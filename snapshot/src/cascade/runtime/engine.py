@@ -1,5 +1,6 @@
 import time
 import inspect
+import asyncio
 from typing import Any, Dict, Optional, Generator, Callable
 from uuid import uuid4
 from contextlib import ExitStack
@@ -87,35 +88,57 @@ class Engine:
                     )
                     self.bus.publish(start_event)
 
-                    try:
-                        result = await self.executor.execute(
-                            node, graph, results, active_resources
-                        )
-                        results[node.id] = result
+                    # Determine retry policy
+                    retry_policy = node.retry_policy
+                    max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
+                    delay = retry_policy.delay if retry_policy else 0.0
+                    backoff = retry_policy.backoff if retry_policy else 1.0
 
-                        task_duration = time.time() - task_start_time
-                        finish_event = TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            status="Succeeded",
-                            duration=task_duration,
-                            result_preview=repr(result)[:100],
-                        )
-                        self.bus.publish(finish_event)
+                    attempt = 0
+                    last_exception = None
 
-                    except Exception as e:
-                        task_duration = time.time() - task_start_time
-                        fail_event = TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            status="Failed",
-                            duration=task_duration,
-                            error=f"{type(e).__name__}: {e}",
-                        )
-                        self.bus.publish(fail_event)
-                        raise
+                    while attempt < max_attempts:
+                        attempt += 1
+                        try:
+                            result = await self.executor.execute(
+                                node, graph, results, active_resources
+                            )
+                            results[node.id] = result
+
+                            task_duration = time.time() - task_start_time
+                            finish_event = TaskExecutionFinished(
+                                run_id=run_id,
+                                task_id=node.id,
+                                task_name=node.name,
+                                status="Succeeded",
+                                duration=task_duration,
+                                result_preview=repr(result)[:100],
+                            )
+                            self.bus.publish(finish_event)
+                            # Break the retry loop on success
+                            last_exception = None
+                            break
+
+                        except Exception as e:
+                            last_exception = e
+                            # If we have retries left, wait and continue
+                            if attempt < max_attempts:
+                                # Optional: Publish a specific Retry event here in the future
+                                await asyncio.sleep(delay)
+                                delay *= backoff
+                            else:
+                                # Final failure
+                                task_duration = time.time() - task_start_time
+                                fail_event = TaskExecutionFinished(
+                                    run_id=run_id,
+                                    task_id=node.id,
+                                    task_name=node.name,
+                                    status="Failed",
+                                    duration=task_duration,
+                                    error=f"{type(e).__name__}: {e}",
+                                )
+                                self.bus.publish(fail_event)
+                                raise last_exception
 
                 run_duration = time.time() - start_time
                 final_event = RunFinished(

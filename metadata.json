@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(spec): 定义缓存协议与扩展任务规格", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765804613.509887, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(runtime): 在 Engine 中实现重试逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765804702.272974, "duration_ms": 0}}

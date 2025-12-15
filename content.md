@@ -1,241 +1,203 @@
-好的，测试通过，所有异步改造任务已完成。
-
-现在我们进入阶段二的第三项核心任务：**缓存与重试机制**。
-
-我们将首先进行**协议定义与规格扩展**，确保系统能够理解和传递用户的缓存与重试意图。
-
-## [WIP] feat(spec): 定义缓存协议与扩展任务规格
+## [WIP] feat(runtime): 在 Engine 中实现重试逻辑
 
 ### 用户需求
-1.  定义 `CachePolicy` 协议，规定缓存策略必须实现的方法。
-2.  扩展 `LazyResult` 对象，允许用户通过 `.with_cache()` 和 `.with_retry()` 链式方法配置策略。
-3.  更新核心图模型 (`Node`) 和构建器 (`GraphBuilder`)，确保这些策略能从用户 API 正确传递到底层计算图。
+1.  在 `Engine` 执行任务时，能够识别并应用 `retry_policy`。
+2.  当任务失败时，根据策略进行多次重试，支持延迟 (`delay`) 和指数退避 (`backoff`)。
+3.  确保每次重试失败和最终失败都能正确记录日志或抛出异常。
 
 ### 评论
-这是实现健壮性功能的“地基”。我们不立即修改 `Engine` 去执行这些策略，而是先打通数据流：从用户在 API 层的声明（`spec`），到图模型的存储（`graph`）。这样，当我们在下一步修改 `Engine` 时，它就已经能从 `Node` 上获取到所需的策略配置了。
+重试机制是构建健壮自动化脚本的关键。通过将这一逻辑内建于引擎中，用户不再需要在每个任务函数里手写 `try...except` 循环。这是一个典型的“关注点分离”：用户只管写“快乐路径”的业务逻辑，错误处理交给框架。
 
 ### 目标
-1.  更新 `src/cascade/runtime/protocols.py`：添加 `CachePolicy` Protocol。
-2.  更新 `src/cascade/spec/task.py`：定义 `RetryPolicy` 数据类，并在 `LazyResult` 中实现配置方法。
-3.  更新 `src/cascade/graph/model.py`：在 `Node` 类中添加 `retry_policy` 和 `cache_policy` 字段。
-4.  更新 `src/cascade/graph/build.py`：在构建图时，将策略从 `LazyResult` 复制到 `Node`。
+1.  修改 `src/cascade/runtime/engine.py`：
+    -   在 `executor.execute` 的调用外层包裹一个重试循环。
+    -   使用 `asyncio.sleep` 实现异步延迟。
+2.  添加测试 `tests/test_retry.py`，验证重试次数、延迟和最终成功/失败的行为。
 
 ### 基本原理
--   **声明式 API**: 用户不应该关心重试循环怎么写，只需声明“我要重试 3 次”。`.with_retry()` 这种 Fluent API 是最佳实践。
--   **数据流透传**: 策略是任务的元数据。它必须跟随任务从定义阶段（`LazyResult`）一直流转到执行阶段（`Node`）。
+-   **装饰器模式 vs 引擎内置**: 虽然可以用装饰器实现，但在引擎层面实现能更好地控制事件发布（例如发布 `TaskRetry` 事件，尽管 MVP 阶段可能先简化处理），并且能更好地与资源管理、超时控制等其他引擎特性集成。
 
 ### 标签
-#intent/architect #flow/ready #priority/high
-#comp/spec #comp/graph #comp/runtime #concept/caching #concept/resilience
-#task/domain/core #task/object/resilience-support #task/action/architect
-#task/state/begin #task/status/active
+#intent/build #flow/ready #priority/high
+#comp/runtime #concept/resilience
+#task/domain/core #task/object/resilience-support #task/action/implementation
+#task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: Define CachePolicy Protocol
+#### Acts 1: Implement Retry Loop in Engine
 
-定义缓存策略的接口。
-
-~~~~~act
-patch_file
-src/cascade/runtime/protocols.py
-~~~~~
-~~~~~python
-    async def execute(
-        self,
-        node: Node,
-        graph: Graph,
-        upstream_results: Dict[str, Any],
-        resource_context: Dict[str, Any],
-    ) -> Any: ...
-~~~~~
-~~~~~python
-    async def execute(
-        self,
-        node: Node,
-        graph: Graph,
-        upstream_results: Dict[str, Any],
-        resource_context: Dict[str, Any],
-    ) -> Any: ...
-
-
-class CachePolicy(Protocol):
-    """
-    Protocol for a caching strategy.
-    """
-
-    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
-        """
-        Checks if a result is cached.
-        Returns None if not found, or the cached value if found.
-        """
-        ...
-
-    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
-        """
-        Saves a result to the cache.
-        """
-        ...
-~~~~~
-
-#### Acts 2: Update Spec with Policies
-
-在 `task.py` 中定义 `RetryPolicy` 并更新 `LazyResult`。
+在 `Engine.run` 中实现重试逻辑。我们需要引入 `asyncio` 来处理非阻塞延迟。
 
 ~~~~~act
 patch_file
-src/cascade/spec/task.py
+src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-from typing import TypeVar, Generic, Callable, Any, Dict, Optional
-from dataclasses import dataclass, field
+import time
 import inspect
+from typing import Any, Dict, Optional, Generator, Callable
 from uuid import uuid4
-
-T = TypeVar("T")
-
-
-@dataclass
-class Param:
+from contextlib import ExitStack
 ~~~~~
 ~~~~~python
-from typing import TypeVar, Generic, Callable, Any, Dict, Optional, Union
-from dataclasses import dataclass, field
+import time
 import inspect
+import asyncio
+from typing import Any, Dict, Optional, Generator, Callable
 from uuid import uuid4
-
-# Import protocols only for type hinting to avoid circular imports if possible
-# But here we just need Any or "CachePolicy" forward ref
-from cascade.runtime.protocols import CachePolicy
-
-T = TypeVar("T")
-
-
-@dataclass
-class RetryPolicy:
-    max_attempts: int
-    delay: float = 0.0
-    backoff: float = 1.0  # Multiplier for delay after each retry
-
-
-@dataclass
-class Param:
+from contextlib import ExitStack
 ~~~~~
 
 ~~~~~act
 patch_file
-src/cascade/spec/task.py
+src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-    task: "Task[T]"
-    args: tuple
-    kwargs: Dict[str, Any]
-    _uuid: str = field(default_factory=lambda: str(uuid4()))
+                    self.bus.publish(start_event)
 
-    def __hash__(self):
-        return hash(self._uuid)
+                    try:
+                        result = await self.executor.execute(
+                            node, graph, results, active_resources
+                        )
+                        results[node.id] = result
+
+                        task_duration = time.time() - task_start_time
+                        finish_event = TaskExecutionFinished(
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            status="Succeeded",
+                            duration=task_duration,
+                            result_preview=repr(result)[:100],
+                        )
+                        self.bus.publish(finish_event)
+
+                    except Exception as e:
+                        task_duration = time.time() - task_start_time
+                        fail_event = TaskExecutionFinished(
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            status="Failed",
+                            duration=task_duration,
+                            error=f"{type(e).__name__}: {e}",
+                        )
+                        self.bus.publish(fail_event)
+                        raise
 ~~~~~
 ~~~~~python
-    task: "Task[T]"
-    args: tuple
-    kwargs: Dict[str, Any]
-    _uuid: str = field(default_factory=lambda: str(uuid4()))
-    _retry_policy: Optional[RetryPolicy] = None
-    _cache_policy: Optional[CachePolicy] = None
+                    self.bus.publish(start_event)
 
-    def __hash__(self):
-        return hash(self._uuid)
+                    # Determine retry policy
+                    retry_policy = node.retry_policy
+                    max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
+                    delay = retry_policy.delay if retry_policy else 0.0
+                    backoff = retry_policy.backoff if retry_policy else 1.0
 
-    def with_retry(
-        self, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0
-    ) -> "LazyResult[T]":
-        """Configures retry logic for this task."""
-        self._retry_policy = RetryPolicy(max_attempts, delay, backoff)
-        return self
+                    attempt = 0
+                    last_exception = None
 
-    def with_cache(self, policy: CachePolicy) -> "LazyResult[T]":
-        """Configures caching strategy for this task."""
-        self._cache_policy = policy
-        return self
+                    while attempt < max_attempts:
+                        attempt += 1
+                        try:
+                            result = await self.executor.execute(
+                                node, graph, results, active_resources
+                            )
+                            results[node.id] = result
+
+                            task_duration = time.time() - task_start_time
+                            finish_event = TaskExecutionFinished(
+                                run_id=run_id,
+                                task_id=node.id,
+                                task_name=node.name,
+                                status="Succeeded",
+                                duration=task_duration,
+                                result_preview=repr(result)[:100],
+                            )
+                            self.bus.publish(finish_event)
+                            # Break the retry loop on success
+                            last_exception = None
+                            break
+
+                        except Exception as e:
+                            last_exception = e
+                            # If we have retries left, wait and continue
+                            if attempt < max_attempts:
+                                # Optional: Publish a specific Retry event here in the future
+                                await asyncio.sleep(delay)
+                                delay *= backoff
+                            else:
+                                # Final failure
+                                task_duration = time.time() - task_start_time
+                                fail_event = TaskExecutionFinished(
+                                    run_id=run_id,
+                                    task_id=node.id,
+                                    task_name=node.name,
+                                    status="Failed",
+                                    duration=task_duration,
+                                    error=f"{type(e).__name__}: {e}",
+                                )
+                                self.bus.publish(fail_event)
+                                raise last_exception
 ~~~~~
 
-#### Acts 3: Update Graph Node Model
+#### Acts 2: Add Retry Tests
 
-更新 `Node` 模型以存储策略。
+编写测试用例验证重试行为。
 
 ~~~~~act
-patch_file
-src/cascade/graph/model.py
+write_file
+tests/test_retry.py
 ~~~~~
 ~~~~~python
-from dataclasses import dataclass, field
-from typing import List, Callable
+import pytest
+from unittest.mock import Mock
+import asyncio
+import cascade as cs
 
-
-@dataclass
-class Node:
-    """Represents a node in the computation graph."""
-
-    id: str
-    name: str
-    callable_obj: Callable
-    # We might store additional metadata here later
-
-    def __hash__(self):
-        return hash(self.id)
-~~~~~
-~~~~~python
-from dataclasses import dataclass, field
-from typing import List, Callable, Optional, Any
-
-
-@dataclass
-class Node:
-    """Represents a node in the computation graph."""
-
-    id: str
-    name: str
-    callable_obj: Callable
+def test_retry_success_after_failure():
+    """Test that a task retries and eventually succeeds."""
     
-    # Metadata for execution strategies
-    retry_policy: Optional[Any] = None  # Typed as Any to avoid circular deps with spec
-    cache_policy: Optional[Any] = None
+    call_count = 0
 
-    def __hash__(self):
-        return hash(self.id)
-~~~~~
+    @cs.task
+    def flaky_task():
+        nonlocal call_count
+        call_count += 1
+        if call_count < 3:
+            raise ValueError("Fail!")
+        return "Success"
 
-#### Acts 4: Update Graph Builder
+    # Retry 3 times (total 4 attempts allowed)
+    task_with_retry = flaky_task().with_retry(max_attempts=3, delay=0.01)
 
-更新构建器，将策略从 `LazyResult` 复制到 `Node`。
+    result = cs.run(task_with_retry)
 
-~~~~~act
-patch_file
-src/cascade/graph/build.py
-~~~~~
-~~~~~python
-        # Create a new Node for this task execution
-        node = Node(
-            id=result._uuid, name=result.task.name, callable_obj=result.task.func
-        )
-        self.graph.add_node(node)
-        self._visited[result._uuid] = node
-~~~~~
-~~~~~python
-        # Create a new Node for this task execution
-        node = Node(
-            id=result._uuid,
-            name=result.task.name,
-            callable_obj=result.task.func,
-            retry_policy=result._retry_policy,
-            cache_policy=result._cache_policy,
-        )
-        self.graph.add_node(node)
-        self._visited[result._uuid] = node
+    assert result == "Success"
+    assert call_count == 3  # Failed twice, succeeded on 3rd
+
+def test_retry_exhausted_failure():
+    """Test that a task fails after exhausting all retries."""
+    
+    call_count = 0
+
+    @cs.task
+    def always_fail():
+        nonlocal call_count
+        call_count += 1
+        raise ValueError("Always fail")
+
+    task_with_retry = always_fail().with_retry(max_attempts=2, delay=0.01)
+
+    with pytest.raises(ValueError, match="Always fail"):
+        cs.run(task_with_retry)
+    
+    assert call_count == 3  # Initial + 2 retries
 ~~~~~
 
 ### 下一步建议
-执行 **子任务 2: 引擎重试逻辑实现**。
-有了数据结构的支持，我们现在可以修改 `Engine`，在执行任务时检查 `node.retry_policy`，并实现重试循环。这将立即赋予 Cascade 声明式的重试能力。
+执行 **子任务 3: 缓存逻辑实现与 FileExistenceCache**。
+现在我们有了健壮的重试，接下来要实现“避免重复劳动”的能力。我们将实现 `FileExistenceCache` 适配器，并在 `Engine` 中集成缓存检查 (`check`) 和保存 (`save`) 逻辑。

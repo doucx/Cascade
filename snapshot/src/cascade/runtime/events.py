@@ -49,3 +49,18 @@ class TaskExecutionFinished(TaskEvent):
 class TaskSkipped(TaskEvent):
     """Fired when a task is skipped due to caching or conditional logic."""
     reason: str = "Unknown" # "CacheHit", "ConditionFalse"
+
+@dataclass(frozen=True)
+class ResourceEvent(Event):
+    """Base for events related to resources."""
+    resource_name: str = ""
+
+@dataclass(frozen=True)
+class ResourceAcquired(ResourceEvent):
+    """Fired when a resource is successfully initialized (setup complete)."""
+    pass
+
+@dataclass(frozen=True)
+class ResourceReleased(ResourceEvent):
+    """Fired when a resource is successfully torn down."""
+    pass

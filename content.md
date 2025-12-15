@@ -1,63 +1,87 @@
-## [WIP] fix: 修复依赖注入测试用例中的类型断言错误
+好的，所有测试均已通过。我们已经成功地为 Cascade 实现了依赖注入系统的核心功能。现在，是时候将这个重要的里程碑作为一个完整的逻辑单元提交到版本控制中了。
 
-### 错误分析
-**`tests/test_di_and_resources.py` 失败**:
-*   **现象**: `AssertionError: assert False where False = isinstance('mock_db_url', MagicMock)`
-*   **原因**: 测试任务 `task_using_resource` 硬编码断言了注入对象必须是 `MagicMock` 类型，且代码逻辑访问了 `conn.url`。但在 `test_resource_override` 测试用例中，我们定义的 `mock_db_connection` 资源仅仅产出了一个字符串 `"mock_db_url"`。这不仅违反了类型断言，也会导致后续访问 `.url` 属性时出错。
-*   **解决方案**: 修改测试用例中的 `mock_db_connection`，使其产出一个符合“契约”的对象（即一个带有 `url` 属性的 `MagicMock`），而不仅仅是一个字符串。
+我将生成一个 `[COMMIT]` 计划来完成这个任务。
+
+## [COMMIT] feat(runtime, spec): Implement dependency injection and resource management
 
 ### 用户需求
-修复测试用例逻辑，使所有测试通过。
+将已实现并通过测试的依赖注入（DI）与资源管理系统核心功能，作为一个完整的特性提交到版本控制中。
 
 ### 评论
-这是一个典型的测试逻辑错误：Mock 对象没有正确模拟真实对象的行为（接口）。修复它将验证 DI 系统能否正确地用 Mock 对象替换真实对象。
+这个提交是 Cascade 从一个简单的任务执行器演变为一个健壮的自动化应用框架的决定性一步。通过引入 `@resource` 和 `inject`，我们从根本上解决了传统脚本最核心的痛点——可测试性。`Engine` 对资源生命周期的管理，以及 `override_resource` 工具的提供，为开发者构建可靠、可维护的工作流奠定了坚实的基础。
 
 ### 目标
-1.  修改 `tests/test_di_and_resources.py` 中的 `mock_db_connection` 实现。
+1.  将所有与 DI 功能相关的新建和修改文件添加到 Git 暂存区。
+2.  创建一个内容详尽的 Git Commit，清晰地记录本次功能开发的设计决策和实现要点。
 
 ### 基本原理
-依赖注入的核心优势之一就是可以用 Mock 对象替换真实依赖。但 Mock 对象必须遵循与真实对象相同的接口（鸭子类型）。
+通过一个原子性的提交来封装整个 DI 核心功能的实现，可以确保版本历史的清晰性。这为后续的增强（如异步资源、事件发布）提供了一个稳定、可靠的基线。
 
 ### 标签
-#intent/fix #flow/ready #priority/high
-#comp/tests
+#intent/build #flow/ready #priority/high
+#comp/runtime #comp/spec #comp/tests
 #concept/dependency-injection
-#scope/core
-#task/domain/core #task/object/test-case #task/action/fix
+#scope/core #scope/api #scope/dx
+#task/domain/core #task/object/dependency-injection #task/action/implementation
 #task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 修正测试用例中的 Mock 资源
+#### Acts 1: Stage all changes
 
-我们将修改 `test_resource_override` 函数内部定义的 `mock_db_connection`，使其产出一个 `MagicMock` 对象，而不是字符串。
+我们将所有在 DI 系统开发过程中创建和修改的文件添加到 Git 暂存区。
 
 ~~~~~act
-patch_file
+git_add
+~~~~~
+~~~~~
+src/cascade/__init__.py
+src/cascade/adapters/executors/local.py
+src/cascade/runtime/engine.py
+src/cascade/spec/resource.py
+src/cascade/testing.py
+tests/test_adapters.py
 tests/test_di_and_resources.py
 ~~~~~
-~~~~~python
-    @cs.resource
-    def mock_db_connection():
-        print("SETUP: mock_db_connection")
-        yield "mock_db_url"
-        print("TEARDOWN: mock_db_connection")
 
-    engine = cs.Engine()
+#### Acts 2: Commit changes
+
+现在，我们创建一个内容详尽的提交，总结 DI 系统的所有工作。
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-    @cs.resource
-    def mock_db_connection():
-        print("SETUP: mock_db_connection")
-        m = MagicMock()
-        m.url = "mock_db_url"
-        yield m
-        print("TEARDOWN: mock_db_connection")
+~~~~~text
+feat(runtime, spec): Implement dependency injection and resource management
 
-    engine = cs.Engine()
+Introduces a dependency injection (DI) system to decouple tasks from resource management, significantly enhancing testability and modularity. This is a foundational feature for building robust automation applications.
+
+Key components:
+
+1.  **`@resource` Decorator (`spec/resource.py`):**
+    - Allows defining resource providers as generator functions.
+    - The `yield` statement separates setup (before) from teardown (after) logic.
+    - Supports dependency declaration on other resources via `inject`.
+
+2.  **`inject()` Marker (`spec/resource.py`):**
+    - A special function used as a default argument in task or resource signatures to declare a dependency on a named resource.
+
+3.  **Engine Lifecycle Management (`runtime/engine.py`):**
+    - The `Engine` is now responsible for managing the full lifecycle of resources.
+    - It scans the execution plan for required resources, resolves their dependency graph, and initializes them in the correct order.
+    - Utilizes `contextlib.ExitStack` to guarantee that resource teardown logic is executed in the reverse order of setup, even if the workflow fails.
+
+4.  **Executor Integration (`adapters/executors/local.py`):**
+    - The `execute` method now accepts a `resource_context`.
+    - It inspects the task signature and injects the active resource instances into the appropriate parameters before execution.
+
+5.  **Testing Utilities (`testing.py`):**
+    - Implements `override_resource`, a context manager that allows temporarily replacing a registered resource with a mock or alternative implementation during tests. This is the cornerstone of the system's testability.
 ~~~~~
 
 ### 下一步建议
-运行 `pytest`。如果通过，我们将继续按计划增强可观测性，添加资源相关的事件。
+我们已经成功提交了 DI 系统的核心。
+
+下一步，我们将在此基础上继续完善，**为资源生命周期添加可观测性**。我将生成一个计划，为 `Engine` 添加 `ResourceAcquired` 和 `ResourceReleased` 事件的发布逻辑，并更新测试来验证这些事件。

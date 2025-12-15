@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(runtime): Ignore control edges in LocalExecutor", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765808613.215014, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(core): Implement conditional execution with `.run_if()`", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765808649.8981519, "duration_ms": 0}}

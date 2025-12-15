@@ -1,70 +1,56 @@
-## [WIP] fix(runtime): Ignore control edges in LocalExecutor
+这是一个包含 `.run_if()` 完整功能的提交计划，包括核心逻辑和必要的执行器修复。
 
-### 错误分析
-测试 `test_run_if_true` 失败，报错 `TypeError: ... got an unexpected keyword argument '_condition'`。
-
-**原因**:
-1.  我们通过在图中添加 `arg_name="_condition"` 的边来表示条件依赖。
-2.  `LocalExecutor` 在准备任务参数时，遍历了所有指向该节点的边，并将 `arg_name` 用作关键字参数传给函数。
-3.  它错误地将 `_condition` 也当作普通参数传递给了目标函数，而目标函数并不接受该参数。
-
-**解决方案**:
-修改 `LocalExecutor`，在参数组装阶段显式忽略 `arg_name` 为 `_condition` 的边。这些边仅用于 `Engine` 层的调度逻辑，不应参与函数调用。
+## [COMMIT] feat(core): Implement conditional execution with `.run_if()`
 
 ### 用户需求
-修复条件工作流实现中的参数传递错误，确保测试通过。
+实现 `.run_if()` 方法，允许根据一个上游任务（返回布尔值）的结果来决定当前任务是否执行。如果条件为 `False`，则当前任务及其所有下游任务应被跳过（剪枝）。
 
 ### 评论
-这是一个经典的“泄漏抽象”问题。底层的图结构（Edge）承载了多种语义（数据流 vs 控制流），执行器需要能区分它们。
+该功能是构建动态、高效工作流的基础。核心实现涉及在 `GraphBuilder` 中创建特殊的控制流边，在 `Engine` 中实现 `_should_skip` 逻辑来处理条件判断和级联跳过，并在 `LocalExecutor` 中修复了参数传递错误，确保控制流边不会泄露到任务函数中。
 
 ### 目标
-1.  修改 `src/cascade/adapters/executors/local.py`，过滤掉控制流边。
-2.  确保 `tests/test_control_flow.py` 通过。
+创建一个 Git 提交，将条件工作流所需的所有代码变更（spec, graph, runtime, executor fix, tests）整合为一个原子化的工作单元。
 
 ### 基本原理
-在 `LocalExecutor` 的循环中添加简单的 `if edge.arg_name == "_condition": continue` 检查。
+按照 ACA 运行时协议，在功能测试通过后，应立即创建 `[COMMIT]` 计划以保持代码库历史的清洁和一致性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #concept/control-flow #scope/core #ai/instruct #task/domain/core #task/object/local-executor #task/action/bug-fix #task/state/continue
+#intent/build #flow/ready #priority/high #comp/core #comp/runtime #comp/tests #concept/control-flow #scope/core #ai/instruct #task/domain/core #task/object/conditional-workflow #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 LocalExecutor
+#### Acts 1: 提交所有文件变更
 
-修改参数组装逻辑，忽略 `_condition` 边。
+将 `run_if` 功能实现涉及的所有文件添加到暂存区，并执行提交。
 
 ~~~~~act
-patch_file
+git_add
+src/cascade/spec/task.py
+src/cascade/graph/build.py
+src/cascade/runtime/engine.py
 src/cascade/adapters/executors/local.py
+tests/test_control_flow.py
 ~~~~~
-~~~~~python
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-        for edge in incoming_edges:
-            result = upstream_results[edge.source.id]
-            if edge.arg_name.isdigit():
-                positional_args[int(edge.arg_name)] = result
-            else:
-                final_kwargs[edge.arg_name] = result
 
-        sorted_indices = sorted(positional_args.keys())
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-        for edge in incoming_edges:
-            # Skip control flow edges
-            if edge.arg_name == "_condition":
-                continue
+~~~~~text
+feat(core): Implement conditional execution with .run_if()
 
-            result = upstream_results[edge.source.id]
-            if edge.arg_name.isdigit():
-                positional_args[int(edge.arg_name)] = result
-            else:
-                final_kwargs[edge.arg_name] = result
+This introduces conditional execution via the chainable method `.run_if(condition_result)`.
 
-        sorted_indices = sorted(positional_args.keys())
+Key changes:
+1. **Spec & Graph:** `LazyResult` stores the condition, and `GraphBuilder` creates a control flow edge using `arg_name="_condition"`.
+2. **Engine Logic:** `Engine.run` now includes a skipping mechanism. It checks `_condition` task results and tracks `skipped_node_ids`. If a task's condition is `False`, or if any of its upstream dependencies were skipped, the task is skipped, ensuring proper graph pruning.
+3. **Executor Fix (LocalExecutor):** The executor was patched to explicitly ignore edges with `arg_name="_condition"` during argument preparation, resolving a `TypeError` and preventing control flow information from leaking into user task functions.
+
+The task object "conditional-workflow" is now considered complete.
 ~~~~~
 
 ### 下一步建议
-修复后，所有测试应该通过。通过后，我将提交包含条件工作流功能的代码。
+我们已经完成了 `cs.File` 和 `.run_if()` 的实现。根据《Cascade 阶段三：增强表现力与动态工作流——执行计划》，接下来的重点是实现**动态路由 (`Router`) 和 任务映射 (`.map`)**。
+
+我建议先从 **`cs.Router`** 开始，因为它在架构上相对独立，且能立刻解锁高级的数据源选择功能。

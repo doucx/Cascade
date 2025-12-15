@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M events.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765802784.8199399, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复运行时事件类的 Dataclass 继承顺序问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765802784.8580377, "duration_ms": 0}}

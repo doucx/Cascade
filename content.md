@@ -1,25 +1,28 @@
-## [WIP] feat(runtime): 在 Engine 中实现重试逻辑
+## [WIP] feat(runtime): 实现缓存逻辑与 FileExistenceCache 适配器
 
 ### 用户需求
-1.  在 `Engine` 执行任务时，能够识别并应用 `retry_policy`。
-2.  当任务失败时，根据策略进行多次重试，支持延迟 (`delay`) 和指数退避 (`backoff`)。
-3.  确保每次重试失败和最终失败都能正确记录日志或抛出异常。
+1.  在 `Engine` 执行任务前，检查是否存在有效的缓存。如果命中，跳过执行并直接使用缓存结果。
+2.  在任务执行成功后，调用缓存策略保存结果。
+3.  实现第一个具体的缓存策略：`FileExistenceCache`，当指定文件存在时视为缓存命中。
 
 ### 评论
-重试机制是构建健壮自动化脚本的关键。通过将这一逻辑内建于引擎中，用户不再需要在每个任务函数里手写 `try...except` 循环。这是一个典型的“关注点分离”：用户只管写“快乐路径”的业务逻辑，错误处理交给框架。
+这是 MVP 阶段的最后一个重要特性。缓存机制极大地提升了自动化流程的效率，特别是对于耗时的数据处理或构建任务。`FileExistenceCache` 是最简单但也最实用的策略之一，特别适合基于文件的自动化工作流（如 Make 风格的任务）。
 
 ### 目标
 1.  修改 `src/cascade/runtime/engine.py`：
-    -   在 `executor.execute` 的调用外层包裹一个重试循环。
-    -   使用 `asyncio.sleep` 实现异步延迟。
-2.  添加测试 `tests/test_retry.py`，验证重试次数、延迟和最终成功/失败的行为。
+    -   在重试循环之前，增加缓存检查逻辑。
+    -   如果命中缓存，发布 `TaskSkipped` 事件，并跳过执行。
+    -   在任务成功后，增加缓存保存逻辑。
+2.  创建 `src/cascade/adapters/caching/file_existence.py`：实现 `FileExistenceCache` 类。
+3.  添加测试 `tests/test_caching.py` 验证缓存命中和未命中的行为。
 
 ### 基本原理
--   **装饰器模式 vs 引擎内置**: 虽然可以用装饰器实现，但在引擎层面实现能更好地控制事件发布（例如发布 `TaskRetry` 事件，尽管 MVP 阶段可能先简化处理），并且能更好地与资源管理、超时控制等其他引擎特性集成。
+-   **优先检查**: 缓存检查必须在任何执行尝试（包括重试）之前进行。
+-   **结果一致性**: 缓存命中的结果必须在格式上与实际执行的结果兼容，以便下游任务使用。对于 `FileExistenceCache`，通常返回文件路径或 `True`。
 
 ### 标签
 #intent/build #flow/ready #priority/high
-#comp/runtime #concept/resilience
+#comp/runtime #comp/adapters #concept/caching
 #task/domain/core #task/object/resilience-support #task/action/implementation
 #task/state/continue #task/status/active
 
@@ -27,28 +30,90 @@
 
 ### Script
 
-#### Acts 1: Implement Retry Loop in Engine
+#### Acts 1: Implement FileExistenceCache Adapter
 
-在 `Engine.run` 中实现重试逻辑。我们需要引入 `asyncio` 来处理非阻塞延迟。
+实现基于文件存在的缓存策略。
+
+~~~~~act
+write_file
+src/cascade/adapters/caching/file_existence.py
+~~~~~
+~~~~~python
+import os
+from typing import Any, Dict, Callable, Union
+from cascade.runtime.protocols import CachePolicy
+
+class FileExistenceCache:
+    """
+    A simple cache policy that considers a task 'cached' if a specific file exists.
+    """
+
+    def __init__(self, target_path: Union[str, Callable[[Dict[str, Any]], str]]):
+        """
+        Args:
+            target_path: A string path or a function that accepts task inputs 
+                         (args/kwargs dict) and returns a path string.
+        """
+        self.target_path = target_path
+
+    def _resolve_path(self, inputs: Dict[str, Any]) -> str:
+        if callable(self.target_path):
+            return self.target_path(inputs)
+        return str(self.target_path)
+
+    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
+        path = self._resolve_path(inputs)
+        if os.path.exists(path):
+            return path  # Return the path as the cached result
+        return None
+
+    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+        # File existence cache usually implies the task itself creates the file.
+        # But we can verify it was created.
+        path = self._resolve_path(inputs)
+        if not os.path.exists(path):
+            # In a stricter implementation, we might raise a warning here.
+            pass
+~~~~~
+
+#### Acts 2: Expose Cache Adapter
+
+方便用户导入。
+
+~~~~~act
+write_file
+src/cascade/adapters/caching/__init__.py
+~~~~~
+~~~~~python
+from .file_existence import FileExistenceCache
+
+__all__ = ["FileExistenceCache"]
+~~~~~
+
+#### Acts 3: Integrate Caching into Engine
+
+在 `Engine` 中集成缓存检查和保存逻辑。
 
 ~~~~~act
 patch_file
 src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-import time
-import inspect
-from typing import Any, Dict, Optional, Generator, Callable
-from uuid import uuid4
-from contextlib import ExitStack
+    RunFinished,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+    ResourceAcquired,
+    ResourceReleased,
+)
 ~~~~~
 ~~~~~python
-import time
-import inspect
-import asyncio
-from typing import Any, Dict, Optional, Generator, Callable
-from uuid import uuid4
-from contextlib import ExitStack
+    RunFinished,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+    TaskSkipped,
+    ResourceAcquired,
+    ResourceReleased,
+)
 ~~~~~
 
 ~~~~~act
@@ -56,148 +121,163 @@ patch_file
 src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-                    self.bus.publish(start_event)
+                results: Dict[str, Any] = {}
+                for node in plan:
+                    task_start_time = time.time()
 
-                    try:
-                        result = await self.executor.execute(
-                            node, graph, results, active_resources
-                        )
-                        results[node.id] = result
-
-                        task_duration = time.time() - task_start_time
-                        finish_event = TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            status="Succeeded",
-                            duration=task_duration,
-                            result_preview=repr(result)[:100],
-                        )
-                        self.bus.publish(finish_event)
-
-                    except Exception as e:
-                        task_duration = time.time() - task_start_time
-                        fail_event = TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            status="Failed",
-                            duration=task_duration,
-                            error=f"{type(e).__name__}: {e}",
-                        )
-                        self.bus.publish(fail_event)
-                        raise
-~~~~~
-~~~~~python
+                    start_event = TaskExecutionStarted(
+                        run_id=run_id, task_id=node.id, task_name=node.name
+                    )
                     self.bus.publish(start_event)
 
                     # Determine retry policy
                     retry_policy = node.retry_policy
-                    max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
-                    delay = retry_policy.delay if retry_policy else 0.0
-                    backoff = retry_policy.backoff if retry_policy else 1.0
+~~~~~
+~~~~~python
+                results: Dict[str, Any] = {}
+                for node in plan:
+                    task_start_time = time.time()
 
-                    attempt = 0
-                    last_exception = None
-
-                    while attempt < max_attempts:
-                        attempt += 1
-                        try:
-                            result = await self.executor.execute(
-                                node, graph, results, active_resources
+                    # 0. Check Cache
+                    if node.cache_policy:
+                        # Construct inputs for cache check
+                        # We need to resolve dependencies first to pass them to cache policy
+                        # Similar logic to Executor, but just for inputs
+                        inputs_for_cache = self._resolve_inputs(node, graph, results)
+                        
+                        cached_value = node.cache_policy.check(node.id, inputs_for_cache)
+                        if cached_value is not None:
+                            # Cache Hit!
+                            results[node.id] = cached_value
+                            self.bus.publish(
+                                TaskSkipped(
+                                    run_id=run_id,
+                                    task_id=node.id,
+                                    task_name=node.name,
+                                    reason="CacheHit"
+                                )
                             )
-                            results[node.id] = result
+                            continue
 
-                            task_duration = time.time() - task_start_time
-                            finish_event = TaskExecutionFinished(
-                                run_id=run_id,
-                                task_id=node.id,
-                                task_name=node.name,
-                                status="Succeeded",
-                                duration=task_duration,
-                                result_preview=repr(result)[:100],
-                            )
+                    start_event = TaskExecutionStarted(
+                        run_id=run_id, task_id=node.id, task_name=node.name
+                    )
+                    self.bus.publish(start_event)
+
+                    # Determine retry policy
+                    retry_policy = node.retry_policy
+~~~~~
+
+~~~~~act
+patch_file
+src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
                             self.bus.publish(finish_event)
                             # Break the retry loop on success
                             last_exception = None
                             break
+~~~~~
+~~~~~python
+                            self.bus.publish(finish_event)
+                            
+                            # Save to cache if policy exists
+                            if node.cache_policy:
+                                # Re-resolve inputs (they are already resolved, but kept in scope)
+                                # Optimization: we could calculate inputs once before retry loop
+                                inputs_for_save = self._resolve_inputs(node, graph, results)
+                                node.cache_policy.save(node.id, inputs_for_save, result)
 
-                        except Exception as e:
-                            last_exception = e
-                            # If we have retries left, wait and continue
-                            if attempt < max_attempts:
-                                # Optional: Publish a specific Retry event here in the future
-                                await asyncio.sleep(delay)
-                                delay *= backoff
-                            else:
-                                # Final failure
-                                task_duration = time.time() - task_start_time
-                                fail_event = TaskExecutionFinished(
-                                    run_id=run_id,
-                                    task_id=node.id,
-                                    task_name=node.name,
-                                    status="Failed",
-                                    duration=task_duration,
-                                    error=f"{type(e).__name__}: {e}",
-                                )
-                                self.bus.publish(fail_event)
-                                raise last_exception
+                            # Break the retry loop on success
+                            last_exception = None
+                            break
 ~~~~~
 
-#### Acts 2: Add Retry Tests
+~~~~~act
+patch_file
+src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    def _scan_for_resources(self, plan: list[Node]) -> set[str]:
+~~~~~
+~~~~~python
+    def _resolve_inputs(self, node: Node, graph: Graph, upstream_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Helper to resolve inputs for cache checking."""
+        inputs = {}
+        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
+        for edge in incoming_edges:
+            inputs[edge.arg_name] = upstream_results[edge.source.id]
+        return inputs
 
-编写测试用例验证重试行为。
+    def _scan_for_resources(self, plan: list[Node]) -> set[str]:
+~~~~~
+
+#### Acts 4: Add Caching Tests
+
+编写测试用例验证缓存行为。
 
 ~~~~~act
 write_file
-tests/test_retry.py
+tests/test_caching.py
 ~~~~~
 ~~~~~python
+import os
 import pytest
-from unittest.mock import Mock
-import asyncio
 import cascade as cs
+from cascade.adapters.caching import FileExistenceCache
 
-def test_retry_success_after_failure():
-    """Test that a task retries and eventually succeeds."""
-    
+def test_file_existence_cache_hit(tmp_path):
+    """Test that a task is skipped if the target file exists."""
+    target_file = tmp_path / "output.txt"
+    target_file.touch()  # Create the file to simulate cache hit
+
     call_count = 0
 
     @cs.task
-    def flaky_task():
+    def create_file(path: str):
         nonlocal call_count
         call_count += 1
-        if call_count < 3:
-            raise ValueError("Fail!")
-        return "Success"
+        return "New Content"
 
-    # Retry 3 times (total 4 attempts allowed)
-    task_with_retry = flaky_task().with_retry(max_attempts=3, delay=0.01)
+    # Configure cache
+    policy = FileExistenceCache(target_path=str(target_file))
+    task = create_file(str(target_file)).with_cache(policy)
 
-    result = cs.run(task_with_retry)
+    result = cs.run(task)
 
-    assert result == "Success"
-    assert call_count == 3  # Failed twice, succeeded on 3rd
+    # Should return the path (cache value), and NOT execute the function
+    assert result == str(target_file)
+    assert call_count == 0
 
-def test_retry_exhausted_failure():
-    """Test that a task fails after exhausting all retries."""
-    
+def test_file_existence_cache_miss(tmp_path):
+    """Test that a task runs if the target file does not exist."""
+    target_file = tmp_path / "output_miss.txt"
+
     call_count = 0
 
     @cs.task
-    def always_fail():
+    def create_file(path: str):
         nonlocal call_count
         call_count += 1
-        raise ValueError("Always fail")
+        # Create the file to satisfy the cache save contract
+        with open(path, "w") as f:
+            f.write("content")
+        return "Executed"
 
-    task_with_retry = always_fail().with_retry(max_attempts=2, delay=0.01)
+    policy = FileExistenceCache(target_path=str(target_file))
+    task = create_file(str(target_file)).with_cache(policy)
 
-    with pytest.raises(ValueError, match="Always fail"):
-        cs.run(task_with_retry)
-    
-    assert call_count == 3  # Initial + 2 retries
+    result = cs.run(task)
+
+    assert result == "Executed"
+    assert call_count == 1
+    assert target_file.exists()
 ~~~~~
 
 ### 下一步建议
-执行 **子任务 3: 缓存逻辑实现与 FileExistenceCache**。
-现在我们有了健壮的重试，接下来要实现“避免重复劳动”的能力。我们将实现 `FileExistenceCache` 适配器，并在 `Engine` 中集成缓存检查 (`check`) 和保存 (`save`) 逻辑。
+我们已经完成了 Cascade 阶段二的所有核心功能开发（DI、异步、重试、缓存）。
+现在的代码库已经具备了“可靠的自动化应用框架”的所有要素。
+
+下一步，为了巩固成果，我建议：
+1.  **提交所有更改**: 创建一个 `[COMMIT]` 计划，将当前所有关于缓存和重试的代码变更提交。
+2.  **阶段三启动**: 进入阶段三“走向生态与可扩展性”，开始实现 `Shell` 任务和 CLI 集成等功能，进一步提升用户体验。

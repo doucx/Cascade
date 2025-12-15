@@ -15,6 +15,7 @@ from cascade.runtime.events import (
     RunFinished,
     TaskExecutionStarted,
     TaskExecutionFinished,
+    TaskSkipped,
     ResourceAcquired,
     ResourceReleased,
 )
@@ -83,6 +84,27 @@ class Engine:
                 for node in plan:
                     task_start_time = time.time()
 
+                    # 0. Check Cache
+                    if node.cache_policy:
+                        # Construct inputs for cache check
+                        # We need to resolve dependencies first to pass them to cache policy
+                        # Similar logic to Executor, but just for inputs
+                        inputs_for_cache = self._resolve_inputs(node, graph, results)
+                        
+                        cached_value = node.cache_policy.check(node.id, inputs_for_cache)
+                        if cached_value is not None:
+                            # Cache Hit!
+                            results[node.id] = cached_value
+                            self.bus.publish(
+                                TaskSkipped(
+                                    run_id=run_id,
+                                    task_id=node.id,
+                                    task_name=node.name,
+                                    reason="CacheHit"
+                                )
+                            )
+                            continue
+
                     start_event = TaskExecutionStarted(
                         run_id=run_id, task_id=node.id, task_name=node.name
                     )
@@ -115,6 +137,14 @@ class Engine:
                                 result_preview=repr(result)[:100],
                             )
                             self.bus.publish(finish_event)
+                            
+                            # Save to cache if policy exists
+                            if node.cache_policy:
+                                # Re-resolve inputs (they are already resolved, but kept in scope)
+                                # Optimization: we could calculate inputs once before retry loop
+                                inputs_for_save = self._resolve_inputs(node, graph, results)
+                                node.cache_policy.save(node.id, inputs_for_save, result)
+
                             # Break the retry loop on success
                             last_exception = None
                             break
@@ -158,6 +188,14 @@ class Engine:
                 )
                 self.bus.publish(final_fail_event)
                 raise
+
+    def _resolve_inputs(self, node: Node, graph: Graph, upstream_results: Dict[str, Any]) -> Dict[str, Any]:
+        """Helper to resolve inputs for cache checking."""
+        inputs = {}
+        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
+        for edge in incoming_edges:
+            inputs[edge.arg_name] = upstream_results[edge.source.id]
+        return inputs
 
     def _scan_for_resources(self, plan: list[Node]) -> set[str]:
         """Finds all unique resource names required by the plan."""

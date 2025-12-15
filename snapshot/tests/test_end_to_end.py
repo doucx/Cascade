@@ -1,8 +1,20 @@
 import pytest
 import cascade as cs
-import io
-import sys
-from contextlib import redirect_stdout
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event, RunStarted, TaskExecutionStarted, TaskExecutionFinished, RunFinished
+
+class SpySubscriber:
+    """A test utility to collect events from a MessageBus."""
+    def __init__(self, bus: MessageBus):
+        self.events = []
+        bus.subscribe(Event, self.collect)
+
+    def collect(self, event: Event):
+        self.events.append(event)
+
+    def event_names(self):
+        return [type(e).__name__ for e in self.events]
 
 def test_e2e_linear_workflow():
     @cs.task
@@ -15,19 +27,29 @@ def test_e2e_linear_workflow():
 
     final_greeting = greet(get_name())
     
-    output = io.StringIO()
-    with redirect_stdout(output):
-        result = cs.run(final_greeting)
-
-    assert result == "Hello, Cascade!"
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
     
-    logs = output.getvalue()
-    assert "▶️  Starting Run" in logs
-    assert "⏳ Running task `get_name`" in logs
-    assert "✅ Finished task `get_name`" in logs
-    assert "⏳ Running task `greet`" in logs
-    assert "✅ Finished task `greet`" in logs
-    assert "🏁 Run finished successfully" in logs
+    result = engine.run(final_greeting)
+
+    assert result == "Hello, {name}!".format(name="Cascade")
+    
+    assert spy.event_names() == [
+        "RunStarted",
+        "TaskExecutionStarted",
+        "TaskExecutionFinished",
+        "TaskExecutionStarted",
+        "TaskExecutionFinished",
+        "RunFinished",
+    ]
+    
+    # Assert specific event details
+    assert spy.events[1].task_name == "get_name"
+    assert spy.events[2].status == "Succeeded"
+    assert spy.events[2].result_preview == "'Cascade'"
+    assert spy.events[4].status == "Succeeded"
+    assert spy.events[5].status == "Succeeded"
 
 def test_e2e_diamond_workflow_and_result():
     @cs.task
@@ -44,7 +66,11 @@ def test_e2e_diamond_workflow_and_result():
     r_c = t_c(r_a)
     r_d = t_d(r_b, z=r_c)
 
-    result = cs.run(r_d)
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
+    
+    result = engine.run(r_d)
     assert result == 18
 
 def test_e2e_failure_propagation():
@@ -64,13 +90,36 @@ def test_e2e_failure_propagation():
     r2 = failing_task(r1)
     r3 = unreachable_task(r2)
 
-    output = io.StringIO()
-    with redirect_stdout(output):
-        with pytest.raises(ValueError, match="Something went wrong"):
-            cs.run(r3)
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
+    
+    with pytest.raises(ValueError, match="Something went wrong"):
+        engine.run(r3)
 
-    logs = output.getvalue()
-    assert "✅ Finished task `ok_task`" in logs
-    assert "❌ Failed task `failing_task`" in logs
-    assert "💥 Run failed" in logs
-    assert "unreachable_task" not in logs
+    assert spy.event_names() == [
+        "RunStarted",
+        "TaskExecutionStarted", # ok_task started
+        "TaskExecutionFinished",# ok_task finished
+        "TaskExecutionStarted", # failing_task started
+        "TaskExecutionFinished",# failing_task finished
+        "RunFinished",
+    ]
+
+    # Assert success of the first task
+    task_ok_finished = spy.events[2]
+    assert isinstance(task_ok_finished, TaskExecutionFinished)
+    assert task_ok_finished.task_name == "ok_task"
+    assert task_ok_finished.status == "Succeeded"
+    
+    # Assert failure of the second task
+    task_fail_finished = spy.events[4]
+    assert isinstance(task_fail_finished, TaskExecutionFinished)
+    assert task_fail_finished.task_name == "failing_task"
+    assert task_fail_finished.status == "Failed"
+    assert "ValueError: Something went wrong" in task_fail_finished.error
+
+    # Assert failure of the entire run
+    run_finished = spy.events[5]
+    assert isinstance(run_finished, RunFinished)
+    assert run_finished.status == "Failed"

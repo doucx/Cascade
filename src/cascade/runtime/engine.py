@@ -9,7 +9,10 @@ from cascade.graph.model import Node
 from cascade.spec.task import LazyResult
 from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import RunStarted, RunFinished, TaskExecutionStarted, TaskExecutionFinished
+from cascade.runtime.events import (
+    RunStarted, RunFinished, TaskExecutionStarted, TaskExecutionFinished,
+    ResourceAcquired, ResourceReleased
+)
 from cascade.runtime.protocols import Solver, Executor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
@@ -61,7 +64,7 @@ class Engine:
                 required_resources = self._scan_for_resources(plan)
                 
                 # Setup resources and get active instances
-                active_resources = self._setup_resources(required_resources, stack)
+                active_resources = self._setup_resources(required_resources, stack, run_id)
 
                 results: Dict[str, Any] = {}
                 for node in plan:
@@ -125,7 +128,7 @@ class Engine:
                     required.add(param.default.resource_name)
         return required
 
-    def _setup_resources(self, required_names: set[str], stack: ExitStack) -> Dict[str, Any]:
+    def _setup_resources(self, required_names: set[str], stack: ExitStack, run_id: str) -> Dict[str, Any]:
         """
         Initializes all required resources and their dependencies recursively.
         Returns a dictionary of active resource instances.
@@ -154,9 +157,10 @@ class Engine:
             # Enter the generator and get the yielded value
             instance = next(gen)
             active[name] = instance
+            self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
             
             # Register the teardown logic
-            stack.callback(self._teardown_resource, gen)
+            stack.callback(self._teardown_resource, gen, run_id, name)
             
             return instance
 
@@ -165,9 +169,9 @@ class Engine:
             
         return active
 
-    def _teardown_resource(self, gen: Generator):
+    def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):
         """Helper to exhaust a resource generator for cleanup."""
         try:
             next(gen)
         except StopIteration:
-            pass # This is expected
+            self.bus.publish(ResourceReleased(run_id=run_id, resource_name=resource_name))

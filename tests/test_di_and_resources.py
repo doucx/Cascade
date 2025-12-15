@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
 import cascade as cs
+from cascade.runtime.events import ResourceAcquired, ResourceReleased, Event
 
 # --- Test Resources ---
 
@@ -40,8 +41,32 @@ def test_di_end_to_end():
     result = engine.run(task_using_resource())
 
     assert result == "production_url"
-    # Teardown order should be reverse of setup
-    # TODO: We need a way to verify setup/teardown calls, maybe via events.
+
+def test_resource_events():
+    """Tests that resource lifecycle events are emitted."""
+    events = []
+    bus = cs.MessageBus()
+    bus.subscribe(Event, events.append)
+
+    engine = cs.Engine(bus=bus)
+    engine.register(config)
+    engine.register(db_connection)
+
+    engine.run(task_using_resource())
+
+    # Check for ResourceAcquired events
+    acquired_names = [e.resource_name for e in events if isinstance(e, ResourceAcquired)]
+    # 'config' must be acquired before 'db_connection' because db_connection depends on config
+    assert "config" in acquired_names
+    assert "db_connection" in acquired_names
+    assert acquired_names.index("config") < acquired_names.index("db_connection")
+
+    # Check for ResourceReleased events
+    released_names = [e.resource_name for e in events if isinstance(e, ResourceReleased)]
+    # Teardown is in reverse order (LIFO via ExitStack)
+    assert "db_connection" in released_names
+    assert "config" in released_names
+    assert released_names.index("db_connection") < released_names.index("config")
 
 def test_resource_override():
     """Tests that a resource can be overridden for testing."""

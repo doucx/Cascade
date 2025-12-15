@@ -50,6 +50,9 @@ class GraphBuilder:
                 source_node = self._visit(value)
                 edge = Edge(source=source_node, target=target_node, arg_name=arg_name)
                 self.graph.add_edge(edge)
+            else:
+                # It's a literal value, store it in the node.
+                target_node.literal_inputs[arg_name] = value
 
             # TODO: Handle lists/dicts containing LazyResults (Future MVP enhancement)
 

@@ -13,6 +13,9 @@ class Node:
     # Metadata for execution strategies
     retry_policy: Optional[Any] = None  # Typed as Any to avoid circular deps with spec
     cache_policy: Optional[Any] = None
+    
+    # Pre-resolved literal inputs for the task
+    literal_inputs: Dict[str, Any] = field(default_factory=dict)
 
     def __hash__(self):
         return hash(self.id)

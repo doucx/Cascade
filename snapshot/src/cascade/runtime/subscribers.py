@@ -7,6 +7,7 @@ from .events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
     TaskSkipped,
+    TaskRetrying,
 )
 
 
@@ -24,6 +25,7 @@ class HumanReadableLogSubscriber:
         bus.subscribe(TaskExecutionStarted, self.on_task_started)
         bus.subscribe(TaskExecutionFinished, self.on_task_finished)
         bus.subscribe(TaskSkipped, self.on_task_skipped)
+        bus.subscribe(TaskRetrying, self.on_task_retrying)
 
     def _print(self, msg: str):
         print(msg, file=self._stream)
@@ -55,3 +57,10 @@ class HumanReadableLogSubscriber:
 
     def on_task_skipped(self, event: TaskSkipped):
         self._print(f"  ⏩ Skipped task `{event.task_name}` (Reason: {event.reason})")
+
+    def on_task_retrying(self, event: TaskRetrying):
+        self._print(
+            f"  ⚠️  Retrying task `{event.task_name}` "
+            f"(Attempt {event.attempt}/{event.max_attempts}) "
+            f"in {event.delay:.2f}s... Error: {event.error}"
+        )

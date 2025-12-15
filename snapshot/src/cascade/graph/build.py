@@ -1,6 +1,7 @@
 from typing import Dict, Any
 from cascade.graph.model import Graph, Node, Edge
 from cascade.spec.task import LazyResult
+from cascade.spec.routing import Router
 
 
 class GraphBuilder:
@@ -57,6 +58,30 @@ class GraphBuilder:
                 source_node = self._visit(value)
                 edge = Edge(source=source_node, target=target_node, arg_name=arg_name)
                 self.graph.add_edge(edge)
+            elif isinstance(value, Router):
+                # Handle Dynamic Router
+                # 1. Edge for Selector (carries the Router metadata)
+                selector_node = self._visit(value.selector)
+                edge = Edge(
+                    source=selector_node, 
+                    target=target_node, 
+                    arg_name=arg_name,
+                    router=value
+                )
+                self.graph.add_edge(edge)
+                
+                # 2. Edges for all possible Routes (implicit dependencies)
+                for route_result in value.routes.values():
+                    route_node = self._visit(route_result)
+                    # We use a special prefix to denote implicit dependencies that
+                    # shouldn't be directly injected as args, but ensure execution order.
+                    # LocalExecutor will ignore these.
+                    imp_edge = Edge(
+                        source=route_node, 
+                        target=target_node, 
+                        arg_name="_implicit_dependency"
+                    )
+                    self.graph.add_edge(imp_edge)
             else:
                 # It's a literal value, store it in the node.
                 target_node.literal_inputs[arg_name] = value

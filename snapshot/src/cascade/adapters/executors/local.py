@@ -35,12 +35,38 @@ class LocalExecutor:
             # Skip control flow edges
             if edge.arg_name == "_condition":
                 continue
+            
+            # Skip implicit dependencies (used for routing/ordering only)
+            if edge.arg_name == "_implicit_dependency":
+                continue
 
             result = upstream_results[edge.source.id]
-            if edge.arg_name.isdigit():
-                positional_args[int(edge.arg_name)] = result
+            
+            # Handle Dynamic Routing
+            if edge.router:
+                # 'result' is the value of the selector (e.g., "csv")
+                selector_value = result
+                try:
+                    selected_lazy_result = edge.router.routes[selector_value]
+                except KeyError:
+                    raise ValueError(
+                        f"Router selector returned '{selector_value}', "
+                        f"but no matching route found in {list(edge.router.routes.keys())}"
+                    )
+                
+                # Retrieve the actual result of the selected task
+                actual_value = upstream_results[selected_lazy_result._uuid]
+                
+                if edge.arg_name.isdigit():
+                    positional_args[int(edge.arg_name)] = actual_value
+                else:
+                    final_kwargs[edge.arg_name] = actual_value
             else:
-                final_kwargs[edge.arg_name] = result
+                # Standard dependency
+                if edge.arg_name.isdigit():
+                    positional_args[int(edge.arg_name)] = result
+                else:
+                    final_kwargs[edge.arg_name] = result
 
         sorted_indices = sorted(positional_args.keys())
         args = [positional_args[i] for i in sorted_indices]

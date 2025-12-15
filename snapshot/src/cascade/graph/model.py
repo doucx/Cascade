@@ -29,6 +29,8 @@ class Edge:
     target: Node
     # Metadata like argument name in the target function
     arg_name: str
+    # If set, implies this edge is the selector for a dynamic router
+    router: Optional[Any] = None
 
 
 @dataclass

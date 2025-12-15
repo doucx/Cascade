@@ -5,6 +5,7 @@ import asyncio
 from typing import Any, Dict, Optional
 
 from .spec.task import task, Param, LazyResult
+from .spec.routing import Router
 from .spec.file import File
 from .spec.resource import resource, inject
 from .runtime.engine import Engine
@@ -20,6 +21,7 @@ __all__ = [
     "run",
     "dry_run",
     "LazyResult",
+    "Router",
     "File",
     "resource",
     "inject",

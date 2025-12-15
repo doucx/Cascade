@@ -37,6 +37,13 @@ class GraphBuilder:
         self._process_dependencies(node, result.args, is_kwargs=False)
         self._process_dependencies(node, result.kwargs, is_kwargs=True)
 
+        # Handle condition dependency
+        if result._condition:
+            source_node = self._visit(result._condition)
+            # Use a special arg_name to identify control flow edges
+            edge = Edge(source=source_node, target=node, arg_name="_condition")
+            self.graph.add_edge(edge)
+
         return node
 
     def _process_dependencies(self, target_node: Node, inputs: Any, is_kwargs: bool):

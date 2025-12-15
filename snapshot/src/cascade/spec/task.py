@@ -40,9 +40,18 @@ class LazyResult(Generic[T]):
     _uuid: str = field(default_factory=lambda: str(uuid4()))
     _retry_policy: Optional[RetryPolicy] = None
     _cache_policy: Optional[CachePolicy] = None
+    _condition: Optional["LazyResult"] = None
 
     def __hash__(self):
         return hash(self._uuid)
+
+    def run_if(self, condition: "LazyResult") -> "LazyResult[T]":
+        """
+        Attaches a condition to this task. The task will only run if
+        the condition evaluates to True at runtime.
+        """
+        self._condition = condition
+        return self
 
     def with_retry(
         self, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0

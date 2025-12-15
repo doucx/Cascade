@@ -47,6 +47,33 @@ class Engine:
 
     def get_resource_provider(self, name: str) -> Callable:
         return self._resource_providers[name]
+    
+    def _should_skip(
+        self, 
+        node: Node, 
+        graph: Graph, 
+        results: Dict[str, Any], 
+        skipped_node_ids: set[str]
+    ) -> Optional[str]:
+        """
+        Determines if a node should be skipped. 
+        Returns the reason string if yes, None otherwise.
+        """
+        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
+        
+        # 1. Cascade Skip: If any upstream dependency was skipped
+        for edge in incoming_edges:
+            if edge.source.id in skipped_node_ids:
+                return "UpstreamSkipped"
+
+        # 2. Condition Check: If this node has a condition and it evaluated to False
+        for edge in incoming_edges:
+            if edge.arg_name == "_condition":
+                condition_result = results.get(edge.source.id)
+                if not condition_result:
+                    return "ConditionFalse"
+        
+        return None
 
     def override_resource_provider(self, name: str, new_provider: Any):
         # Unwrap ResourceDefinition if provided
@@ -82,7 +109,24 @@ class Engine:
                 )
 
                 results: Dict[str, Any] = {}
+                skipped_node_ids: set[str] = set()
+
                 for node in plan:
+                    # Check if we should skip this node
+                    skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
+                    
+                    if skip_reason:
+                        skipped_node_ids.add(node.id)
+                        self.bus.publish(
+                            TaskSkipped(
+                                run_id=run_id,
+                                task_id=node.id,
+                                task_name=node.name,
+                                reason=skip_reason,
+                            )
+                        )
+                        continue
+
                     results[node.id] = await self._execute_node_with_policies(
                         node, graph, results, active_resources, run_id
                     )

@@ -6,7 +6,7 @@ from uuid import uuid4
 from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
-from cascade.graph.model import Node
+from cascade.graph.model import Node, Graph
 from cascade.spec.task import LazyResult
 from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus

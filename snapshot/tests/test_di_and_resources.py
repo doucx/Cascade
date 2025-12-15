@@ -40,17 +40,21 @@ def task_using_resource(conn=cs.inject("db_connection")):
 
 def test_di_end_to_end():
     """Tests the full lifecycle: registration, injection, execution, teardown."""
+    import asyncio
+
     engine = cs.Engine()
     engine.register(config)
     engine.register(db_connection)
 
-    result = engine.run(task_using_resource())
+    result = asyncio.run(engine.run(task_using_resource()))
 
     assert result == "production_url"
 
 
 def test_resource_events():
     """Tests that resource lifecycle events are emitted."""
+    import asyncio
+
     events = []
     bus = cs.MessageBus()
     bus.subscribe(Event, events.append)
@@ -59,7 +63,7 @@ def test_resource_events():
     engine.register(config)
     engine.register(db_connection)
 
-    engine.run(task_using_resource())
+    asyncio.run(engine.run(task_using_resource()))
 
     # Check for ResourceAcquired events
     acquired_names = [
@@ -95,14 +99,16 @@ def test_resource_override():
     engine.register(config)
     engine.register(db_connection)  # Register the original
 
+    import asyncio
+
     # Override the db_connection resource
     with cs.override_resource(engine, "db_connection", mock_db_connection):
-        result = engine.run(task_using_resource())
+        result = asyncio.run(engine.run(task_using_resource()))
 
     assert result == "mock_db_url"
 
     # After exiting the context, the original should be restored
-    result_after = engine.run(task_using_resource())
+    result_after = asyncio.run(engine.run(task_using_resource()))
     assert result_after == "production_url"
 
 

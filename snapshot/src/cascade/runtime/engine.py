@@ -51,7 +51,9 @@ class Engine:
             new_provider = new_provider.func
         self._resource_providers[name] = new_provider
 
-    def run(self, target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
+    async def run(
+        self, target: LazyResult, params: Optional[Dict[str, Any]] = None
+    ) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
 
@@ -86,7 +88,7 @@ class Engine:
                     self.bus.publish(start_event)
 
                     try:
-                        result = self.executor.execute(
+                        result = await self.executor.execute(
                             node, graph, results, active_resources
                         )
                         results[node.id] = result

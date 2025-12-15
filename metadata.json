@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(executor): 将 LocalExecutor 升级为支持异步", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765804402.8740997, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(runtime): 引擎异步化与门面函数更新", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765804471.1095896, "duration_ms": 0}}

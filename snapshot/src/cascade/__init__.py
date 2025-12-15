@@ -33,4 +33,4 @@ def run(target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
 
     engine = Engine(bus=bus)
 
-    return engine.run(target, params=params)
+    return asyncio.run(engine.run(target, params=params))

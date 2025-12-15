@@ -1,196 +1,306 @@
-## [WIP] feat(executor): 将 LocalExecutor 升级为支持异步
+## [WIP] feat(runtime): 引擎异步化与门面函数更新
 
 ### 用户需求
-将 `LocalExecutor` 改造为支持同步/异步混合执行，以配合 `Executor` 协议的变更。
+1.  将 `Engine.run` 改造为异步方法，以配合异步的 `Executor`。
+2.  更新顶层 `cascade.run` 函数，使其能自动启动事件循环，对用户保持同步调用的便捷性。
+3.  修复因异步改造而崩溃的集成测试。
 
 ### 评论
-这是异步支持的关键实现步骤。现在的执行器将能够智能地识别任务类型，如果是 `async def` 定义的任务，它会 `await` 其结果；如果是普通函数，则直接执行。这使得 Cascade 能够无缝混合处理 CPU 密集型任务（同步）和 IO 密集型任务（异步）。
+这是异步改造的收官之战。通过将 `Engine` 转变为异步，我们打通了整个调用链。虽然内部机制发生了翻天覆地的变化（从同步到异步），但在 `cascade.run` 这一层，我们通过 `asyncio.run` 保持了 API 的向后兼容性，这是一次优雅的重构。
 
 ### 目标
-1.  修改 `src/cascade/adapters/executors/local.py`：
-    -   将 `execute` 方法改为 `async def`。
-    -   内部增加逻辑：检查 `node.callable_obj` 是否为协程函数。如果是，使用 `await` 执行；否则保持同步调用。
-2.  更新 `tests/test_adapters.py`：
-    -   由于 `execute` 变成了异步方法，现有的同步测试会失败。需要使用 `asyncio.run()` 来运行测试中的执行逻辑。
+1.  修改 `src/cascade/runtime/engine.py`：将 `run` 方法改为 `async def`，并 `await` 执行器的结果。
+2.  修改 `src/cascade/__init__.py`：在 `run` 函数中使用 `asyncio.run`。
+3.  修复 `tests/test_end_to_end.py` 和 `tests/test_di_and_resources.py`：在直接使用 `Engine` 的测试中引入 `asyncio.run`。
 
 ### 基本原理
--   **混合执行模型**: 通过 `inspect.iscoroutinefunction` 在运行时动态分发。
--   **协议一致性**: 实现之前更新的 `Executor` Protocol。
+-   **全链路异步**: 只有当 `Engine` 也是异步的，它才能 `await` 异步的 `Executor`，从而正确获取结果而非协程对象。
+-   **入口封装**: 对于库的使用者，特别是编写简单脚本的用户，`asyncio` 的复杂性被封装在 `cascade.run` 内部。
+-   **测试适配**: 测试代码直接操作内部组件（Engine），因此必须显式管理事件循环。
 
 ### 标签
-#intent/build #flow/ready #priority/high
-#comp/runtime #comp/adapters #concept/async
+#intent/refine #flow/ready #priority/high
+#comp/runtime #comp/tests #concept/async
 #task/domain/core #task/object/async-support #task/action/implementation
-#task/state/continue #task/status/active
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: Upgrade LocalExecutor to async
+#### Acts 1: Async Engine
 
-将 `LocalExecutor.execute` 转换为异步方法，并处理同步/异步分发。
-
-~~~~~act
-patch_file
-src/cascade/adapters/executors/local.py
-~~~~~
-~~~~~python
-    def execute(
-        self,
-        node: Node,
-        graph: Graph,
-        upstream_results: Dict[str, Any],
-        resource_context: Dict[str, Any],
-    ) -> Any:
-        """
-        Executes a single node's callable object by reconstructing its arguments
-        from dependency results and injected resources.
-        """
-        # 1. Prepare arguments from upstream task results
-        kwargs_from_deps: Dict[str, Any] = {}
-        positional_args_from_deps = {}
-
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-        for edge in incoming_edges:
-            result = upstream_results[edge.source.id]
-            if edge.arg_name.isdigit():
-                positional_args_from_deps[int(edge.arg_name)] = result
-            else:
-                kwargs_from_deps[edge.arg_name] = result
-
-        sorted_indices = sorted(positional_args_from_deps.keys())
-        args = [positional_args_from_deps[i] for i in sorted_indices]
-
-        # 2. Prepare arguments from injected resources
-        sig = inspect.signature(node.callable_obj)
-        kwargs_from_resources = {}
-        for param in sig.parameters.values():
-            if isinstance(param.default, Inject):
-                resource_name = param.default.resource_name
-                if resource_name in resource_context:
-                    kwargs_from_resources[param.name] = resource_context[resource_name]
-                else:
-                    raise NameError(
-                        f"Task '{node.name}' requires resource '{resource_name}' "
-                        "which was not found in the active context."
-                    )
-
-        # 3. Combine arguments and execute
-        # Dependencies take precedence over resource injections if names conflict
-        final_kwargs = {**kwargs_from_resources, **kwargs_from_deps}
-
-        return node.callable_obj(*args, **final_kwargs)
-~~~~~
-~~~~~python
-    async def execute(
-        self,
-        node: Node,
-        graph: Graph,
-        upstream_results: Dict[str, Any],
-        resource_context: Dict[str, Any],
-    ) -> Any:
-        """
-        Executes a single node's callable object by reconstructing its arguments
-        from dependency results and injected resources.
-        """
-        # 1. Prepare arguments from upstream task results
-        kwargs_from_deps: Dict[str, Any] = {}
-        positional_args_from_deps = {}
-
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-        for edge in incoming_edges:
-            result = upstream_results[edge.source.id]
-            if edge.arg_name.isdigit():
-                positional_args_from_deps[int(edge.arg_name)] = result
-            else:
-                kwargs_from_deps[edge.arg_name] = result
-
-        sorted_indices = sorted(positional_args_from_deps.keys())
-        args = [positional_args_from_deps[i] for i in sorted_indices]
-
-        # 2. Prepare arguments from injected resources
-        sig = inspect.signature(node.callable_obj)
-        kwargs_from_resources = {}
-        for param in sig.parameters.values():
-            if isinstance(param.default, Inject):
-                resource_name = param.default.resource_name
-                if resource_name in resource_context:
-                    kwargs_from_resources[param.name] = resource_context[resource_name]
-                else:
-                    raise NameError(
-                        f"Task '{node.name}' requires resource '{resource_name}' "
-                        "which was not found in the active context."
-                    )
-
-        # 3. Combine arguments and execute
-        # Dependencies take precedence over resource injections if names conflict
-        final_kwargs = {**kwargs_from_resources, **kwargs_from_deps}
-
-        if inspect.iscoroutinefunction(node.callable_obj):
-            return await node.callable_obj(*args, **final_kwargs)
-        else:
-            return node.callable_obj(*args, **final_kwargs)
-~~~~~
-
-#### Acts 2: Update tests for async executor
-
-更新 `tests/test_adapters.py` 中的 `test_local_executor`，使用 `asyncio.run` 来执行异步的 `execute` 方法。
+将 `Engine.run` 转换为异步方法，并 `await` 执行器调用。
 
 ~~~~~act
 patch_file
-tests/test_adapters.py
+src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-def test_local_executor():
-    def add(x: int, y: int) -> int:
-        return x + y
+    def override_resource_provider(self, name: str, new_provider: Any):
+        # Unwrap ResourceDefinition if provided
+        if isinstance(new_provider, ResourceDefinition):
+            new_provider = new_provider.func
+        self._resource_providers[name] = new_provider
 
-    # Manually construct graph for clarity
-    node_x = Node(id="x", name="provide_x", callable_obj=lambda: 5)
-    node_y = Node(id="y", name="provide_y", callable_obj=lambda: 10)
-    node_add = Node(id="add", name="add", callable_obj=add)
-
-    edge1 = Edge(source=node_x, target=node_add, arg_name="0")  # positional x
-    edge2 = Edge(source=node_y, target=node_add, arg_name="y")  # keyword y
-
-    graph = Graph(nodes=[node_x, node_y, node_add], edges=[edge1, edge2])
-
-    # Simulate upstream results
-    upstream_results = {"x": 5, "y": 10}
-
-    executor = LocalExecutor()
-    result = executor.execute(node_add, graph, upstream_results, resource_context={})
-
-    assert result == 15
+    def run(self, target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
+        run_id = str(uuid4())
+        start_time = time.time()
 ~~~~~
 ~~~~~python
-def test_local_executor():
+    def override_resource_provider(self, name: str, new_provider: Any):
+        # Unwrap ResourceDefinition if provided
+        if isinstance(new_provider, ResourceDefinition):
+            new_provider = new_provider.func
+        self._resource_providers[name] = new_provider
+
+    async def run(
+        self, target: LazyResult, params: Optional[Dict[str, Any]] = None
+    ) -> Any:
+        run_id = str(uuid4())
+        start_time = time.time()
+~~~~~
+
+~~~~~act
+patch_file
+src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+                    self.bus.publish(start_event)
+
+                    try:
+                        result = self.executor.execute(
+                            node, graph, results, active_resources
+                        )
+                        results[node.id] = result
+
+                        task_duration = time.time() - task_start_time
+~~~~~
+~~~~~python
+                    self.bus.publish(start_event)
+
+                    try:
+                        result = await self.executor.execute(
+                            node, graph, results, active_resources
+                        )
+                        results[node.id] = result
+
+                        task_duration = time.time() - task_start_time
+~~~~~
+
+#### Acts 2: Update Facade
+
+更新 `cascade.run` 以使用 `asyncio.run`。
+
+~~~~~act
+patch_file
+src/cascade/__init__.py
+~~~~~
+~~~~~python
+def run(target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
+    """
+    Runs a Cascade workflow with a default engine configuration.
+
+    This is the primary entry point for users. It sets up a default
+    engine with a human-readable logger.
+    """
+    bus = MessageBus()
+    # Attach the default logger
+    HumanReadableLogSubscriber(bus)
+
+    engine = Engine(bus=bus)
+
+    return engine.run(target, params=params)
+~~~~~
+~~~~~python
+def run(target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
+    """
+    Runs a Cascade workflow with a default engine configuration.
+
+    This is the primary entry point for users. It sets up a default
+    engine with a human-readable logger.
+    """
+    bus = MessageBus()
+    # Attach the default logger
+    HumanReadableLogSubscriber(bus)
+
+    engine = Engine(bus=bus)
+
+    return asyncio.run(engine.run(target, params=params))
+~~~~~
+
+#### Acts 3: Fix DI Tests
+
+修复 `tests/test_di_and_resources.py` 中的测试，使用 `asyncio.run`。
+
+~~~~~act
+patch_file
+tests/test_di_and_resources.py
+~~~~~
+~~~~~python
+def test_di_end_to_end():
+    """Tests the full lifecycle: registration, injection, execution, teardown."""
+    engine = cs.Engine()
+    engine.register(config)
+    engine.register(db_connection)
+
+    result = engine.run(task_using_resource())
+
+    assert result == "production_url"
+
+
+def test_resource_events():
+    """Tests that resource lifecycle events are emitted."""
+    events = []
+    bus = cs.MessageBus()
+    bus.subscribe(Event, events.append)
+
+    engine = cs.Engine(bus=bus)
+    engine.register(config)
+    engine.register(db_connection)
+
+    engine.run(task_using_resource())
+
+    # Check for ResourceAcquired events
+~~~~~
+~~~~~python
+def test_di_end_to_end():
+    """Tests the full lifecycle: registration, injection, execution, teardown."""
     import asyncio
 
-    def add(x: int, y: int) -> int:
-        return x + y
+    engine = cs.Engine()
+    engine.register(config)
+    engine.register(db_connection)
 
-    # Manually construct graph for clarity
-    node_x = Node(id="x", name="provide_x", callable_obj=lambda: 5)
-    node_y = Node(id="y", name="provide_y", callable_obj=lambda: 10)
-    node_add = Node(id="add", name="add", callable_obj=add)
+    result = asyncio.run(engine.run(task_using_resource()))
 
-    edge1 = Edge(source=node_x, target=node_add, arg_name="0")  # positional x
-    edge2 = Edge(source=node_y, target=node_add, arg_name="y")  # keyword y
+    assert result == "production_url"
 
-    graph = Graph(nodes=[node_x, node_y, node_add], edges=[edge1, edge2])
 
-    # Simulate upstream results
-    upstream_results = {"x": 5, "y": 10}
+def test_resource_events():
+    """Tests that resource lifecycle events are emitted."""
+    import asyncio
 
-    executor = LocalExecutor()
-    result = asyncio.run(
-        executor.execute(node_add, graph, upstream_results, resource_context={})
-    )
+    events = []
+    bus = cs.MessageBus()
+    bus.subscribe(Event, events.append)
 
-    assert result == 15
+    engine = cs.Engine(bus=bus)
+    engine.register(config)
+    engine.register(db_connection)
+
+    asyncio.run(engine.run(task_using_resource()))
+
+    # Check for ResourceAcquired events
+~~~~~
+
+~~~~~act
+patch_file
+tests/test_di_and_resources.py
+~~~~~
+~~~~~python
+    # Override the db_connection resource
+    with cs.override_resource(engine, "db_connection", mock_db_connection):
+        result = engine.run(task_using_resource())
+
+    assert result == "mock_db_url"
+
+    # After exiting the context, the original should be restored
+    result_after = engine.run(task_using_resource())
+    assert result_after == "production_url"
+~~~~~
+~~~~~python
+    import asyncio
+
+    # Override the db_connection resource
+    with cs.override_resource(engine, "db_connection", mock_db_connection):
+        result = asyncio.run(engine.run(task_using_resource()))
+
+    assert result == "mock_db_url"
+
+    # After exiting the context, the original should be restored
+    result_after = asyncio.run(engine.run(task_using_resource()))
+    assert result_after == "production_url"
+~~~~~
+
+#### Acts 4: Fix End-to-End Tests
+
+修复 `tests/test_end_to_end.py` 中的测试，使用 `asyncio.run`。
+
+~~~~~act
+patch_file
+tests/test_end_to_end.py
+~~~~~
+~~~~~python
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
+
+    result = engine.run(final_greeting)
+
+    assert result == "Hello, {name}!".format(name="Cascade")
+~~~~~
+~~~~~python
+    import asyncio
+
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
+
+    result = asyncio.run(engine.run(final_greeting))
+
+    assert result == "Hello, {name}!".format(name="Cascade")
+~~~~~
+
+~~~~~act
+patch_file
+tests/test_end_to_end.py
+~~~~~
+~~~~~python
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
+
+    result = engine.run(r_d)
+    assert result == 18
+~~~~~
+~~~~~python
+    import asyncio
+
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
+
+    result = asyncio.run(engine.run(r_d))
+    assert result == 18
+~~~~~
+
+~~~~~act
+patch_file
+tests/test_end_to_end.py
+~~~~~
+~~~~~python
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
+
+    with pytest.raises(ValueError, match="Something went wrong"):
+        engine.run(r3)
+
+    assert spy.event_names() == [
+~~~~~
+~~~~~python
+    import asyncio
+
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    engine = Engine(bus=bus)
+
+    with pytest.raises(ValueError, match="Something went wrong"):
+        asyncio.run(engine.run(r3))
+
+    assert spy.event_names() == [
 ~~~~~
 
 ### 下一步建议
-执行 **子任务 3: 引擎异步化**。这是异步改造的最后一步。我们将把 `Engine.run` 改造为异步方法，并确保顶层 `cascade.run` API 能够正确引导事件循环。此外，我们还需要更新 `Engine` 内部调用 `executor.execute` 的方式（添加 `await`）。这一步将使整个系统真正支持异步工作流。
+运行测试。如果所有测试通过，则说明异步改造圆满完成。接下来，我们将进入 Cascade 阶段二的第三项任务：**缓存与重试机制**。这将进一步增强框架在不可靠环境下的健壮性。我们将首先从 **缓存协议与基础实现 (`FileExistenceCache`)** 开始。

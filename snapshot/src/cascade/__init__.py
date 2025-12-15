@@ -11,11 +11,13 @@ from .runtime.bus import MessageBus
 from .runtime.subscribers import HumanReadableLogSubscriber
 from .testing import override_resource
 from .stdlib import shell
+from .tools.preview import dry_run
 
 __all__ = [
     "task",
     "Param",
     "run",
+    "dry_run",
     "LazyResult",
     "resource",
     "inject",

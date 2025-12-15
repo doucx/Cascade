@@ -4,11 +4,14 @@ from typing import Callable, Any
 # This will be properly implemented once the Engine supports resource registration.
 # For now, it's a placeholder for the API contract.
 
+
 @contextmanager
-def override_resource(engine: 'Engine', name: str, new_resource_func: Callable[[], Any]):
+def override_resource(
+    engine: "Engine", name: str, new_resource_func: Callable[[], Any]
+):
     """
     A context manager to temporarily override a resource for testing purposes.
-    
+
     Usage:
         engine = Engine()
         engine.register(production_db)
@@ -16,7 +19,7 @@ def override_resource(engine: 'Engine', name: str, new_resource_func: Callable[[
         with override_resource(engine, "production_db", mock_db):
             engine.run(my_task) # my_task will receive mock_db
     """
-    if not hasattr(engine, 'override_resource_provider'):
+    if not hasattr(engine, "override_resource_provider"):
         raise TypeError("The provided engine does not support resource overriding.")
 
     original = engine.get_resource_provider(name)

@@ -1,12 +1,13 @@
-from typing import Dict, Any, Set
-from uuid import uuid4
+from typing import Dict, Any
 from cascade.graph.model import Graph, Node, Edge
-from cascade.spec.task import LazyResult, Task
+from cascade.spec.task import LazyResult
+
 
 class GraphBuilder:
     """
     Constructs a Graph from a target LazyResult by traversing dependencies.
     """
+
     def __init__(self):
         self.graph = Graph()
         # Map LazyResult UUID to created Node to ensure singularity (handle diamond deps)
@@ -23,9 +24,7 @@ class GraphBuilder:
 
         # Create a new Node for this task execution
         node = Node(
-            id=result._uuid,
-            name=result.task.name,
-            callable_obj=result.task.func
+            id=result._uuid, name=result.task.name, callable_obj=result.task.func
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
@@ -38,17 +37,18 @@ class GraphBuilder:
 
     def _process_dependencies(self, target_node: Node, inputs: Any, is_kwargs: bool):
         iterator = inputs.items() if is_kwargs else enumerate(inputs)
-        
+
         for key, value in iterator:
-            arg_name = str(key) # key is int for args, str for kwargs
-            
+            arg_name = str(key)  # key is int for args, str for kwargs
+
             if isinstance(value, LazyResult):
                 # Found a dependency! Recurse.
                 source_node = self._visit(value)
                 edge = Edge(source=source_node, target=target_node, arg_name=arg_name)
                 self.graph.add_edge(edge)
-            
+
             # TODO: Handle lists/dicts containing LazyResults (Future MVP enhancement)
+
 
 def build_graph(target: LazyResult) -> Graph:
     """Helper function to build a graph from a result."""

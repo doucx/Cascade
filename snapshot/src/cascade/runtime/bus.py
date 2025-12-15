@@ -5,10 +5,12 @@ from .events import Event
 # Define a Handler type alias for clarity
 Handler = Callable[[Any], None]
 
+
 class MessageBus:
     """
     A simple in-memory message bus for dispatching events to subscribers.
     """
+
     def __init__(self):
         self._subscribers: Dict[Type[Event], List[Handler]] = defaultdict(list)
         self._wildcard_subscribers: List[Handler] = []
@@ -26,7 +28,7 @@ class MessageBus:
         handlers = self._subscribers.get(type(event), [])
         for handler in handlers:
             handler(event)
-        
+
         # 2. Dispatch to wildcard handlers (subscribed to Event)
         for handler in self._wildcard_subscribers:
             handler(event)

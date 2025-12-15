@@ -2,17 +2,22 @@ import sys
 from typing import TextIO
 from .bus import MessageBus
 from .events import (
-    Event, RunStarted, RunFinished, 
-    TaskExecutionStarted, TaskExecutionFinished, TaskSkipped
+    RunStarted,
+    RunFinished,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+    TaskSkipped,
 )
+
 
 class HumanReadableLogSubscriber:
     """
     Listens to events and prints user-friendly logs to a stream (default: stdout).
     """
+
     def __init__(self, bus: MessageBus, stream: TextIO = sys.stdout):
         self._stream = stream
-        
+
         # Subscribe to relevant events
         bus.subscribe(RunStarted, self.on_run_started)
         bus.subscribe(RunFinished, self.on_run_finished)
@@ -40,9 +45,13 @@ class HumanReadableLogSubscriber:
 
     def on_task_finished(self, event: TaskExecutionFinished):
         if event.status == "Succeeded":
-            self._print(f"  ✅ Finished task `{event.task_name}` in {event.duration:.2f}s")
+            self._print(
+                f"  ✅ Finished task `{event.task_name}` in {event.duration:.2f}s"
+            )
         else:
-            self._print(f"  ❌ Failed task `{event.task_name}` after {event.duration:.2f}s: {event.error}")
+            self._print(
+                f"  ❌ Failed task `{event.task_name}` after {event.duration:.2f}s: {event.error}"
+            )
 
     def on_task_skipped(self, event: TaskSkipped):
         self._print(f"  ⏩ Skipped task `{event.task_name}` (Reason: {event.reason})")

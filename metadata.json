@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修正菱形图构造逻辑并补充视图层测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765807686.5078838, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(tests): Correct diamond graph construction and add view layer tests", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765807849.0533082, "duration_ms": 0}}

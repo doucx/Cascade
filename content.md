@@ -1,22 +1,23 @@
-## [WIP] feat: 增强资源管理系统的可观测性
+好的，事件发布功能已完成并验证通过。现在，我们将其作为一个完整的工作单元提交。
+
+## [COMMIT] feat(runtime, event): Enhance observability with Resource lifecycle events
 
 ### 用户需求
-为依赖注入系统添加可观测性。具体而言，需要在资源被获取（setup 完成）和释放（teardown 完成）时发布相应的事件，以便日志和监控系统能够感知资源的状态变化。
+将资源生命周期事件（`ResourceAcquired`, `ResourceReleased`）的实现提交到版本控制。
 
 ### 评论
-当前资源管理是“静默”的。如果资源初始化缓慢或失败，或者清理逻辑未执行，用户很难感知。通过引入 `ResourceAcquired` 和 `ResourceReleased` 事件，我们将这种隐式的生命周期显式化，这对于调试复杂的资源依赖链至关重要。
+通过将资源管理的操作（setup 和 teardown）转化为显式的、结构化的事件，我们极大地提升了系统的透明度。这不仅使得测试 `Engine` 的资源清理逻辑变得简单，也为未来的诊断、监控和审计工具提供了关键的数据源。这是一个小而精悍的改进，但对系统的可观测性有着巨大的长期价值。
 
 ### 目标
-1.  **定义事件**: 在 `src/cascade/runtime/events.py` 中添加 `ResourceAcquired` 和 `ResourceReleased` 事件类。
-2.  **发布事件**: 更新 `src/cascade/runtime/engine.py`，在资源 setup 成功后和 teardown 完成后发布上述事件。
-3.  **验证**: 更新 `tests/test_di_and_resources.py`，添加测试逻辑以验证这些事件是否被正确触发。
+1.  将所有与资源事件相关的新建和修改文件添加到 Git 暂存区。
+2.  创建一个内容详尽的 Git Commit。
 
 ### 基本原理
-我们利用 Cascade 已有的 Message Bus 架构。`Engine` 在管理资源生命周期的关键节点（`next(gen)` 之后和 `StopIteration` 之后/异常时）构造并发布事件。这些事件将携带 `run_id` 和 `resource_name`，提供完整的上下文。
+持续利用 Message Bus 模式，确保核心逻辑（`Engine`）与观测逻辑（日志、监控）之间的解耦。事件发布使得资源管理流程变得透明。
 
 ### 标签
 #intent/build #flow/ready #priority/medium
-#comp/runtime #comp/tests
+#comp/runtime #comp/events #comp/tests
 #concept/observability #concept/dependency-injection
 #scope/core
 #task/domain/core #task/object/observability #task/action/implementation
@@ -26,271 +27,48 @@
 
 ### Script
 
-#### Acts 1: 定义资源生命周期事件
+#### Acts 1: Stage all changes
 
-我们首先定义两个新的事件类型。
+将所有与资源事件相关的修改添加到 Git 暂存区。
 
 ~~~~~act
-patch_file
+git_add
+~~~~~
+~~~~~
+src/cascade/runtime/engine.py
 src/cascade/runtime/events.py
-~~~~~
-~~~~~python
-@dataclass(frozen=True)
-class TaskSkipped(TaskEvent):
-    """Fired when a task is skipped due to caching or conditional logic."""
-    reason: str = "Unknown" # "CacheHit", "ConditionFalse"
-~~~~~
-~~~~~python
-@dataclass(frozen=True)
-class TaskSkipped(TaskEvent):
-    """Fired when a task is skipped due to caching or conditional logic."""
-    reason: str = "Unknown" # "CacheHit", "ConditionFalse"
-
-@dataclass(frozen=True)
-class ResourceEvent(Event):
-    """Base for events related to resources."""
-    resource_name: str = ""
-
-@dataclass(frozen=True)
-class ResourceAcquired(ResourceEvent):
-    """Fired when a resource is successfully initialized (setup complete)."""
-    pass
-
-@dataclass(frozen=True)
-class ResourceReleased(ResourceEvent):
-    """Fired when a resource is successfully torn down."""
-    pass
-~~~~~
-
-#### Acts 2: 在 Engine 中发布事件
-
-修改 `Engine`，在 `_setup_resources` 和 `_teardown_resource` 中发布事件。我们需要将 `run_id` 传递给这两个方法，以便事件包含正确的上下文。
-
-~~~~~act
-patch_file
-src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-from cascade.spec.resource import ResourceDefinition, Inject
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import RunStarted, RunFinished, TaskExecutionStarted, TaskExecutionFinished
-from cascade.runtime.protocols import Solver, Executor
-from cascade.adapters.solvers.native import NativeSolver
-~~~~~
-~~~~~python
-from cascade.spec.resource import ResourceDefinition, Inject
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import (
-    RunStarted, RunFinished, TaskExecutionStarted, TaskExecutionFinished,
-    ResourceAcquired, ResourceReleased
-)
-from cascade.runtime.protocols import Solver, Executor
-from cascade.adapters.solvers.native import NativeSolver
-~~~~~
-
-~~~~~act
-patch_file
-src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-                # Scan for all required resources
-                required_resources = self._scan_for_resources(plan)
-                
-                # Setup resources and get active instances
-                active_resources = self._setup_resources(required_resources, stack)
-
-                results: Dict[str, Any] = {}
-                for node in plan:
-~~~~~
-~~~~~python
-                # Scan for all required resources
-                required_resources = self._scan_for_resources(plan)
-                
-                # Setup resources and get active instances
-                active_resources = self._setup_resources(required_resources, stack, run_id)
-
-                results: Dict[str, Any] = {}
-                for node in plan:
-~~~~~
-
-~~~~~act
-patch_file
-src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-        return required
-
-    def _setup_resources(self, required_names: set[str], stack: ExitStack) -> Dict[str, Any]:
-        """
-        Initializes all required resources and their dependencies recursively.
-        Returns a dictionary of active resource instances.
-        """
-        active: Dict[str, Any] = {}
-        
-        def get_or_create(name: str):
-            if name in active:
-                return active[name]
-            
-            provider = self._resource_providers.get(name)
-            if not provider:
-                raise NameError(f"Resource '{name}' is required but not registered.")
-
-            # Inspect provider's signature to find its dependencies
-            sig = inspect.signature(provider)
-            deps = {}
-            for param_name, param in sig.parameters.items():
-                if isinstance(param.default, Inject):
-                    deps[param_name] = get_or_create(param.default.resource_name)
-                # Here you could also inject `Param`s if needed
-            
-            # Create the resource generator
-            gen = provider(**deps)
-            
-            # Enter the generator and get the yielded value
-            instance = next(gen)
-            active[name] = instance
-            
-            # Register the teardown logic
-            stack.callback(self._teardown_resource, gen)
-            
-            return instance
-
-        for name in required_names:
-            get_or_create(name)
-            
-        return active
-
-    def _teardown_resource(self, gen: Generator):
-        """Helper to exhaust a resource generator for cleanup."""
-        try:
-            next(gen)
-        except StopIteration:
-            pass # This is expected
-~~~~~
-~~~~~python
-        return required
-
-    def _setup_resources(self, required_names: set[str], stack: ExitStack, run_id: str) -> Dict[str, Any]:
-        """
-        Initializes all required resources and their dependencies recursively.
-        Returns a dictionary of active resource instances.
-        """
-        active: Dict[str, Any] = {}
-        
-        def get_or_create(name: str):
-            if name in active:
-                return active[name]
-            
-            provider = self._resource_providers.get(name)
-            if not provider:
-                raise NameError(f"Resource '{name}' is required but not registered.")
-
-            # Inspect provider's signature to find its dependencies
-            sig = inspect.signature(provider)
-            deps = {}
-            for param_name, param in sig.parameters.items():
-                if isinstance(param.default, Inject):
-                    deps[param_name] = get_or_create(param.default.resource_name)
-                # Here you could also inject `Param`s if needed
-            
-            # Create the resource generator
-            gen = provider(**deps)
-            
-            # Enter the generator and get the yielded value
-            instance = next(gen)
-            active[name] = instance
-            self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-            
-            # Register the teardown logic
-            stack.callback(self._teardown_resource, gen, run_id, name)
-            
-            return instance
-
-        for name in required_names:
-            get_or_create(name)
-            
-        return active
-
-    def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):
-        """Helper to exhaust a resource generator for cleanup."""
-        try:
-            next(gen)
-        except StopIteration:
-            self.bus.publish(ResourceReleased(run_id=run_id, resource_name=resource_name))
-~~~~~
-
-#### Acts 3: 验证事件发布
-
-更新测试文件，验证事件是否被正确触发。
-
-~~~~~act
-patch_file
 tests/test_di_and_resources.py
 ~~~~~
-~~~~~python
-import pytest
-from unittest.mock import MagicMock
-import cascade as cs
 
-# --- Test Resources ---
-~~~~~
-~~~~~python
-import pytest
-from unittest.mock import MagicMock
-import cascade as cs
-from cascade.runtime.events import ResourceAcquired, ResourceReleased, Event
+#### Acts 2: Commit changes
 
-# --- Test Resources ---
-~~~~~
+现在，我们创建一个内容详尽的提交。
 
 ~~~~~act
-patch_file
-tests/test_di_and_resources.py
+git_commit
 ~~~~~
-~~~~~python
-    result = engine.run(task_using_resource())
+~~~~~text
+feat(runtime, event): Enhance observability with Resource lifecycle events
 
-    assert result == "production_url"
-    # Teardown order should be reverse of setup
-    # TODO: We need a way to verify setup/teardown calls, maybe via events.
+Introduces two new event types, `ResourceAcquired` and `ResourceReleased`, to the runtime Message Bus.
 
-def test_resource_override():
-~~~~~
-~~~~~python
-    result = engine.run(task_using_resource())
+The Engine is updated to publish these events:
+1. `ResourceAcquired` is published immediately after a resource's generator yields its instance (setup complete).
+2. `ResourceReleased` is published after the generator is exhausted (teardown complete).
 
-    assert result == "production_url"
+This enhancement provides critical observability into the resource lifecycle, allowing subscribers to monitor the setup time and failure status of external dependencies, which is crucial for debugging and performance profiling.
 
-def test_resource_events():
-    """Tests that resource lifecycle events are emitted."""
-    events = []
-    bus = cs.MessageBus()
-    bus.subscribe(Event, events.append)
-
-    engine = cs.Engine(bus=bus)
-    engine.register(config)
-    engine.register(db_connection)
-
-    engine.run(task_using_resource())
-
-    # Check for ResourceAcquired events
-    acquired_names = [e.resource_name for e in events if isinstance(e, ResourceAcquired)]
-    # 'config' must be acquired before 'db_connection' because db_connection depends on config
-    assert "config" in acquired_names
-    assert "db_connection" in acquired_names
-    assert acquired_names.index("config") < acquired_names.index("db_connection")
-
-    # Check for ResourceReleased events
-    released_names = [e.resource_name for e in events if isinstance(e, ResourceReleased)]
-    # Teardown is in reverse order (LIFO via ExitStack)
-    assert "db_connection" in released_names
-    assert "config" in released_names
-    assert released_names.index("db_connection") < released_names.index("config")
-
-def test_resource_override():
+The integration tests were updated to assert the correct sequence of these events, ensuring that dependencies are acquired in forward order and released in reverse order.
 ~~~~~
 
 ### 下一步建议
-运行测试 `pytest tests/test_di_and_resources.py`，确认所有测试通过。
+我们继续 Cascade 阶段二的下一项核心任务：**一等公民的异步 (`async/await`) 支持**。
 
-之后，我们将进行阶段二的下一个大任务：**实现一等公民的异步 (`async/await`) 支持**。这将使 `Cascade` 能够处理现代的 IO 密集型工作流。
+这个任务包含对 `Task`, `Executor`, 和 `Engine` 的核心协议修改。
+
+我将拆解为以下子任务：
+1. **规格与协议演进**: 修改 `@task` 装饰器和 `Executor` 协议，使其兼容异步。
+2. **执行器升级**: 将 `LocalExecutor` 改造为支持同步/异步混合执行。
+3. **引擎异步化**: 将 `Engine.run` 改造为 `async def`，并确保 `cascade.run()` 门面函数能正确启动 `asyncio` 事件循环。
+
+如果你同意，我将从**规格与协议演进**开始。

@@ -44,7 +44,7 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
                 total_nodes=total_steps,
                 node_id=node.id,
                 node_name=node.name,
-                literal_inputs=node.literal_inputs
+                literal_inputs=node.literal_inputs,
             )
         )
 

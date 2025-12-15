@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict
 from ..runtime.events import Event
 
@@ -12,12 +12,14 @@ class ToolEvent(Event):
 @dataclass(frozen=True)
 class PlanAnalysisStarted(ToolEvent):
     """Fired when dry_run starts analyzing a target."""
+    _: field(kw_only=True)
     target_node_id: str
 
 
 @dataclass(frozen=True)
 class PlanNodeInspected(ToolEvent):
     """Fired for each node in the resolved execution plan."""
+    _: field(kw_only=True)
     index: int
     total_nodes: int
     node_id: str
@@ -28,4 +30,5 @@ class PlanNodeInspected(ToolEvent):
 @dataclass(frozen=True)
 class PlanAnalysisFinished(ToolEvent):
     """Fired when dry_run analysis is complete."""
+    _: field(kw_only=True)
     total_steps: int

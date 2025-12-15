@@ -1,60 +1,60 @@
 简要回答
-测试失败是因为 Cascade 目前不将默认参数捕获为图中的字面量输入。我将修改测试用例，显式传递参数，以验证 `dry_run` 显示字面量的功能。
+测试已通过。我们将创建提交，正式提交针对 `dry_run` 测试的修复，以确保它与 Cascade 处理默认参数的当前行为一致。
 
-## [WIP] fix(tests): Fix dry_run test expectation for default arguments
-
+## [COMMIT] fix(tests): Adjust dry_run test to correctly reflect literal inputs
 
 ### 错误分析
-测试 `test_dry_run_linear_graph` 失败，断言 `[2/2] step_b (Literals: {'y': 10})` 未在输出中找到。
-原因在于测试代码 `result = step_b(step_a())` 依赖了 `step_b` 的默认参数 `y=10`。目前的 `Cascade` 架构在构建图时仅捕获显式传递的参数，不会自省并“烘焙”函数的默认参数到 `literal_inputs` 中。因此，`dry_run` 正确地显示了空的字面量集合。
+之前的 `test_dry_run_linear_graph` 失败，因为它预期 `dry_run` 的输出中包含任务函数的默认参数 (`y=10`) 作为字面量。然而，`Cascade` 的图构建逻辑目前只捕获显式传递给 `LazyResult` 的参数，而不自省函数的默认参数。因此，`dry_run` 输出的字面量为空，导致测试断言失败。
 
 ### 用户需求
-修复测试失败，确保持续集成通过。
+修复 `tests/test_tools.py` 中的 `test_dry_run_linear_graph` 测试，使其能够正确通过。
 
 ### 评论
-虽然显示默认参数是 `dry_run` 的一个很好的未来增强功能，但目前的测试目的是验证 `dry_run` 能否正确打印出图中的信息。通过显式传递参数，我们可以验证“打印字面量”这一核心功能。
+这个修复是必要的，它使测试用例与 `Cascade` 当前的工作机制对齐。虽然将来可以增强 `dry_run` 以显示函数的默认参数，但目前的修改确保了测试能够准确验证当前“字面量捕获”功能的行为，并恢复了测试套件的通过状态。
 
 ### 目标
-1.  修改 `tests/test_tools.py` 中的 `test_dry_run_linear_graph`，显式传递 `y=10`。
+1.  修改 `tests/test_tools.py` 中的 `test_dry_run_linear_graph`。
+2.  创建一个 Git Commit。
 
 ### 基本原理
-调整测试用例以匹配当前系统的行为，同时保留对“字面量显示功能”的验证。
+通过在测试中显式传递 `y=10`，我们确保了该参数被 `GraphBuilder` 正确捕获为 `Node` 的 `literal_inputs`，从而 `dry_run` 可以如预期地打印出它。这验证了 `dry_run` 在有字面量输入时的正确显示功能。
 
 ### 标签
 #intent/fix #flow/ready #priority/medium
 #comp/tests #scope/dx
 #ai/instruct
-#task/domain/core #task/object/debugging-tools #task/action/bug-fix
-#task/state/continue
+#task/domain/testing #task/object/dry-run-tool #task/action/bug-fix
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修改测试用例
+#### Acts 1: Stage files
+
+将修复后的 `tests/test_tools.py` 文件添加到 Git 暂存区。
 
 ~~~~~act
-patch_file
+git_add
 tests/test_tools.py
 ~~~~~
-~~~~~python
-    @cs.task
-    def step_b(x, y=10):
-        return x + y
 
-    result = step_b(step_a())
-    cs.dry_run(result)
+#### Acts 2: Commit changes
 
-    captured = capsys.readouterr()
+现在，我们创建一个内容详尽的提交。
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-    @cs.task
-    def step_b(x, y=10):
-        return x + y
+~~~~~text
+fix(tests): Adjust dry_run test to correctly reflect literal inputs
 
-    # Explicitly pass y=10 to verify it appears in the dry run output
-    result = step_b(step_a(), y=10)
-    cs.dry_run(result)
+The `test_dry_run_linear_graph` in `tests/test_tools.py` was failing because it expected default function arguments (e.g., `y=10`) to appear in the `dry_run` output's literal inputs.
 
-    captured = capsys.readouterr()
+The current `Cascade` graph building mechanism only captures arguments explicitly passed to `LazyResult`, not introspected default values from the function signature. The test has been updated to explicitly pass `y=10`, aligning the test's expectation with the current system's behavior and ensuring the `dry_run` output correctly displays this literal.
+
+This resolves the test failure and correctly verifies the `dry_run`'s ability to display explicit literal inputs.
 ~~~~~
+
+### 下一步建议
+我们已成功修复 `dry_run` 的测试，并提交了代码。现在，我们可以继续 Cascade 阶段三的下一个任务：**实现 `cs.File`**。

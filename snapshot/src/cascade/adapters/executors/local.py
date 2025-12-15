@@ -32,6 +32,10 @@ class LocalExecutor:
         # Upstream results override literals
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
         for edge in incoming_edges:
+            # Skip control flow edges
+            if edge.arg_name == "_condition":
+                continue
+
             result = upstream_results[edge.source.id]
             if edge.arg_name.isdigit():
                 positional_args[int(edge.arg_name)] = result

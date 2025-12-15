@@ -280,6 +280,10 @@ class Engine:
         """Finds all unique resource names required by the plan."""
         required = set()
         for node in plan:
+            # Skip nodes that don't have a callable (e.g., Param nodes)
+            if node.callable_obj is None:
+                continue
+
             sig = inspect.signature(node.callable_obj)
             for param in sig.parameters.values():
                 if isinstance(param.default, Inject):

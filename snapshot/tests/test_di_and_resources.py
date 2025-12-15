@@ -49,7 +49,9 @@ def test_resource_override():
     @cs.resource
     def mock_db_connection():
         print("SETUP: mock_db_connection")
-        yield "mock_db_url"
+        m = MagicMock()
+        m.url = "mock_db_url"
+        yield m
         print("TEARDOWN: mock_db_connection")
 
     engine = cs.Engine()

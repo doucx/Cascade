@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(core): Implement dynamic routing with `cs.Router`", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765808786.944366, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(core): 引入 ParamNode 以解决技术债务", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765808961.9621887, "duration_ms": 0}}

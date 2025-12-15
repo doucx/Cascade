@@ -71,6 +71,11 @@ class LocalExecutor:
         sorted_indices = sorted(positional_args.keys())
         args = [positional_args[i] for i in sorted_indices]
 
+        # A param node has no callable, so it shouldn't be executed
+        if node.callable_obj is None:
+            # This should not be reached due to Engine's skip, but as a safeguard:
+            raise TypeError(f"Node '{node.name}' of type '{node.node_type}' is not executable.")
+
         # 2. Prepare arguments from injected resources
         sig = inspect.signature(node.callable_obj)
         kwargs_from_resources = {}

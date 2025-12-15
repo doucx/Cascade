@@ -47,6 +47,19 @@ class Engine:
 
     def get_resource_provider(self, name: str) -> Callable:
         return self._resource_providers[name]
+
+    def _inject_params(
+        self, plan: list[Node], user_params: Dict[str, Any], results: Dict[str, Any]
+    ):
+        for node in plan:
+            if node.node_type == "param":
+                param_spec = node.param_spec
+                if node.name in user_params:
+                    results[node.id] = user_params[node.name]
+                elif param_spec.default is not None:
+                    results[node.id] = param_spec.default
+                else:
+                    raise ValueError(f"Required parameter '{node.name}' was not provided.")
     
     def _should_skip(
         self, 
@@ -111,7 +124,14 @@ class Engine:
                 results: Dict[str, Any] = {}
                 skipped_node_ids: set[str] = set()
 
+                # Pre-populate results with parameter values
+                self._inject_params(plan, params or {}, results)
+
                 for node in plan:
+                    # Skip param nodes as they are not "executed"
+                    if node.node_type == "param":
+                        continue
+                        
                     # Check if we should skip this node
                     skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
                     

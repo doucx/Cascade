@@ -1,18 +1,20 @@
 import inspect
-from typing import Any, Dict, List
+from typing import Any, Dict
 from cascade.graph.model import Graph, Node
 from cascade.spec.resource import Inject
+
 
 class LocalExecutor:
     """
     An executor that runs tasks sequentially in the current process.
     """
+
     def execute(
-        self, 
-        node: Node, 
-        graph: Graph, 
+        self,
+        node: Node,
+        graph: Graph,
         upstream_results: Dict[str, Any],
-        resource_context: Dict[str, Any]
+        resource_context: Dict[str, Any],
     ) -> Any:
         """
         Executes a single node's callable object by reconstructing its arguments
@@ -21,7 +23,7 @@ class LocalExecutor:
         # 1. Prepare arguments from upstream task results
         kwargs_from_deps: Dict[str, Any] = {}
         positional_args_from_deps = {}
-        
+
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
         for edge in incoming_edges:
             result = upstream_results[edge.source.id]
@@ -29,10 +31,10 @@ class LocalExecutor:
                 positional_args_from_deps[int(edge.arg_name)] = result
             else:
                 kwargs_from_deps[edge.arg_name] = result
-        
+
         sorted_indices = sorted(positional_args_from_deps.keys())
         args = [positional_args_from_deps[i] for i in sorted_indices]
-        
+
         # 2. Prepare arguments from injected resources
         sig = inspect.signature(node.callable_obj)
         kwargs_from_resources = {}
@@ -50,5 +52,5 @@ class LocalExecutor:
         # 3. Combine arguments and execute
         # Dependencies take precedence over resource injections if names conflict
         final_kwargs = {**kwargs_from_resources, **kwargs_from_deps}
-        
+
         return node.callable_obj(*args, **final_kwargs)

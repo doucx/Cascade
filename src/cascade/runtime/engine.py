@@ -10,22 +10,28 @@ from cascade.spec.task import LazyResult
 from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
-    RunStarted, RunFinished, TaskExecutionStarted, TaskExecutionFinished,
-    ResourceAcquired, ResourceReleased
+    RunStarted,
+    RunFinished,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+    ResourceAcquired,
+    ResourceReleased,
 )
 from cascade.runtime.protocols import Solver, Executor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
+
 class Engine:
     """
     Orchestrates the entire workflow execution.
     """
+
     def __init__(
         self,
         solver: Optional[Solver] = None,
         executor: Optional[Executor] = None,
-        bus: Optional[MessageBus] = None
+        bus: Optional[MessageBus] = None,
     ):
         self.solver = solver or NativeSolver()
         self.executor = executor or LocalExecutor()
@@ -48,10 +54,12 @@ class Engine:
     def run(self, target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
-        
+
         target_task_names = [target.task.name]
-        
-        event = RunStarted(run_id=run_id, target_tasks=target_task_names, params=params or {})
+
+        event = RunStarted(
+            run_id=run_id, target_tasks=target_task_names, params=params or {}
+        )
         self.bus.publish(event)
 
         # ExitStack manages the teardown of resources
@@ -59,24 +67,30 @@ class Engine:
             try:
                 graph = build_graph(target)
                 plan = self.solver.resolve(graph)
-                
+
                 # Scan for all required resources
                 required_resources = self._scan_for_resources(plan)
-                
+
                 # Setup resources and get active instances
-                active_resources = self._setup_resources(required_resources, stack, run_id)
+                active_resources = self._setup_resources(
+                    required_resources, stack, run_id
+                )
 
                 results: Dict[str, Any] = {}
                 for node in plan:
                     task_start_time = time.time()
-                    
-                    start_event = TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
+
+                    start_event = TaskExecutionStarted(
+                        run_id=run_id, task_id=node.id, task_name=node.name
+                    )
                     self.bus.publish(start_event)
-                    
+
                     try:
-                        result = self.executor.execute(node, graph, results, active_resources)
+                        result = self.executor.execute(
+                            node, graph, results, active_resources
+                        )
                         results[node.id] = result
-                        
+
                         task_duration = time.time() - task_start_time
                         finish_event = TaskExecutionFinished(
                             run_id=run_id,
@@ -84,7 +98,7 @@ class Engine:
                             task_name=node.name,
                             status="Succeeded",
                             duration=task_duration,
-                            result_preview=repr(result)[:100]
+                            result_preview=repr(result)[:100],
                         )
                         self.bus.publish(finish_event)
 
@@ -96,13 +110,15 @@ class Engine:
                             task_name=node.name,
                             status="Failed",
                             duration=task_duration,
-                            error=f"{type(e).__name__}: {e}"
+                            error=f"{type(e).__name__}: {e}",
                         )
                         self.bus.publish(fail_event)
                         raise
 
                 run_duration = time.time() - start_time
-                final_event = RunFinished(run_id=run_id, status="Succeeded", duration=run_duration)
+                final_event = RunFinished(
+                    run_id=run_id, status="Succeeded", duration=run_duration
+                )
                 self.bus.publish(final_event)
 
                 return results[target._uuid]
@@ -113,11 +129,11 @@ class Engine:
                     run_id=run_id,
                     status="Failed",
                     duration=run_duration,
-                    error=f"{type(e).__name__}: {e}"
+                    error=f"{type(e).__name__}: {e}",
                 )
                 self.bus.publish(final_fail_event)
                 raise
-    
+
     def _scan_for_resources(self, plan: list[Node]) -> set[str]:
         """Finds all unique resource names required by the plan."""
         required = set()
@@ -128,17 +144,19 @@ class Engine:
                     required.add(param.default.resource_name)
         return required
 
-    def _setup_resources(self, required_names: set[str], stack: ExitStack, run_id: str) -> Dict[str, Any]:
+    def _setup_resources(
+        self, required_names: set[str], stack: ExitStack, run_id: str
+    ) -> Dict[str, Any]:
         """
         Initializes all required resources and their dependencies recursively.
         Returns a dictionary of active resource instances.
         """
         active: Dict[str, Any] = {}
-        
+
         def get_or_create(name: str):
             if name in active:
                 return active[name]
-            
+
             provider = self._resource_providers.get(name)
             if not provider:
                 raise NameError(f"Resource '{name}' is required but not registered.")
@@ -150,23 +168,23 @@ class Engine:
                 if isinstance(param.default, Inject):
                     deps[param_name] = get_or_create(param.default.resource_name)
                 # Here you could also inject `Param`s if needed
-            
+
             # Create the resource generator
             gen = provider(**deps)
-            
+
             # Enter the generator and get the yielded value
             instance = next(gen)
             active[name] = instance
             self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-            
+
             # Register the teardown logic
             stack.callback(self._teardown_resource, gen, run_id, name)
-            
+
             return instance
 
         for name in required_names:
             get_or_create(name)
-            
+
         return active
 
     def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):
@@ -174,4 +192,6 @@ class Engine:
         try:
             next(gen)
         except StopIteration:
-            self.bus.publish(ResourceReleased(run_id=run_id, resource_name=resource_name))
+            self.bus.publish(
+                ResourceReleased(run_id=run_id, resource_name=resource_name)
+            )

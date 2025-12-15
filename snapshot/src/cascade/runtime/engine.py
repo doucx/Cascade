@@ -36,7 +36,10 @@ class Engine:
     def get_resource_provider(self, name: str) -> Callable:
         return self._resource_providers[name]
 
-    def override_resource_provider(self, name: str, new_provider: Callable):
+    def override_resource_provider(self, name: str, new_provider: Any):
+        # Unwrap ResourceDefinition if provided
+        if isinstance(new_provider, ResourceDefinition):
+            new_provider = new_provider.func
         self._resource_providers[name] = new_provider
 
     def run(self, target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:

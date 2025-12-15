@@ -19,6 +19,9 @@ classifiers = [
 ]
 dependencies = []
 
+[tool.pytest.ini_options]
+addopts = "-ra --cov=cascade --cov-report=term-missing"
+
 [project.optional-dependencies]
 dev = [
   "pytest",

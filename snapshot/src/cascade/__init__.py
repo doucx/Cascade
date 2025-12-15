@@ -4,7 +4,8 @@ from typing import Any, Dict, Optional
 import asyncio
 from typing import Any, Dict, Optional
 
-from .spec.task import task, Param, LazyResult
+from .spec.task import task, LazyResult
+from .spec.common import Param
 from .spec.routing import Router
 from .spec.file import File
 from .spec.resource import resource, inject

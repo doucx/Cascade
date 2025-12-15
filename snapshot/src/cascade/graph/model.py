@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Any, Dict
 
 
-from cascade.spec.task import Param
+from cascade.spec.common import Param
 
 @dataclass
 class Node:

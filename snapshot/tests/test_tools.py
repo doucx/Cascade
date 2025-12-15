@@ -10,7 +10,8 @@ def test_dry_run_linear_graph(capsys):
     def step_b(x, y=10):
         return x + y
 
-    result = step_b(step_a())
+    # Explicitly pass y=10 to verify it appears in the dry run output
+    result = step_b(step_a(), y=10)
     cs.dry_run(result)
 
     captured = capsys.readouterr()

@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-py"
+version = "0.1.0"
+description = "A modern, declarative automation library for Python."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+authors = [
+  { name = "Cascade Team", email = "dev@cascade.local" },
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[tool.pytest.ini_options]
+addopts = "-ra --cov=cascade --cov-report=term-missing"
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "mypy",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]

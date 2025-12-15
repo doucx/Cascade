@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M __init__.py, M local.py, M native.py ... and 15 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765804286.8398762, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(spec): 支持异步 Task 定义与 Executor 协议更新 (修正)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765804324.678946, "duration_ms": 0}}

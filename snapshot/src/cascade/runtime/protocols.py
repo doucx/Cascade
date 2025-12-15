@@ -18,6 +18,10 @@ class Executor(Protocol):
     Protocol for an executor that runs a single task.
     """
 
-    def execute(
-        self, node: Node, graph: Graph, upstream_results: Dict[str, Any]
+    async def execute(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        resource_context: Dict[str, Any],
     ) -> Any: ...

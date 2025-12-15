@@ -42,6 +42,7 @@ class Task(Generic[T]):
         self.name = name or func.__name__
         # Signature inspection for validation (future enhancement)
         self._signature = inspect.signature(func)
+        self.is_async = inspect.iscoroutinefunction(func)
 
     def __call__(self, *args, **kwargs) -> LazyResult[T]:
         return LazyResult(task=self, args=args, kwargs=kwargs)

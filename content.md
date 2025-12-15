@@ -1,74 +1,68 @@
-你的分析完全正确。测试失败的原因是 `Engine._scan_for_resources` 方法在扫描资源依赖时，无差别地对所有节点调用了 `inspect.signature(node.callable_obj)`。然而，`Param` 类型的节点（如测试中的 `cs.Param("mode")`）其 `callable_obj` 为 `None`，导致 `inspect` 抛出 `TypeError`。
+好的，这个修复直击要害，解决了 `ParamNode` 引入后在资源扫描阶段的副作用。现在我们的核心模型更加健壮了。
 
-这确实是一个阻断性的 Bug，我们需要在资源扫描逻辑中跳过那些没有可调用对象的节点。
+我将生成一个 `[COMMIT]` 计划，将这次重要的重构（`ParamNode` 引入、循环导入修复）和最终的 bug 修复合并为一个原子提交。
 
-## [WIP] fix(runtime): Skip non-callable nodes during resource scanning
-
-### 错误分析
-`test_router_with_params` 和 `test_router_invalid_selection` 均失败，报错 `TypeError: None is not a callable object`。
-
-**根本原因**:
-1.  **图结构**: 测试用例使用了 `cs.Router` 并依赖于 `cs.Param`。这导致生成的计算图中包含了类型为 `"param"` 的节点。
-2.  **数据模型**: 根据 `cascade.graph.model.Node` 的定义，`param` 类型节点的 `callable_obj` 字段默认为 `None`。
-3.  **缺陷逻辑**: `Engine._scan_for_resources` 方法遍历执行计划中的**所有**节点，并试图获取 `node.callable_obj` 的函数签名以查找 `@inject` 标记。
-4.  **崩溃点**: 当遍历到 `Param` 节点时，`inspect.signature(None)` 被调用，引发崩溃。
-
-**解决方案**:
-在 `_scan_for_resources` 循环中添加一个守卫子句，如果 `node.callable_obj` 为 `None`，则直接跳过该节点。
+## [COMMIT] refactor(core): Introduce ParamNode to handle external inputs
 
 ### 用户需求
-修复 `tests/test_routing.py` 中的 `TypeError`，使包含 `Param` 节点的图能够正常运行。
+为了使 `cs.Router` 能够与 `cs.Param` 一起工作，需要对核心图模型进行重构，将 `Param` 提升为图中的一等公民，并修复由此引发的循环导入和运行时错误。
 
 ### 评论
-这是一个典型的边界情况遗漏。`Engine.run` 的主执行循环已经包含了 `if node.node_type == "param": continue` 的逻辑，但我们在辅助方法 `_scan_for_resources` 中遗漏了类似的检查。
+这是一次关键的技术债务偿还。最初尝试用 `Param` 作为 `Router` 的选择器时，暴露了我们图模型中对外部输入的表示不足以及模块间的耦合问题。通过引入 `ParamNode` 并分离 `spec.common`，我们不仅修复了当前的 bug，还极大增强了核心架构的健壮性和清晰度，为未来的功能开发奠定了坚实的基础。
 
 ### 目标
-修改 `src/cascade/runtime/engine.py`，确保资源扫描逻辑能够安全地处理非任务节点（如 `Param` 节点）。
+创建一个单一的、原子化的 Git 提交，包含所有与 `ParamNode` 重构相关的变更，包括：
+1.  `ParamNode` 在图模型中的定义。
+2.  `GraphBuilder` 对 `Param` 的处理逻辑。
+3.  `Engine` 对 `Param` 值的注入逻辑。
+4.  为解决循环导入而创建的 `spec/common.py`。
+5.  对 `Engine._scan_for_resources` 的最终修复。
 
 ### 基本原理
-资源注入（Dependency Injection）只对具体的执行任务（Task）有意义，因为只有函数签名中才可能包含 `Inject` 标记。对于仅仅充当数据占位符的 `Param` 节点，扫描其签名不仅没有意义，还会导致运行时错误。
+将一系列为达成同一目标的、紧密关联的修改（一次重构和随后的几次修复）捆绑在一次提交中，可以保持 Git 历史的逻辑性和可读性。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/runtime #scope/core #ai/instruct #task/domain/core #task/object/engine #task/action/bug-fix #task/state/begin
+#intent/refine #intent/fix #flow/ready #priority/critical #comp/core #comp/engine #comp/graph #scope/core #ai/brainstorm #task/domain/core #task/object/graph-model #task/action/refactor #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `_scan_for_resources` 方法
+#### Acts 1: 提交所有相关变更
 
-我们在遍历节点时增加对 `node.callable_obj` 的非空检查。
+我们将所有涉及 `ParamNode` 重构和修复的文件添加到暂存区，并创建一个内容详尽的提交。
 
 ~~~~~act
-patch_file
+git_add
+src/cascade/__init__.py
+src/cascade/adapters/executors/local.py
+src/cascade/graph/build.py
+src/cascade/graph/model.py
 src/cascade/runtime/engine.py
+src/cascade/spec/common.py
+src/cascade/spec/task.py
 ~~~~~
-~~~~~python
-    def _scan_for_resources(self, plan: list[Node]) -> set[str]:
-        """Finds all unique resource names required by the plan."""
-        required = set()
-        for node in plan:
-            sig = inspect.signature(node.callable_obj)
-            for param in sig.parameters.values():
-                if isinstance(param.default, Inject):
-                    required.add(param.default.resource_name)
-        return required
-~~~~~
-~~~~~python
-    def _scan_for_resources(self, plan: list[Node]) -> set[str]:
-        """Finds all unique resource names required by the plan."""
-        required = set()
-        for node in plan:
-            # Skip nodes that don't have a callable (e.g., Param nodes)
-            if node.callable_obj is None:
-                continue
 
-            sig = inspect.signature(node.callable_obj)
-            for param in sig.parameters.values():
-                if isinstance(param.default, Inject):
-                    required.add(param.default.resource_name)
-        return required
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+refactor(core): Introduce ParamNode to handle external inputs
+
+This major refactoring addresses a fundamental architectural issue revealed while implementing `cs.Router` with `cs.Param` selectors.
+
+Previously, `Param` objects had no formal representation within the computation graph, leading to `AttributeError`s in the `GraphBuilder`. This commit elevates `Param` to a first-class citizen of the graph by introducing the `ParamNode` concept.
+
+Key Changes:
+
+1.  **`ParamNode` Model:** `cascade.graph.model.Node` now supports a `node_type` of `"param"`, distinguishing external inputs from task outputs.
+2.  **`GraphBuilder` Enhancement:** The builder now correctly identifies `Param` objects and creates `ParamNode`s for them.
+3.  **Engine Injection:** `Engine.run` logic is updated to pre-populate results with `Param` values from the `params` dictionary before execution begins.
+4.  **Circular Import Fix:** A `cascade.spec.common` module was created to house the `Param` definition, breaking a circular dependency between `graph.model`, `spec.task`, and `runtime.protocols`.
+5.  **Bug Fix:** `Engine._scan_for_resources` is patched to safely skip non-callable nodes (like `ParamNode`) during resource dependency scanning, fixing a `TypeError`.
 ~~~~~
 
 ### 下一步建议
-执行此补丁后，应重新运行 `pytest tests/test_routing.py` 以验证修复是否生效。如果测试通过，我们可以将此更改提交到 Git。
+我们已经成功地重构了核心模型并修复了所有已知问题。现在，`tests/test_routing.py` 中的所有测试都应该能通过。
+
+我建议我们为 `Router` 功能创建一个独立的、干净的 `[COMMIT]` 计划，因为它现在是一个逻辑上完整且经过验证的功能单元。

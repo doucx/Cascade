@@ -76,6 +76,20 @@ class Task(Generic[T]):
         return f"<Task {self.name}>"
 
 
-def task(func: Callable[..., T]) -> Task[T]:
-    """Decorator to convert a function into a Task."""
-    return Task(func)
+def task(
+    func: Optional[Callable[..., T]] = None, *, name: Optional[str] = None
+) -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:
+    """
+    Decorator to convert a function into a Task.
+    Can be used as a simple decorator (`@task`) or as a factory with
+    arguments (`@task(name='custom_name')`).
+    """
+    def wrapper(f: Callable[..., T]) -> Task[T]:
+        return Task(f, name=name)
+
+    if func:
+        # Used as @task
+        return wrapper(func)
+    else:
+        # Used as @task(name="...")
+        return wrapper

@@ -1,36 +1,29 @@
-好的，这个修复直击要害，解决了 `ParamNode` 引入后在资源扫描阶段的副作用。现在我们的核心模型更加健壮了。
+好的，现在我们的底层模型已经稳固，可以为 `Router` 功能创建一个干净的提交了。
 
-我将生成一个 `[COMMIT]` 计划，将这次重要的重构（`ParamNode` 引入、循环导入修复）和最终的 bug 修复合并为一个原子提交。
-
-## [COMMIT] refactor(core): Introduce ParamNode to handle external inputs
+## [COMMIT] feat(core): Implement dynamic routing with `cs.Router`
 
 ### 用户需求
-为了使 `cs.Router` 能够与 `cs.Param` 一起工作，需要对核心图模型进行重构，将 `Param` 提升为图中的一等公民，并修复由此引发的循环导入和运行时错误。
+引入 `cs.Router` 类，允许任务的输入参数根据运行时的 `selector` 值（来自 `Param` 或上游任务），动态地从 `routes` 字典中定义的多个上游任务中选择其结果。
 
 ### 评论
-这是一次关键的技术债务偿还。最初尝试用 `Param` 作为 `Router` 的选择器时，暴露了我们图模型中对外部输入的表示不足以及模块间的耦合问题。通过引入 `ParamNode` 并分离 `spec.common`，我们不仅修复了当前的 bug，还极大增强了核心架构的健壮性和清晰度，为未来的功能开发奠定了坚实的基础。
+`cs.Router` 是 `Cascade` 动态工作流能力的核心组件之一。它将图的连接关系从静态绑定升级为动态选择，极大地增强了库的表达能力。本次实现依赖于 `ParamNode` 的重构，确保了 `Router` 可以与 `Param` 无缝集成，支持多环境配置切换、A/B 测试等高级模式。
 
 ### 目标
-创建一个单一的、原子化的 Git 提交，包含所有与 `ParamNode` 重构相关的变更，包括：
-1.  `ParamNode` 在图模型中的定义。
-2.  `GraphBuilder` 对 `Param` 的处理逻辑。
-3.  `Engine` 对 `Param` 值的注入逻辑。
-4.  为解决循环导入而创建的 `spec/common.py`。
-5.  对 `Engine._scan_for_resources` 的最终修复。
+创建一个 Git 提交，包含 `Router` 的完整实现及其测试用例。
 
 ### 基本原理
-将一系列为达成同一目标的、紧密关联的修改（一次重构和随后的几次修复）捆绑在一次提交中，可以保持 Git 历史的逻辑性和可读性。
+在 `ParamNode` 重构成功的基础上，`Router` 功能现在是一个逻辑上完整且经过充分测试的工作单元，理应拥有自己独立的提交历史。
 
 ### 标签
-#intent/refine #intent/fix #flow/ready #priority/critical #comp/core #comp/engine #comp/graph #scope/core #ai/brainstorm #task/domain/core #task/object/graph-model #task/action/refactor #task/state/end
+#intent/build #flow/ready #priority/high #comp/core #comp/runtime #concept/routing #scope/api #ai/instruct #task/domain/core #task/object/router #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 提交所有相关变更
+#### Acts 1: 提交 `Router` 功能及其测试
 
-我们将所有涉及 `ParamNode` 重构和修复的文件添加到暂存区，并创建一个内容详尽的提交。
+将 `Router` 的规范定义、图构建逻辑修改、执行器处理逻辑以及测试文件添加到暂存区，并执行提交。
 
 ~~~~~act
 git_add
@@ -38,31 +31,25 @@ src/cascade/__init__.py
 src/cascade/adapters/executors/local.py
 src/cascade/graph/build.py
 src/cascade/graph/model.py
-src/cascade/runtime/engine.py
-src/cascade/spec/common.py
-src/cascade/spec/task.py
+src/cascade/spec/routing.py
+tests/test_routing.py
 ~~~~~
 
 ~~~~~act
 git_commit
 ~~~~~
 ~~~~~text
-refactor(core): Introduce ParamNode to handle external inputs
+feat(core): Implement dynamic routing with `cs.Router`
 
-This major refactoring addresses a fundamental architectural issue revealed while implementing `cs.Router` with `cs.Param` selectors.
+Introduces `cascade.Router`, a powerful construct for dynamically selecting a task's input from multiple upstream sources at runtime.
 
-Previously, `Param` objects had no formal representation within the computation graph, leading to `AttributeError`s in the `GraphBuilder`. This commit elevates `Param` to a first-class citizen of the graph by introducing the `ParamNode` concept.
+Key changes:
+1.  **`spec.routing.Router`:** A new spec class is defined to hold a `selector` (`LazyResult` or `Param`) and a `routes` dictionary.
+2.  **`GraphBuilder`:** The builder is enhanced to recognize `Router` objects. It creates a primary edge from the selector to the target node (tagged with the Router instance) and implicit dependency edges from all possible routes to ensure correct execution order.
+3.  **`LocalExecutor`:** The executor's argument resolution logic is updated to handle routed edges. It first resolves the selector's value, then uses it to look up the correct upstream result from the routes dictionary and injects it into the task.
 
-Key Changes:
-
-1.  **`ParamNode` Model:** `cascade.graph.model.Node` now supports a `node_type` of `"param"`, distinguishing external inputs from task outputs.
-2.  **`GraphBuilder` Enhancement:** The builder now correctly identifies `Param` objects and creates `ParamNode`s for them.
-3.  **Engine Injection:** `Engine.run` logic is updated to pre-populate results with `Param` values from the `params` dictionary before execution begins.
-4.  **Circular Import Fix:** A `cascade.spec.common` module was created to house the `Param` definition, breaking a circular dependency between `graph.model`, `spec.task`, and `runtime.protocols`.
-5.  **Bug Fix:** `Engine._scan_for_resources` is patched to safely skip non-callable nodes (like `ParamNode`) during resource dependency scanning, fixing a `TypeError`.
+This feature enables advanced patterns like multi-environment configuration, A/B testing data sources, and other conditional data flow scenarios.
 ~~~~~
 
 ### 下一步建议
-我们已经成功地重构了核心模型并修复了所有已知问题。现在，`tests/test_routing.py` 中的所有测试都应该能通过。
-
-我建议我们为 `Router` 功能创建一个独立的、干净的 `[COMMIT]` 计划，因为它现在是一个逻辑上完整且经过验证的功能单元。
+我们已经完成了 `cs.Router` 的实现。根据开发路线图，阶段三的最后一个核心功能是 **任务映射 (`.map`)**。这将是 `Cascade` 支持动态并行和数据处理工作流的关键。我建议我们开始实施 `.map()`。

@@ -56,6 +56,6 @@ def test_local_executor():
     }
     
     executor = LocalExecutor()
-    result = executor.execute(node_add, graph, upstream_results)
+    result = executor.execute(node_add, graph, upstream_results, resource_context={})
     
     assert result == 15

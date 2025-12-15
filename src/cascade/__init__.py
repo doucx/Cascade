@@ -1,12 +1,16 @@
 import asyncio
 from typing import Any, Dict, Optional
 
+import asyncio
+from typing import Any, Dict, Optional
+
 from .spec.task import task, Param, LazyResult
 from .spec.resource import resource, inject
 from .runtime.engine import Engine
 from .runtime.bus import MessageBus
 from .runtime.subscribers import HumanReadableLogSubscriber
 from .testing import override_resource
+from .stdlib import shell
 
 __all__ = [
     "task",
@@ -17,6 +21,7 @@ __all__ = [
     "inject",
     "Engine",
     "override_resource",
+    "shell",
 ]
 
 

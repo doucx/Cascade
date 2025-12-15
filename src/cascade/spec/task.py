@@ -17,15 +17,7 @@ class RetryPolicy:
     backoff: float = 1.0  # Multiplier for delay after each retry
 
 
-@dataclass
-class Param:
-    """Represents a runtime parameter."""
-
-    name: str
-    default: Any = None
-    type: Any = None
-    description: str = ""
-
+from .common import Param
 
 @dataclass
 class LazyResult(Generic[T]):

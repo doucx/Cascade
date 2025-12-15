@@ -12,7 +12,7 @@ class ToolEvent(Event):
 @dataclass(frozen=True)
 class PlanAnalysisStarted(ToolEvent):
     """Fired when dry_run starts analyzing a target."""
-    target_node_id: str
+    target_node_id: str = ""
     
     def _get_payload(self) -> Dict[str, Any]:
         return {"target_node_id": self.target_node_id}
@@ -21,11 +21,11 @@ class PlanAnalysisStarted(ToolEvent):
 @dataclass(frozen=True)
 class PlanNodeInspected(ToolEvent):
     """Fired for each node in the resolved execution plan."""
-    index: int
-    total_nodes: int
-    node_id: str
-    node_name: str
-    literal_inputs: Dict[str, Any]
+    index: int = 0
+    total_nodes: int = 0
+    node_id: str = ""
+    node_name: str = ""
+    literal_inputs: Dict[str, Any] = field(default_factory=dict)
 
     def _get_payload(self) -> Dict[str, Any]:
         return {
@@ -40,7 +40,7 @@ class PlanNodeInspected(ToolEvent):
 @dataclass(frozen=True)
 class PlanAnalysisFinished(ToolEvent):
     """Fired when dry_run analysis is complete."""
-    total_steps: int
+    total_steps: int = 0
 
     def _get_payload(self) -> Dict[str, Any]:
         return {"total_steps": self.total_steps}

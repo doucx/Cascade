@@ -16,6 +16,7 @@ from cascade.runtime.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
     TaskSkipped,
+    TaskRetrying,
     ResourceAcquired,
     ResourceReleased,
 )
@@ -82,93 +83,9 @@ class Engine:
 
                 results: Dict[str, Any] = {}
                 for node in plan:
-                    task_start_time = time.time()
-
-                    # 0. Check Cache
-                    if node.cache_policy:
-                        # Construct inputs for cache check
-                        # We need to resolve dependencies first to pass them to cache policy
-                        # Similar logic to Executor, but just for inputs
-                        inputs_for_cache = self._resolve_inputs(node, graph, results)
-                        
-                        cached_value = node.cache_policy.check(node.id, inputs_for_cache)
-                        if cached_value is not None:
-                            # Cache Hit!
-                            results[node.id] = cached_value
-                            self.bus.publish(
-                                TaskSkipped(
-                                    run_id=run_id,
-                                    task_id=node.id,
-                                    task_name=node.name,
-                                    reason="CacheHit"
-                                )
-                            )
-                            continue
-
-                    start_event = TaskExecutionStarted(
-                        run_id=run_id, task_id=node.id, task_name=node.name
+                    results[node.id] = await self._execute_node_with_policies(
+                        node, graph, results, active_resources, run_id
                     )
-                    self.bus.publish(start_event)
-
-                    # Determine retry policy
-                    retry_policy = node.retry_policy
-                    max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
-                    delay = retry_policy.delay if retry_policy else 0.0
-                    backoff = retry_policy.backoff if retry_policy else 1.0
-
-                    attempt = 0
-                    last_exception = None
-
-                    while attempt < max_attempts:
-                        attempt += 1
-                        try:
-                            result = await self.executor.execute(
-                                node, graph, results, active_resources
-                            )
-                            results[node.id] = result
-
-                            task_duration = time.time() - task_start_time
-                            finish_event = TaskExecutionFinished(
-                                run_id=run_id,
-                                task_id=node.id,
-                                task_name=node.name,
-                                status="Succeeded",
-                                duration=task_duration,
-                                result_preview=repr(result)[:100],
-                            )
-                            self.bus.publish(finish_event)
-                            
-                            # Save to cache if policy exists
-                            if node.cache_policy:
-                                # Re-resolve inputs (they are already resolved, but kept in scope)
-                                # Optimization: we could calculate inputs once before retry loop
-                                inputs_for_save = self._resolve_inputs(node, graph, results)
-                                node.cache_policy.save(node.id, inputs_for_save, result)
-
-                            # Break the retry loop on success
-                            last_exception = None
-                            break
-
-                        except Exception as e:
-                            last_exception = e
-                            # If we have retries left, wait and continue
-                            if attempt < max_attempts:
-                                # Optional: Publish a specific Retry event here in the future
-                                await asyncio.sleep(delay)
-                                delay *= backoff
-                            else:
-                                # Final failure
-                                task_duration = time.time() - task_start_time
-                                fail_event = TaskExecutionFinished(
-                                    run_id=run_id,
-                                    task_id=node.id,
-                                    task_name=node.name,
-                                    status="Failed",
-                                    duration=task_duration,
-                                    error=f"{type(e).__name__}: {e}",
-                                )
-                                self.bus.publish(fail_event)
-                                raise last_exception
 
                 run_duration = time.time() - start_time
                 final_event = RunFinished(
@@ -188,6 +105,104 @@ class Engine:
                 )
                 self.bus.publish(final_fail_event)
                 raise
+
+    async def _execute_node_with_policies(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+    ) -> Any:
+        task_start_time = time.time()
+
+        # 0. Check Cache
+        if node.cache_policy:
+            inputs_for_cache = self._resolve_inputs(node, graph, upstream_results)
+            cached_value = node.cache_policy.check(node.id, inputs_for_cache)
+            if cached_value is not None:
+                self.bus.publish(
+                    TaskSkipped(
+                        run_id=run_id,
+                        task_id=node.id,
+                        task_name=node.name,
+                        reason="CacheHit",
+                    )
+                )
+                return cached_value
+
+        start_event = TaskExecutionStarted(
+            run_id=run_id, task_id=node.id, task_name=node.name
+        )
+        self.bus.publish(start_event)
+
+        # Determine retry policy
+        retry_policy = node.retry_policy
+        max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
+        delay = retry_policy.delay if retry_policy else 0.0
+        backoff = retry_policy.backoff if retry_policy else 1.0
+
+        attempt = 0
+        last_exception = None
+
+        while attempt < max_attempts:
+            attempt += 1
+            try:
+                result = await self.executor.execute(
+                    node, graph, upstream_results, active_resources
+                )
+
+                task_duration = time.time() - task_start_time
+                finish_event = TaskExecutionFinished(
+                    run_id=run_id,
+                    task_id=node.id,
+                    task_name=node.name,
+                    status="Succeeded",
+                    duration=task_duration,
+                    result_preview=repr(result)[:100],
+                )
+                self.bus.publish(finish_event)
+
+                # Save to cache if policy exists
+                if node.cache_policy:
+                    inputs_for_save = self._resolve_inputs(node, graph, upstream_results)
+                    node.cache_policy.save(node.id, inputs_for_save, result)
+
+                return result
+
+            except Exception as e:
+                last_exception = e
+                # If we have retries left, wait and continue
+                if attempt < max_attempts:
+                    self.bus.publish(
+                        TaskRetrying(
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            attempt=attempt,
+                            max_attempts=max_attempts,
+                            delay=delay,
+                            error=str(e),
+                        )
+                    )
+                    await asyncio.sleep(delay)
+                    delay *= backoff
+                else:
+                    # Final failure
+                    task_duration = time.time() - task_start_time
+                    fail_event = TaskExecutionFinished(
+                        run_id=run_id,
+                        task_id=node.id,
+                        task_name=node.name,
+                        status="Failed",
+                        duration=task_duration,
+                        error=f"{type(e).__name__}: {e}",
+                    )
+                    self.bus.publish(fail_event)
+                    raise last_exception
+        
+        # Should not be reached if logic is correct
+        raise RuntimeError("Unexpected execution state")
 
     def _resolve_inputs(self, node: Node, graph: Graph, upstream_results: Dict[str, Any]) -> Dict[str, Any]:
         """Helper to resolve inputs for cache checking."""

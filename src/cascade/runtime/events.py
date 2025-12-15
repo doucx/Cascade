@@ -66,6 +66,16 @@ class TaskSkipped(TaskEvent):
 
 
 @dataclass(frozen=True)
+class TaskRetrying(TaskEvent):
+    """Fired when a task fails but is about to be retried."""
+
+    attempt: int = 0
+    max_attempts: int = 0
+    delay: float = 0.0
+    error: Optional[str] = None
+
+
+@dataclass(frozen=True)
 class ResourceEvent(Event):
     """Base for events related to resources."""
 

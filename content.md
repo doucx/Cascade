@@ -1,239 +1,268 @@
-## [WIP] feat: 实现核心协议与默认适配器 (Solver & Executor)
+## [WIP] feat: 集成 Engine 与公共 API，完成 MVP
 
 ### 用户需求
-执行 Cascade 阶段一 (MVP) 的第 5 步：
-1.  **定义协议**: 在 `cascade/runtime/protocols.py` 中定义 `Solver` 和 `Executor` 协议。
-2.  **实现求解器**: 实现一个 `NativeSolver`，使用 `graphlib` 进行拓扑排序。
-3.  **实现执行器**: 实现一个 `LocalExecutor`，用于在本地同步执行任务。
-4.  **测试**: 编写测试用例验证 `Solver` 和 `Executor` 的功能。
+执行 Cascade 阶段一 (MVP) 的第 6 步和第 7 步：
+1.  **集成引擎**: 创建 `Engine` 类，将 `GraphBuilder`, `Solver`, `Executor`, 和 `MessageBus` 组装成一个完整的工作流。
+2.  **公共 API**: 创建并导出 `run()` 门面函数和 `@task` 装饰器。
+3.  **验证**: 编写一个端到端的测试用例来验证整个 MVP 的功能。
 
 ### 评论
-这是将静态的计算图转化为可执行计划的关键一步。`Solver` 负责“思考”做什么（What），而 `Executor` 负责“执行”怎么做（How）。通过协议将它们解耦，为未来引入并行执行器（`DaskExecutor`）或约束求解器（`CSPSolver`）奠定了坚实的基础。
+这是 MVP 的最后一步，也是最激动人心的一步。我们将所有独立的、经过测试的组件（模型、构建器、求解器、执行器、总线）像乐高积木一样拼装起来，形成一个有机的整体。`Engine` 是这个系统的大脑，而 `run()` 函数则是用户与之交互的唯一窗口。
 
 ### 目标
-1.  创建 `src/cascade/runtime/protocols.py`。
-2.  创建 `src/cascade/adapters/solvers/native.py`。
-3.  创建 `src/cascade/adapters/executors/local.py`。
-4.  创建 `tests/test_adapters.py`。
+1.  创建 `src/cascade/runtime/engine.py`。
+2.  在 `src/cascade/__init__.py` 中暴露公共 API。
+3.  创建 `tests/test_end_to_end.py`。
 
 ### 基本原理
-*   **协议优先**: 首先定义清晰的接口，实现细节隐藏在适配器中。
-*   **零依赖**: 默认的 `NativeSolver` 和 `LocalExecutor` 仅依赖 Python 标准库，符合 MVP 原则。
-*   **职责分离**:
-    *   `NativeSolver` 只关心图的结构，输出一个有序的节点列表。
-    *   `LocalExecutor` 只关心单个节点的执行，它通过查询图的边来动态地构建函数的参数。
+*   **Orchestration**: `Engine` 负责协调所有内部组件。它首先构建图，然后求解执行计划，最后遍历计划并调用执行器来运行每个任务，同时通过 `MessageBus` 广播整个过程的状态。
+*   **Facade Pattern**: `cascade.run()` 函数是一个门面，它隐藏了 `Engine` 实例化的复杂性，为用户提供了最简单、最直接的入口点。
 
 ### 标签
 #intent/build #flow/ready #priority/high
-#task/domain/runtime #task/object/execution-engine #task/action/implementation
-#task/state/continue #task/status/active
+#task/domain/runtime #task/object/engine #task/action/integration
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 定义运行时协议 (Protocols)
+#### Acts 1: 集成引擎 (Engine)
 
-创建 `Solver` 和 `Executor` 的接口定义。我们还需要一个 `ExecutionPlan` 类型来表示求解器的输出。
+创建 `Engine` 类，它是所有组件的总指挥。
 
 ~~~~~act
 write_file
-src/cascade/runtime/protocols.py
+src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-from typing import Protocol, List, Any, Dict
-from cascade.graph.model import Graph, Node
+import time
+from typing import Any, Dict, Optional
+from uuid import uuid4
 
-# An execution plan is simply an ordered list of nodes to execute.
-ExecutionPlan = List[Node]
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node
+from cascade.spec.task import LazyResult
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import RunStarted, RunFinished, TaskExecutionStarted, TaskExecutionFinished
+from cascade.runtime.protocols import Solver, Executor
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
-class Solver(Protocol):
+class Engine:
     """
-    Protocol for a solver that resolves a graph into an execution plan.
+    Orchestrates the entire workflow execution.
     """
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        ...
+    def __init__(
+        self,
+        solver: Optional[Solver] = None,
+        executor: Optional[Executor] = None,
+        bus: Optional[MessageBus] = None
+    ):
+        self.solver = solver or NativeSolver()
+        self.executor = executor or LocalExecutor()
+        self.bus = bus or MessageBus()
 
-class Executor(Protocol):
-    """
-    Protocol for an executor that runs a single task.
-    """
-    def execute(
-        self, 
-        node: Node, 
-        graph: Graph, 
-        upstream_results: Dict[str, Any]
-    ) -> Any:
-        ...
+    def run(self, target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
+        run_id = str(uuid4())
+        start_time = time.time()
+        
+        # TODO: A proper way to get target names. For now, use the task name.
+        target_task_names = [target.task.name]
+        
+        # Publish start event
+        event = RunStarted(run_id=run_id, target_tasks=target_task_names, params=params or {})
+        self.bus.publish(event)
+        
+        try:
+            # 1. Build
+            graph = build_graph(target)
+            
+            # 2. Solve
+            plan = self.solver.resolve(graph)
+            
+            # 3. Execute
+            results: Dict[str, Any] = {}
+            for node in plan:
+                task_start_time = time.time()
+                
+                start_event = TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
+                self.bus.publish(start_event)
+                
+                try:
+                    # TODO: Inject params into tasks that need them
+                    result = self.executor.execute(node, graph, results)
+                    results[node.id] = result
+                    
+                    task_duration = time.time() - task_start_time
+                    finish_event = TaskExecutionFinished(
+                        run_id=run_id,
+                        task_id=node.id,
+                        task_name=node.name,
+                        status="Succeeded",
+                        duration=task_duration,
+                        result_preview=repr(result)[:100] # Truncate long results
+                    )
+                    self.bus.publish(finish_event)
+
+                except Exception as e:
+                    task_duration = time.time() - task_start_time
+                    fail_event = TaskExecutionFinished(
+                        run_id=run_id,
+                        task_id=node.id,
+                        task_name=node.name,
+                        status="Failed",
+                        duration=task_duration,
+                        error=f"{type(e).__name__}: {e}"
+                    )
+                    self.bus.publish(fail_event)
+                    raise # Re-raise to stop the run
+
+            run_duration = time.time() - start_time
+            final_event = RunFinished(run_id=run_id, status="Succeeded", duration=run_duration)
+            self.bus.publish(final_event)
+
+            return results[target._uuid]
+
+        except Exception as e:
+            run_duration = time.time() - start_time
+            final_fail_event = RunFinished(
+                run_id=run_id,
+                status="Failed",
+                duration=run_duration,
+                error=f"{type(e).__name__}: {e}"
+            )
+            self.bus.publish(final_fail_event)
+            raise
+
 ~~~~~
 
-#### Acts 2: 实现原生求解器 (Native Solver)
+#### Acts 2: 暴露公共 API (Public API)
 
-使用 `graphlib.TopologicalSorter` 来实现一个简单、高效的求解器。
+在 `__init__.py` 中定义 `run` 门面函数并导出 `@task` 和 `Param`。
 
 ~~~~~act
 write_file
-src/cascade/adapters/solvers/native.py
+src/cascade/__init__.py
 ~~~~~
 ~~~~~python
-from graphlib import TopologicalSorter
-from typing import Dict
-from cascade.graph.model import Graph, Node
-from cascade.runtime.protocols import ExecutionPlan
+from typing import Any, Dict, Optional
 
-class NativeSolver:
+from .spec.task import task, Param, LazyResult
+from .runtime.engine import Engine
+from .runtime.bus import MessageBus
+from .runtime.subscribers import HumanReadableLogSubscriber
+
+__all__ = ["task", "Param", "run", "LazyResult"]
+
+def run(target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
     """
-    A solver that uses Python's standard library `graphlib` to produce
-    a sequential execution plan.
+    Runs a Cascade workflow with a default engine configuration.
+    
+    This is the primary entry point for users. It sets up a default
+    engine with a human-readable logger.
     """
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # Create a mapping from node ID to node object for quick lookup
-        node_map: Dict[str, Node] = {node.id: node for node in graph.nodes}
-        
-        # Build the dependency structure for TopologicalSorter
-        # Format: {node_id: {dep1_id, dep2_id, ...}}
-        deps: Dict[str, set] = {node.id: set() for node in graph.nodes}
-        for edge in graph.edges:
-            deps[edge.target.id].add(edge.source.id)
-
-        # Perform the sort
-        ts = TopologicalSorter(deps)
-        sorted_node_ids = list(ts.static_order())
-
-        # Map sorted IDs back to Node objects
-        plan = [node_map[node_id] for node_id in sorted_node_ids]
-        return plan
+    bus = MessageBus()
+    # Attach the default logger
+    HumanReadableLogSubscriber(bus)
+    
+    engine = Engine(bus=bus)
+    
+    return engine.run(target, params=params)
 ~~~~~
 
-#### Acts 3: 实现本地执行器 (Local Executor)
+#### Acts 3: 编写端到端测试 (End-to-End Test)
 
-这个执行器负责在当前进程中同步调用任务函数。
+创建一个新测试文件来验证整个流程。
 
 ~~~~~act
 write_file
-src/cascade/adapters/executors/local.py
-~~~~~
-~~~~~python
-from typing import Any, Dict, List
-from cascade.graph.model import Graph, Node
-
-class LocalExecutor:
-    """
-    An executor that runs tasks sequentially in the current process.
-    """
-    def execute(
-        self, 
-        node: Node, 
-        graph: Graph, 
-        upstream_results: Dict[str, Any]
-    ) -> Any:
-        """
-        Executes a single node's callable object by reconstructing its arguments
-        from the results of its dependencies.
-        """
-        # Find all edges that point to the current node
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-
-        # Prepare arguments
-        args: List[Any] = []
-        kwargs: Dict[str, Any] = {}
-        
-        # This is a simplified approach assuming we know the number of positional args
-        # A more robust solution might inspect the function signature.
-        # For now, we assume args are sorted by their integer `arg_name`.
-        
-        positional_args = {}
-        
-        for edge in incoming_edges:
-            result = upstream_results[edge.source.id]
-            if edge.arg_name.isdigit():
-                # It's a positional argument, store with its index
-                positional_args[int(edge.arg_name)] = result
-            else:
-                # It's a keyword argument
-                kwargs[edge.arg_name] = result
-
-        # Sort and create the final positional args list
-        if positional_args:
-            sorted_indices = sorted(positional_args.keys())
-            args = [positional_args[i] for i in sorted_indices]
-
-        # Execute the function
-        return node.callable_obj(*args, **kwargs)
-~~~~~
-
-#### Acts 4: 编写测试
-
-创建 `tests/test_adapters.py` 来验证 `Solver` 和 `Executor` 的正确性。
-
-~~~~~act
-write_file
-tests/test_adapters.py
+tests/test_end_to_end.py
 ~~~~~
 ~~~~~python
 import pytest
-from cascade.spec.task import task
-from cascade.graph.build import build_graph
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.graph.model import Node, Graph, Edge
+import cascade as cs
+import io
+import sys
+from contextlib import redirect_stdout
 
-def test_native_solver_diamond_graph():
-    @task
-    def t_a(): return 1
-    @task
-    def t_b(x): return x + 1
-    @task
-    def t_c(x): return x * 2
-    @task
-    def t_d(y, z): return y + z
+def test_e2e_linear_workflow():
+    @cs.task
+    def get_name():
+        return "Cascade"
+
+    @cs.task
+    def greet(name: str):
+        return f"Hello, {name}!"
+
+    final_greeting = greet(get_name())
+    
+    output = io.StringIO()
+    with redirect_stdout(output):
+        result = cs.run(final_greeting)
+
+    assert result == "Hello, Cascade!"
+    
+    logs = output.getvalue()
+    assert "▶️  Starting Run" in logs
+    assert "⏳ Running task `get_name`" in logs
+    assert "✅ Finished task `get_name`" in logs
+    assert "⏳ Running task `greet`" in logs
+    assert "✅ Finished task `greet`" in logs
+    assert "🏁 Run finished successfully" in logs
+
+def test_e2e_diamond_workflow_and_result():
+    @cs.task
+    def t_a(): return 5
+    @cs.task
+    def t_b(x): return x * 2  # 10
+    @cs.task
+    def t_c(x): return x + 3  # 8
+    @cs.task
+    def t_d(y, z): return y + z # 18
 
     r_a = t_a()
     r_b = t_b(r_a)
     r_c = t_c(r_a)
     r_d = t_d(r_b, z=r_c)
 
-    graph = build_graph(r_d)
-    solver = NativeSolver()
-    plan = solver.resolve(graph)
+    result = cs.run(r_d)
+    assert result == 18
 
-    assert len(plan) == 4
-    
-    # Node A must be first
-    assert plan[0].name == "t_a"
-    # Node D must be last
-    assert plan[-1].name == "t_d"
+def test_e2e_failure_propagation():
+    @cs.task
+    def ok_task():
+        return True
 
-    # Nodes B and C can be in any order in between
-    middle_names = {plan[1].name, plan[2].name}
-    assert middle_names == {"t_b", "t_c"}
+    @cs.task
+    def failing_task(x):
+        raise ValueError("Something went wrong")
 
-def test_local_executor():
-    def add(x: int, y: int) -> int:
-        return x + y
+    @cs.task
+    def unreachable_task(y):
+        return False
     
-    # Manually construct graph for clarity
-    node_x = Node(id="x", name="provide_x", callable_obj=lambda: 5)
-    node_y = Node(id="y", name="provide_y", callable_obj=lambda: 10)
-    node_add = Node(id="add", name="add", callable_obj=add)
-    
-    edge1 = Edge(source=node_x, target=node_add, arg_name="0") # positional x
-    edge2 = Edge(source=node_y, target=node_add, arg_name="y") # keyword y
-    
-    graph = Graph(nodes=[node_x, node_y, node_add], edges=[edge1, edge2])
-    
-    # Simulate upstream results
-    upstream_results = {
-        "x": 5,
-        "y": 10
-    }
-    
-    executor = LocalExecutor()
-    result = executor.execute(node_add, graph, upstream_results)
-    
-    assert result == 15
+    r1 = ok_task()
+    r2 = failing_task(r1)
+    r3 = unreachable_task(r2)
+
+    output = io.StringIO()
+    with redirect_stdout(output):
+        with pytest.raises(ValueError, match="Something went wrong"):
+            cs.run(r3)
+
+    logs = output.getvalue()
+    assert "✅ Finished task `ok_task`" in logs
+    assert "❌ Failed task `failing_task`" in logs
+    assert "💥 Run failed" in logs
+    assert "unreachable_task" not in logs
 ~~~~~
 
 ### 下一步建议
-我们已经拥有了将图转化为计划 (`Solver`) 和执行单个计划步骤 (`Executor`) 的能力。
-下一步是第 6 步：**集成引擎与公共 API**。我们将创建一个 `Engine` 类，它会把 `GraphBuilder`、`Solver` 和 `Executor` 串联起来，并驱动整个工作流的执行，同时通过 `MessageBus` 发布事件。
+**Cascade MVP 已完成！**
+
+我们成功地构建了一个功能完备的“智能脚本执行器”。它拥有优雅的 API、清晰的日志输出，并且核心架构稳固、可扩展。
+
+下一步，我们将进入**阶段二：增强健壮性与可测试性**。
+建议的第一个任务是：
+*   **实现完整的依赖注入系统 (`@resource`, `cs.inject`)**，这将是 `Cascade` 区别于普通脚本执行器的关键特性，也是解决可测试性问题的核心。

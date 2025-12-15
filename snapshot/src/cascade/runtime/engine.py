@@ -1,10 +1,13 @@
 import time
-from typing import Any, Dict, Optional
+import inspect
+from typing import Any, Dict, Optional, Generator, Callable
 from uuid import uuid4
+from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node
 from cascade.spec.task import LazyResult
+from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import RunStarted, RunFinished, TaskExecutionStarted, TaskExecutionFinished
 from cascade.runtime.protocols import Solver, Executor
@@ -24,75 +27,144 @@ class Engine:
         self.solver = solver or NativeSolver()
         self.executor = executor or LocalExecutor()
         self.bus = bus or MessageBus()
+        self._resource_providers: Dict[str, Callable] = {}
+
+    def register(self, resource_def: ResourceDefinition):
+        """Registers a resource provider function with the engine."""
+        self._resource_providers[resource_def.name] = resource_def.func
+
+    def get_resource_provider(self, name: str) -> Callable:
+        return self._resource_providers[name]
+
+    def override_resource_provider(self, name: str, new_provider: Callable):
+        self._resource_providers[name] = new_provider
 
     def run(self, target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
         
-        # TODO: A proper way to get target names. For now, use the task name.
         target_task_names = [target.task.name]
         
-        # Publish start event
         event = RunStarted(run_id=run_id, target_tasks=target_task_names, params=params or {})
         self.bus.publish(event)
-        
-        try:
-            # 1. Build
-            graph = build_graph(target)
-            
-            # 2. Solve
-            plan = self.solver.resolve(graph)
-            
-            # 3. Execute
-            results: Dict[str, Any] = {}
-            for node in plan:
-                task_start_time = time.time()
+
+        # ExitStack manages the teardown of resources
+        with ExitStack() as stack:
+            try:
+                graph = build_graph(target)
+                plan = self.solver.resolve(graph)
                 
-                start_event = TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
-                self.bus.publish(start_event)
+                # Scan for all required resources
+                required_resources = self._scan_for_resources(plan)
                 
-                try:
-                    # TODO: Inject params into tasks that need them
-                    result = self.executor.execute(node, graph, results)
-                    results[node.id] = result
+                # Setup resources and get active instances
+                active_resources = self._setup_resources(required_resources, stack)
+
+                results: Dict[str, Any] = {}
+                for node in plan:
+                    task_start_time = time.time()
                     
-                    task_duration = time.time() - task_start_time
-                    finish_event = TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        status="Succeeded",
-                        duration=task_duration,
-                        result_preview=repr(result)[:100] # Truncate long results
-                    )
-                    self.bus.publish(finish_event)
+                    start_event = TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
+                    self.bus.publish(start_event)
+                    
+                    try:
+                        result = self.executor.execute(node, graph, results, active_resources)
+                        results[node.id] = result
+                        
+                        task_duration = time.time() - task_start_time
+                        finish_event = TaskExecutionFinished(
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            status="Succeeded",
+                            duration=task_duration,
+                            result_preview=repr(result)[:100]
+                        )
+                        self.bus.publish(finish_event)
 
-                except Exception as e:
-                    task_duration = time.time() - task_start_time
-                    fail_event = TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        status="Failed",
-                        duration=task_duration,
-                        error=f"{type(e).__name__}: {e}"
-                    )
-                    self.bus.publish(fail_event)
-                    raise # Re-raise to stop the run
+                    except Exception as e:
+                        task_duration = time.time() - task_start_time
+                        fail_event = TaskExecutionFinished(
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            status="Failed",
+                            duration=task_duration,
+                            error=f"{type(e).__name__}: {e}"
+                        )
+                        self.bus.publish(fail_event)
+                        raise
 
-            run_duration = time.time() - start_time
-            final_event = RunFinished(run_id=run_id, status="Succeeded", duration=run_duration)
-            self.bus.publish(final_event)
+                run_duration = time.time() - start_time
+                final_event = RunFinished(run_id=run_id, status="Succeeded", duration=run_duration)
+                self.bus.publish(final_event)
 
-            return results[target._uuid]
+                return results[target._uuid]
 
-        except Exception as e:
-            run_duration = time.time() - start_time
-            final_fail_event = RunFinished(
-                run_id=run_id,
-                status="Failed",
-                duration=run_duration,
-                error=f"{type(e).__name__}: {e}"
-            )
-            self.bus.publish(final_fail_event)
-            raise
+            except Exception as e:
+                run_duration = time.time() - start_time
+                final_fail_event = RunFinished(
+                    run_id=run_id,
+                    status="Failed",
+                    duration=run_duration,
+                    error=f"{type(e).__name__}: {e}"
+                )
+                self.bus.publish(final_fail_event)
+                raise
+    
+    def _scan_for_resources(self, plan: list[Node]) -> set[str]:
+        """Finds all unique resource names required by the plan."""
+        required = set()
+        for node in plan:
+            sig = inspect.signature(node.callable_obj)
+            for param in sig.parameters.values():
+                if isinstance(param.default, Inject):
+                    required.add(param.default.resource_name)
+        return required
+
+    def _setup_resources(self, required_names: set[str], stack: ExitStack) -> Dict[str, Any]:
+        """
+        Initializes all required resources and their dependencies recursively.
+        Returns a dictionary of active resource instances.
+        """
+        active: Dict[str, Any] = {}
+        
+        def get_or_create(name: str):
+            if name in active:
+                return active[name]
+            
+            provider = self._resource_providers.get(name)
+            if not provider:
+                raise NameError(f"Resource '{name}' is required but not registered.")
+
+            # Inspect provider's signature to find its dependencies
+            sig = inspect.signature(provider)
+            deps = {}
+            for param_name, param in sig.parameters.items():
+                if isinstance(param.default, Inject):
+                    deps[param_name] = get_or_create(param.default.resource_name)
+                # Here you could also inject `Param`s if needed
+            
+            # Create the resource generator
+            gen = provider(**deps)
+            
+            # Enter the generator and get the yielded value
+            instance = next(gen)
+            active[name] = instance
+            
+            # Register the teardown logic
+            stack.callback(self._teardown_resource, gen)
+            
+            return instance
+
+        for name in required_names:
+            get_or_create(name)
+            
+        return active
+
+    def _teardown_resource(self, gen: Generator):
+        """Helper to exhaust a resource generator for cleanup."""
+        try:
+            next(gen)
+        except StopIteration:
+            pass # This is expected

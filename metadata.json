@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(core): Implement MVP for declarative task execution engine", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765803197.0011203, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实现依赖注入与资源管理系统", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765803658.381108, "duration_ms": 0}}

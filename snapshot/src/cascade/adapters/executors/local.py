@@ -1,5 +1,7 @@
+import inspect
 from typing import Any, Dict, List
 from cascade.graph.model import Graph, Node
+from cascade.spec.resource import Inject
 
 class LocalExecutor:
     """
@@ -9,38 +11,44 @@ class LocalExecutor:
         self, 
         node: Node, 
         graph: Graph, 
-        upstream_results: Dict[str, Any]
+        upstream_results: Dict[str, Any],
+        resource_context: Dict[str, Any]
     ) -> Any:
         """
         Executes a single node's callable object by reconstructing its arguments
-        from the results of its dependencies.
+        from dependency results and injected resources.
         """
-        # Find all edges that point to the current node
+        # 1. Prepare arguments from upstream task results
+        kwargs_from_deps: Dict[str, Any] = {}
+        positional_args_from_deps = {}
+        
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-
-        # Prepare arguments
-        args: List[Any] = []
-        kwargs: Dict[str, Any] = {}
-        
-        # This is a simplified approach assuming we know the number of positional args
-        # A more robust solution might inspect the function signature.
-        # For now, we assume args are sorted by their integer `arg_name`.
-        
-        positional_args = {}
-        
         for edge in incoming_edges:
             result = upstream_results[edge.source.id]
             if edge.arg_name.isdigit():
-                # It's a positional argument, store with its index
-                positional_args[int(edge.arg_name)] = result
+                positional_args_from_deps[int(edge.arg_name)] = result
             else:
-                # It's a keyword argument
-                kwargs[edge.arg_name] = result
+                kwargs_from_deps[edge.arg_name] = result
+        
+        sorted_indices = sorted(positional_args_from_deps.keys())
+        args = [positional_args_from_deps[i] for i in sorted_indices]
+        
+        # 2. Prepare arguments from injected resources
+        sig = inspect.signature(node.callable_obj)
+        kwargs_from_resources = {}
+        for param in sig.parameters.values():
+            if isinstance(param.default, Inject):
+                resource_name = param.default.resource_name
+                if resource_name in resource_context:
+                    kwargs_from_resources[param.name] = resource_context[resource_name]
+                else:
+                    raise NameError(
+                        f"Task '{node.name}' requires resource '{resource_name}' "
+                        "which was not found in the active context."
+                    )
 
-        # Sort and create the final positional args list
-        if positional_args:
-            sorted_indices = sorted(positional_args.keys())
-            args = [positional_args[i] for i in sorted_indices]
-
-        # Execute the function
-        return node.callable_obj(*args, **kwargs)
+        # 3. Combine arguments and execute
+        # Dependencies take precedence over resource injections if names conflict
+        final_kwargs = {**kwargs_from_resources, **kwargs_from_deps}
+        
+        return node.callable_obj(*args, **final_kwargs)

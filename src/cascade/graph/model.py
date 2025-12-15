@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Callable
+from typing import List, Callable, Optional, Any, Dict
 
 
 @dataclass
@@ -9,7 +9,13 @@ class Node:
     id: str
     name: str
     callable_obj: Callable
-    # We might store additional metadata here later
+    
+    # Metadata for execution strategies
+    retry_policy: Optional[Any] = None  # Typed as Any to avoid circular deps with spec
+    cache_policy: Optional[Any] = None
+    
+    # Pre-resolved literal inputs for the task
+    literal_inputs: Dict[str, Any] = field(default_factory=dict)
 
     def __hash__(self):
         return hash(self.id)

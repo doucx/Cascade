@@ -34,11 +34,13 @@ def test_e2e_linear_workflow():
 
     final_greeting = greet(get_name())
 
+    import asyncio
+
     bus = MessageBus()
     spy = SpySubscriber(bus)
     engine = Engine(bus=bus)
 
-    result = engine.run(final_greeting)
+    result = asyncio.run(engine.run(final_greeting))
 
     assert result == "Hello, {name}!".format(name="Cascade")
 
@@ -81,11 +83,13 @@ def test_e2e_diamond_workflow_and_result():
     r_c = t_c(r_a)
     r_d = t_d(r_b, z=r_c)
 
+    import asyncio
+
     bus = MessageBus()
     spy = SpySubscriber(bus)
     engine = Engine(bus=bus)
 
-    result = engine.run(r_d)
+    result = asyncio.run(engine.run(r_d))
     assert result == 18
 
 
@@ -106,12 +110,14 @@ def test_e2e_failure_propagation():
     r2 = failing_task(r1)
     r3 = unreachable_task(r2)
 
+    import asyncio
+
     bus = MessageBus()
     spy = SpySubscriber(bus)
     engine = Engine(bus=bus)
 
     with pytest.raises(ValueError, match="Something went wrong"):
-        engine.run(r3)
+        asyncio.run(engine.run(r3))
 
     assert spy.event_names() == [
         "RunStarted",

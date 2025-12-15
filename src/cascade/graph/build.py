@@ -24,7 +24,11 @@ class GraphBuilder:
 
         # Create a new Node for this task execution
         node = Node(
-            id=result._uuid, name=result.task.name, callable_obj=result.task.func
+            id=result._uuid,
+            name=result.task.name,
+            callable_obj=result.task.func,
+            retry_policy=result._retry_policy,
+            cache_policy=result._cache_policy,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
@@ -46,6 +50,9 @@ class GraphBuilder:
                 source_node = self._visit(value)
                 edge = Edge(source=source_node, target=target_node, arg_name=arg_name)
                 self.graph.add_edge(edge)
+            else:
+                # It's a literal value, store it in the node.
+                target_node.literal_inputs[arg_name] = value
 
             # TODO: Handle lists/dicts containing LazyResults (Future MVP enhancement)
 

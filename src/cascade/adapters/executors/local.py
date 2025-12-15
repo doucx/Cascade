@@ -9,7 +9,7 @@ class LocalExecutor:
     An executor that runs tasks sequentially in the current process.
     """
 
-    def execute(
+    async def execute(
         self,
         node: Node,
         graph: Graph,
@@ -20,20 +20,26 @@ class LocalExecutor:
         Executes a single node's callable object by reconstructing its arguments
         from dependency results and injected resources.
         """
-        # 1. Prepare arguments from upstream task results
-        kwargs_from_deps: Dict[str, Any] = {}
-        positional_args_from_deps = {}
+        # 1. Prepare arguments from all sources
+        # Literals are the base
+        final_kwargs = {
+            k: v for k, v in node.literal_inputs.items() if not k.isdigit()
+        }
+        positional_args = {
+            int(k): v for k, v in node.literal_inputs.items() if k.isdigit()
+        }
 
+        # Upstream results override literals
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
         for edge in incoming_edges:
             result = upstream_results[edge.source.id]
             if edge.arg_name.isdigit():
-                positional_args_from_deps[int(edge.arg_name)] = result
+                positional_args[int(edge.arg_name)] = result
             else:
-                kwargs_from_deps[edge.arg_name] = result
+                final_kwargs[edge.arg_name] = result
 
-        sorted_indices = sorted(positional_args_from_deps.keys())
-        args = [positional_args_from_deps[i] for i in sorted_indices]
+        sorted_indices = sorted(positional_args.keys())
+        args = [positional_args[i] for i in sorted_indices]
 
         # 2. Prepare arguments from injected resources
         sig = inspect.signature(node.callable_obj)
@@ -50,7 +56,10 @@ class LocalExecutor:
                     )
 
         # 3. Combine arguments and execute
-        # Dependencies take precedence over resource injections if names conflict
-        final_kwargs = {**kwargs_from_resources, **kwargs_from_deps}
+        # Injected resources take precedence over other inputs
+        final_kwargs = {**final_kwargs, **kwargs_from_resources}
 
-        return node.callable_obj(*args, **final_kwargs)
+        if inspect.iscoroutinefunction(node.callable_obj):
+            return await node.callable_obj(*args, **final_kwargs)
+        else:
+            return node.callable_obj(*args, **final_kwargs)

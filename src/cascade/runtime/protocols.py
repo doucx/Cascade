@@ -18,6 +18,29 @@ class Executor(Protocol):
     Protocol for an executor that runs a single task.
     """
 
-    def execute(
-        self, node: Node, graph: Graph, upstream_results: Dict[str, Any]
+    async def execute(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        resource_context: Dict[str, Any],
     ) -> Any: ...
+
+
+class CachePolicy(Protocol):
+    """
+    Protocol for a caching strategy.
+    """
+
+    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
+        """
+        Checks if a result is cached.
+        Returns None if not found, or the cached value if found.
+        """
+        ...
+
+    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+        """
+        Saves a result to the cache.
+        """
+        ...

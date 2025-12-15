@@ -1,306 +1,241 @@
-## [WIP] feat(runtime): 引擎异步化与门面函数更新
+好的，测试通过，所有异步改造任务已完成。
+
+现在我们进入阶段二的第三项核心任务：**缓存与重试机制**。
+
+我们将首先进行**协议定义与规格扩展**，确保系统能够理解和传递用户的缓存与重试意图。
+
+## [WIP] feat(spec): 定义缓存协议与扩展任务规格
 
 ### 用户需求
-1.  将 `Engine.run` 改造为异步方法，以配合异步的 `Executor`。
-2.  更新顶层 `cascade.run` 函数，使其能自动启动事件循环，对用户保持同步调用的便捷性。
-3.  修复因异步改造而崩溃的集成测试。
+1.  定义 `CachePolicy` 协议，规定缓存策略必须实现的方法。
+2.  扩展 `LazyResult` 对象，允许用户通过 `.with_cache()` 和 `.with_retry()` 链式方法配置策略。
+3.  更新核心图模型 (`Node`) 和构建器 (`GraphBuilder`)，确保这些策略能从用户 API 正确传递到底层计算图。
 
 ### 评论
-这是异步改造的收官之战。通过将 `Engine` 转变为异步，我们打通了整个调用链。虽然内部机制发生了翻天覆地的变化（从同步到异步），但在 `cascade.run` 这一层，我们通过 `asyncio.run` 保持了 API 的向后兼容性，这是一次优雅的重构。
+这是实现健壮性功能的“地基”。我们不立即修改 `Engine` 去执行这些策略，而是先打通数据流：从用户在 API 层的声明（`spec`），到图模型的存储（`graph`）。这样，当我们在下一步修改 `Engine` 时，它就已经能从 `Node` 上获取到所需的策略配置了。
 
 ### 目标
-1.  修改 `src/cascade/runtime/engine.py`：将 `run` 方法改为 `async def`，并 `await` 执行器的结果。
-2.  修改 `src/cascade/__init__.py`：在 `run` 函数中使用 `asyncio.run`。
-3.  修复 `tests/test_end_to_end.py` 和 `tests/test_di_and_resources.py`：在直接使用 `Engine` 的测试中引入 `asyncio.run`。
+1.  更新 `src/cascade/runtime/protocols.py`：添加 `CachePolicy` Protocol。
+2.  更新 `src/cascade/spec/task.py`：定义 `RetryPolicy` 数据类，并在 `LazyResult` 中实现配置方法。
+3.  更新 `src/cascade/graph/model.py`：在 `Node` 类中添加 `retry_policy` 和 `cache_policy` 字段。
+4.  更新 `src/cascade/graph/build.py`：在构建图时，将策略从 `LazyResult` 复制到 `Node`。
 
 ### 基本原理
--   **全链路异步**: 只有当 `Engine` 也是异步的，它才能 `await` 异步的 `Executor`，从而正确获取结果而非协程对象。
--   **入口封装**: 对于库的使用者，特别是编写简单脚本的用户，`asyncio` 的复杂性被封装在 `cascade.run` 内部。
--   **测试适配**: 测试代码直接操作内部组件（Engine），因此必须显式管理事件循环。
+-   **声明式 API**: 用户不应该关心重试循环怎么写，只需声明“我要重试 3 次”。`.with_retry()` 这种 Fluent API 是最佳实践。
+-   **数据流透传**: 策略是任务的元数据。它必须跟随任务从定义阶段（`LazyResult`）一直流转到执行阶段（`Node`）。
 
 ### 标签
-#intent/refine #flow/ready #priority/high
-#comp/runtime #comp/tests #concept/async
-#task/domain/core #task/object/async-support #task/action/implementation
-#task/state/end #task/status/completed
+#intent/architect #flow/ready #priority/high
+#comp/spec #comp/graph #comp/runtime #concept/caching #concept/resilience
+#task/domain/core #task/object/resilience-support #task/action/architect
+#task/state/begin #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: Async Engine
+#### Acts 1: Define CachePolicy Protocol
 
-将 `Engine.run` 转换为异步方法，并 `await` 执行器调用。
-
-~~~~~act
-patch_file
-src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-    def override_resource_provider(self, name: str, new_provider: Any):
-        # Unwrap ResourceDefinition if provided
-        if isinstance(new_provider, ResourceDefinition):
-            new_provider = new_provider.func
-        self._resource_providers[name] = new_provider
-
-    def run(self, target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
-        run_id = str(uuid4())
-        start_time = time.time()
-~~~~~
-~~~~~python
-    def override_resource_provider(self, name: str, new_provider: Any):
-        # Unwrap ResourceDefinition if provided
-        if isinstance(new_provider, ResourceDefinition):
-            new_provider = new_provider.func
-        self._resource_providers[name] = new_provider
-
-    async def run(
-        self, target: LazyResult, params: Optional[Dict[str, Any]] = None
-    ) -> Any:
-        run_id = str(uuid4())
-        start_time = time.time()
-~~~~~
+定义缓存策略的接口。
 
 ~~~~~act
 patch_file
-src/cascade/runtime/engine.py
+src/cascade/runtime/protocols.py
 ~~~~~
 ~~~~~python
-                    self.bus.publish(start_event)
-
-                    try:
-                        result = self.executor.execute(
-                            node, graph, results, active_resources
-                        )
-                        results[node.id] = result
-
-                        task_duration = time.time() - task_start_time
+    async def execute(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        resource_context: Dict[str, Any],
+    ) -> Any: ...
 ~~~~~
 ~~~~~python
-                    self.bus.publish(start_event)
+    async def execute(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        resource_context: Dict[str, Any],
+    ) -> Any: ...
 
-                    try:
-                        result = await self.executor.execute(
-                            node, graph, results, active_resources
-                        )
-                        results[node.id] = result
 
-                        task_duration = time.time() - task_start_time
-~~~~~
-
-#### Acts 2: Update Facade
-
-更新 `cascade.run` 以使用 `asyncio.run`。
-
-~~~~~act
-patch_file
-src/cascade/__init__.py
-~~~~~
-~~~~~python
-def run(target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
+class CachePolicy(Protocol):
     """
-    Runs a Cascade workflow with a default engine configuration.
-
-    This is the primary entry point for users. It sets up a default
-    engine with a human-readable logger.
+    Protocol for a caching strategy.
     """
-    bus = MessageBus()
-    # Attach the default logger
-    HumanReadableLogSubscriber(bus)
 
-    engine = Engine(bus=bus)
+    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
+        """
+        Checks if a result is cached.
+        Returns None if not found, or the cached value if found.
+        """
+        ...
 
-    return engine.run(target, params=params)
-~~~~~
-~~~~~python
-def run(target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
-    """
-    Runs a Cascade workflow with a default engine configuration.
-
-    This is the primary entry point for users. It sets up a default
-    engine with a human-readable logger.
-    """
-    bus = MessageBus()
-    # Attach the default logger
-    HumanReadableLogSubscriber(bus)
-
-    engine = Engine(bus=bus)
-
-    return asyncio.run(engine.run(target, params=params))
+    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+        """
+        Saves a result to the cache.
+        """
+        ...
 ~~~~~
 
-#### Acts 3: Fix DI Tests
+#### Acts 2: Update Spec with Policies
 
-修复 `tests/test_di_and_resources.py` 中的测试，使用 `asyncio.run`。
+在 `task.py` 中定义 `RetryPolicy` 并更新 `LazyResult`。
 
 ~~~~~act
 patch_file
-tests/test_di_and_resources.py
+src/cascade/spec/task.py
 ~~~~~
 ~~~~~python
-def test_di_end_to_end():
-    """Tests the full lifecycle: registration, injection, execution, teardown."""
-    engine = cs.Engine()
-    engine.register(config)
-    engine.register(db_connection)
+from typing import TypeVar, Generic, Callable, Any, Dict, Optional
+from dataclasses import dataclass, field
+import inspect
+from uuid import uuid4
 
-    result = engine.run(task_using_resource())
-
-    assert result == "production_url"
+T = TypeVar("T")
 
 
-def test_resource_events():
-    """Tests that resource lifecycle events are emitted."""
-    events = []
-    bus = cs.MessageBus()
-    bus.subscribe(Event, events.append)
-
-    engine = cs.Engine(bus=bus)
-    engine.register(config)
-    engine.register(db_connection)
-
-    engine.run(task_using_resource())
-
-    # Check for ResourceAcquired events
+@dataclass
+class Param:
 ~~~~~
 ~~~~~python
-def test_di_end_to_end():
-    """Tests the full lifecycle: registration, injection, execution, teardown."""
-    import asyncio
+from typing import TypeVar, Generic, Callable, Any, Dict, Optional, Union
+from dataclasses import dataclass, field
+import inspect
+from uuid import uuid4
 
-    engine = cs.Engine()
-    engine.register(config)
-    engine.register(db_connection)
+# Import protocols only for type hinting to avoid circular imports if possible
+# But here we just need Any or "CachePolicy" forward ref
+from cascade.runtime.protocols import CachePolicy
 
-    result = asyncio.run(engine.run(task_using_resource()))
-
-    assert result == "production_url"
+T = TypeVar("T")
 
 
-def test_resource_events():
-    """Tests that resource lifecycle events are emitted."""
-    import asyncio
+@dataclass
+class RetryPolicy:
+    max_attempts: int
+    delay: float = 0.0
+    backoff: float = 1.0  # Multiplier for delay after each retry
 
-    events = []
-    bus = cs.MessageBus()
-    bus.subscribe(Event, events.append)
 
-    engine = cs.Engine(bus=bus)
-    engine.register(config)
-    engine.register(db_connection)
-
-    asyncio.run(engine.run(task_using_resource()))
-
-    # Check for ResourceAcquired events
+@dataclass
+class Param:
 ~~~~~
 
 ~~~~~act
 patch_file
-tests/test_di_and_resources.py
+src/cascade/spec/task.py
 ~~~~~
 ~~~~~python
-    # Override the db_connection resource
-    with cs.override_resource(engine, "db_connection", mock_db_connection):
-        result = engine.run(task_using_resource())
+    task: "Task[T]"
+    args: tuple
+    kwargs: Dict[str, Any]
+    _uuid: str = field(default_factory=lambda: str(uuid4()))
 
-    assert result == "mock_db_url"
-
-    # After exiting the context, the original should be restored
-    result_after = engine.run(task_using_resource())
-    assert result_after == "production_url"
+    def __hash__(self):
+        return hash(self._uuid)
 ~~~~~
 ~~~~~python
-    import asyncio
+    task: "Task[T]"
+    args: tuple
+    kwargs: Dict[str, Any]
+    _uuid: str = field(default_factory=lambda: str(uuid4()))
+    _retry_policy: Optional[RetryPolicy] = None
+    _cache_policy: Optional[CachePolicy] = None
 
-    # Override the db_connection resource
-    with cs.override_resource(engine, "db_connection", mock_db_connection):
-        result = asyncio.run(engine.run(task_using_resource()))
+    def __hash__(self):
+        return hash(self._uuid)
 
-    assert result == "mock_db_url"
+    def with_retry(
+        self, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0
+    ) -> "LazyResult[T]":
+        """Configures retry logic for this task."""
+        self._retry_policy = RetryPolicy(max_attempts, delay, backoff)
+        return self
 
-    # After exiting the context, the original should be restored
-    result_after = asyncio.run(engine.run(task_using_resource()))
-    assert result_after == "production_url"
+    def with_cache(self, policy: CachePolicy) -> "LazyResult[T]":
+        """Configures caching strategy for this task."""
+        self._cache_policy = policy
+        return self
 ~~~~~
 
-#### Acts 4: Fix End-to-End Tests
+#### Acts 3: Update Graph Node Model
 
-修复 `tests/test_end_to_end.py` 中的测试，使用 `asyncio.run`。
+更新 `Node` 模型以存储策略。
 
 ~~~~~act
 patch_file
-tests/test_end_to_end.py
+src/cascade/graph/model.py
 ~~~~~
 ~~~~~python
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
+from dataclasses import dataclass, field
+from typing import List, Callable
 
-    result = engine.run(final_greeting)
 
-    assert result == "Hello, {name}!".format(name="Cascade")
+@dataclass
+class Node:
+    """Represents a node in the computation graph."""
+
+    id: str
+    name: str
+    callable_obj: Callable
+    # We might store additional metadata here later
+
+    def __hash__(self):
+        return hash(self.id)
 ~~~~~
 ~~~~~python
-    import asyncio
+from dataclasses import dataclass, field
+from typing import List, Callable, Optional, Any
 
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
 
-    result = asyncio.run(engine.run(final_greeting))
+@dataclass
+class Node:
+    """Represents a node in the computation graph."""
 
-    assert result == "Hello, {name}!".format(name="Cascade")
+    id: str
+    name: str
+    callable_obj: Callable
+    
+    # Metadata for execution strategies
+    retry_policy: Optional[Any] = None  # Typed as Any to avoid circular deps with spec
+    cache_policy: Optional[Any] = None
+
+    def __hash__(self):
+        return hash(self.id)
 ~~~~~
+
+#### Acts 4: Update Graph Builder
+
+更新构建器，将策略从 `LazyResult` 复制到 `Node`。
 
 ~~~~~act
 patch_file
-tests/test_end_to_end.py
+src/cascade/graph/build.py
 ~~~~~
 ~~~~~python
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    result = engine.run(r_d)
-    assert result == 18
+        # Create a new Node for this task execution
+        node = Node(
+            id=result._uuid, name=result.task.name, callable_obj=result.task.func
+        )
+        self.graph.add_node(node)
+        self._visited[result._uuid] = node
 ~~~~~
 ~~~~~python
-    import asyncio
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    result = asyncio.run(engine.run(r_d))
-    assert result == 18
-~~~~~
-
-~~~~~act
-patch_file
-tests/test_end_to_end.py
-~~~~~
-~~~~~python
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    with pytest.raises(ValueError, match="Something went wrong"):
-        engine.run(r3)
-
-    assert spy.event_names() == [
-~~~~~
-~~~~~python
-    import asyncio
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    with pytest.raises(ValueError, match="Something went wrong"):
-        asyncio.run(engine.run(r3))
-
-    assert spy.event_names() == [
+        # Create a new Node for this task execution
+        node = Node(
+            id=result._uuid,
+            name=result.task.name,
+            callable_obj=result.task.func,
+            retry_policy=result._retry_policy,
+            cache_policy=result._cache_policy,
+        )
+        self.graph.add_node(node)
+        self._visited[result._uuid] = node
 ~~~~~
 
 ### 下一步建议
-运行测试。如果所有测试通过，则说明异步改造圆满完成。接下来，我们将进入 Cascade 阶段二的第三项任务：**缓存与重试机制**。这将进一步增强框架在不可靠环境下的健壮性。我们将首先从 **缓存协议与基础实现 (`FileExistenceCache`)** 开始。
+执行 **子任务 2: 引擎重试逻辑实现**。
+有了数据结构的支持，我们现在可以修改 `Engine`，在执行任务时检查 `node.retry_policy`，并实现重试循环。这将立即赋予 Cascade 声明式的重试能力。

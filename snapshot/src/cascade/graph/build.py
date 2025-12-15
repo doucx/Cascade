@@ -24,7 +24,11 @@ class GraphBuilder:
 
         # Create a new Node for this task execution
         node = Node(
-            id=result._uuid, name=result.task.name, callable_obj=result.task.func
+            id=result._uuid,
+            name=result.task.name,
+            callable_obj=result.task.func,
+            retry_policy=result._retry_policy,
+            cache_policy=result._cache_policy,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node

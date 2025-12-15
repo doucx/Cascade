@@ -1,75 +1,86 @@
-这是我的疏忽。`patch_file` 严格需要 `old_string` 和 `new_string` 两个参数块。我将修正指令。
-
-## [WIP] feat(spec): 支持异步 Task 定义与 Executor 协议更新 (修正)
+## [WIP] feat(executor): 将 LocalExecutor 升级为支持异步
 
 ### 用户需求
-1.  修改 `Task` 定义，使其在初始化时能够检测并标记被装饰的函数是否为异步函数 (`async def`)。
-2.  修改 `Executor` 协议 (`Protocol`)，将 `execute` 方法声明为异步方法 (`async def`)，为后续的引擎升级做准备。
+将 `LocalExecutor` 改造为支持同步/异步混合执行，以配合 `Executor` 协议的变更。
 
 ### 评论
-这是引入异步支持的基石。通过在元数据层（`Task`）和接口层（`Protocol`）确立异步的一等公民地位，我们为后续的执行器和引擎改造设定了明确的契约。
+这是异步支持的关键实现步骤。现在的执行器将能够智能地识别任务类型，如果是 `async def` 定义的任务，它会 `await` 其结果；如果是普通函数，则直接执行。这使得 Cascade 能够无缝混合处理 CPU 密集型任务（同步）和 IO 密集型任务（异步）。
 
 ### 目标
-1.  更新 `src/cascade/spec/task.py`，添加 `is_async` 属性。
-2.  更新 `src/cascade/runtime/protocols.py`，使 `Executor.execute` 变为异步，并同步更新其签名以包含 `resource_context`。
-3.  添加 `tests/test_spec_async.py` 验证 `Task` 对异步函数的识别能力。
+1.  修改 `src/cascade/adapters/executors/local.py`：
+    -   将 `execute` 方法改为 `async def`。
+    -   内部增加逻辑：检查 `node.callable_obj` 是否为协程函数。如果是，使用 `await` 执行；否则保持同步调用。
+2.  更新 `tests/test_adapters.py`：
+    -   由于 `execute` 变成了异步方法，现有的同步测试会失败。需要使用 `asyncio.run()` 来运行测试中的执行逻辑。
 
 ### 基本原理
--   **元数据先行**: `Task` 对象需要知道自己包裹的是否是协程函数，以便 `Executor` 决定是直接调用还是 `await`。`inspect.iscoroutinefunction` 是标准的检测方法。
--   **协议驱动**: 更新 `Executor` Protocol 明确了未来的方向。
+-   **混合执行模型**: 通过 `inspect.iscoroutinefunction` 在运行时动态分发。
+-   **协议一致性**: 实现之前更新的 `Executor` Protocol。
 
 ### 标签
-#intent/architect #flow/ready #priority/high
-#comp/runtime #comp/spec #concept/async
-#task/domain/core #task/object/async-support #task/action/architect
+#intent/build #flow/ready #priority/high
+#comp/runtime #comp/adapters #concept/async
+#task/domain/core #task/object/async-support #task/action/implementation
 #task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: Update Task specification
+#### Acts 1: Upgrade LocalExecutor to async
 
-在 `Task` 类中引入 `inspect.iscoroutinefunction` 检测，并存储为 `is_async` 属性。
-
-~~~~~act
-patch_file
-src/cascade/spec/task.py
-~~~~~
-~~~~~python
-    def __init__(self, func: Callable[..., T], name: Optional[str] = None):
-        self.func = func
-        self.name = name or func.__name__
-        # Signature inspection for validation (future enhancement)
-        self._signature = inspect.signature(func)
-
-    def __call__(self, *args, **kwargs) -> LazyResult[T]:
-~~~~~
-~~~~~python
-    def __init__(self, func: Callable[..., T], name: Optional[str] = None):
-        self.func = func
-        self.name = name or func.__name__
-        # Signature inspection for validation (future enhancement)
-        self._signature = inspect.signature(func)
-        self.is_async = inspect.iscoroutinefunction(func)
-
-    def __call__(self, *args, **kwargs) -> LazyResult[T]:
-~~~~~
-
-#### Acts 2: Update Executor Protocol
-
-更新 `Executor` 协议：
-1.  改为 `async def execute`。
-2.  补全参数签名，添加 `resource_context`。
+将 `LocalExecutor.execute` 转换为异步方法，并处理同步/异步分发。
 
 ~~~~~act
 patch_file
-src/cascade/runtime/protocols.py
+src/cascade/adapters/executors/local.py
 ~~~~~
 ~~~~~python
     def execute(
-        self, node: Node, graph: Graph, upstream_results: Dict[str, Any]
-    ) -> Any: ...
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        resource_context: Dict[str, Any],
+    ) -> Any:
+        """
+        Executes a single node's callable object by reconstructing its arguments
+        from dependency results and injected resources.
+        """
+        # 1. Prepare arguments from upstream task results
+        kwargs_from_deps: Dict[str, Any] = {}
+        positional_args_from_deps = {}
+
+        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
+        for edge in incoming_edges:
+            result = upstream_results[edge.source.id]
+            if edge.arg_name.isdigit():
+                positional_args_from_deps[int(edge.arg_name)] = result
+            else:
+                kwargs_from_deps[edge.arg_name] = result
+
+        sorted_indices = sorted(positional_args_from_deps.keys())
+        args = [positional_args_from_deps[i] for i in sorted_indices]
+
+        # 2. Prepare arguments from injected resources
+        sig = inspect.signature(node.callable_obj)
+        kwargs_from_resources = {}
+        for param in sig.parameters.values():
+            if isinstance(param.default, Inject):
+                resource_name = param.default.resource_name
+                if resource_name in resource_context:
+                    kwargs_from_resources[param.name] = resource_context[resource_name]
+                else:
+                    raise NameError(
+                        f"Task '{node.name}' requires resource '{resource_name}' "
+                        "which was not found in the active context."
+                    )
+
+        # 3. Combine arguments and execute
+        # Dependencies take precedence over resource injections if names conflict
+        final_kwargs = {**kwargs_from_resources, **kwargs_from_deps}
+
+        return node.callable_obj(*args, **final_kwargs)
 ~~~~~
 ~~~~~python
     async def execute(
@@ -78,46 +89,108 @@ src/cascade/runtime/protocols.py
         graph: Graph,
         upstream_results: Dict[str, Any],
         resource_context: Dict[str, Any],
-    ) -> Any: ...
+    ) -> Any:
+        """
+        Executes a single node's callable object by reconstructing its arguments
+        from dependency results and injected resources.
+        """
+        # 1. Prepare arguments from upstream task results
+        kwargs_from_deps: Dict[str, Any] = {}
+        positional_args_from_deps = {}
+
+        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
+        for edge in incoming_edges:
+            result = upstream_results[edge.source.id]
+            if edge.arg_name.isdigit():
+                positional_args_from_deps[int(edge.arg_name)] = result
+            else:
+                kwargs_from_deps[edge.arg_name] = result
+
+        sorted_indices = sorted(positional_args_from_deps.keys())
+        args = [positional_args_from_deps[i] for i in sorted_indices]
+
+        # 2. Prepare arguments from injected resources
+        sig = inspect.signature(node.callable_obj)
+        kwargs_from_resources = {}
+        for param in sig.parameters.values():
+            if isinstance(param.default, Inject):
+                resource_name = param.default.resource_name
+                if resource_name in resource_context:
+                    kwargs_from_resources[param.name] = resource_context[resource_name]
+                else:
+                    raise NameError(
+                        f"Task '{node.name}' requires resource '{resource_name}' "
+                        "which was not found in the active context."
+                    )
+
+        # 3. Combine arguments and execute
+        # Dependencies take precedence over resource injections if names conflict
+        final_kwargs = {**kwargs_from_resources, **kwargs_from_deps}
+
+        if inspect.iscoroutinefunction(node.callable_obj):
+            return await node.callable_obj(*args, **final_kwargs)
+        else:
+            return node.callable_obj(*args, **final_kwargs)
 ~~~~~
 
-#### Acts 3: Add test for async task detection
+#### Acts 2: Update tests for async executor
 
-创建一个新的测试文件，验证 `@task` 装饰器能否正确区分同步和异步函数。
+更新 `tests/test_adapters.py` 中的 `test_local_executor`，使用 `asyncio.run` 来执行异步的 `execute` 方法。
 
 ~~~~~act
-write_file
-tests/test_spec_async.py
+patch_file
+tests/test_adapters.py
 ~~~~~
 ~~~~~python
-import asyncio
-from cascade.spec.task import task
+def test_local_executor():
+    def add(x: int, y: int) -> int:
+        return x + y
 
-def test_task_detects_sync_function():
-    @task
-    def sync_fn():
-        return 1
-    
-    assert sync_fn.is_async is False
+    # Manually construct graph for clarity
+    node_x = Node(id="x", name="provide_x", callable_obj=lambda: 5)
+    node_y = Node(id="y", name="provide_y", callable_obj=lambda: 10)
+    node_add = Node(id="add", name="add", callable_obj=add)
 
-def test_task_detects_async_function():
-    @task
-    async def async_fn():
-        return 1
-    
-    assert async_fn.is_async is True
+    edge1 = Edge(source=node_x, target=node_add, arg_name="0")  # positional x
+    edge2 = Edge(source=node_y, target=node_add, arg_name="y")  # keyword y
 
-def test_async_task_returns_lazy_result():
-    @task
-    async def async_fn(x):
-        return x + 1
-    
-    # Even for async tasks, calling them should return a LazyResult immediately,
-    # not a coroutine object.
-    result = async_fn(10)
-    assert result.task.name == "async_fn"
-    assert result.args == (10,)
+    graph = Graph(nodes=[node_x, node_y, node_add], edges=[edge1, edge2])
+
+    # Simulate upstream results
+    upstream_results = {"x": 5, "y": 10}
+
+    executor = LocalExecutor()
+    result = executor.execute(node_add, graph, upstream_results, resource_context={})
+
+    assert result == 15
+~~~~~
+~~~~~python
+def test_local_executor():
+    import asyncio
+
+    def add(x: int, y: int) -> int:
+        return x + y
+
+    # Manually construct graph for clarity
+    node_x = Node(id="x", name="provide_x", callable_obj=lambda: 5)
+    node_y = Node(id="y", name="provide_y", callable_obj=lambda: 10)
+    node_add = Node(id="add", name="add", callable_obj=add)
+
+    edge1 = Edge(source=node_x, target=node_add, arg_name="0")  # positional x
+    edge2 = Edge(source=node_y, target=node_add, arg_name="y")  # keyword y
+
+    graph = Graph(nodes=[node_x, node_y, node_add], edges=[edge1, edge2])
+
+    # Simulate upstream results
+    upstream_results = {"x": 5, "y": 10}
+
+    executor = LocalExecutor()
+    result = asyncio.run(
+        executor.execute(node_add, graph, upstream_results, resource_context={})
+    )
+
+    assert result == 15
 ~~~~~
 
 ### 下一步建议
-执行 **子任务 2: 执行器升级**。我们将改造 `LocalExecutor`，使其能够根据 `node.is_async` 属性，智能地处理同步和异步任务的执行。这将涉及到 `asyncio` 的引入和执行逻辑的分支处理。
+执行 **子任务 3: 引擎异步化**。这是异步改造的最后一步。我们将把 `Engine.run` 改造为异步方法，并确保顶层 `cascade.run` API 能够正确引导事件循环。此外，我们还需要更新 `Engine` 内部调用 `executor.execute` 的方式（添加 `await`）。这一步将使整个系统真正支持异步工作流。

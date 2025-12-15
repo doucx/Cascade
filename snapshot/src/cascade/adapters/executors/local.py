@@ -9,7 +9,7 @@ class LocalExecutor:
     An executor that runs tasks sequentially in the current process.
     """
 
-    def execute(
+    async def execute(
         self,
         node: Node,
         graph: Graph,
@@ -53,4 +53,7 @@ class LocalExecutor:
         # Dependencies take precedence over resource injections if names conflict
         final_kwargs = {**kwargs_from_resources, **kwargs_from_deps}
 
-        return node.callable_obj(*args, **final_kwargs)
+        if inspect.iscoroutinefunction(node.callable_obj):
+            return await node.callable_obj(*args, **final_kwargs)
+        else:
+            return node.callable_obj(*args, **final_kwargs)

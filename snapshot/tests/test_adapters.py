@@ -44,6 +44,8 @@ def test_native_solver_diamond_graph():
 
 
 def test_local_executor():
+    import asyncio
+
     def add(x: int, y: int) -> int:
         return x + y
 
@@ -61,6 +63,8 @@ def test_local_executor():
     upstream_results = {"x": 5, "y": 10}
 
     executor = LocalExecutor()
-    result = executor.execute(node_add, graph, upstream_results, resource_context={})
+    result = asyncio.run(
+        executor.execute(node_add, graph, upstream_results, resource_context={})
+    )
 
     assert result == 15

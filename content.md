@@ -1,86 +1,176 @@
-好的，所有测试均已通过，阶段二的核心功能（异步、重试、缓存）已全部实现并验证。现在是时候将这个重大的里程碑作为一个完整的逻辑单元提交了。
+好的，我们来完成阶段二的最后一项任务：实现 `Shell` 预置任务类型。完成此项后，我们将正式结束阶段二。
 
-我将生成一个 `[COMMIT]` 计划。
-
-## [COMMIT] feat(runtime): Implement async, retry, and caching support
+## [WIP] feat(stdlib): 实现 Shell 预置任务以执行外部命令
 
 ### 用户需求
-将 Cascade 阶段二实现的核心功能——异步支持、重试机制和缓存逻辑——作为一个原子提交，正式集成到代码库中。
+为 Cascade 提供一个开箱即用的、健壮的 `shell` 任务，用于在工作流中执行外部 shell 命令，并将其输出传递给下游任务。
 
 ### 评论
-这是一个里程碑式的提交，标志着 Cascade 从一个“智能脚本执行器”演进为一个“可靠的自动化应用框架”。通过原生支持 `async/await`，我们解锁了处理 IO 密集型任务的高性能潜力。而声明式的重试与缓存机制，则直接解决了传统脚本最核心的脆弱性和低效性痛点。这些功能共同构成了 Cascade 在可靠性与性能方面的核心价值主张。
+这是对开发者体验 (DX) 的一次巨大提升。几乎所有的自动化工作流都需要与 shell 交互。通过提供一个内置的、经过良好测试的 `shell` 任务，我们不仅减少了用户的样板代码，还提供了一套比 `subprocess.run` 更高级、更符合 Cascade 声明式理念的接口。
+
+我们选择的 API 形式是 `cs.shell(...)`，它本身就是一个 `@task` 实例，调用它会直接返回一个 `LazyResult`。这种设计比“在用户任务中 `return Shell(...)`”的模式更简洁，并且完全无需修改现有的、已经稳定的执行引擎。
 
 ### 目标
-1.  将所有与异步、重试、缓存相关的修改和新增文件添加到 Git 暂存区。
-2.  创建一个内容详尽的 Git Commit，清晰地记录本次重大功能升级。
+1.  创建一个新的模块 `src/cascade/stdlib.py` 用于存放预置任务。
+2.  在该模块中，实现一个基于 `asyncio.create_subprocess_shell` 的异步函数，作为 `shell` 任务的底层逻辑。
+3.  使用 `@cs.task` 装饰器将此函数包装成一个可重用的 `shell` 任务。
+4.  在顶层 `cascade` 包中导出 `shell`，方便用户以 `cs.shell(...)` 的形式调用。
+5.  编写全面的测试，覆盖命令成功、失败 (`check=True`) 以及与下游任务集成等场景。
 
 ### 基本原理
-我们将阶段二的所有相关功能捆绑在一次提交中，这反映了它们在架构设计上的内在联系（共同构成了框架的健壮性层）。这次提交后，Cascade 的核心功能集将达到一个稳定且强大的状态，为阶段三的生态与 DX 优化工作奠定坚实基础。
+我们将 `shell` 命令的执行抽象为一个标准的 Cascade 异步任务。这使得 shell 命令可以无缝地融入计算图，享受与其他任务同等的依赖管理、异步执行和错误处理能力。我们使用 `asyncio` 的子进程工具，以确保命令执行不会阻塞整个 `Engine` 的事件循环。
 
 ### 标签
 #intent/build #flow/ready #priority/high
-#comp/runtime #comp/spec #comp/graph #comp/adapters #comp/tests
-#concept/async #concept/resilience #concept/caching #scope/core #scope/api
-#task/domain/core #task/object/resilience-support #task/action/implementation
+#comp/stdlib #scope/api #scope/dx
+#task/domain/core #task/object/prebuilt-tasks #task/action/implementation
 #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: Stage all changes
+#### Acts 1: Create the Standard Library Module
 
-将所有相关文件添加到 Git 暂存区。
+创建 `src/cascade/stdlib.py` 并实现 `shell` 任务。
 
 ~~~~~act
-git_add
+write_file
+src/cascade/stdlib.py
+~~~~~
+~~~~~python
+import asyncio
+from typing import Optional, Tuple
+from .spec.task import task
+
+async def _run_shell_command(
+    command: str, check: bool = True
+) -> str:
+    """
+    Asynchronously executes a shell command and returns its stdout.
+    """
+    proc = await asyncio.create_subprocess_shell(
+        command,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+
+    stdout, stderr = await proc.communicate()
+
+    if check and proc.returncode != 0:
+        raise RuntimeError(
+            f"Command '{command}' failed with exit code {proc.returncode}:\n"
+            f"STDOUT:\n{stdout.decode().strip()}\n"
+            f"STDERR:\n{stderr.decode().strip()}"
+        )
+
+    return stdout.decode().strip()
+
+# Create a pre-instantiated task for users to import and use directly.
+shell = task(_run_shell_command, name="shell")
+~~~~~
+
+#### Acts 2: Expose the `shell` Task
+
+在 `src/cascade/__init__.py` 中导出 `shell` 任务。
+
+~~~~~act
+patch_file
 src/cascade/__init__.py
-src/cascade/adapters/caching/__init__.py
-src/cascade/adapters/caching/file_existence.py
-src/cascade/adapters/executors/local.py
-src/cascade/graph/build.py
-src/cascade/graph/model.py
-src/cascade/runtime/engine.py
-src/cascade/runtime/protocols.py
-src/cascade/spec/task.py
-tests/test_adapters.py
-tests/test_caching.py
-tests/test_di_and_resources.py
-tests/test_end_to_end.py
-tests/test_retry.py
-tests/test_spec_async.py
 ~~~~~
+~~~~~python
+from .spec.task import task, Param, LazyResult
+from .spec.resource import resource, inject
+from .runtime.engine import Engine
+from .runtime.bus import MessageBus
+from .runtime.subscribers import HumanReadableLogSubscriber
+from .testing import override_resource
+~~~~~
+~~~~~python
+import asyncio
+from typing import Any, Dict, Optional
 
-#### Acts 2: Commit changes
-
-现在，我们创建一个内容详尽的提交。
+from .spec.task import task, Param, LazyResult
+from .spec.resource import resource, inject
+from .runtime.engine import Engine
+from .runtime.bus import MessageBus
+from .runtime.subscribers import HumanReadableLogSubscriber
+from .testing import override_resource
+from .stdlib import shell
+~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+src/cascade/__init__.py
 ~~~~~
-~~~~~text
-feat(runtime): Implement async, retry, and caching support
+~~~~~python
+__all__ = [
+    "task",
+    "Param",
+    "run",
+    "LazyResult",
+    "resource",
+    "inject",
+    "Engine",
+    "override_resource",
+]
+~~~~~
+~~~~~python
+__all__ = [
+    "task",
+    "Param",
+    "run",
+    "LazyResult",
+    "resource",
+    "inject",
+    "Engine",
+    "override_resource",
+    "shell",
+]
+~~~~~
 
-This commit introduces three major features that form the core of Cascade's robustness and performance capabilities, completing the goals of Phase Two.
+#### Acts 3: Add Tests for the `shell` Task
 
-1.  **First-Class Async Support**:
-    - The entire execution chain, from `Executor` protocol to `Engine` and `LocalExecutor`, is now fully asynchronous (`async/await`).
-    - The `@task` decorator transparently handles both `def` and `async def` functions, allowing seamless mixing of synchronous (CPU-bound) and asynchronous (IO-bound) tasks in the same workflow.
-    - The top-level `cascade.run()` API maintains a simple synchronous interface for users by managing the `asyncio` event loop internally.
+创建 `tests/test_stdlib.py` 并添加测试用例。
 
-2.  **Declarative Retry Mechanism**:
-    - A `.with_retry()` method has been added to `LazyResult`, allowing users to specify `max_attempts`, `delay`, and `backoff` declaratively.
-    - The `Engine` now contains a built-in retry loop that honors these policies, automatically handling transient failures without requiring manual `try/except` blocks in user code.
+~~~~~act
+write_file
+tests/test_stdlib.py
+~~~~~
+~~~~~python
+import pytest
+import cascade as cs
 
-3.  **Pluggable Caching System**:
-    - A `.with_cache()` method and a `CachePolicy` protocol have been introduced.
-    - The `Engine` now performs cache checks before task execution and saves results upon success, preventing redundant computations.
-    - The first adapter, `FileExistenceCache`, is implemented, providing a common caching strategy for file-based workflows.
+def test_shell_task_success():
+    """Tests that a simple shell command runs and captures stdout."""
+    # Using `echo` is a reliable cross-platform command
+    result = cs.run(cs.shell("echo 'Hello, Cascade!'"))
+    assert result == "Hello, Cascade!"
 
-These features collectively elevate Cascade from a simple DAG runner to a production-ready framework for building reliable and efficient automation applications.
+def test_shell_task_failure_with_check():
+    """Tests that a failing command with check=True raises an error."""
+    # `exit 1` is a simple way to force failure
+    with pytest.raises(RuntimeError) as excinfo:
+        cs.run(cs.shell("exit 1"))
+    
+    assert "failed with exit code 1" in str(excinfo.value)
+
+def test_shell_task_integration():
+    """Tests that the output of a shell task can be used by another task."""
+    @cs.task
+    def process_output(text: str):
+        return f"Processed: {text.upper()}"
+
+    command_output = cs.shell("echo 'data'")
+    final_result = process_output(command_output)
+
+    result = cs.run(final_result)
+    assert result == "Processed: DATA"
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 Cascade 阶段二。现在，我们将正式启动阶段三：**走向生态与可扩展性**。
+**Cascade 阶段二已正式完成！**
 
-阶段三的目标是进一步提升开发者体验 (DX) 和框架的易用性。根据计划，我建议我们从最能减少用户样板代码的功能开始：**实现 `Shell` 预置任务类型**。这将为执行外部命令提供一个健壮、优雅且经过良好测试的内置方法。如果你同意，我将开始制定实现 `Shell` 任务的计划。
+我们成功地实现了依赖注入、一等公民的异步支持、健壮的重试与缓存机制，并提供了便捷的 `shell` 预置任务。框架的核心功能已经非常完善。
+
+我建议创建一个最终的 `[COMMIT]` 计划，将 `shell` 任务的实现提交，并正式为这个阶段的工作画上句号。之后，我们将可以开始规划阶段三的详细任务，例如 `visualize` 工具或更高级的 `CSPSolver`。

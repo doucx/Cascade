@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(runtime): Implement async, retry, and caching support", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765804968.0757716, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(stdlib): 实现 Shell 预置任务以执行外部命令", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765805427.6029422, "duration_ms": 0}}

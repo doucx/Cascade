@@ -129,7 +129,7 @@ class Engine:
         run_id: str,
     ) -> Any:
         graph = build_graph(target)
-        self.flow_manager = FlowManager(graph) # Initialize FlowManager per run
+        self.flow_manager = FlowManager(graph, target._uuid)
         
         plan = self.solver.resolve(graph)  # Now returns List[List[Node]]
         results: Dict[str, Any] = {}
@@ -341,6 +341,10 @@ class Engine:
                         node, graph, upstream_results
                     )
                     node.cache_policy.save(node.id, inputs_for_save, result)
+
+                # Notify flow manager of result to trigger potential pruning
+                if self.flow_manager:
+                    self.flow_manager.register_result(node.id, result)
 
                 return result
 

@@ -1,60 +1,206 @@
-好的，我们已经成功地将“Dogfooding”原则应用到了两个核心的运行时测试文件中。现在是时候将这个重要的改进作为一个逻辑单元提交了。
+Excellent idea. Implementing `cs.visualize` is a logical and high-impact next step. It directly addresses the need for better developer tooling identified in the roadmap and will provide immense value for debugging and understanding complex workflows.
 
-我将生成一个 `[COMMIT]` 计划。
+I will generate the plan to implement this feature.
 
-## [COMMIT] refactor(tests): 采用事件驱动的'Dogfooding'模式重构运行时测试
+## [WIP] feat(tools): Implement cs.visualize to generate Graphviz DOT output
 
 ### 用户需求
-将针对 `test_retry.py` 和 `test_control_flow.py` 的重构工作合并到一个单一的、逻辑完整的 Git 提交中。
+Implement a new top-level function `cs.visualize(target: LazyResult) -> str` that inspects a Cascade workflow, builds its computation graph, and returns a string representation of that graph in the Graphviz DOT language format.
 
 ### 评论
-这次提交标志着 Cascade 测试策略的一次重要演进。我们用一种统一的、基于事件总线的“Dogfooding”模式，取代了脆弱的、依赖内部实现的测试方法。通过断言 `Engine` 发出的事件流，我们的测试现在验证的是其公开的行为契约，而非实现细节。这大大增强了测试的健壮性、可读性和长期可维护性。`SpySubscriber` 辅助类的标准化也消除了重复代码，提升了开发者体验。
+This is a cornerstone feature for developer experience (DX). By providing a simple, one-line command to visualize any workflow, we dramatically lower the cognitive overhead required to understand, debug, and share complex dependency structures. Generating a standard DOT file format is an excellent choice, as it allows users to leverage a vast ecosystem of tools (like Graphviz, online viewers) to render the graph into various formats (PNG, SVG, etc.).
 
 ### 目标
-创建一个 Git 提交，该提交包含对 `tests/runtime/test_retry.py` 和 `tests/runtime/test_control_flow.py` 的重构，并附有一个清晰的提交信息来阐述这一测试理念的转变。
+1.  Create a new module `src/cascade/tools/visualize.py` to house the visualization logic, keeping it separate from the core runtime.
+2.  Implement the `visualize` function, which will:
+    a.  Build the `Graph` from the target `LazyResult`.
+    b.  Traverse the graph's nodes and edges.
+    c.  Generate a DOT language string, using different shapes and styles for different node types (`task`, `param`, `map`, `router`) and edge types (`run_if` condition) to enhance readability.
+3.  Create a new test file `tests/tools/test_visualize.py` to validate that the generated DOT string is syntactically correct and accurately represents the workflow structure.
+4.  Expose the new `visualize` function as part of the public API in `src/cascade/__init__.py`.
 
 ### 基本原理
-这两项重构服务于同一个战略目标：将《自我测试》的愿景付诸实践。将它们合并到一次提交中，可以在版本历史中清晰地记录下我们从传统的实现测试到现代的行为测试的转变，这是一个单一、完整的架构决策。
+The implementation will follow the pattern established by `cs.dry_run`, acting as a developer tool that inspects the graph without executing it. We will manually generate the DOT string, as the format is simple and this avoids adding a new third-party dependency for a straightforward task.
+
+The tests will not attempt to render the graph, but will instead perform substring assertions on the generated DOT string. This is a robust strategy to verify that the correct nodes and edges are present, without making the tests brittle to minor formatting changes.
 
 ### 标签
-#intent/refine #flow/ready #priority/medium #comp/tests #comp/runtime #scope/dx #ai/brainstorm #task/domain/testing #task/object/dogfooding #task/action/implementation #task/state/end #task/status/completed
+#intent/build #flow/ready #priority/high #comp/core #scope/dx #ai/instruct #task/domain/tooling #task/object/visualization #task/action/implementation #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存重构后的测试文件
+#### Acts 1: Create the visualization module and its logic
 
-我们将 `test_retry.py` 和 `test_control_flow.py` 的新版本添加到 Git 暂存区。
-
-~~~~~act
-git_add
-tests/runtime/test_retry.py
-tests/runtime/test_control_flow.py
-~~~~~
-
-#### Acts 2: 创建 Git 提交
-
-现在，我们执行 `git commit`，附上详细的提交信息，记录下这次重要的测试策略升级。
+We'll start by creating the new `visualize.py` file within the `tools` directory. This file will contain the core logic for traversing the graph and building the DOT string.
 
 ~~~~~act
-git_commit
+write_file
+src/cascade/tools/visualize.py
 ~~~~~
-~~~~~text
-refactor(tests): Adopt event-driven 'Dogfooding' pattern for runtime tests
+~~~~~python
+from typing import Any
+from ..spec.task import LazyResult
+from ..graph.build import build_graph
+from ..graph.model import Node
 
-Refactors key runtime tests (`test_retry.py` and `test_control_flow.py`) to align with the "Dogfooding" and "test intent over implementation" principles.
 
-Key Changes:
+def visualize(target: LazyResult[Any]) -> str:
+    """
+    Builds the computation graph for a target and returns its representation
+    in the Graphviz DOT language format.
+    """
+    graph = build_graph(target)
 
-1.  **Event-Based Assertions:** Tests no longer inspect internal state (e.g., `nonlocal` counters). Instead, they subscribe to the `MessageBus` and assert that the `Engine` emits the correct sequence of events (`TaskRetrying`, `TaskSkipped`, etc.). This validates the public, observable behavior of the engine, making tests more robust against internal refactoring.
+    dot_parts = [
+        "digraph CascadeWorkflow {",
+        '  rankdir="TB";',
+        '  node [shape=box, style="rounded,filled", fillcolor=white];',
+    ]
 
-2.  **Unified SpySubscriber:** A standard `SpySubscriber` helper class is now used in both modules, eliminating code duplication and providing a consistent API for event collection and inspection.
+    # 1. Define Nodes
+    for node in graph.nodes:
+        shape = _get_node_shape(node)
+        label = f"{node.name}\\n({node.node_type})"
+        dot_parts.append(f'  "{node.id}" [label="{label}", shape={shape}];')
 
-This change significantly improves the quality and expressiveness of our test suite, ensuring that we are testing the behavior our users will actually experience.
+    # 2. Define Edges
+    for edge in graph.edges:
+        style = ""
+        if edge.arg_name == "_condition":
+            style = ' [style=dashed, color=gray, label="run_if"]'
+        elif edge.arg_name == "_implicit_dependency":
+            style = ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
+        elif edge.router:
+            style = f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
+        else:
+            style = f' [label="{edge.arg_name}"]'
+
+        dot_parts.append(f'  "{edge.source.id}" -> "{edge.target.id}"{style};')
+
+    dot_parts.append("}")
+    return "\n".join(dot_parts)
+
+
+def _get_node_shape(node: Node) -> str:
+    """Returns the Graphviz shape for a given node type."""
+    if node.node_type == "param":
+        return "ellipse"
+    if node.node_type == "map":
+        return "hexagon"
+    # Future: Routers could be a diamond, but they are edges in our model
+    return "box"
+~~~~~
+
+#### Acts 2: Create the test for the visualization tool
+
+Next, we'll create a new test file to ensure our `visualize` function works as expected. We'll test it on a classic "diamond" dependency graph.
+
+~~~~~act
+write_file
+tests/tools/test_visualize.py
+~~~~~
+~~~~~python
+import cascade as cs
+
+
+def test_visualize_diamond_graph():
+    """
+    Tests that visualize() produces a correct DOT string for a diamond graph.
+    """
+
+    @cs.task
+    def t_a():
+        return 1
+
+    @cs.task
+    def t_b(x):
+        return x + 1
+
+    @cs.task
+    def t_c(x):
+        return x * 2
+
+    @cs.task
+    def t_d(y, z):
+        return y + z
+
+    r_a = t_a()
+    r_b = t_b(r_a)
+    r_c = t_c(r_a)
+    r_d = t_d(r_b, z=r_c)
+
+    dot_string = cs.visualize(r_d)
+
+    # Basic structural checks
+    assert dot_string.startswith("digraph CascadeWorkflow {")
+    assert dot_string.endswith("}")
+    assert 'rankdir="TB"' in dot_string
+
+    # Check that all nodes are defined with correct labels and shapes
+    assert f'"{r_a._uuid}" [label="t_a\\n(task)", shape=box];' in dot_string
+    assert f'"{r_b._uuid}" [label="t_b\\n(task)", shape=box];' in dot_string
+    assert f'"{r_c._uuid}" [label="t_c\\n(task)", shape=box];' in dot_string
+    assert f'"{r_d._uuid}" [label="t_d\\n(task)", shape=box];' in dot_string
+
+    # Check that all edges are defined with correct labels
+    assert f'"{r_a._uuid}" -> "{r_b._uuid}" [label="0"];' in dot_string
+    assert f'"{r_a._uuid}" -> "{r_c._uuid}" [label="0"];' in dot_string
+    assert f'"{r_b._uuid}" -> "{r_d._uuid}" [label="0"];' in dot_string
+    assert f'"{r_c._uuid}" -> "{r_d._uuid}" [label="z"];' in dot_string
+~~~~~
+
+#### Acts 3: Expose the new function in the public API
+
+Finally, we'll patch the main `__init__.py` to make `cs.visualize` available to users.
+
+~~~~~act
+patch_file
+src/cascade/__init__.py
+~~~~~
+~~~~~python
+from .runtime.subscribers import HumanReadableLogSubscriber
+from .testing import override_resource
+from .tools.preview import dry_run
+
+# Note: 'shell' is removed from static imports to support dynamic provider loading
+__all__ = [
+    "task",
+    "Param",
+    "run",
+    "dry_run",
+    "LazyResult",
+    "Router",
+    "File",
+    "resource",
+    "inject",
+    "Engine",
+    "override_resource",
+]
+~~~~~
+~~~~~python
+from .runtime.subscribers import HumanReadableLogSubscriber
+from .testing import override_resource
+from .tools.preview import dry_run
+from .tools.visualize import visualize
+
+# Note: 'shell' is removed from static imports to support dynamic provider loading
+__all__ = [
+    "task",
+    "Param",
+    "run",
+    "dry_run",
+    "visualize",
+    "LazyResult",
+    "Router",
+    "File",
+    "resource",
+    "inject",
+    "Engine",
+    "override_resource",
+]
 ~~~~~
 
 ### 下一步建议
-我们已经完成了对测试策略的重大升级，代码库的健康状况也得到了提升。现在，我们的基础异常坚实。
-
-是时候将注意力转向下一个高价值的核心功能了。我建议我们正式开始 **`cs.visualize(target)`** 的实现工作。这个工具将允许我们将任何工作流的依赖图可视化，这将是调试和理解复杂流程的无价之宝。如果你同意，我将开始制定实现 `cs.visualize` 的计划。
+Once this plan is executed, the `visualize` feature will be fully implemented and tested. The next logical step would be to create a `[COMMIT]` plan to merge this valuable new tool into our main branch.

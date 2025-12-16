@@ -1,22 +1,21 @@
-好的，收到指示。既然可以一次性处理多个文件，我将把逻辑上相关的“操作指南”内容作为一个批次进行填充。
+好的，我们继续批量填充内容，这次将完成“操作指南”的最后两篇文章。
 
-我将从《Cascade 使用手册》中提取第 3、4、5 节的内容，并分别填充到我们已经创建的三个“操作指南”文件中。
+这将涵盖 `Cascade` 的两个高级但至关重要的特性：依赖注入（资源管理）和健壮性（缓存与重试）。
 
-## [WIP] docs: 填充核心“操作指南”文档页面
+## [WIP] docs: 填充高级“操作指南” (DI 与健壮性)
 
 ### 用户需求
-继续填充文档，利用“一次可填充多个文件”的授权，将《Cascade 使用手册》中的主要内容块迁移到对应的 Markdown 文件中。
+完成“操作指南”部分的文档填充工作，具体包括“依赖注入”和“提升健壮性”两篇指南。
 
 ### 评论
-这是一个提高效率的好机会。我将把“定义计算”、“使用 Provider”和“构建复杂工作流”这三个逻辑上连续的章节一次性填充完毕。这三篇指南构成了用户从入门到进阶的核心学习路径。
+这两篇指南是 `Cascade` 从一个简单的脚本编排工具走向生产级自动化框架的关键。清晰地阐述资源管理和容错机制，将极大地提升用户构建复杂、可靠应用的信心。我将确保示例代码准确且易于理解。
 
 ### 目标
-1.  填充 `docs/how-to-guides/defining-computations.md`，内容来自手册第 3 节。
-2.  填充 `docs/how-to-guides/using-providers.md`，内容来自手册第 4 节。
-3.  填充 `docs/how-to-guides/advanced-workflows.md`，内容来自手册第 5 节。
+1.  填充 `docs/how-to-guides/dependency-injection.md`，内容来自手册第 6 节。
+2.  填充 `docs/how-to-guides/improving-robustness.md`，内容来自手册第 7 节。
 
 ### 基本原理
-通过批量操作，我们可以更快地使文档网站变得充实和可用。我将仔细地将手册中的内容分解，调整标题和格式，确保每一篇新文档都自成体系、清晰易读，同时保持与项目架构决策（如显式使用 `cs.template`）的一致性。
+我将继续采用内容迁移和适配的策略。对于依赖注入部分，重点是解释 `@cs.resource` 的 `yield` 模式和 `@cs.task` 中 `cs.inject` 的用法。对于健壮性部分，将分别介绍缓存和重试的使用场景和 API，并提供基于 `Cascade` 内置能力的具体示例（例如使用 `FileExistenceCache`）。
 
 ### 标签
 #intent/document #flow/ready #priority/high #comp/docs #scope/dx #ai/delegate #task/domain/docs #task/object/content-population #task/action/batch-write #task/state/continue
@@ -25,306 +24,186 @@
 
 ### Script
 
-#### Acts 1: 填充“定义计算”指南
+#### Acts 1: 填充“依赖注入”指南
 
-这部分内容解释了定义计算的两种基本模式：`@cs.task` 和 `cs.config`。
+这部分内容解释了如何使用 `@cs.resource` 和 `cs.inject` 来管理数据库连接、API 客户端等有生命周期的外部服务。
 
 ~~~~~act
 write_file
-docs/how-to-guides/defining-computations.md
+docs/how-to-guides/dependency-injection.md
 ~~~~~
 ~~~~~markdown
-# 操作指南：定义计算
+# 操作指南：管理资源 (DI)
 
-`Cascade` 提供了两种定义“可计算值” (`LazyResult`) 的核心方式，它们可以自由地混合使用，形成强大的工作流。
+在真实世界的自动化工作流中，许多任务都依赖于外部资源，例如数据库连接、HTTP 会话客户端或硬件设备句柄。这些资源通常需要一个明确的**初始化 (Setup)** 和**清理 (Teardown)** 过程。
 
-## 命令式：使用 `@cs.task` 封装业务逻辑
+`Cascade` 通过一个优雅的依赖注入 (Dependency Injection, DI) 系统来解决这个问题，确保资源被正确地管理和传递。
 
-当你需要执行包含复杂、图灵完备的业务逻辑时，最佳方式是将其封装在一个 Python 函数中，并使用 `@cs.task` 装饰器将其转换为一个 `Cascade` 任务。
+## 核心组件
+
+1.  **`@cs.resource`**: 一个装饰器，用于将一个资源管理函数转换为 `Cascade` 可识别的资源定义。
+2.  **`cs.inject()`**: 一个函数，用于在任务的签名中声明对某个资源的依赖。
+
+## 定义一个资源
+
+一个资源必须被定义为一个**生成器 (generator) 函数**，即函数体内必须使用 `yield` 关键字。
+
+*   `yield` 之前的所有代码，是资源的**初始化**逻辑。
+*   `yield` 产生的值，是真正要被注入到任务中的**资源实例**。
+*   `yield` 之后的所有代码，是资源的**清理**逻辑。`Cascade` 引擎保证在整个工作流运行结束后，这部分代码一定会被执行。
+
+**示例：定义一个数据库连接资源**
 
 ```python
 import cascade as cs
+from sqlalchemy import create_engine
 
-@cs.task
-def analyze_data(data: list) -> dict:
-    """这是一个标准的 Python 函数，用于执行分析。"""
-    if not data:
-        return {}
+# 假设 db_url 来自于配置
+db_url = cs.config("db.url.analytics")
+
+@cs.resource
+def analytics_db(url: str = db_url):
+    """一个管理数据库连接的资源"""
     
-    mean = sum(data) / len(data)
-    # ... 其他复杂的分析逻辑 ...
+    print("【资源】正在连接数据库...")
+    engine = create_engine(url)
+    connection = engine.connect()
     
-    return {"mean": mean}
-
-# 调用这个被装饰的函数并不会立即执行它
-# 而是返回一个代表未来结果的 LazyResult 对象
-analysis_result = analyze_data(data=[1, 2, 3, 4, 5]) 
+    # yield 出可用的连接对象
+    yield connection
+    
+    # 工作流结束后，这里的代码将被执行
+    print("【资源】关闭数据库连接...")
+    connection.close()
+    engine.dispose()
 ```
 
-`@cs.task` 是连接你现有 Python 代码与 `Cascade` 生态系统的桥梁。
+## 在任务中使用资源
 
-## 声明式：使用 `cs.config` 从配置中获取值
-
-当你的值是来自于一个静态配置文件（例如 `.yaml`）时，你应该使用 `cs.config()` 来声明对这个值的依赖。
+要在任务中使用上面定义的资源，只需在该任务的函数签名中，使用 `cs.inject("资源名称")` 作为参数的默认值。
 
 ```python
 import cascade as cs
 
-# 这会声明一个依赖，它将在运行时从配置源中查找 'project.name' 这个键
-project_name = cs.config("project.name")
+@cs.task
+def fetch_active_users(
+    conn = cs.inject("analytics_db") # 声明依赖于名为 'analytics_db' 的资源
+):
+    """一个使用数据库连接的任务"""
+    
+    # 在任务内部，conn 就是 yield 出来的那个 connection 对象
+    result = conn.execute("SELECT * FROM users WHERE status = 'active'")
+    return result.fetchall()
 
-# 假设你的项目中有一个 cascade.yml 文件:
-# project:
-#   name: "MyApp"
+# 当你运行这个任务时，Cascade 引擎会自动：
+# 1. 发现 fetch_active_users 依赖于 analytics_db。
+# 2. 找到 analytics_db 资源，并执行其初始化逻辑。
+# 3. 将 yield 的值注入到 fetch_active_users 的 conn 参数中。
+# 4. 执行任务。
+# 5. 在整个工作流结束后，执行 analytics_db 的清理逻辑。
+final_result = fetch_active_users()
 ```
 
-### 处理动态配置键
+### Provider 的隐式使用
 
-一个常见的场景是，配置的键本身是动态生成的（例如，根据环境切换）。为了保持依赖图的明确性，**严禁**使用 f-string 等方式在 `cs.config` 内部拼接字符串。
-
-正确的做法是使用 `cs.template` 来显式地构建配置键：
+`Cascade` 的一些内置 Provider（如 `cs.sql`）也隐式地使用了这个资源系统。
 
 ```python
-import cascade as cs
-
-# 1. 定义一个运行时参数
-env = cs.Param("env", default="staging")
-
-# 2. 使用 cs.template 显式地构建配置键
-# db_url_key 本身是一个 LazyResult
-db_url_key = cs.template("db.url.{{ environment }}", environment=env)
-
-# 3. 使用这个 LazyResult 作为 cs.config 的输入
-# 这清晰地表明 db_url 依赖于 db_url_key，而 db_url_key 依赖于 env
-db_url = cs.config(db_url_key)
+# 这行代码等效于在内部执行了 cs.inject("analytics_db")
+users = cs.sql("SELECT ...", db="analytics_db")
 ```
+
+通过这种方式，`Cascade` 将业务逻辑（`fetch_active_users`）与资源管理的复杂性完全解耦，使你的代码更清晰、更易于测试。
 ~~~~~
 
-#### Acts 2: 填充“使用内置 Provider”指南
+#### Acts 2: 填充“提升健壮性”指南
 
-这部分内容介绍了 `Cascade` 提供的一系列开箱即用的 `LazyResult` 工厂。
+这部分内容介绍如何使用 `.with_cache()` 和 `.with_retry()` 来让工作流更稳定、更高效。
 
 ~~~~~act
 write_file
-docs/how-to-guides/using-providers.md
+docs/how-to-guides/improving-robustness.md
 ~~~~~
 ~~~~~markdown
-# 操作指南：使用内置 Provider
+# 操作指南：提升健壮性
 
-`Cascade` 的核心是精简的，但它通过一个强大的 Provider（提供者）插件系统，提供了一系列开箱即用的、高度抽象的 `LazyResult` 工厂，以简化常见自动化场景。
+自动化工作流经常面临两大挑战：**暂时性故障**（如网络抖动）和**重复执行昂贵的操作**。`Cascade` 提供了两个强大的链式方法来应对这些问题，让你的工作流在不修改核心逻辑的情况下，变得更加健壮和高效。
 
-这些工厂函数（如 `cs.shell`, `cs.file`）是声明式工作流的基石。
+## 避免重复计算：使用缓存 (`.with_cache()`)
 
-## `cs.shell`: 执行 Shell 命令
+对于那些输入相同、输出也必定相同（确定性的）且执行成本高昂的任务，你可以附加一个缓存策略。
 
-将一个 Shell 命令的执行及其 `stdout` 输出封装成一个 `LazyResult`。
+`.with_cache()` 方法可以被链式调用在任何 `LazyResult` 之后，它接受一个**缓存策略 (Cache Policy)** 对象作为参数。
 
-```python
-import cascade as cs
+**示例：缓存一个耗时的文件生成任务**
 
-# 声明一个 Shell 命令的输出作为一个值
-# 只有在下游任务需要 python_version 时，此命令才会被执行
-python_version = cs.shell("python --version", check=True)
-```
-
-## `cs.file`: 声明文件依赖
-
-`cs.file` 提供了一种声明对文件系统内容的依赖的方式。它本身返回一个文件工厂对象，你可以链式调用其方法。
+`Cascade` 提供了一个简单的 `FileExistenceCache` 策略：如果目标文件已存在，则跳过任务。
 
 ```python
 import cascade as cs
+from cascade.adapters.caching import FileExistenceCache
 
-# 声明对文件内容的依赖，并自动解析为 JSON
-config_data = cs.file("./config.json").json()
-
-# 你也可以只检查文件是否存在
-file_exists = cs.file("./important.lock").exists()
-```
-
-## `cs.sql`: 执行数据库查询
-
-`cs.sql` 允许你将一个 SQL 查询的结果声明为一个 `LazyResult`。它通过 `db` 参数与资源管理系统集成。
-
-```python
-import cascade as cs
-
-# 声明对 SQL 查询结果的依赖
-# 它会自动查找并使用一个名为 'analytics_db' 的资源
-active_users = cs.sql(
-    "SELECT * FROM users WHERE status = 'active'",
-    db="analytics_db"
-)
-```
-
-## `cs.http`: 调用 Web API
-
-`cs.http` 用于执行 HTTP 请求，并将其响应封装起来。为了处理动态 URL，它应该与 `cs.template` 配合使用。
-
-```python
-import cascade as cs
-
-# 定义一个参数作为模板变量
-username = cs.Param("username", default="cascade-py")
-
-# 1. 使用 cs.template 显式地构建 URL
-api_url = cs.template("https://api.github.com/users/{{ user }}", user=username)
-
-# 2. 将构建好的 URL (一个 LazyResult) 传递给 cs.http
-# .json() 会创建一个下游任务，自动解析响应体
-user_profile = cs.http(api_url).json()
-```
-~~~~~
-
-#### Acts 3: 填充“构建复杂工作流”指南
-
-这部分内容展示了如何将各种计算单元组合成复杂的逻辑。
-
-~~~~~act
-write_file
-docs/how-to-guides/advanced-workflows.md
-~~~~~
-~~~~~markdown
-# 操作指南：构建复杂工作流
-
-一旦你掌握了定义单个计算值的基础，就可以开始将它们组合起来，构建真正强大的、端到端的工作流。`Cascade` 的核心价值在于其无缝的可组合性。
-
-## 无缝依赖混合
-
-这是 `Cascade` `1+1 > 2` 的关键。因为所有东西都是 `LazyResult`，它们可以自由地相互依赖，无论其来源如何。
-
-```python
-import cascade as cs
-
-# 场景：使用 Shell 命令的结果作为 Python 任务的输入
-# 1. 从 Shell 获取当前的 git commit hash
-commit_hash = cs.shell("git rev-parse --short HEAD")
-
-# 2. 定义一个 Python 任务
-@cs.task
-def create_build_artifact(version: str) -> str:
-    # 模拟创建构建产物
-    artifact_name = f"artifact-{version}.zip"
-    print(f"Creating {artifact_name}...")
-    return artifact_name
-
-# 3. 将 Shell 的 LazyResult 连接到 Python 任务
-# 依赖关系被自动建立：create_build_artifact 依赖于 commit_hash
-artifact = create_build_artifact(version=commit_hash)
-```
-
-## 参数化你的工作流 (`cs.param`)
-
-使用 `cs.Param` 来定义在运行时（通过 `cs.run` 的 `params` 参数或 `cs.cli` 的命令行参数）注入的值。这使得你的工作流可以复用和配置。
-
-```python
-import cascade as cs
-
-# 定义一个名为 'env' 的参数，默认值为 'staging'
-env = cs.Param("env", default="staging", description="目标环境 (staging/production)")
-
-@cs.task
-def get_db_url(environment: str) -> str:
-    if environment == "production":
-        return "prod_db_url"
-    return "stage_db_url"
-
-db_url = get_db_url(environment=env)
-
-# 运行时可以覆盖默认值
-# from cascade.runtime.engine import Engine
-# engine = Engine()
-# prod_url = engine.run(db_url, params={"env": "production"}) 
-# assert prod_url == "prod_db_url"
-```
-
-## 条件执行 (`.run_if()`)
-
-使用 `.run_if()` 方法，可以让一个任务只在某个条件（一个返回布尔值的 `LazyResult`）为 `True` 时执行。
-
-```python
-import cascade as cs
-
-# 定义一个布尔类型的参数来控制是否部署
-should_deploy = cs.Param("deploy", default=False, type=bool)
-
-# .run_if() 会将 should_deploy 作为其条件依赖
-deployment_status = cs.shell(
-    "kubectl apply -f deployment.yaml", 
-    check=True
-).run_if(should_deploy)
-```
-当以 `params={"deploy": False}` 运行时，`shell` 命令将永远不会被执行。
-
-## 处理集合：映射 (`.map()`)
-
-使用 `.map()`，您可以将一个任务工厂（如 `@task` 函数或 `cs.shell`）应用到一个集合的每个元素上，这会自动创建一组并行执行的任务。
-
-```python
-import cascade as cs
-
-# files_to_process 可以是一个列表，也可以是上游任务的 LazyResult
-files_to_process = ["data1.csv", "data2.csv", "data3.csv"]
-
-@cs.task
-def process_file(filepath: str) -> str:
-    # ... 复杂的处理逻辑 ...
-    return f"processed_{filepath}"
-
-# 将 process_file 任务映射到文件列表上
-# .map() 返回一个 MappedLazyResult，它在运行时会解析为一个结果列表
-processed_files = process_file.map(filepath=files_to_process)
-
-@cs.task
-def summarize(processed: list[str]):
-    print(f"完成了 {len(processed)} 个文件的处理。")
-    return f"Processed {len(processed)} files."
-
-# `summarize` 任务会等待所有 `process_file` 子任务完成后再执行
-final_summary = summarize(processed=processed_files)
-```
-
-## 动态路由 (`cs.router`)
-
-`cs.Router` 可以根据一个 `selector` 的值，动态地从多个上游 `LazyResult` 中选择一个作为下游任务的输入。
-
-```python
-import cascade as cs
-
-# selector 可以是 Param，也可以是其他任务的结果
-data_source_type = cs.Param("data_source", default="db")
-
-@cs.task
-def from_db(): return "Data from DB"
-
-@cs.task
-def from_api(): return "Data from API"
-
-# Router 会根据 data_source_type 的值，选择一个上游
-data_input = cs.Router(
-    selector=data_source_type,
-    routes={
-        "db": from_db(),
-        "api": from_api()
-    }
+# 定义一个 shell 命令，它会模拟一个耗时的操作并创建一个文件
+# 注意：我们让它打印日志，以便观察它是否被执行
+create_report_task = cs.shell(
+    "echo 'Generating report...' && sleep 2 && touch report.txt"
 )
 
-@cs.task
-def process_data(data: str):
-    return f"Final data: {data}"
+# 定义缓存策略：如果 'report.txt' 文件存在，就认为任务已缓存
+cache_policy = FileExistenceCache(target_path="report.txt")
 
-result = process_data(data=data_input)
+# 将缓存策略附加到任务上
+cached_task = create_report_task.with_cache(cache_policy)
 
-#
-# from cascade.runtime.engine import Engine
-# engine = Engine()
-# res_api = engine.run(result, params={"data_source": "api"}) 
-# assert "API" in res_api
+# 第一次运行：
+# > cs.run(cached_task)
+# 输出: "Generating report..."
+# (等待 2 秒)
+# report.txt 文件被创建
+
+# 第二次运行：
+# > cs.run(cached_task)
+# (立即返回, 无任何输出)
+# 因为 report.txt 已经存在，shell 命令被完全跳过。
 ```
+
+## 处理暂时性故障：自动重试 (`.with_retry()`)
+
+对于可能因网络问题或服务临时不可用而失败的任务（如 API 调用），你可以配置自动重试逻辑。
+
+`.with_retry()` 方法可以被链式调用在任何 `LazyResult` 之后，它允许你配置重试次数、延迟和退避策略。
+
+**示例：为一个可能失败的 API 调用配置重试**
+
+假设我们有一个调用外部服务的 `http` 任务，该服务有时会不稳定。
+
+```python
+import cascade as cs
+
+# 定义一个 API 调用任务
+# (为了示例，我们假设这个 URL 可能会间歇性失败)
+api_call = cs.http("https://api.flaky-service.com/data")
+
+# 为这个任务配置重试逻辑：
+# - max_attempts: 最多尝试 3 次 (即首次失败后，再重试 2 次)
+# - delay: 首次重试前等待 1.0 秒
+# - backoff: 后续每次重试的延迟时间乘以 2.0 (即 1s, 2s, 4s...)
+robust_api_call = api_call.with_retry(max_attempts=3, delay=1.0, backoff=2.0)
+
+# 当运行 robust_api_call 时:
+# - 如果 `api_call` 第一次就成功, 流程继续。
+# - 如果 `api_call` 第一次失败, Cascade 会捕获异常, 等待 1 秒, 然后再次尝试。
+# - 如果第二次又失败, 它会等待 2 秒 (1.0 * 2.0), 然后进行第三次尝试。
+# - 如果第三次仍然失败, 最终的异常才会被抛出, 导致工作流失败。
+```
+
+通过组合使用 `.with_cache()` 和 `.with_retry()`，你可以用声明式的方式，极大地提升工作流的稳定性和效率，而无需用 `try/except` 和 `if os.path.exists()` 把你的业务逻辑弄得一团糟。
 ~~~~~
 
 ### 下一步建议
-我们已经完成了核心“操作指南”的填充。剩下的指南还有：
-*   `docs/how-to-guides/dependency-injection.md`
-*   `docs/how-to-guides/improving-robustness.md`
+我们已经完成了“教程”、“操作指南”和“概念”这三个主要部分的内容填充。最后剩下的就是“参考”部分了。
 
-我们可以继续完成这两篇，以使“操作指南”部分完整。如果你同意，我将开始填充关于依赖注入 (`@cs.resource`) 的内容。
+*   `docs/reference/cli-tools.md`：这部分可以手动编写，介绍 `cs.cli` 工具如何使用。
+*   `docs/reference/api.md`：这部分设计的初衷是使用 `mkdocstrings` 从代码的 docstrings 自动生成。
+
+我们可以先手动编写 `cli-tools.md` 的内容。如果你同意，我将为你生成这篇文档。

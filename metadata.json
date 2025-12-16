@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] docs: 填充核心“操作指南”文档页面", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765868147.3460808, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] docs: 填充高级“操作指南” (DI 与健壮性)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765868268.8770452, "duration_ms": 0}}

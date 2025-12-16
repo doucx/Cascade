@@ -1,6 +1,6 @@
 site_name: Cascade
 site_description: 'A modern, declarative automation library for Python.'
-repo_url: https://github.com/your-repo/cascade-py # 请替换为你的仓库 URL
+repo_url: https://github.com/doucx/Cascade # 请替换为你的仓库 URL
 edit_uri: "" # 可选，指向编辑页面的链接
 
 theme:

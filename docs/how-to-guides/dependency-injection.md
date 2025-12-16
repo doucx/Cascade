@@ -23,8 +23,11 @@
 import cascade as cs
 from sqlalchemy import create_engine
 
-# 假设 db_url 来自于配置
-db_url = cs.config("db.url.analytics")
+# 1. 明确加载配置源
+config_source = cs.load_yaml("config.yml")
+
+# 2. 从配置源中查找 URL
+db_url = cs.lookup(source=config_source, key="db.url.analytics")
 
 @cs.resource
 def analytics_db(url: str = db_url):

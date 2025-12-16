@@ -1,10 +1,10 @@
 import json
 import importlib
 from typing import Any, Dict, Optional
-from .model import Graph, Node, Edge
+from .model import Graph, Node, Edge, EdgeType
 from ..spec.common import Param
 from ..spec.constraint import ResourceConstraint
-from ..spec.lazy_types import RetryPolicy  # NEW
+from ..spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
 from ..spec.task import Task
 
 # --- Serialization Helpers ---
@@ -93,7 +93,16 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         }
 
     if node.constraints:
-        data["constraints"] = node.constraints.requirements
+        # Dynamic constraints contain LazyResult/MappedLazyResult which are not JSON serializable.
+        # We must replace them with their UUID reference.
+        serialized_reqs = {}
+        for res, amount in node.constraints.requirements.items():
+            if isinstance(amount, (LazyResult, MappedLazyResult)):
+                # Store the UUID reference as a JSON serializable dict.
+                serialized_reqs[res] = {"__lazy_ref": amount._uuid}
+            else:
+                serialized_reqs[res] = amount
+        data["constraints"] = serialized_reqs
 
     return data
 
@@ -103,14 +112,12 @@ def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
         "source_id": edge.source.id,
         "target_id": edge.target.id,
         "arg_name": edge.arg_name,
+        "edge_type": edge.edge_type.name,
     }
     if edge.router:
-        # Router is complex, but for the edge we just need to mark it or verify consistency
-        # In current model, router object is attached to edge.
-        # We need to serialize enough info to reconstruct the Router logic if needed,
-        # but the Router spec object itself is mostly build-time.
-        # Runtime logic depends on the edge structure.
-        # For now, we simply flag it.
+        # We flag the presence of a Router, but the object itself is not serialized 
+        # (Router reconstruction requires full graph context not available here).
+        # This is a known limitation for MVP serialization.
         data["router_present"] = True
     return data
 
@@ -136,28 +143,30 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
         source = node_map.get(ed["source_id"])
         target = node_map.get(ed["target_id"])
         if source and target:
+            edge_type_name = ed.get("edge_type", "DATA")
+            edge_type = EdgeType[edge_type_name]
+            
             # Note: We are losing the original 'Router' spec object here.
-            # If runtime requires the Router object on the edge, we might need to rethink.
-            # Checking `LocalExecutor`: it checks `edge.router`.
-            # If `edge.router` is None, dynamic routing fails.
-            # So we MUST reconstruct a Router object if `router_present` is True.
+            # Reconstructing the complex Router object is a technical debt item 
+            # required for distributed execution, but not for visualization/inspection.
+            
+            # The Edge object itself is restored.
+            edge = Edge(
+                source=source, 
+                target=target, 
+                arg_name=ed["arg_name"], 
+                edge_type=edge_type
+            )
+            
+            # Current limitation: We cannot restore the `edge.router` object, 
+            # making the deserialized graph unsuitable for execution that relies 
+            # on dynamic routing (i.e., LocalExecutor will fail to resolve inputs 
+            # for tasks downstream of a Router).
+            if ed.get("router_present"):
+                # We retain the flag but cannot set the object.
+                # TODO: Implement full Router object reconstruction in a future PR.
+                pass 
 
-            # However, the `Router` object in spec needs `routes` dict and `selector` LazyResult.
-            # Reconstructing that from a flat edge list is hard.
-            # BUT, look at `LocalExecutor`: it uses `edge.router.routes` to find the implementation node.
-            # This implies the graph structure already contains the routes.
-            # The Executor uses `edge.router` mainly as a marker and a lookup table for `routes`.
-
-            # For this MVP, we will revive the Edge.
-            # TODO: Fully restoring Router object requires matching the "implicit_dependency" edges
-            # back to the routes dict. This is complex.
-            # For basic serialization (visualization/inspection), omitting Router object is fine.
-            # For Distributed Execution, we will need full reconstruction.
-            # Let's leave a TODO for Router reconstruction and support basic edges.
-
-            edge = Edge(source=source, target=target, arg_name=ed["arg_name"])
-            # If we marked it as having a router, we might want to attach a placeholder or
-            # address this in a future PR for distributed routing.
             graph.add_edge(edge)
         else:
             raise ValueError(f"Edge references unknown node: {ed}")

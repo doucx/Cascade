@@ -91,13 +91,14 @@ class SimpleHttpResponse:
     headers: Dict[str, str]
     body: bytes
 
-    def json(self) -> Any:
-        # Assuming utf-8, which is standard for JSON
-        return aiohttp.helpers.bytes_to_str(self.body)
-
     def text(self) -> str:
-        # Again, assuming utf-8 for simplicity
+        """Decodes the response body into a string, assuming utf-8."""
         return self.body.decode("utf-8")
+        
+    def json(self) -> Any:
+        """Parses the response body as JSON and returns a Python object."""
+        import json
+        return json.loads(self.text())
 
     def __repr__(self) -> str:
         return f"<HttpResponse status={self.status}>"

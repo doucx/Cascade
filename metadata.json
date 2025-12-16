@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 实现 `cs.http` Provider 以支持声明式 Web 请求", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765856130.0708203, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 安装测试依赖并修正 http provider 的 API", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765856288.3636842, "duration_ms": 0}}

@@ -26,9 +26,8 @@ async def test_http_get_success(aiohttp_client):
 
     @cs.task
     def process_user(res):
-        # The response object from http task has a .json() method
-        import json
-        data = json.loads(res.json()) # The body is bytes, so we parse it
+        # The new .json() method directly returns a parsed dict
+        data = res.json()
         return data["user"]
 
     final_result = process_user(api_response)
@@ -68,12 +67,10 @@ async def test_http_with_template(aiohttp_client):
     api_response = cs.http(api_url)
 
     @cs.task
-    async def get_status(res):
-        # We need to make this task async to call await on res.json()
-        # The executor should handle this. Let's re-verify the http.py implementation
-        # Ah, my implementation of SimpleHttpResponse.json() is not async. Let's fix that.
-        import json
-        return json.loads(res.json())['status']
+    def get_status(res):
+        # The .json() method is now sync and returns a parsed dict.
+        # The task no longer needs to be async.
+        return res.json()['status']
 
     final_status = get_status(api_response)
     

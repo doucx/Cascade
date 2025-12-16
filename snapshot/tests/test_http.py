@@ -1,5 +1,6 @@
 import pytest
 import cascade as cs
+import aiohttp
 
 # Mark all tests in this module to be skipped if aiohttp is not installed
 pytest.importorskip("aiohttp")

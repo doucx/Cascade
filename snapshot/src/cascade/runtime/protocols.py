@@ -21,10 +21,13 @@ class Executor(Protocol):
     async def execute(
         self,
         node: Node,
-        graph: Graph,
-        upstream_results: Dict[str, Any],
-        resource_context: Dict[str, Any],
-    ) -> Any: ...
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        """
+        Executes the node's callable with the provided fully-resolved arguments.
+        """
+        ...
 
 
 class CachePolicy(Protocol):

@@ -1,7 +1,7 @@
 import time
 import inspect
 import asyncio
-from typing import Any, Dict, Optional, Generator, Callable, List
+from typing import Any, Dict, Optional, Generator, Callable, List, Tuple
 from uuid import uuid4
 from contextlib import ExitStack
 
@@ -20,6 +20,7 @@ from cascade.runtime.events import (
     ResourceReleased,
 )
 from cascade.runtime.protocols import Solver, Executor
+from cascade.runtime.exceptions import DependencyMissingError
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.resource_manager import ResourceManager
@@ -51,6 +52,11 @@ class Engine:
     def get_resource_provider(self, name: str) -> Callable:
         return self._resource_providers[name]
 
+    def override_resource_provider(self, name: str, new_provider: Any):
+        if isinstance(new_provider, ResourceDefinition):
+            new_provider = new_provider.func
+        self._resource_providers[name] = new_provider
+
     def _inject_params(
         self, plan: list[Node], user_params: Dict[str, Any], results: Dict[str, Any]
     ):
@@ -73,18 +79,14 @@ class Engine:
         results: Dict[str, Any],
         skipped_node_ids: set[str],
     ) -> Optional[str]:
-        """
-        Determines if a node should be skipped.
-        Returns the reason string if yes, None otherwise.
-        """
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
 
-        # 1. Cascade Skip: If any upstream dependency was skipped
+        # 1. Cascade Skip
         for edge in incoming_edges:
             if edge.source.id in skipped_node_ids:
                 return "UpstreamSkipped"
 
-        # 2. Condition Check: If this node has a condition and it evaluated to False
+        # 2. Condition Check
         for edge in incoming_edges:
             if edge.arg_name == "_condition":
                 condition_result = results.get(edge.source.id)
@@ -93,35 +95,119 @@ class Engine:
 
         return None
 
-    def override_resource_provider(self, name: str, new_provider: Any):
-        # Unwrap ResourceDefinition if provided
-        if isinstance(new_provider, ResourceDefinition):
-            new_provider = new_provider.func
-        self._resource_providers[name] = new_provider
+    def _resolve_arguments(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        resource_context: Dict[str, Any],
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        """
+        Resolves arguments for the node's callable from:
+        1. Literal inputs
+        2. Upstream dependency results (handling Routers)
+        3. Injected resources
+        
+        Raises DependencyMissingError if a required upstream result is missing.
+        """
+        # 1. Prepare arguments from literals and upstream results
+        final_kwargs = {k: v for k, v in node.literal_inputs.items() if not k.isdigit()}
+        positional_args = {
+            int(k): v for k, v in node.literal_inputs.items() if k.isdigit()
+        }
+
+        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
+        
+        for edge in incoming_edges:
+            if edge.arg_name.startswith("_"): # Skip control/meta edges
+                continue
+            
+            # Resolve Upstream Value
+            if edge.router:
+                # Handle Dynamic Routing
+                selector_value = upstream_results.get(edge.source.id)
+                if selector_value is None:
+                     # If the selector itself is missing, that's an error
+                     if edge.source.id not in upstream_results:
+                         raise DependencyMissingError(node.id, "router_selector", edge.source.id)
+                
+                try:
+                    selected_lazy_result = edge.router.routes[selector_value]
+                except KeyError:
+                    raise ValueError(
+                        f"Router selector returned '{selector_value}', "
+                        f"but no matching route found in {list(edge.router.routes.keys())}"
+                    )
+                
+                dependency_id = selected_lazy_result._uuid
+            else:
+                # Standard dependency
+                dependency_id = edge.source.id
+
+            # Check existence in results
+            if dependency_id not in upstream_results:
+                raise DependencyMissingError(node.id, edge.arg_name, dependency_id)
+            
+            result = upstream_results[dependency_id]
+
+            # Assign to args/kwargs
+            if edge.arg_name.isdigit():
+                positional_args[int(edge.arg_name)] = result
+            else:
+                final_kwargs[edge.arg_name] = result
+
+        # 2. Prepare arguments from injected resources (Implicit Injection via Signature)
+        if node.callable_obj:
+            sig = inspect.signature(node.callable_obj)
+            for param in sig.parameters.values():
+                if isinstance(param.default, Inject):
+                    resource_name = param.default.resource_name
+                    if resource_name in resource_context:
+                        final_kwargs[param.name] = resource_context[resource_name]
+                    else:
+                        raise NameError(
+                            f"Task '{node.name}' requires resource '{resource_name}' "
+                            "which was not found in the active context."
+                        )
+
+        # 3. Resolve explicit Inject objects in arguments (passed as values)
+        # Convert positional map to list
+        sorted_indices = sorted(positional_args.keys())
+        args = [positional_args[i] for i in sorted_indices]
+        
+        resolved_args = []
+        for arg in args:
+            if isinstance(arg, Inject):
+                if arg.resource_name in resource_context:
+                    resolved_args.append(resource_context[arg.resource_name])
+                else:
+                    raise NameError(f"Resource '{arg.resource_name}' not found.")
+            else:
+                resolved_args.append(arg)
+        args = resolved_args
+
+        for key, value in final_kwargs.items():
+            if isinstance(value, Inject):
+                if value.resource_name in resource_context:
+                    final_kwargs[key] = resource_context[value.resource_name]
+                else:
+                    raise NameError(f"Resource '{value.resource_name}' not found.")
+        
+        return args, final_kwargs
 
     async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
-
-        # Handle MappedLazyResult or LazyResult
         target_name = getattr(target, "name", "unknown")
         if hasattr(target, "task"):
             target_name = target.task.name
 
-        event = RunStarted(
-            run_id=run_id, target_tasks=[target_name], params=params or {}
+        self.bus.publish(
+            RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
         )
-        self.bus.publish(event)
 
-        # ExitStack manages the teardown of resources
         with ExitStack() as stack:
             try:
-                # 1. Build graph to discover resources
-                # We need to build the graph once here to find global resources for this run.
-                # Note: Sub-graphs generated by .map() might need resources not discovered here if they depend on
-                # parameters that change resources. But typically resources are static.
-                # For dynamic resources, we might need a more complex strategy.
-                # For now, we assume top-level graph building reveals all needed resources for the initial plan.
                 initial_graph = build_graph(target)
                 initial_plan = self.solver.resolve(initial_graph)
 
@@ -130,28 +216,26 @@ class Engine:
                     required_resources, stack, run_id
                 )
 
-                # 2. Execute
                 final_result = await self._execute_graph(
                     target, params or {}, active_resources, run_id
                 )
 
-                run_duration = time.time() - start_time
-                final_event = RunFinished(
-                    run_id=run_id, status="Succeeded", duration=run_duration
+                duration = time.time() - start_time
+                self.bus.publish(
+                    RunFinished(run_id=run_id, status="Succeeded", duration=duration)
                 )
-                self.bus.publish(final_event)
-
                 return final_result
 
             except Exception as e:
-                run_duration = time.time() - start_time
-                final_fail_event = RunFinished(
-                    run_id=run_id,
-                    status="Failed",
-                    duration=run_duration,
-                    error=f"{type(e).__name__}: {e}",
+                duration = time.time() - start_time
+                self.bus.publish(
+                    RunFinished(
+                        run_id=run_id,
+                        status="Failed",
+                        duration=duration,
+                        error=f"{type(e).__name__}: {e}",
+                    )
                 )
-                self.bus.publish(final_fail_event)
                 raise
 
     async def _execute_graph(
@@ -161,13 +245,8 @@ class Engine:
         active_resources: Dict[str, Any],
         run_id: str,
     ) -> Any:
-        """
-        Executes a dependency graph for a given target.
-        Can be called recursively for sub-graphs (e.g. inside .map()).
-        """
         graph = build_graph(target)
         plan = self.solver.resolve(graph)
-
         results: Dict[str, Any] = {}
         skipped_node_ids: set[str] = set()
 
@@ -178,7 +257,6 @@ class Engine:
                 continue
 
             skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
-
             if skip_reason:
                 skipped_node_ids.add(node.id)
                 self.bus.publish(
@@ -191,6 +269,7 @@ class Engine:
                 )
                 continue
 
+            # Execute Node
             results[node.id] = await self._execute_node_with_policies(
                 node, graph, results, active_resources, run_id, params
             )
@@ -206,44 +285,31 @@ class Engine:
         run_id: str,
         params: Dict[str, Any],
     ) -> Any:
-        # Resolve resource requirements
+        # Resolve Dynamic Constraints
         requirements = self._resolve_constraints(node, graph, upstream_results)
         
-        # Acquire resources (this may block)
         await self.resource_manager.acquire(requirements)
-        
         try:
             return await self._execute_node_internal(
-                node, graph, upstream_results, active_resources, run_id, params, requirements
+                node, graph, upstream_results, active_resources, run_id, params
             )
         finally:
-            # Always release resources
             await self.resource_manager.release(requirements)
 
     def _resolve_constraints(
         self, node: Node, graph: Graph, upstream_results: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Resolves dynamic constraints to concrete values."""
         if not node.constraints or node.constraints.is_empty():
             return {}
-
+        
         resolved = {}
         for res, amount in node.constraints.requirements.items():
             if isinstance(amount, (LazyResult, MappedLazyResult)):
-                # Find the upstream source for this dynamic constraint using the special edge prefix
-                # We can also lookup by ID since we know it's a LazyResult, but edge lookup is safer graph-wise.
-                # Actually, simply using the result of the LazyResult._uuid is enough because
-                # the graph builder ensures it's in upstream_results.
                 if amount._uuid in upstream_results:
                     resolved[res] = upstream_results[amount._uuid]
                 else:
-                    # Depending on skip logic, this might be missing. 
-                    # If upstream was skipped, we probably shouldn't be here, 
-                    # or we should fail because we can't determine resource usage.
-                    raise RuntimeError(
-                        f"Could not resolve dynamic resource constraint '{res}' for task '{node.name}'. "
-                        "Upstream dependency result missing."
-                    )
+                    # Logic to determine if it was skipped or just missing
+                    raise DependencyMissingError(node.id, f"constraint:{res}", amount._uuid)
             else:
                 resolved[res] = amount
         return resolved
@@ -256,64 +322,72 @@ class Engine:
         active_resources: Dict[str, Any],
         run_id: str,
         params: Dict[str, Any],
-        requirements: Dict[str, Any], # Passed for logging if needed
     ) -> Any:
-        task_start_time = time.time()
+        # 1. Resolve Arguments (Input Validation happens here)
+        # Note: Map nodes handle their own resolution internally for sub-tasks, 
+        # but the map node itself has inputs (the iterables) which need validation.
+        # We'll let _resolve_arguments handle standard inputs.
+        
+        # However, Map nodes are special. They iterate. 
+        # _execute_map_node will need to be refactored or we handle it here.
+        # Let's handle generic inputs first.
+        try:
+            args, kwargs = self._resolve_arguments(
+                node, graph, upstream_results, active_resources
+            )
+        except DependencyMissingError:
+            # Re-raise. In future we could emit a specific event here.
+            raise
 
-        # 0. Check Cache
+        start_time = time.time()
+
+        # 2. Check Cache
         if node.cache_policy:
-            inputs_for_cache = self._resolve_inputs(node, graph, upstream_results)
+            # We can reconstruct inputs dict for cache check from args/kwargs?
+            # Or use a simplified resolver. 
+            # For now, let's just use the resolved args/kwargs as cache input context?
+            # The current cache policy expects a dict.
+            # Let's map args back to names if possible, or just use kwargs.
+            # Simpler: Use _resolve_inputs helper just for cache (legacy way) or update cache to use args/kwargs.
+            # To minimize risk, I will keep _resolve_inputs helper ONLY for cache key generation for now.
+            inputs_for_cache = self._resolve_inputs_for_cache(node, graph, upstream_results)
             cached_value = node.cache_policy.check(node.id, inputs_for_cache)
             if cached_value is not None:
                 self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        reason="CacheHit",
-                    )
+                    TaskSkipped(run_id=run_id, task_id=node.id, task_name=node.name, reason="CacheHit")
                 )
                 return cached_value
 
-        start_event = TaskExecutionStarted(
-            run_id=run_id, task_id=node.id, task_name=node.name
-        )
-        self.bus.publish(start_event)
+        self.bus.publish(TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name))
 
-        # Special handling for Map Nodes
+        # 3. Execution (Map or Single)
         if node.node_type == "map":
-            try:
-                result = await self._execute_map_node(
-                    node, graph, upstream_results, active_resources, run_id, params
-                )
+             # Map node logic is complex, it needs to generate sub-tasks.
+             # It uses args/kwargs (iterables) resolved above.
+             try:
+                 result = await self._execute_map_node(
+                     node, args, kwargs, active_resources, run_id, params
+                 )
+                 # ... (Events)
+                 status = "Succeeded"
+                 error = None
+             except Exception as e:
+                 result = None
+                 status = "Failed"
+                 error = str(e)
+                 raise e
+             finally:
+                 duration = time.time() - start_time
+                 self.bus.publish(
+                     TaskExecutionFinished(
+                         run_id=run_id, task_id=node.id, task_name=node.name,
+                         status=status, duration=duration, error=error,
+                         result_preview=f"List[{len(result)}]" if result else None
+                     )
+                 )
+             return result
 
-                task_duration = time.time() - task_start_time
-                self.bus.publish(
-                    TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        status="Succeeded",
-                        duration=task_duration,
-                        result_preview=f"List[{len(result)} items]",
-                    )
-                )
-                return result
-            except Exception as e:
-                task_duration = time.time() - task_start_time
-                self.bus.publish(
-                    TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        status="Failed",
-                        duration=task_duration,
-                        error=str(e),
-                    )
-                )
-                raise e
-
-        # Determine retry policy
+        # Single Task Execution with Retry
         retry_policy = node.retry_policy
         max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
         delay = retry_policy.delay if retry_policy else 0.0
@@ -325,101 +399,137 @@ class Engine:
         while attempt < max_attempts:
             attempt += 1
             try:
-                result = await self.executor.execute(
-                    node, graph, upstream_results, active_resources
-                )
+                # CALL THE EXECUTOR with clean Args
+                result = await self.executor.execute(node, args, kwargs)
 
-                task_duration = time.time() - task_start_time
-                finish_event = TaskExecutionFinished(
-                    run_id=run_id,
-                    task_id=node.id,
-                    task_name=node.name,
-                    status="Succeeded",
-                    duration=task_duration,
-                    result_preview=repr(result)[:100],
-                )
-                self.bus.publish(finish_event)
-
-                # Save to cache if policy exists
-                if node.cache_policy:
-                    inputs_for_save = self._resolve_inputs(
-                        node, graph, upstream_results
+                duration = time.time() - start_time
+                self.bus.publish(
+                    TaskExecutionFinished(
+                        run_id=run_id, task_id=node.id, task_name=node.name,
+                        status="Succeeded", duration=duration,
+                        result_preview=repr(result)[:100]
                     )
-                    node.cache_policy.save(node.id, inputs_for_save, result)
+                )
+
+                if node.cache_policy:
+                     inputs_for_save = self._resolve_inputs_for_cache(node, graph, upstream_results)
+                     node.cache_policy.save(node.id, inputs_for_save, result)
 
                 return result
 
             except Exception as e:
                 last_exception = e
-                # If we have retries left, wait and continue
                 if attempt < max_attempts:
                     self.bus.publish(
                         TaskRetrying(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            delay=delay,
-                            error=str(e),
+                            run_id=run_id, task_id=node.id, task_name=node.name,
+                            attempt=attempt, max_attempts=max_attempts, delay=delay, error=str(e)
                         )
                     )
                     await asyncio.sleep(delay)
                     delay *= backoff
                 else:
-                    # Final failure
-                    task_duration = time.time() - task_start_time
-                    fail_event = TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        status="Failed",
-                        duration=task_duration,
-                        error=f"{type(e).__name__}: {e}",
+                    duration = time.time() - start_time
+                    self.bus.publish(
+                        TaskExecutionFinished(
+                            run_id=run_id, task_id=node.id, task_name=node.name,
+                            status="Failed", duration=duration, error=f"{type(e).__name__}: {e}"
+                        )
                     )
-                    self.bus.publish(fail_event)
                     raise last_exception
-
-        # Should not be reached if logic is correct
+        
         raise RuntimeError("Unexpected execution state")
 
-    def _resolve_inputs(
+    def _resolve_inputs_for_cache(
         self, node: Node, graph: Graph, upstream_results: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Helper to resolve inputs for cache checking."""
+        """Helper to resolve inputs specifically for cache checking/saving."""
         inputs = {}
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
         for edge in incoming_edges:
-            inputs[edge.arg_name] = upstream_results[edge.source.id]
+            if edge.arg_name.startswith("_"): continue
+            
+            # Simple resolution for cache keys
+            if edge.source.id in upstream_results:
+                inputs[edge.arg_name] = upstream_results[edge.source.id]
         return inputs
 
+    async def _execute_map_node(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        params: Dict[str, Any],
+    ) -> List[Any]:
+        # Validate lengths
+        # In args/kwargs, values should be iterables
+        # We need to construct sub-tasks
+        
+        # Merge args and kwargs into a unified iterable map for length checking
+        # This part assumes mapping inputs are passed as kwargs (standard for .map)
+        # But args could exist too.
+        
+        # Logic: 
+        # 1. Determine length from first iterable
+        # 2. Iterate and invoke factory
+        
+        # Note: MappedLazyResult usually puts inputs in mapping_kwargs.
+        # But _resolve_arguments flattened everything into args/kwargs.
+        
+        # For MVP safety, let's assume .map() only uses kwargs for the mapped arguments,
+        # which is how Task.map implementation works.
+        
+        factory = node.mapping_factory
+        
+        # Safety check: if there are positional args in a map node, it's ambiguous which to iterate
+        if args:
+             # If we support mapping over positional args, we'd need to zip them.
+             # For now, let's assume args are static or unsupported in map.
+             pass
+
+        if not kwargs:
+            return []
+
+        lengths = {k: len(v) for k, v in kwargs.items()}
+        first_len = list(lengths.values())[0]
+        if not all(l == first_len for l in lengths.values()):
+            raise ValueError(f"Mapped inputs have mismatched lengths: {lengths}")
+
+        sub_targets = []
+        for i in range(first_len):
+            item_kwargs = {k: v[i] for k, v in kwargs.items()}
+            # Factory creates a LazyResult
+            sub_target = factory(**item_kwargs)
+            sub_targets.append(sub_target)
+
+        coros = [
+            self._execute_graph(target, params, active_resources, run_id)
+            for target in sub_targets
+        ]
+
+        return await asyncio.gather(*coros)
+
     def _scan_for_resources(self, plan: list[Node]) -> set[str]:
-        """Finds all unique resource names required by the plan."""
         required = set()
         for node in plan:
-            # 1. Check literal inputs for dynamic injection
+            # Check literal inputs
             for value in node.literal_inputs.values():
                 if isinstance(value, Inject):
                     required.add(value.resource_name)
 
-            # 2. Check function signature for static injection
-            # Skip nodes that don't have a callable (e.g., Param nodes)
-            if node.callable_obj is None:
-                continue
-
-            sig = inspect.signature(node.callable_obj)
-            for param in sig.parameters.values():
-                if isinstance(param.default, Inject):
-                    required.add(param.default.resource_name)
+            # Check signature
+            if node.callable_obj:
+                sig = inspect.signature(node.callable_obj)
+                for param in sig.parameters.values():
+                    if isinstance(param.default, Inject):
+                        required.add(param.default.resource_name)
         return required
 
     def _setup_resources(
         self, required_names: set[str], stack: ExitStack, run_id: str
     ) -> Dict[str, Any]:
-        """
-        Initializes all required resources and their dependencies recursively.
-        Returns a dictionary of active resource instances.
-        """
         active: Dict[str, Any] = {}
 
         def get_or_create(name: str):
@@ -430,25 +540,17 @@ class Engine:
             if not provider:
                 raise NameError(f"Resource '{name}' is required but not registered.")
 
-            # Inspect provider's signature to find its dependencies
             sig = inspect.signature(provider)
             deps = {}
             for param_name, param in sig.parameters.items():
                 if isinstance(param.default, Inject):
                     deps[param_name] = get_or_create(param.default.resource_name)
-                # Here you could also inject `Param`s if needed
 
-            # Create the resource generator
             gen = provider(**deps)
-
-            # Enter the generator and get the yielded value
             instance = next(gen)
             active[name] = instance
             self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-
-            # Register the teardown logic
             stack.callback(self._teardown_resource, gen, run_id, name)
-
             return instance
 
         for name in required_names:
@@ -456,66 +558,7 @@ class Engine:
 
         return active
 
-    async def _execute_map_node(
-        self,
-        node: Node,
-        graph: Graph,
-        upstream_results: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-    ) -> List[Any]:
-        """
-        Dynamically unfolds and executes a map node.
-        """
-        # 1. Resolve inputs
-        # Start with static literals
-        mapped_inputs = node.literal_inputs.copy()
-
-        # Merge dynamic inputs from upstream
-        dynamic_inputs = self._resolve_inputs(node, graph, upstream_results)
-        mapped_inputs.update(dynamic_inputs)
-
-        if not mapped_inputs:
-            return []
-
-        # 2. Validate input lengths
-        lengths = {k: len(v) for k, v in mapped_inputs.items()}
-        first_len = list(lengths.values())[0]
-        if not all(l == first_len for l in lengths.values()):
-            raise ValueError(f"Mapped inputs have mismatched lengths: {lengths}")
-
-        # 3. Generate sub-tasks
-        # We invoke the factory for each item to get a LazyResult (a sub-graph root)
-        sub_targets = []
-        factory = node.mapping_factory
-
-        for i in range(first_len):
-            # Extract the i-th item from each iterable input
-            kwargs_for_item = {k: v[i] for k, v in mapped_inputs.items()}
-            # Invoke factory to get the LazyResult
-            # Task objects implement __call__ to create LazyResult
-            sub_target = factory(**kwargs_for_item)
-            sub_targets.append(sub_target)
-
-        # 4. Execute sub-tasks in parallel
-        # We recursively call _execute_graph for each sub-target.
-        # This supports sub-targets being complex graphs themselves.
-        # We share active_resources with them.
-
-        # Note: factory(**kwargs) calls the Task.__call__ which returns a LazyResult.
-        # Task class does NOT implement map_item, it implements __call__.
-        # So factory(**kwargs_for_item) is correct for Task objects.
-
-        coros = [
-            self._execute_graph(target, params, active_resources, run_id)
-            for target in sub_targets
-        ]
-
-        return await asyncio.gather(*coros)
-
     def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):
-        """Helper to exhaust a resource generator for cleanup."""
         try:
             next(gen)
         except StopIteration:

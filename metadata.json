@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] docs(config): 统一配置文档，迁移所有示例至 cs.load_yaml/cs.lookup", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765870767.4157097, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(runtime): 解耦 Engine 与 Executor，增强错误处理", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765871493.9862661, "duration_ms": 0}}

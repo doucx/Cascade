@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(core): 引入 Provider 插件架构并迁移 shell/template", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765855906.158802, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实现 `cs.http` Provider 以支持声明式 Web 请求", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765856130.0708203, "duration_ms": 0}}

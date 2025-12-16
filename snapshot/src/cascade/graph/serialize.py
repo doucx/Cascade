@@ -1,13 +1,26 @@
 import json
 import importlib
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
+from dataclasses import dataclass
+
 from .model import Graph, Node, Edge, EdgeType
 from ..spec.common import Param
 from ..spec.constraint import ResourceConstraint
 from ..spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
+from ..spec.routing import Router
 from ..spec.task import Task
 
-# --- Serialization Helpers ---
+
+# --- Helpers ---
+
+
+@dataclass
+class _StubLazyResult:
+    """
+    A minimal stub to satisfy Router's type hints and runtime requirements 
+    (specifically accessing ._uuid) during deserialization.
+    """
+    _uuid: str
 
 
 def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
@@ -53,9 +66,33 @@ def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:
 
 
 def graph_to_dict(graph: Graph) -> Dict[str, Any]:
+    # 1. Collect and Deduplicate Routers
+    # Map id(router_obj) -> index_in_list
+    router_map: Dict[int, int] = {}
+    routers_data: List[Dict[str, Any]] = []
+
+    for edge in graph.edges:
+        if edge.router and id(edge.router) not in router_map:
+            idx = len(routers_data)
+            router_map[id(edge.router)] = idx
+            
+            # Serialize the Router object
+            # We only need the UUIDs of the selector and routes to reconstruct dependencies
+            routers_data.append({
+                "selector_id": edge.router.selector._uuid,
+                "routes": {k: v._uuid for k, v in edge.router.routes.items()}
+            })
+
+    # 2. Serialize Nodes
+    nodes_data = [_node_to_dict(n) for n in graph.nodes]
+
+    # 3. Serialize Edges (referencing routers by index)
+    edges_data = [_edge_to_dict(e, router_map) for e in graph.edges]
+
     return {
-        "nodes": [_node_to_dict(n) for n in graph.nodes],
-        "edges": [_edge_to_dict(e) for e in graph.edges],
+        "nodes": nodes_data,
+        "edges": edges_data,
+        "routers": routers_data,
     }
 
 
@@ -84,8 +121,6 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         }
 
     if node.retry_policy:
-        # Assuming RetryPolicy is a simple dataclass-like object we can reconstruct
-        # But RetryPolicy in task.py is a class. We should serialize its fields.
         data["retry_policy"] = {
             "max_attempts": node.retry_policy.max_attempts,
             "delay": node.retry_policy.delay,
@@ -107,7 +142,7 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
     return data
 
 
-def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
+def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
     data = {
         "source_id": edge.source.id,
         "target_id": edge.target.id,
@@ -115,10 +150,9 @@ def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
         "edge_type": edge.edge_type.name,
     }
     if edge.router:
-        # We flag the presence of a Router, but the object itself is not serialized 
-        # (Router reconstruction requires full graph context not available here).
-        # This is a known limitation for MVP serialization.
-        data["router_present"] = True
+        # Store the index to the routers list
+        if id(edge.router) in router_map:
+            data["router_index"] = router_map[id(edge.router)]
     return data
 
 
@@ -128,6 +162,7 @@ def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
 def graph_from_dict(data: Dict[str, Any]) -> Graph:
     nodes_data = data.get("nodes", [])
     edges_data = data.get("edges", [])
+    routers_data = data.get("routers", [])
 
     node_map: Dict[str, Node] = {}
     graph = Graph()
@@ -138,7 +173,17 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
         node_map[node.id] = node
         graph.add_node(node)
 
-    # 2. Reconstruct Edges
+    # 2. Reconstruct Routers
+    # We create Router objects populated with _StubLazyResult
+    restored_routers: List[Router] = []
+    for rd in routers_data:
+        selector_stub = _StubLazyResult(rd["selector_id"])
+        routes_stubs = {k: _StubLazyResult(uuid) for k, uuid in rd["routes"].items()}
+        # Note: Type checker might complain because we are passing Stubs instead of LazyResults,
+        # but Python is duck-typed and this satisfies the runtime needs.
+        restored_routers.append(Router(selector=selector_stub, routes=routes_stubs)) # type: ignore
+
+    # 3. Reconstruct Edges
     for ed in edges_data:
         source = node_map.get(ed["source_id"])
         target = node_map.get(ed["target_id"])
@@ -146,11 +191,6 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
             edge_type_name = ed.get("edge_type", "DATA")
             edge_type = EdgeType[edge_type_name]
             
-            # Note: We are losing the original 'Router' spec object here.
-            # Reconstructing the complex Router object is a technical debt item 
-            # required for distributed execution, but not for visualization/inspection.
-            
-            # The Edge object itself is restored.
             edge = Edge(
                 source=source, 
                 target=target, 
@@ -158,14 +198,11 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
                 edge_type=edge_type
             )
             
-            # Current limitation: We cannot restore the `edge.router` object, 
-            # making the deserialized graph unsuitable for execution that relies 
-            # on dynamic routing (i.e., LocalExecutor will fail to resolve inputs 
-            # for tasks downstream of a Router).
-            if ed.get("router_present"):
-                # We retain the flag but cannot set the object.
-                # TODO: Implement full Router object reconstruction in a future PR.
-                pass 
+            # Re-attach Router object if present
+            if "router_index" in ed:
+                r_idx = ed["router_index"]
+                if 0 <= r_idx < len(restored_routers):
+                    edge.router = restored_routers[r_idx]
 
             graph.add_edge(edge)
         else:

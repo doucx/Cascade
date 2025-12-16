@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(graph): 修复 LazyResult 序列化和测试作用域问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765877309.3113458, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(graph): 实现 Router 对象的完整序列化与反序列化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765882507.1145597, "duration_ms": 0}}

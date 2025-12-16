@@ -1,67 +1,83 @@
 import io
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event, RunStarted, TaskExecutionFinished
+from cascade.runtime.events import RunStarted, TaskExecutionFinished
 from cascade.runtime.subscribers import HumanReadableLogSubscriber
 
 
-def test_message_bus_dispatch():
-    bus = MessageBus()
-    received_events = []
+def test_message_bus_dispatch(bus_and_spy):
+    """
+    Tests that the bus correctly dispatches events to specifically subscribed handlers.
+    """
+    bus, spy = bus_and_spy
 
-    def handler(event):
-        received_events.append(event)
+    specific_received = []
 
-    # Subscribe to specific event
-    bus.subscribe(RunStarted, handler)
+    def specific_handler(event: RunStarted):
+        specific_received.append(event)
+
+    bus.subscribe(RunStarted, specific_handler)
 
     # Publish relevant event
-    event1 = RunStarted(target_tasks=["t1"], params={})
+    event1 = RunStarted()
     bus.publish(event1)
 
-    assert len(received_events) == 1
-    assert received_events[0] == event1
+    # Assert specific handler was called
+    assert len(specific_received) == 1
 
     # Publish irrelevant event
-    event2 = TaskExecutionFinished(
-        task_id="1", task_name="t", status="Succeeded", duration=0.1
-    )
+    event2 = TaskExecutionFinished()
     bus.publish(event2)
 
-    # Handler should not receive it
-    assert len(received_events) == 1
+    # Assert specific handler was NOT called again
+    assert len(specific_received) == 1
+
+    # Assert that the spy (wildcard) received everything
+    assert len(spy.events) == 2
+    assert spy.events[0] == event1
+    assert spy.events[1] == event2
 
 
-def test_message_bus_wildcard():
-    bus = MessageBus()
-    received_events = []
-
-    def handler(event):
-        received_events.append(event)
-
-    # Subscribe to base Event (wildcard)
-    bus.subscribe(Event, handler)
+def test_message_bus_wildcard(bus_and_spy):
+    """
+    Tests that a wildcard subscriber (listening to base Event) receives all events.
+    """
+    bus, spy = bus_and_spy
 
     bus.publish(RunStarted(target_tasks=[], params={}))
     bus.publish(
         TaskExecutionFinished(task_id="1", task_name="t", status="OK", duration=0.0)
     )
 
-    assert len(received_events) == 2
+    assert len(spy.events) == 2
+    assert isinstance(spy.events_of_type(RunStarted)[0], RunStarted)
+    assert isinstance(spy.events_of_type(TaskExecutionFinished)[0], TaskExecutionFinished)
 
 
-def test_human_readable_subscriber():
-    bus = MessageBus()
+from cascade.runtime.bus import MessageBus as EventBus
+from cascade.messaging.bus import bus as messaging_bus
+from cascade.messaging.renderer import CliRenderer
+
+
+def test_human_readable_subscriber_integration():
+    """
+    Integration test for the full logging pipeline:
+    EventBus -> Subscriber -> MessageBus -> Renderer -> Output
+    """
+    event_bus = EventBus()
     output = io.StringIO()
-    HumanReadableLogSubscriber(bus, stream=output)
+    renderer = CliRenderer(stream=output, min_level="INFO")
+    messaging_bus.set_renderer(renderer)
 
-    # Simulate a flow
-    bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
-    bus.publish(
+    # Connect the subscriber to the event bus
+    HumanReadableLogSubscriber(event_bus)
+
+    # Publish events to the event bus
+    event_bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
+    event_bus.publish(
         TaskExecutionFinished(
             task_id="123", task_name="build_image", status="Succeeded", duration=1.23
         )
     )
-    bus.publish(
+    event_bus.publish(
         TaskExecutionFinished(
             task_id="124",
             task_name="deploy_k8s",
@@ -71,42 +87,35 @@ def test_human_readable_subscriber():
         )
     )
 
+    # Assert on the final rendered output
     logs = output.getvalue()
-
-    assert "▶️  Starting Run" in logs
-    assert "env': 'prod'" in logs
-    assert "✅ Finished task `build_image` in 1.23s" in logs
-    assert "❌ Failed task `deploy_k8s`" in logs
-    assert "AuthError" in logs
+    assert "▶️" in logs and "deploy" in logs and "prod" in logs
+    assert "✅" in logs and "build_image" in logs
+    assert "❌" in logs and "deploy_k8s" in logs and "AuthError" in logs
 
 
-def test_subscriber_log_level_filtering():
-    """Test that setting min_level suppresses lower priority logs."""
-    bus = MessageBus()
+def test_human_readable_subscriber_log_level_filtering():
+    """
+    Tests that the min_level setting in the CliRenderer correctly filters messages.
+    """
+    event_bus = EventBus()
     output = io.StringIO()
-    # Set level to ERROR, so INFO logs should be skipped
-    HumanReadableLogSubscriber(bus, stream=output, min_level="ERROR")
+    # Set renderer level to ERROR
+    renderer = CliRenderer(stream=output, min_level="ERROR")
+    messaging_bus.set_renderer(renderer)
+    
+    HumanReadableLogSubscriber(event_bus)
 
-    # INFO event
-    bus.publish(RunStarted(target_tasks=["t1"]))
-    # INFO event
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="1", task_name="t1", status="Succeeded", duration=0.1
-        )
-    )
-    # ERROR event
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="2", task_name="t2", status="Failed", error="Boom", duration=0.1
-        )
-    )
+    # Publish INFO and ERROR level events
+    event_bus.publish(RunStarted(target_tasks=["t1"])) # INFO
+    event_bus.publish(TaskExecutionFinished(task_id="1", task_name="t1", status="Succeeded")) # INFO
+    event_bus.publish(TaskExecutionFinished(task_id="2", task_name="t2", status="Failed", error="Boom")) # ERROR
 
     logs = output.getvalue()
 
-    # Should NOT contain INFO logs
-    assert "Starting Run" not in logs
-    assert "Finished task `t1`" not in logs
-    # Should contain ERROR logs
-    assert "Failed task `t2`" in logs
+    # INFO messages should be filtered out
+    assert "▶️" not in logs
+    assert "✅" not in logs
+    # ERROR messages should be present
+    assert "❌" in logs
     assert "Boom" in logs

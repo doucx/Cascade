@@ -51,6 +51,9 @@ def __getattr__(name: str) -> Any:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
+from .messaging.bus import bus as messaging_bus
+from .messaging.renderer import CliRenderer
+
 def run(
     target: LazyResult,
     params: Optional[Dict[str, Any]] = None,
@@ -68,10 +71,15 @@ def run(
         log_level: Minimum logging level ("DEBUG", "INFO", "WARNING", "ERROR").
                    Defaults to "INFO".
     """
-    bus = MessageBus()
-    # Attach the default logger
-    HumanReadableLogSubscriber(bus, min_level=log_level)
+    # 1. Setup the messaging renderer
+    renderer = CliRenderer(min_level=log_level)
+    messaging_bus.set_renderer(renderer)
+    
+    # 2. Setup the event system
+    event_bus = MessageBus()
+    # Attach the translator
+    HumanReadableLogSubscriber(event_bus)
 
-    engine = Engine(bus=bus, system_resources=system_resources)
+    engine = Engine(bus=event_bus, system_resources=system_resources)
 
     return asyncio.run(engine.run(target, params=params))

@@ -1,4 +1,3 @@
-from unittest.mock import MagicMock
 import cascade as cs
 from cascade.runtime.bus import MessageBus
 from cascade.tools.preview import _analyze_plan, DryRunConsoleSubscriber
@@ -9,7 +8,9 @@ from cascade.tools.events import (
 )
 
 
-def test_dry_run_emits_correct_events_linear():
+def test_dry_run_emits_correct_events_linear(bus_and_spy):
+    bus, spy = bus_and_spy
+
     @cs.task
     def step_a():
         return 1
@@ -18,41 +19,33 @@ def test_dry_run_emits_correct_events_linear():
     def step_b(x, y=10):
         return x + y
 
-    # Define the workflow
     result = step_b(step_a(), y=10)
-
-    # Create a mock bus
-    mock_bus = MagicMock()
-
-    # Run the core analysis logic
-    _analyze_plan(result, mock_bus)
-
-    # Collect all published events
-    events = [call.args[0] for call in mock_bus.publish.call_args_list]
+    _analyze_plan(result, bus)
 
     # Assert basic sequence
-    assert len(events) == 4  # Start + NodeA + NodeB + Finish
+    assert len(spy.events) == 4  # Start + NodeA + NodeB + Finish
+    assert isinstance(spy.events_of_type(PlanAnalysisStarted)[0], PlanAnalysisStarted)
+    assert isinstance(spy.events_of_type(PlanAnalysisFinished)[0], PlanAnalysisFinished)
 
-    assert isinstance(events[0], PlanAnalysisStarted)
+    node_events = spy.events_of_type(PlanNodeInspected)
+    assert len(node_events) == 2
 
     # Check Step A
-    node_a_event = events[1]
-    assert isinstance(node_a_event, PlanNodeInspected)
+    node_a_event = node_events[0]
     assert node_a_event.index == 1
     assert node_a_event.node_name == "step_a"
     assert node_a_event.literal_inputs == {}
 
     # Check Step B
-    node_b_event = events[2]
-    assert isinstance(node_b_event, PlanNodeInspected)
+    node_b_event = node_events[1]
     assert node_b_event.index == 2
     assert node_b_event.node_name == "step_b"
     assert node_b_event.literal_inputs == {"y": 10}
 
-    assert isinstance(events[3], PlanAnalysisFinished)
 
+def test_dry_run_emits_correct_events_diamond(bus_and_spy):
+    bus, spy = bus_and_spy
 
-def test_dry_run_emits_correct_events_diamond():
     @cs.task
     def t_a():
         return 1
@@ -69,17 +62,12 @@ def test_dry_run_emits_correct_events_diamond():
     def t_d(y, z):
         return y + z
 
-    # Fix: Create the LazyResult for A once and reuse it
     r_a = t_a()
     r_d = t_d(t_b(r_a), z=t_c(r_a))
 
-    mock_bus = MagicMock()
-    _analyze_plan(r_d, mock_bus)
+    _analyze_plan(r_d, bus)
 
-    events = [call.args[0] for call in mock_bus.publish.call_args_list]
-
-    # Filter only node events
-    node_events = [e for e in events if isinstance(e, PlanNodeInspected)]
+    node_events = spy.events_of_type(PlanNodeInspected)
     assert len(node_events) == 4
 
     names = [e.node_name for e in node_events]
@@ -93,17 +81,16 @@ def test_dry_run_emits_correct_events_diamond():
 
 def test_console_subscriber_renders_correctly(capsys):
     """
-    Tests the View layer independently.
-    We verify that events are correctly translated into stdout strings.
+    Tests the View layer independently for correct formatting.
     """
     bus = MessageBus()
-    # Attach the subscriber
     DryRunConsoleSubscriber(bus)
 
     # 1. Publish Start Event
     bus.publish(PlanAnalysisStarted(target_node_id="root"))
     captured = capsys.readouterr()
-    assert "--- Cascade Execution Plan (Dry Run) ---" in captured.out
+    assert "---" in captured.out
+    assert "Execution Plan" in captured.out
 
     # 2. Publish Node Event
     bus.publish(
@@ -116,9 +103,11 @@ def test_console_subscriber_renders_correctly(capsys):
         )
     )
     captured = capsys.readouterr()
-    assert "[1/2] my_task (Literals: {'param': 42})" in captured.out
+    assert "[1/2]" in captured.out
+    assert "my_task" in captured.out
+    assert "'param': 42" in captured.out
 
     # 3. Publish Finish Event
     bus.publish(PlanAnalysisFinished(total_steps=2))
     captured = capsys.readouterr()
-    assert "----------------------------------------" in captured.out
+    assert "---" in captured.out

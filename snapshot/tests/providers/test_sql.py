@@ -7,7 +7,7 @@ pytest.importorskip("sqlalchemy")
 
 
 @cs.resource
-def sqlite_db():
+def _sqlite_db_definition():
     # Setup an in-memory SQLite database
     engine = create_engine("sqlite:///:memory:")
 
@@ -27,8 +27,14 @@ def sqlite_db():
     engine.dispose()
 
 
+@pytest.fixture(scope="module")
+def sqlite_db():
+    """Provides the ResourceDefinition object for injection tests."""
+    return _sqlite_db_definition
+
+
 @pytest.mark.asyncio
-async def test_sql_query_success():
+async def test_sql_query_success(sqlite_db):
     """Test a basic SELECT query."""
 
     # Define a workflow using the 'sqlite_db' resource
@@ -45,7 +51,7 @@ async def test_sql_query_success():
 
 
 @pytest.mark.asyncio
-async def test_sql_with_params():
+async def test_sql_with_params(sqlite_db):
     """Test a query with parameters."""
 
     target = cs.sql(

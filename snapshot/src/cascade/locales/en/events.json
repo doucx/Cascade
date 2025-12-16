@@ -1,0 +1,11 @@
+{
+    "run.started": "▶️  Starting Run for targets: [{targets}]",
+    "run.started_with_params": "   With params: {params}",
+    "run.finished_success": "🏁 Run finished successfully in {duration:.2f}s.",
+    "run.finished_failure": "💥 Run failed after {duration:.2f}s: {error}",
+    "task.started": "  ⏳ Running task `{task_name}`...",
+    "task.finished_success": "  ✅ Finished task `{task_name}` in {duration:.2f}s",
+    "task.finished_failure": "  ❌ Failed task `{task_name}` after {duration:.2f}s: {error}",
+    "task.skipped": "  ⏩ Skipped task `{task_name}` (Reason: {reason})",
+    "task.retrying": "  ⚠️  Retrying task `{task_name}` (Attempt {attempt}/{max_attempts}) in {delay:.2f}s... Error: {error}"
+}

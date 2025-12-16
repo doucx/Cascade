@@ -95,7 +95,7 @@ class GraphBuilder:
         for key, value in iterator:
             arg_name = str(key)
 
-            if isinstance(value, (LazyResult, Param)):
+            if isinstance(value, (LazyResult, MappedLazyResult, Param)):
                 source_node = self._visit(value)
                 edge = Edge(source=source_node, target=target_node, arg_name=arg_name)
                 self.graph.add_edge(edge)

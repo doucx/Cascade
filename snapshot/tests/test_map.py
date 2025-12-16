@@ -20,7 +20,8 @@ async def test_map_basic():
     # 2. Reduce the results -> 12
     total = sum_all(numbers=mapped_results)
     
-    result = cs.run(total)
+    engine = cs.Engine()
+    result = await engine.run(total)
     assert result == 12
 
 @pytest.mark.asyncio
@@ -31,7 +32,8 @@ async def test_map_empty():
     mapped_results = double.map(x=inputs)
     total = sum_all(numbers=mapped_results)
     
-    result = cs.run(total)
+    engine = cs.Engine()
+    result = await engine.run(total)
     assert result == 0
 
 @pytest.mark.asyncio
@@ -51,7 +53,8 @@ async def test_map_dynamic_input():
     # 3. Sum -> 12
     total = sum_all(numbers=doubled)
     
-    result = cs.run(total)
+    engine = cs.Engine()
+    result = await engine.run(total)
     assert result == 12
 
 @pytest.mark.asyncio
@@ -69,7 +72,8 @@ async def test_map_multiple_args():
     mapped = add.map(a=list_a, b=list_b)
     total = sum_all(numbers=mapped)
     
-    result = cs.run(total)
+    engine = cs.Engine()
+    result = await engine.run(total)
     assert result == 66
 
 @pytest.mark.asyncio
@@ -85,5 +89,6 @@ async def test_map_mismatched_lengths():
     
     mapped = add.map(a=list_a, b=list_b)
     
+    engine = cs.Engine()
     with pytest.raises(ValueError, match="mismatched lengths"):
-        cs.run(mapped)
+        await engine.run(mapped)

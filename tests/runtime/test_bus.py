@@ -52,7 +52,7 @@ def test_message_bus_wildcard():
 def test_human_readable_subscriber():
     bus = MessageBus()
     output = io.StringIO()
-    subscriber = HumanReadableLogSubscriber(bus, stream=output)
+    HumanReadableLogSubscriber(bus, stream=output)
 
     # Simulate a flow
     bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))

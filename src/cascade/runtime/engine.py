@@ -1,7 +1,7 @@
 import time
 import inspect
 import asyncio
-from typing import Any, Dict, Optional, Generator, Callable, List, Tuple
+from typing import Any, Dict, Optional, Generator, Callable, List
 from uuid import uuid4
 from contextlib import ExitStack
 
@@ -24,7 +24,6 @@ from cascade.runtime.exceptions import DependencyMissingError
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.resource_manager import ResourceManager
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
 
 
@@ -178,21 +177,21 @@ class Engine:
             results[node.id] = await self._execute_node_with_policies(
                 node, graph, results, active_resources, run_id, params
             )
-        
+
         # Final check: Was the target task executed?
         if target._uuid not in results:
             # If target was skipped itself, or skipped because of upstream.
             if target._uuid in skipped_node_ids:
                 # We need to find the node name for the error message
                 target_node = next(n for n in plan if n.id == target._uuid)
-                
+
                 # The "dependency" here is the task itself, because it was skipped.
                 raise DependencyMissingError(
                     task_id=target_node.name,
                     arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped."
+                    dependency_id="Target was skipped.",
                 )
-            
+
             # If target is missing for unknown reasons, re-raise original KeyError
             raise KeyError(target._uuid)
 
@@ -209,7 +208,7 @@ class Engine:
     ) -> Any:
         # Resolve Dynamic Constraints
         requirements = self.constraint_resolver.resolve(node, graph, upstream_results)
-        
+
         await self.resource_manager.acquire(requirements)
         try:
             return await self._execute_node_internal(
@@ -241,48 +240,61 @@ class Engine:
         # 2. Check Cache
         if node.cache_policy:
             # We can reconstruct inputs dict for cache check from args/kwargs?
-            # Or use a simplified resolver. 
+            # Or use a simplified resolver.
             # For now, let's just use the resolved args/kwargs as cache input context?
             # The current cache policy expects a dict.
             # Let's map args back to names if possible, or just use kwargs.
             # Simpler: Use _resolve_inputs helper just for cache (legacy way) or update cache to use args/kwargs.
             # To minimize risk, I will keep _resolve_inputs helper ONLY for cache key generation for now.
-            inputs_for_cache = self._resolve_inputs_for_cache(node, graph, upstream_results)
+            inputs_for_cache = self._resolve_inputs_for_cache(
+                node, graph, upstream_results
+            )
             cached_value = node.cache_policy.check(node.id, inputs_for_cache)
             if cached_value is not None:
                 self.bus.publish(
-                    TaskSkipped(run_id=run_id, task_id=node.id, task_name=node.name, reason="CacheHit")
+                    TaskSkipped(
+                        run_id=run_id,
+                        task_id=node.id,
+                        task_name=node.name,
+                        reason="CacheHit",
+                    )
                 )
                 return cached_value
 
-        self.bus.publish(TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name))
+        self.bus.publish(
+            TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
+        )
 
         # 3. Execution (Map or Single)
         if node.node_type == "map":
-             # Map node logic is complex, it needs to generate sub-tasks.
-             # It uses args/kwargs (iterables) resolved above.
-             try:
-                 result = await self._execute_map_node(
-                     node, args, kwargs, active_resources, run_id, params
-                 )
-                 # ... (Events)
-                 status = "Succeeded"
-                 error = None
-             except Exception as e:
-                 result = None
-                 status = "Failed"
-                 error = str(e)
-                 raise e
-             finally:
-                 duration = time.time() - start_time
-                 self.bus.publish(
-                     TaskExecutionFinished(
-                         run_id=run_id, task_id=node.id, task_name=node.name,
-                         status=status, duration=duration, error=error,
-                         result_preview=f"List[{len(result)}]" if result else None
-                     )
-                 )
-             return result
+            # Map node logic is complex, it needs to generate sub-tasks.
+            # It uses args/kwargs (iterables) resolved above.
+            try:
+                result = await self._execute_map_node(
+                    node, args, kwargs, active_resources, run_id, params
+                )
+                # ... (Events)
+                status = "Succeeded"
+                error = None
+            except Exception as e:
+                result = None
+                status = "Failed"
+                error = str(e)
+                raise e
+            finally:
+                duration = time.time() - start_time
+                self.bus.publish(
+                    TaskExecutionFinished(
+                        run_id=run_id,
+                        task_id=node.id,
+                        task_name=node.name,
+                        status=status,
+                        duration=duration,
+                        error=error,
+                        result_preview=f"List[{len(result)}]" if result else None,
+                    )
+                )
+            return result
 
         # Single Task Execution with Retry
         retry_policy = node.retry_policy
@@ -302,15 +314,20 @@ class Engine:
                 duration = time.time() - start_time
                 self.bus.publish(
                     TaskExecutionFinished(
-                        run_id=run_id, task_id=node.id, task_name=node.name,
-                        status="Succeeded", duration=duration,
-                        result_preview=repr(result)[:100]
+                        run_id=run_id,
+                        task_id=node.id,
+                        task_name=node.name,
+                        status="Succeeded",
+                        duration=duration,
+                        result_preview=repr(result)[:100],
                     )
                 )
 
                 if node.cache_policy:
-                     inputs_for_save = self._resolve_inputs_for_cache(node, graph, upstream_results)
-                     node.cache_policy.save(node.id, inputs_for_save, result)
+                    inputs_for_save = self._resolve_inputs_for_cache(
+                        node, graph, upstream_results
+                    )
+                    node.cache_policy.save(node.id, inputs_for_save, result)
 
                 return result
 
@@ -319,8 +336,13 @@ class Engine:
                 if attempt < max_attempts:
                     self.bus.publish(
                         TaskRetrying(
-                            run_id=run_id, task_id=node.id, task_name=node.name,
-                            attempt=attempt, max_attempts=max_attempts, delay=delay, error=str(e)
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            attempt=attempt,
+                            max_attempts=max_attempts,
+                            delay=delay,
+                            error=str(e),
                         )
                     )
                     await asyncio.sleep(delay)
@@ -329,12 +351,16 @@ class Engine:
                     duration = time.time() - start_time
                     self.bus.publish(
                         TaskExecutionFinished(
-                            run_id=run_id, task_id=node.id, task_name=node.name,
-                            status="Failed", duration=duration, error=f"{type(e).__name__}: {e}"
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            status="Failed",
+                            duration=duration,
+                            error=f"{type(e).__name__}: {e}",
                         )
                     )
                     raise last_exception
-        
+
         raise RuntimeError("Unexpected execution state")
 
     def _resolve_inputs_for_cache(
@@ -344,8 +370,9 @@ class Engine:
         inputs = {}
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
         for edge in incoming_edges:
-            if edge.arg_name.startswith("_"): continue
-            
+            if edge.arg_name.startswith("_"):
+                continue
+
             # Simple resolution for cache keys
             if edge.source.id in upstream_results:
                 inputs[edge.arg_name] = upstream_results[edge.source.id]
@@ -363,35 +390,35 @@ class Engine:
         # Validate lengths
         # In args/kwargs, values should be iterables
         # We need to construct sub-tasks
-        
+
         # Merge args and kwargs into a unified iterable map for length checking
         # This part assumes mapping inputs are passed as kwargs (standard for .map)
         # But args could exist too.
-        
-        # Logic: 
+
+        # Logic:
         # 1. Determine length from first iterable
         # 2. Iterate and invoke factory
-        
+
         # Note: MappedLazyResult usually puts inputs in mapping_kwargs.
         # But _resolve_arguments flattened everything into args/kwargs.
-        
+
         # For MVP safety, let's assume .map() only uses kwargs for the mapped arguments,
         # which is how Task.map implementation works.
-        
+
         factory = node.mapping_factory
-        
+
         # Safety check: if there are positional args in a map node, it's ambiguous which to iterate
         if args:
-             # If we support mapping over positional args, we'd need to zip them.
-             # For now, let's assume args are static or unsupported in map.
-             pass
+            # If we support mapping over positional args, we'd need to zip them.
+            # For now, let's assume args are static or unsupported in map.
+            pass
 
         if not kwargs:
             return []
 
         lengths = {k: len(v) for k, v in kwargs.items()}
         first_len = list(lengths.values())[0]
-        if not all(l == first_len for l in lengths.values()):
+        if not all(length == first_len for length in lengths.values()):
             raise ValueError(f"Mapped inputs have mismatched lengths: {lengths}")
 
         sub_targets = []

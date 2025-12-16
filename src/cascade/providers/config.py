@@ -1,13 +1,14 @@
-from typing import Any, Dict, Union
+from typing import Any, Dict
 
 try:
     import yaml
 except ImportError:
     yaml = None
 
-from cascade.spec.task import task, LazyResult
+from cascade.spec.task import task
 from cascade.providers import LazyFactory, Provider
 import asyncio
+
 
 @task(name="load_yaml")
 async def _read_yaml_task(path: str) -> Dict[str, Any]:
@@ -34,13 +35,15 @@ def _lookup_task(source: Dict[str, Any], key: str) -> Any:
     """
     parts = key.split(".")
     current = source
-    
+
     for part in parts:
         if isinstance(current, dict):
             if part in current:
                 current = current[part]
             else:
-                raise KeyError(f"Configuration key segment '{part}' not found in path: {key}")
+                raise KeyError(
+                    f"Configuration key segment '{part}' not found in path: {key}"
+                )
         elif isinstance(current, list):
             try:
                 index = int(part)

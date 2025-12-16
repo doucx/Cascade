@@ -1,8 +1,6 @@
 from contextlib import contextmanager
 from typing import Callable, Any
-
-# This will be properly implemented once the Engine supports resource registration.
-# For now, it's a placeholder for the API contract.
+from cascade.runtime import Engine
 
 
 @contextmanager

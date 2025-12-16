@@ -1,8 +1,8 @@
 import asyncio
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 
 from .spec.task import task
-from .spec.lazy_types import LazyResult # NEW
+from .spec.lazy_types import LazyResult  # NEW
 from .spec.common import Param
 from .spec.routing import Router
 from .spec.resource import resource, inject
@@ -52,7 +52,7 @@ def __getattr__(name: str) -> Any:
 
 
 def run(
-    target: LazyResult, 
+    target: LazyResult,
     params: Optional[Dict[str, Any]] = None,
     system_resources: Optional[Dict[str, Any]] = None,
 ) -> Any:
@@ -62,7 +62,7 @@ def run(
     Args:
         target: The workflow target.
         params: Runtime parameters.
-        system_resources: A dictionary defining total system capacity 
+        system_resources: A dictionary defining total system capacity
                           (e.g. {"gpu": 1, "threads": 4}).
     """
     bus = MessageBus()

@@ -1,5 +1,5 @@
 import sys
-from typing import Callable, Any, Dict, Protocol, Type
+from typing import Any, Dict, Protocol
 import importlib.metadata
 
 

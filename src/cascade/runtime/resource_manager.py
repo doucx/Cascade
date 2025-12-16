@@ -1,6 +1,7 @@
 import asyncio
 from typing import Dict, Union, Optional
 
+
 class ResourceManager:
     """
     Manages system resources and ensures task concurrency respects resource constraints.
@@ -13,10 +14,10 @@ class ResourceManager:
         self._capacity: Dict[str, float] = {}
         if capacity:
             self._capacity = {k: float(v) for k, v in capacity.items()}
-        
+
         # Current usage
         self._usage: Dict[str, float] = {k: 0.0 for k in self._capacity}
-        
+
         # Condition variable for waiting tasks
         self._condition = asyncio.Condition()
 
@@ -30,7 +31,7 @@ class ResourceManager:
 
     async def acquire(self, requirements: Dict[str, Union[int, float]]):
         """
-        Atomically acquires the requested resources. 
+        Atomically acquires the requested resources.
         Waits until all resources are available.
         """
         if not requirements:
@@ -42,7 +43,7 @@ class ResourceManager:
 
             while not self._can_acquire(requirements):
                 await self._condition.wait()
-            
+
             # Commit acquisition
             for res, amount in requirements.items():
                 if res in self._capacity:
@@ -62,7 +63,7 @@ class ResourceManager:
                     # Prevent floating point drift below zero
                     if self._usage[res] < 0:
                         self._usage[res] = 0.0
-            
+
             # Notify all waiting tasks to re-check their conditions
             self._condition.notify_all()
 
@@ -70,8 +71,8 @@ class ResourceManager:
         """Internal check to see if resources are currently available."""
         for res, amount in requirements.items():
             if res not in self._capacity:
-                continue # Unmanaged resources are always available
-            
+                continue  # Unmanaged resources are always available
+
             if self._usage[res] + float(amount) > self._capacity[res]:
                 return False
         return True

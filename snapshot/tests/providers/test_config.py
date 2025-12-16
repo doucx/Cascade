@@ -77,8 +77,26 @@ async def test_lookup_missing_key_raises_error():
         return {"a": 1}
         
     source = provide_dict()
-    missing_value = cs.lookup(source=source, key="a.nonexistent")
+    # "b" does not exist in the root dict, should raise KeyError
+    missing_value = cs.lookup(source=source, key="b")
     
     engine = cs.Engine()
     with pytest.raises(KeyError):
         await engine.run(missing_value)
+
+@pytest.mark.asyncio
+async def test_lookup_invalid_path_raises_type_error():
+    """Tests that lookup on a non-container value raises TypeError."""
+
+    @cs.task
+    def provide_dict():
+        return {"a": 1}
+
+    source = provide_dict()
+    # "a" resolves to 1 (int), which is not a container. 
+    # Attempting to look up "nonexistent" on it should raise TypeError.
+    invalid_lookup = cs.lookup(source=source, key="a.nonexistent")
+
+    engine = cs.Engine()
+    with pytest.raises(TypeError, match="Cannot access segment"):
+        await engine.run(invalid_lookup)

@@ -85,8 +85,8 @@ def test_serialize_params():
 
 
 def test_serialize_with_retry():
-    """Test serialization of retry policy."""
-    t = simple_task(x=1).with_retry(max_attempts=5, delay=1.0)
+    """Test serialization of retry policy including backoff."""
+    t = simple_task(x=1).with_retry(max_attempts=5, delay=1.0, backoff=2.0)
     graph = build_graph(t)
 
     data = graph_to_dict(graph)
@@ -94,11 +94,51 @@ def test_serialize_with_retry():
 
     assert task_node["retry_policy"]["max_attempts"] == 5
     assert task_node["retry_policy"]["delay"] == 1.0
+    assert task_node["retry_policy"]["backoff"] == 2.0
 
     # Round trip
     restored = from_json(to_json(graph))
     t_node = next(n for n in restored.nodes if n.name == "simple_task")
     assert t_node.retry_policy.max_attempts == 5
+    assert t_node.retry_policy.backoff == 2.0
+
+
+def test_serialize_edge_types():
+    """Test serialization and deserialization of various EdgeType instances."""
+    
+    @cs.task
+    def t_condition(): return True
+    
+    @cs.task
+    def t_dynamic_constraint(val): return val
+    
+    @cs.task
+    def t_target(x): return x
+
+    # 1. Condition edge
+    target_condition = t_target(t_dynamic_constraint(1)).run_if(t_condition())
+    
+    # 2. Constraint edge (dynamic)
+    target = target_condition.with_constraints(cpu=t_dynamic_constraint(1))
+    
+    graph = build_graph(target)
+    json_str = to_json(graph)
+    restored_graph = from_json(json_str)
+
+    # We only need to check the edges pointing to t_target (the target node of the chains)
+    target_node = next(n for n in restored_graph.nodes if n.name == "t_target")
+    
+    data_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.DATA]
+    condition_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONDITION]
+    constraint_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONSTRAINT]
+
+    assert len(data_edges) == 1
+    assert len(condition_edges) == 1
+    assert len(constraint_edges) == 1
+    
+    # Verify the restored types are correct
+    assert condition_edges[0].edge_type is cs.graph.model.EdgeType.CONDITION
+    assert constraint_edges[0].edge_type is cs.graph.model.EdgeType.CONSTRAINT
 
 
 def test_serialize_with_constraints():

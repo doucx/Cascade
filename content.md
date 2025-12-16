@@ -1,61 +1,255 @@
 简要回答：
-已完成 `EdgeType` 枚举的重构。本次提交消除了图模型中对硬编码字符串的所有依赖，提升了系统的类型安全和可维护性。
+我们将修改 `src/cascade/graph/serialize.py`，实现 `EdgeType` 的序列化与反序列化，并确保所有边缘元数据（包括重试策略和约束）在往返过程中保持完整性。
 
-## [COMMIT] refactor(graph): 引入 EdgeType 枚举以消除魔法字符串
+## [WIP] refactor(graph): 增强图序列化以支持 EdgeType 和 Router 元数据
 
 ### 用户需求
-将引入 `EdgeType` 枚举的重构提交，消除 `GraphBuilder`, `Engine`, `Resolver` 和 `Visualize` 中对特殊边类型硬编码字符串（如 `_condition`, `_implicit_dependency`）的依赖。
+增强图序列化模块 (`src/cascade/graph/serialize.py`)，使其能够正确处理并持久化 `EdgeType` 枚举和 `Router` 边缘元数据。
 
 ### 评论
-这个重构是提高 `Cascade` 核心稳定性的关键一步。通过将边的语义意图（数据、条件、约束、隐式依赖）显式化为枚举类型，我们极大地增强了代码的可读性，并降低了未来因字符串拼写错误或约定变更而导致系统逻辑崩溃的风险。
+图序列化是实现分布式执行、工作流持久化和高级调试工具（如外部可视化器）的基础。引入 `EdgeType` 后，我们必须同步更新序列化逻辑，以确保图模型能够无损地进行往返操作，这是下一步平台演进的关键。
 
 ### 目标
-提交所有与 `EdgeType` 相关的更改，并将宏观任务标记为完成。
+1.  修改 `serialize.py`，导入并使用 `EdgeType`。
+2.  在 `_edge_to_dict` 中将 `EdgeType` 转换为字符串名称。
+3.  在 `graph_from_dict` 中将字符串名称转换回 `EdgeType` 枚举。
+4.  更新 `tests/graph/test_serialize.py`，增加对 `EdgeType` 往返测试的覆盖。
+5.  在 `serialize.py` 中添加关于 `Router` 重建的技术债务注释，明确当前阶段的限制。
 
 ### 基本原理
-此变更属于代码重构范畴，通过替换魔法字符串为类型安全的枚举，提高了核心模型的质量。它是对现有实现债的清理，也是未来复杂功能（如分布式执行中的序列化）的必要前置条件。
+由于 `EdgeType` 是一个 Python 枚举，它无法被原生 JSON 序列化。我们将采用标准的序列化策略：将枚举值存储为它们的名称字符串，并在反序列化时通过名称查找重新构造枚举对象。
 
 ### 标签
-#intent/refine #flow/ready #priority/medium #comp/graph #comp/runtime #concept/state #scope/dx #ai/delegate #task/domain/graph #task/object/edgemodel #task/action/refactor #task/state/end
+#intent/refine #flow/ready #priority/high #comp/graph #comp/tests #concept/serialization #scope/core #scope/dx #ai/delegate #task/domain/graph #task/object/serialization #task/action/refinement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 提交 EdgeType 重构的所有变更
+#### Acts 1: 更新 Graph 序列化逻辑 (`serialize.py`)
 
-将所有被修改的文件添加到 Git 暂存区，并执行提交。
-
-~~~~~act
-git_add
-src/cascade/graph/model.py
-src/cascade/graph/build.py
-src/cascade/runtime/engine.py
-src/cascade/runtime/resolvers.py
-src/cascade/tools/visualize.py
-~~~~~
+修改 `src/cascade/graph/serialize.py` 以支持 `EdgeType` 的序列化和反序列化，并添加必要的 `EdgeType` 导入。
 
 ~~~~~act
-git_commit
+patch_file
+src/cascade/graph/serialize.py
 ~~~~~
-~~~~~text
-refactor(graph): Replace magic strings with EdgeType enum
-
-This refactors the core graph model to eliminate reliance on hardcoded string conventions for special edge types, improving type safety and maintainability.
-
-- **`graph.model`**: Introduces `EdgeType` enum (`DATA`, `CONDITION`, `CONSTRAINT`, `IMPLICIT`) and adds it to the `Edge` dataclass.
-- **`graph.build`**: Updates edge creation logic to use `EdgeType` instead of string conventions (`_condition`, implicit dependency, dynamic constraints via prefixing `arg_name`).
-- **`runtime.engine`**: Updates the `_should_skip` logic to use `EdgeType.CONDITION` and `EdgeType.DATA/IMPLICIT` for skip cascading checks.
-- **`runtime.resolvers`**: `ArgumentResolver` now filters non-data edges explicitly using `EdgeType.DATA`. `ConstraintResolver` now correctly identifies dynamic constraints using `EdgeType.CONSTRAINT`.
-- **`tools.visualize`**: Updates visualization rendering logic to interpret edges based on their `EdgeType`.
+~~~~~python
+import json
+import importlib
+from typing import Any, Dict, Optional
+from .model import Graph, Node, Edge
+from ..spec.common import Param
+from ..spec.constraint import ResourceConstraint
+from ..spec.lazy_types import RetryPolicy  # NEW
+from ..spec.task import Task
+~~~~~
+~~~~~python
+import json
+import importlib
+from typing import Any, Dict, Optional
+from .model import Graph, Node, Edge, EdgeType
+from ..spec.common import Param
+from ..spec.constraint import ResourceConstraint
+from ..spec.lazy_types import RetryPolicy
+from ..spec.task import Task
 ~~~~~
 
-### 下一步建议
+~~~~~act
+patch_file
+src/cascade/graph/serialize.py
+~~~~~
+~~~~~python
+def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
+    data = {
+        "source_id": edge.source.id,
+        "target_id": edge.target.id,
+        "arg_name": edge.arg_name,
+    }
+    if edge.router:
+        # Router is complex, but for the edge we just need to mark it or verify consistency
+        # In current model, router object is attached to edge.
+        # We need to serialize enough info to reconstruct the Router logic if needed,
+        # but the Router spec object itself is mostly build-time.
+        # Runtime logic depends on the edge structure.
+        # For now, we simply flag it.
+        data["router_present"] = True
+    return data
+~~~~~
+~~~~~python
+def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
+    data = {
+        "source_id": edge.source.id,
+        "target_id": edge.target.id,
+        "arg_name": edge.arg_name,
+        "edge_type": edge.edge_type.name,
+    }
+    if edge.router:
+        # We flag the presence of a Router, but the object itself is not serialized 
+        # (Router reconstruction requires full graph context not available here).
+        # This is a known limitation for MVP serialization.
+        data["router_present"] = True
+    return data
+~~~~~
 
-现在核心图模型已经稳定且类型安全。然而，在 `src/cascade/graph/serialize.py` 中，我们存在一个已知技术债务：图序列化对 `EdgeType` 缺乏支持，并且无法正确重建包含 `Router` 元数据的边。
+~~~~~act
+patch_file
+src/cascade/graph/serialize.py
+~~~~~
+~~~~~python
+    # 2. Reconstruct Edges
+    for ed in edges_data:
+        source = node_map.get(ed["source_id"])
+        target = node_map.get(ed["target_id"])
+        if source and target:
+            # Note: We are losing the original 'Router' spec object here.
+            # If runtime requires the Router object on the edge, we might need to rethink.
+            # Checking `LocalExecutor`: it checks `edge.router`.
+            # If `edge.router` is None, dynamic routing fails.
+            # So we MUST reconstruct a Router object if `router_present` is True.
 
-我建议下一个任务是 **改进图序列化机制**：
-1.  更新 `serialize.py`，确保 `EdgeType` 能够被正确序列化和反序列化。
-2.  解决 `Router` 相关的序列化问题，确保边缘元数据的无损往返（尽管完全重建 `Router` 对象本身很复杂，但我们可以确保图结构和边缘类型是完整的）。
+            # However, the `Router` object in spec needs `routes` dict and `selector` LazyResult.
+            # Reconstructing that from a flat edge list is hard.
+            # BUT, look at `LocalExecutor`: it uses `edge.router.routes` to find the implementation node.
+            # This implies the graph structure already contains the routes.
+            # The Executor uses `edge.router` mainly as a marker and a lookup table for `routes`.
 
-如果你同意，我将生成执行此序列化改进的计划。
+            # For this MVP, we will revive the Edge.
+            # TODO: Fully restoring Router object requires matching the "implicit_dependency" edges
+            # back to the routes dict. This is complex.
+            # For basic serialization (visualization/inspection), omitting Router object is fine.
+            # For Distributed Execution, we will need full reconstruction.
+            # Let's leave a TODO for Router reconstruction and support basic edges.
+
+            edge = Edge(source=source, target=target, arg_name=ed["arg_name"])
+            # If we marked it as having a router, we might want to attach a placeholder or
+            # address this in a future PR for distributed routing.
+            graph.add_edge(edge)
+        else:
+            raise ValueError(f"Edge references unknown node: {ed}")
+~~~~~
+~~~~~python
+    # 2. Reconstruct Edges
+    for ed in edges_data:
+        source = node_map.get(ed["source_id"])
+        target = node_map.get(ed["target_id"])
+        if source and target:
+            edge_type_name = ed.get("edge_type", "DATA")
+            edge_type = EdgeType[edge_type_name]
+            
+            # Note: We are losing the original 'Router' spec object here.
+            # Reconstructing the complex Router object is a technical debt item 
+            # required for distributed execution, but not for visualization/inspection.
+            
+            # The Edge object itself is restored.
+            edge = Edge(
+                source=source, 
+                target=target, 
+                arg_name=ed["arg_name"], 
+                edge_type=edge_type
+            )
+            
+            # Current limitation: We cannot restore the `edge.router` object, 
+            # making the deserialized graph unsuitable for execution that relies 
+            # on dynamic routing (i.e., LocalExecutor will fail to resolve inputs 
+            # for tasks downstream of a Router).
+            if ed.get("router_present"):
+                # We retain the flag but cannot set the object.
+                # TODO: Implement full Router object reconstruction in a future PR.
+                pass 
+
+            graph.add_edge(edge)
+        else:
+            raise ValueError(f"Edge references unknown node: {ed}")
+~~~~~
+
+#### Acts 2: 增强序列化测试用例 (`test_serialize.py`)
+
+在 `tests/graph/test_serialize.py` 中添加测试，确保所有新的 `EdgeType` 都能正确地进行序列化往返。
+
+~~~~~act
+patch_file
+tests/graph/test_serialize.py
+~~~~~
+~~~~~python
+    p_node = next(n for n in restored.nodes if n.node_type == "param")
+    assert p_node.param_spec.name == "env"
+
+
+def test_serialize_with_retry():
+    """Test serialization of retry policy."""
+    t = simple_task(x=1).with_retry(max_attempts=5, delay=1.0)
+    graph = build_graph(t)
+
+    data = graph_to_dict(graph)
+    task_node = next(n for n in data["nodes"] if n["name"] == "simple_task")
+
+    assert task_node["retry_policy"]["max_attempts"] == 5
+    assert task_node["retry_policy"]["delay"] == 1.0
+
+    # Round trip
+    restored = from_json(to_json(graph))
+    t_node = next(n for n in restored.nodes if n.name == "simple_task")
+    assert t_node.retry_policy.max_attempts == 5
+~~~~~
+~~~~~python
+    p_node = next(n for n in restored.nodes if n.node_type == "param")
+    assert p_node.param_spec.name == "env"
+
+
+def test_serialize_with_retry():
+    """Test serialization of retry policy including backoff."""
+    t = simple_task(x=1).with_retry(max_attempts=5, delay=1.0, backoff=2.0)
+    graph = build_graph(t)
+
+    data = graph_to_dict(graph)
+    task_node = next(n for n in data["nodes"] if n["name"] == "simple_task")
+
+    assert task_node["retry_policy"]["max_attempts"] == 5
+    assert task_node["retry_policy"]["delay"] == 1.0
+    assert task_node["retry_policy"]["backoff"] == 2.0
+
+    # Round trip
+    restored = from_json(to_json(graph))
+    t_node = next(n for n in restored.nodes if n.name == "simple_task")
+    assert t_node.retry_policy.max_attempts == 5
+    assert t_node.retry_policy.backoff == 2.0
+
+
+def test_serialize_edge_types():
+    """Test serialization and deserialization of various EdgeType instances."""
+    
+    @cs.task
+    def t_condition(): return True
+    
+    @cs.task
+    def t_dynamic_constraint(val): return val
+    
+    @cs.task
+    def t_target(x): return x
+
+    # 1. Condition edge
+    target_condition = t_target(t_dynamic_constraint(1)).run_if(t_condition())
+    
+    # 2. Constraint edge (dynamic)
+    target = target_condition.with_constraints(cpu=t_dynamic_constraint(1))
+    
+    graph = build_graph(target)
+    json_str = to_json(graph)
+    restored_graph = from_json(json_str)
+
+    # We only need to check the edges pointing to t_target (the target node of the chains)
+    target_node = next(n for n in restored_graph.nodes if n.name == "t_target")
+    
+    data_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.DATA]
+    condition_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONDITION]
+    constraint_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONSTRAINT]
+
+    assert len(data_edges) == 1
+    assert len(condition_edges) == 1
+    assert len(constraint_edges) == 1
+    
+    # Verify the restored types are correct
+    assert condition_edges[0].edge_type is cs.graph.model.EdgeType.CONDITION
+    assert constraint_edges[0].edge_type is cs.graph.model.EdgeType.CONSTRAINT
+~~~~~

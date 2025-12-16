@@ -1,49 +1,34 @@
 site_name: Cascade
 site_description: 'A modern, declarative automation library for Python.'
 repo_url: https://github.com/doucx/Cascade
-edit_uri: ""
 
 theme:
   name: material
-  language: zh # 1. 将中文设置为默认语言
+  language: zh # 设置主题语言为中文
   palette:
-    # Palette toggle for light vs dark mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
   features:
     - navigation.tabs
-    - navigation.sections
-    - navigation.top
-    - toc.integrate
     - content.code.copy
     - content.code.annotate
-
-# 2. 定义可用的语言版本
-extra:
-  alternate:
-    - name: English
-      lang: en
-    - name: 中文
-      lang: zh
 
 plugins:
   - search
   - mkdocstrings:
       handlers:
         python:
+          # 以下是修复 API 参考为空的关键配置
+          setup_commands:
+            # 强制插件在收集文档前，安装项目本身及其所有可选依赖
+            - pip install -e .[all]
           options:
-            show_root_heading: true
+            # (可选, 但推荐) 按源代码中的顺序，而不是字母顺序列出成员
+            members_order: source
 
 nav:
-  # 3. 更新导航标题为中文，并指向基础 .md 文件
   - '首页': 'index.md'
   - '教程':
     - '快速上手': 'tutorial/getting-started.md'

@@ -39,6 +39,15 @@ sql = ["sqlalchemy"]
 cli = ["typer[all]"]
 config = ["PyYAML"]
 
+# 新增一个 'all' 组，方便一键安装所有可选依赖
+all = [
+  "jinja2",
+  "aiohttp",
+  "sqlalchemy",
+  "typer[all]",
+  "PyYAML",
+]
+
 [project.entry-points."cascade.providers"]
 shell = "cascade.providers.shell:ShellProvider"
 template = "cascade.providers.template:TemplateProvider"

@@ -48,17 +48,24 @@ def __getattr__(name: str) -> Any:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
-def run(target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:
+def run(
+    target: LazyResult, 
+    params: Optional[Dict[str, Any]] = None,
+    system_resources: Optional[Dict[str, Any]] = None,
+) -> Any:
     """
     Runs a Cascade workflow with a default engine configuration.
 
-    This is the primary entry point for users. It sets up a default
-    engine with a human-readable logger.
+    Args:
+        target: The workflow target.
+        params: Runtime parameters.
+        system_resources: A dictionary defining total system capacity 
+                          (e.g. {"gpu": 1, "threads": 4}).
     """
     bus = MessageBus()
     # Attach the default logger
     HumanReadableLogSubscriber(bus)
 
-    engine = Engine(bus=bus)
+    engine = Engine(bus=bus, system_resources=system_resources)
 
     return asyncio.run(engine.run(target, params=params))

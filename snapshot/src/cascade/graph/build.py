@@ -64,6 +64,20 @@ class GraphBuilder:
             edge = Edge(source=source_node, target=node, arg_name="_condition")
             self.graph.add_edge(edge)
 
+        # Process dynamic constraints
+        if result._constraints and not result._constraints.is_empty():
+            from cascade.spec.task import LazyResult, MappedLazyResult
+            for res_name, req_value in result._constraints.requirements.items():
+                if isinstance(req_value, (LazyResult, MappedLazyResult)):
+                    source_node = self._visit(req_value)
+                    # Use a special prefix for constraint edges so executors can ignore them
+                    edge = Edge(
+                        source=source_node, 
+                        target=node, 
+                        arg_name=f"_constraint:{res_name}"
+                    )
+                    self.graph.add_edge(edge)
+
         return node
 
     def _visit_mapped_result(self, result: MappedLazyResult) -> Node:

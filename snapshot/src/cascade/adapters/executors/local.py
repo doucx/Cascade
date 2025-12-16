@@ -38,6 +38,10 @@ class LocalExecutor:
             if edge.arg_name == "_implicit_dependency":
                 continue
 
+            # Skip dynamic constraint dependencies (handled by Engine resource manager)
+            if edge.arg_name.startswith("_constraint:"):
+                continue
+
             result = upstream_results[edge.source.id]
 
             # Handle Dynamic Routing

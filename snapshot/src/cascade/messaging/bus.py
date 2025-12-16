@@ -43,7 +43,7 @@ class MessageStore:
 
 
 class Renderer(Protocol):
-    def print(self, message: str, level: str) -> None: ...
+    def render(self, msg_id: str, level: str, **kwargs: Any) -> None: ...
 
 
 class MessageBus:
@@ -51,20 +51,19 @@ class MessageBus:
         self._store = store
         self._renderer: Optional[Renderer] = None
 
+    @property
+    def store(self) -> MessageStore:
+        return self._store
+
     def set_renderer(self, renderer: Renderer):
         self._renderer = renderer
 
     def _render(self, level: str, msg_id: str, **kwargs: Any) -> None:
         if not self._renderer:
             return
-
-        template = self._store.get(msg_id)
-        try:
-            message = template.format(**kwargs)
-        except KeyError as e:
-            message = f"<Formatting error for '{msg_id}': missing key {e}>"
-
-        self._renderer.print(message, level)
+        
+        # The renderer is now responsible for everything
+        self._renderer.render(msg_id, level, **kwargs)
 
     def info(self, msg_id: str, **kwargs: Any) -> None:
         self._render("info", msg_id, **kwargs)

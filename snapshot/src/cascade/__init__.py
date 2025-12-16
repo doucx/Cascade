@@ -72,7 +72,7 @@ def run(
                    Defaults to "INFO".
     """
     # 1. Setup the messaging renderer
-    renderer = CliRenderer(min_level=log_level)
+    renderer = CliRenderer(store=messaging_bus.store, min_level=log_level)
     messaging_bus.set_renderer(renderer)
     
     # 2. Setup the event system

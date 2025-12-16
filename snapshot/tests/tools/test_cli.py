@@ -39,7 +39,7 @@ def test_cli_generator_success():
 
 
 def test_cli_generator_help_message():
-    """Tests that the --help message is generated correctly from Param descriptions."""
+    """Tests that the --help message is generated correctly from Param descriptions, including log_level."""
 
     name_param = cs.Param("name", description="The name to greet.")
     count_param = cs.Param(
@@ -60,6 +60,8 @@ def test_cli_generator_help_message():
     assert "Number of times to greet." in result.stdout
     assert "--name" in result.stdout
     assert "--count" in result.stdout
+    assert "--log-level" in result.stdout
+    assert "Minimum level for console logging" in result.stdout
 
 
 def test_cli_missing_required_param():

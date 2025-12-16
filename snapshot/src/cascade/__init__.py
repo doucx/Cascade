@@ -1,5 +1,5 @@
 import asyncio
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional
 
 from .spec.task import task
 from .spec.lazy_types import LazyResult  # NEW

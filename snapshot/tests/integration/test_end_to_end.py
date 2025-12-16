@@ -86,7 +86,7 @@ def test_e2e_diamond_workflow_and_result():
     import asyncio
 
     bus = MessageBus()
-    spy = SpySubscriber(bus)
+    SpySubscriber(bus)
     engine = Engine(bus=bus)
 
     result = asyncio.run(engine.run(r_d))

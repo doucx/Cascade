@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(runtime): 解耦 Engine/Executor，增强错误处理，修复导入循环", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765872022.4874108, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: A resolvers.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765872761.393025, "duration_ms": 0}}

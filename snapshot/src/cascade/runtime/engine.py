@@ -214,7 +214,7 @@ class Engine:
         
         try:
             return await self._execute_node_internal(
-                node, graph, upstream_results, active_resources, run_id, requirements
+                node, graph, upstream_results, active_resources, run_id, params, requirements
             )
         finally:
             # Always release resources
@@ -255,6 +255,7 @@ class Engine:
         upstream_results: Dict[str, Any],
         active_resources: Dict[str, Any],
         run_id: str,
+        params: Dict[str, Any],
         requirements: Dict[str, Any], # Passed for logging if needed
     ) -> Any:
         task_start_time = time.time()

@@ -1,135 +1,92 @@
 简要回答
-测试失败的原因是 `cs.run()` 内部使用了 `asyncio.run()`，这在已经由 `pytest-asyncio` 启动的事件循环中调用是非法的（Python 不允许嵌套事件循环）。在异步测试环境中，我们应该直接实例化 `Engine` 并 `await engine.run(...)`，而不是使用同步的 `cs.run()` 封装器。
+这是一个非常低级的参数传递错误。在之前的重构中，我确实忽略了将 `params` 这一关键参数从 `_execute_node_with_policies` 透传给新拆分出来的 `_execute_node_internal`。
 
-我将生成一个修复计划来重构测试代码。
+`_execute_node_internal` 内部需要使用 `params` 来支持 `.map()` 的递归执行（因为子任务也需要这些全局参数），所以必须修复函数签名和调用点。
 
-## [WIP] test: 修复资源调度测试中的嵌套事件循环错误
+## [WIP] fix(core): 修复 Engine 重构导致的参数丢失问题
 
 ### 错误分析
-测试框架 `pytest-asyncio` 会为标记为 `async` 的测试函数创建一个正在运行的事件循环。`cs.run()` 是一个为同步脚本设计的入口函数，它不仅实例化 `Engine`，还强制调用 `asyncio.run()`。在 `async` 测试函数中调用 `cs.run()` 会导致 `RuntimeError: asyncio.run() cannot be called from a running event loop`。
+在 `src/cascade/runtime/engine.py` 中，`_execute_node_internal` 尝试使用变量 `params`，但在其函数签名中并没有定义该参数。这是因为在将其从 `_execute_node_with_policies` 拆分出来时，遗漏了 `params` 的透传。这直接导致了所有涉及 `.map()` 的操作（因为只有 `.map()` 逻辑用到了 `params`）抛出 `NameError`。
 
 ### 用户需求
-修复 `tests/integration/test_resource_scheduling.py` 中的运行时错误，使其能够正确验证资源调度逻辑。
+修复 `NameError: name 'params' is not defined`，确保所有测试尤其是 `.map()` 相关的测试能通过。
 
 ### 评论
-这是一个常见的异步测试陷阱。解决办法是遵循 Cascade 的测试最佳实践：在异步测试中，直接使用底层的异步 API (`Engine.run`)，而不是面向最终用户的同步 API (`cs.run`)。这也更符合单元测试“测试组件而非封装”的原则。
+这是一个典型的重构回归问题。幸运的是，测试套件立即捕获了它。修复非常直接。
 
 ### 目标
-重构 `tests/integration/test_resource_scheduling.py`，将所有 `cs.run(...)` 调用替换为显式的 `Engine` 实例化和 `await engine.run(...)` 调用。
+修改 `src/cascade/runtime/engine.py`，更新 `_execute_node_with_policies` 的调用逻辑和 `_execute_node_internal` 的签名，加上缺失的 `params` 参数。
 
 ### 基本原理
-直接使用 `Engine` 类不仅解决了事件循环冲突，还允许我们在测试中更精细地控制 `Engine` 的配置（如 `system_resources`），而无需依赖 `cs.run` 的参数透传。
+简单地补全缺失的参数传递路径。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/core #task/domain/runtime #task/object/resource-manager #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/core #scope/core #task/domain/runtime #task/object/engine #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构资源调度测试
+#### Acts 1: 修复 Engine 参数传递
 
-修改测试文件，将同步调用替换为异步调用。
+同时更新调用点和函数定义。
 
 ~~~~~act
-write_file
-tests/integration/test_resource_scheduling.py
+patch_file
+src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-import pytest
-import asyncio
-import time
-import cascade as cs
-from cascade.runtime.engine import Engine
-
-@pytest.mark.asyncio
-async def test_resource_concurrency_limit():
-    """
-    Test that system capacity limits task concurrency.
-    We set up a system with 'slots=1', and try to run 2 tasks in parallel that each require 'slots=1'.
-    They should execute sequentially, doubling the total time.
-    """
-    
-    @cs.task
-    async def slow_task(name: str):
-        # Simulate work
-        await asyncio.sleep(0.1)
-        return time.time()
-
-    # Define two parallel tasks
-    t1 = slow_task("t1").with_constraints(slots=1)
-    t2 = slow_task("t2").with_constraints(slots=1)
-    
-    # Run them (we need a way to run both, creating a list)
-    @cs.task
-    def gather(a, b):
-        return a, b
-
-    workflow = gather(t1, t2)
-
-    start_time = time.time()
-    
-    # Run with limited capacity: only 1 slot available
-    # Because both tasks need 1 slot, they must run one after another.
-    # FIX: Use Engine directly to avoid nested event loop error in tests
-    engine = Engine(system_resources={"slots": 1})
-    result = await engine.run(workflow)
-    
-    duration = time.time() - start_time
-    t1_end, t2_end = result
-    
-    # In parallel, it would take ~0.1s. In serial, ~0.2s.
-    # Allow some buffer for overhead.
-    assert duration >= 0.2
-    
-    # One must finish before the other, roughly.
-    assert abs(t1_end - t2_end) >= 0.1
-
-@pytest.mark.asyncio
-async def test_dynamic_resource_constraint():
-    """
-    Test that a task can request resources based on an upstream calculation.
-    """
-    
-    @cs.task
-    def calculate_cpu_needs():
-        return 2
-
-    @cs.task
-    def cpu_heavy_task():
-        return "Done"
-
-    # CPU needs are determined dynamically
-    needs = calculate_cpu_needs()
-    
-    # The task requests 'cpu' equal to the result of 'needs' (2)
-    job = cpu_heavy_task().with_constraints(cpu=needs)
-
-    # We set system capacity to 4.
-    engine = Engine(system_resources={"cpu": 4})
-    result = await engine.run(job)
-    
-    assert result == "Done"
-
-@pytest.mark.asyncio
-async def test_insufficient_resources_deadlock():
-    """
-    Test that requesting more resources than available raises an error immediately
-    (feasibility check), rather than hanging indefinitely.
-    """
-    
-    @cs.task
-    def massive_job():
-        return "Should not run"
+        # Acquire resources (this may block)
+        await self.resource_manager.acquire(requirements)
         
-    job = massive_job().with_constraints(memory_gb=64)
-    
-    # System only has 16GB
-    engine = Engine(system_resources={"memory_gb": 16})
-    
-    with pytest.raises(ValueError, match="exceeds total system capacity"):
-        await engine.run(job)
+        try:
+            return await self._execute_node_internal(
+                node, graph, upstream_results, active_resources, run_id, requirements
+            )
+        finally:
+            # Always release resources
+~~~~~
+~~~~~python
+        # Acquire resources (this may block)
+        await self.resource_manager.acquire(requirements)
+        
+        try:
+            return await self._execute_node_internal(
+                node, graph, upstream_results, active_resources, run_id, params, requirements
+            )
+        finally:
+            # Always release resources
+~~~~~
+
+~~~~~act
+patch_file
+src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    async def _execute_node_internal(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        requirements: Dict[str, Any], # Passed for logging if needed
+    ) -> Any:
+        task_start_time = time.time()
+~~~~~
+~~~~~python
+    async def _execute_node_internal(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        params: Dict[str, Any],
+        requirements: Dict[str, Any], # Passed for logging if needed
+    ) -> Any:
+        task_start_time = time.time()
 ~~~~~
 
 ### 下一步建议
-一旦测试通过，我们的资源感知调度 MVP 就完成了。接下来，我们可以考虑实现 `cs.config` Provider，这将与现有的机制结合，实现“资源配置代码化”，即把资源需求定义在配置文件中，并在运行时注入到任务约束里。
+这次修复后，所有测试应该都能通过。建议运行完整测试套件，确认无误后提交本次关于资源感知调度的完整变更。

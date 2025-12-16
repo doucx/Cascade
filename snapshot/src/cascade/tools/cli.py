@@ -59,8 +59,6 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
             default,
             f"--{p.name}",
             help=p.description,
-            # Typer can infer type from default, but explicit is better
-            type=p.type,
         )
 
         sig_param = inspect.Parameter(

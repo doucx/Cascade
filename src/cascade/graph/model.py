@@ -12,7 +12,8 @@ class EdgeType(Enum):
     DATA = auto()           # A standard data dependency (the output of Source is an input to Target)
     CONDITION = auto()      # A control dependency for the run_if condition
     CONSTRAINT = auto()     # An implicit dependency for resolving dynamic constraints
-    IMPLICIT = auto()       # An implicit structural dependency (e.g., from Router routes)
+    IMPLICIT = auto()       # An implicit structural dependency
+    ROUTER_ROUTE = auto()   # A potential dependency branch for a Router
 
 
 @dataclass

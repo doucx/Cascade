@@ -25,6 +25,7 @@ from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
+from cascade.runtime.flow import FlowManager
 
 
 class Engine:
@@ -48,6 +49,7 @@ class Engine:
         # Internal resolvers
         self.arg_resolver = ArgumentResolver()
         self.constraint_resolver = ConstraintResolver()
+        self.flow_manager: Optional[FlowManager] = None
 
     def register(self, resource_def: ResourceDefinition):
         """Registers a resource provider function with the engine."""
@@ -75,30 +77,6 @@ class Engine:
                     raise ValueError(
                         f"Required parameter '{node.name}' was not provided."
                     )
-
-    def _should_skip(
-        self,
-        node: Node,
-        graph: Graph,
-        results: Dict[str, Any],
-        skipped_node_ids: set[str],
-    ) -> Optional[str]:
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-
-        # 1. Cascade Skip: Check only DATA and IMPLICIT edges (i.e., actual inputs and router routes)
-        for edge in incoming_edges:
-            if edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
-                if edge.source.id in skipped_node_ids:
-                    return "UpstreamSkipped"
-
-        # 2. Condition Check
-        for edge in incoming_edges:
-            if edge.edge_type == EdgeType.CONDITION:
-                condition_result = results.get(edge.source.id)
-                if not condition_result:
-                    return "ConditionFalse"
-
-        return None
 
     async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
@@ -151,10 +129,11 @@ class Engine:
         run_id: str,
     ) -> Any:
         graph = build_graph(target)
+        self.flow_manager = FlowManager(graph, target._uuid)
+        
         plan = self.solver.resolve(graph)  # Now returns List[List[Node]]
         results: Dict[str, Any] = {}
-        skipped_node_ids: set[str] = set()
-
+        
         # Inject params first (usually params are in the first stage or handled implicitly)
         # We need to flatten the plan to find params or iterate carefully.
         # Let's just iterate:
@@ -164,14 +143,15 @@ class Engine:
         for stage in plan:
             # Prepare tasks for this stage
             tasks_to_run = []
+            nodes_in_execution = []
             
             for node in stage:
                 if node.node_type == "param":
                     continue
 
-                skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
+                skip_reason = self.flow_manager.should_skip(node, results)
                 if skip_reason:
-                    skipped_node_ids.add(node.id)
+                    self.flow_manager.mark_skipped(node.id)
                     self.bus.publish(
                         TaskSkipped(
                             run_id=run_id,
@@ -188,6 +168,7 @@ class Engine:
                         node, graph, results, active_resources, run_id, params
                     )
                 )
+                nodes_in_execution.append(node)
 
             if not tasks_to_run:
                 continue
@@ -197,23 +178,17 @@ class Engine:
             stage_results = await asyncio.gather(*tasks_to_run)
 
             # Map results back to node IDs
-            # We need to reconstruct which result belongs to which node
-            # tasks_to_run order matches the iteration order.
-            # We need to re-iterate or capture the mapping.
-            # Let's capture the node IDs corresponding to tasks_to_run.
-            
-            runnable_nodes = []
-            for node in stage:
-                if node.node_type != "param" and node.id not in skipped_node_ids:
-                    runnable_nodes.append(node)
-            
-            for node, res in zip(runnable_nodes, stage_results):
+            # We use the captured nodes_in_execution list to ensure 1:1 mapping with tasks_to_run.
+            # This is critical because tasks executing in parallel might trigger pruning (via Router),
+            # which could change the skip status of nodes in this very list.
+            # If we re-filtered based on skip status here, we'd get a misalignment.
+            for node, res in zip(nodes_in_execution, stage_results):
                 results[node.id] = res
 
         # Final check: Was the target task executed?
         if target._uuid not in results:
             # If target was skipped itself, or skipped because of upstream.
-            if target._uuid in skipped_node_ids:
+            if self.flow_manager.is_skipped(target._uuid):
                 # We need to find the node name for the error message
                 # Flatten plan to search for the node
                 all_nodes = (node for stage in plan for node in stage)
@@ -362,6 +337,10 @@ class Engine:
                         node, graph, upstream_results
                     )
                     node.cache_policy.save(node.id, inputs_for_save, result)
+
+                # Notify flow manager of result to trigger potential pruning
+                if self.flow_manager:
+                    self.flow_manager.register_result(node.id, result)
 
                 return result
 

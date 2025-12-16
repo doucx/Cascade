@@ -1,1 +1,1 @@
-# Concepts: The Core Philosophy of Cascade
+# 核心概念：Cascade 的设计哲学

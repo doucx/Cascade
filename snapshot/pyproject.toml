@@ -32,6 +32,7 @@ dev = [
   "mkdocs",
   "mkdocs-material",
   "mkdocstrings[python]",
+  "mkdocs-static-i18n",
 ]
 template = ["jinja2"]
 http = ["aiohttp"]

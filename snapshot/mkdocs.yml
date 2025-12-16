@@ -5,9 +5,8 @@ edit_uri: ""
 
 theme:
   name: material
-  language: zh # 1. 将中文设置为默认语言
+  language: zh
   palette:
-    # Palette toggle for light vs dark mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
       toggle:
@@ -26,14 +25,6 @@ theme:
     - content.code.copy
     - content.code.annotate
 
-# 2. 定义可用的语言版本
-extra:
-  alternate:
-    - name: English
-      lang: en
-    - name: 中文
-      lang: zh
-
 plugins:
   - search
   - mkdocstrings:
@@ -41,9 +32,17 @@ plugins:
         python:
           options:
             show_root_heading: true
+  - i18n:
+      default_language: zh
+      languages:
+        zh:
+          name: 中文
+          build: true
+        en:
+          name: English
+          build: true
 
 nav:
-  # 3. 更新导航标题为中文，并指向基础 .md 文件
   - '首页': 'index.md'
   - '教程':
     - '快速上手': 'tutorial/getting-started.md'

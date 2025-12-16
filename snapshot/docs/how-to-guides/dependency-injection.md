@@ -1,1 +1,1 @@
-# How-to: Manage Resources with Dependency Injection
+# 操作指南：管理资源 (DI)

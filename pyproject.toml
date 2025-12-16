@@ -28,6 +28,11 @@ dev = [
   "pytest-cov",
   "mypy",
 ]
+template = ["jinja2"]
+
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+template = "cascade.providers.template:TemplateProvider"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

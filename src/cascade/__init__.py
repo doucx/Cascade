@@ -1,8 +1,5 @@
 import asyncio
-from typing import Any, Dict, Optional
-
-import asyncio
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 
 from .spec.task import task, LazyResult
 from .spec.common import Param
@@ -13,9 +10,9 @@ from .runtime.engine import Engine
 from .runtime.bus import MessageBus
 from .runtime.subscribers import HumanReadableLogSubscriber
 from .testing import override_resource
-from .stdlib import shell
 from .tools.preview import dry_run
 
+# Note: 'shell' is removed from static imports to support dynamic provider loading
 __all__ = [
     "task",
     "Param",
@@ -28,8 +25,19 @@ __all__ = [
     "inject",
     "Engine",
     "override_resource",
-    "shell",
+    "shell", # kept in __all__ for documentation/IDE discovery purposes, though resolved dynamically
 ]
+
+def __getattr__(name: str) -> Any:
+    """
+    Dynamic attribute access to support plugin providers.
+    E.g., accessing `cascade.shell` will look up the 'shell' provider.
+    """
+    from .providers import registry
+    try:
+        return registry.get(name)
+    except AttributeError:
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 def run(target: LazyResult, params: Optional[Dict[str, Any]] = None) -> Any:

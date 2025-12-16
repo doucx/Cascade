@@ -1,145 +1,61 @@
-好的，我们将更新 `cs.cli` 的生成逻辑，使其自动包含 `--log-level` 选项，并确保该值被正确传递给 `cascade.run`。
+我们将创建一个 `[COMMIT]` 计划，提交 `cs.cli` 对 `--log-level` 选项的支持。
 
-## [WIP] feat(cli): Add --log-level option to generated CLI
+## [COMMIT] feat(cli): Add --log-level option to generated CLI
 
 ### 用户需求
-需要通过 `cs.cli` 生成的命令行应用程序（Typer App）能够接收 `--log-level` 选项，并将其值透明地传递给底层的 `cascade.run` 函数。
+使 `cs.cli` 生成的命令行工具自动支持 `--log-level` 选项，以控制运行时日志输出，保持与 `cs.run` API 的一致性。
 
 ### 评论
-这个修复是完成日志等级功能链条的关键一步。它将确保用户无论是通过 Python 脚本还是 CLI 运行工作流，都能保持一致的日志控制体验。由于 `log_level` 是 `cs.run` 的固定参数，它需要被硬编码到 CLI 签名中。
+该功能极大地增强了 `Cascade` 作为独立 CLI 工具的可控性。通过将 `log_level` 硬编码为 Typer 选项，我们确保所有生成的应用都能即时利用日志过滤功能，提升了开发者体验 (DX)。
 
 ### 目标
-1.  在 `src/cascade/tools/cli.py` 中，修改 `main` 函数，使其能够提取 `log_level` 并将其传递给 `cascade_run`。
-2.  修改元编程逻辑，在生成的 CLI 签名中显式添加 `--log-level` 选项定义，包括帮助文本和默认值。
-3.  更新现有测试，确认 `--log-level` 选项出现在帮助信息中。
+创建一个 Git 提交，包含 `src/cascade/tools/cli.py` 中对 `log_level` 参数的动态注入和处理逻辑，以及对相关测试的更新。
 
 ### 基本原理
-`cs.cli` 依赖 Python 的 `inspect` 模块动态构建 Typer 函数签名。我们将手动创建一个 `log_level` 的 `inspect.Parameter` 对象，将其插入到动态签名中。在 `main` 函数的实现中，我们通过 `kwargs.pop()` 提取 `log_level`，然后将其作为关键字参数传递给 `cascade_run`。
+通过元编程向 `cs.cli` 内部的 `main` 函数签名中注入 `log_level` 参数，并在实际调用 `cascade.run` 时通过 `kwargs` 提取并传递该参数。这是一种非侵入式地扩展生成的 CLI 接口的有效方法。
 
 ### 标签
-#intent/build #flow/ready #priority/medium
-#comp/cli #comp/runtime #concept/ui #scope/dx
+#intent/build #flow/ready #priority/high
+#comp/cli #comp/tests #concept/ui #scope/dx
 #ai/instruct
 #task/domain/cli #task/object/cli-options #task/action/implementation
-#task/state/begin
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 CLI 生成逻辑，添加 `log_level` 选项
+#### Acts 1: 提交 CLI 增强功能及其测试
 
-修改 `src/cascade/tools/cli.py` 文件中的 `main` 函数和签名生成逻辑，以包含新的 `log_level` 选项。
+将所有修改文件添加到 Git 暂存区，并执行提交。
 
 ~~~~~act
-patch_file
+git_add
 src/cascade/tools/cli.py
-~~~~~
-~~~~~python
-    def main(**kwargs):
-        """The actual function that Typer will wrap."""
-        from .. import run as cascade_run
-
-        # Filter out None values so they don't override defaults in cs.run
-        run_params = {k: v for k, v in kwargs.items() if v is not None}
-        cascade_run(target, params=run_params)
-
-    # --- Metaprogramming to create the dynamic signature ---
-    sig_params = []
-    for p in params.values():
-        # Determine the default value for Typer
-~~~~~
-~~~~~python
-    def main(**kwargs):
-        """The actual function that Typer will wrap."""
-        from .. import run as cascade_run
-
-        # Extract log_level explicitly since it's injected by Typer via the dynamic signature
-        log_level = kwargs.pop("log_level", "INFO")
-
-        # Filter out None values so they don't override defaults in cs.run
-        run_params = {k: v for k, v in kwargs.items() if v is not None}
-        cascade_run(target, params=run_params, log_level=log_level)
-
-    # --- Metaprogramming to create the dynamic signature ---
-    sig_params = []
-
-    # 1. Add log_level as a standard CLI option
-    log_level_param = inspect.Parameter(
-        name="log_level",
-        kind=inspect.Parameter.KEYWORD_ONLY,
-        default=typer.Option(
-            "INFO",
-            "--log-level",
-            help="Minimum level for console logging (DEBUG, INFO, WARNING, ERROR).",
-        ),
-        annotation=str,
-    )
-    sig_params.append(log_level_param)
-
-    # 2. Add user-defined parameters
-    for p in params.values():
-        # Determine the default value for Typer
-~~~~~
-
-#### Acts 2: 更新 CLI 测试用例
-
-更新 `tests/tools/test_cli.py` 中的帮助信息测试，以确保新的 `--log-level` 选项被正确显示。
-
-~~~~~act
-patch_file
 tests/tools/test_cli.py
 ~~~~~
-~~~~~python
-def test_cli_generator_help_message():
-    """Tests that the --help message is generated correctly from Param descriptions."""
 
-    name_param = cs.Param("name", description="The name to greet.")
-    count_param = cs.Param(
-        "count", default=1, type=int, description="Number of times to greet."
-    )
-
-    @cs.task
-    def dummy(name: str, count: int):
-        pass
-
-    workflow = dummy(name=name_param, count=count_param)
-    app = cs.cli(workflow)
-
-    result = runner.invoke(app, ["--help"])
-
-    assert result.exit_code == 0
-    assert "The name to greet." in result.stdout
-    assert "Number of times to greet." in result.stdout
-    assert "--name" in result.stdout
-    assert "--count" in result.stdout
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-def test_cli_generator_help_message():
-    """Tests that the --help message is generated correctly from Param descriptions, including log_level."""
+~~~~~text
+feat(cli): Add --log-level option to generated CLI
 
-    name_param = cs.Param("name", description="The name to greet.")
-    count_param = cs.Param(
-        "count", default=1, type=int, description="Number of times to greet."
-    )
+Enhances `cascade.cli` to automatically include a `--log-level` option (defaults to INFO) in the generated Typer application signature.
 
-    @cs.task
-    def dummy(name: str, count: int):
-        pass
+The core implementation in `cli.py` now explicitly injects the `log_level` parameter into the dynamic signature and extracts it from `kwargs` before passing it down to `cascade.run()`.
 
-    workflow = dummy(name=name_param, count=count_param)
-    app = cs.cli(workflow)
-
-    result = runner.invoke(app, ["--help"])
-
-    assert result.exit_code == 0
-    assert "The name to greet." in result.stdout
-    assert "Number of times to greet." in result.stdout
-    assert "--name" in result.stdout
-    assert "--count" in result.stdout
-    assert "--log-level" in result.stdout
-    assert "Minimum level for console logging" in result.stdout
+This ensures that users can control the verbosity of the runtime logs when executing workflows via the generated command-line interface.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 `cs.cli` 的更新。现在需要执行测试，如果测试通过，就可以提交本次修改。
+至此，我们已经完成了用户提出的日志流向和日志等级的实现，并在主要的入口 (`cs.run` 和 `cs.cli`) 中暴露了控制参数。
+
+根据 `规范/潜在改进点与未来工作.md`，我们已经完成了大部分**阶段四：生态系统与核心工具**的工作。唯一尚未实现的重大改进是**高级求解器**。
+
+我建议下一步着手实现 **高级求解器 (`CSPSolver`)** 的架构和基础实现，以解决我们在 `开发/债务分析251216.md` 中识别出的**架构债**（贪婪/非优化调度）。
+
+**具体建议：**
+1.  分析并规划 `CSPSolver` 适配器的架构。
+2.  在 `pyproject.toml` 中添加 `python-constraint` 可选依赖。
+3.  实现 `CSPSolver` 的核心 `resolve` 逻辑。

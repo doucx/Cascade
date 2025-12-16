@@ -1,11 +1,12 @@
 {
-    "run.started": "▶️  Starting Run for targets: [{targets}]",
-    "run.started_with_params": "   With params: {params}",
-    "run.finished_success": "🏁 Run finished successfully in {duration:.2f}s.",
-    "run.finished_failure": "💥 Run failed after {duration:.2f}s: {error}",
-    "task.started": "  ⏳ Running task `{task_name}`...",
-    "task.finished_success": "  ✅ Finished task `{task_name}` in {duration:.2f}s",
-    "task.finished_failure": "  ❌ Failed task `{task_name}` after {duration:.2f}s: {error}",
-    "task.skipped": "  ⏩ Skipped task `{task_name}` (Reason: {reason})",
-    "task.retrying": "  ⚠️  Retrying task `{task_name}` (Attempt {attempt}/{max_attempts}) in {delay:.2f}s... Error: {error}"
+    "run.started": "▶️  Running workflow for target: {target_tasks}",
+    "run.started_with_params": "   - with params: {params}",
+    "run.finished_success": "✅ Run finished successfully in {duration:.2f}s.",
+    "run.finished_failure": "❌ Run failed after {duration:.2f}s. Error: {error}",
+
+    "task.started": "   - Task '{task_name}' started.",
+    "task.finished_success": "   - ✅ Task '{task_name}' succeeded in {duration:.2f}s.",
+    "task.finished_failure": "   - ❌ Task '{task_name}' failed after {duration:.2f}s. Error: {error}",
+    "task.skipped": "   - ⚪ Task '{task_name}' skipped. Reason: {reason}",
+    "task.retrying": "   - ⚠️ Task '{task_name}' failed, retrying (attempt {attempt}/{max_attempts}). Delaying for {delay:.2f}s. Error: {error}"
 }

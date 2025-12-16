@@ -1,0 +1,60 @@
+site_name: Cascade
+site_description: 'A modern, declarative automation library for Python.'
+repo_url: https://github.com/doucx/Cascade
+edit_uri: ""
+
+theme:
+  name: material
+  language: zh # 1. 将中文设置为默认语言
+  palette:
+    # Palette toggle for light vs dark mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.integrate
+    - content.code.copy
+    - content.code.annotate
+
+# 2. 定义可用的语言版本
+extra:
+  alternate:
+    - name: English
+      lang: en
+    - name: 中文
+      lang: zh
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+
+nav:
+  # 3. 更新导航标题为中文，并指向基础 .md 文件
+  - '首页': 'index.md'
+  - '教程':
+    - '快速上手': 'tutorial/getting-started.md'
+  - '操作指南':
+    - '定义计算': 'how-to-guides/defining-computations.md'
+    - '使用内置 Provider': 'how-to-guides/using-providers.md'
+    - '构建复杂工作流': 'how-to-guides/advanced-workflows.md'
+    - '管理资源 (DI)': 'how-to-guides/dependency-injection.md'
+    - '提升健壮性': 'how-to-guides/improving-robustness.md'
+  - '概念':
+    - '核心哲学': 'concepts/philosophy.md'
+  - '参考':
+    - 'API 参考': 'reference/api.md'
+    - 'CLI 工具': 'reference/cli-tools.md'

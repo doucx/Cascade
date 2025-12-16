@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 引入语义消息总线以实现终极测试解耦", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765883566.2718716, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: Correct test failures from messaging system refactor", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765883667.3291807, "duration_ms": 0}}

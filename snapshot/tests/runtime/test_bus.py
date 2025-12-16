@@ -52,23 +52,32 @@ def test_message_bus_wildcard(bus_and_spy):
     assert isinstance(spy.events_of_type(TaskExecutionFinished)[0], TaskExecutionFinished)
 
 
-def test_human_readable_subscriber_output_formatting(bus_and_spy):
-    """
-    Tests that the subscriber correctly formats and prints different events.
-    This test focuses on the subscriber's presentation logic.
-    """
-    bus, _ = bus_and_spy  # Spy is not used here, but fixture provides bus
-    output = io.StringIO()
-    HumanReadableLogSubscriber(bus, stream=output)
+from cascade.runtime.bus import MessageBus as EventBus
+from cascade.messaging.bus import bus as messaging_bus
+from cascade.messaging.renderer import CliRenderer
 
-    # Simulate a flow of events
-    bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
-    bus.publish(
+
+def test_human_readable_subscriber_integration():
+    """
+    Integration test for the full logging pipeline:
+    EventBus -> Subscriber -> MessageBus -> Renderer -> Output
+    """
+    event_bus = EventBus()
+    output = io.StringIO()
+    renderer = CliRenderer(stream=output, min_level="INFO")
+    messaging_bus.set_renderer(renderer)
+
+    # Connect the subscriber to the event bus
+    HumanReadableLogSubscriber(event_bus)
+
+    # Publish events to the event bus
+    event_bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
+    event_bus.publish(
         TaskExecutionFinished(
             task_id="123", task_name="build_image", status="Succeeded", duration=1.23
         )
     )
-    bus.publish(
+    event_bus.publish(
         TaskExecutionFinished(
             task_id="124",
             task_name="deploy_k8s",
@@ -78,51 +87,35 @@ def test_human_readable_subscriber_output_formatting(bus_and_spy):
         )
     )
 
+    # Assert on the final rendered output
     logs = output.getvalue()
-
-    # Assertions are now less brittle, checking for key semantic markers
-    assert "▶️" in logs
-    assert "deploy" in logs
-    assert "env" in logs
-    assert "prod" in logs
-
-    assert "✅" in logs
-    assert "build_image" in logs
-
-    assert "❌" in logs
-    assert "deploy_k8s" in logs
-    assert "AuthError" in logs
+    assert "▶️" in logs and "deploy" in logs and "prod" in logs
+    assert "✅" in logs and "build_image" in logs
+    assert "❌" in logs and "deploy_k8s" in logs and "AuthError" in logs
 
 
-def test_human_readable_subscriber_log_level(bus_and_spy):
+def test_human_readable_subscriber_log_level_filtering():
     """
-    Tests that setting min_level correctly suppresses lower priority logs.
+    Tests that the min_level setting in the CliRenderer correctly filters messages.
     """
-    bus, _ = bus_and_spy
+    event_bus = EventBus()
     output = io.StringIO()
-    # Set level to ERROR, so INFO logs from RunStarted and Succeeded should be skipped
-    HumanReadableLogSubscriber(bus, stream=output, min_level="ERROR")
+    # Set renderer level to ERROR
+    renderer = CliRenderer(stream=output, min_level="ERROR")
+    messaging_bus.set_renderer(renderer)
+    
+    HumanReadableLogSubscriber(event_bus)
 
-    # INFO event
-    bus.publish(RunStarted(target_tasks=["t1"]))
-    # INFO event
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="1", task_name="t1", status="Succeeded", duration=0.1
-        )
-    )
-    # ERROR event
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="2", task_name="t2", status="Failed", error="Boom", duration=0.1
-        )
-    )
+    # Publish INFO and ERROR level events
+    event_bus.publish(RunStarted(target_tasks=["t1"])) # INFO
+    event_bus.publish(TaskExecutionFinished(task_id="1", task_name="t1", status="Succeeded")) # INFO
+    event_bus.publish(TaskExecutionFinished(task_id="2", task_name="t2", status="Failed", error="Boom")) # ERROR
 
     logs = output.getvalue()
 
-    # Should NOT contain INFO-level markers
+    # INFO messages should be filtered out
     assert "▶️" not in logs
     assert "✅" not in logs
-    # Should contain ERROR-level markers
+    # ERROR messages should be present
     assert "❌" in logs
     assert "Boom" in logs

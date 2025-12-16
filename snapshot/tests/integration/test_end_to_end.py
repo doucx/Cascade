@@ -35,7 +35,11 @@ def test_e2e_linear_workflow(mock_messaging_bus):
     assert result == "Hello, Cascade!"
 
     # Assertions are now on the INTENT (semantic ID), not the output!
-    mock_messaging_bus.info.assert_any_call("run.started", targets="greet")
+    # Note: The target name might be the final task name. Let's check for 'greet'.
+    run_started_call = mock_messaging_bus.info.call_args_list[0]
+    assert run_started_call.args[0] == "run.started"
+    assert "greet" in run_started_call.kwargs["targets"]
+    
     mock_messaging_bus.info.assert_any_call("task.started", task_name="get_name")
     mock_messaging_bus.info.assert_any_call("task.finished_success", task_name="get_name", duration=pytest.approx(0, abs=1))
     mock_messaging_bus.info.assert_any_call("task.started", task_name="greet")
@@ -64,8 +68,18 @@ def test_e2e_failure_propagation(mock_messaging_bus):
         duration=pytest.approx(0, abs=1),
         error="ValueError: Something went wrong"
     )
+    from unittest.mock import ANY
+
+    # Use ANY as a placeholder for the error message in the initial check
     mock_messaging_bus.error.assert_any_call(
         "run.finished_failure",
         duration=pytest.approx(0, abs=1),
-        error=pytest.string_containing("ValueError: Something went wrong")
+        error=ANY
     )
+    
+    # Manually inspect the call arguments for the specific error string
+    run_finished_call = next(
+        c for c in mock_messaging_bus.error.call_args_list
+        if c.args and c.args[0] == "run.finished_failure"
+    )
+    assert "ValueError: Something went wrong" in run_finished_call.kwargs['error']

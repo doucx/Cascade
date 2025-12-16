@@ -78,3 +78,35 @@ def test_human_readable_subscriber():
     assert "✅ Finished task `build_image` in 1.23s" in logs
     assert "❌ Failed task `deploy_k8s`" in logs
     assert "AuthError" in logs
+
+
+def test_subscriber_log_level_filtering():
+    """Test that setting min_level suppresses lower priority logs."""
+    bus = MessageBus()
+    output = io.StringIO()
+    # Set level to ERROR, so INFO logs should be skipped
+    HumanReadableLogSubscriber(bus, stream=output, min_level="ERROR")
+
+    # INFO event
+    bus.publish(RunStarted(target_tasks=["t1"]))
+    # INFO event
+    bus.publish(
+        TaskExecutionFinished(
+            task_id="1", task_name="t1", status="Succeeded", duration=0.1
+        )
+    )
+    # ERROR event
+    bus.publish(
+        TaskExecutionFinished(
+            task_id="2", task_name="t2", status="Failed", error="Boom", duration=0.1
+        )
+    )
+
+    logs = output.getvalue()
+
+    # Should NOT contain INFO logs
+    assert "Starting Run" not in logs
+    assert "Finished task `t1`" not in logs
+    # Should contain ERROR logs
+    assert "Failed task `t2`" in logs
+    assert "Boom" in logs

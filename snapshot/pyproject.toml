@@ -29,5 +29,8 @@ dev = [
   "mypy",
 ]
 
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

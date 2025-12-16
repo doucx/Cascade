@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(cli): 修复 CLI 工具不输出工作流执行结果的问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765894585.090256, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(core): 通过解耦输入契约实现图同构化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765894660.1707504, "duration_ms": 0}}

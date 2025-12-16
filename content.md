@@ -1,56 +1,92 @@
-简要回答
-CLI 工具在运行工作流后未打印最终结果，导致测试无法捕获预期输出。我将修改 `src/cascade/tools/cli.py` 以显式打印执行结果。
+好的，所有测试都已通过。现在我们将把这次重构作为一个完整的逻辑单元提交，并检查当前的工作区状态。
 
-## [WIP] fix(cli): 修复 CLI 工具不输出工作流执行结果的问题
-
-### 错误分析
-*   **现象**: `tests/tools/test_cli.py::test_cli_generator_from_context` 失败。断言 `'Hello World Hello World' in output` 未通过，输出中仅包含运行时的日志信息。
-*   **原因**: `src/cascade/tools/cli.py` 中的 `main` 函数调用了 `cascade_run`，但**丢弃了返回值**。`cascade_run` 负责执行工作流并返回结果，但它本身不负责将结果打印到控制台（这是调用者的职责）。因此，`Typer` 应用执行完毕后，stdout 中没有任何关于业务结果的输出。
-*   **解决方案**: 修改 `main` 函数，捕获 `cascade_run` 的返回值，如果不为 `None`，则使用 `print()` 将其输出到 stdout。
+## [COMMIT] refactor(core): 通过解耦输入契约实现图同构化
 
 ### 用户需求
-修复 CLI 测试失败，确保通过 `cs.cli` 生成的命令行工具能够将工作流的最终结果输出到标准输出，以便用户查看或被其他工具管道化使用。
+提交所有关于 v1.3 架构重构的变更，该重构旨在将 `Param`/`Env` 定义与图构建解耦，并修复由此引入的 Bug。
 
 ### 评论
-这是一个简单的疏忽。CLI 工具的主要作用之一就是展示结果。
+这是一次关键的架构重构。通过引入 `InputSpec` 和 `WorkflowContext`，我们彻底解决了 `Param` 作为特殊节点带来的概念不一致问题，并极大地提升了 `cs.cli` 的性能和独立性。工作流图现在是完全同构的，所有节点都是 `LazyResult`，这简化了 `Engine` 和 `GraphBuilder` 的核心逻辑，使系统更加健壮和可扩展。
 
 ### 目标
-修改 `src/cascade/tools/cli.py`，在工作流执行成功后打印结果。
+1.  将所有与 v1.3 重构相关的、已修改和新增的文件添加到 Git 暂存区。
+2.  创建一个清晰、详尽的 Git Commit，记录本次重构的核心思想和收益。
+3.  检查提交后工作区的状态，确保没有遗留的未跟踪文件。
 
 ### 基本原理
-在 `cli.py` 的闭包 `main` 函数中添加结果打印逻辑。
+本次重构是一个逻辑上完整的工作单元，它解决了 `Cascade` v1.2 中的核心设计问题，并成功通过了所有测试。现在是将其固化到版本历史中的最佳时机。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/cli #task/domain/core #task/object/cli #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/core #comp/cli #comp/runtime #concept/state #scope/core #scope/api #task/domain/core #task/object/param #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 CLI 输出逻辑
+#### Acts 1: 暂存所有相关变更
 
-在 `src/cascade/tools/cli.py` 中，将 `cascade_run` 的结果捕获并打印。
+我们将所有已修改和新增的文件添加到 Git 暂存区。
 
 ~~~~~act
-patch_file
+git_add
+src/cascade/__init__.py
+src/cascade/context.py
+src/cascade/graph/build.py
+src/cascade/internal/__init__.py
+src/cascade/internal/inputs.py
+src/cascade/runtime/engine.py
+src/cascade/runtime/resolvers.py
+src/cascade/spec/input.py
+src/cascade/spec/task.py
 src/cascade/tools/cli.py
+tests/graph/test_build.py
+tests/graph/test_serialize.py
+tests/providers/test_sql.py
+tests/runtime/test_flow_manager.py
+tests/runtime/test_input_execution.py
+tests/spec/test_input_context.py
+tests/tools/test_cli.py
 ~~~~~
-~~~~~python
-        # Filter out None values so they don't override defaults in cs.run
-        run_params = {k: v for k, v in kwargs.items() if v is not None}
-        cascade_run(target, params=run_params, log_level=log_level, log_format=log_format)
 
-    # --- Metaprogramming to create the dynamic signature ---
+#### Acts 2: 提交重构
+
+执行 Git 提交，并附上详细的说明。
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-        # Filter out None values so they don't override defaults in cs.run
-        run_params = {k: v for k, v in kwargs.items() if v is not None}
-        result = cascade_run(target, params=run_params, log_level=log_level, log_format=log_format)
-        if result is not None:
-            print(result)
+~~~~~text
+refactor(core): Homogenize graph by decoupling input specs
 
-    # --- Metaprogramming to create the dynamic signature ---
+This commit implements the Cascade v1.3 architecture for handling external inputs, moving from special `param` node types to a fully homogeneous graph.
+
+Key Changes:
+
+1.  **Homogeneous Graph**: The special `node_type="param"` has been eliminated. All nodes in the computation graph are now standard `LazyResult` objects, simplifying the `GraphBuilder` and `Engine`.
+
+2.  **Input Specification (`spec.input`)**: Introduced `InputSpec`, `ParamSpec`, and `EnvSpec` dataclasses. These objects hold the metadata (name, default, type, description) for external inputs, separating the *what* from the *how*.
+
+3.  **Workflow Context (`context.py`)**: A new `WorkflowContext` (using `contextvars`) acts as a registry for `InputSpec` objects. This decouples the input contract definition from the graph structure itself.
+
+4.  **Factory Functions (`cs.Param`, `cs.Env`)**: `cs.Param` and the new `cs.Env` are no longer spec objects but factory functions. They perform two roles:
+    - Register their corresponding `Spec` object in the `WorkflowContext`.
+    - Return a standard `LazyResult` that wraps an internal task (e.g., `_get_param_value`) responsible for fetching the value at runtime.
+
+5.  **Decoupled CLI (`tools.cli`)**: `cs.cli` no longer needs to build the entire computation graph to discover parameters. It now reads directly from the `WorkflowContext`, making CLI generation significantly faster and more robust.
+
+6.  **Bug Fixes**:
+    - `ArgumentResolver`: Fixed a bug where it failed to identify internal tasks (`_get_param_value`) because it was comparing a `Task` instance to a raw function. The check is now correctly `node.callable_obj is task.func`.
+    - `tools.cli`: Fixed the CLI tool to print the final result of a workflow to stdout.
+    - `tests.tools.test_cli`: Resolved a variable scope issue (`NameError`) caused by a local import shadowing the module-level import within a closure.
+~~~~~
+
+#### Acts 3: 检查最终状态
+
+检查当前 Git 仓库的状态以确认工作区是干净的。
+
+~~~~~act
+git_status
 ~~~~~
 
 ### 下一步建议
-再次运行测试。如果通过，则所有已知的 v1.3 重构问题均已解决。我们可以着手准备提交。
+我们已经成功完成了 v1.3 的核心重构。现在可以开始处理 `Router` 剪枝的逻辑了，因为我们已经为此奠定了坚实的架构基础。

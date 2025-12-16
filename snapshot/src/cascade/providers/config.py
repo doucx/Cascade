@@ -6,46 +6,34 @@ except ImportError:
     yaml = None
 
 from cascade.spec.task import task, LazyResult
-from cascade.spec.resource import inject
-from cascade.providers import LazyFactory
+from cascade.providers import LazyFactory, Provider
+import asyncio
 
-
-class ConfigProvider:
-    name = "config"
-
-    def create_factory(self) -> LazyFactory:
-        if yaml is None:
-            # We enforce yaml as the standard for configuration lookup due to common usage
-            raise ImportError(
-                "The 'PyYAML' library is required to use the config provider. "
-                "Please install it with: pip install cascade-py[config]"
-            )
-        return _config_factory
-
-
-def _config_factory(key: Union[str, LazyResult]) -> LazyResult[Any]:
+@task(name="load_yaml")
+async def _read_yaml_task(path: str) -> Dict[str, Any]:
     """
-    Factory function exposed as cs.config.
-
-    Args:
-        key: The dot-separated configuration key string, or a LazyResult
-             that resolves to the key string.
-    
-    Returns:
-        A LazyResult that resolves to the configuration value.
+    Asynchronously reads and parses a YAML file.
     """
-    # The actual config data (the dict) is assumed to be registered as a resource.
-    # This task depends on an injected resource named 'config_data'.
-    return _config_lookup_task(key=key, config=inject("config_data"))
+    if yaml is None:
+        raise ImportError(
+            "The 'PyYAML' library is required to use the YAML loader. "
+            "Please install it with: pip install cascade-py[config]"
+        )
+
+    def blocking_read():
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    return await asyncio.to_thread(blocking_read)
 
 
-@task(name="config_lookup")
-def _config_lookup_task(key: str, config: Dict[str, Any]) -> Any:
+@task(name="lookup")
+def _lookup_task(source: Dict[str, Any], key: str) -> Any:
     """
-    Executes a dot-separated lookup in the provided configuration dictionary.
+    Executes a dot-separated lookup in the provided dictionary.
     """
     parts = key.split(".")
-    current = config
+    current = source
     
     for part in parts:
         if isinstance(current, dict):
@@ -67,3 +55,17 @@ def _config_lookup_task(key: str, config: Dict[str, Any]) -> Any:
             )
 
     return current
+
+
+class YamlLoaderProvider(Provider):
+    name = "load_yaml"
+
+    def create_factory(self) -> LazyFactory:
+        return _read_yaml_task
+
+
+class LookupProvider(Provider):
+    name = "lookup"
+
+    def create_factory(self) -> LazyFactory:
+        return _lookup_task

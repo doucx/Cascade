@@ -22,9 +22,7 @@ class LocalExecutor:
         """
         # 1. Prepare arguments from all sources
         # Literals are the base
-        final_kwargs = {
-            k: v for k, v in node.literal_inputs.items() if not k.isdigit()
-        }
+        final_kwargs = {k: v for k, v in node.literal_inputs.items() if not k.isdigit()}
         positional_args = {
             int(k): v for k, v in node.literal_inputs.items() if k.isdigit()
         }
@@ -35,13 +33,13 @@ class LocalExecutor:
             # Skip control flow edges
             if edge.arg_name == "_condition":
                 continue
-            
+
             # Skip implicit dependencies (used for routing/ordering only)
             if edge.arg_name == "_implicit_dependency":
                 continue
 
             result = upstream_results[edge.source.id]
-            
+
             # Handle Dynamic Routing
             if edge.router:
                 # 'result' is the value of the selector (e.g., "csv")
@@ -53,10 +51,10 @@ class LocalExecutor:
                         f"Router selector returned '{selector_value}', "
                         f"but no matching route found in {list(edge.router.routes.keys())}"
                     )
-                
+
                 # Retrieve the actual result of the selected task
                 actual_value = upstream_results[selected_lazy_result._uuid]
-                
+
                 if edge.arg_name.isdigit():
                     positional_args[int(edge.arg_name)] = actual_value
                 else:
@@ -74,7 +72,9 @@ class LocalExecutor:
         # A param node has no callable, so it shouldn't be executed
         if node.callable_obj is None:
             # This should not be reached due to Engine's skip, but as a safeguard:
-            raise TypeError(f"Node '{node.name}' of type '{node.node_type}' is not executable.")
+            raise TypeError(
+                f"Node '{node.name}' of type '{node.node_type}' is not executable."
+            )
 
         # 2. Prepare arguments from injected resources
         sig = inspect.signature(node.callable_obj)
@@ -98,7 +98,9 @@ class LocalExecutor:
                 if arg.resource_name in resource_context:
                     resolved_args.append(resource_context[arg.resource_name])
                 else:
-                    raise NameError(f"Resource '{arg.resource_name}' not found in context.")
+                    raise NameError(
+                        f"Resource '{arg.resource_name}' not found in context."
+                    )
             else:
                 resolved_args.append(arg)
         args = resolved_args
@@ -108,7 +110,9 @@ class LocalExecutor:
                 if value.resource_name in resource_context:
                     final_kwargs[key] = resource_context[value.resource_name]
                 else:
-                    raise NameError(f"Resource '{value.resource_name}' not found in context.")
+                    raise NameError(
+                        f"Resource '{value.resource_name}' not found in context."
+                    )
 
         # 4. Combine arguments and execute
         # Injected resources take precedence over other inputs

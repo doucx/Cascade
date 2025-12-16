@@ -1,13 +1,15 @@
 import os
 from typing import Union
 
+
 class File:
     """
     A declarative wrapper for a file system path.
-    
+
     It provides convenience methods for I/O operations and can be used
     to explicitly declare file dependencies in task signatures.
     """
+
     def __init__(self, path: Union[str, "File"]):
         self.path = str(path)
 
@@ -23,7 +25,7 @@ class File:
 
     def write_text(self, data: str, encoding="utf-8") -> None:
         """
-        Writes a string to the file. 
+        Writes a string to the file.
         Automatically creates parent directories if they don't exist.
         """
         os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)

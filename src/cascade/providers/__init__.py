@@ -2,10 +2,12 @@ import sys
 from typing import Callable, Any, Dict, Protocol, Type
 import importlib.metadata
 
+
 class LazyFactory(Protocol):
     """
     Protocol for objects that can serve as task factories (must support .map).
     """
+
     def map(self, **kwargs) -> Any: ...
     def __call__(self, *args, **kwargs) -> Any: ...
 
@@ -14,6 +16,7 @@ class Provider(Protocol):
     """
     Interface that all Cascade providers must implement.
     """
+
     @property
     def name(self) -> str:
         """The name of the provider, used as the accessor (e.g., 'shell' -> cs.shell)."""
@@ -28,8 +31,9 @@ class ProviderRegistry:
     """
     Manages the discovery and loading of Cascade providers.
     """
+
     _instance = None
-    
+
     def __init__(self):
         self._providers: Dict[str, LazyFactory] = {}
         self._loaded = False
@@ -48,10 +52,10 @@ class ProviderRegistry:
         if not self._loaded:
             self._discover_entry_points()
             self._loaded = True
-        
+
         if name not in self._providers:
             raise AttributeError(f"Cascade provider '{name}' not found.")
-        
+
         return self._providers[name]
 
     def register(self, name: str, factory: LazyFactory):
@@ -63,7 +67,9 @@ class ProviderRegistry:
         if sys.version_info >= (3, 10):
             entry_points = importlib.metadata.entry_points(group="cascade.providers")
         else:
-            entry_points = importlib.metadata.entry_points().get("cascade.providers", [])
+            entry_points = importlib.metadata.entry_points().get(
+                "cascade.providers", []
+            )
 
         for ep in entry_points:
             try:
@@ -72,14 +78,21 @@ class ProviderRegistry:
                 # Instantiate it
                 provider_instance = provider_cls()
                 # Validate interface
-                if not hasattr(provider_instance, "create_factory") or not hasattr(provider_instance, "name"):
-                    print(f"Warning: Plugin {ep.name} does not implement Provider protocol. Skipping.")
+                if not hasattr(provider_instance, "create_factory") or not hasattr(
+                    provider_instance, "name"
+                ):
+                    print(
+                        f"Warning: Plugin {ep.name} does not implement Provider protocol. Skipping."
+                    )
                     continue
-                
+
                 # Register
-                self._providers[provider_instance.name] = provider_instance.create_factory()
+                self._providers[provider_instance.name] = (
+                    provider_instance.create_factory()
+                )
             except Exception as e:
                 print(f"Error loading plugin {ep.name}: {e}")
+
 
 # Global registry accessor
 registry = ProviderRegistry.instance()

@@ -25,8 +25,9 @@ __all__ = [
     "inject",
     "Engine",
     "override_resource",
-    "shell", # kept in __all__ for documentation/IDE discovery purposes, though resolved dynamically
+    "shell",  # kept in __all__ for documentation/IDE discovery purposes, though resolved dynamically
 ]
+
 
 def __getattr__(name: str) -> Any:
     """
@@ -34,6 +35,7 @@ def __getattr__(name: str) -> Any:
     E.g., accessing `cascade.shell` will look up the 'shell' provider.
     """
     from .providers import registry
+
     try:
         return registry.get(name)
     except AttributeError:

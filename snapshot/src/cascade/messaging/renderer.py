@@ -1,7 +1,7 @@
 import sys
 import json
 import time
-from typing import TextIO
+from typing import TextIO, Optional
 from datetime import datetime, timezone
 
 from .bus import MessageStore, Renderer
@@ -21,11 +21,11 @@ class CliRenderer:
     def __init__(
         self,
         store: MessageStore,
-        stream: TextIO = sys.stderr,
+        stream: Optional[TextIO] = None,
         min_level: str = "INFO",
     ):
         self._store = store
-        self._stream = stream
+        self._stream = stream if stream is not None else sys.stderr
         self._min_level_val = LOG_LEVELS.get(min_level.upper(), 20)
 
     def render(self, msg_id: str, level: str, **kwargs):
@@ -41,10 +41,10 @@ class JsonRenderer:
     """
     def __init__(
         self,
-        stream: TextIO = sys.stderr,
+        stream: Optional[TextIO] = None,
         min_level: str = "INFO",
     ):
-        self._stream = stream
+        self._stream = stream if stream is not None else sys.stderr
         self._min_level_val = LOG_LEVELS.get(min_level.upper(), 20)
 
     def render(self, msg_id: str, level: str, **kwargs):

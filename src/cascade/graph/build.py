@@ -1,6 +1,6 @@
 from typing import Dict, Any
-from cascade.graph.model import Graph, Node, Edge
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult  # NEW
+from cascade.graph.model import Graph, Node, Edge, EdgeType
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.common import Param
 from cascade.spec.routing import Router
 
@@ -61,7 +61,12 @@ class GraphBuilder:
 
         if result._condition:
             source_node = self._visit(result._condition)
-            edge = Edge(source=source_node, target=node, arg_name="_condition")
+            edge = Edge(
+                source=source_node, 
+                target=node, 
+                arg_name="_condition", 
+                edge_type=EdgeType.CONDITION
+            )
             self.graph.add_edge(edge)
 
         # Process dynamic constraints
@@ -71,11 +76,12 @@ class GraphBuilder:
             for res_name, req_value in result._constraints.requirements.items():
                 if isinstance(req_value, (LazyResult, MappedLazyResult)):
                     source_node = self._visit(req_value)
-                    # Use a special prefix for constraint edges so executors can ignore them
+                    # Use EdgeType.CONSTRAINT instead of magic arg_name prefix
                     edge = Edge(
                         source=source_node,
                         target=node,
-                        arg_name=f"_constraint:{res_name}",
+                        arg_name=res_name, # Use resource name as arg_name
+                        edge_type=EdgeType.CONSTRAINT
                     )
                     self.graph.add_edge(edge)
 
@@ -100,7 +106,12 @@ class GraphBuilder:
 
         if result._condition:
             source_node = self._visit(result._condition)
-            edge = Edge(source=source_node, target=node, arg_name="_condition")
+            edge = Edge(
+                source=source_node, 
+                target=node, 
+                arg_name="_condition", 
+                edge_type=EdgeType.CONDITION
+            )
             self.graph.add_edge(edge)
 
         return node
@@ -113,30 +124,38 @@ class GraphBuilder:
 
             if isinstance(value, (LazyResult, MappedLazyResult, Param)):
                 source_node = self._visit(value)
-                edge = Edge(source=source_node, target=target_node, arg_name=arg_name)
+                # Standard DATA edge
+                edge = Edge(
+                    source=source_node, 
+                    target=target_node, 
+                    arg_name=arg_name, 
+                    edge_type=EdgeType.DATA
+                )
                 self.graph.add_edge(edge)
             elif isinstance(value, Router):
                 selector_node = self._visit(value.selector)
+                # Edge for the Router selector is a DATA edge that happens to carry Router metadata
                 edge = Edge(
                     source=selector_node,
                     target=target_node,
                     arg_name=arg_name,
                     router=value,
+                    edge_type=EdgeType.DATA
                 )
                 self.graph.add_edge(edge)
 
                 for route_result in value.routes.values():
                     route_node = self._visit(route_result)
+                    # Implicit dependency edge for Router routes
                     imp_edge = Edge(
                         source=route_node,
                         target=target_node,
-                        arg_name="_implicit_dependency",
+                        arg_name="_implicit_dependency", 
+                        edge_type=EdgeType.IMPLICIT
                     )
                     self.graph.add_edge(imp_edge)
             else:
                 target_node.literal_inputs[arg_name] = value
-
-            # TODO: Handle lists/dicts containing LazyResults (Future MVP enhancement)
 
 
 def build_graph(target: LazyResult) -> Graph:

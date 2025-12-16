@@ -1,9 +1,18 @@
 from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Any, Dict
+from enum import Enum, auto
 
 
 from cascade.spec.common import Param
 from cascade.spec.constraint import ResourceConstraint
+
+
+class EdgeType(Enum):
+    """Defines the semantic type of a dependency edge."""
+    DATA = auto()           # A standard data dependency (the output of Source is an input to Target)
+    CONDITION = auto()      # A control dependency for the run_if condition
+    CONSTRAINT = auto()     # An implicit dependency for resolving dynamic constraints
+    IMPLICIT = auto()       # An implicit structural dependency (e.g., from Router routes)
 
 
 @dataclass
@@ -39,6 +48,9 @@ class Edge:
     target: Node
     # Metadata like argument name in the target function
     arg_name: str
+    # The semantic type of this edge
+    edge_type: EdgeType = EdgeType.DATA
+
     # If set, implies this edge is the selector for a dynamic router
     router: Optional[Any] = None
 

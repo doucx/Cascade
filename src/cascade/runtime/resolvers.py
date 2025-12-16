@@ -1,7 +1,7 @@
 import inspect
 from typing import Any, Dict, List, Tuple
 
-from cascade.graph.model import Node, Graph
+from cascade.graph.model import Node, Graph, EdgeType
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError
@@ -37,7 +37,8 @@ class ArgumentResolver:
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
 
         for edge in incoming_edges:
-            if edge.arg_name.startswith("_"):  # Skip control/meta edges
+            # Only process edges that carry data to the task (DATA edges)
+            if edge.edge_type != EdgeType.DATA:
                 continue
 
             # Resolve Upstream Value
@@ -128,14 +129,31 @@ class ConstraintResolver:
             return {}
 
         resolved = {}
+        
+        # Find all CONSTRAINT edges relevant to this node
+        constraint_edges = [
+            e for e in graph.edges 
+            if e.target.id == node.id and e.edge_type == EdgeType.CONSTRAINT
+        ]
+
+        # Use the constraints requirements defined in the node spec as the primary source
         for res, amount in node.constraints.requirements.items():
             if isinstance(amount, (LazyResult, MappedLazyResult)):
-                if amount._uuid in upstream_results:
-                    resolved[res] = upstream_results[amount._uuid]
+                # Match requirement name with the edge's arg_name (which is the resource name in GraphBuilder)
+                constraint_edge = next(
+                    (e for e in constraint_edges if e.arg_name == res), None
+                )
+                
+                if constraint_edge is None:
+                    raise RuntimeError(
+                        f"Internal Error: Missing constraint edge for dynamic requirement '{res}' on task '{node.name}'"
+                    )
+
+                if constraint_edge.source.id in upstream_results:
+                    resolved[res] = upstream_results[constraint_edge.source.id]
                 else:
-                    # Logic to determine if it was skipped or just missing
                     raise DependencyMissingError(
-                        node.id, f"constraint:{res}", amount._uuid
+                        node.id, f"constraint:{res}", constraint_edge.source.id
                     )
             else:
                 resolved[res] = amount

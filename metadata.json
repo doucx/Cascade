@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(tools): 实现 `cs.visualize` 以生成 Graphviz DOT 输出", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765861602.7830884, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(tools): 实现 `cs.cli` 以从工作流参数自动生成 CLI", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765861730.7567823, "duration_ms": 0}}

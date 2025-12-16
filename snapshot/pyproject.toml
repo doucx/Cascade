@@ -28,10 +28,12 @@ dev = [
   "pytest-cov",
   "mypy",
   "pytest-aiohttp",
+  "typer[all]",
 ]
 template = ["jinja2"]
 http = ["aiohttp"]
 sql = ["sqlalchemy"]
+cli = ["typer[all]"]
 
 [project.entry-points."cascade.providers"]
 shell = "cascade.providers.shell:ShellProvider"

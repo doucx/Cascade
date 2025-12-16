@@ -1,7 +1,8 @@
 import asyncio
 from typing import Any, Dict, Optional, List
 
-from .spec.task import task, LazyResult
+from .spec.task import task
+from .spec.lazy_types import LazyResult # NEW
 from .spec.common import Param
 from .spec.routing import Router
 from .spec.resource import resource, inject

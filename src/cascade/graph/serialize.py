@@ -5,7 +5,8 @@ from .model import Graph, Node, Edge
 from ..spec.common import Param
 from ..spec.constraint import ResourceConstraint
 from ..spec.routing import Router
-from ..spec.task import RetryPolicy, Task
+from ..spec.lazy_types import RetryPolicy # NEW
+from ..spec.task import Task
 
 # --- Serialization Helpers ---
 

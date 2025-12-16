@@ -58,7 +58,8 @@ async def test_run_if_false():
     spy = SpySubscriber(bus)
     engine = Engine(bus=bus)
 
-    with pytest.raises(KeyError):
+    # Now asserts DependencyMissingError instead of KeyError
+    with pytest.raises(cs.DependencyMissingError):
         await engine.run(flow)
 
     # Verify Skip Event using the new helper
@@ -93,7 +94,8 @@ async def test_cascade_skip():
     spy = SpySubscriber(bus)
     engine = Engine(bus=bus)
 
-    with pytest.raises(KeyError):
+    # Now asserts DependencyMissingError instead of KeyError
+    with pytest.raises(cs.DependencyMissingError):
         await engine.run(res_b)
 
     skip_events = spy.events_of_type(TaskSkipped)

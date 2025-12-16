@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, Any, TypeVar
-from .task import LazyResult
+from .lazy_types import LazyResult # NEW
 
 T = TypeVar("T")
 

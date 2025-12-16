@@ -1,28 +1,54 @@
 import asyncio
+from typing import Any, Dict
 from cascade.adapters.executors.local import LocalExecutor
-from cascade.graph.model import Node, Graph, Edge
+from cascade.graph.model import Node
+from cascade.spec.task import task
 
 
-def test_local_executor():
-    def add(x: int, y: int) -> int:
-        return x + y
+def test_local_executor_sync_execution():
+    """
+    Tests that the LocalExecutor can execute a synchronous function
+    with resolved positional and keyword arguments.
+    """
+    
+    # 1. Define the callable
+    @task
+    def add(x: int, y: int, z: int = 0) -> int:
+        return x + y + z
+    
+    # 2. Simulate the Node (Only callable_obj is needed here)
+    node_add = Node(id="add", name="add", callable_obj=add.func)
 
-    # Manually construct graph for clarity
-    node_x = Node(id="x", name="provide_x", callable_obj=lambda: 5)
-    node_y = Node(id="y", name="provide_y", callable_obj=lambda: 10)
-    node_add = Node(id="add", name="add", callable_obj=add)
-
-    edge1 = Edge(source=node_x, target=node_add, arg_name="0")  # positional x
-    edge2 = Edge(source=node_y, target=node_add, arg_name="y")  # keyword y
-
-    graph = Graph(nodes=[node_x, node_y, node_add], edges=[edge1, edge2])
-
-    # Simulate upstream results
-    upstream_results = {"x": 5, "y": 10}
+    # 3. Simulate arguments resolved by the Engine
+    resolved_args = [5]  # positional argument 'x'
+    resolved_kwargs = {"y": 10, "z": 2} # keyword arguments 'y' and 'z'
 
     executor = LocalExecutor()
     result = asyncio.run(
-        executor.execute(node_add, graph, upstream_results, resource_context={})
+        executor.execute(node_add, resolved_args, resolved_kwargs)
     )
 
-    assert result == 15
+    assert result == 17 # 5 + 10 + 2
+
+
+def test_local_executor_async_execution():
+    """
+    Tests that the LocalExecutor can execute an asynchronous function.
+    """
+    
+    @task
+    async def async_add(x: int) -> int:
+        await asyncio.sleep(0.01)
+        return x + 1
+
+    node_async = Node(id="async_add", name="async_add", callable_obj=async_add.func)
+    
+    resolved_args = [5]
+    resolved_kwargs = {}
+
+    executor = LocalExecutor()
+    result = asyncio.run(
+        executor.execute(node_async, resolved_args, resolved_kwargs)
+    )
+    
+    assert result == 6

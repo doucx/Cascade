@@ -1,31 +1,30 @@
-## [WIP] feat(runtime): Implement Router pruning with Reference Counting
+## [WIP] fix(runtime): Fix FlowManager pruning logic and Param ID resolution
 
 ### 用户需求
-用户希望实现 `Router` 的剪枝（Pruning）功能。当 `Router` 的 `selector` 确定了执行路径后，系统应自动跳过（Skip）那些未被选择的分支上的任务，以节省资源并避免执行不必要的逻辑。
+1.  **修复 Router 剪枝导致的误判**: 之前的实现中，`FlowManager` 会因为某个未被选中的路由分支被标记为 Skipped，而错误地将目标节点（Consumer）也标记为 Skipped（原因是 `UpstreamSkipped`）。必须修正 `should_skip` 逻辑，使其忽略未被选中分支的 Skip 状态。
+2.  **修复 Param ID 解析错误**: `FlowManager` 无法处理 `Param` 类型的 Selector，因为 `Param` 对象没有 `_uuid` 属性。需要统一 ID 获取逻辑。
 
 ### 评论
-这是一个极具价值的性能优化。为了安全地实现剪枝，我们必须解决“共享依赖”的问题——即不能因为一个分支不需要某个任务就贸然杀死它，因为其他分支或任务可能仍需要它。
-基于引用计数（Reference Counting）的算法是解决此问题的最佳方案：我们将每个任务的“出度”视为其初始需求量。当 Router 排除一个分支时，我们减少该分支根节点的需求量。当需求量降为零时，节点被剪枝，并递归地减少其上游节点的需求量。
+这是一个关键的逻辑修复。通过在 `FlowManager` 内部构建 `Route Source Map`，我们可以精确地知道哪条 `ROUTER_ROUTE` 边对应哪个 Key。结合运行时的 Selector 结果，我们可以实现精准的“条件性依赖检查”，即只关心被选中分支的健康状况。
 
 ### 目标
-1.  在 `FlowManager` 中实现基于引用计数的动态剪枝逻辑。
-2.  在 `Engine` 中连接执行循环与 `FlowManager`，在任务完成后报告结果。
-3.  添加单元测试，验证专属依赖被正确剪枝，而共享依赖被正确保留。
+1.  在 `FlowManager` 中增加 `_get_obj_id` 辅助方法，统一处理 `Param` 和 `LazyResult`。
+2.  在 `FlowManager` 初始化时构建 `consumer -> {source_id: route_key}` 的映射。
+3.  重写 `should_skip` 逻辑，对于 `ROUTER_ROUTE` 类型的边，仅当其对应的 Key 与 Selector 结果一致时，才检查 Skip 状态。
 
 ### 基本原理
-我们将在 `FlowManager` 初始化时构建全图的引用计数（Demand）和拓扑索引。
-当 `Engine` 报告 `selector` 的结果时，`FlowManager` 会识别出所有未选中的路由分支。对于每个未选中的分支，逻辑上切断其指向 Router Target 的边（即 Demand - 1）。如果某节点的 Demand 归零，说明它成为了图中的“孤岛”，不再对最终结果有贡献，因此可以安全地标记为 `Skipped`（原因：`Pruned`）。该过程会递归向上传播，直到遇到被其他活跃路径引用的节点（共享节点）为止。
+Consumer 节点虽然在图结构上依赖所有 Route 分支，但在运行时逻辑上，它只依赖被选中的那一个。`FlowManager` 作为控制流的大脑，必须体现这种运行时逻辑，屏蔽掉图结构带来的“虚假”依赖失败。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/control-flow #scope/core #ai/instruct #task/domain/core #task/object/router #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/control-flow #scope/core #ai/instruct #task/domain/core #task/object/flow-manager #task/action/bug-fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 `FlowManager` 实现引用计数剪枝
+#### Acts 1: 修正 `FlowManager`
 
-我们将重写 `FlowManager`，在其中加入索引构建、引用计数初始化、结果注册和递归剪枝的核心逻辑。
+我们将对 `FlowManager` 进行全面的逻辑增强。
 
 ~~~~~act
 write_file
@@ -35,6 +34,8 @@ src/cascade/runtime/flow.py
 from typing import Dict, Any, Optional, Set, List
 from collections import defaultdict
 from cascade.graph.model import Node, Graph, EdgeType, Edge
+from cascade.spec.common import Param
+from cascade.spec.lazy_types import LazyResult
 
 
 class FlowManager:
@@ -52,13 +53,22 @@ class FlowManager:
         self.in_edges: Dict[str, List[Edge]] = defaultdict(list)
         self.routers_by_selector: Dict[str, List[Edge]] = defaultdict(list)
         
+        # Mapping: consumer_id -> { source_node_id -> route_key }
+        # Used to identify which route key a ROUTER_ROUTE edge corresponds to.
+        self.route_source_map: Dict[str, Dict[str, Any]] = defaultdict(dict)
+        
         for edge in self.graph.edges:
             self.in_edges[edge.target.id].append(edge)
             
             if edge.router:
                 # Map selector_id -> edges that utilize this selector
-                selector_id = edge.router.selector._uuid
+                selector_id = self._get_obj_id(edge.router.selector)
                 self.routers_by_selector[selector_id].append(edge)
+                
+                # Build the route source map for the consumer (edge.target)
+                for key, route_result in edge.router.routes.items():
+                    route_source_id = self._get_obj_id(route_result)
+                    self.route_source_map[edge.target.id][route_source_id] = key
 
         # --- 2. Initialize Reference Counting (Demand) ---
         # A node's initial demand is its out-degree (number of consumers).
@@ -70,12 +80,18 @@ class FlowManager:
             
         self.downstream_demand[target_node_id] += 1
 
+    def _get_obj_id(self, obj: Any) -> str:
+        """Helper to get ID from LazyResult or Param."""
+        if isinstance(obj, LazyResult):
+            return obj._uuid
+        elif isinstance(obj, Param):
+            return obj.name
+        # Fallback, though graph building should ensure these types
+        return str(obj)
+
     def mark_skipped(self, node_id: str, reason: str = "Unknown"):
         """Manually marks a node as skipped."""
         self._skipped_nodes.add(node_id)
-        # Note: We don't decrement demand here because if a node is skipped naturally 
-        # (e.g. condition false), its downstream will handle "UpstreamSkipped".
-        # Pruning is a proactive measure for nodes that haven't run yet.
 
     def is_skipped(self, node_id: str) -> bool:
         return node_id in self._skipped_nodes
@@ -92,19 +108,14 @@ class FlowManager:
     def _process_router_decision(self, edge: Edge, selector_value: Any):
         router = edge.router
         
-        # 1. Identify unselected routes
-        # Selector value might be non-hashable, but route keys in dict usually are strings/ints.
-        # We rely on simple equality check.
         selected_route_key = selector_value
         
         for route_key, route_lazy_result in router.routes.items():
             if route_key == selected_route_key:
                 continue
                 
-            # This route is NOT selected.
-            # The edge from this route branch to the target node is logically "broken".
-            # We decrement the demand for the branch's root node.
-            branch_root_id = route_lazy_result._uuid
+            # This route is NOT selected. Prune it.
+            branch_root_id = self._get_obj_id(route_lazy_result)
             self._decrement_demand_and_prune(branch_root_id)
 
     def _decrement_demand_and_prune(self, node_id: str):
@@ -118,13 +129,8 @@ class FlowManager:
         self.downstream_demand[node_id] -= 1
         
         if self.downstream_demand[node_id] <= 0:
-            # No one needs this node anymore. Prune it!
-            # But wait, we should check if it has already run?
-            # Engine handles that check (it won't check should_skip for completed nodes).
             self.mark_skipped(node_id, reason="Pruned")
             
-            # Recursively decrement demand for its UPSTREAM dependencies.
-            # These are the sources of incoming edges.
             for edge in self.in_edges[node_id]:
                 self._decrement_demand_and_prune(edge.source.id)
 
@@ -135,13 +141,39 @@ class FlowManager:
         Determines if a node should be skipped.
         Returns the reason string if it should be skipped, or None otherwise.
         """
-        # 0. Check if already marked (e.g. Pruned)
         if self.is_skipped(node.id):
             return "Pruned"
 
-        # 1. Upstream Skip Propagation (Cascade Skip)
+        # Determine active route key if this node is a Router consumer
+        active_route_key = None
+        # Find the edge carrying the Router definition
+        router_edge = next((e for e in self.in_edges[node.id] if e.router), None)
+        if router_edge:
+            selector_id = self._get_obj_id(router_edge.router.selector)
+            # If selector result is available, we know the active key
+            if selector_id in results:
+                active_route_key = results[selector_id]
+            # If selector is missing/skipped, we can't determine active key yet.
+            # But standard DATA dependency check below will handle missing selector.
+
+        # 1. Upstream Skip Propagation
         for edge in self.in_edges[node.id]:
-            if edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT, EdgeType.ROUTER_ROUTE):
+            # Special handling for ROUTER_ROUTE edges
+            if edge.edge_type == EdgeType.ROUTER_ROUTE:
+                # If we know the active route, we only care about that one.
+                if active_route_key is not None:
+                    # Look up which key this edge corresponds to
+                    edge_key = self.route_source_map[node.id].get(edge.source.id)
+                    # If this edge is NOT the active route, ignore its skip status
+                    if edge_key != active_route_key:
+                        continue
+                
+                # If active_route_key is unknown (shouldn't happen if selector ran),
+                # or if this IS the active route, check if it's skipped.
+                if self.is_skipped(edge.source.id):
+                    return "UpstreamSkipped"
+
+            elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
                 if self.is_skipped(edge.source.id):
                     return "UpstreamSkipped"
 
@@ -158,196 +190,6 @@ class FlowManager:
         return None
 ~~~~~
 
-#### Acts 2: 连接 `Engine` 与 `FlowManager`
-
-修改 `Engine`，在初始化 `FlowManager` 时传入 `target_node_id`，并在任务成功执行后调用 `register_result`。
-
-~~~~~act
-patch_file
-src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-    async def _execute_graph(
-        self,
-        target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-    ) -> Any:
-        graph = build_graph(target)
-        self.flow_manager = FlowManager(graph) # Initialize FlowManager per run
-        
-        plan = self.solver.resolve(graph)  # Now returns List[List[Node]]
-        results: Dict[str, Any] = {}
-~~~~~
-~~~~~python
-    async def _execute_graph(
-        self,
-        target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-    ) -> Any:
-        graph = build_graph(target)
-        self.flow_manager = FlowManager(graph, target._uuid)
-        
-        plan = self.solver.resolve(graph)  # Now returns List[List[Node]]
-        results: Dict[str, Any] = {}
-~~~~~
-
-~~~~~act
-patch_file
-src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-                return result
-
-            except Exception as e:
-                last_exception = e
-~~~~~
-~~~~~python
-                # Notify flow manager of result to trigger potential pruning
-                if self.flow_manager:
-                    self.flow_manager.register_result(node.id, result)
-
-                return result
-
-            except Exception as e:
-                last_exception = e
-~~~~~
-
-#### Acts 3: 添加剪枝测试用例
-
-创建一个新的测试文件 `tests/runtime/test_router_pruning.py`，测试“专属依赖”被剪枝和“共享依赖”被保留的场景。
-
-~~~~~act
-write_file
-tests/runtime/test_router_pruning.py
-~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import Event, TaskSkipped
-
-class SpySubscriber:
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.events.append)
-
-    def events_of_type(self, event_type):
-        return [e for e in self.events if isinstance(e, event_type)]
-
-@pytest.mark.asyncio
-async def test_pruning_exclusive_branches():
-    """
-    Test that branches exclusive to a router are pruned when not selected.
-    """
-    @cs.task
-    def get_route():
-        return "a"
-
-    @cs.task
-    def branch_a():
-        return "A"
-
-    @cs.task
-    def branch_b():
-        return "B" # Should be pruned
-
-    @cs.task
-    def branch_b_upstream():
-        return "B_UP" # Should also be pruned (recursive)
-
-    # branch_b depends on branch_b_upstream
-    b_chain = branch_b(branch_b_upstream())
-
-    router = cs.Router(
-        selector=get_route(),
-        routes={"a": branch_a(), "b": b_chain}
-    )
-
-    @cs.task
-    def consumer(val):
-        return val
-
-    workflow = consumer(router)
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    result = await engine.run(workflow)
-    assert result == "A"
-
-    # Check pruning events
-    skipped = spy.events_of_type(TaskSkipped)
-    skipped_names = {e.task_name for e in skipped}
-    
-    assert "branch_b" in skipped_names
-    assert "branch_b_upstream" in skipped_names
-    
-    # Verify reasons
-    for e in skipped:
-        assert e.reason == "Pruned"
-
-
-@pytest.mark.asyncio
-async def test_pruning_shared_dependency():
-    """
-    Test that a dependency shared between branches (or external tasks) 
-    is NOT pruned even if one consumer branch is pruned.
-    """
-    @cs.task
-    def get_route():
-        return "a"
-
-    @cs.task
-    def shared_task():
-        return "SHARED"
-
-    @cs.task
-    def branch_a(dep):
-        return f"A({dep})"
-
-    @cs.task
-    def branch_b(dep):
-        return f"B({dep})" # Should be pruned, but 'dep' should not
-
-    # shared_task is used by BOTH branches
-    shared = shared_task()
-    
-    router = cs.Router(
-        selector=get_route(),
-        routes={"a": branch_a(shared), "b": branch_b(shared)}
-    )
-
-    @cs.task
-    def consumer(val):
-        return val
-
-    workflow = consumer(router)
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    result = await engine.run(workflow)
-    assert result == "A(SHARED)"
-
-    # Check pruning
-    skipped = spy.events_of_type(TaskSkipped)
-    skipped_names = {e.task_name for e in skipped}
-
-    assert "branch_b" in skipped_names
-    assert "shared_task" not in skipped_names # MUST NOT be pruned
-
-    # Only branch_b should be pruned
-    assert len(skipped) == 1
-~~~~~
-
 ### 下一步建议
-我们已经实现了健壮的 `Router` 剪枝功能，并通过了复杂的依赖场景验证。
-目前阶段三的所有功能（`.map`, `.run_if`, `Router`, `Pruning`, `File`, `Serialization`）均已完成。
-接下来的重点将转向阶段四：**生态系统与核心工具**，即实现 `Provider` 插件系统的正式协议与加载机制，以及实现 `cs.template` 等核心 Provider。
+通过这次修复，我们解决了 Router 剪枝逻辑中的核心缺陷。`FlowManager` 现在不仅能正确地剪枝未选中的分支，还能正确地保护 Consumer 免受“无辜”分支被剪枝的影响。
+可以运行测试以验证修复结果。验证通过后，我们将继续推进生态系统的建设。

@@ -7,14 +7,14 @@ except ImportError:
     typer = None
 
 from ..spec.task import LazyResult
-from ..graph.build import build_graph
-from ..spec.common import Param
+from ..context import get_current_context
+from ..spec.input import ParamSpec
 
 
 def cli(target: LazyResult[Any]) -> Callable[[], None]:
     """
     A factory that generates a Typer-based command-line interface for a Cascade workflow.
-    It inspects the workflow for `cs.Param` dependencies and converts them into
+    It inspects the workflow context for `cs.Param` definitions and converts them into
     CLI options.
 
     Args:
@@ -30,13 +30,17 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
         )
 
     app = typer.Typer()
-    graph = build_graph(target)
-
-    # Find all unique parameter definitions in the graph
-    params: dict[str, Param] = {
-        node.param_spec.name: node.param_spec
-        for node in graph.nodes
-        if node.node_type == "param"
+    
+    # In v1.3, we retrieve specs from the global context, populated when 
+    # the workflow was defined (e.g. when `cs.Param()` was called).
+    context = get_current_context()
+    all_specs = context.get_all_specs()
+    
+    # Filter for ParamSpec
+    params: dict[str, ParamSpec] = {
+        spec.name: spec
+        for spec in all_specs
+        if isinstance(spec, ParamSpec)
     }
 
     def main(**kwargs):

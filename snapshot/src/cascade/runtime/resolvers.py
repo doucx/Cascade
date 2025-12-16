@@ -5,6 +5,7 @@ from cascade.graph.model import Node, Graph, EdgeType
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError
+from cascade.internal.inputs import _get_param_value
 
 
 class ArgumentResolver:
@@ -19,15 +20,25 @@ class ArgumentResolver:
         graph: Graph,
         upstream_results: Dict[str, Any],
         resource_context: Dict[str, Any],
+        user_params: Dict[str, Any] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
         """
         Resolves arguments for the node's callable from:
         1. Literal inputs
         2. Upstream dependency results (handling Routers)
         3. Injected resources
+        4. User provided params (for internal input tasks)
 
         Raises DependencyMissingError if a required upstream result is missing.
         """
+        # 0. Special handling for internal input tasks
+        if node.callable_obj is _get_param_value:
+            # Inject params_context directly
+            # The literal_inputs should contain 'name'
+            final_kwargs = node.literal_inputs.copy()
+            final_kwargs["params_context"] = user_params or {}
+            return [], final_kwargs
+
         # 1. Prepare arguments from literals and upstream results
         final_kwargs = {k: v for k, v in node.literal_inputs.items() if not k.isdigit()}
         positional_args = {

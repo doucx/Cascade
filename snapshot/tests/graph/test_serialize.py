@@ -82,22 +82,26 @@ def test_round_trip_top_level_functions():
 
 
 def test_serialize_params():
-    """Test serialization of Param nodes."""
+    """Test serialization of Param nodes (now standard tasks)."""
     p = cs.Param("env", default="dev", description="Environment")
     target = simple_task(p)
     graph = build_graph(target)
 
     data = graph_to_dict(graph)
-    param_node = next(n for n in data["nodes"] if n["node_type"] == "param")
+    # In v1.3, Param produces a task named '_get_param_value'
+    param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
 
-    assert param_node["param_spec"]["name"] == "env"
-    assert param_node["param_spec"]["default"] == "dev"
-    assert param_node["param_spec"]["description"] == "Environment"
+    assert param_node["node_type"] == "task"
+    assert param_node["literal_inputs"]["name"] == "env"
+    
+    # Note: Serialization currently only saves graph structure, not the Context.
+    # So deserialized graph will have the node, but not the ParamSpec metadata 
+    # (which lives in WorkflowContext). This is expected behavior for v1.3.
 
     # Round trip
     restored = from_json(to_json(graph))
-    p_node = next(n for n in restored.nodes if n.node_type == "param")
-    assert p_node.param_spec.name == "env"
+    p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
+    assert p_node.literal_inputs["name"] == "env"
 
 
 def test_serialize_with_retry():

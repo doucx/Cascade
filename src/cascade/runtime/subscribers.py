@@ -13,10 +13,10 @@ from .events import (
 
 class HumanReadableLogSubscriber:
     """
-    Listens to events and prints user-friendly logs to a stream (default: stdout).
+    Listens to events and prints user-friendly logs to a stream (default: stderr).
     """
 
-    def __init__(self, bus: MessageBus, stream: TextIO = sys.stdout):
+    def __init__(self, bus: MessageBus, stream: TextIO = sys.stderr):
         self._stream = stream
 
         # Subscribe to relevant events

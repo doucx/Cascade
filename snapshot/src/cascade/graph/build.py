@@ -104,7 +104,7 @@ class GraphBuilder:
         for key, value in iterator:
             arg_name = str(key)
 
-            if isinstance(value, (LazyResult, MappedLazyResult, Param)):
+            if isinstance(value, (LazyResult, MappedLazyResult)):
                 source_node = self._visit(value)
                 # Standard DATA edge
                 edge = Edge(

@@ -32,6 +32,11 @@ def test_cli_generator_from_context():
     # 2. 模拟“导入时执行”：先运行一次定义，填充上下文
     target = workflow_def() 
     
+    # Debug: Verify context is populated
+    from cascade.context import get_current_context
+    specs = get_current_context().get_all_specs()
+    assert len(specs) == 2, f"Context should have 2 specs, got {len(specs)}"
+
     # 3. 生成 CLI
     # 注意：v1.3 cs.cli 可能既支持 LazyResult (为了兼容)，
     # 也支持直接利用 Context。这里我们传 target，验证它能否正确提取 Context 中的 Specs。
@@ -39,6 +44,8 @@ def test_cli_generator_from_context():
     
     # 4. 验证 Help 信息 (证明 Spec 被正确读取)
     result = runner.invoke(app, ["--help"])
+    if result.exit_code != 0:
+        print(result.stdout)
     assert result.exit_code == 0
     assert "--name" in result.stdout
     assert "--count" in result.stdout

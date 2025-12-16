@@ -76,5 +76,6 @@ async def test_sql_missing_resource():
     # Or during setup if we scan correctly?
     # With the new scanning logic, it should fail at setup time!
 
+    # The error message from engine.py is: f"Resource '{name}' is required but not registered."
     with pytest.raises(NameError, match="not registered"):
         await engine.run(target)

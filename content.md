@@ -1,157 +1,57 @@
-You are absolutely right to point out the failure. My apologies. The error log provides a clear diagnosis.
+我们已经成功解决了 `cs.Router` 的序列化技术债务，这是支持工作流持久化和分布式执行的关键一步。现在我将生成一个 `[COMMIT]` 计划来提交这些变更。
 
-The problem stems from defining the test tasks (`get_route`, `consumer`, etc.) *inside* the `test_serialize_router` function. When Python's `inspect` module gets the `__qualname__` for these nested functions, it includes `<locals>`, which our `_load_func_from_path` deserializer cannot resolve. Functions must be defined at the module's top level to be reliably located and imported.
-
-I will now generate a plan to fix this by moving the task definitions to the top level of the test module.
-
-## [WIP] fix(tests): Correct serialization test by moving tasks to top level
-
-### 错误分析
-The test `test_serialize_router` fails during the deserialization phase. The root cause is that the test-specific tasks (`get_route`, `task_a`, `consumer`, etc.) were defined as nested functions inside `test_serialize_router`.
-
-1.  **Serialization**: The `_get_func_path` function correctly captures the qualified name of a nested function, which looks like `test_serialize_router.<locals>.consumer`.
-2.  **Deserialization**: The `_load_func_from_path` function tries to resolve this path by splitting it at the dots and using `getattr`. However, `<locals>` is not a real attribute that can be accessed via `getattr`. It's a special marker for a function's local scope.
-3.  **Result**: This leads to an `AttributeError`, which is caught and re-raised as the `ValueError` we see in the test output.
+## [COMMIT] fix(graph): Implement full serialization support for cs.Router
 
 ### 用户需求
-Fix the failing test `test_serialize_router` to ensure the new `Router` serialization logic can be correctly validated.
+偿还 Router 序列化的技术债务，确保包含动态路由的工作流能够被无损序列化和反序列化，为分布式执行和持久化工作流打下基础。
 
 ### 评论
-This is a common limitation when dealing with Python's serialization and dynamic import mechanisms. The fix is straightforward and aligns with best practices: any function intended to be serialized and restored by its path must be discoverable from the module's top-level scope.
+本次重构通过引入 `routers` 顶级列表和轻量级的 `_StubLazyResult` 代理对象，巧妙地解决了 `Router` 及其内部 `LazyResult` 依赖的循环引用和反序列化问题。这使得 `Cascade` 的 `Graph` 对象现在是完全可序列化的，极大增强了其作为“数据”传递给外部系统的能力。
 
 ### 目标
-1.  Modify `tests/graph/test_serialize.py`.
-2.  Move the task definitions used in `test_serialize_router` out of the function body and place them at the module's top level.
-3.  Ensure the test logic within `test_serialize_router` remains the same, but now references the top-level tasks.
+1.  提交 `src/cascade/graph/serialize.py` 中对 Router 序列化逻辑的重写。
+2.  提交 `tests/graph/test_serialize.py` 中对测试用例的修复，确保所有 Task 都在模块顶层定义以通过反序列化测试。
 
 ### 基本原理
-By making the tasks (`get_route`, `task_a`, `task_b`, `consumer`) top-level objects within the `test_serialize.py` module, their `__qualname__` will be simple and resolvable (e.g., `'get_route'`). This allows the `_load_func_from_path` function to successfully find and load them using `importlib` and `getattr`, thus fixing the test failure.
+原序列化逻辑无法处理 `Router` 对象的复杂结构。新方法：
+1.  将 `Router` 定义从 `Edge` 中提取，集中存储在 JSON 的 `routers` 列表中（规范化）。
+2.  使用 `_StubLazyResult` 替代原生的 `LazyResult` 对象作为占位符，在反序列化时连接 `Router` 依赖的节点 ID。
+通过这种方式，我们实现了无损的 Round-Trip 序列化，同时解决了 Python 嵌套函数带来的 `AttributeError` 错误。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #concept/state #scope/core #ai/instruct #task/domain/core #task/object/serialization #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/core #concept/state #scope/api #scope/core #ai/instruct #task/domain/core #task/object/serialization #task/action/refactor #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: Refactor the test file
+#### Acts 1: 暂存并提交变更
 
-We will replace the entire `test_serialize_router` function with a new block of code that first defines the necessary tasks at the top level, and then defines the test function which uses them.
+将序列化文件和测试文件添加到 Git 暂存区，并创建一个内容详尽的提交。
 
 ~~~~~act
-patch_file
+git_add
+src/cascade/graph/serialize.py
 tests/graph/test_serialize.py
 ~~~~~
-~~~~~python
-def test_serialize_router():
-    """Test full round-trip serialization of a Router."""
-    
-    @cs.task
-    def get_route():
-        return "a"
-        
-    @cs.task
-    def task_a():
-        return "A"
-        
-    @cs.task
-    def task_b():
-        return "B"
-        
-    @cs.task
-    def consumer(val):
-        return val
-        
-    # Construct a router
-    selector = get_route()
-    route_a = task_a()
-    route_b = task_b()
-    
-    router = cs.Router(
-        selector=selector,
-        routes={"a": route_a, "b": route_b}
-    )
-    
-    # Consumer depends on the router
-    target = consumer(router)
-    
-    # Build and Serialize
-    graph = build_graph(target)
-    json_str = to_json(graph)
-    
-    # Deserialize
-    restored_graph = from_json(json_str)
-    
-    # Verify
-    # Find the edge from selector to consumer (which carries the Router metadata)
-    # The selector node name is "get_route"
-    # The consumer node name is "consumer"
-    
-    selector_node = next(n for n in restored_graph.nodes if n.name == "get_route")
-    consumer_node = next(n for n in restored_graph.nodes if n.name == "consumer")
-    
-    # The edge between them should have the router attached
-    edge = next(e for e in restored_graph.edges if e.source == selector_node and e.target == consumer_node)
-    
-    assert edge.router is not None
-    # Check that the stub has the correct UUIDs
-    assert edge.router.selector._uuid == selector._uuid
-    assert edge.router.routes["a"]._uuid == route_a._uuid
-    assert edge.router.routes["b"]._uuid == route_b._uuid
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-# --- Router Test Tasks ---
-@cs.task
-def get_route():
-    return "a"
+~~~~~text
+fix(graph): Implement full serialization support for cs.Router
 
-@cs.task
-def task_a():
-    return "A"
+This commit resolves the critical technical debt where the computation graph's serialization (`to_json`/`from_json`) failed to correctly handle and restore the `cs.Router` object metadata attached to edges.
 
-@cs.task
-def task_b():
-    return "B"
+Key changes:
+1.  **Serialization Logic (`serialize.py`):** Routers are now collected and stored in a top-level `routers` list in the JSON output.
+2.  **Deserialization Logic (`serialize.py`):** Introduces `_StubLazyResult`, a minimal proxy object containing only the UUID, which is used to reconstruct the `Router` instance during graph loading. This satisfies the runtime requirements of `ArgumentResolver` without needing full LazyResult objects.
+3.  **Test Fix:** Nested test functions in `tests/graph/test_serialize.py` were moved to the top level to ensure their callables could be correctly imported via `__qualname__` during deserialization.
 
-@cs.task
-def consumer(val):
-    return val
-
-
-def test_serialize_router():
-    """Test full round-trip serialization of a Router."""
-
-    # Construct a router using top-level tasks
-    selector = get_route()
-    route_a = task_a()
-    route_b = task_b()
-
-    router = cs.Router(
-        selector=selector,
-        routes={"a": route_a, "b": route_b}
-    )
-
-    # Consumer depends on the router
-    target = consumer(router)
-
-    # Build and Serialize
-    graph = build_graph(target)
-    json_str = to_json(graph)
-
-    # Deserialize
-    restored_graph = from_json(json_str)
-
-    # Verify
-    # Find the edge from selector to consumer (which carries the Router metadata)
-    selector_node = next(n for n in restored_graph.nodes if n.name == "get_route")
-    consumer_node = next(n for n in restored_graph.nodes if n.name == "consumer")
-
-    # The edge between them should have the router attached
-    edge = next(e for e in restored_graph.edges if e.source == selector_node and e.target == consumer_node)
-
-    assert edge.router is not None
-    # Check that the stub has the correct UUIDs
-    assert edge.router.selector._uuid == selector._uuid
-    assert edge.router.routes["a"]._uuid == route_a._uuid
-    assert edge.router.routes["b"]._uuid == route_b._uuid
+This change is fundamental for supporting distributed execution and persistent work flows.
 ~~~~~
+
+### 下一步建议
+我们已经完成了对核心架构的最后一次关键修复。根据战略分析，接下来的重点是增强 **DX (开发者体验)** 和 **Provider 生态**。
+
+我建议的下一步是：**将 `cs.template` 任务提升为更健壮的 Provider**，使其能够处理更复杂的模板场景，并作为后续“预编排”战略（生成 Airflow DAGs/YAMLs）的基石。

@@ -55,6 +55,7 @@ def run(
     target: LazyResult,
     params: Optional[Dict[str, Any]] = None,
     system_resources: Optional[Dict[str, Any]] = None,
+    log_level: str = "INFO",
 ) -> Any:
     """
     Runs a Cascade workflow with a default engine configuration.
@@ -64,10 +65,12 @@ def run(
         params: Runtime parameters.
         system_resources: A dictionary defining total system capacity
                           (e.g. {"gpu": 1, "threads": 4}).
+        log_level: Minimum logging level ("DEBUG", "INFO", "WARNING", "ERROR").
+                   Defaults to "INFO".
     """
     bus = MessageBus()
     # Attach the default logger
-    HumanReadableLogSubscriber(bus)
+    HumanReadableLogSubscriber(bus, min_level=log_level)
 
     engine = Engine(bus=bus, system_resources=system_resources)
 

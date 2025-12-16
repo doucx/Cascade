@@ -334,6 +334,12 @@ class Engine:
         """Finds all unique resource names required by the plan."""
         required = set()
         for node in plan:
+            # 1. Check literal inputs for dynamic injection
+            for value in node.literal_inputs.values():
+                if isinstance(value, Inject):
+                    required.add(value.resource_name)
+
+            # 2. Check function signature for static injection
             # Skip nodes that don't have a callable (e.g., Param nodes)
             if node.callable_obj is None:
                 continue

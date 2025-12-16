@@ -90,7 +90,27 @@ class LocalExecutor:
                         "which was not found in the active context."
                     )
 
-        # 3. Combine arguments and execute
+        # 3. Resolve explicit Inject objects in arguments
+        # This allows passing cs.inject("name") as a value to the task call
+        resolved_args = []
+        for arg in args:
+            if isinstance(arg, Inject):
+                if arg.resource_name in resource_context:
+                    resolved_args.append(resource_context[arg.resource_name])
+                else:
+                    raise NameError(f"Resource '{arg.resource_name}' not found in context.")
+            else:
+                resolved_args.append(arg)
+        args = resolved_args
+
+        for key, value in final_kwargs.items():
+            if isinstance(value, Inject):
+                if value.resource_name in resource_context:
+                    final_kwargs[key] = resource_context[value.resource_name]
+                else:
+                    raise NameError(f"Resource '{value.resource_name}' not found in context.")
+
+        # 4. Combine arguments and execute
         # Injected resources take precedence over other inputs
         final_kwargs = {**final_kwargs, **kwargs_from_resources}
 

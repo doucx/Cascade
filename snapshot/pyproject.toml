@@ -31,11 +31,13 @@ dev = [
 ]
 template = ["jinja2"]
 http = ["aiohttp"]
+sql = ["sqlalchemy"]
 
 [project.entry-points."cascade.providers"]
 shell = "cascade.providers.shell:ShellProvider"
 template = "cascade.providers.template:TemplateProvider"
 http = "cascade.providers.http:HttpProvider"
+sql = "cascade.providers.sql:SqlProvider"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

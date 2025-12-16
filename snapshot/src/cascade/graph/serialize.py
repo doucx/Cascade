@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from .model import Graph, Node, Edge, EdgeType
 from ..spec.common import Param
 from ..spec.constraint import ResourceConstraint
-from ..spec.lazy_types import RetryPolicy
+from ..spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
 from ..spec.task import Task
 
 # --- Serialization Helpers ---
@@ -93,7 +93,16 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         }
 
     if node.constraints:
-        data["constraints"] = node.constraints.requirements
+        # Dynamic constraints contain LazyResult/MappedLazyResult which are not JSON serializable.
+        # We must replace them with their UUID reference.
+        serialized_reqs = {}
+        for res, amount in node.constraints.requirements.items():
+            if isinstance(amount, (LazyResult, MappedLazyResult)):
+                # Store the UUID reference as a JSON serializable dict.
+                serialized_reqs[res] = {"__lazy_ref": amount._uuid}
+            else:
+                serialized_reqs[res] = amount
+        data["constraints"] = serialized_reqs
 
     return data
 

@@ -438,11 +438,8 @@ class Engine:
             # Extract the i-th item from each iterable input
             kwargs_for_item = {k: v[i] for k, v in mapped_inputs.items()}
             # Invoke factory to get the LazyResult
-            sub_target = (
-                factory.map(**kwargs_for_item)
-                if hasattr(factory, "map_item")
-                else factory(**kwargs_for_item)
-            )
+            # Task objects implement __call__ to create LazyResult
+            sub_target = factory(**kwargs_for_item)
             sub_targets.append(sub_target)
 
         # 4. Execute sub-tasks in parallel

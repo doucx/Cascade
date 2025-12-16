@@ -58,7 +58,7 @@ def test_round_trip_top_level_functions():
 
     # Verify function restoration
     restored_node = next(n for n in restored_graph.nodes if n.name == "simple_task")
-    assert restored_node.callable_obj == simple_task
+    assert restored_node.callable_obj == simple_task.func
     assert restored_node.callable_obj(1) == 2
 
 def test_serialize_params():

@@ -1,21 +1,21 @@
 简要回答：
-测试失败揭示了两个问题：一是测试预期的 `qualname` 错误，模块级函数不包含 `<locals>`；二是 Python 装饰器的副作用——模块属性指向的是包装后的 `Task` 对象而非原函数，导致反序列化时类型不一致。我将修复测试断言，并在反序列化逻辑中增加对 `Task` 对象的自动解包。
+测试失败是因为 `restored_node.callable_obj` 是原始函数，而测试代码中比较的对象 `simple_task` 是被 `@task` 装饰后的 `Task` 实例。我将修正测试断言，并在序列化逻辑中增加对 `Task` 对象的支持，以确保 `map` 节点等场景下的序列化也能正常工作。
 
-## [WIP] fix(core): 修复序列化测试与 Task 对象解包逻辑
+## [WIP] fix(core): 修复反序列化测试断言及 Task 序列化支持
 
 ### 用户需求
-修复 `tests/graph/test_serialize.py` 中的测试失败，并确保存储了原始函数的 `Node` 在反序列化后仍然持有原始函数，而不是被 `@task` 装饰后的 `Task` 对象。
+1.  修正 `test_round_trip_top_level_functions` 中的断言错误，正确比较原始函数。
+2.  增强 `_get_func_path`，使其能够处理 `Task` 实例（解包出原始函数进行路径提取），防止因 `Task` 对象缺失 `__qualname__` 导致序列化失败。
 
 ### 评论
-这是一个典型的“装饰器改变了被装饰对象”导致的问题。在 Python 中，`@task` 使得 `module.func` 变成了 `Task` 实例。我们的图构建逻辑正确地提取了原始函数存入 `Node`，但在反序列化时，通过 `import_module` + `getattr` 拿回来的却是 `Task` 实例。这破坏了 `Node.callable_obj` 的类型一致性（从 `function` 变成了 `Task`），导致调用失败。
-解决方案是在 `_load_func_from_path` 中增加智能判断：如果加载回来的对象是 `Task` 实例，则自动剥离包装，取回 `.func`。
+当前的失败揭示了对象身份的不匹配。反序列化层正确地还原了“执行逻辑”（原始函数），但测试用例却在与“接口包装器”（Task对象）进行比较。此外，为了支持即将到来的 `.map()` 功能（它会存储 `Task` 实例作为 `mapping_factory`），序列化器必须能够主动解包 `Task` 对象，提取其内部函数的路径信息，实现完美的闭环：序列化时解包存路径，反序列化时加载包装器并再次解包。
 
 ### 目标
-1.  修正 `test_serialize_basic_graph` 中错误的 `qualname` 断言。
-2.  修改 `src/cascade/graph/serialize.py`，处理反序列化时的 `Task` 解包。
+1.  修改 `tests/graph/test_serialize.py`。
+2.  修改 `src/cascade/graph/serialize.py`。
 
 ### 基本原理
-保持 `Node.callable_obj` 始终为“执行逻辑的载体”（即原始函数）对于运行时的一致性至关重要。反序列化层充当了适配器，负责屏蔽 Python 导入机制带来的这种差异。
+序列化/反序列化的核心契约是：**内存中的 Graph 应该持有最底层的可执行单元（函数）**。装饰器只是用户侧的语法糖，系统内部应尽量透明化。
 
 ### 标签
 #intent/fix #flow/ready #priority/high #comp/core #concept/state #task/domain/core #task/object/serialization #task/action/bug-fix #task/state/continue
@@ -24,81 +24,66 @@
 
 ### Script
 
-#### Acts 1: 修复测试断言
+#### Acts 1: 修正测试断言
 
-首先修正测试代码中对 `qualname` 的错误预期。
+将断言对象从 `Task` 实例改为 `Task.func`。
 
 ~~~~~act
 patch_file
 tests/graph/test_serialize.py
 ~~~~~
 ~~~~~python
-    # Check Callable Metadata
-    node_simple = next(n for n in data["nodes"] if n["name"] == "simple_task")
-    assert node_simple["callable"]["qualname"] == "test_serialize_basic_graph.<locals>.simple_task"
-    # Note: local functions might have issues with importlib if not top-level, 
-    # but for structure check it's fine.
+    # Verify function restoration
+    restored_node = next(n for n in restored_graph.nodes if n.name == "simple_task")
+    assert restored_node.callable_obj == simple_task
+    assert restored_node.callable_obj(1) == 2
 ~~~~~
 ~~~~~python
-    # Check Callable Metadata
-    node_simple = next(n for n in data["nodes"] if n["name"] == "simple_task")
-    assert node_simple["callable"]["qualname"] == "simple_task"
-    # Note: local functions might have issues with importlib if not top-level, 
-    # but for structure check it's fine.
+    # Verify function restoration
+    restored_node = next(n for n in restored_graph.nodes if n.name == "simple_task")
+    assert restored_node.callable_obj == simple_task.func
+    assert restored_node.callable_obj(1) == 2
 ~~~~~
 
-#### Acts 2: 增强反序列化逻辑
+#### Acts 2: 增强序列化逻辑以支持 Task 对象
 
-修改 `serialize.py`，导入 `Task` 类（需要注意避免循环引用，这里使用类型检查或局部导入），并在加载对象时检查并解包。
+修改 `_get_func_path`，在提取路径前先检查是否为 `Task` 实例并解包。
 
 ~~~~~act
 patch_file
 src/cascade/graph/serialize.py
 ~~~~~
 ~~~~~python
-from .model import Graph, Node, Edge
-from ..spec.common import Param
-from ..spec.routing import Router
-from ..spec.task import RetryPolicy
-
 # --- Serialization Helpers ---
+
+def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
+    """Extracts module and qualname from a callable."""
+    if func is None:
+        return None
+    # Handle wrapped functions or partials if necessary in future
+    return {
+        "module": func.__module__,
+        "qualname": func.__qualname__
+    }
 ~~~~~
 ~~~~~python
-from .model import Graph, Node, Edge
-from ..spec.common import Param
-from ..spec.routing import Router
-from ..spec.task import RetryPolicy, Task
-
 # --- Serialization Helpers ---
-~~~~~
 
-~~~~~act
-patch_file
-src/cascade/graph/serialize.py
-~~~~~
-~~~~~python
-        for part in qualname.split('.'):
-            obj = getattr(obj, part)
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise ValueError(f"Could not restore function {module_name}.{qualname}: {e}")
+def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
+    """Extracts module and qualname from a callable."""
+    if func is None:
+        return None
+    
+    # If it's a Task instance, serialize the underlying function
+    if isinstance(func, Task):
+        func = func.func
 
-# --- Graph to Dict ---
-~~~~~
-~~~~~python
-        for part in qualname.split('.'):
-            obj = getattr(obj, part)
-        
-        # If the object is a Task wrapper (due to @task decorator), unwrap it
-        if isinstance(obj, Task):
-            return obj.func
-            
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise ValueError(f"Could not restore function {module_name}.{qualname}: {e}")
-
-# --- Graph to Dict ---
+    # Handle wrapped functions or partials if necessary in future
+    return {
+        "module": func.__module__,
+        "qualname": func.__qualname__
+    }
 ~~~~~
 
 ### 下一步建议
-现在测试应该可以通过了。通过后，我们可以将序列化功能合并，然后开始实现 **任务映射 (`.map`)**，这是支持动态并行工作流的关键特性。
+通过测试后，我们可以将序列化功能合并。然后进入 **任务映射 (`.map`)** 的开发。这将完成阶段三的所有核心功能。

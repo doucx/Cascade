@@ -12,6 +12,11 @@ def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
     """Extracts module and qualname from a callable."""
     if func is None:
         return None
+    
+    # If it's a Task instance, serialize the underlying function
+    if isinstance(func, Task):
+        func = func.func
+
     # Handle wrapped functions or partials if necessary in future
     return {
         "module": func.__module__,

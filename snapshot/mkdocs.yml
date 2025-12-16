@@ -1,10 +1,11 @@
 site_name: Cascade
 site_description: 'A modern, declarative automation library for Python.'
-repo_url: https://github.com/doucx/Cascade # 请替换为你的仓库 URL
-edit_uri: "" # 可选，指向编辑页面的链接
+repo_url: https://github.com/doucx/Cascade
+edit_uri: ""
 
 theme:
   name: material
+  language: zh # 1. 将中文设置为默认语言
   palette:
     # Palette toggle for light vs dark mode
     - media: "(prefers-color-scheme: light)"
@@ -25,6 +26,14 @@ theme:
     - content.code.copy
     - content.code.annotate
 
+# 2. 定义可用的语言版本
+extra:
+  alternate:
+    - name: English
+      lang: en
+    - name: 中文
+      lang: zh
+
 plugins:
   - search
   - mkdocstrings:
@@ -34,17 +43,18 @@ plugins:
             show_root_heading: true
 
 nav:
-  - 'Home': 'index.md'
-  - 'Tutorial':
-    - 'Getting Started': 'tutorial/getting-started.md'
-  - 'How-to Guides':
-    - 'Defining Computations': 'how-to-guides/defining-computations.md'
-    - 'Using Built-in Providers': 'how-to-guides/using-providers.md'
-    - 'Building Complex Workflows': 'how-to-guides/advanced-workflows.md'
-    - 'Managing Resources (DI)': 'how-to-guides/dependency-injection.md'
-    - 'Improving Robustness': 'how-to-guides/improving-robustness.md'
-  - 'Concepts':
-    - 'Core Philosophy': 'concepts/philosophy.md'
-  - 'Reference':
-    - 'API Reference': 'reference/api.md'
-    - 'CLI Tools': 'reference/cli-tools.md'
+  # 3. 更新导航标题为中文，并指向基础 .md 文件
+  - '首页': 'index.md'
+  - '教程':
+    - '快速上手': 'tutorial/getting-started.md'
+  - '操作指南':
+    - '定义计算': 'how-to-guides/defining-computations.md'
+    - '使用内置 Provider': 'how-to-guides/using-providers.md'
+    - '构建复杂工作流': 'how-to-guides/advanced-workflows.md'
+    - '管理资源 (DI)': 'how-to-guides/dependency-injection.md'
+    - '提升健壮性': 'how-to-guides/improving-robustness.md'
+  - '概念':
+    - '核心哲学': 'concepts/philosophy.md'
+  - '参考':
+    - 'API 参考': 'reference/api.md'
+    - 'CLI 工具': 'reference/cli-tools.md'

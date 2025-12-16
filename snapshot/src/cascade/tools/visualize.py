@@ -1,7 +1,7 @@
 from typing import Any
 from ..spec.task import LazyResult
 from ..graph.build import build_graph
-from ..graph.model import Node
+from ..graph.model import Node, EdgeType
 
 
 def visualize(target: LazyResult[Any]) -> str:
@@ -26,12 +26,16 @@ def visualize(target: LazyResult[Any]) -> str:
     # 2. Define Edges
     for edge in graph.edges:
         style = ""
-        if edge.arg_name == "_condition":
+        
+        if edge.edge_type == EdgeType.CONDITION:
             style = ' [style=dashed, color=gray, label="run_if"]'
-        elif edge.arg_name == "_implicit_dependency":
+        elif edge.edge_type == EdgeType.IMPLICIT:
             style = ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
         elif edge.router:
+            # Router selector edge (which is EdgeType.DATA)
             style = f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
+        elif edge.edge_type == EdgeType.CONSTRAINT:
+            style = f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
         else:
             style = f' [label="{edge.arg_name}"]'
 

@@ -6,7 +6,7 @@ from uuid import uuid4
 from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
-from cascade.graph.model import Node, Graph
+from cascade.graph.model import Node, Graph, EdgeType
 from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
@@ -85,14 +85,15 @@ class Engine:
     ) -> Optional[str]:
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
 
-        # 1. Cascade Skip
+        # 1. Cascade Skip: Check only DATA and IMPLICIT edges (i.e., actual inputs and router routes)
         for edge in incoming_edges:
-            if edge.source.id in skipped_node_ids:
-                return "UpstreamSkipped"
+            if edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
+                if edge.source.id in skipped_node_ids:
+                    return "UpstreamSkipped"
 
         # 2. Condition Check
         for edge in incoming_edges:
-            if edge.arg_name == "_condition":
+            if edge.edge_type == EdgeType.CONDITION:
                 condition_result = results.get(edge.source.id)
                 if not condition_result:
                     return "ConditionFalse"

@@ -45,15 +45,16 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
 
         # Extract log_level explicitly since it's injected by Typer via the dynamic signature
         log_level = kwargs.pop("log_level", "INFO")
+        log_format = kwargs.pop("log_format", "human")
 
         # Filter out None values so they don't override defaults in cs.run
         run_params = {k: v for k, v in kwargs.items() if v is not None}
-        cascade_run(target, params=run_params, log_level=log_level)
+        cascade_run(target, params=run_params, log_level=log_level, log_format=log_format)
 
     # --- Metaprogramming to create the dynamic signature ---
     sig_params = []
 
-    # 1. Add log_level as a standard CLI option
+    # 1. Add standard CLI options
     log_level_param = inspect.Parameter(
         name="log_level",
         kind=inspect.Parameter.KEYWORD_ONLY,
@@ -64,7 +65,17 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
         ),
         annotation=str,
     )
-    sig_params.append(log_level_param)
+    log_format_param = inspect.Parameter(
+        name="log_format",
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        default=typer.Option(
+            "human",
+            "--log-format",
+            help="Format for logging ('human' or 'json').",
+        ),
+        annotation=str,
+    )
+    sig_params.extend([log_level_param, log_format_param])
 
     # 2. Add user-defined parameters
     for p in params.values():

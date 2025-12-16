@@ -1,218 +1,38 @@
-Of course. This is an excellent next step for enhancing Cascade's observability, making it suitable for production environments where structured logging is essential.
+Excellent. The core refactoring is complete and stable. Now, let's make the new `JsonRenderer` accessible to the user and add dedicated tests to ensure its correctness.
 
-To achieve this, we need to perform a small but important refactoring. The current `MessageBus` formats the message string *before* sending it to the renderer. This is fine for human-readable logs, but for a `JsonRenderer`, we need the raw, structured data (`msg_id` and `kwargs`).
+This plan will introduce a `log_format` option to both `cs.run` and the generated CLI, allowing users to easily switch between human-readable and machine-parsable log formats.
 
-Therefore, my plan involves:
-1.  Changing the `Renderer` protocol to accept structured data instead of a pre-formatted string.
-2.  Updating the `MessageBus` and the existing `CliRenderer` to use this new protocol.
-3.  Implementing the new `JsonRenderer`.
-4.  Updating the tests to reflect these changes.
-
-Here is the detailed plan.
-
-## [WIP] feat: Implement JsonRenderer for structured logging
+## [WIP] feat: Add log_format option to select JSON or human-readable output
 
 ### 用户需求
-利用现有的语义消息总线，实现一个 `JsonRenderer`，将所有运行时事件输出为结构化的 JSON 格式，以便于日志聚合系统（如 Loki, Elasticsearch）进行机器解析。
+为 `cs.run` 函数和 `cs.cli` 生成的命令行工具添加一个 `log_format` 选项，允许用户选择使用 "human"（默认）或 "json" 格式的日志输出。
 
 ### 评论
-这是一个对生产环境可观测性至关重要的改进。它将 Cascade 的日志从单纯的人类可读输出，提升为可供机器分析的结构化数据流。
-
-为了实现这一点，需要对 `Renderer` 协议进行一次小型的重构，将消息格式化的责任从 `MessageBus` 转移到 `Renderer` 实现中。这是一个健康的架构演进，它遵循了关注点分离原则，使得系统能够支持任何输出格式（如未来的 `HtmlRenderer` 或 `XmlRenderer`），而不仅仅是文本或 JSON。
+这是完成结构化日志功能的关键一步。它将新实现的 `JsonRenderer` 从一个内部组件转变为一个对用户可用的、有价值的功能。通过在核心 API 和开发者工具中同时支持此选项，我们确保了 Cascade 在不同使用场景下（作为库或作为 CLI 工具）都能提供一致的可观测性体验。
 
 ### 目标
-1.  **重构 `Renderer` 协议**：将接口从接收格式化字符串改为接收原始的 `msg_id` 和数据 `kwargs`。
-2.  **更新 `MessageBus`**：修改其 `_render` 方法，使其直接将结构化数据委托给 `Renderer`，不再自行格式化。
-3.  **实现 `JsonRenderer`**：创建一个新的 `Renderer` 实现，它将接收到的结构化数据格式化为 JSON 字符串。
-4.  **更新 `CliRenderer`**：修改现有的 `CliRenderer` 以遵循新协议，使其现在负责从 `MessageStore` 获取模板并进行格式化。
-5.  **调整集成点**：更新 `cs.run` 函数和相关测试，以正确地实例化被修改后的 `CliRenderer`。
+1.  **更新 `cs.run`**：为其添加 `log_format` 参数，并根据该参数的值选择并实例化正确的 `Renderer`。
+2.  **增强 `cs.cli`**：为生成的 CLI 自动添加 `--log-format` 命令行选项。
+3.  **创建 Renderer 测试**: 新建一个专门的测试文件 `tests/messaging/test_renderer.py`，为 `CliRenderer` 和 `JsonRenderer` 添加单元测试。
+4.  **更新 CLI 测试**: 扩展 `tests/tools/test_cli.py`，验证 `--log-format` 选项是否正常工作。
 
 ### 基本原理
-核心思想是**将数据与表现分离**。`MessageBus` 的职责是分发**语义事件**（即 `msg_id` 和与之关联的数据）。`Renderer` 的职责是将这些语义事件**呈现**为特定的格式。通过修改它们之间的协议，我们强制执行了这种分离，从而使系统更加模块化和可扩展。
+通过将格式选择逻辑集中在顶层的 `cs.run` 函数中，我们为所有 Cascade 工作流提供了一个统一的配置入口。`cs.cli` 工具则通过元编程将这个配置选项无缝地暴露给命令行用户，体现了 Cascade “开发者体验优先”的设计原则。专门的 Renderer 测试将确保这两种输出格式的正确性和稳定性，独立于 `Engine` 的执行逻辑。
 
 ### 标签
-#intent/build #intent/refine #flow/ready #priority/high #comp/core #comp/tests #concept/ui #scope/api #scope/dx #ai/instruct #task/domain/observability #task/object/json-logging #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/core #comp/cli #comp/tests #concept/ui #scope/api #scope/dx #ai/instruct #task/domain/observability #task/object/json-logging #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `Renderer` 协议和 `MessageBus`
+#### Acts 1: 更新 `cs.run` 以支持 `log_format`
 
-我们将更新 `bus.py`，修改 `Renderer` 协议和 `_render` 方法的实现，将格式化逻辑的责任转移出去。
-
-~~~~~act
-patch_file
-src/cascade/messaging/bus.py
-~~~~~
-~~~~~python
-class Renderer(Protocol):
-    def print(self, message: str, level: str) -> None: ...
-
-
-class MessageBus:
-    def __init__(self, store: MessageStore):
-        self._store = store
-        self._renderer: Optional[Renderer] = None
-
-    def set_renderer(self, renderer: Renderer):
-        self._renderer = renderer
-
-    def _render(self, level: str, msg_id: str, **kwargs: Any) -> None:
-        if not self._renderer:
-            return
-
-        template = self._store.get(msg_id)
-        try:
-            message = template.format(**kwargs)
-        except KeyError as e:
-            message = f"<Formatting error for '{msg_id}': missing key {e}>"
-
-        self._renderer.print(message, level)
-
-    def info(self, msg_id: str, **kwargs: Any) -> None:
-~~~~~
-~~~~~python
-class Renderer(Protocol):
-    def render(self, msg_id: str, level: str, **kwargs: Any) -> None: ...
-
-
-class MessageBus:
-    def __init__(self, store: MessageStore):
-        self._store = store
-        self._renderer: Optional[Renderer] = None
-
-    @property
-    def store(self) -> MessageStore:
-        return self._store
-
-    def set_renderer(self, renderer: Renderer):
-        self._renderer = renderer
-
-    def _render(self, level: str, msg_id: str, **kwargs: Any) -> None:
-        if not self._renderer:
-            return
-        
-        # The renderer is now responsible for everything
-        self._renderer.render(msg_id, level, **kwargs)
-
-    def info(self, msg_id: str, **kwargs: Any) -> None:
-~~~~~
-
-#### Acts 2: 实现 `JsonRenderer` 并更新 `CliRenderer`
-
-现在，我们将重写 `renderer.py`。`CliRenderer` 将承担起格式化的职责，并新增 `JsonRenderer`。
-
-~~~~~act
-write_file
-src/cascade/messaging/renderer.py
-~~~~~
-~~~~~python
-import sys
-import json
-import time
-from typing import TextIO
-from datetime import datetime, timezone
-
-from .bus import MessageStore, Renderer
-
-LOG_LEVELS = {
-    "DEBUG": 10,
-    "INFO": 20,
-    "WARNING": 30,
-    "ERROR": 40,
-}
-
-
-class CliRenderer:
-    """
-    Renders messages as human-readable, formatted text strings.
-    """
-    def __init__(
-        self,
-        store: MessageStore,
-        stream: TextIO = sys.stderr,
-        min_level: str = "INFO",
-    ):
-        self._store = store
-        self._stream = stream
-        self._min_level_val = LOG_LEVELS.get(min_level.upper(), 20)
-
-    def render(self, msg_id: str, level: str, **kwargs):
-        if LOG_LEVELS.get(level.upper(), 20) >= self._min_level_val:
-            template = self._store.get(msg_id)
-            try:
-                message = template.format(**kwargs)
-            except KeyError as e:
-                message = f"<Formatting error for '{msg_id}': missing key {e}>"
-            
-            print(message, file=self._stream)
-
-
-class JsonRenderer:
-    """
-    Renders messages as structured, JSON-formatted strings.
-    """
-    def __init__(
-        self,
-        stream: TextIO = sys.stderr,
-        min_level: str = "INFO",
-    ):
-        self._stream = stream
-        self._min_level_val = LOG_LEVELS.get(min_level.upper(), 20)
-
-    def render(self, msg_id: str, level: str, **kwargs):
-        if LOG_LEVELS.get(level.upper(), 20) >= self._min_level_val:
-            log_record = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "level": level.upper(),
-                "event_id": msg_id,
-                "data": kwargs,
-            }
-
-            def default_serializer(o):
-                """Handle non-serializable objects gracefully."""
-                return repr(o)
-
-            json_str = json.dumps(log_record, default=default_serializer)
-            print(json_str, file=self._stream)
-~~~~~
-
-#### Acts 3: 更新 `cs.run` 以正确实例化 `CliRenderer`
-
-`CliRenderer` 现在需要 `MessageStore` 实例，我们需要更新 `cs.run` 来提供它。
+我们将修改 `src/cascade/__init__.py` 中的 `run` 函数，使其能够根据 `log_format` 参数选择渲染器。
 
 ~~~~~act
 patch_file
 src/cascade/__init__.py
-~~~~~
-~~~~~python
-from .messaging.bus import bus as messaging_bus
-from .messaging.renderer import CliRenderer
-
-def run(
-    target: LazyResult,
-    params: Optional[Dict[str, Any]] = None,
-    system_resources: Optional[Dict[str, Any]] = None,
-    log_level: str = "INFO",
-) -> Any:
-    """
-    Runs a Cascade workflow with a default engine configuration.
-
-    Args:
-        target: The workflow target.
-        params: Runtime parameters.
-        system_resources: A dictionary defining total system capacity
-                          (e.g. {"gpu": 1, "threads": 4}).
-        log_level: Minimum logging level ("DEBUG", "INFO", "WARNING", "ERROR").
-                   Defaults to "INFO".
-    """
-    # 1. Setup the messaging renderer
-    renderer = CliRenderer(min_level=log_level)
-    messaging_bus.set_renderer(renderer)
-    
-    # 2. Setup the event system
-    event_bus = MessageBus()
 ~~~~~
 ~~~~~python
 from .messaging.bus import bus as messaging_bus
@@ -241,78 +61,235 @@ def run(
     
     # 2. Setup the event system
     event_bus = MessageBus()
+    # Attach the translator
+~~~~~
+~~~~~python
+from .messaging.bus import bus as messaging_bus
+from .messaging.renderer import CliRenderer, JsonRenderer
+
+def run(
+    target: LazyResult,
+    params: Optional[Dict[str, Any]] = None,
+    system_resources: Optional[Dict[str, Any]] = None,
+    log_level: str = "INFO",
+    log_format: str = "human",
+) -> Any:
+    """
+    Runs a Cascade workflow with a default engine configuration.
+
+    Args:
+        target: The workflow target.
+        params: Runtime parameters.
+        system_resources: A dictionary defining total system capacity
+                          (e.g. {"gpu": 1, "threads": 4}).
+        log_level: Minimum logging level ("DEBUG", "INFO", "WARNING", "ERROR").
+                   Defaults to "INFO".
+        log_format: Logging format ("human" or "json"). Defaults to "human".
+    """
+    # 1. Setup the messaging renderer
+    if log_format == "json":
+        renderer = JsonRenderer(min_level=log_level)
+    else:
+        renderer = CliRenderer(store=messaging_bus.store, min_level=log_level)
+    messaging_bus.set_renderer(renderer)
+
+    # 2. Setup the event system
+    event_bus = MessageBus()
+    # Attach the translator
 ~~~~~
 
-#### Acts 4: 更新测试用例
+#### Acts 2: 增强 `cs.cli` 以支持 `--log-format`
 
-最后，我们需要更新 `test_bus.py` 中实例化 `CliRenderer` 的方式，以符合新的 `__init__` 签名。
+现在，我们将 `--log-format` 选项添加到 `src/cascade/tools/cli.py` 生成的 CLI 中。
 
 ~~~~~act
 patch_file
-tests/runtime/test_bus.py
+src/cascade/tools/cli.py
 ~~~~~
 ~~~~~python
-def test_human_readable_subscriber_integration():
-    """
-    Integration test for the full logging pipeline:
-    EventBus -> Subscriber -> MessageBus -> Renderer -> Output
-    """
-    event_bus = EventBus()
-    output = io.StringIO()
-    renderer = CliRenderer(stream=output, min_level="INFO")
-    messaging_bus.set_renderer(renderer)
+    def main(**kwargs):
+        """The actual function that Typer will wrap."""
+        from .. import run as cascade_run
 
-    # Connect the subscriber to the event bus
+        # Extract log_level explicitly since it's injected by Typer via the dynamic signature
+        log_level = kwargs.pop("log_level", "INFO")
+
+        # Filter out None values so they don't override defaults in cs.run
+        run_params = {k: v for k, v in kwargs.items() if v is not None}
+        cascade_run(target, params=run_params, log_level=log_level)
+
+    # --- Metaprogramming to create the dynamic signature ---
+    sig_params = []
+
+    # 1. Add log_level as a standard CLI option
+    log_level_param = inspect.Parameter(
 ~~~~~
 ~~~~~python
-def test_human_readable_subscriber_integration():
-    """
-    Integration test for the full logging pipeline:
-    EventBus -> Subscriber -> MessageBus -> Renderer -> Output
-    """
-    event_bus = EventBus()
-    output = io.StringIO()
-    renderer = CliRenderer(store=messaging_bus.store, stream=output, min_level="INFO")
-    messaging_bus.set_renderer(renderer)
+    def main(**kwargs):
+        """The actual function that Typer will wrap."""
+        from .. import run as cascade_run
 
-    # Connect the subscriber to the event bus
+        # Extract log_level explicitly since it's injected by Typer via the dynamic signature
+        log_level = kwargs.pop("log_level", "INFO")
+        log_format = kwargs.pop("log_format", "human")
+
+        # Filter out None values so they don't override defaults in cs.run
+        run_params = {k: v for k, v in kwargs.items() if v is not None}
+        cascade_run(target, params=run_params, log_level=log_level, log_format=log_format)
+
+    # --- Metaprogramming to create the dynamic signature ---
+    sig_params = []
+
+    # 1. Add standard CLI options
+    log_level_param = inspect.Parameter(
 ~~~~~
+~~~~~act
+patch_file
+src/cascade/tools/cli.py
+~~~~~
+~~~~~python
+    )
+    sig_params.append(log_level_param)
+
+    # 2. Add user-defined parameters
+    for p in params.values():
+        # Determine the default value for Typer
+~~~~~
+~~~~~python
+    )
+    log_format_param = inspect.Parameter(
+        name="log_format",
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        default=typer.Option(
+            "human",
+            "--log-format",
+            help="Format for logging ('human' or 'json').",
+        ),
+        annotation=str,
+    )
+    sig_params.extend([log_level_param, log_format_param])
+
+    # 2. Add user-defined parameters
+    for p in params.values():
+        # Determine the default value for Typer
+~~~~~
+
+#### Acts 3: 创建 Renderer 测试
+
+我们将创建一个新的测试文件 `tests/messaging/test_renderer.py` 来独立测试 `CliRenderer` 和 `JsonRenderer`。
+
+~~~~~act
+write_file
+tests/messaging/test_renderer.py
+~~~~~
+~~~~~python
+import io
+import json
+import pytest
+from cascade.messaging.renderer import CliRenderer, JsonRenderer
+from cascade.messaging.bus import MessageStore
+
+@pytest.fixture
+def msg_store():
+    store = MessageStore()
+    # Manually add a message for testing
+    store._messages["test.hello"] = "Hello, {name}!"
+    return store
+
+
+def test_cli_renderer(msg_store):
+    output = io.StringIO()
+    renderer = CliRenderer(store=msg_store, stream=output)
+
+    renderer.render("test.hello", "info", name="World")
+
+    assert "Hello, World!" in output.getvalue()
+
+
+def test_json_renderer_structure_and_content():
+    output = io.StringIO()
+    renderer = JsonRenderer(stream=output)
+
+    renderer.render("user.created", "info", user_id=123, status="active")
+    
+    log_line = output.getvalue()
+    data = json.loads(log_line)
+
+    assert "timestamp" in data
+    assert data["level"] == "INFO"
+    assert data["event_id"] == "user.created"
+    assert data["data"]["user_id"] == 123
+    assert data["data"]["status"] == "active"
+
+
+def test_json_renderer_log_level_filtering():
+    output = io.StringIO()
+    renderer = JsonRenderer(stream=output, min_level="WARNING")
+
+    # This should be rendered
+    renderer.render("api.error", "error", code=500)
+    # This should be filtered out
+    renderer.render("request.start", "info", path="/")
+
+    logs = output.getvalue().strip()
+    assert '"level": "ERROR"' in logs
+    assert '"level": "INFO"' not in logs
+    # Ensure it's a single line of JSON
+    assert len(logs.splitlines()) == 1
+~~~~~
+
+#### Acts 4: 更新 CLI 测试以验证新选项
+
+最后，我们将向 `tests/tools/test_cli.py` 添加一个测试用例，以验证 `--log-format json` 选项的功能。
 
 ~~~~~act
 patch_file
-tests/runtime/test_bus.py
+tests/tools/test_cli.py
 ~~~~~
 ~~~~~python
-def test_human_readable_subscriber_log_level_filtering():
-    """
-    Tests that the min_level setting in the CliRenderer correctly filters messages.
-    """
-    event_bus = EventBus()
-    output = io.StringIO()
-    # Set renderer level to ERROR
-    renderer = CliRenderer(stream=output, min_level="ERROR")
-    messaging_bus.set_renderer(renderer)
-    
-    HumanReadableLogSubscriber(event_bus)
+    assert "--name" in result.stdout
+    assert "--count" in result.stdout
+    assert "--log-level" in result.stdout
+    assert "Minimum level for console logging" in result.stdout
+
+
+def test_cli_missing_required_param():
 ~~~~~
 ~~~~~python
-def test_human_readable_subscriber_log_level_filtering():
-    """
-    Tests that the min_level setting in the CliRenderer correctly filters messages.
-    """
-    event_bus = EventBus()
-    output = io.StringIO()
-    # Set renderer level to ERROR
-    renderer = CliRenderer(store=messaging_bus.store, stream=output, min_level="ERROR")
-    messaging_bus.set_renderer(renderer)
+    assert "--name" in result.stdout
+    assert "--count" in result.stdout
+    assert "--log-level" in result.stdout
+    assert "--log-format" in result.stdout
+    assert "Format for logging" in result.stdout
+
+
+def test_cli_json_log_format():
+    """Tests that the CLI can produce JSON formatted logs."""
+    @cs.task
+    def simple_task():
+        return "done"
+
+    workflow = simple_task()
+    app = cs.cli(workflow)
+
+    result = runner.invoke(app, ["--log-format", "json"])
+
+    assert result.exit_code == 0
+    # Engine logs go to stderr by default
+    logs = result.stderr.strip()
     
-    HumanReadableLogSubscriber(event_bus)
+    # Check that each line is a valid JSON
+    log_lines = [json.loads(line) for line in logs.splitlines()]
+    
+    assert any(item["event_id"] == "run.started" for item in log_lines)
+    assert any(item["event_id"] == "task.started" and item["data"]["task_name"] == "simple_task" for item in log_lines)
+    assert any(item["event_id"] == "run.finished_success" for item in log_lines)
+
+
+def test_cli_missing_required_param():
 ~~~~~
 
 ### 下一步建议
-我们已经成功实现了 `JsonRenderer`。下一步的关键是让用户能够方便地选择使用它。我建议：
+我们已经成功地将结构化日志功能完全集成并暴露给了用户。代码修改已经完成，现在是时候将这个完整的逻辑单元提交到版本控制中了。
 
-1.  **在 `cs.run` 和 `cs.cli` 中增加一个 `log_format` 参数**：允许用户通过 `cs.run(..., log_format="json")` 或 `python my_script.py --log-format json` 来选择渲染器。
-2.  **增加一个测试文件**：为新的 `JsonRenderer` 编写专门的单元测试，验证其输出格式的正确性。
-
-如果你同意，我将生成执行这些后续步骤的计划。
+我将生成一个 `[COMMIT]` 计划，其中包含 `git add` 和 `git commit` 指令。

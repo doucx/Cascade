@@ -39,22 +39,26 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          options:
+          options: 
             show_root_heading: true
 
-nav:
-  # 3. 更新导航标题为中文，并指向基础 .md 文件
-  - '首页': 'index.md'
-  - '教程':
-    - '快速上手': 'tutorial/getting-started.md'
-  - '操作指南':
-    - '定义计算': 'how-to-guides/defining-computations.md'
-    - '使用内置 Provider': 'how-to-guides/using-providers.md'
-    - '构建复杂工作流': 'how-to-guides/advanced-workflows.md'
-    - '管理资源 (DI)': 'how-to-guides/dependency-injection.md'
-    - '提升健壮性': 'how-to-guides/improving-robustness.md'
-  - '概念':
-    - '核心哲学': 'concepts/philosophy.md'
-  - '参考':
-    - 'API 参考': 'reference/api.md'
-    - 'CLI 工具': 'reference/cli-tools.md'
+# Add validation block to suppress warnings for language-specific pages
+validation:
+  pages:
+    not_in_nav: ignore
+
+nav: 
+  - '首页': 'index.md' 
+  - '教程': 
+    - '快速上手': 'tutorial/getting-started.md' 
+  - '操作指南': 
+    - '定义计算': 'how-to-guides/defining-computations.md' 
+    - '使用内置 Provider': 'how-to-guides/using-providers.md' 
+    - '构建复杂工作流': 'how-to-guides/advanced-workflows.md' 
+    - '管理资源 (DI)': 'how-to-guides/dependency-injection.md' 
+    - '提升健壮性': 'how-to-guides/improving-robustness.md' 
+  - '概念': 
+    - '核心哲学': 'concepts/philosophy.md' 
+  - '参考': 
+    - 'API 参考': 'reference/api.md' 
+    - 'CLI 工具': 'reference/cli-tools.md' 

@@ -400,8 +400,12 @@ class Engine:
         Dynamically unfolds and executes a map node.
         """
         # 1. Resolve inputs
-        # The node inputs (from edges) correspond to the iterables passed to .map()
-        mapped_inputs = self._resolve_inputs(node, graph, upstream_results)
+        # Start with static literals
+        mapped_inputs = node.literal_inputs.copy()
+        
+        # Merge dynamic inputs from upstream
+        dynamic_inputs = self._resolve_inputs(node, graph, upstream_results)
+        mapped_inputs.update(dynamic_inputs)
         
         if not mapped_inputs:
             return []

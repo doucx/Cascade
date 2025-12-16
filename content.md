@@ -1,131 +1,71 @@
-## [WIP] fix(runtime): Fix result mapping misalignment in Engine due to dynamic pruning
+## [WIP] fix(test): Ensure deterministic execution order for recursive pruning test
 
 ### 用户需求
-修复 `Engine` 中的一个严重 Bug：当并行执行的任务触发了剪枝逻辑（例如 `Router` 的 Selector 完成），可能会导致同一批次中正在运行的其他任务被标记为 `Skipped`。这导致在结果收集阶段，`runnable_nodes` 列表（过滤掉了 Skipped 节点）与 `stage_results` 列表（包含所有已运行任务的结果）长度和顺序不一致，从而导致结果错位（Zip Misalignment）。
+修复 `test_pruning_exclusive_branches` 测试失败。
 
-### 评论
-这个 Bug 非常隐蔽且致命。它揭示了“执行计划状态”在异步并发环境下的易变性。我们不能依赖“再次过滤”来重建上下文，必须在提交任务时就确立好“任务 -> 节点”的不可变映射关系。
+### 错误分析
+测试断言 `branch_b_upstream` 应该被剪枝，但实际上它运行了。
+原因在于 `NativeSolver` 将无依赖的 `get_route` (Selector) 和 `branch_b_upstream` (Route Root) 调度到了同一个 Stage 0 并行执行。由于 `branch_b_upstream` 在剪枝逻辑触发前（或同时）就已经被提交执行，因此无法被“拦截”。
+剪枝是一种“尽力而为”的优化，它只能阻止尚未运行的任务。
 
-### 目标
-修改 `Engine._execute_graph` 方法，在构建 `tasks_to_run` 的同时，同步构建一个 `nodes_in_execution` 列表。在收集结果时，直接使用这个列表进行 Zip 操作，完全摒弃重新过滤的逻辑。
-
-### 基本原理
-通过维护一个显式的 `nodes_in_execution` 列表，我们确保了无论任务执行期间发生了什么状态变更（如剪枝），结果与其所属节点的对应关系始终是锚定的、正确的。即使一个任务在运行期间被标记为 Pruned，既然它已经运行并产生了结果，我们就应该记录这个结果（或者丢弃），但绝不能让它影响其他节点的结果映射。
+### 解决方案
+为了确定性地测试递归剪枝逻辑，我们需要构造一个图，使得 Selector 的执行必然早于被剪枝分支的根节点。
+通过引入一个 `dummy_start` 任务，并让 `branch_b_upstream` 依赖它，我们可以将 `branch_b_upstream` 推迟到 Stage 1。而 Selector (`get_route`) 仍然在 Stage 0。
+这样，当 Stage 0 完成时，Selector 触发剪枝，此时 Stage 1 尚未开始，`branch_b_upstream` 将被成功标记为 Pruned 并跳过。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/core #task/object/engine #task/action/bug-fix #task/state/end
+#intent/fix #flow/ready #priority/medium #comp/tests #concept/control-flow #scope/core #ai/instruct #task/domain/testing #task/object/router-test #task/action/fix-flaky-test #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `Engine` 的结果映射逻辑
+#### Acts 1: 修正测试用例
 
-我们将在 `_execute_graph` 中引入 `nodes_in_execution` 列表，确保结果的一一对应。
+修改 `tests/runtime/test_router_pruning.py`，引入依赖以控制执行顺序。
 
 ~~~~~act
 patch_file
-src/cascade/runtime/engine.py
+tests/runtime/test_router_pruning.py
 ~~~~~
 ~~~~~python
-        for stage in plan:
-            # Prepare tasks for this stage
-            tasks_to_run = []
-            
-            for node in stage:
-                if node.node_type == "param":
-                    continue
+    @cs.task
+    def branch_b():
+        return "B" # Should be pruned
 
-                skip_reason = self.flow_manager.should_skip(node, results)
-                if skip_reason:
-                    self.flow_manager.mark_skipped(node.id)
-                    self.bus.publish(
-                        TaskSkipped(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            reason=skip_reason,
-                        )
-                    )
-                    continue
-                
-                # Create coroutine for the node
-                tasks_to_run.append(
-                    self._execute_node_with_policies(
-                        node, graph, results, active_resources, run_id, params
-                    )
-                )
+    @cs.task
+    def branch_b_upstream():
+        return "B_UP" # Should also be pruned (recursive)
 
-            if not tasks_to_run:
-                continue
+    # branch_b depends on branch_b_upstream
+    b_chain = branch_b(branch_b_upstream())
 
-            # Execute stage in parallel
-            # We use return_exceptions=False (default) so the first error propagates immediately
-            stage_results = await asyncio.gather(*tasks_to_run)
-
-            # Map results back to node IDs
-            # We need to reconstruct which result belongs to which node
-            # tasks_to_run order matches the iteration order.
-            # We need to re-iterate or capture the mapping.
-            # Let's capture the node IDs corresponding to tasks_to_run.
-            
-            runnable_nodes = []
-            for node in stage:
-                if node.node_type != "param" and not self.flow_manager.is_skipped(node.id):
-                    runnable_nodes.append(node)
-            
-            for node, res in zip(runnable_nodes, stage_results):
-                results[node.id] = res
+    router = cs.Router(
+        selector=get_route(),
+        routes={"a": branch_a(), "b": b_chain}
+    )
 ~~~~~
 ~~~~~python
-        for stage in plan:
-            # Prepare tasks for this stage
-            tasks_to_run = []
-            nodes_in_execution = []
-            
-            for node in stage:
-                if node.node_type == "param":
-                    continue
+    @cs.task
+    def branch_b(val):
+        return "B" # Should be pruned
 
-                skip_reason = self.flow_manager.should_skip(node, results)
-                if skip_reason:
-                    self.flow_manager.mark_skipped(node.id)
-                    self.bus.publish(
-                        TaskSkipped(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            reason=skip_reason,
-                        )
-                    )
-                    continue
-                
-                # Create coroutine for the node
-                tasks_to_run.append(
-                    self._execute_node_with_policies(
-                        node, graph, results, active_resources, run_id, params
-                    )
-                )
-                nodes_in_execution.append(node)
+    @cs.task
+    def dummy_dep():
+        return "DEP"
 
-            if not tasks_to_run:
-                continue
+    @cs.task
+    def branch_b_upstream(dep):
+        return "B_UP" # Should also be pruned (recursive)
 
-            # Execute stage in parallel
-            # We use return_exceptions=False (default) so the first error propagates immediately
-            stage_results = await asyncio.gather(*tasks_to_run)
+    # branch_b depends on branch_b_upstream
+    # branch_b_upstream depends on dummy_dep
+    # This pushes branch_b_upstream to Stage 1, while get_route (selector) is in Stage 0.
+    # This ensures pruning happens BEFORE branch_b_upstream is scheduled.
+    b_chain = branch_b(branch_b_upstream(dummy_dep()))
 
-            # Map results back to node IDs
-            # We use the captured nodes_in_execution list to ensure 1:1 mapping with tasks_to_run.
-            # This is critical because tasks executing in parallel might trigger pruning (via Router),
-            # which could change the skip status of nodes in this very list.
-            # If we re-filtered based on skip status here, we'd get a misalignment.
-            for node, res in zip(nodes_in_execution, stage_results):
-                results[node.id] = res
+    router = cs.Router(
+        selector=get_route(),
+        routes={"a": branch_a(), "b": b_chain}
+    )
 ~~~~~
-
-### 下一步建议
-这是一个涉及并发一致性的关键修复。
-现在，即使 `Router` 剪枝了当前批次中的某个任务，该任务的结果仍然会与其节点正确对应（因为它是基于提交时的快照）。虽然从业务逻辑上看这个结果可能不再被需要（因为被剪枝了），但从引擎的数据一致性角度看，它必须被正确归档，不能“张冠李戴”。
-
-请运行测试。验证通过后，我们的 `Router` 和 `FlowManager` 实现就可以视为稳固了。

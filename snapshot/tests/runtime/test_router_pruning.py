@@ -26,15 +26,22 @@ async def test_pruning_exclusive_branches():
         return "A"
 
     @cs.task
-    def branch_b():
+    def branch_b(val):
         return "B" # Should be pruned
 
     @cs.task
-    def branch_b_upstream():
+    def dummy_dep():
+        return "DEP"
+
+    @cs.task
+    def branch_b_upstream(dep):
         return "B_UP" # Should also be pruned (recursive)
 
     # branch_b depends on branch_b_upstream
-    b_chain = branch_b(branch_b_upstream())
+    # branch_b_upstream depends on dummy_dep
+    # This pushes branch_b_upstream to Stage 1, while get_route (selector) is in Stage 0.
+    # This ensures pruning happens BEFORE branch_b_upstream is scheduled.
+    b_chain = branch_b(branch_b_upstream(dummy_dep()))
 
     router = cs.Router(
         selector=get_route(),

@@ -44,3 +44,16 @@ class CachePolicy(Protocol):
         Saves a result to the cache.
         """
         ...
+
+
+class LazyFactory(Protocol):
+    """
+    Protocol for any object that can produce a MappedLazyResult via a .map() method.
+    Example: Task, ShellTask, etc.
+    """
+
+    def map(self, **kwargs) -> Any:
+        """
+        Creates a mapped lazy result by applying this factory over iterables.
+        """
+        ...

@@ -1,11 +1,11 @@
-from typing import TypeVar, Generic, Callable, Any, Dict, Optional, Union
+from typing import TypeVar, Generic, Callable, Any, Dict, Optional, Union, List
 from dataclasses import dataclass, field
 import inspect
 from uuid import uuid4
 
 # Import protocols only for type hinting to avoid circular imports if possible
 # But here we just need Any or "CachePolicy" forward ref
-from cascade.runtime.protocols import CachePolicy
+from cascade.runtime.protocols import CachePolicy, LazyFactory
 
 T = TypeVar("T")
 
@@ -58,6 +58,26 @@ class LazyResult(Generic[T]):
         return self
 
 
+@dataclass
+class MappedLazyResult(Generic[T]):
+    """
+    Represents the result of mapping a factory over a set of inputs.
+    It resolves to a list of results.
+    """
+
+    factory: LazyFactory
+    mapping_kwargs: Dict[str, Any]
+    _uuid: str = field(default_factory=lambda: str(uuid4()))
+    _condition: Optional[LazyResult] = None
+
+    def __hash__(self):
+        return hash(self._uuid)
+
+    def run_if(self, condition: LazyResult) -> "MappedLazyResult[T]":
+        self._condition = condition
+        return self
+
+
 class Task(Generic[T]):
     """
     Wraps a callable to make it return a LazyResult when called.
@@ -72,6 +92,19 @@ class Task(Generic[T]):
 
     def __call__(self, *args, **kwargs) -> LazyResult[T]:
         return LazyResult(task=self, args=args, kwargs=kwargs)
+
+    def map(self, **kwargs) -> MappedLazyResult[List[T]]:
+        """
+        Applies the task over a sequence of inputs.
+        
+        Args:
+            **kwargs: Arguments where values are iterables (or LazyResults resolving to iterables).
+                      All iterables must have the same length.
+        
+        Returns:
+            A MappedLazyResult that resolves to a list of outputs.
+        """
+        return MappedLazyResult(factory=self, mapping_kwargs=kwargs)
 
     def __repr__(self):
         return f"<Task {self.name}>"

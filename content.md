@@ -1,55 +1,196 @@
-好的，现在我们的底层模型已经稳固，可以为 `Router` 功能创建一个干净的提交了。
+好的，我们按照规划，分步实施。
 
-## [COMMIT] feat(core): Implement dynamic routing with `cs.Router`
+这是第一步：**定义核心协议与数据结构**。
+
+我们将首先在协议层正式定义“可映射工厂”的契约，然后在 `Task` 类中实现这一契约，引入 `MappedLazyResult` 结构。这不会影响现有代码的运行，但为后续的运行时支持做好了数据准备。
+
+## [WIP] feat(core): Define `LazyFactory` protocol and `MappedLazyResult`
 
 ### 用户需求
-引入 `cs.Router` 类，允许任务的输入参数根据运行时的 `selector` 值（来自 `Param` 或上游任务），动态地从 `routes` 字典中定义的多个上游任务中选择其结果。
+开始实现重新设计的 `.map()` 功能。第一步需要建立基础架构：定义 `LazyFactory` 协议接口，并在 `Task` 类中实现 `.map()` 方法，使其返回一个新的 `MappedLazyResult` 对象。
 
 ### 评论
-`cs.Router` 是 `Cascade` 动态工作流能力的核心组件之一。它将图的连接关系从静态绑定升级为动态选择，极大地增强了库的表达能力。本次实现依赖于 `ParamNode` 的重构，确保了 `Router` 可以与 `Param` 无缝集成，支持多环境配置切换、A/B 测试等高级模式。
+这是架构升级的基础。通过显式定义 `LazyFactory` 协议，我们为未来所有的“值工厂”（如 `cs.shell`, `cs.sql`）确立了统一的行为标准。引入 `MappedLazyResult` 则为图构建器提供了一个明确的信号，表明这里存在一个需要动态展开的结构，而不是一个静态的任务调用。
 
 ### 目标
-创建一个 Git 提交，包含 `Router` 的完整实现及其测试用例。
+1.  在 `protocols.py` 中定义 `LazyFactory` 协议。
+2.  在 `task.py` 中定义 `MappedLazyResult` 数据类。
+3.  在 `Task` 类中实现 `.map()` 方法。
 
 ### 基本原理
-在 `ParamNode` 重构成功的基础上，`Router` 功能现在是一个逻辑上完整且经过充分测试的工作单元，理应拥有自己独立的提交历史。
+将接口定义与运行时逻辑实现分离，有助于保持代码变更的清晰和原子性。本步骤仅关注“定义”，确保数据结构正确，无需担心执行逻辑的复杂性。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/core #comp/runtime #concept/routing #scope/api #ai/instruct #task/domain/core #task/object/router #task/action/implementation #task/state/end
+#intent/build #flow/ready #priority/high #comp/core #comp/interfaces #concept/map #scope/api #ai/instruct #task/domain/core #task/object/map-api #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 提交 `Router` 功能及其测试
+#### Acts 1: 定义 `LazyFactory` 协议
 
-将 `Router` 的规范定义、图构建逻辑修改、执行器处理逻辑以及测试文件添加到暂存区，并执行提交。
+我们在运行时协议中增加 `LazyFactory` 定义。它要求实现者提供一个 `.map` 方法。
 
 ~~~~~act
-git_add
-src/cascade/__init__.py
-src/cascade/adapters/executors/local.py
-src/cascade/graph/build.py
-src/cascade/graph/model.py
-src/cascade/spec/routing.py
-tests/test_routing.py
+patch_file
+src/cascade/runtime/protocols.py
+~~~~~
+~~~~~python
+    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+        """
+        Saves a result to the cache.
+        """
+        ...
+~~~~~
+~~~~~python
+    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+        """
+        Saves a result to the cache.
+        """
+        ...
+
+
+class LazyFactory(Protocol):
+    """
+    Protocol for any object that can produce a MappedLazyResult via a .map() method.
+    Example: Task, ShellTask, etc.
+    """
+
+    def map(self, **kwargs) -> Any:
+        """
+        Creates a mapped lazy result by applying this factory over iterables.
+        """
+        ...
+~~~~~
+
+#### Acts 2: 实现 `MappedLazyResult` 和 `Task.map`
+
+我们在 `task.py` 中引入 `MappedLazyResult` 类，并修改 `Task` 类以实现 `LazyFactory` 协议。
+
+~~~~~act
+patch_file
+src/cascade/spec/task.py
+~~~~~
+~~~~~python
+from typing import TypeVar, Generic, Callable, Any, Dict, Optional, Union
+from dataclasses import dataclass, field
+import inspect
+from uuid import uuid4
+
+# Import protocols only for type hinting to avoid circular imports if possible
+# But here we just need Any or "CachePolicy" forward ref
+from cascade.runtime.protocols import CachePolicy
+
+T = TypeVar("T")
+
+
+@dataclass
+class RetryPolicy:
+~~~~~
+~~~~~python
+from typing import TypeVar, Generic, Callable, Any, Dict, Optional, Union, List
+from dataclasses import dataclass, field
+import inspect
+from uuid import uuid4
+
+# Import protocols only for type hinting to avoid circular imports if possible
+# But here we just need Any or "CachePolicy" forward ref
+from cascade.runtime.protocols import CachePolicy, LazyFactory
+
+T = TypeVar("T")
+
+
+@dataclass
+class RetryPolicy:
 ~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+src/cascade/spec/task.py
 ~~~~~
-~~~~~text
-feat(core): Implement dynamic routing with `cs.Router`
+~~~~~python
+    def with_cache(self, policy: CachePolicy) -> "LazyResult[T]":
+        """Configures caching strategy for this task."""
+        self._cache_policy = policy
+        return self
 
-Introduces `cascade.Router`, a powerful construct for dynamically selecting a task's input from multiple upstream sources at runtime.
 
-Key changes:
-1.  **`spec.routing.Router`:** A new spec class is defined to hold a `selector` (`LazyResult` or `Param`) and a `routes` dictionary.
-2.  **`GraphBuilder`:** The builder is enhanced to recognize `Router` objects. It creates a primary edge from the selector to the target node (tagged with the Router instance) and implicit dependency edges from all possible routes to ensure correct execution order.
-3.  **`LocalExecutor`:** The executor's argument resolution logic is updated to handle routed edges. It first resolves the selector's value, then uses it to look up the correct upstream result from the routes dictionary and injects it into the task.
+class Task(Generic[T]):
+    """
+    Wraps a callable to make it return a LazyResult when called.
+    """
 
-This feature enables advanced patterns like multi-environment configuration, A/B testing data sources, and other conditional data flow scenarios.
+    def __init__(self, func: Callable[..., T], name: Optional[str] = None):
+        self.func = func
+        self.name = name or func.__name__
+        # Signature inspection for validation (future enhancement)
+        self._signature = inspect.signature(func)
+        self.is_async = inspect.iscoroutinefunction(func)
+
+    def __call__(self, *args, **kwargs) -> LazyResult[T]:
+        return LazyResult(task=self, args=args, kwargs=kwargs)
+
+    def __repr__(self):
+        return f"<Task {self.name}>"
+~~~~~
+~~~~~python
+    def with_cache(self, policy: CachePolicy) -> "LazyResult[T]":
+        """Configures caching strategy for this task."""
+        self._cache_policy = policy
+        return self
+
+
+@dataclass
+class MappedLazyResult(Generic[T]):
+    """
+    Represents the result of mapping a factory over a set of inputs.
+    It resolves to a list of results.
+    """
+
+    factory: LazyFactory
+    mapping_kwargs: Dict[str, Any]
+    _uuid: str = field(default_factory=lambda: str(uuid4()))
+    _condition: Optional[LazyResult] = None
+
+    def __hash__(self):
+        return hash(self._uuid)
+
+    def run_if(self, condition: LazyResult) -> "MappedLazyResult[T]":
+        self._condition = condition
+        return self
+
+
+class Task(Generic[T]):
+    """
+    Wraps a callable to make it return a LazyResult when called.
+    """
+
+    def __init__(self, func: Callable[..., T], name: Optional[str] = None):
+        self.func = func
+        self.name = name or func.__name__
+        # Signature inspection for validation (future enhancement)
+        self._signature = inspect.signature(func)
+        self.is_async = inspect.iscoroutinefunction(func)
+
+    def __call__(self, *args, **kwargs) -> LazyResult[T]:
+        return LazyResult(task=self, args=args, kwargs=kwargs)
+
+    def map(self, **kwargs) -> MappedLazyResult[List[T]]:
+        """
+        Applies the task over a sequence of inputs.
+        
+        Args:
+            **kwargs: Arguments where values are iterables (or LazyResults resolving to iterables).
+                      All iterables must have the same length.
+        
+        Returns:
+            A MappedLazyResult that resolves to a list of outputs.
+        """
+        return MappedLazyResult(factory=self, mapping_kwargs=kwargs)
+
+    def __repr__(self):
+        return f"<Task {self.name}>"
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 `cs.Router` 的实现。根据开发路线图，阶段三的最后一个核心功能是 **任务映射 (`.map`)**。这将是 `Cascade` 支持动态并行和数据处理工作流的关键。我建议我们开始实施 `.map()`。
+我们已经完成了数据结构的定义。现在 `Task.map()` 会返回一个 `MappedLazyResult` 对象，但系统还不知道如何处理它。接下来的关键步骤是**升级运行时**：首先修改 `GraphBuilder` 以识别并构建映射节点，然后彻底改造 `Engine` 以支持动态展开和执行这些节点。

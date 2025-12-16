@@ -29,6 +29,9 @@ dev = [
   "mypy",
   "pytest-aiohttp",
   "typer[all]",
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocstrings[python]",
 ]
 template = ["jinja2"]
 http = ["aiohttp"]

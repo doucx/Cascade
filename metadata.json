@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(docs): 添加多语言支持 (中/英)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765867036.59969, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] chore(deps): 添加 MkDocs 相关文档构建依赖", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765867162.519303, "duration_ms": 0}}

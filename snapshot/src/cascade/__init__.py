@@ -25,7 +25,6 @@ __all__ = [
     "inject",
     "Engine",
     "override_resource",
-    "shell",  # kept in __all__ for documentation/IDE discovery purposes, though resolved dynamically
 ]
 
 

@@ -10,30 +10,6 @@ from cascade.spec.task import task
 from cascade.providers import LazyFactory
 
 
-@dataclass
-class HttpResponse:
-    """A wrapper around the aiohttp response for a better downstream API."""
-
-    _session: aiohttp.ClientSession
-    _response: aiohttp.ClientResponse
-
-    @property
-    def status(self) -> int:
-        return self._response.status
-
-    async def json(self) -> Any:
-        return await self._response.json()
-
-    async def text(self) -> str:
-        return await self._response.text()
-
-    async def read(self) -> bytes:
-        return await self._response.read()
-
-    def __repr__(self) -> str:
-        return f"<HttpResponse status={self.status}>"
-
-
 class HttpProvider:
     name = "http"
 
@@ -44,45 +20,6 @@ class HttpProvider:
                 "Please install it with: pip install cascade-py[http]"
             )
         return _http_task
-
-
-@task(name="http")
-async def _http_task(
-    url: str,
-    method: str = "GET",
-    params: Optional[Dict[str, str]] = None,
-    json_data: Optional[Any] = None,
-    headers: Optional[Dict[str, str]] = None,
-) -> HttpResponse:
-    """
-    Performs an asynchronous HTTP request.
-    """
-    async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.request(
-            method, url, params=params, json=json_data
-        ) as response:
-            # Ensure the response is fully read or buffered if needed,
-            # but for now we pass the raw response to the wrapper.
-            # The wrapper will handle reading the body on demand.
-            # IMPORTANT: The session will be closed, so the response object
-            # must be used within the task that receives it. This is a limitation
-            # we might need to address later by e.g. reading the body here.
-            # For now, let's keep it simple and assume immediate consumption.
-
-            # Re-evaluating: To make this safe, we should probably return a simple
-            # wrapper that already contains the read data. Let's adjust.
-
-            # The session will close, so we need to read the content now.
-            # We'll create a more robust wrapper that holds the data.
-
-            # This is a better design:
-            final_response = SimpleHttpResponse(
-                status=response.status,
-                headers=dict(response.headers),
-                body=await response.read(),
-            )
-            response.raise_for_status()
-            return final_response
 
 
 @dataclass

@@ -1,60 +1,77 @@
-好的，成果需要固化。我们已经成功地将一个重要的架构原则（显式模板渲染）转化为具体、可测试的代码。现在，是时候将这个工作单元提交到版本控制中了。
+好的，我们已经成功地奠定了 `Cascade` 生态系统的基石，并将两个核心功能迁移到了新的插件架构中。现在是时候将这些重大的架构改进作为一个原子单元提交了。
 
-我将生成一个 `[COMMIT]` 计划来完成这项工作。
+我将生成一个 `[COMMIT]` 计划来固化所有变更。
 
-## [COMMIT] feat(provider): 实现 cs.template 用于显式字符串渲染
+## [COMMIT] feat(core): 引入 Provider 插件架构并迁移 shell/template
 
 ### 用户需求
-将已完成并经过测试的 `cs.template` Provider 功能提交到版本控制中，以固化开发成果。
+将已完成并经过测试的 Provider 插件架构、`ShellProvider` 和 `TemplateProvider` 的实现，以及所有相关的代码重构和测试，作为一个完整的逻辑单元提交到版本控制中。
 
 ### 评论
-这是一个里程碑式的提交，它不仅仅是增加了一个新功能，更是对 `Cascade` 核心架构理念的一次重要实践和验证。通过 `cs.template`，我们确立了“显式优于隐式”的原则，保证了计算图的诚实性和清晰性，并为后续 `cs.http` 等 Provider 的干净实现铺平了道路。
+这是一个对 `Cascade` 长期健康发展至关重要的里程碑式提交。通过引入基于 `entry_points` 的 Provider 插件系统，我们成功地将核心库与具体功能实现解耦，遵循了开放/封闭原则。`cs.shell` 的迁移验证了该架构的可行性，而 `cs.template` 的实现则解决了之前讨论中的核心架构缺陷，确保了计算图的显式性和依赖关系的清晰性。这个提交为 `Cascade` 未来的可扩展性、社区贡献和生态系统建设奠定了坚实的基础。
 
 ### 目标
-创建一个 Git 提交，包含 `TemplateProvider` 的完整实现、`jinja2` 可选依赖的配置、插件入口点的注册以及相关的测试用例。
+创建一个 Git 提交，包含 Provider 插件系统的完整实现，以及 `shell` 和 `template` 两个官方 Provider 的代码、配置和测试用例。
 
 ### 基本原理
-该功能已经开发完毕并通过了测试，形成了一个逻辑上完整且独立的原子工作单元。将其提交可以为项目历史留下清晰的记录，并为下一步的工作（如修改文档、开发 `cs.http`）提供一个稳定的基础。
+所有开发和重构工作已经完成，相关功能形成了一个逻辑上完整且经过充分测试的工作单元。将其作为一个原子提交，可以清晰地记录项目从一个单体库向一个可扩展平台演进的关键时刻，并为后续开发提供一个稳定的基线。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/core #comp/build #comp/tests #concept/plugin #concept/template-engine #scope/api #scope/dx #ai/instruct #task/domain/ecosystem #task/object/template-provider #task/action/implementation #task/state/continue
+#intent/build #intent/architect #flow/ready #priority/high #comp/core #comp/build #concept/plugin #concept/template-engine #scope/api #scope/dx #ai/instruct #task/domain/ecosystem #task/object/provider-system #task/action/redesign #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 提交 `cs.template` Provider
+#### Acts 1: 暂存所有相关变更
 
-我们将所有与 `cs.template` 相关的新增和修改文件添加到 Git 暂存区，并创建一个内容详尽的提交。
+我们将所有新建、修改和删除的文件添加到 Git 暂存区，以准备提交。
 
 ~~~~~act
 git_add
-src/cascade/providers/template.py
 pyproject.toml
+src/cascade/__init__.py
+src/cascade/stdlib.py
+src/cascade/providers/
 tests/test_template.py
 ~~~~~
+
+#### Acts 2: 创建 Git 提交
+
+现在，执行 `git commit`，并附上详细的提交信息，解释这次架构升级的重要性。
 
 ~~~~~act
 git_commit
 ~~~~~
 ~~~~~text
-feat(provider): Implement cs.template for explicit string rendering
+feat(core): Introduce Provider plugin architecture and migrate shell/template
 
-Introduces the `cs.template` provider, establishing an explicit, first-class mechanism for string templating within the computation graph.
+This landmark commit refactors Cascade from a monolithic library into an extensible platform by introducing a formal Provider plugin architecture. It establishes the foundation for a rich ecosystem and community contributions.
 
-This commit resolves a core architectural issue where templating was implicitly coupled with providers like `http` or `config`. By making templating an independent task, we achieve:
-1.  **Explicit Dependency Graph**: The dependency of a task on a rendered string (and its variables) is now clearly represented in the graph.
-2.  **Single Responsibility Principle**: Providers are no longer responsible for rendering. `cs.template` handles templating; `cs.http` handles HTTP, etc.
-3.  **Composability**: Any `LazyResult` can be used as a context variable for a template, making it a powerful and universal primitive.
+Key Architectural Changes:
 
-Key changes:
-- Adds `src/cascade/providers/template.py` with `TemplateProvider`.
-- Uses `jinja2` as the rendering engine, managed as an optional dependency group `[template]`.
-- Registers the new provider via the `cascade.providers` entry point in `pyproject.toml`.
-- Includes a comprehensive test suite in `tests/test_template.py`.
+1.  **Provider System**:
+    - A new `cascade.providers` module defines the `Provider` and `LazyFactory` protocols, establishing a clear contract for all plugins.
+    - `ProviderRegistry` implements plugin discovery via the standard `importlib.metadata` and `entry_points` mechanism ('cascade.providers' group).
+    - `cascade/__init__.py` now uses `__getattr__` for lazy-loading of providers, making the system dynamic and performant.
+
+2.  **`ShellProvider` Migration**:
+    - The `cs.shell` task has been migrated from the old `stdlib.py` into the first official provider, `cascade.providers.shell.ShellProvider`.
+    - This validates the new architecture and serves as a reference implementation for future providers.
+
+3.  **`TemplateProvider` Implementation**:
+    - A new `cs.template` provider is introduced to handle explicit, graph-aware string templating, backed by Jinja2.
+    - This critically resolves a core architectural flaw of implicit dependencies, ensuring all data flows remain explicit within the computation graph. It decouples rendering logic from other providers (like a future `http` provider).
+
+4.  **Dependency Management**:
+    - `jinja2` is added as an optional dependency under the `[template]` extra, keeping the core library lightweight.
+
+This refactoring significantly improves modularity, testability, and extensibility, paving the way for the development of a robust standard library of providers (e.g., http, sql, file) and contributions from the community.
 ~~~~~
 
 ### 下一步建议
-我们已经成功地将 `cs.template` 功能合并。现在，最重要的事情是确保我们的文档与代码实现保持一致，以避免误导用户。
+我们已经成功地完成了 Provider 架构的奠基工作。下一步，我们应该利用这个强大的新架构来丰富 `Cascade` 的核心功能。根据我们的路线图，以下任务是最高优先级的：
 
-**下一步，我建议我们立即着手更新 `开发/Cascade 使用手册 v2.0.md`，将其中所有使用隐式模板的错误示例，全部修正为使用我们新引入的、架构正确的 `cs.template` Provider。**
+1.  **更新文档**: 立即修改 `Cascade 使用手册 v2.0.md`，移除所有关于隐式模板的错误示例，并用 `cs.template` 的正确用法替换它们。
+2.  **实现 `cs.http` Provider**: 既然模板问题已经解决，我们可以毫无顾虑地开始实现 `cs.http` Provider。
+3.  **实现 `cs.sql` Provider**: 这将是另一个展示 Provider 系统与 `@cs.resource` 依赖注入系统如何协同工作的绝佳机会。

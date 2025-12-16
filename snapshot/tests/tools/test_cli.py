@@ -1,6 +1,7 @@
 import pytest
 from typer.testing import CliRunner
 import cascade as cs
+import json
 
 # Skip if typer is not installed
 pytest.importorskip("typer")

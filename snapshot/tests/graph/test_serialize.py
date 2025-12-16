@@ -34,7 +34,7 @@ def test_serialize_basic_graph():
 
     # Check Callable Metadata
     node_simple = next(n for n in data["nodes"] if n["name"] == "simple_task")
-    assert node_simple["callable"]["qualname"] == "test_serialize_basic_graph.<locals>.simple_task"
+    assert node_simple["callable"]["qualname"] == "simple_task"
     # Note: local functions might have issues with importlib if not top-level, 
     # but for structure check it's fine.
 

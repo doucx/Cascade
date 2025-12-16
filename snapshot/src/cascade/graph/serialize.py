@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 from .model import Graph, Node, Edge
 from ..spec.common import Param
 from ..spec.routing import Router
-from ..spec.task import RetryPolicy
+from ..spec.task import RetryPolicy, Task
 
 # --- Serialization Helpers ---
 
@@ -34,6 +34,11 @@ def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:
         obj = module
         for part in qualname.split('.'):
             obj = getattr(obj, part)
+        
+        # If the object is a Task wrapper (due to @task decorator), unwrap it
+        if isinstance(obj, Task):
+            return obj.func
+            
         return obj
     except (ImportError, AttributeError) as e:
         raise ValueError(f"Could not restore function {module_name}.{qualname}: {e}")

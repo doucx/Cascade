@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(solver): 实现基于 CSP 的资源感知调度器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765876703.876661, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(solver): 实现基于 CSP 的资源感知调度器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765876800.9334745, "duration_ms": 0}}

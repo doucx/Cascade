@@ -214,7 +214,9 @@ class Engine:
             # If target was skipped itself, or skipped because of upstream.
             if target._uuid in skipped_node_ids:
                 # We need to find the node name for the error message
-                target_node = next(n for n in plan if n.id == target._uuid)
+                # Flatten plan to search for the node
+                all_nodes = (node for stage in plan for node in stage)
+                target_node = next(n for n in all_nodes if n.id == target._uuid)
 
                 # The "dependency" here is the task itself, because it was skipped.
                 raise DependencyMissingError(

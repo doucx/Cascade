@@ -12,6 +12,7 @@ from .runtime.subscribers import HumanReadableLogSubscriber
 from .testing import override_resource
 from .tools.preview import dry_run
 from .tools.visualize import visualize
+from .tools.cli import cli
 
 # Note: 'shell' is removed from static imports to support dynamic provider loading
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "run",
     "dry_run",
     "visualize",
+    "cli",
     "LazyResult",
     "Router",
     "File",

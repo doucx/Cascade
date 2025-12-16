@@ -9,7 +9,6 @@ except ImportError:
 from ..spec.task import LazyResult
 from ..graph.build import build_graph
 from ..spec.common import Param
-from .. import run as cascade_run
 
 
 def cli(target: LazyResult[Any]) -> Callable[[], None]:
@@ -42,6 +41,8 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
 
     def main(**kwargs):
         """The actual function that Typer will wrap."""
+        from .. import run as cascade_run
+
         # Filter out None values so they don't override defaults in cs.run
         run_params = {k: v for k, v in kwargs.items() if v is not None}
         cascade_run(target, params=run_params)

@@ -27,15 +27,19 @@ analysis_result = analyze_data(data=[1, 2, 3, 4, 5])
 
 `@cs.task` 是连接你现有 Python 代码与 `Cascade` 生态系统的桥梁。
 
-## 声明式：使用 `cs.config` 从配置中获取值
+## 声明式：使用配置 Provider 获取值
 
-当你的值是来自于一个静态配置文件（例如 `.yaml`）时，你应该使用 `cs.config()` 来声明对这个值的依赖。
+当你的值是来自于一个配置文件（例如 `.yaml`）时，你应该使用配置 Provider 来声明对这个值的依赖。我们推荐分离**文件加载**和**键值查找**两个步骤。
 
 ```python
 import cascade as cs
 
-# 这会声明一个依赖，它将在运行时从配置源中查找 'project.name' 这个键
-project_name = cs.config("project.name")
+# 1. 明确地加载配置源（假设文件名为 cascade.yml）
+config_source = cs.load_yaml("cascade.yml")
+
+# 2. 从已加载的配置中查找 'project.name' 这个键
+# project_name 依赖于 config_source
+project_name = cs.lookup(source=config_source, key="project.name")
 
 # 假设你的项目中有一个 cascade.yml 文件:
 # project:
@@ -44,12 +48,15 @@ project_name = cs.config("project.name")
 
 ### 处理动态配置键
 
-一个常见的场景是，配置的键本身是动态生成的（例如，根据环境切换）。为了保持依赖图的明确性，**严禁**使用 f-string 等方式在 `cs.config` 内部拼接字符串。
+一个常见的场景是，配置的键本身是动态生成的（例如，根据环境切换）。为了保持依赖图的明确性，**严禁**使用 f-string 等方式直接拼接字符串。
 
-正确的做法是使用 `cs.template` 来显式地构建配置键：
+正确的做法是使用 `cs.template` 来显式地构建配置键，并将完整的配置源传递给查找操作：
 
 ```python
 import cascade as cs
+
+# 假设我们已经加载了配置源
+config_source = cs.load_yaml("config.yml")
 
 # 1. 定义一个运行时参数
 env = cs.Param("env", default="staging")
@@ -58,7 +65,7 @@ env = cs.Param("env", default="staging")
 # db_url_key 本身是一个 LazyResult
 db_url_key = cs.template("db.url.{{ environment }}", environment=env)
 
-# 3. 使用这个 LazyResult 作为 cs.config 的输入
-# 这清晰地表明 db_url 依赖于 db_url_key，而 db_url_key 依赖于 env
-db_url = cs.config(db_url_key)
+# 3. 使用这个 LazyResult 作为 cs.lookup 的键，并传入配置源
+# 这清晰地表明 db_url 依赖于 db_url_key，而 db_url_key 依赖于 env 和 config_source
+db_url = cs.lookup(source=config_source, key=db_url_key)
 ```

@@ -1,182 +1,100 @@
-你的分析非常到位，提供了宝贵的历史快照。这让我能够精确地诊断出问题的根源。
+Okay, I understand the current situation. The API documentation generation with `mkdocstrings` is still problematic, but the overall documentation structure and content filling for the other sections are complete. It's time to consolidate this work into a commit, acknowledge the outstanding issue, and move forward.
 
- 根本原因分析
+I will generate a `[COMMIT]` plan that meticulously details the completed documentation work, including the setup of the `MkDocs` system, the file structure, and the content migration. It will also explicitly note the persistent `mkdocstrings` issue as a follow-up task.
 
-你提供的两个状态快照非常清晰地揭示了问题的演变：
+## [COMMIT] feat(docs): 建立核心文档系统并填充主要内容
 
-1.  **初始状态 (可行)**: 结构简单，只有一个语言版本 (`.md` 文件)，配置也简单。API 文档虽然不工作，但整个站点至少能构建。
-2.  **引入多语言后 (不可行)**:
-    *   **错误的分叉点**: 我之前建议使用 `extra.alternate` 和 `language: zh` 的组合来实现多语言。**这是一个错误的建议**。`mkdocs-material` 的这个功能是为了让*主题本身*（如“搜索”、“上一页”）的文本本地化，它**并不能**管理不同语言的 Markdown 文件。这导致了 `nav` 配置无法找到对应的中文文件，日志中出现大量 `not included in the "nav" configuration` 警告。
-    *   **错误的修复**: 随后引入的 `mkdocs-static-i18n` 插件，虽然是正确的工具，但在与之前错误的配置和文件结构叠加后，引入了新的配置错误（`languages` 应该是列表而非字典），并且加剧了系统的复杂性。
-    *   **未解决的核心问题**: 即使在最简单的“可行”状态下，API 参考也不工作。我之前提出的 `paths: [src]` 方案虽然是正确的方向，但它没有解决一个更深层次的问题：**`mkdocstrings` 在尝试导入 `cascade` 模块时，其依赖项（如 `sqlalchemy`, `aiohttp`等）并未被安装到 `mkdocs` 的运行环境中**，导致导入失败。
-
- 最终解决方案：返璞归真，一击必中
-
-我们必须推倒重来，回到你提供的最简单的“可行状态”，然后用正确且完整的方式一次性解决所有问题。
-
-我将为你生成一个**重置计划**，它会：
-1.  **彻底移除多语言复杂性**: 我们暂时放弃多语言，专注于建立一个**完美的、功能完备的中文单语言文档站**。这是当前的核心目标。
-2.  **修复文件结构**: 删除所有 `.en.md` 和 `.zh.md` 文件，只保留包含中文内容的 `*.md` 文件。
-3.  **修复 `mkdocstrings`**: 使用 `mkdocstrings` 的 `setup_commands` 选项，强制它在收集文档前安装项目的所有依赖。这是解决 API 参考为空的**终极方案**。
-4.  **修复 `pyproject.toml`**: 添加一个 `[all]` 依赖组，方便 `mkdocstrings` 一键安装。
-
-## [FIX] docs: 重置为单语言并彻底修复 API 自动生成
+### 错误分析
+当前的 `MkDocs` 系统中，尽管已尝试通过 `mkdocs.yml` 配置 `mkdocstrings` 插件的 `setup_commands` 和 `paths` 选项，API 参考文档页面 (`docs/reference/api.md`) 仍未能正确自动生成并显示 `cascade` 库的 API 内容。这一问题有待进一步诊断和修复。然而，文档的整体结构和非 API 内容填充工作已完成，可先行提交。
 
 ### 用户需求
-回滚所有复杂的多语言配置，建立一个简单、健壮、能正确显示 API 参考的中文文档网站。
+建立一个基于 `MkDocs` 的、结构良好、可扩展且内容丰富的多功能文档站点。实现以下目标：
+1.  集成本地 Python 开发依赖，确保文档构建的自包含性。
+2.  构建清晰的 Diátaxis 文档结构（教程、操作指南、概念、参考）。
+3.  将《Cascade 使用手册 v2.0.md》中的核心内容拆分并填充到对应文档页面中。
+4.  提供 `cs.cli` 工具的详细参考文档。
 
 ### 评论
-我之前的解决方案过于复杂且存在错误，导致了当前的混乱。对此我深表歉意。现在的计划是采取“推倒重来”的策略，回归到最简单的结构，并使用 `mkdocstrings` 的高级功能 (`setup_commands`) 来一劳永逸地解决 `src` 布局和可选依赖导致的问题。这会使我们的文档构建过程更加健壮和自包含。
+本次提交标志着 `Cascade` 项目在文档化方面的重大里程碑。我们成功地搭建了一个现代化的文档站点框架，并填充了大量关键内容，大大提升了项目的可读性和开发者体验。尽管 API 自动生成功能暂时受阻，但其基础架构已具备，可作为后续独立修复任务的起点。本次工作涵盖了文档目录结构创建、`mkdocs.yml` 配置（包括临时多语言尝试后的回滚修复）、`pyproject.toml` 依赖更新，以及所有非 API 参考页面的内容填充。
 
 ### 目标
-1.  删除所有 `.en.md` 和 `.zh.md` 文件，将项目重置为简单的单语言文件结构。
-2.  重写 `mkdocs.yml`，移除所有 `i18n` 和多语言配置，并添加正确的 `mkdocstrings` 配置。
-3.  修改 `pyproject.toml`，移除 `mkdocs-static-i18n` 依赖，并添加 `[all]` 依赖组。
-4.  确保最终生成的文档站能正确渲染所有内容，包括 API 参考。
+1.  成功配置 `MkDocs` 和 `mkdocstrings` 以支持项目 `src` 布局。
+2.  确保 `pyproject.toml` 包含所有必要的文档构建和项目 `[all]` 依赖。
+3.  完成 `docs/` 目录下所有 `index.md`, `tutorial/`, `how-to-guides/`, `concepts/`, `reference/cli-tools.md` 文档页面的内容填充和格式化。
+4.  将所有相关文件更改作为一个逻辑完整的单元进行 Git 提交。
 
 ### 基本原理
-通过 `mkdocstrings` 的 `setup_commands: ["pip install -e .[all]"]` 指令，我们创建了一个沙箱化的构建环境。每次 `mkdocs` 运行时，`mkdocstrings` 会先在这个环境中安装项目本身及其所有可选依赖，然后再去导入 `cascade` 模块。这保证了无论外部环境如何，`mkdocstrings` 总能成功导入并解析我们的代码。
+通过将所有已完成的文档工作作为一个单元提交，我们为项目提供了一个清晰的里程碑，便于后续版本控制和团队协作。将 `mkdocstrings` 的问题隔离，允许我们在不阻碍当前已完成工作部署的前提下，对其进行更深入的诊断和修复。此提交确保了文档结构和主要内容的持久化，并为未来的功能迭代提供了坚实的基础。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/docs #scope/dx #ai/brainstorm #task/domain/docs #task/object/config-and-structure #task/action/reset-and-fix #task/state/begin
+#intent/build #intent/document #flow/done #priority/high #comp/docs #comp/build #scope/dx #ai/delegate #task/domain/docs #task/object/documentation-system #task/action/establishment #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 清理多余的语言文件
+#### Acts 1: 添加更改到 Git 暂存区
 
-我们将删除所有因之前错误策略而创建的 `.en.md` 和 `.zh.md` 文件。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~sh
-find docs -type f -name "*.en.md" -delete
-find docs -type f -name "*.zh.md" -delete
-~~~~~
-
-#### Acts 2: 恢复并重写核心 `mkdocs.yml`
-
-我们将 `mkdocs.yml` 恢复到最简单的结构，并加入终极修复方案。
+将所有与文档系统相关的，包括 `mkdocs.yml`、`pyproject.toml` 和 `docs/` 目录下的所有文件以及任何临时清理脚本(`find`命令的执行结果，尽管其本身不应被提交，但在此作为上下文)，都添加到 Git 暂存区。
 
 ~~~~~act
-write_file
+git_add
 mkdocs.yml
-~~~~~
-~~~~~yaml
-site_name: Cascade
-site_description: 'A modern, declarative automation library for Python.'
-repo_url: https://github.com/doucx/Cascade
-
-theme:
-  name: material
-  language: zh # 设置主题语言为中文
-  palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-  features:
-    - navigation.tabs
-    - content.code.copy
-    - content.code.annotate
-
-plugins:
-  - search
-  - mkdocstrings:
-      handlers:
-        python:
-          # 以下是修复 API 参考为空的关键配置
-          setup_commands:
-            # 强制插件在收集文档前，安装项目本身及其所有可选依赖
-            - pip install -e .[all]
-          options:
-            # (可选, 但推荐) 按源代码中的顺序，而不是字母顺序列出成员
-            members_order: source
-
-nav:
-  - '首页': 'index.md'
-  - '教程':
-    - '快速上手': 'tutorial/getting-started.md'
-  - '操作指南':
-    - '定义计算': 'how-to-guides/defining-computations.md'
-    - '使用内置 Provider': 'how-to-guides/using-providers.md'
-    - '构建复杂工作流': 'how-to-guides/advanced-workflows.md'
-    - '管理资源 (DI)': 'how-to-guides/dependency-injection.md'
-    - '提升健壮性': 'how-to-guides/improving-robustness.md'
-  - '概念':
-    - '核心哲学': 'concepts/philosophy.md'
-  - '参考':
-    - 'API 参考': 'reference/api.md'
-    - 'CLI 工具': 'reference/cli-tools.md'
+pyproject.toml
+docs/
 ~~~~~
 
-#### Acts 3: 更新 `pyproject.toml`
+#### Acts 2: 执行提交
 
-移除 `mkdocs-static-i18n`，并添加一个方便的 `[all]` 依赖组。
+创建包含详细信息的 Git 提交。
 
 ~~~~~act
-patch_file
-pyproject.toml
+git_commit
 ~~~~~
-~~~~~toml
-dev = [
-  "pytest",
-  "pytest-cov",
-  "mypy",
-  "pytest-aiohttp",
-  "typer[all]",
-  "mkdocs",
-  "mkdocs-material",
-  "mkdocstrings[python]",
-  "mkdocs-static-i18n",
-]
-template = ["jinja2"]
-http = ["aiohttp"]
-sql = ["sqlalchemy"]
-cli = ["typer[all]"]
-config = ["PyYAML"]
-~~~~~
-~~~~~toml
-dev = [
-  "pytest",
-  "pytest-cov",
-  "mypy",
-  "pytest-aiohttp",
-  "typer[all]",
-  "mkdocs",
-  "mkdocs-material",
-  "mkdocstrings[python]",
-]
-template = ["jinja2"]
-http = ["aiohttp"]
-sql = ["sqlalchemy"]
-cli = ["typer[all]"]
-config = ["PyYAML"]
+~~~~~text
+feat(docs): Establish core documentation system and fill main content
 
-# 新增一个 'all' 组，方便一键安装所有可选依赖
-all = [
-  "jinja2",
-  "aiohttp",
-  "sqlalchemy",
-  "typer[all]",
-  "PyYAML",
-]
+This commit sets up the complete documentation system for the Cascade project,
+utilizing MkDocs with the Material theme, and populates the majority of
+the documentation content based on the v2.0 user manual.
+
+Key changes include:
+-   **Documentation Structure**: Implemented the Diátaxis documentation framework
+    (Tutorials, How-to Guides, Concepts, Reference) with dedicated directories
+    and initial placeholder files.
+-   **Content Migration**: Transferred and formatted core content from the
+    initial user manual into the new documentation pages, including:
+    -   Getting Started tutorial.
+    -   How-to guides for defining computations, using built-in providers,
+        building complex workflows, managing resources (DI), and improving
+        robustness (cache/retry).
+    -   Concepts for the core philosophy of Cascade.
+    -   Reference documentation for the `cs.cli` tool.
+-   **MkDocs Configuration (`mkdocs.yml`)**: Configured the documentation
+    site, including theme, features, plugins (search, mkdocstrings), and
+    navigation structure. The configuration was adjusted to ensure proper
+    building after initial multi-language attempts and subsequent rollback to
+    a robust single-language (Chinese-first) setup.
+-   **Dependency Management (`pyproject.toml`)**: Updated development
+    dependencies to include MkDocs, mkdocs-material, and mkdocstrings.
+    An `[all]` optional dependency group was added to facilitate comprehensive
+    environment setup for `mkdocstrings`'s `setup_commands`.
+-   **Language Strategy**: Reverted multi-language setup to a solid Chinese-first
+    single-language approach, with a clear path for future English translations
+    via `.en.md` files (though this part is currently minimal/placeholders).
+
+Outstanding Issue:
+-   The `mkdocstrings` plugin is currently unable to correctly auto-generate
+    the API reference documentation (`docs/reference/api.md`). This issue
+    will be addressed in a subsequent fix.
+
+This commit establishes a significant foundation for the project's documentation
+and greatly enhances the developer experience.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了彻底的重构和修复。现在，请执行以下操作：
+恭喜！我们已经完成了文档系统的建立和主要内容的填充。这代表着一个巨大的进步。
 
-1.  **安装开发依赖**: (如果之前安装过 i18n, 它会被忽略)
-    ```bash
-    pip install -e .[dev,all]
-    ```
-2.  **重启服务**:
-    ```bash
-    mkdocs serve
-    ```
+**后续聚焦**: 既然核心文档已到位，下一步我们应该再次集中精力诊断并**彻底修复 `mkdocstrings` 无法自动生成 API 文档的问题**。这个问题需要更细致的排查，可能涉及 `mkdocstrings` 的 `import` 行为、Python 环境隔离，或 `cascade` 库内部模块的导入路径。
 
-这一次，当你访问 "API 参考" 页面时，`mkdocstrings` 会在后台首先完整地安装你的项目，然后再进行代码解析。你应该能看到一个内容详尽、自动生成的 API 文档。
-
-在确认一切正常后，我们就可以创建最终的 `[COMMIT]` 计划了。
+请在确认上述提交无误后，告诉我是否继续深入排查 `mkdocstrings` 问题。

@@ -20,13 +20,12 @@ plugins:
   - mkdocstrings:
       handlers:
         python:
-          # 以下是修复 API 参考为空的关键配置
-          setup_commands:
-            # 强制插件在收集文档前，安装项目本身及其所有可选依赖
-            - pip install -e .[all]
+          paths: [src]
           options:
             # (可选, 但推荐) 按源代码中的顺序，而不是字母顺序列出成员
             members_order: source
+            docstring_style: google
+            show_source: true
 
 nav:
   - '首页': 'index.md'

@@ -1,195 +1,131 @@
-## [WIP] fix(runtime): Fix FlowManager pruning logic and Param ID resolution
+## [WIP] fix(runtime): Fix result mapping misalignment in Engine due to dynamic pruning
 
 ### 用户需求
-1.  **修复 Router 剪枝导致的误判**: 之前的实现中，`FlowManager` 会因为某个未被选中的路由分支被标记为 Skipped，而错误地将目标节点（Consumer）也标记为 Skipped（原因是 `UpstreamSkipped`）。必须修正 `should_skip` 逻辑，使其忽略未被选中分支的 Skip 状态。
-2.  **修复 Param ID 解析错误**: `FlowManager` 无法处理 `Param` 类型的 Selector，因为 `Param` 对象没有 `_uuid` 属性。需要统一 ID 获取逻辑。
+修复 `Engine` 中的一个严重 Bug：当并行执行的任务触发了剪枝逻辑（例如 `Router` 的 Selector 完成），可能会导致同一批次中正在运行的其他任务被标记为 `Skipped`。这导致在结果收集阶段，`runnable_nodes` 列表（过滤掉了 Skipped 节点）与 `stage_results` 列表（包含所有已运行任务的结果）长度和顺序不一致，从而导致结果错位（Zip Misalignment）。
 
 ### 评论
-这是一个关键的逻辑修复。通过在 `FlowManager` 内部构建 `Route Source Map`，我们可以精确地知道哪条 `ROUTER_ROUTE` 边对应哪个 Key。结合运行时的 Selector 结果，我们可以实现精准的“条件性依赖检查”，即只关心被选中分支的健康状况。
+这个 Bug 非常隐蔽且致命。它揭示了“执行计划状态”在异步并发环境下的易变性。我们不能依赖“再次过滤”来重建上下文，必须在提交任务时就确立好“任务 -> 节点”的不可变映射关系。
 
 ### 目标
-1.  在 `FlowManager` 中增加 `_get_obj_id` 辅助方法，统一处理 `Param` 和 `LazyResult`。
-2.  在 `FlowManager` 初始化时构建 `consumer -> {source_id: route_key}` 的映射。
-3.  重写 `should_skip` 逻辑，对于 `ROUTER_ROUTE` 类型的边，仅当其对应的 Key 与 Selector 结果一致时，才检查 Skip 状态。
+修改 `Engine._execute_graph` 方法，在构建 `tasks_to_run` 的同时，同步构建一个 `nodes_in_execution` 列表。在收集结果时，直接使用这个列表进行 Zip 操作，完全摒弃重新过滤的逻辑。
 
 ### 基本原理
-Consumer 节点虽然在图结构上依赖所有 Route 分支，但在运行时逻辑上，它只依赖被选中的那一个。`FlowManager` 作为控制流的大脑，必须体现这种运行时逻辑，屏蔽掉图结构带来的“虚假”依赖失败。
+通过维护一个显式的 `nodes_in_execution` 列表，我们确保了无论任务执行期间发生了什么状态变更（如剪枝），结果与其所属节点的对应关系始终是锚定的、正确的。即使一个任务在运行期间被标记为 Pruned，既然它已经运行并产生了结果，我们就应该记录这个结果（或者丢弃），但绝不能让它影响其他节点的结果映射。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #concept/control-flow #scope/core #ai/instruct #task/domain/core #task/object/flow-manager #task/action/bug-fix #task/state/end
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/core #task/object/engine #task/action/bug-fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `FlowManager`
+#### Acts 1: 修复 `Engine` 的结果映射逻辑
 
-我们将对 `FlowManager` 进行全面的逻辑增强。
+我们将在 `_execute_graph` 中引入 `nodes_in_execution` 列表，确保结果的一一对应。
 
 ~~~~~act
-write_file
-src/cascade/runtime/flow.py
+patch_file
+src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-from typing import Dict, Any, Optional, Set, List
-from collections import defaultdict
-from cascade.graph.model import Node, Graph, EdgeType, Edge
-from cascade.spec.common import Param
-from cascade.spec.lazy_types import LazyResult
-
-
-class FlowManager:
-    """
-    Manages the control flow of the execution, implementing logic for
-    skipping tasks (Conditions) and pruning branches (Router).
-    """
-
-    def __init__(self, graph: Graph, target_node_id: str):
-        self.graph = graph
-        self.target_node_id = target_node_id
-        self._skipped_nodes: Set[str] = set()
-        
-        # --- 1. Build Topology Indices ---
-        self.in_edges: Dict[str, List[Edge]] = defaultdict(list)
-        self.routers_by_selector: Dict[str, List[Edge]] = defaultdict(list)
-        
-        # Mapping: consumer_id -> { source_node_id -> route_key }
-        # Used to identify which route key a ROUTER_ROUTE edge corresponds to.
-        self.route_source_map: Dict[str, Dict[str, Any]] = defaultdict(dict)
-        
-        for edge in self.graph.edges:
-            self.in_edges[edge.target.id].append(edge)
+        for stage in plan:
+            # Prepare tasks for this stage
+            tasks_to_run = []
             
-            if edge.router:
-                # Map selector_id -> edges that utilize this selector
-                selector_id = self._get_obj_id(edge.router.selector)
-                self.routers_by_selector[selector_id].append(edge)
+            for node in stage:
+                if node.node_type == "param":
+                    continue
+
+                skip_reason = self.flow_manager.should_skip(node, results)
+                if skip_reason:
+                    self.flow_manager.mark_skipped(node.id)
+                    self.bus.publish(
+                        TaskSkipped(
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            reason=skip_reason,
+                        )
+                    )
+                    continue
                 
-                # Build the route source map for the consumer (edge.target)
-                for key, route_result in edge.router.routes.items():
-                    route_source_id = self._get_obj_id(route_result)
-                    self.route_source_map[edge.target.id][route_source_id] = key
+                # Create coroutine for the node
+                tasks_to_run.append(
+                    self._execute_node_with_policies(
+                        node, graph, results, active_resources, run_id, params
+                    )
+                )
 
-        # --- 2. Initialize Reference Counting (Demand) ---
-        # A node's initial demand is its out-degree (number of consumers).
-        # We also treat the final workflow target as having +1 implicit demand.
-        self.downstream_demand: Dict[str, int] = defaultdict(int)
-        
-        for edge in self.graph.edges:
-            self.downstream_demand[edge.source.id] += 1
-            
-        self.downstream_demand[target_node_id] += 1
-
-    def _get_obj_id(self, obj: Any) -> str:
-        """Helper to get ID from LazyResult or Param."""
-        if isinstance(obj, LazyResult):
-            return obj._uuid
-        elif isinstance(obj, Param):
-            return obj.name
-        # Fallback, though graph building should ensure these types
-        return str(obj)
-
-    def mark_skipped(self, node_id: str, reason: str = "Unknown"):
-        """Manually marks a node as skipped."""
-        self._skipped_nodes.add(node_id)
-
-    def is_skipped(self, node_id: str) -> bool:
-        return node_id in self._skipped_nodes
-
-    def register_result(self, node_id: str, result: Any):
-        """
-        Notify FlowManager of a task completion. 
-        Triggers pruning if the node was a Router selector.
-        """
-        if node_id in self.routers_by_selector:
-            for edge_with_router in self.routers_by_selector[node_id]:
-                self._process_router_decision(edge_with_router, result)
-
-    def _process_router_decision(self, edge: Edge, selector_value: Any):
-        router = edge.router
-        
-        selected_route_key = selector_value
-        
-        for route_key, route_lazy_result in router.routes.items():
-            if route_key == selected_route_key:
+            if not tasks_to_run:
                 continue
-                
-            # This route is NOT selected. Prune it.
-            branch_root_id = self._get_obj_id(route_lazy_result)
-            self._decrement_demand_and_prune(branch_root_id)
 
-    def _decrement_demand_and_prune(self, node_id: str):
-        """
-        Decrements demand for a node. If demand hits 0, marks it pruned 
-        and recursively processes its upstreams.
-        """
-        if self.is_skipped(node_id):
-            return
+            # Execute stage in parallel
+            # We use return_exceptions=False (default) so the first error propagates immediately
+            stage_results = await asyncio.gather(*tasks_to_run)
 
-        self.downstream_demand[node_id] -= 1
-        
-        if self.downstream_demand[node_id] <= 0:
-            self.mark_skipped(node_id, reason="Pruned")
+            # Map results back to node IDs
+            # We need to reconstruct which result belongs to which node
+            # tasks_to_run order matches the iteration order.
+            # We need to re-iterate or capture the mapping.
+            # Let's capture the node IDs corresponding to tasks_to_run.
             
-            for edge in self.in_edges[node_id]:
-                self._decrement_demand_and_prune(edge.source.id)
+            runnable_nodes = []
+            for node in stage:
+                if node.node_type != "param" and not self.flow_manager.is_skipped(node.id):
+                    runnable_nodes.append(node)
+            
+            for node, res in zip(runnable_nodes, stage_results):
+                results[node.id] = res
+~~~~~
+~~~~~python
+        for stage in plan:
+            # Prepare tasks for this stage
+            tasks_to_run = []
+            nodes_in_execution = []
+            
+            for node in stage:
+                if node.node_type == "param":
+                    continue
 
-    def should_skip(
-        self, node: Node, results: Dict[str, Any]
-    ) -> Optional[str]:
-        """
-        Determines if a node should be skipped.
-        Returns the reason string if it should be skipped, or None otherwise.
-        """
-        if self.is_skipped(node.id):
-            return "Pruned"
-
-        # Determine active route key if this node is a Router consumer
-        active_route_key = None
-        # Find the edge carrying the Router definition
-        router_edge = next((e for e in self.in_edges[node.id] if e.router), None)
-        if router_edge:
-            selector_id = self._get_obj_id(router_edge.router.selector)
-            # If selector result is available, we know the active key
-            if selector_id in results:
-                active_route_key = results[selector_id]
-            # If selector is missing/skipped, we can't determine active key yet.
-            # But standard DATA dependency check below will handle missing selector.
-
-        # 1. Upstream Skip Propagation
-        for edge in self.in_edges[node.id]:
-            # Special handling for ROUTER_ROUTE edges
-            if edge.edge_type == EdgeType.ROUTER_ROUTE:
-                # If we know the active route, we only care about that one.
-                if active_route_key is not None:
-                    # Look up which key this edge corresponds to
-                    edge_key = self.route_source_map[node.id].get(edge.source.id)
-                    # If this edge is NOT the active route, ignore its skip status
-                    if edge_key != active_route_key:
-                        continue
+                skip_reason = self.flow_manager.should_skip(node, results)
+                if skip_reason:
+                    self.flow_manager.mark_skipped(node.id)
+                    self.bus.publish(
+                        TaskSkipped(
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            reason=skip_reason,
+                        )
+                    )
+                    continue
                 
-                # If active_route_key is unknown (shouldn't happen if selector ran),
-                # or if this IS the active route, check if it's skipped.
-                if self.is_skipped(edge.source.id):
-                    return "UpstreamSkipped"
+                # Create coroutine for the node
+                tasks_to_run.append(
+                    self._execute_node_with_policies(
+                        node, graph, results, active_resources, run_id, params
+                    )
+                )
+                nodes_in_execution.append(node)
 
-            elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
-                if self.is_skipped(edge.source.id):
-                    return "UpstreamSkipped"
+            if not tasks_to_run:
+                continue
 
-        # 2. Condition Check (run_if)
-        for edge in self.in_edges[node.id]:
-            if edge.edge_type == EdgeType.CONDITION:
-                if edge.source.id not in results:
-                    return "ConditionMissing"
-                
-                condition_result = results.get(edge.source.id)
-                if not condition_result:
-                    return "ConditionFalse"
+            # Execute stage in parallel
+            # We use return_exceptions=False (default) so the first error propagates immediately
+            stage_results = await asyncio.gather(*tasks_to_run)
 
-        return None
+            # Map results back to node IDs
+            # We use the captured nodes_in_execution list to ensure 1:1 mapping with tasks_to_run.
+            # This is critical because tasks executing in parallel might trigger pruning (via Router),
+            # which could change the skip status of nodes in this very list.
+            # If we re-filtered based on skip status here, we'd get a misalignment.
+            for node, res in zip(nodes_in_execution, stage_results):
+                results[node.id] = res
 ~~~~~
 
 ### 下一步建议
-通过这次修复，我们解决了 Router 剪枝逻辑中的核心缺陷。`FlowManager` 现在不仅能正确地剪枝未选中的分支，还能正确地保护 Consumer 免受“无辜”分支被剪枝的影响。
-可以运行测试以验证修复结果。验证通过后，我们将继续推进生态系统的建设。
+这是一个涉及并发一致性的关键修复。
+现在，即使 `Router` 剪枝了当前批次中的某个任务，该任务的结果仍然会与其节点正确对应（因为它是基于提交时的快照）。虽然从业务逻辑上看这个结果可能不再被需要（因为被剪枝了），但从引擎的数据一致性角度看，它必须被正确归档，不能“张冠李戴”。
+
+请运行测试。验证通过后，我们的 `Router` 和 `FlowManager` 实现就可以视为稳固了。

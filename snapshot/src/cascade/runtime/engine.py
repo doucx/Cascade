@@ -143,6 +143,7 @@ class Engine:
         for stage in plan:
             # Prepare tasks for this stage
             tasks_to_run = []
+            nodes_in_execution = []
             
             for node in stage:
                 if node.node_type == "param":
@@ -167,6 +168,7 @@ class Engine:
                         node, graph, results, active_resources, run_id, params
                     )
                 )
+                nodes_in_execution.append(node)
 
             if not tasks_to_run:
                 continue
@@ -176,17 +178,11 @@ class Engine:
             stage_results = await asyncio.gather(*tasks_to_run)
 
             # Map results back to node IDs
-            # We need to reconstruct which result belongs to which node
-            # tasks_to_run order matches the iteration order.
-            # We need to re-iterate or capture the mapping.
-            # Let's capture the node IDs corresponding to tasks_to_run.
-            
-            runnable_nodes = []
-            for node in stage:
-                if node.node_type != "param" and not self.flow_manager.is_skipped(node.id):
-                    runnable_nodes.append(node)
-            
-            for node, res in zip(runnable_nodes, stage_results):
+            # We use the captured nodes_in_execution list to ensure 1:1 mapping with tasks_to_run.
+            # This is critical because tasks executing in parallel might trigger pruning (via Router),
+            # which could change the skip status of nodes in this very list.
+            # If we re-filtered based on skip status here, we'd get a misalignment.
+            for node, res in zip(nodes_in_execution, stage_results):
                 results[node.id] = res
 
         # Final check: Was the target task executed?

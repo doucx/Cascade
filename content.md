@@ -1,57 +1,209 @@
-我们已经成功解决了 `cs.Router` 的序列化技术债务，这是支持工作流持久化和分布式执行的关键一步。现在我将生成一个 `[COMMIT]` 计划来提交这些变更。
+当然，我们开始这次集中的测试重构。
 
-## [COMMIT] fix(graph): Implement full serialization support for cs.Router
+你的分析是正确的，依赖硬编码的日志字符串会让测试用例变得脆弱。我们将引入一个标准的、可复用的事件监听器 (`SpySubscriber`)，并将其作为 pytest fixture 提供，然后用它来重构 `tests/runtime/test_bus.py`，使其断言更关注“意图”（发出的事件）而非“表现”（日志文本）。
+
+## [WIP] test: 集中化 SpySubscriber 并重构总线测试以增强健壮性
 
 ### 用户需求
-偿还 Router 序列化的技术债务，确保包含动态路由的工作流能够被无损序列化和反序列化，为分布式执行和持久化工作流打下基础。
+规划并执行一次集中的测试重构，将 `tests/runtime/test_bus.py` 中依赖硬编码日志字符串的集成测试，全部迁移到基于 `SpySubscriber` 的事件断言模式，以提高测试套件的健壮性和可维护性。
 
 ### 评论
-本次重构通过引入 `routers` 顶级列表和轻量级的 `_StubLazyResult` 代理对象，巧妙地解决了 `Router` 及其内部 `LazyResult` 依赖的循环引用和反序列化问题。这使得 `Cascade` 的 `Graph` 对象现在是完全可序列化的，极大增强了其作为“数据”传递给外部系统的能力。
+这是一个关键的改进，能显著提升测试套件的健康度。通过断言事件流而非 UI 输出，我们的测试将直接验证系统的核心行为契约，使其免受未来日志格式、颜色或文案调整的影响。将 `SpySubscriber` 集中化为 `conftest.py` 中的 fixture，也为整个项目建立了一个标准的、可复用的测试模式。
 
 ### 目标
-1.  提交 `src/cascade/graph/serialize.py` 中对 Router 序列化逻辑的重写。
-2.  提交 `tests/graph/test_serialize.py` 中对测试用例的修复，确保所有 Task 都在模块顶层定义以通过反序列化测试。
+1.  创建 `tests/conftest.py` 文件，用于存放通用的测试辅助工具。
+2.  在该文件中定义一个 `SpySubscriber` 类和一个 `bus_and_spy` pytest fixture，后者将提供一个 `MessageBus` 实例和一个已附加到该总线上的 `SpySubscriber` 实例。
+3.  重构 `tests/runtime/test_bus.py` 中的所有测试用例，使其利用新的 `bus_and_spy` fixture。
+4.  修改 `test_human_readable_subscriber` 和 `test_subscriber_log_level_filtering` 的断言逻辑，使其检查日志中的关键语义标记（如表情符号 ✅/❌ 和错误信息），而不是完整的、硬编码的字符串，从而在保留其测试目的的同时降低脆弱性。
 
 ### 基本原理
-原序列化逻辑无法处理 `Router` 对象的复杂结构。新方法：
-1.  将 `Router` 定义从 `Edge` 中提取，集中存储在 JSON 的 `routers` 列表中（规范化）。
-2.  使用 `_StubLazyResult` 替代原生的 `LazyResult` 对象作为占位符，在反序列化时连接 `Router` 依赖的节点 ID。
-通过这种方式，我们实现了无损的 Round-Trip 序列化，同时解决了 Python 嵌套函数带来的 `AttributeError` 错误。
+此计划遵循“验证意图而非实现”的核心测试原则。
+1.  **集中化**: 在 `conftest.py` 中创建 `SpySubscriber` 和 `bus_and_spy` fixture，使其成为整个测试套件的一等公民，鼓励在未来的测试中优先使用事件断言。
+2.  **标准化**: 将 `test_bus.py` 中测试总线分发逻辑的用例（`test_message_bus_dispatch`, `test_message_bus_wildcard`）统一到使用 `bus_and_spy` fixture，这比手动创建列表来收集事件更清晰、更标准。
+3.  **健壮化**: 对于专门测试 `HumanReadableLogSubscriber` 输出的用例，我们采取务实的折中方案。我们不移除对字符串输出的检查（因为这正是该组件的功能），而是将断言从“字节级精确匹配”升级为“语义关键点匹配”。这极大地提高了测试的健壮性，同时确保了其核心验证逻辑的完整性。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/core #concept/state #scope/api #scope/core #ai/instruct #task/domain/core #task/object/serialization #task/action/refactor #task/state/end
+#intent/refine #intent/tooling #flow/ready #priority/high #comp/tests #concept/ui #scope/dx #task/domain/testing #task/object/test-suite #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存并提交变更
+#### Acts 1: 创建 conftest.py 并定义核心测试辅助工具
 
-将序列化文件和测试文件添加到 Git 暂存区，并创建一个内容详尽的提交。
-
-~~~~~act
-git_add
-src/cascade/graph/serialize.py
-tests/graph/test_serialize.py
-~~~~~
+我们首先创建 `tests/conftest.py` 文件，并定义 `SpySubscriber` 类和一个可注入的 `bus_and_spy` fixture。这将为后续的重构提供基础。
 
 ~~~~~act
-git_commit
+write_file
+tests/conftest.py
 ~~~~~
-~~~~~text
-fix(graph): Implement full serialization support for cs.Router
+~~~~~python
+import pytest
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
 
-This commit resolves the critical technical debt where the computation graph's serialization (`to_json`/`from_json`) failed to correctly handle and restore the `cs.Router` object metadata attached to edges.
 
-Key changes:
-1.  **Serialization Logic (`serialize.py`):** Routers are now collected and stored in a top-level `routers` list in the JSON output.
-2.  **Deserialization Logic (`serialize.py`):** Introduces `_StubLazyResult`, a minimal proxy object containing only the UUID, which is used to reconstruct the `Router` instance during graph loading. This satisfies the runtime requirements of `ArgumentResolver` without needing full LazyResult objects.
-3.  **Test Fix:** Nested test functions in `tests/graph/test_serialize.py` were moved to the top level to ensure their callables could be correctly imported via `__qualname__` during deserialization.
+class SpySubscriber:
+    """A test utility to collect events from a MessageBus."""
 
-This change is fundamental for supporting distributed execution and persistent work flows.
+    def __init__(self, bus: MessageBus):
+        self.events = []
+        bus.subscribe(Event, self.collect)
+
+    def collect(self, event: Event):
+        self.events.append(event)
+
+    def events_of_type(self, event_type):
+        """Returns a list of all events of a specific type."""
+        return [e for e in self.events if isinstance(e, event_type)]
+
+
+@pytest.fixture
+def bus_and_spy():
+    """Provides a MessageBus instance and an attached SpySubscriber."""
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    return bus, spy
+~~~~~
+
+#### Acts 2: 重构 `test_bus.py` 以提高健壮性和一致性
+
+现在，我们将重写 `tests/runtime/test_bus.py`。所有测试将使用新的 `bus_and_spy` fixture，并且针对日志输出的断言将被修改为更健壮的模式。
+
+~~~~~act
+write_file
+tests/runtime/test_bus.py
+~~~~~
+~~~~~python
+import io
+from cascade.runtime.events import RunStarted, TaskExecutionFinished
+from cascade.runtime.subscribers import HumanReadableLogSubscriber
+
+
+def test_message_bus_dispatch(bus_and_spy):
+    """
+    Tests that the bus correctly dispatches events to specifically subscribed handlers.
+    """
+    bus, spy = bus_and_spy
+
+    specific_received = []
+
+    def specific_handler(event: RunStarted):
+        specific_received.append(event)
+
+    bus.subscribe(RunStarted, specific_handler)
+
+    # Publish relevant event
+    event1 = RunStarted()
+    bus.publish(event1)
+
+    # Assert specific handler was called
+    assert len(specific_received) == 1
+
+    # Publish irrelevant event
+    event2 = TaskExecutionFinished()
+    bus.publish(event2)
+
+    # Assert specific handler was NOT called again
+    assert len(specific_received) == 1
+
+    # Assert that the spy (wildcard) received everything
+    assert len(spy.events) == 2
+    assert spy.events[0] == event1
+    assert spy.events[1] == event2
+
+
+def test_message_bus_wildcard(bus_and_spy):
+    """
+    Tests that a wildcard subscriber (listening to base Event) receives all events.
+    """
+    bus, spy = bus_and_spy
+
+    bus.publish(RunStarted(target_tasks=[], params={}))
+    bus.publish(
+        TaskExecutionFinished(task_id="1", task_name="t", status="OK", duration=0.0)
+    )
+
+    assert len(spy.events) == 2
+    assert isinstance(spy.events_of_type(RunStarted)[0], RunStarted)
+    assert isinstance(spy.events_of_type(TaskExecutionFinished)[0], TaskExecutionFinished)
+
+
+def test_human_readable_subscriber_output_formatting(bus_and_spy):
+    """
+    Tests that the subscriber correctly formats and prints different events.
+    This test focuses on the subscriber's presentation logic.
+    """
+    bus, _ = bus_and_spy  # Spy is not used here, but fixture provides bus
+    output = io.StringIO()
+    HumanReadableLogSubscriber(bus, stream=output)
+
+    # Simulate a flow of events
+    bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
+    bus.publish(
+        TaskExecutionFinished(
+            task_id="123", task_name="build_image", status="Succeeded", duration=1.23
+        )
+    )
+    bus.publish(
+        TaskExecutionFinished(
+            task_id="124",
+            task_name="deploy_k8s",
+            status="Failed",
+            duration=0.05,
+            error="AuthError",
+        )
+    )
+
+    logs = output.getvalue()
+
+    # Assertions are now less brittle, checking for key semantic markers
+    assert "▶️" in logs
+    assert "deploy" in logs
+    assert "env" in logs
+    assert "prod" in logs
+
+    assert "✅" in logs
+    assert "build_image" in logs
+
+    assert "❌" in logs
+    assert "deploy_k8s" in logs
+    assert "AuthError" in logs
+
+
+def test_human_readable_subscriber_log_level(bus_and_spy):
+    """
+    Tests that setting min_level correctly suppresses lower priority logs.
+    """
+    bus, _ = bus_and_spy
+    output = io.StringIO()
+    # Set level to ERROR, so INFO logs from RunStarted and Succeeded should be skipped
+    HumanReadableLogSubscriber(bus, stream=output, min_level="ERROR")
+
+    # INFO event
+    bus.publish(RunStarted(target_tasks=["t1"]))
+    # INFO event
+    bus.publish(
+        TaskExecutionFinished(
+            task_id="1", task_name="t1", status="Succeeded", duration=0.1
+        )
+    )
+    # ERROR event
+    bus.publish(
+        TaskExecutionFinished(
+            task_id="2", task_name="t2", status="Failed", error="Boom", duration=0.1
+        )
+    )
+
+    logs = output.getvalue()
+
+    # Should NOT contain INFO-level markers
+    assert "▶️" not in logs
+    assert "✅" not in logs
+    # Should contain ERROR-level markers
+    assert "❌" in logs
+    assert "Boom" in logs
 ~~~~~
 
 ### 下一步建议
-我们已经完成了对核心架构的最后一次关键修复。根据战略分析，接下来的重点是增强 **DX (开发者体验)** 和 **Provider 生态**。
-
-我建议的下一步是：**将 `cs.template` 任务提升为更健壮的 Provider**，使其能够处理更复杂的模板场景，并作为后续“预编排”战略（生成 Airflow DAGs/YAMLs）的基石。
+我们已经成功地为测试套件的核心部分建立了更健壮的模式。下一步，我建议我们审查其他集成测试文件（例如 `tests/integration/` 和 `tests/tools/`），看看是否有其他地方可以从新的 `bus_and_spy` fixture 中受益，以进一步提高整个测试套件的一致性和可维护性。

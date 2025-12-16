@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(graph): Implement full serialization support for cs.Router", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765882751.3430226, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 集中化 SpySubscriber 并重构总线测试以增强健壮性", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765883147.327278, "duration_ms": 0}}

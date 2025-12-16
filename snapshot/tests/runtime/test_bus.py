@@ -1,60 +1,67 @@
 import io
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event, RunStarted, TaskExecutionFinished
+from cascade.runtime.events import RunStarted, TaskExecutionFinished
 from cascade.runtime.subscribers import HumanReadableLogSubscriber
 
 
-def test_message_bus_dispatch():
-    bus = MessageBus()
-    received_events = []
+def test_message_bus_dispatch(bus_and_spy):
+    """
+    Tests that the bus correctly dispatches events to specifically subscribed handlers.
+    """
+    bus, spy = bus_and_spy
 
-    def handler(event):
-        received_events.append(event)
+    specific_received = []
 
-    # Subscribe to specific event
-    bus.subscribe(RunStarted, handler)
+    def specific_handler(event: RunStarted):
+        specific_received.append(event)
+
+    bus.subscribe(RunStarted, specific_handler)
 
     # Publish relevant event
-    event1 = RunStarted(target_tasks=["t1"], params={})
+    event1 = RunStarted()
     bus.publish(event1)
 
-    assert len(received_events) == 1
-    assert received_events[0] == event1
+    # Assert specific handler was called
+    assert len(specific_received) == 1
 
     # Publish irrelevant event
-    event2 = TaskExecutionFinished(
-        task_id="1", task_name="t", status="Succeeded", duration=0.1
-    )
+    event2 = TaskExecutionFinished()
     bus.publish(event2)
 
-    # Handler should not receive it
-    assert len(received_events) == 1
+    # Assert specific handler was NOT called again
+    assert len(specific_received) == 1
+
+    # Assert that the spy (wildcard) received everything
+    assert len(spy.events) == 2
+    assert spy.events[0] == event1
+    assert spy.events[1] == event2
 
 
-def test_message_bus_wildcard():
-    bus = MessageBus()
-    received_events = []
-
-    def handler(event):
-        received_events.append(event)
-
-    # Subscribe to base Event (wildcard)
-    bus.subscribe(Event, handler)
+def test_message_bus_wildcard(bus_and_spy):
+    """
+    Tests that a wildcard subscriber (listening to base Event) receives all events.
+    """
+    bus, spy = bus_and_spy
 
     bus.publish(RunStarted(target_tasks=[], params={}))
     bus.publish(
         TaskExecutionFinished(task_id="1", task_name="t", status="OK", duration=0.0)
     )
 
-    assert len(received_events) == 2
+    assert len(spy.events) == 2
+    assert isinstance(spy.events_of_type(RunStarted)[0], RunStarted)
+    assert isinstance(spy.events_of_type(TaskExecutionFinished)[0], TaskExecutionFinished)
 
 
-def test_human_readable_subscriber():
-    bus = MessageBus()
+def test_human_readable_subscriber_output_formatting(bus_and_spy):
+    """
+    Tests that the subscriber correctly formats and prints different events.
+    This test focuses on the subscriber's presentation logic.
+    """
+    bus, _ = bus_and_spy  # Spy is not used here, but fixture provides bus
     output = io.StringIO()
     HumanReadableLogSubscriber(bus, stream=output)
 
-    # Simulate a flow
+    # Simulate a flow of events
     bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
     bus.publish(
         TaskExecutionFinished(
@@ -73,18 +80,27 @@ def test_human_readable_subscriber():
 
     logs = output.getvalue()
 
-    assert "▶️  Starting Run" in logs
-    assert "env': 'prod'" in logs
-    assert "✅ Finished task `build_image` in 1.23s" in logs
-    assert "❌ Failed task `deploy_k8s`" in logs
+    # Assertions are now less brittle, checking for key semantic markers
+    assert "▶️" in logs
+    assert "deploy" in logs
+    assert "env" in logs
+    assert "prod" in logs
+
+    assert "✅" in logs
+    assert "build_image" in logs
+
+    assert "❌" in logs
+    assert "deploy_k8s" in logs
     assert "AuthError" in logs
 
 
-def test_subscriber_log_level_filtering():
-    """Test that setting min_level suppresses lower priority logs."""
-    bus = MessageBus()
+def test_human_readable_subscriber_log_level(bus_and_spy):
+    """
+    Tests that setting min_level correctly suppresses lower priority logs.
+    """
+    bus, _ = bus_and_spy
     output = io.StringIO()
-    # Set level to ERROR, so INFO logs should be skipped
+    # Set level to ERROR, so INFO logs from RunStarted and Succeeded should be skipped
     HumanReadableLogSubscriber(bus, stream=output, min_level="ERROR")
 
     # INFO event
@@ -104,9 +120,9 @@ def test_subscriber_log_level_filtering():
 
     logs = output.getvalue()
 
-    # Should NOT contain INFO logs
-    assert "Starting Run" not in logs
-    assert "Finished task `t1`" not in logs
-    # Should contain ERROR logs
-    assert "Failed task `t2`" in logs
+    # Should NOT contain INFO-level markers
+    assert "▶️" not in logs
+    assert "✅" not in logs
+    # Should contain ERROR-level markers
+    assert "❌" in logs
     assert "Boom" in logs

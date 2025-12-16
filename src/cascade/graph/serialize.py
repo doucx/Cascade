@@ -3,6 +3,7 @@ import importlib
 from typing import Any, Dict, Optional
 from .model import Graph, Node, Edge
 from ..spec.common import Param
+from ..spec.constraint import ResourceConstraint
 from ..spec.routing import Router
 from ..spec.task import RetryPolicy, Task
 
@@ -86,6 +87,9 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
             "delay": node.retry_policy.delay,
             "backoff": node.retry_policy.backoff
         }
+
+    if node.constraints:
+        data["constraints"] = node.constraints.requirements
 
     return data
 
@@ -179,6 +183,11 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             backoff=rp["backoff"]
         )
 
+    # Recover Constraints
+    constraints = None
+    if "constraints" in data:
+        constraints = ResourceConstraint(requirements=data["constraints"])
+
     node = Node(
         id=data["id"],
         name=data["name"],
@@ -187,6 +196,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
         mapping_factory=_load_func_from_path(data.get("mapping_factory")),
         param_spec=param_spec,
         retry_policy=retry_policy,
+        constraints=constraints,
         literal_inputs=data.get("literal_inputs", {})
     )
     return node

@@ -51,6 +51,7 @@ class GraphBuilder:
             callable_obj=result.task.func,
             retry_policy=result._retry_policy,
             cache_policy=result._cache_policy,
+            constraints=result._constraints,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node

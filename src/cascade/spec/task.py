@@ -6,6 +6,7 @@ from uuid import uuid4
 # Import protocols only for type hinting to avoid circular imports if possible
 # But here we just need Any or "CachePolicy" forward ref
 from cascade.runtime.protocols import CachePolicy, LazyFactory
+from cascade.spec.constraint import ResourceConstraint
 
 T = TypeVar("T")
 
@@ -31,6 +32,7 @@ class LazyResult(Generic[T]):
     _retry_policy: Optional[RetryPolicy] = None
     _cache_policy: Optional[CachePolicy] = None
     _condition: Optional["LazyResult"] = None
+    _constraints: Optional[ResourceConstraint] = None
 
     def __hash__(self):
         return hash(self._uuid)
@@ -53,6 +55,14 @@ class LazyResult(Generic[T]):
     def with_cache(self, policy: CachePolicy) -> "LazyResult[T]":
         """Configures caching strategy for this task."""
         self._cache_policy = policy
+        return self
+
+    def with_constraints(self, **kwargs) -> "LazyResult[T]":
+        """
+        Attaches resource constraints to this task.
+        e.g., .with_constraints(memory_gb=4, gpu_count=1)
+        """
+        self._constraints = ResourceConstraint(requirements=kwargs)
         return self
 
 

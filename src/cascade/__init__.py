@@ -14,6 +14,7 @@ from .tools.preview import dry_run
 from .tools.visualize import visualize
 from .tools.cli import cli
 from .graph.serialize import to_json, from_json
+from .spec.constraint import with_constraints
 
 # Note: 'shell' is removed from static imports to support dynamic provider loading
 __all__ = [
@@ -25,6 +26,7 @@ __all__ = [
     "cli",
     "to_json",
     "from_json",
+    "with_constraints",
     "LazyResult",
     "Router",
     "File",

@@ -3,6 +3,7 @@ from typing import List, Callable, Optional, Any, Dict
 
 
 from cascade.spec.common import Param
+from cascade.spec.constraint import ResourceConstraint
 
 
 @dataclass
@@ -21,6 +22,7 @@ class Node:
     # Metadata for execution strategies
     retry_policy: Optional[Any] = None  # Typed as Any to avoid circular deps with spec
     cache_policy: Optional[Any] = None
+    constraints: Optional[ResourceConstraint] = None
 
     # Pre-resolved literal inputs for the task
     literal_inputs: Dict[str, Any] = field(default_factory=dict)

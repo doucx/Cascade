@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(graph): Implement Graph and Node JSON Serialization (to_json/from_json)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765862782.1374457, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(core): 引入 Node 资源约束与调度感知", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765863607.7529137, "duration_ms": 0}}

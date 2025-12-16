@@ -1,93 +1,63 @@
-这是一个非常经典的异步编程错误。
+好的，测试通过，这是一个重要的里程碑。我们已经成功地将一个关键的 Provider 添加到了 Cascade 生态系统中。
 
-### 错误分析
+现在，我将生成一个 `[COMMIT]` 计划，将这个功能作为一个完整的、经过验证的工作单元提交到版本控制中。
 
-错误 `RuntimeError: asyncio.run() cannot be called from a running event loop` 发生的原因是：
-
-1.  **环境**: 你的测试使用了 `@pytest.mark.asyncio` (通过 `pytest-aiohttp`)。这意味着 `pytest` 已经为你创建并启动了一个 `asyncio` 事件循环来运行测试函数。
-2.  **冲突**: 在测试内部，你调用了 `cs.run()`。
-3.  **实现**: 查看 `src/cascade/__init__.py`，`cs.run` 的实现是：
-    ```python
-    def run(...):
-        # ...
-        return asyncio.run(engine.run(...)) 
-    ```
-4.  **根本原因**: `asyncio.run()` 的设计初衷是作为**同步**程序的入口点。它会尝试创建一个**新**的事件循环。如果检测到当前线程已经有一个正在运行的循环（你的测试环境就是这种情况），它就会抛出这个错误，以防止嵌套循环带来的复杂性。
-
-### 解决方案
-
-在已经处于异步上下文（如 `async def` 测试函数或 FastAPI 路由）中时，你不应该使用 `cs.run()` 这个便利封装。
-
-你应该直接使用更底层的 `Engine` API，并 `await` 它的 `run` 方法。这正好符合 `Cascade` 的分层设计：`cs.run` 针对脚本用户，`Engine` 针对集成和高级用户。
-
-我将生成一个计划来更新测试代码，改用 `Engine` 直接运行。
-
-## [WIP] fix: 修复测试中的嵌套事件循环错误
+## [COMMIT] feat(provider): 实现 `cs.http` Provider 以支持声明式 Web 请求
 
 ### 用户需求
-修复 `tests/test_http.py` 中因在异步测试环境下调用 `cs.run()` (内部使用 `asyncio.run()`) 而导致的 `RuntimeError`。
+将已完成并经过测试的 `cs.http` Provider 及其相关依赖和测试，作为一个完整的逻辑单元提交到版本控制中。
 
 ### 评论
-这是一个常见的误区。在 `pytest-asyncio` 环境中，我们已经是“原生异步”的了，因此不需要（也不能）再次启动一个新的事件循环。直接 `await engine.run()` 是正确且更高效的做法。这同时也验证了 `Cascade` 的 `Engine` API 可以被无缝集成到现有的异步应用中。
+这是 `Cascade` 生态系统向前迈出的重要一步。`cs.http` Provider 的引入，使得 `Cascade` 能够原生、声明式地与外部 Web 服务和 API 进行交互，极大地扩展了其应用场景。本次实现严格遵循了新的 Provider 插件架构，通过 `aiohttp` 提供了异步支持，并与 `cs.template` 无缝集成以实现动态、图感知的 URL 构建，充分展示了 `Cascade` 核心设计的健壮性与可扩展性。
 
 ### 目标
-修改 `tests/test_http.py`，将所有 `cs.run(...)` 调用替换为 `await cs.Engine().run(...)`。
+创建一个 Git 提交，包含 `cs.http` Provider 的完整实现、可选依赖配置、入口点注册以及使用 `pytest-aiohttp` 编写的端到端测试。
 
 ### 基本原理
-`cs.run` 是一个为同步入口点设计的便利函数。在异步测试中，我们需要手动实例化 `Engine` 并以此执行工作流，从而复用现有的事件循环。
+`cs.http` Provider 的开发工作已经完成，所有测试均已通过，形成了一个逻辑上完整且质量经过验证的功能单元。将其作为一个原子提交，可以清晰地记录 `Cascade` 在网络交互能力上的重大增强，并为后续开发提供一个稳定的基线。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #concept/async #scope/dx #ai/instruct #task/domain/testing #task/object/event-loop #task/action/fix #task/state/continue #task/status/active
+#intent/build #flow/ready #priority/high #comp/core #concept/plugin #scope/api #scope/dx #ai/instruct #task/domain/ecosystem #task/object/http-provider #task/action/implementation #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 `test_http.py` 以使用 `Engine`
+#### Acts 1: 暂存所有相关变更
 
-我们将修改两个测试函数，不再使用 `cs.run`，而是实例化 `cs.Engine` 并 `await` 其运行结果。
-
-~~~~~act
-patch_file
-tests/test_http.py
-~~~~~
-~~~~~python
-    final_result = process_user(api_response)
-
-    # 3. Run and Assert
-    result = cs.run(final_result)
-    assert result == "cascade"
-~~~~~
-~~~~~python
-    final_result = process_user(api_response)
-
-    # 3. Run and Assert
-    # Since we are already in an async test loop, we use the Engine directly
-    # instead of cs.run() which tries to create a new loop via asyncio.run()
-    engine = cs.Engine()
-    result = await engine.run(final_result)
-    assert result == "cascade"
-~~~~~
+我们将所有与 `http` Provider 相关的新建和修改文件添加到 Git 暂存区。
 
 ~~~~~act
-patch_file
+git_add
+pyproject.toml
+src/cascade/providers/http.py
 tests/test_http.py
 ~~~~~
-~~~~~python
-    final_status = get_status(api_response)
-    
-    # 3. Run and Assert
-    result = cs.run(final_status, params={"username": "dynamic_user"})
-    assert result == "ok"
+
+#### Acts 2: 创建 Git 提交
+
+现在，执行 `git commit`，并附上详细的提交信息，解释这个新 Provider 的功能和实现细节。
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-    final_status = get_status(api_response)
-    
-    # 3. Run and Assert
-    engine = cs.Engine()
-    result = await engine.run(final_status, params={"username": "dynamic_user"})
-    assert result == "ok"
+~~~~~text
+feat(provider): Implement cs.http provider for declarative web requests
+
+Introduces the `cs.http` provider, enabling users to define asynchronous web requests as nodes in the computation graph. This significantly expands Cascade's capabilities for interacting with external APIs and services.
+
+Key Features:
+1.  **Provider Implementation**: A new `HttpProvider` is created in `cascade.providers.http`, leveraging `aiohttp` for non-blocking I/O.
+2.  **Safe Response Object**: A `SimpleHttpResponse` data class is returned by the task. It safely holds the response body (as bytes), status, and headers, preventing resource leakage from closed `aiohttp` sessions. It provides convenient `.json()` and `.text()` methods for downstream consumption.
+3.  **Dependency Management**: `aiohttp` is added as an optional dependency under the `[http]` extra, keeping the core library lightweight. `pytest-aiohttp` is added to dev dependencies for robust testing.
+4.  **Plugin Registration**: The new provider is registered via the `cascade.providers` entry point in `pyproject.toml`.
+5.  **Testing**: Comprehensive tests using `pytest-aiohttp` mock the server, ensuring the provider is tested without actual network I/O, including integration with `cs.template` for dynamic URL generation.
+
+This provider seamlessly integrates with Cascade's core features like dependency management and the new plugin architecture, making it a powerful tool for building modern automation workflows.
 ~~~~~
 
 ### 下一步建议
-这次修改后，测试应该能够通过。请再次运行 `pytest`。如果通过，我们将完成 `cs.http` Provider 的所有工作，可以进行提交。
+我们已经成功交付了 `cs.http` Provider。根据我们的路线图和之前的讨论，下一步的重点是：
+
+1.  **更新文档**: 在 `展望/Cascade 使用手册 v2.0.md` 中添加关于 `cs.http` 的章节，展示其用法，特别是与 `cs.template` 的结合。
+2.  **实现 `cs.sql` Provider**: 继续扩展我们的 Provider 生态，开始实现与数据库交互的 `cs.sql` Provider。这将是展示与 `@cs.resource` 系统集成的绝佳机会。

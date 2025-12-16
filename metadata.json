@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(tools): 实现 `cs.cli` 以从工作流自动生成 CLI", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765862052.6378756, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(core): 实现计算图与任务的 JSON 序列化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765862524.561116, "duration_ms": 0}}

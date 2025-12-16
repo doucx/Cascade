@@ -34,7 +34,10 @@ async def test_http_get_success(aiohttp_client):
     final_result = process_user(api_response)
 
     # 3. Run and Assert
-    result = cs.run(final_result)
+    # Since we are already in an async test loop, we use the Engine directly
+    # instead of cs.run() which tries to create a new loop via asyncio.run()
+    engine = cs.Engine()
+    result = await engine.run(final_result)
     assert result == "cascade"
 
 
@@ -76,5 +79,6 @@ async def test_http_with_template(aiohttp_client):
     final_status = get_status(api_response)
     
     # 3. Run and Assert
-    result = cs.run(final_status, params={"username": "dynamic_user"})
+    engine = cs.Engine()
+    result = await engine.run(final_status, params={"username": "dynamic_user"})
     assert result == "ok"

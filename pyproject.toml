@@ -42,6 +42,7 @@ template = "cascade.providers.template:TemplateProvider"
 http = "cascade.providers.http:HttpProvider"
 sql = "cascade.providers.sql:SqlProvider"
 config = "cascade.providers.config:ConfigProvider"
+file = "cascade.providers.file:FileProvider"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

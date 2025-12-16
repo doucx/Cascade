@@ -24,7 +24,7 @@ from cascade.runtime.exceptions import DependencyMissingError
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.resource_manager import ResourceManager
-from cascade.spec.task import LazyResult, MappedLazyResult
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult # NEW
 
 
 class Engine:

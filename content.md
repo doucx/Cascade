@@ -1,172 +1,59 @@
-## [WIP] feat(core): 支持资源约束的序列化
+我们将对资源约束序列化支持的实现进行原子化提交。
+
+## [COMMIT] feat(graph): Serialize and deserialize ResourceConstraint metadata
 
 ### 用户需求
-更新图序列化模块，使其能够正确处理 `Node` 对象中的 `constraints` 字段，确保资源约束信息在图的序列化和反序列化过程中不会丢失。
+确保 `ResourceConstraint` 元数据在计算图序列化（JSON）和反序列化过程中得到保留，支持图的持久化和跨进程传输。
 
 ### 评论
-这是完成资源约束功能的最后一块拼图。支持序列化意味着带有资源需求的计算图可以被持久化存储、传输到远程节点或由外部工具（如可视化器）正确解析。目前我们主要关注基本类型（如数字、字符串）约束值的序列化，这覆盖了绝大多数静态资源声明场景。
+资源约束的序列化是实现高级调度器的先决条件，它保证了任务的关键调度信息不会在图生命周期中丢失。这次修改优雅地将 `ResourceConstraint` 结构扁平化为 `requirements` 字典进行存储，并在反序列化时重建对象。
 
 ### 目标
-1.  修改 `src/cascade/graph/serialize.py`，实现 `ResourceConstraint` 的序列化与反序列化逻辑。
-2.  在 `tests/graph/test_serialize.py` 中添加测试用例，验证往返序列化的正确性。
+创建一个 Git 提交，包含对 `src/cascade/graph/serialize.py` 和 `tests/graph/test_serialize.py` 的所有修改。
 
 ### 基本原理
-我们将 `ResourceConstraint` 对象简化为其内部的 `requirements` 字典进行存储。在反序列化时，读取该字典并重新构造 `ResourceConstraint` 对象。这保持了 JSON 结构的简洁性。
+序列化是核心功能的一部分，必须紧跟在模型变更之后完成。这使得 `ResourceConstraint` 功能完整地成为 `Cascade` 的一个稳定特性。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/core #concept/solver #task/domain/core #task/object/resource-constraint #task/action/serialization #task/state/continue
+#intent/build #flow/ready #priority/high #comp/core #comp/runtime #concept/serialization #task/domain/core #task/object/resource-constraint #task/action/serialization #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修改序列化逻辑
-
-更新 `serialize.py` 以处理 `ResourceConstraint`。
+#### Acts 1: 暂存序列化相关的修改
 
 ~~~~~act
-patch_file
+git_add
 src/cascade/graph/serialize.py
-~~~~~
-~~~~~python
-import importlib
-from typing import Any, Dict, Optional
-from .model import Graph, Node, Edge
-from ..spec.common import Param
-from ..spec.routing import Router
-from ..spec.task import RetryPolicy, Task
-~~~~~
-~~~~~python
-import importlib
-from typing import Any, Dict, Optional
-from .model import Graph, Node, Edge
-from ..spec.common import Param
-from ..spec.constraint import ResourceConstraint
-from ..spec.routing import Router
-from ..spec.task import RetryPolicy, Task
-~~~~~
-
-~~~~~act
-patch_file
-src/cascade/graph/serialize.py
-~~~~~
-~~~~~python
-            "backoff": node.retry_policy.backoff
-        }
-
-    return data
-
-def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
-~~~~~
-~~~~~python
-            "backoff": node.retry_policy.backoff
-        }
-
-    if node.constraints:
-        data["constraints"] = node.constraints.requirements
-
-    return data
-
-def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
-~~~~~
-
-~~~~~act
-patch_file
-src/cascade/graph/serialize.py
-~~~~~
-~~~~~python
-    # Recover Retry Policy
-    retry_policy = None
-    if "retry_policy" in data:
-        rp = data["retry_policy"]
-        retry_policy = RetryPolicy(
-            max_attempts=rp["max_attempts"],
-            delay=rp["delay"],
-            backoff=rp["backoff"]
-        )
-
-    node = Node(
-        id=data["id"],
-        name=data["name"],
-        node_type=data["node_type"],
-        callable_obj=_load_func_from_path(data.get("callable")),
-        mapping_factory=_load_func_from_path(data.get("mapping_factory")),
-        param_spec=param_spec,
-        retry_policy=retry_policy,
-        literal_inputs=data.get("literal_inputs", {})
-    )
-    return node
-~~~~~
-~~~~~python
-    # Recover Retry Policy
-    retry_policy = None
-    if "retry_policy" in data:
-        rp = data["retry_policy"]
-        retry_policy = RetryPolicy(
-            max_attempts=rp["max_attempts"],
-            delay=rp["delay"],
-            backoff=rp["backoff"]
-        )
-
-    # Recover Constraints
-    constraints = None
-    if "constraints" in data:
-        constraints = ResourceConstraint(requirements=data["constraints"])
-
-    node = Node(
-        id=data["id"],
-        name=data["name"],
-        node_type=data["node_type"],
-        callable_obj=_load_func_from_path(data.get("callable")),
-        mapping_factory=_load_func_from_path(data.get("mapping_factory")),
-        param_spec=param_spec,
-        retry_policy=retry_policy,
-        constraints=constraints,
-        literal_inputs=data.get("literal_inputs", {})
-    )
-    return node
-~~~~~
-
-#### Acts 2: 添加测试用例
-
-在 `test_serialize.py` 中验证带约束的任务的序列化。
-
-~~~~~act
-patch_file
 tests/graph/test_serialize.py
 ~~~~~
-~~~~~python
-    restored = from_json(to_json(graph))
-    t_node = next(n for n in restored.nodes if n.name == "simple_task")
-    assert t_node.retry_policy.max_attempts == 5
-~~~~~
-~~~~~python
-    restored = from_json(to_json(graph))
-    t_node = next(n for n in restored.nodes if n.name == "simple_task")
-    assert t_node.retry_policy.max_attempts == 5
 
-def test_serialize_with_constraints():
-    """Test serialization of resource constraints."""
-    t = simple_task(x=1).with_constraints(gpu_count=1, memory_gb=16)
-    graph = build_graph(t)
-    
-    data = graph_to_dict(graph)
-    task_node = next(n for n in data["nodes"] if n["name"] == "simple_task")
-    
-    assert "constraints" in task_node
-    assert task_node["constraints"]["gpu_count"] == 1
-    assert task_node["constraints"]["memory_gb"] == 16
-    
-    # Round trip
-    restored = from_json(to_json(graph))
-    t_node = next(n for n in restored.nodes if n.name == "simple_task")
-    
-    assert t_node.constraints is not None
-    assert t_node.constraints.requirements["gpu_count"] == 1
-    assert t_node.constraints.requirements["memory_gb"] == 16
+#### Acts 2: 提交变更
+
+创建一个详细的 Git Commit。
+
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(graph): Serialize and deserialize ResourceConstraint metadata
+
+Updates the graph serialization logic to handle the new `ResourceConstraint` field on the `Node` model.
+
+The `ResourceConstraint` object is serialized into its plain `requirements` dictionary and reconstructed during deserialization. This ensures that resource scheduling metadata is fully preserved when the workflow graph is stored or transmitted.
 ~~~~~
 
 ### 下一步建议
-资源感知调度的基础数据结构工作（模型定义、传递、序列化）已全部完成。现在，我们可以在不影响主线功能的情况下，创建一个新的 Git 提交来封装这些变更。
+资源约束的核心模型和序列化工作已完成。我们现在可以继续推进下一个核心功能：
 
-之后，我们可以转向 **任务映射 (.map)** 的增强，或者开始设计 **Advanced Solver** 的接口，但考虑到 `map` 已经在早期实现中存在但可能需要打磨，检查一下 `map` 功能的完整性也是一个好方向。鉴于用户提到“下一个最具挑战性和基础性的任务是实现资源感知调度”，我们实际上已经完成了核心数据的铺垫。
+**当前状态总结**:
+1.  资源约束模型 (`ResourceConstraint`) 及其 API (`.with_constraints()`) 已经完成。
+2.  图构建 (`GraphBuilder`) 已经将约束传递给节点 (`Node.constraints`)。
+3.  图序列化 (`to_json`/`from_json`) 已经支持约束。
+
+根据开发路线图（`d1-schema-quipu-plan-template` 引用的 `Cascade 库架构与开发规范 v1.3.md`），我们现在已经完成了大部分**阶段四**的工作。
+
+下一个逻辑步骤是：**在运行时利用这些约束，或者继续实现 Provider 插件的完整功能。**
+
+鉴于我们已经实现了 `cs.template` 的基础，我建议我们现在开始设计和实现 **`cs.config` Provider**，它是手册中提到的一个关键组件，用于声明式地从配置中获取值。这将进一步充实我们的 Provider 生态系统。

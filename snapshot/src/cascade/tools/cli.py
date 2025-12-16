@@ -61,11 +61,14 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
             help=p.description,
         )
 
+        # Default to str if no type is provided, as CLI args are inherently strings
+        annotation = p.type if p.type is not None else str
+
         sig_param = inspect.Parameter(
             name=p.name,
             kind=inspect.Parameter.KEYWORD_ONLY,
             default=option,
-            annotation=p.type,
+            annotation=annotation,
         )
         sig_params.append(sig_param)
 

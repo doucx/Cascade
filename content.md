@@ -1,67 +1,215 @@
-好的，既然所有资源调度和图遍历相关的测试都已通过，那么现在可以放心地提交本次关于`资源感知的初步实现`的内容了。
+好的，收到。现在是偿还文档技术债的最佳时机。
 
-## [COMMIT] feat(core): 实现资源感知调度与配额管理 (MVP)
+你的要求非常明确：**构思，且仅构思**一个良好的、可扩展的、易于维护的文档结构。这意味着我现在不会产出具体的文档内容，而是为你设计和建立整个文档系统的“脚手架”。
 
-### 错误分析
-没有错误，实现通过所有测试。
+我将基于业界公认的 **Diátaxis 文档框架** 和现代化的工具链来构思这个结构。该框架将文档分为四个明确的类别，以满足不同用户的不同需求，确保了极佳的可扩展性和可维护性。
+
+## [WIP] feat(docs): 建立基础文档结构
 
 ### 用户需求
-实现一个零依赖的资源感知调度系统，使 `Engine` 能够在执行任务前检查、等待并获取任务声明所需的资源（例如 CPU, GPU, 内存）。同时，支持动态资源约束，即资源的需求量本身可以是一个上游任务的计算结果。修复了测试中的事件嵌套循环错误。
+为 `cascade` 项目创建一个良好的、可扩展的、易于维护的文档结构，以偿还现有的文档债务，为后续的内容填充工作打下坚实的基础。
 
 ### 评论
-这个提交增加了资源管理能力，这是向工业级别框架演进的重要一步。
+这是一个至关重要的任务。一个优秀的文档结构不仅能提升用户体验，更能降低未来维护文档的成本。
+
+我将采用以下策略：
+1.  **采用 MkDocs**: 选择 `MkDocs` 作为文档生成工具。它基于 Markdown，配置简单，拥有丰富的插件生态（特别是 `mkdocs-material` 主题和 `mkdocstrings` 插件），非常符合 `Cascade` 追求优秀开发者体验（DX）的理念。
+2.  **遵循 Diátaxis 框架**: 将文档内容明确划分为四个象限，创建对应的目录结构：
+    *   **教程 (Tutorials)**: 面向初学者，提供手把手的引导。
+    *   **操作指南 (How-to Guides)**: 面向目标导向的用户，提供解决特定问题的步骤。
+    *   **概念阐述 (Explanation/Concepts)**: 面向寻求深入理解的用户，解释背后的原理和设计哲学。
+    *   **技术参考 (Reference)**: 面向需要精确技术细节的专家，提供 API、CLI 等的详尽参考。
+3.  **创建脚手架**: 我将创建所有必要的目录和空的 Markdown 文件，并配置好 `mkdocs.yml` 文件。这将为下一步的内容填充工作提供一个清晰的、即时可用的框架。
+
 ### 目标
-所有代码修改已完成。
+1.  在项目根目录创建 `docs/` 文件夹。
+2.  创建 `mkdocs.yml` 配置文件，定义网站结构、主题和插件。
+3.  在 `docs/` 目录下，根据 Diátaxis 框架创建 `tutorial`, `how-to-guides`, `concepts`, `reference` 等子目录。
+4.  在这些目录中创建对应的占位符 Markdown 文件，其文件名反映了 `Cascade 使用手册 v2.0.md` 中已有的内容构想。
 
 ### 基本原理
--   **ResourceManager**: 选择 `asyncio.Condition` 而非 `Semaphore` 是因为资源请求是多维度的（如 `{gpu:1, mem:4}`），标准信号量无法处理这种原子性的多资源请求。
--   **GraphBuilder 增强**: 为了保证拓扑排序正确，动态计算的资源需求量必须被视为“上游依赖”。通过添加特殊前缀的边，我们既利用了现有的求解器，又能在执行时通过名称过滤将其与普通数据参数区分开。
--   **Engine 集成**: 将资源获取放在 `_execute_node_with_policies` 中最靠近执行点的位置，能够最大限度地减少资源占用时间。
+通过预先建立一个结构化的、由工具驱动的文档系统，我们可以确保未来的所有文档贡献都能被放置在正确的位置，从而避免混乱。`mkdocs.yml` 文件将成为文档导航的“唯一事实来源 (Single Source of Truth)”，使得添加或重排页面变得轻而易举。使用 `mkdocstrings` 插件则为未来从代码 docstring 自动生成 API 参考文档铺平了道路，极大地提高了可维护性。
 
 ### 标签
-#intent/build #flow/done #priority/high #comp/core #comp/runtime #scope/core #task/domain/runtime #task/object/resource-manager #task/action/implementation #task/state/end #task/status/completed
+#intent/architect #intent/tooling #flow/ready #priority/high #comp/docs #scope/dx #ai/brainstorm #task/domain/docs #task/object/structure #task/action/establishment #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 添加变更到 Git 暂存区
+#### Acts 1: 创建文档目录结构
 
-将所有被修改和添加的文件都添加到 Git 暂存区，准备提交。
-
-~~~~~act
-git_add
-src/cascade/runtime/resource_manager.py
-src/cascade/graph/build.py
-src/cascade/adapters/executors/local.py
-src/cascade/runtime/engine.py
-src/cascade/__init__.py
-tests/integration/test_resource_scheduling.py
-~~~~~
-
-#### Acts 2: 执行提交
-
-创建包含详细信息的提交，并推送到远程仓库。
+我们将创建顶层 `docs` 目录以及基于 Diátaxis 框架的子目录结构。我们还会添加一个 `assets` 目录，用于存放未来的图片等资源。
 
 ~~~~~act
-git_commit
+run_command
 ~~~~~
-~~~~~text
-feat(core): Implement resource-aware scheduling and quota management (MVP)
+~~~~~sh
+mkdir -p docs/tutorial docs/how-to-guides docs/concepts docs/reference docs/assets
+~~~~~
 
-This commit introduces a zero-dependency resource-aware scheduling system to Cascade, enabling the Engine to inspect, wait for, and acquire resources (CPU, GPU, memory) declared by tasks. It also supports dynamic resource constraints, where the demand is the result of an upstream task.
+#### Acts 2: 创建 MkDocs 配置文件
 
-Key changes:
+创建 `mkdocs.yml` 文件。这将是整个文档站点的核心配置文件，定义了站点名称、主题和导航结构。我将选择流行的 `material` 主题，并预配置 `mkdocstrings` 插件，为未来的 API 文档自动化做好准备。
 
--   `src/cascade/runtime/resource_manager.py`: Implements `ResourceManager`, a thread-safe resource manager based on `asyncio.Condition`. It manages resource limits and ensures tasks wait until resources become available.
--   `src/cascade/graph/build.py`: Enhances `GraphBuilder` to scan for `.with_constraints()` and creates implicit dependency edges to tasks that compute the resource amount.
--   `src/cascade/adapters/executors/local.py`: Modifies `LocalExecutor` to ignore constraint edges during argument injection.
--   `src/cascade/runtime/engine.py`: Integrates `ResourceManager` into the task execution lifecycle: resolving dynamic resource requirements, acquiring before task execution, and releasing after.
--   `src/cascade/__init__.py`: Updates the public API `run` function to accept a `system_resources` argument, configuring available resources.
--   `tests/integration/test_resource_scheduling.py`: Adds integration tests for concurrency limiting, dynamic resource constraints, and error handling for insufficient resources.
+~~~~~act
+write_file
+mkdocs.yml
+~~~~~
+~~~~~yaml
+site_name: Cascade
+site_description: 'A modern, declarative automation library for Python.'
+repo_url: https://github.com/your-repo/cascade-py # 请替换为你的仓库 URL
+edit_uri: "" # 可选，指向编辑页面的链接
 
-This is an important infrastructure milestone, allowing Cascade workflows to be more robust in complex resource-constrained environments.
+theme:
+  name: material
+  palette:
+    # Palette toggle for light vs dark mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - toc.integrate
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+
+nav:
+  - 'Home': 'index.md'
+  - 'Tutorial':
+    - 'Getting Started': 'tutorial/getting-started.md'
+  - 'How-to Guides':
+    - 'Defining Computations': 'how-to-guides/defining-computations.md'
+    - 'Using Built-in Providers': 'how-to-guides/using-providers.md'
+    - 'Building Complex Workflows': 'how-to-guides/advanced-workflows.md'
+    - 'Managing Resources (DI)': 'how-to-guides/dependency-injection.md'
+    - 'Improving Robustness': 'how-to-guides/improving-robustness.md'
+  - 'Concepts':
+    - 'Core Philosophy': 'concepts/philosophy.md'
+  - 'Reference':
+    - 'API Reference': 'reference/api.md'
+    - 'CLI Tools': 'reference/cli-tools.md'
+~~~~~
+
+#### Acts 3: 创建占位符 Markdown 文件
+
+现在，我们根据 `mkdocs.yml` 中定义的导航结构，创建对应的 Markdown 文件。这些文件目前只包含一个标题，作为后续内容填充的起点。
+
+创建 `index.md` (主页)。
+
+~~~~~act
+write_file
+docs/index.md
+~~~~~
+~~~~~markdown
+# Welcome to Cascade
+
+A modern, declarative automation library for Python.
+~~~~~
+
+创建教程文件。
+
+~~~~~act
+write_file
+docs/tutorial/getting-started.md
+~~~~~
+~~~~~markdown
+# Getting Started with Cascade
+~~~~~
+
+创建操作指南文件。
+
+~~~~~act
+write_file
+docs/how-to-guides/defining-computations.md
+~~~~~
+~~~~~markdown
+# How-to: Define Computations
+~~~~~
+~~~~~act
+write_file
+docs/how-to-guides/using-providers.md
+~~~~~
+~~~~~markdown
+# How-to: Use Built-in Providers
+~~~~~
+~~~~~act
+write_file
+docs/how-to-guides/advanced-workflows.md
+~~~~~
+~~~~~markdown
+# How-to: Build Complex Workflows
+~~~~~
+~~~~~act
+write_file
+docs/how-to-guides/dependency-injection.md
+~~~~~
+~~~~~markdown
+# How-to: Manage Resources with Dependency Injection
+~~~~~
+~~~~~act
+write_file
+docs/how-to-guides/improving-robustness.md
+~~~~~
+~~~~~markdown
+# How-to: Improve Workflow Robustness (Cache & Retry)
+~~~~~
+
+创建概念阐述文件。
+
+~~~~~act
+write_file
+docs/concepts/philosophy.md
+~~~~~
+~~~~~markdown
+# Concepts: The Core Philosophy of Cascade
+~~~~~
+
+创建技术参考文件。
+
+~~~~~act
+write_file
+docs/reference/api.md
+~~~~~
+~~~~~markdown
+# API Reference
+
+This section is auto-generated from the source code.
+
+::: cascade
+~~~~~
+~~~~~act
+write_file
+docs/reference/cli-tools.md
+~~~~~
+~~~~~markdown
+# Reference: CLI Tools
 ~~~~~
 
 ### 下一步建议
-根据先前的讨论，现在是构建 `cs.config` Provider 的理想时机。
+我们已经成功地搭建了文档系统的骨架。现在，你可以随时开始填充内容了。
+
+我建议的下一步是：
+1.  **安装 `MkDocs` 依赖**: 运行 `pip install mkdocs mkdocs-material mkdocstrings-python`，并将其添加到 `pyproject.toml` 的 `dev` 依赖中。
+2.  **启动本地文档服务器**: 在项目根目录运行 `mkdocs serve`，你将在本地看到一个功能齐全但内容为空的文档网站。
+3.  **填充内容**: 从 **`docs/tutorial/getting-started.md`** 开始，将 `Cascade 使用手册 v2.0.md` 中的内容迁移并润色到这些新的 Markdown 文件中。
+
+如果你同意，我们可以立刻开始 `pyproject.toml` 的修改和第一篇文档内容的填充工作。

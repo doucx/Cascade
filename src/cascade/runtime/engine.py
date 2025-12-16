@@ -22,6 +22,8 @@ from cascade.runtime.events import (
 from cascade.runtime.protocols import Solver, Executor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.resource_manager import ResourceManager
+from cascade.spec.task import LazyResult, MappedLazyResult
 
 
 class Engine:
@@ -34,10 +36,12 @@ class Engine:
         solver: Optional[Solver] = None,
         executor: Optional[Executor] = None,
         bus: Optional[MessageBus] = None,
+        system_resources: Optional[Dict[str, Any]] = None,
     ):
         self.solver = solver or NativeSolver()
         self.executor = executor or LocalExecutor()
         self.bus = bus or MessageBus()
+        self.resource_manager = ResourceManager(capacity=system_resources)
         self._resource_providers: Dict[str, Callable] = {}
 
     def register(self, resource_def: ResourceDefinition):
@@ -201,6 +205,58 @@ class Engine:
         active_resources: Dict[str, Any],
         run_id: str,
         params: Dict[str, Any],
+    ) -> Any:
+        # Resolve resource requirements
+        requirements = self._resolve_constraints(node, graph, upstream_results)
+        
+        # Acquire resources (this may block)
+        await self.resource_manager.acquire(requirements)
+        
+        try:
+            return await self._execute_node_internal(
+                node, graph, upstream_results, active_resources, run_id, params, requirements
+            )
+        finally:
+            # Always release resources
+            await self.resource_manager.release(requirements)
+
+    def _resolve_constraints(
+        self, node: Node, graph: Graph, upstream_results: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Resolves dynamic constraints to concrete values."""
+        if not node.constraints or node.constraints.is_empty():
+            return {}
+
+        resolved = {}
+        for res, amount in node.constraints.requirements.items():
+            if isinstance(amount, (LazyResult, MappedLazyResult)):
+                # Find the upstream source for this dynamic constraint using the special edge prefix
+                # We can also lookup by ID since we know it's a LazyResult, but edge lookup is safer graph-wise.
+                # Actually, simply using the result of the LazyResult._uuid is enough because
+                # the graph builder ensures it's in upstream_results.
+                if amount._uuid in upstream_results:
+                    resolved[res] = upstream_results[amount._uuid]
+                else:
+                    # Depending on skip logic, this might be missing. 
+                    # If upstream was skipped, we probably shouldn't be here, 
+                    # or we should fail because we can't determine resource usage.
+                    raise RuntimeError(
+                        f"Could not resolve dynamic resource constraint '{res}' for task '{node.name}'. "
+                        "Upstream dependency result missing."
+                    )
+            else:
+                resolved[res] = amount
+        return resolved
+
+    async def _execute_node_internal(
+        self,
+        node: Node,
+        graph: Graph,
+        upstream_results: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        params: Dict[str, Any],
+        requirements: Dict[str, Any], # Passed for logging if needed
     ) -> Any:
         task_start_time = time.time()
 

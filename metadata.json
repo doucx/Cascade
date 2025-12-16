@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(providers): 将 cs.File 从 Spec 原语迁移到标准 Provider", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765864557.2479873, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(providers): 将 cs.File 从 Spec 原语迁移到标准 Provider", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765864630.117462, "duration_ms": 0}}

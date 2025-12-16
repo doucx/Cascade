@@ -2,6 +2,7 @@ import pytest
 import asyncio
 import time
 import cascade as cs
+from cascade.runtime.engine import Engine
 
 @pytest.mark.asyncio
 async def test_resource_concurrency_limit():
@@ -32,7 +33,9 @@ async def test_resource_concurrency_limit():
     
     # Run with limited capacity: only 1 slot available
     # Because both tasks need 1 slot, they must run one after another.
-    result = cs.run(workflow, system_resources={"slots": 1})
+    # FIX: Use Engine directly to avoid nested event loop error in tests
+    engine = Engine(system_resources={"slots": 1})
+    result = await engine.run(workflow)
     
     duration = time.time() - start_time
     t1_end, t2_end = result
@@ -65,8 +68,8 @@ async def test_dynamic_resource_constraint():
     job = cpu_heavy_task().with_constraints(cpu=needs)
 
     # We set system capacity to 4.
-    # This test mainly verifies the graph building and resolution logic works without error.
-    result = cs.run(job, system_resources={"cpu": 4})
+    engine = Engine(system_resources={"cpu": 4})
+    result = await engine.run(job)
     
     assert result == "Done"
 
@@ -84,5 +87,7 @@ async def test_insufficient_resources_deadlock():
     job = massive_job().with_constraints(memory_gb=64)
     
     # System only has 16GB
+    engine = Engine(system_resources={"memory_gb": 16})
+    
     with pytest.raises(ValueError, match="exceeds total system capacity"):
-        cs.run(job, system_resources={"memory_gb": 16})
+        await engine.run(job)

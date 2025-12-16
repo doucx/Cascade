@@ -53,7 +53,9 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
 
         # Filter out None values so they don't override defaults in cs.run
         run_params = {k: v for k, v in kwargs.items() if v is not None}
-        cascade_run(target, params=run_params, log_level=log_level, log_format=log_format)
+        result = cascade_run(target, params=run_params, log_level=log_level, log_format=log_format)
+        if result is not None:
+            print(result)
 
     # --- Metaprogramming to create the dynamic signature ---
     sig_params = []

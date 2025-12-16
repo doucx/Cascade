@@ -1,293 +1,70 @@
-Of course. It seems my previous refactoring was a bit too aggressive and introduced a few errors. The test failures provide clear guidance on what needs to be fixed.
+完美，所有的测试都已通过，证明了新的语义消息架构是健壮的，并且测试用例现在正确地遵循了新的解耦模式。
 
-1.  **`AttributeError` in `test_end_to_end.py`**: My apologies, I hallucinated `pytest.string_containing`. This functionality isn't part of pytest. The correct way to assert a partial string match in a mock call is to use `unittest.mock.ANY` and then inspect the call arguments manually.
-2.  **`TypeError` in `test_bus.py`**: I changed the `HumanReadableLogSubscriber`'s `__init__` method but failed to update the tests that call it. The tests are still trying to pass `stream` and `min_level`, which are now handled by the new `CliRenderer`.
+现在我将生成一个 `[COMMIT]` 计划来封装这次架构升级和测试修复。
 
-I will now generate a plan to fix these specific errors.
-
-## [WIP] fix: Correct test failures from messaging system refactor
-
-### 錯誤分析
-1.  **`test_e2e_failure_propagation`**: The test failed due to an `AttributeError` because `pytest.string_containing` does not exist. The intention was to check for a substring in a mock call's argument, but the wrong tool was used.
-2.  **`test_human_readable_subscriber_*`**: These tests failed with a `TypeError` because they were calling the refactored `HumanReadableLogSubscriber` with its old constructor arguments (`stream`, `min_level`). The refactoring moved this responsibility to the `CliRenderer`, but the tests were not updated to reflect this new architecture. The tests need to be rewritten to correctly test the full chain: `EventBus` -> `Subscriber` -> `MessageBus` -> `Renderer`.
+## [COMMIT] feat(runtime): Implement semantic messaging bus for robust testing
 
 ### 用户需求
-修复因引入语义消息总线而导致的三项测试失败，确保测试套件恢复到 `passed` 状态。
+将 Cascade 的日志和事件报告系统从耦合的 `Subscriber` 模式升级为基于语义 ID 的消息总线架构。目标是彻底解耦核心逻辑与 UI 表现层，并使测试能够通过断言消息 ID 来验证意图。
 
 ### 评论
-This is a standard part of the development cycle: a major refactoring often requires subsequent adjustments to the test suite. These failures are not regressions in the application code but rather errors in the test code itself. Fixing them will correctly align our tests with the new, more robust messaging architecture.
+这次重构是一次关键的架构投资，它遵循了“验证意图而非实现”的最高测试原则。通过引入 `MessageStore`、`MessageBus` 和 `CliRenderer`，我们为 Cascade 提供了国际化（i18n）、结构化日志输出（如 JSON）的能力，并极大地增强了测试套件的健壮性。现在，对日志文案、颜色或格式的任何更改都不会导致集成测试失败。
 
 ### 目标
-1.  Correct the assertion in `tests/integration/test_end_to_end.py` by replacing the incorrect `pytest.string_containing` with a robust check using `unittest.mock.ANY` and manual inspection of call arguments.
-2.  Rewrite `test_human_readable_subscriber_output_formatting` and `test_human_readable_subscriber_log_level` in `tests/runtime/test_bus.py` to correctly test the new logging pipeline, instantiating the `CliRenderer` with the desired output stream and log level.
+1.  **架构升级**: 引入 `cascade.messaging` 模块，实现语义消息总线。
+2.  **职责分离**: 将 `HumanReadableLogSubscriber` 转换为一个纯粹的“翻译层”，它将运行时 `Event` 映射到 `MessageBus` 的语义 ID 调用。
+3.  **测试健壮性**: 重构了所有依赖日志输出的集成测试（包括 `tests/runtime/test_bus.py` 和 `tests/integration/test_end_to_end.py`），使其现在 Mock `MessageBus` 并断言语义 ID，或使用新的 `CliRenderer` 进行健壮的 UI 验证。
 
 ### 基本原理
-We will apply targeted fixes to the broken tests:
-1.  For the `AttributeError`, we'll adopt the standard pattern for complex mock assertion: use `ANY` as a placeholder in the `assert_any_call` and then perform a more specific assertion on the captured call arguments from `mock.call_args_list`. This verifies the call structure and content correctly.
-2.  For the `TypeError`s, we will restructure the tests to be proper integration tests of the logging system. They will manually construct the full component chain (`EventBus`, `HumanReadableLogSubscriber`, `messaging_bus`, `CliRenderer` with `StringIO`) to accurately simulate the application's runtime behavior and validate the final output.
+旧的日志系统将 UI 文本硬编码在 `Subscriber` 中，导致测试用例必须依赖硬编码的字符串进行断言，这极易导致测试脆弱。新的架构通过引入一个抽象的语义层（例如 `"run.started"`），使得核心运行时、事件翻译层、消息模板和渲染层各自独立。这不仅解决了测试中的脆弱性问题，也为 Cascade 的可观测性和可扩展性奠定了高级基础。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #task/domain/testing #task/object/test-suite #task/action/bug-fix #task/state/continue
+#intent/architect #intent/refine #flow/ready #priority/high #comp/runtime #comp/tests #concept/messaging #scope/dx #task/domain/core #task/object/messaging-system #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: Fix `test_end_to_end.py` assertion
+#### Acts 1: 暂存所有变更的文件
 
-We will patch the test to use `unittest.mock.ANY` and then perform a more detailed assertion on the call arguments.
+我们将暂存所有新增和修改的文件，为提交做准备。
 
 ~~~~~act
-patch_file
+git_add
+src/cascade/locales/en/events.json
+src/cascade/messaging/bus.py
+src/cascade/messaging/renderer.py
+src/cascade/messaging/__init__.py
+src/cascade/__init__.py
+src/cascade/runtime/subscribers.py
+tests/conftest.py
 tests/integration/test_end_to_end.py
-~~~~~
-~~~~~python
-    mock_messaging_bus.error.assert_any_call(
-        "run.finished_failure",
-        duration=pytest.approx(0, abs=1),
-        error=pytest.string_containing("ValueError: Something went wrong")
-    )
-~~~~~
-~~~~~python
-    from unittest.mock import ANY
-
-    # Use ANY as a placeholder for the error message in the initial check
-    mock_messaging_bus.error.assert_any_call(
-        "run.finished_failure",
-        duration=pytest.approx(0, abs=1),
-        error=ANY
-    )
-    
-    # Manually inspect the call arguments for the specific error string
-    run_finished_call = next(
-        c for c in mock_messaging_bus.error.call_args_list
-        if c.args and c.args[0] == "run.finished_failure"
-    )
-    assert "ValueError: Something went wrong" in run_finished_call.kwargs['error']
-~~~~~
-~~~~~act
-patch_file
-tests/integration/test_end_to_end.py
-~~~~~
-~~~~~python
-def test_e2e_linear_workflow(mock_messaging_bus):
-    @cs.task
-    def get_name():
-        return "Cascade"
-
-    @cs.task
-    def greet(name: str):
-        return f"Hello, {name}!"
-
-    final_greeting = greet(get_name())
-
-    # We use the event_bus for engine events, which is internal.
-    # The subscriber will translate these to calls on the mocked messaging_bus.
-    event_bus = cs.runtime.MessageBus()
-    cs.runtime.HumanReadableLogSubscriber(event_bus)
-    engine = Engine(bus=event_bus)
-
-    result = asyncio.run(engine.run(final_greeting))
-
-    assert result == "Hello, Cascade!"
-
-    # Assertions are now on the INTENT (semantic ID), not the output!
-    mock_messaging_bus.info.assert_any_call("run.started", targets="greet")
-    mock_messaging_bus.info.assert_any_call("task.started", task_name="get_name")
-    mock_messaging_bus.info.assert_any_call("task.finished_success", task_name="get_name", duration=pytest.approx(0, abs=1))
-    mock_messaging_bus.info.assert_any_call("task.started", task_name="greet")
-    mock_messaging_bus.info.assert_any_call("run.finished_success", duration=pytest.approx(0, abs=1))
-    
-    # Check that it was not called with a failure message
-    mock_messaging_bus.error.assert_not_called()
-~~~~~
-~~~~~python
-def test_e2e_linear_workflow(mock_messaging_bus):
-    @cs.task
-    def get_name():
-        return "Cascade"
-
-    @cs.task
-    def greet(name: str):
-        return f"Hello, {name}!"
-
-    final_greeting = greet(get_name())
-
-    # We use the event_bus for engine events, which is internal.
-    # The subscriber will translate these to calls on the mocked messaging_bus.
-    event_bus = cs.runtime.MessageBus()
-    cs.runtime.HumanReadableLogSubscriber(event_bus)
-    engine = Engine(bus=event_bus)
-
-    result = asyncio.run(engine.run(final_greeting))
-
-    assert result == "Hello, Cascade!"
-
-    # Assertions are now on the INTENT (semantic ID), not the output!
-    # Note: The target name might be the final task name. Let's check for 'greet'.
-    run_started_call = mock_messaging_bus.info.call_args_list[0]
-    assert run_started_call.args[0] == "run.started"
-    assert "greet" in run_started_call.kwargs["targets"]
-    
-    mock_messaging_bus.info.assert_any_call("task.started", task_name="get_name")
-    mock_messaging_bus.info.assert_any_call("task.finished_success", task_name="get_name", duration=pytest.approx(0, abs=1))
-    mock_messaging_bus.info.assert_any_call("task.started", task_name="greet")
-    mock_messaging_bus.info.assert_any_call("run.finished_success", duration=pytest.approx(0, abs=1))
-    
-    # Check that it was not called with a failure message
-    mock_messaging_bus.error.assert_not_called()
-~~~~~
-
-#### Acts 2: Rewrite failing tests in `test_bus.py`
-
-We'll replace the two failing subscriber tests with correctly structured integration tests. The other two tests in the file are correct as they are.
-
-~~~~~act
-patch_file
 tests/runtime/test_bus.py
 ~~~~~
-~~~~~python
-def test_human_readable_subscriber_output_formatting(bus_and_spy):
-    """
-    Tests that the subscriber correctly formats and prints different events.
-    This test focuses on the subscriber's presentation logic.
-    """
-    bus, _ = bus_and_spy  # Spy is not used here, but fixture provides bus
-    output = io.StringIO()
-    HumanReadableLogSubscriber(bus, stream=output)
 
-    # Simulate a flow of events
-    bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="123", task_name="build_image", status="Succeeded", duration=1.23
-        )
-    )
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="124",
-            task_name="deploy_k8s",
-            status="Failed",
-            duration=0.05,
-            error="AuthError",
-        )
-    )
+#### Acts 2: 执行提交
 
-    logs = output.getvalue()
-
-    # Assertions are now less brittle, checking for key semantic markers
-    assert "▶️" in logs
-    assert "deploy" in logs
-    assert "env" in logs
-    assert "prod" in logs
-
-    assert "✅" in logs
-    assert "build_image" in logs
-
-    assert "❌" in logs
-    assert "deploy_k8s" in logs
-    assert "AuthError" in logs
-
-
-def test_human_readable_subscriber_log_level(bus_and_spy):
-    """
-    Tests that setting min_level correctly suppresses lower priority logs.
-    """
-    bus, _ = bus_and_spy
-    output = io.StringIO()
-    # Set level to ERROR, so INFO logs from RunStarted and Succeeded should be skipped
-    HumanReadableLogSubscriber(bus, stream=output, min_level="ERROR")
-
-    # INFO event
-    bus.publish(RunStarted(target_tasks=["t1"]))
-    # INFO event
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="1", task_name="t1", status="Succeeded", duration=0.1
-        )
-    )
-    # ERROR event
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="2", task_name="t2", status="Failed", error="Boom", duration=0.1
-        )
-    )
-
-    logs = output.getvalue()
-
-    # Should NOT contain INFO-level markers
-    assert "▶️" not in logs
-    assert "✅" not in logs
-    # Should contain ERROR-level markers
-    assert "❌" in logs
-    assert "Boom" in logs
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-from cascade.runtime.bus import MessageBus as EventBus
-from cascade.messaging.bus import bus as messaging_bus
-from cascade.messaging.renderer import CliRenderer
+~~~~~text
+feat(runtime): Implement semantic messaging bus for robust testing
 
+This commit introduces a new semantic messaging architecture to decouple core runtime logic from console output and logging formats.
 
-def test_human_readable_subscriber_integration():
-    """
-    Integration test for the full logging pipeline:
-    EventBus -> Subscriber -> MessageBus -> Renderer -> Output
-    """
-    event_bus = EventBus()
-    output = io.StringIO()
-    renderer = CliRenderer(stream=output, min_level="INFO")
-    messaging_bus.set_renderer(renderer)
+Key changes:
+1. **New `cascade.messaging` module**: Implements `MessageStore`, `MessageBus`, and `CliRenderer`. The `MessageBus` now acts as the centralized authority for all user-facing output via stable semantic IDs (e.g., `run.started`).
+2. **Refactored `HumanReadableLogSubscriber`**: This component is now a pure "translator" that listens to runtime events (like `RunStarted`) and translates them into semantic ID calls on the new messaging bus. It no longer contains hardcoded strings.
+3. **Test Robustness**:
+    - Removed fragile hardcoded string assertions in `tests/runtime/test_bus.py`.
+    - Refactored `tests/integration/test_end_to_end.py` to utilize `unittest.mock` to assert that the correct semantic message IDs and data payloads were sent to the messaging bus, making these critical tests completely UI-agnostic.
+    - Added `tests/conftest.py` with a centralized `SpySubscriber` and fixtures to standardize event-driven testing across the project.
 
-    # Connect the subscriber to the event bus
-    HumanReadableLogSubscriber(event_bus)
-
-    # Publish events to the event bus
-    event_bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
-    event_bus.publish(
-        TaskExecutionFinished(
-            task_id="123", task_name="build_image", status="Succeeded", duration=1.23
-        )
-    )
-    event_bus.publish(
-        TaskExecutionFinished(
-            task_id="124",
-            task_name="deploy_k8s",
-            status="Failed",
-            duration=0.05,
-            error="AuthError",
-        )
-    )
-
-    # Assert on the final rendered output
-    logs = output.getvalue()
-    assert "▶️" in logs and "deploy" in logs and "prod" in logs
-    assert "✅" in logs and "build_image" in logs
-    assert "❌" in logs and "deploy_k8s" in logs and "AuthError" in logs
-
-
-def test_human_readable_subscriber_log_level_filtering():
-    """
-    Tests that the min_level setting in the CliRenderer correctly filters messages.
-    """
-    event_bus = EventBus()
-    output = io.StringIO()
-    # Set renderer level to ERROR
-    renderer = CliRenderer(stream=output, min_level="ERROR")
-    messaging_bus.set_renderer(renderer)
-    
-    HumanReadableLogSubscriber(event_bus)
-
-    # Publish INFO and ERROR level events
-    event_bus.publish(RunStarted(target_tasks=["t1"])) # INFO
-    event_bus.publish(TaskExecutionFinished(task_id="1", task_name="t1", status="Succeeded")) # INFO
-    event_bus.publish(TaskExecutionFinished(task_id="2", task_name="t2", status="Failed", error="Boom")) # ERROR
-
-    logs = output.getvalue()
-
-    # INFO messages should be filtered out
-    assert "▶️" not in logs
-    assert "✅" not in logs
-    # ERROR messages should be present
-    assert "❌" in logs
-    assert "Boom" in logs
+This upgrade significantly improves the maintainability and testability of the entire project, laying the groundwork for i18n and structured logging.
 ~~~~~
+
+### 下一步建议
+核心架构工作已经完成，测试债务也已偿还。下一步应该回到性能和开发者体验的优化上：
+
+1.  **优化 Fixture 作用域**: 审查测试套件中创建成本较高的 fixture（例如，可能涉及 I/O 或昂贵设置的资源 fixture），并根据 `d3-principle-pytest-fixture-scoping` 原则提升其作用域（如从 `function` 到 `class` 或 `module`），以减少重复设置开销，提高测试执行速度。
+2.  **JSON Log Renderer**: 利用新实现的语义消息总线，实现一个 `JsonRenderer`，将所有输出结构化为 JSON 格式，便于机器解析和日志聚合。

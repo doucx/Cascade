@@ -1,1 +1,0 @@
-# Concepts: The Core Philosophy of Cascade

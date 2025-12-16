@@ -1,1 +1,0 @@
-# How-to: Manage Resources with Dependency Injection

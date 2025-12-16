@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 重构测试套件以镜像 src 目录结构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765857172.5114639, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 拆分混杂的测试文件以实现职责单一", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765857258.4641812, "duration_ms": 0}}

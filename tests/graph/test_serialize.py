@@ -167,3 +167,59 @@ def test_serialize_edge_types():
     # Verify the restored types are correct
     assert condition_edges[0].edge_type is cs.graph.model.EdgeType.CONDITION
     assert constraint_edges[0].edge_type is cs.graph.model.EdgeType.CONSTRAINT
+
+
+# --- Router Test Tasks ---
+@cs.task
+def get_route():
+    return "a"
+
+@cs.task
+def task_a():
+    return "A"
+
+@cs.task
+def task_b():
+    return "B"
+
+@cs.task
+def consumer(val):
+    return val
+
+
+def test_serialize_router():
+    """Test full round-trip serialization of a Router."""
+
+    # Construct a router using top-level tasks
+    selector = get_route()
+    route_a = task_a()
+    route_b = task_b()
+
+    router = cs.Router(
+        selector=selector,
+        routes={"a": route_a, "b": route_b}
+    )
+
+    # Consumer depends on the router
+    target = consumer(router)
+
+    # Build and Serialize
+    graph = build_graph(target)
+    json_str = to_json(graph)
+
+    # Deserialize
+    restored_graph = from_json(json_str)
+
+    # Verify
+    # Find the edge from selector to consumer (which carries the Router metadata)
+    selector_node = next(n for n in restored_graph.nodes if n.name == "get_route")
+    consumer_node = next(n for n in restored_graph.nodes if n.name == "consumer")
+
+    # The edge between them should have the router attached
+    edge = next(e for e in restored_graph.edges if e.source == selector_node and e.target == consumer_node)
+
+    assert edge.router is not None
+    # Check that the stub has the correct UUIDs
+    assert edge.router.selector._uuid == selector._uuid
+    assert edge.router.routes["a"]._uuid == route_a._uuid
+    assert edge.router.routes["b"]._uuid == route_b._uuid

@@ -26,3 +26,19 @@ def test_shell_task_integration():
 
     result = cs.run(final_result)
     assert result == "Processed: DATA"
+
+def test_shell_map():
+    """Tests mapping shell commands."""
+    commands = ["echo 'foo'", "echo 'bar'"]
+    
+    # Map the shell task over a list of commands
+    # This works because cs.shell is a Task instance, and Task implements LazyFactory
+    results = cs.shell.map(command=commands)
+    
+    @cs.task
+    def join_results(items: list[str]) -> str:
+        return "|".join(items)
+        
+    final = join_results(results)
+    
+    assert cs.run(final) == "foo|bar"

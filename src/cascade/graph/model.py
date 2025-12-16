@@ -12,9 +12,10 @@ class Node:
     name: str
     
     # Core spec
-    node_type: str = "task" # "task" or "param"
+    node_type: str = "task" # "task", "param", or "map"
     callable_obj: Optional[Callable] = None
     param_spec: Optional[Param] = None
+    mapping_factory: Optional[Any] = None # Implements LazyFactory
 
     # Metadata for execution strategies
     retry_policy: Optional[Any] = None  # Typed as Any to avoid circular deps with spec

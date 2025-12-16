@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from cascade.graph.model import Graph, Node, Edge
-from cascade.spec.task import LazyResult
+from cascade.spec.task import LazyResult, MappedLazyResult
 from cascade.spec.common import Param
 from cascade.spec.routing import Router
 
@@ -11,12 +11,15 @@ class GraphBuilder:
         self._visited: Dict[str, Node] = {}
 
     def build(self, target: LazyResult) -> Graph:
-        self._visit_lazy_result(target)
+        # Target could be a MappedLazyResult too
+        self._visit(target)
         return self.graph
 
     def _visit(self, value: Any) -> Node:
         if isinstance(value, LazyResult):
             return self._visit_lazy_result(value)
+        elif isinstance(value, MappedLazyResult):
+            return self._visit_mapped_result(value)
         elif isinstance(value, Param):
             return self._visit_param(value)
         else:
@@ -62,13 +65,37 @@ class GraphBuilder:
 
         return node
 
+    def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
+        if result._uuid in self._visited:
+            return self._visited[result._uuid]
+
+        node = Node(
+            id=result._uuid,
+            name=f"map({getattr(result.factory, 'name', 'factory')})",
+            node_type="map",
+            mapping_factory=result.factory,
+        )
+        self.graph.add_node(node)
+        self._visited[result._uuid] = node
+
+        # Process dependencies in mapping_kwargs
+        # Note: These arguments are treated as kwargs
+        self._process_dependencies(node, result.mapping_kwargs, is_kwargs=True)
+
+        if result._condition:
+            source_node = self._visit(result._condition)
+            edge = Edge(source=source_node, target=node, arg_name="_condition")
+            self.graph.add_edge(edge)
+
+        return node
+
     def _process_dependencies(self, target_node: Node, inputs: Any, is_kwargs: bool):
         iterator = inputs.items() if is_kwargs else enumerate(inputs)
 
         for key, value in iterator:
             arg_name = str(key)
 
-            if isinstance(value, (LazyResult, Param)):
+            if isinstance(value, (LazyResult, MappedLazyResult, Param)):
                 source_node = self._visit(value)
                 edge = Edge(source=source_node, target=target_node, arg_name=arg_name)
                 self.graph.add_edge(edge)

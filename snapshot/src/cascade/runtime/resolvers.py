@@ -5,7 +5,6 @@ from cascade.graph.model import Node, Graph, EdgeType
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError
-from cascade.internal.inputs import _get_param_value
 
 
 class ArgumentResolver:
@@ -32,6 +31,9 @@ class ArgumentResolver:
         Raises DependencyMissingError if a required upstream result is missing.
         """
         # 0. Special handling for internal input tasks
+        # Local import to avoid circular dependency with internal.inputs -> spec.task -> runtime
+        from cascade.internal.inputs import _get_param_value
+
         if node.callable_obj is _get_param_value:
             # Inject params_context directly
             # The literal_inputs should contain 'name'

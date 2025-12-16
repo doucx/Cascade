@@ -1,58 +1,172 @@
-好的，资源约束模型的元数据层已完成，现在我们创建一个原子化的提交。
-
-## [COMMIT] feat(core): Add resource constraint model to Node and LazyResult
+## [WIP] feat(core): 支持资源约束的序列化
 
 ### 用户需求
-引入资源感知调度的基础结构，允许任务声明资源需求（如 CPU, GPU, 内存）。
+更新图序列化模块，使其能够正确处理 `Node` 对象中的 `constraints` 字段，确保资源约束信息在图的序列化和反序列化过程中不会丢失。
 
 ### 评论
-该任务是实现高级调度和健壮性管理的关键一步。通过在 `LazyResult` 上暴露 `.with_constraints()` API 并将约束元数据化到 `Node` 模型中，我们严格遵循了洋葱架构，将约束的规格定义与未来的调度实现逻辑解耦。这是一个逻辑上完整的、可提交的工作单元。
+这是完成资源约束功能的最后一块拼图。支持序列化意味着带有资源需求的计算图可以被持久化存储、传输到远程节点或由外部工具（如可视化器）正确解析。目前我们主要关注基本类型（如数字、字符串）约束值的序列化，这覆盖了绝大多数静态资源声明场景。
 
 ### 目标
-将所有关于资源约束的修改和新增的测试文件提交到一个原子化的 Git Commit 中。
+1.  修改 `src/cascade/graph/serialize.py`，实现 `ResourceConstraint` 的序列化与反序列化逻辑。
+2.  在 `tests/graph/test_serialize.py` 中添加测试用例，验证往返序列化的正确性。
 
 ### 基本原理
-资源约束元数据是核心工作流管理所需的持久化信息。在完成其定义和传递后，应立即提交以确保工作单元的完整性。后续的序列化支持和调度逻辑将依赖于这些已固化的模型。
+我们将 `ResourceConstraint` 对象简化为其内部的 `requirements` 字典进行存储。在反序列化时，读取该字典并重新构造 `ResourceConstraint` 对象。这保持了 JSON 结构的简洁性。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/core #concept/solver #task/domain/core #task/object/resource-constraint #task/action/implementation #task/state/end
+#intent/build #flow/ready #priority/high #comp/core #concept/solver #task/domain/core #task/object/resource-constraint #task/action/serialization #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存所有与资源约束相关的修改和新增文件
+#### Acts 1: 修改序列化逻辑
+
+更新 `serialize.py` 以处理 `ResourceConstraint`。
 
 ~~~~~act
-git_add
-src/cascade/spec/constraint.py
-src/cascade/spec/task.py
-src/cascade/graph/model.py
-src/cascade/graph/build.py
-src/cascade/__init__.py
-tests/spec/test_constraint.py
+patch_file
+src/cascade/graph/serialize.py
 ~~~~~
-
-#### Acts 2: 提交变更
-
-创建一个详细的 Git Commit，描述本次功能增强。
+~~~~~python
+import importlib
+from typing import Any, Dict, Optional
+from .model import Graph, Node, Edge
+from ..spec.common import Param
+from ..spec.routing import Router
+from ..spec.task import RetryPolicy, Task
+~~~~~
+~~~~~python
+import importlib
+from typing import Any, Dict, Optional
+from .model import Graph, Node, Edge
+from ..spec.common import Param
+from ..spec.constraint import ResourceConstraint
+from ..spec.routing import Router
+from ..spec.task import RetryPolicy, Task
+~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+src/cascade/graph/serialize.py
 ~~~~~
-~~~~~text
-feat(core): Add resource constraint model to Node and LazyResult
+~~~~~python
+            "backoff": node.retry_policy.backoff
+        }
 
-This commit introduces the necessary metadata structures to support resource-aware scheduling in future advanced solvers (like CSPSolver).
+    return data
 
-Key changes:
-1. `ResourceConstraint` spec is defined, allowing tasks to declare requirements (e.g., `gpu_count`, `memory_gb`).
-2. `LazyResult` gains `.with_constraints(**kwargs)` for declarative setup.
-3. `GraphBuilder` and `Node` model are updated to propagate and store this metadata on the computation graph node.
-4. Exported `cs.with_constraints` as a helper function.
+def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
+~~~~~
+~~~~~python
+            "backoff": node.retry_policy.backoff
+        }
 
-The execution logic remains unchanged, as resource scheduling will be implemented in a future adapter/solver.
+    if node.constraints:
+        data["constraints"] = node.constraints.requirements
+
+    return data
+
+def _edge_to_dict(edge: Edge) -> Dict[str, Any]:
+~~~~~
+
+~~~~~act
+patch_file
+src/cascade/graph/serialize.py
+~~~~~
+~~~~~python
+    # Recover Retry Policy
+    retry_policy = None
+    if "retry_policy" in data:
+        rp = data["retry_policy"]
+        retry_policy = RetryPolicy(
+            max_attempts=rp["max_attempts"],
+            delay=rp["delay"],
+            backoff=rp["backoff"]
+        )
+
+    node = Node(
+        id=data["id"],
+        name=data["name"],
+        node_type=data["node_type"],
+        callable_obj=_load_func_from_path(data.get("callable")),
+        mapping_factory=_load_func_from_path(data.get("mapping_factory")),
+        param_spec=param_spec,
+        retry_policy=retry_policy,
+        literal_inputs=data.get("literal_inputs", {})
+    )
+    return node
+~~~~~
+~~~~~python
+    # Recover Retry Policy
+    retry_policy = None
+    if "retry_policy" in data:
+        rp = data["retry_policy"]
+        retry_policy = RetryPolicy(
+            max_attempts=rp["max_attempts"],
+            delay=rp["delay"],
+            backoff=rp["backoff"]
+        )
+
+    # Recover Constraints
+    constraints = None
+    if "constraints" in data:
+        constraints = ResourceConstraint(requirements=data["constraints"])
+
+    node = Node(
+        id=data["id"],
+        name=data["name"],
+        node_type=data["node_type"],
+        callable_obj=_load_func_from_path(data.get("callable")),
+        mapping_factory=_load_func_from_path(data.get("mapping_factory")),
+        param_spec=param_spec,
+        retry_policy=retry_policy,
+        constraints=constraints,
+        literal_inputs=data.get("literal_inputs", {})
+    )
+    return node
+~~~~~
+
+#### Acts 2: 添加测试用例
+
+在 `test_serialize.py` 中验证带约束的任务的序列化。
+
+~~~~~act
+patch_file
+tests/graph/test_serialize.py
+~~~~~
+~~~~~python
+    restored = from_json(to_json(graph))
+    t_node = next(n for n in restored.nodes if n.name == "simple_task")
+    assert t_node.retry_policy.max_attempts == 5
+~~~~~
+~~~~~python
+    restored = from_json(to_json(graph))
+    t_node = next(n for n in restored.nodes if n.name == "simple_task")
+    assert t_node.retry_policy.max_attempts == 5
+
+def test_serialize_with_constraints():
+    """Test serialization of resource constraints."""
+    t = simple_task(x=1).with_constraints(gpu_count=1, memory_gb=16)
+    graph = build_graph(t)
+    
+    data = graph_to_dict(graph)
+    task_node = next(n for n in data["nodes"] if n["name"] == "simple_task")
+    
+    assert "constraints" in task_node
+    assert task_node["constraints"]["gpu_count"] == 1
+    assert task_node["constraints"]["memory_gb"] == 16
+    
+    # Round trip
+    restored = from_json(to_json(graph))
+    t_node = next(n for n in restored.nodes if n.name == "simple_task")
+    
+    assert t_node.constraints is not None
+    assert t_node.constraints.requirements["gpu_count"] == 1
+    assert t_node.constraints.requirements["memory_gb"] == 16
 ~~~~~
 
 ### 下一步建议
-资源约束模型现已在图结构中稳定。下一步，我们需要更新图序列化模块 (`src/cascade/graph/serialize.py`)，使其能够正确地序列化和反序列化新的 `ResourceConstraint` 对象，从而保证图的持久化是无损的。
+资源感知调度的基础数据结构工作（模型定义、传递、序列化）已全部完成。现在，我们可以在不影响主线功能的情况下，创建一个新的 Git 提交来封装这些变更。
+
+之后，我们可以转向 **任务映射 (.map)** 的增强，或者开始设计 **Advanced Solver** 的接口，但考虑到 `map` 已经在早期实现中存在但可能需要打磨，检查一下 `map` 功能的完整性也是一个好方向。鉴于用户提到“下一个最具挑战性和基础性的任务是实现资源感知调度”，我们实际上已经完成了核心数据的铺垫。

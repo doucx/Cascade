@@ -94,3 +94,23 @@ def test_serialize_with_retry():
     restored = from_json(to_json(graph))
     t_node = next(n for n in restored.nodes if n.name == "simple_task")
     assert t_node.retry_policy.max_attempts == 5
+
+def test_serialize_with_constraints():
+    """Test serialization of resource constraints."""
+    t = simple_task(x=1).with_constraints(gpu_count=1, memory_gb=16)
+    graph = build_graph(t)
+    
+    data = graph_to_dict(graph)
+    task_node = next(n for n in data["nodes"] if n["name"] == "simple_task")
+    
+    assert "constraints" in task_node
+    assert task_node["constraints"]["gpu_count"] == 1
+    assert task_node["constraints"]["memory_gb"] == 16
+    
+    # Round trip
+    restored = from_json(to_json(graph))
+    t_node = next(n for n in restored.nodes if n.name == "simple_task")
+    
+    assert t_node.constraints is not None
+    assert t_node.constraints.requirements["gpu_count"] == 1
+    assert t_node.constraints.requirements["memory_gb"] == 16

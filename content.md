@@ -1,155 +1,60 @@
-好的，我们立即开始。
+好的，我们已经成功地将“Dogfooding”原则应用到了两个核心的运行时测试文件中。现在是时候将这个重要的改进作为一个逻辑单元提交了。
 
-我将应用上一轮重构中建立的 `SpySubscriber` 模式来改进 `tests/runtime/test_control_flow.py`，以实现测试辅助工具的一致性。
+我将生成一个 `[COMMIT]` 计划。
 
-## [WIP] refactor(tests): 在控制流测试中统一事件监听模式
-
-### 摘要头
-**[WIP] refactor(tests): 在控制流测试中统一事件监听模式**
+## [COMMIT] refactor(tests): 采用事件驱动的'Dogfooding'模式重构运行时测试
 
 ### 用户需求
-按照建议，将 `tests/runtime/test_control_flow.py` 中自定义的 `EventSpy` 类替换为在 `test_retry.py` 中引入的、功能更全面的 `SpySubscriber` 类，以统一整个测试套件的事件监听和断言模式。
+将针对 `test_retry.py` 和 `test_control_flow.py` 的重构工作合并到一个单一的、逻辑完整的 Git 提交中。
 
 ### 评论
-这是一个很好的“小重构，大影响”的例子。通过用一个标准的 `SpySubscriber` 替换临时的 `EventSpy`，我们不仅消除了重复代码，还获得了更强的能力（捕获所有事件）和更清晰的 API（`.events_of_type()` 辅助方法）。这使得测试代码更易于阅读和维护，并进一步巩固了我们的“Dogfooding”测试策略。
+这次提交标志着 Cascade 测试策略的一次重要演进。我们用一种统一的、基于事件总线的“Dogfooding”模式，取代了脆弱的、依赖内部实现的测试方法。通过断言 `Engine` 发出的事件流，我们的测试现在验证的是其公开的行为契约，而非实现细节。这大大增强了测试的健壮性、可读性和长期可维护性。`SpySubscriber` 辅助类的标准化也消除了重复代码，提升了开发者体验。
 
 ### 目标
-1.  在 `tests/runtime/test_control_flow.py` 文件中，移除 `EventSpy` 类的定义。
-2.  引入 `SpySubscriber` 类的定义。
-3.  更新所有测试用例，使用 `SpySubscriber` 实例化事件监听器。
-4.  修改断言逻辑，使用 `spy.events_of_type(TaskSkipped)` 来获取和验证事件，使代码更简洁、更具可读性。
+创建一个 Git 提交，该提交包含对 `tests/runtime/test_retry.py` 和 `tests/runtime/test_control_flow.py` 的重构，并附有一个清晰的提交信息来阐述这一测试理念的转变。
 
 ### 基本原理
-在测试套件中保持辅助工具和模式的一致性，可以显著降低开发者的认知负荷。当所有测试都使用相同的方式来监听和断言事件时，理解和编写新测试的速度会大大加快。此举旨在将 `SpySubscriber` 确立为我们测试 `Engine` 行为的标准工具。
+这两项重构服务于同一个战略目标：将《自我测试》的愿景付诸实践。将它们合并到一次提交中，可以在版本历史中清晰地记录下我们从传统的实现测试到现代的行为测试的转变，这是一个单一、完整的架构决策。
 
 ### 标签
-#intent/refine #flow/ready #priority/low #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/dogfooding #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/medium #comp/tests #comp/runtime #scope/dx #ai/brainstorm #task/domain/testing #task/object/dogfooding #task/action/implementation #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `test_control_flow.py`
+#### Acts 1: 暂存重构后的测试文件
 
-我们将使用 `write_file` 覆盖此文件，引入 `SpySubscriber` 并更新所有测试用例以使用新的模式。
+我们将 `test_retry.py` 和 `test_control_flow.py` 的新版本添加到 Git 暂存区。
 
 ~~~~~act
-write_file
+git_add
+tests/runtime/test_retry.py
 tests/runtime/test_control_flow.py
 ~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import Event, TaskSkipped, TaskExecutionFinished
 
+#### Acts 2: 创建 Git 提交
 
-class SpySubscriber:
-    """A standard test utility to collect events from a MessageBus."""
+现在，我们执行 `git commit`，附上详细的提交信息，记录下这次重要的测试策略升级。
 
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+refactor(tests): Adopt event-driven 'Dogfooding' pattern for runtime tests
 
-    def collect(self, event: Event):
-        self.events.append(event)
+Refactors key runtime tests (`test_retry.py` and `test_control_flow.py`) to align with the "Dogfooding" and "test intent over implementation" principles.
 
-    def events_of_type(self, event_type):
-        return [e for e in self.events if isinstance(e, event_type)]
+Key Changes:
 
+1.  **Event-Based Assertions:** Tests no longer inspect internal state (e.g., `nonlocal` counters). Instead, they subscribe to the `MessageBus` and assert that the `Engine` emits the correct sequence of events (`TaskRetrying`, `TaskSkipped`, etc.). This validates the public, observable behavior of the engine, making tests more robust against internal refactoring.
 
-@pytest.mark.asyncio
-async def test_run_if_true():
-    @cs.task
-    def condition():
-        return True
+2.  **Unified SpySubscriber:** A standard `SpySubscriber` helper class is now used in both modules, eliminating code duplication and providing a consistent API for event collection and inspection.
 
-    @cs.task
-    def action():
-        return "executed"
-
-    flow = action().run_if(condition())
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    result = await engine.run(flow)
-    assert result == "executed"
-
-    # Check no skip events were fired
-    assert not spy.events_of_type(TaskSkipped)
-
-
-@pytest.mark.asyncio
-async def test_run_if_false():
-    @cs.task
-    def condition():
-        return False
-
-    @cs.task
-    def action():
-        return "executed"
-
-    flow = action().run_if(condition())
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    with pytest.raises(KeyError):
-        await engine.run(flow)
-
-    # Verify Skip Event using the new helper
-    skip_events = spy.events_of_type(TaskSkipped)
-    assert len(skip_events) == 1
-    assert skip_events[0].task_name == "action"
-    assert skip_events[0].reason == "ConditionFalse"
-
-
-@pytest.mark.asyncio
-async def test_cascade_skip():
-    """
-    Test that if A is skipped, B (which depends on A) is also skipped.
-    """
-
-    @cs.task
-    def condition():
-        return False
-
-    @cs.task
-    def step_a():
-        return "A"
-
-    @cs.task
-    def step_b(val):
-        return f"B got {val}"
-
-    res_a = step_a().run_if(condition())
-    res_b = step_b(res_a)
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
-
-    with pytest.raises(KeyError):
-        await engine.run(res_b)
-
-    skip_events = spy.events_of_type(TaskSkipped)
-
-    # Both A and B should be skipped
-    skipped_names = sorted([e.task_name for e in skip_events])
-    assert skipped_names == ["step_a", "step_b"]
-
-    reason_a = next(e.reason for e in skip_events if e.task_name == "step_a")
-    reason_b = next(e.reason for e in skip_events if e.task_name == "step_b")
-
-    assert reason_a == "ConditionFalse"
-    assert reason_b == "UpstreamSkipped"
+This change significantly improves the quality and expressiveness of our test suite, ensuring that we are testing the behavior our users will actually experience.
 ~~~~~
 
 ### 下一步建议
-太好了。我们已经成功地将两个关键的运行时测试（`retry` 和 `control_flow`）迁移到了新的、基于事件的“Dogfooding”测试模式。
+我们已经完成了对测试策略的重大升级，代码库的健康状况也得到了提升。现在，我们的基础异常坚实。
 
-这些改进现在是时候作为一个逻辑单元提交了。我建议下一步生成一个 `[COMMIT]` 计划，将这两次测试重构合并到一个原子提交中，以清晰地记录我们对测试质量的提升。
+是时候将注意力转向下一个高价值的核心功能了。我建议我们正式开始 **`cs.visualize(target)`** 的实现工作。这个工具将允许我们将任何工作流的依赖图可视化，这将是调试和理解复杂流程的无价之宝。如果你同意，我将开始制定实现 `cs.visualize` 的计划。

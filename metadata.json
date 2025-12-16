@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M engine.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765853187.256297, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(core): Verify `.map()` functionality and `cs.shell` integration", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765853200.2631457, "duration_ms": 0}}

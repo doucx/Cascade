@@ -11,6 +11,7 @@ from .runtime.bus import MessageBus
 from .runtime.subscribers import HumanReadableLogSubscriber
 from .testing import override_resource
 from .tools.preview import dry_run
+from .tools.visualize import visualize
 
 # Note: 'shell' is removed from static imports to support dynamic provider loading
 __all__ = [
@@ -18,6 +19,7 @@ __all__ = [
     "Param",
     "run",
     "dry_run",
+    "visualize",
     "LazyResult",
     "Router",
     "File",

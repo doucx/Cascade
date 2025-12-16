@@ -30,12 +30,16 @@ class CliRenderer:
 
     def render(self, msg_id: str, level: str, **kwargs):
         if LOG_LEVELS.get(level.upper(), 20) >= self._min_level_val:
+            # Handle specific transformations for human-readable output
+            if "target_tasks" in kwargs:
+                kwargs["targets"] = ", ".join(kwargs["target_tasks"])
+
             template = self._store.get(msg_id)
             try:
                 message = template.format(**kwargs)
             except KeyError as e:
                 message = f"<Formatting error for '{msg_id}': missing key {e}>"
-            
+
             print(message, file=self._stream)
 
 

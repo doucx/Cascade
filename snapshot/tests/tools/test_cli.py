@@ -82,8 +82,14 @@ def test_cli_json_log_format():
     
     # Check that each line is a valid JSON
     log_lines = [json.loads(line) for line in logs.splitlines()]
+
+    # Find the specific log entry for run.started
+    run_started_log = next((item for item in log_lines if item["event_id"] == "run.started"), None)
     
-    assert any(item["event_id"] == "run.started" for item in log_lines)
+    # Assertions
+    assert run_started_log is not None, "run.started event not found in logs"
+    assert run_started_log["data"]["target_tasks"] == ["simple_task"]
+    
     assert any(item["event_id"] == "task.started" and item["data"]["task_name"] == "simple_task" for item in log_lines)
     assert any(item["event_id"] == "run.finished_success" for item in log_lines)
 

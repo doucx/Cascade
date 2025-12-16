@@ -70,4 +70,64 @@ robust_api_call = api_call.with_retry(max_attempts=3, delay=1.0, backoff=2.0)
 # - 如果第三次仍然失败, 最终的异常才会被抛出, 导致工作流失败。
 ```
 
-通过组合使用 `.with_cache()` 和 `.with_retry()`，你可以用声明式的方式，极大地提升工作流的稳定性和效率，而无需用 `try/except` 和 `if os.path.exists()` 把你的业务逻辑弄得一团糟。
+## 资源安全与并发控制 (`.with_constraints()`)
+
+当工作流包含资源密集型任务（例如，需要 GPU 或大量内存）时，你需要确保任务不会超额使用系统资源，导致整个进程崩溃或调度混乱。
+
+### 1. 定义系统容量
+
+首先，在运行工作流时，通过 `cs.run` 的 `system_resources` 参数定义系统的总资源容量。
+
+```python
+# 定义系统容量：只有 1 个 GPU 和 32GB 内存
+system_config = {
+    "gpu_slots": 1,
+    "memory_gb": 32,
+}
+
+# 引擎将使用此配置来仲裁任务的执行顺序
+# cs.run(target_task, system_resources=system_config)
+```
+
+### 2. 声明任务需求
+
+使用 `.with_constraints()` 方法，声明一个任务需要多少资源才能运行。
+
+```python
+import cascade as cs
+
+@cs.task
+def train_model():
+    print("Running memory-heavy task...")
+    # ... task logic ...
+    return "Model Trained"
+
+# 声明此任务需要 1 个 gpu_slot 和 16GB 内存
+constrained_task = train_model().with_constraints(
+    gpu_slots=1, 
+    memory_gb=16
+)
+
+# 调度器保证：
+# 1. 如果系统总容量不够 (例如系统只有 8GB 内存)，任务将立即失败 (快速失败)。
+# 2. 如果多个任务需要 gpu_slots=1，它们将被强制串行执行。
+```
+
+### 3. 动态约束
+
+资源约束的值也可以是上游任务的 `LazyResult`。
+
+```python
+@cs.task
+def calculate_required_cpu() -> int:
+    # 假设根据数据大小动态计算出需要 4 个 CPU 核心
+    return 4
+
+# CPU 需求是动态计算出来的
+required_cpu = calculate_required_cpu()
+
+# 任务的约束是动态值
+job = train_model().with_constraints(cpu_cores=required_cpu) 
+```
+
+通过组合使用 `.with_cache()`、`.with_retry()` 和 `.with_constraints()`，你可以用声明式的方式，极大地提升工作流的稳定性和效率，而无需用 `try/except` 和 `if os.path.exists()` 把你的业务逻辑弄得一团糟。

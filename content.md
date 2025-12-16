@@ -1,59 +1,106 @@
-好的，我们已经完成了 `Engine` 职责的解耦工作。此操作将核心的协调逻辑与输入解析逻辑分离，显著提高了 `Cascade` 运行时的架构健康度。
+这是本次重构后的第一个文档任务，旨在偿还高优先级文档技术债务。我将更新 `docs/how-to-guides/improving-robustness.md` 文件，增加关于资源安全和并发控制的章节。
 
-现在，我将为您生成提交此变更的计划。
-
-## [COMMIT] refactor(runtime): Decouple argument and constraint resolution from Engine
+## [WIP] docs: Add documentation for resource constraints and scheduling
 
 ### 用户需求
-提交对 `Engine` 核心运行时进行的重构，将参数解析和资源约束解析逻辑分离到独立的 Resolver 类中。
+在 `improving-robustness.md` 中增加关于 `.with_constraints()` 和 `cs.run` 的 `system_resources` 参数的文档，确保用户了解如何使用新的资源调度功能。
 
 ### 评论
-这是一次关键的架构提炼。通过将 `_resolve_arguments` 和 `_resolve_constraints` 逻辑提取到专门的 `ArgumentResolver` 和 `ConstraintResolver` 类中，我们成功地使 `Engine` 专注于其核心的协调和调度角色。这遵循了单一职责原则，并为未来的解析策略扩展提供了清晰的接口。
+资源约束是 `Cascade` 健壮性的关键组成部分，它防止了资源超额使用导致的工作流崩溃。本次文档更新是高优先级的，它使得功能对用户可用且可见。
 
 ### 目标
-将新创建的 `src/cascade/runtime/resolvers.py` 文件和重构后的 `src/cascade/runtime/engine.py` 文件作为一个逻辑单元提交。
+在 `docs/how-to-guides/improving-robustness.md` 中，在 `.with_retry()` 之后添加 `资源安全与并发控制` 章节。
 
 ### 基本原理
-此变更使 `Engine` 的方法签名更简洁，其内部复杂性得以降低。由于解析逻辑现在集中在 `resolvers.py` 中，它们可以被独立于 `Engine` 进行测试和验证，大大提高了开发者体验（DX）。
+按照项目规划，文档债必须在开始下一个核心功能之前偿还。我们将使用 `patch_file` 精确定位和插入新内容。
 
 ### 标签
-#intent/refine #intent/architect #flow/ready #priority/high #comp/runtime #concept/architecture #scope/core #scope/dx #ai/instruct #task/domain/architecture #task/object/core-engine #task/action/refactor #task/state/end
+#intent/document #flow/ready #priority/high #comp/docs #concept/constraint #scope/ux #ai/instruct #task/domain/documentation #task/object/improving-robustness-doc #task/action/update #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存并提交变更
+#### Acts 1: 更新 `improving-robustness.md` 文件
 
-将新创建的 `resolvers.py` 文件和重构后的 `engine.py` 添加到 Git 暂存区，并执行提交。
-
-~~~~~act
-git_add
-src/cascade/runtime/resolvers.py
-src/cascade/runtime/engine.py
-~~~~~
+在 `improving-robustness.md` 中，在 `.with_retry()` 章节和末尾总结之间插入新的 `资源安全与并发控制` 章节。
 
 ~~~~~act
-git_commit
+patch_file
+docs/how-to-guides/improving-robustness.md
 ~~~~~
-~~~~~text
-refactor(runtime): Decouple argument and constraint resolution from Engine
+~~~~~markdown
+# - 如果第三次仍然失败, 最终的异常才会被抛出, 导致工作流失败。
+```
 
-The Engine class was taking on too much responsibility, specifically handling the complex logic of argument resolution (including Router lookups and Inject substitution) and dynamic resource constraint resolution.
+通过组合使用 `.with_cache()` 和 `.with_retry()`，你可以用声明式的方式，极大地提升工作流的稳定性和效率，而无需用 `try/except` 和 `if os.path.exists()` 把你的业务逻辑弄得一团糟。
+~~~~~
+~~~~~markdown
+# - 如果第三次仍然失败, 最终的异常才会被抛出, 导致工作流失败。
+```
 
-This refactoring separates concerns:
-1. Introduced `ArgumentResolver` to handle dynamic argument assembly.
-2. Introduced `ConstraintResolver` to handle resolution of LazyResult values within constraints.
+## 资源安全与并发控制 (`.with_constraints()`)
 
-The `Engine` now delegates these tasks, making it a pure coordinator and significantly improving the maintainability and testability of the core runtime.
+当工作流包含资源密集型任务（例如，需要 GPU 或大量内存）时，你需要确保任务不会超额使用系统资源，导致整个进程崩溃或调度混乱。
+
+### 1. 定义系统容量
+
+首先，在运行工作流时，通过 `cs.run` 的 `system_resources` 参数定义系统的总资源容量。
+
+```python
+# 定义系统容量：只有 1 个 GPU 和 32GB 内存
+system_config = {
+    "gpu_slots": 1,
+    "memory_gb": 32,
+}
+
+# 引擎将使用此配置来仲裁任务的执行顺序
+# cs.run(target_task, system_resources=system_config)
+```
+
+### 2. 声明任务需求
+
+使用 `.with_constraints()` 方法，声明一个任务需要多少资源才能运行。
+
+```python
+import cascade as cs
+
+@cs.task
+def train_model():
+    print("Running memory-heavy task...")
+    # ... task logic ...
+    return "Model Trained"
+
+# 声明此任务需要 1 个 gpu_slot 和 16GB 内存
+constrained_task = train_model().with_constraints(
+    gpu_slots=1, 
+    memory_gb=16
+)
+
+# 调度器保证：
+# 1. 如果系统总容量不够 (例如系统只有 8GB 内存)，任务将立即失败 (快速失败)。
+# 2. 如果多个任务需要 gpu_slots=1，它们将被强制串行执行。
+```
+
+### 3. 动态约束
+
+资源约束的值也可以是上游任务的 `LazyResult`。
+
+```python
+@cs.task
+def calculate_required_cpu() -> int:
+    # 假设根据数据大小动态计算出需要 4 个 CPU 核心
+    return 4
+
+# CPU 需求是动态计算出来的
+required_cpu = calculate_required_cpu()
+
+# 任务的约束是动态值
+job = train_model().with_constraints(cpu_cores=required_cpu) 
+```
+
+通过组合使用 `.with_cache()`、`.with_retry()` 和 `.with_constraints()`，你可以用声明式的方式，极大地提升工作流的稳定性和效率，而无需用 `try/except` 和 `if os.path.exists()` 把你的业务逻辑弄得一团糟。
 ~~~~~
 
 ### 下一步建议
-
-架构重构完成后，我们应立即偿还已识别出的最高优先级技术债务。
-
-根据 `开发/债务分析251216.md` 的报告：
-1.  **任务**: 偿还文档债 (高优先级)。
-2.  **内容**: 更新 `docs/how-to-guides/improving-robustness.md` 文件，详细介绍新引入的 `.with_constraints()` 和 `cs.run` 的 `system_resources` 参数。
-
-我建议我们开始编写这个文档。
+文档更新已完成。根据开发路线图和技术债务分析，下一个任务应是继续 **`cs.config` Provider** 的实现，以提供更强大的动态配置能力。

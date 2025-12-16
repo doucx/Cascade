@@ -27,17 +27,22 @@ def sqlite_db():
     engine.dispose()
 
 
+@pytest.fixture(scope="module")
+def db_engine():
+    """Provides a Cascade Engine with the sqlite_db resource pre-registered."""
+    engine = cs.Engine()
+    engine.register(sqlite_db)
+    return engine
+
+
 @pytest.mark.asyncio
-async def test_sql_query_success():
+async def test_sql_query_success(db_engine):
     """Test a basic SELECT query."""
 
     # Define a workflow using the 'sqlite_db' resource
     users = cs.sql("SELECT * FROM users ORDER BY name", db="sqlite_db")
 
-    engine = cs.Engine()
-    engine.register(sqlite_db)
-
-    result = await engine.run(users)
+    result = await db_engine.run(users)
 
     assert len(result) == 2
     assert result[0]["name"] == "Alice"
@@ -45,17 +50,14 @@ async def test_sql_query_success():
 
 
 @pytest.mark.asyncio
-async def test_sql_with_params():
+async def test_sql_with_params(db_engine):
     """Test a query with parameters."""
 
     target = cs.sql(
         "SELECT * FROM users WHERE name = :name", db="sqlite_db", params={"name": "Bob"}
     )
 
-    engine = cs.Engine()
-    engine.register(sqlite_db)
-
-    result = await engine.run(target)
+    result = await db_engine.run(target)
 
     assert len(result) == 1
     assert result[0]["name"] == "Bob"

@@ -1,69 +1,122 @@
-执行成功，现在所有测试应该已通过。我们将此完整的逻辑单元（JSON Renderer实现、API暴露以及所有相关的架构修正和测试修复）作为一个原子提交进行版本控制。
+你的分析完全正确。
 
-## [COMMIT] feat(observability): Implement JSON logging and structured data contract
+遵循 `d3-principle-pytest-fixture-scoping` 原则来优化涉及 I/O 的 Fixture 是优秀的工程实践，即使在当前规模下速度不是瓶颈。这种主动优化有助于保持测试套件的健康和高效。
+
+你的建议是将 `sqlite_db` 资源提升为模块作用域的 Pytest Fixture，这是正确的方向。我的实现方案会稍微调整一下，以获得最佳效果：我将创建一个 `db_engine` Fixture，它在模块级别（`module` scope）初始化一个 `Engine` 实例并预先注册 `sqlite_db` 资源。这样，每个测试函数就可以直接使用一个准备就绪的、带有数据库资源的 `Engine`，从而将性能开销降至最低。
+
+我将生成一个计划来实现这一优化。
+
+## [WIP] refactor(tests): 优化 SQL 测试中的 Fixture 作用域
 
 ### 用户需求
-实现 `JsonRenderer`，将运行时事件输出为结构化 JSON 格式，并通过 `cs.run` 和生成的 CLI (`--log-format`) 对外暴露此功能。同时，修复了由架构重构引起的所有日志不一致性、模板契约冲突以及测试捕获问题。
+根据 `d3-principle-pytest-fixture-scoping` 原则，将 `tests/integration/test_sql.py` 中的 `sqlite_db` 资源相关的设置提升为模块作用域的 Pytest Fixture，以优化测试性能并遵循最佳实践。
 
 ### 评论
-这是一个对生产级可观测性具有决定性意义的提交。它将 Cascade 的日志系统从单纯的人类报告升级为机器可读的结构化数据流，极大地增强了其在 CI/CD 和大规模部署环境中的可操作性。
-
-本次提交的关键成就包括：
-1.  **实现 `JsonRenderer`**：提供了 JSON 格式的结构化日志输出。
-2.  **API 暴露**：在 `cs.run` 和 `cs.cli` 中引入 `--log-format` 选项。
-3.  **架构净化**：通过将表现逻辑（如列表连接）移入 `CliRenderer` 或通过 `MessageStore` 智能处理，确保了事件总线和订阅者只传递原始、结构化的数据，从而稳定了整个日志架构。
-4.  **解决测试陷阱**：修复了因 Python 默认参数绑定机制导致的 `CliRunner` 无法捕获日志的运行时错误。
+这是一个应用架构原则来改善测试套件质量的绝佳示例。通过将 `Engine` 的设置和资源注册集中到一个模块级别的 Fixture 中，我们不仅减少了每个测试用例不必要的重复设置开销，还使测试代码本身变得更加简洁和意图明确。同时，特意保持 `test_sql_missing_resource` 测试的独立性是正确的，因为它需要一个“干净”的、未注册任何资源的 `Engine` 实例来验证其特定的失败场景。
 
 ### 目标
-将实现结构化日志所需的所有文件变更打包，并进行一次干净的提交。
+1.  在 `tests/integration/test_sql.py` 文件中，创建一个名为 `db_engine` 的、作用域为 `module` 的 Pytest Fixture。
+2.  该 Fixture 将负责创建 `cs.Engine` 实例，并为其注册 `sqlite_db` 资源。
+3.  重构 `test_sql_query_success` 和 `test_sql_with_params` 测试函数，使其依赖并使用 `db_engine` Fixture。
+4.  确保 `test_sql_missing_resource` 测试函数维持原状，不使用新的 Fixture。
 
 ### 基本原理
-为了支持“预编排”和“嵌入式引擎”的战略定位，`Cascade` 必须在可观测性方面达到工业标准。结构化日志是实现与现代日志聚合系统（Loki, ELK）无缝集成的先决条件。所有关联的架构修正都是为了确保这一新功能可以在不破坏现有功能和测试稳定性的前提下，保持高可维护性。
+遵循 `d3-principle-pytest-fixture-scoping` 原则，对于那些创建成本较高且在测试过程中不会被修改的只读 Fixture，应提升其作用域。在本例中，一个带有已注册的数据库资源的 `Engine` 实例完全符合这个条件。通过将其作用域提升至 `module`，我们可以确保在整个测试文件的执行过程中，相关的 `Engine` 初始化和资源注册操作只执行一次，从而显著提高测试套件的运行效率。
 
 ### 标签
-#intent/build #intent/refine #flow/ready #priority/high #comp/core #comp/cli #comp/tests #concept/ui #scope/api #scope/dx #ai/delegate #task/domain/observability #task/object/json-logging #task/action/implementation #task/state/end
+#intent/refine #flow/ready #priority/low #comp/tests #concept/config #scope/dx #ai/instruct #task/domain/testing #task/object/pytest-fixture #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交所有与结构化日志和渲染器重构相关的变更
+#### Acts 1: 重构 SQL 集成测试
+
+我们将使用 `write_file` 来更新整个 `test_sql.py` 文件。这包括引入新的模块级 `db_engine` Fixture，并更新依赖它的测试用例。
 
 ~~~~~act
-git_add
-src/cascade/__init__.py
-src/cascade/messaging/bus.py
-src/cascade/messaging/renderer.py
-src/cascade/runtime/subscribers.py
-src/cascade/tools/cli.py
-tests/messaging/test_renderer.py
-tests/integration/test_end_to_end.py
-tests/tools/test_cli.py
+write_file
+tests/providers/test_sql.py
 ~~~~~
+~~~~~python
+import pytest
+import cascade as cs
+from sqlalchemy import create_engine
 
-~~~~~act
-git_commit
+# Skip if sqlalchemy missing
+pytest.importorskip("sqlalchemy")
+
+
+@cs.resource
+def sqlite_db():
+    # Setup an in-memory SQLite database
+    engine = create_engine("sqlite:///:memory:")
+
+    # Create a table
+    with engine.connect() as conn:
+        conn.execute(
+            cs.providers.sql.text(
+                "CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"
+            )
+        )
+        conn.execute(cs.providers.sql.text("INSERT INTO users (name) VALUES ('Alice')"))
+        conn.execute(cs.providers.sql.text("INSERT INTO users (name) VALUES ('Bob')"))
+        conn.commit()
+
+    yield engine
+
+    engine.dispose()
+
+
+@pytest.fixture(scope="module")
+def db_engine():
+    """Provides a Cascade Engine with the sqlite_db resource pre-registered."""
+    engine = cs.Engine()
+    engine.register(sqlite_db)
+    return engine
+
+
+@pytest.mark.asyncio
+async def test_sql_query_success(db_engine):
+    """Test a basic SELECT query."""
+
+    # Define a workflow using the 'sqlite_db' resource
+    users = cs.sql("SELECT * FROM users ORDER BY name", db="sqlite_db")
+
+    result = await db_engine.run(users)
+
+    assert len(result) == 2
+    assert result[0]["name"] == "Alice"
+    assert result[1]["name"] == "Bob"
+
+
+@pytest.mark.asyncio
+async def test_sql_with_params(db_engine):
+    """Test a query with parameters."""
+
+    target = cs.sql(
+        "SELECT * FROM users WHERE name = :name", db="sqlite_db", params={"name": "Bob"}
+    )
+
+    result = await db_engine.run(target)
+
+    assert len(result) == 1
+    assert result[0]["name"] == "Bob"
+
+
+@pytest.mark.asyncio
+async def test_sql_missing_resource():
+    """Test failure when the specified DB resource is not registered."""
+
+    target = cs.sql("SELECT 1", db="non_existent_db")
+
+    engine = cs.Engine()
+    # We don't register anything
+
+    # Should fail during execution when trying to resolve the Inject object
+    # Or during setup if we scan correctly?
+    # With the new scanning logic, it should fail at setup time!
+
+    with pytest.raises(NameError, match="not registered"):
+        await engine.run(target)
 ~~~~~
-~~~~~text
-feat(observability): Implement JSON logging and expose log_format option
-
-This commit introduces comprehensive structured logging capabilities to Cascade, ensuring it meets production standards for observability.
-
-Key changes:
-1. **Renderer Protocol Refactor**: The core `Renderer` protocol is changed to accept structured data (`msg_id`, `level`, `**kwargs`) instead of a pre-formatted string. This cleanly separates the semantic message from its presentation format.
-2. **`JsonRenderer` Implementation**: A new renderer is added to output structured JSON logs, critical for machine parsing by tools like Loki or Elasticsearch.
-3. **API Exposure**: Added `log_format` parameter to `cs.run` and exposed `--log-format` option via `cs.cli`, allowing users to choose between "human" (default) and "json" output.
-4. **Architectural Fixes**:
-    - Stabilized the data contract by moving list-to-string formatting logic from the event subscriber into the `CliRenderer` and simulating a template fix in `MessageStore`.
-    - Fixed a critical bug where `CliRunner` could not capture output due to late binding of `sys.stderr` in `Renderer` default arguments, making the test suite robust against I/O redirection.
-5. **New Test Suite**: Added `tests/messaging/test_renderer.py` for dedicated testing of all renderer formats.
-~~~~~
-
-### 下一步建议
-我们已经完成了两个重要的开发者体验改进：结构化日志和 Renderer 架构稳定。
-
-根据 `当前.md` 中未完成的任务，下一步应该回到性能优化，**优化 Fixture 作用域**，以提高测试套件的执行速度。
-
-1.  **优化 Fixture 作用域**: 审查测试套件中创建成本较高的 fixture（例如，`sqlite_db` 资源 fixture 或 Mock 依赖项），并根据 `d3-principle-pytest-fixture-scoping` 原则提升其作用域（如从 `function` 到 `class` 或 `module`），以减少重复设置开销，提高测试执行速度。
-
-我建议我们首先分析 `tests/integration/test_sql.py` 中的 `sqlite_db` fixture，因为它涉及 I/O 和数据库连接创建，是一个耗时操作，非常适合作用域优化。

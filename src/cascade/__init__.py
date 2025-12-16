@@ -13,6 +13,7 @@ from .testing import override_resource
 from .tools.preview import dry_run
 from .tools.visualize import visualize
 from .tools.cli import cli
+from .graph.serialize import to_json, from_json
 
 # Note: 'shell' is removed from static imports to support dynamic provider loading
 __all__ = [
@@ -22,6 +23,8 @@ __all__ = [
     "dry_run",
     "visualize",
     "cli",
+    "to_json",
+    "from_json",
     "LazyResult",
     "Router",
     "File",

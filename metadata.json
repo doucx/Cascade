@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复代码审查中发现的冗余代码和逻辑缺陷", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765860893.0026863, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(tests): 应用'Dogfooding'原则重构重试测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765861114.2551143, "duration_ms": 0}}

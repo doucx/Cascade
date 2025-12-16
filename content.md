@@ -1,164 +1,85 @@
-# [WIP] fix(core): 修复 build.py 中的 NameError 并适配 CLI 测试
+简要回答
+发现两个关键 Bug：运行时解析器无法识别 `Param` 任务（因对象比对错误），以及 CLI 测试中存在变量作用域遮蔽。我将修复解析器逻辑并清理测试代码。
 
-## 摘要头
-## [WIP] fix(core): 修复 build.py 中的 NameError 并适配 CLI 测试
+## [WIP] fix: 修复 ArgumentResolver 中的内部任务识别逻辑及测试中的作用域错误
+
+### 错误分析
+
+1.  **TypeError: `_get_param_value` missing argument**:
+    *   **现象**: `tests/providers/test_http.py`, `tests/runtime/test_input_execution.py` 等测试失败，报错 `TypeError: _get_param_value() missing 1 required positional argument: 'params_context'`.
+    *   **原因**: 在 `src/cascade/runtime/resolvers.py` 中，`ArgumentResolver` 试图拦截 `_get_param_value` 任务以注入 `params_context`。判断逻辑 `if node.callable_obj is _get_param_value:` 是错误的。
+        *   `node.callable_obj` 是原始函数 (因为 `GraphBuilder` 取的是 `result.task.func`)。
+        *   `_get_param_value` (导入自 `cascade.internal.inputs`) 是被 `@task` 装饰后的 `Task` 实例。
+        *   两者不相等，导致拦截失败，逻辑落入默认参数解析流程。默认流程在 `node.literal_inputs` 中找不到 `params_context`，导致调用时参数缺失。
+    *   **修复**: 修改判断逻辑为 `if node.callable_obj is _get_param_value.func:`。
+
+2.  **NameError: cannot access free variable**:
+    *   **现象**: `tests/tools/test_cli.py` 报错。
+    *   **原因**: 测试函数 `test_cli_generator_from_context` 内部定义了闭包 `workflow_def`，其中引用了 `get_current_context`。但在闭包定义之后、调用之前，测试函数内部又执行了 `from cascade.context import get_current_context`。这导致 Python 编译器将 `get_current_context` 视为局部变量，但在 `workflow_def` 执行时该局部变量尚未赋值（UnboundLocalError 的变体，闭包场景下报 free variable 访问错误）。
+    *   **修复**: 删除测试函数内部多余的局部导入，使用模块级导入。
 
 ### 用户需求
-修复导致大量测试失败的 `NameError: name 'Param' is not defined`，并解决 SQL 和 CLI 测试中的断言失败。
+修复导致测试失败的 Bug，确保 `Param` 机制正常工作，以及 CLI 测试通过。
 
 ### 评论
-`build.py` 中的 `_process_dependencies` 方法仍然引用了 `Param` 类，但在文件头部该类的导入已被移除，这是导致 `NameError` 的直接原因。由于 `cs.Param()` 现在返回标准的 `LazyResult`，`GraphBuilder` 不再需要对 `Param` 进行特殊类型检查。
+这些是重构过程中典型的集成问题。一个是运行时标识符匹配不精确，一个是测试代码的 Python 作用域陷阱。修复它们将使 v1.3 的核心机制跑通。
 
 ### 目标
-1.  修改 `src/cascade/graph/build.py`，移除 `_process_dependencies` 中对 `Param` 的引用。
-2.  更新 `tests/providers/test_sql.py`，放宽错误消息匹配，以适应可能的异常类型变化。
-3.  调试并修复 `tests/tools/test_cli.py`，确保 Context 正确传递。
+1.  修改 `src/cascade/runtime/resolvers.py`，正确识别内部任务。
+2.  修改 `tests/tools/test_cli.py`，修复作用域错误。
 
 ### 基本原理
--   **GraphBuilder**: `Param` 现在只是一个工厂函数，返回 `LazyResult`。因此，在图构建阶段，它就是一个普通的 `LazyResult`，不需要特殊的 `isinstance` 检查。
--   **SQL Test**: 资源查找失败可能会抛出 `NameError`，但也可能因为异步执行或包装而被捕获为其他形式。
+通过精确匹配函数对象来确保参数注入逻辑生效。清理测试代码中的遮蔽变量以符合 Python 作用域规则。
 
 ### 标签
-#intent/fix #flow/draft #priority/critical #comp/core #comp/cli #scope/core #ai/instruct #task/domain/core #task/object/name-error #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #task/domain/core #task/object/param #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 移除 build.py 中的 Param 引用
+#### Acts 1: 修复 ArgumentResolver
+
+修正 `ArgumentResolver` 中对 `_get_param_value` 的识别逻辑。
 
 ~~~~~act
 patch_file
-src/cascade/graph/build.py
+src/cascade/runtime/resolvers.py
 ~~~~~
-~~~~~old
-    def _process_dependencies(self, target_node: Node, inputs: Any, is_kwargs: bool):
-        iterator = inputs.items() if is_kwargs else enumerate(inputs)
+~~~~~python
+        # 0. Special handling for internal input tasks
+        # Local import to avoid circular dependency with internal.inputs -> spec.task -> runtime
+        from cascade.internal.inputs import _get_param_value
 
-        for key, value in iterator:
-            arg_name = str(key)
-
-            if isinstance(value, (LazyResult, MappedLazyResult, Param)):
-                source_node = self._visit(value)
-                # Standard DATA edge
-                edge = Edge(
-                    source=source_node, 
-                    target=target_node, 
-                    arg_name=arg_name, 
-                    edge_type=EdgeType.DATA
-                )
-                self.graph.add_edge(edge)
+        if node.callable_obj is _get_param_value:
+            # Inject params_context directly
+            # The literal_inputs should contain 'name'
+            final_kwargs = node.literal_inputs.copy()
+            final_kwargs["params_context"] = user_params or {}
+            return [], final_kwargs
 ~~~~~
-~~~~~new
-    def _process_dependencies(self, target_node: Node, inputs: Any, is_kwargs: bool):
-        iterator = inputs.items() if is_kwargs else enumerate(inputs)
+~~~~~python
+        # 0. Special handling for internal input tasks
+        # Local import to avoid circular dependency with internal.inputs -> spec.task -> runtime
+        from cascade.internal.inputs import _get_param_value
 
-        for key, value in iterator:
-            arg_name = str(key)
-
-            if isinstance(value, (LazyResult, MappedLazyResult)):
-                source_node = self._visit(value)
-                # Standard DATA edge
-                edge = Edge(
-                    source=source_node, 
-                    target=target_node, 
-                    arg_name=arg_name, 
-                    edge_type=EdgeType.DATA
-                )
-                self.graph.add_edge(edge)
+        if node.callable_obj is _get_param_value.func:
+            # Inject params_context directly
+            # The literal_inputs should contain 'name'
+            final_kwargs = node.literal_inputs.copy()
+            final_kwargs["params_context"] = user_params or {}
+            return [], final_kwargs
 ~~~~~
 
-#### Acts 2: 修复 SQL 测试的错误匹配
+#### Acts 2: 修复 CLI 测试中的作用域问题
 
-`test_sql_missing_resource` 抛出的 `NameError` 消息可能包含单引号或格式差异，导致正则匹配失败。
-
-~~~~~act
-patch_file
-tests/providers/test_sql.py
-~~~~~
-~~~~~old
-@pytest.mark.asyncio
-async def test_sql_missing_resource():
-    """Test failure when the specified DB resource is not registered."""
-
-    target = cs.sql("SELECT 1", db="non_existent_db")
-
-    engine = cs.Engine()
-    # We don't register anything
-
-    # Should fail during execution when trying to resolve the Inject object
-    # Or during setup if we scan correctly?
-    # With the new scanning logic, it should fail at setup time!
-
-    with pytest.raises(NameError, match="not registered"):
-        await engine.run(target)
-~~~~~
-~~~~~new
-@pytest.mark.asyncio
-async def test_sql_missing_resource():
-    """Test failure when the specified DB resource is not registered."""
-
-    target = cs.sql("SELECT 1", db="non_existent_db")
-
-    engine = cs.Engine()
-    # We don't register anything
-
-    # Should fail during execution when trying to resolve the Inject object
-    # Or during setup if we scan correctly?
-    # With the new scanning logic, it should fail at setup time!
-
-    # The error message from engine.py is: f"Resource '{name}' is required but not registered."
-    with pytest.raises(NameError, match="not registered"):
-        await engine.run(target)
-~~~~~
-
-#### Acts 3: 诊断 CLI Context 问题
-
-我怀疑 `test_cli.py` 中的 `workflow_def` 在被 `cs.cli` 调用前并没有被执行，或者 `get_current_context` 的上下文在 `CliRunner` 的隔离环境中丢失了。
-但仔细看测试代码：
-```python
-    target = workflow_def() 
-    app = cs.cli(target) 
-```
-`workflow_def` 已经被显式调用了，所以 Context 应该被填充了。
-问题可能出在 `cs.cli` 实现中如何获取 Context。
-在 `src/cascade/tools/cli.py` 中：
-```python
-    context = get_current_context()
-    all_specs = context.get_all_specs()
-```
-如果 `cs.Param` 工厂确实工作正常，`all_specs` 应该包含定义的参数。
-让我们在 `test_cli.py` 中增加调试信息或者确保 import 正确。
-其实 `cs.Param` 依赖 `get_current_context`。
-如果 `cs` 模块被重载，可能会有多个 Context 实例？
-`from cascade.context import get_current_context` 是单例 ContextVar 包装器。
-
-可能的问题是 `test_cli_generator_from_context` 中使用的 `get_current_context()` 和 `cs.Param` 内部使用的不是同一个对象？不应该。
-让我们检查 `cs.cli` 的实现是否过滤太严，或者 Spec 对象类型不对。
-
-我将修改 `tests/tools/test_cli.py`，使其更健壮，并验证 Context 确实被填充。
+删除 `test_cli_generator_from_context` 中多余的局部导入。
 
 ~~~~~act
 patch_file
 tests/tools/test_cli.py
 ~~~~~
-~~~~~old
-    # 2. 模拟“导入时执行”：先运行一次定义，填充上下文
-    target = workflow_def() 
-    
-    # 3. 生成 CLI
-    # 注意：v1.3 cs.cli 可能既支持 LazyResult (为了兼容)，
-    # 也支持直接利用 Context。这里我们传 target，验证它能否正确提取 Context 中的 Specs。
-    app = cs.cli(target) 
-    
-    # 4. 验证 Help 信息 (证明 Spec 被正确读取)
-    result = runner.invoke(app, ["--help"])
-    assert result.exit_code == 0
-    assert "--name" in result.stdout
-    assert "--count" in result.stdout
-    assert "User name" in result.stdout
-~~~~~
-~~~~~new
+~~~~~python
     # 2. 模拟“导入时执行”：先运行一次定义，填充上下文
     target = workflow_def() 
     
@@ -168,19 +89,17 @@ tests/tools/test_cli.py
     assert len(specs) == 2, f"Context should have 2 specs, got {len(specs)}"
 
     # 3. 生成 CLI
-    # 注意：v1.3 cs.cli 可能既支持 LazyResult (为了兼容)，
-    # 也支持直接利用 Context。这里我们传 target，验证它能否正确提取 Context 中的 Specs。
-    app = cs.cli(target) 
+~~~~~
+~~~~~python
+    # 2. 模拟“导入时执行”：先运行一次定义，填充上下文
+    target = workflow_def() 
     
-    # 4. 验证 Help 信息 (证明 Spec 被正确读取)
-    result = runner.invoke(app, ["--help"])
-    if result.exit_code != 0:
-        print(result.stdout)
-    assert result.exit_code == 0
-    assert "--name" in result.stdout
-    assert "--count" in result.stdout
-    assert "User name" in result.stdout
+    # Debug: Verify context is populated
+    specs = get_current_context().get_all_specs()
+    assert len(specs) == 2, f"Context should have 2 specs, got {len(specs)}"
+
+    # 3. 生成 CLI
 ~~~~~
 
 ### 下一步建议
-运行测试，确认 `NameError` 是否消除，并检查 CLI 测试的新断言是否通过。如果有其他失败，将更容易定位。
+执行测试以验证修复。如果通过，可以继续推进 v1.3 的其他清理工作或文档更新。

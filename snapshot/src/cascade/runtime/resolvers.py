@@ -34,7 +34,7 @@ class ArgumentResolver:
         # Local import to avoid circular dependency with internal.inputs -> spec.task -> runtime
         from cascade.internal.inputs import _get_param_value
 
-        if node.callable_obj is _get_param_value:
+        if node.callable_obj is _get_param_value.func:
             # Inject params_context directly
             # The literal_inputs should contain 'name'
             final_kwargs = node.literal_inputs.copy()

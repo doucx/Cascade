@@ -33,7 +33,6 @@ def test_cli_generator_from_context():
     target = workflow_def() 
     
     # Debug: Verify context is populated
-    from cascade.context import get_current_context
     specs = get_current_context().get_all_specs()
     assert len(specs) == 2, f"Context should have 2 specs, got {len(specs)}"
 

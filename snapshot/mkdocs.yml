@@ -33,12 +33,12 @@ plugins:
           options:
             show_root_heading: true
   - i18n:
-      default_language: zh
+      docs_structure: suffix
       languages:
-        zh:
+        - locale: zh
           name: 中文
-          build: true
-        en:
+          default: true
+        - locale: en
           name: English
           build: true
 

@@ -35,10 +35,14 @@ def test_e2e_linear_workflow(mock_messaging_bus):
     assert result == "Hello, Cascade!"
 
     # Assertions are now on the INTENT (semantic ID), not the output!
-    # Note: The target name might be the final task name. Let's check for 'greet'.
-    run_started_call = mock_messaging_bus.info.call_args_list[0]
-    assert run_started_call.args[0] == "run.started"
-    assert "greet" in run_started_call.kwargs["targets"]
+    # Find the specific call to 'run.started' to make the test more robust
+    run_started_call = next(
+        c for c in mock_messaging_bus.info.call_args_list if c.args[0] == 'run.started'
+    )
+    
+    # Assert that the new, structured keyword is used
+    assert "target_tasks" in run_started_call.kwargs
+    assert "greet" in run_started_call.kwargs["target_tasks"] # Check for list membership
     
     mock_messaging_bus.info.assert_any_call("task.started", task_name="get_name")
     mock_messaging_bus.info.assert_any_call("task.finished_success", task_name="get_name", duration=pytest.approx(0, abs=1))

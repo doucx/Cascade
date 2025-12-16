@@ -1,17 +1,5 @@
-from cascade.spec.task import task, LazyResult
+from cascade.spec.task import task
 from cascade.graph.build import build_graph
-
-
-def test_task_decorator_and_lazy_result():
-    @task
-    def add(a, b):
-        return a + b
-
-    result = add(1, 2)
-    assert isinstance(result, LazyResult)
-    assert result.task.name == "add"
-    assert result.args == (1, 2)
-    assert result.kwargs == {}
 
 
 def test_build_linear_graph():
@@ -79,11 +67,3 @@ def test_build_diamond_graph():
     node_a = next(n for n in graph.nodes if n.name == "t_a")
     edges_from_a = [e for e in graph.edges if e.source == node_a]
     assert len(edges_from_a) == 2
-
-
-def test_param_placeholder():
-    from cascade.spec.task import Param
-
-    p = Param("env", default="dev")
-    assert p.name == "env"
-    assert p.default == "dev"

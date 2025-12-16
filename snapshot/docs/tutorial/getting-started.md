@@ -1,86 +1,94 @@
 # 快速上手
 
-本教程将引导你完成第一个 `Cascade` 应用的创建，整个过程大约需要一分钟。
+本教程将引导你完成第一个 `Cascade` 应用的创建。只需一分钟，你就能体验到声明式配置与命令式代码无缝结合的强大之处。
 
-## 安装
+## 1. 安装
 
-`Cascade` 支持 Python 3.8+。通过 pip 安装：
+`Cascade` 支持 Python 3.8+。我们推荐安装 `config` 附加依赖，以便使用 `cs.config`。
 
 ```bash
-pip install "cascade-py"
+pip install "cascade-py[config]"
 ```
 
 > 注意：根据你的 shell 配置，你可能需要使用 `pip3`。
 
-## 您的第一个 Cascade 应用
+## 2. 您的第一个 Cascade 应用
 
-让我们创建一个混合了配置和代码的脚本。这个脚本的目标是：读取一个配置文件中的版本号，并用它来构建一个 Docker 镜像标签。
+我们的目标是：从一个 YAML 配置文件中读取项目版本号，然后用它来构建一个 Docker 镜像标签。
 
-首先，在你项目的根目录创建一个名为 `build.py` 的文件：
+### 步骤 1：创建配置文件
+
+在你的项目根目录，创建一个名为 `cascade.yml` 的文件。`Cascade` 会自动发现并加载它。
+
+```yaml
+# cascade.yml
+project:
+  version: "1.2.3"
+```
+
+这为我们的工作流提供了声明式的输入数据。
+
+### 步骤 2：创建 Python 脚本
+
+现在，在同一目录下，创建一个名为 `build.py` 的文件：
 
 ```python
 # build.py
 import cascade as cs
 
-# 1. 使用 cs.config 声明一个对配置值的依赖
-# 它会懒加载项目中的 YAML 文件来查找 'project.version'
-# 注意: cs.config() 依赖 PyYAML, 请确保已安装 (`pip install PyYAML`)
+# 1. 声明对配置值的依赖
+#    这行代码并不会立即读取文件，而是创建了一个对未来值的“承诺”。
+#    Cascade 会在需要时，自动从 cascade.yml 中加载 'project.version' 的值。
 project_version = cs.config("project.version")
 
-# 2. 使用 @cs.task 定义一个 Python 任务
-# 它依赖于从配置中获取的版本号
+# 2. 定义一个执行业务逻辑的 Python 任务
 @cs.task
-def generate_docker_tag(version: str, suffix: str) -> str:
+def generate_docker_tag(version: str, suffix: str = "latest") -> str:
+    """根据版本号和后缀生成 Docker 标签。"""
+    print(f"--> 正在使用版本 '{version}' 生成标签...")
     return f"my-app:{version}-{suffix}"
 
-# 3. 连接声明式与命令式
-# 注意：这里没有立即执行！
-# project_version 是一个 LazyResult
-image_tag = generate_docker_tag(version=project_version, suffix="latest")
+# 3. 将声明式的值连接到命令式的任务中
+#    我们将 project_version 这个“承诺”作为参数传给任务。
+#    Cascade 会自动构建它们之间的依赖关系。
+image_tag = generate_docker_tag(version=project_version)
 
-# 4. 运行工作流，请求最终目标
+# 4. 运行工作流并请求最终结果
 if __name__ == "__main__":
-    # 为了让这个例子能运行，我们需要一个配置文件。
-    # cs.run() 会自动查找并加载名为 "cascade.yml" 或 "cascade.yaml" 的文件，
-    # 并将其作为名为 "config_data" 的资源注入。
-    # 
-    # 你也可以手动指定配置字典，但使用资源是最佳实践。
+    print("开始运行 Cascade 工作流...")
+    # 只有在调用 run() 时，Cascade 才会真正开始计算。
+    # 它会分析出 image_tag 依赖 generate_docker_tag，
+    # 而 generate_docker_tag 依赖 project_version，
+    # 最终 project_version 依赖 cascade.yml 文件。
+    # 然后按照正确的顺序执行所有操作。
+    final_tag = cs.run(image_tag)
     
-    # 手动创建一个模拟的配置
-    mock_config = {
-        "project": {
-            "version": "1.2.3"
-        }
-    }
-    
-    # 只有在调用 run() 时，所有依赖才会被解析和计算
-    # 我们通过 `override_resource` 注入我们的 mock_config
-    # 这样就不需要真的在项目里创建一个 cascade.yml 文件了
-    
-    from cascade.runtime.engine import Engine
-    from cascade.testing import override_resource
-    
-    @cs.resource
-    def config_data():
-        yield mock_config
+    print("工作流完成！")
+    print(f"最终 Docker 镜像标签: {final_tag}")
 
-    engine = Engine()
-    with override_resource(engine, "config_data", config_data):
-        result = engine.run(image_tag)
-
-    print(f"Docker 镜像标签: {result}")
 ```
 
-现在，运行它：
+### 步骤 3：运行它！
+
+打开你的终端，运行脚本：
 
 ```bash
 $ python build.py
-Docker 镜像标签: my-app:1.2.3-latest
+```
+
+你应该会看到如下输出：
+
+```
+开始运行 Cascade 工作流...
+--> 正在使用版本 '1.2.3' 生成标签...
+工作流完成！
+最终 Docker 镜像标签: my-app:1.2.3-latest
 ```
 
 恭喜！你刚刚构建并运行了你的第一个 `Cascade` 工作流。你已经体验到了其核心魅力：
-- **声明式依赖**: 你声明了 `image_tag` 依赖于 `project_version`。
-- **懒加载**: 直到调用 `run()` 之前，什么都没有发生。
-- **无缝集成**: 来自配置的值 (`cs.config`) 和来自 Python 代码的值 (`@cs.task`) 被无缝地结合在了一起。
+
+- **声明式依赖**: 你用 `cs.config` 声明了对配置文件的依赖。
+- **懒加载**: 直到调用 `cs.run()` 之前，文件读取和函数执行都没有发生。
+- **自动依赖解析**: `Cascade` 自动发现并执行了从配置文件到最终结果所需的所有步骤。
 
 在接下来的指南中，我们将深入探索 `Cascade` 的更多强大功能。

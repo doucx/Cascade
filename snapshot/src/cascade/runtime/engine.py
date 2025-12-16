@@ -24,6 +24,7 @@ from cascade.runtime.exceptions import DependencyMissingError
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.resource_manager import ResourceManager
+from collections import defaultdict
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
 
 
@@ -82,7 +83,12 @@ class Engine:
         graph: Graph,
         results: Dict[str, Any],
         skipped_node_ids: set[str],
+        pruned_node_ids: set[str],
     ) -> Optional[str]:
+        # 0. Pruning Check
+        if node.id in pruned_node_ids:
+            return "RouterPruned"
+
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
 
         # 1. Cascade Skip: Check only DATA and IMPLICIT edges (i.e., actual inputs and router routes)
@@ -154,6 +160,14 @@ class Engine:
         plan = self.solver.resolve(graph)  # Now returns List[List[Node]]
         results: Dict[str, Any] = {}
         skipped_node_ids: set[str] = set()
+        pruned_node_ids: set[str] = set()  # IDs explicitly pruned by Router logic
+
+        # Pre-scan for routers to enable fast lookups during execution
+        # Map: selector_node_id -> List[Router]
+        selector_map = defaultdict(list)
+        for edge in graph.edges:
+            if edge.router:
+                selector_map[edge.router.selector._uuid].append(edge.router)
 
         # Inject params first (usually params are in the first stage or handled implicitly)
         # We need to flatten the plan to find params or iterate carefully.
@@ -169,7 +183,9 @@ class Engine:
                 if node.node_type == "param":
                     continue
 
-                skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
+                skip_reason = self._should_skip(
+                    node, graph, results, skipped_node_ids, pruned_node_ids
+                )
                 if skip_reason:
                     skipped_node_ids.add(node.id)
                     self.bus.publish(
@@ -209,6 +225,22 @@ class Engine:
             
             for node, res in zip(runnable_nodes, stage_results):
                 results[node.id] = res
+
+                # Check if this node drives any Routers
+                if node.id in selector_map:
+                    for router in selector_map[node.id]:
+                        # The result of this node determines which route is active
+                        selected_key = res
+                        
+                        # Identify active route UUID
+                        active_route_uuid = None
+                        if selected_key in router.routes:
+                            active_route_uuid = router.routes[selected_key]._uuid
+                        
+                        # Prune all OTHER routes
+                        for route_key, route_lazy in router.routes.items():
+                            if route_lazy._uuid != active_route_uuid:
+                                pruned_node_ids.add(route_lazy._uuid)
 
         # Final check: Was the target task executed?
         if target._uuid not in results:

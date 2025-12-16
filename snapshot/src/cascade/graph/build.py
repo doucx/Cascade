@@ -154,6 +154,17 @@ class GraphBuilder:
                         edge_type=EdgeType.IMPLICIT
                     )
                     self.graph.add_edge(imp_edge)
+
+                    # NEW: Control dependency from selector to route
+                    # This ensures the selector runs BEFORE the route, allowing the Engine
+                    # to prune the route if it's not selected.
+                    control_edge = Edge(
+                        source=selector_node,
+                        target=route_node,
+                        arg_name="_router_control",
+                        edge_type=EdgeType.IMPLICIT
+                    )
+                    self.graph.add_edge(control_edge)
             else:
                 target_node.literal_inputs[arg_name] = value
 

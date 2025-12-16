@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(provider): 建立插件架构并迁移 `cs.shell`", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765854880.6069694, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(provider): 实现 cs.template 用于显式字符串渲染", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765855713.970906, "duration_ms": 0}}

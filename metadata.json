@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(core): 修复 Engine 重构导致的参数丢失问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765865869.1954057, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(core): 实现资源感知调度与配额管理 (MVP)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765865928.4879825, "duration_ms": 0}}

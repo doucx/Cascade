@@ -43,12 +43,30 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
         """The actual function that Typer will wrap."""
         from .. import run as cascade_run
 
+        # Extract log_level explicitly since it's injected by Typer via the dynamic signature
+        log_level = kwargs.pop("log_level", "INFO")
+
         # Filter out None values so they don't override defaults in cs.run
         run_params = {k: v for k, v in kwargs.items() if v is not None}
-        cascade_run(target, params=run_params)
+        cascade_run(target, params=run_params, log_level=log_level)
 
     # --- Metaprogramming to create the dynamic signature ---
     sig_params = []
+
+    # 1. Add log_level as a standard CLI option
+    log_level_param = inspect.Parameter(
+        name="log_level",
+        kind=inspect.Parameter.KEYWORD_ONLY,
+        default=typer.Option(
+            "INFO",
+            "--log-level",
+            help="Minimum level for console logging (DEBUG, INFO, WARNING, ERROR).",
+        ),
+        annotation=str,
+    )
+    sig_params.append(log_level_param)
+
+    # 2. Add user-defined parameters
     for p in params.values():
         # Determine the default value for Typer
         # If no default, it's a required CLI argument (or option if -- is used)

@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional, List
 from .spec.task import task, LazyResult
 from .spec.common import Param
 from .spec.routing import Router
-from .spec.file import File
 from .spec.resource import resource, inject
 from .runtime.engine import Engine
 from .runtime.bus import MessageBus
@@ -29,7 +28,6 @@ __all__ = [
     "with_constraints",
     "LazyResult",
     "Router",
-    "File",
     "resource",
     "inject",
     "Engine",

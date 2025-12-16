@@ -8,6 +8,7 @@ from contextlib import ExitStack
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, Graph, EdgeType
 from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.spec.common import Param
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
     RunStarted,
@@ -167,7 +168,9 @@ class Engine:
         selector_map = defaultdict(list)
         for edge in graph.edges:
             if edge.router:
-                selector_map[edge.router.selector._uuid].append(edge.router)
+                selector = edge.router.selector
+                selector_id = selector.name if isinstance(selector, Param) else selector._uuid
+                selector_map[selector_id].append(edge.router)
 
         # Inject params first (usually params are in the first stage or handled implicitly)
         # We need to flatten the plan to find params or iterate carefully.

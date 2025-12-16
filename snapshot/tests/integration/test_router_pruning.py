@@ -109,11 +109,17 @@ async def test_router_prunes_cascade():
         }
     )
 
+    @cs.task
+    def identity(x):
+        return x
+
+    target = identity(router)
+
     bus = MessageBus()
     spy = SpySubscriber(bus)
     engine = Engine(bus=bus)
 
-    await engine.run(router)
+    await engine.run(target)
 
     skipped = spy.events_of_type(TaskSkipped)
     skipped_map = {e.task_name: e.reason for e in skipped}

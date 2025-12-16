@@ -14,6 +14,7 @@ from .tools.visualize import visualize
 from .tools.cli import cli
 from .graph.serialize import to_json, from_json
 from .spec.constraint import with_constraints
+from .runtime.exceptions import DependencyMissingError
 
 # Note: 'shell' is removed from static imports to support dynamic provider loading
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "inject",
     "Engine",
     "override_resource",
+    "DependencyMissingError",
 ]
 
 

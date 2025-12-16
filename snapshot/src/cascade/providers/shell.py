@@ -1,13 +1,14 @@
 import asyncio
-from typing import Callable, Any
-from cascade.spec.task import task, Task
+from cascade.spec.task import task
 from cascade.providers import LazyFactory
+
 
 class ShellProvider:
     name = "shell"
 
     def create_factory(self) -> LazyFactory:
         return _shell_task
+
 
 # Define the task logic (moved from stdlib.py)
 @task(name="shell")

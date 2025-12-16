@@ -13,6 +13,7 @@ from cascade.providers import LazyFactory
 @dataclass
 class HttpResponse:
     """A wrapper around the aiohttp response for a better downstream API."""
+
     _session: aiohttp.ClientSession
     _response: aiohttp.ClientResponse
 
@@ -67,18 +68,18 @@ async def _http_task(
             # must be used within the task that receives it. This is a limitation
             # we might need to address later by e.g. reading the body here.
             # For now, let's keep it simple and assume immediate consumption.
-            
+
             # Re-evaluating: To make this safe, we should probably return a simple
             # wrapper that already contains the read data. Let's adjust.
-            
+
             # The session will close, so we need to read the content now.
             # We'll create a more robust wrapper that holds the data.
-            
+
             # This is a better design:
             final_response = SimpleHttpResponse(
                 status=response.status,
                 headers=dict(response.headers),
-                body=await response.read()
+                body=await response.read(),
             )
             response.raise_for_status()
             return final_response
@@ -87,6 +88,7 @@ async def _http_task(
 @dataclass
 class SimpleHttpResponse:
     """A simple, safe data holder for the HTTP response."""
+
     status: int
     headers: Dict[str, str]
     body: bytes
@@ -94,14 +96,16 @@ class SimpleHttpResponse:
     def text(self) -> str:
         """Decodes the response body into a string, assuming utf-8."""
         return self.body.decode("utf-8")
-        
+
     def json(self) -> Any:
         """Parses the response body as JSON and returns a Python object."""
         import json
+
         return json.loads(self.text())
 
     def __repr__(self) -> str:
         return f"<HttpResponse status={self.status}>"
+
 
 # Let's refine the task to return the SimpleHttpResponse
 @task(name="http")
@@ -119,10 +123,10 @@ async def _http_task(
         async with session.request(
             method, url, params=params, json=json_data
         ) as response:
-            response.raise_for_status() # Raise exception for non-2xx status
-            
+            response.raise_for_status()  # Raise exception for non-2xx status
+
             return SimpleHttpResponse(
                 status=response.status,
                 headers=dict(response.headers),
-                body=await response.read()
+                body=await response.read(),
             )

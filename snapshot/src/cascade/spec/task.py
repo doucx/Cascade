@@ -17,8 +17,6 @@ class RetryPolicy:
     backoff: float = 1.0  # Multiplier for delay after each retry
 
 
-from .common import Param
-
 @dataclass
 class LazyResult(Generic[T]):
     """
@@ -96,11 +94,11 @@ class Task(Generic[T]):
     def map(self, **kwargs) -> MappedLazyResult[List[T]]:
         """
         Applies the task over a sequence of inputs.
-        
+
         Args:
             **kwargs: Arguments where values are iterables (or LazyResults resolving to iterables).
                       All iterables must have the same length.
-        
+
         Returns:
             A MappedLazyResult that resolves to a list of outputs.
         """
@@ -118,6 +116,7 @@ def task(
     Can be used as a simple decorator (`@task`) or as a factory with
     arguments (`@task(name='custom_name')`).
     """
+
     def wrapper(f: Callable[..., T]) -> Task[T]:
         return Task(f, name=name)
 

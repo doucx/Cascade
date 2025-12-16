@@ -18,16 +18,17 @@ class TemplateProvider:
             )
         return render_template
 
+
 @task(name="template")
 def render_template(template_string: str, **context) -> str:
     """
     Renders a Jinja2 template string with the provided context.
-    
+
     Args:
         template_string: The Jinja2 template string.
         **context: Keyword arguments to be used as variables in the template.
                    These can be literals or LazyResults.
-                   
+
     Returns:
         The rendered string.
     """

@@ -1,7 +1,6 @@
-import os
-import pytest
 import cascade as cs
 from cascade.adapters.caching import FileExistenceCache
+
 
 def test_file_existence_cache_hit(tmp_path):
     """Test that a task is skipped if the target file exists."""
@@ -25,6 +24,7 @@ def test_file_existence_cache_hit(tmp_path):
     # Should return the path (cache value), and NOT execute the function
     assert result == str(target_file)
     assert call_count == 0
+
 
 def test_file_existence_cache_miss(tmp_path):
     """Test that a task runs if the target file does not exist."""

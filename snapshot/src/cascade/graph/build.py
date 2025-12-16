@@ -102,19 +102,19 @@ class GraphBuilder:
             elif isinstance(value, Router):
                 selector_node = self._visit(value.selector)
                 edge = Edge(
-                    source=selector_node, 
-                    target=target_node, 
+                    source=selector_node,
+                    target=target_node,
                     arg_name=arg_name,
-                    router=value
+                    router=value,
                 )
                 self.graph.add_edge(edge)
-                
+
                 for route_result in value.routes.values():
                     route_node = self._visit(route_result)
                     imp_edge = Edge(
-                        source=route_node, 
-                        target=target_node, 
-                        arg_name="_implicit_dependency"
+                        source=route_node,
+                        target=target_node,
+                        arg_name="_implicit_dependency",
                     )
                     self.graph.add_edge(imp_edge)
             else:

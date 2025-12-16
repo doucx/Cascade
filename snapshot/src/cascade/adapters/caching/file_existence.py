@@ -1,6 +1,6 @@
 import os
 from typing import Any, Dict, Callable, Union
-from cascade.runtime.protocols import CachePolicy
+
 
 class FileExistenceCache:
     """
@@ -10,7 +10,7 @@ class FileExistenceCache:
     def __init__(self, target_path: Union[str, Callable[[Dict[str, Any]], str]]):
         """
         Args:
-            target_path: A string path or a function that accepts task inputs 
+            target_path: A string path or a function that accepts task inputs
                          (args/kwargs dict) and returns a path string.
         """
         self.target_path = target_path

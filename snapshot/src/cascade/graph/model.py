@@ -4,23 +4,24 @@ from typing import List, Callable, Optional, Any, Dict
 
 from cascade.spec.common import Param
 
+
 @dataclass
 class Node:
     """Represents a node in the computation graph."""
 
     id: str
     name: str
-    
+
     # Core spec
-    node_type: str = "task" # "task", "param", or "map"
+    node_type: str = "task"  # "task", "param", or "map"
     callable_obj: Optional[Callable] = None
     param_spec: Optional[Param] = None
-    mapping_factory: Optional[Any] = None # Implements LazyFactory
+    mapping_factory: Optional[Any] = None  # Implements LazyFactory
 
     # Metadata for execution strategies
     retry_policy: Optional[Any] = None  # Typed as Any to avoid circular deps with spec
     cache_policy: Optional[Any] = None
-    
+
     # Pre-resolved literal inputs for the task
     literal_inputs: Dict[str, Any] = field(default_factory=dict)
 

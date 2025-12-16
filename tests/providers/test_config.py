@@ -6,101 +6,97 @@ from typing import Dict, Any
 # Skip if PyYAML missing
 pytest.importorskip("yaml")
 
+# --- Fixtures ---
 
-# --- Resources (Mocking the user-provided config loader) ---
-
-# This resource is what cs.config will inject
-@cs.resource
-def config_data():
-    """A mock config loader resource."""
-    # Simulate loading a complex config structure
-    config = {
-        "project": {
-            "name": "Cascade",
-            "version": "1.0.0",
-            "feature_flags": {"beta": True, "release": False},
-        },
-        "databases": [
-            {"name": "analytics", "url": "url1"},
-            {"name": "app_db", "url": "url2"},
-        ],
-    }
-    yield config
+@pytest.fixture
+def dummy_config_file(tmp_path):
+    """Creates a temporary YAML file."""
+    p = tmp_path / "config.yml"
+    content = """
+project:
+  name: Cascade
+  version: 1.0.0
+databases:
+  - name: analytics
+    url: url1
+"""
+    p.write_text(content)
+    return str(p)
 
 
 # --- Tests ---
 
 @pytest.mark.asyncio
-async def test_config_basic_lookup():
-    """Test lookup of a simple nested key."""
-    # cs.config relies on dynamic loading via __getattr__
-    project_name = cs.config("project.name")
-
+async def test_load_yaml_provider(dummy_config_file):
+    """Tests that cs.load_yaml correctly loads and parses a file."""
+    
+    loaded_data = cs.load_yaml(dummy_config_file)
+    
     engine = cs.Engine()
-    engine.register(config_data)
-
-    result = await engine.run(project_name)
-    assert result == "Cascade"
-
+    result = await engine.run(loaded_data)
+    
+    assert isinstance(result, dict)
+    assert result["project"]["name"] == "Cascade"
 
 @pytest.mark.asyncio
-async def test_config_list_index_lookup():
-    """Test lookup that involves indexing into a list."""
-    db_name = cs.config("databases.1.name")  # databases[1].name
-
-    engine = cs.Engine()
-    engine.register(config_data)
-
-    result = await engine.run(db_name)
-    assert result == "app_db"
-
-
-@pytest.mark.asyncio
-async def test_config_dynamic_key_lookup():
-    """Test lookup where the key itself comes from an upstream LazyResult."""
+async def test_lookup_provider_basic(dummy_config_file):
+    """Tests cs.lookup on a dynamically loaded source."""
     
-    # Task that provides the configuration key part
-    @cs.task
-    def get_version_key():
-        return "version"
-
-    # Use cs.template to build the full key path
-    version_key_path = cs.template("project.{{ key }}", key=get_version_key())
+    # 1. Explicitly load the config
+    config_source = cs.load_yaml(dummy_config_file)
     
-    # Use the dynamic path in cs.config
-    version = cs.config(version_key_path)
-
+    # 2. Explicitly look up the value
+    version = cs.lookup(source=config_source, key="project.version")
+    
     engine = cs.Engine()
-    engine.register(config_data)
-
     result = await engine.run(version)
+    
     assert result == "1.0.0"
 
-
 @pytest.mark.asyncio
-async def test_config_missing_key_raises_error():
-    """Test that a missing key raises a KeyError."""
-    missing_key = cs.config("project.missing_field")
-
-    engine = cs.Engine()
-    engine.register(config_data)
-
-    with pytest.raises(KeyError, match="missing_field"):
-        await engine.run(missing_key)
-
-
-@pytest.mark.asyncio
-async def test_config_invalid_list_index_raises_error():
-    """Test accessing non-existent index or non-dict/list element."""
-    invalid_index = cs.config("databases.5")
+async def test_lookup_on_static_dict():
+    """Tests that cs.lookup can also work on a simple dictionary provided by a task."""
     
-    engine = cs.Engine()
-    engine.register(config_data)
-
-    with pytest.raises(KeyError, match="5"):
-        await engine.run(invalid_index)
+    @cs.task
+    def provide_dict():
+        return {"a": {"b": 10}}
         
-    invalid_access_type = cs.config("project.version.sub_key")
+    source = provide_dict()
+    value = cs.lookup(source=source, key="a.b")
     
-    with pytest.raises(TypeError, match="Cannot access segment 'sub_key' on non-container type 'str'"):
-        await engine.run(invalid_access_type)
+    engine = cs.Engine()
+    result = await engine.run(value)
+    assert result == 10
+
+@pytest.mark.asyncio
+async def test_lookup_missing_key_raises_error():
+    """Tests that a missing key raises a KeyError."""
+    
+    @cs.task
+    def provide_dict():
+        return {"a": 1}
+        
+    source = provide_dict()
+    # "b" does not exist in the root dict, should raise KeyError
+    missing_value = cs.lookup(source=source, key="b")
+    
+    engine = cs.Engine()
+    with pytest.raises(KeyError):
+        await engine.run(missing_value)
+
+@pytest.mark.asyncio
+async def test_lookup_invalid_path_raises_type_error():
+    """Tests that lookup on a non-container value raises TypeError."""
+
+    @cs.task
+    def provide_dict():
+        return {"a": 1}
+
+    source = provide_dict()
+    # "a" resolves to 1 (int), which is not a container. 
+    # Attempting to look up "nonexistent" on it should raise TypeError.
+    invalid_lookup = cs.lookup(source=source, key="a.nonexistent")
+
+    engine = cs.Engine()
+    with pytest.raises(TypeError, match="Cannot access segment"):
+        await engine.run(invalid_lookup)

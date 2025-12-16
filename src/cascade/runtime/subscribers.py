@@ -27,8 +27,7 @@ class HumanReadableLogSubscriber:
         event_bus.subscribe(TaskRetrying, self.on_task_retrying)
 
     def on_run_started(self, event: RunStarted):
-        targets = ", ".join(event.target_tasks)
-        messaging_bus.info("run.started", targets=targets)
+        messaging_bus.info("run.started", target_tasks=event.target_tasks)
         if event.params:
             messaging_bus.info("run.started_with_params", params=event.params)
 

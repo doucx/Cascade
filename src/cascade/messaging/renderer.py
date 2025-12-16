@@ -1,5 +1,10 @@
 import sys
-from typing import TextIO
+import json
+import time
+from typing import TextIO, Optional
+from datetime import datetime, timezone
+
+from .bus import MessageStore, Renderer
 
 LOG_LEVELS = {
     "DEBUG": 10,
@@ -8,11 +13,52 @@ LOG_LEVELS = {
     "ERROR": 40,
 }
 
+
 class CliRenderer:
-    def __init__(self, stream: TextIO = sys.stderr, min_level: str = "INFO"):
-        self._stream = stream
+    """
+    Renders messages as human-readable, formatted text strings.
+    """
+    def __init__(
+        self,
+        store: MessageStore,
+        stream: Optional[TextIO] = None,
+        min_level: str = "INFO",
+    ):
+        self._store = store
+        self._stream = stream if stream is not None else sys.stderr
         self._min_level_val = LOG_LEVELS.get(min_level.upper(), 20)
 
-    def print(self, message: str, level: str):
+    def render(self, msg_id: str, level: str, **kwargs):
         if LOG_LEVELS.get(level.upper(), 20) >= self._min_level_val:
+            # The store now handles formatting, making the renderer simpler
+            message = self._store.get(msg_id, **kwargs)
             print(message, file=self._stream)
+
+
+class JsonRenderer:
+    """
+    Renders messages as structured, JSON-formatted strings.
+    """
+    def __init__(
+        self,
+        stream: Optional[TextIO] = None,
+        min_level: str = "INFO",
+    ):
+        self._stream = stream if stream is not None else sys.stderr
+        self._min_level_val = LOG_LEVELS.get(min_level.upper(), 20)
+
+    def render(self, msg_id: str, level: str, **kwargs):
+        if LOG_LEVELS.get(level.upper(), 20) >= self._min_level_val:
+            log_record = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "level": level.upper(),
+                "event_id": msg_id,
+                "data": kwargs,
+            }
+
+            def default_serializer(o):
+                """Handle non-serializable objects gracefully."""
+                return repr(o)
+
+            json_str = json.dumps(log_record, default=default_serializer)
+            print(json_str, file=self._stream)

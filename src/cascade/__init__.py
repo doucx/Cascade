@@ -52,13 +52,14 @@ def __getattr__(name: str) -> Any:
 
 
 from .messaging.bus import bus as messaging_bus
-from .messaging.renderer import CliRenderer
+from .messaging.renderer import CliRenderer, JsonRenderer
 
 def run(
     target: LazyResult,
     params: Optional[Dict[str, Any]] = None,
     system_resources: Optional[Dict[str, Any]] = None,
     log_level: str = "INFO",
+    log_format: str = "human",
 ) -> Any:
     """
     Runs a Cascade workflow with a default engine configuration.
@@ -70,11 +71,15 @@ def run(
                           (e.g. {"gpu": 1, "threads": 4}).
         log_level: Minimum logging level ("DEBUG", "INFO", "WARNING", "ERROR").
                    Defaults to "INFO".
+        log_format: Logging format ("human" or "json"). Defaults to "human".
     """
     # 1. Setup the messaging renderer
-    renderer = CliRenderer(min_level=log_level)
+    if log_format == "json":
+        renderer = JsonRenderer(min_level=log_level)
+    else:
+        renderer = CliRenderer(store=messaging_bus.store, min_level=log_level)
     messaging_bus.set_renderer(renderer)
-    
+
     # 2. Setup the event system
     event_bus = MessageBus()
     # Attach the translator

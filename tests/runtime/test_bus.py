@@ -64,7 +64,7 @@ def test_human_readable_subscriber_integration():
     """
     event_bus = EventBus()
     output = io.StringIO()
-    renderer = CliRenderer(stream=output, min_level="INFO")
+    renderer = CliRenderer(store=messaging_bus.store, stream=output, min_level="INFO")
     messaging_bus.set_renderer(renderer)
 
     # Connect the subscriber to the event bus
@@ -101,7 +101,7 @@ def test_human_readable_subscriber_log_level_filtering():
     event_bus = EventBus()
     output = io.StringIO()
     # Set renderer level to ERROR
-    renderer = CliRenderer(stream=output, min_level="ERROR")
+    renderer = CliRenderer(store=messaging_bus.store, stream=output, min_level="ERROR")
     messaging_bus.set_renderer(renderer)
     
     HumanReadableLogSubscriber(event_bus)

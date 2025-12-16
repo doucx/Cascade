@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
@@ -88,6 +87,6 @@ async def test_retry_exhausted_failure():
     assert len(finished_events) == 1
     assert finished_events[0].status == "Failed"
     assert "ValueError: Always fail" in finished_events[0].error
-    
+
     # We can still infer call count from events, which is more robust
     assert len(retry_events) + 1 == call_count

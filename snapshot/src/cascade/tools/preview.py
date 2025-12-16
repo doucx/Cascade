@@ -1,5 +1,5 @@
 from typing import Any
-from ..spec.lazy_types import LazyResult # NEW
+from ..spec.lazy_types import LazyResult  # NEW
 from ..graph.build import build_graph
 from ..runtime.engine import Engine
 from ..runtime.bus import MessageBus

@@ -1,15 +1,19 @@
-from typing import TypeVar, Generic, Callable, Any, Dict, Optional, Union, List
-from dataclasses import dataclass
+from typing import TypeVar, Generic, Callable, Optional, Union, List
 import inspect
 
-from cascade.runtime.protocols import CachePolicy, LazyFactory
+from cascade.runtime.protocols import CachePolicy
 from cascade.spec.constraint import ResourceConstraint
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult, RetryPolicy # NEW import location
+from cascade.spec.lazy_types import (
+    LazyResult,
+    MappedLazyResult,
+    RetryPolicy,
+)  # NEW import location
 
 T = TypeVar("T")
 
 
 # --- Task Definition ---
+
 
 class Task(Generic[T]):
     """
@@ -23,7 +27,7 @@ class Task(Generic[T]):
         self.is_async = inspect.iscoroutinefunction(func)
 
     def __call__(self, *args, **kwargs) -> LazyResult[T]:
-        # When called, it creates a LazyResult, inheriting RetryPolicy etc. from the Task? 
+        # When called, it creates a LazyResult, inheriting RetryPolicy etc. from the Task?
         # No, policies are set on the LazyResult object itself via chaining.
         return LazyResult(task=self, args=args, kwargs=kwargs)
 
@@ -38,6 +42,7 @@ class Task(Generic[T]):
 
 
 # --- Decorator ---
+
 
 def task(
     func: Optional[Callable[..., T]] = None, *, name: Optional[str] = None
@@ -58,27 +63,44 @@ def task(
 # --- Extend LazyResult/MappedLazyResult with Chaining Methods (Mixin-like) ---
 # We dynamically attach the chaining methods to the imported LazyResult class.
 
+
 def _run_if(self: LazyResult, condition: LazyResult) -> LazyResult:
     self._condition = condition
     return self
+
+
 LazyResult.run_if = _run_if
 
-def _with_retry(self: LazyResult, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0) -> LazyResult:
+
+def _with_retry(
+    self: LazyResult, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0
+) -> LazyResult:
     self._retry_policy = RetryPolicy(max_attempts, delay, backoff)
     return self
+
+
 LazyResult.with_retry = _with_retry
+
 
 def _with_cache(self: LazyResult, policy: CachePolicy) -> LazyResult:
     self._cache_policy = policy
     return self
+
+
 LazyResult.with_cache = _with_cache
+
 
 def _with_constraints(self: LazyResult, **kwargs) -> LazyResult:
     self._constraints = ResourceConstraint(requirements=kwargs)
     return self
+
+
 LazyResult.with_constraints = _with_constraints
+
 
 def _mapped_run_if(self: MappedLazyResult, condition: LazyResult) -> MappedLazyResult:
     self._condition = condition
     return self
+
+
 MappedLazyResult.run_if = _mapped_run_if

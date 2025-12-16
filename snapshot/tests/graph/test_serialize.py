@@ -1,18 +1,20 @@
 import json
-import pytest
 import cascade as cs
 from cascade.graph.build import build_graph
 from cascade.graph.serialize import to_json, from_json, graph_to_dict
 
 # --- Fixtures for Testing ---
 
+
 @cs.task
 def simple_task(x):
     return x + 1
 
+
 @cs.task
 def another_task(y):
     return y * 2
+
 
 def test_serialize_basic_graph():
     """Test serializing a simple linear graph."""
@@ -35,8 +37,9 @@ def test_serialize_basic_graph():
     # Check Callable Metadata
     node_simple = next(n for n in data["nodes"] if n["name"] == "simple_task")
     assert node_simple["callable"]["qualname"] == "simple_task"
-    # Note: local functions might have issues with importlib if not top-level, 
+    # Note: local functions might have issues with importlib if not top-level,
     # but for structure check it's fine.
+
 
 def test_round_trip_top_level_functions():
     """
@@ -61,6 +64,7 @@ def test_round_trip_top_level_functions():
     assert restored_node.callable_obj == simple_task.func
     assert restored_node.callable_obj(1) == 2
 
+
 def test_serialize_params():
     """Test serialization of Param nodes."""
     p = cs.Param("env", default="dev", description="Environment")
@@ -69,7 +73,7 @@ def test_serialize_params():
 
     data = graph_to_dict(graph)
     param_node = next(n for n in data["nodes"] if n["node_type"] == "param")
-    
+
     assert param_node["param_spec"]["name"] == "env"
     assert param_node["param_spec"]["default"] == "dev"
     assert param_node["param_spec"]["description"] == "Environment"
@@ -78,6 +82,7 @@ def test_serialize_params():
     restored = from_json(to_json(graph))
     p_node = next(n for n in restored.nodes if n.node_type == "param")
     assert p_node.param_spec.name == "env"
+
 
 def test_serialize_with_retry():
     """Test serialization of retry policy."""
@@ -95,22 +100,23 @@ def test_serialize_with_retry():
     t_node = next(n for n in restored.nodes if n.name == "simple_task")
     assert t_node.retry_policy.max_attempts == 5
 
+
 def test_serialize_with_constraints():
     """Test serialization of resource constraints."""
     t = simple_task(x=1).with_constraints(gpu_count=1, memory_gb=16)
     graph = build_graph(t)
-    
+
     data = graph_to_dict(graph)
     task_node = next(n for n in data["nodes"] if n["name"] == "simple_task")
-    
+
     assert "constraints" in task_node
     assert task_node["constraints"]["gpu_count"] == 1
     assert task_node["constraints"]["memory_gb"] == 16
-    
+
     # Round trip
     restored = from_json(to_json(graph))
     t_node = next(n for n in restored.nodes if n.name == "simple_task")
-    
+
     assert t_node.constraints is not None
     assert t_node.constraints.requirements["gpu_count"] == 1
     assert t_node.constraints.requirements["memory_gb"] == 16

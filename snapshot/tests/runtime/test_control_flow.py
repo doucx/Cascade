@@ -2,7 +2,7 @@ import pytest
 import cascade as cs
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.engine import Engine
-from cascade.runtime.events import Event, TaskSkipped, TaskExecutionFinished
+from cascade.runtime.events import Event, TaskSkipped
 
 
 class SpySubscriber:

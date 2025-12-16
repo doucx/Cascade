@@ -13,7 +13,9 @@ def test_cli_generator_success():
 
     # 1. Define a workflow with Params
     name_param = cs.Param("name", description="The name to greet.")
-    count_param = cs.Param("count", default=1, type=int, description="Number of times to greet.")
+    count_param = cs.Param(
+        "count", default=1, type=int, description="Number of times to greet."
+    )
 
     @cs.task
     def greet(name: str, count: int) -> str:
@@ -40,7 +42,9 @@ def test_cli_generator_help_message():
     """Tests that the --help message is generated correctly from Param descriptions."""
 
     name_param = cs.Param("name", description="The name to greet.")
-    count_param = cs.Param("count", default=1, type=int, description="Number of times to greet.")
+    count_param = cs.Param(
+        "count", default=1, type=int, description="Number of times to greet."
+    )
 
     @cs.task
     def dummy(name: str, count: int):

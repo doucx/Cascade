@@ -18,7 +18,7 @@ class LocalExecutor:
         Executes a single node's callable object with the provided arguments.
         """
         if node.callable_obj is None:
-             raise TypeError(
+            raise TypeError(
                 f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
             )
 

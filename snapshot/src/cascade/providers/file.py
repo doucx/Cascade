@@ -10,12 +10,15 @@ from cascade.providers import LazyFactory
 
 # --- Core I/O Tasks (Synchronous functions run in separate thread) ---
 
+
 @task(name="file_read_text")
 async def _read_text_task(path: str, encoding: str) -> str:
     """Reads file content as a string."""
+
     def blocking_read():
         with open(path, "r", encoding=encoding) as f:
             return f.read()
+
     # Use asyncio.to_thread to run synchronous I/O without blocking the event loop
     return await asyncio.to_thread(blocking_read)
 
@@ -23,9 +26,11 @@ async def _read_text_task(path: str, encoding: str) -> str:
 @task(name="file_read_bytes")
 async def _read_bytes_task(path: str) -> bytes:
     """Reads file content as bytes."""
+
     def blocking_read():
         with open(path, "rb") as f:
             return f.read()
+
     return await asyncio.to_thread(blocking_read)
 
 
@@ -43,12 +48,14 @@ def _json_parse_task(text_content: str) -> Any:
 
 # --- File Factory (The object returned by cs.file) ---
 
+
 @dataclass
 class FileLazyFactory(LazyFactory):
     """
     Intermediate factory for cs.file(path) that returns a LazyResult
     when an I/O method is called.
     """
+
     path: Union[str, LazyResult]
 
     def read_text(self, encoding: str = "utf-8") -> LazyResult[str]:
@@ -62,7 +69,7 @@ class FileLazyFactory(LazyFactory):
     def exists(self) -> LazyResult[bool]:
         """Returns a LazyResult for checking file existence."""
         return _exists_task(path=self.path)
-    
+
     def json(self, encoding: str = "utf-8") -> LazyResult[Any]:
         """Returns a LazyResult for reading the file content and parsing it as JSON."""
         # Chain the result: Read text -> Parse JSON
@@ -72,6 +79,7 @@ class FileLazyFactory(LazyFactory):
 
 # --- Provider Definition ---
 
+
 class FileProvider:
     name = "file"
 
@@ -79,5 +87,5 @@ class FileProvider:
         # The factory function (cs.file) simply wraps the path in the FileLazyFactory
         def factory_func(path: Union[str, LazyResult]) -> FileLazyFactory:
             return FileLazyFactory(path=path)
-        
+
         return factory_func

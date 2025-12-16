@@ -25,7 +25,7 @@ class ArgumentResolver:
         1. Literal inputs
         2. Upstream dependency results (handling Routers)
         3. Injected resources
-        
+
         Raises DependencyMissingError if a required upstream result is missing.
         """
         # 1. Prepare arguments from literals and upstream results
@@ -35,20 +35,22 @@ class ArgumentResolver:
         }
 
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-        
+
         for edge in incoming_edges:
-            if edge.arg_name.startswith("_"): # Skip control/meta edges
+            if edge.arg_name.startswith("_"):  # Skip control/meta edges
                 continue
-            
+
             # Resolve Upstream Value
             if edge.router:
                 # Handle Dynamic Routing
                 selector_value = upstream_results.get(edge.source.id)
                 if selector_value is None:
-                     # If the selector itself is missing, that's an error
-                     if edge.source.id not in upstream_results:
-                         raise DependencyMissingError(node.id, "router_selector", edge.source.id)
-                
+                    # If the selector itself is missing, that's an error
+                    if edge.source.id not in upstream_results:
+                        raise DependencyMissingError(
+                            node.id, "router_selector", edge.source.id
+                        )
+
                 try:
                     selected_lazy_result = edge.router.routes[selector_value]
                 except KeyError:
@@ -56,7 +58,7 @@ class ArgumentResolver:
                         f"Router selector returned '{selector_value}', "
                         f"but no matching route found in {list(edge.router.routes.keys())}"
                     )
-                
+
                 dependency_id = selected_lazy_result._uuid
             else:
                 # Standard dependency
@@ -65,7 +67,7 @@ class ArgumentResolver:
             # Check existence in results
             if dependency_id not in upstream_results:
                 raise DependencyMissingError(node.id, edge.arg_name, dependency_id)
-            
+
             result = upstream_results[dependency_id]
 
             # Assign to args/kwargs
@@ -92,7 +94,7 @@ class ArgumentResolver:
         # Convert positional map to list
         sorted_indices = sorted(positional_args.keys())
         args = [positional_args[i] for i in sorted_indices]
-        
+
         resolved_args = []
         for arg in args:
             if isinstance(arg, Inject):
@@ -110,7 +112,7 @@ class ArgumentResolver:
                     final_kwargs[key] = resource_context[value.resource_name]
                 else:
                     raise NameError(f"Resource '{value.resource_name}' not found.")
-        
+
         return args, final_kwargs
 
 
@@ -120,14 +122,11 @@ class ConstraintResolver:
     """
 
     def resolve(
-        self, 
-        node: Node, 
-        graph: Graph, 
-        upstream_results: Dict[str, Any]
+        self, node: Node, graph: Graph, upstream_results: Dict[str, Any]
     ) -> Dict[str, Any]:
         if not node.constraints or node.constraints.is_empty():
             return {}
-        
+
         resolved = {}
         for res, amount in node.constraints.requirements.items():
             if isinstance(amount, (LazyResult, MappedLazyResult)):
@@ -135,7 +134,9 @@ class ConstraintResolver:
                     resolved[res] = upstream_results[amount._uuid]
                 else:
                     # Logic to determine if it was skipped or just missing
-                    raise DependencyMissingError(node.id, f"constraint:{res}", amount._uuid)
+                    raise DependencyMissingError(
+                        node.id, f"constraint:{res}", amount._uuid
+                    )
             else:
                 resolved[res] = amount
         return resolved

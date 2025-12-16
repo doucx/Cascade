@@ -31,6 +31,9 @@ def visualize(target: LazyResult[Any]) -> str:
             style = ' [style=dashed, color=gray, label="run_if"]'
         elif edge.edge_type == EdgeType.IMPLICIT:
             style = ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
+        elif edge.edge_type == EdgeType.ROUTER_ROUTE:
+             # Router route edge
+            style = ' [style=dashed, color=orange, arrowhead=open, label="route"]'
         elif edge.router:
             # Router selector edge (which is EdgeType.DATA)
             style = f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'

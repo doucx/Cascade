@@ -144,14 +144,14 @@ class GraphBuilder:
                 )
                 self.graph.add_edge(edge)
 
-                for route_result in value.routes.values():
+                for route_key, route_result in value.routes.items():
                     route_node = self._visit(route_result)
-                    # Implicit dependency edge for Router routes
+                    # Specific edge type for Router routes, allowing dynamic pruning later
                     imp_edge = Edge(
                         source=route_node,
                         target=target_node,
-                        arg_name="_implicit_dependency", 
-                        edge_type=EdgeType.IMPLICIT
+                        arg_name=f"_route_{route_key}", 
+                        edge_type=EdgeType.ROUTER_ROUTE
                     )
                     self.graph.add_edge(imp_edge)
             else:

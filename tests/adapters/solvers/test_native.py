@@ -29,13 +29,18 @@ def test_native_solver_diamond_graph():
     solver = NativeSolver()
     plan = solver.resolve(graph)
 
-    assert len(plan) == 4
+    # Should have 3 stages: [A], [B, C], [D]
+    assert len(plan) == 3
 
-    # Node A must be first
-    assert plan[0].name == "t_a"
-    # Node D must be last
-    assert plan[-1].name == "t_d"
-
-    # Nodes B and C can be in any order in between
-    middle_names = {plan[1].name, plan[2].name}
+    # Stage 0: A
+    assert len(plan[0]) == 1
+    assert plan[0][0].name == "t_a"
+    
+    # Stage 1: B and C (Parallel)
+    assert len(plan[1]) == 2
+    middle_names = {n.name for n in plan[1]}
     assert middle_names == {"t_b", "t_c"}
+
+    # Stage 2: D
+    assert len(plan[2]) == 1
+    assert plan[2][0].name == "t_d"

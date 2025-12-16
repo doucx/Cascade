@@ -150,40 +150,73 @@ class Engine:
         run_id: str,
     ) -> Any:
         graph = build_graph(target)
-        plan = self.solver.resolve(graph)
+        plan = self.solver.resolve(graph)  # Now returns List[List[Node]]
         results: Dict[str, Any] = {}
         skipped_node_ids: set[str] = set()
 
-        self._inject_params(plan, params, results)
+        # Inject params first (usually params are in the first stage or handled implicitly)
+        # We need to flatten the plan to find params or iterate carefully.
+        # Let's just iterate:
+        all_nodes = [node for stage in plan for node in stage]
+        self._inject_params(all_nodes, params, results)
 
-        for node in plan:
-            if node.node_type == "param":
-                continue
+        for stage in plan:
+            # Prepare tasks for this stage
+            tasks_to_run = []
+            
+            for node in stage:
+                if node.node_type == "param":
+                    continue
 
-            skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
-            if skip_reason:
-                skipped_node_ids.add(node.id)
-                self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        reason=skip_reason,
+                skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
+                if skip_reason:
+                    skipped_node_ids.add(node.id)
+                    self.bus.publish(
+                        TaskSkipped(
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            reason=skip_reason,
+                        )
+                    )
+                    continue
+                
+                # Create coroutine for the node
+                tasks_to_run.append(
+                    self._execute_node_with_policies(
+                        node, graph, results, active_resources, run_id, params
                     )
                 )
+
+            if not tasks_to_run:
                 continue
 
-            # Execute Node
-            results[node.id] = await self._execute_node_with_policies(
-                node, graph, results, active_resources, run_id, params
-            )
+            # Execute stage in parallel
+            # We use return_exceptions=False (default) so the first error propagates immediately
+            stage_results = await asyncio.gather(*tasks_to_run)
+
+            # Map results back to node IDs
+            # We need to reconstruct which result belongs to which node
+            # tasks_to_run order matches the iteration order.
+            # We need to re-iterate or capture the mapping.
+            # Let's capture the node IDs corresponding to tasks_to_run.
+            
+            runnable_nodes = []
+            for node in stage:
+                if node.node_type != "param" and node.id not in skipped_node_ids:
+                    runnable_nodes.append(node)
+            
+            for node, res in zip(runnable_nodes, stage_results):
+                results[node.id] = res
 
         # Final check: Was the target task executed?
         if target._uuid not in results:
             # If target was skipped itself, or skipped because of upstream.
             if target._uuid in skipped_node_ids:
                 # We need to find the node name for the error message
-                target_node = next(n for n in plan if n.id == target._uuid)
+                # Flatten plan to search for the node
+                all_nodes = (node for stage in plan for node in stage)
+                target_node = next(n for n in all_nodes if n.id == target._uuid)
 
                 # The "dependency" here is the task itself, because it was skipped.
                 raise DependencyMissingError(
@@ -435,9 +468,11 @@ class Engine:
 
         return await asyncio.gather(*coros)
 
-    def _scan_for_resources(self, plan: list[Node]) -> set[str]:
+    def _scan_for_resources(self, plan: List[List[Node]]) -> set[str]:
         required = set()
-        for node in plan:
+        # Flatten the staged plan for scanning
+        all_nodes = [node for stage in plan for node in stage]
+        for node in all_nodes:
             # Check literal inputs
             for value in node.literal_inputs.values():
                 if isinstance(value, Inject):

@@ -1,209 +1,309 @@
-当然，我们开始这次集中的测试重构。
+好的，审查完成。
 
-你的分析是正确的，依赖硬编码的日志字符串会让测试用例变得脆弱。我们将引入一个标准的、可复用的事件监听器 (`SpySubscriber`)，并将其作为 pytest fixture 提供，然后用它来重构 `tests/runtime/test_bus.py`，使其断言更关注“意图”（发出的事件）而非“表现”（日志文本）。
+根据 `rg assert` 的输出，我识别出以下几个可以应用我们新测试模式的关键文件：
+1.  `tests/integration/test_end_to_end.py`: 这个文件定义了它自己的 `SpySubscriber` 类，这是典型的重复代码，可以被我们的 centralized fixture 替代。
+2.  `tests/tools/test_preview.py`: `test_dry_run_emits_correct_events_linear` 使用了 `unittest.mock.MagicMock` 来模拟 bus，这可以被 `bus_and_spy` fixture 替代，使其测试模式更统一。此外，`test_console_subscriber_renders_correctly` 仍然在断言完整的 UI 字符串，可以使其更加健壮。
 
-## [WIP] test: 集中化 SpySubscriber 并重构总线测试以增强健壮性
+其他文件中的 `assert` 主要用于验证数据、类型或逻辑流程，并未违反“验证意图”的原则，因此暂不作修改。
+
+我将生成一个计划来重构这两个文件。
+
+## [WIP] test: 推广事件驱动的测试模式到集成和工具测试中
 
 ### 用户需求
-规划并执行一次集中的测试重构，将 `tests/runtime/test_bus.py` 中依赖硬编码日志字符串的集成测试，全部迁移到基于 `SpySubscriber` 的事件断言模式，以提高测试套件的健壮性和可维护性。
+继续审查测试套件，识别并重构那些可以从新的 `bus_and_spy` fixture 中受益的测试用例，以提高整个测试套件的一致性、健壮性和可维护性。
 
 ### 评论
-这是一个关键的改进，能显著提升测试套件的健康度。通过断言事件流而非 UI 输出，我们的测试将直接验证系统的核心行为契约，使其免受未来日志格式、颜色或文案调整的影响。将 `SpySubscriber` 集中化为 `conftest.py` 中的 fixture，也为整个项目建立了一个标准的、可复用的测试模式。
+这次重构是上一个计划的自然延续，它将我们建立的最佳实践推广到更高层次的测试（集成测试和工具测试）中。通过移除本地的 `SpySubscriber` 实现并替换 `MagicMock` 的使用，我们不仅减少了代码重复，还统一了整个项目的异步和事件驱动测试方法，这是一个巨大的开发者体验 (DX) 胜利。
 
 ### 目标
-1.  创建 `tests/conftest.py` 文件，用于存放通用的测试辅助工具。
-2.  在该文件中定义一个 `SpySubscriber` 类和一个 `bus_and_spy` pytest fixture，后者将提供一个 `MessageBus` 实例和一个已附加到该总线上的 `SpySubscriber` 实例。
-3.  重构 `tests/runtime/test_bus.py` 中的所有测试用例，使其利用新的 `bus_and_spy` fixture。
-4.  修改 `test_human_readable_subscriber` 和 `test_subscriber_log_level_filtering` 的断言逻辑，使其检查日志中的关键语义标记（如表情符号 ✅/❌ 和错误信息），而不是完整的、硬编码的字符串，从而在保留其测试目的的同时降低脆弱性。
+1.  **重构 `tests/integration/test_end_to_end.py`**:
+    *   移除本地定义的 `SpySubscriber` 类。
+    *   将所有测试用例修改为使用 `bus_and_spy` fixture。
+    *   保持原有的事件断言逻辑不变。
+2.  **重构 `tests/tools/test_preview.py`**:
+    *   修改 `test_dry_run_emits_correct_events_linear`，用 `bus_and_spy` fixture 替换 `MagicMock`，并更新断言以检查 `spy.events`。
+    *   修改 `test_console_subscriber_renders_correctly`，使其断言更关注语义标记而非精确的字符串匹配，以增强健壮性。
 
 ### 基本原理
-此计划遵循“验证意图而非实现”的核心测试原则。
-1.  **集中化**: 在 `conftest.py` 中创建 `SpySubscriber` 和 `bus_and_spy` fixture，使其成为整个测试套件的一等公民，鼓励在未来的测试中优先使用事件断言。
-2.  **标准化**: 将 `test_bus.py` 中测试总线分发逻辑的用例（`test_message_bus_dispatch`, `test_message_bus_wildcard`）统一到使用 `bus_and_spy` fixture，这比手动创建列表来收集事件更清晰、更标准。
-3.  **健壮化**: 对于专门测试 `HumanReadableLogSubscriber` 输出的用例，我们采取务实的折中方案。我们不移除对字符串输出的检查（因为这正是该组件的功能），而是将断言从“字节级精确匹配”升级为“语义关键点匹配”。这极大地提高了测试的健壮性，同时确保了其核心验证逻辑的完整性。
+我们正在系统性地偿还测试技术债务。
+*   **消除重复 (DRY)**: `test_end_to_end.py` 中的 `SpySubscriber` 是一个教科书式的重复代码示例。将其替换为 `conftest.py` 中的共享 fixture 是标准实践。
+*   **统一模式**: 在 `test_preview.py` 中用真实的 `MessageBus` 和 `SpySubscriber` 替换 `MagicMock`，使测试更接近真实世界的场景，并与其他事件驱动的测试保持一致。
+*   **增强韧性**: 对 `test_console_subscriber_renders_correctly` 的断言进行“软化”，使其在保留测试核心目的（验证输出格式）的同时，不易因微小的文本调整而失败。
 
 ### 标签
-#intent/refine #intent/tooling #flow/ready #priority/high #comp/tests #concept/ui #scope/dx #task/domain/testing #task/object/test-suite #task/action/refactor #task/state/begin
+#intent/refine #intent/tooling #flow/ready #priority/medium #comp/tests #scope/dx #task/domain/testing #task/object/test-suite #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 conftest.py 并定义核心测试辅助工具
+#### Acts 1: 重构 `test_end_to_end.py` 以使用共享 fixture
 
-我们首先创建 `tests/conftest.py` 文件，并定义 `SpySubscriber` 类和一个可注入的 `bus_and_spy` fixture。这将为后续的重构提供基础。
+我们将完全重写此文件，移除本地的 `SpySubscriber` 并将所有测试函数注入 `bus_and_spy` fixture。
 
 ~~~~~act
 write_file
-tests/conftest.py
+tests/integration/test_end_to_end.py
 ~~~~~
 ~~~~~python
 import pytest
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
+import cascade as cs
+from cascade.runtime.engine import Engine
+from cascade.runtime.events import (
+    TaskExecutionFinished,
+    RunFinished,
+)
 
 
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
+def test_e2e_linear_workflow(bus_and_spy):
+    bus, spy = bus_and_spy
 
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
+    @cs.task
+    def get_name():
+        return "Cascade"
 
-    def collect(self, event: Event):
-        self.events.append(event)
+    @cs.task
+    def greet(name: str):
+        return f"Hello, {name}!"
 
-    def events_of_type(self, event_type):
-        """Returns a list of all events of a specific type."""
-        return [e for e in self.events if isinstance(e, event_type)]
+    final_greeting = greet(get_name())
+
+    import asyncio
+    engine = Engine(bus=bus)
+    result = asyncio.run(engine.run(final_greeting))
+
+    assert result == "Hello, {name}!".format(name="Cascade")
+
+    event_names = [type(e).__name__ for e in spy.events]
+    assert event_names == [
+        "RunStarted",
+        "TaskExecutionStarted",
+        "TaskExecutionFinished",
+        "TaskExecutionStarted",
+        "TaskExecutionFinished",
+        "RunFinished",
+    ]
+
+    # Assert specific event details
+    assert spy.events[1].task_name == "get_name"
+    assert spy.events[2].status == "Succeeded"
+    assert spy.events[2].result_preview == "'Cascade'"
+    assert spy.events[4].status == "Succeeded"
+    assert spy.events[5].status == "Succeeded"
 
 
-@pytest.fixture
-def bus_and_spy():
-    """Provides a MessageBus instance and an attached SpySubscriber."""
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    return bus, spy
+def test_e2e_diamond_workflow_and_result(bus_and_spy):
+    bus, _ = bus_and_spy
+
+    @cs.task
+    def t_a():
+        return 5
+
+    @cs.task
+    def t_b(x):
+        return x * 2  # 10
+
+    @cs.task
+    def t_c(x):
+        return x + 3  # 8
+
+    @cs.task
+    def t_d(y, z):
+        return y + z  # 18
+
+    r_a = t_a()
+    r_b = t_b(r_a)
+    r_c = t_c(r_a)
+    r_d = t_d(r_b, z=r_c)
+
+    import asyncio
+    engine = Engine(bus=bus)
+    result = asyncio.run(engine.run(r_d))
+    assert result == 18
+
+
+def test_e2e_failure_propagation(bus_and_spy):
+    bus, spy = bus_and_spy
+
+    @cs.task
+    def ok_task():
+        return True
+
+    @cs.task
+    def failing_task(x):
+        raise ValueError("Something went wrong")
+
+    @cs.task
+    def unreachable_task(y):
+        return False
+
+    r1 = ok_task()
+    r2 = failing_task(r1)
+    r3 = unreachable_task(r2)
+
+    import asyncio
+    engine = Engine(bus=bus)
+
+    with pytest.raises(ValueError, match="Something went wrong"):
+        asyncio.run(engine.run(r3))
+
+    event_names = [type(e).__name__ for e in spy.events]
+    assert event_names == [
+        "RunStarted",
+        "TaskExecutionStarted",  # ok_task started
+        "TaskExecutionFinished",  # ok_task finished
+        "TaskExecutionStarted",  # failing_task started
+        "TaskExecutionFinished",  # failing_task finished
+        "RunFinished",
+    ]
+
+    # Assert success of the first task
+    task_ok_finished = spy.events[2]
+    assert isinstance(task_ok_finished, TaskExecutionFinished)
+    assert task_ok_finished.task_name == "ok_task"
+    assert task_ok_finished.status == "Succeeded"
+
+    # Assert failure of the second task
+    task_fail_finished = spy.events[4]
+    assert isinstance(task_fail_finished, TaskExecutionFinished)
+    assert task_fail_finished.task_name == "failing_task"
+    assert task_fail_finished.status == "Failed"
+    assert "ValueError: Something went wrong" in task_fail_finished.error
+
+    # Assert failure of the entire run
+    run_finished = spy.events[5]
+    assert isinstance(run_finished, RunFinished)
+    assert run_finished.status == "Failed"
 ~~~~~
 
-#### Acts 2: 重构 `test_bus.py` 以提高健壮性和一致性
+#### Acts 2: 重构 `test_preview.py` 以统一测试模式
 
-现在，我们将重写 `tests/runtime/test_bus.py`。所有测试将使用新的 `bus_and_spy` fixture，并且针对日志输出的断言将被修改为更健壮的模式。
+我们将修改此文件，用 `bus_and_spy` fixture 替换 `MagicMock`，并使 UI 断言更加健壮。
 
 ~~~~~act
 write_file
-tests/runtime/test_bus.py
+tests/tools/test_preview.py
 ~~~~~
 ~~~~~python
-import io
-from cascade.runtime.events import RunStarted, TaskExecutionFinished
-from cascade.runtime.subscribers import HumanReadableLogSubscriber
+import cascade as cs
+from cascade.runtime.bus import MessageBus
+from cascade.tools.preview import _analyze_plan, DryRunConsoleSubscriber
+from cascade.tools.events import (
+    PlanNodeInspected,
+    PlanAnalysisFinished,
+    PlanAnalysisStarted,
+)
 
 
-def test_message_bus_dispatch(bus_and_spy):
-    """
-    Tests that the bus correctly dispatches events to specifically subscribed handlers.
-    """
+def test_dry_run_emits_correct_events_linear(bus_and_spy):
     bus, spy = bus_and_spy
 
-    specific_received = []
+    @cs.task
+    def step_a():
+        return 1
 
-    def specific_handler(event: RunStarted):
-        specific_received.append(event)
+    @cs.task
+    def step_b(x, y=10):
+        return x + y
 
-    bus.subscribe(RunStarted, specific_handler)
+    result = step_b(step_a(), y=10)
+    _analyze_plan(result, bus)
 
-    # Publish relevant event
-    event1 = RunStarted()
-    bus.publish(event1)
+    # Assert basic sequence
+    assert len(spy.events) == 4  # Start + NodeA + NodeB + Finish
+    assert isinstance(spy.events_of_type(PlanAnalysisStarted)[0], PlanAnalysisStarted)
+    assert isinstance(spy.events_of_type(PlanAnalysisFinished)[0], PlanAnalysisFinished)
 
-    # Assert specific handler was called
-    assert len(specific_received) == 1
+    node_events = spy.events_of_type(PlanNodeInspected)
+    assert len(node_events) == 2
 
-    # Publish irrelevant event
-    event2 = TaskExecutionFinished()
-    bus.publish(event2)
+    # Check Step A
+    node_a_event = node_events[0]
+    assert node_a_event.index == 1
+    assert node_a_event.node_name == "step_a"
+    assert node_a_event.literal_inputs == {}
 
-    # Assert specific handler was NOT called again
-    assert len(specific_received) == 1
-
-    # Assert that the spy (wildcard) received everything
-    assert len(spy.events) == 2
-    assert spy.events[0] == event1
-    assert spy.events[1] == event2
+    # Check Step B
+    node_b_event = node_events[1]
+    assert node_b_event.index == 2
+    assert node_b_event.node_name == "step_b"
+    assert node_b_event.literal_inputs == {"y": 10}
 
 
-def test_message_bus_wildcard(bus_and_spy):
-    """
-    Tests that a wildcard subscriber (listening to base Event) receives all events.
-    """
+def test_dry_run_emits_correct_events_diamond(bus_and_spy):
     bus, spy = bus_and_spy
 
-    bus.publish(RunStarted(target_tasks=[], params={}))
-    bus.publish(
-        TaskExecutionFinished(task_id="1", task_name="t", status="OK", duration=0.0)
-    )
+    @cs.task
+    def t_a():
+        return 1
 
-    assert len(spy.events) == 2
-    assert isinstance(spy.events_of_type(RunStarted)[0], RunStarted)
-    assert isinstance(spy.events_of_type(TaskExecutionFinished)[0], TaskExecutionFinished)
+    @cs.task
+    def t_b(x):
+        return x + 1
+
+    @cs.task
+    def t_c(x):
+        return x * 2
+
+    @cs.task
+    def t_d(y, z):
+        return y + z
+
+    r_a = t_a()
+    r_d = t_d(t_b(r_a), z=t_c(r_a))
+
+    _analyze_plan(r_d, bus)
+
+    node_events = spy.events_of_type(PlanNodeInspected)
+    assert len(node_events) == 4
+
+    names = [e.node_name for e in node_events]
+
+    # Assert topological order
+    assert names[0] == "t_a"
+    assert names[-1] == "t_d"
+    assert "t_b" in names[1:3]
+    assert "t_c" in names[1:3]
 
 
-def test_human_readable_subscriber_output_formatting(bus_and_spy):
+def test_console_subscriber_renders_correctly(capsys):
     """
-    Tests that the subscriber correctly formats and prints different events.
-    This test focuses on the subscriber's presentation logic.
+    Tests the View layer independently for correct formatting.
     """
-    bus, _ = bus_and_spy  # Spy is not used here, but fixture provides bus
-    output = io.StringIO()
-    HumanReadableLogSubscriber(bus, stream=output)
+    bus = MessageBus()
+    DryRunConsoleSubscriber(bus)
 
-    # Simulate a flow of events
-    bus.publish(RunStarted(target_tasks=["deploy"], params={"env": "prod"}))
+    # 1. Publish Start Event
+    bus.publish(PlanAnalysisStarted(target_node_id="root"))
+    captured = capsys.readouterr()
+    assert "---" in captured.out
+    assert "Execution Plan" in captured.out
+
+    # 2. Publish Node Event
     bus.publish(
-        TaskExecutionFinished(
-            task_id="123", task_name="build_image", status="Succeeded", duration=1.23
+        PlanNodeInspected(
+            index=1,
+            total_nodes=2,
+            node_id="n1",
+            node_name="my_task",
+            literal_inputs={"param": 42},
         )
     )
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="124",
-            task_name="deploy_k8s",
-            status="Failed",
-            duration=0.05,
-            error="AuthError",
-        )
-    )
+    captured = capsys.readouterr()
+    assert "[1/2]" in captured.out
+    assert "my_task" in captured.out
+    assert "'param': 42" in captured.out
 
-    logs = output.getvalue()
-
-    # Assertions are now less brittle, checking for key semantic markers
-    assert "▶️" in logs
-    assert "deploy" in logs
-    assert "env" in logs
-    assert "prod" in logs
-
-    assert "✅" in logs
-    assert "build_image" in logs
-
-    assert "❌" in logs
-    assert "deploy_k8s" in logs
-    assert "AuthError" in logs
-
-
-def test_human_readable_subscriber_log_level(bus_and_spy):
-    """
-    Tests that setting min_level correctly suppresses lower priority logs.
-    """
-    bus, _ = bus_and_spy
-    output = io.StringIO()
-    # Set level to ERROR, so INFO logs from RunStarted and Succeeded should be skipped
-    HumanReadableLogSubscriber(bus, stream=output, min_level="ERROR")
-
-    # INFO event
-    bus.publish(RunStarted(target_tasks=["t1"]))
-    # INFO event
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="1", task_name="t1", status="Succeeded", duration=0.1
-        )
-    )
-    # ERROR event
-    bus.publish(
-        TaskExecutionFinished(
-            task_id="2", task_name="t2", status="Failed", error="Boom", duration=0.1
-        )
-    )
-
-    logs = output.getvalue()
-
-    # Should NOT contain INFO-level markers
-    assert "▶️" not in logs
-    assert "✅" not in logs
-    # Should contain ERROR-level markers
-    assert "❌" in logs
-    assert "Boom" in logs
+    # 3. Publish Finish Event
+    bus.publish(PlanAnalysisFinished(total_steps=2))
+    captured = capsys.readouterr()
+    assert "---" in captured.out
 ~~~~~
 
 ### 下一步建议
-我们已经成功地为测试套件的核心部分建立了更健壮的模式。下一步，我建议我们审查其他集成测试文件（例如 `tests/integration/` 和 `tests/tools/`），看看是否有其他地方可以从新的 `bus_and_spy` fixture 中受益，以进一步提高整个测试套件的一致性和可维护性。
+我们已经成功地将核心测试套件统一到了一个更健壮、更一致的事件驱动测试模式上。测试技术债务的主要部分已经偿还。
+
+下一步，我们可以将注意力转向代码库的其他方面。一个有价值的方向是：
+*   **优化 Fixture 作用域**: 审查测试套件，识别那些创建成本高且只读的 fixture，并根据 `d3-principle-pytest-fixture-scoping` 原则提升其作用域（例如，从 `function` 到 `module`），以提高测试执行速度。
+*   **文档生成**: 探索如何利用 Cascade 自身的能力来自动化其文档的某些部分，真正实现“吃自己的狗粮”。

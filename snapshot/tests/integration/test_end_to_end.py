@@ -1,29 +1,15 @@
 import pytest
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
-    Event,
     TaskExecutionFinished,
     RunFinished,
 )
 
 
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
+def test_e2e_linear_workflow(bus_and_spy):
+    bus, spy = bus_and_spy
 
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
-
-    def collect(self, event: Event):
-        self.events.append(event)
-
-    def event_names(self):
-        return [type(e).__name__ for e in self.events]
-
-
-def test_e2e_linear_workflow():
     @cs.task
     def get_name():
         return "Cascade"
@@ -35,16 +21,13 @@ def test_e2e_linear_workflow():
     final_greeting = greet(get_name())
 
     import asyncio
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
     engine = Engine(bus=bus)
-
     result = asyncio.run(engine.run(final_greeting))
 
     assert result == "Hello, {name}!".format(name="Cascade")
 
-    assert spy.event_names() == [
+    event_names = [type(e).__name__ for e in spy.events]
+    assert event_names == [
         "RunStarted",
         "TaskExecutionStarted",
         "TaskExecutionFinished",
@@ -61,7 +44,9 @@ def test_e2e_linear_workflow():
     assert spy.events[5].status == "Succeeded"
 
 
-def test_e2e_diamond_workflow_and_result():
+def test_e2e_diamond_workflow_and_result(bus_and_spy):
+    bus, _ = bus_and_spy
+
     @cs.task
     def t_a():
         return 5
@@ -84,16 +69,14 @@ def test_e2e_diamond_workflow_and_result():
     r_d = t_d(r_b, z=r_c)
 
     import asyncio
-
-    bus = MessageBus()
-    SpySubscriber(bus)
     engine = Engine(bus=bus)
-
     result = asyncio.run(engine.run(r_d))
     assert result == 18
 
 
-def test_e2e_failure_propagation():
+def test_e2e_failure_propagation(bus_and_spy):
+    bus, spy = bus_and_spy
+
     @cs.task
     def ok_task():
         return True
@@ -111,15 +94,13 @@ def test_e2e_failure_propagation():
     r3 = unreachable_task(r2)
 
     import asyncio
-
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
     engine = Engine(bus=bus)
 
     with pytest.raises(ValueError, match="Something went wrong"):
         asyncio.run(engine.run(r3))
 
-    assert spy.event_names() == [
+    event_names = [type(e).__name__ for e in spy.events]
+    assert event_names == [
         "RunStarted",
         "TaskExecutionStarted",  # ok_task started
         "TaskExecutionFinished",  # ok_task finished

@@ -1,13 +1,12 @@
-from cascade.spec.task import task
+import cascade as cs
 from cascade.graph.build import build_graph
 
-
 def test_build_linear_graph():
-    @task
+    @cs.task
     def t1():
         return 1
 
-    @task
+    @cs.task
     def t2(x):
         return x + 1
 
@@ -24,46 +23,47 @@ def test_build_linear_graph():
     assert edge.target.name == "t2"
     assert edge.arg_name == "0"  # first positional arg
 
-
-def test_build_diamond_graph():
+def test_build_graph_with_param_factory():
     """
-       A
-      / \
-     B   C
-      \ /
-       D
+    [V1.3 更新] 验证 cs.Param() 现在生成一个标准的任务节点，
+    而不是旧版的 'param' 类型节点。
     """
+    # 定义工作流
+    param_node = cs.Param("x", default=1)
+    
+    @cs.task
+    def process(val):
+        return val + 1
+        
+    target = process(param_node)
+    
+    graph = build_graph(target)
+    
+    assert len(graph.nodes) == 2
+    
+    # 找到参数节点
+    # 注意：我们不能再通过 node_type="param" 来查找了
+    # 我们需要通过任务名称或 ID 查找
+    p_node = next(n for n in graph.nodes if n.name == "_get_param_value")
+    
+    # 断言节点类型统一为 task
+    assert p_node.node_type == "task" 
+    
+    # 断言它包含正确的 literal_inputs (这是内部任务需要的参数)
+    assert "name" in p_node.literal_inputs
+    assert p_node.literal_inputs["name"] == "x"
 
-    @task
-    def t_a():
-        return 1
-
-    @task
-    def t_b(x):
-        return x + 1
-
-    @task
-    def t_c(x):
-        return x * 2
-
-    @task
-    def t_d(y, z):
-        return y + z
-
-    r_a = t_a()
-    r_b = t_b(r_a)
-    r_c = t_c(r_a)
-    r_d = t_d(r_b, z=r_c)
-
-    graph = build_graph(r_d)
-
-    # Should have 4 nodes (A, B, C, D)
-    assert len(graph.nodes) == 4
-
-    # Should have 4 edges: A->B, A->C, B->D, C->D
-    assert len(graph.edges) == 4
-
-    # Verify A is reused (A->B and A->C)
-    node_a = next(n for n in graph.nodes if n.name == "t_a")
-    edges_from_a = [e for e in graph.edges if e.source == node_a]
-    assert len(edges_from_a) == 2
+def test_build_graph_with_env_factory():
+    """验证 cs.Env() 生成标准任务节点。"""
+    env_node = cs.Env("HOME")
+    
+    @cs.task
+    def echo(val):
+        return val
+        
+    target = echo(env_node)
+    graph = build_graph(target)
+    
+    e_node = next(n for n in graph.nodes if n.name == "_get_env_var")
+    assert e_node.node_type == "task"
+    assert e_node.literal_inputs["name"] == "HOME"

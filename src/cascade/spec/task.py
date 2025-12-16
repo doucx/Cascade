@@ -1,7 +1,9 @@
-from typing import TypeVar, Generic, Callable, Optional, Union, List
+from typing import TypeVar, Generic, Callable, Optional, Union, List, TYPE_CHECKING
 import inspect
 
-from cascade.runtime.protocols import CachePolicy
+if TYPE_CHECKING:
+    from cascade.runtime.protocols import CachePolicy
+
 from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.lazy_types import (
     LazyResult,
@@ -82,7 +84,7 @@ def _with_retry(
 LazyResult.with_retry = _with_retry
 
 
-def _with_cache(self: LazyResult, policy: CachePolicy) -> LazyResult:
+def _with_cache(self: LazyResult, policy: "CachePolicy") -> LazyResult:
     self._cache_policy = policy
     return self
 

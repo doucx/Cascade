@@ -63,21 +63,6 @@ class Engine:
             new_provider = new_provider.func
         self._resource_providers[name] = new_provider
 
-    def _inject_params(
-        self, plan: list[Node], user_params: Dict[str, Any], results: Dict[str, Any]
-    ):
-        for node in plan:
-            if node.node_type == "param":
-                param_spec = node.param_spec
-                if node.name in user_params:
-                    results[node.id] = user_params[node.name]
-                elif param_spec.default is not None:
-                    results[node.id] = param_spec.default
-                else:
-                    raise ValueError(
-                        f"Required parameter '{node.name}' was not provided."
-                    )
-
     async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
@@ -134,11 +119,8 @@ class Engine:
         plan = self.solver.resolve(graph)  # Now returns List[List[Node]]
         results: Dict[str, Any] = {}
         
-        # Inject params first (usually params are in the first stage or handled implicitly)
-        # We need to flatten the plan to find params or iterate carefully.
-        # Let's just iterate:
-        all_nodes = [node for stage in plan for node in stage]
-        self._inject_params(all_nodes, params, results)
+        # In v1.3, params are resolved by tasks (_get_param_value), not injected upfront.
+        # So we skip _inject_params.
 
         for stage in plan:
             # Prepare tasks for this stage
@@ -238,7 +220,7 @@ class Engine:
         # 1. Resolve Arguments (Input Validation happens here)
         try:
             args, kwargs = self.arg_resolver.resolve(
-                node, graph, upstream_results, active_resources
+                node, graph, upstream_results, active_resources, user_params=params
             )
         except DependencyMissingError:
             # Re-raise. In future we could emit a specific event here.

@@ -1,7 +1,6 @@
 from typing import Dict, Any
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.spec.common import Param
 from cascade.spec.routing import Router
 
 
@@ -20,25 +19,8 @@ class GraphBuilder:
             return self._visit_lazy_result(value)
         elif isinstance(value, MappedLazyResult):
             return self._visit_mapped_result(value)
-        elif isinstance(value, Param):
-            return self._visit_param(value)
         else:
             raise TypeError(f"Cannot build graph from type {type(value)}")
-
-    def _visit_param(self, param: Param) -> Node:
-        # Use param name as its unique ID
-        if param.name in self._visited:
-            return self._visited[param.name]
-
-        node = Node(
-            id=param.name,
-            name=param.name,
-            node_type="param",
-            param_spec=param,
-        )
-        self.graph.add_node(node)
-        self._visited[param.name] = node
-        return node
 
     def _visit_lazy_result(self, result: LazyResult) -> Node:
         if result._uuid in self._visited:
@@ -122,7 +104,7 @@ class GraphBuilder:
         for key, value in iterator:
             arg_name = str(key)
 
-            if isinstance(value, (LazyResult, MappedLazyResult, Param)):
+            if isinstance(value, (LazyResult, MappedLazyResult)):
                 source_node = self._visit(value)
                 # Standard DATA edge
                 edge = Edge(

@@ -32,21 +32,25 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
 
     # 2. Resolve the execution plan (topological sort)
     plan = engine.solver.resolve(graph)
-    total_steps = len(plan)
+    # Calculate total nodes across all stages
+    total_steps = sum(len(stage) for stage in plan)
 
     bus.publish(PlanAnalysisStarted(run_id=target._uuid, target_node_id=target._uuid))
 
-    for i, node in enumerate(plan, 1):
-        bus.publish(
-            PlanNodeInspected(
-                run_id=target._uuid,
-                index=i,
-                total_nodes=total_steps,
-                node_id=node.id,
-                node_name=node.name,
-                literal_inputs=node.literal_inputs,
+    current_index = 1
+    for stage in plan:
+        for node in stage:
+            bus.publish(
+                PlanNodeInspected(
+                    run_id=target._uuid,
+                    index=current_index,
+                    total_nodes=total_steps,
+                    node_id=node.id,
+                    node_name=node.name,
+                    literal_inputs=node.literal_inputs,
+                )
             )
-        )
+            current_index += 1
 
     bus.publish(PlanAnalysisFinished(run_id=target._uuid, total_steps=total_steps))
 

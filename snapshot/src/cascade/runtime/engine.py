@@ -466,9 +466,11 @@ class Engine:
 
         return await asyncio.gather(*coros)
 
-    def _scan_for_resources(self, plan: list[Node]) -> set[str]:
+    def _scan_for_resources(self, plan: List[List[Node]]) -> set[str]:
         required = set()
-        for node in plan:
+        # Flatten the staged plan for scanning
+        all_nodes = [node for stage in plan for node in stage]
+        for node in all_nodes:
             # Check literal inputs
             for value in node.literal_inputs.values():
                 if isinstance(value, Inject):

@@ -1,289 +1,159 @@
-这是一个非常核心的架构升级。在实现 `CSPSolver` 之前，我们需要先重构 `Engine` 和 `ExecutionPlan` 协议，使其支持**分层并行执行 (Batched/Staged Execution)**。目前的 `Engine` 严格串行执行任务，这限制了 `Cascade` 的性能，也使得高级调度器没有用武之地。
+分析表明，大量的 `AttributeError` 失败是因为 `Engine` 和工具代码仍然假设 `Solver` 返回的是扁平的节点列表，而实际上它现在返回的是分层的列表（`List[List[Node]]`）。我们需要更新这些消费端以适配新的数据结构。
 
-我们将分两步走：
-1.  **架构升级**: 重构 `Engine` 和 `NativeSolver`，支持 `List[List[Node]]` 形式的分层执行计划。这将立即为用户带来并行执行的能力。
-2.  **高级调度**: 引入 `CSPSolver`，在分层的基础上加入资源约束优化。
-
-现在开始第一步。
-
-## [WIP] feat(runtime): Enable parallel execution via staged execution plan
+## [WIP] fix(runtime): Adapt consumers to staged execution plan
 
 ### 用户需求
-当前的 `Engine` 是串行执行任务的。即使两个任务之间没有依赖关系，它们也会一个接一个地运行。用户希望能够并行执行无依赖的任务，以提高工作流的总吞吐量。
+修复因引入分层执行计划（Staged Execution Plan）而导致的大量单元测试失败。`Engine`、`dry_run` 工具和相关测试用例需要更新，以正确处理嵌套的列表结构。
 
 ### 评论
-这是 `Cascade` 演进过程中的一个重要里程碑。通过将 `ExecutionPlan` 从扁平的 `List[Node]` 升级为分层的 `List[List[Node]]`，我们为真正的并发执行打开了大门。这也为后续的 `CSPSolver` 提供了必要的运行时基础——Solver 将负责规划“哪些任务应该在同一层并行”。
+这是重构过程中的必要清理工作。引入新的数据结构（分层计划）破坏了现有的假设，我们需要恢复这些组件的兼容性。
 
 ### 目标
-1.  更新 `src/cascade/runtime/protocols.py` 中的 `ExecutionPlan` 类型定义。
-2.  重写 `src/cascade/adapters/solvers/native.py`，实现分层拓扑排序算法，尽可能将无依赖的任务放在同一层。
-3.  重构 `src/cascade/runtime/engine.py` 的 `_execute_graph` 方法，使用 `asyncio.gather` 并发执行每一层中的任务。
+1.  修改 `src/cascade/runtime/engine.py` 中的 `_scan_for_resources` 方法，使其能够处理嵌套的 `ExecutionPlan`。
+2.  修改 `src/cascade/tools/preview.py` 中的 `_analyze_plan`，使其能够正确计算总步数并遍历分层计划。
+3.  修改 `tests/adapters/solvers/test_native.py`，更新针对 `NativeSolver` 输出结构的断言。
 
 ### 基本原理
-我们采用 **分层执行 (Staged Execution)** 模型。
-*   **Solver**: 负责生成层级。对于 `NativeSolver`，它将使用贪婪策略，将所有当前入度为 0 的节点放入同一层。
-*   **Engine**: 负责执行层级。它会按顺序遍历层级，但对于层级内的所有任务，会同时启动并等待它们全部完成（Barrier）。
-虽然这种模型存在“同步屏障”问题（一层中最慢的任务会拖慢整体进度），但它实现简单、确定性强，且与我们未来的静态资源调度 (CSP) 路线图完美契合。
+*   **Engine**: `_scan_for_resources` 需要遍历所有节点。对于分层计划，这意味着需要两层循环（遍历 Stage -> 遍历 Node）或先将其扁平化。我们将采用扁平化处理，因为资源扫描不关心执行顺序。
+*   **Preview Tool**: `dry_run` 的显示逻辑需要展平结构，以便按顺序打印每个节点。
+*   **Tests**: 测试断言必须反映新的、更优化的执行顺序（即并行任务在同一层）。
 
 ### 标签
-#intent/refine #flow/ready #priority/high
-#comp/runtime #comp/engine #concept/concurrency #scope/core
+#intent/fix #flow/ready #priority/high
+#comp/runtime #comp/tools #comp/tests
 #ai/instruct
-#task/domain/runtime #task/object/execution-plan #task/action/refactor
-#task/state/begin
+#task/domain/runtime #task/object/execution-plan #task/action/fix
+#task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新协议定义
+#### Acts 1: 修复 Engine 的资源扫描
 
-修改 `protocols.py`，将 `ExecutionPlan` 定义为嵌套列表。
-
-~~~~~act
-patch_file
-src/cascade/runtime/protocols.py
-~~~~~
-~~~~~python
-from typing import Protocol, List, Any, Dict
-from cascade.graph.model import Graph, Node
-
-# An execution plan is simply an ordered list of nodes to execute.
-ExecutionPlan = List[Node]
-
-
-class Solver(Protocol):
-~~~~~
-~~~~~python
-from typing import Protocol, List, Any, Dict
-from cascade.graph.model import Graph, Node
-
-# An execution plan is a list of stages, where each stage is a list of nodes
-# that can be executed in parallel.
-ExecutionPlan = List[List[Node]]
-
-
-class Solver(Protocol):
-~~~~~
-
-#### Acts 2: 升级 NativeSolver 实现分层排序
-
-修改 `native.py`。由于 `graphlib.TopologicalSorter` 不直接支持分层输出，我们将手动实现一个基于入度表的分层 Kahn 算法。
-
-~~~~~act
-patch_file
-src/cascade/adapters/solvers/native.py
-~~~~~
-~~~~~python
-from graphlib import TopologicalSorter
-from typing import Dict
-from cascade.graph.model import Graph, Node
-from cascade.runtime.protocols import ExecutionPlan
-
-
-class NativeSolver:
-    """
-    A solver that uses Python's standard library `graphlib` to produce
-    a sequential execution plan.
-    """
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # Create a mapping from node ID to node object for quick lookup
-        node_map: Dict[str, Node] = {node.id: node for node in graph.nodes}
-
-        # Build the dependency structure for TopologicalSorter
-        # Format: {node_id: {dep1_id, dep2_id, ...}}
-        deps: Dict[str, set] = {node.id: set() for node in graph.nodes}
-        for edge in graph.edges:
-            deps[edge.target.id].add(edge.source.id)
-
-        # Perform the sort
-        ts = TopologicalSorter(deps)
-        sorted_node_ids = list(ts.static_order())
-
-        # Map sorted IDs back to Node objects
-        plan = [node_map[node_id] for node_id in sorted_node_ids]
-        return plan
-~~~~~
-~~~~~python
-from typing import Dict, List, Set
-from cascade.graph.model import Graph, Node
-from cascade.runtime.protocols import ExecutionPlan
-
-
-class NativeSolver:
-    """
-    A solver that produces a staged execution plan (layered topological sort).
-    Nodes in the same stage have no dependencies on each other and can be run in parallel.
-    """
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # 1. Calculate in-degrees for all nodes
-        in_degree: Dict[str, int] = {node.id: 0 for node in graph.nodes}
-        adj_list: Dict[str, List[str]] = {node.id: [] for node in graph.nodes}
-
-        for edge in graph.edges:
-            in_degree[edge.target.id] += 1
-            adj_list[edge.source.id].append(edge.target.id)
-
-        # 2. Identify initial layer (nodes with 0 in-degree)
-        current_stage = [node for node in graph.nodes if in_degree[node.id] == 0]
-        
-        # Sort stage by name for deterministic behavior
-        current_stage.sort(key=lambda n: n.name)
-
-        plan: ExecutionPlan = []
-        processed_count = 0
-
-        while current_stage:
-            plan.append(current_stage)
-            processed_count += len(current_stage)
-            next_stage_nodes: Set[str] = set()
-
-            # 3. Simulate execution of current stage
-            for node in current_stage:
-                # For each downstream neighbor
-                for neighbor_id in adj_list[node.id]:
-                    in_degree[neighbor_id] -= 1
-                    if in_degree[neighbor_id] == 0:
-                        next_stage_nodes.add(neighbor_id)
-            
-            # Prepare next stage
-            # We need to map IDs back to Node objects. 
-            # Optimization: could use a lookup dict, but graph.nodes is usually small enough.
-            # Let's create a lookup for speed.
-            node_lookup = {n.id: n for n in graph.nodes}
-            
-            next_stage = [node_lookup[nid] for nid in next_stage_nodes]
-            next_stage.sort(key=lambda n: n.name) # Deterministic
-            
-            current_stage = next_stage
-
-        # 4. Cycle detection
-        if processed_count < len(graph.nodes):
-             # Finding the cycle is complex, for now raise a generic error
-             raise ValueError("Cycle detected in the dependency graph.")
-
-        return plan
-~~~~~
-
-#### Acts 3: 重构 Engine 支持并发执行
-
-修改 `engine.py`。主循环现在将遍历 stages，并使用 `asyncio.gather` 并发执行每个 stage 中的节点。
+修改 `src/cascade/runtime/engine.py`，更新 `_scan_for_resources` 以处理分层计划。
 
 ~~~~~act
 patch_file
 src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-    async def _execute_graph(
-        self,
-        target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-    ) -> Any:
-        graph = build_graph(target)
-        plan = self.solver.resolve(graph)
-        results: Dict[str, Any] = {}
-        skipped_node_ids: set[str] = set()
-
-        self._inject_params(plan, params, results)
-
+    def _scan_for_resources(self, plan: list[Node]) -> set[str]:
+        required = set()
         for node in plan:
-            if node.node_type == "param":
-                continue
-
-            skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
-            if skip_reason:
-                skipped_node_ids.add(node.id)
-                self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        reason=skip_reason,
-                    )
-                )
-                continue
-
-            # Execute Node
-            results[node.id] = await self._execute_node_with_policies(
-                node, graph, results, active_resources, run_id, params
-            )
-
-        # Final check: Was the target task executed?
+            # Check literal inputs
+            for value in node.literal_inputs.values():
 ~~~~~
 ~~~~~python
-    async def _execute_graph(
-        self,
-        target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-    ) -> Any:
-        graph = build_graph(target)
-        plan = self.solver.resolve(graph)  # Now returns List[List[Node]]
-        results: Dict[str, Any] = {}
-        skipped_node_ids: set[str] = set()
-
-        # Inject params first (usually params are in the first stage or handled implicitly)
-        # We need to flatten the plan to find params or iterate carefully.
-        # Let's just iterate:
+    def _scan_for_resources(self, plan: List[List[Node]]) -> set[str]:
+        required = set()
+        # Flatten the staged plan for scanning
         all_nodes = [node for stage in plan for node in stage]
-        self._inject_params(all_nodes, params, results)
+        for node in all_nodes:
+            # Check literal inputs
+            for value in node.literal_inputs.values():
+~~~~~
 
-        for stage in plan:
-            # Prepare tasks for this stage
-            tasks_to_run = []
-            
-            for node in stage:
-                if node.node_type == "param":
-                    continue
+#### Acts 2: 修复 Preview 工具
 
-                skip_reason = self._should_skip(node, graph, results, skipped_node_ids)
-                if skip_reason:
-                    skipped_node_ids.add(node.id)
-                    self.bus.publish(
-                        TaskSkipped(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            reason=skip_reason,
-                        )
-                    )
-                    continue
-                
-                # Create coroutine for the node
-                tasks_to_run.append(
-                    self._execute_node_with_policies(
-                        node, graph, results, active_resources, run_id, params
-                    )
+修改 `src/cascade/tools/preview.py`，使其能正确迭代分层计划。
+
+~~~~~act
+patch_file
+src/cascade/tools/preview.py
+~~~~~
+~~~~~python
+    # 2. Resolve the execution plan (topological sort)
+    plan = engine.solver.resolve(graph)
+    total_steps = len(plan)
+
+    bus.publish(PlanAnalysisStarted(run_id=target._uuid, target_node_id=target._uuid))
+
+    for i, node in enumerate(plan, 1):
+        bus.publish(
+            PlanNodeInspected(
+                run_id=target._uuid,
+                index=i,
+                total_nodes=total_steps,
+                node_id=node.id,
+                node_name=node.name,
+                literal_inputs=node.literal_inputs,
+            )
+        )
+
+    bus.publish(PlanAnalysisFinished(run_id=target._uuid, total_steps=total_steps))
+~~~~~
+~~~~~python
+    # 2. Resolve the execution plan (topological sort)
+    plan = engine.solver.resolve(graph)
+    # Calculate total nodes across all stages
+    total_steps = sum(len(stage) for stage in plan)
+
+    bus.publish(PlanAnalysisStarted(run_id=target._uuid, target_node_id=target._uuid))
+
+    current_index = 1
+    for stage in plan:
+        for node in stage:
+            bus.publish(
+                PlanNodeInspected(
+                    run_id=target._uuid,
+                    index=current_index,
+                    total_nodes=total_steps,
+                    node_id=node.id,
+                    node_name=node.name,
+                    literal_inputs=node.literal_inputs,
                 )
+            )
+            current_index += 1
 
-            if not tasks_to_run:
-                continue
+    bus.publish(PlanAnalysisFinished(run_id=target._uuid, total_steps=total_steps))
+~~~~~
 
-            # Execute stage in parallel
-            # We use return_exceptions=False (default) so the first error propagates immediately
-            stage_results = await asyncio.gather(*tasks_to_run)
+#### Acts 3: 更新 Solver 测试
 
-            # Map results back to node IDs
-            # We need to reconstruct which result belongs to which node
-            # tasks_to_run order matches the iteration order.
-            # We need to re-iterate or capture the mapping.
-            # Let's capture the node IDs corresponding to tasks_to_run.
-            
-            runnable_nodes = []
-            for node in stage:
-                if node.node_type != "param" and node.id not in skipped_node_ids:
-                    runnable_nodes.append(node)
-            
-            for node, res in zip(runnable_nodes, stage_results):
-                results[node.id] = res
+修改 `tests/adapters/solvers/test_native.py`，以匹配新的分层输出。
 
-        # Final check: Was the target task executed?
+~~~~~act
+patch_file
+tests/adapters/solvers/test_native.py
+~~~~~
+~~~~~python
+    graph = build_graph(r_d)
+    solver = NativeSolver()
+    plan = solver.resolve(graph)
+
+    assert len(plan) == 4
+
+    # Node A must be first
+    assert plan[0].name == "t_a"
+    # Node D must be last
+    assert plan[-1].name == "t_d"
+
+    # Nodes B and C can be in any order in between
+    middle_names = {plan[1].name, plan[2].name}
+    assert middle_names == {"t_b", "t_c"}
+~~~~~
+~~~~~python
+    graph = build_graph(r_d)
+    solver = NativeSolver()
+    plan = solver.resolve(graph)
+
+    # Should have 3 stages: [A], [B, C], [D]
+    assert len(plan) == 3
+
+    # Stage 0: A
+    assert len(plan[0]) == 1
+    assert plan[0][0].name == "t_a"
+    
+    # Stage 1: B and C (Parallel)
+    assert len(plan[1]) == 2
+    middle_names = {n.name for n in plan[1]}
+    assert middle_names == {"t_b", "t_c"}
+
+    # Stage 2: D
+    assert len(plan[2]) == 1
+    assert plan[2][0].name == "t_d"
 ~~~~~
 
 ### 下一步建议
-我们已经完成了并发执行的核心重构。现在需要运行现有的测试套件，特别是 `tests/adapters/solvers/test_native.py`（它测试了求解器的输出结构，现在结构变了，测试肯定会挂）和 `tests/integration`。我们需要更新 `test_native.py` 以适配新的分层结构。
+我们已经修复了所有已知的兼容性问题。现在应该重新运行测试，确认所有组件（Engine, Tools, Tests）都能正常工作。如果一切顺利，就可以提交这个包含并发执行功能的重大更新了。

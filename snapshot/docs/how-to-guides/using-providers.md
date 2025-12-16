@@ -16,6 +16,35 @@ import cascade as cs
 python_version = cs.shell("python --version", check=True)
 ```
 
+## 配置 Provider: `cs.load_yaml` 和 `cs.lookup`
+
+`Cascade` 推荐分离配置文件的 I/O 操作和键值查找操作，以获得更清晰的依赖图。
+
+### `cs.load_yaml`: 加载和解析 YAML/JSON
+
+它将文件内容加载并解析为一个 Python 字典，返回一个 `LazyResult`。
+
+```python
+import cascade as cs
+
+# 显式地加载配置文件，返回一个 LazyResult[dict]
+config_data = cs.load_yaml("config.yml") 
+```
+
+### `cs.lookup`: 从数据源中查找值
+
+它负责在已加载的字典中进行点分路径查找。
+
+```python
+import cascade as cs
+
+# 假设 config_data 已经通过 cs.load_yaml 获得
+config_data = cs.load_yaml("config.yml") 
+
+# 声明对配置值的依赖
+project_name = cs.lookup(source=config_data, key="project.name")
+```
+
 ## `cs.file`: 声明文件依赖
 
 `cs.file` 提供了一种声明对文件系统内容的依赖的方式。它本身返回一个文件工厂对象，你可以链式调用其方法。

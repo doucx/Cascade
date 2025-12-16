@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] docs(config): 更新文档，将 cs.config 替换为 cs.load_yaml/cs.lookup", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765870694.2893348, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] docs(config): 更新依赖注入和 Provider 指南，迁移至新配置 API", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765870744.2258618, "duration_ms": 0}}

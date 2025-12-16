@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] docs: 填充 `cs.cli` 工具参考文档", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765868428.094342, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[FIX] docs: 修复 mkdocstrings 未能找到 src 目录的问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765868552.6262057, "duration_ms": 0}}

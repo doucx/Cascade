@@ -32,6 +32,7 @@ plugins:
         python:
           options:
             show_root_heading: true
+            paths: [src]
   - i18n:
       docs_structure: suffix
       languages:

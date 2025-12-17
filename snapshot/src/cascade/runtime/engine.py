@@ -419,6 +419,15 @@ class Engine:
             item_kwargs = {k: v[i] for k, v in kwargs.items()}
             # Factory creates a LazyResult
             sub_target = factory(**item_kwargs)
+            
+            # Propagate policies from the map node to the sub-task
+            if node.retry_policy:
+                sub_target._retry_policy = node.retry_policy
+            if node.cache_policy:
+                sub_target._cache_policy = node.cache_policy
+            if node.constraints:
+                sub_target._constraints = node.constraints
+
             sub_targets.append(sub_target)
 
         coros = [

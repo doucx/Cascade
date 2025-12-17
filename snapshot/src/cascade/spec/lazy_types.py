@@ -50,6 +50,9 @@ class MappedLazyResult(Generic[T]):
     mapping_kwargs: Dict[str, Any]
     _uuid: str = field(default_factory=lambda: str(uuid4()))
     _condition: Optional[LazyResult] = None
+    _retry_policy: Optional[RetryPolicy] = None
+    _cache_policy: Optional[Any] = None  # CachePolicy
+    _constraints: Optional[Any] = None  # ResourceConstraint
 
     def __hash__(self):
         return hash(self._uuid)

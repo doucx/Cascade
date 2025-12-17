@@ -100,9 +100,14 @@ def _with_constraints(self: LazyResult, **kwargs) -> LazyResult:
 LazyResult.with_constraints = _with_constraints
 
 
+# --- MappedLazyResult Mixins ---
+
 def _mapped_run_if(self: MappedLazyResult, condition: LazyResult) -> MappedLazyResult:
     self._condition = condition
     return self
 
 
 MappedLazyResult.run_if = _mapped_run_if
+MappedLazyResult.with_retry = _with_retry
+MappedLazyResult.with_cache = _with_cache
+MappedLazyResult.with_constraints = _with_constraints

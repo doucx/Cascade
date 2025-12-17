@@ -25,7 +25,7 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
     Decoupled from any output mechanism.
     """
     # We use the default engine configuration to get the default solver
-    engine = Engine()
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
     # 1. Build the graph statically
     graph = build_graph(target)

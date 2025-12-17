@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-cli"
+version = "0.1.0"
+description = "Command-line interface for the Cascade workflow system."
+dependencies = [
+  "cascade-py @ file:///${PROJECT_ROOT}/packages/cascade-py",
+  "typer[all]",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]

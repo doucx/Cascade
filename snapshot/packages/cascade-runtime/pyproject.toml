@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-runtime"
+version = "0.1.0"
+description = "Core runtime engine for the Cascade workflow system."
+dependencies = [
+  "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]

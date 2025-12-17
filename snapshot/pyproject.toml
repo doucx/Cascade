@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade-py"
+name = "cascade-monorepo"
 version = "0.1.0"
 description = "A modern, declarative automation library for Python."
 readme = "README.md"
@@ -86,6 +86,15 @@ lookup = "cascade.providers.config:LookupProvider"
 # New cs.io.stdio namespace
 "io.stdout.write" = "cascade.providers.stdio:StdOutWriteProvider"
 "io.stdin.read_line" = "cascade.providers.stdio:StdInReadLineProvider"
+
+[tool.hatch.workspaces]
+default = [
+  "packages/cascade-interfaces",
+  "packages/cascade-runtime",
+  "packages/cascade-py",
+  "packages/cascade-cli",
+  ".", # The root package itself
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-py"
+version = "0.1.0"
+description = "A modern, declarative automation library for Python."
+dependencies = [
+  "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces",
+  "cascade-runtime @ file:///${PROJECT_ROOT}/packages/cascade-runtime"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]

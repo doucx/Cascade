@@ -1,133 +1,58 @@
-## [WIP] fix: 修复 S3 测试中的逻辑依赖并应用环境变量配置
+## [COMMIT] feat(io): Unify I/O namespace to `cs.io.local` and add S3 provider
 
-### 摘要
-我们遇到了 `DependencyMissingError`，这是因为 `run_if` 机制的工作原理导致的：`run_if` 期望上游任务返回“真值” (Truthy)。然而，我们的 `write_text` 任务返回 `None` (Falsy)，导致下游的 `read_text` 任务被判定为“条件不满足”而被跳过。
+### 用户需求
+1.  将本地文件 I/O (read/write/exists) 统一到 `cs.io.local.*` 命名空间。
+2.  引入 `cs.io.s3.*` Provider，支持异步 S3 读写操作，依赖 `aiobotocore`。
 
-为了修复这个问题并验证 S3 Provider 的核心功能，我们将测试逻辑改为两步执行：先执行写任务，再执行读任务。这不仅避开了 `run_if` 对返回值的限制，还更清晰地隔离了写入和读取的测试环节。同时，我们整合了之前关于 `moto` 服务器模式和环境变量配置的修复。
+### 评论
+这个提交代表了 Cascade 核心基础设施的一个重要里程碑。通过引入 `cs.io` 命名空间，我们为未来的多种存储后端（S3, GCS, etc.）定义了一个清晰且可扩展的抽象层。S3 Provider 的实现是高度原子化的，严格遵循了“提供者组合优于封装”的设计原则。对测试套件的多次修复，最终选择了最健壮的 `moto` 服务器模式和环境变量配置，确保了测试的稳定性和隔离性。
 
-### 详细变更
-1.  **Fixture 重构**: 使用 `ThreadedMotoServer` 和 `monkeypatch.setenv` 来确保所有 `aiobotocore` 客户端（包括 Provider 内部的）都指向 Mock 服务器。
-2.  **测试流程优化**: 移除 `run_if`，将写操作和读操作分为两个独立的 `engine.run()` 调用。
+### 目标
+提交所有关于 `cs.io` 命名空间统一、S3 Provider 文件创建和 `pyproject.toml` 配置的变更。
 
-### 完整文件内容
+### 基本原理
+完成的任务包括：
+1.  创建 `src/cascade/providers/s3.py`，实现异步 S3 读写任务。
+2.  修改 `src/cascade/providers/io.py`，添加 `io.local.*` 别名 Provider。
+3.  更新 `pyproject.toml`，注册所有新的 Provider 入口点，并添加 `s3` 可选依赖。
+4.  创建并稳定 `tests/providers/test_s3.py`，验证 S3 读写功能和依赖检查。
+
+### 标签
+#intent/build #flow/ready #priority/high #comp/providers #comp/tests #concept/executor #scope/api #scope/dx #task/domain/storage #task/object/io-provider #task/action/integration #task/state/end
+
+---
+
+### Script
+
+#### Acts 1: 添加所有变更文件到 Git 暂存区
 
 ~~~~~act
-write_file
+git_add
+pyproject.toml
+src/cascade/providers/io.py
+src/cascade/providers/s3.py
 tests/providers/test_s3.py
 ~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
 
-# Skip if dependencies are missing
-pytest.importorskip("aiobotocore")
-pytest.importorskip("moto")
-pytest.importorskip("requests") # Moto server needs requests sometimes
+#### Acts 2: 创建 Git Commit
 
-@pytest.fixture(scope="module")
-def aws_credentials():
-    """Mocked AWS Credentials for moto."""
-    import os
-    os.environ["AWS_ACCESS_KEY_ID"] = "testing"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
-    os.environ["AWS_SECURITY_TOKEN"] = "testing"
-    os.environ["AWS_SESSION_TOKEN"] = "testing"
-    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
-
-@pytest.fixture
-def s3_mock(aws_credentials, monkeypatch):
-    """A sync fixture that runs moto in server mode and configures client via env var."""
-    from moto.server import ThreadedMotoServer
-    
-    # Start Moto Server in a separate thread
-    server = ThreadedMotoServer(ip_address="127.0.0.1", port=0) # port 0 lets OS pick a free port
-    server.start()
-    
-    # Get the dynamic port
-    host, port = server.get_host_and_port()
-    endpoint_url = f"http://{host}:{port}"
-    
-    # Use monkeypatch to set environment variable for aiobotocore
-    # This ensures ANY client created by aiobotocore within the test uses this endpoint
-    monkeypatch.setenv("AWS_ENDPOINT_URL_S3", endpoint_url)
-    
-    yield endpoint_url
-    
-    server.stop()
-
-# --- Tests ---
-
-@pytest.mark.asyncio
-async def test_s3_write_read_text(s3_mock):
-    """Tests writing and reading a text file from S3."""
-    import aiobotocore.session
-    
-    bucket_name = "test-cascade-bucket"
-
-    # 1. Setup: Create Bucket
-    # Note: Since AWS_ENDPOINT_URL_S3 is set, this client automatically hits moto
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3", region_name="us-east-1") as client:
-        await client.create_bucket(Bucket=bucket_name)
-
-    # 2. Define Operations
-    key = "test.txt"
-    content = "hello s3"
-    
-    write_op = cs.io.s3.write_text(bucket=bucket_name, key=key, content=content)
-    read_op = cs.io.s3.read_text(bucket=bucket_name, key=key)
-
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
-
-    # 3. Execute Write
-    await engine.run(write_op)
-    
-    # 4. Execute Read
-    result = await engine.run(read_op)
-
-    assert result == content
-
-@pytest.mark.asyncio
-async def test_s3_write_read_bytes(s3_mock):
-    """Tests writing and reading a binary file from S3."""
-    import aiobotocore.session
-
-    bucket_name = "test-cascade-bucket"
-
-    # 1. Setup
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3", region_name="us-east-1") as client:
-        await client.create_bucket(Bucket=bucket_name)
-    
-    key = "test.bin"
-    content = b"\x01\x02\x03"
-    
-    write_op = cs.io.s3.write_bytes(bucket=bucket_name, key=key, content=content)
-    read_op = cs.io.s3.read_bytes(bucket=bucket_name, key=key)
-
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
-
-    # 2. Execute Write
-    await engine.run(write_op)
-    
-    # 3. Execute Read
-    result = await engine.run(read_op)
-
-    assert result == content
-
-def test_s3_import_error(monkeypatch):
-    """Tests that an ImportError is raised if aiobotocore is missing."""
-    import cascade.providers.s3 as s3_provider_module
-    
-    # Simulate missing dependency
-    monkeypatch.setattr(s3_provider_module, "aiobotocore", None)
-    
-    # Instantiate the provider
-    provider = s3_provider_module.S3ReadTextProvider()
-    
-    # Try to get the factory
-    with pytest.raises(ImportError, match="aiobotocore"):
-        provider.create_factory()
+~~~~~act
+git_commit
 ~~~~~
+~~~~~text
+feat(io): Unify I/O namespace to `cs.io.local` and add S3 provider
+
+This feature unifies all file I/O providers under the new `cs.io` namespace, providing a consistent abstraction layer for various storage backends.
+
+Key changes:
+1.  **Namespace Unification**: Existing local file providers (e.g., `read.text`) are aliased to `io.local.read_text`, laying the groundwork for deprecating the old names.
+2.  **S3 Integration**: Introduced `io.s3.read_text` and `io.s3.write_text` (and byte variants) using `aiobotocore`, adding the first external storage backend.
+3.  **Testing Infrastructure**: Added robust, isolated integration tests for the S3 provider using `moto` in server mode and configured via `AWS_ENDPOINT_URL_S3` environment variables, ensuring zero dependency on actual network calls or real credentials.
+
+This completes Task 1.1 of the roadmap.
+~~~~~
+
+### 下一步建议
+我们已经完成了路线图的第一阶段任务 1.1。现在可以着手进行**任务 1.2: `cs.http` 原子化网络提供者**。
+
+这个任务的目标是完善 `cs.http` Provider，使其成为一个高度原子化、专注于网络传输的积木。目前 `src/cascade/providers/http.py` 中的实现已经存在，但需要确保它返回一个易于组合的 **数据类 (`SimpleHttpResponse`)**，而不是一个复杂的、难以序列化的 `aiohttp` 响应对象。这与路线图中的指导原则完全一致。

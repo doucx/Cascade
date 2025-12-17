@@ -83,6 +83,9 @@ lookup = "cascade.providers.config:LookupProvider"
 "io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
 "io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
 "io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
+# New cs.io.stdio namespace
+"io.stdout.write" = "cascade.providers.stdio:StdOutWriteProvider"
+"io.stdin.read_line" = "cascade.providers.stdio:StdInReadLineProvider"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

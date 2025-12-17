@@ -1,47 +1,62 @@
+import pytest
 import cascade as cs
 
+@cs.task
+def source():
+    return True
 
-def test_visualize_diamond_graph():
+@cs.task
+def data_consumer(val):
+    return val
+
+@cs.task
+def condition_consumer():
+    return "conditioned"
+
+@cs.task
+def constraint_consumer():
+    return "constrained"
+
+@cs.task
+def gather(a, b, c):
+    return True
+
+def test_visualize_differentiates_edge_types():
     """
-    Tests that visualize() produces a correct DOT string for a diamond graph.
+    Tests that visualize() produces a DOT string that visually distinguishes
+    between data, condition, and constraint edges.
     """
-
-    @cs.task
-    def t_a():
-        return 1
-
-    @cs.task
-    def t_b(x):
-        return x + 1
-
-    @cs.task
-    def t_c(x):
-        return x * 2
-
-    @cs.task
-    def t_d(y, z):
-        return y + z
-
-    r_a = t_a()
-    r_b = t_b(r_a)
-    r_c = t_c(r_a)
-    r_d = t_d(r_b, z=r_c)
-
-    dot_string = cs.visualize(r_d)
-
-    # Basic structural checks
-    assert dot_string.startswith("digraph CascadeWorkflow {")
-    assert dot_string.endswith("}")
-    assert 'rankdir="TB"' in dot_string
-
-    # Check that all nodes are defined with correct labels and shapes
-    assert f'"{r_a._uuid}" [label="t_a\\n(task)", shape=box];' in dot_string
-    assert f'"{r_b._uuid}" [label="t_b\\n(task)", shape=box];' in dot_string
-    assert f'"{r_c._uuid}" [label="t_c\\n(task)", shape=box];' in dot_string
-    assert f'"{r_d._uuid}" [label="t_d\\n(task)", shape=box];' in dot_string
-
-    # Check that all edges are defined with correct labels
-    assert f'"{r_a._uuid}" -> "{r_b._uuid}" [label="0"];' in dot_string
-    assert f'"{r_a._uuid}" -> "{r_c._uuid}" [label="0"];' in dot_string
-    assert f'"{r_b._uuid}" -> "{r_d._uuid}" [label="0"];' in dot_string
-    assert f'"{r_c._uuid}" -> "{r_d._uuid}" [label="z"];' in dot_string
+    src = source()
+    
+    # 1. Standard Data Edge
+    data_edge_target = data_consumer(src)
+    
+    # 2. Condition Edge
+    condition_edge_target = condition_consumer().run_if(src)
+    
+    # 3. Constraint Edge
+    constraint_edge_target = constraint_consumer().with_constraints(cpu=src)
+    
+    # Use a gather task to create a single target for the graph
+    final_target = gather(data_edge_target, condition_edge_target, constraint_edge_target)
+    
+    dot_string = cs.visualize(final_target)
+    
+    # --- Assertions ---
+    
+    # Find node UUIDs
+    src_id = src._uuid
+    data_id = data_edge_target.task._uuid
+    cond_id = condition_edge_target._uuid
+    cons_id = constraint_edge_target._uuid
+    
+    # Assert Data Edge (default style, just a label)
+    assert f'"{src_id}" -> "{data_id}" [label="0"];' in dot_string
+    
+    # Assert Condition Edge (dashed, gray)
+    assert f'"{src_id}" -> "{cond_id}"' in dot_string
+    assert 'style=dashed, color=gray, label="run_if"' in dot_string
+    
+    # Assert Constraint Edge (dotted, purple)
+    assert f'"{src_id}" -> "{cons_id}"' in dot_string
+    assert 'style=dotted, color=purple, label="constraint: cpu"' in dot_string

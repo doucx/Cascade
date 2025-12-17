@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M philosophy.md, M using-providers.md", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765966444.5845933, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[INFO] feat(tools): 验证可视化工具中已实现的依赖类型区分", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765966446.0194442, "duration_ms": 0}}

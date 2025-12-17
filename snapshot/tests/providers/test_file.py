@@ -31,10 +31,8 @@ def binary_file(tmp_path):
 
 @pytest.mark.asyncio
 async def test_file_read_text_success(dummy_file):
-    """Tests reading a file as text using cs.file."""
-
-    # cs.file returns the factory, read_text() returns the LazyResult
-    read_result = cs.file(dummy_file).read_text()
+    """Tests reading a file as text using the new cs.read.text provider."""
+    read_result = cs.read.text(dummy_file)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(read_result)
@@ -45,9 +43,8 @@ async def test_file_read_text_success(dummy_file):
 
 @pytest.mark.asyncio
 async def test_file_read_bytes_success(binary_file):
-    """Tests reading a file as bytes."""
-
-    read_result = cs.file(binary_file).read_bytes()
+    """Tests reading a file as bytes using cs.read.bytes."""
+    read_result = cs.read.bytes(binary_file)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(read_result)
@@ -57,9 +54,8 @@ async def test_file_read_bytes_success(binary_file):
 
 @pytest.mark.asyncio
 async def test_file_exists_true(dummy_file):
-    """Tests checking existence for an existing file."""
-
-    exist_result = cs.file(dummy_file).exists()
+    """Tests checking existence for an existing file using cs.fs.exists."""
+    exist_result = cs.fs.exists(dummy_file)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(exist_result)
@@ -69,10 +65,9 @@ async def test_file_exists_true(dummy_file):
 
 @pytest.mark.asyncio
 async def test_file_exists_false(tmp_path):
-    """Tests checking existence for a non-existing file."""
-
+    """Tests checking existence for a non-existing file using cs.fs.exists."""
     path = str(tmp_path / "non_existent.txt")
-    exist_result = cs.file(path).exists()
+    exist_result = cs.fs.exists(path)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(exist_result)
@@ -81,10 +76,15 @@ async def test_file_exists_false(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_file_json_parsing(dummy_file):
-    """Tests the chained .json() method."""
+async def test_file_json_parsing_composition(dummy_file):
+    """Tests composing read_text with a JSON parsing task."""
+    @cs.task
+    def parse_json(text: str):
+        return json.loads(text)
 
-    json_result = cs.file(dummy_file).json()
+    # Chain the new atomic providers
+    text_content = cs.read.text(dummy_file)
+    json_result = parse_json(text_content)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(json_result)
@@ -97,8 +97,6 @@ async def test_file_json_parsing(dummy_file):
 @pytest.mark.asyncio
 async def test_file_dynamic_path_dependency(tmp_path):
     """Tests dependency where the file path comes from an upstream task."""
-
-    # Upstream task generates the path string
     @cs.task
     def generate_path() -> str:
         p = tmp_path / "dynamic.txt"
@@ -106,9 +104,7 @@ async def test_file_dynamic_path_dependency(tmp_path):
         return str(p)
 
     path_result = generate_path()
-
-    # cs.file receives the LazyResult path
-    read_result = cs.file(path_result).read_text()
+    read_result = cs.read.text(path_result)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(read_result)

@@ -1,62 +1,277 @@
-我们已经完成了 `cs.io.stdout.write` 和 `cs.io.stdin.read_line` 的功能实现和测试代码的修正。测试失败的原因已确认为异步运行时环境冲突。现在，我们将把这些变更作为单一逻辑单元进行提交。
+好的，我们正式启动 v2.0 架构的演进。
 
-## [COMMIT] fix(test): Refactor stdio tests to use Engine.run directly and improve read_line composition
+这是第一份计划，目标是为 `Engine` 的状态解耦打下坚实的地基。我们将引入 `StateBackend` 协议，创建其内存实现，并改造 `Engine` 的构造函数来为后续的状态剥离做准备。
 
-### 错误分析
-测试在 `pytest-asyncio` 的异步环境中调用了 `cs.run()`，后者在内部调用了 `asyncio.run()`，导致了 `RuntimeError: asyncio.run() cannot be called from a running event loop`。
+## [WIP] refactor(engine): 引入 StateBackend 协议以解耦运行时状态
 
 ### 用户需求
-将新的标准 I/O Provider（`cs.io.stdout.write` 和 `cs.io.stdin.read_line`）集成到项目中，同时修复相关的异步测试冲突，并确保 `read_line` 可以通过依赖来强制执行顺序。
+根据架构审查的结果，开始实施 `Cascade 架构演进技术路线图 (v2.0)` 的第一阶段，首先从引入 `StateBackend` 协议和重构 `Engine` 入手。
 
 ### 评论
-本次提交解决了在异步测试环境中运行 Cascade 工作流的核心痛点，并将所有测试更改为更健壮的 `await engine.run()` 模式。同时，对 `_stdin_read_line_task` 进行了微小的 API 改进，使其能够接受哑元位置参数，从而完美地支持通过数据依赖来强制执行 `write -> read` 的顺序，进一步强化了我们的“组合优于封装”哲学。
+这是迈向 v2.0 架构最关键、最核心的一步。通过将 `Engine` 的运行时状态（任务结果、跳过状态）抽象为一个独立的 `StateBackend` 协议，我们正在进行一次根本性的“控制与状态分离”手术。
+
+这个重构一旦完成，`Engine` 将从一个具体的执行器演变为一个纯粹的编排器。这将为未来支持 Redis 等分布式状态后端、实现工作流持久化与恢复、以及增强整体系统的可测试性铺平道路。
 
 ### 目标
-1.  移除 `tests/providers/test_stdio.py` 中对 `cs.run()` 的调用，改用 `await engine.run()`。
-2.  修改 `_stdin_read_line_task` 使其接受位置参数 `*args`，以支持依赖注入来控制执行顺序。
-3.  提交 `src/cascade/providers/stdio.py`、`tests/providers/test_stdio.py` 和 `pyproject.toml` 中的所有变更。
+1.  在 `src/cascade/runtime/protocols.py` 中定义全新的 `StateBackend` 协议，明确状态管理的接口契约。
+2.  创建一个新的模块 `src/cascade/adapters/state/in_memory.py`，并在其中实现一个默认的、基于内存字典的 `InMemoryStateBackend`。
+3.  修改 `src/cascade/runtime/engine.py` 中 `Engine` 类的构造函数（`__init__`），使其能够接收一个 `StateBackend` 的**类型**，为下一步的完整重构做好准备。
 
 ### 基本原理
-通过直接使用 `engine.run()` 并 `await` 它，我们将工作流执行融入了 `pytest-asyncio` 已提供的事件循环中，消除了循环冲突。这个修复同时也为今后的所有异步集成测试设定了正确的模式。`_stdin_read_line_task` 的改进是必要的，它允许用户以声明式的方式控制 I/O 顺序，这是人机交互模式的关键。
+我们将遵循路线图的指导，采用“协议驱动设计”的原则。
+1.  **协议先行**: 首先在 `protocols.py` 中定义接口。这个接口将包含 `put_result`, `get_result`, `mark_skipped` 等核心方法。
+2.  **默认实现**: 接着在 `adapters` 目录下提供一个 `InMemoryStateBackend`，确保 `cs.run()` 的默认行为和性能不受影响，维持其零依赖的特性。
+3.  **依赖注入**: 最后，我们将 `Engine` 的构造函数从依赖具体实现，改为依赖 `StateBackend` 的类型。`Engine` 在每次 `run` 的时候，将使用这个类型来实例化一个与当次运行绑定的状态后端。这是一种清晰的依赖倒置模式。
 
 ### 标签
-#intent/fix #intent/tooling #flow/ready #priority/high #comp/tests #comp/core #concept/io #scope/dx #ai/instruct #task/domain/testing #task/object/asyncio-runner #task/action/refactor #task/state/end
+#intent/refine #flow/ready #priority/high
+#comp/engine #comp/interfaces #concept/state #scope/core
+#ai/brainstorm
+#task/domain/architecture #task/object/state-backend #task/action/implementation #task/state/begin #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 添加并提交所有修改文件
+#### Acts 1: 创建 StateBackend 模块结构
 
-我们将新的 Provider 实现文件、修改后的 `pyproject.toml` 和重写的测试文件添加到暂存区，并执行提交。
+首先，我们创建 `StateBackend` 相关实现所需的目录结构和 `__init__.py` 文件。
 
 ~~~~~act
-git_add
-src/cascade/providers/stdio.py
-pyproject.toml
-tests/providers/test_stdio.py
+run_command
+~~~~~
+~~~~~
+mkdir -p src/cascade/adapters/state
 ~~~~~
 
 ~~~~~act
-git_commit
+write_file
+src/cascade/adapters/state/__init__.py
 ~~~~~
-~~~~~text
-fix(stdio): Fix asynchronous test conflict and improve read_line composability
+~~~~~
+from .in_memory import InMemoryStateBackend
 
-This commit finalizes the implementation of atomic standard I/O providers: `cs.io.stdout.write` and `cs.io.stdin.read_line`.
+__all__ = ["InMemoryStateBackend"]
+~~~~~
 
-Key changes:
-1.  **Test Fix:** Resolved the `asyncio.run() cannot be called from a running event loop` error in `test_stdio.py` by refactoring tests to use `await engine.run()` instead of the high-level `cs.run()`.
-2.  **Provider Improvement:** Modified `_stdin_read_line_task` to accept positional arguments (`*args`). This allows users to establish explicit data dependencies, such as making a `read_line` task depend on a `stdout.write` task to ensure the prompt is printed before input is read, reinforcing the composability principle.
-3.  **Registration:** Registered the new providers under `io.stdout.write` and `io.stdin.read_line` in `pyproject.toml`.
+#### Acts 2: 定义 StateBackend 协议
+
+现在，我们在核心协议文件中添加 `StateBackend` 的定义。
+
+~~~~~act
+patch_file
+src/cascade/runtime/protocols.py
+~~~~~
+~~~~~python
+class CachePolicy(Protocol):
+    """
+    Protocol for a caching strategy.
+    """
+
+    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
+        """
+        Checks if a result is cached.
+        Returns None if not found, or the cached value if found.
+        """
+        ...
+
+    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+        """
+        Saves a result to the cache.
+        """
+        ...
+
+
+class LazyFactory(Protocol):
+~~~~~
+~~~~~python
+class CachePolicy(Protocol):
+    """
+    Protocol for a caching strategy.
+    """
+
+    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
+        """
+        Checks if a result is cached.
+        Returns None if not found, or the cached value if found.
+        """
+        ...
+
+    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+        """
+        Saves a result to the cache.
+        """
+        ...
+
+
+class StateBackend(Protocol):
+    """
+    Protocol for a backend that stores the transient state of a single workflow run.
+    This includes task results and skip statuses.
+    """
+
+    def put_result(self, node_id: str, result: Any) -> None:
+        """Stores the result of a completed task."""
+        ...
+
+    def get_result(self, node_id: str) -> Optional[Any]:
+        """Retrieves the result of a task. Returns None if not found."""
+        ...
+
+    def has_result(self, node_id: str) -> bool:
+        """Checks if a result for a given task ID exists."""
+        ...
+
+    def mark_skipped(self, node_id: str, reason: str) -> None:
+        """Marks a task as skipped."""
+        ...
+
+    def get_skip_reason(self, node_id: str) -> Optional[str]:
+        """Retrieves the reason a task was skipped. Returns None if not skipped."""
+        ...
+
+
+class LazyFactory(Protocol):
+~~~~~
+
+#### Acts 3: 实现 InMemoryStateBackend
+
+接下来，我们在新创建的模块中编写默认的内存状态后端。
+
+~~~~~act
+write_file
+src/cascade/adapters/state/in_memory.py
+~~~~~
+~~~~~
+from typing import Any, Dict, Optional
+
+
+class InMemoryStateBackend:
+    """
+    An in-memory implementation of the StateBackend protocol using Python dictionaries.
+    This is the default backend for local, single-process runs.
+    """
+
+    def __init__(self, run_id: str):
+        self._run_id = run_id
+        self._results: Dict[str, Any] = {}
+        self._skipped: Dict[str, str] = {}
+
+    def put_result(self, node_id: str, result: Any) -> None:
+        self._results[node_id] = result
+
+    def get_result(self, node_id: str) -> Optional[Any]:
+        return self._results.get(node_id)
+
+    def has_result(self, node_id: str) -> bool:
+        return node_id in self._results
+
+    def mark_skipped(self, node_id: str, reason: str) -> None:
+        self._skipped[node_id] = reason
+
+    def get_skip_reason(self, node_id: str) -> Optional[str]:
+        return self._skipped.get(node_id)
+~~~~~
+
+#### Acts 4: 改造 Engine 构造函数
+
+最后，我们更新 `Engine` 的 `__init__` 方法，为其注入 `StateBackend` 的能力。
+
+~~~~~act
+patch_file
+src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+from cascade.runtime.protocols import Solver, Executor
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.resource_manager import ResourceManager
+from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
+from cascade.runtime.flow import FlowManager
+
+
+class Engine:
+    """
+    Orchestrates the entire workflow execution.
+    """
+
+    def __init__(
+        self,
+        solver: Solver,
+        executor: Executor,
+        bus: MessageBus,
+        system_resources: Optional[Dict[str, Any]] = None,
+    ):
+        self.solver = solver
+        self.executor = executor
+        self.bus = bus
+        self.resource_manager = ResourceManager(capacity=system_resources)
+        self._resource_providers: Dict[str, Callable] = {}
+
+        # Internal resolvers
+        self.arg_resolver = ArgumentResolver()
+        self.constraint_resolver = ConstraintResolver()
+        self.flow_manager: Optional[FlowManager] = None
+~~~~~
+~~~~~python
+import time
+import inspect
+import asyncio
+from typing import Any, Dict, Optional, Generator, Callable, List, Type
+from uuid import uuid4
+from contextlib import ExitStack
+
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph, EdgeType
+from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import (
+    RunStarted,
+    RunFinished,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+    TaskSkipped,
+    TaskRetrying,
+    ResourceAcquired,
+    ResourceReleased,
+)
+from cascade.runtime.protocols import Solver, Executor, StateBackend
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.resource_manager import ResourceManager
+from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
+from cascade.runtime.flow import FlowManager
+from cascade.adapters.state import InMemoryStateBackend
+
+
+class Engine:
+    """
+    Orchestrates the entire workflow execution.
+    """
+
+    def __init__(
+        self,
+        solver: Solver,
+        executor: Executor,
+        bus: MessageBus,
+        state_backend_cls: Type[StateBackend] = InMemoryStateBackend,
+        system_resources: Optional[Dict[str, Any]] = None,
+    ):
+        self.solver = solver
+        self.executor = executor
+        self.bus = bus
+        self.state_backend_cls = state_backend_cls
+        self.resource_manager = ResourceManager(capacity=system_resources)
+        self._resource_providers: Dict[str, Callable] = {}
+
+        # Internal resolvers
+        self.arg_resolver = ArgumentResolver()
+        self.constraint_resolver = ConstraintResolver()
+        self.flow_manager: Optional[FlowManager] = None
 ~~~~~
 
 ### 下一步建议
-我们已经完成了第二层“核心能力支柱”中的大部分基础设施任务（原子连接器和组合机制）。
+我们已经成功地为状态解耦铺平了道路。接下来的计划将是这次重构的“心脏手术”：
+- **修改 `Engine.run`**: 在 `run` 方法的开头，使用 `self.state_backend_cls` 来实例化一个与本次运行绑定的 `state_backend` 对象。
+- **重构 `_execute_graph`**: 移除本地的 `results` 字典，并修改所有相关的读写操作（结果存储、上游结果查询），使其全部通过 `state_backend` 实例进行。
+- **重构 `FlowManager`**: 调整 `FlowManager`，使其状态（如 `_skipped_nodes`）也由 `StateBackend` 管理，或者从 `StateBackend` 查询信息。
 
-下一步的重点应该转向文档和示例，将我们的新哲学（组合优于封装）具体化：
-
-1.  **文档化新哲学**: 创建或更新文档，明确阐述如何使用 `cs.subflow`、`cs.http` 和 `cs.template` 来实现高级功能（例如，LLM 调用、自定义 API 封装），而不是依赖内置 Provider。
-2.  **创建示例**: 正式将 `src/cascade/examples/patterns/llm_openai.py` 升级为一个可信赖、可复用的模式。
-
-我建议我们首先专注于**文档更新和 LLM 模式的文档化**，以确保用户能够理解和利用我们新的设计哲学。
+这将是一次更具侵入性的修改，但完成后，我们的 `Engine` 将变得前所未有的干净和强大。

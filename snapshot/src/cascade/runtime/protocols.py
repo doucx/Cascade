@@ -50,6 +50,33 @@ class CachePolicy(Protocol):
         ...
 
 
+class StateBackend(Protocol):
+    """
+    Protocol for a backend that stores the transient state of a single workflow run.
+    This includes task results and skip statuses.
+    """
+
+    def put_result(self, node_id: str, result: Any) -> None:
+        """Stores the result of a completed task."""
+        ...
+
+    def get_result(self, node_id: str) -> Optional[Any]:
+        """Retrieves the result of a task. Returns None if not found."""
+        ...
+
+    def has_result(self, node_id: str) -> bool:
+        """Checks if a result for a given task ID exists."""
+        ...
+
+    def mark_skipped(self, node_id: str, reason: str) -> None:
+        """Marks a task as skipped."""
+        ...
+
+    def get_skip_reason(self, node_id: str) -> Optional[str]:
+        """Retrieves the reason a task was skipped. Returns None if not skipped."""
+        ...
+
+
 class LazyFactory(Protocol):
     """
     Protocol for any object that can produce a MappedLazyResult via a .map() method.

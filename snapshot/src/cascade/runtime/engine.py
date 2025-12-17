@@ -19,11 +19,33 @@ from cascade.runtime.events import (
     ResourceAcquired,
     ResourceReleased,
 )
-from cascade.runtime.protocols import Solver, Executor
+import time
+import inspect
+import asyncio
+from typing import Any, Dict, Optional, Generator, Callable, List, Type
+from uuid import uuid4
+from contextlib import ExitStack
+
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph, EdgeType
+from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import (
+    RunStarted,
+    RunFinished,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+    TaskSkipped,
+    TaskRetrying,
+    ResourceAcquired,
+    ResourceReleased,
+)
+from cascade.runtime.protocols import Solver, Executor, StateBackend
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
 from cascade.runtime.flow import FlowManager
+from cascade.adapters.state import InMemoryStateBackend
 
 
 class Engine:
@@ -36,11 +58,13 @@ class Engine:
         solver: Solver,
         executor: Executor,
         bus: MessageBus,
+        state_backend_cls: Type[StateBackend] = InMemoryStateBackend,
         system_resources: Optional[Dict[str, Any]] = None,
     ):
         self.solver = solver
         self.executor = executor
         self.bus = bus
+        self.state_backend_cls = state_backend_cls
         self.resource_manager = ResourceManager(capacity=system_resources)
         self._resource_providers: Dict[str, Callable] = {}
 

@@ -1,4 +1,4 @@
-from typing import Protocol, List, Any, Dict, Optional
+from typing import Protocol, List, Any, Dict, Optional, Callable, Awaitable
 from cascade.graph.model import Graph, Node
 
 # An execution plan is a list of stages, where each stage is a list of nodes
@@ -101,4 +101,27 @@ class LazyFactory(Protocol):
         """
         Creates a mapped lazy result by applying this factory over iterables.
         """
+        ...
+
+
+class Connector(Protocol):
+    """
+    Protocol for a connector that bridges the Cascade runtime with the outside world.
+    It's responsible for all non-business-logic I/O, primarily for telemetry and control.
+    """
+
+    async def connect(self) -> None:
+        """Establishes a connection to the external system (e.g., MQTT Broker)."""
+        ...
+
+    async def disconnect(self) -> None:
+        """Disconnects from the external system and cleans up resources."""
+        ...
+
+    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
+        """Publishes a message (e.g., a telemetry event) to a specific topic."""
+        ...
+
+    async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> None:
+        """Subscribes to a topic to receive messages (e.g., control commands)."""
         ...

@@ -19,7 +19,7 @@ from cascade.runtime.events import (
     ResourceAcquired,
     ResourceReleased,
 )
-from cascade.runtime.protocols import Solver, Executor, StateBackend
+from cascade.runtime.protocols import Solver, Executor, StateBackend, Connector
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
@@ -39,10 +39,12 @@ class Engine:
         bus: MessageBus,
         state_backend_cls: Type[StateBackend] = InMemoryStateBackend,
         system_resources: Optional[Dict[str, Any]] = None,
+        connector: Optional[Connector] = None,
     ):
         self.solver = solver
         self.executor = executor
         self.bus = bus
+        self.connector = connector
         self.state_backend_cls = state_backend_cls
         self.resource_manager = ResourceManager(capacity=system_resources)
         self._resource_providers: Dict[str, Callable] = {}
@@ -80,8 +82,11 @@ class Engine:
         
         state_backend = self.state_backend_cls(run_id=run_id)
 
-        with ExitStack() as stack:
-            try:
+        try:
+            if self.connector:
+                await self.connector.connect()
+
+            with ExitStack() as stack:
                 initial_graph = build_graph(target)
                 required_resources = self._scan_for_resources(initial_graph)
                 active_resources = self._setup_resources(
@@ -92,23 +97,26 @@ class Engine:
                     target, params or {}, active_resources, run_id, state_backend
                 )
 
-                duration = time.time() - start_time
-                self.bus.publish(
-                    RunFinished(run_id=run_id, status="Succeeded", duration=duration)
-                )
-                return final_result
+            duration = time.time() - start_time
+            self.bus.publish(
+                RunFinished(run_id=run_id, status="Succeeded", duration=duration)
+            )
+            return final_result
 
-            except Exception as e:
-                duration = time.time() - start_time
-                self.bus.publish(
-                    RunFinished(
-                        run_id=run_id,
-                        status="Failed",
-                        duration=duration,
-                        error=f"{type(e).__name__}: {e}",
-                    )
+        except Exception as e:
+            duration = time.time() - start_time
+            self.bus.publish(
+                RunFinished(
+                    run_id=run_id,
+                    status="Failed",
+                    duration=duration,
+                    error=f"{type(e).__name__}: {e}",
                 )
-                raise
+            )
+            raise
+        finally:
+            if self.connector:
+                await self.connector.disconnect()
 
     async def _execute_graph(
         self,

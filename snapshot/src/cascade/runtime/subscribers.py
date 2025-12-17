@@ -1,3 +1,7 @@
+import platform
+import os
+import time
+from datetime import datetime, timezone
 from .bus import MessageBus
 from ..messaging.bus import bus as messaging_bus
 from .events import (
@@ -7,7 +11,12 @@ from .events import (
     TaskExecutionFinished,
     TaskSkipped,
     TaskRetrying,
+    Event,
+    ResourceAcquired,
+    ResourceReleased,
 )
+from ..spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
+from .protocols import Connector
 
 
 class HumanReadableLogSubscriber:
@@ -58,3 +67,60 @@ class HumanReadableLogSubscriber:
             delay=event.delay,
             error=event.error
         )
+
+
+class TelemetrySubscriber:
+    """
+    Listens to runtime events and publishes them as structured telemetry
+    data via a Connector.
+    """
+    def __init__(self, event_bus: MessageBus, connector: Connector):
+        self._connector = connector
+        self._source_id = f"{platform.node()}-{os.getpid()}"
+        event_bus.subscribe(Event, self.on_event)
+
+    def _create_header(self, run_id: str) -> dict:
+        return {
+            "v": "1.0",
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "run_id": run_id,
+            "org_id": os.getenv("CASCADE_ORG_ID", "local"),
+            "project_id": os.getenv("CASCADE_PROJECT_ID", "default"),
+            "source": self._source_id,
+        }
+
+    async def on_event(self, event: Event):
+        if not event.run_id:
+            return
+
+        payload = self._create_header(event.run_id)
+        topic = f"cascade/telemetry/{payload['org_id']}/{payload['project_id']}/{event.run_id}/events"
+        
+        event_body = {}
+        if isinstance(event, (TaskExecutionStarted, TaskExecutionFinished, TaskSkipped)):
+            state_map = {
+                TaskExecutionStarted: "RUNNING",
+                TaskExecutionFinished: "COMPLETED" if event.status == "Succeeded" else "FAILED",
+                TaskSkipped: "SKIPPED",
+            }
+            event_body = {
+                "type": "TaskStateEvent",
+                "task_id": event.task_id,
+                "task_name": event.task_name,
+                "state": state_map[type(event)],
+                "duration_ms": getattr(event, 'duration', 0) * 1000,
+                "error": getattr(event, 'error', None) or "",
+            }
+
+        elif isinstance(event, RunStarted):
+             event_body = {"type": "LifecycleEvent", "event": "ENGINE_STARTED"}
+        
+        elif isinstance(event, RunFinished):
+             event_body = {"type": "LifecycleEvent", "event": "ENGINE_STOPPED"}
+        
+        # We can add more event types like ResourceEvent later
+
+        if event_body:
+            payload["body"] = event_body
+            # Fire-and-forget publish
+            asyncio.create_task(self._connector.publish(topic, payload))

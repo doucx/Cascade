@@ -20,8 +20,9 @@ from .internal.inputs import _get_param_value, _get_env_var
 # Runtime
 from .runtime.engine import Engine
 from .runtime.bus import MessageBus
-from .runtime.subscribers import HumanReadableLogSubscriber
+from .runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
 from .runtime.exceptions import DependencyMissingError
+from .runtime.protocols import Connector
 from .adapters.solvers.native import NativeSolver
 from .adapters.executors.local import LocalExecutor
 
@@ -88,6 +89,7 @@ def run(
     system_resources: Optional[Dict[str, Any]] = None,
     log_level: str = "INFO",
     log_format: str = "human",
+    connector: Optional[Connector] = None,
 ) -> Any:
     """
     Runs a Cascade workflow with a default engine configuration.
@@ -101,8 +103,11 @@ def run(
 
     # 2. Setup the event system
     event_bus = MessageBus()
-    # Attach the translator
+    # Attach the human-readable log translator
     HumanReadableLogSubscriber(event_bus)
+    # Attach the telemetry publisher if a connector is provided
+    if connector:
+        TelemetrySubscriber(event_bus, connector)
 
     # 3. Assemble the default Engine
     solver = NativeSolver()
@@ -113,6 +118,7 @@ def run(
         executor=executor,
         bus=event_bus,
         system_resources=system_resources,
+        connector=connector,
     )
 
     return asyncio.run(engine.run(target, params=params))

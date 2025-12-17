@@ -58,6 +58,11 @@ sql = "cascade.providers.sql:SqlProvider"
 file = "cascade.providers.file:FileProvider"
 load_yaml = "cascade.providers.config:YamlLoaderProvider"
 lookup = "cascade.providers.config:LookupProvider"
+"read.text" = "cascade.providers.io:ReadTextProvider"
+"read.bytes" = "cascade.providers.io:ReadBytesProvider"
+"write.text" = "cascade.providers.io:WriteTextProvider"
+"write.bytes" = "cascade.providers.io:WriteBytesProvider"
+"fs.exists" = "cascade.providers.io:FsExistsProvider"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

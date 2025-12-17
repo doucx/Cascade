@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(runtime): 验证 map 结果直接传递给下游任务", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765965891.7834687, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(providers): 引入原子化 IO Provider 与命名空间支持", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765965982.0558798, "duration_ms": 0}}

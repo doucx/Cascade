@@ -1,33 +1,229 @@
 简要回答
-当前的 `Engine` 实现理论上已经支持将 `.map()` 的结果直接传递给下游任务。为了确认这一点并决定是否需要调整路线图，我将先创建一个针对性的测试用例。如果测试通过，说明现有的递归执行模型已经满足需求，该路线图步骤可能是不必要的优化或基于过时假设。
+好的，我们开始实施第二部分：统一 Provider API。我们将首先升级 `ProviderRegistry` 以支持命名空间（如 `cs.read.text`），并实现原子化的 I/O Provider。
 
-## [WIP] test(runtime): 验证 map 结果直接传递给下游任务
+## [WIP] feat(providers): 引入原子化 IO Provider 与命名空间支持
 
 ### 用户需求
-验证 Cascade 当前是否支持将 `.map()` 操作生成的 `MappedLazyResult` 直接作为参数传递给下游聚合任务（如 `sum`），并正确解析为结果列表。
+用户目前使用 `cs.file("path").read_text()` 这种双重调用的 API，这与其他 Provider 不一致。用户期望使用更扁平、原子化的 API，如 `cs.read.text("path")` 或 `cs.fs.exists("path")`，这要求系统支持嵌套的 Provider 命名空间。
 
 ### 评论
-路线图的第二部分假设此操作目前会失败。我需要通过“实地考察”来验证这个假设。如果测试通过，我们将节省大量重构时间；如果失败，我们将获得明确的调试线索来实现该修复。
+为了实现 `cs.read.text` 这样的调用链，我们需要让 `ProviderRegistry` 具备“部分匹配”的能力：当请求 `read` 且不存在直接对应的 Provider 时，应该返回一个能继续解析后续属性（如 `.text`）的命名空间代理对象。同时，我们需要新建 `io.py` 来承载这些新的原子操作。
 
 ### 目标
-编写并运行一个测试，该测试构建一个 `Source -> Map -> Reduce` 的工作流，验证端到端的执行正确性。
+1.  **Core**: 升级 `ProviderRegistry`，使其支持返回 `ProviderNamespace` 代理对象。
+2.  **Feature**: 创建 `src/cascade/providers/io.py`，实现 `read.text`, `read.bytes`, `write.text` 等原子 Provider。
+3.  **Config**: 更新 `pyproject.toml` 注册新的 entry points。
+4.  **Test**: 添加测试验证新 API 的可用性。
 
 ### 基本原理
-实践是检验真理的唯一标准。在着手修改核心图构建逻辑之前，先通过测试确立基线行为是明智的工程实践。
+通过在 `ProviderRegistry.get` 中检测前缀匹配（例如请求 `read` 时发现存在 `read.text`），我们可以动态返回一个 `Namespace` 对象。该对象重载了 `__getattr__`，将属性访问拼接成完整的 Provider 名称（`read` + `.text`）后再次回调 Registry，从而实现无限层级的命名空间支持。
 
 ### 标签
-#intent/tooling #flow/draft #priority/high #comp/tests #concept/map-reduce #scope/core #ai/instruct #task/domain/testing #task/object/map-integration #task/action/verification #task/state/continue
+#intent/build #flow/ready #priority/high #comp/core #comp/runtime #concept/provider #scope/api #ai/instruct #task/domain/core #task/object/provider-namespace #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建验证测试
-创建一个新的测试文件 `tests/runtime/test_map_reduce_integration.py`。
+#### Acts 1: 升级 `ProviderRegistry` 支持命名空间
+修改 `src/cascade/providers/__init__.py`，引入 `ProviderNamespace` 类并更新 `get` 方法的查找逻辑。
+
+~~~~~act
+patch_file
+src/cascade/providers/__init__.py
+~~~~~
+~~~~~python
+class ProviderRegistry:
+    """
+    Manages the discovery and loading of Cascade providers.
+    """
+
+    _instance = None
+
+    def __init__(self):
+        self._providers: Dict[str, LazyFactory] = {}
+        self._loaded = False
+
+    @classmethod
+    def instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def get(self, name: str) -> LazyFactory:
+        """
+        Retrieves a provider factory by name. Loads from entry points if not yet loaded.
+        Raises AttributeError if not found (to conform with __getattr__ semantics).
+        """
+        if not self._loaded:
+            self._discover_entry_points()
+            self._loaded = True
+
+        if name not in self._providers:
+            raise AttributeError(f"Cascade provider '{name}' not found.")
+
+        return self._providers[name]
+
+    def register(self, name: str, factory: LazyFactory):
+~~~~~
+~~~~~python
+class ProviderNamespace:
+    """
+    A proxy object to handle nested provider names (e.g. cs.read.text).
+    """
+    def __init__(self, registry: "ProviderRegistry", prefix: str):
+        self._registry = registry
+        self._prefix = prefix
+
+    def __getattr__(self, name: str) -> Any:
+        full_name = f"{self._prefix}.{name}"
+        return self._registry.get(full_name)
+
+
+class ProviderRegistry:
+    """
+    Manages the discovery and loading of Cascade providers.
+    """
+
+    _instance = None
+
+    def __init__(self):
+        self._providers: Dict[str, LazyFactory] = {}
+        self._loaded = False
+
+    @classmethod
+    def instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def get(self, name: str) -> Any:
+        """
+        Retrieves a provider factory by name. Loads from entry points if not yet loaded.
+        Raises AttributeError if not found (to conform with __getattr__ semantics).
+        """
+        if not self._loaded:
+            self._discover_entry_points()
+            self._loaded = True
+
+        if name in self._providers:
+            return self._providers[name]
+
+        # Check for namespace match (e.g. asking for 'read' when 'read.text' exists)
+        prefix = name + "."
+        if any(key.startswith(prefix) for key in self._providers):
+            return ProviderNamespace(self, name)
+
+        raise AttributeError(f"Cascade provider '{name}' not found.")
+
+    def register(self, name: str, factory: LazyFactory):
+~~~~~
+
+#### Acts 2: 实现原子化 IO Provider
+创建 `src/cascade/providers/io.py`，定义新的原子任务和对应的 Provider 类。
 
 ~~~~~act
 write_file
-tests/runtime/test_map_reduce_integration.py
+src/cascade/providers/io.py
+~~~~~
+~~~~~python
+import asyncio
+import os
+from typing import Any, Union
+from cascade.spec.task import task
+from cascade.providers import LazyFactory, Provider
+
+# --- Async IO Tasks ---
+
+@task(name="read_text")
+async def _read_text_task(path: str, encoding: str = "utf-8") -> str:
+    def blocking_read():
+        with open(path, "r", encoding=encoding) as f:
+            return f.read()
+    return await asyncio.to_thread(blocking_read)
+
+@task(name="read_bytes")
+async def _read_bytes_task(path: str) -> bytes:
+    def blocking_read():
+        with open(path, "rb") as f:
+            return f.read()
+    return await asyncio.to_thread(blocking_read)
+
+@task(name="write_text")
+async def _write_text_task(path: str, content: str, encoding: str = "utf-8") -> None:
+    def blocking_write():
+        with open(path, "w", encoding=encoding) as f:
+            f.write(content)
+    await asyncio.to_thread(blocking_write)
+
+@task(name="write_bytes")
+async def _write_bytes_task(path: str, content: bytes) -> None:
+    def blocking_write():
+        with open(path, "wb") as f:
+            f.write(content)
+    await asyncio.to_thread(blocking_write)
+
+@task(name="fs_exists")
+async def _exists_task(path: str) -> bool:
+    return await asyncio.to_thread(os.path.exists, path)
+
+# --- Providers ---
+
+class ReadTextProvider(Provider):
+    name = "read.text"
+    def create_factory(self) -> LazyFactory:
+        return _read_text_task
+
+class ReadBytesProvider(Provider):
+    name = "read.bytes"
+    def create_factory(self) -> LazyFactory:
+        return _read_bytes_task
+
+class WriteTextProvider(Provider):
+    name = "write.text"
+    def create_factory(self) -> LazyFactory:
+        return _write_text_task
+
+class WriteBytesProvider(Provider):
+    name = "write.bytes"
+    def create_factory(self) -> LazyFactory:
+        return _write_bytes_task
+
+class FsExistsProvider(Provider):
+    name = "fs.exists"
+    def create_factory(self) -> LazyFactory:
+        return _exists_task
+~~~~~
+
+#### Acts 3: 注册新 Provider
+修改 `pyproject.toml`，将新的 Provider 注册到 Entry Points。
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~toml
+lookup = "cascade.providers.config:LookupProvider"
+
+[tool.hatch.build.targets.wheel]
+~~~~~
+~~~~~toml
+lookup = "cascade.providers.config:LookupProvider"
+"read.text" = "cascade.providers.io:ReadTextProvider"
+"read.bytes" = "cascade.providers.io:ReadBytesProvider"
+"write.text" = "cascade.providers.io:WriteTextProvider"
+"write.bytes" = "cascade.providers.io:WriteBytesProvider"
+"fs.exists" = "cascade.providers.io:FsExistsProvider"
+
+[tool.hatch.build.targets.wheel]
+~~~~~
+
+#### Acts 4: 添加 IO Provider 测试
+创建 `tests/providers/test_io.py`。
+
+~~~~~act
+write_file
+tests/providers/test_io.py
 ~~~~~
 ~~~~~python
 import pytest
@@ -35,43 +231,64 @@ import cascade as cs
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 
-@cs.task
-def generate_range(n: int) -> list[int]:
-    return list(range(n))
-
-@cs.task
-def double(x: int) -> int:
-    return x * 2
-
-@cs.task
-def sum_all(numbers: list[int]) -> int:
-    return sum(numbers)
+@pytest.fixture
+def test_file(tmp_path):
+    return tmp_path / "test.txt"
 
 @pytest.mark.asyncio
-async def test_map_reduce_pipeline():
-    """
-    Test the flow: generate -> map(double) -> sum_all.
-    This verifies if a MappedLazyResult can be passed directly to a downstream task
-    and is correctly resolved as a list of values.
-    """
-    # 1. Generate dynamic input: [0, 1, 2, 3, 4]
-    nums = generate_range(5)
+async def test_read_text_provider(test_file):
+    test_file.write_text("hello cascade")
     
-    # 2. Map: [0, 2, 4, 6, 8]
-    doubled_nums = double.map(x=nums)
-    
-    # 3. Reduce: 20
-    # Here doubled_nums is a MappedLazyResult. 
-    # The engine must resolve this to [0, 2, 4, 6, 8] before calling sum_all.
-    total = sum_all(numbers=doubled_nums)
+    # cs.read.text matches "read.text" provider
+    lazy = cs.read.text(str(test_file))
     
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
-    result = await engine.run(total)
+    result = await engine.run(lazy)
+    assert result == "hello cascade"
+
+@pytest.mark.asyncio
+async def test_write_text_provider(test_file):
+    # cs.write.text matches "write.text" provider
+    lazy = cs.write.text(str(test_file), "written by cascade")
     
-    assert result == 20
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    await engine.run(lazy)
+    
+    assert test_file.read_text() == "written by cascade"
+
+@pytest.mark.asyncio
+async def test_fs_exists_provider(test_file):
+    # cs.fs.exists matches "fs.exists" provider
+    lazy_true = cs.fs.exists(str(test_file))
+    lazy_false = cs.fs.exists(str(test_file) + ".missing")
+    
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    
+    test_file.touch()
+    assert await engine.run(lazy_true) is True
+    assert await engine.run(lazy_false) is False
+
+def test_provider_registry_namespace_resolution():
+    """Verify that accessing intermediate namespaces returns a proxy."""
+    # This requires the entry points to be loaded. 
+    # Since we are in a test env, we might need to rely on the fact that 'cs' import loaded them 
+    # or that we registered them via pyproject.toml (if installed in editable mode).
+    # If not installed, we can manually register for this unit test.
+    
+    from cascade.providers import registry, ProviderNamespace
+    from cascade.providers.io import ReadTextProvider
+    
+    # Manual registration to ensure test isolation
+    registry.register("read.text", ReadTextProvider().create_factory())
+    
+    # Access "read" -> should return Namespace
+    ns = registry.get("read")
+    assert isinstance(ns, ProviderNamespace)
+    
+    # Access "read.text" -> should return factory
+    factory = ns.text
+    assert factory.__name__ == "read_text" # Task name from @task
 ~~~~~
 
 ### 下一步建议
-根据测试结果：
-1.  **如果通过**: 说明现有的 Engine 逻辑（递归执行并返回列表）已经能够处理这种情况。我们可以跳过“隐式 Gather 节点”的开发，直接进入路线图的下一部分（第二部分：统一 Provider API）。
-2.  **如果失败**: 分析错误原因，如果是类型错误（传入了 `MappedLazyResult` 对象而不是列表），则按照原计划实施 `GraphBuilder` 的修改。
+测试通过后，我们将执行路线图的下一步：**废弃旧的 `cs.file` 并更新代码库**。这包括删除旧文件并全局替换引用。

@@ -3,6 +3,8 @@ import cascade as cs
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.engine import Engine
 from cascade.runtime.events import Event, TaskSkipped
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 
 class SpySubscriber:
@@ -33,7 +35,7 @@ async def test_run_if_true():
 
     bus = MessageBus()
     spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     result = await engine.run(flow)
     assert result == "executed"
@@ -56,7 +58,7 @@ async def test_run_if_false():
 
     bus = MessageBus()
     spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     # Now asserts DependencyMissingError instead of KeyError
     with pytest.raises(cs.DependencyMissingError):
@@ -92,7 +94,7 @@ async def test_cascade_skip():
 
     bus = MessageBus()
     spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     # Now asserts DependencyMissingError instead of KeyError
     with pytest.raises(cs.DependencyMissingError):

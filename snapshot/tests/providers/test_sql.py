@@ -74,7 +74,7 @@ async def test_sql_missing_resource():
 
     target = cs.sql("SELECT 1", db="non_existent_db")
 
-    engine = cs.Engine()
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     # We don't register anything
 
     # Should fail during execution when trying to resolve the Inject object

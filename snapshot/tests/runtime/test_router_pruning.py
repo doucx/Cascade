@@ -3,6 +3,8 @@ import cascade as cs
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.engine import Engine
 from cascade.runtime.events import Event, TaskSkipped
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 class SpySubscriber:
     def __init__(self, bus: MessageBus):
@@ -56,7 +58,7 @@ async def test_pruning_exclusive_branches():
 
     bus = MessageBus()
     spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     result = await engine.run(workflow)
     assert result == "A"
@@ -111,7 +113,7 @@ async def test_pruning_shared_dependency():
 
     bus = MessageBus()
     spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     result = await engine.run(workflow)
     assert result == "A(SHARED)"

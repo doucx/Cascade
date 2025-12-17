@@ -1,6 +1,8 @@
 import pytest
 import cascade as cs
 import aiohttp
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 # Mark all tests in this module to be skipped if aiohttp is not installed
 pytest.importorskip("aiohttp")
@@ -39,7 +41,7 @@ async def test_http_get_success(aiohttp_client):
     # 3. Run and Assert
     # Since we are already in an async test loop, we use the Engine directly
     # instead of cs.run() which tries to create a new loop via asyncio.run()
-    engine = cs.Engine()
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(final_result)
     assert result == "cascade"
 
@@ -82,6 +84,6 @@ async def test_http_with_template(aiohttp_client):
     final_status = get_status(api_response)
 
     # 3. Run and Assert
-    engine = cs.Engine()
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(final_status, params={"username": "dynamic_user"})
     assert result == "ok"

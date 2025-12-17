@@ -18,11 +18,13 @@ class FlowManager:
         self.target_node_id = target_node_id
         
         self.in_edges: Dict[str, List[Edge]] = defaultdict(list)
+        self.out_edges: Dict[str, List[Edge]] = defaultdict(list)
         self.routers_by_selector: Dict[str, List[Edge]] = defaultdict(list)
         self.route_source_map: Dict[str, Dict[str, Any]] = defaultdict(dict)
         
         for edge in self.graph.edges:
             self.in_edges[edge.target.id].append(edge)
+            self.out_edges[edge.source.id].append(edge)
             
             if edge.router:
                 selector_id = self._get_obj_id(edge.router.selector)

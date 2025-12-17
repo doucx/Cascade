@@ -71,8 +71,11 @@ async def test_pruning_exclusive_branches():
     assert "branch_b_upstream" in skipped_names
     
     # Verify reasons
-    for e in skipped:
-        assert e.reason == "Pruned"
+    reason_b = next(e.reason for e in skipped if e.task_name == "branch_b")
+    reason_b_up = next(e.reason for e in skipped if e.task_name == "branch_b_upstream")
+    
+    assert reason_b == "Pruned_UnselectedRoute"
+    assert reason_b_up == "Pruned_AllDownstreamSkipped"
 
 
 @pytest.mark.asyncio

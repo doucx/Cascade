@@ -65,7 +65,12 @@ class Engine:
     async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
-        target_name = getattr(target.task, "name", "unknown")
+        
+        from cascade.spec.lazy_types import MappedLazyResult
+        if isinstance(target, MappedLazyResult):
+            target_name = getattr(target.factory, "name", "mapped_factory")
+        else:
+            target_name = getattr(target.task, "name", "unknown_task")
 
         self.bus.publish(
             RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})

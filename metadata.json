@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "错误分析", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765971396.0079703, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(test): Refactor stdio tests to use Engine.run directly and improve read_line composition", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765971431.5499759, "duration_ms": 0}}

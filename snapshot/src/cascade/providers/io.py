@@ -64,3 +64,20 @@ class FsExistsProvider(Provider):
     name = "fs.exists"
     def create_factory(self) -> LazyFactory:
         return _exists_task
+
+# --- New io.local.* Aliases ---
+
+class IoLocalReadTextProvider(ReadTextProvider):
+    name = "io.local.read_text"
+
+class IoLocalReadBytesProvider(ReadBytesProvider):
+    name = "io.local.read_bytes"
+
+class IoLocalWriteTextProvider(WriteTextProvider):
+    name = "io.local.write_text"
+
+class IoLocalWriteBytesProvider(WriteBytesProvider):
+    name = "io.local.write_bytes"
+
+class IoLocalExistsProvider(FsExistsProvider):
+    name = "io.local.exists"

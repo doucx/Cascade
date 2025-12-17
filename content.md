@@ -1,85 +1,264 @@
-简要回答
-好的，我们已经顺利完成了路线图 **Layer 1** 的所有任务。通过重塑 `.map` 操作、统一 Provider API 以及完善可视化与文档，我们已经为 Cascade 的开发者体验奠定了坚实的基础。
+这是一个非常核心的基础设施升级任务。将 I/O 操作统一到 `cs.io` 命名空间下不仅能提高 API 的一致性，也为后续扩展更多存储后端（如 S3, GCS, Azure Blob）奠定了清晰的结构基础。
 
-现在，我将生成最终的 `[COMMIT]` 计划，将这些变更作为一个逻辑整体提交。
+我将生成一个计划，通过引入 `io.local.*` 和 `io.s3.*` 来实现这一目标，并更新项目配置以支持这些变更。
 
-## [COMMIT] feat(dx): 构建 Cascade 开发者体验地基 (Layer 1)
+## [WIP] feat: 统一 I/O 命名空间至 cs.io 并添加 S3 支持
 
 ### 用户需求
-执行路线图 Layer 1 的最终提交。这包括：
-1. 使 `.map()` 支持策略链式调用并实现自动传播。
-2. 统一 Provider API，引入原子化 IO 接口并支持命名空间（如 `cs.read.text`）。
-3. 废弃并移除旧的 `cs.file` 接口。
-4. 增强可视化测试并完善核心概念文档。
+1.  **命名空间统一**: 将现有的本地文件操作（原 `cs.read.*`, `cs.write.*`）映射到新的统一命名空间 `cs.io.local.*` 下，以规范 API。
+2.  **S3 支持**: 引入 `cs.io.s3.*` Provider，支持对 AWS S3 对象存储的读写操作，作为 Cascade 扩展性的验证。
+3.  **基础设施更新**: 更新 `pyproject.toml` 以注册新的 Provider 入口点并管理新的可选依赖（`aiobotocore`）。
 
 ### 评论
-本次提交标志着 Cascade 迈向成熟的重要一步。我们不仅消除了 API 中的不一致性（“惊奇”），还通过自动化的策略传播和级联跳过逻辑，使系统的行为更加符合用户的直觉。
+这个变更严格遵循了“提供者组合优于封装”的原则。S3 Provider 被设计为原子化的 `read` 和 `write` 操作，这意味着它们可以像本地文件操作一样被轻易地组合进任何工作流中。同时，通过继承现有的 `io` Provider 来实现 `io.local`，我们保持了代码的 DRY (Don't Repeat Yourself) 并确保了向后兼容性。
 
 ### 目标
-执行 Git 提交，持久化 Layer 1 的所有工作成果。
+1.  在 `src/cascade/providers/io.py` 中通过继承创建新的 `io.local.*` Provider 类。
+2.  创建 `src/cascade/providers/s3.py`，实现基于 `aiobotocore` 的 S3 读写能力。
+3.  更新 `pyproject.toml`，添加 `s3` 依赖组，并注册上述所有新 Provider。
 
 ### 基本原理
-按照规范，所有的文件修改已在之前的 `[WIP]` 计划中完成并经过验证。现在的任务是将其归档到版本控制系统中。
+- **命名空间策略**: 使用 `.` 分隔的命名空间（如 `io.local.read_text`）配合 Cascade 的 `ProviderNamespace` 机制，可以自然地形成层级化的 API (`cs.io.local.read_text`)。
+- **延迟加载**: S3 的依赖（`aiobotocore`）比较重，因此必须在 Provider 的 `create_factory` 方法中进行导入检查，确保未安装该依赖的用户不受影响。
+- **兼容性**: 我们暂时保留旧的 `read.text` 等入口点，但在文档和新代码中推荐使用 `io.local`。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/core #comp/providers #comp/docs #scope/api #scope/dx #ai/instruct #task/domain/core #task/object/dx-foundation #task/action/completion #task/state/end
+#intent/build #flow/ready #priority/high #comp/providers #scope/api #task/domain/storage #task/object/io-provider #task/action/integration #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交变更
+#### Acts 1: 扩展本地 IO Provider 以支持新命名空间
 
-我们将所有修改过的源文件、测试文件以及新增的文档添加到暂存区，并执行一个详尽的提交。
+我们在 `src/cascade/providers/io.py` 中定义新的 Provider 子类。它们继承自现有的实现，唯一的区别是 `name` 属性变更为 `io.local.*` 前缀。
 
 ~~~~~act
-git_add
-src/cascade/spec/lazy_types.py
-src/cascade/spec/task.py
-src/cascade/graph/build.py
-src/cascade/runtime/engine.py
-src/cascade/providers/__init__.py
+patch_file
 src/cascade/providers/io.py
+~~~~~
+~~~~~python
+class FsExistsProvider(Provider):
+    name = "fs.exists"
+    def create_factory(self) -> LazyFactory:
+        return _exists_task
+~~~~~
+~~~~~python
+class FsExistsProvider(Provider):
+    name = "fs.exists"
+    def create_factory(self) -> LazyFactory:
+        return _exists_task
+
+# --- New io.local.* Aliases ---
+
+class IoLocalReadTextProvider(ReadTextProvider):
+    name = "io.local.read_text"
+
+class IoLocalReadBytesProvider(ReadBytesProvider):
+    name = "io.local.read_bytes"
+
+class IoLocalWriteTextProvider(WriteTextProvider):
+    name = "io.local.write_text"
+
+class IoLocalWriteBytesProvider(WriteBytesProvider):
+    name = "io.local.write_bytes"
+
+class IoLocalExistsProvider(FsExistsProvider):
+    name = "io.local.exists"
+~~~~~
+
+#### Acts 2: 创建 S3 Provider
+
+我们创建一个新的模块 `src/cascade/providers/s3.py`。它使用 `aiobotocore` 来实现异步的 S3 操作。为了保持原子性，Provider 不处理凭证逻辑，而是依赖 `botocore` 的标准凭证链（环境变量、配置文件、IAM 角色等）。
+
+~~~~~act
+write_file
+src/cascade/providers/s3.py
+~~~~~
+~~~~~python
+import asyncio
+from typing import Any, Optional
+from cascade.spec.task import task
+from cascade.providers import LazyFactory, Provider
+
+try:
+    import aiobotocore.session
+except ImportError:
+    aiobotocore = None
+
+
+class S3ProviderBase(Provider):
+    """Base class for S3 providers handling dependency checks."""
+    
+    def _check_dependency(self):
+        if aiobotocore is None:
+            raise ImportError(
+                "The 'aiobotocore' library is required to use S3 providers. "
+                "Please install it with: pip install cascade-py[s3]"
+            )
+
+# --- Tasks ---
+
+@task(name="s3_read_text")
+async def _s3_read_text(bucket: str, key: str, encoding: str = "utf-8") -> str:
+    session = aiobotocore.session.get_session()
+    async with session.create_client("s3") as client:
+        response = await client.get_object(Bucket=bucket, Key=key)
+        async with response["Body"] as stream:
+            data = await stream.read()
+            return data.decode(encoding)
+
+
+@task(name="s3_read_bytes")
+async def _s3_read_bytes(bucket: str, key: str) -> bytes:
+    session = aiobotocore.session.get_session()
+    async with session.create_client("s3") as client:
+        response = await client.get_object(Bucket=bucket, Key=key)
+        async with response["Body"] as stream:
+            return await stream.read()
+
+
+@task(name="s3_write_text")
+async def _s3_write_text(bucket: str, key: str, content: str, encoding: str = "utf-8") -> None:
+    data = content.encode(encoding)
+    session = aiobotocore.session.get_session()
+    async with session.create_client("s3") as client:
+        await client.put_object(Bucket=bucket, Key=key, Body=data)
+
+
+@task(name="s3_write_bytes")
+async def _s3_write_bytes(bucket: str, key: str, content: bytes) -> None:
+    session = aiobotocore.session.get_session()
+    async with session.create_client("s3") as client:
+        await client.put_object(Bucket=bucket, Key=key, Body=content)
+
+
+# --- Providers ---
+
+class S3ReadTextProvider(S3ProviderBase):
+    name = "io.s3.read_text"
+    
+    def create_factory(self) -> LazyFactory:
+        self._check_dependency()
+        return _s3_read_text
+
+
+class S3ReadBytesProvider(S3ProviderBase):
+    name = "io.s3.read_bytes"
+    
+    def create_factory(self) -> LazyFactory:
+        self._check_dependency()
+        return _s3_read_bytes
+
+
+class S3WriteTextProvider(S3ProviderBase):
+    name = "io.s3.write_text"
+    
+    def create_factory(self) -> LazyFactory:
+        self._check_dependency()
+        return _s3_write_text
+
+
+class S3WriteBytesProvider(S3ProviderBase):
+    name = "io.s3.write_bytes"
+    
+    def create_factory(self) -> LazyFactory:
+        self._check_dependency()
+        return _s3_write_bytes
+~~~~~
+
+#### Acts 3: 注册 Provider 并更新依赖
+
+更新 `pyproject.toml`，注册新的 `io.local.*` 和 `io.s3.*` 入口点，并添加 `aiobotocore` 到依赖列表。同时，为了方便测试，我们也将 `moto` 添加到 dev 依赖中。
+
+~~~~~act
+patch_file
 pyproject.toml
-tests/runtime/test_map_policies.py
-tests/runtime/test_map_reduce_integration.py
-tests/providers/test_io.py
-tests/providers/test_file.py
-tests/tools/test_visualize.py
-docs/concepts/control_vs_data_flow.md
-docs/how-to-guides/dependency-injection.md
+~~~~~
+~~~~~toml
+  "pytest-aiohttp",
+  "typer[all]",
+  "mkdocs",
+~~~~~
+~~~~~toml
+  "pytest-aiohttp",
+  "moto[s3]",
+  "typer[all]",
+  "mkdocs",
 ~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+pyproject.toml
 ~~~~~
-~~~~~text
-feat(dx): implement Layer 1 of Developer Experience roadmap
+~~~~~toml
+config = ["PyYAML"]
+csp_solver = ["python-constraint"]
 
-This major update refines the core APIs and runtime behaviors to ensure 
-consistency, predictability, and better developer experience.
+# 新增一个 'all' 组，方便一键安装所有可选依赖
+all = [
+  "jinja2",
+  "aiohttp",
+  "sqlalchemy",
+  "typer[all]",
+  "PyYAML",
+  "python-constraint",
+]
 
-Key Improvements:
-1.  **Enhanced `.map()` Policies**: 
-    - `MappedLazyResult` now supports `.with_retry()`, `.with_cache()`, and `.with_constraints()`.
-    - Engine automatically propagates these policies from the map node to all dynamically generated sub-tasks.
-2.  **Unified Provider API**:
-    - Upgraded `ProviderRegistry` to support nested namespaces (e.g., `cs.read.text`).
-    - Introduced atomic IO providers: `read.text`, `read.bytes`, `write.text`, `write.bytes`, and `fs.exists`.
-    - Removed the legacy and inconsistent `cs.file()` API.
-3.  **Refined Control Flow**:
-    - Verified and documented 'Cascading Skip' logic where skipped upstreams lead to downstream skipping with clear reasons.
-    - Improved `TaskSkipped` event with semantic reason IDs.
-4.  **Observability & Documentation**:
-    - Enhanced `cs.visualize()` to distinctively style data, condition, and constraint edges.
-    - Added comprehensive documentation on Control vs Data Flow and Dependency Injection patterns.
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+template = "cascade.providers.template:TemplateProvider"
+http = "cascade.providers.http:HttpProvider"
+sql = "cascade.providers.sql:SqlProvider"
+load_yaml = "cascade.providers.config:YamlLoaderProvider"
+lookup = "cascade.providers.config:LookupProvider"
+"read.text" = "cascade.providers.io:ReadTextProvider"
+"read.bytes" = "cascade.providers.io:ReadBytesProvider"
+"write.text" = "cascade.providers.io:WriteTextProvider"
+"write.bytes" = "cascade.providers.io:WriteBytesProvider"
+"fs.exists" = "cascade.providers.io:FsExistsProvider"
+~~~~~
+~~~~~toml
+config = ["PyYAML"]
+csp_solver = ["python-constraint"]
+s3 = ["aiobotocore"]
 
-This completes the Layer 1 foundation, setting the stage for more advanced 
-workflow features.
+# 新增一个 'all' 组，方便一键安装所有可选依赖
+all = [
+  "jinja2",
+  "aiohttp",
+  "sqlalchemy",
+  "typer[all]",
+  "PyYAML",
+  "python-constraint",
+  "aiobotocore",
+]
+
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+template = "cascade.providers.template:TemplateProvider"
+http = "cascade.providers.http:HttpProvider"
+sql = "cascade.providers.sql:SqlProvider"
+load_yaml = "cascade.providers.config:YamlLoaderProvider"
+lookup = "cascade.providers.config:LookupProvider"
+# Legacy aliases
+"read.text" = "cascade.providers.io:ReadTextProvider"
+"read.bytes" = "cascade.providers.io:ReadBytesProvider"
+"write.text" = "cascade.providers.io:WriteTextProvider"
+"write.bytes" = "cascade.providers.io:WriteBytesProvider"
+"fs.exists" = "cascade.providers.io:FsExistsProvider"
+# New cs.io.local namespace
+"io.local.read_text" = "cascade.providers.io:IoLocalReadTextProvider"
+"io.local.read_bytes" = "cascade.providers.io:IoLocalReadBytesProvider"
+"io.local.write_text" = "cascade.providers.io:IoLocalWriteTextProvider"
+"io.local.write_bytes" = "cascade.providers.io:IoLocalWriteBytesProvider"
+"io.local.exists" = "cascade.providers.io:IoLocalExistsProvider"
+# New cs.io.s3 namespace
+"io.s3.read_text" = "cascade.providers.s3:S3ReadTextProvider"
+"io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
+"io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
+"io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
 ~~~~~
 
 ### 下一步建议
-我们已经成功交付了 Layer 1。基于当前的状态，我建议下一步：
-- **执行全面的测试套件**: 运行 `pytest` 确保在整合后所有功能依然稳健。
-- **规划 Layer 2**: 我们可以开始讨论 Layer 2 的重点，可能涉及更复杂的调度策略或持久化缓存的深度集成。
-- **债务检查**: 查看 `债务监测.md`，看看是否有在此过程中引入的新问题（例如，由于移除 `cs.file` 带来的潜在兼容性说明需求）。
+实现 S3 Provider 的集成测试。由于 S3 依赖外部服务，我们将使用 `moto` 库来模拟 AWS 环境，确保测试可以在无网络、无凭证的环境下运行。这将验证我们新构建的 `cs.io.s3` 确实可用。

@@ -1,264 +1,124 @@
-这是一个非常核心的基础设施升级任务。将 I/O 操作统一到 `cs.io` 命名空间下不仅能提高 API 的一致性，也为后续扩展更多存储后端（如 S3, GCS, Azure Blob）奠定了清晰的结构基础。
+好的，我们已经完成了 `cs.io` 命名空间的扩展和 S3 Provider 的代码实现。现在，至关重要的一步是为这个新的 S3 Provider 添加健壮的集成测试，以确保其功能的正确性。
 
-我将生成一个计划，通过引入 `io.local.*` 和 `io.s3.*` 来实现这一目标，并更新项目配置以支持这些变更。
+我将生成一个计划，创建一个新的测试文件，并使用 `moto` 库来模拟 AWS S3 服务，从而在不依赖真实网络和凭证的情况下验证我们的实现。
 
-## [WIP] feat: 统一 I/O 命名空间至 cs.io 并添加 S3 支持
+## [WIP] test: 添加 S3 provider 的集成测试
 
 ### 用户需求
-1.  **命名空间统一**: 将现有的本地文件操作（原 `cs.read.*`, `cs.write.*`）映射到新的统一命名空间 `cs.io.local.*` 下，以规范 API。
-2.  **S3 支持**: 引入 `cs.io.s3.*` Provider，支持对 AWS S3 对象存储的读写操作，作为 Cascade 扩展性的验证。
-3.  **基础设施更新**: 更新 `pyproject.toml` 以注册新的 Provider 入口点并管理新的可选依赖（`aiobotocore`）。
+为新创建的 `cs.io.s3.*` Provider 添加一套完整的集成测试，以验证其在隔离环境中的功能正确性。
 
 ### 评论
-这个变更严格遵循了“提供者组合优于封装”的原则。S3 Provider 被设计为原子化的 `read` 和 `write` 操作，这意味着它们可以像本地文件操作一样被轻易地组合进任何工作流中。同时，通过继承现有的 `io` Provider 来实现 `io.local`，我们保持了代码的 DRY (Don't Repeat Yourself) 并确保了向后兼容性。
+使用 `moto` 库是测试 AWS 相关集成的最佳实践。它允许我们在本地完全模拟 S3 API，使得测试快速、可靠且独立于外部环境。此外，将测试用例本身编写为 Cascade 工作流，也是一种绝佳的“吃自己的狗粮”(Dogfooding)方式，可以同时验证 Provider 和 `Engine` 的集成。
 
 ### 目标
-1.  在 `src/cascade/providers/io.py` 中通过继承创建新的 `io.local.*` Provider 类。
-2.  创建 `src/cascade/providers/s3.py`，实现基于 `aiobotocore` 的 S3 读写能力。
-3.  更新 `pyproject.toml`，添加 `s3` 依赖组，并注册上述所有新 Provider。
+1.  创建一个新的测试文件 `tests/providers/test_s3.py`。
+2.  利用 `moto` 和 `pytest` fixture 创建一个临时的、被 mock 的 S3 环境，包括凭证和一个测试用的存储桶 (bucket)。
+3.  编写测试用例，覆盖对 mock S3 的文本和字节的写入与读取操作。
+4.  编写一个测试用例，验证当 `aiobotocore` 依赖缺失时，Provider 会按预期抛出 `ImportError`。
 
 ### 基本原理
-- **命名空间策略**: 使用 `.` 分隔的命名空间（如 `io.local.read_text`）配合 Cascade 的 `ProviderNamespace` 机制，可以自然地形成层级化的 API (`cs.io.local.read_text`)。
-- **延迟加载**: S3 的依赖（`aiobotocore`）比较重，因此必须在 Provider 的 `create_factory` 方法中进行导入检查，确保未安装该依赖的用户不受影响。
-- **兼容性**: 我们暂时保留旧的 `read.text` 等入口点，但在文档和新代码中推荐使用 `io.local`。
+通过 `pytest.importorskip` 确保这些测试只在已安装 `moto` 和 `aiobotocore` 的开发环境中运行。测试工作流将包含一个 `write` 操作和一个依赖于它的 `read` 操作，以验证端到端的正确性。`run_if` 用于确保 `read` 操作在 `write` 操作成功后执行，形成一个逻辑上的依赖关系。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/providers #scope/api #task/domain/storage #task/object/io-provider #task/action/integration #task/state/begin
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/providers #task/domain/storage #task/object/io-provider #task/action/integration #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 扩展本地 IO Provider 以支持新命名空间
+#### Acts 1: 创建 S3 Provider 的测试文件
 
-我们在 `src/cascade/providers/io.py` 中定义新的 Provider 子类。它们继承自现有的实现，唯一的区别是 `name` 属性变更为 `io.local.*` 前缀。
-
-~~~~~act
-patch_file
-src/cascade/providers/io.py
-~~~~~
-~~~~~python
-class FsExistsProvider(Provider):
-    name = "fs.exists"
-    def create_factory(self) -> LazyFactory:
-        return _exists_task
-~~~~~
-~~~~~python
-class FsExistsProvider(Provider):
-    name = "fs.exists"
-    def create_factory(self) -> LazyFactory:
-        return _exists_task
-
-# --- New io.local.* Aliases ---
-
-class IoLocalReadTextProvider(ReadTextProvider):
-    name = "io.local.read_text"
-
-class IoLocalReadBytesProvider(ReadBytesProvider):
-    name = "io.local.read_bytes"
-
-class IoLocalWriteTextProvider(WriteTextProvider):
-    name = "io.local.write_text"
-
-class IoLocalWriteBytesProvider(WriteBytesProvider):
-    name = "io.local.write_bytes"
-
-class IoLocalExistsProvider(FsExistsProvider):
-    name = "io.local.exists"
-~~~~~
-
-#### Acts 2: 创建 S3 Provider
-
-我们创建一个新的模块 `src/cascade/providers/s3.py`。它使用 `aiobotocore` 来实现异步的 S3 操作。为了保持原子性，Provider 不处理凭证逻辑，而是依赖 `botocore` 的标准凭证链（环境变量、配置文件、IAM 角色等）。
+我们将创建 `tests/providers/test_s3.py` 文件。它包含使用 `moto` 模拟 S3 环境的 fixtures，以及验证文本/字节读写和依赖检查的核心测试逻辑。
 
 ~~~~~act
 write_file
-src/cascade/providers/s3.py
+tests/providers/test_s3.py
 ~~~~~
 ~~~~~python
-import asyncio
-from typing import Any, Optional
-from cascade.spec.task import task
-from cascade.providers import LazyFactory, Provider
+import pytest
+import cascade as cs
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
-try:
+# Skip if dependencies are missing
+pytest.importorskip("aiobotocore")
+pytest.importorskip("moto")
+
+from moto import mock_aws
+
+# --- Fixtures ---
+
+@pytest.fixture(scope="module")
+def aws_credentials():
+    """Mocked AWS Credentials for moto."""
+    import os
+    os.environ["AWS_ACCESS_KEY_ID"] = "testing"
+    os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
+    os.environ["AWS_SECURITY_TOKEN"] = "testing"
+    os.environ["AWS_SESSION_TOKEN"] = "testing"
+    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
+
+@pytest.fixture
+@mock_aws
+async def s3_bucket(aws_credentials):
+    """Creates a mock S3 bucket for testing."""
     import aiobotocore.session
-except ImportError:
-    aiobotocore = None
-
-
-class S3ProviderBase(Provider):
-    """Base class for S3 providers handling dependency checks."""
     
-    def _check_dependency(self):
-        if aiobotocore is None:
-            raise ImportError(
-                "The 'aiobotocore' library is required to use S3 providers. "
-                "Please install it with: pip install cascade-py[s3]"
-            )
-
-# --- Tasks ---
-
-@task(name="s3_read_text")
-async def _s3_read_text(bucket: str, key: str, encoding: str = "utf-8") -> str:
+    bucket_name = "test-cascade-bucket"
     session = aiobotocore.session.get_session()
-    async with session.create_client("s3") as client:
-        response = await client.get_object(Bucket=bucket, Key=key)
-        async with response["Body"] as stream:
-            data = await stream.read()
-            return data.decode(encoding)
+    async with session.create_client("s3", region_name="us-east-1") as client:
+        await client.create_bucket(Bucket=bucket_name)
+        yield bucket_name
 
+# --- Tests ---
 
-@task(name="s3_read_bytes")
-async def _s3_read_bytes(bucket: str, key: str) -> bytes:
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3") as client:
-        response = await client.get_object(Bucket=bucket, Key=key)
-        async with response["Body"] as stream:
-            return await stream.read()
-
-
-@task(name="s3_write_text")
-async def _s3_write_text(bucket: str, key: str, content: str, encoding: str = "utf-8") -> None:
-    data = content.encode(encoding)
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3") as client:
-        await client.put_object(Bucket=bucket, Key=key, Body=data)
-
-
-@task(name="s3_write_bytes")
-async def _s3_write_bytes(bucket: str, key: str, content: bytes) -> None:
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3") as client:
-        await client.put_object(Bucket=bucket, Key=key, Body=content)
-
-
-# --- Providers ---
-
-class S3ReadTextProvider(S3ProviderBase):
-    name = "io.s3.read_text"
+@pytest.mark.asyncio
+async def test_s3_write_read_text(s3_bucket):
+    """Tests writing and reading a text file from S3."""
     
-    def create_factory(self) -> LazyFactory:
-        self._check_dependency()
-        return _s3_read_text
-
-
-class S3ReadBytesProvider(S3ProviderBase):
-    name = "io.s3.read_bytes"
+    # Workflow: Write then Read
+    key = "test.txt"
+    content = "hello s3"
     
-    def create_factory(self) -> LazyFactory:
-        self._check_dependency()
-        return _s3_read_bytes
-
-
-class S3WriteTextProvider(S3ProviderBase):
-    name = "io.s3.write_text"
+    write_op = cs.io.s3.write_text(bucket=s3_bucket, key=key, content=content)
     
-    def create_factory(self) -> LazyFactory:
-        self._check_dependency()
-        return _s3_write_text
+    # The read operation depends on the write operation to complete
+    read_op = cs.io.s3.read_text(bucket=s3_bucket, key=key).run_if(write_op)
 
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    result = await engine.run(read_op)
 
-class S3WriteBytesProvider(S3ProviderBase):
-    name = "io.s3.write_bytes"
+    assert result == content
+
+@pytest.mark.asyncio
+async def test_s3_write_read_bytes(s3_bucket):
+    """Tests writing and reading a binary file from S3."""
+    key = "test.bin"
+    content = b"\x01\x02\x03"
     
-    def create_factory(self) -> LazyFactory:
-        self._check_dependency()
-        return _s3_write_bytes
-~~~~~
+    write_op = cs.io.s3.write_bytes(bucket=s3_bucket, key=key, content=content)
+    read_op = cs.io.s3.read_bytes(bucket=s3_bucket, key=key).run_if(write_op)
 
-#### Acts 3: 注册 Provider 并更新依赖
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    result = await engine.run(read_op)
 
-更新 `pyproject.toml`，注册新的 `io.local.*` 和 `io.s3.*` 入口点，并添加 `aiobotocore` 到依赖列表。同时，为了方便测试，我们也将 `moto` 添加到 dev 依赖中。
+    assert result == content
 
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml
-  "pytest-aiohttp",
-  "typer[all]",
-  "mkdocs",
-~~~~~
-~~~~~toml
-  "pytest-aiohttp",
-  "moto[s3]",
-  "typer[all]",
-  "mkdocs",
-~~~~~
-
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml
-config = ["PyYAML"]
-csp_solver = ["python-constraint"]
-
-# 新增一个 'all' 组，方便一键安装所有可选依赖
-all = [
-  "jinja2",
-  "aiohttp",
-  "sqlalchemy",
-  "typer[all]",
-  "PyYAML",
-  "python-constraint",
-]
-
-[project.entry-points."cascade.providers"]
-shell = "cascade.providers.shell:ShellProvider"
-template = "cascade.providers.template:TemplateProvider"
-http = "cascade.providers.http:HttpProvider"
-sql = "cascade.providers.sql:SqlProvider"
-load_yaml = "cascade.providers.config:YamlLoaderProvider"
-lookup = "cascade.providers.config:LookupProvider"
-"read.text" = "cascade.providers.io:ReadTextProvider"
-"read.bytes" = "cascade.providers.io:ReadBytesProvider"
-"write.text" = "cascade.providers.io:WriteTextProvider"
-"write.bytes" = "cascade.providers.io:WriteBytesProvider"
-"fs.exists" = "cascade.providers.io:FsExistsProvider"
-~~~~~
-~~~~~toml
-config = ["PyYAML"]
-csp_solver = ["python-constraint"]
-s3 = ["aiobotocore"]
-
-# 新增一个 'all' 组，方便一键安装所有可选依赖
-all = [
-  "jinja2",
-  "aiohttp",
-  "sqlalchemy",
-  "typer[all]",
-  "PyYAML",
-  "python-constraint",
-  "aiobotocore",
-]
-
-[project.entry-points."cascade.providers"]
-shell = "cascade.providers.shell:ShellProvider"
-template = "cascade.providers.template:TemplateProvider"
-http = "cascade.providers.http:HttpProvider"
-sql = "cascade.providers.sql:SqlProvider"
-load_yaml = "cascade.providers.config:YamlLoaderProvider"
-lookup = "cascade.providers.config:LookupProvider"
-# Legacy aliases
-"read.text" = "cascade.providers.io:ReadTextProvider"
-"read.bytes" = "cascade.providers.io:ReadBytesProvider"
-"write.text" = "cascade.providers.io:WriteTextProvider"
-"write.bytes" = "cascade.providers.io:WriteBytesProvider"
-"fs.exists" = "cascade.providers.io:FsExistsProvider"
-# New cs.io.local namespace
-"io.local.read_text" = "cascade.providers.io:IoLocalReadTextProvider"
-"io.local.read_bytes" = "cascade.providers.io:IoLocalReadBytesProvider"
-"io.local.write_text" = "cascade.providers.io:IoLocalWriteTextProvider"
-"io.local.write_bytes" = "cascade.providers.io:IoLocalWriteBytesProvider"
-"io.local.exists" = "cascade.providers.io:IoLocalExistsProvider"
-# New cs.io.s3 namespace
-"io.s3.read_text" = "cascade.providers.s3:S3ReadTextProvider"
-"io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
-"io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
-"io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
+def test_s3_import_error(monkeypatch):
+    """Tests that an ImportError is raised if aiobotocore is missing."""
+    import cascade.providers.s3 as s3_provider_module
+    
+    # Simulate missing dependency
+    monkeypatch.setattr(s3_provider_module, "aiobotocore", None)
+    
+    # Instantiate the provider and try to get the factory
+    provider = s3_provider_module.S3ReadTextProvider()
+    
+    with pytest.raises(ImportError, match="aiobotocore"):
+        provider.create_factory()
 ~~~~~
 
 ### 下一步建议
-实现 S3 Provider 的集成测试。由于 S3 依赖外部服务，我们将使用 `moto` 库来模拟 AWS 环境，确保测试可以在无网络、无凭证的环境下运行。这将验证我们新构建的 `cs.io.s3` 确实可用。
+我们已经完成了 `cs.io` 命名空间的统一和 S3 Provider 的核心实现与测试。这标志着路线图第一阶段任务 1.1 的核心工作已经完成。
+
+接下来，我们可以继续执行路线图，开始**任务 1.2: `cs.http` 原子化网络提供者**。这将是构建 LLM 调用等更高级组合模式的关键积木。

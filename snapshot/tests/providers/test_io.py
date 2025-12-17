@@ -59,4 +59,4 @@ def test_provider_registry_namespace_resolution():
     
     # Access "read.text" -> should return factory
     factory = ns.text
-    assert factory.__name__ == "read_text" # Task name from @task
+    assert factory.name == "read_text" # Task name from @task

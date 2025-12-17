@@ -4,11 +4,11 @@ from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
 
 from .model import Graph, Node, Edge, EdgeType
-from ..spec.common import Param
-from ..spec.constraint import ResourceConstraint
-from ..spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
-from ..spec.routing import Router
-from ..spec.task import Task
+from cascade.spec.common import Param
+from cascade.spec.constraint import ResourceConstraint
+from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.task import Task
 
 
 # --- Helpers ---

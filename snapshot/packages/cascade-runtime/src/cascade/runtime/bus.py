@@ -1,6 +1,6 @@
 from collections import defaultdict
 from typing import Callable, List, Type, Dict, Any
-from .events import Event
+from cascade.interfaces.events import Event
 
 # Define a Handler type alias for clarity
 Handler = Callable[[Any], None]

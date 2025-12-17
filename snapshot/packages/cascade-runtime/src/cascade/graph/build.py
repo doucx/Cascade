@@ -1,4 +1,5 @@
 from typing import Dict, Any
+from typing import Dict, Any
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -53,7 +54,7 @@ class GraphBuilder:
 
         # Process dynamic constraints
         if result._constraints and not result._constraints.is_empty():
-            from cascade.spec.task import LazyResult, MappedLazyResult
+            from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 
             for res_name, req_value in result._constraints.requirements.items():
                 if isinstance(req_value, (LazyResult, MappedLazyResult)):

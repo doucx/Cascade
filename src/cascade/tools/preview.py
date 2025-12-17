@@ -3,6 +3,8 @@ from ..spec.lazy_types import LazyResult  # NEW
 from ..graph.build import build_graph
 from ..runtime.engine import Engine
 from ..runtime.bus import MessageBus
+from ..adapters.solvers.native import NativeSolver
+from ..adapters.executors.local import LocalExecutor
 from .events import PlanAnalysisStarted, PlanNodeInspected, PlanAnalysisFinished
 
 
@@ -25,7 +27,7 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
     Decoupled from any output mechanism.
     """
     # We use the default engine configuration to get the default solver
-    engine = Engine()
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
     # 1. Build the graph statically
     graph = build_graph(target)

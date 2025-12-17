@@ -22,6 +22,8 @@ from .runtime.engine import Engine
 from .runtime.bus import MessageBus
 from .runtime.subscribers import HumanReadableLogSubscriber
 from .runtime.exceptions import DependencyMissingError
+from .adapters.solvers.native import NativeSolver
+from .adapters.executors.local import LocalExecutor
 
 # Tools
 from .testing import override_resource
@@ -102,7 +104,16 @@ def run(
     # Attach the translator
     HumanReadableLogSubscriber(event_bus)
 
-    engine = Engine(bus=event_bus, system_resources=system_resources)
+    # 3. Assemble the default Engine
+    solver = NativeSolver()
+    executor = LocalExecutor()
+
+    engine = Engine(
+        solver=solver,
+        executor=executor,
+        bus=event_bus,
+        system_resources=system_resources,
+    )
 
     return asyncio.run(engine.run(target, params=params))
 

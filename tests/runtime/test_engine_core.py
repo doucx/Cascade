@@ -1,0 +1,74 @@
+import pytest
+from typing import List, Any, Dict
+
+import cascade as cs
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph
+from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
+
+
+# --- Test Doubles (Mocks and Spies) ---
+
+class MockSolver(Solver):
+    def __init__(self, plan: ExecutionPlan):
+        self._plan = plan
+    
+    def resolve(self, graph: Graph) -> ExecutionPlan:
+        # Return the pre-programmed plan
+        return self._plan
+
+class SpyExecutor(Executor):
+    def __init__(self):
+        self.call_log: List[Node] = []
+
+    async def execute(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        self.call_log.append(node)
+        return f"executed_{node.name}"
+
+
+# --- Test Case ---
+
+@pytest.mark.asyncio
+async def test_engine_follows_solver_plan():
+    """
+    Tests that Engine correctly iterates over the plan provided by a Solver
+    and calls the Executor for each node in the correct order.
+    """
+    # 1. Define a simple workflow (the graph structure doesn't matter much
+    # as the MockSolver will override the plan)
+    @cs.task
+    def task_a(): pass
+    @cs.task
+    def task_b(x): pass
+    
+    workflow = task_b(task_a())
+    graph = build_graph(workflow)
+    node_a = next(n for n in graph.nodes if n.name == 'task_a')
+    node_b = next(n for n in graph.nodes if n.name == 'task_b')
+
+    # 2. Define the execution plan that the MockSolver will return
+    # A simple sequential plan: [A], then [B]
+    mock_plan: ExecutionPlan = [
+        [node_a],
+        [node_b]
+    ]
+    
+    # 3. Setup test doubles and Engine
+    solver = MockSolver(plan=mock_plan)
+    executor = SpyExecutor()
+    bus = MessageBus()
+    
+    engine = Engine(solver=solver, executor=executor, bus=bus)
+    
+    # 4. Run the engine
+    await engine.run(workflow)
+    
+    # 5. Assert the executor was called in the correct order
+    assert len(executor.call_log) == 2
+    assert executor.call_log[0].name == "task_a"
+    assert executor.call_log[1].name == "task_b"

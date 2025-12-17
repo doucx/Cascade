@@ -1,5 +1,7 @@
 import pytest
 import cascade as cs
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 # 注意：在实现阶段需要确保这些模块存在
 # from cascade.context import get_current_context
 
@@ -17,7 +19,7 @@ async def test_engine_executes_param_task():
         
     workflow = double(p)
     
-    engine = cs.Engine()
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     
     # 执行，传入 params
     # 这里的关键是 Engine 需要将 {"count": 10} 传递给 _get_param_value 任务
@@ -32,7 +34,7 @@ async def test_engine_executes_env_task(monkeypatch):
     
     e = cs.Env("TEST_VAR")
     
-    engine = cs.Engine()
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(e)
     
     assert result == "cascade_value"

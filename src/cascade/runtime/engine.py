@@ -21,8 +21,6 @@ from cascade.runtime.events import (
 )
 from cascade.runtime.protocols import Solver, Executor
 from cascade.runtime.exceptions import DependencyMissingError
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
 from cascade.runtime.flow import FlowManager
@@ -35,14 +33,14 @@ class Engine:
 
     def __init__(
         self,
-        solver: Optional[Solver] = None,
-        executor: Optional[Executor] = None,
-        bus: Optional[MessageBus] = None,
+        solver: Solver,
+        executor: Executor,
+        bus: MessageBus,
         system_resources: Optional[Dict[str, Any]] = None,
     ):
-        self.solver = solver or NativeSolver()
-        self.executor = executor or LocalExecutor()
-        self.bus = bus or MessageBus()
+        self.solver = solver
+        self.executor = executor
+        self.bus = bus
         self.resource_manager = ResourceManager(capacity=system_resources)
         self._resource_providers: Dict[str, Callable] = {}
 

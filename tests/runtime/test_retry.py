@@ -3,6 +3,8 @@ import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event, TaskRetrying, TaskExecutionFinished
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 
 class SpySubscriber:
@@ -38,7 +40,7 @@ async def test_retry_success_after_failure():
 
     bus = MessageBus()
     spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     result = await engine.run(task_with_retry)
 
@@ -72,7 +74,7 @@ async def test_retry_exhausted_failure():
 
     bus = MessageBus()
     spy = SpySubscriber(bus)
-    engine = Engine(bus=bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     with pytest.raises(ValueError, match="Always fail"):
         await engine.run(task_with_retry)

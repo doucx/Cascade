@@ -2,6 +2,8 @@ import pytest
 from unittest.mock import MagicMock
 import cascade as cs
 from cascade.runtime.events import ResourceAcquired, ResourceReleased, Event
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 # --- Test Resources ---
 
@@ -42,7 +44,7 @@ def test_di_end_to_end():
     """Tests the full lifecycle: registration, injection, execution, teardown."""
     import asyncio
 
-    engine = cs.Engine()
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     engine.register(config)
     engine.register(db_connection)
 
@@ -59,7 +61,7 @@ def test_resource_events():
     bus = cs.MessageBus()
     bus.subscribe(Event, events.append)
 
-    engine = cs.Engine(bus=bus)
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     engine.register(config)
     engine.register(db_connection)
 
@@ -95,7 +97,7 @@ def test_resource_override():
         yield m
         print("TEARDOWN: mock_db_connection")
 
-    engine = cs.Engine()
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     engine.register(config)
     engine.register(db_connection)  # Register the original
 

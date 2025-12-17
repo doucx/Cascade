@@ -3,6 +3,8 @@ import asyncio
 from unittest.mock import MagicMock
 import cascade as cs
 from cascade.runtime.engine import Engine
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 
 @pytest.fixture
@@ -28,7 +30,7 @@ def test_e2e_linear_workflow(mock_messaging_bus):
     # The subscriber will translate these to calls on the mocked messaging_bus.
     event_bus = cs.runtime.MessageBus()
     cs.runtime.HumanReadableLogSubscriber(event_bus)
-    engine = Engine(bus=event_bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=event_bus)
 
     result = asyncio.run(engine.run(final_greeting))
 
@@ -55,7 +57,7 @@ def test_e2e_failure_propagation(mock_messaging_bus):
 
     event_bus = cs.runtime.MessageBus()
     cs.runtime.HumanReadableLogSubscriber(event_bus)
-    engine = Engine(bus=event_bus)
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=event_bus)
 
     with pytest.raises(ValueError, match="Something went wrong"):
         asyncio.run(engine.run(failing_task()))

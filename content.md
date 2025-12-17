@@ -1,120 +1,68 @@
-好的，我们现在就来实现这个经过调整和简化的“人机交互”能力。
+Your analysis is spot on. The test failures are a classic case of trying to start a new asyncio event loop from within an already running one.
 
-遵照我们的新战略，我将废弃 `cs.prompt` 的整体式概念，并将其分解为两个独立的、原子化的 Provider：`cs.io.stdout.write` 和 `cs.io.stdin.read_line`。这将使与标准流的交互变得透明、可测试，并完全符合“组合优于封装”的核心设计原则。
+Here is my analysis of the error and the plan to fix it.
 
-以下是实现此功能的完整计划。
+### 错误分析
 
-## [WIP] feat: 实现原子化的标准输入输出 Provider
+**根本原因**: `pytest-asyncio` 与 `cs.run` 的冲突。
 
-### 用户需求
-根据我们最新的战略规划，实现简化的、原子化的人机交互能力，取代原有的 `cs.prompt` 整体式 Provider 概念，具体为提供 `cs.io.stdout.write` 和 `cs.io.stdin.read_line` 这两个 Provider。
+1.  **`pytest-asyncio` 的工作方式**: 当你使用 `@pytest.mark.asyncio` 装饰一个测试函数时，`pytest-asyncio` 插件会负责创建一个 asyncio 事件循环，并在这个循环中运行你的 `async def` 测试函数。
+2.  **`cs.run` 的工作方式**: `cs.run` 是一个为最终用户设计的高级便捷函数。它的核心职责是**创建并管理一个全新的事件循环**来运行 Cascade 工作流，这通过调用 `asyncio.run()` 实现。
+3.  **冲突点**: 在测试函数执行时，我们已经处于一个由 `pytest-asyncio` 管理的事件循环中。此时调用 `cs.run()`，它又试图调用 `asyncio.run()` 来创建一个新的事件循环。Asyncio 规范明确禁止在同一个线程中从一个正在运行的循环内部启动另一个循环，因此抛出了 `RuntimeError: asyncio.run() cannot be called from a running event loop`。
 
-### 评论
-这是一个关键的实现，它完美地体现了“组合优于封装”的核心设计原则。通过此计划，我们将一个原计划中不透明的“魔法”操作（`cs.prompt`）分解为两个透明、可测试、可组合的原子构建块。这不仅增强了库的一致性和可预测性，也为用户提供了更大的灵活性，让他们可以自由地构建自定义的交互模式。
+**解决方案**:
+
+在异步测试环境中，我们不应该使用 `cs.run()` 这个高级封装。我们应该直接与 `cascade.Engine` 交互，并使用 `await` 在 `pytest-asyncio` 提供的现有事件循环中执行工作流。
+
+此外，在 `test_prompt_composition` 测试中，为了确保 `read` 操作在 `write` 操作之后执行，原测试试图创建一个 `read_after_write` 任务。这种方式是正确的，但其实现返回了一个 `LazyResult`，这是不合法的。一个标准的 `@cs.task` 必须返回一个具体的、可序列化的值，而不是另一个 `LazyResult`。
+
+我们将通过一个小幅改进 `_stdin_read_line_task` 来解决这个问题，使其能够接受一个哑元（dummy）参数，从而允许我们以一种更清晰、更直接的方式建立数据依赖，以确保执行顺序。
 
 ### 目标
-1.  创建一个新的 Provider 实现文件 `src/cascade/providers/stdio.py`。
-2.  在该文件中实现 `_stdout_write_task` 和 `_stdin_read_line_task` 两个异步任务，用于与标准输出/输入交互。
-3.  创建对应的 `StdOutWriteProvider` 和 `StdInReadLineProvider` 类，并将它们注册到 `io.stdout.write` 和 `io.stdin.read_line` 命名空间。
-4.  更新 `pyproject.toml` 文件，添加新的 Provider 入口点。
-5.  创建一个新的测试文件 `tests/providers/test_stdio.py`，为这两个新 Provider 编写隔离的、健壮的单元测试。
+1.  修改 `_stdin_read_line_task` 任务，使其可以接受一个位置参数，从而能够通过数据依赖来强制执行顺序。
+2.  重写 `tests/providers/test_stdio.py` 中的所有测试用例，使用 `await engine.run()` 代替 `cs.run()`，并在 `test_prompt_composition` 中使用新的依赖模式。
 
 ### 基本原理
-我们将创建一个新的 `stdio.py` 模块来存放与标准 I/O 相关的 Provider，以保持代码组织的清晰性。核心任务逻辑将使用 `asyncio.to_thread` 来包装阻塞的 `sys.stdin.readline()` 和 `print()` 调用，以确保它们在异步的 `Engine` 中表现良好而不会阻塞事件循环。Provider 的注册将通过在 `pyproject.toml` 中添加标准入口点来完成。测试将依赖 pytest 的 `capsys` 和 `monkeypatch` fixture 来实现对 `stdout` 和 `stdin` 的完全隔离测试，确保测试的可靠性和确定性。
+我们将直接实例化 `cascade.Engine` 并 `await` 其 `.run()` 方法，使其在 `pytest-asyncio` 管理的事件循环中正确执行。对于 `test_prompt_composition`，我们将利用数据依赖这一 Cascade 核心机制来确保 `write` 操作先于 `read` 操作，通过将 `write` 任务的结果传递给 `read` 任务。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/core #comp/tests #concept/io #scope/api #ai/instruct #task/domain/core #task/object/stdio-providers #task/action/implementation #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/core #comp/tests #concept/io #scope/dx #ai/instruct #task/domain/core #task/object/stdio-providers #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Provider 实现文件
+#### Acts 1: 改进标准输入 Provider 以支持依赖
 
-我们首先创建 `src/cascade/providers/stdio.py` 文件，其中包含与标准输入输出交互的核心任务逻辑和 Provider 定义。
+我们将修改 `src/cascade/providers/stdio.py` 中的 `_stdin_read_line_task`，为其添加一个哑元位置参数。这个改动是向后兼容的，但极大地增强了它的可组合性。
 
 ~~~~~act
-write_file
+patch_file
 src/cascade/providers/stdio.py
 ~~~~~
 ~~~~~python
-import sys
-import asyncio
-from cascade.spec.task import task
-from cascade.providers import LazyFactory, Provider
-
-
-# --- Tasks ---
-
-@task(name="stdout_write")
-async def _stdout_write_task(text: str) -> None:
-    """Writes text to standard output."""
-    def blocking_write():
-        # Using print ensures newline handling consistent with user expectations.
-        print(text, file=sys.stdout)
-        sys.stdout.flush()
-    await asyncio.to_thread(blocking_write)
-
-
 @task(name="stdin_read_line")
 async def _stdin_read_line_task() -> str:
     """Reads a single line from standard input."""
     def blocking_read():
         return sys.stdin.readline().strip()
     return await asyncio.to_thread(blocking_read)
-
-
-# --- Providers ---
-
-class StdOutWriteProvider(Provider):
-    name = "io.stdout.write"
-
-    def create_factory(self) -> LazyFactory:
-        return _stdout_write_task
-
-
-class StdInReadLineProvider(Provider):
-    name = "io.stdin.read_line"
-
-    def create_factory(self) -> LazyFactory:
-        return _stdin_read_line_task
+~~~~~
+~~~~~python
+@task(name="stdin_read_line")
+async def _stdin_read_line_task(*_args) -> str:
+    """
+    Reads a single line from standard input.
+    Accepts positional arguments to allow data dependencies for ordering.
+    """
+    def blocking_read():
+        return sys.stdin.readline().strip()
+    return await asyncio.to_thread(blocking_read)
 ~~~~~
 
-#### Acts 2: 注册新的 Provider
+#### Acts 2: 修正测试文件
 
-现在，我们在 `pyproject.toml` 文件中添加新的入口点，以便 Cascade 的 Provider 注册表能够发现它们。
-
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml
-# New cs.io.s3 namespace
-"io.s3.read_text" = "cascade.providers.s3:S3ReadTextProvider"
-"io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
-"io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
-"io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-~~~~~
-~~~~~toml
-# New cs.io.s3 namespace
-"io.s3.read_text" = "cascade.providers.s3:S3ReadTextProvider"
-"io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
-"io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
-"io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
-# New cs.io.stdio namespace
-"io.stdout.write" = "cascade.providers.stdio:StdOutWriteProvider"
-"io.stdin.read_line" = "cascade.providers.stdio:StdInReadLineProvider"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-~~~~~
-
-#### Acts 3: 创建测试文件
-
-最后，我们创建一个新的测试文件 `tests/providers/test_stdio.py`，以确保新 Provider 的行为符合预期。
+现在，我们将重写 `tests/providers/test_stdio.py`，采用正确的异步测试模式，并利用我们刚刚进行的改进来简化 `test_prompt_composition`。
 
 ~~~~~act
 write_file
@@ -124,21 +72,30 @@ tests/providers/test_stdio.py
 import pytest
 import cascade as cs
 import io
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
+
+@pytest.fixture
+def engine():
+    """Provides a default Cascade Engine for tests."""
+    return cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
 
 @pytest.mark.asyncio
-async def test_stdout_write(capsys):
+async def test_stdout_write(engine, capsys):
     """
     Tests that cs.io.stdout.write correctly prints to standard output.
     """
     workflow = cs.io.stdout.write("Hello, Interactive World!")
     
-    cs.run(workflow)
+    await engine.run(workflow)
     
     captured = capsys.readouterr()
     assert captured.out == "Hello, Interactive World!\n"
 
 @pytest.mark.asyncio
-async def test_stdin_read_line(monkeypatch):
+async def test_stdin_read_line(engine, monkeypatch):
     """
     Tests that cs.io.stdin.read_line correctly reads from standard input.
     """
@@ -154,12 +111,12 @@ async def test_stdin_read_line(monkeypatch):
     user_line = cs.io.stdin.read_line()
     workflow = process_input(user_line)
     
-    result = cs.run(workflow)
+    result = await engine.run(workflow)
     
     assert result == "Received: TEST INPUT"
 
 @pytest.mark.asyncio
-async def test_prompt_composition(capsys, monkeypatch):
+async def test_prompt_composition(engine, capsys, monkeypatch):
     """
     Tests the composition of write and read to simulate a user prompt.
     """
@@ -174,23 +131,13 @@ async def test_prompt_composition(capsys, monkeypatch):
     prompt_message = "Please enter your name: "
     write_prompt = cs.io.stdout.write(prompt_message)
     
-    # Reading depends implicitly on the prompt being written first
-    # We can model this explicitly if needed, but for CLI it's often sequential
-    # A better pattern would be to make read depend on write's completion.
-    # cs.io.stdout.write returns None, so a pure data dependency isn't ideal.
-    # Let's test the simple sequential case, which `run` will handle correctly.
-    
-    # A more robust workflow would use depends_on if we had it,
-    # or chain them with a task that ignores the None result.
-    
-    @cs.task
-    def read_after_write(_: None) -> str:
-        return cs.io.stdin.read_line()
-
-    user_name = read_after_write(write_prompt)
+    # Create a data dependency to ensure write_prompt runs before read_line.
+    # The result of write_prompt (None) is passed to read_line,
+    # which now accepts it as a positional argument.
+    user_name = cs.io.stdin.read_line(write_prompt)
     workflow = create_greeting(user_name)
 
-    result = cs.run(workflow)
+    result = await engine.run(workflow)
 
     # Verify the output and the final result
     captured = capsys.readouterr()
@@ -199,10 +146,6 @@ async def test_prompt_composition(capsys, monkeypatch):
 ~~~~~
 
 ### 下一步建议
+我们已经修复了测试并改进了 Provider 的设计。现在所有测试应该都能通过。
 
-我们已经成功地实现了 `cs.io.stdout.write` 和 `cs.io.stdin.read_line` 这两个原子化的 Provider。
-
-1.  **文档更新**: 接下来，我们需要在官方文档的 "Provider Reference" 和 "Cookbook/Patterns" 章节中添加这两个新 Provider 的说明，并给出一个如何组合它们来实现用户提示的官方示例。
-2.  **提交代码**: 在所有测试通过后，我将为您生成一个 `[COMMIT]` 计划，将这些新文件作为一个完整的逻辑单元提交到版本控制中。
-
-如果您同意，请告诉我，我将准备下一步的行动。
+在确认测试通过后，我将为您生成一个 `[COMMIT]` 计划，将这些修复和改进作为一个完整的逻辑单元提交到版本控制中。请指示我继续。

@@ -1,21 +1,30 @@
 import pytest
 import cascade as cs
 import io
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
+
+@pytest.fixture
+def engine():
+    """Provides a default Cascade Engine for tests."""
+    return cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
 
 @pytest.mark.asyncio
-async def test_stdout_write(capsys):
+async def test_stdout_write(engine, capsys):
     """
     Tests that cs.io.stdout.write correctly prints to standard output.
     """
     workflow = cs.io.stdout.write("Hello, Interactive World!")
     
-    cs.run(workflow)
+    await engine.run(workflow)
     
     captured = capsys.readouterr()
     assert captured.out == "Hello, Interactive World!\n"
 
 @pytest.mark.asyncio
-async def test_stdin_read_line(monkeypatch):
+async def test_stdin_read_line(engine, monkeypatch):
     """
     Tests that cs.io.stdin.read_line correctly reads from standard input.
     """
@@ -31,12 +40,12 @@ async def test_stdin_read_line(monkeypatch):
     user_line = cs.io.stdin.read_line()
     workflow = process_input(user_line)
     
-    result = cs.run(workflow)
+    result = await engine.run(workflow)
     
     assert result == "Received: TEST INPUT"
 
 @pytest.mark.asyncio
-async def test_prompt_composition(capsys, monkeypatch):
+async def test_prompt_composition(engine, capsys, monkeypatch):
     """
     Tests the composition of write and read to simulate a user prompt.
     """
@@ -51,23 +60,13 @@ async def test_prompt_composition(capsys, monkeypatch):
     prompt_message = "Please enter your name: "
     write_prompt = cs.io.stdout.write(prompt_message)
     
-    # Reading depends implicitly on the prompt being written first
-    # We can model this explicitly if needed, but for CLI it's often sequential
-    # A better pattern would be to make read depend on write's completion.
-    # cs.io.stdout.write returns None, so a pure data dependency isn't ideal.
-    # Let's test the simple sequential case, which `run` will handle correctly.
-    
-    # A more robust workflow would use depends_on if we had it,
-    # or chain them with a task that ignores the None result.
-    
-    @cs.task
-    def read_after_write(_: None) -> str:
-        return cs.io.stdin.read_line()
-
-    user_name = read_after_write(write_prompt)
+    # Create a data dependency to ensure write_prompt runs before read_line.
+    # The result of write_prompt (None) is passed to read_line,
+    # which now accepts it as a positional argument.
+    user_name = cs.io.stdin.read_line(write_prompt)
     workflow = create_greeting(user_name)
 
-    result = cs.run(workflow)
+    result = await engine.run(workflow)
 
     # Verify the output and the final result
     captured = capsys.readouterr()

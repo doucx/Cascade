@@ -17,8 +17,11 @@ async def _stdout_write_task(text: str) -> None:
 
 
 @task(name="stdin_read_line")
-async def _stdin_read_line_task() -> str:
-    """Reads a single line from standard input."""
+async def _stdin_read_line_task(*_args) -> str:
+    """
+    Reads a single line from standard input.
+    Accepts positional arguments to allow data dependencies for ordering.
+    """
     def blocking_read():
         return sys.stdin.readline().strip()
     return await asyncio.to_thread(blocking_read)

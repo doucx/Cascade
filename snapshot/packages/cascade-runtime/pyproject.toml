@@ -1,0 +1,11 @@
+[project]
+name = "cascade-runtime"
+version = "0.1.0"
+description = "Core execution engine for Cascade."
+requires-python = ">=3.8"
+dependencies = [
+    "cascade-interfaces",
+]
+
+[project.optional-dependencies]
+csp_solver = ["python-constraint"]

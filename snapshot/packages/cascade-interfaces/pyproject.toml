@@ -1,0 +1,6 @@
+[project]
+name = "cascade-interfaces"
+version = "0.1.0"
+description = "Protocols and Specifications for Cascade."
+requires-python = ">=3.8"
+dependencies = []

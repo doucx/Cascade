@@ -1,97 +1,72 @@
-Excellent, all tests are passing. This confirms that our recent refactoring of the `FlowManager` has successfully restored the core functionality while preserving the new state-decoupled architecture.
+这是一个涉及多阶段架构重构的核心提交。
 
-However, the coverage report you provided highlights one critical gap before we can create a commit. Our brand new `src/cascade/adapters/cache/in_memory.py` module has **0% test coverage**.
-
-Committing a new, foundational component without any tests would introduce significant risk and violate our testing principles. Therefore, I will create one final `[WIP]` plan to add unit tests for `InMemoryCacheBackend`. Once these tests are passing, we will have a complete, robust, and verified set of changes ready for a clean commit.
-
-## [WIP] test(cache): Add unit tests for InMemoryCacheBackend
+## [COMMIT] refactor(core): 完成 v2.0 路线图第一阶段的核心解耦 (State/Cache Backend)
 
 ### 用户需求
-根据测试覆盖率报告，为新创建的 `InMemoryCacheBackend` 添加单元测试，以确保其功能正确性，为后续的提交做准备。
+将自架构审查以来对 `Engine` 和运行时组件进行的所有重构、Bug 修复和测试代码整合为一个逻辑完整的提交。
 
 ### 评论
-这是一个必要的步骤。`InMemoryCacheBackend` 是我们新缓存架构的基石，虽然其逻辑简单，但包含时间敏感的 TTL (Time-To-Live) 功能，这是典型的需要通过测试来精确验证的边缘情况。添加这些测试将确保我们的缓存后端是可靠的。
+本次提交完成了 `Cascade 架构演进技术路线图 (v2.0)` 第一阶段（内核重构与协议标准化）的关键目标：
+
+1.  **状态解耦**: 引入 `StateBackend` 协议 (`protocols.py`) 和默认实现 (`InMemoryStateBackend`)。Engine 不再将运行时结果耦合在其内部字典中，而是委托给该后端。
+2.  **流控恢复**: 修复了重构导致的 `FlowManager` 递归修剪逻辑回归，确保动态路由 (`cs.Router`) 在新的无状态架构中能正确修剪未使用的上游分支。
+3.  **缓存解耦**: 引入 `CacheBackend` 协议和默认实现 (`InMemoryCacheBackend`)，将缓存的“策略”与“存储”职责分离。
+4.  **鲁棒性增强**: 修复了 `Engine.run` 在处理 `MappedLazyResult` 作为目标时发生的 `AttributeError`，并更新了测试套件以适应新的错误码和架构模式。
+
+这些改变使得 `Engine` 成为了一个纯粹的、协议驱动的编排器，为第二阶段的遥测系统和分布式执行奠定了坚实基础。
 
 ### 目标
-1.  创建新的测试文件 `tests/adapters/cache/test_in_memory.py`。
-2.  实现单元测试，覆盖 `InMemoryCacheBackend` 的 `get`, `set` 和 TTL 过期逻辑。
+创建一个 Git 提交，包含所有新增的协议、适配器、重构的运行时代码以及配套的测试用例。
 
 ### 基本原理
-我们将编写一个标准的 `pytest` 测试套件：
-- **基础功能**: 验证基本的 `set` 和 `get` 操作是否按预期工作。
-- **TTL 功能**: 使用 `unittest.mock.patch` 来控制 `time.time()` 的返回值，从而精确地模拟时间的流逝，验证：
-    1. 在 TTL 过期**前**调用 `get` 能成功返回值。
-    2. 在 TTL 过期**后**调用 `get` 会返回 `None`，并且缓存项被正确清理。
+本次提交是逻辑上的一个完整工作单元，因为它将架构的协议层、核心执行层和默认实现层全部进行了升级，并修复了所有因此导致的回归问题。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high
-#comp/tests #concept/caching
-#ai/instruct
-#task/domain/testing #task/object/cache-backend #task/action/implementation #task/state/continue #task/status/active
+#intent/refine #flow/done #priority/high
+#comp/engine #comp/interfaces #concept/state #concept/caching #scope/core
+#ai/delegate
+#task/domain/architecture #task/object/state-backend #task/action/implementation #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `InMemoryCacheBackend` 的测试文件
-
-我们将创建并填充 `InMemoryCacheBackend` 的单元测试。
+#### Acts 1: 添加所有更改到暂存区
 
 ~~~~~act
-write_file
+git_add
+src/cascade/runtime/protocols.py
+src/cascade/adapters/state/__init__.py
+src/cascade/adapters/state/in_memory.py
+src/cascade/runtime/engine.py
+src/cascade/runtime/resolvers.py
+src/cascade/runtime/flow.py
+src/cascade/adapters/cache/__init__.py
+src/cascade/adapters/cache/in_memory.py
+tests/runtime/test_control_flow.py
+tests/runtime/test_flow_manager.py
 tests/adapters/cache/test_in_memory.py
 ~~~~~
-~~~~~python
-import time
-from unittest.mock import patch
-from cascade.adapters.cache.in_memory import InMemoryCacheBackend
 
+#### Acts 2: 执行提交
 
-def test_cache_set_and_get():
-    """Test basic set and get functionality."""
-    cache = InMemoryCacheBackend()
-    cache.set("key1", "value1")
-    assert cache.get("key1") == "value1"
-
-
-def test_cache_get_non_existent_key():
-    """Test that getting a non-existent key returns None."""
-    cache = InMemoryCacheBackend()
-    assert cache.get("non_existent") is None
-
-
-def test_cache_set_overwrite():
-    """Test that setting an existing key overwrites the value."""
-    cache = InMemoryCacheBackend()
-    cache.set("key1", "value1")
-    cache.set("key1", "value2")
-    assert cache.get("key1") == "value2"
-
-
-def test_cache_ttl_not_expired():
-    """Test that a key can be retrieved before its TTL expires."""
-    cache = InMemoryCacheBackend()
-    with patch('time.time', return_value=1000):
-        cache.set("key_ttl", "value_ttl", ttl=60)
-
-    with patch('time.time', return_value=1059):
-        assert cache.get("key_ttl") == "value_ttl"
-
-
-def test_cache_ttl_expired():
-    """Test that a key returns None after its TTL expires."""
-    cache = InMemoryCacheBackend()
-    with patch('time.time', return_value=1000):
-        cache.set("key_ttl", "value_ttl", ttl=60)
-
-    # Move time forward to just after the expiry
-    with patch('time.time', return_value=1061):
-        assert cache.get("key_ttl") is None
-
-    # Verify that the key was actually removed from the store
-    assert "key_ttl" not in cache._store
-    assert "key_ttl" not in cache._expiry
+~~~~~act
+git_commit
 ~~~~~
+~~~~~text
+refactor(core): Complete V2.0 Phase 1 core decoupling (State/Cache Backend)
 
-### 下一步建议
-一旦这个计划执行完毕并通过测试，我们的代码库将处于一个非常健康的状态：所有核心重构已完成，所有回归问题已修复，并且所有新组件都拥有了基础的测试覆盖。届时，我们将可以自信地创建一个 `[COMMIT]` 计划来封装从引入 `StateBackend` 到现在的所有工作。
+This commit implements the foundation for the V2.0 Architecture Roadmap, achieving full decoupling of transient runtime state from the Engine core.
+
+Key Architectural Changes:
+
+1.  **State Decoupling**: Introduced `StateBackend` protocol and `InMemoryStateBackend`. The `Engine` and `Resolvers` were refactored to read/write all task results and skip statuses via this protocol, making the Engine a pure orchestrator.
+2.  **Cache Decoupling**: Introduced `CacheBackend` protocol and `InMemoryCacheBackend`, separating the "key generation strategy" (`CachePolicy`) from the "storage mechanism" (`CacheBackend`).
+3.  **Flow Control Fix**: Restored the critical recursive demand-counting and pruning logic within `FlowManager` to ensure unused branches created by `cs.Router` and conditional skips are correctly identified and skipped at the graph level.
+
+Bug Fixes & Enhancements:
+
+*   Fixed `AttributeError: 'MappedLazyResult' object has no attribute 'task'` in `Engine.run` by implementing robust target name resolution logic.
+*   Updated integration tests (e.g., `test_control_flow.py`) to align with the more specific skip reasons (e.g., `UpstreamSkipped_Data`).
+*   Added full test coverage for the new `InMemoryCacheBackend` implementation.
+~~~~~

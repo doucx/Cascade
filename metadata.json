@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(cache): Add unit tests for InMemoryCacheBackend", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765980229.6750236, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(core): 完成 v2.0 路线图第一阶段的核心解耦 (State/Cache Backend)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765980288.9796793, "duration_ms": 0}}

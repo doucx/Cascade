@@ -3,6 +3,14 @@ import cascade as cs
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 
+# anext is in asyncio for Python 3.10+
+try:
+    from asyncio import anext
+except ImportError:
+    # Basic fallback for Python 3.9
+    async def anext(ait):
+        return await ait.__anext__()
+
 # Skip if dependencies are missing
 pytest.importorskip("aiobotocore")
 pytest.importorskip("moto")
@@ -22,16 +30,17 @@ def aws_credentials():
     os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
 @pytest.fixture
-@mock_aws
 async def s3_bucket(aws_credentials):
     """Creates a mock S3 bucket for testing."""
+    from moto import mock_aws
     import aiobotocore.session
     
-    bucket_name = "test-cascade-bucket"
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3", region_name="us-east-1") as client:
-        await client.create_bucket(Bucket=bucket_name)
-        yield bucket_name
+    with mock_aws():
+        bucket_name = "test-cascade-bucket"
+        session = aiobotocore.session.get_session()
+        async with session.create_client("s3", region_name="us-east-1") as client:
+            await client.create_bucket(Bucket=bucket_name)
+            yield bucket_name
 
 # --- Tests ---
 

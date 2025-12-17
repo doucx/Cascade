@@ -1,101 +1,70 @@
-你的分析完全正确，测试失败了。这是一个非常好的错误捕获，它暴露了我们 API 设计中的一个微妙问题。
+这是一个将 **第三阶段：验证组合模式 (以 `LLM` 为例)** 的所有更改提交到版本控制的计划。
 
-## [WIP] fix: Refactor `cs.template` to support dynamic context dictionaries
+此提交包含 LLM 模式的实现文件、用于验证组合的集成测试，以及为修复 `cs.template` 的 API 缺陷而进行的微小重构。
 
-### 错误分析
-测试失败的根本原因是 `TypeError: <Task template> argument after ** must be a mapping, not LazyResult`。
-
-这个错误发生在 `llm_openai.py` 的这一行：
-`final_prompt = cs.template(prompt_template, **context)`
-
-这里的 `context` 是 `cs.Param("context", ...)` 的返回值，它是一个 `LazyResult` 对象，而不是一个 Python 字典。Python 的 `**` 解包操作符是在**图构建时**（即调用 `cs.template(...)` 的那一刻）执行的，它要求操作数必须是一个实际的 `dict`。它无法解包一个代表未来值的 `LazyResult`。
-
-我们不能动态地根据一个 `LazyResult` 的内容来决定一个函数调用有哪些关键字参数。
+## [COMMIT] feat(patterns): Add LLM composition pattern and fix template API
 
 ### 用户需求
-修复 `cs.template` 的调用方式，使其能够接受一个 `LazyResult` 作为其渲染上下文的来源，从而修复 LLM 模式中的 `TypeError`。
+引入 LLM 调用模式，证明 `cs.http`, `cs.template`, `cs.subflow` 等原子化组件可以组合成复杂的高级工作流（LLM Orchestration），同时修复了 `cs.template` 中由于 Python `**kwargs` 运行时限制导致的问题。
 
 ### 评论
-这个修复虽然小，但意义重大。它澄清了 `Cascade` 中静态图定义与动态值解析之间的界限。通过修改 `cs.template` 的接口，我们使其行为更加明确和健壮，能够更好地处理动态数据结构。
+这个提交标志着第二层核心能力路线图的成功完成。我们创建了一个行业标准的用例，完全通过组合现有组件实现，证明了架构的正确性。对 `cs.template` 的修复是必要的 API 健壮性改进，确保它可以接收表示未来值的 `LazyResult` 字典。
 
 ### 目标
-1.  修改 `src/cascade/providers/template.py` 中 `render_template` 任务的签名，使其能显式接受一个 `context` 字典参数。
-2.  修改 `src/cascade/examples/patterns/llm_openai.py` 中对 `cs.template` 的调用，以符合新的、更安全的 API。
+1.  提交 LLM 模式文件 `llm_openai.py` 及其目录结构。
+2.  提交 `llm_pattern` 集成测试。
+3.  提交对 `src/cascade/providers/template.py` 的修复。
 
 ### 基本原理
-我们将把 `render_template` 任务的签名从 `(template_string, **kwargs)` 修改为 `(template_string, context=None, **kwargs)`。在任务内部，我们会将 `context` 字典（如果提供）和 `kwargs` 合并。这样，在调用端，我们就可以将代表上下文的 `LazyResult` 作为一个普通的关键字参数 `context` 传递进去，从而避免使用 `**` 操作符，解决了 `TypeError` 的问题。
+将 LLM 模式作为官方参考，有助于教育用户如何使用 `Cascade` 的核心特性，特别是 `cs.subflow` 和 `.with_retry()` 策略在网络调用中的精确应用。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #comp/providers #scope/api #task/domain/core #task/object/template-provider #task/action/refactor #task/state/continue
+#intent/build #intent/fix #flow/ready #priority/high #comp/providers #comp/tests #scope/dx #task/domain/patterns #task/object/llm-pattern #task/action/refactor #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 `template` 提供者以接受显式上下文
+#### Acts 1: 添加文件并提交变更
 
-我们将更新 `src/cascade/providers/template.py`，使其能够处理一个名为 `context` 的字典参数。
+将所有新增和修改的文件添加到暂存区，并执行提交。
 
 ~~~~~act
-patch_file
+git_add
 src/cascade/providers/template.py
+src/cascade/examples/patterns/llm_openai.py
+tests/examples/test_llm_pattern.py
+tests/examples/
+src/cascade/examples/patterns/
 ~~~~~
-~~~~~python
-@task(name="template")
-def render_template(template_string: str, **context) -> str:
-    """
-    Renders a Jinja2 template string with the provided context.
-
-    Args:
-        template_string: The Jinja2 template string.
-        **context: Keyword arguments to be used as variables in the template.
-                   These can be literals or LazyResults.
-
-    Returns:
-        The rendered string.
-    """
-    template = jinja2.Template(template_string)
-    return template.render(**context)
-~~~~~
-~~~~~python
-from typing import Dict, Any, Optional
-
-@task(name="template")
-def render_template(
-    template_string: str, context: Optional[Dict[str, Any]] = None, **kwargs
-) -> str:
-    """
-    Renders a Jinja2 template string with the provided context.
-
-    Args:
-        template_string: The Jinja2 template string.
-        context: A dictionary of context variables.
-        **kwargs: Additional context variables passed as keyword arguments.
-
-    Returns:
-        The rendered string.
-    """
-    template = jinja2.Template(template_string)
-    final_context = {}
-    if context:
-        final_context.update(context)
-    final_context.update(kwargs)
-    return template.render(**final_context)
-~~~~~
-
-#### Acts 2: 修正 LLM 模式中的 `template` 调用
-
-现在我们更新 `llm_openai.py`，使用新的 `context` 参数，而不是 `**` 解包。
 
 ~~~~~act
-patch_file
-src/cascade/examples/patterns/llm_openai.py
+git_commit
 ~~~~~
-~~~~~python
-# 步骤 A: 渲染 Prompt
-final_prompt = cs.template(prompt_template, **context)
+~~~~~text
+feat(patterns): Add LLM composition pattern and fix template API
+
+This commit marks the completion of the second-tier core capability roadmap by delivering a non-trivial, complex workflow built purely from atomic providers.
+
+Key Changes:
+
+1.  **New Pattern (`examples/patterns/llm_openai.py`)**: Demonstrates how to orchestrate an OpenAI API call by composing:
+    *   `cs.Env` for API keys.
+    *   `cs.Param` for dynamic configuration (model, template).
+    *   `cs.template` for prompt rendering.
+    *   `cs.http.post` for the network call, with an explicit `.with_retry()` policy.
+    *   `cs.subflow` is used to call this pattern from an external entry point.
+
+2.  **Fix(template)**: Refactors `cs.template` to explicitly accept a `context` argument. This resolves a `TypeError` encountered when passing a `LazyResult` representing a dictionary (`cs.Param` or upstream task) directly via `**kwargs` in the defining stage (which is a static operation in Python).
+
+3.  **Tests**: Adds end-to-end integration tests for the LLM pattern, validating the flow via `cs.subflow` using a mocked HTTP response.
 ~~~~~
-~~~~~python
-# 步骤 A: 渲染 Prompt
-final_prompt = cs.template(template_string=prompt_template, context=context)
-~~~~~
+
+### 下一步建议
+我们已经完成了 Cascade 第二层核心能力的实现和验证，项目处于一个功能完整且经过测试的稳定状态。
+
+接下来，我建议从技术债务监测中选取优先级较高的项目继续迭代，例如：
+1.  **缓存键的健壮性**: 这是一个架构稳定性问题，需要引入一个更明确的 `generate_key` 协议。
+2.  **增强 `cs.template` 的开发者体验**: 考虑到我们刚刚修复了 `cs.template` 的人体工程学问题，现在正是引入如 `cs.dict` 这样的辅助提供者来提高 DX 的好时机（对应技术债务分析中的选项 B）。
+
+请告诉我你希望继续处理哪个任务。

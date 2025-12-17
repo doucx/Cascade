@@ -3,14 +3,6 @@ import cascade as cs
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 
-# anext is in asyncio for Python 3.10+
-try:
-    from asyncio import anext
-except ImportError:
-    # Basic fallback for Python 3.9
-    async def anext(ait):
-        return await ait.__anext__()
-
 # Skip if dependencies are missing
 pytest.importorskip("aiobotocore")
 pytest.importorskip("moto")
@@ -30,26 +22,25 @@ def aws_credentials():
     os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
 @pytest.fixture
-async def s3_bucket(aws_credentials):
-    """Creates a mock S3 bucket for testing."""
+def s3_mock(aws_credentials):
+    """A sync fixture that activates the moto mock context."""
     from moto import mock_aws
-    import aiobotocore.session
-    
     with mock_aws():
-        bucket_name = "test-cascade-bucket"
-        session = aiobotocore.session.get_session()
-        async with session.create_client("s3", region_name="us-east-1") as client:
-            await client.create_bucket(Bucket=bucket_name)
-            yield bucket_name
+        yield
+
 
 # --- Tests ---
 
 @pytest.mark.asyncio
-async def test_s3_write_read_text(s3_bucket):
+async def test_s3_write_read_text(s3_mock):
     """Tests writing and reading a text file from S3."""
-    
-    # Consume the async generator fixture to get the bucket name string
-    bucket_name = await anext(s3_bucket)
+    import aiobotocore.session
+
+    # Async setup is now inside the test
+    bucket_name = "test-cascade-bucket"
+    session = aiobotocore.session.get_session()
+    async with session.create_client("s3", region_name="us-east-1") as client:
+        await client.create_bucket(Bucket=bucket_name)
 
     # Workflow: Write then Read
     key = "test.txt"
@@ -66,10 +57,15 @@ async def test_s3_write_read_text(s3_bucket):
     assert result == content
 
 @pytest.mark.asyncio
-async def test_s3_write_read_bytes(s3_bucket):
+async def test_s3_write_read_bytes(s3_mock):
     """Tests writing and reading a binary file from S3."""
-    
-    bucket_name = await anext(s3_bucket)
+    import aiobotocore.session
+
+    # Async setup is inside the test
+    bucket_name = "test-cascade-bucket"
+    session = aiobotocore.session.get_session()
+    async with session.create_client("s3", region_name="us-east-1") as client:
+        await client.create_bucket(Bucket=bucket_name)
     
     key = "test.bin"
     content = b"\x01\x02\x03"

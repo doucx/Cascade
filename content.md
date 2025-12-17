@@ -1,92 +1,281 @@
-好的，所有测试都已通过。现在我们将把这次重构作为一个完整的逻辑单元提交，并检查当前的工作区状态。
+好的，我们正式开始实施**阶段二：引擎解耦与核心逻辑统一**。
 
-## [COMMIT] refactor(core): 通过解耦输入契约实现图同构化
+根据路线图，第一步是实现 `Engine` 的依赖注入，并剥离其与具体实现的耦合。这将使 `Engine` 成为一个纯粹的、由协议驱动的编排器。同时，为了保持项目在每个阶段都处于可测试状态，我将同步更新 `cs.run` 门面函数以适应新的 `Engine` 构造器，并创建第一个核心的、隔离的 `Engine` 单元测试。
+
+## [WIP] refactor(runtime): 实现 Engine 依赖注入并创建核心测试
 
 ### 用户需求
-提交所有关于 v1.3 架构重构的变更，该重构旨在将 `Param`/`Env` 定义与图构建解耦，并修复由此引入的 Bug。
+根据重构路线图第二阶段的要求，将 `cascade.runtime.Engine` 类重构为纯粹的依赖注入模式，并为其核心编排逻辑建立独立的单元测试。
 
 ### 评论
-这是一次关键的架构重构。通过引入 `InputSpec` 和 `WorkflowContext`，我们彻底解决了 `Param` 作为特殊节点带来的概念不一致问题，并极大地提升了 `cs.cli` 的性能和独立性。工作流图现在是完全同构的，所有节点都是 `LazyResult`，这简化了 `Engine` 和 `GraphBuilder` 的核心逻辑，使系统更加健壮和可扩展。
+这是整个重构中最关键的一步。通过强制依赖注入，我们从根本上解除了 `Engine`（高层策略）与 `NativeSolver` 或 `LocalExecutor`（底层实现）之间的硬编码耦合。这不仅遵循了“依赖倒置原则”，也为未来引入新的执行器（如分布式执行器）或解析器（如资源感知解析器）铺平了道路，而无需修改 `Engine` 的核心代码。
+
+同时，创建 `test_engine_core.py` 是一个重要的里程碑，它标志着我们开始为系统的“大脑”构建一套独立于任何具体实现的、健壮的验证机制。
 
 ### 目标
-1.  将所有与 v1.3 重构相关的、已修改和新增的文件添加到 Git 暂存区。
-2.  创建一个清晰、详尽的 Git Commit，记录本次重构的核心思想和收益。
-3.  检查提交后工作区的状态，确保没有遗留的未跟踪文件。
+1.  **重构 `Engine`**: 修改 `src/cascade/runtime/engine.py`，移除 `__init__` 方法中对 `NativeSolver`, `LocalExecutor`, 和 `MessageBus` 的硬编码默认实例化，强制调用者提供实现协议的实例。
+2.  **更新 `cs.run` 门面**: 修改 `src/cascade/__init__.py` 中的 `run` 函数，由其负责实例化默认的 `NativeSolver` 和 `LocalExecutor`，并将其注入到新的 `Engine` 构造器中，以保持高级 API 的行为不变。
+3.  **创建核心测试**: 新建 `tests/runtime/test_engine_core.py` 文件，并添加第一个测试用例 `test_engine_follows_solver_plan`，使用 Mock/Spy 对象验证 `Engine` 严格按照 `Solver` 提供的计划顺序调用 `Executor`。
 
 ### 基本原理
-本次重构是一个逻辑上完整的工作单元，它解决了 `Cascade` v1.2 中的核心设计问题，并成功通过了所有测试。现在是将其固化到版本历史中的最佳时机。
+本次重构遵循“依赖倒置”原则。`Engine` 作为高层模块，不应依赖于底层模块的具体实现，而应依赖于抽象（即 `Solver` 和 `Executor` 协议）。
+
+我将通过 `patch_file` 原子化地修改 `Engine` 的构造函数和 `cs.run` 的实现。然后，通过 `write_file` 创建新的测试文件。这个新的测试将使用我们自己实现的轻量级测试替身（`MockSolver`, `SpyExecutor`）来隔离 `Engine`，确保我们只测试其“编排”逻辑，而不受具体解析或执行逻辑的影响。这种方法保证了测试的精确性和稳定性。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/core #comp/cli #comp/runtime #concept/state #scope/core #scope/api #task/domain/core #task/object/param #task/action/implementation #task/state/end
+#intent/refine #flow/ready #priority/high #comp/runtime #comp/tests #scope/core #scope/dx #ai/instruct #task/domain/architecture #task/object/engine-decoupling #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存所有相关变更
+#### Acts 1: 重构 `Engine` 以强制依赖注入
 
-我们将所有已修改和新增的文件添加到 Git 暂存区。
+首先，我将修改 `engine.py`，移除 `__init__` 中的默认组件实例化逻辑。
 
 ~~~~~act
-git_add
-src/cascade/__init__.py
-src/cascade/context.py
-src/cascade/graph/build.py
-src/cascade/internal/__init__.py
-src/cascade/internal/inputs.py
+patch_file
 src/cascade/runtime/engine.py
-src/cascade/runtime/resolvers.py
-src/cascade/spec/input.py
-src/cascade/spec/task.py
-src/cascade/tools/cli.py
-tests/graph/test_build.py
-tests/graph/test_serialize.py
-tests/providers/test_sql.py
-tests/runtime/test_flow_manager.py
-tests/runtime/test_input_execution.py
-tests/spec/test_input_context.py
-tests/tools/test_cli.py
 ~~~~~
+~~~~~python
+import time
+import inspect
+import asyncio
+from typing import Any, Dict, Optional, Generator, Callable, List
+from uuid import uuid4
+from contextlib import ExitStack
 
-#### Acts 2: 提交重构
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph, EdgeType
+from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import (
+    RunStarted,
+    RunFinished,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+    TaskSkipped,
+    TaskRetrying,
+    ResourceAcquired,
+    ResourceReleased,
+)
+from cascade.runtime.protocols import Solver, Executor
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.resource_manager import ResourceManager
+from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
+~~~~~
+~~~~~python
+import time
+import inspect
+import asyncio
+from typing import Any, Dict, Optional, Generator, Callable, List
+from uuid import uuid4
+from contextlib import ExitStack
 
-执行 Git 提交，并附上详细的说明。
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph, EdgeType
+from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import (
+    RunStarted,
+    RunFinished,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+    TaskSkipped,
+    TaskRetrying,
+    ResourceAcquired,
+    ResourceReleased,
+)
+from cascade.runtime.protocols import Solver, Executor
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.resource_manager import ResourceManager
+from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
+~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+src/cascade/runtime/engine.py
 ~~~~~
-~~~~~text
-refactor(core): Homogenize graph by decoupling input specs
-
-This commit implements the Cascade v1.3 architecture for handling external inputs, moving from special `param` node types to a fully homogeneous graph.
-
-Key Changes:
-
-1.  **Homogeneous Graph**: The special `node_type="param"` has been eliminated. All nodes in the computation graph are now standard `LazyResult` objects, simplifying the `GraphBuilder` and `Engine`.
-
-2.  **Input Specification (`spec.input`)**: Introduced `InputSpec`, `ParamSpec`, and `EnvSpec` dataclasses. These objects hold the metadata (name, default, type, description) for external inputs, separating the *what* from the *how*.
-
-3.  **Workflow Context (`context.py`)**: A new `WorkflowContext` (using `contextvars`) acts as a registry for `InputSpec` objects. This decouples the input contract definition from the graph structure itself.
-
-4.  **Factory Functions (`cs.Param`, `cs.Env`)**: `cs.Param` and the new `cs.Env` are no longer spec objects but factory functions. They perform two roles:
-    - Register their corresponding `Spec` object in the `WorkflowContext`.
-    - Return a standard `LazyResult` that wraps an internal task (e.g., `_get_param_value`) responsible for fetching the value at runtime.
-
-5.  **Decoupled CLI (`tools.cli`)**: `cs.cli` no longer needs to build the entire computation graph to discover parameters. It now reads directly from the `WorkflowContext`, making CLI generation significantly faster and more robust.
-
-6.  **Bug Fixes**:
-    - `ArgumentResolver`: Fixed a bug where it failed to identify internal tasks (`_get_param_value`) because it was comparing a `Task` instance to a raw function. The check is now correctly `node.callable_obj is task.func`.
-    - `tools.cli`: Fixed the CLI tool to print the final result of a workflow to stdout.
-    - `tests.tools.test_cli`: Resolved a variable scope issue (`NameError`) caused by a local import shadowing the module-level import within a closure.
+~~~~~python
+    def __init__(
+        self,
+        solver: Optional[Solver] = None,
+        executor: Optional[Executor] = None,
+        bus: Optional[MessageBus] = None,
+        system_resources: Optional[Dict[str, Any]] = None,
+    ):
+        self.solver = solver or NativeSolver()
+        self.executor = executor or LocalExecutor()
+        self.bus = bus or MessageBus()
+        self.resource_manager = ResourceManager(capacity=system_resources)
+        self._resource_providers: Dict[str, Callable] = {}
+~~~~~
+~~~~~python
+    def __init__(
+        self,
+        solver: Solver,
+        executor: Executor,
+        bus: MessageBus,
+        system_resources: Optional[Dict[str, Any]] = None,
+    ):
+        self.solver = solver
+        self.executor = executor
+        self.bus = bus
+        self.resource_manager = ResourceManager(capacity=system_resources)
+        self._resource_providers: Dict[str, Callable] = {}
 ~~~~~
 
-#### Acts 3: 检查最终状态
+#### Acts 2: 更新 `cs.run` 门面以使用新的 `Engine`
 
-检查当前 Git 仓库的状态以确认工作区是干净的。
+现在，我将更新 `cs.run()`，让它负责创建默认的 `Solver` 和 `Executor` 并注入到 `Engine` 中，以保持 API 的向后兼容性。
 
 ~~~~~act
-git_status
+patch_file
+src/cascade/__init__.py
+~~~~~
+~~~~~python
+# Runtime
+from .runtime.engine import Engine
+from .runtime.bus import MessageBus
+from .runtime.subscribers import HumanReadableLogSubscriber
+from .runtime.exceptions import DependencyMissingError
+~~~~~
+~~~~~python
+# Runtime
+from .runtime.engine import Engine
+from .runtime.bus import MessageBus
+from .runtime.subscribers import HumanReadableLogSubscriber
+from .runtime.exceptions import DependencyMissingError
+from .adapters.solvers.native import NativeSolver
+from .adapters.executors.local import LocalExecutor
+~~~~~
+
+~~~~~act
+patch_file
+src/cascade/__init__.py
+~~~~~
+~~~~~python
+    # 2. Setup the event system
+    event_bus = MessageBus()
+    # Attach the translator
+    HumanReadableLogSubscriber(event_bus)
+
+    engine = Engine(bus=event_bus, system_resources=system_resources)
+
+    return asyncio.run(engine.run(target, params=params))
+~~~~~
+~~~~~python
+    # 2. Setup the event system
+    event_bus = MessageBus()
+    # Attach the translator
+    HumanReadableLogSubscriber(event_bus)
+
+    # 3. Assemble the default Engine
+    solver = NativeSolver()
+    executor = LocalExecutor()
+
+    engine = Engine(
+        solver=solver,
+        executor=executor,
+        bus=event_bus,
+        system_resources=system_resources,
+    )
+
+    return asyncio.run(engine.run(target, params=params))
+~~~~~
+
+#### Acts 3: 创建 `Engine` 的核心单元测试
+
+最后，我将创建新的测试文件和第一个隔离测试，以验证 `Engine` 的核心编排逻辑。
+
+~~~~~act
+write_file
+tests/runtime/test_engine_core.py
+~~~~~
+~~~~~python
+import pytest
+from typing import List, Any, Dict
+
+import cascade as cs
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph
+from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
+
+
+# --- Test Doubles (Mocks and Spies) ---
+
+class MockSolver(Solver):
+    def __init__(self, plan: ExecutionPlan):
+        self._plan = plan
+    
+    def resolve(self, graph: Graph) -> ExecutionPlan:
+        # Return the pre-programmed plan
+        return self._plan
+
+class SpyExecutor(Executor):
+    def __init__(self):
+        self.call_log: List[Node] = []
+
+    async def execute(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        self.call_log.append(node)
+        return f"executed_{node.name}"
+
+
+# --- Test Case ---
+
+@pytest.mark.asyncio
+async def test_engine_follows_solver_plan():
+    """
+    Tests that Engine correctly iterates over the plan provided by a Solver
+    and calls the Executor for each node in the correct order.
+    """
+    # 1. Define a simple workflow (the graph structure doesn't matter much
+    # as the MockSolver will override the plan)
+    @cs.task
+    def task_a(): pass
+    @cs.task
+    def task_b(x): pass
+    
+    workflow = task_b(task_a())
+    graph = build_graph(workflow)
+    node_a = next(n for n in graph.nodes if n.name == 'task_a')
+    node_b = next(n for n in graph.nodes if n.name == 'task_b')
+
+    # 2. Define the execution plan that the MockSolver will return
+    # A simple sequential plan: [A], then [B]
+    mock_plan: ExecutionPlan = [
+        [node_a],
+        [node_b]
+    ]
+    
+    # 3. Setup test doubles and Engine
+    solver = MockSolver(plan=mock_plan)
+    executor = SpyExecutor()
+    bus = MessageBus()
+    
+    engine = Engine(solver=solver, executor=executor, bus=bus)
+    
+    # 4. Run the engine
+    await engine.run(workflow)
+    
+    # 5. Assert the executor was called in the correct order
+    assert len(executor.call_log) == 2
+    assert executor.call_log[0].name == "task_a"
+    assert executor.call_log[1].name == "task_b"
 ~~~~~
 
 ### 下一步建议
-我们已经成功完成了 v1.3 的核心重构。现在可以开始处理 `Router` 剪枝的逻辑了，因为我们已经为此奠定了坚实的架构基础。
+我们已经成功地将 `Engine` 解耦，并为其建立了第一个核心测试。现在，我们应该继续丰富 `test_engine_core.py`，以覆盖 `Engine` 的其他关键职责。
+
+根据路线图，我建议下一步是添加以下测试用例：
+1.  `test_engine_publishes_lifecycle_events`: 使用 `SpySubscriber` 验证 `Engine` 在任务开始、成功、失败时发布了正确的事件。
+2.  `test_engine_respects_retry_policy`: 给 `SpyExecutor` 编程，让它在前两次调用时抛出异常，验证 `Engine` 是否正确地进行了重试并发布了 `TaskRetrying` 事件。
+
+如果你同意，我将立即开始准备实现这些测试的计划。

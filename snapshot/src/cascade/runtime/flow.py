@@ -9,8 +9,7 @@ from cascade.runtime.protocols import StateBackend
 class FlowManager:
     """
     Manages the control flow of the execution, implementing logic for
-    skipping tasks (Conditions) and pruning branches (Router). This class is
-    stateless; all state is read from and written to a StateBackend instance.
+    skipping tasks (Conditions) and pruning branches (Router).
     """
 
     def __init__(self, graph: Graph, target_node_id: str):
@@ -21,8 +20,13 @@ class FlowManager:
         self.routers_by_selector: Dict[str, List[Edge]] = defaultdict(list)
         self.route_source_map: Dict[str, Dict[str, Any]] = defaultdict(dict)
         
+        # Reference counting for pruning
+        # Initial demand = Out-degree (number of consumers)
+        self.downstream_demand: Dict[str, int] = defaultdict(int)
+
         for edge in self.graph.edges:
             self.in_edges[edge.target.id].append(edge)
+            self.downstream_demand[edge.source.id] += 1
             
             if edge.router:
                 selector_id = self._get_obj_id(edge.router.selector)
@@ -32,8 +36,8 @@ class FlowManager:
                     route_source_id = self._get_obj_id(route_result)
                     self.route_source_map[edge.target.id][route_source_id] = key
 
-        # Note: Demand counting for pruning is now handled dynamically based on
-        # the state within the StateBackend, not pre-calculated.
+        # The final target always has at least 1 implicit demand (the user wants it)
+        self.downstream_demand[target_node_id] += 1
 
     def _get_obj_id(self, obj: Any) -> str:
         if isinstance(obj, LazyResult):
@@ -60,8 +64,33 @@ class FlowManager:
         for route_key, route_lazy_result in router.routes.items():
             if route_key != selected_route_key:
                 branch_root_id = self._get_obj_id(route_lazy_result)
-                # This branch is NOT selected. Mark it to be pruned.
-                state_backend.mark_skipped(branch_root_id, "Pruned_UnselectedRoute")
+                # This branch is NOT selected. 
+                # We decrement its demand. If it drops to 0, it gets pruned.
+                # Note: In the Router model, the "edge" carrying the router implies a demand
+                # from the consumer (edge.target) to the route (branch_root).
+                # Since we decided NOT to use this route, that demand is effectively gone.
+                self._decrement_demand_and_prune(branch_root_id, state_backend)
+
+    def _decrement_demand_and_prune(self, node_id: str, state_backend: StateBackend):
+        """
+        Decrements demand for a node. If demand hits 0, marks it pruned 
+        and recursively processes its upstreams.
+        """
+        # If already skipped/pruned, no need to do anything further
+        if state_backend.get_skip_reason(node_id):
+            return
+
+        self.downstream_demand[node_id] -= 1
+        
+        if self.downstream_demand[node_id] <= 0:
+            state_backend.mark_skipped(node_id, "Pruned")
+            
+            # Recursively reduce demand for inputs of the pruned node
+            for edge in self.in_edges[node_id]:
+                # Special case: If the edge is from a Router, do we prune the Router selector?
+                # No, the selector might be used by other branches.
+                # Standard dependency logic applies: reduce demand on source.
+                self._decrement_demand_and_prune(edge.source.id, state_backend)
 
     def should_skip(
         self, node: Node, state_backend: StateBackend

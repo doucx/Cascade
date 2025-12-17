@@ -56,7 +56,12 @@ all = [
 [project.entry-points."cascade.providers"]
 shell = "cascade.providers.shell:ShellProvider"
 template = "cascade.providers.template:TemplateProvider"
-http = "cascade.providers.http:HttpProvider"
+# http namespace
+"http.get" = "cascade.providers.http:HttpGetProvider"
+"http.post" = "cascade.providers.http:HttpPostProvider"
+"http.put" = "cascade.providers.http:HttpPutProvider"
+"http.delete" = "cascade.providers.http:HttpDeleteProvider"
+"http.request" = "cascade.providers.http:HttpRequestProvider"
 sql = "cascade.providers.sql:SqlProvider"
 load_yaml = "cascade.providers.config:YamlLoaderProvider"
 lookup = "cascade.providers.config:LookupProvider"

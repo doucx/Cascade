@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(runtime): 实现 Engine 依赖注入并创建核心测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765949503.4335694, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 更新测试用例以适应 Engine 的依赖注入构造器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765949646.8559468, "duration_ms": 0}}

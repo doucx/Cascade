@@ -2,6 +2,9 @@ import pytest
 import cascade as cs
 from sqlalchemy import create_engine
 
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
+
 # Skip if sqlalchemy missing
 pytest.importorskip("sqlalchemy")
 
@@ -30,7 +33,9 @@ def sqlite_db():
 @pytest.fixture(scope="module")
 def db_engine():
     """Provides a Cascade Engine with the sqlite_db resource pre-registered."""
-    engine = cs.Engine()
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     engine.register(sqlite_db)
     return engine
 

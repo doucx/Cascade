@@ -2,94 +2,93 @@ import pytest
 from unittest.mock import MagicMock
 from cascade.graph.model import Node, Edge, EdgeType
 from cascade.runtime.flow import FlowManager
+from cascade.adapters.state import InMemoryStateBackend
+from cascade.spec.lazy_types import LazyResult
+from cascade.spec.routing import Router
 
 def create_mock_node(id):
     return Node(id=id, name=id)
 
+def create_mock_lazy_result(uuid):
+    lr = MagicMock(spec=LazyResult)
+    lr._uuid = uuid
+    return lr
+
 def test_flow_manager_pruning_logic():
-    """Test that FlowManager correctly prunes downstream nodes."""
+    """
+    Test that FlowManager correctly prunes downstream nodes recursively.
     
-    # Graph Topology:
-    #       S
-    #      / \
-    #     A   B (to be pruned)
-    #      \ /
-    #       C
+    Graph Topology:
+    S (Selector) -> chooses "a" or "b"
     
-    # Note: In a real router scenario, S would be the selector, and there would be
-    # implicit edges. Here we simulate the pruning mechanism directly.
+    Routes:
+    - "a": A
+    - "b": B -> B_UP (B depends on B_UP)
     
-    nodes = [create_mock_node(n) for n in ["S", "A", "B", "C"]]
+    Consumer C depends on Router(S)
+    
+    If S chooses "a":
+    1. Route "b" (Node B) is not selected.
+    2. B should be pruned.
+    3. B_UP (only used by B) should be recursively pruned.
+    """
+    
+    # 1. Setup Nodes
+    nodes = [create_mock_node(n) for n in ["S", "A", "B", "B_UP", "C"]]
     n_map = {n.id: n for n in nodes}
     
+    # 2. Setup Router Objects
+    lr_s = create_mock_lazy_result("S")
+    lr_a = create_mock_lazy_result("A")
+    lr_b = create_mock_lazy_result("B")
+    
+    router_obj = Router(
+        selector=lr_s,
+        routes={"a": lr_a, "b": lr_b}
+    )
+    
+    # 3. Setup Edges
     edges = [
-        # S -> A
-        Edge(n_map["S"], n_map["A"], arg_name="x", edge_type=EdgeType.DATA),
-        # S -> B
-        Edge(n_map["S"], n_map["B"], arg_name="x", edge_type=EdgeType.DATA),
+        # S is used by C as the router selector
+        # Edge from Selector to Consumer
+        Edge(n_map["S"], n_map["C"], arg_name="x", edge_type=EdgeType.DATA, router=router_obj),
         
-        # A -> C
-        Edge(n_map["A"], n_map["C"], arg_name="a", edge_type=EdgeType.DATA),
-        # B -> C
-        Edge(n_map["B"], n_map["C"], arg_name="b", edge_type=EdgeType.DATA),
+        # B depends on B_UP
+        Edge(n_map["B_UP"], n_map["B"], arg_name="dep", edge_type=EdgeType.DATA),
+        
+        # Router implicitly links Routes to Consumer (ROUTER_ROUTE edges would exist in real graph)
+        # But FlowManager uses routers_by_selector map mostly.
+        # However, for demand counting, we need edges representing usage.
+        # In build_graph, we add edges from Route Result to Consumer.
+        Edge(n_map["A"], n_map["C"], arg_name="_route_a", edge_type=EdgeType.ROUTER_ROUTE),
+        Edge(n_map["B"], n_map["C"], arg_name="_route_b", edge_type=EdgeType.ROUTER_ROUTE),
     ]
     
     graph = MagicMock()
     graph.nodes = nodes
     graph.edges = edges
     
+    # 4. Initialize Manager & Backend
     manager = FlowManager(graph, target_node_id="C")
+    state_backend = InMemoryStateBackend(run_id="test_run")
     
-    # Initial state: C has demand 2 (from A and B) + 1 (target) = 3?
-    # No, demand is out-degree.
-    # S: 2 (A, B)
-    # A: 1 (C)
-    # B: 1 (C)
-    # C: 1 (Target implicit)
+    # Initial state check
+    # B_UP demand should be 1 (from B)
+    assert manager.downstream_demand["B_UP"] == 1
+    # B demand should be 1 (from C)
+    assert manager.downstream_demand["B"] == 1
     
-    # We simulate pruning B.
-    # B's demand is 1. If we prune it, we simulate that its demand drops to 0?
-    # No, pruning means we decided B shouldn't run.
-    # The method _decrement_demand_and_prune(node_id) does:
-    # demand[node_id] -= 1
-    # if demand <= 0: mark_skipped; recursively decrement demand for upstreams (inputs to node_id)
+    # 5. Simulate S completing and choosing "a"
+    state_backend.put_result("S", "a")
+    manager.register_result("S", "a", state_backend)
     
-    # Wait, the pruning logic usually works backward from unselected routes?
-    # Or forward?
-    # In flow.py:
-    # _process_router_decision:
-    #   for unselected route:
-    #     branch_root_id = ...
-    #     _decrement_demand_and_prune(branch_root_id)
+    # 6. Verify Pruning
+    # Route "b" (Node B) was not selected.
+    # It should be marked skipped.
+    assert state_backend.get_skip_reason("B") == "Pruned"
     
-    # So if S is a Router, and it selects A.
-    # Then B is unselected.
-    # We call decrement(B).
-    # B's demand is 1 (C depends on B). 
-    # Decrementing it makes it 0. So B is pruned.
-    # Then B's inputs (S) are decremented? 
-    #   for edge in in_edges[B]: decrement(S)
+    # Recursion: Since B is skipped, B_UP's demand should drop to 0 and be skipped too.
+    assert state_backend.get_skip_reason("B_UP") == "Pruned"
     
-    # C depends on B. But C also depends on A.
-    # If B is pruned, does C get pruned?
-    # C's demand is 1 (target).
-    # Pruning B doesn't affect C's demand (C is downstream of B).
-    # Pruning usually propagates UPSTREAM (reducing demand for parents).
-    
-    # Ah, Router logic is: "This branch is not needed".
-    # But C needs B?
-    # If C needs B, and B is pruned, C will fail with DependencyMissing unless C handles it.
-    
-    # The logic in flow.py seems to imply:
-    # If a node is not needed by anyone (demand=0), prune it.
-    
-    # In this test, if we call decrement(B):
-    # demand[B] becomes 0. B is skipped.
-    # B's input is S. demand[S] becomes 1 (was 2). S is NOT skipped.
-    
-    # Check if B is skipped.
-    manager._decrement_demand_and_prune("B")
-    assert manager.is_skipped("B")
-    assert not manager.is_skipped("A")
-    assert not manager.is_skipped("S")
-    assert not manager.is_skipped("C")
+    # Route "a" (Node A) should NOT be skipped.
+    assert state_backend.get_skip_reason("A") is None

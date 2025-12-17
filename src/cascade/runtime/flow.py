@@ -1,8 +1,9 @@
-from typing import Dict, Any, Optional, Set, List
+from typing import Dict, Any, Optional, List
 from collections import defaultdict
 from cascade.graph.model import Node, Graph, EdgeType, Edge
 from cascade.spec.common import Param
 from cascade.spec.lazy_types import LazyResult
+from cascade.runtime.protocols import StateBackend
 
 
 class FlowManager:
@@ -14,144 +15,127 @@ class FlowManager:
     def __init__(self, graph: Graph, target_node_id: str):
         self.graph = graph
         self.target_node_id = target_node_id
-        self._skipped_nodes: Set[str] = set()
         
-        # --- 1. Build Topology Indices ---
         self.in_edges: Dict[str, List[Edge]] = defaultdict(list)
         self.routers_by_selector: Dict[str, List[Edge]] = defaultdict(list)
-        
-        # Mapping: consumer_id -> { source_node_id -> route_key }
-        # Used to identify which route key a ROUTER_ROUTE edge corresponds to.
         self.route_source_map: Dict[str, Dict[str, Any]] = defaultdict(dict)
         
+        # Reference counting for pruning
+        # Initial demand = Out-degree (number of consumers)
+        self.downstream_demand: Dict[str, int] = defaultdict(int)
+
         for edge in self.graph.edges:
             self.in_edges[edge.target.id].append(edge)
+            self.downstream_demand[edge.source.id] += 1
             
             if edge.router:
-                # Map selector_id -> edges that utilize this selector
                 selector_id = self._get_obj_id(edge.router.selector)
                 self.routers_by_selector[selector_id].append(edge)
                 
-                # Build the route source map for the consumer (edge.target)
                 for key, route_result in edge.router.routes.items():
                     route_source_id = self._get_obj_id(route_result)
                     self.route_source_map[edge.target.id][route_source_id] = key
 
-        # --- 2. Initialize Reference Counting (Demand) ---
-        # A node's initial demand is its out-degree (number of consumers).
-        # We also treat the final workflow target as having +1 implicit demand.
-        self.downstream_demand: Dict[str, int] = defaultdict(int)
-        
-        for edge in self.graph.edges:
-            self.downstream_demand[edge.source.id] += 1
-            
+        # The final target always has at least 1 implicit demand (the user wants it)
         self.downstream_demand[target_node_id] += 1
 
     def _get_obj_id(self, obj: Any) -> str:
-        """Helper to get ID from LazyResult or Param."""
         if isinstance(obj, LazyResult):
             return obj._uuid
         elif isinstance(obj, Param):
             return obj.name
-        # Fallback, though graph building should ensure these types
         return str(obj)
 
-    def mark_skipped(self, node_id: str, reason: str = "Unknown"):
-        """Manually marks a node as skipped."""
-        self._skipped_nodes.add(node_id)
-
-    def is_skipped(self, node_id: str) -> bool:
-        return node_id in self._skipped_nodes
-
-    def register_result(self, node_id: str, result: Any):
+    def register_result(self, node_id: str, result: Any, state_backend: StateBackend):
         """
-        Notify FlowManager of a task completion. 
+        Notifies FlowManager of a task completion. 
         Triggers pruning if the node was a Router selector.
         """
         if node_id in self.routers_by_selector:
             for edge_with_router in self.routers_by_selector[node_id]:
-                self._process_router_decision(edge_with_router, result)
+                self._process_router_decision(edge_with_router, result, state_backend)
 
-    def _process_router_decision(self, edge: Edge, selector_value: Any):
+    def _process_router_decision(
+        self, edge: Edge, selector_value: Any, state_backend: StateBackend
+    ):
         router = edge.router
-        
         selected_route_key = selector_value
         
         for route_key, route_lazy_result in router.routes.items():
-            if route_key == selected_route_key:
-                continue
-                
-            # This route is NOT selected. Prune it.
-            branch_root_id = self._get_obj_id(route_lazy_result)
-            self._decrement_demand_and_prune(branch_root_id)
+            if route_key != selected_route_key:
+                branch_root_id = self._get_obj_id(route_lazy_result)
+                # This branch is NOT selected. 
+                # We decrement its demand. If it drops to 0, it gets pruned.
+                # Note: In the Router model, the "edge" carrying the router implies a demand
+                # from the consumer (edge.target) to the route (branch_root).
+                # Since we decided NOT to use this route, that demand is effectively gone.
+                self._decrement_demand_and_prune(branch_root_id, state_backend)
 
-    def _decrement_demand_and_prune(self, node_id: str):
+    def _decrement_demand_and_prune(self, node_id: str, state_backend: StateBackend):
         """
         Decrements demand for a node. If demand hits 0, marks it pruned 
         and recursively processes its upstreams.
         """
-        if self.is_skipped(node_id):
+        # If already skipped/pruned, no need to do anything further
+        if state_backend.get_skip_reason(node_id):
             return
 
         self.downstream_demand[node_id] -= 1
         
         if self.downstream_demand[node_id] <= 0:
-            self.mark_skipped(node_id, reason="Pruned")
+            state_backend.mark_skipped(node_id, "Pruned")
             
+            # Recursively reduce demand for inputs of the pruned node
             for edge in self.in_edges[node_id]:
-                self._decrement_demand_and_prune(edge.source.id)
+                # Special case: If the edge is from a Router, do we prune the Router selector?
+                # No, the selector might be used by other branches.
+                # Standard dependency logic applies: reduce demand on source.
+                self._decrement_demand_and_prune(edge.source.id, state_backend)
 
     def should_skip(
-        self, node: Node, results: Dict[str, Any]
+        self, node: Node, state_backend: StateBackend
     ) -> Optional[str]:
         """
-        Determines if a node should be skipped.
+        Determines if a node should be skipped based on the current state.
         Returns the reason string if it should be skipped, or None otherwise.
         """
-        if self.is_skipped(node.id):
-            return "Pruned"
-
-        # Determine active route key if this node is a Router consumer
-        active_route_key = None
-        # Find the edge carrying the Router definition
-        router_edge = next((e for e in self.in_edges[node.id] if e.router), None)
-        if router_edge:
-            selector_id = self._get_obj_id(router_edge.router.selector)
-            # If selector result is available, we know the active key
-            if selector_id in results:
-                active_route_key = results[selector_id]
-            # If selector is missing/skipped, we can't determine active key yet.
-            # But standard DATA dependency check below will handle missing selector.
-
-        # 1. Upstream Skip Propagation
-        for edge in self.in_edges[node.id]:
-            # Special handling for ROUTER_ROUTE edges
-            if edge.edge_type == EdgeType.ROUTER_ROUTE:
-                # If we know the active route, we only care about that one.
-                if active_route_key is not None:
-                    # Look up which key this edge corresponds to
-                    edge_key = self.route_source_map[node.id].get(edge.source.id)
-                    # If this edge is NOT the active route, ignore its skip status
-                    if edge_key != active_route_key:
-                        continue
-                
-                # If active_route_key is unknown (shouldn't happen if selector ran),
-                # or if this IS the active route, check if it's skipped.
-                if self.is_skipped(edge.source.id):
-                    return "UpstreamSkipped"
-
-            elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
-                if self.is_skipped(edge.source.id):
-                    return "UpstreamSkipped"
+        # 1. Check if already skipped (e.g., by router pruning)
+        if reason := state_backend.get_skip_reason(node.id):
+            return reason
 
         # 2. Condition Check (run_if)
         for edge in self.in_edges[node.id]:
             if edge.edge_type == EdgeType.CONDITION:
-                if edge.source.id not in results:
+                if not state_backend.has_result(edge.source.id):
+                    # Propagate skip if condition source was skipped
+                    if state_backend.get_skip_reason(edge.source.id):
+                        return "UpstreamSkipped_Condition"
                     return "ConditionMissing"
                 
-                condition_result = results.get(edge.source.id)
+                condition_result = state_backend.get_result(edge.source.id)
                 if not condition_result:
                     return "ConditionFalse"
+        
+        # 3. Upstream Skip Propagation
+        active_route_key = None
+        router_edge = next((e for e in self.in_edges[node.id] if e.router), None)
+        if router_edge:
+            selector_id = self._get_obj_id(router_edge.router.selector)
+            if state_backend.has_result(selector_id):
+                active_route_key = state_backend.get_result(selector_id)
 
+        for edge in self.in_edges[node.id]:
+            if edge.edge_type == EdgeType.ROUTER_ROUTE:
+                if active_route_key is not None:
+                    edge_key = self.route_source_map[node.id].get(edge.source.id)
+                    if edge_key != active_route_key:
+                        continue
+                
+                if state_backend.get_skip_reason(edge.source.id):
+                    return "UpstreamSkipped_Route"
+            
+            elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
+                if state_backend.get_skip_reason(edge.source.id):
+                    return "UpstreamSkipped_Data"
+        
         return None

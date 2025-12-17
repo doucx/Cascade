@@ -1,4 +1,4 @@
-from typing import Protocol, List, Any, Dict
+from typing import Protocol, List, Any, Dict, Optional
 from cascade.graph.model import Graph, Node
 
 # An execution plan is a list of stages, where each stage is a list of nodes
@@ -31,6 +31,20 @@ class Executor(Protocol):
         ...
 
 
+class CacheBackend(Protocol):
+    """
+    Protocol for a storage backend that persists cached results.
+    """
+
+    def get(self, key: str) -> Optional[Any]:
+        """Retrieves a value by key."""
+        ...
+
+    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+        """Sets a value for a key, optionally with a TTL in seconds."""
+        ...
+
+
 class CachePolicy(Protocol):
     """
     Protocol for a caching strategy.
@@ -47,6 +61,33 @@ class CachePolicy(Protocol):
         """
         Saves a result to the cache.
         """
+        ...
+
+
+class StateBackend(Protocol):
+    """
+    Protocol for a backend that stores the transient state of a single workflow run.
+    This includes task results and skip statuses.
+    """
+
+    def put_result(self, node_id: str, result: Any) -> None:
+        """Stores the result of a completed task."""
+        ...
+
+    def get_result(self, node_id: str) -> Optional[Any]:
+        """Retrieves the result of a task. Returns None if not found."""
+        ...
+
+    def has_result(self, node_id: str) -> bool:
+        """Checks if a result for a given task ID exists."""
+        ...
+
+    def mark_skipped(self, node_id: str, reason: str) -> None:
+        """Marks a task as skipped."""
+        ...
+
+    def get_skip_reason(self, node_id: str) -> Optional[str]:
+        """Retrieves the reason a task was skipped. Returns None if not skipped."""
         ...
 
 

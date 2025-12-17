@@ -110,4 +110,4 @@ async def test_cascade_skip():
     reason_b = next(e.reason for e in skip_events if e.task_name == "step_b")
 
     assert reason_a == "ConditionFalse"
-    assert reason_b == "UpstreamSkipped"
+    assert reason_b == "UpstreamSkipped_Data"

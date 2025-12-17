@@ -10,7 +10,7 @@ context = cs.Param("context", default={})
 
 # 2. 组合原子任务 (这就是模式的核心)
 # 步骤 A: 渲染 Prompt
-final_prompt = cs.template(prompt_template, **context)
+final_prompt = cs.template(template_string=prompt_template, context=context)
 
 # 步骤 B: 调用 HTTP API (使用第一阶段构建的积木)
 api_response = cs.http.post(

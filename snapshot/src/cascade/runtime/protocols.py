@@ -1,4 +1,4 @@
-from typing import Protocol, List, Any, Dict
+from typing import Protocol, List, Any, Dict, Optional
 from cascade.graph.model import Graph, Node
 
 # An execution plan is a list of stages, where each stage is a list of nodes

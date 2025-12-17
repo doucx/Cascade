@@ -1,6 +1,6 @@
 import pytest
 from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
+from cascade.interfaces.events import Event
 
 
 class SpySubscriber:

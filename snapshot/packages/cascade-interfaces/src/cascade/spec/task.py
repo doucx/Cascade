@@ -2,7 +2,7 @@ from typing import TypeVar, Generic, Callable, Optional, Union, List, TYPE_CHECK
 import inspect
 
 if TYPE_CHECKING:
-    from cascade.runtime.protocols import CachePolicy
+    from cascade.interfaces.protocols import CachePolicy
 
 from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.lazy_types import (

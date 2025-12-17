@@ -1,5 +1,5 @@
 import io
-from cascade.runtime.events import RunStarted, TaskExecutionFinished
+from cascade.interfaces.events import RunStarted, TaskExecutionFinished
 from cascade.runtime.subscribers import HumanReadableLogSubscriber
 
 

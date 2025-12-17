@@ -4,7 +4,7 @@ import time
 import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import TaskRetrying, Event
+from cascade.interfaces.events import TaskRetrying, Event
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 

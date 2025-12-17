@@ -2,7 +2,7 @@ import pytest
 import cascade as cs
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.engine import Engine
-from cascade.runtime.events import Event, TaskSkipped
+from cascade.interfaces.events import Event, TaskSkipped
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 

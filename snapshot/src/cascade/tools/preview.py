@@ -3,6 +3,8 @@ from ..spec.lazy_types import LazyResult  # NEW
 from ..graph.build import build_graph
 from ..runtime.engine import Engine
 from ..runtime.bus import MessageBus
+from ..adapters.solvers.native import NativeSolver
+from ..adapters.executors.local import LocalExecutor
 from .events import PlanAnalysisStarted, PlanNodeInspected, PlanAnalysisFinished
 
 

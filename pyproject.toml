@@ -28,6 +28,7 @@ dev = [
   "pytest-cov",
   "mypy",
   "pytest-aiohttp",
+  "moto[s3]",
   "typer[all]",
   "mkdocs",
   "mkdocs-material",
@@ -39,6 +40,7 @@ sql = ["sqlalchemy"]
 cli = ["typer[all]"]
 config = ["PyYAML"]
 csp_solver = ["python-constraint"]
+s3 = ["aiobotocore"]
 
 # 新增一个 'all' 组，方便一键安装所有可选依赖
 all = [
@@ -48,6 +50,7 @@ all = [
   "typer[all]",
   "PyYAML",
   "python-constraint",
+  "aiobotocore",
 ]
 
 [project.entry-points."cascade.providers"]
@@ -57,11 +60,23 @@ http = "cascade.providers.http:HttpProvider"
 sql = "cascade.providers.sql:SqlProvider"
 load_yaml = "cascade.providers.config:YamlLoaderProvider"
 lookup = "cascade.providers.config:LookupProvider"
+# Legacy aliases
 "read.text" = "cascade.providers.io:ReadTextProvider"
 "read.bytes" = "cascade.providers.io:ReadBytesProvider"
 "write.text" = "cascade.providers.io:WriteTextProvider"
 "write.bytes" = "cascade.providers.io:WriteBytesProvider"
 "fs.exists" = "cascade.providers.io:FsExistsProvider"
+# New cs.io.local namespace
+"io.local.read_text" = "cascade.providers.io:IoLocalReadTextProvider"
+"io.local.read_bytes" = "cascade.providers.io:IoLocalReadBytesProvider"
+"io.local.write_text" = "cascade.providers.io:IoLocalWriteTextProvider"
+"io.local.write_bytes" = "cascade.providers.io:IoLocalWriteBytesProvider"
+"io.local.exists" = "cascade.providers.io:IoLocalExistsProvider"
+# New cs.io.s3 namespace
+"io.s3.read_text" = "cascade.providers.s3:S3ReadTextProvider"
+"io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
+"io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
+"io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

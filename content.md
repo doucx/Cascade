@@ -1,77 +1,44 @@
-好的，我们已经完成了 `cs.io` 命名空间的扩展和 S3 Provider 的代码实现。现在，至关重要的一步是为这个新的 S3 Provider 添加健壮的集成测试，以确保其功能的正确性。
+你的分析非常到位，错误追踪信息非常清晰地指出了问题所在。
 
-我将生成一个计划，创建一个新的测试文件，并使用 `moto` 库来模拟 AWS S3 服务，从而在不依赖真实网络和凭证的情况下验证我们的实现。
+## [WIP] fix: 修正 S3 测试中异步 fixture 的使用方式
 
-## [WIP] test: 添加 S3 provider 的集成测试
+### 错误分析
+测试失败的根本原因是 `pytest-asyncio` 处理 `async def` fixture 的机制与我们的使用方式不匹配。
+
+1.  **Fixture 类型**: 当一个 `async def` 的 pytest fixture 使用 `yield` 时，它返回的不是 `yield` 的值本身，而是一个**异步生成器 (async_generator)** 对象。
+2.  **参数传递**: 在我们的测试函数 `test_s3_write_read_text(s3_bucket)` 中，参数 `s3_bucket` 接收到的就是这个 `async_generator` 对象，而不是我们期望的字符串 `test-cascade-bucket`。
+3.  **根本错误**: `Cascade` 工作流将这个生成器对象作为 `bucket` 参数一路传递给了底层的 `aiobotocore` 库。`botocore` 的验证层在尝试对桶名执行正则表达式搜索时 (`VALID_BUCKET.search(bucket)`)，收到了一个生成器对象而不是预期的字符串，因此抛出了 `TypeError: expected string or bytes-like object, got 'async_generator'`。
 
 ### 用户需求
-为新创建的 `cs.io.s3.*` Provider 添加一套完整的集成测试，以验证其在隔离环境中的功能正确性。
+修复 `tests/providers/test_s3.py` 中因异步 fixture 使用不当而导致的两个测试用例失败。
 
 ### 评论
-使用 `moto` 库是测试 AWS 相关集成的最佳实践。它允许我们在本地完全模拟 S3 API，使得测试快速、可靠且独立于外部环境。此外，将测试用例本身编写为 Cascade 工作流，也是一种绝佳的“吃自己的狗粮”(Dogfooding)方式，可以同时验证 Provider 和 `Engine` 的集成。
+这是一个微妙但很常见的 `asyncio` 与 `pytest` 集成时的陷阱。修复方案是直接且正确的：在测试用例中显式地、异步地从生成器中提取出我们需要的单个值。这确保了传递给业务逻辑的是正确类型的数据。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/providers/test_s3.py`。
-2.  利用 `moto` 和 `pytest` fixture 创建一个临时的、被 mock 的 S3 环境，包括凭证和一个测试用的存储桶 (bucket)。
-3.  编写测试用例，覆盖对 mock S3 的文本和字节的写入与读取操作。
-4.  编写一个测试用例，验证当 `aiobotocore` 依赖缺失时，Provider 会按预期抛出 `ImportError`。
+1.  在 `tests/providers/test_s3.py` 中导入 `anext`（或 `asyncio.anext` for Python 3.10+）。
+2.  在两个失败的测试用例中，使用 `await anext(s3_bucket)` 来正确地从异步生成器 fixture 中提取出桶名字符串。
+3.  使用提取出的字符串变量作为 `cs.io.s3.*` 调用的 `bucket` 参数。
 
 ### 基本原理
-通过 `pytest.importorskip` 确保这些测试只在已安装 `moto` 和 `aiobotocore` 的开发环境中运行。测试工作流将包含一个 `write` 操作和一个依赖于它的 `read` 操作，以验证端到端的正确性。`run_if` 用于确保 `read` 操作在 `write` 操作成功后执行，形成一个逻辑上的依赖关系。
+`anext()` 是用于从异步迭代器（包括异步生成器）中获取下一个项目的标准库函数。由于我们的 fixture 只 `yield` 一次，`await anext(s3_bucket)` 将正确地执行 fixture 直到 `yield` 点，并返回 `yield` 的值。这样，测试的其余部分就能以正确的字符串类型继续执行。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/providers #task/domain/storage #task/object/io-provider #task/action/integration #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #task/domain/storage #task/object/io-provider #task/action/integration #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 S3 Provider 的测试文件
+#### Acts 1: 修正 S3 测试文件
 
-我们将创建 `tests/providers/test_s3.py` 文件。它包含使用 `moto` 模拟 S3 环境的 fixtures，以及验证文本/字节读写和依赖检查的核心测试逻辑。
+我们将修改 `tests/providers/test_s3.py`，在两个失败的测试中正确地消费 `s3_bucket` 异步生成器。
 
 ~~~~~act
-write_file
+patch_file
 tests/providers/test_s3.py
 ~~~~~
 ~~~~~python
-import pytest
-import cascade as cs
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-
-# Skip if dependencies are missing
-pytest.importorskip("aiobotocore")
-pytest.importorskip("moto")
-
-from moto import mock_aws
-
-# --- Fixtures ---
-
-@pytest.fixture(scope="module")
-def aws_credentials():
-    """Mocked AWS Credentials for moto."""
-    import os
-    os.environ["AWS_ACCESS_KEY_ID"] = "testing"
-    os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
-    os.environ["AWS_SECURITY_TOKEN"] = "testing"
-    os.environ["AWS_SESSION_TOKEN"] = "testing"
-    os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
-
-@pytest.fixture
-@mock_aws
-async def s3_bucket(aws_credentials):
-    """Creates a mock S3 bucket for testing."""
-    import aiobotocore.session
-    
-    bucket_name = "test-cascade-bucket"
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3", region_name="us-east-1") as client:
-        await client.create_bucket(Bucket=bucket_name)
-        yield bucket_name
-
-# --- Tests ---
-
 @pytest.mark.asyncio
 async def test_s3_write_read_text(s3_bucket):
     """Tests writing and reading a text file from S3."""
@@ -103,22 +70,46 @@ async def test_s3_write_read_bytes(s3_bucket):
     result = await engine.run(read_op)
 
     assert result == content
+~~~~~
+~~~~~python
+@pytest.mark.asyncio
+async def test_s3_write_read_text(s3_bucket):
+    """Tests writing and reading a text file from S3."""
+    
+    # Consume the async generator fixture to get the bucket name string
+    bucket_name = await anext(s3_bucket)
 
-def test_s3_import_error(monkeypatch):
-    """Tests that an ImportError is raised if aiobotocore is missing."""
-    import cascade.providers.s3 as s3_provider_module
+    # Workflow: Write then Read
+    key = "test.txt"
+    content = "hello s3"
     
-    # Simulate missing dependency
-    monkeypatch.setattr(s3_provider_module, "aiobotocore", None)
+    write_op = cs.io.s3.write_text(bucket=bucket_name, key=key, content=content)
     
-    # Instantiate the provider and try to get the factory
-    provider = s3_provider_module.S3ReadTextProvider()
+    # The read operation depends on the write operation to complete
+    read_op = cs.io.s3.read_text(bucket=bucket_name, key=key).run_if(write_op)
+
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    result = await engine.run(read_op)
+
+    assert result == content
+
+@pytest.mark.asyncio
+async def test_s3_write_read_bytes(s3_bucket):
+    """Tests writing and reading a binary file from S3."""
     
-    with pytest.raises(ImportError, match="aiobotocore"):
-        provider.create_factory()
+    bucket_name = await anext(s3_bucket)
+    
+    key = "test.bin"
+    content = b"\x01\x02\x03"
+    
+    write_op = cs.io.s3.write_bytes(bucket=bucket_name, key=key, content=content)
+    read_op = cs.io.s3.read_bytes(bucket=bucket_name, key=key).run_if(write_op)
+
+    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    result = await engine.run(read_op)
+
+    assert result == content
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 `cs.io` 命名空间的统一和 S3 Provider 的核心实现与测试。这标志着路线图第一阶段任务 1.1 的核心工作已经完成。
-
-接下来，我们可以继续执行路线图，开始**任务 1.2: `cs.http` 原子化网络提供者**。这将是构建 LLM 调用等更高级组合模式的关键积木。
+现在我们已经应用了修复程序，请重新运行测试套件。如果所有测试都通过，我们将确认 `cs.io` 的重构和 S3 Provider 的实现已稳定，可以继续执行路线图中的下一个任务：**任务 1.2: `cs.http` 原子化网络提供者**。

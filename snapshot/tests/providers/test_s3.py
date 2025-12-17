@@ -39,14 +39,17 @@ async def s3_bucket(aws_credentials):
 async def test_s3_write_read_text(s3_bucket):
     """Tests writing and reading a text file from S3."""
     
+    # Consume the async generator fixture to get the bucket name string
+    bucket_name = await anext(s3_bucket)
+
     # Workflow: Write then Read
     key = "test.txt"
     content = "hello s3"
     
-    write_op = cs.io.s3.write_text(bucket=s3_bucket, key=key, content=content)
+    write_op = cs.io.s3.write_text(bucket=bucket_name, key=key, content=content)
     
     # The read operation depends on the write operation to complete
-    read_op = cs.io.s3.read_text(bucket=s3_bucket, key=key).run_if(write_op)
+    read_op = cs.io.s3.read_text(bucket=bucket_name, key=key).run_if(write_op)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(read_op)
@@ -56,11 +59,14 @@ async def test_s3_write_read_text(s3_bucket):
 @pytest.mark.asyncio
 async def test_s3_write_read_bytes(s3_bucket):
     """Tests writing and reading a binary file from S3."""
+    
+    bucket_name = await anext(s3_bucket)
+    
     key = "test.bin"
     content = b"\x01\x02\x03"
     
-    write_op = cs.io.s3.write_bytes(bucket=s3_bucket, key=key, content=content)
-    read_op = cs.io.s3.read_bytes(bucket=s3_bucket, key=key).run_if(write_op)
+    write_op = cs.io.s3.write_bytes(bucket=bucket_name, key=key, content=content)
+    read_op = cs.io.s3.read_bytes(bucket=bucket_name, key=key).run_if(write_op)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
     result = await engine.run(read_op)

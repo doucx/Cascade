@@ -31,6 +31,20 @@ class Executor(Protocol):
         ...
 
 
+class CacheBackend(Protocol):
+    """
+    Protocol for a storage backend that persists cached results.
+    """
+
+    def get(self, key: str) -> Optional[Any]:
+        """Retrieves a value by key."""
+        ...
+
+    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+        """Sets a value for a key, optionally with a TTL in seconds."""
+        ...
+
+
 class CachePolicy(Protocol):
     """
     Protocol for a caching strategy.

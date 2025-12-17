@@ -65,7 +65,14 @@ class Engine:
     async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
-        target_name = getattr(target.task, "name", "unknown")
+        
+        # Robustly determine target name
+        if hasattr(target, "task"):
+            target_name = getattr(target.task, "name", "unknown")
+        elif hasattr(target, "factory"):
+            target_name = f"map({getattr(target.factory, 'name', 'unknown')})"
+        else:
+            target_name = "unknown"
 
         self.bus.publish(
             RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})

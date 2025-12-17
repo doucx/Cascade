@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(tools): 增强 visualize 工具的测试以验证特殊边类型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765966572.1757116, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] docs(concepts): 阐明资源注入模式与控制流", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765966722.8576622, "duration_ms": 0}}

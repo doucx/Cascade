@@ -24,7 +24,7 @@
 这个图不仅包含 Python 函数调用，还包含：
 *   **Shell 命令** (`cs.shell`)
 *   **配置查找** (`cs.config`)
-*   **文件读取** (`cs.file`)
+*   **文件读取** (`cs.file`) #Deprecation
 *   **数据库查询** (`cs.sql`)
 *   **API 请求** (`cs.http`)
 

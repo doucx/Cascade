@@ -78,6 +78,9 @@ class GraphBuilder:
             name=f"map({getattr(result.factory, 'name', 'factory')})",
             node_type="map",
             mapping_factory=result.factory,
+            retry_policy=result._retry_policy,
+            cache_policy=result._cache_policy,
+            constraints=result._constraints,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node

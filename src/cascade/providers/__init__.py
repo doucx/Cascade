@@ -27,6 +27,19 @@ class Provider(Protocol):
         ...
 
 
+class ProviderNamespace:
+    """
+    A proxy object to handle nested provider names (e.g. cs.read.text).
+    """
+    def __init__(self, registry: "ProviderRegistry", prefix: str):
+        self._registry = registry
+        self._prefix = prefix
+
+    def __getattr__(self, name: str) -> Any:
+        full_name = f"{self._prefix}.{name}"
+        return self._registry.get(full_name)
+
+
 class ProviderRegistry:
     """
     Manages the discovery and loading of Cascade providers.
@@ -44,7 +57,7 @@ class ProviderRegistry:
             cls._instance = cls()
         return cls._instance
 
-    def get(self, name: str) -> LazyFactory:
+    def get(self, name: str) -> Any:
         """
         Retrieves a provider factory by name. Loads from entry points if not yet loaded.
         Raises AttributeError if not found (to conform with __getattr__ semantics).
@@ -53,10 +66,15 @@ class ProviderRegistry:
             self._discover_entry_points()
             self._loaded = True
 
-        if name not in self._providers:
-            raise AttributeError(f"Cascade provider '{name}' not found.")
+        if name in self._providers:
+            return self._providers[name]
 
-        return self._providers[name]
+        # Check for namespace match (e.g. asking for 'read' when 'read.text' exists)
+        prefix = name + "."
+        if any(key.startswith(prefix) for key in self._providers):
+            return ProviderNamespace(self, name)
+
+        raise AttributeError(f"Cascade provider '{name}' not found.")
 
     def register(self, name: str, factory: LazyFactory):
         """Manually register a factory (mostly for testing or internal use)."""

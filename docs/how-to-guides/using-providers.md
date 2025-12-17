@@ -45,7 +45,7 @@ config_data = cs.load_yaml("config.yml")
 project_name = cs.lookup(source=config_data, key="project.name")
 ```
 
-## `cs.file`: 声明文件依赖
+## `cs.file`: 声明文件依赖 #Deprecation
 
 `cs.file` 提供了一种声明对文件系统内容的依赖的方式。它本身返回一个文件工厂对象，你可以链式调用其方法。
 

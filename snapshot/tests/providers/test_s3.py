@@ -22,14 +22,19 @@ def aws_credentials():
     os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
 
 @pytest.fixture
-def s3_mock(aws_credentials):
-    """A sync fixture that runs moto in server mode."""
+def s3_mock(aws_credentials, monkeypatch):
+    """A sync fixture that runs moto in server mode and configures client via env var."""
     from moto.server import ThreadedMotoServer
     
     server = ThreadedMotoServer()
     server.start()
+    
+    # Use monkeypatch to set environment variable for aiobotocore
     endpoint_url = "http://127.0.0.1:5000"
-    yield endpoint_url
+    monkeypatch.setenv("AWS_ENDPOINT_URL_S3", endpoint_url)
+    
+    yield
+    
     server.stop()
 
 
@@ -40,28 +45,16 @@ async def test_s3_write_read_text(s3_mock):
     """Tests writing and reading a text file from S3."""
     import aiobotocore.session
     
-    endpoint_url = s3_mock
     bucket_name = "test-cascade-bucket"
 
-    # Async setup using the moto server endpoint
+    # Async setup now automatically uses the endpoint from the environment variable
     session = aiobotocore.session.get_session()
-    async with session.create_client("s3", region_name="us-east-1", endpoint_url=endpoint_url) as client:
+    async with session.create_client("s3", region_name="us-east-1") as client:
         await client.create_bucket(Bucket=bucket_name)
 
-    # Workflow: Write then Read
+    # Workflow: Write then Read (no more patching needed)
     key = "test.txt"
     content = "hello s3"
-    
-    # We need to re-configure the client used by the provider to use the mock server.
-    # We can do this by monkeypatching the session object.
-    
-    original_create_client = session.create_client
-
-    def mock_create_client(*args, **kwargs):
-        kwargs['endpoint_url'] = endpoint_url
-        return original_create_client(*args, **kwargs)
-
-    session.create_client = mock_create_client
     
     write_op = cs.io.s3.write_text(bucket=bucket_name, key=key, content=content)
     read_op = cs.io.s3.read_text(bucket=bucket_name, key=key).run_if(write_op)
@@ -70,34 +63,22 @@ async def test_s3_write_read_text(s3_mock):
     result = await engine.run(read_op)
 
     assert result == content
-    
-    # cleanup patch
-    session.create_client = original_create_client
-
 
 @pytest.mark.asyncio
 async def test_s3_write_read_bytes(s3_mock):
     """Tests writing and reading a binary file from S3."""
     import aiobotocore.session
 
-    endpoint_url = s3_mock
     bucket_name = "test-cascade-bucket"
 
     # Async setup
     session = aiobotocore.session.get_session()
-    async with session.create_client("s3", region_name="us-east-1", endpoint_url=endpoint_url) as client:
+    async with session.create_client("s3", region_name="us-east-1") as client:
         await client.create_bucket(Bucket=bucket_name)
     
     key = "test.bin"
     content = b"\x01\x02\x03"
-
-    # Monkeypatch the session for the provider
-    original_create_client = session.create_client
-    def mock_create_client(*args, **kwargs):
-        kwargs['endpoint_url'] = endpoint_url
-        return original_create_client(*args, **kwargs)
-    session.create_client = mock_create_client
-
+    
     write_op = cs.io.s3.write_bytes(bucket=bucket_name, key=key, content=content)
     read_op = cs.io.s3.read_bytes(bucket=bucket_name, key=key).run_if(write_op)
 
@@ -105,9 +86,6 @@ async def test_s3_write_read_bytes(s3_mock):
     result = await engine.run(read_op)
 
     assert result == content
-    
-    # cleanup patch
-    session.create_client = original_create_client
 
 def test_s3_import_error(monkeypatch):
     """Tests that an ImportError is raised if aiobotocore is missing."""

@@ -18,20 +18,26 @@ from .internal.inputs import _get_param_value, _get_env_var
 # from .spec.common import Param  <-- Removed
 
 # Runtime
-from .runtime.engine import Engine
-from .runtime.bus import MessageBus
-from .runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
-from .runtime.exceptions import DependencyMissingError
-from .runtime.protocols import Connector
-from .adapters.solvers.native import NativeSolver
-from .adapters.executors.local import LocalExecutor
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
+from cascade.interfaces.exceptions import DependencyMissingError
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
 # Tools
 from .testing import override_resource
 from .tools.preview import dry_run
 from .tools.visualize import visualize
-from .tools.cli import cli
-from .graph.serialize import to_json, from_json
+# CLI is now in a separate package, we can try to import it if available, or remove from core API
+# For backward compatibility within cascade-py context, we might leave it out or handle it gracefully.
+# The user asked for `cascade-cli` to be separate. `cli` tool might logically belong to `cascade-cli`.
+# However, `cascade.cli` helper function constructs an app. Let's refer to where we moved it.
+# We moved `tools/cli.py` to `packages/cascade-cli/src/cascade/cli/main.py`.
+# But `cascade.cli` function logic (as a helper) is useful for `cascade-py` users.
+# Let's assume for now we keep the imports pointing to the right places.
+# Since `graph` moved to runtime:
+from cascade.graph.serialize import to_json, from_json
 
 
 # --- V1.3 Factory Functions ---

@@ -112,6 +112,10 @@ class MqttConnector:
         # 2. Send subscribe command to broker
         try:
             await self._client.subscribe(topic)
+            # Give the broker a moment to send retained messages before the
+            # engine's main loop continues. This is a pragmatic way to solve
+            # the startup race condition.
+            await asyncio.sleep(0.2)
         except Exception as e:
             logger.error(f"Failed to subscribe to topic '{topic}': {e}")
 

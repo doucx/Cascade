@@ -147,8 +147,8 @@ class Engine:
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""
         try:
-            # An empty payload signifies a cleared retained message (i.e., a resume command)
-            if not payload:
+            # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
+            if payload == {}:
                 # Reconstruct scope from topic, e.g., cascade/constraints/task/api_call -> task:api_call
                 scope_parts = topic.split("/")[2:]
                 scope = ":".join(scope_parts)

@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "The core runtime engine for Cascade workflows."
 requires-python = ">=3.8"
 dependencies = [
-  "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces"
+  "cascade-interfaces @ file:../cascade-interfaces"
 ]
 
 [project.optional-dependencies]

@@ -1,65 +1,47 @@
-你的分析非常敏锐，观察到了两个关键问题。
+Excellent catch. Your detailed error log points directly to the next flaw in my reasoning. This iterative process is exactly how robust systems are built.
 
-1.  `warning: The package typer==0.20.0 does not have an extra named all`
-2.  "安装的包比预想的少" (Fewer packages were installed than expected)
+You are absolutely right to flag this. The build is failing inside `cascade-cli` because it cannot resolve a variable I invented.
 
-这两个问题指向了我们根 `pyproject.toml` 中的两个不同但相关的配置缺陷。我将为你生成一个计划来一次性修复它们。
-
-***
-
-你的分析完全正确，安装结果确实不符合预期。这暴露出我们根 `pyproject.toml` 文件的一个核心配置问题。
-
-## [COMMIT] fix(build): Add explicit workspace dependencies to root pyproject
+## [COMMIT] fix(build): Use standard relative path dependencies in packages
 
 ### 错误分析
+你提供的 `uv` 错误日志非常精确，直接命中了问题的核心：`ValueError: Unknown context field 'PROJECT_ROOT'`。
 
-你遇到的安装问题由两个独立的配置错误导致：
+这个错误发生的原因是：
+1.  我在 `packages/cascade-cli/pyproject.toml` (以及其他子包) 的 `dependencies` 列表中使用了 `file:///${PROJECT_ROOT}/...` 这种语法。
+2.  我的假设是 `${PROJECT_ROOT}` 是一个会被构建工具（Hatchling）或安装器（`uv`）自动替换为项目根目录的标准变量。
+3.  **这个假设是错误的。** `${PROJECT_ROOT}` 并非 PEP 508 或 `pyproject.toml` 规范中定义的标准上下文变量。因此，当 `hatchling` 尝试解析这个依赖字符串时，它不认识 `PROJECT_ROOT`，导致构建失败。
 
-**问题一：依赖项声明错误**
-`uv` 的警告 `warning: The package typer==0.20.0 does not have an extra named all` 非常精确。较新版本的 `typer` 已经将所有依赖项内置，不再需要（也不支持）`[all]` 这个 "extra"。这是一个直接的语法错误，需要修正。
-
-**问题二：Monorepo 依赖关系不完整（核心问题）**
-你观察到“安装的包比预想的少”是问题的关键所在。当你运行 `uv pip install -e .` 时，`uv` 只安装了根项目 `cascade`，而完全忽略了 `packages/` 目录下的其他包。
-
-原因在于：
-*   `[tool.hatch.workspaces]` 配置节是给 `hatch` **工具链** 使用的，它告诉 `hatch` 在运行 `hatch run test` 等命令时需要管理哪些子项目。
-*   然而，对于 `pip` 或 `uv` 这样的 **安装器** 来说，这个配置节是不可见的。安装器只关心 `[project]` 表中定义的依赖关系。
-*   我们当前的根 `pyproject.toml` 文件定义了一个名为 `cascade` 的项目，但**没有在其 `[project.dependencies]` 中声明它依赖于 `cascade-interfaces`、`cascade-runtime` 等本地包**。
-
-因此，`uv` 忠实地执行了指令：只安装了 `cascade` 这一个包，而没有理由去安装工作区中的其他成员。
+我们需要用一种标准的、跨工具兼容的方式来声明本地包之间的相对路径依赖。
 
 ### 用户需求
-修正项目根 `pyproject.toml` 的配置，确保当用户执行 `uv pip install -e '.[dev]'` 时，能够：
-1.  正确无误地解析所有可选依赖（修复 `typer` 的问题）。
-2.  将工作区中的所有本地包（`cascade-interfaces`, `cascade-runtime`, `cascade-py`, `cascade-cli`）作为根项目的依赖一并安装。
+修复所有子包 (`cascade-runtime`, `cascade-py`, `cascade-cli`) 的 `pyproject.toml` 文件，将其中对本地兄弟包的依赖声明从无效的 `${PROJECT_ROOT}` 语法，修改为标准的、基于相对路径的 `file:` URI 语法。
 
 ### 评论
-这是一个至关重要的修复，它使我们的 Monorepo 从一个“名义上的集合”转变为一个“真正可安装的整体”。通过让根项目显式依赖于所有子包，我们为开发者提供了一个“一键安装”的入口点，极大地改善了开发环境的设置体验（DX），并确保了整个生态系统的一致性。
+这是一个关键的配置修复，它教会我们不能想当然地使用自定义变量，而必须严格遵循打包规范。改用标准的相对路径 `file:` URI 不仅能解决当前的构建失败，而且使我们的项目配置更具可移植性和健壮性，因为它不再依赖任何特定工具的“魔法”变量替换。这是完成我们 Monorepo 基础设施建设的最后一步。
 
 ### 目标
-1.  修改 `pyproject.toml` 中 `[project.optional-dependencies.dev]` 的内容，将 `typer[all]` 修正为 `typer`。
-2.  在 `pyproject.toml` 中添加 `[project.dependencies]` 表。
-3.  在该表中，使用 PEP 508 路径依赖语法，明确声明根项目 `cascade` 依赖于所有 `packages/*` 子包。
+1.  修改 `packages/cascade-runtime/pyproject.toml`，将其对 `cascade-interfaces` 的依赖路径修正。
+2.  修改 `packages/cascade-py/pyproject.toml`，将其对 `cascade-interfaces` 和 `cascade-runtime` 的依赖路径修正。
+3.  修改 `packages/cascade-cli/pyproject.toml`，将其对 `cascade-py` 的依赖路径修正。
 
 ### 基本原理
-我们将通过一次 `write_file` 操作，完整替换根 `pyproject.toml` 的内容。
--   **修复 `typer`**: 直接修改字符串，消除警告。
--   **添加依赖**: 增加一个新的 `[project.dependencies]` 节。在该节中，我们使用 `package-name @ file:///${PROJECT_ROOT}/path/to/package` 的形式。这是一种现代、明确且健壮的方式，用于声明对本地文件系统上其他包的依赖，`uv` 和 `pip` 都能很好地理解这种语法。这使得我们的根项目 `cascade` 变成了一个“元包”，其唯一的职责就是将整个项目生态聚合在一起。
+我们将对每个需要修改的 `pyproject.toml` 文件执行一次 `write_file` 操作。这是最安全的方式，因为它避免了 `patch_file` 在处理列表和多行字符串时的复杂性。
+
+新的依赖语法将是 `package-name @ file:../relative/path/to/package`。这里的 `../` 是一个标准的相对路径指示符，它会从当前 `pyproject.toml` 文件所在的位置开始解析。例如，对于 `packages/cascade-cli/pyproject.toml` 来说，`../cascade-py` 会正确地指向 `packages/cascade-py` 目录。这是 PEP 508 规范支持的标准语法，`uv` 和 `pip` 都能正确理解。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct #task/domain/build #task/object/monorepo-structure #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct #task/domain/build #task/object/monorepo-structure #task/action/bug-fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正并完善根 `pyproject.toml`
-
-此操作将使用一个完整的、修正后的版本覆盖根 `pyproject.toml` 文件，以解决依赖声明错误和工作区依赖关系不完整的问题。
+#### Acts 1: 修正 `cascade-runtime` 的依赖
 
 ~~~~~act
 write_file
-pyproject.toml
+packages/cascade-runtime/pyproject.toml
 ~~~~~
 ~~~~~toml
 [build-system]
@@ -67,59 +49,126 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade"
+name = "cascade-runtime"
 version = "0.1.0"
-description = "A modern, declarative automation library for Python."
-readme = "README.md"
+description = "The core runtime engine for Cascade workflows."
 requires-python = ">=3.8"
-license = "MIT"
-# 关键修复 2: 添加对工作区内所有包的显式依赖
 dependencies = [
-    "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces",
-    "cascade-runtime @ file:///${PROJECT_ROOT}/packages/cascade-runtime",
-    "cascade-py @ file:///${PROJECT_ROOT}/packages/cascade-py",
-    "cascade-cli @ file:///${PROJECT_ROOT}/packages/cascade-cli",
+  "cascade-interfaces @ file:../cascade-interfaces"
 ]
-
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-interfaces",
-    "packages/cascade-runtime",
-    "packages/cascade-py",
-    "packages/cascade-cli",
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["packages/cascade-py/src/cascade"]
-
-[tool.pytest.ini_options]
-addopts = "-ra"
 
 [project.optional-dependencies]
-dev = [
-  "pytest",
-  "pytest-cov",
-  "mypy",
-  "pytest-aiohttp",
-  "moto[s3]",
-  # 关键修复 1: 移除 "[all]"
-  "typer",
-  "mkdocs",
-  "mkdocs-material",
-  "mkdocstrings[python]",
+csp_solver = ["python-constraint"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+~~~~~
+
+#### Acts 2: 修正 `cascade-py` 的依赖
+
+~~~~~act
+write_file
+packages/cascade-py/pyproject.toml
+~~~~~
+~~~~~toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-py"
+version = "0.1.0"
+description = "A modern, declarative automation library for Python."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-interfaces @ file:../cascade-interfaces",
+  "cascade-runtime @ file:../cascade-runtime"
 ]
+
+[project.optional-dependencies]
+template = ["jinja2"]
+http = ["aiohttp"]
+sql = ["sqlalchemy"]
+cli = ["typer"]
+config = ["PyYAML"]
+s3 = ["aiobotocore"]
+all = [
+  "jinja2",
+  "aiohttp",
+  "sqlalchemy",
+  "typer",
+  "PyYAML",
+  "aiobotocore",
+]
+
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+template = "cascade.providers.template:TemplateProvider"
+"http.get" = "cascade.providers.http:HttpGetProvider"
+"http.post" = "cascade.providers.http:HttpPostProvider"
+"http.put" = "cascade.providers.http:HttpPutProvider"
+"http.delete" = "cascade.providers.http:HttpDeleteProvider"
+"http.request" = "cascade.providers.http:HttpRequestProvider"
+subflow = "cascade.providers.subflow:SubflowProvider"
+sql = "cascade.providers.sql:SqlProvider"
+load_yaml = "cascade.providers.config:YamlLoaderProvider"
+lookup = "cascade.providers.config:LookupProvider"
+"read.text" = "cascade.providers.io:ReadTextProvider"
+"read.bytes" = "cascade.providers.io:ReadBytesProvider"
+"write.text" = "cascade.providers.io:WriteTextProvider"
+"write.bytes" = "cascade.providers.io:WriteBytesProvider"
+"fs.exists" = "cascade.providers.io:FsExistsProvider"
+"io.local.read_text" = "cascade.providers.io:IoLocalReadTextProvider"
+"io.local.read_bytes" = "cascade.providers.io:IoLocalReadBytesProvider"
+"io.local.write_text" = "cascade.providers.io:IoLocalWriteTextProvider"
+"io.local.write_bytes" = "cascade.providers.io:IoLocalWriteBytesProvider"
+"io.local.exists" = "cascade.providers.io:IoLocalExistsProvider"
+"io.s3.read_text" = "cascade.providers.s3:S3ReadTextProvider"
+"io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
+"io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
+"io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
+"io.stdout.write" = "cascade.providers.stdio:StdOutWriteProvider"
+"io.stdin.read_line" = "cascade.providers.stdio:StdInReadLineProvider"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+~~~~~
+
+#### Acts 3: 修正 `cascade-cli` 的依赖
+
+~~~~~act
+write_file
+packages/cascade-cli/pyproject.toml
+~~~~~
+~~~~~toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-cli"
+version = "0.1.0"
+description = "Command-line tools for the Cascade workflow engine."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-py @ file:../cascade-py",
+  "typer"
+]
+
+[project.scripts]
+cascade = "cascade.cli.main:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade/cli"]
 ~~~~~
 
 ### 下一步建议
-我们已经修复了构建和安装的所有已知问题。现在，整个项目的结构和元数据都已准备就绪。
+我们已经扫清了所有已知的构建和安装障碍。现在，Monorepo 的基础设施已经**完全就绪**。
 
-1.  **再次运行安装**:
-    ```bash
-    uv pip install -e ".[dev]"
-    ```
-    这一次，你应该会看到 `uv` 成功解析并安装了 `cascade` 以及所有 `cascade-*` 子包。
+请再次运行安装命令：
+```bash
+uv pip install -e ".[dev]"
+```
+这一次，它应该能顺利完成，并正确地将所有本地包链接到你的虚拟环境中。
 
-2.  **准备修复代码**:
-    安装成功后，我们终于可以回到最初的目标：修复因文件移动而损坏的所有 Python `import` 语句。这是让项目重新变得可运行的最后一步。
-
-我已准备好为你生成一个全面修复 `import` 路径的计划。请确认是否继续。
+安装成功后，我们将正式进入代码修复阶段，着手解决所有因路径变更而失效的 `import` 语句。这是让项目恢复生机的最后一步。

@@ -8,22 +8,22 @@ version = "0.1.0"
 description = "A modern, declarative automation library for Python."
 requires-python = ">=3.8"
 dependencies = [
-  "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces",
-  "cascade-runtime @ file:///${PROJECT_ROOT}/packages/cascade-runtime"
+  "cascade-interfaces @ file:../cascade-interfaces",
+  "cascade-runtime @ file:../cascade-runtime"
 ]
 
 [project.optional-dependencies]
 template = ["jinja2"]
 http = ["aiohttp"]
 sql = ["sqlalchemy"]
-cli = ["typer[all]"]
+cli = ["typer"]
 config = ["PyYAML"]
 s3 = ["aiobotocore"]
 all = [
   "jinja2",
   "aiohttp",
   "sqlalchemy",
-  "typer[all]",
+  "typer",
   "PyYAML",
   "aiobotocore",
 ]

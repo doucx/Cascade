@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 创建 MQTT 连接器包 (`cascade-connector-mqtt`)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766038660.0618722, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: Implement connect and disconnect for MqttConnector", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766038808.150811, "duration_ms": 0}}

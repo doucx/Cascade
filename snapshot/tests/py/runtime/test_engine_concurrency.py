@@ -1,42 +1,3 @@
-## [WIP] feat: 实现并发管理与动态资源约束
-
-### 用户需求
-完成 Phase 3 的“并发管理”里程碑。这包括：
-1.  **核心逻辑**: 扩展 `ResourceManager` 和 `ConstraintManager`，使其能够根据外部的 `concurrency` 约束动态地创建和管理资源池。
-2.  **验证**: 创建 `tests/py/runtime/test_engine_concurrency.py`，通过集成测试验证系统能否正确地根据约束限制特定任务的并发度。
-
-### 评论
-我们将在一次提交中完成实现和测试，确保功能的原子性。该实现复用了 Cascade 现有的资源调度原语，通过将“并发限制”转换为“动态资源需求”，优雅地解决了问题。
-
-### 目标
-1.  扩展 `ResourceManager` 以支持 `update_resource`。
-2.  更新 `ConstraintHandler` 协议及 `ConstraintManager` 以支持动态需求注入。
-3.  实现 `ConcurrencyConstraintHandler`。
-4.  集成到 `Engine` 和 `ConstraintResolver`。
-5.  添加全链路集成测试。
-
-### 基本原理
--   **动态资源化**: 并发控制本质上是对“令牌”资源的争夺。
--   **协议扩展**: `ConstraintHandler` 新增 `append_requirements` 方法，允许在任务提交前动态注入对上述“令牌”的需求。
--   **测试策略**: 通过对比受限任务（应串行）和非受限任务（应并行）的执行时间，验证约束是否生效。
-
-### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/concurrency #scope/core #ai/instruct #task/domain/core #task/object/concurrency-control #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-
-#### Acts 7: 创建测试文件
-
-创建 `test_engine_concurrency.py` 以验证并发控制。
-
-~~~~~act
-write_file
-tests/py/runtime/test_engine_concurrency.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 import pytest
@@ -203,4 +164,3 @@ async def test_global_concurrency_limit(engine, connector):
 
     # Serial execution of A and B = ~0.10s
     assert duration >= 0.09
-~~~~~

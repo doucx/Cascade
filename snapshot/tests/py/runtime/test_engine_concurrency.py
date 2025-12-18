@@ -10,6 +10,10 @@ from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.graph.model import Node
 
+# --- DEBUGGING ---
+DEBUG_LOGS = []
+def log(msg):
+    DEBUG_LOGS.append(msg)
 
 # --- Mocks ---
 
@@ -20,11 +24,10 @@ class MockConnector(Connector):
 
     def __init__(self):
         self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
-        # Simulate broker storage for retained messages: topic -> payload
         self.retained_messages: Dict[str, Dict[str, Any]] = {}
 
     async def connect(self) -> None:
-        pass
+        log("MockConnector: connected")
 
     async def disconnect(self) -> None:
         pass
@@ -33,24 +36,24 @@ class MockConnector(Connector):
         pass
 
     def seed_retained_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to pre-seed a retained message on the broker."""
+        log(f"MockConnector: seeding retained message for {topic}")
         self.retained_messages[topic] = payload
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
     ) -> None:
+        log(f"MockConnector: subscribing to {topic}")
         self.subscriptions[topic] = callback
         
-        # Immediate delivery of matching retained messages upon subscription
-        # This simulates MQTT behavior
+        count = 0
         for retained_topic, payload in self.retained_messages.items():
             if self._topic_matches(subscription=topic, topic=retained_topic):
-                # For testing purposes, we await the callback to ensure
-                # the initial state is consistent before the engine starts scheduling.
+                log(f"MockConnector: delivering retained message for {retained_topic}")
                 await callback(retained_topic, payload)
+                count += 1
+        log(f"MockConnector: delivered {count} retained messages")
 
     async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to simulate receiving a live message."""
         for sub_topic, callback in self.subscriptions.items():
             if self._topic_matches(subscription=sub_topic, topic=topic):
                 await callback(topic, payload)
@@ -67,10 +70,8 @@ class MockConnector(Connector):
 
 class MockExecutor(Executor):
     async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        # Simulate work duration
+        log(f"MockExecutor: executing {node.name}")
         await asyncio.sleep(0.05)
-        
-        # Return the first available argument, or a default
         if args:
             return args[0]
         if kwargs:
@@ -82,6 +83,8 @@ class MockExecutor(Executor):
 
 @pytest.fixture
 def mock_connector():
+    # Clear logs for each test
+    DEBUG_LOGS.clear()
     return MockConnector()
 
 
@@ -100,9 +103,6 @@ def engine(mock_connector):
 
 @pytest.mark.asyncio
 async def test_concurrency_constraint_on_map(engine, mock_connector):
-    """
-    Verify that a concurrency constraint limits the parallelism of a mapped task.
-    """
     @cs.task
     def slow_task(x):
         return x
@@ -110,8 +110,6 @@ async def test_concurrency_constraint_on_map(engine, mock_connector):
     inputs = [1, 2, 3, 4]
     workflow = slow_task.map(x=inputs)
 
-    # 1. Pre-seed the constraint as a retained message.
-    # This ensures it is applied immediately when the engine subscribes at startup.
     scope = "task:slow_task"
     payload = {
         "id": "limit-slow-task",
@@ -123,37 +121,28 @@ async def test_concurrency_constraint_on_map(engine, mock_connector):
         f"cascade/constraints/{scope.replace(':', '/')}", payload
     )
     
-    # 2. Run execution
     start_time = time.time()
     results = await engine.run(workflow)
     duration = time.time() - start_time
     
     assert sorted(results) == [1, 2, 3, 4]
-    
-    # With limit=1, 4 tasks of 0.05s should take >= 0.2s
-    # (Allowing slight buffer for overhead, so maybe >= 0.18s)
-    assert duration >= 0.18, f"Expected serial execution, got {duration}s"
+    assert duration >= 0.18, f"Expected serial execution, got {duration}s. Logs: {DEBUG_LOGS}"
 
 
 @pytest.mark.asyncio
 async def test_global_concurrency_limit(engine, mock_connector):
-    """
-    Verify that a global concurrency constraint limits total tasks running.
-    """
     @cs.task
     def task_a(x): return x
     
     @cs.task
     def task_b(x): return x
 
-    # Two independent tasks, normally run in parallel
     wf = [task_a(1), task_b(2)]
     
     @cs.task
     def wrapper(results): return results
     workflow = wrapper(wf)
 
-    # 1. Pre-seed Global Limit = 1
     payload = {
         "id": "global-limit",
         "scope": "global",
@@ -162,10 +151,8 @@ async def test_global_concurrency_limit(engine, mock_connector):
     }
     mock_connector.seed_retained_message("cascade/constraints/global", payload)
 
-    # 2. Run
     start_time = time.time()
     await engine.run(workflow)
     duration = time.time() - start_time
     
-    # 2 tasks of 0.05s in serial => >= 0.1s
-    assert duration >= 0.09, f"Expected serial execution, got {duration}s"
+    assert duration >= 0.09, f"Expected serial execution, got {duration}s. Logs: {DEBUG_LOGS}"

@@ -1,8 +1,8 @@
 import io
 import json
 import pytest
-from cascade.messaging.renderer import CliRenderer, JsonRenderer
-from cascade.messaging.bus import MessageStore
+from cascade.runtime.renderers import CliRenderer, JsonRenderer
+from cascade.common.messaging import MessageStore
 
 
 @pytest.fixture

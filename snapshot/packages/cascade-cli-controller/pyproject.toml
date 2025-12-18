@@ -21,3 +21,7 @@ packages = ["src/cascade"]
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.uv.sources]
+cascade-interfaces = { workspace = true }
+cascade-common = { workspace = true }

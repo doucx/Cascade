@@ -14,7 +14,7 @@ mock_openai_response = {
 @pytest.fixture
 def mock_http_post(monkeypatch):
     """Mocks cs.http.post to avoid real network calls."""
-    mock_post_task = MagicMock()
+    MagicMock()
 
     # The mock needs to return a coroutine that resolves to an HttpResponse
     async def fake_post(*args, **kwargs):

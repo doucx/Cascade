@@ -1,44 +1,3 @@
-好的，测试已通过。我们现在为新实现的并发管理功能创建集成测试。
-
-我将生成一个计划来创建 `tests/py/runtime/test_engine_concurrency.py` 文件。这个测试将端到端地验证：通过模拟的 MQTT Connector 发布的并发约束，能够被 `Engine` 正确接收，并有效限制匹配任务的并行执行数量。
-
-这是创建测试文件的计划：
-
-## [WIP] test: 为动态并发管理添加集成测试
-
-### 用户需求
-为里程碑 3.2 实现的“并发管理”功能创建集成测试文件 `tests/py/runtime/test_engine_concurrency.py`。
-
-### 评论
-一个健壮的集成测试是验证我们新架构（`ConstraintManager -> Handler -> ResourceManager -> Engine Loop`）协同工作的关键。这个测试将模拟一个真实场景：运维人员通过外部工具发布指令，运行时动态地调整其行为，从而确保我们的“自适应执行环境”承诺是可验证的。
-
-### 目标
-1.  创建一个新的测试文件 `tests/py/runtime/test_engine_concurrency.py`。
-2.  在测试中，定义一个包含多个可并行执行的慢任务的工作流。
-3.  通过一个 `MockConnector` 模拟发布一个 `concurrency` 类型的约束，限制这些慢任务的并发数为 2。
-4.  使用事件总线 (`MessageBus` 和 `SpySubscriber`) 监控任务的执行。
-5.  断言在任何时间点，并发执行的慢任务数量都不超过约束的限制。
-6.  断言整个工作流最终成功完成，并且总耗时符合并发受限下的预期。
-
-### 基本原理
-我们将创建一个包含 4 个慢任务（每个耗时 0.1 秒）的工作流。在没有约束的情况下，它们应该在约 0.1 秒内全部完成。测试开始后，我们立即注入一个并发限制为 2 的约束。预期的行为是，`Engine` 应该分两批执行这些任务，总耗时约 0.2 秒。我们将通过监控 `TaskExecutionStarted` 和 `TaskExecutionFinished` 事件来实时计算并发数，并验证其最大值从未超过 2。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #concept/state #ai/delegate #task/domain/testing #task/object/concurrency-test #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建并发管理测试文件
-
-我们将使用 `write_file` 创建新的测试文件，并填充完整的测试逻辑。
-
-~~~~~act
-write_file
-tests/py/runtime/test_engine_concurrency.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 from typing import Callable, Awaitable, Dict, Any, List
@@ -200,7 +159,3 @@ async def test_engine_respects_dynamic_concurrency_limit(
 
     assert len([e for e in spy.events_of_type(TaskExecutionStarted) if e.task_name == "slow_task"]) == 4
     assert len([e for e in spy.events_of_type(TaskExecutionFinished) if e.task_name == "slow_task"]) == 4
-~~~~~
-
-### 下一步建议
-我们已经完成了核心功能的开发和测试。现在是时候完善 `cs-controller` 工具了。我建议下一步为 `cs-controller` 增加一个新的 `set-limit` 子命令，使其能够发布我们刚刚实现的 `concurrency` 约束。

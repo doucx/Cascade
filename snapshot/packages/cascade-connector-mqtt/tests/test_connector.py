@@ -87,3 +87,54 @@ async def test_publish_without_connect_does_nothing(mock_client):
     await asyncio.sleep(0)
     
     mock_client.publish.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_subscribe_receives_messages(mock_client):
+    """
+    Tests that the connector starts a listener loop, and when messages arrive,
+    the registered callback is invoked with decoded data.
+    """
+    connector = MqttConnector(hostname="test.broker")
+
+    # 1. Setup Mock Message Stream
+    # Create a simple AsyncIterator to simulate client.messages
+    incoming_payload = {"command": "pause"}
+    incoming_topic = "control/pause"
+    
+    class MockMessage:
+        def __init__(self, topic, payload):
+            self.topic = topic
+            self.payload = payload
+
+    async def message_stream():
+        # Yield one message then sleep forever to simulate an open but idle connection
+        # (This prevents the loop from exiting immediately and closing the mock)
+        yield MockMessage(incoming_topic, json.dumps(incoming_payload).encode("utf-8"))
+        await asyncio.sleep(10) # Simulate idle waiting
+
+    # Mock the 'messages' property of the client
+    mock_client.messages = message_stream()
+
+    await connector.connect()
+
+    # 2. Register a callback
+    received_events = []
+    async def my_callback(topic, data):
+        received_events.append((topic, data))
+
+    await connector.subscribe(incoming_topic, my_callback)
+
+    # 3. Verify subscription was sent to broker
+    mock_client.subscribe.assert_awaited_with(incoming_topic)
+
+    # 4. Wait for the loop to process the message
+    # We yield control a few times to ensure the background task runs
+    await asyncio.sleep(0.01)
+
+    # 5. Assert callback invocation
+    assert len(received_events) == 1
+    assert received_events[0][0] == incoming_topic
+    assert received_events[0][1] == incoming_payload
+
+    # Cleanup
+    await connector.disconnect()

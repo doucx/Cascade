@@ -28,6 +28,8 @@ class MqttConnector:
         self.port = port
         self.client_kwargs = kwargs
         self._client: "aiomqtt.Client" | None = None
+        self._loop_task: asyncio.Task | None = None
+        self._subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
 
     async def connect(self) -> None:
         """Establishes a connection to the MQTT Broker."""
@@ -41,8 +43,19 @@ class MqttConnector:
         # TODO: Implement LWT message logic.
         self._client = await client.__aenter__()
 
+        # Start the message processing loop
+        self._loop_task = asyncio.create_task(self._message_loop())
+
     async def disconnect(self) -> None:
         """Disconnects from the MQTT Broker and cleans up resources."""
+        if self._loop_task:
+            self._loop_task.cancel()
+            try:
+                await self._loop_task
+            except asyncio.CancelledError:
+                pass
+            self._loop_task = None
+
         if self._client:
             await self._client.__aexit__(None, None, None)
             self._client = None
@@ -65,13 +78,64 @@ class MqttConnector:
 
         asyncio.create_task(_do_publish())
 
-
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
     ) -> None:
         """Subscribes to a topic to receive messages."""
-        # TODO: Implement subscription logic.
-        # - The client needs a message handling loop.
-        # - This method should register the topic and callback.
-        # - The loop will decode JSON and invoke the callback.
-        pass
+        if not self._client:
+             logger.warning("Attempted to subscribe without an active MQTT connection.")
+             return
+
+        # 1. Register callback locally
+        self._subscriptions[topic] = callback
+
+        # 2. Send subscribe command to broker
+        try:
+            await self._client.subscribe(topic)
+        except Exception as e:
+             logger.error(f"Failed to subscribe to topic '{topic}': {e}")
+
+    async def _message_loop(self):
+        """Background task to process incoming MQTT messages."""
+        if not self._client:
+            return
+
+        try:
+            # Iterate over the messages asynchronous generator provided by aiomqtt
+            async for message in self._client.messages:
+                topic = str(message.topic)
+                payload_bytes = message.payload
+
+                # Find callback (Simple exact match for MVP)
+                # TODO: Implement wildcard matching if needed (e.g. + or #)
+                callback = self._subscriptions.get(topic)
+                if not callback:
+                    continue
+
+                # Decode and dispatch
+                try:
+                    # aiomqtt payload can be bytes, bytearray, etc.
+                    if isinstance(payload_bytes, (bytes, bytearray)):
+                        payload_str = payload_bytes.decode("utf-8")
+                    else:
+                        payload_str = str(payload_bytes)
+                    
+                    data = json.loads(payload_str)
+                    
+                    # Execute callback (fire and forget, or await?)
+                    # Since we are in a loop, we should probably await to preserve order,
+                    # or create task for concurrency. For now, await is safer for state consistency.
+                    await callback(topic, data)
+
+                except json.JSONDecodeError:
+                    logger.error(f"Received non-JSON payload on topic '{topic}'")
+                except Exception as e:
+                    logger.error(f"Error processing message on topic '{topic}': {e}")
+
+        except asyncio.CancelledError:
+            # Normal shutdown
+            pass
+        except Exception as e:
+            # Unexpected error in loop, log it. 
+            # In a robust system we might want to restart the loop.
+            logger.error(f"MQTT message loop crashed: {e}")

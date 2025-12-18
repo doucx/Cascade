@@ -1,236 +1,88 @@
-Of course. Following our development process, we will now create a comprehensive test suite for the `cs-controller`'s `pause` command.
+好的，测试通过，证明 `cs-controller pause` 的核心逻辑已经正确实现，并且满足了我们关于测试分离和 Mock Intent 的所有原则。
 
-This plan involves two key actions: first, a minor refactoring of the `cs-controller`'s code to improve testability, and second, the creation of the test file itself. The refactoring will extract the core asynchronous logic from the `typer` command function into a standalone, easily callable function, allowing us to test the logic directly without needing the `typer` test runner.
+现在我们来创建这次实现的提交。
 
-## [WIP] test: Create integration tests for cs-controller publish logic
+## [COMMIT] feat(cli): Implement cs-controller pause command
 
 ### 用户需求
-为 `cs-controller` 的 `pause` 命令创建一套集成测试，以验证其能否正确地连接到 MQTT Broker 并发布符合规范的约束指令。
+提交 `cs-controller` 的核心功能：发布 `pause` 约束。
 
 ### 评论
-这是确保 `cs-controller` 可靠性的关键一步。通过将核心发布逻辑提取到一个独立的函数中，我们能够编写出更清晰、更集中的单元/集成测试。这些测试将严格遵循 Mock 意图的原则，断言 `MqttConnector` 的 `publish` 方法是否被以正确的**主题**和**负载**调用，从而验证了其核心业务逻辑，而无需进行实际的网络通信。
+该提交完成了对 `cs-controller` 命令行工具的实现。它现在能够连接到 MQTT Broker，构造符合 `GlobalConstraint` 规范的 JSON 报文，并将其发布到正确的控制主题上。为了便于测试，核心异步逻辑被提取到 `_publish_pause` 函数中，并且新的测试套件验证了发布行为的正确性。这是实现 Cascade 自适应控制能力的第一块外部工具。
 
-### 目標
-1.  重构 `packages/cascade-cli-controller/src/cascade/cli/controller/app.py`，将核心的异步逻辑提取到一个独立的、可测试的函数中。
-2.  创建新的测试文件 `tests/cli-controller/test_app.py`。
-3.  实现 `pytest` fixtures 来 Mock `MqttConnector` 和 `MessageBus`。
-4.  编写测试用例，验证在不同 `scope` 参数下，是否能生成正确的主题和 `GlobalConstraint` payload。
-5.  验证 `MessageBus` 是否被调用以提供正确的用户反馈。
+### 目标
+1.  提交 `cs-controller/app.py` 中 `pause` 命令的实现。
+2.  提交 `tests/cli-controller/test_app.py` 测试文件。
+3.  更新 `cli_messages.json` 包含所有必需的控制器消息。
 
 ### 基本原理
-我们将 `typer` 命令函数 (`pause`) 的职责缩小为仅负责解析 CLI 参数和调用一个独立的业务逻辑函数（例如 `_publish_pause`)。这样一来，我们的测试就可以完全绕过 `typer` 的复杂性，直接 `await` 这个业务逻辑函数。测试将使用 `monkeypatch` 注入 Mock 版本的 `MqttConnector` 和 `bus`，然后断言这些 Mock 对象的方法是否被以预期的方式调用，从而验证了 `pause` 命令的正确意图。
+遵循 `d3-constraint-quipu-plan-script-rules-D3-P2` 约束，本次计划用于提交前一个步骤中已完成的代码。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/cli #concept/control-loop #scope/dx #ai/instruct #task/domain/cli #task/object/controller-tool #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/cli #concept/control-loop #scope/ux #ai/instruct #task/domain/cli #task/object/controller-tool #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `app.py` 以提高可测试性
+#### Acts 1: 提交 Controller 逻辑、测试和消息模板
 
-我们首先将 `pause` 命令中的 `asyncio` 循环提取到一个独立的、可测试的 `async` 函数 `_publish_pause` 中。
+将所有与 `cs-controller` 实现相关的修改添加到暂存区，并执行提交。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-cli-controller/src/cascade/cli/controller/app.py
-~~~~~
-~~~~~python
-@app.command()
-def pause(
-    scope: str = typer.Argument(
-        "global",
-        help="The scope to pause (e.g., 'global', 'project:etl', 'task:api_call').",
-    ),
-    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
-    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
-):
-    """
-    Publish a 'pause' constraint to the MQTT broker.
-    This will cause running Cascade engines to stop scheduling new tasks that
-    match the specified scope until a 'resume' command is sent.
-    """
-
-    async def main_loop():
-        connector = MqttConnector(hostname=hostname, port=port)
-        try:
-            bus.info("controller.connecting", hostname=hostname, port=port)
-            await connector.connect()
-            bus.info("controller.connected")
-
-            # Create a unique, descriptive ID for the constraint
-            constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
-            constraint = GlobalConstraint(
-                id=constraint_id, scope=scope, type="pause", params={}
-            )
-
-            # Convert to dictionary for JSON serialization
-            payload = asdict(constraint)
-
-            # Publish to a structured topic based on scope
-            topic = f"cascade/constraints/{scope.replace(':', '/')}"
-
-            bus.info("controller.publishing", scope=scope, topic=topic)
-            # The connector's publish is fire-and-forget
-            await connector.publish(topic, payload)
-
-            # In a real fire-and-forget, we can't be sure it succeeded,
-            # but for UX we assume it did if no exception was raised.
-            # Give a brief moment for the task to be sent.
-            await asyncio.sleep(0.1)
-            bus.info("controller.publish_success")
-
-        except Exception as e:
-            bus.error("controller.error", error=e)
-        finally:
-            await connector.disconnect()
-
-    try:
-        asyncio.run(main_loop())
-    except KeyboardInterrupt:
-        bus.info("observer.shutdown")
-~~~~~
-~~~~~python
-async def _publish_pause(scope: str, hostname: str, port: int):
-    """Core logic for publishing a pause constraint."""
-    connector = MqttConnector(hostname=hostname, port=port)
-    try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
-        await connector.connect()
-        bus.info("controller.connected")
-
-        # Create a unique, descriptive ID for the constraint
-        constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
-        constraint = GlobalConstraint(
-            id=constraint_id, scope=scope, type="pause", params={}
-        )
-
-        # Convert to dictionary for JSON serialization
-        payload = asdict(constraint)
-
-        # Publish to a structured topic based on scope
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-
-        bus.info("controller.publishing", scope=scope, topic=topic)
-        # The connector's publish is fire-and-forget
-        await connector.publish(topic, payload)
-
-        # In a real fire-and-forget, we can't be sure it succeeded,
-        # but for UX we assume it did if no exception was raised.
-        # Give a brief moment for the task to be sent.
-        await asyncio.sleep(0.1)
-        bus.info("controller.publish_success")
-
-    except Exception as e:
-        bus.error("controller.error", error=e)
-    finally:
-        await connector.disconnect()
-
-
-@app.command()
-def pause(
-    scope: str = typer.Argument(
-        "global",
-        help="The scope to pause (e.g., 'global', 'project:etl', 'task:api_call').",
-    ),
-    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
-    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
-):
-    """
-    Publish a 'pause' constraint to the MQTT broker.
-    This will cause running Cascade engines to stop scheduling new tasks that
-    match the specified scope until a 'resume' command is sent.
-    """
-    try:
-        asyncio.run(_publish_pause(scope=scope, hostname=hostname, port=port))
-    except KeyboardInterrupt:
-        bus.info("observer.shutdown")
-~~~~~
-
-#### Acts 2: 创建 Controller 的测试文件
-
-现在，我们可以为这个新的、独立的 `_publish_pause` 函数编写干净的测试。
-
-~~~~~act
-write_file
+packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
 tests/cli-controller/test_app.py
 ~~~~~
-~~~~~python
-import pytest
-from unittest.mock import MagicMock, AsyncMock, ANY
 
-# The module we are testing
-from cascade.cli.controller import app as controller_app
-
-
-@pytest.fixture
-def mock_messaging_bus(monkeypatch) -> MagicMock:
-    """Mocks the global message bus used by the controller app."""
-    mock_bus = MagicMock()
-    monkeypatch.setattr("cascade.cli.controller.app.bus", mock_bus)
-    return mock_bus
-
-
-@pytest.fixture
-def mock_connector(monkeypatch) -> AsyncMock:
-    """Mocks the MqttConnector class to prevent network calls."""
-    mock_instance = AsyncMock()
-    mock_class = MagicMock(return_value=mock_instance)
-    monkeypatch.setattr("cascade.cli.controller.app.MqttConnector", mock_class)
-    return mock_instance
-
-
-@pytest.mark.asyncio
-async def test_publish_pause_global_scope(mock_messaging_bus, mock_connector):
-    """
-    Verify publishing a pause command for the 'global' scope.
-    """
-    # Act: Call the core logic function
-    await controller_app._publish_pause(
-        scope="global", hostname="mqtt.test", port=1234
-    )
-
-    # Assert Connector Lifecycle
-    mock_connector.connect.assert_awaited_once()
-    mock_connector.publish.assert_awaited_once()
-    mock_connector.disconnect.assert_awaited_once()
-
-    # Assert Publish Intent
-    # 1. Capture the arguments passed to publish
-    call_args = mock_connector.publish.call_args
-    topic = call_args.args[0]
-    payload = call_args.args[1]
-
-    # 2. Verify the topic and payload
-    assert topic == "cascade/constraints/global"
-    assert payload["scope"] == "global"
-    assert payload["type"] == "pause"
-    assert "id" in payload  # Check for presence of generated ID
-
-    # Assert User Feedback
-    mock_messaging_bus.info.assert_any_call(
-        "controller.publishing", scope="global", topic="cascade/constraints/global"
-    )
-    mock_messaging_bus.info.assert_any_call("controller.publish_success")
-
-
-@pytest.mark.asyncio
-async def test_publish_pause_specific_scope(mock_messaging_bus, mock_connector):
-    """
-    Verify that a scoped pause command generates the correct MQTT topic.
-    """
-    # Act
-    await controller_app._publish_pause(
-        scope="task:api_call", hostname="mqtt.test", port=1234
-    )
-
-    # Assert
-    call_args = mock_connector.publish.call_args
-    topic = call_args.args[0]
-    payload = call_args.args[1]
-
-    # Verify that the ':' was correctly replaced with '/' for the topic
-    assert topic == "cascade/constraints/task/api_call"
-    assert payload["scope"] == "task:api_call"
-    assert payload["type"] == "pause"
+~~~~~act
+git_commit
 ~~~~~
+~~~~~text
+feat(cli): Implement cs-controller pause command
+
+Introduces the first functional command for the `cs-controller` CLI, enabling external control over running Cascade workflows.
+
+The `pause` command:
+1. Connects to the MQTT broker using `MqttConnector`.
+2. Constructs a `GlobalConstraint` payload with `type="pause"`.
+3. Publishes the constraint to a structured topic (`cascade/constraints/{scope_path}`).
+
+Refactoring: The core asynchronous logic was extracted into `_publish_pause` to ensure high testability. Dedicated tests were added to verify correct topic generation and payload contents for different scopes (e.g., 'global' vs. 'task:api_call').
+~~~~~
+
+---
+## 当前位置与后续路线图分析
+
+我们正在执行 **Cascade 架构演进技术路线图 (v2.0)** 的 **第三阶段 (约束与环境感知)** 和 **第四阶段 (生态工具链)** 的并行开发。
+
+### 已完成：
+
+| 里程碑 | 目标 | 状态 |
+| :--- | :--- | :--- |
+| **Phase 2.0** | 遥测系统实现 | **DONE** |
+| **Phase 3.4** | 约束同步（Engine 接收 MQTT） | **DONE** (在 `engine.py` 中实现 `_on_constraint_update`) |
+| **Phase 4.1** | `cs-observer` 基础实现 | **DONE** (完成消息处理逻辑和测试) |
+| **Phase 4.2** | `cs-controller pause` 实现 | **DONE** |
+
+### 下一步聚焦：Phase 3.1 和 Phase 3.2
+
+尽管我们实现了 `cs-controller`，但在 `Engine` 内部，我们只实现了最基本的**全局暂停**检查（即 `ConstraintManager.check_permission` 中的硬编码逻辑）。
+
+路线图要求我们实现更精细的控制：
+
+| 里程碑 | 目标 (Engine Capability) | 对应的 CLI 命令 |
+| :--- | :--- | :--- |
+| **3.1** | **精准控制**：支持基于 `scope` 的任务级暂停。 | `cs-controller pause --task <name>` |
+| **3.2** | **并发管理**：实现基于动态资源的并发数限制。 | `cs-controller set-limit --concurrency <limit>` |
+
+目前，我们的 `ConstraintManager` 尚未实现 **Scope 匹配**和 **约束过期** 逻辑，也未实现 **并发限制**。
+
+### 建议的下一步
+
+我们将从 **里程碑 3.1** 开始，增强 `ConstraintManager` 的逻辑，使其能够识别和应用不同作用域的约束，并清理已过期的约束。
+
+**新任务**: 增强 `ConstraintManager`，实现 Scope 匹配和约束过期功能。
+
+如果你同意，我将生成实现这个内部增强的计划。

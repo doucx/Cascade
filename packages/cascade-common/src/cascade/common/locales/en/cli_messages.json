@@ -3,7 +3,6 @@
     "observer.startup.connected": "✅ Connected to MQTT broker.",
     "observer.startup.error": "❌ Failed to connect to MQTT broker at {hostname}:{port}. Error: {error}",
     "observer.shutdown": "\n🔌 Disconnecting and shutting down...",
-
     "observer.telemetry.run_header": "\n[bold yellow]─── Run Started: {run_id} ───[/bold yellow]",
     "observer.telemetry.lifecycle.ENGINE_STARTED": "▶️  Engine started.",
     "observer.telemetry.lifecycle.ENGINE_STOPPED": "✅ Engine stopped.",
@@ -13,6 +12,9 @@
     "observer.telemetry.task_state.SKIPPED": "   - [dim]⚪ Task '[bold]{task_name}[/bold]' skipped.[/dim]",
     "observer.telemetry.unknown_event": "[dim]Received unknown event type: {type}[/dim]",
 
-    "controller.publishing": "📡 Publishing constraint for scope: {scope}",
-    "controller.not_implemented": "⚠️  Controller functionality is not yet fully implemented."
+    "controller.connecting": "Connecting to MQTT broker at [bold green]{hostname}:{port}[/bold green]...",
+    "controller.connected": "✅ Connected to MQTT broker.",
+    "controller.publishing": "📡 Publishing constraint for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
+    "controller.publish_success": "✅ Constraint published successfully.",
+    "controller.error": "❌ An error occurred: {error}"
 }

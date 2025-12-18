@@ -1,3 +1,4 @@
+import sys
 import time
 import inspect
 import asyncio
@@ -8,6 +9,7 @@ from contextlib import ExitStack
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, Graph
 from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.spec.constraint import GlobalConstraint
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
     RunStarted,
@@ -24,6 +26,7 @@ from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
 from cascade.runtime.flow import FlowManager
+from cascade.runtime.constraints import ConstraintManager
 from cascade.adapters.state import InMemoryStateBackend
 
 
@@ -47,6 +50,7 @@ class Engine:
         self.connector = connector
         self.state_backend_cls = state_backend_cls
         self.resource_manager = ResourceManager(capacity=system_resources)
+        self.constraint_manager = ConstraintManager()
         self._resource_providers: Dict[str, Callable] = {}
 
         self.arg_resolver = ArgumentResolver()
@@ -85,6 +89,10 @@ class Engine:
         try:
             if self.connector:
                 await self.connector.connect()
+                # Subscribe to constraint updates
+                await self.connector.subscribe(
+                    "cascade/constraints/#", self._on_constraint_update
+                )
 
             with ExitStack() as stack:
                 initial_graph = build_graph(target)
@@ -118,6 +126,26 @@ class Engine:
             if self.connector:
                 await self.connector.disconnect()
 
+    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
+        """Callback to handle incoming constraint messages."""
+        try:
+            # Basic validation, could be improved with a schema library
+            constraint = GlobalConstraint(
+                id=payload["id"],
+                scope=payload["scope"],
+                type=payload["type"],
+                params=payload["params"],
+                expires_at=payload.get("expires_at"),
+            )
+            self.constraint_manager.update_constraint(constraint)
+        except (KeyError, TypeError) as e:
+            # In a real system, we'd use a proper logger.
+            # For now, print to stderr to avoid crashing the engine.
+            print(
+                f"[Engine] Error processing constraint on topic '{topic}': {e}",
+                file=sys.stderr,
+            )
+
     async def _execute_graph(
         self,
         target: Any,
@@ -131,42 +159,55 @@ class Engine:
         plan = self.solver.resolve(graph)
 
         for stage in plan:
-            tasks_to_run = []
-            nodes_in_execution = []
+            pending_nodes_in_stage = list(stage)
 
-            for node in stage:
-                if node.node_type == "param":
-                    continue
+            while pending_nodes_in_stage:
+                executable_this_pass: List[Node] = []
+                deferred_this_pass: List[Node] = []
 
-                skip_reason = self.flow_manager.should_skip(node, state_backend)
-                if skip_reason:
-                    state_backend.mark_skipped(node.id, skip_reason)
-                    self.bus.publish(
-                        TaskSkipped(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            reason=skip_reason,
+                for node in pending_nodes_in_stage:
+                    if node.node_type == "param":
+                        continue  # Skip params, they don't execute
+
+                    skip_reason = self.flow_manager.should_skip(node, state_backend)
+                    if skip_reason:
+                        state_backend.mark_skipped(node.id, skip_reason)
+                        self.bus.publish(
+                            TaskSkipped(
+                                run_id=run_id,
+                                task_id=node.id,
+                                task_name=node.name,
+                                reason=skip_reason,
+                            )
                         )
-                    )
-                    continue
+                        # Node is resolved (skipped), so not pending for next pass
+                        continue
 
-                tasks_to_run.append(
-                    self._execute_node_with_policies(
-                        node, graph, state_backend, active_resources, run_id, params
-                    )
-                )
-                nodes_in_execution.append(node)
+                    if self.constraint_manager.check_permission(node):
+                        executable_this_pass.append(node)
+                    else:
+                        deferred_this_pass.append(node)
 
-            if not tasks_to_run:
-                continue
+                if executable_this_pass:
+                    tasks_to_run = [
+                        self._execute_node_with_policies(
+                            node, graph, state_backend, active_resources, run_id, params
+                        )
+                        for node in executable_this_pass
+                    ]
 
-            stage_results = await asyncio.gather(*tasks_to_run)
+                    pass_results = await asyncio.gather(*tasks_to_run)
 
-            for node, res in zip(nodes_in_execution, stage_results):
-                state_backend.put_result(node.id, res)
-                if self.flow_manager:
-                    self.flow_manager.register_result(node.id, res, state_backend)
+                    for node, res in zip(executable_this_pass, pass_results):
+                        state_backend.put_result(node.id, res)
+                        if self.flow_manager:
+                            self.flow_manager.register_result(node.id, res, state_backend)
+
+                pending_nodes_in_stage = deferred_this_pass
+
+                if pending_nodes_in_stage and not executable_this_pass:
+                    # All remaining nodes are blocked by constraints, wait before retrying.
+                    await asyncio.sleep(0.1)  # TODO: Make backoff configurable
 
         if not state_backend.has_result(target._uuid):
             if skip_reason := state_backend.get_skip_reason(target._uuid):

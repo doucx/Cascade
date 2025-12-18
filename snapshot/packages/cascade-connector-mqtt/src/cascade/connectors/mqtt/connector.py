@@ -3,6 +3,7 @@ import json
 import logging
 import platform
 import os
+import sys
 from typing import Callable, Awaitable, Dict, Any
 
 try:
@@ -55,6 +56,7 @@ class MqttConnector:
         self._client = await client.__aenter__()
 
         # Start the message processing loop
+        sys.stderr.write("[DEBUG] Starting message loop task...\n")
         self._loop_task = asyncio.create_task(self._message_loop())
 
     async def disconnect(self) -> None:
@@ -149,15 +151,19 @@ class MqttConnector:
 
     async def _message_loop(self):
         """Background task to process incoming MQTT messages."""
+        sys.stderr.write("[DEBUG] Message loop started.\n")
         if not self._client:
+            sys.stderr.write("[DEBUG] No client in message loop!\n")
             return
 
         try:
             # Iterate over the messages asynchronous generator provided by aiomqtt
+            sys.stderr.write("[DEBUG] Entering aiomqtt messages iterator...\n")
             async for message in self._client.messages:
                 topic = str(message.topic)
                 payload_bytes = message.payload
 
+                sys.stderr.write(f"[DEBUG] RAW MSG: {topic}\n")
                 logger.debug(f"Received message on topic: {topic}")
 
                 # Dispatch to all matching subscriptions
@@ -197,12 +203,15 @@ class MqttConnector:
                 except json.JSONDecodeError:
                     logger.error(f"Received non-JSON payload on topic '{topic}'")
                 except Exception as e:
+                    sys.stderr.write(f"[DEBUG] Error processing message: {e}\n")
                     logger.error(f"Error processing message on topic '{topic}': {e}")
 
         except asyncio.CancelledError:
-            # Normal shutdown
+            sys.stderr.write("[DEBUG] Message loop cancelled.\n")
             pass
         except Exception as e:
             # Unexpected error in loop, log it.
-            # In a robust system we might want to restart the loop.
+            sys.stderr.write(f"[DEBUG] MQTT message loop CRASHED: {type(e).__name__}: {e}\n")
+            import traceback
+            traceback.print_exc()
             logger.error(f"MQTT message loop crashed: {e}")

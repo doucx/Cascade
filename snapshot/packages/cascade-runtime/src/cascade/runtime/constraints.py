@@ -22,9 +22,14 @@ class ConstraintManager:
         """
         Evaluates all active constraints to determine if a given task
         is currently allowed to execute.
-
-        TODO: Implement full evaluation logic based on constraint scope and type.
-              For now, it's permissive.
         """
-        # Placeholder logic: always allow execution
+        # TODO: Implement expiry logic (check constraint.expires_at)
+        # TODO: Implement scope matching (e.g., "task:task_name")
+
+        for constraint in self._constraints.values():
+            # Check for global pause
+            if constraint.type == "pause" and constraint.scope == "global":
+                return False  # Execution is not permitted
+
+        # If no blocking constraints are found, permit execution.
         return True

@@ -1,211 +1,93 @@
-好的，遵照指示，我将为你创建第一阶段“创建新的包结构和配置文件”的 `Plan.md` 文件。
+好的，我们现在进入第二阶段。这是本次重构的核心操作，我们将把所有源代码和测试文件迁移到第一阶段创建的新目录结构中。
 
-这个计划是自包含的，并且严格遵循了我们共同制定的重构路线图中的第一阶段步骤。
+我将使用 `run_command` 来执行文件移动，以确保操作的健壮性。
 
-***
-
-没问题，这是执行重构第一阶段的计划。
-
-该计划的目标是为我们的多包（Monorepo）架构搭建骨架。我们将创建所有必需的目录和基础的 `pyproject.toml` 配置文件，为第二阶段的代码迁移做好准备。
-
-## [WIP] refactor(build): Establish monorepo package structure and configs
+## [WIP] refactor(build): Migrate source and test files to monorepo packages
 
 ### 用户需求
-根据已制定的重构路线图，执行第一阶段任务：创建 `packages` 目录，为 `cascade-interfaces`、`cascade-runtime`、`cascade-py` 和 `cascade-cli` 四个新包建立标准的目录结构，并为每个包生成基础的 `pyproject.toml` 配置文件。
+执行重构路线图的第二阶段：将现有 `src/cascade` 目录下的所有代码文件，以及 `tests` 目录下的所有测试文件，系统性地迁移到它们在 `packages/` 和 `tests/` 子目录中各自的新位置。
 
 ### 评论
-这是整个重构工作的基石。一个清晰、一致的目录结构和预先定义的包元数据，能极大地降低后续代码迁移的复杂性。通过这个步骤，我们为每个组件划分了明确的“领地”，使关注点分离的原则在物理层面得到体现。
+这是整个重构过程中“体力活”最集中的一步。我们将一次性地对项目的文件系统进行大规模重组。这个操作会暂时性地“破坏”整个项目（因为所有的 Python导入路径都会失效），这是一个预期内的中间状态。关键在于精确、完整地执行文件迁移，为第三阶段的配置更新和最终修复做好准备。
 
 ### 目标
-1.  在项目根目录下创建 `packages` 目录。
-2.  在 `packages` 目录内，为四个目标包（`cascade-interfaces`, `cascade-runtime`, `cascade-py`, `cascade-cli`）创建符合 Python `src` 布局的目录结构。
-3.  为每个新包分别创建一个 `pyproject.toml` 文件，并填入其核心的项目元数据，如名称、版本和描述。
+1.  将与接口、协议和数据模型相关的代码（`spec/`, `runtime/protocols.py`, `graph/model.py`）迁移至 `packages/cascade-interfaces/`。
+2.  将核心的运行时引擎、求解器、执行器和适配器（`runtime/`, `adapters/` 等）迁移至 `packages/cascade-runtime/`。
+3.  将面向用户的库代码，包括 `providers/`、`tools/` 和顶层 `__init__.py` 等，迁移至 `packages/cascade-py/`。
+4.  将 CLI 专用代码（`tools/cli.py`）迁移至 `packages/cascade-cli/` 并重命名为 `main.py`。
+5.  同步重组 `tests/` 目录，使其内部结构镜像新的多包布局。
 
 ### 基本原理
-我们将采用原子化的步骤来执行此阶段任务。首先，使用一个 `run_command` 指令结合 `mkdir -p` 来一次性、幂等地创建所有必需的目录结构。这比多个单独的创建指令更高效、更可靠。随后，使用四个独立的 `write_file` 指令来精确地生成每个包的配置文件。这种方法确保了结构创建和配置写入是两个独立的、可验证的步骤，完全符合路线图的设计。
+我们将严格遵循用户指令，使用 `run_command` 和 `mv` 来执行所有文件和目录的移动。为了清晰和可追溯，我们将文件迁移分为两个独立的 `act`：一个用于处理 `src` 目录下的源代码，另一个用于重组 `tests` 目录。通过在 shell 脚本中添加注释，我们能清楚地标示出每一条 `mv` 命令的目的地和意图，确保这个关键步骤的准确无误。
 
 ### 标签
-#intent/architect #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/build #task/object/monorepo-structure #task/action/setup #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/build #task/object/monorepo-structure #task/action/setup #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建目录骨架
+#### Acts 1: 迁移源代码至各包
 
-此操作将创建所有新包所需的目录结构，为后续的文件迁移和配置写入做准备。
+此脚本将 `src/cascade` 目录下的所有内容，根据其职责，分别移动到 `cascade-interfaces`、`cascade-runtime`、`cascade-cli` 和 `cascade-py` 包中。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-# 创建顶层 packages 目录
-mkdir packages
+# --- 1. 迁移至 cascade-interfaces ---
+# 移动所有数据规范、接口定义和核心图模型
+mv src/cascade/spec packages/cascade-interfaces/src/cascade/
+mv src/cascade/runtime/protocols.py packages/cascade-interfaces/src/cascade/interfaces/
+mv src/cascade/graph/model.py packages/cascade-interfaces/src/cascade/graph/
 
-# 为每个包创建标准目录结构
-PACKAGE_NAMES="cascade-interfaces cascade-runtime cascade-py cascade-cli"
-for pkg in $PACKAGE_NAMES; do
-    mkdir -p "packages/$pkg/src/cascade"
-done
+# --- 2. 迁移至 cascade-runtime ---
+# 移动运行时引擎、适配器、图构建逻辑等
+mv src/cascade/adapters packages/cascade-runtime/src/cascade/
+mv src/cascade/graph/build.py src/cascade/graph/serialize.py packages/cascade-runtime/src/cascade/graph/
+# 注意：此时 src/cascade/runtime/ 目录只剩下 protocols.py（已被移走），所以我们移动整个目录
+mv src/cascade/runtime packages/cascade-runtime/src/cascade/
 
-# 为 cascade-cli 创建其特定的子目录
-mkdir -p "packages/cascade-cli/src/cascade/cli"
+# --- 3. 迁移至 cascade-cli ---
+# 移动 CLI 实现，并重命名为 main.py 以符合惯例
+mv src/cascade/tools/cli.py packages/cascade-cli/src/cascade/cli/main.py
 
-# 为 cascade-interfaces 创建其特定的子目录
-mkdir -p "packages/cascade-interfaces/src/cascade/graph"
-mkdir -p "packages/cascade-interfaces/src/cascade/interfaces"
-
-# 为 cascade-runtime 创建其特定的子目录
-mkdir -p "packages/cascade-runtime/src/cascade/graph"
+# --- 4. 迁移剩余部分至 cascade-py ---
+# 将 src/cascade/ 下所有剩余的文件和目录（providers, tools, __init__.py 等）移动到 cascade-py
+mv src/cascade/* packages/cascade-py/src/cascade/
 ~~~~~
 
-#### Acts 2: 写入各包的配置文件
+#### Acts 2: 重组测试目录
 
-现在，我们将为每个新包创建其 `pyproject.toml` 文件，正式定义它们的身份和元数据。
+现在，我们将 `tests` 目录的结构进行调整，以匹配新的多包布局，确保测试代码与被测代码的结构保持一致。
 
-首先是 `cascade-interfaces`，它将是生态系统的契约中心。
 ~~~~~act
-write_file
-packages/cascade-interfaces/pyproject.toml
+run_command
 ~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+~~~~~bash
+# 1. 创建新的测试根目录，用于归类
+mkdir tests/interfaces tests/runtime tests/py tests/cli
 
-[project]
-name = "cascade-interfaces"
-version = "0.1.0"
-description = "Interfaces, specifications, and data models for the Cascade ecosystem."
-requires-python = ">=3.8"
+# 2. 迁移测试文件到新位置
+# 接口和规范相关的测试
+mv tests/spec tests/interfaces/
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-~~~~~
+# 运行时、集成和适配器相关的测试。它们紧密耦合，暂时都归入 'py'，因为它们主要测试 cascade-py 和 cascade-runtime 的集成行为。
+# 后续可以根据需要进一步细化拆分。
+mv tests/runtime tests/integration tests/adapters tests/py/
 
-接下来是 `cascade-runtime`，作为我们新的执行核心。
-~~~~~act
-write_file
-packages/cascade-runtime/pyproject.toml
-~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+# CLI 相关的测试
+mv tests/tools/test_cli.py tests/cli/
 
-[project]
-name = "cascade-runtime"
-version = "0.1.0"
-description = "The core runtime engine for Cascade workflows."
-requires-python = ">=3.8"
-dependencies = [
-  "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces"
-]
-
-[project.optional-dependencies]
-csp_solver = ["python-constraint"]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-~~~~~
-
-然后是 `cascade-py`，面向用户的主要库。
-~~~~~act
-write_file
-packages/cascade-py/pyproject.toml
-~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "cascade-py"
-version = "0.1.0"
-description = "A modern, declarative automation library for Python."
-requires-python = ">=3.8"
-dependencies = [
-  "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces",
-  "cascade-runtime @ file:///${PROJECT_ROOT}/packages/cascade-runtime"
-]
-
-[project.optional-dependencies]
-template = ["jinja2"]
-http = ["aiohttp"]
-sql = ["sqlalchemy"]
-cli = ["typer[all]"]
-config = ["PyYAML"]
-s3 = ["aiobotocore"]
-all = [
-  "jinja2",
-  "aiohttp",
-  "sqlalchemy",
-  "typer[all]",
-  "PyYAML",
-  "aiobotocore",
-]
-
-[project.entry-points."cascade.providers"]
-shell = "cascade.providers.shell:ShellProvider"
-template = "cascade.providers.template:TemplateProvider"
-"http.get" = "cascade.providers.http:HttpGetProvider"
-"http.post" = "cascade.providers.http:HttpPostProvider"
-"http.put" = "cascade.providers.http:HttpPutProvider"
-"http.delete" = "cascade.providers.http:HttpDeleteProvider"
-"http.request" = "cascade.providers.http:HttpRequestProvider"
-subflow = "cascade.providers.subflow:SubflowProvider"
-sql = "cascade.providers.sql:SqlProvider"
-load_yaml = "cascade.providers.config:YamlLoaderProvider"
-lookup = "cascade.providers.config:LookupProvider"
-"read.text" = "cascade.providers.io:ReadTextProvider"
-"read.bytes" = "cascade.providers.io:ReadBytesProvider"
-"write.text" = "cascade.providers.io:WriteTextProvider"
-"write.bytes" = "cascade.providers.io:WriteBytesProvider"
-"fs.exists" = "cascade.providers.io:FsExistsProvider"
-"io.local.read_text" = "cascade.providers.io:IoLocalReadTextProvider"
-"io.local.read_bytes" = "cascade.providers.io:IoLocalReadBytesProvider"
-"io.local.write_text" = "cascade.providers.io:IoLocalWriteTextProvider"
-"io.local.write_bytes" = "cascade.providers.io:IoLocalWriteBytesProvider"
-"io.local.exists" = "cascade.providers.io:IoLocalExistsProvider"
-"io.s3.read_text" = "cascade.providers.s3:S3ReadTextProvider"
-"io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
-"io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
-"io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
-"io.stdout.write" = "cascade.providers.stdio:StdOutWriteProvider"
-"io.stdin.read_line" = "cascade.providers.stdio:StdInReadLineProvider"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-~~~~~
-
-最后是 `cascade-cli`，我们的命令行界面入口。
-~~~~~act
-write_file
-packages/cascade-cli/pyproject.toml
-~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "cascade-cli"
-version = "0.1.0"
-description = "Command-line tools for the Cascade workflow engine."
-requires-python = ">=3.8"
-dependencies = [
-  "cascade-py @ file:///${PROJECT_ROOT}/packages/cascade-py",
-  "typer[all]"
-]
-
-[project.scripts]
-cascade = "cascade.cli.main:app"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade/cli"]
+# 剩余的用户库和 providers 相关的测试
+mv tests/tools tests/providers tests/messaging tests/graph tests/examples tests/py/
 ~~~~~
 
 ### 下一步建议
-我们已经成功创建了新架构的骨架。接下来的 **第二阶段** 将是整个重构的核心：将现有 `src/cascade` 目录中的所有代码和测试文件，逐一迁移到它们在 `packages/*` 和 `tests/*` 中对应的新家。
+我们已经成功地将所有代码和测试文件迁移到了新的多包结构中。目前，项目处于一个“已重组但已损坏”的状态，因为 Python 的导入路径全部失效了，并且根 `pyproject.toml` 尚未更新。
 
-如果你同意，我将为你生成执行第二阶段（文件迁移）的计划。
+接下来的 **第三阶段** 将解决这个问题：
+1.  更新项目根目录的 `pyproject.toml`，将其配置为 Hatch workspace，从而让 `uv` 等工具能够理解新的多包布局。
+2.  清理掉现在已经变空的旧 `src` 和 `tests` 子目录。
+
+如果你确认继续，我将为你生成第三阶段的计划。

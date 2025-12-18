@@ -350,9 +350,10 @@ async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_s
     assert "task_b" not in started_tasks, "'task_b' started despite pause constraint"
 
     # 6. Inject a RESUME command for 'task_b'
-    # An empty payload on a retained topic clears the constraint.
+    # An empty payload on a retained topic clears the constraint. The connector
+    # translates this to an empty dictionary.
     await mock_connector._trigger_message(
-        f"cascade/constraints/{pause_scope.replace(':', '/')}", ""
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", {}
     )
 
     # 7. Wait for the rest of the workflow to complete

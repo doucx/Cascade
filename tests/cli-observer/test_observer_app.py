@@ -36,7 +36,7 @@ async def test_on_message_handles_task_running_event(mock_messaging_bus):
     # Arrange: Reset global state and define payload
     observer_app.seen_run_ids.clear()
     payload = {
-        "header": {"run_id": "run-123"},
+        "run_id": "run-123",
         "body": {
             "type": "TaskStateEvent",
             "state": "RUNNING",
@@ -65,7 +65,7 @@ async def test_on_message_handles_task_completed_event(mock_messaging_bus):
     # Arrange
     observer_app.seen_run_ids.clear()
     payload = {
-        "header": {"run_id": "run-123"},
+        "run_id": "run-123",
         "body": {
             "type": "TaskStateEvent",
             "state": "COMPLETED",
@@ -94,7 +94,7 @@ async def test_on_message_handles_task_failed_event(mock_messaging_bus):
     # Arrange
     observer_app.seen_run_ids.clear()
     payload = {
-        "header": {"run_id": "run-123"},
+        "run_id": "run-123",
         "body": {
             "type": "TaskStateEvent",
             "state": "FAILED",
@@ -122,11 +122,11 @@ async def test_on_message_prints_run_header_only_once(mock_messaging_bus):
     Verify that the run header is printed only for the first message of a new run.
     """
     payload1 = {
-        "header": {"run_id": "run-abc"},
+        "run_id": "run-abc",
         "body": {"type": "LifecycleEvent", "event": "ENGINE_STARTED"},
     }
     payload2 = {
-        "header": {"run_id": "run-abc"},
+        "run_id": "run-abc",
         "body": {"type": "TaskStateEvent", "state": "RUNNING", "task_name": "task1"},
     }
 

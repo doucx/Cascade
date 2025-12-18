@@ -1,58 +1,148 @@
-好的，E2E 测试通过，我们已经成功完成了并发管理能力的闭环验证。现在我们来创建最终的提交。
+好的，我将创建一个 `[WIP]` 计划，以实现从忙等待 (`asyncio.sleep`) 到基于 `asyncio.Event` 的确定性等待机制的转换。
 
-## [COMMIT] test(e2e): 添加并发控制的 In-Process 端到端测试
+这是一个至关重要的架构优化，它将显著提升 `Engine` 在任务被约束推迟时的效率和健壮性。
+
+## [WIP] refactor(runtime): 以事件驱动的唤醒机制取代 Engine 中的忙等待
 
 ### 用户需求
-创建并提交一个完全自包含的、基于 `InProcessConnector` 的端到端测试，以验证 `cs-controller` 发布的并发约束能正确被 `cascade` 运行时接收并执行。
+将 `Engine` 主调度循环中，因任务被约束推迟而产生的 `asyncio.sleep(0.1)` 忙等待，替换为一个高效的、基于 `asyncio.Event` 的精确唤醒机制。
 
 ### 评论
-这个测试是架构的里程碑。它不仅验证了并发管理功能本身，而且确立了一个**新的、健壮的测试模式**：使用 `InProcessConnector` 模拟外部环境（MQTT Broker）的复杂行为（如保留消息），从而在不依赖真实网络资源的情况下，实现对异步、分布式控制回路的确定性验证。这解决了我们在实现过程中遇到的所有时序竞争问题。
+当前的忙等待实现是一个典型的反模式。当大量任务被全局约束（如`pause`）阻塞时，它会导致 `Engine` 持续消耗不必要的 CPU 周期进行轮询。
+
+迁移到事件驱动的等待/唤醒模型是一次关键的架构升级。它使得 `Engine` 在没有可执行任务时能够进入真正的“静默”等待状态，只有在可能改变调度决策的外部事件（即约束变更）发生时才被唤醒。这不仅极大地提升了系统效率，也使调度行为更加确定和可靠。
 
 ### 目标
-将 E2E 测试文件及其所依赖的 `InProcessConnector` 逻辑作为一个原子提交，正式纳入代码库。
+1.  在 `Engine` 类中引入一个 `asyncio.Event` 实例 (`_wakeup_event`)，作为调度循环的唤醒信号。
+2.  修改 `_execute_graph` 方法中的主循环，当所有待处理任务都被约束阻塞时，使其 `await` 这个 `_wakeup_event`，而不是固定时间的 `sleep`。
+3.  增强 `_on_constraint_update` MQTT 回调方法，使其在成功处理任何约束变更（增加或移除）后，调用 `_wakeup_event.set()` 来唤醒可能正在等待的调度循环。
 
 ### 基本原理
-这个测试用例是 Phase 3 核心功能完整性的最终证明。它是一个关键的回归测试，可以保证未来对 `Engine`、`Connector` 或 `ConstraintManager` 的任何修改不会破坏控制回路。
+我们将 `Engine` 的调度模型从**轮询（Polling）**转变为**事件驱动（Event-Driven）**。
+
+`Engine` 的主循环在遇到所有任务都被阻塞的局面时，不再盲目地等待一个固定的时间片，而是 `await` 一个内部的 `asyncio.Event`。这个 `await` 会使其挂起，不消耗任何CPU，直到事件被设置。
+
+唯一能让被阻塞任务变为可执行的外部事件是约束的变更。因此，我们让处理 MQTT 消息的 `_on_constraint_update` 回调函数，在每次成功更新约束状态后，负责调用 `_wakeup_event.set()`。
+
+这就建立了一个清晰的因果链：**约束变更 -> 信号发出 -> 调度器被唤醒 -> 重新评估任务**。这个机制既高效又确定。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/core #task/object/e2e-test #task/action/implementation #task/state/end #task/status/completed
+#intent/refine #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/scheduler #task/action/optimization #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交 E2E 测试文件
+#### Acts 1: 在 Engine 中引入唤醒事件
+
+首先，我们在 `Engine` 的 `__init__` 方法中初始化 `asyncio.Event`。
 
 ~~~~~act
-git_add
-packages/cascade-cli-controller/src/cascade/cli/controller/app.py
-packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
-tests/py/e2e/test_e2e_concurrency_control.py
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
+~~~~~python
+        # Setup constraint manager with default handlers
+        self.constraint_manager = ConstraintManager(self.resource_manager)
+        self.constraint_manager.register_handler(PauseConstraintHandler())
+        self.constraint_manager.register_handler(ConcurrencyConstraintHandler())
+
+        self._resource_providers: Dict[str, Callable] = {}
+~~~~~
+~~~~~python
+        # Setup constraint manager with default handlers
+        self.constraint_manager = ConstraintManager(self.resource_manager)
+        self.constraint_manager.register_handler(PauseConstraintHandler())
+        self.constraint_manager.register_handler(ConcurrencyConstraintHandler())
+
+        self._wakeup_event = asyncio.Event()
+
+        self._resource_providers: Dict[str, Callable] = {}
+~~~~~
+
+#### Acts 2: 实现唤醒信号的触发
+
+接下来，我们修改 MQTT 回调 `_on_constraint_update`，让它在每次约束状态变更后，设置唤醒事件。
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
-~~~~~text
-test(e2e): Add in-process concurrency control test
+~~~~~python
+        try:
+            # Basic validation, could be improved with a schema library
+            constraint = GlobalConstraint(
+                id=payload["id"],
+                scope=payload["scope"],
+                type=payload["type"],
+                params=payload["params"],
+                expires_at=payload.get("expires_at"),
+            )
+            self.constraint_manager.update_constraint(constraint)
+        except (KeyError, TypeError) as e:
+            # In a real system, we'd use a proper logger.
+            # For now, print to stderr to avoid crashing the engine.
+            print(
+                f"[Engine] Error processing constraint on topic '{topic}': {e}",
+                file=sys.stderr,
+            )
+~~~~~
+~~~~~python
+        try:
+            # Basic validation, could be improved with a schema library
+            constraint = GlobalConstraint(
+                id=payload["id"],
+                scope=payload["scope"],
+                type=payload["type"],
+                params=payload["params"],
+                expires_at=payload.get("expires_at"),
+            )
+            self.constraint_manager.update_constraint(constraint)
+        except (KeyError, TypeError) as e:
+            # In a real system, we'd use a proper logger.
+            # For now, print to stderr to avoid crashing the engine.
+            print(
+                f"[Engine] Error processing constraint on topic '{topic}': {e}",
+                file=sys.stderr,
+            )
+        finally:
+            # After any change, wake up the engine loop if it's waiting
+            self._wakeup_event.set()
+~~~~~
 
-Introduces a robust, in-process end-to-end test for dynamic concurrency control.
+#### Acts 3: 替换忙等待为事件等待
 
-Key features of this test:
-1. **InProcessConnector**: A new test utility that simulates an MQTT Broker using `asyncio.Queue` and explicitly implements **Retained Message** logic. This allows for reliable 'config-first' testing where constraints are published before the engine starts.
-2. **ControllerTestApp**: Simulates the `cs-controller` publishing constraints via the shared in-process medium.
-3. **Validation**: Measures the total execution time of a highly parallel `.map()` workflow after the `limit=1` constraint is applied, proving that the entire control loop (Controller -> Connector -> Engine -> ConstraintManager -> Scheduler) works as intended without race conditions.
+最后，我们将 `_execute_graph` 中的 `asyncio.sleep` 替换为对 `_wakeup_event` 的等待。
 
-This solidifies the stability of the Phase 3 implementation.
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+                pending_nodes_in_stage = deferred_this_pass
+
+                if pending_nodes_in_stage and not executable_this_pass:
+                    # All remaining nodes are blocked by constraints, wait before retrying.
+                    await asyncio.sleep(0.1)  # TODO: Make backoff configurable
+~~~~~
+~~~~~python
+                pending_nodes_in_stage = deferred_this_pass
+
+                if pending_nodes_in_stage and not executable_this_pass:
+                    # All remaining nodes are blocked by constraints. Wait for a wakeup
+                    # signal (e.g., from a constraint change) before retrying.
+                    await self._wakeup_event.wait()
+                    self._wakeup_event.clear()
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 Phase 3 中**精准控制 (Targeted Control)** 和 **并发管理 (Concurrency Management)** 这两个核心里程碑的所有工作：
+我们已经完成了核心逻辑的重构。下一步至关重要，是为此新机制编写一个**健壮的集成测试**。
 
-*   **Phase 3.1 & 3.2 核心能力**: 实现 Pause/Resume 和 Concurrency Limits (Engine)。
-*   **Phase 4 对应工具**: 实现 `cs-controller pause` 和 `cs-controller set-limit --concurrency` (CLI)。
-*   **测试覆盖**: 添加了可靠的单元测试和 E2E 测试。
+这个测试需要：
+1.  使用一个 Mock Connector (`InProcessConnector`)。
+2.  启动一个工作流，其中包含一个会被初始约束（例如 `pause`）阻塞的任务。
+3.  断言该任务**没有**被执行。
+4.  通过 Mock Connector 发布一个新的约束（例如 `resume`）。
+5.  断言 `Engine` 被唤醒，并且被阻塞的任务现在成功执行了。
 
-根据 [Phase 3 (Refined) & Phase 4 并行开发路线图]，下一个里程碑是 **3.3: 速率限制 (Rate Limiting)**。
-
-我建议我们开始定义速率限制功能的核心组件：`RateLimiter` 和相应的 `RateLimitConstraintHandler`。
+这个测试将验证我们的事件驱动机制是正确且可靠的，为后续更复杂的约束实现奠定坚实的基础。如果你同意，我将开始制定这个测试计划。

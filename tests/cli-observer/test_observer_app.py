@@ -27,6 +27,7 @@ def mock_connector(monkeypatch) -> AsyncMock:
 
 # --- Test Cases ---
 
+
 @pytest.mark.asyncio
 async def test_on_message_handles_task_running_event(mock_messaging_bus):
     """
@@ -128,7 +129,7 @@ async def test_on_message_prints_run_header_only_once(mock_messaging_bus):
         "header": {"run_id": "run-abc"},
         "body": {"type": "TaskStateEvent", "state": "RUNNING", "task_name": "task1"},
     }
-    
+
     # Reset the global tracker for a clean test run
     observer_app.seen_run_ids.clear()
 
@@ -141,9 +142,9 @@ async def test_on_message_prints_run_header_only_once(mock_messaging_bus):
     header_call = mock_messaging_bus.info.call_args_list[0]
     assert header_call.args[0] == "observer.telemetry.run_header"
     assert header_call.kwargs["run_id"] == "run-abc"
-    
+
     # Check that subsequent calls did not print the header again
-    assert len(mock_messaging_bus.info.call_args_list) == 3 # Header, Started, Running
+    assert len(mock_messaging_bus.info.call_args_list) == 3  # Header, Started, Running
     assert all(
         call.args[0] != "observer.telemetry.run_header"
         for call in mock_messaging_bus.info.call_args_list[1:]

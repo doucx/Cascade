@@ -13,6 +13,7 @@ from cascade.graph.model import Node
 
 # --- Mocks ---
 
+
 class MockConnector(Connector):
     """
     A mock connector that simulates MQTT behavior, including Retained Messages.
@@ -40,7 +41,7 @@ class MockConnector(Connector):
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
     ) -> None:
         self.subscriptions[topic] = callback
-        
+
         # Immediate delivery of matching retained messages upon subscription
         # This simulates MQTT behavior
         for retained_topic, payload in self.retained_messages.items():
@@ -69,7 +70,7 @@ class MockExecutor(Executor):
     async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
         # Simulate work duration
         await asyncio.sleep(0.05)
-        
+
         # Return the first available argument, or a default
         if args:
             return args[0]
@@ -79,6 +80,7 @@ class MockExecutor(Executor):
 
 
 # --- Fixtures ---
+
 
 @pytest.fixture
 def mock_connector():
@@ -92,17 +94,19 @@ def engine(mock_connector):
         executor=MockExecutor(),
         bus=MessageBus(),
         connector=mock_connector,
-        system_resources={}, 
+        system_resources={},
     )
 
 
 # --- Tests ---
+
 
 @pytest.mark.asyncio
 async def test_concurrency_constraint_on_map(engine, mock_connector):
     """
     Verify that a concurrency constraint limits the parallelism of a mapped task.
     """
+
     @cs.task
     def slow_task(x):
         return x
@@ -117,19 +121,19 @@ async def test_concurrency_constraint_on_map(engine, mock_connector):
         "id": "limit-slow-task",
         "scope": scope,
         "type": "concurrency",
-        "params": {"limit": 1}
+        "params": {"limit": 1},
     }
     mock_connector.seed_retained_message(
         f"cascade/constraints/{scope.replace(':', '/')}", payload
     )
-    
+
     # 2. Run execution
     start_time = time.time()
     results = await engine.run(workflow)
     duration = time.time() - start_time
-    
+
     assert sorted(results) == [1, 2, 3, 4]
-    
+
     # With limit=1, 4 tasks of 0.05s should take >= 0.2s
     # (Allowing slight buffer for overhead, so maybe >= 0.18s)
     assert duration >= 0.18, f"Expected serial execution, got {duration}s"
@@ -140,23 +144,27 @@ async def test_global_concurrency_limit(engine, mock_connector):
     """
     Verify that a global concurrency constraint limits total tasks running.
     """
+
     @cs.task
-    def task_a(x): return x
-    
+    def task_a(x):
+        return x
+
     @cs.task
-    def task_b(x): return x
+    def task_b(x):
+        return x
 
     # Pass dependencies as separate arguments so GraphBuilder detects them
     @cs.task
-    def wrapper(res_a, res_b): return [res_a, res_b]
-    
+    def wrapper(res_a, res_b):
+        return [res_a, res_b]
+
     workflow = wrapper(task_a(1), task_b(2))
 
     payload = {
         "id": "global-limit",
         "scope": "global",
         "type": "concurrency",
-        "params": {"limit": 1}
+        "params": {"limit": 1},
     }
     mock_connector.seed_retained_message("cascade/constraints/global", payload)
 
@@ -164,6 +172,6 @@ async def test_global_concurrency_limit(engine, mock_connector):
     start_time = time.time()
     await engine.run(workflow)
     duration = time.time() - start_time
-    
+
     # 2 tasks of 0.05s in serial => >= 0.1s
     assert duration >= 0.09, f"Expected serial execution, got {duration}s"

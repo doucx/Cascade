@@ -1,5 +1,3 @@
-import sys
-from typing import TextIO, Optional
 
 from rich.console import Console
 from rich.theme import Theme
@@ -14,15 +12,18 @@ LOG_LEVELS = {
 }
 
 # Define a custom theme for Rich
-custom_theme = Theme({
-    "info": "cyan",
-    "warning": "yellow",
-    "error": "bold red",
-    "data": "green",
-})
+custom_theme = Theme(
+    {
+        "info": "cyan",
+        "warning": "yellow",
+        "error": "bold red",
+        "data": "green",
+    }
+)
 
 
 from rich.rule import Rule
+
 
 class RichCliRenderer(protocols.Renderer):
     """
@@ -49,8 +50,8 @@ class RichCliRenderer(protocols.Renderer):
             return
 
         message = self._store.get(msg_id, **kwargs)
-        
+
         # Use style tags that match our theme
         style = level.lower() if level.lower() in custom_theme.styles else ""
-        
+
         self._console.print(message, style=style)

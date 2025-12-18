@@ -1,0 +1,12 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-interfaces"
+version = "0.1.0"
+description = "Interfaces, specifications, and data models for the Cascade ecosystem."
+requires-python = ">=3.8"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]

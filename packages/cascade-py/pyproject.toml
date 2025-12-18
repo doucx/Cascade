@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-py"
+version = "0.1.0"
+description = "A modern, declarative automation library for Python."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-interfaces",
+  "cascade-runtime"
+]
+
+[project.optional-dependencies]
+template = ["jinja2"]
+http = ["aiohttp"]
+sql = ["sqlalchemy"]
+cli = ["typer[all]"]
+config = ["PyYAML"]
+s3 = ["aiobotocore"]
+all = [
+  "jinja2",
+  "aiohttp",
+  "sqlalchemy",
+  "typer[all]",
+  "PyYAML",
+  "aiobotocore",
+]
+
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+template = "cascade.providers.template:TemplateProvider"
+"http.get" = "cascade.providers.http:HttpGetProvider"
+"http.post" = "cascade.providers.http:HttpPostProvider"
+"http.put" = "cascade.providers.http:HttpPutProvider"
+"http.delete" = "cascade.providers.http:HttpDeleteProvider"
+"http.request" = "cascade.providers.http:HttpRequestProvider"
+subflow = "cascade.providers.subflow:SubflowProvider"
+sql = "cascade.providers.sql:SqlProvider"
+load_yaml = "cascade.providers.config:YamlLoaderProvider"
+lookup = "cascade.providers.config:LookupProvider"
+"read.text" = "cascade.providers.io:ReadTextProvider"
+"read.bytes" = "cascade.providers.io:ReadBytesProvider"
+"write.text" = "cascade.providers.io:WriteTextProvider"
+"write.bytes" = "cascade.providers.io:WriteBytesProvider"
+"fs.exists" = "cascade.providers.io:FsExistsProvider"
+"io.local.read_text" = "cascade.providers.io:IoLocalReadTextProvider"
+"io.local.read_bytes" = "cascade.providers.io:IoLocalReadBytesProvider"
+"io.local.write_text" = "cascade.providers.io:IoLocalWriteTextProvider"
+"io.local.write_bytes" = "cascade.providers.io:IoLocalWriteBytesProvider"
+"io.local.exists" = "cascade.providers.io:IoLocalExistsProvider"
+"io.s3.read_text" = "cascade.providers.s3:S3ReadTextProvider"
+"io.s3.read_bytes" = "cascade.providers.s3:S3ReadBytesProvider"
+"io.s3.write_text" = "cascade.providers.s3:S3WriteTextProvider"
+"io.s3.write_bytes" = "cascade.providers.s3:S3WriteBytesProvider"
+"io.stdout.write" = "cascade.providers.stdio:StdOutWriteProvider"
+"io.stdin.read_line" = "cascade.providers.stdio:StdInReadLineProvider"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true

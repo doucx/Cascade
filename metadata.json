@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(runtime): Implement rate limiting for task execution", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766059276.2281725, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(runtime): 实现约束的 TTL (Time-To-Live) 与自动过期清理", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766059754.8135405, "duration_ms": 0}}

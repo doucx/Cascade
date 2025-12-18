@@ -235,9 +235,10 @@ class Engine:
 
                 if pending_nodes_in_stage and not executable_this_pass:
                     # All remaining nodes are blocked by constraints. Wait for a wakeup
-                    # signal (e.g., from a constraint change) before retrying.
+                    # signal (e.g., from a constraint change or TTL expiration) before retrying.
                     await self._wakeup_event.wait()
                     self._wakeup_event.clear()
+                    self.constraint_manager.cleanup_expired_constraints()
 
         if not state_backend.has_result(target._uuid):
             if skip_reason := state_backend.get_skip_reason(target._uuid):

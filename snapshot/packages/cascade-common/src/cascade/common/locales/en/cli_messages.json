@@ -1,6 +1,18 @@
 {
-    "observer.startup.watching": "🔭 Watching project: {project}",
-    "observer.not_implemented": "⚠️  Observer functionality is not yet fully implemented.",
+    "observer.startup.watching": "🔭 Watching project: [bold cyan]{project}[/bold cyan] on [bold green]{hostname}:{port}[/bold green]...",
+    "observer.startup.connected": "✅ Connected to MQTT broker.",
+    "observer.startup.error": "❌ Failed to connect to MQTT broker at {hostname}:{port}. Error: {error}",
+    "observer.shutdown": "\n🔌 Disconnecting and shutting down...",
+
+    "observer.telemetry.run_header": "\n[bold yellow]─── Run Started: {run_id} ───[/bold yellow]",
+    "observer.telemetry.lifecycle.ENGINE_STARTED": "▶️  Engine started.",
+    "observer.telemetry.lifecycle.ENGINE_STOPPED": "✅ Engine stopped.",
+    "observer.telemetry.task_state.RUNNING": "   - Task '[bold]{task_name}[/bold]' started.",
+    "observer.telemetry.task_state.COMPLETED": "   - [green]✅ Task '[bold]{task_name}[/bold]' succeeded in {duration_ms:.0f}ms.[/green]",
+    "observer.telemetry.task_state.FAILED": "   - [bold red]❌ Task '[bold]{task_name}[/bold]' failed after {duration_ms:.0f}ms. Error: {error}[/bold red]",
+    "observer.telemetry.task_state.SKIPPED": "   - [dim]⚪ Task '[bold]{task_name}[/bold]' skipped.[/dim]",
+    "observer.telemetry.unknown_event": "[dim]Received unknown event type: {type}[/dim]",
+
     "controller.publishing": "📡 Publishing constraint for scope: {scope}",
     "controller.not_implemented": "⚠️  Controller functionality is not yet fully implemented."
 }

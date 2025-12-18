@@ -27,8 +27,8 @@ from cascade.runtime.bus import MessageBus
 from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.interfaces.protocols import Connector
-from cascade.runtime.adapters.solvers.native import NativeSolver
-from cascade.runtime.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
 # Tools
 from .testing import override_resource

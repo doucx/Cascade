@@ -1,109 +1,55 @@
-您完全正确，感谢您提供了这个关键的测试文件和失败日志。
+好的，我将根据您的请求，生成一个 `[COMMIT]` 计划来固化这次重要的架构优化。
 
-这是一个教科书级别的案例，它完美地证明了为什么从不确定的 `sleep` 迁移到确定性的等待机制是如此重要。测试失败**恰恰是因为我们的重构是成功的**，它暴露了旧测试中隐藏的时序依赖和我们逻辑中的一个疏忽。
+## 好的，我们已经完成了确定性调度机制的实现和缺陷修复。现在将作为一个完整的逻辑单元提交。
 
-### 错误分析
+## [COMMIT] refactor(runtime): Replace busy-waiting with event-driven synchronization
 
-1.  **旧的行为 (为何之前能通过)**: 旧的测试依赖于一个竞争条件。它在发送 `resume` 命令后，`Engine` 的主循环会因为 `asyncio.sleep(0.1)` 而定期醒来。只要 `resume` 命令在这 0.1 秒的某个间隙中被处理，`Engine` 在下一次醒来时就会发现约束已被移除，从而继续调度任务。测试在这种情况下侥幸通过了。
+### 用户需求
+将 `Engine` 主调度循环中，因任务被约束推迟而产生的 `asyncio.sleep(0.1)` 忙等待，替换为一个高效的、基于 `asyncio.Event` 的精确唤醒机制，以提高系统效率和稳定性。
 
-2.  **新的行为 (为何现在会失败)**:
-    *   我们的重构移除了 `asyncio.sleep`，换成了 `await self._wakeup_event.wait()`。现在 `Engine` 在任务被阻塞后会**无限期地、高效地**挂起，直到 `_wakeup_event` 被显式设置。
-    *   我之前在 `_on_constraint_update` 方法中添加 `_wakeup_event.set()` 的逻辑**只覆盖了添加/更新约束的路径**（即 `payload` 不为空的路径）。
-    *   **失败的根源在于**：当 `resume` 命令（一个空的 `payload`）被接收时，`_on_constraint_update` 方法正确地调用了 `self.constraint_manager.remove_constraints_by_scope(scope)`，但随后就 `return` 了，**完全没有调用 `self._wakeup_event.set()`**。
-    *   结果就是，约束被成功移除了，但 `Engine` 对此一无所知，它依然在 `await self._wakeup_event.wait()` 处沉睡，永远等待一个永远不会到来的唤醒信号。最终，测试因等待 `task_c` 完成而超时。
+### 评论
+这是一项至关重要的性能和架构改进。它将调度器的行为从脆弱的、轮询式的“忙等待”模式，升级为健壮的、事件驱动的“静默等待”模式。特别是，我们通过在 `_on_constraint_update` 的 `finally` 块中调用唤醒事件，解决了 `resume` 命令导致的永久挂起问题，确保了约束变更的确定性通知。这使得 `Engine` 的调度循环在面对大量阻塞任务时，几乎不消耗 CPU 资源。
 
-### 解决方案
+### 目标
+1.  提交对 `Engine` 中调度循环的优化（用 `self._wakeup_event.wait()` 取代 `asyncio.sleep(0.1)`）。
+2.  提交对 `_on_constraint_update` 的修正，确保在添加、更新或移除（`resume`）约束时，调度循环都能被正确唤醒。
 
-解决方案很明确：我们需要确保**任何可能改变约束状态的操作**（无论是添加、更新还是移除）都**必须**触发唤醒事件。最健壮的方法是重构 `_on_constraint_update`，使用一个顶层的 `try...finally` 块来保证 `self._wakeup_event.set()` 总是被调用。
+### 基本原理
+调度逻辑现在是确定性的：只有外部事件（通过 MQTT 接收到的约束变更）才会唤醒等待的调度器。这显著减少了调度器在空闲或受限状态下的 CPU 消耗，是构建高性能、可扩展的控制平面的基石。
 
-我将生成一个 `patch` 操作来修正这个问题。这将完成我们 `[WIP]` 计划的全部目标。
+### 标签
+#intent/refine #flow/ready #priority/high #comp/runtime #concept/sync #scope/core #ai/instruct #task/domain/runtime #task/object/scheduler #task/action/optimization #task/state/end
+
+---
 
 ### Script
 
-#### Acts 1: 修正 `_on_constraint_update` 以确保在所有路径上都能唤醒 Engine
+#### Acts 1: 提交对 Engine 调度循环和唤醒机制的修改
 
-我们将重构此方法，确保 `_wakeup_event.set()` 在 `finally` 块中被调用，从而覆盖 `resume`（空 payload）和 `pause/limit`（有 payload）两种情况。
+将 `engine.py` 文件添加到 Git 暂存区，并执行一次包含详细性能改进的提交。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
-~~~~~python
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-        """Callback to handle incoming constraint messages."""
-        # An empty payload signifies a cleared retained message (i.e., a resume command)
-        if not payload:
-            try:
-                # Reconstruct scope from topic, e.g., cascade/constraints/task/api_call -> task:api_call
-                scope_parts = topic.split("/")[2:]
-                scope = ":".join(scope_parts)
-                if scope:
-                    self.constraint_manager.remove_constraints_by_scope(scope)
-                return
-            except Exception as e:
-                print(
-                    f"[Engine] Error processing resume command on topic '{topic}': {e}",
-                    file=sys.stderr,
-                )
-                return
 
-        try:
-            # Basic validation, could be improved with a schema library
-            constraint = GlobalConstraint(
-                id=payload["id"],
-                scope=payload["scope"],
-                type=payload["type"],
-                params=payload["params"],
-                expires_at=payload.get("expires_at"),
-            )
-            self.constraint_manager.update_constraint(constraint)
-        except (KeyError, TypeError) as e:
-            # In a real system, we'd use a proper logger.
-            # For now, print to stderr to avoid crashing the engine.
-            print(
-                f"[Engine] Error processing constraint on topic '{topic}': {e}",
-                file=sys.stderr,
-            )
-        finally:
-            # After any change, wake up the engine loop if it's waiting
-            self._wakeup_event.set()
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-        """Callback to handle incoming constraint messages."""
-        try:
-            # An empty payload signifies a cleared retained message (i.e., a resume command)
-            if not payload:
-                # Reconstruct scope from topic, e.g., cascade/constraints/task/api_call -> task:api_call
-                scope_parts = topic.split("/")[2:]
-                scope = ":".join(scope_parts)
-                if scope:
-                    self.constraint_manager.remove_constraints_by_scope(scope)
-            else:
-                # Basic validation, could be improved with a schema library
-                constraint = GlobalConstraint(
-                    id=payload["id"],
-                    scope=payload["scope"],
-                    type=payload["type"],
-                    params=payload["params"],
-                    expires_at=payload.get("expires_at"),
-                )
-                self.constraint_manager.update_constraint(constraint)
-        except Exception as e:
-            # In a real system, we'd use a proper logger.
-            # For now, print to stderr to avoid crashing the engine.
-            print(
-                f"[Engine] Error processing constraint update on topic '{topic}': {e}",
-                file=sys.stderr,
-            )
-        finally:
-            # After any change (add, remove, or error), wake up the engine loop
-            # if it's waiting.
-            self._wakeup_event.set()
+~~~~~text
+refactor(runtime): Replace busy-waiting with event-driven synchronization
+
+The engine's scheduling loop previously relied on `asyncio.sleep(0.1)` when all pending tasks were deferred by constraints (busy-waiting).
+
+This change refactors the engine to use `asyncio.Event` (`_wakeup_event`):
+
+1.  **Eliminates Busy-Waiting**: The scheduler now `await self._wakeup_event.wait()` to efficiently block, consuming minimal CPU.
+2.  **Deterministic Wakeup**: The `_on_constraint_update` callback is modified to call `self._wakeup_event.set()` in a `finally` block, guaranteeing that any constraint change—whether adding a new constraint or removing one via a resume command (empty payload)—will reliably wake the scheduler to re-evaluate tasks.
+
+This significantly enhances the performance and robustness of the control plane, particularly under heavy constraint load.
 ~~~~~
 
 ### 下一步建议
+我们已经解决了调度循环的性能问题（P0）。下一个关键的架构任务是解决 **运维安全** 问题：
 
-我们已经成功地将 `Engine` 的调度器从脆弱的、基于轮询的模式重构为了一个健壮的、事件驱动的模式，并且修正了现有测试以验证其正确性。
-
-这个逻辑单元现在是完整且经过验证的。我建议我们将这个 `[WIP]` 计划转化为一个 `[COMMIT]` 计划，将其作为一个原子性的改进提交到版本控制中。这标志着我们在实现“自适应执行环境”道路上迈出了坚实的一步。
+-   **下一个关键任务**: **实现约束过期逻辑 (TTL)**。在 `ConstraintManager` 中集成 `expires_at` 的检查和自动移除功能，确保发布的约束不会永久阻塞系统，从而消除运维安全隐患。

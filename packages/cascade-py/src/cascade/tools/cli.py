@@ -11,7 +11,7 @@ from cascade.context import get_current_context
 from cascade.spec.input import ParamSpec
 
 
-def cli(target: "LazyResult[Any]") -> Callable[[], None]:
+def create_cli(target: "LazyResult[Any]") -> Callable[[], None]:
     """
     A factory that generates a Typer-based command-line interface for a Cascade workflow.
     It inspects the workflow context for `cs.Param` definitions and converts them into

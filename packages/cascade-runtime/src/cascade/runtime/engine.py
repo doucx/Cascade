@@ -27,6 +27,7 @@ from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
 from cascade.runtime.flow import FlowManager
 from cascade.runtime.constraints import ConstraintManager
+from cascade.runtime.constraints.handlers import PauseConstraintHandler
 from cascade.adapters.state import InMemoryStateBackend
 
 
@@ -50,7 +51,11 @@ class Engine:
         self.connector = connector
         self.state_backend_cls = state_backend_cls
         self.resource_manager = ResourceManager(capacity=system_resources)
+        
+        # Setup constraint manager with default handlers
         self.constraint_manager = ConstraintManager()
+        self.constraint_manager.register_handler(PauseConstraintHandler())
+
         self._resource_providers: Dict[str, Callable] = {}
 
         self.arg_resolver = ArgumentResolver()

@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-cli-observer"
+version = "0.1.0"
+description = "A real-time telemetry observer for the Cascade ecosystem."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-interfaces",
+  "typer[all]",
+  "aiomqtt",
+  "rich"
+]
+
+[project.scripts]
+cs-observer = "cascade.cli.observer.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true

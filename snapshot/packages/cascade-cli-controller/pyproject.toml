@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-cli-controller"
+version = "0.1.0"
+description = "A command-line tool to control running Cascade workflows."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-interfaces",
+  "typer[all]",
+  "aiomqtt"
+]
+
+[project.scripts]
+cs-controller = "cascade.cli.controller.app:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true

@@ -13,7 +13,6 @@ dependencies = [
     "cascade-interfaces",
     "cascade-runtime",
     "cascade-py",
-    "cascade-cli",
 ]
 
 [tool.uv.workspace]
@@ -23,14 +22,12 @@ members = ["packages/*"]
 cascade-interfaces = { workspace = true }
 cascade-runtime = { workspace = true }
 cascade-py = { workspace = true }
-cascade-cli = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
     "packages/cascade-interfaces",
     "packages/cascade-runtime",
     "packages/cascade-py",
-    "packages/cascade-cli",
 ]
 
 [tool.hatch.build.targets.wheel]

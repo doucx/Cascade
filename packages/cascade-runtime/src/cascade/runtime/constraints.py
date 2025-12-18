@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict
 from cascade.spec.constraint import GlobalConstraint
 from cascade.graph.model import Node
 

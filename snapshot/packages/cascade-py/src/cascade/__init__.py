@@ -17,7 +17,7 @@ from .internal.inputs import _get_param_value, _get_env_var
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
-from cascade.runtime.graph.serialize import to_json, from_json
+from cascade.graph.serialize import to_json, from_json
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 

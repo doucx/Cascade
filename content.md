@@ -1,175 +1,101 @@
-Excellent catch. You've correctly identified a crucial configuration issue with the build system that I overlooked. The error message from `uv` is perfectly clear: while I declared the dependencies between our local packages, I didn't tell the build tool *where* to find them (i.e., in the local workspace, not on PyPI).
+You've found another excellent and subtle bug. My apologies. The `pytest` error trace is the smoking gun, and your analysis is spot on.
 
-This is a classic monorepo setup problem, and your feedback prevents us from accumulating technical debt in our build process. We must fix this before proceeding.
+This is a classic Python packaging mistake on my part, especially during a refactor.
 
-I will generate a plan to patch all the necessary `pyproject.toml` files with the `[tool.uv.sources]` configuration to make the project buildable again.
+## [WIP] fix(build): Add missing __init__.py to new packages for proper discovery
 
-## [WIP] fix(build): Configure uv for local workspace package resolution
+### 錯誤分析
+`pytest` fails during test collection with an `ImportError: cannot import name 'MessageStore' from 'cascade.common.messaging'`. The key part of the error is `(unknown location)`, which is a strong indicator of a namespace package problem.
 
-### 错误分析
-用户在执行 `uv pip install packages/*` 时遇到构建失败。错误日志明确指出，像 `cascade-cli-observer` 这样的包依赖于 `cascade-common`，但 `uv` 构建工具不知道 `cascade-common` 是一个本地工作区成员。默认情况下，`uv` 会尝试从 PyPI 等外部源查找这个包，但找不到，因此构建失败。
+The root cause is that I created the directory `packages/cascade-common/src/cascade/common/messaging` and placed `bus.py` and `protocols.py` inside it, but I **failed to create an `__init__.py` file within that directory**.
 
-这是因为在各个包的 `pyproject.toml` 文件中，我们只声明了依赖关系（`dependencies = ["cascade-common"]`），却没有为 `uv` 提供解析这些本地包的元数据。
+Without `__init__.py`, Python 3 treats `cascade.common.messaging` as an implicit "namespace package". When `cascade.runtime.renderers` tries to `from cascade.common.messaging import MessageStore`, the importer finds the `messaging` namespace but doesn't know to look *inside* the `bus.py` file to find the `MessageStore` class. This results in the `ImportError`.
 
 ### 用户需求
-修复项目的构建配置，使其能够在使用 `uv` 工具时正确识别和解析本地包之间的依赖关系，让 `uv pip install packages/*` 命令能够成功执行。
+修复项目结构，添加所有必需的 `__init__.py` 文件，以确保 Python's import system can correctly discover and load modules and their contents from the new `cascade-common` package, allowing `pytest` to run without import errors.
 
 ### 评论
-这是一个对开发者体验（DX）至关重要的修复。正确配置工作区是任何现代 Python monorepo 的基础。通过添加 `[tool.uv.sources]` 配置，我们显式地声明了项目的拓扑结构，使 `uv` 能够高效、正确地构建整个项目。这个修复将使我们的开发流程更加顺畅和可靠。
+This is a critical fix that corrects a fundamental Python packaging error. Properly defining packages with `__init__.py` files is essential for creating a reliable and predictable import structure. This fix will unblock the test suite and allow us to proceed with development on a stable foundation. It also highlights the value of running tests immediately after a refactor to catch such integration issues.
 
 ### 目标
-1.  定位所有依赖于其他本地工作区包的 `pyproject.toml` 文件。
-2.  为每个受影响的 `pyproject.toml` 文件添加一个 `[tool.uv.sources]` 表。
-3.  在该表中，为每一个本地依赖项添加 `{ workspace = true }` 声明，以指示 `uv` 从本地解析它。
+1.  Create the missing `__init__.py` file in `packages/cascade-common/src/cascade/common/messaging`.
+2.  Populate this new `__init__.py` to expose the public API of the messaging module (like the global `bus` singleton), making it easier to import.
+3.  Add any other missing `__init__.py` files in the new package structures to ensure the entire `cascade` namespace is correctly constructed.
 
 ### 基本原理
-我们将遵循 `uv` 工具的官方规范，通过在每个消费包（consumer package）的 `pyproject.toml` 文件中添加 `[tool.uv.sources]` 部分来解决此问题。这个配置块作为元数据，告诉 `uv` 在解析依赖时，对于列出的包名，应优先在当前工作区中查找，而不是查询外部索引。我们将对 `cascade-runtime`、`cascade-py`、`cascade-connector-mqtt`、`cascade-cli-observer` 和 `cascade-cli-controller` 的配置文件进行精确的 `patch_file` 操作。
+We will use `write_file` to create the necessary `__init__.py` files. The most important one, in `.../messaging/`, will not be empty; it will contain imports from its sibling modules (`bus.py`, `protocols.py`) to define the public API for the `cascade.common.messaging` package. This is a standard Python practice that makes packages easier to use and fixes the import resolution error.
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/build-config #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/packaging #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 配置 `cascade-runtime`
+#### Acts 1: Create `__init__.py` files for the `cascade.common` namespace
 
-`cascade-runtime` 依赖 `cascade-interfaces` 和 `cascade-common`。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/pyproject.toml
-~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-common = { workspace = true }
-~~~~~
-
-#### Acts 2: 配置 `cascade-py`
-
-`cascade-py` 依赖 `cascade-interfaces`, `cascade-runtime`, 和 `cascade-common`。
+First, we need to ensure that `cascade` and `cascade.common` are themselves recognized as packages.
 
 ~~~~~act
-patch_file
-packages/cascade-py/pyproject.toml
+write_file
+packages/cascade-common/src/cascade/__init__.py
 ~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
+~~~~~python
+# This must be the very first line to allow this package to coexist with other
+# namespace packages (like cascade-interfaces) in editable installs.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-common = { workspace = true }
-~~~~~
-
-#### Acts 3: 配置 `cascade-connector-mqtt`
-
-`cascade-connector-mqtt` 依赖 `cascade-interfaces`。
 
 ~~~~~act
-patch_file
-packages/cascade-connector-mqtt/pyproject.toml
+write_file
+packages/cascade-common/src/cascade/common/__init__.py
 ~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
+~~~~~python
+# This space intentionally left blank.
 ~~~~~
 
-#### Acts 4: 配置 `cascade-cli-observer`
+#### Acts 2: Create the critical `__init__.py` for the messaging package
 
-`cascade-cli-observer` 依赖 `cascade-interfaces` 和 `cascade-common`。
+This is the core of the fix. We'll create the file and define the public API for easier imports.
 
 ~~~~~act
-patch_file
-packages/cascade-cli-observer/pyproject.toml
+write_file
+packages/cascade-common/src/cascade/common/messaging/__init__.py
 ~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
+~~~~~python
+from .bus import bus, MessageBus, MessageStore
+from . import protocols
 
-[tool.hatch.metadata]
-allow-direct-references = true
-~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-common = { workspace = true }
+__all__ = ["bus", "MessageBus", "MessageStore", "protocols"]
 ~~~~~
 
-#### Acts 5: 配置 `cascade-cli-controller`
+#### Acts 3: Ensure `__init__.py` files exist for CLI packages
 
-`cascade-cli-controller` 同样依赖 `cascade-interfaces` 和 `cascade-common`。
+To prevent future issues, let's ensure the intermediate `cascade.cli` namespace is also a proper package.
 
 ~~~~~act
-patch_file
-packages/cascade-cli-controller/pyproject.toml
+write_file
+packages/cascade-cli-observer/src/cascade/cli/__init__.py
 ~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
+~~~~~python
+# This must be the very first line to allow this package to coexist with other
+# namespace packages (like cascade-interfaces) in editable installs.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
-~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
 
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-common = { workspace = true }
+~~~~~act
+write_file
+packages/cascade-cli-controller/src/cascade/cli/__init__.py
+~~~~~
+~~~~~python
+# This must be the very first line to allow this package to coexist with other
+# namespace packages (like cascade-interfaces) in editable installs.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
 
 ### 下一步建议
-我们已经为所有相关的包添加了正确的 `uv` 工作区配置。
+The missing `__init__.py` files have been created, and the `messaging` package now has a proper public API. The import errors should now be resolved.
 
-现在，请你重新运行 `uv pip install packages/*` 命令来验证这个修复是否解决了构建问题。
+Please run `pytest` again.
 
-一旦构建成功，我们就可以安全地回到之前的计划：为 `cs-observer` 实现连接到 MQTT 并实时显示遥测事件的核心功能。
+Once the tests pass (or at least start running without import errors), we can finally proceed with implementing the core logic for the `cs-observer watch` command.

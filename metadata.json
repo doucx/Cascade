@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(core): 修正多包重构后的导入路径错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766027922.4690473, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(core): 解决 Monorepo 命名空间遮蔽问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766028026.1602948, "duration_ms": 0}}

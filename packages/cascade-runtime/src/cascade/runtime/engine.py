@@ -27,7 +27,7 @@ from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
 from cascade.runtime.flow import FlowManager
 from cascade.runtime.constraints import ConstraintManager
-from cascade.runtime.constraints.handlers import PauseConstraintHandler
+from cascade.runtime.constraints.handlers import PauseConstraintHandler, ConcurrencyConstraintHandler
 from cascade.adapters.state import InMemoryStateBackend
 
 
@@ -53,8 +53,9 @@ class Engine:
         self.resource_manager = ResourceManager(capacity=system_resources)
         
         # Setup constraint manager with default handlers
-        self.constraint_manager = ConstraintManager()
+        self.constraint_manager = ConstraintManager(self.resource_manager)
         self.constraint_manager.register_handler(PauseConstraintHandler())
+        self.constraint_manager.register_handler(ConcurrencyConstraintHandler())
 
         self._resource_providers: Dict[str, Callable] = {}
 
@@ -254,7 +255,9 @@ class Engine:
         run_id: str,
         params: Dict[str, Any],
     ) -> Any:
-        requirements = self.constraint_resolver.resolve(node, graph, state_backend)
+        requirements = self.constraint_resolver.resolve(
+            node, graph, state_backend, self.constraint_manager
+        )
         await self.resource_manager.acquire(requirements)
         try:
             return await self._execute_node_internal(

@@ -1,4 +1,4 @@
-from typing import Protocol, TYPE_CHECKING
+from typing import Protocol, TYPE_CHECKING, Dict, Any
 
 from cascade.graph.model import Node
 from cascade.spec.constraint import GlobalConstraint
@@ -17,19 +17,36 @@ class ConstraintHandler(Protocol):
         """Returns the constraint type this handler is responsible for."""
         ...
 
+    def on_constraint_add(
+        self, constraint: GlobalConstraint, manager: "ConstraintManager"
+    ) -> None:
+        """Called when a new constraint of this type is added or updated."""
+        ...
+
+    def on_constraint_remove(
+        self, constraint: GlobalConstraint, manager: "ConstraintManager"
+    ) -> None:
+        """Called when a constraint is removed."""
+        ...
+
     def check_permission(
         self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
     ) -> bool:
         """
         Evaluates the constraint against the given task.
+        Returns: True if permitted, False if deferred.
+        """
+        ...
 
-        Args:
-            task: The task node being considered for execution.
-            constraint: The specific constraint instance to evaluate.
-            manager: A reference to the parent ConstraintManager, providing access
-                     to the overall state if needed.
-
-        Returns:
-            True if the task is permitted to run, False if it should be deferred.
+    def append_requirements(
+        self,
+        task: Node,
+        constraint: GlobalConstraint,
+        requirements: Dict[str, Any],
+        manager: "ConstraintManager",
+    ) -> None:
+        """
+        Allows the handler to inject dynamic resource requirements for the task.
+        Modifies the 'requirements' dictionary in-place.
         """
         ...

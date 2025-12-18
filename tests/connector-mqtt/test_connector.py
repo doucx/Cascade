@@ -105,7 +105,7 @@ async def test_publish_sends_json_and_is_fire_and_forget(mock_client):
     # Verify that the mock client's publish method was called with the correct args
     expected_json_payload = json.dumps(payload)
     mock_client.publish.assert_awaited_once_with(
-        topic, payload=expected_json_payload, qos=1
+        topic, payload=expected_json_payload, qos=1, retain=False
     )
 
 

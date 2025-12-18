@@ -1,7 +1,8 @@
-from typing import Dict
+from typing import Dict, Any
 from cascade.spec.constraint import GlobalConstraint
 from cascade.graph.model import Node
 from .protocols import ConstraintHandler
+from cascade.runtime.resource_manager import ResourceManager
 
 
 class ConstraintManager:
@@ -10,7 +11,8 @@ class ConstraintManager:
     handlers for evaluation.
     """
 
-    def __init__(self):
+    def __init__(self, resource_manager: ResourceManager):
+        self.resource_manager = resource_manager
         # Stores active constraints by their unique ID
         self._constraints: Dict[str, GlobalConstraint] = {}
         # Stores registered handlers by the constraint type they handle
@@ -24,12 +26,20 @@ class ConstraintManager:
         """Adds a new constraint or updates an existing one."""
         self._constraints[constraint.id] = constraint
 
+        handler = self._handlers.get(constraint.type)
+        if handler:
+            handler.on_constraint_add(constraint, self)
+
     def remove_constraints_by_scope(self, scope: str) -> None:
         """Removes all constraints that match the given scope."""
         ids_to_remove = [
             cid for cid, c in self._constraints.items() if c.scope == scope
         ]
         for cid in ids_to_remove:
+            constraint = self._constraints[cid]
+            handler = self._handlers.get(constraint.type)
+            if handler:
+                handler.on_constraint_remove(constraint, self)
             del self._constraints[cid]
 
     def check_permission(self, task: Node) -> bool:
@@ -50,3 +60,14 @@ class ConstraintManager:
 
         # If no handler denied permission, permit execution.
         return True
+
+    def get_extra_requirements(self, task: Node) -> Dict[str, Any]:
+        """
+        Collects dynamic resource requirements from all applicable constraints.
+        """
+        requirements: Dict[str, Any] = {}
+        for constraint in self._constraints.values():
+            handler = self._handlers.get(constraint.type)
+            if handler:
+                handler.append_requirements(task, constraint, requirements, self)
+        return requirements

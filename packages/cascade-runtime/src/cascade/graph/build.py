@@ -44,10 +44,10 @@ class GraphBuilder:
         if result._condition:
             source_node = self._visit(result._condition)
             edge = Edge(
-                source=source_node, 
-                target=node, 
-                arg_name="_condition", 
-                edge_type=EdgeType.CONDITION
+                source=source_node,
+                target=node,
+                arg_name="_condition",
+                edge_type=EdgeType.CONDITION,
             )
             self.graph.add_edge(edge)
 
@@ -62,8 +62,8 @@ class GraphBuilder:
                     edge = Edge(
                         source=source_node,
                         target=node,
-                        arg_name=res_name, # Use resource name as arg_name
-                        edge_type=EdgeType.CONSTRAINT
+                        arg_name=res_name,  # Use resource name as arg_name
+                        edge_type=EdgeType.CONSTRAINT,
                     )
                     self.graph.add_edge(edge)
 
@@ -92,10 +92,10 @@ class GraphBuilder:
         if result._condition:
             source_node = self._visit(result._condition)
             edge = Edge(
-                source=source_node, 
-                target=node, 
-                arg_name="_condition", 
-                edge_type=EdgeType.CONDITION
+                source=source_node,
+                target=node,
+                arg_name="_condition",
+                edge_type=EdgeType.CONDITION,
             )
             self.graph.add_edge(edge)
 
@@ -111,10 +111,10 @@ class GraphBuilder:
                 source_node = self._visit(value)
                 # Standard DATA edge
                 edge = Edge(
-                    source=source_node, 
-                    target=target_node, 
-                    arg_name=arg_name, 
-                    edge_type=EdgeType.DATA
+                    source=source_node,
+                    target=target_node,
+                    arg_name=arg_name,
+                    edge_type=EdgeType.DATA,
                 )
                 self.graph.add_edge(edge)
             elif isinstance(value, Router):
@@ -125,7 +125,7 @@ class GraphBuilder:
                     target=target_node,
                     arg_name=arg_name,
                     router=value,
-                    edge_type=EdgeType.DATA
+                    edge_type=EdgeType.DATA,
                 )
                 self.graph.add_edge(edge)
 
@@ -135,8 +135,8 @@ class GraphBuilder:
                     imp_edge = Edge(
                         source=route_node,
                         target=target_node,
-                        arg_name=f"_route_{route_key}", 
-                        edge_type=EdgeType.ROUTER_ROUTE
+                        arg_name=f"_route_{route_key}",
+                        edge_type=EdgeType.ROUTER_ROUTE,
                     )
                     self.graph.add_edge(imp_edge)
             else:

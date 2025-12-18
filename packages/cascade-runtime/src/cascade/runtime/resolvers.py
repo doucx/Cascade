@@ -131,9 +131,10 @@ class ConstraintResolver:
             return {}
 
         resolved = {}
-        
+
         constraint_edges = [
-            e for e in graph.edges 
+            e
+            for e in graph.edges
             if e.target.id == node.id and e.edge_type == EdgeType.CONSTRAINT
         ]
 
@@ -142,7 +143,7 @@ class ConstraintResolver:
                 constraint_edge = next(
                     (e for e in constraint_edges if e.arg_name == res), None
                 )
-                
+
                 if constraint_edge is None:
                     raise RuntimeError(
                         f"Internal Error: Missing constraint edge for dynamic requirement '{res}' on task '{node.name}'"

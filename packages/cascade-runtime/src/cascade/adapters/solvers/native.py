@@ -1,5 +1,5 @@
 from typing import Dict, List, Set
-from cascade.graph.model import Graph, Node
+from cascade.graph.model import Graph
 from cascade.interfaces.protocols import ExecutionPlan
 
 
@@ -20,7 +20,7 @@ class NativeSolver:
 
         # 2. Identify initial layer (nodes with 0 in-degree)
         current_stage = [node for node in graph.nodes if in_degree[node.id] == 0]
-        
+
         # Sort stage by name for deterministic behavior
         current_stage.sort(key=lambda n: n.name)
 
@@ -39,21 +39,21 @@ class NativeSolver:
                     in_degree[neighbor_id] -= 1
                     if in_degree[neighbor_id] == 0:
                         next_stage_nodes.add(neighbor_id)
-            
+
             # Prepare next stage
-            # We need to map IDs back to Node objects. 
+            # We need to map IDs back to Node objects.
             # Optimization: could use a lookup dict, but graph.nodes is usually small enough.
             # Let's create a lookup for speed.
             node_lookup = {n.id: n for n in graph.nodes}
-            
+
             next_stage = [node_lookup[nid] for nid in next_stage_nodes]
-            next_stage.sort(key=lambda n: n.name) # Deterministic
-            
+            next_stage.sort(key=lambda n: n.name)  # Deterministic
+
             current_stage = next_stage
 
         # 4. Cycle detection
         if processed_count < len(graph.nodes):
-             # Finding the cycle is complex, for now raise a generic error
-             raise ValueError("Cycle detected in the dependency graph.")
+            # Finding the cycle is complex, for now raise a generic error
+            raise ValueError("Cycle detected in the dependency graph.")
 
         return plan

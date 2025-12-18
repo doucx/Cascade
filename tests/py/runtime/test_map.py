@@ -25,7 +25,9 @@ async def test_map_basic():
     # 2. Reduce the results -> 12
     total = sum_all(numbers=mapped_results)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(total)
     assert result == 12
 
@@ -38,7 +40,9 @@ async def test_map_empty():
     mapped_results = double.map(x=inputs)
     total = sum_all(numbers=mapped_results)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(total)
     assert result == 0
 
@@ -60,7 +64,9 @@ async def test_map_dynamic_input():
     # 3. Sum -> 12
     total = sum_all(numbers=doubled)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(total)
     assert result == 12
 
@@ -80,7 +86,9 @@ async def test_map_multiple_args():
     mapped = add.map(a=list_a, b=list_b)
     total = sum_all(numbers=mapped)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(total)
     assert result == 66
 
@@ -98,6 +106,8 @@ async def test_map_mismatched_lengths():
 
     mapped = add.map(a=list_a, b=list_b)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     with pytest.raises(ValueError, match="mismatched lengths"):
         await engine.run(mapped)

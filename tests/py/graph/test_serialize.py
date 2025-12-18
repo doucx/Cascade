@@ -20,9 +20,11 @@ def another_task(y):
 def t_condition():
     return True
 
+
 @cs.task
 def t_dynamic_constraint(val):
     return val
+
 
 @cs.task
 def t_target(x):
@@ -93,9 +95,9 @@ def test_serialize_params():
 
     assert param_node["node_type"] == "task"
     assert param_node["literal_inputs"]["name"] == "env"
-    
+
     # Note: Serialization currently only saves graph structure, not the Context.
-    # So deserialized graph will have the node, but not the ParamSpec metadata 
+    # So deserialized graph will have the node, but not the ParamSpec metadata
     # (which lives in WorkflowContext). This is expected behavior for v1.3.
 
     # Round trip
@@ -146,28 +148,40 @@ def test_serialize_with_constraints():
 
 def test_serialize_edge_types():
     """Test serialization and deserialization of various EdgeType instances."""
-    
+
     # 1. Condition edge
     target_condition = t_target(t_dynamic_constraint(1)).run_if(t_condition())
-    
+
     # 2. Constraint edge (dynamic)
     target = target_condition.with_constraints(cpu=t_dynamic_constraint(1))
-    
+
     graph = build_graph(target)
     json_str = to_json(graph)
     restored_graph = from_json(json_str)
 
     # We only need to check the edges pointing to t_target (the target node of the chains)
     target_node = next(n for n in restored_graph.nodes if n.name == "t_target")
-    
-    data_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.DATA]
-    condition_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONDITION]
-    constraint_edges = [e for e in restored_graph.edges if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONSTRAINT]
+
+    data_edges = [
+        e
+        for e in restored_graph.edges
+        if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.DATA
+    ]
+    condition_edges = [
+        e
+        for e in restored_graph.edges
+        if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONDITION
+    ]
+    constraint_edges = [
+        e
+        for e in restored_graph.edges
+        if e.target == target_node and e.edge_type == cs.graph.model.EdgeType.CONSTRAINT
+    ]
 
     assert len(data_edges) == 1
     assert len(condition_edges) == 1
     assert len(constraint_edges) == 1
-    
+
     # Verify the restored types are correct
     assert condition_edges[0].edge_type is cs.graph.model.EdgeType.CONDITION
     assert constraint_edges[0].edge_type is cs.graph.model.EdgeType.CONSTRAINT
@@ -178,13 +192,16 @@ def test_serialize_edge_types():
 def get_route():
     return "a"
 
+
 @cs.task
 def task_a():
     return "A"
 
+
 @cs.task
 def task_b():
     return "B"
+
 
 @cs.task
 def consumer(val):
@@ -199,10 +216,7 @@ def test_serialize_router():
     route_a = task_a()
     route_b = task_b()
 
-    router = cs.Router(
-        selector=selector,
-        routes={"a": route_a, "b": route_b}
-    )
+    router = cs.Router(selector=selector, routes={"a": route_a, "b": route_b})
 
     # Consumer depends on the router
     target = consumer(router)
@@ -220,7 +234,11 @@ def test_serialize_router():
     consumer_node = next(n for n in restored_graph.nodes if n.name == "consumer")
 
     # The edge between them should have the router attached
-    edge = next(e for e in restored_graph.edges if e.source == selector_node and e.target == consumer_node)
+    edge = next(
+        e
+        for e in restored_graph.edges
+        if e.source == selector_node and e.target == consumer_node
+    )
 
     assert edge.router is not None
     # Check that the stub has the correct UUIDs

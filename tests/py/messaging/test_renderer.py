@@ -4,6 +4,7 @@ import pytest
 from cascade.messaging.renderer import CliRenderer, JsonRenderer
 from cascade.messaging.bus import MessageStore
 
+
 @pytest.fixture
 def msg_store():
     store = MessageStore()
@@ -26,7 +27,7 @@ def test_json_renderer_structure_and_content():
     renderer = JsonRenderer(stream=output)
 
     renderer.render("user.created", "info", user_id=123, status="active")
-    
+
     log_line = output.getvalue()
     data = json.loads(log_line)
 

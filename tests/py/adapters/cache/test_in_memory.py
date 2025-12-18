@@ -1,4 +1,3 @@
-import time
 from unittest.mock import patch
 from cascade.adapters.cache.in_memory import InMemoryCacheBackend
 
@@ -27,21 +26,21 @@ def test_cache_set_overwrite():
 def test_cache_ttl_not_expired():
     """Test that a key can be retrieved before its TTL expires."""
     cache = InMemoryCacheBackend()
-    with patch('time.time', return_value=1000):
+    with patch("time.time", return_value=1000):
         cache.set("key_ttl", "value_ttl", ttl=60)
 
-    with patch('time.time', return_value=1059):
+    with patch("time.time", return_value=1059):
         assert cache.get("key_ttl") == "value_ttl"
 
 
 def test_cache_ttl_expired():
     """Test that a key returns None after its TTL expires."""
     cache = InMemoryCacheBackend()
-    with patch('time.time', return_value=1000):
+    with patch("time.time", return_value=1000):
         cache.set("key_ttl", "value_ttl", ttl=60)
 
     # Move time forward to just after the expiry
-    with patch('time.time', return_value=1061):
+    with patch("time.time", return_value=1061):
         assert cache.get("key_ttl") is None
 
     # Verify that the key was actually removed from the store

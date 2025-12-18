@@ -26,19 +26,21 @@ def visualize(target: LazyResult[Any]) -> str:
     # 2. Define Edges
     for edge in graph.edges:
         style = ""
-        
+
         if edge.edge_type == EdgeType.CONDITION:
             style = ' [style=dashed, color=gray, label="run_if"]'
         elif edge.edge_type == EdgeType.IMPLICIT:
             style = ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
         elif edge.edge_type == EdgeType.ROUTER_ROUTE:
-             # Router route edge
+            # Router route edge
             style = ' [style=dashed, color=orange, arrowhead=open, label="route"]'
         elif edge.router:
             # Router selector edge (which is EdgeType.DATA)
             style = f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
         elif edge.edge_type == EdgeType.CONSTRAINT:
-            style = f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
+            style = (
+                f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
+            )
         else:
             style = f' [label="{edge.arg_name}"]'
 

@@ -9,11 +9,14 @@ from cascade.spec.constraint import ResourceConstraint
 
 class EdgeType(Enum):
     """Defines the semantic type of a dependency edge."""
-    DATA = auto()           # A standard data dependency (the output of Source is an input to Target)
-    CONDITION = auto()      # A control dependency for the run_if condition
-    CONSTRAINT = auto()     # An implicit dependency for resolving dynamic constraints
-    IMPLICIT = auto()       # An implicit structural dependency
-    ROUTER_ROUTE = auto()   # A potential dependency branch for a Router
+
+    DATA = (
+        auto()
+    )  # A standard data dependency (the output of Source is an input to Target)
+    CONDITION = auto()  # A control dependency for the run_if condition
+    CONSTRAINT = auto()  # An implicit dependency for resolving dynamic constraints
+    IMPLICIT = auto()  # An implicit structural dependency
+    ROUTER_ROUTE = auto()  # A potential dependency branch for a Router
 
 
 @dataclass

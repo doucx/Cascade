@@ -30,17 +30,15 @@ def cli(target: "LazyResult[Any]") -> Callable[[], None]:
         )
 
     app = typer.Typer()
-    
-    # In v1.3, we retrieve specs from the global context, populated when 
+
+    # In v1.3, we retrieve specs from the global context, populated when
     # the workflow was defined (e.g. when `cs.Param()` was called).
     context = get_current_context()
     all_specs = context.get_all_specs()
-    
+
     # Filter for ParamSpec
     params: dict[str, ParamSpec] = {
-        spec.name: spec
-        for spec in all_specs
-        if isinstance(spec, ParamSpec)
+        spec.name: spec for spec in all_specs if isinstance(spec, ParamSpec)
     }
 
     def main(**kwargs):
@@ -53,7 +51,9 @@ def cli(target: "LazyResult[Any]") -> Callable[[], None]:
 
         # Filter out None values so they don't override defaults in cs.run
         run_params = {k: v for k, v in kwargs.items() if v is not None}
-        result = cascade_run(target, params=run_params, log_level=log_level, log_format=log_format)
+        result = cascade_run(
+            target, params=run_params, log_level=log_level, log_format=log_format
+        )
         if result is not None:
             print(result)
 

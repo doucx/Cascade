@@ -44,7 +44,9 @@ def test_di_end_to_end():
     """Tests the full lifecycle: registration, injection, execution, teardown."""
     import asyncio
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     engine.register(config)
     engine.register(db_connection)
 
@@ -97,7 +99,9 @@ def test_resource_override():
         yield m
         print("TEARDOWN: mock_db_connection")
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     engine.register(config)
     engine.register(db_connection)  # Register the original
 

@@ -122,6 +122,8 @@ class Connector(Protocol):
         """Publishes a message (e.g., a telemetry event) to a specific topic."""
         ...
 
-    async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> None:
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> None:
         """Subscribes to a topic to receive messages (e.g., control commands)."""
         ...

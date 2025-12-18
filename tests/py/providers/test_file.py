@@ -34,7 +34,9 @@ async def test_file_read_text_success(dummy_file):
     """Tests reading a file as text using the new cs.read.text provider."""
     read_result = cs.read.text(dummy_file)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(read_result)
 
     assert "status" in result
@@ -46,7 +48,9 @@ async def test_file_read_bytes_success(binary_file):
     """Tests reading a file as bytes using cs.read.bytes."""
     read_result = cs.read.bytes(binary_file)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(read_result)
 
     assert result == b"\x01\x02\x03\x04"
@@ -57,7 +61,9 @@ async def test_file_exists_true(dummy_file):
     """Tests checking existence for an existing file using cs.fs.exists."""
     exist_result = cs.fs.exists(dummy_file)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(exist_result)
 
     assert result is True
@@ -69,7 +75,9 @@ async def test_file_exists_false(tmp_path):
     path = str(tmp_path / "non_existent.txt")
     exist_result = cs.fs.exists(path)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(exist_result)
 
     assert result is False
@@ -78,6 +86,7 @@ async def test_file_exists_false(tmp_path):
 @pytest.mark.asyncio
 async def test_file_json_parsing_composition(dummy_file):
     """Tests composing read_text with a JSON parsing task."""
+
     @cs.task
     def parse_json(text: str):
         return json.loads(text)
@@ -86,7 +95,9 @@ async def test_file_json_parsing_composition(dummy_file):
     text_content = cs.read.text(dummy_file)
     json_result = parse_json(text_content)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(json_result)
 
     assert isinstance(result, dict)
@@ -97,6 +108,7 @@ async def test_file_json_parsing_composition(dummy_file):
 @pytest.mark.asyncio
 async def test_file_dynamic_path_dependency(tmp_path):
     """Tests dependency where the file path comes from an upstream task."""
+
     @cs.task
     def generate_path() -> str:
         p = tmp_path / "dynamic.txt"
@@ -106,7 +118,9 @@ async def test_file_dynamic_path_dependency(tmp_path):
     path_result = generate_path()
     read_result = cs.read.text(path_result)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(read_result)
 
     assert result == "dynamic content"

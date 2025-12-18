@@ -18,6 +18,12 @@ packages = [
     "packages/cascade-cli",
 ]
 
+[tool.hatch.build.targets.wheel]
+# 关键修复：
+# 明确告诉 hatch，当构建根项目 "cascade" 时，
+# 它的源代码实际上是 'cascade-py' 包的源代码。
+packages = ["packages/cascade-py/src/cascade"]
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 

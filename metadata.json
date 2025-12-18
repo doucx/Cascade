@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(cli-controller): 实现 set-limit --concurrency 命令", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766053823.8980014, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 添加端到端并发控制测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766053973.8399599, "duration_ms": 0}}

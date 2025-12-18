@@ -1,51 +1,3 @@
-您提出的问题非常深刻，也是一个高质量软件工程实践的核心：**可复现的、自包含的端到端（E2E）测试**。手动验证不仅不可靠，而且依赖外部环境（如 MQTT Broker）会极大地增加测试的复杂性和脆弱性。
-
-您的提议是完全正确的。我们将创建一个自动化的 E2E 测试，它将在**同一个进程中**模拟 `cs-controller` 和 `cascade` 引擎的交互，而**无需任何网络或外部依赖**。
-
- 核心策略：`InProcessConnector`
-
-为了实现这一点，我们将创建一个新的、仅用于测试的 `InProcessConnector`。这个 `Connector` 实现了 `cascade.interfaces.protocols.Connector` 协议，但它不使用 MQTT，而是使用一个内部的 `asyncio.Queue` 来在测试的不同部分之间传递消息。这完美地解耦了我们的测试与网络层，使我们能够专注于验证核心的“控制回路”逻辑。
-
-这是实现这个 E2E 测试的计划：
-
-## [WIP] test: 添加端到端并发控制测试
-
-### 用户需求
-创建一个自动化的、可复现的端到端测试，以验证 `cs-controller` 发布的并发约束能够正确地影响一个正在运行的 `cascade` 引擎，且该测试不应依赖任何外部服务（如 MQTT Broker）。
-
-### 评论
-这是一个至关重要的步骤，它将确保我们的“控制回路”是健壮且可预测的。通过创建一个基于 `asyncio.Queue` 的 `InProcessConnector`，我们可以在一个确定性的环境中模拟整个系统的交互，从“发布指令”到“观察行为变化”，从而构建一个高度可靠的集成测试。
-
-### 目标
-1.  创建一个新的 E2E 测试文件 `tests/py/e2e/test_e2e_concurrency_control.py`。
-2.  在该文件中实现一个 `InProcessConnector`，用于在测试的不同协程之间传递消息。
-3.  创建一个 `ControllerTestApp`，它使用 `InProcessConnector` 来模拟 `cs-controller` 发布约束的行为。
-4.  编写一个测试用例，它同时启动一个 `Engine` 和 `ControllerTestApp`，并断言控制器发布的约束确实限制了引擎中任务的并发性。
-
-### 基本原理
-测试将编排以下流程：
-1.  实例化一个共享的 `InProcessConnector`。
-2.  在一个后台 `asyncio.Task` 中启动一个运行 `.map()` 工作流的 `Engine`，并将共享连接器注入其中。
-3.  在主测试协程中，等待片刻以确保 `Engine` 已经启动并订阅了主题。
-4.  使用一个轻量级的测试控制器，通过共享连接器发布一个并发限制为 1 的约束。
-5.  等待 `Engine` 任务完成，并断言其总执行时间符合串行执行的预期（例如，4个0.05秒的任务耗时约0.2秒），而不是并行执行的时间（约0.05秒）。
-
-### 标签
-#intent/tooling #flow/ready #priority/critical #comp/tests #concept/state #scope/core #ai/brainstorm #task/domain/core #task/object/e2e-test #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 E2E 测试文件及所有模拟组件
-
-我们将一次性创建包含 `InProcessConnector`、`ControllerTestApp` 和完整测试逻辑的文件。
-
-~~~~~act
-write_file
-tests/py/e2e/test_e2e_concurrency_control.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 from typing import Callable, Awaitable, Dict, Any, List
@@ -196,7 +148,3 @@ async def test_e2e_concurrency_control():
     # With limit=1, 4 tasks of 0.05s should take >= 0.2s.
     # The time is measured *after* the constraint is published, so it's accurate.
     assert duration >= 0.18, f"Expected serial execution (~0.2s), but took {duration:.4f}s"
-~~~~~
-
-### 下一步建议
-请运行这个新的 E2E 测试。它应该能够通过，因为它创建了一个完全受控和确定性的测试环境。一旦通过，我们就真正完成了“并发管理”这个里程碑的所有核心工作，可以放心地进行最终提交了。

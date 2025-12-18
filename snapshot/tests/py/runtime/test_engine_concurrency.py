@@ -1,37 +1,3 @@
-## [WIP] test: 添加并发管理集成测试
-
-### 用户需求
-创建 `tests/py/runtime/test_engine_concurrency.py`，以验证新实现的并发管理功能。测试需要覆盖全局并发限制和任务级并发限制，特别是针对 `.map()` 操作生成的子任务。
-
-### 评论
-通过模拟耗时任务和断言总执行时间或并发事件，我们可以黑盒验证 `ResourceManager` 和 `ConstraintManager` 是否正确地协同工作。这比检查内部状态更具说服力。
-
-### 目标
-编写一个健壮的集成测试套件，验证：
-1.  `concurrency` 类型的约束能正确限制并行任务的数量。
-2.  约束的 Scope (如 `global`, `task:xxx`) 能被正确解析和应用。
-
-### 基本原理
-我们将复用 `test_engine_constraints.py` 中的 `MockConnector` 和 `MockExecutor` 模式，通过注入 MQTT 消息来动态设定约束，并观察 Engine 的调度行为。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/core #task/object/concurrency-control #task/action/test #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建并发管理测试文件
-
-我们将创建一个包含两个主要测试用例的文件：
-1.  **Map 并发限制**: 验证对 `task:slow_task` 的并发限制能让原本并行的 `.map()` 操作变成串行或受限并行。
-2.  **全局并发限制**: 验证 `scope=global` 能限制所有任务的总并发数。
-
-~~~~~act
-write_file
-tests/py/runtime/test_engine_concurrency.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 from typing import Callable, Awaitable, Dict, Any, List
@@ -202,9 +168,3 @@ async def test_global_concurrency_limit(engine, mock_connector):
     
     # 2 tasks of 0.05s in serial => >= 0.1s
     assert duration >= 0.1, f"Expected serial execution duration >= 0.1s, got {duration}s"
-
-~~~~~
-
-### 下一步建议
-如果测试通过，我们应立即提交代码（Git Commit）。
-之后，我们将进入 Phase 4，实现与之配套的 CLI 工具功能 `cs-controller set-limit`。

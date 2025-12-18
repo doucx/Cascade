@@ -136,4 +136,5 @@ async def test_startup_telemetry_no_race_condition(bus_and_spy):
     
     mock_connector.connect.assert_awaited_once()
     # At least one publish should have happened (RunStarted)
-    mock_connector.publish.assert_called()
+    # mock_connector.publish is now a normal function, so we check call_order instead
+    assert call_order.count("publish") >= 1

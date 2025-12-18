@@ -238,6 +238,18 @@ class Engine:
                             del pending_nodes[node.id]
                             continue
 
+                        # Pre-check resources to prevent premature scheduling
+                        # This ensures tasks stay in 'pending' (and thus under control of Pause/Permission checks)
+                        # until resources are actually available.
+                        requirements = self.constraint_resolver.resolve(
+                            node, graph, state_backend, self.constraint_manager
+                        )
+                        
+                        if not self.resource_manager.can_acquire(requirements):
+                            # Not enough resources yet. Keep it pending.
+                            deferred_nodes[node.id] = node
+                            continue
+
                         coro = self._execute_node_with_policies(
                             node, graph, state_backend, active_resources, run_id, params
                         )

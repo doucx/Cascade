@@ -49,7 +49,7 @@ class ResourceManager:
             # Check if request is impossible to satisfy even when empty
             self._validate_feasibility(requirements)
 
-            while not self._can_acquire(requirements):
+            while not self.can_acquire(requirements):
                 await self._condition.wait()
 
             # Commit acquisition
@@ -75,8 +75,8 @@ class ResourceManager:
             # Notify all waiting tasks to re-check their conditions
             self._condition.notify_all()
 
-    def _can_acquire(self, requirements: Dict[str, Union[int, float]]) -> bool:
-        """Internal check to see if resources are currently available."""
+    def can_acquire(self, requirements: Dict[str, Union[int, float]]) -> bool:
+        """Checks if resources are currently available without acquiring them."""
         for res, amount in requirements.items():
             if res not in self._capacity:
                 continue  # Unmanaged resources are always available

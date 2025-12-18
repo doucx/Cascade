@@ -3,7 +3,7 @@ from cascade.runtime.events import RunStarted, TaskExecutionFinished
 from cascade.runtime.subscribers import HumanReadableLogSubscriber
 from cascade.runtime.bus import MessageBus as EventBus
 from cascade.common.messaging import bus as ui_bus
-from cascade.runtime.renderers import CliRenderer
+from cascade.common.renderers import CliRenderer
 
 
 def test_message_bus_dispatch(bus_and_spy):

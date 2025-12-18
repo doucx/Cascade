@@ -1,88 +1,108 @@
-好的，测试通过，证明 `cs-controller pause` 的核心逻辑已经正确实现，并且满足了我们关于测试分离和 Mock Intent 的所有原则。
+好的，我将开始执行“路线图：可插拔约束处理器架构 (v1.0)”中的第一个里程碑。
 
-现在我们来创建这次实现的提交。
+这是一个关键的架构重构，它将 `ConstraintManager` 从一个硬编码的实现转变为一个灵活的、由协议驱动的调度中心。这为未来的扩展性和社区贡献奠定了基础，完全符合项目的核心设计原则。
 
-## [COMMIT] feat(cli): Implement cs-controller pause command
+## [WIP] refactor(runtime): 引入可插拔的 ConstraintHandler 协议
 
 ### 用户需求
-提交 `cs-controller` 的核心功能：发布 `pause` 约束。
+根据“路线图：可插拔约束处理器架构 (v1.0)”，完成“里程碑 1：定义契约 (The Contract)”。
 
 ### 评论
-该提交完成了对 `cs-controller` 命令行工具的实现。它现在能够连接到 MQTT Broker，构造符合 `GlobalConstraint` 规范的 JSON 报文，并将其发布到正确的控制主题上。为了便于测试，核心异步逻辑被提取到 `_publish_pause` 函数中，并且新的测试套件验证了发布行为的正确性。这是实现 Cascade 自适应控制能力的第一块外部工具。
+这是一个重要的架构演进。将硬编码的约束逻辑解耦为独立的、协议驱动的处理器，是偿还技术债务、拥抱可扩展性的关键一步。此举措将使约束系统更加清晰、可测试，并为未来添加新的控制类型（如速率限制、并发控制）打开大门，而无需修改核心引擎代码。
 
 ### 目标
-1.  提交 `cs-controller/app.py` 中 `pause` 命令的实现。
-2.  提交 `tests/cli-controller/test_app.py` 测试文件。
-3.  更新 `cli_messages.json` 包含所有必需的控制器消息。
+1.  将现有的 `cascade/runtime/constraints.py` 文件重构为一个 `constraints` 包。
+2.  在新的包内创建一个 `protocols.py` 文件。
+3.  在该文件中定义 `ConstraintHandler` 协议，作为所有未来约束处理器的契约。
+4.  确保对 `ConstraintManager` 的现有导入路径不受此次重构的影响。
 
 ### 基本原理
-遵循 `d3-constraint-quipu-plan-script-rules-D3-P2` 约束，本次计划用于提交前一个步骤中已完成的代码。
+为了给新的协议文件 `protocols.py` 和未来的处理器实现提供一个专属的命名空间，我们必须首先将当前的 `constraints.py` 文件转换为一个 Python 包（一个包含 `__init__.py` 的目录）。
+
+具体的重构步骤是：
+1.  创建一个新的 `constraints/` 目录。
+2.  将原 `constraints.py` 文件移动到新目录中，并重命名为 `manager.py`，以明确其职责。
+3.  在 `constraints/` 目录中创建一个 `__init__.py` 文件，该文件从 `manager.py` 中导入并重新导出 `ConstraintManager`。这确保了像 `engine.py` 这样的模块中 `from cascade.runtime.constraints import ConstraintManager` 的导入语句仍然有效，使本次重构对外部透明。
+4.  最后，在 `constraints/` 目录中创建新的 `protocols.py` 文件并定义 `ConstraintHandler` 协议。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/cli #concept/control-loop #scope/ux #ai/instruct #task/domain/cli #task/object/controller-tool #task/action/implementation #task/state/end
+#intent/architect #intent/refine #flow/ready #priority/high #comp/runtime #concept/config #scope/api #ai/instruct #task/domain/runtime #task/object/constraint-system #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交 Controller 逻辑、测试和消息模板
+#### Acts 1: 将 `constraints.py` 文件重构为包结构
 
-将所有与 `cs-controller` 实现相关的修改添加到暂存区，并执行提交。
-
-~~~~~act
-git_add
-packages/cascade-cli-controller/src/cascade/cli/controller/app.py
-packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
-tests/cli-controller/test_app.py
-~~~~~
+首先，我们将 `constraints.py` 文件转换为一个包，为新的协议文件和未来的处理器实现提供空间。
 
 ~~~~~act
-git_commit
+run_command
 ~~~~~
-~~~~~text
-feat(cli): Implement cs-controller pause command
-
-Introduces the first functional command for the `cs-controller` CLI, enabling external control over running Cascade workflows.
-
-The `pause` command:
-1. Connects to the MQTT broker using `MqttConnector`.
-2. Constructs a `GlobalConstraint` payload with `type="pause"`.
-3. Publishes the constraint to a structured topic (`cascade/constraints/{scope_path}`).
-
-Refactoring: The core asynchronous logic was extracted into `_publish_pause` to ensure high testability. Dedicated tests were added to verify correct topic generation and payload contents for different scopes (e.g., 'global' vs. 'task:api_call').
+~~~~~bash
+mkdir -p packages/cascade-runtime/src/cascade/runtime/constraints && \
+mv packages/cascade-runtime/src/cascade/runtime/constraints.py packages/cascade-runtime/src/cascade/runtime/constraints/manager.py
 ~~~~~
 
----
-## 当前位置与后续路线图分析
+#### Acts 2: 创建包的 `__init__.py` 以确保向后兼容
 
-我们正在执行 **Cascade 架构演进技术路线图 (v2.0)** 的 **第三阶段 (约束与环境感知)** 和 **第四阶段 (生态工具链)** 的并行开发。
+我们创建一个 `__init__.py` 文件来重新导出 `ConstraintManager`，这样就不需要修改 `engine.py` 中的导入语句。
 
-### 已完成：
+~~~~~act
+write_file
+packages/cascade-runtime/src/cascade/runtime/constraints/__init__.py
+~~~~~
+~~~~~python
+from .manager import ConstraintManager
 
-| 里程碑 | 目标 | 状态 |
-| :--- | :--- | :--- |
-| **Phase 2.0** | 遥测系统实现 | **DONE** |
-| **Phase 3.4** | 约束同步（Engine 接收 MQTT） | **DONE** (在 `engine.py` 中实现 `_on_constraint_update`) |
-| **Phase 4.1** | `cs-observer` 基础实现 | **DONE** (完成消息处理逻辑和测试) |
-| **Phase 4.2** | `cs-controller pause` 实现 | **DONE** |
+__all__ = ["ConstraintManager"]
+~~~~~
 
-### 下一步聚焦：Phase 3.1 和 Phase 3.2
+#### Acts 3: 创建并定义 `ConstraintHandler` 协议
 
-尽管我们实现了 `cs-controller`，但在 `Engine` 内部，我们只实现了最基本的**全局暂停**检查（即 `ConstraintManager.check_permission` 中的硬编码逻辑）。
+现在，我们创建新的协议文件并定义 `ConstraintHandler` 接口，这是本次重构的核心交付物。
 
-路线图要求我们实现更精细的控制：
+~~~~~act
+write_file
+packages/cascade-runtime/src/cascade/runtime/constraints/protocols.py
+~~~~~
+~~~~~python
+from typing import Protocol, TYPE_CHECKING
 
-| 里程碑 | 目标 (Engine Capability) | 对应的 CLI 命令 |
-| :--- | :--- | :--- |
-| **3.1** | **精准控制**：支持基于 `scope` 的任务级暂停。 | `cs-controller pause --task <name>` |
-| **3.2** | **并发管理**：实现基于动态资源的并发数限制。 | `cs-controller set-limit --concurrency <limit>` |
+from cascade.graph.model import Node
+from cascade.spec.constraint import GlobalConstraint
 
-目前，我们的 `ConstraintManager` 尚未实现 **Scope 匹配**和 **约束过期** 逻辑，也未实现 **并发限制**。
+if TYPE_CHECKING:
+    from .manager import ConstraintManager
 
-### 建议的下一步
 
-我们将从 **里程碑 3.1** 开始，增强 `ConstraintManager` 的逻辑，使其能够识别和应用不同作用域的约束，并清理已过期的约束。
+class ConstraintHandler(Protocol):
+    """
+    Protocol for a pluggable handler that implements the logic for a specific
+    type of global constraint (e.g., "pause", "rate_limit").
+    """
 
-**新任务**: 增强 `ConstraintManager`，实现 Scope 匹配和约束过期功能。
+    def handles_type(self) -> str:
+        """Returns the constraint type this handler is responsible for."""
+        ...
 
-如果你同意，我将生成实现这个内部增强的计划。
+    def check_permission(
+        self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
+    ) -> bool:
+        """
+        Evaluates the constraint against the given task.
+
+        Args:
+            task: The task node being considered for execution.
+            constraint: The specific constraint instance to evaluate.
+            manager: A reference to the parent ConstraintManager, providing access
+                     to the overall state if needed.
+
+        Returns:
+            True if the task is permitted to run, False if it should be deferred.
+        """
+        ...
+~~~~~
+
+### 下一步建议
+我们已经成功定义了契约。接下来的**里程碑 2** 是将当前硬编码在 `ConstraintManager` 中的 `pause` 逻辑迁移到第一个具体的处理器实现 `PauseConstraintHandler` 中。这将是我们新架构的第一个具体应用。

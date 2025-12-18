@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(cli): Implement cs-controller pause command", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766048889.1344354, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(runtime): 引入可插拔的 ConstraintHandler 协议", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766050305.5372345, "duration_ms": 0}}

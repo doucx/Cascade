@@ -1,4 +1,6 @@
 import typer
+from cascade.common.messaging import bus
+from cascade.common.renderers import CliRenderer
 
 app = typer.Typer()
 
@@ -8,12 +10,13 @@ def pause(scope: str = typer.Argument(..., help="The scope to pause (e.g., 'glob
     """
     Publish a 'pause' constraint to the MQTT broker.
     """
-    typer.echo(f"Publishing pause command for scope: {scope}...")
+    bus.info("controller.publishing", scope=scope)
     # TODO: Implement MQTT connection and publishing logic.
-    typer.echo("Controller not yet implemented.")
+    bus.warning("controller.not_implemented")
 
 
 def main():
+    bus.set_renderer(CliRenderer(store=bus.store))
     app()
 
 

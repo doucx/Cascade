@@ -1,7 +1,7 @@
 import io
 import json
 import pytest
-from cascade.runtime.renderers import CliRenderer, JsonRenderer
+from cascade.common.renderers import CliRenderer, JsonRenderer
 from cascade.common.messaging import MessageStore
 
 

@@ -89,7 +89,7 @@ def __getattr__(name: str) -> Any:
 
 # --- Main Run Entrypoint ---
 from cascade.common.messaging import bus
-from cascade.runtime.renderers import CliRenderer, JsonRenderer
+from cascade.common.renderers import CliRenderer, JsonRenderer
 
 
 def run(

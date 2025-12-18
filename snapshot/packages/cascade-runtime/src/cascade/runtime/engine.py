@@ -292,6 +292,10 @@ class Engine:
                         # Once an error occurs, cancel remaining running tasks in the stage
                         for t in running_tasks:
                             t.cancel()
+                
+                # Yield control to allow background tasks (like MQTT message handlers) to run.
+                # This is crucial for maintaining responsiveness to control signals during heavy load.
+                await asyncio.sleep(0)
 
             # Clean up the wakeup task if the stage finishes
             if not wakeup_task.done():

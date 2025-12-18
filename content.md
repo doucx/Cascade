@@ -1,224 +1,66 @@
-Excellent. The reference file provides a perfect template for creating a robust, deterministic, end-to-end test for the new rate-limiting feature. I now have a clear understanding of the best practices for testing asynchronous control loops within the Cascade ecosystem.
+好的，测试已通过，我们已经成功完成了速率限制功能的实现和验证。
 
-I will now generate a plan to create a new test file, `test_e2e_rate_limit_control.py`, which will validate the rate-limiting functionality by following the "Configure-Then-Run" pattern established in the reference test.
+根据我们的开发路线图 `Phase 3 (Refined) & Phase 4 并行开发路线图.md`，我们现在已经完成了里程碑 3.3。这意味着 `Engine` 的核心动态控制能力（精准暂停、并发管理、速率限制）已经全部实现。
 
-### 简要回答
-我将创建一个新的端到端测试文件 `tests/py/e2e/test_e2e_rate_limit_control.py`，用于验证刚刚实现的速率限制功能。该测试将复用 `InProcessConnector` 和 `MockWorkExecutor` 等测试工具，并模拟一个 `cs-controller` 来发布一个带有突发容量限制的速率约束。通过断言工作流的执行总时长，我们可以验证引擎是否正确地根据速率限制对任务执行进行了节流。
+我们当前正处于 Phase 3 的收尾阶段。下一步的逻辑是进入**里程碑 3.4: 系统健壮性与完善**，为我们刚刚添加的所有控制指令（`pause`, `set-limit`）增加自动过期的能力（`--ttl`），并丰富遥测事件，使系统行为更加可观测。
 
-## [WIP] test: Add E2E test for rate limit control
+现在，我将生成一个 `[COMMIT]` 计划，将我们完成的速率限制功能作为一个完整的逻辑单元提交到版本控制中。
+
+## [COMMIT] feat(runtime): Implement rate limiting for task execution
 
 ### 用户需求
-为新实现的速率限制功能（里程碑 3.3）编写一个端到端的集成测试，以确保其正确性和健壮性。
+为 Cascade 工作流引擎引入基于令牌桶算法的速率限制（Rate Limiting）功能，并提供相应的 CLI 控制工具。
 
 ### 评论
-遵循现有的 `test_e2e_concurrency_control.py` 的模式是最佳实践。通过使用内存中的 `InProcessConnector` 和一个模拟的 `Controller` 应用，我们可以创建一个完全确定性的测试环境，从而消除异步测试中常见的时序竞争问题。
+这是 Phase 3 动态控制能力的最后一个核心功能。它使 Cascade 能够精细地管理对外部 API 或资源的调用频率，是构建健壮、合规的自动化工作流的关键。通过为 `Engine` 引入时间驱动的唤醒机制，我们增强了其调度器的能力，为未来更多基于时间的策略（如延时任务）奠定了基础。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/py/e2e/test_e2e_rate_limit_control.py`。
-2.  在该文件中，实现一个测试用例，用于验证 `rate_limit` 约束。
-3.  测试应验证当大量任务并发请求时，`Engine` 会根据令牌桶的速率和容量对它们的执行进行时间上的延迟。
+创建一个 Git 提交，包含速率限制功能的完整实现、CLI 工具更新以及相应的端到端测试。
 
 ### 基本原理
-测试的核心是验证时间行为。我们会设定一个比任务执行本身慢得多的速率限制（例如 5 tps），并让任务执行时间非常短（例如 0.01s）。然后，我们会一次性调度多个（例如 4个）任务。如果速率限制有效，总执行时间将主要由速率限制决定（大约 0.4s），而不是并发执行时间（大约 0.01s）。这提供了一个清晰、可量化的验证信号。我们还将设置一个小的突发容量（`capacity=2`），以验证令牌桶的突发行为。
+该功能已经完全实现并通过了端到端的自动化测试，验证了其在模拟环境中的正确行为。现在应将其作为一个原子性的功能提交，为后续的健壮性改进（里程碑 3.4）建立一个稳定的基线。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/runtime #concept/constraint #ai/instruct #task/domain/testing #task/object/rate-limiter-e2e #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/runtime #comp/cli #comp/tests #concept/constraint #ai/instruct #task/domain/runtime #task/object/rate-limiter #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建速率限制的端到端测试文件
+#### Acts 1: 将所有相关变更添加到暂存区
 
-我将创建一个新的测试文件，其中包含必要的测试基础设施和一个验证速率限制功能的测试用例。
+我们将添加 `RateLimiter` 的实现、`ConstraintManager` 和 `Engine` 的更新、`cs-controller` 的修改以及新的端到端测试文件。
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-runtime/src/cascade/runtime/constraints/rate_limiter.py
+packages/cascade-runtime/src/cascade/runtime/constraints/manager.py
+packages/cascade-runtime/src/cascade/runtime/constraints/handlers.py
+packages/cascade-runtime/src/cascade/runtime/engine.py
+packages/cascade-cli-controller/src/cascade/cli/controller/app.py
+packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
 tests/py/e2e/test_e2e_rate_limit_control.py
 ~~~~~
-~~~~~python
-import asyncio
-import time
-from typing import Callable, Awaitable, Dict, Any, List, Optional
-from collections import defaultdict
-import uuid
-from dataclasses import asdict
 
-import pytest
-import cascade as cs
-from cascade.interfaces.protocols import Connector, Executor
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.graph.model import Node
-from cascade.spec.constraint import GlobalConstraint
+#### Acts 2: 提交功能
 
+创建一个内容详尽的提交，记录本次功能实现。
 
-# --- Test Infrastructure: In-Process Communication ---
-
-
-class InProcessConnector(Connector):
-    """
-    A Connector that uses asyncio Queues for in-process, in-memory message passing.
-    Supports MQTT-style Retained Messages for robust config delivery.
-    """
-
-    _shared_topics: Dict[str, List[asyncio.Queue]] = defaultdict(list)
-    _retained_messages: Dict[str, Any] = {}
-
-    def __init__(self):
-        self._shared_topics.clear()
-        self._retained_messages.clear()
-
-    async def connect(self) -> None:
-        pass
-
-    async def disconnect(self) -> None:
-        pass
-
-    async def publish(
-        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
-    ) -> None:
-        if retain:
-            if payload:
-                self._retained_messages[topic] = payload
-            elif topic in self._retained_messages:
-                del self._retained_messages[topic]
-
-        for sub_topic, queues in self._shared_topics.items():
-            if self._topic_matches(subscription=sub_topic, topic=topic):
-                for q in queues:
-                    await q.put((topic, payload))
-
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        queue = asyncio.Queue()
-        self._shared_topics[topic].append(queue)
-        
-        # Replay retained messages that match the subscription
-        for retained_topic, payload in self._retained_messages.items():
-            if self._topic_matches(subscription=topic, topic=retained_topic):
-                # We need to await the callback to ensure sync delivery
-                await callback(retained_topic, payload)
-
-        asyncio.create_task(self._listen_on_queue(queue, callback))
-
-    async def _listen_on_queue(self, queue: asyncio.Queue, callback):
-        while True:
-            try:
-                topic, payload = await queue.get()
-                await callback(topic, payload)
-                queue.task_done()
-            except asyncio.CancelledError:
-                break
-
-    def _topic_matches(self, subscription: str, topic: str) -> bool:
-        if subscription == topic:
-            return True
-        if subscription.endswith("/#"):
-            prefix = subscription[:-2]
-            if topic.startswith(prefix):
-                return True
-        return False
-
-
-class ControllerTestApp:
-    """A lightweight simulator for the cs-controller CLI tool."""
-
-    def __init__(self, connector: Connector):
-        self.connector = connector
-
-    async def set_rate_limit(
-        self, scope: str, rate: str, capacity: Optional[float] = None
-    ):
-        params = {"rate": rate}
-        if capacity is not None:
-            params["capacity"] = capacity
-
-        constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
-        constraint = GlobalConstraint(
-            id=constraint_id,
-            scope=scope,
-            type="rate_limit",
-            params=params,
-        )
-        payload = asdict(constraint)
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        await self.connector.publish(topic, payload, retain=True)
-
-
-class MockWorkExecutor(Executor):
-    """Executor that simulates short, time-consuming work."""
-
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        await asyncio.sleep(0.01) # Short work time
-        return time.time()
-
-
-# --- The E2E Test ---
-
-
-@pytest.mark.asyncio
-async def test_e2e_rate_limit_control():
-    """
-    Full end-to-end test for rate limiting.
-    1. Controller publishes a rate limit constraint (Retained).
-    2. Engine starts, receives the constraint, and throttles execution.
-    """
-    # 1. Setup shared communication bus
-    connector = InProcessConnector()
-
-    # 2. Setup the Controller
-    controller = ControllerTestApp(connector)
-
-    # 3. Publish the constraint FIRST.
-    # Limit to 5 tasks/sec (1 every 0.2s), with a burst capacity of 2.
-    await controller.set_rate_limit(scope="task:fast_task", rate="5/s", capacity=2)
-
-    # 4. Define the workflow
-    @cs.task
-    def fast_task():
-        return  # Does almost nothing, just returns its finish time via executor
-
-    # 4 tasks that should be rate-limited
-    workflow = fast_task.map(x=[1, 2, 3, 4])
-
-    # 5. Setup the Engine
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=MockWorkExecutor(),
-        bus=MessageBus(),
-        connector=connector,
-    )
-
-    # 6. Run the engine
-    start_time = time.time()
-    results = await engine.run(workflow)
-    duration = time.time() - start_time
-
-    # 7. Assertions
-    finish_times = sorted([t - start_time for t in results])
-
-    # Expected timing:
-    # - Capacity=2, so Task 1 & 2 run immediately in the first 0.01s slot.
-    # - Rate=5/s -> 1 token refills every 0.2s.
-    # - T=0.01s: T1, T2 finish. Bucket is empty.
-    # - T=0.20s: 1 token available. T3 starts.
-    # - T=0.21s: T3 finishes.
-    # - T=0.40s: 1 token available. T4 starts.
-    # - T=0.41s: T4 finishes.
-    # Total duration should be ~0.4s. Without rate limit, it's ~0.01s.
-
-    assert duration >= 0.38, (
-        f"Expected throttled execution (~0.4s), but took {duration:.4f}s"
-    )
-
-    # Check the timestamps to verify sequential execution after burst
-    # First two should be very close together
-    assert finish_times[1] - finish_times[0] < 0.05
-    # Gap between 2nd and 3rd should be ~0.2s
-    assert finish_times[2] - finish_times[1] > 0.18
-    # Gap between 3rd and 4th should be ~0.2s
-    assert finish_times[3] - finish_times[2] > 0.18
+~~~~~act
+git_commit
 ~~~~~
+~~~~~text
+feat(runtime): Implement rate limiting for task execution
+
+Introduces the `rate_limit` global constraint, allowing operators to dynamically control the execution frequency of tasks.
+
+Key changes:
+1.  **`RateLimiter` Component**: A new `RateLimiter` class is added, implementing a standard token bucket algorithm to manage multiple rate-limiting scopes.
+2.  **`RateLimitConstraintHandler`**: A new handler that interprets `rate_limit` constraints, interacts with the `RateLimiter`, and parses intuitive rate strings (e.g., "10/m").
+3.  **Time-based Engine Wakeup**: The `ConstraintManager` and `Engine` are enhanced with a time-based wakeup mechanism. When a task is rate-limited, the handler requests a wakeup via `loop.call_later`, ensuring the engine re-evaluates permissions efficiently without busy-waiting.
+4.  **`cs-controller` Update**: The `set-limit` command is updated to accept a `--rate` option, allowing users to publish rate-limiting policies from the command line.
+5.  **E2E Testing**: A new deterministic end-to-end test, `test_e2e_rate_limit_control.py`, is added to validate the entire control loop from CLI command to engine throttling.
+~~~~~
+
+### 下一步建议
+我们已经完成了 Phase 3 的核心功能开发。我建议立即开始执行**里程碑 3.4: 系统健壮性与完善**。具体来说，我们可以从为 `cs-controller` 的 `pause` 和 `set-limit` 命令添加 `--ttl <seconds>` 参数开始，并同步在 `ConstraintManager` 中实现约束的自动过期逻辑。

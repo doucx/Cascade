@@ -32,7 +32,8 @@ async def test_on_message_handles_task_running_event(mock_messaging_bus):
     """
     Verify that a 'RUNNING' TaskStateEvent is correctly parsed and rendered.
     """
-    # Arrange: A sample telemetry payload
+    # Arrange: Reset global state and define payload
+    observer_app.seen_run_ids.clear()
     payload = {
         "header": {"run_id": "run-123"},
         "body": {
@@ -45,8 +46,9 @@ async def test_on_message_handles_task_running_event(mock_messaging_bus):
     # Act: Directly call the callback function
     await observer_app.on_message("a/topic", payload)
 
-    # Assert: Verify the bus was called with the correct semantic intent
-    mock_messaging_bus.info.assert_called_once_with(
+    # Assert: Verify the bus was called with the correct semantic intent.
+    # We use assert_any_call because the run header might also be printed.
+    mock_messaging_bus.info.assert_any_call(
         "observer.telemetry.task_state.RUNNING",
         task_name="process_data",
         duration_ms=0,
@@ -59,6 +61,8 @@ async def test_on_message_handles_task_completed_event(mock_messaging_bus):
     """
     Verify that a 'COMPLETED' TaskStateEvent is correctly parsed.
     """
+    # Arrange
+    observer_app.seen_run_ids.clear()
     payload = {
         "header": {"run_id": "run-123"},
         "body": {
@@ -69,9 +73,11 @@ async def test_on_message_handles_task_completed_event(mock_messaging_bus):
         },
     }
 
+    # Act
     await observer_app.on_message("a/topic", payload)
 
-    mock_messaging_bus.info.assert_called_once_with(
+    # Assert
+    mock_messaging_bus.info.assert_any_call(
         "observer.telemetry.task_state.COMPLETED",
         task_name="generate_report",
         duration_ms=123.45,
@@ -84,6 +90,8 @@ async def test_on_message_handles_task_failed_event(mock_messaging_bus):
     """
     Verify that a 'FAILED' TaskStateEvent is correctly parsed.
     """
+    # Arrange
+    observer_app.seen_run_ids.clear()
     payload = {
         "header": {"run_id": "run-123"},
         "body": {
@@ -95,9 +103,11 @@ async def test_on_message_handles_task_failed_event(mock_messaging_bus):
         },
     }
 
+    # Act
     await observer_app.on_message("a/topic", payload)
 
-    mock_messaging_bus.info.assert_called_once_with(
+    # Assert
+    mock_messaging_bus.info.assert_any_call(
         "observer.telemetry.task_state.FAILED",
         task_name="api_call",
         duration_ms=50.0,

@@ -1,71 +1,50 @@
-是的，为 `cs-observer` 编写测试套件是绝对正确的下一步。
+Excellent, the tests have correctly identified a flaw in our logic. This is exactly why we write them.
 
-根据我们的测试原则，我们必须在功能完成后立即为其编写测试，以验证其行为并防止未来的重构破坏现有功能。
+The error `AssertionError: Expected 'info' to be called once. Called 2 times` tells us that `bus.info` was called twice, but the test only expected a single call.
 
-我将为你生成一个计划，创建一个新的集成测试套件。这个测试套件将严格遵循**“验证意图而非实现”**的原则。我们将通过 Mock `MqttConnector` 和 `MessageBus` 来隔离外部依赖，并将测试的焦点集中在验证 `on_message` 回调函数是否能正确解析遥测数据，并调用消息总线传递**正确的语义 ID 和数据**。
+### 错误分析
 
-## [WIP] test: Create integration test suite for cs-observer
+The root cause is in the `on_message` callback. When it receives the *first* message for a new `run_id`, it performs two actions:
+1.  It prints the run header: `bus.info("observer.telemetry.run_header", ...)`
+2.  It prints the specific event message: `bus.info("observer.telemetry.task_state.RUNNING", ...)`
+
+Our test assertion, `assert_called_once_with`, is too strict. It requires that the mock was called *exactly once* and with the specified arguments. Since there were two calls, the test failed on the call count.
+
+Furthermore, the tests suffer from **state leakage**. The `seen_run_ids` set is a global variable, so whichever test runs first will add `"run-123"` to it, causing subsequent tests to behave differently. This is why only the first test failed. We must ensure each test runs in an isolated state.
+
+### 解决方案
+
+1.  **Isolate Test State**: We will add `observer_app.seen_run_ids.clear()` to the beginning of each test case to ensure that the global state is reset before each run. This makes the tests independent of execution order.
+2.  **Refine Assertions**: Instead of asserting the total number of calls, we will use `assert_any_call`. This assertion specifically checks if a call with the given arguments was made at least once, regardless of other calls. This correctly reflects our intent: "Was the correct 'RUNNING' event message sent?".
+
+## [WIP] fix(tests): Isolate test state and refine observer assertions
 
 ### 用户需求
-为 `cs-observer` 的核心消息处理逻辑 (`on_message` 回调) 创建一个健壮的、可维护的集成测试套件。
+修复 `cs-observer` 测试套件中的 `AssertionError`，并消除因共享全局状态 (`seen_run_ids`) 导致的测试间依赖。
 
 ### 评论
-这是一个至关重要的步骤，它确保了我们核心调试工具的可靠性。通过采用 Mock-based 的集成测试策略，我们可以精确地验证 `cs-observer` 的业务逻辑，而无需依赖一个活动的 MQTT Broker 或检查脆弱的、易变的终端输出字符串。这使得测试运行得更快、更稳定，并且完全符合项目的测试哲学。
+这是一个典型的测试驱动开发 (TDD) 循环的胜利。测试暴露了两个常见问题：过于严格的断言和测试间的状态泄漏。通过修正这些问题，我们将使测试套件更加健壮、可靠，并且与实现细节解耦。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/cli-observer/test_app.py`。
-2.  在测试文件中，创建 `pytest` fixtures 来 Mock `MqttConnector` 和全局 `MessageBus`。
-3.  编写一系列测试用例，模拟不同类型的遥测事件（`RUNNING`, `COMPLETED`, `FAILED` 等）。
-4.  在每个测试用例中，断言 `MessageBus` 的 `info` 方法被以预期的**语义消息 ID** 和**数据负载**调用。
-
-### 基本原理
-我们将遵循 `d3-principle-python-testing-mock-intent` 原则。测试的核心是验证 `on_message` 函数的行为契约。这个契约是：当给定一个特定的遥测 `payload` 时，它必须调用 `bus.info` 并传递一个特定的 `msg_id` 和一组从 `payload` 中提取出的 `kwargs`。我们不关心这些信息最终被 `RichCliRenderer` 渲染成了什么颜色或文本，只关心这个“意图”是否被正确地传达了。
+1.  在每个处理遥测事件的测试用例开始时，清空 `observer_app.seen_run_ids` 集合。
+2.  将测试断言从 `assert_called_once_with` 修改为 `assert_any_call`，以准确验证“意图”的存在，而不是调用次数。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/cli #concept/telemetry #scope/dx #ai/instruct #task/domain/cli #task/object/observer-tool #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #comp/cli #task/domain/testing #task/object/test-suite #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Observer 的测试文件和 Fixtures
+#### Acts 1: 修复并加固 Observer 测试套件
 
-我们将创建新的测试文件，并设置好用于 Mock 消息总线和连接器的 `pytest` Fixtures。
+我们将修改 `test_app.py` 中的所有测试用例，为它们添加状态重置逻辑，并使用更合适的断言。
 
 ~~~~~act
-write_file
+patch_file
 tests/cli-observer/test_app.py
 ~~~~~
 ~~~~~python
-import pytest
-from unittest.mock import MagicMock, AsyncMock
-
-# The module we are testing
-from cascade.cli.observer import app as observer_app
-
-# The objects we need to mock
-# We will patch 'bus' and 'MqttConnector' where they are USED.
-
-
-@pytest.fixture
-def mock_messaging_bus(monkeypatch) -> MagicMock:
-    """Mocks the global message bus used by the observer app."""
-    mock_bus = MagicMock()
-    monkeypatch.setattr("cascade.cli.observer.app.bus", mock_bus)
-    return mock_bus
-
-
-@pytest.fixture
-def mock_connector(monkeypatch) -> AsyncMock:
-    """Mocks the MqttConnector class to prevent network calls."""
-    mock_instance = AsyncMock()
-    mock_class = MagicMock(return_value=mock_instance)
-    monkeypatch.setattr("cascade.cli.observer.app.MqttConnector", mock_class)
-    return mock_instance
-
-
-# --- Test Cases ---
-
 @pytest.mark.asyncio
 async def test_on_message_handles_task_running_event(mock_messaging_bus):
     """
@@ -142,39 +121,92 @@ async def test_on_message_handles_task_failed_event(mock_messaging_bus):
         duration_ms=50.0,
         error="TimeoutError",
     )
+~~~~~
+~~~~~python
+@pytest.mark.asyncio
+async def test_on_message_handles_task_running_event(mock_messaging_bus):
+    """
+    Verify that a 'RUNNING' TaskStateEvent is correctly parsed and rendered.
+    """
+    # Arrange: Reset global state and define payload
+    observer_app.seen_run_ids.clear()
+    payload = {
+        "header": {"run_id": "run-123"},
+        "body": {
+            "type": "TaskStateEvent",
+            "state": "RUNNING",
+            "task_name": "process_data",
+        },
+    }
+
+    # Act: Directly call the callback function
+    await observer_app.on_message("a/topic", payload)
+
+    # Assert: Verify the bus was called with the correct semantic intent.
+    # We use assert_any_call because the run header might also be printed.
+    mock_messaging_bus.info.assert_any_call(
+        "observer.telemetry.task_state.RUNNING",
+        task_name="process_data",
+        duration_ms=0,
+        error="",
+    )
 
 
 @pytest.mark.asyncio
-async def test_on_message_prints_run_header_only_once(mock_messaging_bus):
+async def test_on_message_handles_task_completed_event(mock_messaging_bus):
     """
-    Verify that the run header is printed only for the first message of a new run.
+    Verify that a 'COMPLETED' TaskStateEvent is correctly parsed.
     """
-    payload1 = {
-        "header": {"run_id": "run-abc"},
-        "body": {"type": "LifecycleEvent", "event": "ENGINE_STARTED"},
-    }
-    payload2 = {
-        "header": {"run_id": "run-abc"},
-        "body": {"type": "TaskStateEvent", "state": "RUNNING", "task_name": "task1"},
-    }
-    
-    # Reset the global tracker for a clean test run
+    # Arrange
     observer_app.seen_run_ids.clear()
+    payload = {
+        "header": {"run_id": "run-123"},
+        "body": {
+            "type": "TaskStateEvent",
+            "state": "COMPLETED",
+            "task_name": "generate_report",
+            "duration_ms": 123.45,
+        },
+    }
 
     # Act
-    await observer_app.on_message("a/topic", payload1)
-    await observer_app.on_message("a/topic", payload2)
+    await observer_app.on_message("a/topic", payload)
 
     # Assert
-    # Check that the header was printed exactly once
-    header_call = mock_messaging_bus.info.call_args_list[0]
-    assert header_call.args[0] == "observer.telemetry.run_header"
-    assert header_call.kwargs["run_id"] == "run-abc"
-    
-    # Check that subsequent calls did not print the header again
-    assert len(mock_messaging_bus.info.call_args_list) == 3 # Header, Started, Running
-    assert all(
-        call.args[0] != "observer.telemetry.run_header"
-        for call in mock_messaging_bus.info.call_args_list[1:]
+    mock_messaging_bus.info.assert_any_call(
+        "observer.telemetry.task_state.COMPLETED",
+        task_name="generate_report",
+        duration_ms=123.45,
+        error="",
+    )
+
+
+@pytest.mark.asyncio
+async def test_on_message_handles_task_failed_event(mock_messaging_bus):
+    """
+    Verify that a 'FAILED' TaskStateEvent is correctly parsed.
+    """
+    # Arrange
+    observer_app.seen_run_ids.clear()
+    payload = {
+        "header": {"run_id": "run-123"},
+        "body": {
+            "type": "TaskStateEvent",
+            "state": "FAILED",
+            "task_name": "api_call",
+            "duration_ms": 50.0,
+            "error": "TimeoutError",
+        },
+    }
+
+    # Act
+    await observer_app.on_message("a/topic", payload)
+
+    # Assert
+    mock_messaging_bus.info.assert_any_call(
+        "observer.telemetry.task_state.FAILED",
+        task_name="api_call",
+        duration_ms=50.0,
+        error="TimeoutError",
     )
 ~~~~~

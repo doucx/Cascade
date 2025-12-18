@@ -9,12 +9,11 @@ description = "A modern, declarative automation library for Python."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
-# 关键修复 2: 添加对工作区内所有包的显式依赖
 dependencies = [
-    "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces",
-    "cascade-runtime @ file:///${PROJECT_ROOT}/packages/cascade-runtime",
-    "cascade-py @ file:///${PROJECT_ROOT}/packages/cascade-py",
-    "cascade-cli @ file:///${PROJECT_ROOT}/packages/cascade-cli",
+    "cascade-interfaces @ file:packages/cascade-interfaces",
+    "cascade-runtime @ file:packages/cascade-runtime",
+    "cascade-py @ file:packages/cascade-py",
+    "cascade-cli @ file:packages/cascade-cli",
 ]
 
 [tool.hatch.workspaces]
@@ -28,6 +27,10 @@ packages = [
 [tool.hatch.build.targets.wheel]
 packages = ["packages/cascade-py/src/cascade"]
 
+# 关键修复：允许根项目包含对本地包的直接文件引用
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.pytest.ini_options]
 addopts = "-ra"
 
@@ -38,7 +41,6 @@ dev = [
   "mypy",
   "pytest-aiohttp",
   "moto[s3]",
-  # 关键修复 1: 移除 "[all]"
   "typer",
   "mkdocs",
   "mkdocs-material",

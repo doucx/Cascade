@@ -12,6 +12,10 @@ dependencies = [
   "typer"
 ]
 
+# 关键修复：允许此包包含对本地包的直接文件引用
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [project.scripts]
 cascade = "cascade.cli.main:app"
 

@@ -1,34 +1,37 @@
-Excellent catch. Your detailed error log points directly to the next flaw in my reasoning. This iterative process is exactly how robust systems are built.
+You are right once again. My apologies, this is a subtle but critical configuration detail specific to the Hatch build backend. The error message is, thankfully, extremely explicit and tells us exactly what we need to do.
 
-You are absolutely right to flag this. The build is failing inside `cascade-cli` because it cannot resolve a variable I invented.
+This error is a safety feature from the build tool, `hatchling`. It prevents you from accidentally publishing a package to PyPI that has local-only dependencies (`file:...`), which would be broken for anyone else. Since we are intentionally using this for our local monorepo development, we just need to tell Hatch that we know what we're doing.
 
-## [COMMIT] fix(build): Use standard relative path dependencies in packages
+This should be the final configuration hurdle to clear.
+
+## [WIP] fix(build): Allow direct path dependencies in Hatch metadata
 
 ### 错误分析
-你提供的 `uv` 错误日志非常精确，直接命中了问题的核心：`ValueError: Unknown context field 'PROJECT_ROOT'`。
+你遇到的 `uv` 构建失败，其根本原因在于 `hatchling`（Hatch 的构建后端）的一个安全默认设置。
 
-这个错误发生的原因是：
-1.  我在 `packages/cascade-cli/pyproject.toml` (以及其他子包) 的 `dependencies` 列表中使用了 `file:///${PROJECT_ROOT}/...` 这种语法。
-2.  我的假设是 `${PROJECT_ROOT}` 是一个会被构建工具（Hatchling）或安装器（`uv`）自动替换为项目根目录的标准变量。
-3.  **这个假设是错误的。** `${PROJECT_ROOT}` 并非 PEP 508 或 `pyproject.toml` 规范中定义的标准上下文变量。因此，当 `hatchling` 尝试解析这个依赖字符串时，它不认识 `PROJECT_ROOT`，导致构建失败。
+错误信息 `ValueError: Dependency #1 of field 'project.dependencies' cannot be a direct reference unless field 'tool.hatch.metadata.allow-direct-references' is set to 'true'` 明确指出：
 
-我们需要用一种标准的、跨工具兼容的方式来声明本地包之间的相对路径依赖。
+1.  我们在子包的 `pyproject.toml` 中使用了 `file:../some-package` 这样的“直接引用”依赖。
+2.  默认情况下，`hatchling` 禁止这种引用，因为它认为这对于要发布到 PyPI 的包来说是不安全的。
+3.  要允许这种行为，我们必须在 `pyproject.toml` 文件中显式地设置一个标志：`[tool.hatch.metadata] \n allow-direct-references = true`。
+
+这个问题会出现在每一个使用了 `file:` 语法的子包以及根包中。
 
 ### 用户需求
-修复所有子包 (`cascade-runtime`, `cascade-py`, `cascade-cli`) 的 `pyproject.toml` 文件，将其中对本地兄弟包的依赖声明从无效的 `${PROJECT_ROOT}` 语法，修改为标准的、基于相对路径的 `file:` URI 语法。
+修改所有使用了本地 `file:` 依赖的 `pyproject.toml` 文件（包括根目录和 `packages/` 下的子包），添加 `[tool.hatch.metadata]` 配置节并设置 `allow-direct-references = true`，以 разрешить (allow) Hatch 构建包含本地路径依赖的包。
 
 ### 评论
-这是一个关键的配置修复，它教会我们不能想当然地使用自定义变量，而必须严格遵循打包规范。改用标准的相对路径 `file:` URI 不仅能解决当前的构建失败，而且使我们的项目配置更具可移植性和健壮性，因为它不再依赖任何特定工具的“魔法”变量替换。这是完成我们 Monorepo 基础设施建设的最后一步。
+这是一个完美的例子，说明了现代构建工具如何通过“显式优于隐式”的原则来提高打包的健壮性。通过强制我们声明允许直接引用，Hatch 确保我们是“有意为之”，而不是意外引入了本地依赖。完成这个修复后，我们的 Monorepo 配置将是完整且符合最佳实践的。
 
 ### 目标
-1.  修改 `packages/cascade-runtime/pyproject.toml`，将其对 `cascade-interfaces` 的依赖路径修正。
-2.  修改 `packages/cascade-py/pyproject.toml`，将其对 `cascade-interfaces` 和 `cascade-runtime` 的依赖路径修正。
-3.  修改 `packages/cascade-cli/pyproject.toml`，将其对 `cascade-py` 的依赖路径修正。
+1.  修改根 `pyproject.toml`。
+2.  修改 `packages/cascade-runtime/pyproject.toml`。
+3.  修改 `packages/cascade-py/pyproject.toml`。
+4.  修改 `packages/cascade-cli/pyproject.toml`。
+5.  在上述所有文件中，添加 `[tool.hatch.metadata]` 表并设置 `allow-direct-references = true`。
 
 ### 基本原理
-我们将对每个需要修改的 `pyproject.toml` 文件执行一次 `write_file` 操作。这是最安全的方式，因为它避免了 `patch_file` 在处理列表和多行字符串时的复杂性。
-
-新的依赖语法将是 `package-name @ file:../relative/path/to/package`。这里的 `../` 是一个标准的相对路径指示符，它会从当前 `pyproject.toml` 文件所在的位置开始解析。例如，对于 `packages/cascade-cli/pyproject.toml` 来说，`../cascade-py` 会正确地指向 `packages/cascade-py` 目录。这是 PEP 508 规范支持的标准语法，`uv` 和 `pip` 都能正确理解。
+我们将对四个 `pyproject.toml` 文件分别执行 `write_file` 操作。这是最直接和可靠的方法，可以确保新的配置节被正确添加。这个 `allow-direct-references = true` 标志将直接告诉 `hatchling` 构建后端：“我确认这个包包含本地文件系统引用，请继续构建。” 这将解决 `uv` 在调用构建后端时遇到的 `ValueError`。
 
 ### 标签
 #intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct #task/domain/build #task/object/monorepo-structure #task/action/bug-fix #task/state/end
@@ -37,8 +40,67 @@ You are absolutely right to flag this. The build is failing inside `cascade-cli`
 
 ### Script
 
-#### Acts 1: 修正 `cascade-runtime` 的依赖
+#### Acts 1: 修正所有 `pyproject.toml` 文件以允许直接引用
 
+我们将逐一更新所有使用 `file:` 依赖的配置文件。
+
+首先是项目根 `pyproject.toml`。
+~~~~~act
+write_file
+pyproject.toml
+~~~~~
+~~~~~toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade"
+version = "0.1.0"
+description = "A modern, declarative automation library for Python."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+dependencies = [
+    "cascade-interfaces @ file:packages/cascade-interfaces",
+    "cascade-runtime @ file:packages/cascade-runtime",
+    "cascade-py @ file:packages/cascade-py",
+    "cascade-cli @ file:packages/cascade-cli",
+]
+
+[tool.hatch.workspaces]
+packages = [
+    "packages/cascade-interfaces",
+    "packages/cascade-runtime",
+    "packages/cascade-py",
+    "packages/cascade-cli",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["packages/cascade-py/src/cascade"]
+
+# 关键修复：允许根项目包含对本地包的直接文件引用
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "mypy",
+  "pytest-aiohttp",
+  "moto[s3]",
+  "typer",
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocstrings[python]",
+]
+~~~~~
+
+然后是 `cascade-runtime`。
 ~~~~~act
 write_file
 packages/cascade-runtime/pyproject.toml
@@ -57,6 +119,10 @@ dependencies = [
   "cascade-interfaces @ file:../cascade-interfaces"
 ]
 
+# 关键修复：允许此包包含对本地包的直接文件引用
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [project.optional-dependencies]
 csp_solver = ["python-constraint"]
 
@@ -64,8 +130,7 @@ csp_solver = ["python-constraint"]
 packages = ["src/cascade"]
 ~~~~~
 
-#### Acts 2: 修正 `cascade-py` 的依赖
-
+接着是 `cascade-py`。
 ~~~~~act
 write_file
 packages/cascade-py/pyproject.toml
@@ -84,6 +149,10 @@ dependencies = [
   "cascade-interfaces @ file:../cascade-interfaces",
   "cascade-runtime @ file:../cascade-runtime"
 ]
+
+# 关键修复：允许此包包含对本地包的直接文件引用
+[tool.hatch.metadata]
+allow-direct-references = true
 
 [project.optional-dependencies]
 template = ["jinja2"]
@@ -134,8 +203,7 @@ lookup = "cascade.providers.config:LookupProvider"
 packages = ["src/cascade"]
 ~~~~~
 
-#### Acts 3: 修正 `cascade-cli` 的依赖
-
+最后是 `cascade-cli`。
 ~~~~~act
 write_file
 packages/cascade-cli/pyproject.toml
@@ -155,6 +223,10 @@ dependencies = [
   "typer"
 ]
 
+# 关键修复：允许此包包含对本地包的直接文件引用
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [project.scripts]
 cascade = "cascade.cli.main:app"
 
@@ -163,12 +235,12 @@ packages = ["src/cascade/cli"]
 ~~~~~
 
 ### 下一步建议
-我们已经扫清了所有已知的构建和安装障碍。现在，Monorepo 的基础设施已经**完全就绪**。
+我们已经解决了所有已知的、由 `pyproject.toml` 配置不当导致的构建问题。Monorepo 的基础设施现在是健壮且完整的。
 
-请再次运行安装命令：
+**请再次运行安装命令：**
 ```bash
 uv pip install -e ".[dev]"
 ```
-这一次，它应该能顺利完成，并正确地将所有本地包链接到你的虚拟环境中。
+这一次，我们有充分的理由相信它会成功。
 
-安装成功后，我们将正式进入代码修复阶段，着手解决所有因路径变更而失效的 `import` 语句。这是让项目恢复生机的最后一步。
+安装成功后，唯一的遗留问题就是代码中的 `import` 路径错误。我已准备好为你生成一个修复所有导入路径的计划，这将是使项目恢复可运行状态的最后一步。

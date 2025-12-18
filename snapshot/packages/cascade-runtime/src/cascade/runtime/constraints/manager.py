@@ -24,6 +24,14 @@ class ConstraintManager:
         """Adds a new constraint or updates an existing one."""
         self._constraints[constraint.id] = constraint
 
+    def remove_constraints_by_scope(self, scope: str) -> None:
+        """Removes all constraints that match the given scope."""
+        ids_to_remove = [
+            cid for cid, c in self._constraints.items() if c.scope == scope
+        ]
+        for cid in ids_to_remove:
+            del self._constraints[cid]
+
     def check_permission(self, task: Node) -> bool:
         """
         Evaluates all active constraints against a task. If any handler denies

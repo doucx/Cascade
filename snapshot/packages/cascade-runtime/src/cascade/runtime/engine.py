@@ -133,6 +133,22 @@ class Engine:
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""
+        # An empty payload signifies a cleared retained message (i.e., a resume command)
+        if not payload:
+            try:
+                # Reconstruct scope from topic, e.g., cascade/constraints/task/api_call -> task:api_call
+                scope_parts = topic.split("/")[2:]
+                scope = ":".join(scope_parts)
+                if scope:
+                    self.constraint_manager.remove_constraints_by_scope(scope)
+                return
+            except Exception as e:
+                print(
+                    f"[Engine] Error processing resume command on topic '{topic}': {e}",
+                    file=sys.stderr,
+                )
+                return
+
         try:
             # Basic validation, could be improved with a schema library
             constraint = GlobalConstraint(

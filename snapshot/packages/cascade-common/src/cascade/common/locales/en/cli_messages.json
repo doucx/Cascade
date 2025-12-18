@@ -14,7 +14,10 @@
 
     "controller.connecting": "Connecting to MQTT broker at [bold green]{hostname}:{port}[/bold green]...",
     "controller.connected": "✅ Connected to MQTT broker.",
+json
     "controller.publishing": "📡 Publishing constraint for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
     "controller.publish_success": "✅ Constraint published successfully.",
+    "controller.resuming": "📡 Publishing resume command for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
+    "controller.resume_success": "✅ Resume command published successfully.",
     "controller.error": "❌ An error occurred: {error}"
 }

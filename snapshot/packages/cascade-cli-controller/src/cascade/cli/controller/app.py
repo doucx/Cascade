@@ -34,14 +34,37 @@ async def _publish_pause(scope: str, hostname: str, port: int):
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
 
         bus.info("controller.publishing", scope=scope, topic=topic)
-        # The connector's publish is fire-and-forget
-        await connector.publish(topic, payload)
+        # The connector's publish is fire-and-forget, now with retain=True
+        await connector.publish(topic, payload, retain=True)
 
         # In a real fire-and-forget, we can't be sure it succeeded,
         # but for UX we assume it did if no exception was raised.
         # Give a brief moment for the task to be sent.
         await asyncio.sleep(0.1)
         bus.info("controller.publish_success")
+
+    except Exception as e:
+        bus.error("controller.error", error=e)
+    finally:
+        await connector.disconnect()
+
+
+async def _publish_resume(scope: str, hostname: str, port: int):
+    """Core logic for publishing a resume (clear constraint) command."""
+    connector = MqttConnector(hostname=hostname, port=port)
+    try:
+        bus.info("controller.connecting", hostname=hostname, port=port)
+        await connector.connect()
+        bus.info("controller.connected")
+
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+
+        bus.info("controller.resuming", scope=scope, topic=topic)
+        # Publishing an empty retained message clears the previous one
+        await connector.publish(topic, "", retain=True)
+
+        await asyncio.sleep(0.1)
+        bus.info("controller.resume_success")
 
     except Exception as e:
         bus.error("controller.error", error=e)
@@ -65,6 +88,26 @@ def pause(
     """
     try:
         asyncio.run(_publish_pause(scope=scope, hostname=hostname, port=port))
+    except KeyboardInterrupt:
+        bus.info("observer.shutdown")
+
+
+@app.command()
+def resume(
+    scope: str = typer.Argument(
+        "global",
+        help="The scope to resume (e.g., 'global', 'project:etl', 'task:api_call').",
+    ),
+    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
+    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
+):
+    """
+    Publish a 'resume' command to the MQTT broker.
+    This clears any 'pause' constraint for the specified scope, allowing
+    tasks to be scheduled again.
+    """
+    try:
+        asyncio.run(_publish_resume(scope=scope, hostname=hostname, port=port))
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 

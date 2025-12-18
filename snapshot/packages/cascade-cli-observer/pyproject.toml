@@ -9,6 +9,7 @@ description = "A real-time telemetry observer for the Cascade ecosystem."
 requires-python = ">=3.8"
 dependencies = [
   "cascade-interfaces",
+  "cascade-common",
   "typer[all]",
   "aiomqtt",
   "rich"

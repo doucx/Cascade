@@ -1,4 +1,6 @@
 import typer
+from cascade.common.messaging import bus
+from .rendering import RichCliRenderer
 
 app = typer.Typer()
 
@@ -10,10 +12,13 @@ def watch(project: str = typer.Option("default", help="The project ID to watch."
     """
     typer.echo(f"Starting to watch project: {project}...")
     # TODO: Implement MQTT connection and event printing logic.
+    bus.info("observer.startup.watching", project=project)
     typer.echo("Observer not yet implemented.")
 
 
 def main():
+    # Inject the rich renderer into the global message bus at application startup
+    bus.set_renderer(RichCliRenderer(store=bus.store))
     app()
 
 

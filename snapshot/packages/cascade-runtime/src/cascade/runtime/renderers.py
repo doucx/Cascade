@@ -3,7 +3,7 @@ import json
 from typing import TextIO, Optional
 from datetime import datetime, timezone
 
-from .bus import MessageStore
+from cascade.common.messaging import MessageStore, protocols
 
 LOG_LEVELS = {
     "DEBUG": 10,
@@ -13,7 +13,7 @@ LOG_LEVELS = {
 }
 
 
-class CliRenderer:
+class CliRenderer(protocols.Renderer):
     """
     Renders messages as human-readable, formatted text strings.
     """
@@ -30,12 +30,11 @@ class CliRenderer:
 
     def render(self, msg_id: str, level: str, **kwargs):
         if LOG_LEVELS.get(level.upper(), 20) >= self._min_level_val:
-            # The store now handles formatting, making the renderer simpler
             message = self._store.get(msg_id, **kwargs)
             print(message, file=self._stream)
 
 
-class JsonRenderer:
+class JsonRenderer(protocols.Renderer):
     """
     Renders messages as structured, JSON-formatted strings.
     """

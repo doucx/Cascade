@@ -9,7 +9,8 @@ description = "A modern, declarative automation library for Python."
 requires-python = ">=3.8"
 dependencies = [
   "cascade-interfaces",
-  "cascade-runtime"
+  "cascade-runtime",
+  "cascade-common"
 ]
 
 [project.optional-dependencies]

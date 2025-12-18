@@ -72,29 +72,50 @@ async def _publish_resume(scope: str, hostname: str, port: int):
         await connector.disconnect()
 
 
-async def _publish_limit(scope: str, concurrency: int, hostname: str, port: int):
-    """Core logic for publishing a concurrency limit constraint."""
+async def _publish_limit(
+    scope: str,
+    concurrency: int | None,
+    rate: str | None,
+    hostname: str,
+    port: int,
+):
+    """Core logic for publishing concurrency or rate limit constraints."""
     connector = MqttConnector(hostname=hostname, port=port)
     try:
         bus.info("controller.connecting", hostname=hostname, port=port)
         await connector.connect()
         bus.info("controller.connected")
 
-        constraint_id = f"concurrency-{scope}-{uuid.uuid4().hex[:8]}"
-        constraint = GlobalConstraint(
-            id=constraint_id,
-            scope=scope,
-            type="concurrency",
-            params={"limit": concurrency},
-        )
-
-        payload = asdict(constraint)
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
 
-        bus.info(
-            "controller.publishing_limit", scope=scope, topic=topic, limit=concurrency
-        )
-        await connector.publish(topic, payload, retain=True)
+        if concurrency is not None:
+            constraint_id = f"concurrency-{scope}-{uuid.uuid4().hex[:8]}"
+            constraint = GlobalConstraint(
+                id=constraint_id,
+                scope=scope,
+                type="concurrency",
+                params={"limit": concurrency},
+            )
+            bus.info(
+                "controller.publishing_limit",
+                scope=scope,
+                topic=topic,
+                limit=concurrency,
+            )
+            await connector.publish(topic, asdict(constraint), retain=True)
+
+        if rate is not None:
+            constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
+            constraint = GlobalConstraint(
+                id=constraint_id,
+                scope=scope,
+                type="rate_limit",
+                params={"rate": rate},
+            )
+            bus.info(
+                "controller.publishing_rate", scope=scope, topic=topic, rate=rate
+            )
+            await connector.publish(topic, asdict(constraint), retain=True)
 
         await asyncio.sleep(0.1)
         bus.info("controller.publish_limit_success")
@@ -113,18 +134,30 @@ def set_limit(
         help="The scope to apply the limit to (e.g., 'global', 'task:api_call').",
     ),
     concurrency: int = typer.Option(
-        ..., "--concurrency", help="The maximum number of concurrent tasks."
+        None, "--concurrency", help="The maximum number of concurrent tasks."
+    ),
+    rate: str = typer.Option(
+        None, "--rate", help="The rate limit (e.g., '10/m', '5/s')."
     ),
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
     """
-    Publish a 'concurrency' constraint to the MQTT broker.
+    Publish a 'concurrency' or 'rate_limit' constraint to the MQTT broker.
+    You must provide either --concurrency or --rate (or both).
     """
+    if concurrency is None and rate is None:
+        print("Error: Must provide either --concurrency or --rate.")
+        raise typer.Exit(code=1)
+
     try:
         asyncio.run(
             _publish_limit(
-                scope=scope, concurrency=concurrency, hostname=hostname, port=port
+                scope=scope,
+                concurrency=concurrency,
+                rate=rate,
+                hostname=hostname,
+                port=port,
             )
         )
     except KeyboardInterrupt:

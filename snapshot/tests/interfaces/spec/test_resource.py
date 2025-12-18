@@ -2,8 +2,8 @@ import pytest
 from unittest.mock import MagicMock
 import cascade as cs
 from cascade.runtime.events import ResourceAcquired, ResourceReleased, Event
-from cascade.runtime.adapters.executors.local import LocalExecutor
-from cascade.runtime.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 # --- Test Resources ---
 

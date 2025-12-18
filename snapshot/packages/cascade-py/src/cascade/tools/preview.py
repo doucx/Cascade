@@ -1,10 +1,10 @@
 from typing import Any
-from cascade.interfaces.spec.lazy_types import LazyResult  # NEW
-from cascade.runtime.graph.build import build_graph
+from cascade.spec.lazy_types import LazyResult  # NEW
+from cascade.graph.build import build_graph
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.runtime.adapters.solvers.native import NativeSolver
-from cascade.runtime.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 from .events import PlanAnalysisStarted, PlanNodeInspected, PlanAnalysisFinished
 
 

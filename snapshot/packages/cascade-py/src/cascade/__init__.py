@@ -19,7 +19,7 @@ from .internal.inputs import _get_param_value, _get_env_var
 
 # Legacy / Spec Compat
 # We keep Param class import removed/hidden as we are overriding it below.
-# from cascade.interfaces.spec.common import Param  <-- Removed
+# from cascade.spec.common import Param  <-- Removed
 
 # Runtime
 from cascade.runtime.engine import Engine

@@ -1,6 +1,6 @@
 import pytest
 from cascade.context import get_current_context, WorkflowContext
-from cascade.interfaces.spec.input import ParamSpec, EnvSpec
+from cascade.spec.input import ParamSpec, EnvSpec
 
 def test_context_isolation():
     """验证上下文是隔离的。"""
@@ -36,7 +36,7 @@ def test_param_factory_registration():
     assert spec.description == "Environment"
     
     # 2. 验证返回类型 (不再是 Param 对象，而是 LazyResult)
-    from cascade.interfaces.spec.lazy_types import LazyResult
+    from cascade.spec.lazy_types import LazyResult
     assert isinstance(result, LazyResult)
     # 验证内部任务名称
     assert result.task.name == "_get_param_value"

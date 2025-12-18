@@ -1,6 +1,6 @@
 import cascade as cs
-from cascade.runtime.graph.build import build_graph
-from cascade.interfaces.spec.constraint import ResourceConstraint
+from cascade.graph.build import build_graph
+from cascade.spec.constraint import ResourceConstraint
 
 
 def test_resource_constraint_definition():

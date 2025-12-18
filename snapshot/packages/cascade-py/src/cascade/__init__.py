@@ -35,7 +35,7 @@ from .testing import override_resource
 from .tools.preview import dry_run
 from .tools.visualize import visualize
 from .tools.cli import cli
-from cascade.runtime.graph.serialize import to_json, from_json
+from cascade.graph.serialize import to_json, from_json
 
 
 # --- V1.3 Factory Functions ---

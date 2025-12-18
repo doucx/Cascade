@@ -1,109 +1,64 @@
-Excellent catch. You've pinpointed the exact line of failure. The error `assert 1 == 0` is the `pytest` representation of `assert result.exit_code == 0` failing because `result.exit_code` was `1`.
+好的，我们将创建这个提交，它标志着核心控制平面测试覆盖的重大飞跃。
 
-## [WIP] This is a classic and subtle error when testing asynchronous code.
-
-### 错误分析
-
-**根本原因：使用同步 Mock 模拟异步函数 (Sync Mock for Async Function)**
-
-1.  **目标函数是异步的**: The function we are patching, `_publish_pause`, is an `async def` function.
-2.  **`asyncio.run()` 的契约**: The `cs-controller pause` command uses `asyncio.run()` to execute it. `asyncio.run()` **must** be given a coroutine object (the result of calling an `async def` function).
-3.  **Mock 类型不匹配**: Our test fixture, `mock_publish_pause`, uses `unittest.mock.MagicMock`. `MagicMock` is a **synchronous** mock. When it's called, it returns another `MagicMock` instance, not a coroutine.
-4.  **运行时错误**: When `asyncio.run()` receives the synchronous mock object, it immediately fails with a `TypeError` because it wasn't given an awaitable.
-5.  **測試失敗**: The `typer.testing.CliRunner` catches this `TypeError` inside the command, causing the command to exit with a non-zero status code (`1`).
-6.  **断言失败**: The test's assertion, `assert result.exit_code == 0`, therefore fails, which you correctly identified as `assert 1 == 0`.
+## [COMMIT] feat(test): 实现控制平面与遥测的全面回归测试套件
 
 ### 用户需求
-The CLI test for `cs-controller` must correctly mock the asynchronous `_publish_pause` function so the test can pass and properly verify the command's behavior.
+为 Cascade 的动态控制和遥测系统建立一套健壮的、确定性的集成与回归测试，以防止异步时序问题和数据契约（Payload Schema）不匹配的回归。
 
 ### 评论
-This is a fantastic example of why understanding the nuances of `asyncio` testing is so important. The fix is simple, but it requires correctly identifying the mismatch between the asynchronous nature of the code and the synchronous nature of the mock being used.
+这个提交彻底解决了异步测试的脆弱性，将测试重点从不可靠的 `asyncio.sleep` 转移到了确定性的状态同步。新的测试架构通过以下方式提升了系统质量：
+1.  **确定性异步**: `InProcessConnector` 确保了保留消息的同步投递，消除了 Engine 启动时的竞争条件。
+2.  **契约验证**: 引入了 Telemetry Contract Test，保证了事件生产者和消费者之间的 JSON 结构一致性。
+3.  **CLI 覆盖**: 增加了 `cs-controller` 的基本功能测试，修复了 mock 类型错误，提高了 CLI 应用的覆盖率。
 
 ### 目标
-Modify the `mock_publish_pause` fixture in `tests/cli-controller/test_controller_cli.py` to use `unittest.mock.AsyncMock` instead of `MagicMock`.
+1.  创建并集成 `InProcessConnector` 和 `ControllerTestApp` 作为核心 E2E 测试工具。
+2.  实现针对“启动时暂停/恢复”场景的 E2E 验证，保证约束的可靠性。
+3.  实现 Telemetry 事件流的端到端数据契约验证。
+4.  增加 `cs-controller` 的 CLI 接口测试，保证其用户体验的稳定性。
 
 ### 基本原理
-`unittest.mock.AsyncMock` is the correct tool for this job. It is specifically designed to mock `async` functions. When called, it returns an awaitable, which satisfies the contract of `asyncio.run()`. This will prevent the `TypeError`, allow the command to complete with an exit code of `0`, and enable our test to correctly assert that the function was called with the expected arguments.
+通过将复杂的异步交互逻辑封装到 `InProcessConnector` 这样的确定性测试工具中，我们将测试的焦点重新聚集到业务逻辑和组件间的数据契约上。这遵循了我们“确定性异步测试”的原则，为 Cascade 的核心功能提供了长期的稳定性保障。
 
 ### 标签
-#intent/fix #intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/async-mocking #task/action/fix
+#intent/tooling #flow/done #priority/high
+#comp/tests #comp/cli #comp/runtime #concept/executor #concept/config #concept/ui
+#ai/brainstorm
+#task/domain/testing #task/object/control-plane #task/action/implementation
+#task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: Fix the Mock Type in `test_controller_cli.py`
-
-We will change the import from `MagicMock` to `AsyncMock` and update the fixture to use the correct mock type.
+#### Acts 1: 添加所有新的和修改的测试文件以及包结构
 
 ~~~~~act
-patch_file
+git_add
+tests/__init__.py
+tests/py/__init__.py
+tests/py/e2e/__init__.py
+tests/py/e2e/harness.py
+tests/py/e2e/test_e2e_control_plane.py
 tests/cli-controller/test_controller_cli.py
-~~~~~
-~~~~~python
-import pytest
-from typer.testing import CliRunner
-from unittest.mock import patch, MagicMock
-
-from cascade.cli.controller.app import app
-
-runner = CliRunner()
-
-@pytest.fixture
-def mock_publish_pause():
-    with patch("cascade.cli.controller.app._publish_pause", new_callable=MagicMock) as mock:
-        yield mock
-
-def test_pause_command_dispatches_correctly(mock_publish_pause):
-    """
-    Tests that the 'cs-controller pause' CLI command correctly parses arguments
-    and calls the underlying business logic function.
-    """
-    # Act: Simulate command line invocation
-    result = runner.invoke(app, ["pause", "task:my-task", "--ttl", "300"])
-
-    # Assert: The command executed successfully and called our logic function
-    assert result.exit_code == 0
-    mock_publish_pause.assert_called_once()
-    
-    # Assert that arguments were parsed and passed correctly
-    call_args = mock_publish_pause.call_args
-    assert call_args.kwargs['scope'] == 'task:my-task'
-    assert call_args.kwargs['ttl'] == 300
-    assert call_args.kwargs['hostname'] == 'localhost' # Verifies default value
-~~~~~
-~~~~~python
-import pytest
-from typer.testing import CliRunner
-from unittest.mock import patch, AsyncMock
-
-from cascade.cli.controller.app import app
-
-runner = CliRunner()
-
-@pytest.fixture
-def mock_publish_pause():
-    with patch("cascade.cli.controller.app._publish_pause", new_callable=AsyncMock) as mock:
-        yield mock
-
-def test_pause_command_dispatches_correctly(mock_publish_pause):
-    """
-    Tests that the 'cs-controller pause' CLI command correctly parses arguments
-    and calls the underlying business logic function.
-    """
-    # Act: Simulate command line invocation
-    result = runner.invoke(app, ["pause", "task:my-task", "--ttl", "300"])
-
-    # Assert: The command executed successfully and called our logic function
-    assert result.exit_code == 0
-    mock_publish_pause.assert_called_once()
-    
-    # Assert that arguments were parsed and passed correctly
-    call_args = mock_publish_pause.call_args
-    assert call_args.kwargs['scope'] == 'task:my-task'
-    assert call_args.kwargs['ttl'] == 300
-    assert call_args.kwargs['hostname'] == 'localhost' # Verifies default value
+tests/cli-observer/test_telemetry_contract.py
 ~~~~~
 
-### 下一步建议
-This should be the final fix required to get the entire test suite to a "green" state. Please run the tests again. Once they all pass, we can create a single `[COMMIT]` plan that incorporates all the testing improvements we've made.
+#### Acts 2: 执行提交
+
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(test): Implement comprehensive regression suite for control plane and telemetry
+
+This commit introduces a set of critical integration tests and supporting infrastructure to guard against the recurrence of timing and contract-based bugs in the dynamic control plane.
+
+Key deliverables:
+1. **Deterministic Test Harness**: Introduced `tests/py/e2e/harness.py` containing `InProcessConnector` and `ControllerTestApp` for reliable, in-memory simulation of MQTT broker and controller interactions.
+2. **Startup Race Regression Test**: `test_e2e_control_plane.py` definitively verifies that a pre-existing `pause` constraint is respected immediately upon `Engine.run()` starting, and that `resume` correctly unblocks execution.
+3. **Telemetry Contract Test**: `test_telemetry_contract.py` ensures the JSON payload structure is consistently generated by the `TelemetrySubscriber` and consumed by the `cs-observer` handler, preventing payload schema drift errors.
+4. **CLI Coverage**: Added `test_controller_cli.py` to test argument parsing and command dispatching for `cs-controller`, addressing previous coverage gaps.
+
+This infrastructure significantly enhances the test suite's reliability and developer experience.
+~~~~~

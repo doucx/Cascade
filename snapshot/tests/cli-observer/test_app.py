@@ -1,42 +1,3 @@
-是的，为 `cs-observer` 编写测试套件是绝对正确的下一步。
-
-根据我们的测试原则，我们必须在功能完成后立即为其编写测试，以验证其行为并防止未来的重构破坏现有功能。
-
-我将为你生成一个计划，创建一个新的集成测试套件。这个测试套件将严格遵循**“验证意图而非实现”**的原则。我们将通过 Mock `MqttConnector` 和 `MessageBus` 来隔离外部依赖，并将测试的焦点集中在验证 `on_message` 回调函数是否能正确解析遥测数据，并调用消息总线传递**正确的语义 ID 和数据**。
-
-## [WIP] test: Create integration test suite for cs-observer
-
-### 用户需求
-为 `cs-observer` 的核心消息处理逻辑 (`on_message` 回调) 创建一个健壮的、可维护的集成测试套件。
-
-### 评论
-这是一个至关重要的步骤，它确保了我们核心调试工具的可靠性。通过采用 Mock-based 的集成测试策略，我们可以精确地验证 `cs-observer` 的业务逻辑，而无需依赖一个活动的 MQTT Broker 或检查脆弱的、易变的终端输出字符串。这使得测试运行得更快、更稳定，并且完全符合项目的测试哲学。
-
-### 目标
-1.  创建一个新的测试文件 `tests/cli-observer/test_app.py`。
-2.  在测试文件中，创建 `pytest` fixtures 来 Mock `MqttConnector` 和全局 `MessageBus`。
-3.  编写一系列测试用例，模拟不同类型的遥测事件（`RUNNING`, `COMPLETED`, `FAILED` 等）。
-4.  在每个测试用例中，断言 `MessageBus` 的 `info` 方法被以预期的**语义消息 ID** 和**数据负载**调用。
-
-### 基本原理
-我们将遵循 `d3-principle-python-testing-mock-intent` 原则。测试的核心是验证 `on_message` 函数的行为契约。这个契约是：当给定一个特定的遥测 `payload` 时，它必须调用 `bus.info` 并传递一个特定的 `msg_id` 和一组从 `payload` 中提取出的 `kwargs`。我们不关心这些信息最终被 `RichCliRenderer` 渲染成了什么颜色或文本，只关心这个“意图”是否被正确地传达了。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/cli #concept/telemetry #scope/dx #ai/instruct #task/domain/cli #task/object/observer-tool #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 Observer 的测试文件和 Fixtures
-
-我们将创建新的测试文件，并设置好用于 Mock 消息总线和连接器的 `pytest` Fixtures。
-
-~~~~~act
-write_file
-tests/cli-observer/test_app.py
-~~~~~
-~~~~~python
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
@@ -177,4 +138,3 @@ async def test_on_message_prints_run_header_only_once(mock_messaging_bus):
         call.args[0] != "observer.telemetry.run_header"
         for call in mock_messaging_bus.info.call_args_list[1:]
     )
-~~~~~

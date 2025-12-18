@@ -83,6 +83,19 @@ async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
     pytest.fail(f"Timeout waiting for task '{task_name}' to finish.")
 
 
+async def wait_for_task_start(spy, task_name: str, timeout: float = 2.0):
+    """Helper coroutine to wait for a specific task to start."""
+    from cascade.runtime.events import TaskExecutionStarted
+
+    start_time = asyncio.get_event_loop().time()
+    while asyncio.get_event_loop().time() - start_time < timeout:
+        started_events = spy.events_of_type(TaskExecutionStarted)
+        if any(e.task_name == task_name for e in started_events):
+            return
+        await asyncio.sleep(0.01)
+    pytest.fail(f"Timeout waiting for task '{task_name}' to start.")
+
+
 # --- Test Cases ---
 
 @pytest.mark.asyncio
@@ -223,10 +236,13 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
     # 2. Start the engine in a concurrent task
     run_task = asyncio.create_task(engine.run(workflow))
 
-    # 3. Wait for the first task to complete
-    await wait_for_task_finish(spy, "task_a")
+    # 3. Wait for the first task to START.
+    # We want to inject the pause while A is running (or at least before B starts).
+    # Since Engine awaits tasks in a stage, injecting here ensures the constraint
+    # is ready when Engine wakes up for Stage 2.
+    await wait_for_task_start(spy, "task_a")
 
-    # 4. Inject the pause command
+    # 4. Inject the pause command immediately
     pause_payload = {
         "id": "global-pause",
         "scope": "global",
@@ -235,8 +251,11 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
     }
     await mock_connector._trigger_message("cascade/constraints/control", pause_payload)
 
-    # 5. Wait a moment to see if the engine schedules the next task
-    await asyncio.sleep(0.2)  # Longer than engine's internal sleep
+    # 5. Wait to ensure A finishes and Engine has had time to process Stage 2 logic
+    # We wait for A to finish first
+    await wait_for_task_finish(spy, "task_a")
+    # Then wait a bit more to allow Engine to potentially (incorrectly) start B
+    await asyncio.sleep(0.2)
 
     # 6. Assert based on the event stream
     started_task_names = {

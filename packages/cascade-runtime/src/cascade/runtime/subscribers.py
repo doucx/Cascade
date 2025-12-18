@@ -2,7 +2,7 @@ import platform
 import os
 from datetime import datetime, timezone
 from .bus import MessageBus
-from ..messaging.bus import bus as messaging_bus
+from cascade.common.messaging import bus
 from .events import (
     RunStarted,
     RunFinished,
@@ -32,30 +32,30 @@ class HumanReadableLogSubscriber:
         event_bus.subscribe(TaskRetrying, self.on_task_retrying)
 
     def on_run_started(self, event: RunStarted):
-        messaging_bus.info("run.started", target_tasks=event.target_tasks)
+        bus.info("run.started", target_tasks=event.target_tasks)
         if event.params:
-            messaging_bus.info("run.started_with_params", params=event.params)
+            bus.info("run.started_with_params", params=event.params)
 
     def on_run_finished(self, event: RunFinished):
         if event.status == "Succeeded":
-            messaging_bus.info("run.finished_success", duration=event.duration)
+            bus.info("run.finished_success", duration=event.duration)
         else:
-            messaging_bus.error(
+            bus.error(
                 "run.finished_failure", duration=event.duration, error=event.error
             )
 
     def on_task_started(self, event: TaskExecutionStarted):
-        messaging_bus.info("task.started", task_name=event.task_name)
+        bus.info("task.started", task_name=event.task_name)
 
     def on_task_finished(self, event: TaskExecutionFinished):
         if event.status == "Succeeded":
-            messaging_bus.info(
+            bus.info(
                 "task.finished_success",
                 task_name=event.task_name,
                 duration=event.duration,
             )
         else:
-            messaging_bus.error(
+            bus.error(
                 "task.finished_failure",
                 task_name=event.task_name,
                 duration=event.duration,
@@ -63,12 +63,12 @@ class HumanReadableLogSubscriber:
             )
 
     def on_task_skipped(self, event: TaskSkipped):
-        messaging_bus.info(
+        bus.info(
             "task.skipped", task_name=event.task_name, reason=event.reason
         )
 
     def on_task_retrying(self, event: TaskRetrying):
-        messaging_bus.warning(
+        bus.warning(
             "task.retrying",
             task_name=event.task_name,
             attempt=event.attempt,

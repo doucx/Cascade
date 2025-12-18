@@ -1,0 +1,20 @@
+from typing import Protocol, Any
+
+
+class Renderer(Protocol):
+    """
+    Protocol defining the interface for all message renderers.
+    A renderer is responsible for taking a final, formatted message string
+    and presenting it to the user (e.g., printing to console, logging).
+    """
+
+    def render(self, msg_id: str, level: str, **kwargs: Any) -> None:
+        """
+        The core rendering method.
+
+        Args:
+            msg_id: The semantic ID of the message (e.g., "run.started").
+            level: The log level of the message ("info", "warning", "error").
+            **kwargs: The context data for the message template.
+        """
+        ...

@@ -88,9 +88,8 @@ def __getattr__(name: str) -> Any:
 
 
 # --- Main Run Entrypoint ---
-
-from .messaging.bus import bus as messaging_bus
-from .messaging.renderer import CliRenderer, JsonRenderer
+from cascade.common.messaging import bus
+from cascade.runtime.renderers import CliRenderer, JsonRenderer
 
 
 def run(
@@ -108,8 +107,8 @@ def run(
     if log_format == "json":
         renderer = JsonRenderer(min_level=log_level)
     else:
-        renderer = CliRenderer(store=messaging_bus.store, min_level=log_level)
-    messaging_bus.set_renderer(renderer)
+        renderer = CliRenderer(store=bus.store, min_level=log_level)
+    bus.set_renderer(renderer)
 
     # 2. Setup the event system
     event_bus = MessageBus()

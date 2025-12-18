@@ -1,7 +1,9 @@
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol
+from typing import Any, Dict, Optional
+
+from .protocols import Renderer
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +16,7 @@ class MessageStore:
 
     def _find_locales_dir(self) -> Optional[Path]:
         try:
+            # Assumes locales is in a directory relative to this file
             locales_path = Path(__file__).parent.parent / "locales"
             if locales_path.is_dir():
                 return locales_path
@@ -46,10 +49,6 @@ class MessageStore:
             return f"<Formatting error for '{msg_id}': missing key {e}>"
 
 
-class Renderer(Protocol):
-    def render(self, msg_id: str, level: str, **kwargs: Any) -> None: ...
-
-
 class MessageBus:
     def __init__(self, store: MessageStore):
         self._store = store
@@ -65,8 +64,6 @@ class MessageBus:
     def _render(self, level: str, msg_id: str, **kwargs: Any) -> None:
         if not self._renderer:
             return
-
-        # The renderer is now responsible for everything
         self._renderer.render(msg_id, level, **kwargs)
 
     def info(self, msg_id: str, **kwargs: Any) -> None:
@@ -79,5 +76,6 @@ class MessageBus:
         self._render("error", msg_id, **kwargs)
 
 
+# Global singleton instance
 _default_store = MessageStore(locale="en")
 bus = MessageBus(store=_default_store)

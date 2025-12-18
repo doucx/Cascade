@@ -1,4 +1,5 @@
 import asyncio
+import time
 import typer
 import uuid
 from dataclasses import asdict
@@ -13,7 +14,7 @@ app = typer.Typer(
 )
 
 
-async def _publish_pause(scope: str, hostname: str, port: int):
+async def _publish_pause(scope: str, ttl: int | None, hostname: str, port: int):
     """Core logic for publishing a pause constraint."""
     connector = MqttConnector(hostname=hostname, port=port)
     try:
@@ -23,8 +24,14 @@ async def _publish_pause(scope: str, hostname: str, port: int):
 
         # Create a unique, descriptive ID for the constraint
         constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
+        expires_at = time.time() + ttl if ttl else None
+
         constraint = GlobalConstraint(
-            id=constraint_id, scope=scope, type="pause", params={}
+            id=constraint_id,
+            scope=scope,
+            type="pause",
+            params={},
+            expires_at=expires_at,
         )
 
         # Convert to dictionary for JSON serialization
@@ -76,6 +83,7 @@ async def _publish_limit(
     scope: str,
     concurrency: int | None,
     rate: str | None,
+    ttl: int | None,
     hostname: str,
     port: int,
 ):
@@ -87,6 +95,7 @@ async def _publish_limit(
         bus.info("controller.connected")
 
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
+        expires_at = time.time() + ttl if ttl else None
 
         if concurrency is not None:
             constraint_id = f"concurrency-{scope}-{uuid.uuid4().hex[:8]}"
@@ -95,6 +104,7 @@ async def _publish_limit(
                 scope=scope,
                 type="concurrency",
                 params={"limit": concurrency},
+                expires_at=expires_at,
             )
             bus.info(
                 "controller.publishing_limit",
@@ -111,6 +121,7 @@ async def _publish_limit(
                 scope=scope,
                 type="rate_limit",
                 params={"rate": rate},
+                expires_at=expires_at,
             )
             bus.info(
                 "controller.publishing_rate", scope=scope, topic=topic, rate=rate
@@ -139,6 +150,9 @@ def set_limit(
     rate: str = typer.Option(
         None, "--rate", help="The rate limit (e.g., '10/m', '5/s')."
     ),
+    ttl: int = typer.Option(
+        None, "--ttl", help="Time to live in seconds. Constraint expires automatically."
+    ),
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
@@ -156,6 +170,7 @@ def set_limit(
                 scope=scope,
                 concurrency=concurrency,
                 rate=rate,
+                ttl=ttl,
                 hostname=hostname,
                 port=port,
             )
@@ -170,6 +185,9 @@ def pause(
         "global",
         help="The scope to pause (e.g., 'global', 'project:etl', 'task:api_call').",
     ),
+    ttl: int = typer.Option(
+        None, "--ttl", help="Time to live in seconds. Pause expires automatically."
+    ),
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
@@ -179,7 +197,9 @@ def pause(
     match the specified scope until a 'resume' command is sent.
     """
     try:
-        asyncio.run(_publish_pause(scope=scope, hostname=hostname, port=port))
+        asyncio.run(
+            _publish_pause(scope=scope, ttl=ttl, hostname=hostname, port=port)
+        )
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 

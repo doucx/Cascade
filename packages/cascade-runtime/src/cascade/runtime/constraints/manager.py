@@ -1,3 +1,4 @@
+import time
 from typing import Dict, Any
 from cascade.spec.constraint import GlobalConstraint
 from cascade.graph.model import Node
@@ -46,9 +47,25 @@ class ConstraintManager:
         """Adds a new constraint or updates an existing one."""
         self._constraints[constraint.id] = constraint
 
+        # Schedule wakeup if TTL is set
+        if constraint.expires_at:
+            now = time.time()
+            if constraint.expires_at > now:
+                self.request_wakeup(constraint.expires_at - now)
+
         handler = self._handlers.get(constraint.type)
         if handler:
             handler.on_constraint_add(constraint, self)
+
+    def _remove_constraint_by_id(self, cid: str) -> None:
+        """Helper to remove a constraint and notify handler."""
+        if cid not in self._constraints:
+            return
+        constraint = self._constraints[cid]
+        handler = self._handlers.get(constraint.type)
+        if handler:
+            handler.on_constraint_remove(constraint, self)
+        del self._constraints[cid]
 
     def remove_constraints_by_scope(self, scope: str) -> None:
         """Removes all constraints that match the given scope."""
@@ -56,19 +73,36 @@ class ConstraintManager:
             cid for cid, c in self._constraints.items() if c.scope == scope
         ]
         for cid in ids_to_remove:
-            constraint = self._constraints[cid]
-            handler = self._handlers.get(constraint.type)
-            if handler:
-                handler.on_constraint_remove(constraint, self)
-            del self._constraints[cid]
+            self._remove_constraint_by_id(cid)
+
+    def cleanup_expired_constraints(self) -> None:
+        """Removes constraints that have exceeded their TTL."""
+        now = time.time()
+        expired_ids = [
+            cid
+            for cid, c in self._constraints.items()
+            if c.expires_at is not None and c.expires_at <= now
+        ]
+
+        for cid in expired_ids:
+            self._remove_constraint_by_id(cid)
+
+        # Reschedule wakeup for the next earliest expiration if any remain
+        next_expiry = None
+        for c in self._constraints.values():
+            if c.expires_at and c.expires_at > now:
+                if next_expiry is None or c.expires_at < next_expiry:
+                    next_expiry = c.expires_at
+
+        if next_expiry:
+            # We add a small buffer (0.1s) to ensure we wake up strictly after expiration
+            self.request_wakeup(max(0, next_expiry - now + 0.1))
 
     def check_permission(self, task: Node) -> bool:
         """
         Evaluates all active constraints against a task. If any handler denies
         permission, the task is deferred.
         """
-        # TODO: Implement expiry logic (check constraint.expires_at)
-
         for constraint in self._constraints.values():
             handler = self._handlers.get(constraint.type)
             if not handler:

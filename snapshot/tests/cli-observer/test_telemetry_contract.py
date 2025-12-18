@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from unittest.mock import MagicMock
 
 from cascade.runtime.events import TaskExecutionFinished

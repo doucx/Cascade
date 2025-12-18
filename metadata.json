@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复引擎启动时的遥测竞态问题与运行时约束更新延迟", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766065314.1882153, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复调度循环重构引入的异常和.map()目标解析回归", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766065556.3356724, "duration_ms": 0}}

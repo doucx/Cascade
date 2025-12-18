@@ -196,10 +196,17 @@ class Engine:
             # Wakeup task for constraint changes
             wakeup_task = asyncio.create_task(self._wakeup_event.wait())
 
+            # Nodes to be processed in the current stage
+            pending_nodes = {node.id: node for node in stage}
+            # Tasks currently running in asyncio
+            running_tasks: Dict[asyncio.Task, str] = {}
+            # Wakeup task for constraint changes
+            wakeup_task = asyncio.create_task(self._wakeup_event.wait())
+            first_exception: Optional[Exception] = None
+
             while pending_nodes or running_tasks:
-                # 1. Schedule new tasks if possible
-                if pending_nodes:
-                    # Find nodes whose dependencies are met and are not constrained
+                # 1. Schedule new tasks if possible, but only if no failure has occurred
+                if pending_nodes and not first_exception:
                     schedulable_nodes = []
                     deferred_nodes = {}
                     for node_id, node in pending_nodes.items():
@@ -209,12 +216,10 @@ class Engine:
                             deferred_nodes[node_id] = node
 
                     for node in schedulable_nodes:
-                        # Skip params, they don't execute
                         if node.node_type == "param":
                             del pending_nodes[node.id]
                             continue
                         
-                        # Check for skips (run_if, etc.)
                         skip_reason = self.flow_manager.should_skip(node, state_backend)
                         if skip_reason:
                             state_backend.mark_skipped(node.id, skip_reason)
@@ -224,7 +229,6 @@ class Engine:
                             del pending_nodes[node.id]
                             continue
 
-                        # Create and track the task
                         coro = self._execute_node_with_policies(
                             node, graph, state_backend, active_resources, run_id, params
                         )
@@ -234,7 +238,7 @@ class Engine:
 
                     pending_nodes = deferred_nodes
 
-                if not running_tasks and not pending_nodes:
+                if not running_tasks and (not pending_nodes or first_exception):
                     break
 
                 # 2. Wait for something to happen
@@ -249,7 +253,6 @@ class Engine:
                         self._wakeup_event.clear()
                         wakeup_task = asyncio.create_task(self._wakeup_event.wait())
                         self.constraint_manager.cleanup_expired_constraints()
-                        # Re-add deferred nodes to pending to re-check permissions
                         for node_id, node in pending_nodes.items():
                              pending_nodes[node_id] = node
                         continue
@@ -263,14 +266,22 @@ class Engine:
                                 node_id, result, state_backend
                             )
                     except Exception as e:
-                        # The exception will be re-raised at the end by engine.run()
-                        # We just need to stop tracking it.
-                        # Error events are already published inside _execute_node...
-                        pass
-            
+                        if not first_exception:
+                            first_exception = e
+                        # Once an error occurs, cancel remaining running tasks in the stage
+                        for t in running_tasks:
+                            t.cancel()
+
             # Clean up the wakeup task if the stage finishes
             if not wakeup_task.done():
                 wakeup_task.cancel()
+                try:
+                    await wakeup_task
+                except asyncio.CancelledError:
+                    pass
+            
+            if first_exception:
+                raise first_exception
 
         if not state_backend.has_result(target._uuid):
             if skip_reason := state_backend.get_skip_reason(target._uuid):

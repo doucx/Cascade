@@ -118,7 +118,9 @@ class Connector(Protocol):
         """Disconnects from the external system and cleans up resources."""
         ...
 
-    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
+    async def publish(
+        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
+    ) -> None:
         """Publishes a message (e.g., a telemetry event) to a specific topic."""
         ...
 

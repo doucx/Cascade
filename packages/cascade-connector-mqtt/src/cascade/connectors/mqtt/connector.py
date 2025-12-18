@@ -71,7 +71,9 @@ class MqttConnector:
             await self._client.__aexit__(None, None, None)
             self._client = None
 
-    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
+    async def publish(
+        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
+    ) -> None:
         """
         Publishes a message in a non-blocking, fire-and-forget manner.
         """
@@ -81,8 +83,15 @@ class MqttConnector:
 
         async def _do_publish():
             try:
-                json_payload = json.dumps(payload)
-                await self._client.publish(topic, payload=json_payload, qos=qos)
+                # Support both dicts (for JSON) and empty strings (for clearing retained)
+                if isinstance(payload, dict):
+                    final_payload = json.dumps(payload)
+                else:
+                    final_payload = payload
+
+                await self._client.publish(
+                    topic, payload=final_payload, qos=qos, retain=retain
+                )
             except Exception as e:
                 # Per Fail-Silent Telemetry principle, we log errors but don't propagate them.
                 logger.error(f"Failed to publish MQTT message to topic '{topic}': {e}")
@@ -130,8 +139,12 @@ class MqttConnector:
                         payload_str = payload_bytes.decode("utf-8")
                     else:
                         payload_str = str(payload_bytes)
-
-                    data = json.loads(payload_str)
+                    
+                    # If the payload is empty (resume command), pass an empty dict
+                    if not payload_str:
+                        data = {}
+                    else:
+                        data = json.loads(payload_str)
 
                     # Execute callback (fire and forget, or await?)
                     # Since we are in a loop, we should probably await to preserve order,

@@ -281,3 +281,81 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
         await run_task
     except asyncio.CancelledError:
         pass
+
+
+@pytest.mark.asyncio
+async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):
+    """
+    End-to-end test for task-specific pause and resume functionality.
+    """
+    from cascade.spec.task import task
+    from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
+
+    bus, spy = bus_and_spy
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(),
+        bus=bus,
+        connector=mock_connector,
+    )
+
+    # 1. Workflow: A -> B -> C
+    @task
+    def task_a():
+        return "A"
+
+    @task
+    def task_b(a):
+        return f"B after {a}"
+
+    @task
+    def task_c(b):
+        return f"C after {b}"
+
+    workflow = task_c(task_b(task_a()))
+
+    # 2. Start the engine in a background task
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # 3. Wait for 'task_a' to finish. This ensures the engine is ready for 'task_b'.
+    await wait_for_task_finish(spy, "task_a")
+
+    # 4. Inject a PAUSE command specifically for 'task_b'
+    pause_scope = "task:task_b"
+    pause_payload = {
+        "id": "pause-b",
+        "scope": pause_scope,
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message(
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", pause_payload
+    )
+
+    # 5. Wait briefly and assert that 'task_b' has NOT started
+    await asyncio.sleep(0.2)
+    started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
+    assert "task_b" not in started_tasks, "'task_b' started despite pause constraint"
+
+    # 6. Inject a RESUME command for 'task_b'
+    # An empty payload on a retained topic clears the constraint.
+    await mock_connector._trigger_message(
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", ""
+    )
+
+    # 7. Wait for the rest of the workflow to complete
+    await wait_for_task_finish(spy, "task_c", timeout=1.0)
+
+    # 8. Final assertions on the complete event stream
+    finished_tasks = {
+        e.task_name
+        for e in spy.events_of_type(TaskExecutionFinished)
+        if e.status == "Succeeded"
+    }
+    assert finished_tasks == {"task_a", "task_b", "task_c"}
+
+    # 9. Verify the final result
+    final_result = await run_task
+    # Note: Since we use MockExecutor, the result is the fixed string it returns,
+    # not the result of the actual task function.
+    assert final_result == "Result for task_c"

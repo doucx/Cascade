@@ -17,3 +17,6 @@ cascade = "cascade.cli.main:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade/cli"]
+
+[tool.hatch.metadata]
+allow-direct-references = true

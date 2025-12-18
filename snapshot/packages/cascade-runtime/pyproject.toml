@@ -16,3 +16,6 @@ csp_solver = ["python-constraint"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true

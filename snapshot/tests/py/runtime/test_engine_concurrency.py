@@ -45,9 +45,9 @@ class MockConnector(Connector):
         # This simulates MQTT behavior
         for retained_topic, payload in self.retained_messages.items():
             if self._topic_matches(subscription=topic, topic=retained_topic):
-                # Dispatch in background to simulate async network I/O
-                # ensuring subscribe returns quickly
-                asyncio.create_task(callback(retained_topic, payload))
+                # For testing purposes, we await the callback to ensure
+                # the initial state is consistent before the engine starts scheduling.
+                await callback(retained_topic, payload)
 
     async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
         """Helper to simulate receiving a live message."""

@@ -112,6 +112,52 @@ def resume(
         bus.info("observer.shutdown")
 
 
+async def _publish_limit(scope: str, limit: int, hostname: str, port: int):
+    """Core logic for publishing a concurrency limit constraint."""
+    connector = MqttConnector(hostname=hostname, port=port)
+    try:
+        bus.info("controller.connecting", hostname=hostname, port=port)
+        await connector.connect()
+        bus.info("controller.connected")
+
+        constraint_id = f"limit-{scope}-{uuid.uuid4().hex[:8]}"
+        constraint = GlobalConstraint(
+            id=constraint_id,
+            scope=scope,
+            type="concurrency",
+            params={"limit": limit}
+        )
+        payload = asdict(constraint)
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+
+        bus.info("controller.publishing", scope=scope, topic=topic)
+        await connector.publish(topic, payload, retain=True)
+
+        await asyncio.sleep(0.1)
+        bus.info("controller.publish_success")
+
+    except Exception as e:
+        bus.error("controller.error", error=e)
+    finally:
+        await connector.disconnect()
+
+
+@app.command(name="set-limit")
+def set_limit(
+    scope: str = typer.Argument(..., help="The scope (e.g., 'task:api_call')."),
+    concurrency: int = typer.Option(..., "--concurrency", "-c", help="Max concurrent executions."),
+    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
+    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
+):
+    """
+    Publish a concurrency limit constraint.
+    """
+    try:
+        asyncio.run(_publish_limit(scope=scope, limit=concurrency, hostname=hostname, port=port))
+    except KeyboardInterrupt:
+        bus.info("observer.shutdown")
+
+
 def main():
     bus.set_renderer(CliRenderer(store=bus.store))
     app()

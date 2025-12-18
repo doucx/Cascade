@@ -119,20 +119,74 @@ class ArgumentResolver:
         return args, final_kwargs
 
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from cascade.runtime.constraints import ConstraintManager
+
+
 class ConstraintResolver:
     """
     Responsible for resolving dynamic resource constraints for a node.
     """
 
+    def __init__(self, constraint_manager: "ConstraintManager" = None):
+        self.constraint_manager = constraint_manager
+
     def resolve(
         self, node: Node, graph: Graph, state_backend: StateBackend
     ) -> Dict[str, Any]:
-        if not node.constraints or node.constraints.is_empty():
-            return {}
-
         resolved = {}
 
-        constraint_edges = [
+        # 1. Resolve explicit constraints from Node definition
+        if node.constraints and not node.constraints.is_empty():
+            constraint_edges = [
+                e
+                for e in graph.edges
+                if e.target.id == node.id and e.edge_type == EdgeType.CONSTRAINT
+            ]
+
+            for res, amount in node.constraints.requirements.items():
+                if isinstance(amount, (LazyResult, MappedLazyResult)):
+                    constraint_edge = next(
+                        (e for e in constraint_edges if e.arg_name == res), None
+                    )
+
+                    if constraint_edge is None:
+                        raise RuntimeError(
+                            f"Internal Error: Missing constraint edge for dynamic requirement '{res}' on task '{node.name}'"
+                        )
+
+                    if state_backend.has_result(constraint_edge.source.id):
+                        resolved[res] = state_backend.get_result(constraint_edge.source.id)
+                    else:
+                        raise DependencyMissingError(
+                            node.id, f"constraint:{res}", constraint_edge.source.id
+                        )
+                else:
+                    resolved[res] = amount
+
+        # 2. Resolve implicit constraints from ConstraintManager (Global/External)
+        if self.constraint_manager:
+            # We iterate over all constraints to find concurrency limits that apply to this node.
+            # This is O(N_constraints), usually small.
+            for constraint in self.constraint_manager._constraints.values():
+                if constraint.type == "concurrency":
+                    # Check scope match
+                    is_match = False
+                    if constraint.scope == "global":
+                        is_match = True
+                    elif constraint.scope.startswith("task:"):
+                        target_name = constraint.scope.split(":", 1)[1]
+                        if node.name == target_name:
+                            is_match = True
+                    
+                    if is_match:
+                        # Inject implicit requirement: 1 slot of the synthetic resource
+                        resource_key = f"constraint:concurrency:{constraint.scope}"
+                        resolved[resource_key] = 1
+
+        return resolved
             e
             for e in graph.edges
             if e.target.id == node.id and e.edge_type == EdgeType.CONSTRAINT

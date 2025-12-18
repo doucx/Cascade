@@ -22,10 +22,20 @@ class ResourceManager:
         self._condition = asyncio.Condition()
 
     def set_capacity(self, capacity: Dict[str, Union[int, float]]):
-        """Updates system capacity configuration."""
+        """Updates system capacity configuration (resets existing)."""
         self._capacity = {k: float(v) for k, v in capacity.items()}
         # Initialize usage for new keys if needed
         for k in self._capacity:
+            if k not in self._usage:
+                self._usage[k] = 0.0
+
+    def update_capacity(self, updates: Dict[str, Union[int, float]]):
+        """
+        Incrementally updates capacity for specific resources without clearing others.
+        Useful for dynamic constraints.
+        """
+        for k, v in updates.items():
+            self._capacity[k] = float(v)
             if k not in self._usage:
                 self._usage[k] = 0.0
 

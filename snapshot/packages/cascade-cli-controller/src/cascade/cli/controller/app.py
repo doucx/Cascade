@@ -72,6 +72,59 @@ async def _publish_resume(scope: str, hostname: str, port: int):
         await connector.disconnect()
 
 
+async def _publish_limit(scope: str, concurrency: int, hostname: str, port: int):
+    """Core logic for publishing a concurrency limit constraint."""
+    connector = MqttConnector(hostname=hostname, port=port)
+    try:
+        bus.info("controller.connecting", hostname=hostname, port=port)
+        await connector.connect()
+        bus.info("controller.connected")
+
+        constraint_id = f"concurrency-{scope}-{uuid.uuid4().hex[:8]}"
+        constraint = GlobalConstraint(
+            id=constraint_id,
+            scope=scope,
+            type="concurrency",
+            params={"limit": concurrency},
+        )
+
+        payload = asdict(constraint)
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+
+        bus.info("controller.publishing_limit", scope=scope, topic=topic, limit=concurrency)
+        await connector.publish(topic, payload, retain=True)
+
+        await asyncio.sleep(0.1)
+        bus.info("controller.publish_limit_success")
+
+    except Exception as e:
+        bus.error("controller.error", error=e)
+    finally:
+        await connector.disconnect()
+
+
+@app.command()
+def set_limit(
+    scope: str = typer.Option(
+        ..., "--scope", help="The scope to apply the limit to (e.g., 'global', 'task:api_call')."
+    ),
+    concurrency: int = typer.Option(
+        ..., "--concurrency", help="The maximum number of concurrent tasks."
+    ),
+    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
+    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
+):
+    """
+    Publish a 'concurrency' constraint to the MQTT broker.
+    """
+    try:
+        asyncio.run(
+            _publish_limit(scope=scope, concurrency=concurrency, hostname=hostname, port=port)
+        )
+    except KeyboardInterrupt:
+        bus.info("observer.shutdown")
+
+
 @app.command()
 def pause(
     scope: str = typer.Argument(

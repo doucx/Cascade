@@ -1,46 +1,3 @@
-这是一个非常好的建议。在增加更多复杂性之前，确保我们构建的基础是稳固、可测试且行为符合预期的，这是至关重要的工程实践。我们立即暂停新功能的开发，转而为已完成的约束同步机制添加测试。
-
-为了有效地测试 `Engine` 与 `Connector` 协议的交互，我们将创建一个 `MockConnector`，它允许我们在不依赖真实网络（如 MQTT）的情况下，精确地模拟消息的接收。
-
-我将生成一个计划来创建这个测试文件和相关的测试用例。
-
-## [WIP] test: 添加约束同步机制的集成测试
-
-### 用户需求
-在继续开发约束功能之前，为现有的 `Engine` 与 `Connector` 的集成（特别是约束订阅和更新机制）添加自动化测试。
-
-### 评论
-这是一个关键的、提升代码质量的步骤。通过引入 `MockConnector`，我们不仅可以验证 `Engine` 在理想情况下的行为，还能轻松地测试其对错误或异常输入的处理能力。这确保了我们的反馈回路入口是健壮的，为后续更复杂的约束逻辑提供了一个可靠的基础。
-
-### 目标
-1.  在 `cascade-runtime` 包中创建一个新的测试文件 `tests/runtime/test_engine_constraints.py`。
-2.  在该文件中实现一个 `MockConnector`，它遵循 `Connector` 协议，并允许我们手动触发消息回调。
-3.  编写一个测试用例，验证 `Engine` 在启动时会使用 `Connector` 订阅正确的约束主题。
-4.  编写一个核心测试用例，模拟 `MockConnector` 接收到一个有效的约束消息，并断言 `Engine` 的 `constraint_manager` 状态被正确更新。
-5.  编写一个负面测试用例，模拟接收到一个格式错误的约束消息，并验证 `Engine` 能够优雅地处理该错误而不会崩溃。
-
-### 基本原理
-我们遵循“依赖注入”和“面向协议编程”的测试原则。`Engine` 依赖的是 `Connector` 协议，而不是任何具体的实现。因此，我们可以注入一个完全受控的 `MockConnector` 来代替真实的 `MqttConnector`。这个 Mock 对象将记录对其方法的调用（如 `subscribe`），并提供一个方法来模拟消息的到达，从而让我们能够在一个隔离的、确定性的环境中，精确地验证 `Engine` 的集成逻辑。
-
-### 标签
-#intent/tooling #flow/ready #priority/high
-#comp/runtime #comp/tests #concept/constraints #concept/sync
-#ai/instruct
-#task/domain/testing #task/object/constraint-system #task/action/verification #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建测试文件并实现 MockConnector 和测试用例
-
-我们将一次性创建 `test_engine_constraints.py` 文件，其中包含 `MockConnector` 的实现和所有必要的测试用例。
-
-~~~~~act
-write_file
-packages/cascade-runtime/tests/runtime/test_engine_constraints.py
-~~~~~
-~~~~~python
 import asyncio
 from typing import Callable, Awaitable, Dict, Any, Optional
 
@@ -212,11 +169,3 @@ async def test_engine_handles_malformed_constraint_payload(
         await run_task
     except asyncio.CancelledError:
         pass
-~~~~~
-
-### 下一步建议
-我们已经为约束同步机制建立了坚实的测试基础，验证了 `Engine` 能够正确地订阅主题并根据接收到的消息更新其内部状态。
-
-现在，我们可以放心地回到我们之前暂停的计划：**在 `ConstraintManager` 中实现真正的约束评估逻辑**。
-
-我建议我们立即开始实施“全局暂停”功能，这将使我们刚刚测试过的整个反馈回路首次产生实际的、可观测的控制效果。如果你同意，我将重新生成该计划。

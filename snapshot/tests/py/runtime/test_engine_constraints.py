@@ -52,6 +52,9 @@ class MockConnector(Connector):
 
 class MockExecutor(Executor):
     async def execute(self, node, args, kwargs):
+        # Simulate execution time to allow test control flow to inject constraints
+        # while the engine is "busy" waiting for this task.
+        await asyncio.sleep(0.05)
         return f"Result for {node.name}"
 
 

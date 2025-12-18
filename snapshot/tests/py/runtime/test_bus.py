@@ -55,7 +55,7 @@ def test_message_bus_wildcard(bus_and_spy):
 
 
 from cascade.runtime.bus import MessageBus as EventBus
-from cascade.messaging.bus import bus as messaging_bus
+from cascade.common.messaging import bus as messaging_bus
 from cascade.messaging.renderer import CliRenderer
 
 

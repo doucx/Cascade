@@ -1,101 +1,69 @@
-You've found another excellent and subtle bug. My apologies. The `pytest` error trace is the smoking gun, and your analysis is spot on.
+Ah, the "ModuleNotFoundError: No module named 'cascade.messaging'" error. This is happening because we deleted the `cascade.messaging` module from `cascade-py` during our refactor, but we forgot to update the unit tests that were importing from it.
 
-This is a classic Python packaging mistake on my part, especially during a refactor.
+These tests are now trying to import code that no longer exists in that location. We need to refactor these tests to use the new `cascade-common` package structure and the updated `cascade-runtime` renderers.
 
-## [WIP] fix(build): Add missing __init__.py to new packages for proper discovery
+## [WIP] fix(tests): Migrate unit tests to use cascade-common messaging
 
-### 錯誤分析
-`pytest` fails during test collection with an `ImportError: cannot import name 'MessageStore' from 'cascade.common.messaging'`. The key part of the error is `(unknown location)`, which is a strong indicator of a namespace package problem.
-
-The root cause is that I created the directory `packages/cascade-common/src/cascade/common/messaging` and placed `bus.py` and `protocols.py` inside it, but I **failed to create an `__init__.py` file within that directory**.
-
-Without `__init__.py`, Python 3 treats `cascade.common.messaging` as an implicit "namespace package". When `cascade.runtime.renderers` tries to `from cascade.common.messaging import MessageStore`, the importer finds the `messaging` namespace but doesn't know to look *inside* the `bus.py` file to find the `MessageStore` class. This results in the `ImportError`.
+### 错误分析
+`pytest` 在收集测试时失败，因为 `tests/py/messaging/test_renderer.py` 和 `tests/py/runtime/test_bus.py` 仍在尝试从 `cascade.messaging` 导入模块。然而，作为我们之前的架构重构的一部分，该模块已被移除，其功能已迁移到 `cascade-common` 包（用于协议和核心总线）和 `cascade-runtime` 包（用于渲染器实现）。
 
 ### 用户需求
-修复项目结构，添加所有必需的 `__init__.py` 文件，以确保 Python's import system can correctly discover and load modules and their contents from the new `cascade-common` package, allowing `pytest` to run without import errors.
+修复失败的单元测试，使其适应新的消息总线架构。
 
 ### 评论
-This is a critical fix that corrects a fundamental Python packaging error. Properly defining packages with `__init__.py` files is essential for creating a reliable and predictable import structure. This fix will unblock the test suite and allow us to proceed with development on a stable foundation. It also highlights the value of running tests immediately after a refactor to catch such integration issues.
+维护一个健康、通过的测试套件是持续开发的关键。这次重构虽然改变了内部结构，但通过更新测试，我们可以确保这一变更没有破坏原有的功能契约，同时也验证了新架构的正确性。这是一个偿还技术债务和巩固架构变更的重要步骤。
 
 ### 目标
-1.  Create the missing `__init__.py` file in `packages/cascade-common/src/cascade/common/messaging`.
-2.  Populate this new `__init__.py` to expose the public API of the messaging module (like the global `bus` singleton), making it easier to import.
-3.  Add any other missing `__init__.py` files in the new package structures to ensure the entire `cascade` namespace is correctly constructed.
+1.  重构 `tests/py/messaging/test_renderer.py`：
+    *   更新导入路径：从 `cascade.runtime.renderers` 导入渲染器。
+    *   更新导入路径：从 `cascade.common.messaging` 导入 `MessageStore`。
+2.  重构 `tests/py/runtime/test_bus.py`：
+    *   更新导入路径：使用 `cascade.common.messaging.bus` 替代旧的 `cascade.messaging.bus`。
+3.  确保所有与消息总线相关的测试都能正确通过。
 
 ### 基本原理
-We will use `write_file` to create the necessary `__init__.py` files. The most important one, in `.../messaging/`, will not be empty; it will contain imports from its sibling modules (`bus.py`, `protocols.py`) to define the public API for the `cascade.common.messaging` package. This is a standard Python practice that makes packages easier to use and fixes the import resolution error.
+我们将使用 `patch_file` 指令来修改测试文件中的导入语句。这不仅能解决 `ModuleNotFoundError`，还能确保我们的测试代码准确反映了生产代码的现状。这验证了从 `cascade-py` 移除耦合的消息代码并将其放入 `cascade-common` 和 `cascade-runtime` 的决定是可行的。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/packaging #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/unit-tests #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Create `__init__.py` files for the `cascade.common` namespace
+#### Acts 1: 更新 `test_renderer.py`
 
-First, we need to ensure that `cascade` and `cascade.common` are themselves recognized as packages.
-
-~~~~~act
-write_file
-packages/cascade-common/src/cascade/__init__.py
-~~~~~
-~~~~~python
-# This must be the very first line to allow this package to coexist with other
-# namespace packages (like cascade-interfaces) in editable installs.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
-~~~~~
+我们需要更新此文件以从新的位置导入 `CliRenderer`, `JsonRenderer` 和 `MessageStore`。
 
 ~~~~~act
-write_file
-packages/cascade-common/src/cascade/common/__init__.py
+patch_file
+tests/py/messaging/test_renderer.py
 ~~~~~
 ~~~~~python
-# This space intentionally left blank.
+from cascade.messaging.renderer import CliRenderer, JsonRenderer
+from cascade.messaging.bus import MessageStore
+~~~~~
+~~~~~python
+from cascade.runtime.renderers import CliRenderer, JsonRenderer
+from cascade.common.messaging import MessageStore
 ~~~~~
 
-#### Acts 2: Create the critical `__init__.py` for the messaging package
+#### Acts 2: 更新 `test_bus.py`
 
-This is the core of the fix. We'll create the file and define the public API for easier imports.
+此测试文件中的一个特定测试用例引用了旧的全局总线。我们需要将其指向新的全局总线。
 
 ~~~~~act
-write_file
-packages/cascade-common/src/cascade/common/messaging/__init__.py
+patch_file
+tests/py/runtime/test_bus.py
 ~~~~~
 ~~~~~python
-from .bus import bus, MessageBus, MessageStore
-from . import protocols
-
-__all__ = ["bus", "MessageBus", "MessageStore", "protocols"]
-~~~~~
-
-#### Acts 3: Ensure `__init__.py` files exist for CLI packages
-
-To prevent future issues, let's ensure the intermediate `cascade.cli` namespace is also a proper package.
-
-~~~~~act
-write_file
-packages/cascade-cli-observer/src/cascade/cli/__init__.py
+from cascade.messaging.bus import bus as messaging_bus
 ~~~~~
 ~~~~~python
-# This must be the very first line to allow this package to coexist with other
-# namespace packages (like cascade-interfaces) in editable installs.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-cli-controller/src/cascade/cli/__init__.py
-~~~~~
-~~~~~python
-# This must be the very first line to allow this package to coexist with other
-# namespace packages (like cascade-interfaces) in editable installs.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+from cascade.common.messaging import bus as messaging_bus
 ~~~~~
 
 ### 下一步建议
-The missing `__init__.py` files have been created, and the `messaging` package now has a proper public API. The import errors should now be resolved.
+测试文件已更新。请再次运行 `pytest`。
 
-Please run `pytest` again.
-
-Once the tests pass (or at least start running without import errors), we can finally proceed with implementing the core logic for the `cs-observer watch` command.
+如果测试现在通过，我们将确信新的消息总线架构已正确集成，并且没有破坏现有的渲染逻辑。然后，我们可以自信地推进 `cs-observer` 的开发。

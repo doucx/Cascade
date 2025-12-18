@@ -1,222 +1,109 @@
-这是一个非常好的建议。在增加更多复杂性之前，确保我们构建的基础是稳固、可测试且行为符合预期的，这是至关重要的工程实践。我们立即暂停新功能的开发，转而为已完成的约束同步机制添加测试。
+## [WIP] fix: 修复 MockConnector 主题匹配逻辑及 Engine 错误日志输出
 
-为了有效地测试 `Engine` 与 `Connector` 协议的交互，我们将创建一个 `MockConnector`，它允许我们在不依赖真实网络（如 MQTT）的情况下，精确地模拟消息的接收。
-
-我将生成一个计划来创建这个测试文件和相关的测试用例。
-
-## [WIP] test: 添加约束同步机制的集成测试
+### 错误分析
+1.  **MockConnector 匹配逻辑错误**: `MockConnector` 使用简单的字典键值对查找 (`if topic in self.subscriptions`) 来匹配消息主题。然而，`Engine` 订阅的是通配符主题 `cascade/constraints/#`，而测试用例触发的是具体主题 `cascade/constraints/control`。由于这两个字符串不相等，回调函数从未被触发。
+2.  **日志输出目标错误**: `Engine` 中的 `_on_constraint_update` 方法使用默认的 `print()` 函数，这会将信息输出到 `stdout`。而测试用例 `test_engine_handles_malformed_constraint_payload` 断言的是 `captured.err` (stderr)，导致断言失败。
 
 ### 用户需求
-在继续开发约束功能之前，为现有的 `Engine` 与 `Connector` 的集成（特别是约束订阅和更新机制）添加自动化测试。
+修复测试失败，确保 `Engine` 的约束同步机制能被正确验证。
 
 ### 评论
-这是一个关键的、提升代码质量的步骤。通过引入 `MockConnector`，我们不仅可以验证 `Engine` 在理想情况下的行为，还能轻松地测试其对错误或异常输入的处理能力。这确保了我们的反馈回路入口是健壮的，为后续更复杂的约束逻辑提供了一个可靠的基础。
+这是一个典型的测试工具实现细节导致的“伪失败”。修复它将验证我们的集成逻辑本身是正确的。
 
 ### 目标
-1.  在 `cascade-runtime` 包中创建一个新的测试文件 `tests/runtime/test_engine_constraints.py`。
-2.  在该文件中实现一个 `MockConnector`，它遵循 `Connector` 协议，并允许我们手动触发消息回调。
-3.  编写一个测试用例，验证 `Engine` 在启动时会使用 `Connector` 订阅正确的约束主题。
-4.  编写一个核心测试用例，模拟 `MockConnector` 接收到一个有效的约束消息，并断言 `Engine` 的 `constraint_manager` 状态被正确更新。
-5.  编写一个负面测试用例，模拟接收到一个格式错误的约束消息，并验证 `Engine` 能够优雅地处理该错误而不会崩溃。
+1.  改进 `MockConnector` 的 `_trigger_message` 方法，实现对 `#` 通配符的基本支持。
+2.  修改 `Engine` 的 `_on_constraint_update` 方法，使用 `sys.stderr` 作为输出目标。
 
 ### 基本原理
-我们遵循“依赖注入”和“面向协议编程”的测试原则。`Engine` 依赖的是 `Connector` 协议，而不是任何具体的实现。因此，我们可以注入一个完全受控的 `MockConnector` 来代替真实的 `MqttConnector`。这个 Mock 对象将记录对其方法的调用（如 `subscribe`），并提供一个方法来模拟消息的到达，从而让我们能够在一个隔离的、确定性的环境中，精确地验证 `Engine` 的集成逻辑。
+1.  **通配符匹配**: MQTT 的 `#` 通配符匹配该层级及以下的所有主题。简单的逻辑是：如果订阅了 `A/#`，那么发送到 `A/B` 的消息应该被匹配。
+2.  **标准错误输出**: 错误日志理应输出到 `stderr`，这也符合测试框架捕获错误流的标准做法。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high
-#comp/runtime #comp/tests #concept/constraints #concept/sync
+#intent/fix #flow/ready #priority/high
+#comp/tests #comp/runtime #concept/sync #scope/core
 #ai/instruct
-#task/domain/testing #task/object/constraint-system #task/action/verification #task/state/continue
+#task/domain/testing #task/object/mock-connector #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建测试文件并实现 MockConnector 和测试用例
+#### Acts 1: 修复 Engine 的日志输出
 
-我们将一次性创建 `test_engine_constraints.py` 文件，其中包含 `MockConnector` 的实现和所有必要的测试用例。
+将 `print` 调用修改为输出到 `sys.stderr`。
 
 ~~~~~act
-write_file
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+import time
+import inspect
+import asyncio
+from typing import Any, Dict, Optional, Generator, Callable, List, Type
+from uuid import uuid4
+from contextlib import ExitStack
+~~~~~
+~~~~~python
+import sys
+import time
+import inspect
+import asyncio
+from typing import Any, Dict, Optional, Generator, Callable, List, Type
+from uuid import uuid4
+from contextlib import ExitStack
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+        except (KeyError, TypeError) as e:
+            # In a real system, we'd use a proper logger.
+            # For now, print to stderr to avoid crashing the engine.
+            print(
+                f"[Engine] Error processing constraint on topic '{topic}': {e}"
+            )
+~~~~~
+~~~~~python
+        except (KeyError, TypeError) as e:
+            # In a real system, we'd use a proper logger.
+            # For now, print to stderr to avoid crashing the engine.
+            print(
+                f"[Engine] Error processing constraint on topic '{topic}': {e}",
+                file=sys.stderr,
+            )
+~~~~~
+
+#### Acts 2: 改进 MockConnector 的匹配逻辑
+
+修改 `test_engine_constraints.py` 中的 `MockConnector`，使其支持简单的后缀匹配。
+
+~~~~~act
+patch_file
 packages/cascade-runtime/tests/runtime/test_engine_constraints.py
 ~~~~~
 ~~~~~python
-import asyncio
-from typing import Callable, Awaitable, Dict, Any, Optional
-
-import pytest
-
-from cascade.graph.model import Node
-from cascade.interfaces.protocols import Connector, Solver, Executor
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.spec.constraint import GlobalConstraint
-
-
-# --- Test Fixtures and Mocks ---
-
-class MockConnector(Connector):
-    """A mock connector for testing Engine's subscription logic."""
-
-    def __init__(self):
-        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
-        self.connected = False
-        self.disconnected = False
-
-    async def connect(self) -> None:
-        self.connected = True
-
-    async def disconnect(self) -> None:
-        self.disconnected = True
-
-    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
-        pass  # Not needed for this test
-
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        self.subscriptions[topic] = callback
-
     async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
         """Helper to simulate receiving a message."""
         # Find a matching subscription (basic exact match for now)
         if topic in self.subscriptions:
             await self.subscriptions[topic](topic, payload)
-
-
-class MockSolver(Solver):
-    def resolve(self, graph):
-        # Return a single stage with all non-param nodes
-        return [[n for n in graph.nodes if n.node_type != "param"]]
-
-
-class MockExecutor(Executor):
-    async def execute(self, node, args, kwargs):
-        return f"Result for {node.name}"
-
-
-@pytest.fixture
-def mock_connector():
-    return MockConnector()
-
-
-@pytest.fixture
-def engine_with_connector(mock_connector):
-    return Engine(
-        solver=MockSolver(),
-        executor=MockExecutor(),
-        bus=MessageBus(),
-        connector=mock_connector,
-    )
-
-
-# --- Test Cases ---
-
-@pytest.mark.asyncio
-async def test_engine_subscribes_to_constraints(engine_with_connector, mock_connector):
-    """
-    Verify that the Engine subscribes to the correct topic upon starting a run.
-    """
-    from cascade.spec.task import task
-
-    @task
-    def dummy_task():
-        pass
-
-    await engine_with_connector.run(dummy_task())
-
-    # Assert that subscribe was called with the correct topic
-    assert "cascade/constraints/#" in mock_connector.subscriptions
-    assert callable(mock_connector.subscriptions["cascade/constraints/#"])
-
-
-@pytest.mark.asyncio
-async def test_engine_updates_constraints_on_message(engine_with_connector, mock_connector):
-    """
-    Verify that the Engine's ConstraintManager is updated when a valid message is received.
-    """
-    from cascade.spec.task import task
-
-    @task
-    def dummy_task():
-        pass
-
-    # Start the run to establish subscriptions
-    run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
-
-    # Give the engine a moment to start and subscribe
-    await asyncio.sleep(0.01)
-
-    # Simulate receiving a constraint message
-    constraint_payload = {
-        "id": "global-pause",
-        "scope": "global",
-        "type": "pause",
-        "params": {},
-    }
-    await mock_connector._trigger_message("cascade/constraints/control", constraint_payload)
-
-    # Check the internal state of the ConstraintManager
-    constraint_manager = engine_with_connector.constraint_manager
-    stored_constraint = constraint_manager._constraints.get("global-pause")
-
-    assert stored_constraint is not None
-    assert isinstance(stored_constraint, GlobalConstraint)
-    assert stored_constraint.id == "global-pause"
-    assert stored_constraint.scope == "global"
-    assert stored_constraint.type == "pause"
-
-    # Allow the run to complete
-    run_task.cancel()
-    try:
-        await run_task
-    except asyncio.CancelledError:
-        pass
-
-
-@pytest.mark.asyncio
-async def test_engine_handles_malformed_constraint_payload(
-    engine_with_connector, mock_connector, capsys
-):
-    """
-    Verify that the Engine logs an error but does not crash on a malformed payload.
-    """
-    from cascade.spec.task import task
-
-    @task
-    def dummy_task():
-        pass
-
-    run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
-    await asyncio.sleep(0.01)
-
-    # Payload missing the required 'id' key
-    malformed_payload = {
-        "scope": "global",
-        "type": "pause",
-        "params": {},
-    }
-    await mock_connector._trigger_message("cascade/constraints/control", malformed_payload)
-
-    # The engine should not have crashed.
-    # We can check stderr for the error message.
-    captured = capsys.readouterr()
-    assert "[Engine] Error processing constraint" in captured.err
-    assert "'id'" in captured.err  # Specifically mentions the missing key
-
-    # Assert that no constraint was added
-    assert not engine_with_connector.constraint_manager._constraints
-
-    run_task.cancel()
-    try:
-        await run_task
-    except asyncio.CancelledError:
-        pass
 ~~~~~
-
-### 下一步建议
-我们已经为约束同步机制建立了坚实的测试基础，验证了 `Engine` 能够正确地订阅主题并根据接收到的消息更新其内部状态。
-
-现在，我们可以放心地回到我们之前暂停的计划：**在 `ConstraintManager` 中实现真正的约束评估逻辑**。
-
-我建议我们立即开始实施“全局暂停”功能，这将使我们刚刚测试过的整个反馈回路首次产生实际的、可观测的控制效果。如果你同意，我将重新生成该计划。
+~~~~~python
+    async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
+        """Helper to simulate receiving a message."""
+        # Check all subscriptions for a match
+        for sub_topic, callback in self.subscriptions.items():
+            is_match = False
+            if sub_topic == topic:
+                is_match = True
+            elif sub_topic.endswith("/#"):
+                prefix = sub_topic[:-2]
+                if topic.startswith(prefix):
+                    is_match = True
+            
+            if is_match:
+                await callback(topic, payload)
+~~~~~

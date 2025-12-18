@@ -36,9 +36,18 @@ class MockConnector(Connector):
 
     async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
         """Helper to simulate receiving a message."""
-        # Find a matching subscription (basic exact match for now)
-        if topic in self.subscriptions:
-            await self.subscriptions[topic](topic, payload)
+        # Check all subscriptions for a match
+        for sub_topic, callback in self.subscriptions.items():
+            is_match = False
+            if sub_topic == topic:
+                is_match = True
+            elif sub_topic.endswith("/#"):
+                prefix = sub_topic[:-2]
+                if topic.startswith(prefix):
+                    is_match = True
+            
+            if is_match:
+                await callback(topic, payload)
 
 
 class MockSolver(Solver):

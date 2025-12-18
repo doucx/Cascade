@@ -1,3 +1,4 @@
+import sys
 import time
 import inspect
 import asyncio
@@ -141,7 +142,8 @@ class Engine:
             # In a real system, we'd use a proper logger.
             # For now, print to stderr to avoid crashing the engine.
             print(
-                f"[Engine] Error processing constraint on topic '{topic}': {e}"
+                f"[Engine] Error processing constraint on topic '{topic}': {e}",
+                file=sys.stderr,
             )
 
     async def _execute_graph(

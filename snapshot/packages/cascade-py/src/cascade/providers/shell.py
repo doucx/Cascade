@@ -1,6 +1,6 @@
 import asyncio
-from cascade.interfaces.spec.task import task
-from cascade.providers import LazyFactory
+from cascade.spec.task import task
+from cascade.providers import LazyFactory, Provider
 
 
 class ShellProvider:

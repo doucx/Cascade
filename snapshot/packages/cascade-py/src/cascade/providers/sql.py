@@ -6,8 +6,8 @@ try:
 except ImportError:
     sqlalchemy = None
 
-from cascade.interfaces.spec.task import task, LazyResult
-from cascade.interfaces.spec.resource import inject
+from cascade.spec.task import task, LazyResult
+from cascade.spec.resource import inject
 from cascade.providers import LazyFactory
 
 

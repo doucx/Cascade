@@ -1,6 +1,6 @@
 import os
 from typing import Any, Dict, Optional
-from cascade.interfaces.spec.task import task
+from cascade.spec.task import task
 
 # 这个任务的职责是从 Engine 提供的参数上下文中获取值。
 # 'params_context' 将由 Engine 的参数解析器在运行时注入。

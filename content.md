@@ -1,53 +1,77 @@
-这是由于测试中使用的 `MockExecutor` 为了方便控制时序，没有执行真实的任务函数，而是直接返回了固定格式的字符串 `Result for {task_name}`。因此，最终结果不是字符串拼接的结果，而是 `Result for task_c`。
+好的，测试已经通过，确认任务级暂停与恢复功能已成功实现并验证。现在我们创建 Git 提交。
 
-我将修正测试断言以匹配 `MockExecutor` 的行为。
+由于此前的操作涉及了多个包（`cascade-interfaces`, `cascade-connector-mqtt`, `cascade-runtime`, `cascade-cli-controller`, 以及测试文件），我们将把这些修改打包成一个逻辑上完整的工作单元进行提交。
 
-## [WIP] fix(test): 修正集成测试断言以匹配 MockExecutor 行为
-
-### 错误分析
-**错误信息**: `AssertionError: assert 'Result for task_c' == 'C after B after A'`
-**原因**: 在 `test_engine_constraints.py` 中，使用了 `MockExecutor` 来替代真实的执行器。`MockExecutor` 的实现逻辑是忽略任务函数和参数，固定返回 `f"Result for {node.name}"`。因此，`task_c` 的返回值是 `"Result for task_c"`，而不是业务逻辑预期的 `"C after B after A"`。
-**结论**: 测试的控制流逻辑（暂停/恢复）已经通过验证（前面的断言都通过了），仅最后的返回值断言需要修正。
+## [COMMIT] feat(control): Implement task-level pause/resume via retained MQTT messages
 
 ### 用户需求
-修复 `tests/py/runtime/test_engine_constraints.py` 中的测试失败。
+完成里程碑 3.1: 精准控制的开发。实现 `Engine` 对任务级暂停约束的响应，并为 `cs-controller` 添加 `resume` 功能，利用 MQTT 保留消息实现控制状态的持久化。
 
 ### 评论
-这是一个简单的测试代码修正，不涉及业务逻辑变更。
+本次提交是 Cascade 向“自适应执行环境”演进的关键一步。通过引入任务级的 `pause` 和 `resume`，我们极大地增强了系统的运行时可控性。核心设计是利用 MQTT 的保留消息作为**分布式状态存储**，保证了控制命令在执行者启动或重新连接时立即生效，实现了控制者和执行者之间的完全解耦。
 
 ### 目标
-修改 `test_engine_pauses_and_resumes_specific_task` 中的断言，使其与 `MockExecutor` 的实际输出一致。
+1.  **MqttConnector**: 增加对 `retain` 标志的支持。
+2.  **ConstraintManager**: 增加 `remove_constraints_by_scope` 逻辑。
+3.  **Engine**: 增强 `_on_constraint_update` 以识别空 payload（即 `resume` 命令），并清除对应的约束。
+4.  **CLI Tooling**: 为 `cs-controller` 实现 `pause` (使用保留消息) 和 `resume` (清除保留消息) 命令。
+5.  **Testing**: 增加集成测试以验证任务级暂停与恢复的端到端行为。
 
 ### 基本原理
-将 `assert final_result == "C after B after A"` 修改为 `assert final_result == "Result for task_c"`。
+我们基于 **MQTT 保留消息** 机制，将控制指令的持久化责任交给 Broker。一个带有 `retain=True` 的空消息是清除 Broker 上该主题保留消息的标准方法，这巧妙地实现了我们所需的 `resume` 功能。这种方法避免了在 `Engine` 或 `Controller` 中实现复杂的持久化状态存储逻辑。
 
 ### 标签
-#intent/fix #flow/ready #priority/high
-#comp/tests
+#intent/build #flow/ready #priority/high
+#comp/runtime #comp/cli #comp/interfaces #comp/tests
+#concept/executor #scope/api #scope/ux
 #ai/instruct
-#task/domain/control #task/object/constraint-system #task/action/bug-fix #task/state/continue
+#task/domain/control #task/object/constraint-system #task/action/implementation #task/state/end
 
 ---
 ### Script
 
-#### Acts 1: 修正测试断言
+#### Acts 1: 暂存所有已修改和新增的文件
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-interfaces/src/cascade/interfaces/protocols.py
+packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py
+packages/cascade-runtime/src/cascade/runtime/constraints/manager.py
+packages/cascade-runtime/src/cascade/runtime/constraints/handlers.py
+packages/cascade-runtime/src/cascade/runtime/engine.py
+packages/cascade-cli-controller/src/cascade/cli/controller/app.py
+packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
 tests/py/runtime/test_engine_constraints.py
 ~~~~~
-~~~~~python
-    # 9. Verify the final result
-    final_result = await run_task
-    assert final_result == "C after B after A"
+
+#### Acts 2: 提交变更
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-    # 9. Verify the final result
-    final_result = await run_task
-    # Note: Since we use MockExecutor, the result is the fixed string it returns,
-    # not the result of the actual task function.
-    assert final_result == "Result for task_c"
+~~~~~text
+feat(control): Implement task-level pause/resume via retained MQTT messages
+
+This implements Milestone 3.1, enabling precise, task-scoped control over running Cascade workflows via external control messages.
+
+Key features and changes:
+
+1.  **MqttConnector Enhancement:** Updated `publish` to support the `retain=True` flag for creating persistent control state messages on the broker.
+2.  **Control Loop:**
+    *   `Engine` now subscribes to `cascade/constraints/#`.
+    *   It interprets an empty payload on a constraint topic as a `RESUME` command.
+    *   `ConstraintManager` gains `remove_constraints_by_scope` to support dynamic constraint removal during runtime.
+3.  **cs-controller Tooling:**
+    *   `cs-controller pause` now publishes constraints with `retain=True`.
+    *   A new `cs-controller resume` command publishes an empty retained message to the same topic, clearing the pause state on the broker and inside any connected `Engine`.
+4.  **Scope Filtering:** `PauseConstraintHandler` correctly checks if a task matches a `task:<task_name>` scope.
+
+This establishes the foundation for a truly adaptive and externally governable execution environment.
 ~~~~~
 
 ### 下一步建议
-测试修正后，请重新运行测试。如果通过，我们将继续按照原定计划，进入 **里程碑 3.2: 并发管理 (Concurrency Management)** 的开发。
+里程碑 3.1 (精准控制) 已完成。根据《Phase 3 (Refined) & Phase 4 并行开发路线图》：
+
+我们下一步将进入 **里程碑 3.2: 并发管理 (Concurrency Management)**。这项工作的目标是利用 `ResourceManager`，通过外部指令限制特定任务的并发执行数量。
+
+我建议先对 `ResourceManager` 进行必要的修改，使其能够处理动态的、由外部约束定义的容量限制，然后扩展 `ConstraintManager` 和 `ConstraintHandler`。

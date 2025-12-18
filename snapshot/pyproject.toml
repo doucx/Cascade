@@ -34,7 +34,7 @@ packages = [
 packages = ["packages/cascade-py/src/cascade"]
 
 [tool.pytest.ini_options]
-addopts = "-ra"
+addopts = "-ra --cov=cascade --cov-report=term-missing"
 
 [project.optional-dependencies]
 dev = [

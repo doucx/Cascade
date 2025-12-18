@@ -1,109 +1,41 @@
-好的，我们开始实现 `cs-controller` 的核心功能。
+Of course. Following our development process, we will now create a comprehensive test suite for the `cs-controller`'s `pause` command.
 
-这个计划将把 `cs-controller pause` 命令从一个占位符转变为一个功能完备的工具。它将负责连接到 MQTT Broker，构造一个符合 `cascade.spec.constraint.GlobalConstraint` 规范的 JSON 报文，并将其发布到正确的控制主题上，从而实现对远程 Cascade 工作流的实时干预。
+This plan involves two key actions: first, a minor refactoring of the `cs-controller`'s code to improve testability, and second, the creation of the test file itself. The refactoring will extract the core asynchronous logic from the `typer` command function into a standalone, easily callable function, allowing us to test the logic directly without needing the `typer` test runner.
 
-## [WIP] feat: Implement `cs-controller pause` command to publish constraints
+## [WIP] test: Create integration tests for cs-controller publish logic
 
 ### 用户需求
-为 `cs-controller` CLI 工具实现 `pause` 命令，使其能够向 MQTT Broker 发布一个标准的“暂停”约束指令，该指令可以被一个正在运行的 Cascade `Engine` 接收并执行。
+为 `cs-controller` 的 `pause` 命令创建一套集成测试，以验证其能否正确地连接到 MQTT Broker 并发布符合规范的约束指令。
 
 ### 评论
-这是实现 Phase 4 “生态工具链”的关键里程碑，它为 Phase 3 构建的“约束与环境感知”能力提供了第一个正式的操作界面。通过这个工具，开发者或运维人员将首次获得从外部动态影响和控制 Cascade 工作流的能力，这是从“工作流库”迈向“自适应执行环境”的重要一步。
+这是确保 `cs-controller` 可靠性的关键一步。通过将核心发布逻辑提取到一个独立的函数中，我们能够编写出更清晰、更集中的单元/集成测试。这些测试将严格遵循 Mock 意图的原则，断言 `MqttConnector` 的 `publish` 方法是否被以正确的**主题**和**负载**调用，从而验证了其核心业务逻辑，而无需进行实际的网络通信。
 
-### 目标
-1.  为 `cs-controller` 的各种输出（连接、发布、成功、失败）定义新的语义消息 ID。
-2.  将 `cs-controller pause` 命令改造为一个异步函数。
-3.  在该函数中集成 `MqttConnector`，处理连接和断开逻辑。
-4.  构造一个 `GlobalConstraint` 数据对象，并将其序列化为 JSON payload。
-5.  将 payload 发布到一个结构化的 MQTT 主题上（例如 `cascade/constraints/global`）。
+### 目標
+1.  重构 `packages/cascade-cli-controller/src/cascade/cli/controller/app.py`，将核心的异步逻辑提取到一个独立的、可测试的函数中。
+2.  创建新的测试文件 `tests/cli-controller/test_app.py`。
+3.  实现 `pytest` fixtures 来 Mock `MqttConnector` 和 `MessageBus`。
+4.  编写测试用例，验证在不同 `scope` 参数下，是否能生成正确的主题和 `GlobalConstraint` payload。
+5.  验证 `MessageBus` 是否被调用以提供正确的用户反馈。
 
 ### 基本原理
-我们将 `pause` 命令的实现委托给一个 `asyncio` 事件循环。该循环负责管理 `MqttConnector` 的生命周期。当命令执行时，它会创建一个 `GlobalConstraint` 实例（`type="pause"`），使用 `dataclasses.asdict` 将其转换为字典，然后通过 `connector.publish` 将其发布。MQTT 主题将根据 `scope` 参数动态构建，例如 `pause --scope task:api_call` 会发布到 `cascade/constraints/task/api_call` 主题，这允许 Cascade 引擎通过订阅通配符主题 (`cascade/constraints/#`) 来接收并精细化地处理各类约束。
-
-*(注：为了简化初版实现，本次发布的 MQTT 消息将不是“保留消息 (retained message)”。这意味着只有当前已连接的引擎会收到该约束。在未来的迭代中，我们将增强 `MqttConnector` 以支持发布保留消息，确保后加入的引擎也能获取到最新的约束状态。)*
+我们将 `typer` 命令函数 (`pause`) 的职责缩小为仅负责解析 CLI 参数和调用一个独立的业务逻辑函数（例如 `_publish_pause`)。这样一来，我们的测试就可以完全绕过 `typer` 的复杂性，直接 `await` 这个业务逻辑函数。测试将使用 `monkeypatch` 注入 Mock 版本的 `MqttConnector` 和 `bus`，然后断言这些 Mock 对象的方法是否被以预期的方式调用，从而验证了 `pause` 命令的正确意图。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/cli #concept/control-loop #scope/api #scope/ux #ai/instruct #task/domain/cli #task/object/controller-tool #task/action/implementation #task/state/begin
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/cli #concept/control-loop #scope/dx #ai/instruct #task/domain/cli #task/object/controller-tool #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 定义 Controller 的消息模板
+#### Acts 1: 重构 `app.py` 以提高可测试性
 
-首先，我们在 `cli_messages.json` 中为 `cs-controller` 添加一套完整的消息模板。
+我们首先将 `pause` 命令中的 `asyncio` 循环提取到一个独立的、可测试的 `async` 函数 `_publish_pause` 中。
 
 ~~~~~act
 patch_file
-packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
-~~~~~
-~~~~~json
-{
-    "observer.startup.watching": "🔭 Watching project: [bold cyan]{project}[/bold cyan] on [bold green]{hostname}:{port}[/bold green]...",
-    "observer.startup.connected": "✅ Connected to MQTT broker.",
-    "observer.startup.error": "❌ Failed to connect to MQTT broker at {hostname}:{port}. Error: {error}",
-    "observer.shutdown": "\n🔌 Disconnecting and shutting down...",
-
-    "observer.telemetry.run_header": "\n[bold yellow]─── Run Started: {run_id} ───[/bold yellow]",
-    "observer.telemetry.lifecycle.ENGINE_STARTED": "▶️  Engine started.",
-    "observer.telemetry.lifecycle.ENGINE_STOPPED": "✅ Engine stopped.",
-    "observer.telemetry.task_state.RUNNING": "   - Task '[bold]{task_name}[/bold]' started.",
-    "observer.telemetry.task_state.COMPLETED": "   - [green]✅ Task '[bold]{task_name}[/bold]' succeeded in {duration_ms:.0f}ms.[/green]",
-    "observer.telemetry.task_state.FAILED": "   - [bold red]❌ Task '[bold]{task_name}[/bold]' failed after {duration_ms:.0f}ms. Error: {error}[/bold red]",
-    "observer.telemetry.task_state.SKIPPED": "   - [dim]⚪ Task '[bold]{task_name}[/bold]' skipped.[/dim]",
-    "observer.telemetry.unknown_event": "[dim]Received unknown event type: {type}[/dim]",
-
-    "controller.publishing": "📡 Publishing constraint for scope: {scope}",
-    "controller.not_implemented": "⚠️  Controller functionality is not yet fully implemented."
-}
-~~~~~
-~~~~~json
-{
-    "observer.startup.watching": "🔭 Watching project: [bold cyan]{project}[/bold cyan] on [bold green]{hostname}:{port}[/bold green]...",
-    "observer.startup.connected": "✅ Connected to MQTT broker.",
-    "observer.startup.error": "❌ Failed to connect to MQTT broker at {hostname}:{port}. Error: {error}",
-    "observer.shutdown": "\n🔌 Disconnecting and shutting down...",
-    "observer.telemetry.run_header": "\n[bold yellow]─── Run Started: {run_id} ───[/bold yellow]",
-    "observer.telemetry.lifecycle.ENGINE_STARTED": "▶️  Engine started.",
-    "observer.telemetry.lifecycle.ENGINE_STOPPED": "✅ Engine stopped.",
-    "observer.telemetry.task_state.RUNNING": "   - Task '[bold]{task_name}[/bold]' started.",
-    "observer.telemetry.task_state.COMPLETED": "   - [green]✅ Task '[bold]{task_name}[/bold]' succeeded in {duration_ms:.0f}ms.[/green]",
-    "observer.telemetry.task_state.FAILED": "   - [bold red]❌ Task '[bold]{task_name}[/bold]' failed after {duration_ms:.0f}ms. Error: {error}[/bold red]",
-    "observer.telemetry.task_state.SKIPPED": "   - [dim]⚪ Task '[bold]{task_name}[/bold]' skipped.[/dim]",
-    "observer.telemetry.unknown_event": "[dim]Received unknown event type: {type}[/dim]",
-
-    "controller.connecting": "Connecting to MQTT broker at [bold green]{hostname}:{port}[/bold green]...",
-    "controller.connected": "✅ Connected to MQTT broker.",
-    "controller.publishing": "📡 Publishing constraint for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
-    "controller.publish_success": "✅ Constraint published successfully.",
-    "controller.error": "❌ An error occurred: {error}"
-}
-~~~~~
-
-#### Acts 2: 实现 `cs-controller` 的核心发布逻辑
-
-我们将重写 `app.py`，为其注入完整的 `asyncio` 和 `MqttConnector` 逻辑，并实现 `pause` 命令。
-
-~~~~~act
-write_file
 packages/cascade-cli-controller/src/cascade/cli/controller/app.py
 ~~~~~
 ~~~~~python
-import asyncio
-import typer
-import uuid
-from dataclasses import asdict
-
-from cascade.common.messaging import bus
-from cascade.common.renderers import CliRenderer
-from cascade.connectors.mqtt import MqttConnector
-from cascade.spec.constraint import GlobalConstraint
-
-app = typer.Typer(
-    help="A command-line tool to control running Cascade workflows via MQTT."
-)
-
-
 @app.command()
 def pause(
     scope: str = typer.Argument(
@@ -157,13 +89,148 @@ def pause(
         asyncio.run(main_loop())
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
+~~~~~
+~~~~~python
+async def _publish_pause(scope: str, hostname: str, port: int):
+    """Core logic for publishing a pause constraint."""
+    connector = MqttConnector(hostname=hostname, port=port)
+    try:
+        bus.info("controller.connecting", hostname=hostname, port=port)
+        await connector.connect()
+        bus.info("controller.connected")
+
+        # Create a unique, descriptive ID for the constraint
+        constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
+        constraint = GlobalConstraint(
+            id=constraint_id, scope=scope, type="pause", params={}
+        )
+
+        # Convert to dictionary for JSON serialization
+        payload = asdict(constraint)
+
+        # Publish to a structured topic based on scope
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+
+        bus.info("controller.publishing", scope=scope, topic=topic)
+        # The connector's publish is fire-and-forget
+        await connector.publish(topic, payload)
+
+        # In a real fire-and-forget, we can't be sure it succeeded,
+        # but for UX we assume it did if no exception was raised.
+        # Give a brief moment for the task to be sent.
+        await asyncio.sleep(0.1)
+        bus.info("controller.publish_success")
+
+    except Exception as e:
+        bus.error("controller.error", error=e)
+    finally:
+        await connector.disconnect()
 
 
-def main():
-    bus.set_renderer(CliRenderer(store=bus.store))
-    app()
+@app.command()
+def pause(
+    scope: str = typer.Argument(
+        "global",
+        help="The scope to pause (e.g., 'global', 'project:etl', 'task:api_call').",
+    ),
+    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
+    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
+):
+    """
+    Publish a 'pause' constraint to the MQTT broker.
+    This will cause running Cascade engines to stop scheduling new tasks that
+    match the specified scope until a 'resume' command is sent.
+    """
+    try:
+        asyncio.run(_publish_pause(scope=scope, hostname=hostname, port=port))
+    except KeyboardInterrupt:
+        bus.info("observer.shutdown")
+~~~~~
+
+#### Acts 2: 创建 Controller 的测试文件
+
+现在，我们可以为这个新的、独立的 `_publish_pause` 函数编写干净的测试。
+
+~~~~~act
+write_file
+tests/cli-controller/test_app.py
+~~~~~
+~~~~~python
+import pytest
+from unittest.mock import MagicMock, AsyncMock, ANY
+
+# The module we are testing
+from cascade.cli.controller import app as controller_app
 
 
-if __name__ == "__main__":
-    main()
+@pytest.fixture
+def mock_messaging_bus(monkeypatch) -> MagicMock:
+    """Mocks the global message bus used by the controller app."""
+    mock_bus = MagicMock()
+    monkeypatch.setattr("cascade.cli.controller.app.bus", mock_bus)
+    return mock_bus
+
+
+@pytest.fixture
+def mock_connector(monkeypatch) -> AsyncMock:
+    """Mocks the MqttConnector class to prevent network calls."""
+    mock_instance = AsyncMock()
+    mock_class = MagicMock(return_value=mock_instance)
+    monkeypatch.setattr("cascade.cli.controller.app.MqttConnector", mock_class)
+    return mock_instance
+
+
+@pytest.mark.asyncio
+async def test_publish_pause_global_scope(mock_messaging_bus, mock_connector):
+    """
+    Verify publishing a pause command for the 'global' scope.
+    """
+    # Act: Call the core logic function
+    await controller_app._publish_pause(
+        scope="global", hostname="mqtt.test", port=1234
+    )
+
+    # Assert Connector Lifecycle
+    mock_connector.connect.assert_awaited_once()
+    mock_connector.publish.assert_awaited_once()
+    mock_connector.disconnect.assert_awaited_once()
+
+    # Assert Publish Intent
+    # 1. Capture the arguments passed to publish
+    call_args = mock_connector.publish.call_args
+    topic = call_args.args[0]
+    payload = call_args.args[1]
+
+    # 2. Verify the topic and payload
+    assert topic == "cascade/constraints/global"
+    assert payload["scope"] == "global"
+    assert payload["type"] == "pause"
+    assert "id" in payload  # Check for presence of generated ID
+
+    # Assert User Feedback
+    mock_messaging_bus.info.assert_any_call(
+        "controller.publishing", scope="global", topic="cascade/constraints/global"
+    )
+    mock_messaging_bus.info.assert_any_call("controller.publish_success")
+
+
+@pytest.mark.asyncio
+async def test_publish_pause_specific_scope(mock_messaging_bus, mock_connector):
+    """
+    Verify that a scoped pause command generates the correct MQTT topic.
+    """
+    # Act
+    await controller_app._publish_pause(
+        scope="task:api_call", hostname="mqtt.test", port=1234
+    )
+
+    # Assert
+    call_args = mock_connector.publish.call_args
+    topic = call_args.args[0]
+    payload = call_args.args[1]
+
+    # Verify that the ':' was correctly replaced with '/' for the topic
+    assert topic == "cascade/constraints/task/api_call"
+    assert payload["scope"] == "task:api_call"
+    assert payload["type"] == "pause"
 ~~~~~

@@ -1,24 +1,25 @@
-好的，我们现在进入第二阶段。这是本次重构的核心操作，我们将把所有源代码和测试文件迁移到第一阶段创建的新目录结构中。
+是的，文件结构完全符合预期。我们已经成功地将所有文件迁移到了新家的“毛坯房”里。
 
-我将使用 `run_command` 来执行文件移动，以确保操作的健壮性。
+现在，我们进入重构的最后阶段：配置工作区并进行“装修”，让整个多包项目能够被工具理解并正常工作。
 
-## [WIP] refactor(build): Migrate source and test files to monorepo packages
+## [WIP] refactor(build): Finalize monorepo structure via workspace config
 
 ### 用户需求
-执行重构路线图的第二阶段：将现有 `src/cascade` 目录下的所有代码文件，以及 `tests` 目录下的所有测试文件，系统性地迁移到它们在 `packages/` 和 `tests/` 子目录中各自的新位置。
+根据重构路线图，执行第三阶段任务：
+1.  更新项目根目录的 `pyproject.toml`，将其转变为一个 Hatch workspace 配置，以统一管理所有 `packages/*` 下的子包。
+2.  清理掉因文件迁移而遗留下来的、现已废弃的旧目录结构。
 
 ### 评论
-这是整个重构过程中“体力活”最集中的一步。我们将一次性地对项目的文件系统进行大规模重组。这个操作会暂时性地“破坏”整个项目（因为所有的 Python导入路径都会失效），这是一个预期内的中间状态。关键在于精确、完整地执行文件迁移，为第三阶段的配置更新和最终修复做好准备。
+这是画龙点睛的一步。通过将根 `pyproject.toml` 声明为 workspace，我们正式赋予了项目“Monorepo”的身份。这使得 `uv`、`pip`、`hatch` 等现代化的 Python 工具能够理解本地包之间的依赖关系，从而实现无缝的开发和安装体验。随后的清理工作则是保持项目整洁的必要步骤，标志着结构性重构的彻底完成。
 
 ### 目标
-1.  将与接口、协议和数据模型相关的代码（`spec/`, `runtime/protocols.py`, `graph/model.py`）迁移至 `packages/cascade-interfaces/`。
-2.  将核心的运行时引擎、求解器、执行器和适配器（`runtime/`, `adapters/` 等）迁移至 `packages/cascade-runtime/`。
-3.  将面向用户的库代码，包括 `providers/`、`tools/` 和顶层 `__init__.py` 等，迁移至 `packages/cascade-py/`。
-4.  将 CLI 专用代码（`tools/cli.py`）迁移至 `packages/cascade-cli/` 并重命名为 `main.py`。
-5.  同步重组 `tests/` 目录，使其内部结构镜像新的多包布局。
+1.  使用 `write_file` 指令，以新的 workspace 配置内容，完全覆盖项目根目录下的 `pyproject.toml` 文件。
+2.  使用 `run_command` 指令，安全地移除旧的、现已为空的 `src` 目录以及 `tests` 目录下的旧子目录。
 
 ### 基本原理
-我们将严格遵循用户指令，使用 `run_command` 和 `mv` 来执行所有文件和目录的移动。为了清晰和可追溯，我们将文件迁移分为两个独立的 `act`：一个用于处理 `src` 目录下的源代码，另一个用于重组 `tests` 目录。通过在 shell 脚本中添加注释，我们能清楚地标示出每一条 `mv` 命令的目的地和意图，确保这个关键步骤的准确无误。
+此阶段的核心是配置的更新和垃圾回收。
+1.  **配置更新**: 对于 `pyproject.toml` 这种需要完全替换内容的文件，`write_file` 是最直接且最可靠的指令。新的配置将定义 `tool.hatch.workspaces`，这是让构建工具识别多包布局的关键。
+2.  **清理**: 对于目录删除，`run_command` 结合 `rm -rf` 和 `rmdir` 是标准且高效的做法。`rm -rf src` 将递归删除旧的源目录。对于 `tests` 目录下的空文件夹，`rmdir` 是一个更安全的选择，因为它仅在目录为空时才会成功，这为我们的操作增加了一层保障。
 
 ### 标签
 #intent/refine #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/build #task/object/monorepo-structure #task/action/setup #task/state/continue
@@ -27,67 +28,84 @@
 
 ### Script
 
-#### Acts 1: 迁移源代码至各包
+#### Acts 1: 配置根 Workspace
 
-此脚本将 `src/cascade` 目录下的所有内容，根据其职责，分别移动到 `cascade-interfaces`、`cascade-runtime`、`cascade-cli` 和 `cascade-py` 包中。
+此操作将更新根 `pyproject.toml` 文件，使其成为一个 Hatch workspace 的管理器，能够识别并管理 `packages/` 目录下的所有子包。
+
+~~~~~act
+write_file
+pyproject.toml
+~~~~~
+~~~~~toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade"
+version = "0.1.0"
+description = "A modern, declarative automation library for Python."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+
+[tool.hatch.workspaces]
+packages = [
+    "packages/cascade-interfaces",
+    "packages/cascade-runtime",
+    "packages/cascade-py",
+    "packages/cascade-cli",
+]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "mypy",
+  "pytest-aiohttp",
+  "moto[s3]",
+  "typer[all]",
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocstrings[python]",
+]
+~~~~~
+
+#### Acts 2: 清理旧的目录结构
+
+现在，我们将移除在第二阶段迁移后留下的空的、废弃的目录。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-# --- 1. 迁移至 cascade-interfaces ---
-# 移动所有数据规范、接口定义和核心图模型
-mv src/cascade/spec packages/cascade-interfaces/src/cascade/
-mv src/cascade/runtime/protocols.py packages/cascade-interfaces/src/cascade/interfaces/
-mv src/cascade/graph/model.py packages/cascade-interfaces/src/cascade/graph/
+# 递归删除旧的 src 目录及其所有（空的）子目录
+rm -rf src
 
-# --- 2. 迁移至 cascade-runtime ---
-# 移动运行时引擎、适配器、图构建逻辑等
-mv src/cascade/adapters packages/cascade-runtime/src/cascade/
-mv src/cascade/graph/build.py src/cascade/graph/serialize.py packages/cascade-runtime/src/cascade/graph/
-# 注意：此时 src/cascade/runtime/ 目录只剩下 protocols.py（已被移走），所以我们移动整个目录
-mv src/cascade/runtime packages/cascade-runtime/src/cascade/
-
-# --- 3. 迁移至 cascade-cli ---
-# 移动 CLI 实现，并重命名为 main.py 以符合惯例
-mv src/cascade/tools/cli.py packages/cascade-cli/src/cascade/cli/main.py
-
-# --- 4. 迁移剩余部分至 cascade-py ---
-# 将 src/cascade/ 下所有剩余的文件和目录（providers, tools, __init__.py 等）移动到 cascade-py
-mv src/cascade/* packages/cascade-py/src/cascade/
-~~~~~
-
-#### Acts 2: 重组测试目录
-
-现在，我们将 `tests` 目录的结构进行调整，以匹配新的多包布局，确保测试代码与被测代码的结构保持一致。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-# 1. 创建新的测试根目录，用于归类
-mkdir tests/interfaces tests/runtime tests/py tests/cli
-
-# 2. 迁移测试文件到新位置
-# 接口和规范相关的测试
-mv tests/spec tests/interfaces/
-
-# 运行时、集成和适配器相关的测试。它们紧密耦合，暂时都归入 'py'，因为它们主要测试 cascade-py 和 cascade-runtime 的集成行为。
-# 后续可以根据需要进一步细化拆分。
-mv tests/runtime tests/integration tests/adapters tests/py/
-
-# CLI 相关的测试
-mv tests/tools/test_cli.py tests/cli/
-
-# 剩余的用户库和 providers 相关的测试
-mv tests/tools tests/providers tests/messaging tests/graph tests/examples tests/py/
+# 删除 tests 目录下那些现已为空的旧的子目录
+# rmdir 是安全的，如果目录非空则会报错
+rmdir tests/adapters tests/examples tests/graph tests/integration tests/messaging tests/providers tests/runtime tests/spec tests/tools
 ~~~~~
 
 ### 下一步建议
-我们已经成功地将所有代码和测试文件迁移到了新的多包结构中。目前，项目处于一个“已重组但已损坏”的状态，因为 Python 的导入路径全部失效了，并且根 `pyproject.toml` 尚未更新。
+**结构性重构已全部完成！**
 
-接下来的 **第三阶段** 将解决这个问题：
-1.  更新项目根目录的 `pyproject.toml`，将其配置为 Hatch workspace，从而让 `uv` 等工具能够理解新的多包布局。
-2.  清理掉现在已经变空的旧 `src` 和 `tests` 子目录。
+我们已经成功地将 Cascade 重塑为一个现代化的多包项目。现在，项目处于一个全新的、逻辑清晰的结构中，但所有的 Python `import` 语句都已失效。
 
-如果你确认继续，我将为你生成第三阶段的计划。
+**接下来的关键任务是：**
+
+1.  **安装依赖**：在你的终端中，使用 `uv` 或 `pip` 在可编辑模式下安装所有包。这将使 Python 解释器能够找到新的模块路径。
+    ```bash
+    # 建议使用 uv
+    uv pip install -e ".[dev]"
+    ```
+2.  **运行测试 (预期会失败)**：运行 `pytest` 将会暴露所有因路径变更而损坏的导入语句。
+    ```bash
+    pytest
+    ```
+3.  **修复导入**：这是下一个需要解决的宏大任务。我们需要遍历所有包中的代码和测试，将旧的导入（如 `from cascade.runtime.protocols import Solver`）更新为新的路径（如 `from cascade.interfaces.protocols import Solver`）。
+
+如果你准备好开始修复工作，我可以为你生成一个全面的计划，用于扫描并修正整个代码库中的所有 `import` 语句。

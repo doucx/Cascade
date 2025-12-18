@@ -17,6 +17,26 @@ class ConstraintManager:
         self._constraints: Dict[str, GlobalConstraint] = {}
         # Stores registered handlers by the constraint type they handle
         self._handlers: Dict[str, ConstraintHandler] = {}
+        # Callback to wake up the engine loop
+        self._wakeup_callback: Any = None
+
+    def set_wakeup_callback(self, callback: Any) -> None:
+        """Sets the callback to trigger an engine wakeup."""
+        self._wakeup_callback = callback
+
+    def request_wakeup(self, delay: float) -> None:
+        """
+        Requests the engine to wake up after a specified delay (in seconds).
+        Used by time-based constraints (like rate limits).
+        """
+        if self._wakeup_callback:
+            import asyncio
+            try:
+                loop = asyncio.get_running_loop()
+                loop.call_later(delay, self._wakeup_callback)
+            except RuntimeError:
+                # Fallback if no loop is running (e.g. during sync tests), though less likely in Engine run
+                pass
 
     def register_handler(self, handler: ConstraintHandler) -> None:
         """Registers a constraint handler for the type it handles."""

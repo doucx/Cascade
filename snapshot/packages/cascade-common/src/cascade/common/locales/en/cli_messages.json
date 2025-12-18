@@ -17,7 +17,8 @@
     "controller.publishing": "📡 Publishing 'pause' constraint for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
     "controller.publish_success": "✅ Pause constraint published successfully.",
     "controller.publishing_limit": "📡 Publishing concurrency limit of [bold magenta]{limit}[/bold magenta] for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
-    "controller.publish_limit_success": "✅ Concurrency limit published successfully.",
+    "controller.publishing_rate": "📡 Publishing rate limit of [bold magenta]{rate}[/bold magenta] for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
+    "controller.publish_limit_success": "✅ Limits published successfully.",
     "controller.resuming": "📡 Publishing resume command for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
     "controller.resume_success": "✅ Resume command published successfully.",
     "controller.error": "❌ An error occurred: {error}"

@@ -30,6 +30,7 @@ from cascade.runtime.constraints import ConstraintManager
 from cascade.runtime.constraints.handlers import (
     PauseConstraintHandler,
     ConcurrencyConstraintHandler,
+    RateLimitConstraintHandler,
 )
 from cascade.adapters.state import InMemoryStateBackend
 
@@ -59,8 +60,10 @@ class Engine:
         self.constraint_manager = ConstraintManager(self.resource_manager)
         self.constraint_manager.register_handler(PauseConstraintHandler())
         self.constraint_manager.register_handler(ConcurrencyConstraintHandler())
+        self.constraint_manager.register_handler(RateLimitConstraintHandler())
 
         self._wakeup_event = asyncio.Event()
+        self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
 
         self._resource_providers: Dict[str, Callable] = {}
 

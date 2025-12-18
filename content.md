@@ -1,25 +1,26 @@
-Excellent. Tests passed, which confirms our `connect` and `disconnect` logic is sound. Let's move on to the next critical piece: implementing the `publish` method.
+Confirmed. With `publish` now functional, we will proceed to implement `subscribe`, the final core component of the `Connector` protocol. This will enable the two-way communication necessary for external control of a running workflow.
 
-Following the same TDD pattern, we'll first write a test to define the expected behavior of `publish`. This includes ensuring the payload is correctly serialized to JSON and that the operation is "fire-and-forget" (non-blocking) as required by the architecture. Then, we will write the implementation code to make the test pass.
+We will continue with our TDD approach: first, defining the desired behavior in a test, then implementing the feature to make that test pass. This test will be more complex as it needs to simulate an incoming message from the broker and verify that our registered callback is correctly invoked.
 
-## [WIP] feat: Implement fire-and-forget publish method for MqttConnector
+## [WIP] feat: Implement subscribe method and message handling for MqttConnector
 
 ### 用户需求
-继续 TDD 流程，为 `MqttConnector` 实现 `publish` 方法。此方法必须能将 Python 字典负载序列化为 JSON，并以非阻塞的“发射后不管”方式将其发布到 MQTT Broker。
+为 `MqttConnector` 实现 `subscribe` 方法和底层的消息处理循环。该功能应允许外部客户端注册一个回调函数来处理特定主题上的消息，从而使 Cascade `Engine` 能够接收外部指令。
 
 ### 评论
-这是遥测功能的核心。`publish` 方法是 `Engine` 将内部事件广播到外部世界的通道。实现非阻塞行为至关重要，这严格遵循了“遥测系统故障绝不能阻塞业务”的设计原则 (`Fail-Silent Telemetry`)。通过 `asyncio.create_task`，即使 MQTT Broker 响应缓慢或无响应，`Engine` 的主事件循环也不会被拖慢。
+这是实现 Cascade 架构路线图第三阶段“约束与环境感知”的关键赋能步骤。通过 `subscribe`，我们建立了一个从外部世界到 `Engine` 内部的反馈回路。实现此功能的挑战在于需要一个健壮的、在后台持续运行的异步任务来监听和分发消息，同时确保在连接断开时能被干净地清理。
 
 ### 目标
-1.  在 `tests/test_connector.py` 中添加一个新的异步测试，验证 `publish` 方法：
-    *   在发布前会检查连接状态。
-    *   将 Python 字典正确序列化为 JSON 字符串。
-    *   调用底层 `aiomqtt.Client` 的 `publish` 方法，并传入正确的 topic 和序列化后的 payload。
-    *   该操作是非阻塞的（通过 `asyncio.create_task` 实现，并在测试中通过 `asyncio.sleep(0)` 验证其效果）。
-2.  在 `src/cascade/connectors/mqtt/connector.py` 中完整实现 `publish` 方法。
+1.  在 `tests/test_connector.py` 中编写一个新的异步测试用例，该用例将：
+    *   模拟 `aiomqtt.Client` 的消息异步迭代器 (`client.messages`)。
+    *   验证 `connector.subscribe()` 会调用底层客户端的 `subscribe` 方法。
+    *   验证当模拟的消息到达时，注册的回调函数会被调用，并传入正确解码后的 JSON payload。
+2.  修改 `connect` 方法以启动一个后台消息处理任务。
+3.  修改 `disconnect` 方法以优雅地取消这个后台任务。
+4.  在 `src/cascade/connectors/mqtt/connector.py` 中完整实现 `subscribe` 方法和私有的 `_message_handler_loop`。
 
 ### 基本原理
-我们将在测试中使用 `pytest-mock` 来继续模拟 `aiomqtt.Client`。测试的关键在于，调用 `connector.publish()` 后，我们会立即使用 `await asyncio.sleep(0)` 将控制权交还给事件循环，从而允许 `asyncio.create_task` 创建的后台任务得以执行。之后，我们再对 mock 对象的 `publish` 方法是否被以预期的参数调用进行断言。这种方法能可靠地验证“发射后不管”的行为。
+`subscribe` 的实现分为两部分：一是面向用户的 API，用于注册 topic 和 callback；二是内部的消息循环。我们将在 `connect` 时启动一个 `asyncio.Task` 来运行这个循环，并在 `disconnect` 时取消它，以确保生命周期管理的正确性。测试将通过 Mock `aiomqtt` 的 `client.messages` 异步迭代器来精确控制“何时”以及“何种”消息到达，从而在隔离环境中验证我们回调分发和 JSON 解码逻辑的正确性。
 
 ### 标签
 #intent/build #flow/ready #priority/high #comp/runtime #concept/sync #scope/api #intent/tooling #comp/tests #ai/instruct #task/state/continue
@@ -28,140 +29,15 @@ Following the same TDD pattern, we'll first write a test to define the expected 
 
 ### Script
 
-#### Acts 1: 编写 `publish` 的测试用例 (TDD - Red Phase)
+#### Acts 1: 编写 `subscribe` 的测试用例 (TDD - Red Phase)
 
-我们来扩展测试文件，加入对 `publish` 方法行为的验证。
+我们将在测试文件中添加一个更复杂的测试，用于模拟消息的接收并验证回调的执行。
 
 ~~~~~act
 patch_file
 packages/cascade-connector-mqtt/tests/test_connector.py
 ~~~~~
 ~~~~~python
-import pytest
-from unittest.mock import AsyncMock
-from cascade.connectors.mqtt import MqttConnector
-
-@pytest.fixture(autouse=True)
-def check_aiomqtt_installed():
-    try:
-        import aiomqtt
-    except ImportError:
-        pytest.skip("aiomqtt not installed, skipping MQTT connector tests.")
-
-def test_mqtt_connector_instantiation():
-    """
-    Tests that the MqttConnector can be instantiated.
-    """
-    connector = MqttConnector(hostname="localhost", port=1234)
-    assert connector.hostname == "localhost"
-    assert connector.port == 1234
-
-@pytest.mark.asyncio
-async def test_connect_and_disconnect_lifecycle(mocker):
-    """
-    Tests that connect() creates and connects a client, and disconnect() disconnects it.
-    """
-    # 1. Mock the aiomqtt.Client class
-    mock_client_instance = AsyncMock()
-    mock_client_class = mocker.patch("cascade.connectors.mqtt.connector.aiomqtt.Client")
-    mock_client_class.return_value = mock_client_instance
-
-    # 2. Setup connector
-    connector = MqttConnector(hostname="test.broker", port=9999, client_id="tester")
-
-    # 3. Test connect()
-    await connector.connect()
-
-    # Assert that the client was instantiated with correct parameters
-    mock_client_class.assert_called_once_with(
-        hostname="test.broker", port=9999, client_id="tester"
-    )
-
-    # Assert that the client's connect method was awaited
-    mock_client_instance.connect.assert_awaited_once()
-
-    # 4. Test disconnect()
-    await connector.disconnect()
-
-    # Assert that the client's disconnect method was awaited
-    mock_client_instance.disconnect.assert_awaited_once()
-~~~~~
-~~~~~python
-import pytest
-import json
-import asyncio
-from unittest.mock import AsyncMock, patch
-from cascade.connectors.mqtt import MqttConnector
-
-@pytest.fixture(autouse=True)
-def check_aiomqtt_installed():
-    try:
-        import aiomqtt
-    except ImportError:
-        pytest.skip("aiomqtt not installed, skipping MQTT connector tests.")
-
-@pytest.fixture
-def mock_client(mocker):
-    """Provides a mocked aiomqtt.Client instance and patches the class."""
-    mock_instance = AsyncMock()
-    # Configure the context manager protocol
-    mock_instance.__aenter__.return_value = mock_instance
-    mock_instance.__aexit__.return_value = None
-    
-    mocker.patch("cascade.connectors.mqtt.connector.aiomqtt.Client", return_value=mock_instance)
-    return mock_instance
-
-def test_mqtt_connector_instantiation():
-    """Tests that the MqttConnector can be instantiated."""
-    connector = MqttConnector(hostname="localhost", port=1234)
-    assert connector.hostname == "localhost"
-    assert connector.port == 1234
-
-@pytest.mark.asyncio
-async def test_connect_and_disconnect_lifecycle(mock_client, mocker):
-    """Tests that connect() creates and connects a client, and disconnect() disconnects it."""
-    # 1. Setup connector
-    connector = MqttConnector(hostname="test.broker", port=9999, client_id="tester")
-
-    # 2. Test connect()
-    await connector.connect()
-
-    # Assert that the client was instantiated
-    assert connector._client is mock_client
-    # Assert that the client's connect method was awaited via context manager
-    mock_client.__aenter__.assert_awaited_once()
-
-    # 3. Test disconnect()
-    await connector.disconnect()
-
-    # Assert that the client's disconnect method was awaited via context manager
-    mock_client.__aexit__.assert_awaited_once()
-    assert connector._client is None
-
-@pytest.mark.asyncio
-async def test_publish_sends_json_and_is_fire_and_forget(mock_client):
-    """
-    Tests that publish() serializes the payload to JSON and sends it in a
-    non-blocking manner.
-    """
-    connector = MqttConnector(hostname="test.broker")
-    await connector.connect()
-
-    topic = "telemetry/events"
-    payload = {"run_id": "123", "status": "Succeeded"}
-
-    # This should return immediately, creating a background task
-    await connector.publish(topic, payload, qos=1)
-
-    # Yield control to the event loop to allow the created task to run
-    await asyncio.sleep(0)
-
-    # Verify that the mock client's publish method was called with the correct args
-    expected_json_payload = json.dumps(payload)
-    mock_client.publish.assert_awaited_once_with(
-        topic, payload=expected_json_payload, qos=1
-    )
-
 @pytest.mark.asyncio
 async def test_publish_without_connect_does_nothing(mock_client):
     """
@@ -177,79 +53,80 @@ async def test_publish_without_connect_does_nothing(mock_client):
     
     mock_client.publish.assert_not_called()
 ~~~~~
+~~~~~python
+@pytest.mark.asyncio
+async def test_publish_without_connect_does_nothing(mock_client):
+    """
+    Tests that calling publish() before connect() does not raise an error
+    and does not try to publish anything (Fail-Silent Telemetry).
+    """
+    connector = MqttConnector(hostname="test.broker")
+    
+    # Do not call connect()
+    
+    await connector.publish("a/topic", {"data": 1})
+    await asyncio.sleep(0)
+    
+    mock_client.publish.assert_not_called()
 
-#### Acts 2: 实现 `publish` 方法 (TDD - Green Phase)
+@pytest.mark.asyncio
+async def test_subscribe_and_receive_message(mock_client, mocker):
+    """
+    Tests that subscribe() registers a callback that is correctly invoked
+    when a message is received.
+    """
+    # 1. Setup a mock message and the async iterator for client.messages
+    topic = "control/test"
+    payload = {"command": "pause"}
+    
+    mock_message = mocker.MagicMock()
+    mock_message.topic.value = topic
+    mock_message.payload = json.dumps(payload).encode("utf-8")
 
-现在我们来实现 `publish` 的逻辑，以通过上面的新测试。
+    async def mock_message_iterator():
+        yield mock_message
+
+    mock_client.messages.__aiter__.return_value = mock_message_iterator()
+    
+    # 2. Setup connector and callback
+    connector = MqttConnector(hostname="test.broker")
+    callback = AsyncMock()
+    
+    # 3. Connect and Subscribe
+    await connector.connect()
+    await connector.subscribe(topic, callback)
+    
+    # Assert that the underlying client was told to subscribe
+    mock_client.subscribe.assert_awaited_once_with(topic)
+    
+    # 4. Wait for the message handler loop to process the message
+    # The loop is started by connect(), so a small sleep lets it run.
+    await asyncio.sleep(0)
+    
+    # 5. Assert the callback was invoked with the correct, decoded arguments
+    callback.assert_awaited_once_with(topic, payload)
+
+    # 6. Disconnect should cancel the handler task
+    with patch("asyncio.Task.cancel") as mock_cancel:
+        # Re-fetch the task from the connector to patch it correctly
+        handler_task = connector._handler_task
+        if handler_task:
+             mocker.patch.object(handler_task, 'cancel', wraps=handler_task.cancel)
+             mock_cancel = handler_task.cancel
+
+        await connector.disconnect()
+        # Ensure the handler task created by connect() was cancelled
+        if handler_task:
+            assert mock_cancel.call_count == 1
+~~~~~
+
+#### Acts 2: 实现 `subscribe` 和消息循环 (TDD - Green Phase)
+
+现在，我们将实现 `subscribe` API 和内部消息处理循环，以满足新测试的要求。这包括更新 `connect` 和 `disconnect` 来管理后台任务的生命周期。
 
 ~~~~~act
 patch_file
 packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py
-~~~~~
-~~~~~python
-import asyncio
-import json
-from typing import Callable, Awaitable, Dict, Any
-
-try:
-    import aiomqtt
-except ImportError:
-    aiomqtt = None
-
-
-class MqttConnector:
-    """
-    Implements the Connector protocol for MQTT.
-
-    This connector enables Cascade to publish telemetry data to an MQTT broker
-    and subscribe to control commands.
-    """
-
-    def __init__(self, hostname: str, port: int = 1883, **kwargs):
-        if aiomqtt is None:
-            raise ImportError(
-                "The 'aiomqtt' library is required to use the MqttConnector. "
-                "Please install it with: pip install cascade-connector-mqtt"
-            )
-        self.hostname = hostname
-        self.port = port
-        self.client_kwargs = kwargs
-        self._client: "aiomqtt.Client" | None = None
-
-    async def connect(self) -> None:
-        """Establishes a connection to the MQTT Broker."""
-        if self._client:
-            return  # Already connected
-
-        self._client = aiomqtt.Client(
-            hostname=self.hostname, port=self.port, **self.client_kwargs
-        )
-        # TODO: Implement LWT message logic.
-        await self._client.connect()
-
-    async def disconnect(self) -> None:
-        """Disconnects from the MQTT Broker and cleans up resources."""
-        if self._client:
-            await self._client.disconnect()
-            self._client = None
-
-    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
-        """Publishes a message to a specific topic."""
-        # TODO: Implement publishing logic.
-        # - Ensure payload is JSON serialized.
-        # - Make it fire-and-forget (e.g., using asyncio.create_task).
-        # - Handle potential connection errors gracefully.
-        pass
-
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        """Subscribes to a topic to receive messages."""
-        # TODO: Implement subscription logic.
-        # - The client needs a message handling loop.
-        # - This method should register the topic and callback.
-        # - The loop will decode JSON and invoke the callback.
-        pass
 ~~~~~
 ~~~~~python
 import asyncio
@@ -330,16 +207,119 @@ class MqttConnector:
         # - The loop will decode JSON and invoke the callback.
         pass
 ~~~~~
+~~~~~python
+import asyncio
+import json
+import logging
+from typing import Callable, Awaitable, Dict, Any
+
+try:
+    import aiomqtt
+except ImportError:
+    aiomqtt = None
+
+logger = logging.getLogger(__name__)
+
+
+class MqttConnector:
+    """
+    Implements the Connector protocol for MQTT.
+
+    This connector enables Cascade to publish telemetry data to an MQTT broker
+    and subscribe to control commands.
+    """
+
+    def __init__(self, hostname: str, port: int = 1883, **kwargs):
+        if aiomqtt is None:
+            raise ImportError(
+                "The 'aiomqtt' library is required to use the MqttConnector. "
+                "Please install it with: pip install cascade-connector-mqtt"
+            )
+        self.hostname = hostname
+        self.port = port
+        self.client_kwargs = kwargs
+        self._client: "aiomqtt.Client" | None = None
+        self._subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
+        self._handler_task: asyncio.Task | None = None
+
+    async def _message_handler_loop(self):
+        if not self._client:
+            return
+        try:
+            async for message in self._client.messages:
+                topic = message.topic.value
+                callback = self._subscriptions.get(topic)
+                if callback:
+                    try:
+                        payload = json.loads(message.payload)
+                        # Fire-and-forget the callback execution
+                        asyncio.create_task(callback(topic, payload))
+                    except json.JSONDecodeError:
+                        logger.warning(f"Received non-JSON payload on topic '{topic}'")
+                    except Exception as e:
+                        logger.error(f"Error in message callback for topic '{topic}': {e}")
+        except asyncio.CancelledError:
+            logger.info("MQTT message handler task cancelled.")
+        except Exception as e:
+            logger.error(f"MQTT message handler loop crashed: {e}")
+
+    async def connect(self) -> None:
+        """Establishes a connection and starts the message handler."""
+        if self._client:
+            return
+
+        client = aiomqtt.Client(
+            hostname=self.hostname, port=self.port, **self.client_kwargs
+        )
+        self._client = await client.__aenter__()
+        self._handler_task = asyncio.create_task(self._message_handler_loop())
+
+    async def disconnect(self) -> None:
+        """Cancels the message handler and disconnects from the broker."""
+        if self._handler_task:
+            self._handler_task.cancel()
+            try:
+                await self._handler_task
+            except asyncio.CancelledError:
+                pass  # Expected
+            self._handler_task = None
+
+        if self._client:
+            await self._client.__aexit__(None, None, None)
+            self._client = None
+        
+        self._subscriptions.clear()
+
+
+    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
+        """Publishes a message in a non-blocking, fire-and-forget manner."""
+        if not self._client:
+            logger.warning("Attempted to publish without an active MQTT connection.")
+            return
+
+        async def _do_publish():
+            try:
+                json_payload = json.dumps(payload)
+                await self._client.publish(topic, payload=json_payload, qos=qos)
+            except Exception as e:
+                logger.error(f"Failed to publish MQTT message to topic '{topic}': {e}")
+
+        asyncio.create_task(_do_publish())
+
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> None:
+        """Subscribes to a topic to receive messages."""
+        if not self._client:
+            raise ConnectionError("Cannot subscribe, not connected to MQTT broker.")
+
+        await self._client.subscribe(topic)
+        self._subscriptions[topic] = callback
+~~~~~
 
 ### 下一步建议
-我们已经成功实现了 `connect`、`disconnect` 和 `publish` 方法，使连接器现在具备了向外发送遥测数据的核心能力。
+我们已经成功地实现了 `Connector` 协议的所有核心方法 (`connect`, `disconnect`, `publish`, `subscribe`)，并且都有相应的测试覆盖。`cascade-connector-mqtt` 包现在功能完备。
 
-根据路线图，第三阶段（约束与环境感知）需要一个反馈回路，这要求连接器能够`subscribe`（订阅）来自外部的指令。这是 `Connector` 协议的最后一部分。
+根据路线图（`Cascade 架构演进技术路线图 (v2.0).md`）和我们在代码中留下的 `TODO`，有一个重要的健壮性特性尚未实现：**遗言（Last Will and Testament - LWT）**。
 
-我建议我们下一步实现 `subscribe` 方法。这将比 `publish` 更复杂，因为它需要管理一个持续监听消息的任务，并在收到消息时调用注册的回调函数。
-
-我们的计划将是：
-1.  **编写测试**: 创建一个测试，验证 `subscribe` 方法能够注册一个回调，并且当模拟的客户端“接收”到消息时，该回调会被正确调用，并传入解码后的 JSON payload。
-2.  **实现 `subscribe`**: 在 `MqttConnector` 中实现一个消息处理循环，管理订阅和回调分发。
-
-如果你同意，我们将开始这个最后的核心功能。
+我建议我们下一个计划是实现 LWT 功能。这涉及到在 `connect` 方法中，为 `aiomqtt.Client` 配置 `will` 参数。这将确保在我们的 Cascade 客户端异常断开时，Broker 可以自动发布一条消息（例如，`{"status": "offline"}`），这对构建可靠的分布式系统至关重要。

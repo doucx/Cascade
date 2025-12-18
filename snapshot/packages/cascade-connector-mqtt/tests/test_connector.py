@@ -87,3 +87,53 @@ async def test_publish_without_connect_does_nothing(mock_client):
     await asyncio.sleep(0)
     
     mock_client.publish.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_subscribe_and_receive_message(mock_client, mocker):
+    """
+    Tests that subscribe() registers a callback that is correctly invoked
+    when a message is received.
+    """
+    # 1. Setup a mock message and the async iterator for client.messages
+    topic = "control/test"
+    payload = {"command": "pause"}
+    
+    mock_message = mocker.MagicMock()
+    mock_message.topic.value = topic
+    mock_message.payload = json.dumps(payload).encode("utf-8")
+
+    async def mock_message_iterator():
+        yield mock_message
+
+    mock_client.messages.__aiter__.return_value = mock_message_iterator()
+    
+    # 2. Setup connector and callback
+    connector = MqttConnector(hostname="test.broker")
+    callback = AsyncMock()
+    
+    # 3. Connect and Subscribe
+    await connector.connect()
+    await connector.subscribe(topic, callback)
+    
+    # Assert that the underlying client was told to subscribe
+    mock_client.subscribe.assert_awaited_once_with(topic)
+    
+    # 4. Wait for the message handler loop to process the message
+    # The loop is started by connect(), so a small sleep lets it run.
+    await asyncio.sleep(0)
+    
+    # 5. Assert the callback was invoked with the correct, decoded arguments
+    callback.assert_awaited_once_with(topic, payload)
+
+    # 6. Disconnect should cancel the handler task
+    with patch("asyncio.Task.cancel") as mock_cancel:
+        # Re-fetch the task from the connector to patch it correctly
+        handler_task = connector._handler_task
+        if handler_task:
+             mocker.patch.object(handler_task, 'cancel', wraps=handler_task.cancel)
+             mock_cancel = handler_task.cancel
+
+        await connector.disconnect()
+        # Ensure the handler task created by connect() was cancelled
+        if handler_task:
+            assert mock_cancel.call_count == 1

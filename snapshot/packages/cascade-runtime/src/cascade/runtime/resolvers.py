@@ -125,36 +125,48 @@ class ConstraintResolver:
     """
 
     def resolve(
-        self, node: Node, graph: Graph, state_backend: StateBackend
+        self, node: Node, graph: Graph, state_backend: StateBackend, constraint_manager: "ConstraintManager" = None
     ) -> Dict[str, Any]:
-        if not node.constraints or node.constraints.is_empty():
-            return {}
-
+        """
+        Resolves resource requirements from:
+        1. Node-level .with_constraints() (static & dynamic)
+        2. Global constraints (via ConstraintManager)
+        """
         resolved = {}
 
-        constraint_edges = [
-            e
-            for e in graph.edges
-            if e.target.id == node.id and e.edge_type == EdgeType.CONSTRAINT
-        ]
+        # 1. Resolve Node-level constraints
+        if node.constraints and not node.constraints.is_empty():
+            constraint_edges = [
+                e
+                for e in graph.edges
+                if e.target.id == node.id and e.edge_type == EdgeType.CONSTRAINT
+            ]
 
-        for res, amount in node.constraints.requirements.items():
-            if isinstance(amount, (LazyResult, MappedLazyResult)):
-                constraint_edge = next(
-                    (e for e in constraint_edges if e.arg_name == res), None
-                )
-
-                if constraint_edge is None:
-                    raise RuntimeError(
-                        f"Internal Error: Missing constraint edge for dynamic requirement '{res}' on task '{node.name}'"
+            for res, amount in node.constraints.requirements.items():
+                if isinstance(amount, (LazyResult, MappedLazyResult)):
+                    constraint_edge = next(
+                        (e for e in constraint_edges if e.arg_name == res), None
                     )
 
-                if state_backend.has_result(constraint_edge.source.id):
-                    resolved[res] = state_backend.get_result(constraint_edge.source.id)
+                    if constraint_edge is None:
+                        raise RuntimeError(
+                            f"Internal Error: Missing constraint edge for dynamic requirement '{res}' on task '{node.name}'"
+                        )
+
+                    if state_backend.has_result(constraint_edge.source.id):
+                        resolved[res] = state_backend.get_result(constraint_edge.source.id)
+                    else:
+                        raise DependencyMissingError(
+                            node.id, f"constraint:{res}", constraint_edge.source.id
+                        )
                 else:
-                    raise DependencyMissingError(
-                        node.id, f"constraint:{res}", constraint_edge.source.id
-                    )
-            else:
-                resolved[res] = amount
+                    resolved[res] = amount
+        
+        # 2. Resolve Global constraints
+        if constraint_manager:
+            extra = constraint_manager.get_extra_requirements(node)
+            # TODO: Handle conflict resolution? For now, we assume disjoint keys or additive.
+            # But concurrency resources have unique names, so conflicts are unlikely.
+            resolved.update(extra)
+
         return resolved

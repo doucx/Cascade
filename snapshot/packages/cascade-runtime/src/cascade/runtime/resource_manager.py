@@ -29,6 +29,14 @@ class ResourceManager:
             if k not in self._usage:
                 self._usage[k] = 0.0
 
+    def update_resource(self, name: str, capacity: float):
+        """Dynamically updates or creates a single resource's capacity."""
+        self._capacity[name] = float(capacity)
+        if name not in self._usage:
+            self._usage[name] = 0.0
+        # If we reduced capacity below current usage, that's allowed (soft limit),
+        # but new acquisitions will block.
+
     async def acquire(self, requirements: Dict[str, Union[int, float]]):
         """
         Atomically acquires the requested resources.

@@ -1,212 +1,74 @@
-Excellent, the tests have correctly identified a flaw in our logic. This is exactly why we write them.
+好的，测试已通过。我们将为这次测试用例的创建和修复创建一个提交，然后定位到当前的开发路线。
 
-The error `AssertionError: Expected 'info' to be called once. Called 2 times` tells us that `bus.info` was called twice, but the test only expected a single call.
-
-### 错误分析
-
-The root cause is in the `on_message` callback. When it receives the *first* message for a new `run_id`, it performs two actions:
-1.  It prints the run header: `bus.info("observer.telemetry.run_header", ...)`
-2.  It prints the specific event message: `bus.info("observer.telemetry.task_state.RUNNING", ...)`
-
-Our test assertion, `assert_called_once_with`, is too strict. It requires that the mock was called *exactly once* and with the specified arguments. Since there were two calls, the test failed on the call count.
-
-Furthermore, the tests suffer from **state leakage**. The `seen_run_ids` set is a global variable, so whichever test runs first will add `"run-123"` to it, causing subsequent tests to behave differently. This is why only the first test failed. We must ensure each test runs in an isolated state.
-
-### 解决方案
-
-1.  **Isolate Test State**: We will add `observer_app.seen_run_ids.clear()` to the beginning of each test case to ensure that the global state is reset before each run. This makes the tests independent of execution order.
-2.  **Refine Assertions**: Instead of asserting the total number of calls, we will use `assert_any_call`. This assertion specifically checks if a call with the given arguments was made at least once, regardless of other calls. This correctly reflects our intent: "Was the correct 'RUNNING' event message sent?".
-
-## [WIP] fix(tests): Isolate test state and refine observer assertions
+## [COMMIT] test(cli): Add and stabilize observer message processing tests
 
 ### 用户需求
-修复 `cs-observer` 测试套件中的 `AssertionError`，并消除因共享全局状态 (`seen_run_ids`) 导致的测试间依赖。
+提交 `cs-observer` 的核心消息处理逻辑测试，并修复了在测试执行过程中发现的全局状态泄漏问题，确保测试的独立性和鲁棒性。
 
 ### 评论
-这是一个典型的测试驱动开发 (TDD) 循环的胜利。测试暴露了两个常见问题：过于严格的断言和测试间的状态泄漏。通过修正这些问题，我们将使测试套件更加健壮、可靠，并且与实现细节解耦。
+该提交完成了 `cs-observer` 消息处理逻辑（`on_message`）的覆盖。通过使用 `unittest.mock` 对 `MessageBus` 进行断言，我们验证了业务逻辑的正确性（即它是否发送了正确的语义消息），而与最终的用户界面解耦，完全符合 `d3-principle-python-testing-mock-intent` 原则。
 
 ### 目标
-1.  在每个处理遥测事件的测试用例开始时，清空 `observer_app.seen_run_ids` 集合。
-2.  将测试断言从 `assert_called_once_with` 修改为 `assert_any_call`，以准确验证“意图”的存在，而不是调用次数。
+1.  提交 `tests/cli-observer/test_app.py`，完成对 `cs-observer` 消息处理逻辑的测试覆盖。
+2.  确保 `observer_app.seen_run_ids` 的状态隔离，消除测试间的依赖。
+
+### 基本原理
+遵循 `d3-constraint-quipu-plan-script-rules-D3-P2` 约束，本次计划用于提交前一个步骤中已完成的代码。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #comp/cli #task/domain/testing #task/object/test-suite #task/action/refactor #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/cli #concept/telemetry #scope/dx #ai/instruct #task/domain/testing #task/object/observer-tool #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复并加固 Observer 测试套件
+#### Acts 1: 提交测试文件
 
-我们将修改 `test_app.py` 中的所有测试用例，为它们添加状态重置逻辑，并使用更合适的断言。
+将新创建的测试文件添加到暂存区，并执行提交。
 
 ~~~~~act
-patch_file
+git_add
 tests/cli-observer/test_app.py
+packages/cascade-cli-observer/src/cascade/cli/observer/app.py
+packages/cascade-cli-observer/src/cascade/cli/observer/rendering.py
+packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
 ~~~~~
-~~~~~python
-@pytest.mark.asyncio
-async def test_on_message_handles_task_running_event(mock_messaging_bus):
-    """
-    Verify that a 'RUNNING' TaskStateEvent is correctly parsed and rendered.
-    """
-    # Arrange: A sample telemetry payload
-    payload = {
-        "header": {"run_id": "run-123"},
-        "body": {
-            "type": "TaskStateEvent",
-            "state": "RUNNING",
-            "task_name": "process_data",
-        },
-    }
 
-    # Act: Directly call the callback function
-    await observer_app.on_message("a/topic", payload)
-
-    # Assert: Verify the bus was called with the correct semantic intent
-    mock_messaging_bus.info.assert_called_once_with(
-        "observer.telemetry.task_state.RUNNING",
-        task_name="process_data",
-        duration_ms=0,
-        error="",
-    )
-
-
-@pytest.mark.asyncio
-async def test_on_message_handles_task_completed_event(mock_messaging_bus):
-    """
-    Verify that a 'COMPLETED' TaskStateEvent is correctly parsed.
-    """
-    payload = {
-        "header": {"run_id": "run-123"},
-        "body": {
-            "type": "TaskStateEvent",
-            "state": "COMPLETED",
-            "task_name": "generate_report",
-            "duration_ms": 123.45,
-        },
-    }
-
-    await observer_app.on_message("a/topic", payload)
-
-    mock_messaging_bus.info.assert_called_once_with(
-        "observer.telemetry.task_state.COMPLETED",
-        task_name="generate_report",
-        duration_ms=123.45,
-        error="",
-    )
-
-
-@pytest.mark.asyncio
-async def test_on_message_handles_task_failed_event(mock_messaging_bus):
-    """
-    Verify that a 'FAILED' TaskStateEvent is correctly parsed.
-    """
-    payload = {
-        "header": {"run_id": "run-123"},
-        "body": {
-            "type": "TaskStateEvent",
-            "state": "FAILED",
-            "task_name": "api_call",
-            "duration_ms": 50.0,
-            "error": "TimeoutError",
-        },
-    }
-
-    await observer_app.on_message("a/topic", payload)
-
-    mock_messaging_bus.info.assert_called_once_with(
-        "observer.telemetry.task_state.FAILED",
-        task_name="api_call",
-        duration_ms=50.0,
-        error="TimeoutError",
-    )
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-@pytest.mark.asyncio
-async def test_on_message_handles_task_running_event(mock_messaging_bus):
-    """
-    Verify that a 'RUNNING' TaskStateEvent is correctly parsed and rendered.
-    """
-    # Arrange: Reset global state and define payload
-    observer_app.seen_run_ids.clear()
-    payload = {
-        "header": {"run_id": "run-123"},
-        "body": {
-            "type": "TaskStateEvent",
-            "state": "RUNNING",
-            "task_name": "process_data",
-        },
-    }
+~~~~~text
+test(cli): Add and stabilize observer message processing tests
 
-    # Act: Directly call the callback function
-    await observer_app.on_message("a/topic", payload)
+Adds comprehensive integration tests for the `cs-observer`'s `on_message` callback function.
 
-    # Assert: Verify the bus was called with the correct semantic intent.
-    # We use assert_any_call because the run header might also be printed.
-    mock_messaging_bus.info.assert_any_call(
-        "observer.telemetry.task_state.RUNNING",
-        task_name="process_data",
-        duration_ms=0,
-        error="",
-    )
-
-
-@pytest.mark.asyncio
-async def test_on_message_handles_task_completed_event(mock_messaging_bus):
-    """
-    Verify that a 'COMPLETED' TaskStateEvent is correctly parsed.
-    """
-    # Arrange
-    observer_app.seen_run_ids.clear()
-    payload = {
-        "header": {"run_id": "run-123"},
-        "body": {
-            "type": "TaskStateEvent",
-            "state": "COMPLETED",
-            "task_name": "generate_report",
-            "duration_ms": 123.45,
-        },
-    }
-
-    # Act
-    await observer_app.on_message("a/topic", payload)
-
-    # Assert
-    mock_messaging_bus.info.assert_any_call(
-        "observer.telemetry.task_state.COMPLETED",
-        task_name="generate_report",
-        duration_ms=123.45,
-        error="",
-    )
-
-
-@pytest.mark.asyncio
-async def test_on_message_handles_task_failed_event(mock_messaging_bus):
-    """
-    Verify that a 'FAILED' TaskStateEvent is correctly parsed.
-    """
-    # Arrange
-    observer_app.seen_run_ids.clear()
-    payload = {
-        "header": {"run_id": "run-123"},
-        "body": {
-            "type": "TaskStateEvent",
-            "state": "FAILED",
-            "task_name": "api_call",
-            "duration_ms": 50.0,
-            "error": "TimeoutError",
-        },
-    }
-
-    # Act
-    await observer_app.on_message("a/topic", payload)
-
-    # Assert
-    mock_messaging_bus.info.assert_any_call(
-        "observer.telemetry.task_state.FAILED",
-        task_name="api_call",
-        duration_ms=50.0,
-        error="TimeoutError",
-    )
+Key changes:
+- Tests verify that incoming telemetry payloads are correctly translated into semantic message IDs (e.g., `observer.telemetry.task_state.COMPLETED`) and published to the `MessageBus`.
+- Fixed a critical failure where tests were relying on the global state (`seen_run_ids`). Global state is now explicitly reset before each test to ensure isolation and robustness.
+- Uses `assert_any_call` to accurately assert the presence of a specific message intent, aligning with the "Mock Intent" testing principle.
 ~~~~~
+
+---
+## 当前状态和下一步分析
+
+**当前位置**: 我们已经完成了 `cs-observer` 的**消息处理回调** (`on_message`) 逻辑和测试。我们知道如何接收 MQTT 消息并将其格式化输出。
+
+**下一步方向**: 路线图要求我们实现 `cs-controller`，使其能够发布约束指令。
+
+### 下一步建议：实现 `cs-controller`
+
+我们现在可以转向实现 `cs-controller` 的第一个核心功能：`pause` 命令。
+
+这将涉及到：
+1.  **实现 `MqttConnector` 的 `publish` 逻辑**：虽然连接器类已存在，但我们需要在 `cs-controller` 中使用它。
+2.  **构造 `GlobalConstraint` 报文**：根据 Phase 3 的定义，构造一个标准的 JSON 约束对象。
+3.  **确定 MQTT 主题**：发布到 `cascade/constraints/{org}/{project}/{id}` 主题（或一个简单的 `cascade/constraints/global`）。
+
+我将生成一个计划，来实现 `cs-controller pause` 命令，使其能够发布一个标准的全局暂停约束。
+
+### 新任务计划
+*   **动作**: 实现 `cs-controller pause` 命令。
+*   **涉及文件**: `packages/cascade-cli-controller/src/cascade/cli/controller/app.py`
+*   **核心逻辑**: 实例化 `MqttConnector`，连接，构造 `GlobalConstraint` JSON，并发布到预定的约束主题。
+
+如果你同意，我将生成这个新的实现计划。

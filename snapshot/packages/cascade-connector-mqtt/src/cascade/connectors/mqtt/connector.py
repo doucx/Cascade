@@ -139,7 +139,7 @@ class MqttConnector:
                         payload_str = payload_bytes.decode("utf-8")
                     else:
                         payload_str = str(payload_bytes)
-                    
+
                     # If the payload is empty (resume command), pass an empty dict
                     if not payload_str:
                         data = {}

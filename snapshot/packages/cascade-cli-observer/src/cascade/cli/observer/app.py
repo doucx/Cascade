@@ -13,7 +13,7 @@ seen_run_ids = set()
 async def on_message(topic: str, payload: dict):
     """Callback to process incoming telemetry messages."""
     global seen_run_ids
-    
+
     header = payload.get("header", {})
     body = payload.get("body", {})
     run_id = header.get("run_id")
@@ -52,12 +52,15 @@ def watch(
     """
     Connect to the MQTT broker and watch for real-time telemetry events.
     """
+
     async def main_loop():
         topic = f"cascade/telemetry/+/{project}/+/events"
         connector = MqttConnector(hostname=hostname, port=port)
         shutdown_event = asyncio.Event()
 
-        bus.info("observer.startup.watching", project=project, hostname=hostname, port=port)
+        bus.info(
+            "observer.startup.watching", project=project, hostname=hostname, port=port
+        )
 
         try:
             await connector.connect()
@@ -69,7 +72,7 @@ def watch(
         finally:
             bus.info("observer.shutdown")
             await connector.disconnect()
-            
+
     try:
         asyncio.run(main_loop())
     except KeyboardInterrupt:

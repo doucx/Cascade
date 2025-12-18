@@ -125,7 +125,11 @@ class ConstraintResolver:
     """
 
     def resolve(
-        self, node: Node, graph: Graph, state_backend: StateBackend, constraint_manager: "ConstraintManager" = None
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        constraint_manager: "ConstraintManager" = None,
     ) -> Dict[str, Any]:
         """
         Resolves resource requirements from:
@@ -154,14 +158,16 @@ class ConstraintResolver:
                         )
 
                     if state_backend.has_result(constraint_edge.source.id):
-                        resolved[res] = state_backend.get_result(constraint_edge.source.id)
+                        resolved[res] = state_backend.get_result(
+                            constraint_edge.source.id
+                        )
                     else:
                         raise DependencyMissingError(
                             node.id, f"constraint:{res}", constraint_edge.source.id
                         )
                 else:
                     resolved[res] = amount
-        
+
         # 2. Resolve Global constraints
         if constraint_manager:
             extra = constraint_manager.get_extra_requirements(node)

@@ -109,7 +109,7 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
             target_task_name = scope.split(":", 1)[1]
             if task.name == target_task_name:
                 is_match = True
-        
+
         if is_match:
             res_name = self._get_resource_name(constraint)
             # We require 1 slot of this concurrency resource

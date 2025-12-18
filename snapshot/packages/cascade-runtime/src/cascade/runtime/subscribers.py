@@ -63,9 +63,7 @@ class HumanReadableLogSubscriber:
             )
 
     def on_task_skipped(self, event: TaskSkipped):
-        bus.info(
-            "task.skipped", task_name=event.task_name, reason=event.reason
-        )
+        bus.info("task.skipped", task_name=event.task_name, reason=event.reason)
 
     def on_task_retrying(self, event: TaskRetrying):
         bus.warning(

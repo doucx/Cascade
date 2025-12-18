@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "好的，我们已经完成了确定性调度机制的实现和缺陷修复。现在将作为一个完整的逻辑单元提交。", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766056511.664132, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py, M app.py, M __init__.py ... and 24 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766059013.4608479, "duration_ms": 0}}

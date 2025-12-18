@@ -14,7 +14,6 @@
 
     "controller.connecting": "Connecting to MQTT broker at [bold green]{hostname}:{port}[/bold green]...",
     "controller.connected": "✅ Connected to MQTT broker.",
-json
     "controller.publishing": "📡 Publishing 'pause' constraint for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
     "controller.publish_success": "✅ Pause constraint published successfully.",
     "controller.publishing_limit": "📡 Publishing concurrency limit of [bold magenta]{limit}[/bold magenta] for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",

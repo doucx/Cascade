@@ -91,7 +91,9 @@ async def _publish_limit(scope: str, concurrency: int, hostname: str, port: int)
         payload = asdict(constraint)
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
 
-        bus.info("controller.publishing_limit", scope=scope, topic=topic, limit=concurrency)
+        bus.info(
+            "controller.publishing_limit", scope=scope, topic=topic, limit=concurrency
+        )
         await connector.publish(topic, payload, retain=True)
 
         await asyncio.sleep(0.1)
@@ -106,7 +108,9 @@ async def _publish_limit(scope: str, concurrency: int, hostname: str, port: int)
 @app.command()
 def set_limit(
     scope: str = typer.Option(
-        ..., "--scope", help="The scope to apply the limit to (e.g., 'global', 'task:api_call')."
+        ...,
+        "--scope",
+        help="The scope to apply the limit to (e.g., 'global', 'task:api_call').",
     ),
     concurrency: int = typer.Option(
         ..., "--concurrency", help="The maximum number of concurrent tasks."
@@ -119,7 +123,9 @@ def set_limit(
     """
     try:
         asyncio.run(
-            _publish_limit(scope=scope, concurrency=concurrency, hostname=hostname, port=port)
+            _publish_limit(
+                scope=scope, concurrency=concurrency, hostname=hostname, port=port
+            )
         )
     except KeyboardInterrupt:
         bus.info("observer.shutdown")

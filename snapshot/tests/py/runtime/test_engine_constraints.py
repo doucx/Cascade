@@ -12,6 +12,7 @@ from cascade.spec.constraint import GlobalConstraint
 
 # --- Test Fixtures and Mocks ---
 
+
 class MockConnector(Connector):
     """A mock connector for testing Engine's subscription logic."""
 
@@ -45,7 +46,7 @@ class MockConnector(Connector):
                 prefix = sub_topic[:-2]
                 if topic.startswith(prefix):
                     is_match = True
-            
+
             if is_match:
                 await callback(topic, payload)
 
@@ -101,6 +102,7 @@ async def wait_for_task_start(spy, task_name: str, timeout: float = 2.0):
 
 # --- Test Cases ---
 
+
 @pytest.mark.asyncio
 async def test_engine_subscribes_to_constraints(engine_with_connector, mock_connector):
     """
@@ -121,7 +123,9 @@ async def test_engine_subscribes_to_constraints(engine_with_connector, mock_conn
 
 
 @pytest.mark.asyncio
-async def test_engine_updates_constraints_on_message(engine_with_connector, mock_connector):
+async def test_engine_updates_constraints_on_message(
+    engine_with_connector, mock_connector
+):
     """
     Verify that the Engine's ConstraintManager is updated when a valid message is received.
     """
@@ -144,7 +148,9 @@ async def test_engine_updates_constraints_on_message(engine_with_connector, mock
         "type": "pause",
         "params": {},
     }
-    await mock_connector._trigger_message("cascade/constraints/control", constraint_payload)
+    await mock_connector._trigger_message(
+        "cascade/constraints/control", constraint_payload
+    )
 
     # Check the internal state of the ConstraintManager
     constraint_manager = engine_with_connector.constraint_manager
@@ -186,7 +192,9 @@ async def test_engine_handles_malformed_constraint_payload(
         "type": "pause",
         "params": {},
     }
-    await mock_connector._trigger_message("cascade/constraints/control", malformed_payload)
+    await mock_connector._trigger_message(
+        "cascade/constraints/control", malformed_payload
+    )
 
     # The engine should not have crashed.
     # We can check stderr for the error message.
@@ -261,9 +269,7 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
     await asyncio.sleep(0.2)
 
     # 6. Assert based on the event stream
-    started_task_names = {
-        e.task_name for e in spy.events_of_type(TaskExecutionStarted)
-    }
+    started_task_names = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
 
     assert "task_a" in started_task_names
     assert "task_b" not in started_task_names, "task_b should have been paused"

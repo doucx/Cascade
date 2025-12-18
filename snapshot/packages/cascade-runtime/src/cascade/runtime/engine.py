@@ -201,7 +201,9 @@ class Engine:
                     for node, res in zip(executable_this_pass, pass_results):
                         state_backend.put_result(node.id, res)
                         if self.flow_manager:
-                            self.flow_manager.register_result(node.id, res, state_backend)
+                            self.flow_manager.register_result(
+                                node.id, res, state_backend
+                            )
 
                 pending_nodes_in_stage = deferred_this_pass
 

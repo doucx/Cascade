@@ -12,6 +12,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
 class MqttConnector:
     """
     Implements the Connector protocol for MQTT.
@@ -33,7 +34,6 @@ class MqttConnector:
         self._loop_task: asyncio.Task | None = None
         self._subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
         self._source_id = f"{platform.node()}-{os.getpid()}"
-
 
     async def connect(self) -> None:
         """Establishes a connection to the MQTT Broker."""
@@ -94,8 +94,8 @@ class MqttConnector:
     ) -> None:
         """Subscribes to a topic to receive messages."""
         if not self._client:
-             logger.warning("Attempted to subscribe without an active MQTT connection.")
-             return
+            logger.warning("Attempted to subscribe without an active MQTT connection.")
+            return
 
         # 1. Register callback locally
         self._subscriptions[topic] = callback
@@ -104,7 +104,7 @@ class MqttConnector:
         try:
             await self._client.subscribe(topic)
         except Exception as e:
-             logger.error(f"Failed to subscribe to topic '{topic}': {e}")
+            logger.error(f"Failed to subscribe to topic '{topic}': {e}")
 
     async def _message_loop(self):
         """Background task to process incoming MQTT messages."""
@@ -130,9 +130,9 @@ class MqttConnector:
                         payload_str = payload_bytes.decode("utf-8")
                     else:
                         payload_str = str(payload_bytes)
-                    
+
                     data = json.loads(payload_str)
-                    
+
                     # Execute callback (fire and forget, or await?)
                     # Since we are in a loop, we should probably await to preserve order,
                     # or create task for concurrency. For now, await is safer for state consistency.
@@ -147,6 +147,6 @@ class MqttConnector:
             # Normal shutdown
             pass
         except Exception as e:
-            # Unexpected error in loop, log it. 
+            # Unexpected error in loop, log it.
             # In a robust system we might want to restart the loop.
             logger.error(f"MQTT message loop crashed: {e}")

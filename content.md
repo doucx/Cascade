@@ -1,507 +1,268 @@
-好的，我将分析当前的项目状态，并根据《Phase 3 (Refined) & Phase 4 并行开发路线图》文档，选取**里程碑 3.1: 精准控制 (Targeted Control)** 作为本次任务的核心，并生成一个完整的实施计划。
+好的，我们立即开始编写集成测试。
 
-这是一个关键的里程碑，它将系统的控制能力从“全局”提升到了“任务级”，是实现“自适应执行环境”愿景的基础。为了实现这一点，我们需要同步修改引擎和 CLI 工具。
+我将生成一个 `[WIP]` 计划，用于在 `tests/py/runtime/test_engine_constraints.py` 中添加一个全面的测试用例。这个测试将严格遵循我们已建立的“通过事件流验证意图”的原则，确保新实现的暂停与恢复功能在任务级别上是正确且健壮的。
 
-## [WIP] feat(control): 实现任务级暂停与恢复机制
+## [WIP] test(runtime): 为任务级暂停与恢复功能添加集成测试
 
 ### 用户需求
-根据项目路线图，需要实现里程碑 3.1，为 Cascade 系统引入任务级的精准控制能力。具体需求如下：
-1.  **引擎能力**: `Engine` 必须能够理解并执行针对特定任务范围（如 `task:api_call`）的 `pause` 约束。
-2.  **工具能力**: `cs-controller` CLI 工具需要增加一个 `resume` 命令，用于解除之前施加的 `pause` 约束。
-3.  **协议健壮性**: `pause` 和 `resume` 的实现需要依赖 MQTT 的保留消息 (Retained Message) 机制，以确保控制状态的持久性。
+为里程碑 3.1 实现的“任务级暂停与恢复”功能编写一个集成测试。该测试需要验证整个控制回路：
+1.  施加一个针对特定任务的 `pause` 约束。
+2.  确认该任务被正确挂起，而其他任务不受影响。
+3.  发送一个 `resume` 命令。
+4.  确认被挂起的任务恢复执行，并且整个工作流最终成功完成。
 
 ### 评论
-这是一个对系统可操作性的重大改进。它将 Cascade 从一个纯粹的“执行引擎”转变为一个可被外部实时管理的“受控系统”，为实现更高级的运维模式（如蓝绿部署、金丝雀发布中的流量控制、紧急止损等）奠定了基础。通过并行开发 `cs-controller`，我们确保了引擎的新能力能够立刻转化为对开发者和运维人员有价值的工具。
+这是确保我们新功能质量的关键步骤。一个可靠的集成测试不仅能验证当前实现的正确性，还能在未来的重构中充当安全网，防止回归问题的发生。通过模拟 MQTT 消息并断言 `Engine` 发出的事件，我们可以创建一个与 UI 无关的、高度可靠的测试用例。
 
 ### 目标
-1.  **增强 `MqttConnector`**: 修改 `publish` 方法，使其支持 MQTT 的 `retain` 标志，这是实现持久化控制状态的关键。
-2.  **增强 `cs-controller`**:
-    *   更新 `pause` 命令，使其发布的约束消息成为保留消息。
-    *   创建一个新的 `resume` 命令，它通过向同一主题发布一条空的保留消息来清除先前的 `pause` 状态。
-    *   为新命令添加对应的用户反馈消息。
-3.  **增强 `ConstraintManager`**: 增加一个 `remove_constraints_by_scope` 方法，允许 `Engine` 响应 `resume` 指令。
-4.  **增强 `Engine`**: 更新其 MQTT 回调逻辑 (`_on_constraint_update`)，使其能够处理空消息负载（代表 `resume`），并调用 `ConstraintManager` 的新方法来移除约束。
-5.  **增强 `PauseConstraintHandler`**: 更新其 `check_permission` 逻辑，以正确解析并匹配任务级范围（`task:<task_name>`）。
+1.  在 `tests/py/runtime/test_engine_constraints.py` 文件中，新增一个名为 `test_engine_pauses_and_resumes_specific_task` 的测试用例。
+2.  该测试将使用 `MockConnector` 模拟来自 `cs-controller` 的 `pause` 和 `resume` MQTT 消息。
+3.  使用 `SpySubscriber` 捕获 `Engine` 在整个执行过程中的所有事件。
+4.  通过断言事件的顺序和内容（例如，`TaskExecutionFinished` for `task_a`, an absence of events for `task_b`, followed by `TaskExecutionFinished` for `task_b` and `task_c` after resume），来验证控制逻辑的正确性。
 
 ### 基本原理
-我们将利用 MQTT 的 **保留消息 (Retained Message)** 机制作为实现“状态控制”的基石。
-*   当 `cs-controller pause --task api_call` 执行时，它会向 `cascade/constraints/task/api_call` 主题发布一条**带有 `retain=True` 标志的**约束消息。Broker 会持久化这条消息。任何新连接到此主题的 `Engine` 都会立即收到这个“暂停”状态。
-*   当 `cs-controller resume --task api_call` 执行时，它会向同一主题发布一条**空的、`retain=True` 的**消息。根据 MQTT 规范，这会清除该主题上先前的保留消息。
-*   `Engine` 端会订阅 `cascade/constraints/#`。当收到空消息时，它会识别出这是一个“解除”信号，并从其内部的 `ConstraintManager` 中移除所有与该主题范围匹配的约束，从而恢复任务执行。
-
-这种设计将控制状态的“真理之源”放在了消息代理 (Broker) 上，极大地解耦了控制者和执行者。
+测试将创建一个 A -> B -> C 的三步工作流。在任务 A 完成后，测试会注入一个针对 `task:task_b` 的暂停约束。此时，我们断言 `task_b` 不会启动。然后，我们注入一个恢复命令，并断言 `task_b` 和 `task_c` 依次恢复执行并成功完成。所有对系统状态的判断都将基于 `SpySubscriber` 捕获的事件流，这是一种健壮且解耦的测试策略。
 
 ### 标签
-#intent/build #flow/ready #priority/high
-#comp/runtime #comp/cli #comp/interfaces
-#concept/executor #scope/api #scope/ux
+#intent/tooling #flow/ready #priority/high
+#comp/runtime #comp/tests
+#concept/executor #scope/core
 #ai/instruct
-#task/domain/control #task/object/constraint-system #task/action/refinement #task/state/begin
+#task/domain/control #task/object/constraint-system #task/action/refinement #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 增强 MqttConnector 与其协议以支持保留消息
+#### Acts 1: 在 `test_engine_constraints.py` 中添加新的集成测试
 
-首先，我们需要让核心的 `MqttConnector` 和 `Connector` 协议支持 `retain` 标志。
-
-~~~~~act
-patch_file
-packages/cascade-interfaces/src/cascade/interfaces/protocols.py
-~~~~~
-~~~~~python
-    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
-        """Publishes a message (e.g., a telemetry event) to a specific topic."""
-        ...
-~~~~~
-~~~~~python
-    async def publish(
-        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
-    ) -> None:
-        """Publishes a message (e.g., a telemetry event) to a specific topic."""
-        ...
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py
-~~~~~
-~~~~~python
-    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
-        """
-        Publishes a message in a non-blocking, fire-and-forget manner.
-        """
-        if not self._client:
-            logger.warning("Attempted to publish without an active MQTT connection.")
-            return
-
-        async def _do_publish():
-            try:
-                json_payload = json.dumps(payload)
-                await self._client.publish(topic, payload=json_payload, qos=qos)
-            except Exception as e:
-                # Per Fail-Silent Telemetry principle, we log errors but don't propagate them.
-                logger.error(f"Failed to publish MQTT message to topic '{topic}': {e}")
-
-        asyncio.create_task(_do_publish())
-~~~~~
-~~~~~python
-    async def publish(
-        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
-    ) -> None:
-        """
-        Publishes a message in a non-blocking, fire-and-forget manner.
-        """
-        if not self._client:
-            logger.warning("Attempted to publish without an active MQTT connection.")
-            return
-
-        async def _do_publish():
-            try:
-                # Support both dicts (for JSON) and empty strings (for clearing retained)
-                if isinstance(payload, dict):
-                    final_payload = json.dumps(payload)
-                else:
-                    final_payload = payload
-
-                await self._client.publish(
-                    topic, payload=final_payload, qos=qos, retain=retain
-                )
-            except Exception as e:
-                # Per Fail-Silent Telemetry principle, we log errors but don't propagate them.
-                logger.error(f"Failed to publish MQTT message to topic '{topic}': {e}")
-
-        asyncio.create_task(_do_publish())
-~~~~~
-
-#### Acts 2: 在 Controller 中实现 `resume` 命令并更新 `pause`
-
-现在我们为 `cs-controller` 添加 `resume` 功能，并让 `pause` 使用保留消息。
+我们将通过 `patch_file` 向测试文件中追加新的测试用例。
 
 ~~~~~act
 patch_file
-packages/cascade-cli-controller/src/cascade/cli/controller/app.py
+tests/py/runtime/test_engine_constraints.py
 ~~~~~
 ~~~~~python
-async def _publish_pause(scope: str, hostname: str, port: int):
-    """Core logic for publishing a pause constraint."""
-    connector = MqttConnector(hostname=hostname, port=port)
+@pytest.mark.asyncio
+async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
+    """
+    End-to-end test verifying the global pause functionality.
+    It checks that after a pause command is received, no new tasks are started.
+    """
+    from cascade.spec.task import task
+    from cascade.runtime.events import TaskExecutionStarted
+
+    bus, spy = bus_and_spy
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(),
+        bus=bus,
+        connector=mock_connector,
+    )
+
+    # 1. Define a declarative workflow
+    @task
+    def task_a():
+        return "A"
+
+    @task
+    def task_b(a):
+        return f"B after {a}"
+
+    @task
+    def task_c(b):
+        return f"C after {b}"
+
+    workflow = task_c(b=task_b(a=task_a()))
+
+    # 2. Start the engine in a concurrent task
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # 3. Wait for the first task to START.
+    # We want to inject the pause while A is running (or at least before B starts).
+    # Since Engine awaits tasks in a stage, injecting here ensures the constraint
+    # is ready when Engine wakes up for Stage 2.
+    await wait_for_task_start(spy, "task_a")
+
+    # 4. Inject the pause command immediately
+    pause_payload = {
+        "id": "global-pause",
+        "scope": "global",
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message("cascade/constraints/control", pause_payload)
+
+    # 5. Wait to ensure A finishes and Engine has had time to process Stage 2 logic
+    # We wait for A to finish first
+    await wait_for_task_finish(spy, "task_a")
+    # Then wait a bit more to allow Engine to potentially (incorrectly) start B
+    await asyncio.sleep(0.2)
+
+    # 6. Assert based on the event stream
+    started_task_names = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
+
+    assert "task_a" in started_task_names
+    assert "task_b" not in started_task_names, "task_b should have been paused"
+    assert "task_c" not in started_task_names
+
+    # 7. Cleanup
+    run_task.cancel()
     try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
-        await connector.connect()
-        bus.info("controller.connected")
-
-        # Create a unique, descriptive ID for the constraint
-        constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
-        constraint = GlobalConstraint(
-            id=constraint_id, scope=scope, type="pause", params={}
-        )
-
-        # Convert to dictionary for JSON serialization
-        payload = asdict(constraint)
-
-        # Publish to a structured topic based on scope
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-
-        bus.info("controller.publishing", scope=scope, topic=topic)
-        # The connector's publish is fire-and-forget
-        await connector.publish(topic, payload)
-
-        # In a real fire-and-forget, we can't be sure it succeeded,
-        # but for UX we assume it did if no exception was raised.
-        # Give a brief moment for the task to be sent.
-        await asyncio.sleep(0.1)
-        bus.info("controller.publish_success")
-
-    except Exception as e:
-        bus.error("controller.error", error=e)
-    finally:
-        await connector.disconnect()
-
-
-@app.command()
-def pause(
-    scope: str = typer.Argument(
-        "global",
-        help="The scope to pause (e.g., 'global', 'project:etl', 'task:api_call').",
-    ),
+        await run_task
+    except asyncio.CancelledError:
+        pass
 ~~~~~
 ~~~~~python
-async def _publish_pause(scope: str, hostname: str, port: int):
-    """Core logic for publishing a pause constraint."""
-    connector = MqttConnector(hostname=hostname, port=port)
+@pytest.mark.asyncio
+async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
+    """
+    End-to-end test verifying the global pause functionality.
+    It checks that after a pause command is received, no new tasks are started.
+    """
+    from cascade.spec.task import task
+    from cascade.runtime.events import TaskExecutionStarted
+
+    bus, spy = bus_and_spy
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(),
+        bus=bus,
+        connector=mock_connector,
+    )
+
+    # 1. Define a declarative workflow
+    @task
+    def task_a():
+        return "A"
+
+    @task
+    def task_b(a):
+        return f"B after {a}"
+
+    @task
+    def task_c(b):
+        return f"C after {b}"
+
+    workflow = task_c(b=task_b(a=task_a()))
+
+    # 2. Start the engine in a concurrent task
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # 3. Wait for the first task to START.
+    # We want to inject the pause while A is running (or at least before B starts).
+    # Since Engine awaits tasks in a stage, injecting here ensures the constraint
+    # is ready when Engine wakes up for Stage 2.
+    await wait_for_task_start(spy, "task_a")
+
+    # 4. Inject the pause command immediately
+    pause_payload = {
+        "id": "global-pause",
+        "scope": "global",
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message("cascade/constraints/control", pause_payload)
+
+    # 5. Wait to ensure A finishes and Engine has had time to process Stage 2 logic
+    # We wait for A to finish first
+    await wait_for_task_finish(spy, "task_a")
+    # Then wait a bit more to allow Engine to potentially (incorrectly) start B
+    await asyncio.sleep(0.2)
+
+    # 6. Assert based on the event stream
+    started_task_names = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
+
+    assert "task_a" in started_task_names
+    assert "task_b" not in started_task_names, "task_b should have been paused"
+    assert "task_c" not in started_task_names
+
+    # 7. Cleanup
+    run_task.cancel()
     try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
-        await connector.connect()
-        bus.info("controller.connected")
-
-        # Create a unique, descriptive ID for the constraint
-        constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
-        constraint = GlobalConstraint(
-            id=constraint_id, scope=scope, type="pause", params={}
-        )
-
-        # Convert to dictionary for JSON serialization
-        payload = asdict(constraint)
-
-        # Publish to a structured topic based on scope
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-
-        bus.info("controller.publishing", scope=scope, topic=topic)
-        # The connector's publish is fire-and-forget, now with retain=True
-        await connector.publish(topic, payload, retain=True)
-
-        # In a real fire-and-forget, we can't be sure it succeeded,
-        # but for UX we assume it did if no exception was raised.
-        # Give a brief moment for the task to be sent.
-        await asyncio.sleep(0.1)
-        bus.info("controller.publish_success")
-
-    except Exception as e:
-        bus.error("controller.error", error=e)
-    finally:
-        await connector.disconnect()
+        await run_task
+    except asyncio.CancelledError:
+        pass
 
 
-async def _publish_resume(scope: str, hostname: str, port: int):
-    """Core logic for publishing a resume (clear constraint) command."""
-    connector = MqttConnector(hostname=hostname, port=port)
-    try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
-        await connector.connect()
-        bus.info("controller.connected")
-
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-
-        bus.info("controller.resuming", scope=scope, topic=topic)
-        # Publishing an empty retained message clears the previous one
-        await connector.publish(topic, "", retain=True)
-
-        await asyncio.sleep(0.1)
-        bus.info("controller.resume_success")
-
-    except Exception as e:
-        bus.error("controller.error", error=e)
-    finally:
-        await connector.disconnect()
-
-
-@app.command()
-def pause(
-    scope: str = typer.Argument(
-        "global",
-        help="The scope to pause (e.g., 'global', 'project:etl', 'task:api_call').",
-    ),
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-cli-controller/src/cascade/cli/controller/app.py
-~~~~~
-~~~~~python
-def main():
-    bus.set_renderer(CliRenderer(store=bus.store))
-    app()
-~~~~~
-~~~~~python
-@app.command()
-def resume(
-    scope: str = typer.Argument(
-        "global",
-        help="The scope to resume (e.g., 'global', 'project:etl', 'task:api_call').",
-    ),
-    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
-    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
-):
+@pytest.mark.asyncio
+async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):
     """
-    Publish a 'resume' command to the MQTT broker.
-    This clears any 'pause' constraint for the specified scope, allowing
-    tasks to be scheduled again.
+    End-to-end test for task-specific pause and resume functionality.
     """
-    try:
-        asyncio.run(_publish_resume(scope=scope, hostname=hostname, port=port))
-    except KeyboardInterrupt:
-        bus.info("observer.shutdown")
+    from cascade.spec.task import task
+    from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
 
+    bus, spy = bus_and_spy
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(),
+        bus=bus,
+        connector=mock_connector,
+    )
 
-def main():
-    bus.set_renderer(CliRenderer(store=bus.store))
-    app()
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
-~~~~~
-~~~~~json
-    "controller.publishing": "📡 Publishing constraint for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
-    "controller.publish_success": "✅ Constraint published successfully.",
-    "controller.error": "❌ An error occurred: {error}"
-}
-~~~~~
-~~~~~
-json
-    "controller.publishing": "📡 Publishing constraint for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
-    "controller.publish_success": "✅ Constraint published successfully.",
-    "controller.resuming": "📡 Publishing resume command for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
-    "controller.resume_success": "✅ Resume command published successfully.",
-    "controller.error": "❌ An error occurred: {error}"
-}
-~~~~~
+    # 1. Workflow: A -> B -> C
+    @task
+    def task_a():
+        return "A"
 
-#### Acts 3: 更新 Engine 和 ConstraintManager 以响应 `resume`
+    @task
+    def task_b(a):
+        return f"B after {a}"
 
-接下来，我们需要让 `Engine` 能理解 `resume` 信号，并让 `ConstraintManager` 具备移除约束的能力。
+    @task
+    def task_c(b):
+        return f"C after {b}"
 
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/constraints/manager.py
-~~~~~
-~~~~~python
-    def update_constraint(self, constraint: GlobalConstraint) -> None:
-        """Adds a new constraint or updates an existing one."""
-        self._constraints[constraint.id] = constraint
+    workflow = task_c(task_b(task_a()))
 
-    def check_permission(self, task: Node) -> bool:
-~~~~~
-~~~~~python
-    def update_constraint(self, constraint: GlobalConstraint) -> None:
-        """Adds a new constraint or updates an existing one."""
-        self._constraints[constraint.id] = constraint
+    # 2. Start the engine in a background task
+    run_task = asyncio.create_task(engine.run(workflow))
 
-    def remove_constraints_by_scope(self, scope: str) -> None:
-        """Removes all constraints that match the given scope."""
-        ids_to_remove = [
-            cid for cid, c in self._constraints.items() if c.scope == scope
-        ]
-        for cid in ids_to_remove:
-            del self._constraints[cid]
+    # 3. Wait for 'task_a' to finish. This ensures the engine is ready for 'task_b'.
+    await wait_for_task_finish(spy, "task_a")
 
-    def check_permission(self, task: Node) -> bool:
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-        """Callback to handle incoming constraint messages."""
-        try:
-            # Basic validation, could be improved with a schema library
-            constraint = GlobalConstraint(
-                id=payload["id"],
-                scope=payload["scope"],
-                type=payload["type"],
-                params=payload["params"],
-                expires_at=payload.get("expires_at"),
-            )
-            self.constraint_manager.update_constraint(constraint)
-        except (KeyError, TypeError) as e:
-            # In a real system, we'd use a proper logger.
-            # For now, print to stderr to avoid crashing the engine.
-            print(
-                f"[Engine] Error processing constraint on topic '{topic}': {e}",
-                file=sys.stderr,
-            )
-~~~~~
-~~~~~python
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-        """Callback to handle incoming constraint messages."""
-        # An empty payload signifies a cleared retained message (i.e., a resume command)
-        if not payload:
-            try:
-                # Reconstruct scope from topic, e.g., cascade/constraints/task/api_call -> task:api_call
-                scope_parts = topic.split("/")[2:]
-                scope = ":".join(scope_parts)
-                if scope:
-                    self.constraint_manager.remove_constraints_by_scope(scope)
-                return
-            except Exception as e:
-                print(
-                    f"[Engine] Error processing resume command on topic '{topic}': {e}",
-                    file=sys.stderr,
-                )
-                return
+    # 4. Inject a PAUSE command specifically for 'task_b'
+    pause_scope = "task:task_b"
+    pause_payload = {
+        "id": "pause-b",
+        "scope": pause_scope,
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message(
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", pause_payload
+    )
 
-        try:
-            # Basic validation, could be improved with a schema library
-            constraint = GlobalConstraint(
-                id=payload["id"],
-                scope=payload["scope"],
-                type=payload["type"],
-                params=payload["params"],
-                expires_at=payload.get("expires_at"),
-            )
-            self.constraint_manager.update_constraint(constraint)
-        except (KeyError, TypeError) as e:
-            # In a real system, we'd use a proper logger.
-            # For now, print to stderr to avoid crashing the engine.
-            print(
-                f"[Engine] Error processing constraint on topic '{topic}': {e}",
-                file=sys.stderr,
-            )
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py
-~~~~~
-~~~~~python
-                try:
-                    # aiomqtt payload can be bytes, bytearray, etc.
-                    if isinstance(payload_bytes, (bytes, bytearray)):
-                        payload_str = payload_bytes.decode("utf-8")
-                    else:
-                        payload_str = str(payload_bytes)
+    # 5. Wait briefly and assert that 'task_b' has NOT started
+    await asyncio.sleep(0.2)
+    started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
+    assert "task_b" not in started_tasks, "'task_b' started despite pause constraint"
 
-                    data = json.loads(payload_str)
+    # 6. Inject a RESUME command for 'task_b'
+    # An empty payload on a retained topic clears the constraint.
+    await mock_connector._trigger_message(
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", ""
+    )
 
-                    # Execute callback (fire and forget, or await?)
-~~~~~
-~~~~~python
-                try:
-                    # aiomqtt payload can be bytes, bytearray, etc.
-                    if isinstance(payload_bytes, (bytes, bytearray)):
-                        payload_str = payload_bytes.decode("utf-8")
-                    else:
-                        payload_str = str(payload_bytes)
-                    
-                    # If the payload is empty (resume command), pass an empty dict
-                    if not payload_str:
-                        data = {}
-                    else:
-                        data = json.loads(payload_str)
+    # 7. Wait for the rest of the workflow to complete
+    await wait_for_task_finish(spy, "task_c", timeout=1.0)
 
-                    # Execute callback (fire and forget, or await?)
-~~~~~
+    # 8. Final assertions on the complete event stream
+    finished_tasks = {
+        e.task_name
+        for e in spy.events_of_type(TaskExecutionFinished)
+        if e.status == "Succeeded"
+    }
+    assert finished_tasks == {"task_a", "task_b", "task_c"}
 
-#### Acts 4: 实现任务级范围匹配
-
-最后，我们让 `PauseConstraintHandler` 能够理解 `task:` 范围。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/constraints/handlers.py
-~~~~~
-~~~~~python
-class PauseConstraintHandler(ConstraintHandler):
-    """
-    Handles the 'pause' constraint type.
-    It can pause execution globally or for a specific task.
-    """
-
-    def handles_type(self) -> str:
-        return "pause"
-
-    def check_permission(
-        self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> bool:
-        """
-        Returns False (permission denied) if the task matches the constraint's scope.
-        """
-        scope = constraint.scope
-
-        # Global scope matches everything
-        if scope == "global":
-            return False
-
-        # Task-specific scope
-        if scope.startswith("task:"):
-            target_task_name = scope.split(":", 1)[1]
-            if task.name == target_task_name:
-                return False
-
-        # Project-specific scope (placeholder for future implementation)
-        # if scope.startswith("project:"):
-        #     ...
-
-        # If no match, this constraint doesn't apply to this task, so it is permitted.
-        return True
-~~~~~
-~~~~~python
-class PauseConstraintHandler(ConstraintHandler):
-    """
-    Handles the 'pause' constraint type.
-    It can pause execution globally or for a specific task.
-    """
-
-    def handles_type(self) -> str:
-        return "pause"
-
-    def check_permission(
-        self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> bool:
-        """
-        Returns False (permission denied) if the task matches the constraint's scope.
-        """
-        scope = constraint.scope
-
-        # Global scope matches everything
-        if scope == "global":
-            return False
-
-        # Task-specific scope
-        if scope.startswith("task:"):
-            target_task_name = scope.split(":", 1)[1]
-            if task.name == target_task_name:
-                return False
-
-        # Project-specific scope (placeholder for future implementation)
-        # if scope.startswith("project:"):
-        #     ...
-
-        # If no match, this constraint doesn't apply to this task, so it is permitted.
-        return True
+    # 9. Verify the final result
+    final_result = await run_task
+    assert final_result == "C after B after A"
 ~~~~~
 
 ### 下一步建议
-我们已经完成了核心功能的实现。现在最关键的一步是编写集成测试来验证这个新的控制回路。
+我们已经完成了里程碑 3.1 的核心功能开发和测试。根据路线图，下一步是进入**里程碑 3.2: 并发管理 (Concurrency Management)**。
 
-我建议在 `tests/py/runtime/test_engine_constraints.py` 文件中增加一个新的测试用例 `test_engine_pauses_specific_task_and_resumes`。该测试应遵循以下逻辑：
+这项工作将允许我们通过外部指令来限制特定任务的并发执行数量，例如 `cs-controller set-limit --scope "task:api_call" --concurrency 5`。这将进一步增强 Cascade 保护下游系统、防止过载的能力。
 
-1.  定义一个 A -> B -> C 的工作流。
-2.  启动 `Engine`。
-3.  等待任务 A 完成。
-4.  使用 Mock Connector 注入一个针对 `task:task_b` 的 `pause` 约束。
-5.  断言任务 B **没有**被启动，而任务 C 也因此被阻塞。
-6.  注入一个针对 `task:task_b` 的 `resume` 命令（即发布空消息）。
-7.  断言任务 B **现在被启动并完成**，随后任务 C 也完成。
-8.  整个测试的断言都应基于 `SpySubscriber` 捕获的事件流，以遵循**“验证意图而非实现”**的测试原则。
-
-如果你同意，我将为你生成实现该测试的计划。
+如果你同意，我将开始分析并生成实现此功能的计划。

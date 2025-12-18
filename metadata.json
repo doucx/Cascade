@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(control): 实现任务级暂停与恢复机制", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766051285.435552, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(runtime): 为任务级暂停与恢复功能添加集成测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766051404.9329069, "duration_ms": 0}}

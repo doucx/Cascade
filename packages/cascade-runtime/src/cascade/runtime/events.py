@@ -94,3 +94,17 @@ class ResourceReleased(ResourceEvent):
     """Fired when a resource is successfully torn down."""
 
     pass
+
+
+@dataclass(frozen=True)
+class ConnectorConnected(Event):
+    """Fired when the engine successfully connects to an external connector."""
+
+    pass
+
+
+@dataclass(frozen=True)
+class ConnectorDisconnected(Event):
+    """Fired when the engine disconnects from an external connector."""
+
+    pass

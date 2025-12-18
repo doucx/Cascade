@@ -8,5 +8,8 @@
     "task.finished_success": "   - ✅ Task '{task_name}' succeeded in {duration:.2f}s.",
     "task.finished_failure": "   - ❌ Task '{task_name}' failed after {duration:.2f}s. Error: {error}",
     "task.skipped": "   - ⚪ Task '{task_name}' skipped. Reason: {reason}",
-    "task.retrying": "   - ⚠️ Task '{task_name}' failed, retrying (attempt {attempt}/{max_attempts}). Delaying for {delay:.2f}s. Error: {error}"
+    "task.retrying": "   - ⚠️ Task '{task_name}' failed, retrying (attempt {attempt}/{max_attempts}). Delaying for {delay:.2f}s. Error: {error}",
+
+    "engine.connector.connected": "📡 Engine connected to external connector.",
+    "engine.connector.disconnected": "🔌 Engine disconnected from external connector."
 }

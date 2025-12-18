@@ -1,5 +1,6 @@
 import asyncio
 import time
+import logging
 from datetime import datetime, timezone
 import typer
 from rich.console import Console
@@ -21,9 +22,9 @@ async def on_message(topic: str, payload: dict):
     """Callback to process incoming telemetry messages."""
     global seen_run_ids
 
-    header = payload.get("header", {})
+    # The payload structure is flat for headers, with a nested 'body'
     body = payload.get("body", {})
-    run_id = header.get("run_id")
+    run_id = payload.get("run_id")
 
     if not run_id or not body:
         return

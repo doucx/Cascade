@@ -1,10 +1,10 @@
 import asyncio
-from typing import Callable, Awaitable, Dict, Any, Optional
+from typing import Callable, Awaitable, Dict, Any
 
 import pytest
 
-from cascade.graph.model import Node
-from cascade.interfaces.protocols import Connector, Solver, Executor
+from cascade.interfaces.protocols import Connector, Executor
+from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.spec.constraint import GlobalConstraint
@@ -50,12 +50,6 @@ class MockConnector(Connector):
                 await callback(topic, payload)
 
 
-class MockSolver(Solver):
-    def resolve(self, graph):
-        # Return a single stage with all non-param nodes
-        return [[n for n in graph.nodes if n.node_type != "param"]]
-
-
 class MockExecutor(Executor):
     async def execute(self, node, args, kwargs):
         return f"Result for {node.name}"
@@ -69,11 +63,24 @@ def mock_connector():
 @pytest.fixture
 def engine_with_connector(mock_connector):
     return Engine(
-        solver=MockSolver(),
+        solver=NativeSolver(),
         executor=MockExecutor(),
         bus=MessageBus(),
         connector=mock_connector,
     )
+
+
+async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
+    """Helper coroutine to wait for a specific task to finish."""
+    from cascade.runtime.events import TaskExecutionFinished
+
+    start_time = asyncio.get_event_loop().time()
+    while asyncio.get_event_loop().time() - start_time < timeout:
+        finished_events = spy.events_of_type(TaskExecutionFinished)
+        if any(e.task_name == task_name for e in finished_events):
+            return
+        await asyncio.sleep(0.01)
+    pytest.fail(f"Timeout waiting for task '{task_name}' to finish.")
 
 
 # --- Test Cases ---
@@ -92,6 +99,7 @@ async def test_engine_subscribes_to_constraints(engine_with_connector, mock_conn
     await engine_with_connector.run(dummy_task())
 
     # Assert that subscribe was called with the correct topic
+    # The actual topic is cascade/constraints/#, our mock logic handles the match
     assert "cascade/constraints/#" in mock_connector.subscriptions
     assert callable(mock_connector.subscriptions["cascade/constraints/#"])
 
@@ -141,6 +149,46 @@ async def test_engine_updates_constraints_on_message(engine_with_connector, mock
 
 
 @pytest.mark.asyncio
+async def test_engine_handles_malformed_constraint_payload(
+    engine_with_connector, mock_connector, capsys
+):
+    """
+    Verify that the Engine logs an error but does not crash on a malformed payload.
+    """
+    from cascade.spec.task import task
+
+    @task
+    def dummy_task():
+        pass
+
+    run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
+    await asyncio.sleep(0.01)
+
+    # Payload missing the required 'id' key
+    malformed_payload = {
+        "scope": "global",
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message("cascade/constraints/control", malformed_payload)
+
+    # The engine should not have crashed.
+    # We can check stderr for the error message.
+    captured = capsys.readouterr()
+    assert "[Engine] Error processing constraint" in captured.err
+    assert "'id'" in captured.err  # Specifically mentions the missing key
+
+    # Assert that no constraint was added
+    assert not engine_with_connector.constraint_manager._constraints
+
+    run_task.cancel()
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
 async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
     """
     End-to-end test verifying the global pause functionality.
@@ -151,7 +199,7 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
 
     bus, spy = bus_and_spy
     engine = Engine(
-        solver=MockSolver(),
+        solver=NativeSolver(),
         executor=MockExecutor(),
         bus=bus,
         connector=mock_connector,
@@ -200,59 +248,6 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
     assert "task_c" not in started_task_names
 
     # 7. Cleanup
-    run_task.cancel()
-    try:
-        await run_task
-    except asyncio.CancelledError:
-        pass
-
-
-async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
-    """Helper coroutine to wait for a specific task to finish."""
-    from cascade.runtime.events import TaskExecutionFinished
-
-    start_time = asyncio.get_event_loop().time()
-    while asyncio.get_event_loop().time() - start_time < timeout:
-        finished_events = spy.events_of_type(TaskExecutionFinished)
-        if any(e.task_name == task_name for e in finished_events):
-            return
-        await asyncio.sleep(0.01)
-    pytest.fail(f"Timeout waiting for task '{task_name}' to finish.")
-
-
-@pytest.mark.asyncio
-async def test_engine_handles_malformed_constraint_payload(
-    engine_with_connector, mock_connector, capsys
-):
-    """
-    Verify that the Engine logs an error but does not crash on a malformed payload.
-    """
-    from cascade.spec.task import task
-
-    @task
-    def dummy_task():
-        pass
-
-    run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
-    await asyncio.sleep(0.01)
-
-    # Payload missing the required 'id' key
-    malformed_payload = {
-        "scope": "global",
-        "type": "pause",
-        "params": {},
-    }
-    await mock_connector._trigger_message("cascade/constraints/control", malformed_payload)
-
-    # The engine should not have crashed.
-    # We can check stderr for the error message.
-    captured = capsys.readouterr()
-    assert "[Engine] Error processing constraint" in captured.err
-    assert "'id'" in captured.err  # Specifically mentions the missing key
-
-    # Assert that no constraint was added
-    assert not engine_with_connector.constraint_manager._constraints
-
     run_task.cancel()
     try:
         await run_task

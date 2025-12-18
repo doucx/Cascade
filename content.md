@@ -1,121 +1,59 @@
-好的，我分析了这次的构建失败。
+是的，这确实是一次大规模且至关重要的架构重构。将如此多的变更整合到一个清晰的提交中是非常正确的做法。我将为您生成一个 `[COMMIT]` 计划来完成这项工作。
 
- 错误分析
-
-错误发生在尝试以可编辑模式（`-e`）安装项目时，构建系统 `hatchling` 无法为 `cascade-cli` 包创建 wheel。
-
-`ValueError: Unable to determine which files to ship inside the wheel...`
-
-这个错误的原因是，在我上一个计划中，我将所有源代码从 `cascade-cli` 目录中移出，但其 `pyproject.toml` 文件仍然保留了构建配置。`hatchling` 尝试构建这个包，但找不到任何源文件，因此失败。
-
-`cascade-cli` 包现在已经变成了一个没有实际代码的“元数据包”，其唯一的目的就是声明对 `cascade-py` 和 `typer` 的依赖。这种结构在当前的多包工作区（monorepo）设置中显得多余且容易出错。
-
-`cs.cli()` 工具函数现在是 `cascade-py` 的一部分，用户可以通过安装 `cascade-py[cli]` 来获取所有命令行功能。因此，独立的 `cascade-cli` 包已经没有存在的必要了。
-
- 解决方案
-
-我将彻底移除 `cascade-cli` 包，并将依赖关系整合到根项目中，从而简化架构并解决构建错误。
-
-## [WIP] fix: 移除冗余的 cascade-cli 包以修复构建错误
+## [COMMIT] refactor(core): Transition to a multi-package monorepo architecture
 
 ### 用户需求
-`uv pip install -e .[dev]` 命令失败，因为 `cascade-cli` 包无法构建。需要修复此构建错误。
+将项目从单包结构重构为多包（Monorepo）布局的所有变更，合并到一个 Git 提交中。
 
 ### 评论
-这是一个架构清理任务。`cascade-cli` 包在重构后已经失去了其存在的意义，成为了构建过程中的障碍。通过移除它并调整根项目的依赖，我们可以简化项目结构，使其更清晰、更健壮。
+这是一个奠基性的重构。将项目分解为 `cascade-interfaces`, `cascade-runtime`, 和 `cascade-py` 等多个逻辑包，极大地提升了代码的模块化、可维护性和未来的可扩展性。它为实现插件化连接器、远程执行器等高级功能铺平了道路，是项目从一个库演进为一个生态系统的关键一步。
 
 ### 目标
-1.  彻底删除 `packages/cascade-cli` 目录。
-2.  更新根 `pyproject.toml`，移除对 `cascade-cli` 的所有引用。
-3.  确保项目能够成功安装和测试。
+创建一个单一的、内容详尽的 Git 提交，记录下整个多包重构过程。
 
 ### 基本原理
-由于 `cs.cli()` 功能已并入 `cascade-py` 库并通过可选依赖 `[cli]` 提供，独立的 `cascade-cli` 包已成为冗余。直接移除此包是解决构建错误并优化项目结构的最直接方法。
+由于整个重构过程是原子性的——即中间状态是不可用的——因此将所有文件移动和配置更改合并到一个提交中是合理的。这确保了版本历史的清晰性，任何检出此提交之前或之后的版本的开发者都能获得一个功能完整的代码库。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct #task/domain/refactoring #task/object/build-system #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/build #scope/core #scope/dx #ai/instruct #task/domain/refactoring #task/object/monorepo-architecture #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 移除 cascade-cli 包及其目录
+#### Acts 1: 暂存所有变更并执行提交
 
-我们首先从文件系统中删除 `cascade-cli` 包的整个目录。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~sh
-rm -rf packages/cascade-cli
-~~~~~
-
-#### Acts 2: 更新根项目的配置
-
-现在，我们需要从根 `pyproject.toml` 文件中移除对 `cascade-cli` 的所有引用，包括工作区配置和项目依赖。
+我们将暂存所有已修改、重命名和删除的文件，然后使用一条详尽的提交信息来创建一个原子性的提交，以记录这次大规模的架构重构。
 
 ~~~~~act
-patch_file
-pyproject.toml
+git_add
+.
 ~~~~~
-~~~~~toml
-[project]
-name = "cascade"
-version = "0.1.0"
-description = "A modern, declarative automation library for Python."
-readme = "README.md"
-requires-python = ">=3.8"
-license = "MIT"
-dependencies = [
-    "cascade-interfaces",
-    "cascade-runtime",
-    "cascade-py",
-    "cascade-cli",
-]
 
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-py = { workspace = true }
-cascade-cli = { workspace = true }
-
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-interfaces",
-    "packages/cascade-runtime",
-    "packages/cascade-py",
-    "packages/cascade-cli",
-]
+~~~~~act
+git_commit
 ~~~~~
-~~~~~toml
-[project]
-name = "cascade"
-version = "0.1.0"
-description = "A modern, declarative automation library for Python."
-readme = "README.md"
-requires-python = ">=3.8"
-license = "MIT"
-dependencies = [
-    "cascade-interfaces",
-    "cascade-runtime",
-    "cascade-py",
-]
+~~~~~text
+refactor(core): Transition to a multi-package monorepo architecture
 
-[tool.uv.workspace]
-members = ["packages/*"]
+This commit marks a fundamental architectural shift for the Cascade project, moving from a monolithic single-package structure to a decoupled, multi-package monorepo managed by a Hatch workspace.
 
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-py = { workspace = true }
+### Motivation
 
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-interfaces",
-    "packages/cascade-runtime",
-    "packages/cascade-py",
-]
+The primary driver for this refactoring is to establish a scalable foundation for future growth. The previous single-package model made it difficult to manage dependencies, separate concerns, and develop ecosystem components like connectors or remote executors independently.
+
+This new structure enhances modularity, clarifies dependency flows, and significantly improves the developer experience by creating clean boundaries between different parts of the system.
+
+### Key Changes
+
+1.  **Decomposition into Packages**: The original `cascade` library has been broken down into three core packages:
+    *   **`cascade-interfaces`**: The source of truth for all data models, specifications (`spec`), and protocols (`interfaces`). This package serves as the "contract" for the entire ecosystem and has zero dependencies.
+    *   **`cascade-runtime`**: Contains the core execution logic, including the `Engine`, `Solver`, `Executor`, and `ResourceManager`. It depends only on `cascade-interfaces`.
+    *   **`cascade-py`**: The main user-facing library. It provides the `@cs.task` decorator, the `cs.run()` entrypoint, built-in providers, and developer tools (`dry_run`, `visualize`, `cli`). It integrates the other packages into a cohesive whole.
+
+2.  **Hatch Workspace**: The project root `pyproject.toml` has been reconfigured as a Hatch workspace, which now orchestrates the builds and local dependencies of all packages within the `packages/` directory.
+
+3.  **Test Suite Reorganization**: The `tests/` directory has been restructured to mirror the new package layout (`tests/interfaces`, `tests/py`, etc.), ensuring that tests remain colocated with the code they validate.
+
+4.  **CLI API Relocation**: The `cs.cli()` function has been consolidated into `cascade-py` as a library tool, and the separate `cascade-cli` package has been removed to simplify the architecture. CLI functionality is now provided via the `cascade-py[cli]` optional dependency.
 ~~~~~

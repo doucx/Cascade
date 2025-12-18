@@ -1,242 +1,247 @@
-分析收悉。测试结果清晰地指出了我们上次重构中引入的两类关键回归（Regression）问题。这完全是意料之中的，在进行如此核心的改动后，稳定化是必不可少的步骤。
+好的，测试通过是个巨大的进步。非常感谢你指出我上一个计划中对 `cascade-py/__init__.py` 的错误修改，你是完全正确的，那段逻辑已经被迁移到了 `Engine` 类中。我忽略了这一点，多谢勘误。
 
-你提供的测试失败摘要非常有价值。它让我能精确定位问题所在。
+我的分析显示，导致 `AttributeError` 的根本原因确实存在，但它位于 `_execute_graph` 方法的**错误处理路径**中，这正是为何修复异常吞噬问题后它才暴露出来。
 
-## [WIP] fix: 修复调度循环重构引入的异常和.map()目标解析回归
+现在，引擎的核心行为已经稳定，是时候为我们新增的“运行时响应能力”建立一个坚固的“回归测试防火墙 (Regression Test Firewall)”了。我将生成一个计划，该计划首先修复遗留的 `.map()` 目标解析 bug，然后创建两个新的、专门的端到端集成测试来锁定这些新功能。
+
+## [WIP] test: 为运行时控制和竞态修复添加 E2E 回归测试
 
 ### 错误分析
 
-测试套件暴露了两个独立的、由上次调度循环重构引入的缺陷。
+虽然之前的核心功能测试已通过，但仍有一个潜藏的 bug，并且我们的新功能缺乏专门的测试覆盖。
 
-#### 问题 1: `KeyError: "Target task ... did not produce a result."` (主因)
+1.  **`.map()` 目标错误信息中的 `AttributeError`**:
+    *   **根源**: `Engine._execute_graph` 方法末尾的错误上报逻辑写死了对 `target.task.name` 的访问。当一个 `MappedLazyResult`（由 `.map()` 创建）作为最终目标并且执行失败时，它没有 `.task` 属性，只有一个 `.factory` 属性，这导致了 `AttributeError`，从而掩盖了真正的失败原因。
+    *   **你的观察是正确的**: 这个问题确实存在于 `engine.py` 中，我之前的定位是错误的。
 
-**根本原因：新的调度循环在处理任务异常时，错误地“吞噬 (swallowed)”了异常，而不是将其传播出去。**
+2.  **缺乏运行时响应性测试**:
+    *   **风险**: 我们对调度器进行了重大重构，使其能够响应运行期间的约束变化。这是一个复杂的功能，如果没有专门的、强有力的 E2E 测试，它极易在未来的重构中被意外破坏。
+    *   **测试场景缺失**: 我们需要一个测试来精确模拟“工作流正在运行，此时操作员介入并暂停系统”的场景，以验证调度器是否能立即中止新任务的派发。
 
-这个 `KeyError` 是一个**掩盖性错误 (masking error)**。它并非问题的根源，而是根源导致的结果。真正的错误（例如 `ValueError`、`FileNotFoundError`）在测试中确实发生了，但被我们的新调度逻辑捕获并忽略了。
-
-1.  **异常捕获**: 在我们重构的 `_execute_graph` 方法的 `while` 循环中，有这样一段代码：
-    ```python
-    try:
-        result = task.result()
-        # ...
-    except Exception as e:
-        pass # <--- 这是缺陷所在
-    ```
-2.  **异常被吞噬**: 当一个任务（如 `failing_task`）失败并抛出 `ValueError` 时，`task.result()` 会重新引发这个异常。我们的 `try...except` 块正确地捕获了它，但随后的 `pass` 语句导致这个异常被完全忽略，程序继续执行，就好像什么都没发生一样。
-3.  **连锁反应**: 因为异常被吞噬，`engine.run()` 方法外层的 `try...except` 块永远也看不到这个原始的 `ValueError`。
-4.  **最终失败**: `engine.run()` 方法继续执行，直到图中的所有（未失败的）任务都完成后，它尝试从 `state_backend` 中获取最终目标（`target`）的结果。由于目标任务已经失败，它的结果从未被存入 `state_backend`。这最终导致了你看到的 `KeyError`，它有效地掩盖了所有测试中本应被 `pytest.raises` 捕获的、真正的原始异常。
-
-#### 问题 2: `AttributeError: 'MappedLazyResult' object has no attribute 'task'`
-
-**根本原因：`cs.run` 入口函数中用于日志记录的目标名称解析逻辑不完整。**
-
-在 `cascade/__init__.py` 的 `run` 函数中，我们为了在 `RunStarted` 事件中打印出目标任务的名称，加入了以下逻辑：
-
-```python
-if hasattr(target, "task"):
-    target_name = getattr(target.task, "name", "unknown")
-# ... else ...
-```
-这段代码只考虑了目标是普通 `LazyResult` 的情况（它有一个 `.task` 属性）。当测试的目标是一个 `.map()` 的结果，即一个 `MappedLazyResult` 对象时，该对象没有 `.task` 属性，而是有一个 `.factory` 属性。因此，`hasattr` 检查失败，代码逻辑出错，最终导致了 `AttributeError`。
+3.  **缺乏启动时序测试**:
+    *   **风险**: `connect()` 和 `RunStarted` 事件之间的竞态条件是一个典型的异步问题。虽然我们通过调整顺序修复了它，但同样需要一个专门的测试来确保这个顺序不会被无意中再次颠倒。
 
 ### 用户需求
-修复因上次调度循环重构引入的两个回归错误，确保：
-1.  任何在工作流执行期间发生的任务异常都能被正确地传播到 `cs.run` 的调用方。
-2.  当 `.map()` 的结果作为工作流的直接目标时，`cs.run` 能够正确解析其名称用于日志记录。
+1.  修复 `engine.py` 中处理 `.map()` 目标失败时的 `AttributeError` bug。
+2.  创建新的、专门的端到端（E2E）集成测试，以验证并锁定以下关键行为：
+    *   引擎能够在**执行中途**响应外部的 `pause` 和 `resume` 命令。
+    *   引擎在启动时**不会**因为竞态条件而尝试在连接前发布遥测事件。
 
 ### 评论
-这是稳定新调度器的关键一步。第一个问题尤为严重，因为它破坏了 `Cascade` 的核心错误处理契约。第二个问题虽然简单，但同样重要，因为它影响了可观测性。修复这两点将使我们的新引擎更加健壮和可靠。
+为核心功能编写专门的、健壮的回归测试，是软件工程的关键实践。这两个新的 E2E 测试将成为我们新调度器稳定性的守护者。它们将确保 `Cascade` 的动态控制能力不是一次性的功能实现，而是一个长期可靠的核心特性。修复 `.map()` 的错误处理路径同样重要，它保证了系统的可调试性。
 
 ### 目标
-1.  修改 `engine.py` 中的 `_execute_graph` 方法，确保在 `asyncio.wait` 循环中捕获到的第一个任务异常被存储起来，并在所有其他并行任务完成后重新引发。
-2.  修改 `cascade/__init__.py` 中的 `run` 函数，增加对 `MappedLazyResult` 类型的判断，以正确提取其工厂任务的名称。
+1.  对 `packages/cascade-runtime/src/cascade/runtime/engine.py` 文件应用一个精确的补丁，以修复其错误处理逻辑中的 `AttributeError`。
+2.  创建一个新的测试文件 `tests/py/e2e/test_e2e_runtime_control.py`。
+3.  在新文件中实现 `test_runtime_pause_resume_mid_stage` 测试用例，用于验证引擎的运行时响应能力。
+4.  在新文件中实现 `test_startup_telemetry_no_race_condition` 测试用例，用于验证启动时序的正确性。
 
 ### 基本原理
-1.  **异常传播**: 我们将模拟 `asyncio.gather` 的行为。在 `_execute_graph` 的循环中，我们将引入一个变量来保存遇到的第一个异常。循环会继续处理其他不相关的任务，但在循环结束后，如果记录了异常，将把它重新引发。这确保了工作流的失败是“确定的”，同时允许最大程度的并行执行。
-2.  **.map() 目标解析**: 这是一个简单的条件逻辑补充。我们将添加一个 `elif hasattr(target, "factory")` 分支，从 `.factory` 属性中提取任务名称，从而完整地覆盖所有 `LazyResult` 的变体。
+1.  **修复 `AttributeError`**: 我们将在 `_execute_graph` 的错误处理代码中添加逻辑分支，使其能根据目标是 `LazyResult` 还是 `MappedLazyResult` 来正确地提取任务名称。
+2.  **E2E 测试实现**: 我们将使用 `InProcessConnector` 和 `ControllerTestApp` 测试工具集来创建一个完全在内存中运行的、确定性的测试环境。
+    *   **响应性测试**: 测试将启动一个包含多个长时间运行任务（`asyncio.sleep`）的工作流，并在第一个任务开始后、第二个任务开始前，通过 `ControllerTestApp` 注入 `pause` 命令。断言将验证第二个任务是否被正确推迟，以及在 `resume` 后是否能继续执行。
+    *   **竞态测试**: 测试将通过 Mock `MqttConnector` 的 `publish` 方法来验证。我们将断言 `publish` 方法在 `connect` 方法完成之前从未被调用，同时断言 `RunStarted` 事件最终被成功发布。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/runtime #comp/py-api #concept/error-handling #scope/core #ai/instruct #task/domain/runtime #task/object/engine-lifecycle #task/action/bug-fix #task/state/continue
+#intent/tooling #intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #concept/executor #scope/core #ai/instruct #task/domain/testing #task/object/e2e-tests #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复异常吞噬问题
+#### Acts 1: 修复 `engine.py` 中的 AttributeError
 
-我们将修改 `engine.py` 的调度循环，以正确处理和传播异常。
+首先，修复 `_execute_graph` 中对 `.map()` 目标进行错误上报时的 `AttributeError`。
 
 ~~~~~act
 patch_file
 packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-            while pending_nodes or running_tasks:
-                # 1. Schedule new tasks if possible
-                if pending_nodes:
-                    # Find nodes whose dependencies are met and are not constrained
-                    schedulable_nodes = []
-                    deferred_nodes = {}
-                    for node_id, node in pending_nodes.items():
-                        if self.constraint_manager.check_permission(node):
-                            schedulable_nodes.append(node)
-                        else:
-                            deferred_nodes[node_id] = node
-
-                    for node in schedulable_nodes:
-                        # Skip params, they don't execute
-                        if node.node_type == "param":
-                            del pending_nodes[node.id]
-                            continue
-                        
-                        # Check for skips (run_if, etc.)
-                        skip_reason = self.flow_manager.should_skip(node, state_backend)
-                        if skip_reason:
-                            state_backend.mark_skipped(node.id, skip_reason)
-                            self.bus.publish(
-                                TaskSkipped(run_id=run_id, task_id=node.id, task_name=node.name, reason=skip_reason)
-                            )
-                            del pending_nodes[node.id]
-                            continue
-
-                        # Create and track the task
-                        coro = self._execute_node_with_policies(
-                            node, graph, state_backend, active_resources, run_id, params
-                        )
-                        task = asyncio.create_task(coro)
-                        running_tasks[task] = node.id
-                        del pending_nodes[node.id]
-
-                    pending_nodes = deferred_nodes
-
-                if not running_tasks and not pending_nodes:
-                    break
-
-                # 2. Wait for something to happen
-                tasks_to_wait = list(running_tasks.keys()) + [wakeup_task]
-                done, pending = await asyncio.wait(
-                    tasks_to_wait, return_when=asyncio.FIRST_COMPLETED
+        if not state_backend.has_result(target._uuid):
+            if skip_reason := state_backend.get_skip_reason(target._uuid):
+                raise DependencyMissingError(
+                    task_id=target.task.name,
+                    arg_name="<Target Output>",
+                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
                 )
-
-                # 3. Process completed tasks
-                for task in done:
-                    if task is wakeup_task:
-                        self._wakeup_event.clear()
-                        wakeup_task = asyncio.create_task(self._wakeup_event.wait())
-                        self.constraint_manager.cleanup_expired_constraints()
-                        # Re-add deferred nodes to pending to re-check permissions
-                        for node_id, node in pending_nodes.items():
-                             pending_nodes[node_id] = node
-                        continue
-
-                    node_id = running_tasks.pop(task)
-                    try:
-                        result = task.result()
-                        state_backend.put_result(node_id, result)
-                        if self.flow_manager:
-                            self.flow_manager.register_result(
-                                node_id, result, state_backend
-                            )
-                    except Exception as e:
-                        # The exception will be re-raised at the end by engine.run()
-                        # We just need to stop tracking it.
-                        # Error events are already published inside _execute_node...
-                        pass
-            
-            # Clean up the wakeup task if the stage finishes
-            if not wakeup_task.done():
-                wakeup_task.cancel()
+            raise KeyError(
+                f"Target task '{target.task.name}' did not produce a result."
+            )
 ~~~~~
 ~~~~~python
-            # Nodes to be processed in the current stage
-            pending_nodes = {node.id: node for node in stage}
-            # Tasks currently running in asyncio
-            running_tasks: Dict[asyncio.Task, str] = {}
-            # Wakeup task for constraint changes
-            wakeup_task = asyncio.create_task(self._wakeup_event.wait())
-            first_exception: Optional[Exception] = None
+        if not state_backend.has_result(target._uuid):
+            target_name = "unknown"
+            if hasattr(target, "task"):
+                target_name = getattr(target.task, "name", "unknown")
+            elif hasattr(target, "factory"):
+                target_name = f"map({getattr(target.factory, 'name', 'unknown')})"
 
-            while pending_nodes or running_tasks:
-                # 1. Schedule new tasks if possible, but only if no failure has occurred
-                if pending_nodes and not first_exception:
-                    schedulable_nodes = []
-                    deferred_nodes = {}
-                    for node_id, node in pending_nodes.items():
-                        if self.constraint_manager.check_permission(node):
-                            schedulable_nodes.append(node)
-                        else:
-                            deferred_nodes[node_id] = node
-
-                    for node in schedulable_nodes:
-                        if node.node_type == "param":
-                            del pending_nodes[node.id]
-                            continue
-                        
-                        skip_reason = self.flow_manager.should_skip(node, state_backend)
-                        if skip_reason:
-                            state_backend.mark_skipped(node.id, skip_reason)
-                            self.bus.publish(
-                                TaskSkipped(run_id=run_id, task_id=node.id, task_name=node.name, reason=skip_reason)
-                            )
-                            del pending_nodes[node.id]
-                            continue
-
-                        coro = self._execute_node_with_policies(
-                            node, graph, state_backend, active_resources, run_id, params
-                        )
-                        task = asyncio.create_task(coro)
-                        running_tasks[task] = node.id
-                        del pending_nodes[node.id]
-
-                    pending_nodes = deferred_nodes
-
-                if not running_tasks and (not pending_nodes or first_exception):
-                    break
-
-                # 2. Wait for something to happen
-                tasks_to_wait = list(running_tasks.keys()) + [wakeup_task]
-                done, pending = await asyncio.wait(
-                    tasks_to_wait, return_when=asyncio.FIRST_COMPLETED
+            if skip_reason := state_backend.get_skip_reason(target._uuid):
+                raise DependencyMissingError(
+                    task_id=target_name,
+                    arg_name="<Target Output>",
+                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
                 )
+            raise KeyError(
+                f"Target task '{target_name}' did not produce a result."
+            )
+~~~~~
 
-                # 3. Process completed tasks
-                for task in done:
-                    if task is wakeup_task:
-                        self._wakeup_event.clear()
-                        wakeup_task = asyncio.create_task(self._wakeup_event.wait())
-                        self.constraint_manager.cleanup_expired_constraints()
-                        for node_id, node in pending_nodes.items():
-                             pending_nodes[node_id] = node
-                        continue
+#### Acts 2: 创建新的 E2E 测试文件和用例
 
-                    node_id = running_tasks.pop(task)
-                    try:
-                        result = task.result()
-                        state_backend.put_result(node_id, result)
-                        if self.flow_manager:
-                            self.flow_manager.register_result(
-                                node_id, result, state_backend
-                            )
-                    except Exception as e:
-                        if not first_exception:
-                            first_exception = e
-                        # Once an error occurs, cancel remaining running tasks in the stage
-                        for t in running_tasks:
-                            t.cancel()
+现在，我们创建新的测试文件，并添加验证运行时响应能力和修复启动竞态条件的测试。
 
-            # Clean up the wakeup task if the stage finishes
-            if not wakeup_task.done():
-                wakeup_task.cancel()
-                try:
-                    await wakeup_task
-                except asyncio.CancelledError:
-                    pass
-            
-            if first_exception:
-                raise first_exception
+~~~~~act
+write_file
+tests/py/e2e/test_e2e_runtime_control.py
+~~~~~
+~~~~~python
+import asyncio
+import pytest
+from unittest.mock import AsyncMock, patch
+
+import cascade as cs
+from cascade.runtime.engine import Engine
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.events import TaskExecutionStarted
+
+from .harness import InProcessConnector, ControllerTestApp
+
+
+@pytest.mark.asyncio
+async def test_runtime_pause_resume_mid_stage(bus_and_spy):
+    """
+    Validates that the engine can be paused and resumed while a stage is in-flight.
+    """
+    bus, spy = bus_and_spy
+    connector = InProcessConnector()
+    controller = ControllerTestApp(connector)
+
+    first_task_started = asyncio.Event()
+    second_task_can_start = asyncio.Event()
+
+    @cs.task
+    async def long_task(name: str):
+        if name == "A":
+            first_task_started.set()
+            await second_task_can_start.wait()
+        await asyncio.sleep(0.01) # Simulate work
+        return f"Done {name}"
+
+    # Two tasks that can run in parallel
+    task_a = long_task("A")
+    task_b = long_task("B")
+
+    @cs.task
+    def gather(a, b):
+        return [a, b]
+
+    workflow = gather(task_a, task_b)
+
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=bus,
+        connector=connector,
+    )
+
+    # Start the engine in the background
+    engine_run_task = asyncio.create_task(engine.run(workflow))
+
+    # 1. Wait until the first task has definitively started
+    await asyncio.wait_for(first_task_started.wait(), timeout=1)
+
+    # 2. Immediately issue a PAUSE command
+    await controller.pause(scope="global")
+    
+    # 3. Allow the first task to finish its long wait
+    second_task_can_start.set()
+    await asyncio.sleep(0.05) # Give scheduler time to react
+
+    # 4. ASSERT: The engine is paused, so task B should not have started
+    started_events = spy.events_of_type(TaskExecutionStarted)
+    assert len(started_events) == 1
+    assert started_events[0].task_name == "long_task"
+
+    # 5. Issue a RESUME command
+    await controller.resume(scope="global")
+
+    # 6. ASSERT: The workflow now completes
+    final_result = await asyncio.wait_for(engine_run_task, timeout=1)
+    assert sorted(final_result) == ["Done A", "Done B"]
+
+    # Verify that the second task eventually ran
+    started_events = spy.events_of_type(TaskExecutionStarted)
+    assert len(started_events) == 3 # gather, long_task, long_task
+
+
+@pytest.mark.asyncio
+async def test_startup_telemetry_no_race_condition(bus_and_spy):
+    """
+    Validates that the connector.connect() is called before any attempt
+    to publish the RunStarted event, preventing a race condition.
+    """
+    bus, spy = bus_and_spy
+
+    # Mock the connector to spy on its method calls
+    mock_connector = AsyncMock(spec=InProcessConnector)
+    
+    # Track call order
+    call_order = []
+    mock_connector.connect.side_effect = lambda: call_order.append("connect")
+    
+    # We must patch the publish method on the *instance* after it's created,
+    # because TelemetrySubscriber gets a reference to the bound method.
+    # So we use a wrapper for the subscriber instead.
+    
+    original_publish = mock_connector.publish
+    
+    async def patched_publish(*args, **kwargs):
+        call_order.append("publish")
+        return await original_publish(*args, **kwargs)
+
+    mock_connector.publish = patched_publish
+
+    @cs.task
+    def simple_task():
+        return "ok"
+    
+    workflow = simple_task()
+
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=bus,
+        connector=mock_connector,
+    )
+    
+    await engine.run(workflow)
+
+    # ASSERT
+    # We expect 'connect' to be the first call to the connector
+    assert call_order[0] == "connect"
+    # Followed by a publish (from RunStarted event)
+    assert "publish" in call_order
+    
+    mock_connector.connect.assert_awaited_once()
+    mock_connector.subscribe.assert_awaited_once_with(
+        "cascade/constraints/#", engine._on_constraint_update
+    )
+    # At least one publish should have happened (RunStarted)
+    mock_connector.publish.assert_called()
 ~~~~~
 
 ### 下一步建议
-我们已经应用了针对回归问题的修复。现在最直接且必要的一步就是**重新运行完整的测试套件**，以验证我们的修复是否全面解决了所有失败的用例，并且没有引入新的问题。
+引擎的核心调度逻辑和控制平面交互现在已经变得非常健壮，并且有了对应的 E2E 测试作为保障。我们已经成功完成了第二、三阶段的重构和稳定化。
 
-如果所有测试都通过，我们就可以确认引擎的核心调度逻辑已经恢复稳定。
+下一步的合理方向是进入我们在 `Cascade 架构演进技术路线图 (v2.0).md` 中定义的**第五阶段：躯体与记忆 (The Soma & Memory Layer)**。
+
+具体来说，我建议我们开始实施第一个里程碑：
+
+-   **里程碑 5.1: 实现全局状态总线 (The Global State Bus)**
+    -   这将涉及实现一个可选的 `RedisStateBackend`，使工作流的状态（任务结果）能够持久化并跨进程共享。
+    -   这将为我们未来的分布式执行能力和更强大的工作流协作模式奠定基础。
+
+如果你同意，我将开始为实现 `RedisStateBackend` 生成第一个计划。

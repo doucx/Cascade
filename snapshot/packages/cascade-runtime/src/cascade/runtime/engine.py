@@ -284,14 +284,20 @@ class Engine:
                 raise first_exception
 
         if not state_backend.has_result(target._uuid):
+            target_name = "unknown"
+            if hasattr(target, "task"):
+                target_name = getattr(target.task, "name", "unknown")
+            elif hasattr(target, "factory"):
+                target_name = f"map({getattr(target.factory, 'name', 'unknown')})"
+
             if skip_reason := state_backend.get_skip_reason(target._uuid):
                 raise DependencyMissingError(
-                    task_id=target.task.name,
+                    task_id=target_name,
                     arg_name="<Target Output>",
                     dependency_id=f"Target was skipped (Reason: {skip_reason})",
                 )
             raise KeyError(
-                f"Target task '{target.task.name}' did not produce a result."
+                f"Target task '{target_name}' did not produce a result."
             )
 
         return state_backend.get_result(target._uuid)

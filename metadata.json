@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 添加全局暂停功能的端到端集成测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766040402.747022, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 移动约束测试文件以解决 fixture 作用域问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766040547.5421405, "duration_ms": 0}}

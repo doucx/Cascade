@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(runtime): 以事件驱动的唤醒机制取代 Engine 中的忙等待", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766056323.9674776, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "错误分析", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766056449.0180302, "duration_ms": 0}}

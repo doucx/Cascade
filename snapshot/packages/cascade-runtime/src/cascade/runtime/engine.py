@@ -136,41 +136,34 @@ class Engine:
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""
-        # An empty payload signifies a cleared retained message (i.e., a resume command)
-        if not payload:
-            try:
+        try:
+            # An empty payload signifies a cleared retained message (i.e., a resume command)
+            if not payload:
                 # Reconstruct scope from topic, e.g., cascade/constraints/task/api_call -> task:api_call
                 scope_parts = topic.split("/")[2:]
                 scope = ":".join(scope_parts)
                 if scope:
                     self.constraint_manager.remove_constraints_by_scope(scope)
-                return
-            except Exception as e:
-                print(
-                    f"[Engine] Error processing resume command on topic '{topic}': {e}",
-                    file=sys.stderr,
+            else:
+                # Basic validation, could be improved with a schema library
+                constraint = GlobalConstraint(
+                    id=payload["id"],
+                    scope=payload["scope"],
+                    type=payload["type"],
+                    params=payload["params"],
+                    expires_at=payload.get("expires_at"),
                 )
-                return
-
-        try:
-            # Basic validation, could be improved with a schema library
-            constraint = GlobalConstraint(
-                id=payload["id"],
-                scope=payload["scope"],
-                type=payload["type"],
-                params=payload["params"],
-                expires_at=payload.get("expires_at"),
-            )
-            self.constraint_manager.update_constraint(constraint)
-        except (KeyError, TypeError) as e:
+                self.constraint_manager.update_constraint(constraint)
+        except Exception as e:
             # In a real system, we'd use a proper logger.
             # For now, print to stderr to avoid crashing the engine.
             print(
-                f"[Engine] Error processing constraint on topic '{topic}': {e}",
+                f"[Engine] Error processing constraint update on topic '{topic}': {e}",
                 file=sys.stderr,
             )
         finally:
-            # After any change, wake up the engine loop if it's waiting
+            # After any change (add, remove, or error), wake up the engine loop
+            # if it's waiting.
             self._wakeup_event.set()
 
     async def _execute_graph(

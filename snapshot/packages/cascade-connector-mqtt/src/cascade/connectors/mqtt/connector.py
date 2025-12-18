@@ -126,7 +126,7 @@ class MqttConnector:
         """
         if subscription == topic:
             return True
-        
+
         sub_parts = subscription.split("/")
         topic_parts = topic.split("/")
 
@@ -134,20 +134,20 @@ class MqttConnector:
             if sub_part == "#":
                 # '#' matches the rest of the topic
                 return True
-            
+
             if i >= len(topic_parts):
                 # Topic is shorter than subscription (and not matched by #)
                 return False
-            
+
             topic_part = topic_parts[i]
-            
+
             if sub_part == "+":
                 # '+' matches any single level
                 continue
-            
+
             if sub_part != topic_part:
                 return False
-        
+
         # Ensure lengths match (unless ended with #, handled above)
         return len(sub_parts) == len(topic_parts)
 
@@ -163,13 +163,13 @@ class MqttConnector:
                 payload_bytes = message.payload
 
                 # Dispatch to all matching subscriptions
-                # We iterate over all subscriptions because a single message 
+                # We iterate over all subscriptions because a single message
                 # might match multiple patterns (e.g. "a/b" matches "a/+" and "#")
                 matched_callbacks = []
                 for sub_pattern, cb in self._subscriptions.items():
                     if self._topic_matches(sub_pattern, topic):
                         matched_callbacks.append(cb)
-                
+
                 if not matched_callbacks:
                     continue
 

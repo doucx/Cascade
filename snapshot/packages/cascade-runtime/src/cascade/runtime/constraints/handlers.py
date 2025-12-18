@@ -9,22 +9,23 @@ from .rate_limiter import RateLimiter
 if TYPE_CHECKING:
     from .manager import ConstraintManager
 
+
 def _parse_rate_string(rate_str: str) -> float:
     """Parses '10/m', '5/s', '300/h' into tokens per second."""
     if not isinstance(rate_str, str):
         return float(rate_str)
-    
+
     parts = rate_str.split("/")
     if len(parts) != 2:
         try:
             return float(rate_str)
         except ValueError:
-             # Default fallback or error
+            # Default fallback or error
             return 1.0
 
     count = float(parts[0])
     unit = parts[1].lower()
-    
+
     divisor = 1.0
     if unit in ("s", "sec", "second"):
         divisor = 1.0
@@ -32,7 +33,7 @@ def _parse_rate_string(rate_str: str) -> float:
         divisor = 60.0
     elif unit in ("h", "hr", "hour"):
         divisor = 3600.0
-    
+
     return count / divisor
 
 
@@ -162,14 +163,16 @@ class RateLimitConstraintHandler(ConstraintHandler):
     ) -> None:
         rate_val = constraint.params.get("rate", "1/s")
         rate_hertz = _parse_rate_string(str(rate_val))
-        
+
         # We can optionally allow users to set burst capacity via params
         # For now, default burst = rate (1 second worth)
-        capacity = constraint.params.get("capacity") 
+        capacity = constraint.params.get("capacity")
         if capacity is not None:
             capacity = float(capacity)
-        
-        self.limiter.update_bucket(self._get_scope_key(constraint), rate_hertz, capacity)
+
+        self.limiter.update_bucket(
+            self._get_scope_key(constraint), rate_hertz, capacity
+        )
 
     def on_constraint_remove(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
@@ -191,13 +194,13 @@ class RateLimitConstraintHandler(ConstraintHandler):
             target_task_name = scope.split(":", 1)[1]
             if task.name == target_task_name:
                 is_match = True
-        
+
         if not is_match:
             return True
 
         # Try acquire
         wait_time = self.limiter.try_acquire(self._get_scope_key(constraint))
-        
+
         if wait_time == 0.0:
             return True
         else:

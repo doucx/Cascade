@@ -123,9 +123,7 @@ async def _publish_limit(
                 params={"rate": rate},
                 expires_at=expires_at,
             )
-            bus.info(
-                "controller.publishing_rate", scope=scope, topic=topic, rate=rate
-            )
+            bus.info("controller.publishing_rate", scope=scope, topic=topic, rate=rate)
             await connector.publish(topic, asdict(constraint), retain=True)
 
         await asyncio.sleep(0.1)
@@ -197,9 +195,7 @@ def pause(
     match the specified scope until a 'resume' command is sent.
     """
     try:
-        asyncio.run(
-            _publish_pause(scope=scope, ttl=ttl, hostname=hostname, port=port)
-        )
+        asyncio.run(_publish_pause(scope=scope, ttl=ttl, hostname=hostname, port=port))
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 

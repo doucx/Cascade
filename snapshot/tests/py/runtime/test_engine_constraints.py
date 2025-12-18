@@ -189,7 +189,7 @@ async def test_engine_handles_malformed_constraint_payload(
         pass
 
     run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
-    
+
     # Wait until subscription is established
     for _ in range(50):
         if "cascade/constraints/#" in mock_connector.subscriptions:

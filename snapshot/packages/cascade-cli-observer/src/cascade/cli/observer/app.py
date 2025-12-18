@@ -1,7 +1,5 @@
 import asyncio
 import time
-import logging
-from datetime import datetime, timezone
 import typer
 from rich.console import Console
 from rich.table import Table

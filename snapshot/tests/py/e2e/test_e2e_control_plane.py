@@ -2,12 +2,12 @@ import asyncio
 import pytest
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.events import TaskExecutionStarted
 
 from .harness import InProcessConnector, ControllerTestApp
+
 
 @pytest.mark.asyncio
 async def test_startup_pause_and_resume_e2e(bus_and_spy):
@@ -28,6 +28,7 @@ async def test_startup_pause_and_resume_e2e(bus_and_spy):
     @cs.task
     def my_task():
         return "done"
+
     workflow = my_task()
 
     # 3. ACT: Start the engine.
@@ -45,7 +46,9 @@ async def test_startup_pause_and_resume_e2e(bus_and_spy):
     # Wait a moment to ensure the engine has had time to (incorrectly) start.
     await asyncio.sleep(0.3)
     started_events = spy.events_of_type(TaskExecutionStarted)
-    assert len(started_events) == 0, "Task started execution despite global pause constraint"
+    assert len(started_events) == 0, (
+        "Task started execution despite global pause constraint"
+    )
 
     # 5. ACT: Controller issues a RESUME command.
     await controller.resume(scope="global")

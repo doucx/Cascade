@@ -6,15 +6,24 @@ from cascade.runtime.events import TaskExecutionFinished
 from cascade.runtime.subscribers import TelemetrySubscriber
 from cascade.cli.observer.app import on_message
 
+
 # Mock connector to capture the published payload
 class CaptureConnector:
     def __init__(self):
         self.captured_payload = None
+
     async def publish(self, topic, payload, **kwargs):
         self.captured_payload = payload
-    async def connect(self): pass
-    async def disconnect(self): pass
-    async def subscribe(self, topic, callback): pass
+
+    async def connect(self):
+        pass
+
+    async def disconnect(self):
+        pass
+
+    async def subscribe(self, topic, callback):
+        pass
+
 
 @pytest.mark.asyncio
 async def test_telemetry_subscriber_to_observer_contract():
@@ -32,10 +41,10 @@ async def test_telemetry_subscriber_to_observer_contract():
         task_id="task-abc",
         task_name="contract_task",
         status="Succeeded",
-        duration=0.123
+        duration=0.123,
     )
     subscriber.on_event(event)
-    
+
     # Let the asyncio.create_task in on_event run
     await asyncio.sleep(0.01)
 
@@ -60,5 +69,5 @@ async def test_telemetry_subscriber_to_observer_contract():
         "observer.telemetry.task_state.COMPLETED",
         task_name="contract_task",
         duration_ms=123.0,
-        error=""
+        error="",
     )

@@ -8,6 +8,7 @@ from contextlib import ExitStack
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, Graph
 from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.spec.constraint import GlobalConstraint
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
     RunStarted,
@@ -87,6 +88,10 @@ class Engine:
         try:
             if self.connector:
                 await self.connector.connect()
+                # Subscribe to constraint updates
+                await self.connector.subscribe(
+                    "cascade/constraints/#", self._on_constraint_update
+                )
 
             with ExitStack() as stack:
                 initial_graph = build_graph(target)
@@ -119,6 +124,25 @@ class Engine:
         finally:
             if self.connector:
                 await self.connector.disconnect()
+
+    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
+        """Callback to handle incoming constraint messages."""
+        try:
+            # Basic validation, could be improved with a schema library
+            constraint = GlobalConstraint(
+                id=payload["id"],
+                scope=payload["scope"],
+                type=payload["type"],
+                params=payload["params"],
+                expires_at=payload.get("expires_at"),
+            )
+            self.constraint_manager.update_constraint(constraint)
+        except (KeyError, TypeError) as e:
+            # In a real system, we'd use a proper logger.
+            # For now, print to stderr to avoid crashing the engine.
+            print(
+                f"[Engine] Error processing constraint on topic '{topic}': {e}"
+            )
 
     async def _execute_graph(
         self,

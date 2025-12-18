@@ -29,24 +29,47 @@ def test_mqtt_connector_instantiation():
     assert connector.port == 1234
 
 @pytest.mark.asyncio
-async def test_connect_and_disconnect_lifecycle(mock_client, mocker):
-    """Tests that connect() creates and connects a client, and disconnect() disconnects it."""
-    # 1. Setup connector
+async def test_connect_and_disconnect_lifecycle(mocker):
+    """Tests that connect() creates and connects a client with LWT, and disconnect() disconnects it."""
+    # 1. Mock aiomqtt.Client and aiomqtt.Will
+    mock_client_instance = AsyncMock()
+    mock_client_instance.__aenter__.return_value = mock_client_instance
+    
+    mock_client_class = mocker.patch("cascade.connectors.mqtt.connector.aiomqtt.Client", return_value=mock_client_instance)
+    mock_will_class = mocker.patch("cascade.connectors.mqtt.connector.aiomqtt.Will")
+    
+    # Mock platform and os to get a deterministic source_id
+    mocker.patch("platform.node", return_value="test-host")
+    mocker.patch("os.getpid", return_value=12345)
+
+    # 2. Setup connector
     connector = MqttConnector(hostname="test.broker", port=9999, client_id="tester")
 
-    # 2. Test connect()
+    # 3. Test connect()
     await connector.connect()
 
-    # Assert that the client was instantiated
-    assert connector._client is mock_client
-    # Assert that the client's connect method was awaited via context manager
-    mock_client.__aenter__.assert_awaited_once()
+    # Assert that Will was called correctly
+    expected_source_id = "test-host-12345"
+    expected_topic = f"cascade/status/{expected_source_id}"
+    expected_payload = json.dumps({"status": "offline"})
+    mock_will_class.assert_called_once_with(topic=expected_topic, payload=expected_payload)
 
-    # 3. Test disconnect()
+    # Assert that the client was instantiated with the will message
+    mock_client_class.assert_called_once_with(
+        hostname="test.broker",
+        port=9999,
+        client_id="tester",
+        will=mock_will_class.return_value
+    )
+    
+    # Assert that the client's connect method was awaited via context manager
+    mock_client_instance.__aenter__.assert_awaited_once()
+
+    # 4. Test disconnect()
     await connector.disconnect()
 
     # Assert that the client's disconnect method was awaited via context manager
-    mock_client.__aexit__.assert_awaited_once()
+    mock_client_instance.__aexit__.assert_awaited_once()
     assert connector._client is None
 
 @pytest.mark.asyncio

@@ -1,6 +1,8 @@
 import asyncio
 import json
 import logging
+import platform
+import os
 from typing import Callable, Awaitable, Dict, Any
 
 try:
@@ -30,17 +32,26 @@ class MqttConnector:
         self._client: "aiomqtt.Client" | None = None
         self._loop_task: asyncio.Task | None = None
         self._subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
+        self._source_id = f"{platform.node()}-{os.getpid()}"
+
 
     async def connect(self) -> None:
         """Establishes a connection to the MQTT Broker."""
         if self._client:
             return
 
+        # Define the Last Will and Testament message
+        lwt_topic = f"cascade/status/{self._source_id}"
+        lwt_payload = json.dumps({"status": "offline"})
+        will_message = aiomqtt.Will(topic=lwt_topic, payload=lwt_payload)
+
         # aiomqtt.Client now acts as an async context manager
         client = aiomqtt.Client(
-            hostname=self.hostname, port=self.port, **self.client_kwargs
+            hostname=self.hostname,
+            port=self.port,
+            will=will_message,
+            **self.client_kwargs,
         )
-        # TODO: Implement LWT message logic.
         self._client = await client.__aenter__()
 
         # Start the message processing loop

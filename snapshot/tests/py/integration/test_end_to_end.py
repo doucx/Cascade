@@ -11,7 +11,8 @@ from cascade.adapters.solvers.native import NativeSolver
 def mock_messaging_bus(monkeypatch):
     """Mocks the global messaging bus and returns the mock object."""
     mock_bus = MagicMock()
-    monkeypatch.setattr("cascade.runtime.subscribers.messaging_bus", mock_bus)
+    # Correctly patch the new global bus in cascade-common
+    monkeypatch.setattr("cascade.common.messaging.bus", mock_bus)
     return mock_bus
 
 

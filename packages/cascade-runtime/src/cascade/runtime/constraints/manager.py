@@ -32,6 +32,7 @@ class ConstraintManager:
         """
         if self._wakeup_callback:
             import asyncio
+
             try:
                 loop = asyncio.get_running_loop()
                 loop.call_later(delay, self._wakeup_callback)

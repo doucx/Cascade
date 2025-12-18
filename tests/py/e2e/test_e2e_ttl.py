@@ -24,10 +24,15 @@ class InProcessConnector(Connector):
         self._shared_topics.clear()
         self._retained_messages.clear()
 
-    async def connect(self) -> None: pass
-    async def disconnect(self) -> None: pass
+    async def connect(self) -> None:
+        pass
 
-    async def publish(self, topic: str, payload: Any, qos: int = 0, retain: bool = False) -> None:
+    async def disconnect(self) -> None:
+        pass
+
+    async def publish(
+        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
+    ) -> None:
         if retain:
             if payload:
                 self._retained_messages[topic] = payload
@@ -38,7 +43,9 @@ class InProcessConnector(Connector):
                 for q in queues:
                     await q.put((topic, payload))
 
-    async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> None:
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> None:
         queue = asyncio.Queue()
         self._shared_topics[topic].append(queue)
         for retained_topic, payload in self._retained_messages.items():
@@ -56,10 +63,12 @@ class InProcessConnector(Connector):
                 break
 
     def _topic_matches(self, subscription: str, topic: str) -> bool:
-        if subscription == topic: return True
+        if subscription == topic:
+            return True
         if subscription.endswith("/#"):
             prefix = subscription[:-2]
-            if topic.startswith(prefix): return True
+            if topic.startswith(prefix):
+                return True
         return False
 
 
@@ -75,7 +84,7 @@ class ControllerTestApp:
             scope=scope,
             type="pause",
             params={},
-            expires_at=expires_at
+            expires_at=expires_at,
         )
         payload = asdict(constraint)
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
@@ -113,18 +122,18 @@ async def test_e2e_ttl_expiration():
     )
 
     start_time = time.time()
-    
+
     # 2. Run engine. It should be paused initially.
     # The Engine loop will wait on wakeup.
     # ConstraintManager should have scheduled a wakeup at T+0.25s.
     # At T+0.25s, Engine wakes up, cleans expired constraint, and unblocks.
     await engine.run(workflow)
-    
+
     duration = time.time() - start_time
 
     # 3. Assertions
     # Duration must be at least the TTL (0.25s), proving it was blocked.
     assert duration >= 0.24, f"Engine didn't wait for TTL! Duration: {duration:.3f}s"
-    
+
     # But it shouldn't wait forever (e.g. < 1s)
     assert duration < 1.0, "Engine waited too long or didn't recover."

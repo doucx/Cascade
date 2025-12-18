@@ -1,18 +1,19 @@
 import asyncio
-from typing import Callable, Awaitable, Dict, Any, List, Optional
+from typing import Callable, Awaitable, Dict, Any, List
 from collections import defaultdict
 import uuid
 from dataclasses import asdict
 
-import cascade as cs
 from cascade.interfaces.protocols import Connector
 from cascade.spec.constraint import GlobalConstraint
+
 
 class InProcessConnector(Connector):
     """
     A deterministic, in-memory connector that simulates an MQTT broker with
     retained message support for robust E2E testing.
     """
+
     _shared_topics: Dict[str, List[asyncio.Queue]] = defaultdict(list)
     _retained_messages: Dict[str, Any] = {}
 
@@ -50,7 +51,7 @@ class InProcessConnector(Connector):
     ) -> None:
         queue = asyncio.Queue()
         self._shared_topics[topic].append(queue)
-        
+
         # Immediately deliver retained messages that match the subscription.
         # We await the callback to ensure state is synchronized before proceeding.
         for retained_topic, payload in self._retained_messages.items():
@@ -82,13 +83,16 @@ class InProcessConnector(Connector):
 
 class ControllerTestApp:
     """A lightweight simulator for the cs-controller CLI tool."""
+
     def __init__(self, connector: Connector):
         self.connector = connector
 
     async def pause(self, scope: str = "global"):
         constraint = GlobalConstraint(
             id=f"pause-{scope}-{uuid.uuid4().hex[:8]}",
-            scope=scope, type="pause", params={}
+            scope=scope,
+            type="pause",
+            params={},
         )
         await self._publish(scope, constraint)
 

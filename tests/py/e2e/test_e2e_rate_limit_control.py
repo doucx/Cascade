@@ -56,7 +56,7 @@ class InProcessConnector(Connector):
     ) -> None:
         queue = asyncio.Queue()
         self._shared_topics[topic].append(queue)
-        
+
         # Replay retained messages that match the subscription
         for retained_topic, payload in self._retained_messages.items():
             if self._topic_matches(subscription=topic, topic=retained_topic):
@@ -113,7 +113,7 @@ class MockWorkExecutor(Executor):
     """Executor that simulates short, time-consuming work."""
 
     async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        await asyncio.sleep(0.01) # Short work time
+        await asyncio.sleep(0.01)  # Short work time
         return time.time()
 
 

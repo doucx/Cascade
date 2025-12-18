@@ -1,5 +1,5 @@
 import time
-from typing import Dict, Tuple
+from typing import Dict
 from dataclasses import dataclass
 
 
@@ -23,7 +23,7 @@ class RateLimiter:
     def update_bucket(self, key: str, rate: float, capacity: float = None):
         """
         Updates or creates a bucket configuration.
-        
+
         Args:
             key: Unique identifier for the bucket.
             rate: Tokens per second.
@@ -33,14 +33,11 @@ class RateLimiter:
             capacity = rate
 
         now = time.time()
-        
+
         if key not in self._buckets:
             # Initialize full
             self._buckets[key] = Bucket(
-                capacity=capacity,
-                tokens=capacity,
-                rate=rate,
-                last_refill=now
+                capacity=capacity, tokens=capacity, rate=rate, last_refill=now
             )
         else:
             # Update existing parameters, keeping current level (clamped)
@@ -74,7 +71,7 @@ class RateLimiter:
             # Calculate time to wait
             missing = cost - bucket.tokens
             if bucket.rate <= 0:
-                return float("inf") # Should not happen in normal config
+                return float("inf")  # Should not happen in normal config
             return missing / bucket.rate
 
     def _refill(self, bucket: Bucket, now: float):

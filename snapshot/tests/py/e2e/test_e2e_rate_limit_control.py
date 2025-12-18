@@ -1,42 +1,3 @@
-Excellent. The reference file provides a perfect template for creating a robust, deterministic, end-to-end test for the new rate-limiting feature. I now have a clear understanding of the best practices for testing asynchronous control loops within the Cascade ecosystem.
-
-I will now generate a plan to create a new test file, `test_e2e_rate_limit_control.py`, which will validate the rate-limiting functionality by following the "Configure-Then-Run" pattern established in the reference test.
-
-### 简要回答
-我将创建一个新的端到端测试文件 `tests/py/e2e/test_e2e_rate_limit_control.py`，用于验证刚刚实现的速率限制功能。该测试将复用 `InProcessConnector` 和 `MockWorkExecutor` 等测试工具，并模拟一个 `cs-controller` 来发布一个带有突发容量限制的速率约束。通过断言工作流的执行总时长，我们可以验证引擎是否正确地根据速率限制对任务执行进行了节流。
-
-## [WIP] test: Add E2E test for rate limit control
-
-### 用户需求
-为新实现的速率限制功能（里程碑 3.3）编写一个端到端的集成测试，以确保其正确性和健壮性。
-
-### 评论
-遵循现有的 `test_e2e_concurrency_control.py` 的模式是最佳实践。通过使用内存中的 `InProcessConnector` 和一个模拟的 `Controller` 应用，我们可以创建一个完全确定性的测试环境，从而消除异步测试中常见的时序竞争问题。
-
-### 目标
-1.  创建一个新的测试文件 `tests/py/e2e/test_e2e_rate_limit_control.py`。
-2.  在该文件中，实现一个测试用例，用于验证 `rate_limit` 约束。
-3.  测试应验证当大量任务并发请求时，`Engine` 会根据令牌桶的速率和容量对它们的执行进行时间上的延迟。
-
-### 基本原理
-测试的核心是验证时间行为。我们会设定一个比任务执行本身慢得多的速率限制（例如 5 tps），并让任务执行时间非常短（例如 0.01s）。然后，我们会一次性调度多个（例如 4个）任务。如果速率限制有效，总执行时间将主要由速率限制决定（大约 0.4s），而不是并发执行时间（大约 0.01s）。这提供了一个清晰、可量化的验证信号。我们还将设置一个小的突发容量（`capacity=2`），以验证令牌桶的突发行为。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/runtime #concept/constraint #ai/instruct #task/domain/testing #task/object/rate-limiter-e2e #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建速率限制的端到端测试文件
-
-我将创建一个新的测试文件，其中包含必要的测试基础设施和一个验证速率限制功能的测试用例。
-
-~~~~~act
-write_file
-tests/py/e2e/test_e2e_rate_limit_control.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 from typing import Callable, Awaitable, Dict, Any, List, Optional
@@ -221,4 +182,3 @@ async def test_e2e_rate_limit_control():
     assert finish_times[2] - finish_times[1] > 0.18
     # Gap between 3rd and 4th should be ~0.2s
     assert finish_times[3] - finish_times[2] > 0.18
-~~~~~

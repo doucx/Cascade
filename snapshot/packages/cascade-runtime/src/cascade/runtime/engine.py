@@ -89,12 +89,21 @@ class Engine:
         start_time = time.time()
 
         # Robustly determine target name
-        if hasattr(target, "task"):
-            target_name = getattr(target.task, "name", "unknown")
+        target_names = []
+        if isinstance(target, (list, tuple)):
+            for t in target:
+                if hasattr(t, "task"):
+                    target_names.append(getattr(t.task, "name", "unknown"))
+                elif hasattr(t, "factory"):
+                    target_names.append(f"map({getattr(t.factory, 'name', 'unknown')})")
+                else:
+                    target_names.append("unknown")
+        elif hasattr(target, "task"):
+            target_names.append(getattr(target.task, "name", "unknown"))
         elif hasattr(target, "factory"):
-            target_name = f"map({getattr(target.factory, 'name', 'unknown')})"
+            target_names.append(f"map({getattr(target.factory, 'name', 'unknown')})")
         else:
-            target_name = "unknown"
+            target_names.append("unknown")
 
         state_backend = self.state_backend_cls(run_id=run_id)
 
@@ -108,7 +117,7 @@ class Engine:
                 )
 
             self.bus.publish(
-                RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
+                RunStarted(run_id=run_id, target_tasks=target_names, params=params or {})
             )
 
             with ExitStack() as stack:

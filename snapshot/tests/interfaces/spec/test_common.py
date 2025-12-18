@@ -1,4 +1,4 @@
-from cascade.spec.common import Param
+from cascade.interfaces.spec.common import Param
 
 
 def test_param_placeholder():

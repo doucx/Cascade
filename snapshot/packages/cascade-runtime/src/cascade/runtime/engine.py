@@ -7,7 +7,7 @@ from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, Graph, EdgeType
-from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.interfaces.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
     RunStarted,

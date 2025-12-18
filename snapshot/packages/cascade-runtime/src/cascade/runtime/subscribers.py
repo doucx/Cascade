@@ -15,7 +15,7 @@ from .events import (
     ResourceAcquired,
     ResourceReleased,
 )
-from ..spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
+from cascade.interfaces.spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
 from .protocols import Connector
 
 

@@ -1,4 +1,4 @@
-from cascade.spec.task import task
+from cascade.interfaces.spec.task import task
 
 
 def test_task_detects_sync_function():

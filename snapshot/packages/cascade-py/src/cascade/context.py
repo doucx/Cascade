@@ -1,6 +1,6 @@
 from contextvars import ContextVar
 from typing import Dict, List
-from .spec.input import InputSpec
+from cascade.interfaces.spec.input import InputSpec
 
 class WorkflowContext:
     def __init__(self):

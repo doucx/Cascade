@@ -1,7 +1,7 @@
 from typing import Any
-from ..spec.task import LazyResult
-from ..graph.build import build_graph
-from ..graph.model import Node, EdgeType
+from cascade.interfaces.spec.task import LazyResult
+from cascade.runtime.graph.build import build_graph
+from cascade.interfaces.graph.model import Node, EdgeType
 
 
 def visualize(target: LazyResult[Any]) -> str:

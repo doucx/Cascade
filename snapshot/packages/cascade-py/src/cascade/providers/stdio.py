@@ -1,6 +1,6 @@
 import sys
 import asyncio
-from cascade.spec.task import task
+from cascade.interfaces.spec.task import task
 from cascade.providers import LazyFactory, Provider
 
 

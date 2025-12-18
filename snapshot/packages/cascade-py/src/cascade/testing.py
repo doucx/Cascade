@@ -1,6 +1,6 @@
 from contextlib import contextmanager
 from typing import Callable, Any
-from cascade.runtime import Engine
+from cascade.runtime.engine import Engine
 
 
 @contextmanager

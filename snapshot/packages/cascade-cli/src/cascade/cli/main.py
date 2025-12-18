@@ -6,12 +6,12 @@ try:
 except ImportError:
     typer = None
 
-from ..spec.task import LazyResult
-from ..context import get_current_context
-from ..spec.input import ParamSpec
+from cascade.interfaces.spec.lazy_types import LazyResult
+from cascade.context import get_current_context
+from cascade.interfaces.spec.input import ParamSpec
 
 
-def cli(target: LazyResult[Any]) -> Callable[[], None]:
+def cli(target: "LazyResult[Any]") -> Callable[[], None]:
     """
     A factory that generates a Typer-based command-line interface for a Cascade workflow.
     It inspects the workflow context for `cs.Param` definitions and converts them into
@@ -45,7 +45,7 @@ def cli(target: LazyResult[Any]) -> Callable[[], None]:
 
     def main(**kwargs):
         """The actual function that Typer will wrap."""
-        from .. import run as cascade_run
+        from cascade import run as cascade_run
 
         # Extract log_level explicitly since it's injected by Typer via the dynamic signature
         log_level = kwargs.pop("log_level", "INFO")

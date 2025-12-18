@@ -1,4 +1,4 @@
-from cascade.spec.task import task, LazyResult
+from cascade.interfaces.spec.task import task, LazyResult
 
 
 def test_task_decorator_and_lazy_result():

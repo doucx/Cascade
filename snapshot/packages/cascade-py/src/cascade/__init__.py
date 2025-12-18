@@ -2,36 +2,36 @@ import asyncio
 from typing import Any, Dict, Optional
 
 # Core Specs
-from .spec.task import task
-from .spec.lazy_types import LazyResult
-from .spec.routing import Router
-from .spec.resource import resource, inject
-from .spec.constraint import with_constraints
+from cascade.interfaces.spec.task import task
+from cascade.interfaces.spec.lazy_types import LazyResult
+from cascade.interfaces.spec.routing import Router
+from cascade.interfaces.spec.resource import resource, inject
+from cascade.interfaces.spec.constraint import with_constraints
 
 # V1.3 New Core Components
 from .context import get_current_context
-from .spec.input import ParamSpec, EnvSpec
+from cascade.interfaces.spec.input import ParamSpec, EnvSpec
 from .internal.inputs import _get_param_value, _get_env_var
 
 # Legacy / Spec Compat
 # We keep Param class import removed/hidden as we are overriding it below.
-# from .spec.common import Param  <-- Removed
+# from cascade.interfaces.spec.common import Param  <-- Removed
 
 # Runtime
-from .runtime.engine import Engine
-from .runtime.bus import MessageBus
-from .runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
-from .runtime.exceptions import DependencyMissingError
-from .runtime.protocols import Connector
-from .adapters.solvers.native import NativeSolver
-from .adapters.executors.local import LocalExecutor
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.interfaces.protocols import Connector
+from cascade.runtime.adapters.solvers.native import NativeSolver
+from cascade.runtime.adapters.executors.local import LocalExecutor
 
 # Tools
 from .testing import override_resource
 from .tools.preview import dry_run
 from .tools.visualize import visualize
 from .tools.cli import cli
-from .graph.serialize import to_json, from_json
+from cascade.runtime.graph.serialize import to_json, from_json
 
 
 # --- V1.3 Factory Functions ---

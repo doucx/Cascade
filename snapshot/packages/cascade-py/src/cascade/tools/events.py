@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
-from ..runtime.events import Event
+from cascade.runtime.events import Event
 
 
 @dataclass(frozen=True)

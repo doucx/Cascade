@@ -5,18 +5,14 @@ build-backend = "hatchling.build"
 [project]
 name = "cascade-cli"
 version = "0.1.0"
-description = "Command-line tools for the Cascade workflow engine."
+description = "Command-line tools for the Cascade workflow engine. Installs cascade-py and typer."
 requires-python = ">=3.8"
 dependencies = [
   "cascade-py",
-  "typer"
+  "typer[all]"
 ]
 
-[project.scripts]
-cascade = "cascade.cli.main:app"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade/cli"]
+# This package provides no scripts or code of its own, only dependencies.
 
 [tool.hatch.metadata]
 allow-direct-references = true

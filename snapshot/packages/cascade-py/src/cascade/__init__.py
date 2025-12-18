@@ -34,6 +34,7 @@ from cascade.adapters.executors.local import LocalExecutor
 from .testing import override_resource
 from .tools.preview import dry_run
 from .tools.visualize import visualize
+from .tools.cli import cli
 from cascade.graph.serialize import to_json, from_json
 
 
@@ -144,4 +145,5 @@ __all__ = [
     "override_resource",
     "DependencyMissingError",
     "get_current_context", # Exposed for testing/advanced usage
+    "cli",
 ]

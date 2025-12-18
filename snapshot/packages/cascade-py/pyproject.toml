@@ -16,14 +16,14 @@ dependencies = [
 template = ["jinja2"]
 http = ["aiohttp"]
 sql = ["sqlalchemy"]
-cli = ["typer"]
+cli = ["typer[all]"]
 config = ["PyYAML"]
 s3 = ["aiobotocore"]
 all = [
   "jinja2",
   "aiohttp",
   "sqlalchemy",
-  "typer",
+  "typer[all]",
   "PyYAML",
   "aiobotocore",
 ]

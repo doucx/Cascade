@@ -1,108 +1,123 @@
-好的，我将开始执行“路线图：可插拔约束处理器架构 (v1.0)”中的第一个里程碑。
+Excellent. We're moving on to the second milestone of our architecture refactoring. This is where the new protocol becomes tangible.
 
-这是一个关键的架构重构，它将 `ConstraintManager` 从一个硬编码的实现转变为一个灵活的、由协议驱动的调度中心。这为未来的扩展性和社区贡献奠定了基础，完全符合项目的核心设计原则。
+I will now generate the plan to migrate the existing `pause` logic into our first concrete handler, `PauseConstraintHandler`, and add the enhanced scope-matching capabilities as defined in the roadmap.
 
-## [WIP] refactor(runtime): 引入可插拔的 ConstraintHandler 协议
+## [WIP] refactor(runtime): Implement PauseConstraintHandler and decouple from manager
 
 ### 用户需求
-根据“路线图：可插拔约束处理器架构 (v1.0)”，完成“里程碑 1：定义契约 (The Contract)”。
+根据“路线图：可插拔约束处理器架构 (v1.0)”，完成“里程碑 2：迁移现有逻辑 (The Migration)”。
 
 ### 评论
-这是一个重要的架构演进。将硬编码的约束逻辑解耦为独立的、协议驱动的处理器，是偿还技术债务、拥抱可扩展性的关键一步。此举措将使约束系统更加清晰、可测试，并为未来添加新的控制类型（如速率限制、并发控制）打开大门，而无需修改核心引擎代码。
+这是新架构的第一次“试驾”。通过将 `pause` 逻辑从核心 `ConstraintManager` 迁移到一个独立的、可测试的 `PauseConstraintHandler` 中，我们不仅证明了新协议的可行性，还立即获得了价值：我们现在可以实现更精细的、基于作用域（Scope）的控制，例如暂停单个任务，这是旧的硬编码实现无法做到的。
 
 ### 目标
-1.  将现有的 `cascade/runtime/constraints.py` 文件重构为一个 `constraints` 包。
-2.  在新的包内创建一个 `protocols.py` 文件。
-3.  在该文件中定义 `ConstraintHandler` 协议，作为所有未来约束处理器的契约。
-4.  确保对 `ConstraintManager` 的现有导入路径不受此次重构的影响。
+1.  在 `cascade/runtime/constraints/` 包中创建一个新的 `handlers.py` 文件。
+2.  在该文件中实现 `PauseConstraintHandler`，使其符合 `ConstraintHandler` 协议。
+3.  `PauseConstraintHandler` 的 `check_permission` 方法必须实现完整的作用域匹配逻辑（支持 `global` 和 `task:<task_name>`）。
+4.  从 `ConstraintManager` 的 `check_permission` 方法中移除旧的、硬编码的 `pause` 逻辑，为下一步的调度器重构做准备。
 
 ### 基本原理
-为了给新的协议文件 `protocols.py` 和未来的处理器实现提供一个专属的命名空间，我们必须首先将当前的 `constraints.py` 文件转换为一个 Python 包（一个包含 `__init__.py` 的目录）。
+我们采用“Strangler Fig”模式进行重构。首先，我们构建新的功能单元 (`PauseConstraintHandler`)，使其具备比旧实现更强的功能（即作用域匹配）。然后，我们“杀死”旧的实现，即从 `ConstraintManager` 中删除硬编码的 `if constraint.type == "pause"` 逻辑。
 
-具体的重构步骤是：
-1.  创建一个新的 `constraints/` 目录。
-2.  将原 `constraints.py` 文件移动到新目录中，并重命名为 `manager.py`，以明确其职责。
-3.  在 `constraints/` 目录中创建一个 `__init__.py` 文件，该文件从 `manager.py` 中导入并重新导出 `ConstraintManager`。这确保了像 `engine.py` 这样的模块中 `from cascade.runtime.constraints import ConstraintManager` 的导入语句仍然有效，使本次重构对外部透明。
-4.  最后，在 `constraints/` 目录中创建新的 `protocols.py` 文件并定义 `ConstraintHandler` 协议。
+为了保持增量重构的安全性，在 `ConstraintManager` 成为一个完整调度器之前（里程碑 3），我们暂时将其 `check_permission` 方法修改为总是返回 `True`。这确保了在重构的中间步骤中，系统保持可运行状态，尽管约束功能会暂时失效，直到下一个里程碑完成。
 
 ### 标签
-#intent/architect #intent/refine #flow/ready #priority/high #comp/runtime #concept/config #scope/api #ai/instruct #task/domain/runtime #task/object/constraint-system #task/action/refactor #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/runtime #concept/config #scope/api #ai/instruct #task/domain/runtime #task/object/constraint-system #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 将 `constraints.py` 文件重构为包结构
+#### Acts 1: 创建 `PauseConstraintHandler`
 
-首先，我们将 `constraints.py` 文件转换为一个包，为新的协议文件和未来的处理器实现提供空间。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p packages/cascade-runtime/src/cascade/runtime/constraints && \
-mv packages/cascade-runtime/src/cascade/runtime/constraints.py packages/cascade-runtime/src/cascade/runtime/constraints/manager.py
-~~~~~
-
-#### Acts 2: 创建包的 `__init__.py` 以确保向后兼容
-
-我们创建一个 `__init__.py` 文件来重新导出 `ConstraintManager`，这样就不需要修改 `engine.py` 中的导入语句。
+我们创建新的 `handlers.py` 文件，并实现 `PauseConstraintHandler`。它将包含处理 `pause` 约束的所有逻辑，包括对 `global` 和 `task:` 作用域的匹配。
 
 ~~~~~act
 write_file
-packages/cascade-runtime/src/cascade/runtime/constraints/__init__.py
+packages/cascade-runtime/src/cascade/runtime/constraints/handlers.py
 ~~~~~
 ~~~~~python
-from .manager import ConstraintManager
+from typing import TYPE_CHECKING
 
-__all__ = ["ConstraintManager"]
-~~~~~
-
-#### Acts 3: 创建并定义 `ConstraintHandler` 协议
-
-现在，我们创建新的协议文件并定义 `ConstraintHandler` 接口，这是本次重构的核心交付物。
-
-~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/runtime/constraints/protocols.py
-~~~~~
-~~~~~python
-from typing import Protocol, TYPE_CHECKING
-
+from .protocols import ConstraintHandler
 from cascade.graph.model import Node
 from cascade.spec.constraint import GlobalConstraint
+
 
 if TYPE_CHECKING:
     from .manager import ConstraintManager
 
 
-class ConstraintHandler(Protocol):
+class PauseConstraintHandler(ConstraintHandler):
     """
-    Protocol for a pluggable handler that implements the logic for a specific
-    type of global constraint (e.g., "pause", "rate_limit").
+    Handles the 'pause' constraint type.
+    It can pause execution globally or for a specific task.
     """
 
     def handles_type(self) -> str:
-        """Returns the constraint type this handler is responsible for."""
-        ...
+        return "pause"
 
     def check_permission(
         self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
     ) -> bool:
         """
-        Evaluates the constraint against the given task.
-
-        Args:
-            task: The task node being considered for execution.
-            constraint: The specific constraint instance to evaluate.
-            manager: A reference to the parent ConstraintManager, providing access
-                     to the overall state if needed.
-
-        Returns:
-            True if the task is permitted to run, False if it should be deferred.
+        Returns False (permission denied) if the task matches the constraint's scope.
         """
-        ...
+        scope = constraint.scope
+
+        # Global scope matches everything
+        if scope == "global":
+            return False
+
+        # Task-specific scope
+        if scope.startswith("task:"):
+            target_task_name = scope.split(":", 1)[1]
+            if task.name == target_task_name:
+                return False
+
+        # Project-specific scope (placeholder for future implementation)
+        # if scope.startswith("project:"):
+        #     ...
+
+        # If no match, this constraint doesn't apply to this task, so it is permitted.
+        return True
+~~~~~
+
+#### Acts 2: 从 `ConstraintManager` 中移除硬编码逻辑
+
+现在我们修改 `ConstraintManager`，移除旧的 `pause` 检查。在下一个里程碑中，这里将被新的调度逻辑取代。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/constraints/manager.py
+~~~~~
+~~~~~python
+    def check_permission(self, task: Node) -> bool:
+        """
+        Evaluates all active constraints to determine if a given task
+        is currently allowed to execute.
+        """
+        # TODO: Implement expiry logic (check constraint.expires_at)
+        # TODO: Implement scope matching (e.g., "task:task_name")
+
+        for constraint in self._constraints.values():
+            # Check for global pause
+            if constraint.type == "pause" and constraint.scope == "global":
+                return False  # Execution is not permitted
+
+        # If no blocking constraints are found, permit execution.
+        return True
+~~~~~
+~~~~~python
+    def check_permission(self, task: Node) -> bool:
+        """
+        Evaluates all active constraints to determine if a given task
+        is currently allowed to execute.
+        """
+        # TODO: This will be replaced by the dispatcher logic in the next milestone.
+        # For now, it permits all execution to allow incremental refactoring.
+        return True
 ~~~~~
 
 ### 下一步建议
-我们已经成功定义了契约。接下来的**里程碑 2** 是将当前硬编码在 `ConstraintManager` 中的 `pause` 逻辑迁移到第一个具体的处理器实现 `PauseConstraintHandler` 中。这将是我们新架构的第一个具体应用。
+逻辑迁移已经完成。现在 `ConstraintManager` 是一个空壳，而 `PauseConstraintHandler` 已经准备就绪。下一步是**里程碑 3**，我们将重建 `ConstraintManager` 作为一个真正的调度中心，使其能够注册并调用我们刚刚创建的 `PauseConstraintHandler`。

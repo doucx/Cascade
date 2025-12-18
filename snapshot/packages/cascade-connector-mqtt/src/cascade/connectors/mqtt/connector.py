@@ -115,6 +115,38 @@ class MqttConnector:
         except Exception as e:
             logger.error(f"Failed to subscribe to topic '{topic}': {e}")
 
+    @staticmethod
+    def _topic_matches(subscription: str, topic: str) -> bool:
+        """
+        Checks if a concrete topic matches a subscription pattern (supporting + and #).
+        """
+        if subscription == topic:
+            return True
+        
+        sub_parts = subscription.split("/")
+        topic_parts = topic.split("/")
+
+        for i, sub_part in enumerate(sub_parts):
+            if sub_part == "#":
+                # '#' matches the rest of the topic
+                return True
+            
+            if i >= len(topic_parts):
+                # Topic is shorter than subscription (and not matched by #)
+                return False
+            
+            topic_part = topic_parts[i]
+            
+            if sub_part == "+":
+                # '+' matches any single level
+                continue
+            
+            if sub_part != topic_part:
+                return False
+        
+        # Ensure lengths match (unless ended with #, handled above)
+        return len(sub_parts) == len(topic_parts)
+
     async def _message_loop(self):
         """Background task to process incoming MQTT messages."""
         if not self._client:
@@ -126,13 +158,18 @@ class MqttConnector:
                 topic = str(message.topic)
                 payload_bytes = message.payload
 
-                # Find callback (Simple exact match for MVP)
-                # TODO: Implement wildcard matching if needed (e.g. + or #)
-                callback = self._subscriptions.get(topic)
-                if not callback:
+                # Dispatch to all matching subscriptions
+                # We iterate over all subscriptions because a single message 
+                # might match multiple patterns (e.g. "a/b" matches "a/+" and "#")
+                matched_callbacks = []
+                for sub_pattern, cb in self._subscriptions.items():
+                    if self._topic_matches(sub_pattern, topic):
+                        matched_callbacks.append(cb)
+                
+                if not matched_callbacks:
                     continue
 
-                # Decode and dispatch
+                # Decode payload once
                 try:
                     # aiomqtt payload can be bytes, bytearray, etc.
                     if isinstance(payload_bytes, (bytes, bytearray)):
@@ -146,10 +183,9 @@ class MqttConnector:
                     else:
                         data = json.loads(payload_str)
 
-                    # Execute callback (fire and forget, or await?)
-                    # Since we are in a loop, we should probably await to preserve order,
-                    # or create task for concurrency. For now, await is safer for state consistency.
-                    await callback(topic, data)
+                    # Execute all matched callbacks
+                    for cb in matched_callbacks:
+                        await cb(topic, data)
 
                 except json.JSONDecodeError:
                     logger.error(f"Received non-JSON payload on topic '{topic}'")

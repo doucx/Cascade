@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 TelemetrySubscriber 中缺失的 asyncio 导入", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766061602.9499538, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 MQTT 连接器不支持通配符订阅的问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766061773.9643223, "duration_ms": 0}}

@@ -22,9 +22,9 @@ async def on_message(topic: str, payload: dict):
     """Callback to process incoming telemetry messages."""
     global seen_run_ids
 
-    header = payload.get("header", {})
+    # The payload structure is flat for headers, with a nested 'body'
     body = payload.get("body", {})
-    run_id = header.get("run_id")
+    run_id = payload.get("run_id")
 
     if not run_id or not body:
         return
@@ -154,14 +154,6 @@ async def _get_status(hostname: str, port: int):
 
 
 def main():
-    # Configure logging to capture output from aiomqtt and our connector
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    )
-    # Suppress overly verbose logs from some libraries if needed
-    logging.getLogger("aiomqtt").setLevel(logging.WARNING)
-    
     bus.set_renderer(RichCliRenderer(store=bus.store))
     app()
 

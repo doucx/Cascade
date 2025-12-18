@@ -6,9 +6,9 @@ try:
 except ImportError:
     typer = None
 
-from cascade.interfaces.spec.lazy_types import LazyResult
+from cascade.spec.lazy_types import LazyResult
 from cascade.context import get_current_context
-from cascade.interfaces.spec.input import ParamSpec
+from cascade.spec.input import ParamSpec
 
 
 def cli(target: "LazyResult[Any]") -> Callable[[], None]:

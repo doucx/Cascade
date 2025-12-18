@@ -7,7 +7,7 @@ from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, Graph, EdgeType
-from cascade.interfaces.spec.resource import ResourceDefinition, Inject
+from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
     RunStarted,
@@ -19,7 +19,7 @@ from cascade.runtime.events import (
     ResourceAcquired,
     ResourceReleased,
 )
-from cascade.runtime.protocols import Solver, Executor, StateBackend, Connector
+from cascade.interfaces.protocols import Solver, Executor, StateBackend, Connector
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver

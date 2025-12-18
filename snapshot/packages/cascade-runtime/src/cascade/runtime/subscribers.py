@@ -15,8 +15,8 @@ from .events import (
     ResourceAcquired,
     ResourceReleased,
 )
-from cascade.interfaces.spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
-from .protocols import Connector
+from cascade.spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
+from cascade.interfaces.protocols import Connector
 
 
 class HumanReadableLogSubscriber:

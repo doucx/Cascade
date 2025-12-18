@@ -2,10 +2,10 @@ import inspect
 from typing import Any, Dict, List, Tuple
 
 from cascade.graph.model import Node, Graph, EdgeType
-from cascade.interfaces.spec.resource import Inject
-from cascade.interfaces.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.resource import Inject
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError
-from cascade.runtime.protocols import StateBackend
+from cascade.interfaces.protocols import StateBackend
 
 
 class ArgumentResolver:

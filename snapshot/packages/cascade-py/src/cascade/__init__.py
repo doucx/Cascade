@@ -2,15 +2,15 @@ import asyncio
 from typing import Any, Dict, Optional
 
 # Core Specs
-from cascade.interfaces.spec.task import task
-from cascade.interfaces.spec.lazy_types import LazyResult
-from cascade.interfaces.spec.routing import Router
-from cascade.interfaces.spec.resource import resource, inject
-from cascade.interfaces.spec.constraint import with_constraints
+from cascade.spec.task import task
+from cascade.spec.lazy_types import LazyResult
+from cascade.spec.routing import Router
+from cascade.spec.resource import resource, inject
+from cascade.spec.constraint import with_constraints
 
 # V1.3 New Core Components
 from .context import get_current_context
-from cascade.interfaces.spec.input import ParamSpec, EnvSpec
+from cascade.spec.input import ParamSpec, EnvSpec
 from .internal.inputs import _get_param_value, _get_env_var
 
 # Legacy / Spec Compat

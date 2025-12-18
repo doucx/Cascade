@@ -1,122 +1,363 @@
-好的，我明白了。这个新的错误非常具有指导性。
+简要回答：
+这是典型的多包重构后的导入路径混乱。虽然文件物理上被移动到了 `packages/cascade-interfaces/src/cascade/spec`，但在 Python 的命名空间中，它们映射为 `cascade.spec`，而不是 `cascade.interfaces.spec`。同样，`cascade.runtime.protocols` 也应更新为 `cascade.interfaces.protocols`。
 
-我的上一个计划在逻辑上是正确的——修复导入路径——但它引入了一个新的、与构建系统（`hatchling`）相关的问题。我移除了 `[tool.hatch.build.targets.wheel]`，是想让根项目成为一个纯粹的“虚拟”工作区，但 `hatchling` 在被要求构建一个可编辑的包（`uv pip install -e .` 的操作）时，仍然需要明确的指令来知道哪些文件构成了这个名为 `cascade` 的根包。
+我将生成一个计划来批量修复核心包（`cascade-py`, `cascade-runtime`, `cascade-cli`）中的这些导入错误。
 
-错误信息 `ValueError: Unable to determine which files to ship inside the wheel` 明确地告诉我们，`hatchling` 找不到一个名为 `cascade` 的目录来打包，因此构建失败。
-
-解决方案是将根 `pyproject.toml` 调整为一个正确的**聚合器包（Aggregator Package）**。它本身是一个有效的、可安装的包，其主要职责是：
-1.  将 `packages/cascade-py/src/cascade` 作为 `cascade` 包的源代码。
-2.  在其 `dependencies` 中明确声明它依赖于工作区中的所有其他包（`cascade-interfaces`, `cascade-runtime` 等）。
-
-我将生成一个计划来纠正这个配置。
-
-## [WIP] fix(monorepo): 修复根 pyproject.toml 的构建和依赖配置
-
-### 错误分析
-安装命令 `uv pip install -e ".[dev]"` 失败，并显示 `hatchling` 构建错误。根本原因在于，在我上一次的修改中，我从根 `pyproject.toml` 文件中移除了 `[tool.hatch.build.targets.wheel]` 配置节。
-
-这一移除导致 `hatchling` 在尝试构建名为 `cascade` 的根包时，无法找到任何源文件。`hatchling` 的默认行为是寻找一个与项目同名的目录（即 `cascade/`），但该目录在项目根目录下并不存在。
-
-此外，根 `pyproject.toml` 的 `[project]` 部分也缺少一个关键的 `dependencies` 列表。作为一个聚合器包，它必须明确声明它依赖于工作区中的所有其他子包。没有这个声明，即使安装成功，包之间的依赖关系也是不完整的。
+## [WIP] fix(core): 修正多包重构后的导入路径错误
 
 ### 用户需求
-修复 `pyproject.toml` 的配置，使 `uv pip install -e ".[dev]"` 能够成功执行，并正确安装所有工作区内的包及其依赖项。
+修复运行 `pytest` 时出现的 `ModuleNotFoundError: No module named 'cascade.interfaces'` 错误。这主要是由于重构后，代码中的导入路径（如 `cascade.interfaces.spec`）与实际的命名空间布局（应为 `cascade.spec`）不匹配导致的。
 
 ### 评论
-这是一个典型的 monorepo 配置问题。通过将根项目配置为一个有效的“聚合器”包，我们为 `hatchling` 和 `uv` 提供了清晰的指令，既解决了构建问题，也正确地建立了包之间的依赖关系。这个修复是使多包架构正常工作的最后一步。
+这种路径错误在 Monorepo 迁移中非常常见。关键是要理解 Hatchling 的 `packages = ["src/cascade"]` 配置实际上是将所有包的内容合并到了同一个顶层 `cascade` 命名空间下，并没有为每个包（如 `cascade-interfaces`）创建单独的二级命名空间。
 
 ### 目标
-1.  恢复根 `pyproject.toml` 中的 `[tool.hatch.build.targets.wheel]` 配置，并将其指向正确的源目录 (`packages/cascade-py/src/cascade`)。
-2.  在根 `pyproject.toml` 的 `[project]` 表中添加一个 `dependencies` 列表，明确声明对所有 `cascade-*` 子包的依赖。
-3.  （可选但推荐）简化 `[project.optional-dependencies.dev]` 中的 `typer[all]` 为 `typer`，以提高兼容性。
+1.  修正 `cascade-py`、`cascade-runtime` 和 `cascade-cli` 中所有错误的 `cascade.interfaces.spec.*` 引用为 `cascade.spec.*`。
+2.  修正所有过时的 `cascade.runtime.protocols` 引用为 `cascade.interfaces.protocols`。
+3.  修正 `cascade.interfaces.graph` 引用为 `cascade.graph`。
 
 ### 基本原理
-通过恢复 `[tool.hatch.build.targets.wheel]`，我们告诉 `hatchling`：“当你构建 `cascade` 这个包时，它的源代码在 `packages/cascade-py/src/cascade`。” 这解决了构建错误。
-
-通过添加 `dependencies`，我们告诉 `pip`/`uv`：“当你安装 `cascade` 这个包时，请同时确保 `cascade-interfaces`, `cascade-runtime` 等包也被安装。” `uv` 的工作区解析器会智能地从本地路径 (`packages/*`) 安装这些依赖，而不是去 PyPI 查找。这两个修改共同确保了整个 monorepo 能够被正确地构建和安装为一个连贯的整体。
+我们必须遵循 Python 的 Namespace Package 规则。`packages/cascade-interfaces/src/cascade/spec/task.py` 在安装后，其导入路径就是 `cascade.spec.task`。任何中间的目录名（如 `interfaces`）如果不是 `src/cascade` 下的子目录，就不应该出现在导入路径中。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct #task/domain/build #task/object/packaging-metadata #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/build #concept/config #scope/core #ai/instruct #task/domain/core #task/object/monorepo #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 修复根 `pyproject.toml` 的构建和依赖配置
-
-我们将一次性修复 `pyproject.toml`，恢复构建目标，添加核心依赖，并清理开发依赖。
+#### Acts 1: 修正 `cascade-py` 的导入路径
 
 ~~~~~act
-write_file
-pyproject.toml
+patch_file
+packages/cascade-py/src/cascade/__init__.py
 ~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+~~~~~python
+# Core Specs
+from cascade.interfaces.spec.task import task
+from cascade.interfaces.spec.lazy_types import LazyResult
+from cascade.interfaces.spec.routing import Router
+from cascade.interfaces.spec.resource import resource, inject
+from cascade.interfaces.spec.constraint import with_constraints
 
-[project]
-name = "cascade"
-version = "0.1.0"
-description = "A modern, declarative automation library for Python."
-readme = "README.md"
-requires-python = ">=3.8"
-license = "MIT"
-dependencies = [
-    "cascade-interfaces",
-    "cascade-runtime",
-    "cascade-py",
-    "cascade-cli",
-]
+# V1.3 New Core Components
+from .context import get_current_context
+from cascade.interfaces.spec.input import ParamSpec, EnvSpec
+from .internal.inputs import _get_param_value, _get_env_var
+~~~~~
+~~~~~python
+# Core Specs
+from cascade.spec.task import task
+from cascade.spec.lazy_types import LazyResult
+from cascade.spec.routing import Router
+from cascade.spec.resource import resource, inject
+from cascade.spec.constraint import with_constraints
 
-[tool.uv.workspace]
-members = ["packages/*"]
+# V1.3 New Core Components
+from .context import get_current_context
+from cascade.spec.input import ParamSpec, EnvSpec
+from .internal.inputs import _get_param_value, _get_env_var
+~~~~~
 
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-py = { workspace = true }
-cascade-cli = { workspace = true }
+~~~~~act
+patch_file
+packages/cascade-py/src/cascade/context.py
+~~~~~
+~~~~~python
+from contextvars import ContextVar
+from typing import Dict, List
+from cascade.interfaces.spec.input import InputSpec
 
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-interfaces",
-    "packages/cascade-runtime",
-    "packages/cascade-py",
-    "packages/cascade-cli",
-]
+class WorkflowContext:
+~~~~~
+~~~~~python
+from contextvars import ContextVar
+from typing import Dict, List
+from cascade.spec.input import InputSpec
 
-[tool.hatch.build.targets.wheel]
-packages = ["packages/cascade-py/src/cascade"]
+class WorkflowContext:
+~~~~~
 
-[tool.pytest.ini_options]
-addopts = "-ra"
+~~~~~act
+patch_file
+packages/cascade-py/src/cascade/tools/visualize.py
+~~~~~
+~~~~~python
+from typing import Any
+from cascade.interfaces.spec.task import LazyResult
+from cascade.runtime.graph.build import build_graph
+from cascade.interfaces.graph.model import Node, EdgeType
 
-[project.optional-dependencies]
-dev = [
-  "pytest",
-  "pytest-cov",
-  "mypy",
-  "pytest-aiohttp",
-  "moto[s3]",
-  "typer",
-  "mkdocs",
-  "mkdocs-material",
-  "mkdocstrings[python]",
-]
 
-[tool.hatch.metadata]
-allow-direct-references = true
+def visualize(target: LazyResult[Any]) -> str:
+~~~~~
+~~~~~python
+from typing import Any
+from cascade.spec.lazy_types import LazyResult
+from cascade.runtime.graph.build import build_graph
+from cascade.graph.model import Node, EdgeType
+
+
+def visualize(target: LazyResult[Any]) -> str:
+~~~~~
+
+#### Acts 2: 修正 `cascade-cli` 的导入路径
+
+~~~~~act
+patch_file
+packages/cascade-cli/src/cascade/cli/main.py
+~~~~~
+~~~~~python
+    typer = None
+
+from cascade.interfaces.spec.lazy_types import LazyResult
+from cascade.context import get_current_context
+from cascade.interfaces.spec.input import ParamSpec
+
+
+def cli(target: "LazyResult[Any]") -> Callable[[], None]:
+~~~~~
+~~~~~python
+    typer = None
+
+from cascade.spec.lazy_types import LazyResult
+from cascade.context import get_current_context
+from cascade.spec.input import ParamSpec
+
+
+def cli(target: "LazyResult[Any]") -> Callable[[], None]:
+~~~~~
+
+#### Acts 3: 修正 `cascade-runtime` 的导入路径 (Graph & Build)
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+from typing import Dict, Any
+from cascade.graph.model import Graph, Node, Edge, EdgeType
+from cascade.interfaces.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.interfaces.spec.routing import Router
+
+
+class GraphBuilder:
+~~~~~
+~~~~~python
+from typing import Dict, Any
+from cascade.graph.model import Graph, Node, Edge, EdgeType
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+
+
+class GraphBuilder:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+        # Process dynamic constraints
+        if result._constraints and not result._constraints.is_empty():
+            from cascade.interfaces.spec.lazy_types import LazyResult, MappedLazyResult
+
+            for res_name, req_value in result._constraints.requirements.items():
+~~~~~
+~~~~~python
+        # Process dynamic constraints
+        if result._constraints and not result._constraints.is_empty():
+            from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+
+            for res_name, req_value in result._constraints.requirements.items():
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/graph/serialize.py
+~~~~~
+~~~~~python
+from .model import Graph, Node, Edge, EdgeType
+from cascade.interfaces.spec.common import Param
+from cascade.interfaces.spec.constraint import ResourceConstraint
+from cascade.interfaces.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
+from cascade.interfaces.spec.routing import Router
+from cascade.interfaces.spec.task import Task
+~~~~~
+~~~~~python
+from .model import Graph, Node, Edge, EdgeType
+from cascade.spec.common import Param
+from cascade.spec.constraint import ResourceConstraint
+from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.task import Task
+~~~~~
+
+#### Acts 4: 修正 `cascade-runtime` 的导入路径 (Runtime Core)
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/__init__.py
+~~~~~
+~~~~~python
+from .exceptions import DependencyMissingError
+from .resource_manager import ResourceManager
+from .protocols import ExecutionPlan, Solver, Executor, CachePolicy
+
+__all__ = [
+~~~~~
+~~~~~python
+from .exceptions import DependencyMissingError
+from .resource_manager import ResourceManager
+from cascade.interfaces.protocols import ExecutionPlan, Solver, Executor, CachePolicy
+
+__all__ = [
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph, EdgeType
+from cascade.interfaces.spec.resource import ResourceDefinition, Inject
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import (
+~~~~~
+~~~~~python
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph, EdgeType
+from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import (
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    ResourceAcquired,
+    ResourceReleased,
+)
+from cascade.runtime.protocols import Solver, Executor, StateBackend, Connector
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.resource_manager import ResourceManager
+~~~~~
+~~~~~python
+    ResourceAcquired,
+    ResourceReleased,
+)
+from cascade.interfaces.protocols import Solver, Executor, StateBackend, Connector
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.resource_manager import ResourceManager
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/flow.py
+~~~~~
+~~~~~python
+from typing import Dict, Any, Optional, List
+from collections import defaultdict
+from cascade.graph.model import Node, Graph, EdgeType, Edge
+from cascade.interfaces.spec.common import Param
+from cascade.interfaces.spec.lazy_types import LazyResult
+from cascade.runtime.protocols import StateBackend
+~~~~~
+~~~~~python
+from typing import Dict, Any, Optional, List
+from collections import defaultdict
+from cascade.graph.model import Node, Graph, EdgeType, Edge
+from cascade.spec.common import Param
+from cascade.spec.lazy_types import LazyResult
+from cascade.interfaces.protocols import StateBackend
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/resolvers.py
+~~~~~
+~~~~~python
+from cascade.graph.model import Node, Graph, EdgeType
+from cascade.interfaces.spec.resource import Inject
+from cascade.interfaces.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.protocols import StateBackend
+~~~~~
+~~~~~python
+from cascade.graph.model import Node, Graph, EdgeType
+from cascade.spec.resource import Inject
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.interfaces.protocols import StateBackend
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/subscribers.py
+~~~~~
+~~~~~python
+    ResourceAcquired,
+    ResourceReleased,
+)
+from cascade.interfaces.spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
+from .protocols import Connector
+~~~~~
+~~~~~python
+    ResourceAcquired,
+    ResourceReleased,
+)
+from cascade.spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
+from cascade.interfaces.protocols import Connector
+~~~~~
+
+#### Acts 5: 修正 `cascade-runtime` 的导入路径 (Adapters)
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/adapters/solvers/native.py
+~~~~~
+~~~~~python
+from typing import Dict, List, Set
+from cascade.graph.model import Graph, Node
+from cascade.runtime.protocols import ExecutionPlan
+
+
+class NativeSolver:
+~~~~~
+~~~~~python
+from typing import Dict, List, Set
+from cascade.graph.model import Graph, Node
+from cascade.interfaces.protocols import ExecutionPlan
+
+
+class NativeSolver:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/adapters/solvers/csp.py
+~~~~~
+~~~~~python
+from typing import Dict, List, Any, Optional
+from collections import defaultdict
+from cascade.graph.model import Graph, Node
+from cascade.runtime.protocols import ExecutionPlan
+from cascade.interfaces.spec.lazy_types import LazyResult, MappedLazyResult
+
+try:
+~~~~~
+~~~~~python
+from typing import Dict, List, Any, Optional
+from collections import defaultdict
+from cascade.graph.model import Graph, Node
+from cascade.interfaces.protocols import ExecutionPlan
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+
+try:
 ~~~~~
 
 ### 下一步建议
-这次的 `pyproject.toml` 文件是完整且正确的，它定义了一个有效的聚合器包。现在请再次运行安装和测试命令，问题应该已得到彻底解决。
-
-1.  **重新安装**:
-    ```bash
-    uv pip install -e ".[dev]"
-    ```
-2.  **运行测试**:
-    ```bash
-    pytest
-    ```
+一旦核心代码的导入路径被修复，我建议运行 `pytest` 来识别剩余的错误。根据经验，测试文件（`tests/`）中肯定还存在大量类似的路径引用错误，需要在一个单独的计划中进行批量修复。

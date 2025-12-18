@@ -6,6 +6,7 @@ from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.interfaces.protocols import StateBackend
+from cascade.runtime.constraints import ConstraintManager
 
 
 class ArgumentResolver:
@@ -124,13 +125,29 @@ class ConstraintResolver:
     Responsible for resolving dynamic resource constraints for a node.
     """
 
+    def __init__(self, constraint_manager: ConstraintManager):
+        self.constraint_manager = constraint_manager
+
     def resolve(
         self, node: Node, graph: Graph, state_backend: StateBackend
     ) -> Dict[str, Any]:
-        if not node.constraints or node.constraints.is_empty():
-            return {}
+        # Start with static constraints defined on the task
+        resolved = (
+            node.constraints.requirements.copy()
+            if node.constraints and not node.constraints.is_empty()
+            else {}
+        )
 
-        resolved = {}
+        # Add dynamic requirements from global concurrency constraints
+        concurrency_constraints = self.constraint_manager.get_matching_constraints(
+            node, "concurrency"
+        )
+        for c in concurrency_constraints:
+            resource_name = f"constraint:concurrency:{c.scope}"
+            resolved[resource_name] = 1  # Each task acquires 1 unit of the limit
+
+        if not resolved:
+            return {}
 
         constraint_edges = [
             e
@@ -138,7 +155,10 @@ class ConstraintResolver:
             if e.target.id == node.id and e.edge_type == EdgeType.CONSTRAINT
         ]
 
-        for res, amount in node.constraints.requirements.items():
+        # Note: We iterate over the 'resolved' dict which now contains both static
+        # and concurrency constraints. The logic for resolving LazyResult amounts
+        # only applies to static constraints.
+        for res, amount in resolved.items():
             if isinstance(amount, (LazyResult, MappedLazyResult)):
                 constraint_edge = next(
                     (e for e in constraint_edges if e.arg_name == res), None

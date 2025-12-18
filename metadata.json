@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(control): Implement task-level pause/resume via retained MQTT messages", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766051551.104895, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实现动态并发管理", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766051998.9980063, "duration_ms": 0}}

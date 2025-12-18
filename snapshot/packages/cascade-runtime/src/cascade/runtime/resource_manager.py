@@ -29,6 +29,26 @@ class ResourceManager:
             if k not in self._usage:
                 self._usage[k] = 0.0
 
+    def set_resource_capacity(self, name: str, capacity: float):
+        """Dynamically sets or updates the capacity for a single resource."""
+        with self._condition:
+            is_new = name not in self._capacity
+            self._capacity[name] = capacity
+            if is_new:
+                self._usage[name] = 0.0
+            # Wake up waiting tasks, as this change might satisfy their needs
+            self._condition.notify_all()
+
+    def remove_resource(self, name: str):
+        """Dynamically removes a resource."""
+        with self._condition:
+            if name in self._capacity:
+                del self._capacity[name]
+            if name in self._usage:
+                del self._usage[name]
+            # Wake up waiting tasks
+            self._condition.notify_all()
+
     async def acquire(self, requirements: Dict[str, Union[int, float]]):
         """
         Atomically acquires the requested resources.

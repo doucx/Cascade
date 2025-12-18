@@ -53,13 +53,15 @@ class Engine:
         self.resource_manager = ResourceManager(capacity=system_resources)
         
         # Setup constraint manager with default handlers
-        self.constraint_manager = ConstraintManager()
+        self.constraint_manager = ConstraintManager(resource_manager=self.resource_manager)
         self.constraint_manager.register_handler(PauseConstraintHandler())
 
         self._resource_providers: Dict[str, Callable] = {}
 
         self.arg_resolver = ArgumentResolver()
-        self.constraint_resolver = ConstraintResolver()
+        self.constraint_resolver = ConstraintResolver(
+            constraint_manager=self.constraint_manager
+        )
         self.flow_manager: Optional[FlowManager] = None
 
     def register(self, resource_def: ResourceDefinition):

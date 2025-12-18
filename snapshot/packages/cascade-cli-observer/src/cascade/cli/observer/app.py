@@ -10,10 +10,9 @@ def watch(project: str = typer.Option("default", help="The project ID to watch."
     """
     Connect to the MQTT broker and watch for real-time telemetry events.
     """
-    typer.echo(f"Starting to watch project: {project}...")
-    # TODO: Implement MQTT connection and event printing logic.
     bus.info("observer.startup.watching", project=project)
-    typer.echo("Observer not yet implemented.")
+    # TODO: Implement MQTT connection and event printing logic.
+    bus.warning("observer.not_implemented")
 
 
 def main():

@@ -1,0 +1,6 @@
+{
+    "observer.startup.watching": "🔭 Watching project: {project}",
+    "observer.not_implemented": "⚠️  Observer functionality is not yet fully implemented.",
+    "controller.publishing": "📡 Publishing constraint for scope: {scope}",
+    "controller.not_implemented": "⚠️  Controller functionality is not yet fully implemented."
+}

@@ -1,6 +1,6 @@
 # This must be the very first line to allow this package to coexist with other
 # namespace packages (like cascade-interfaces) in editable installs.
-__path__ = __import__('pkgutil').extend_path(__path__, __name__)
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 import asyncio
 from typing import Any, Dict, Optional
@@ -40,7 +40,10 @@ from cascade.graph.serialize import to_json, from_json
 
 # --- V1.3 Factory Functions ---
 
-def Param(name: str, default: Any = None, type: Any = str, description: str = "") -> LazyResult:
+
+def Param(
+    name: str, default: Any = None, type: Any = str, description: str = ""
+) -> LazyResult:
     """
     定义一个工作流参数。
 
@@ -53,9 +56,10 @@ def Param(name: str, default: Any = None, type: Any = str, description: str = ""
     # 简单起见，暂用 None。
     spec = ParamSpec(name=name, default=default, type=type, description=description)
     get_current_context().register(spec)
-    
+
     # 返回 LazyResult
     return _get_param_value(name=name)
+
 
 def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
     """
@@ -63,11 +67,12 @@ def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
     """
     spec = EnvSpec(name=name, default=default, description=description)
     get_current_context().register(spec)
-    
+
     return _get_env_var(name=name)
 
 
 # --- Dynamic Provider Loading ---
+
 
 def __getattr__(name: str) -> Any:
     """
@@ -86,6 +91,7 @@ def __getattr__(name: str) -> Any:
 
 from .messaging.bus import bus as messaging_bus
 from .messaging.renderer import CliRenderer, JsonRenderer
+
 
 def run(
     target: LazyResult,
@@ -127,10 +133,11 @@ def run(
 
     return asyncio.run(engine.run(target, params=params))
 
+
 __all__ = [
     "task",
     "Param",  # Now the factory function
-    "Env",    # New factory function
+    "Env",  # New factory function
     "run",
     "dry_run",
     "visualize",
@@ -144,6 +151,6 @@ __all__ = [
     "Engine",
     "override_resource",
     "DependencyMissingError",
-    "get_current_context", # Exposed for testing/advanced usage
+    "get_current_context",  # Exposed for testing/advanced usage
     "cli",
 ]

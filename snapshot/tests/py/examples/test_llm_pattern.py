@@ -10,24 +10,28 @@ mock_openai_response = {
     "choices": [{"message": {"content": "This is a mock summary."}}]
 }
 
+
 @pytest.fixture
 def mock_http_post(monkeypatch):
     """Mocks cs.http.post to avoid real network calls."""
     mock_post_task = MagicMock()
-    
+
     # The mock needs to return a coroutine that resolves to an HttpResponse
     async def fake_post(*args, **kwargs):
         return HttpResponse(
             status=200,
             headers={"Content-Type": "application/json"},
-            body=str.encode(str(mock_openai_response).replace("'", '"')) # Basic JSON dump
+            body=str.encode(
+                str(mock_openai_response).replace("'", '"')
+            ),  # Basic JSON dump
         )
-    
+
     # We need to mock the underlying task function that the provider returns
     monkeypatch.setattr("cascade.providers.http._http_post_task.func", fake_post)
-    
+
     # We can also check calls on the task wrapper if needed, but mocking the func is direct
     return fake_post
+
 
 @pytest.mark.asyncio
 async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):
@@ -39,19 +43,21 @@ async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):
 
     # Define the parent workflow
     article_text = "This is a long article about software architecture..."
-    
+
     summary = cs.subflow(
         path="packages/cascade-py/src/cascade/examples/patterns/llm_openai.py",
-        target="result", # 'result' is the final LazyResult in the subflow file
+        target="result",  # 'result' is the final LazyResult in the subflow file
         params={
             "model": "gpt-3.5-turbo",
             "prompt_template": "Please summarize: {{ article }}",
-            "context": {"article": article_text}
-        }
+            "context": {"article": article_text},
+        },
     )
 
     # Run the workflow
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(summary)
 
     # Assert the final result

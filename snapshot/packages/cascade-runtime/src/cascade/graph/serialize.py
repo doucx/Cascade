@@ -17,9 +17,10 @@ from cascade.spec.task import Task
 @dataclass
 class _StubLazyResult:
     """
-    A minimal stub to satisfy Router's type hints and runtime requirements 
+    A minimal stub to satisfy Router's type hints and runtime requirements
     (specifically accessing ._uuid) during deserialization.
     """
+
     _uuid: str
 
 
@@ -75,13 +76,15 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
         if edge.router and id(edge.router) not in router_map:
             idx = len(routers_data)
             router_map[id(edge.router)] = idx
-            
+
             # Serialize the Router object
             # We only need the UUIDs of the selector and routes to reconstruct dependencies
-            routers_data.append({
-                "selector_id": edge.router.selector._uuid,
-                "routes": {k: v._uuid for k, v in edge.router.routes.items()}
-            })
+            routers_data.append(
+                {
+                    "selector_id": edge.router.selector._uuid,
+                    "routes": {k: v._uuid for k, v in edge.router.routes.items()},
+                }
+            )
 
     # 2. Serialize Nodes
     nodes_data = [_node_to_dict(n) for n in graph.nodes]
@@ -181,7 +184,7 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
         routes_stubs = {k: _StubLazyResult(uuid) for k, uuid in rd["routes"].items()}
         # Note: Type checker might complain because we are passing Stubs instead of LazyResults,
         # but Python is duck-typed and this satisfies the runtime needs.
-        restored_routers.append(Router(selector=selector_stub, routes=routes_stubs)) # type: ignore
+        restored_routers.append(Router(selector=selector_stub, routes=routes_stubs))  # type: ignore
 
     # 3. Reconstruct Edges
     for ed in edges_data:
@@ -190,14 +193,14 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
         if source and target:
             edge_type_name = ed.get("edge_type", "DATA")
             edge_type = EdgeType[edge_type_name]
-            
+
             edge = Edge(
-                source=source, 
-                target=target, 
-                arg_name=ed["arg_name"], 
-                edge_type=edge_type
+                source=source,
+                target=target,
+                arg_name=ed["arg_name"],
+                edge_type=edge_type,
             )
-            
+
             # Re-attach Router object if present
             if "router_index" in ed:
                 r_idx = ed["router_index"]

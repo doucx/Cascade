@@ -28,13 +28,11 @@ result_node = process(10, multiplier)
 @pytest.mark.asyncio
 async def test_subflow_execution(subflow_file):
     """Test calling a subflow with parameters."""
-    
+
     # Define a parent workflow that calls the subflow
     # subflow is loaded via provider registry
     sub_result = cs.subflow(
-        path=subflow_file,
-        target="result_node",
-        params={"multiplier": 5}
+        path=subflow_file, target="result_node", params={"multiplier": 5}
     )
 
     @cs.task
@@ -43,22 +41,26 @@ async def test_subflow_execution(subflow_file):
 
     workflow = finalize(sub_result)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
-    
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
+
     # 10 * 5 = 50 -> "Final: 50"
     result = await engine.run(workflow)
-    
+
     assert result == "Final: 50"
 
 
 @pytest.mark.asyncio
 async def test_subflow_file_not_found():
     """Test error handling for missing file."""
-    
+
     workflow = cs.subflow(path="non_existent.py", target="foo")
-    
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
-    
+
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
+
     with pytest.raises(FileNotFoundError):
         await engine.run(workflow)
 
@@ -66,10 +68,12 @@ async def test_subflow_file_not_found():
 @pytest.mark.asyncio
 async def test_subflow_target_not_found(subflow_file):
     """Test error handling for missing target variable."""
-    
+
     workflow = cs.subflow(path=subflow_file, target="missing_var")
-    
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
-    
+
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
+
     with pytest.raises(ValueError, match="Target 'missing_var' not found"):
         await engine.run(workflow)

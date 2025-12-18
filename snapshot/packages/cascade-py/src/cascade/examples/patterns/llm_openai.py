@@ -18,13 +18,11 @@ api_response = cs.http.post(
     headers={
         "Content-Type": "application/json",
         # 使用 cs.template 动态构建认证头
-        "Authorization": cs.template("Bearer {{ key }}", key=api_key)
+        "Authorization": cs.template("Bearer {{ key }}", key=api_key),
     },
-    json={
-        "model": model,
-        "messages": [{"role": "user", "content": final_prompt}]
-    }
-).with_retry(max_attempts=3, delay=5) # 精确地对网络调用进行重试
+    json={"model": model, "messages": [{"role": "user", "content": final_prompt}]},
+).with_retry(max_attempts=3, delay=5)  # 精确地对网络调用进行重试
+
 
 # 步骤 C: 解析响应 (一个简单的纯函数任务)
 @cs.task
@@ -32,6 +30,7 @@ def parse_response(response: "HttpResponse"):
     if response.status >= 400:
         raise RuntimeError(f"API Error: {response.status} - {response.text()}")
     return response.json()["choices"][0]["message"]["content"]
+
 
 parsed_text = parse_response(api_response)
 

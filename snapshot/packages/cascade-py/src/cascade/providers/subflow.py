@@ -43,7 +43,9 @@ async def _subflow_task(
     try:
         spec.loader.exec_module(module)
     except Exception as e:
-        raise RuntimeError(f"Error executing subflow definition file '{file_path}': {e}")
+        raise RuntimeError(
+            f"Error executing subflow definition file '{file_path}': {e}"
+        )
 
     # 2. Extract Target
     target_obj = getattr(module, target, None)

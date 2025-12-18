@@ -31,6 +31,7 @@ class ProviderNamespace:
     """
     A proxy object to handle nested provider names (e.g. cs.read.text).
     """
+
     def __init__(self, registry: "ProviderRegistry", prefix: str):
         self._registry = registry
         self._prefix = prefix

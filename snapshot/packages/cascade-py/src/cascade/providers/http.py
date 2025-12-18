@@ -24,6 +24,7 @@ class HttpResponse:
     def json(self) -> Any:
         """Parses the response body as JSON and returns a Python object."""
         import json
+
         return json.loads(self.text())
 
     def __repr__(self) -> str:
@@ -64,16 +65,16 @@ async def _perform_request(
             # So we MUST raise for 5xx/4xx if we want to use Cascade's retry mechanisms easily.
             # Compromise: raise for status, but capture the body first so we can attach it to the error if needed.
             # Actually, aiohttp's raise_for_status() is good.
-            
+
             body_bytes = await response.read()
-            
+
             # We construct the response object FIRST
             resp_obj = HttpResponse(
                 status=response.status,
                 headers=dict(response.headers),
                 body=body_bytes,
             )
-            
+
             # If we want to allow 404 handling without try/catch in the graph, we shouldn't raise.
             # But then .with_retry() won't work for 503s.
             # Let's verify standard practices. Typically, raw HTTP clients usually have a 'raise_for_status' flag.
@@ -81,11 +82,12 @@ async def _perform_request(
             # Users can use a generic "check_status" task or we can add a flag.
             # Let's NOT raise by default to keep it atomic and pure.
             # User can throw in a downstream task if they want to trigger retry.
-            
+
             return resp_obj
 
 
 # --- Tasks ---
+
 
 @task(name="http_get")
 async def _http_get_task(
@@ -104,7 +106,9 @@ async def _http_post_task(
     headers: Optional[Dict[str, str]] = None,
     params: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
-    return await _perform_request(url, "POST", params=params, json_data=json, data=data, headers=headers)
+    return await _perform_request(
+        url, "POST", params=params, json_data=json, data=data, headers=headers
+    )
 
 
 @task(name="http_put")
@@ -114,7 +118,9 @@ async def _http_put_task(
     data: Optional[Any] = None,
     headers: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
-    return await _perform_request(url, "PUT", json_data=json, data=data, headers=headers)
+    return await _perform_request(
+        url, "PUT", json_data=json, data=data, headers=headers
+    )
 
 
 @task(name="http_delete")
@@ -134,32 +140,44 @@ async def _http_request_task(
     data: Optional[Any] = None,
     headers: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
-    return await _perform_request(url, method, params=params, json_data=json, data=data, headers=headers)
+    return await _perform_request(
+        url, method, params=params, json_data=json, data=data, headers=headers
+    )
 
 
 # --- Providers ---
 
+
 class HttpGetProvider(Provider):
     name = "http.get"
+
     def create_factory(self) -> LazyFactory:
         return _http_get_task
 
+
 class HttpPostProvider(Provider):
     name = "http.post"
+
     def create_factory(self) -> LazyFactory:
         return _http_post_task
 
+
 class HttpPutProvider(Provider):
     name = "http.put"
+
     def create_factory(self) -> LazyFactory:
         return _http_put_task
 
+
 class HttpDeleteProvider(Provider):
     name = "http.delete"
+
     def create_factory(self) -> LazyFactory:
         return _http_delete_task
 
+
 class HttpRequestProvider(Provider):
     name = "http.request"
+
     def create_factory(self) -> LazyFactory:
         return _http_request_task

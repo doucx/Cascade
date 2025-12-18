@@ -1,22 +1,26 @@
 import cascade as cs
-from cascade.graph.model import EdgeType
 
 
 def test_visualize_diamond_graph():
     """
     Tests that visualize() produces a correct DOT string for a diamond graph with standard data edges.
     """
-    @cs.task
-    def t_a(): return 1
 
     @cs.task
-    def t_b(x): return x + 1
+    def t_a():
+        return 1
 
     @cs.task
-    def t_c(x): return x * 2
+    def t_b(x):
+        return x + 1
 
     @cs.task
-    def t_d(y, z): return y + z
+    def t_c(x):
+        return x * 2
+
+    @cs.task
+    def t_d(y, z):
+        return y + z
 
     r_a = t_a()
     r_b = t_b(r_a)
@@ -43,6 +47,7 @@ def test_visualize_special_edge_types():
     """
     Tests that visualize() correctly styles edges for conditions and constraints.
     """
+
     @cs.task
     def t_condition():
         return True
@@ -61,12 +66,8 @@ def test_visualize_special_edge_types():
     data_source = cs.task(lambda: 1, name="data_source")()
 
     # Apply run_if and dynamic constraints
-    target = t_main(
-        data_in=data_source
-    ).run_if(
-        cond
-    ).with_constraints(
-        cpu=constraint_val
+    target = (
+        t_main(data_in=data_source).run_if(cond).with_constraints(cpu=constraint_val)
     )
 
     dot_string = cs.visualize(target)
@@ -75,7 +76,9 @@ def test_visualize_special_edge_types():
     assert f'"{data_source._uuid}" -> "{target._uuid}" [label="data_in"];' in dot_string
 
     # 2. Assert Condition Edge (dashed, gray)
-    expected_cond_edge = f'"{cond._uuid}" -> "{target._uuid}" [style=dashed, color=gray, label="run_if"]'
+    expected_cond_edge = (
+        f'"{cond._uuid}" -> "{target._uuid}" [style=dashed, color=gray, label="run_if"]'
+    )
     assert expected_cond_edge in dot_string
 
     # 3. Assert Constraint Edge (dotted, purple)

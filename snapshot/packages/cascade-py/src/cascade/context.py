@@ -2,6 +2,7 @@ from contextvars import ContextVar
 from typing import Dict, List
 from cascade.spec.input import InputSpec
 
+
 class WorkflowContext:
     def __init__(self):
         self.input_specs: Dict[str, InputSpec] = {}
@@ -15,8 +16,10 @@ class WorkflowContext:
     def get_all_specs(self) -> List[InputSpec]:
         return list(self.input_specs.values())
 
+
 # 创建一个全局可访问的上下文变量
 _current_context = ContextVar("cascade_workflow_context", default=WorkflowContext())
+
 
 def get_current_context() -> WorkflowContext:
     """获取当前的 WorkflowContext。"""

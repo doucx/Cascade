@@ -65,7 +65,7 @@ class MessageBus:
     def _render(self, level: str, msg_id: str, **kwargs: Any) -> None:
         if not self._renderer:
             return
-        
+
         # The renderer is now responsible for everything
         self._renderer.render(msg_id, level, **kwargs)
 
@@ -74,9 +74,10 @@ class MessageBus:
 
     def warning(self, msg_id: str, **kwargs: Any) -> None:
         self._render("warning", msg_id, **kwargs)
-    
+
     def error(self, msg_id: str, **kwargs: Any) -> None:
         self._render("error", msg_id, **kwargs)
+
 
 _default_store = MessageStore(locale="en")
 bus = MessageBus(store=_default_store)

@@ -21,6 +21,7 @@ class TemplateProvider:
 
 from typing import Dict, Any, Optional
 
+
 @task(name="template")
 def render_template(
     template_string: str, context: Optional[Dict[str, Any]] = None, **kwargs

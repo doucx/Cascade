@@ -49,7 +49,9 @@ def test_message_bus_wildcard(bus_and_spy):
 
     assert len(spy.events) == 2
     assert isinstance(spy.events_of_type(RunStarted)[0], RunStarted)
-    assert isinstance(spy.events_of_type(TaskExecutionFinished)[0], TaskExecutionFinished)
+    assert isinstance(
+        spy.events_of_type(TaskExecutionFinished)[0], TaskExecutionFinished
+    )
 
 
 from cascade.runtime.bus import MessageBus as EventBus
@@ -103,13 +105,19 @@ def test_human_readable_subscriber_log_level_filtering():
     # Set renderer level to ERROR
     renderer = CliRenderer(store=messaging_bus.store, stream=output, min_level="ERROR")
     messaging_bus.set_renderer(renderer)
-    
+
     HumanReadableLogSubscriber(event_bus)
 
     # Publish INFO and ERROR level events
-    event_bus.publish(RunStarted(target_tasks=["t1"])) # INFO
-    event_bus.publish(TaskExecutionFinished(task_id="1", task_name="t1", status="Succeeded")) # INFO
-    event_bus.publish(TaskExecutionFinished(task_id="2", task_name="t2", status="Failed", error="Boom")) # ERROR
+    event_bus.publish(RunStarted(target_tasks=["t1"]))  # INFO
+    event_bus.publish(
+        TaskExecutionFinished(task_id="1", task_name="t1", status="Succeeded")
+    )  # INFO
+    event_bus.publish(
+        TaskExecutionFinished(
+            task_id="2", task_name="t2", status="Failed", error="Boom"
+        )
+    )  # ERROR
 
     logs = output.getvalue()
 

@@ -1,6 +1,5 @@
 import platform
 import os
-import time
 from datetime import datetime, timezone
 from .bus import MessageBus
 from ..messaging.bus import bus as messaging_bus
@@ -12,10 +11,7 @@ from .events import (
     TaskSkipped,
     TaskRetrying,
     Event,
-    ResourceAcquired,
-    ResourceReleased,
 )
-from cascade.spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
 from cascade.interfaces.protocols import Connector
 
 
@@ -44,19 +40,32 @@ class HumanReadableLogSubscriber:
         if event.status == "Succeeded":
             messaging_bus.info("run.finished_success", duration=event.duration)
         else:
-            messaging_bus.error("run.finished_failure", duration=event.duration, error=event.error)
+            messaging_bus.error(
+                "run.finished_failure", duration=event.duration, error=event.error
+            )
 
     def on_task_started(self, event: TaskExecutionStarted):
         messaging_bus.info("task.started", task_name=event.task_name)
 
     def on_task_finished(self, event: TaskExecutionFinished):
         if event.status == "Succeeded":
-            messaging_bus.info("task.finished_success", task_name=event.task_name, duration=event.duration)
+            messaging_bus.info(
+                "task.finished_success",
+                task_name=event.task_name,
+                duration=event.duration,
+            )
         else:
-            messaging_bus.error("task.finished_failure", task_name=event.task_name, duration=event.duration, error=event.error)
+            messaging_bus.error(
+                "task.finished_failure",
+                task_name=event.task_name,
+                duration=event.duration,
+                error=event.error,
+            )
 
     def on_task_skipped(self, event: TaskSkipped):
-        messaging_bus.info("task.skipped", task_name=event.task_name, reason=event.reason)
+        messaging_bus.info(
+            "task.skipped", task_name=event.task_name, reason=event.reason
+        )
 
     def on_task_retrying(self, event: TaskRetrying):
         messaging_bus.warning(
@@ -65,7 +74,7 @@ class HumanReadableLogSubscriber:
             attempt=event.attempt,
             max_attempts=event.max_attempts,
             delay=event.delay,
-            error=event.error
+            error=event.error,
         )
 
 
@@ -74,6 +83,7 @@ class TelemetrySubscriber:
     Listens to runtime events and publishes them as structured telemetry
     data via a Connector.
     """
+
     def __init__(self, event_bus: MessageBus, connector: Connector):
         self._connector = connector
         self._source_id = f"{platform.node()}-{os.getpid()}"
@@ -95,12 +105,16 @@ class TelemetrySubscriber:
 
         payload = self._create_header(event.run_id)
         topic = f"cascade/telemetry/{payload['org_id']}/{payload['project_id']}/{event.run_id}/events"
-        
+
         event_body = {}
-        if isinstance(event, (TaskExecutionStarted, TaskExecutionFinished, TaskSkipped)):
+        if isinstance(
+            event, (TaskExecutionStarted, TaskExecutionFinished, TaskSkipped)
+        ):
             state_map = {
                 TaskExecutionStarted: "RUNNING",
-                TaskExecutionFinished: "COMPLETED" if event.status == "Succeeded" else "FAILED",
+                TaskExecutionFinished: "COMPLETED"
+                if event.status == "Succeeded"
+                else "FAILED",
                 TaskSkipped: "SKIPPED",
             }
             event_body = {
@@ -108,16 +122,16 @@ class TelemetrySubscriber:
                 "task_id": event.task_id,
                 "task_name": event.task_name,
                 "state": state_map[type(event)],
-                "duration_ms": getattr(event, 'duration', 0) * 1000,
-                "error": getattr(event, 'error', None) or "",
+                "duration_ms": getattr(event, "duration", 0) * 1000,
+                "error": getattr(event, "error", None) or "",
             }
 
         elif isinstance(event, RunStarted):
-             event_body = {"type": "LifecycleEvent", "event": "ENGINE_STARTED"}
-        
+            event_body = {"type": "LifecycleEvent", "event": "ENGINE_STARTED"}
+
         elif isinstance(event, RunFinished):
-             event_body = {"type": "LifecycleEvent", "event": "ENGINE_STOPPED"}
-        
+            event_body = {"type": "LifecycleEvent", "event": "ENGINE_STOPPED"}
+
         # We can add more event types like ResourceEvent later
 
         if event_body:

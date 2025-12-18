@@ -34,7 +34,9 @@ async def test_load_yaml_provider(dummy_config_file):
 
     loaded_data = cs.load_yaml(dummy_config_file)
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(loaded_data)
 
     assert isinstance(result, dict)
@@ -51,7 +53,9 @@ async def test_lookup_provider_basic(dummy_config_file):
     # 2. Explicitly look up the value
     version = cs.lookup(source=config_source, key="project.version")
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(version)
 
     assert result == "1.0.0"
@@ -68,7 +72,9 @@ async def test_lookup_on_static_dict():
     source = provide_dict()
     value = cs.lookup(source=source, key="a.b")
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     result = await engine.run(value)
     assert result == 10
 
@@ -85,7 +91,9 @@ async def test_lookup_missing_key_raises_error():
     # "b" does not exist in the root dict, should raise KeyError
     missing_value = cs.lookup(source=source, key="b")
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     with pytest.raises(KeyError):
         await engine.run(missing_value)
 
@@ -103,6 +111,8 @@ async def test_lookup_invalid_path_raises_type_error():
     # Attempting to look up "nonexistent" on it should raise TypeError.
     invalid_lookup = cs.lookup(source=source, key="a.nonexistent")
 
-    engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus())
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
     with pytest.raises(TypeError, match="Cannot access segment"):
         await engine.run(invalid_lookup)

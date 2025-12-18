@@ -1,10 +1,9 @@
 import sys
 import json
-import time
 from typing import TextIO, Optional
 from datetime import datetime, timezone
 
-from .bus import MessageStore, Renderer
+from .bus import MessageStore
 
 LOG_LEVELS = {
     "DEBUG": 10,
@@ -18,6 +17,7 @@ class CliRenderer:
     """
     Renders messages as human-readable, formatted text strings.
     """
+
     def __init__(
         self,
         store: MessageStore,
@@ -39,6 +39,7 @@ class JsonRenderer:
     """
     Renders messages as structured, JSON-formatted strings.
     """
+
     def __init__(
         self,
         stream: Optional[TextIO] = None,

@@ -8,6 +8,7 @@ from cascade.runtime.events import TaskRetrying, Event
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 
+
 class SpySubscriber:
     def __init__(self, bus: MessageBus):
         self.events = []
@@ -18,6 +19,7 @@ class SpySubscriber:
 
     def events_of_type(self, event_type):
         return [e for e in self.events if isinstance(e, event_type)]
+
 
 @pytest.mark.asyncio
 async def test_map_with_retry_policy():
@@ -30,7 +32,7 @@ async def test_map_with_retry_policy():
     def flaky_process(x):
         count = call_counts.get(x, 0)
         call_counts[x] = count + 1
-        
+
         # Fail on first attempt for each item
         if count == 0:
             raise ValueError(f"Fail {x}")
@@ -57,24 +59,26 @@ async def test_map_with_retry_policy():
     # However, Engine.run returns the result of the target node.
     # For a map node, _execute_map_node returns a list of results.
     # So we CAN run mapped result directly.
-    
+
     results = await engine.run(mapped)
-    
+
     assert sorted(results) == [1, 2, 3]
-    
+
     # Check retries occurred
     retries = spy.events_of_type(TaskRetrying)
     assert len(retries) == 3
-    
+
     # Check call counts
     assert sum(call_counts.values()) == 6
     assert all(c == 2 for c in call_counts.values())
+
 
 @pytest.mark.asyncio
 async def test_map_with_constraints_policy():
     """
     Test that .with_constraints() applied to .map() limits concurrency of sub-tasks.
     """
+
     @cs.task
     async def slow_task(x):
         await asyncio.sleep(0.05)
@@ -86,24 +90,24 @@ async def test_map_with_constraints_policy():
     mapped = slow_task.map(x=inputs).with_constraints(slots=1)
 
     engine = Engine(
-        solver=NativeSolver(), 
-        executor=LocalExecutor(), 
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
         bus=MessageBus(),
-        system_resources={"slots": 2} # Allow 2 concurrent tasks
+        system_resources={"slots": 2},  # Allow 2 concurrent tasks
     )
 
     start_time = time.time()
     results = await engine.run(mapped)
     duration = time.time() - start_time
-    
+
     assert len(results) == 4
-    
+
     # Ideally:
     # T=0: Task 1, 2 start
     # T=0.05: Task 1, 2 finish; Task 3, 4 start
     # T=0.10: Task 3, 4 finish
     # Total ~0.10s.
     # If parallel (unconstrained): ~0.05s.
-    
+
     # We assert it took clearly longer than a single pass
     assert duration >= 0.09

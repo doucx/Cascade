@@ -6,7 +6,7 @@ from uuid import uuid4
 from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
-from cascade.graph.model import Node, Graph, EdgeType
+from cascade.graph.model import Node, Graph
 from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
@@ -67,7 +67,7 @@ class Engine:
     async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
-        
+
         # Robustly determine target name
         if hasattr(target, "task"):
             target_name = getattr(target.task, "name", "unknown")
@@ -79,7 +79,7 @@ class Engine:
         self.bus.publish(
             RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
         )
-        
+
         state_backend = self.state_backend_cls(run_id=run_id)
 
         try:
@@ -133,7 +133,7 @@ class Engine:
         for stage in plan:
             tasks_to_run = []
             nodes_in_execution = []
-            
+
             for node in stage:
                 if node.node_type == "param":
                     continue
@@ -150,7 +150,7 @@ class Engine:
                         )
                     )
                     continue
-                
+
                 tasks_to_run.append(
                     self._execute_node_with_policies(
                         node, graph, state_backend, active_resources, run_id, params
@@ -175,7 +175,9 @@ class Engine:
                     arg_name="<Target Output>",
                     dependency_id=f"Target was skipped (Reason: {skip_reason})",
                 )
-            raise KeyError(f"Target task '{target.task.name}' did not produce a result.")
+            raise KeyError(
+                f"Target task '{target.task.name}' did not produce a result."
+            )
 
         return state_backend.get_result(target._uuid)
 
@@ -213,7 +215,9 @@ class Engine:
         start_time = time.time()
 
         if node.cache_policy:
-            inputs_for_cache = self._resolve_inputs_for_cache(node, graph, state_backend)
+            inputs_for_cache = self._resolve_inputs_for_cache(
+                node, graph, state_backend
+            )
             cached_value = node.cache_policy.check(node.id, inputs_for_cache)
             if cached_value is not None:
                 self.bus.publish(
@@ -251,13 +255,18 @@ class Engine:
                 duration = time.time() - start_time
                 self.bus.publish(
                     TaskExecutionFinished(
-                        run_id=run_id, task_id=node.id, task_name=node.name,
-                        status="Succeeded", duration=duration,
+                        run_id=run_id,
+                        task_id=node.id,
+                        task_name=node.name,
+                        status="Succeeded",
+                        duration=duration,
                         result_preview=repr(result)[:100],
                     )
                 )
                 if node.cache_policy:
-                    inputs_for_save = self._resolve_inputs_for_cache(node, graph, state_backend)
+                    inputs_for_save = self._resolve_inputs_for_cache(
+                        node, graph, state_backend
+                    )
                     node.cache_policy.save(node.id, inputs_for_save, result)
                 return result
             except Exception as e:
@@ -265,8 +274,13 @@ class Engine:
                 if attempt < max_attempts:
                     self.bus.publish(
                         TaskRetrying(
-                            run_id=run_id, task_id=node.id, task_name=node.name,
-                            attempt=attempt, max_attempts=max_attempts, delay=delay, error=str(e),
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            attempt=attempt,
+                            max_attempts=max_attempts,
+                            delay=delay,
+                            error=str(e),
                         )
                     )
                     await asyncio.sleep(delay)
@@ -275,8 +289,11 @@ class Engine:
                     duration = time.time() - start_time
                     self.bus.publish(
                         TaskExecutionFinished(
-                            run_id=run_id, task_id=node.id, task_name=node.name,
-                            status="Failed", duration=duration,
+                            run_id=run_id,
+                            task_id=node.id,
+                            task_name=node.name,
+                            status="Failed",
+                            duration=duration,
                             error=f"{type(e).__name__}: {e}",
                         )
                     )
@@ -296,12 +313,18 @@ class Engine:
         return inputs
 
     async def _execute_map_node(
-        self, node: Node, args: List[Any], kwargs: Dict[str, Any],
-        active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any],
-        parent_state_backend: StateBackend
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        params: Dict[str, Any],
+        parent_state_backend: StateBackend,
     ) -> List[Any]:
         factory = node.mapping_factory
-        if not kwargs: return []
+        if not kwargs:
+            return []
         lengths = {k: len(v) for k, v in kwargs.items()}
         first_len = list(lengths.values())[0]
         if not all(length == first_len for length in lengths.values()):
@@ -311,15 +334,20 @@ class Engine:
         for i in range(first_len):
             item_kwargs = {k: v[i] for k, v in kwargs.items()}
             sub_target = factory(**item_kwargs)
-            if node.retry_policy: sub_target._retry_policy = node.retry_policy
-            if node.cache_policy: sub_target._cache_policy = node.cache_policy
-            if node.constraints: sub_target._constraints = node.constraints
+            if node.retry_policy:
+                sub_target._retry_policy = node.retry_policy
+            if node.cache_policy:
+                sub_target._cache_policy = node.cache_policy
+            if node.constraints:
+                sub_target._constraints = node.constraints
             sub_targets.append(sub_target)
 
         # Each sub-task is a full workflow run from the engine's perspective
         # but shares the parent's state backend to see results.
         coros = [
-            self._execute_graph(target, params, active_resources, run_id, parent_state_backend)
+            self._execute_graph(
+                target, params, active_resources, run_id, parent_state_backend
+            )
             for target in sub_targets
         ]
         return await asyncio.gather(*coros)
@@ -328,30 +356,41 @@ class Engine:
         required = set()
         for node in graph.nodes:
             for value in node.literal_inputs.values():
-                if isinstance(value, Inject): required.add(value.resource_name)
+                if isinstance(value, Inject):
+                    required.add(value.resource_name)
             if node.callable_obj:
                 sig = inspect.signature(node.callable_obj)
                 for param in sig.parameters.values():
-                    if isinstance(param.default, Inject): required.add(param.default.resource_name)
+                    if isinstance(param.default, Inject):
+                        required.add(param.default.resource_name)
         return required
 
     def _setup_resources(
         self, required_names: set[str], stack: ExitStack, run_id: str
     ) -> Dict[str, Any]:
         active: Dict[str, Any] = {}
+
         def get_or_create(name: str):
-            if name in active: return active[name]
+            if name in active:
+                return active[name]
             provider = self._resource_providers.get(name)
-            if not provider: raise NameError(f"Resource '{name}' is required but not registered.")
+            if not provider:
+                raise NameError(f"Resource '{name}' is required but not registered.")
             sig = inspect.signature(provider)
-            deps = {p_name: get_or_create(p.default.resource_name) for p_name, p in sig.parameters.items() if isinstance(p.default, Inject)}
+            deps = {
+                p_name: get_or_create(p.default.resource_name)
+                for p_name, p in sig.parameters.items()
+                if isinstance(p.default, Inject)
+            }
             gen = provider(**deps)
             instance = next(gen)
             active[name] = instance
             self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
             stack.callback(self._teardown_resource, gen, run_id, name)
             return instance
-        for name in required_names: get_or_create(name)
+
+        for name in required_names:
+            get_or_create(name)
         return active
 
     def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):

@@ -102,6 +102,7 @@ LazyResult.with_constraints = _with_constraints
 
 # --- MappedLazyResult Mixins ---
 
+
 def _mapped_run_if(self: MappedLazyResult, condition: LazyResult) -> MappedLazyResult:
     self._condition = condition
     return self

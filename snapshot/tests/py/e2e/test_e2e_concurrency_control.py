@@ -2,6 +2,8 @@ import asyncio
 import time
 from typing import Callable, Awaitable, Dict, Any, List
 from collections import defaultdict
+import uuid
+from dataclasses import asdict
 
 import pytest
 import cascade as cs
@@ -11,23 +13,26 @@ from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.graph.model import Node
 from cascade.spec.constraint import GlobalConstraint
-from dataclasses import asdict
-import uuid
 
 
 # --- Test Infrastructure: In-Process Communication ---
 
 class InProcessConnector(Connector):
     """
-    A Connector that uses asyncio Queues for in-process, in-memory message passing,
-    perfectly simulating a broker for E2E tests without network dependencies.
+    A Connector that uses asyncio Queues for in-process, in-memory message passing.
+    Now supports MQTT-style Retained Messages for robust config delivery.
     """
     _instance = None
     _shared_topics: Dict[str, List[asyncio.Queue]] = defaultdict(list)
+    _retained_messages: Dict[str, Any] = {}
 
     def __init__(self):
-        # This connector acts as a singleton to share state across instances
-        pass
+        # Reset state for each test instantiation if needed, 
+        # but here we rely on new instances per test via fixtures usually.
+        # Since we use class-level dicts for sharing, we should clear them if reusing classes.
+        # For this file, let's clear them in __init__ to be safe given the test runner.
+        self._shared_topics.clear()
+        self._retained_messages.clear()
 
     async def connect(self) -> None:
         pass
@@ -38,6 +43,11 @@ class InProcessConnector(Connector):
     async def publish(
         self, topic: str, payload: Any, qos: int = 0, retain: bool = False
     ) -> None:
+        # 1. Handle Retention
+        if retain:
+            self._retained_messages[topic] = payload
+
+        # 2. Live Dispatch
         # Find all queues subscribed to this topic and put the message
         for sub_topic, queues in self._shared_topics.items():
             if self._topic_matches(subscription=sub_topic, topic=topic):
@@ -49,7 +59,14 @@ class InProcessConnector(Connector):
     ) -> None:
         queue = asyncio.Queue()
         self._shared_topics[topic].append(queue)
-        # Start a listener task for this subscription
+        
+        # 1. Replay Retained Messages immediately (Async task to simulate network)
+        # We find all retained messages that match this new subscription
+        for retained_topic, payload in self._retained_messages.items():
+            if self._topic_matches(subscription=topic, topic=retained_topic):
+                await queue.put((retained_topic, payload))
+
+        # 2. Start listener
         asyncio.create_task(self._listen_on_queue(queue, callback))
 
     async def _listen_on_queue(self, queue: asyncio.Queue, callback):
@@ -65,7 +82,9 @@ class InProcessConnector(Connector):
         if subscription == topic:
             return True
         if subscription.endswith("/#"):
-            return topic.startswith(subscription[:-1])
+            prefix = subscription[:-2]
+            if topic.startswith(prefix):
+                return True
         return False
 
 
@@ -101,10 +120,9 @@ class MockWorkExecutor(Executor):
 @pytest.mark.asyncio
 async def test_e2e_concurrency_control():
     """
-    Full end-to-end test:
-    1. A Controller App publishes a concurrency limit.
-    2. A running Engine receives it and throttles its execution.
-    All communication happens in-memory via the InProcessConnector.
+    Full end-to-end test with Retained Messages.
+    1. Controller publishes constraint (Retained).
+    2. Engine starts, connects, receives config, AND THEN executes.
     """
     # 1. Setup shared communication bus
     connector = InProcessConnector()
@@ -112,7 +130,11 @@ async def test_e2e_concurrency_control():
     # 2. Setup the Controller
     controller = ControllerTestApp(connector)
 
-    # 3. Define the workflow that will be controlled
+    # 3. Publish the constraint FIRST (Simulating existing environment config)
+    # Limit task concurrency to 1
+    await controller.set_concurrency_limit(scope="task:slow_task", limit=1)
+
+    # 4. Define the workflow
     @cs.task
     def slow_task(x):
         return x
@@ -120,7 +142,7 @@ async def test_e2e_concurrency_control():
     # 4 tasks that would normally run in parallel in ~0.05s
     workflow = slow_task.map(x=[1, 2, 3, 4])
 
-    # 4. Setup the Engine
+    # 5. Setup the Engine
     engine = Engine(
         solver=NativeSolver(),
         executor=MockWorkExecutor(),
@@ -128,23 +150,20 @@ async def test_e2e_concurrency_control():
         connector=connector,
     )
 
-    # 5. Start the engine in a background task
-    engine_task = asyncio.create_task(engine.run(workflow))
-
-    # 6. Wait briefly for the engine to initialize and subscribe to topics
-    await asyncio.sleep(0.01)
-
-    # 7. Use the controller to publish the constraint
-    await controller.set_concurrency_limit(scope="task:slow_task", limit=1)
-
-    # 8. Await the workflow's completion and measure time
+    # 6. Run the engine (Blocking call, simpler than background task for this flow)
+    # The Engine will:
+    #   a. Connect
+    #   b. Subscribe to constraints/#
+    #   c. Receive the retained 'limit=1' message -> Update ConstraintManager
+    #   d. Build graph and start scheduling
+    #   e. See constraint and throttle execution
+    
     start_time = time.time()
-    results = await engine_task
+    results = await engine.run(workflow)
     duration = time.time() - start_time
 
-    # 9. Assertions
+    # 7. Assertions
     assert sorted(results) == [1, 2, 3, 4]
 
     # With limit=1, 4 tasks of 0.05s should take >= 0.2s.
-    # The time is measured *after* the constraint is published, so it's accurate.
     assert duration >= 0.18, f"Expected serial execution (~0.2s), but took {duration:.4f}s"

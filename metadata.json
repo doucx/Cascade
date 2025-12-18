@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 Engine 日志调用错误并增强测试稳定性", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766061508.0452998, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 TelemetrySubscriber 中缺失的 asyncio 导入", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766061602.9499538, "duration_ms": 0}}

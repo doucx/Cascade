@@ -8,8 +8,8 @@ version = "0.1.0"
 description = "A modern, declarative automation library for Python."
 requires-python = ">=3.8"
 dependencies = [
-  "cascade-interfaces @ file:../cascade-interfaces",
-  "cascade-runtime @ file:../cascade-runtime"
+  "cascade-interfaces",
+  "cascade-runtime"
 ]
 
 [project.optional-dependencies]

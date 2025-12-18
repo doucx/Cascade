@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(build): 允许 Hatchling 使用直接文件引用以解决构建错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766026187.4948318, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(build): 移除硬编码文件路径依赖并配置 UV Workspace", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766026271.9564042, "duration_ms": 0}}

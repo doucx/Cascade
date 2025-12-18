@@ -11,11 +11,14 @@ requires-python = ">=3.8"
 license = "MIT"
 # 关键修复 2: 添加对工作区内所有包的显式依赖
 dependencies = [
-    "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces",
-    "cascade-runtime @ file:///${PROJECT_ROOT}/packages/cascade-runtime",
-    "cascade-py @ file:///${PROJECT_ROOT}/packages/cascade-py",
-    "cascade-cli @ file:///${PROJECT_ROOT}/packages/cascade-cli",
+    "cascade-interfaces",
+    "cascade-runtime",
+    "cascade-py",
+    "cascade-cli",
 ]
+
+[tool.uv.workspace]
+members = ["packages/*"]
 
 [tool.hatch.workspaces]
 packages = [

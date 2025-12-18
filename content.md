@@ -1,131 +1,132 @@
 简要回答：
-这是一个 Hatchling 构建后端的安全限制。默认情况下，Hatchling 禁止在 `project.dependencies` 中使用直接文件引用（Direct References, 如 `pkg @ file://...`）。我们需要显式地在 `pyproject.toml` 中通过 `[tool.hatch.metadata] allow-direct-references = true` 解除此限制。
+构建失败是因为在 `project.dependencies` 中使用了相对路径 (`@ file:../...`)，这在构建 Wheel 时会导致路径解析错误。正确的 Monorepo 实践是：在 `dependencies` 中仅声明包名，通过 `uv` 的 Workspace 机制来解析本地路径。
 
-## [WIP] fix(build): 允许 Hatchling 使用直接文件引用以解决构建错误
+## [WIP] fix(build): 移除硬编码文件路径依赖并配置 UV Workspace
 
 ### 错误分析
-构建失败的直接原因是 `cascade-cli` 的 `pyproject.toml` 中声明了对 `cascade-py` 的本地文件依赖 (`cascade-py @ file:../cascade-py`)。
-
-Hatchling 抛出了 `ValueError: Dependency #1 ... cannot be a direct reference unless field tool.hatch.metadata.allow-direct-references is set to true`。这是 Hatch 为了防止意外发布包含本地路径的包而设置的默认保护机制。
-
-由于我们要构建一个包含相互依赖的本地包的 Monorepo，我们需要在所有涉及本地路径依赖的 `pyproject.toml` 文件中显式启用此选项。
+错误 `relative path without a working directory: ../cascade-py` 表明构建后端无法将相对路径依赖写入 Wheel 的元数据。
+此外，根目录 `pyproject.toml` 中使用了非标准的 `${PROJECT_ROOT}` 变量，这也会导致解析失败。
 
 ### 用户需求
-修复 `uv pip install -e ".[dev]"` 时的构建错误。
-
-### 评论
-这是一个非常典型的 Monorepo配置问题。虽然 `uv` 能够处理工作区，但在底层调用构建后端（这里是 `hatchling`）生成元数据时，必须遵守构建后端的规则。
+修复构建依赖关系，使得 `uv pip install -e ".[dev]"` 能够成功执行。
 
 ### 目标
-修改根目录及所有子包的 `pyproject.toml`，添加允许直接引用的配置。
+1.  将所有子包 (`cascade-cli`, `cascade-py`, `cascade-runtime`) 的依赖声明回退为纯包名（移除 `@ file:...`）。
+2.  将根目录 `pyproject.toml` 的依赖声明回退为纯包名。
+3.  在根目录 `pyproject.toml` 中配置 `[tool.uv.workspace]`，启用自动本地包发现。
 
 ### 基本原理
-我们在所有 `pyproject.toml` 文件中添加 `[tool.hatch.metadata]` 配置块，设置 `allow-direct-references = true`。这将允许 Hatchling 处理我们在多包布局中定义的 `file:` 依赖。
+通过将依赖声明与依赖源分离（Dependency Declaration vs Resolution），我们遵循了 Python 打包的最佳实践。`project.dependencies` 只描述“需要什么”，而 `tool.uv.workspace` 告诉工具“去哪里找”。这既解决了构建错误，也保持了包未来发布到 PyPI 的可能性。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #concept/config #scope/dx #ai/instruct #task/domain/devops #task/object/monorepo-config #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/build #concept/config #scope/dx #ai/instruct #task/domain/devops #task/object/monorepo-config #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 配置 `cascade-cli` (报错源头)
-首先修复报错的 `cascade-cli` 包。
+#### Acts 1: 修复 `cascade-cli` 依赖
+移除 `file:` 引用。
 
 ~~~~~act
 patch_file
 packages/cascade-cli/pyproject.toml
 ~~~~~
 ~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade/cli"]
+dependencies = [
+  "cascade-py @ file:../cascade-py",
+  "typer"
+]
 ~~~~~
 ~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade/cli"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
+dependencies = [
+  "cascade-py",
+  "typer"
+]
 ~~~~~
 
-#### Acts 2: 配置 `cascade-py`
-`cascade-py` 也依赖于其他本地包 (`cascade-interfaces`, `cascade-runtime`)，同样需要修复。
+#### Acts 2: 修复 `cascade-py` 依赖
+移除 `file:` 引用。
 
 ~~~~~act
 patch_file
 packages/cascade-py/pyproject.toml
 ~~~~~
 ~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
+dependencies = [
+  "cascade-interfaces @ file:../cascade-interfaces",
+  "cascade-runtime @ file:../cascade-runtime"
+]
 ~~~~~
 ~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
+dependencies = [
+  "cascade-interfaces",
+  "cascade-runtime"
+]
 ~~~~~
 
-#### Acts 3: 配置 `cascade-runtime`
-`cascade-runtime` 依赖于 `cascade-interfaces`。
+#### Acts 3: 修复 `cascade-runtime` 依赖
+移除 `file:` 引用。
 
 ~~~~~act
 patch_file
 packages/cascade-runtime/pyproject.toml
 ~~~~~
 ~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
+dependencies = [
+  "cascade-interfaces @ file:../cascade-interfaces"
+]
 ~~~~~
 ~~~~~toml
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
+dependencies = [
+  "cascade-interfaces"
+]
 ~~~~~
 
-#### Acts 4: 配置根目录 `pyproject.toml`
-根目录作为开发环境入口，也定义了对所有子包的本地依赖，因此也需要此配置以支持 `pip install -e .`。
+#### Acts 4: 修复根目录 `pyproject.toml` 并启用 Workspace
+移除 `file:` 引用及错误的 `${PROJECT_ROOT}` 变量，添加 `[tool.uv.workspace]` 配置。
 
 ~~~~~act
 patch_file
 pyproject.toml
 ~~~~~
 ~~~~~toml
-[project.optional-dependencies]
-dev = [
-  "pytest",
-  "pytest-cov",
-  "mypy",
-  "pytest-aiohttp",
-  "moto[s3]",
-  # 关键修复 1: 移除 "[all]"
-  "typer",
-  "mkdocs",
-  "mkdocs-material",
-  "mkdocstrings[python]",
+# 关键修复 2: 添加对工作区内所有包的显式依赖
+dependencies = [
+    "cascade-interfaces @ file:///${PROJECT_ROOT}/packages/cascade-interfaces",
+    "cascade-runtime @ file:///${PROJECT_ROOT}/packages/cascade-runtime",
+    "cascade-py @ file:///${PROJECT_ROOT}/packages/cascade-py",
+    "cascade-cli @ file:///${PROJECT_ROOT}/packages/cascade-cli",
+]
+
+[tool.hatch.workspaces]
+packages = [
+    "packages/cascade-interfaces",
+    "packages/cascade-runtime",
+    "packages/cascade-py",
+    "packages/cascade-cli",
 ]
 ~~~~~
 ~~~~~toml
-[project.optional-dependencies]
-dev = [
-  "pytest",
-  "pytest-cov",
-  "mypy",
-  "pytest-aiohttp",
-  "moto[s3]",
-  # 关键修复 1: 移除 "[all]"
-  "typer",
-  "mkdocs",
-  "mkdocs-material",
-  "mkdocstrings[python]",
+# 关键修复 2: 添加对工作区内所有包的显式依赖
+dependencies = [
+    "cascade-interfaces",
+    "cascade-runtime",
+    "cascade-py",
+    "cascade-cli",
 ]
 
-[tool.hatch.metadata]
-allow-direct-references = true
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.hatch.workspaces]
+packages = [
+    "packages/cascade-interfaces",
+    "packages/cascade-runtime",
+    "packages/cascade-py",
+    "packages/cascade-cli",
+]
 ~~~~~
 
 ### 下一步建议
-执行完上述补丁后，请再次尝试运行 `uv pip install -e ".[dev]"`。如果安装成功，我们可以继续进行第四阶段的验证工作（运行测试）。
+再次运行 `uv pip install -e ".[dev]"`。这次 `uv` 应该能通过 Workspace 机制自动解析所有本地包，而不会触发 Hatchling 的路径构建错误。

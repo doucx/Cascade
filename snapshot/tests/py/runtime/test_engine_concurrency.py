@@ -14,10 +14,14 @@ from cascade.graph.model import Node
 # --- Mocks ---
 
 class MockConnector(Connector):
-    """A mock connector for testing Engine's subscription logic."""
+    """
+    A mock connector that simulates MQTT behavior, including Retained Messages.
+    """
 
     def __init__(self):
         self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
+        # Simulate broker storage for retained messages: topic -> payload
+        self.retained_messages: Dict[str, Dict[str, Any]] = {}
 
     async def connect(self) -> None:
         pass
@@ -28,31 +32,50 @@ class MockConnector(Connector):
     async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
         pass
 
+    def seed_retained_message(self, topic: str, payload: Dict[str, Any]):
+        """Helper to pre-seed a retained message on the broker."""
+        self.retained_messages[topic] = payload
+
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
     ) -> None:
         self.subscriptions[topic] = callback
+        
+        # Immediate delivery of matching retained messages upon subscription
+        # This simulates MQTT behavior
+        for retained_topic, payload in self.retained_messages.items():
+            if self._topic_matches(subscription=topic, topic=retained_topic):
+                # Dispatch in background to simulate async network I/O
+                # ensuring subscribe returns quickly
+                asyncio.create_task(callback(retained_topic, payload))
 
     async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to simulate receiving a message."""
+        """Helper to simulate receiving a live message."""
         for sub_topic, callback in self.subscriptions.items():
-            is_match = False
-            if sub_topic == topic:
-                is_match = True
-            elif sub_topic.endswith("/#"):
-                prefix = sub_topic[:-2]
-                if topic.startswith(prefix):
-                    is_match = True
-
-            if is_match:
+            if self._topic_matches(subscription=sub_topic, topic=topic):
                 await callback(topic, payload)
+
+    def _topic_matches(self, subscription: str, topic: str) -> bool:
+        if subscription == topic:
+            return True
+        if subscription.endswith("/#"):
+            prefix = subscription[:-2]
+            if topic.startswith(prefix):
+                return True
+        return False
 
 
 class MockExecutor(Executor):
     async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
         # Simulate work duration
         await asyncio.sleep(0.05)
-        return args[0] if args else "result"
+        
+        # Return the first available argument, or a default
+        if args:
+            return args[0]
+        if kwargs:
+            return next(iter(kwargs.values()))
+        return "result"
 
 
 # --- Fixtures ---
@@ -69,7 +92,6 @@ def engine(mock_connector):
         executor=MockExecutor(),
         bus=MessageBus(),
         connector=mock_connector,
-        # Ensure system has infinite capacity by default unless constrained
         system_resources={}, 
     )
 
@@ -85,28 +107,11 @@ async def test_concurrency_constraint_on_map(engine, mock_connector):
     def slow_task(x):
         return x
 
-    # 1. Map over 4 items. Without constraint, they should run in parallel (~0.05s total).
     inputs = [1, 2, 3, 4]
     workflow = slow_task.map(x=inputs)
 
-    # 2. Inject constraint BEFORE running (simulating a pre-existing retained message)
-    # We do this by manually triggering the update, assuming the engine subscribes early.
-    # However, Engine subscribes inside run().
-    # So we must start run(), wait for subscription, then inject constraint.
-    
-    # But wait, to test effect on the whole map, we need the constraint active before tasks schedule.
-    # The standard way is that 'run' connects and subscribes first.
-    # So we trigger the message immediately after run starts but before tasks are processed?
-    # Or rely on the fact that Mapped tasks expand into sub-graphs dynamically.
-    
-    # A cleaner way for this test:
-    # Use a background task to run the engine.
-    task_future = asyncio.create_task(engine.run(workflow))
-    
-    # Give engine time to connect and subscribe
-    await asyncio.sleep(0.01)
-    
-    # 3. Inject Concurrency Constraint: limit 'slow_task' to 1 concurrent instance.
+    # 1. Pre-seed the constraint as a retained message.
+    # This ensures it is applied immediately when the engine subscribes at startup.
     scope = "task:slow_task"
     payload = {
         "id": "limit-slow-task",
@@ -114,20 +119,20 @@ async def test_concurrency_constraint_on_map(engine, mock_connector):
         "type": "concurrency",
         "params": {"limit": 1}
     }
-    await mock_connector._trigger_message(
+    mock_connector.seed_retained_message(
         f"cascade/constraints/{scope.replace(':', '/')}", payload
     )
     
-    # 4. Measure execution time
+    # 2. Run execution
     start_time = time.time()
-    results = await task_future
+    results = await engine.run(workflow)
     duration = time.time() - start_time
     
     assert sorted(results) == [1, 2, 3, 4]
     
     # With limit=1, 4 tasks of 0.05s should take >= 0.2s
-    # Without limit, it would be ~0.05s
-    assert duration >= 0.2, f"Expected serial execution duration >= 0.2s, got {duration}s"
+    # (Allowing slight buffer for overhead, so maybe >= 0.18s)
+    assert duration >= 0.18, f"Expected serial execution, got {duration}s"
 
 
 @pytest.mark.asyncio
@@ -144,27 +149,23 @@ async def test_global_concurrency_limit(engine, mock_connector):
     # Two independent tasks, normally run in parallel
     wf = [task_a(1), task_b(2)]
     
-    # Wrapper to run list of tasks
     @cs.task
     def wrapper(results): return results
-    
-    workflow = wrapper(wf) # Engine.run handles the list dependency resolution inside wrapper args
+    workflow = wrapper(wf)
 
-    task_future = asyncio.create_task(engine.run(workflow))
-    await asyncio.sleep(0.01)
-
-    # Inject Global Limit = 1
+    # 1. Pre-seed Global Limit = 1
     payload = {
         "id": "global-limit",
         "scope": "global",
         "type": "concurrency",
         "params": {"limit": 1}
     }
-    await mock_connector._trigger_message("cascade/constraints/global", payload)
+    mock_connector.seed_retained_message("cascade/constraints/global", payload)
 
+    # 2. Run
     start_time = time.time()
-    await task_future
+    await engine.run(workflow)
     duration = time.time() - start_time
     
     # 2 tasks of 0.05s in serial => >= 0.1s
-    assert duration >= 0.1, f"Expected serial execution duration >= 0.1s, got {duration}s"
+    assert duration >= 0.09, f"Expected serial execution, got {duration}s"

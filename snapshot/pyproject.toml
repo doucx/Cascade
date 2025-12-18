@@ -34,9 +34,6 @@ packages = [
     "packages/cascade-cli",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["packages/cascade-py/src/cascade"]
-
 [tool.pytest.ini_options]
 addopts = "-ra"
 

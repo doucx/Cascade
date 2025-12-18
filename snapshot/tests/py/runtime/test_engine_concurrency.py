@@ -137,11 +137,11 @@ async def test_global_concurrency_limit(engine, mock_connector):
     @cs.task
     def task_b(x): return x
 
-    wf = [task_a(1), task_b(2)]
-    
+    # Pass dependencies as separate arguments so GraphBuilder detects them
     @cs.task
-    def wrapper(results): return results
-    workflow = wrapper(wf)
+    def wrapper(res_a, res_b): return [res_a, res_b]
+    
+    workflow = wrapper(task_a(1), task_b(2))
 
     payload = {
         "id": "global-limit",

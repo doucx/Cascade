@@ -10,6 +10,8 @@ from .events import (
     TaskExecutionFinished,
     TaskSkipped,
     TaskRetrying,
+    ConnectorConnected,
+    ConnectorDisconnected,
     Event,
 )
 from cascade.interfaces.protocols import Connector
@@ -30,6 +32,8 @@ class HumanReadableLogSubscriber:
         event_bus.subscribe(TaskExecutionFinished, self.on_task_finished)
         event_bus.subscribe(TaskSkipped, self.on_task_skipped)
         event_bus.subscribe(TaskRetrying, self.on_task_retrying)
+        event_bus.subscribe(ConnectorConnected, self.on_connector_connected)
+        event_bus.subscribe(ConnectorDisconnected, self.on_connector_disconnected)
 
     def on_run_started(self, event: RunStarted):
         bus.info("run.started", target_tasks=event.target_tasks)
@@ -74,6 +78,12 @@ class HumanReadableLogSubscriber:
             delay=event.delay,
             error=event.error,
         )
+
+    def on_connector_connected(self, event: ConnectorConnected):
+        bus.info("engine.connector.connected")
+
+    def on_connector_disconnected(self, event: ConnectorDisconnected):
+        bus.info("engine.connector.disconnected")
 
 
 class TelemetrySubscriber:

@@ -138,8 +138,13 @@ async def test_engine_updates_constraints_on_message(
     # Start the run to establish subscriptions
     run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
 
-    # Give the engine a moment to start and subscribe
-    await asyncio.sleep(0.01)
+    # Wait until subscription is established
+    for _ in range(50):
+        if "cascade/constraints/#" in mock_connector.subscriptions:
+            break
+        await asyncio.sleep(0.01)
+    else:
+        pytest.fail("Timeout waiting for engine to subscribe to constraints")
 
     # Simulate receiving a constraint message
     constraint_payload = {
@@ -184,7 +189,14 @@ async def test_engine_handles_malformed_constraint_payload(
         pass
 
     run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
-    await asyncio.sleep(0.01)
+    
+    # Wait until subscription is established
+    for _ in range(50):
+        if "cascade/constraints/#" in mock_connector.subscriptions:
+            break
+        await asyncio.sleep(0.01)
+    else:
+        pytest.fail("Timeout waiting for engine to subscribe to constraints")
 
     # Payload missing the required 'id' key
     malformed_payload = {

@@ -20,6 +20,8 @@ from cascade.runtime.events import (
     TaskRetrying,
     ResourceAcquired,
     ResourceReleased,
+    ConnectorConnected,
+    ConnectorDisconnected,
 )
 from cascade.interfaces.protocols import Solver, Executor, StateBackend, Connector
 from cascade.runtime.exceptions import DependencyMissingError
@@ -103,7 +105,7 @@ class Engine:
         try:
             if self.connector:
                 await self.connector.connect()
-                self.bus.info("engine.connector.connected")
+                self.bus.publish(ConnectorConnected(run_id=run_id))
                 # Subscribe to constraint updates
                 await self.connector.subscribe(
                     "cascade/constraints/#", self._on_constraint_update
@@ -140,7 +142,7 @@ class Engine:
         finally:
             if self.connector:
                 await self.connector.disconnect()
-                self.bus.info("engine.connector.disconnected")
+                self.bus.publish(ConnectorDisconnected(run_id=run_id))
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""

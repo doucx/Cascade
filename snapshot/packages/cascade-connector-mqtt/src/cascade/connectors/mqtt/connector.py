@@ -158,6 +158,8 @@ class MqttConnector:
                 topic = str(message.topic)
                 payload_bytes = message.payload
 
+                logger.debug(f"Received message on topic: {topic}")
+
                 # Dispatch to all matching subscriptions
                 # We iterate over all subscriptions because a single message 
                 # might match multiple patterns (e.g. "a/b" matches "a/+" and "#")
@@ -165,9 +167,14 @@ class MqttConnector:
                 for sub_pattern, cb in self._subscriptions.items():
                     if self._topic_matches(sub_pattern, topic):
                         matched_callbacks.append(cb)
+                    else:
+                        logger.debug(f"Topic '{topic}' did not match subscription '{sub_pattern}'")
                 
                 if not matched_callbacks:
+                    logger.debug(f"No matching subscriptions found for topic: {topic}")
                     continue
+
+                logger.debug(f"Found {len(matched_callbacks)} callbacks for topic: {topic}")
 
                 # Decode payload once
                 try:

@@ -1,139 +1,111 @@
-# [WIP] fix: 修复 MQTT 连接器不支持通配符订阅的问题
+# [WIP] fix: 启用 Observer 日志并增加连接器调试探针
 
 ## 摘要
 
-本计划旨在修复 `MqttConnector` 中存在的一个严重缺陷：其内部消息分发逻辑仅支持精确的主题匹配，导致使用通配符（如 `+` 或 `#`）的订阅（如 `cs-observer` 所使用的）无法接收到消息。
+本计划旨在解决 `cs-observer` 无响应且无错误信息的“黑盒”状态。我们将通过两步措施来定位并修复问题：
+1.  **启用 Logging**: 在 `cs-observer` 入口处配置标准 `logging`，确保底层库（如 `aiomqtt` 和 `connector`）的错误信息能输出到终端。
+2.  **增加调试探针**: 在 `MqttConnector` 的消息循环中增加临时的、高可见度的调试输出，以确定消息链路断裂的具体位置（是没收到消息，还是匹配失败，还是回调出错）。
 
 ## 错误分析
 
-### 1. `cs-observer` 无输出
-*   **现象**: `cs-observer` 订阅了 `cascade/telemetry/+/default/+/events`，Broker 成功发送了 `cascade/telemetry/local/default/run-123/events`，但 `cs-observer` 没有反应。
-*   **原因**: 在 `MqttConnector._message_loop` 中，回调函数的查找逻辑是 `callback = self._subscriptions.get(topic)`。这里 `topic` 是从 Broker 收到的**具体主题**（例如 `.../run-123/events`），而 `self._subscriptions` 字典中的 Key 是**订阅模式**（例如 `.../+/events`）。由于这两个字符串不相等，字典查找返回 `None`，导致消息被丢弃。
-*   **解决方案**: 实现符合 MQTT 规范的主题匹配逻辑（支持 `+` 和 `#`），并在收到消息时遍历所有订阅进行匹配。
+### 1. 错误被吞没 (Silent Failure)
+*   **现象**: `cs-observer` 无反应，且终端无报错。
+*   **原因**: `MqttConnector` 使用 Python 标准 `logging` 记录错误，但 `cs-observer` 应用未配置 `logging.basicConfig`。默认情况下，`logging` 只输出 `WARNING` 级别以上，且格式可能不明显。更重要的是，如果 `aiomqtt` 内部有异常，也通过 logging 报告。
+*   **解决方案**: 在 `cs-observer` 的 `app.py` 中显式配置 Logging。
+
+### 2. 消息链路不透明
+*   **现象**: 无法确定问题出在 Broker -> Client 的传输层，还是 Client 内部的分发层。
+*   **解决方案**: 在 `MqttConnector` 的 `_message_loop` 中添加详细的调试日志，打印收到的每一个 Topic。
 
 ## 用户需求
-1.  确保 `cs-observer` 能够显示实时遥测数据。
+1.  看到 `cs-observer` 的内部运行状态，以便排错。
+2.  最终修复无数据的问题。
 
 ## 评论
-这是一个典型的实现细节疏忽。在之前的 `InProcessConnector`（用于测试的模拟器）中，我们反而正确实现了这个逻辑，但在真实的 `MqttConnector` 中为了简单而使用了字典直接查找。现在必须补齐这个短板。
+在分布式系统的调试中，可观测性是第一位的。当前的“静默失败”是不可接受的。
 
 ## 目标
-1.  在 `MqttConnector` 中添加 `_topic_matches` 静态方法。
-2.  重构 `_message_loop` 以支持通配符匹配分发。
+1.  配置 `cs-observer` 的日志系统。
+2.  在 `MqttConnector` 中添加必要的调试信息。
 
 ## 基本原理
-MQTT 协议定义了 `+`（单层通配符）和 `#`（多层通配符）。客户端库必须在本地实现相应的路由分发逻辑，以便将从 Broker 收到的具体消息映射回最初注册的通配符订阅上。
+通过 `logging.basicConfig` 将所有模块的日志导向 stderr，这是 CLI 工具的标准做法。
 
 ## 标签
-#intent/fix #flow/ready #priority/critical #comp/connector #concept/mqtt #scope/core #ai/instruct #task/domain/telemetry #task/object/connector #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/cli #comp/connector #scope/debug #ai/instruct #task/domain/telemetry #task/object/observer #task/action/debug #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 在 `MqttConnector` 中实现主题匹配逻辑
+#### Acts 1: 在 `cs-observer` 中配置 Logging
 
-我们将修改 `connector.py`，添加匹配逻辑并更新循环。
+我们将修改 `app.py`，在 `main` 函数开头配置 logging。
+
+~~~~~act
+patch_file
+packages/cascade-cli-observer/src/cascade/cli/observer/app.py
+~~~~~
+~~~~~python
+import asyncio
+import time
+from datetime import datetime, timezone
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from cascade.common.messaging import bus
+~~~~~
+~~~~~python
+import asyncio
+import time
+import logging
+from datetime import datetime, timezone
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from cascade.common.messaging import bus
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-cli-observer/src/cascade/cli/observer/app.py
+~~~~~
+~~~~~python
+def main():
+    bus.set_renderer(RichCliRenderer(store=bus.store))
+    app()
+
+
+if __name__ == "__main__":
+~~~~~
+~~~~~python
+def main():
+    # Configure logging to capture output from aiomqtt and our connector
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    # Suppress overly verbose logs from some libraries if needed
+    logging.getLogger("aiomqtt").setLevel(logging.WARNING)
+    
+    bus.set_renderer(RichCliRenderer(store=bus.store))
+    app()
+
+
+if __name__ == "__main__":
+~~~~~
+
+#### Acts 2: 在 `MqttConnector` 中增加调试日志
+
+我们将修改 `connector.py`，在收到消息时打印 debug 日志，并报告匹配结果。
 
 ~~~~~act
 patch_file
 packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py
 ~~~~~
 ~~~~~python
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        """Subscribes to a topic to receive messages."""
-        if not self._client:
-            logger.warning("Attempted to subscribe without an active MQTT connection.")
-            return
-
-        # 1. Register callback locally
-        self._subscriptions[topic] = callback
-
-        # 2. Send subscribe command to broker
-        try:
-            await self._client.subscribe(topic)
-        except Exception as e:
-            logger.error(f"Failed to subscribe to topic '{topic}': {e}")
-
-    async def _message_loop(self):
-        """Background task to process incoming MQTT messages."""
-        if not self._client:
-            return
-
-        try:
-            # Iterate over the messages asynchronous generator provided by aiomqtt
-            async for message in self._client.messages:
-                topic = str(message.topic)
-                payload_bytes = message.payload
-
-                # Find callback (Simple exact match for MVP)
-                # TODO: Implement wildcard matching if needed (e.g. + or #)
-                callback = self._subscriptions.get(topic)
-                if not callback:
-                    continue
-
-                # Decode and dispatch
-                try:
-                    # aiomqtt payload can be bytes, bytearray, etc.
-~~~~~
-~~~~~python
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        """Subscribes to a topic to receive messages."""
-        if not self._client:
-            logger.warning("Attempted to subscribe without an active MQTT connection.")
-            return
-
-        # 1. Register callback locally
-        self._subscriptions[topic] = callback
-
-        # 2. Send subscribe command to broker
-        try:
-            await self._client.subscribe(topic)
-        except Exception as e:
-            logger.error(f"Failed to subscribe to topic '{topic}': {e}")
-
-    @staticmethod
-    def _topic_matches(subscription: str, topic: str) -> bool:
-        """
-        Checks if a concrete topic matches a subscription pattern (supporting + and #).
-        """
-        if subscription == topic:
-            return True
-        
-        sub_parts = subscription.split("/")
-        topic_parts = topic.split("/")
-
-        for i, sub_part in enumerate(sub_parts):
-            if sub_part == "#":
-                # '#' matches the rest of the topic
-                return True
-            
-            if i >= len(topic_parts):
-                # Topic is shorter than subscription (and not matched by #)
-                return False
-            
-            topic_part = topic_parts[i]
-            
-            if sub_part == "+":
-                # '+' matches any single level
-                continue
-            
-            if sub_part != topic_part:
-                return False
-        
-        # Ensure lengths match (unless ended with #, handled above)
-        return len(sub_parts) == len(topic_parts)
-
-    async def _message_loop(self):
-        """Background task to process incoming MQTT messages."""
-        if not self._client:
-            return
-
-        try:
             # Iterate over the messages asynchronous generator provided by aiomqtt
             async for message in self._client.messages:
                 topic = str(message.topic)
@@ -151,47 +123,41 @@ packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py
                     continue
 
                 # Decode payload once
-                try:
-                    # aiomqtt payload can be bytes, bytearray, etc.
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-connector-mqtt/src/cascade/connectors/mqtt/connector.py
 ~~~~~
 ~~~~~python
-                    # If the payload is empty (resume command), pass an empty dict
-                    if not payload_str:
-                        data = {}
+            # Iterate over the messages asynchronous generator provided by aiomqtt
+            async for message in self._client.messages:
+                topic = str(message.topic)
+                payload_bytes = message.payload
+
+                logger.debug(f"Received message on topic: {topic}")
+
+                # Dispatch to all matching subscriptions
+                # We iterate over all subscriptions because a single message 
+                # might match multiple patterns (e.g. "a/b" matches "a/+" and "#")
+                matched_callbacks = []
+                for sub_pattern, cb in self._subscriptions.items():
+                    if self._topic_matches(sub_pattern, topic):
+                        matched_callbacks.append(cb)
                     else:
-                        data = json.loads(payload_str)
+                        logger.debug(f"Topic '{topic}' did not match subscription '{sub_pattern}'")
+                
+                if not matched_callbacks:
+                    logger.debug(f"No matching subscriptions found for topic: {topic}")
+                    continue
 
-                    # Execute callback (fire and forget, or await?)
-                    # Since we are in a loop, we should probably await to preserve order,
-                    # or create task for concurrency. For now, await is safer for state consistency.
-                    await callback(topic, data)
+                logger.debug(f"Found {len(matched_callbacks)} callbacks for topic: {topic}")
 
-                except json.JSONDecodeError:
-                    logger.error(f"Received non-JSON payload on topic '{topic}'")
-                except Exception as e:
-                    logger.error(f"Error processing message on topic '{topic}': {e}")
-~~~~~
-~~~~~python
-                    # If the payload is empty (resume command), pass an empty dict
-                    if not payload_str:
-                        data = {}
-                    else:
-                        data = json.loads(payload_str)
-
-                    # Execute all matched callbacks
-                    for cb in matched_callbacks:
-                        await cb(topic, data)
-
-                except json.JSONDecodeError:
-                    logger.error(f"Received non-JSON payload on topic '{topic}'")
-                except Exception as e:
-                    logger.error(f"Error processing message on topic '{topic}': {e}")
+                # Decode payload once
 ~~~~~
 
 ### 下一步建议
-应用此补丁后，请再次运行 `cs-observer watch` 和 `workflow_demo.py`。现在 `cs-observer` 应该能够正确匹配并显示遥测数据了。如果验证通过，我们将提交此修复以及之前的所有修复。
+请再次运行 `cs-observer watch`。
+1.  现在你应该能看到详细的日志输出。
+2.  当 `workflow_demo.py` 运行时，观察 `cs-observer` 的输出。
+    *   如果你看到 `Received message on topic: ...`，说明接收正常。
+    *   如果你接着看到 `No matching subscriptions found...`，说明 `_topic_matches` 逻辑有误。
+    *   如果你什么都没看到，说明 `aiomqtt` 没有收到消息（网络问题或 Broker 问题）。
+    *   如果你看到 `Found X callbacks` 但依然没反应，说明 `callback` 内部出错了（虽然那也会被 log catch 住）。
+
+根据新的日志信息，我们可以精准修复。

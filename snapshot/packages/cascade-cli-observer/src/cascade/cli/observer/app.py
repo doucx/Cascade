@@ -1,5 +1,6 @@
 import asyncio
 import time
+import logging
 from datetime import datetime, timezone
 import typer
 from rich.console import Console
@@ -153,6 +154,14 @@ async def _get_status(hostname: str, port: int):
 
 
 def main():
+    # Configure logging to capture output from aiomqtt and our connector
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+    # Suppress overly verbose logs from some libraries if needed
+    logging.getLogger("aiomqtt").setLevel(logging.WARNING)
+    
     bus.set_renderer(RichCliRenderer(store=bus.store))
     app()
 

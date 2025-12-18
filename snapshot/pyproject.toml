@@ -20,6 +20,12 @@ dependencies = [
 [tool.uv.workspace]
 members = ["packages/*"]
 
+[tool.uv.sources]
+cascade-interfaces = { workspace = true }
+cascade-runtime = { workspace = true }
+cascade-py = { workspace = true }
+cascade-cli = { workspace = true }
+
 [tool.hatch.workspaces]
 packages = [
     "packages/cascade-interfaces",

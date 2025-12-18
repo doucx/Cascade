@@ -34,7 +34,6 @@ from cascade.adapters.executors.local import LocalExecutor
 from .testing import override_resource
 from .tools.preview import dry_run
 from .tools.visualize import visualize
-from .tools.cli import cli
 from cascade.graph.serialize import to_json, from_json
 
 
@@ -134,7 +133,6 @@ __all__ = [
     "run",
     "dry_run",
     "visualize",
-    "cli",
     "to_json",
     "from_json",
     "with_constraints",

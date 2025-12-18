@@ -1,88 +1,61 @@
-这些测试收集错误（`ImportError`）是因为我们刚刚将 `CliRenderer` 和 `JsonRenderer` 从 `cascade-runtime` 迁移到了 `cascade-common`。由于导入路径发生了变化，现有的测试用例无法找到对应的模块。
+这是一个仅包含文件系统更改和导入路径修正的 `[COMMIT]` 计划。
 
-### 分析与建议
-
-1.  **迁移测试用例**: `test_renderers.py` 是对 `Renderer` 实现的单元测试。既然 `Renderer` 已经移动到了 `cascade-common` 包，那么对应的测试文件也应该移动到 `tests/common/` 目录下，以保持测试结构与源代码结构的一致性。
-2.  **更新导入路径**: `test_event_bus.py` 是一个集成测试，验证了运行时事件总线到用户界面消息总线的全链路打通。它依赖于 `CliRenderer`。我们需要更新它的导入语句。
-3.  **拆分逻辑**:
-    *   **单元测试**: 针对 `CliRenderer` 和 `JsonRenderer` 的纯逻辑测试应放在 `tests/common/`。
-    *   **集成测试**: 涉及 `HumanReadableLogSubscriber`（位于 `runtime`）如何将事件转换为消息的测试，应保留在 `tests/runtime/` 中，因为这是运行时组件的行为验证。
-
----
-
-## [WIP] fix(tests): Fix broken imports and reorganize renderer tests
-
-### 错误分析
-测试失败是因为在 `refactor` 计划中，我们将渲染器从 `cascade.runtime.renderers` 移动到了 `cascade.common.renderers`。由于 Python 测试文件在收集阶段会执行模块级导入，错误的路径导致了 `ModuleNotFoundError` 并中断了测试运行。
+## [COMMIT] fix(tests): Correct imports and move renderer tests to common package
 
 ### 用户需求
-修复测试中的导入错误，并根据新的包结构优化测试文件的存储位置。
+修复由于将 `Renderer` 模块从 `cascade-runtime` 迁移到 `cascade-common` 导致的测试收集失败问题。并优化测试结构，使渲染器单元测试与源代码位于同一包结构下。
+
+### 评论
+这是一次必要的清理工作，确保测试套件能正常运行。将渲染器单元测试移动到 `tests/common` 下是符合架构原则的，因为它测试的是 `cascade-common` 包中的通用组件。
 
 ### 目标
 1.  将 `tests/runtime/test_renderers.py` 移动到 `tests/common/test_renderers.py`。
-2.  更新 `tests/common/test_renderers.py` 中的导入语句。
-3.  更新 `tests/runtime/test_event_bus.py` 中的导入语句。
+2.  更新所有受影响文件的导入路径。
+
+### 基本原理
+遵循 `d3-constraint-quipu-plan-script-rules-D3-P2` 约束，文件修改和 Git 提交必须隔离在不同的 Plan 中。本次 Plan 负责提交上一步骤中已完成的文件修复和结构优化。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #comp/common #comp/runtime #task/domain/testing #task/object/import-fix #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #comp/common #comp/runtime #concept/tooling #scope/dx #ai/instruct #task/domain/testing #task/object/import-fix #task/action/refactor #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 移动并修复渲染器单元测试
+#### Acts 1: 提交文件变更
 
-我们将专门测试渲染器的文件移动到 `common` 对应的测试目录下，并修正导入。
-
-~~~~~act
-move_file
-tests/runtime/test_renderers.py
-tests/common/test_renderers.py
-~~~~~
+将文件移动和内容修改添加到暂存区，并执行提交。
 
 ~~~~~act
-patch_file
-tests/common/test_renderers.py
-~~~~~
-~~~~~python
-import io
-import json
-import pytest
-from cascade.runtime.renderers import CliRenderer, JsonRenderer
-from cascade.common.messaging import MessageStore
-~~~~~
-~~~~~python
-import io
-import json
-import pytest
-from cascade.common.renderers import CliRenderer, JsonRenderer
-from cascade.common.messaging import MessageStore
-~~~~~
-
-#### Acts 2: 修复事件总线集成测试的导入
-
-`test_event_bus.py` 虽然留在 `runtime`，但需要从新位置导入 `CliRenderer`。
-
-~~~~~act
-patch_file
+git_add
 tests/runtime/test_event_bus.py
+tests/common/test_renderers.py
+packages/cascade-common/src/cascade/common/renderers.py
+packages/cascade-runtime/src/cascade/runtime/renderers.py
+packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
+packages/cascade-cli-observer/src/cascade/cli/observer/app.py
+packages/cascade-cli-controller/src/cascade/cli/controller/app.py
+packages/cascade-py/src/cascade/__init__.py
 ~~~~~
-~~~~~python
-from cascade.runtime.events import RunStarted, TaskExecutionFinished
-from cascade.runtime.subscribers import HumanReadableLogSubscriber
-from cascade.runtime.bus import MessageBus as EventBus
-from cascade.common.messaging import bus as ui_bus
-from cascade.runtime.renderers import CliRenderer
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-from cascade.runtime.events import RunStarted, TaskExecutionFinished
-from cascade.runtime.subscribers import HumanReadableLogSubscriber
-from cascade.runtime.bus import MessageBus as EventBus
-from cascade.common.messaging import bus as ui_bus
-from cascade.common.renderers import CliRenderer
+~~~~~text
+fix(tests): Correct imports and move renderers to cascade-common
+
+This commit finalizes the refactoring of the messaging architecture:
+
+1. **Renderer Migration**: Moved `CliRenderer` and `JsonRenderer` from `cascade-runtime` to the core `cascade-common` package, establishing them as shared components for the entire ecosystem.
+2. **CLI Message Registration**: Introduced `cli_messages.json` to store semantic message IDs for CLI tools, fully decoupling their logic from presentation.
+3. **CLI Refactoring**: `cs-observer` and `cs-controller` were refactored to use the message bus (`bus.info`) instead of direct console output (`typer.echo`).
+4. **Test Fixes**: Fixed `ImportError` in tests by updating import paths and moving `test_renderers.py` to `tests/common` to match the new package structure.
 ~~~~~
 
 ### 下一步建议
-现在测试环境应该已经恢复。我建议你运行测试（`pytest`）来验证重构是否成功。
+我们已经完成了消息总线和渲染器的重构以及相关的测试修复。下一步是开始实现 `cs-observer` 的核心功能：
+1.  **实现 MQTT 订阅**: 在 `cs-observer` 中连接到 MQTT Broker。
+2.  **事件处理**: 编写逻辑，从 MQTT 流中接收和解析 `TelemetryEvent`。
+3.  **Rich 渲染**: 利用 `RichCliRenderer` 清晰地展示实时遥测数据。
 
-如果测试通过，我们可以继续路线图的下一步：实现 `cs-observer`。我们已经有了 `RichCliRenderer` 的雏形，下一步是为它添加真实的 MQTT 订阅逻辑，使其能真正“观察”到运行中的工作流。
+我建议从 `cascade-cli-observer/src/cascade/cli/observer/app.py` 入手，集成 `MqttConnector` 的 `subscribe` 逻辑。

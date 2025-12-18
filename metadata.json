@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "分析与建议", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766047670.5872712, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(tests): Correct imports and move renderer tests to common package", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766047713.4747326, "duration_ms": 0}}

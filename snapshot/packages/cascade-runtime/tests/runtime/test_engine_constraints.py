@@ -141,6 +141,86 @@ async def test_engine_updates_constraints_on_message(engine_with_connector, mock
 
 
 @pytest.mark.asyncio
+async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
+    """
+    End-to-end test verifying the global pause functionality.
+    It checks that after a pause command is received, no new tasks are started.
+    """
+    from cascade.spec.task import task
+    from cascade.runtime.events import TaskExecutionStarted
+
+    bus, spy = bus_and_spy
+    engine = Engine(
+        solver=MockSolver(),
+        executor=MockExecutor(),
+        bus=bus,
+        connector=mock_connector,
+    )
+
+    # 1. Define a declarative workflow
+    @task
+    def task_a():
+        return "A"
+
+    @task
+    def task_b(a):
+        return f"B after {a}"
+
+    @task
+    def task_c(b):
+        return f"C after {b}"
+
+    workflow = task_c(b=task_b(a=task_a()))
+
+    # 2. Start the engine in a concurrent task
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # 3. Wait for the first task to complete
+    await wait_for_task_finish(spy, "task_a")
+
+    # 4. Inject the pause command
+    pause_payload = {
+        "id": "global-pause",
+        "scope": "global",
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message("cascade/constraints/control", pause_payload)
+
+    # 5. Wait a moment to see if the engine schedules the next task
+    await asyncio.sleep(0.2)  # Longer than engine's internal sleep
+
+    # 6. Assert based on the event stream
+    started_task_names = {
+        e.task_name for e in spy.events_of_type(TaskExecutionStarted)
+    }
+
+    assert "task_a" in started_task_names
+    assert "task_b" not in started_task_names, "task_b should have been paused"
+    assert "task_c" not in started_task_names
+
+    # 7. Cleanup
+    run_task.cancel()
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass
+
+
+async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
+    """Helper coroutine to wait for a specific task to finish."""
+    from cascade.runtime.events import TaskExecutionFinished
+
+    start_time = asyncio.get_event_loop().time()
+    while asyncio.get_event_loop().time() - start_time < timeout:
+        finished_events = spy.events_of_type(TaskExecutionFinished)
+        if any(e.task_name == task_name for e in finished_events):
+            return
+        await asyncio.sleep(0.01)
+    pytest.fail(f"Timeout waiting for task '{task_name}' to finish.")
+
+
+@pytest.mark.asyncio
 async def test_engine_handles_malformed_constraint_payload(
     engine_with_connector, mock_connector, capsys
 ):

@@ -103,6 +103,7 @@ class Engine:
         try:
             if self.connector:
                 await self.connector.connect()
+                self.bus.info("engine.connector.connected")
                 # Subscribe to constraint updates
                 await self.connector.subscribe(
                     "cascade/constraints/#", self._on_constraint_update
@@ -139,6 +140,7 @@ class Engine:
         finally:
             if self.connector:
                 await self.connector.disconnect()
+                self.bus.info("engine.connector.disconnected")
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""

@@ -97,10 +97,15 @@ class TelemetrySubscriber:
             "source": self._source_id,
         }
 
-    async def on_event(self, event: Event):
+    def on_event(self, event: Event):
+        """
+        Handles incoming events synchronously and schedules asynchronous publishing.
+        This bridges the synchronous MessageBus with the asynchronous Connector.
+        """
         if not event.run_id:
             return
 
+        # Prepare payload synchronously to avoid race conditions with event state
         payload = self._create_header(event.run_id)
         topic = f"cascade/telemetry/{payload['org_id']}/{payload['project_id']}/{event.run_id}/events"
 
@@ -111,7 +116,7 @@ class TelemetrySubscriber:
             state_map = {
                 TaskExecutionStarted: "RUNNING",
                 TaskExecutionFinished: "COMPLETED"
-                if event.status == "Succeeded"
+                if getattr(event, "status", "") == "Succeeded"
                 else "FAILED",
                 TaskSkipped: "SKIPPED",
             }
@@ -130,9 +135,7 @@ class TelemetrySubscriber:
         elif isinstance(event, RunFinished):
             event_body = {"type": "LifecycleEvent", "event": "ENGINE_STOPPED"}
 
-        # We can add more event types like ResourceEvent later
-
+        # If we have a valid body, schedule the publish task
         if event_body:
             payload["body"] = event_body
-            # Fire-and-forget publish
             asyncio.create_task(self._connector.publish(topic, payload))

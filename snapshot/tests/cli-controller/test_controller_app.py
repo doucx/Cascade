@@ -28,7 +28,9 @@ async def test_publish_pause_global_scope(mock_messaging_bus, mock_connector):
     Verify publishing a pause command for the 'global' scope.
     """
     # Act: Call the core logic function
-    await controller_app._publish_pause(scope="global", hostname="mqtt.test", port=1234)
+    await controller_app._publish_pause(
+        scope="global", ttl=None, hostname="mqtt.test", port=1234
+    )
 
     # Assert Connector Lifecycle
     mock_connector.connect.assert_awaited_once()
@@ -61,7 +63,7 @@ async def test_publish_pause_specific_scope(mock_messaging_bus, mock_connector):
     """
     # Act
     await controller_app._publish_pause(
-        scope="task:api_call", hostname="mqtt.test", port=1234
+        scope="task:api_call", ttl=None, hostname="mqtt.test", port=1234
     )
 
     # Assert

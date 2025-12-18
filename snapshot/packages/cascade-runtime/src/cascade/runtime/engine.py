@@ -107,6 +107,9 @@ class Engine:
                 await self.connector.subscribe(
                     "cascade/constraints/#", self._on_constraint_update
                 )
+                # Give a short moment for retained messages (constraints) to arrive
+                # before we start scheduling tasks.
+                await asyncio.sleep(0.2)
 
             with ExitStack() as stack:
                 initial_graph = build_graph(target)

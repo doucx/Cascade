@@ -97,7 +97,7 @@ class TelemetrySubscriber:
             "source": self._source_id,
         }
 
-    async def on_event(self, event: Event):
+    def on_event(self, event: Event):
         if not event.run_id:
             return
 
@@ -111,7 +111,7 @@ class TelemetrySubscriber:
             state_map = {
                 TaskExecutionStarted: "RUNNING",
                 TaskExecutionFinished: "COMPLETED"
-                if event.status == "Succeeded"
+                if getattr(event, "status", "") == "Succeeded"
                 else "FAILED",
                 TaskSkipped: "SKIPPED",
             }
@@ -134,5 +134,11 @@ class TelemetrySubscriber:
 
         if event_body:
             payload["body"] = event_body
-            # Fire-and-forget publish
-            asyncio.create_task(self._connector.publish(topic, payload))
+            # Fire-and-forget publish using create_task because this handler is sync
+            # but needs to schedule async I/O.
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(self._connector.publish(topic, payload))
+            except RuntimeError:
+                # Fallback if no loop is running (rare in Engine run, possible in tests)
+                pass

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修正主包中 adapters 模块的导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766028516.7875893, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 创建并运行脚本以修正所有错误的 monorepo 导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766028638.8624573, "duration_ms": 0}}

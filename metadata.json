@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 为运行时控制和竞态修复添加 E2E 回归测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766065883.0228372, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复并强化 E2E 运行时控制和启动时序测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766065995.8266816, "duration_ms": 0}}

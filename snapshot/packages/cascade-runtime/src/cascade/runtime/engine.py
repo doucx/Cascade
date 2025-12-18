@@ -96,10 +96,6 @@ class Engine:
         else:
             target_name = "unknown"
 
-        self.bus.publish(
-            RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
-        )
-
         state_backend = self.state_backend_cls(run_id=run_id)
 
         try:
@@ -110,6 +106,10 @@ class Engine:
                 await self.connector.subscribe(
                     "cascade/constraints/#", self._on_constraint_update
                 )
+
+            self.bus.publish(
+                RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
+            )
 
             with ExitStack() as stack:
                 initial_graph = build_graph(target)
@@ -189,60 +189,88 @@ class Engine:
         plan = self.solver.resolve(graph)
 
         for stage in plan:
-            pending_nodes_in_stage = list(stage)
+            # Nodes to be processed in the current stage
+            pending_nodes = {node.id: node for node in stage}
+            # Tasks currently running in asyncio
+            running_tasks: Dict[asyncio.Task, str] = {}
+            # Wakeup task for constraint changes
+            wakeup_task = asyncio.create_task(self._wakeup_event.wait())
 
-            while pending_nodes_in_stage:
-                executable_this_pass: List[Node] = []
-                deferred_this_pass: List[Node] = []
+            while pending_nodes or running_tasks:
+                # 1. Schedule new tasks if possible
+                if pending_nodes:
+                    # Find nodes whose dependencies are met and are not constrained
+                    schedulable_nodes = []
+                    deferred_nodes = {}
+                    for node_id, node in pending_nodes.items():
+                        if self.constraint_manager.check_permission(node):
+                            schedulable_nodes.append(node)
+                        else:
+                            deferred_nodes[node_id] = node
 
-                for node in pending_nodes_in_stage:
-                    if node.node_type == "param":
-                        continue  # Skip params, they don't execute
-
-                    skip_reason = self.flow_manager.should_skip(node, state_backend)
-                    if skip_reason:
-                        state_backend.mark_skipped(node.id, skip_reason)
-                        self.bus.publish(
-                            TaskSkipped(
-                                run_id=run_id,
-                                task_id=node.id,
-                                task_name=node.name,
-                                reason=skip_reason,
+                    for node in schedulable_nodes:
+                        # Skip params, they don't execute
+                        if node.node_type == "param":
+                            del pending_nodes[node.id]
+                            continue
+                        
+                        # Check for skips (run_if, etc.)
+                        skip_reason = self.flow_manager.should_skip(node, state_backend)
+                        if skip_reason:
+                            state_backend.mark_skipped(node.id, skip_reason)
+                            self.bus.publish(
+                                TaskSkipped(run_id=run_id, task_id=node.id, task_name=node.name, reason=skip_reason)
                             )
-                        )
-                        # Node is resolved (skipped), so not pending for next pass
-                        continue
+                            del pending_nodes[node.id]
+                            continue
 
-                    if self.constraint_manager.check_permission(node):
-                        executable_this_pass.append(node)
-                    else:
-                        deferred_this_pass.append(node)
-
-                if executable_this_pass:
-                    tasks_to_run = [
-                        self._execute_node_with_policies(
+                        # Create and track the task
+                        coro = self._execute_node_with_policies(
                             node, graph, state_backend, active_resources, run_id, params
                         )
-                        for node in executable_this_pass
-                    ]
+                        task = asyncio.create_task(coro)
+                        running_tasks[task] = node.id
+                        del pending_nodes[node.id]
 
-                    pass_results = await asyncio.gather(*tasks_to_run)
+                    pending_nodes = deferred_nodes
 
-                    for node, res in zip(executable_this_pass, pass_results):
-                        state_backend.put_result(node.id, res)
+                if not running_tasks and not pending_nodes:
+                    break
+
+                # 2. Wait for something to happen
+                tasks_to_wait = list(running_tasks.keys()) + [wakeup_task]
+                done, pending = await asyncio.wait(
+                    tasks_to_wait, return_when=asyncio.FIRST_COMPLETED
+                )
+
+                # 3. Process completed tasks
+                for task in done:
+                    if task is wakeup_task:
+                        self._wakeup_event.clear()
+                        wakeup_task = asyncio.create_task(self._wakeup_event.wait())
+                        self.constraint_manager.cleanup_expired_constraints()
+                        # Re-add deferred nodes to pending to re-check permissions
+                        for node_id, node in pending_nodes.items():
+                             pending_nodes[node_id] = node
+                        continue
+
+                    node_id = running_tasks.pop(task)
+                    try:
+                        result = task.result()
+                        state_backend.put_result(node_id, result)
                         if self.flow_manager:
                             self.flow_manager.register_result(
-                                node.id, res, state_backend
+                                node_id, result, state_backend
                             )
-
-                pending_nodes_in_stage = deferred_this_pass
-
-                if pending_nodes_in_stage and not executable_this_pass:
-                    # All remaining nodes are blocked by constraints. Wait for a wakeup
-                    # signal (e.g., from a constraint change or TTL expiration) before retrying.
-                    await self._wakeup_event.wait()
-                    self._wakeup_event.clear()
-                    self.constraint_manager.cleanup_expired_constraints()
+                    except Exception as e:
+                        # The exception will be re-raised at the end by engine.run()
+                        # We just need to stop tracking it.
+                        # Error events are already published inside _execute_node...
+                        pass
+            
+            # Clean up the wakeup task if the stage finishes
+            if not wakeup_task.done():
+                wakeup_task.cancel()
 
         if not state_backend.has_result(target._uuid):
             if skip_reason := state_backend.get_skip_reason(target._uuid):

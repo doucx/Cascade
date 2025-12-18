@@ -4,7 +4,9 @@ from typing import List, Any, Dict
 import cascade as cs
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, Graph
-from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.interfaces.protocols import Solver, Executor, ExecutionPlan
 
 
 # --- Test Doubles (Mocks and Spies) ---

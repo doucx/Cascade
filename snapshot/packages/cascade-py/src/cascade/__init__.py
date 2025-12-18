@@ -1,89 +1,58 @@
 import asyncio
 from typing import Any, Dict, Optional
 
-# Core Specs
-from .spec.task import task
-from .spec.lazy_types import LazyResult
-from .spec.routing import Router
-from .spec.resource import resource, inject
-from .spec.constraint import with_constraints
-
-# V1.3 New Core Components
-from .context import get_current_context
-from .spec.input import ParamSpec, EnvSpec
-from .internal.inputs import _get_param_value, _get_env_var
-
-# Legacy / Spec Compat
-# We keep Param class import removed/hidden as we are overriding it below.
-# from .spec.common import Param  <-- Removed
-
-# Core Specs
+# Core Specs from cascade-interfaces
 from cascade.spec.task import task
 from cascade.spec.lazy_types import LazyResult
 from cascade.spec.routing import Router
 from cascade.spec.resource import resource, inject
 from cascade.spec.constraint import with_constraints
-
-# V1.3 New Core Components
-from .context import get_current_context
 from cascade.spec.input import ParamSpec, EnvSpec
+
+# V1.3 Components from cascade-py
+from .context import get_current_context
 from .internal.inputs import _get_param_value, _get_env_var
 
-# Runtime
+# Core Runtime from cascade-runtime
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
-from cascade.interfaces.exceptions import DependencyMissingError
-from cascade.interfaces.protocols import Connector
+from cascade.runtime.graph.serialize import to_json, from_json
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
-# Tools
+# Interfaces
+from cascade.interfaces.exceptions import DependencyMissingError
+from cascade.interfaces.protocols import Connector
+
+# Tools from cascade-py and cascade-cli
 from .testing import override_resource
 from .tools.preview import dry_run
 from .tools.visualize import visualize
-from cascade.cli.main import cli
-from cascade.graph.serialize import to_json, from_json
+from cascade.cli import cli
+
+# Messaging components from cascade-runtime
+from cascade.messaging.bus import bus as messaging_bus
+from cascade.messaging.renderer import CliRenderer, JsonRenderer
 
 
 # --- V1.3 Factory Functions ---
 
 def Param(name: str, default: Any = None, type: Any = str, description: str = "") -> LazyResult:
-    """
-    定义一个工作流参数。
-
-    它会向工作流上下文注册其元数据，并返回一个 LazyResult，
-    该 LazyResult 在执行时会从用户提供的参数中提取值。
-    """
-    # 注册 Spec
-    # 注意：default=None 作为函数参数默认值，可能与 "无默认值" 混淆。
-    # 这里我们假设 None 就是默认值，或者使用 Sentinel 对象。
-    # 简单起见，暂用 None。
     spec = ParamSpec(name=name, default=default, type=type, description=description)
     get_current_context().register(spec)
-    
-    # 返回 LazyResult
     return _get_param_value(name=name)
 
 def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
-    """
-    定义一个环境变量依赖。
-    """
     spec = EnvSpec(name=name, default=default, description=description)
     get_current_context().register(spec)
-    
     return _get_env_var(name=name)
 
 
 # --- Dynamic Provider Loading ---
 
 def __getattr__(name: str) -> Any:
-    """
-    Dynamic attribute access to support plugin providers.
-    E.g., accessing `cascade.shell` will look up the 'shell' provider.
-    """
     from .providers import registry
-
     try:
         return registry.get(name)
     except AttributeError:
@@ -91,9 +60,6 @@ def __getattr__(name: str) -> Any:
 
 
 # --- Main Run Entrypoint ---
-
-from .messaging.bus import bus as messaging_bus
-from .messaging.renderer import CliRenderer, JsonRenderer
 
 def run(
     target: LazyResult,
@@ -103,31 +69,20 @@ def run(
     log_format: str = "human",
     connector: Optional[Connector] = None,
 ) -> Any:
-    """
-    Runs a Cascade workflow with a default engine configuration.
-    """
-    # 1. Setup the messaging renderer
     if log_format == "json":
         renderer = JsonRenderer(min_level=log_level)
     else:
         renderer = CliRenderer(store=messaging_bus.store, min_level=log_level)
     messaging_bus.set_renderer(renderer)
 
-    # 2. Setup the event system
     event_bus = MessageBus()
-    # Attach the human-readable log translator
     HumanReadableLogSubscriber(event_bus)
-    # Attach the telemetry publisher if a connector is provided
     if connector:
         TelemetrySubscriber(event_bus, connector)
 
-    # 3. Assemble the default Engine
-    solver = NativeSolver()
-    executor = LocalExecutor()
-
     engine = Engine(
-        solver=solver,
-        executor=executor,
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
         bus=event_bus,
         system_resources=system_resources,
         connector=connector,
@@ -136,22 +91,8 @@ def run(
     return asyncio.run(engine.run(target, params=params))
 
 __all__ = [
-    "task",
-    "Param",  # Now the factory function
-    "Env",    # New factory function
-    "run",
-    "dry_run",
-    "visualize",
-    "cli",
-    "to_json",
-    "from_json",
-    "with_constraints",
-    "LazyResult",
-    "Router",
-    "resource",
-    "inject",
-    "Engine",
-    "override_resource",
-    "DependencyMissingError",
-    "get_current_context", # Exposed for testing/advanced usage
+    "task", "Param", "Env", "run", "dry_run", "visualize", "cli",
+    "to_json", "from_json", "with_constraints", "LazyResult", "Router",
+    "resource", "inject", "Engine", "override_resource",
+    "DependencyMissingError", "get_current_context",
 ]

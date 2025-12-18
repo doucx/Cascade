@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复多包重构后损坏的模块间引用", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1765982869.9666183, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复重构后所有损坏的模块导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766024047.0442657, "duration_ms": 0}}

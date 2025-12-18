@@ -4,7 +4,8 @@ import time
 from datetime import datetime, timezone
 from .bus import MessageBus
 from ..messaging.bus import bus as messaging_bus
-from .events import (
+from ..messaging.bus import bus as messaging_bus
+from cascade.interfaces.events import (
     RunStarted,
     RunFinished,
     TaskExecutionStarted,
@@ -15,8 +16,8 @@ from .events import (
     ResourceAcquired,
     ResourceReleased,
 )
-from ..spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
-from .protocols import Connector
+from cascade.spec.telemetry import TelemetryHeader, LifecycleEvent, TaskStateEvent
+from cascade.interfaces.protocols import Connector
 
 
 class HumanReadableLogSubscriber:

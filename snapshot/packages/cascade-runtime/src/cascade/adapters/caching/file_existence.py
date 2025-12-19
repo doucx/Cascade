@@ -20,13 +20,13 @@ class FileExistenceCache:
             return self.target_path(inputs)
         return str(self.target_path)
 
-    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
+    async def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
         path = self._resolve_path(inputs)
         if os.path.exists(path):
             return path  # Return the path as the cached result
         return None
 
-    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+    async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
         # File existence cache usually implies the task itself creates the file.
         # But we can verify it was created.
         path = self._resolve_path(inputs)

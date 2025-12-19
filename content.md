@@ -1,59 +1,123 @@
-好的，测试已通过。这意味着我们成功实现了尾调用优化 (TCO) 循环，并修正了资源管理器，使其能够根据资源作用域（Scope）在 TCO 循环的每个步骤中正确地释放和重新获取资源，从而防止资源泄漏。
+好的，我们正式启动 **里程碑 1.3**：实现时间感知原语 `cs.wait`。
 
-现在我将生成一个 `[COMMIT]` 计划来封装这些变更。
+遵循 TDD 流程，我将首先创建测试套件。由于 `cascade-py/src/cascade/providers/time.py` 文件和 `cs.wait` 提供者都还不存在，因此访问 `cs.wait` 会立即导致 `AttributeError`，使我们进入 **Red** 阶段。
 
-## [COMMIT] feat(runtime): Implement Tail Call Optimization (TCO) and Scoped Resource Management
+## [WIP] test(providers): 为时间原语 cs.wait 添加 TDD 测试
 
 ### 用户需求
-实现“萤火计划” Milestone 1.2 中定义的内核重构：
-1.  **TCO 递归**: 引擎应通过迭代而非递归来执行返回 `LazyResult` 的任务链，防止栈溢出，支持长运行 Agent。
-2.  **Scoped Resource Management**: 确保 `scope="task"` 的资源在任务执行完毕后立即释放，而不是等到整个 `Engine.run` 结束后，解决长运行工作流中的资源泄漏问题。
+为“萤火计划” Milestone 1.3 的 `cs.wait` 原子任务创建 TDD 测试套件。
+测试需覆盖以下核心功能：
+1.  **非阻塞节拍**: 验证 `cs.wait` 是一个非阻塞的异步操作，它会暂停当前任务的执行，但不会阻塞整个 `asyncio` 事件循环。
+2.  **动态参数化**: 验证 `cs.wait` 的延迟时间可以接受来自上游任务的 `LazyResult` 作为输入。
 
 ### 评论
-本次重构将 `Engine.run` 的核心逻辑从单次执行流程转换为了一个**持续求值循环**。这是 Cascade 从“流程引擎”向“自适应 Agent 运行环境”升级的关键一步。通过引入 `run_stack` 和 `step_stack` 的分层管理，我们以最小的侵入实现了高效的资源回收机制，完全满足了 TDD 测试用例的要求。
+`cs.wait` 是赋予工作流“自律”能力的基础。它让 Agent 能够控制自身的行为频率和脉冲节拍，是构建响应式和周期性行为的关键“积木”。这两个测试用例精确地定义了它的核心契约。
 
 ### 目标
-创建一个 Git 提交，包含 `Engine.run` 的 TCO 逻辑和 `Engine._setup_resources` 的多作用域处理逻辑。
+创建 `tests/py/providers/test_time_provider.py` 文件，并包含 `test_wait_is_non_blocking` 和 `test_wait_accepts_lazy_result` 两个预期失败的测试用例。
 
 ### 基本原理
-通过在 `Engine.run` 中引入 `while True` 循环来处理 `LazyResult` 返回值，将逻辑递归转化为迭代，避免了 Python 的 `RecursionError`。同时，我们将资源初始化逻辑分离，使用一个长期存在的 `run_stack` 管理 `run` 作用域资源，以及一个在每次 TCO 迭代中重置的 `step_stack` 来管理 `task` 作用域资源。
+我们首先编写测试来定义 `cs.wait` 必须满足的行为规范。
+*   `test_wait_is_non_blocking`: 通过并行运行一个 `cs.wait(0.1)` 任务和一个立即完成的任务来验证。如果 `cs.wait` 是阻塞的，总耗时将大于 0.1 秒；如果非阻塞，总耗时将约等于 0.1 秒。
+*   `test_wait_accepts_lazy_result`: 定义一个返回数字的上游任务，并将其 `LazyResult` 传递给 `cs.wait`。通过测量执行时间，验证 `cs.wait` 使用了动态生成的延迟值。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/executor #concept/resource #scope/core #scope/dx #ai/instruct #task/domain/runtime #task/object/recursion-tco #task/action/implementation #task/state/end
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/core #concept/time #scope/api #ai/instruct #task/domain/providers #task/object/wait-primitive #task/action/test #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存并提交变更
+#### Acts 1: 创建 `cs.wait` 的测试套件
 
-将 `packages/cascade-runtime/src/cascade/runtime/engine.py` 文件添加到 Git 暂存区。
-
-~~~~~act
-git_add
-packages/cascade-runtime/src/cascade/runtime/engine.py
-tests/py/runtime/test_engine_recursion.py
-~~~~~
+我们将创建新的测试文件 `tests/py/providers/test_time_provider.py`。
 
 ~~~~~act
-git_commit
+write_file
+tests/py/providers/test_time_provider.py
 ~~~~~
-~~~~~text
-feat(runtime): Implement TCO for LazyResult returns and Scoped Resource Management
+~~~~~python
+import asyncio
+import time
+import pytest
+import cascade as cs
 
-This commit implements the foundation for long-running, iterative Cascade Agents by addressing deep recursion and resource leakage within the engine loop.
+from cascade.runtime import Engine, MessageBus
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
-Key changes:
 
-1.  **Tail Call Optimization (TCO) Loop**: `Engine.run` is converted into a `while True` loop that detects if a task returns a `LazyResult` or `MappedLazyResult`. If so, it uses that result as the next target in the iteration, avoiding stack overflow (`RecursionError`) and enabling recursive workflows that exceed Python's depth limit.
-2.  **Scoped Resource Management**: Introduced `run_stack` (global cleanup) and `step_stack` (per-iteration cleanup) in `Engine.run`.
-    *   Resources declared with `scope="task"` (the default for the TCO loop) are released when `step_stack` exits, ensuring resources are freed immediately after the task finishes its processing step, rather than holding them for the entire workflow duration.
-3.  **Engine API Update**: `Engine.register` now stores the full `ResourceDefinition` to preserve the `scope` metadata.
+@pytest.fixture
+def engine():
+    """Provides a default engine instance."""
+    return Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),
+    )
 
-This refactoring is a prerequisite for the "Firefly Test" and the implementation of `cs.wait` and `cs.recv`.
+
+@pytest.mark.asyncio
+async def test_wait_is_non_blocking(engine):
+    """
+    Test Case 6 (From Firefly Plan): Non-blocking Tick.
+
+    Verifies that cs.wait(t) pauses for approximately t seconds, and does so
+    without blocking the execution of other concurrent tasks.
+    """
+    start_time = time.time()
+
+    @cs.task
+    def immediate_task():
+        return "immediate"
+
+    @cs.task
+    def wrapper(a, b):
+        return [a, b]
+
+    # Both tasks are at the same stage and can run concurrently
+    workflow = wrapper(cs.wait(0.1), immediate_task())
+
+    results = await engine.run(workflow)
+    duration = time.time() - start_time
+
+    # Assert that results are correct (None for wait, 'immediate' for the other)
+    # The order might vary, so we check contents
+    assert None in results
+    assert "immediate" in results
+
+    # The total duration should be determined by the longest task (cs.wait),
+    # not the sum of durations.
+    assert 0.1 <= duration < 0.15, (
+        f"Execution should be non-blocking and take ~0.1s, but took {duration:.2f}s."
+    )
+
+
+@pytest.mark.asyncio
+async def test_wait_accepts_lazy_result(engine):
+    """
+    Test Case 7 (From Firefly Plan): Dynamic Parameterized Time.
+
+    Verifies that the delay argument of cs.wait can be a LazyResult
+    from an upstream task.
+    """
+    start_time = time.time()
+
+    @cs.task
+    def get_delay():
+        return 0.1
+
+    # The delay for cs.wait is dynamically provided by get_delay
+    workflow = cs.wait(get_delay())
+
+    await engine.run(workflow)
+    duration = time.time() - start_time
+
+    assert 0.1 <= duration < 0.15, (
+        f"cs.wait should have used the dynamic delay from upstream, but took {duration:.2f}s."
+    )
+
 ~~~~~
 
 ### 下一步建议
-我们已经完成了内核的 TCO 重构。根据 **[萤火计划第一阶段：TDD 技术演进路线图](萤火计划第一阶段：TDD%20技术演进路线图.md)**，下一个里程碑是 **1.3：感知原语——时间 (`cs.wait`)**。
-
-我建议我们开始实现 `cs.wait`，它将是一个封装了 `asyncio.sleep` 的原子任务，位于 `cascade-py/src/cascade/providers/time.py`（如果不存在，则创建一个新的 `time.py`）。这个任务将赋予 Agent 显式的时序控制能力。
+运行测试。由于 `cs.wait` 不存在，测试将因 `AttributeError` 而失败。确认失败后，我将生成实现 `cascade.providers.time` 模块和注册新提供者的计划，使测试通过。

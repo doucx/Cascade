@@ -1,4 +1,5 @@
 import time
+import asyncio
 import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver

@@ -30,7 +30,12 @@ class LocalBusConnector(Connector):
         This is critical for pytest where each test has its own loop.
         """
         loop = asyncio.get_running_loop()
-        if cls._lock is None or cls._lock._get_loop() != loop:
+        try:
+            # In modern Python, accessing or using a lock created in a different 
+            # loop will raise RuntimeError. We catch this to re-initialize.
+            if cls._lock is None or cls._lock._get_loop() != loop:
+                cls._lock = asyncio.Lock()
+        except RuntimeError:
             cls._lock = asyncio.Lock()
         return cls._lock
 
@@ -39,7 +44,8 @@ class LocalBusConnector(Connector):
         """Helper for tests to clear the 'broker'."""
         cls._subscriptions.clear()
         cls._retained_messages.clear()
-        cls._lock = None  # Force re-creation on next access
+        # Setting to None ensures _get_lock will create a fresh one for the current loop
+        cls._lock = None 
 
     async def connect(self) -> None:
         self._is_connected = True

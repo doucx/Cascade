@@ -1,129 +1,331 @@
-好的，我们进入 **里程碑 1.4**，为“感知原语” `cs.recv` 编写 TDD 测试。
+好的，我们进入 **里程碑 1.4** 的实现阶段。我们将一次性完成使 `cs.recv` 测试通过所需的所有变更。这涉及到创建新的提供者、修改引擎以暴露其连接器、扩展连接器协议以支持取消订阅，以及更新 `LocalBusConnector` 的实现。
 
-关于命名，`cs.recv` 是一个简洁且符合“接收/发送”对称性的好名字，它清晰地表达了“接收一个信号”的意图。我将沿用这个名称。
+## [WIP] feat(providers): 实现信号原语 cs.recv 及依赖的协议扩展
 
-现在，我们将创建测试套件，进入 **Red** 阶段。由于 `cs.recv` 提供者尚不存在，这些测试会因 `AttributeError` 而失败，从而为我们的实现提供明确的目标。
-
-## [WIP] test(providers): 为信号原语 cs.recv 添加 TDD 测试
+### 错误分析
+无（这是 TDD 的实现阶段）。
 
 ### 用户需求
-根据“萤火计划” Milestone 1.4，为 `cs.recv` 原子任务创建 TDD 测试套件。
-测试需覆盖以下核心功能：
-1.  **异步唤醒**: 验证 `cs.recv` 能够挂起一个工作流的执行，直到从 `Connector` 接收到匹配主题的信号，然后恢复执行。
-2.  **超时与回退**: 验证 `cs.recv` 在指定时间内未收到信号时，会抛出 `asyncio.TimeoutError` 异常，从而允许工作流实现容错和回退逻辑。
+实现 `cs.recv` 原子任务，使其能够挂起工作流、等待外部信号并支持超时。
 
 ### 评论
-`cs.recv` 是 Cascade Agent 的“耳朵”，是实现响应式行为的基石。它将外部世界的事件（通过 `Connector` 传入）转化为工作流内部的控制流。这两个测试用例精确地定义了 `cs.recv` 的核心行为契约：等待与超时。
+`cs.recv` 的实现触及了 Cascade 架构的多个层面。它要求任务能够与 `Engine` 的核心组件（`Connector`）交互。我们通过“资源注入”这一现有模式优雅地解决了这个问题，即让 `Engine` 将其 `Connector` 注册为一个内部资源。此外，为了防止资源泄漏，我们必须扩展 `Connector` 协议，引入可取消的订阅句柄 (`SubscriptionHandle`)。这是实现健壮、长生命周期 Agent 的关键一步。
 
 ### 目标
-创建 `tests/py/providers/test_signal_provider.py` 文件，并包含 `test_recv_blocks_and_wakes_up` 和 `test_recv_times_out` 两个预期失败的测试。
-
-### 基本原理
-我们将使用 `LocalBusConnector` 作为测试的确定性信令总线。
-*   `test_recv_blocks_and_wakes_up`: 在后台运行一个包含 `cs.recv` 的工作流，然后通过 `LocalBusConnector` 发布一个匹配的信号，并断言工作流最终成功完成。
-*   `test_recv_times_out`: 运行一个带 `timeout` 参数的 `cs.recv` 工作流，但不发布任何信号。断言 `asyncio.TimeoutError` 被正确抛出，且执行耗时约等于超时时长。
+1.  **创建 `signal.py`**: 实现 `cs.recv` 任务，该任务注入 `_internal_connector` 资源。
+2.  **修改 `Engine`**: 让 `Engine` 在运行时将其 `Connector` 注册为名为 `_internal_connector` 的内部资源。
+3.  **扩展 `Connector` 协议**: 引入 `SubscriptionHandle` 并修改 `subscribe` 方法以返回该句柄，从而支持取消订阅。
+4.  **更新 `LocalBusConnector`**: 实现新的 `SubscriptionHandle` 协议，确保订阅可以被正确清理。
+5.  **注册 `RecvProvider`**: 在 `pyproject.toml` 中注册新的提供者。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/core #concept/signal #scope/api #ai/instruct #task/domain/providers #task/object/recv-primitive #task/action/test #task/state/continue
+#intent/build #flow/ready #priority/high #comp/core #comp/runtime #comp/interfaces #concept/signal #scope/api #ai/instruct #task/domain/providers #task/object/recv-primitive #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `cs.recv` 的 TDD 测试套件
+#### Acts 1: 创建 `signal.py` 提供者模块
 
-我们将创建一个新的测试文件，`tests/py/providers/test_signal_provider.py`。
+首先，我们创建 `cs.recv` 的核心实现。它依赖一个尚不存在的 `_internal_connector` 资源和一个可取消的订阅句柄。
 
 ~~~~~act
 write_file
-tests/py/providers/test_signal_provider.py
+packages/cascade-py/src/cascade/providers/signal.py
 ~~~~~
 ~~~~~python
 import asyncio
-import time
-import pytest
-import cascade as cs
+from typing import Optional, Any
 
-from cascade.runtime import Engine, MessageBus
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.connectors.local import LocalBusConnector
+from cascade.spec.task import task
+from cascade.spec.resource import inject
+from cascade.providers import LazyFactory, Provider
+from cascade.interfaces.protocols import Connector
 
 
-@pytest.fixture
-def local_connector():
-    """Provides a fresh LocalBusConnector for each test."""
-    return LocalBusConnector()
-
-
-@pytest.fixture
-def engine(local_connector):
-    """Provides an engine instance configured with a LocalBusConnector."""
-    return Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus(),
-        connector=local_connector,
-    )
-
-
-@pytest.mark.asyncio
-async def test_recv_blocks_and_wakes_up(engine, local_connector):
+@task(name="recv")
+async def _recv_task(
+    topic: str,
+    timeout: Optional[float] = None,
+    # This is a special, undocumented resource provided by the Engine
+    connector: Connector = inject("_internal_connector"),
+) -> Any:
     """
-    Test Case 8 (From Firefly Plan): Asynchronous Wake-up.
-
-    Verifies that a task executing cs.recv pauses until a matching signal
-    is published on the connector, at which point it resumes.
+    Pauses execution until a signal is received on the given topic.
     """
-    topic = "firefly/sync/pulse"
-    payload = {"source": "firefly-01"}
+    if connector is None:
+        raise RuntimeError(
+            "cs.recv cannot be used because no Connector is configured in the Engine."
+        )
 
-    @cs.task
-    def downstream_task(signal):
-        return signal  # signal should be the received payload
+    future = asyncio.Future()
 
-    workflow = downstream_task(cs.recv(topic))
+    async def callback(topic: str, payload: Any):
+        # Ensure we only set the result once
+        if not future.done():
+            future.set_result(payload)
 
-    # Run the engine in a background task
-    engine_task = asyncio.create_task(engine.run(workflow))
-
-    # Give the engine a moment to start and block on recv()
-    await asyncio.sleep(0.05)
-    assert not engine_task.done(), "Engine finished prematurely before signal was sent"
-
-    # Publish the signal that should unblock the workflow
-    await local_connector.publish(topic, payload)
-
-    # Await the final result
-    final_result = await asyncio.wait_for(engine_task, timeout=1.0)
-
-    assert final_result == payload
+    subscription = await connector.subscribe(topic, callback)
+    try:
+        return await asyncio.wait_for(future, timeout=timeout)
+    except asyncio.TimeoutError:
+        # Re-raise to allow Cascade's error handling to catch it
+        raise asyncio.TimeoutError(f"Timed out waiting for signal on topic '{topic}' after {timeout}s")
+    finally:
+        # Crucially, unsubscribe to prevent resource leaks
+        if subscription and hasattr(subscription, "unsubscribe"):
+            await subscription.unsubscribe()
 
 
-@pytest.mark.asyncio
-async def test_recv_times_out(engine):
-    """
-    Test Case 9 (From Firefly Plan): Timeout and Fallback.
+class RecvProvider(Provider):
+    name = "recv"
 
-    Verifies that cs.recv raises TimeoutError if a signal is not received
-    within the specified timeout period.
-    """
-    topic = "firefly/no-reply"
-    timeout_duration = 0.05
-
-    workflow = cs.recv(topic, timeout=timeout_duration)
-
-    start_time = time.time()
-    with pytest.raises(asyncio.TimeoutError):
-        await engine.run(workflow)
-    duration = time.time() - start_time
-
-    # Verify that the timeout was respected
-    assert timeout_duration <= duration < timeout_duration + 0.05, (
-        f"Timeout was not respected. Expected ~{timeout_duration}s, took {duration:.2f}s."
-    )
+    def create_factory(self) -> LazyFactory:
+        return _recv_task
 
 ~~~~~
 
+#### Acts 2: 修改 Engine 以提供 Connector 资源
+
+现在，我们让 `Engine` 将其 `Connector` 实例注册为一个内部资源，供 `cs.recv` 注入。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+            # TCO Loop: We keep executing as long as the result is a LazyResult
+            current_target = target
+            
+            # The global stack holds "run" scoped resources
+            with ExitStack() as run_stack:
+                active_resources: Dict[str, Any] = {}
+
+                while True:
+~~~~~
+~~~~~python
+            # TCO Loop: We keep executing as long as the result is a LazyResult
+            current_target = target
+            
+            # The global stack holds "run" scoped resources
+            with ExitStack() as run_stack:
+                # Register the engine's connector as a special internal resource
+                if self.connector:
+                    from cascade.spec.resource import resource
+                    @resource(name="_internal_connector", scope="run")
+                    def _connector_provider():
+                        yield self.connector
+                    self.register(_connector_provider)
+                
+                active_resources: Dict[str, Any] = {}
+
+                while True:
+~~~~~
+
+#### Acts 3: 扩展 Connector 协议以支持取消订阅
+
+我们修改 `cascade-interfaces` 中的 `protocols.py`，加入 `SubscriptionHandle` 并更新 `subscribe` 的签名。
+
+~~~~~act
+patch_file
+packages/cascade-interfaces/src/cascade/interfaces/protocols.py
+~~~~~
+~~~~~python
+class LazyFactory(Protocol):
+    """
+    Protocol for any object that can produce a MappedLazyResult via a .map() method.
+    Example: Task, ShellTask, etc.
+    """
+~~~~~
+~~~~~python
+class SubscriptionHandle(Protocol):
+    """
+    A handle to an active subscription, allowing it to be cancelled.
+    """
+
+    async def unsubscribe(self) -> None:
+        """Cancels the subscription."""
+        ...
+
+
+class LazyFactory(Protocol):
+    """
+    Protocol for any object that can produce a MappedLazyResult via a .map() method.
+    Example: Task, ShellTask, etc.
+    """
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-interfaces/src/cascade/interfaces/protocols.py
+~~~~~
+~~~~~python
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> None:
+        """Subscribes to a topic to receive messages (e.g., control commands)."""
+        ...
+~~~~~
+~~~~~python
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> "SubscriptionHandle":
+        """
+        Subscribes to a topic to receive messages (e.g., control commands).
+        Returns a handle that can be used to unsubscribe.
+        """
+        ...
+~~~~~
+
+#### Acts 4: 更新 `LocalBusConnector` 以实现新协议
+
+现在我们更新 `LocalBusConnector` 来实现可取消的订阅。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/connectors/local.py
+~~~~~
+~~~~~python
+import asyncio
+from collections import defaultdict
+from typing import Dict, List, Any, Callable, Awaitable, Optional
+from cascade.interfaces.protocols import Connector
+from cascade.common.messaging import bus
+
+
+class LocalBusConnector(Connector):
+    """
+    A robust, in-memory implementation of the Connector protocol.
+~~~~~
+~~~~~python
+import asyncio
+import uuid
+from collections import defaultdict
+from typing import Dict, List, Any, Callable, Awaitable, Optional
+from cascade.interfaces.protocols import Connector, SubscriptionHandle
+from cascade.common.messaging import bus
+
+
+class _LocalSubscriptionHandle(SubscriptionHandle):
+    """Implementation of the subscription handle for the LocalBusConnector."""
+
+    def __init__(self, parent: "LocalBusConnector", topic: str, queue: asyncio.Queue, listener_task: asyncio.Task):
+        self._parent = parent
+        self._topic = topic
+        self._queue = queue
+        self._listener_task = listener_task
+
+    async def unsubscribe(self) -> None:
+        # 1. Cancel the listener task
+        self._listener_task.cancel()
+        try:
+            await self._listener_task
+        except asyncio.CancelledError:
+            pass
+
+        # 2. Remove the queue from the broker's shared state
+        async with self._parent._get_lock():
+            if self._topic in self._parent._subscriptions:
+                try:
+                    self._parent._subscriptions[self._topic].remove(self._queue)
+                    if not self._parent._subscriptions[self._topic]:
+                        del self._parent._subscriptions[self._topic]
+                except ValueError:
+                    # Queue already removed, which is fine
+                    pass
+        
+        # 3. Remove task from parent's tracked listeners to prevent memory leak
+        try:
+            self._parent._listener_tasks.remove(self._listener_task)
+        except ValueError:
+            pass
+
+
+class LocalBusConnector(Connector):
+    """
+    A robust, in-memory implementation of the Connector protocol.
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/connectors/local.py
+~~~~~
+~~~~~python
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> None:
+        if not self._is_connected:
+            return
+
+        queue = asyncio.Queue()
+        
+        async with self._get_lock():
+            self._subscriptions[topic].append(queue)
+
+            # Deliver Retained Messages Synchronously for the caller.
+            # This ensures that when subscribe() returns, all existing 
+            # state (constraints, etc.) has been processed by the engine.
+            for retained_topic, payload in self._retained_messages.items():
+                if self._topic_matches(topic, retained_topic):
+                    try:
+                        await callback(retained_topic, payload)
+                    except Exception as e:
+                        bus.error("localbus.retained_callback_error", topic=retained_topic, error=e)
+
+        # Start a background listener for NEW incoming messages
+        task = asyncio.create_task(self._listener_loop(queue, callback))
+        self._listener_tasks.append(task)
+~~~~~
+~~~~~python
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> SubscriptionHandle:
+        if not self._is_connected:
+            raise RuntimeError("Connector is not connected.")
+
+        queue = asyncio.Queue()
+        
+        async with self._get_lock():
+            self._subscriptions[topic].append(queue)
+
+            # Deliver Retained Messages Synchronously for the caller.
+            for retained_topic, payload in self._retained_messages.items():
+                if self._topic_matches(topic, retained_topic):
+                    try:
+                        await callback(retained_topic, payload)
+                    except Exception as e:
+                        bus.error("localbus.retained_callback_error", topic=retained_topic, error=e)
+
+        # Start a background listener for NEW incoming messages
+        task = asyncio.create_task(self._listener_loop(queue, callback))
+        self._listener_tasks.append(task)
+        
+        return _LocalSubscriptionHandle(self, topic, queue, task)
+~~~~~
+
+#### Acts 5: 注册 `cs.recv` 提供者
+
+最后，我们将新的提供者注册到 `cascade-py` 的入口点。
+
+~~~~~act
+patch_file
+packages/cascade-py/pyproject.toml
+~~~~~
+~~~~~python
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+wait = "cascade.providers.time:TimeWaitProvider"
+template = "cascade.providers.template:TemplateProvider"
+"http.get" = "cascade.providers.http:HttpGetProvider"
+~~~~~
+~~~~~python
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+wait = "cascade.providers.time:TimeWaitProvider"
+recv = "cascade.providers.signal:RecvProvider"
+template = "cascade.providers.template:TemplateProvider"
+"http.get" = "cascade.providers.http:HttpGetProvider"
+~~~~~
+
 ### 下一步建议
-运行测试。由于 `cs.recv` 不存在，测试会失败。确认失败后，我将生成实现 `cs.recv` 提供者的计划，该计划将涉及与 `Engine` 的 `Connector` 协议进行交互。
+运行测试。所有与 `cs.recv` 相关的测试现在都应该通过了。确认通过后，我将为这个重要的里程碑创建一个 `[COMMIT]` 计划。

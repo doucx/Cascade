@@ -40,7 +40,7 @@ async def mock_ipfs_add_handler(request: web.Request):
     if part.name != 'file':
         return web.Response(status=400, text="Expected 'file' part")
     
-    # Read content to verify (optional, but good for testing)
+    # Read content to verify
     content = await part.read()
     if content != FAKE_CONTENT:
         return web.Response(status=400, text="Content mismatch")
@@ -113,30 +113,3 @@ async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
 
     # Assert we got the hash from the JSON response
     assert result == "QmHash"
-    # 1. Setup the mock server
-    app = web.Application()
-    app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
-    client = await aiohttp_client(app)
-    
-    # 2. Monkeypatch the IPFS provider to point to our mock server
-    # The URL is constructed inside the provider, so we patch the base URL constant there.
-    mock_base_url = f"http://{client.server.host}:{client.server.port}"
-    monkeypatch.setattr(
-        "cascade.providers.ipfs.provider.IPFS_API_BASE_URL", 
-        mock_base_url
-    )
-
-    # 3. Define the Cascade workflow
-    # This will dynamically load the `cs.ipfs.cat` provider via entry points
-    workflow = cs.ipfs.cat(cid=TEST_CID)
-
-    # 4. Run the workflow using the async Engine directly
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus() # A silent bus for clean test output
-    )
-    result = await engine.run(workflow)
-
-    # 5. Assert the result
-    assert result == FAKE_CONTENT

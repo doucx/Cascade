@@ -68,7 +68,7 @@ async def test_connect_and_disconnect_lifecycle(mocker):
     )
 
     # Assert that the client was instantiated with the will message
-    mock_client_class.assert_called_once_with(
+    mock_client_class_factory.assert_called_once_with(
         hostname="test.broker",
         port=9999,
         client_id="tester",

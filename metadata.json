@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(tests): Consolidate E2E harness to use LocalBusConnector", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766128419.9046407, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(runtime): 修复 LocalBusConnector 的连接状态与锁竞争问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766128807.3501205, "duration_ms": 0}}

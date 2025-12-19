@@ -14,22 +14,32 @@ class LocalBusConnector(Connector):
     """
 
     # --- Broker State (Shared across all instances) ---
-    # topic -> list of (Queue, subscription_pattern)
-    # We store the subscription pattern with the queue to verify matches during routing
     _subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)
     _retained_messages: Dict[str, Any] = {}
-    _lock = asyncio.Lock()  # Protects shared state modifications
+    _lock: Optional[asyncio.Lock] = None
 
     def __init__(self):
-        self._is_connected = False
+        # Default to True to support pre-run configuration in E2E tests
+        self._is_connected = True
         self._listener_tasks = []
+
+    @classmethod
+    def _get_lock(cls) -> asyncio.Lock:
+        """
+        Ensures the lock is bound to the current running event loop.
+        This is critical for pytest where each test has its own loop.
+        """
+        loop = asyncio.get_running_loop()
+        if cls._lock is None or cls._lock._get_loop() != loop:
+            cls._lock = asyncio.Lock()
+        return cls._lock
 
     @classmethod
     def _reset_broker_state(cls):
         """Helper for tests to clear the 'broker'."""
         cls._subscriptions.clear()
         cls._retained_messages.clear()
-        cls._lock = asyncio.Lock()  # Reset lock for new event loop context
+        cls._lock = None  # Force re-creation on next access
 
     async def connect(self) -> None:
         self._is_connected = True
@@ -49,7 +59,7 @@ class LocalBusConnector(Connector):
         if not self._is_connected:
             return
 
-        async with self._lock:
+        async with self._get_lock():
             # Handle Retention
             if retain:
                 if payload == {} or payload == "":
@@ -74,7 +84,7 @@ class LocalBusConnector(Connector):
 
         queue = asyncio.Queue()
         
-        async with self._lock:
+        async with self._get_lock():
             self._subscriptions[topic].append(queue)
 
             # Deliver Retained Messages

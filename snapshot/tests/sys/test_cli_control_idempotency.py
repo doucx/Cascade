@@ -7,7 +7,7 @@ from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import TaskExecutionFinished
 from cascade.connectors.mqtt import MqttConnector
 
-from ..py.e2e.harness import MockWorkExecutor
+from tests.py.e2e.harness import MockWorkExecutor
 
 # NOTE: This test suite requires a live MQTT broker running on localhost:1883.
 # You can start one easily with Docker:

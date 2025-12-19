@@ -2,12 +2,11 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 6: Bypassed cs.inject by passing the connector manually.
-This is a workaround for a suspected bug in resource injection within
-deeply recursive, cross-engine workflows.
+REVISION 7: Deep debug logging enabled.
 """
 import asyncio
 import random
+import time
 from typing import Any, Dict
 
 import cascade as cs
@@ -24,8 +23,16 @@ async def send_signal(
     connector: Connector,
 ) -> None:
     """A task to publish a message to the shared bus."""
+    # DEBUG: Inspect the connector object deeply
+    conn_status = "VALID" if connector else "NONE"
+    conn_id = id(connector) if connector else "N/A"
+    
+    print(f"[Agent] send_signal EXEC. should_send={should_send}, connector={conn_status}({conn_id})")
+    
     if should_send and connector:
+        print(f"[Agent] ⚡ ATTEMPTING PUBLISH to {topic}...")
         await connector.publish(topic, payload)
+        print(f"[Agent] ⚡ PUBLISH CALL DONE.")
 
 
 @cs.task
@@ -38,6 +45,8 @@ async def safe_recv(
     if not connector:
         return {"signal": None, "timeout": True}
 
+    print(f"[Agent] safe_recv START wait={timeout:.4f}s")
+    
     future = asyncio.Future()
     async def callback(topic: str, payload: Any):
         if not future.done():
@@ -46,8 +55,10 @@ async def safe_recv(
     subscription = await connector.subscribe(topic, callback)
     try:
         signal = await asyncio.wait_for(future, timeout=timeout)
+        print(f"[Agent] safe_recv GOT SIGNAL")
         return {"signal": signal, "timeout": False}
     except asyncio.TimeoutError:
+        print(f"[Agent] safe_recv TIMEOUT")
         return {"signal": None, "timeout": True}
     finally:
         if subscription:
@@ -63,7 +74,7 @@ def firefly_agent(
     nudge: float,
     flash_topic: str,
     listen_topic: str,
-    connector: Connector, # Now an explicit argument
+    connector: Connector,
 ):
     """
     This is the main entry point for a single firefly agent.
@@ -77,7 +88,6 @@ def firefly_agent(
         listen_topic: str,
         connector: Connector,
     ):
-        """A single, declarative life cycle of a firefly."""
         time_to_flash = period - phase
         wait_timeout = max(0.01, time_to_flash)
 
@@ -85,7 +95,11 @@ def firefly_agent(
 
         @cs.task
         def was_timeout(p: Dict[str, Any]) -> bool:
-            return p.get("timeout", False)
+            # DEBUG
+            val = p.get("timeout", False)
+            print(f"[Agent] was_timeout check: input={p} -> {val}")
+            return val
+            
         is_timeout = was_timeout(perception)
 
         flash_action = send_signal(

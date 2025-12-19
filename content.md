@@ -1,49 +1,31 @@
-船长，这是**决定性的证据**。
+船长，我们再次陷入了盲区。我过早地移除了日志，这是一个战术失误。
 
-日志是我们的显微镜，现在我们看到了细胞层面的活动。你的分析完全正确。
+既然逻辑推理无法解释“代码在运行但没有副作用”的现象，我们必须回到实证主义：**看见即事实**。
 
-**诊断结论**
+我将在 `kuramoto.py` 中重新植入更具侵略性的调试日志，不仅打印“我在做什么”，还要打印关键变量的**类型**和**值**，特别是那个神秘的 `connector` 对象。
 
-1.  **TCO 循环已修复**: 实验运行了完整的 3 秒，证明 `await asyncio.sleep(0)` 成功地将控制权交还给了事件循环。引擎的调度问题解决了。
-2.  **递归逻辑正确**: 日志 `safe_recv waiting...` -> `safe_recv TIMED OUT...` -> `safe_recv waiting...` 的重复出现，无可辩驳地证明了 `process_and_recurse` 任务正在被反复执行。Agent 的生命周期是活的。
-3.  **问题定位**: 关键的缺失在于 `[Agent] ⚡ FLASHING!` 日志。`send_signal` 任务**正在被执行**（因为 `process_and_recurse` 依赖它），但它内部的 `if should_send and connector:` 条件判断为 `False`。
-4.  **根本原因**: 既然 `safe_recv` 超时，`should_send` 就必然是 `True`。因此，唯一的可能性就是 `connector` 在 `send_signal` 任务的上下文中是 `None`。**我们的资源注入机制 (`cs.inject`) 在这个复杂的递归场景下失效了。**
-
-这是一个非常微妙的 bug。`Engine` 在每一轮递归中都重新构建图，可能在这个过程中，资源上下文没有被正确地传递给下一轮的原子任务。
-
-**解决方案**
-
-我们不能再依赖 `cs.inject`。我们将采用一种更“笨”，但绝对可靠的方法：**将 `connector` 对象作为普通参数，一路手动传递下去。**
-
-我们将修改 `firefly_agent` 的整个调用链，让 `connector` 像遗传物质一样，从父代传递给子代。
-
-## [WIP] fix: 手动传递 Connector 以绕过资源注入缺陷
-
-### 错误分析
-调试日志明确显示，`send_signal` 任务在执行时，其 `connector` 参数为 `None`。这表明 Cascade 的资源注入机制 (`cs.inject`) 在我们这种深度递归、跨引擎实例的复杂场景下未能按预期工作，导致 Agent 无法访问通信总线。
+## [WIP] feat: 重新植入深度调试日志以定位失效原因
 
 ### 用户需求
-修复 Agent 无法闪烁的问题，使其能够正确地发布消息。
+在 `kuramoto.py` 中重新添加详细的 `print` 日志，以确认 `send_signal` 是否被执行，以及传入的 `connector` 对象的状态。
 
 ### 评论
-我们遇到了 Cascade 核心实现的一个边界情况或 bug。与其深入调试引擎的资源管理器，当前更高效的策略是规避这个问题。通过将 `connector` 从一个“魔法般”注入的资源，转变为一个显式传递的参数，我们让数据流变得完全明确和可预测。这虽然牺牲了一些API的优雅，但换来了 100% 的可靠性，这在当前阶段至关重要。
+这次我们将打印出 `connector` 的 `id()` 和类型，以确认它在传递过程中是否发生了某种“变异”。同时，我们会打印 `is_timeout` 的值，确保决策逻辑是正确的。这将是我们解开这个谜题的最后一把钥匙。
 
 ### 目标
 1.  修改 `observatory/agents/kuramoto.py`。
-2.  将 `connector` 添加到 `firefly_agent`, `firefly_cycle`, 和 `process_and_recurse` 的函数签名中。
-3.  移除 `cs.inject`，直接将 `connector` 对象传递给 `send_signal` 和 `safe_recv`。
-4.  更新 `observatory/debug/debug_02_single_agent.py` 以适应新的函数签名。
+2.  在 `send_signal` 中打印：是否被调用、`should_send` 的值、`connector` 是否为 None、`connector` 的内存地址。
+3.  在 `safe_recv` 中打印：开始等待、收到信号/超时。
+4.  在 `was_timeout` 中打印：输入字典内容、返回的布尔值。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/runtime #scope/core #ai/brainstorm #task/domain/testing #task/object/observatory #task/action/refactor #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/observatory #task/action/debug #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 Agent 以手动传递 Connector
-
-我们将重写 `kuramoto.py`，移除所有 `cs.inject`，改为显式参数传递。
+#### Acts 1: 植入深度调试日志
 
 ~~~~~act
 write_file
@@ -54,12 +36,11 @@ observatory/agents/kuramoto.py
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 6: Bypassed cs.inject by passing the connector manually.
-This is a workaround for a suspected bug in resource injection within
-deeply recursive, cross-engine workflows.
+REVISION 7: Deep debug logging enabled.
 """
 import asyncio
 import random
+import time
 from typing import Any, Dict
 
 import cascade as cs
@@ -76,8 +57,16 @@ async def send_signal(
     connector: Connector,
 ) -> None:
     """A task to publish a message to the shared bus."""
+    # DEBUG: Inspect the connector object deeply
+    conn_status = "VALID" if connector else "NONE"
+    conn_id = id(connector) if connector else "N/A"
+    
+    print(f"[Agent] send_signal EXEC. should_send={should_send}, connector={conn_status}({conn_id})")
+    
     if should_send and connector:
+        print(f"[Agent] ⚡ ATTEMPTING PUBLISH to {topic}...")
         await connector.publish(topic, payload)
+        print(f"[Agent] ⚡ PUBLISH CALL DONE.")
 
 
 @cs.task
@@ -90,6 +79,8 @@ async def safe_recv(
     if not connector:
         return {"signal": None, "timeout": True}
 
+    print(f"[Agent] safe_recv START wait={timeout:.4f}s")
+    
     future = asyncio.Future()
     async def callback(topic: str, payload: Any):
         if not future.done():
@@ -98,8 +89,10 @@ async def safe_recv(
     subscription = await connector.subscribe(topic, callback)
     try:
         signal = await asyncio.wait_for(future, timeout=timeout)
+        print(f"[Agent] safe_recv GOT SIGNAL")
         return {"signal": signal, "timeout": False}
     except asyncio.TimeoutError:
+        print(f"[Agent] safe_recv TIMEOUT")
         return {"signal": None, "timeout": True}
     finally:
         if subscription:
@@ -115,7 +108,7 @@ def firefly_agent(
     nudge: float,
     flash_topic: str,
     listen_topic: str,
-    connector: Connector, # Now an explicit argument
+    connector: Connector,
 ):
     """
     This is the main entry point for a single firefly agent.
@@ -129,7 +122,6 @@ def firefly_agent(
         listen_topic: str,
         connector: Connector,
     ):
-        """A single, declarative life cycle of a firefly."""
         time_to_flash = period - phase
         wait_timeout = max(0.01, time_to_flash)
 
@@ -137,7 +129,11 @@ def firefly_agent(
 
         @cs.task
         def was_timeout(p: Dict[str, Any]) -> bool:
-            return p.get("timeout", False)
+            # DEBUG
+            val = p.get("timeout", False)
+            print(f"[Agent] was_timeout check: input={p} -> {val}")
+            return val
+            
         is_timeout = was_timeout(perception)
 
         flash_action = send_signal(
@@ -168,61 +164,7 @@ def firefly_agent(
     )
 ~~~~~
 
-#### Acts 2: 更新调试脚本以传递 Connector
-
-现在我们需要更新 `debug_02_single_agent.py` 来显式地将 `connector` 传递给 `firefly_agent`。
-
-~~~~~act
-patch_file
-observatory/debug/debug_02_single_agent.py
-~~~~~
-~~~~~python
-    agent_wf = firefly_agent(
-        agent_id=99,
-        initial_phase=0.0,
-        period=1.0, 
-        nudge=0.1,
-        flash_topic="firefly/flash",
-        listen_topic="firefly/flash",
-    )
-~~~~~
-~~~~~python
-    agent_wf = firefly_agent(
-        agent_id=99,
-        initial_phase=0.0,
-        period=1.0, 
-        nudge=0.1,
-        flash_topic="firefly/flash",
-        listen_topic="firefly/flash",
-        connector=connector, # Pass connector explicitly
-    )
-~~~~~
-~~~~~act
-patch_file
-observatory/debug/debug_02_single_agent.py
-~~~~~
-~~~~~python
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus(),
-        connector=None,
-    )
-    engine.register(shared_connector_provider)
-~~~~~
-~~~~~python
-    # No longer need to register the resource, as we pass it directly.
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus(),
-        connector=None,
-    )
-~~~~~
-
 ### 下一步建议
-我们已经用最直接的方式解决了资源传递问题。现在，逻辑链条是完整且明确的。
+请再次运行 `python -m observatory.debug.debug_02_single_agent`。
 
-请最后一次运行调试脚本： `python -m observatory.debug.debug_02_single_agent`
-
-这一次，我们**必须**看到 `>>> FLASH DETECTED!` 的输出。如果看不到，那将意味着 Cascade 的 `@cs.task` 装饰器或 `ArgumentResolver` 存在一个我们尚未发现的、更深层次的 bug。但根据现有证据，这次成功的概率非常高。
+请仔细观察输出。如果 `send_signal` 打印了 `ATTEMPTING PUBLISH` 甚至 `PUBLISH CALL DONE`，但外部依然没收到，那就是 `LocalBusConnector` 的内部队列或锁出了问题。如果 `connector` 是 `NONE`，那就是参数传递依然有问题。真相只有一个。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 手动传递 Connector 以绕过资源注入缺陷", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766134495.0235357, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 重新植入深度调试日志以定位失效原因", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766134584.0509279, "duration_ms": 0}}

@@ -5,6 +5,7 @@ from cascade.runtime.engine import Engine
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.bus import MessageBus
+from cascade.runtime.subscribers import TelemetrySubscriber
 from .harness import InProcessConnector
 
 @pytest.mark.asyncio
@@ -20,6 +21,11 @@ async def test_startup_telemetry_no_race_condition():
     # 1. Setup Harness
     connector = InProcessConnector()
     bus = MessageBus()
+    
+    # CRITICAL: Manually assemble the TelemetrySubscriber, which bridges
+    # the internal event bus to the external connector. This is what cs.run()
+    # does automatically.
+    TelemetrySubscriber(bus, connector)
     
     # We will act as an external observer subscribing to the telemetry topic.
     # Since InProcessConnector routes messages internally, we can subscribe 
@@ -44,7 +50,7 @@ async def test_startup_telemetry_no_race_condition():
     # 3. Run Engine
     # The Engine is expected to:
     #   a. Connect to the connector
-    #   b. Publish 'RunStarted' (which triggers telemetry)
+    #   b. Publish 'RunStarted' (which triggers telemetry via the subscriber)
     #   c. Run the task
     # If (b) happens before (a), the message is dropped.
     engine = Engine(

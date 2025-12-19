@@ -1,6 +1,6 @@
 import asyncio
 from collections import defaultdict
-from typing import Dict, List, Any, Callable, Awaitable
+from typing import Dict, List, Any, Callable, Awaitable, Optional
 from cascade.interfaces.protocols import Connector
 
 

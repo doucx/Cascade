@@ -72,19 +72,27 @@ class LocalBusConnector(Connector):
         if not self._is_connected:
             return
 
+        # --- CRITICAL FIX START ---
+        # Deliver retained messages SYNCHRONOUSLY before returning.
+        # This closes the race condition window at engine startup.
+        async with self._lock:
+            retained_to_deliver = []
+            for retained_topic, payload in self._retained_messages.items():
+                if self._topic_matches(topic, retained_topic):
+                    retained_to_deliver.append(
+                        callback(retained_topic, payload)
+                    )
+            
+            if retained_to_deliver:
+                await asyncio.gather(*retained_to_deliver)
+        # --- CRITICAL FIX END ---
+
         queue = asyncio.Queue()
         
         async with self._lock:
             self._subscriptions[topic].append(queue)
 
-            # Deliver Retained Messages
-            for retained_topic, payload in self._retained_messages.items():
-                if self._topic_matches(topic, retained_topic):
-                    # For immediate delivery, we can push to queue or call callback directly?
-                    # Pushing to queue preserves order and simplifies locking.
-                    await queue.put((retained_topic, payload))
-
-        # Start a background listener for this specific subscription queue
+        # Start a background listener for NEW messages on this subscription.
         task = asyncio.create_task(self._listener_loop(queue, callback))
         self._listener_tasks.append(task)
 

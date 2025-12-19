@@ -22,8 +22,8 @@ async def _publish_pause(scope: str, ttl: int | None, hostname: str, port: int):
         await connector.connect()
         bus.info("controller.connected")
 
-        # Create a unique, descriptive ID for the constraint
-        constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
+        # Create a deterministic ID for idempotency (Last-Write-Wins)
+        constraint_id = f"pause-{scope}"
         expires_at = time.time() + ttl if ttl else None
 
         constraint = GlobalConstraint(
@@ -98,7 +98,7 @@ async def _publish_limit(
         expires_at = time.time() + ttl if ttl else None
 
         if concurrency is not None:
-            constraint_id = f"concurrency-{scope}-{uuid.uuid4().hex[:8]}"
+            constraint_id = f"concurrency-{scope}"
             constraint = GlobalConstraint(
                 id=constraint_id,
                 scope=scope,
@@ -115,7 +115,7 @@ async def _publish_limit(
             await connector.publish(topic, asdict(constraint), retain=True)
 
         if rate is not None:
-            constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
+            constraint_id = f"ratelimit-{scope}"
             constraint = GlobalConstraint(
                 id=constraint_id,
                 scope=scope,

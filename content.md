@@ -1,119 +1,67 @@
-简要回答
-分析报告：
-1.  **状态泄漏 (State Leakage)**：`LocalBusConnector` 的核心状态（订阅和保留消息）存储在类属性中。由于现有的 E2E 测试没有调用清理逻辑，测试用例之间的状态发生了严重的互相干扰。例如，上一个测试留下的“全局暂停”保留消息导致下一个测试的任务无法启动，从而引发 `TimeoutError`。
-2.  **死任务干扰**：类属性中的 `_subscriptions` 积累了大量已经销毁的旧 Engine 的消息队列。当新测试发布消息时，总线会尝试向这些“僵尸队列”推送消息，虽然不会报错，但会造成资源浪费和逻辑混乱。
-3.  **锁的生命周期**：类级别的 `_lock` 必须在每个测试开始前重置，以确保它总是绑定到当前测试的 `asyncio` 事件循环。
+这是一个完整的 Git 提交计划，包含了所有对 `LocalBusConnector` 的修复、重构和测试隔离的修改。
 
-我将通过在全局 `conftest.py` 中注入自动清理逻辑来彻底解决这些稳定性问题。
-
-## [WIP] fix(tests): 强制 LocalBusConnector 在测试间进行状态清理
+## [COMMIT] fix(runtime): Stabilize LocalBusConnector for deterministic E2E testing
 
 ### 错误分析
-- **根本原因**：`LocalBusConnector` 作为一个内存中的单例 Broker，在测试环境下的生命周期管理缺失。
-- **故障现象**：
-    - `test_runtime_pause_interrupts_stage` 失败是因为它接收到了上一个测试残留的 `pause` 保留消息。
-    - `test_e2e_rate_limit_control` 卡死通常是因为总线状态混乱或锁竞争。
-    - `test_e2e_ttl_expiration` 失败是因为它跳过了预期的阻塞阶段，直接执行了任务。
+本次提交解决了三个核心问题，这些问题在复杂的异步 E2E 测试环境中尤为明显：
+1.  **锁的跨 Event Loop 绑定**: `LocalBusConnector` 的类级 `asyncio.Lock` 在 `pytest-asyncio` 环境中被绑定到第一个 Event Loop。后续测试尝试访问该锁时，触发了 `RuntimeError: ... is bound to a different event loop`。
+2.  **启动竞态条件**: `LocalBusConnector.subscribe` 异步分发保留消息。Engine 在订阅后立即进入执行循环，导致它在感知到约束（如 `pause` 或 `rate_limit`）之前就开始调度任务，从而导致时序性测试失败（例如 `test_startup_pause_is_respected`）。
+3.  **状态泄漏**: 由于 `LocalBusConnector` 状态是类级别的，测试之间没有清理，导致上一个测试遗留的保留消息或订阅干扰了下一个测试。
 
 ### 用户需求
-确保 Cascade 的测试套件在并发或顺序执行时具有完全的隔离性，消除由于内存总线状态残留导致的随机失败。
+恢复 E2E 测试套件的稳定性，确保内存总线在多进程/多 Loop 自动化测试环境下表现正确，并消除测试脚手架中的重复代码。
 
 ### 评论
-在 E2E 测试中，基础设施的“洁净度”是确定性的前提。通过 `pytest` 钩子进行全局清理是处理此类类级别共享状态的最稳健方案。
+这次修复至关重要，它为后续的“萤火计划”提供了可靠的底层通信保证。通过将保留消息同步化处理，我们确保了 **状态先于执行** 的原则在 Engine 启动时得到了强制执行。通过全局清理 fixture，我们彻底解决了测试间的状态隔离问题。
 
 ### 目标
-1.  修改 `tests/conftest.py`，增加一个 `autouse` 级别的异步 fixture。
-2.  该 fixture 在每个测试开始前和结束后都调用 `LocalBusConnector._reset_broker_state()`。
-3.  确保 `LocalBusConnector` 的锁和字典在重置时被彻底清空。
+1.  修复 `LocalBusConnector` 中的锁逻辑，使其能够安全地跨 Event Loop 使用。
+2.  确保保留消息在 `subscribe` 调用返回之前被完全同步处理。
+3.  将测试脚手架 `InProcessConnector` 替换为 `LocalBusConnector` 的别名。
+4.  在 `conftest.py` 中引入自动清理机制，确保测试隔离。
+5.  创建一个原子提交来封装所有这些基础设施级别的变更。
 
 ### 基本原理
-利用 `pytest` 的生命周期管理，我们强制在每个测试用例执行前后将内存总线恢复到初始状态。这确保了每个测试都运行在一个“干净的宇宙”中，不再受其他测试留下的保留消息或订阅的影响。
+我们采用了异常驱动的锁重置机制，捕获 `RuntimeError` 来检测 Loop 切换，并创建新的 `asyncio.Lock`。同时，将保留消息的处理从异步后台任务提升为同步 `await callback()`，保证了启动时的确定性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high 
-#comp/tests #comp/runtime #concept/telemetry #scope/dx
-#task/domain/testing #task/object/local-bus #task/action/cleanup
+#intent/fix #flow/ready #priority/high
+#comp/runtime #comp/tests #concept/telemetry #scope/dx
+#task/domain/telemetry #task/object/local-bus #task/action/cleanup
 #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 全局注入清理逻辑
-
-我们修改 `tests/conftest.py`。如果系统中安装了 `cascade-runtime`，我们就自动执行清理。
+#### Acts 1: 暂存所有修改的文件
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-runtime/src/cascade/connectors/local.py
+tests/py/connectors/test_local_connector.py
+tests/py/e2e/harness.py
 tests/conftest.py
 ~~~~~
-~~~~~python
-import pytest
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
 
-
-class SpySubscriber:
-~~~~~
-~~~~~python
-import pytest
-import asyncio
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
-
-# Attempt to import LocalBusConnector for global cleanup
-try:
-    from cascade.connectors.local import LocalBusConnector
-except ImportError:
-    LocalBusConnector = None
-
-
-@pytest.fixture(autouse=True)
-def cleanup_local_bus():
-    """
-    Ensures that the memory broker state is completely cleared between tests.
-    This prevents state leakage (retained messages/subscriptions) which
-    causes unpredictable failures in E2E tests.
-    """
-    if LocalBusConnector:
-        LocalBusConnector._reset_broker_state()
-    yield
-    if LocalBusConnector:
-        LocalBusConnector._reset_broker_state()
-
-
-class SpySubscriber:
-~~~~~
-
-#### Acts 2: 移除 `harness.py` 中残留的冗余逻辑
-
-确保 `harness.py` 干净，不包含任何可能干扰 `LocalBusConnector` 状态的初始化代码。
+#### Acts 2: 提交变更
 
 ~~~~~act
-patch_file
-tests/py/e2e/harness.py
+git_commit
 ~~~~~
-~~~~~python
-# Alias for backward compatibility with existing e2e tests
-InProcessConnector = LocalBusConnector
+~~~~~text
+fix(runtime): Stabilize LocalBusConnector for deterministic E2E testing
 
+The LocalBusConnector required significant fixes to operate reliably in a multi-loop asynchronous testing environment (like pytest-asyncio).
 
-class ControllerTestApp:
-~~~~~
-~~~~~python
-# Alias for backward compatibility with existing e2e tests
-# LocalBusConnector handles its own global state internally.
-InProcessConnector = LocalBusConnector
-
-
-class ControllerTestApp:
+Key fixes:
+1.  **Synchronous Retain Delivery**: Changed `subscribe` to synchronously `await` the processing of retained messages. This eliminates a critical race condition where the Engine would start scheduling tasks before receiving a pre-existing constraint (e.g., global pause or rate limit). This restores determinism for all startup control plane tests.
+2.  **Cross-Loop Lock Management**: Implemented an exception-driven check within `_get_lock()` to detect if the class-level `asyncio.Lock` is bound to a different Event Loop. It safely re-initializes the lock if a conflict is detected, resolving the persistent `RuntimeError: is bound to a different event loop` failures.
+3.  **Test Isolation**: Introduced an `autouse` fixture in `tests/conftest.py` to ensure `LocalBusConnector`'s shared class state (`_subscriptions`, `_retained_messages`) is cleared before and after every test, preventing state leakage and inter-test interference.
+4.  **Refactor**: Consolidated `tests/py/e2e/harness.py` by replacing its redundant `InProcessConnector` implementation with an alias to the now-stable `LocalBusConnector`.
 ~~~~~
 
 ### 下一步建议
+我们已经完成了对通信基础设施的改造和加固（里程碑 1.1）。现在，我们可以正式开始 **里程碑 1.2：实现“尾递归优化” (引擎连续性重构)**。
 
-现在隔离机制已经建立，请重新运行全量测试：
-`pytest tests/py/e2e/`
-
-如果通过，说明 **里程碑 1.1** 已经完全达成。我们已经拥有了一个隔离、确定且健壮的内存实验环境。
-
-接下来，我们将进入 **里程碑 1.2**：**实现尾递归优化 (TCO)**。这一步至关重要，它将允许工作流通过末尾返回自身来实现 Agent 的“永生”循环。我们需要修改 `Engine` 的核心运行循环。准备好了吗？
+这一阶段需要重点修改 `packages/cascade-runtime/src/cascade/runtime/engine.py` 中的 `Engine.run` 和 `_execute_graph` 方法，以实现当任务返回 `LazyResult` 时，Engine 能够优雅地进入下一个循环，而不是直接返回结果或引发异常。

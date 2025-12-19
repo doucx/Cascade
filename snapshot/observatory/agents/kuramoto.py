@@ -2,12 +2,11 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 4: Internalized the conditional logic into send_signal.
-This prevents the 'skip propagation' issue where skipping the flash action
-caused the recursive step to be skipped as well, killing the agent.
+REVISION 5: Added debug prints to trace execution flow.
 """
 import asyncio
 import random
+import time
 from typing import Any, Dict
 
 import cascade as cs
@@ -23,12 +22,12 @@ async def send_signal(
     should_send: bool,
     connector: Connector = cs.inject("_internal_connector"),
 ) -> None:
-    """
-    A task to publish a message to the shared bus.
-    Now accepts 'should_send' to handle conditional logic internally,
-    ensuring the task always executes and doesn't break downstream dependencies.
-    """
+    """A task to publish a message to the shared bus."""
+    # DEBUG PRINT
+    # print(f"[Agent] send_signal called. should_send={should_send}")
     if should_send and connector:
+        # DEBUG PRINT
+        print(f"[Agent] ⚡ FLASHING! Payload: {payload}")
         await connector.publish(topic, payload)
 
 
@@ -40,8 +39,10 @@ async def safe_recv(
 ) -> Dict[str, Any]:
     """
     A custom receive task that treats timeouts as valid return values.
-    Returns: {"signal": payload, "timeout": False} OR {"signal": None, "timeout": True}
     """
+    # DEBUG PRINT
+    print(f"[Agent] safe_recv waiting for {timeout:.4f}s...")
+    
     if not connector:
         return {"signal": None, "timeout": True}
 
@@ -53,9 +54,12 @@ async def safe_recv(
 
     subscription = await connector.subscribe(topic, callback)
     try:
+        start_t = time.time()
         signal = await asyncio.wait_for(future, timeout=timeout)
+        print(f"[Agent] safe_recv RECEIVED signal after {time.time()-start_t:.4f}s")
         return {"signal": signal, "timeout": False}
     except asyncio.TimeoutError:
+        print(f"[Agent] safe_recv TIMED OUT as expected after {timeout:.4f}s")
         return {"signal": None, "timeout": True}
     finally:
         if subscription:
@@ -100,8 +104,6 @@ def firefly_agent(
         is_timeout = was_timeout(perception)
 
         # 3. ACT
-        # We pass 'is_timeout' as a data dependency. 
-        # The task will always run, but only emit side effects if True.
         flash_action = send_signal(
             topic=flash_topic, 
             payload={"agent_id": agent_id, "phase": phase},
@@ -109,7 +111,6 @@ def firefly_agent(
         )
 
         # 4. EVOLVE & RECURSE
-        # We explicitly depend on flash_action to ensure ordering (Act before Recurse)
         @cs.task
         def process_and_recurse(
             p: Dict[str, Any], _flash_dependency=flash_action
@@ -122,6 +123,9 @@ def firefly_agent(
             else:
                 # We saw another flash, nudge phase forward.
                 next_phase = (phase + nudge + jitter) % period
+            
+            # DEBUG PRINT
+            # print(f"[Agent] Recursion. Next phase: {next_phase:.2f}")
 
             return firefly_cycle(
                 agent_id, next_phase, period, nudge, flash_topic, listen_topic

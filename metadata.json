@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 创建调试脚本以隔离定位死锁问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766134071.5663145, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 验证 TCO 修复并为萤火虫添加详细调试日志", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766134402.9209626, "duration_ms": 0}}

@@ -1,171 +1,202 @@
-船长，你的决定非常明智。在复杂的分布式系统中，当集成测试出现“静默死锁”时，盲目试错极其低效。我们需要**隔离变量**。
+船长，这非常奇怪。`debug_02` 证明了引擎在运行，但没有任何闪烁。推理链条告诉我们：
+1.  如果引擎运行了 3 秒才超时，说明递归循环在进行（或者卡在了一个长达 3 秒的操作中）。
+2.  如果是递归在进行，那么 `safe_recv` 必然返回了结果。
+3.  如果是单体 Agent，`safe_recv` 只能是超时返回。
+4.  如果超时返回，`send_signal` 必然被调用。
+5.  如果 `send_signal` 被调用，它应该通过 `connector` 发布消息。
+6.  `debug_01` 证明了 `connector` 是工作的。
 
-我们将采用**“洋葱剥皮法”**，由内而外逐层验证。我们将创建两个独立的调试脚本，分别验证“通信基础设施”和“个体行为”。
+**唯一的逻辑漏洞**：`safe_recv` 可能**没有超时**，或者**超时时间计算错误**，导致它一直在等待，直到外部的 3 秒大限已到。
 
-## [WIP] feat: 创建调试脚本以隔离定位死锁问题
+我们需要确认两件事：
+1.  **代码完整性**：确认 `Engine` 的 TCO 修复确实生效了。
+2.  **执行流跟踪**：在 `kuramoto.py` 中打入日志，看看 Agent 到底在想什么。
+
+## [WIP] feat: 验证 TCO 修复并为萤火虫添加详细调试日志
 
 ### 用户需求
-创建独立的测试文件，用于分层验证系统组件，定位实验卡死的原因。
+验证 `cascade-runtime` 的修复状态，并修改 `kuramoto.py` 添加详细的 `print` 日志，以追踪单体 Agent 实验中的执行流。
 
 ### 评论
-当前实验涉及：50个并发引擎、共享总线、递归工作流、异步IO。任何一个环节出问题都会导致死锁。我们将复杂度降维：
-1.  **验证总线 (`debug_01_bus.py`)**: 排除 `Engine` 和 `Agent`，仅验证 `LocalBusConnector` 在 `asyncio` 环境下是否能正常收发消息。如果这一层挂了，那就是基础设施问题。
-2.  **验证个体 (`debug_02_single_agent.py`)**: 引入 `Engine`，但只运行**一只**萤火虫。验证 `safe_recv` 的超时机制和递归逻辑是否能正常工作。如果一只萤火虫都不能闪烁，那一群肯定不行。
+我们在“黑盒”外部徘徊太久了。现在我们要把盒子打开。通过在原子任务内部直接打印日志，我们将能够精确地看到：
+1.  `safe_recv` 是否真的启动了？它的超时参数是多少？
+2.  `safe_recv` 是否真的捕获了超时？
+3.  `send_signal` 是否真的被调用了？
 
 ### 目标
-1.  创建 `observatory/debug/debug_01_bus.py`。
-2.  创建 `observatory/debug/debug_02_single_agent.py`。
+1.  使用 `read_file` 检查 `packages/cascade-runtime/src/cascade/runtime/engine.py`，确认 `await asyncio.sleep(0)` 存在。
+2.  修改 `observatory/agents/kuramoto.py`，在 `safe_recv` 和 `send_signal` 中添加 `print` 调试信息。
+3.  再次运行 `debug_02_single_agent.py`。
 
 ### 标签
-#intent/tooling #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/observatory #task/action/debug #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/observatory #task/action/debug #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建调试目录
+#### Acts 1: 验证 Engine 代码完整性
+
+确认之前的 patch 是否正确应用。
 
 ~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p observatory/debug
+read_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
 
-#### Acts 2: 调试脚本 1 - 纯总线验证
+#### Acts 2: 为 Agent 植入调试日志
 
-这个脚本不依赖 Cascade 的 Engine，仅测试 `LocalBusConnector` 和 Python 的 `asyncio`。目的是验证我们的“物理定律”是否正常。
-
-~~~~~act
-write_file
-observatory/debug/debug_01_bus.py
-~~~~~
-~~~~~python
-import asyncio
-from cascade.connectors.local import LocalBusConnector
-
-async def main():
-    print("--- Debug 01: Raw Bus Test ---")
-    
-    # 1. Setup
-    LocalBusConnector._reset_broker_state()
-    connector = LocalBusConnector()
-    await connector.connect()
-    print("[1] Connector connected.")
-
-    # 2. Define a subscriber
-    received = asyncio.Event()
-    
-    async def on_message(topic, payload):
-        print(f"[3] Received message on {topic}: {payload}")
-        received.set()
-
-    # 3. Subscribe
-    await connector.subscribe("test/topic", on_message)
-    print("[2] Subscribed.")
-
-    # 4. Publish (Simulate a firefly flash)
-    print("[4] Publishing...")
-    await connector.publish("test/topic", {"msg": "hello"})
-
-    # 5. Wait for receipt
-    try:
-        await asyncio.wait_for(received.wait(), timeout=2.0)
-        print("[5] SUCCESS: Message received.")
-    except asyncio.TimeoutError:
-        print("[5] FAILURE: Timed out waiting for message.")
-    
-    await connector.disconnect()
-
-if __name__ == "__main__":
-    asyncio.run(main())
-~~~~~
-
-#### Acts 3: 调试脚本 2 - 单体 Agent 验证
-
-这个脚本引入 `Engine` 和 `firefly_agent`，但只运行一个实例。如果这个脚本卡住，说明是 **Engine 调度** 或 **Agent 逻辑** 的问题（例如 `safe_recv` 没有正确超时）。
+在 `kuramoto.py` 中添加详细的 print 语句。
 
 ~~~~~act
 write_file
-observatory/debug/debug_02_single_agent.py
+observatory/agents/kuramoto.py
 ~~~~~
 ~~~~~python
+"""
+Implementation of a Firefly agent based on the Kuramoto model
+of coupled oscillators, using pure Cascade primitives.
+
+REVISION 5: Added debug prints to trace execution flow.
+"""
 import asyncio
+import random
 import time
+from typing import Any, Dict
+
 import cascade as cs
-from cascade.connectors.local import LocalBusConnector
-from cascade.spec.resource import resource
-from observatory.agents.kuramoto import firefly_agent
+from cascade.interfaces.protocols import Connector
 
-async def main():
-    print("--- Debug 02: Single Agent Test ---")
+
+# --- Atomic Primitives for Agent Behavior ---
+
+@cs.task
+async def send_signal(
+    topic: str,
+    payload: Dict[str, Any],
+    should_send: bool,
+    connector: Connector = cs.inject("_internal_connector"),
+) -> None:
+    """A task to publish a message to the shared bus."""
+    # DEBUG PRINT
+    # print(f"[Agent] send_signal called. should_send={should_send}")
+    if should_send and connector:
+        # DEBUG PRINT
+        print(f"[Agent] ⚡ FLASHING! Payload: {payload}")
+        await connector.publish(topic, payload)
+
+
+@cs.task
+async def safe_recv(
+    topic: str,
+    timeout: float,
+    connector: Connector = cs.inject("_internal_connector"),
+) -> Dict[str, Any]:
+    """
+    A custom receive task that treats timeouts as valid return values.
+    """
+    # DEBUG PRINT
+    print(f"[Agent] safe_recv waiting for {timeout:.4f}s...")
     
-    # 1. Setup Environment
-    LocalBusConnector._reset_broker_state()
-    connector = LocalBusConnector()
-    await connector.connect()
+    if not connector:
+        return {"signal": None, "timeout": True}
 
-    # 2. Setup Monitor (Log flashes)
-    async def on_flash(topic, payload):
-        print(f"   >>> FLASH DETECTED! Payload: {payload}")
-    await connector.subscribe("firefly/flash", on_flash)
+    future = asyncio.Future()
 
-    # 3. Setup Engine (Isolated mode)
-    @resource(name="_internal_connector", scope="run")
-    def shared_connector_provider():
-        yield connector
+    async def callback(topic: str, payload: Any):
+        if not future.done():
+            future.set_result(payload)
 
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus(),
-        connector=None,
-    )
-    engine.register(shared_connector_provider)
-
-    # 4. Create Agent
-    # Very short period (1.0s) so we don't wait long
-    print("   Creating agent with period=1.0s...")
-    agent_wf = firefly_agent(
-        agent_id=99,
-        initial_phase=0.0,
-        period=1.0, 
-        nudge=0.1,
-        flash_topic="firefly/flash",
-        listen_topic="firefly/flash",
-    )
-
-    # 5. Run for 3 seconds
-    print("   Starting Engine run...")
-    task = asyncio.create_task(engine.run(agent_wf))
-    
+    subscription = await connector.subscribe(topic, callback)
     try:
-        start = time.time()
-        # It should flash at least twice in 3 seconds
-        await asyncio.wait_for(task, timeout=3.0) 
+        start_t = time.time()
+        signal = await asyncio.wait_for(future, timeout=timeout)
+        print(f"[Agent] safe_recv RECEIVED signal after {time.time()-start_t:.4f}s")
+        return {"signal": signal, "timeout": False}
     except asyncio.TimeoutError:
-        print("   Runtime finished (Timeout as expected for infinite loop).")
-    except Exception as e:
-        print(f"   ERROR: {e}")
+        print(f"[Agent] safe_recv TIMED OUT as expected after {timeout:.4f}s")
+        return {"signal": None, "timeout": True}
     finally:
-        await connector.disconnect()
-        print(f"   Done. Elapsed: {time.time() - start:.2f}s")
+        if subscription:
+            await subscription.unsubscribe()
 
-if __name__ == "__main__":
-    asyncio.run(main())
+
+# --- Core Agent Logic ---
+
+def firefly_agent(
+    agent_id: int,
+    initial_phase: float,
+    period: float,
+    nudge: float,
+    flash_topic: str,
+    listen_topic: str,
+):
+    """
+    This is the main entry point for a single firefly agent.
+    It kicks off the recursive cycle.
+    """
+
+    def firefly_cycle(
+        agent_id: int,
+        phase: float,
+        period: float,
+        nudge: float,
+        flash_topic: str,
+        listen_topic: str,
+    ):
+        """A single, declarative life cycle of a firefly."""
+        time_to_flash = period - phase
+        wait_timeout = max(0.01, time_to_flash)
+
+        # 1. PERCEIVE
+        perception = safe_recv(listen_topic, timeout=wait_timeout)
+
+        # 2. DECIDE
+        @cs.task
+        def was_timeout(p: Dict[str, Any]) -> bool:
+            return p.get("timeout", False)
+
+        is_timeout = was_timeout(perception)
+
+        # 3. ACT
+        flash_action = send_signal(
+            topic=flash_topic, 
+            payload={"agent_id": agent_id, "phase": phase},
+            should_send=is_timeout
+        )
+
+        # 4. EVOLVE & RECURSE
+        @cs.task
+        def process_and_recurse(
+            p: Dict[str, Any], _flash_dependency=flash_action
+        ) -> cs.LazyResult:
+            jitter = random.uniform(-0.01, 0.01)
+
+            if p["timeout"]:
+                # We flashed, reset phase.
+                next_phase = 0.0 + jitter
+            else:
+                # We saw another flash, nudge phase forward.
+                next_phase = (phase + nudge + jitter) % period
+            
+            # DEBUG PRINT
+            # print(f"[Agent] Recursion. Next phase: {next_phase:.2f}")
+
+            return firefly_cycle(
+                agent_id, next_phase, period, nudge, flash_topic, listen_topic
+            )
+
+        return process_and_recurse(perception)
+
+    return firefly_cycle(
+        agent_id, initial_phase, period, nudge, flash_topic, listen_topic
+    )
 ~~~~~
 
 ### 下一步建议
-请依次运行这两个脚本。
+请再次运行 `python -m observatory.debug.debug_02_single_agent`。
 
-1.  运行 `python observatory/debug/debug_01_bus.py`
-    *   **预期**: 输出 `SUCCESS: Message received.`
-    *   **如果不通过**: 说明 `LocalBusConnector` 的锁机制或队列在 `asyncio` 下有问题。
-
-2.  运行 `python observatory/debug/debug_02_single_agent.py`
-    *   **预期**: 看到至少两三次 `>>> FLASH DETECTED!`，并在 3 秒后退出。
-    *   **如果不通过**:
-        *   如果卡住且无 Flash：说明 `safe_recv` 没有超时，或者 `is_timeout` 逻辑判断错误。
-        *   如果瞬间退出：说明递归逻辑依然有问题。
-
-这两个测试的结果将直接指向问题的核心。
+这次的日志将告诉我们要么：
+1.  `safe_recv waiting for X s...` 然后就卡住了（说明 `wait_for` 没生效）。
+2.  `safe_recv TIMED OUT`，但 `FLASHING` 没出现（说明参数传递有问题）。
+3.  完全没有输出（说明 Engine 根本没跑起来）。

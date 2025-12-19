@@ -1,182 +1,207 @@
-抱歉，这是由于 `pytest` 在不同目录下遇到了相同的测试文件名（`test_redis.py`），导致导入冲突。为了解决这个问题并符合 Python 最佳实践，我将使用更具描述性的唯一文件名，并在相关的测试目录中添加 `__init__.py`。
-
-## [WIP] fix(tests): Resolve filename conflict in Redis tests
+好的，我分析了错误。`TypeError: a bytes-like object is required, not 'MagicMock'` 这个错误非常明确，它发生在 `pickle.loads()` 尝试反序列化一个 `MagicMock` 对象时，而不是预期的 `bytes` 对象。
 
 ### 错误分析
-`pytest` 在收集测试时，如果多个目录下的文件名相同（如 `adapters/cache/test_redis.py` 和 `adapters/state/test_redis.py`），且没有通过 `__init__.py` 明确定义包结构，或者导入路径配置不当，就会发生 `import file mismatch` 错误。
+
+1.  **发生点**: 错误发生在 `RedisStateBackend.get_result()` 内部的 `pickle.loads(data)` 调用。
+2.  **根本原因**: 在我们的集成测试 `test_run_with_redis_backend_uri` 中，我们模拟了 `redis.from_url()`，使其返回一个 `mock_redis_client` (`MagicMock`)。然而，我们没有配置这个 mock 的 `hget` 方法的行为。
+3.  **执行流程**:
+    *   `cs.run(workflow)` 成功执行了 `add(1, 2)` 任务。
+    *   `Engine` 调用 `RedisStateBackend.put_result()`，将 `pickle.dumps(3)`（一个 `bytes` 对象）存入 mock 的 `hset` 中。
+    *   在工作流的最后，`Engine` 需要返回最终结果，因此它调用 `RedisStateBackend.get_result()` 来获取目标任务 (`add` 任务) 的结果。
+    *   `get_result()` 调用 `self._client.hget(...)`。由于 `hget` 没有被配置，它默认返回一个新的 `MagicMock` 对象。
+    *   这个 `MagicMock` 对象被传递给 `pickle.loads()`，导致了 `TypeError`。
+
+### 解决方案
+
+我们需要让我们的 mock Redis 客户端变得更“智能”，让它能够模拟存取行为。我们将创建一个简单的内存字典来充当 Redis 的存储，并配置 mock 的 `hset` 和 `hget` 方法来操作这个字典。
+
+## [WIP] fix(tests): Create stateful mock for Redis client in integration tests
 
 ### 用户需求
-修复测试文件名冲突，采用更规范的命名方式。
+修复集成测试中的 `TypeError`，通过创建一个有状态的 Redis mock 来确保 `hget` 返回 `hset` 存入的字节数据，而不是一个 `MagicMock`。
 
 ### 评论
-使用更具描述性的文件名（如 `test_redis_state.py` 和 `test_redis_cache.py`）不仅能解决冲突，还能提高代码的可读性。
+这是一个经典的 mock 陷阱。无状态的 mock 只能验证“调用”，但无法模拟“交互”。通过添加一个简单的内存存储，我们的 mock 可以正确模拟 `put`/`get` 循环，使测试更真实、更健壮。
 
 ### 目标
-1.  重命名冲突的测试文件。
-2.  为测试子目录添加 `__init__.py` 以确保正确的包结构。
+1.  修改 `tests/cascade-py/integration/test_state_backends.py` 中的 mock 设置。
+2.  为 `mock_redis_client` 和其 pipeline 添加 `side_effect`，使其 `hset`, `hget`, `hexists` 和 `expire` 方法能与一个共享字典交互。
+3.  在测试中增加对 `cs.run` 返回值的断言，以验证整个存取周期。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-structure #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/mocking #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 清理并重新创建测试文件
+#### Acts 1: 修复集成测试
 
-我们将删除冲突的旧文件，并创建带有唯一名称的新文件。
-
-~~~~~act
-delete_file
-tests/cascade-runtime/adapters/state/test_redis.py
-~~~~~
+我们将重写 `test_state_backends.py` 以使用有状态的 mock。
 
 ~~~~~act
-delete_file
-tests/cascade-runtime/adapters/cache/test_redis.py
+patch_file
+tests/cascade-py/integration/test_state_backends.py
 ~~~~~
+~~~~~python
+import pytest
+from unittest.mock import MagicMock, patch
 
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-touch tests/cascade-runtime/adapters/state/__init__.py
-touch tests/cascade-runtime/adapters/cache/__init__.py
-~~~~~
+import cascade as cs
 
-~~~~~act
-write_file
-tests/cascade-runtime/adapters/state/test_redis_state.py
+# A simple task for testing
+@cs.task
+def add(a, b):
+    return a + b
+
+@cs.task
+def identity(x):
+    return x
+
+def test_run_with_redis_backend_uri(monkeypatch):
+    """
+    Tests that cs.run with a redis:// URI correctly uses the RedisStateBackend.
+    """
+    # 1. Mock the redis library at the source where it's imported
+    mock_redis_client = MagicMock()
+    mock_redis_from_url = MagicMock(return_value=mock_redis_client)
+    
+    # We create a mock 'redis' module
+    mock_redis_module = MagicMock()
+    mock_redis_module.from_url = mock_redis_from_url
+    
+    # We patch it inside the cascade.__init__ where `_create_state_backend_factory` is.
+    monkeypatch.setitem(__import__("sys").modules, "redis", mock_redis_module)
+
+    # We also need to patch the import within the redis state adapter itself
+    from cascade.adapters.state import redis as redis_state_module
+    monkeypatch.setattr(redis_state_module, "redis", mock_redis_module)
+    
+    # 2. Define a simple workflow
+    workflow = add(1, 2)
+    
+    # 3. Run the workflow
+    cs.run(workflow, state_backend="redis://localhost:6379/0")
+    
+    # 4. Assertions
+    # Was the redis client created from the URI?
+    mock_redis_from_url.assert_called_once_with("redis://localhost:6379/0")
+    
+    # Did the backend try to save the result of the 'add' task?
+    # We expect hset to be called.
+    assert mock_redis_client.pipeline.return_value.hset.called
+    # Check the call arguments (we can be more specific if needed)
+    args, kwargs = mock_redis_client.pipeline.return_value.hset.call_args
+    assert "results" in args[0]  # Check if it's the results key
+    assert len(args) == 3 # key, field, value
 ~~~~~
 ~~~~~python
 import pickle
 import pytest
 from unittest.mock import MagicMock, patch
 
-# We import the module to patch its members
-from cascade.adapters.state import redis as redis_state_module
+import cascade as cs
 
+# A simple task for testing
+@cs.task
+def add(a, b):
+    return a + b
+
+@cs.task
+def identity(x):
+    return x
 
 @pytest.fixture
-def mock_redis_client():
-    """Provides a MagicMock for the redis.Redis client."""
+def stateful_redis_mock(monkeypatch):
+    """
+    A fixture that provides a stateful mock for the redis client,
+    simulating hset/hget operations with an in-memory dictionary.
+    """
+    mock_store = {}
+
+    def mock_hset(name, key, value):
+        if name not in mock_store:
+            mock_store[name] = {}
+        mock_store[name][key] = value
+        # hset in redis-py returns 1 if new field, 0 if updated. Mocking 1 is fine.
+        return 1
+
+    def mock_hget(name, key):
+        return mock_store.get(name, {}).get(key)
+
+    def mock_hexists(name, key):
+        return key in mock_store.get(name, {})
+
     mock_client = MagicMock()
-    # Mock the pipeline context manager
     mock_pipeline = MagicMock()
+
+    # Configure the pipeline methods
+    mock_pipeline.hset.side_effect = mock_hset
+    mock_pipeline.expire.return_value = None
+    mock_pipeline.execute.return_value = []
+    
+    # Configure the client methods
+    mock_client.hget.side_effect = mock_hget
+    mock_client.hexists.side_effect = mock_hexists
     mock_client.pipeline.return_value = mock_pipeline
-    return mock_client, mock_pipeline
-
-
-def test_redis_state_backend_dependency_check(monkeypatch):
-    """
-    Ensures RedisStateBackend raises ImportError if 'redis' is not installed.
-    """
-    monkeypatch.setattr(redis_state_module, "redis", None)
-    with pytest.raises(ImportError, match="The 'redis' library is required"):
-        from cascade.adapters.state.redis import RedisStateBackend
-        RedisStateBackend(run_id="test", client=MagicMock())
-
-
-def test_put_result(mock_redis_client):
-    """
-    Verifies that put_result serializes data and calls Redis HSET and EXPIRE.
-    """
-    client, pipeline = mock_redis_client
-    backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
     
-    test_result = {"status": "ok", "data": [1, 2]}
-    backend.put_result("node_a", test_result)
-
-    expected_key = "cascade:run:run123:results"
-    expected_data = pickle.dumps(test_result)
-
-    client.pipeline.assert_called_once()
-    pipeline.hset.assert_called_once_with(expected_key, "node_a", expected_data)
-    pipeline.expire.assert_called_once_with(expected_key, 86400)
-    pipeline.execute.assert_called_once()
-
-
-def test_get_result(mock_redis_client):
-    """
-    Verifies that get_result retrieves and deserializes data correctly.
-    """
-    client, _ = mock_redis_client
-    backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
-
-    # Case 1: Result found
-    test_result = {"value": 42}
-    pickled_result = pickle.dumps(test_result)
-    client.hget.return_value = pickled_result
+    mock_redis_from_url = MagicMock(return_value=mock_client)
     
-    result = backend.get_result("node_b")
+    mock_redis_module = MagicMock()
+    mock_redis_module.from_url = mock_redis_from_url
     
-    client.hget.assert_called_once_with("cascade:run:run123:results", "node_b")
-    assert result == test_result
+    # Patch the redis module in all necessary locations
+    monkeypatch.setitem(__import__("sys").modules, "redis", mock_redis_module)
+    from cascade.adapters.state import redis as redis_state_module
+    monkeypatch.setattr(redis_state_module, "redis", mock_redis_module)
+    from cascade.adapters.cache import redis as redis_cache_module
+    monkeypatch.setattr(redis_cache_module, "redis", mock_redis_module)
 
-    # Case 2: Result not found
-    client.hget.return_value = None
-    assert backend.get_result("node_c") is None
-~~~~~
+    # Yield the mocks and the store for assertions
+    return {
+        "from_url": mock_redis_from_url,
+        "client": mock_client,
+        "pipeline": mock_pipeline,
+        "store": mock_store,
+    }
 
-~~~~~act
-write_file
-tests/cascade-runtime/adapters/cache/test_redis_cache.py
-~~~~~
-~~~~~python
-import pickle
-import pytest
-from unittest.mock import MagicMock
 
-from cascade.adapters.cache import redis as redis_cache_module
-
-@pytest.fixture
-def mock_redis_client():
-    """Provides a MagicMock for the redis.Redis client."""
-    return MagicMock()
-
-def test_redis_cache_backend_dependency_check(monkeypatch):
+def test_run_with_redis_backend_uri(stateful_redis_mock):
     """
-    Ensures RedisCacheBackend raises ImportError if 'redis' is not installed.
+    Tests that cs.run with a redis:// URI correctly uses the RedisStateBackend
+    and that the put/get cycle for the final result is successful.
     """
-    monkeypatch.setattr(redis_cache_module, "redis", None)
-    with pytest.raises(ImportError, match="The 'redis' library is required"):
-        from cascade.adapters.cache.redis import RedisCacheBackend
-        RedisCacheBackend(client=MagicMock())
-
-def test_set_cache(mock_redis_client):
-    """
-    Verifies that set() serializes data and calls Redis SET with TTL.
-    """
-    backend = redis_cache_module.RedisCacheBackend(client=mock_redis_client)
+    # 1. Define a simple workflow
+    workflow = add(1, 2)
     
-    value = {"result": "cached"}
-    backend.set("cache_key_1", value, ttl=300)
-
-    expected_key = "cascade:cache:cache_key_1"
-    expected_data = pickle.dumps(value)
-
-    mock_redis_client.set.assert_called_once_with(expected_key, expected_data, ex=300)
-
-def test_get_cache(mock_redis_client):
-    """
-    Verifies that get() retrieves and deserializes data correctly.
-    """
-    backend = redis_cache_module.RedisCacheBackend(client=mock_redis_client)
-
-    # Case 1: Cache hit
-    value = {"result": "cached"}
-    pickled_value = pickle.dumps(value)
-    mock_redis_client.get.return_value = pickled_value
-
-    result = backend.get("cache_key_1")
+    # 2. Run the workflow
+    result = cs.run(workflow, state_backend="redis://localhost:6379/0")
     
-    mock_redis_client.get.assert_called_once_with("cascade:cache:cache_key_1")
-    assert result == value
+    # 3. Assertions
+    # Was the redis client created from the URI?
+    stateful_redis_mock["from_url"].assert_called_once_with("redis://localhost:6379/0")
+    
+    # Was the result correctly calculated and returned?
+    assert result == 3
+    
+    # Did the backend try to save the result of the 'add' task?
+    stateful_redis_mock["pipeline"].hset.assert_called()
 
-    # Case 2: Cache miss
-    mock_redis_client.get.return_value = None
-    assert backend.get("cache_key_2") is None
+    # Verify the content in the mock store
+    store = stateful_redis_mock["store"]
+    # Find the results hash in the store (key contains the run_id, so we search)
+    results_key = next((k for k in store if "results" in k), None)
+    assert results_key is not None
+    
+    # The key of the hash field is the node's UUID
+    node_uuid = workflow._uuid
+    stored_pickled_data = store[results_key][node_uuid]
+    
+    # Verify the stored data is correct
+    assert pickle.loads(stored_pickled_data) == 3
 ~~~~~
 
 ### 下一步建议
-现在测试名称冲突已解决，你可以再次尝试运行测试。如果一切顺利，我们就可以将这些更改作为**里程碑 5.1** 的完成部分进行提交，然后继续进行 **IPFS 数据层** 的工作。
+通过创建这个有状态的 mock，我们不仅修复了 `TypeError`，还极大地增强了集成测试的验证能力。现在我们可以确信 `RedisStateBackend` 的序列化和反序列化逻辑与 `Engine` 的执行周期正确集成。
+
+现在，测试应该可以通过了。我建议我们正式进入**里程碑 5.2: 引入 IPFS 作为原生数据层**。

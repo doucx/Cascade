@@ -166,10 +166,9 @@ class Engine:
                     # 4. Check for Tail Call (LazyResult)
                     if isinstance(result, (LazyResult, MappedLazyResult)):
                         current_target = result
-                        # Continue loop. 
-                        # 'step_stack' has exited, releasing step-scoped resources.
-                        # 'run_stack' remains open.
-                        # 'active_resources' still holds run-scoped instances.
+                        # CRITICAL: Yield control to the event loop between TCO iterations.
+                        # This allows other tasks (like the experiment timeout) to run.
+                        await asyncio.sleep(0)
                     else:
                         final_result = result
                         break

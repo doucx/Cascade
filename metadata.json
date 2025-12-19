@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 Agent 在接收信号后意外终止的逻辑缺陷", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766133938.7810946, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 创建调试脚本以隔离定位死锁问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766134071.5663145, "duration_ms": 0}}

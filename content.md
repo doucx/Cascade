@@ -1,67 +1,148 @@
-这是一个完整的 Git 提交计划，包含了所有对 `LocalBusConnector` 的修复、重构和测试隔离的修改。
+是的，船长，你敏锐地察觉到了。`LocalBusConnector` 的当前实现中确实存在两处违背 **[设计原则：解耦消息总线 (01KCR9TXZ966TQDKWP1W50ENPP)]** 的情况。
 
-## [COMMIT] fix(runtime): Stabilize LocalBusConnector for deterministic E2E testing
+ 违规分析
 
-### 错误分析
-本次提交解决了三个核心问题，这些问题在复杂的异步 E2E 测试环境中尤为明显：
-1.  **锁的跨 Event Loop 绑定**: `LocalBusConnector` 的类级 `asyncio.Lock` 在 `pytest-asyncio` 环境中被绑定到第一个 Event Loop。后续测试尝试访问该锁时，触发了 `RuntimeError: ... is bound to a different event loop`。
-2.  **启动竞态条件**: `LocalBusConnector.subscribe` 异步分发保留消息。Engine 在订阅后立即进入执行循环，导致它在感知到约束（如 `pause` 或 `rate_limit`）之前就开始调度任务，从而导致时序性测试失败（例如 `test_startup_pause_is_respected`）。
-3.  **状态泄漏**: 由于 `LocalBusConnector` 状态是类级别的，测试之间没有清理，导致上一个测试遗留的保留消息或订阅干扰了下一个测试。
+在 `LocalBusConnector` 中，我们使用了硬编码的 `print` 语句来处理错误反馈：
+
+1.  **在 `subscribe` 中**:
+    ```python
+    print(f"[LocalBus] Retained Callback error on {retained_topic}: {e}")
+    ```
+2.  **在 `_listener_loop` 中**:
+    ```python
+    print(f"[LocalBus] Callback error on {topic}: {e}")
+    ```
+
+**这违反了原则，原因如下：**
+*   **硬编码字符串**：它直接向 `stderr/stdout` 输出面向人类的文本，而不是使用语义 ID。
+*   **不可定制性**：如果用户使用了 `log_format="json"`，这两行 `print` 会破坏 JSON 输出流，导致日志解析器失效。
+*   **绕过了渲染器**：它直接绕过了我们在 `cs.run` 中注入的 `Renderer`（如 `RichCliRenderer` 或 `JsonRenderer`），使得这些低层错误无法被统一管理、过滤或着色。
+
+ 修复方案
+
+我们需要按照“解耦消息总线”原则进行重构。
+
+## [WIP] fix(runtime): Decouple LocalBus error messages using semantic IDs
 
 ### 用户需求
-恢复 E2E 测试套件的稳定性，确保内存总线在多进程/多 Loop 自动化测试环境下表现正确，并消除测试脚手架中的重复代码。
-
-### 评论
-这次修复至关重要，它为后续的“萤火计划”提供了可靠的底层通信保证。通过将保留消息同步化处理，我们确保了 **状态先于执行** 的原则在 Engine 启动时得到了强制执行。通过全局清理 fixture，我们彻底解决了测试间的状态隔离问题。
+将 `LocalBusConnector` 中的低层错误输出与 UI 逻辑分离，确保其符合系统的消息总线协议。
 
 ### 目标
-1.  修复 `LocalBusConnector` 中的锁逻辑，使其能够安全地跨 Event Loop 使用。
-2.  确保保留消息在 `subscribe` 调用返回之前被完全同步处理。
-3.  将测试脚手架 `InProcessConnector` 替换为 `LocalBusConnector` 的别名。
-4.  在 `conftest.py` 中引入自动清理机制，确保测试隔离。
-5.  创建一个原子提交来封装所有这些基础设施级别的变更。
-
-### 基本原理
-我们采用了异常驱动的锁重置机制，捕获 `RuntimeError` 来检测 Loop 切换，并创建新的 `asyncio.Lock`。同时，将保留消息的处理从异步后台任务提升为同步 `await callback()`，保证了启动时的确定性。
+1.  在 `cascade-common` 的语言包中增加 `localbus` 相关的语义 ID。
+2.  在 `LocalBusConnector` 中引入全局 `bus` 实例，并使用 `bus.error()` 替代 `print`。
 
 ### 标签
-#intent/fix #flow/ready #priority/high
-#comp/runtime #comp/tests #concept/telemetry #scope/dx
-#task/domain/telemetry #task/object/local-bus #task/action/cleanup
-#task/state/end
+#intent/fix #flow/ready #priority/medium 
+#comp/runtime #comp/common #concept/ui #scope/dx
+#task/domain/telemetry #task/object/local-bus #task/action/refactor
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存所有修改的文件
+#### Acts 1: 定义语义 ID
+
+我们需要在 `cascade-common` 中为本地总线定义错误模板。
 
 ~~~~~act
-git_add
+patch_file
+packages/cascade-common/src/cascade/common/locales/en/runtime_events.json
+~~~~~
+~~~~~json
+    "engine.connector.connected": "📡 Engine connected to external connector.",
+    "engine.connector.disconnected": "🔌 Engine disconnected from external connector."
+}
+~~~~~
+~~~~~json
+    "engine.connector.connected": "📡 Engine connected to external connector.",
+    "engine.connector.disconnected": "🔌 Engine disconnected from external connector.",
+
+    "localbus.callback_error": "[LocalBus] Callback error on topic '{topic}': {error}",
+    "localbus.retained_callback_error": "[LocalBus] Sync/Retained callback error on topic '{topic}': {error}"
+}
+~~~~~
+
+#### Acts 2: 在实现中应用消息总线
+
+修改 `LocalBusConnector` 以使用 `bus` 单例。
+
+~~~~~act
+patch_file
 packages/cascade-runtime/src/cascade/connectors/local.py
-tests/py/connectors/test_local_connector.py
-tests/py/e2e/harness.py
-tests/conftest.py
 ~~~~~
+~~~~~python
+import asyncio
+from collections import defaultdict
+from typing import Dict, List, Any, Callable, Awaitable, Optional
+from cascade.interfaces.protocols import Connector
 
-#### Acts 2: 提交变更
+
+class LocalBusConnector(Connector):
+~~~~~
+~~~~~python
+import asyncio
+from collections import defaultdict
+from typing import Dict, List, Any, Callable, Awaitable, Optional
+from cascade.interfaces.protocols import Connector
+from cascade.common.messaging import bus
+
+
+class LocalBusConnector(Connector):
+~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-runtime/src/cascade/connectors/local.py
 ~~~~~
-~~~~~text
-fix(runtime): Stabilize LocalBusConnector for deterministic E2E testing
+~~~~~python
+            for retained_topic, payload in self._retained_messages.items():
+                if self._topic_matches(topic, retained_topic):
+                    try:
+                        await callback(retained_topic, payload)
+                    except Exception as e:
+                        print(f"[LocalBus] Retained Callback error on {retained_topic}: {e}")
 
-The LocalBusConnector required significant fixes to operate reliably in a multi-loop asynchronous testing environment (like pytest-asyncio).
+        # Start a background listener for NEW incoming messages
+~~~~~
+~~~~~python
+            for retained_topic, payload in self._retained_messages.items():
+                if self._topic_matches(topic, retained_topic):
+                    try:
+                        await callback(retained_topic, payload)
+                    except Exception as e:
+                        bus.error("localbus.retained_callback_error", topic=retained_topic, error=e)
 
-Key fixes:
-1.  **Synchronous Retain Delivery**: Changed `subscribe` to synchronously `await` the processing of retained messages. This eliminates a critical race condition where the Engine would start scheduling tasks before receiving a pre-existing constraint (e.g., global pause or rate limit). This restores determinism for all startup control plane tests.
-2.  **Cross-Loop Lock Management**: Implemented an exception-driven check within `_get_lock()` to detect if the class-level `asyncio.Lock` is bound to a different Event Loop. It safely re-initializes the lock if a conflict is detected, resolving the persistent `RuntimeError: is bound to a different event loop` failures.
-3.  **Test Isolation**: Introduced an `autouse` fixture in `tests/conftest.py` to ensure `LocalBusConnector`'s shared class state (`_subscriptions`, `_retained_messages`) is cleared before and after every test, preventing state leakage and inter-test interference.
-4.  **Refactor**: Consolidated `tests/py/e2e/harness.py` by replacing its redundant `InProcessConnector` implementation with an alias to the now-stable `LocalBusConnector`.
+        # Start a background listener for NEW incoming messages
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/connectors/local.py
+~~~~~
+~~~~~python
+                topic, payload = await queue.get()
+                try:
+                    await callback(topic, payload)
+                except Exception as e:
+                    # Fail-silent: don't crash the bus because a callback failed
+                    print(f"[LocalBus] Callback error on {topic}: {e}")
+                finally:
+                    queue.task_done()
+~~~~~
+~~~~~python
+                topic, payload = await queue.get()
+                try:
+                    await callback(topic, payload)
+                except Exception as e:
+                    # Fail-silent: don't crash the bus because a callback failed
+                    bus.error("localbus.callback_error", topic=topic, error=e)
+                finally:
+                    queue.task_done()
 ~~~~~
 
 ### 下一步建议
-我们已经完成了对通信基础设施的改造和加固（里程碑 1.1）。现在，我们可以正式开始 **里程碑 1.2：实现“尾递归优化” (引擎连续性重构)**。
+通过这次修复，我们不仅消除了技术债务，还使得 `LocalBusConnector` 的错误在 JSON 日志模式下也是结构化的、可被监测的。
 
-这一阶段需要重点修改 `packages/cascade-runtime/src/cascade/runtime/engine.py` 中的 `Engine.run` 和 `_execute_graph` 方法，以实现当任务返回 `LazyResult` 时，Engine 能够优雅地进入下一个循环，而不是直接返回结果或引发异常。
+接下来，我们将进入核心挑战：**里程碑 1.2 —— 实现尾递归优化 (TCO) 改造引擎。** 
+
+这涉及到对 `Engine.run` 的重大修改，我们需要在不改变现有 DAG 模型的前提下，让它能处理任务返回的“动态子流”。准备好开始了吗？

@@ -1,54 +1,3 @@
-**注意**:
-用户提到的里程碑 1.2 要求“解决嵌套递归导致的堆栈溢出”。
-如果目前的引擎压根不执行返回的 LazyResult，那么“堆栈溢出”可能还谈不上，因为第一层就结束了。
-但是，如果我们实现了“自动执行返回的 LazyResult”，最直观的实现方式是在 `_execute_graph` 里递归调用 `await _execute_graph(result)`。这种实现会导致堆栈溢出。
-我们需要验证的是：
-1.  引擎能处理返回的 `LazyResult` (Tail Call)。
-2.  引擎处理它是通过迭代（TCO）而不是递归，从而避免栈溢出。
-
-所以测试应该设定期望：
-`engine.run(recursive_task(N))` 最终返回 base case 的结果。
-且 N 很大时（大于 recursion limit），依然能成功。
-
-让我们开始。简要回答：
-好的，我们将进入 **萤火计划 Milestone 1.2** 的 **Red** 阶段。我将创建一个新的测试文件 `tests/py/runtime/test_engine_recursion.py`，其中包含两个核心测试用例：一个用于验证引擎是否支持深度递归（TCO）且不发生栈溢出，另一个用于验证在递归过程中资源是否能被及时释放（避免资源泄漏）。
-
-由于当前引擎尚未实现对任务返回 `LazyResult` 的自动展开和循环执行（Tail Call Optimization），这些测试预期将失败（或行为不符合预期）。
-
-## [WIP] test(runtime): 添加深度递归与资源释放的 TDD 测试用例
-
-### 用户需求
-实现“萤火计划” Milestone 1.2 的 TDD 测试套件。
-具体要求包括：
-1.  **深度递归测试**: 验证 Cascade 能够处理深度超过 Python 默认递归限制（如 2000+ 层）的任务链，证明引擎实现了迭代式的尾调用优化 (TCO)，而非递归调用。
-2.  **资源回收测试**: 验证在递归链的每一步，任务所持有的资源（Scope 为 `run` 或默认）都能在进入下一步前被正确释放，防止长运行 Agent 耗尽内存或句柄。
-
-### 评论
-当前的 `Engine` 实现将任务返回的 `LazyResult` 视为普通数据对象，直接作为结果返回，而不会继续执行它。即使我们稍后修改引擎来支持执行返回的 `LazyResult`，如果采用简单的递归 `await execute(new_target)` 方式，也会在大规模循环时导致 `RecursionError`。
-这两个测试用例精确地定义了“自发智能 Agent”所需的运行时特性：**永生（不爆栈）** 和 **新陈代谢（资源及时回收）**。
-
-### 目标
-创建 `tests/py/runtime/test_engine_recursion.py` 并包含 `test_deep_recursion_tco` 和 `test_resource_release_in_recursion` 两个测试。
-
-### 基本原理
-我们遵循 TDD 原则，先编写断言未来行为的测试。
-*   `test_deep_recursion_tco`: 定义一个递减计数任务，当计数 > 0 时返回自身的下一个调用（LazyResult）。断言最终结果为 0，且在深度为 2000 时不抛出异常。
-*   `test_resource_release_in_recursion`: 定义一个依赖 Mock 资源的任务。该资源在 setup/teardown 时记录日志。任务执行时返回下一个任务。断言在第 N+1 个任务开始前，第 N 个任务的资源已被释放。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/recursion-tco #task/action/test #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建递归测试套件
-
-~~~~~act
-write_file
-tests/py/runtime/test_engine_recursion.py
-~~~~~
-~~~~~python
 import sys
 import asyncio
 import pytest
@@ -188,8 +137,3 @@ async def test_resource_release_in_recursion(engine):
             "Resource leak detected: step_one's resource was not released before step_two started. "
             "The engine is likely holding the previous frame open."
         )
-
-~~~~~
-
-### 下一步建议
-运行测试。由于 `Engine` 目前不具备“自动执行返回的 `LazyResult`”的能力，`test_deep_recursion_tco` 预期会失败（返回 `LazyResult` 对象而不是 `"Done"`）。我们将基于此失败开始实现 Milestone 1.2 的内核重构。

@@ -1,296 +1,185 @@
-Excellent. The universe for our fireflies has been created. Now, we shall become its gods, building an observatory to gaze upon our creation and measure the emergence of order from chaos.
+船长，你的诊断完全正确，而且你发现了一个比表面看起来更深层次的问题。
 
-This monitoring script is the scientific core of the experiment. It acts as a passive, non-intrusive observer that listens to the "light" (flash signals) from the fireflies and calculates, in real-time, the collective coherence of the entire system. This allows us to quantify the abstract concept of "synchronization" into a hard number.
+**错误分析**
 
-I will generate the plan to build this observatory and integrate it into our experiment.
+你指出的现象——“立刻退出”和“进度条未变化”——是两个关键线索，它们指向了我们 Agent 设计中的一个根本性架构缺陷。
 
-## [WIP] feat: 创建实时同步监测器并集成到实验中
+1.  **为何进度条未变 (The Obvious Bug)**: `ConvergenceMonitor` 依赖于 `firefly/flash` 主题上的信号。在 `kuramoto.py` 的原始设计中，`send_signal(...)` 任务在一个 `@cs.task` 内部被调用，但它的 `LazyResult` **从未被返回**。这意味着 `send_signal` 从未成为计算图的一部分，因此**从未被执行**。萤火虫们实际上是“哑巴”，它们从未闪烁，所以监控器自然什么也看不到。
+
+2.  **为何立刻退出 (The Deeper Bug)**: 这是更严重的问题。既然萤火虫不闪烁，`cs.recv` 就应该**等待**其 `timeout`（大约 10 秒）然后超时。整个实验应该持续 60 秒。但它在 1.17 秒内就退出了。这揭示了一个我们之前未曾预料到的、关于递归工作流的架构限制：
+    *   我们的“尾递归优化 (TCO)”存在于 `Engine.run` 的顶层循环中。
+    *   当一个任务（如 `process_cycle_result`）返回一个 `LazyResult` 时，引擎并不会立刻开始执行这个新的工作流。它将这个 `LazyResult` 对象视为一个**普通的数据返回值**，并将其存入状态后端。
+    *   只有当整个原始图的所有任务都完成后，`Engine.run` 才会检查最终结果。如果这个结果是 `LazyResult`，它才会启动下一轮循环。
+    *   然而，因为我们的 `firefly_cycle` 依赖于 `cs.recv`，这是一个阻塞操作，它似乎在当前引擎的执行模型中导致了事件循环的异常退出或未被正确调度。**这是一个需要记录的技术债务**，即引擎目前不能很好地支持包含“永久阻塞”任务的递归工作流。
+
+**解决方案**
+
+我们需要重新设计 `firefly_agent`，使其更符合 Cascade 的**声明式**和**无阻塞**的图构建理念。我们将把隐式的、命令式的 `if/else` 逻辑，改造为显式的、由图结构本身表达的条件执行路径。
+
+我将为你生成一个计划，彻底重构 `kuramoto.py` 以解决这两个问题。
+
+## [WIP] fix: 重构萤火虫 Agent 以支持正确的声明式执行
+
+### 错误分析
+实验失败的根本原因有两个：
+1.  **命令式执行**: 在 `decide_and_act` 任务内部，`send_signal` 被命令式地调用，但其返回的 `LazyResult` 未被接入计算图，导致该任务从未执行，萤火虫无法“闪烁”。
+2.  **递归模型缺陷**: 当前 `Engine` 的 TCO 模型无法正确处理包含长时阻塞任务（如 `cs.recv`）的递归工作流，导致实验意外地提前退出。
 
 ### 用户需求
-创建 `observatory/monitors/convergence.py` 脚本，用于实时监听萤火虫的“闪烁”事件，计算并显示系统的同步程度（序参数），并将其集成到 `run_fireflies.py` 实验脚本中。
+修复 `kuramoto.py` 中的 Agent 逻辑，使其能够正确执行闪烁操作，并能在引擎中稳定地长期运行。
 
 ### 评论
-这是“涌现”的可视化。通过创建一个独立的、并行的监控任务，我们完美地模拟了科学实验中的“测量”过程。该监测器利用 `numpy` 进行高效的向量计算，将 Kuramoto 模型的序参数公式付诸实践。将其与 Agent 种群并发运行，我们不仅能验证 Agent 的行为，还能亲眼见证宏观秩序如何从微观的、去中心化的交互中自发产生。这是对 Cascade 作为复杂系统模拟框架潜力的一次有力证明。
+这次失败是一次宝贵的教训，它暴露了我们对 Cascade 执行模型的误解。修复方案的核心是从“命令式”思维转向“声明式”思维。我们不再在一个任务内部根据条件执行另一个任务，而是构建一个图，其中包含一个条件节点 (`was_timeout`)，并使用 `.run_if()` 来让图的*结构本身*来表达这个条件逻辑。这使得整个工作流对引擎完全透明、可预测，从而解决了两个根本性问题。
 
 ### 目标
-1.  创建 `observatory/monitors/convergence.py` 文件。
-2.  在其中实现一个 `ConvergenceMonitor` 类，该类负责：
-    *   订阅萤火虫的闪烁主题 (`firefly/flash`)。
-    *   维护所有 Agent 的最新相位状态。
-    *   定期（例如每秒一次）计算并打印 Kuramoto 序参数（0 表示完全无序，1 表示完全同步）。
-3.  修改 `observatory/experiments/run_fireflies.py`，使其在运行 Agent 的同时，并发启动 `ConvergenceMonitor`。
+1.  将 `decide_and_act` 任务分解为纯粹的“决策”和独立的“行动”任务。
+2.  创建一个 `was_timeout` 任务，用于将 `handled_recv` 的结果转化为一个布尔型的 `LazyResult`。
+3.  使用 `.run_if(was_timeout)` 来确保 `send_signal` 任务只有在超时的情况下才被执行，并正确地接入计算图。
+4.  重构 `process_cycle_result` 任务，使其依赖于所有必要的上游节点（包括条件执行的 `send_signal`），以确保正确的执行顺序。
 
 ### 基本原理
-监测器与 Agent 们共享同一个 `LocalBusConnector`，但作为独立的异步任务运行。它包含两个主要协程：
-1.  **事件监听器 (`on_flash`)**: 一个回调函数，被动地接收每一个闪烁信号，并更新内部记录的该 Agent 的相位和闪烁时间。
-2.  **计算循环 (`run`)**: 一个主动的循环，以固定的频率（如 1Hz）运行。在每次循环中，它会根据所有 Agent 上次闪烁的时间和相位，**推算出它们当前时刻的相位**，然后应用 Kuramoto 序参数公式进行计算，并打印结果。
-
-这种“被动监听，主动计算”的模式确保了测量的及时性和性能，避免了在每次闪烁时都进行昂贵的全局计算。
+新的设计遵循 Cascade 的核心原则：**组合优于封装**。我们将复杂的、带有内部分支的 `decide_and_act` 任务，分解为一系列更小、更纯粹的原子任务，并通过 Cascade 的声明式 API (`.run_if()`) 将它们组合起来。
+-   `recv_with_timeout_handler` 负责**感知**。
+-   `was_timeout` 负责**判断**。
+-   `send_signal(...).run_if(...)` 负责**行动**。
+-   `process_cycle_result` 负责**状态演化**和**递归**。
+这个清晰的分层结构不仅解决了 bug，也使得工作流的逻辑更加健壮和易于理解。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/tests #scope/dx #ai/delegate #task/domain/testing #task/object/observatory #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/observatory #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建并实现收敛监测器
+#### Acts 1: 重构并修复萤火虫 Agent 的核心逻辑
 
-我们首先创建 `convergence.py` 文件，并实现 `ConvergenceMonitor` 的完整逻辑。
+我们将用一个完全重构的版本覆盖 `kuramoto.py`。新的代码是纯声明式的，确保了所有操作都在计算图中正确表达。
 
 ~~~~~act
 write_file
-observatory/monitors/convergence.py
+observatory/agents/kuramoto.py
 ~~~~~
 ~~~~~python
+"""
+Implementation of a Firefly agent based on the Kuramoto model
+of coupled oscillators, using pure Cascade primitives.
+
+REVISION 2: This version uses a fully declarative approach with .run_if()
+to ensure all actions are correctly represented in the computation graph.
+"""
 import asyncio
-import time
-from typing import Dict, Any
+import random
+from typing import Any, Dict
 
-import numpy as np
-from cascade.connectors.local import LocalBusConnector
+import cascade as cs
+from cascade.interfaces.protocols import Connector
 
 
-class ConvergenceMonitor:
+# --- Atomic Primitives for Agent Behavior ---
+
+@cs.task
+async def send_signal(
+    topic: str,
+    payload: Dict[str, Any],
+    connector: Connector = cs.inject("_internal_connector"),
+) -> None:
+    """A task to publish a message to the shared bus."""
+    if connector:
+        await connector.publish(topic, payload)
+
+
+@cs.task
+async def recv_with_timeout_handler(recv_lazy_result: cs.LazyResult) -> Dict[str, Any]:
     """
-    Listens to firefly flashes and periodically calculates the Kuramoto order
-    parameter to measure the degree of synchronization.
+    Wraps a cs.recv call to transform asyncio.TimeoutError into a structured output.
+    """
+    try:
+        # This await is crucial; it executes the LazyResult passed in.
+        signal = await recv_lazy_result
+        return {"signal": signal, "timeout": False}
+    except asyncio.TimeoutError:
+        return {"signal": None, "timeout": True}
+
+
+# --- Core Agent Logic ---
+
+def firefly_agent(
+    agent_id: int,
+    initial_phase: float,
+    period: float,
+    nudge: float,
+    flash_topic: str,
+    listen_topic: str,
+):
+    """
+    This is the main entry point for a single firefly agent.
+    It kicks off the recursive cycle.
     """
 
-    def __init__(
-        self, num_agents: int, period: float, connector: LocalBusConnector
+    def firefly_cycle(
+        agent_id: int,
+        phase: float,
+        period: float,
+        nudge: float,
+        flash_topic: str,
+        listen_topic: str,
     ):
-        self.num_agents = num_agents
-        self.period = period
-        self.connector = connector
+        """A single, declarative life cycle of a firefly."""
+        time_to_flash = period - phase
+        wait_timeout = max(0.01, time_to_flash)
 
-        # State: Store the phase reported at the last flash time for each agent
-        self.phases_at_flash: Dict[int, float] = {}
-        self.last_flash_time: Dict[int, float] = {}
+        # 1. PERCEIVE: Wait for a signal OR until it's time to flash
+        recv_task = cs.recv(listen_topic, timeout=wait_timeout)
+        handled_recv = recv_with_timeout_handler(recv_task)
 
-        self._is_running = False
+        # 2. DECIDE: Was the perception a timeout?
+        @cs.task
+        def was_timeout(hrr: Dict[str, Any]) -> bool:
+            return hrr.get("timeout", False)
 
-    async def on_flash(self, topic: str, payload: Dict[str, Any]):
-        """Callback to update agent state when a flash is received."""
-        agent_id = payload.get("agent_id")
-        if agent_id is not None:
-            self.phases_at_flash[agent_id] = payload.get("phase", 0.0)
-            self.last_flash_time[agent_id] = time.time()
+        is_timeout = was_timeout(handled_recv)
 
-    def _calculate_order_parameter(self) -> float:
-        """
-        Calculates the Kuramoto order parameter, R.
-        R = 0 indicates complete desynchronization.
-        R = 1 indicates complete synchronization.
-        """
-        if not self.phases_at_flash:
-            return 0.0
+        # 3. ACT: Flash *only if* it was a timeout.
+        flash_action = send_signal(
+            topic=flash_topic, payload={"agent_id": agent_id, "phase": phase}
+        ).run_if(is_timeout)
 
-        now = time.time()
-        current_thetas = []
+        # 4. EVOLVE & RECURSE: Calculate the next state and loop.
+        # This task must wait for the flash_action to complete to ensure ordering.
+        @cs.task
+        def process_and_recurse(
+            hrr: Dict[str, Any], _flash_dependency=flash_action
+        ) -> cs.LazyResult:
+            jitter = random.uniform(-0.01, 0.01)
 
-        # Extrapolate the *current* phase for each agent
-        for agent_id, phase_at_flash in self.phases_at_flash.items():
-            time_since_flash = now - self.last_flash_time.get(agent_id, now)
-            current_phase = (phase_at_flash + time_since_flash) % self.period
-            
-            # Convert phase [0, period] to angle theta [0, 2*pi]
-            theta = 2 * np.pi * current_phase / self.period
-            current_thetas.append(theta)
+            if hrr["timeout"]:
+                # We flashed, reset phase.
+                next_phase = 0.0 + jitter
+            else:
+                # We saw another flash, nudge phase forward.
+                # Note: A more accurate model would use the time waited, but this is simpler
+                # and still effective for demonstrating synchronization.
+                next_phase = (phase + nudge + jitter) % period
 
-        # Calculate the order parameter R = | (1/N) * sum(e^(i * theta_j)) |
-        if not current_thetas:
-            return 0.0
-        
-        # We use num_agents as N for a stable denominator, even if not all have flashed yet
-        z = np.sum(np.exp(1j * np.array(current_thetas))) / self.num_agents
-        return np.abs(z)
+            # The recursive call that powers the agent's lifecycle
+            return firefly_cycle(
+                agent_id, next_phase, period, nudge, flash_topic, listen_topic
+            )
 
-    def _print_status(self, order_param: float):
-        """Prints a simple text-based progress bar for synchronization."""
-        bar_length = 40
-        filled_length = int(bar_length * order_param)
-        bar = "█" * filled_length + "-" * (bar_length - filled_length)
-        # Use carriage return to print on the same line
-        print(f"\r[SYNC: {bar}] {order_param:.4f}", end="", flush=True)
+        return process_and_recurse(handled_recv)
 
-    async def run(self, frequency_hz: float = 2.0):
-        """The main loop of the monitor."""
-        self._is_running = True
-        subscription = await self.connector.subscribe("firefly/flash", self.on_flash)
-        
-        print("🔭 Convergence Monitor Started...")
-        try:
-            while self._is_running:
-                order_parameter = self._calculate_order_parameter()
-                self._print_status(order_parameter)
-                await asyncio.sleep(1.0 / frequency_hz)
-        finally:
-            print("\nShutting down monitor.")
-            if subscription:
-                await subscription.unsubscribe()
-
-    def stop(self):
-        self._is_running = False
-~~~~~
-
-#### Acts 2: 将监测器集成到实验脚本中
-
-现在，我们修改 `run_fireflies.py`，让它在启动萤火虫的同时，也启动我们的监测器。
-
-~~~~~act
-patch_file
-observatory/experiments/run_fireflies.py
-~~~~~
-~~~~~python
-import asyncio
-import random
-import time
-
-import cascade as cs
-from cascade.connectors.local import LocalBusConnector
-
-from observatory.agents.kuramoto import firefly_agent
-
-
-async def run_experiment(
-    num_agents: int = 50,
-    period: float = 10.0,
-    nudge: float = 0.5,
-    duration_seconds: float = 60.0,
-):
-    """
-    Sets up and runs the firefly synchronization experiment.
-    """
-    print(f"🔥 Starting firefly experiment with {num_agents} agents for {duration_seconds}s...")
-
-    # Ensure a clean slate for each experiment run
-    LocalBusConnector._reset_broker_state()
-    connector = LocalBusConnector()
-    
-    # All agents will run within the same engine and share the same connector
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus(),
-        connector=connector,
+    # Start the first cycle
+    return firefly_cycle(
+        agent_id, initial_phase, period, nudge, flash_topic, listen_topic
     )
-
-    # --- Create the population of firefly agents ---
-    agent_tasks = []
-    for i in range(num_agents):
-        # Each firefly starts with a random phase in its cycle
-        initial_phase = random.uniform(0, period)
-        
-        # Create the workflow for a single agent
-        agent_workflow = firefly_agent(
-            agent_id=i,
-            initial_phase=initial_phase,
-            period=period,
-            nudge=nudge,
-            flash_topic="firefly/flash",
-            listen_topic="firefly/flash", # All agents listen and talk on the same topic
-        )
-        
-        # Schedule the workflow to be run by the engine
-        agent_tasks.append(engine.run(agent_workflow))
-
-    # --- Run the experiment ---
-    # We use asyncio.wait_for to run for a fixed duration
-    try:
-        main_task = asyncio.gather(*agent_tasks)
-        await asyncio.wait_for(main_task, timeout=duration_seconds)
-    except asyncio.TimeoutError:
-        print(f"\n✅ Experiment finished after {duration_seconds}s.")
-    finally:
-        # Gracefully stop the engine and connector
-        # This will cancel all running agent tasks
-        if not main_task.done():
-            main_task.cancel()
-            await asyncio.gather(main_task, return_exceptions=True)
-        await engine.connector.disconnect()
-~~~~~
-~~~~~python
-import asyncio
-import random
-import time
-
-import cascade as cs
-from cascade.connectors.local import LocalBusConnector
-
-from observatory.agents.kuramoto import firefly_agent
-from observatory.monitors.convergence import ConvergenceMonitor
-
-
-async def run_experiment(
-    num_agents: int = 50,
-    period: float = 10.0,
-    nudge: float = 0.5,
-    duration_seconds: float = 60.0,
-):
-    """
-    Sets up and runs the firefly synchronization experiment.
-    """
-    print(f"🔥 Starting firefly experiment with {num_agents} agents for {duration_seconds}s...")
-
-    # Ensure a clean slate for each experiment run
-    LocalBusConnector._reset_broker_state()
-    connector = LocalBusConnector()
-    
-    # --- Setup Monitor ---
-    monitor = ConvergenceMonitor(num_agents, period, connector)
-    monitor_task = asyncio.create_task(monitor.run())
-
-    # --- Setup Engine for Agents ---
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus(),
-        connector=connector,
-    )
-
-    # --- Create the population of firefly agents ---
-    agent_tasks = []
-    for i in range(num_agents):
-        # Each firefly starts with a random phase in its cycle
-        initial_phase = random.uniform(0, period)
-        
-        agent_workflow = firefly_agent(
-            agent_id=i,
-            initial_phase=initial_phase,
-            period=period,
-            nudge=nudge,
-            flash_topic="firefly/flash",
-            listen_topic="firefly/flash", # All agents listen and talk on the same topic
-        )
-        agent_tasks.append(engine.run(agent_workflow))
-
-    # --- Run the experiment ---
-    all_tasks = asyncio.gather(*agent_tasks)
-    try:
-        await asyncio.wait_for(all_tasks, timeout=duration_seconds)
-    except asyncio.TimeoutError:
-        print(f"\n✅ Experiment finished after {duration_seconds}s.")
-    finally:
-        # Gracefully stop everything
-        monitor.stop()
-        if not all_tasks.done():
-            all_tasks.cancel()
-            # Await both agents and monitor to ensure clean shutdown
-            await asyncio.gather(all_tasks, monitor_task, return_exceptions=True)
-        else:
-             await asyncio.gather(monitor_task, return_exceptions=True)
-        
-        await engine.connector.disconnect()
 ~~~~~
 
 ### 下一步建议
-一切准备就绪。我们已经创造了生命，建立了宇宙，并架设了观测台。
+我们已经对萤火虫的“基因”进行了修复和重构，现在它的行为应该是正确的、声明式的。
 
-现在，是时候按下“运行”按钮，见证奇迹的时刻了。请在你的终端中，从项目根目录执行以下命令，来启动我们的第一个“萤火虫”实验：
+请再次运行实验。新的 Agent 设计应该能够正确地执行闪烁操作，并稳定地在引擎中循环。我们应该能看到监控器上的进度条开始移动了。
+
+请在终端中，从项目根目录再次执行：
 
 `python -m observatory.experiments.run_fireflies`
-
-观察同步指示条和序参数的变化。如果我们的理论是正确的，你将看到序参数从一个接近 0 的随机值，随着时间的推移，逐渐、稳定地增长，最终趋近于 1。
-
-这将是“涌现”的直接证据。

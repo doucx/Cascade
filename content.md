@@ -1,149 +1,109 @@
-分析正确。当前 `tests` 目录的结构与 `packages` 目录的结构存在明显的不匹配，特别是 `tests/py` 和 `tests/runtime` 目录的存在，破坏了清晰的一一对应关系。这会增加新开发者理解项目的难度，并使查找特定模块的测试变得不直观。
+好的，我收到了测试失败的反馈。这表明在之前的重构计划中，虽然结构上正确，但可能触发了一个潜在的、与测试环境或 `pytest-mock` 行为相关的脆弱性。
 
-为了解决这个问题，我将提出一个重构计划，目标是使 `tests` 目录的顶层结构严格镜像 `packages` 目录的结构。
+### 错误分析
 
-## [WIP] refactor(tests): 重组测试套件以镜像包结构
+所有失败都发生在 `tests/connector-mqtt/test_connector.py` 文件中，并且错误是相同的 `TypeError: object.__new__() takes exactly one argument (the type to instantiate)`。
+
+这个错误通常发生在尝试实例化一个不是类的对象时。在我们的测试场景中，我们正在 Mock `aiomqtt.Client` 这个类。错误表明，在测试执行时，被 Mock 的 `aiomqtt.Client` 对象不再是一个可实例化的类（或返回实例的工厂），而可能是一个普通的 Mock 实例。
+
+虽然之前的重构没有直接修改这个文件，但目录结构的改变可能会影响 `pytest` 的测试发现路径和模块加载顺序，从而暴露了 `mocker.patch(..., return_value=...)` 这种快捷方式在特定上下文中的不稳定行为。
+
+**解决方案**:
+我们将修改 `test_connector.py` 中的 Mocking 策略，采用一种更明确、更健壮的方式：
+1.  创建一个 `MagicMock` 对象，它将作为被 Mock 类的替代品（一个工厂）。
+2.  配置这个 `MagicMock` 工厂，使其在被调用时返回我们预先准备好的 `AsyncMock` 实例。
+3.  使用 `mocker.patch(..., new=...)` 显式地用我们创建的工厂来替换目标类。
+
+这种方法比使用 `return_value` 快捷方式更底层，也更不容易受环境影响，应该可以解决这个问题。
+
+## [WIP] fix(tests): 修复 MQTT 连接器测试中的 Mocking 策略
 
 ### 用户需求
-重构测试套件，使 `tests/` 目录的结构成为 `packages/` 目录结构的直接镜像，以提高可维护性和导航便利性。
+修复在 `tests/connector-mqtt/test_connector.py` 中因 Mocking 策略不稳定而导致的 `TypeError` 测试失败。
 
 ### 评论
-这是一个非常有价值的开发者体验 (DX) 改进。一个与源代码结构同构的测试套件可以大大降低认知负荷，让开发者能够快速定位、阅读和添加测试。当前 `tests/py` 作为一个“大杂烩”目录，是技术债务的体现，本次重构将彻底偿还它。
+测试失败是重构过程中的正常现象，它帮助我们识别并加固系统中脆弱的部分。通过采用更明确的 Mocking 模式，我们可以提高测试套件的健壮性，使其更能抵抗未来因环境变化而引入的不确定性。
 
 ### 目标
-1.  创建新的、与包名对应的测试目录：`tests/cascade-py` 和 `tests/cascade-runtime`。
-2.  将现有 `tests/py`、`tests/cli` 和 `tests/runtime` 目录下的所有测试文件和子目录，迁移到它们在 `packages` 中对应源码的新测试目录中。
-3.  删除旧的、结构不正确的目录 (`tests/py`, `tests/cli`, `tests/runtime`)。
-4.  确保最终的 `tests` 目录结构清晰、直观，且与 `packages` 保持一致。
+1.  修改 `test_connector.py` 中的 `mock_client` Fixture，使用 `mocker.patch(..., new=...)`。
+2.  修改 `test_connector.py` 中的 `test_connect_and_disconnect_lifecycle` 测试，使用相同的 `new=...` 模式进行 Mock。
 
 ### 基本原理
-我们将通过一系列文件移动 (`move_file`) 和目录创建/删除 (`run_command`) 操作来完成重构。核心思想是拆解 `tests/py` 这个混合目录，将其中的内容根据其测试对象的真实位置（`cascade-py` 或 `cascade-runtime`）进行重新分配。对于 `tests/cli` 和 `tests/runtime` 中位置不当的单个文件，也将进行迁移。整个过程是纯粹的结构调整，不涉及任何测试代码的逻辑变更。
+我们将 `mocker.patch` 的 `return_value` 参数替换为更明确的 `new` 参数。`new` 参数接受一个对象，该对象将完全替换被 patch 的目标。我们提供一个配置好的 `MagicMock` 作为这个 `new` 对象，它在被调用时（即代码尝试 `aiomqtt.Client(...)` 时）会返回我们想要的 `AsyncMock` 实例。这消除了 `return_value` 快捷方式可能存在的歧义。
 
 ### 标签
-#intent/refine #intent/tooling #flow/ready #priority/medium #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/directory-structure #task/action/refactor #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/tests #concept/executor #scope/dx #ai/instruct #task/domain/testing #task/object/mocking-strategy #task/action/bug-fix #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 创建新的目录结构
+#### Acts 1: 修复 `mock_client` Fixture
 
-首先，我们创建镜像 `packages` 结构的新测试目录。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p tests/cascade-py/tools
-mkdir -p tests/cascade-py/examples
-mkdir -p tests/cascade-py/providers
-mkdir -p tests/cascade-runtime/adapters/cache
-mkdir -p tests/cascade-runtime/adapters/caching
-mkdir -p tests/cascade-runtime/adapters/executors
-mkdir -p tests/cascade-runtime/adapters/solvers
-mkdir -p tests/cascade-runtime/connectors
-mkdir -p tests/cascade-runtime/graph
-mkdir -p tests/cascade-runtime/runtime
-mkdir -p tests/cascade-runtime/integration
-mkdir -p tests/cascade-runtime/e2e
-~~~~~
-
-#### Acts 2: 迁移 `cascade-runtime` 相关的测试
-
-现在，我们将 `tests/py` 下所有与 `cascade-runtime` 包对应的测试移动到新创建的 `tests/cascade-runtime` 目录中。
+我们将更新 Fixture 以使用更明确的 `new=` 参数进行 patching。
 
 ~~~~~act
-move_file
-tests/py/adapters
-tests/cascade-runtime/adapters
+patch_file
+tests/connector-mqtt/test_connector.py
 ~~~~~
+~~~~~python
+@pytest.fixture
+def mock_client(mocker):
+    """Provides a mocked aiomqtt.Client instance and patches the class."""
+    mock_instance = AsyncMock()
+    # Configure the context manager protocol
+    mock_instance.__aenter__.return_value = mock_instance
+    mock_instance.__aexit__.return_value = None
+
+    mocker.patch(
+        "cascade.connectors.mqtt.connector.aiomqtt.Client", return_value=mock_instance
+    )
+    return mock_instance
+~~~~~
+~~~~~python
+@pytest.fixture
+def mock_client(mocker):
+    """Provides a mocked aiomqtt.Client instance and patches the class."""
+    mock_instance = AsyncMock()
+    # Configure the context manager protocol
+    mock_instance.__aenter__.return_value = mock_instance
+    mock_instance.__aexit__.return_value = None
+
+    mock_class = mocker.MagicMock(return_value=mock_instance)
+    mocker.patch(
+        "cascade.connectors.mqtt.connector.aiomqtt.Client", new=mock_class
+    )
+    return mock_instance
+~~~~~
+
+#### Acts 2: 修复 `test_connect_and_disconnect_lifecycle` 测试
+
+同样，我们将更新此测试用例内部的 patching 逻辑。
 
 ~~~~~act
-move_file
-tests/py/connectors
-tests/cascade-runtime/connectors
+patch_file
+tests/connector-mqtt/test_connector.py
 ~~~~~
+~~~~~python
+    mock_client_instance = AsyncMock()
+    mock_client_instance.__aenter__.return_value = mock_client_instance
 
-~~~~~act
-move_file
-tests/py/graph
-tests/cascade-runtime/graph
+    mock_client_class = mocker.patch(
+        "cascade.connectors.mqtt.connector.aiomqtt.Client",
+        return_value=mock_client_instance,
+    )
+    mock_will_class = mocker.patch("cascade.connectors.mqtt.connector.aiomqtt.Will")
 ~~~~~
+~~~~~python
+    mock_client_instance = AsyncMock()
+    mock_client_instance.__aenter__.return_value = mock_client_instance
 
-~~~~~act
-move_file
-tests/py/runtime
-tests/cascade-runtime/runtime
-~~~~~
-
-~~~~~act
-move_file
-tests/py/integration
-tests/cascade-runtime/integration
-~~~~~
-
-~~~~~act
-move_file
-tests/py/e2e
-tests/cascade-runtime/e2e
-~~~~~
-
-#### Acts 3: 迁移 `cascade-py` 相关的测试
-
-接着，我们将 `tests/py` 下所有与 `cascade-py` 包对应的测试移动到新创建的 `tests/cascade-py` 目录中。
-
-~~~~~act
-move_file
-tests/py/tools
-tests/cascade-py/tools
-~~~~~
-
-~~~~~act
-move_file
-tests/py/examples
-tests/cascade-py/examples
-~~~~~
-
-~~~~~act
-move_file
-tests/py/providers
-tests/cascade-py/providers
-~~~~~
-
-#### Acts 4: 迁移位置不当的测试文件
-
-现在处理那些放在错误顶层目录中的零散文件。
-
-首先，`tests/cli/test_cli.py` 测试的是 `cascade-py` 中的 `cs.create_cli` 工具，应归属 `cascade-py`。
-
-~~~~~act
-move_file
-tests/cli/test_cli.py
-tests/cascade-py/tools/test_cli.py
-~~~~~
-
-其次，`tests/runtime/test_event_bus.py` 应该在 `tests/cascade-runtime/runtime` 中，并重命名以保持一致性。
-
-~~~~~act
-move_file
-tests/runtime/test_event_bus.py
-tests/cascade-runtime/runtime/test_bus.py
-~~~~~
-
-#### Acts 5: 清理旧的目录
-
-所有文件都已移动完毕，现在可以安全地删除旧的、空的目录结构。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-rm -rf tests/py
-rm -rf tests/cli
-rm -rf tests/runtime
-rm -rf tests/connector-local
+    mock_client_class_factory = mocker.MagicMock(return_value=mock_client_instance)
+    mocker.patch(
+        "cascade.connectors.mqtt.connector.aiomqtt.Client",
+        new=mock_client_class_factory,
+    )
+    mock_will_class = mocker.patch("cascade.connectors.mqtt.connector.aiomqtt.Will")
 ~~~~~
 
 ### 下一步建议
-我们已经完成了大规模的目录结构重构。最关键的下一步是**运行完整的测试套件**，以确保在文件移动过程中没有遗漏任何文件，并且所有的测试导入路径和依赖关系依然有效。
-
-你可以执行 `pytest` 来验证重构的正确性。
+我们已经应用了针对性的修复。现在请重新运行测试套件。如果所有测试通过，我们可以将这次重构标记为一个完整的提交 (`[COMMIT]`)。

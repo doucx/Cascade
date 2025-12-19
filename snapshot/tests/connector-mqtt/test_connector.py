@@ -21,8 +21,9 @@ def mock_client(mocker):
     mock_instance.__aenter__.return_value = mock_instance
     mock_instance.__aexit__.return_value = None
 
+    mock_class = mocker.MagicMock(return_value=mock_instance)
     mocker.patch(
-        "cascade.connectors.mqtt.connector.aiomqtt.Client", return_value=mock_instance
+        "cascade.connectors.mqtt.connector.aiomqtt.Client", new=mock_class
     )
     return mock_instance
 
@@ -41,9 +42,10 @@ async def test_connect_and_disconnect_lifecycle(mocker):
     mock_client_instance = AsyncMock()
     mock_client_instance.__aenter__.return_value = mock_client_instance
 
-    mock_client_class = mocker.patch(
+    mock_client_class_factory = mocker.MagicMock(return_value=mock_client_instance)
+    mocker.patch(
         "cascade.connectors.mqtt.connector.aiomqtt.Client",
-        return_value=mock_client_instance,
+        new=mock_client_class_factory,
     )
     mock_will_class = mocker.patch("cascade.connectors.mqtt.connector.aiomqtt.Will")
 

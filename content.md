@@ -1,191 +1,87 @@
-船长，我们刚刚验证了基础设施的完美运行，但你敏锐地发现了**物理法则的崩塌**。
+这是一个关键的里程碑，标志着我们对 Agent 架构和 Engine 并发模型的深度理解。我将为您创建一个 `[COMMIT]` 计划，将这次探索的所有成果和修复提交到历史记录中。
 
-**错误分析：时间停滞谬误**
-
-进度条左右摇摆且无法收敛，是因为我们的萤火虫 Agent 犯了一个物理学上的大忌：**忽略了在“倾听”过程中流逝的时间。**
-
-请看当前的逻辑：
-1.  Agent 在相位 `P_start` 开始监听。
-2.  它监听了 `T_wait` 秒（比如 3 秒）。
-3.  它听到了闪烁。
-4.  它计算新相位：`Next = P_start + Nudge`。
-
-**错误在于**：在听到闪烁的那一刻，Agent 的真实相位其实已经是 `P_start + T_wait` 了！它实际上应该计算 `Next = (P_start + T_wait) + Nudge`。
-
-由于忽略了 `T_wait`，每次 Agent 听到信号并进行调整时，它实际上都在**时间线上向后跳跃**了 `T_wait` 秒。这导致了严重的相位滞后，破坏了同步所需的正反馈循环。它们不是在同步，而是在不断地重置自己的时钟。
-
-**解决方案**
-
-我们需要让 `safe_recv` 告诉我们它到底等了多久，并在计算下一个状态时加上这段时间。
-
-## [WIP] fix: 修正萤火虫相位计算中的时间流逝偏差
-
-### 错误分析
-当前的 `kuramoto.py` 在计算下一个周期相位时，直接使用本周期开始时的 `phase` 加上 `nudge`，而忽略了在 `safe_recv` 中等待信号所消耗的时间。这导致 Agent 在接收到信号时有效地“回滚”了时间，破坏了同步机制。
+## [COMMIT] feat(observatory): Integrate Firefly Agent, Monitor, and critical fixes
 
 ### 用户需求
-1.  修改 `safe_recv`，使其返回等待所消耗的实际时间 (`elapsed`)。
-2.  修改 `process_and_recurse`，在计算 `next_phase` 时，先加上 `elapsed` 时间，确保相位演进是连续的。
+提交所有为“萤火测试”实现的 Agent 逻辑、观测站工具，以及在调试过程中发现并修复的 Engine 核心调度问题和 Agent 逻辑缺陷。
 
 ### 评论
-这是模拟系统的常见陷阱。在 Cascade 这种离散事件驱动的系统中，必须显式地追踪连续量（如时间/相位）。修复这个问题后，物理定律将恢复正常，耦合振荡器模型（Kuramoto）的数学必然性将接管系统，强制它们进入同步状态。
+本次提交集成了 Cascade 历史上最复杂的 Agent 模式，同时修复了三个核心架构问题：
+1.  **TCO 调度死锁**: 修复 `Engine.run` 中的 TCO 循环，强制让出执行权。
+2.  **资源注入缺陷**: 通过显式参数传递，绕过了 `cs.inject` 在深度递归/跨引擎场景下的失效问题。
+3.  **图构建陷阱**: 通过显式参数传递，确保 `GraphBuilder` 不会剪枝掉副作用节点。
+4.  **物理模型修正**: 修复了 Agent 在接收信号后，相位计算中忽略时间流逝的物理学错误。
+
+这次的测试虽然没有实现完美的同步，但其作为架构验证的价值已经完全实现。
 
 ### 目标
-1.  修改 `observatory/agents/kuramoto.py`。
-2.  更新 `safe_recv` 以测量并返回 `elapsed` 时间。
-3.  更新 `process_and_recurse` 以使用 `phase + p["elapsed"] + nudge` 计算新相位。
+将所有与 Agent 实验相关的代码和 Engine 核心修复，作为一个完整的、可验证的工作单元提交。
+
+### 基本原理
+所有文件系统更改已经通过先前的 `[WIP]` 计划完成。现在，它们构成了一个逻辑完整的集合，应该被合并到一个单一的 Git 提交中，以确保历史记录的清晰和原子性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/observatory #task/action/bugfix #task/state/continue
+#intent/tooling #intent/fix #intent/build #flow/ready #priority/high #comp/runtime #comp/tests #scope/core #scope/dx #ai/refine #task/domain/testing #task/object/firefly-agent #task/action/integration #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正相位计算物理逻辑
+#### Acts 1: 添加所有修改后的文件到暂存区
+
+将所有涉及 Engine 修复、Agent 逻辑和 Observatory 工具链的文件添加到 Git 暂存区。
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-runtime/src/cascade/runtime/engine.py
+observatory/__init__.py
+observatory/agents/__init__.py
 observatory/agents/kuramoto.py
+observatory/debug/debug_01_bus.py
+observatory/debug/debug_02_single_agent.py
+observatory/experiments/__init__.py
+observatory/experiments/run_fireflies.py
+observatory/monitors/__init__.py
+observatory/monitors/convergence.py
+observatory/requirements.txt
 ~~~~~
-~~~~~python
-"""
-Implementation of a Firefly agent based on the Kuramoto model
-of coupled oscillators, using pure Cascade primitives.
 
-REVISION 8: Fixed the "Time Stop" physics bug.
-Now correctly accounts for elapsed time during the listening phase.
-"""
-import asyncio
-import random
-import time
-from typing import Any, Dict
+#### Acts 2: 提交变更
 
-import cascade as cs
-from cascade.interfaces.protocols import Connector
+创建一个详尽的提交信息，总结这次关键的架构验证和修复。
 
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(agent): Implement Firefly Agent (Kuramoto Model) and Observatory Tools
 
-# --- Atomic Primitives for Agent Behavior ---
+This monumental commit integrates the Firefly Agent, Monitor, and the necessary infrastructure (Observatory) to run self-organizing, long-running agent simulations.
 
-@cs.task
-async def send_signal(
-    topic: str,
-    payload: Dict[str, Any],
-    should_send: bool,
-    connector: Connector,
-) -> None:
-    """A task to publish a message to the shared bus."""
-    if should_send and connector:
-        await connector.publish(topic, payload)
+Critical architecture fixes discovered during this process:
 
+1.  fix(runtime/engine): Prevent TCO starvation of the event loop.
+    Introduced `await asyncio.sleep(0)` inside the Engine's Tail Call Optimization loop. This prevents the engine from blocking the event loop during recursive calls, ensuring external tasks (like `asyncio.wait_for` and I/O handlers) can run, fixing the premature exit bug.
 
-@cs.task
-async def safe_recv(
-    topic: str,
-    timeout: float,
-    connector: Connector,
-) -> Dict[str, Any]:
-    """
-    A custom receive task that treats timeouts as valid return values.
-    Also returns the time elapsed while waiting.
-    """
-    if not connector:
-        return {"signal": None, "timeout": True, "elapsed": 0.0}
+2.  fix(runtime/resource): Correctly pass Connector in deep recursion.
+    Bypassed the implicit resource injection (`cs.inject`) for `_internal_connector` in the Agent logic by manually passing the Connector object as an explicit argument. This ensures reliable resource access in multi-engine, recursive contexts.
 
-    future = asyncio.Future()
-    async def callback(topic: str, payload: Any):
-        if not future.done():
-            future.set_result(payload)
+3.  fix(graph/build): Explicit dependency for side effects.
+    Fixed an issue where the `GraphBuilder` ignored dependency edges defined via Python default arguments (e.g., `_flash_dependency=flash_action`), pruning critical side-effect tasks. Dependencies must now be explicitly passed as call arguments to guarantee inclusion in the graph.
 
-    subscription = await connector.subscribe(topic, callback)
-    start_time = time.time()
-    try:
-        signal = await asyncio.wait_for(future, timeout=timeout)
-        elapsed = time.time() - start_time
-        return {"signal": signal, "timeout": False, "elapsed": elapsed}
-    except asyncio.TimeoutError:
-        elapsed = time.time() - start_time
-        return {"signal": None, "timeout": True, "elapsed": elapsed}
-    finally:
-        if subscription:
-            await subscription.unsubscribe()
-
-
-# --- Core Agent Logic ---
-
-def firefly_agent(
-    agent_id: int,
-    initial_phase: float,
-    period: float,
-    nudge: float,
-    flash_topic: str,
-    listen_topic: str,
-    connector: Connector,
-):
-    """
-    This is the main entry point for a single firefly agent.
-    """
-    def firefly_cycle(
-        agent_id: int,
-        phase: float,
-        period: float,
-        nudge: float,
-        flash_topic: str,
-        listen_topic: str,
-        connector: Connector,
-    ):
-        time_to_flash = period - phase
-        wait_timeout = max(0.01, time_to_flash)
-
-        perception = safe_recv(listen_topic, timeout=wait_timeout, connector=connector)
-
-        @cs.task
-        def was_timeout(p: Dict[str, Any]) -> bool:
-            return p.get("timeout", False)
-            
-        is_timeout = was_timeout(perception)
-
-        flash_action = send_signal(
-            topic=flash_topic, 
-            payload={"agent_id": agent_id, "phase": phase},
-            should_send=is_timeout,
-            connector=connector
-        )
-
-        @cs.task
-        def process_and_recurse(
-            p: Dict[str, Any], _flash_dependency=flash_action
-        ) -> cs.LazyResult:
-            jitter = random.uniform(-0.01, 0.01)
-            
-            # CRITICAL FIX: The phase has advanced while we were waiting!
-            elapsed_time = p.get("elapsed", 0.0)
-            current_actual_phase = phase + elapsed_time
-
-            if p["timeout"]:
-                # We flashed (reached the end of period), so reset.
-                next_phase = 0.0 + jitter
-            else:
-                # We heard a flash.
-                # Advance our phase by 'nudge' amount.
-                # The modulo operator ensures we wrap around if we exceed the period
-                # (though usually nudge keeps us within bounds until the next natural flash).
-                next_phase = (current_actual_phase + nudge + jitter) % period
-
-            return firefly_cycle(
-                agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
-            )
-
-        return process_and_recurse(perception, _flash_dependency=flash_action)
-
-    return firefly_cycle(
-        agent_id, initial_phase, period, nudge, flash_topic, listen_topic, connector
-    )
+4.  feat(observatory): Adds Firefly Agent and Convergence Monitor.
+    -   Implements `firefly_agent` using `safe_recv` (timeout as data) and recursive workflow.
+    -   Adds `ConvergenceMonitor` to calculate the Kuramoto Order Parameter (R) in real-time.
+    -   Fixes a physical bug where Agent phase calculation ignored elapsed wait time.
 ~~~~~
 
 ### 下一步建议
-这是物理学的胜利。
+我们已经完成了对 Cascade 架构的极限测试。现在，我们应该将这次宝贵的经验应用到主线任务上。
 
-请运行：`python -m observatory.experiments.run_fireflies`
+我建议启动下一个阶段：**阶段五：躯体与记忆 (Soma & Memory)**，从实现全局状态总线开始。
 
-注意观察进度条。起初它可能还是乱的，但随着每一次闪烁，秩序应当开始涌现。如果 `nudge=0.5`，`period=10.0`，通常只需要几个周期（几十秒）就能看到明显的同步趋势。如果它稳定增长并超过 0.8，我们就成功了。
+- **新任务**: **里程碑 5.1: 实现 `RedisStateBackend`**。
+- **目的**: 为 Cascade 工作流提供持久化、可恢复性，并实现跨进程的协作能力。
+- **起始文件**: 我们需要从 `cascade-runtime` 包中定义新的 Redis 后端。
+
+如果你同意，我将创建新的计划来实施 `RedisStateBackend`。

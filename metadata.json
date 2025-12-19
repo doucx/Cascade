@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(observatory): Integrate Firefly Agent, Monitor, and critical fixes", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766135345.3997052, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 引入不应期机制并优化萤火虫实验参数", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766136503.6606004, "duration_ms": 0}}

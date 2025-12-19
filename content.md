@@ -1,195 +1,339 @@
-**注意**:
-用户提到的里程碑 1.2 要求“解决嵌套递归导致的堆栈溢出”。
-如果目前的引擎压根不执行返回的 LazyResult，那么“堆栈溢出”可能还谈不上，因为第一层就结束了。
-但是，如果我们实现了“自动执行返回的 LazyResult”，最直观的实现方式是在 `_execute_graph` 里递归调用 `await _execute_graph(result)`。这种实现会导致堆栈溢出。
-我们需要验证的是：
-1.  引擎能处理返回的 `LazyResult` (Tail Call)。
-2.  引擎处理它是通过迭代（TCO）而不是递归，从而避免栈溢出。
+## [WIP] refactor(runtime): 在 Engine 中实现尾调用优化 (TCO) 与分级资源管理
 
-所以测试应该设定期望：
-`engine.run(recursive_task(N))` 最终返回 base case 的结果。
-且 N 很大时（大于 recursion limit），依然能成功。
-
-让我们开始。简要回答：
-好的，我们将进入 **萤火计划 Milestone 1.2** 的 **Red** 阶段。我将创建一个新的测试文件 `tests/py/runtime/test_engine_recursion.py`，其中包含两个核心测试用例：一个用于验证引擎是否支持深度递归（TCO）且不发生栈溢出，另一个用于验证在递归过程中资源是否能被及时释放（避免资源泄漏）。
-
-由于当前引擎尚未实现对任务返回 `LazyResult` 的自动展开和循环执行（Tail Call Optimization），这些测试预期将失败（或行为不符合预期）。
-
-## [WIP] test(runtime): 添加深度递归与资源释放的 TDD 测试用例
+### 错误分析
+无（这是基于 TDD 的实现，针对已知的失败测试）。
 
 ### 用户需求
-实现“萤火计划” Milestone 1.2 的 TDD 测试套件。
-具体要求包括：
-1.  **深度递归测试**: 验证 Cascade 能够处理深度超过 Python 默认递归限制（如 2000+ 层）的任务链，证明引擎实现了迭代式的尾调用优化 (TCO)，而非递归调用。
-2.  **资源回收测试**: 验证在递归链的每一步，任务所持有的资源（Scope 为 `run` 或默认）都能在进入下一步前被正确释放，防止长运行 Agent 耗尽内存或句柄。
+1.  让 `Engine` 能够自动展开并执行任务返回的 `LazyResult`，通过循环而非递归实现，以支持无限深度的 Agent 循环。
+2.  实现基于 Scope 的资源管理，确保在 TCO 循环中，`scope="task"` 的资源能被及时回收，防止资源泄漏。
 
 ### 评论
-当前的 `Engine` 实现将任务返回的 `LazyResult` 视为普通数据对象，直接作为结果返回，而不会继续执行它。即使我们稍后修改引擎来支持执行返回的 `LazyResult`，如果采用简单的递归 `await execute(new_target)` 方式，也会在大规模循环时导致 `RecursionError`。
-这两个测试用例精确地定义了“自发智能 Agent”所需的运行时特性：**永生（不爆栈）** 和 **新陈代谢（资源及时回收）**。
+这是一个核心架构变更。它将 `Engine.run` 从单一的“构建-执行”过程转变为一个“持续求值”的循环。这不仅解决了递归深度问题，也为未来的长时间运行 Agent 奠定了基础。
 
 ### 目标
-创建 `tests/py/runtime/test_engine_recursion.py` 并包含 `test_deep_recursion_tco` 和 `test_resource_release_in_recursion` 两个测试。
+1.  修改 `Engine.register` 以保留 `ResourceDefinition` 元数据（scope）。
+2.  重构 `Engine.run`，引入 `while` 循环处理返回的 `LazyResult`。
+3.  重构资源设置逻辑，区分 `run_stack` (全局) 和 `step_stack` (局部)。
 
 ### 基本原理
-我们遵循 TDD 原则，先编写断言未来行为的测试。
-*   `test_deep_recursion_tco`: 定义一个递减计数任务，当计数 > 0 时返回自身的下一个调用（LazyResult）。断言最终结果为 0，且在深度为 2000 时不抛出异常。
-*   `test_resource_release_in_recursion`: 定义一个依赖 Mock 资源的任务。该资源在 setup/teardown 时记录日志。任务执行时返回下一个任务。断言在第 N+1 个任务开始前，第 N 个任务的资源已被释放。
+通过将执行逻辑包裹在 `while True` 循环中，我们能够检测每次执行的结果。如果结果是 `LazyResult`，我们将其作为新的 `target` 进入下一次迭代，而不是直接返回。同时，我们在每次迭代中引入一个独立的 `ExitStack` 来管理局部资源，确保单步资源在迭代结束时释放，而全局资源在整个 `run` 中保持活跃。
 
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/recursion-tco #task/action/test #task/state/begin
+## 标签
+#intent/refine #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/engine-loop #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建递归测试套件
+#### Acts 1: 更新 Engine 实现以支持 TCO 和 Scope 资源
 
 ~~~~~act
-write_file
-tests/py/runtime/test_engine_recursion.py
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-import sys
-import asyncio
-import pytest
-from typing import Generator
-from unittest.mock import MagicMock, call
+from typing import Any, Dict, Optional, Generator, Callable, List, Type
+from uuid import uuid4
+from contextlib import ExitStack
 
-import cascade as cs
-from cascade.runtime import Engine, MessageBus
-from cascade.runtime.events import TaskExecutionFinished
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.spec.resource import resource, inject
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph
+from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.spec.constraint import GlobalConstraint
+~~~~~
+~~~~~python
+from typing import Any, Dict, Optional, Generator, Callable, List, Type, Union
+from uuid import uuid4
+from contextlib import ExitStack
 
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph
+from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.constraint import GlobalConstraint
+~~~~~
 
-# --- Fixtures ---
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+        self._wakeup_event = asyncio.Event()
+        self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
 
-@pytest.fixture
-def engine():
-    return Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus(),
-    )
+        self._resource_providers: Dict[str, Callable] = {}
 
+        self.arg_resolver = ArgumentResolver()
+        self.constraint_resolver = ConstraintResolver()
+~~~~~
+~~~~~python
+        self._wakeup_event = asyncio.Event()
+        self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
 
-# --- Test Cases ---
+        self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
 
-@pytest.mark.asyncio
-async def test_deep_recursion_tco(engine):
-    """
-    Test Case 4 (From Firefly Plan): Deep Recursion Pressure Test.
-    
-    Verifies that the engine can handle a recursion depth significantly larger 
-    than the Python recursion limit by unrolling the execution loop (TCO).
-    
-    If the engine recursively calls `execute` for the returned LazyResult,
-    this test will fail with RecursionError.
-    If the engine returns the LazyResult without executing it, 
-    this test will fail assertion on the final result.
-    """
-    # Set a recursion depth that is definitely unsafe for standard recursion
-    # Python's default is usually 1000.
-    RECURSION_DEPTH = 1500
-    
-    # Increase system limit slightly just to be sure we are testing logic, 
-    # not hitting a tight default, but 1500 is usually enough to crash naive recursion.
-    sys.setrecursionlimit(2000)
+        self.arg_resolver = ArgumentResolver()
+        self.constraint_resolver = ConstraintResolver()
+~~~~~
 
-    @cs.task
-    def countdown(n: int):
-        if n <= 0:
-            return "Done"
-        return countdown(n - 1)
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    def register(self, resource_def: ResourceDefinition):
+        self._resource_providers[resource_def.name] = resource_def.func
 
-    # Execution
-    # We expect the engine to automatically execute the returned LazyResult
-    # until it hits a non-LazyResult value.
-    try:
-        result = await engine.run(countdown(RECURSION_DEPTH))
-    except RecursionError:
-        pytest.fail("Engine hit RecursionError. It likely does not implement TCO.")
-    
-    # Assertions
-    assert result == "Done", f"Expected 'Done', got {result}. Did the engine stop early?"
+    def get_resource_provider(self, name: str) -> Callable:
+        return self._resource_providers[name]
 
+    def override_resource_provider(self, name: str, new_provider: Any):
+        if isinstance(new_provider, ResourceDefinition):
+            new_provider = new_provider.func
+        self._resource_providers[name] = new_provider
 
-@pytest.mark.asyncio
-async def test_resource_release_in_recursion(engine):
-    """
-    Test Case 5 (From Firefly Plan): Resource Smooth Release.
-    
-    Verifies that resources used in one step of a recursive chain are released 
-    *before* or *as* the next step begins, rather than accumulating until the end.
-    This is critical for long-running agents to avoid resource leaks.
-    """
-    
-    mock_tracker = MagicMock()
+    async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
+        run_id = str(uuid4())
+        start_time = time.time()
 
-    @resource(name="scope_resource", scope="task") # Note: scope='task' implies release after task
-    def tracked_resource() -> Generator[str, None, None]:
-        mock_tracker.setup()
-        yield "active"
-        mock_tracker.teardown()
+        # Robustly determine target name
+        if hasattr(target, "task"):
+            target_name = getattr(target.task, "name", "unknown")
+        elif hasattr(target, "factory"):
+            target_name = f"map({getattr(target.factory, 'name', 'unknown')})"
+        else:
+            target_name = "unknown"
 
-    engine.register(tracked_resource)
-    
-    @cs.task
-    def step_two(res=inject("scope_resource")):
-        mock_tracker.step_two_run()
-        return "Finish"
+        # Initialize State Backend first (no side effects)
+        state_backend = self.state_backend_cls(run_id=run_id)
 
-    @cs.task
-    def step_one(res=inject("scope_resource")):
-        mock_tracker.step_one_run()
-        # Return the next step (LazyResult)
-        return step_two()
+        try:
+            # 1. Establish Infrastructure Connection FIRST
+            # This ensures we are ready to transmit telemetry and receive constraints
+            # BEFORE we announce the run starting or execute any logic.
+            if self.connector:
+                await self.connector.connect()
+                self.bus.publish(ConnectorConnected(run_id=run_id))
+                # Subscribe to constraint updates immediately.
+                # This gives the connector a chance to receive retained messages (like global pause)
+                # before we enter the execution loop.
+                await self.connector.subscribe(
+                    "cascade/constraints/#", self._on_constraint_update
+                )
 
-    # Execution
-    await engine.run(step_one())
+            # 2. Publish Lifecycle Event
+            # Now that the connector is active, this event will be successfully transmitted.
+            self.bus.publish(
+                RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
+            )
 
-    # Analysis of call order
-    # The expected behavior for TCO / Agent loop is:
-    # 1. step_one acquires resource
-    # 2. step_one runs
-    # 3. step_one finishes -> **resource should be released here** (context switch)
-    # 4. step_two acquires resource
-    # 5. step_two runs
-    # 6. step_two finishes -> resource released
-    
-    # If the engine holds the context of step_one open while waiting for the result 
-    # of step_two (recursive behavior), the teardown of step_one won't happen 
-    # until step_two finishes.
-    
-    calls = mock_tracker.mock_calls
-    
-    # Let's look for the sequence
-    # Expected: setup -> run1 -> teardown -> setup -> run2 -> teardown
-    # Or at least: run1 -> teardown -> run2
-    
-    try:
-        idx_run1 = calls.index(call.step_one_run())
-        idx_run2 = calls.index(call.step_two_run())
-    except ValueError:
-        pytest.fail("Tasks did not run as expected.")
+            with ExitStack() as stack:
+                initial_graph = build_graph(target)
+                required_resources = self._scan_for_resources(initial_graph)
+                active_resources = self._setup_resources(
+                    required_resources, stack, run_id
+                )
 
-    # Find teardowns
-    teardown_indices = [i for i, c in enumerate(calls) if c == call.teardown()]
-    
-    assert len(teardown_indices) >= 2, "Resource should be torn down twice (once for each task)."
-    
-    first_teardown = teardown_indices[0]
-    
-    # Critical Assertion: The first teardown must happen BEFORE step_two starts.
-    # This proves that step_one's context was closed before step_two's context was opened.
-    if first_teardown > idx_run2:
-        pytest.fail(
-            "Resource leak detected: step_one's resource was not released before step_two started. "
-            "The engine is likely holding the previous frame open."
-        )
+                final_result = await self._execute_graph(
+                    target, params or {}, active_resources, run_id, state_backend
+                )
 
+            duration = time.time() - start_time
+            self.bus.publish(
+                RunFinished(run_id=run_id, status="Succeeded", duration=duration)
+            )
+            return final_result
+
+        except Exception as e:
+~~~~~
+~~~~~python
+    def register(self, resource_def: ResourceDefinition):
+        # We store the full ResourceDefinition to preserve metadata like scope.
+        self._resource_providers[resource_def.name] = resource_def
+
+    def get_resource_provider(self, name: str) -> Callable:
+        provider = self._resource_providers[name]
+        if isinstance(provider, ResourceDefinition):
+            return provider.func
+        return provider
+
+    def override_resource_provider(self, name: str, new_provider: Any):
+        # When overriding, we might lose metadata if a raw function is passed,
+        # but that's acceptable for testing overrides.
+        self._resource_providers[name] = new_provider
+
+    async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
+        run_id = str(uuid4())
+        start_time = time.time()
+
+        # Robustly determine initial target name for logging
+        if hasattr(target, "task"):
+            target_name = getattr(target.task, "name", "unknown")
+        elif hasattr(target, "factory"):
+            target_name = f"map({getattr(target.factory, 'name', 'unknown')})"
+        else:
+            target_name = "unknown"
+
+        # Initialize State Backend first (no side effects)
+        state_backend = self.state_backend_cls(run_id=run_id)
+
+        try:
+            # 1. Establish Infrastructure Connection FIRST
+            if self.connector:
+                await self.connector.connect()
+                self.bus.publish(ConnectorConnected(run_id=run_id))
+                await self.connector.subscribe(
+                    "cascade/constraints/#", self._on_constraint_update
+                )
+
+            # 2. Publish Lifecycle Event
+            self.bus.publish(
+                RunStarted(
+                    run_id=run_id, target_tasks=[target_name], params=params or {}
+                )
+            )
+
+            # TCO Loop: We keep executing as long as the result is a LazyResult
+            current_target = target
+            
+            # The global stack holds "run" scoped resources
+            with ExitStack() as run_stack:
+                active_resources: Dict[str, Any] = {}
+
+                while True:
+                    # The step stack holds "task" (step) scoped resources
+                    with ExitStack() as step_stack:
+                        # 1. Build graph for current target
+                        graph = build_graph(current_target)
+                        
+                        # 2. Setup Resources (mixed scope)
+                        required_resources = self._scan_for_resources(graph)
+                        self._setup_resources(
+                            required_resources, 
+                            active_resources, 
+                            run_stack, 
+                            step_stack, 
+                            run_id
+                        )
+
+                        # 3. Execute
+                        result = await self._execute_graph(
+                            current_target, params or {}, active_resources, run_id, state_backend
+                        )
+
+                    # 4. Check for Tail Call (LazyResult)
+                    if isinstance(result, (LazyResult, MappedLazyResult)):
+                        current_target = result
+                        # Continue loop. 
+                        # 'step_stack' has exited, releasing step-scoped resources.
+                        # 'run_stack' remains open.
+                        # 'active_resources' still holds run-scoped instances.
+                    else:
+                        final_result = result
+                        break
+
+            duration = time.time() - start_time
+            self.bus.publish(
+                RunFinished(run_id=run_id, status="Succeeded", duration=duration)
+            )
+            return final_result
+
+        except Exception as e:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    def _setup_resources(
+        self, required_names: set[str], stack: ExitStack, run_id: str
+    ) -> Dict[str, Any]:
+        active: Dict[str, Any] = {}
+
+        def get_or_create(name: str):
+            if name in active:
+                return active[name]
+            provider = self._resource_providers.get(name)
+            if not provider:
+                raise NameError(f"Resource '{name}' is required but not registered.")
+            sig = inspect.signature(provider)
+            deps = {
+                p_name: get_or_create(p.default.resource_name)
+                for p_name, p in sig.parameters.items()
+                if isinstance(p.default, Inject)
+            }
+            gen = provider(**deps)
+            instance = next(gen)
+            active[name] = instance
+            self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
+            stack.callback(self._teardown_resource, gen, run_id, name)
+            return instance
+
+        for name in required_names:
+            get_or_create(name)
+        return active
+~~~~~
+~~~~~python
+    def _setup_resources(
+        self,
+        required_names: set[str],
+        active_resources: Dict[str, Any],
+        run_stack: ExitStack,
+        step_stack: ExitStack,
+        run_id: str,
+    ) -> None:
+        """
+        Initializes required resources that are not yet active.
+        Decides whether to put them in run_stack or step_stack based on scope.
+        Updates active_resources in-place.
+        """
+
+        def get_or_create(name: str):
+            if name in active_resources:
+                return active_resources[name]
+            
+            provider_entry = self._resource_providers.get(name)
+            if not provider_entry:
+                raise NameError(f"Resource '{name}' is required but not registered.")
+            
+            # Determine scope and func
+            scope = "run"
+            func = provider_entry
+            if isinstance(provider_entry, ResourceDefinition):
+                scope = provider_entry.scope
+                func = provider_entry.func
+            
+            # Recursive dependency resolution
+            sig = inspect.signature(func)
+            deps = {
+                p_name: get_or_create(p.default.resource_name)
+                for p_name, p in sig.parameters.items()
+                if isinstance(p.default, Inject)
+            }
+            
+            # Instantiate
+            gen = func(**deps)
+            instance = next(gen)
+            
+            # Register in active dict
+            active_resources[name] = instance
+            self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
+            
+            # Register teardown in appropriate stack
+            target_stack = step_stack if scope == "task" else run_stack
+            
+            def cleanup():
+                self._teardown_resource(gen, run_id, name)
+                # Important: remove from active_resources so it can be re-created if needed later
+                active_resources.pop(name, None)
+
+            target_stack.callback(cleanup)
+            return instance
+
+        for name in required_names:
+            get_or_create(name)
 ~~~~~
 
 ### 下一步建议
-运行测试。由于 `Engine` 目前不具备“自动执行返回的 `LazyResult`”的能力，`test_deep_recursion_tco` 预期会失败（返回 `LazyResult` 对象而不是 `"Done"`）。我们将基于此失败开始实现 Milestone 1.2 的内核重构。
+运行测试。预期所有测试（包括之前的和新加的）都应该通过。

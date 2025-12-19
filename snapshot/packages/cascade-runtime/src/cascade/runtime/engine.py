@@ -2,13 +2,14 @@ import sys
 import time
 import inspect
 import asyncio
-from typing import Any, Dict, Optional, Generator, Callable, List, Type
+from typing import Any, Dict, Optional, Generator, Callable, List, Type, Union
 from uuid import uuid4
 from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, Graph
 from cascade.spec.resource import ResourceDefinition, Inject
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.constraint import GlobalConstraint
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
@@ -67,7 +68,7 @@ class Engine:
         self._wakeup_event = asyncio.Event()
         self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
 
-        self._resource_providers: Dict[str, Callable] = {}
+        self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
 
         self.arg_resolver = ArgumentResolver()
         self.constraint_resolver = ConstraintResolver()
@@ -81,21 +82,25 @@ class Engine:
         self._managed_subscribers.append(subscriber)
 
     def register(self, resource_def: ResourceDefinition):
-        self._resource_providers[resource_def.name] = resource_def.func
+        # We store the full ResourceDefinition to preserve metadata like scope.
+        self._resource_providers[resource_def.name] = resource_def
 
     def get_resource_provider(self, name: str) -> Callable:
-        return self._resource_providers[name]
+        provider = self._resource_providers[name]
+        if isinstance(provider, ResourceDefinition):
+            return provider.func
+        return provider
 
     def override_resource_provider(self, name: str, new_provider: Any):
-        if isinstance(new_provider, ResourceDefinition):
-            new_provider = new_provider.func
+        # When overriding, we might lose metadata if a raw function is passed,
+        # but that's acceptable for testing overrides.
         self._resource_providers[name] = new_provider
 
     async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
         run_id = str(uuid4())
         start_time = time.time()
 
-        # Robustly determine target name
+        # Robustly determine initial target name for logging
         if hasattr(target, "task"):
             target_name = getattr(target.task, "name", "unknown")
         elif hasattr(target, "factory"):
@@ -108,34 +113,58 @@ class Engine:
 
         try:
             # 1. Establish Infrastructure Connection FIRST
-            # This ensures we are ready to transmit telemetry and receive constraints
-            # BEFORE we announce the run starting or execute any logic.
             if self.connector:
                 await self.connector.connect()
                 self.bus.publish(ConnectorConnected(run_id=run_id))
-                # Subscribe to constraint updates immediately.
-                # This gives the connector a chance to receive retained messages (like global pause)
-                # before we enter the execution loop.
                 await self.connector.subscribe(
                     "cascade/constraints/#", self._on_constraint_update
                 )
 
             # 2. Publish Lifecycle Event
-            # Now that the connector is active, this event will be successfully transmitted.
             self.bus.publish(
-                RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
+                RunStarted(
+                    run_id=run_id, target_tasks=[target_name], params=params or {}
+                )
             )
 
-            with ExitStack() as stack:
-                initial_graph = build_graph(target)
-                required_resources = self._scan_for_resources(initial_graph)
-                active_resources = self._setup_resources(
-                    required_resources, stack, run_id
-                )
+            # TCO Loop: We keep executing as long as the result is a LazyResult
+            current_target = target
+            
+            # The global stack holds "run" scoped resources
+            with ExitStack() as run_stack:
+                active_resources: Dict[str, Any] = {}
 
-                final_result = await self._execute_graph(
-                    target, params or {}, active_resources, run_id, state_backend
-                )
+                while True:
+                    # The step stack holds "task" (step) scoped resources
+                    with ExitStack() as step_stack:
+                        # 1. Build graph for current target
+                        graph = build_graph(current_target)
+                        
+                        # 2. Setup Resources (mixed scope)
+                        required_resources = self._scan_for_resources(graph)
+                        self._setup_resources(
+                            required_resources, 
+                            active_resources, 
+                            run_stack, 
+                            step_stack, 
+                            run_id
+                        )
+
+                        # 3. Execute
+                        result = await self._execute_graph(
+                            current_target, params or {}, active_resources, run_id, state_backend
+                        )
+
+                    # 4. Check for Tail Call (LazyResult)
+                    if isinstance(result, (LazyResult, MappedLazyResult)):
+                        current_target = result
+                        # Continue loop. 
+                        # 'step_stack' has exited, releasing step-scoped resources.
+                        # 'run_stack' remains open.
+                        # 'active_resources' still holds run-scoped instances.
+                    else:
+                        final_result = result
+                        break
 
             duration = time.time() - start_time
             self.bus.publish(
@@ -464,32 +493,63 @@ class Engine:
         return required
 
     def _setup_resources(
-        self, required_names: set[str], stack: ExitStack, run_id: str
-    ) -> Dict[str, Any]:
-        active: Dict[str, Any] = {}
+        self,
+        required_names: set[str],
+        active_resources: Dict[str, Any],
+        run_stack: ExitStack,
+        step_stack: ExitStack,
+        run_id: str,
+    ) -> None:
+        """
+        Initializes required resources that are not yet active.
+        Decides whether to put them in run_stack or step_stack based on scope.
+        Updates active_resources in-place.
+        """
 
         def get_or_create(name: str):
-            if name in active:
-                return active[name]
-            provider = self._resource_providers.get(name)
-            if not provider:
+            if name in active_resources:
+                return active_resources[name]
+            
+            provider_entry = self._resource_providers.get(name)
+            if not provider_entry:
                 raise NameError(f"Resource '{name}' is required but not registered.")
-            sig = inspect.signature(provider)
+            
+            # Determine scope and func
+            scope = "run"
+            func = provider_entry
+            if isinstance(provider_entry, ResourceDefinition):
+                scope = provider_entry.scope
+                func = provider_entry.func
+            
+            # Recursive dependency resolution
+            sig = inspect.signature(func)
             deps = {
                 p_name: get_or_create(p.default.resource_name)
                 for p_name, p in sig.parameters.items()
                 if isinstance(p.default, Inject)
             }
-            gen = provider(**deps)
+            
+            # Instantiate
+            gen = func(**deps)
             instance = next(gen)
-            active[name] = instance
+            
+            # Register in active dict
+            active_resources[name] = instance
             self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-            stack.callback(self._teardown_resource, gen, run_id, name)
+            
+            # Register teardown in appropriate stack
+            target_stack = step_stack if scope == "task" else run_stack
+            
+            def cleanup():
+                self._teardown_resource(gen, run_id, name)
+                # Important: remove from active_resources so it can be re-created if needed later
+                active_resources.pop(name, None)
+
+            target_stack.callback(cleanup)
             return instance
 
         for name in required_names:
             get_or_create(name)
-        return active
 
     def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):
         try:

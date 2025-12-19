@@ -11,10 +11,10 @@ from observatory.monitors.convergence import ConvergenceMonitor
 
 
 async def run_experiment(
-    num_agents: int = 50,
-    period: float = 10.0,
-    nudge: float = 0.5,
-    duration_seconds: float = 60.0,
+    num_agents: int = 10,  # Reduced from 50 to minimize simulation noise
+    period: float = 2.0,   # Faster cycle for quicker feedback
+    nudge: float = 0.2,    # 10% coupling strength
+    duration_seconds: float = 30.0,
 ):
     """
     Sets up and runs the firefly synchronization experiment.
@@ -67,6 +67,7 @@ async def run_experiment(
             flash_topic="firefly/flash",
             listen_topic="firefly/flash",
             connector=connector,
+            refractory_period=period * 0.2, # 20% of cycle is blind
         )
         
         agent_tasks.append(engine.run(agent_workflow))

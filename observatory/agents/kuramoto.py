@@ -2,8 +2,7 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 8: Fixed the "Time Stop" physics bug.
-Now correctly accounts for elapsed time during the listening phase.
+REVISION 9: Added Refractory Period to prevent 'echo' effects.
 """
 import asyncio
 import random
@@ -70,6 +69,7 @@ def firefly_agent(
     flash_topic: str,
     listen_topic: str,
     connector: Connector,
+    refractory_period: float = 2.0,  # Blind period after flash
 ):
     """
     This is the main entry point for a single firefly agent.
@@ -82,51 +82,84 @@ def firefly_agent(
         flash_topic: str,
         listen_topic: str,
         connector: Connector,
+        refractory_period: float,
     ):
-        time_to_flash = period - phase
-        wait_timeout = max(0.01, time_to_flash)
-
-        perception = safe_recv(listen_topic, timeout=wait_timeout, connector=connector)
-
-        @cs.task
-        def was_timeout(p: Dict[str, Any]) -> bool:
-            return p.get("timeout", False)
+        # --- Logic Branching ---
+        
+        # 1. Refractory Check: If we are in the "blind" zone, just wait.
+        if phase < refractory_period:
+            # We are blind. Wait until we exit refractory period.
+            blind_wait_duration = refractory_period - phase
             
-        is_timeout = was_timeout(perception)
-
-        flash_action = send_signal(
-            topic=flash_topic, 
-            payload={"agent_id": agent_id, "phase": phase},
-            should_send=is_timeout,
-            connector=connector
-        )
-
-        @cs.task
-        def process_and_recurse(
-            p: Dict[str, Any], _flash_dependency=flash_action
-        ) -> cs.LazyResult:
-            jitter = random.uniform(-0.01, 0.01)
+            # Use cs.wait for pure time passage (no listening)
+            wait_action = cs.wait(blind_wait_duration)
             
-            # CRITICAL FIX: The phase has advanced while we were waiting!
-            elapsed_time = p.get("elapsed", 0.0)
-            current_actual_phase = phase + elapsed_time
+            @cs.task
+            def after_refractory(_):
+                # We have advanced time by 'blind_wait_duration'.
+                # Our phase is now exactly 'refractory_period'.
+                return firefly_cycle(
+                    agent_id, refractory_period, period, nudge, flash_topic, listen_topic, connector, refractory_period
+                )
+            
+            return after_refractory(wait_action)
 
-            if p["timeout"]:
-                # We flashed (reached the end of period), so reset.
-                next_phase = 0.0 + jitter
-            else:
-                # We heard a flash.
-                # Advance our phase by 'nudge' amount.
-                # The modulo operator ensures we wrap around if we exceed the period
-                # (though usually nudge keeps us within bounds until the next natural flash).
-                next_phase = (current_actual_phase + nudge + jitter) % period
+        # 2. Sensitive Check: We are past refractory. Listen for neighbors.
+        else:
+            time_to_flash = period - phase
+            # Ensure we don't have negative timeout due to floating point drift
+            wait_timeout = max(0.01, time_to_flash)
 
-            return firefly_cycle(
-                agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
-            )
+            perception = safe_recv(listen_topic, timeout=wait_timeout, connector=connector)
 
-        return process_and_recurse(perception, _flash_dependency=flash_action)
+            @cs.task
+            def process_perception(p: Dict[str, Any]) -> cs.LazyResult:
+                is_timeout = p.get("timeout", False)
+                elapsed_time = p.get("elapsed", 0.0)
+                
+                # Update actual phase based on real time passed
+                current_actual_phase = phase + elapsed_time
+
+                # Determine Action
+                if is_timeout:
+                    # We reached the end of the period. FLASH!
+                    flash_payload = {"agent_id": agent_id, "phase": current_actual_phase}
+                    
+                    # We send the signal *then* recurse with phase 0
+                    flash = send_signal(
+                        topic=flash_topic, 
+                        payload=flash_payload,
+                        should_send=True,
+                        connector=connector
+                    )
+                    
+                    @cs.task
+                    def loop_reset(_, _flash):
+                        jitter = random.uniform(0.0, 0.1)
+                        return firefly_cycle(
+                            agent_id, 0.0 + jitter, period, nudge, flash_topic, listen_topic, connector, refractory_period
+                        )
+                    
+                    return loop_reset(p, flash)
+                
+                else:
+                    # We heard a neighbor! NUDGE!
+                    # Advance phase, but cap at period (so we don't flash immediately, 
+                    # we just get closer).
+                    # NOTE: In some models, if nudge pushes > period, we flash immediately.
+                    # Here we keep it simple: just advance.
+                    next_phase = current_actual_phase + nudge
+                    
+                    # If the nudge pushes us past the period, we wrap around or clamp.
+                    # Standard PCO: Jump to 1 (fire). But here let's just jump forward.
+                    # If next_phase > period, the next cycle loop will see time_to_flash < 0 and fire immediately.
+                    
+                    return firefly_cycle(
+                        agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector, refractory_period
+                    )
+
+            return process_perception(perception)
 
     return firefly_cycle(
-        agent_id, initial_phase, period, nudge, flash_topic, listen_topic, connector
+        agent_id, initial_phase, period, nudge, flash_topic, listen_topic, connector, refractory_period
     )

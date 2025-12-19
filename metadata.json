@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(runtime): 实现 LocalBusConnector 以支持零配置的 Agent 协作", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766127724.473565, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修复异步测试配置并完成 LocalBusConnector 替换", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766127810.3639445, "duration_ms": 0}}

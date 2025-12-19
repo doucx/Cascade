@@ -2,6 +2,9 @@ import pytest
 import asyncio
 from cascade.connectors.local import LocalBusConnector
 
+# 显式声明模块内所有测试及 Fixture 均运行于 asyncio 环境
+pytestmark = pytest.mark.asyncio
+
 @pytest.fixture(autouse=True)
 async def cleanup_bus():
     """每个测试运行前强制清理全局总线。"""

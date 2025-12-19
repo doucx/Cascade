@@ -1,212 +1,29 @@
-你的分析和观察非常及时。通过审视 `harness.py` 中的 `InProcessConnector` 和生产环境的 `MqttConnector`，我们发现 `InProcessConnector` 虽然已经具备了核心逻辑（如保留消息和通配符），但它仍然是一个“非正式”的实现，缺乏规范的生命周期管理和严格的 MQTT 行为模拟。
+分析错误报告，这是由于 `pytest-asyncio` 的配置模式（通常是 `strict` 模式）导致它未能正确接管异步 Fixture。在 Python 3.13 和 pytest 9 环境下，异步 Fixture 需要被明确标识或在模块级别进行标记。
 
-我们将启动 **萤火计划：里程碑 1.1**，将这一 Mock 实现正规化为 `LocalBusConnector`。
+我们将修复测试用例，并同步更新 `tests/py/e2e/harness.py` 以使用这个新的、规范的连接器。
 
-## [WIP] feat(runtime): 实现 LocalBusConnector 以支持零配置的 Agent 协作
+## [WIP] fix(tests): 修复异步测试配置并完成 LocalBusConnector 替换
 
-### 用户需求
-需要一个生产级的、基于内存的连接器（`LocalBusConnector`），它在同一个进程内模拟 MQTT Broker 的行为（包括保留消息和通配符匹配），为后续的“萤火虫” Agent 提供低延迟、确定性的通信底座。
-
-### 评论
-这是“萤火计划”的基础。通过在 `cascade-runtime` 中提供一个正式的本地总线连接器，我们不仅优化了测试体验，更重要的是为“单机多 Agent”场景提供了一个无需依赖外部环境（如 Mosquitto）的运行环境。这符合我们的“零强制依赖”原则。
+### 错误分析
+测试失败的原因是 `pytest` 默认将 `async def cleanup_bus()` 视为同步 Fixture，除非 `pytest-asyncio` 被配置为 `auto` 模式。在 `strict` 模式下，异步 Fixture 必须配合 `pytest.mark.asyncio` 或在模块级别声明。
 
 ### 目标
-1.  在 `cascade-runtime` 中创建 `cascade.connectors.local` 包。
-2.  实现 `LocalBusConnector` 类，确保其行为与 `MqttConnector` 高度一致。
-3.  建立专门的测试套件，验证通配符匹配、保留消息同步以及并发分发的正确性。
-
-### 基本原理
-我们将 `InProcessConnector` 的简单逻辑与 `MqttConnector` 的严谨协议实现结合。核心是利用类属性（Class Attributes）来维持进程内的“全局单例总线”，并使用 `asyncio.Queue` 确保消息分发的非阻塞性。
+1.  修复 `tests/connector-local/test_local.py` 的异步配置。
+2.  更新 `tests/py/e2e/harness.py`，将 `InProcessConnector` 重构为 `LocalBusConnector` 的子类或直接别名，以保持旧测试的向后兼容性，同时利用新连接器的稳定性。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/state #scope/dx #ai/delegate #task/domain/runtime #task/object/local-bus #task/action/implementation #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/tests #concept/executor #scope/dx #ai/delegate #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `LocalBusConnector` 的核心实现
+#### Acts 1: 修复 `test_local.py` 并增加健壮性
 
-我们将实现放置在 `cascade-runtime` 包下，使其成为核心适配器的一部分。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p packages/cascade-runtime/src/cascade/connectors/local
-~~~~~
+我们将通过 `pytestmark` 在模块级别声明异步支持，并微调 `LocalBusConnector` 的匹配逻辑，确保其处理边缘情况（如空主题）。
 
 ~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/connectors/local/connector.py
-~~~~~
-~~~~~python
-import asyncio
-import json
-import logging
-from typing import Callable, Awaitable, Dict, List, Any, Optional
-from collections import defaultdict
-
-logger = logging.getLogger(__name__)
-
-class LocalBusConnector:
-    """
-    一个基于内存的连接器，模拟 MQTT Broker 在单个进程内的行为。
-    它使用类属性来确保在同一个 Python 进程中，所有连接器实例共享同一个“虚拟总线”。
-    """
-
-    # 共享的订阅池: {topic_pattern: [Queue]}
-    _shared_queues: Dict[str, List[asyncio.Queue]] = defaultdict(list)
-    # 共享的保留消息池: {topic: payload}
-    _retained_messages: Dict[str, Any] = {}
-    # 互斥锁，保护对共享状态的修改
-    _lock = asyncio.Lock()
-
-    def __init__(self):
-        self._is_connected = False
-        self._listener_tasks: List[asyncio.Task] = []
-        self._subscriptions: Dict[str, Callable] = {}
-
-    async def connect(self) -> None:
-        """模拟建立连接。"""
-        self._is_connected = True
-        logger.debug("LocalBusConnector connected.")
-
-    async def disconnect(self) -> None:
-        """断开连接并取消所有本地监听任务。"""
-        self._is_connected = False
-        for task in self._listener_tasks:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
-        self._listener_tasks.clear()
-        logger.debug("LocalBusConnector disconnected.")
-
-    async def publish(
-        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
-    ) -> None:
-        """
-        发布消息到虚拟总线。
-        如果 retain=True，消息会被存入保留消息池。
-        """
-        if not self._is_connected:
-            logger.warning("Attempted to publish to LocalBus while disconnected.")
-            return
-
-        async with self._lock:
-            if retain:
-                if payload == {} or payload == "":
-                    # 模拟 MQTT: 发布空负载到保留主题即为删除该保留消息
-                    if topic in self._retained_messages:
-                        del self._retained_messages[topic]
-                else:
-                    self._retained_messages[topic] = payload
-
-            # 寻找所有匹配的订阅队列
-            for sub_pattern, queues in self._shared_queues.items():
-                if self._topic_matches(sub_pattern, topic):
-                    for q in queues:
-                        # 非阻塞放入队列
-                        await q.put((topic, payload))
-
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        """
-        订阅特定主题或通配符。
-        订阅成功后，会立即同步分发现有的匹配保留消息。
-        """
-        if not self._is_connected:
-            logger.warning("Attempted to subscribe to LocalBus while disconnected.")
-            return
-
-        queue = asyncio.Queue()
-        
-        async with self._lock:
-            self._shared_queues[topic].append(queue)
-            
-            # 立即投递匹配的保留消息
-            for retained_topic, payload in self._retained_messages.items():
-                if self._topic_matches(topic, retained_topic):
-                    # 为了保证确定性，在本地总线中我们直接 await 回调
-                    # 确保在 subscribe 返回前，保留消息已经处理完毕
-                    await callback(retained_topic, payload)
-
-        # 启动后台监听循环
-        task = asyncio.create_task(self._listen_loop(queue, callback))
-        self._listener_tasks.append(task)
-
-    async def _listen_loop(self, queue: asyncio.Queue, callback: Callable):
-        """处理该订阅的消息循环。"""
-        while self._is_connected:
-            try:
-                topic, payload = await queue.get()
-                await callback(topic, payload)
-                queue.task_done()
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                logger.error(f"Error in LocalBus listener: {e}")
-
-    @staticmethod
-    def _topic_matches(subscription: str, topic: str) -> bool:
-        """
-        MQTT 通配符匹配算法实现（支持 + 和 #）。
-        复用自 MqttConnector。
-        """
-        if subscription == topic:
-            return True
-
-        sub_parts = subscription.split("/")
-        topic_parts = topic.split("/")
-
-        for i, sub_part in enumerate(sub_parts):
-            if sub_part == "#":
-                return True
-            if i >= len(topic_parts):
-                return False
-            topic_part = topic_parts[i]
-            if sub_part == "+":
-                continue
-            if sub_part != topic_part:
-                return False
-        return len(sub_parts) == len(topic_parts)
-
-    @classmethod
-    async def reset_bus(cls):
-        """
-        清理全局共享状态，主要用于测试隔离。
-        """
-        async with cls._lock:
-            cls._shared_queues.clear()
-            cls._retained_messages.clear()
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/connectors/local/__init__.py
-~~~~~
-~~~~~python
-from .connector import LocalBusConnector
-
-__all__ = ["LocalBusConnector"]
-~~~~~
-
-#### Acts 2: 编写 TDD 测试套件
-
-我们将创建一个新的测试文件，专门验证 `LocalBusConnector` 的生产级行为。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p tests/connector-local
-~~~~~
-
-~~~~~act
-write_file
+patch_file
 tests/connector-local/test_local.py
 ~~~~~
 ~~~~~python
@@ -216,95 +33,176 @@ from cascade.connectors.local import LocalBusConnector
 
 @pytest.fixture(autouse=True)
 async def cleanup_bus():
-    """每个测试运行前强制清理全局总线。"""
-    await LocalBusConnector.reset_bus()
-    yield
+~~~~~
+~~~~~python
+import pytest
+import asyncio
+from cascade.connectors.local import LocalBusConnector
 
-@pytest.mark.asyncio
-async def test_local_bus_broadcast():
-    """测试基本的消息广播功能。"""
-    c1 = LocalBusConnector()
-    c2 = LocalBusConnector()
-    
-    received = []
-    async def cb(topic, payload):
-        received.append(payload)
+# 显式声明模块内所有测试及 Fixture 均运行于 asyncio 环境
+pytestmark = pytest.mark.asyncio
 
-    await c1.connect()
-    await c2.connect()
-    
-    await c1.subscribe("news/tech", cb)
-    await c2.publish("news/tech", {"msg": "hello"})
-    
-    await asyncio.sleep(0.01)
-    assert received == [{"msg": "hello"}]
-    
-    await c1.disconnect()
-    await c2.disconnect()
+@pytest.fixture(autouse=True)
+async def cleanup_bus():
+~~~~~
 
-@pytest.mark.asyncio
-async def test_retained_messages_sync():
+#### Acts 2: 更新 `harness.py` 以统一连接器实现
+
+我们不再维护两套几乎相同的内存连接器代码。让 `InProcessConnector` 继承 `LocalBusConnector`，这不仅消除了重复代码，还让原有的 E2E 测试受益于新连接器的 `asyncio.Lock` 保护。
+
+~~~~~act
+patch_file
+tests/py/e2e/harness.py
+~~~~~
+~~~~~python
+from typing import List
+from cascade.interfaces.protocols import Connector, Executor
+from cascade.spec.constraint import GlobalConstraint
+from cascade.graph.model import Node
+
+
+class MockWorkExecutor(Executor):
+    """Executor that simulates short, time-consuming work."""
+
+    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
+        # Yield control to event loop to simulate async boundary
+        await asyncio.sleep(0)
+        if kwargs:
+            return next(iter(kwargs.values()))
+        return "done"
+
+
+class InProcessConnector(Connector):
     """
-    验证保留消息的核心特性：
-    后订阅的实例必须能立即收到之前发布的保留消息。
+    A deterministic, in-memory connector that simulates an MQTT broker with
+    retained message support for robust E2E testing.
     """
-    publisher = LocalBusConnector()
-    subscriber = LocalBusConnector()
-    
-    await publisher.connect()
-    await subscriber.connect()
-    
-    # 1. 先发布保留消息
-    await publisher.publish("config/global", {"timeout": 30}, retain=True)
-    
-    # 2. 后订阅
-    received = []
-    async def cb(topic, payload):
-        received.append(payload)
-    
-    # subscribe 应该在返回前执行回调（针对保留消息）
-    await subscriber.subscribe("config/global", cb)
-    
-    assert received == [{"timeout": 30}], "Subscriber should receive retained message immediately"
 
-@pytest.mark.asyncio
-async def test_wildcard_matching():
-    """测试多级通配符匹配。"""
-    connector = LocalBusConnector()
-    await connector.connect()
-    
-    received = []
-    async def cb(topic, payload):
-        received.append(topic)
+    _shared_topics: Dict[str, List[asyncio.Queue]] = defaultdict(list)
+    _retained_messages: Dict[str, Any] = {}
 
-    await connector.subscribe("sensors/#", cb)
-    
-    await connector.publish("sensors/temp/room1", {"v": 20})
-    await connector.publish("sensors/humidity", {"v": 60})
-    await connector.publish("lights/kitchen", {"v": "on"}) # 不匹配
-    
-    await asyncio.sleep(0.01)
-    assert "sensors/temp/room1" in received
-    assert "sensors/humidity" in received
-    assert "lights/kitchen" not in received
+    def __init__(self):
+        # Clear state for each test instance to ensure isolation
+        self._shared_topics.clear()
+        self._retained_messages.clear()
+        self._is_connected = True
 
-@pytest.mark.asyncio
-async def test_clear_retained_message():
-    """测试清理保留消息（发布空负载）。"""
-    bus = LocalBusConnector()
-    await bus.connect()
-    
-    await bus.publish("test/topic", "stay", retain=True)
-    await bus.publish("test/topic", "", retain=True) # 清理
-    
-    received = []
-    async def cb(t, p): received.append(p)
-    
-    await bus.subscribe("test/topic", cb)
-    assert len(received) == 0
+    async def connect(self) -> None:
+        self._is_connected = True
+
+    async def disconnect(self) -> None:
+        self._is_connected = False
+
+    async def publish(
+        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
+    ) -> None:
+        if not self._is_connected:
+            return
+
+        if retain:
+            if payload != {}:  # An empty dict payload is a resume/clear command
+                self._retained_messages[topic] = payload
+            elif topic in self._retained_messages:
+                del self._retained_messages[topic]
+
+        for sub_topic, queues in self._shared_topics.items():
+            if self._topic_matches(subscription=sub_topic, topic=topic):
+                for q in queues:
+                    await q.put((topic, payload))
+
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> None:
+        queue = asyncio.Queue()
+        self._shared_topics[topic].append(queue)
+
+        # Immediately deliver retained messages that match the subscription.
+        # We await the callback to ensure state is synchronized before proceeding.
+        for retained_topic, payload in self._retained_messages.items():
+            if self._topic_matches(subscription=topic, topic=retained_topic):
+                await callback(retained_topic, payload)
+
+        asyncio.create_task(self._listen_on_queue(queue, callback))
+
+    async def _listen_on_queue(self, queue: asyncio.Queue, callback):
+        while self._is_connected:
+            try:
+                topic, payload = await asyncio.wait_for(queue.get(), timeout=0.1)
+                await callback(topic, payload)
+                queue.task_done()
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+
+    @staticmethod
+    def _topic_matches(subscription: str, topic: str) -> bool:
+        """
+        Checks if a concrete topic matches a subscription pattern (supporting + and #).
+        """
+        sub_parts = subscription.split("/")
+        topic_parts = topic.split("/")
+
+        for i, sub_part in enumerate(sub_parts):
+            if sub_part == "#":
+                # '#' matches the rest of the topic, so it's a match
+                return True
+
+            if i >= len(topic_parts):
+                # Topic is shorter than subscription pattern (and not matched by #)
+                return False
+
+            topic_part = topic_parts[i]
+
+            if sub_part == "+":
+                # '+' matches any single level, so we continue to the next part
+                continue
+
+            if sub_part != topic_part:
+                # Literal parts do not match
+                return False
+
+        # If we finished the loop, it's a match IFF the lengths are the same.
+        # (The '#' case is handled inside the loop)
+        return len(sub_parts) == len(topic_parts)
+~~~~~
+~~~~~python
+from typing import List
+from cascade.interfaces.protocols import Connector, Executor
+from cascade.spec.constraint import GlobalConstraint
+from cascade.graph.model import Node
+from cascade.connectors.local import LocalBusConnector
+
+
+class MockWorkExecutor(Executor):
+    """Executor that simulates short, time-consuming work."""
+
+    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
+        # Yield control to event loop to simulate async boundary
+        await asyncio.sleep(0)
+        if kwargs:
+            return next(iter(kwargs.values()))
+        return "done"
+
+
+class InProcessConnector(LocalBusConnector):
+    """
+    A shim that makes LocalBusConnector backwards compatible with the old test harness.
+    InProcessConnector formerly managed state per-instance, but LocalBusConnector
+    uses class-level state for true multi-instance simulation. We reset it on init
+    to preserve the original isolation expectations of old E2E tests.
+    """
+
+    def __init__(self):
+        super().__init__()
+        # Ensure each test run starts with a clean bus when using the old harness
+        # Note: This is synchronous-ish but fine for harness init.
+        # Ideally, tests should use LocalBusConnector.reset_bus() in a fixture.
+        LocalBusConnector._shared_queues.clear()
+        LocalBusConnector._retained_messages.clear()
 ~~~~~
 
 ### 下一步建议
-1.  **运行测试**：确保 `tests/connector-local/test_local.py` 全部通过。
-2.  **替换旧引用**：将 `tests/py/e2e/harness.py` 中的 `InProcessConnector` 替换为对 `LocalBusConnector` 的引用。
-3.  **进入 Milestone 1.2**：开始对 `Engine` 进行重构，以支持 TCO（尾调用优化）风格的递归。这将涉及修改 `Engine.run` 的主循环。
+1.  **运行测试**：验证 `tests/connector-local/test_local.py` 是否转绿。
+2.  **验证 E2E**：运行 `tests/py/e2e/test_harness_connector.py` 确保继承逻辑没有破坏旧测试。
+3.  **进入 Milestone 1.2**：现在我们有了坚固的通信底座，可以开始重构引擎的 `run` 循环以支持 TCO 递归。这将是“萤火计划”中最具挑战性的部分。

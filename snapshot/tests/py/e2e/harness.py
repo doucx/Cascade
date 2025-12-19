@@ -8,6 +8,7 @@ from typing import List
 from cascade.interfaces.protocols import Connector, Executor
 from cascade.spec.constraint import GlobalConstraint
 from cascade.graph.model import Node
+from cascade.connectors.local import LocalBusConnector
 
 
 class MockWorkExecutor(Executor):
@@ -21,99 +22,21 @@ class MockWorkExecutor(Executor):
         return "done"
 
 
-class InProcessConnector(Connector):
+class InProcessConnector(LocalBusConnector):
     """
-    A deterministic, in-memory connector that simulates an MQTT broker with
-    retained message support for robust E2E testing.
+    A shim that makes LocalBusConnector backwards compatible with the old test harness.
+    InProcessConnector formerly managed state per-instance, but LocalBusConnector
+    uses class-level state for true multi-instance simulation. We reset it on init
+    to preserve the original isolation expectations of old E2E tests.
     """
-
-    _shared_topics: Dict[str, List[asyncio.Queue]] = defaultdict(list)
-    _retained_messages: Dict[str, Any] = {}
 
     def __init__(self):
-        # Clear state for each test instance to ensure isolation
-        self._shared_topics.clear()
-        self._retained_messages.clear()
-        self._is_connected = True
-
-    async def connect(self) -> None:
-        self._is_connected = True
-
-    async def disconnect(self) -> None:
-        self._is_connected = False
-
-    async def publish(
-        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
-    ) -> None:
-        if not self._is_connected:
-            return
-
-        if retain:
-            if payload != {}:  # An empty dict payload is a resume/clear command
-                self._retained_messages[topic] = payload
-            elif topic in self._retained_messages:
-                del self._retained_messages[topic]
-
-        for sub_topic, queues in self._shared_topics.items():
-            if self._topic_matches(subscription=sub_topic, topic=topic):
-                for q in queues:
-                    await q.put((topic, payload))
-
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        queue = asyncio.Queue()
-        self._shared_topics[topic].append(queue)
-
-        # Immediately deliver retained messages that match the subscription.
-        # We await the callback to ensure state is synchronized before proceeding.
-        for retained_topic, payload in self._retained_messages.items():
-            if self._topic_matches(subscription=topic, topic=retained_topic):
-                await callback(retained_topic, payload)
-
-        asyncio.create_task(self._listen_on_queue(queue, callback))
-
-    async def _listen_on_queue(self, queue: asyncio.Queue, callback):
-        while self._is_connected:
-            try:
-                topic, payload = await asyncio.wait_for(queue.get(), timeout=0.1)
-                await callback(topic, payload)
-                queue.task_done()
-            except asyncio.TimeoutError:
-                continue
-            except asyncio.CancelledError:
-                break
-
-    @staticmethod
-    def _topic_matches(subscription: str, topic: str) -> bool:
-        """
-        Checks if a concrete topic matches a subscription pattern (supporting + and #).
-        """
-        sub_parts = subscription.split("/")
-        topic_parts = topic.split("/")
-
-        for i, sub_part in enumerate(sub_parts):
-            if sub_part == "#":
-                # '#' matches the rest of the topic, so it's a match
-                return True
-
-            if i >= len(topic_parts):
-                # Topic is shorter than subscription pattern (and not matched by #)
-                return False
-
-            topic_part = topic_parts[i]
-
-            if sub_part == "+":
-                # '+' matches any single level, so we continue to the next part
-                continue
-
-            if sub_part != topic_part:
-                # Literal parts do not match
-                return False
-
-        # If we finished the loop, it's a match IFF the lengths are the same.
-        # (The '#' case is handled inside the loop)
-        return len(sub_parts) == len(topic_parts)
+        super().__init__()
+        # Ensure each test run starts with a clean bus when using the old harness
+        # Note: This is synchronous-ish but fine for harness init.
+        # Ideally, tests should use LocalBusConnector.reset_bus() in a fixture.
+        LocalBusConnector._shared_queues.clear()
+        LocalBusConnector._retained_messages.clear()
 
 
 class ControllerTestApp:

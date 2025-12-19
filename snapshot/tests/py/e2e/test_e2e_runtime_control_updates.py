@@ -58,7 +58,7 @@ async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
     run_task = asyncio.create_task(engine.run(workflow))
 
     # Wait for the first task to finish, confirming the engine is running and throttled
-    for _ in range(2): # Give it 2 seconds to finish the first task
+    for _ in range(20): # Give it 2 seconds to finish the first task
         await asyncio.sleep(0.1)
         if len(spy.events_of_type(TaskExecutionFinished)) > 0:
             break

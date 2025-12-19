@@ -31,6 +31,7 @@ all = [
 
 [project.entry-points."cascade.providers"]
 shell = "cascade.providers.shell:ShellProvider"
+wait = "cascade.providers.time:TimeWaitProvider"
 template = "cascade.providers.template:TemplateProvider"
 "http.get" = "cascade.providers.http:HttpGetProvider"
 "http.post" = "cascade.providers.http:HttpPostProvider"

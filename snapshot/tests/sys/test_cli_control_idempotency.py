@@ -84,7 +84,7 @@ async def test_updating_rate_limit_via_cli_is_idempotent(bus_and_spy):
             with pytest.raises(asyncio.CancelledError):
                 await engine_task
         # And clear the constraint for other tests
-        await run_cli_command("cs-controller resume --scope global")
+        await run_cli_command("cs-controller resume global")
 
     # Final check
     assert len(spy.events_of_type(TaskExecutionFinished)) == 10

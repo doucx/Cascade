@@ -1,60 +1,54 @@
-You've correctly identified an `ImportError`. My apologies, the previous plan created a test with a faulty import path. This is a classic test structuring issue.
+Excellent catch. You've uncovered a bug in the *test's cleanup logic itself*. The `stderr` output is unambiguous: `No such option: --scope`.
 
-## [WIP] fix(test): Correct import path in system integration test
+This means our test is failing for a trivial reason (incorrect command-line usage) before it even gets to test the actual complex concurrency bug we're hunting. We must fix this to get a real signal from our test.
+
+## [WIP] fix(test): Correct `cs-controller resume` command usage in system test
 
 ### 错误分析
-The traceback clearly shows the problem: `ImportError: attempted relative import with no known parent package`.
+The error `No such option: --scope` arises because the `cs-controller resume` command is defined with `scope` as a positional `Argument`, not a named `Option`.
 
-1.  **Root Cause**: The line `from ..py.e2e.harness import MockWorkExecutor` is a **relative import**. It tells Python to go up two directories (`..`) from the current file's location, then look for a `py` package. When `pytest` runs `tests/sys/test_cli_control_idempotency.py`, Python doesn't necessarily consider the `tests` directory as a single unified package, so the `..` part fails because there's "no known parent package" to go up into.
-2.  **Missing `__init__.py`**: The directory `tests/sys` is also missing an `__init__.py` file, which, while not always required in modern Python, is best practice for explicitly marking a directory as a package and can help avoid such import issues.
-3.  **The Solution**: The most robust solution is to change the import from a fragile *relative* path to a stable **absolute** path, assuming the tests are run from the project's root directory (which is the standard for `pytest`). We will also add the missing `__init__.py` for good measure.
+-   **Incorrect Usage (in the test's `finally` block)**: `cs-controller resume --scope global`
+-   **Correct Usage (as per `typer` definition)**: `cs-controller resume global`
+
+The test is attempting to pass the scope as an option (`--scope ...`), which the Typer application correctly rejects. This crash in the cleanup phase prevents the test from running to completion and reporting the *real* failure we are looking for (the timeout).
 
 ### 用户需求
-Fix the `ImportError` in `tests/sys/test_cli_control_idempotency.py` so that the test can be collected and run by `pytest`.
+The system integration test must use the correct command-line syntax for all its operations, including the cleanup phase, so that it can run to completion and provide a valid result regarding the idempotency issue.
 
 ### 评论
-This is a developer experience (DX) fix. A reliable test suite requires stable imports. Using absolute imports from the `tests` root makes individual test files less dependent on their specific location within the test directory structure, making the whole suite more robust and easier to refactor.
+This is a simple but critical fix. A failing test is only useful if it fails for the right reason. By correcting this syntax error, we ensure that the test's failure (or success) is a true reflection of the `Engine`'s behavior, not a distraction caused by a typo in the test setup.
 
 ### 目标
-1.  Add an empty `__init__.py` file to the `tests/sys/` directory.
-2.  Change the import statement in `test_cli_control_idempotency.py` to use an absolute path from the `tests` package root.
+Modify the `finally` block in `tests/sys/test_cli_control_idempotency.py` to use the correct positional argument format for the `cs-controller resume` command.
 
 ### 基本原理
-By treating the `tests` directory as a top-level package (thanks to `tests/__init__.py` which already exists), we can use absolute imports like `from tests.py.e2e.harness...`. This is the standard and most reliable way to share code within a test suite when using tools like `pytest` that add the project root to the `PYTHONPATH`.
+The fix involves changing the command string to match the CLI's public interface as defined in its source code. This will resolve the `Typer` parsing error and allow the test to execute its main logic and cleanup procedures correctly.
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-imports #task/action/fix-imports #task-state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/cli-idempotency #task/action/fix-cli-call #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Create `__init__.py` in the system test directory
+#### Acts 1: Correct the CLI call in the test's cleanup block
 
-First, we'll create the empty `__init__.py` file to properly mark `tests/sys` as a Python package.
-
-~~~~~act
-write_file
-tests/sys/__init__.py
-~~~~~
-~~~~~python
-
-~~~~~
-
-#### Acts 2: Correct the import statement in the test file
-
-Now, we'll patch the file to use the correct absolute import path.
+We will patch the test file to use the correct command syntax.
 
 ~~~~~act
 patch_file
 tests/sys/test_cli_control_idempotency.py
 ~~~~~
 ~~~~~python
-from ..py.e2e.harness import MockWorkExecutor
+        # And clear the constraint for other tests
+        await run_cli_command("cs-controller resume --scope global")
 ~~~~~
 ~~~~~python
-from tests.py.e2e.harness import MockWorkExecutor
+        # And clear the constraint for other tests
+        await run_cli_command("cs-controller resume global")
 ~~~~~
 
 ### 下一步建议
-Please run this plan. After it completes, the `ImportError` will be resolved. You can then re-run the command `pytest tests/sys/` to execute the system integration test. As before, the expectation is that this test will now run but **fail** due to the `asyncio.TimeoutError`, which will prove the existence of the idempotency bug.
+Please execute this plan. After the fix is applied, run `pytest tests/sys/` again.
+
+With this syntax error resolved, we now expect the test to fail with the `asyncio.TimeoutError` we originally intended to see. This will be our true "red light", confirming the idempotency bug exists and is ready to be fixed.

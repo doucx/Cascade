@@ -96,20 +96,28 @@ class Engine:
         else:
             target_name = "unknown"
 
-        self.bus.publish(
-            RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
-        )
-
+        # Initialize State Backend first (no side effects)
         state_backend = self.state_backend_cls(run_id=run_id)
 
         try:
+            # 1. Establish Infrastructure Connection FIRST
+            # This ensures we are ready to transmit telemetry and receive constraints
+            # BEFORE we announce the run starting or execute any logic.
             if self.connector:
                 await self.connector.connect()
                 self.bus.publish(ConnectorConnected(run_id=run_id))
-                # Subscribe to constraint updates
+                # Subscribe to constraint updates immediately.
+                # This gives the connector a chance to receive retained messages (like global pause)
+                # before we enter the execution loop.
                 await self.connector.subscribe(
                     "cascade/constraints/#", self._on_constraint_update
                 )
+
+            # 2. Publish Lifecycle Event
+            # Now that the connector is active, this event will be successfully transmitted.
+            self.bus.publish(
+                RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
+            )
 
             with ExitStack() as stack:
                 initial_graph = build_graph(target)

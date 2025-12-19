@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(providers): Implement signal primitive `cs.recv` for responsive agents", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766132107.4884818, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 搭建萤火测试的观测站 (Observatory) 基础结构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766132752.1382937, "duration_ms": 0}}

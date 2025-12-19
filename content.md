@@ -1,73 +1,125 @@
-好的，我们已经成功完成了 **里程碑 1.4：感知原语——信号 (`cs.recv`)** 的实现，并且所有 TDD 测试均已通过。这个功能涉及到对接口协议、核心引擎和 `LocalBusConnector` 的多处、精密的修改。
+船长，你的问题切中了我们当前阶段的核心：**在追求“涌现”的道路上，如何平衡“有机生长”与“过度设计”？**
 
-现在我将生成一个 `[COMMIT]` 计划来封装这些变更。
+你的思考非常敏锐。为观测工具创建一个独立的包是标准的、优秀的工程实践。但在我们当前的哲学下，这是一种**“过早的固化”**。
 
-## [COMMIT] feat(providers): Implement signal primitive `cs.recv` for responsive agents
+1.  **《白皮书》的指引**: 我们拒绝“主流引力”。为尚不存在的代码预先创建包结构，就是一种主流的、自上而下的设计规训。我们的原则是**“观测先于存在”**，让结构从实际的需求中**涌现**出来。
+2.  **《萤火计划》的蓝图**: 计划中明确指出创建一个顶层目录 `/observatory`。它被设想为一个“实验室”或“培养皿”，一个与核心库隔离、可以自由实验、甚至可以引入“脏”依赖（如 `matplotlib`）而不污染生产环境的沙盒。
+3.  **MVP 的力量**: 我们当前的首要任务是**验证哲学**——即用最少的代码证明“萤火虫”可以同步。一个简单的目录结构能让我们以最快速度搭建实验环境，聚焦于算法和观测本身，而不是包的元数据和依赖管理。
+
+**结论**：我们坚决选择 MVP 优先。先在 `/observatory` 这个沙盒里把萤火虫养起来，让它飞舞、同步。当我们观测到足够多的现象，提炼出真正稳定、可复用的工具时，再将它们“收割”并封装成一个独立的包，反哺 `cs-observer`。这才是符合 Cascade 精神的、自下而上的演进路径。
+
+我将为你生成一个计划，以最直接的方式搭建这个“实验室”。
+
+## [WIP] feat: 搭建萤火测试的观测站 (Observatory) 基础结构
 
 ### 用户需求
-实现 `cs.recv` 原子任务，赋予工作流异步等待外部信号并处理超时的能力。
+开始执行“萤火计划”的第三部分，为观测实验创建一个工作空间，并决定其组织形式。
 
 ### 评论
-`cs.recv` 是实现“涌现式分布式执行”和响应式 Agent 的最后一个关键原子积木。它通过将任务执行挂起，直到从 `Connector` 接收到消息，从而将 Cascade 升级为具备“听觉”的 Reactive Engine。本次实现也同时升级了 `Connector` 协议，引入了 `SubscriptionHandle` 来确保在任务完成或超时时，订阅资源能够被确定性地释放，从而满足长运行 Agent 对资源清洁度的要求。
+为观测工具创建一个独立的包是很有远见的想法，但在这个阶段属于过早优化。我们当前的核心是快速验证“涌现”的可行性。因此，一个独立的、非侵入性的顶层 `/observatory` 目录是最佳选择。它既能满足实验所需的依赖隔离，又避免了不必要的工程开销，让我们能聚焦于科学实验本身。
 
 ### 目标
-创建一个 Git 提交，包含所有必要的接口协议、核心引擎、LocalBusConnector 以及 `cs.recv` 提供者本身的实现和注册。
+1.  在项目根目录下创建一个名为 `observatory` 的新目录。
+2.  在 `observatory` 内部，创建 `agents`, `experiments`, 和 `monitors` 子目录。
+3.  创建一个 `observatory/requirements.txt` 文件，用于管理科学计算和可视化相关的依赖。
+4.  创建必要的占位符 Python 文件，以建立清晰的项目结构。
 
 ### 基本原理
-我们通过以下三个核心步骤实现了该功能：
-1.  **协议扩展**: 定义了 `SubscriptionHandle` 协议，使订阅操作可取消。
-2.  **引擎桥接**: `Engine` 在运行时将自身的 `Connector` 注册为 `_internal_connector` 资源。
-3.  **任务实现**: `cs.recv` 任务通过注入 `_internal_connector` 来执行订阅和 `asyncio.wait_for`，并在 `finally` 块中调用 `unsubscribe` 来进行清理。
+遵循“萤火计划”的规划和“MVP优先”的原则，我们选择创建一个简单的目录结构而非一个完整的 Python 包。这个“沙盒”环境允许我们快速迭代实验代码，而不会影响核心库的依赖和结构。当实验成功并提炼出通用工具后，再将其正式打包。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/core #comp/runtime #comp/interfaces #concept/signal #concept/resource #scope/api #ai/instruct #task/domain/providers #task/object/recv-primitive #task/action/implementation #task/state/end
+#intent/architect #flow/ready #priority/high #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/observatory #task/action/setup #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交所有相关的变更文件
+#### Acts 1: 创建观测站的目录结构
+
+首先，我们使用 `mkdir -p` 一次性创建所有必需的目录。
 
 ~~~~~act
-git_add
-packages/cascade-interfaces/src/cascade/interfaces/protocols.py
-packages/cascade-py/src/cascade/providers/signal.py
-packages/cascade-py/pyproject.toml
-packages/cascade-runtime/src/cascade/connectors/local.py
-packages/cascade-runtime/src/cascade/runtime/engine.py
-tests/py/providers/test_signal_provider.py
+run_command
+~~~~~
+~~~~~bash
+mkdir -p observatory/agents observatory/experiments observatory/monitors
 ~~~~~
 
+#### Acts 2: 定义实验环境的依赖
+
+创建一个独立的 `requirements.txt` 文件，用于安装科学计算和可视化所需的库。这确保了它们不会污染核心库的依赖。
+
 ~~~~~act
-git_commit
+write_file
+observatory/requirements.txt
 ~~~~~
 ~~~~~text
-feat(providers): Implement signal primitive `cs.recv` for responsive agents
+# Scientific computing and data analysis
+numpy
+scipy
+pandas
 
-This adds the core primitive `cs.recv(topic, timeout=...)` which allows a Cascade task to pause execution and wait for a signal message via the configured Connector.
+# Visualization
+matplotlib
+seaborn
+rich
 
-Key architectural changes include:
-1.  **Subscription Cleanup**: The `Connector` protocol is updated to return a `SubscriptionHandle`, guaranteeing deterministic cleanup of listeners via an `unsubscribe` method (critical for long-running TCO loops).
-2.  **Engine Injection**: The `Engine` now registers its `Connector` instance as a special internal resource (`_internal_connector`), allowing `cs.recv` to inject and interact with the communication channel directly.
-3.  **LocalBus Update**: `LocalBusConnector` is updated to implement `SubscriptionHandle` with proper queue and task cancellation logic, ensuring resources are not leaked during concurrent subscriptions.
+# Add any other experiment-specific dependencies here
+~~~~~
 
-This feature completes the set of primitives required for the "Firefly Test" (TCO, cs.wait, cs.recv).
+#### Acts 3: 创建占位符 Python 文件
+
+创建空的 `__init__.py` 文件将目录标记为 Python 包，并为萤火虫 Agent 和实验脚本创建占位符文件，以便我们下一步填充内容。
+
+~~~~~act
+write_file
+observatory/__init__.py
+~~~~~
+~~~~~python
+# This directory serves as a sandboxed laboratory for running
+# scientific experiments on the Cascade ecosystem.
+~~~~~
+
+~~~~~act
+write_file
+observatory/agents/__init__.py
+~~~~~
+~~~~~python
+# Contains definitions of agents (e.g., Fireflies) as Cascade workflows.
+~~~~~
+
+~~~~~act
+write_file
+observatory/agents/kuramoto.py
+~~~~~
+~~~~~python
+"""
+Implementation of a Firefly agent based on the Kuramoto model
+of coupled oscillators.
+"""
+import cascade as cs
+
+# TODO: Implement the firefly logic here.
+# It will likely be a recursive workflow using cs.wait and cs.recv.
+~~~~~
+
+~~~~~act
+write_file
+observatory/experiments/__init__.py
+~~~~~
+~~~~~python
+# Contains scripts that orchestrate experiments.
+~~~~~
+
+~~~~~act
+write_file
+observatory/monitors/__init__.py
+~~~~~
+~~~~~python
+# Contains tools for observing and analyzing experiment results.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 **萤火计划** 第一阶段的所有里程碑（1.1-1.4）：
-*   **1.1 LocalBus Connector**: 已实现。
-*   **1.2 引擎 TCO**: 已实现。
-*   **1.3 `cs.wait`**: 已实现。
-*   **1.4 `cs.recv`**: 已实现。
+我们已经成功搭建了实验的“培养皿”。现在，是时候放入第一只“萤火虫”了。
 
-现在，我们拥有了一个具备永续执行和基本感知（时间、信号）能力的 Agent 运行时。
-
-根据 [萤火计划：合成智能与涌现架构演进技术路线图](萤火计划：合成智能与涌现架构演进路线图.md) 的指导，下一步是 **第三部分：观测站建设 (The Observatory)**，即搭建实验环境并运行第一个基准测试。
-
-我建议：
-1.  **创建 `/observatory` 目录**。
-2.  **创建第一个 Agent 逻辑**: 实现一个简单的、只包含 `cs.wait` 的 `firefly.py`，作为基准测试的 Agent。
-3.  **创建实验运行脚本**: 定义如何启动多个 Agent 实例，并使用 `cs.run` 和 `LocalBusConnector` 运行它们。
-
-如果你同意，我将首先创建 `/observatory` 目录结构。
+我建议我们开始在 `observatory/agents/kuramoto.py` 文件中，使用 `cs.wait`, `cs.recv` 和递归工作流，实现萤火虫 Agent 的核心闪烁与同步逻辑。这将是整个计划中最激动人心的部分。

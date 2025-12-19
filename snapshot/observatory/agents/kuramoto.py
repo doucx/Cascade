@@ -123,7 +123,10 @@ def firefly_agent(
                 agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
             )
 
-        return process_and_recurse(perception)
+        # CRITICAL FIX: We must explicitly pass the dependency so it ends up 
+        # in the LazyResult's kwargs. If we rely on the default argument value,
+        # the GraphBuilder won't see the edge, and send_signal will be pruned.
+        return process_and_recurse(perception, _flash_dependency=flash_action)
 
     return firefly_cycle(
         agent_id, initial_phase, period, nudge, flash_topic, listen_topic, connector

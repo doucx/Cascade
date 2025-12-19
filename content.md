@@ -1,158 +1,69 @@
-船长，我们再次陷入了盲区。我过早地移除了日志，这是一个战术失误。
+船长，谜底解开了。
 
-既然逻辑推理无法解释“代码在运行但没有副作用”的现象，我们必须回到实证主义：**看见即事实**。
+**这是一个极其隐蔽的“图构建”陷阱。**
 
-我将在 `kuramoto.py` 中重新植入更具侵略性的调试日志，不仅打印“我在做什么”，还要打印关键变量的**类型**和**值**，特别是那个神秘的 `connector` 对象。
+**错误根源**
 
-## [WIP] feat: 重新植入深度调试日志以定位失效原因
+请看这段代码：
+```python
+@cs.task
+def process_and_recurse(
+    p: Dict[str, Any], _flash_dependency=flash_action
+) -> cs.LazyResult:
+    # ...
+```
+
+以及调用处：
+```python
+return process_and_recurse(perception)
+```
+
+在 Cascade 中，`GraphBuilder` 是通过遍历 `LazyResult` 对象中**实际传递的参数 (`.args` 和 `.kwargs`)** 来构建依赖图的。
+
+虽然你在函数定义中将 `flash_action` 设为了 `_flash_dependency` 的**默认值**，但在调用 `process_and_recurse(perception)` 时，你并没有把 `flash_action` 传进去。因此，生成的 `LazyResult` 对象中**不包含**对 `flash_action` 的引用。
+
+结果就是：
+1.  `Engine` 看到要执行 `process_and_recurse`。
+2.  它检查依赖，只发现了 `perception`。
+3.  它执行 `safe_recv`，得到结果。
+4.  它执行 `process_and_recurse`。
+5.  **`flash_action` (即 `send_signal`) 从未被加入到图中，因为它是一个没有被引用的“孤岛”节点。**
+
+这就是为什么循环在跑，接收在跑，但“发射信号”和“判断超时”的任务从未执行。
+
+**解决方案**
+
+必须**显式地**将依赖项作为参数传递给下游任务，强迫它进入 `LazyResult` 的参数列表，从而被 `GraphBuilder` 捕获。
+
+## [WIP] fix: 显式传递副作用依赖以修复图构建断裂
+
+### 错误分析
+`send_signal` 任务从未执行，因为它是作为 `process_and_recurse` 的**默认参数**定义的，但在调用时未显式传递。Cascade 的 `GraphBuilder` 仅根据显式传递给 `LazyResult` 的参数来构建依赖关系，忽略了 Python 函数签名的默认值。因此，`send_signal` 及其上游的 `was_timeout` 任务变成了“孤岛节点”，被引擎优化（忽略）掉了。
 
 ### 用户需求
-在 `kuramoto.py` 中重新添加详细的 `print` 日志，以确认 `send_signal` 是否被执行，以及传入的 `connector` 对象的状态。
+修改 `kuramoto.py`，在调用 `process_and_recurse` 时显式传递 `_flash_dependency` 参数，确保 `send_signal` 被正确纳入执行图。
 
 ### 评论
-这次我们将打印出 `connector` 的 `id()` 和类型，以确认它在传递过程中是否发生了某种“变异”。同时，我们会打印 `is_timeout` 的值，确保决策逻辑是正确的。这将是我们解开这个谜题的最后一把钥匙。
+这个 bug 给我们上了一堂关于“声明式图构建”的重要一课：**在计算图中，依赖必须是显式的连接**。Python 的语法糖（默认参数）在这里不仅不起作用，反而具有欺骗性。显式传递参数不仅解决了 bug，也让数据流向更加清晰。
 
 ### 目标
 1.  修改 `observatory/agents/kuramoto.py`。
-2.  在 `send_signal` 中打印：是否被调用、`should_send` 的值、`connector` 是否为 None、`connector` 的内存地址。
-3.  在 `safe_recv` 中打印：开始等待、收到信号/超时。
-4.  在 `was_timeout` 中打印：输入字典内容、返回的布尔值。
+2.  在 `firefly_cycle` 函数末尾调用 `process_and_recurse` 时，显式传入 `_flash_dependency=flash_action`。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/observatory #task/action/debug #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/runtime #scope/core #ai/refine #task/domain/testing #task/object/observatory #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 植入深度调试日志
+#### Acts 1: 显式连接依赖图
 
 ~~~~~act
-write_file
+patch_file
 observatory/agents/kuramoto.py
 ~~~~~
 ~~~~~python
-"""
-Implementation of a Firefly agent based on the Kuramoto model
-of coupled oscillators, using pure Cascade primitives.
-
-REVISION 7: Deep debug logging enabled.
-"""
-import asyncio
-import random
-import time
-from typing import Any, Dict
-
-import cascade as cs
-from cascade.interfaces.protocols import Connector
-
-
-# --- Atomic Primitives for Agent Behavior ---
-
-@cs.task
-async def send_signal(
-    topic: str,
-    payload: Dict[str, Any],
-    should_send: bool,
-    connector: Connector,
-) -> None:
-    """A task to publish a message to the shared bus."""
-    # DEBUG: Inspect the connector object deeply
-    conn_status = "VALID" if connector else "NONE"
-    conn_id = id(connector) if connector else "N/A"
-    
-    print(f"[Agent] send_signal EXEC. should_send={should_send}, connector={conn_status}({conn_id})")
-    
-    if should_send and connector:
-        print(f"[Agent] ⚡ ATTEMPTING PUBLISH to {topic}...")
-        await connector.publish(topic, payload)
-        print(f"[Agent] ⚡ PUBLISH CALL DONE.")
-
-
-@cs.task
-async def safe_recv(
-    topic: str,
-    timeout: float,
-    connector: Connector,
-) -> Dict[str, Any]:
-    """A custom receive task that treats timeouts as valid return values."""
-    if not connector:
-        return {"signal": None, "timeout": True}
-
-    print(f"[Agent] safe_recv START wait={timeout:.4f}s")
-    
-    future = asyncio.Future()
-    async def callback(topic: str, payload: Any):
-        if not future.done():
-            future.set_result(payload)
-
-    subscription = await connector.subscribe(topic, callback)
-    try:
-        signal = await asyncio.wait_for(future, timeout=timeout)
-        print(f"[Agent] safe_recv GOT SIGNAL")
-        return {"signal": signal, "timeout": False}
-    except asyncio.TimeoutError:
-        print(f"[Agent] safe_recv TIMEOUT")
-        return {"signal": None, "timeout": True}
-    finally:
-        if subscription:
-            await subscription.unsubscribe()
-
-
-# --- Core Agent Logic ---
-
-def firefly_agent(
-    agent_id: int,
-    initial_phase: float,
-    period: float,
-    nudge: float,
-    flash_topic: str,
-    listen_topic: str,
-    connector: Connector,
-):
-    """
-    This is the main entry point for a single firefly agent.
-    """
-    def firefly_cycle(
-        agent_id: int,
-        phase: float,
-        period: float,
-        nudge: float,
-        flash_topic: str,
-        listen_topic: str,
-        connector: Connector,
-    ):
-        time_to_flash = period - phase
-        wait_timeout = max(0.01, time_to_flash)
-
-        perception = safe_recv(listen_topic, timeout=wait_timeout, connector=connector)
-
-        @cs.task
-        def was_timeout(p: Dict[str, Any]) -> bool:
-            # DEBUG
-            val = p.get("timeout", False)
-            print(f"[Agent] was_timeout check: input={p} -> {val}")
-            return val
-            
-        is_timeout = was_timeout(perception)
-
-        flash_action = send_signal(
-            topic=flash_topic, 
-            payload={"agent_id": agent_id, "phase": phase},
-            should_send=is_timeout,
-            connector=connector
-        )
-
-        @cs.task
-        def process_and_recurse(
-            p: Dict[str, Any], _flash_dependency=flash_action
-        ) -> cs.LazyResult:
-            jitter = random.uniform(-0.01, 0.01)
-            if p["timeout"]:
-                next_phase = 0.0 + jitter
-            else:
-                next_phase = (phase + nudge + jitter) % period
-
             return firefly_cycle(
                 agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
             )
@@ -163,8 +74,26 @@ def firefly_agent(
         agent_id, initial_phase, period, nudge, flash_topic, listen_topic, connector
     )
 ~~~~~
+~~~~~python
+            return firefly_cycle(
+                agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
+            )
+
+        # CRITICAL FIX: We must explicitly pass the dependency so it ends up 
+        # in the LazyResult's kwargs. If we rely on the default argument value,
+        # the GraphBuilder won't see the edge, and send_signal will be pruned.
+        return process_and_recurse(perception, _flash_dependency=flash_action)
+
+    return firefly_cycle(
+        agent_id, initial_phase, period, nudge, flash_topic, listen_topic, connector
+    )
+~~~~~
 
 ### 下一步建议
-请再次运行 `python -m observatory.debug.debug_02_single_agent`。
+这是最后一步修正。逻辑链条现在在“代码层面”和“图结构层面”都闭合了。
 
-请仔细观察输出。如果 `send_signal` 打印了 `ATTEMPTING PUBLISH` 甚至 `PUBLISH CALL DONE`，但外部依然没收到，那就是 `LocalBusConnector` 的内部队列或锁出了问题。如果 `connector` 是 `NONE`，那就是参数传递依然有问题。真相只有一个。
+请再次运行调试脚本：`python -m observatory.debug.debug_02_single_agent`
+
+这一次，我们一定会看到 `[Agent] send_signal EXEC` 和 `[Agent] ⚡ ATTEMPTING PUBLISH`。如果看到了这些，而且外部脚本打印了 `>>> FLASH DETECTED!`，那么我们的单体测试就通过了。
+
+随后，我们就可以自信地运行大规模的 50 萤火虫实验了。

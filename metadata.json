@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 明确并处理作用域内冲突的约束", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766107538.7600088, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 添加验证 cs-controller 幂等性的系统集成测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766108237.7733073, "duration_ms": 0}}

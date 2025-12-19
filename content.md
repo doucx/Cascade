@@ -1,220 +1,90 @@
-You are absolutely right to push for a deeper analysis. My previous fix was incomplete because I misdiagnosed the *symptom* (a missing event) without correctly identifying the *root cause* of the race condition. Your continued observation that the test fails is crucial.
+You are absolutely right to insist on more tests. A single failing test can have multiple potential causes, and adding more focused tests is the correct engineering practice to isolate the root cause. My previous diagnoses were incorrect because they were based on incomplete analysis. Your methodology is forcing a more rigorous approach, and it's leading us to the real problem.
 
-Let's trace the execution flow with precision. This is a subtle but classic asynchronous programming bug.
+My new, deeper analysis points to a subtle but critical bug not in the `Engine` itself, but in our **test harness**. Specifically, the `InProcessConnector` does not correctly handle MQTT's `+` (single-level wildcard) in topic subscriptions.
 
- 错误分析
+The test subscribes to `cascade/telemetry/+/+/+/events`, but the `_topic_matches` method in our harness only supports exact matches and the `#` (multi-level) wildcard. This means the observer's subscription never matches the published message, even if the `Engine` and `TelemetrySubscriber` are working perfectly. The message is published, but the harness fails to route it to the test's observer.
 
-The root cause is a **race condition between the synchronous scheduling of an asynchronous task and the synchronous execution of the shutdown logic**.
+To prove this, I will create a new, highly isolated test that *only* checks the `InProcessConnector`'s wildcard subscription logic. This test is designed to fail. If it does, we will have pinpointed the exact location of the bug without the complexity of the full Engine.
 
-Here is the exact sequence of events that causes the failure:
+## [WIP] test: Isolate and identify wildcard subscription bug in test harness
 
-1.  **`Engine.run()` starts.** It correctly calls `await self.connector.connect()`. The connector is now active.
-2.  **`Engine.run()` calls `self.bus.publish(RunStarted(...))`**. This is a **synchronous** call.
-3.  The `MessageBus` immediately and **synchronously** calls the `on_event` method of our `TelemetrySubscriber`.
-4.  Inside the **synchronous** `on_event` handler, the line `asyncio.create_task(self._connector.publish(topic, payload))` is executed.
-    *   **This is the critical point.** `asyncio.create_task()` **schedules** the `_connector.publish()` coroutine to be run on the event loop *at some point in the future*. It does **not** execute it immediately. It returns control to the `on_event` handler instantly.
-5.  Control returns all the way back to `Engine.run()`.
-6.  The test workflow (`noop()`) is extremely fast. The `await self._execute_graph(...)` call completes almost instantly, as there are no `await` points within the workflow to yield control to the event loop.
-7.  The `try` block in `Engine.run()` finishes.
-8.  The `finally` block is executed. It calls `await self.connector.disconnect()`. This **synchronously** sets the connector's internal state to "disconnected".
-9.  **Sometime after all this**, the Python event loop finally gets a chance to run the `publish()` task that was scheduled back in step 4.
-10. The `publish()` method runs, but the first thing it does is check if the connector is active. It is not, so the message is silently (and correctly, from its perspective) dropped.
+### 错误分析
+经过对 `InProcessConnector`实现的深入审查，发现其 `_topic_matches` 方法不支持 MQTT 的 `+` (单层通配符)。我们现有的遥测测试 `test_startup_telemetry_no_race_condition` 依赖于 `cascade/telemetry/+/+/+/events` 这个订阅主题来捕获事件。
 
-The reason your `workflow_demo.py` **passes in practice** is because its `process_item` task contains `await asyncio.sleep(...)`. This `await` forces the `engine.run()` coroutine to yield control back to the event loop, giving the scheduled `publish()` task ample time to execute *while the connector is still connected*. Our test, lacking any such delay, exposes the underlying race condition perfectly.
-
-### 解决方案
-
-The `TelemetrySubscriber` needs a "graceful shutdown" mechanism. It must ensure that all its scheduled publish tasks have completed before the `Engine` is allowed to disconnect the connector.
-
-1.  The `TelemetrySubscriber` will be modified to track all pending `publish` tasks it creates.
-2.  It will expose a new `async def shutdown()` method that waits for all tracked tasks to complete.
-3.  The `Engine` will be modified to be aware of its critical subscribers and will be responsible for calling `await subscriber.shutdown()` inside its `finally` block, **before** it calls `connector.disconnect()`.
-
-This ensures a clean, ordered shutdown where telemetry is always flushed before the connection is closed.
-
-## [WIP] fix(runtime): Implement graceful shutdown for TelemetrySubscriber
+由于测试线束中的这个缺陷，即使 `Engine` 和 `TelemetrySubscriber` 完美地发布了遥测事件，`InProcessConnector` 也无法将该消息路由到测试的观察者回调函数，导致 `received_messages` 列表为空，测试断言失败。问题的根源不在于 `Engine` 的时序，而在于测试工具本身的功能不完整。
 
 ### 用户需求
-The `TelemetrySubscriber`'s fire-and-forget approach to publishing creates a race condition where the `Engine` can disconnect the connector before pending telemetry messages are sent, leading to data loss, especially for short-lived workflows. A graceful shutdown mechanism is required to ensure all telemetry is flushed before disconnection.
+创建一个新的、独立的、最小化的测试用例，专门用于验证 `InProcessConnector` 的通配符匹配逻辑，并证明其当前实现中存在的缺陷。
 
 ### 评论
-This is a critical reliability fix. Unreliable telemetry can mask other issues and make debugging production problems impossible. By implementing a graceful shutdown, we make the system more robust and production-ready.
+这是一个至关重要的发现。它表明我们的测试基础设施本身存在盲点，可能会导致我们对核心代码做出错误的诊断和修改。通过为测试工具编写测试，我们遵循了更深层次的测试驱动开发原则，确保了我们用于验证系统的工具本身是可靠的。
 
 ### 目标
-1.  Modify `TelemetrySubscriber` to track its pending `asyncio.Task` objects.
-2.  Add a `shutdown()` method to `TelemetrySubscriber` that awaits the completion of all pending tasks.
-3.  Modify the `Engine` to accept "managed subscribers" and call their `shutdown()` method during its cleanup phase, just before disconnecting the connector.
-4.  Update the failing E2E test to correctly register the `TelemetrySubscriber` with the `Engine`.
+1.  创建一个新的测试文件 `tests/py/e2e/test_harness_connector.py`。
+2.  在该文件中，编写一个名为 `test_in_process_connector_plus_wildcard_subscription` 的测试。
+3.  该测试将直接使用 `InProcessConnector`，用一个包含 `+` 通配符的主题进行订阅。
+4.  然后，向一个应该与该通配符匹配的具体主题发布一条消息。
+5.  断言订阅的回调函数收到了该消息。
+6.  **预期结果**: 此测试将失败，从而精确地暴露测试线束中的缺陷。
 
 ### 基本原理
-The core principle is "structured concurrency". The parent process (`Engine.run`) must not terminate its resources (the `connector`) until its child processes (the telemetry `publish` tasks) have completed. We achieve this by creating an explicit dependency: the `Engine` will now manage the subscriber's lifecycle and wait for its confirmation (`shutdown()`) before proceeding with its own teardown.
+通过将测试范围缩小到单一组件 (`InProcessConnector`)，我们排除了 `Engine`、`MessageBus` 和 `TelemetrySubscriber` 等所有其他变量的干扰。这使得测试的意图极其清晰：验证 `subscribe` 和 `publish` 之间的路由逻辑。如果这个最小化的测试失败，我们就 100% 确定了问题的根源在于 `_topic_matches` 方法。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/runtime #concept/telemetry #concept/lifecycle #scope/core #ai/instruct #task/domain/runtime #task/object/telemetry-subscriber #task/action/refactor #task_state/continue
+#intent/tooling #flow/ready #priority/critical #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/test-harness #task/action/bug-fix #task_state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Enhance `TelemetrySubscriber` with shutdown logic
+#### Acts 1: 创建隔离的线束连接器测试
 
-We will modify `subscribers.py` to add task tracking and the `shutdown` method.
+我们将创建一个全新的测试文件来隔离和验证 `InProcessConnector` 的行为。
 
 ~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/subscribers.py
+write_file
+tests/py/e2e/test_harness_connector.py
 ~~~~~
 ~~~~~python
-class TelemetrySubscriber:
+import pytest
+import asyncio
+from .harness import InProcessConnector
+
+@pytest.mark.asyncio
+async def test_in_process_connector_plus_wildcard_subscription():
     """
-    Listens to runtime events and publishes them as structured telemetry
-    data via a Connector.
+    Isolated test to verify that the InProcessConnector correctly handles
+    the single-level '+' MQTT wildcard in subscriptions.
     """
+    connector = InProcessConnector()
+    received_payloads = []
 
-    def __init__(self, event_bus: MessageBus, connector: Connector):
-        self._connector = connector
-        self._source_id = f"{platform.node()}-{os.getpid()}"
-        event_bus.subscribe(Event, self.on_event)
+    async def observer_callback(topic, payload):
+        received_payloads.append(payload)
 
-    def _create_header(self, run_id: str) -> dict:
-~~~~~
-~~~~~python
-class TelemetrySubscriber:
-    """
-    Listens to runtime events and publishes them as structured telemetry
-    data via a Connector.
-    """
+    # 1. ARRANGE: Subscribe with a '+' wildcard
+    subscription_topic = "test/+/data"
+    await connector.subscribe(subscription_topic, observer_callback)
 
-    def __init__(self, event_bus: MessageBus, connector: Connector):
-        self._connector = connector
-        self._source_id = f"{platform.node()}-{os.getpid()}"
-        self._pending_tasks = set()
-        event_bus.subscribe(Event, self.on_event)
-
-    async def shutdown(self):
-        """Waits for all pending telemetry tasks to complete."""
-        if self._pending_tasks:
-            await asyncio.gather(*self._pending_tasks, return_exceptions=True)
-
-    def _create_header(self, run_id: str) -> dict:
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/subscribers.py
-~~~~~
-~~~~~python
-        # If we have a valid body, schedule the publish task
-        if event_body:
-            payload["body"] = event_body
-            asyncio.create_task(self._connector.publish(topic, payload))
-~~~~~
-~~~~~python
-        # If we have a valid body, schedule the publish task
-        if event_body:
-            payload["body"] = event_body
-            task = asyncio.create_task(self._connector.publish(topic, payload))
-            self._pending_tasks.add(task)
-            task.add_done_callback(self._pending_tasks.discard)
-~~~~~
-
-#### Acts 2: Update `Engine` to manage subscriber shutdown
-
-Now we modify `engine.py` to manage the subscriber's lifecycle.
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-        self.flow_manager: Optional[FlowManager] = None
-
-    def register(self, resource_def: ResourceDefinition):
-        self._resource_providers[resource_def.name] = resource_def.func
-~~~~~
-~~~~~python
-        self.flow_manager: Optional[FlowManager] = None
-        self._managed_subscribers = []
-
-    def add_subscriber(self, subscriber: Any):
-        """
-        Adds a subscriber whose lifecycle (e.g., shutdown) the engine should manage.
-        """
-        self._managed_subscribers.append(subscriber)
-
-    def register(self, resource_def: ResourceDefinition):
-        self._resource_providers[resource_def.name] = resource_def.func
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-            raise
-        finally:
-            if self.connector:
-                await self.connector.disconnect()
-                self.bus.publish(ConnectorDisconnected(run_id=run_id))
-~~~~~
-~~~~~python
-            raise
-        finally:
-            # Gracefully shut down any managed subscribers BEFORE disconnecting the connector
-            for sub in self._managed_subscribers:
-                if hasattr(sub, "shutdown"):
-                    await sub.shutdown()
-
-            if self.connector:
-                await self.connector.disconnect()
-                self.bus.publish(ConnectorDisconnected(run_id=run_id))
-~~~~~
-
-#### Acts 3: Fix the test by registering the subscriber with the Engine
-
-Finally, we update `test_startup_telemetry.py` to use the new `add_subscriber` method.
-
-~~~~~act
-patch_file
-tests/py/e2e/test_startup_telemetry.py
-~~~~~
-~~~~~python
-    # CRITICAL: Manually assemble the TelemetrySubscriber, which bridges
-    # the internal event bus to the external connector. This is what cs.run()
-    # does automatically.
-    TelemetrySubscriber(bus, connector)
+    # 2. ACT: Publish to a topic that should match the wildcard
+    publish_topic = "test/device-123/data"
+    await connector.publish(publish_topic, {"value": 42})
     
-    # We will act as an external observer subscribing to the telemetry topic.
-    # Since InProcessConnector routes messages internally, we can subscribe 
-~~~~~
-~~~~~python
-    # CRITICAL: Manually assemble the TelemetrySubscriber, which bridges
-    # the internal event bus to the external connector. This is what cs.run()
-    # does automatically.
-    telemetry_subscriber = TelemetrySubscriber(bus, connector)
-    
-    # We will act as an external observer subscribing to the telemetry topic.
-    # Since InProcessConnector routes messages internally, we can subscribe 
-~~~~~
-~~~~~act
-patch_file
-tests/py/e2e/test_startup_telemetry.py
-~~~~~
-~~~~~python
-        bus=bus,
-        connector=connector,
+    # Give the internal queue a moment to process
+    await asyncio.sleep(0.01)
+
+    # 3. ASSERT: The message should have been received
+    assert len(received_payloads) == 1, (
+        f"Connector failed to route message on topic '{publish_topic}' "
+        f"to wildcard subscription '{subscription_topic}'"
     )
-    
-    await engine.run(noop())
-    
-    # 4. Assert
+    assert received_payloads[0] == {"value": 42}
 ~~~~~
-~~~~~python
-        bus=bus,
-        connector=connector,
-    )
-    # CRITICAL: Register the subscriber with the engine for lifecycle management
-    engine.add_subscriber(telemetry_subscriber)
-    
-    await engine.run(noop())
-    
-    # 4. Assert
-~~~~~
+
+### 下一步建议
+我们已经创建了一个预期会失败的、高度集中的测试，来精确定位测试线束中的缺陷。
+
+下一步是运行这个新测试。在它失败后，我们将进入修复阶段：
+1.  修改 `tests/py/e2e/harness.py` 中的 `_topic_matches` 方法，使其正确实现对 `+` 通配符的支持。
+2.  重新运行 `test_harness_connector.py` 以确认修复成功（绿灯）。
+3.  最后，重新运行最初失败的 `test_startup_telemetry.py`，它现在也应该会通过。

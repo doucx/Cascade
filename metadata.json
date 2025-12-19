@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "解决方案", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766106177.8373892, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: Isolate and identify wildcard subscription bug in test harness", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766106328.6408842, "duration_ms": 0}}

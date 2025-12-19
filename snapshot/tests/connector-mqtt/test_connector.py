@@ -1,13 +1,14 @@
 import pytest
 import json
 import asyncio
-from cascade.connectors.mqtt import MqttConnector
-
-# Note: The 'mock_aiomqtt_module' fixture is now autoused from conftest.py
-# This ensures aiomqtt is mocked BEFORE this module is even imported.
+# REMOVED: Top-level import of MqttConnector to prevent early loading
+# from cascade.connectors.mqtt import MqttConnector
 
 def test_mqtt_connector_instantiation():
     """Tests that the MqttConnector can be instantiated."""
+    # Lazy import ensures we get the version patched by conftest.py
+    from cascade.connectors.mqtt import MqttConnector
+    
     connector = MqttConnector(hostname="localhost", port=1234)
     assert connector.hostname == "localhost"
     assert connector.port == 1234
@@ -16,6 +17,9 @@ def test_mqtt_connector_instantiation():
 @pytest.mark.asyncio
 async def test_connect_and_disconnect_lifecycle(mock_aiomqtt_module, mocker):
     """Tests that connect() creates and connects a client with LWT, and disconnect() disconnects it."""
+    # Lazy import
+    from cascade.connectors.mqtt import MqttConnector
+
     mock_client_instance = mock_aiomqtt_module["instance"]
     mock_client_class = mock_aiomqtt_module["Client"]
     mock_will_class = mock_aiomqtt_module["Will"]
@@ -63,6 +67,8 @@ async def test_publish_sends_json_and_is_fire_and_forget(mock_aiomqtt_module):
     Tests that publish() serializes the payload to JSON and sends it in a
     non-blocking manner.
     """
+    from cascade.connectors.mqtt import MqttConnector
+
     mock_client = mock_aiomqtt_module["instance"]
     connector = MqttConnector(hostname="test.broker")
     await connector.connect()
@@ -89,6 +95,8 @@ async def test_publish_without_connect_does_nothing(mock_aiomqtt_module):
     Tests that calling publish() before connect() does not raise an error
     and does not try to publish anything (Fail-Silent Telemetry).
     """
+    from cascade.connectors.mqtt import MqttConnector
+
     mock_client = mock_aiomqtt_module["instance"]
     connector = MqttConnector(hostname="test.broker")
 
@@ -105,6 +113,8 @@ async def test_subscribe_receives_messages(mock_aiomqtt_module):
     Tests that the connector starts a listener loop, and when messages arrive,
     the registered callback is invoked with decoded data.
     """
+    from cascade.connectors.mqtt import MqttConnector
+
     mock_client = mock_aiomqtt_module["instance"]
     connector = MqttConnector(hostname="test.broker")
 

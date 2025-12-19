@@ -19,10 +19,21 @@ class InProcessController:
     def __init__(self, connector: InProcessConnector):
         self.connector = connector
 
-    async def set_limit(self, **kwargs):
-        # Directly call the async logic, bypassing Typer and asyncio.run()
+    async def set_limit(
+        self,
+        scope: str,
+        rate: str | None = None,
+        concurrency: int | None = None,
+        ttl: int | None = None,
+    ):
+        """Directly calls the async logic, providing defaults for missing args."""
         await controller_app._publish_limit(
-            hostname="localhost", port=1883, **kwargs
+            scope=scope,
+            concurrency=concurrency,
+            rate=rate,
+            ttl=ttl,
+            hostname="localhost",  # Constant for test purposes
+            port=1883,           # Constant for test purposes
         )
 
 @pytest.fixture
@@ -30,19 +41,12 @@ def controller_runner(monkeypatch):
     """
     Provides a way to run cs-controller commands in-process with a mocked connector.
     """
-    # 1. Create the deterministic, in-memory connector for this test
     connector = InProcessConnector()
-
-    # 2. Monkeypatch the MqttConnector class *where it's used* in the controller app module
-    #    to always return our in-memory instance.
-    #    Note: We patch the class constructor to return our instance.
     monkeypatch.setattr(
         controller_app.MqttConnector,
         "__new__",
         lambda cls, *args, **kwargs: connector
     )
-    
-    # 3. Return a controller instance that uses this connector
     return InProcessController(connector)
 
 # --- The Failing Test Case ---
@@ -50,20 +54,18 @@ def controller_runner(monkeypatch):
 @pytest.mark.asyncio
 async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
     """
-    This test should FAIL with the current code due to a timeout.
+    This test is EXPECTED TO FAIL with a timeout on the pre-fix codebase.
     It verifies that a non-idempotent CLI controller creates conflicting
-    constraints that deadlock the engine.
+    constraints that deadlock the engine. After the fix is applied, this
+    test should pass.
     """
     bus, spy = bus_and_spy
     
-    # ARRANGE: Define a simple workflow
     @cs.task
     def fast_task(i: int):
         return i
-
     workflow = fast_task.map(i=range(10))
 
-    # ARRANGE: Setup the engine to use the same in-memory connector
     engine = Engine(
         solver=NativeSolver(),
         executor=MockWorkExecutor(),
@@ -71,15 +73,13 @@ async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
         connector=controller_runner.connector,
     )
 
-    # ACT & ASSERT
     engine_task = asyncio.create_task(engine.run(workflow))
 
     try:
-        # 1. Set a slow limit using the in-process controller.
+        # 1. Set a slow limit.
         await controller_runner.set_limit(scope="global", rate="1/s")
 
-        # 2. Wait long enough to confirm the engine is running but throttled.
-        # We wait up to 2s for at least one task to finish.
+        # 2. Wait to confirm the engine is throttled.
         for _ in range(20):
             await asyncio.sleep(0.1)
             if len(spy.events_of_type(TaskExecutionFinished)) > 0:
@@ -89,19 +89,12 @@ async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
             "Engine did not start processing tasks under the initial slow rate limit."
         )
 
-        # 3. Set a fast limit. In the buggy version, this adds a NEW conflicting limit
-        # because the CLI generates a new random ID for the constraint.
+        # 3. Set a fast limit. The bug causes this to ADD a new conflicting constraint.
         await controller_runner.set_limit(scope="global", rate="100/s")
 
-        # 4. The engine should now finish quickly.
-        # With the bug, it will be deadlocked on the old "1/s" limit and this will time out.
+        # 4. The engine should now finish quickly. The bug will cause a timeout here.
         await asyncio.wait_for(engine_task, timeout=2.0)
 
-    except asyncio.TimeoutError:
-        pytest.fail(
-            "Engine timed out as expected. This confirms the non-idempotent "
-            "controller created conflicting constraints, deadlocking the engine."
-        )
     finally:
         # Cleanup: ensure engine task is cancelled if it's still running
         if not engine_task.done():
@@ -109,6 +102,5 @@ async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
             with pytest.raises(asyncio.CancelledError):
                 await engine_task
 
-    # This part should only be reached after the bug is fixed.
-    # For now, the test is expected to fail before this.
+    # This part is only reached if the test passes (i.e., after the bug is fixed).
     assert len(spy.events_of_type(TaskExecutionFinished)) == 10

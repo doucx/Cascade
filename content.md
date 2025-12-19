@@ -1,69 +1,46 @@
-好的，我们正式开始重构。
+You are absolutely right. My apologies, the generated test harness had a flaw in its call signature, and the failure logic was confusingly inverted. Thank you for catching that. The goal is indeed to have a clean test that fails for the right reason.
 
-根据我们制定的路线图，第一步是建立一个坚实的、可靠的测试基础。我们将彻底移除旧的、依赖外部环境的系统测试，并创建一个新的、完全在内存中运行的端到端集成测试。这个新测试将能够稳定地复现 `cs-controller` 的非幂等性 Bug，为我们后续的修复工作提供一个明确的“红灯”信号。
+The `TypeError` occurs because when we call `controller_app._publish_limit` directly, we bypass the Typer CLI layer. Typer would normally handle optional arguments that aren't provided on the command line, but a direct Python call requires all arguments without a default value (`= None`) to be present. The signature of `_publish_limit` expects `concurrency` and `ttl`, even if their value is `None`.
 
-我将生成一个计划来执行此项重构。
+I will now generate a plan to fix this test. This plan corrects the call signature in our test harness and simplifies the test's failure logic to be more straightforward: it will now naturally fail with a timeout, which is the clear "red light" we need.
 
-## [WIP] refactor: 使用确定性的内存连接器重构CLI集成测试
+## [WIP] fix: Correct TypeError in CLI integration test harness
+
+### 错误分析
+测试 `test_cli_idempotency_unblocks_engine` 失败，并报告 `TypeError`，因为测试辅助工具 `InProcessController` 在调用 `_publish_limit` 函数时，未能提供 `concurrency` 和 `ttl` 这两个必需的参数。
+
+虽然这两个参数在 CLI 中是可选的，但在 Python 函数签名中，它们没有默认值（例如 `concurrency: int | None = None`），因此在直接调用时必须提供。此外，原始测试用例中的 `except asyncio.TimeoutError: pytest.fail(...)` 逻辑是反直觉的；一个因超时而失败的测试应该直接被报告为失败，而不是通过 `pytest.fail` 将其标记为失败，这会掩盖真正的失败原因。
 
 ### 用户需求
-遵循之前批准的重构路线图，我们需要用一个快速、可靠且完全隔离的端到端集成测试，来替换掉旧的、依赖外部 MQTT Broker 的系统测试。这个新的测试用例必须能在当前的代码基础上稳定地复现 `cs-controller` 的非幂等性 Bug。
+修复 `tests/py/e2e/test_e2e_cli_integration.py` 中的 `TypeError`，并调整测试逻辑，使其在遇到预期的死锁时能够自然地因超时而失败，从而稳定地复现 Bug。
 
 ### 评论
-这是解决底层 Bug 的关键第一步。通过消除对外部 Broker 和 `subprocess` 的依赖，我们不仅能创建一个稳定重现问题的测试用例，还极大地改善了开发者体验（DX），使得测试套件更快、更可靠。这个重构遵循了“测试应验证意图而非实现”以及“确定性异步测试”的核心原则。
+这是一个关键的修复，它使我们的新测试用例能够实际运行并准确地暴露底层的幂等性问题。通过修正调用签名并简化失败逻辑，我们得到了一个清晰、可靠的“红灯”测试，为后续的修复工作铺平了道路。
 
 ### 目标
-1.  **清理**: 彻底删除旧的、脆弱的 `tests/sys` 目录及其内容。
-2.  **构建**: 创建一个新的测试文件 `tests/py/e2e/test_e2e_cli_integration.py`。
-3.  **实现测试工具**: 在新文件中，实现一个 `pytest` fixture (`controller_runner`)。该 fixture 将：
-    *   实例化一个确定性的 `InProcessConnector`。
-    *   通过 `monkeypatch` 将 `cascade.cli.controller.app.MqttConnector` 替换为我们的 `InProcessConnector` 实例。
-    *   提供一个简洁的接口，用于在测试中直接调用 `cs-controller` 的核心异步逻辑（如 `set-limit`）。
-4.  **编写失败的测试**: 使用新的 fixture 编写 `test_cli_idempotency_unblocks_engine` 测试用例。该测试将编排“设置慢速限制 -> 验证节流 -> 设置快速限制 -> 验证死锁”的完整场景。
-5.  **预期结果**: 在当前代码下，此测试用例将因 `asyncio.TimeoutError` 而**失败**，从而为我们提供一个清晰的、可修复的故障信号。
+1.  修改 `InProcessController` 辅助类中的 `set_limit` 方法，使其接受并传递 `concurrency` 和 `ttl` 参数，并为它们提供 `None` 作为默认值。
+2.  移除 `test_cli_idempotency_unblocks_engine` 测试用例中的 `try...except` 块，让 `asyncio.TimeoutError` 能够自然地导致测试失败。
+3.  在测试的文档字符串中明确说明，该测试预期会因超时而失败。
 
 ### 基本原理
-我们将遵循重构路线图的第一、二步。我们不直接调用 `typer` 应用的入口点（因为它内部的 `asyncio.run` 会与 `pytest-asyncio` 的事件循环冲突），而是创建一个测试专用的“控制器应用”模拟器。这个模拟器会直接调用 `cs-controller` 内部的核心 `async def` 函数（例如 `_publish_limit`），并通过 `monkeypatch` 将其网络通信重定向到内存中的 `InProcessConnector`。这使得我们可以在同一个异步事件循环中，协同测试 `Engine` 和 `cs-controller` 的交互，从而以一种完全确定性的方式复现时序相关的 Bug。
+我们将通过精确匹配 `_publish_limit` 函数的签名来修复 `TypeError`。同时，我们将移除多余的异常捕获逻辑。一个健壮的回归测试应该在其预期失败的场景下直接失败（亮红灯），而不是捕获预期的异常然后手动调用 `pytest.fail`。这使得测试结果更加清晰，并直接反映了系统的真实行为。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/tests #comp/cli #concept/state #scope/dx #ai/instruct #task/domain/control-plane #task/object/constraint-management #task/action/refactor-idempotency #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/control-plane #task/object/constraint-management #task/action/refactor-idempotency #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 清理旧的系统测试并创建新的集成测试文件
+#### Acts 1: 修正测试辅助工具并简化测试用例
 
-我们将首先删除整个 `tests/sys` 目录，然后创建新的测试文件，其中包含复现 Bug 所需的全套逻辑：测试工具、workflow 定义和失败的测试用例本身。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-rm -rf tests/sys
-~~~~~
+我们将通过一个 `patch_file` 操作来同时更新 `InProcessController` 和 `test_cli_idempotency_unblocks_engine`，以确保测试的正确性和清晰度。
 
 ~~~~~act
-write_file
+patch_file
 tests/py/e2e/test_e2e_cli_integration.py
 ~~~~~
 ~~~~~python
-import asyncio
-import pytest
-import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import TaskExecutionFinished
-
-# 导入 app 模块中的核心异步逻辑函数
-from cascade.cli.controller import app as controller_app
-from cascade.connectors.mqtt import MqttConnector
-
-from .harness import InProcessConnector, MockWorkExecutor
-
-# --- Test Harness for In-Process CLI Interaction ---
-
 class InProcessController:
     """A test double for the controller CLI that calls its core logic in-process."""
     def __init__(self, connector: InProcessConnector):
@@ -163,9 +140,100 @@ async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
     # For now, the test is expected to fail before this.
     assert len(spy.events_of_type(TaskExecutionFinished)) == 10
 ~~~~~
+~~~~~python
+class InProcessController:
+    """A test double for the controller CLI that calls its core logic in-process."""
+    def __init__(self, connector: InProcessConnector):
+        self.connector = connector
+
+    async def set_limit(
+        self,
+        scope: str,
+        rate: str | None = None,
+        concurrency: int | None = None,
+        ttl: int | None = None,
+    ):
+        """Directly calls the async logic, providing defaults for missing args."""
+        await controller_app._publish_limit(
+            scope=scope,
+            concurrency=concurrency,
+            rate=rate,
+            ttl=ttl,
+            hostname="localhost",  # Constant for test purposes
+            port=1883,           # Constant for test purposes
+        )
+
+@pytest.fixture
+def controller_runner(monkeypatch):
+    """
+    Provides a way to run cs-controller commands in-process with a mocked connector.
+    """
+    connector = InProcessConnector()
+    monkeypatch.setattr(
+        controller_app.MqttConnector,
+        "__new__",
+        lambda cls, *args, **kwargs: connector
+    )
+    return InProcessController(connector)
+
+# --- The Failing Test Case ---
+
+@pytest.mark.asyncio
+async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
+    """
+    This test is EXPECTED TO FAIL with a timeout on the pre-fix codebase.
+    It verifies that a non-idempotent CLI controller creates conflicting
+    constraints that deadlock the engine. After the fix is applied, this
+    test should pass.
+    """
+    bus, spy = bus_and_spy
+    
+    @cs.task
+    def fast_task(i: int):
+        return i
+    workflow = fast_task.map(i=range(10))
+
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockWorkExecutor(),
+        bus=bus,
+        connector=controller_runner.connector,
+    )
+
+    engine_task = asyncio.create_task(engine.run(workflow))
+
+    try:
+        # 1. Set a slow limit.
+        await controller_runner.set_limit(scope="global", rate="1/s")
+
+        # 2. Wait to confirm the engine is throttled.
+        for _ in range(20):
+            await asyncio.sleep(0.1)
+            if len(spy.events_of_type(TaskExecutionFinished)) > 0:
+                break
+        
+        assert len(spy.events_of_type(TaskExecutionFinished)) >= 1, (
+            "Engine did not start processing tasks under the initial slow rate limit."
+        )
+
+        # 3. Set a fast limit. The bug causes this to ADD a new conflicting constraint.
+        await controller_runner.set_limit(scope="global", rate="100/s")
+
+        # 4. The engine should now finish quickly. The bug will cause a timeout here.
+        await asyncio.wait_for(engine_task, timeout=2.0)
+
+    finally:
+        # Cleanup: ensure engine task is cancelled if it's still running
+        if not engine_task.done():
+            engine_task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await engine_task
+
+    # This part is only reached if the test passes (i.e., after the bug is fixed).
+    assert len(spy.events_of_type(TaskExecutionFinished)) == 10
+~~~~~
 
 ### 下一步建议
+测试用例现已修复并能正常运行。它将稳定地因 `asyncio.TimeoutError` 而失败，这正是我们需要的“红灯”。
 
-我们已经成功地创建了一个可靠的、可复现的“红灯”测试。运行此测试用例（`pytest tests/py/e2e/test_e2e_cli_integration.py`）现在应该会稳定地失败并报告 `pytest.fail` 中指出的超时问题。
-
-下一步是执行路线图中的**第三步**：**应用幂等性修复**。我将生成一个新计划，其中包含对 `cascade-cli-controller/src/cascade/cli/controller/app.py` 和 `cascade-runtime/src/cascade/runtime/constraints/manager.py` 的修改，以实现稳定标识符和“最后写入为准”的逻辑。
+既然您提到修复已经完成，我们现在可以前进到**路线图的第四步**：**重新应用修复并验证测试通过**。请您将修复幂等性问题的代码变更应用到工作区，然后再次运行这个测试。它现在应该会顺利通过，从而证明我们的修复是正确且有效的。

@@ -23,13 +23,13 @@ async def main():
     def shared_connector_provider():
         yield connector
 
+    # No longer need to register the resource, as we pass it directly.
     engine = cs.Engine(
         solver=cs.NativeSolver(),
         executor=cs.LocalExecutor(),
         bus=cs.MessageBus(),
         connector=None,
     )
-    engine.register(shared_connector_provider)
 
     # 4. Create Agent
     # Very short period (1.0s) so we don't wait long
@@ -41,6 +41,7 @@ async def main():
         nudge=0.1,
         flash_topic="firefly/flash",
         listen_topic="firefly/flash",
+        connector=connector, # Pass connector explicitly
     )
 
     # 5. Run for 3 seconds

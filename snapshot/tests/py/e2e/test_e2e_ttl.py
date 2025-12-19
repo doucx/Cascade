@@ -53,7 +53,7 @@ async def test_e2e_ttl_expiration():
 
     # 1. Publish a pause with short TTL (0.2s)
     # We use a slightly longer TTL than the check interval to ensure we catch the pause state
-    await controller.pause_with_ttl(scope="global", ttl=0.25)
+    await pause_with_ttl(scope="global", ttl=0.25)
 
     @cs.task
     def simple_task():

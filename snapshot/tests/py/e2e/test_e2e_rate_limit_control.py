@@ -63,7 +63,7 @@ async def test_e2e_rate_limit_control():
     # 5. Setup the Engine
     engine = Engine(
         solver=NativeSolver(),
-        executor=MockWorkExecutor(),
+        executor=TimingWorkExecutor(),
         bus=MessageBus(),
         connector=connector,
     )

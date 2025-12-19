@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(test): 修正速率限制测试的时序问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766107203.211943, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(test): 在速率限制更新测试中使用稳定的约束 ID", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766107317.4320204, "duration_ms": 0}}

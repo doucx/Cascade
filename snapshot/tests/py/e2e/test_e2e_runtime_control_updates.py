@@ -12,9 +12,10 @@ import uuid
 from .harness import InProcessConnector, MockWorkExecutor
 
 
-async def set_rate_limit(connector: InProcessConnector, scope: str, rate: str):
+async def set_rate_limit(connector: InProcessConnector, scope: str, rate: str, constraint_id: str = None):
     """Helper to publish a rate limit constraint."""
-    constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
+    if not constraint_id:
+        constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
     constraint = GlobalConstraint(
         id=constraint_id,
         scope=scope,
@@ -51,8 +52,11 @@ async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
         connector=connector,
     )
 
+    # Use a fixed ID to simulate an UPDATE, not adding a second constraint
+    limit_id = "global-rate-limit-1"
+
     # Publish a very slow rate limit *before* starting
-    await set_rate_limit(connector, scope="global", rate="1/s")
+    await set_rate_limit(connector, scope="global", rate="1/s", constraint_id=limit_id)
 
     # ACT & ASSERT
     run_task = asyncio.create_task(engine.run(workflow))
@@ -67,8 +71,8 @@ async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
         "Engine did not start processing tasks under the initial slow rate limit."
     )
 
-    # Now, publish a very fast rate limit. This should unblock the engine.
-    await set_rate_limit(connector, scope="global", rate="100/s")
+    # Now, publish a very fast rate limit using the SAME ID. This should unblock the engine.
+    await set_rate_limit(connector, scope="global", rate="100/s", constraint_id=limit_id)
 
     # The engine should now wake up and finish the remaining ~4 tasks very quickly.
     # If it's deadlocked, this await will time out.

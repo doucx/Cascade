@@ -1,51 +1,124 @@
-这是 **步骤 5: [绿灯]** 的执行。
+这是一个 `[WIP]` 计划，包含文件修改。
 
-我们分析发现，之前的测试失败 `AssertionError` 是由于测试代码本身给定的初始等待时间（0.2秒）过短，导致在引擎启动和调度第一个任务之前断言就执行了。
-
-此外，经过对 `Engine` 代码的审查，我们发现防止死锁的关键代码 `self._wakeup_event.set()` **已经存在**于 `_on_constraint_update` 方法中（可能是在之前的步骤中引入的）。因此，本次“修复”的核心是修正测试用例的缺陷，以验证现有代码的正确性。如果测试修正后通过，则证明系统实际上是健康的。
-
-## [WIP] fix(test): 修正速率限制测试的时序问题
+## [WIP] fix(test): 在速率限制更新测试中使用稳定的约束 ID
 
 ### 用户需求
-修正 `test_updating_rate_limit_unblocks_engine` 测试用例，将初始阶段的等待时间从 0.2 秒增加到 2.0 秒，以确保 `Engine` 有足够的时间启动并处理第一个任务。
+修改 `tests/py/e2e/test_e2e_runtime_control_updates.py`，确保在更新速率限制时使用相同的 `constraint_id`。
 
 ### 评论
-测试的准确性至关重要。当前的测试失败是一个“假阳性”——它报告了错误，但不是因为被测系统有问题，而是因为测试本身太急躁。通过放宽时间限制，我们将能够看到系统的真实行为：它是否能在更新约束后解除阻塞。
+在之前的测试失败分析中，我们发现测试辅助函数 `set_rate_limit` 每次调用都会生成一个新的随机 UUID。这意味着第二次调用实际上是**添加了第二个**约束，而不是更新现有的约束。这会导致 `RateLimiter` 被双重扣费（虽然桶是共享的），引入了不必要的复杂性。为了验证“更新约束能解开死锁”这一核心假设，我们需要确保操作是真正的“更新”。
 
 ### 目标
-1.  修改 `tests/py/e2e/test_e2e_runtime_control_updates.py`。
-2.  将等待循环从 `range(2)` 增加到 `range(20)`。
+1.  修改 `set_rate_limit` 辅助函数，接受一个可选的 `constraint_id`。
+2.  在测试用例中，生成一个固定的 ID，并在两次调用 `set_rate_limit` 时传入该 ID。
 
 ### 基本原理
-在异步测试中，特别是涉及 `InProcessConnector` 和 `MockWorkExecutor` 的集成测试，必须预留足够的缓冲时间来容纳事件循环的调度开销。0.2 秒对于完整的“启动->连接->订阅->调度->执行”链路来说过于紧张。
+控制变量法。我们需要排除“多重约束叠加”这一干扰因素，专注于验证 `Engine` 在接收到约束参数变更（Rate: 1/s -> 100/s）时的响应行为。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/engine-control #task/action/fix-test-timing #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/engine-control #task/action/fix-test-logic #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 增加测试等待时间
+#### Acts 1: 修改测试以使用固定 ID
 
 ~~~~~act
 patch_file
 tests/py/e2e/test_e2e_runtime_control_updates.py
 ~~~~~
 ~~~~~python
-    # Wait for the first task to finish, confirming the engine is running and throttled
-    for _ in range(2): # Give it 2 seconds to finish the first task
-        await asyncio.sleep(0.1)
-        if len(spy.events_of_type(TaskExecutionFinished)) > 0:
-            break
+async def set_rate_limit(connector: InProcessConnector, scope: str, rate: str):
+    """Helper to publish a rate limit constraint."""
+    constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
+    constraint = GlobalConstraint(
+        id=constraint_id,
+        scope=scope,
+        type="rate_limit",
+        params={"rate": rate},
+    )
 ~~~~~
 ~~~~~python
+async def set_rate_limit(connector: InProcessConnector, scope: str, rate: str, constraint_id: str = None):
+    """Helper to publish a rate limit constraint."""
+    if not constraint_id:
+        constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
+    constraint = GlobalConstraint(
+        id=constraint_id,
+        scope=scope,
+        type="rate_limit",
+        params={"rate": rate},
+    )
+~~~~~
+
+~~~~~act
+patch_file
+tests/py/e2e/test_e2e_runtime_control_updates.py
+~~~~~
+~~~~~python
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockWorkExecutor(),
+        bus=bus,
+        connector=connector,
+    )
+
+    # Publish a very slow rate limit *before* starting
+    await set_rate_limit(connector, scope="global", rate="1/s")
+
+    # ACT & ASSERT
+    run_task = asyncio.create_task(engine.run(workflow))
+
     # Wait for the first task to finish, confirming the engine is running and throttled
     for _ in range(20): # Give it 2 seconds to finish the first task
         await asyncio.sleep(0.1)
         if len(spy.events_of_type(TaskExecutionFinished)) > 0:
             break
+    
+    assert len(spy.events_of_type(TaskExecutionFinished)) >= 1, (
+        "Engine did not start processing tasks under the initial slow rate limit."
+    )
+
+    # Now, publish a very fast rate limit. This should unblock the engine.
+    await set_rate_limit(connector, scope="global", rate="100/s")
+
+    # The engine should now wake up and finish the remaining ~4 tasks very quickly.
+~~~~~
+~~~~~python
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockWorkExecutor(),
+        bus=bus,
+        connector=connector,
+    )
+
+    # Use a fixed ID to simulate an UPDATE, not adding a second constraint
+    limit_id = "global-rate-limit-1"
+
+    # Publish a very slow rate limit *before* starting
+    await set_rate_limit(connector, scope="global", rate="1/s", constraint_id=limit_id)
+
+    # ACT & ASSERT
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # Wait for the first task to finish, confirming the engine is running and throttled
+    for _ in range(20): # Give it 2 seconds to finish the first task
+        await asyncio.sleep(0.1)
+        if len(spy.events_of_type(TaskExecutionFinished)) > 0:
+            break
+    
+    assert len(spy.events_of_type(TaskExecutionFinished)) >= 1, (
+        "Engine did not start processing tasks under the initial slow rate limit."
+    )
+
+    # Now, publish a very fast rate limit using the SAME ID. This should unblock the engine.
+    await set_rate_limit(connector, scope="global", rate="100/s", constraint_id=limit_id)
+
+    # The engine should now wake up and finish the remaining ~4 tasks very quickly.
 ~~~~~
 
 ### 下一步建议
-运行修正后的测试。如果通过，说明 `Engine` 的并发控制逻辑是正确的。如果仍然失败（这次应该是超时），则说明确实存在深层死锁问题，我们需要进一步排查。
+再次运行测试。
+- 如果通过，说明问题确实在于多重约束的干扰，我们随后需要单独评估是否需要修复多重约束的行为，或者只是规范 CLI 的 ID 生成逻辑。但无论如何，Engine 的核心唤醒机制被证明是有效的。
+- 如果依然失败，那么我们就可以确信问题出在 `Engine` 的唤醒逻辑本身，必须深入代码进行修复。

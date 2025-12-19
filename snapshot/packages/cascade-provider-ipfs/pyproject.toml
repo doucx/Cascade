@@ -14,7 +14,6 @@ dependencies = [
 [project.entry-points."cascade.providers"]
 "ipfs.cat" = "cascade.providers.ipfs.provider:IpfsCatProvider"
 "ipfs.add" = "cascade.providers.ipfs.provider:IpfsAddProvider"
-"ipfs.add" = "cascade.providers.ipfs.provider:IpfsAddProvider"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

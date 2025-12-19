@@ -1,208 +1,166 @@
-这是一个非常精彩的调试过程。实验的快速失败（0.23s）揭示了一个关于 Cascade 异常传播机制的关键误解。
+船长，我明白了。现象虽然看似“卡住”，但实际上是因为我们触碰到了 `Engine` 和 `Connector` 生命周期管理的边界情况。
 
-**错误根源深度剖析**
+**问题核心：生命周期冲突**
 
-你目前的 `kuramoto.py` 是这样设计的：
-```python
-recv_task = cs.recv(...)  # 任务 A
-handled_recv = recv_with_timeout_handler(recv_task)  # 任务 B
-```
+在当前的实现中，我们创建了一个 `Engine` 实例，并发运行 50 个工作流。
+1.  **共享实例的隐患**: `Engine` 并非设计为完全无状态的重入式运行器。虽然它大体上是，但 `run()` 方法中包含了一些针对**单次运行**的生命周期管理逻辑（如 `connector.connect()` 和 `disconnect()`）。
+2.  **资源竞争**: 当 50 个工作流共享同一个 `Engine` 实例时，它们都在同一个 `_resource_providers` 字典中注册 `_internal_connector`。虽然这在 Python 中勉强能行，但很“脏”。
+3.  **致命的 Disconnect**: 最严重的问题是，如果有**任何一个** Agent 的工作流因为某种原因（甚至是正常的结束逻辑）触发了 `Engine.run` 的 `finally` 块，它就会调用 `await self.connector.disconnect()`。
+    *   `LocalBusConnector.disconnect()` 会将 `_is_connected` 设为 `False` 并**取消所有监听任务**。
+    *   这意味着：**只要有一个 Agent 退出（或重启），它就会切断所有其他 49 个 Agent 的通信线路。** 剩下的 Agent 变成了“聋子”和“哑巴”，实验自然就看起来像卡住了。
 
-在 Cascade 的执行模型中：
-1.  引擎首先调度 **任务 A (`cs.recv`)**。
-2.  当超时发生时，`cs.recv` 的实现（在核心库中）会**抛出 `asyncio.TimeoutError`**。
-3.  引擎捕获到这个异常，将其标记为 **任务 A 失败**。
-4.  因为任务 A 失败，依赖它的 **任务 B (`recv_with_timeout_handler`) 永远不会被执行**。
-5.  引擎判定当前工作流执行失败，抛出异常，进而导致外部的 `run_experiment` 中的 `asyncio.gather` 崩溃。
+**解决方案：去中心化的引擎，中心化的总线**
 
-**结论**：试图在下游任务（任务 B）中捕获上游任务（任务 A）的异常是行不通的，因为上游失败会直接阻断执行流。
+我们需要改变编排方式：
+1.  **总线独立**: 实验脚本 (`run_fireflies.py`) 负责 `connector` 的 `connect` 和 `disconnect`，而不是委托给 Engine。
+2.  **引擎隔离**: 为**每一个** Agent 创建一个独立的 `Engine` 实例。这听起来很重，但实际上 `Engine` 对象很轻量。这样每个 Agent 都有自己独立的资源注册表和生命周期，互不干扰。
+3.  **手动注入**: 我们手动将共享的 `connector` 注册到每个 Engine 中，而不通过 Engine 构造函数的自动管理机制。
 
-**解决方案**
+这样，Agent 们就像连接到同一个 Wi-Fi 热点的 50 台独立笔记本电脑，而不是 50 个用户试图同时操作同一台电脑。
 
-我们需要将“超时”这一行为，从“异常（Exception）”降级为“数据（Data）”。
-
-我们需要在 `kuramoto.py` 中实现一个自定义的 `safe_recv` 任务，它在内部捕获 `TimeoutError`，并返回一个表示超时的字典（例如 `{"timeout": True}`），而不是抛出异常。这完全符合 Cascade 的哲学：**让数据流驱动控制流**。
-
-我将生成一个计划来实施这个修复。
-
-## [WIP] fix: 将 cs.recv 替换为 safe_recv 以处理超时
+## [WIP] fix: 隔离 Agent 引擎实例以解决生命周期冲突
 
 ### 错误分析
-当前的萤火虫 Agent 依赖于 `cs.recv` 抛出 `TimeoutError` 来触发闪烁行为。然而，在 Cascade 引擎中，任务抛出异常会导致工作流直接失败，而不是将异常传递给下游任务处理。这导致只要有任何一只萤火虫超时（准备闪烁），整个实验就会崩溃。
+当前实验脚本让所有 Agent 共享同一个 `Engine` 实例。`Engine.run` 方法在退出时会自动断开 Connector。由于并发竞争，任何一个 Agent 的重启或退出都可能导致 Connector 被关闭，从而切断所有其他 Agent 的通信，导致系统死锁或行为异常。
 
 ### 用户需求
-修改 `kuramoto.py`，实现一个不抛出异常的信号接收机制，使萤火虫能够在超时后继续执行“闪烁”逻辑，而不是导致程序崩溃。
+修改 `run_fireflies.py`，实现 Connector 生命周期的外部管理，并为每个 Agent 使用独立的 Engine 实例，确保互不干扰。
 
 ### 评论
-这又是一次观念的纠正。在分布式系统中，超时不是“错误”，而是一种“状态”。我们需要将这种状态内化到原子任务中，而不是依赖异常处理机制。通过实现 `safe_recv`，我们将不可控的异常流转变为可控的数据流，这是构建健壮 Agent 的关键一步。
+这是一个经典的“资源所有权”问题。在多 Agent 场景下，通信总线是“公共基础设施”，不应由任何单个 Agent（或其 Engine）拥有或管理。通过将 Connector 的控制权提升到实验脚本层级，并将 Engine 降级为单纯的执行容器，我们构建了一个更符合分布式系统语义的拓扑结构。
 
 ### 目标
-1.  在 `kuramoto.py` 中实现一个新的 `@cs.task`：`safe_recv`。
-2.  `safe_recv` 应直接使用 `connector` 订阅主题，并在 `asyncio.wait_for` 超时时捕获异常，返回 `{"timeout": True}`。
-3.  移除旧的 `recv_with_timeout_handler` 任务。
-4.  更新 `firefly_cycle` 逻辑以使用 `safe_recv`。
-
-### 基本原理
-我们利用 Cascade 的 `cs.inject("_internal_connector")` 机制，在用户定义的任务中直接访问底层的连接器。这赋予了我们极大的灵活性，允许我们在不修改核心库的情况下，定制特定于实验的 I/O 行为。
+1.  修改 `run_fireflies.py`。
+2.  在 `run_experiment` 中显式调用 `connector.connect()`。
+3.  在循环中，为每个 Agent 实例化一个新的 `cs.Engine`，构造时传入 `connector=None`（防止自动管理）。
+4.  使用 `eng.register` 手动将共享的 `connector` 注入为 `_internal_connector` 资源。
+5.  在 `finally` 块中显式调用 `connector.disconnect()`。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/observatory #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/observatory #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 用 safe_recv 重构萤火虫 Agent
+#### Acts 1: 重构实验脚本以隔离引擎实例
 
-我们将重写 `kuramoto.py`，用内置了错误处理的 `safe_recv` 替换掉原生的 `cs.recv` + `handler` 组合。
+我们将重写 `run_fireflies.py`，实施上述的架构变更。
 
 ~~~~~act
 write_file
-observatory/agents/kuramoto.py
+observatory/experiments/run_fireflies.py
 ~~~~~
 ~~~~~python
-"""
-Implementation of a Firefly agent based on the Kuramoto model
-of coupled oscillators, using pure Cascade primitives.
-
-REVISION 3: Replaced cs.recv with a custom safe_recv task.
-This ensures timeouts are treated as data, not exceptions, preventing
-the engine from aborting the workflow when a firefly needs to flash.
-"""
 import asyncio
 import random
-from typing import Any, Dict
+import time
 
 import cascade as cs
-from cascade.interfaces.protocols import Connector
+from cascade.connectors.local import LocalBusConnector
+from cascade.spec.resource import resource
+
+from observatory.agents.kuramoto import firefly_agent
+from observatory.monitors.convergence import ConvergenceMonitor
 
 
-# --- Atomic Primitives for Agent Behavior ---
-
-@cs.task
-async def send_signal(
-    topic: str,
-    payload: Dict[str, Any],
-    connector: Connector = cs.inject("_internal_connector"),
-) -> None:
-    """A task to publish a message to the shared bus."""
-    if connector:
-        await connector.publish(topic, payload)
-
-
-@cs.task
-async def safe_recv(
-    topic: str,
-    timeout: float,
-    connector: Connector = cs.inject("_internal_connector"),
-) -> Dict[str, Any]:
-    """
-    A custom receive task that treats timeouts as valid return values.
-    Returns: {"signal": payload, "timeout": False} OR {"signal": None, "timeout": True}
-    """
-    if not connector:
-         # Should not happen in a properly configured engine
-        return {"signal": None, "timeout": True}
-
-    future = asyncio.Future()
-
-    async def callback(topic: str, payload: Any):
-        if not future.done():
-            future.set_result(payload)
-
-    subscription = await connector.subscribe(topic, callback)
-    try:
-        # Wait for the signal
-        signal = await asyncio.wait_for(future, timeout=timeout)
-        return {"signal": signal, "timeout": False}
-    except asyncio.TimeoutError:
-        # Crucial: Return data, don't raise exception
-        return {"signal": None, "timeout": True}
-    finally:
-        # Always clean up the subscription to prevent memory leaks
-        if subscription:
-            await subscription.unsubscribe()
-
-
-# --- Core Agent Logic ---
-
-def firefly_agent(
-    agent_id: int,
-    initial_phase: float,
-    period: float,
-    nudge: float,
-    flash_topic: str,
-    listen_topic: str,
+async def run_experiment(
+    num_agents: int = 50,
+    period: float = 10.0,
+    nudge: float = 0.5,
+    duration_seconds: float = 60.0,
 ):
     """
-    This is the main entry point for a single firefly agent.
-    It kicks off the recursive cycle.
+    Sets up and runs the firefly synchronization experiment.
     """
+    print(f"🔥 Starting firefly experiment with {num_agents} agents for {duration_seconds}s...")
 
-    def firefly_cycle(
-        agent_id: int,
-        phase: float,
-        period: float,
-        nudge: float,
-        flash_topic: str,
-        listen_topic: str,
-    ):
-        """A single, declarative life cycle of a firefly."""
-        time_to_flash = period - phase
-        # Ensure timeout is positive and reasonable
-        wait_timeout = max(0.01, time_to_flash)
+    # 1. Initialize the Shared Bus
+    LocalBusConnector._reset_broker_state()
+    connector = LocalBusConnector()
+    
+    # CRITICAL: We manage the connector lifecycle at the experiment level,
+    # NOT at the individual engine level. This prevents one agent's engine
+    # from disconnecting the bus and killing everyone else.
+    await connector.connect()
 
-        # 1. PERCEIVE: Use our custom safe_recv
-        perception = safe_recv(listen_topic, timeout=wait_timeout)
+    # --- Setup Monitor ---
+    monitor = ConvergenceMonitor(num_agents, period, connector)
+    monitor_task = asyncio.create_task(monitor.run())
 
-        # 2. DECIDE: Was the perception a timeout?
-        @cs.task
-        def was_timeout(p: Dict[str, Any]) -> bool:
-            return p.get("timeout", False)
+    # --- Create the population of firefly agents ---
+    agent_tasks = []
+    
+    # Define a resource provider that yields our shared connector
+    # We must define it here to capture the 'connector' variable
+    @resource(name="_internal_connector", scope="run")
+    def shared_connector_provider():
+        yield connector
 
-        is_timeout = was_timeout(perception)
+    for i in range(num_agents):
+        # Each firefly starts with a random phase in its cycle
+        initial_phase = random.uniform(0, period)
+        
+        # 2. ISOLATION: Create a dedicated Engine for each agent.
+        # We pass connector=None so the engine doesn't try to manage it.
+        engine = cs.Engine(
+            solver=cs.NativeSolver(),
+            executor=cs.LocalExecutor(),
+            bus=cs.MessageBus(),
+            connector=None, 
+        )
+        
+        # 3. INJECTION: Manually register the shared connector
+        engine.register(shared_connector_provider)
 
-        # 3. ACT: Flash *only if* it was a timeout.
-        flash_action = send_signal(
-            topic=flash_topic, payload={"agent_id": agent_id, "phase": phase}
-        ).run_if(is_timeout)
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=period,
+            nudge=nudge,
+            flash_topic="firefly/flash",
+            listen_topic="firefly/flash",
+        )
+        
+        agent_tasks.append(engine.run(agent_workflow))
 
-        # 4. EVOLVE & RECURSE: Calculate the next state and loop.
-        @cs.task
-        def process_and_recurse(
-            p: Dict[str, Any], _flash_dependency=flash_action
-        ) -> cs.LazyResult:
-            jitter = random.uniform(-0.01, 0.01)
+    # --- Run the experiment ---
+    all_tasks = asyncio.gather(*agent_tasks)
+    try:
+        print(f"\n⏳ Running agents and monitor for {duration_seconds} seconds...")
+        start_time = time.time()
+        await asyncio.wait_for(all_tasks, timeout=duration_seconds)
+    except asyncio.TimeoutError:
+        end_time = time.time()
+        print(f"\n✅ Experiment finished after {end_time - start_time:.2f}s.")
+    finally:
+        # Gracefully stop everything
+        monitor.stop()
+        if not all_tasks.done():
+            all_tasks.cancel()
+            await asyncio.gather(all_tasks, monitor_task, return_exceptions=True)
+        else:
+             await asyncio.gather(monitor_task, return_exceptions=True)
+        
+        # CRITICAL: Only disconnect after everyone is done
+        await connector.disconnect()
 
-            if p["timeout"]:
-                # We flashed, reset phase.
-                next_phase = 0.0 + jitter
-            else:
-                # We saw another flash, nudge phase forward.
-                next_phase = (phase + nudge + jitter) % period
 
-            # The recursive call that powers the agent's lifecycle
-            return firefly_cycle(
-                agent_id, next_phase, period, nudge, flash_topic, listen_topic
-            )
-
-        return process_and_recurse(perception)
-
-    # Start the first cycle
-    return firefly_cycle(
-        agent_id, initial_phase, period, nudge, flash_topic, listen_topic
-    )
+if __name__ == "__main__":
+    # To run the experiment, execute this script from the project root:
+    # python -m observatory.experiments.run_fireflies
+    asyncio.run(run_experiment())
 ~~~~~
 
 ### 下一步建议
-这是最后一块拼图。我们修复了引擎的调度模型（让出控制权），并修复了 Agent 的异常处理模型（将超时视为数据）。
+这次架构调整彻底消除了“单点故障导致全局断网”的风险。每个 Agent 都有自己的执行容器，但共享同一个通信通道。
 
-现在，系统应当是健壮的。请再次运行实验。
+请再次运行实验。这一次，你应该能看到：
+1.  实验稳定运行。
+2.  日志不再仅仅是 `Monitor Started`，而是会有 `Received flash`。
+3.  最重要的是，你之前看到的 `0.0000` 应该会随着时间推移而**增加**。
 
-执行命令：
+运行命令：
 `python -m observatory.experiments.run_fireflies`
 
-期待看到：
-1.  完整的 60 秒运行。
-2.  日志中持续的 Flash 记录。
-3.  最重要的是：同步进度条的稳步增长。
+如果仍然不动，那我们就得检查是不是参数（`nudge` 或 `period`）设置得太保守，导致同步太慢，但这属于科学调优范畴，而非工程故障了。让我们先确保它是活的。

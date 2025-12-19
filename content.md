@@ -1,92 +1,53 @@
-好的，我们正处于 TDD 流程的 **Green** 阶段。测试已经明确了我们的目标，现在我将编写最少的代码来使这些测试通过。
+好的，我们将为新实现的时间原语 `cs.wait` 创建提交。
 
-这包括创建新的 `time.py` 提供者模块，实现 `cs.wait` 任务，并通过 `pyproject.toml` 中的入口点将其注册到 Cascade 生态系统中。
-
-## [WIP] feat(providers): 实现时间原语 cs.wait
-
-### 错误分析
-无（这是 TDD 的实现阶段）。
+## [COMMIT] feat(providers): Introduce `cs.wait` time primitive
 
 ### 用户需求
-实现 `cs.wait` 原子任务，使其满足 TDD 测试用例中定义的契约：
-1.  它必须是一个基于 `asyncio.sleep` 的非阻塞任务。
-2.  它必须能接受动态 `LazyResult` 作为延迟参数。
+实现并注册 `cs.wait` 原子任务，以支持工作流对时序的精确控制，实现非阻塞的异步延迟。
 
 ### 评论
-`cs.wait` 的实现非常直接，它是一个典型的原子提供者：职责单一、逻辑简单、可组合。通过将其注册为插件，我们遵循了 Cascade 的可扩展设计原则，将核心引擎与具体功能解耦。
+`cs.wait` 是“萤火计划”的关键基础设施之一。它是一个非阻塞的原子任务，将 `asyncio.sleep` 提升为工作流的一等公民。这使得 Agent 能够定义自己的“脉冲节拍”和时序逻辑，而无需在 Python 代码中手动处理异步。它的实现遵循了“原子化、可组合”的设计原则。
 
 ### 目标
-1.  创建 `packages/cascade-py/src/cascade/providers/time.py` 文件。
-2.  在该文件中定义一个名为 `_wait_task` 的 `@cs.task`，其核心逻辑是 `await asyncio.sleep(delay)`。
-3.  创建 `TimeWaitProvider` 类，并将其注册到 `cascade-py` 的 `pyproject.toml` 中。
+创建一个 Git 提交，包含 `cs.wait` 的实现文件和 `pyproject.toml` 的注册信息。
 
 ### 基本原理
-通过在 `pyproject.toml` 的 `cascade.providers` 入口点组中注册 `TimeWaitProvider`，Cascade 的 `ProviderRegistry` 将在启动时自动发现并加载它。当用户调用 `cs.wait(...)` 时，`__getattr__` 魔法方法会从注册表中查找名为 `wait` 的提供者，并返回其工厂函数（即 `_wait_task`），从而创建一个 `LazyResult` 并将其集成到计算图中。
+通过将 `cs.wait` 实现为一个 `Provider` 插件，我们扩展了 `cascade-py` 的能力，同时保持了核心引擎的轻量级和稳定。测试用例已验证它满足非阻塞和动态参数化的要求。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/core #concept/time #scope/api #ai/instruct #task/domain/providers #task/object/wait-primitive #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/core #comp/tests #concept/time #scope/api #ai/instruct #task/domain/providers #task/object/wait-primitive #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `time.py` 提供者模块
+#### Acts 1: 提交 `cs.wait` 功能及其测试
 
-我们将创建新的文件 `packages/cascade-py/src/cascade/providers/time.py`，其中包含 `cs.wait` 的核心实现。
+将新创建的文件和修改后的配置文件添加到 Git 暂存区，并执行提交。
 
 ~~~~~act
-write_file
+git_add
 packages/cascade-py/src/cascade/providers/time.py
+packages/cascade-py/pyproject.toml
+tests/py/providers/test_time_provider.py
 ~~~~~
-~~~~~python
-import asyncio
-from typing import Union
-
-from cascade.spec.task import task
-from cascade.providers import LazyFactory, Provider
-
-
-@task(name="wait")
-async def _wait_task(delay: Union[float, int]) -> None:
-    """
-    Asynchronously waits for a specified duration.
-    This is a non-blocking operation.
-
-    Args:
-        delay: The duration to wait in seconds.
-    """
-    await asyncio.sleep(float(delay))
-
-
-class TimeWaitProvider(Provider):
-    name = "wait"
-
-    def create_factory(self) -> LazyFactory:
-        return _wait_task
-
-~~~~~
-
-#### Acts 2: 注册 `cs.wait` 提供者
-
-现在，我们将新的提供者注册到 `cascade-py` 的入口点，使其能够被动态加载。
 
 ~~~~~act
-patch_file
-packages/cascade-py/pyproject.toml
+git_commit
 ~~~~~
-~~~~~python
-[project.entry-points."cascade.providers"]
-shell = "cascade.providers.shell:ShellProvider"
-template = "cascade.providers.template:TemplateProvider"
-"http.get" = "cascade.providers.http:HttpGetProvider"
-~~~~~
-~~~~~python
-[project.entry-points."cascade.providers"]
-shell = "cascade.providers.shell:ShellProvider"
-wait = "cascade.providers.time:TimeWaitProvider"
-template = "cascade.providers.template:TemplateProvider"
-"http.get" = "cascade.providers.http:HttpGetProvider"
+~~~~~text
+feat(providers): Introduce cs.wait time primitive
+
+Implements the `cs.wait(delay)` provider, which acts as a non-blocking asynchronous sleep function within the Cascade workflow.
+
+This is a fundamental primitive required for implementing time-based logic, long-running agents, and rate-limiting patterns using dynamic parameters (LazyResults).
+
+The implementation is registered as a standard plugin, keeping the core engine decoupled from the functionality.
 ~~~~~
 
 ### 下一步建议
-运行测试。现在 `cs.wait` 已经实现并注册，之前失败的测试应该会全部通过。确认通过后，我将为这个功能创建一个 `[COMMIT]` 计划。
+我们已经完成了 Milestone 1.3。现在我们将转向 **里程碑 1.4：感知原语——信号 (`cs.recv`)**。
+
+`cs.recv` 是实现响应式 Agent 的核心。它将挂起任务直到收到特定的外部信号。
+
+我建议下一步是为 `cs.recv` 编写 TDD 测试用例，以进入 **Red** 阶段。这涉及创建一个新的提供者模块，例如 `cascade-py/src/cascade/providers/signal.py` (或类似的命名，但我们先使用 `recv`)。

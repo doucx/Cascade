@@ -1,160 +1,70 @@
-船长，看来在之前的航行中，我们的测试脚本遭遇了“代码残留”——在 `patch_file` 的过程中，一段旧的、带有语法错误的代码块被意外地追加到了文件末尾。这导致了 `test_ipfs_add_provider` 的失败。
+好的，船长。我们已经成功建立并验证了 IPFS 数据层的基础架构。现在我们将这些变更作为一个完整的逻辑单元进行提交。
 
-我将立即生成一个计划来清理这个烂摊子，恢复测试文件的纯净。
-
-## [WIP] fix: 清理 IPFS 测试文件中的重复和错误代码
-
-### 错误分析
-在 `tests/cascade-py/providers/test_ipfs.py` 的末尾（第 116 行以后），存在一段重复且格式错误的 `test_ipfs_cat_provider` 逻辑。这段代码：
-1.  **不在任何函数内**: 它直接暴露在模块层级。
-2.  **引用了未定义的变量**: 它使用了 `aiohttp_client` 和 `monkeypatch`，而这些变量只有在作为 `pytest` fixture 传入函数时才有效。
-3.  **导致执行中断**: `pytest` 在解析模块时遇到这些错误，导致 `test_ipfs_add_provider` 无法正常完成或报错。
+## [COMMIT] feat(storage): Implement IPFS provider as a composition of HTTP tasks
 
 ### 用户需求
-彻底清理 `tests/cascade-py/providers/test_ipfs.py`，移除末尾的冗余代码，确保两个测试用例（`cat` 和 `add`）都能在干净的环境中运行。
+实现里程碑 5.2：集成 IPFS 作为 Cascade 的原生数据层，并增强 HTTP 提供者以支持文件上传。
 
 ### 评论
-这是典型的“代码熵”增加。在快速迭代中，`patch_file` 有时会因为定位锚点模糊而产生这种副作用。通过 `write_file` 进行全量覆盖是将其恢复到有序状态的最快、最彻底的方法。
+这次提交展示了 Cascade 核心哲学的力量：通过组合原子化的积木（HTTP, Task）来构建复杂的功能，而不是增加库的体积。这种模式极大地降低了维护成本并提高了透明度，同时也为后续实现 IPFS 原生缓存铺平了道路。
 
 ### 目标
-1.  全量重写 `tests/cascade-py/providers/test_ipfs.py`。
-2.  保留已验证正确的 `mock_ipfs_server` fixture 和两个测试函数。
-3.  移除文件末尾的所有垃圾代码。
+创建一个 Git 提交，记录 IPFS 提供者的实现、HTTP 功能的增强以及相关的测试套件。
+
+### 基本原理
+IPFS 是我们“躯体与记忆”愿景的关键，它通过内容寻址解决了分布式系统中的数据一致性和移动问题。将其作为原生提供者引入，并采用“组合优于封装”的原则，不仅验证了 Cascade 的表达能力，也为后续的全局缓存、代码分发和去中心化协作打下了坚实的物质基础。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/ipfs-provider #task/action/bug-fix #task/state/continue
+#intent/build #flow/ready #priority/high #comp/runtime #comp/interfaces #concept/storage #scope/api #ai/instruct #task/domain/storage #task/object/ipfs-integration #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 清理测试文件
+#### Acts 1: 提交 IPFS 集成及其依赖增强
 
-我们通过全量写入来确保文件的完整性和正确性。
+我们将所有相关的实现文件、配置文件和测试用例添加到 Git 暂存区，并执行提交。
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-py/src/cascade/providers/http.py
+packages/cascade-provider-ipfs/pyproject.toml
+packages/cascade-provider-ipfs/src/cascade/providers/ipfs/provider.py
+packages/cascade-provider-ipfs/src/cascade/providers/ipfs/cache.py
+packages/cascade-provider-ipfs/src/cascade/providers/ipfs/__init__.py
+packages/cascade-provider-ipfs/src/cascade/providers/__init__.py
+packages/cascade-provider-ipfs/src/cascade/__init__.py
+pyproject.toml
 tests/cascade-py/providers/test_ipfs.py
 ~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from aiohttp import web
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
 
-# The CID we will request in the test
-TEST_CID = "QmZULkCELmmk5XNfCgTnflahDcwr9ssAAkAJd15uiNpdEp"
-# The content our mock IPFS node will return for that CID
-FAKE_CONTENT = b"hello ipfs world"
-FAKE_ADD_RESPONSE = b'{"Name":"test.txt","Hash":"QmHash","Size":"16"}\n'
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(storage): Implement IPFS provider as a composition of HTTP tasks
 
+Integrates IPFS as a first-class citizen in the Cascade ecosystem by implementing the `cs.ipfs` provider. Following the "Composition Over Encapsulation" principle, IPFS operations are implemented as a orchestration of atomic HTTP tasks.
 
-async def mock_ipfs_cat_handler(request: web.Request):
-    """A mock aiohttp handler for the `ipfs cat` RPC call."""
-    if request.method != "POST":
-        return web.Response(status=405)
-    
-    if request.query.get("arg") == TEST_CID:
-        return web.Response(body=FAKE_CONTENT, content_type="application/octet-stream")
-    else:
-        return web.Response(status=404, text="CID not found")
+Key changes:
+1.  **`cascade-provider-ipfs` package**: A new lightweight provider package.
+2.  **`cs.ipfs.cat(cid)`**: Retrieves content from IPFS by composing `cs.http.post` and a bytes-parsing task.
+3.  **`cs.ipfs.add(path)`**: Uploads local files to IPFS by composing `cs.http.post` and a JSON-parsing task.
+4.  **`cs.http` Enhancement**: Upgraded the core HTTP provider to support `multipart/form-data` file uploads. Added a `files` parameter to `post`, `put`, and `request` tasks, utilizing `aiohttp.FormData` and `contextlib.ExitStack` for robust resource management.
+5.  **Integration Testing**: Added a comprehensive test suite in `tests/cascade-py/providers/test_ipfs.py` that verifies the entire composition flow against a mock IPFS RPC server.
 
-
-async def mock_ipfs_add_handler(request: web.Request):
-    """A mock aiohttp handler for the `ipfs add` RPC call."""
-    if request.method != "POST":
-        return web.Response(status=405)
-
-    # Check if the request is multipart
-    if not request.content_type.startswith("multipart/form-data"):
-        return web.Response(status=400, text="Expected multipart/form-data")
-
-    reader = await request.multipart()
-    part = await reader.next()
-    
-    # We expect a part named 'file'
-    if part.name != 'file':
-        return web.Response(status=400, text="Expected 'file' part")
-    
-    # Read content to verify
-    content = await part.read()
-    if content != FAKE_CONTENT:
-        return web.Response(status=400, text="Content mismatch")
-
-    # Return standard IPFS add JSON response
-    return web.Response(body=FAKE_ADD_RESPONSE, content_type="application/json")
-
-
-@pytest.fixture
-def mock_ipfs_server(aiohttp_client, monkeypatch):
-    """Fixture to setup the mock IPFS server and patch the provider."""
-    async def _setup():
-        app = web.Application()
-        app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
-        app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
-        client = await aiohttp_client(app)
-        
-        mock_base_url = f"http://{client.server.host}:{client.server.port}"
-        monkeypatch.setattr(
-            "cascade.providers.ipfs.provider.IPFS_API_BASE_URL", 
-            mock_base_url
-        )
-        return client
-    return _setup
-
-
-@pytest.mark.asyncio
-async def test_ipfs_cat_provider(mock_ipfs_server):
-    """
-    Tests the cs.ipfs.cat provider.
-    """
-    await mock_ipfs_server()
-
-    # Define the Cascade workflow
-    workflow = cs.ipfs.cat(cid=TEST_CID)
-
-    # Run the workflow
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus()
-    )
-    result = await engine.run(workflow)
-
-    # Assert the result
-    assert result == FAKE_CONTENT
-
-
-@pytest.mark.asyncio
-async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
-    """
-    Tests the cs.ipfs.add provider with local file upload.
-    """
-    await mock_ipfs_server()
-
-    # Create a temporary file to upload
-    test_file = tmp_path / "test.txt"
-    test_file.write_bytes(FAKE_CONTENT)
-
-    # Define workflow
-    workflow = cs.ipfs.add(path=str(test_file))
-
-    # Run
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus()
-    )
-    result = await engine.run(workflow)
-
-    # Assert we got the hash from the JSON response
-    assert result == "QmHash"
+This infrastructure enables location-transparent data handling and serves as the foundation for the upcoming content-addressed global cache.
 ~~~~~
 
 ### 下一步建议
-文件已清理。请重新运行测试套件。
 
-这一次，所有的 IPFS 集成测试（`cat` 和 `add`）都应该能顺利通过，证明了我们通过组合 `cs.http` 实现 IPFS 功能的策略是完全成功的。一旦通过，我们将迈向里程碑 5.2 的终章：**实现基于 IPFS 的缓存后端**。
+里程碑 5.2 的最后一块拼图是 **IPFS 原生缓存 (`IpfsCacheBackend`)**。
+
+目前，我们面临一个有趣的挑战：`CacheBackend` 的接口在协议定义中是同步的（`get`, `set`），但 IPFS 操作（以及未来的 Redis 操作）本质上是异步的。
+
+我建议下一步：
+1.  **升级 `CacheBackend` 协议**: 将其方法修改为 `async`。
+2.  **更新引擎**: 修改 `Engine` 调度循环，以便 `await` 缓存检查和保存操作。
+3.  **实现 `IpfsCacheBackend`**: 完整实现基于内容寻址的缓存逻辑。
+
+船长，如果你准备好了，我们可以开始对“记忆层”进行异步化改造。

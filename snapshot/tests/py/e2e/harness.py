@@ -23,6 +23,7 @@ class MockWorkExecutor(Executor):
 
 
 # Alias for backward compatibility with existing e2e tests
+# LocalBusConnector handles its own global state internally.
 InProcessConnector = LocalBusConnector
 
 

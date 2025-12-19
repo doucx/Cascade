@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(providers): Introduce `cs.wait` time primitive", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766131889.608377, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(providers): 为信号原语 cs.recv 添加 TDD 测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766131968.50124, "duration_ms": 0}}

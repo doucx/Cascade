@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 补全 Cache 异步化测试修复指令", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766152745.071451, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(storage): 异步缓存协议迁移与 IpfsCacheBackend 实现", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766152816.4185915, "duration_ms": 0}}

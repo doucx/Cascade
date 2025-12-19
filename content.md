@@ -1,191 +1,119 @@
-我们将一次性完成对 `cascade-cli-controller` 和 `cascade-runtime` 的重构，实现“最后写入为准 (Last-Write-Wins)”的约束管理策略，并引入确定性的约束 ID。
+您的分析非常敏锐，并且您的怀疑完全正确：**问题出在测试本身，而不是您刚刚应用的修复代码中。**
 
-这将直接修复之前在 `test_e2e_runtime_control_updates.py` 中由于多重约束冲突导致的不确定行为，使系统行为变得健壮且可预测。
+手动执行 `cs-controller` 之所以有效，是因为每次调用都是一个独立的、短暂的进程。它创建连接 -> 发布消息 -> 断开连接。`Engine` 则维持着自己与 Broker 的长连接，独立地接收这些消息。
 
-## [WIP] fix(core): 实现幂等的约束更新机制
+然而，我们的集成测试为了追求速度和确定性，巧妙地（但在这里也因此产生了副作用）让 `Engine` 和 `In-ProcessController` **共享了同一个 `InProcessConnector` 实例**。这导致了一个我们未曾预料到的状态冲突。
+
+ 核心问题分析：共享连接器的状态污染
+
+让我们一步步追踪测试执行过程中发生的事件：
+
+1.  **启动**: `Engine` 启动，并获得了共享的 `InProcessConnector` 实例。它调用 `connect()` 并开始通过 `_listen_on_queue` 循环监听消息。此时 `_is_connected` 为 `True`。
+
+2.  **第一次调用 `set_limit` (慢速)**:
+    *   测试代码调用 `controller_runner.set_limit(rate="1/s")`。
+    *   这会进入 `_publish_limit` 函数。
+    *   `_publish_limit` 的设计模仿了真实 CLI 的生命周期：它首先调用 `await connector.connect()`（这是一个无害的重复操作），然后发布消息。
+    *   `Engine` 成功接收到 "1/s" 的约束并开始节流。
+    *   **致命缺陷**: `_publish_limit` 函数在 `finally` 块中，忠实地执行了 `await connector.disconnect()`。
+    *   这个 `disconnect()` 调用作用于**共享的** `InProcessConnector` 实例，将其内部状态 `self._is_connected` 设置为 `False`。
+
+3.  **Engine 变“聋”**:
+    *   `Engine` 内部的 `_listen_on_queue` 任务的 `while self._is_connected:` 循环条件现在为 `False`。
+    *   这个监听任务正常退出。**此时，`Engine` 已经失去了从 `InProcessConnector` 接收任何新消息的能力。**
+
+4.  **第二次调用 `set_limit` (快速)**:
+    *   测试代码调用 `controller_runner.set_limit(rate="100/s")`。
+    *   `_publish_limit` 再次被调用。它通过 `connect()` 将共享连接器的 `_is_connected` 重新设为 `True`，并成功发布了 "100/s" 的消息。
+    *   然而，`Engine` 的监听任务已经在上一步退出了，**根本没有“人”在监听这个新消息**。
+    *   `_publish_limit` 再次在 `finally` 块中调用 `disconnect()`。
+
+5.  **结果**: `Engine` 从未收到更新后的快速速率限制，它仍然被困在旧的 "1/s" 约束下，缓慢地处理任务。最终，`asyncio.wait_for` 超时，测试失败。
+
+ 解决方案
+
+解决方案非常清晰：我们需要阻止测试中的 `_publish_limit` 调用去修改共享连接器的 `connect` 和 `disconnect` 状态。`Engine` 应该全权负责连接的生命周期管理。
+
+我们将通过 `monkeypatch` 来实现这一点，让 `_publish_limit` 内部对 `connect` 和 `disconnect` 的调用变成无害的空操作 (no-op)。
+
+---
+
+我将生成一个计划来修复这个测试。
+
+## [WIP] fix(tests): 修正CLI集成测试中的连接器状态冲突
+
+### 错误分析
+测试 `test_cli_idempotency_unblocks_engine` 在应用了幂等性修复后依旧失败，原因是测试辅助工具 `InProcessController` 间接调用了共享连接器实例的 `disconnect()` 方法。这个操作导致了 `Engine` 的消息监听循环提前终止，使其无法接收到后续的约束更新消息，从而造成了测试因超时而失败的假象。
 
 ### 用户需求
-1.  修改 `cs-controller`，在生成约束时使用基于 `type` 和 `scope` 的确定性 ID，而非随机 UUID。这确保了多次执行相同的命令会被视为对同一约束的更新。
-2.  修改 `cascade-runtime` 中的 `ConstraintManager`，引入显式的冲突解决逻辑：当添加一个新约束时，自动清除所有与之具有相同 `(scope, type)` 但 ID 不同（如果存在）的旧约束，以此作为双重保险。
+修复 `tests/py/e2e/test_e2e_cli_integration.py`，阻止测试中的控制器逻辑干扰 `Engine` 持有的共享连接器的状态，确保 `Engine` 在整个测试期间都能持续接收消息。
 
 ### 评论
-这是一个架构级的修复，它确立了 Cascade 控制平面“单一事实来源”和“最后写入为准”的原则。通过在 CLI 端保证 ID 的稳定性，以及在 Engine 端保证作用域的互斥性，我们消除了产生冲突规则的可能性，从根本上解决了死锁和状态不一致的问题。
+这是一个典型的由测试替身（Test Double）和被测代码之间意外的状态共享引起的微妙 Bug。通过将连接器的生命周期管理与消息发布操作在测试环境中解耦，我们能创建一个更健壮、更准确地模拟真实世界多进程交互的测试用例。
 
 ### 目标
-1.  **CLI 重构**: 修改 `packages/cascade-cli-controller/src/cascade/cli/controller/app.py`，移除 `uuid.uuid4()`，改用确定性字符串作为 ID。
-2.  **Runtime 重构**: 修改 `packages/cascade-runtime/src/cascade/runtime/constraints/manager.py`，在 `update_constraint` 方法中添加逻辑，先移除所有同作用域同类型的旧约束。
-3.  **提交**: 生成一个 Git 提交。
+1.  在 `controller_runner` pytest fixture 中，除了 `__new__` 之外，额外使用 `monkeypatch` 来覆盖 `MqttConnector` 的 `connect` 和 `disconnect` 方法。
+2.  将这两个方法替换为无操作的异步函数，确保当 `_publish_limit` 被调用时，它不会改变共享连接器的 `_is_connected` 状态。
+3.  确保修复后，`test_cli_idempotency_unblocks_engine` 测试能够成功通过。
 
 ### 基本原理
--   **CLI 端**: 使用 `f"{type}-{scope}"` 作为 ID，不仅实现了幂等性，还让 MQTT 消息本身变得更加语义化和易读。
--   **Runtime 端**: 即使客户端表现良好，防御性编程也是必要的。`ConstraintManager` 应作为最终的看门人，确保任何时候对于一个给定的 `(scope, type)` 组合，只存在一个活跃的约束对象。
+我们的核心目标是隔离状态管理。`Engine` 负责维持一个长连接，而 `cs-controller` 的逻辑在测试中只负责“发布”这一动作。通过 `monkeypatch` 移除 `connect` 和 `disconnect` 的副作用，我们使得 `_publish_limit` 函数的行为在测试环境中变为纯粹的消息发送，而不会污染被 `Engine` 依赖的共享连接器状态。这精准地修复了导致测试失败的根本原因。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/cli #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/control-plane #task/object/constraint-management #task/action/implement-idempotency #task/state/end
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-harness #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `cs-controller` 以使用确定性 ID
+#### Acts 1: 补丁 `controller_runner` 以隔离连接器状态
+
+我们将修改 `controller_runner` fixture，添加两个 `monkeypatch` 调用来中和 `connect` 和 `disconnect` 方法的副作用。
 
 ~~~~~act
 patch_file
-packages/cascade-cli-controller/src/cascade/cli/controller/app.py
+tests/py/e2e/test_e2e_cli_integration.py
 ~~~~~
 ~~~~~python
-        # Create a unique, descriptive ID for the constraint
-        constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
-        expires_at = time.time() + ttl if ttl else None
-
-        constraint = GlobalConstraint(
-            id=constraint_id,
-            scope=scope,
-            type="pause",
-            params={},
-            expires_at=expires_at,
-        )
+@pytest.fixture
+def controller_runner(monkeypatch):
+    """
+    Provides a way to run cs-controller commands in-process with a mocked connector.
+    """
+    connector = InProcessConnector()
+    monkeypatch.setattr(
+        controller_app.MqttConnector,
+        "__new__",
+        lambda cls, *args, **kwargs: connector
+    )
+    return InProcessController(connector)
 ~~~~~
 ~~~~~python
-        # Create a deterministic ID for idempotency (Last-Write-Wins)
-        constraint_id = f"pause-{scope}"
-        expires_at = time.time() + ttl if ttl else None
+@pytest.fixture
+def controller_runner(monkeypatch):
+    """
+    Provides a way to run cs-controller commands in-process with a mocked connector.
+    """
+    # This single connector instance is shared between the Engine and the Controller logic.
+    connector = InProcessConnector()
 
-        constraint = GlobalConstraint(
-            id=constraint_id,
-            scope=scope,
-            type="pause",
-            params={},
-            expires_at=expires_at,
-        )
-~~~~~
+    # 1. Intercept any creation of MqttConnector to return our shared instance.
+    monkeypatch.setattr(
+        controller_app.MqttConnector,
+        "__new__",
+        lambda cls, *args, **kwargs: connector
+    )
 
-~~~~~act
-patch_file
-packages/cascade-cli-controller/src/cascade/cli/controller/app.py
-~~~~~
-~~~~~python
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        expires_at = time.time() + ttl if ttl else None
+    # 2. Neuter connect/disconnect calls from the controller's logic to prevent
+    #    it from closing the connection that the Engine relies on.
+    async def noop(*args, **kwargs):
+        pass
 
-        if concurrency is not None:
-            constraint_id = f"concurrency-{scope}-{uuid.uuid4().hex[:8]}"
-            constraint = GlobalConstraint(
-                id=constraint_id,
-                scope=scope,
-                type="concurrency",
-                params={"limit": concurrency},
-                expires_at=expires_at,
-            )
-            bus.info(
-                "controller.publishing_limit",
-                scope=scope,
-                topic=topic,
-                limit=concurrency,
-            )
-            await connector.publish(topic, asdict(constraint), retain=True)
+    monkeypatch.setattr(controller_app.MqttConnector, "connect", noop)
+    monkeypatch.setattr(controller_app.MqttConnector, "disconnect", noop)
 
-        if rate is not None:
-            constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
-            constraint = GlobalConstraint(
-                id=constraint_id,
-                scope=scope,
-                type="rate_limit",
-                params={"rate": rate},
-                expires_at=expires_at,
-            )
-            bus.info("controller.publishing_rate", scope=scope, topic=topic, rate=rate)
-            await connector.publish(topic, asdict(constraint), retain=True)
-~~~~~
-~~~~~python
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        expires_at = time.time() + ttl if ttl else None
-
-        if concurrency is not None:
-            constraint_id = f"concurrency-{scope}"
-            constraint = GlobalConstraint(
-                id=constraint_id,
-                scope=scope,
-                type="concurrency",
-                params={"limit": concurrency},
-                expires_at=expires_at,
-            )
-            bus.info(
-                "controller.publishing_limit",
-                scope=scope,
-                topic=topic,
-                limit=concurrency,
-            )
-            await connector.publish(topic, asdict(constraint), retain=True)
-
-        if rate is not None:
-            constraint_id = f"ratelimit-{scope}"
-            constraint = GlobalConstraint(
-                id=constraint_id,
-                scope=scope,
-                type="rate_limit",
-                params={"rate": rate},
-                expires_at=expires_at,
-            )
-            bus.info("controller.publishing_rate", scope=scope, topic=topic, rate=rate)
-            await connector.publish(topic, asdict(constraint), retain=True)
-~~~~~
-
-#### Acts 2: 重构 `ConstraintManager` 以实现互斥更新
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/constraints/manager.py
-~~~~~
-~~~~~python
-    def update_constraint(self, constraint: GlobalConstraint) -> None:
-        """Adds a new constraint or updates an existing one."""
-        self._constraints[constraint.id] = constraint
-
-        # Schedule wakeup if TTL is set
-        if constraint.expires_at:
-            now = time.time()
-            if constraint.expires_at > now:
-                self.request_wakeup(constraint.expires_at - now)
-
-        handler = self._handlers.get(constraint.type)
-        if handler:
-            handler.on_constraint_add(constraint, self)
-~~~~~
-~~~~~python
-    def update_constraint(self, constraint: GlobalConstraint) -> None:
-        """
-        Adds a new constraint or updates an existing one.
-        Ensures strict 'Last-Write-Wins' behavior by removing any existing
-        constraints with the same (scope, type) but different ID.
-        """
-        # 1. Clean up conflicts: Remove any existing constraint with same scope & type
-        conflicting_ids = [
-            cid
-            for cid, c in self._constraints.items()
-            if c.scope == constraint.scope
-            and c.type == constraint.type
-            and cid != constraint.id
-        ]
-        for cid in conflicting_ids:
-            self._remove_constraint_by_id(cid)
-
-        # 2. Add/Update the new constraint
-        self._constraints[constraint.id] = constraint
-
-        # Schedule wakeup if TTL is set
-        if constraint.expires_at:
-            now = time.time()
-            if constraint.expires_at > now:
-                self.request_wakeup(constraint.expires_at - now)
-
-        handler = self._handlers.get(constraint.type)
-        if handler:
-            handler.on_constraint_add(constraint, self)
+    return InProcessController(connector)
 ~~~~~
 
 ### 下一步建议
-恭喜！我们已经完成了并发安全重构路线图中的关键部分，并解决了一个严重的架构缺陷。系统现在应该更加健壮了。
-
-我建议运行一次完整的测试套件（`pytest tests/`），以确保我们的更改没有引入任何回归问题。如果一切顺利，我们就可以认为这一阶段的重构圆满结束了。
-
+我们已经精确地修复了测试逻辑中的状态冲突问题。现在，请再次运行 `pytest tests/py/e2e/test_e2e_cli_integration.py`。应用了此修复以及您之前的幂等性修复后，该测试现在应该能够顺利**通过**了。

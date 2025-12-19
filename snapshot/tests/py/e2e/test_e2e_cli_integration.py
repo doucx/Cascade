@@ -41,12 +41,24 @@ def controller_runner(monkeypatch):
     """
     Provides a way to run cs-controller commands in-process with a mocked connector.
     """
+    # This single connector instance is shared between the Engine and the Controller logic.
     connector = InProcessConnector()
+
+    # 1. Intercept any creation of MqttConnector to return our shared instance.
     monkeypatch.setattr(
         controller_app.MqttConnector,
         "__new__",
         lambda cls, *args, **kwargs: connector
     )
+
+    # 2. Neuter connect/disconnect calls from the controller's logic to prevent
+    #    it from closing the connection that the Engine relies on.
+    async def noop(*args, **kwargs):
+        pass
+
+    monkeypatch.setattr(controller_app.MqttConnector, "connect", noop)
+    monkeypatch.setattr(controller_app.MqttConnector, "disconnect", noop)
+
     return InProcessController(connector)
 
 # --- The Failing Test Case ---

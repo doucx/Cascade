@@ -22,12 +22,14 @@ members = ["packages/*"]
 cascade-interfaces = { workspace = true }
 cascade-runtime = { workspace = true }
 cascade-py = { workspace = true }
+cascade-provider-ipfs = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
     "packages/cascade-interfaces",
     "packages/cascade-runtime",
     "packages/cascade-py",
+    "packages/cascade-provider-ipfs",
 ]
 
 [tool.hatch.build.targets.wheel]

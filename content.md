@@ -1,75 +1,48 @@
-好的，船长。我们收到了新的航行指令。
+优秀的问题，船长。你敏锐地指出了一个潜在的不一致之处，这正是精确导航所必需的。
 
-这是一个绝佳的机会来展示 Cascade “提供者组合优于封装”的核心设计哲学。我们将不创建一个庞大的、内置了 IPFS 逻辑的“黑盒”提供者，而是通过组合现有的、原子化的 `cs.http` 和 `cs.task` 积木，来构建出一个透明、可观测且强大的 IPFS 数据层。
+你的观察完全正确。`cs.ipfs.cat` 的实现**依赖**于 `cascade-py` 包中的 `cs.http` 提供者，而 `cs.http` 是使用 `aiohttp` 实现的。因此，`cascade-provider-ipfs` 包在运行时并不直接需要 `httpx`。
 
-我将为你生成启动此里程碑的第一个计划。
+我在上一个计划中包含 `httpx` 是一个疏忽，意在为未来可能的、不通过 `cs.http` 的直接交互做准备，但这违反了我们当前“积木组合”的纯粹性原则。我们将立即修正这个偏差，并为你编写集成测试。
 
-## [WIP] feat: 创建 IPFS 提供者包并以组合方式实现 `cat`
+我将生成一个计划，首先修正依赖关系，然后创建与你要求一致的、健壮的集成测试。
+
+## [WIP] test: 添加 cs.ipfs.cat 的集成测试并修正依赖
 
 ### 用户需求
-开始实现【里程碑 5.2】，将 IPFS 引入作为 Cascade 的原生数据层。实现过程应遵循“积木组合”的设计原则。
+为新创建的 `cs.ipfs.cat` 提供者编写一个集成测试，确保它能与 IPFS Kubo 节点的 HTTP API 正确交互。同时，澄清并修正 `aiohttp` 与 `httpx` 的依赖关系。
 
 ### 评论
-这是一个完美的“吃自己的狗粮”的案例。IPFS Kubo 节点通过一个标准的 HTTP RPC API 暴露其功能。因此，我们完全没必要创建一个新的、复杂的、整体式的 `cs.ipfs` 提供者。
+这是一个验证我们“组合优于封装”哲学的关键测试。由于 `cs.ipfs.cat` 是 `cs.http.post` 的一层薄封装，我们测试 `cs.ipfs.cat` 实际上就是在端到端地测试一个真实的组合工作流。
 
-取而代之，我们将创建一个 `cascade-provider-ipfs` 包，其中的“提供者”实际上是返回预先组合好的 `LazyResult` 图的工厂函数。这不仅验证了我们核心架构的表达能力，还使得 IPFS 的集成变得极其轻量、透明且易于维护。
+我们将使用 `pytest_aiohttp` 库来创建一个 Mock 的 IPFS API 服务器。这使得测试完全独立、确定且极快，无需在测试环境中运行一个真实的 IPFS 守护进程，是 CI/CD 的最佳实践。
 
 ### 目标
-1.  创建 `packages/cascade-provider-ipfs` 的基本目录结构和 `pyproject.toml` 配置文件。
-2.  实现第一个 IPFS 原子任务 `cs.ipfs.cat`，它将通过组合 `cs.http.post` 和一个简单的解析任务来实现。
-3.  创建 `IpfsCacheBackend` 的骨架文件，为后续实现奠定基础。
+1.  修正 `packages/cascade-provider-ipfs/pyproject.toml`，移除不必要的 `httpx` 依赖，并添加对 `cascade-py` 的开发依赖以进行测试。
+2.  创建新的测试文件 `tests/cascade-py/providers/test_ipfs.py`。
+3.  在该文件中，实现一个使用 `aiohttp.web` 模拟 IPFS `/api/v0/cat` 端点的测试。
+4.  定义一个使用 `cs.ipfs.cat` 的 Cascade 工作流。
+5.  通过 `monkeypatch` 将 `cs.ipfs.cat` 内部的 API 地址指向我们的 Mock 服务器。
+6.  运行工作流并断言其返回了预期的字节内容。
 
 ### 基本原理
-我们将把对 IPFS 的操作分解为两个原子步骤，并用 Cascade 的原生积木来表达：
-1.  **API 调用**: 使用通用的 `cs.http.post` 任务向本地 IPFS 节点的 `/api/v0/cat` 端点发送请求。URL 参数将通过 `cs.template` 动态构建。
-2.  **结果解析**: 创建一个简单的、纯函数的 `@cs.task`，它接收 `HttpResponse` 对象并提取其原始 `body` 作为字节流返回。
-
-最终暴露给用户的 `cs.ipfs.cat(...)` 将是一个返回这两步组合图 (`parsing_task(http_task(...))`) 的便捷函数。这种模式是 Cascade 哲学的完美体现。
+测试的核心是拦截和模拟网络请求。我们将使用 `aiohttp_client` 这个 `pytest` fixture 来启动一个内存中的 aiohttp 服务器。然后，我们通过 `monkeypatch` 动态地修改 `cascade.providers.ipfs.provider` 模块中的 `IPFS_API_BASE_URL` 常量，将其指向 Mock 服务器的地址。这样，当 `cs.run` 执行 `cs.ipfs.cat` 时，其内部的 `cs.http.post` 调用会自然地被路由到我们的测试服务器上，从而实现对整个流程的端到端验证。
 
 ### 标签
-#intent/build #flow/ready #priority/high #scope/api #ai/instruct #task/domain/storage #task/object/ipfs-provider #task/action/implementation #task/state/begin
+#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/ipfs-provider #task/action/integration-test #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建新包的目录结构
+#### Acts 1: 修正 `pyproject.toml` 依赖
 
-首先，我们为 `cascade-provider-ipfs` 创建标准化的包目录。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p packages/cascade-provider-ipfs/src/cascade/providers/ipfs
-~~~~~
-
-#### Acts 2: 初始化 `__init__.py` 文件
-
-创建必要的 `__init__.py` 文件，使目录成为合法的 Python 包。
+首先，我们修正 `cascade-provider-ipfs` 的 `pyproject.toml` 文件。移除 `httpx`，因为它并未被直接使用。我们添加对 `cascade-py` 的可编辑开发依赖，以便在测试环境中能够找到 `cs.http` 等核心提供者。
 
 ~~~~~act
-run_command
-~~~~~
-~~~~~bash
-touch packages/cascade-provider-ipfs/src/cascade/__init__.py
-touch packages/cascade-provider-ipfs/src/cascade/providers/__init__.py
-touch packages/cascade-provider-ipfs/src/cascade/providers/ipfs/__init__.py
-~~~~~
-
-#### Acts 3: 定义 `pyproject.toml`
-
-创建新包的 `pyproject.toml`，定义其元数据、依赖项（`cascade-interfaces` 和 `httpx`）以及关键的 `entry_points`。
-
-~~~~~act
-write_file
+patch_file
 packages/cascade-provider-ipfs/pyproject.toml
 ~~~~~
 ~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
 [project]
 name = "cascade-provider-ipfs"
 version = "0.1.0"
@@ -82,168 +55,127 @@ dependencies = [
 
 [project.entry-points."cascade.providers"]
 "ipfs.cat" = "cascade.providers.ipfs.provider:IpfsCatProvider"
+~~~~~
+~~~~~toml
+[project]
+name = "cascade-provider-ipfs"
+version = "0.1.0"
+description = "IPFS providers for the Cascade ecosystem, enabling content-addressed data."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-interfaces"
+]
+
+[project.entry-points."cascade.providers"]
+"ipfs.cat" = "cascade.providers.ipfs.provider:IpfsCatProvider"
 "ipfs.add" = "cascade.providers.ipfs.provider:IpfsAddProvider"
+~~~~~
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
+#### Acts 2: 更新根 `pyproject.toml`
 
-[tool.hatch.metadata]
-allow-direct-references = true
+为了让测试套件能够发现新的 `cascade-provider-ipfs` 包，我们需要将其添加到根 `pyproject.toml` 的工作区成员中。
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~toml
+[tool.uv.workspace]
+members = ["packages/*"]
 
 [tool.uv.sources]
 cascade-interfaces = { workspace = true }
-cascade-py = { path = "../cascade-py", editable = true }
+cascade-runtime = { workspace = true }
+cascade-py = { workspace = true }
+
+[tool.hatch.workspaces]
+packages = [
+    "packages/cascade-interfaces",
+    "packages/cascade-runtime",
+    "packages/cascade-py",
+]
+~~~~~
+~~~~~toml
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+cascade-interfaces = { workspace = true }
+cascade-runtime = { workspace = true }
+cascade-py = { workspace = true }
+cascade-provider-ipfs = { workspace = true }
+
+[tool.hatch.workspaces]
+packages = [
+    "packages/cascade-interfaces",
+    "packages/cascade-runtime",
+    "packages/cascade-py",
+    "packages/cascade-provider-ipfs",
+]
 ~~~~~
 
-#### Acts 4: 实现组合式的 `cat` 提供者
+#### Acts 3: 创建 IPFS 提供者的测试文件
 
-这是核心部分。我们将创建 `provider.py`，其中 `cs.ipfs.cat` 被实现为一个组合了 `cs.http.post` 和解析任务的工厂函数。
+现在，我们创建测试文件。由于 `cs.ipfs.cat` 是通过 `cascade-py` 的插件机制加载的，所以它的测试也应该放在 `tests/cascade-py/providers` 目录下，以模拟真实的使用场景。
 
 ~~~~~act
 write_file
-packages/cascade-provider-ipfs/src/cascade/providers/ipfs/provider.py
+tests/cascade-py/providers/test_ipfs.py
 ~~~~~
 ~~~~~python
-from typing import Any
+import pytest
 import cascade as cs
-from cascade.providers import Provider, LazyFactory
-from cascade.providers.http import HttpResponse
+from aiohttp import web
 
-# The IPFS RPC API defaults
-IPFS_API_BASE_URL = "http://127.0.0.1:5001"
-
-
-# --- Provider Implementations ---
-
-class IpfsCatProvider(Provider):
-    name = "ipfs.cat"
-
-    def create_factory(self) -> LazyFactory:
-        # The factory is not a @cs.task, but a regular function that returns one.
-        return cat
+# The CID we will request in the test
+TEST_CID = "QmZULkCELmmk5XNfCgTnflahDcwr9ssAAkAJd15uiNpdEp"
+# The content our mock IPFS node will return for that CID
+FAKE_CONTENT = b"hello ipfs world"
 
 
-class IpfsAddProvider(Provider):
-    name = "ipfs.add"
-
-    def create_factory(self) -> LazyFactory:
-        # The factory is not a @cs.task, but a regular function that returns one.
-        return add
-
-
-# --- Atomic Helper Tasks ---
-
-@cs.task(name="_ipfs_parse_cat_response")
-def _parse_cat_response(response: HttpResponse) -> bytes:
-    """Parses the raw body from an HttpResponse."""
-    if response.status >= 400:
-        raise RuntimeError(f"IPFS API Error ({response.status}): {response.text()}")
-    return response.body
-
-@cs.task(name="_ipfs_parse_add_response")
-def _parse_add_response(response: HttpResponse) -> str:
-    """Parses the JSON response from `ipfs add` and returns the CID."""
-    if response.status >= 400:
-        raise RuntimeError(f"IPFS API Error ({response.status}): {response.text()}")
-    # The response is a stream of JSON objects, newline-separated.
-    # The last one is the summary for the whole directory/file.
-    lines = response.text().strip().split('\n')
-    last_line = lines[-1]
-    import json
-    return json.loads(last_line)['Hash']
+async def mock_ipfs_cat_handler(request: web.Request):
+    """A mock aiohttp handler for the `ipfs cat` RPC call."""
+    if request.method != "POST":
+        return web.Response(status=405)
+    
+    if request.query.get("arg") == TEST_CID:
+        return web.Response(body=FAKE_CONTENT, content_type="application/octet-stream")
+    else:
+        return web.Response(status=404, text="CID not found")
 
 
-# --- User-Facing Factory Functions ---
-
-def cat(cid: str) -> "cs.LazyResult[bytes]":
+@pytest.mark.asyncio
+async def test_ipfs_cat_provider(aiohttp_client, monkeypatch):
     """
-    Creates a Cascade workflow to retrieve the contents of a file from IPFS.
-
-    This is a composition of `cs.http.post` and a parsing task.
+    Tests the cs.ipfs.cat provider by mocking the IPFS HTTP API.
     """
-    api_url = f"{IPFS_API_BASE_URL}/api/v0/cat"
+    # 1. Setup the mock server
+    app = web.Application()
+    app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
+    client = await aiohttp_client(app)
+    
+    # 2. Monkeypatch the IPFS provider to point to our mock server
+    # The URL is constructed inside the provider, so we patch the base URL constant there.
+    mock_base_url = f"http://{client.server.host}:{client.server.port}"
+    monkeypatch.setattr(
+        "cascade.providers.ipfs.provider.IPFS_API_BASE_URL", 
+        mock_base_url
+    )
 
-    # Step 1: Call the IPFS RPC API
-    api_response = cs.http.post(url=api_url, params={"arg": cid})
+    # 3. Define the Cascade workflow
+    # This will dynamically load the `cs.ipfs.cat` provider via entry points
+    workflow = cs.ipfs.cat(cid=TEST_CID)
 
-    # Step 2: Parse the response
-    return _parse_cat_response(api_response)
+    # 4. Run the workflow
+    result = cs.run(workflow, log_level="ERROR") # Use ERROR to keep test output clean
 
-
-def add(path: str) -> "cs.LazyResult[str]":
-    """
-    Creates a Cascade workflow to add a local file to IPFS and get its CID.
-
-    This requires `cs.http.post` to support multipart/form-data, which is a
-    planned enhancement. For now, this serves as a placeholder for the pattern.
-    """
-    # NOTE: This will require cs.http.post to be enhanced to support `files=`
-    # similar to the `requests` library. This plan doesn't implement that, but
-    # lays the groundwork for the pattern.
-    api_url = f"{IPFS_API_BASE_URL}/api/v0/add"
-
-    # Step 1: Call the IPFS RPC API with a file upload
-    # The conceptual call would look like this:
-    # api_response = cs.http.post(url=api_url, files={"file": path})
-
-    # For now, let's create a placeholder that will fail until http is enhanced
-    @cs.task
-    def _placeholder_add(path: str) -> Any:
-        raise NotImplementedError("cs.ipfs.add requires `cs.http.post` to support file uploads.")
-
-    return _placeholder_add(path)
-~~~~~
-
-#### Acts 5: 创建 `IpfsCacheBackend` 骨架
-
-最后，我们创建缓存后端的骨架文件。
-
-~~~~~act
-write_file
-packages/cascade-provider-ipfs/src/cascade/providers/ipfs/cache.py
-~~~~~
-~~~~~python
-from typing import Any, Optional, Dict
-from cascade.interfaces.protocols import CacheBackend
-
-class IpfsCacheBackend(CacheBackend):
-    """
-    A cache backend that stores results in IPFS.
-
-    It uses a fast key-value store (like Redis or in-memory dict) to map
-    a task's cache key to a content identifier (CID) in IPFS.
-    """
-    def __init__(self, metadata_backend: CacheBackend):
-        """
-        Args:
-            metadata_backend: A fast backend (e.g., InMemory, Redis) to store key->CID mappings.
-        """
-        self._meta_db = metadata_backend
-
-    def get(self, key: str) -> Optional[Any]:
-        """Retrieves a CID from metadata and then fetches content from IPFS."""
-        cid = self._meta_db.get(key)
-        if cid is None:
-            return None
-        
-        # In a real implementation, we would now call a workflow to `cs.ipfs.cat(cid)`
-        # and deserialize the result. This requires the engine to be able to run
-        # sub-workflows, which is a powerful concept to explore.
-        raise NotImplementedError("IPFS cache GET logic requires sub-workflow execution.")
-
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """Serializes value, adds it to IPFS to get a CID, then stores key->CID mapping."""
-        
-        # In a real implementation, we would serialize `value`, then call a workflow
-        # to `cs.ipfs.add()` the data, get the resulting CID, and then store that
-        # in the metadata backend.
-        raise NotImplementedError("IPFS cache SET logic requires sub-workflow execution.")
+    # 5. Assert the result
+    assert result == FAKE_CONTENT
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功地为 IPFS 集成奠定了基础，并以“组合”的方式实现了第一个功能。
+我们已经成功地为 `cs.ipfs.cat` 构建了坚实的测试基础，并理清了依赖关系。
 
-1.  **增强 `cs.http.post`**: 下一步的关键是增强 `cascade.providers.http`，使其能够处理 `multipart/form-data` 文件上传。这将解锁 `cs.ipfs.add` 的全部功能。
-2.  **实现 `IpfsCacheBackend`**: 一旦 `add` 和 `cat` 功能完备，我们就可以完整地实现 `IpfsCacheBackend` 的 `get` 和 `set` 逻辑，这可能需要引擎支持在策略内部运行子工作流，是一个非常有价值的探索方向。
-3.  **编写测试**: 为新的 `cs.ipfs.cat` 提供者编写集成测试，确保它能与本地运行的 IPFS Kubo 节点正确交互。
+- **增强 `cs.http.post` 以支持文件上传**: 这是解锁 `cs.ipfs.add` 功能的下一个关键步骤。我们需要为 `cs.http` 提供者添加处理 `multipart/form-data` 的能力。
+- **为 `cs.ipfs.add` 编写测试**: 一旦 `cs.http.post` 增强完毕，我们应立即仿照本计划的模式，为 `cs.ipfs.add` 编写集成测试。

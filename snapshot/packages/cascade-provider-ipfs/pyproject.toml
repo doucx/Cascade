@@ -8,12 +8,12 @@ version = "0.1.0"
 description = "IPFS providers for the Cascade ecosystem, enabling content-addressed data."
 requires-python = ">=3.8"
 dependencies = [
-  "cascade-interfaces",
-  "httpx"  # For potential future direct use, though not strictly needed by cs.http
+  "cascade-interfaces"
 ]
 
 [project.entry-points."cascade.providers"]
 "ipfs.cat" = "cascade.providers.ipfs.provider:IpfsCatProvider"
+"ipfs.add" = "cascade.providers.ipfs.provider:IpfsAddProvider"
 "ipfs.add" = "cascade.providers.ipfs.provider:IpfsAddProvider"
 
 [tool.hatch.build.targets.wheel]

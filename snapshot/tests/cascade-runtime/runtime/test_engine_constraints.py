@@ -329,8 +329,9 @@ async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_s
     # 2. Start the engine in a background task
     run_task = asyncio.create_task(engine.run(workflow))
 
-    # 3. Wait for 'task_a' to finish. This ensures the engine is ready for 'task_b'.
-    await wait_for_task_finish(spy, "task_a")
+    # 3. Wait for 'task_a' to START (instead of finish).
+    # This allows us to inject the constraint while A is running.
+    await wait_for_task_start(spy, "task_a")
 
     # 4. Inject a PAUSE command specifically for 'task_b'
     pause_scope = "task:task_b"
@@ -344,7 +345,11 @@ async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_s
         f"cascade/constraints/{pause_scope.replace(':', '/')}", pause_payload
     )
 
+    # Wait for A to finish naturally
+    await wait_for_task_finish(spy, "task_a")
+
     # 5. Wait briefly and assert that 'task_b' has NOT started
+    # Give the engine a moment to potentially (incorrectly) schedule B
     await asyncio.sleep(0.2)
     started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
     assert "task_b" not in started_tasks, "'task_b' started despite pause constraint"

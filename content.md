@@ -1,472 +1,216 @@
 简要回答:
-分析正确。网络 I/O (IPFS/Redis) 必须是异步的，以避免阻塞引擎的事件循环。我将执行一个包含架构变更的计划：首先将 `CacheBackend` 和 `CachePolicy` 协议迁移为 `async`，然后更新运行时和现有适配器，最后实现基于 `aiohttp` 的 `IpfsCacheBackend`。
+抱歉，我在之前的指令块中漏掉了 `old_string`。现在我补全完整的 `patch_file` 操作，确保包含路径、旧代码块和新代码块三个部分，以修复 Cache 异步化导致的测试失败。
 
-## [WIP] feat(storage): 迁移 Cache 协议至异步并实现 IpfsCacheBackend
+## [WIP] fix(tests): 补全 Cache 异步化测试修复指令
 
 ### 错误分析
-无（新功能开发与架构重构）。
+之前的 `patch_file` 指令格式不正确（缺少 `old_string` 参数），导致执行器报错。现在重新生成符合规范的补全计划。
 
 ### 用户需求
-1.  确认 `CacheBackend` 同步接口在处理 IPFS/Redis 等网络 I/O 时的阻塞问题。
-2.  将 `CacheBackend` 和 `CachePolicy` 协议升级为异步。
-3.  实现 `IpfsCacheBackend`，利用 IPFS 进行内容寻址存储，并使用另一个 `CacheBackend` 存储元数据映射。
+补全之前失败的 `patch_file` 指令，修复测试。
 
 ### 评论
-这是一个“牵一发而动全身”的架构变更，但对于高性能的分布式/网络存储是绝对必要的。如果不做此变更，IPFS 操作将导致 Engine 在等待 HTTP 响应时完全卡死。通过这次重构，我们不仅启用了 IPFS，也为未来全异步的 Redis 操作铺平了道路。
+必须严格遵守 Quipu 协议的围栏语法。测试修复完成后，所有的 Cache 操作将完全符合异步执行模型。
 
 ### 目标
-1.  修改 `CacheBackend` 和 `CachePolicy` 协议定义为 `async`。
-2.  更新 `Engine` 以 `await` 缓存操作。
-3.  更新现有实现 (`InMemoryCacheBackend`, `RedisCacheBackend`, `FileExistenceCache`) 适配异步接口。
-4.  在 `cascade-provider-ipfs` 中引入 `aiohttp` 依赖。
-5.  实现 `IpfsCacheBackend`，支持 `set` (上传+映射) 和 `get` (查找映射+下载)。
-
-### 基本原理
-1.  **协议迁移**: 在 `Engine` 这种异步系统中，任何涉及 I/O 的接口都应该是 `async` 的。
-2.  **组合模式**: `IpfsCacheBackend` 不直接存储 Key-Value，而是存储 `Key -> CID` (在元数据后端) 和 `CID -> Content` (在 IPFS)。这利用了 IPFS 的去重特性，同时保持了 Key-Value 的语义。
-3.  **兼容性**: 对于现有的同步客户端（如 `RedisCacheBackend` 目前可能持有的同步 client），我们将使用 `asyncio.to_thread` 进行非阻塞包装，确保平滑过渡。
+1.  修复 `test_in_memory.py` 及其 `old_string` 匹配。
+2.  修复 `test_redis_cache.py` 及其 `old_string` 匹配。
+3.  优化 `test_engine_constraints.py` 的竞争条件逻辑。
 
 ### 标签
-#intent/architect #intent/build #flow/ready #priority/high #comp/runtime #comp/interfaces #concept/state #scope/core #ai/instruct #task/domain/storage #task/object/cache-backend #task/action/async-migration #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/tests #ai/instruct #task/domain/testing #task/object/cache-tests #task/action/async-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 升级接口协议为异步
+#### Acts 1: 修复 InMemoryCacheBackend 测试
 
-修改 `CacheBackend` 和 `CachePolicy` 协议，将相关方法改为 `async def`。
-
-~~~~~act
-patch_file
-packages/cascade-interfaces/src/cascade/interfaces/protocols.py
-~~~~~
-~~~~~python
-class CacheBackend(Protocol):
-    """
-    Protocol for a storage backend that persists cached results.
-    """
-
-    def get(self, key: str) -> Optional[Any]:
-        """Retrieves a value by key."""
-        ...
-
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """Sets a value for a key, optionally with a TTL in seconds."""
-        ...
-
-
-class CachePolicy(Protocol):
-    """
-    Protocol for a caching strategy.
-    """
-
-    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
-        """
-        Checks if a result is cached.
-        Returns None if not found, or the cached value if found.
-        """
-        ...
-
-    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
-        """
-        Saves a result to the cache.
-        """
-        ...
-~~~~~
-~~~~~python
-class CacheBackend(Protocol):
-    """
-    Protocol for a storage backend that persists cached results.
-    """
-
-    async def get(self, key: str) -> Optional[Any]:
-        """Retrieves a value by key."""
-        ...
-
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """Sets a value for a key, optionally with a TTL in seconds."""
-        ...
-
-
-class CachePolicy(Protocol):
-    """
-    Protocol for a caching strategy.
-    """
-
-    async def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
-        """
-        Checks if a result is cached.
-        Returns None if not found, or the cached value if found.
-        """
-        ...
-
-    async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
-        """
-        Saves a result to the cache.
-        """
-        ...
-~~~~~
-
-#### Acts 2: 更新 Engine 以支持异步缓存
-
-修改 `Engine`，在调用 `check` 和 `save` 时使用 `await`。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-        if node.cache_policy:
-            inputs_for_cache = self._resolve_inputs_for_cache(
-                node, graph, state_backend
-            )
-            cached_value = node.cache_policy.check(node.id, inputs_for_cache)
-            if cached_value is not None:
-                self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        reason="CacheHit",
-                    )
-                )
-                return cached_value
-
-        self.bus.publish(
-            TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
-        )
-~~~~~
-~~~~~python
-        if node.cache_policy:
-            inputs_for_cache = self._resolve_inputs_for_cache(
-                node, graph, state_backend
-            )
-            cached_value = await node.cache_policy.check(node.id, inputs_for_cache)
-            if cached_value is not None:
-                self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        reason="CacheHit",
-                    )
-                )
-                return cached_value
-
-        self.bus.publish(
-            TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
-        )
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-                        result_preview=repr(result)[:100],
-                    )
-                )
-                if node.cache_policy:
-                    inputs_for_save = self._resolve_inputs_for_cache(
-                        node, graph, state_backend
-                    )
-                    node.cache_policy.save(node.id, inputs_for_save, result)
-                return result
-            except Exception as e:
-                last_exception = e
-~~~~~
-~~~~~python
-                        result_preview=repr(result)[:100],
-                    )
-                )
-                if node.cache_policy:
-                    inputs_for_save = self._resolve_inputs_for_cache(
-                        node, graph, state_backend
-                    )
-                    await node.cache_policy.save(node.id, inputs_for_save, result)
-                return result
-            except Exception as e:
-                last_exception = e
-~~~~~
-
-#### Acts 3: 更新现有适配器实现
-
-更新 `InMemoryCacheBackend`, `RedisCacheBackend`, 和 `FileExistenceCache` 以匹配新的异步协议。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/adapters/cache/in_memory.py
-~~~~~
-~~~~~python
-    def get(self, key: str) -> Optional[Any]:
-        if key in self._expiry:
-            if time.time() > self._expiry[key]:
-                del self._store[key]
-                del self._expiry[key]
-                return None
-        return self._store.get(key)
-
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        self._store[key] = value
-        if ttl is not None:
-            self._expiry[key] = time.time() + ttl
-        elif key in self._expiry:
-            del self._expiry[key]
-~~~~~
-~~~~~python
-    async def get(self, key: str) -> Optional[Any]:
-        if key in self._expiry:
-            if time.time() > self._expiry[key]:
-                del self._store[key]
-                del self._expiry[key]
-                return None
-        return self._store.get(key)
-
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        self._store[key] = value
-        if ttl is not None:
-            self._expiry[key] = time.time() + ttl
-        elif key in self._expiry:
-            del self._expiry[key]
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/adapters/cache/redis.py
-~~~~~
-~~~~~python
-import pickle
-from typing import Any, Optional
-
-try:
-    import redis
-except ImportError:
-    redis = None
-
-
-class RedisCacheBackend:
-    """
-    A CacheBackend implementation using Redis.
-    """
-
-    def __init__(self, client: "redis.Redis", prefix: str = "cascade:cache:"):
-        if redis is None:
-            raise ImportError("The 'redis' library is required to use RedisCacheBackend.")
-        self._client = client
-        self._prefix = prefix
-
-    def get(self, key: str) -> Optional[Any]:
-        data = self._client.get(self._prefix + key)
-        if data is None:
-            return None
-        return pickle.loads(data)
-
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        data = pickle.dumps(value)
-        self._client.set(self._prefix + key, data, ex=ttl)
-~~~~~
-~~~~~python
-import asyncio
-import pickle
-from typing import Any, Optional
-
-try:
-    import redis
-except ImportError:
-    redis = None
-
-
-class RedisCacheBackend:
-    """
-    A CacheBackend implementation using Redis.
-    Uses asyncio.to_thread to wrap synchronous redis client calls to ensure
-    compatibility with the async Protocol without blocking the loop.
-    """
-
-    def __init__(self, client: "redis.Redis", prefix: str = "cascade:cache:"):
-        if redis is None:
-            raise ImportError("The 'redis' library is required to use RedisCacheBackend.")
-        self._client = client
-        self._prefix = prefix
-
-    async def get(self, key: str) -> Optional[Any]:
-        def _blocking_get():
-            data = self._client.get(self._prefix + key)
-            if data is None:
-                return None
-            return pickle.loads(data)
-
-        return await asyncio.to_thread(_blocking_get)
-
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        def _blocking_set():
-            data = pickle.dumps(value)
-            self._client.set(self._prefix + key, data, ex=ttl)
-
-        await asyncio.to_thread(_blocking_set)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/adapters/caching/file_existence.py
-~~~~~
-~~~~~python
-    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
-        path = self._resolve_path(inputs)
-        if os.path.exists(path):
-            return path  # Return the path as the cached result
-        return None
-
-    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
-        # File existence cache usually implies the task itself creates the file.
-        # But we can verify it was created.
-        path = self._resolve_path(inputs)
-        if not os.path.exists(path):
-            # In a stricter implementation, we might raise a warning here.
-            pass
-~~~~~
-~~~~~python
-    async def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
-        path = self._resolve_path(inputs)
-        if os.path.exists(path):
-            return path  # Return the path as the cached result
-        return None
-
-    async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
-        # File existence cache usually implies the task itself creates the file.
-        # But we can verify it was created.
-        path = self._resolve_path(inputs)
-        if not os.path.exists(path):
-            # In a stricter implementation, we might raise a warning here.
-            pass
-~~~~~
-
-#### Acts 4: 配置 IPFS Provider 依赖
-
-在 `cascade-provider-ipfs` 中添加 `aiohttp`，这是进行异步 HTTP 请求所必需的。
-
-~~~~~act
-patch_file
-packages/cascade-provider-ipfs/pyproject.toml
-~~~~~
-~~~~~toml
-dependencies = [
-  "cascade-interfaces"
-]
-~~~~~
-~~~~~toml
-dependencies = [
-  "cascade-interfaces",
-  "aiohttp"
-]
-~~~~~
-
-#### Acts 5: 实现 IpfsCacheBackend
-
-实现核心逻辑：
-1.  **set**: 序列化 -> 异步上传到 IPFS -> 获得 CID -> 异步存储 Key-CID 映射到元数据后端。
-2.  **get**: 异步查询 Key -> 获得 CID -> 异步从 IPFS 下载 -> 反序列化。
+由于需要添加 `import pytest` 并修改所有函数，使用 `write_file` 更为稳健。
 
 ~~~~~act
 write_file
-packages/cascade-provider-ipfs/src/cascade/providers/ipfs/cache.py
+tests/cascade-runtime/adapters/cache/test_in_memory.py
+~~~~~
+~~~~~python
+import pytest
+from unittest.mock import patch
+from cascade.adapters.cache.in_memory import InMemoryCacheBackend
+
+@pytest.mark.asyncio
+async def test_cache_set_and_get():
+    """Test basic set and get functionality."""
+    cache = InMemoryCacheBackend()
+    await cache.set("key1", "value1")
+    assert await cache.get("key1") == "value1"
+
+
+@pytest.mark.asyncio
+async def test_cache_get_non_existent_key():
+    """Test that getting a non-existent key returns None."""
+    cache = InMemoryCacheBackend()
+    assert await cache.get("non_existent") is None
+
+
+@pytest.mark.asyncio
+async def test_cache_set_overwrite():
+    """Test that setting an existing key overwrites the value."""
+    cache = InMemoryCacheBackend()
+    await cache.set("key1", "value1")
+    await cache.set("key1", "value2")
+    assert await cache.get("key1") == "value2"
+
+
+@pytest.mark.asyncio
+async def test_cache_ttl_not_expired():
+    """Test that a key can be retrieved before its TTL expires."""
+    cache = InMemoryCacheBackend()
+    with patch("time.time", return_value=1000):
+        await cache.set("key_ttl", "value_ttl", ttl=60)
+
+    with patch("time.time", return_value=1059):
+        assert await cache.get("key_ttl") == "value_ttl"
+
+
+@pytest.mark.asyncio
+async def test_cache_ttl_expired():
+    """Test that a key returns None after its TTL expires."""
+    cache = InMemoryCacheBackend()
+    with patch("time.time", return_value=1000):
+        await cache.set("key_ttl", "value_ttl", ttl=60)
+
+    # Move time forward to just after the expiry
+    with patch("time.time", return_value=1061):
+        assert await cache.get("key_ttl") is None
+
+    # Verify that the key was actually removed from the store
+    assert "key_ttl" not in cache._store
+    assert "key_ttl" not in cache._expiry
+~~~~~
+
+#### Acts 2: 修复 RedisCacheBackend 测试
+
+~~~~~act
+write_file
+tests/cascade-runtime/adapters/cache/test_redis_cache.py
 ~~~~~
 ~~~~~python
 import pickle
-import json
-import logging
-from typing import Any, Optional, Union
-import aiohttp
+import pytest
+import asyncio
+from unittest.mock import MagicMock
 
-from cascade.interfaces.protocols import CacheBackend
+from cascade.adapters.cache import redis as redis_cache_module
 
-logger = logging.getLogger(__name__)
+@pytest.fixture
+def mock_redis_client():
+    """Provides a MagicMock for the redis.Redis client."""
+    return MagicMock()
 
-class IpfsCacheBackend(CacheBackend):
+def test_redis_cache_backend_dependency_check(monkeypatch):
     """
-    A cache backend that stores results in IPFS via its HTTP RPC API.
-
-    It uses a secondary 'metadata_backend' (like Redis or In-Memory) to map
-    application cache keys to IPFS Content Identifiers (CIDs).
-
-    Structure:
-       App Key -> Metadata Backend -> CID -> IPFS -> Serialized Data
+    Ensures RedisCacheBackend raises ImportError if 'redis' is not installed.
     """
+    monkeypatch.setattr(redis_cache_module, "redis", None)
+    with pytest.raises(ImportError, match="The 'redis' library is required"):
+        from cascade.adapters.cache.redis import RedisCacheBackend
+        RedisCacheBackend(client=MagicMock())
 
-    def __init__(
-        self,
-        metadata_backend: CacheBackend,
-        ipfs_api_url: str = "http://127.0.0.1:5001",
-    ):
-        """
-        Args:
-            metadata_backend: A fast K-V backend to store Key->CID mappings.
-            ipfs_api_url: The base URL of the IPFS RPC API (default: local Kubo node).
-        """
-        self._meta_db = metadata_backend
-        self._api_base = ipfs_api_url.rstrip("/")
+@pytest.mark.asyncio
+async def test_set_cache(mock_redis_client):
+    """
+    Verifies that set() serializes data and calls Redis SET with TTL.
+    """
+    backend = redis_cache_module.RedisCacheBackend(client=mock_redis_client)
+    
+    value = {"result": "cached"}
+    await backend.set("cache_key_1", value, ttl=300)
 
-    async def get(self, key: str) -> Optional[Any]:
-        """Retrieves a CID from metadata and then fetches content from IPFS."""
-        # 1. Resolve Key -> CID
-        cid = await self._meta_db.get(key)
-        if not cid:
-            return None
+    expected_key = "cascade:cache:cache_key_1"
+    expected_data = pickle.dumps(value)
 
-        # 2. Fetch Content from IPFS
-        try:
-            async with aiohttp.ClientSession() as session:
-                # ipfs cat <cid>
-                url = f"{self._api_base}/api/v0/cat"
-                async with session.post(url, params={"arg": cid}) as resp:
-                    if resp.status != 200:
-                        logger.warning(
-                            f"Failed to fetch CID {cid} from IPFS: {resp.status}"
-                        )
-                        return None
-                    data = await resp.read()
+    mock_redis_client.set.assert_called_once_with(expected_key, expected_data, ex=300)
 
-            # 3. Deserialize
-            return pickle.loads(data)
-        except Exception as e:
-            logger.error(f"Error reading from IPFS cache (key={key}, cid={cid}): {e}")
-            return None
+@pytest.mark.asyncio
+async def test_get_cache(mock_redis_client):
+    """
+    Verifies that get() retrieves and deserializes data correctly.
+    """
+    backend = redis_cache_module.RedisCacheBackend(client=mock_redis_client)
 
-    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """Serializes value, adds it to IPFS to get a CID, then stores key->CID mapping."""
-        try:
-            # 1. Serialize
-            data = pickle.dumps(value)
+    # Case 1: Cache hit
+    value = {"result": "cached"}
+    pickled_value = pickle.dumps(value)
+    mock_redis_client.get.return_value = pickled_value
 
-            # 2. Upload to IPFS
-            async with aiohttp.ClientSession() as session:
-                url = f"{self._api_base}/api/v0/add"
-                # IPFS expects 'file' field in multipart/form-data
-                form = aiohttp.FormData()
-                form.add_field("file", data)
+    result = await backend.get("cache_key_1")
+    
+    mock_redis_client.get.assert_called_once_with("cascade:cache:cache_key_1")
+    assert result == value
 
-                async with session.post(url, data=form) as resp:
-                    if resp.status != 200:
-                        text = await resp.text()
-                        raise RuntimeError(f"IPFS add failed: {resp.status} - {text}")
-                    
-                    # IPFS add returns JSON: {"Name": "...", "Hash": "Qm...", ...}
-                    resp_json = await resp.json()
-                    cid = resp_json["Hash"]
-
-            # 3. Store Key -> CID Mapping
-            # Note: We apply the TTL to the mapping, effectively expiring the cache entry
-            # even though the data remains in IPFS (until GC).
-            await self._meta_db.set(key, cid, ttl=ttl)
-
-        except Exception as e:
-            logger.error(f"Error writing to IPFS cache (key={key}): {e}")
-            # We don't raise here to avoid failing the workflow just because caching failed
+    # Case 2: Cache miss
+    mock_redis_client.get.return_value = None
+    assert await backend.get("cache_key_2") is None
 ~~~~~
 
-### 下一步建议
-我们已经完成了 Cache 系统的异步化改造并实现了 IPFS 后端。下一步，建议：
-1.  **实现 `IpfsCachePolicy`**（如果需要）：目前的实现假设用户手动组合 Backend。如果需要更高级的策略（例如只缓存大于一定大小的文件到 IPFS），可能需要专用的 Policy。
-2.  **完善测试**：由于涉及比较大的改动，强烈建议为 `IpfsCacheBackend` 添加单元测试（mock `aiohttp` 和 `metadata_backend`），并更新现有的集成测试以确保 `await` 调用正确。
-3.  **继续 Roadmap 5.3**: 既然 IPFS 存储已经就绪，可以开始探索基于“工单”和 IPFS 数据传递的分布式执行模型。
+#### Acts 3: 修复 Engine 约束测试的时序问题
+
+使用正确的三参数 `patch_file` 格式。
+
+~~~~~act
+patch_file
+tests/cascade-runtime/runtime/test_engine_constraints.py
+~~~~~
+~~~~~python
+    # 2. Start the engine in a background task
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # 3. Wait for 'task_a' to finish. This ensures the engine is ready for 'task_b'.
+    await wait_for_task_finish(spy, "task_a")
+
+    # 4. Inject a PAUSE command specifically for 'task_b'
+    pause_scope = "task:task_b"
+    pause_payload = {
+        "id": "pause-b",
+        "scope": pause_scope,
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message(
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", pause_payload
+    )
+
+    # 5. Wait briefly and assert that 'task_b' has NOT started
+    await asyncio.sleep(0.2)
+    started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
+    assert "task_b" not in started_tasks, "'task_b' started despite pause constraint"
+~~~~~
+~~~~~python
+    # 2. Start the engine in a background task
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # 3. Wait for 'task_a' to START (instead of finish).
+    # This allows us to inject the constraint while A is running.
+    await wait_for_task_start(spy, "task_a")
+
+    # 4. Inject a PAUSE command specifically for 'task_b'
+    pause_scope = "task:task_b"
+    pause_payload = {
+        "id": "pause-b",
+        "scope": pause_scope,
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message(
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", pause_payload
+    )
+
+    # Wait for A to finish naturally
+    await wait_for_task_finish(spy, "task_a")
+
+    # 5. Wait briefly and assert that 'task_b' has NOT started
+    # Give the engine a moment to potentially (incorrectly) schedule B
+    await asyncio.sleep(0.2)
+    started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
+    assert "task_b" not in started_tasks, "'task_b' started despite pause constraint"
+~~~~~

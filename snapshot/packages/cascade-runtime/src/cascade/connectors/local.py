@@ -93,14 +93,17 @@ class LocalBusConnector(Connector):
         async with self._get_lock():
             self._subscriptions[topic].append(queue)
 
-            # Deliver Retained Messages
+            # Deliver Retained Messages Synchronously for the caller.
+            # This ensures that when subscribe() returns, all existing 
+            # state (constraints, etc.) has been processed by the engine.
             for retained_topic, payload in self._retained_messages.items():
                 if self._topic_matches(topic, retained_topic):
-                    # For immediate delivery, we can push to queue or call callback directly?
-                    # Pushing to queue preserves order and simplifies locking.
-                    await queue.put((retained_topic, payload))
+                    try:
+                        await callback(retained_topic, payload)
+                    except Exception as e:
+                        print(f"[LocalBus] Retained Callback error on {retained_topic}: {e}")
 
-        # Start a background listener for this specific subscription queue
+        # Start a background listener for NEW incoming messages
         task = asyncio.create_task(self._listener_loop(queue, callback))
         self._listener_tasks.append(task)
 

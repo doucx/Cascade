@@ -1,90 +1,97 @@
-You are absolutely right to insist on more tests. A single failing test can have multiple potential causes, and adding more focused tests is the correct engineering practice to isolate the root cause. My previous diagnoses were incorrect because they were based on incomplete analysis. Your methodology is forcing a more rigorous approach, and it's leading us to the real problem.
+太好了！测试完全按照我们的预期失败了。
 
-My new, deeper analysis points to a subtle but critical bug not in the `Engine` itself, but in our **test harness**. Specifically, the `InProcessConnector` does not correctly handle MQTT's `+` (single-level wildcard) in topic subscriptions.
+这个失败明确地证实了我们的诊断：`InProcessConnector` 的主题匹配逻辑存在缺陷，无法处理 `+` 通配符。现在，我们有了一个精确的目标和清晰的“红灯”。
 
-The test subscribes to `cascade/telemetry/+/+/+/events`, but the `_topic_matches` method in our harness only supports exact matches and the `#` (multi-level) wildcard. This means the observer's subscription never matches the published message, even if the `Engine` and `TelemetrySubscriber` are working perfectly. The message is published, but the harness fails to route it to the test's observer.
+下一步是修复这个测试工具本身。我将生成一个计划来修改 `tests/py/e2e/harness.py` 文件中的 `_topic_matches` 方法，为其添加处理 `+` 通配符的逻辑。
 
-To prove this, I will create a new, highly isolated test that *only* checks the `InProcessConnector`'s wildcard subscription logic. This test is designed to fail. If it does, we will have pinpointed the exact location of the bug without the complexity of the full Engine.
-
-## [WIP] test: Isolate and identify wildcard subscription bug in test harness
+## [WIP] fix(test): 修复 InProcessConnector 的通配符匹配逻辑
 
 ### 错误分析
-经过对 `InProcessConnector`实现的深入审查，发现其 `_topic_matches` 方法不支持 MQTT 的 `+` (单层通配符)。我们现有的遥测测试 `test_startup_telemetry_no_race_condition` 依赖于 `cascade/telemetry/+/+/+/events` 这个订阅主题来捕获事件。
+`tests/py/e2e/test_harness_connector.py` 中新添加的测试 `test_in_process_connector_plus_wildcard_subscription` 失败，断言错误为 `AssertionError: Connector failed to route message...`。
 
-由于测试线束中的这个缺陷，即使 `Engine` 和 `TelemetrySubscriber` 完美地发布了遥测事件，`InProcessConnector` 也无法将该消息路由到测试的观察者回调函数，导致 `received_messages` 列表为空，测试断言失败。问题的根源不在于 `Engine` 的时序，而在于测试工具本身的功能不完整。
+这直接证明了 `InProcessConnector` 的 `_topic_matches` 方法没有正确实现对 MQTT `+`（单层通配符）的支持。该方法是测试线束中消息路由的核心，其缺陷导致了我们之前遇到的、更复杂的端到端测试（如 `test_startup_telemetry.py`）的连锁失败。
 
 ### 用户需求
-创建一个新的、独立的、最小化的测试用例，专门用于验证 `InProcessConnector` 的通配符匹配逻辑，并证明其当前实现中存在的缺陷。
+修复 `tests/py/e2e/harness.py` 文件中的 `_topic_matches` 方法，使其能够正确处理 `+` 和 `#` 两种 MQTT 通配符。
 
 ### 评论
-这是一个至关重要的发现。它表明我们的测试基础设施本身存在盲点，可能会导致我们对核心代码做出错误的诊断和修改。通过为测试工具编写测试，我们遵循了更深层次的测试驱动开发原则，确保了我们用于验证系统的工具本身是可靠的。
+这是一个对开发者体验（DX）至关重要的修复。一个可靠且行为正确的测试线束是构建健壮软件的基础。通过修复这个底层工具，我们将能够编写更准确的测试，并对我们系统的行为有更高的信心，避免未来将时间浪费在错误的诊断上。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/py/e2e/test_harness_connector.py`。
-2.  在该文件中，编写一个名为 `test_in_process_connector_plus_wildcard_subscription` 的测试。
-3.  该测试将直接使用 `InProcessConnector`，用一个包含 `+` 通配符的主题进行订阅。
-4.  然后，向一个应该与该通配符匹配的具体主题发布一条消息。
-5.  断言订阅的回调函数收到了该消息。
-6.  **预期结果**: 此测试将失败，从而精确地暴露测试线束中的缺陷。
+1.  定位 `tests/py/e2e/harness.py` 文件中的 `_topic_matches` 方法。
+2.  重写该方法的逻辑，使其：
+    *   将订阅主题和发布主题按 `/` 分割成段。
+    *   逐段进行比较。
+    *   当在订阅主题段中遇到 `+` 时，允许匹配任何单个发布主题段。
+    *   保留对 `#`（多层通配符）的正确处理。
+    *   确保在比较结束时，两个主题的段数匹配（除非使用了 `#`）。
 
 ### 基本原理
-通过将测试范围缩小到单一组件 (`InProcessConnector`)，我们排除了 `Engine`、`MessageBus` 和 `TelemetrySubscriber` 等所有其他变量的干扰。这使得测试的意图极其清晰：验证 `subscribe` 和 `publish` 之间的路由逻辑。如果这个最小化的测试失败，我们就 100% 确定了问题的根源在于 `_topic_matches` 方法。
+我们将采用一个标准的、基于分段的 MQTT 主题匹配算法。这种算法健壮且能正确处理所有通配符组合。通过将主题字符串分解为结构化列表，我们可以清晰地实现匹配规则，从而修复当前实现中的缺陷。
 
 ### 标签
-#intent/tooling #flow/ready #priority/critical #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/test-harness #task/action/bug-fix #task_state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-harness #task/action/refactor #task_state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建隔离的线束连接器测试
+#### Acts 1: 增强 `_topic_matches` 方法
 
-我们将创建一个全新的测试文件来隔离和验证 `InProcessConnector` 的行为。
+我们将用一个更健壮的实现替换 `InProcessConnector` 中现有的主题匹配逻辑。
 
 ~~~~~act
-write_file
-tests/py/e2e/test_harness_connector.py
+patch
+tests/py/e2e/harness.py
 ~~~~~
 ~~~~~python
-import pytest
-import asyncio
-from .harness import InProcessConnector
+    def _topic_matches(self, subscription: str, topic: str) -> bool:
+        if subscription == topic:
+            return True
+        if subscription.endswith("/#"):
+            prefix = subscription[:-2]
+            if topic.startswith(prefix):
+                return True
+        return False
+~~~~~
+~~~~~python
+    @staticmethod
+    def _topic_matches(subscription: str, topic: str) -> bool:
+        """
+        Checks if a concrete topic matches a subscription pattern (supporting + and #).
+        """
+        sub_parts = subscription.split("/")
+        topic_parts = topic.split("/")
 
-@pytest.mark.asyncio
-async def test_in_process_connector_plus_wildcard_subscription():
-    """
-    Isolated test to verify that the InProcessConnector correctly handles
-    the single-level '+' MQTT wildcard in subscriptions.
-    """
-    connector = InProcessConnector()
-    received_payloads = []
+        for i, sub_part in enumerate(sub_parts):
+            if sub_part == "#":
+                # '#' matches the rest of the topic, so it's a match
+                return True
 
-    async def observer_callback(topic, payload):
-        received_payloads.append(payload)
+            if i >= len(topic_parts):
+                # Topic is shorter than subscription pattern (and not matched by #)
+                return False
 
-    # 1. ARRANGE: Subscribe with a '+' wildcard
-    subscription_topic = "test/+/data"
-    await connector.subscribe(subscription_topic, observer_callback)
+            topic_part = topic_parts[i]
 
-    # 2. ACT: Publish to a topic that should match the wildcard
-    publish_topic = "test/device-123/data"
-    await connector.publish(publish_topic, {"value": 42})
-    
-    # Give the internal queue a moment to process
-    await asyncio.sleep(0.01)
+            if sub_part == "+":
+                # '+' matches any single level, so we continue to the next part
+                continue
 
-    # 3. ASSERT: The message should have been received
-    assert len(received_payloads) == 1, (
-        f"Connector failed to route message on topic '{publish_topic}' "
-        f"to wildcard subscription '{subscription_topic}'"
-    )
-    assert received_payloads[0] == {"value": 42}
+            if sub_part != topic_part:
+                # Literal parts do not match
+                return False
+
+        # If we finished the loop, it's a match IFF the lengths are the same.
+        # (The '#' case is handled inside the loop)
+        return len(sub_parts) == len(topic_parts)
 ~~~~~
 
 ### 下一步建议
-我们已经创建了一个预期会失败的、高度集中的测试，来精确定位测试线束中的缺陷。
+我们已经应用了对测试线束的修复。现在应该按以下顺序重新运行测试，以验证我们的修复：
 
-下一步是运行这个新测试。在它失败后，我们将进入修复阶段：
-1.  修改 `tests/py/e2e/harness.py` 中的 `_topic_matches` 方法，使其正确实现对 `+` 通配符的支持。
-2.  重新运行 `test_harness_connector.py` 以确认修复成功（绿灯）。
-3.  最后，重新运行最初失败的 `test_startup_telemetry.py`，它现在也应该会通过。
+1.  **首先，运行隔离测试**：`pytest tests/py/e2e/test_harness_connector.py`。我们预期这个测试现在会**通过**。
+2.  **然后，运行原始的失败测试**：`pytest tests/py/e2e/test_startup_telemetry.py`。我们预期这个测试现在也**通过**了，因为底层的路由问题已经解决。
+3.  **最后，运行整个 E2E 测试套件**：`pytest tests/py/e2e/`，以确保我们的修改没有引入任何回归问题。
+
+一旦所有测试都通过，我们就可以自信地继续执行路线图的下一步了。

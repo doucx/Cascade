@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 添加运行时暂停的回归测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766106616.5513868, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 为速率限制更新导致的引擎死锁问题添加回归测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766106987.19766, "duration_ms": 0}}

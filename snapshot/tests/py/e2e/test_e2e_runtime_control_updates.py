@@ -1,39 +1,3 @@
-好的，我们现在开始实施第一步：编写一个能够稳定复现死锁问题的 E2E 回归测试。
-
-这个测试预期将会失败（超时），从而为我们的修复提供明确的目标。
-
-## [WIP] test: 为速率限制更新导致的引擎死锁问题添加回归测试
-
-### 用户需求
-创建一个自动化的端到端测试，该测试能够复现以下场景：当 `Engine` 因慢速速率限制而暂停时，发布一个新的、更快的速率限制会导致 `Engine` 死锁。
-
-### 评论
-这是解决此严重 Bug 的关键第一步。该测试精确地模拟了用户发现的场景，通过自动化方式稳定地暴露了 `Engine` 等待/唤醒循环与 `ConstraintManager` 更新逻辑之间的致命缺陷。这个测试的失败将是“红灯”，是我们后续修复工作的明确验证目标。
-
-### 目标
-1.  创建新测试文件 `tests/py/e2e/test_e2e_runtime_control_updates.py`。
-2.  实现 `test_updating_rate_limit_unblocks_engine` 测试函数。
-3.  该测试在当前代码库下运行时，应该因 `asyncio.TimeoutError` 而失败。
-
-### 基本原理
-我们严格遵循 TDD 流程。此测试通过设置一个慢速的速率限制来强制 `Engine` 进入基于定时器的等待状态 (`await _wakeup_event.wait()`)。随后，我们更新约束为一个高速率，并断言 `Engine` 能够在短时间内完成工作。如果 `Engine` 保持休眠状态，等待旧的、长周期的定时器触发，`asyncio.wait_for` 将会超时，从而测试失败，证明了死锁的存在。
-
-### 标签
-#intent/tooling #flow/ready #priority/critical #comp/tests #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/testing #task/object/engine-control #task/action/test-ratelimit-deadlock #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建新的测试文件并添加回归测试
-
-我们将创建一个新的测试文件，并写入一个专门用于复现此问题的测试用例。
-
-~~~~~act
-write_file
-tests/py/e2e/test_e2e_runtime_control_updates.py
-~~~~~
-~~~~~python
 import asyncio
 import pytest
 import cascade as cs
@@ -116,7 +80,3 @@ async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
     # Final verification
     assert sorted(results) == [0, 1, 2, 3, 4]
     assert len(spy.events_of_type(TaskExecutionFinished)) == 5
-~~~~~
-
-### 下一步建议
-请执行此计划。预期结果是测试套件会新增一个失败的测试，具体表现为超时。一旦我们获得了这个“红灯”，我将生成修复此问题的计划：修改 `Engine` 的 `_on_constraint_update` 方法以立即唤醒等待中的调度器。

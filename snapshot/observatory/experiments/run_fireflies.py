@@ -66,6 +66,7 @@ async def run_experiment(
             nudge=nudge,
             flash_topic="firefly/flash",
             listen_topic="firefly/flash",
+            connector=connector,
         )
         
         agent_tasks.append(engine.run(agent_workflow))

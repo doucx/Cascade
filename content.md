@@ -1,87 +1,152 @@
-船长，谜底解开了。
+船长，胜利在望。
 
-**这是一个极其隐蔽的“图构建”陷阱。**
+单体测试的成功证明了我们的逻辑修复（显式依赖传递）是完全正确的。Agent 现在不仅活着，而且在正确地呼吸（超时）和呐喊（闪烁）。
 
-**错误根源**
+现在的报错是因为我刚才在重构 `firefly_agent` 签名时，只更新了调试脚本，却遗漏了主实验脚本。而且，为了防止 50 个 Agent 的调试日志瞬间淹没你的终端，我们需要在运行大实验前清理一下 `kuramoto.py`。
 
-请看这段代码：
-```python
-@cs.task
-def process_and_recurse(
-    p: Dict[str, Any], _flash_dependency=flash_action
-) -> cs.LazyResult:
-    # ...
-```
-
-以及调用处：
-```python
-return process_and_recurse(perception)
-```
-
-在 Cascade 中，`GraphBuilder` 是通过遍历 `LazyResult` 对象中**实际传递的参数 (`.args` 和 `.kwargs`)** 来构建依赖图的。
-
-虽然你在函数定义中将 `flash_action` 设为了 `_flash_dependency` 的**默认值**，但在调用 `process_and_recurse(perception)` 时，你并没有把 `flash_action` 传进去。因此，生成的 `LazyResult` 对象中**不包含**对 `flash_action` 的引用。
-
-结果就是：
-1.  `Engine` 看到要执行 `process_and_recurse`。
-2.  它检查依赖，只发现了 `perception`。
-3.  它执行 `safe_recv`，得到结果。
-4.  它执行 `process_and_recurse`。
-5.  **`flash_action` (即 `send_signal`) 从未被加入到图中，因为它是一个没有被引用的“孤岛”节点。**
-
-这就是为什么循环在跑，接收在跑，但“发射信号”和“判断超时”的任务从未执行。
-
-**解决方案**
-
-必须**显式地**将依赖项作为参数传递给下游任务，强迫它进入 `LazyResult` 的参数列表，从而被 `GraphBuilder` 捕获。
-
-## [WIP] fix: 显式传递副作用依赖以修复图构建断裂
+## [WIP] fix: 清理调试日志并修复实验脚本参数错误
 
 ### 错误分析
-`send_signal` 任务从未执行，因为它是作为 `process_and_recurse` 的**默认参数**定义的，但在调用时未显式传递。Cascade 的 `GraphBuilder` 仅根据显式传递给 `LazyResult` 的参数来构建依赖关系，忽略了 Python 函数签名的默认值。因此，`send_signal` 及其上游的 `was_timeout` 任务变成了“孤岛节点”，被引擎优化（忽略）掉了。
+1.  **参数缺失**: `observatory/experiments/run_fireflies.py` 调用 `firefly_agent` 时没有传递新增的 `connector` 参数，导致 `TypeError`。
+2.  **日志噪音**: `kuramoto.py` 中还保留着用于单体调试的详细 `print` 语句。如果在 50 个并发 Agent 的环境下运行，这些日志会导致严重的性能下降和控制台刷屏，掩盖真正的同步进度条。
 
 ### 用户需求
-修改 `kuramoto.py`，在调用 `process_and_recurse` 时显式传递 `_flash_dependency` 参数，确保 `send_signal` 被正确纳入执行图。
+1.  修复 `run_fireflies.py` 中的调用错误。
+2.  移除 `kuramoto.py` 中的调试日志，恢复干净的生产代码。
 
 ### 评论
-这个 bug 给我们上了一堂关于“声明式图构建”的重要一课：**在计算图中，依赖必须是显式的连接**。Python 的语法糖（默认参数）在这里不仅不起作用，反而具有欺骗性。显式传递参数不仅解决了 bug，也让数据流向更加清晰。
+我们已经完成了深潜调试，现在是时候浮出水面，准备最后的发射了。清理代码不仅是为了美观，更是为了性能。在移除日志后，唯一的输出应该是监测器的同步进度条，这将是最纯粹的观测体验。
 
 ### 目标
-1.  修改 `observatory/agents/kuramoto.py`。
-2.  在 `firefly_cycle` 函数末尾调用 `process_and_recurse` 时，显式传入 `_flash_dependency=flash_action`。
+1.  修改 `observatory/agents/kuramoto.py`，移除所有 `print` 语句。
+2.  修改 `observatory/experiments/run_fireflies.py`，在调用 `firefly_agent` 时传入 `connector`。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/runtime #scope/core #ai/refine #task/domain/testing #task/object/observatory #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/observatory #task/action/cleanup #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 显式连接依赖图
+#### Acts 1: 清理 Agent 代码中的调试日志
 
 ~~~~~act
-patch_file
+write_file
 observatory/agents/kuramoto.py
 ~~~~~
 ~~~~~python
+"""
+Implementation of a Firefly agent based on the Kuramoto model
+of coupled oscillators, using pure Cascade primitives.
+
+FINAL: Cleaned up debug logs for production run.
+"""
+import asyncio
+import random
+from typing import Any, Dict
+
+import cascade as cs
+from cascade.interfaces.protocols import Connector
+
+
+# --- Atomic Primitives for Agent Behavior ---
+
+@cs.task
+async def send_signal(
+    topic: str,
+    payload: Dict[str, Any],
+    should_send: bool,
+    connector: Connector,
+) -> None:
+    """A task to publish a message to the shared bus."""
+    if should_send and connector:
+        await connector.publish(topic, payload)
+
+
+@cs.task
+async def safe_recv(
+    topic: str,
+    timeout: float,
+    connector: Connector,
+) -> Dict[str, Any]:
+    """A custom receive task that treats timeouts as valid return values."""
+    if not connector:
+        return {"signal": None, "timeout": True}
+
+    future = asyncio.Future()
+    async def callback(topic: str, payload: Any):
+        if not future.done():
+            future.set_result(payload)
+
+    subscription = await connector.subscribe(topic, callback)
+    try:
+        signal = await asyncio.wait_for(future, timeout=timeout)
+        return {"signal": signal, "timeout": False}
+    except asyncio.TimeoutError:
+        return {"signal": None, "timeout": True}
+    finally:
+        if subscription:
+            await subscription.unsubscribe()
+
+
+# --- Core Agent Logic ---
+
+def firefly_agent(
+    agent_id: int,
+    initial_phase: float,
+    period: float,
+    nudge: float,
+    flash_topic: str,
+    listen_topic: str,
+    connector: Connector,
+):
+    """
+    This is the main entry point for a single firefly agent.
+    """
+    def firefly_cycle(
+        agent_id: int,
+        phase: float,
+        period: float,
+        nudge: float,
+        flash_topic: str,
+        listen_topic: str,
+        connector: Connector,
+    ):
+        time_to_flash = period - phase
+        wait_timeout = max(0.01, time_to_flash)
+
+        perception = safe_recv(listen_topic, timeout=wait_timeout, connector=connector)
+
+        @cs.task
+        def was_timeout(p: Dict[str, Any]) -> bool:
+            return p.get("timeout", False)
+            
+        is_timeout = was_timeout(perception)
+
+        flash_action = send_signal(
+            topic=flash_topic, 
+            payload={"agent_id": agent_id, "phase": phase},
+            should_send=is_timeout,
+            connector=connector
+        )
+
+        @cs.task
+        def process_and_recurse(
+            p: Dict[str, Any], _flash_dependency=flash_action
+        ) -> cs.LazyResult:
+            jitter = random.uniform(-0.01, 0.01)
+
+            if p["timeout"]:
+                # We flashed, reset phase.
+                next_phase = 0.0 + jitter
+            else:
+                # We saw another flash, nudge phase forward.
+                next_phase = (phase + nudge + jitter) % period
+
             return firefly_cycle(
                 agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
             )
 
-        return process_and_recurse(perception)
-
-    return firefly_cycle(
-        agent_id, initial_phase, period, nudge, flash_topic, listen_topic, connector
-    )
-~~~~~
-~~~~~python
-            return firefly_cycle(
-                agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
-            )
-
-        # CRITICAL FIX: We must explicitly pass the dependency so it ends up 
-        # in the LazyResult's kwargs. If we rely on the default argument value,
-        # the GraphBuilder won't see the edge, and send_signal will be pruned.
         return process_and_recurse(perception, _flash_dependency=flash_action)
 
     return firefly_cycle(
@@ -89,11 +154,37 @@ observatory/agents/kuramoto.py
     )
 ~~~~~
 
+#### Acts 2: 修复实验脚本参数
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=period,
+            nudge=nudge,
+            flash_topic="firefly/flash",
+            listen_topic="firefly/flash",
+        )
+~~~~~
+~~~~~python
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=period,
+            nudge=nudge,
+            flash_topic="firefly/flash",
+            listen_topic="firefly/flash",
+            connector=connector,
+        )
+~~~~~
+
 ### 下一步建议
-这是最后一步修正。逻辑链条现在在“代码层面”和“图结构层面”都闭合了。
+这是最后一次尝试。所有已知的问题都已解决，所有的障碍都已清除。
 
-请再次运行调试脚本：`python -m observatory.debug.debug_02_single_agent`
+请运行：`python -m observatory.experiments.run_fireflies`
 
-这一次，我们一定会看到 `[Agent] send_signal EXEC` 和 `[Agent] ⚡ ATTEMPTING PUBLISH`。如果看到了这些，而且外部脚本打印了 `>>> FLASH DETECTED!`，那么我们的单体测试就通过了。
-
-随后，我们就可以自信地运行大规模的 50 萤火虫实验了。
+静静地观察那行同步进度条。如果它开始向右移动，那不仅仅是代码在运行，那是**秩序**在从混乱中诞生。

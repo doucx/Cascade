@@ -2,11 +2,10 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 7: Deep debug logging enabled.
+FINAL: Cleaned up debug logs for production run.
 """
 import asyncio
 import random
-import time
 from typing import Any, Dict
 
 import cascade as cs
@@ -23,16 +22,8 @@ async def send_signal(
     connector: Connector,
 ) -> None:
     """A task to publish a message to the shared bus."""
-    # DEBUG: Inspect the connector object deeply
-    conn_status = "VALID" if connector else "NONE"
-    conn_id = id(connector) if connector else "N/A"
-    
-    print(f"[Agent] send_signal EXEC. should_send={should_send}, connector={conn_status}({conn_id})")
-    
     if should_send and connector:
-        print(f"[Agent] ⚡ ATTEMPTING PUBLISH to {topic}...")
         await connector.publish(topic, payload)
-        print(f"[Agent] ⚡ PUBLISH CALL DONE.")
 
 
 @cs.task
@@ -45,8 +36,6 @@ async def safe_recv(
     if not connector:
         return {"signal": None, "timeout": True}
 
-    print(f"[Agent] safe_recv START wait={timeout:.4f}s")
-    
     future = asyncio.Future()
     async def callback(topic: str, payload: Any):
         if not future.done():
@@ -55,10 +44,8 @@ async def safe_recv(
     subscription = await connector.subscribe(topic, callback)
     try:
         signal = await asyncio.wait_for(future, timeout=timeout)
-        print(f"[Agent] safe_recv GOT SIGNAL")
         return {"signal": signal, "timeout": False}
     except asyncio.TimeoutError:
-        print(f"[Agent] safe_recv TIMEOUT")
         return {"signal": None, "timeout": True}
     finally:
         if subscription:
@@ -95,10 +82,7 @@ def firefly_agent(
 
         @cs.task
         def was_timeout(p: Dict[str, Any]) -> bool:
-            # DEBUG
-            val = p.get("timeout", False)
-            print(f"[Agent] was_timeout check: input={p} -> {val}")
-            return val
+            return p.get("timeout", False)
             
         is_timeout = was_timeout(perception)
 
@@ -114,18 +98,18 @@ def firefly_agent(
             p: Dict[str, Any], _flash_dependency=flash_action
         ) -> cs.LazyResult:
             jitter = random.uniform(-0.01, 0.01)
+
             if p["timeout"]:
+                # We flashed, reset phase.
                 next_phase = 0.0 + jitter
             else:
+                # We saw another flash, nudge phase forward.
                 next_phase = (phase + nudge + jitter) % period
 
             return firefly_cycle(
                 agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
             )
 
-        # CRITICAL FIX: We must explicitly pass the dependency so it ends up 
-        # in the LazyResult's kwargs. If we rely on the default argument value,
-        # the GraphBuilder won't see the edge, and send_signal will be pruned.
         return process_and_recurse(perception, _flash_dependency=flash_action)
 
     return firefly_cycle(

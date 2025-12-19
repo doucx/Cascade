@@ -72,6 +72,13 @@ class Engine:
         self.arg_resolver = ArgumentResolver()
         self.constraint_resolver = ConstraintResolver()
         self.flow_manager: Optional[FlowManager] = None
+        self._managed_subscribers = []
+
+    def add_subscriber(self, subscriber: Any):
+        """
+        Adds a subscriber whose lifecycle (e.g., shutdown) the engine should manage.
+        """
+        self._managed_subscribers.append(subscriber)
 
     def register(self, resource_def: ResourceDefinition):
         self._resource_providers[resource_def.name] = resource_def.func
@@ -96,20 +103,28 @@ class Engine:
         else:
             target_name = "unknown"
 
-        self.bus.publish(
-            RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
-        )
-
+        # Initialize State Backend first (no side effects)
         state_backend = self.state_backend_cls(run_id=run_id)
 
         try:
+            # 1. Establish Infrastructure Connection FIRST
+            # This ensures we are ready to transmit telemetry and receive constraints
+            # BEFORE we announce the run starting or execute any logic.
             if self.connector:
                 await self.connector.connect()
                 self.bus.publish(ConnectorConnected(run_id=run_id))
-                # Subscribe to constraint updates
+                # Subscribe to constraint updates immediately.
+                # This gives the connector a chance to receive retained messages (like global pause)
+                # before we enter the execution loop.
                 await self.connector.subscribe(
                     "cascade/constraints/#", self._on_constraint_update
                 )
+
+            # 2. Publish Lifecycle Event
+            # Now that the connector is active, this event will be successfully transmitted.
+            self.bus.publish(
+                RunStarted(run_id=run_id, target_tasks=[target_name], params=params or {})
+            )
 
             with ExitStack() as stack:
                 initial_graph = build_graph(target)
@@ -140,6 +155,11 @@ class Engine:
             )
             raise
         finally:
+            # Gracefully shut down any managed subscribers BEFORE disconnecting the connector
+            for sub in self._managed_subscribers:
+                if hasattr(sub, "shutdown"):
+                    await sub.shutdown()
+
             if self.connector:
                 await self.connector.disconnect()
                 self.bus.publish(ConnectorDisconnected(run_id=run_id))

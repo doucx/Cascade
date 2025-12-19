@@ -91,6 +91,16 @@ class StateBackend(Protocol):
         ...
 
 
+class SubscriptionHandle(Protocol):
+    """
+    A handle to an active subscription, allowing it to be cancelled.
+    """
+
+    async def unsubscribe(self) -> None:
+        """Cancels the subscription."""
+        ...
+
+
 class LazyFactory(Protocol):
     """
     Protocol for any object that can produce a MappedLazyResult via a .map() method.
@@ -126,6 +136,9 @@ class Connector(Protocol):
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        """Subscribes to a topic to receive messages (e.g., control commands)."""
+    ) -> "SubscriptionHandle":
+        """
+        Subscribes to a topic to receive messages (e.g., control commands).
+        Returns a handle that can be used to unsubscribe.
+        """
         ...

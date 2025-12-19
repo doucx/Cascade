@@ -132,6 +132,14 @@ class Engine:
             
             # The global stack holds "run" scoped resources
             with ExitStack() as run_stack:
+                # Register the engine's connector as a special internal resource
+                if self.connector:
+                    from cascade.spec.resource import resource
+                    @resource(name="_internal_connector", scope="run")
+                    def _connector_provider():
+                        yield self.connector
+                    self.register(_connector_provider)
+                
                 active_resources: Dict[str, Any] = {}
 
                 while True:

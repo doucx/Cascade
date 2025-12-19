@@ -1,8 +1,44 @@
 import asyncio
+import uuid
 from collections import defaultdict
 from typing import Dict, List, Any, Callable, Awaitable, Optional
-from cascade.interfaces.protocols import Connector
+from cascade.interfaces.protocols import Connector, SubscriptionHandle
 from cascade.common.messaging import bus
+
+
+class _LocalSubscriptionHandle(SubscriptionHandle):
+    """Implementation of the subscription handle for the LocalBusConnector."""
+
+    def __init__(self, parent: "LocalBusConnector", topic: str, queue: asyncio.Queue, listener_task: asyncio.Task):
+        self._parent = parent
+        self._topic = topic
+        self._queue = queue
+        self._listener_task = listener_task
+
+    async def unsubscribe(self) -> None:
+        # 1. Cancel the listener task
+        self._listener_task.cancel()
+        try:
+            await self._listener_task
+        except asyncio.CancelledError:
+            pass
+
+        # 2. Remove the queue from the broker's shared state
+        async with self._parent._get_lock():
+            if self._topic in self._parent._subscriptions:
+                try:
+                    self._parent._subscriptions[self._topic].remove(self._queue)
+                    if not self._parent._subscriptions[self._topic]:
+                        del self._parent._subscriptions[self._topic]
+                except ValueError:
+                    # Queue already removed, which is fine
+                    pass
+        
+        # 3. Remove task from parent's tracked listeners to prevent memory leak
+        try:
+            self._parent._listener_tasks.remove(self._listener_task)
+        except ValueError:
+            pass
 
 
 class LocalBusConnector(Connector):
@@ -85,9 +121,9 @@ class LocalBusConnector(Connector):
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
+    ) -> SubscriptionHandle:
         if not self._is_connected:
-            return
+            raise RuntimeError("Connector is not connected.")
 
         queue = asyncio.Queue()
         
@@ -95,8 +131,6 @@ class LocalBusConnector(Connector):
             self._subscriptions[topic].append(queue)
 
             # Deliver Retained Messages Synchronously for the caller.
-            # This ensures that when subscribe() returns, all existing 
-            # state (constraints, etc.) has been processed by the engine.
             for retained_topic, payload in self._retained_messages.items():
                 if self._topic_matches(topic, retained_topic):
                     try:
@@ -107,6 +141,8 @@ class LocalBusConnector(Connector):
         # Start a background listener for NEW incoming messages
         task = asyncio.create_task(self._listener_loop(queue, callback))
         self._listener_tasks.append(task)
+        
+        return _LocalSubscriptionHandle(self, topic, queue, task)
 
     async def _listener_loop(self, queue: asyncio.Queue, callback):
         """Consumes messages from the subscription queue and invokes callback."""

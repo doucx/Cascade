@@ -1,98 +1,38 @@
-import asyncio
 import time
-from typing import Callable, Awaitable, Dict, Any, List, Optional
-from collections import defaultdict
-import uuid
-from dataclasses import asdict
-
 import pytest
 import cascade as cs
-from cascade.interfaces.protocols import Connector, Executor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.graph.model import Node
-from cascade.spec.constraint import GlobalConstraint
+from cascade.interfaces.protocols import Node, Executor
+from typing import List, Any, Dict
+
+from .harness import InProcessConnector
 
 
-# --- Test Infrastructure: In-Process Communication ---
+# Specific executor for rate limit timing
+class TimingWorkExecutor(Executor):
+    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
+        await asyncio.sleep(0.01)  # Short work time
+        return time.time()
 
 
-class InProcessConnector(Connector):
+@pytest.mark.asyncio
+async def test_e2e_rate_limit_control():
     """
-    A Connector that uses asyncio Queues for in-process, in-memory message passing.
-    Supports MQTT-style Retained Messages for robust config delivery.
+    Full end-to-end test for rate limiting.
+    1. Controller publishes a rate limit constraint (Retained).
+    2. Engine starts, receives the constraint, and throttles execution.
     """
+    # 1. Setup shared communication bus
+    connector = InProcessConnector()
 
-    _shared_topics: Dict[str, List[asyncio.Queue]] = defaultdict(list)
-    _retained_messages: Dict[str, Any] = {}
+    # 2. Setup Helper (Inline to avoid complex harness changes for now)
+    from cascade.spec.constraint import GlobalConstraint
+    from dataclasses import asdict
+    import uuid
 
-    def __init__(self):
-        self._shared_topics.clear()
-        self._retained_messages.clear()
-
-    async def connect(self) -> None:
-        pass
-
-    async def disconnect(self) -> None:
-        pass
-
-    async def publish(
-        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
-    ) -> None:
-        if retain:
-            if payload:
-                self._retained_messages[topic] = payload
-            elif topic in self._retained_messages:
-                del self._retained_messages[topic]
-
-        for sub_topic, queues in self._shared_topics.items():
-            if self._topic_matches(subscription=sub_topic, topic=topic):
-                for q in queues:
-                    await q.put((topic, payload))
-
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        queue = asyncio.Queue()
-        self._shared_topics[topic].append(queue)
-
-        # Replay retained messages that match the subscription
-        for retained_topic, payload in self._retained_messages.items():
-            if self._topic_matches(subscription=topic, topic=retained_topic):
-                # We need to await the callback to ensure sync delivery
-                await callback(retained_topic, payload)
-
-        asyncio.create_task(self._listen_on_queue(queue, callback))
-
-    async def _listen_on_queue(self, queue: asyncio.Queue, callback):
-        while True:
-            try:
-                topic, payload = await queue.get()
-                await callback(topic, payload)
-                queue.task_done()
-            except asyncio.CancelledError:
-                break
-
-    def _topic_matches(self, subscription: str, topic: str) -> bool:
-        if subscription == topic:
-            return True
-        if subscription.endswith("/#"):
-            prefix = subscription[:-2]
-            if topic.startswith(prefix):
-                return True
-        return False
-
-
-class ControllerTestApp:
-    """A lightweight simulator for the cs-controller CLI tool."""
-
-    def __init__(self, connector: Connector):
-        self.connector = connector
-
-    async def set_rate_limit(
-        self, scope: str, rate: str, capacity: Optional[float] = None
-    ):
+    async def set_rate_limit(scope: str, rate: str, capacity: float = None):
         params = {"rate": rate}
         if capacity is not None:
             params["capacity"] = capacity
@@ -106,36 +46,11 @@ class ControllerTestApp:
         )
         payload = asdict(constraint)
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        await self.connector.publish(topic, payload, retain=True)
-
-
-class MockWorkExecutor(Executor):
-    """Executor that simulates short, time-consuming work."""
-
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        await asyncio.sleep(0.01)  # Short work time
-        return time.time()
-
-
-# --- The E2E Test ---
-
-
-@pytest.mark.asyncio
-async def test_e2e_rate_limit_control():
-    """
-    Full end-to-end test for rate limiting.
-    1. Controller publishes a rate limit constraint (Retained).
-    2. Engine starts, receives the constraint, and throttles execution.
-    """
-    # 1. Setup shared communication bus
-    connector = InProcessConnector()
-
-    # 2. Setup the Controller
-    controller = ControllerTestApp(connector)
+        await connector.publish(topic, payload, retain=True)
 
     # 3. Publish the constraint FIRST.
     # Limit to 5 tasks/sec (1 every 0.2s), with a burst capacity of 2.
-    await controller.set_rate_limit(scope="task:fast_task", rate="5/s", capacity=2)
+    await set_rate_limit(scope="task:fast_task", rate="5/s", capacity=2)
 
     # 4. Define the workflow
     @cs.task

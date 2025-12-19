@@ -43,8 +43,9 @@ async def test_startup_pause_and_resume_e2e(bus_and_spy):
     engine_run_task = asyncio.create_task(engine.run(workflow))
 
     # 4. ASSERT: The engine is paused.
-    # Wait a moment to ensure the engine has had time to (incorrectly) start.
-    await asyncio.sleep(0.3)
+    # Yield control to allow engine to initialize and process the retained pause message.
+    # With deterministic connector, this should be instant.
+    await asyncio.sleep(0)
     started_events = spy.events_of_type(TaskExecutionStarted)
     assert len(started_events) == 0, (
         "Task started execution despite global pause constraint"

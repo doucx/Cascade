@@ -1,31 +1,51 @@
 import pytest
 import json
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from cascade.connectors.mqtt import MqttConnector
+
+# Attempt to import aiomqtt for type hinting if available, but don't fail
+try:
+    import aiomqtt
+except ImportError:
+    aiomqtt = None
 
 
 @pytest.fixture(autouse=True)
-def check_aiomqtt_installed():
-    try:
-        import aiomqtt
-    except ImportError:
-        pytest.skip("aiomqtt not installed, skipping MQTT connector tests.")
+def mock_aiomqtt_module(mocker):
+    """
+    Creates a completely isolated, fake 'aiomqtt' module and injects it into
+    sys.modules for the duration of the tests in this file.
 
+    This prevents any state leakage from other tests and removes the need for
+    aiomqtt to be installed to run these tests.
+    """
+    # 1. Create the mock client INSTANCE that will be returned by the fake Client class
+    mock_client_instance = AsyncMock()
+    mock_client_instance.__aenter__.return_value = mock_client_instance
 
-@pytest.fixture
-def mock_client(mocker):
-    """Provides a mocked aiomqtt.Client instance and patches the class."""
-    mock_instance = AsyncMock()
-    # Configure the context manager protocol
-    mock_instance.__aenter__.return_value = mock_instance
-    mock_instance.__aexit__.return_value = None
+    # 2. Create the fake aiomqtt.Client CLASS
+    mock_client_class = MagicMock(return_value=mock_client_instance)
 
-    mock_class = mocker.MagicMock(return_value=mock_instance)
-    mocker.patch(
-        "cascade.connectors.mqtt.connector.aiomqtt.Client", new=mock_class
+    # 3. Create the fake aiomqtt.Will CLASS
+    mock_will_class = MagicMock()
+
+    # 4. Create the fake aiomqtt MODULE
+    mock_aiomqtt_module = MagicMock()
+    mock_aiomqtt_module.Client = mock_client_class
+    mock_aiomqtt_module.Will = mock_will_class
+
+    # 5. Patch sys.modules to replace the real aiomqtt with our fake one
+    mocker.patch.dict(
+        "sys.modules", {"aiomqtt": mock_aiomqtt_module}
     )
-    return mock_instance
+
+    # Yield the components for tests to use
+    yield {
+        "instance": mock_client_instance,
+        "Client": mock_client_class,
+        "Will": mock_will_class,
+    }
 
 
 def test_mqtt_connector_instantiation():
@@ -36,18 +56,11 @@ def test_mqtt_connector_instantiation():
 
 
 @pytest.mark.asyncio
-async def test_connect_and_disconnect_lifecycle(mocker):
+async def test_connect_and_disconnect_lifecycle(mock_aiomqtt_module, mocker):
     """Tests that connect() creates and connects a client with LWT, and disconnect() disconnects it."""
-    # 1. Mock aiomqtt.Client and aiomqtt.Will
-    mock_client_instance = AsyncMock()
-    mock_client_instance.__aenter__.return_value = mock_client_instance
-
-    mock_client_class_factory = mocker.MagicMock(return_value=mock_client_instance)
-    mocker.patch(
-        "cascade.connectors.mqtt.connector.aiomqtt.Client",
-        new=mock_client_class_factory,
-    )
-    mock_will_class = mocker.patch("cascade.connectors.mqtt.connector.aiomqtt.Will")
+    mock_client_instance = mock_aiomqtt_module["instance"]
+    mock_client_class = mock_aiomqtt_module["Client"]
+    mock_will_class = mock_aiomqtt_module["Will"]
 
     # Mock platform and os to get a deterministic source_id
     mocker.patch("platform.node", return_value="test-host")
@@ -68,7 +81,7 @@ async def test_connect_and_disconnect_lifecycle(mocker):
     )
 
     # Assert that the client was instantiated with the will message
-    mock_client_class_factory.assert_called_once_with(
+    mock_client_class.assert_called_once_with(
         hostname="test.broker",
         port=9999,
         client_id="tester",
@@ -87,11 +100,12 @@ async def test_connect_and_disconnect_lifecycle(mocker):
 
 
 @pytest.mark.asyncio
-async def test_publish_sends_json_and_is_fire_and_forget(mock_client):
+async def test_publish_sends_json_and_is_fire_and_forget(mock_aiomqtt_module):
     """
     Tests that publish() serializes the payload to JSON and sends it in a
     non-blocking manner.
     """
+    mock_client = mock_aiomqtt_module["instance"]
     connector = MqttConnector(hostname="test.broker")
     await connector.connect()
 
@@ -112,11 +126,12 @@ async def test_publish_sends_json_and_is_fire_and_forget(mock_client):
 
 
 @pytest.mark.asyncio
-async def test_publish_without_connect_does_nothing(mock_client):
+async def test_publish_without_connect_does_nothing(mock_aiomqtt_module):
     """
     Tests that calling publish() before connect() does not raise an error
     and does not try to publish anything (Fail-Silent Telemetry).
     """
+    mock_client = mock_aiomqtt_module["instance"]
     connector = MqttConnector(hostname="test.broker")
 
     # Do not call connect()
@@ -128,15 +143,15 @@ async def test_publish_without_connect_does_nothing(mock_client):
 
 
 @pytest.mark.asyncio
-async def test_subscribe_receives_messages(mock_client):
+async def test_subscribe_receives_messages(mock_aiomqtt_module):
     """
     Tests that the connector starts a listener loop, and when messages arrive,
     the registered callback is invoked with decoded data.
     """
+    mock_client = mock_aiomqtt_module["instance"]
     connector = MqttConnector(hostname="test.broker")
 
     # 1. Setup Mock Message Stream
-    # Create a simple AsyncIterator to simulate client.messages
     incoming_payload = {"command": "pause"}
     incoming_topic = "control/pause"
 
@@ -146,12 +161,9 @@ async def test_subscribe_receives_messages(mock_client):
             self.payload = payload
 
     async def message_stream():
-        # Yield one message then sleep forever to simulate an open but idle connection
-        # (This prevents the loop from exiting immediately and closing the mock)
         yield MockMessage(incoming_topic, json.dumps(incoming_payload).encode("utf-8"))
-        await asyncio.sleep(10)  # Simulate idle waiting
+        await asyncio.sleep(10)
 
-    # Mock the 'messages' property of the client
     mock_client.messages = message_stream()
 
     await connector.connect()
@@ -168,7 +180,6 @@ async def test_subscribe_receives_messages(mock_client):
     mock_client.subscribe.assert_awaited_with(incoming_topic)
 
     # 4. Wait for the loop to process the message
-    # We yield control a few times to ensure the background task runs
     await asyncio.sleep(0.01)
 
     # 5. Assert callback invocation

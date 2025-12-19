@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 重构萤火虫 Agent 以支持正确的声明式执行", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766133238.0825813, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复引擎 TCO 循环并为实验添加诊断日志", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766133521.0817714, "duration_ms": 0}}

@@ -1,184 +1,228 @@
-船长，你的诊断完全正确，而且你发现了一个比表面看起来更深层次的问题。
+船长，情况不妙。实验再次失败，并且现象与上次几乎完全一致。你的判断是正确的——我们必须注入观测探针（日志），才能解剖这个问题。
 
 **错误分析**
 
-你指出的现象——“立刻退出”和“进度条未变化”——是两个关键线索，它们指向了我们 Agent 设计中的一个根本性架构缺陷。
+这次的失败极其微妙，它暴露了 `Engine` 核心调度循环的一个根本性缺陷，这个问题隐藏得比之前的声明式错误更深。
 
-1.  **为何进度条未变 (The Obvious Bug)**: `ConvergenceMonitor` 依赖于 `firefly/flash` 主题上的信号。在 `kuramoto.py` 的原始设计中，`send_signal(...)` 任务在一个 `@cs.task` 内部被调用，但它的 `LazyResult` **从未被返回**。这意味着 `send_signal` 从未成为计算图的一部分，因此**从未被执行**。萤火虫们实际上是“哑巴”，它们从未闪烁，所以监控器自然什么也看不到。
-
-2.  **为何立刻退出 (The Deeper Bug)**: 这是更严重的问题。既然萤火虫不闪烁，`cs.recv` 就应该**等待**其 `timeout`（大约 10 秒）然后超时。整个实验应该持续 60 秒。但它在 1.17 秒内就退出了。这揭示了一个我们之前未曾预料到的、关于递归工作流的架构限制：
-    *   我们的“尾递归优化 (TCO)”存在于 `Engine.run` 的顶层循环中。
-    *   当一个任务（如 `process_cycle_result`）返回一个 `LazyResult` 时，引擎并不会立刻开始执行这个新的工作流。它将这个 `LazyResult` 对象视为一个**普通的数据返回值**，并将其存入状态后端。
-    *   只有当整个原始图的所有任务都完成后，`Engine.run` 才会检查最终结果。如果这个结果是 `LazyResult`，它才会启动下一轮循环。
-    *   然而，因为我们的 `firefly_cycle` 依赖于 `cs.recv`，这是一个阻塞操作，它似乎在当前引擎的执行模型中导致了事件循环的异常退出或未被正确调度。**这是一个需要记录的技术债务**，即引擎目前不能很好地支持包含“永久阻塞”任务的递归工作流。
+1.  **症状**: 实验在 1.16 秒内退出，而 `asyncio.wait_for` 设置的超时是 60 秒。这证明 `asyncio.gather(*agent_tasks)` 中的所有任务都**几乎立即完成了**。
+2.  **根本原因**: 我们的 `Engine` 为支持递归工作流，实现了一个“尾调用优化 (TCO)”循环。当一个工作流的最终任务（如 `process_and_recurse`）返回一个新的 `LazyResult` 时，`Engine.run` 会捕获它，并立即开始下一轮的图构建和执行，**而不会将控制权交还给 `asyncio` 的事件循环**。
+3.  **结果**: 引擎陷入了一个非常“紧凑”的内部循环。它在一瞬间内，以极高的速度，为所有 50 个 Agent 执行了第一轮的图构建，发现最终结果都是指向下一轮循环的 `LazyResult`，然后就**退出了 `_execute_graph` 方法**。因为这个过程本身没有长时间的 `await`，所以 `engine.run` 协程也就完成了。`asyncio.gather` 看到所有任务都已完成，便立刻返回，导致整个实验提前结束。`cs.recv` 任务内部的 `await` 从未有机会真正“等待”，因为引擎的 TCO 循环没有给事件循环留下喘息之机。
 
 **解决方案**
 
-我们需要重新设计 `firefly_agent`，使其更符合 Cascade 的**声明式**和**无阻塞**的图构建理念。我们将把隐式的、命令式的 `if/else` 逻辑，改造为显式的、由图结构本身表达的条件执行路径。
+我们必须“打破”引擎的这个紧凑循环，在每次尾递归迭代后，强制将控制权交还给 `asyncio` 事件循环。这样，事件循环才能有机会去处理其他任务，比如我们的 `asyncio.wait_for` 超时计时器，以及 `cs.recv` 内部真正的 `asyncio.Future` 等待。
 
-我将为你生成一个计划，彻底重构 `kuramoto.py` 以解决这两个问题。
+最简单、最有效的修复方法是在 `engine.run` 的 TCO 循环中加入一行 `await asyncio.sleep(0)`。这行代码的意义是：“我（引擎）当前迭代的同步工作已经完成，请事件循环去处理一下其他待办任务，然后再回来继续我的下一次迭代。”
 
-## [WIP] fix: 重构萤火虫 Agent 以支持正确的声明式执行
+同时，我将遵循你的指示，在关键位置添加日志，以便我们能清晰地观测到修复后的行为。
+
+## [WIP] fix: 修复引擎 TCO 循环并为实验添加诊断日志
 
 ### 错误分析
-实验失败的根本原因有两个：
-1.  **命令式执行**: 在 `decide_and_act` 任务内部，`send_signal` 被命令式地调用，但其返回的 `LazyResult` 未被接入计算图，导致该任务从未执行，萤火虫无法“闪烁”。
-2.  **递归模型缺陷**: 当前 `Engine` 的 TCO 模型无法正确处理包含长时阻塞任务（如 `cs.recv`）的递归工作流，导致实验意外地提前退出。
+`Engine.run` 方法中的尾调用优化（TCO）循环存在缺陷。它在处理返回 `LazyResult` 的递归工作流时，不会将控制权交还给 `asyncio` 事件循环，导致外部的 `asyncio.wait_for` 等并发工具无法正常工作，使得整个实验提前退出。
 
 ### 用户需求
-修复 `kuramoto.py` 中的 Agent 逻辑，使其能够正确执行闪烁操作，并能在引擎中稳定地长期运行。
+在实验脚本和监测器中添加日志以进行问题诊断，并修复导致实验提前退出的引擎核心问题。
 
 ### 评论
-这次失败是一次宝贵的教训，它暴露了我们对 Cascade 执行模型的误解。修复方案的核心是从“命令式”思维转向“声明式”思维。我们不再在一个任务内部根据条件执行另一个任务，而是构建一个图，其中包含一个条件节点 (`was_timeout`)，并使用 `.run_if()` 来让图的*结构本身*来表达这个条件逻辑。这使得整个工作流对引擎完全透明、可预测，从而解决了两个根本性问题。
+这次的修复虽然代码量很小，但意义重大。它触及了 Cascade 异步执行模型的核心。通过在 TCO 循环中显式地使用 `await asyncio.sleep(0)` 来让出执行权，我们确保了 Cascade 引擎能够作为 `asyncio` 生态系统中的一个“良好公民”，与其他并发任务正确协作。这对于构建任何长期运行的、响应式的 Agent 系统都是至关重要的。
 
 ### 目标
-1.  将 `decide_and_act` 任务分解为纯粹的“决策”和独立的“行动”任务。
-2.  创建一个 `was_timeout` 任务，用于将 `handled_recv` 的结果转化为一个布尔型的 `LazyResult`。
-3.  使用 `.run_if(was_timeout)` 来确保 `send_signal` 任务只有在超时的情况下才被执行，并正确地接入计算图。
-4.  重构 `process_cycle_result` 任务，使其依赖于所有必要的上游节点（包括条件执行的 `send_signal`），以确保正确的执行顺序。
+1.  在 `cascade.runtime.engine` 的 `run` 方法中的 TCO 循环里，添加 `await asyncio.sleep(0)`。
+2.  在 `observatory/experiments/run_fireflies.py` 中添加日志，以确认 `asyncio.wait_for` 的开始和结束。
+3.  在 `observatory/monitors/convergence.py` 的 `on_flash` 回调中添加日志，以确认闪烁信号被成功接收。
 
 ### 基本原理
-新的设计遵循 Cascade 的核心原则：**组合优于封装**。我们将复杂的、带有内部分支的 `decide_and_act` 任务，分解为一系列更小、更纯粹的原子任务，并通过 Cascade 的声明式 API (`.run_if()`) 将它们组合起来。
--   `recv_with_timeout_handler` 负责**感知**。
--   `was_timeout` 负责**判断**。
--   `send_signal(...).run_if(...)` 负责**行动**。
--   `process_cycle_result` 负责**状态演化**和**递归**。
-这个清晰的分层结构不仅解决了 bug，也使得工作流的逻辑更加健壮和易于理解。
+`await asyncio.sleep(0)` 是一个特殊的 `asyncio` 表达式，它会暂停当前协程的执行，并通知事件循环可以去运行其他准备就绪的任务。当其他任务（如IO操作、其他协程）执行完毕后，事件循环会在下一次“滴答”时恢复当前协程的执行。通过在引擎的 TCO 循环中插入这个调用，我们确保了引擎的每一次递归迭代之间都有一个让步点，从而允许 `cs.recv` 的内部等待和 `run_experiment` 的超时监控能够正常执行。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/observatory #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/runtime #concept/state #scope/core #ai/brainstorm #task/domain/testing #task/object/observatory #task/action/debug #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构并修复萤火虫 Agent 的核心逻辑
+#### Acts 1: 在引擎 TCO 循环中强制让出控制权
 
-我们将用一个完全重构的版本覆盖 `kuramoto.py`。新的代码是纯声明式的，确保了所有操作都在计算图中正确表达。
+这是核心修复。我们在 `engine.py` 的 `run` 方法的 `while` 循环中添加 `await asyncio.sleep(0)`。
 
 ~~~~~act
-write_file
-observatory/agents/kuramoto.py
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-"""
-Implementation of a Firefly agent based on the Kuramoto model
-of coupled oscillators, using pure Cascade primitives.
+                while True:
+                    # The step stack holds "task" (step) scoped resources
+                    with ExitStack() as step_stack:
+                        # 1. Build graph for current target
+                        graph = build_graph(current_target)
+                        
+                        # 2. Setup Resources (mixed scope)
+                        required_resources = self._scan_for_resources(graph)
+                        self._setup_resources(
+                            required_resources, 
+                            active_resources, 
+                            run_stack, 
+                            step_stack, 
+                            run_id
+                        )
 
-REVISION 2: This version uses a fully declarative approach with .run_if()
-to ensure all actions are correctly represented in the computation graph.
-"""
-import asyncio
-import random
-from typing import Any, Dict
+                        # 3. Execute
+                        result = await self._execute_graph(
+                            current_target, params or {}, active_resources, run_id, state_backend
+                        )
 
-import cascade as cs
-from cascade.interfaces.protocols import Connector
+                    # 4. Check for Tail Call (LazyResult)
+                    if isinstance(result, (LazyResult, MappedLazyResult)):
+                        current_target = result
+                        # Continue loop. 
+                        # 'step_stack' has exited, releasing step-scoped resources.
+                        # 'run_stack' remains open.
+                        # 'active_resources' still holds run-scoped instances.
+                    else:
+                        final_result = result
+                        break
+~~~~~
+~~~~~python
+                while True:
+                    # The step stack holds "task" (step) scoped resources
+                    with ExitStack() as step_stack:
+                        # 1. Build graph for current target
+                        graph = build_graph(current_target)
+                        
+                        # 2. Setup Resources (mixed scope)
+                        required_resources = self._scan_for_resources(graph)
+                        self._setup_resources(
+                            required_resources, 
+                            active_resources, 
+                            run_stack, 
+                            step_stack, 
+                            run_id
+                        )
 
+                        # 3. Execute
+                        result = await self._execute_graph(
+                            current_target, params or {}, active_resources, run_id, state_backend
+                        )
 
-# --- Atomic Primitives for Agent Behavior ---
+                    # 4. Check for Tail Call (LazyResult)
+                    if isinstance(result, (LazyResult, MappedLazyResult)):
+                        current_target = result
+                        # CRITICAL: Yield control to the event loop between TCO iterations.
+                        # This allows other tasks (like the experiment timeout) to run.
+                        await asyncio.sleep(0)
+                    else:
+                        final_result = result
+                        break
+~~~~~
 
-@cs.task
-async def send_signal(
-    topic: str,
-    payload: Dict[str, Any],
-    connector: Connector = cs.inject("_internal_connector"),
-) -> None:
-    """A task to publish a message to the shared bus."""
-    if connector:
-        await connector.publish(topic, payload)
+#### Acts 2: 为实验脚本添加诊断日志
 
+我们在 `run_fireflies.py` 中添加 `print` 语句，以确认实验的开始、等待和结束。
 
-@cs.task
-async def recv_with_timeout_handler(recv_lazy_result: cs.LazyResult) -> Dict[str, Any]:
-    """
-    Wraps a cs.recv call to transform asyncio.TimeoutError into a structured output.
-    """
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+    # --- Run the experiment ---
+    all_tasks = asyncio.gather(*agent_tasks)
     try:
-        # This await is crucial; it executes the LazyResult passed in.
-        signal = await recv_lazy_result
-        return {"signal": signal, "timeout": False}
+        await asyncio.wait_for(all_tasks, timeout=duration_seconds)
     except asyncio.TimeoutError:
-        return {"signal": None, "timeout": True}
+        print(f"\n✅ Experiment finished after {duration_seconds}s.")
+    finally:
+        # Gracefully stop everything
+        monitor.stop()
+~~~~~
+~~~~~python
+    # --- Run the experiment ---
+    all_tasks = asyncio.gather(*agent_tasks)
+    try:
+        print(f"\n⏳ Running agents and monitor for {duration_seconds} seconds...")
+        start_time = time.time()
+        await asyncio.wait_for(all_tasks, timeout=duration_seconds)
+    except asyncio.TimeoutError:
+        end_time = time.time()
+        print(f"\n✅ Experiment finished after {end_time - start_time:.2f}s.")
+    finally:
+        # Gracefully stop everything
+        monitor.stop()
+~~~~~
 
+#### Acts 3: 为监测器添加诊断日志
 
-# --- Core Agent Logic ---
+我们在 `convergence.py` 的 `on_flash` 回调中添加 `print` 语句，来确认是否收到了闪烁信号。为了避免日志刷屏，我们只打印前几个。
 
-def firefly_agent(
-    agent_id: int,
-    initial_phase: float,
-    period: float,
-    nudge: float,
-    flash_topic: str,
-    listen_topic: str,
-):
-    """
-    This is the main entry point for a single firefly agent.
-    It kicks off the recursive cycle.
-    """
+~~~~~act
+patch_file
+observatory/monitors/convergence.py
+~~~~~
+~~~~~python
+        self.last_flash_time: Dict[int, float] = {}
 
-    def firefly_cycle(
-        agent_id: int,
-        phase: float,
-        period: float,
-        nudge: float,
-        flash_topic: str,
-        listen_topic: str,
-    ):
-        """A single, declarative life cycle of a firefly."""
-        time_to_flash = period - phase
-        wait_timeout = max(0.01, time_to_flash)
+        self._is_running = False
 
-        # 1. PERCEIVE: Wait for a signal OR until it's time to flash
-        recv_task = cs.recv(listen_topic, timeout=wait_timeout)
-        handled_recv = recv_with_timeout_handler(recv_task)
+    async def on_flash(self, topic: str, payload: Dict[str, Any]):
+        """Callback to update agent state when a flash is received."""
+        agent_id = payload.get("agent_id")
+        if agent_id is not None:
+            self.phases_at_flash[agent_id] = payload.get("phase", 0.0)
+            self.last_flash_time[agent_id] = time.time()
 
-        # 2. DECIDE: Was the perception a timeout?
-        @cs.task
-        def was_timeout(hrr: Dict[str, Any]) -> bool:
-            return hrr.get("timeout", False)
+    def _calculate_order_parameter(self) -> float:
+        """
+        Calculates the Kuramoto order parameter, R.
+~~~~~
+~~~~~python
+        self.last_flash_time: Dict[int, float] = {}
 
-        is_timeout = was_timeout(handled_recv)
+        self._is_running = False
+        self._flash_count = 0
 
-        # 3. ACT: Flash *only if* it was a timeout.
-        flash_action = send_signal(
-            topic=flash_topic, payload={"agent_id": agent_id, "phase": phase}
-        ).run_if(is_timeout)
+    async def on_flash(self, topic: str, payload: Dict[str, Any]):
+        """Callback to update agent state when a flash is received."""
+        agent_id = payload.get("agent_id")
+        if agent_id is not None:
+            self._flash_count += 1
+            if self._flash_count <= 5: # Log first 5 flashes to confirm activity
+                print(f"\n[Monitor] Received flash from agent {agent_id} at t={time.time():.2f}")
 
-        # 4. EVOLVE & RECURSE: Calculate the next state and loop.
-        # This task must wait for the flash_action to complete to ensure ordering.
-        @cs.task
-        def process_and_recurse(
-            hrr: Dict[str, Any], _flash_dependency=flash_action
-        ) -> cs.LazyResult:
-            jitter = random.uniform(-0.01, 0.01)
+            self.phases_at_flash[agent_id] = payload.get("phase", 0.0)
+            self.last_flash_time[agent_id] = time.time()
 
-            if hrr["timeout"]:
-                # We flashed, reset phase.
-                next_phase = 0.0 + jitter
-            else:
-                # We saw another flash, nudge phase forward.
-                # Note: A more accurate model would use the time waited, but this is simpler
-                # and still effective for demonstrating synchronization.
-                next_phase = (phase + nudge + jitter) % period
+    def _calculate_order_parameter(self) -> float:
+        """
+        Calculates the Kuramoto order parameter, R.
+~~~~~
+~~~~~act
+patch_file
+observatory/monitors/convergence.py
+~~~~~
+~~~~~python
+        # Use carriage return to print on the same line
+        print(f"\r[SYNC: {bar}] {order_param:.4f}", end="", flush=True)
 
-            # The recursive call that powers the agent's lifecycle
-            return firefly_cycle(
-                agent_id, next_phase, period, nudge, flash_topic, listen_topic
-            )
+    async def run(self, frequency_hz: float = 2.0):
+        """The main loop of the monitor."""
+~~~~~
+~~~~~python
+        # Use carriage return to print on the same line
+        # Add a check to not overwrite initial log messages
+        if self._flash_count > 0:
+            print(f"\r[SYNC: {bar}] {order_param:.4f}", end="", flush=True)
 
-        return process_and_recurse(handled_recv)
-
-    # Start the first cycle
-    return firefly_cycle(
-        agent_id, initial_phase, period, nudge, flash_topic, listen_topic
-    )
+    async def run(self, frequency_hz: float = 2.0):
+        """The main loop of the monitor."""
 ~~~~~
 
 ### 下一步建议
-我们已经对萤火虫的“基因”进行了修复和重构，现在它的行为应该是正确的、声明式的。
+我们已经实施了核心修复并部署了诊断探针。现在，我们拥有了前所未有的洞察力。
 
-请再次运行实验。新的 Agent 设计应该能够正确地执行闪烁操作，并稳定地在引擎中循环。我们应该能看到监控器上的进度条开始移动了。
+请再次运行实验。这一次，我们期望看到：
+1.  实验将**完整地运行 60 秒**。
+2.  终端将打印出“Monitor received flash from agent X”的日志，确认闪烁信号正在被发送和接收。
+3.  同步指示条将开始实时更新，反映系统序参数的变化。
 
 请在终端中，从项目根目录再次执行：
 

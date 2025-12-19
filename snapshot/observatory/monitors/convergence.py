@@ -24,11 +24,16 @@ class ConvergenceMonitor:
         self.last_flash_time: Dict[int, float] = {}
 
         self._is_running = False
+        self._flash_count = 0
 
     async def on_flash(self, topic: str, payload: Dict[str, Any]):
         """Callback to update agent state when a flash is received."""
         agent_id = payload.get("agent_id")
         if agent_id is not None:
+            self._flash_count += 1
+            if self._flash_count <= 5: # Log first 5 flashes to confirm activity
+                print(f"\n[Monitor] Received flash from agent {agent_id} at t={time.time():.2f}")
+
             self.phases_at_flash[agent_id] = payload.get("phase", 0.0)
             self.last_flash_time[agent_id] = time.time()
 
@@ -67,7 +72,9 @@ class ConvergenceMonitor:
         filled_length = int(bar_length * order_param)
         bar = "█" * filled_length + "-" * (bar_length - filled_length)
         # Use carriage return to print on the same line
-        print(f"\r[SYNC: {bar}] {order_param:.4f}", end="", flush=True)
+        # Add a check to not overwrite initial log messages
+        if self._flash_count > 0:
+            print(f"\r[SYNC: {bar}] {order_param:.4f}", end="", flush=True)
 
     async def run(self, frequency_hz: float = 2.0):
         """The main loop of the monitor."""

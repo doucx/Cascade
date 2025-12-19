@@ -55,9 +55,12 @@ async def run_experiment(
     # --- Run the experiment ---
     all_tasks = asyncio.gather(*agent_tasks)
     try:
+        print(f"\n⏳ Running agents and monitor for {duration_seconds} seconds...")
+        start_time = time.time()
         await asyncio.wait_for(all_tasks, timeout=duration_seconds)
     except asyncio.TimeoutError:
-        print(f"\n✅ Experiment finished after {duration_seconds}s.")
+        end_time = time.time()
+        print(f"\n✅ Experiment finished after {end_time - start_time:.2f}s.")
     finally:
         # Gracefully stop everything
         monitor.stop()

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 创建萤火虫实验的运行与编排脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766133019.2083464, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 创建实时同步监测器并集成到实验中", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766133093.7922568, "duration_ms": 0}}

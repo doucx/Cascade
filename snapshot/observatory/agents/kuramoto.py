@@ -2,10 +2,12 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-FINAL: Cleaned up debug logs for production run.
+REVISION 8: Fixed the "Time Stop" physics bug.
+Now correctly accounts for elapsed time during the listening phase.
 """
 import asyncio
 import random
+import time
 from typing import Any, Dict
 
 import cascade as cs
@@ -32,9 +34,12 @@ async def safe_recv(
     timeout: float,
     connector: Connector,
 ) -> Dict[str, Any]:
-    """A custom receive task that treats timeouts as valid return values."""
+    """
+    A custom receive task that treats timeouts as valid return values.
+    Also returns the time elapsed while waiting.
+    """
     if not connector:
-        return {"signal": None, "timeout": True}
+        return {"signal": None, "timeout": True, "elapsed": 0.0}
 
     future = asyncio.Future()
     async def callback(topic: str, payload: Any):
@@ -42,11 +47,14 @@ async def safe_recv(
             future.set_result(payload)
 
     subscription = await connector.subscribe(topic, callback)
+    start_time = time.time()
     try:
         signal = await asyncio.wait_for(future, timeout=timeout)
-        return {"signal": signal, "timeout": False}
+        elapsed = time.time() - start_time
+        return {"signal": signal, "timeout": False, "elapsed": elapsed}
     except asyncio.TimeoutError:
-        return {"signal": None, "timeout": True}
+        elapsed = time.time() - start_time
+        return {"signal": None, "timeout": True, "elapsed": elapsed}
     finally:
         if subscription:
             await subscription.unsubscribe()
@@ -98,13 +106,20 @@ def firefly_agent(
             p: Dict[str, Any], _flash_dependency=flash_action
         ) -> cs.LazyResult:
             jitter = random.uniform(-0.01, 0.01)
+            
+            # CRITICAL FIX: The phase has advanced while we were waiting!
+            elapsed_time = p.get("elapsed", 0.0)
+            current_actual_phase = phase + elapsed_time
 
             if p["timeout"]:
-                # We flashed, reset phase.
+                # We flashed (reached the end of period), so reset.
                 next_phase = 0.0 + jitter
             else:
-                # We saw another flash, nudge phase forward.
-                next_phase = (phase + nudge + jitter) % period
+                # We heard a flash.
+                # Advance our phase by 'nudge' amount.
+                # The modulo operator ensures we wrap around if we exceed the period
+                # (though usually nudge keeps us within bounds until the next natural flash).
+                next_phase = (current_actual_phase + nudge + jitter) % period
 
             return firefly_cycle(
                 agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector

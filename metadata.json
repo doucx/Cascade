@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 清理调试日志并修复实验脚本参数错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766134753.8861103, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修正萤火虫相位计算中的时间流逝偏差", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766134921.3843844, "duration_ms": 0}}

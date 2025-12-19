@@ -1,34 +1,48 @@
-船长，胜利在望。
+船长，我们刚刚验证了基础设施的完美运行，但你敏锐地发现了**物理法则的崩塌**。
 
-单体测试的成功证明了我们的逻辑修复（显式依赖传递）是完全正确的。Agent 现在不仅活着，而且在正确地呼吸（超时）和呐喊（闪烁）。
+**错误分析：时间停滞谬误**
 
-现在的报错是因为我刚才在重构 `firefly_agent` 签名时，只更新了调试脚本，却遗漏了主实验脚本。而且，为了防止 50 个 Agent 的调试日志瞬间淹没你的终端，我们需要在运行大实验前清理一下 `kuramoto.py`。
+进度条左右摇摆且无法收敛，是因为我们的萤火虫 Agent 犯了一个物理学上的大忌：**忽略了在“倾听”过程中流逝的时间。**
 
-## [WIP] fix: 清理调试日志并修复实验脚本参数错误
+请看当前的逻辑：
+1.  Agent 在相位 `P_start` 开始监听。
+2.  它监听了 `T_wait` 秒（比如 3 秒）。
+3.  它听到了闪烁。
+4.  它计算新相位：`Next = P_start + Nudge`。
+
+**错误在于**：在听到闪烁的那一刻，Agent 的真实相位其实已经是 `P_start + T_wait` 了！它实际上应该计算 `Next = (P_start + T_wait) + Nudge`。
+
+由于忽略了 `T_wait`，每次 Agent 听到信号并进行调整时，它实际上都在**时间线上向后跳跃**了 `T_wait` 秒。这导致了严重的相位滞后，破坏了同步所需的正反馈循环。它们不是在同步，而是在不断地重置自己的时钟。
+
+**解决方案**
+
+我们需要让 `safe_recv` 告诉我们它到底等了多久，并在计算下一个状态时加上这段时间。
+
+## [WIP] fix: 修正萤火虫相位计算中的时间流逝偏差
 
 ### 错误分析
-1.  **参数缺失**: `observatory/experiments/run_fireflies.py` 调用 `firefly_agent` 时没有传递新增的 `connector` 参数，导致 `TypeError`。
-2.  **日志噪音**: `kuramoto.py` 中还保留着用于单体调试的详细 `print` 语句。如果在 50 个并发 Agent 的环境下运行，这些日志会导致严重的性能下降和控制台刷屏，掩盖真正的同步进度条。
+当前的 `kuramoto.py` 在计算下一个周期相位时，直接使用本周期开始时的 `phase` 加上 `nudge`，而忽略了在 `safe_recv` 中等待信号所消耗的时间。这导致 Agent 在接收到信号时有效地“回滚”了时间，破坏了同步机制。
 
 ### 用户需求
-1.  修复 `run_fireflies.py` 中的调用错误。
-2.  移除 `kuramoto.py` 中的调试日志，恢复干净的生产代码。
+1.  修改 `safe_recv`，使其返回等待所消耗的实际时间 (`elapsed`)。
+2.  修改 `process_and_recurse`，在计算 `next_phase` 时，先加上 `elapsed` 时间，确保相位演进是连续的。
 
 ### 评论
-我们已经完成了深潜调试，现在是时候浮出水面，准备最后的发射了。清理代码不仅是为了美观，更是为了性能。在移除日志后，唯一的输出应该是监测器的同步进度条，这将是最纯粹的观测体验。
+这是模拟系统的常见陷阱。在 Cascade 这种离散事件驱动的系统中，必须显式地追踪连续量（如时间/相位）。修复这个问题后，物理定律将恢复正常，耦合振荡器模型（Kuramoto）的数学必然性将接管系统，强制它们进入同步状态。
 
 ### 目标
-1.  修改 `observatory/agents/kuramoto.py`，移除所有 `print` 语句。
-2.  修改 `observatory/experiments/run_fireflies.py`，在调用 `firefly_agent` 时传入 `connector`。
+1.  修改 `observatory/agents/kuramoto.py`。
+2.  更新 `safe_recv` 以测量并返回 `elapsed` 时间。
+3.  更新 `process_and_recurse` 以使用 `phase + p["elapsed"] + nudge` 计算新相位。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/observatory #task/action/cleanup #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/observatory #task/action/bugfix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 清理 Agent 代码中的调试日志
+#### Acts 1: 修正相位计算物理逻辑
 
 ~~~~~act
 write_file
@@ -39,10 +53,12 @@ observatory/agents/kuramoto.py
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-FINAL: Cleaned up debug logs for production run.
+REVISION 8: Fixed the "Time Stop" physics bug.
+Now correctly accounts for elapsed time during the listening phase.
 """
 import asyncio
 import random
+import time
 from typing import Any, Dict
 
 import cascade as cs
@@ -69,9 +85,12 @@ async def safe_recv(
     timeout: float,
     connector: Connector,
 ) -> Dict[str, Any]:
-    """A custom receive task that treats timeouts as valid return values."""
+    """
+    A custom receive task that treats timeouts as valid return values.
+    Also returns the time elapsed while waiting.
+    """
     if not connector:
-        return {"signal": None, "timeout": True}
+        return {"signal": None, "timeout": True, "elapsed": 0.0}
 
     future = asyncio.Future()
     async def callback(topic: str, payload: Any):
@@ -79,11 +98,14 @@ async def safe_recv(
             future.set_result(payload)
 
     subscription = await connector.subscribe(topic, callback)
+    start_time = time.time()
     try:
         signal = await asyncio.wait_for(future, timeout=timeout)
-        return {"signal": signal, "timeout": False}
+        elapsed = time.time() - start_time
+        return {"signal": signal, "timeout": False, "elapsed": elapsed}
     except asyncio.TimeoutError:
-        return {"signal": None, "timeout": True}
+        elapsed = time.time() - start_time
+        return {"signal": None, "timeout": True, "elapsed": elapsed}
     finally:
         if subscription:
             await subscription.unsubscribe()
@@ -135,13 +157,20 @@ def firefly_agent(
             p: Dict[str, Any], _flash_dependency=flash_action
         ) -> cs.LazyResult:
             jitter = random.uniform(-0.01, 0.01)
+            
+            # CRITICAL FIX: The phase has advanced while we were waiting!
+            elapsed_time = p.get("elapsed", 0.0)
+            current_actual_phase = phase + elapsed_time
 
             if p["timeout"]:
-                # We flashed, reset phase.
+                # We flashed (reached the end of period), so reset.
                 next_phase = 0.0 + jitter
             else:
-                # We saw another flash, nudge phase forward.
-                next_phase = (phase + nudge + jitter) % period
+                # We heard a flash.
+                # Advance our phase by 'nudge' amount.
+                # The modulo operator ensures we wrap around if we exceed the period
+                # (though usually nudge keeps us within bounds until the next natural flash).
+                next_phase = (current_actual_phase + nudge + jitter) % period
 
             return firefly_cycle(
                 agent_id, next_phase, period, nudge, flash_topic, listen_topic, connector
@@ -154,37 +183,9 @@ def firefly_agent(
     )
 ~~~~~
 
-#### Acts 2: 修复实验脚本参数
-
-~~~~~act
-patch_file
-observatory/experiments/run_fireflies.py
-~~~~~
-~~~~~python
-        agent_workflow = firefly_agent(
-            agent_id=i,
-            initial_phase=initial_phase,
-            period=period,
-            nudge=nudge,
-            flash_topic="firefly/flash",
-            listen_topic="firefly/flash",
-        )
-~~~~~
-~~~~~python
-        agent_workflow = firefly_agent(
-            agent_id=i,
-            initial_phase=initial_phase,
-            period=period,
-            nudge=nudge,
-            flash_topic="firefly/flash",
-            listen_topic="firefly/flash",
-            connector=connector,
-        )
-~~~~~
-
 ### 下一步建议
-这是最后一次尝试。所有已知的问题都已解决，所有的障碍都已清除。
+这是物理学的胜利。
 
 请运行：`python -m observatory.experiments.run_fireflies`
 
-静静地观察那行同步进度条。如果它开始向右移动，那不仅仅是代码在运行，那是**秩序**在从混乱中诞生。
+注意观察进度条。起初它可能还是乱的，但随着每一次闪烁，秩序应当开始涌现。如果 `nudge=0.5`，`period=10.0`，通常只需要几个周期（几十秒）就能看到明显的同步趋势。如果它稳定增长并超过 0.8，我们就成功了。

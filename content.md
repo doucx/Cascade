@@ -1,97 +1,68 @@
-太好了！测试完全按照我们的预期失败了。
+出色的工作。通过这次深入的分析和修复，我们不仅解决了最初的遥测丢失问题和更隐蔽的启动竞态条件（通过调整 `Engine` 顺序和实现 `TelemetrySubscriber` 关机），还顺带发现并修复了测试线束中关键的 MQTT 通配符缺陷。现在我们的 E2E 测试基础设施更加健壮了。
 
-这个失败明确地证实了我们的诊断：`InProcessConnector` 的主题匹配逻辑存在缺陷，无法处理 `+` 通配符。现在，我们有了一个精确的目标和清晰的“红灯”。
+我将把所有这些逻辑上相关的修改打包成一个原子提交。
 
-下一步是修复这个测试工具本身。我将生成一个计划来修改 `tests/py/e2e/harness.py` 文件中的 `_topic_matches` 方法，为其添加处理 `+` 通配符的逻辑。
-
-## [WIP] fix(test): 修复 InProcessConnector 的通配符匹配逻辑
-
-### 错误分析
-`tests/py/e2e/test_harness_connector.py` 中新添加的测试 `test_in_process_connector_plus_wildcard_subscription` 失败，断言错误为 `AssertionError: Connector failed to route message...`。
-
-这直接证明了 `InProcessConnector` 的 `_topic_matches` 方法没有正确实现对 MQTT `+`（单层通配符）的支持。该方法是测试线束中消息路由的核心，其缺陷导致了我们之前遇到的、更复杂的端到端测试（如 `test_startup_telemetry.py`）的连锁失败。
+## [COMMIT] fix(runtime, test): 修复启动竞态条件并增强遥测可靠性
 
 ### 用户需求
-修复 `tests/py/e2e/harness.py` 文件中的 `_topic_matches` 方法，使其能够正确处理 `+` 和 `#` 两种 MQTT 通配符。
+1.  修复 `Engine` 启动时，`RunStarted` 遥测事件在连接建立前发送导致丢失的问题。
+2.  解决因事件发布异步性导致的关闭竞态条件，确保所有遥测消息在连接断开前发送。
+3.  修复 E2E 测试线束中的 MQTT `+` 通配符匹配缺陷，以使遥测 E2E 测试能正确路由消息。
 
 ### 评论
-这是一个对开发者体验（DX）至关重要的修复。一个可靠且行为正确的测试线束是构建健壮软件的基础。通过修复这个底层工具，我们将能够编写更准确的测试，并对我们系统的行为有更高的信心，避免未来将时间浪费在错误的诊断上。
+这个提交解决了 Cascade 运行时中最关键的一类并发和时序缺陷。通过将 Engine 的连接和订阅逻辑提升到 `RunStarted` 事件之前，消除了启动时的竞态。同时，在 `TelemetrySubscriber` 中实现了优雅关机逻辑，确保了所有异步发布的任务在 `Connector` 断开之前被刷新。最后，修复了测试线束中的通配符匹配缺陷，为所有控制面和遥测 E2E 测试提供了坚实的基础。
 
 ### 目标
-1.  定位 `tests/py/e2e/harness.py` 文件中的 `_topic_matches` 方法。
-2.  重写该方法的逻辑，使其：
-    *   将订阅主题和发布主题按 `/` 分割成段。
-    *   逐段进行比较。
-    *   当在订阅主题段中遇到 `+` 时，允许匹配任何单个发布主题段。
-    *   保留对 `#`（多层通配符）的正确处理。
-    *   确保在比较结束时，两个主题的段数匹配（除非使用了 `#`）。
+将以下功能性修复和测试改进整合为一个提交：
+1.  调整 `Engine.run()` 中的初始化顺序：先连接/订阅，后发布 `RunStarted`。
+2.  为 `TelemetrySubscriber` 添加任务追踪和 `shutdown` 方法，并更新 `Engine` 以在 `finally` 块中调用该方法。
+3.  修复 `InProcessConnector._topic_matches` 以正确支持 MQTT `+` 通配符。
+4.  更新 `test_startup_telemetry.py`，正确注册 `TelemetrySubscriber` 和 `Engine` 的管理。
 
 ### 基本原理
-我们将采用一个标准的、基于分段的 MQTT 主题匹配算法。这种算法健壮且能正确处理所有通配符组合。通过将主题字符串分解为结构化列表，我们可以清晰地实现匹配规则，从而修复当前实现中的缺陷。
+这些变更虽然分散在运行时代码和测试代码中，但它们共同构成了对 **"Engine 启动时序和遥测可靠性"** 这个核心问题的完整解决方案。因此，它们应作为一个原子工作单元被提交。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-harness #task/action/refactor #task_state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #concept/telemetry #concept/lifecycle #scope/core #scope/dx #ai/instruct #task/domain/runtime #task/object/engine-startup #task/action/reorder #task_state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 增强 `_topic_matches` 方法
+#### Acts 1: 暂存所有已修改文件
 
-我们将用一个更健壮的实现替换 `InProcessConnector` 中现有的主题匹配逻辑。
+我们将所有受影响的文件添加到 Git 暂存区。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-runtime/src/cascade/runtime/subscribers.py
+packages/cascade-runtime/src/cascade/runtime/engine.py
 tests/py/e2e/harness.py
+tests/py/e2e/test_startup_telemetry.py
+tests/py/e2e/test_harness_connector.py
 ~~~~~
-~~~~~python
-    def _topic_matches(self, subscription: str, topic: str) -> bool:
-        if subscription == topic:
-            return True
-        if subscription.endswith("/#"):
-            prefix = subscription[:-2]
-            if topic.startswith(prefix):
-                return True
-        return False
+
+#### Acts 2: 提交变更
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-    @staticmethod
-    def _topic_matches(subscription: str, topic: str) -> bool:
-        """
-        Checks if a concrete topic matches a subscription pattern (supporting + and #).
-        """
-        sub_parts = subscription.split("/")
-        topic_parts = topic.split("/")
+~~~~~text
+fix(runtime, test): Enhance telemetry reliability and fix startup race conditions
 
-        for i, sub_part in enumerate(sub_parts):
-            if sub_part == "#":
-                # '#' matches the rest of the topic, so it's a match
-                return True
+This commit implements a suite of fixes to address reliability issues in the engine's startup sequence and telemetry publishing mechanisms.
 
-            if i >= len(topic_parts):
-                # Topic is shorter than subscription pattern (and not matched by #)
-                return False
+Key fixes:
+1.  **Engine Startup Order:** `Engine.run()` now connects to the external `Connector` (and subscribes to control constraints via retained messages) *before* publishing the `RunStarted` internal event. This prevents the `RunStarted` telemetry from being lost due to a race condition where the `TelemetrySubscriber` attempts to publish before the connector is fully connected.
+2.  **Telemetry Flush on Shutdown:** Introduced `async def shutdown()` to `TelemetrySubscriber` to wait for all fire-and-forget publish tasks to complete. `Engine` now calls this method in its `finally` block before disconnecting the connector, ensuring all scheduled telemetry is successfully flushed, resolving a shutdown race condition for fast workflows.
+3.  **Test Harness Bugfix:** Fixed a critical bug in `tests/py/e2e/harness.py:InProcessConnector._topic_matches` where the MQTT single-level wildcard (`+`) was not correctly supported. This was preventing many E2E telemetry and control tests from correctly routing messages.
 
-            topic_part = topic_parts[i]
-
-            if sub_part == "+":
-                # '+' matches any single level, so we continue to the next part
-                continue
-
-            if sub_part != topic_part:
-                # Literal parts do not match
-                return False
-
-        # If we finished the loop, it's a match IFF the lengths are the same.
-        # (The '#' case is handled inside the loop)
-        return len(sub_parts) == len(topic_parts)
+New dedicated tests (`test_startup_telemetry.py`, `test_harness_connector.py`) confirm the success of these fixes.
 ~~~~~
 
 ### 下一步建议
-我们已经应用了对测试线束的修复。现在应该按以下顺序重新运行测试，以验证我们的修复：
+我们已经完成了路线图中的 **步骤 3: [绿灯] 修复引擎的启动逻辑**，并且解决了相关的测试基础设施缺陷。
 
-1.  **首先，运行隔离测试**：`pytest tests/py/e2e/test_harness_connector.py`。我们预期这个测试现在会**通过**。
-2.  **然后，运行原始的失败测试**：`pytest tests/py/e2e/test_startup_telemetry.py`。我们预期这个测试现在也**通过**了，因为底层的路由问题已经解决。
-3.  **最后，运行整个 E2E 测试套件**：`pytest tests/py/e2e/`，以确保我们的修改没有引入任何回归问题。
+现在，我们回到路线图的 **步骤 4: [红灯] 为运行时控制延迟编写一个失败的测试**，以解决在工作流执行中途无法响应 `pause` 命令的问题。
 
-一旦所有测试都通过，我们就可以自信地继续执行路线图的下一步了。
+我建议继续执行路线图的下一步。

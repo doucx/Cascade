@@ -105,3 +105,65 @@ async def test_startup_pause_is_respected(bus_and_spy):
     engine_run_task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await engine_run_task
+
+
+@pytest.mark.asyncio
+async def test_runtime_pause_interrupts_stage(bus_and_spy):
+    """
+    Verifies that a pause command issued *during* a workflow execution
+    effectively prevents subsequent tasks from starting.
+    """
+    bus, spy = bus_and_spy
+    connector = InProcessConnector()
+    controller = ControllerTestApp(connector)
+
+    # 1. ARRANGE
+    # Task A is slow. Task B depends on A.
+    # We want to pause while A is running, and ensure B never starts.
+    task_a_started = asyncio.Event()
+
+    @cs.task
+    async def slow_task_a():
+        task_a_started.set()
+        await asyncio.sleep(0.5)
+        return "A"
+
+    @cs.task
+    def task_b(dep):
+        return "B"
+
+    workflow = task_b(slow_task_a())
+
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=bus,
+        connector=connector,
+    )
+
+    # 2. ACT
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # Wait for A to start
+    await asyncio.wait_for(task_a_started.wait(), timeout=1.0)
+
+    # Issue PAUSE immediately
+    await controller.pause(scope="global")
+
+    # Wait long enough for A to finish and for Engine to potentially schedule B
+    await asyncio.sleep(0.7)
+
+    # 3. ASSERT
+    # Task B should NOT have started
+    b_events = [
+        e for e in spy.events_of_type(TaskExecutionStarted)
+        if e.task_name == "task_b"
+    ]
+    assert len(b_events) == 0, "Task B started despite global pause!"
+
+    # Cleanup
+    run_task.cancel()
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(runtime, test): 修复启动竞态条件并增强遥测可靠性", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766106458.5258636, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 添加运行时暂停的回归测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766106616.5513868, "duration_ms": 0}}

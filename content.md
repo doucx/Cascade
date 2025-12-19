@@ -41,7 +41,7 @@
 我们将用一个更健壮的实现替换 `InProcessConnector` 中现有的主题匹配逻辑。
 
 ~~~~~act
-patch
+patch_file
 tests/py/e2e/harness.py
 ~~~~~
 ~~~~~python

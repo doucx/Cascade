@@ -84,14 +84,36 @@ class InProcessConnector(Connector):
             except asyncio.CancelledError:
                 break
 
-    def _topic_matches(self, subscription: str, topic: str) -> bool:
-        if subscription == topic:
-            return True
-        if subscription.endswith("/#"):
-            prefix = subscription[:-2]
-            if topic.startswith(prefix):
+    @staticmethod
+    def _topic_matches(subscription: str, topic: str) -> bool:
+        """
+        Checks if a concrete topic matches a subscription pattern (supporting + and #).
+        """
+        sub_parts = subscription.split("/")
+        topic_parts = topic.split("/")
+
+        for i, sub_part in enumerate(sub_parts):
+            if sub_part == "#":
+                # '#' matches the rest of the topic, so it's a match
                 return True
-        return False
+
+            if i >= len(topic_parts):
+                # Topic is shorter than subscription pattern (and not matched by #)
+                return False
+
+            topic_part = topic_parts[i]
+
+            if sub_part == "+":
+                # '+' matches any single level, so we continue to the next part
+                continue
+
+            if sub_part != topic_part:
+                # Literal parts do not match
+                return False
+
+        # If we finished the loop, it's a match IFF the lengths are the same.
+        # (The '#' case is handled inside the loop)
+        return len(sub_parts) == len(topic_parts)
 
 
 class ControllerTestApp:

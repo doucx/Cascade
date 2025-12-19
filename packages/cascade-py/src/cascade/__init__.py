@@ -3,7 +3,7 @@
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 import asyncio
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union, Callable
 
 # Core Specs
 from cascade.spec.task import task
@@ -26,7 +26,7 @@ from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
 from cascade.runtime.exceptions import DependencyMissingError
-from cascade.interfaces.protocols import Connector
+from cascade.interfaces.protocols import Connector, StateBackend
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
@@ -92,6 +92,37 @@ from cascade.common.messaging import bus
 from cascade.common.renderers import CliRenderer, JsonRenderer
 
 
+def _create_state_backend_factory(backend_spec: Union[str, Callable[[str], StateBackend], None]):
+    """
+    Helper to create a factory function from a backend specification (URI or object).
+    """
+    if backend_spec is None:
+        return None  # Engine defaults to InMemory
+
+    if callable(backend_spec):
+        return backend_spec
+
+    if isinstance(backend_spec, str):
+        if backend_spec.startswith("redis://"):
+            try:
+                import redis
+                from cascade.adapters.state.redis import RedisStateBackend
+            except ImportError:
+                raise ImportError("The 'redis' library is required for redis:// backends.")
+            
+            # Create a shared client pool
+            client = redis.from_url(backend_spec)
+            
+            def factory(run_id: str) -> StateBackend:
+                return RedisStateBackend(run_id=run_id, client=client)
+            
+            return factory
+        else:
+            raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
+
+    raise TypeError(f"Invalid state_backend type: {type(backend_spec)}")
+
+
 def run(
     target: LazyResult,
     params: Optional[Dict[str, Any]] = None,
@@ -99,9 +130,14 @@ def run(
     log_level: str = "INFO",
     log_format: str = "human",
     connector: Optional[Connector] = None,
+    state_backend: Union[str, Callable[[str], StateBackend], None] = None,
 ) -> Any:
     """
     Runs a Cascade workflow with a default engine configuration.
+    
+    Args:
+        state_backend: A URI string (e.g. "redis://localhost") or a factory function 
+                       that accepts a run_id and returns a StateBackend.
     """
     # 1. Setup the messaging renderer
     if log_format == "json":
@@ -121,6 +157,8 @@ def run(
     # 3. Assemble the default Engine
     solver = NativeSolver()
     executor = LocalExecutor()
+    
+    sb_factory = _create_state_backend_factory(state_backend)
 
     engine = Engine(
         solver=solver,
@@ -128,6 +166,7 @@ def run(
         bus=event_bus,
         system_resources=system_resources,
         connector=connector,
+        state_backend_factory=sb_factory,
     )
 
     return asyncio.run(engine.run(target, params=params))

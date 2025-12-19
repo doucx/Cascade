@@ -20,6 +20,7 @@ sql = ["sqlalchemy"]
 cli = ["typer[all]"]
 config = ["PyYAML"]
 s3 = ["aiobotocore"]
+redis = ["cascade-runtime[redis]"]
 all = [
   "jinja2",
   "aiohttp",
@@ -27,6 +28,7 @@ all = [
   "typer[all]",
   "PyYAML",
   "aiobotocore",
+  "cascade-runtime[redis]",
 ]
 
 [project.entry-points."cascade.providers"]

@@ -55,20 +55,12 @@ async def _perform_request(
 
         if files:
             # If files are provided, we must use FormData
-            # We construct a new FormData and add 'data' fields + 'files' fields
             form = aiohttp.FormData()
 
             # Add existing data fields if it's a dict
             if isinstance(data, dict):
                 for k, v in data.items():
                     form.add_field(k, str(v))
-            elif data is not None:
-                # If data is not a dict but files are present, aiohttp might complain
-                # or we might handle it differently. For now, assume data is dict-like
-                # if mixed with files, or raise/warn?
-                # Let's just treat data as a field if possible or ignore?
-                # Simpler: If files exist, data MUST be compatible with form fields.
-                pass
 
             for field_name, file_path in files.items():
                 if isinstance(file_path, str) and os.path.exists(file_path):
@@ -85,39 +77,19 @@ async def _perform_request(
                 method, url, params=params, json=json_data, data=final_data
             ) as response:
                 # Note: We do NOT raise_for_status() automatically here.
-            # We want to return the response object so the user (or a downstream task)
-            # can decide how to handle 4xx/5xx codes.
-            # However, for convenience in simple workflows, users often expect failure on error.
-            # But adhering to "Atomic Provider" philosophy, raw HTTP provider should probably
-            # just return the response.
-            # EDIT: The original implementation did raise_for_status().
-            # To be robust, let's read the body first, then check status?
-            # Or just let it be.
-            # Let's keep it pure: Return the response. If status check is needed,
-            # it should be a separate logic or a .with_retry() policy triggered by exception.
-            # BUT, .with_retry() only triggers on Exception. If we don't raise, we can't retry on 503.
-            # So we MUST raise for 5xx/4xx if we want to use Cascade's retry mechanisms easily.
-            # Compromise: raise for status, but capture the body first so we can attach it to the error if needed.
-            # Actually, aiohttp's raise_for_status() is good.
+                # We want to return the response object so the user (or a downstream task)
+                # can decide how to handle 4xx/5xx codes.
+                
+                body_bytes = await response.read()
 
-            body_bytes = await response.read()
+                # We construct the response object FIRST
+                resp_obj = HttpResponse(
+                    status=response.status,
+                    headers=dict(response.headers),
+                    body=body_bytes,
+                )
 
-            # We construct the response object FIRST
-            resp_obj = HttpResponse(
-                status=response.status,
-                headers=dict(response.headers),
-                body=body_bytes,
-            )
-
-            # If we want to allow 404 handling without try/catch in the graph, we shouldn't raise.
-            # But then .with_retry() won't work for 503s.
-            # Let's verify standard practices. Typically, raw HTTP clients usually have a 'raise_for_status' flag.
-            # We'll default to NOT raising, to allow logic like "if 404 do X".
-            # Users can use a generic "check_status" task or we can add a flag.
-            # Let's NOT raise by default to keep it atomic and pure.
-            # User can throw in a downstream task if they want to trigger retry.
-
-            return resp_obj
+                return resp_obj
 
 
 # --- Tasks ---

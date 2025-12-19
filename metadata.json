@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 增强 HTTP 提供者以支持文件上传并实现 IPFS Add", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766151563.5147989, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 `cs.http` 提供者中的严重缩进错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766151715.5660741, "duration_ms": 0}}

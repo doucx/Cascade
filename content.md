@@ -1,191 +1,165 @@
-我们将一次性完成对 `cascade-cli-controller` 和 `cascade-runtime` 的重构，实现“最后写入为准 (Last-Write-Wins)”的约束管理策略，并引入确定性的约束 ID。
+这是一个非常精彩的分析，你精准地定位到了问题的根源：**CLI 工具的生命周期管理（短连接）意外地切断了 Engine（长连接）的通信管道**，因为在我们的测试 harness 中，它们错误地共享了同一个 Connector 实例。
 
-这将直接修复之前在 `test_e2e_runtime_control_updates.py` 中由于多重约束冲突导致的不确定行为，使系统行为变得健壮且可预测。
+这解释了为什么通过命令行手动测试（两个独立进程）是成功的，而单元测试（同一进程共享内存）却失败了。
 
-## [WIP] fix(core): 实现幂等的约束更新机制
+我们将采用你建议的 **Wrapper 方案**。这不仅是风险最小的修复（不需要重构可能有缺陷的 harness 核心代码），而且在语义上也更符合我们当前的测试场景：我们在模拟一个“总是在线”的虚拟 Broker 环境，CLI 的连接/断开只是逻辑上的，不应影响物理链路。
+
+## [WIP] fix(test): 修复 CLI 集成测试中的 Connector 共享冲突
 
 ### 用户需求
-1.  修改 `cs-controller`，在生成约束时使用基于 `type` 和 `scope` 的确定性 ID，而非随机 UUID。这确保了多次执行相同的命令会被视为对同一约束的更新。
-2.  修改 `cascade-runtime` 中的 `ConstraintManager`，引入显式的冲突解决逻辑：当添加一个新约束时，自动清除所有与之具有相同 `(scope, type)` 但 ID 不同（如果存在）的旧约束，以此作为双重保险。
+修复 `test_cli_idempotency_unblocks_engine` 测试用例中的 `TimeoutError`。
+根本原因是 CLI 命令执行完毕后调用的 `disconnect()` 错误地关闭了 Engine 正在使用的共享 `InProcessConnector` 实例，导致 Engine 无法接收到后续的约束更新（即那条应该“解锁”死锁的更新）。
 
 ### 评论
-这是一个架构级的修复，它确立了 Cascade 控制平面“单一事实来源”和“最后写入为准”的原则。通过在 CLI 端保证 ID 的稳定性，以及在 Engine 端保证作用域的互斥性，我们消除了产生冲突规则的可能性，从根本上解决了死锁和状态不一致的问题。
+这个修复展示了在编写内存级集成测试时对组件生命周期管理的深刻理解。通过引入一个 `SharedInstanceConnector` 代理，我们在保持测试确定性和速度的同时，正确隔离了不同逻辑组件（CLI vs Engine）的连接状态语义。
 
 ### 目标
-1.  **CLI 重构**: 修改 `packages/cascade-cli-controller/src/cascade/cli/controller/app.py`，移除 `uuid.uuid4()`，改用确定性字符串作为 ID。
-2.  **Runtime 重构**: 修改 `packages/cascade-runtime/src/cascade/runtime/constraints/manager.py`，在 `update_constraint` 方法中添加逻辑，先移除所有同作用域同类型的旧约束。
-3.  **提交**: 生成一个 Git 提交。
+1.  在 `tests/py/e2e/test_e2e_cli_integration.py` 中定义一个辅助类 `SharedInstanceConnector`。
+    *   它代理所有调用到底层的 `InProcessConnector`。
+    *   关键点：它的 `disconnect()` 方法是一个空操作（No-Op），从而防止 CLI 关闭 Engine 的连接。
+2.  更新 `controller_runner` fixture，使其在 monkeypatch 时返回这个包装器实例，而不是原始的 connector。
 
 ### 基本原理
--   **CLI 端**: 使用 `f"{type}-{scope}"` 作为 ID，不仅实现了幂等性，还让 MQTT 消息本身变得更加语义化和易读。
--   **Runtime 端**: 即使客户端表现良好，防御性编程也是必要的。`ConstraintManager` 应作为最终的看门人，确保任何时候对于一个给定的 `(scope, type)` 组合，只存在一个活跃的约束对象。
+我们在模拟两个独立的客户端（Engine 和 CLI）连接到同一个 Broker。在真实的 TCP/IP 世界中，一个客户端断开连接不会影响另一个。但在我们的内存模拟中，由于它们共享同一个 Python 对象作为“连接”，一个客户端的断开操作（修改 `_is_connected` 标志）会“物理上”切断所有人的连接。包装器通过拦截断开信号，模拟了“CLI 断开了它的逻辑会话，但底层的测试通信管道保持开启”的行为。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/cli #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/control-plane #task/object/constraint-management #task/action/implement-idempotency #task/state/end
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/harness #task/action/fix-lifecycle #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `cs-controller` 以使用确定性 ID
+#### Acts 1: 引入 `SharedInstanceConnector` 并修复测试
 
 ~~~~~act
 patch_file
-packages/cascade-cli-controller/src/cascade/cli/controller/app.py
+tests/py/e2e/test_e2e_cli_integration.py
 ~~~~~
 ~~~~~python
-        # Create a unique, descriptive ID for the constraint
-        constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
-        expires_at = time.time() + ttl if ttl else None
+from cascade.cli.controller import app as controller_app
+from cascade.connectors.mqtt import MqttConnector
 
-        constraint = GlobalConstraint(
-            id=constraint_id,
+from .harness import InProcessConnector, MockWorkExecutor
+
+# --- Test Harness for In-Process CLI Interaction ---
+
+class InProcessController:
+    """A test double for the controller CLI that calls its core logic in-process."""
+    def __init__(self, connector: InProcessConnector):
+        self.connector = connector
+
+    async def set_limit(
+        self,
+        scope: str,
+        rate: str | None = None,
+        concurrency: int | None = None,
+        ttl: int | None = None,
+    ):
+        """Directly calls the async logic, providing defaults for missing args."""
+        await controller_app._publish_limit(
             scope=scope,
-            type="pause",
-            params={},
-            expires_at=expires_at,
+            concurrency=concurrency,
+            rate=rate,
+            ttl=ttl,
+            hostname="localhost",  # Constant for test purposes
+            port=1883,           # Constant for test purposes
         )
+
+@pytest.fixture
+def controller_runner(monkeypatch):
+    """
+    Provides a way to run cs-controller commands in-process with a mocked connector.
+    """
+    connector = InProcessConnector()
+    monkeypatch.setattr(
+        controller_app.MqttConnector,
+        "__new__",
+        lambda cls, *args, **kwargs: connector
+    )
+    return InProcessController(connector)
 ~~~~~
 ~~~~~python
-        # Create a deterministic ID for idempotency (Last-Write-Wins)
-        constraint_id = f"pause-{scope}"
-        expires_at = time.time() + ttl if ttl else None
+from cascade.cli.controller import app as controller_app
+from cascade.connectors.mqtt import MqttConnector
 
-        constraint = GlobalConstraint(
-            id=constraint_id,
+from .harness import InProcessConnector, MockWorkExecutor
+
+# --- Test Harness for In-Process CLI Interaction ---
+
+class SharedInstanceConnector:
+    """
+    Wraps an InProcessConnector to prevent 'disconnect' calls from affecting
+    the underlying shared instance. This allows the Engine to stay connected
+    even when the short-lived CLI command 'disconnects'.
+    """
+    def __init__(self, delegate: InProcessConnector):
+        self._delegate = delegate
+
+    async def connect(self):
+        # Ensure the underlying connector is active
+        await self._delegate.connect()
+
+    async def disconnect(self):
+        # CRITICAL: Ignore disconnects from the CLI.
+        # Since we share the single InProcessConnector instance with the Engine,
+        # checking out would kill the Engine's subscription loop too.
+        pass
+
+    async def publish(self, *args, **kwargs):
+        await self._delegate.publish(*args, **kwargs)
+
+    async def subscribe(self, *args, **kwargs):
+        await self._delegate.subscribe(*args, **kwargs)
+
+
+class InProcessController:
+    """A test double for the controller CLI that calls its core logic in-process."""
+    def __init__(self, connector: InProcessConnector):
+        self.connector = connector
+
+    async def set_limit(
+        self,
+        scope: str,
+        rate: str | None = None,
+        concurrency: int | None = None,
+        ttl: int | None = None,
+    ):
+        """Directly calls the async logic, providing defaults for missing args."""
+        await controller_app._publish_limit(
             scope=scope,
-            type="pause",
-            params={},
-            expires_at=expires_at,
+            concurrency=concurrency,
+            rate=rate,
+            ttl=ttl,
+            hostname="localhost",  # Constant for test purposes
+            port=1883,           # Constant for test purposes
         )
-~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-cli-controller/src/cascade/cli/controller/app.py
-~~~~~
-~~~~~python
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        expires_at = time.time() + ttl if ttl else None
+@pytest.fixture
+def controller_runner(monkeypatch):
+    """
+    Provides a way to run cs-controller commands in-process with a mocked connector.
+    """
+    # 1. Create the master connector that holds the state (topics, queues)
+    master_connector = InProcessConnector()
+    
+    # 2. Create a wrapper for the CLI that won't close the master connector
+    cli_connector_wrapper = SharedInstanceConnector(master_connector)
 
-        if concurrency is not None:
-            constraint_id = f"concurrency-{scope}-{uuid.uuid4().hex[:8]}"
-            constraint = GlobalConstraint(
-                id=constraint_id,
-                scope=scope,
-                type="concurrency",
-                params={"limit": concurrency},
-                expires_at=expires_at,
-            )
-            bus.info(
-                "controller.publishing_limit",
-                scope=scope,
-                topic=topic,
-                limit=concurrency,
-            )
-            await connector.publish(topic, asdict(constraint), retain=True)
-
-        if rate is not None:
-            constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
-            constraint = GlobalConstraint(
-                id=constraint_id,
-                scope=scope,
-                type="rate_limit",
-                params={"rate": rate},
-                expires_at=expires_at,
-            )
-            bus.info("controller.publishing_rate", scope=scope, topic=topic, rate=rate)
-            await connector.publish(topic, asdict(constraint), retain=True)
-~~~~~
-~~~~~python
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        expires_at = time.time() + ttl if ttl else None
-
-        if concurrency is not None:
-            constraint_id = f"concurrency-{scope}"
-            constraint = GlobalConstraint(
-                id=constraint_id,
-                scope=scope,
-                type="concurrency",
-                params={"limit": concurrency},
-                expires_at=expires_at,
-            )
-            bus.info(
-                "controller.publishing_limit",
-                scope=scope,
-                topic=topic,
-                limit=concurrency,
-            )
-            await connector.publish(topic, asdict(constraint), retain=True)
-
-        if rate is not None:
-            constraint_id = f"ratelimit-{scope}"
-            constraint = GlobalConstraint(
-                id=constraint_id,
-                scope=scope,
-                type="rate_limit",
-                params={"rate": rate},
-                expires_at=expires_at,
-            )
-            bus.info("controller.publishing_rate", scope=scope, topic=topic, rate=rate)
-            await connector.publish(topic, asdict(constraint), retain=True)
-~~~~~
-
-#### Acts 2: 重构 `ConstraintManager` 以实现互斥更新
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/constraints/manager.py
-~~~~~
-~~~~~python
-    def update_constraint(self, constraint: GlobalConstraint) -> None:
-        """Adds a new constraint or updates an existing one."""
-        self._constraints[constraint.id] = constraint
-
-        # Schedule wakeup if TTL is set
-        if constraint.expires_at:
-            now = time.time()
-            if constraint.expires_at > now:
-                self.request_wakeup(constraint.expires_at - now)
-
-        handler = self._handlers.get(constraint.type)
-        if handler:
-            handler.on_constraint_add(constraint, self)
-~~~~~
-~~~~~python
-    def update_constraint(self, constraint: GlobalConstraint) -> None:
-        """
-        Adds a new constraint or updates an existing one.
-        Ensures strict 'Last-Write-Wins' behavior by removing any existing
-        constraints with the same (scope, type) but different ID.
-        """
-        # 1. Clean up conflicts: Remove any existing constraint with same scope & type
-        conflicting_ids = [
-            cid
-            for cid, c in self._constraints.items()
-            if c.scope == constraint.scope
-            and c.type == constraint.type
-            and cid != constraint.id
-        ]
-        for cid in conflicting_ids:
-            self._remove_constraint_by_id(cid)
-
-        # 2. Add/Update the new constraint
-        self._constraints[constraint.id] = constraint
-
-        # Schedule wakeup if TTL is set
-        if constraint.expires_at:
-            now = time.time()
-            if constraint.expires_at > now:
-                self.request_wakeup(constraint.expires_at - now)
-
-        handler = self._handlers.get(constraint.type)
-        if handler:
-            handler.on_constraint_add(constraint, self)
+    # 3. Patch the CLI app to use our wrapper
+    monkeypatch.setattr(
+        controller_app.MqttConnector,
+        "__new__",
+        lambda cls, *args, **kwargs: cli_connector_wrapper
+    )
+    
+    # 4. Return the controller initialized with the MASTER connector
+    #    (The Engine will use this master connector directly)
+    return InProcessController(master_connector)
 ~~~~~
 
 ### 下一步建议
-恭喜！我们已经完成了并发安全重构路线图中的关键部分，并解决了一个严重的架构缺陷。系统现在应该更加健壮了。
+我们已经应用了针对测试 Harness 的修复。现在的测试架构如下：
+*   **Engine** 使用原始的 `master_connector`，它可以正常连接和监听。
+*   **CLI** 使用 `cli_connector_wrapper`，它的 `publish` 会透传给 `master_connector`，但它的 `disconnect` 会被忽略，从而保护了 Engine 的连接。
 
-我建议运行一次完整的测试套件（`pytest tests/`），以确保我们的更改没有引入任何回归问题。如果一切顺利，我们就可以认为这一阶段的重构圆满结束了。
-
+请运行测试 `pytest tests/py/e2e/test_e2e_cli_integration.py`。既然之前的代码修复（幂等性 ID）已经生效，这个测试现在应该会**通过**。

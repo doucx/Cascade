@@ -14,6 +14,32 @@ from .harness import InProcessConnector, MockWorkExecutor
 
 # --- Test Harness for In-Process CLI Interaction ---
 
+class SharedInstanceConnector:
+    """
+    Wraps an InProcessConnector to prevent 'disconnect' calls from affecting
+    the underlying shared instance. This allows the Engine to stay connected
+    even when the short-lived CLI command 'disconnects'.
+    """
+    def __init__(self, delegate: InProcessConnector):
+        self._delegate = delegate
+
+    async def connect(self):
+        # Ensure the underlying connector is active
+        await self._delegate.connect()
+
+    async def disconnect(self):
+        # CRITICAL: Ignore disconnects from the CLI.
+        # Since we share the single InProcessConnector instance with the Engine,
+        # checking out would kill the Engine's subscription loop too.
+        pass
+
+    async def publish(self, *args, **kwargs):
+        await self._delegate.publish(*args, **kwargs)
+
+    async def subscribe(self, *args, **kwargs):
+        await self._delegate.subscribe(*args, **kwargs)
+
+
 class InProcessController:
     """A test double for the controller CLI that calls its core logic in-process."""
     def __init__(self, connector: InProcessConnector):
@@ -41,13 +67,22 @@ def controller_runner(monkeypatch):
     """
     Provides a way to run cs-controller commands in-process with a mocked connector.
     """
-    connector = InProcessConnector()
+    # 1. Create the master connector that holds the state (topics, queues)
+    master_connector = InProcessConnector()
+    
+    # 2. Create a wrapper for the CLI that won't close the master connector
+    cli_connector_wrapper = SharedInstanceConnector(master_connector)
+
+    # 3. Patch the CLI app to use our wrapper
     monkeypatch.setattr(
         controller_app.MqttConnector,
         "__new__",
-        lambda cls, *args, **kwargs: connector
+        lambda cls, *args, **kwargs: cli_connector_wrapper
     )
-    return InProcessController(connector)
+    
+    # 4. Return the controller initialized with the MASTER connector
+    #    (The Engine will use this master connector directly)
+    return InProcessController(master_connector)
 
 # --- The Failing Test Case ---
 

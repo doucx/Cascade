@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-provider-ipfs"
+version = "0.1.0"
+description = "IPFS providers for the Cascade ecosystem, enabling content-addressed data."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-interfaces"
+]
+
+[project.entry-points."cascade.providers"]
+"ipfs.cat" = "cascade.providers.ipfs.provider:IpfsCatProvider"
+"ipfs.add" = "cascade.providers.ipfs.provider:IpfsAddProvider"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+cascade-interfaces = { workspace = true }
+cascade-py = { path = "../cascade-py", editable = true }

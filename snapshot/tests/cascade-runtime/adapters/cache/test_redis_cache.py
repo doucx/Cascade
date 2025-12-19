@@ -9,7 +9,7 @@ def mock_redis_client():
     """Provides a MagicMock for the redis.Redis client."""
     return MagicMock()
 
-def test_redis_cache_dependency_check(monkeypatch):
+def test_redis_cache_backend_dependency_check(monkeypatch):
     """
     Ensures RedisCacheBackend raises ImportError if 'redis' is not installed.
     """

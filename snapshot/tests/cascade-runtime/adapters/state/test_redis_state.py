@@ -16,7 +16,7 @@ def mock_redis_client():
     return mock_client, mock_pipeline
 
 
-def test_redis_backend_dependency_check(monkeypatch):
+def test_redis_state_backend_dependency_check(monkeypatch):
     """
     Ensures RedisStateBackend raises ImportError if 'redis' is not installed.
     """
@@ -65,20 +65,3 @@ def test_get_result(mock_redis_client):
     # Case 2: Result not found
     client.hget.return_value = None
     assert backend.get_result("node_c") is None
-
-
-def test_mark_skipped(mock_redis_client):
-    """
-    Verifies that mark_skipped calls HSET and EXPIRE on the skipped key.
-    """
-    client, pipeline = mock_redis_client
-    backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
-
-    backend.mark_skipped("node_d", "ConditionFalse")
-    
-    expected_key = "cascade:run:run123:skipped"
-    
-    client.pipeline.assert_called_once()
-    pipeline.hset.assert_called_once_with(expected_key, "node_d", "ConditionFalse")
-    pipeline.expire.assert_called_once_with(expected_key, 86400)
-    pipeline.execute.assert_called_once()

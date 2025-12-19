@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: Correct TypeError in CLI integration test harness", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766112636.679539, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(core): 实现幂等的约束更新机制", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766112662.8366656, "duration_ms": 0}}

@@ -36,11 +36,11 @@ class CacheBackend(Protocol):
     Protocol for a storage backend that persists cached results.
     """
 
-    def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Optional[Any]:
         """Retrieves a value by key."""
         ...
 
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Sets a value for a key, optionally with a TTL in seconds."""
         ...
 
@@ -50,14 +50,14 @@ class CachePolicy(Protocol):
     Protocol for a caching strategy.
     """
 
-    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
+    async def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
         """
         Checks if a result is cached.
         Returns None if not found, or the cached value if found.
         """
         ...
 
-    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+    async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
         """
         Saves a result to the cache.
         """

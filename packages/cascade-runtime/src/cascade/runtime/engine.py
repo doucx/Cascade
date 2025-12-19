@@ -355,7 +355,7 @@ class Engine:
             inputs_for_cache = self._resolve_inputs_for_cache(
                 node, graph, state_backend
             )
-            cached_value = node.cache_policy.check(node.id, inputs_for_cache)
+            cached_value = await node.cache_policy.check(node.id, inputs_for_cache)
             if cached_value is not None:
                 self.bus.publish(
                     TaskSkipped(
@@ -404,7 +404,7 @@ class Engine:
                     inputs_for_save = self._resolve_inputs_for_cache(
                         node, graph, state_backend
                     )
-                    node.cache_policy.save(node.id, inputs_for_save, result)
+                    await node.cache_policy.save(node.id, inputs_for_save, result)
                 return result
             except Exception as e:
                 last_exception = e

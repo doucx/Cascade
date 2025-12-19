@@ -1,37 +1,3 @@
-## [WIP] test: 添加针对启动时遥测丢失的测试用例
-
-### 用户需求
-用户报告在运行工作流时看到 `Attempted to publish without an active MQTT connection.` 警告，这发生在 `Engine connected` 消息之前。这意味着 `RunStarted` 遥测事件在 MQTT 连接建立之前就被触发并尝试发送，导致该关键生命周期事件丢失。
-
-用户需要一个新的测试来复现并证实这个问题。
-
-### 评论
-这是一个典型的初始化顺序错误。Engine 的生命周期事件（如 `RunStarted`）应该在所有基础设施（如 Connector 连接）就绪之后才触发。当前的实现顺序是先触发事件，后建立连接。这个测试将作为“红灯”，证明该缺陷的存在。
-
-### 目标
-1.  创建新测试文件 `tests/py/e2e/test_startup_telemetry.py`。
-2.  实现测试 `test_startup_telemetry_no_race_condition`。
-3.  该测试使用 `InProcessConnector` 订阅所有遥测频道，然后运行一个空工作流。
-4.  断言能够收到 `ENGINE_STARTED` 的生命周期事件。
-5.  预期结果：测试失败（断言错误），因为该事件在连接建立前被发布，从而被 `InProcessConnector`（模拟真实行为）丢弃。
-
-### 基本原理
-我们复用现有的 `InProcessConnector` 测试线束。它已经正确模拟了 `publish` 在未连接时的行为（丢弃消息或仅记录日志）。通过在同一个 connector 实例上订阅并运行 Engine，我们可以捕获这一时序错误。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/telemetry #task/action/bug-fix #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建测试文件 `tests/py/e2e/test_startup_telemetry.py`
-
-~~~~~act
-write_file
-tests/py/e2e/test_startup_telemetry.py
-~~~~~
-~~~~~python
 import pytest
 import asyncio
 import cascade as cs
@@ -103,9 +69,3 @@ async def test_startup_telemetry_no_race_condition():
         "Failed to receive ENGINE_STARTED telemetry event. "
         "It was likely published before the connector was active."
     )
-~~~~~
-
-### 下一步建议
-我们已经添加了针对遥测丢失问题的失败测试。结合之前计划中的针对 `pause` 约束竞态条件的测试（如果已添加），我们现在有了覆盖 Engine 启动阶段两个主要并发缺陷的回归测试集。
-
-接下来的步骤是执行 **步骤 3: [绿灯] 修复引擎的启动逻辑**。我们将修改 `cascade-runtime/src/cascade/runtime/engine.py` 中的 `run` 方法，调整连接建立、订阅和事件发布的顺序，以通过这些测试。

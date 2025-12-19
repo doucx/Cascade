@@ -3,7 +3,7 @@ import asyncio
 from cascade.connectors.local import LocalBusConnector
 
 @pytest.fixture
-async def local_bus():
+def local_bus():
     """Provides a fresh LocalBus environment for each test."""
     # LocalBusConnector uses shared class state, so we must clear it before each test
     LocalBusConnector._reset_broker_state()

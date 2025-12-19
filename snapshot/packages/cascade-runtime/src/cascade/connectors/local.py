@@ -29,6 +29,7 @@ class LocalBusConnector(Connector):
         """Helper for tests to clear the 'broker'."""
         cls._subscriptions.clear()
         cls._retained_messages.clear()
+        cls._lock = asyncio.Lock()  # Reset lock for new event loop context
 
     async def connect(self) -> None:
         self._is_connected = True

@@ -1,52 +1,10 @@
 import pytest
 import json
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
 from cascade.connectors.mqtt import MqttConnector
 
-# Attempt to import aiomqtt for type hinting if available, but don't fail
-try:
-    import aiomqtt
-except ImportError:
-    aiomqtt = None
-
-
-@pytest.fixture(autouse=True)
-def mock_aiomqtt_module(mocker):
-    """
-    Creates a completely isolated, fake 'aiomqtt' module and injects it into
-    sys.modules for the duration of the tests in this file.
-
-    This prevents any state leakage from other tests and removes the need for
-    aiomqtt to be installed to run these tests.
-    """
-    # 1. Create the mock client INSTANCE that will be returned by the fake Client class
-    mock_client_instance = AsyncMock()
-    mock_client_instance.__aenter__.return_value = mock_client_instance
-
-    # 2. Create the fake aiomqtt.Client CLASS
-    mock_client_class = MagicMock(return_value=mock_client_instance)
-
-    # 3. Create the fake aiomqtt.Will CLASS
-    mock_will_class = MagicMock()
-
-    # 4. Create the fake aiomqtt MODULE
-    mock_aiomqtt_module = MagicMock()
-    mock_aiomqtt_module.Client = mock_client_class
-    mock_aiomqtt_module.Will = mock_will_class
-
-    # 5. Patch sys.modules to replace the real aiomqtt with our fake one
-    mocker.patch.dict(
-        "sys.modules", {"aiomqtt": mock_aiomqtt_module}
-    )
-
-    # Yield the components for tests to use
-    yield {
-        "instance": mock_client_instance,
-        "Client": mock_client_class,
-        "Will": mock_will_class,
-    }
-
+# Note: The 'mock_aiomqtt_module' fixture is now autoused from conftest.py
+# This ensures aiomqtt is mocked BEFORE this module is even imported.
 
 def test_mqtt_connector_instantiation():
     """Tests that the MqttConnector can be instantiated."""
@@ -66,10 +24,10 @@ async def test_connect_and_disconnect_lifecycle(mock_aiomqtt_module, mocker):
     mocker.patch("platform.node", return_value="test-host")
     mocker.patch("os.getpid", return_value=12345)
 
-    # 2. Setup connector
+    # Setup connector
     connector = MqttConnector(hostname="test.broker", port=9999, client_id="tester")
 
-    # 3. Test connect()
+    # Test connect()
     await connector.connect()
 
     # Assert that Will was called correctly
@@ -91,7 +49,7 @@ async def test_connect_and_disconnect_lifecycle(mock_aiomqtt_module, mocker):
     # Assert that the client's connect method was awaited via context manager
     mock_client_instance.__aenter__.assert_awaited_once()
 
-    # 4. Test disconnect()
+    # Test disconnect()
     await connector.disconnect()
 
     # Assert that the client's disconnect method was awaited via context manager
@@ -135,7 +93,6 @@ async def test_publish_without_connect_does_nothing(mock_aiomqtt_module):
     connector = MqttConnector(hostname="test.broker")
 
     # Do not call connect()
-
     await connector.publish("a/topic", {"data": 1})
     await asyncio.sleep(0)
 

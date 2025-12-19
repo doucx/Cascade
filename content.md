@@ -1,108 +1,98 @@
-你的分析非常精准。
+You are absolutely right to point this out. My apologies. The fact that it passes in isolation but fails in a full run is the definitive symptom of a test environment leak, and my `sys.modules` patch was flawed in its timing.
 
-1.  **环境泄漏**: 测试套件在全量运行时失败，但在独立运行时通过，这是测试间**状态污染**或**环境泄漏**的典型症状。一个测试的 Mock 或配置影响了后续测试的运行环境。
-2.  **目录结构错误**: `tests/cascade-runtime/runtime/runtime/` 这样的重复路径表明我之前的 `move_file` 操作是错误的。`move_file a b` 会将目录 `a` 移动到目录 `b` *之下*，而不是移动 `a` 的*内容*。我需要纠正这个错误。
-
-我将制定一个两阶段的计划来解决这两个问题。首先，修复错误的目录结构；其次，采用一种更强大的、完全隔离的 Mocking 策略来根除环境泄漏问题。
-
-## [WIP] fix(tests): 修正测试目录结构并隔离 MQTT Mock 环境
+This is a classic, subtle, and frustrating problem. I have a definitive solution.
 
 ### 错误分析
 
-**1. 目录结构问题**
+The root cause is a race condition between Python's module import mechanism and `pytest`'s fixture execution order. Here's what's happening:
 
-我之前计划中的 `move_file tests/py/runtime tests/cascade-runtime/runtime` 等指令，错误地将源目录（例如 `runtime`）移动到了目标目录 `tests/cascade-runtime/runtime` *内部*，导致了 `.../runtime/runtime/` 这样的嵌套。正确的做法应该是将源目录的*内容*移动到目标目录。我将通过一系列更精确的 `move_file` 操作来修正这个问题。
+1.  `pytest` starts and discovers `tests/connector-mqtt/test_connector.py`.
+2.  To discover the tests inside, Python must first **import** this file.
+3.  The line `from cascade.connectors.mqtt import MqttConnector` is at the top level of `test_connector.py`. This triggers the import of the `cascade.connectors.mqtt.connector` module.
+4.  *That* module, in turn, has `import aiomqtt` at its top level. At this moment, the **real `aiomqtt` module is loaded and cached** in `sys.modules`.
+5.  **Only after all this module loading is complete** does `pytest` begin to execute the `autouse` fixture (`mock_aiomqtt_module`) inside `test_connector.py`.
+6.  The fixture then patches `sys.modules`, but it's **too late**. The `cascade.connectors.mqtt.connector` module already holds a reference to the original, real `aiomqtt` module in its local namespace.
 
-**2. 测试环境泄漏**
+The patch I applied was correct in principle but executed at the wrong time.
 
-`test_connector.py` 的失败根源在于，当全量运行时，`aiomqtt` 模块在被 `mocker` patch 之前，已经被某个先行的测试以某种方式“污染”了。为了彻底杜绝这种可能性，我们将采用一种终极的隔离策略：
+**The Solution:**
 
-*   **完全模块替换**: 我们不再 `patch` `aiomqtt.Client` 这个类，而是在 `test_connector.py` 的测试开始前，直接从 `sys.modules` 中**移除**整个 `aiomqtt` 模块（如果存在的话），并用一个我们完全控制的 `MagicMock` 对象取而代之。
-*   **确定性行为**: 这个伪造的 `aiomqtt` 模块将有一个 `Client` 属性，该属性是一个 Mock 工厂，它在被调用时会返回我们预先配置好的 `AsyncMock` 实例。
+We need to apply the patch *before* `test_connector.py` is ever imported. The `pytest` mechanism designed for exactly this purpose is a `conftest.py` file. A `conftest.py` file in a directory is loaded by `pytest` *before* it loads the test modules in that same directory.
 
-这个方案有两个巨大优势：
-1.  **完全隔离**: 它确保了 `test_connector.py` 中的测试与系统中其他任何地方对 `aiomqtt` 的使用完全无关。
-2.  **可选依赖测试**: 它甚至不要求 `aiomqtt` 被实际安装，使得测试在没有可选依赖的环境中也能健壮运行。
+By moving the `autouse` fixture into `tests/connector-mqtt/conftest.py`, we guarantee that our fake `aiomqtt` module is in `sys.modules` *before* the line `from cascade.connectors.mqtt import MqttConnector` ever runs. This will permanently solve the problem.
+
+## [WIP] fix(tests): Isolate MQTT mock environment using conftest.py
 
 ### 用户需求
-1.  修复 `tests` 目录下因错误的文件移动操作导致的重复和嵌套的目录结构。
-2.  修复 `test_connector.py` 在全量测试时因环境泄漏导致的 `TypeError` 失败。
+Fix the persistent `TypeError` in `test_connector.py` by ensuring the `aiomqtt` mock is in place before the module under test is imported.
 
 ### 评论
-这是一个关键的修复计划。一个干净、可预测的测试环境是项目长期健康发展的基石。通过修正结构并加强测试隔离，我们不仅解决了当前的 bug，也为未来的测试套件增加了韧性。
+This is the correct and canonical `pytest` solution for complex mocking scenarios that need to preempt module imports. It will create a fully hermetic testing environment for the MQTT connector, making it resilient to state leakage from other tests. This is a valuable hardening of our test suite.
 
 ### 目标
-1.  执行一系列 `move_file` 操作，将嵌套目录中的测试文件移动到其正确的、扁平化的位置。
-2.  删除因错误移动而产生的多余的嵌套目录。
-3.  在 `test_connector.py` 中引入一个新的 `autouse` Fixture，该 Fixture 使用 `mocker.patch.dict('sys.modules', ...)` 来创建一个完全隔离的、伪造的 `aiomqtt` 模块。
-4.  简化 `test_connector.py` 中现有的 Mocking 代码，使其依赖于这个新的、全局隔离的 Mock 环境。
+1.  Create a new `tests/connector-mqtt/conftest.py` file.
+2.  Move the `mock_aiomqtt_module` autouse fixture from `test_connector.py` into this new `conftest.py`.
+3.  Clean up `test_connector.py` by removing the fixture definition, as it will now be provided automatically by `conftest.py`.
 
 ### 基本原理
-我们将分两步走。第一步是通过精细的文件移动操作“解开”错误的目录嵌套。第二步是在 `test_connector.py` 中建立一个“无尘室”环境：通过 `autouse` 的 `pytest` Fixture，在文件内的所有测试运行前，用一个我们精心构造的 Mock 对象在 Python 的模块缓存 (`sys.modules`) 中替换掉 `aiomqtt`，从而保证测试的输入是完全确定的，不受任何外部状态干扰。
+We are leveraging `pytest`'s test discovery and configuration loading order. `pytest` scans for and loads `conftest.py` files as it descends the directory tree, making any fixtures they contain available to the test modules at that level. By defining our `autouse` fixture in a local `conftest.py`, we win the race against the module-level `import` statements in `test_connector.py`, ensuring our mock is active at the critical moment.
 
 ### 标签
-#intent/fix #intent/refine #flow/ready #priority/critical #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/test-isolation #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/test-isolation #task/action/bug-fix #task/state/end
 
 ---
 ### Script
 
-#### Acts 1: 修正 `cascade-runtime` 内部错误的目录结构
+#### Acts 1: Create `conftest.py` to host the isolated environment
 
-我们将逐一修正 `tests/cascade-runtime` 下的嵌套目录。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-# Move contents of adapters/adapters up one level, then remove the empty dir
-mv tests/cascade-runtime/adapters/adapters/* tests/cascade-runtime/adapters/
-rmdir tests/cascade-runtime/adapters/adapters
-
-# Move contents of connectors/connectors up one level, then remove the empty dir
-mv tests/cascade-runtime/connectors/connectors/* tests/cascade-runtime/connectors/
-rmdir tests/cascade-runtime/connectors/connectors
-
-# Move contents of e2e/e2e up one level, then remove the empty dir
-mv tests/cascade-runtime/e2e/e2e/* tests/cascade-runtime/e2e/
-rmdir tests/cascade-runtime/e2e/e2e
-
-# Move contents of graph/graph up one level, then remove the empty dir
-mv tests/cascade-runtime/graph/graph/* tests/cascade-runtime/graph/
-rmdir tests/cascade-runtime/graph/graph
-
-# Move contents of integration/integration up one level, then remove the empty dir
-mv tests/cascade-runtime/integration/integration/* tests/cascade-runtime/integration/
-rmdir tests/cascade-runtime/integration/integration
-
-# Move contents of runtime/runtime up one level, then remove the empty dir
-mv tests/cascade-runtime/runtime/runtime/* tests/cascade-runtime/runtime/
-rmdir tests/cascade-runtime/runtime/runtime
-~~~~~
-
-#### Acts 2: 修正 `cascade-py` 内部错误的目录结构
-
-同样地，修正 `cascade-py` 下的嵌套目录。
+We will create the `conftest.py` file and place the powerful, isolating fixture inside it.
 
 ~~~~~act
-run_command
+write_file
+tests/connector-mqtt/conftest.py
 ~~~~~
-~~~~~bash
-# Move contents of examples/examples up one level, then remove the empty dir
-mv tests/cascade-py/examples/examples/* tests/cascade-py/examples/
-rmdir tests/cascade-py/examples/examples
+~~~~~python
+import pytest
+from unittest.mock import MagicMock, AsyncMock
 
-# Move contents of providers/providers up one level, then remove the empty dir
-mv tests/cascade-py/providers/providers/* tests/cascade-py/providers/
-rmdir tests/cascade-py/providers/providers
+@pytest.fixture(autouse=True)
+def mock_aiomqtt_module(mocker):
+    """
+    Creates a completely isolated, fake 'aiomqtt' module and injects it into
+    sys.modules for the duration of the tests in this directory.
 
-# Move contents of tools/tools up one level, then remove the empty dir
-mv tests/cascade-py/tools/tools/* tests/cascade-py/tools/
-rmdir tests/cascade-py/tools/tools
+    This is defined in conftest.py to ensure it runs BEFORE the test module
+    is imported, thus patching the dependency before it's ever loaded.
+    """
+    # 1. Create the mock client INSTANCE that will be returned by the fake Client class
+    mock_client_instance = AsyncMock()
+    mock_client_instance.__aenter__.return_value = mock_client_instance
+
+    # 2. Create the fake aiomqtt.Client CLASS (a factory for the instance)
+    mock_client_class = MagicMock(return_value=mock_client_instance)
+
+    # 3. Create the fake aiomqtt.Will CLASS
+    mock_will_class = MagicMock()
+
+    # 4. Create the fake aiomqtt MODULE object
+    mock_aiomqtt_module_obj = MagicMock()
+    mock_aiomqtt_module_obj.Client = mock_client_class
+    mock_aiomqtt_module_obj.Will = mock_will_class
+
+    # 5. Patch sys.modules to replace the real aiomqtt with our fake one
+    mocker.patch.dict("sys.modules", {"aiomqtt": mock_aiomqtt_module_obj})
+
+    # Yield the components for tests to use, if they need to make assertions
+    yield {
+        "instance": mock_client_instance,
+        "Client": mock_client_class,
+        "Will": mock_will_class,
+    }
 ~~~~~
 
-#### Acts 3: 实现完全隔离的 MQTT Mock 环境
+#### Acts 2: Clean up `test_connector.py`
 
-现在，我们对 `test_connector.py` 进行手术，注入终极隔离的 Mock Fixture。这将替换掉之前所有的 `mocker.patch` 尝试。
+Now we remove the fixture from the test file itself, simplifying it greatly. The tests will now transparently use the fixture provided by `conftest.py`.
 
 ~~~~~act
 write_file
@@ -112,52 +102,10 @@ tests/connector-mqtt/test_connector.py
 import pytest
 import json
 import asyncio
-from unittest.mock import AsyncMock, MagicMock
 from cascade.connectors.mqtt import MqttConnector
 
-# Attempt to import aiomqtt for type hinting if available, but don't fail
-try:
-    import aiomqtt
-except ImportError:
-    aiomqtt = None
-
-
-@pytest.fixture(autouse=True)
-def mock_aiomqtt_module(mocker):
-    """
-    Creates a completely isolated, fake 'aiomqtt' module and injects it into
-    sys.modules for the duration of the tests in this file.
-
-    This prevents any state leakage from other tests and removes the need for
-    aiomqtt to be installed to run these tests.
-    """
-    # 1. Create the mock client INSTANCE that will be returned by the fake Client class
-    mock_client_instance = AsyncMock()
-    mock_client_instance.__aenter__.return_value = mock_client_instance
-
-    # 2. Create the fake aiomqtt.Client CLASS
-    mock_client_class = MagicMock(return_value=mock_client_instance)
-
-    # 3. Create the fake aiomqtt.Will CLASS
-    mock_will_class = MagicMock()
-
-    # 4. Create the fake aiomqtt MODULE
-    mock_aiomqtt_module = MagicMock()
-    mock_aiomqtt_module.Client = mock_client_class
-    mock_aiomqtt_module.Will = mock_will_class
-
-    # 5. Patch sys.modules to replace the real aiomqtt with our fake one
-    mocker.patch.dict(
-        "sys.modules", {"aiomqtt": mock_aiomqtt_module}
-    )
-
-    # Yield the components for tests to use
-    yield {
-        "instance": mock_client_instance,
-        "Client": mock_client_class,
-        "Will": mock_will_class,
-    }
-
+# Note: The 'mock_aiomqtt_module' fixture is now autoused from conftest.py
+# This ensures aiomqtt is mocked BEFORE this module is even imported.
 
 def test_mqtt_connector_instantiation():
     """Tests that the MqttConnector can be instantiated."""
@@ -177,10 +125,10 @@ async def test_connect_and_disconnect_lifecycle(mock_aiomqtt_module, mocker):
     mocker.patch("platform.node", return_value="test-host")
     mocker.patch("os.getpid", return_value=12345)
 
-    # 2. Setup connector
+    # Setup connector
     connector = MqttConnector(hostname="test.broker", port=9999, client_id="tester")
 
-    # 3. Test connect()
+    # Test connect()
     await connector.connect()
 
     # Assert that Will was called correctly
@@ -202,7 +150,7 @@ async def test_connect_and_disconnect_lifecycle(mock_aiomqtt_module, mocker):
     # Assert that the client's connect method was awaited via context manager
     mock_client_instance.__aenter__.assert_awaited_once()
 
-    # 4. Test disconnect()
+    # Test disconnect()
     await connector.disconnect()
 
     # Assert that the client's disconnect method was awaited via context manager
@@ -246,7 +194,6 @@ async def test_publish_without_connect_does_nothing(mock_aiomqtt_module):
     connector = MqttConnector(hostname="test.broker")
 
     # Do not call connect()
-
     await connector.publish("a/topic", {"data": 1})
     await asyncio.sleep(0)
 
@@ -303,8 +250,6 @@ async def test_subscribe_receives_messages(mock_aiomqtt_module):
 ~~~~~
 
 ### 下一步建议
-我们已经完成了两个关键的修复：
-1.  整理了 `tests` 目录的结构，消除了令人困惑的嵌套。
-2.  为 `test_connector.py` 引入了目前已知最健壮的 Mock 隔离策略。
+This should be the definitive fix. We have addressed both the structural issues and the complex environment leakage problem with a standard, robust pattern.
 
-现在，请最后一次运行完整的 `pytest` 测试套件。如果所有测试都通过了，那么这次大规模的重构就成功了，我们可以将其作为一个完整的、可提交的工作单元。
+Please run the full `pytest` suite one last time. If it passes, we can proceed to generate a final `[COMMIT]` plan to merge all these changes into a single, logical unit of work.

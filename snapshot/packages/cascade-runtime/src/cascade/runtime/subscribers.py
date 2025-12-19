@@ -96,7 +96,13 @@ class TelemetrySubscriber:
     def __init__(self, event_bus: MessageBus, connector: Connector):
         self._connector = connector
         self._source_id = f"{platform.node()}-{os.getpid()}"
+        self._pending_tasks = set()
         event_bus.subscribe(Event, self.on_event)
+
+    async def shutdown(self):
+        """Waits for all pending telemetry tasks to complete."""
+        if self._pending_tasks:
+            await asyncio.gather(*self._pending_tasks, return_exceptions=True)
 
     def _create_header(self, run_id: str) -> dict:
         return {
@@ -149,4 +155,6 @@ class TelemetrySubscriber:
         # If we have a valid body, schedule the publish task
         if event_body:
             payload["body"] = event_body
-            asyncio.create_task(self._connector.publish(topic, payload))
+            task = asyncio.create_task(self._connector.publish(topic, payload))
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)

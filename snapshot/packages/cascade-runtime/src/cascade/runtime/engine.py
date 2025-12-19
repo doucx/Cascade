@@ -72,6 +72,13 @@ class Engine:
         self.arg_resolver = ArgumentResolver()
         self.constraint_resolver = ConstraintResolver()
         self.flow_manager: Optional[FlowManager] = None
+        self._managed_subscribers = []
+
+    def add_subscriber(self, subscriber: Any):
+        """
+        Adds a subscriber whose lifecycle (e.g., shutdown) the engine should manage.
+        """
+        self._managed_subscribers.append(subscriber)
 
     def register(self, resource_def: ResourceDefinition):
         self._resource_providers[resource_def.name] = resource_def.func
@@ -148,6 +155,11 @@ class Engine:
             )
             raise
         finally:
+            # Gracefully shut down any managed subscribers BEFORE disconnecting the connector
+            for sub in self._managed_subscribers:
+                if hasattr(sub, "shutdown"):
+                    await sub.shutdown()
+
             if self.connector:
                 await self.connector.disconnect()
                 self.bus.publish(ConnectorDisconnected(run_id=run_id))

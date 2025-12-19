@@ -1,132 +1,182 @@
-你的分析完全正确，一针见血。
+You are absolutely right to push for a deeper analysis. My previous fix was incomplete because I misdiagnosed the *symptom* (a missing event) without correctly identifying the *root cause* of the race condition. Your continued observation that the test fails is crucial.
 
-这是一个经典的测试环境与实际运行环境不一致导致的问题。`cs.run()` 作为高级入口，封装了“装配”逻辑，将各个组件（Engine, Bus, Subscribers, Connector）粘合在一起。而我们的 E2E 测试为了精确控制，直接使用了低级的 `Engine`，却忘记了手动完成这个“装配”过程。
+Let's trace the execution flow with precision. This is a subtle but classic asynchronous programming bug.
 
-`Engine` 正确地将 `RunStarted` 事件发布到了内部的 `MessageBus` 上，但由于缺少 `TelemetrySubscriber` 这个“桥梁”，事件从未被转发到 `connector` 上。因此，我们测试中监听 `connector` 的 `telemetry_observer` 自然什么也收不到。
+ 错误分析
 
-我将生成一个计划来修复这个测试用例，正确地装配 `TelemetrySubscriber`。
+The root cause is a **race condition between the synchronous scheduling of an asynchronous task and the synchronous execution of the shutdown logic**.
 
-## [WIP] fix(test): 正确装配 TelemetrySubscriber 以修复遥测测试
+Here is the exact sequence of events that causes the failure:
 
-### 错误分析
-测试 `test_startup_telemetry_no_race_condition` 失败的根本原因是测试环境的配置不完整，未能准确模拟 `cs.run()` 的完整组件装配流程。
-1.  **组件缺失**: 测试直接实例化了 `Engine`，但没有实例化并注册 `TelemetrySubscriber`。
-2.  **职责中断**: `TelemetrySubscriber` 的核心职责是监听来自 `Engine` 的内部事件（如 `RunStarted`），并将它们转换为遥测消息发布到外部 `Connector`。
-3.  **断言失效**: 由于缺少这个关键的订阅者，`Engine` 发布的事件从未到达 `Connector`。因此，测试中监听 `Connector` 的 `telemetry_observer` 无法捕获到任何事件，导致断言失败。
+1.  **`Engine.run()` starts.** It correctly calls `await self.connector.connect()`. The connector is now active.
+2.  **`Engine.run()` calls `self.bus.publish(RunStarted(...))`**. This is a **synchronous** call.
+3.  The `MessageBus` immediately and **synchronously** calls the `on_event` method of our `TelemetrySubscriber`.
+4.  Inside the **synchronous** `on_event` handler, the line `asyncio.create_task(self._connector.publish(topic, payload))` is executed.
+    *   **This is the critical point.** `asyncio.create_task()` **schedules** the `_connector.publish()` coroutine to be run on the event loop *at some point in the future*. It does **not** execute it immediately. It returns control to the `on_event` handler instantly.
+5.  Control returns all the way back to `Engine.run()`.
+6.  The test workflow (`noop()`) is extremely fast. The `await self._execute_graph(...)` call completes almost instantly, as there are no `await` points within the workflow to yield control to the event loop.
+7.  The `try` block in `Engine.run()` finishes.
+8.  The `finally` block is executed. It calls `await self.connector.disconnect()`. This **synchronously** sets the connector's internal state to "disconnected".
+9.  **Sometime after all this**, the Python event loop finally gets a chance to run the `publish()` task that was scheduled back in step 4.
+10. The `publish()` method runs, but the first thing it does is check if the connector is active. It is not, so the message is silently (and correctly, from its perspective) dropped.
+
+The reason your `workflow_demo.py` **passes in practice** is because its `process_item` task contains `await asyncio.sleep(...)`. This `await` forces the `engine.run()` coroutine to yield control back to the event loop, giving the scheduled `publish()` task ample time to execute *while the connector is still connected*. Our test, lacking any such delay, exposes the underlying race condition perfectly.
+
+### 解决方案
+
+The `TelemetrySubscriber` needs a "graceful shutdown" mechanism. It must ensure that all its scheduled publish tasks have completed before the `Engine` is allowed to disconnect the connector.
+
+1.  The `TelemetrySubscriber` will be modified to track all pending `publish` tasks it creates.
+2.  It will expose a new `async def shutdown()` method that waits for all tracked tasks to complete.
+3.  The `Engine` will be modified to be aware of its critical subscribers and will be responsible for calling `await subscriber.shutdown()` inside its `finally` block, **before** it calls `connector.disconnect()`.
+
+This ensures a clean, ordered shutdown where telemetry is always flushed before the connection is closed.
+
+## [WIP] fix(runtime): Implement graceful shutdown for TelemetrySubscriber
 
 ### 用户需求
-修复 `test_startup_telemetry_no_race_condition` 测试，使其能够正确地模拟遥测事件的发布与捕获流程。
+The `TelemetrySubscriber`'s fire-and-forget approach to publishing creates a race condition where the `Engine` can disconnect the connector before pending telemetry messages are sent, leading to data loss, especially for short-lived workflows. A graceful shutdown mechanism is required to ensure all telemetry is flushed before disconnection.
 
 ### 评论
-这个修复非常重要，它确保了我们的端到端测试能够真实地反映系统各组件间的交互方式。一个可靠的测试套件是高质量软件的基石，此修复将增强我们对遥测功能正确性的信心。
+This is a critical reliability fix. Unreliable telemetry can mask other issues and make debugging production problems impossible. By implementing a graceful shutdown, we make the system more robust and production-ready.
 
 ### 目标
-1.  定位 `tests/py/e2e/test_startup_telemetry.py` 文件中的 `test_startup_telemetry_no_race_condition` 函数。
-2.  导入 `TelemetrySubscriber`。
-3.  在测试设置阶段，实例化 `TelemetrySubscriber`，并将其与测试中使用的 `MessageBus` 和 `InProcessConnector` 实例关联起来。
+1.  Modify `TelemetrySubscriber` to track its pending `asyncio.Task` objects.
+2.  Add a `shutdown()` method to `TelemetrySubscriber` that awaits the completion of all pending tasks.
+3.  Modify the `Engine` to accept "managed subscribers" and call their `shutdown()` method during its cleanup phase, just before disconnecting the connector.
+4.  Update the failing E2E test to correctly register the `TelemetrySubscriber` with the `Engine`.
 
 ### 基本原理
-通过在测试中手动装配 `TelemetrySubscriber`，我们补全了从 `Engine` 内部事件总线到外部 `Connector` 的事件传递链条。这样，当 `Engine` 发布 `RunStarted` 事件时，`TelemetrySubscriber` 会接收到它，并调用 `connector.publish()`，最终使得测试中的 `telemetry_observer` 能够捕获到该事件，从而让测试按预期通过。
+The core principle is "structured concurrency". The parent process (`Engine.run`) must not terminate its resources (the `connector`) until its child processes (the telemetry `publish` tasks) have completed. We achieve this by creating an explicit dependency: the `Engine` will now manage the subscriber's lifecycle and wait for its confirmation (`shutdown()`) before proceeding with its own teardown.
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #concept/telemetry #scope/dx #ai/instruct #task/domain/testing #task/object/telemetry-test #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/runtime #concept/telemetry #concept/lifecycle #scope/core #ai/instruct #task/domain/runtime #task/object/telemetry-subscriber #task/action/refactor #task_state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `test_startup_telemetry.py`
+#### Acts 1: Enhance `TelemetrySubscriber` with shutdown logic
 
-我们导入 `TelemetrySubscriber` 并在测试中实例化它，将其连接到事件总线和连接器。
+We will modify `subscribers.py` to add task tracking and the `shutdown` method.
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/subscribers.py
+~~~~~
+~~~~~python
+class TelemetrySubscriber:
+    """
+    Listens to runtime events and publishes them as structured telemetry
+    data via a Connector.
+    """
+
+    def __init__(self, event_bus: MessageBus, connector: Connector):
+        self._connector = connector
+        self._source_id = f"{platform.node()}-{os.getpid()}"
+        event_bus.subscribe(Event, self.on_event)
+
+    def _create_header(self, run_id: str) -> dict:
+~~~~~
+~~~~~python
+class TelemetrySubscriber:
+    """
+    Listens to runtime events and publishes them as structured telemetry
+    data via a Connector.
+    """
+
+    def __init__(self, event_bus: MessageBus, connector: Connector):
+        self._connector = connector
+        self._source_id = f"{platform.node()}-{os.getpid()}"
+        self._pending_tasks = set()
+        event_bus.subscribe(Event, self.on_event)
+
+    async def shutdown(self):
+        """Waits for all pending telemetry tasks to complete."""
+        if self._pending_tasks:
+            await asyncio.gather(*self._pending_tasks, return_exceptions=True)
+
+    def _create_header(self, run_id: str) -> dict:
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/subscribers.py
+~~~~~
+~~~~~python
+        # If we have a valid body, schedule the publish task
+        if event_body:
+            payload["body"] = event_body
+            asyncio.create_task(self._connector.publish(topic, payload))
+~~~~~
+~~~~~python
+        # If we have a valid body, schedule the publish task
+        if event_body:
+            payload["body"] = event_body
+            task = asyncio.create_task(self._connector.publish(topic, payload))
+            self._pending_tasks.add(task)
+            task.add_done_callback(self._pending_tasks.discard)
+~~~~~
+
+#### Acts 2: Update `Engine` to manage subscriber shutdown
+
+Now we modify `engine.py` to manage the subscriber's lifecycle.
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+        self.flow_manager: Optional[FlowManager] = None
+
+    def register(self, resource_def: ResourceDefinition):
+        self._resource_providers[resource_def.name] = resource_def.func
+~~~~~
+~~~~~python
+        self.flow_manager: Optional[FlowManager] = None
+        self._managed_subscribers = []
+
+    def add_subscriber(self, subscriber: Any):
+        """
+        Adds a subscriber whose lifecycle (e.g., shutdown) the engine should manage.
+        """
+        self._managed_subscribers.append(subscriber)
+
+    def register(self, resource_def: ResourceDefinition):
+        self._resource_providers[resource_def.name] = resource_def.func
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+            raise
+        finally:
+            if self.connector:
+                await self.connector.disconnect()
+                self.bus.publish(ConnectorDisconnected(run_id=run_id))
+~~~~~
+~~~~~python
+            raise
+        finally:
+            # Gracefully shut down any managed subscribers BEFORE disconnecting the connector
+            for sub in self._managed_subscribers:
+                if hasattr(sub, "shutdown"):
+                    await sub.shutdown()
+
+            if self.connector:
+                await self.connector.disconnect()
+                self.bus.publish(ConnectorDisconnected(run_id=run_id))
+~~~~~
+
+#### Acts 3: Fix the test by registering the subscriber with the Engine
+
+Finally, we update `test_startup_telemetry.py` to use the new `add_subscriber` method.
 
 ~~~~~act
 patch_file
 tests/py/e2e/test_startup_telemetry.py
 ~~~~~
 ~~~~~python
-import pytest
-import asyncio
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.bus import MessageBus
-from .harness import InProcessConnector
-
-@pytest.mark.asyncio
-async def test_startup_telemetry_no_race_condition():
-    """
-    Verifies that the initial 'RunStarted' telemetry event is correctly published
-    to the connector.
-    
-    This guards against a race condition where the engine emits 'RunStarted'
-    internally *before* establishing the connection to the external connector,
-    causing the first telemetry message to be lost (and a warning logged).
-    """
-    # 1. Setup Harness
-    connector = InProcessConnector()
-    bus = MessageBus()
-    
-    # We will act as an external observer subscribing to the telemetry topic.
-    # Since InProcessConnector routes messages internally, we can subscribe 
-    # on the same instance that the Engine uses.
-    received_messages = []
-    
-    async def telemetry_observer(topic, payload):
-        received_messages.append(payload)
-    
-    # Subscribe to all telemetry events
-    # Note: We must ensure the connector considers itself "connected" enough 
-    # to register this subscription, or at least that the subscription persists.
-    # InProcessConnector.subscribe doesn't check _is_connected strictness for 
-    # registration, but Engine will call connect() shortly.
-    await connector.subscribe("cascade/telemetry/+/+/+/events", telemetry_observer)
-    
-    # 2. Define Workflow
-    @cs.task
-    def noop():
-        pass
-        
-    # 3. Run Engine
-    # The Engine is expected to:
-    #   a. Connect to the connector
-    #   b. Publish 'RunStarted' (which triggers telemetry)
-    #   c. Run the task
-    # If (b) happens before (a), the message is dropped.
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus,
-        connector=connector,
-    )
-    
-    await engine.run(noop())
-~~~~~
-~~~~~python
-import pytest
-import asyncio
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.subscribers import TelemetrySubscriber
-from .harness import InProcessConnector
-
-@pytest.mark.asyncio
-async def test_startup_telemetry_no_race_condition():
-    """
-    Verifies that the initial 'RunStarted' telemetry event is correctly published
-    to the connector.
-    
-    This guards against a race condition where the engine emits 'RunStarted'
-    internally *before* establishing the connection to the external connector,
-    causing the first telemetry message to be lost (and a warning logged).
-    """
-    # 1. Setup Harness
-    connector = InProcessConnector()
-    bus = MessageBus()
-    
     # CRITICAL: Manually assemble the TelemetrySubscriber, which bridges
     # the internal event bus to the external connector. This is what cs.run()
     # does automatically.
@@ -134,41 +184,37 @@ async def test_startup_telemetry_no_race_condition():
     
     # We will act as an external observer subscribing to the telemetry topic.
     # Since InProcessConnector routes messages internally, we can subscribe 
-    # on the same instance that the Engine uses.
-    received_messages = []
+~~~~~
+~~~~~python
+    # CRITICAL: Manually assemble the TelemetrySubscriber, which bridges
+    # the internal event bus to the external connector. This is what cs.run()
+    # does automatically.
+    telemetry_subscriber = TelemetrySubscriber(bus, connector)
     
-    async def telemetry_observer(topic, payload):
-        received_messages.append(payload)
-    
-    # Subscribe to all telemetry events
-    # Note: We must ensure the connector considers itself "connected" enough 
-    # to register this subscription, or at least that the subscription persists.
-    # InProcessConnector.subscribe doesn't check _is_connected strictness for 
-    # registration, but Engine will call connect() shortly.
-    await connector.subscribe("cascade/telemetry/+/+/+/events", telemetry_observer)
-    
-    # 2. Define Workflow
-    @cs.task
-    def noop():
-        pass
-        
-    # 3. Run Engine
-    # The Engine is expected to:
-    #   a. Connect to the connector
-    #   b. Publish 'RunStarted' (which triggers telemetry via the subscriber)
-    #   c. Run the task
-    # If (b) happens before (a), the message is dropped.
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
+    # We will act as an external observer subscribing to the telemetry topic.
+    # Since InProcessConnector routes messages internally, we can subscribe 
+~~~~~
+~~~~~act
+patch_file
+tests/py/e2e/test_startup_telemetry.py
+~~~~~
+~~~~~python
         bus=bus,
         connector=connector,
     )
     
     await engine.run(noop())
+    
+    # 4. Assert
 ~~~~~
-
-### 下一步建议
-我们已经修复了测试用例本身。现在应该重新运行测试，预期它会通过。
-
-一旦测试通过，我们就完成了路线图的第三步（绿灯）。接下来，我们将继续推进到 **步骤 4: [红灯] 为运行时控制延迟编写一个失败的测试**，以解决在工作流执行中途无法响应 `pause` 命令的问题。
+~~~~~python
+        bus=bus,
+        connector=connector,
+    )
+    # CRITICAL: Register the subscriber with the engine for lifecycle management
+    engine.add_subscriber(telemetry_subscriber)
+    
+    await engine.run(noop())
+    
+    # 4. Assert
+~~~~~

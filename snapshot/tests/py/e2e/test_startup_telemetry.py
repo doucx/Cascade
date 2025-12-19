@@ -25,7 +25,7 @@ async def test_startup_telemetry_no_race_condition():
     # CRITICAL: Manually assemble the TelemetrySubscriber, which bridges
     # the internal event bus to the external connector. This is what cs.run()
     # does automatically.
-    TelemetrySubscriber(bus, connector)
+    telemetry_subscriber = TelemetrySubscriber(bus, connector)
     
     # We will act as an external observer subscribing to the telemetry topic.
     # Since InProcessConnector routes messages internally, we can subscribe 
@@ -59,6 +59,8 @@ async def test_startup_telemetry_no_race_condition():
         bus=bus,
         connector=connector,
     )
+    # CRITICAL: Register the subscriber with the engine for lifecycle management
+    engine.add_subscriber(telemetry_subscriber)
     
     await engine.run(noop())
     

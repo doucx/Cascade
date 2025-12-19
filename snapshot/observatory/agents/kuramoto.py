@@ -2,8 +2,9 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 2: This version uses a fully declarative approach with .run_if()
-to ensure all actions are correctly represented in the computation graph.
+REVISION 3: Replaced cs.recv with a custom safe_recv task.
+This ensures timeouts are treated as data, not exceptions, preventing
+the engine from aborting the workflow when a firefly needs to flash.
 """
 import asyncio
 import random
@@ -27,16 +28,37 @@ async def send_signal(
 
 
 @cs.task
-async def recv_with_timeout_handler(recv_lazy_result: cs.LazyResult) -> Dict[str, Any]:
+async def safe_recv(
+    topic: str,
+    timeout: float,
+    connector: Connector = cs.inject("_internal_connector"),
+) -> Dict[str, Any]:
     """
-    Wraps a cs.recv call to transform asyncio.TimeoutError into a structured output.
+    A custom receive task that treats timeouts as valid return values.
+    Returns: {"signal": payload, "timeout": False} OR {"signal": None, "timeout": True}
     """
+    if not connector:
+         # Should not happen in a properly configured engine
+        return {"signal": None, "timeout": True}
+
+    future = asyncio.Future()
+
+    async def callback(topic: str, payload: Any):
+        if not future.done():
+            future.set_result(payload)
+
+    subscription = await connector.subscribe(topic, callback)
     try:
-        # This await is crucial; it executes the LazyResult passed in.
-        signal = await recv_lazy_result
+        # Wait for the signal
+        signal = await asyncio.wait_for(future, timeout=timeout)
         return {"signal": signal, "timeout": False}
     except asyncio.TimeoutError:
+        # Crucial: Return data, don't raise exception
         return {"signal": None, "timeout": True}
+    finally:
+        # Always clean up the subscription to prevent memory leaks
+        if subscription:
+            await subscription.unsubscribe()
 
 
 # --- Core Agent Logic ---
@@ -64,18 +86,18 @@ def firefly_agent(
     ):
         """A single, declarative life cycle of a firefly."""
         time_to_flash = period - phase
+        # Ensure timeout is positive and reasonable
         wait_timeout = max(0.01, time_to_flash)
 
-        # 1. PERCEIVE: Wait for a signal OR until it's time to flash
-        recv_task = cs.recv(listen_topic, timeout=wait_timeout)
-        handled_recv = recv_with_timeout_handler(recv_task)
+        # 1. PERCEIVE: Use our custom safe_recv
+        perception = safe_recv(listen_topic, timeout=wait_timeout)
 
         # 2. DECIDE: Was the perception a timeout?
         @cs.task
-        def was_timeout(hrr: Dict[str, Any]) -> bool:
-            return hrr.get("timeout", False)
+        def was_timeout(p: Dict[str, Any]) -> bool:
+            return p.get("timeout", False)
 
-        is_timeout = was_timeout(handled_recv)
+        is_timeout = was_timeout(perception)
 
         # 3. ACT: Flash *only if* it was a timeout.
         flash_action = send_signal(
@@ -83,20 +105,17 @@ def firefly_agent(
         ).run_if(is_timeout)
 
         # 4. EVOLVE & RECURSE: Calculate the next state and loop.
-        # This task must wait for the flash_action to complete to ensure ordering.
         @cs.task
         def process_and_recurse(
-            hrr: Dict[str, Any], _flash_dependency=flash_action
+            p: Dict[str, Any], _flash_dependency=flash_action
         ) -> cs.LazyResult:
             jitter = random.uniform(-0.01, 0.01)
 
-            if hrr["timeout"]:
+            if p["timeout"]:
                 # We flashed, reset phase.
                 next_phase = 0.0 + jitter
             else:
                 # We saw another flash, nudge phase forward.
-                # Note: A more accurate model would use the time waited, but this is simpler
-                # and still effective for demonstrating synchronization.
                 next_phase = (phase + nudge + jitter) % period
 
             # The recursive call that powers the agent's lifecycle
@@ -104,7 +123,7 @@ def firefly_agent(
                 agent_id, next_phase, period, nudge, flash_topic, listen_topic
             )
 
-        return process_and_recurse(handled_recv)
+        return process_and_recurse(perception)
 
     # Start the first cycle
     return firefly_cycle(

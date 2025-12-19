@@ -1,84 +1,177 @@
-简要回答
-我们遇到了 pytest 的一个错误，这是因为 `local_bus` fixture 被定义为 `async` 但其实并不执行任何异步操作，且没有正确标记为异步 fixture。同时，为了防止不同测试用例间的 Event Loop 隔离导致全局 `asyncio.Lock` 报错，我们需要在重置状态时一并重置锁。
+好的，这是一个绝佳的重构步骤，完全符合 **DRY (Don't Repeat Yourself)** 原则。我们将 E2E 测试的脚手架 (`harness.py`) 更新为使用我们刚刚创建的、更健壮的 `LocalBusConnector`。
 
-我们将修复这两个问题，以确保测试稳定运行。
+为了确保现有的大量 E2E 测试用例不受影响，我们将使用一个简单的别名 (`InProcessConnector = LocalBusConnector`) 来维持向后兼容性。
 
-## [WIP] fix(tests): 修复 LocalBus 测试的 fixture 定义与状态重置
-
-### 错误分析
-1.  **Fixture 定义错误**: `pytest.PytestRemovedIn9Warning` 指出 `local_bus` fixture 是异步的 (`async def`)，但没有被正确处理。由于该 fixture 内部只有同步操作（重置类状态），将其改为同步 (`def`) 是最直接的修复方式。
-2.  **潜在的 Event Loop 问题**: `LocalBusConnector` 使用一个类级别的全局 `asyncio.Lock`。在测试环境中，每个测试可能会创建新的 Event Loop。如果全局锁绑定到了旧的 Loop，后续测试会失败。因此，我们需要在 `_reset_broker_state` 中重新创建这个锁。
+## [WIP] refactor(tests): Consolidate E2E harness to use LocalBusConnector
 
 ### 用户需求
-确保 `LocalBusConnector` 的测试套件能够绿灯通过，为后续功能开发提供稳定的基础。
+将 `tests/py/e2e/harness.py` 中 `InProcessConnector` 的实现替换为对新创建的 `cascade.connectors.local.LocalBusConnector` 的引用，以消除重复代码。
 
 ### 评论
-这是 TDD 流程中的典型“红灯修补”环节。在基础设施代码中处理好全局状态和异步上下文的生命周期至关重要。
+这是一个标准的、健康的重构。它将测试基础设施与生产代码对齐，确保我们的测试环境与本地运行环境使用完全相同的内存总线实现。这不仅减少了维护成本，也增强了测试的有效性。通过别名维持兼容性是一种低风险、高收益的策略。
 
 ### 目标
-1.  修改 `tests/py/connectors/test_local_connector.py`，将 `local_bus` fixture 改为同步函数。
-2.  修改 `packages/cascade-runtime/src/cascade/connectors/local.py`，在 `_reset_broker_state` 中重置 `_lock`。
+1.  修改 `tests/py/e2e/harness.py` 文件。
+2.  移除 `InProcessConnector` 的本地实现。
+3.  导入 `LocalBusConnector` 并将其别名为 `InProcessConnector`。
 
 ### 基本原理
-将 fixture 改为同步消除了 pytest 的警告。在每个测试开始前重建 `asyncio.Lock` 确保了锁总是隶属于当前测试的 Event Loop，防止了跨 Loop 调用导致的 `Future attached to a different loop` 错误。
+我们已经验证了 `LocalBusConnector` 的行为符合我们的 TDD 规范，它现在是内存消息总线的“事实标准”。测试脚手架作为该组件的用户，理应直接使用这个标准实现，而不是维护一个功能重复的副本。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #comp/runtime #scope/core #task/domain/telemetry #task/object/local-bus #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/medium
+#comp/tests #comp/runtime #concept/telemetry #scope/dx
+#task/domain/testing #task/object/test-harness #task/action/refactor
+#task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复测试 Fixture
+#### Acts 1: 重构 `harness.py`
 
-移除 `async` 关键字。
-
-~~~~~act
-patch_file
-tests/py/connectors/test_local_connector.py
-~~~~~
-~~~~~old
-@pytest.fixture
-async def local_bus():
-    """Provides a fresh LocalBus environment for each test."""
-    # LocalBusConnector uses shared class state, so we must clear it before each test
-    LocalBusConnector._reset_broker_state()
-    yield
-    LocalBusConnector._reset_broker_state()
-~~~~~
-~~~~~new
-@pytest.fixture
-def local_bus():
-    """Provides a fresh LocalBus environment for each test."""
-    # LocalBusConnector uses shared class state, so we must clear it before each test
-    LocalBusConnector._reset_broker_state()
-    yield
-    LocalBusConnector._reset_broker_state()
-~~~~~
-
-#### Acts 2: 增强状态重置逻辑
-
-在 `_reset_broker_state` 中加入锁的重置。
+我们将 `InProcessConnector` 的完整类定义替换为一个导入和别名。
 
 ~~~~~act
 patch_file
-packages/cascade-runtime/src/cascade/connectors/local.py
+tests/py/e2e/harness.py
 ~~~~~
-~~~~~old
-    @classmethod
-    def _reset_broker_state(cls):
-        """Helper for tests to clear the 'broker'."""
-        cls._subscriptions.clear()
-        cls._retained_messages.clear()
+~~~~~python
+from typing import List
+from cascade.interfaces.protocols import Connector, Executor
+from cascade.spec.constraint import GlobalConstraint
+from cascade.graph.model import Node
+
+
+class MockWorkExecutor(Executor):
+    """Executor that simulates short, time-consuming work."""
+
+    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
+        # Yield control to event loop to simulate async boundary
+        await asyncio.sleep(0)
+        if kwargs:
+            return next(iter(kwargs.values()))
+        return "done"
+
+
+class InProcessConnector(Connector):
+    """
+    A deterministic, in-memory connector that simulates an MQTT broker with
+    retained message support for robust E2E testing.
+    """
+
+    _shared_topics: Dict[str, List[asyncio.Queue]] = defaultdict(list)
+    _retained_messages: Dict[str, Any] = {}
+
+    def __init__(self):
+        # Clear state for each test instance to ensure isolation
+        self._shared_topics.clear()
+        self._retained_messages.clear()
+        self._is_connected = True
+
+    async def connect(self) -> None:
+        self._is_connected = True
+
+    async def disconnect(self) -> None:
+        self._is_connected = False
+
+    async def publish(
+        self, topic: str, payload: Any, qos: int = 0, retain: bool = False
+    ) -> None:
+        if not self._is_connected:
+            return
+
+        if retain:
+            if payload != {}:  # An empty dict payload is a resume/clear command
+                self._retained_messages[topic] = payload
+            elif topic in self._retained_messages:
+                del self._retained_messages[topic]
+
+        for sub_topic, queues in self._shared_topics.items():
+            if self._topic_matches(subscription=sub_topic, topic=topic):
+                for q in queues:
+                    await q.put((topic, payload))
+
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> None:
+        queue = asyncio.Queue()
+        self._shared_topics[topic].append(queue)
+
+        # Immediately deliver retained messages that match the subscription.
+        # We await the callback to ensure state is synchronized before proceeding.
+        for retained_topic, payload in self._retained_messages.items():
+            if self._topic_matches(subscription=topic, topic=retained_topic):
+                await callback(retained_topic, payload)
+
+        asyncio.create_task(self._listen_on_queue(queue, callback))
+
+    async def _listen_on_queue(self, queue: asyncio.Queue, callback):
+        while self._is_connected:
+            try:
+                topic, payload = await asyncio.wait_for(queue.get(), timeout=0.1)
+                await callback(topic, payload)
+                queue.task_done()
+            except asyncio.TimeoutError:
+                continue
+            except asyncio.CancelledError:
+                break
+
+    @staticmethod
+    def _topic_matches(subscription: str, topic: str) -> bool:
+        """
+        Checks if a concrete topic matches a subscription pattern (supporting + and #).
+        """
+        sub_parts = subscription.split("/")
+        topic_parts = topic.split("/")
+
+        for i, sub_part in enumerate(sub_parts):
+            if sub_part == "#":
+                # '#' matches the rest of the topic, so it's a match
+                return True
+
+            if i >= len(topic_parts):
+                # Topic is shorter than subscription pattern (and not matched by #)
+                return False
+
+            topic_part = topic_parts[i]
+
+            if sub_part == "+":
+                # '+' matches any single level, so we continue to the next part
+                continue
+
+            if sub_part != topic_part:
+                # Literal parts do not match
+                return False
+
+        # If we finished the loop, it's a match IFF the lengths are the same.
+        # (The '#' case is handled inside the loop)
+        return len(sub_parts) == len(topic_parts)
 ~~~~~
-~~~~~new
-    @classmethod
-    def _reset_broker_state(cls):
-        """Helper for tests to clear the 'broker'."""
-        cls._subscriptions.clear()
-        cls._retained_messages.clear()
-        cls._lock = asyncio.Lock()  # Reset lock for new event loop context
+~~~~~python
+from typing import List
+from cascade.connectors.local import LocalBusConnector
+from cascade.interfaces.protocols import Connector, Executor
+from cascade.spec.constraint import GlobalConstraint
+from cascade.graph.model import Node
+
+
+class MockWorkExecutor(Executor):
+    """Executor that simulates short, time-consuming work."""
+
+    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
+        # Yield control to event loop to simulate async boundary
+        await asyncio.sleep(0)
+        if kwargs:
+            return next(iter(kwargs.values()))
+        return "done"
+
+
+# Alias for backward compatibility with existing e2e tests
+InProcessConnector = LocalBusConnector
 ~~~~~
 
 ### 下一步建议
-运行测试 `pytest tests/py/connectors/test_local_connector.py`。如果通过，我们将按计划进入 **里程碑 1.2**，开始对 `Engine` 进行递归改造。
+重构完成后，建议运行完整的 E2E 测试套件 (`pytest tests/py/e2e/`)，以确保我们的别名策略确实无缝地维持了兼容性。
+
+如果所有测试通过，我们就正式完成了 **里程碑 1.1**，可以昂首进入 **里程碑 1.2**：对引擎核心进行改造，以支持永续递归。

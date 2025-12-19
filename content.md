@@ -1,123 +1,92 @@
-好的，我们正式启动 **里程碑 1.3**：实现时间感知原语 `cs.wait`。
+好的，我们正处于 TDD 流程的 **Green** 阶段。测试已经明确了我们的目标，现在我将编写最少的代码来使这些测试通过。
 
-遵循 TDD 流程，我将首先创建测试套件。由于 `cascade-py/src/cascade/providers/time.py` 文件和 `cs.wait` 提供者都还不存在，因此访问 `cs.wait` 会立即导致 `AttributeError`，使我们进入 **Red** 阶段。
+这包括创建新的 `time.py` 提供者模块，实现 `cs.wait` 任务，并通过 `pyproject.toml` 中的入口点将其注册到 Cascade 生态系统中。
 
-## [WIP] test(providers): 为时间原语 cs.wait 添加 TDD 测试
+## [WIP] feat(providers): 实现时间原语 cs.wait
+
+### 错误分析
+无（这是 TDD 的实现阶段）。
 
 ### 用户需求
-为“萤火计划” Milestone 1.3 的 `cs.wait` 原子任务创建 TDD 测试套件。
-测试需覆盖以下核心功能：
-1.  **非阻塞节拍**: 验证 `cs.wait` 是一个非阻塞的异步操作，它会暂停当前任务的执行，但不会阻塞整个 `asyncio` 事件循环。
-2.  **动态参数化**: 验证 `cs.wait` 的延迟时间可以接受来自上游任务的 `LazyResult` 作为输入。
+实现 `cs.wait` 原子任务，使其满足 TDD 测试用例中定义的契约：
+1.  它必须是一个基于 `asyncio.sleep` 的非阻塞任务。
+2.  它必须能接受动态 `LazyResult` 作为延迟参数。
 
 ### 评论
-`cs.wait` 是赋予工作流“自律”能力的基础。它让 Agent 能够控制自身的行为频率和脉冲节拍，是构建响应式和周期性行为的关键“积木”。这两个测试用例精确地定义了它的核心契约。
+`cs.wait` 的实现非常直接，它是一个典型的原子提供者：职责单一、逻辑简单、可组合。通过将其注册为插件，我们遵循了 Cascade 的可扩展设计原则，将核心引擎与具体功能解耦。
 
 ### 目标
-创建 `tests/py/providers/test_time_provider.py` 文件，并包含 `test_wait_is_non_blocking` 和 `test_wait_accepts_lazy_result` 两个预期失败的测试用例。
+1.  创建 `packages/cascade-py/src/cascade/providers/time.py` 文件。
+2.  在该文件中定义一个名为 `_wait_task` 的 `@cs.task`，其核心逻辑是 `await asyncio.sleep(delay)`。
+3.  创建 `TimeWaitProvider` 类，并将其注册到 `cascade-py` 的 `pyproject.toml` 中。
 
 ### 基本原理
-我们首先编写测试来定义 `cs.wait` 必须满足的行为规范。
-*   `test_wait_is_non_blocking`: 通过并行运行一个 `cs.wait(0.1)` 任务和一个立即完成的任务来验证。如果 `cs.wait` 是阻塞的，总耗时将大于 0.1 秒；如果非阻塞，总耗时将约等于 0.1 秒。
-*   `test_wait_accepts_lazy_result`: 定义一个返回数字的上游任务，并将其 `LazyResult` 传递给 `cs.wait`。通过测量执行时间，验证 `cs.wait` 使用了动态生成的延迟值。
+通过在 `pyproject.toml` 的 `cascade.providers` 入口点组中注册 `TimeWaitProvider`，Cascade 的 `ProviderRegistry` 将在启动时自动发现并加载它。当用户调用 `cs.wait(...)` 时，`__getattr__` 魔法方法会从注册表中查找名为 `wait` 的提供者，并返回其工厂函数（即 `_wait_task`），从而创建一个 `LazyResult` 并将其集成到计算图中。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/core #concept/time #scope/api #ai/instruct #task/domain/providers #task/object/wait-primitive #task/action/test #task/state/continue
+#intent/build #flow/ready #priority/high #comp/core #concept/time #scope/api #ai/instruct #task/domain/providers #task/object/wait-primitive #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `cs.wait` 的测试套件
+#### Acts 1: 创建 `time.py` 提供者模块
 
-我们将创建新的测试文件 `tests/py/providers/test_time_provider.py`。
+我们将创建新的文件 `packages/cascade-py/src/cascade/providers/time.py`，其中包含 `cs.wait` 的核心实现。
 
 ~~~~~act
 write_file
-tests/py/providers/test_time_provider.py
+packages/cascade-py/src/cascade/providers/time.py
 ~~~~~
 ~~~~~python
 import asyncio
-import time
-import pytest
-import cascade as cs
+from typing import Union
 
-from cascade.runtime import Engine, MessageBus
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
+from cascade.spec.task import task
+from cascade.providers import LazyFactory, Provider
 
 
-@pytest.fixture
-def engine():
-    """Provides a default engine instance."""
-    return Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus(),
-    )
-
-
-@pytest.mark.asyncio
-async def test_wait_is_non_blocking(engine):
+@task(name="wait")
+async def _wait_task(delay: Union[float, int]) -> None:
     """
-    Test Case 6 (From Firefly Plan): Non-blocking Tick.
+    Asynchronously waits for a specified duration.
+    This is a non-blocking operation.
 
-    Verifies that cs.wait(t) pauses for approximately t seconds, and does so
-    without blocking the execution of other concurrent tasks.
+    Args:
+        delay: The duration to wait in seconds.
     """
-    start_time = time.time()
-
-    @cs.task
-    def immediate_task():
-        return "immediate"
-
-    @cs.task
-    def wrapper(a, b):
-        return [a, b]
-
-    # Both tasks are at the same stage and can run concurrently
-    workflow = wrapper(cs.wait(0.1), immediate_task())
-
-    results = await engine.run(workflow)
-    duration = time.time() - start_time
-
-    # Assert that results are correct (None for wait, 'immediate' for the other)
-    # The order might vary, so we check contents
-    assert None in results
-    assert "immediate" in results
-
-    # The total duration should be determined by the longest task (cs.wait),
-    # not the sum of durations.
-    assert 0.1 <= duration < 0.15, (
-        f"Execution should be non-blocking and take ~0.1s, but took {duration:.2f}s."
-    )
+    await asyncio.sleep(float(delay))
 
 
-@pytest.mark.asyncio
-async def test_wait_accepts_lazy_result(engine):
-    """
-    Test Case 7 (From Firefly Plan): Dynamic Parameterized Time.
+class TimeWaitProvider(Provider):
+    name = "wait"
 
-    Verifies that the delay argument of cs.wait can be a LazyResult
-    from an upstream task.
-    """
-    start_time = time.time()
-
-    @cs.task
-    def get_delay():
-        return 0.1
-
-    # The delay for cs.wait is dynamically provided by get_delay
-    workflow = cs.wait(get_delay())
-
-    await engine.run(workflow)
-    duration = time.time() - start_time
-
-    assert 0.1 <= duration < 0.15, (
-        f"cs.wait should have used the dynamic delay from upstream, but took {duration:.2f}s."
-    )
+    def create_factory(self) -> LazyFactory:
+        return _wait_task
 
 ~~~~~
 
+#### Acts 2: 注册 `cs.wait` 提供者
+
+现在，我们将新的提供者注册到 `cascade-py` 的入口点，使其能够被动态加载。
+
+~~~~~act
+patch_file
+packages/cascade-py/pyproject.toml
+~~~~~
+~~~~~python
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+template = "cascade.providers.template:TemplateProvider"
+"http.get" = "cascade.providers.http:HttpGetProvider"
+~~~~~
+~~~~~python
+[project.entry-points."cascade.providers"]
+shell = "cascade.providers.shell:ShellProvider"
+wait = "cascade.providers.time:TimeWaitProvider"
+template = "cascade.providers.template:TemplateProvider"
+"http.get" = "cascade.providers.http:HttpGetProvider"
+~~~~~
+
 ### 下一步建议
-运行测试。由于 `cs.wait` 不存在，测试将因 `AttributeError` 而失败。确认失败后，我将生成实现 `cascade.providers.time` 模块和注册新提供者的计划，使测试通过。
+运行测试。现在 `cs.wait` 已经实现并注册，之前失败的测试应该会全部通过。确认通过后，我将为这个功能创建一个 `[COMMIT]` 计划。

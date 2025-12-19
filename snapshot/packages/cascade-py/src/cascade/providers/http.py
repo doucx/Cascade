@@ -1,3 +1,5 @@
+import os
+from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 from cascade.spec.task import task
@@ -38,6 +40,7 @@ async def _perform_request(
     json_data: Optional[Any] = None,
     headers: Optional[Dict[str, str]] = None,
     data: Optional[Any] = None,
+    files: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     """Core logic to perform an HTTP request using aiohttp."""
     if aiohttp is None:
@@ -46,11 +49,42 @@ async def _perform_request(
             "Please install it with: pip install cascade-py[http]"
         )
 
-    async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.request(
-            method, url, params=params, json=json_data, data=data
-        ) as response:
-            # Note: We do NOT raise_for_status() automatically here.
+    # Use ExitStack to ensure any files opened for upload are closed
+    with ExitStack() as stack:
+        final_data = data
+
+        if files:
+            # If files are provided, we must use FormData
+            # We construct a new FormData and add 'data' fields + 'files' fields
+            form = aiohttp.FormData()
+
+            # Add existing data fields if it's a dict
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    form.add_field(k, str(v))
+            elif data is not None:
+                # If data is not a dict but files are present, aiohttp might complain
+                # or we might handle it differently. For now, assume data is dict-like
+                # if mixed with files, or raise/warn?
+                # Let's just treat data as a field if possible or ignore?
+                # Simpler: If files exist, data MUST be compatible with form fields.
+                pass
+
+            for field_name, file_path in files.items():
+                if isinstance(file_path, str) and os.path.exists(file_path):
+                    f = stack.enter_context(open(file_path, "rb"))
+                    form.add_field(field_name, f, filename=os.path.basename(file_path))
+                else:
+                    # Fallback for bytes or other content
+                    form.add_field(field_name, file_path)
+            
+            final_data = form
+
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.request(
+                method, url, params=params, json=json_data, data=final_data
+            ) as response:
+                # Note: We do NOT raise_for_status() automatically here.
             # We want to return the response object so the user (or a downstream task)
             # can decide how to handle 4xx/5xx codes.
             # However, for convenience in simple workflows, users often expect failure on error.
@@ -103,11 +137,12 @@ async def _http_post_task(
     url: str,
     json: Optional[Any] = None,
     data: Optional[Any] = None,
+    files: Optional[Dict[str, str]] = None,
     headers: Optional[Dict[str, str]] = None,
     params: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     return await _perform_request(
-        url, "POST", params=params, json_data=json, data=data, headers=headers
+        url, "POST", params=params, json_data=json, data=data, files=files, headers=headers
     )
 
 
@@ -116,10 +151,11 @@ async def _http_put_task(
     url: str,
     json: Optional[Any] = None,
     data: Optional[Any] = None,
+    files: Optional[Dict[str, str]] = None,
     headers: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     return await _perform_request(
-        url, "PUT", json_data=json, data=data, headers=headers
+        url, "PUT", json_data=json, data=data, files=files, headers=headers
     )
 
 
@@ -138,10 +174,11 @@ async def _http_request_task(
     params: Optional[Dict[str, str]] = None,
     json: Optional[Any] = None,
     data: Optional[Any] = None,
+    files: Optional[Dict[str, str]] = None,
     headers: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     return await _perform_request(
-        url, method, params=params, json_data=json, data=data, headers=headers
+        url, method, params=params, json_data=json, data=data, files=files, headers=headers
     )
 
 

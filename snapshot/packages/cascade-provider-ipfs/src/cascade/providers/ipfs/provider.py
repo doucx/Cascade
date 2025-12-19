@@ -67,22 +67,12 @@ def cat(cid: str) -> "cs.LazyResult[bytes]":
 def add(path: str) -> "cs.LazyResult[str]":
     """
     Creates a Cascade workflow to add a local file to IPFS and get its CID.
-
-    This requires `cs.http.post` to support multipart/form-data, which is a
-    planned enhancement. For now, this serves as a placeholder for the pattern.
     """
-    # NOTE: This will require cs.http.post to be enhanced to support `files=`
-    # similar to the `requests` library. This plan doesn't implement that, but
-    # lays the groundwork for the pattern.
     api_url = f"{IPFS_API_BASE_URL}/api/v0/add"
 
     # Step 1: Call the IPFS RPC API with a file upload
-    # The conceptual call would look like this:
-    # api_response = cs.http.post(url=api_url, files={"file": path})
+    # 'file' is the field name expected by IPFS for the file content
+    api_response = cs.http.post(url=api_url, files={"file": path})
 
-    # For now, let's create a placeholder that will fail until http is enhanced
-    @cs.task
-    def _placeholder_add(path: str) -> Any:
-        raise NotImplementedError("cs.ipfs.add requires `cs.http.post` to support file uploads.")
-
-    return _placeholder_add(path)
+    # Step 2: Parse the response to extract the CID
+    return _parse_add_response(api_response)

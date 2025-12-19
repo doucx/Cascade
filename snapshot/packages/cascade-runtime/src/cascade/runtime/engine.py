@@ -48,15 +48,18 @@ class Engine:
         solver: Solver,
         executor: Executor,
         bus: MessageBus,
-        state_backend_cls: Type[StateBackend] = InMemoryStateBackend,
+        state_backend_factory: Callable[[str], StateBackend] = None,
         system_resources: Optional[Dict[str, Any]] = None,
         connector: Optional[Connector] = None,
+        cache_backend: Optional[Any] = None,
     ):
         self.solver = solver
         self.executor = executor
         self.bus = bus
         self.connector = connector
-        self.state_backend_cls = state_backend_cls
+        # Default to InMemory factory if none provided
+        self.state_backend_factory = state_backend_factory or (lambda run_id: InMemoryStateBackend(run_id))
+        self.cache_backend = cache_backend
         self.resource_manager = ResourceManager(capacity=system_resources)
 
         # Setup constraint manager with default handlers
@@ -108,8 +111,8 @@ class Engine:
         else:
             target_name = "unknown"
 
-        # Initialize State Backend first (no side effects)
-        state_backend = self.state_backend_cls(run_id=run_id)
+        # Initialize State Backend using the factory
+        state_backend = self.state_backend_factory(run_id)
 
         try:
             # 1. Establish Infrastructure Connection FIRST

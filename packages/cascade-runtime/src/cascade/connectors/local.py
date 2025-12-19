@@ -2,6 +2,7 @@ import asyncio
 from collections import defaultdict
 from typing import Dict, List, Any, Callable, Awaitable, Optional
 from cascade.interfaces.protocols import Connector
+from cascade.common.messaging import bus
 
 
 class LocalBusConnector(Connector):
@@ -101,7 +102,7 @@ class LocalBusConnector(Connector):
                     try:
                         await callback(retained_topic, payload)
                     except Exception as e:
-                        print(f"[LocalBus] Retained Callback error on {retained_topic}: {e}")
+                        bus.error("localbus.retained_callback_error", topic=retained_topic, error=e)
 
         # Start a background listener for NEW incoming messages
         task = asyncio.create_task(self._listener_loop(queue, callback))
@@ -118,7 +119,7 @@ class LocalBusConnector(Connector):
                     await callback(topic, payload)
                 except Exception as e:
                     # Fail-silent: don't crash the bus because a callback failed
-                    print(f"[LocalBus] Callback error on {topic}: {e}")
+                    bus.error("localbus.callback_error", topic=topic, error=e)
                 finally:
                     queue.task_done()
         except asyncio.CancelledError:

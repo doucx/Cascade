@@ -1,6 +1,10 @@
 import pytest
 import cascade as cs
 from aiohttp import web
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
 # The CID we will request in the test
 TEST_CID = "QmZULkCELmmk5XNfCgTnflahDcwr9ssAAkAJd15uiNpdEp"
@@ -41,8 +45,13 @@ async def test_ipfs_cat_provider(aiohttp_client, monkeypatch):
     # This will dynamically load the `cs.ipfs.cat` provider via entry points
     workflow = cs.ipfs.cat(cid=TEST_CID)
 
-    # 4. Run the workflow
-    result = cs.run(workflow, log_level="ERROR") # Use ERROR to keep test output clean
+    # 4. Run the workflow using the async Engine directly
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus() # A silent bus for clean test output
+    )
+    result = await engine.run(workflow)
 
     # 5. Assert the result
     assert result == FAKE_CONTENT

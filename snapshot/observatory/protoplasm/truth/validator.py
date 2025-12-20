@@ -107,46 +107,57 @@ class StateValidator:
         if gen == 0:
             self.golden.seed(actual_grid)
             self.history_theoretical[0] = actual_grid
-            print("🟦 [Gen 0] Axiom Set. System Initialized.")
-            return
-        
-        # 3. Validation Logic
-        
-        # --- Check A: Absolute Truth (Trajectory) ---
-        # Did we stay on the path defined by T0?
-        prev_theo = self.history_theoretical.get(gen - 1)
-        is_absolute_match = False
-        
-        if prev_theo is not None:
-            self.golden.seed(prev_theo)
-            theo_grid = self.golden.step()
-            self.history_theoretical[gen] = theo_grid
+            # If renderer is active, we proceed to render Gen 0 instead of returning
+            if not self.renderer:
+                print("🟦 [Gen 0] Axiom Set. System Initialized.")
+                return
             
-            diff_abs = np.sum(actual_grid != theo_grid)
-            if diff_abs == 0:
-                is_absolute_match = True
-            else:
-                self.absolute_errors += diff_abs
+            # Prepare dummy stats/grids for Gen 0 render
+            theo_grid = actual_grid # Gen 0 is truth by definition
+            is_absolute_match = True
+            is_relative_match = True
+            # Skip validation logic for Gen 0, fall through to reporting/rendering
         else:
-            # Should not happen if processing in order
-            print(f"⚠️  Missing history for Absolute check at Gen {gen}")
+            # 3. Validation Logic (Only for Gen > 0)
+            
+                # --- Check A: Absolute Truth (Trajectory) ---
+            # Did we stay on the path defined by T0?
+            prev_theo = self.history_theoretical.get(gen - 1)
+            is_absolute_match = False
+            
+            # Default to actual if we can't compute theory (error case)
+            theo_grid = actual_grid 
+            
+            if prev_theo is not None:
+                self.golden.seed(prev_theo)
+                theo_grid = self.golden.step()
+                self.history_theoretical[gen] = theo_grid
+                
+                diff_abs = np.sum(actual_grid != theo_grid)
+                if diff_abs == 0:
+                    is_absolute_match = True
+                else:
+                    self.absolute_errors += diff_abs
+            else:
+                # Should not happen if processing in order
+                print(f"⚠️  Missing history for Absolute check at Gen {gen}")
 
-        # --- Check B: Relative Truth (Transition) ---
-        # Did we calculate correctly based on what we had yesterday?
-        prev_actual = self.history_actual.get(gen - 1)
-        is_relative_match = False
-        
-        if prev_actual is not None:
-            self.golden.seed(prev_actual)
-            expected_relative = self.golden.step()
+            # --- Check B: Relative Truth (Transition) ---
+            # Did we calculate correctly based on what we had yesterday?
+            prev_actual = self.history_actual.get(gen - 1)
+            is_relative_match = False
             
-            diff_rel = np.sum(actual_grid != expected_relative)
-            if diff_rel == 0:
-                is_relative_match = True
+            if prev_actual is not None:
+                self.golden.seed(prev_actual)
+                expected_relative = self.golden.step()
+                
+                diff_rel = np.sum(actual_grid != expected_relative)
+                if diff_rel == 0:
+                    is_relative_match = True
+                else:
+                    self.relative_errors += diff_rel
             else:
-                self.relative_errors += diff_rel
-        else:
-             print(f"⚠️  Missing history for Relative check at Gen {gen}")
+                 print(f"⚠️  Missing history for Relative check at Gen {gen}")
 
         # 4. Reporting
         stats = {"abs": self.absolute_errors, "rel": self.relative_errors}

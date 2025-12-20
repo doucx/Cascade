@@ -1,166 +1,186 @@
-这是一个非常好的消息。既然独立的渲染器测试通过了，说明**渲染引擎（TruthRenderer）本身是健康的**。
+这是一个性能与逻辑并存的问题。
 
-问题被精确锁定在 **数据流死锁** 上。
+1.  **规模过载 (4000 Agents)**: 你的终端可能很大，导致自动计算出的网格（如 100x40）产生了 4000 个 Agent。在单线程的 `LocalExecutor` 加上 Python 的 `asyncio` 开销下，处理 4000 个高频交互的 Agent（每个都在订阅/发布/等待）会导致事件循环严重阻塞，表现为“死锁”或极度缓慢。
+2.  **Gen 0 渲染缺失**: 验证器在 Gen 0 初始化时直接 `return` 并打印了日志，**跳过了渲染调用**。所以你没看到初始画面。
+3.  **UI 闪烁**: `render_waiting` 和 `print` 混用导致输出混乱。
 
-现象解释：
-1.  **屏幕空白**：因为 `Validator` 采用了**“全有或全无”**的逻辑。它在等待当前代（Gen 0）的**所有** Agent 上报。
-2.  **死锁**：Agent 无法上报，因为它们在 `collect_neighbors` 步骤卡住了（等待邻居数据）。
-3.  **根源**：正如之前推断的，邻居发出的消息丢失了。这是因为我们之前的修复代码没有正确执行，导致 `retain=True` 没有被应用。**没有保留消息，晚启动的 Agent 永远收不到早启动邻居的“问候”，于是全网死锁。**
+我们将大幅缩小规模以验证逻辑，并修复 Gen 0 的渲染路径。
 
-我们现在执行修复。这次不仅修复死锁，还要让 Validator 在等待数据时不再“沉默”，而是把进度显示在屏幕上。
-
-## [WIP] fix: 修复死锁并增加加载进度显示
+## [WIP] fix: 缩减实验规模并修复 Gen 0 渲染缺失
 
 ### 错误分析
-1.  **死锁 (Critical)**: `conway.py` 缺少 `retain=True`，导致分布式系统经典的“启动时序死锁”。
-2.  **UI 沉默**: `Validator` 在数据收集不完整时直接 `return`，没有给用户任何反馈（黑屏）。
+1.  **性能崩溃**: 4000 Agents 产生的并发消息量（4000 * 8 邻居 * N 代）压垮了 `LocalBus` 和 `asyncio` 循环。
+2.  **逻辑漏洞**: `Validator._verify_generation` 中 Gen 0 的处理逻辑包含一个 `return`，导致它永远不会调用 `renderer.update_frame`。
 
 ### 用户需求
-1.  修复死锁，让 Agent 能跑起来。
-2.  在 Validator 等待数据时，在屏幕下方显示进度条（例如 `Waiting for Gen 0: 200/400 agents...`），避免让用户以为程序挂了。
+1.  能够看到动画。
+2.  将 Agent 数量限制在安全范围（如 400 个）。
 
-### 计划内容
-1.  **Core Fix**: 在 `conway.py` 中加上 `retain=True`。
-2.  **UI Fix**: 修改 `validator.py`，在缓冲区未满时调用渲染器更新状态行。
+### 目标
+1.  修改 `run_conway_experiment.py`，硬编码网格上限为 25x25。
+2.  修改 `validator.py`，确保 Gen 0 也触发渲染更新。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #scope/core #task/domain/testing #task/object/agent #task/action/fix-deadlock #task/state/continue
+#intent/fix #intent/tune #flow/ready #priority/high #comp/tests #scope/core #task/domain/testing #task/object/experiment #task/action/downscale
 
 ---
 
 ### Script
 
-#### Acts 1: 修复死锁 (conway.py)
+#### Acts 1: 强制缩减实验规模 (run_conway_experiment.py)
 
-这是最关键的一步。我们必须确保状态广播是持久化的。
-
-~~~~~act
-patch_file
-observatory/protoplasm/agents/conway.py
-~~~~~
-~~~~~python
-@cs.task
-async def broadcast_state(
-    topic_base: str,
-    agent_id: int,
-    generation: int,
-    state: int,
-    connector: Connector,
-    rendezvous: Any = None # Dummy argument to force ordering
-) -> None:
-    """Publishes current state. Waits for rendezvous if provided."""
-    payload = {"agent_id": agent_id, "gen": generation, "state": state}
-    await connector.publish(f"{topic_base}/{agent_id}/state", payload, retain=True)
-~~~~~
-~~~~~python
-@cs.task
-async def broadcast_state(
-    topic_base: str,
-    agent_id: int,
-    generation: int,
-    state: int,
-    connector: Connector,
-    rendezvous: Any = None # Dummy argument to force ordering
-) -> None:
-    """Publishes current state. Waits for rendezvous if provided."""
-    payload = {"agent_id": agent_id, "gen": generation, "state": state}
-    # Use retain=True to handle subscription gaps (neighbors starting late)
-    await connector.publish(f"{topic_base}/{agent_id}/state", payload, retain=True)
-~~~~~
-
-#### Acts 2: 增加加载进度反馈 (renderer.py)
-
-在渲染器中增加一个 `render_status` 方法，允许只更新状态栏而不重绘整个网格。
+我们将最大尺寸限制在 25x25 (625 Agents)，这是一个 `LocalExecutor` 可以轻松处理的数量。
 
 ~~~~~act
 patch_file
-observatory/protoplasm/truth/renderer.py
+observatory/protoplasm/truth/run_conway_experiment.py
 ~~~~~
 ~~~~~python
-    def update_frame(self, gen: int, actual: np.ndarray, theoretical: np.ndarray, stats: dict):
-        self._gen_counter = gen
-        self._error_stats = stats
-        self.matrix.update(actual, theoretical)
-        self._render()
-
-    def _render(self):
+    # Ensure reasonable bounds
+    GRID_WIDTH = min(GRID_WIDTH, 100) 
+    GRID_HEIGHT = min(GRID_HEIGHT, 50)
+    
+    print(f"🚀 Starting Conway Experiment with grid {GRID_WIDTH}x{GRID_HEIGHT}...")
 ~~~~~
 ~~~~~python
-    def update_frame(self, gen: int, actual: np.ndarray, theoretical: np.ndarray, stats: dict):
-        self._gen_counter = gen
-        self._error_stats = stats
-        self.matrix.update(actual, theoretical)
-        self._render()
-
-    def render_waiting(self, gen: int, current_count: int, total: int):
-        """Updates only the status line to show loading progress."""
-        self.driver.move_to(self.height + 1, 0)
-        progress = current_count / total
-        bar_len = 20
-        filled = int(bar_len * progress)
-        bar = "█" * filled + "░" * (bar_len - filled)
-        
-        status = (
-            f"GEN: {gen:<4} | "
-            f"WAITING: [{bar}] {current_count}/{total} Agents | "
-            f"Initializing..."
-        )
-        self.driver.write(f"{status:<80}")
-        self.driver.flush()
-
-    def _render(self):
+    # Ensure reasonable bounds
+    # Reduce to 25x25 to ensure LocalExecutor (single thread) can handle the message load smoothly
+    GRID_WIDTH = min(GRID_WIDTH, 25) 
+    GRID_HEIGHT = min(GRID_HEIGHT, 25)
+    
+    print(f"🚀 Starting Conway Experiment with grid {GRID_WIDTH}x{GRID_HEIGHT}...")
 ~~~~~
 
-#### Acts 3: 让 Validator 说话 (validator.py)
+#### Acts 2: 修复 Gen 0 渲染逻辑 (validator.py)
 
-修改 `validator.py`，在数据不足时调用 `render_waiting`。
+去掉 Gen 0 的 `return`，并确保它正确设置 `actual_grid` 以便后续渲染。
 
 ~~~~~act
 patch_file
 observatory/protoplasm/truth/validator.py
 ~~~~~
 ~~~~~python
-    def _process_buffers(self):
-        # We process generations in strict order
-        next_gen = self.max_gen_verified + 1
+        # 2. Base Case: Gen 0
+        if gen == 0:
+            self.golden.seed(actual_grid)
+            self.history_theoretical[0] = actual_grid
+            print("🟦 [Gen 0] Axiom Set. System Initialized.")
+            return
         
-        if next_gen not in self.buffer:
-            return
-
-        current_buffer = self.buffer[next_gen]
-        if len(current_buffer) < self.total_agents:
-            return
-            
-        self._verify_generation(next_gen, current_buffer)
+        # 3. Validation Logic
+        
+        # --- Check A: Absolute Truth (Trajectory) ---
 ~~~~~
 ~~~~~python
-    def _process_buffers(self):
-        # We process generations in strict order
-        next_gen = self.max_gen_verified + 1
-        
-        # If no data at all yet, just return
-        if next_gen not in self.buffer:
-            if self.renderer:
-                self.renderer.render_waiting(next_gen, 0, self.total_agents)
-            return
-
-        current_buffer = self.buffer[next_gen]
-        
-        # If incomplete, update UI but don't verify yet
-        if len(current_buffer) < self.total_agents:
-            if self.renderer:
-                self.renderer.render_waiting(next_gen, len(current_buffer), self.total_agents)
-            return
+        # 2. Base Case: Gen 0
+        if gen == 0:
+            self.golden.seed(actual_grid)
+            self.history_theoretical[0] = actual_grid
+            # If renderer is active, we proceed to render Gen 0 instead of returning
+            if not self.renderer:
+                print("🟦 [Gen 0] Axiom Set. System Initialized.")
+                return
             
-        self._verify_generation(next_gen, current_buffer)
+            # Prepare dummy stats/grids for Gen 0 render
+            theo_grid = actual_grid # Gen 0 is truth by definition
+            is_absolute_match = True
+            is_relative_match = True
+            # Skip validation logic for Gen 0, fall through to reporting/rendering
+        else:
+            # 3. Validation Logic (Only for Gen > 0)
+            
+            # --- Check A: Absolute Truth (Trajectory) ---
+~~~~~
+
+~~~~~act
+patch_file
+observatory/protoplasm/truth/validator.py
+~~~~~
+~~~~~python
+        # --- Check A: Absolute Truth (Trajectory) ---
+        # Did we stay on the path defined by T0?
+        prev_theo = self.history_theoretical.get(gen - 1)
+        is_absolute_match = False
+        
+        if prev_theo is not None:
+            self.golden.seed(prev_theo)
+            theo_grid = self.golden.step()
+            self.history_theoretical[gen] = theo_grid
+            
+            diff_abs = np.sum(actual_grid != theo_grid)
+            if diff_abs == 0:
+                is_absolute_match = True
+            else:
+                self.absolute_errors += diff_abs
+        else:
+            # Should not happen if processing in order
+            print(f"⚠️  Missing history for Absolute check at Gen {gen}")
+
+        # --- Check B: Relative Truth (Transition) ---
+        # Did we calculate correctly based on what we had yesterday?
+        prev_actual = self.history_actual.get(gen - 1)
+        is_relative_match = False
+        
+        if prev_actual is not None:
+            self.golden.seed(prev_actual)
+            expected_relative = self.golden.step()
+            
+            diff_rel = np.sum(actual_grid != expected_relative)
+            if diff_rel == 0:
+                is_relative_match = True
+            else:
+                self.relative_errors += diff_rel
+        else:
+             print(f"⚠️  Missing history for Relative check at Gen {gen}")
+
+        # 4. Reporting
+~~~~~
+~~~~~python
+            # --- Check A: Absolute Truth (Trajectory) ---
+            # Did we stay on the path defined by T0?
+            prev_theo = self.history_theoretical.get(gen - 1)
+            is_absolute_match = False
+            
+            # Default to actual if we can't compute theory (error case)
+            theo_grid = actual_grid 
+            
+            if prev_theo is not None:
+                self.golden.seed(prev_theo)
+                theo_grid = self.golden.step()
+                self.history_theoretical[gen] = theo_grid
+                
+                diff_abs = np.sum(actual_grid != theo_grid)
+                if diff_abs == 0:
+                    is_absolute_match = True
+                else:
+                    self.absolute_errors += diff_abs
+            else:
+                # Should not happen if processing in order
+                print(f"⚠️  Missing history for Absolute check at Gen {gen}")
+
+            # --- Check B: Relative Truth (Transition) ---
+            # Did we calculate correctly based on what we had yesterday?
+            prev_actual = self.history_actual.get(gen - 1)
+            is_relative_match = False
+            
+            if prev_actual is not None:
+                self.golden.seed(prev_actual)
+                expected_relative = self.golden.step()
+                
+                diff_rel = np.sum(actual_grid != expected_relative)
+                if diff_rel == 0:
+                    is_relative_match = True
+                else:
+                    self.relative_errors += diff_rel
+            else:
+                 print(f"⚠️  Missing history for Relative check at Gen {gen}")
+
+        # 4. Reporting
 ~~~~~
 
 ### 下一步建议
-现在再次运行 `python -m observatory.protoplasm.truth.run_conway_experiment`。
+再次运行 `python -m observatory.protoplasm.truth.run_conway_experiment`。
 
-你应该能看到：
-1.  屏幕底部出现 `WAITING: [██░░...] 123/400 Agents` 的进度条。
-2.  当进度条满时，死锁解除，屏幕开始播放生命游戏动画。
-3.  如果一切正常，状态应该是 `✅ SYNC`。
+这次 Agent 数量应该是 ~600，Gen 0 应该会立即显示，随后你会看到生命游戏的演化。
 
-如果仍然死锁（进度条卡在某个数字不动），说明还有其他通信问题，但至少我们现在能看到它卡在哪里了！
+如果依然“看起来”卡顿，请注意 `WAITING` 进度条是否在移动。如果是，说明计算正在进行，只是比较慢（Python 处理大量 Future 的开销）。只要它在动，就证明逻辑是通的。

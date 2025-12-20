@@ -53,8 +53,9 @@ async def run_experiment():
     GRID_HEIGHT = rows - 6 
     
     # Ensure reasonable bounds
-    GRID_WIDTH = min(GRID_WIDTH, 100) 
-    GRID_HEIGHT = min(GRID_HEIGHT, 50)
+    # Reduce to 25x25 to ensure LocalExecutor (single thread) can handle the message load smoothly
+    GRID_WIDTH = min(GRID_WIDTH, 25) 
+    GRID_HEIGHT = min(GRID_HEIGHT, 25)
     
     print(f"🚀 Starting Conway Experiment with grid {GRID_WIDTH}x{GRID_HEIGHT}...")
 

@@ -42,7 +42,7 @@ async def run_experiment(
     nudge: float = 0.2,
     duration_seconds: float = 3000.0,
     visualize: bool = True,
-    decay_duty_cycle: float = 0.5,
+    decay_duty_cycle: float = 0.3,
 ):
     """
     Sets up and runs the firefly synchronization experiment.

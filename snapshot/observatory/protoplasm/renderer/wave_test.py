@@ -25,9 +25,9 @@ async def main():
         # Use double-width characters for pixels, reserve 5 rows for status/prompt
         grid_width = cols // 2
         grid_height = rows - 5
-    except OSError: # Happens in non-interactive environments like CI
+    except OSError:  # Happens in non-interactive environments like CI
         grid_width, grid_height = 80, 20
-    
+
     total_pixels = grid_width * grid_height
 
     print("🚀 Starting Renderer Wave Stress Test...")
@@ -89,12 +89,14 @@ async def main():
                 x = current_pos % grid_width
                 y = current_pos // grid_width
                 updates_this_tick.append((x, y, 1.0))
-            
+
             # 2. Submit the entire batch in a single async call
             await app.direct_update_grid_batch(updates_this_tick)
-            
+
             # Move the scanline forward and WRAP AROUND
-            move_amount = math.ceil(grid_width * 2 * SIMULATION_TICK_S) # Move 2 rows per second
+            move_amount = math.ceil(
+                grid_width * 2 * SIMULATION_TICK_S
+            )  # Move 2 rows per second
             scan_pos = (scan_pos + move_amount) % total_pixels
 
             # --- Yield to Renderer ---

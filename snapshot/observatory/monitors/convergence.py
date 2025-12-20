@@ -102,7 +102,9 @@ class ConvergenceMonitor:
         try:
             while self._is_running:
                 # Offload heavy numpy/math calculation to thread to avoid stuttering the UI
-                order_parameter = await asyncio.to_thread(self._calculate_order_parameter)
+                order_parameter = await asyncio.to_thread(
+                    self._calculate_order_parameter
+                )
                 self._print_status(order_parameter)
                 await asyncio.sleep(1.0 / frequency_hz)
         finally:

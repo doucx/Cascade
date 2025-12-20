@@ -21,7 +21,7 @@ RESET_COLOR = b"\033[0m"
 
 class RawTerminalApp:
     """
-    A 'Raw Metal' renderer that bypasses Rich/Curses and writes directly 
+    A 'Raw Metal' renderer that bypasses Rich/Curses and writes directly
     to the stdout buffer.
     """
 
@@ -74,12 +74,12 @@ class RawTerminalApp:
     async def start(self):
         """Starts the raw render loop."""
         self._running = True
-        
+
         # Setup terminal
         self._stdout.write(CURSOR_HIDE)
         self._stdout.write(CLEAR_SCREEN)
         self._stdout.flush()
-        
+
         self._render_task = asyncio.create_task(self._render_loop())
 
     def stop(self):
@@ -87,7 +87,7 @@ class RawTerminalApp:
         self._running = False
         if self._render_task:
             self._render_task.cancel()
-        
+
         # Restore terminal
         self._stdout.write(CURSOR_SHOW)
         self._stdout.write(RESET_COLOR)
@@ -103,7 +103,7 @@ class RawTerminalApp:
         for key, value in self.status_bar.status_data.items():
             # Cyan Key, Magenta Value (Bold)
             parts.append(f"\033[36m{key}:\033[0m \033[1;35m{str(value)}\033[0m")
-        
+
         line = " | ".join(parts)
         # Add a top border or separation
         bar = f"\n\033[2m{'-' * self.grid_view.logical_width * 2}\033[0m\n"
@@ -148,12 +148,12 @@ class RawTerminalApp:
 
     async def _render_loop(self):
         last_time = time.perf_counter()
-        
+
         # Cap at 60 FPS to balance smoothness and resource usage.
         # This also reduces aliasing artifacts when render rate > physics rate.
         target_fps = 60.0
         frame_interval = 1.0 / target_fps
-        
+
         while self._running:
             loop_start = time.perf_counter()
 
@@ -181,7 +181,7 @@ class RawTerminalApp:
             now = time.perf_counter()
             dt = now - last_time
             last_time = now
-            
+
             # Clamp dt to prevent "time jumps" from clearing the screen instantly
             # if a lag spike occurs. Max 0.1s physics step.
             physics_dt = min(dt, 0.1)
@@ -190,27 +190,27 @@ class RawTerminalApp:
             # 4. RENDER (The heavy lifting)
             # Move cursor home
             output_buffer = bytearray(CURSOR_HOME)
-            
+
             # Get Grid Bytes
             grid_bytes = self.grid_view.render_frame_buffer()
             output_buffer.extend(grid_bytes)
-            
+
             # Get Status Bytes
             status_bytes = self._render_status_bar()
             output_buffer.extend(status_bytes)
-            
+
             # WRITE TO STDOUT (Atomic-ish)
             self._stdout.write(output_buffer)
             self._stdout.flush()
 
             # 5. Telemetry & Sleep
             render_duration = time.perf_counter() - loop_start
-            
+
             # Calculate FPS based on real loop time, not just render time
             fps = 1.0 / dt if dt > 0 else 0
-            
+
             self.status_bar.set_status("FPS", f"{fps:.1f}")
-            
+
             if self.aggregator:
                 await self.aggregator.record("fps", fps)
                 await self.aggregator.record("flush_duration_ms", flush_ms)
@@ -218,7 +218,7 @@ class RawTerminalApp:
             # Smart Sleep to maintain target FPS
             render_duration = time.perf_counter() - loop_start
             sleep_time = frame_interval - render_duration
-            
+
             # Jitter: How much we missed our deadline (negative means we are fast enough)
             # If sleep_time is -0.01, it means we are 10ms behind schedule.
             jitter_ms = max(0, -sleep_time) * 1000

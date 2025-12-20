@@ -4,8 +4,6 @@ from typing import Callable
 
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.segment import Segment
-from rich.control import Control
-from rich.style import Style
 
 # Re-using the matrix logic from protoplasm as it's solid
 from .matrix import StateMatrix, GridConfig
@@ -55,16 +53,16 @@ class GridView:
         brightness = self.matrix.get_snapshot()
         # colors is a numpy array of strings like "\033[38;2;...m"
         colors = self.palette_func(brightness)
-        
+
         # ANSI Reset
         reset = "\033[0m"
-        
+
         # 1. Add pixel char "██" to every color code in the array
         # This creates an array of strings like "\033[38;...m██"
         # We use numpy char module for vectorized concatenation if possible,
         # but standard list comp is surprisingly fast for string joining.
         # Let's try a hybrid approach: Pre-calculate the row strings.
-        
+
         lines = []
         for y in range(self.logical_height):
             # Join the row into one huge string
@@ -72,8 +70,8 @@ class GridView:
             # but string join is extremely optimized in CPython.
             row_str = "".join(f"{code}██" for code in colors[y])
             lines.append(row_str + reset)
-            
+
         # Join lines with newline
         full_frame = "\n".join(lines)
-        
+
         return full_frame.encode("utf-8")

@@ -49,16 +49,16 @@ class MetricsAggregator:
         buffer_to_process = self._buffer
         self._buffer = defaultdict(list)
         # --- End Critical Section ---
-        
+
         if not self._file or not buffer_to_process:
             self._next_flush_time = now + self.interval
             return
-            
+
         stats = {"ts": now}
         for key, values in buffer_to_process.items():
             if not values:
                 continue
-            
+
             arr = np.array(values)
             stats[key] = {
                 "avg": np.mean(arr),
@@ -67,7 +67,7 @@ class MetricsAggregator:
                 "sum": np.sum(arr),
                 "count": len(values),
             }
-        
+
         json.dump(stats, self._file, default=float)
         self._file.write("\n")
         self._file.flush()
@@ -78,4 +78,6 @@ class MetricsAggregator:
         """The main loop that periodically flushes the buffer."""
         while self._file is not None:
             self._flush_and_log()
-            await asyncio.sleep(self.interval / 10) # Wake up 10x per interval for responsiveness
+            await asyncio.sleep(
+                self.interval / 10
+            )  # Wake up 10x per interval for responsiveness

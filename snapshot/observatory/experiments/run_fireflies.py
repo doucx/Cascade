@@ -81,7 +81,7 @@ async def run_experiment(
         aggregator = MetricsAggregator(log_filename, interval_s=1.0)
         aggregator.open()
         print(f"📝 Logging telemetry to [bold cyan]{log_filename}[/bold cyan]")
-        
+
         # Inject aggregator into App to capture FPS/Jitter automatically
         app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
         aggregator_task = asyncio.create_task(aggregator.run())
@@ -93,13 +93,12 @@ async def run_experiment(
             filled = int(bar_len * r_value)
             bar = "█" * filled + "░" * (bar_len - filled)
             app.update_status("Sync", f"R={r_value:.3f} [{bar}] @ Pulse {pulse_count}")
-            
+
             # Data Logging (Async record to aggregator)
             # Since this callback is synchronous (called by Monitor), we need to schedule the record
             asyncio.create_task(aggregator.record("r_value", r_value))
             asyncio.create_task(aggregator.record("pulse", pulse_count))
             asyncio.create_task(aggregator.record("flash_count", monitor._flash_count))
-
 
         monitor_task = asyncio.create_task(
             # Reduce monitor frequency to reduce CPU load
@@ -134,7 +133,7 @@ async def run_experiment(
     print("Generating Agent Workflows...")
     for i in range(num_agents):
         initial_phase = random.uniform(0, period)
-        
+
         neighbor_ids = get_neighbors(i, grid_width, grid_width)
         neighbor_inboxes = [f"firefly/{nid}/inbox" for nid in neighbor_ids]
         my_inbox = f"firefly/{i}/inbox"
@@ -159,14 +158,14 @@ async def run_experiment(
         )
 
         agent_tasks.append(engine.run(agent_workflow))
-        
+
         # Yield every 500 agents to keep UI responsive during setup
         if i > 0 and i % 500 == 0:
             print(f"   ... {i} agents prepared.")
             await asyncio.sleep(0)
 
     print("🚀 All agents prepared. Launching...")
-    
+
     # --- Run ---
     all_agent_tasks = asyncio.gather(*agent_tasks)
     try:
@@ -177,10 +176,10 @@ async def run_experiment(
         monitor.stop()
         if app:
             app.stop()
-        
-        if 'aggregator' in locals():
+
+        if "aggregator" in locals():
             aggregator.close()
-            if 'aggregator_task' in locals():
+            if "aggregator_task" in locals():
                 aggregator_task.cancel()
                 await asyncio.gather(aggregator_task, return_exceptions=True)
 

@@ -20,10 +20,10 @@ class JsonFileLogger:
         """Logs a dictionary as a JSON line."""
         if not self._file:
             return
-        
+
         # Add a timestamp for time-series analysis
         data_with_ts = {"ts": time.time(), **data}
-        
+
         json.dump(data_with_ts, self._file)
         self._file.write("\n")
         self._file.flush()

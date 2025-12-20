@@ -32,10 +32,12 @@ class StateMatrix:
             self.brightness[y, x] = state
             self.active[y, x] = True
 
-    def update_batch(self, coords_x: np.ndarray, coords_y: np.ndarray, states: np.ndarray):
+    def update_batch(
+        self, coords_x: np.ndarray, coords_y: np.ndarray, states: np.ndarray
+    ):
         """
         Updates a batch of cells using vectorized assignment.
-        
+
         Args:
             coords_x: 1D array of x-coordinates.
             coords_y: 1D array of y-coordinates.

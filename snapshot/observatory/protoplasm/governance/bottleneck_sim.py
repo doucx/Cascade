@@ -1,30 +1,32 @@
 import asyncio
 import random
-import shutil
-import time
+import numpy as np
+from asyncio import Queue
 from typing import Any
 
 import cascade as cs
 from cascade.runtime.events import TaskBlocked, TaskExecutionStarted, TaskExecutionFinished
 from cascade.spec.constraint import GlobalConstraint
 
-# New Renderer Imports
-from observatory.protoplasm.renderer.unigrid import UniGridRenderer
+# New Visualization Imports
+from observatory.visualization import VisualizerApp
 from observatory.protoplasm.renderer.palette import Palettes
 
 # --- Configuration ---
-NUM_AGENTS = 500
+NUM_AGENTS = 225  # 15x15 grid
 SLOTS = 20
-DURATION = 15.0
-
-# --- Visualizer Logic ---
+DURATION = 30.0
 
 class BottleneckVisualizer:
-    def __init__(self, renderer: UniGridRenderer, num_agents: int):
-        self.renderer = renderer
-        # Ensure grid is roughly square logic
-        self.grid_width = int(num_agents**0.5) + 1
-        
+    def __init__(self, data_queue: Queue, num_agents: int):
+        self.data_queue = data_queue
+        self.grid_width = int(num_agents**0.5)
+        if self.grid_width * self.grid_width < num_agents:
+            self.grid_width += 1
+            
+        self.grid_height = (num_agents + self.grid_width - 1) // self.grid_width
+        self.matrix = np.zeros((self.grid_height, self.grid_width), dtype=np.float32)
+
     def get_coords(self, agent_id: int):
         return (agent_id % self.grid_width, agent_id // self.grid_width)
 
@@ -40,23 +42,20 @@ class BottleneckVisualizer:
             
             x, y = self.get_coords(agent_id)
             
-            # Map Events to States for Palette
-            # 1.0 = Running (White)
-            # 0.5 = Waiting (Cyan)
-            # 0.0 = Idle (Dim)
-            
+            # State Mapping: 1.0 = Running, 0.5 = Waiting, 0.0 = Idle
             if task_type == "work":
                 if isinstance(event, TaskExecutionStarted):
-                    self.renderer.ingest(x, y, 1.0)
+                    self.matrix[y, x] = 1.0
                 elif isinstance(event, TaskBlocked):
-                    self.renderer.ingest(x, y, 0.5)
+                    self.matrix[y, x] = 0.5
                 elif isinstance(event, TaskExecutionFinished):
-                    self.renderer.ingest(x, y, 0.0)
+                    self.matrix[y, x] = 0.0
+                
+                # Push the updated matrix to the TUI
+                self.data_queue.put_nowait(self.matrix.copy())
                     
         except (IndexError, ValueError):
             pass
-
-# --- Agent Definition ---
 
 def make_agent_workflow(i: int):
     @cs.task(name=f"agent_{i}_work")
@@ -70,53 +69,55 @@ def make_agent_workflow(i: int):
 
     return loop(work(0))
 
-# --- Main ---
-
 async def run_simulation():
-    # 1. Setup New Renderer
-    # Note: We rely on auto-sizing, passing only palette
-    renderer = UniGridRenderer(palette_func=Palettes.bottleneck, decay_rate=0.0)
+    data_queue = Queue()
+    status_queue = Queue() # Not used here, but required by App
     
-    viz = BottleneckVisualizer(renderer, NUM_AGENTS)
-    
-    # 2. Setup Engine
-    engine_bus = cs.MessageBus()
-    engine_bus.subscribe(cs.Event, viz.handle_event)
-    
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=engine_bus
+    grid_width = int(NUM_AGENTS**0.5)
+    if grid_width * grid_width < NUM_AGENTS: grid_width += 1
+    grid_height = (NUM_AGENTS + grid_width - 1) // grid_width
+
+    app = VisualizerApp(
+        width=grid_width,
+        height=grid_height,
+        palette_func=Palettes.bottleneck,
+        data_queue=data_queue,
+        status_queue=status_queue
     )
     
-    # 3. Apply Constraint
-    print(f"Applying constraint: Max {SLOTS} concurrent 'work' tasks...")
+    viz_handler = BottleneckVisualizer(data_queue, NUM_AGENTS)
+    
+    engine_bus = cs.MessageBus()
+    engine_bus.subscribe(cs.Event, viz_handler.handle_event)
+    
+    engine = cs.Engine(
+        solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=engine_bus
+    )
+    
     engine.constraint_manager.update_constraint(
         GlobalConstraint(
-            id="funnel",
-            scope="task:agent_*_work",
-            type="concurrency",
+            id="funnel", scope="task:agent_*_work", type="concurrency",
             params={"limit": SLOTS}
         )
     )
 
-    # 4. Launch Agents
-    print(f"Launching {NUM_AGENTS} agents...")
-    tasks = []
-    for i in range(NUM_AGENTS):
-        tasks.append(asyncio.create_task(engine.run(make_agent_workflow(i))))
-        
-    # 5. Run Visualization
+    print(f"🚀 Launching Bottleneck Simulation: {NUM_AGENTS} agents, {SLOTS} slots...")
+    print("   (UI will launch in a new screen buffer)")
+    await asyncio.sleep(2)
+
+    agent_tasks = [
+        asyncio.create_task(engine.run(make_agent_workflow(i))) for i in range(NUM_AGENTS)
+    ]
+    
+    ui_task = asyncio.create_task(app.run_async())
+
     try:
-        renderer_task = asyncio.create_task(renderer.start())
         await asyncio.sleep(DURATION)
     finally:
-        renderer.stop()
-        for t in tasks: t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        if not renderer_task.done():
-            renderer_task.cancel()
-            await renderer_task
+        app.exit()
+        for t in agent_tasks: t.cancel()
+        await asyncio.gather(*agent_tasks, ui_task, return_exceptions=True)
+        print("\nSimulation finished.")
 
 if __name__ == "__main__":
     try:

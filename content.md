@@ -1,74 +1,220 @@
-好的，收到指令。我将分析你提供的《Cascade 预研计划：原基 (Protoplasm)》文档，识别状态和遗漏，并生成一个计划来完成剩余的工作。
+Brief Response
+好的，我们现在将原基 (Protoplasm) 阶段验证通过的高性能渲染组件提取为公共基础设施，并将其应用于萤火虫实验，实现从“日志流”到“可视化矩阵”的升级。
 
-你的分析非常准确。文档显示，“原基”计划的大部分预研工作（第一、二、三、五、六章）都已标记为 `#DONE`，我们已经成功验证了渲染、通信、时序和验证机制的基础能力。
+Summary Header
+## [WIP] refactor(observatory): 提取统一渲染库并可视化萤火虫实验
 
-**核心遗漏点正如你所指出的：第四章“压力的具象化 —— 资源约束模拟器”。**
-
-这一章的核心目标是验证 `ConstraintManager` 在高争用环境下的表现，并将其行为可视化。虽然文档中描述了*要做什么*（令牌桶反压测试、阻塞可视化），但尚未提供具体的实验代码和实施方案。
-
-为了完成“原基”计划并为“创世网格”的构建扫清所有障碍，我们必须完成这一最终验证。
-
-我将为你生成一个计划，创建 `bottleneck_sim.py` 实验脚本，以完成第四章的预研目标。
-
-## [WIP] feat: 实现 Protoplasm 第四章的资源约束模拟器
+### 错误分析
+N/A
 
 ### 用户需求
-分析《Cascade 预研计划：原基 (Protoplasm)》的状态，并制定计划以完成其中尚未实现的第四章“资源约束模拟器”。
+1.  **代码清理与抽象**: 将分散在 `protoplasm` 中的渲染代码 (`AnsiDriver`, `RenderBuffer`, `StateMatrix`) 提取为通用的 `observatory.visualization` 库。
+2.  **统一行为**: 确保 `protoplasm` 中的旧实验（如 Conway, Bottleneck）和新实验都能复用这套基础设施。
+3.  **萤火可视化**: 修改 `run_fireflies.py`，为其配备基于终端的实时渲染器，直观展示同步过程（从随机闪烁到同步波纹）。
 
 ### 评论
-这是“原基”预研计划的最后一项关键任务。验证 `ConstraintManager` 在高并发、高资源争用场景下的稳定性和公平性，对于我们战略学说中“稀缺性作为一种治理手段”的核心理念至关重要。通过将约束状态与 `ForestRenderer` 结合，我们不仅能获得量化指标，还能直观地“看到”系统瓶颈的形成和缓解过程，这将为“创世网格”的物理定律调试提供无价的洞察力。
+这是一个重要的工程化步骤。原基阶段的代码往往是“快脏”的，将其提升为共享库可以大幅降低后续实验（如创世网格）的构建成本。同时，可视化的萤火虫实验将提供极其直观的反馈，验证我们的同步理论。
 
 ### 目标
-1.  创建一个新的实验脚本 `observatory/protoplasm/governance/bottleneck_sim.py`。
-2.  在该脚本中，模拟远超可用资源槽位的 Agent 数量（例如 500 个 Agent 争夺 20 个计算槽位）。
-3.  应用一个全局 `concurrency` 约束到所有 Agent 的“工作”任务上。
-4.  集成第一章的 `ForestRenderer`，并创建一个 `BottleneckVisualizer` 类，该类订阅 `Engine` 的事件总线。
-5.  在可视化界面中，用不同的亮度和颜色区分三种核心状态：
-    *   `TaskExecutionStarted`: 正在计算（持有资源槽位）。
-    *   `TaskBlocked`: 等待资源（被阻塞）。
-    *   `TaskExecutionFinished`: 计算完成（释放资源）。
+1.  建立 `observatory/visualization` 包。
+2.  迁移并重构渲染核心类 (`GridRenderer`)。
+3.  修复受影响的 `protoplasm` 实验导入路径。
+4.  改造 `run_fireflies.py` 以支持可视化模式。
 
 ### 基本原理
-我们将创建一个独立的实验脚本。该脚本会：
-1.  **设置环境**: 初始化 `ForestRenderer` 用于可视化。
-2.  **定义 Agent**: 创建一个简单的、无限递归的 Agent 工作流。该工作流包含一个被约束的核心 `@cs.task(name="agent_i_work")` 和一个驱动循环的 `@cs.task(name="agent_i_loop")`。
-3.  **施加约束**: 在 `Engine` 启动前，通过 `engine.constraint_manager.update_constraint()` 方法，施加一个 `type="concurrency"` 的全局约束，其 `scope` 将通过模式匹配（如 `"task:agent_*_work"`）精确地应用到所有 Agent 的工作任务上。
-4.  **启动并观测**: 并发启动所有 Agent。同时，`BottleneckVisualizer` 会监听 `Engine` 发出的 `TaskBlocked`、`TaskExecutionStarted` 和 `TaskExecutionFinished` 事件，根据事件类型和 `task_name` 中包含的 Agent ID，实时更新 `ForestRenderer` 状态矩阵中对应单元格的亮度，从而将资源争夺过程动态地呈现在终端上。
+我们将采用“提升与适配”策略：
+1.  **提升**: 将 `protoplasm/renderer` 整体移动到 `observatory/visualization`。
+2.  **适配**: 修改 `run_fireflies.py`，引入一个适配层，将 `firefly/flash` 事件转换为渲染器的 `ingest(x, y, brightness)` 调用。
+3.  **集成**: 将 `ConvergenceMonitor` 的计算结果集成到渲染器的状态栏中，而不是向 stdout 打印，避免画面撕裂。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/tests #concept/ui #scope/dx #ai/brainstorm #task/domain/testing #task/object/constraint-simulator #task/action/implementation #task/state/begin
+#intent/refactor #intent/build #flow/ready #priority/medium #comp/observatory #concept/ui #task/domain/observatory #task/object/visualizer #task/action/integration #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 创建实验目录
+#### Acts 1: 建立可视化基础设施
 
-根据计划文档，为第四章的实验创建专用的 `governance` 目录。
+首先，我们将原基中的渲染器代码迁移到新的公共目录 `observatory/visualization`，并重命名核心渲染器以体现其通用性。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~
-mkdir -p observatory/protoplasm/governance
+mkdir -p observatory/visualization
 ~~~~~
 
-#### Acts 2: 编写资源瓶颈模拟器脚本
+~~~~~act
+move_file
+observatory/protoplasm/renderer/driver.py
+observatory/visualization/driver.py
+~~~~~
 
-现在，我们创建 `bottleneck_sim.py` 文件。这个脚本将包含完整的模拟、约束应用和可视化逻辑。
+~~~~~act
+move_file
+observatory/protoplasm/renderer/buffer.py
+observatory/visualization/buffer.py
+~~~~~
+
+~~~~~act
+move_file
+observatory/protoplasm/renderer/matrix.py
+observatory/visualization/matrix.py
+~~~~~
+
+~~~~~act
+move_file
+observatory/protoplasm/renderer/visualizer_proto.py
+observatory/visualization/grid_renderer.py
+~~~~~
 
 ~~~~~act
 write_file
-observatory/protoplasm/governance/bottleneck_sim.py
+observatory/visualization/__init__.py
 ~~~~~
 ~~~~~python
-import asyncio
-import random
-import shutil
-import time
-from typing import Any
+from .driver import AnsiDriver
+from .buffer import RenderBuffer
+from .matrix import StateMatrix, GridConfig
+from .grid_renderer import GridRenderer
 
-import cascade as cs
+__all__ = ["AnsiDriver", "RenderBuffer", "StateMatrix", "GridConfig", "GridRenderer"]
+~~~~~
+
+#### Acts 2: 重构 GridRenderer 类名
+
+我们将 `ForestRenderer` 重命名为更通用的 `GridRenderer`，并调整其内部引用。
+
+~~~~~act
+patch_file
+observatory/visualization/grid_renderer.py
+~~~~~
+~~~~~old
+class ForestRenderer:
+    """
+    The High-Performance CLI Renderer.
+    Decouples ingestion (Telemetry) from Rendering (30 FPS Loop).
+    """
+
+    def __init__(self, width: int = 100, height: int = 100):
+~~~~~
+~~~~~new
+class GridRenderer:
+    """
+    The High-Performance CLI Renderer.
+    Decouples ingestion (Telemetry) from Rendering (30 FPS Loop).
+    """
+
+    def __init__(self, width: int = 100, height: int = 100):
+~~~~~
+
+~~~~~act
+patch_file
+observatory/visualization/grid_renderer.py
+~~~~~
+~~~~~old
+async def stress_test_loader(renderer: ForestRenderer):
+    """
+    Simulates 10,000 agents firing randomly.
+    """
+    # Wait for the renderer to start
+    print("Loader: Waiting for renderer to start...")
+    while not renderer._running:
+        await asyncio.sleep(0.1)
+    print("Loader: Renderer started. Injecting events.")
+
+    width, height = renderer.config.width, renderer.config.height
+    
+    while renderer._running:
+        # Simulate ~10% of agents firing per second
+        # Let's be aggressive: 100 events per frame loop
+        
+        for _ in range(100):
+            x = random.randint(0, width - 1)
+            y = random.randint(0, height - 1)
+            renderer.ingest(x, y, 1.0)
+            
+        await asyncio.sleep(0.01)
+
+if __name__ == "__main__":
+    # Self-contained run with dynamic sizing
+    try:
+        cols, rows = shutil.get_terminal_size()
+        # Reserve 2 rows for status line and shell prompt
+        render_height = rows - 2
+        renderer = ForestRenderer(width=cols, height=render_height)
+    except OSError:
+        # Fallback for environments without a TTY (e.g., CI)
+        renderer = ForestRenderer(width=100, height=40)
+
+    loop = asyncio.get_event_loop()
+    try:
+        # Schedule the stress loader
+        loop.create_task(stress_test_loader(renderer))
+        # Run the renderer
+        loop.run_until_complete(renderer.start())
+    except KeyboardInterrupt:
+        # Stop is now responsible for most cleanup
+        renderer.stop()
+        print("Renderer stopped.")
+~~~~~
+~~~~~new
+async def stress_test_loader(renderer: GridRenderer):
+    """
+    Simulates 10,000 agents firing randomly.
+    """
+    # Wait for the renderer to start
+    print("Loader: Waiting for renderer to start...")
+    while not renderer._running:
+        await asyncio.sleep(0.1)
+    print("Loader: Renderer started. Injecting events.")
+
+    width, height = renderer.config.width, renderer.config.height
+    
+    while renderer._running:
+        # Simulate ~10% of agents firing per second
+        # Let's be aggressive: 100 events per frame loop
+        
+        for _ in range(100):
+            x = random.randint(0, width - 1)
+            y = random.randint(0, height - 1)
+            renderer.ingest(x, y, 1.0)
+            
+        await asyncio.sleep(0.01)
+
+if __name__ == "__main__":
+    # Self-contained run with dynamic sizing
+    try:
+        cols, rows = shutil.get_terminal_size()
+        # Reserve 2 rows for status line and shell prompt
+        render_height = rows - 2
+        renderer = GridRenderer(width=cols, height=render_height)
+    except OSError:
+        # Fallback for environments without a TTY (e.g., CI)
+        renderer = GridRenderer(width=100, height=40)
+
+    loop = asyncio.get_event_loop()
+    try:
+        # Schedule the stress loader
+        loop.create_task(stress_test_loader(renderer))
+        # Run the renderer
+        loop.run_until_complete(renderer.start())
+    except KeyboardInterrupt:
+        # Stop is now responsible for most cleanup
+        renderer.stop()
+        print("Renderer stopped.")
+~~~~~
+
+#### Acts 3: 修复 Protoplasm 中的引用
+
+我们需要修复 `bottleneck_sim.py` 和 `truth/renderer.py` 中的导入路径，因为原来的文件已经被移动了。
+
+~~~~~act
+patch_file
+observatory/protoplasm/governance/bottleneck_sim.py
+~~~~~
+~~~~~old
 from cascade.runtime.events import TaskBlocked, TaskExecutionStarted, TaskExecutionFinished
 from cascade.spec.constraint import GlobalConstraint
 from observatory.protoplasm.renderer.visualizer_proto import ForestRenderer
@@ -84,58 +230,30 @@ class BottleneckVisualizer:
     def __init__(self, renderer: ForestRenderer, num_agents: int):
         self.renderer = renderer
         self.grid_width = int(num_agents**0.5) + 1
-        
-    def get_coords(self, agent_id: int):
-        return (agent_id % self.grid_width, agent_id // self.grid_width)
+~~~~~
+~~~~~new
+from cascade.runtime.events import TaskBlocked, TaskExecutionStarted, TaskExecutionFinished
+from cascade.spec.constraint import GlobalConstraint
+from observatory.visualization.grid_renderer import GridRenderer
 
-    def handle_event(self, event: Any):
-        # We expect task names like "agent_42_work"
-        if not hasattr(event, "task_name") or not event.task_name.startswith("agent_"):
-            return
-            
-        try:
-            # Format: "agent_{id}_work" or "agent_{id}_loop"
-            parts = event.task_name.split("_")
-            if len(parts) < 3: return
-            agent_id = int(parts[1])
-            task_type = parts[2]
-            
-            x, y = self.get_coords(agent_id)
-            
-            if task_type == "work":
-                if isinstance(event, TaskExecutionStarted):
-                    # Acquired Slot = Bright White
-                    self.renderer.ingest(x, y, 1.0)
-                elif isinstance(event, TaskBlocked):
-                    # Waiting for Slot = Mid Cyan
-                    self.renderer.ingest(x, y, 0.5)
-                elif isinstance(event, TaskExecutionFinished):
-                    # Released Slot = Dim
-                    self.renderer.ingest(x, y, 0.0)
-                    
-        except (IndexError, ValueError):
-            pass
+# --- Configuration ---
+NUM_AGENTS = 500
+SLOTS = 20
+DURATION = 10.0
 
-# --- Agent Definition ---
+# --- Visualizer Logic ---
 
-def make_agent_workflow(i: int):
-    # This task simulates the resource-intensive work
-    # It will be named "agent_{i}_work" so it matches the constraint "task:agent_*_work"
-    @cs.task(name=f"agent_{i}_work")
-    async def work(val):
-        # Hold the slot for a bit
-        await asyncio.sleep(random.uniform(0.1, 0.3))
-        return val + 1
+class BottleneckVisualizer:
+    def __init__(self, renderer: GridRenderer, num_agents: int):
+        self.renderer = renderer
+        self.grid_width = int(num_agents**0.5) + 1
+~~~~~
 
-    # This task is the recursive driver, it is NOT constrained
-    @cs.task(name=f"agent_{i}_loop")
-    def loop(val):
-        return make_agent_workflow(i)
-
-    return loop(work(0))
-
-# --- Main ---
-
+~~~~~act
+patch_file
+observatory/protoplasm/governance/bottleneck_sim.py
+~~~~~
+~~~~~old
 async def run_simulation():
     # 1. Setup Renderer
     cols, rows = shutil.get_terminal_size()
@@ -144,60 +262,288 @@ async def run_simulation():
     viz = BottleneckVisualizer(renderer, NUM_AGENTS)
     
     # 2. Setup Engine
-    engine_bus = cs.MessageBus()
-    engine_bus.subscribe(cs.Event, viz.handle_event)
+~~~~~
+~~~~~new
+async def run_simulation():
+    # 1. Setup Renderer
+    cols, rows = shutil.get_terminal_size()
+    render_height = max(10, rows - 4)
+    renderer = GridRenderer(width=cols, height=render_height)
+    viz = BottleneckVisualizer(renderer, NUM_AGENTS)
     
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=engine_bus
-    )
-    
-    # 3. Apply Constraint
-    # "task:agent_*_work" matches our work tasks
-    print(f"Applying constraint: Max {SLOTS} concurrent 'work' tasks...")
-    engine.constraint_manager.update_constraint(
-        GlobalConstraint(
-            id="funnel",
-            scope="task:agent_*_work",
-            type="concurrency",
-            params={"limit": SLOTS}
-        )
-    )
+    # 2. Setup Engine
+~~~~~
 
-    # 4. Launch Agents
-    # We launch them all on the SAME engine instance
-    print(f"Launching {NUM_AGENTS} agents...")
-    tasks = []
-    for i in range(NUM_AGENTS):
-        # We use asyncio.create_task to fire them off
-        tasks.append(asyncio.create_task(engine.run(make_agent_workflow(i))))
+~~~~~act
+patch_file
+observatory/protoplasm/truth/renderer.py
+~~~~~
+~~~~~old
+import numpy as np
+import shutil
+from typing import Tuple
+
+# Reuse low-level drivers from the existing prototype
+from observatory.protoplasm.renderer.driver import AnsiDriver
+from observatory.protoplasm.renderer.buffer import RenderBuffer
+from observatory.protoplasm.renderer.matrix import GridConfig
+
+class DiffMatrix:
+~~~~~
+~~~~~new
+import numpy as np
+import shutil
+from typing import Tuple
+
+# Reuse low-level drivers from the existing prototype
+from observatory.visualization.driver import AnsiDriver
+from observatory.visualization.buffer import RenderBuffer
+from observatory.visualization.matrix import GridConfig
+
+class DiffMatrix:
+~~~~~
+
+#### Acts 4: 增强 GridRenderer 以支持外部状态注入
+
+为了让 `ConvergenceMonitor` 能在渲染器的状态栏显示数据，我们需要给 `GridRenderer` 添加一个 `set_status_callback` 钩子。
+
+~~~~~act
+patch_file
+observatory/visualization/grid_renderer.py
+~~~~~
+~~~~~old
+        self.queue: Queue = Queue()
         
-    # 5. Run Visualization
+        self._running = False
+        self._fps_stats = []
+
+    async def start(self):
+~~~~~
+~~~~~new
+        self.queue: Queue = Queue()
+        
+        self._running = False
+        self._fps_stats = []
+        
+        # Optional callback to get extra status text
+        self._status_callback = None
+
+    def set_status_callback(self, callback):
+        """Callback should return a string to be appended to the status line."""
+        self._status_callback = callback
+
+    async def start(self):
+~~~~~
+
+~~~~~act
+patch_file
+observatory/visualization/grid_renderer.py
+~~~~~
+~~~~~old
+            status_line = (
+                f"FPS: {real_fps:.1f} | "
+                f"Events: {events_processed:<4} | "
+                f"Diff: {len(rows):<4} px | "
+                f"ProcT: {processing_time*1000:.2f}ms"
+            )
+            # Pad the line to clear previous text artifacts
+            self.driver.write(f"{status_line:<80}")
+            
+            self.driver.flush()
+~~~~~
+~~~~~new
+            status_line = (
+                f"FPS: {real_fps:.1f} | "
+                f"Events: {events_processed:<4} | "
+                f"Diff: {len(rows):<4} px | "
+                f"ProcT: {processing_time*1000:.2f}ms"
+            )
+            
+            if self._status_callback:
+                try:
+                    extra_status = self._status_callback()
+                    status_line += f" | {extra_status}"
+                except Exception:
+                    pass
+
+            # Pad the line to clear previous text artifacts
+            self.driver.write(f"{status_line:<100}")
+            
+            self.driver.flush()
+~~~~~
+
+#### Acts 5: 改造 run_fireflies.py 以支持可视化
+
+这是本次重构的核心。我们将移除简单的 print 输出，转而使用 `GridRenderer`，并将 `ConvergenceMonitor` 的输出重定向到渲染器的状态栏。
+
+~~~~~act
+write_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+import asyncio
+import random
+import time
+import shutil
+import math
+from typing import Any, Dict
+
+import cascade as cs
+from cascade.connectors.local import LocalBusConnector
+from cascade.spec.resource import resource
+
+from observatory.agents.kuramoto import firefly_agent
+from observatory.monitors.convergence import ConvergenceMonitor
+from observatory.visualization.grid_renderer import GridRenderer
+
+# --- Visualizer Adapter ---
+
+class FireflyVisualizer:
+    def __init__(self, renderer: GridRenderer, num_agents: int):
+        self.renderer = renderer
+        # Calculate grid dimensions to map agent_id -> (x, y)
+        # We aim for a roughly square grid
+        self.cols = int(math.ceil(math.sqrt(num_agents)))
+        
+    def get_coords(self, agent_id: int):
+        x = agent_id % self.cols
+        y = agent_id // self.cols
+        return x, y
+
+    async def on_flash(self, topic: str, payload: Dict[str, Any]):
+        """
+        Adapts the bus event to a renderer ingestion.
+        """
+        agent_id = payload.get("agent_id")
+        if agent_id is not None:
+            x, y = self.get_coords(agent_id)
+            # Flash intensity 1.0
+            self.renderer.ingest(x, y, 1.0)
+
+
+async def run_experiment(
+    num_agents: int = 100,
+    period: float = 2.0,
+    nudge: float = 0.2,
+    duration_seconds: float = 30.0,
+    visualize: bool = True
+):
+    """
+    Sets up and runs the firefly synchronization experiment.
+    """
+    print(f"🔥 Starting firefly experiment with {num_agents} agents...")
+
+    # 1. Initialize Infrastructure
+    LocalBusConnector._reset_broker_state()
+    connector = LocalBusConnector()
+    await connector.connect()
+
+    # 2. Setup Visualization (if enabled)
+    renderer = None
+    viz_adapter = None
+    monitor = None
+    
+    if visualize:
+        cols, rows = shutil.get_terminal_size()
+        render_height = max(10, rows - 4)
+        renderer = GridRenderer(width=cols, height=render_height)
+        viz_adapter = FireflyVisualizer(renderer, num_agents)
+        
+        # Subscribe visualizer to flashes
+        await connector.subscribe("firefly/flash", viz_adapter.on_flash)
+    
+    # 3. Setup Monitor
+    monitor = ConvergenceMonitor(num_agents, period, connector)
+    
+    if visualize and renderer:
+        # Hook monitor status into renderer
+        renderer.set_status_callback(lambda: f"SYNC: {monitor._calculate_order_parameter():.4f}")
+        # We don't run the monitor's loop because we don't want it printing to stdout
+        # Instead, we just let it passively collect data via its subscription
+        # BUT, ConvergenceMonitor.run() handles the subscription. 
+        # So we need to call monitor.start_passive() or similar.
+        # For now, let's manually subscribe the monitor's callback
+        await connector.subscribe("firefly/flash", monitor.on_flash)
+    else:
+        # Run monitor in active mode (printing to stdout)
+        asyncio.create_task(monitor.run())
+
+    # --- Create the population of firefly agents ---
+    agent_tasks = []
+    
+    @resource(name="_internal_connector", scope="run")
+    def shared_connector_provider():
+        yield connector
+
+    for i in range(num_agents):
+        initial_phase = random.uniform(0, period)
+        
+        engine = cs.Engine(
+            solver=cs.NativeSolver(),
+            executor=cs.LocalExecutor(),
+            bus=cs.MessageBus(),
+            connector=None, 
+        )
+        engine.register(shared_connector_provider)
+
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=period,
+            nudge=nudge,
+            flash_topic="firefly/flash",
+            listen_topic="firefly/flash",
+            connector=connector,
+            refractory_period=period * 0.2,
+        )
+        
+        agent_tasks.append(engine.run(agent_workflow))
+
+    # --- Run the experiment ---
     try:
-        renderer_task = asyncio.create_task(renderer.start())
-        
-        # Let it run for DURATION
-        await asyncio.sleep(DURATION)
-        
+        renderer_task = None
+        if visualize and renderer:
+            renderer_task = asyncio.create_task(renderer.start())
+        else:
+             print(f"\n⏳ Running for {duration_seconds} seconds...")
+
+        # Wait for duration
+        all_agents = asyncio.gather(*agent_tasks)
+        try:
+            await asyncio.wait_for(all_agents, timeout=duration_seconds)
+        except asyncio.TimeoutError:
+            pass
+            
     finally:
-        renderer.stop()
-        # Cancel all agents
-        for t in tasks: t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        if not renderer_task.done():
-            renderer_task.cancel()
-            await renderer_task
+        # Graceful Shutdown
+        if visualize and renderer:
+            renderer.stop()
+            if renderer_task:
+                await renderer_task
+        
+        if monitor:
+            monitor.stop()
+
+        if not all_agents.done():
+            all_agents.cancel()
+            await asyncio.gather(all_agents, return_exceptions=True)
+        
+        await connector.disconnect()
+        
+        if visualize:
+             print(f"\n✅ Experiment finished. Final Sync: {monitor._calculate_order_parameter():.4f}")
+
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(run_simulation())
-    except KeyboardInterrupt:
-        pass
+    # Adjust params for a good visual show
+    # 400 agents fits nicely in a 20x20 grid
+    asyncio.run(run_experiment(num_agents=400, duration_seconds=60.0))
 ~~~~~
 
 ### 下一步建议
-1.  **执行测试**: 在项目根目录下运行命令 `python -m observatory.protoplasm.governance.bottleneck_sim` 来启动模拟。
-2.  **观察结果**: 你应该能看到一个由字符组成的网格，其中亮点（正在计算）的数量始终被限制在 20 个左右，而其他大量的点（被阻塞）则以较暗的颜色显示，并随着槽位的释放而依次变亮。
-3.  **完成预研**: 如果模拟成功，则“原基 (Protoplasm)”预研计划的核心目标就全部达成。我们可以更新计划文档，将第四章也标记为 `#DONE`。
-4.  **迈向创世**: 在此之后，我们就拥有了一套经过严格压力测试的“创世开发包 (Genesis SDK)”，可以满怀信心地启动“创世网格”的 Alpha 阶段开发。
+我们已经完成了基础设施的重构和萤火虫实验的可视化改造。现在，运行 `python -m observatory.experiments.run_fireflies` 将展示一个实时演化的、具有余辉效果的萤火虫矩阵。
+
+建议的后续步骤：
+1.  **运行实验**: 观察 400 个萤火虫从混乱到同步的视觉效果。
+2.  **清理旧代码**: 检查 `observatory/protoplasm` 目录下是否还有其他残留的、未被使用的渲染代码，并将其删除。
+3.  **应用到创世网格**: 这个 `GridRenderer` 已经准备好被用于下一阶段“创世网格”的 Alpha 阶段（逻辑叠加与验证），用于展示两个平行宇宙（Cascade vs Truth）的差异矩阵。

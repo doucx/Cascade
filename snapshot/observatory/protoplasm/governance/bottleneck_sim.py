@@ -7,7 +7,7 @@ from typing import Any
 import cascade as cs
 from cascade.runtime.events import TaskBlocked, TaskExecutionStarted, TaskExecutionFinished
 from cascade.spec.constraint import GlobalConstraint
-from observatory.protoplasm.renderer.visualizer_proto import ForestRenderer
+from observatory.visualization.grid_renderer import GridRenderer
 
 # --- Configuration ---
 NUM_AGENTS = 500
@@ -17,7 +17,7 @@ DURATION = 10.0
 # --- Visualizer Logic ---
 
 class BottleneckVisualizer:
-    def __init__(self, renderer: ForestRenderer, num_agents: int):
+    def __init__(self, renderer: GridRenderer, num_agents: int):
         self.renderer = renderer
         self.grid_width = int(num_agents**0.5) + 1
         
@@ -76,7 +76,7 @@ async def run_simulation():
     # 1. Setup Renderer
     cols, rows = shutil.get_terminal_size()
     render_height = max(10, rows - 4)
-    renderer = ForestRenderer(width=cols, height=render_height)
+    renderer = GridRenderer(width=cols, height=render_height)
     viz = BottleneckVisualizer(renderer, NUM_AGENTS)
     
     # 2. Setup Engine

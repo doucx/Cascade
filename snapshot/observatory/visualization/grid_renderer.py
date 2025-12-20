@@ -9,7 +9,7 @@ from .driver import AnsiDriver
 from .matrix import StateMatrix, GridConfig
 from .buffer import RenderBuffer
 
-class ForestRenderer:
+class GridRenderer:
     """
     The High-Performance CLI Renderer.
     Decouples ingestion (Telemetry) from Rendering (30 FPS Loop).
@@ -31,6 +31,13 @@ class ForestRenderer:
         
         self._running = False
         self._fps_stats = []
+        
+        # Optional callback to get extra status text
+        self._status_callback = None
+
+    def set_status_callback(self, callback):
+        """Callback should return a string to be appended to the status line."""
+        self._status_callback = callback
 
     async def start(self):
         self._running = True
@@ -114,8 +121,16 @@ class ForestRenderer:
                 f"Diff: {len(rows):<4} px | "
                 f"ProcT: {processing_time*1000:.2f}ms"
             )
+            
+            if self._status_callback:
+                try:
+                    extra_status = self._status_callback()
+                    status_line += f" | {extra_status}"
+                except Exception:
+                    pass
+
             # Pad the line to clear previous text artifacts
-            self.driver.write(f"{status_line:<80}")
+            self.driver.write(f"{status_line:<100}")
             
             self.driver.flush()
             
@@ -127,7 +142,7 @@ class ForestRenderer:
 
 # --- Load Generator for Stress Testing ---
 
-async def stress_test_loader(renderer: ForestRenderer):
+async def stress_test_loader(renderer: GridRenderer):
     """
     Simulates 10,000 agents firing randomly.
     """
@@ -156,10 +171,10 @@ if __name__ == "__main__":
         cols, rows = shutil.get_terminal_size()
         # Reserve 2 rows for status line and shell prompt
         render_height = rows - 2
-        renderer = ForestRenderer(width=cols, height=render_height)
+        renderer = GridRenderer(width=cols, height=render_height)
     except OSError:
         # Fallback for environments without a TTY (e.g., CI)
-        renderer = ForestRenderer(width=100, height=40)
+        renderer = GridRenderer(width=100, height=40)
 
     loop = asyncio.get_event_loop()
     try:

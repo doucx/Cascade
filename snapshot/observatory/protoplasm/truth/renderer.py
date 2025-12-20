@@ -5,9 +5,9 @@ import shutil
 from typing import Tuple
 
 # Reuse low-level drivers from the existing prototype
-from observatory.protoplasm.renderer.driver import AnsiDriver
-from observatory.protoplasm.renderer.buffer import RenderBuffer
-from observatory.protoplasm.renderer.matrix import GridConfig
+from observatory.visualization.driver import AnsiDriver
+from observatory.visualization.buffer import RenderBuffer
+from observatory.visualization.matrix import GridConfig
 
 class DiffMatrix:
     """

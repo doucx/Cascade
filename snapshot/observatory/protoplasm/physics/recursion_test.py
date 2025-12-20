@@ -1,52 +1,3 @@
-简要回答：
-非常抱歉，船长。由于之前的重心完全放在了时间抖动分析上，我确实遗漏了 **3.2 递归深度与栈溢出** 这一关键环节。
-
-在“创世网格”中，Agent 是以长生不死的递归 Task 形式存在的。如果我们的尾递归优化 (TCO) 存在缺陷，或者在万节点并发下发生内存泄漏，网格将会在运行几小时后由于 OOM (内存溢出) 而崩溃。我们必须在进入第四章之前，完成这项关于“生命持久性”的验证。
-
-摘要头：
-## [WIP] feat: 预研大规模递归稳定性与内存泄漏检测
-
-### 错误分析
-在执行第三章计划时，我未能严格遵守 `CS-DOC-PRE-GENESIS-251220` 中定义的完整子项，跳过了 3.2 节。这违反了计划的完整性原则。现在立即补全这一关键的基础设施验证步骤。
-
-### 用户需求
-1.  **验证 TCO 机制**：确保 Cascade 在 10,000 个并发 Agent 递归 100,000 代以上时，不会触发 Python 的 `RecursionError`。
-2.  **内存泄漏监测**：量化分析大规模递归过程中的内存占用曲线，验证 `LazyResult` 节点在被替代后是否被正确释放。
-
-### 评论
-Python 原生并不支持尾递归优化。Cascade 的 `Engine` 是通过一个 `while True` 循环手动驱动 `LazyResult` 链条来实现这一点的。这是一个“逻辑上的递归，物理上的迭代”。本实验将证明这种设计在高并发下是否依然能保持内存平稳。
-
-### 目标
-*   在 `observatory/protoplasm/physics/` 下实现 `recursion_test.py`。
-*   同时运行 10,000 个递归 Agent，每代进行简单的状态累加。
-*   记录并分析前 1,000 代的内存增长情况。
-
-### 基本原理
-*   **资源释放验证**：如果 `Engine` 在每次递归时没有显式解除对上一代 `LazyResult` 的引用，那么 10,000 个 Agent 每秒产生数万个对象，内存会迅速耗尽。
-*   **采样频率**：每 100 代记录一次系统内存占用 (`psutil`)，以此构建时间-内存曲线。
-
-### 标签
-#intent/explore #flow/ready #priority/high
-#comp/observatory #comp/runtime #concept/memory #scope/core
-#ai/instruct
-#task/domain/physics
-#task/object/recursion-tco
-#task/action/verification
-#task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 实现递归与内存测试脚本 (`recursion_test.py`)
-
-我们将编写一个高强度的递归工作流，并集成内存统计功能。
-
-~~~~~act
-write_file
-observatory/protoplasm/physics/recursion_test.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 import os
@@ -170,14 +121,3 @@ async def run_recursion_experiment():
 
 if __name__ == "__main__":
     asyncio.run(run_recursion_experiment())
-~~~~~
-
-### 下一步建议
-请运行此脚本：
-`python -m observatory.protoplasm.physics.recursion_test`
-
-**观察重点**：
-1.  **是否崩溃**：如果触发了 `RecursionError`，说明我们的 TCO 逻辑在并发环境下失效了。
-2.  **内存斜率**：关注 `[Monitor]` 输出的 Delta 值。如果它随着代数的增加而线性、无止境地增长，说明我们存在内存泄漏（可能在 `Engine` 的历史记录或闭包引用中）。
-
-完成此项测试后，我们将补齐第三章的所有预研报告，并真正进入第四章。

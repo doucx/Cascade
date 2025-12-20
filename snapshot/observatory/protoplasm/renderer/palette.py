@@ -72,3 +72,26 @@ class Palettes:
         colors[mask_run] = '\033[38;2;200;255;200m'
         
         return colors
+
+    @staticmethod
+    def conway_diff(states: np.ndarray) -> np.ndarray:
+        """
+        Maps diff states to visual colors for Conway's Game of Life validation.
+        0: Correctly Dead (Dark Gray)
+        1: Correctly Alive (Bright White)
+        2: False Positive / Ghost (Bright Red) - Cascade has it, Golden does not.
+        3: False Negative / Missing (Bright Cyan) - Golden has it, Cascade does not.
+        """
+        # Default: Dark Gray for state 0
+        colors = np.full(states.shape, '\033[38;2;40;40;40m', dtype='<U24')
+        
+        # Correctly Alive (White)
+        colors[states == 1] = '\033[38;2;220;220;220m'
+        
+        # False Positive (Red)
+        colors[states == 2] = '\033[38;2;255;50;50m'
+        
+        # False Negative (Cyan)
+        colors[states == 3] = '\033[38;2;50;200;255m'
+        
+        return colors

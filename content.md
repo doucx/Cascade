@@ -1,159 +1,177 @@
-你的观察非常准确。
+数据分析显示系统运行极其稳定。
 
-**关于“周期性卡顿”**：
-这极有可能是**主线程阻塞**造成的。虽然渲染很快，但你的 Python 进程中还运行着一个 `ConvergenceMonitor`（收敛监视器）。它每 0.5 秒（默认 2Hz）醒来一次，计算所有 2500 个 Agent 的相位一致性（Order Parameter）。
-如果这个计算过程是同步运行的（它是），它就会卡住 asyncio 事件循环，导致渲染器在那几十毫秒内无法刷新。这就解释了“顺滑 -> 暂停 -> 顺滑”的周期性现象。
+**日志解读**：
+1.  **时间稳定性**：日志的时间戳间隔（`ts` 差值）非常精确地保持在 **0.50s ~ 0.53s** 之间。这证明了将 `ConvergenceMonitor` 的计算移入后台线程的策略完全生效，主循环不再有数百毫秒的阻塞，周期性卡顿已被消除。
+2.  **同步行为**：`r_value` 呈现出经典的耦合振荡行为（上升->下降->上升），这是 Kuramoto 模型的预期表现。
 
-**关于“23.4.7”**：
-这是经典的**残留字符（Ghosting）**问题。上一帧 FPS 是 `23.4`（4个字符），这一帧变成了 `23.7`（也是4个字符）本来没问题，但如果变成 `100.1` 然后跌回 `9.0`，就会变成 `9.0.1`。
-我们需要在每一行末尾发送 `\033[K`（清除至行尾）指令。
+**缺失的一环**：
+目前的 `run_fireflies.py` 虽然运行流畅，但**没有记录**我们刚刚在 `RawTerminalApp` 中添加的高级渲染指标（FPS, Jitter, Flush Duration）。这是因为 `run_fireflies.py` 还在使用旧的 `JsonFileLogger`，没有接入新的 `MetricsAggregator`。
 
-**关于更多指标**：
-我们可以轻易记录“循环延迟（Loop Lag）”，即实际帧时间与预期帧时间的偏差，这是衡量稳定度的最佳指标。
+我们需要最后一步：统一日志系统。将 `run_fireflies.py` 升级为使用 `MetricsAggregator`，这样同一个日志文件将同时包含**业务指标**（R值）和**性能指标**（FPS, Jitter），让我们能直接关联“同步状态”与“系统负载”。
 
-让我们一次性解决这些问题。
-
-## [WIP] fix(observatory): 修复状态栏残留并消除监视器计算导致的周期性卡顿
+## [WIP] tune(observatory): 统一萤火虫实验的遥测系统以捕获性能指标
 
 ### 用户需求
-1.  修复状态栏 FPS 显示的残留字符问题。
-2.  消除因 `ConvergenceMonitor` 计算密集型任务阻塞事件循环导致的周期性渲染卡顿。
-3.  增加渲染循环稳定性的遥测指标（Jitter/Lag）。
+在 `run_fireflies.py` 生成的日志中包含 FPS、Render Jitter 和 Flush Duration 等性能指标，以便评估大规模 Agent 对渲染管线的压力。
 
 ### 评论
-“裸金属”渲染器暴露了 Python 单线程事件循环的脆弱性。任何一个任务只要贪婪地占用了 CPU，UI 就会掉帧。解决方案是将计算密集型的统计逻辑（计算 Order Parameter）扔到线程池中运行。
+目前 `run_fireflies.py` 使用简单的 `JsonFileLogger` 记录业务数据，而 `RawTerminalApp` 依赖 `MetricsAggregator` 记录性能数据。两者未连接。我们将废弃 `JsonFileLogger`，统一使用 `MetricsAggregator`。
 
 ### 目标
-1.  **UI 修复**: 在 `RawTerminalApp._render_status_bar` 末尾追加 ANSI 清除行指令。
-2.  **性能优化**: 修改 `ConvergenceMonitor`，使用 `asyncio.to_thread` 执行 `_calculate_order_parameter`。
-3.  **遥测增强**: 在 `RawTerminalApp` 中计算并记录 `jitter`（当前帧耗时与目标耗时的差值）。
+1.  修改 `observatory/experiments/run_fireflies.py`。
+2.  引入 `MetricsAggregator`。
+3.  将其注入 `RawTerminalApp` 以自动捕获渲染指标。
+4.  修改 `monitor_callback`，将 `r_value` 和 `pulse` 也记录到聚合器中。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/observatory #concept/ui #scope/perf #ai/instruct #task/domain/observability #task/object/monitor #task/action/offload #task/state/continue
+#intent/tune #flow/ready #priority/medium #comp/observatory #concept/telemetry #scope/dx #ai/instruct #task/domain/observability #task/object/firefly-experiment #task/action/integrate #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复状态栏残留与增加 Jitter 遥测
-
-我们将修改 `RawTerminalApp`。
-1.  引入 `CLEAR_LINE = b"\033[K"`。
-2.  在状态栏输出后追加它。
-3.  计算 `jitter` 并记录。
+#### Acts 1: 升级 run_fireflies.py 以使用聚合器
 
 ~~~~~act
 patch_file
-observatory/visualization/raw_app.py
+observatory/experiments/run_fireflies.py
 ~~~~~
 ~~~~~python
-CURSOR_HOME = b"\033[H"
-CLEAR_SCREEN = b"\033[2J"
-RESET_COLOR = b"\033[0m"
+from observatory.agents.kuramoto import firefly_agent
+from observatory.monitors.convergence import ConvergenceMonitor
+from observatory.monitors.logger import JsonFileLogger
 
-
-class RawTerminalApp:
+# Visualization
+from observatory.visualization.palette import Palettes
 ~~~~~
 ~~~~~python
-CURSOR_HOME = b"\033[H"
-CLEAR_SCREEN = b"\033[2J"
-CLEAR_LINE = b"\033[K"
-RESET_COLOR = b"\033[0m"
+from observatory.agents.kuramoto import firefly_agent
+from observatory.monitors.convergence import ConvergenceMonitor
+from observatory.monitors.aggregator import MetricsAggregator
 
-
-class RawTerminalApp:
+# Visualization
+from observatory.visualization.palette import Palettes
 ~~~~~
 
 ~~~~~act
 patch_file
-observatory/visualization/raw_app.py
+observatory/experiments/run_fireflies.py
 ~~~~~
 ~~~~~python
-        line = " | ".join(parts)
-        # Add a top border or separation
-        bar = f"\n\033[2m{'-' * self.grid_view.logical_width * 2}\033[0m\n"
-        return (bar + line).encode("utf-8")
+        app = TerminalApp(grid_view, status_bar)
+        
+        # --- Setup Logger ---
+        log_filename = f"firefly_log_{int(time.time())}.jsonl"
+        logger = JsonFileLogger(log_filename)
+        logger.open()
+        print(f"📝 Logging telemetry to [bold cyan]{log_filename}[/bold cyan]")
 
-    def _blocking_flush_logic(self, updates_set):
-~~~~~
-~~~~~python
-        line = " | ".join(parts)
-        # Add a top border or separation
-        bar = f"\n\033[2m{'-' * self.grid_view.logical_width * 2}\033[0m\n"
-        # Append CLEAR_LINE code to wipe any ghost characters
-        return (bar + line + "\033[K").encode("utf-8")
 
-    def _blocking_flush_logic(self, updates_set):
-~~~~~
-
-~~~~~act
-patch_file
-observatory/visualization/raw_app.py
-~~~~~
-~~~~~python
-            # Smart Sleep to maintain target FPS
-            render_duration = time.perf_counter() - loop_start
-            sleep_time = frame_interval - render_duration
+        # 2. Bridge Monitor -> Status Bar & Logger
+        def monitor_callback(r_value: float, pulse_count: int):
+            # UI Update
+            bar_len = 20
+            filled = int(bar_len * r_value)
+            bar = "█" * filled + "░" * (bar_len - filled)
+            app.update_status("Sync", f"R={r_value:.3f} [{bar}] @ Pulse {pulse_count}")
             
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
-            else:
-                # If we missed the frame deadline, just yield to let others run
-                await asyncio.sleep(0)
+            # Data Logging
+            logger.log({"r_value": r_value, "pulse": pulse_count, "flash_count": monitor._flash_count})
+
+
+        monitor_task = asyncio.create_task(
+            # Reduce monitor frequency to reduce CPU load
 ~~~~~
 ~~~~~python
-            # Smart Sleep to maintain target FPS
-            render_duration = time.perf_counter() - loop_start
-            sleep_time = frame_interval - render_duration
+        
+        # --- Setup Aggregator (Unified Logger) ---
+        log_filename = f"firefly_log_{int(time.time())}.jsonl"
+        aggregator = MetricsAggregator(log_filename, interval_s=1.0)
+        aggregator.open()
+        print(f"📝 Logging telemetry to [bold cyan]{log_filename}[/bold cyan]")
+        
+        # Inject aggregator into App to capture FPS/Jitter automatically
+        app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
+        aggregator_task = asyncio.create_task(aggregator.run())
+
+        # 2. Bridge Monitor -> Status Bar & Logger
+        def monitor_callback(r_value: float, pulse_count: int):
+            # UI Update
+            bar_len = 20
+            filled = int(bar_len * r_value)
+            bar = "█" * filled + "░" * (bar_len - filled)
+            app.update_status("Sync", f"R={r_value:.3f} [{bar}] @ Pulse {pulse_count}")
             
-            # Jitter: How much we missed our deadline (negative means we are fast enough)
-            # If sleep_time is -0.01, it means we are 10ms behind schedule.
-            jitter_ms = max(0, -sleep_time) * 1000
+            # Data Logging (Async record to aggregator)
+            # Since this callback is synchronous (called by Monitor), we need to schedule the record
+            asyncio.create_task(aggregator.record("r_value", r_value))
+            asyncio.create_task(aggregator.record("pulse", pulse_count))
+            asyncio.create_task(aggregator.record("flash_count", monitor._flash_count))
 
-            if self.aggregator:
-                await self.aggregator.record("fps", fps)
-                await self.aggregator.record("flush_duration_ms", flush_ms)
-                await self.aggregator.record("render_jitter_ms", jitter_ms)
 
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
-            else:
-                # If we missed the frame deadline, just yield to let others run
-                await asyncio.sleep(0)
+        monitor_task = asyncio.create_task(
+            # Reduce monitor frequency to reduce CPU load
 ~~~~~
-
-#### Acts 2: 将 Monitor 计算移至后台线程
-
-这是解决周期性卡顿的关键。`_calculate_order_parameter` 在 N=2500 时涉及大量的字典查找和三角函数运算，必须从主循环中移出。
 
 ~~~~~act
 patch_file
-observatory/monitors/convergence.py
+observatory/experiments/run_fireflies.py
 ~~~~~
 ~~~~~python
-        try:
-            while self._is_running:
-                order_parameter = self._calculate_order_parameter()
-                self._print_status(order_parameter)
-                await asyncio.sleep(1.0 / frequency_hz)
-        finally:
-            if not self.callback:
+    try:
+        await asyncio.sleep(duration_seconds)
+    except (Exception, asyncio.CancelledError) as e:
+        print(f"Experiment interrupted or failed: {e}")
+    finally:
+        monitor.stop()
+        if app:
+            app.stop()
+        if logger:
+            logger.close()
+
+        if not all_agent_tasks.done():
+            all_agent_tasks.cancel()
+            await asyncio.gather(all_agent_tasks, return_exceptions=True)
+
+        await asyncio.gather(monitor_task, return_exceptions=True)
+        if app_task and not app_task.done():
+            await app_task
+
+        await connector.disconnect()
 ~~~~~
 ~~~~~python
-        try:
-            while self._is_running:
-                # Offload heavy numpy/math calculation to thread to avoid stuttering the UI
-                order_parameter = await asyncio.to_thread(self._calculate_order_parameter)
-                self._print_status(order_parameter)
-                await asyncio.sleep(1.0 / frequency_hz)
-        finally:
-            if not self.callback:
+    try:
+        await asyncio.sleep(duration_seconds)
+    except (Exception, asyncio.CancelledError) as e:
+        print(f"Experiment interrupted or failed: {e}")
+    finally:
+        monitor.stop()
+        if app:
+            app.stop()
+        
+        if 'aggregator' in locals():
+            aggregator.close()
+            if 'aggregator_task' in locals():
+                aggregator_task.cancel()
+                await asyncio.gather(aggregator_task, return_exceptions=True)
+
+        if not all_agent_tasks.done():
+            all_agent_tasks.cancel()
+            await asyncio.gather(all_agent_tasks, return_exceptions=True)
+
+        await asyncio.gather(monitor_task, return_exceptions=True)
+        if app_task and not app_task.done():
+            await app_task
+
+        await connector.disconnect()
 ~~~~~
 
 ### 下一步建议
-再次运行 `run_fireflies.py`。
-1.  **卡顿检查**：观察那个周期性的暂停是否消失了。
-2.  **UI 检查**：FPS 数字应该干净利落，没有残留。
-3.  **日志检查**：结束后查看 `.jsonl` 日志文件，你会看到新的 `render_jitter_ms` 字段。
-    *   如果 `avg` 很低（< 5ms）但 `max` 很高，说明偶尔还是有东西卡住了循环。
-    *   如果 `avg` 持续很高，说明 60 FPS 对你的机器来说太重了。
+最后一次运行 `run_fireflies.py`。
+这次的日志将包含一切：
+*   `r_value`: 同步程度
+*   `fps`: 渲染帧率 (Avg/Min/Max)
+*   `render_jitter_ms`: 渲染稳定性 (Avg/Max)
+*   `flush_duration_ms`: 内存拷贝耗时
+
+这将是我们对“原基”项目渲染基础设施优化的最终验收。

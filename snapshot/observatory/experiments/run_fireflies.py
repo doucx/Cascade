@@ -9,7 +9,7 @@ from cascade.spec.resource import resource
 
 from observatory.agents.kuramoto import firefly_agent
 from observatory.monitors.convergence import ConvergenceMonitor
-from observatory.monitors.logger import JsonFileLogger
+from observatory.monitors.aggregator import MetricsAggregator
 
 # Visualization
 from observatory.visualization.palette import Palettes
@@ -76,14 +76,15 @@ async def run_experiment(
         status_bar = StatusBar(
             initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."}
         )
-        app = TerminalApp(grid_view, status_bar)
-        
-        # --- Setup Logger ---
+        # --- Setup Aggregator (Unified Logger) ---
         log_filename = f"firefly_log_{int(time.time())}.jsonl"
-        logger = JsonFileLogger(log_filename)
-        logger.open()
+        aggregator = MetricsAggregator(log_filename, interval_s=1.0)
+        aggregator.open()
         print(f"📝 Logging telemetry to [bold cyan]{log_filename}[/bold cyan]")
-
+        
+        # Inject aggregator into App to capture FPS/Jitter automatically
+        app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
+        aggregator_task = asyncio.create_task(aggregator.run())
 
         # 2. Bridge Monitor -> Status Bar & Logger
         def monitor_callback(r_value: float, pulse_count: int):
@@ -93,8 +94,11 @@ async def run_experiment(
             bar = "█" * filled + "░" * (bar_len - filled)
             app.update_status("Sync", f"R={r_value:.3f} [{bar}] @ Pulse {pulse_count}")
             
-            # Data Logging
-            logger.log({"r_value": r_value, "pulse": pulse_count, "flash_count": monitor._flash_count})
+            # Data Logging (Async record to aggregator)
+            # Since this callback is synchronous (called by Monitor), we need to schedule the record
+            asyncio.create_task(aggregator.record("r_value", r_value))
+            asyncio.create_task(aggregator.record("pulse", pulse_count))
+            asyncio.create_task(aggregator.record("flash_count", monitor._flash_count))
 
 
         monitor_task = asyncio.create_task(
@@ -173,8 +177,12 @@ async def run_experiment(
         monitor.stop()
         if app:
             app.stop()
-        if logger:
-            logger.close()
+        
+        if 'aggregator' in locals():
+            aggregator.close()
+            if 'aggregator_task' in locals():
+                aggregator_task.cancel()
+                await asyncio.gather(aggregator_task, return_exceptions=True)
 
         if not all_agent_tasks.done():
             all_agent_tasks.cancel()

@@ -14,13 +14,22 @@ EXPERIMENT_DURATION_S = 10.0
 
 # --- Noise Generators ---
 
+def blocking_cpu_work():
+    """A synchronous function that represents a piece of heavy computation."""
+    # This runs in a separate thread, so it doesn't block the event loop.
+    _ = sum(i*i for i in range(1000))
+
 async def cpu_noise_task():
-    """A task that burns CPU cycles to stress the scheduler."""
+    """
+    A task that simulates CPU load correctly by offloading blocking work
+    to a thread pool.
+    """
     while True:
-        # Perform some meaningless computation
-        _ = sum(i*i for i in range(1000))
-        # Yield control to the event loop
-        await asyncio.sleep(0)
+        # Offload the blocking call to a worker thread
+        await asyncio.to_thread(blocking_cpu_work)
+        # We can keep a small sleep to prevent this task from re-queuing
+        # work too aggressively, simulating a task that has some pauses.
+        await asyncio.sleep(0.01)
 
 async def io_noise_task():
     """A task that simulates frequent, short IO waits."""

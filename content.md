@@ -1,74 +1,99 @@
 简要回答：
-分析完全正确。`TypeError` 指出了一个核心的范式错误：在 Cascade 的 `@cs.task` 装饰的函数内部，我们不能 `await` 另一个 Cascade 任务（如 `cs.wait()`）的 `LazyResult`。`LazyResult` 是一个声明式的图节点，而不是一个可等待的协程。
+你的判断完全正确。这个结果不是“抖动 (Jitter)”，而是 **“系统性饿死 (Systemic Starvation)”**。
 
 **根源分析**：
-`@cs.task` 内部的 `async def` 函数体应该包含标准的、命令式的 Python 异步代码。`cs.wait()` 是一个图构建原语，用于在工作流的*声明阶段*创建一个“等待”节点。而我们的 `time_probe_task` 任务的*职责*就是执行等待，因此它应该直接调用底层的 `asyncio.sleep()`。
+`Mean Error: +610.1732 ms` 表明，即使是平均情况，`await asyncio.sleep(0.05)` 也需要 `50ms + 610ms = 660ms` 才能完成。这说明我们的 `time_probe_task` 根本没有机会按时运行。
 
-**解决方案**：
-我们将修改 `time_probe_task`，将 `await cs.wait(interval)` 替换为 `await asyncio.sleep(interval)`。这不仅能修复错误，还能使我们的测量更纯粹，因为它直接探测了 `asyncio` 事件循环的调度延迟，这正是本实验的初衷。
+罪魁祸首是 `cpu_noise_task` 的实现：
+```python
+async def cpu_noise_task():
+    while True:
+        _ = sum(i*i for i in range(1000)) # <--- 这是一个同步的、阻塞CPU的操作
+        await asyncio.sleep(0)
+```
+`asyncio` 是一个**协作式**调度器。当一个 `cpu_noise_task` 获得执行权时，它会**完全占有 CPU** 直到 `sum(...)` 计算完成，这个过程会阻塞整个事件循环。在此期间，其他所有任务，包括我们的 `time_probe_task` 和 `asyncio` 内部的计时器，都无法运行。我们制造了 5000 个这样的任务，它们像一群野牛一样轮流冲撞并踩踏事件循环，导致其完全瘫痪。
+
+我们当前的实验设计错误地测量了 **CPU 饱和** 的影响，而不是我们想要测量的 **调度延迟**。
+
+**修正方案**：
+在 `asyncio` 中处理 CPU 密集型任务的正确模式是将其委托给一个**线程池**，从而将主事件循环解放出来。我们将使用 `asyncio.to_thread()` 来实现这一点。
 
 摘要头：
-## [WIP] fix: Correctly use async primitive in time_probe_task
+## [WIP] fix: Refactor CPU noise generator to prevent event loop starvation
 
 ### 标签
 #intent/fix #flow/ready #priority/high
-#comp/observatory #concept/async #scope/core
+#comp/observatory #concept/async #scope/core #scope/dx
 #ai/instruct
 #task/domain/physics
 #task/object/jitter-meter
-#task/action/bug-fix
+#task/action/refactor
 #task/state/continue
 
 ### 用户需求
-修复在 `time_probe_task` 中因错误地 `await` 一个 `LazyResult` 而导致的 `TypeError`，使抖动测量实验能够成功运行。
+修正 `jitter_meter.py` 的实验设计，使其能够准确地测量 `asyncio` 的调度抖动，而不是测量 CPU 阻塞导致的系统性延迟。
 
 ### 评论
-这是一个关于 Cascade 核心设计哲学的关键示例。它区分了两种操作模式：
-1.  **声明式组合 (Graph Building)**: 在工作流的顶层，你通过调用 `cs.task(...)` 来创建 `LazyResult` 对象，并将它们作为参数传递给其他任务，从而构建计算图。`cs.wait()` 就属于这一层。
-2.  **命令式执行 (Task Implementation)**: 在 `@cs.task` 装饰的函数体内部，你编写的是标准的 Python 代码。如果你需要异步等待，你应该使用 `asyncio` 的原生原语，如 `asyncio.sleep()`。
-
-这次修复使我们的实验代码更加符合 Cascade 的设计范式，并且测量结果也更直接地反映了 `asyncio` 事件循环的性能。
+这是一个关于 `asyncio` 核心工作原理的经典且深刻的教训。它证明了在 `asyncio` 的主线程上执行任何长时间运行的、非 `await` 的同步代码都是致命的。这次修复不仅能让我们的实验得出有效结论，其代码本身也成为了在 `asyncio` 应用中集成 CPU 密集型后台工作的最佳实践范例。
 
 ### 目标
-修改 `observatory/protoplasm/physics/jitter_meter.py`，将 `time_probe_task` 中对 `cs.wait()` 的不正确调用替换为对 `asyncio.sleep()` 的正确调用。
+修改 `jitter_meter.py`，将 `cpu_noise_task` 的阻塞式计算通过 `asyncio.to_thread()` 移到工作线程中执行，从而确保主事件循环的流畅运行。
 
 ### 基本原理
-`cs.wait()` 的底层实现本身就是对 `asyncio.sleep()` 的封装。在 `@cs.task` 内部直接调用 `asyncio.sleep()` 是实现“等待”这一副作用的正确、直接的方式。
+`await asyncio.to_thread(blocking_func)` 会从 `asyncio` 内部的线程池中取出一个线程来运行 `blocking_func`，而主线程的事件循环可以继续调度其他协程。这使得 CPU 密集型工作和 IO 密集型工作可以在一个 `asyncio` 程序中和谐共存，这正是我们模拟复杂系统负载所需要的。
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `time_probe_task` 的实现
+#### Acts 1: 修正 `jitter_meter.py` 中的 CPU 噪音生成器
 
-我们将把对 Cascade API 的错误调用替换为对 `asyncio` 原语的正确调用。
+我们将把阻塞的计算逻辑分离出来，并使用 `asyncio.to_thread` 来调用它。
 
 ~~~~~act
 patch_file
 observatory/protoplasm/physics/jitter_meter.py
 ~~~~~
 ~~~~~python
-    for i in range(num_probes):
-        start_time = time.perf_counter()
-        
-        await cs.wait(interval)
-        
-        end_time = time.perf_counter()
-        actual_delay = end_time - start_time
+# --- Noise Generators ---
+
+async def cpu_noise_task():
+    """A task that burns CPU cycles to stress the scheduler."""
+    while True:
+        # Perform some meaningless computation
+        _ = sum(i*i for i in range(1000))
+        # Yield control to the event loop
+        await asyncio.sleep(0)
 ~~~~~
 ~~~~~python
-    for i in range(num_probes):
-        start_time = time.perf_counter()
-        
-        # Inside a @cs.task, we use standard asyncio primitives for IO/time waits.
-        await asyncio.sleep(interval)
-        
-        end_time = time.perf_counter()
-        actual_delay = end_time - start_time
+# --- Noise Generators ---
+
+def blocking_cpu_work():
+    """A synchronous function that represents a piece of heavy computation."""
+    # This runs in a separate thread, so it doesn't block the event loop.
+    _ = sum(i*i for i in range(1000))
+
+async def cpu_noise_task():
+    """
+    A task that simulates CPU load correctly by offloading blocking work
+    to a thread pool.
+    """
+    while True:
+        # Offload the blocking call to a worker thread
+        await asyncio.to_thread(blocking_cpu_work)
+        # We can keep a small sleep to prevent this task from re-queuing
+        # work too aggressively, simulating a task that has some pauses.
+        await asyncio.sleep(0.01)
 ~~~~~
 
 ### 下一步建议
 再次运行实验：
 `python -m observatory.protoplasm.physics.jitter_meter`
 
-现在，`TypeError` 应该已经解决，实验将能够完整运行并输出我们期待的抖动分析报告。
+**预期的新结果**：
+现在，CPU 密集型工作已经不会阻塞主循环了。我们应该能看到一个截然不同的、更能代表**真实抖动**的报告。
+*   **Mean Error** 应该非常接近 `0`。
+*   **Min/Max Error** 应该在一个很小的范围内，例如 `-2ms` 到 `+10ms`。
+*   **Std Deviation** 应该很小。
+
+这将为我们提供关于 `asyncio` 在重度 IO 负载和后台 CPU 负载下的真实调度精度的有效数据。

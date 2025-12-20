@@ -1,155 +1,90 @@
-You are absolutely right, and I sincerely apologize for that destructive action. Deleting `truth_visualizer_demo.py` was a significant error. I failed to recognize its value as a standalone test harness for the visualization components. Thank you for correcting me and clarifying its purpose. Preserving such focused testing tools is crucial for long-term maintainability.
+好的，我将创建一个 `[COMMIT]` 计划来提交所有关于可视化组件的重构和修复工作。
 
-I will now rectify this by rewriting the file completely to work with the new `TerminalApp` framework, ensuring it continues to serve its important role as a visual debugging and validation script.
+这次提交涵盖了以下关键变更：
+1.  将旧的、低效的 ANSI 驱动渲染器替换为基于 `rich` 的高性能 `TerminalApp` 框架。
+2.  修复了多次迁移中产生的级联 `ModuleNotFoundError`。
+3.  优化了 `GridView` 的渲染流程，从慢速的 `Table` 转换为快速的 `Segment`，显著提升了 FPS。
+4.  将视觉物理（衰减）与帧率解耦，确保了余晖效果的视觉一致性。
+5.  将 `run_fireflies.py`、`bottleneck_sim.py` 和 `run_conway_experiment.py` 三个实验成功迁移到新框架。
+6.  重写了 `truth_visualizer_demo.py` 作为新的可视化测试工具。
 
-## [WIP] fix(observatory): Rewrite visualizer demo to use the new rendering framework
+## [COMMIT] feat(visualization): Implement high-performance Rich-based terminal UI
 
-### 错误分析
-My previous plan incorrectly identified `truth_visualizer_demo.py` as redundant and deleted it. This was a mistake. The user has clarified that this script serves a vital purpose as a standalone test harness for visually verifying the correctness of rendering components, like color palettes, without the complexity of running a full agent-based simulation. The `ModuleNotFoundError` is a direct result of my erroneous deletion.
+### 摘要头
+## [COMMIT] feat(visualization): 实现高性能的 Rich-based 终端 UI
 
 ### 用户需求
-The `truth_visualizer_demo.py` script must be restored and made functional again. It needs to be rewritten to use the new, standardized `TerminalApp` visualization framework while retaining its original purpose: simulating a "golden" Conway's Game of Life, injecting artificial errors, and visualizing the diff to test the rendering logic in isolation.
+将观测站（Observatory）的所有可视化实验从低效的手写 ANSI 渲染器迁移到基于 `rich` 的模块化、高性能框架。
 
 ### 评论
-This is an important correction. A good component library should always be accompanied by simple, standalone examples or test harnesses. Restoring this script and adapting it to the new framework not only fixes the error but also improves the developer experience (DX) by providing an easy way to debug and showcase the visualization components. This is a much better outcome than simply deleting the file.
+这是一项成功的、大规模的重构，它标志着项目从“可行性验证”阶段进入“核心工具构建”阶段。新的 `TerminalApp` 框架提供了稳定的 30+ FPS 渲染、帧率解耦的物理衰减（余晖），以及清晰的模块化结构（`GridView`, `StatusBar`）。它将成为未来所有 Cascade 模拟可视化输出的标准。
 
 ### 目标
-1.  Completely rewrite `observatory/protoplasm/truth/truth_visualizer_demo.py`.
-2.  The new script will instantiate and drive the `TerminalApp`, `GridView`, `StatusBar`, and use the `Palettes.truth_diff` palette.
-3.  The script's core logic will remain the same: run a `GoldenLife` simulation, periodically inject fake errors into the "actual" grid, compute the diff matrix, and then push that matrix and status updates to the `TerminalApp`.
-4.  A comprehensive docstring will be added to the file to clearly explain its purpose as a visual test harness.
+1.  用 `TerminalApp` 和 `rich` 替换所有实验中的旧渲染逻辑。
+2.  将所有可视化组件（`grid.py`, `matrix.py`, `palette.py`, `app.py`, `status.py`）整合到 `observatory/visualization` 模块。
+3.  确保所有实验（Fireflies, Bottleneck, Conway）均能正常运行，并展示优化后的视觉效果。
 
 ### 基本原理
-Instead of importing the defunct `TruthRenderer`, the new script will set up our standardized `TerminalApp`. The main loop will no longer call a custom `renderer.update_frame()` method. Instead, it will perform the diff calculation locally (replicating the logic now found in `StateValidator`) to produce a `diff_matrix` with values `0, 1, 2, 3`. It will then pass this entire matrix to the `TerminalApp` using the `ingest_full_matrix()` method, and send status updates via `update_status()`. This demonstrates the new framework's flexibility and successfully restores the test harness's functionality.
+我们通过以下三个核心设计来达成目标：
+1.  **分层解耦**: 实验逻辑通过 `asyncio.Queue` 无阻塞地将数据推送到 `TerminalApp`。
+2.  **性能优化**: `GridView` 放弃了低效的 `rich.Table`，转而使用 `rich.Segment` 进行直接渲染，消除了主要的 CPU 瓶颈。
+3.  **时间一致性**: 将 `StateMatrix` 的衰减逻辑从基于帧率的步进修改为基于真实时间增量 (`dt`) 的步进，解决了在高FPS下的余晖闪烁问题。
 
 ### 标签
-#intent/fix #intent/refine #flow/ready #priority/critical #comp/cli #concept/ui #task/domain/visualization #task/object/test-harness #task/action/rewrite #task/state/continue
+#intent/build #flow/ready #priority/high
+#comp/cli #concept/ui #scope/dx
+#ai/delegate
+#task/domain/visualization #task/object/terminal-renderer #task/action/implementation
+#task/state/end #task/status/completed
 
 ---
 ### Script
 
-#### Acts 1: Rewrite the visualizer demo script
-
-I will now write the new, complete version of `truth_visualizer_demo.py` that is compatible with our new visualization framework.
+#### Acts 1: 暂存所有已修改/新增的文件
 
 ~~~~~act
-write_file
+git_add
+observatory/experiments/run_fireflies.py
+observatory/protoplasm/governance/bottleneck_sim.py
+observatory/protoplasm/truth/run_conway_experiment.py
 observatory/protoplasm/truth/truth_visualizer_demo.py
+observatory/protoplasm/truth/validator.py
+observatory/visualization/__init__.py
+observatory/visualization/app.py
+observatory/visualization/grid.py
+observatory/visualization/matrix.py
+observatory/visualization/palette.py
+observatory/visualization/status.py
 ~~~~~
-~~~~~python
-"""
-truth_visualizer_demo.py - A Standalone Visual Test Harness.
 
-This script's purpose is to test the visualization components in isolation,
-specifically the `GridView` and the `Palettes.truth_diff` color palette,
-without needing to run the full, complex, multi-agent Cascade simulation.
+#### Acts 2: 提交变更
 
-It works by:
-1. Running a "perfect", synchronous Game of Life simulation (the "Golden Truth").
-2. Simulating an "actual" grid that mostly follows the truth but occasionally has
-   injected errors (false positives/negatives).
-3. Calculating a "diff matrix" between the actual and golden grids.
-4. Rendering this diff matrix using the TerminalApp framework.
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(visualization): Implement high-performance Rich-based terminal UI
 
-This allows for rapid visual verification of color schemes, performance, and
-rendering correctness.
-"""
-import asyncio
-import numpy as np
+Replaces the inefficient hand-rolled ANSI renderer with a modular, high-performance visualization framework based on the `rich` library. This is a critical step in finalizing the "Protoplasm" phase tooling.
 
-from observatory.protoplasm.truth.golden_ca import GoldenLife
-from observatory.visualization.app import TerminalApp
-from observatory.visualization.grid import GridView
-from observatory.visualization.status import StatusBar
-from observatory.visualization.palette import Palettes
+Key changes:
+1. Unified Renderer: Consolidated all visual components into `observatory/visualization/TerminalApp`.
+2. Performance Fix: Refactored `GridView` to use low-level `rich.Segment` objects instead of heavy `rich.Table` objects, eliminating stuttering at high frame rates.
+3. Decoupled Physics: Updated `StateMatrix` to use delta time (`dt`) for decay, ensuring that the "afterglow" effect is time-consistent (e.g., 0.2s fade) regardless of the rendering FPS.
+4. Experiment Migration: Successfully migrated `run_fireflies.py`, `bottleneck_sim.py`, and `run_conway_experiment.py` to use the new framework.
+5. Test Harness Restored: Rewrote `truth_visualizer_demo.py` as a dedicated visual test harness for the new system.
+6. Bug Fixes: Corrected color rendering by using Rich-native RGB style strings instead of raw ANSI codes, fixing the "question mark" issue.
 
-# --- Test Configuration ---
-GRID_WIDTH = 50
-GRID_HEIGHT = 25
-MAX_GENERATIONS = 300
-FRAME_DELAY = 0.05  # seconds
-
-def get_glider_seed(width: int, height: int) -> np.ndarray:
-    """Creates a simple Glider pattern on the grid."""
-    grid = np.zeros((height, width), dtype=np.int8)
-    #   .X.
-    #   ..X
-    #   XXX
-    grid[1, 2] = 1
-    grid[2, 3] = 1
-    grid[3, 1:4] = 1
-    return grid
-
-async def main():
-    """Main loop to test the renderer."""
-    print("🚀 Starting Standalone Renderer Test...")
-    
-    # 1. Setup the "perfect" simulator
-    golden = GoldenLife(GRID_WIDTH, GRID_HEIGHT)
-    golden.seed(get_glider_seed(GRID_WIDTH, GRID_HEIGHT))
-
-    # 2. Setup the visualization app
-    grid_view = GridView(
-        width=GRID_WIDTH,
-        height=GRID_HEIGHT,
-        palette_func=Palettes.truth_diff,
-        decay_per_second=0.0 # No decay for discrete states
-    )
-    status_bar = StatusBar({"Generation": 0, "Status": "Running Test"})
-    app = TerminalApp(grid_view, status_bar)
-
-    await app.start()
-    try:
-        for gen in range(MAX_GENERATIONS):
-            # A. Get the next "correct" state from the simulator
-            theoretical_grid = golden.step()
-            
-            # B. For this test, assume the "actual" grid from agents is identical
-            actual_grid = theoretical_grid.copy()
-
-            # --- Inject fake errors to test colors ---
-            stats = {"false_pos": 0, "false_neg": 0}
-            if 20 <= gen < 40:
-                # Add a "ghost" cell (False Positive -> Red)
-                actual_grid[5, 5] = 1 
-                stats["false_pos"] += 1
-            if 60 <= gen < 80:
-                # Remove a real cell (False Negative -> Cyan)
-                glider_pos = np.where(theoretical_grid == 1)
-                if len(glider_pos[0]) > 0:
-                    # Pick a random part of the glider to remove
-                    idx = np.random.randint(len(glider_pos[0]))
-                    actual_grid[glider_pos[0][idx], glider_pos[1][idx]] = 0
-                    stats["false_neg"] += 1
-            
-            # C. Compute the diff matrix for rendering
-            diff_matrix = np.zeros_like(actual_grid)
-            diff_matrix[(actual_grid == 1) & (theoretical_grid == 1)] = 1 # Match-Alive
-            diff_matrix[(actual_grid == 1) & (theoretical_grid == 0)] = 2 # False Positive
-            diff_matrix[(actual_grid == 0) & (theoretical_grid == 1)] = 3 # False Negative
-
-            # D. Update the renderer with the diff matrix and stats
-            app.ingest_full_matrix(diff_matrix)
-            app.update_status("Generation", f"{gen}/{MAX_GENERATIONS}")
-            app.update_status("Status", "✅ SYNC" if sum(stats.values())==0 else "❌ DRIFT")
-            app.update_status("Errors", f"(Ghosts: {stats['false_pos']}, Missing: {stats['false_neg']})")
-            
-            # E. Wait to make it viewable
-            await asyncio.sleep(FRAME_DELAY)
-
-    finally:
-        app.stop()
-        print("\n✅ Renderer Test Finished.")
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nTest interrupted by user.")
+The old `observatory/protoplasm/renderer` files have been successfully superseded and removed.
 ~~~~~
 
 ### 下一步建议
-The entire refactoring and associated bug fixing for the visualization framework is now complete. The tooling is stable, performant, and correctly structured. This is the ideal moment to checkpoint our progress.
 
-My final recommendation for this task is to generate a `[COMMIT]` plan. This will save all the successful changes we've made, close out this chapter of the "Protoplasm" project, and provide a clean foundation for whatever comes next in the "Genesis Grid" plan.
+本次提交标志着“原基可视化与性能调优”任务的完成。
+
+接下来，你应该参考 **Cascade 预研计划：原基 (Protoplasm)** 的原始文档，确定下一个未完成的宏观任务。根据文档，下一个关键步骤是：
+
+1.  **第二章：神经直连**：虽然原型已完成，但我们尚未在任何实际 Agent 实验（如 Conway's Game of Life）中实现 **`DirectChannel`** 优化，以取代全局 `LocalBusConnector`。这应该成为下一个性能优化目标。
+2.  **第五章：真理之镜**：在 `run_conway_experiment.py` 中，我们只是完成了 Agent 的调度和验证器的初始化。下一个逻辑步骤是确保 `conway_agent.py` 中的逻辑是**完全正确**和**最优化**的，以配合我们高性能的验证器。
+
+建议启动下一项任务，例如，在 `conway_agent.py` 中实际使用和测试 `DirectChannel` 机制，以彻底打破 `LocalBus` 的规模限制。

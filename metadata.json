@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(api): 在公共命名空间中暴露 cs.Event", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766204036.6693337, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(runtime): 实现约束模拟与阻塞状态的可观测性", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766204129.572966, "duration_ms": 0}}

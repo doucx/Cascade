@@ -83,14 +83,26 @@ class Palettes:
     @staticmethod
     def truth_diff(diff_matrix: np.ndarray) -> np.ndarray:
         """
-        Maps a diff matrix to validation colors.
-        0: Dead (Correct) -> Dark Gray
-        1: Alive (Correct) -> Bright White
-        2: False Positive (Ghost) -> Bright Red
-        3: False Negative (Missing) -> Bright Cyan
+        Maps a diff matrix to validation colors (3-Network Model).
+        
+        0: Dead (Correct)          -> Dim Gray
+        1: Alive (Correct)         -> Bright White
+        
+        Logic Errors (vs Step Prediction):
+        2: FP (Logic Ghost)        -> Bright Red
+        3: FN (Logic Missing)      -> Cyan
+        
+        Drift Errors (vs Absolute Truth):
+        4: FP (Drift Ghost)        -> Gold
+        5: FN (Drift Missing)      -> Violet
         """
-        colors = np.full(diff_matrix.shape, "rgb(40,40,40)", dtype="<U18") # Default to dead
-        colors[diff_matrix == 1] = "rgb(220,220,220)" # Alive
-        colors[diff_matrix == 2] = "rgb(255,50,50)"   # False Positive
-        colors[diff_matrix == 3] = "rgb(50,220,255)"   # False Negative
+        # Default: 0 (Dead/Correct)
+        colors = np.full(diff_matrix.shape, "rgb(40,40,40)", dtype="<U18")
+        
+        colors[diff_matrix == 1] = "rgb(220,220,220)" # Alive (Correct)
+        colors[diff_matrix == 2] = "rgb(255,50,50)"   # Logic FP (Red)
+        colors[diff_matrix == 3] = "rgb(0,255,255)"   # Logic FN (Cyan)
+        colors[diff_matrix == 4] = "rgb(255,215,0)"   # Drift FP (Gold)
+        colors[diff_matrix == 5] = "rgb(238,130,238)" # Drift FN (Violet)
+        
         return colors

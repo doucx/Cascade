@@ -54,13 +54,14 @@ class TerminalApp:
 
     async def _render_loop(self):
         """The core loop that processes the queue and updates the Live display."""
+        # Let the Live object manage the refresh rate entirely.
         with Live(self.layout, screen=True, transient=True, refresh_per_second=30) as live:
-            frame_times = []
             last_time = time.perf_counter()
+            frame_count = 0
 
             while self._running:
-                # Process all pending updates from the queue
-                queue_size = self.queue.qsize()
+                # Process all pending updates from the queue.
+                # This is a fast, non-blocking operation.
                 while not self.queue.empty():
                     try:
                         msg_type, data = self.queue.get_nowait()
@@ -71,24 +72,21 @@ class TerminalApp:
                             key, value = data
                             self.status_bar.set_status(key, value)
                     except asyncio.QueueEmpty:
-                        break
+                        break # Continue to physics step
                 
                 # Apply physics/decay to the grid
                 self.grid_view.matrix.decay()
 
-                # Calculate FPS using a moving average of last 10 frames
+                # Update stats once per second for readability
+                frame_count += 1
                 now = time.perf_counter()
-                frame_time = now - last_time
-                last_time = now
-                frame_times.append(frame_time)
-                if len(frame_times) > 10:
-                    frame_times.pop(0)
+                if (now - last_time) > 1.0:
+                    fps = frame_count / (now - last_time)
+                    self.status_bar.set_status("FPS", f"{fps:.1f}")
+                    self.status_bar.set_status("Queue", self.queue.qsize())
+                    frame_count = 0
+                    last_time = now
                 
-                avg_frame_time = sum(frame_times) / len(frame_times)
-                fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float('inf')
-                self.status_bar.set_status("FPS", f"{fps:.1f}")
-                self.status_bar.set_status("Queue", queue_size)
-                
-                # Live display is automatically refreshed by the context manager.
-                # We add a small sleep to prevent a 100% CPU busy-loop.
-                await asyncio.sleep(0.001)
+                # Crucially, we yield control to the event loop.
+                # Rich's Live object will handle the sleep/wait to match refresh_per_second.
+                await asyncio.sleep(0)

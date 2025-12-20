@@ -4,9 +4,10 @@ import numpy as np
 from typing import Dict, Any, List, Optional
 from cascade.interfaces.protocols import Connector
 from .golden_ca import GoldenLife
-# Replace old renderer with UniGrid
+# Replace old renderer with UniGrid and import new UI helpers
 from observatory.protoplasm.renderer.unigrid import UniGridRenderer
 from observatory.protoplasm.renderer.palette import Palettes
+from . import ui
 
 class StateValidator:
     def __init__(self, width: int, height: int, connector: Connector, enable_ui: bool = True):
@@ -78,16 +79,16 @@ class StateValidator:
     def _process_buffers(self):
         next_gen = self.max_gen_verified + 1
         
-        if next_gen not in self.buffer:
-            self._update_ui_status(next_gen, 0)
+        current_buffer_size = len(self.buffer.get(next_gen, {}))
+        
+        # Always update UI status
+        self._update_ui_status(next_gen, current_buffer_size)
+
+        # If incomplete, don't verify yet
+        if current_buffer_size < self.total_agents:
             return
 
         current_buffer = self.buffer[next_gen]
-        
-        if len(current_buffer) < self.total_agents:
-            self._update_ui_status(next_gen, len(current_buffer))
-            return
-            
         self._verify_generation(next_gen, current_buffer)
         
         del self.buffer[next_gen]
@@ -99,23 +100,10 @@ class StateValidator:
         self.max_gen_verified = next_gen
 
     def _update_ui_status(self, gen: int, current: int):
-        if not self.renderer:
-            return
-            
-        total = self.total_agents
-        progress = current / total if total > 0 else 0
-        bar_len = 10
-        filled = int(bar_len * progress)
-        bar = "█" * filled + "░" * (bar_len - filled)
-        
-        status_icon = "✅" if (self.absolute_errors + self.relative_errors) == 0 else "❌"
-        
-        info = (
-            f"Gen {gen}: [{bar}] | "
-            f"{status_icon} Err: {self.absolute_errors+self.relative_errors} "
-            f"(Abs:{self.absolute_errors} Rel:{self.relative_errors})"
-        )
-        self.renderer.set_extra_info(info)
+        if self.renderer:
+            errors = {"abs": self.absolute_errors, "rel": self.relative_errors}
+            info = ui.format_status_line(gen, current, self.total_agents, errors)
+            self.renderer.set_extra_info(info)
 
     def _verify_generation(self, gen: int, reports: Dict[int, Any]):
         # 1. Construct Actual Grid
@@ -156,25 +144,9 @@ class StateValidator:
 
         # 4. Visualization Update
         if self.renderer:
-            # Encode states for Palette.truth
-            # 0.0: Match Dead
-            # 1.0: Match Alive
-            # 2.0: False Positive
-            # 3.0: False Negative
-            
-            display_grid = np.zeros(actual_grid.shape, dtype=np.float32)
-            
-            # Match Alive
-            display_grid[(actual_grid == 1) & (theo_grid == 1)] = 1.0
-            # False Positive
-            display_grid[(actual_grid == 1) & (theo_grid == 0)] = 2.0
-            # False Negative
-            display_grid[(actual_grid == 0) & (theo_grid == 1)] = 3.0
-            
-            # Ingest Full Frame
+            display_grid = ui.create_display_grid(actual_grid, theo_grid)
             self.renderer.ingest_full(display_grid)
-            
-            # Force status update
+            # Force status update for the next generation's clean slate
             self._update_ui_status(gen + 1, 0)
 
     def stop(self):

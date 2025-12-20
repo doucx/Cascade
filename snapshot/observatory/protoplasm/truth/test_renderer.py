@@ -3,10 +3,11 @@ import numpy as np
 import shutil
 import random
 
-# Use the new UniGrid
+# Use the new UniGrid and the shared UI module
 from observatory.protoplasm.renderer.unigrid import UniGridRenderer
 from observatory.protoplasm.renderer.palette import Palettes
 from observatory.protoplasm.truth.golden_ca import GoldenLife
+from observatory.protoplasm.truth import ui
 
 # --- Test Configuration ---
 GRID_WIDTH = 40
@@ -44,38 +45,44 @@ async def main():
     )
     renderer_task = asyncio.create_task(renderer.start())
 
-    abs_err = 0
+    errors = {"abs": 0, "rel": 0}
 
     try:
         for gen in range(MAX_GENERATIONS):
-            # A. Get the next "correct" state from the simulator
+            # A. Get theoretical state
             theoretical_grid = golden.step()
             
-            # B. For this test, assume the "actual" grid from agents is identical
+            # B. Create actual state with injected errors
             actual_grid = theoretical_grid.copy()
-
-            # --- Inject a fake error to test colors ---
-            # Should turn RED (2.0)
-            if 20 <= gen < 40:
-                actual_grid[5, 5] = 1 
-                abs_err = 1
+            errors["abs"] = 0 # Reset per frame for this test
             
-            # Should turn CYAN (3.0)
+            if 20 <= gen < 40:
+                # Create a false positive (Red)
+                if theoretical_grid[5, 5] == 0:
+                    actual_grid[5, 5] = 1 
+                    errors["abs"] += 1
+            
             if 30 <= gen < 50:
+                # Create a false negative (Cyan)
                 glider_pos = np.where(theoretical_grid == 1)
                 if len(glider_pos[0]) > 0:
-                    actual_grid[glider_pos[0][0], glider_pos[1][0]] = 0
-                    abs_err = 1
+                    y, x = glider_pos[0][0], glider_pos[1][0]
+                    if actual_grid[y, x] == 1:
+                        actual_grid[y, x] = 0
+                        errors["abs"] += 1
 
-            # C. Encode State
-            display_grid = np.zeros(actual_grid.shape, dtype=np.float32)
-            display_grid[(actual_grid == 1) & (theoretical_grid == 1)] = 1.0
-            display_grid[(actual_grid == 1) & (theoretical_grid == 0)] = 2.0
-            display_grid[(actual_grid == 0) & (theoretical_grid == 1)] = 3.0
+            # C. Use shared UI logic to create display grid and status line
+            display_grid = ui.create_display_grid(actual_grid, theoretical_grid)
+            status_line = ui.format_status_line(
+                gen, 
+                GRID_WIDTH * GRID_HEIGHT, # Assume full buffer for test
+                GRID_WIDTH * GRID_HEIGHT, 
+                errors
+            )
 
-            # D. Push Frame
+            # D. Push to renderer
             renderer.ingest_full(display_grid)
-            renderer.set_extra_info(f"Gen {gen} | Errors: {abs_err}")
+            renderer.set_extra_info(status_line)
             
             # E. Wait
             await asyncio.sleep(FRAME_DELAY)

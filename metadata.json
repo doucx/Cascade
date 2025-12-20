@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[PASS]", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766211974.044761, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(proto): 纠正 Diff 渲染并统一验证器 UI", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766212563.0315957, "duration_ms": 0}}

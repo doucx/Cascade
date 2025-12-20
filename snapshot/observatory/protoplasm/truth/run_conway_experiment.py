@@ -42,12 +42,12 @@ async def run_experiment():
     # Auto-detect terminal size to fit the grid
     cols, rows = shutil.get_terminal_size()
     # Leave room for logs and status lines
-    GRID_WIDTH = cols
-    GRID_HEIGHT = rows - 6 
+    # Each cell is 2 chars wide, so logical width is half the terminal width
+    GRID_WIDTH = cols // 2
+    GRID_HEIGHT = rows - 4 # We only need 2 status lines now
     
-    # Ensure reasonable bounds
-    # Reduce to 25x25 to ensure LocalExecutor (single thread) can handle the message load smoothly
-    GRID_WIDTH = min(GRID_WIDTH, 25) 
+    # Ensure reasonable bounds for performance
+    GRID_WIDTH = min(GRID_WIDTH, 50) 
     GRID_HEIGHT = min(GRID_HEIGHT, 25)
     
     print(f"🚀 Starting Conway Experiment with grid {GRID_WIDTH}x{GRID_HEIGHT}...")

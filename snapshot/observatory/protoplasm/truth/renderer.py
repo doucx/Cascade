@@ -48,8 +48,9 @@ class TruthRenderer:
         self.height = height
         self.matrix = DiffMatrix(width, height)
         
-        self.buffer_prev = RenderBuffer(width, height)
-        self.buffer_curr = RenderBuffer(width, height)
+        # Physical buffers are twice the logical width for square cells
+        self.buffer_prev = RenderBuffer(width * 2, height)
+        self.buffer_curr = RenderBuffer(width * 2, height)
         self.driver = AnsiDriver()
         
         self._gen_counter = 0
@@ -95,31 +96,25 @@ class TruthRenderer:
         self.driver.flush()
 
     def _render(self):
-        # 1. Rasterize Matrix to Buffer
-        self.buffer_curr.chars[:] = ' '
-        self.buffer_curr.colors[:] = ''
+        # 1. Rasterize Matrix to Buffer using vectorized operations
         
-        grid = self.matrix.grid
-        
-        # Match Alive: White '#'
-        mask_match = grid == 1
-        self.buffer_curr.chars[mask_match] = '#'
-        self.buffer_curr.colors[mask_match] = '\033[97m' # Bright White
-        
-        # Match Dead: Dim '.'
-        mask_dead = grid == 0
-        self.buffer_curr.chars[mask_dead] = '.'
-        self.buffer_curr.colors[mask_dead] = '\033[90m' # Dark Gray
-        
-        # False Positive: Red 'X'
-        mask_fp = grid == 2
-        self.buffer_curr.chars[mask_fp] = 'X'
-        self.buffer_curr.colors[mask_fp] = '\033[91m' # Bright Red
-        
-        # False Negative: Cyan 'O'
-        mask_fn = grid == 3
-        self.buffer_curr.chars[mask_fn] = 'O'
-        self.buffer_curr.colors[mask_fn] = '\033[96m' # Bright Cyan
+        # Logical grid (e.g., 25x50)
+        logical_grid = self.matrix.grid
+
+        # Create physical masks by repeating columns (e.g., creates a 25x100 mask)
+        phys_mask_alive = np.repeat(logical_grid == 1, 2, axis=1)
+        phys_mask_dead = np.repeat(logical_grid == 0, 2, axis=1)
+        phys_mask_fp = np.repeat(logical_grid == 2, 2, axis=1)
+        phys_mask_fn = np.repeat(logical_grid == 3, 2, axis=1)
+
+        # Apply character (always a block)
+        self.buffer_curr.chars[:] = '█'
+
+        # Apply colors based on physical masks
+        self.buffer_curr.colors[phys_mask_alive] = '\033[97m' # Bright White
+        self.buffer_curr.colors[phys_mask_dead] = '\033[90m'  # Dark Gray
+        self.buffer_curr.colors[phys_mask_fp] = '\033[91m'    # Bright Red
+        self.buffer_curr.colors[phys_mask_fn] = '\033[96m'   # Bright Cyan
 
         # 2. Diff & Draw
         rows, cols = RenderBuffer.compute_diff(self.buffer_prev, self.buffer_curr)

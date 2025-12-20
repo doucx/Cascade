@@ -26,45 +26,45 @@ class Palettes:
     @staticmethod
     def firefly(brightness: np.ndarray) -> np.ndarray:
         """
-        Maps 0.0-1.0 brightness to a Firefly gradient.
+        Maps 0.0-1.0 brightness to a Firefly gradient using Rich-compatible styles.
         0.0 (Refractory/Quiet) -> Dark Blue/Black
         0.5 (Charging) -> Deep Orange
         1.0 (Flash) -> Bright Yellow/White
         """
-        # Initialize with Dark (Background)
-        # \033[38;2;20;20;30m (Very Dark Blue)
-        colors = np.full(brightness.shape, '\033[38;2;30;30;40m', dtype='<U24')
-        
+        # Initialize with a dark background color in Rich's rgb format
+        colors = np.full(brightness.shape, "rgb(30,30,40)", dtype="<U18")
+
         # Low energy (Charging): Reddish
         mask_low = (brightness > 0.1) & (brightness <= 0.6)
-        colors[mask_low] = '\033[38;2;100;40;40m'
+        colors[mask_low] = "rgb(100,40,40)"
 
         # High energy (Pre-flash): Orange
         mask_high = (brightness > 0.6) & (brightness <= 0.9)
-        colors[mask_high] = '\033[38;2;200;120;0m'
-        
+        colors[mask_high] = "rgb(200,120,0)"
+
         # Flash: Bright Yellow/White
         mask_flash = brightness > 0.9
-        colors[mask_flash] = '\033[38;2;255;255;200m'
-        
+        colors[mask_flash] = "rgb(255,255,200)"
+
         return colors
 
     @staticmethod
     def bottleneck(states: np.ndarray) -> np.ndarray:
         """
-        Maps states to bottleneck visualizer colors.
-        0.0: Idle (Dim)
+        Maps states to bottleneck visualizer colors using Rich-compatible styles.
+        0.0: Idle (Dim Gray)
         0.5: Waiting (Cyan)
-        1.0: Running (White/Green)
+        1.0: Running (Bright Green/White)
         """
-        colors = np.full(states.shape, '\033[38;2;40;40;40m', dtype='<U24') # Dim Gray
-        
+        # Initialize with Dim Gray
+        colors = np.full(states.shape, "rgb(40,40,40)", dtype="<U18")
+
         # Waiting (Cyan)
         mask_wait = (states > 0.4) & (states < 0.8)
-        colors[mask_wait] = '\033[38;2;0;200;200m'
-        
-        # Running (Bright White/Green tint)
+        colors[mask_wait] = "rgb(0,200,200)"
+
+        # Running (Bright Green/White tint)
         mask_run = states >= 0.8
-        colors[mask_run] = '\033[38;2;200;255;200m'
-        
+        colors[mask_run] = "rgb(200,255,200)"
+
         return colors

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(observatory): 使用 Rich Control 封装原始 ANSI 流以防止自动换行破坏", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766233853.8529637, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(observatory): 移除 Rich 依赖并实施基于 ANSI 字节流的裸金属渲染器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766234808.6502512, "duration_ms": 0}}

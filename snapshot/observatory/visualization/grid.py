@@ -42,26 +42,38 @@ class GridView:
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
         """
-        The Rich render protocol method, highly optimized for throughput.
-        It bypasses Rich's style parsing by constructing raw ANSI strings.
+        Legacy Rich support. Used if wrapped in a Rich Layout.
+        """
+        # Fallback for static reporting if needed
+        yield Segment("GridView(Raw Mode Active)")
+
+    def render_frame_buffer(self) -> bytes:
+        """
+        Generates the full frame as a raw byte string.
+        This is the "Raw Metal" mode.
         """
         brightness = self.matrix.get_snapshot()
-        # colors now contains raw ANSI escape codes (e.g. "\033[38;2;...m")
+        # colors is a numpy array of strings like "\033[38;2;...m"
         colors = self.palette_func(brightness)
-
-        # ANSI Reset code to clear color at the end of each line
+        
+        # ANSI Reset
         reset = "\033[0m"
-
-        # Vectorized string construction.
-        # We iterate over rows and join the (color + block) strings.
-        # This is significantly faster than creating 10,000 Segment objects.
+        
+        # 1. Add pixel char "██" to every color code in the array
+        # This creates an array of strings like "\033[38;...m██"
+        # We use numpy char module for vectorized concatenation if possible,
+        # but standard list comp is surprisingly fast for string joining.
+        # Let's try a hybrid approach: Pre-calculate the row strings.
+        
+        lines = []
         for y in range(self.logical_height):
-            # Join all columns in this row: color_code + "██"
-            # Since `colors` is a numpy array of strings, this loop is tight.
-            row_content = "".join(f"{code}██" for code in colors[y])
+            # Join the row into one huge string
+            # OPTIMIZATION: We could cache the "██" part or use numpy char add,
+            # but string join is extremely optimized in CPython.
+            row_str = "".join(f"{code}██" for code in colors[y])
+            lines.append(row_str + reset)
             
-            # Yield a Control object.
-            # Rich treats Control objects as having 0 width and does NOT wrap them.
-            # This allows our long ANSI string to pass through to the terminal intact.
-            yield Control(row_content + reset)
-            yield Segment.line()
+        # Join lines with newline
+        full_frame = "\n".join(lines)
+        
+        return full_frame.encode("utf-8")

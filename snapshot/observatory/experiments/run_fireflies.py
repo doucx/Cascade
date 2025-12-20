@@ -11,7 +11,7 @@ from observatory.agents.kuramoto import firefly_agent
 from observatory.monitors.convergence import ConvergenceMonitor
 
 # Visualization
-from observatory.protoplasm.renderer.palette import Palettes
+from observatory.visualization.palette import Palettes
 from observatory.visualization.app import TerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar

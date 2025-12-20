@@ -1,11 +1,14 @@
 简要回答：
-分析完全正确。这个 `RuntimeError` 是一个典型的 `asyncio` 架构错误：我们在一个已经由 `asyncio.run()` 启动的异步函数 (`main`) 内部，错误地调用了 `cs.run()`，而 `cs.run()` 本身会尝试创建并运行一个新的事件循环，这在 `asyncio` 中是被禁止的。
+分析完全正确。`TypeError` 指出了一个核心的范式错误：在 Cascade 的 `@cs.task` 装饰的函数内部，我们不能 `await` 另一个 Cascade 任务（如 `cs.wait()`）的 `LazyResult`。`LazyResult` 是一个声明式的图节点，而不是一个可等待的协程。
+
+**根源分析**：
+`@cs.task` 内部的 `async def` 函数体应该包含标准的、命令式的 Python 异步代码。`cs.wait()` 是一个图构建原语，用于在工作流的*声明阶段*创建一个“等待”节点。而我们的 `time_probe_task` 任务的*职责*就是执行等待，因此它应该直接调用底层的 `asyncio.sleep()`。
 
 **解决方案**：
-我们必须遵循“异步代码用异步方式测试”的原则。在 `main` 函数这个异步上下文中，我们不应使用同步的 `cs.run` 门面，而应直接实例化 `cs.Engine` 并使用 `await engine.run()` 来执行工作流。
+我们将修改 `time_probe_task`，将 `await cs.wait(interval)` 替换为 `await asyncio.sleep(interval)`。这不仅能修复错误，还能使我们的测量更纯粹，因为它直接探测了 `asyncio` 事件循环的调度延迟，这正是本实验的初衷。
 
 摘要头：
-## [WIP] fix: Resolve nested event loop error in jitter meter
+## [WIP] fix: Correctly use async primitive in time_probe_task
 
 ### 标签
 #intent/fix #flow/ready #priority/high
@@ -17,61 +20,55 @@
 #task/state/continue
 
 ### 用户需求
-修复 `jitter_meter.py` 中因嵌套调用 `asyncio.run()` 而导致的 `RuntimeError`，使实验能够正常执行。
+修复在 `time_probe_task` 中因错误地 `await` 一个 `LazyResult` 而导致的 `TypeError`，使抖动测量实验能够成功运行。
 
 ### 评论
-这是一个非常有价值的“吃自己的狗粮 (Dogfooding)”的时刻。它暴露了 Cascade API 两种使用模式的明确界限：
-1.  **`cs.run()`**：一个高级、同步的便利封装，适用于简单的脚本和程序的顶层入口。
-2.  **`Engine().run()`**：核心的、异步的 API，适用于在已有的 `async` 环境中集成和控制 Cascade。
+这是一个关于 Cascade 核心设计哲学的关键示例。它区分了两种操作模式：
+1.  **声明式组合 (Graph Building)**: 在工作流的顶层，你通过调用 `cs.task(...)` 来创建 `LazyResult` 对象，并将它们作为参数传递给其他任务，从而构建计算图。`cs.wait()` 就属于这一层。
+2.  **命令式执行 (Task Implementation)**: 在 `@cs.task` 装饰的函数体内部，你编写的是标准的 Python 代码。如果你需要异步等待，你应该使用 `asyncio` 的原生原语，如 `asyncio.sleep()`。
 
-我们的实验脚本本身就是一个复杂的异步程序，因此必须使用后者。这个修复将使我们的测试代码成为正确使用 Cascade 异步 API 的典范。
+这次修复使我们的实验代码更加符合 Cascade 的设计范式，并且测量结果也更直接地反映了 `asyncio` 事件循环的性能。
 
 ### 目标
-修改 `jitter_meter.py`，将其中对 `cs.run()` 的调用替换为手动实例化 `cs.Engine` 并 `await` 其 `.run()` 方法。
+修改 `observatory/protoplasm/physics/jitter_meter.py`，将 `time_probe_task` 中对 `cs.wait()` 的不正确调用替换为对 `asyncio.sleep()` 的正确调用。
 
 ### 基本原理
-由于 `main()` 函数已经创建并管理了一个事件循环，所有在该函数内部的异步操作都必须是可等待的 (`awaitable`)，并提交给这个现有的循环。`cs.run()` 破坏了这个规则，而 `await engine.run()` 遵循了这个规则。我们将创建一个配置了默认组件（`NativeSolver`, `LocalExecutor`, `MessageBus`）的 `Engine` 实例，以模拟 `cs.run` 的内部行为，同时保持异步兼容性。
+`cs.wait()` 的底层实现本身就是对 `asyncio.sleep()` 的封装。在 `@cs.task` 内部直接调用 `asyncio.sleep()` 是实现“等待”这一副作用的正确、直接的方式。
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `jitter_meter.py` 的引擎调用方式
+#### Acts 1: 修正 `time_probe_task` 的实现
 
-我们将替换 `cs.run` 为 `Engine` 的直接异步调用。
+我们将把对 Cascade API 的错误调用替换为对 `asyncio` 原语的正确调用。
 
 ~~~~~act
 patch_file
 observatory/protoplasm/physics/jitter_meter.py
 ~~~~~
 ~~~~~python
-    # 2. Run the Probe using Cascade
-    # We use cs.run here to "eat our own dogfood".
-    # This ensures we are measuring the performance of the actual Cascade runtime.
-    print("Running Cascade probe workflow...")
-    probe_workflow = time_probe_task(PROBE_INTERVAL_S, EXPERIMENT_DURATION_S)
-    
-    # Use a silent logger for the probe run to not pollute the output
-    timing_errors = cs.run(probe_workflow, log_level="ERROR")
+    for i in range(num_probes):
+        start_time = time.perf_counter()
+        
+        await cs.wait(interval)
+        
+        end_time = time.perf_counter()
+        actual_delay = end_time - start_time
 ~~~~~
 ~~~~~python
-    # 2. Run the Probe using Cascade's async API
-    # We are already in an async context, so we must instantiate the Engine
-    # and `await` its run method, not use the synchronous `cs.run()` helper.
-    print("Running Cascade probe workflow...")
-    probe_workflow = time_probe_task(PROBE_INTERVAL_S, EXPERIMENT_DURATION_S)
-
-    # Instantiate a default, silent engine for the probe
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus() # A silent bus for clean test output
-    )
-    timing_errors = await engine.run(probe_workflow)
+    for i in range(num_probes):
+        start_time = time.perf_counter()
+        
+        # Inside a @cs.task, we use standard asyncio primitives for IO/time waits.
+        await asyncio.sleep(interval)
+        
+        end_time = time.perf_counter()
+        actual_delay = end_time - start_time
 ~~~~~
 
 ### 下一步建议
 再次运行实验：
-`python -m observatory.protoplasm/physics/jitter_meter.py`
+`python -m observatory.protoplasm.physics.jitter_meter`
 
-由于嵌套事件循环的 `RuntimeError` 已被解决，脚本现在应该能够成功执行，并最终输出我们期望的抖动分析报告。
+现在，`TypeError` 应该已经解决，实验将能够完整运行并输出我们期待的抖动分析报告。

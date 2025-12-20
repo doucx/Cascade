@@ -43,7 +43,8 @@ async def time_probe_task(interval: float, duration: float) -> List[float]:
     for i in range(num_probes):
         start_time = time.perf_counter()
         
-        await cs.wait(interval)
+        # Inside a @cs.task, we use standard asyncio primitives for IO/time waits.
+        await asyncio.sleep(interval)
         
         end_time = time.perf_counter()
         actual_delay = end_time - start_time

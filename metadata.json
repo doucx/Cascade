@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: Resolve nested event loop error in jitter meter", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766200695.5510638, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: Correctly use async primitive in time_probe_task", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766200753.641918, "duration_ms": 0}}

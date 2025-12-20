@@ -2,6 +2,7 @@ import asyncio
 import time
 import random
 import numpy as np
+import shutil
 from asyncio import Queue
 
 from .driver import AnsiDriver
@@ -46,8 +47,12 @@ class ForestRenderer:
 
     def stop(self):
         self._running = False
+        # CRITICAL FIX: Clear any partial frame data from the buffer
+        # before showing the cursor and flushing.
+        self.driver._buffer.clear()
         self.driver.show_cursor()
-        self.driver.reset # Reset colors
+        # Move to a clean line before printing final messages
+        self.driver.move_to(self.config.height + 2, 0)
         self.driver.flush()
         self.driver.close()
 
@@ -146,9 +151,16 @@ async def stress_test_loader(renderer: ForestRenderer):
         await asyncio.sleep(0.01)
 
 if __name__ == "__main__":
-    # Self-contained run
-    renderer = ForestRenderer(width=100, height=50)
-    
+    # Self-contained run with dynamic sizing
+    try:
+        cols, rows = shutil.get_terminal_size()
+        # Reserve 2 rows for status line and shell prompt
+        render_height = rows - 2
+        renderer = ForestRenderer(width=cols, height=render_height)
+    except OSError:
+        # Fallback for environments without a TTY (e.g., CI)
+        renderer = ForestRenderer(width=100, height=40)
+
     loop = asyncio.get_event_loop()
     try:
         # Schedule the stress loader
@@ -156,5 +168,6 @@ if __name__ == "__main__":
         # Run the renderer
         loop.run_until_complete(renderer.start())
     except KeyboardInterrupt:
+        # Stop is now responsible for most cleanup
         renderer.stop()
-        print("\nRenderer stopped.")
+        print("Renderer stopped.")

@@ -74,19 +74,24 @@ class TruthRenderer:
         self._render()
 
     def render_waiting(self, gen: int, current_count: int, total: int):
-        """Updates only the status line to show loading progress."""
-        self.driver.move_to(self.height + 1, 0)
-        progress = current_count / total
+        """Updates only the progress line (Line 2) to show loading status."""
+        # Move to Line 2 (height + 2)
+        self.driver.move_to(self.height + 2, 0)
+        
+        progress = current_count / total if total > 0 else 0
         bar_len = 20
         filled = int(bar_len * progress)
         bar = "█" * filled + "░" * (bar_len - filled)
         
+        # Clear line first
+        self.driver.write(f"{' ':<80}")
+        self.driver.move_to(self.height + 2, 0)
+        
         status = (
-            f"GEN: {gen:<4} | "
-            f"WAITING: [{bar}] {current_count}/{total} Agents | "
-            f"Initializing..."
+            f"Next Gen {gen}: [{bar}] {current_count}/{total}"
         )
-        self.driver.write(f"{status:<80}")
+        # Use dim color for waiting status
+        self.driver.write(status, '\033[90m') 
         self.driver.flush()
 
     def _render(self):
@@ -130,13 +135,22 @@ class TruthRenderer:
             np.copyto(self.buffer_prev.chars, self.buffer_curr.chars)
             np.copyto(self.buffer_prev.colors, self.buffer_curr.colors)
 
-        # 3. Status Line
+        # 3. Status Line (Line 1)
         self.driver.move_to(self.height + 1, 0)
+        
+        total_err = self._error_stats['abs'] + self._error_stats['rel']
+        status_icon = "✅ SYNC" if total_err == 0 else "❌ DRIFT"
+        
         status = (
             f"GEN: {self._gen_counter:<4} | "
-            f"AbsErr: {self._error_stats['abs']:<4} | "
-            f"RelErr: {self._error_stats['rel']:<4} | "
-            f"Status: {'✅ SYNC' if self._error_stats['abs']==0 else '❌ DRIFT'}"
+            f"Status: {status_icon} | "
+            f"Total Err: {total_err:<4} | "
+            f"(Abs: {self._error_stats['abs']}, Rel: {self._error_stats['rel']})"
         )
         self.driver.write(f"{status:<80}")
+        
+        # Clear the waiting line (Line 2) because we just finished a frame
+        self.driver.move_to(self.height + 2, 0)
+        self.driver.write(f"{' ':<80}")
+        
         self.driver.flush()

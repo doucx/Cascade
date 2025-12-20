@@ -15,20 +15,13 @@ from observatory.protoplasm.truth.validator import StateValidator
 MAX_GENERATIONS = 200
 EXPERIMENT_DURATION = 60.0
 
-def get_glider_seed(width: int, height: int) -> np.ndarray:
-    """Creates a seeded grid with random gliders."""
-    grid = np.zeros((height, width), dtype=np.int8)
-    
-    # Place a few gliders randomly
-    num_gliders = max(1, (width * height) // 100)
-    for _ in range(num_gliders):
-        ox = random.randint(1, width - 4)
-        oy = random.randint(1, height - 4)
-        # Glider pattern
-        grid[oy+0, ox+1] = 1
-        grid[oy+1, ox+2] = 1
-        grid[oy+2, ox+0:3] = 1
-        
+def get_random_seed(width: int, height: int, density: float = 0.2) -> np.ndarray:
+    """Creates a grid initialized with random noise."""
+    # Create a random float matrix 0.0-1.0
+    rng = np.random.default_rng()
+    noise = rng.random((height, width))
+    # Threshold it to get binary state
+    grid = (noise < density).astype(np.int8)
     return grid
 
 def calculate_neighbors(x: int, y: int, width: int, height: int) -> List[int]:
@@ -80,7 +73,7 @@ async def run_experiment():
     engine.register(shared_connector_provider)
     
     # 4. Create Initial State
-    initial_grid = get_glider_seed(GRID_WIDTH, GRID_HEIGHT)
+    initial_grid = get_random_seed(GRID_WIDTH, GRID_HEIGHT, density=0.25)
     
     # 5. Build Agent Workflows
     # Optimization: Batch creation to avoid slow startup

@@ -2,7 +2,7 @@ import asyncio
 import random
 import time
 
-from observatory.visualization.app import TerminalApp
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 from observatory.visualization.palette import Palettes
@@ -31,7 +31,8 @@ async def source_coroutine(app: TerminalApp, source_id: int):
         y = random.randint(0, GRID_HEIGHT - 1)
 
         # Call the renderer directly, mimicking an agent's flash callback
-        app.direct_update_grid(x, y, 1.0)
+        # Use batch API for RawTerminalApp
+        await app.direct_update_grid_batch([(x, y, 1.0)])
 
 
 async def main():

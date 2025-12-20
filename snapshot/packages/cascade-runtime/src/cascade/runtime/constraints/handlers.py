@@ -1,4 +1,5 @@
 from typing import TYPE_CHECKING, Dict, Any
+import fnmatch
 
 from .protocols import ConstraintHandler
 from cascade.graph.model import Node
@@ -8,6 +9,18 @@ from .rate_limiter import RateLimiter
 
 if TYPE_CHECKING:
     from .manager import ConstraintManager
+
+
+def _matches(scope: str, task_name: str) -> bool:
+    """Helper to check if a task name matches a scope pattern."""
+    if scope == "global":
+        return True
+    
+    if scope.startswith("task:"):
+        pattern = scope.split(":", 1)[1]
+        return fnmatch.fnmatch(task_name, pattern)
+    
+    return False
 
 
 def _parse_rate_string(rate_str: str) -> float:
@@ -62,24 +75,8 @@ class PauseConstraintHandler(ConstraintHandler):
         """
         Returns False (permission denied) if the task matches the constraint's scope.
         """
-        scope = constraint.scope
-
-        # Global scope matches everything
-        if scope == "global":
+        if _matches(constraint.scope, task.name):
             return False
-
-        # Task-specific scope
-        if scope.startswith("task:"):
-            target_pattern = scope.split(":", 1)[1]
-            if target_pattern.endswith("*"):
-                # Prefix match
-                prefix = target_pattern[:-1]
-                if task.name.startswith(prefix):
-                    return False
-            elif task.name == target_pattern:
-                return False
-
-        # If no match, this constraint doesn't apply to this task, so it is permitted.
         return True
 
     def append_requirements(
@@ -132,22 +129,7 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
         requirements: Dict[str, Any],
         manager: "ConstraintManager",
     ) -> None:
-        # Check scope match
-        scope = constraint.scope
-        is_match = False
-
-        if scope == "global":
-            is_match = True
-        elif scope.startswith("task:"):
-            target_pattern = scope.split(":", 1)[1]
-            if target_pattern.endswith("*"):
-                prefix = target_pattern[:-1]
-                if task.name.startswith(prefix):
-                    is_match = True
-            elif task.name == target_pattern:
-                is_match = True
-
-        if is_match:
+        if _matches(constraint.scope, task.name):
             res_name = self._get_resource_name(constraint)
             # We require 1 slot of this concurrency resource
             requirements[res_name] = 1
@@ -193,18 +175,7 @@ class RateLimitConstraintHandler(ConstraintHandler):
     def check_permission(
         self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
     ) -> bool:
-        # Check scope match
-        scope = constraint.scope
-        is_match = False
-
-        if scope == "global":
-            is_match = True
-        elif scope.startswith("task:"):
-            target_task_name = scope.split(":", 1)[1]
-            if task.name == target_task_name:
-                is_match = True
-
-        if not is_match:
+        if not _matches(constraint.scope, task.name):
             return True
 
         # Try acquire

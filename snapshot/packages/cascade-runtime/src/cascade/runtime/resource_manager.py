@@ -37,6 +37,14 @@ class ResourceManager:
         # If we reduced capacity below current usage, that's allowed (soft limit),
         # but new acquisitions will block.
 
+    def can_acquire(self, requirements: Dict[str, Union[int, float]]) -> bool:
+        """
+        Checks if the requested resources are currently available without blocking.
+        """
+        if not requirements:
+            return True
+        return self._can_acquire(requirements)
+
     async def acquire(self, requirements: Dict[str, Union[int, float]]):
         """
         Atomically acquires the requested resources.

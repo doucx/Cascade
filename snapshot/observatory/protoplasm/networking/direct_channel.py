@@ -32,14 +32,9 @@ class DirectChannel:
         Directly puts a message into the channel. Zero-copy.
         """
         # 1. Core Logic: Direct Delivery
-        # put_nowait is fastest, but risks Full exception. 
-        # For proto, we assume consumers are fast enough or capacity is sufficient.
-        try:
-            self._inbox.put_nowait(payload)
-        except asyncio.QueueFull:
-            # In a real system, we'd handle backpressure here.
-            # For the benchmark, this counts as a "dropped packet" or saturation.
-            pass
+        # We use await put() to handle backpressure and ensure fair scheduling.
+        # This prevents the producer from starving the consumer loop.
+        await self._inbox.put(payload)
 
         # 2. Telemetry Probe (The "Leak")
         # Randomly sample traffic to the global bus for observability.

@@ -1,93 +1,57 @@
 简要回答：
-收到。我们将正式启动 **原基计划 (Project Protoplasm)** 的第二阶段：神经直连 (Neural Direct Connection)。
+测试结果异常。`DirectChannel` 遭遇了严重的超时问题，且吞吐量反而低于 `LocalBus`。
+分析显示：`!! Timeout !! Received 80000/4000000`。
+这意味着 `DirectChannel` 的消费者几乎没有工作（80,000 条消息恰好等于 800 个通道 * 100 容量，即所有消息都堆积在 Queue 中，消费者没有取出）。
 
-根据文档 `CS-DOC-PRE-GENESIS-251220` 的第二章，我们的目标是证明在大规模（N=10,000）网格交互下，基于 Pub/Sub 的总线模式会遭遇物理瓶颈，并验证 **拓扑感知直连 (DirectChannel)** 方案的性能优势。
+**根源分析**：
+这是一个典型的 **事件循环饿死 (Event Loop Starvation)** 问题。
+在 `benchmark_direct_channel` 中，Producers 是紧密循环 (`for _ in range(NUM_ITERATIONS): for neighbor...`)。因为 `DirectChannel.send` 使用的是 `put_nowait`（非阻塞同步调用），整个 Producer 循环在 `asyncio` 看来是一个同步块（或者极少让出控制权）。
+结果是，Producer 霸占了 CPU，填满了所有 Queue，直到它们抛出 `QueueFull`（我们在代码中 `pass` 掉了这个异常），而 Consumer 的 `await channel.recv()` 协程从未获得执行机会去清空 Queue。
+
+相比之下，`LocalBus.publish` 内部虽然也是 `put_nowait`，但其内部的锁机制或其他 `await` 点可能隐式地提供了让步机会，或者其开销本身导致了自然的节奏变慢。
+
+**修正方案**：
+1.  **主动让步**：在 Producer 的 `send` 循环中，或者在 `DirectChannel.send` 内部，必须加入 `await asyncio.sleep(0)` 来强制让出控制权，模拟真实世界中 Agent 的计算间隔。
+2.  **容量控制**：基准测试不应忽略 `QueueFull`。如果满了，Producer 应该等待 (`await put()`) 而不是丢弃，这才是公平的吞吐量测试。
 
 摘要头：
-## [WIP] feat: 预研 DirectChannel 通信原型与基准测试
+## [WIP] fix: 修复 DirectChannel 基准测试中的事件循环饿死问题
 
 ### 标签
-#intent/explore #flow/ready #priority/high
-#comp/observatory #concept/communication #scope/core
+#intent/fix #flow/ready #priority/high
+#comp/observatory #concept/async #scope/core
 #ai/instruct
 #task/domain/networking
 #task/object/direct-channel
-#task/action/implementation
-#task/state/begin
+#task/action/bug-fix
+#task/state/continue
 
 ### 用户需求
-1.  **构建网络预研目录**：在 `observatory/protoplasm/networking/` 下建立实验场。
-2.  **实现 DirectChannel**：编写一个极简的、零拷贝的通信原语，基于 `asyncio.Queue` 封装，支持“点对点”直接投递。
-3.  **实现采样探针**：在 DirectChannel 中集成随机采样逻辑，验证“旁路通信”下的可观测性方案（即每 N 条消息向总线泄漏一条）。
-4.  **构建基准测试 (Benchmark)**：编写 `proto_direct_connect.py`，对比 `LocalBusConnector`（基于主题匹配及分发）与 `DirectChannel`（基于直接引用）在 1 对 N 广播场景下的吞吐量和延迟差异。
+1.  **修复基准测试逻辑**：修正 `benchmark_direct_channel` 中的饿死现象，确保消费者有机会处理消息。
+2.  **实现公平对比**：将 `DirectChannel.send` 改为标准的 `await queue.put()` 以处理背压，或者在 Producer 中添加 `await asyncio.sleep(0)`。考虑到我们要测试吞吐量极限，使用 `await queue.put()` 是更符合“无损传输”要求的做法。
+3.  **重新校准参数**：400万条消息对于单线程 Python 还是有点重，如果加上 `await` 切换开销，时间会变长。我们将 `NUM_ITERATIONS` 调整为 1000 以获得更快的反馈。
 
 ### 评论
-在细胞自动机模型中，邻居关系是静态的。`LocalBus` 的通用性（动态订阅、通配符匹配）在这里变成了纯粹的开销。`DirectChannel` 模拟的是生物神经突触的连接——一旦建立，信号传递就是电化学的直接流动，无需经过中央邮局。这个实验将量化这种“去中心化”带来的性能提升。
+这个失败是非常有价值的“反面教材”。它揭示了在 Python `asyncio` 中，"Direct" 并不总是意味着快。如果没有 IO 等待（`await`），单一的协程可以轻易阻塞整个世界。为了公平对比，我们必须让 `DirectChannel` 表现得像一个真正的异步通道，即处理背压。
 
 ### 目标
-*   建立 `observatory/protoplasm/networking` 目录。
-*   完成 `direct_channel.py`：实现带采样的直连通道。
-*   完成 `proto_direct_connect.py`：实现高并发基准测试脚本。
+*   修改 `direct_channel.py`，将 `put_nowait` 改为 `await put`。
+*   修改 `proto_direct_connect.py`，减少迭代次数，确保测试能在合理时间内完成。
 
 ### 基本原理
-*   **零拷贝 (Zero-Copy)**：`DirectChannel.send(obj)` 直接将 Python 对象引用放入接收者的 `asyncio.Queue`，不进行序列化，不经过中间路由。
-*   **对照实验**：模拟“一个细胞向 8 个邻居闪烁”的场景。
-    *   **Group A (Bus)**: 1 次 `publish("flash")`，Bus 内部遍历订阅列表并分发给 8 个 Queue。
-    *   **Group B (Direct)**: 循环 8 次 `neighbor.channel.send(msg)`。
-*   **预期结论**：在协程数量巨大时，Bus 的锁竞争 (`asyncio.Lock`) 和列表遍历将导致显著的延迟抖动，而 Direct 模式应保持线性性能。
+*   **背压 (Backpressure)**：当消费者处理不过来时，生产者必须减速。`await queue.put()` 天然实现了这一点。这不仅解决了饿死问题，也使得吞吐量测试更加真实——它测量的是系统在背压平衡下的最大处理能力。
 
 ---
 
 ### Script
 
-#### Acts 1: 创建目录结构
+#### Acts 1: 修正 `DirectChannel` 为异步阻塞模式
 
 ~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p observatory/protoplasm/networking
-touch observatory/protoplasm/networking/__init__.py
-~~~~~
-
-#### Acts 2: 实现 DirectChannel (`direct_channel.py`)
-
-这是一个包装了 `asyncio.Queue` 的轻量级类，它模拟了“突触”。关键特性是它持有一个可选的 `bus` 引用用于采样。
-
-~~~~~act
-write_file
+patch_file
 observatory/protoplasm/networking/direct_channel.py
 ~~~~~
 ~~~~~python
-import asyncio
-import random
-from typing import Any, Optional
-from cascade.common.messaging import bus as global_bus
-from cascade.interfaces.protocols import Connector
-
-class DirectChannel:
-    """
-    A high-performance, point-to-point communication primitive.
-    Simulates a direct synaptic connection between agents, bypassing the central event bus.
-    """
-    
-    def __init__(
-        self, 
-        owner_id: str, 
-        capacity: int = 100, 
-        sampling_rate: float = 0.001,
-        telemetry_connector: Optional[Connector] = None
-    ):
-        self.owner_id = owner_id
-        # The inbox is a simple asyncio Queue.
-        # Unbounded queues are dangerous in prod, but for this proto we want to measure pure throughput.
-        # We set a high limit to avoid immediate backpressure during bursts.
-        self._inbox = asyncio.Queue(maxsize=capacity)
-        
-        # Telemetry Sampling
-        self.sampling_rate = sampling_rate
-        self.telemetry_connector = telemetry_connector
-        
     async def send(self, payload: Any):
         """
         Directly puts a message into the channel. Zero-copy.
@@ -103,193 +67,46 @@ class DirectChannel:
             pass
 
         # 2. Telemetry Probe (The "Leak")
-        # Randomly sample traffic to the global bus for observability.
-        if self.telemetry_connector and self.sampling_rate > 0:
-            if random.random() < self.sampling_rate:
-                # We fire-and-forget the telemetry to minimize impact on the critical path
-                asyncio.create_task(
-                    self.telemetry_connector.publish(
-                        f"debug/sample/{self.owner_id}", 
-                        {"payload": str(payload), "type": "sample"}
-                    )
-                )
+~~~~~
+~~~~~python
+    async def send(self, payload: Any):
+        """
+        Directly puts a message into the channel. Zero-copy.
+        """
+        # 1. Core Logic: Direct Delivery
+        # We use await put() to handle backpressure and ensure fair scheduling.
+        # This prevents the producer from starving the consumer loop.
+        await self._inbox.put(payload)
 
-    async def recv(self) -> Any:
-        """
-        Waits for a message.
-        """
-        return await self._inbox.get()
-    
-    def qsize(self) -> int:
-        return self._inbox.qsize()
+        # 2. Telemetry Probe (The "Leak")
 ~~~~~
 
-#### Acts 3: 实现基准测试脚本 (`proto_direct_connect.py`)
+#### Acts 2: 调整基准测试参数与逻辑
 
-该脚本将对比两种模式的每秒操作数 (OPS)。为了模拟真实负载，我们将创建 N 个消费者和 M 个生产者。
+减少迭代次数，修正预期行为。
 
 ~~~~~act
-write_file
+patch_file
 observatory/protoplasm/networking/proto_direct_connect.py
 ~~~~~
 ~~~~~python
-import asyncio
-import time
-import random
-from typing import List
-from cascade.connectors.local import LocalBusConnector
-from .direct_channel import DirectChannel
-
 # --- Configuration ---
 NUM_ITERATIONS = 5000  # How many messages each producer sends
 NUM_PRODUCERS = 100
 NUM_CONSUMERS_PER_PRODUCER = 8 # Simulating Moore neighborhood (8 neighbors)
 
 async def benchmark_local_bus():
-    """
-    Scenario A: Pub/Sub via LocalBusConnector.
-    1 Producer publishes to a topic.
-    8 Consumers subscribe to that topic.
-    """
-    print(f"\n--- Benchmarking LocalBus (Producers={NUM_PRODUCERS}, Fan-out={NUM_CONSUMERS_PER_PRODUCER}) ---")
-    
-    connector = LocalBusConnector()
-    await connector.connect()
-    
-    # Setup Consumers
-    # Each consumer is a queue attached to a subscription
-    consumer_queues = []
-    
-    # We use a latch (Event) to signal completion
-    completion_event = asyncio.Event()
-    total_messages_received = 0
-    expected_messages = NUM_PRODUCERS * NUM_ITERATIONS * NUM_CONSUMERS_PER_PRODUCER
-    
-    async def consumer_handler(topic, payload):
-        nonlocal total_messages_received
-        total_messages_received += 1
-        if total_messages_received >= expected_messages:
-            completion_event.set()
+~~~~~
+~~~~~python
+# --- Configuration ---
+NUM_ITERATIONS = 1000  # Reduced for quicker feedback loop
+NUM_PRODUCERS = 100
+NUM_CONSUMERS_PER_PRODUCER = 8 # Simulating Moore neighborhood (8 neighbors)
 
-    # Subscribe 800 consumers (100 producers * 8)
-    # To mimic grid, Producer I publishes to Topic I.
-    # Consumers C_I_1 to C_I_8 subscribe to Topic I.
-    # This is optimizing Bus usage (exact topic match is faster than wildcard).
-    
-    subs = []
-    for i in range(NUM_PRODUCERS):
-        topic = f"cell/{i}"
-        for _ in range(NUM_CONSUMERS_PER_PRODUCER):
-             sub = await connector.subscribe(topic, consumer_handler)
-             subs.append(sub)
-
-    # Producers
-    start_time = time.perf_counter()
-    
-    async def producer(idx):
-        topic = f"cell/{idx}"
-        payload = {"data": "ping"}
-        for _ in range(NUM_ITERATIONS):
-            await connector.publish(topic, payload)
-    
-    producers = [producer(i) for i in range(NUM_PRODUCERS)]
-    
-    await asyncio.gather(*producers)
-    
-    # Wait for consumers to drain
-    try:
-        await asyncio.wait_for(completion_event.wait(), timeout=30.0)
-    except asyncio.TimeoutError:
-        print(f"!! Timeout !! Received {total_messages_received}/{expected_messages}")
-        
-    duration = time.perf_counter() - start_time
-    ops = expected_messages / duration
-    print(f"LocalBus Result: {duration:.4f}s | Throughput: {ops:,.0f} msgs/sec")
-    
-    await connector.disconnect()
-
-
-async def benchmark_direct_channel():
-    """
-    Scenario B: DirectChannel.
-    1 Producer holds references to 8 Consumer Channels.
-    It loops and calls send() on each.
-    """
-    print(f"\n--- Benchmarking DirectChannel (Producers={NUM_PRODUCERS}, Fan-out={NUM_CONSUMERS_PER_PRODUCER}) ---")
-
-    # Setup Consumers
-    # Each consumer is just a Channel
-    # We flatten the structure: channels[producer_id][neighbor_index]
-    consumer_channels = []
-    for i in range(NUM_PRODUCERS):
-        neighbors = [DirectChannel(f"p{i}_c{j}") for j in range(NUM_CONSUMERS_PER_PRODUCER)]
-        consumer_channels.append(neighbors)
-        
-    completion_event = asyncio.Event()
-    total_messages_received = 0
-    expected_messages = NUM_PRODUCERS * NUM_ITERATIONS * NUM_CONSUMERS_PER_PRODUCER
-
-    async def consumer_loop(channel: DirectChannel):
-        nonlocal total_messages_received
-        while True:
-            await channel.recv()
-            total_messages_received += 1
-            if total_messages_received >= expected_messages:
-                completion_event.set()
-                break
-
-    # Start 800 consumer loops
-    all_consumers = []
-    for group in consumer_channels:
-        for channel in group:
-            all_consumers.append(asyncio.create_task(consumer_loop(channel)))
-
-    # Producers
-    start_time = time.perf_counter()
-
-    async def producer(idx):
-        payload = {"data": "ping"}
-        my_neighbors = consumer_channels[idx]
-        for _ in range(NUM_ITERATIONS):
-            # The "Bypass": Manual iteration
-            for neighbor in my_neighbors:
-                await neighbor.send(payload)
-
-    producers = [producer(i) for i in range(NUM_PRODUCERS)]
-    
-    await asyncio.gather(*producers)
-
-    # Wait for consumers to drain
-    try:
-        await asyncio.wait_for(completion_event.wait(), timeout=30.0)
-    except asyncio.TimeoutError:
-        print(f"!! Timeout !! Received {total_messages_received}/{expected_messages}")
-
-    duration = time.perf_counter() - start_time
-    ops = expected_messages / duration
-    print(f"DirectChannel Result: {duration:.4f}s | Throughput: {ops:,.0f} msgs/sec")
-    
-    # Cleanup
-    for t in all_consumers:
-        t.cancel()
-
-
-async def main():
-    print("🚀 Starting Networking Benchmark...")
-    # Warmup
-    await asyncio.sleep(1)
-    
-    await benchmark_local_bus()
-    
-    await asyncio.sleep(1)
-    
-    await benchmark_direct_channel()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+async def benchmark_local_bus():
 ~~~~~
 
 ### 下一步建议
-我们已经准备好了测试脚本。下一步是执行这个基准测试，观察输出数据。
+再次运行 `python -m observatory.protoplasm.networking.proto_direct_connect`。
 
-预期的结果是 `DirectChannel` 的吞吐量应显著高于 `LocalBus`（可能在 2x 到 10x 之间），因为它是纯粹的 Python 协程切换，没有锁和字典查找的开销。这个数据将为我们在“创世网格”中采用混合通信架构（拓扑直连 + 随机采样总线）提供坚实的理论依据。
+这一次，`DirectChannel` 应该能正确跑完，并显示出比 `LocalBus` 更高的吞吐量，因为它省去了 Topic 匹配、列表查找和锁的开销，仅保留了最纯粹的 `Queue` 操作和协程切换成本。

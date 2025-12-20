@@ -6,7 +6,7 @@ from cascade.connectors.local import LocalBusConnector
 from .direct_channel import DirectChannel
 
 # --- Configuration ---
-NUM_ITERATIONS = 5000  # How many messages each producer sends
+NUM_ITERATIONS = 1000  # Reduced for quicker feedback loop
 NUM_PRODUCERS = 100
 NUM_CONSUMERS_PER_PRODUCER = 8 # Simulating Moore neighborhood (8 neighbors)
 

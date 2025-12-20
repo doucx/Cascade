@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 预研 DirectChannel 通信原型与基准测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766200198.589604, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 DirectChannel 基准测试中的事件循环饿死问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766200350.415906, "duration_ms": 0}}

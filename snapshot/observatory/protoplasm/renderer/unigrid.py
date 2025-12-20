@@ -53,6 +53,11 @@ class UniGridRenderer:
     def ingest(self, x: int, y: int, state: float = 1.0):
         """Thread-safe ingestion."""
         self.queue.put_nowait((x, y, state))
+
+    def ingest_full(self, matrix: np.ndarray):
+        """Thread-safe ingestion of a full frame."""
+        # Use a special tag for full frame updates
+        self.queue.put_nowait(("FULL", matrix))
         
     def set_extra_info(self, info: str):
         """Sets a string to be displayed in the status bar."""
@@ -83,8 +88,16 @@ class UniGridRenderer:
             # 1. Process Queue
             while not self.queue.empty():
                 try:
-                    x, y, state = self.queue.get_nowait()
-                    self.matrix.update(x, y, state)
+                    item = self.queue.get_nowait()
+                    if isinstance(item, tuple) and item[0] == "FULL":
+                        # Full frame replacement
+                        # We assume the shape matches or relies on numpy broadcasting if compatible
+                        # Ideally, caller ensures shape match.
+                        # We copy to avoid reference issues if caller mutates it later.
+                        np.copyto(self.matrix.brightness, item[1])
+                    else:
+                        x, y, state = item
+                        self.matrix.update(x, y, state)
                 except asyncio.QueueEmpty:
                     break
             

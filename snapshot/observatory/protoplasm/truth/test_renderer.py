@@ -3,7 +3,9 @@ import numpy as np
 import shutil
 import random
 
-from observatory.protoplasm.truth.renderer import TruthRenderer
+# Use the new UniGrid
+from observatory.protoplasm.renderer.unigrid import UniGridRenderer
+from observatory.protoplasm.renderer.palette import Palettes
 from observatory.protoplasm.truth.golden_ca import GoldenLife
 
 # --- Test Configuration ---
@@ -25,17 +27,24 @@ def get_glider_seed(width: int, height: int) -> np.ndarray:
 
 async def main():
     """
-    Main loop to test the TruthRenderer in isolation.
+    Main loop to test the UniGridRenderer in "Truth Mode".
     """
-    print("🚀 Starting Isolated Renderer Test...")
+    print("🚀 Starting UniGrid Truth Mode Test...")
     
     # 1. Setup the "perfect" simulator
     golden = GoldenLife(GRID_WIDTH, GRID_HEIGHT)
     golden.seed(get_glider_seed(GRID_WIDTH, GRID_HEIGHT))
 
-    # 2. Setup the renderer
-    renderer = TruthRenderer(GRID_WIDTH, GRID_HEIGHT)
-    renderer.start()
+    # 2. Setup the renderer with Truth Palette
+    renderer = UniGridRenderer(
+        width=GRID_WIDTH, 
+        height=GRID_HEIGHT, 
+        palette_func=Palettes.truth,
+        decay_rate=0.0
+    )
+    renderer_task = asyncio.create_task(renderer.start())
+
+    abs_err = 0
 
     try:
         for gen in range(MAX_GENERATIONS):
@@ -46,26 +55,36 @@ async def main():
             actual_grid = theoretical_grid.copy()
 
             # --- Inject a fake error to test colors ---
-            stats = {"abs": 0, "rel": 0}
-            if 20 <= gen < 25:
-                # Add a "ghost" cell (False Positive -> Red 'X')
+            # Should turn RED (2.0)
+            if 20 <= gen < 40:
                 actual_grid[5, 5] = 1 
-                stats["abs"] +=1
-            if 30 <= gen < 35:
-                # Remove a real cell (False Negative -> Cyan 'O')
+                abs_err = 1
+            
+            # Should turn CYAN (3.0)
+            if 30 <= gen < 50:
                 glider_pos = np.where(theoretical_grid == 1)
                 if len(glider_pos[0]) > 0:
                     actual_grid[glider_pos[0][0], glider_pos[1][0]] = 0
-                    stats["abs"] +=1
+                    abs_err = 1
 
-            # C. Update the renderer with both grids
-            renderer.update_frame(gen, actual_grid, theoretical_grid, stats)
+            # C. Encode State
+            display_grid = np.zeros(actual_grid.shape, dtype=np.float32)
+            display_grid[(actual_grid == 1) & (theoretical_grid == 1)] = 1.0
+            display_grid[(actual_grid == 1) & (theoretical_grid == 0)] = 2.0
+            display_grid[(actual_grid == 0) & (theoretical_grid == 1)] = 3.0
+
+            # D. Push Frame
+            renderer.ingest_full(display_grid)
+            renderer.set_extra_info(f"Gen {gen} | Errors: {abs_err}")
             
-            # D. Wait to make it viewable
+            # E. Wait
             await asyncio.sleep(FRAME_DELAY)
 
     finally:
         renderer.stop()
+        if not renderer_task.done():
+            renderer_task.cancel()
+            await renderer_task
         print("\n✅ Renderer Test Finished.")
 
 

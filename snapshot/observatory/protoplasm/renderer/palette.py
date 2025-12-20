@@ -72,3 +72,28 @@ class Palettes:
         colors[mask_run] = '\033[38;2;200;255;200m'
         
         return colors
+
+    @staticmethod
+    def truth(states: np.ndarray) -> np.ndarray:
+        """
+        Maps states to Truth/Diff colors.
+        0.0: Match Dead (Dark Gray)
+        1.0: Match Alive (Bright White)
+        2.0: False Positive (Red)
+        3.0: False Negative (Cyan)
+        """
+        colors = np.full(states.shape, '\033[90m', dtype='<U24') # Match Dead
+        
+        # Match Alive (1.0)
+        mask_alive = (states > 0.9) & (states < 1.1)
+        colors[mask_alive] = '\033[97m' # Bright White
+
+        # False Positive (2.0) - Red
+        mask_fp = (states > 1.9) & (states < 2.1)
+        colors[mask_fp] = '\033[91m'
+
+        # False Negative (3.0) - Cyan
+        mask_fn = (states > 2.9) & (states < 3.1)
+        colors[mask_fn] = '\033[96m'
+        
+        return colors

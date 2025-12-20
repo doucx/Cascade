@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 预研大规模递归稳定性与内存泄漏检测", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766201280.0402708, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: Enhance observability and reduce scale in recursion test", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766201457.0517395, "duration_ms": 0}}

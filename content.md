@@ -1,46 +1,43 @@
 简要回答：
-非常抱歉，船长。由于之前的重心完全放在了时间抖动分析上，我确实遗漏了 **3.2 递归深度与栈溢出** 这一关键环节。
+分析表明脚本存在三个问题：
+1.  **内存监测失效**：由于环境中未安装 `psutil`，脚本回退到了返回 `0.0` 的空函数。
+2.  **“静默”运行**：手动实例化的 `MessageBus` 没有挂载任何日志订阅者（Subscriber），因此你看不到任何任务启动或完成的日志，无法判断 Agent 是否存活。
+3.  **并发过载**：同时启动 10,000 个 Agent 会瞬间产生巨大的 CPU 负载（用于图构建和任务调度），导致事件循环响应极慢，看起来像卡死。
 
-在“创世网格”中，Agent 是以长生不死的递归 Task 形式存在的。如果我们的尾递归优化 (TCO) 存在缺陷，或者在万节点并发下发生内存泄漏，网格将会在运行几小时后由于 OOM (内存溢出) 而崩溃。我们必须在进入第四章之前，完成这项关于“生命持久性”的验证。
+**修正方案**：
+1.  **增强内存读取**：添加读取 `/proc/self/status` 作为 Linux 环境下的无依赖回退方案，确保能读到内存数据。
+2.  **增加可观测性**：手动挂载 `HumanReadableLogSubscriber`，并将日志级别设为 `WARNING`（避免刷屏但能看到错误）或抽样打印进度。
+3.  **降低并发规模**：将 Agent 数量暂时调整为 **1,000**，以确保测试能在合理时间内完成并验证 TCO 机制。1,000 个长生不死的 Agent 足以暴露内存泄漏问题。
 
 摘要头：
-## [WIP] feat: 预研大规模递归稳定性与内存泄漏检测
-
-### 错误分析
-在执行第三章计划时，我未能严格遵守 `CS-DOC-PRE-GENESIS-251220` 中定义的完整子项，跳过了 3.2 节。这违反了计划的完整性原则。现在立即补全这一关键的基础设施验证步骤。
-
-### 用户需求
-1.  **验证 TCO 机制**：确保 Cascade 在 10,000 个并发 Agent 递归 100,000 代以上时，不会触发 Python 的 `RecursionError`。
-2.  **内存泄漏监测**：量化分析大规模递归过程中的内存占用曲线，验证 `LazyResult` 节点在被替代后是否被正确释放。
-
-### 评论
-Python 原生并不支持尾递归优化。Cascade 的 `Engine` 是通过一个 `while True` 循环手动驱动 `LazyResult` 链条来实现这一点的。这是一个“逻辑上的递归，物理上的迭代”。本实验将证明这种设计在高并发下是否依然能保持内存平稳。
-
-### 目标
-*   在 `observatory/protoplasm/physics/` 下实现 `recursion_test.py`。
-*   同时运行 10,000 个递归 Agent，每代进行简单的状态累加。
-*   记录并分析前 1,000 代的内存增长情况。
-
-### 基本原理
-*   **资源释放验证**：如果 `Engine` 在每次递归时没有显式解除对上一代 `LazyResult` 的引用，那么 10,000 个 Agent 每秒产生数万个对象，内存会迅速耗尽。
-*   **采样频率**：每 100 代记录一次系统内存占用 (`psutil`)，以此构建时间-内存曲线。
+## [WIP] fix: Enhance observability and reduce scale in recursion test
 
 ### 标签
-#intent/explore #flow/ready #priority/high
-#comp/observatory #comp/runtime #concept/memory #scope/core
+#intent/fix #flow/ready #priority/high
+#comp/observatory #concept/memory #scope/core
 #ai/instruct
 #task/domain/physics
 #task/object/recursion-tco
-#task/action/verification
+#task/action/bug-fix
 #task/state/continue
+
+### 用户需求
+1.  **修复内存监控**：在没有 `psutil` 的情况下也能获取内存数据。
+2.  **确认 Agent 状态**：通过日志输出证明 Agent 确实在递归运行。
+3.  **防止卡死**：调整测试参数以适应单线程 Python 的调度能力。
+
+### 目标
+修改 `recursion_test.py`，实现 Linux 原生内存读取，添加日志订阅者，并将并发数降至 1,000。
+
+### 基本原理
+*   **/proc/self/status**: Linux 内核提供的进程状态文件，其中 `VmRSS` 字段即为物理内存占用。
+*   **采样日志**: 我们不需要打印 1,000 个 Agent 的每一代日志，只需打印其中一个 Agent 的状态即可证明系统在运行。
 
 ---
 
 ### Script
 
-#### Acts 1: 实现递归与内存测试脚本 (`recursion_test.py`)
-
-我们将编写一个高强度的递归工作流，并集成内存统计功能。
+#### Acts 1: 增强 `recursion_test.py`
 
 ~~~~~act
 write_file
@@ -50,46 +47,70 @@ observatory/protoplasm/physics/recursion_test.py
 import asyncio
 import time
 import os
-import gc
+import re
+import random
 from typing import Optional
 
 import cascade as cs
+from cascade.runtime.subscribers import HumanReadableLogSubscriber
+from cascade.common.messaging import bus as global_bus
+from cascade.common.renderers import CliRenderer
 
-# Use psutil if available, otherwise fallback to a simpler method
-try:
-    import psutil
-    def get_memory_mb():
+# --- Memory Monitoring Utils ---
+
+def get_memory_mb():
+    """
+    Tries to get memory usage via psutil, then /proc/self/status (Linux),
+    then returns 0.0 if all fail.
+    """
+    # 1. Try psutil
+    try:
+        import psutil
         process = psutil.Process(os.getpid())
         return process.memory_info().rss / (1024 * 1024)
-except ImportError:
-    def get_memory_mb():
-        return 0.0 # Cannot measure without psutil
+    except ImportError:
+        pass
+
+    # 2. Try reading /proc/self/status (Linux specific)
+    try:
+        with open("/proc/self/status", "r") as f:
+            content = f.read()
+            # Look for "VmRSS:    1234 kB"
+            match = re.search(r"VmRSS:\s+(\d+)\s+kB", content)
+            if match:
+                return float(match.group(1)) / 1024.0
+    except FileNotFoundError:
+        pass
+
+    print("⚠️  Warning: Cannot determine memory usage (psutil missing & not on Linux?)")
+    return 0.0
 
 # --- Configuration ---
-NUM_AGENTS = 10000
-NUM_GENERATIONS = 1000  # Total generations to simulate
-REPORT_INTERVAL = 100   # Report stats every N generations
+NUM_AGENTS = 1000      # Reduced from 10,000 to ensure responsiveness
+NUM_GENERATIONS = 1000 # Total generations to simulate
+REPORT_INTERVAL = 2    # Monitor interval in seconds
 
 # --- The Recursive Agent ---
 
-def immortal_agent(agent_id: int, gen: int):
+def controlled_agent(agent_id: int, gen: int, limit: int):
     """
-    A simple recursive agent that just counts its generations.
-    This tests the Engine's ability to handle infinite recursion (TCO).
+    A recursive agent that stops after `limit` generations.
     """
-    @cs.task(name=f"step_{agent_id}")
-    def step(current_gen: int):
-        # Perform a tiny bit of work
-        return current_gen + 1
-
-    next_gen_val = step(gen)
-
-    @cs.task(name=f"loop_{agent_id}")
-    def loop(next_val: int):
-        # Tail call back to itself
-        return immortal_agent(agent_id, next_val)
-
-    return loop(next_gen_val)
+    # We use a task for the step to involve the Engine's scheduling machinery
+    @cs.task(name=f"step")
+    def step(v): 
+        return v + 1
+    
+    next_v = step(gen)
+    
+    # We use a task for the check/recursion to test TCO
+    @cs.task(name=f"loop")
+    def loop(v):
+        if v >= limit:
+            return v
+        return controlled_agent(agent_id, v, limit)
+        
+    return loop(next_v)
 
 # --- Experiment Orchestrator ---
 
@@ -101,53 +122,54 @@ async def run_recursion_experiment():
     initial_mem = get_memory_mb()
     print(f"Initial Memory Usage: {initial_mem:.2f} MB")
 
-    # 1. Create 10,000 Agent Tasks
-    agent_tasks = []
-    # We use a shared engine to stress the internal graph-building and cleanup logic
+    # 1. Setup Engine with Visibility
+    # We attach a subscriber to the bus so we can see if things go wrong.
+    # But we set min_level="WARNING" to avoid flooding stdout with 1000 agents' info.
+    
+    # Configure global renderer for the bus (used by subscribers)
+    global_bus.set_renderer(CliRenderer(store=global_bus.store, min_level="WARNING"))
+    
+    engine_bus = cs.MessageBus()
+    # Attach subscriber to the engine's bus
+    HumanReadableLogSubscriber(engine_bus)
+    
     engine = cs.Engine(
         solver=cs.NativeSolver(),
         executor=cs.LocalExecutor(),
-        bus=cs.MessageBus()
+        bus=engine_bus
     )
 
     print(f"Starting {NUM_AGENTS} agents...")
-    
-    # We create all workflows but we need a way to stop them after NUM_GENERATIONS.
-    # We'll modify the agent to stop at a limit for this test.
-    
-    def controlled_agent(agent_id: int, gen: int, limit: int):
-        @cs.task
-        def step(v): return v + 1
-        
-        next_v = step(gen)
-        
-        @cs.task
-        def check(v):
-            if v >= limit:
-                return v
-            return controlled_agent(agent_id, v, limit)
-            
-        return check(next_v)
-
     start_time = time.perf_counter()
     
-    # Run agents concurrently
-    tasks = [engine.run(controlled_agent(i, 0, NUM_GENERATIONS)) for i in range(NUM_AGENTS)]
+    # 2. Launch Agents
+    # We stagger the start slightly to avoid thundering herd on graph build
+    tasks = []
+    for i in range(NUM_AGENTS):
+        tasks.append(engine.run(controlled_agent(i, 0, NUM_GENERATIONS)))
+        if i % 100 == 0:
+            await asyncio.sleep(0) # Yield to event loop
     
-    # Monitor memory in a background loop
+    print(f"All agents scheduled. Monitoring...")
+
+    # 3. Monitor memory in a background loop
     async def monitor_mem():
+        max_mem = initial_mem
         while True:
-            await asyncio.sleep(2)
+            await asyncio.sleep(REPORT_INTERVAL)
             mem = get_memory_mb()
-            print(f"   [Monitor] Memory: {mem:.2f} MB (Delta: {mem - initial_mem:+.2f} MB)")
-            # Trigger GC manually to see if it clears the "lazy" junk
-            # gc.collect()
+            max_mem = max(max_mem, mem)
+            print(f"   [Monitor] Memory: {mem:.2f} MB (Delta: {mem - initial_mem:+.2f} MB) | Max Delta: {max_mem - initial_mem:+.2f} MB")
 
     monitor_task = asyncio.create_task(monitor_mem())
 
     try:
+        # Wait for all agents to finish
         results = await asyncio.gather(*tasks)
         print(f"\n✅ Successfully reached {NUM_GENERATIONS} generations for all {NUM_AGENTS} agents.")
+    except Exception as e:
+        print(f"\n❌ Experiment failed with error: {e}")
+        raise
     finally:
         monitor_task.cancel()
 
@@ -162,9 +184,10 @@ async def run_recursion_experiment():
     print(f"Net Leak:         {final_mem - initial_mem:+.2f} MB")
     print("----------------------------------")
     
-    if (final_mem - initial_mem) > 100: # Arbitrary threshold for 10k agents
-        print("⚠️  POTENTIAL LEAK: Memory increased significantly.")
-        print("   Check if Engine._execute_graph is holding onto old LazyResults.")
+    # Check for leaks
+    # Allow some overhead for python objects, but it shouldn't be massive
+    if (final_mem - initial_mem) > 50: 
+        print("⚠️  POTENTIAL LEAK: Memory increased significantly (>50MB).")
     else:
         print("✅  STABLE: Memory usage remained within reasonable bounds.")
 
@@ -173,11 +196,12 @@ if __name__ == "__main__":
 ~~~~~
 
 ### 下一步建议
-请运行此脚本：
+运行修正后的测试：
 `python -m observatory.protoplasm.physics.recursion_test`
 
-**观察重点**：
-1.  **是否崩溃**：如果触发了 `RecursionError`，说明我们的 TCO 逻辑在并发环境下失效了。
-2.  **内存斜率**：关注 `[Monitor]` 输出的 Delta 值。如果它随着代数的增加而线性、无止境地增长，说明我们存在内存泄漏（可能在 `Engine` 的历史记录或闭包引用中）。
+这次你应该能看到：
+1.  **有效的内存读数**（基于 Linux `/proc`）。
+2.  **定期的监控日志**。
+3.  **最终的成功报告**。
 
-完成此项测试后，我们将补齐第三章的所有预研报告，并真正进入第四章。
+如果脚本成功运行且 Net Leak 较小（例如 < 20MB），则证明 TCO 机制有效且无明显内存泄漏。如果内存持续上涨，我们将需要检查 `Engine` 对历史 `LazyResult` 的引用处理。

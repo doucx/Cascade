@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import patch
 from cascade.adapters.cache.in_memory import InMemoryCacheBackend
 
+
 @pytest.mark.asyncio
 async def test_cache_set_and_get():
     """Test basic set and get functionality."""

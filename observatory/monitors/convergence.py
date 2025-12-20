@@ -12,9 +12,7 @@ class ConvergenceMonitor:
     parameter to measure the degree of synchronization.
     """
 
-    def __init__(
-        self, num_agents: int, period: float, connector: LocalBusConnector
-    ):
+    def __init__(self, num_agents: int, period: float, connector: LocalBusConnector):
         self.num_agents = num_agents
         self.period = period
         self.connector = connector
@@ -31,8 +29,10 @@ class ConvergenceMonitor:
         agent_id = payload.get("agent_id")
         if agent_id is not None:
             self._flash_count += 1
-            if self._flash_count <= 5: # Log first 5 flashes to confirm activity
-                print(f"\n[Monitor] Received flash from agent {agent_id} at t={time.time():.2f}")
+            if self._flash_count <= 5:  # Log first 5 flashes to confirm activity
+                print(
+                    f"\n[Monitor] Received flash from agent {agent_id} at t={time.time():.2f}"
+                )
 
             self.phases_at_flash[agent_id] = payload.get("phase", 0.0)
             self.last_flash_time[agent_id] = time.time()
@@ -53,7 +53,7 @@ class ConvergenceMonitor:
         for agent_id, phase_at_flash in self.phases_at_flash.items():
             time_since_flash = now - self.last_flash_time.get(agent_id, now)
             current_phase = (phase_at_flash + time_since_flash) % self.period
-            
+
             # Convert phase [0, period] to angle theta [0, 2*pi]
             theta = 2 * np.pi * current_phase / self.period
             current_thetas.append(theta)
@@ -61,7 +61,7 @@ class ConvergenceMonitor:
         # Calculate the order parameter R = | (1/N) * sum(e^(i * theta_j)) |
         if not current_thetas:
             return 0.0
-        
+
         # We use num_agents as N for a stable denominator, even if not all have flashed yet
         z = np.sum(np.exp(1j * np.array(current_thetas))) / self.num_agents
         return np.abs(z)
@@ -83,19 +83,19 @@ class ConvergenceMonitor:
     async def run(self, frequency_hz: float = 2.0, callback=None):
         """
         The main loop of the monitor.
-        
+
         Args:
             frequency_hz: How often to calculate R.
-            callback: Optional function(float) -> None to receive the R value 
+            callback: Optional function(float) -> None to receive the R value
                       instead of printing to stdout.
         """
         self._is_running = True
         self.callback = callback
         subscription = await self.connector.subscribe("firefly/flash", self.on_flash)
-        
+
         if not self.callback:
             print("🔭 Convergence Monitor Started...")
-            
+
         try:
             while self._is_running:
                 order_parameter = self._calculate_order_parameter()

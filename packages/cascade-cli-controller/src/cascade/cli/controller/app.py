@@ -1,7 +1,6 @@
 import asyncio
 import time
 import typer
-import uuid
 from dataclasses import asdict
 
 from cascade.common.messaging import bus

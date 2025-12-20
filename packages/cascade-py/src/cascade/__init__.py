@@ -93,7 +93,9 @@ from cascade.common.messaging import bus
 from cascade.common.renderers import CliRenderer, JsonRenderer
 
 
-def _create_state_backend_factory(backend_spec: Union[str, Callable[[str], StateBackend], None]):
+def _create_state_backend_factory(
+    backend_spec: Union[str, Callable[[str], StateBackend], None],
+):
     """
     Helper to create a factory function from a backend specification (URI or object).
     """
@@ -109,14 +111,16 @@ def _create_state_backend_factory(backend_spec: Union[str, Callable[[str], State
                 import redis
                 from cascade.adapters.state.redis import RedisStateBackend
             except ImportError:
-                raise ImportError("The 'redis' library is required for redis:// backends.")
-            
+                raise ImportError(
+                    "The 'redis' library is required for redis:// backends."
+                )
+
             # Create a shared client pool
             client = redis.from_url(backend_spec)
-            
+
             def factory(run_id: str) -> StateBackend:
                 return RedisStateBackend(run_id=run_id, client=client)
-            
+
             return factory
         else:
             raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
@@ -135,9 +139,9 @@ def run(
 ) -> Any:
     """
     Runs a Cascade workflow with a default engine configuration.
-    
+
     Args:
-        state_backend: A URI string (e.g. "redis://localhost") or a factory function 
+        state_backend: A URI string (e.g. "redis://localhost") or a factory function
                        that accepts a run_id and returns a StateBackend.
     """
     # 1. Setup the messaging renderer
@@ -158,7 +162,7 @@ def run(
     # 3. Assemble the default Engine
     solver = NativeSolver()
     executor = LocalExecutor()
-    
+
     sb_factory = _create_state_backend_factory(state_backend)
 
     engine = Engine(

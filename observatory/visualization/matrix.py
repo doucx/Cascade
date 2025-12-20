@@ -1,11 +1,13 @@
 import numpy as np
 from dataclasses import dataclass
 
+
 @dataclass
 class GridConfig:
     width: int = 100
     height: int = 100
-    decay_per_second: float = 4.0 # Brightness fades from 1.0 to 0 in 0.25s
+    decay_per_second: float = 4.0  # Brightness fades from 1.0 to 0 in 0.25s
+
 
 class StateMatrix:
     """
@@ -34,7 +36,7 @@ class StateMatrix:
         """
         Applies time-based decay to the entire matrix.
         Optimized vectorized operation.
-        
+
         Args:
             dt: The time delta in seconds since the last decay.
         """

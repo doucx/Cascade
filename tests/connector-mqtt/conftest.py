@@ -2,6 +2,7 @@ import sys
 import pytest
 from unittest.mock import MagicMock, AsyncMock
 
+
 @pytest.fixture(autouse=True)
 def mock_aiomqtt_module(mocker):
     """
@@ -15,10 +16,7 @@ def mock_aiomqtt_module(mocker):
     # 1. Force reload of the target module
     # We must remove any existing loaded versions of our connector modules
     # so that they are forced to re-import 'aiomqtt' (which we are about to mock).
-    modules_to_unload = [
-        "cascade.connectors.mqtt",
-        "cascade.connectors.mqtt.connector"
-    ]
+    modules_to_unload = ["cascade.connectors.mqtt", "cascade.connectors.mqtt.connector"]
     for mod in modules_to_unload:
         if mod in sys.modules:
             del sys.modules[mod]

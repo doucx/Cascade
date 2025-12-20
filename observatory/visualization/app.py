@@ -1,7 +1,7 @@
 import asyncio
 import time
 from asyncio import Queue
-from typing import Any, Dict
+from typing import Any
 import numpy as np
 
 from rich.live import Live
@@ -9,6 +9,7 @@ from rich.layout import Layout
 
 from .grid import GridView
 from .status import StatusBar
+
 
 class TerminalApp:
     """
@@ -19,15 +20,12 @@ class TerminalApp:
     def __init__(self, grid_view: GridView, status_bar: StatusBar):
         self.grid_view = grid_view
         self.status_bar = status_bar
-        
+
         self.layout = Layout()
-        self.layout.split(
-            Layout(name="main", ratio=1),
-            Layout(name="footer", size=3)
-        )
+        self.layout.split(Layout(name="main", ratio=1), Layout(name="footer", size=3))
         self.layout["main"].update(self.grid_view)
         self.layout["footer"].update(self.status_bar)
-        
+
         self.queue: Queue = Queue()
         self._running = False
         self._render_task: asyncio.Task | None = None
@@ -62,7 +60,9 @@ class TerminalApp:
 
     async def _render_loop(self):
         """The core loop that processes the queue and updates the Live display."""
-        with Live(self.layout, screen=True, transient=True, refresh_per_second=30) as live:
+        with Live(
+            self.layout, screen=True, transient=True, refresh_per_second=30
+        ) as live:
             frame_times = []
             last_time = time.perf_counter()
 
@@ -80,7 +80,7 @@ class TerminalApp:
                             self.status_bar.set_status(key, value)
                     except asyncio.QueueEmpty:
                         break
-                
+
                 # Calculate dt (frame_time) for physics update
                 now = time.perf_counter()
                 frame_time = now - last_time
@@ -92,12 +92,12 @@ class TerminalApp:
                 frame_times.append(frame_time)
                 if len(frame_times) > 10:
                     frame_times.pop(0)
-                
+
                 avg_frame_time = sum(frame_times) / len(frame_times)
-                fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float('inf')
+                fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float("inf")
                 self.status_bar.set_status("FPS", f"{fps:.1f}")
                 self.status_bar.set_status("Queue", queue_size)
-                
+
                 # Live display is automatically refreshed by the context manager.
                 # We add a small sleep to prevent a 100% CPU busy-loop.
                 await asyncio.sleep(0.001)

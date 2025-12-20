@@ -1,10 +1,8 @@
 import asyncio
-from typing import Callable, Awaitable, Dict, Any, List
-from collections import defaultdict
+from typing import Dict, Any, List
 import uuid
 from dataclasses import asdict
 
-from typing import List
 from cascade.connectors.local import LocalBusConnector
 from cascade.interfaces.protocols import Connector, Executor
 from cascade.spec.constraint import GlobalConstraint

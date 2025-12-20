@@ -1,6 +1,6 @@
 import asyncio
 import random
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 import cascade as cs
 from cascade.connectors.local import LocalBusConnector
@@ -15,10 +15,28 @@ from observatory.visualization.app import TerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 
+# --- Constants ---
+GRID_SIDE = 50
+NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
+PERIOD = 3.0
+
+
+def get_neighbors(index: int, width: int, height: int) -> List[int]:
+    """Calculate 8-neighbors (Moore neighborhood) with wrap-around (toroidal)."""
+    x, y = index % width, index // width
+    neighbors = []
+    for dx in [-1, 0, 1]:
+        for dy in [-1, 0, 1]:
+            if dx == 0 and dy == 0:
+                continue
+            nx, ny = (x + dx) % width, (y + dy) % height
+            neighbors.append(ny * width + nx)
+    return neighbors
+
 
 async def run_experiment(
-    num_agents: int = 15**2,
-    period: float = 3.0,
+    num_agents: int = NUM_AGENTS,
+    period: float = PERIOD,
     nudge: float = 0.2,
     duration_seconds: float = 3000.0,
     visualize: bool = True,
@@ -27,8 +45,9 @@ async def run_experiment(
     """
     Sets up and runs the firefly synchronization experiment.
     """
+    grid_width = int(num_agents**0.5)
     print(
-        f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents..."
+        f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents ({grid_width}x{grid_width})..."
     )
 
     # 1. Initialize Shared Bus
@@ -37,16 +56,13 @@ async def run_experiment(
     await connector.connect()
 
     # --- Setup Monitor & Visualizer ---
+    # Monitor now needs to handle many more agents.
     monitor = ConvergenceMonitor(num_agents, period, connector)
 
     app = None
     app_task = None
 
     if visualize:
-        grid_width = int(num_agents**0.5)
-        if grid_width * grid_width < num_agents:
-            grid_width += 1
-
         # 1. Create visualization components
         # A decay_per_second of 5.0 means a flash will fade in 1/5 = 0.2 seconds.
         grid_view = GridView(
@@ -72,6 +88,7 @@ async def run_experiment(
         )
 
         # 3. Bridge Agent Flashes -> Grid
+        # Agents now also publish to "firefly/flash" for the visualizer/monitor
         async def on_flash_visual(topic: str, payload: Dict[str, Any]):
             aid = payload.get("agent_id")
             if aid is not None and app:
@@ -92,8 +109,14 @@ async def run_experiment(
     def shared_connector_provider():
         yield connector
 
+    # Batch creation to avoid freezing UI loop
+    print("Generating Agent Workflows...")
     for i in range(num_agents):
         initial_phase = random.uniform(0, period)
+        
+        neighbor_ids = get_neighbors(i, grid_width, grid_width)
+        neighbor_inboxes = [f"firefly/{nid}/inbox" for nid in neighbor_ids]
+        my_inbox = f"firefly/{i}/inbox"
 
         engine = cs.Engine(
             solver=cs.NativeSolver(),
@@ -108,14 +131,21 @@ async def run_experiment(
             initial_phase=initial_phase,
             period=period,
             nudge=nudge,
-            flash_topic="firefly/flash",
-            listen_topic="firefly/flash",
+            neighbor_inboxes=neighbor_inboxes,
+            my_inbox=my_inbox,
             connector=connector,
             refractory_period=period * 0.2,
         )
 
         agent_tasks.append(engine.run(agent_workflow))
+        
+        # Yield every 500 agents to keep UI responsive during setup
+        if i > 0 and i % 500 == 0:
+            print(f"   ... {i} agents prepared.")
+            await asyncio.sleep(0)
 
+    print("🚀 All agents prepared. Launching...")
+    
     # --- Run ---
     all_agent_tasks = asyncio.gather(*agent_tasks)
     try:

@@ -1,188 +1,126 @@
-Excellent. We have the components; now we assemble the laboratory.
+You've hit upon a classic and fundamental concept in declarative, graph-based programming. Your analysis is spot on.
 
-I will write the experiment script that initializes the grid, spawns all the distributed agents, starts the validator, and runs the entire simulation. This script is the culmination of the "Truth Mirror" phase.
+The error `TypeError: cannot unpack non-iterable LazyResult object` occurs because the line `neighbors_data, next_mailbox = collect_neighbors(...)` is executed at **graph-building time**, not at **execution time**.
 
-## [WIP] feat(proto): Implement Conway's Game of Life experiment script
+1.  **Graph-Building Time**: When Python first runs `conway_agent`, it's not executing the logic. It's building a computation graph. The call to `collect_neighbors(...)` doesn't return a tuple of data; it returns a single `LazyResult` object which is a *promise* that a tuple will be available in the future. Trying to unpack this single object into two variables (`neighbors_data`, `next_mailbox`) immediately fails.
+
+2.  **Execution Time**: The `Engine` takes this graph and executes it. Only when the `collect_neighbors` task actually runs will its result (the tuple) be computed.
+
+**The solution is to embrace the dataflow model**: The logic that needs the unpacked tuple must be placed *inside another task* that takes the single `LazyResult` (representing the future tuple) as its input.
+
+I will now generate a plan to fix this by correctly composing the tasks.
+
+## [WIP] fix(agent): Correctly chain dependent tasks in conway_agent
 
 ### 错误分析
-无（新功能开发）。
+`conway_agent` 在图构建阶段尝试解包 (unpack) `collect_neighbors` 任务返回的 `LazyResult` 对象。`LazyResult` 是一个单一对象，代表未来的计算结果，而不是一个可迭代的元组，因此导致了 `TypeError`。
+
+这个错误暴露了一个对 Cascade 声明式编程模型的误用：试图在定义计算图时，命令式地处理一个只有在运行时才存在的数据。
 
 ### 用户需求
-Create an executable Python script that orchestrates the entire Conway's Game of Life consistency check experiment. This script must:
-1.  Initialize a shared communication bus (`LocalBusConnector`).
-2.  Set up the `StateValidator` to monitor the experiment.
-3.  Create an initial grid state (e.g., a "Glider" pattern).
-4.  For each cell in the grid, calculate its neighbors and spawn a `conway_agent` workflow.
-5.  Run all agents and the validator concurrently on a single `Engine` instance.
-6.  Gracefully manage the lifecycle of the experiment, including startup and shutdown.
+`conway_agent` 的工作流逻辑需要被正确地链接起来。`collect_neighbors` 任务的输出（一个包含邻居状态和新邮箱的元组）必须能够被后续的 `compute_next` 和递归调用正确地消费。
 
 ### 评论
-This script represents the final assembly of our "Truth Mirror". It moves from defining individual components to orchestrating a complex, distributed system. The use of a single, highly concurrent `Engine` will also serve as a significant stress test of the runtime's ability to manage thousands of interdependent, long-running tasks. The success of this experiment will be a direct validation of Cascade's core promise: enabling reliable computation in an asynchronous, decoupled environment.
+这是一个非常好的教学案例，它清晰地展示了“图构建时”和“运行时”的区别。正确的模式是将数据处理逻辑封装在任务中，并通过将 `LazyResult` 作为参数传递来构建依赖关系，而不是在顶层代码中直接操作它们。
 
 ### 目标
-1.  Create the file `observatory/protoplasm/truth/run_conway_experiment.py`.
-2.  Implement the logic to set up the grid, agents, and validator.
-3.  Ensure the experiment runs for a fixed duration and then cleans up all resources properly.
+1.  重构 `conway_agent` 中的 `lifecycle` 函数。
+2.  创建一个新的包装任务，该任务接收 `collect_neighbors` 返回的单一 `LazyResult`。
+3.  将解包、调用 `compute_next` 和递归调用 `lifecycle` 的逻辑移动到这个新的包装任务内部。
 
 ### 基本原理
--   **Single-Engine Topology**: All agent workflows will be launched on the same `Engine` instance, sharing its resources and event loop. This is the most efficient way to simulate high-density agent populations on a single machine.
--   **Toroidal Grid Logic**: A helper function will calculate each agent's eight neighbors using modulo arithmetic to create a wrap-around grid, a standard practice in cellular automata simulations.
--   **Asynchronous Orchestration**: The script will use `asyncio.create_task` and `asyncio.gather` to manage the concurrent execution of the validator and all agent workflows. An `asyncio.wait_for` will act as a safety net to prevent the experiment from running indefinitely in case of a deadlock.
+通过将后续逻辑移入一个新的 `@cs.task`，我们确保了解包操作发生在**运行时**。届时，`Engine` 已经执行了 `collect_neighbors`，其具体的元组结果会作为参数传递给我们的新任务，此时解包操作就可以安全地进行了。这完全符合 Cascade 的数据流和延迟执行模型。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/observatory #concept/consistency #scope/core #ai/instruct #task/domain/simulation #task/object/experiment-script #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/observatory #concept/dataflow #scope/core #ai/instruct #task/domain/simulation #task/object/agent-logic #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建实验运行脚本
+#### Acts 1: 修复 conway_agent 的数据流
 
-This is the final piece of the puzzle, bringing all our components together.
+我们将重构 `lifecycle` 函数，将依赖于 `collect_neighbors` 结果的逻辑封装到一个新的任务中。
 
 ~~~~~act
-write_file
-observatory/protoplasm/truth/run_conway_experiment.py
+patch_file
+observatory/protoplasm/agents/conway.py
 ~~~~~
 ~~~~~python
-import asyncio
-import numpy as np
-from typing import List
+        neighbors_data, next_mailbox = collect_neighbors(
+            broadcast, report, gen, mailbox, neighbor_ids, connector
+        )
 
-import cascade as cs
-from cascade.connectors.local import LocalBusConnector
-from cascade.spec.resource import resource
-
-from observatory.protoplasm.agents.conway import conway_agent
-from observatory.protoplasm.truth.validator import StateValidator
-
-# --- Experiment Configuration ---
-GRID_WIDTH = 20
-GRID_HEIGHT = 20
-MAX_GENERATIONS = 50
-EXPERIMENT_DURATION = 30.0  # Seconds
-
-def get_glider_seed(width: int, height: int) -> np.ndarray:
-    """Creates a simple Glider pattern on the grid."""
-    grid = np.zeros((height, width), dtype=np.int8)
-    #   .X.
-    #   ..X
-    #   XXX
-    grid[1, 2] = 1
-    grid[2, 3] = 1
-    grid[3, 1:4] = 1
-    return grid
-
-def calculate_neighbors(x: int, y: int, width: int, height: int) -> List[int]:
-    """Calculates neighbor IDs for a cell in a toroidal grid."""
-    neighbors = []
-    for dx in [-1, 0, 1]:
-        for dy in [-1, 0, 1]:
-            if dx == 0 and dy == 0:
-                continue
-            nx, ny = (x + dx) % width, (y + dy) % height
-            neighbor_id = ny * width + nx
-            neighbors.append(neighbor_id)
-    return neighbors
-
-async def run_experiment():
-    """Sets up and runs the Conway's Game of Life consistency experiment."""
-    print("🚀 Starting Conway's Game of Life Experiment...")
-    print(f"   Grid: {GRID_WIDTH}x{GRID_HEIGHT}, Agents: {GRID_WIDTH * GRID_HEIGHT}, Generations: {MAX_GENERATIONS}")
-
-    # 1. Setup Shared Infrastructure
-    LocalBusConnector._reset_broker_state()
-    connector = LocalBusConnector()
-    await connector.connect()
-
-    # 2. Setup Validator
-    validator = StateValidator(GRID_WIDTH, GRID_HEIGHT, connector)
-
-    # 3. Setup Engine (Single-Engine, Multi-Tenant)
-    # We create one powerful engine to run all agents.
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus() # Silent bus for clean output
-    )
-
-    # The conway_agent needs a connector. We inject it as a resource.
-    @resource(name="shared_connector")
-    def shared_connector_provider():
-        yield connector
-    engine.register(shared_connector_provider)
-    
-    # 4. Create Initial State and Agent Workflows
-    initial_grid = get_glider_seed(GRID_WIDTH, GRID_HEIGHT)
-    agent_workflows = []
-
-    for y in range(GRID_HEIGHT):
-        for x in range(GRID_WIDTH):
-            agent_id = y * GRID_WIDTH + x
-            initial_state = int(initial_grid[y, x])
-            neighbor_ids = calculate_neighbors(x, y, GRID_WIDTH, GRID_HEIGHT)
+        # 3. Compute next state based on neighbors
+        @cs.task
+        def compute_next(neighbor_states: Dict[int, int], my_state: int) -> int:
+            alive_neighbors = sum(neighbor_states.values())
             
-            workflow = conway_agent(
-                agent_id=agent_id,
-                x=x, y=y,
-                initial_state=initial_state,
-                neighbor_ids=neighbor_ids,
-                topic_base="cell",
-                validator_topic="validator/report",
-                connector=cs.inject("shared_connector"),
-                max_generations=MAX_GENERATIONS
-            )
-            agent_workflows.append(workflow)
-
-    # 5. Run the Simulation
-    validator_task = asyncio.create_task(validator.run())
-    
-    print(f"\nLaunching {len(agent_workflows)} agents on a single engine...")
-    # Launch all agents concurrently on the same engine
-    agent_tasks = [asyncio.create_task(engine.run(wf)) for wf in agent_workflows]
-    all_agents_task = asyncio.gather(*agent_tasks)
-    
-    try:
-        # Wait for all agents to finish or for the timeout
-        await asyncio.wait_for(all_agents_task, timeout=EXPERIMENT_DURATION)
-        print("\n✅ All agents completed their lifecycle.")
-    except asyncio.TimeoutError:
-        print(f"\n⚠️  Experiment timed out after {EXPERIMENT_DURATION}s.")
-    except Exception as e:
-        print(f"\n❌ Experiment failed with an unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-    finally:
-        # 6. Cleanup
-        print("--- Shutting down ---")
-        validator.stop()
-        if not all_agents_task.done():
-            all_agents_task.cancel()
-            await asyncio.gather(all_agents_task, validator_task, return_exceptions=True)
-        else:
-            await asyncio.gather(validator_task, return_exceptions=True)
+            if my_state == 1:
+                if alive_neighbors in (2, 3):
+                    return 1
+                else:
+                    return 0
+            else:
+                if alive_neighbors == 3:
+                    return 1
+                else:
+                    return 0
+        
+        next_state = compute_next(neighbors_data[0], current_state)
+        
+        # 4. Recurse
+        @cs.task
+        def step_recursion(ns, nmb):
+            return lifecycle(gen + 1, ns, nmb)
             
-        await connector.disconnect()
-        print("Shutdown complete.")
+        return step_recursion(next_state, neighbors_data[1])
+~~~~~
+~~~~~python
+        collected_data = collect_neighbors(
+            broadcast, report, gen, mailbox, neighbor_ids, connector
+        )
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(run_experiment())
-    except KeyboardInterrupt:
-        print("\nExperiment interrupted by user.")
+        # 3. Chain the computation and recursion into a subsequent task
+        # This task will only execute after 'collect_neighbors' is done,
+        # and it will receive the actual tuple result.
+        @cs.task
+        def process_and_compute(collected_tuple: Tuple[Dict[int, int], Dict[int, Dict[int, int]]]):
+            # Unpacking happens here, at EXECUTION time, which is correct.
+            neighbors_data, next_mailbox = collected_tuple
+
+            # --- Compute next state based on neighbors ---
+            @cs.task
+            def compute_next(neighbor_states: Dict[int, int], my_state: int) -> int:
+                alive_neighbors = sum(neighbor_states.values())
+                
+                if my_state == 1:
+                    if alive_neighbors in (2, 3):
+                        return 1
+                    else:
+                        return 0
+                else:
+                    if alive_neighbors == 3:
+                        return 1
+                    else:
+                        return 0
+            
+            next_state = compute_next(neighbors_data, current_state)
+            
+            # --- Recurse ---
+            @cs.task
+            def step_recursion(ns):
+                return lifecycle(gen + 1, ns, next_mailbox)
+                
+            return step_recursion(next_state)
+
+        return process_and_compute(collected_data)
 ~~~~~
 
 ### 下一步建议
-我们已经完成了“真理之镜”的全部基础设施建设和实验编排。现在是见证成果的时刻。
+这个逻辑修复非常精确地解决了 `TypeError` 的根源。现在，整个 `conway_agent` 的数据流应该是正确且符合 Cascade 设计哲学的。
 
-请执行以下命令来运行实验：
-`python -m observatory.protoplasm.truth.run_conway_experiment`
+请再次运行实验：
+`python -m observatory.protoplasm/truth/run_conway_experiment`
 
-我们期望看到的输出是：
-1.  启动信息。
-2.  `[Gen 0]` 被设置为公理。
-3.  随后连续打印 `✅ [Gen X] PERFECT MATCH`。
-
-如果全程都是 `PERFECT MATCH`，那就意味着 Cascade 在一个包含数千个并发任务和数十万次消息交换的复杂场景中，保持了完美的因果一致性。这将是一个巨大的成功，标志着“原基 (Protoplasm)”计划的核心目标已经达成。
-
-如果出现 `DRIFT` 或 `LOGIC FAILURE`，那我们就捕获到了一个非常宝贵的、可复现的 Bug，可以开始进行调试。
+我们现在应该能看到模拟正确启动，并开始打印验证日志。

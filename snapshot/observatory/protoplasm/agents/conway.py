@@ -139,33 +139,43 @@ def conway_agent(
             
             return consumed_data, new_mb
 
-        neighbors_data, next_mailbox = collect_neighbors(
+        collected_data = collect_neighbors(
             broadcast, report, gen, mailbox, neighbor_ids, connector
         )
 
-        # 3. Compute next state based on neighbors
+        # 3. Chain the computation and recursion into a subsequent task
+        # This task will only execute after 'collect_neighbors' is done,
+        # and it will receive the actual tuple result.
         @cs.task
-        def compute_next(neighbor_states: Dict[int, int], my_state: int) -> int:
-            alive_neighbors = sum(neighbor_states.values())
-            
-            if my_state == 1:
-                if alive_neighbors in (2, 3):
-                    return 1
+        def process_and_compute(collected_tuple: Tuple[Dict[int, int], Dict[int, Dict[int, int]]]):
+            # Unpacking happens here, at EXECUTION time, which is correct.
+            neighbors_data, next_mailbox = collected_tuple
+
+            # --- Compute next state based on neighbors ---
+            @cs.task
+            def compute_next(neighbor_states: Dict[int, int], my_state: int) -> int:
+                alive_neighbors = sum(neighbor_states.values())
+                
+                if my_state == 1:
+                    if alive_neighbors in (2, 3):
+                        return 1
+                    else:
+                        return 0
                 else:
-                    return 0
-            else:
-                if alive_neighbors == 3:
-                    return 1
-                else:
-                    return 0
-        
-        next_state = compute_next(neighbors_data[0], current_state)
-        
-        # 4. Recurse
-        @cs.task
-        def step_recursion(ns, nmb):
-            return lifecycle(gen + 1, ns, nmb)
+                    if alive_neighbors == 3:
+                        return 1
+                    else:
+                        return 0
             
-        return step_recursion(next_state, neighbors_data[1])
+            next_state = compute_next(neighbors_data, current_state)
+            
+            # --- Recurse ---
+            @cs.task
+            def step_recursion(ns):
+                return lifecycle(gen + 1, ns, next_mailbox)
+                
+            return step_recursion(next_state)
+
+        return process_and_compute(collected_data)
 
     return lifecycle(0, initial_state, initial_mailbox)

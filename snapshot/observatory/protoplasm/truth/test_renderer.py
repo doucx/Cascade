@@ -3,7 +3,9 @@ import numpy as np
 import shutil
 import random
 
-from observatory.protoplasm.truth.renderer import TruthRenderer
+# Use the new UniGrid
+from observatory.protoplasm.renderer.unigrid import UniGridRenderer
+from observatory.protoplasm.renderer.palette import Palettes
 from observatory.protoplasm.truth.golden_ca import GoldenLife
 
 # --- Test Configuration ---
@@ -25,47 +27,60 @@ def get_glider_seed(width: int, height: int) -> np.ndarray:
 
 async def main():
     """
-    Main loop to test the TruthRenderer in isolation.
+    Main loop to test the UniGridRenderer in isolation with Truth palette.
     """
-    print("🚀 Starting Isolated Renderer Test...")
+    print("🚀 Starting Isolated Renderer Test (UniGrid)...")
     
-    # 1. Setup the "perfect" simulator
+    # 1. Setup simulator
     golden = GoldenLife(GRID_WIDTH, GRID_HEIGHT)
     golden.seed(get_glider_seed(GRID_WIDTH, GRID_HEIGHT))
 
-    # 2. Setup the renderer
-    renderer = TruthRenderer(GRID_WIDTH, GRID_HEIGHT)
-    renderer.start()
+    # 2. Setup UniGrid with Truth palette
+    renderer = UniGridRenderer(
+        width=GRID_WIDTH, 
+        height=GRID_HEIGHT, 
+        palette_func=Palettes.truth,
+        decay_rate=0.0
+    )
+    
+    # We must run renderer in a background task
+    renderer_task = asyncio.create_task(renderer.start())
 
     try:
         for gen in range(MAX_GENERATIONS):
-            # A. Get the next "correct" state from the simulator
-            theoretical_grid = golden.step()
+            # A. Get next state (Theoretical Truth)
+            theo_grid = golden.step().astype(np.float32)
             
-            # B. For this test, assume the "actual" grid from agents is identical
-            actual_grid = theoretical_grid.copy()
+            # B. Simulate Actual Grid (copy truth)
+            # We map this to the Diff codes:
+            # 0.0 = Dead, 1.0 = Alive
+            diff_grid = theo_grid.copy()
 
-            # --- Inject a fake error to test colors ---
-            stats = {"abs": 0, "rel": 0}
+            # --- Inject Fake Errors ---
             if 20 <= gen < 25:
-                # Add a "ghost" cell (False Positive -> Red 'X')
-                actual_grid[5, 5] = 1 
-                stats["abs"] +=1
-            if 30 <= gen < 35:
-                # Remove a real cell (False Negative -> Cyan 'O')
-                glider_pos = np.where(theoretical_grid == 1)
+                # Ghost cell (False Positive -> 2.0 -> Red)
+                diff_grid[5, 5] = 2.0
+                renderer.set_extra_info(f"Gen {gen}: Injecting False Positive (Red)")
+            elif 30 <= gen < 35:
+                # Remove cell (False Negative -> 3.0 -> Cyan)
+                glider_pos = np.where(theo_grid == 1)
                 if len(glider_pos[0]) > 0:
-                    actual_grid[glider_pos[0][0], glider_pos[1][0]] = 0
-                    stats["abs"] +=1
+                    diff_grid[glider_pos[0][0], glider_pos[1][0]] = 3.0
+                renderer.set_extra_info(f"Gen {gen}: Injecting False Negative (Cyan)")
+            else:
+                renderer.set_extra_info(f"Gen {gen}: Perfect Match")
 
-            # C. Update the renderer with both grids
-            renderer.update_frame(gen, actual_grid, theoretical_grid, stats)
+            # C. Ingest Full Frame
+            renderer.ingest_full(diff_grid)
             
-            # D. Wait to make it viewable
+            # D. Wait
             await asyncio.sleep(FRAME_DELAY)
 
     finally:
         renderer.stop()
+        if not renderer_task.done():
+            renderer_task.cancel()
+            await renderer_task
         print("\n✅ Renderer Test Finished.")
 
 

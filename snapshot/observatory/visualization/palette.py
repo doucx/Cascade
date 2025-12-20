@@ -26,27 +26,38 @@ class Palettes:
     @staticmethod
     def firefly(brightness: np.ndarray) -> np.ndarray:
         """
-        Maps 0.0-1.0 brightness to a Firefly gradient using Rich-compatible styles.
-        0.0 (Refractory/Quiet) -> Dark Blue/Black
-        0.5 (Charging) -> Deep Orange
-        1.0 (Flash) -> Bright Yellow/White
+        Maps 0.0-1.0 brightness to a Firefly gradient using vectorized interpolation.
         """
-        # Initialize with a dark background color in Rich's rgb format
-        colors = np.full(brightness.shape, "rgb(30,30,40)", dtype="<U18")
+        # Define color stops [R, G, B]
+        stop1 = np.array([30, 30, 40])      # Dark Blue (at brightness 0.0)
+        stop2 = np.array([200, 120, 0])     # Orange (at brightness 0.5)
+        stop3 = np.array([255, 255, 200])   # Bright Yellow (at brightness 1.0)
 
-        # Low energy (Charging): Reddish
-        mask_low = (brightness > 0.1) & (brightness <= 0.6)
-        colors[mask_low] = "rgb(100,40,40)"
+        # Prepare output arrays
+        r = np.zeros_like(brightness, dtype=np.uint8)
+        g = np.zeros_like(brightness, dtype=np.uint8)
+        b = np.zeros_like(brightness, dtype=np.uint8)
 
-        # High energy (Pre-flash): Orange
-        mask_high = (brightness > 0.6) & (brightness <= 0.9)
-        colors[mask_high] = "rgb(200,120,0)"
+        # --- Vectorized Interpolation ---
+        # Mask for the lower half of the gradient (0.0 to 0.5)
+        mask1 = brightness <= 0.5
+        # Normalize brightness in this range to 0-1 for interpolation
+        t1 = brightness[mask1] * 2
+        r[mask1] = (stop1[0] + (stop2[0] - stop1[0]) * t1).astype(np.uint8)
+        g[mask1] = (stop1[1] + (stop2[1] - stop1[1]) * t1).astype(np.uint8)
+        b[mask1] = (stop1[2] + (stop2[2] - stop1[2]) * t1).astype(np.uint8)
 
-        # Flash: Bright Yellow/White
-        mask_flash = brightness > 0.9
-        colors[mask_flash] = "rgb(255,255,200)"
+        # Mask for the upper half of the gradient (0.5 to 1.0)
+        mask2 = brightness > 0.5
+        # Normalize brightness in this range to 0-1 for interpolation
+        t2 = (brightness[mask2] - 0.5) * 2
+        r[mask2] = (stop2[0] + (stop3[0] - stop2[0]) * t2).astype(np.uint8)
+        g[mask2] = (stop2[1] + (stop3[1] - stop2[1]) * t2).astype(np.uint8)
+        b[mask2] = (stop2[2] + (stop3[2] - stop2[2]) * t2).astype(np.uint8)
 
-        return colors
+        # Create rich-compatible "rgb(r,g,b)" strings. This is the slowest part.
+        # We can optimize if needed, but it's more readable for now.
+        return np.array([f"rgb({r_},{g_},{b_})" for r_, g_, b_ in zip(r.flat, g.flat, b.flat)]).reshape(r.shape)
 
     @staticmethod
     def bottleneck(states: np.ndarray) -> np.ndarray:

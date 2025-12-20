@@ -26,3 +26,8 @@ class InMemoryStateBackend:
 
     def get_skip_reason(self, node_id: str) -> Optional[str]:
         return self._skipped.get(node_id)
+
+    def clear(self) -> None:
+        """Clears all stored state. Used for garbage collection between TCO steps."""
+        self._results.clear()
+        self._skipped.clear()

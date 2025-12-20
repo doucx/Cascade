@@ -35,7 +35,7 @@ def calculate_neighbors(x: int, y: int, width: int, height: int) -> List[int]:
 
 async def run_experiment(visualize: bool = True):
     cols, rows = shutil.get_terminal_size()
-    GRID_WIDTH = min(cols // 2, 50)
+    GRID_WIDTH = min(cols // 2, 25)
     GRID_HEIGHT = min(rows - 5, 25)
     
     print(f"🚀 Starting Conway Experiment with grid {GRID_WIDTH}x{GRID_HEIGHT}...")

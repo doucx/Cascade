@@ -76,14 +76,19 @@ async def main():
     print("Noise generators started. Allowing system to stabilize...")
     await asyncio.sleep(1)
 
-    # 2. Run the Probe using Cascade
-    # We use cs.run here to "eat our own dogfood".
-    # This ensures we are measuring the performance of the actual Cascade runtime.
+    # 2. Run the Probe using Cascade's async API
+    # We are already in an async context, so we must instantiate the Engine
+    # and `await` its run method, not use the synchronous `cs.run()` helper.
     print("Running Cascade probe workflow...")
     probe_workflow = time_probe_task(PROBE_INTERVAL_S, EXPERIMENT_DURATION_S)
-    
-    # Use a silent logger for the probe run to not pollute the output
-    timing_errors = cs.run(probe_workflow, log_level="ERROR")
+
+    # Instantiate a default, silent engine for the probe
+    engine = cs.Engine(
+        solver=cs.NativeSolver(),
+        executor=cs.LocalExecutor(),
+        bus=cs.MessageBus() # A silent bus for clean test output
+    )
+    timing_errors = await engine.run(probe_workflow)
 
     # 3. Stop Noise Tasks
     print("Probe finished. Shutting down noise generators...")

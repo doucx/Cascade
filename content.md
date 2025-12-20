@@ -1,142 +1,50 @@
 简要回答：
-收到。正式启动 **原基计划 (Project Protoplasm)** 的第三阶段：时间的高保真 (High-Fidelity Time)。
+分析完全正确。这个 `RuntimeError` 是一个典型的 `asyncio` 架构错误：我们在一个已经由 `asyncio.run()` 启动的异步函数 (`main`) 内部，错误地调用了 `cs.run()`，而 `cs.run()` 本身会尝试创建并运行一个新的事件循环，这在 `asyncio` 中是被禁止的。
 
-根据文档 `CS-DOC-PRE-GENESIS-251220` 的第三章，我们的核心任务是构建一个**抖动测量仪 (Jitter Meter)**，以定量分析 `asyncio` 事件循环在重度负载下的调度精度。这项研究将直接决定我们“创世网格”中时间同步模型的最小可靠时间片（即物理常数）。
+**解决方案**：
+我们必须遵循“异步代码用异步方式测试”的原则。在 `main` 函数这个异步上下文中，我们不应使用同步的 `cs.run` 门面，而应直接实例化 `cs.Engine` 并使用 `await engine.run()` 来执行工作流。
 
 摘要头：
-## [WIP] feat: 实现 Jitter Meter 以分析 asyncio 事件循环精度
+## [WIP] fix: Resolve nested event loop error in jitter meter
 
 ### 标签
-#intent/explore #flow/ready #priority/high
-#comp/observatory #comp/runtime #concept/timing #scope/core
+#intent/fix #flow/ready #priority/high
+#comp/observatory #concept/async #scope/core
 #ai/instruct
 #task/domain/physics
 #task/object/jitter-meter
-#task/action/implementation
-#task/state/begin
+#task/action/bug-fix
+#task/state/continue
 
 ### 用户需求
-1.  **创建物理模拟目录**：在 `observatory/protoplasm/physics/` 下建立实验场。
-2.  **实现抖动测量仪**：编写 `jitter_meter.py` 脚本，包含三个核心组件：
-    *   `TimeProbe`：一个 Cascade 任务，周期性地调用 `cs.wait(delay)` 并精确记录实际等待时间与期望值之间的误差。
-    *   `CPU-Bound Noise`：大量计算密集型协程，用于抢占 CPU 时间，模拟逻辑计算负载。
-    *   `IO-Bound Noise`：大量 IO 密集型协程，通过频繁的短时 `sleep` 模拟网络或磁盘操作，制造调度压力。
-3.  **量化分析**：运行实验，收集 `TimeProbe` 产生的上千个误差样本，并计算其最小值、最大值、平均值和标准差，从而得出调度抖动的统计学画像。
+修复 `jitter_meter.py` 中因嵌套调用 `asyncio.run()` 而导致的 `RuntimeError`，使实验能够正常执行。
 
 ### 评论
-这是一个至关重要的基础物理实验。如果 `cs.wait(0.1)` 在高负载下实际等待了 `0.15` 秒，那么任何依赖于“脉冲耦合”的同步算法都将失效。这个实验的目的就是揭示“时空扭曲”的程度。通过人为制造一个“嘈杂”的 `asyncio` 环境，我们可以测量出 Cascade 运行时在最坏情况下的时间精度，为“创世网格”的设计提供硬数据约束。
+这是一个非常有价值的“吃自己的狗粮 (Dogfooding)”的时刻。它暴露了 Cascade API 两种使用模式的明确界限：
+1.  **`cs.run()`**：一个高级、同步的便利封装，适用于简单的脚本和程序的顶层入口。
+2.  **`Engine().run()`**：核心的、异步的 API，适用于在已有的 `async` 环境中集成和控制 Cascade。
+
+我们的实验脚本本身就是一个复杂的异步程序，因此必须使用后者。这个修复将使我们的测试代码成为正确使用 Cascade 异步 API 的典范。
 
 ### 目标
-*   建立 `observatory/protoplasm/physics` 目录。
-*   完成 `jitter_meter.py` 的代码实现，使其能够独立运行并输出抖动分析报告。
+修改 `jitter_meter.py`，将其中对 `cs.run()` 的调用替换为手动实例化 `cs.Engine` 并 `await` 其 `.run()` 方法。
 
 ### 基本原理
-*   **对照测量**：`TimeProbe` 作为实验组，其 `cs.wait()` 的行为是我们测量的目标。
-*   **环境干扰**：数千个“噪音”协程作为对照组，它们的存在是为了给事件循环施加持续且不可预测的压力。
-*   **高精度计时**：使用 `time.perf_counter()` 来进行计时，它提供了最高精度的单调时钟，不受系统时间变化的影响。
-*   **统计学结论**：单次测量是无意义的。通过对数千次测量的误差进行统计分析（特别是标准差和最大值），我们可以得出一个关于系统时间可靠性的可信结论。
+由于 `main()` 函数已经创建并管理了一个事件循环，所有在该函数内部的异步操作都必须是可等待的 (`awaitable`)，并提交给这个现有的循环。`cs.run()` 破坏了这个规则，而 `await engine.run()` 遵循了这个规则。我们将创建一个配置了默认组件（`NativeSolver`, `LocalExecutor`, `MessageBus`）的 `Engine` 实例，以模拟 `cs.run` 的内部行为，同时保持异步兼容性。
 
 ---
 
 ### Script
 
-#### Acts 1: 创建目录结构
+#### Acts 1: 修正 `jitter_meter.py` 的引擎调用方式
+
+我们将替换 `cs.run` 为 `Engine` 的直接异步调用。
 
 ~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p observatory/protoplasm/physics
-touch observatory/protoplasm/physics/__init__.py
-~~~~~
-
-#### Acts 2: 实现抖动测量仪 (`jitter_meter.py`)
-
-这个脚本包含了实验所需的所有组件：探针、噪音源和主循环。
-
-~~~~~act
-write_file
+patch_file
 observatory/protoplasm/physics/jitter_meter.py
 ~~~~~
 ~~~~~python
-import asyncio
-import time
-import random
-import statistics
-from typing import List
-
-import cascade as cs
-
-# --- Experiment Configuration ---
-NUM_NOISE_TASKS_CPU = 5000
-NUM_NOISE_TASKS_IO = 5000
-PROBE_INTERVAL_S = 0.05  # 50ms, a common tick rate in simulations
-EXPERIMENT_DURATION_S = 10.0
-
-# --- Noise Generators ---
-
-async def cpu_noise_task():
-    """A task that burns CPU cycles to stress the scheduler."""
-    while True:
-        # Perform some meaningless computation
-        _ = sum(i*i for i in range(1000))
-        # Yield control to the event loop
-        await asyncio.sleep(0)
-
-async def io_noise_task():
-    """A task that simulates frequent, short IO waits."""
-    while True:
-        # Simulate waiting for a network packet, DB query, etc.
-        await asyncio.sleep(random.uniform(0.01, 0.05))
-
-# --- Time Probe ---
-
-@cs.task
-async def time_probe_task(interval: float, duration: float) -> List[float]:
-    """
-    The core measurement tool.
-    Repeatedly calls cs.wait() and records the timing error.
-    """
-    errors_ms = []
-    num_probes = int(duration / interval)
-    print(f"TimeProbe: Starting measurement for {num_probes} probes...")
-    
-    for i in range(num_probes):
-        start_time = time.perf_counter()
-        
-        await cs.wait(interval)
-        
-        end_time = time.perf_counter()
-        actual_delay = end_time - start_time
-        error = actual_delay - interval
-        errors_ms.append(error * 1000) # Store error in milliseconds
-        
-        # Print progress without spamming
-        if (i + 1) % (num_probes // 10) == 0:
-            print(f"TimeProbe: Progress {((i+1)/num_probes)*100:.0f}%...")
-
-    return errors_ms
-
-# --- Main Experiment Orchestrator ---
-
-async def main():
-    print("🚀 Starting Jitter Meter Experiment...")
-    print(f"   - CPU Noise Tasks: {NUM_NOISE_TASKS_CPU}")
-    print(f"   - IO Noise Tasks: {NUM_NOISE_TASKS_IO}")
-    print(f"   - Total Noise: {NUM_NOISE_TASKS_CPU + NUM_NOISE_TASKS_IO} coroutines")
-    print(f"   - Probe Interval: {PROBE_INTERVAL_S * 1000} ms")
-    print(f"   - Duration: {EXPERIMENT_DURATION_S} seconds")
-    
-    # 1. Start Noise Tasks in the background
-    noise_tasks = []
-    for _ in range(NUM_NOISE_TASKS_CPU):
-        noise_tasks.append(asyncio.create_task(cpu_noise_task()))
-    for _ in range(NUM_NOISE_TASKS_IO):
-        noise_tasks.append(asyncio.create_task(io_noise_task()))
-        
-    print("Noise generators started. Allowing system to stabilize...")
-    await asyncio.sleep(1)
-
     # 2. Run the Probe using Cascade
     # We use cs.run here to "eat our own dogfood".
     # This ensures we are measuring the performance of the actual Cascade runtime.
@@ -145,59 +53,25 @@ async def main():
     
     # Use a silent logger for the probe run to not pollute the output
     timing_errors = cs.run(probe_workflow, log_level="ERROR")
+~~~~~
+~~~~~python
+    # 2. Run the Probe using Cascade's async API
+    # We are already in an async context, so we must instantiate the Engine
+    # and `await` its run method, not use the synchronous `cs.run()` helper.
+    print("Running Cascade probe workflow...")
+    probe_workflow = time_probe_task(PROBE_INTERVAL_S, EXPERIMENT_DURATION_S)
 
-    # 3. Stop Noise Tasks
-    print("Probe finished. Shutting down noise generators...")
-    for task in noise_tasks:
-        task.cancel()
-    await asyncio.gather(*noise_tasks, return_exceptions=True)
-
-    # 4. Analyze and Report Results
-    if not timing_errors:
-        print("\n❌ No timing data collected. Experiment failed.")
-        return
-        
-    mean_error = statistics.mean(timing_errors)
-    std_dev = statistics.stdev(timing_errors)
-    min_error = min(timing_errors)
-    max_error = max(timing_errors)
-    
-    print("\n--- Jitter Analysis Report ---")
-    print(f"Target Interval: {PROBE_INTERVAL_S * 1000:.2f} ms")
-    print(f"Samples Collected: {len(timing_errors)}")
-    print("------------------------------")
-    print(f"Mean Error:      {mean_error:+.4f} ms")
-    print(f"Std Deviation:   {std_dev:.4f} ms")
-    print(f"Min Error (fast):{min_error:+.4f} ms")
-    print(f"Max Error (lag): {max_error:+.4f} ms")
-    print("------------------------------")
-    
-    # Interpretation
-    print("\nInterpretation:")
-    if max_error > (PROBE_INTERVAL_S * 1000 * 0.25):
-         print(f"⚠️  WARNING: Maximum lag ({max_error:.2f}ms) is over 25% of the target interval.")
-         print(f"   This indicates significant scheduling jitter under load.")
-    else:
-        print("✅  SUCCESS: Jitter is within acceptable limits for the given load.")
-        
-    print(f"   The system's 'minimum reliable time slice' is likely in the range of {max_error:.0f}-{max_error*2:.0f} ms.")
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("\nExperiment interrupted by user.")
+    # Instantiate a default, silent engine for the probe
+    engine = cs.Engine(
+        solver=cs.NativeSolver(),
+        executor=cs.LocalExecutor(),
+        bus=cs.MessageBus() # A silent bus for clean test output
+    )
+    timing_errors = await engine.run(probe_workflow)
 ~~~~~
 
 ### 下一步建议
-我们已经完成了实验脚本的编写。下一步是直接运行它并分析结果。
+再次运行实验：
+`python -m observatory.protoplasm/physics/jitter_meter.py`
 
-**执行指令:**
-`python -m observatory.protoplasm.physics.jitter_meter`
-
-**预期结果:**
-脚本将运行约 11 秒，并输出一份抖动分析报告。我们需要密切关注**最大误差 (Max Error)** 和**标准差 (Std Deviation)**。
-*   如果最大误差远小于我们的探针间隔（50ms），比如在 5-10ms 以内，那么 `asyncio` 的调度就是相当可靠的。
-*   如果最大误差接近或超过 50ms，那么在“创世网格”中，任何小于 50-100ms 的时间同步窗口都将是不可靠的。
-
-这个数据将直接决定我们模拟的“物理精度”。
+由于嵌套事件循环的 `RuntimeError` 已被解决，脚本现在应该能够成功执行，并最终输出我们期望的抖动分析报告。

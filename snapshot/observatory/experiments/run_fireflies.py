@@ -1,6 +1,7 @@
 import asyncio
 import random
 from typing import Dict, Any, List
+import time
 
 import cascade as cs
 from cascade.connectors.local import LocalBusConnector
@@ -8,6 +9,7 @@ from cascade.spec.resource import resource
 
 from observatory.agents.kuramoto import firefly_agent
 from observatory.monitors.convergence import ConvergenceMonitor
+from observatory.monitors.logger import JsonFileLogger
 
 # Visualization
 from observatory.visualization.palette import Palettes
@@ -75,13 +77,25 @@ async def run_experiment(
             initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."}
         )
         app = TerminalApp(grid_view, status_bar)
+        
+        # --- Setup Logger ---
+        log_filename = f"firefly_log_{int(time.time())}.jsonl"
+        logger = JsonFileLogger(log_filename)
+        logger.open()
+        print(f"📝 Logging telemetry to [bold cyan]{log_filename}[/bold cyan]")
 
-        # 2. Bridge Monitor -> Status Bar
-        def monitor_callback(r_value: float):
+
+        # 2. Bridge Monitor -> Status Bar & Logger
+        def monitor_callback(r_value: float, pulse_count: int):
+            # UI Update
             bar_len = 20
             filled = int(bar_len * r_value)
             bar = "█" * filled + "░" * (bar_len - filled)
-            app.update_status("Sync (R)", f"{r_value:.3f} [{bar}]")
+            app.update_status("Sync", f"R={r_value:.3f} [{bar}] @ Pulse {pulse_count}")
+            
+            # Data Logging
+            logger.log({"r_value": r_value, "pulse": pulse_count, "flash_count": monitor._flash_count})
+
 
         monitor_task = asyncio.create_task(
             # Reduce monitor frequency to reduce CPU load
@@ -158,6 +172,8 @@ async def run_experiment(
         monitor.stop()
         if app:
             app.stop()
+        if logger:
+            logger.close()
 
         if not all_agent_tasks.done():
             all_agent_tasks.cancel()

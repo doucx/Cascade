@@ -27,6 +27,7 @@ class TerminalApp:
         self.layout["footer"].update(self.status_bar)
 
         self.queue: Queue = Queue()
+        self._frame_buffer = set()  # (x, y, state)
         self._running = False
         self._render_task: asyncio.Task | None = None
 
@@ -39,10 +40,10 @@ class TerminalApp:
 
     def direct_update_grid(self, x: int, y: int, state: float):
         """
-        Directly updates the state matrix, bypassing the queue.
-        Safe to call from async callbacks in the same event loop.
+        Adds a grid update to the frame buffer for batch processing.
+        This is extremely fast and non-blocking.
         """
-        self.grid_view.matrix.update(x, y, state)
+        self._frame_buffer.add((x, y, state))
 
     def update_status(self, key: str, value: Any):
         """Asynchronously update a key-value pair in the status bar."""
@@ -68,6 +69,18 @@ class TerminalApp:
         if self._render_task:
             self._render_task.cancel()
 
+    async def _flush_buffer(self):
+        """Applies all buffered updates to the grid matrix."""
+        if not self._frame_buffer:
+            return
+
+        # Atomically swap the buffer
+        updates = self._frame_buffer
+        self._frame_buffer = set()
+
+        for x, y, state in updates:
+            self.grid_view.matrix.update(x, y, state)
+
     async def _render_loop(self):
         """The core loop that processes the queue and updates the Live display."""
         # Reduce refresh rate to 15 FPS to save CPU for agents
@@ -78,12 +91,15 @@ class TerminalApp:
             last_time = time.perf_counter()
 
             while self._running:
-                # Process all pending updates from the queue
+                # --- Batch Updates ---
+                await self._flush_buffer()
+
+                # Process all pending updates from the queue (for status bar etc.)
                 queue_size = self.queue.qsize()
                 while not self.queue.empty():
                     try:
                         msg_type, data = self.queue.get_nowait()
-                        if msg_type == "grid":
+                        if msg_type == "grid":  # Legacy path
                             x, y, state = data
                             self.grid_view.matrix.update(x, y, state)
                         elif msg_type == "status":

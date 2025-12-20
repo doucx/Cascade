@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M run_fireflies.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766230531.8595147, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] tune(observatory): 实施帧缓冲并增强遥测以解决同步瓶颈", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766230534.135031, "duration_ms": 0}}

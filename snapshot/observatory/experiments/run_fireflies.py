@@ -45,7 +45,8 @@ async def run_experiment(
         if grid_width * grid_width < num_agents: grid_width += 1
         
         # 1. Create visualization components
-        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_rate=0.1)
+        # A decay_per_second of 5.0 means a flash will fade in 1/5 = 0.2 seconds.
+        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_per_second=5.0)
         status_bar = StatusBar(initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."})
         app = TerminalApp(grid_view, status_bar)
 

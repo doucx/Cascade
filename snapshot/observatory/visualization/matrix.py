@@ -5,7 +5,7 @@ from dataclasses import dataclass
 class GridConfig:
     width: int = 100
     height: int = 100
-    decay_rate: float = 0.1
+    decay_per_second: float = 4.0 # Brightness fades from 1.0 to 0 in 0.25s
 
 class StateMatrix:
     """
@@ -30,13 +30,16 @@ class StateMatrix:
             self.brightness[y, x] = state
             self.active[y, x] = True
 
-    def decay(self):
+    def decay(self, dt: float):
         """
-        Applies decay to the entire matrix.
+        Applies time-based decay to the entire matrix.
         Optimized vectorized operation.
+        
+        Args:
+            dt: The time delta in seconds since the last decay.
         """
-        # Subtract decay_rate, clip at 0.0
-        self.brightness -= self.cfg.decay_rate
+        decay_amount = self.cfg.decay_per_second * dt
+        self.brightness -= decay_amount
         np.clip(self.brightness, 0.0, 1.0, out=self.brightness)
 
     def get_snapshot(self):

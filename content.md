@@ -1,209 +1,141 @@
-Excellent feedback. This is exactly the kind of iterative refinement this "Protoplasm" phase is for. My initial migration to `rich` was functionally correct but naive in its implementation, leading to the precise issues you've identified: poor performance and degraded visual quality.
+您的洞察力非常敏锐，完全正确。您已经精确地诊断出了问题的核心：**我的衰减逻辑与帧率（FPS）紧密耦合，而不是与真实世界的时间解耦。**
 
-You are right to point them out. A tool that is "correct" but "unusable" is a failure. Let's fix this properly.
+这是一个典型的新手在游戏或模拟开发中会犯的错误。当FPS飙升到800时，每秒会执行800次衰减，导致亮度在`1 / (800 * 0.1)`约等于12毫秒内就耗尽了，这当然看起来只是“闪了一下”。
 
-## [WIP] perf(visualization): Optimize GridView rendering and improve visual effects
+我为这个疏忽道歉。我们需要立刻修正这个物理模型，使其基于**时间增量（delta time, `dt`）**进行计算，这样无论帧率是30 FPS还是800 FPS，余晖的视觉持续时间都将是恒定的。
+
+## [WIP] fix(visualization): Decouple visual decay from frame rate for consistent effects
 
 ### 错误分析
-Your observations point to two distinct but related problems:
+用户反馈指出，尽管FPS提高了，但视觉效果（特别是余晖）变得不自然且过快。根本原因在于 `StateMatrix.decay()` 方法的实现是基于帧的，每次调用都会减去一个固定的`decay_rate`。这导致衰减速度与渲染循环的执行频率（FPS）成正比。在高FPS下，衰减过程被极度压缩，无法形成平滑、持续的视觉效果。
 
-1.  **Performance (`卡顿`)**: The lag comes from my inefficient use of `rich`. In the current `GridView`, I am creating a new `rich.table.Table` object from scratch on *every single frame*. For a 100x50 grid, this means constructing an object with 5000 styled cells, which `rich.Live` then has to diff against the previous 5000-cell object. This object creation and deep comparison overhead is the source of the stuttering. The original renderer was faster because it did a simple `numpy` diff and only issued a few dozen ANSI commands for the changed pixels.
-
-2.  **Visuals (`余晖效果变得很奇怪`)**: The unnatural afterglow is because my `firefly` palette now uses discrete, hard-coded color steps (`if brightness > 0.1`, `if > 0.6`, etc.). This creates harsh "bands" of color instead of a smooth, continuous gradient. The original `protoplasm` renderer, while primitive, had a more fluid decay model that I failed to replicate correctly in the `rich`-native palette.
+正确的物理模拟必须基于流逝的真实时间。衰减量应该是 `每秒衰减率 * 帧间流逝时间(dt)`。
 
 ### 用户需求
-The visualization must be both performant and aesthetically pleasing. Specifically:
-1.  The rendering loop must be smooth and not cause stuttering. An FPS counter is needed to quantify this.
-2.  The "firefly" afterglow effect should be a smooth, continuous gradient from bright yellow to dark blue, not a series of jarring color jumps.
+1.  余晖效果必须是平滑的，并且其持续时间应与真实世界时间挂钩（例如，从最亮到最暗持续约0.2-0.5秒），不受FPS波动的影响。
+2.  应用应保持高性能。
 
 ### 评论
-This is a critical performance and quality-of-life tuning step. It moves our visualization tool from a "working prototype" to a "genuinely useful instrument". By addressing these issues, we ensure that the visualization does not interfere with the simulation itself and provides clear, intuitive insights. This refinement is essential before we can trust it for more complex experiments like Conway's Game of Life.
+这是一个至关重要的修复，它将我们的可视化工具从一个简单的“动画播放器”提升为一个具备基本物理一致性的“模拟器”。实现帧率无关的物理更新是所有动态视觉系统的基石。这次修复将使我们的“创世开发包”更加健壮和可预测。
 
 ### 目标
-1.  **Add FPS Monitoring**: Instrument the `TerminalApp`'s render loop to calculate and display the current Frames Per Second (FPS) in the `StatusBar`.
-2.  **Optimize `GridView`**: Refactor `GridView.__rich_console__` to be dramatically more efficient. Instead of building a heavy `Table` object, it will be rewritten to yield low-level `Segment` objects directly, minimizing overhead and allowing `rich.Live` to perform much faster diffs.
-3.  **Improve `Palettes`**: Rework the `firefly` palette function to use mathematical linear interpolation between color stops. This will replace the hard-coded thresholds with a smooth, continuous color gradient, restoring the natural afterglow effect.
+1.  **修改 `StateMatrix`**: `decay` 方法将接受一个`dt` (delta time，浮点数，表示自上一帧以来经过的秒数) 参数。
+2.  **修改 `GridConfig`**: 将 `decay_rate` 重命名为 `decay_per_second`，以更清晰地反映其含义，并为其设定一个基于时间的新默认值（例如`4.0`，意味着亮度在0.25秒内从1.0衰减到0）。
+3.  **更新 `TerminalApp`**: 在渲染循环中，计算每帧的`dt`，并将其传递给`grid_view.matrix.decay(dt)`。
+4.  **更新调用点**: 修改 `run_fireflies.py` 和 `GridView` 的初始化，使用新的 `decay_per_second` 参数。
 
 ### 基本原理
--   **Performance**: The key to performance with `rich.Live` is to make the renderable object as simple as possible. By ditching the `Table` class and yielding `Segment` objects (the most basic drawable unit in `rich`), we reduce the object graph that `rich` needs to traverse and diff each frame. We are essentially moving closer to the metal of `rich`'s rendering engine for our performance-critical component.
--   **Visuals**: We will define color "stops" (e.g., at brightness 0.0, 0.5, and 1.0) and use `numpy`'s vectorized operations to linearly interpolate the R, G, B values for every cell's brightness level simultaneously. This is computationally efficient and will produce a perfectly smooth gradient.
--   **Monitoring**: A simple moving average of frame times within the `TerminalApp`'s render loop will provide a stable FPS counter for the `StatusBar`.
+我们将把衰减计算从 `brightness -= rate` 改为 `brightness -= rate_per_second * dt`。
+-   `rate_per_second`: 是一个常数，定义了“亮度每秒下降多少”。
+-   `dt`: 是一个变量，即 `current_time - last_frame_time`。
+
+这样，如果FPS高（`dt`很小），每次衰减的量就小；如果FPS低（`dt`很大），每次衰减的量就大。最终，总的衰减速度在真实时间维度上保持恒定，从而实现了帧率解耦。
 
 ### 标签
-#intent/refine #intent/fix #flow/ready #priority/high #comp/cli #concept/ui #task/domain/visualization #task/object/rendering-performance #task/action/performance-tuning #task/state/continue
+#intent/fix #intent/refine #flow/ready #priority/high #comp/cli #concept/ui #task/domain/visualization #task/object/physics-simulation #task/action/decoupling #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: Instrument `TerminalApp` to Display FPS
+#### Acts 1: Update `StateMatrix` to be time-based
 
-First, we'll add an FPS counter to the main application loop so we can measure the impact of our optimizations.
-
-~~~~~act
-patch_file
-observatory/visualization/app.py
-~~~~~
-~~~~~python
-    async def _render_loop(self):
-        """The core loop that processes the queue and updates the Live display."""
-        with Live(self.layout, screen=True, transient=True) as live:
-            while self._running:
-                # Process all pending updates from the queue
-                while not self.queue.empty():
-                    try:
-                        msg_type, data = self.queue.get_nowait()
-                        if msg_type == "grid":
-                            x, y, state = data
-                            self.grid_view.matrix.update(x, y, state)
-                        elif msg_type == "status":
-                            key, value = data
-                            self.status_bar.set_status(key, value)
-                    except asyncio.QueueEmpty:
-                        break
-                
-                # Apply physics/decay to the grid
-                self.grid_view.matrix.decay()
-                
-                # Rich's Live object will handle the refresh automatically.
-                # We can control the refresh rate here.
-                await asyncio.sleep(1/30) # ~30 FPS
-~~~~~
-~~~~~python
-    async def _render_loop(self):
-        """The core loop that processes the queue and updates the Live display."""
-        with Live(self.layout, screen=True, transient=True, refresh_per_second=30) as live:
-            frame_times = []
-            last_time = time.perf_counter()
-
-            while self._running:
-                # Process all pending updates from the queue
-                queue_size = self.queue.qsize()
-                while not self.queue.empty():
-                    try:
-                        msg_type, data = self.queue.get_nowait()
-                        if msg_type == "grid":
-                            x, y, state = data
-                            self.grid_view.matrix.update(x, y, state)
-                        elif msg_type == "status":
-                            key, value = data
-                            self.status_bar.set_status(key, value)
-                    except asyncio.QueueEmpty:
-                        break
-                
-                # Apply physics/decay to the grid
-                self.grid_view.matrix.decay()
-
-                # Calculate FPS using a moving average of last 10 frames
-                now = time.perf_counter()
-                frame_time = now - last_time
-                last_time = now
-                frame_times.append(frame_time)
-                if len(frame_times) > 10:
-                    frame_times.pop(0)
-                
-                avg_frame_time = sum(frame_times) / len(frame_times)
-                fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float('inf')
-                self.status_bar.set_status("FPS", f"{fps:.1f}")
-                self.status_bar.set_status("Queue", queue_size)
-                
-                # Live display is automatically refreshed by the context manager.
-                # We add a small sleep to prevent a 100% CPU busy-loop.
-                await asyncio.sleep(0.001)
-~~~~~
-
-#### Acts 2: Implement Smooth Gradient in `palette.py`
-
-Next, we'll fix the afterglow effect by replacing the discrete color steps with smooth linear interpolation.
+我们首先修改 `matrix.py`，让 `decay` 方法接受 `dt` 参数，并更新配置。
 
 ~~~~~act
 patch_file
-observatory/visualization/palette.py
+observatory/visualization/matrix.py
 ~~~~~
 ~~~~~python
-    @staticmethod
-    def firefly(brightness: np.ndarray) -> np.ndarray:
+@dataclass
+class GridConfig:
+    width: int = 100
+    height: int = 100
+    decay_rate: float = 0.1
+
+class StateMatrix:
+    """
+    Manages the 'physics' of the grid:
+    - Logical state (is the agent active?)
+    - Physical state (brightness/afterglow)
+    """
+
+    def __init__(self, config: GridConfig):
+        self.cfg = config
+        # brightness: Float 0.0 - 1.0 (1.0 = Flash, 0.0 = Dark)
+        self.brightness = np.zeros((self.cfg.height, self.cfg.width), dtype=np.float32)
+        # active: Boolean (True = Agent exists/alive)
+        self.active = np.zeros((self.cfg.height, self.cfg.width), dtype=bool)
+
+    def update(self, x: int, y: int, state: float):
         """
-        Maps 0.0-1.0 brightness to a Firefly gradient using Rich-compatible styles.
-        0.0 (Refractory/Quiet) -> Dark Blue/Black
-        0.5 (Charging) -> Deep Orange
-        1.0 (Flash) -> Bright Yellow/White
+        Updates the state of a single cell.
+        state: 1.0 usually indicates a flash trigger.
         """
-        # Initialize with a dark background color in Rich's rgb format
-        colors = np.full(brightness.shape, "rgb(30,30,40)", dtype="<U18")
+        if 0 <= x < self.cfg.width and 0 <= y < self.cfg.height:
+            self.brightness[y, x] = state
+            self.active[y, x] = True
 
-        # Low energy (Charging): Reddish
-        mask_low = (brightness > 0.1) & (brightness <= 0.6)
-        colors[mask_low] = "rgb(100,40,40)"
-
-        # High energy (Pre-flash): Orange
-        mask_high = (brightness > 0.6) & (brightness <= 0.9)
-        colors[mask_high] = "rgb(200,120,0)"
-
-        # Flash: Bright Yellow/White
-        mask_flash = brightness > 0.9
-        colors[mask_flash] = "rgb(255,255,200)"
-
-        return colors
+    def decay(self):
+        """
+        Applies decay to the entire matrix.
+        Optimized vectorized operation.
+        """
+        # Subtract decay_rate, clip at 0.0
+        self.brightness -= self.cfg.decay_rate
+        np.clip(self.brightness, 0.0, 1.0, out=self.brightness)
 ~~~~~
 ~~~~~python
-    @staticmethod
-    def firefly(brightness: np.ndarray) -> np.ndarray:
+@dataclass
+class GridConfig:
+    width: int = 100
+    height: int = 100
+    decay_per_second: float = 4.0 # Brightness fades from 1.0 to 0 in 0.25s
+
+class StateMatrix:
+    """
+    Manages the 'physics' of the grid:
+    - Logical state (is the agent active?)
+    - Physical state (brightness/afterglow)
+    """
+
+    def __init__(self, config: GridConfig):
+        self.cfg = config
+        # brightness: Float 0.0 - 1.0 (1.0 = Flash, 0.0 = Dark)
+        self.brightness = np.zeros((self.cfg.height, self.cfg.width), dtype=np.float32)
+        # active: Boolean (True = Agent exists/alive)
+        self.active = np.zeros((self.cfg.height, self.cfg.width), dtype=bool)
+
+    def update(self, x: int, y: int, state: float):
         """
-        Maps 0.0-1.0 brightness to a Firefly gradient using vectorized interpolation.
+        Updates the state of a single cell.
+        state: 1.0 usually indicates a flash trigger.
         """
-        # Define color stops [R, G, B]
-        stop1 = np.array([30, 30, 40])      # Dark Blue (at brightness 0.0)
-        stop2 = np.array([200, 120, 0])     # Orange (at brightness 0.5)
-        stop3 = np.array([255, 255, 200])   # Bright Yellow (at brightness 1.0)
+        if 0 <= x < self.cfg.width and 0 <= y < self.cfg.height:
+            self.brightness[y, x] = state
+            self.active[y, x] = True
 
-        # Prepare output arrays
-        r = np.zeros_like(brightness, dtype=np.uint8)
-        g = np.zeros_like(brightness, dtype=np.uint8)
-        b = np.zeros_like(brightness, dtype=np.uint8)
-
-        # --- Vectorized Interpolation ---
-        # Mask for the lower half of the gradient (0.0 to 0.5)
-        mask1 = brightness <= 0.5
-        # Normalize brightness in this range to 0-1 for interpolation
-        t1 = brightness[mask1] * 2
-        r[mask1] = (stop1[0] + (stop2[0] - stop1[0]) * t1).astype(np.uint8)
-        g[mask1] = (stop1[1] + (stop2[1] - stop1[1]) * t1).astype(np.uint8)
-        b[mask1] = (stop1[2] + (stop2[2] - stop1[2]) * t1).astype(np.uint8)
-
-        # Mask for the upper half of the gradient (0.5 to 1.0)
-        mask2 = brightness > 0.5
-        # Normalize brightness in this range to 0-1 for interpolation
-        t2 = (brightness[mask2] - 0.5) * 2
-        r[mask2] = (stop2[0] + (stop3[0] - stop2[0]) * t2).astype(np.uint8)
-        g[mask2] = (stop2[1] + (stop3[1] - stop2[1]) * t2).astype(np.uint8)
-        b[mask2] = (stop2[2] + (stop3[2] - stop2[2]) * t2).astype(np.uint8)
-
-        # Create rich-compatible "rgb(r,g,b)" strings. This is the slowest part.
-        # We can optimize if needed, but it's more readable for now.
-        return np.array([f"rgb({r_},{g_},{b_})" for r_, g_, b_ in zip(r.flat, g.flat, b.flat)]).reshape(r.shape)
+    def decay(self, dt: float):
+        """
+        Applies time-based decay to the entire matrix.
+        Optimized vectorized operation.
+        
+        Args:
+            dt: The time delta in seconds since the last decay.
+        """
+        decay_amount = self.cfg.decay_per_second * dt
+        self.brightness -= decay_amount
+        np.clip(self.brightness, 0.0, 1.0, out=self.brightness)
 ~~~~~
 
-#### Acts 3: Optimize `GridView` by using low-level `Segment` rendering
+#### Acts 2: Update `GridView` to use the new parameter name
 
-Finally, the most important change: we'll refactor `GridView` to eliminate the slow, per-frame `Table` creation.
+现在我们更新 `grid.py` 以使用 `decay_per_second`。
 
 ~~~~~act
 patch_file
 observatory/visualization/grid.py
 ~~~~~
 ~~~~~python
-from rich.table import Table
-from rich.box import MINIMAL
-from rich.console import Console, ConsoleOptions, RenderResult
-from rich.segment import Segment
-
-# Re-using the matrix logic from protoplasm as it's solid
-from .matrix import StateMatrix, GridConfig
-
-class GridView:
-    """
-    A Rich-renderable object that displays the state of a simulation grid.
-    """
     def __init__(
         self,
         width: int = 0,
@@ -221,56 +153,14 @@ class GridView:
             height=self.logical_height, 
             decay_rate=decay_rate
         )
-        self.matrix = StateMatrix(self.config)
-        self.palette_func = palette_func
-
-    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        """The Rich render protocol method."""
-        # Get a snapshot of the brightness matrix
-        brightness = self.matrix.get_snapshot()
-        # Get the corresponding colors using the palette
-        colors = self.palette_func(brightness)
-        
-        # We use a simple table with no padding/borders for a clean grid
-        table = Table.grid(padding=0)
-        for _ in range(self.logical_width):
-            table.add_column()
-
-        # Build the grid row by row
-        for y in range(self.logical_height):
-            row_cells = []
-            for x in range(self.logical_width):
-                # Use a double-width block for square-like pixels
-                char = "██"
-                color_code = colors[y, x]
-                style = color_code if color_code else "black"
-                row_cells.append((char, style))
-            
-            # Rich Table expects strings with style markup
-            table.add_row(*[f"[{style}]{char}" for char, style in row_cells])
-            
-        yield table
 ~~~~~
 ~~~~~python
-from rich.console import Console, ConsoleOptions, RenderResult
-from rich.segment import Segment
-from rich.style import Style
-
-# Re-using the matrix logic from protoplasm as it's solid
-from .matrix import StateMatrix, GridConfig
-
-class GridView:
-    """
-    A Rich-renderable object that displays the state of a simulation grid.
-    This version is highly optimized to yield low-level Segments instead of
-    building a heavy Table object, which dramatically improves performance.
-    """
     def __init__(
         self,
         width: int = 0,
         height: int = 0,
         palette_func: Callable[[np.ndarray], np.ndarray] = None,
-        decay_rate: float = 0.05
+        decay_per_second: float = 4.0
     ):
         cols, rows = shutil.get_terminal_size()
         
@@ -280,37 +170,71 @@ class GridView:
         self.config = GridConfig(
             width=self.logical_width, 
             height=self.logical_height, 
-            decay_rate=decay_rate
+            decay_per_second=decay_per_second
         )
-        self.matrix = StateMatrix(self.config)
-        self.palette_func = palette_func
-        # Pre-cache styles to avoid parsing strings in the render loop
-        self._style_cache: Dict[str, Style] = {}
+~~~~~
 
-    def _get_style(self, style_str: str) -> Style:
-        """Caches Rich Style objects for performance."""
-        if style_str not in self._style_cache:
-            self._style_cache[style_str] = Style.parse(style_str)
-        return self._style_cache[style_str]
+#### Acts 3: Update `TerminalApp` to pass `dt` to the decay function
 
-    def __rich_console__(self, console: Console, options: ConsoleOptions) -> RenderResult:
-        """The Rich render protocol method, optimized for performance."""
-        brightness = self.matrix.get_snapshot()
-        colors = self.palette_func(brightness)
-        
-        # Use a double-width block for square-like pixels
-        char = "██"
-        
-        for y in range(self.logical_height):
-            # Yield segments for one full row
-            yield from [
-                Segment(char, self._get_style(colors[y, x]))
-                for x in range(self.logical_width)
-            ]
-            # Yield a newline to move to the next row
-            yield Segment.line()
+这是核心修复。我们在 `app.py` 的渲染循环中计算 `frame_time` (即 `dt`) 并将其传递下去。
+
+~~~~~act
+patch_file
+observatory/visualization/app.py
+~~~~~
+~~~~~python
+                # Apply physics/decay to the grid
+                self.grid_view.matrix.decay()
+
+                # Calculate FPS using a moving average of last 10 frames
+~~~~~
+~~~~~python
+                # Calculate dt (frame_time) for physics update
+                now = time.perf_counter()
+                frame_time = now - last_time
+                last_time = now
+
+                # Apply physics/decay to the grid using the calculated dt
+                self.grid_view.matrix.decay(frame_time)
+
+                # Calculate FPS using a moving average of last 10 frames
+~~~~~
+~~~~~act
+patch_file
+observatory/visualization/app.py
+~~~~~
+~~~~~python
+                # Calculate FPS using a moving average of last 10 frames
+                now = time.perf_counter()
+                frame_time = now - last_time
+                last_time = now
+                frame_times.append(frame_time)
+~~~~~
+~~~~~python
+                frame_times.append(frame_time)
+~~~~~
+
+#### Acts 4: Update `run_fireflies.py` to use the new decay parameter
+
+最后，确保实验脚本使用新的、基于时间的参数来实例化`GridView`。我们将衰减率设置为 `5.0`，这意味着余晖效果将在 `1.0 / 5.0 = 0.2` 秒内完成。
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+        # 1. Create visualization components
+        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_rate=0.1)
+        status_bar = StatusBar(initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."})
+~~~~~
+~~~~~python
+        # 1. Create visualization components
+        # A decay_per_second of 5.0 means a flash will fade in 1/5 = 0.2 seconds.
+        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_per_second=5.0)
+        status_bar = StatusBar(initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."})
 ~~~~~
 
 ### 下一步建议
-1.  **验证修复**: 请再次运行 `python -m observatory.experiments.run_fireflies`。您应该会看到一个 FPS 计数器，注意到卡顿现象已显著改善，并且萤火虫的余晖效果现在是平滑自然的渐变。
-2.  **继续迁移**: 在确认性能和视觉效果达标后，我们可以充满信心地将 `run_conway_experiment.py` 和 `bottleneck_sim.py` 迁移到这个经过优化的可视化框架上。
+请再次运行 `python -m observatory.experiments.run_fireflies`。现在，无论FPS如何变化，您都应该能观察到一个持续时间稳定、平滑渐变的余晖效果。如果觉得0.2秒的衰减时间太快或太慢，只需调整 `run_fireflies.py` 中 `decay_per_second` 的值即可轻松控制。
+
+一旦您对效果满意，我们就可以继续将其他实验迁移到这个现在已经非常健壮的可视化框架上了。

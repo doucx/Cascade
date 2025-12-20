@@ -73,13 +73,14 @@ class TerminalApp:
                     except asyncio.QueueEmpty:
                         break
                 
-                # Apply physics/decay to the grid
-                self.grid_view.matrix.decay()
-
-                # Calculate FPS using a moving average of last 10 frames
+                # Calculate dt (frame_time) for physics update
                 now = time.perf_counter()
                 frame_time = now - last_time
                 last_time = now
+
+                # Apply physics/decay to the grid using the calculated dt
+                self.grid_view.matrix.decay(frame_time)
+
                 frame_times.append(frame_time)
                 if len(frame_times) > 10:
                     frame_times.pop(0)

@@ -20,7 +20,7 @@ class GridView:
         width: int = 0,
         height: int = 0,
         palette_func: Callable[[np.ndarray], np.ndarray] = None,
-        decay_rate: float = 0.05
+        decay_per_second: float = 4.0
     ):
         cols, rows = shutil.get_terminal_size()
         
@@ -30,7 +30,7 @@ class GridView:
         self.config = GridConfig(
             width=self.logical_width, 
             height=self.logical_height, 
-            decay_rate=decay_rate
+            decay_per_second=decay_per_second
         )
         self.matrix = StateMatrix(self.config)
         self.palette_func = palette_func

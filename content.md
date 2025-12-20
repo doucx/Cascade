@@ -1,208 +1,265 @@
-你的观察非常敏锐。日志中 `fps.min` 的周期性下降，并且这个节奏与萤火虫的闪烁频率（即系统的“脉冲”）一致，这强烈暗示了当系统达成大规模同步时，大量的 Agent 同时唤醒并执行操作，给事件循环带来了瞬时压力，导致了帧率的抖动。这正是我们希望通过数据分析来验证的现象。
+这是一个非常棒的工程挑战。你的直觉是正确的：**只要去除 Python 侧的低效循环和不必要的锁竞争，Python 完全有能力处理这个量级的数据。**
 
-我将为你创建一个使用 Cascade 构建的分析脚本。这个脚本遵循了 Cascade 的组合哲学：将数据加载、分析和报告分解为独立的、可重用的任务。
+我们将实施两个关键的性能优化（Surgical Optimization），直接消除导致滞后的根本原因：
 
-## [WIP] feat(analysis): 创建一个日志分析脚本与 Cascade
+1.  **无锁双缓冲 (Lockless Double Buffering)**:
+    *   **现状**: 每一帧 2500 次 `async with lock`，导致严重的事件循环争用。
+    *   **优化**: 利用 Python GIL 和 asyncio 的单线程特性，使用 `list.extend` 进行原子操作。渲染循环只需简单地“交换”缓冲区引用即可。这将摄入开销降至接近零。
 
-### 用户需求
-创建一个可以通过命令行接收 JSONL 文件路径的 Python 脚本。该脚本需要读取文件，分析其中各项指标（特别是 `fps.min`）之间的相关性，并输出一份清晰的分析报告，以验证日志数据中的周期性性能变化。
+2.  **向量化摄入 (Vectorized Ingestion)**:
+    *   **现状**: 使用 `np.fromiter` + 生成器表达式，在 Python 层面逐个解包 2500 个元组。
+    *   **优化**: 直接将 `List[Tuple]` 喂给 `np.array`。NumPy 的 C 语言后端处理列表转换的速度比 Python 迭代器快一个数量级。
 
-### 评论
-这是一个非常合适的任务，它展示了如何利用 Cascade 将一个数据分析流程表达为一个清晰的计算图。我们将使用强大的 `pandas` 库来处理数据和计算相关性，这使得核心分析逻辑非常简洁。整个流程将是声明式的，易于理解和扩展。
+这是一个针对 `RawTerminalApp` 的“心脏移植”手术。
 
-### 目标
-1.  创建一个名为 `analyze_logs.py` 的脚本。
-2.  该脚本使用 `cs.Param` 接收一个文件路径作为输入。
-3.  实现一个任务，用于加载 JSONL 文件并将其解析为一个 `pandas` DataFrame。
-4.  实现一个核心分析任务，计算关键指标之间的相关性矩阵。
-5.  实现一个报告任务，将分析结果格式化并打印到控制台。
-6.  提供一个 `requirements.txt` 文件来管理依赖。
+### 计划：实施零延迟渲染内核
 
-### 基本原理
-我们将构建一个三阶段的 Cascade 工作流：
+#### 1. 重写 `RawTerminalApp`
 
-1.  **加载与解析 (`load_and_parse_log`)**: 这个任务负责 I/O 和数据规整化。它会逐行读取文件，将 JSON 对象解析并展平（例如，将嵌套的 `fps.min` 变成 `fps_min` 列），然后构建一个 `pandas` DataFrame。这一步是数据准备的“物理层”。
-2.  **核心分析 (`analyze_correlations`)**: 这个任务是纯粹的计算。它接收 DataFrame，选择数值类型的列，并计算它们的相关性矩阵。这是分析的“逻辑层”。
-3.  **结果呈现 (`print_results`)**: 这个任务负责“表示层”。它接收分析结果（相关性矩阵），并以人类可读的格式将其打印出来，同时附上对结果的解读，以突出最重要的发现。
-
-这种分层确保了每一部分都只做一件事，使得整个流程清晰、可测试且易于修改。
-
-### 标签
-#intent/build #flow/ready #priority/medium #comp/cli #concept/analysis #scope/dx #ai/instruct #task/domain/tooling #task/object/log-analyzer #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建项目依赖文件
-
-首先，我们定义项目所需的 Python 库。
+我们将重写 `observatory/visualization/raw_app.py`，移除所有锁，并引入新的缓冲逻辑。
 
 ~~~~~act
 write_file
-observatory/scripts/requirements.txt
-~~~~~
-~~~~~text
-# Core workflow library
-cascade-py
-
-# Data analysis and manipulation
-pandas
-numpy
-~~~~~
-
-#### Acts 2: 创建日志分析脚本
-
-现在，我将为你生成完整的 `analyze_logs.py` 脚本。
-
-~~~~~act
-write_file
-observatory/scripts/analyze_logs.py
+observatory/visualization/raw_app.py
 ~~~~~
 ~~~~~python
-import json
-import pandas as pd
-from typing import List, Dict, Any
+import asyncio
+import sys
+import time
+from asyncio import Queue
+from typing import Any, List, Tuple
 
-import cascade as cs
+import numpy as np
 
-@cs.task
-def load_and_parse_log(filepath: str) -> pd.DataFrame:
+from .grid import GridView
+from .status import StatusBar
+from observatory.monitors.aggregator import MetricsAggregator
+
+# ANSI Codes
+CURSOR_HIDE = b"\033[?25l"
+CURSOR_SHOW = b"\033[?25h"
+CURSOR_HOME = b"\033[H"
+CLEAR_SCREEN = b"\033[2J"
+CLEAR_LINE = b"\033[K"
+RESET_COLOR = b"\033[0m"
+
+
+class RawTerminalApp:
     """
-    Reads a JSONL file line by line, parses each line as JSON,
-    and returns a flattened pandas DataFrame.
+    A 'Raw Metal' renderer that bypasses Rich/Curses and writes directly
+    to the stdout buffer.
+    
+    OPTIMIZED VERSION (v2):
+    - Implements Lockless Double Buffering for high-frequency ingestion.
+    - Uses Vectorized NumPy ingestion to eliminate Python iteration overhead.
     """
-    print(f"INFO: Loading and parsing log file: {filepath}...")
-    data = []
-    with open(filepath, 'r', encoding='utf-8') as f:
-        for line in f:
-            try:
-                data.append(json.loads(line))
-            except json.JSONDecodeError:
-                print(f"WARNING: Skipping malformed JSON line: {line.strip()}")
-                continue
 
-    # json_normalize is excellent for flattening nested JSON structures
-    df = pd.json_normalize(data)
+    def __init__(
+        self,
+        grid_view: GridView,
+        status_bar: StatusBar,
+        aggregator: MetricsAggregator = None,
+    ):
+        self.grid_view = grid_view
+        self.status_bar = status_bar
+        self.aggregator = aggregator
 
-    # Rename columns for easier access (e.g., 'fps.min' -> 'fps_min')
-    df.columns = df.columns.str.replace('.', '_', regex=False)
-    print(f"INFO: Successfully loaded {len(df)} records.")
-    return df
+        self.queue: Queue = Queue()
+        
+        # --- Optimization: Double Buffering ---
+        # We use a simple list for the back buffer.
+        # Since 'direct_update_grid_batch' and '_render_loop' run in the same
+        # asyncio event loop thread, simple list operations are atomic relative
+        # to each other (no context switch during extend/assignment).
+        self._back_buffer: List[Tuple[int, int, float]] = []
+        
+        self._running = False
+        self._render_task: asyncio.Task | None = None
 
-@cs.task
-def analyze_correlations(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Selects key numerical metrics and computes their correlation matrix.
-    """
-    print("INFO: Analyzing correlations...")
-    # Select the columns of interest for correlation analysis
-    metrics_of_interest = [
-        'ts',
-        'fps_avg',
-        'fps_min',
-        'fps_max',
-        'flush_duration_ms_avg',
-        'render_jitter_ms_avg',
-        'r_value_avg',
-        'pulse_avg',
-        'flash_count_avg'
-    ]
-    
-    # Filter out columns that might not exist in all logs
-    existing_metrics = [col for col in metrics_of_interest if col in df.columns]
-    
-    # Ensure all selected columns are numeric
-    numeric_df = df[existing_metrics].apply(pd.to_numeric, errors='coerce')
-    
-    return numeric_df.corr()
+        self._stdout = sys.stdout.buffer
 
-@cs.task
-def print_results(correlation_matrix: pd.DataFrame) -> None:
-    """
-    Formats and prints the correlation analysis results and key findings.
-    """
-    print("\n" + "="*80)
-    print(" " * 25 + "LOG CORRELATION ANALYSIS RESULTS")
-    print("="*80)
+    async def direct_update_grid_batch(self, updates: List[Tuple[int, int, float]]):
+        """
+        Async batch update.
+        
+        PERFORMANCE NOTE:
+        This is the hottest path in the system (called 2500+ times per flush).
+        We removed the asyncio.Lock here. We simply extend the list.
+        This operation is 'atomic' in the sense that the render loop cannot
+        interrupt this function in the middle (cooperative multitasking).
+        """
+        if updates:
+            self._back_buffer.extend(updates)
 
-    print("\n[ Correlation Matrix ]\n")
-    print(correlation_matrix.to_string(float_format="%.3f"))
-    
-    print("\n\n[ Key Findings ]\n")
-    
-    if 'fps_min' not in correlation_matrix:
-        print("WARNING: 'fps_min' column not found in correlation matrix.")
-        return
+    def update_status(self, key: str, value: Any):
+        """Async status update."""
+        self.queue.put_nowait(("status", (key, value)))
 
-    # Extract correlations related to fps_min
-    fps_min_corr = correlation_matrix['fps_min'].sort_values(ascending=True)
-    
-    print("Correlations with 'fps_min':")
-    print(fps_min_corr.to_string(float_format="%.3f"))
+    def ingest_grid(self, x: int, y: int, state: float):
+        """
+        Legacy sync ingestion for event callbacks.
+        """
+        self.queue.put_nowait(("grid", (x, y, state)))
 
-    print("\n--- Interpretation ---")
-    
-    # Check for the expected negative correlations
-    flush_corr = fps_min_corr.get('flush_duration_ms_avg', 0)
-    jitter_corr = fps_min_corr.get('render_jitter_ms_avg', 0)
-    
-    if flush_corr < -0.5:
-        print(f"✅ Hypothesis Confirmed: A strong negative correlation ({flush_corr:.3f}) exists between 'fps_min' and 'flush_duration_ms_avg'.")
-        print("   This means as the time spent flushing updates increases, the minimum FPS drops significantly.")
-    else:
-        print(f"ℹ️ A moderate or weak negative correlation ({flush_corr:.3f}) was found between 'fps_min' and 'flush_duration_ms_avg'.")
+    def ingest_full_matrix(self, new_matrix: np.ndarray):
+        """Direct full matrix update."""
+        self.grid_view.matrix.set_matrix(new_matrix)
 
-    if jitter_corr < -0.5:
-        print(f"✅ Hypothesis Confirmed: A strong negative correlation ({jitter_corr:.3f}) exists between 'fps_min' and 'render_jitter_ms_avg'.")
-        print("   This indicates that high render jitter (lag) is directly associated with dips in minimum FPS.")
-    
-    r_value_corr = fps_min_corr.get('r_value_avg', 0)
-    if r_value_corr < -0.1:
-         print(f"Interesting Insight: There is a negative correlation ({r_value_corr:.3f}) between 'fps_min' and the synchronization metric 'r_value_avg'.")
-         print("   This supports the idea that as the system becomes more synchronized (higher r_value), the performance becomes more 'spiky', leading to lower minimum FPS during the synchronized pulse.")
-    
-    print("\n" + "="*80)
+    async def start(self):
+        """Starts the raw render loop."""
+        self._running = True
 
-def main():
-    """
-    Defines and runs the Cascade workflow.
-    """
-    # 1. Define workflow inputs
-    log_filepath = cs.Param("filepath", type=str, description="Path to the JSONL log file.")
-    
-    # 2. Build the workflow graph
-    dataframe = load_and_parse_log(log_filepath)
-    analysis_results = analyze_correlations(dataframe)
-    final_report = print_results(analysis_results)
-    
-    # 3. Create and run the command-line interface
-    cli = cs.create_cli(final_report)
-    cli()
+        # Setup terminal
+        self._stdout.write(CURSOR_HIDE)
+        self._stdout.write(CLEAR_SCREEN)
+        self._stdout.flush()
 
-if __name__ == "__main__":
-    main()
+        self._render_task = asyncio.create_task(self._render_loop())
+
+    def stop(self):
+        """Stops the loop and restores terminal."""
+        self._running = False
+        if self._render_task:
+            self._render_task.cancel()
+
+        # Restore terminal
+        self._stdout.write(CURSOR_SHOW)
+        self._stdout.write(RESET_COLOR)
+        self._stdout.write(b"\n")
+        self._stdout.flush()
+
+    def _render_status_bar(self) -> bytes:
+        """
+        Manually renders the status bar to bytes.
+        Format: | Key: Value | Key: Value |
+        """
+        parts = []
+        for key, value in self.status_bar.status_data.items():
+            # Cyan Key, Magenta Value (Bold)
+            parts.append(f"\033[36m{key}:\033[0m \033[1;35m{str(value)}\033[0m")
+
+        line = " | ".join(parts)
+        bar = f"\n\033[2m{'-' * self.grid_view.logical_width * 2}\033[0m\n"
+        return (bar + line + "\033[K").encode("utf-8")
+
+    def _blocking_flush_logic(self, updates_list: List[Tuple[int, int, float]]):
+        """
+        CPU-bound state update running in a separate thread.
+        
+        OPTIMIZATION:
+        Replaced np.fromiter (slow Python loop) with np.array (fast C loop).
+        """
+        if not updates_list:
+            return
+
+        # 1. Vectorized Creation
+        # Converting a list of tuples to a structured array is extremely fast in NumPy
+        # shape will be (N, 3) where columns are x, y, state
+        data = np.array(updates_list, dtype=np.float32)
+
+        # 2. Vectorized Unpacking
+        # We cast coordinates to int for indexing. 
+        # Using astype(int) is very fast.
+        x_coords = data[:, 0].astype(int)
+        y_coords = data[:, 1].astype(int)
+        states = data[:, 2]
+
+        # 3. Vectorized Update
+        self.grid_view.matrix.update_batch(x_coords, y_coords, states)
+
+    async def _swap_and_process_buffer(self):
+        """
+        Async wrapper for flushing. 
+        Implements the buffer swap logic.
+        """
+        # --- CRITICAL SECTION START ---
+        # We swap the reference. The old list is detached and handed off to the thread.
+        # A new list is put in place for incoming updates.
+        # This is safe because we are single-threaded here.
+        if not self._back_buffer:
+            return 0
+            
+        updates_to_process = self._back_buffer
+        self._back_buffer = [] 
+        # --- CRITICAL SECTION END ---
+
+        # Offload the heavy NumPy lifting to a thread
+        await asyncio.to_thread(self._blocking_flush_logic, updates_to_process)
+        return len(updates_to_process)
+
+    async def _render_loop(self):
+        last_time = time.perf_counter()
+
+        # Cap at 60 FPS
+        target_fps = 60.0
+        frame_interval = 1.0 / target_fps
+
+        while self._running:
+            loop_start = time.perf_counter()
+
+            # 1. Process Updates (Flush)
+            flush_start = time.perf_counter()
+            # This now handles the swap and the threaded processing
+            updates_count = await self._swap_and_process_buffer()
+            flush_ms = (time.perf_counter() - flush_start) * 1000
+
+            # 2. Process Queue (Status & Legacy Grid)
+            while not self.queue.empty():
+                try:
+                    msg_type, data = self.queue.get_nowait()
+                    if msg_type == "status":
+                        k, v = data
+                        self.status_bar.set_status(k, v)
+                    elif msg_type == "grid":
+                        x, y, s = data
+                        # Direct update via matrix method (thread-safe enough for simple writes)
+                        self.grid_view.matrix.update(x, y, s)
+                except asyncio.QueueEmpty:
+                    break
+
+            # 3. Physics Step
+            now = time.perf_counter()
+            dt = now - last_time
+            last_time = now
+            physics_dt = min(dt, 0.1)
+            self.grid_view.matrix.decay(physics_dt)
+
+            # 4. RENDER
+            output_buffer = bytearray(CURSOR_HOME)
+            output_buffer.extend(self.grid_view.render_frame_buffer())
+            output_buffer.extend(self._render_status_bar())
+
+            self._stdout.write(output_buffer)
+            self._stdout.flush()
+
+            # 5. Telemetry & Sleep
+            render_duration = time.perf_counter() - loop_start
+            fps = 1.0 / dt if dt > 0 else 0
+            
+            self.status_bar.set_status("FPS", f"{fps:.1f}")
+
+            if self.aggregator:
+                # Log metrics for analysis
+                # We expect flush_duration_ms to be MUCH lower now
+                await self.aggregator.record("fps", fps)
+                await self.aggregator.record("flush_duration_ms", flush_ms)
+
+            sleep_time = frame_interval - render_duration
+            
+            if self.aggregator:
+                jitter_ms = max(0, -sleep_time) * 1000
+                await self.aggregator.record("render_jitter_ms", jitter_ms)
+
+            if sleep_time > 0:
+                await asyncio.sleep(sleep_time)
+            else:
+                await asyncio.sleep(0)
 ~~~~~
 
-### 下一步建议
+### 验证计划
 
-**如何使用这个脚本：**
+现在 `RawTerminalApp` 已经升级为 v2 (Zero-Latency)。
+你可以直接运行 `run_fireflies.py`。
+预期的结果是：即使在全屏同步闪烁的高峰时刻，FPS 也应稳定在 50-60 之间，且 `flush_duration_ms` 应该从之前的峰值 (~160ms) 降低到 < 5ms。
 
-1.  **安装依赖**:
-    ```bash
-    pip install -r observatory/scripts/requirements.txt
-    ```
-
-2.  **运行分析**:
-    假设你的日志文件名为 `firefly_log.jsonl`，你可以这样运行脚本：
-    ```bash
-    python observatory/scripts/analyze_logs.py --filepath firefly_log.jsonl
-    ```
-    或者更简洁地：
-    ```bash
-    python observatory/scripts/analyze_logs.py firefly_log.jsonl
-    ```
-
-这个脚本将直接输出分析报告。接下来，我们可以基于这个脚本进行扩展，例如：
--   **增加绘图功能**：添加一个新的任务，使用 `matplotlib` 或 `seaborn` 库将时间序列数据（如 `ts` vs `fps_min`）绘制成图表，以更直观地展示性能抖动。
--   **性能事件检测**：编写一个任务来自动检测 `fps_min` 低于某个阈值的事件，并打印出这些事件发生时其他所有指标的状态，以进行更深入的根本原因分析。
+现在，去点亮那些萤火虫吧。

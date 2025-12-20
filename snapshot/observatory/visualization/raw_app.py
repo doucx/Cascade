@@ -2,7 +2,7 @@ import asyncio
 import sys
 import time
 from asyncio import Queue
-from typing import Any
+from typing import Any, List, Tuple
 
 import numpy as np
 
@@ -23,6 +23,10 @@ class RawTerminalApp:
     """
     A 'Raw Metal' renderer that bypasses Rich/Curses and writes directly
     to the stdout buffer.
+    
+    OPTIMIZED VERSION (v2):
+    - Implements Lockless Double Buffering for high-frequency ingestion.
+    - Uses Vectorized NumPy ingestion to eliminate Python iteration overhead.
     """
 
     def __init__(
@@ -36,25 +40,31 @@ class RawTerminalApp:
         self.aggregator = aggregator
 
         self.queue: Queue = Queue()
-        self._frame_buffer = set()
+        
+        # --- Optimization: Double Buffering ---
+        # We use a simple list for the back buffer.
+        # Since 'direct_update_grid_batch' and '_render_loop' run in the same
+        # asyncio event loop thread, simple list operations are atomic relative
+        # to each other (no context switch during extend/assignment).
+        self._back_buffer: List[Tuple[int, int, float]] = []
+        
         self._running = False
         self._render_task: asyncio.Task | None = None
-        self._flush_lock = asyncio.Lock()
-
-        # Pre-allocate numpy buffers for batch updates
-        max_pixels = self.grid_view.logical_width * self.grid_view.logical_height
-        self._update_coords_x = np.zeros(max_pixels, dtype=int)
-        self._update_coords_y = np.zeros(max_pixels, dtype=int)
-        self._update_states = np.zeros(max_pixels, dtype=np.float32)
 
         self._stdout = sys.stdout.buffer
 
-    async def direct_update_grid_batch(self, updates: list):
-        """Async batch update (same interface as TerminalApp)."""
-        if not updates:
-            return
-        async with self._flush_lock:
-            self._frame_buffer.update(updates)
+    async def direct_update_grid_batch(self, updates: List[Tuple[int, int, float]]):
+        """
+        Async batch update.
+        
+        PERFORMANCE NOTE:
+        This is the hottest path in the system (called 2500+ times per flush).
+        We removed the asyncio.Lock here. We simply extend the list.
+        This operation is 'atomic' in the sense that the render loop cannot
+        interrupt this function in the middle (cooperative multitasking).
+        """
+        if updates:
+            self._back_buffer.extend(updates)
 
     def update_status(self, key: str, value: Any):
         """Async status update."""
@@ -62,8 +72,7 @@ class RawTerminalApp:
 
     def ingest_grid(self, x: int, y: int, state: float):
         """
-        Legacy sync ingestion for event callbacks (e.g. from synchronous bus listeners).
-        Adds overhead compared to batch updates but ensures compatibility.
+        Legacy sync ingestion for event callbacks.
         """
         self.queue.put_nowait(("grid", (x, y, state)))
 
@@ -105,61 +114,68 @@ class RawTerminalApp:
             parts.append(f"\033[36m{key}:\033[0m \033[1;35m{str(value)}\033[0m")
 
         line = " | ".join(parts)
-        # Add a top border or separation
         bar = f"\n\033[2m{'-' * self.grid_view.logical_width * 2}\033[0m\n"
-        # Append CLEAR_LINE code to wipe any ghost characters
         return (bar + line + "\033[K").encode("utf-8")
 
-    def _blocking_flush_logic(self, updates_set):
-        """CPU-bound state update."""
-        num_updates = len(updates_set)
-        if num_updates == 0:
+    def _blocking_flush_logic(self, updates_list: List[Tuple[int, int, float]]):
+        """
+        CPU-bound state update running in a separate thread.
+        
+        OPTIMIZATION:
+        Replaced np.fromiter (slow Python loop) with np.array (fast C loop).
+        """
+        if not updates_list:
             return
 
-        # Flatten logic same as before
-        temp_array = np.fromiter(
-            (item for tpl in updates_set for item in tpl),
-            dtype=np.float32,
-            count=num_updates * 3,
-        ).reshape((num_updates, 3))
+        # 1. Vectorized Creation
+        # Converting a list of tuples to a structured array is extremely fast in NumPy
+        # shape will be (N, 3) where columns are x, y, state
+        data = np.array(updates_list, dtype=np.float32)
 
-        self._update_coords_x[:num_updates] = temp_array[:, 0]
-        self._update_coords_y[:num_updates] = temp_array[:, 1]
-        self._update_states[:num_updates] = temp_array[:, 2]
+        # 2. Vectorized Unpacking
+        # We cast coordinates to int for indexing. 
+        # Using astype(int) is very fast.
+        x_coords = data[:, 0].astype(int)
+        y_coords = data[:, 1].astype(int)
+        states = data[:, 2]
 
-        self.grid_view.matrix.update_batch(
-            self._update_coords_x[:num_updates],
-            self._update_coords_y[:num_updates],
-            self._update_states[:num_updates],
-        )
+        # 3. Vectorized Update
+        self.grid_view.matrix.update_batch(x_coords, y_coords, states)
 
-    async def _flush_buffer(self):
-        """Async wrapper for flushing."""
-        updates_to_flush = None
-        async with self._flush_lock:
-            if self._frame_buffer:
-                updates_to_flush = self._frame_buffer
-                self._frame_buffer = set()
+    async def _swap_and_process_buffer(self):
+        """
+        Async wrapper for flushing. 
+        Implements the buffer swap logic.
+        """
+        # --- CRITICAL SECTION START ---
+        # We swap the reference. The old list is detached and handed off to the thread.
+        # A new list is put in place for incoming updates.
+        # This is safe because we are single-threaded here.
+        if not self._back_buffer:
+            return 0
+            
+        updates_to_process = self._back_buffer
+        self._back_buffer = [] 
+        # --- CRITICAL SECTION END ---
 
-        if updates_to_flush:
-            await asyncio.to_thread(self._blocking_flush_logic, updates_to_flush)
-            return len(updates_to_flush)
-        return 0
+        # Offload the heavy NumPy lifting to a thread
+        await asyncio.to_thread(self._blocking_flush_logic, updates_to_process)
+        return len(updates_to_process)
 
     async def _render_loop(self):
         last_time = time.perf_counter()
 
-        # Cap at 60 FPS to balance smoothness and resource usage.
-        # This also reduces aliasing artifacts when render rate > physics rate.
+        # Cap at 60 FPS
         target_fps = 60.0
         frame_interval = 1.0 / target_fps
 
         while self._running:
             loop_start = time.perf_counter()
 
-            # 1. Process Updates
+            # 1. Process Updates (Flush)
             flush_start = time.perf_counter()
-            updates_count = await self._flush_buffer()
+            # This now handles the swap and the threaded processing
+            updates_count = await self._swap_and_process_buffer()
             flush_ms = (time.perf_counter() - flush_start) * 1000
 
             # 2. Process Queue (Status & Legacy Grid)
@@ -171,8 +187,7 @@ class RawTerminalApp:
                         self.status_bar.set_status(k, v)
                     elif msg_type == "grid":
                         x, y, s = data
-                        # Direct update. Safe because _flush_buffer (via to_thread) is awaited
-                        # before we get here, so no race condition on matrix.
+                        # Direct update via matrix method (thread-safe enough for simple writes)
                         self.grid_view.matrix.update(x, y, s)
                 except asyncio.QueueEmpty:
                     break
@@ -181,55 +196,36 @@ class RawTerminalApp:
             now = time.perf_counter()
             dt = now - last_time
             last_time = now
-
-            # Clamp dt to prevent "time jumps" from clearing the screen instantly
-            # if a lag spike occurs. Max 0.1s physics step.
             physics_dt = min(dt, 0.1)
             self.grid_view.matrix.decay(physics_dt)
 
-            # 4. RENDER (The heavy lifting)
-            # Move cursor home
+            # 4. RENDER
             output_buffer = bytearray(CURSOR_HOME)
+            output_buffer.extend(self.grid_view.render_frame_buffer())
+            output_buffer.extend(self._render_status_bar())
 
-            # Get Grid Bytes
-            grid_bytes = self.grid_view.render_frame_buffer()
-            output_buffer.extend(grid_bytes)
-
-            # Get Status Bytes
-            status_bytes = self._render_status_bar()
-            output_buffer.extend(status_bytes)
-
-            # WRITE TO STDOUT (Atomic-ish)
             self._stdout.write(output_buffer)
             self._stdout.flush()
 
             # 5. Telemetry & Sleep
             render_duration = time.perf_counter() - loop_start
-
-            # Calculate FPS based on real loop time, not just render time
             fps = 1.0 / dt if dt > 0 else 0
-
+            
             self.status_bar.set_status("FPS", f"{fps:.1f}")
 
             if self.aggregator:
+                # Log metrics for analysis
+                # We expect flush_duration_ms to be MUCH lower now
                 await self.aggregator.record("fps", fps)
                 await self.aggregator.record("flush_duration_ms", flush_ms)
 
-            # Smart Sleep to maintain target FPS
-            render_duration = time.perf_counter() - loop_start
             sleep_time = frame_interval - render_duration
-
-            # Jitter: How much we missed our deadline (negative means we are fast enough)
-            # If sleep_time is -0.01, it means we are 10ms behind schedule.
-            jitter_ms = max(0, -sleep_time) * 1000
-
+            
             if self.aggregator:
-                await self.aggregator.record("fps", fps)
-                await self.aggregator.record("flush_duration_ms", flush_ms)
+                jitter_ms = max(0, -sleep_time) * 1000
                 await self.aggregator.record("render_jitter_ms", jitter_ms)
 
             if sleep_time > 0:
                 await asyncio.sleep(sleep_time)
             else:
-                # If we missed the frame deadline, just yield to let others run
                 await asyncio.sleep(0)

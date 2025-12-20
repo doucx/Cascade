@@ -36,30 +36,30 @@ class GridView:
         )
         self.matrix = StateMatrix(self.config)
         self.palette_func = palette_func
-        # Pre-cache styles to avoid parsing strings in the render loop
-        self._style_cache: Dict[str, Style] = {}
-
-    def _get_style(self, style_str: str) -> Style:
-        """Caches Rich Style objects for performance."""
-        if style_str not in self._style_cache:
-            self._style_cache[style_str] = Style.parse(style_str)
-        return self._style_cache[style_str]
 
     def __rich_console__(
         self, console: Console, options: ConsoleOptions
     ) -> RenderResult:
-        """The Rich render protocol method, optimized for performance."""
+        """
+        The Rich render protocol method, highly optimized for throughput.
+        It bypasses Rich's style parsing by constructing raw ANSI strings.
+        """
         brightness = self.matrix.get_snapshot()
+        # colors now contains raw ANSI escape codes (e.g. "\033[38;2;...m")
         colors = self.palette_func(brightness)
 
-        # Use a double-width block for square-like pixels
-        char = "██"
+        # ANSI Reset code to clear color at the end of each line
+        reset = "\033[0m"
 
+        # Vectorized string construction.
+        # We iterate over rows and join the (color + block) strings.
+        # This is significantly faster than creating 10,000 Segment objects.
         for y in range(self.logical_height):
-            # Yield segments for one full row
-            yield from [
-                Segment(char, self._get_style(colors[y, x]))
-                for x in range(self.logical_width)
-            ]
-            # Yield a newline to move to the next row
+            # Join all columns in this row: color_code + "██"
+            # Since `colors` is a numpy array of strings, this loop is tight.
+            row_content = "".join(f"{code}██" for code in colors[y])
+            
+            # Yield a single Segment for the entire row, plus the reset code.
+            # Rich will output this raw text directly to the terminal.
+            yield Segment(row_content + reset)
             yield Segment.line()

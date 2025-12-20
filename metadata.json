@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] perf(observatory): 实施批处理提交 API 以消除事件循环饱和", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766233077.4235294, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] perf(observatory): 矢量化 Rich 渲染管线以消除主线程 GIL 争用", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766233589.4644785, "duration_ms": 0}}

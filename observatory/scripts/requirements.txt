@@ -1,0 +1,6 @@
+# Core workflow library
+cascade-py
+
+# Data analysis and manipulation
+pandas
+numpy

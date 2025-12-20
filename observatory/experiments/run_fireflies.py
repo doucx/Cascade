@@ -17,9 +17,9 @@ from observatory.visualization.status import StatusBar
 
 
 async def run_experiment(
-    num_agents: int = 25**2,
-    period: float = 5.0,
-    nudge: float = 0.5,
+    num_agents: int = 15**2,
+    period: float = 3.0,
+    nudge: float = 0.2,
     duration_seconds: float = 3000.0,
     visualize: bool = True,
     decay_duty_cycle: float = 0.5,

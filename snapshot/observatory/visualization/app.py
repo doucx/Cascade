@@ -10,7 +10,10 @@ from rich.text import Text
 class GridView(Static):
     """A widget to display the simulation grid."""
 
-    grid_data = reactive(np.zeros((1, 1), dtype=np.float32))
+    grid_data: reactive[np.ndarray] = reactive(
+        np.zeros((1, 1), dtype=np.float32),
+        comparator=lambda a, b: np.array_equal(a, b)
+    )
     palette_func: reactive[Callable | None] = reactive(None)
 
     def render(self) -> str:

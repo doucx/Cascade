@@ -360,6 +360,19 @@ class Engine:
         requirements = self.constraint_resolver.resolve(
             node, graph, state_backend, self.constraint_manager
         )
+        
+        # Pre-check for blocking to improve observability
+        if not self.resource_manager.can_acquire(requirements):
+            from cascade.runtime.events import TaskBlocked
+            self.bus.publish(
+                TaskBlocked(
+                    run_id=run_id,
+                    task_id=node.id,
+                    task_name=node.name,
+                    reason="ResourceContention",
+                )
+            )
+
         await self.resource_manager.acquire(requirements)
         try:
             return await self._execute_node_internal(

@@ -65,21 +65,26 @@ class Palettes:
     @staticmethod
     def bottleneck(states: np.ndarray) -> np.ndarray:
         """
-        Maps states to bottleneck visualizer colors using Rich-compatible styles.
-        0.0: Idle (Dim Gray)
-        0.5: Waiting (Cyan)
-        1.0: Running (Bright Green/White)
+        Maps states to bottleneck visualizer colors.
+        0.0: Idle (Black/Dim)
+        0.3: Sleeping (Grey)      -> .
+        0.7: Blocked (Red)        -> x
+        1.0: Running (White)      -> o
         """
-        # Initialize with Dim Gray
-        colors = np.full(states.shape, "rgb(40,40,40)", dtype="<U18")
+        # Initialize with Black/Dim
+        colors = np.full(states.shape, "rgb(20,20,20)", dtype="<U18")
 
-        # Waiting (Cyan)
-        mask_wait = (states > 0.4) & (states < 0.8)
-        colors[mask_wait] = "rgb(0,200,200)"
+        # Sleeping (Grey) ~ 0.3
+        mask_sleep = (states > 0.2) & (states < 0.5)
+        colors[mask_sleep] = "rgb(100,100,100)"
 
-        # Running (Bright White/Green tint)
-        mask_run = states >= 0.8
-        colors[mask_run] = "rgb(200,255,200)"
+        # Blocked (Red) ~ 0.7
+        mask_blocked = (states >= 0.5) & (states < 0.9)
+        colors[mask_blocked] = "rgb(180,40,40)"
+
+        # Running (Bright White) ~ 1.0
+        mask_run = states >= 0.9
+        colors[mask_run] = "rgb(255,255,255)"
 
         return colors
 

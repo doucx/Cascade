@@ -25,8 +25,15 @@ DURATION = 15.0
 
 
 def make_agent_workflow(i: int):
+    @cs.task(name=f"agent_{i}_wait")
+    async def wait_step(val):
+        # Simulate thinking/sleeping state (Grey)
+        await asyncio.sleep(random.uniform(0.5, 1.5))
+        return val
+
     @cs.task(name=f"agent_{i}_work")
     async def work(val):
+        # Critical section (White), resource constrained
         await asyncio.sleep(random.uniform(0.1, 0.3))
         return val + 1
 
@@ -34,7 +41,7 @@ def make_agent_workflow(i: int):
     def loop(val):
         return make_agent_workflow(i)
 
-    return loop(work(0))
+    return loop(work(wait_step(0)))
 
 
 # --- Main ---
@@ -55,14 +62,22 @@ async def run_simulation():
     app = TerminalApp(grid_view, status_bar)
 
     # 2. Setup Event Handling
-    blocked_count = 0
-    running_count = 0
+    # Track state per agent to ensure accurate counters
+    # States: 'idle', 'sleeping', 'blocked', 'running'
+    agent_states = {} 
 
     def get_coords(agent_id: int):
         return (agent_id % grid_width, agent_id // grid_width)
 
+    def update_agent_state(agent_id: int, new_state: str):
+        agent_states[agent_id] = new_state
+        # Recalculate totals
+        blocked = sum(1 for s in agent_states.values() if s == 'blocked')
+        running = sum(1 for s in agent_states.values() if s == 'running')
+        app.update_status("Blocked", blocked)
+        app.update_status("Running", running)
+
     def handle_event(event: Any):
-        nonlocal blocked_count, running_count
         if not hasattr(event, "task_name") or not event.task_name.startswith("agent_"):
             return
 
@@ -75,24 +90,21 @@ async def run_simulation():
 
             x, y = get_coords(agent_id)
 
-            if task_type == "work":
+            if task_type == "wait":
                 if isinstance(event, TaskExecutionStarted):
-                    app.ingest_grid(x, y, 1.0)  # 1.0 = Running
-                    running_count += 1
-                elif isinstance(event, TaskBlocked):
-                    app.ingest_grid(x, y, 0.5)  # 0.5 = Waiting
-                    blocked_count += 1
+                    app.ingest_grid(x, y, 0.3)  # 0.3 = Sleeping (Grey)
+                    update_agent_state(agent_id, 'sleeping')
+                
+            elif task_type == "work":
+                if isinstance(event, TaskBlocked):
+                    app.ingest_grid(x, y, 0.7)  # 0.7 = Blocked (Red)
+                    update_agent_state(agent_id, 'blocked')
+                elif isinstance(event, TaskExecutionStarted):
+                    app.ingest_grid(x, y, 1.0)  # 1.0 = Running (White)
+                    update_agent_state(agent_id, 'running')
                 elif isinstance(event, TaskExecutionFinished):
                     app.ingest_grid(x, y, 0.0)  # 0.0 = Idle
-                    if event.status == "Succeeded":
-                        running_count -= 1
-                    else:
-                        blocked_count -= (
-                            1  # Assuming failed blocked tasks are 'unblocked'
-                        )
-
-            app.update_status("Blocked", blocked_count)
-            app.update_status("Running", running_count)
+                    update_agent_state(agent_id, 'idle')
 
         except (IndexError, ValueError):
             pass

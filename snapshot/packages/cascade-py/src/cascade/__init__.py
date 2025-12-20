@@ -24,6 +24,7 @@ from .internal.inputs import _get_param_value, _get_env_var
 # Runtime
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
 from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.interfaces.protocols import Connector, StateBackend
@@ -187,6 +188,7 @@ __all__ = [
     "resource",
     "inject",
     "Engine",
+    "Event",
     "override_resource",
     "DependencyMissingError",
     "get_current_context",  # Exposed for testing/advanced usage

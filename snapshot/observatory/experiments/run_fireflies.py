@@ -45,7 +45,7 @@ async def run_experiment(
         if grid_width * grid_width < num_agents: grid_width += 1
         
         # 1. Create visualization components
-        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_rate=0.1)
+        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_rate=0.05)
         status_bar = StatusBar(initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."})
         app = TerminalApp(grid_view, status_bar)
 

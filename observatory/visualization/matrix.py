@@ -38,9 +38,12 @@ class StateMatrix:
         Args:
             dt: The time delta in seconds since the last decay.
         """
-        decay_amount = self.cfg.decay_per_second * dt
-        self.brightness -= decay_amount
-        np.clip(self.brightness, 0.0, 1.0, out=self.brightness)
+        if self.cfg.decay_per_second > 0:
+            decay_amount = self.cfg.decay_per_second * dt
+            self.brightness -= decay_amount
+            np.clip(self.brightness, 0.0, 1.0, out=self.brightness)
+        # If decay is 0, we assume discrete state mode (e.g. Validator)
+        # and do NOT clip to 1.0, allowing state codes like 2, 3, 4, 5 to persist.
 
     def get_snapshot(self):
         """Returns a copy of the current brightness matrix."""

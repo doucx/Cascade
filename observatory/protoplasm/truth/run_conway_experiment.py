@@ -57,7 +57,8 @@ async def run_experiment(visualize: bool = True):
         status_bar = StatusBar({"Generation": 0, "Status": "Initializing..."})
         app = TerminalApp(grid_view, status_bar)
 
-    # 3. Setup Validator (now accepts the app)
+    # 3. Setup Validator (Using the new 3-Network Model)
+    # It will automatically maintain Relative (B) and Absolute (C) truth chains.
     validator = StateValidator(GRID_WIDTH, GRID_HEIGHT, connector, app=app)
 
     # 4. Setup Engine

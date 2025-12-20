@@ -74,8 +74,23 @@ class Palettes:
         mask_wait = (states > 0.4) & (states < 0.8)
         colors[mask_wait] = "rgb(0,200,200)"
 
-        # Running (Bright Green/White tint)
+        # Running (Bright White/Green tint)
         mask_run = states >= 0.8
         colors[mask_run] = "rgb(200,255,200)"
+        
+        return colors
 
+    @staticmethod
+    def truth_diff(diff_matrix: np.ndarray) -> np.ndarray:
+        """
+        Maps a diff matrix to validation colors.
+        0: Dead (Correct) -> Dark Gray
+        1: Alive (Correct) -> Bright White
+        2: False Positive (Ghost) -> Bright Red
+        3: False Negative (Missing) -> Bright Cyan
+        """
+        colors = np.full(diff_matrix.shape, "rgb(40,40,40)", dtype="<U18") # Default to dead
+        colors[diff_matrix == 1] = "rgb(220,220,220)" # Alive
+        colors[diff_matrix == 2] = "rgb(255,50,50)"   # False Positive
+        colors[diff_matrix == 3] = "rgb(50,220,255)"   # False Negative
         return colors

@@ -45,3 +45,9 @@ class StateMatrix:
     def get_snapshot(self):
         """Returns a copy of the current brightness matrix."""
         return self.brightness.copy()
+
+    def set_matrix(self, new_matrix: np.ndarray):
+        """Directly sets the brightness matrix to a new state."""
+        if new_matrix.shape == self.brightness.shape:
+            # np.copyto is an efficient way to copy array contents
+            np.copyto(self.brightness, new_matrix)

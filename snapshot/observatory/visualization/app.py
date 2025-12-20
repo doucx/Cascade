@@ -39,6 +39,13 @@ class TerminalApp:
         """Asynchronously update a key-value pair in the status bar."""
         self.queue.put_nowait(("status", (key, value)))
 
+    def ingest_full_matrix(self, new_matrix: np.ndarray):
+        """
+        Specialized ingestion for full-frame updates, bypassing the queue
+        for efficiency as it's a single large data item.
+        """
+        self.grid_view.matrix.set_matrix(new_matrix)
+
     async def start(self):
         """Starts the live rendering loop."""
         self._running = True

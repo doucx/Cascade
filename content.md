@@ -1,112 +1,80 @@
 简要回答：
-测试结果异常。`DirectChannel` 遭遇了严重的超时问题，且吞吐量反而低于 `LocalBus`。
-分析显示：`!! Timeout !! Received 80000/4000000`。
-这意味着 `DirectChannel` 的消费者几乎没有工作（80,000 条消息恰好等于 800 个通道 * 100 容量，即所有消息都堆积在 Queue 中，消费者没有取出）。
+测试结果是决定性的，完全符合我们的研究预期。`DirectChannel` 展现了 **~7.5倍** 的吞吐量提升（1,029,035 msgs/sec vs 137,451 msgs/sec），这有力地证明了在静态拓扑结构下，绕过通用总线所带来的巨大性能优势。
 
-**根源分析**：
-这是一个典型的 **事件循环饿死 (Event Loop Starvation)** 问题。
-在 `benchmark_direct_channel` 中，Producers 是紧密循环 (`for _ in range(NUM_ITERATIONS): for neighbor...`)。因为 `DirectChannel.send` 使用的是 `put_nowait`（非阻塞同步调用），整个 Producer 循环在 `asyncio` 看来是一个同步块（或者极少让出控制权）。
-结果是，Producer 霸占了 CPU，填满了所有 Queue，直到它们抛出 `QueueFull`（我们在代码中 `pass` 掉了这个异常），而 Consumer 的 `await channel.recv()` 协程从未获得执行机会去清空 Queue。
-
-相比之下，`LocalBus.publish` 内部虽然也是 `put_nowait`，但其内部的锁机制或其他 `await` 点可能隐式地提供了让步机会，或者其开销本身导致了自然的节奏变慢。
-
-**修正方案**：
-1.  **主动让步**：在 Producer 的 `send` 循环中，或者在 `DirectChannel.send` 内部，必须加入 `await asyncio.sleep(0)` 来强制让出控制权，模拟真实世界中 Agent 的计算间隔。
-2.  **容量控制**：基准测试不应忽略 `QueueFull`。如果满了，Producer 应该等待 (`await put()`) 而不是丢弃，这才是公平的吞吐量测试。
+我们已经完成了 **第二章：神经直连** 的所有预研目标，现在将这个已验证的、完整的逻辑工作单元提交。
 
 摘要头：
-## [WIP] fix: 修复 DirectChannel 基准测试中的事件循环饿死问题
+## [COMMIT] feat(observatory): Implement and validate DirectChannel communication prototype
 
 ### 标签
-#intent/fix #flow/ready #priority/high
-#comp/observatory #concept/async #scope/core
+#intent/build #intent/explore #flow/ready #priority/high
+#comp/observatory #concept/communication #scope/core
 #ai/instruct
 #task/domain/networking
 #task/object/direct-channel
-#task/action/bug-fix
-#task/state/continue
+#task/action/implementation
+#task/state/end
 
 ### 用户需求
-1.  **修复基准测试逻辑**：修正 `benchmark_direct_channel` 中的饿死现象，确保消费者有机会处理消息。
-2.  **实现公平对比**：将 `DirectChannel.send` 改为标准的 `await queue.put()` 以处理背压，或者在 Producer 中添加 `await asyncio.sleep(0)`。考虑到我们要测试吞吐量极限，使用 `await queue.put()` 是更符合“无损传输”要求的做法。
-3.  **重新校准参数**：400万条消息对于单线程 Python 还是有点重，如果加上 `await` 切换开销，时间会变长。我们将 `NUM_ITERATIONS` 调整为 1000 以获得更快的反馈。
+对 `LocalBus` 和 `DirectChannel` 进行定量性能分析，以验证在“创世网格”这种静态邻居关系模型中，采用直连通信的必要性和可行性。
 
 ### 评论
-这个失败是非常有价值的“反面教材”。它揭示了在 Python `asyncio` 中，"Direct" 并不总是意味着快。如果没有 IO 等待（`await`），单一的协程可以轻易阻塞整个世界。为了公平对比，我们必须让 `DirectChannel` 表现得像一个真正的异步通道，即处理背压。
+**测试结果分析**:
+1.  **数量级差异**: `DirectChannel` 的吞吐量达到了百万级，而 `LocalBus` 稳定在十几万。~7.5倍的性能差距清晰地展示了两种模式的根本不同。
+2.  **开销来源**:
+    *   `LocalBus` 的开销在于其通用性：每次 `publish` 都需要进行**主题字符串匹配**、**订阅者列表遍历**，并且在多线程/协程环境下需要**锁机制**来保护共享的订阅者字典。这些操作在高频调用下会累积成显著的性能瓶颈。
+    *   `DirectChannel` 的开销被降至最低：它仅仅是 `asyncio.Queue.put()` 的成本加上 `asyncio` 事件循环本身的协程切换成本。它没有锁，没有查找，没有匹配，因此性能接近 Python `asyncio` 的理论上限。
+3.  **关键洞察**: 我们最初遇到的“事件循环饿死”问题同样重要。它证明了在设计高性能 Agent 时，必须在计算密集型循环中通过 `await asyncio.sleep(0)` 或真正的 IO `await` **主动让出控制权**，否则会破坏整个系统的并发性。
 
 ### 目标
-*   修改 `direct_channel.py`，将 `put_nowait` 改为 `await put`。
-*   修改 `proto_direct_connect.py`，减少迭代次数，确保测试能在合理时间内完成。
+将 `DirectChannel` 的实现及其基准测试脚本作为一个完整的工作单元提交到代码库中，为 **第二章：神经直连** 的预研工作画上句号。
 
 ### 基本原理
-*   **背压 (Backpressure)**：当消费者处理不过来时，生产者必须减速。`await queue.put()` 天然实现了这一点。这不仅解决了饿死问题，也使得吞吐量测试更加真实——它测量的是系统在背压平衡下的最大处理能力。
+本次预研工作已成功完成，并通过基准测试数据验证了核心假设。将这些原型代码和测试结果固化到版本历史中，是完成一个研究阶段的标准流程。
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `DirectChannel` 为异步阻塞模式
+#### Acts 1: 添加网络原型和测试文件
 
 ~~~~~act
-patch_file
+git_add
+observatory/protoplasm/networking/__init__.py
 observatory/protoplasm/networking/direct_channel.py
-~~~~~
-~~~~~python
-    async def send(self, payload: Any):
-        """
-        Directly puts a message into the channel. Zero-copy.
-        """
-        # 1. Core Logic: Direct Delivery
-        # put_nowait is fastest, but risks Full exception. 
-        # For proto, we assume consumers are fast enough or capacity is sufficient.
-        try:
-            self._inbox.put_nowait(payload)
-        except asyncio.QueueFull:
-            # In a real system, we'd handle backpressure here.
-            # For the benchmark, this counts as a "dropped packet" or saturation.
-            pass
-
-        # 2. Telemetry Probe (The "Leak")
-~~~~~
-~~~~~python
-    async def send(self, payload: Any):
-        """
-        Directly puts a message into the channel. Zero-copy.
-        """
-        # 1. Core Logic: Direct Delivery
-        # We use await put() to handle backpressure and ensure fair scheduling.
-        # This prevents the producer from starving the consumer loop.
-        await self._inbox.put(payload)
-
-        # 2. Telemetry Probe (The "Leak")
-~~~~~
-
-#### Acts 2: 调整基准测试参数与逻辑
-
-减少迭代次数，修正预期行为。
-
-~~~~~act
-patch_file
 observatory/protoplasm/networking/proto_direct_connect.py
 ~~~~~
-~~~~~python
-# --- Configuration ---
-NUM_ITERATIONS = 5000  # How many messages each producer sends
-NUM_PRODUCERS = 100
-NUM_CONSUMERS_PER_PRODUCER = 8 # Simulating Moore neighborhood (8 neighbors)
 
-async def benchmark_local_bus():
+#### Acts 2: 提交变更
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-# --- Configuration ---
-NUM_ITERATIONS = 1000  # Reduced for quicker feedback loop
-NUM_PRODUCERS = 100
-NUM_CONSUMERS_PER_PRODUCER = 8 # Simulating Moore neighborhood (8 neighbors)
+~~~~~text
+feat(observatory): Implement and benchmark DirectChannel prototype
 
-async def benchmark_local_bus():
+Completes Chapter 2 of the Protoplasm pre-research plan by implementing a high-performance, direct-connection communication primitive and validating its performance against the standard `LocalBusConnector`.
+
+Key Additions:
+- `networking/direct_channel.py`: A lightweight, zero-copy communication channel based on `asyncio.Queue`, designed for static topologies. It includes an optional telemetry sampling probe for observability.
+- `networking/proto_direct_connect.py`: A benchmark script that measures the message throughput of `LocalBusConnector` vs. `DirectChannel` in a high-concurrency, N-to-M fan-out scenario.
+
+Benchmark Results:
+- LocalBus: ~137,000 msgs/sec
+- DirectChannel: ~1,029,000 msgs/sec
+
+The ~7.5x performance improvement validates that bypassing the overhead of topic matching and lock contention is critical for achieving the required communication latency in the Genesis Grid. The experiment also revealed and fixed a key `asyncio` event loop starvation issue, providing valuable insights for future agent design.
 ~~~~~
 
 ### 下一步建议
-再次运行 `python -m observatory.protoplasm.networking.proto_direct_connect`。
 
-这一次，`DirectChannel` 应该能正确跑完，并显示出比 `LocalBus` 更高的吞吐量，因为它省去了 Topic 匹配、列表查找和锁的开销，仅保留了最纯粹的 `Queue` 操作和协程切换成本。
+**下一阶段：第三章：时间的高保真**
+
+我们已经解决了**视觉（渲染）**和**空间（通信）**的瓶颈。现在，根据预研计划，下一个核心基础设施风险是**时间**。我们需要量化 `asyncio` 事件循环在高负载下的调度延迟（Jitter），以确定我们能达到的最小可靠时间精度。
+
+我建议我们开始 **第三章：时间的高保真 —— 事件循环抖动分析**。
+
+具体任务将是：
+1.  创建 `observatory/protoplasm/physics/` 目录。
+2.  实现 `jitter_meter.py`，其中包含一个 `TimeProbe` 任务，用于精确测量 `cs.wait(delay)` 的实际执行时间。
+3.  设计一个实验，在启动 10,000 个“噪音”协程（计算密集型和 IO 密集型）的背景下，运行 `TimeProbe` 来收集抖动数据。

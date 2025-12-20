@@ -61,11 +61,12 @@ class ForestRenderer:
         
         print(f"Starting Render Loop at {target_fps} FPS...")
         
+        last_loop_time = time.perf_counter()
+
         while self._running:
-            start_t = time.perf_counter()
+            loop_start = time.perf_counter()
             
             # 1. Ingestion Phase: Drain the queue
-            # We process ALL pending events to clear the backlog
             events_processed = 0
             while not self.queue.empty():
                 try:
@@ -85,9 +86,7 @@ class ForestRenderer:
             rows, cols = RenderBuffer.compute_diff(self.buffer_prev, self.buffer_curr)
             
             # 5. Draw Phase
-            # We iterate only the changed pixels
             if len(rows) > 0:
-                # Optimized extraction
                 chars = self.buffer_curr.chars[rows, cols]
                 colors = self.buffer_curr.colors[rows, cols]
                 
@@ -95,22 +94,28 @@ class ForestRenderer:
                     self.driver.move_to(r, c)
                     self.driver.write(char, color)
                 
-                # Swap buffers (copy content from curr to prev)
-                # Optimization: Swap references if we create new curr every time. 
-                # But here we update in place, so we copy.
-                # Actually, numpy copyto is fast.
                 np.copyto(self.buffer_prev.chars, self.buffer_curr.chars)
                 np.copyto(self.buffer_prev.colors, self.buffer_curr.colors)
             
             # Debug Stats overlay
-            draw_t = time.perf_counter() - start_t
+            processing_time = time.perf_counter() - loop_start
+            real_fps = 1.0 / (time.perf_counter() - last_loop_time + 0.000001)
+            last_loop_time = time.perf_counter()
+
             self.driver.move_to(self.config.height + 1, 0)
-            self.driver.write(f"FPS: {1.0/(draw_t+0.0001):.1f} | Events: {events_processed} | Diff: {len(rows)} px | DrawT: {draw_t*1000:.2f}ms")
+            status_line = (
+                f"FPS: {real_fps:.1f} | "
+                f"Events: {events_processed:<4} | "
+                f"Diff: {len(rows):<4} px | "
+                f"ProcT: {processing_time*1000:.2f}ms"
+            )
+            # Pad the line to clear previous text artifacts
+            self.driver.write(f"{status_line:<80}")
             
             self.driver.flush()
             
-            # 6. Sleep
-            elapsed = time.perf_counter() - start_t
+            # 6. Sleep to maintain Target FPS
+            elapsed = time.perf_counter() - loop_start
             sleep_t = max(0, frame_time - elapsed)
             await asyncio.sleep(sleep_t)
 
@@ -121,12 +126,16 @@ async def stress_test_loader(renderer: ForestRenderer):
     """
     Simulates 10,000 agents firing randomly.
     """
+    # Wait for the renderer to start
+    print("Loader: Waiting for renderer to start...")
+    while not renderer._running:
+        await asyncio.sleep(0.1)
+    print("Loader: Renderer started. Injecting events.")
+
     width, height = renderer.config.width, renderer.config.height
-    num_agents = 10000
     
     while renderer._running:
         # Simulate ~10% of agents firing per second
-        # In one frame (33ms), maybe 30 agents fire?
         # Let's be aggressive: 100 events per frame loop
         
         for _ in range(100):

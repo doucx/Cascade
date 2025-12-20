@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 搭建 CLI 渲染器原型的高性能核心组件", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766199556.861893, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复渲染器测试加载器的启动竞争与显示问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766199674.2675805, "duration_ms": 0}}

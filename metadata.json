@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(observatory): 修复波浪循环并实现滑动窗口指标聚合器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766232292.2072692, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(observatory): 使波浪测试自适应终端尺寸", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766232303.049617, "duration_ms": 0}}

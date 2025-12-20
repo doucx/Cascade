@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 为 Conway 渲染器创建隔离验证脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766208415.0211034, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复死锁并增加加载进度显示", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766208562.0988648, "duration_ms": 0}}

@@ -73,6 +73,22 @@ class TruthRenderer:
         self.matrix.update(actual, theoretical)
         self._render()
 
+    def render_waiting(self, gen: int, current_count: int, total: int):
+        """Updates only the status line to show loading progress."""
+        self.driver.move_to(self.height + 1, 0)
+        progress = current_count / total
+        bar_len = 20
+        filled = int(bar_len * progress)
+        bar = "█" * filled + "░" * (bar_len - filled)
+        
+        status = (
+            f"GEN: {gen:<4} | "
+            f"WAITING: [{bar}] {current_count}/{total} Agents | "
+            f"Initializing..."
+        )
+        self.driver.write(f"{status:<80}")
+        self.driver.flush()
+
     def _render(self):
         # 1. Rasterize Matrix to Buffer
         self.buffer_curr.chars[:] = ' '

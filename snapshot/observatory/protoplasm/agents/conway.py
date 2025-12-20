@@ -16,6 +16,7 @@ async def broadcast_state(
 ) -> None:
     """Publishes current state. Waits for rendezvous if provided."""
     payload = {"agent_id": agent_id, "gen": generation, "state": state}
+    # Use retain=True to handle subscription gaps (neighbors starting late)
     await connector.publish(f"{topic_base}/{agent_id}/state", payload, retain=True)
 
 @cs.task

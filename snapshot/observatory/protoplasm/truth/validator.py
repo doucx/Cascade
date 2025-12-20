@@ -68,11 +68,18 @@ class StateValidator:
         # We process generations in strict order
         next_gen = self.max_gen_verified + 1
         
+        # If no data at all yet, just return
         if next_gen not in self.buffer:
+            if self.renderer:
+                self.renderer.render_waiting(next_gen, 0, self.total_agents)
             return
 
         current_buffer = self.buffer[next_gen]
+        
+        # If incomplete, update UI but don't verify yet
         if len(current_buffer) < self.total_agents:
+            if self.renderer:
+                self.renderer.render_waiting(next_gen, len(current_buffer), self.total_agents)
             return
             
         self._verify_generation(next_gen, current_buffer)

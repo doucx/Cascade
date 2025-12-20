@@ -11,7 +11,7 @@ from cascade.runtime.events import (
 from cascade.spec.constraint import GlobalConstraint
 
 # New Renderer Imports
-from observatory.visualization.app import TerminalApp
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 from observatory.visualization.palette import Palettes

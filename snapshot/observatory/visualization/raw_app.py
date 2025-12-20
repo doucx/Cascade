@@ -60,6 +60,13 @@ class RawTerminalApp:
         """Async status update."""
         self.queue.put_nowait(("status", (key, value)))
 
+    def ingest_grid(self, x: int, y: int, state: float):
+        """
+        Legacy sync ingestion for event callbacks (e.g. from synchronous bus listeners).
+        Adds overhead compared to batch updates but ensures compatibility.
+        """
+        self.queue.put_nowait(("grid", (x, y, state)))
+
     def ingest_full_matrix(self, new_matrix: np.ndarray):
         """Direct full matrix update."""
         self.grid_view.matrix.set_matrix(new_matrix)
@@ -155,13 +162,18 @@ class RawTerminalApp:
             updates_count = await self._flush_buffer()
             flush_ms = (time.perf_counter() - flush_start) * 1000
 
-            # 2. Process Queue (Status)
+            # 2. Process Queue (Status & Legacy Grid)
             while not self.queue.empty():
                 try:
                     msg_type, data = self.queue.get_nowait()
                     if msg_type == "status":
                         k, v = data
                         self.status_bar.set_status(k, v)
+                    elif msg_type == "grid":
+                        x, y, s = data
+                        # Direct update. Safe because _flush_buffer (via to_thread) is awaited
+                        # before we get here, so no race condition on matrix.
+                        self.grid_view.matrix.update(x, y, s)
                 except asyncio.QueueEmpty:
                     break
 

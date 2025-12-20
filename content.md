@@ -1,98 +1,243 @@
-这些日志是 **Observatory 渲染管线重构彻底成功** 的确凿证据。
+这非常合理。为了保持技术栈的统一并消除旧版 `TerminalApp` 带来的维护负担，我们应该将所有实验迁移到 `RawTerminalApp`。
 
- 数据取证与分析
+为了支持 `bottleneck_sim.py` 这种依赖同步回调（`handle_event`）的场景，我们需要在 `RawTerminalApp` 中恢复基于队列的 `ingest_grid` 方法。虽然这比批量更新慢，但对于低频事件驱动的模拟来说足够了，且能保证兼容性。
 
-1.  **性能跃迁 (The Performance Leap)**:
-    *   **Flush Duration**: 从重构前的平均 ~30ms (导致卡顿) 降至现在的 **~2ms - 10ms**。即使在 2500 个 Agent 并发更新的高负载下，内存拷贝和 NumPy 拼接操作也被有效地压制在毫秒级。
-    *   **Render Jitter**: 平均抖动在 **2ms - 5ms** 之间。这意味着大多数帧都精确地命中在 16.6ms (60 FPS) 的时间窗口内。渲染器不再是“尽力而为”，而是“游刃有余”。
-
-2.  **吞吐量释放 (Throughput Unleashed)**:
-    *   **FPS**: 平均值稳定在 **60 - 100 FPS** 区间。
-    *   你看到的 120+ FPS 甚至更高的数值（在无更新空转时）表明，当你移除 `sleep` 限制时，这套“裸金属”管线的理论上限极高，完全受限于 Python 解释器本身的循环速度，而不再是渲染逻辑。
-
-3.  **业务逻辑完好 (Logic Preservation)**:
-    *   `r_value` 从 `0.0` -> `0.46` -> `0.15` -> `0.45` 的振荡曲线极其完美。
-    *   这证明了我们对 `Monitor` 的 `to_thread` 改造成功地将计算负载从主循环剥离。渲染线程的高帧率没有“饿死”模拟线程，模拟线程的繁重计算也没有“卡住”渲染画面。二者在同一个进程内和谐共存。
-
- 结论
-
-我们已经成功将一个 **基于对象的、CPU 密集型的、阻塞式** 的渲染系统，改造为一个 **基于数据流的、内存密集型的、非阻塞式** 的高性能遥测系统。
-
-现在，我们可以放心地将这些变更固化到代码库中。
-
-## [COMMIT] perf(observatory): 实施裸金属渲染器与异步遥测架构
+## [WIP] refactor(observatory): 全面迁移至 RawTerminalApp 并恢复同步数据摄入接口
 
 ### 用户需求
-解决大规模 (N=2500) 萤火虫实验中的 UI 卡顿、FPS 低下和主线程阻塞问题。
+将 `bottleneck_sim.py`, `run_conway_experiment.py` 等剩余实验脚本迁移到高性能渲染器。
 
 ### 评论
-通过移除 Rich 库的布局引擎依赖，直接操作 ANSI 字节流，并利用 NumPy 的矢量化能力进行帧合成，我们将渲染开销降低了两个数量级。同时，通过引入 `MetricsAggregator` 和将计算密集型任务（Order Parameter）移至线程池，实现了高频渲染与高频模拟的无干扰并发。
+1.  **兼容性缺失**：`RawTerminalApp` 缺少旧版 `TerminalApp` 的 `ingest_grid` 方法，导致无法在同步回调（如 `bottleneck_sim` 中的事件处理器）中使用。
+2.  **API 不一致**：`stress_test.py` 使用了旧的单点更新 API。
 
 ### 目标
-提交所有针对 `observatory` 的性能优化修改。
-
-### 基本原理
-1.  **Raw Metal Rendering**: 使用 `observatory.visualization.raw_app.RawTerminalApp` 替代 Rich `Layout`。
-2.  **Zero-Copy Pipeline**: 预计算 ANSI 码，仅在最后一步进行字符串/字节拼接。
-3.  **Thread Offloading**: `ConvergenceMonitor` 计算移至后台线程，避免阻塞 `asyncio` 循环。
-4.  **Unified Telemetry**: 集成 `MetricsAggregator` 以关联性能指标与业务指标。
+1.  **增强 RawTerminalApp**：添加 `ingest_grid` 方法，并在渲染循环中处理 `"grid"` 类型的队列消息。
+2.  **迁移脚本**：将所有实验脚本的导入语句从 `visualization.app` 切换到 `visualization.raw_app`。
+3.  **适配调用**：修正 `stress_test.py` 中的 API 调用。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/observatory #concept/ui #scope/perf #ai/instruct #task/domain/visualization #task/object/raw-renderer #task/action/commit #task/state/end
+#intent/refine #flow/ready #priority/medium #comp/observatory #concept/ui #scope/app #ai/instruct #task/domain/visualization #task/object/raw-renderer #task/action/migration #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 提交可视化层的核心重构
+#### Acts 1: 增强 RawTerminalApp 以支持同步数据摄入
 
-提交调色板优化、Grid 字节流渲染支持以及全新的 RawTerminalApp。
+这是为了兼容 `bottleneck_sim.py`。
 
 ~~~~~act
-git_add
-observatory/visualization/palette.py
-observatory/visualization/grid.py
+patch_file
 observatory/visualization/raw_app.py
 ~~~~~
+~~~~~python
+    def update_status(self, key: str, value: Any):
+        """Async status update."""
+        self.queue.put_nowait(("status", (key, value)))
 
-#### Acts 2: 提交监视器与实验脚本的优化
+    def ingest_full_matrix(self, new_matrix: np.ndarray):
+~~~~~
+~~~~~python
+    def update_status(self, key: str, value: Any):
+        """Async status update."""
+        self.queue.put_nowait(("status", (key, value)))
 
-提交 `ConvergenceMonitor` 的异步化改造，以及 `run_fireflies.py` 的集成修改。同时清理 `wave_test.py`。
+    def ingest_grid(self, x: int, y: int, state: float):
+        """
+        Legacy sync ingestion for event callbacks (e.g. from synchronous bus listeners).
+        Adds overhead compared to batch updates but ensures compatibility.
+        """
+        self.queue.put_nowait(("grid", (x, y, state)))
 
-~~~~~act
-git_add
-observatory/monitors/convergence.py
-observatory/experiments/run_fireflies.py
-observatory/protoplasm/renderer/wave_test.py
+    def ingest_full_matrix(self, new_matrix: np.ndarray):
 ~~~~~
 
-#### Acts 3: 执行提交
+~~~~~act
+patch_file
+observatory/visualization/raw_app.py
+~~~~~
+~~~~~python
+            # 2. Process Queue (Status)
+            while not self.queue.empty():
+                try:
+                    msg_type, data = self.queue.get_nowait()
+                    if msg_type == "status":
+                        k, v = data
+                        self.status_bar.set_status(k, v)
+                except asyncio.QueueEmpty:
+                    break
+~~~~~
+~~~~~python
+            # 2. Process Queue (Status & Legacy Grid)
+            while not self.queue.empty():
+                try:
+                    msg_type, data = self.queue.get_nowait()
+                    if msg_type == "status":
+                        k, v = data
+                        self.status_bar.set_status(k, v)
+                    elif msg_type == "grid":
+                        x, y, s = data
+                        # Direct update. Safe because _flush_buffer (via to_thread) is awaited
+                        # before we get here, so no race condition on matrix.
+                        self.grid_view.matrix.update(x, y, s)
+                except asyncio.QueueEmpty:
+                    break
+~~~~~
+
+#### Acts 2: 迁移 Conway 实验与 Validator
+
+修改 `validator.py` 的类型提示和导入，以及实验脚本。
 
 ~~~~~act
-git_commit
+patch_file
+observatory/protoplasm/truth/validator.py
 ~~~~~
-~~~~~text
-perf(observatory): implement raw metal renderer and async telemetry
+~~~~~python
+from cascade.interfaces.protocols import Connector
+from .golden_ca import GoldenLife
+from observatory.visualization.app import TerminalApp
 
-This major refactor resolves the UI stuttering and GIL contention issues observed in large-scale (N=2500) simulations.
 
-Key Changes:
-1.  **RawTerminalApp**: Introduced a new renderer that bypasses Rich's layout and style engine, writing pre-formatted ANSI byte streams directly to stdout. This eliminates the O(N) object creation overhead per frame.
-2.  **Vectorized Palettes**: `Palettes` now return raw ANSI escape sequences instead of Rich style objects, enabling fast string joining in NumPy.
-3.  **Async Monitor**: `ConvergenceMonitor` now offloads the heavy Kuramoto order parameter calculation to a thread pool via `asyncio.to_thread`, preventing the main event loop from blocking.
-4.  **Unified Telemetry**: Integrated `MetricsAggregator` into `run_fireflies.py` to capture FPS, Render Jitter, and logic metrics in a single log stream.
+class StateValidator:
+~~~~~
+~~~~~python
+from cascade.interfaces.protocols import Connector
+from .golden_ca import GoldenLife
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 
-Performance Impact:
-- Flush duration dropped from ~30ms to <5ms.
-- Stable 60 FPS rendering achieved with 2500 agents.
-- Eliminated periodic UI freezes caused by synchronous metrics calculation.
+
+class StateValidator:
+~~~~~
+
+~~~~~act
+patch_file
+observatory/protoplasm/truth/run_conway_experiment.py
+~~~~~
+~~~~~python
+from observatory.protoplasm.truth.validator import StateValidator
+
+# New Visualization imports
+from observatory.visualization.app import TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+~~~~~
+~~~~~python
+from observatory.protoplasm.truth.validator import StateValidator
+
+# New Visualization imports
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+~~~~~
+
+~~~~~act
+patch_file
+observatory/protoplasm/truth/truth_visualizer_demo.py
+~~~~~
+~~~~~python
+from observatory.protoplasm.truth.golden_ca import GoldenLife
+from observatory.protoplasm.truth.validator import StateValidator
+from observatory.visualization.app import TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+~~~~~
+~~~~~python
+from observatory.protoplasm.truth.golden_ca import GoldenLife
+from observatory.protoplasm.truth.validator import StateValidator
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+~~~~~
+
+#### Acts 3: 迁移瓶颈模拟 (Bottleneck Sim)
+
+~~~~~act
+patch_file
+observatory/protoplasm/governance/bottleneck_sim.py
+~~~~~
+~~~~~python
+from cascade.spec.constraint import GlobalConstraint
+
+# New Renderer Imports
+from observatory.visualization.app import TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+~~~~~
+~~~~~python
+from cascade.spec.constraint import GlobalConstraint
+
+# New Renderer Imports
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+~~~~~
+
+#### Acts 4: 迁移并修复 Stress Test
+
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/stress_test.py
+~~~~~
+~~~~~python
+import asyncio
+import random
+import time
+
+from observatory.visualization.app import TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+~~~~~
+~~~~~python
+import asyncio
+import random
+import time
+
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+~~~~~
+
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/stress_test.py
+~~~~~
+~~~~~python
+        # Generate a "flash"
+        x = random.randint(0, GRID_WIDTH - 1)
+        y = random.randint(0, GRID_HEIGHT - 1)
+
+        # Call the renderer directly, mimicking an agent's flash callback
+        app.direct_update_grid(x, y, 1.0)
+~~~~~
+~~~~~python
+        # Generate a "flash"
+        x = random.randint(0, GRID_WIDTH - 1)
+        y = random.randint(0, GRID_HEIGHT - 1)
+
+        # Call the renderer directly, mimicking an agent's flash callback
+        # Use batch API for RawTerminalApp
+        await app.direct_update_grid_batch([(x, y, 1.0)])
+~~~~~
+
+#### Acts 5: 删除旧的 App
+
+现在所有引用都已更新，旧的 `app.py` 已经不再被使用。虽然通常我们可能会保留旧代码作为参考，但考虑到 `RawTerminalApp` 是完全的替代品且 `app.py` 依赖 Rich Layout（这是我们明确要放弃的），删除它可以减少混淆。
+
+~~~~~act
+delete_file
+observatory/visualization/app.py
 ~~~~~
 
 ### 下一步建议
-我们已经完成了“原基 (Protoplasm)”计划的所有技术验证目标。
-1.  **大规模并发**: 2500 Agent。
-2.  **高性能渲染**: 裸金属管线。
-3.  **精确遥测**: 异步聚合指标。
-4.  **物理/逻辑解耦**: 渲染不阻塞模拟。
+现在整个 Observatory 生态系统都统一在了“裸金属”渲染管线上。你可以随意运行任何实验脚本，它们都将享受到极致的性能和统一的体验。
 
-现在的 `observatory` 目录已经是一个成熟的、经过战火考验的实验室。建议开始规划下一阶段：**“创世网格 (Genesis Grid)”**，我们将把这些能力封装成更易用的 API，并尝试引入更复杂的逻辑（如资源约束下的生命游戏）。
+建议运行 `observatory.protoplasm.truth.truth_visualizer_demo` 来验证 3-Network Validation 的可视化是否依然正常（它依赖 `ingest_full_matrix`）。

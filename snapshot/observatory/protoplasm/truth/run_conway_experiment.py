@@ -11,7 +11,7 @@ from observatory.protoplasm.agents.conway import conway_agent
 from observatory.protoplasm.truth.validator import StateValidator
 
 # New Visualization imports
-from observatory.visualization.app import TerminalApp
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 from observatory.visualization.palette import Palettes

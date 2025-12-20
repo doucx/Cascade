@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] perf(observatory): 实施裸金属渲染器与异步遥测架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766236488.9331055, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(observatory): 全面迁移至 RawTerminalApp 并恢复同步数据摄入接口", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766236620.7748299, "duration_ms": 0}}

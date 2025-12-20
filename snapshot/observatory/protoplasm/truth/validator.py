@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional
 
 from cascade.interfaces.protocols import Connector
 from .golden_ca import GoldenLife
-from observatory.visualization.app import TerminalApp
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 
 
 class StateValidator:

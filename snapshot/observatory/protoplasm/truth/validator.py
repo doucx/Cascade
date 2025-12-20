@@ -111,7 +111,7 @@ class StateValidator:
         status_icon = "✅" if (self.absolute_errors + self.relative_errors) == 0 else "❌"
         
         info = (
-            f"Gen {gen}: [{bar}] | "
+            f"Gen {gen}: [{bar}] {current}/{total} | "
             f"{status_icon} Err: {self.absolute_errors+self.relative_errors} "
             f"(Abs:{self.absolute_errors} Rel:{self.relative_errors})"
         )

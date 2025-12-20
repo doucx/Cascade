@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[PASS]", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766211974.044761, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(proto): 修正 Conway 实验的渲染和状态显示", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766212220.780879, "duration_ms": 0}}

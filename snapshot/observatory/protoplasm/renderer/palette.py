@@ -82,7 +82,8 @@ class Palettes:
         2.0: False Positive (Red)
         3.0: False Negative (Cyan)
         """
-        colors = np.full(states.shape, '\033[90m', dtype='<U24') # Match Dead
+        # Default to a dim but visible blue for Match Dead to contrast with black bg
+        colors = np.full(states.shape, '\033[34m', dtype='<U24') 
         
         # Match Alive (1.0)
         mask_alive = (states > 0.9) & (states < 1.1)

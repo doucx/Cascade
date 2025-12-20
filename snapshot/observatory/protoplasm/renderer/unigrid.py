@@ -51,8 +51,18 @@ class UniGridRenderer:
         self._extra_info = ""
 
     def ingest(self, x: int, y: int, state: float = 1.0):
-        """Thread-safe ingestion."""
+        """Thread-safe ingestion for continuous events."""
         self.queue.put_nowait((x, y, state))
+
+    def update_full_matrix(self, new_matrix: np.ndarray):
+        """
+        Directly sets the entire state matrix.
+        Useful for turn-based simulations like Conway's Game of Life.
+        This bypasses the event queue and decay logic.
+        """
+        if new_matrix.shape == self.matrix.brightness.shape:
+            # We use the brightness matrix as our direct state holder here.
+            np.copyto(self.matrix.brightness, new_matrix)
         
     def set_extra_info(self, info: str):
         """Sets a string to be displayed in the status bar."""

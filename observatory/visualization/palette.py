@@ -108,9 +108,9 @@ class Palettes:
         colors = np.full(diff_matrix.shape, "\033[38;2;40;40;40m", dtype="<U20")
 
         colors[diff_matrix == 1] = "\033[38;2;220;220;220m"  # Alive (Correct)
-        colors[diff_matrix == 2] = "\033[38;2;255;50;50m"    # Logic FP (Red)
-        colors[diff_matrix == 3] = "\033[38;2;0;255;255m"    # Logic FN (Cyan)
-        colors[diff_matrix == 4] = "\033[38;2;255;215;0m"    # Drift FP (Gold)
+        colors[diff_matrix == 2] = "\033[38;2;255;50;50m"  # Logic FP (Red)
+        colors[diff_matrix == 3] = "\033[38;2;0;255;255m"  # Logic FN (Cyan)
+        colors[diff_matrix == 4] = "\033[38;2;255;215;0m"  # Drift FP (Gold)
         colors[diff_matrix == 5] = "\033[38;2;238;130;238m"  # Drift FN (Violet)
 
         return colors

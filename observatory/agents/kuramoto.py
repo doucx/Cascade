@@ -126,9 +126,7 @@ def firefly_agent(
             wait_timeout = max(0.01, time_to_flash)
 
             # Listen only to MY inbox
-            perception = safe_recv(
-                my_inbox, timeout=wait_timeout, connector=connector
-            )
+            perception = safe_recv(my_inbox, timeout=wait_timeout, connector=connector)
 
             @cs.task
             def process_perception(p: Dict[str, Any]) -> cs.LazyResult:

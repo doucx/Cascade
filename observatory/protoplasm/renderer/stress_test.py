@@ -59,10 +59,7 @@ async def main():
     app = TerminalApp(grid_view, status_bar)
 
     # 2. Create source tasks
-    tasks = [
-        asyncio.create_task(source_coroutine(app, i))
-        for i in range(NUM_SOURCES)
-    ]
+    tasks = [asyncio.create_task(source_coroutine(app, i)) for i in range(NUM_SOURCES)]
 
     print("Starting renderer and source coroutines...")
     await app.start()

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 实现 Protoplasm 第四章的资源约束模拟器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766209513.2784967, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(proto): 统一渲染基座并实现萤火虫可视化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766210478.9505143, "duration_ms": 0}}

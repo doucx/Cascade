@@ -69,7 +69,7 @@ async def _perform_request(
                 else:
                     # Fallback for bytes or other content
                     form.add_field(field_name, file_path)
-            
+
             final_data = form
 
         async with aiohttp.ClientSession(headers=headers) as session:
@@ -79,7 +79,7 @@ async def _perform_request(
                 # Note: We do NOT raise_for_status() automatically here.
                 # We want to return the response object so the user (or a downstream task)
                 # can decide how to handle 4xx/5xx codes.
-                
+
                 body_bytes = await response.read()
 
                 # We construct the response object FIRST
@@ -114,7 +114,13 @@ async def _http_post_task(
     params: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     return await _perform_request(
-        url, "POST", params=params, json_data=json, data=data, files=files, headers=headers
+        url,
+        "POST",
+        params=params,
+        json_data=json,
+        data=data,
+        files=files,
+        headers=headers,
     )
 
 
@@ -150,7 +156,13 @@ async def _http_request_task(
     headers: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     return await _perform_request(
-        url, method, params=params, json_data=json, data=data, files=files, headers=headers
+        url,
+        method,
+        params=params,
+        json_data=json,
+        data=data,
+        files=files,
+        headers=headers,
     )
 
 

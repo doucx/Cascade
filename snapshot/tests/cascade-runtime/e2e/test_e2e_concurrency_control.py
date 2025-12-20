@@ -1,20 +1,17 @@
 import asyncio
 import time
-from typing import Callable, Awaitable, Dict, Any, List
-from collections import defaultdict
+from typing import Dict, Any, List
 import uuid
 from dataclasses import asdict
 
-import time
 import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.interfaces.protocols import Node, Executor
-from typing import List, Any, Dict
 
-from .harness import InProcessConnector, ControllerTestApp
+from .harness import InProcessConnector
 
 
 # Override harness executor to simulate specific timing for this test
@@ -40,17 +37,15 @@ async def test_e2e_concurrency_control():
     # or using the simplified helper from harness but constructing payload manually as in original test)
     # The ControllerTestApp in harness is generic. We can extend it or use it.
     # The original test had set_concurrency_limit helper. Let's replicate or inline it.
-    
+
     # Inline setting concurrency limit using standard controller app logic
-    # But wait, harness ControllerTestApp only has pause/resume. 
-    # Let's use the connector directly or update harness later? 
+    # But wait, harness ControllerTestApp only has pause/resume.
+    # Let's use the connector directly or update harness later?
     # To keep this atomic, I'll just publish via connector here or extend ControllerTestApp locally if needed.
     # Actually, let's just do manual publish to keep it simple as in harness.
-    
+
     # To avoid changing harness too much in Acts 1, I will implement helper here.
     from cascade.spec.constraint import GlobalConstraint
-    from dataclasses import asdict
-    import uuid
 
     async def set_concurrency_limit(scope: str, limit: int):
         constraint = GlobalConstraint(

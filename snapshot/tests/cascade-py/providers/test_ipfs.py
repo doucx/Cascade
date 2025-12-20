@@ -17,7 +17,7 @@ async def mock_ipfs_cat_handler(request: web.Request):
     """A mock aiohttp handler for the `ipfs cat` RPC call."""
     if request.method != "POST":
         return web.Response(status=405)
-    
+
     if request.query.get("arg") == TEST_CID:
         return web.Response(body=FAKE_CONTENT, content_type="application/octet-stream")
     else:
@@ -35,11 +35,11 @@ async def mock_ipfs_add_handler(request: web.Request):
 
     reader = await request.multipart()
     part = await reader.next()
-    
+
     # We expect a part named 'file'
-    if part.name != 'file':
+    if part.name != "file":
         return web.Response(status=400, text="Expected 'file' part")
-    
+
     # Read content to verify
     content = await part.read()
     if content != FAKE_CONTENT:
@@ -52,18 +52,19 @@ async def mock_ipfs_add_handler(request: web.Request):
 @pytest.fixture
 def mock_ipfs_server(aiohttp_client, monkeypatch):
     """Fixture to setup the mock IPFS server and patch the provider."""
+
     async def _setup():
         app = web.Application()
         app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
         app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
         client = await aiohttp_client(app)
-        
+
         mock_base_url = f"http://{client.server.host}:{client.server.port}"
         monkeypatch.setattr(
-            "cascade.providers.ipfs.provider.IPFS_API_BASE_URL", 
-            mock_base_url
+            "cascade.providers.ipfs.provider.IPFS_API_BASE_URL", mock_base_url
         )
         return client
+
     return _setup
 
 
@@ -78,11 +79,7 @@ async def test_ipfs_cat_provider(mock_ipfs_server):
     workflow = cs.ipfs.cat(cid=TEST_CID)
 
     # Run the workflow
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus()
-    )
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
     result = await engine.run(workflow)
 
     # Assert the result
@@ -104,11 +101,7 @@ async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
     workflow = cs.ipfs.add(path=str(test_file))
 
     # Run
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus()
-    )
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
     result = await engine.run(workflow)
 
     # Assert we got the hash from the JSON response

@@ -1,12 +1,12 @@
 import pickle
-import json
 import logging
-from typing import Any, Optional, Union
+from typing import Any, Optional
 import aiohttp
 
 from cascade.interfaces.protocols import CacheBackend
 
 logger = logging.getLogger(__name__)
+
 
 class IpfsCacheBackend(CacheBackend):
     """
@@ -75,7 +75,7 @@ class IpfsCacheBackend(CacheBackend):
                     if resp.status != 200:
                         text = await resp.text()
                         raise RuntimeError(f"IPFS add failed: {resp.status} - {text}")
-                    
+
                     # IPFS add returns JSON: {"Name": "...", "Hash": "Qm...", ...}
                     resp_json = await resp.json()
                     cid = resp_json["Hash"]

@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
 

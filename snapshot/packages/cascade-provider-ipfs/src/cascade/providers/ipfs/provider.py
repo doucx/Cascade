@@ -1,4 +1,3 @@
-from typing import Any
 import cascade as cs
 from cascade.providers import Provider, LazyFactory
 from cascade.providers.http import HttpResponse
@@ -8,6 +7,7 @@ IPFS_API_BASE_URL = "http://127.0.0.1:5001"
 
 
 # --- Provider Implementations ---
+
 
 class IpfsCatProvider(Provider):
     name = "ipfs.cat"
@@ -27,12 +27,14 @@ class IpfsAddProvider(Provider):
 
 # --- Atomic Helper Tasks ---
 
+
 @cs.task(name="_ipfs_parse_cat_response")
 def _parse_cat_response(response: HttpResponse) -> bytes:
     """Parses the raw body from an HttpResponse."""
     if response.status >= 400:
         raise RuntimeError(f"IPFS API Error ({response.status}): {response.text()}")
     return response.body
+
 
 @cs.task(name="_ipfs_parse_add_response")
 def _parse_add_response(response: HttpResponse) -> str:
@@ -41,13 +43,15 @@ def _parse_add_response(response: HttpResponse) -> str:
         raise RuntimeError(f"IPFS API Error ({response.status}): {response.text()}")
     # The response is a stream of JSON objects, newline-separated.
     # The last one is the summary for the whole directory/file.
-    lines = response.text().strip().split('\n')
+    lines = response.text().strip().split("\n")
     last_line = lines[-1]
     import json
-    return json.loads(last_line)['Hash']
+
+    return json.loads(last_line)["Hash"]
 
 
 # --- User-Facing Factory Functions ---
+
 
 def cat(cid: str) -> "cs.LazyResult[bytes]":
     """

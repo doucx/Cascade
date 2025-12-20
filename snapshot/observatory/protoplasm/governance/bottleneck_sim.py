@@ -3,7 +3,11 @@ import random
 from typing import Any
 
 import cascade as cs
-from cascade.runtime.events import TaskBlocked, TaskExecutionStarted, TaskExecutionFinished
+from cascade.runtime.events import (
+    TaskBlocked,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+)
 from cascade.spec.constraint import GlobalConstraint
 
 # New Renderer Imports
@@ -19,6 +23,7 @@ DURATION = 15.0
 
 # --- Agent Definition ---
 
+
 def make_agent_workflow(i: int):
     @cs.task(name=f"agent_{i}_work")
     async def work(val):
@@ -31,7 +36,9 @@ def make_agent_workflow(i: int):
 
     return loop(work(0))
 
+
 # --- Main ---
+
 
 async def run_simulation():
     # 1. Setup New Renderer
@@ -42,13 +49,15 @@ async def run_simulation():
         palette_func=Palettes.bottleneck,
         decay_per_second=0.0,  # No decay, states are discrete
     )
-    status_bar = StatusBar({"Agents": NUM_AGENTS, "Slots": SLOTS, "Blocked": 0, "Running": 0})
+    status_bar = StatusBar(
+        {"Agents": NUM_AGENTS, "Slots": SLOTS, "Blocked": 0, "Running": 0}
+    )
     app = TerminalApp(grid_view, status_bar)
-    
+
     # 2. Setup Event Handling
     blocked_count = 0
     running_count = 0
-    
+
     def get_coords(agent_id: int):
         return (agent_id % grid_width, agent_id // grid_width)
 
@@ -56,43 +65,46 @@ async def run_simulation():
         nonlocal blocked_count, running_count
         if not hasattr(event, "task_name") or not event.task_name.startswith("agent_"):
             return
-            
+
         try:
             parts = event.task_name.split("_")
-            if len(parts) < 3: return
+            if len(parts) < 3:
+                return
             agent_id = int(parts[1])
             task_type = parts[2]
-            
+
             x, y = get_coords(agent_id)
-            
+
             if task_type == "work":
                 if isinstance(event, TaskExecutionStarted):
-                    app.ingest_grid(x, y, 1.0) # 1.0 = Running
+                    app.ingest_grid(x, y, 1.0)  # 1.0 = Running
                     running_count += 1
                 elif isinstance(event, TaskBlocked):
-                    app.ingest_grid(x, y, 0.5) # 0.5 = Waiting
+                    app.ingest_grid(x, y, 0.5)  # 0.5 = Waiting
                     blocked_count += 1
                 elif isinstance(event, TaskExecutionFinished):
-                    app.ingest_grid(x, y, 0.0) # 0.0 = Idle
-                    if event.status == "Succeeded": running_count -= 1
-                    else: blocked_count -= 1 # Assuming failed blocked tasks are 'unblocked'
-            
+                    app.ingest_grid(x, y, 0.0)  # 0.0 = Idle
+                    if event.status == "Succeeded":
+                        running_count -= 1
+                    else:
+                        blocked_count -= (
+                            1  # Assuming failed blocked tasks are 'unblocked'
+                        )
+
             app.update_status("Blocked", blocked_count)
             app.update_status("Running", running_count)
-                    
+
         except (IndexError, ValueError):
             pass
 
     # 3. Setup Engine
     engine_bus = cs.MessageBus()
     engine_bus.subscribe(cs.Event, handle_event)
-    
+
     engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=engine_bus
+        solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=engine_bus
     )
-    
+
     # 4. Apply Constraint
     print(f"Applying constraint: Max {SLOTS} concurrent 'work' tasks...")
     engine.constraint_manager.update_constraint(
@@ -100,21 +112,26 @@ async def run_simulation():
             id="funnel",
             scope="task:agent_*_work",
             type="concurrency",
-            params={"limit": SLOTS}
+            params={"limit": SLOTS},
         )
     )
 
     # 5. Launch Agents and Visualization
     print(f"Launching {NUM_AGENTS} agents...")
-    tasks = [asyncio.create_task(engine.run(make_agent_workflow(i))) for i in range(NUM_AGENTS)]
-        
+    tasks = [
+        asyncio.create_task(engine.run(make_agent_workflow(i)))
+        for i in range(NUM_AGENTS)
+    ]
+
     await app.start()
     try:
         await asyncio.sleep(DURATION)
     finally:
         app.stop()
-        for t in tasks: t.cancel()
+        for t in tasks:
+            t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
+
 
 if __name__ == "__main__":
     try:

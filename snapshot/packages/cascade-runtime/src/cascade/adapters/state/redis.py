@@ -1,6 +1,5 @@
 import pickle
 from typing import Any, Optional
-from cascade.interfaces.protocols import StateBackend
 
 try:
     import redis
@@ -15,12 +14,14 @@ class RedisStateBackend:
 
     def __init__(self, run_id: str, client: "redis.Redis", ttl: int = 86400):
         if redis is None:
-            raise ImportError("The 'redis' library is required to use RedisStateBackend.")
-        
+            raise ImportError(
+                "The 'redis' library is required to use RedisStateBackend."
+            )
+
         self._run_id = run_id
         self._client = client
         self._ttl = ttl
-        
+
         # Keys
         self._results_key = f"cascade:run:{run_id}:results"
         self._skipped_key = f"cascade:run:{run_id}:skipped"

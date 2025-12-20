@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 from collections import defaultdict
 from typing import Dict, List, Any, Callable, Awaitable, Optional
 from cascade.interfaces.protocols import Connector, SubscriptionHandle
@@ -9,7 +8,13 @@ from cascade.common.messaging import bus
 class _LocalSubscriptionHandle(SubscriptionHandle):
     """Implementation of the subscription handle for the LocalBusConnector."""
 
-    def __init__(self, parent: "LocalBusConnector", topic: str, queue: asyncio.Queue, listener_task: asyncio.Task):
+    def __init__(
+        self,
+        parent: "LocalBusConnector",
+        topic: str,
+        queue: asyncio.Queue,
+        listener_task: asyncio.Task,
+    ):
         self._parent = parent
         self._topic = topic
         self._queue = queue
@@ -33,7 +38,7 @@ class _LocalSubscriptionHandle(SubscriptionHandle):
                 except ValueError:
                     # Queue already removed, which is fine
                     pass
-        
+
         # 3. Remove task from parent's tracked listeners to prevent memory leak
         try:
             self._parent._listener_tasks.remove(self._listener_task)
@@ -68,7 +73,7 @@ class LocalBusConnector(Connector):
         """
         loop = asyncio.get_running_loop()
         try:
-            # In modern Python, accessing or using a lock created in a different 
+            # In modern Python, accessing or using a lock created in a different
             # loop will raise RuntimeError. We catch this to re-initialize.
             if cls._lock is None or cls._lock._get_loop() != loop:
                 cls._lock = asyncio.Lock()
@@ -82,7 +87,7 @@ class LocalBusConnector(Connector):
         cls._subscriptions.clear()
         cls._retained_messages.clear()
         # Setting to None ensures _get_lock will create a fresh one for the current loop
-        cls._lock = None 
+        cls._lock = None
 
     async def connect(self) -> None:
         self._is_connected = True
@@ -126,7 +131,7 @@ class LocalBusConnector(Connector):
             raise RuntimeError("Connector is not connected.")
 
         queue = asyncio.Queue()
-        
+
         async with self._get_lock():
             self._subscriptions[topic].append(queue)
 
@@ -136,12 +141,16 @@ class LocalBusConnector(Connector):
                     try:
                         await callback(retained_topic, payload)
                     except Exception as e:
-                        bus.error("localbus.retained_callback_error", topic=retained_topic, error=e)
+                        bus.error(
+                            "localbus.retained_callback_error",
+                            topic=retained_topic,
+                            error=e,
+                        )
 
         # Start a background listener for NEW incoming messages
         task = asyncio.create_task(self._listener_loop(queue, callback))
         self._listener_tasks.append(task)
-        
+
         return _LocalSubscriptionHandle(self, topic, queue, task)
 
     async def _listener_loop(self, queue: asyncio.Queue, callback):

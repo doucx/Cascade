@@ -3,16 +3,15 @@ import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import TaskExecutionFinished
 
 # 导入 app 模块中的核心异步逻辑函数
 from cascade.cli.controller import app as controller_app
-from cascade.connectors.mqtt import MqttConnector
 
 from .harness import InProcessConnector, MockWorkExecutor
 
 # --- Test Harness for In-Process CLI Interaction ---
+
 
 class SharedInstanceConnector:
     """
@@ -20,6 +19,7 @@ class SharedInstanceConnector:
     the underlying shared instance. This allows the Engine to stay connected
     even when the short-lived CLI command 'disconnects'.
     """
+
     def __init__(self, delegate: InProcessConnector):
         self._delegate = delegate
 
@@ -42,6 +42,7 @@ class SharedInstanceConnector:
 
 class InProcessController:
     """A test double for the controller CLI that calls its core logic in-process."""
+
     def __init__(self, connector: InProcessConnector):
         self.connector = connector
 
@@ -59,8 +60,9 @@ class InProcessController:
             rate=rate,
             ttl=ttl,
             hostname="localhost",  # Constant for test purposes
-            port=1883,           # Constant for test purposes
+            port=1883,  # Constant for test purposes
         )
+
 
 @pytest.fixture
 def controller_runner(monkeypatch):
@@ -69,7 +71,7 @@ def controller_runner(monkeypatch):
     """
     # 1. Create the master connector that holds the state (topics, queues)
     master_connector = InProcessConnector()
-    
+
     # 2. Create a wrapper for the CLI that won't close the master connector
     cli_connector_wrapper = SharedInstanceConnector(master_connector)
 
@@ -77,14 +79,16 @@ def controller_runner(monkeypatch):
     monkeypatch.setattr(
         controller_app.MqttConnector,
         "__new__",
-        lambda cls, *args, **kwargs: cli_connector_wrapper
+        lambda cls, *args, **kwargs: cli_connector_wrapper,
     )
-    
+
     # 4. Return the controller initialized with the MASTER connector
     #    (The Engine will use this master connector directly)
     return InProcessController(master_connector)
 
+
 # --- The Failing Test Case ---
+
 
 @pytest.mark.asyncio
 async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
@@ -95,10 +99,11 @@ async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
     test should pass.
     """
     bus, spy = bus_and_spy
-    
+
     @cs.task
     def fast_task(i: int):
         return i
+
     workflow = fast_task.map(i=range(10))
 
     engine = Engine(
@@ -119,7 +124,7 @@ async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
             await asyncio.sleep(0.1)
             if len(spy.events_of_type(TaskExecutionFinished)) > 0:
                 break
-        
+
         assert len(spy.events_of_type(TaskExecutionFinished)) >= 1, (
             "Engine did not start processing tasks under the initial slow rate limit."
         )

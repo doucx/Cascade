@@ -4,11 +4,12 @@ import asyncio
 # REMOVED: Top-level import of MqttConnector to prevent early loading
 # from cascade.connectors.mqtt import MqttConnector
 
+
 def test_mqtt_connector_instantiation():
     """Tests that the MqttConnector can be instantiated."""
     # Lazy import ensures we get the version patched by conftest.py
     from cascade.connectors.mqtt import MqttConnector
-    
+
     connector = MqttConnector(hostname="localhost", port=1234)
     assert connector.hostname == "localhost"
     assert connector.port == 1234

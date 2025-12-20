@@ -135,7 +135,8 @@ class TelemetrySubscriber:
 
         event_body = {}
         if isinstance(
-            event, (TaskExecutionStarted, TaskExecutionFinished, TaskSkipped, TaskBlocked)
+            event,
+            (TaskExecutionStarted, TaskExecutionFinished, TaskSkipped, TaskBlocked),
         ):
             state_map = {
                 TaskExecutionStarted: "RUNNING",

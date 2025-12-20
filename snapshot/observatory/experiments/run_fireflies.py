@@ -1,6 +1,5 @@
 import asyncio
 import random
-import time
 from typing import Dict, Any
 
 import cascade as cs
@@ -28,7 +27,9 @@ async def run_experiment(
     """
     Sets up and runs the firefly synchronization experiment.
     """
-    print(f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents...")
+    print(
+        f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents..."
+    )
 
     # 1. Initialize Shared Bus
     LocalBusConnector._reset_broker_state()
@@ -37,18 +38,26 @@ async def run_experiment(
 
     # --- Setup Monitor & Visualizer ---
     monitor = ConvergenceMonitor(num_agents, period, connector)
-    
+
     app = None
     app_task = None
-    
+
     if visualize:
         grid_width = int(num_agents**0.5)
-        if grid_width * grid_width < num_agents: grid_width += 1
-        
+        if grid_width * grid_width < num_agents:
+            grid_width += 1
+
         # 1. Create visualization components
         # A decay_per_second of 5.0 means a flash will fade in 1/5 = 0.2 seconds.
-        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_per_second=1/(period*decay_duty_cycle))
-        status_bar = StatusBar(initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."})
+        grid_view = GridView(
+            width=grid_width,
+            height=grid_width,
+            palette_func=Palettes.firefly,
+            decay_per_second=1 / (period * decay_duty_cycle),
+        )
+        status_bar = StatusBar(
+            initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."}
+        )
         app = TerminalApp(grid_view, status_bar)
 
         # 2. Bridge Monitor -> Status Bar
@@ -58,7 +67,9 @@ async def run_experiment(
             bar = "█" * filled + "░" * (bar_len - filled)
             app.update_status("Sync (R)", f"{r_value:.3f} [{bar}]")
 
-        monitor_task = asyncio.create_task(monitor.run(frequency_hz=10.0, callback=monitor_callback))
+        monitor_task = asyncio.create_task(
+            monitor.run(frequency_hz=10.0, callback=monitor_callback)
+        )
 
         # 3. Bridge Agent Flashes -> Grid
         async def on_flash_visual(topic: str, payload: Dict[str, Any]):
@@ -67,7 +78,7 @@ async def run_experiment(
                 x = aid % grid_width
                 y = aid // grid_width
                 app.ingest_grid(x, y, 1.0)
-        
+
         await connector.subscribe("firefly/flash", on_flash_visual)
         app_task = asyncio.create_task(app.start())
     else:
@@ -76,19 +87,19 @@ async def run_experiment(
 
     # --- Create Agents ---
     agent_tasks = []
-    
+
     @resource(name="_internal_connector", scope="run")
     def shared_connector_provider():
         yield connector
 
     for i in range(num_agents):
         initial_phase = random.uniform(0, period)
-        
+
         engine = cs.Engine(
             solver=cs.NativeSolver(),
             executor=cs.LocalExecutor(),
             bus=cs.MessageBus(),
-            connector=None, 
+            connector=None,
         )
         engine.register(shared_connector_provider)
 
@@ -102,7 +113,7 @@ async def run_experiment(
             connector=connector,
             refractory_period=period * 0.2,
         )
-        
+
         agent_tasks.append(engine.run(agent_workflow))
 
     # --- Run ---
@@ -113,17 +124,19 @@ async def run_experiment(
         print(f"Experiment interrupted or failed: {e}")
     finally:
         monitor.stop()
-        if app: app.stop()
-        
+        if app:
+            app.stop()
+
         if not all_agent_tasks.done():
             all_agent_tasks.cancel()
             await asyncio.gather(all_agent_tasks, return_exceptions=True)
-            
+
         await asyncio.gather(monitor_task, return_exceptions=True)
         if app_task and not app_task.done():
             await app_task
-        
+
         await connector.disconnect()
+
 
 if __name__ == "__main__":
     asyncio.run(run_experiment(visualize=True))

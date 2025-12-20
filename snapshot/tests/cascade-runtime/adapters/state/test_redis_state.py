@@ -1,6 +1,6 @@
 import pickle
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # We import the module to patch its members
 from cascade.adapters.state import redis as redis_state_module
@@ -23,6 +23,7 @@ def test_redis_state_backend_dependency_check(monkeypatch):
     monkeypatch.setattr(redis_state_module, "redis", None)
     with pytest.raises(ImportError, match="The 'redis' library is required"):
         from cascade.adapters.state.redis import RedisStateBackend
+
         RedisStateBackend(run_id="test", client=MagicMock())
 
 
@@ -32,7 +33,7 @@ def test_put_result(mock_redis_client):
     """
     client, pipeline = mock_redis_client
     backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
-    
+
     test_result = {"status": "ok", "data": [1, 2]}
     backend.put_result("node_a", test_result)
 
@@ -56,9 +57,9 @@ def test_get_result(mock_redis_client):
     test_result = {"value": 42}
     pickled_result = pickle.dumps(test_result)
     client.hget.return_value = pickled_result
-    
+
     result = backend.get_result("node_b")
-    
+
     client.hget.assert_called_once_with("cascade:run:run123:results", "node_b")
     assert result == test_result
 

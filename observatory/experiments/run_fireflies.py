@@ -18,11 +18,12 @@ from observatory.visualization.status import StatusBar
 
 
 async def run_experiment(
-    num_agents: int = 100, # Reduced to 100 (10x10) to prevent LocalBus saturation
-    period: float = 2.0,
-    nudge: float = 0.2,
-    duration_seconds: float = 30.0,
-    visualize: bool = True
+    num_agents: int = 25**2,
+    period: float = 5.0,
+    nudge: float = 0.5,
+    duration_seconds: float = 3000.0,
+    visualize: bool = True,
+    decay_duty_cycle: float = 0.5,
 ):
     """
     Sets up and runs the firefly synchronization experiment.
@@ -46,7 +47,7 @@ async def run_experiment(
         
         # 1. Create visualization components
         # A decay_per_second of 5.0 means a flash will fade in 1/5 = 0.2 seconds.
-        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_per_second=5.0)
+        grid_view = GridView(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_per_second=1/(period*decay_duty_cycle))
         status_bar = StatusBar(initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."})
         app = TerminalApp(grid_view, status_bar)
 

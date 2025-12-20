@@ -51,8 +51,17 @@ class UniGridRenderer:
         self._extra_info = ""
 
     def ingest(self, x: int, y: int, state: float = 1.0):
-        """Thread-safe ingestion."""
+        """Thread-safe ingestion of a single pixel."""
         self.queue.put_nowait((x, y, state))
+
+    def ingest_full(self, matrix: np.ndarray):
+        """
+        Thread-safe ingestion of a full frame.
+        The matrix must match the logical dimensions.
+        """
+        # We put the whole matrix into the queue. 
+        # The render loop needs to handle this type distinction.
+        self.queue.put_nowait(matrix)
         
     def set_extra_info(self, info: str):
         """Sets a string to be displayed in the status bar."""
@@ -83,8 +92,22 @@ class UniGridRenderer:
             # 1. Process Queue
             while not self.queue.empty():
                 try:
-                    x, y, state = self.queue.get_nowait()
-                    self.matrix.update(x, y, state)
+                    item = self.queue.get_nowait()
+                    if isinstance(item, np.ndarray):
+                        # Full frame update: Direct copy
+                        # Ensure shape matches to prevent crashes
+                        if item.shape == self.matrix.brightness.shape:
+                            np.copyto(self.matrix.brightness, item)
+                            # For full frame, we assume 'active' is implied or we reset physics?
+                            # For simplicity, we just copy values.
+                        else:
+                            # If shape mismatch (e.g. terminal resized), we might skip or resize?
+                            # For this proto, we ignore mismatch to be safe.
+                            pass
+                    else:
+                        # Single pixel update
+                        x, y, state = item
+                        self.matrix.update(x, y, state)
                 except asyncio.QueueEmpty:
                     break
             

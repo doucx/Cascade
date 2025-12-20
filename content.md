@@ -1,83 +1,161 @@
-好的，我们来执行这个迁移。我们将把 `UniGrid` 的能力应用到最后的角落——Conway 生命游戏的孪生验证器中，并确保测试脚本能正确地驱动它。
+简要回答
+# [WIP]
 
-## [WIP] feat(proto): 将 Conway 验证器迁移至 UniGrid 渲染架构
+我们将把 Conway 生命游戏实验及其验证器迁移到统一的 `UniGrid` 渲染架构上，并确保保留所有关键的监控指标（如进度条）和测试用例。
+
+## [WIP] refactor(proto): 迁移 Conway 实验至 UniGrid 架构
 
 ### 用户需求
-1.  **迁移核心逻辑**: 将 `StateValidator` 和 `run_conway_experiment.py` 使用的 `TruthRenderer` 替换为新的 `UniGridRenderer`。
-2.  **保留功能**:
-    *   必须保留现有的网格尺寸限制逻辑 (`min(GRID_WIDTH, 50)` 等)。
-    *   必须保留“Next Gen: [██░░] X/Y”的加载状态显示。
-3.  **验证迁移**: 更新 `observatory/protoplasm/truth/test_renderer.py`，使其能够成功驱动新的 `UniGridRenderer` 并作为本次迁移的视觉验收标准。
+1.  **架构统一**: 将 `run_conway_experiment.py` 和 `test_renderer.py` 迁移到 `UniGridRenderer`。
+2.  **功能保留**:
+    *   保留 `run_conway_experiment.py` 中的网格尺寸限制。
+    *   保留 "Next Gen" 进度条显示。
+    *   保留 `test_renderer.py` 的功能，作为高性能渲染测试基准。
+3.  **视觉风格**: 使用新的正方形像素和调色板。
 
 ### 评论
-这是对 `UniGrid` 抽象能力的一次绝佳考验。`TruthRenderer` 有一个特殊需求：它显示的不是单一的状态值（如相位），而是一个计算出的“差异状态”（匹配、遗漏、幽灵）。通过为这个需求创建一个专用的 `conway_diff` 调色板，我们证明了 `UniGrid` 的“状态 -> 调色板 -> 渲染”管线是足够灵活和强大的，能够适应不同的可视化场景而无需修改渲染器本身。
+这是一个收官动作。将所有视觉组件统一到 `UniGrid` 不仅减少了代码维护量，还证明了 `UniGrid` 具有足够的通用性，既能处理异步稀疏的萤火虫（Event-driven），也能处理同步密集的生命游戏（Frame-driven）。为了支持生命游戏的高吞吐量更新，我们需要赋予 `UniGrid` 批量更新矩阵的能力。
 
 ### 目标
-1.  在 `palette.py` 中新增 `conway_diff` 调色板，用于将差异状态（0-3）映射到颜色。
-2.  重写 `validator.py`，使其内部使用 `UniGridRenderer`，并通过 `set_extra_info` 方法更新“Next Gen”状态。
-3.  重写 `test_renderer.py` 以适应 `UniGrid` 的异步运行模型，并验证其正确性。
-4.  确认 `run_conway_experiment.py` 在新的依赖下依然能正确工作。
+1.  **升级 Palette**: 增加 `truth` 调色板，支持 diff 状态的可视化。
+2.  **升级 UniGrid**: 支持 `ingest_full` 操作，允许一次性通过队列更新整个矩阵，以优化帧同步渲染性能。
+3.  **重写 Validator**: 使用 `UniGrid` 替换旧的 `TruthRenderer`，并将进度条逻辑映射到 `set_extra_info`。
+4.  **适配测试**: 更新 `test_renderer.py` 以验证新架构。
 
 ### 基本原理
--   **关注点分离**: `StateValidator` 负责计算出 `diff_matrix`（一个值为 0-3 的 NumPy 数组）。`Palettes.conway_diff` 负责将这个逻辑矩阵翻译成颜色矩阵。`UniGridRenderer` 负责将颜色矩阵高效地渲染到终端。三者各司其职。
--   **异步驱动**: 对于 `test_renderer.py`，我们将启动 `UniGridRenderer` 作为一个独立的异步任务。测试的主循环将不再直接调用绘图函数，而是通过修改 `renderer.matrix.brightness` 来推送新一帧的完整状态，模拟 `StateValidator` 的行为。
+-   **全帧注入 (Full-Frame Ingestion)**: 萤火虫是稀疏更新（每次几个点），而生命游戏是全网格更新。为了避免将 1000 个像素拆分为 1000 个队列消息，我们扩展 `UniGrid` 的协议，允许直接传递一个 `numpy` 数组作为一帧。
+-   **状态编码**: 我们将利用 `float` 状态值来编码分类数据：`0.0`(死对), `1.0`(活对), `2.0`(假阳), `3.0`(假阴)。`Palette.truth` 将解码这些值并分配颜色。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/protoplasm #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/unigrid #task/action/integration #task/state/continue
+#intent/refine #flow/draft #priority/medium #comp/protoplasm #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/validator #task/action/migration #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 为 Conway 差异添加专用调色板
+#### Acts 1: 更新调色板 (`palette.py`)
 
-我们首先扩展调色板，使其能理解“孪生验证”的四种状态。
+增加用于 Truth Validator 的调色板。
 
 ~~~~~act
 patch_file
 observatory/protoplasm/renderer/palette.py
 ~~~~~
 ~~~~~python
-        # Running (Bright White/Green tint)
         mask_run = states >= 0.8
         colors[mask_run] = '\033[38;2;200;255;200m'
         
         return colors
 ~~~~~
 ~~~~~python
-        # Running (Bright White/Green tint)
         mask_run = states >= 0.8
         colors[mask_run] = '\033[38;2;200;255;200m'
         
         return colors
 
     @staticmethod
-    def conway_diff(states: np.ndarray) -> np.ndarray:
+    def truth(states: np.ndarray) -> np.ndarray:
         """
-        Maps diff states to visual colors for Conway's Game of Life validation.
-        0: Correctly Dead (Dark Gray)
-        1: Correctly Alive (Bright White)
-        2: False Positive / Ghost (Bright Red) - Cascade has it, Golden does not.
-        3: False Negative / Missing (Bright Cyan) - Golden has it, Cascade does not.
+        Maps Truth Validator states to colors.
+        0.0: Dead Correct (Grey)
+        1.0: Alive Correct (White)
+        2.0: False Positive (Red)
+        3.0: False Negative (Cyan)
         """
-        # Default: Dark Gray for state 0
-        colors = np.full(states.shape, '\033[38;2;40;40;40m', dtype='<U24')
+        # Default: Dead (Dark Grey)
+        colors = np.full(states.shape, '\033[38;2;60;60;60m', dtype='<U24')
         
-        # Correctly Alive (White)
-        colors[states == 1] = '\033[38;2;220;220;220m'
+        # Alive Correct (1.0) -> Bright White
+        mask_alive = (states == 1.0)
+        colors[mask_alive] = '\033[38;2;255;255;255m'
         
-        # False Positive (Red)
-        colors[states == 2] = '\033[38;2;255;50;50m'
+        # False Positive (2.0) -> Bright Red
+        mask_fp = (states == 2.0)
+        colors[mask_fp] = '\033[38;2;255;50;50m'
         
-        # False Negative (Cyan)
-        colors[states == 3] = '\033[38;2;50;200;255m'
+        # False Negative (3.0) -> Bright Cyan
+        mask_fn = (states == 3.0)
+        colors[mask_fn] = '\033[38;2;50;255;255m'
         
         return colors
 ~~~~~
 
-#### Acts 2: 重构 `StateValidator` 以使用 `UniGridRenderer`
+#### Acts 2: 增强 `UniGridRenderer` 支持全帧注入
 
-这是核心迁移。我们将 `TruthRenderer` 的所有逻辑替换为 `UniGridRenderer`，并调整数据流。
+我们需要支持高性能的全矩阵更新。
+
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/unigrid.py
+~~~~~
+~~~~~python
+    def ingest(self, x: int, y: int, state: float = 1.0):
+        """Thread-safe ingestion."""
+        self.queue.put_nowait((x, y, state))
+        
+    def set_extra_info(self, info: str):
+~~~~~
+~~~~~python
+    def ingest(self, x: int, y: int, state: float = 1.0):
+        """Thread-safe ingestion of a single pixel."""
+        self.queue.put_nowait((x, y, state))
+
+    def ingest_full(self, matrix: np.ndarray):
+        """
+        Thread-safe ingestion of a full frame.
+        The matrix must match the logical dimensions.
+        """
+        # We put the whole matrix into the queue. 
+        # The render loop needs to handle this type distinction.
+        self.queue.put_nowait(matrix)
+        
+    def set_extra_info(self, info: str):
+~~~~~
+
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/unigrid.py
+~~~~~
+~~~~~python
+            # 1. Process Queue
+            while not self.queue.empty():
+                try:
+                    x, y, state = self.queue.get_nowait()
+                    self.matrix.update(x, y, state)
+                except asyncio.QueueEmpty:
+                    break
+            
+            # 2. Physics (Decay)
+~~~~~
+~~~~~python
+            # 1. Process Queue
+            while not self.queue.empty():
+                try:
+                    item = self.queue.get_nowait()
+                    if isinstance(item, np.ndarray):
+                        # Full frame update: Direct copy
+                        # Ensure shape matches to prevent crashes
+                        if item.shape == self.matrix.brightness.shape:
+                            np.copyto(self.matrix.brightness, item)
+                            # For full frame, we assume 'active' is implied or we reset physics?
+                            # For simplicity, we just copy values.
+                        else:
+                            # If shape mismatch (e.g. terminal resized), we might skip or resize?
+                            # For this proto, we ignore mismatch to be safe.
+                            pass
+                    else:
+                        # Single pixel update
+                        x, y, state = item
+                        self.matrix.update(x, y, state)
+                except asyncio.QueueEmpty:
+                    break
+            
+            # 2. Physics (Decay)
+~~~~~
+
+#### Acts 3: 重写 Validator 以使用 UniGrid
+
+这是主要的逻辑迁移。我们将旧的 `TruthRenderer` 替换为 `UniGridRenderer`。
 
 ~~~~~act
 write_file
@@ -85,11 +163,13 @@ observatory/protoplasm/truth/validator.py
 ~~~~~
 ~~~~~python
 import asyncio
+import time
 import numpy as np
-from typing import Dict, Any
-
+from typing import Dict, Any, List, Optional
 from cascade.interfaces.protocols import Connector
 from .golden_ca import GoldenLife
+
+# New Renderer
 from observatory.protoplasm.renderer.unigrid import UniGridRenderer
 from observatory.protoplasm.renderer.palette import Palettes
 
@@ -100,36 +180,43 @@ class StateValidator:
         self.connector = connector
         self.golden = GoldenLife(width, height)
         
+        # UI
         self.enable_ui = enable_ui
-        self.renderer = None
-        if enable_ui:
-            self.renderer = UniGridRenderer(
-                width=width, 
-                height=height, 
-                palette_func=Palettes.conway_diff, 
-                decay_rate=0.0  # Conway state is absolute, no decay
-            )
+        # We use UniGrid now with the 'truth' palette and 0 decay (crisp state)
+        self.renderer = UniGridRenderer(
+            width=width, 
+            height=height, 
+            palette_func=Palettes.truth, 
+            decay_rate=0.0
+        ) if enable_ui else None
         
+        # buffer[gen][agent_id] = state
         self.buffer: Dict[int, Dict[int, int]] = {}
+        
+        # History
         self.history_theoretical: Dict[int, np.ndarray] = {}
         self.history_actual: Dict[int, np.ndarray] = {}
         
         self.total_agents = width * height
         self._running = False
         
+        # Stats
         self.absolute_errors = 0
         self.relative_errors = 0
         self.max_gen_verified = -1
 
     async def run(self):
         self._running = True
-        renderer_task = None
         if self.renderer:
-            renderer_task = asyncio.create_task(self.renderer.start())
-
+            await self.renderer.start()
+        else:
+            print(f"⚖️  Validator active. Grid: {self.width}x{self.height}. Dual-Truth Mode Enabled.")
+        
         sub = await self.connector.subscribe("validator/report", self.on_report)
         
         try:
+            # Main validation loop
+            # Since renderer has its own loop, we just process buffers here
             while self._running:
                 self._process_buffers()
                 await asyncio.sleep(0.01)
@@ -137,12 +224,17 @@ class StateValidator:
             await sub.unsubscribe()
             if self.renderer:
                 self.renderer.stop()
-            if renderer_task and not renderer_task.done():
-                renderer_task.cancel()
 
     async def on_report(self, topic: str, payload: Any):
-        gen, agent_id = payload['gen'], payload['id']
-        if gen not in self.buffer: self.buffer[gen] = {}
+        """
+        Payload: {id, coords: [x, y], gen, state}
+        """
+        gen = payload['gen']
+        agent_id = payload['id']
+        
+        if gen not in self.buffer:
+            self.buffer[gen] = {}
+            
         self.buffer[gen][agent_id] = payload
 
     def _process_buffers(self):
@@ -150,82 +242,110 @@ class StateValidator:
         
         if next_gen not in self.buffer:
             if self.renderer:
-                self._update_waiting_status(next_gen, 0)
+                self._update_ui_status(next_gen, 0)
             return
 
         current_buffer = self.buffer[next_gen]
+        
         if len(current_buffer) < self.total_agents:
             if self.renderer:
-                self._update_waiting_status(next_gen, len(current_buffer))
+                self._update_ui_status(next_gen, len(current_buffer))
             return
             
         self._verify_generation(next_gen, current_buffer)
         
         del self.buffer[next_gen]
-        if next_gen - 2 in self.history_actual: del self.history_actual[next_gen - 2]
-        if next_gen - 2 in self.history_theoretical: del self.history_theoretical[next_gen - 2]
+        if next_gen - 2 in self.history_actual:
+            del self.history_actual[next_gen - 2]
+        if next_gen - 2 in self.history_theoretical:
+            del self.history_theoretical[next_gen - 2]
             
         self.max_gen_verified = next_gen
 
-    def _update_waiting_status(self, gen: int, current_count: int):
+    def _update_ui_status(self, gen: int, current_count: int):
         progress = current_count / self.total_agents if self.total_agents > 0 else 0
-        bar = "█" * int(10 * progress) + "░" * (10 - int(10 * progress))
-        status = f"Next Gen {gen}: [{bar}] {current_count}/{self.total_agents}"
+        bar_len = 10
+        filled = int(bar_len * progress)
+        bar = "█" * filled + "░" * (bar_len - filled)
+        
+        status = (
+            f"Gen {gen}: [{bar}] {current_count}/{self.total_agents} | "
+            f"Err(Abs/Rel): {self.absolute_errors}/{self.relative_errors}"
+        )
         self.renderer.set_extra_info(status)
 
     def _verify_generation(self, gen: int, reports: Dict[int, Any]):
-        actual_grid = np.zeros((self.height, self.width), dtype=np.int8)
+        # 1. Construct Actual Grid
+        actual_grid = np.zeros((self.height, self.width), dtype=np.float32)
         for r in reports.values():
             x, y = r['coords']
-            actual_grid[y, x] = r['state']
+            actual_grid[y, x] = float(r['state']) # 0.0 or 1.0
+            
         self.history_actual[gen] = actual_grid
 
-        # --- Calculate theoretical grid ---
+        # 2. Validation
         if gen == 0:
-            self.golden.seed(actual_grid)
+            self.golden.seed(actual_grid.astype(np.int8))
+            self.history_theoretical[0] = actual_grid
             theo_grid = actual_grid
+            diff_grid = actual_grid # 0 or 1
         else:
             prev_theo = self.history_theoretical.get(gen - 1)
-            self.golden.seed(prev_theo)
-            theo_grid = self.golden.step()
-        
-        self.history_theoretical[gen] = theo_grid
-
-        # --- Update Errors ---
-        if gen > 0:
-            diff_abs = np.sum(actual_grid != theo_grid)
-            if diff_abs > 0: self.absolute_errors += diff_abs
             
-            prev_actual = self.history_actual.get(gen - 1)
-            self.golden.seed(prev_actual)
-            expected_relative = self.golden.step()
-            diff_rel = np.sum(actual_grid != expected_relative)
-            if diff_rel > 0: self.relative_errors += diff_rel
+            if prev_theo is not None:
+                self.golden.seed(prev_theo.astype(np.int8))
+                theo_grid = self.golden.step().astype(np.float32)
+                self.history_theoretical[gen] = theo_grid
+                
+                # Compute Diff Matrix for Visualization
+                # 0.0: Dead Correct
+                # 1.0: Alive Correct
+                # 2.0: False Positive (actual=1, theo=0)
+                # 3.0: False Negative (actual=0, theo=1)
+                
+                diff_grid = np.zeros_like(actual_grid)
+                
+                # Matches
+                mask_dead = (actual_grid == 0) & (theo_grid == 0)
+                mask_alive = (actual_grid == 1) & (theo_grid == 1)
+                diff_grid[mask_dead] = 0.0
+                diff_grid[mask_alive] = 1.0
+                
+                # Errors
+                mask_fp = (actual_grid == 1) & (theo_grid == 0)
+                mask_fn = (actual_grid == 0) & (theo_grid == 1)
+                diff_grid[mask_fp] = 2.0
+                diff_grid[mask_fn] = 3.0
+                
+                # Update Stats
+                self.absolute_errors += np.sum(mask_fp | mask_fn)
+                
+                # Relative check (omitted for render logic simplification, logic kept in memory)
+                prev_actual = self.history_actual.get(gen - 1)
+                if prev_actual is not None:
+                     self.golden.seed(prev_actual.astype(np.int8))
+                     expected_rel = self.golden.step()
+                     self.relative_errors += np.sum(actual_grid != expected_rel)
 
-        # --- Render ---
+            else:
+                theo_grid = actual_grid
+                diff_grid = actual_grid
+
+        # 3. Render
         if self.renderer:
-            # Create diff matrix for the palette
-            diff_matrix = np.zeros_like(actual_grid)
-            diff_matrix[(actual_grid == 1) & (theo_grid == 1)] = 1 # Match Alive
-            diff_matrix[(actual_grid == 1) & (theo_grid == 0)] = 2 # False Positive
-            diff_matrix[(actual_grid == 0) & (theo_grid == 1)] = 3 # False Negative
-            
-            # Push the full frame state
-            self.renderer.matrix.brightness = diff_matrix
-            
-            # Update status bar
-            total_err = self.absolute_errors + self.relative_errors
-            status_icon = "✅ SYNC" if total_err == 0 else "❌ DRIFT"
-            status_msg = f"GEN: {gen} | Status: {status_icon} | Total Err: {total_err}"
-            self.renderer.set_extra_info(status_msg)
+            self.renderer.ingest_full(diff_grid)
+            self._update_ui_status(gen, self.total_agents)
+        else:
+            # Fallback text log
+            pass
 
     def stop(self):
         self._running = False
 ~~~~~
 
-#### Acts 3: 更新测试渲染器以驱动 `UniGridRenderer`
+#### Acts 4: 适配 `test_renderer.py`
 
-这是验收步骤。我们将 `test_renderer.py` 的主体逻辑保留，但将其与 `UniGrid` 的 API 对接。
+确保我们有一个干净的、高性能的渲染基准。
 
 ~~~~~act
 write_file
@@ -237,6 +357,7 @@ import numpy as np
 import shutil
 import random
 
+# Use the new UniGrid
 from observatory.protoplasm.renderer.unigrid import UniGridRenderer
 from observatory.protoplasm.renderer.palette import Palettes
 from observatory.protoplasm.truth.golden_ca import GoldenLife
@@ -248,65 +369,72 @@ MAX_GENERATIONS = 200
 FRAME_DELAY = 0.05  # seconds
 
 def get_glider_seed(width: int, height: int) -> np.ndarray:
+    """Creates a simple Glider pattern on the grid."""
     grid = np.zeros((height, width), dtype=np.int8)
-    grid[1, 2] = 1; grid[2, 3] = 1; grid[3, 1:4] = 1
+    #   .X.
+    #   ..X
+    #   XXX
+    grid[1, 2] = 1
+    grid[2, 3] = 1
+    grid[3, 1:4] = 1
     return grid
 
 async def main():
-    print("🚀 Starting UniGrid Renderer Test for Conway...")
+    """
+    Main loop to test the UniGridRenderer in isolation with Truth palette.
+    """
+    print("🚀 Starting Isolated Renderer Test (UniGrid)...")
     
+    # 1. Setup simulator
     golden = GoldenLife(GRID_WIDTH, GRID_HEIGHT)
     golden.seed(get_glider_seed(GRID_WIDTH, GRID_HEIGHT))
 
+    # 2. Setup UniGrid with Truth palette
     renderer = UniGridRenderer(
-        width=GRID_WIDTH,
-        height=GRID_HEIGHT,
-        palette_func=Palettes.conway_diff,
+        width=GRID_WIDTH, 
+        height=GRID_HEIGHT, 
+        palette_func=Palettes.truth,
         decay_rate=0.0
     )
     
+    # We must run renderer in a background task
     renderer_task = asyncio.create_task(renderer.start())
-    # Allow renderer to initialize
-    await asyncio.sleep(0.1)
 
     try:
         for gen in range(MAX_GENERATIONS):
-            theoretical_grid = golden.step()
-            actual_grid = theoretical_grid.copy()
+            # A. Get next state (Theoretical Truth)
+            theo_grid = golden.step().astype(np.float32)
             
-            abs_err, rel_err = 0, 0
+            # B. Simulate Actual Grid (copy truth)
+            # We map this to the Diff codes:
+            # 0.0 = Dead, 1.0 = Alive
+            diff_grid = theo_grid.copy()
 
-            # --- Inject fake errors to test colors ---
+            # --- Inject Fake Errors ---
             if 20 <= gen < 25:
-                actual_grid[5, 5] = 1 
-                abs_err +=1
-            if 30 <= gen < 35:
-                glider_pos = np.where(theoretical_grid == 1)
+                # Ghost cell (False Positive -> 2.0 -> Red)
+                diff_grid[5, 5] = 2.0
+                renderer.set_extra_info(f"Gen {gen}: Injecting False Positive (Red)")
+            elif 30 <= gen < 35:
+                # Remove cell (False Negative -> 3.0 -> Cyan)
+                glider_pos = np.where(theo_grid == 1)
                 if len(glider_pos[0]) > 0:
-                    actual_grid[glider_pos[0][0], glider_pos[1][0]] = 0
-                    abs_err +=1
+                    diff_grid[glider_pos[0][0], glider_pos[1][0]] = 3.0
+                renderer.set_extra_info(f"Gen {gen}: Injecting False Negative (Cyan)")
+            else:
+                renderer.set_extra_info(f"Gen {gen}: Perfect Match")
+
+            # C. Ingest Full Frame
+            renderer.ingest_full(diff_grid)
             
-            # --- Manually compute and push frame state ---
-            diff_matrix = np.zeros_like(actual_grid)
-            diff_matrix[(actual_grid == 1) & (theoretical_grid == 1)] = 1
-            diff_matrix[(actual_grid == 1) & (theoretical_grid == 0)] = 2
-            diff_matrix[(actual_grid == 0) & (theoretical_grid == 1)] = 3
-            
-            # Push data to renderer's matrix
-            renderer.matrix.brightness = diff_matrix
-            
-            # Update status info
-            total_err = abs_err + rel_err
-            status_icon = "✅ SYNC" if total_err == 0 else "❌ DRIFT"
-            status_msg = f"GEN: {gen} | Status: {status_icon} | Test Mode"
-            renderer.set_extra_info(status_msg)
-            
+            # D. Wait
             await asyncio.sleep(FRAME_DELAY)
 
     finally:
         renderer.stop()
         if not renderer_task.done():
             renderer_task.cancel()
+            await renderer_task
         print("\n✅ Renderer Test Finished.")
 
 
@@ -317,10 +445,28 @@ if __name__ == "__main__":
         print("\nTest interrupted by user.")
 ~~~~~
 
-### 下一步建议
-我们已经成功地将所有可视化组件统一到了 `UniGrid` 架构下，为“创世网格”的 Alpha 阶段奠定了坚实的观测基础。现在，所有的预研任务都已完成。
+#### Acts 5: 更新实验运行脚本 (`run_conway_experiment.py`)
 
-建议的下一步是：
-1.  **代码清理**: 删除旧的、未使用的渲染器文件 (`observatory/protoplasm/renderer/visualizer_proto.py`, `observatory/protoplasm/truth/renderer.py`)。
-2.  **创建提交**: 将本次迁移作为一个独立的 `feat(proto)` 提交。
-3.  **启动 Alpha 阶段**: 正式开始“创世网格”第一阶段的开发，即在 `UniGrid` 上运行分布式、带状态的 Conway 生命游戏，并使用 `StateValidator` 进行实时验证。
+因为 `validator` 的签名和逻辑已经更新，我们可能需要微调实验脚本。不过看前面的改动，`StateValidator` 的构造函数签名保持不变 (`width, height, connector, enable_ui`)，所以主脚本可能不需要大改。
+
+让我们检查 `run_conway_experiment.py` 是否有需要清理的旧引用。旧代码引用了 `observatory.protoplasm.truth.renderer` 吗？不，它只导入了 `conway_agent` 和 `StateValidator`。
+
+但是，`StateValidator.run` 现在是 `await` 渲染器启动。我们需要确认一下调用方式。
+旧的：`validator_task = asyncio.create_task(validator.run())`
+新的：`validator_task = asyncio.create_task(validator.run())`
+兼容。
+
+我们唯一需要做的是移除旧的 `observatory/protoplasm/truth/renderer.py`，因为我们已经完全迁移了。
+
+~~~~~act
+delete_file
+observatory/protoplasm/truth/renderer.py
+~~~~~
+
+### 下一步建议
+我们已经完成了所有组件的迁移。现在 `run_conway_experiment.py` 和 `test_renderer.py` 都基于 `UniGrid` 运行。
+可以运行 `python -m observatory.protoplasm.truth.test_renderer` 来验证迁移是否成功，你应该能看到：
+1.  正方形像素（`██`）。
+2.  白色滑翔机移动。
+3.  在第 20-25 代出现红色 Ghost 像素。
+4.  在第 30-35 代滑翔机部分变青色（丢失）。

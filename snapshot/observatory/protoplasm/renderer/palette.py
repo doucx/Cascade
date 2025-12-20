@@ -74,6 +74,32 @@ class Palettes:
         return colors
 
     @staticmethod
+    def truth(states: np.ndarray) -> np.ndarray:
+        """
+        Maps Truth Validator states to colors.
+        0.0: Dead Correct (Grey)
+        1.0: Alive Correct (White)
+        2.0: False Positive (Red)
+        3.0: False Negative (Cyan)
+        """
+        # Default: Dead (Dark Grey)
+        colors = np.full(states.shape, '\033[38;2;60;60;60m', dtype='<U24')
+        
+        # Alive Correct (1.0) -> Bright White
+        mask_alive = (states == 1.0)
+        colors[mask_alive] = '\033[38;2;255;255;255m'
+        
+        # False Positive (2.0) -> Bright Red
+        mask_fp = (states == 2.0)
+        colors[mask_fp] = '\033[38;2;255;50;50m'
+        
+        # False Negative (3.0) -> Bright Cyan
+        mask_fn = (states == 3.0)
+        colors[mask_fn] = '\033[38;2;50;255;255m'
+        
+        return colors
+
+    @staticmethod
     def conway_diff(states: np.ndarray) -> np.ndarray:
         """
         Maps diff states to visual colors for Conway's Game of Life validation.

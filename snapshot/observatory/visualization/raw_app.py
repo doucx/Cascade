@@ -140,10 +140,8 @@ class RawTerminalApp:
     async def _render_loop(self):
         last_time = time.perf_counter()
         
-        # Target FPS
-        target_fps = 30.0
-        frame_interval = 1.0 / target_fps
-
+        # Removed target FPS cap to stress test the pipeline
+        
         while self._running:
             loop_start = time.perf_counter()
 
@@ -166,7 +164,11 @@ class RawTerminalApp:
             now = time.perf_counter()
             dt = now - last_time
             last_time = now
-            self.grid_view.matrix.decay(dt)
+            
+            # Clamp dt to prevent "time jumps" from clearing the screen instantly
+            # if a lag spike occurs. Max 0.1s physics step.
+            physics_dt = min(dt, 0.1)
+            self.grid_view.matrix.decay(physics_dt)
 
             # 4. RENDER (The heavy lifting)
             # Move cursor home
@@ -186,6 +188,8 @@ class RawTerminalApp:
 
             # 5. Telemetry & Sleep
             render_duration = time.perf_counter() - loop_start
+            
+            # Calculate FPS based on real loop time, not just render time
             fps = 1.0 / dt if dt > 0 else 0
             
             self.status_bar.set_status("FPS", f"{fps:.1f}")
@@ -194,9 +198,6 @@ class RawTerminalApp:
                 await self.aggregator.record("fps", fps)
                 await self.aggregator.record("flush_duration_ms", flush_ms)
 
-            # Smart Sleep to maintain target FPS
-            sleep_time = frame_interval - render_duration
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
-            else:
-                await asyncio.sleep(0) # Yield at least once
+            # Yield control to allow simulation tasks to run.
+            # Without a sleep delay, we run as fast as the CPU allows ("V-Sync Off")
+            await asyncio.sleep(0)

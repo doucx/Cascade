@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(demo): 修正 Matrix 渲染裁剪问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766221434.9853425, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(proto): 实现三网验证模型 (A/B/C) 与高级差分可视化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766221512.544461, "duration_ms": 0}}

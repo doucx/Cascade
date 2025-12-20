@@ -1,7 +1,7 @@
 import asyncio
 import time
 import numpy as np
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from cascade.interfaces.protocols import Connector
 from .golden_ca import GoldenLife
 
@@ -14,19 +14,24 @@ class StateValidator:
         
         # buffer[gen][agent_id] = state
         self.buffer: Dict[int, Dict[int, int]] = {}
-        # Stores the validated/truth state for each generation
-        self.truth_history: Dict[int, np.ndarray] = {}
+        
+        # History
+        # theoretical: The pure timeline derived from T0
+        self.history_theoretical: Dict[int, np.ndarray] = {}
+        # actual: What the agents actually reported
+        self.history_actual: Dict[int, np.ndarray] = {}
         
         self.total_agents = width * height
         self._running = False
         
         # Stats
-        self.errors_found = 0
+        self.absolute_errors = 0
+        self.relative_errors = 0
         self.max_gen_verified = -1
 
     async def run(self):
         self._running = True
-        print(f"⚖️  Validator active. Grid: {self.width}x{self.height}")
+        print(f"⚖️  Validator active. Grid: {self.width}x{self.height}. Dual-Truth Mode Enabled.")
         
         sub = await self.connector.subscribe("validator/report", self.on_report)
         
@@ -43,21 +48,14 @@ class StateValidator:
         """
         gen = payload['gen']
         agent_id = payload['id']
-        state = payload['state']
         
         if gen not in self.buffer:
             self.buffer[gen] = {}
             
-        # Optimization: We could store (x,y) mapping once, but payload carries it.
-        # For validation we need to map id -> (x,y) to construct the matrix.
-        # Let's trust the coords in payload for now.
-        if 'coords' in payload:
-             # We store full metadata in buffer to reconstruct grid later
-             self.buffer[gen][agent_id] = payload
+        self.buffer[gen][agent_id] = payload
 
     def _process_buffers(self):
-        # Check if any generation is complete
-        # We process generations in order.
+        # We process generations in strict order
         next_gen = self.max_gen_verified + 1
         
         if next_gen not in self.buffer:
@@ -65,57 +63,85 @@ class StateValidator:
 
         current_buffer = self.buffer[next_gen]
         if len(current_buffer) < self.total_agents:
-            # Waiting for more reports...
             return
             
-        # Complete! Let's validate.
-        print(f"[Validator] Verifying Generation {next_gen}...")
         self._verify_generation(next_gen, current_buffer)
         
-        # Cleanup
+        # Cleanup to save memory, keeping only immediate history needed for next step
         del self.buffer[next_gen]
+        # We need history_actual[gen] for verifying gen+1 relative truth, so we keep recent history
+        if next_gen - 2 in self.history_actual:
+            del self.history_actual[next_gen - 2]
+        if next_gen - 2 in self.history_theoretical:
+            del self.history_theoretical[next_gen - 2]
+            
         self.max_gen_verified = next_gen
 
     def _verify_generation(self, gen: int, reports: Dict[int, Any]):
-        # 1. Construct Actual Grid
+        # 1. Construct Actual Grid (The Report)
         actual_grid = np.zeros((self.height, self.width), dtype=np.int8)
         for r in reports.values():
             x, y = r['coords']
             actual_grid[y, x] = r['state']
             
-        # 2. Get Expected Grid
+        self.history_actual[gen] = actual_grid
+
+        # 2. Base Case: Gen 0
         if gen == 0:
-            # Gen 0 is the axiom. We set the golden reference to match it.
             self.golden.seed(actual_grid)
-            self.truth_history[0] = actual_grid
-            print("✅ Gen 0 accepted as Axiom.")
+            self.history_theoretical[0] = actual_grid
+            print("🟦 [Gen 0] Axiom Set. System Initialized.")
             return
         
-        # For Gen > 0, we must calculate expectation from Gen-1 Truth
-        prev_truth = self.truth_history.get(gen - 1)
-        if prev_truth is None:
-            print(f"❌ Missing truth for Gen {gen-1}, cannot verify Gen {gen}")
-            return
+        # 3. Validation Logic
+        
+        # --- Check A: Absolute Truth (Trajectory) ---
+        # Did we stay on the path defined by T0?
+        prev_theo = self.history_theoretical.get(gen - 1)
+        is_absolute_match = False
+        
+        if prev_theo is not None:
+            self.golden.seed(prev_theo)
+            theo_grid = self.golden.step()
+            self.history_theoretical[gen] = theo_grid
             
-        # Reset golden to prev state and step
-        self.golden.seed(prev_truth)
-        expected_grid = self.golden.step()
-        self.truth_history[gen] = expected_grid
-        
-        # 3. Compare
-        diff = actual_grid != expected_grid
-        errors = np.sum(diff)
-        
-        if errors == 0:
-            print(f"✅ Gen {gen} Verified. Perfect Match.")
+            diff_abs = np.sum(actual_grid != theo_grid)
+            if diff_abs == 0:
+                is_absolute_match = True
+            else:
+                self.absolute_errors += diff_abs
         else:
-            self.errors_found += errors
-            print(f"🚨 Gen {gen} MISMATCH! {errors} errors found.")
-            # Optional: Print diff locations
-            rows, cols = np.where(diff)
-            for r, c in zip(rows[:5], cols[:5]):
-                print(f"   - Mismatch at ({c}, {r}): Expected {expected_grid[r,c]}, Got {actual_grid[r,c]}")
-            if errors > 5: print("   ... and more.")
+            # Should not happen if processing in order
+            print(f"⚠️  Missing history for Absolute check at Gen {gen}")
+
+        # --- Check B: Relative Truth (Transition) ---
+        # Did we calculate correctly based on what we had yesterday?
+        prev_actual = self.history_actual.get(gen - 1)
+        is_relative_match = False
+        
+        if prev_actual is not None:
+            self.golden.seed(prev_actual)
+            expected_relative = self.golden.step()
+            
+            diff_rel = np.sum(actual_grid != expected_relative)
+            if diff_rel == 0:
+                is_relative_match = True
+            else:
+                self.relative_errors += diff_rel
+        else:
+             print(f"⚠️  Missing history for Relative check at Gen {gen}")
+
+        # 4. Reporting
+        if is_absolute_match:
+            print(f"✅ [Gen {gen}] PERFECT MATCH (Absolute & Relative)")
+        elif is_relative_match:
+            print(f"🟡 [Gen {gen}] DRIFT DETECTED. Logic is correct (Relative Pass), but state diverged from T0.")
+        else:
+            print(f"🔴 [Gen {gen}] LOGIC FAILURE. Transition from T{gen-1} to T{gen} is incorrect. Errors: {self.relative_errors}")
+            # Diagnostic
+            if prev_actual is not None:
+                 rows, cols = np.where(actual_grid != expected_relative)
+                 print(f"   -> First mismatch at ({cols[0]}, {rows[0]}). Agent reported {actual_grid[rows[0], cols[0]]}, Expected {expected_relative[rows[0], cols[0]]}")
 
     def stop(self):
         self._running = False

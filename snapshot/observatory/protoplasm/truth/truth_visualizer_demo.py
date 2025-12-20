@@ -1,14 +1,18 @@
 """
-truth_visualizer_demo.py - 3-Network Validation Demo
+truth_visualizer_demo.py - 3-Network Validation Demo (Fixed)
 
 This script demonstrates the "A/B/C" validation model.
 Network A: Simulated Cluster (with injected errors)
 Network B: Step Predictor (Internal to Validator)
 Network C: Absolute Truth (Internal to Validator)
 
-It directly drives the StateValidator to visualize:
-- Logic Errors (Red/Cyan): A diverges from B (Immediate computation error)
-- Drift Errors (Gold/Violet): A matches B, but diverges from C (Wrong timeline)
+Scenarios:
+1. Logic Error (FP): Sudden appearance of a block.
+   - Frame T: Red (A has it, B doesn't)
+   - Frame T+1: Gold (A has it, B predicts it, C doesn't)
+2. Logic Error (FN): Sudden disappearance of everything.
+   - Frame T: Cyan (A empty, B has life)
+   - Frame T+1: Violet (A empty, B predicts empty, C has life)
 """
 import asyncio
 import numpy as np
@@ -23,8 +27,8 @@ from observatory.visualization.palette import Palettes
 # --- Test Configuration ---
 GRID_WIDTH = 50
 GRID_HEIGHT = 25
-MAX_GENERATIONS = 300
-FRAME_DELAY = 0.1
+MAX_GENERATIONS = 200
+FRAME_DELAY = 0.05
 
 def get_glider_seed(width: int, height: int) -> np.ndarray:
     grid = np.zeros((height, width), dtype=np.int8)
@@ -46,50 +50,52 @@ async def main():
     grid_view = GridView(
         width=GRID_WIDTH,
         height=GRID_HEIGHT,
-        palette_func=Palettes.truth_diff, # New 6-color palette
+        palette_func=Palettes.truth_diff, 
         decay_per_second=0.0
     )
     status_bar = StatusBar({"Generation": 0, "Status": "Init"})
     app = TerminalApp(grid_view, status_bar)
 
-    # 3. Setup Validator (It holds Network B and C internally)
-    # We pass None for connector as we will inject state manually
+    # 3. Setup Validator
     validator = StateValidator(GRID_WIDTH, GRID_HEIGHT, connector=None, app=app)
 
     await app.start()
     try:
         # Feed Gen 0
         validator.ingest_full_state(0, seed)
-        await asyncio.sleep(1.0) # Pause to see seed
+        await asyncio.sleep(1.0) 
 
         for gen in range(1, MAX_GENERATIONS):
             # --- Step Network A ---
             grid_a = simulated_cluster.step()
             
-            # --- Inject Errors into A ---
+            # --- Inject Errors ---
+            injected = False
             
-            # Scenario 1: Logic Error (Flash in the pan) at Gen 30
-            # A single cell flips wrongly, but A continues computing correctly from that error.
-            # This causes an immediate Red/Cyan flash (Logic Error).
-            # Then, because A's state is now physically different, it will drift from C.
+            # Scenario 1: Gen 30 - The "Bunker" Injection
+            # Inject a 2x2 Block (Still Life) at (10, 10).
+            # It survives forever.
             if gen == 30:
-                # Inject a False Positive (Ghost)
-                grid_a[10, 10] = 1 
-                app.update_status("Event", "INJECT: Logic FP (Red)")
+                grid_a[10:12, 10:12] = 1
+                injected = True
+                app.update_status("Event", "INJECT: Logic FP (Red Block)")
             
-            if gen == 31:
-                 app.update_status("Event", "Result: Drift (Gold)")
+            if gen == 32:
+                 app.update_status("Event", "Result: Drift (Gold Block)")
 
-            # Scenario 2: Massive Logic Failure at Gen 100
-            # A whole block fails to compute
+            # Scenario 2: Gen 100 - The "Extinction" Event
+            # Wipe out the entire grid.
             if gen == 100:
-                grid_a[0:5, 0:5] = 0
+                grid_a.fill(0)
+                injected = True
                 app.update_status("Event", "INJECT: Mass Logic FN (Cyan)")
 
+            # CRITICAL FIX: If we modified grid_a, we MUST write it back 
+            # to the simulator so the error persists/propagates!
+            if injected:
+                simulated_cluster.seed(grid_a)
+
             # --- Validation ---
-            # We push A's state to the validator. 
-            # It compares A vs B (Relative) and A vs C (Absolute).
-            # It calculates the colors and updates the App.
             validator.ingest_full_state(gen, grid_a)
             
             # --- Render Speed Control ---

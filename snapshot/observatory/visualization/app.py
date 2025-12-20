@@ -104,8 +104,13 @@ class TerminalApp:
             last_time = time.perf_counter()
 
             while self._running:
-                # --- Batch Updates ---
+                # --- Instrumentation: Capture load before flush ---
+                updates_in_frame = len(self._frame_buffer)
+
+                # --- Batch Updates with Timing ---
+                flush_start = time.perf_counter()
                 await self._flush_buffer()
+                flush_duration_ms = (time.perf_counter() - flush_start) * 1000
 
                 # Process all pending updates from the queue (for status bar etc.)
                 queue_size = self.queue.qsize()
@@ -135,8 +140,11 @@ class TerminalApp:
 
                 avg_frame_time = sum(frame_times) / len(frame_times)
                 fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float("inf")
+                
+                # --- Update Status Bar with New Metrics ---
                 self.status_bar.set_status("FPS", f"{fps:.1f}")
-                self.status_bar.set_status("Queue", queue_size)
+                self.status_bar.set_status("Upd/Frame", f"{updates_in_frame}")
+                self.status_bar.set_status("Flush (ms)", f"{flush_duration_ms:.2f}")
 
                 # Live display is automatically refreshed by the context manager.
                 # We add a small sleep to prevent a 100% CPU busy-loop.

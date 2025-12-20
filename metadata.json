@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] style: 微调瓶颈模拟器的阻塞状态颜色为暗红色", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766223356.0991096, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(runtime/sim): 修复约束匹配并增强瓶颈模拟器的可观测性", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766223443.2338612, "duration_ms": 0}}

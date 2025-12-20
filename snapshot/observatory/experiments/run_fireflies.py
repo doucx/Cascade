@@ -18,7 +18,7 @@ from observatory.visualization.status import StatusBar
 # --- Constants ---
 GRID_SIDE = 50
 NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
-PERIOD = 3.0
+PERIOD = 6.0  # Slowed down to allow CPU to catch up with 2500 agents
 
 
 def get_neighbors(index: int, width: int, height: int) -> List[int]:
@@ -84,7 +84,8 @@ async def run_experiment(
             app.update_status("Sync (R)", f"{r_value:.3f} [{bar}]")
 
         monitor_task = asyncio.create_task(
-            monitor.run(frequency_hz=10.0, callback=monitor_callback)
+            # Reduce monitor frequency to reduce CPU load
+            monitor.run(frequency_hz=2.0, callback=monitor_callback)
         )
 
         # 3. Bridge Agent Flashes -> Grid
@@ -94,13 +95,14 @@ async def run_experiment(
             if aid is not None and app:
                 x = aid % grid_width
                 y = aid // grid_width
-                app.ingest_grid(x, y, 1.0)
+                # Use Fast Path (Direct Update) to avoid queue bottlenecks
+                app.direct_update_grid(x, y, 1.0)
 
         await connector.subscribe("firefly/flash", on_flash_visual)
         app_task = asyncio.create_task(app.start())
     else:
         # Headless mode: Monitor prints to stdout
-        monitor_task = asyncio.create_task(monitor.run(frequency_hz=10.0))
+        monitor_task = asyncio.create_task(monitor.run(frequency_hz=2.0))
 
     # --- Create Agents ---
     agent_tasks = []

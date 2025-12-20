@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(runtime): 优化 LocalBus 路由算法并重构 Fireflies 为局部耦合以支持 2500+ Agent", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766228560.3946724, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] tune(observatory): 建立渲染快速通道并实施时间膨胀策略", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766228685.0288634, "duration_ms": 0}}

@@ -31,8 +31,18 @@ class TerminalApp:
         self._render_task: asyncio.Task | None = None
 
     def ingest_grid(self, x: int, y: int, state: float):
-        """Asynchronously ingest a state update for a single cell in the grid."""
+        """
+        [Legacy] Asynchronously ingest a state update via Queue.
+        WARNING: High overhead. Use direct_update_grid for high-frequency updates.
+        """
         self.queue.put_nowait(("grid", (x, y, state)))
+
+    def direct_update_grid(self, x: int, y: int, state: float):
+        """
+        Directly updates the state matrix, bypassing the queue.
+        Safe to call from async callbacks in the same event loop.
+        """
+        self.grid_view.matrix.update(x, y, state)
 
     def update_status(self, key: str, value: Any):
         """Asynchronously update a key-value pair in the status bar."""
@@ -60,8 +70,9 @@ class TerminalApp:
 
     async def _render_loop(self):
         """The core loop that processes the queue and updates the Live display."""
+        # Reduce refresh rate to 15 FPS to save CPU for agents
         with Live(
-            self.layout, screen=True, transient=True, refresh_per_second=30
+            self.layout, screen=True, transient=True, refresh_per_second=15
         ) as live:
             frame_times = []
             last_time = time.perf_counter()

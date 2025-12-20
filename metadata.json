@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(observatory): 使用 Textual TUI 替换自定义渲染器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766213592.240512, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(observatory): 修正因渲染器重构引起的模块导入错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766213682.2211106, "duration_ms": 0}}

@@ -10,7 +10,7 @@ from cascade.spec.constraint import GlobalConstraint
 
 # New Visualization Imports
 from observatory.visualization import VisualizerApp
-from observatory.protoplasm.renderer.palette import Palettes
+from observatory.visualization.palette import Palettes
 
 # --- Configuration ---
 NUM_AGENTS = 225  # 15x15 grid

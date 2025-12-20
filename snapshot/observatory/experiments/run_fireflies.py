@@ -14,7 +14,7 @@ from observatory.monitors.convergence import ConvergenceMonitor
 
 # New Visualization Imports
 from observatory.visualization import VisualizerApp
-from observatory.protoplasm.renderer.palette import Palettes
+from observatory.visualization.palette import Palettes
 
 
 async def run_experiment(

@@ -3,7 +3,7 @@ import numpy as np
 from asyncio import Queue
 
 from observatory.visualization import VisualizerApp
-from observatory.protoplasm.renderer.palette import Palettes
+from observatory.visualization.palette import Palettes
 from observatory.protoplasm.truth.golden_ca import GoldenLife
 from observatory.protoplasm.truth import ui
 

@@ -12,16 +12,18 @@ def create_display_grid(actual: np.ndarray, theoretical: np.ndarray) -> np.ndarr
     - 2.0: False Positive (Red)
     - 3.0: False Negative (Cyan)
     """
+    # Start with a grid of 0.0s. This correctly handles the 'Match Dead' case by default.
     display_grid = np.zeros(actual.shape, dtype=np.float32)
     
-    # Correctly handle all 4 cases without overlap
+    # Define the three other mutually exclusive conditions using boolean masks
     match_alive = (actual == 1) & (theoretical == 1)
-    false_pos = (actual == 1) & (theoretical == 0)
-    false_neg = (actual == 0) & (theoretical == 1)
+    false_pos   = (actual == 1) & (theoretical == 0)
+    false_neg   = (actual == 0) & (theoretical == 1)
     
+    # Apply the state values. The order doesn't matter because the masks don't overlap.
     display_grid[match_alive] = 1.0
-    display_grid[false_pos] = 2.0
-    display_grid[false_neg] = 3.0
+    display_grid[false_pos]   = 2.0
+    display_grid[false_neg]   = 3.0
     
     return display_grid
 

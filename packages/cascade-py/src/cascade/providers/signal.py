@@ -34,7 +34,9 @@ async def _recv_task(
         return await asyncio.wait_for(future, timeout=timeout)
     except asyncio.TimeoutError:
         # Re-raise to allow Cascade's error handling to catch it
-        raise asyncio.TimeoutError(f"Timed out waiting for signal on topic '{topic}' after {timeout}s")
+        raise asyncio.TimeoutError(
+            f"Timed out waiting for signal on topic '{topic}' after {timeout}s"
+        )
     finally:
         # Crucially, unsubscribe to prevent resource leaks
         if subscription and hasattr(subscription, "unsubscribe"):

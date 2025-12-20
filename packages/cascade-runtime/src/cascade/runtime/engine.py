@@ -2,7 +2,7 @@ import sys
 import time
 import inspect
 import asyncio
-from typing import Any, Dict, Optional, Generator, Callable, List, Type, Union
+from typing import Any, Dict, Optional, Generator, Callable, List, Union
 from uuid import uuid4
 from contextlib import ExitStack
 
@@ -58,7 +58,9 @@ class Engine:
         self.bus = bus
         self.connector = connector
         # Default to InMemory factory if none provided
-        self.state_backend_factory = state_backend_factory or (lambda run_id: InMemoryStateBackend(run_id))
+        self.state_backend_factory = state_backend_factory or (
+            lambda run_id: InMemoryStateBackend(run_id)
+        )
         self.cache_backend = cache_backend
         self.resource_manager = ResourceManager(capacity=system_resources)
 
@@ -132,17 +134,19 @@ class Engine:
 
             # TCO Loop: We keep executing as long as the result is a LazyResult
             current_target = target
-            
+
             # The global stack holds "run" scoped resources
             with ExitStack() as run_stack:
                 # Register the engine's connector as a special internal resource
                 if self.connector:
                     from cascade.spec.resource import resource
+
                     @resource(name="_internal_connector", scope="run")
                     def _connector_provider():
                         yield self.connector
+
                     self.register(_connector_provider)
-                
+
                 active_resources: Dict[str, Any] = {}
 
                 while True:
@@ -150,32 +154,36 @@ class Engine:
                     with ExitStack() as step_stack:
                         # 1. Build graph for current target
                         graph = build_graph(current_target)
-                        
+
                         # 2. Setup Resources (mixed scope)
                         required_resources = self._scan_for_resources(graph)
                         self._setup_resources(
-                            required_resources, 
-                            active_resources, 
-                            run_stack, 
-                            step_stack, 
-                            run_id
+                            required_resources,
+                            active_resources,
+                            run_stack,
+                            step_stack,
+                            run_id,
                         )
 
                         # 3. Execute
                         result = await self._execute_graph(
-                            current_target, params or {}, active_resources, run_id, state_backend
+                            current_target,
+                            params or {},
+                            active_resources,
+                            run_id,
+                            state_backend,
                         )
 
                     # 4. Check for Tail Call (LazyResult)
                     if isinstance(result, (LazyResult, MappedLazyResult)):
                         current_target = result
-                        
+
                         # STATE GC: Since we are moving to a new generation (new graph),
                         # the transient state of the previous generation is no longer needed.
                         # We clear it to prevent memory leaks in infinite recursion.
                         if hasattr(state_backend, "clear"):
                             state_backend.clear()
-                            
+
                         # CRITICAL: Yield control to the event loop between TCO iterations.
                         # This allows other tasks (like the experiment timeout) to run.
                         await asyncio.sleep(0)
@@ -290,12 +298,13 @@ class Engine:
                         deferred_this_pass.append(node)
                         if node.id not in blocked_nodes:
                             from cascade.runtime.events import TaskBlocked
+
                             self.bus.publish(
                                 TaskBlocked(
                                     run_id=run_id,
                                     task_id=node.id,
                                     task_name=node.name,
-                                    reason="ConstraintViolation" # Detailed reason requires manager update
+                                    reason="ConstraintViolation",  # Detailed reason requires manager update
                                 )
                             )
                             blocked_nodes.add(node.id)
@@ -542,18 +551,18 @@ class Engine:
         def get_or_create(name: str):
             if name in active_resources:
                 return active_resources[name]
-            
+
             provider_entry = self._resource_providers.get(name)
             if not provider_entry:
                 raise NameError(f"Resource '{name}' is required but not registered.")
-            
+
             # Determine scope and func
             scope = "run"
             func = provider_entry
             if isinstance(provider_entry, ResourceDefinition):
                 scope = provider_entry.scope
                 func = provider_entry.func
-            
+
             # Recursive dependency resolution
             sig = inspect.signature(func)
             deps = {
@@ -561,18 +570,18 @@ class Engine:
                 for p_name, p in sig.parameters.items()
                 if isinstance(p.default, Inject)
             }
-            
+
             # Instantiate
             gen = func(**deps)
             instance = next(gen)
-            
+
             # Register in active dict
             active_resources[name] = instance
             self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
-            
+
             # Register teardown in appropriate stack
             target_stack = step_stack if scope == "task" else run_stack
-            
+
             def cleanup():
                 self._teardown_resource(gen, run_id, name)
                 # Important: remove from active_resources so it can be re-created if needed later

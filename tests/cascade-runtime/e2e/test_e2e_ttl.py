@@ -14,7 +14,7 @@ async def test_e2e_ttl_expiration():
     Tests that a pause constraint automatically expires after TTL.
     """
     connector = InProcessConnector()
-    
+
     # Helper to avoid complex harness logic for now
     from cascade.spec.constraint import GlobalConstraint
     from dataclasses import asdict

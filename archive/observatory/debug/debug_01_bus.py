@@ -1,9 +1,10 @@
 import asyncio
 from cascade.connectors.local import LocalBusConnector
 
+
 async def main():
     print("--- Debug 01: Raw Bus Test ---")
-    
+
     # 1. Setup
     LocalBusConnector._reset_broker_state()
     connector = LocalBusConnector()
@@ -12,7 +13,7 @@ async def main():
 
     # 2. Define a subscriber
     received = asyncio.Event()
-    
+
     async def on_message(topic, payload):
         print(f"[3] Received message on {topic}: {payload}")
         received.set()
@@ -31,8 +32,9 @@ async def main():
         print("[5] SUCCESS: Message received.")
     except asyncio.TimeoutError:
         print("[5] FAILURE: Timed out waiting for message.")
-    
+
     await connector.disconnect()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

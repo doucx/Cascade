@@ -2,6 +2,7 @@ import pytest
 import asyncio
 from cascade.connectors.local import LocalBusConnector
 
+
 @pytest.fixture
 def local_bus():
     """Provides a fresh LocalBus environment for each test."""
@@ -9,6 +10,7 @@ def local_bus():
     LocalBusConnector._reset_broker_state()
     yield
     LocalBusConnector._reset_broker_state()
+
 
 @pytest.mark.asyncio
 async def test_bus_connectivity_between_instances(local_bus):
@@ -19,23 +21,25 @@ async def test_bus_connectivity_between_instances(local_bus):
     await sub_connector.connect()
 
     received = []
+
     async def callback(topic, payload):
         received.append(payload)
 
     await sub_connector.subscribe("chat/room1", callback)
-    
+
     # Publish from the other connector
     payload = {"msg": "hello"}
     await pub_connector.publish("chat/room1", payload)
-    
+
     # Allow loop to process
     await asyncio.sleep(0.01)
-    
+
     assert len(received) == 1
     assert received[0] == payload
 
     await pub_connector.disconnect()
     await sub_connector.disconnect()
+
 
 @pytest.mark.asyncio
 async def test_retained_messages(local_bus):
@@ -50,15 +54,16 @@ async def test_retained_messages(local_bus):
     # 2. Subscribe AFTER publishing
     sub_connector = LocalBusConnector()
     await sub_connector.connect()
-    
+
     received = []
+
     async def callback(topic, payload):
         received.append((topic, payload))
 
     # This should trigger immediate delivery of the retained message
     await sub_connector.subscribe("device/+/status", callback)
-    
-    # Retained messages are delivered synchronously in our implementation, 
+
+    # Retained messages are delivered synchronously in our implementation,
     # but let's yield just in case
     await asyncio.sleep(0.01)
 
@@ -69,6 +74,7 @@ async def test_retained_messages(local_bus):
     await pub_connector.disconnect()
     await sub_connector.disconnect()
 
+
 @pytest.mark.asyncio
 async def test_wildcards_and_clearing_retain(local_bus):
     """Test wildcards (+) and clearing retained messages."""
@@ -76,6 +82,7 @@ async def test_wildcards_and_clearing_retain(local_bus):
     await connector.connect()
 
     received = []
+
     async def callback(topic, payload):
         received.append((topic, payload))
 
@@ -89,7 +96,7 @@ async def test_wildcards_and_clearing_retain(local_bus):
     await connector.publish("sensors/living/humid/v2", {"v": 50})
 
     await asyncio.sleep(0.01)
-    
+
     assert len(received) == 2
     assert received[0][0] == "sensors/kitchen/temp"
     assert received[1][0] == "sensors/living/humid/v2"
@@ -99,11 +106,13 @@ async def test_wildcards_and_clearing_retain(local_bus):
     await connector.publish("sensors/config", {"cfg": 1}, retain=True)
     # 2. Clear retain (empty payload)
     await connector.publish("sensors/config", {}, retain=True)
-    
+
     # 3. New subscriber shouldn't get anything
     received_new = []
-    async def cb_new(t, p): received_new.append(p)
-    
+
+    async def cb_new(t, p):
+        received_new.append(p)
+
     conn2 = LocalBusConnector()
     await conn2.connect()
     await conn2.subscribe("sensors/config", cb_new)

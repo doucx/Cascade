@@ -3,7 +3,6 @@ import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import TaskExecutionFinished
 from cascade.spec.constraint import GlobalConstraint
 from dataclasses import asdict
@@ -12,7 +11,9 @@ import uuid
 from .harness import InProcessConnector, MockWorkExecutor
 
 
-async def set_rate_limit(connector: InProcessConnector, scope: str, rate: str, constraint_id: str = None):
+async def set_rate_limit(
+    connector: InProcessConnector, scope: str, rate: str, constraint_id: str = None
+):
     """Helper to publish a rate limit constraint."""
     if not constraint_id:
         constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
@@ -62,24 +63,28 @@ async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
     run_task = asyncio.create_task(engine.run(workflow))
 
     # Wait for the first task to finish, confirming the engine is running and throttled
-    for _ in range(20): # Give it 2 seconds to finish the first task
+    for _ in range(20):  # Give it 2 seconds to finish the first task
         await asyncio.sleep(0.1)
         if len(spy.events_of_type(TaskExecutionFinished)) > 0:
             break
-    
+
     assert len(spy.events_of_type(TaskExecutionFinished)) >= 1, (
         "Engine did not start processing tasks under the initial slow rate limit."
     )
 
     # Now, publish a very fast rate limit using the SAME ID. This should unblock the engine.
-    await set_rate_limit(connector, scope="global", rate="100/s", constraint_id=limit_id)
+    await set_rate_limit(
+        connector, scope="global", rate="100/s", constraint_id=limit_id
+    )
 
     # The engine should now wake up and finish the remaining ~4 tasks very quickly.
     # If it's deadlocked, this await will time out.
     try:
         results = await asyncio.wait_for(run_task, timeout=1.0)
     except asyncio.TimeoutError:
-        pytest.fail("Engine deadlocked and did not respond to the updated rate limit within the timeout.")
+        pytest.fail(
+            "Engine deadlocked and did not respond to the updated rate limit within the timeout."
+        )
 
     # Final verification
     assert sorted(results) == [0, 1, 2, 3, 4]

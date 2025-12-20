@@ -81,6 +81,7 @@ async def test_startup_pause_is_respected(bus_and_spy):
     @cs.task
     def my_task():
         return "done"
+
     workflow = my_task()
 
     # ACT: Create and start the engine.
@@ -156,8 +157,7 @@ async def test_runtime_pause_interrupts_stage(bus_and_spy):
     # 3. ASSERT
     # Task B should NOT have started
     b_events = [
-        e for e in spy.events_of_type(TaskExecutionStarted)
-        if e.task_name == "task_b"
+        e for e in spy.events_of_type(TaskExecutionStarted) if e.task_name == "task_b"
     ]
     assert len(b_events) == 0, "Task B started despite global pause!"
 

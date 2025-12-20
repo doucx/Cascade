@@ -1,6 +1,6 @@
 import numpy as np
 from dataclasses import dataclass
-from typing import List, Tuple
+
 
 @dataclass
 class Color:
@@ -12,6 +12,7 @@ class Color:
         """Returns ANSI escape code for background color."""
         # Using 24-bit TrueColor: \033[48;2;R;G;Bm
         return f"\033[38;2;{self.r};{self.g};{self.b}m"
+
 
 class Palettes:
     """Predefined color palettes for simulations."""
@@ -29,9 +30,9 @@ class Palettes:
         Maps 0.0-1.0 brightness to a Firefly gradient using vectorized interpolation.
         """
         # Define color stops [R, G, B]
-        stop1 = np.array([30, 30, 40])      # Dark Blue (at brightness 0.0)
-        stop2 = np.array([200, 120, 0])     # Orange (at brightness 0.5)
-        stop3 = np.array([255, 255, 200])   # Bright Yellow (at brightness 1.0)
+        stop1 = np.array([30, 30, 40])  # Dark Blue (at brightness 0.0)
+        stop2 = np.array([200, 120, 0])  # Orange (at brightness 0.5)
+        stop3 = np.array([255, 255, 200])  # Bright Yellow (at brightness 1.0)
 
         # Prepare output arrays
         r = np.zeros_like(brightness, dtype=np.uint8)
@@ -57,7 +58,9 @@ class Palettes:
 
         # Create rich-compatible "rgb(r,g,b)" strings. This is the slowest part.
         # We can optimize if needed, but it's more readable for now.
-        return np.array([f"rgb({r_},{g_},{b_})" for r_, g_, b_ in zip(r.flat, g.flat, b.flat)]).reshape(r.shape)
+        return np.array(
+            [f"rgb({r_},{g_},{b_})" for r_, g_, b_ in zip(r.flat, g.flat, b.flat)]
+        ).reshape(r.shape)
 
     @staticmethod
     def bottleneck(states: np.ndarray) -> np.ndarray:
@@ -77,32 +80,32 @@ class Palettes:
         # Running (Bright White/Green tint)
         mask_run = states >= 0.8
         colors[mask_run] = "rgb(200,255,200)"
-        
+
         return colors
 
     @staticmethod
     def truth_diff(diff_matrix: np.ndarray) -> np.ndarray:
         """
         Maps a diff matrix to validation colors (3-Network Model).
-        
+
         0: Dead (Correct)          -> Dim Gray
         1: Alive (Correct)         -> Bright White
-        
+
         Logic Errors (vs Step Prediction):
         2: FP (Logic Ghost)        -> Bright Red
         3: FN (Logic Missing)      -> Cyan
-        
+
         Drift Errors (vs Absolute Truth):
         4: FP (Drift Ghost)        -> Gold
         5: FN (Drift Missing)      -> Violet
         """
         # Default: 0 (Dead/Correct)
         colors = np.full(diff_matrix.shape, "rgb(40,40,40)", dtype="<U18")
-        
-        colors[diff_matrix == 1] = "rgb(220,220,220)" # Alive (Correct)
-        colors[diff_matrix == 2] = "rgb(255,50,50)"   # Logic FP (Red)
-        colors[diff_matrix == 3] = "rgb(0,255,255)"   # Logic FN (Cyan)
-        colors[diff_matrix == 4] = "rgb(255,215,0)"   # Drift FP (Gold)
-        colors[diff_matrix == 5] = "rgb(238,130,238)" # Drift FN (Violet)
-        
+
+        colors[diff_matrix == 1] = "rgb(220,220,220)"  # Alive (Correct)
+        colors[diff_matrix == 2] = "rgb(255,50,50)"  # Logic FP (Red)
+        colors[diff_matrix == 3] = "rgb(0,255,255)"  # Logic FN (Cyan)
+        colors[diff_matrix == 4] = "rgb(255,215,0)"  # Drift FP (Gold)
+        colors[diff_matrix == 5] = "rgb(238,130,238)"  # Drift FN (Violet)
+
         return colors

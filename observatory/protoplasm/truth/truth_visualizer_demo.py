@@ -14,6 +14,7 @@ Scenarios:
    - Frame T: Cyan (A empty, B has life)
    - Frame T+1: Violet (A empty, B predicts empty, C has life)
 """
+
 import asyncio
 import numpy as np
 
@@ -30,6 +31,7 @@ GRID_HEIGHT = 25
 MAX_GENERATIONS = 200
 FRAME_DELAY = 0.05
 
+
 def get_glider_seed(width: int, height: int) -> np.ndarray:
     grid = np.zeros((height, width), dtype=np.int8)
     # Glider at (1,1)
@@ -38,9 +40,10 @@ def get_glider_seed(width: int, height: int) -> np.ndarray:
     grid[3, 1:4] = 1
     return grid
 
+
 async def main():
     print("🚀 Starting 3-Network Validation Demo...")
-    
+
     # 1. Network A (The "Actual" System we are simulating)
     simulated_cluster = GoldenLife(GRID_WIDTH, GRID_HEIGHT)
     seed = get_glider_seed(GRID_WIDTH, GRID_HEIGHT)
@@ -50,8 +53,8 @@ async def main():
     grid_view = GridView(
         width=GRID_WIDTH,
         height=GRID_HEIGHT,
-        palette_func=Palettes.truth_diff, 
-        decay_per_second=0.0
+        palette_func=Palettes.truth_diff,
+        decay_per_second=0.0,
     )
     status_bar = StatusBar({"Generation": 0, "Status": "Init"})
     app = TerminalApp(grid_view, status_bar)
@@ -63,15 +66,15 @@ async def main():
     try:
         # Feed Gen 0
         validator.ingest_full_state(0, seed)
-        await asyncio.sleep(1.0) 
+        await asyncio.sleep(1.0)
 
         for gen in range(1, MAX_GENERATIONS):
             # --- Step Network A ---
             grid_a = simulated_cluster.step()
-            
+
             # --- Inject Errors ---
             injected = False
-            
+
             # Scenario 1: Gen 30 - The "Bunker" Injection
             # Inject a 2x2 Block (Still Life) at (10, 10).
             # It survives forever.
@@ -79,9 +82,9 @@ async def main():
                 grid_a[10:12, 10:12] = 1
                 injected = True
                 app.update_status("Event", "INJECT: Logic FP (Red Block)")
-            
+
             if gen == 32:
-                 app.update_status("Event", "Result: Drift (Gold Block)")
+                app.update_status("Event", "Result: Drift (Gold Block)")
 
             # Scenario 2: Gen 100 - The "Extinction" Event
             # Wipe out the entire grid.
@@ -90,20 +93,21 @@ async def main():
                 injected = True
                 app.update_status("Event", "INJECT: Mass Logic FN (Cyan)")
 
-            # CRITICAL FIX: If we modified grid_a, we MUST write it back 
+            # CRITICAL FIX: If we modified grid_a, we MUST write it back
             # to the simulator so the error persists/propagates!
             if injected:
                 simulated_cluster.seed(grid_a)
 
             # --- Validation ---
             validator.ingest_full_state(gen, grid_a)
-            
+
             # --- Render Speed Control ---
             await asyncio.sleep(FRAME_DELAY)
 
     finally:
         app.stop()
         print("\n✅ Demo Finished.")
+
 
 if __name__ == "__main__":
     try:

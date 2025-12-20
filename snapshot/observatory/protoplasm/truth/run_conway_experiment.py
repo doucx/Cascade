@@ -1,50 +1,3 @@
-Excellent. We have the components; now we assemble the laboratory.
-
-I will write the experiment script that initializes the grid, spawns all the distributed agents, starts the validator, and runs the entire simulation. This script is the culmination of the "Truth Mirror" phase.
-
-## [WIP] feat(proto): Implement Conway's Game of Life experiment script
-
-### 错误分析
-无（新功能开发）。
-
-### 用户需求
-Create an executable Python script that orchestrates the entire Conway's Game of Life consistency check experiment. This script must:
-1.  Initialize a shared communication bus (`LocalBusConnector`).
-2.  Set up the `StateValidator` to monitor the experiment.
-3.  Create an initial grid state (e.g., a "Glider" pattern).
-4.  For each cell in the grid, calculate its neighbors and spawn a `conway_agent` workflow.
-5.  Run all agents and the validator concurrently on a single `Engine` instance.
-6.  Gracefully manage the lifecycle of the experiment, including startup and shutdown.
-
-### 评论
-This script represents the final assembly of our "Truth Mirror". It moves from defining individual components to orchestrating a complex, distributed system. The use of a single, highly concurrent `Engine` will also serve as a significant stress test of the runtime's ability to manage thousands of interdependent, long-running tasks. The success of this experiment will be a direct validation of Cascade's core promise: enabling reliable computation in an asynchronous, decoupled environment.
-
-### 目标
-1.  Create the file `observatory/protoplasm/truth/run_conway_experiment.py`.
-2.  Implement the logic to set up the grid, agents, and validator.
-3.  Ensure the experiment runs for a fixed duration and then cleans up all resources properly.
-
-### 基本原理
--   **Single-Engine Topology**: All agent workflows will be launched on the same `Engine` instance, sharing its resources and event loop. This is the most efficient way to simulate high-density agent populations on a single machine.
--   **Toroidal Grid Logic**: A helper function will calculate each agent's eight neighbors using modulo arithmetic to create a wrap-around grid, a standard practice in cellular automata simulations.
--   **Asynchronous Orchestration**: The script will use `asyncio.create_task` and `asyncio.gather` to manage the concurrent execution of the validator and all agent workflows. An `asyncio.wait_for` will act as a safety net to prevent the experiment from running indefinitely in case of a deadlock.
-
-### 标签
-#intent/build #flow/ready #priority/high #comp/observatory #concept/consistency #scope/core #ai/instruct #task/domain/simulation #task/object/experiment-script #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建实验运行脚本
-
-This is the final piece of the puzzle, bringing all our components together.
-
-~~~~~act
-write_file
-observatory/protoplasm/truth/run_conway_experiment.py
-~~~~~
-~~~~~python
 import asyncio
 import numpy as np
 from typing import List
@@ -170,19 +123,3 @@ if __name__ == "__main__":
         asyncio.run(run_experiment())
     except KeyboardInterrupt:
         print("\nExperiment interrupted by user.")
-~~~~~
-
-### 下一步建议
-我们已经完成了“真理之镜”的全部基础设施建设和实验编排。现在是见证成果的时刻。
-
-请执行以下命令来运行实验：
-`python -m observatory.protoplasm.truth.run_conway_experiment`
-
-我们期望看到的输出是：
-1.  启动信息。
-2.  `[Gen 0]` 被设置为公理。
-3.  随后连续打印 `✅ [Gen X] PERFECT MATCH`。
-
-如果全程都是 `PERFECT MATCH`，那就意味着 Cascade 在一个包含数千个并发任务和数十万次消息交换的复杂场景中，保持了完美的因果一致性。这将是一个巨大的成功，标志着“原基 (Protoplasm)”计划的核心目标已经达成。
-
-如果出现 `DRIFT` 或 `LOGIC FAILURE`，那我们就捕获到了一个非常宝贵的、可复现的 Bug，可以开始进行调试。

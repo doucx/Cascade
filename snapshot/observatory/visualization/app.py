@@ -96,48 +96,60 @@ class TerminalApp:
 
     async def _render_loop(self):
         """The core loop that processes the queue and updates the Live display."""
-        # Reduce refresh rate to 15 FPS to save CPU for agents
+        TARGET_FPS = 60
+        TARGET_FRAME_TIME = 1.0 / TARGET_FPS
+
+        # refresh_per_second is now just a maximum, our sleep will be more precise
         with Live(
-            self.layout, screen=True, transient=True, refresh_per_second=15
+            self.layout, screen=True, transient=True, refresh_per_second=TARGET_FPS
         ) as live:
             frame_times = []
             last_time = time.perf_counter()
 
             while self._running:
-                # --- Batch Updates ---
-                await self._flush_buffer()
+                loop_start_time = time.perf_counter()
 
-                # Process all pending updates from the queue (for status bar etc.)
+                # --- Physics & Logic Update ---
+                # Calculate dt (delta_time) for physics, based on REAL time passed
+                now = time.perf_counter()
+                delta_time = now - last_time
+                last_time = now
+
+                # Apply physics/decay to the grid using the calculated dt
+                self.grid_view.matrix.decay(delta_time)
+
+                # --- Batch Updates from Simulation ---
+                await self._flush_buffer()
+                
+                # --- Process Queued Updates (for status bar etc.) ---
                 queue_size = self.queue.qsize()
                 while not self.queue.empty():
                     try:
                         msg_type, data = self.queue.get_nowait()
-                        if msg_type == "grid":  # Legacy path
-                            x, y, state = data
-                            self.grid_view.matrix.update(x, y, state)
-                        elif msg_type == "status":
+                        if msg_type == "status":
                             key, value = data
                             self.status_bar.set_status(key, value)
                     except asyncio.QueueEmpty:
                         break
-
-                # Calculate dt (frame_time) for physics update
-                now = time.perf_counter()
-                frame_time = now - last_time
-                last_time = now
-
-                # Apply physics/decay to the grid using the calculated dt
-                self.grid_view.matrix.decay(frame_time)
-
-                frame_times.append(frame_time)
-                if len(frame_times) > 10:
+                
+                # --- FPS Calculation ---
+                frame_times.append(delta_time)
+                if len(frame_times) > TARGET_FPS: # Keep 1s of samples
                     frame_times.pop(0)
-
+                
                 avg_frame_time = sum(frame_times) / len(frame_times)
                 fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float("inf")
                 self.status_bar.set_status("FPS", f"{fps:.1f}")
-                self.status_bar.set_status("Queue", queue_size)
+                self.status_bar.set_status("Buffer", len(self._frame_buffer)) # More useful metric
 
-                # Live display is automatically refreshed by the context manager.
-                # We add a small sleep to prevent a 100% CPU busy-loop.
-                await asyncio.sleep(0.001)
+                # --- Frame Rate Capping (Game Loop Logic) ---
+                # The Live object will be refreshed implicitly at the end of the loop.
+                # We now control the timing.
+                loop_end_time = time.perf_counter()
+                elapsed = loop_end_time - loop_start_time
+                
+                sleep_duration = TARGET_FRAME_TIME - elapsed
+                if sleep_duration > 0:
+                    await asyncio.sleep(sleep_duration)
+                # If sleep_duration is negative, we've missed our frame budget.
+                # The loop will run again immediately.

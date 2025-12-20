@@ -12,16 +12,20 @@ def create_display_grid(actual: np.ndarray, theoretical: np.ndarray) -> np.ndarr
     - 2.0: False Positive (Red)
     - 3.0: False Negative (Cyan)
     """
+    # More robust implementation: explicitly define all four states.
     display_grid = np.zeros(actual.shape, dtype=np.float32)
     
-    # Correctly handle all 4 cases without overlap
+    # State Masks
+    match_dead = (actual == 0) & (theoretical == 0)
     match_alive = (actual == 1) & (theoretical == 1)
-    false_pos = (actual == 1) & (theoretical == 0)
-    false_neg = (actual == 0) & (theoretical == 1)
+    false_positive = (actual == 1) & (theoretical == 0)
+    false_negative = (actual == 0) & (theoretical == 1)
     
+    # State Assignment
+    display_grid[match_dead] = 0.0
     display_grid[match_alive] = 1.0
-    display_grid[false_pos] = 2.0
-    display_grid[false_neg] = 3.0
+    display_grid[false_positive] = 2.0
+    display_grid[false_negative] = 3.0
     
     return display_grid
 

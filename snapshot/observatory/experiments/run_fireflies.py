@@ -110,7 +110,7 @@ async def run_experiment(
                 x = aid % grid_width
                 y = aid // grid_width
                 # Use Fast Path (Direct Update) to avoid queue bottlenecks
-                app.direct_update_grid(x, y, 1.0)
+                await app.direct_update_grid(x, y, 1.0)
 
         await connector.subscribe("firefly/flash", on_flash_visual)
         app_task = asyncio.create_task(app.start())

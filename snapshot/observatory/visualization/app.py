@@ -40,10 +40,10 @@ class TerminalApp:
         """
         self.queue.put_nowait(("grid", (x, y, state)))
 
-    def direct_update_grid(self, x: int, y: int, state: float):
+    async def direct_update_grid(self, x: int, y: int, state: float):
         """
-        Adds a grid update to the frame buffer for batch processing.
-        This is extremely fast and non-blocking.
+        Asynchronously adds a grid update to the frame buffer for batch processing.
+        This is extremely fast and non-blocking from the caller's perspective.
         """
         # Acquire lock to safely add to buffer if _flush_buffer is swapping it
         async with self._flush_lock:

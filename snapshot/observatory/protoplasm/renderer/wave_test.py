@@ -82,11 +82,13 @@ async def main():
 
             # --- Generate Updates for this Tick ---
             # This loop simulates the "thundering herd"
+            # To avoid awaiting in a tight loop, we can create tasks
+            # but for this diagnostic, direct await is clearer.
             for i in range(wave_width):
                 current_pos = (scan_pos + i) % total_pixels
                 x = current_pos % grid_width
                 y = current_pos // grid_width
-                app.direct_update_grid(x, y, 1.0)
+                await app.direct_update_grid(x, y, 1.0)
             
             # Move the scanline forward and WRAP AROUND
             move_amount = math.ceil(grid_width * 2 * SIMULATION_TICK_S) # Move 2 rows per second

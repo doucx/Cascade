@@ -31,7 +31,13 @@ class TerminalApp:
         self._frame_buffer = set()  # (x, y, state)
         self._running = False
         self._render_task: asyncio.Task | None = None
-        self._flush_lock = asyncio.Lock() # Ensure _frame_buffer access is safe during swap
+        self._flush_lock = asyncio.Lock()
+
+        # --- Object Pooling: Pre-allocate NumPy arrays ---
+        max_pixels = self.grid_view.logical_width * self.grid_view.logical_height
+        self._update_coords_x = np.zeros(max_pixels, dtype=int)
+        self._update_coords_y = np.zeros(max_pixels, dtype=int)
+        self._update_states = np.zeros(max_pixels, dtype=np.float32)
 
     def ingest_grid(self, x: int, y: int, state: float):
         """
@@ -73,32 +79,48 @@ class TerminalApp:
         if self._render_task:
             self._render_task.cancel()
 
-    def _blocking_flush_logic(self, updates_set: set, matrix_ref: Any):
+    def _blocking_flush_logic(
+        self,
+        updates_set: set,
+        matrix_ref: Any,
+        coords_x_buf: np.ndarray,
+        coords_y_buf: np.ndarray,
+        states_buf: np.ndarray,
+    ):
         """
-        Synchronous, CPU-bound logic for flushing the frame buffer.
-        This function should be run in a separate thread.
+        Synchronous, CPU-bound logic that populates pre-allocated NumPy arrays
+        and calls the batch update.
         """
-        if not updates_set:
+        num_updates = len(updates_set)
+        if num_updates == 0:
             return
 
-        update_array = np.array(list(updates_set), dtype=np.float32)
+        # Instead of creating new arrays, we fill the pre-allocated ones.
+        # This is the critical change to avoid GC pressure.
+        # We use np.fromiter for a fast conversion from the set.
+        temp_array = np.fromiter(
+            (item for tpl in updates_set for item in tpl),
+            dtype=np.float32,
+            count=num_updates * 3,
+        ).reshape((num_updates, 3))
 
-        if update_array.size == 0:
-            return
+        # Populate the slices of our pre-allocated buffers
+        coords_x_buf[:num_updates] = temp_array[:, 0]
+        coords_y_buf[:num_updates] = temp_array[:, 1]
+        states_buf[:num_updates] = temp_array[:, 2]
 
-        coords_x = update_array[:, 0].astype(int)
-        coords_y = update_array[:, 1].astype(int)
-        states = update_array[:, 2]
-        
-        matrix_ref.update_batch(coords_x, coords_y, states)
+        # Use the slices for the update
+        matrix_ref.update_batch(
+            coords_x_buf[:num_updates],
+            coords_y_buf[:num_updates],
+            states_buf[:num_updates],
+        )
 
     async def _flush_buffer(self):
         """
-        Asynchronously triggers the vectorized buffer flush, offloading the
-        CPU-bound part to a thread.
+        Asynchronously triggers the buffer flush in a thread, using pre-allocated arrays.
         """
         updates_to_flush = None
-        # Atomically swap the buffer under lock
         async with self._flush_lock:
             if self._frame_buffer:
                 updates_to_flush = self._frame_buffer
@@ -106,10 +128,15 @@ class TerminalApp:
 
         if updates_to_flush:
             await asyncio.to_thread(
-                self._blocking_flush_logic, updates_to_flush, self.grid_view.matrix
+                self._blocking_flush_logic,
+                updates_to_flush,
+                self.grid_view.matrix,
+                self._update_coords_x,
+                self._update_coords_y,
+                self._update_states,
             )
-            return len(updates_to_flush) # Return the count for telemetry
-        return 0 # No updates flushed
+            return len(updates_to_flush)
+        return 0
 
 
     async def _render_loop(self):

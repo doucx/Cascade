@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(observatory): 修复 `direct_update_grid` 中的 `async with` 语法错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766232652.573511, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] perf(observatory): 实施渲染器对象池化以消除 GC 尖峰", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766232851.4349637, "duration_ms": 0}}

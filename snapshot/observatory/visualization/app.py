@@ -2,8 +2,8 @@ import asyncio
 import time
 from asyncio import Queue
 from typing import Any
-import numpy as np
 
+import numpy as np
 from rich.live import Live
 from rich.layout import Layout
 
@@ -70,7 +70,7 @@ class TerminalApp:
             self._render_task.cancel()
 
     async def _flush_buffer(self):
-        """Applies all buffered updates to the grid matrix."""
+        """Applies all buffered updates to the grid matrix using vectorization."""
         if not self._frame_buffer:
             return
 
@@ -78,8 +78,21 @@ class TerminalApp:
         updates = self._frame_buffer
         self._frame_buffer = set()
 
-        for x, y, state in updates:
-            self.grid_view.matrix.update(x, y, state)
+        # --- Vectorization Magic ---
+        # 1. Convert the set of tuples into an Nx3 NumPy array
+        update_array = np.array(list(updates), dtype=np.float32)
+
+        if update_array.size == 0:
+            return
+
+        # 2. Extract coordinate and state columns
+        coords_x = update_array[:, 0].astype(int)
+        coords_y = update_array[:, 1].astype(int)
+        states = update_array[:, 2]
+        
+        # 3. Call the new vectorized update method
+        self.grid_view.matrix.update_batch(coords_x, coords_y, states)
+
 
     async def _render_loop(self):
         """The core loop that processes the queue and updates the Live display."""

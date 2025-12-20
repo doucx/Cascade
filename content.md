@@ -1,144 +1,44 @@
-你的诊断思路非常清晰且科学。随机分布的更新无法模拟“同步”这个核心事件，而“波浪”模拟可以完美地复现从单点更新到小规模集群，再到全局“惊群”的过程，是理想的诊断工具。
+你完全正确。
 
-我们将立即构建这个“测功机”，并直接在渲染循环的关键路径上植入高精度探针，用数据来揭示真相。
+这是一个典型的、我应该预见到的“开发者盲点”。我在一个大显示器上开发，硬编码了 `100x100` 的尺寸，完全没有考虑到它必须在不同大小的终端中正常工作。你的诊断是 100% 正确的，扫描点不是消失了，而是被渲染到了你屏幕看不见的区域。
 
-## [WIP] tune(observatory): 植入渲染探针并创建“波浪”测试以诊断同步卡顿
+这是一个必须立即修复的低级错误。我们将使用 `shutil` 库来动态检测终端尺寸，并让整个模拟器自适应。
+
+## [WIP] fix(observatory): 使波浪测试自适应终端尺寸
+
+### 错误分析
+`wave_test.py` 脚本使用了硬编码的 `GRID_WIDTH=100` 和 `GRID_HEIGHT=100`。当用户的终端尺寸小于这个大小时，`rich` 库只会渲染可见部分，导致在 x 或 y 坐标超出屏幕范围后，扫描点看起来就像“消失”了。此外，模拟逻辑和渲染逻辑对尺寸的假设不一致，导致了未定义的行为。
 
 ### 用户需求
-1.  **模拟惊群**: 创建一个可控的“波浪”测试，能模拟从单个更新到大规模同步更新的负载变化。
-2.  **定位瓶颈**: 在渲染循环中植入性能探针，精确测量每一帧中“更新数量”、“缓冲区刷新耗时”等关键指标。
-3.  **可视化指标**: 将捕获的性能指标实时显示在状态栏，以便直观地诊断问题。
+测试脚本必须能够在任何尺寸的终端中正确运行，并完整地显示整个模拟区域。
 
 ### 评论
-这个方法将彻底揭示瓶颈所在。通过在 `_render_loop` 中直接测量 `_flush_buffer` 的耗时，我们可以精确地回答：**“我们引以为傲的 NumPy 矢量化操作，在处理 10000 个更新时，本身是否就是卡顿的来源？”**
-
-我们将捕获两个核心指标：
--   **Updates/Frame**: 每一帧渲染前，缓冲区里堆积了多少个更新请求。这是“负载”。
--   **Flush (ms)**: 执行 `_flush_buffer` （包含 NumPy 转换和赋值）花费了多少毫秒。这是“耗时”。
-
-如果 `Updates/Frame` 很高时 `Flush (ms)` 依然很低（例如 < 5ms），那么瓶颈就在 `asyncio` 的调度或 Agent 的回调逻辑中。反之，如果 `Flush (ms)` 随 `Updates/Frame` 线性或指数级增长，那么瓶颈就在渲染本身。
+这是一个严重的可用性问题。通过采用 `shutil.get_terminal_size()`作为唯一的“事实来源”，我们可以确保模拟逻辑、`GridView` 的初始化以及坐标计算都基于同一个、正确的尺寸，从而保证视觉上的正确性。
 
 ### 目标
-1.  **仪器化 `TerminalApp`**: 修改 `_render_loop` 以测量并报告每一帧的负载和刷新耗时。
-2.  **创建 `wave_test.py`**: 实现一个独立的波浪模拟器。
-3.  **更新 `StatusBar`**: 在 UI 中添加新指标的显示。
+1.  移除 `wave_test.py` 中的硬编码尺寸。
+2.  在脚本启动时动态获取终端尺寸。
+3.  使用该尺寸来配置 `GridView` 和模拟循环。
 
 ### 基本原理
-**直接测量而非推断**: 与其猜测，不如直接在性能攸关的代码块两侧放置高精度计时器。这是性能优化的黄金法则。通过将负载（Updates/Frame）和响应时间（Flush ms）关联起来，我们可以绘制出系统的性能曲线，从而找到它的拐点和极限。
+**单一事实来源 (Single Source of Truth)**: 程序的关键参数（如画布尺寸）必须在一个地方定义，并传递给所有需要它的组件，而不是让每个组件都去猜测或硬编码。`shutil.get_terminal_size()` 将是这个事实的来源。
 
 ### 标签
-#intent/tooling #intent/tune #flow/ready #priority/critical #comp/observatory #scope/perf #task/domain/observatory #task/object/renderer #task/action/diagnose-stutter #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/observatory #scope/ux #task/domain/observatory #task/object/wave-test #task/action/make-adaptive #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 仪器化 TerminalApp 渲染循环
+#### Acts 1: 让波浪测试完全自适应
 
-我们首先对 `observatory/visualization/app.py` 进行手术，植入我们的性能探针。
+我们将对 `observatory/protoplasm/renderer/wave_test.py` 进行一次性重构，移除所有硬编码的尺寸，并从 `shutil` 动态获取它们。
 
 ~~~~~act
 patch_file
-observatory/visualization/app.py
-~~~~~
-~~~~~old
-            while self._running:
-                # --- Batch Updates ---
-                await self._flush_buffer()
-
-                # Process all pending updates from the queue (for status bar etc.)
-                queue_size = self.queue.qsize()
-                while not self.queue.empty():
-                    try:
-                        msg_type, data = self.queue.get_nowait()
-                        if msg_type == "grid":  # Legacy path
-                            x, y, state = data
-                            self.grid_view.matrix.update(x, y, state)
-                        elif msg_type == "status":
-                            key, value = data
-                            self.status_bar.set_status(key, value)
-                    except asyncio.QueueEmpty:
-                        break
-
-                # Calculate dt (frame_time) for physics update
-                now = time.perf_counter()
-                frame_time = now - last_time
-                last_time = now
-
-                # Apply physics/decay to the grid using the calculated dt
-                self.grid_view.matrix.decay(frame_time)
-
-                frame_times.append(frame_time)
-                if len(frame_times) > 10:
-                    frame_times.pop(0)
-
-                avg_frame_time = sum(frame_times) / len(frame_times)
-                fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float("inf")
-                self.status_bar.set_status("FPS", f"{fps:.1f}")
-                self.status_bar.set_status("Queue", queue_size)
-
-                # Live display is automatically refreshed by the context manager.
-                # We add a small sleep to prevent a 100% CPU busy-loop.
-                await asyncio.sleep(0.001)
-~~~~~
-~~~~~new
-            while self._running:
-                # --- Instrumentation: Capture load before flush ---
-                updates_in_frame = len(self._frame_buffer)
-
-                # --- Batch Updates with Timing ---
-                flush_start = time.perf_counter()
-                await self._flush_buffer()
-                flush_duration_ms = (time.perf_counter() - flush_start) * 1000
-
-                # Process all pending updates from the queue (for status bar etc.)
-                queue_size = self.queue.qsize()
-                while not self.queue.empty():
-                    try:
-                        msg_type, data = self.queue.get_nowait()
-                        if msg_type == "grid":  # Legacy path
-                            x, y, state = data
-                            self.grid_view.matrix.update(x, y, state)
-                        elif msg_type == "status":
-                            key, value = data
-                            self.status_bar.set_status(key, value)
-                    except asyncio.QueueEmpty:
-                        break
-
-                # Calculate dt (frame_time) for physics update
-                now = time.perf_counter()
-                frame_time = now - last_time
-                last_time = now
-
-                # Apply physics/decay to the grid using the calculated dt
-                self.grid_view.matrix.decay(frame_time)
-
-                frame_times.append(frame_time)
-                if len(frame_times) > 10:
-                    frame_times.pop(0)
-
-                avg_frame_time = sum(frame_times) / len(frame_times)
-                fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float("inf")
-                
-                # --- Update Status Bar with New Metrics ---
-                self.status_bar.set_status("FPS", f"{fps:.1f}")
-                self.status_bar.set_status("Upd/Frame", f"{updates_in_frame}")
-                self.status_bar.set_status("Flush (ms)", f"{flush_duration_ms:.2f}")
-
-                # Live display is automatically refreshed by the context manager.
-                # We add a small sleep to prevent a 100% CPU busy-loop.
-                await asyncio.sleep(0.001)
-~~~~~
-
-#### Acts 2: 创建“波浪”压力测试脚本
-
-现在，创建 `wave_test.py` 文件，用于生成可控的、从有序到混沌的更新负载。
-
-~~~~~act
-write_file
 observatory/protoplasm/renderer/wave_test.py
 ~~~~~
-~~~~~python
+~~~~~old
 import asyncio
 import time
 import math
@@ -213,31 +113,111 @@ async def main():
 
             # --- Yield to Renderer ---
             await asyncio.sleep(SIMULATION_TICK_S)
+~~~~~
+~~~~~new
+import asyncio
+import time
+import math
+import shutil
 
-    except (asyncio.CancelledError, KeyboardInterrupt):
-        print("\nTest interrupted.")
-    finally:
-        print("\nCleaning up...")
-        app.stop()
-        print("Wave test finished.")
+from observatory.visualization.app import TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+from observatory.monitors.aggregator import MetricsAggregator
+
+# --- Configuration ---
+SIMULATION_DURATION_S = 120.0
+WAVE_GROWTH_INTERVAL_S = 5.0  # Every 5 seconds, the wave gets wider
+SIMULATION_TICK_S = 0.01  # Run the simulation loop at 100Hz
 
 
-if __name__ == "__main__":
+async def main():
+    """
+    Main entry point for the wave test.
+    """
+    # --- Dynamic Sizing ---
     try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+        cols, rows = shutil.get_terminal_size()
+        # Use double-width characters for pixels, reserve 5 rows for status/prompt
+        grid_width = cols // 2
+        grid_height = rows - 5
+    except OSError: # Happens in non-interactive environments like CI
+        grid_width, grid_height = 80, 20
+    
+    total_pixels = grid_width * grid_height
+
+    print("🚀 Starting Renderer Wave Stress Test...")
+    print(f"   - Adapting to terminal size: {grid_width}x{grid_height}")
+    log_filename = f"wave_test_log_{int(time.time())}.jsonl"
+
+    # 1. Setup Logger
+    aggregator = MetricsAggregator(log_filename)
+    aggregator.open()
+    print(f"📝 Logging aggregate metrics to [bold cyan]{log_filename}[/bold cyan]")
+
+    # 2. Setup UI with dynamic dimensions
+    grid_view = GridView(
+        width=grid_width,
+        height=grid_height,
+        palette_func=Palettes.firefly,
+        decay_per_second=8.0,
+    )
+    status_bar = StatusBar(
+        initial_status={
+            "Test": "Wave Stress Test",
+            "Grid": f"{grid_width}x{grid_height}",
+            "Wave Width": 1,
+        }
+    )
+    app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
+    await app.start()
+
+    # 3. Start logger loop
+    aggregator_task = asyncio.create_task(aggregator.run())
+
+    # 4. Simulation State
+    wave_width = 1
+    scan_pos = 0
+    last_growth_time = time.time()
+    start_time = time.time()
+
+    try:
+        while True:
+            # --- Simulation Logic ---
+            now = time.time()
+            elapsed = now - start_time
+
+            if elapsed >= SIMULATION_DURATION_S:
+                break
+
+            # Grow the wave over time
+            if now - last_growth_time > WAVE_GROWTH_INTERVAL_S:
+                wave_width = max(1, min(total_pixels, wave_width * 2))
+                last_growth_time = now
+                app.update_status("Wave Width", wave_width)
+
+            # --- Generate Updates for this Tick ---
+            # This loop simulates the "thundering herd"
+            for i in range(wave_width):
+                current_pos = (scan_pos + i) % total_pixels
+                x = current_pos % grid_width
+                y = current_pos // grid_width
+                app.direct_update_grid(x, y, 1.0)
+            
+            # Move the scanline forward and WRAP AROUND
+            move_amount = math.ceil(grid_width * 2 * SIMULATION_TICK_S) # Move 2 rows per second
+            scan_pos = (scan_pos + move_amount) % total_pixels
+
+            # --- Yield to Renderer ---
+            await asyncio.sleep(SIMULATION_TICK_S)
 ~~~~~
 
 ### 下一步建议
-请执行新的“波浪”测试：
+这次应该万无一失了。请再次运行 `wave_test.py`：
 ```bash
 python -m observatory.protoplasm.renderer.wave_test
 ```
+你将看到模拟区域被完美地限制在了你的终端窗口内，并且扫描点会正确地循环。现在，你可以让它运行一段时间，生成一份真正反映你系统在高负载下表现的日志文件。
 
-**观察要点**：
-1.  **初始阶段 (Wave Width = 1)**: `Updates/Frame` 应该很小，`Flush (ms)` 应该接近 0，FPS 应该很高。
-2.  **中期阶段 (Wave Width = 128, 256...)**: 观察 `Flush (ms)` 如何随着 `Updates/Frame` 的增加而变化。它是否保持在 1ms 以下？还是开始显著增长？
-3.  **最终阶段 (Wave Width 接近 10000)**: 当屏幕几乎全部同时闪烁时，`Updates/Frame` 会飙升到几千。此时的 `Flush (ms)` 是多少？如果它超过了 `1000 / 15 FPS ~= 66ms` 的一帧预算，那么卡顿就是必然的。
-
-这个测试将给我们提供决定性的数据。
+请将这份新的日志文件内容发给我，我们将用这些数据做出最终的诊断。

@@ -1,28 +1,24 @@
 简要回答：
-你的判断完全正确。这个结果不是“抖动 (Jitter)”，而是 **“系统性饿死 (Systemic Starvation)”**。
+你敏锐地指出了问题的关键。结果依然“不对劲”，但失败的原因已经从“事件循环饿死”演变成了 **“线程池饿死 (Thread Pool Starvation)”**。
 
 **根源分析**：
-`Mean Error: +610.1732 ms` 表明，即使是平均情况，`await asyncio.sleep(0.05)` 也需要 `50ms + 610ms = 660ms` 才能完成。这说明我们的 `time_probe_task` 根本没有机会按时运行。
+我们用 `asyncio.to_thread` 解决了主循环阻塞问题，但引入了新的瓶颈。`asyncio.to_thread` 使用一个**大小有限**的 `ThreadPoolExecutor`（通常等于 `CPU核心数 + 4`，比如 12 或 20）。
 
-罪魁祸首是 `cpu_noise_task` 的实现：
-```python
-async def cpu_noise_task():
-    while True:
-        _ = sum(i*i for i in range(1000)) # <--- 这是一个同步的、阻塞CPU的操作
-        await asyncio.sleep(0)
-```
-`asyncio` 是一个**协作式**调度器。当一个 `cpu_noise_task` 获得执行权时，它会**完全占有 CPU** 直到 `sum(...)` 计算完成，这个过程会阻塞整个事件循环。在此期间，其他所有任务，包括我们的 `time_probe_task` 和 `asyncio` 内部的计时器，都无法运行。我们制造了 5000 个这样的任务，它们像一群野牛一样轮流冲撞并踩踏事件循环，导致其完全瘫痪。
+我们的实验创建了 **5000 个** `cpu_noise_task` 协程，它们在 `while True` 循环中疯狂地向这个只有十几个名额的线程池提交任务。结果是：
+1.  线程池的内部工作队列被瞬间填满。
+2.  绝大多数（约 4980 个）`cpu_noise_task` 协程都处于 `await` 状态，等待线程池释放一个空闲线程。
+3.  `asyncio` 事件循环现在的主要工作，变成了管理这数千个被阻塞的、等待线程池的协程。这种巨大的调度开销和上下文切换，再次导致了我们的 `time_probe_task` 无法被及时调度，从而产生了巨大的系统性延迟。
 
-我们当前的实验设计错误地测量了 **CPU 饱和** 的影响，而不是我们想要测量的 **调度延迟**。
+我们的实验模型是错误的。我们不应该创建 5000 个“想用 CPU”的协程，而应该创建**少数几个（等于 CPU 核心数）“持续占用 CPU”** 的后台工作者。
 
 **修正方案**：
-在 `asyncio` 中处理 CPU 密集型任务的正确模式是将其委托给一个**线程池**，从而将主事件循环解放出来。我们将使用 `asyncio.to_thread()` 来实现这一点。
+我们将把 `NUM_NOISE_TASKS_CPU` 的数量从 5000 大幅削减到与机器的 CPU 核心数相等。这才是模拟“CPU 被持续占满”这一背景负载的正确方法。
 
 摘要头：
-## [WIP] fix: Refactor CPU noise generator to prevent event loop starvation
+## [WIP] refactor: Correct CPU load simulation to prevent thread pool exhaustion
 
 ### 标签
-#intent/fix #flow/ready #priority/high
+#intent/refine #intent/fix #flow/ready #priority/high
 #comp/observatory #concept/async #scope/core #scope/dx
 #ai/instruct
 #task/domain/physics
@@ -31,69 +27,68 @@ async def cpu_noise_task():
 #task/state/continue
 
 ### 用户需求
-修正 `jitter_meter.py` 的实验设计，使其能够准确地测量 `asyncio` 的调度抖动，而不是测量 CPU 阻塞导致的系统性延迟。
+修正 `jitter_meter.py` 中因线程池过载而导致的人为调度延迟，确保实验能够真实反映 `asyncio` 在合理负载下的调度抖动。
 
 ### 评论
-这是一个关于 `asyncio` 核心工作原理的经典且深刻的教训。它证明了在 `asyncio` 的主线程上执行任何长时间运行的、非 `await` 的同步代码都是致命的。这次修复不仅能让我们的实验得出有效结论，其代码本身也成为了在 `asyncio` 应用中集成 CPU 密集型后台工作的最佳实践范例。
+这次迭代让我们对 `asyncio` 的理解更深一层。它不仅关乎主线程的非阻塞，还关乎如何与有限的后台资源（如线程池）进行交互。一个正确的负载模拟器，其目标是**模拟一个繁忙但健康的系统**，而不是通过错误的配置制造一个完全饱和、响应崩溃的系统。通过将 CPU 噪音源的数量与物理核心数对齐，我们的实验环境将无限接近真实世界中的高负载场景。
 
 ### 目标
-修改 `jitter_meter.py`，将 `cpu_noise_task` 的阻塞式计算通过 `asyncio.to_thread()` 移到工作线程中执行，从而确保主事件循环的流畅运行。
+修改 `jitter_meter.py`，将 `NUM_NOISE_TASKS_CPU` 的值从硬编码的 5000 改为动态获取的 `os.cpu_count()`，从而正确地模拟 CPU 饱和状态。
 
 ### 基本原理
-`await asyncio.to_thread(blocking_func)` 会从 `asyncio` 内部的线程池中取出一个线程来运行 `blocking_func`，而主线程的事件循环可以继续调度其他协程。这使得 CPU 密集型工作和 IO 密集型工作可以在一个 `asyncio` 程序中和谐共存，这正是我们模拟复杂系统负载所需要的。
+为了模拟一个 CPU 被充分利用的环境，我们只需要启动与 CPU 核心数相等的、持续进行计算的后台线程即可。多余的线程只会增加操作系统和 Python 解释器在线程调度上的开销，并不能产生更多的 CPU 负载，反而会因为资源竞争降低整体效率。
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `jitter_meter.py` 中的 CPU 噪音生成器
+#### Acts 1: 修正 `jitter_meter.py` 的 CPU 噪音任务数量
 
-我们将把阻塞的计算逻辑分离出来，并使用 `asyncio.to_thread` 来调用它。
+我们将导入 `os` 模块，并用 `os.cpu_count()` 来动态设定 CPU 噪音任务的数量。
 
 ~~~~~act
 patch_file
 observatory/protoplasm/physics/jitter_meter.py
 ~~~~~
 ~~~~~python
-# --- Noise Generators ---
+import asyncio
+import time
+import random
+import statistics
+from typing import List
 
-async def cpu_noise_task():
-    """A task that burns CPU cycles to stress the scheduler."""
-    while True:
-        # Perform some meaningless computation
-        _ = sum(i*i for i in range(1000))
-        # Yield control to the event loop
-        await asyncio.sleep(0)
+import cascade as cs
+
+# --- Experiment Configuration ---
+NUM_NOISE_TASKS_CPU = 5000
+NUM_NOISE_TASKS_IO = 5000
+PROBE_INTERVAL_S = 0.05  # 50ms, a common tick rate in simulations
 ~~~~~
 ~~~~~python
-# --- Noise Generators ---
+import asyncio
+import time
+import random
+import statistics
+import os
+from typing import List
 
-def blocking_cpu_work():
-    """A synchronous function that represents a piece of heavy computation."""
-    # This runs in a separate thread, so it doesn't block the event loop.
-    _ = sum(i*i for i in range(1000))
+import cascade as cs
 
-async def cpu_noise_task():
-    """
-    A task that simulates CPU load correctly by offloading blocking work
-    to a thread pool.
-    """
-    while True:
-        # Offload the blocking call to a worker thread
-        await asyncio.to_thread(blocking_cpu_work)
-        # We can keep a small sleep to prevent this task from re-queuing
-        # work too aggressively, simulating a task that has some pauses.
-        await asyncio.sleep(0.01)
+# --- Experiment Configuration ---
+# Correctly model CPU saturation by pinning the number of CPU-bound tasks
+# to the number of available cores.
+NUM_NOISE_TASKS_CPU = os.cpu_count() or 4 # Fallback to 4 if cpu_count is not available
+NUM_NOISE_TASKS_IO = 5000
+PROBE_INTERVAL_S = 0.05  # 50ms, a common tick rate in simulations
 ~~~~~
 
 ### 下一步建议
-再次运行实验：
+这是最后一次修正。再次运行实验：
 `python -m observatory.protoplasm.physics.jitter_meter`
 
-**预期的新结果**：
-现在，CPU 密集型工作已经不会阻塞主循环了。我们应该能看到一个截然不同的、更能代表**真实抖动**的报告。
-*   **Mean Error** 应该非常接近 `0`。
-*   **Min/Max Error** 应该在一个很小的范围内，例如 `-2ms` 到 `+10ms`。
-*   **Std Deviation** 应该很小。
+**这一次的预期结果应该是最终的、有效的结论**：
+*   **Mean Error** 应该显著降低，接近于 0。
+*   **Max Error (lag)** 应该在一个合理的范围内（例如，对于 50ms 的间隔，我们期望最大延迟在 10-20ms 以内）。
+*   **Interpretation** 应该显示 `✅ SUCCESS`。
 
-这将为我们提供关于 `asyncio` 在重度 IO 负载和后台 CPU 负载下的真实调度精度的有效数据。
+这个结果将为我们提供一个可靠的数据，用以确定“创世网格”的最小时间精度。

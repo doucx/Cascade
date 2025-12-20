@@ -2,12 +2,15 @@ import asyncio
 import time
 import random
 import statistics
+import os
 from typing import List
 
 import cascade as cs
 
 # --- Experiment Configuration ---
-NUM_NOISE_TASKS_CPU = 5000
+# Correctly model CPU saturation by pinning the number of CPU-bound tasks
+# to the number of available cores.
+NUM_NOISE_TASKS_CPU = os.cpu_count() or 4 # Fallback to 4 if cpu_count is not available
 NUM_NOISE_TASKS_IO = 5000
 PROBE_INTERVAL_S = 0.05  # 50ms, a common tick rate in simulations
 EXPERIMENT_DURATION_S = 10.0

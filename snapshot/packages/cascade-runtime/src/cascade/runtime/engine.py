@@ -169,6 +169,13 @@ class Engine:
                     # 4. Check for Tail Call (LazyResult)
                     if isinstance(result, (LazyResult, MappedLazyResult)):
                         current_target = result
+                        
+                        # STATE GC: Since we are moving to a new generation (new graph),
+                        # the transient state of the previous generation is no longer needed.
+                        # We clear it to prevent memory leaks in infinite recursion.
+                        if hasattr(state_backend, "clear"):
+                            state_backend.clear()
+                            
                         # CRITICAL: Yield control to the event loop between TCO iterations.
                         # This allows other tasks (like the experiment timeout) to run.
                         await asyncio.sleep(0)

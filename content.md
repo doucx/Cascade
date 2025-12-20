@@ -1,20 +1,20 @@
 简要回答：
-分析表明脚本存在三个问题：
-1.  **内存监测失效**：由于环境中未安装 `psutil`，脚本回退到了返回 `0.0` 的空函数。
-2.  **“静默”运行**：手动实例化的 `MessageBus` 没有挂载任何日志订阅者（Subscriber），因此你看不到任何任务启动或完成的日志，无法判断 Agent 是否存活。
-3.  **并发过载**：同时启动 10,000 个 Agent 会瞬间产生巨大的 CPU 负载（用于图构建和任务调度），导致事件循环响应极慢，看起来像卡死。
+分析表明，**内存泄漏是必然的**，根源在于 `InMemoryStateBackend` 的设计缺陷。
 
-**修正方案**：
-1.  **增强内存读取**：添加读取 `/proc/self/status` 作为 Linux 环境下的无依赖回退方案，确保能读到内存数据。
-2.  **增加可观测性**：手动挂载 `HumanReadableLogSubscriber`，并将日志级别设为 `WARNING`（避免刷屏但能看到错误）或抽样打印进度。
-3.  **降低并发规模**：将 Agent 数量暂时调整为 **1,000**，以确保测试能在合理时间内完成并验证 TCO 机制。1,000 个长生不死的 Agent 足以暴露内存泄漏问题。
+1.  **泄漏源头**：`InMemoryStateBackend` 使用一个字典 (`self._results`) 永久存储所有任务的执行结果。在递归场景中，每一代都会生成新的任务 ID，并存入该字典。随着代数无限增加，字典也会无限膨胀。这就是为什么内存以恒定斜率增长（+600MB / 1000代）。
+2.  **速度分析**：每代 3 秒意味着吞吐量约为 **333 Tasks/sec**（1000个代理 / 3秒）。考虑到每个任务都涉及图构建、依赖解析、状态存储和 `asyncio` 调度，对于纯 Python 实现的解释型引擎来说，这个速度在预期范围内，但受内存膨胀引起的 GC 压力影响，速度会逐渐变慢。
+
+**解决方案**：
+必须引入 **状态垃圾回收 (State GC)** 机制。在 TCO（尾递归优化）模式下，一旦引擎决定进入下一代（即返回了一个新的 `LazyResult`），当前这一代的中间计算结果（Graph 和 Results）在逻辑上就已经完成了使命。
+
+我们将修改 `Engine`，在 TCO 循环发生“代际跳跃”时，主动清理 `StateBackend`。
 
 摘要头：
-## [WIP] fix: Enhance observability and reduce scale in recursion test
+## [WIP] fix: Implement State GC in Engine TCO loop to prevent memory leaks
 
 ### 标签
-#intent/fix #flow/ready #priority/high
-#comp/observatory #concept/memory #scope/core
+#intent/fix #intent/refine #flow/ready #priority/high
+#comp/runtime #concept/memory #concept/tco #scope/core
 #ai/instruct
 #task/domain/physics
 #task/object/recursion-tco
@@ -22,186 +22,84 @@
 #task/state/continue
 
 ### 用户需求
-1.  **修复内存监控**：在没有 `psutil` 的情况下也能获取内存数据。
-2.  **确认 Agent 状态**：通过日志输出证明 Agent 确实在递归运行。
-3.  **防止卡死**：调整测试参数以适应单线程 Python 的调度能力。
+1.  **消除内存泄漏**：确保在无限递归运行时，内存占用保持平稳，而不是线性增长。
+2.  **验证 TCO 完备性**：证明 Cascade 不仅在栈深度上支持无限递归，在堆内存管理上也能支持。
+
+### 评论
+这是一个关键的架构修正。它确立了 Cascade 运行时的一个重要语义：**TCO 边界即状态生命周期边界**。这意味着通过 `return new_workflow` 传递的数据必须是值（Values）或外部引用（Refs），而不能依赖上一代的内部临时状态。这与函数式编程中的尾调用语义是一致的。
 
 ### 目标
-修改 `recursion_test.py`，实现 Linux 原生内存读取，添加日志订阅者，并将并发数降至 1,000。
+1.  修改 `InMemoryStateBackend`，添加 `clear()` 方法。
+2.  修改 `Engine.run`，在 TCO 循环末尾调用 `state_backend.clear()`。
+3.  重新运行 `recursion_test.py` 验证修复效果。
 
 ### 基本原理
-*   **/proc/self/status**: Linux 内核提供的进程状态文件，其中 `VmRSS` 字段即为物理内存占用。
-*   **采样日志**: 我们不需要打印 1,000 个 Agent 的每一代日志，只需打印其中一个 Agent 的状态即可证明系统在运行。
+在 `Engine.run` 的 `while True` 循环中，每次迭代代表一代。当 `result` 被判定为 `LazyResult` 时，说明当前图已执行完毕，并生成了下一代的入口。此时，当前图产生的所有 `_results` 都可以安全丢弃，因为下一代的依赖已经通过 `LazyResult` 的参数（args/kwargs）捕获了（参数解析器已经将 LazyResult 解析为具体的值）。
 
 ---
 
 ### Script
 
-#### Acts 1: 增强 `recursion_test.py`
+#### Acts 1: 为 `InMemoryStateBackend` 添加清理能力
 
 ~~~~~act
-write_file
-observatory/protoplasm/physics/recursion_test.py
+patch_file
+packages/cascade-runtime/src/cascade/adapters/state/in_memory.py
 ~~~~~
 ~~~~~python
-import asyncio
-import time
-import os
-import re
-import random
-from typing import Optional
+    def get_skip_reason(self, node_id: str) -> Optional[str]:
+        return self._skipped.get(node_id)
+~~~~~
+~~~~~python
+    def get_skip_reason(self, node_id: str) -> Optional[str]:
+        return self._skipped.get(node_id)
 
-import cascade as cs
-from cascade.runtime.subscribers import HumanReadableLogSubscriber
-from cascade.common.messaging import bus as global_bus
-from cascade.common.renderers import CliRenderer
+    def clear(self) -> None:
+        """Clears all stored state. Used for garbage collection between TCO steps."""
+        self._results.clear()
+        self._skipped.clear()
+~~~~~
 
-# --- Memory Monitoring Utils ---
+#### Acts 2: 在 `Engine` 的 TCO 循环中触发清理
 
-def get_memory_mb():
-    """
-    Tries to get memory usage via psutil, then /proc/self/status (Linux),
-    then returns 0.0 if all fail.
-    """
-    # 1. Try psutil
-    try:
-        import psutil
-        process = psutil.Process(os.getpid())
-        return process.memory_info().rss / (1024 * 1024)
-    except ImportError:
-        pass
-
-    # 2. Try reading /proc/self/status (Linux specific)
-    try:
-        with open("/proc/self/status", "r") as f:
-            content = f.read()
-            # Look for "VmRSS:    1234 kB"
-            match = re.search(r"VmRSS:\s+(\d+)\s+kB", content)
-            if match:
-                return float(match.group(1)) / 1024.0
-    except FileNotFoundError:
-        pass
-
-    print("⚠️  Warning: Cannot determine memory usage (psutil missing & not on Linux?)")
-    return 0.0
-
-# --- Configuration ---
-NUM_AGENTS = 1000      # Reduced from 10,000 to ensure responsiveness
-NUM_GENERATIONS = 1000 # Total generations to simulate
-REPORT_INTERVAL = 2    # Monitor interval in seconds
-
-# --- The Recursive Agent ---
-
-def controlled_agent(agent_id: int, gen: int, limit: int):
-    """
-    A recursive agent that stops after `limit` generations.
-    """
-    # We use a task for the step to involve the Engine's scheduling machinery
-    @cs.task(name=f"step")
-    def step(v): 
-        return v + 1
-    
-    next_v = step(gen)
-    
-    # We use a task for the check/recursion to test TCO
-    @cs.task(name=f"loop")
-    def loop(v):
-        if v >= limit:
-            return v
-        return controlled_agent(agent_id, v, limit)
-        
-    return loop(next_v)
-
-# --- Experiment Orchestrator ---
-
-async def run_recursion_experiment():
-    print(f"🚀 Starting Recursion & Memory Experiment...")
-    print(f"   - Agents: {NUM_AGENTS}")
-    print(f"   - Target Generations: {NUM_GENERATIONS}")
-    
-    initial_mem = get_memory_mb()
-    print(f"Initial Memory Usage: {initial_mem:.2f} MB")
-
-    # 1. Setup Engine with Visibility
-    # We attach a subscriber to the bus so we can see if things go wrong.
-    # But we set min_level="WARNING" to avoid flooding stdout with 1000 agents' info.
-    
-    # Configure global renderer for the bus (used by subscribers)
-    global_bus.set_renderer(CliRenderer(store=global_bus.store, min_level="WARNING"))
-    
-    engine_bus = cs.MessageBus()
-    # Attach subscriber to the engine's bus
-    HumanReadableLogSubscriber(engine_bus)
-    
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=engine_bus
-    )
-
-    print(f"Starting {NUM_AGENTS} agents...")
-    start_time = time.perf_counter()
-    
-    # 2. Launch Agents
-    # We stagger the start slightly to avoid thundering herd on graph build
-    tasks = []
-    for i in range(NUM_AGENTS):
-        tasks.append(engine.run(controlled_agent(i, 0, NUM_GENERATIONS)))
-        if i % 100 == 0:
-            await asyncio.sleep(0) # Yield to event loop
-    
-    print(f"All agents scheduled. Monitoring...")
-
-    # 3. Monitor memory in a background loop
-    async def monitor_mem():
-        max_mem = initial_mem
-        while True:
-            await asyncio.sleep(REPORT_INTERVAL)
-            mem = get_memory_mb()
-            max_mem = max(max_mem, mem)
-            print(f"   [Monitor] Memory: {mem:.2f} MB (Delta: {mem - initial_mem:+.2f} MB) | Max Delta: {max_mem - initial_mem:+.2f} MB")
-
-    monitor_task = asyncio.create_task(monitor_mem())
-
-    try:
-        # Wait for all agents to finish
-        results = await asyncio.gather(*tasks)
-        print(f"\n✅ Successfully reached {NUM_GENERATIONS} generations for all {NUM_AGENTS} agents.")
-    except Exception as e:
-        print(f"\n❌ Experiment failed with error: {e}")
-        raise
-    finally:
-        monitor_task.cancel()
-
-    end_time = time.perf_counter()
-    final_mem = get_memory_mb()
-    
-    print("\n--- Recursion Stability Report ---")
-    print(f"Total Time:      {end_time - start_time:.2f} s")
-    print(f"Total Recursions: {NUM_AGENTS * NUM_GENERATIONS:,.0f}")
-    print(f"Initial Memory:   {initial_mem:.2f} MB")
-    print(f"Final Memory:     {final_mem:.2f} MB")
-    print(f"Net Leak:         {final_mem - initial_mem:+.2f} MB")
-    print("----------------------------------")
-    
-    # Check for leaks
-    # Allow some overhead for python objects, but it shouldn't be massive
-    if (final_mem - initial_mem) > 50: 
-        print("⚠️  POTENTIAL LEAK: Memory increased significantly (>50MB).")
-    else:
-        print("✅  STABLE: Memory usage remained within reasonable bounds.")
-
-if __name__ == "__main__":
-    asyncio.run(run_recursion_experiment())
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+                    # 4. Check for Tail Call (LazyResult)
+                    if isinstance(result, (LazyResult, MappedLazyResult)):
+                        current_target = result
+                        # CRITICAL: Yield control to the event loop between TCO iterations.
+                        # This allows other tasks (like the experiment timeout) to run.
+                        await asyncio.sleep(0)
+                    else:
+                        final_result = result
+                        break
+~~~~~
+~~~~~python
+                    # 4. Check for Tail Call (LazyResult)
+                    if isinstance(result, (LazyResult, MappedLazyResult)):
+                        current_target = result
+                        
+                        # STATE GC: Since we are moving to a new generation (new graph),
+                        # the transient state of the previous generation is no longer needed.
+                        # We clear it to prevent memory leaks in infinite recursion.
+                        if hasattr(state_backend, "clear"):
+                            state_backend.clear()
+                            
+                        # CRITICAL: Yield control to the event loop between TCO iterations.
+                        # This allows other tasks (like the experiment timeout) to run.
+                        await asyncio.sleep(0)
+                    else:
+                        final_result = result
+                        break
 ~~~~~
 
 ### 下一步建议
-运行修正后的测试：
-`python -m observatory.protoplasm.physics.recursion_test`
+再次运行 `python -m observatory.protoplasm.physics.recursion_test`。
 
-这次你应该能看到：
-1.  **有效的内存读数**（基于 Linux `/proc`）。
-2.  **定期的监控日志**。
-3.  **最终的成功报告**。
-
-如果脚本成功运行且 Net Leak 较小（例如 < 20MB），则证明 TCO 机制有效且无明显内存泄漏。如果内存持续上涨，我们将需要检查 `Engine` 对历史 `LazyResult` 的引用处理。
+**预期结果**：
+1.  **内存平稳**：Delta 值应该在初始增长（加载库和初始对象）后迅速稳定下来，不再随代数线性增长。
+2.  **Net Leak**：最终报告中的净泄漏应大幅降低（可能 < 5MB）。
+3.  **运行稳定性**：由于内存压力减轻，后期运行速度可能会更加稳定。

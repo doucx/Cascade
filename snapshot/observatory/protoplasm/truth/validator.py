@@ -4,13 +4,18 @@ import numpy as np
 from typing import Dict, Any, List, Optional
 from cascade.interfaces.protocols import Connector
 from .golden_ca import GoldenLife
+from .renderer import TruthRenderer
 
 class StateValidator:
-    def __init__(self, width: int, height: int, connector: Connector):
+    def __init__(self, width: int, height: int, connector: Connector, enable_ui: bool = True):
         self.width = width
         self.height = height
         self.connector = connector
         self.golden = GoldenLife(width, height)
+        
+        # UI
+        self.enable_ui = enable_ui
+        self.renderer = TruthRenderer(width, height) if enable_ui else None
         
         # buffer[gen][agent_id] = state
         self.buffer: Dict[int, Dict[int, int]] = {}
@@ -31,7 +36,10 @@ class StateValidator:
 
     async def run(self):
         self._running = True
-        print(f"⚖️  Validator active. Grid: {self.width}x{self.height}. Dual-Truth Mode Enabled.")
+        if self.renderer:
+            self.renderer.start()
+        else:
+            print(f"⚖️  Validator active. Grid: {self.width}x{self.height}. Dual-Truth Mode Enabled.")
         
         sub = await self.connector.subscribe("validator/report", self.on_report)
         
@@ -41,6 +49,8 @@ class StateValidator:
                 await asyncio.sleep(0.01)
         finally:
             await sub.unsubscribe()
+            if self.renderer:
+                self.renderer.stop()
 
     async def on_report(self, topic: str, payload: Any):
         """
@@ -132,16 +142,18 @@ class StateValidator:
              print(f"⚠️  Missing history for Relative check at Gen {gen}")
 
         # 4. Reporting
-        if is_absolute_match:
-            print(f"✅ [Gen {gen}] PERFECT MATCH (Absolute & Relative)")
-        elif is_relative_match:
-            print(f"🟡 [Gen {gen}] DRIFT DETECTED. Logic is correct (Relative Pass), but state diverged from T0.")
+        stats = {"abs": self.absolute_errors, "rel": self.relative_errors}
+
+        if self.renderer:
+            # Visualize the Diff: We compare ACTUAL vs THEORETICAL (Absolute Truth)
+            self.renderer.update_frame(gen, actual_grid, theo_grid, stats)
         else:
-            print(f"🔴 [Gen {gen}] LOGIC FAILURE. Transition from T{gen-1} to T{gen} is incorrect. Errors: {self.relative_errors}")
-            # Diagnostic
-            if prev_actual is not None:
-                 rows, cols = np.where(actual_grid != expected_relative)
-                 print(f"   -> First mismatch at ({cols[0]}, {rows[0]}). Agent reported {actual_grid[rows[0], cols[0]]}, Expected {expected_relative[rows[0], cols[0]]}")
+            if is_absolute_match:
+                print(f"✅ [Gen {gen}] PERFECT MATCH (Absolute & Relative)")
+            elif is_relative_match:
+                print(f"🟡 [Gen {gen}] DRIFT DETECTED. Logic is correct (Relative Pass), but state diverged from T0.")
+            else:
+                print(f"🔴 [Gen {gen}] LOGIC FAILURE. Transition from T{gen-1} to T{gen} is incorrect. Errors: {self.relative_errors}")
 
     def stop(self):
         self._running = False

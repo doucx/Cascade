@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(agent): 解决 conway_agent 启动时的消息竞争与解包错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766204893.8041072, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 Conway 竞态条件并集成差异可视化渲染 (修正版)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766208283.57639, "duration_ms": 0}}

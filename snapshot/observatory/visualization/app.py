@@ -11,10 +11,14 @@ class GridView(Static):
     """A widget to display the simulation grid."""
 
     grid_data = reactive(np.zeros((1, 1), dtype=np.float32))
-    palette_func = reactive(lambda x: np.full(x.shape, "black", dtype=object))
+    palette_func: reactive[Callable | None] = reactive(None)
 
     def render(self) -> str:
         """Render the grid using Rich."""
+        # Guard against rendering before palette_func is set
+        if self.palette_func is None:
+            return ""
+
         grid = self.grid_data
         colors = self.palette_func(grid)
         

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(observatory): 修正因渲染器重构引起的模块导入错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766213682.2211106, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(observatory): Resolve TypeError in Textual GridView initialization", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766213919.6507282, "duration_ms": 0}}

@@ -13,7 +13,7 @@ from observatory.monitors.logger import JsonFileLogger
 
 # Visualization
 from observatory.visualization.palette import Palettes
-from observatory.visualization.app import TerminalApp
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 
@@ -109,8 +109,9 @@ async def run_experiment(
             if aid is not None and app:
                 x = aid % grid_width
                 y = aid // grid_width
-                # Use Fast Path (Direct Update) to avoid queue bottlenecks
-                await app.direct_update_grid(x, y, 1.0)
+                # Use Fast Path (Batch Update) - Raw App expects a list of tuples
+                # Even for a single update, passing a list is the protocol.
+                await app.direct_update_grid_batch([(x, y, 1.0)])
 
         await connector.subscribe("firefly/flash", on_flash_visual)
         app_task = asyncio.create_task(app.start())

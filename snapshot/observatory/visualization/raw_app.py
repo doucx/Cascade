@@ -140,7 +140,10 @@ class RawTerminalApp:
     async def _render_loop(self):
         last_time = time.perf_counter()
         
-        # Removed target FPS cap to stress test the pipeline
+        # Cap at 60 FPS to balance smoothness and resource usage.
+        # This also reduces aliasing artifacts when render rate > physics rate.
+        target_fps = 60.0
+        frame_interval = 1.0 / target_fps
         
         while self._running:
             loop_start = time.perf_counter()
@@ -198,6 +201,12 @@ class RawTerminalApp:
                 await self.aggregator.record("fps", fps)
                 await self.aggregator.record("flush_duration_ms", flush_ms)
 
-            # Yield control to allow simulation tasks to run.
-            # Without a sleep delay, we run as fast as the CPU allows ("V-Sync Off")
-            await asyncio.sleep(0)
+            # Smart Sleep to maintain target FPS
+            render_duration = time.perf_counter() - loop_start
+            sleep_time = frame_interval - render_duration
+            
+            if sleep_time > 0:
+                await asyncio.sleep(sleep_time)
+            else:
+                # If we missed the frame deadline, just yield to let others run
+                await asyncio.sleep(0)

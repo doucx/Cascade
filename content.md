@@ -1,110 +1,41 @@
-**分析**：
+这是一个非常敏锐的观察。
 
-测试结果实际上**非常成功**，我们解决了核心的性能问题，但由于过于保守的设置导致了视觉上的副作用。
+**闪烁原因分析**：
+这种“锯齿状闪烁”（1.0 -> 0.9 -> 1.0）是由 **模拟频率（100Hz）与渲染频率（200Hz+）不匹配** 造成的。
+1.  **T=0ms**: 模拟器将像素设为 1.0。
+2.  **T=5ms**: 渲染器运行一帧，应用物理衰减，像素变为 0.95。屏幕变暗。
+3.  **T=10ms**: 模拟器再次运行，再次将像素设为 1.0（因为波浪还没移走）。屏幕瞬间变亮。
 
-1.  **性能胜利**：日志显示 `flush_duration_ms` 从之前的 **30ms+ 尖峰** 稳定到了 **~0.4ms**。这是两个数量级的提升！说明主线程的 GIL 争用问题已彻底解决。
-2.  **FPS 锁定**：日志显示 FPS 稳定在 **29.4** 左右。这是因为我在 `RawTerminalApp` 中硬编码了 `target_fps = 30.0`。
-3.  **消失的渐暗效果**：这就是 30 FPS 锁定的副作用。
-    *   在 `wave_test` 中，衰减率 (`decay_per_second`) 设置为 **8.0**。
-    *   在 30 FPS 下，每帧衰减量为 $8.0 / 30 \approx 0.27$。
-    *   这意味着一个全亮的像素 (1.0) 只需要 **不到 4 帧** (0.13秒) 就会完全变黑。
-    *   在人眼看来，这不再是“渐暗”，而是瞬间的“闪烁”或“消失”。
+这在波浪测试（持续发光物体）中很明显，但在**萤火虫实验（瞬时脉冲）**中不会成为问题，因为萤火虫只会触发一次 1.0，随后就应该自然衰减。
 
-**解决方案**：
+因此，这个现象不影响我们将其部署到主实验中。为了平衡视觉效果和 CPU 占用，我们将给 `RawTerminalApp` 设置一个合理的 **60 FPS** 上限（既流畅又不会产生过度的时间混叠）。
 
-我们需要**解除 FPS 锁**。对于压力测试，我们应该让渲染器全速运行（"V-Sync OFF"）。当 FPS 提升到 100+ 时，每帧的衰减量会变小，动画的连续性就会恢复，丝滑的彗星尾巴效果将重现。
-
-同时，为了防止在极高帧率下的除零错误或时间跳跃，我们会给 `dt` 增加一个安全钳位。
-
-## [WIP] tune(observatory): 解除渲染器 FPS 锁定以恢复高频物理动态
+## [WIP] tune(observatory): 将 RawTerminalApp 集成至萤火虫实验并实施 60FPS 软限制
 
 ### 用户需求
-恢复波浪测试中的平滑渐暗效果，并验证渲染管线的极限吞吐量。
+1.  将经过验证的高性能 `RawTerminalApp` 应用到核心实验脚本 `run_fireflies.py` 中。
+2.  解决全速渲染带来的闪烁和资源浪费问题，实施 60 FPS 的软锁定。
 
 ### 评论
-当前的 30 FPS 限制虽然节省了 CPU，但对于高动态场景（如 8.0/s 的极速衰减）来说采样率过低，导致了严重的视觉混叠（Aliasing）。我们需要释放“裸金属”渲染器的全部潜力。
+我们已经在沙盒中验证了“裸金属渲染”的威力。现在是时候将其武器化了。将 FPS 限制在 60 可以消除大部分由模拟/渲染频率差引起的视觉伪影，同时保证人眼的流畅感。
 
 ### 目标
-1.  修改 `RawTerminalApp`，移除目标 FPS 等待逻辑，仅保留最小的 `asyncio.sleep(0)` 以让渡控制权。
-2.  增加 `dt` 钳位逻辑，防止因为系统卡顿（大 `dt`）导致物理计算一步归零。
+1.  修改 `RawTerminalApp`，重新引入 `target_fps` 控制逻辑，默认 60。
+2.  修改 `run_fireflies.py`，替换旧的 `TerminalApp` 为 `RawTerminalApp`。
+3.  清理 `wave_test.py` 中的实验性导入。
 
 ### 标签
-#intent/tune #flow/ready #priority/high #comp/observatory #concept/ui #scope/perf #ai/instruct #task/domain/visualization #task/object/raw-renderer #task/action/uncap-fps #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/observatory #concept/ui #scope/app #ai/instruct #task/domain/visualization #task/object/firefly-experiment #task/action/integrate #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 解除 RawTerminalApp 的速度限制
+#### Acts 1: 在 RawTerminalApp 中实施 60 FPS 限制
 
 ~~~~~act
 patch_file
 observatory/visualization/raw_app.py
-~~~~~
-~~~~~python
-    async def _render_loop(self):
-        last_time = time.perf_counter()
-        
-        # Target FPS
-        target_fps = 30.0
-        frame_interval = 1.0 / target_fps
-
-        while self._running:
-            loop_start = time.perf_counter()
-
-            # 1. Process Updates
-            flush_start = time.perf_counter()
-            updates_count = await self._flush_buffer()
-            flush_ms = (time.perf_counter() - flush_start) * 1000
-
-            # 2. Process Queue (Status)
-            while not self.queue.empty():
-                try:
-                    msg_type, data = self.queue.get_nowait()
-                    if msg_type == "status":
-                        k, v = data
-                        self.status_bar.set_status(k, v)
-                except asyncio.QueueEmpty:
-                    break
-
-            # 3. Physics Step
-            now = time.perf_counter()
-            dt = now - last_time
-            last_time = now
-            self.grid_view.matrix.decay(dt)
-
-            # 4. RENDER (The heavy lifting)
-            # Move cursor home
-            output_buffer = bytearray(CURSOR_HOME)
-            
-            # Get Grid Bytes
-            grid_bytes = self.grid_view.render_frame_buffer()
-            output_buffer.extend(grid_bytes)
-            
-            # Get Status Bytes
-            status_bytes = self._render_status_bar()
-            output_buffer.extend(status_bytes)
-            
-            # WRITE TO STDOUT (Atomic-ish)
-            self._stdout.write(output_buffer)
-            self._stdout.flush()
-
-            # 5. Telemetry & Sleep
-            render_duration = time.perf_counter() - loop_start
-            fps = 1.0 / dt if dt > 0 else 0
-            
-            self.status_bar.set_status("FPS", f"{fps:.1f}")
-            
-            if self.aggregator:
-                await self.aggregator.record("fps", fps)
-                await self.aggregator.record("flush_duration_ms", flush_ms)
-
-            # Smart Sleep to maintain target FPS
-            sleep_time = frame_interval - render_duration
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
-            else:
-                await asyncio.sleep(0) # Yield at least once
 ~~~~~
 ~~~~~python
     async def _render_loop(self):
@@ -117,53 +48,28 @@ observatory/visualization/raw_app.py
 
             # 1. Process Updates
             flush_start = time.perf_counter()
-            updates_count = await self._flush_buffer()
-            flush_ms = (time.perf_counter() - flush_start) * 1000
+~~~~~
+~~~~~python
+    async def _render_loop(self):
+        last_time = time.perf_counter()
+        
+        # Cap at 60 FPS to balance smoothness and resource usage.
+        # This also reduces aliasing artifacts when render rate > physics rate.
+        target_fps = 60.0
+        frame_interval = 1.0 / target_fps
+        
+        while self._running:
+            loop_start = time.perf_counter()
 
-            # 2. Process Queue (Status)
-            while not self.queue.empty():
-                try:
-                    msg_type, data = self.queue.get_nowait()
-                    if msg_type == "status":
-                        k, v = data
-                        self.status_bar.set_status(k, v)
-                except asyncio.QueueEmpty:
-                    break
+            # 1. Process Updates
+            flush_start = time.perf_counter()
+~~~~~
 
-            # 3. Physics Step
-            now = time.perf_counter()
-            dt = now - last_time
-            last_time = now
-            
-            # Clamp dt to prevent "time jumps" from clearing the screen instantly
-            # if a lag spike occurs. Max 0.1s physics step.
-            physics_dt = min(dt, 0.1)
-            self.grid_view.matrix.decay(physics_dt)
-
-            # 4. RENDER (The heavy lifting)
-            # Move cursor home
-            output_buffer = bytearray(CURSOR_HOME)
-            
-            # Get Grid Bytes
-            grid_bytes = self.grid_view.render_frame_buffer()
-            output_buffer.extend(grid_bytes)
-            
-            # Get Status Bytes
-            status_bytes = self._render_status_bar()
-            output_buffer.extend(status_bytes)
-            
-            # WRITE TO STDOUT (Atomic-ish)
-            self._stdout.write(output_buffer)
-            self._stdout.flush()
-
-            # 5. Telemetry & Sleep
-            render_duration = time.perf_counter() - loop_start
-            
-            # Calculate FPS based on real loop time, not just render time
-            fps = 1.0 / dt if dt > 0 else 0
-            
-            self.status_bar.set_status("FPS", f"{fps:.1f}")
-            
+~~~~~act
+patch_file
+observatory/visualization/raw_app.py
+~~~~~
+~~~~~python
             if self.aggregator:
                 await self.aggregator.record("fps", fps)
                 await self.aggregator.record("flush_duration_ms", flush_ms)
@@ -172,12 +78,121 @@ observatory/visualization/raw_app.py
             # Without a sleep delay, we run as fast as the CPU allows ("V-Sync Off")
             await asyncio.sleep(0)
 ~~~~~
+~~~~~python
+            if self.aggregator:
+                await self.aggregator.record("fps", fps)
+                await self.aggregator.record("flush_duration_ms", flush_ms)
+
+            # Smart Sleep to maintain target FPS
+            render_duration = time.perf_counter() - loop_start
+            sleep_time = frame_interval - render_duration
+            
+            if sleep_time > 0:
+                await asyncio.sleep(sleep_time)
+            else:
+                # If we missed the frame deadline, just yield to let others run
+                await asyncio.sleep(0)
+~~~~~
+
+#### Acts 2: 升级 run_fireflies.py
+
+我们需要将 `TerminalApp` 替换为 `RawTerminalApp`，并使用新的批量更新 API (`direct_update_grid_batch`) 来处理可视化信号，以获得最大性能。
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+# Visualization
+from observatory.visualization.palette import Palettes
+from observatory.visualization.app import TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+~~~~~
+~~~~~python
+# Visualization
+from observatory.visualization.palette import Palettes
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+~~~~~
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+        # 3. Bridge Agent Flashes -> Grid
+        # Agents now also publish to "firefly/flash" for the visualizer/monitor
+        async def on_flash_visual(topic: str, payload: Dict[str, Any]):
+            aid = payload.get("agent_id")
+            if aid is not None and app:
+                x = aid % grid_width
+                y = aid // grid_width
+                # Use Fast Path (Direct Update) to avoid queue bottlenecks
+                await app.direct_update_grid(x, y, 1.0)
+
+        await connector.subscribe("firefly/flash", on_flash_visual)
+        app_task = asyncio.create_task(app.start())
+~~~~~
+~~~~~python
+        # 3. Bridge Agent Flashes -> Grid
+        # Agents now also publish to "firefly/flash" for the visualizer/monitor
+        async def on_flash_visual(topic: str, payload: Dict[str, Any]):
+            aid = payload.get("agent_id")
+            if aid is not None and app:
+                x = aid % grid_width
+                y = aid // grid_width
+                # Use Fast Path (Batch Update) - Raw App expects a list of tuples
+                # Even for a single update, passing a list is the protocol.
+                await app.direct_update_grid_batch([(x, y, 1.0)])
+
+        await connector.subscribe("firefly/flash", on_flash_visual)
+        app_task = asyncio.create_task(app.start())
+~~~~~
+
+#### Acts 3: 恢复 Wave Test 的导入
+
+将 `wave_test.py` 中的别名导入改回明确的导入，保持代码整洁。
+
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/wave_test.py
+~~~~~
+~~~~~python
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+from observatory.monitors.aggregator import MetricsAggregator
+~~~~~
+~~~~~python
+from observatory.visualization.raw_app import RawTerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+from observatory.monitors.aggregator import MetricsAggregator
+~~~~~
+
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/wave_test.py
+~~~~~
+~~~~~python
+            "Wave Width": 1,
+        }
+    )
+    app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
+    await app.start()
+~~~~~
+~~~~~python
+            "Wave Width": 1,
+        }
+    )
+    app = RawTerminalApp(grid_view, status_bar, aggregator=aggregator)
+    await app.start()
+~~~~~
 
 ### 下一步建议
-运行 `renderer/wave_test.py`。
-这一次，你将看到真正的性能极限。
-- 渐暗效果应该会非常平滑。
-- FPS 应该会根据你的终端仿真器吞吐量飙升（可能到 100~500+ FPS）。
-- `flush_duration_ms` 应该保持极低。
-
-如果这次验证通过，我们就完成了对 Observatory 可视化层的彻底重构，可以将其应用回 `run_fireflies.py`。
+现在，你可以运行真正的 `observatory.experiments.run_fireflies` 了。
+你应该会看到一个**非常流畅**、**色彩正确**且**CPU占用极低**的 2500 节点同步模拟。这是我们基础设施工程的一个里程碑。

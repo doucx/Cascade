@@ -3,7 +3,7 @@ import time
 import math
 import shutil
 
-from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.raw_app import RawTerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 from observatory.visualization.palette import Palettes
@@ -53,7 +53,7 @@ async def main():
             "Wave Width": 1,
         }
     )
-    app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
+    app = RawTerminalApp(grid_view, status_bar, aggregator=aggregator)
     await app.start()
 
     # 3. Start logger loop

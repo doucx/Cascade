@@ -4,6 +4,7 @@ from typing import Callable
 
 from rich.console import Console, ConsoleOptions, RenderResult
 from rich.segment import Segment
+from rich.control import Control
 from rich.style import Style
 
 # Re-using the matrix logic from protoplasm as it's solid
@@ -59,7 +60,8 @@ class GridView:
             # Since `colors` is a numpy array of strings, this loop is tight.
             row_content = "".join(f"{code}██" for code in colors[y])
             
-            # Yield a single Segment for the entire row, plus the reset code.
-            # Rich will output this raw text directly to the terminal.
-            yield Segment(row_content + reset)
+            # Yield a Control object.
+            # Rich treats Control objects as having 0 width and does NOT wrap them.
+            # This allows our long ANSI string to pass through to the terminal intact.
+            yield Control(row_content + reset)
             yield Segment.line()

@@ -6,6 +6,7 @@ from observatory.visualization.app import TerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 from observatory.visualization.palette import Palettes
+from observatory.monitors.aggregator import MetricsAggregator
 
 # --- Configuration ---
 GRID_WIDTH = 100
@@ -21,8 +22,14 @@ async def main():
     Main entry point for the wave test.
     """
     print("🚀 Starting Renderer Wave Stress Test...")
+    log_filename = f"wave_test_log_{int(time.time())}.jsonl"
 
-    # 1. Setup UI
+    # 1. Setup Logger
+    aggregator = MetricsAggregator(log_filename)
+    aggregator.open()
+    print(f"📝 Logging aggregate metrics to [bold cyan]{log_filename}[/bold cyan]")
+
+    # 2. Setup UI
     grid_view = GridView(
         width=GRID_WIDTH,
         height=GRID_HEIGHT,
@@ -35,10 +42,13 @@ async def main():
             "Wave Width": 1,
         }
     )
-    app = TerminalApp(grid_view, status_bar)
+    app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
     await app.start()
 
-    # 2. Simulation State
+    # 3. Start logger loop
+    aggregator_task = asyncio.create_task(aggregator.run())
+
+    # 4. Simulation State
     wave_width = 1
     scan_pos = 0
     last_growth_time = time.time()
@@ -67,8 +77,9 @@ async def main():
                 y = current_pos // GRID_WIDTH
                 app.direct_update_grid(x, y, 1.0)
             
-            # Move the scanline forward
-            scan_pos += math.ceil(GRID_WIDTH * 2 * SIMULATION_TICK_S) # Move 2 rows per second
+            # Move the scanline forward and WRAP AROUND
+            move_amount = math.ceil(GRID_WIDTH * 2 * SIMULATION_TICK_S) # Move 2 rows per second
+            scan_pos = (scan_pos + move_amount) % TOTAL_PIXELS
 
             # --- Yield to Renderer ---
             await asyncio.sleep(SIMULATION_TICK_S)
@@ -78,6 +89,9 @@ async def main():
     finally:
         print("\nCleaning up...")
         app.stop()
+        aggregator.close()
+        aggregator_task.cancel()
+        await asyncio.gather(aggregator_task, return_exceptions=True)
         print("Wave test finished.")
 
 

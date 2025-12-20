@@ -1,122 +1,172 @@
-你的诊断思路非常清晰且科学。随机分布的更新无法模拟“同步”这个核心事件，而“波浪”模拟可以完美地复现从单点更新到小规模集群，再到全局“惊群”的过程，是理想的诊断工具。
+好的，我理解了。你发现了两个关键问题：
+1.  **Bug**: 我的波浪模拟器逻辑有误，扫描点没有正确地循环。
+2.  **需求**: 需要一个更复杂的日志系统，它能基于滑动窗口计算并输出平均指标，以便平滑噪声，观察趋势。
 
-我们将立即构建这个“测功机”，并直接在渲染循环的关键路径上植入高精度探针，用数据来揭示真相。
+这表明我们需要一个更专业的“遥测仪器”。我将立即为你构建它，并修复模拟器的 bug。
 
-## [WIP] tune(observatory): 植入渲染探针并创建“波浪”测试以诊断同步卡顿
+## [WIP] fix(observatory): 修复波浪循环并实现滑动窗口指标聚合器
+
+### 错误分析
+`wave_test.py` 中的 `scan_pos` 变量一直在递增，没有在达到 `TOTAL_PIXELS` 时归零。这导致扫描点在完成一次全屏扫描后，就跑到了数组范围之外，因此在屏幕上“消失”。这是一个简单的模运算 (`%`) 遗漏。
 
 ### 用户需求
-1.  **模拟惊群**: 创建一个可控的“波浪”测试，能模拟从单个更新到大规模同步更新的负载变化。
-2.  **定位瓶颈**: 在渲染循环中植入性能探针，精确测量每一帧中“更新数量”、“缓冲区刷新耗时”等关键指标。
-3.  **可视化指标**: 将捕获的性能指标实时显示在状态栏，以便直观地诊断问题。
+1.  修复 `wave_test.py` 中的扫描点循环 bug。
+2.  创建一个新的日志记录器 `MetricsAggregator`，它能：
+    -   在内存中收集一秒内的所有指标数据（FPS, Flush ms, Upd/Frame）。
+    -   每秒钟计算一次这些数据的统计信息（平均值、最大值、最小值、总数）。
+    -   将这些聚合后的统计数据作为单行 JSON 写入日志文件。
 
 ### 评论
-这个方法将彻底揭示瓶颈所在。通过在 `_render_loop` 中直接测量 `_flush_buffer` 的耗时，我们可以精确地回答：**“我们引以为傲的 NumPy 矢量化操作，在处理 10000 个更新时，本身是否就是卡顿的来源？”**
-
-我们将捕获两个核心指标：
--   **Updates/Frame**: 每一帧渲染前，缓冲区里堆积了多少个更新请求。这是“负载”。
--   **Flush (ms)**: 执行 `_flush_buffer` （包含 NumPy 转换和赋值）花费了多少毫秒。这是“耗时”。
-
-如果 `Updates/Frame` 很高时 `Flush (ms)` 依然很低（例如 < 5ms），那么瓶颈就在 `asyncio` 的调度或 Agent 的回调逻辑中。反之，如果 `Flush (ms)` 随 `Updates/Frame` 线性或指数级增长，那么瓶颈就在渲染本身。
+这个滑动窗口聚合器是一个强大的诊断工具。瞬时的 `Flush (ms)` 可能会因为事件循环的调度抖动而出现巨大噪声（例如，一帧是 0.1ms，下一帧是 50ms）。通过记录每秒的**平均值**和**最大值**，我们可以过滤掉这种噪声，清晰地看到系统在不同负载下的**真实性能趋势**。这将为我们提供最终诊断所需的、高质量的数据。
 
 ### 目标
-1.  **仪器化 `TerminalApp`**: 修改 `_render_loop` 以测量并报告每一帧的负载和刷新耗时。
-2.  **创建 `wave_test.py`**: 实现一个独立的波浪模拟器。
-3.  **更新 `StatusBar`**: 在 UI 中添加新指标的显示。
+1.  创建一个新的 `observatory/monitors/aggregator.py` 文件，并实现 `MetricsAggregator` 类。
+2.  将 `MetricsAggregator` 集成到 `TerminalApp` 的渲染循环中。
+3.  修复 `wave_test.py` 中的循环 bug，并让它使用新的聚合器。
 
 ### 基本原理
-**直接测量而非推断**: 与其猜测，不如直接在性能攸关的代码块两侧放置高精度计时器。这是性能优化的黄金法则。通过将负载（Updates/Frame）和响应时间（Flush ms）关联起来，我们可以绘制出系统的性能曲线，从而找到它的拐点和极限。
+**信号处理**: 我们正在从处理“原始信号”（每帧的指标）转向处理“降噪后的信号”（每秒的统计数据）。这在所有工程和科学领域都是分析动态系统的标准方法。`MetricsAggregator` 本质上是一个用于性能遥测的低通滤波器。
 
 ### 标签
-#intent/tooling #intent/tune #flow/ready #priority/critical #comp/observatory #scope/perf #task/domain/observatory #task/object/renderer #task/action/diagnose-stutter #task/state/continue
+#intent/fix #intent/tooling #flow/ready #priority/high #comp/observatory #scope/dx #task/domain/observatory #task/object/telemetry #task/action/aggregate-metrics #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 仪器化 TerminalApp 渲染循环
+#### Acts 1: 创建滑动窗口指标聚合器
 
-我们首先对 `observatory/visualization/app.py` 进行手术，植入我们的性能探针。
+我们首先创建这个新的、更智能的日志记录器。
+
+~~~~~act
+write_file
+observatory/monitors/aggregator.py
+~~~~~
+~~~~~python
+import asyncio
+import time
+import json
+import numpy as np
+from collections import defaultdict
+from typing import IO
+
+
+class MetricsAggregator:
+    """
+    Collects high-frequency metrics and logs their aggregate statistics
+    (avg, max, min, count) at a fixed interval.
+    """
+
+    def __init__(self, filename: str, interval_s: float = 1.0):
+        self.filename = filename
+        self.interval = interval_s
+        self._file: IO | None = None
+        self._buffer = defaultdict(list)
+        self._lock = asyncio.Lock()
+        self._next_flush_time = time.time() + self.interval
+
+    def open(self):
+        """Opens the log file."""
+        self._file = open(self.filename, "w", encoding="utf-8")
+
+    def close(self):
+        """Closes the log file."""
+        if self._file:
+            # Flush any remaining data before closing
+            self._flush_and_log(force=True)
+            self._file.close()
+            self._file = None
+
+    async def record(self, key: str, value: float):
+        """Records a single metric data point."""
+        async with self._lock:
+            self._buffer[key].append(value)
+
+    def _flush_and_log(self, force: bool = False):
+        now = time.time()
+        if not force and now < self._next_flush_time:
+            return
+
+        # --- Critical Section ---
+        # Atomically swap buffer to minimize lock time
+        # Note: In asyncio, lock isn't strictly needed for this part if there are no awaits,
+        # but it's good practice for clarity and future-proofing.
+        buffer_to_process = self._buffer
+        self._buffer = defaultdict(list)
+        # --- End Critical Section ---
+        
+        if not self._file or not buffer_to_process:
+            self._next_flush_time = now + self.interval
+            return
+            
+        stats = {"ts": now}
+        for key, values in buffer_to_process.items():
+            if not values:
+                continue
+            
+            arr = np.array(values)
+            stats[key] = {
+                "avg": np.mean(arr),
+                "max": np.max(arr),
+                "min": np.min(arr),
+                "sum": np.sum(arr),
+                "count": len(values),
+            }
+        
+        json.dump(stats, self._file, default=float)
+        self._file.write("\n")
+        self._file.flush()
+
+        self._next_flush_time = now + self.interval
+
+    async def run(self):
+        """The main loop that periodically flushes the buffer."""
+        while self._file is not None:
+            self._flush_and_log()
+            await asyncio.sleep(self.interval / 10) # Wake up 10x per interval for responsiveness
+~~~~~
+
+#### Acts 2: 将聚合器集成到 TerminalApp
+
+现在，让 `TerminalApp` 使用这个新工具。
 
 ~~~~~act
 patch_file
 observatory/visualization/app.py
 ~~~~~
 ~~~~~old
-            while self._running:
-                # --- Batch Updates ---
-                await self._flush_buffer()
+class TerminalApp:
+    """
+    The main application class for managing the live terminal UI.
+    It orchestrates the layout and handles data ingestion and rendering loop.
+    """
 
-                # Process all pending updates from the queue (for status bar etc.)
-                queue_size = self.queue.qsize()
-                while not self.queue.empty():
-                    try:
-                        msg_type, data = self.queue.get_nowait()
-                        if msg_type == "grid":  # Legacy path
-                            x, y, state = data
-                            self.grid_view.matrix.update(x, y, state)
-                        elif msg_type == "status":
-                            key, value = data
-                            self.status_bar.set_status(key, value)
-                    except asyncio.QueueEmpty:
-                        break
+    def __init__(self, grid_view: GridView, status_bar: StatusBar):
+        self.grid_view = grid_view
+        self.status_bar = status_bar
 
-                # Calculate dt (frame_time) for physics update
-                now = time.perf_counter()
-                frame_time = now - last_time
-                last_time = now
-
-                # Apply physics/decay to the grid using the calculated dt
-                self.grid_view.matrix.decay(frame_time)
-
-                frame_times.append(frame_time)
-                if len(frame_times) > 10:
-                    frame_times.pop(0)
-
-                avg_frame_time = sum(frame_times) / len(frame_times)
-                fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float("inf")
-                self.status_bar.set_status("FPS", f"{fps:.1f}")
-                self.status_bar.set_status("Queue", queue_size)
-
-                # Live display is automatically refreshed by the context manager.
-                # We add a small sleep to prevent a 100% CPU busy-loop.
-                await asyncio.sleep(0.001)
+        self.layout = Layout()
 ~~~~~
 ~~~~~new
-            while self._running:
-                # --- Instrumentation: Capture load before flush ---
-                updates_in_frame = len(self._frame_buffer)
+class TerminalApp:
+    """
+    The main application class for managing the live terminal UI.
+    It orchestrates the layout and handles data ingestion and rendering loop.
+    """
 
-                # --- Batch Updates with Timing ---
-                flush_start = time.perf_counter()
-                await self._flush_buffer()
-                flush_duration_ms = (time.perf_counter() - flush_start) * 1000
+    def __init__(self, grid_view: GridView, status_bar: StatusBar, aggregator: 'MetricsAggregator' = None):
+        self.grid_view = grid_view
+        self.status_bar = status_bar
+        self.aggregator = aggregator
 
-                # Process all pending updates from the queue (for status bar etc.)
-                queue_size = self.queue.qsize()
-                while not self.queue.empty():
-                    try:
-                        msg_type, data = self.queue.get_nowait()
-                        if msg_type == "grid":  # Legacy path
-                            x, y, state = data
-                            self.grid_view.matrix.update(x, y, state)
-                        elif msg_type == "status":
-                            key, value = data
-                            self.status_bar.set_status(key, value)
-                    except asyncio.QueueEmpty:
-                        break
+        self.layout = Layout()
+~~~~~
 
-                # Calculate dt (frame_time) for physics update
-                now = time.perf_counter()
-                frame_time = now - last_time
-                last_time = now
-
-                # Apply physics/decay to the grid using the calculated dt
-                self.grid_view.matrix.decay(frame_time)
-
-                frame_times.append(frame_time)
-                if len(frame_times) > 10:
-                    frame_times.pop(0)
-
+~~~~~act
+patch_file
+observatory/visualization/app.py
+~~~~~
+~~~~~old
                 avg_frame_time = sum(frame_times) / len(frame_times)
                 fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float("inf")
                 
@@ -129,16 +179,35 @@ observatory/visualization/app.py
                 # We add a small sleep to prevent a 100% CPU busy-loop.
                 await asyncio.sleep(0.001)
 ~~~~~
+~~~~~new
+                avg_frame_time = sum(frame_times) / len(frame_times)
+                fps = 1.0 / avg_frame_time if avg_frame_time > 0 else float("inf")
+                
+                # --- Update Status Bar with New Metrics ---
+                self.status_bar.set_status("FPS", f"{fps:.1f}")
+                self.status_bar.set_status("Upd/Frame", f"{updates_in_frame}")
+                self.status_bar.set_status("Flush (ms)", f"{flush_duration_ms:.2f}")
 
-#### Acts 2: 创建“波浪”压力测试脚本
+                # --- Record Metrics for Aggregation ---
+                if self.aggregator:
+                    await self.aggregator.record("fps", fps)
+                    await self.aggregator.record("updates_per_frame", updates_in_frame)
+                    await self.aggregator.record("flush_duration_ms", flush_duration_ms)
 
-现在，创建 `wave_test.py` 文件，用于生成可控的、从有序到混沌的更新负载。
+                # Live display is automatically refreshed by the context manager.
+                # We add a small sleep to prevent a 100% CPU busy-loop.
+                await asyncio.sleep(0.001)
+~~~~~
+
+#### Acts 3: 修复并升级“波浪”测试
+
+最后，修复 `wave_test.py` 的 bug，并让它驱动新的聚合器。
 
 ~~~~~act
-write_file
+patch_file
 observatory/protoplasm/renderer/wave_test.py
 ~~~~~
-~~~~~python
+~~~~~old
 import asyncio
 import time
 import math
@@ -147,16 +216,24 @@ from observatory.visualization.app import TerminalApp
 from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 from observatory.visualization.palette import Palettes
+~~~~~
+~~~~~new
+import asyncio
+import time
+import math
 
-# --- Configuration ---
-GRID_WIDTH = 100
-GRID_HEIGHT = 100
-TOTAL_PIXELS = GRID_WIDTH * GRID_HEIGHT
-SIMULATION_DURATION_S = 120.0
-WAVE_GROWTH_INTERVAL_S = 5.0  # Every 5 seconds, the wave gets wider
-SIMULATION_TICK_S = 0.01  # Run the simulation loop at 100Hz
+from observatory.visualization.app import TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+from observatory.visualization.palette import Palettes
+from observatory.monitors.aggregator import MetricsAggregator
+~~~~~
 
-
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/wave_test.py
+~~~~~
+~~~~~old
 async def main():
     """
     Main entry point for the wave test.
@@ -181,27 +258,48 @@ async def main():
 
     # 2. Simulation State
     wave_width = 1
-    scan_pos = 0
-    last_growth_time = time.time()
-    start_time = time.time()
+~~~~~
+~~~~~new
+async def main():
+    """
+    Main entry point for the wave test.
+    """
+    print("🚀 Starting Renderer Wave Stress Test...")
+    log_filename = f"wave_test_log_{int(time.time())}.jsonl"
 
-    try:
-        while True:
-            # --- Simulation Logic ---
-            now = time.time()
-            elapsed = now - start_time
+    # 1. Setup Logger
+    aggregator = MetricsAggregator(log_filename)
+    aggregator.open()
+    print(f"📝 Logging aggregate metrics to [bold cyan]{log_filename}[/bold cyan]")
 
-            if elapsed >= SIMULATION_DURATION_S:
-                break
+    # 2. Setup UI
+    grid_view = GridView(
+        width=GRID_WIDTH,
+        height=GRID_HEIGHT,
+        palette_func=Palettes.firefly,
+        decay_per_second=8.0,
+    )
+    status_bar = StatusBar(
+        initial_status={
+            "Test": "Wave Stress Test",
+            "Wave Width": 1,
+        }
+    )
+    app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
+    await app.start()
 
-            # Grow the wave over time
-            if now - last_growth_time > WAVE_GROWTH_INTERVAL_S:
-                wave_width = max(1, min(TOTAL_PIXELS, wave_width * 2))
-                last_growth_time = now
-                app.update_status("Wave Width", wave_width)
+    # 3. Start logger loop
+    aggregator_task = asyncio.create_task(aggregator.run())
 
-            # --- Generate Updates for this Tick ---
-            # This loop simulates the "thundering herd"
+    # 4. Simulation State
+    wave_width = 1
+~~~~~
+
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/wave_test.py
+~~~~~
+~~~~~old
             for i in range(wave_width):
                 current_pos = (scan_pos + i) % TOTAL_PIXELS
                 x = current_pos % GRID_WIDTH
@@ -220,24 +318,36 @@ async def main():
         print("\nCleaning up...")
         app.stop()
         print("Wave test finished.")
+~~~~~
+~~~~~new
+            for i in range(wave_width):
+                current_pos = (scan_pos + i) % TOTAL_PIXELS
+                x = current_pos % GRID_WIDTH
+                y = current_pos // GRID_WIDTH
+                app.direct_update_grid(x, y, 1.0)
+            
+            # Move the scanline forward and WRAP AROUND
+            move_amount = math.ceil(GRID_WIDTH * 2 * SIMULATION_TICK_S) # Move 2 rows per second
+            scan_pos = (scan_pos + move_amount) % TOTAL_PIXELS
 
+            # --- Yield to Renderer ---
+            await asyncio.sleep(SIMULATION_TICK_S)
 
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        pass
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        print("\nTest interrupted.")
+    finally:
+        print("\nCleaning up...")
+        app.stop()
+        aggregator.close()
+        aggregator_task.cancel()
+        await asyncio.gather(aggregator_task, return_exceptions=True)
+        print("Wave test finished.")
 ~~~~~
 
 ### 下一步建议
-请执行新的“波浪”测试：
-```bash
-python -m observatory.protoplasm.renderer.wave_test
-```
+请再次执行 `wave_test.py`。
+1.  你将看到扫描点现在会正确地从右下角循环回到左上角。
+2.  最重要的是，实验结束后，当前目录会有一个 `wave_test_log_... .jsonl` 文件。
+3.  **请将这个日志文件的内容发给我。**
 
-**观察要点**：
-1.  **初始阶段 (Wave Width = 1)**: `Updates/Frame` 应该很小，`Flush (ms)` 应该接近 0，FPS 应该很高。
-2.  **中期阶段 (Wave Width = 128, 256...)**: 观察 `Flush (ms)` 如何随着 `Updates/Frame` 的增加而变化。它是否保持在 1ms 以下？还是开始显著增长？
-3.  **最终阶段 (Wave Width 接近 10000)**: 当屏幕几乎全部同时闪烁时，`Updates/Frame` 会飙升到几千。此时的 `Flush (ms)` 是多少？如果它超过了 `1000 / 15 FPS ~= 66ms` 的一帧预算，那么卡顿就是必然的。
-
-这个测试将给我们提供决定性的数据。
+有了这些聚合后的数据，我们就能一锤定音，判断卡顿的最终根源。

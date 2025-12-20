@@ -17,9 +17,10 @@ class TerminalApp:
     It orchestrates the layout and handles data ingestion and rendering loop.
     """
 
-    def __init__(self, grid_view: GridView, status_bar: StatusBar):
+    def __init__(self, grid_view: GridView, status_bar: StatusBar, aggregator: 'MetricsAggregator' = None):
         self.grid_view = grid_view
         self.status_bar = status_bar
+        self.aggregator = aggregator
 
         self.layout = Layout()
         self.layout.split(Layout(name="main", ratio=1), Layout(name="footer", size=3))
@@ -145,6 +146,12 @@ class TerminalApp:
                 self.status_bar.set_status("FPS", f"{fps:.1f}")
                 self.status_bar.set_status("Upd/Frame", f"{updates_in_frame}")
                 self.status_bar.set_status("Flush (ms)", f"{flush_duration_ms:.2f}")
+
+                # --- Record Metrics for Aggregation ---
+                if self.aggregator:
+                    await self.aggregator.record("fps", fps)
+                    await self.aggregator.record("updates_per_frame", updates_in_frame)
+                    await self.aggregator.record("flush_duration_ms", flush_duration_ms)
 
                 # Live display is automatically refreshed by the context manager.
                 # We add a small sleep to prevent a 100% CPU busy-loop.

@@ -31,6 +31,7 @@ class TerminalApp:
         self._frame_buffer = set()  # (x, y, state)
         self._running = False
         self._render_task: asyncio.Task | None = None
+        self._flush_lock = asyncio.Lock() # Ensure _frame_buffer access is safe during swap
 
     def ingest_grid(self, x: int, y: int, state: float):
         """
@@ -44,7 +45,9 @@ class TerminalApp:
         Adds a grid update to the frame buffer for batch processing.
         This is extremely fast and non-blocking.
         """
-        self._frame_buffer.add((x, y, state))
+        # Acquire lock to safely add to buffer if _flush_buffer is swapping it
+        async with self._flush_lock:
+            self._frame_buffer.add((x, y, state))
 
     def update_status(self, key: str, value: Any):
         """Asynchronously update a key-value pair in the status bar."""
@@ -70,29 +73,43 @@ class TerminalApp:
         if self._render_task:
             self._render_task.cancel()
 
-    async def _flush_buffer(self):
-        """Applies all buffered updates to the grid matrix using vectorization."""
-        if not self._frame_buffer:
+    def _blocking_flush_logic(self, updates_set: set, matrix_ref: Any):
+        """
+        Synchronous, CPU-bound logic for flushing the frame buffer.
+        This function should be run in a separate thread.
+        """
+        if not updates_set:
             return
 
-        # Atomically swap the buffer
-        updates = self._frame_buffer
-        self._frame_buffer = set()
-
-        # --- Vectorization Magic ---
-        # 1. Convert the set of tuples into an Nx3 NumPy array
-        update_array = np.array(list(updates), dtype=np.float32)
+        update_array = np.array(list(updates_set), dtype=np.float32)
 
         if update_array.size == 0:
             return
 
-        # 2. Extract coordinate and state columns
         coords_x = update_array[:, 0].astype(int)
         coords_y = update_array[:, 1].astype(int)
         states = update_array[:, 2]
         
-        # 3. Call the new vectorized update method
-        self.grid_view.matrix.update_batch(coords_x, coords_y, states)
+        matrix_ref.update_batch(coords_x, coords_y, states)
+
+    async def _flush_buffer(self):
+        """
+        Asynchronously triggers the vectorized buffer flush, offloading the
+        CPU-bound part to a thread.
+        """
+        updates_to_flush = None
+        # Atomically swap the buffer under lock
+        async with self._flush_lock:
+            if self._frame_buffer:
+                updates_to_flush = self._frame_buffer
+                self._frame_buffer = set()
+
+        if updates_to_flush:
+            await asyncio.to_thread(
+                self._blocking_flush_logic, updates_to_flush, self.grid_view.matrix
+            )
+            return len(updates_to_flush) # Return the count for telemetry
+        return 0 # No updates flushed
 
 
     async def _render_loop(self):
@@ -105,12 +122,9 @@ class TerminalApp:
             last_time = time.perf_counter()
 
             while self._running:
-                # --- Instrumentation: Capture load before flush ---
-                updates_in_frame = len(self._frame_buffer)
-
                 # --- Batch Updates with Timing ---
                 flush_start = time.perf_counter()
-                await self._flush_buffer()
+                updates_in_frame = await self._flush_buffer() # _flush_buffer now returns count
                 flush_duration_ms = (time.perf_counter() - flush_start) * 1000
 
                 # Process all pending updates from the queue (for status bar etc.)

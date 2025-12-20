@@ -2,6 +2,7 @@ import asyncio
 import time
 from asyncio import Queue
 from typing import Any, Dict
+import numpy as np
 
 from rich.live import Live
 from rich.layout import Layout

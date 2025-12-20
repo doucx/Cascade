@@ -254,6 +254,9 @@ class Engine:
         self.flow_manager = FlowManager(graph, target._uuid)
         plan = self.solver.resolve(graph)
 
+        # Track blocked state locally to avoid spamming Blocked events every loop tick
+        blocked_nodes = set()
+
         for stage in plan:
             pending_nodes_in_stage = list(stage)
 
@@ -281,8 +284,21 @@ class Engine:
 
                     if self.constraint_manager.check_permission(node):
                         executable_this_pass.append(node)
+                        if node.id in blocked_nodes:
+                            blocked_nodes.remove(node.id)
                     else:
                         deferred_this_pass.append(node)
+                        if node.id not in blocked_nodes:
+                            from cascade.runtime.events import TaskBlocked
+                            self.bus.publish(
+                                TaskBlocked(
+                                    run_id=run_id,
+                                    task_id=node.id,
+                                    task_name=node.name,
+                                    reason="ConstraintViolation" # Detailed reason requires manager update
+                                )
+                            )
+                            blocked_nodes.add(node.id)
 
                 if executable_this_pass:
                     tasks_to_run = [

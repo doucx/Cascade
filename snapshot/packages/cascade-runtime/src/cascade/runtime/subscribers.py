@@ -11,6 +11,7 @@ from .events import (
     TaskExecutionFinished,
     TaskSkipped,
     TaskRetrying,
+    TaskBlocked,
     ConnectorConnected,
     ConnectorDisconnected,
     Event,
@@ -80,6 +81,12 @@ class HumanReadableLogSubscriber:
             error=event.error,
         )
 
+    def on_task_blocked(self, event: TaskBlocked):
+        # We might want a dedicated log message for this, but for now info is fine
+        # Typically blocked tasks are noisy, so use with caution.
+        # In a visualizer, this event is critical.
+        pass
+
     def on_connector_connected(self, event: ConnectorConnected):
         bus.info("engine.connector.connected")
 
@@ -128,7 +135,7 @@ class TelemetrySubscriber:
 
         event_body = {}
         if isinstance(
-            event, (TaskExecutionStarted, TaskExecutionFinished, TaskSkipped)
+            event, (TaskExecutionStarted, TaskExecutionFinished, TaskSkipped, TaskBlocked)
         ):
             state_map = {
                 TaskExecutionStarted: "RUNNING",
@@ -136,6 +143,7 @@ class TelemetrySubscriber:
                 if getattr(event, "status", "") == "Succeeded"
                 else "FAILED",
                 TaskSkipped: "SKIPPED",
+                TaskBlocked: "BLOCKED",
             }
             event_body = {
                 "type": "TaskStateEvent",

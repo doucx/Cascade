@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(runtime): Implement State GC to prevent TCO memory leaks", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766201969.215784, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(sim): 实现资源约束模拟器与阻塞态观测", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766203903.4699655, "duration_ms": 0}}

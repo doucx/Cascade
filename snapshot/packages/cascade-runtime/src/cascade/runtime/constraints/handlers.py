@@ -70,8 +70,13 @@ class PauseConstraintHandler(ConstraintHandler):
 
         # Task-specific scope
         if scope.startswith("task:"):
-            target_task_name = scope.split(":", 1)[1]
-            if task.name == target_task_name:
+            target_pattern = scope.split(":", 1)[1]
+            if target_pattern.endswith("*"):
+                # Prefix match
+                prefix = target_pattern[:-1]
+                if task.name.startswith(prefix):
+                    return False
+            elif task.name == target_pattern:
                 return False
 
         # If no match, this constraint doesn't apply to this task, so it is permitted.
@@ -134,8 +139,12 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
         if scope == "global":
             is_match = True
         elif scope.startswith("task:"):
-            target_task_name = scope.split(":", 1)[1]
-            if task.name == target_task_name:
+            target_pattern = scope.split(":", 1)[1]
+            if target_pattern.endswith("*"):
+                prefix = target_pattern[:-1]
+                if task.name.startswith(prefix):
+                    is_match = True
+            elif task.name == target_pattern:
                 is_match = True
 
         if is_match:

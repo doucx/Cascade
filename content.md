@@ -1,177 +1,118 @@
-我们将基于 Protoplasm 的成果，提炼出一套通用的、支持“正方形像素”和丰富配色的可视化引擎 `UniGrid`，并将其应用于瓶颈模拟和萤火虫实验中。
+分析指出了两个关键问题：**输出流冲突**导致显示错乱，以及**计算负载过高（N=400）**导致 `LocalBus` 广播延迟过大，进而破坏了萤火虫的同步物理条件。
 
-## [WIP] refactor(proto): 统一渲染基座并实现萤火虫可视化
+## [WIP] fix(experiment): 修复显示冲突并优化萤火虫实验参数
 
 ### 用户需求
-1.  **统一渲染行为**: 将 `ForestRenderer` (CLI 性能优化) 和 `TruthRenderer` (双字符正方形渲染) 的优点合并，消除重复代码。
-2.  **正方形像素**: 推广 `██` (双宽字符) 渲染模式，以获得 1:1 的视觉比例，使网格看起来像 Golly/像素画。
-3.  **增强色彩**: 支持类似 Golly 的多级亮度/颜色映射，而非简单的三色状态。
-4.  **可视化萤火虫**: 为 `run_fireflies.py` 添加可视化，直观展示同步过程。
-5.  **可视化瓶颈**: 升级 `bottleneck_sim.py` 的渲染效果。
+1.  **修复 UI 冲突**: 禁止 `ConvergenceMonitor` 直接向 stdout 打印，将其数据集成到 `UniGrid` 的状态栏中。
+2.  **恢复同步**: 降低 Agent 数量（N=400 -> N=100），以适应 `LocalBus` 在 Python 单线程下的全广播性能瓶颈，确保同步现象能正常涌现。
+3.  **修正 FPS 显示**: `UniGrid` 显示的 FPS 应当是实际循环频率，而非单帧处理时间的倒数。
 
 ### 评论
-这是一个非常棒的工程化步骤。在原基阶段，我们为了快速验证（Fail Fast），允许了代码的拷贝粘贴和特化。现在，既然 CLI 渲染已经被证明是可行的且必要的观测手段，将其提炼为通用的 `observatory` 基础设施是合乎逻辑的。正方形像素和丰富的色彩将极大地提升我们对“涌现现象”的感知能力——很多时候，模式（Pattern）只有在正确的视觉比例和色彩深度下才能被肉眼捕捉。
+这是一个典型的“海森堡效应”案例——观测行为（高频渲染 + 高负载广播）干扰了被观测系统（萤火虫同步）。通过降低负载和统一输出管道，我们可以消除这种干扰。同时，将 R 值集成到渲染器状态栏是更符合“单一事实来源”原则的 UI 设计。
 
 ### 目标
-1.  创建 `observatory/protoplasm/renderer/palette.py`: 定义颜色映射接口和预设（Firefly, Heatmap 等）。
-2.  创建 `observatory/protoplasm/renderer/unigrid.py`: 统一的、基于双缓冲和双字符宽度的渲染引擎。
-3.  重构 `bottleneck_sim.py`: 使用新的 `UniGrid` 和 `Palette`。
-4.  升级 `run_fireflies.py`: 接入 `UniGrid`，实现相位的实时热力图。
+1.  修改 `ConvergenceMonitor`: 增加 `silent` 模式，并提供回调接口导出 R 值。
+2.  修改 `UniGridRenderer`: 增加 `extra_info` 字段用于显示外部数据，并修正 FPS 计算公式。
+3.  修改 `run_fireflies.py`: 降低 N 值，并将 Monitor 的数据桥接到 Renderer。
 
 ### 基本原理
-我们将采用 **"State -> Palette -> Physical Buffer"** 的管线设计。
-1.  **State**: 仍然是 numpy 矩阵，存储纯数值（如相位 `0.0-1.0` 或 状态枚举）。
-2.  **Palette**: 负责将数值映射为 ANSI 颜色代码。
-3.  **Physical Buffer**: `UniGrid` 负责将逻辑上的 `(x, y)` 扩展为物理上的 `(x*2, y)` 和 `(x*2+1, y)`，并填充 `█` 字符，从而实现正方形像素。这种“矢量化扩展”比在 Python 循环中打印两次要快得多。
+-   **输出治理**: 在 TUI 应用中，必须只有一个组件（Renderer）拥有 stdout 的写入权。其他组件应作为数据源。
+-   **负载均衡**: N=100 时，全连接广播量为 10,000 msg/cycle，Python `asyncio` 可以轻松处理。N=400 时为 160,000 msg/cycle，加上渲染开销，容易造成事件循环阻塞，导致 `cs.wait` 精度下降，从而破坏 Kuramoto 模型的同步条件。
 
 ### 标签
-#intent/refine #flow/draft #priority/medium #comp/protoplasm #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/unigrid #task/action/refactor #task/state/begin
+#intent/fix #flow/draft #priority/high #comp/protoplasm #concept/ui #scope/ux #ai/instruct #task/domain/visualization #task/object/monitor #task/action/integration #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建调色板系统 (`palette.py`)
+#### Acts 1: 改造 `ConvergenceMonitor` 支持静默回调模式
 
-我们将定义一个颜色处理模块，支持从数值到 ANSI 颜色的渐变映射。这允许我们定义“热力图”风格的配色。
+我们需要让 Monitor 闭嘴，把数据交出来。
 
 ~~~~~act
-write_file
-observatory/protoplasm/renderer/palette.py
+patch_file
+observatory/monitors/convergence.py
 ~~~~~
 ~~~~~python
-import numpy as np
-from dataclasses import dataclass
-from typing import List, Tuple
+    def _print_status(self, order_param: float):
+        """Prints a simple text-based progress bar for synchronization."""
+        bar_length = 40
+        filled_length = int(bar_length * order_param)
+        bar = "█" * filled_length + "-" * (bar_length - filled_length)
+        # Use carriage return to print on the same line
+        # Add a check to not overwrite initial log messages
+        if self._flash_count > 0:
+            print(f"\r[SYNC: {bar}] {order_param:.4f}", end="", flush=True)
 
-@dataclass
-class Color:
-    r: int
-    g: int
-    b: int
+    async def run(self, frequency_hz: float = 2.0):
+        """The main loop of the monitor."""
+        self._is_running = True
+        subscription = await self.connector.subscribe("firefly/flash", self.on_flash)
+        
+        print("🔭 Convergence Monitor Started...")
+        try:
+            while self._is_running:
+                order_parameter = self._calculate_order_parameter()
+                self._print_status(order_parameter)
+                await asyncio.sleep(1.0 / frequency_hz)
+        finally:
+            print("\nShutting down monitor.")
+            if subscription:
+                await subscription.unsubscribe()
+~~~~~
+~~~~~python
+    def _print_status(self, order_param: float):
+        """Prints a simple text-based progress bar for synchronization."""
+        if self.callback:
+            self.callback(order_param)
+            return
 
-    def to_ansi_bg(self) -> str:
-        """Returns ANSI escape code for background color."""
-        # Using 24-bit TrueColor: \033[48;2;R;G;Bm
-        return f"\033[38;2;{self.r};{self.g};{self.b}m"
+        bar_length = 40
+        filled_length = int(bar_length * order_param)
+        bar = "█" * filled_length + "-" * (bar_length - filled_length)
+        # Use carriage return to print on the same line
+        # Add a check to not overwrite initial log messages
+        if self._flash_count > 0:
+            print(f"\r[SYNC: {bar}] {order_param:.4f}", end="", flush=True)
 
-class Palettes:
-    """Predefined color palettes for simulations."""
-
-    @staticmethod
-    def _interpolate(val: float, c1: Color, c2: Color) -> str:
-        r = int(c1.r + (c2.r - c1.r) * val)
-        g = int(c1.g + (c2.g - c1.g) * val)
-        b = int(c1.b + (c2.b - c1.b) * val)
-        return f"\033[38;2;{r};{g};{b}m"
-
-    @staticmethod
-    def firefly(brightness: np.ndarray) -> np.ndarray:
+    async def run(self, frequency_hz: float = 2.0, callback=None):
         """
-        Maps 0.0-1.0 brightness to a Firefly gradient.
-        0.0 (Refractory/Quiet) -> Dark Blue/Black
-        0.5 (Charging) -> Deep Orange
-        1.0 (Flash) -> Bright Yellow/White
+        The main loop of the monitor.
+        
+        Args:
+            frequency_hz: How often to calculate R.
+            callback: Optional function(float) -> None to receive the R value 
+                      instead of printing to stdout.
         """
-        # We handle this utilizing numpy vectorization for speed would be ideal,
-        # but for simplicity in ANSI generation, we might use a lookup or mask.
-        # Here we define 3 discrete levels for performance, or use a mapped array.
+        self._is_running = True
+        self.callback = callback
+        subscription = await self.connector.subscribe("firefly/flash", self.on_flash)
         
-        # Initialize with Dark (Background)
-        # \033[38;2;20;20;30m (Very Dark Blue)
-        colors = np.full(brightness.shape, '\033[38;2;30;30;40m', dtype='<U24')
-        
-        # Low energy (Charging): Reddish
-        mask_low = (brightness > 0.1) & (brightness <= 0.6)
-        colors[mask_low] = '\033[38;2;100;40;40m'
-
-        # High energy (Pre-flash): Orange
-        mask_high = (brightness > 0.6) & (brightness <= 0.9)
-        colors[mask_high] = '\033[38;2;200;120;0m'
-        
-        # Flash: Bright Yellow/White
-        mask_flash = brightness > 0.9
-        colors[mask_flash] = '\033[38;2;255;255;200m'
-        
-        return colors
-
-    @staticmethod
-    def bottleneck(states: np.ndarray) -> np.ndarray:
-        """
-        Maps states to bottleneck visualizer colors.
-        0.0: Idle (Dim)
-        0.5: Waiting (Cyan)
-        1.0: Running (White/Green)
-        """
-        colors = np.full(states.shape, '\033[38;2;40;40;40m', dtype='<U24') # Dim Gray
-        
-        # Waiting (Cyan)
-        mask_wait = (states > 0.4) & (states < 0.8)
-        colors[mask_wait] = '\033[38;2;0;200;200m'
-        
-        # Running (Bright White/Green tint)
-        mask_run = states >= 0.8
-        colors[mask_run] = '\033[38;2;200;255;200m'
-        
-        return colors
+        if not self.callback:
+            print("🔭 Convergence Monitor Started...")
+            
+        try:
+            while self._is_running:
+                order_parameter = self._calculate_order_parameter()
+                self._print_status(order_parameter)
+                await asyncio.sleep(1.0 / frequency_hz)
+        finally:
+            if not self.callback:
+                print("\nShutting down monitor.")
+            if subscription:
+                await subscription.unsubscribe()
 ~~~~~
 
-#### Acts 2: 创建统一网格渲染器 (`unigrid.py`)
+#### Acts 2: 增强 `UniGridRenderer` 支持外部状态和真实 FPS
 
-这是核心重构。它结合了 `ForestRenderer` 的异步摄入循环和 `TruthRenderer` 的双宽字符逻辑。
+修正 FPS 计算（使用两帧之间的时间差），并添加 `set_extra_info` 接口。
 
 ~~~~~act
-write_file
+patch_file
 observatory/protoplasm/renderer/unigrid.py
 ~~~~~
 ~~~~~python
-import asyncio
-import time
-import shutil
-import numpy as np
-from asyncio import Queue
-from dataclasses import dataclass
-from typing import Callable, Optional
-
-from .driver import AnsiDriver
-from .buffer import RenderBuffer
-from .matrix import StateMatrix, GridConfig
-
-class UniGridRenderer:
-    """
-    Unified Grid Renderer.
-    - Uses double-width characters ('██') for square pixels.
-    - Decoupled State (Logic) from Appearance (Palette).
-    - Asynchronous ingestion loop.
-    """
-
-    def __init__(
-        self, 
-        width: int = 0, 
-        height: int = 0, 
-        palette_func: Callable[[np.ndarray], np.ndarray] = None,
-        decay_rate: float = 0.05
-    ):
-        # Auto-detect size if not provided
-        cols, rows = shutil.get_terminal_size()
-        # Logical width is half of physical columns because we use 2 chars per pixel
-        self.logical_width = width if width > 0 else cols // 2
-        # Reserve lines for UI
-        self.logical_height = height if height > 0 else max(10, rows - 3)
-        
-        self.config = GridConfig(
-            width=self.logical_width, 
-            height=self.logical_height, 
-            decay_rate=decay_rate
-        )
-        self.matrix = StateMatrix(self.config)
-        self.palette_func = palette_func
-        
-        # Physical buffers are 2x width
-        self.phys_width = self.logical_width * 2
-        self.buffer_prev = RenderBuffer(self.phys_width, self.logical_height)
-        self.buffer_curr = RenderBuffer(self.phys_width, self.logical_height)
-        
         self.driver = AnsiDriver()
         self.queue: Queue = Queue()
         self._running = False
@@ -181,71 +122,29 @@ class UniGridRenderer:
         self.queue.put_nowait((x, y, state))
 
     async def start(self):
-        self._running = True
-        self.driver.clear_screen()
-        self.driver.hide_cursor()
-        self.driver.flush()
-        await self._render_loop()
-
-    def stop(self):
+~~~~~
+~~~~~python
+        self.driver = AnsiDriver()
+        self.queue: Queue = Queue()
         self._running = False
-        # Do not close immediately, let the loop exit naturally or force cleanup here?
-        # Usually loop exit is cleaner, but for forced stop:
-        self.driver.show_cursor()
-        self.driver.move_to(self.logical_height + 2, 0)
-        self.driver.flush()
+        self._extra_info = ""
 
-    async def _render_loop(self):
-        target_fps = 30
-        frame_time = 1.0 / target_fps
+    def ingest(self, x: int, y: int, state: float = 1.0):
+        """Thread-safe ingestion."""
+        self.queue.put_nowait((x, y, state))
         
-        while self._running:
-            loop_start = time.perf_counter()
-            
-            # 1. Process Queue
-            while not self.queue.empty():
-                try:
-                    x, y, state = self.queue.get_nowait()
-                    self.matrix.update(x, y, state)
-                except asyncio.QueueEmpty:
-                    break
-            
-            # 2. Physics (Decay)
-            self.matrix.decay()
-            
-            # 3. Map to Physical Buffer
-            # Get colors from palette (H, W)
-            logical_colors = self.palette_func(self.matrix.brightness)
-            
-            # Expand to physical (H, W*2)
-            # We use '█' for all visible pixels
-            # If color is 'default dark', maybe print space? 
-            # For Golly style, we usually print blocks everywhere.
-            
-            phys_colors = np.repeat(logical_colors, 2, axis=1)
-            
-            # Update Current Buffer
-            self.buffer_curr.chars[:] = '█' # Solid block
-            self.buffer_curr.colors = phys_colors
-            
-            # 4. Diff & Draw
-            rows, cols = RenderBuffer.compute_diff(self.buffer_prev, self.buffer_curr)
-            
-            if len(rows) > 0:
-                chars = self.buffer_curr.chars[rows, cols]
-                colors = self.buffer_curr.colors[rows, cols]
-                
-                # Buffer writes
-                for r, c, char, color in zip(rows, cols, chars, colors):
-                    self.driver.move_to(r, c)
-                    self.driver.write(char, color)
-                
-                # Update prev
-                # Optim: Only copy diffs or swap references if we reconstruct full buffer?
-                # RenderBuffer implementation expects in-place updates usually.
-                self.buffer_prev.chars[rows, cols] = chars
-                self.buffer_prev.colors[rows, cols] = colors
-                
+    def set_extra_info(self, info: str):
+        """Sets a string to be displayed in the status bar."""
+        self._extra_info = info
+
+    async def start(self):
+~~~~~
+
+~~~~~act
+patch_file
+observatory/protoplasm/renderer/unigrid.py
+~~~~~
+~~~~~python
             # 5. Stats Line
             elapsed = time.perf_counter() - loop_start
             fps = 1.0 / (elapsed + 0.001)
@@ -258,169 +157,39 @@ class UniGridRenderer:
             await asyncio.sleep(sleep_t)
             
         # Cleanup on exit
-        self.driver.show_cursor()
-        self.driver.flush()
-~~~~~
-
-#### Acts 3: 升级瓶颈模拟 (`bottleneck_sim.py`)
-
-使用新的 `UniGrid` 替换原本的 `ForestRenderer`。
-
-~~~~~act
-write_file
-observatory/protoplasm/governance/bottleneck_sim.py
 ~~~~~
 ~~~~~python
-import asyncio
-import random
-import shutil
-import time
-from typing import Any
-
-import cascade as cs
-from cascade.runtime.events import TaskBlocked, TaskExecutionStarted, TaskExecutionFinished
-from cascade.spec.constraint import GlobalConstraint
-
-# New Renderer Imports
-from observatory.protoplasm.renderer.unigrid import UniGridRenderer
-from observatory.protoplasm.renderer.palette import Palettes
-
-# --- Configuration ---
-NUM_AGENTS = 500
-SLOTS = 20
-DURATION = 15.0
-
-# --- Visualizer Logic ---
-
-class BottleneckVisualizer:
-    def __init__(self, renderer: UniGridRenderer, num_agents: int):
-        self.renderer = renderer
-        # Ensure grid is roughly square logic
-        self.grid_width = int(num_agents**0.5) + 1
-        
-    def get_coords(self, agent_id: int):
-        return (agent_id % self.grid_width, agent_id // self.grid_width)
-
-    def handle_event(self, event: Any):
-        if not hasattr(event, "task_name") or not event.task_name.startswith("agent_"):
-            return
+            # 5. Stats Line
+            # Calculate REAL FPS based on total loop time
+            now = time.perf_counter()
+            real_fps = 1.0 / (now - loop_start + 0.00001)
+            # Use a simpler moving average if needed, but this is instant FPS
             
-        try:
-            parts = event.task_name.split("_")
-            if len(parts) < 3: return
-            agent_id = int(parts[1])
-            task_type = parts[2]
+            self.driver.move_to(self.logical_height + 1, 0)
+            status_text = f"UniGrid | FPS: {real_fps:.1f} | Updates: {len(rows)} | {self._extra_info}"
+            # Pad to clear line
+            self.driver.write(f"{status_text:<80}", '\033[97m')
+            self.driver.flush()
             
-            x, y = self.get_coords(agent_id)
+            # 6. Sleep to maintain Target FPS
+            # We measure elapsed from start of loop logic
+            logic_elapsed = time.perf_counter() - loop_start
+            sleep_t = max(0, frame_time - logic_elapsed)
+            await asyncio.sleep(sleep_t)
             
-            # Map Events to States for Palette
-            # 1.0 = Running (White)
-            # 0.5 = Waiting (Cyan)
-            # 0.0 = Idle (Dim)
-            
-            if task_type == "work":
-                if isinstance(event, TaskExecutionStarted):
-                    self.renderer.ingest(x, y, 1.0)
-                elif isinstance(event, TaskBlocked):
-                    self.renderer.ingest(x, y, 0.5)
-                elif isinstance(event, TaskExecutionFinished):
-                    self.renderer.ingest(x, y, 0.0)
-                    
-        except (IndexError, ValueError):
-            pass
-
-# --- Agent Definition ---
-
-def make_agent_workflow(i: int):
-    @cs.task(name=f"agent_{i}_work")
-    async def work(val):
-        await asyncio.sleep(random.uniform(0.1, 0.3))
-        return val + 1
-
-    @cs.task(name=f"agent_{i}_loop")
-    def loop(val):
-        return make_agent_workflow(i)
-
-    return loop(work(0))
-
-# --- Main ---
-
-async def run_simulation():
-    # 1. Setup New Renderer
-    # Note: We rely on auto-sizing, passing only palette
-    renderer = UniGridRenderer(palette_func=Palettes.bottleneck, decay_rate=0.0)
-    
-    viz = BottleneckVisualizer(renderer, NUM_AGENTS)
-    
-    # 2. Setup Engine
-    engine_bus = cs.MessageBus()
-    engine_bus.subscribe(cs.Event, viz.handle_event)
-    
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=engine_bus
-    )
-    
-    # 3. Apply Constraint
-    print(f"Applying constraint: Max {SLOTS} concurrent 'work' tasks...")
-    engine.constraint_manager.update_constraint(
-        GlobalConstraint(
-            id="funnel",
-            scope="task:agent_*_work",
-            type="concurrency",
-            params={"limit": SLOTS}
-        )
-    )
-
-    # 4. Launch Agents
-    print(f"Launching {NUM_AGENTS} agents...")
-    tasks = []
-    for i in range(NUM_AGENTS):
-        tasks.append(asyncio.create_task(engine.run(make_agent_workflow(i))))
-        
-    # 5. Run Visualization
-    try:
-        renderer_task = asyncio.create_task(renderer.start())
-        await asyncio.sleep(DURATION)
-    finally:
-        renderer.stop()
-        for t in tasks: t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        if not renderer_task.done():
-            renderer_task.cancel()
-            await renderer_task
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(run_simulation())
-    except KeyboardInterrupt:
-        pass
+        # Cleanup on exit
 ~~~~~
 
-#### Acts 4: 升级萤火虫实验 (`run_fireflies.py`)
+#### Acts 3: 调整萤火虫实验配置并连接数据流
 
-为萤火虫实验添加视觉反馈。我们需要在 `ConvergenceMonitor` 旁边（或者替代它）引入可视化器。
-
-为了保持整洁，我们把可视化逻辑直接集成进脚本，监听 `flash` 事件。
+1.  `num_agents` 从 400 降至 100。
+2.  定义一个 `update_status` 回调，将 Monitor 的 R 值格式化后传给 Renderer。
 
 ~~~~~act
-write_file
+patch_file
 observatory/experiments/run_fireflies.py
 ~~~~~
 ~~~~~python
-import asyncio
-import random
-import time
-from typing import Dict, Any
-
-import cascade as cs
-from cascade.connectors.local import LocalBusConnector
-from cascade.spec.resource import resource
-
-from observatory.agents.kuramoto import firefly_agent
-from observatory.monitors.convergence import ConvergenceMonitor
-
 # Visualization
 from observatory.protoplasm.renderer.unigrid import UniGridRenderer
 from observatory.protoplasm.renderer.palette import Palettes
@@ -473,66 +242,75 @@ async def run_experiment(
         renderer_task = asyncio.create_task(renderer.start())
 
     # --- Create Agents ---
-    agent_tasks = []
+~~~~~
+~~~~~python
+# Visualization
+from observatory.protoplasm.renderer.unigrid import UniGridRenderer
+from observatory.protoplasm.renderer.palette import Palettes
+
+async def run_experiment(
+    num_agents: int = 100, # Reduced to 100 (10x10) to prevent LocalBus saturation
+    period: float = 2.0,
+    nudge: float = 0.2,
+    duration_seconds: float = 30.0,
+    visualize: bool = True
+):
+    """
+    Sets up and runs the firefly synchronization experiment.
+    """
+    if visualize:
+        print(f"🔥 Starting VISUAL firefly experiment with {num_agents} agents...")
+    else:
+        print(f"🔥 Starting headless firefly experiment...")
+
+    # 1. Initialize Shared Bus
+    LocalBusConnector._reset_broker_state()
+    connector = LocalBusConnector()
+    await connector.connect()
+
+    # --- Setup Monitor & Visualizer ---
+    monitor = ConvergenceMonitor(num_agents, period, connector)
     
-    @resource(name="_internal_connector", scope="run")
-    def shared_connector_provider():
-        yield connector
-
-    for i in range(num_agents):
-        initial_phase = random.uniform(0, period)
+    renderer = None
+    renderer_task = None
+    
+    if visualize:
+        # Define visualizer mapping
+        grid_width = int(num_agents**0.5)
+        if grid_width * grid_width < num_agents: grid_width += 1
         
-        engine = cs.Engine(
-            solver=cs.NativeSolver(),
-            executor=cs.LocalExecutor(),
-            bus=cs.MessageBus(),
-            connector=None, 
-        )
-        engine.register(shared_connector_provider)
-
-        agent_workflow = firefly_agent(
-            agent_id=i,
-            initial_phase=initial_phase,
-            period=period,
-            nudge=nudge,
-            flash_topic="firefly/flash",
-            listen_topic="firefly/flash",
-            connector=connector,
-            refractory_period=period * 0.2,
-        )
+        renderer = UniGridRenderer(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_rate=0.1)
         
-        agent_tasks.append(engine.run(agent_workflow))
+        # Bridge Monitor -> Renderer
+        def monitor_callback(r_value: float):
+            # Create a simple visual bar for R
+            bar_len = 10
+            filled = int(bar_len * r_value)
+            bar = "█" * filled + "░" * (bar_len - filled)
+            renderer.set_extra_info(f"Sync(R): {r_value:.3f} [{bar}]")
 
-    # --- Run ---
-    all_tasks = asyncio.gather(*agent_tasks)
-    try:
-        # If visualizing, wait for duration
-        await asyncio.sleep(duration_seconds)
-    except Exception as e:
-        print(f"Error: {e}")
-    finally:
-        monitor.stop()
-        if renderer: renderer.stop()
-        
-        if not all_tasks.done():
-            all_tasks.cancel()
-            await asyncio.gather(all_tasks, return_exceptions=True)
-            
-        await asyncio.gather(monitor_task, return_exceptions=True)
-        if renderer_task:
-            if not renderer_task.done(): renderer_task.cancel()
-            await renderer_task
-        
-        await connector.disconnect()
+        # Start Monitor in quiet mode with callback
+        monitor_task = asyncio.create_task(monitor.run(frequency_hz=10.0, callback=monitor_callback))
 
-if __name__ == "__main__":
-    asyncio.run(run_experiment(visualize=True))
+        async def on_flash_visual(topic: str, payload: Dict[str, Any]):
+            aid = payload.get("agent_id")
+            if aid is not None:
+                x = aid % grid_width
+                y = aid // grid_width
+                renderer.ingest(x, y, 1.0)
+        
+        await connector.subscribe("firefly/flash", on_flash_visual)
+        renderer_task = asyncio.create_task(renderer.start())
+    else:
+        # Headless mode: Monitor prints to stdout
+        monitor_task = asyncio.create_task(monitor.run(frequency_hz=10.0))
+
+    # --- Create Agents ---
 ~~~~~
 
 ### 下一步建议
-我们已经完成了通用渲染层 `UniGrid` 的构建和集成。现在，我们的“原基”不仅是一个概念验证，更拥有了一套漂亮的、可复用的观测仪表板。
+通过降低 Agent 规模和统一输出管道，我们应该能看到：
+1.  **清晰的 UI**: 网格和状态栏各居其位，互不干扰。
+2.  **正确的物理现象**: 随着负载降低，时间切片精度恢复，R 值应该会从 0 附近逐渐攀升至 1.0，网格上的闪烁也会从随机的“白噪声”逐渐凝聚成统一的“脉冲”。
 
-建议进行以下后续操作：
-1.  **迁移 TruthRenderer**: 考虑是否也将 Conway 生命游戏的 `TruthRenderer` 迁移到 `UniGrid` 之上，虽然它有特殊的 Diff 逻辑，但可以通过自定义 Palette 或扩展 UniGrid 来实现。
-2.  **基准测试**: 比较 `UniGrid` (双宽字符 + 调色板计算) 与原始 `ForestRenderer` 的性能差异，确保美观没有带来过大的性能惩罚。
-3.  **交互性**: 探索是否允许用户通过键盘输入（`asyncio` 监听 `stdin`）来实时调整 `UniGrid` 的参数（如衰减率）。
+如果需要进行大规模（N>1000）模拟，我们将不能再依赖 Python 原生的 `LocalBusConnector` 进行全广播，而必须切换到原基计划第二章中提到的 `DirectChannel` 或未来的 `Redis`/`IPC` 方案。

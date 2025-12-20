@@ -48,10 +48,15 @@ class UniGridRenderer:
         self.driver = AnsiDriver()
         self.queue: Queue = Queue()
         self._running = False
+        self._extra_info = ""
 
     def ingest(self, x: int, y: int, state: float = 1.0):
         """Thread-safe ingestion."""
         self.queue.put_nowait((x, y, state))
+        
+    def set_extra_info(self, info: str):
+        """Sets a string to be displayed in the status bar."""
+        self._extra_info = info
 
     async def start(self):
         self._running = True
@@ -120,14 +125,21 @@ class UniGridRenderer:
                 self.buffer_prev.colors[rows, cols] = colors
                 
             # 5. Stats Line
-            elapsed = time.perf_counter() - loop_start
-            fps = 1.0 / (elapsed + 0.001)
+            # Calculate REAL FPS based on total loop time
+            now = time.perf_counter()
+            real_fps = 1.0 / (now - loop_start + 0.00001)
+            # Use a simpler moving average if needed, but this is instant FPS
+            
             self.driver.move_to(self.logical_height + 1, 0)
-            self.driver.write(f"UniGrid | FPS: {fps:.1f} | Updates: {len(rows)}", '\033[97m')
+            status_text = f"UniGrid | FPS: {real_fps:.1f} | Updates: {len(rows)} | {self._extra_info}"
+            # Pad to clear line
+            self.driver.write(f"{status_text:<80}", '\033[97m')
             self.driver.flush()
             
-            # 6. Sleep
-            sleep_t = max(0, frame_time - elapsed)
+            # 6. Sleep to maintain Target FPS
+            # We measure elapsed from start of loop logic
+            logic_elapsed = time.perf_counter() - loop_start
+            sleep_t = max(0, frame_time - logic_elapsed)
             await asyncio.sleep(sleep_t)
             
         # Cleanup on exit

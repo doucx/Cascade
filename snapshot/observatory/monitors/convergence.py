@@ -68,6 +68,10 @@ class ConvergenceMonitor:
 
     def _print_status(self, order_param: float):
         """Prints a simple text-based progress bar for synchronization."""
+        if self.callback:
+            self.callback(order_param)
+            return
+
         bar_length = 40
         filled_length = int(bar_length * order_param)
         bar = "█" * filled_length + "-" * (bar_length - filled_length)
@@ -76,19 +80,30 @@ class ConvergenceMonitor:
         if self._flash_count > 0:
             print(f"\r[SYNC: {bar}] {order_param:.4f}", end="", flush=True)
 
-    async def run(self, frequency_hz: float = 2.0):
-        """The main loop of the monitor."""
+    async def run(self, frequency_hz: float = 2.0, callback=None):
+        """
+        The main loop of the monitor.
+        
+        Args:
+            frequency_hz: How often to calculate R.
+            callback: Optional function(float) -> None to receive the R value 
+                      instead of printing to stdout.
+        """
         self._is_running = True
+        self.callback = callback
         subscription = await self.connector.subscribe("firefly/flash", self.on_flash)
         
-        print("🔭 Convergence Monitor Started...")
+        if not self.callback:
+            print("🔭 Convergence Monitor Started...")
+            
         try:
             while self._is_running:
                 order_parameter = self._calculate_order_parameter()
                 self._print_status(order_parameter)
                 await asyncio.sleep(1.0 / frequency_hz)
         finally:
-            print("\nShutting down monitor.")
+            if not self.callback:
+                print("\nShutting down monitor.")
             if subscription:
                 await subscription.unsubscribe()
 

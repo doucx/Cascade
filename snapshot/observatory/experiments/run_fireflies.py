@@ -15,7 +15,7 @@ from observatory.protoplasm.renderer.unigrid import UniGridRenderer
 from observatory.protoplasm.renderer.palette import Palettes
 
 async def run_experiment(
-    num_agents: int = 400, # Increased for better visual field (20x20)
+    num_agents: int = 100, # Reduced to 100 (10x10) to prevent LocalBus saturation
     period: float = 2.0,
     nudge: float = 0.2,
     duration_seconds: float = 30.0,
@@ -36,30 +36,40 @@ async def run_experiment(
 
     # --- Setup Monitor & Visualizer ---
     monitor = ConvergenceMonitor(num_agents, period, connector)
-    monitor_task = asyncio.create_task(monitor.run(frequency_hz=10.0))
-
+    
     renderer = None
     renderer_task = None
     
     if visualize:
         # Define visualizer mapping
         grid_width = int(num_agents**0.5)
-        # Handle non-perfect squares
         if grid_width * grid_width < num_agents: grid_width += 1
         
         renderer = UniGridRenderer(width=grid_width, height=grid_width, palette_func=Palettes.firefly, decay_rate=0.1)
         
+        # Bridge Monitor -> Renderer
+        def monitor_callback(r_value: float):
+            # Create a simple visual bar for R
+            bar_len = 10
+            filled = int(bar_len * r_value)
+            bar = "█" * filled + "░" * (bar_len - filled)
+            renderer.set_extra_info(f"Sync(R): {r_value:.3f} [{bar}]")
+
+        # Start Monitor in quiet mode with callback
+        monitor_task = asyncio.create_task(monitor.run(frequency_hz=10.0, callback=monitor_callback))
+
         async def on_flash_visual(topic: str, payload: Dict[str, Any]):
             aid = payload.get("agent_id")
             if aid is not None:
                 x = aid % grid_width
                 y = aid // grid_width
-                # Ingest a "Flash" (1.0 brightness)
                 renderer.ingest(x, y, 1.0)
         
-        # Subscribe visualizer to bus
         await connector.subscribe("firefly/flash", on_flash_visual)
         renderer_task = asyncio.create_task(renderer.start())
+    else:
+        # Headless mode: Monitor prints to stdout
+        monitor_task = asyncio.create_task(monitor.run(frequency_hz=10.0))
 
     # --- Create Agents ---
     agent_tasks = []

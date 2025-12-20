@@ -15,6 +15,7 @@ CURSOR_HIDE = b"\033[?25l"
 CURSOR_SHOW = b"\033[?25h"
 CURSOR_HOME = b"\033[H"
 CLEAR_SCREEN = b"\033[2J"
+CLEAR_LINE = b"\033[K"
 RESET_COLOR = b"\033[0m"
 
 
@@ -99,7 +100,8 @@ class RawTerminalApp:
         line = " | ".join(parts)
         # Add a top border or separation
         bar = f"\n\033[2m{'-' * self.grid_view.logical_width * 2}\033[0m\n"
-        return (bar + line).encode("utf-8")
+        # Append CLEAR_LINE code to wipe any ghost characters
+        return (bar + line + "\033[K").encode("utf-8")
 
     def _blocking_flush_logic(self, updates_set):
         """CPU-bound state update."""
@@ -205,6 +207,15 @@ class RawTerminalApp:
             render_duration = time.perf_counter() - loop_start
             sleep_time = frame_interval - render_duration
             
+            # Jitter: How much we missed our deadline (negative means we are fast enough)
+            # If sleep_time is -0.01, it means we are 10ms behind schedule.
+            jitter_ms = max(0, -sleep_time) * 1000
+
+            if self.aggregator:
+                await self.aggregator.record("fps", fps)
+                await self.aggregator.record("flush_duration_ms", flush_ms)
+                await self.aggregator.record("render_jitter_ms", jitter_ms)
+
             if sleep_time > 0:
                 await asyncio.sleep(sleep_time)
             else:

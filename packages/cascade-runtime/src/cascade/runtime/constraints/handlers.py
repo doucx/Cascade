@@ -15,11 +15,11 @@ def _matches(scope: str, task_name: str) -> bool:
     """Helper to check if a task name matches a scope pattern."""
     if scope == "global":
         return True
-    
+
     if scope.startswith("task:"):
         pattern = scope.split(":", 1)[1]
         return fnmatch.fnmatch(task_name, pattern)
-    
+
     return False
 
 

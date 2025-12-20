@@ -36,11 +36,11 @@ class CacheBackend(Protocol):
     Protocol for a storage backend that persists cached results.
     """
 
-    def get(self, key: str) -> Optional[Any]:
+    async def get(self, key: str) -> Optional[Any]:
         """Retrieves a value by key."""
         ...
 
-    def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
+    async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """Sets a value for a key, optionally with a TTL in seconds."""
         ...
 
@@ -50,14 +50,14 @@ class CachePolicy(Protocol):
     Protocol for a caching strategy.
     """
 
-    def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
+    async def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:
         """
         Checks if a result is cached.
         Returns None if not found, or the cached value if found.
         """
         ...
 
-    def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
+    async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:
         """
         Saves a result to the cache.
         """
@@ -88,6 +88,16 @@ class StateBackend(Protocol):
 
     def get_skip_reason(self, node_id: str) -> Optional[str]:
         """Retrieves the reason a task was skipped. Returns None if not skipped."""
+        ...
+
+
+class SubscriptionHandle(Protocol):
+    """
+    A handle to an active subscription, allowing it to be cancelled.
+    """
+
+    async def unsubscribe(self) -> None:
+        """Cancels the subscription."""
         ...
 
 
@@ -126,6 +136,9 @@ class Connector(Protocol):
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        """Subscribes to a topic to receive messages (e.g., control commands)."""
+    ) -> "SubscriptionHandle":
+        """
+        Subscribes to a topic to receive messages (e.g., control commands).
+        Returns a handle that can be used to unsubscribe.
+        """
         ...

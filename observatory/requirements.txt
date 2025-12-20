@@ -1,0 +1,11 @@
+# Scientific computing and data analysis
+numpy
+scipy
+pandas
+
+# Visualization
+matplotlib
+seaborn
+rich
+
+# Add any other experiment-specific dependencies here

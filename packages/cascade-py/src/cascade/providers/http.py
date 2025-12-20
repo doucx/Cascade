@@ -1,3 +1,5 @@
+import os
+from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 from cascade.spec.task import task
@@ -38,6 +40,7 @@ async def _perform_request(
     json_data: Optional[Any] = None,
     headers: Optional[Dict[str, str]] = None,
     data: Optional[Any] = None,
+    files: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     """Core logic to perform an HTTP request using aiohttp."""
     if aiohttp is None:
@@ -46,44 +49,47 @@ async def _perform_request(
             "Please install it with: pip install cascade-py[http]"
         )
 
-    async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.request(
-            method, url, params=params, json=json_data, data=data
-        ) as response:
-            # Note: We do NOT raise_for_status() automatically here.
-            # We want to return the response object so the user (or a downstream task)
-            # can decide how to handle 4xx/5xx codes.
-            # However, for convenience in simple workflows, users often expect failure on error.
-            # But adhering to "Atomic Provider" philosophy, raw HTTP provider should probably
-            # just return the response.
-            # EDIT: The original implementation did raise_for_status().
-            # To be robust, let's read the body first, then check status?
-            # Or just let it be.
-            # Let's keep it pure: Return the response. If status check is needed,
-            # it should be a separate logic or a .with_retry() policy triggered by exception.
-            # BUT, .with_retry() only triggers on Exception. If we don't raise, we can't retry on 503.
-            # So we MUST raise for 5xx/4xx if we want to use Cascade's retry mechanisms easily.
-            # Compromise: raise for status, but capture the body first so we can attach it to the error if needed.
-            # Actually, aiohttp's raise_for_status() is good.
+    # Use ExitStack to ensure any files opened for upload are closed
+    with ExitStack() as stack:
+        final_data = data
 
-            body_bytes = await response.read()
+        if files:
+            # If files are provided, we must use FormData
+            form = aiohttp.FormData()
 
-            # We construct the response object FIRST
-            resp_obj = HttpResponse(
-                status=response.status,
-                headers=dict(response.headers),
-                body=body_bytes,
-            )
+            # Add existing data fields if it's a dict
+            if isinstance(data, dict):
+                for k, v in data.items():
+                    form.add_field(k, str(v))
 
-            # If we want to allow 404 handling without try/catch in the graph, we shouldn't raise.
-            # But then .with_retry() won't work for 503s.
-            # Let's verify standard practices. Typically, raw HTTP clients usually have a 'raise_for_status' flag.
-            # We'll default to NOT raising, to allow logic like "if 404 do X".
-            # Users can use a generic "check_status" task or we can add a flag.
-            # Let's NOT raise by default to keep it atomic and pure.
-            # User can throw in a downstream task if they want to trigger retry.
+            for field_name, file_path in files.items():
+                if isinstance(file_path, str) and os.path.exists(file_path):
+                    f = stack.enter_context(open(file_path, "rb"))
+                    form.add_field(field_name, f, filename=os.path.basename(file_path))
+                else:
+                    # Fallback for bytes or other content
+                    form.add_field(field_name, file_path)
+            
+            final_data = form
 
-            return resp_obj
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.request(
+                method, url, params=params, json=json_data, data=final_data
+            ) as response:
+                # Note: We do NOT raise_for_status() automatically here.
+                # We want to return the response object so the user (or a downstream task)
+                # can decide how to handle 4xx/5xx codes.
+                
+                body_bytes = await response.read()
+
+                # We construct the response object FIRST
+                resp_obj = HttpResponse(
+                    status=response.status,
+                    headers=dict(response.headers),
+                    body=body_bytes,
+                )
+
+                return resp_obj
 
 
 # --- Tasks ---
@@ -103,11 +109,12 @@ async def _http_post_task(
     url: str,
     json: Optional[Any] = None,
     data: Optional[Any] = None,
+    files: Optional[Dict[str, str]] = None,
     headers: Optional[Dict[str, str]] = None,
     params: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     return await _perform_request(
-        url, "POST", params=params, json_data=json, data=data, headers=headers
+        url, "POST", params=params, json_data=json, data=data, files=files, headers=headers
     )
 
 
@@ -116,10 +123,11 @@ async def _http_put_task(
     url: str,
     json: Optional[Any] = None,
     data: Optional[Any] = None,
+    files: Optional[Dict[str, str]] = None,
     headers: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     return await _perform_request(
-        url, "PUT", json_data=json, data=data, headers=headers
+        url, "PUT", json_data=json, data=data, files=files, headers=headers
     )
 
 
@@ -138,10 +146,11 @@ async def _http_request_task(
     params: Optional[Dict[str, str]] = None,
     json: Optional[Any] = None,
     data: Optional[Any] = None,
+    files: Optional[Dict[str, str]] = None,
     headers: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
     return await _perform_request(
-        url, method, params=params, json_data=json, data=data, headers=headers
+        url, method, params=params, json_data=json, data=data, files=files, headers=headers
     )
 
 

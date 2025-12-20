@@ -76,6 +76,13 @@ class TaskRetrying(TaskEvent):
 
 
 @dataclass(frozen=True)
+class TaskBlocked(TaskEvent):
+    """Fired when a task is deferred due to constraint violations."""
+
+    reason: str = "Unknown"  # e.g. "RateLimit", "ConcurrencyLimit"
+
+
+@dataclass(frozen=True)
 class ResourceEvent(Event):
     """Base for events related to resources."""
 

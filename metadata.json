@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(observatory): 全面迁移至 RawTerminalApp 并恢复同步数据摄入接口", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766236620.7748299, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(observatory): 全面统一至裸金属渲染器并移除旧版组件", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766236841.2518387, "duration_ms": 0}}

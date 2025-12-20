@@ -30,11 +30,18 @@ class _LocalSubscriptionHandle(SubscriptionHandle):
 
         # 2. Remove the queue from the broker's shared state
         async with self._parent._get_lock():
-            if self._topic in self._parent._subscriptions:
+            is_wildcard = "+" in self._topic or "#" in self._topic
+            target_dict = (
+                self._parent._wildcard_subscriptions
+                if is_wildcard
+                else self._parent._exact_subscriptions
+            )
+
+            if self._topic in target_dict:
                 try:
-                    self._parent._subscriptions[self._topic].remove(self._queue)
-                    if not self._parent._subscriptions[self._topic]:
-                        del self._parent._subscriptions[self._topic]
+                    target_dict[self._topic].remove(self._queue)
+                    if not target_dict[self._topic]:
+                        del target_dict[self._topic]
                 except ValueError:
                     # Queue already removed, which is fine
                     pass
@@ -56,7 +63,8 @@ class LocalBusConnector(Connector):
     """
 
     # --- Broker State (Shared across all instances) ---
-    _subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)
+    _exact_subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)
+    _wildcard_subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)
     _retained_messages: Dict[str, Any] = {}
     _lock: Optional[asyncio.Lock] = None
 
@@ -84,7 +92,8 @@ class LocalBusConnector(Connector):
     @classmethod
     def _reset_broker_state(cls):
         """Helper for tests to clear the 'broker'."""
-        cls._subscriptions.clear()
+        cls._exact_subscriptions.clear()
+        cls._wildcard_subscriptions.clear()
         cls._retained_messages.clear()
         # Setting to None ensures _get_lock will create a fresh one for the current loop
         cls._lock = None
@@ -118,8 +127,14 @@ class LocalBusConnector(Connector):
                     self._retained_messages[topic] = payload
 
             # Route to all matching queues
-            # We iterate over all subscription topics in the broker
-            for sub_topic, queues in self._subscriptions.items():
+
+            # 1. Exact Matches (O(1))
+            if topic in self._exact_subscriptions:
+                for q in self._exact_subscriptions[topic]:
+                    await q.put((topic, payload))
+
+            # 2. Wildcard Matches (O(W))
+            for sub_topic, queues in self._wildcard_subscriptions.items():
                 if self._topic_matches(sub_topic, topic):
                     for q in queues:
                         await q.put((topic, payload))
@@ -131,12 +146,21 @@ class LocalBusConnector(Connector):
             raise RuntimeError("Connector is not connected.")
 
         queue = asyncio.Queue()
+        is_wildcard = "+" in topic or "#" in topic
 
         async with self._get_lock():
-            self._subscriptions[topic].append(queue)
+            if is_wildcard:
+                self._wildcard_subscriptions[topic].append(queue)
+            else:
+                self._exact_subscriptions[topic].append(queue)
 
             # Deliver Retained Messages Synchronously for the caller.
+            # Note: Retained messages iteration is still O(R), which is acceptable
+            # as it happens only once per subscription.
             for retained_topic, payload in self._retained_messages.items():
+                # Check match logic:
+                # If I subscribe to "a/+", I want retained "a/1", "a/2".
+                # _topic_matches(sub=topic, topic=retained)
                 if self._topic_matches(topic, retained_topic):
                     try:
                         await callback(retained_topic, payload)

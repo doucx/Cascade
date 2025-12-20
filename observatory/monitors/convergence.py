@@ -23,6 +23,7 @@ class ConvergenceMonitor:
 
         self._is_running = False
         self._flash_count = 0
+        self.pulse_count = 0
 
     async def on_flash(self, topic: str, payload: Dict[str, Any]):
         """Callback to update agent state when a flash is received."""
@@ -68,8 +69,10 @@ class ConvergenceMonitor:
 
     def _print_status(self, order_param: float):
         """Prints a simple text-based progress bar for synchronization."""
+        self.pulse_count = self._flash_count // self.num_agents
+
         if self.callback:
-            self.callback(order_param)
+            self.callback(order_param, self.pulse_count)
             return
 
         bar_length = 40
@@ -98,7 +101,8 @@ class ConvergenceMonitor:
 
         try:
             while self._is_running:
-                order_parameter = self._calculate_order_parameter()
+                # Offload heavy numpy/math calculation to thread to avoid stuttering the UI
+                order_parameter = await asyncio.to_thread(self._calculate_order_parameter)
                 self._print_status(order_parameter)
                 await asyncio.sleep(1.0 / frequency_hz)
         finally:

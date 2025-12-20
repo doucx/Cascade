@@ -8,7 +8,7 @@ REVISION 9: Added Refractory Period to prevent 'echo' effects.
 import asyncio
 import random
 import time
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import cascade as cs
 from cascade.interfaces.protocols import Connector
@@ -18,15 +18,18 @@ from cascade.interfaces.protocols import Connector
 
 
 @cs.task
-async def send_signal(
-    topic: str,
+async def fanout_signal(
+    topics: List[str],
     payload: Dict[str, Any],
     should_send: bool,
     connector: Connector,
 ) -> None:
-    """A task to publish a message to the shared bus."""
-    if should_send and connector:
-        await connector.publish(topic, payload)
+    """A task to publish a message to multiple topics (Fan-out)."""
+    if should_send and connector and topics:
+        # Optimistic fan-out: we just fire tasks or await in loop.
+        # Since LocalBus.publish is non-blocking (just puts to queue), loop is fine.
+        for topic in topics:
+            await connector.publish(topic, payload)
 
 
 @cs.task
@@ -70,8 +73,8 @@ def firefly_agent(
     initial_phase: float,
     period: float,
     nudge: float,
-    flash_topic: str,
-    listen_topic: str,
+    neighbor_inboxes: List[str],
+    my_inbox: str,
     connector: Connector,
     refractory_period: float = 2.0,  # Blind period after flash
 ):
@@ -84,8 +87,8 @@ def firefly_agent(
         phase: float,
         period: float,
         nudge: float,
-        flash_topic: str,
-        listen_topic: str,
+        neighbor_inboxes: List[str],
+        my_inbox: str,
         connector: Connector,
         refractory_period: float,
     ):
@@ -108,8 +111,8 @@ def firefly_agent(
                     refractory_period,
                     period,
                     nudge,
-                    flash_topic,
-                    listen_topic,
+                    neighbor_inboxes,
+                    my_inbox,
                     connector,
                     refractory_period,
                 )
@@ -122,8 +125,9 @@ def firefly_agent(
             # Ensure we don't have negative timeout due to floating point drift
             wait_timeout = max(0.01, time_to_flash)
 
+            # Listen only to MY inbox
             perception = safe_recv(
-                listen_topic, timeout=wait_timeout, connector=connector
+                my_inbox, timeout=wait_timeout, connector=connector
             )
 
             @cs.task
@@ -142,9 +146,16 @@ def firefly_agent(
                         "phase": current_actual_phase,
                     }
 
-                    # We send the signal *then* recurse with phase 0
-                    flash = send_signal(
-                        topic=flash_topic,
+                    # We fan-out the signal to all neighbors
+                    # Also publish to the global visualization topic (optional, but good for debug)
+                    # For performance, visualizer could subscribe to 'firefly/+/inbox' or a dedicated vis topic.
+                    # Let's add 'firefly/visualizer' to the target list if we want centralized viz.
+                    # For now, we assume visualizer subscribes to ALL inboxes or we add a specific one.
+                    # Let's add 'firefly/flash' for the visualizer to keep it simple.
+                    targets = neighbor_inboxes + ["firefly/flash"]
+
+                    flash = fanout_signal(
+                        topics=targets,
                         payload=flash_payload,
                         should_send=True,
                         connector=connector,
@@ -158,8 +169,8 @@ def firefly_agent(
                             0.0 + jitter,
                             period,
                             nudge,
-                            flash_topic,
-                            listen_topic,
+                            neighbor_inboxes,
+                            my_inbox,
                             connector,
                             refractory_period,
                         )
@@ -168,23 +179,14 @@ def firefly_agent(
 
                 else:
                     # We heard a neighbor! NUDGE!
-                    # Advance phase, but cap at period (so we don't flash immediately,
-                    # we just get closer).
-                    # NOTE: In some models, if nudge pushes > period, we flash immediately.
-                    # Here we keep it simple: just advance.
                     next_phase = current_actual_phase + nudge
-
-                    # If the nudge pushes us past the period, we wrap around or clamp.
-                    # Standard PCO: Jump to 1 (fire). But here let's just jump forward.
-                    # If next_phase > period, the next cycle loop will see time_to_flash < 0 and fire immediately.
-
                     return firefly_cycle(
                         agent_id,
                         next_phase,
                         period,
                         nudge,
-                        flash_topic,
-                        listen_topic,
+                        neighbor_inboxes,
+                        my_inbox,
                         connector,
                         refractory_period,
                     )
@@ -196,8 +198,8 @@ def firefly_agent(
         initial_phase,
         period,
         nudge,
-        flash_topic,
-        listen_topic,
+        neighbor_inboxes,
+        my_inbox,
         connector,
         refractory_period,
     )

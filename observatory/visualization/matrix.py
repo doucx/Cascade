@@ -32,6 +32,20 @@ class StateMatrix:
             self.brightness[y, x] = state
             self.active[y, x] = True
 
+    def update_batch(self, coords_x: np.ndarray, coords_y: np.ndarray, states: np.ndarray):
+        """
+        Updates a batch of cells using vectorized assignment.
+        
+        Args:
+            coords_x: 1D array of x-coordinates.
+            coords_y: 1D array of y-coordinates.
+            states: 1D array of corresponding states.
+        """
+        # NumPy Advanced Indexing: This is the core of the optimization.
+        # It updates all specified (y, x) pairs in a single, fast operation.
+        self.brightness[coords_y, coords_x] = states
+        self.active[coords_y, coords_x] = True
+
     def decay(self, dt: float):
         """
         Applies time-based decay to the entire matrix.

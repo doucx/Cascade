@@ -48,12 +48,22 @@ class TerminalApp:
 
     async def direct_update_grid(self, x: int, y: int, state: float):
         """
-        Asynchronously adds a grid update to the frame buffer for batch processing.
-        This is extremely fast and non-blocking from the caller's perspective.
+        [DEPRECATED - Inefficient for >1 update per frame]
+        Asynchronously adds a single grid update to the frame buffer.
+        Prefer `direct_update_grid_batch` for performance.
         """
-        # Acquire lock to safely add to buffer if _flush_buffer is swapping it
         async with self._flush_lock:
             self._frame_buffer.add((x, y, state))
+
+    async def direct_update_grid_batch(self, updates: list):
+        """
+        Asynchronously adds a batch of grid updates to the frame buffer.
+        This is the highly performant method for thundering herds.
+        """
+        if not updates:
+            return
+        async with self._flush_lock:
+            self._frame_buffer.update(updates)
 
     def update_status(self, key: str, value: Any):
         """Asynchronously update a key-value pair in the status bar."""

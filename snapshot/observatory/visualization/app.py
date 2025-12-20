@@ -12,7 +12,7 @@ class GridView(Static):
 
     grid_data: reactive[np.ndarray] = reactive(
         np.zeros((1, 1), dtype=np.float32),
-        comparator=lambda a, b: np.array_equal(a, b)
+        always_update=True
     )
     palette_func: reactive[Callable | None] = reactive(None)
 

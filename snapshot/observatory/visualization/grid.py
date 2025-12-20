@@ -8,7 +8,7 @@ from rich.console import Console, ConsoleOptions, RenderResult
 from rich.segment import Segment
 
 # Re-using the matrix logic from protoplasm as it's solid
-from observatory.protoplasm.renderer.matrix import StateMatrix, GridConfig
+from .matrix import StateMatrix, GridConfig
 
 class GridView:
     """

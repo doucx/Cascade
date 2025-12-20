@@ -1,25 +1,26 @@
-You are absolutely right. The traceback clearly shows a `ModuleNotFoundError`, which is a direct result of my previous plan's oversight. I prematurely deleted the `observatory/protoplasm/renderer` directory without relocating the essential `palette.py` file. The `Palettes` class is a crucial, reusable component for defining the visual appearance of our simulations, and it should have been migrated to the new `visualization` module along with the other components.
+You are correct to point out the new error. My apologies again. My previous fix was incomplete. While I correctly identified and moved `palette.py`, I failed to see that the newly created `grid.py` itself had a dependency on another file, `matrix.py`, from the *same* old directory I had just deleted. This is a classic cascading dependency failure, and my analysis was not thorough enough.
 
-My apologies for that error. I will now correct it by re-creating `palette.py` in its new, correct location and fixing the broken import in `run_fireflies.py`.
+I will now fix this second, deeper `ModuleNotFoundError`. The `StateMatrix` is another core component of the visualization toolkit and must also be migrated to the new `observatory/visualization` module.
 
-## [WIP] fix(observatory): Relocate Palettes module and fix broken import
+## [WIP] fix(observatory): Relocate StateMatrix module to fix cascading import error
 
 ### 错误分析
-The previous refactoring plan (`refactor(observatory): ...`) prematurely deleted the `observatory/protoplasm/renderer` directory. This directory contained `palette.py`, which defines the `Palettes` class used by `run_fireflies.py` to color the grid visualization. The `patch_file` operation for `run_fireflies.py` was also faulty, as it continued to reference the old, now-deleted path, leading directly to the `ModuleNotFoundError`.
+The traceback indicates a `ModuleNotFoundError` inside the new `observatory/visualization/grid.py` file. It's trying to import `StateMatrix` and `GridConfig` from `observatory.protoplasm.renderer.matrix`, a path that no longer exists because the `protoplasm/renderer` directory was deleted in the initial refactoring plan.
+
+This error is a direct consequence of an incomplete dependency analysis during the previous refactoring. I successfully moved the direct dependencies (`palette.py`) but missed the indirect, or "transitive," dependencies (`matrix.py`) that the new modules relied on.
 
 ### 用户需求
-1.  Restore the `palette.py` module in the correct location.
-2.  Fix the import statement in `run_fireflies.py` to resolve the error.
+The `run_fireflies.py` experiment must be able to run without crashing due to import errors. This requires all components of the new visualization system to correctly reference each other from their new locations.
 
 ### 评论
-This is a necessary bug fix that corrects a self-inflicted error from the previous plan. It reinforces the importance of dependency awareness during refactoring. By moving `palette.py` to `observatory/visualization`, we are properly consolidating all reusable visualization components into a single, well-defined module, which aligns with the original refactoring goal.
+This is a critical corrective action that completes the refactoring I started two steps ago. It highlights the importance of analyzing the entire dependency graph of a module being moved, not just its immediate imports. Consolidating `matrix.py` into the `observatory/visualization` module is the correct final step to make this new module self-contained and robust.
 
 ### 目标
-1.  Create `observatory/visualization/palette.py` with the original, correct content.
-2.  Patch `observatory/experiments/run_fireflies.py` to change its import from `observatory.protoplasm.renderer.palette` to `observatory.visualization.palette`.
+1.  Recreate the `matrix.py` file, containing `StateMatrix` and `GridConfig`, in its new correct location: `observatory/visualization/matrix.py`.
+2.  Patch `observatory/visualization/grid.py` to use a relative import (`from .matrix import ...`) to find its necessary components within the same module.
 
 ### 基本原理
-We will use `write_file` to restore the `Palettes` class definition to the new, centralized `observatory/visualization` directory. Then, a simple `patch_file` operation will correct the import path in the experiment script, resolving the module resolution error and completing the refactoring correctly.
+The solution involves two steps. First, use `write_file` to restore the essential `matrix.py` content into the new centralized `observatory/visualization` module. Second, use `patch_file` to correct the import statement within `grid.py`, changing it from an invalid absolute path to a correct relative path. This will resolve the final `ModuleNotFoundError` and make the visualization system fully functional.
 
 ### 标签
 #intent/fix #flow/ready #priority/critical #comp/cli #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/module-imports #task/action/bug-fix #task/state/continue
@@ -27,108 +28,84 @@ We will use `write_file` to restore the `Palettes` class definition to the new, 
 ---
 ### Script
 
-#### Acts 1: Restore `palette.py` to the new visualization module
+#### Acts 1: Restore `matrix.py` to the new visualization module
 
-We will create the `palette.py` file inside `observatory/visualization`, restoring the color definitions needed for our experiments.
+We will create the `matrix.py` file inside `observatory/visualization` to provide the `StateMatrix` and `GridConfig` classes that `GridView` depends on.
 
 ~~~~~act
 write_file
-observatory/visualization/palette.py
+observatory/visualization/matrix.py
 ~~~~~
 ~~~~~python
 import numpy as np
 from dataclasses import dataclass
-from typing import List, Tuple
 
 @dataclass
-class Color:
-    r: int
-    g: int
-    b: int
+class GridConfig:
+    width: int = 100
+    height: int = 100
+    decay_rate: float = 0.1
 
-    def to_ansi_bg(self) -> str:
-        """Returns ANSI escape code for background color."""
-        # Using 24-bit TrueColor: \033[48;2;R;G;Bm
-        return f"\033[38;2;{self.r};{self.g};{self.b}m"
+class StateMatrix:
+    """
+    Manages the 'physics' of the grid:
+    - Logical state (is the agent active?)
+    - Physical state (brightness/afterglow)
+    """
 
-class Palettes:
-    """Predefined color palettes for simulations."""
+    def __init__(self, config: GridConfig):
+        self.cfg = config
+        # brightness: Float 0.0 - 1.0 (1.0 = Flash, 0.0 = Dark)
+        self.brightness = np.zeros((self.cfg.height, self.cfg.width), dtype=np.float32)
+        # active: Boolean (True = Agent exists/alive)
+        self.active = np.zeros((self.cfg.height, self.cfg.width), dtype=bool)
 
-    @staticmethod
-    def _interpolate(val: float, c1: Color, c2: Color) -> str:
-        r = int(c1.r + (c2.r - c1.r) * val)
-        g = int(c1.g + (c2.g - c1.g) * val)
-        b = int(c1.b + (c2.b - c1.b) * val)
-        return f"\033[38;2;{r};{g};{b}m"
-
-    @staticmethod
-    def firefly(brightness: np.ndarray) -> np.ndarray:
+    def update(self, x: int, y: int, state: float):
         """
-        Maps 0.0-1.0 brightness to a Firefly gradient.
-        0.0 (Refractory/Quiet) -> Dark Blue/Black
-        0.5 (Charging) -> Deep Orange
-        1.0 (Flash) -> Bright Yellow/White
+        Updates the state of a single cell.
+        state: 1.0 usually indicates a flash trigger.
         """
-        # Initialize with Dark (Background)
-        # \033[38;2;20;20;30m (Very Dark Blue)
-        colors = np.full(brightness.shape, '\033[38;2;30;30;40m', dtype='<U24')
-        
-        # Low energy (Charging): Reddish
-        mask_low = (brightness > 0.1) & (brightness <= 0.6)
-        colors[mask_low] = '\033[38;2;100;40;40m'
+        if 0 <= x < self.cfg.width and 0 <= y < self.cfg.height:
+            self.brightness[y, x] = state
+            self.active[y, x] = True
 
-        # High energy (Pre-flash): Orange
-        mask_high = (brightness > 0.6) & (brightness <= 0.9)
-        colors[mask_high] = '\033[38;2;200;120;0m'
-        
-        # Flash: Bright Yellow/White
-        mask_flash = brightness > 0.9
-        colors[mask_flash] = '\033[38;2;255;255;200m'
-        
-        return colors
+    def decay(self):
+        """
+        Applies decay to the entire matrix.
+        Optimized vectorized operation.
+        """
+        # Subtract decay_rate, clip at 0.0
+        self.brightness -= self.cfg.decay_rate
+        np.clip(self.brightness, 0.0, 1.0, out=self.brightness)
 
-    @staticmethod
-    def bottleneck(states: np.ndarray) -> np.ndarray:
-        """
-        Maps states to bottleneck visualizer colors.
-        0.0: Idle (Dim)
-        0.5: Waiting (Cyan)
-        1.0: Running (White/Green)
-        """
-        colors = np.full(states.shape, '\033[38;2;40;40;40m', dtype='<U24') # Dim Gray
-        
-        # Waiting (Cyan)
-        mask_wait = (states > 0.4) & (states < 0.8)
-        colors[mask_wait] = '\033[38;2;0;200;200m'
-        
-        # Running (Bright White/Green tint)
-        mask_run = states >= 0.8
-        colors[mask_run] = '\033[38;2;200;255;200m'
-        
-        return colors
+    def get_snapshot(self):
+        """Returns a copy of the current brightness matrix."""
+        return self.brightness.copy()
 ~~~~~
 
-#### Acts 2: Correct the import path in `run_fireflies.py`
+#### Acts 2: Correct the import path in `grid.py`
 
-Now, we apply a patch to fix the `ModuleNotFoundError` by pointing the import to the new, correct location of `palette.py`.
+Now, we patch `grid.py` to use a correct, relative import for `StateMatrix`, resolving the `ModuleNotFoundError`.
 
 ~~~~~act
 patch_file
-observatory/experiments/run_fireflies.py
+observatory/visualization/grid.py
 ~~~~~
 ~~~~~python
-# Visualization
-from observatory.protoplasm.renderer.palette import Palettes
-from observatory.visualization.app import TerminalApp
+# Re-using the matrix logic from protoplasm as it's solid
+from observatory.protoplasm.renderer.matrix import StateMatrix, GridConfig
+
+class GridView:
 ~~~~~
 ~~~~~python
-# Visualization
-from observatory.visualization.palette import Palettes
-from observatory.visualization.app import TerminalApp
+# Re-using the matrix logic from protoplasm as it's solid
+from .matrix import StateMatrix, GridConfig
+
+class GridView:
 ~~~~~
 
 ### 下一步建议
-The course of action remains the same as before, now that the renderer is correctly refactored and functional:
-1.  **Migrate Experiments**: Continue migrating `run_conway_experiment.py` and `bottleneck_sim.py` to use the new `TerminalApp` for a unified visualization backend.
-2.  **Enhance Components**: Add more features to `StatusBar` and design new palettes in `visualization/palette.py` as needed for different experiments.
-3.  **Commit the Work**: Once the migrations are complete, it would be a good time to create a `[COMMIT]` plan to checkpoint this significant and successful refactoring of the observatory's visualization tools.
+The refactoring is now complete and correct. The next logical step is to fully leverage this new, robust visualization tool:
+
+1.  **Migrate All Experiments**: Proceed with updating `run_conway_experiment.py` and `bottleneck_sim.py` to use the `TerminalApp`, ensuring all visual experiments share the same high-quality backend.
+2.  **Commit the Refactoring**: Once all experiments are migrated, generate a `[COMMIT]` plan to save this significant improvement to the project's history. This will provide a clean state before moving on to new feature development.

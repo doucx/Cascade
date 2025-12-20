@@ -80,7 +80,7 @@ class Palettes:
 
         # Blocked (Red) ~ 0.7
         mask_blocked = (states >= 0.5) & (states < 0.9)
-        colors[mask_blocked] = "rgb(255,50,50)"
+        colors[mask_blocked] = "rgb(180,40,40)"
 
         # Running (Bright White) ~ 1.0
         mask_run = states >= 0.9

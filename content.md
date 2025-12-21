@@ -1,171 +1,60 @@
-简要回答：
-好的，我将把 `observatory/agents/kuramoto.py` 中的 Firefly Agent 迁移到基于 `TailCall` 的 VM 模式，并同步更新 `run_fireflies.py` 以启用 VM 执行。
+好的，既然测试已经通过，我们将把这些优化和基础设施的改进作为一个完整的逻辑单元提交。
 
-## [WIP] refactor(agent): 迁移 Kuramoto Agent 至 VM TailCall 模式
+## [COMMIT] refactor(observatory): 迁移 Kuramoto Agent 至 VM TailCall 并优化基础设施
 
 ### 用户需求
-将 `observatory/agents/kuramoto.py` 中的 `firefly_agent` 从基于图构建递归（依赖 TCO）的模式，迁移到使用 `TailCall` 返回值的 VM 执行模式。
+提交已验证的 Kuramoto Agent 迁移代码，包括启用 VM 模式、重构网络层目录结构以及新增的调试工具。
 
 ### 评论
-这是一个显著的性能优化步骤。通过使用 VM 和 `TailCall`，我们可以消除每次递归迭代中的图构建和哈希开销，将 Agent 的运行时开销降低到接近原生 `asyncio` 的水平，同时保留 Cascade 的可观测性和资源管理能力。
+这次提交标志着 Cascade 实验基础设施的一个里程碑。我们不仅通过 `TailCall` 实现了 Agent 的性能飞跃，还清理了代码结构并建立了基准测试体系。这为后续更大规模（N=10k+）的复杂仿真奠定了物理和性能基础。
 
 ### 目标
-1.  重写 `observatory/agents/kuramoto.py`，使其成为一个单一的 `@cs.task`，内部使用 `asyncio` 原语和 `TailCall` 进行状态流转。
-2.  更新 `observatory/experiments/run_fireflies.py`，在启动实验时启用 `use_vm=True`。
+执行 Git 提交，持久化性能优化成果。
 
 ### 基本原理
-目前的 `firefly_agent` 通过递归调用自身来生成新的计算图节点。虽然 Engine 的 TCO 机制可以优化这一点，但在高频（如 30Hz）和大规模（2500+ Agent）场景下，图操作的开销仍然是瓶颈。
-`TailCall` 允许任务直接指示 VM 重置当前栈帧并使用新参数重新开始执行，从而实现零开销的无限递归。这要求我们将逻辑从“声明式图构建”转变为“命令式异步执行”。
+按照「脚本与 Git 操作互斥」原则，在代码修改验证通过后，通过独立的 `[COMMIT]` 计划完成代码入库，确保提交历史的整洁。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/runtime #concept/vm #scope/perf #ai/instruct #task/domain/vm #task/object/kuramoto-agent #task/action/migration #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/runtime #comp/benchmarks #scope/perf #ai/instruct #task/domain/vm #task/object/kuramoto-agent #task/action/migration #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 重写 Kuramoto Agent
+#### Acts 1: 提交变更
 
-我们将完全重写 `observatory/agents/kuramoto.py`。新的实现将不再构建子任务（如 `fanout_direct`），而是直接在一个大的异步任务中处理逻辑。
+我们将所有涉及的文件添加到暂存区，并执行一次详细的提交。
 
 ~~~~~act
-write_file
+git_add
 observatory/agents/kuramoto.py
+observatory/experiments/run_fireflies.py
+observatory/networking/direct_channel.py
+observatory/scripts/debug_headless_throughput.py
+observatory/scripts/debug_renderer_throughput.py
+observatory/scripts/profile_entry.py
 ~~~~~
-~~~~~python
-"""
-Implementation of a Firefly agent based on the Kuramoto model
-of coupled oscillators, utilizing the Cascade VM and TailCall optimization.
-
-REVISION 15: Migration to VM TailCall.
-This version runs as a single, long-lived async task on the Cascade VM.
-It uses `TailCall` to perform zero-overhead recursion, bypassing the
-graph construction and solving phases for each step.
-"""
-
-import asyncio
-import random
-import time
-from typing import Any, Dict, List
-
-import cascade as cs
-from cascade.interfaces.protocols import Connector
-from cascade.runtime.blueprint import TailCall
-from observatory.networking.direct_channel import DirectChannel
-
-
-@cs.task
-async def firefly_agent(
-    agent_id: int,
-    initial_phase: float,
-    period: float,
-    nudge: float,
-    neighbors: List[DirectChannel],
-    my_channel: DirectChannel,
-    connector: Connector,
-    refractory_period: float = 2.0,
-):
-    """
-    The main VM-compatible entry point for a single firefly agent.
-    
-    Instead of building a graph of LazyResults, this task executes imperative
-    async logic and returns a `TailCall` object to trigger the next iteration.
-    """
-
-    # 1. Refractory Path
-    if initial_phase < refractory_period:
-        wait_duration = refractory_period - initial_phase
-        # In VM mode, we use direct asyncio sleep instead of cs.wait
-        if wait_duration > 0:
-            await asyncio.sleep(wait_duration)
-        
-        # Recurse to 'sensitive' phase
-        return TailCall(kwargs={
-            "initial_phase": refractory_period,
-            # Pass through other invariant arguments
-            "agent_id": agent_id,
-            "period": period,
-            "nudge": nudge,
-            "neighbors": neighbors,
-            "my_channel": my_channel,
-            "connector": connector,
-            "refractory_period": refractory_period
-        })
-
-    # 2. Sensitive Path
-    else:
-        time_to_flash = period - initial_phase
-        # Ensure we don't wait for a negative time or 0
-        wait_timeout = max(0.001, time_to_flash)
-        
-        start_time = time.time()
-        try:
-            # Wait for neighbor signal or timeout (which means we flash)
-            _signal = await asyncio.wait_for(my_channel.recv(), timeout=wait_timeout)
-            
-            # Received Signal -> Nudge
-            elapsed = time.time() - start_time
-            next_phase = initial_phase + elapsed + nudge
-            
-            return TailCall(kwargs={
-                "initial_phase": next_phase,
-                "agent_id": agent_id,
-                "period": period,
-                "nudge": nudge,
-                "neighbors": neighbors,
-                "my_channel": my_channel,
-                "connector": connector,
-                "refractory_period": refractory_period
-            })
-
-        except asyncio.TimeoutError:
-            # Timeout -> Flash
-            flash_payload = {"agent_id": agent_id, "phase": period}
-            
-            # Telemetry (Fire and Forget)
-            if connector:
-                asyncio.create_task(connector.publish("firefly/flash", flash_payload))
-            
-            # Broadcast to neighbors
-            for neighbor in neighbors:
-                await neighbor.send(flash_payload)
-            
-            # Reset Phase with slight jitter
-            jitter = random.uniform(0.0, 0.1)
-            
-            return TailCall(kwargs={
-                "initial_phase": jitter,
-                "agent_id": agent_id,
-                "period": period,
-                "nudge": nudge,
-                "neighbors": neighbors,
-                "my_channel": my_channel,
-                "connector": connector,
-                "refractory_period": refractory_period
-            })
-~~~~~
-
-#### Acts 2: 更新实验脚本启用 VM
-
-我们需要在 `observatory/experiments/run_fireflies.py` 中将 `engine.run()` 的调用修改为启用 `use_vm=True`。
 
 ~~~~~act
-patch_file
-observatory/experiments/run_fireflies.py
+git_commit
 ~~~~~
-~~~~~python
-        agent_tasks.append(engine.run(agent_workflow))
+~~~~~text
+refactor(observatory): migrate Kuramoto agent to VM TailCall and optimize infra
 
-        # Yield every 500 agents to keep UI responsive during setup
-        if i > 0 and i % 500 == 0:
-~~~~~
-~~~~~python
-        # Enable VM execution for TailCall support
-        agent_tasks.append(engine.run(agent_workflow, use_vm=True))
+Migrated the Kuramoto firefly agent to the high-performance VM path using the
+TailCall primitive. This refactoring eliminates the graph building and solving
+overhead per simulation tick, enabling massive agent counts with minimal CPU latency.
 
-        # Yield every 500 agents to keep UI responsive during setup
-        if i > 0 and i % 500 == 0:
+Key changes:
+- Refactored kuramoto.py: Removed nested task definitions in favor of imperative
+  async logic returning TailCall objects.
+- Updated run_fireflies.py: Enabled use_vm=True for agent execution.
+- Restructured networking: Moved DirectChannel to a stable location at
+  observatory/networking/ to improve module organization.
+- Added Benchmarking Suite: Introduced specialized scripts for measuring headless
+  throughput, renderer performance, and detailed profiling (cProfile).
 ~~~~~
 
 ### 下一步建议
-迁移完成后，建议运行 `observatory/experiments/run_fireflies.py` 进行验证。如果一切正常，您应该会看到性能（FPS）有显著提升，且内存占用保持稳定。之后可以考虑将资源调度和约束检查集成到 VM 中。
+- **性能基准记录**: 建议使用 `observatory/scripts/profile_entry.py` 运行一次详细的性能画像分析，记录下当前的 CPU 分布情况作为“黄金基准”。
+- **VM 能力增强**: 考虑下一步在 VM 的 `_dispatch` 循环中集成 `ConstraintManager` 的检查逻辑，使 `TailCall` 递归中的每一跳都能享受到 Cascade 的并发治理能力。

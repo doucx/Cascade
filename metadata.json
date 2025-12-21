@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(agent): 迁移 Kuramoto Agent 至 VM TailCall 模式", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766317146.832048, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(observatory): 迁移 Kuramoto Agent 至 VM TailCall 并优化基础设施", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766317399.823978, "duration_ms": 0}}

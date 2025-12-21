@@ -1,3 +1,4 @@
+import inspect
 from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Any, Dict
 from enum import Enum, auto
@@ -39,6 +40,9 @@ class Node:
 
     # Pre-resolved literal inputs for the task
     literal_inputs: Dict[str, Any] = field(default_factory=dict)
+
+    # Cached signature to avoid re-inspection
+    signature: Optional[inspect.Signature] = None
 
     def __hash__(self):
         return hash(self.id)

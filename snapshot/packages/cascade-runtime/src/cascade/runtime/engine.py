@@ -229,6 +229,7 @@ class Engine:
 
                         # 3. Execute
                         result = await self._execute_graph(
+                            graph,  # Pass the built/cached graph
                             current_target,
                             params or {},
                             active_resources,
@@ -314,14 +315,15 @@ class Engine:
 
     async def _execute_graph(
         self,
+        graph: Graph,  # Now accepts the pre-built graph
         target: Any,
         params: Dict[str, Any],
         active_resources: Dict[str, Any],
         run_id: str,
         state_backend: StateBackend,
     ) -> Any:
-        graph = build_graph(target)
-        self.flow_manager = FlowManager(graph, target._uuid)
+        # The graph is now passed in, so we don't build it again.
+        flow_manager = FlowManager(graph, target._uuid)
         plan = self.solver.resolve(graph)
 
         # Track blocked state locally to avoid spamming Blocked events every loop tick

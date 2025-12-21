@@ -46,8 +46,8 @@ class ArgumentResolver:
         args = [positional_args_dict[i] for i in sorted_indices]
 
         # Handle Inject in defaults (if not overridden by inputs)
-        if node.callable_obj:
-            sig = inspect.signature(node.callable_obj)
+        if node.signature:
+            sig = node.signature
             for param in sig.parameters.values():
                 if isinstance(param.default, Inject):
                     if param.name not in final_kwargs:

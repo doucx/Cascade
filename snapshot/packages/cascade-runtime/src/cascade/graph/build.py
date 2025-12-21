@@ -1,3 +1,4 @@
+import inspect
 from typing import Dict, Any
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -41,6 +42,7 @@ class GraphBuilder:
             cache_policy=result._cache_policy,
             constraints=result._constraints,
             literal_inputs=literal_inputs,
+            signature=inspect.signature(result.task.func) if result.task.func else None,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node

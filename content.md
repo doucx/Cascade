@@ -1,70 +1,52 @@
-太棒了！测试全部通过意味着我们的重构不仅实现了预期的深度依赖支持，而且保持了系统的稳定性。
+好的，我们现在进入**阶段三：文档与契约**。
 
-现在我们将这些改动作为一个完整的逻辑单元提交。这标志着 Cascade 架构向“直觉化”迈出了重要的一步。
+为了确保 Cascade 的“隐性知识”转化为“显性文档”，并让新环境的搭建真正实现“一键化”，我们需要更新核心入门指南并创建开发者贡献规范。
 
-## [COMMIT] refactor: 架构直觉化与深度依赖支持
+## [WIP] docs: 建立开发契约与现代化入门指南
 
 ### 用户需求
-解决 Cascade 架构中不符合直觉的限制（如无法在列表中嵌套依赖）并提升开发者体验。
+1.  **环境规范化**: 记录并推广 `uv pip install -e .[dev]` 作为唯一的开发环境入口。
+2.  **教程现代化**: 更新入门教程，展示阶段二引入的“直觉化”特性（如列表依赖、`cs.format`）。
+3.  **建立贡献指南**: 创建 `CONTRIBUTING.md` 以固化开发流程。
 
 ### 评论
-这是 Cascade 核心运行时的一次重大进化。通过从“浅层参数扫描”转向“深度结构解析”，我们彻底消除了 Python 开发者在使用列表、字典组合任务时最常遇到的陷阱。同时，新增的 `cs.dict` 和 `cs.format` 让工作流的表达更加自然，而显式的 `ResourceNotFoundError` 则让 DI 系统的调试变得轻松。
+文档是项目的生命线。通过将最新的架构改动和环境管理经验沉淀为文档，我们不仅降低了新人的进入门槛，也为未来的自动化 CI/CD 流程奠定了基础。这是从“个人项目”迈向“成熟开源项目”的关键一步。
 
 ### 目标
-1.  提交支持深度依赖发现的 `GraphBuilder` 和 `ArgumentResolver`。
-2.  提交新增的 `cs.dict` 和 `cs.format` 提供者。
-3.  提交增强的 DI 报错机制。
-4.  包含所有配套的测试用例。
+1.  读取并分析现有的 `README.md` 和 `docs/tutorial/getting-started.md`。
+2.  创建根目录下的 `CONTRIBUTING.md`。
+3.  更新 `docs/tutorial/getting-started.md`，使用最新的 API 示例。
+4.  在 `README.md` 中增加关于开发环境设置的简要说明。
 
 ### 基本原理
-我们将所有与阶段二（架构直觉化）相关的代码和测试变动打包提交。这包括运行时内核的重构、提供者扩展以及相应的工具函数调整。
+我们将遵循 [Cascade 技术债务偿还与 DX 优化路线图](../../01_current/项目/Cascade%20%E6%8A%80%E6%9C%AF%E5%80%BA%E5%8A%A1%E5%81%BF%E8%BF%98%E4%B8%8E%20DX%20%E4%BC%98%E5%8C%96%E8%B7%AF%E7%BA%BF%E5%9B%BE.md) 中的行动建议。重点是确保所有文档中的安装指令都是确定且一致的。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/core #comp/runtime #comp/py #concept/graph #concept/di #scope/api #scope/dx #ai/instruct #task/domain/core #task/object/architecture #task/action/refactor #task/state/end #task/status/completed
+#intent/document #flow/ready #priority/medium 
+#comp/docs #scope/dx #ai/instruct
+#task/domain/docs #task/object/contribution-guide #task/action/writing
+#task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交阶段二成果
+#### Acts 1: 读取现有文档
 
-我们将所有修改过的文件添加到暂存区并创建详细的提交。
+我需要先查看目前的文档内容，以便进行精准的更新。
 
 ~~~~~act
-git_add
-packages/cascade-py/src/cascade/providers/helpers.py
-packages/cascade-py/pyproject.toml
-packages/cascade-runtime/src/cascade/runtime/exceptions.py
-packages/cascade-runtime/src/cascade/graph/build.py
-packages/cascade-runtime/src/cascade/runtime/resolvers.py
-packages/cascade-runtime/src/cascade/graph/serialize.py
-packages/cascade-py/src/cascade/tools/preview.py
-tests/cascade-py/providers/test_helpers.py
-tests/cascade-runtime/graph/test_build.py
+read_file
+README.md
 ~~~~~
 
 ~~~~~act
-git_commit
-~~~~~
-~~~~~text
-refactor: implement deep dependency resolution and intuitive helpers
-
-This major refactoring removes long-standing architectural limitations and improves the overall Developer Experience (DX).
-
-Key Changes:
-1. **Deep Dependency Discovery**: Refactored `GraphBuilder` and `ArgumentResolver` to recursively scan and resolve dependencies nested within lists, tuples, and dictionaries. This allows users to naturally group task results without breaking the dependency graph.
-2. **Intuitive Helpers**: Introduced `cs.dict()` and `cs.format()` providers. `cs.format` provides a lightweight, Jinja-free way to perform string interpolation, while `cs.dict` enables clean composition of dynamic task inputs.
-3. **Explicit DI Errors**: Replaced silent failures and `None` injections in `cs.inject` with a loud `ResourceNotFoundError`, significantly easing the debugging of dependency injection issues.
-4. **Improved Observability**: Updated the `dry_run` tool to filter out internal lazy objects from the output, ensuring a clean, literal-only view of the execution plan.
-
-Validated with new unit and integration tests covering nested dependency resolution and the new helper providers.
+read_file
+docs/tutorial/getting-started.md
 ~~~~~
 
 ### 下一步建议
-我们已经完成了阶段二的核心工作。现在 Cascade 已经变得非常顺手且强大。
-
-下一步建议进入 **阶段三：文档与契约**。
-1.  **编写 `CONTRIBUTING.md`**: 记录新的安装流程 (`uv pip install -e .[dev]`) 和开发规范。
-2.  **更新入门教程**: 确保 `getting-started.md` 展示了我们刚实现的这些“直觉化”用法（例如列表依赖和 `cs.format`）。
-
-如果你准备好了，请指示我开始阶段三。
+在阅读完这些文件后，我将：
+1.  编写 `CONTRIBUTING.md`，明确开发依赖安装、测试运行和代码规范。
+2.  重写 `getting-started.md` 中的示例，将其从过时的 `cs.template`（在简单场景下）改为更简洁的 `cs.format`，并展示列表依赖的威力。
+3.  最后通过一个 `[COMMIT]` 计划结束这一阶段。

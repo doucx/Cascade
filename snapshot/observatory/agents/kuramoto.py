@@ -2,7 +2,8 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 10: Refactored to use DirectChannel for O(1) communication.
+REVISION 11: Refactored internal loop to be imperative (async while)
+             to eliminate graph-building overhead on each cycle.
 """
 
 import asyncio
@@ -15,36 +16,29 @@ from cascade.interfaces.protocols import Connector
 from observatory.networking.direct_channel import DirectChannel
 
 
-# --- Atomic Primitives for Agent Behavior ---
+# --- Helper Functions (No longer @cs.task) ---
 
 
-@cs.task
 async def fanout_direct(
     neighbors: List[DirectChannel],
     payload: Dict[str, Any],
-    should_send: bool,
-    connector: Connector,  # For visualization/telemetry side-channel
-) -> None:
+    connector: Connector,
+):
     """
     Fan-out using DirectChannel (Fast Path) + Connector (Slow Path).
     """
-    if not should_send:
-        return
-
     # 1. Fast Path: Zero-copy delivery to neighbors
-    # We yield to the event loop occasionally to prevent starvation if fan-out is huge
     for i, neighbor in enumerate(neighbors):
         await neighbor.send(payload)
-        if i % 10 == 0:
+        # Yield to allow other tasks to run in a large fan-out scenario
+        if i > 0 and i % 10 == 0:
             await asyncio.sleep(0)
 
     # 2. Slow Path: Telemetry for Visualization
     if connector:
-        # We publish to a known topic for the visualizer
         await connector.publish("firefly/flash", payload)
 
 
-@cs.task
 async def safe_recv_channel(
     channel: DirectChannel,
     timeout: float,
@@ -54,7 +48,6 @@ async def safe_recv_channel(
     """
     start_time = time.time()
     try:
-        # DirectChannel.recv() returns the payload directly
         signal = await asyncio.wait_for(channel.recv(), timeout=timeout)
         elapsed = time.time() - start_time
         return {"signal": signal, "timeout": False, "elapsed": elapsed}
@@ -63,10 +56,11 @@ async def safe_recv_channel(
         return {"signal": None, "timeout": True, "elapsed": elapsed}
 
 
-# --- Core Agent Logic ---
+# --- Core Agent (now a long-running @cs.task with an internal loop) ---
 
 
-def firefly_agent(
+@cs.task
+async def firefly_agent(
     agent_id: int,
     initial_phase: float,
     period: float,
@@ -77,118 +71,40 @@ def firefly_agent(
     refractory_period: float = 2.0,
 ):
     """
-    The main entry point for a single firefly agent.
-    Now uses DirectChannel topology.
+    This is the main entry point for a single firefly agent.
+    It's a long-running task that contains the agent's entire lifecycle.
     """
+    phase = initial_phase
 
-    def firefly_cycle(
-        agent_id: int,
-        phase: float,
-        period: float,
-        nudge: float,
-        neighbors: List[DirectChannel],
-        my_channel: DirectChannel,
-        connector: Connector,
-        refractory_period: float,
-    ):
+    while True:
         # --- Logic Branching ---
 
-        # 1. Refractory Check: If we are in the "blind" zone, just wait.
+        # 1. Refractory Period: We are "blind" and just wait.
         if phase < refractory_period:
-            # We are blind. Wait until we exit refractory period.
             blind_wait_duration = refractory_period - phase
+            await asyncio.sleep(blind_wait_duration)
+            phase = refractory_period
+            continue  # Re-evaluate state in the next loop iteration
 
-            # Use cs.wait for pure time passage (no listening)
-            wait_action = cs.wait(blind_wait_duration)
+        # 2. Sensitive Period: Listen for neighbors until it's time to flash.
+        time_to_flash = period - phase
+        wait_timeout = max(0.01, time_to_flash)
 
-            @cs.task
-            def after_refractory(_):
-                # We have advanced time by 'blind_wait_duration'.
-                # Our phase is now exactly 'refractory_period'.
-                return firefly_cycle(
-                    agent_id,
-                    refractory_period,
-                    period,
-                    nudge,
-                    neighbors,
-                    my_channel,
-                    connector,
-                    refractory_period,
-                )
+        perception = await safe_recv_channel(my_channel, timeout=wait_timeout)
 
-            return after_refractory(wait_action)
+        is_timeout = perception.get("timeout", False)
+        elapsed_time = perception.get("elapsed", 0.0)
+        phase += elapsed_time
 
-        # 2. Sensitive Check: We are past refractory. Listen for neighbors.
+        # --- State Update ---
+        if is_timeout:
+            # FLASH: We reached the end of our cycle.
+            flash_payload = {"agent_id": agent_id, "phase": phase}
+            await fanout_direct(neighbors, flash_payload, connector)
+
+            # RESET: Start a new cycle with a bit of jitter.
+            phase = random.uniform(0.0, 0.1)
+
         else:
-            time_to_flash = period - phase
-            # Ensure we don't have negative timeout due to floating point drift
-            wait_timeout = max(0.01, time_to_flash)
-
-            # Listen to MY channel
-            perception = safe_recv_channel(my_channel, timeout=wait_timeout)
-
-            @cs.task
-            def process_perception(p: Dict[str, Any]) -> cs.LazyResult:
-                is_timeout = p.get("timeout", False)
-                elapsed_time = p.get("elapsed", 0.0)
-
-                # Update actual phase based on real time passed
-                current_actual_phase = phase + elapsed_time
-
-                # Determine Action
-                if is_timeout:
-                    # We reached the end of the period. FLASH!
-                    flash_payload = {
-                        "agent_id": agent_id,
-                        "phase": current_actual_phase,
-                    }
-
-                    flash = fanout_direct(
-                        neighbors=neighbors,
-                        payload=flash_payload,
-                        should_send=True,
-                        connector=connector,
-                    )
-
-                    @cs.task
-                    def loop_reset(_, _flash):
-                        jitter = random.uniform(0.0, 0.1)
-                        return firefly_cycle(
-                            agent_id,
-                            0.0 + jitter,
-                            period,
-                            nudge,
-                            neighbors,
-                            my_channel,
-                            connector,
-                            refractory_period,
-                        )
-
-                    return loop_reset(p, flash)
-
-                else:
-                    # We heard a neighbor! NUDGE!
-                    next_phase = current_actual_phase + nudge
-                    return firefly_cycle(
-                        agent_id,
-                        next_phase,
-                        period,
-                        nudge,
-                        neighbors,
-                        my_channel,
-                        connector,
-                        refractory_period,
-                    )
-
-            return process_perception(perception)
-
-    return firefly_cycle(
-        agent_id,
-        initial_phase,
-        period,
-        nudge,
-        neighbors,
-        my_channel,
-        connector,
-        refractory_period,
-    )
+            # NUDGE: A neighbor flashed, so we adjust our phase.
+            phase += nudge

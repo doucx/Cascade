@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] explore(perf): 创建诊断脚本以隔离性能瓶颈", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766306461.2712886, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] perf(agent): 将 Agent 内部逻辑重构为命令式循环", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766306718.5081916, "duration_ms": 0}}

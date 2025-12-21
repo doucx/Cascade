@@ -136,42 +136,38 @@ async def run_experiment(
         connector=None,
     )
 
-    @resource(name="_internal_connector", scope="run")
+    # The connector is now a standard resource that can be injected.
+    @resource(name="shared_connector")
     def shared_connector_provider():
         yield connector
     engine.register(shared_connector_provider)
 
 
     # --- Create Agents ---
-    agent_tasks = []
-    # Batch creation to avoid freezing UI loop
+    agent_workflows = []
     print("Generating Agent Workflows...")
     for i in range(num_agents):
         initial_phase = random.uniform(0, period)
-
-        # Topology Lookup
         neighbor_ids = get_neighbors(i, grid_width, grid_width)
-        my_neighbors = [channels[nid] for nid in neighbor_ids]
-        my_channel = channels[i]
-
-        agent_workflow = firefly_agent(
+        
+        # We now create the LazyResult once...
+        workflow = firefly_agent(
             agent_id=i,
             initial_phase=initial_phase,
             period=period,
             nudge=nudge,
-            neighbors=my_neighbors,
-            my_channel=my_channel,
-            connector=cs.inject("_internal_connector"),
+            neighbors=[channels[nid] for nid in neighbor_ids],
+            my_channel=channels[i],
+            connector=cs.inject("shared_connector"),
             refractory_period=period * 0.2,
         )
+        agent_workflows.append(workflow)
 
-        # Schedule the workflow to run on the shared engine
-        agent_tasks.append(engine.run(agent_workflow))
-
-        # Yield every 500 agents to keep UI responsive during setup
-        if i > 0 and i % 500 == 0:
-            print(f"   ... {i} agents prepared.")
-            await asyncio.sleep(0)
+    # ...and then schedule all of them to run concurrently on the engine.
+    print("Launching all agents on the engine...")
+    # We use asyncio.gather to run them, not a loop of awaits.
+    # The engine.run() call returns a coroutine.
+    agent_tasks = [engine.run(wf) for wf in agent_workflows]
 
     print("🚀 All agents prepared. Launching...")
 

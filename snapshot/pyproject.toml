@@ -23,6 +23,9 @@ cascade-interfaces = { workspace = true }
 cascade-runtime = { workspace = true }
 cascade-py = { workspace = true }
 cascade-provider-ipfs = { workspace = true }
+cascade-cli-controller = { workspace = true }
+cascade-cli-observer = { workspace = true }
+cascade-connector-mqtt = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(build): 注册 CLI 工具与连接器，补全全套开发环境", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766298962.5878515, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(build): 在 uv 配置中注册缺失的工作区成员", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766299025.9166627, "duration_ms": 0}}

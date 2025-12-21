@@ -2,10 +2,12 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 14: Restored to Elegant Recursion.
-With the Engine's new structural hashing TCO, we can revert to the most
-natural declarative form. The agent's logic is expressed as a simple
-recursive function, and the Engine handles the performance optimization.
+REVISION 15: Final Architecture - The Imperative Core Pattern.
+This version represents the idiomatic way to implement a high-performance,
+long-running agent in Cascade. The entire agent lifecycle is a single
+@cs.task containing a native `asyncio` `while True` loop. This leverages
+Cascade for orchestration (starting the agent) and native asyncio for the
+zero-overhead, high-frequency internal loop.
 """
 
 import asyncio
@@ -17,40 +19,60 @@ import cascade as cs
 from cascade.interfaces.protocols import Connector
 from observatory.networking.direct_channel import DirectChannel
 
-# --- Atomic Primitives ---
 
-@cs.task
-async def fanout_direct(
+@cs.task(name="firefly_lifecycle")
+async def firefly_lifecycle(
+    agent_id: int,
+    initial_phase: float,
+    period: float,
+    nudge: float,
     neighbors: List[DirectChannel],
-    payload: Dict[str, Any],
-    should_send: bool,
+    my_channel: DirectChannel,
     connector: Connector,
-) -> None:
-    if not should_send:
-        return
+    refractory_period: float,
+):
+    """A single, long-running task representing the entire lifecycle of a firefly."""
+    phase = initial_phase
 
-    # Non-blocking telemetry
-    if connector:
-        asyncio.create_task(connector.publish("firefly/flash", payload))
-        
-    for neighbor in neighbors:
-        await neighbor.send(payload)
+    while True:
+        # 1. Refractory Path
+        if phase < refractory_period:
+            wait_duration = refractory_period - phase
+            await asyncio.sleep(wait_duration)
+            phase = refractory_period
+            # Loop continues to the sensitive path check
 
-@cs.task
-async def safe_recv_channel(
-    channel: DirectChannel,
-    timeout: float,
-) -> Dict[str, Any]:
-    start_time = time.time()
-    try:
-        signal = await asyncio.wait_for(channel.recv(), timeout=timeout)
-        elapsed = time.time() - start_time
-        return {"signal": signal, "timeout": False, "elapsed": elapsed}
-    except asyncio.TimeoutError:
-        elapsed = time.time() - start_time
-        return {"signal": None, "timeout": True, "elapsed": elapsed}
+        # 2. Sensitive Path
+        time_to_flash = period - phase
+        wait_timeout = max(0.01, time_to_flash)
 
-# --- Core Agent Logic ---
+        try:
+            start_time = time.time()
+            # Native asyncio listening on the channel
+            await asyncio.wait_for(my_channel.recv(), timeout=wait_timeout)
+            elapsed = time.time() - start_time
+
+            # Nudged
+            phase += elapsed + nudge
+
+        except asyncio.TimeoutError:
+            elapsed = time.time() - start_time
+            phase += elapsed # Phase should be at or very near 'period'
+            
+            # Flash
+            flash_payload = {"agent_id": agent_id, "phase": phase}
+            
+            # Non-blocking telemetry
+            if connector:
+                asyncio.create_task(connector.publish("firefly/flash", flash_payload))
+            
+            # Fan-out to neighbors
+            for neighbor in neighbors:
+                await neighbor.send(flash_payload)
+            
+            # Reset
+            phase = 0.0 + random.uniform(0.0, 0.1)
+
 
 def firefly_agent(
     agent_id: int,
@@ -62,51 +84,9 @@ def firefly_agent(
     connector: Connector,
     refractory_period: float = 2.0,
 ):
-    """The main recursive entry point for a single firefly agent."""
-
-    # 1. Refractory Path
-    if initial_phase < refractory_period:
-        wait_duration = refractory_period - initial_phase
-        wait_action = cs.wait(wait_duration)
-
-        @cs.task
-        def after_refractory(_):
-            return firefly_agent(
-                agent_id, refractory_period, period, nudge, neighbors,
-                my_channel, connector, refractory_period
-            )
-        return after_refractory(wait_action)
-
-    # 2. Sensitive Path
-    else:
-        time_to_flash = period - initial_phase
-        wait_timeout = max(0.01, time_to_flash)
-        perception = safe_recv_channel(my_channel, timeout=wait_timeout)
-
-        @cs.task
-        def process_perception(p: Dict[str, Any]):
-            is_timeout = p.get("timeout", False)
-            elapsed_time = p.get("elapsed", 0.0)
-
-            if is_timeout:
-                # Flash
-                flash_payload = {"agent_id": agent_id, "phase": period}
-                flash = fanout_direct(neighbors, flash_payload, True, connector)
-
-                @cs.task
-                def reset_and_recurse(_flash_done):
-                    jitter = random.uniform(0.0, 0.1)
-                    return firefly_agent(
-                        agent_id, jitter, period, nudge, neighbors,
-                        my_channel, connector, refractory_period
-                    )
-                return reset_and_recurse(flash)
-            else:
-                # Nudge
-                next_phase = initial_phase + elapsed_time + nudge
-                return firefly_agent(
-                    agent_id, next_phase, period, nudge, neighbors,
-                    my_channel, connector, refractory_period
-                )
-
-        return process_perception(perception)
+    """Public entry point to start the agent's lifecycle."""
+    # This now simply returns a call to our single, long-running task.
+    return firefly_lifecycle(
+        agent_id, initial_phase, period, nudge, neighbors,
+        my_channel, connector, refractory_period
+    )

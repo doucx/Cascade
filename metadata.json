@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(exp): 在 run_fireflies 中支持手动并发限制", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766317955.8571527, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M run_fireflies.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766318087.4730425, "duration_ms": 0}}

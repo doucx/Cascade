@@ -1,73 +1,591 @@
-太棒了，船长！全绿的测试结果意味着我们已经成功完成了最艰苦的“基建修复”工作。我们不仅解决了一堆烦人的 `ImportError`，更重要的是，我们理顺了整个项目的血脉，确立了真正的插件化架构。
+好的，我们正式进入**阶段二：架构直觉化**。
 
-现在，让我们把这些成果作为一个完整的逻辑单元提交。
+这一阶段的核心目标是让 `Cascade` 的行为更符合 Python 开发者的直觉，消除那些“看起来应该能工作但实际上不行”的陷阱（如列表中的依赖），并提供更符合人体工程学的工具（如 `cs.dict`, `cs.format`）。
 
-## [COMMIT] chore: 统一工作区依赖并正规化插件架构
+我们将一次性解决 `GraphBuilder` 的浅层扫描问题、`ArgumentResolver` 的解析策略、以及 `cs.inject` 的静默失败问题，并引入新的工具原子。
+
+## [WIP] feat: 架构直觉化 - 深度图构建与人体工程学优化
+
+### 错误分析
+当前 `GraphBuilder` 仅遍历顶层参数来寻找 `LazyResult` 依赖，导致嵌套在列表或字典中的任务（如 `task([a(), b()])`）无法被正确识别为依赖，从而在运行时引发错误。
+同时，`ArgumentResolver` 依赖于扁平的参数映射，无法还原复杂的嵌套结构。
+此外，`cs.inject` 在资源缺失时缺乏明确报错，增加了调试难度。
 
 ### 用户需求
-解决 Monorepo 在新环境中开发体验（DX）不佳、依赖零散、以及插件命名空间遮蔽导致测试失败的问题。
-
-### 评论
-这次清理是 Cascade 走向成熟的关键一步。通过将 `cascade.providers` 转换为纯命名空间包，我们解决了 Python 包管理中最隐蔽的陷阱之一。现在，Cascade 的核心与扩展包之间拥有了清晰的边界，这不仅修复了当前的测试问题，更极大地增强了系统的可扩展性。
+1.  **深度依赖支持**: 支持在列表、字典等容器内部嵌套使用 `LazyResult`，且能被正确构建进图并解析。
+2.  **明确的 DI 报错**: 当 `cs.inject` 找不到资源时，抛出 `ResourceNotFoundError` 而非静默失败或注入 `None`。
+3.  **人体工程学工具**:
+    *   新增 `cs.format` (类似 `str.format`)。
+    *   新增 `cs.dict` (用于组合字典)。
 
 ### 目标
-1.  在根 `pyproject.toml` 中统一所有开发和测试依赖，实现一键安装。
-2.  将 `ProviderRegistry` 逻辑从 `__init__.py` 迁出，释放 `cascade.providers` 命名空间。
-3.  补全工作区内所有子包的命名空间声明。
-4.  在 `uv` 配置中正确注册所有工作区成员。
+1.  重构 `GraphBuilder` 以支持递归扫描参数中的 `LazyResult` 和 `Router`。
+2.  重构 `ArgumentResolver` 以支持对 `literal_inputs` 的深度遍历和原地替换解析。
+3.  更新 `serialize.py` 以支持序列化嵌套在 `literal_inputs` 中的 `LazyResult`。
+4.  实现 `cs.dict` 和 `cs.format` 提供者。
 
 ### 基本原理
-通过统一根目录依赖，我们将Monorepo的维护成本从 $O(N)$ 降到了 $O(1)$。通过架构重构，我们遵循了 PEP 420 规范，确保了插件机制的物理有效性。这为接下来的“阶段二：架构直觉化”提供了一个绝对稳定、透明且符合 Python 惯例的基础环境。
+我们将改变图构建和参数解析的策略：
+*   **构建时**: `GraphBuilder` 将完整的参数结构（包含 `LazyResult` 对象）保留在 `node.literal_inputs` 中，并递归扫描该结构以添加图的边（Edge）。
+*   **运行时**: `ArgumentResolver` 不再尝试将 Edge 映射回参数位置，而是直接遍历 `node.literal_inputs` 结构，将遇到的 `LazyResult` 占位符替换为 `StateBackend` 中的实际结果。
+*   这种“保留结构、原地替换”的策略天然支持任意深度的嵌套。
 
 ### 标签
-#intent/refine #intent/tooling #flow/ready #priority/high #comp/build #comp/core #scope/dx #scope/arch #ai/instruct #task/domain/tooling #task/object/workspace-foundation #task/action/cleanup #task/state/end
+#intent/refine #intent/build #flow/draft #priority/high
+#comp/runtime #comp/py #concept/graph #concept/di
+#task/domain/core #task/object/graph-builder #task/action/refactor
+#task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交环境修复与架构重构成果
+#### Acts 1: 创建 `cs.dict` 和 `cs.format` 提供者
 
-我们将所有涉及依赖配置、包结构修复、架构重构以及测试修正的文件添加到暂存区，并执行提交。
+这两个工具非常简单，我们将它们放在一个新的 `helpers` 模块中。
 
 ~~~~~act
-git_add
-pyproject.toml
+write_file
+packages/cascade-py/src/cascade/providers/helpers.py
+~~~~~
+~~~~~python
+from typing import Dict, Any, Optional
+
+from cascade.spec.task import task
+from cascade.providers import LazyFactory, Provider
+
+
+# --- Tasks ---
+
+@task(name="dict")
+def _dict_task(**kwargs) -> Dict[str, Any]:
+    """
+    Creates a dictionary from keyword arguments.
+    Useful for composing dynamic contexts in the graph.
+    """
+    return kwargs
+
+
+@task(name="format")
+def _format_task(template: str, *args, **kwargs) -> str:
+    """
+    Formats a string using Python's str.format syntax.
+    
+    Usage:
+        cs.format("Hello, {name}!", name=cs.Param("name"))
+    """
+    return template.format(*args, **kwargs)
+
+
+# --- Providers ---
+
+class DictProvider(Provider):
+    name = "dict"
+
+    def create_factory(self) -> LazyFactory:
+        return _dict_task
+
+
+class FormatProvider(Provider):
+    name = "format"
+
+    def create_factory(self) -> LazyFactory:
+        return _format_task
+~~~~~
+
+#### Acts 2: 注册新 Provider
+
+更新 `pyproject.toml` 以注册新的入口点。
+
+~~~~~act
+patch_file
 packages/cascade-py/pyproject.toml
-packages/cascade-py/src/cascade/providers/registry.py
-packages/cascade-py/src/cascade/providers/__init__.py
-packages/cascade-py/src/cascade/__init__.py
-packages/cascade-provider-ipfs/src/cascade/__init__.py
-packages/cascade-provider-ipfs/src/cascade/providers/__init__.py
-packages/cascade-provider-ipfs/src/cascade/providers/ipfs/__init__.py
-packages/cascade-cli-controller/src/cascade/__init__.py
-packages/cascade-cli-observer/src/cascade/__init__.py
-packages/cascade-connector-mqtt/src/cascade/__init__.py
-packages/cascade-connector-mqtt/src/cascade/connectors/__init__.py
-tests/cascade-py/providers/test_io.py
+~~~~~
+~~~~~toml
+"io.stdin.read_line" = "cascade.providers.stdio:StdInReadLineProvider"
+
+[tool.hatch.build.targets.wheel]
+~~~~~
+~~~~~toml
+"io.stdin.read_line" = "cascade.providers.stdio:StdInReadLineProvider"
+dict = "cascade.providers.helpers:DictProvider"
+format = "cascade.providers.helpers:FormatProvider"
+
+[tool.hatch.build.targets.wheel]
+~~~~~
+
+#### Acts 3: 定义新的异常类型
+
+我们需要一个明确的异常来处理资源缺失。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/exceptions.py
+~~~~~
+~~~~~python
+        super().__init__(
+            f"Task '{task_id}' cannot execute: missing input for argument '{arg_name}'. "
+            f"Dependency '{dependency_id}' did not produce a result (it may have been skipped)."
+        )
+~~~~~
+~~~~~python
+        super().__init__(
+            f"Task '{task_id}' cannot execute: missing input for argument '{arg_name}'. "
+            f"Dependency '{dependency_id}' did not produce a result (it may have been skipped)."
+        )
+
+
+class ResourceNotFoundError(CascadeRuntimeError):
+    """Raised when a requested resource is not available in the context."""
+
+    def __init__(self, resource_name: str, consumer_name: str = "unknown"):
+        super().__init__(
+            f"Resource '{resource_name}' required by '{consumer_name}' was not found. "
+            "Ensure it is registered with the Engine or provided via system_resources."
+        )
+~~~~~
+
+#### Acts 4: 重构 `GraphBuilder` 实现深度扫描
+
+我们将重写 `GraphBuilder`，使其能递归地扫描参数结构，并将完整的结构（包含 `LazyResult`）保存在 `literal_inputs` 中。
+
+~~~~~act
+write_file
+packages/cascade-runtime/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+from typing import Dict, Any, List, Union
+from cascade.graph.model import Graph, Node, Edge, EdgeType
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+
+
+class GraphBuilder:
+    def __init__(self):
+        self.graph = Graph()
+        self._visited: Dict[str, Node] = {}
+
+    def build(self, target: LazyResult) -> Graph:
+        self._visit(target)
+        return self.graph
+
+    def _visit(self, value: Any) -> Node:
+        if isinstance(value, LazyResult):
+            return self._visit_lazy_result(value)
+        elif isinstance(value, MappedLazyResult):
+            return self._visit_mapped_result(value)
+        else:
+            raise TypeError(f"Cannot build graph from type {type(value)}")
+
+    def _visit_lazy_result(self, result: LazyResult) -> Node:
+        if result._uuid in self._visited:
+            return self._visited[result._uuid]
+
+        # 1. Capture the structure of inputs
+        # We store the args/kwargs structure directly in literal_inputs.
+        # This structure contains LazyResult objects, which is fine for the runtime,
+        # but requires special handling for serialization.
+        literal_inputs = {
+            str(i): v for i, v in enumerate(result.args)
+        }
+        literal_inputs.update(result.kwargs)
+
+        node = Node(
+            id=result._uuid,
+            name=result.task.name,
+            node_type="task",
+            callable_obj=result.task.func,
+            retry_policy=result._retry_policy,
+            cache_policy=result._cache_policy,
+            constraints=result._constraints,
+            literal_inputs=literal_inputs,
+        )
+        self.graph.add_node(node)
+        self._visited[result._uuid] = node
+
+        # 2. Recursively scan inputs to add edges
+        self._scan_and_add_edges(node, result.args)
+        self._scan_and_add_edges(node, result.kwargs)
+
+        # 3. Handle conditionals
+        if result._condition:
+            source_node = self._visit(result._condition)
+            edge = Edge(
+                source=source_node,
+                target=node,
+                arg_name="_condition",
+                edge_type=EdgeType.CONDITION,
+            )
+            self.graph.add_edge(edge)
+
+        # 4. Handle dynamic constraints
+        if result._constraints and not result._constraints.is_empty():
+            for res_name, req_value in result._constraints.requirements.items():
+                if isinstance(req_value, (LazyResult, MappedLazyResult)):
+                    source_node = self._visit(req_value)
+                    edge = Edge(
+                        source=source_node,
+                        target=node,
+                        arg_name=res_name,
+                        edge_type=EdgeType.CONSTRAINT,
+                    )
+                    self.graph.add_edge(edge)
+
+        return node
+
+    def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
+        if result._uuid in self._visited:
+            return self._visited[result._uuid]
+
+        node = Node(
+            id=result._uuid,
+            name=f"map({getattr(result.factory, 'name', 'factory')})",
+            node_type="map",
+            mapping_factory=result.factory,
+            retry_policy=result._retry_policy,
+            cache_policy=result._cache_policy,
+            constraints=result._constraints,
+            literal_inputs=result.mapping_kwargs, # Map inputs are treated as kwargs
+        )
+        self.graph.add_node(node)
+        self._visited[result._uuid] = node
+
+        self._scan_and_add_edges(node, result.mapping_kwargs)
+
+        if result._condition:
+            source_node = self._visit(result._condition)
+            edge = Edge(
+                source=source_node,
+                target=node,
+                arg_name="_condition",
+                edge_type=EdgeType.CONDITION,
+            )
+            self.graph.add_edge(edge)
+
+        return node
+
+    def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
+        """
+        Recursively scans the object for LazyResults and Routers to add edges.
+        """
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            source_node = self._visit(obj)
+            # We add a generic DATA edge. The exact argument position is determined
+            # by ArgumentResolver traversing literal_inputs, so arg_name here is
+            # mainly for visualization/debugging.
+            edge = Edge(
+                source=source_node,
+                target=target_node,
+                arg_name=path or "dependency",
+                edge_type=EdgeType.DATA,
+            )
+            self.graph.add_edge(edge)
+
+        elif isinstance(obj, Router):
+            # 1. Add edge for Selector
+            selector_node = self._visit(obj.selector)
+            edge = Edge(
+                source=selector_node,
+                target=target_node,
+                arg_name=f"{path}.selector" if path else "selector",
+                router=obj, # Important: Link Router to this edge for FlowManager
+                edge_type=EdgeType.DATA,
+            )
+            self.graph.add_edge(edge)
+
+            # 2. Add edges for Routes
+            for route_key, route_result in obj.routes.items():
+                route_node = self._visit(route_result)
+                imp_edge = Edge(
+                    source=route_node,
+                    target=target_node,
+                    arg_name=f"{path}.route[{route_key}]",
+                    edge_type=EdgeType.ROUTER_ROUTE,
+                )
+                self.graph.add_edge(imp_edge)
+
+        elif isinstance(obj, (list, tuple)):
+            for i, item in enumerate(obj):
+                self._scan_and_add_edges(target_node, item, path=f"{path}[{i}]" if path else str(i))
+        
+        elif isinstance(obj, dict):
+            for k, v in obj.items():
+                self._scan_and_add_edges(target_node, v, path=f"{path}.{k}" if path else str(k))
+
+
+def build_graph(target: LazyResult) -> Graph:
+    return GraphBuilder().build(target)
+~~~~~
+
+#### Acts 5: 重构 `ArgumentResolver` 实现深度解析
+
+重写解析逻辑，使用递归遍历和原地替换。
+
+~~~~~act
+write_file
+packages/cascade-runtime/src/cascade/runtime/resolvers.py
+~~~~~
+~~~~~python
+import inspect
+from typing import Any, Dict, List, Tuple
+
+from cascade.graph.model import Node, Graph
+from cascade.spec.resource import Inject
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
+from cascade.interfaces.protocols import StateBackend
+
+
+class ArgumentResolver:
+    """
+    Resolves arguments by traversing the structure stored in node.literal_inputs
+    and replacing LazyResult/Router/Inject placeholders with actual values.
+    """
+
+    def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        resource_context: Dict[str, Any],
+        user_params: Dict[str, Any] = None,
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        
+        # Special handling for internal param fetcher
+        from cascade.internal.inputs import _get_param_value
+        if node.callable_obj is _get_param_value.func:
+            final_kwargs = node.literal_inputs.copy()
+            final_kwargs["params_context"] = user_params or {}
+            return [], final_kwargs
+
+        # Recursively resolve the structure
+        resolved_structure = self._resolve_structure(
+            node.literal_inputs, node.id, state_backend, resource_context
+        )
+
+        # Re-assemble args and kwargs
+        final_kwargs = {k: v for k, v in resolved_structure.items() if not k.isdigit()}
+        positional_args_dict = {
+            int(k): v for k, v in resolved_structure.items() if k.isdigit()
+        }
+        
+        sorted_indices = sorted(positional_args_dict.keys())
+        args = [positional_args_dict[i] for i in sorted_indices]
+
+        # Handle Inject in defaults (if not overridden by inputs)
+        if node.callable_obj:
+            sig = inspect.signature(node.callable_obj)
+            for param in sig.parameters.values():
+                if isinstance(param.default, Inject):
+                    if param.name not in final_kwargs:
+                        final_kwargs[param.name] = self._resolve_inject(
+                            param.default, node.name, resource_context
+                        )
+
+        return args, final_kwargs
+
+    def _resolve_structure(
+        self, obj: Any, consumer_id: str, state_backend: StateBackend, resource_context: Dict[str, Any]
+    ) -> Any:
+        """
+        Recursively traverses lists, tuples, and dicts. 
+        Replaces LazyResult, Router, and Inject.
+        """
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            return self._resolve_lazy(obj, consumer_id, state_backend)
+        
+        elif isinstance(obj, Router):
+            return self._resolve_router(obj, consumer_id, state_backend)
+        
+        elif isinstance(obj, Inject):
+            return self._resolve_inject(obj, consumer_id, resource_context)
+        
+        elif isinstance(obj, list):
+            return [
+                self._resolve_structure(item, consumer_id, state_backend, resource_context) 
+                for item in obj
+            ]
+        
+        elif isinstance(obj, tuple):
+            return tuple(
+                self._resolve_structure(item, consumer_id, state_backend, resource_context) 
+                for item in obj
+            )
+        
+        elif isinstance(obj, dict):
+            return {
+                k: self._resolve_structure(v, consumer_id, state_backend, resource_context)
+                for k, v in obj.items()
+            }
+        
+        return obj
+
+    def _resolve_lazy(self, lr: LazyResult, consumer_id: str, state_backend: StateBackend) -> Any:
+        if not state_backend.has_result(lr._uuid):
+            # Check for skip
+            if state_backend.get_skip_reason(lr._uuid):
+                raise DependencyMissingError(
+                    consumer_id, "unknown_arg", f"{lr._uuid} (skipped)"
+                )
+            raise DependencyMissingError(consumer_id, "unknown_arg", lr._uuid)
+        
+        return state_backend.get_result(lr._uuid)
+
+    def _resolve_router(self, router: Router, consumer_id: str, state_backend: StateBackend) -> Any:
+        # 1. Resolve Selector
+        selector_uuid = router.selector._uuid
+        if not state_backend.has_result(selector_uuid):
+             raise DependencyMissingError(consumer_id, "router_selector", selector_uuid)
+        
+        selector_value = state_backend.get_result(selector_uuid)
+
+        # 2. Pick Route
+        try:
+            selected_lr = router.routes[selector_value]
+        except KeyError:
+             raise ValueError(
+                f"Router selector returned '{selector_value}', "
+                f"but no matching route found in {list(router.routes.keys())}"
+            )
+
+        # 3. Resolve Route Result
+        return self._resolve_lazy(selected_lr, consumer_id, state_backend)
+
+    def _resolve_inject(self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]) -> Any:
+        if inject.resource_name in resource_context:
+            return resource_context[inject.resource_name]
+        
+        raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
+
+
+class ConstraintResolver:
+    """
+    Responsible for resolving dynamic resource constraints for a node.
+    """
+
+    def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        constraint_manager: Any = None,
+    ) -> Dict[str, Any]:
+        resolved = {}
+
+        # 1. Resolve Node-level constraints
+        if node.constraints and not node.constraints.is_empty():
+            for res, amount in node.constraints.requirements.items():
+                if isinstance(amount, (LazyResult, MappedLazyResult)):
+                    if state_backend.has_result(amount._uuid):
+                         resolved[res] = state_backend.get_result(amount._uuid)
+                    else:
+                        raise DependencyMissingError(
+                            node.id, f"constraint:{res}", amount._uuid
+                        )
+                else:
+                    resolved[res] = amount
+
+        # 2. Resolve Global constraints
+        if constraint_manager:
+            extra = constraint_manager.get_extra_requirements(node)
+            resolved.update(extra)
+
+        return resolved
+~~~~~
+
+#### Acts 6: 更新序列化逻辑
+
+因为 `literal_inputs` 现在包含了复杂的对象，我们需要更新 `to_json` 逻辑来处理它们。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/graph/serialize.py
+~~~~~
+~~~~~python
+def _node_to_dict(node: Node) -> Dict[str, Any]:
+    data = {
+        "id": node.id,
+        "name": node.name,
+        "node_type": node.node_type,
+        "literal_inputs": node.literal_inputs,  # Assumes JSON-serializable literals
+    }
+
+    if node.callable_obj:
+~~~~~
+~~~~~python
+def _node_to_dict(node: Node) -> Dict[str, Any]:
+    data = {
+        "id": node.id,
+        "name": node.name,
+        "node_type": node.node_type,
+        "literal_inputs": _serialize_structure(node.literal_inputs),
+    }
+
+    if node.callable_obj:
 ~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-runtime/src/cascade/graph/serialize.py
 ~~~~~
-~~~~~text
-chore: unify workspace dependencies and formalize plugin architecture
+~~~~~python
+    if node.constraints:
+        # Dynamic constraints contain LazyResult/MappedLazyResult which are not JSON serializable.
+        # We must replace them with their UUID reference.
+        serialized_reqs = {}
+        for res, amount in node.constraints.requirements.items():
+            if isinstance(amount, (LazyResult, MappedLazyResult)):
+                # Store the UUID reference as a JSON serializable dict.
+                serialized_reqs[res] = {"__lazy_ref": amount._uuid}
+            else:
+                serialized_reqs[res] = amount
+        data["constraints"] = serialized_reqs
 
-Major cleanup and restructuring to ensure a deterministic development environment:
+    return data
 
-1. Unified all development and testing dependencies in the root 'pyproject.toml' under the [dev] extra. This enables a single 'uv pip install -e .[dev]' command to set up a complete environment.
-2. Refactored 'cascade.providers' from a regular package into a proper PEP 420 namespace package. Moved the registry implementation to 'registry.py' to prevent it from shadowing external providers.
-3. Fixed the package structure for 'cascade-provider-ipfs' and other sub-packages by adding missing '__init__.py' files with proper namespace declarations.
-4. Correctly registered all local workspace packages in 'tool.uv.sources' to ensure proper linking during editable installs.
-5. Fixed 'ImportError' in IPFS, S3, and IO tests caused by missing dependencies or incorrect import paths following the refactoring.
 
-This establishes a robust and intuitive foundation for future development and plugin contributions.
+def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
+~~~~~
+~~~~~python
+    if node.constraints:
+        # Dynamic constraints contain LazyResult/MappedLazyResult which are not JSON serializable.
+        # We must replace them with their UUID reference.
+        serialized_reqs = {}
+        for res, amount in node.constraints.requirements.items():
+            if isinstance(amount, (LazyResult, MappedLazyResult)):
+                # Store the UUID reference as a JSON serializable dict.
+                serialized_reqs[res] = {"__lazy_ref": amount._uuid}
+            else:
+                serialized_reqs[res] = amount
+        data["constraints"] = serialized_reqs
+
+    return data
+
+
+def _serialize_structure(obj: Any) -> Any:
+    """Recursively serializes structure, replacing LazyResult/Router with stubs."""
+    if isinstance(obj, (LazyResult, MappedLazyResult)):
+        return {"__lazy_ref": obj._uuid}
+    elif isinstance(obj, Router):
+        # We don't fully serialize router here as it's handled in the 'routers' section of the graph dict.
+        # We just need a stub to indicate existence.
+        # Actually, serialize.py separates routers.
+        # But if a router is inside a list, we need to know.
+        # For visualization simplicity, let's just mark it.
+        return {"__router_ref": "complex_router"}
+    elif isinstance(obj, list):
+        return [_serialize_structure(x) for x in obj]
+    elif isinstance(obj, tuple):
+        return tuple(_serialize_structure(x) for x in obj)
+    elif isinstance(obj, dict):
+        return {k: _serialize_structure(v) for k, v in obj.items()}
+    return obj
+
+
+def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
 ~~~~~
 
 ### 下一步建议
-我们已经拿到了通往“高可用开发环境”的通行证。按照清理技术债务的路线图，接下来的重点将转向**“阶段二：架构直觉化”**：
-
-1.  **修复 `GraphBuilder` 的递归依赖发现**: 这是目前最影响用户直觉的限制，我们将让它能够识别嵌套在字典和列表中的 `LazyResult`。
-2.  **强化资源注入的报错机制**: 让 `cs.inject` 的失败不再静默，提供更清晰的调试信息。
-
-建议我们从 **行动 2.1：强化 GraphBuilder** 开始。如果你准备好了，请指示我开始生成下一个 WIP 计划。
+我们已经完成了核心重构。现在的 `GraphBuilder` 和 `ArgumentResolver` 支持任意深度的嵌套依赖，并且 `cs.inject` 有了明确的报错。
+建议进行一次冒烟测试，尝试运行一个包含列表依赖（如 `task([a(), b()])`）的工作流，验证其是否能正确执行。同时尝试 `cs.dict` 和 `cs.format` 的使用。

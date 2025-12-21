@@ -18,3 +18,13 @@ class DependencyMissingError(CascadeRuntimeError):
             f"Task '{task_id}' cannot execute: missing input for argument '{arg_name}'. "
             f"Dependency '{dependency_id}' did not produce a result (it may have been skipped)."
         )
+
+
+class ResourceNotFoundError(CascadeRuntimeError):
+    """Raised when a requested resource is not available in the context."""
+
+    def __init__(self, resource_name: str, consumer_name: str = "unknown"):
+        super().__init__(
+            f"Resource '{resource_name}' required by '{consumer_name}' was not found. "
+            "Ensure it is registered with the Engine or provided via system_resources."
+        )

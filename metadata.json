@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 增强基准测试复杂度以凸显 TCO 优化效果", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766308267.0016427, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "修复基准测试脚本中的 `TypeError`，使其能够成功运行。", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766308345.5335793, "duration_ms": 0}}

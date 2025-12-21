@@ -342,7 +342,7 @@ class Engine:
                     if node.node_type == "param":
                         continue  # Skip params, they don't execute
 
-                    skip_reason = self.flow_manager.should_skip(node, state_backend)
+                    skip_reason = flow_manager.should_skip(node, state_backend)
                     if skip_reason:
                         state_backend.mark_skipped(node.id, skip_reason)
                         self.bus.publish(
@@ -387,8 +387,8 @@ class Engine:
 
                     for node, res in zip(executable_this_pass, pass_results):
                         state_backend.put_result(node.id, res)
-                        if self.flow_manager:
-                            self.flow_manager.register_result(
+                        if flow_manager:
+                            flow_manager.register_result(
                                 node.id, res, state_backend
                             )
 

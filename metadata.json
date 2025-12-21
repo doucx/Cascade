@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(infra): 为 Firefly Agent 引入 DirectChannel 直连拓扑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766311747.8901522, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(infra): 强制更新 Kuramoto Agent 以匹配 DirectChannel 签名", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766311753.7168028, "duration_ms": 0}}

@@ -1,6 +1,5 @@
-from typing import Any, Dict, Tuple, List, Union
+from typing import Any, Dict, Tuple, List
 import hashlib
-import json
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.spec.resource import Inject
@@ -20,11 +19,11 @@ class StructuralHasher:
 
     def hash(self, target: Any) -> Tuple[str, Dict[str, Any]]:
         self._visit(target, path="root")
-        
+
         # Create a deterministic hash string
         fingerprint = "|".join(self._hash_components)
         hash_val = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
-        
+
         return hash_val, self.literals
 
     def _visit(self, obj: Any, path: str):
@@ -57,19 +56,21 @@ class StructuralHasher:
         # Identification
         task_name = getattr(lr.task, "name", "unknown")
         self._hash_components.append(f"Task({task_name})")
-        
+
         # Policies (part of structure)
         if lr._retry_policy:
             rp = lr._retry_policy
-            self._hash_components.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
+            self._hash_components.append(
+                f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})"
+            )
         if lr._cache_policy:
             self._hash_components.append(f"Cache({type(lr._cache_policy).__name__})")
-        
+
         # Args
         self._hash_components.append("Args:")
         for i, arg in enumerate(lr.args):
             self._visit(arg, f"{path}.args.{i}")
-            
+
         # Kwargs
         self._hash_components.append("Kwargs:")
         for k in sorted(lr.kwargs.keys()):
@@ -84,22 +85,22 @@ class StructuralHasher:
     def _visit_mapped(self, mlr: MappedLazyResult, path: str):
         factory_name = getattr(mlr.factory, "name", "unknown")
         self._hash_components.append(f"Map({factory_name})")
-        
+
         # Kwargs (Mapped inputs)
         self._hash_components.append("MapKwargs:")
         for k in sorted(mlr.mapping_kwargs.keys()):
             self._hash_components.append(f"{k}=")
             self._visit(mlr.mapping_kwargs[k], f"{path}.kwargs.{k}")
-            
+
         if mlr._condition:
-             self._hash_components.append("Condition:")
-             self._visit(mlr._condition, f"{path}.condition")
+            self._hash_components.append("Condition:")
+            self._visit(mlr._condition, f"{path}.condition")
 
     def _visit_router(self, router: Router, path: str):
         self._hash_components.append("Router")
         self._hash_components.append("Selector:")
         self._visit(router.selector, f"{path}.selector")
-        
+
         self._hash_components.append("Routes:")
         for k in sorted(router.routes.keys()):
             # Note: Route keys (k) are structural! (e.g. "prod", "dev")

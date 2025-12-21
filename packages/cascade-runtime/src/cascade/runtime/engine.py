@@ -99,7 +99,7 @@ class Engine:
             return False
         if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
             return False
-        
+
         def _has_lazy(obj):
             if isinstance(obj, (LazyResult, MappedLazyResult)):
                 return True
@@ -113,11 +113,11 @@ class Engine:
         for arg in lr.args:
             if _has_lazy(arg):
                 return False
-        
+
         for v in lr.kwargs.values():
             if _has_lazy(v):
                 return False
-        
+
         return True
 
     def get_resource_provider(self, name: str) -> Callable:
@@ -189,7 +189,7 @@ class Engine:
                     with ExitStack() as step_stack:
                         # 1. Build graph for current target
                         graph = None
-                        
+
                         # TCO Optimization: Fast path for simple recursion
                         if self._is_simple_task(current_target):
                             task_name = current_target.task.name
@@ -197,7 +197,9 @@ class Engine:
                                 # HIT: Reuse the graph, just update inputs
                                 node = _tco_cached_graph.nodes[0]
                                 # Re-construct literal inputs from current args/kwargs
-                                node.literal_inputs = {str(i): v for i, v in enumerate(current_target.args)}
+                                node.literal_inputs = {
+                                    str(i): v for i, v in enumerate(current_target.args)
+                                }
                                 node.literal_inputs.update(current_target.kwargs)
                                 # Update UUID to match current target (important for state backend)
                                 node.id = current_target._uuid

@@ -7,10 +7,12 @@ from cascade.adapters.executors.local import LocalExecutor
 
 # --- Task Definitions ---
 
+
 @cs.task
 def noop(_dummy=None):
     """A task that does nothing, used to force graph complexity."""
     pass
+
 
 @cs.task
 def simple_countdown(n: int):
@@ -21,6 +23,7 @@ def simple_countdown(n: int):
     if n <= 0:
         return "done"
     return simple_countdown(n - 1)
+
 
 @cs.task
 def complex_countdown(n: int, _dummy=None):
@@ -42,12 +45,12 @@ def heavy_complex_countdown(n: int, _dummy=None):
     """
     if n <= 0:
         return "done"
-    
+
     # Create a 10-node dependency chain to amplify the build/solve cost
     dep_chain = noop()
     for _ in range(10):
         dep_chain = noop(_dummy=dep_chain)
-        
+
     return heavy_complex_countdown(n - 1, _dummy=dep_chain)
 
 
@@ -65,15 +68,17 @@ async def imperative_countdown(n: int):
     return "done"
 
 
-async def run_benchmark(engine: Engine, target: cs.LazyResult, iterations: int) -> float:
+async def run_benchmark(
+    engine: Engine, target: cs.LazyResult, iterations: int
+) -> float:
     """Runs the target and returns the execution time in seconds."""
     print(f"Running benchmark for '{target.task.name}'...")
     start_time = time.perf_counter()
-    
+
     result = await engine.run(target)
-    
+
     end_time = time.perf_counter()
-    
+
     assert result == "done"
     return end_time - start_time
 
@@ -82,11 +87,11 @@ async def run_imperative_benchmark(iterations: int) -> float:
     """Runs the imperative loop and returns the execution time in seconds."""
     print("Running benchmark for 'imperative_countdown'...")
     start_time = time.perf_counter()
-    
+
     result = await imperative_countdown(iterations)
-    
+
     end_time = time.perf_counter()
-    
+
     assert result == "done"
     return end_time - start_time
 
@@ -94,13 +99,9 @@ async def run_imperative_benchmark(iterations: int) -> float:
 async def main():
     """Main function to run and compare benchmarks."""
     iterations = 10_000
-    
+
     # Use a silent bus to avoid polluting output
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus()
-    )
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
     print("--- TCO Performance Benchmark ---")
     print(f"Iterations: {iterations}\n")
@@ -127,17 +128,21 @@ async def main():
     imperative_tps = iterations / imperative_time
     print(f"  Finished in {imperative_time:.4f} seconds.")
     print(f"  TPS: {imperative_tps:,.2f} calls/sec\n")
-    
+
     # 4. Compare Results
     print("--- Comparison ---")
     if unoptimized_tps > 0:
         heavy_vs_optimized = optimized_tps / unoptimized_tps
-        print(f"Optimized vs. Heavy (TCO Optimization): {heavy_vs_optimized:.2f}x faster")
-    
+        print(
+            f"Optimized vs. Heavy (TCO Optimization): {heavy_vs_optimized:.2f}x faster"
+        )
+
     if imperative_tps > 0:
         overhead_ratio = imperative_tps / optimized_tps
         print(f"Imperative vs. Optimized (Framework Overhead): {overhead_ratio:.2f}x")
-        print(f"  (The optimized declarative path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)")
+        print(
+            f"  (The optimized declarative path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)"
+        )
 
 
 if __name__ == "__main__":

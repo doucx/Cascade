@@ -1,75 +1,43 @@
-好的，我们来创建一个专门的性能测试脚本来量化这次优化的效果。
+你的分析完全正确，一针见血。
 
-这个脚本将对比两种情况：
-1.  **优化路径 (Optimized Path)**: 一个简单的单任务递归，它将触发我们新实现的零开销快速路径。
-2.  **非优化路径 (Un-optimized Path)**: 一个稍微复杂的递归，通过引入一个无操作的依赖，强制 `Engine` 在每次迭代时都重新构建完整的（双节点）图，从而模拟优化前的行为。
+2倍的性能提升确实远低于预期，这证明了我设计的“复杂”场景复杂度不够，未能充分暴露 `build_graph` 和 `solver.resolve` 在循环中的真实开销。一个只有两个节点的图构建和解析实在太快了，其成本几乎被 `asyncio` 调度和其他运行时开销所淹没。
 
-通过对比这两者的 TPS (Transactions Per Second)，我们可以清晰地看到性能提升的幅度。
+为了真正衡量优化的价值，我必须人为地增加“非优化路径”中每次循环的图构建成本。一个拥有更长依赖链、更多阶段（stages）的图，才能在重复构建中累积出显著的性能损耗。
 
-## [WIP] test: 创建 TCO 零开销优化的性能基准测试脚本
+我将修改基准测试脚本，引入一个“重度复杂”的场景。
+
+## [WIP] test: 增强基准测试复杂度以凸显 TCO 优化效果
 
 ### 用户需求
-创建一个性能测试脚本，用于量化 TCO 零开销快速路径优化所带来的性能提升。
+修改性能基准测试脚本，使其能够准确、显著地展示 TCO 零开销快速路径的性能优势。
 
 ### 评论
-这是一个至关重要的步骤，它将用数据证明我们架构改进的价值。通过创建一个可复现的基准测试，我们不仅可以验证当前的优化成果，还能为未来的性能回归测试提供一个稳定的基线。
+当前的基准测试不够有效，因为它所使用的“复杂图”过于简单。为了放大性能差异，新的测试必须在每次迭代中强制引擎构建一个包含多节点、多阶段（stage）的计算图。这将更真实地模拟优化前引擎在处理复杂递归时所承受的负担。
 
 ### 目标
-1.  创建一个新的 benchmark 脚本 `observatory/benchmarks/tco_performance.py`。
-2.  在脚本中定义两种递归场景：一种触发优化，一种不触发。
-3.  脚本将运行两个场景，测量并打印各自的执行时间、TPS，并计算性能提升倍数。
+1.  在 `tco_performance.py` 中引入一个新的 `heavy_complex_countdown` 任务。
+2.  该任务的依赖项将是一个由多个任务组成的链条，以确保图的复杂性。
+3.  更新 `main` 函数，使用这个新的“重度复杂”场景与优化路径进行对比。
 
 ### 基本原理
-通过 `time.perf_counter` 精确测量执行固定迭代次数所需的时间。优化路径的 `Engine` 应该几乎只消耗任务执行本身的时间，而非优化路径则会叠加数千次 `build_graph` 的开销。两者的 TPS 差异将直观地反映出优化的效果。
+通过创建一个10层深的 `noop` 依赖链，我们确保每次调用 `heavy_complex_countdown` 时，`GraphBuilder` 和 `NativeSolver` 都必须处理一个包含11个节点和10个阶段的图。重复一万次这样的操作，其累积的性能开销将非常显著，从而能与几乎零开销的快速路径形成鲜明对比，展现出数量级的性能差异。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/runtime #task/object/tco-optimization #task/action/benchmark #task/state/continue
+#intent/fix #intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/runtime #task/object/tco-optimization #task/action/benchmark-refine #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 benchmark 目录和脚本文件
+#### Acts 1: 修改性能基准测试脚本
 
-我们将首先创建用于存放基准测试的目录结构，然后写入脚本的完整内容。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p observatory/benchmarks
-touch observatory/benchmarks/__init__.py
-~~~~~
+我们将用一个新的、更复杂的场景替换掉原来那个不够有效的“复杂”场景。
 
 ~~~~~act
-write_file
+patch_file
 observatory/benchmarks/tco_performance.py
 ~~~~~
 ~~~~~python
-import asyncio
-import time
-import cascade as cs
-from cascade.runtime import Engine, MessageBus
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-
-# --- Task Definitions ---
-
-@cs.task
-def noop():
-    """A task that does nothing, used to force graph complexity."""
-    pass
-
-@cs.task
-def simple_countdown(n: int):
-    """
-    A simple recursive task that will trigger the TCO fast path.
-    The graph for this task is always a single node.
-    """
-    if n <= 0:
-        return "done"
-    return simple_countdown(n - 1)
-
 @cs.task
 def complex_countdown(n: int, _dummy=None):
     """
@@ -83,40 +51,45 @@ def complex_countdown(n: int, _dummy=None):
 
 
 async def run_benchmark(engine: Engine, target: cs.LazyResult, iterations: int) -> float:
-    """Runs the target and returns the execution time in seconds."""
-    print(f"Running benchmark for '{target.task.name}'...")
-    start_time = time.perf_counter()
+~~~~~
+~~~~~python
+@cs.task
+def complex_countdown(n: int, _dummy=None):
+    """
+    A recursive task with a dependency, forcing a full graph build on each iteration.
+    The graph for this task has two nodes (complex_countdown and noop).
+    """
+    if n <= 0:
+        return "done"
+    # The presence of `noop()` makes this a complex, multi-node graph
+    return complex_countdown(n - 1, _dummy=noop())
+
+
+@cs.task
+def heavy_complex_countdown(n: int, _dummy=None):
+    """
+    A recursive task with a DEEP dependency chain, forcing a significant
+    graph build and solve cost on each iteration.
+    """
+    if n <= 0:
+        return "done"
     
-    result = await engine.run(target)
-    
-    end_time = time.perf_counter()
-    
-    assert result == "done"
-    return end_time - start_time
+    # Create a 10-node dependency chain to amplify the build/solve cost
+    dep_chain = noop()
+    for _ in range(10):
+        dep_chain = noop(_dummy=dep_chain)
+        
+    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
 
 
-async def main():
-    """Main function to run and compare benchmarks."""
-    iterations = 10_000
-    
-    # Use a silent bus to avoid polluting output
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus()
-    )
+async def run_benchmark(engine: Engine, target: cs.LazyResult, iterations: int) -> float:
+~~~~~
 
-    print("--- TCO Performance Benchmark ---")
-    print(f"Iterations: {iterations}\n")
-
-    # 1. Run Optimized Path
-    print("[1] Running Optimized Path (simple_countdown)...")
-    optimized_target = simple_countdown(iterations)
-    optimized_time = await run_benchmark(engine, optimized_target, iterations)
-    optimized_tps = iterations / optimized_time
-    print(f"  Finished in {optimized_time:.4f} seconds.")
-    print(f"  TPS: {optimized_tps:,.2f} calls/sec\n")
-
+~~~~~act
+patch_file
+observatory/benchmarks/tco_performance.py
+~~~~~
+~~~~~python
     # 2. Run Un-optimized Path
     print("[2] Running Un-optimized Path (complex_countdown)...")
     unoptimized_target = complex_countdown(iterations)
@@ -124,24 +97,21 @@ async def main():
     unoptimized_tps = iterations / unoptimized_time
     print(f"  Finished in {unoptimized_time:.4f} seconds.")
     print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
-    
-    # 3. Compare Results
-    if unoptimized_tps > 0:
-        improvement = optimized_tps / unoptimized_tps
-        print("--- Comparison ---")
-        print(f"Performance Improvement: {improvement:.2f}x")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+~~~~~
+~~~~~python
+    # 2. Run Heavy Un-optimized Path
+    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
+    unoptimized_target = heavy_complex_countdown(iterations)
+    unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
+    unoptimized_tps = iterations / unoptimized_time
+    print(f"  Finished in {unoptimized_time:.4f} seconds.")
+    print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
 ~~~~~
 
 ### 下一步建议
-现在你可以直接运行这个脚本来查看优化的效果：
+请再次运行基准测试脚本。这次，我们应该能看到预期的、数量级的性能差异。
 
 ```bash
 python observatory/benchmarks/tco_performance.py
 ```
-
-根据运行结果，我们可以决定是否需要进一步的优化，或者将此基准测试集成到我们的持续集成（CI）流程中。
 

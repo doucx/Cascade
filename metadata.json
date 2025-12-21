@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 创建 TCO 零开销优化的性能基准测试脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766309052.1548076, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 增强基准测试复杂度以凸显 TCO 优化效果", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766309062.2127507, "duration_ms": 0}}

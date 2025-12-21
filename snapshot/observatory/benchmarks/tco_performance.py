@@ -34,6 +34,23 @@ def complex_countdown(n: int, _dummy=None):
     return complex_countdown(n - 1, _dummy=noop())
 
 
+@cs.task
+def heavy_complex_countdown(n: int, _dummy=None):
+    """
+    A recursive task with a DEEP dependency chain, forcing a significant
+    graph build and solve cost on each iteration.
+    """
+    if n <= 0:
+        return "done"
+    
+    # Create a 10-node dependency chain to amplify the build/solve cost
+    dep_chain = noop()
+    for _ in range(10):
+        dep_chain = noop(_dummy=dep_chain)
+        
+    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
+
+
 async def run_benchmark(engine: Engine, target: cs.LazyResult, iterations: int) -> float:
     """Runs the target and returns the execution time in seconds."""
     print(f"Running benchmark for '{target.task.name}'...")
@@ -69,9 +86,9 @@ async def main():
     print(f"  Finished in {optimized_time:.4f} seconds.")
     print(f"  TPS: {optimized_tps:,.2f} calls/sec\n")
 
-    # 2. Run Un-optimized Path
-    print("[2] Running Un-optimized Path (complex_countdown)...")
-    unoptimized_target = complex_countdown(iterations)
+    # 2. Run Heavy Un-optimized Path
+    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
+    unoptimized_target = heavy_complex_countdown(iterations)
     unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
     unoptimized_tps = iterations / unoptimized_time
     print(f"  Finished in {unoptimized_time:.4f} seconds.")

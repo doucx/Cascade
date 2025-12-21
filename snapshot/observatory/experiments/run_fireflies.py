@@ -50,7 +50,7 @@ def worker_main(
     worker_id: int,
     agent_indices: List[int],
     uplink_queue: mp.Queue,
-    concurrency_limit: Optional[int],
+    worker_limit: Optional[int],
     grid_width: int,
     grid_height: int,
     period: float,
@@ -70,15 +70,12 @@ def worker_main(
         await connector.connect()
 
         # 2. Setup Resources
-        # Note: Concurrency limits are currently PER PROCESS in this mode.
-        # To make them global across processes requires a distributed lock (e.g. Redis),
-        # which is out of scope for this MP queue-based MVP.
-        # We scale the limit down proportionally.
-        local_limit = None
-        if concurrency_limit:
-            local_limit = max(1, concurrency_limit // len(agent_indices)) if agent_indices else 1
-        
+        # worker_limit is the pre-calculated capacity for this process.
         resource_manager = None
+        if worker_limit:
+            resource_manager = ResourceManager(capacity={"cpu_slot": worker_limit})
+
+        # 3. Setup Topology (Local Island)
         if local_limit:
             resource_manager = ResourceManager(capacity={"cpu_slot": local_limit})
 
@@ -221,6 +218,11 @@ async def run_orchestrator(
     all_indices = list(range(num_agents))
     chunk_size = math.ceil(num_agents / workers)
     
+    # Calculate per-worker limit (Global Limit split across processes)
+    worker_limit = None
+    if concurrency_limit:
+        worker_limit = max(1, concurrency_limit // workers)
+
     processes = []
     for w_id in range(workers):
         start = w_id * chunk_size
@@ -233,7 +235,7 @@ async def run_orchestrator(
         p = mp.Process(
             target=worker_main,
             args=(
-                w_id, indices, uplink_queue, concurrency_limit,
+                w_id, indices, uplink_queue, worker_limit,
                 grid_width, grid_width, period, nudge
             )
         )

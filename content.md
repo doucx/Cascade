@@ -1,60 +1,393 @@
-好的，既然测试已经通过，我们将把这些优化和基础设施的改进作为一个完整的逻辑单元提交。
-
-## [COMMIT] refactor(observatory): 迁移 Kuramoto Agent 至 VM TailCall 并优化基础设施
+## [WIP] feat(vm): 集成资源调度与约束检查至 VM 运行时
 
 ### 用户需求
-提交已验证的 Kuramoto Agent 迁移代码，包括启用 VM 模式、重构网络层目录结构以及新增的调试工具。
+让通过 VM (`TailCall` 模式) 执行的任务也能受到 `ResourceManager` (并发/容量控制) 和 `ConstraintManager` (速率/暂停控制) 的管辖。
 
 ### 评论
-这次提交标志着 Cascade 实验基础设施的一个里程碑。我们不仅通过 `TailCall` 实现了 Agent 的性能飞跃，还清理了代码结构并建立了基准测试体系。这为后续更大规模（N=10k+）的复杂仿真奠定了物理和性能基础。
+这是将 VM 从“裸金属”执行器提升为“托管”运行时的关键一步。通过在指令级别引入资源获取和权限检查，我们确保了无论用户选择图模式还是 VM 模式，Cascade 的治理承诺（如“全局并发不超过 100”）始终有效。
 
 ### 目标
-执行 Git 提交，持久化性能优化成果。
+1.  更新 `Blueprint` 协议，使 `Call` 指令携带任务名称和约束元数据。
+2.  更新 `Compiler`，在编译时提取这些元数据。
+3.  更新 `VirtualMachine`，在执行 `Call` 指令前进行资源获取 (`acquire`) 和权限检查 (`check_permission`)。
+4.  更新 `Engine`，将内部的管理器注入到 VM 中。
 
 ### 基本原理
-按照「脚本与 Git 操作互斥」原则，在代码修改验证通过后，通过独立的 `[COMMIT]` 计划完成代码入库，确保提交历史的整洁。
+我们在 VM 的指令分派循环 (`_execute_call`) 中插入了与 `Engine._execute_node` 类似的“中间件”逻辑。为了复用现有的 `ConstraintManager`，我们在 VM 内部构造了临时的 `Node` 对象来适配接口。这避免了重写管理器逻辑，保持了架构的一致性。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/runtime #comp/benchmarks #scope/perf #ai/instruct #task/domain/vm #task/object/kuramoto-agent #task/action/migration #task/state/end
+#intent/build #flow/ready #priority/high #comp/runtime #concept/vm #scope/core #ai/instruct #task/domain/vm #task/object/resource-integration #task/action/implementation #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交变更
+#### Acts 1: 更新 Blueprint 协议
 
-我们将所有涉及的文件添加到暂存区，并执行一次详细的提交。
+首先，我们需要修改 `Call` 指令的定义，使其能够携带任务的元数据（名称）和静态约束定义。
 
 ~~~~~act
-git_add
-observatory/agents/kuramoto.py
-observatory/experiments/run_fireflies.py
-observatory/networking/direct_channel.py
-observatory/scripts/debug_headless_throughput.py
-observatory/scripts/debug_renderer_throughput.py
-observatory/scripts/profile_entry.py
+patch_file
+packages/cascade-runtime/src/cascade/runtime/blueprint.py
+~~~~~
+~~~~~python
+from typing import Any, List, Dict, Optional
+
+@dataclass
+class Operand:
+~~~~~
+~~~~~python
+from typing import Any, List, Dict, Optional
+from cascade.spec.constraint import ResourceConstraint
+
+@dataclass
+class Operand:
 ~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-runtime/src/cascade/runtime/blueprint.py
 ~~~~~
-~~~~~text
-refactor(observatory): migrate Kuramoto agent to VM TailCall and optimize infra
+~~~~~python
+@dataclass
+class Call(Instruction):
+    """
+    Instruction to call a callable (function/task).
+    Results are stored in the 'output' register.
+    """
+    func: Any
+    output: Register
+    args: List[Operand] = field(default_factory=list)
+    kwargs: Dict[str, Operand] = field(default_factory=dict)
 
-Migrated the Kuramoto firefly agent to the high-performance VM path using the
-TailCall primitive. This refactoring eliminates the graph building and solving
-overhead per simulation tick, enabling massive agent counts with minimal CPU latency.
+@dataclass
+class TailCall:
+~~~~~
+~~~~~python
+@dataclass
+class Call(Instruction):
+    """
+    Instruction to call a callable (function/task).
+    Results are stored in the 'output' register.
+    """
+    func: Any
+    output: Register
+    args: List[Operand] = field(default_factory=list)
+    kwargs: Dict[str, Operand] = field(default_factory=dict)
+    
+    # Metadata for observability and constraints
+    task_name: str = "unknown"
+    constraints: Optional[ResourceConstraint] = None
 
-Key changes:
-- Refactored kuramoto.py: Removed nested task definitions in favor of imperative
-  async logic returning TailCall objects.
-- Updated run_fireflies.py: Enabled use_vm=True for agent execution.
-- Restructured networking: Moved DirectChannel to a stable location at
-  observatory/networking/ to improve module organization.
-- Added Benchmarking Suite: Introduced specialized scripts for measuring headless
-  throughput, renderer performance, and detailed profiling (cProfile).
+@dataclass
+class TailCall:
+~~~~~
+
+#### Acts 2: 更新 Compiler 填充元数据
+
+接着，更新 `BlueprintBuilder`，在生成 `Call` 指令时从 `LazyResult` 中提取相关信息。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/graph/compiler.py
+~~~~~
+~~~~~python
+        # 3. Emit Instruction
+        callable_obj = None
+        if isinstance(target, LazyResult):
+            callable_obj = target.task.func
+        elif isinstance(target, MappedLazyResult):
+            callable_obj = target.factory
+
+        instr = Call(
+            func=callable_obj,
+            output=output_reg,
+            args=args_operands,
+            kwargs=kwargs_operands
+        )
+        self._instructions.append(instr)
+~~~~~
+~~~~~python
+        # 3. Emit Instruction
+        callable_obj = None
+        task_name = "unknown"
+        constraints = None
+
+        if isinstance(target, LazyResult):
+            callable_obj = target.task.func
+            task_name = target.task.name
+            constraints = target._constraints
+        elif isinstance(target, MappedLazyResult):
+            callable_obj = target.factory
+            task_name = getattr(target.factory, "name", "map")
+            constraints = target._constraints
+
+        instr = Call(
+            func=callable_obj,
+            output=output_reg,
+            args=args_operands,
+            kwargs=kwargs_operands,
+            task_name=task_name,
+            constraints=constraints
+        )
+        self._instructions.append(instr)
+~~~~~
+
+#### Acts 3: 更新 VM 实现资源逻辑
+
+这是核心变更。VM 需要能够接收管理器，并在执行调用前与其交互。
+
+~~~~~act
+write_file
+packages/cascade-runtime/src/cascade/runtime/vm.py
+~~~~~
+~~~~~python
+import inspect
+import asyncio
+from typing import Any, List, Dict, Optional
+from uuid import uuid4
+
+from cascade.runtime.blueprint import Blueprint, Instruction, Call, Literal, Register, Operand, TailCall
+from cascade.graph.model import Node
+from cascade.runtime.resource_manager import ResourceManager
+from cascade.runtime.constraints import ConstraintManager
+
+class Frame:
+    """
+    Represents the runtime stack frame for a blueprint execution.
+    It holds the values of virtual registers.
+    """
+    def __init__(self, size: int):
+        self.registers: List[Any] = [None] * size
+
+    def load(self, operand: Operand) -> Any:
+        if isinstance(operand, Literal):
+            return operand.value
+        elif isinstance(operand, Register):
+            return self.registers[operand.index]
+        else:
+            raise TypeError(f"Unknown operand type: {type(operand)}")
+
+    def store(self, register: Register, value: Any):
+        self.registers[register.index] = value
+
+
+class VirtualMachine:
+    """
+    Executes compiled Blueprints.
+    Supports Zero-Overhead TCO via an internal loop and blueprint switching.
+    Now integrated with Resource and Constraint Managers.
+    """
+    
+    def __init__(
+        self, 
+        resource_manager: Optional[ResourceManager] = None,
+        constraint_manager: Optional[ConstraintManager] = None,
+        wakeup_event: Optional[asyncio.Event] = None
+    ):
+        self._blueprints: Dict[str, Blueprint] = {}
+        self.resource_manager = resource_manager
+        self.constraint_manager = constraint_manager
+        self.wakeup_event = wakeup_event
+
+    def register_blueprint(self, bp_id: str, blueprint: Blueprint):
+        self._blueprints[bp_id] = blueprint
+
+    async def execute(
+        self, 
+        blueprint: Blueprint, 
+        initial_args: List[Any] = None, 
+        initial_kwargs: Dict[str, Any] = None
+    ) -> Any:
+        """
+        Executes the initial blueprint. Handles TailCalls to self or other registered blueprints.
+        """
+        current_blueprint = blueprint
+        
+        # 1. Allocate Frame
+        # We start with the frame for the initial blueprint
+        frame = Frame(current_blueprint.register_count)
+        
+        # 2. Load Initial Inputs
+        self._load_inputs(frame, current_blueprint, initial_args or [], initial_kwargs or {})
+
+        # 3. Main Execution Loop (The "Trampoline")
+        while True:
+            last_result = None
+            
+            # Execute all instructions in the current blueprint
+            for instr in current_blueprint.instructions:
+                last_result = await self._dispatch(instr, frame)
+
+            # Check for TCO
+            if isinstance(last_result, TailCall):
+                # Determine target blueprint
+                if last_result.target_blueprint_id:
+                    if last_result.target_blueprint_id not in self._blueprints:
+                        raise ValueError(f"Unknown target blueprint ID: {last_result.target_blueprint_id}")
+                    current_blueprint = self._blueprints[last_result.target_blueprint_id]
+                    
+                    # For a new blueprint (mutual recursion), we MUST allocate a new frame
+                    frame = Frame(current_blueprint.register_count)
+                else:
+                    # Self-recursion: reuse current_blueprint
+                    pass
+                
+                # Load inputs into the (potentially new) frame
+                self._load_inputs(frame, current_blueprint, last_result.args, last_result.kwargs)
+                
+                # Yield control to event loop to allow IO/timers to process
+                await asyncio.sleep(0) 
+                continue
+            
+            # Normal return
+            return last_result
+
+    def _load_inputs(
+        self, 
+        frame: Frame, 
+        blueprint: Blueprint, 
+        args: List[Any], 
+        kwargs: Dict[str, Any]
+    ):
+        """Populates the frame's registers based on the blueprint's input mapping."""
+        
+        # Positional args
+        for i, val in enumerate(args):
+            if i < len(blueprint.input_args):
+                reg_index = blueprint.input_args[i]
+                frame.registers[reg_index] = val
+        
+        # Keyword args
+        for k, val in kwargs.items():
+            if k in blueprint.input_kwargs:
+                reg_index = blueprint.input_kwargs[k]
+                frame.registers[reg_index] = val
+
+    async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
+        if isinstance(instr, Call):
+            return await self._execute_call(instr, frame)
+        else:
+            raise NotImplementedError(f"Unknown instruction: {type(instr)}")
+
+    async def _execute_call(self, instr: Call, frame: Frame) -> Any:
+        # --- Resource & Constraint Logic ---
+        requirements = {}
+        
+        # Construct a temporary Node object for the ConstraintManager
+        # We assume node_type="task" for standard calls
+        temp_node = None
+        
+        if self.constraint_manager or (instr.constraints and not instr.constraints.is_empty()):
+            temp_node = Node(
+                id=str(uuid4()),
+                name=instr.task_name,
+                node_type="task",
+                constraints=instr.constraints
+            )
+
+        # 1. Permission Check (e.g. Rate Limits, Pauses)
+        if self.constraint_manager and temp_node:
+            while not self.constraint_manager.check_permission(temp_node):
+                if self.wakeup_event:
+                    await self.wakeup_event.wait()
+                    self.wakeup_event.clear()
+                else:
+                    # Fallback if no event provided (shouldn't happen in proper Engine setup)
+                    await asyncio.sleep(0.1)
+
+        # 2. Resource Resolution & Acquisition
+        if temp_node:
+            # Static constraints
+            if instr.constraints:
+                for res, amount in instr.constraints.requirements.items():
+                    # For VM, we assume constraints are resolved literals or handled simply
+                    # Dynamic constraints (LazyResults) inside VM are tricky, skipping for now
+                    requirements[res] = amount
+            
+            # Global/Dynamic constraints from Manager
+            if self.constraint_manager:
+                extra = self.constraint_manager.get_extra_requirements(temp_node)
+                requirements.update(extra)
+
+        if self.resource_manager and requirements:
+            await self.resource_manager.acquire(requirements)
+
+        try:
+            # --- Execution ---
+            # 1. Resolve Arguments
+            args = [frame.load(op) for op in instr.args]
+            kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
+
+            # 2. Invoke Callable
+            result = instr.func(*args, **kwargs)
+            
+            # Handle Async
+            if inspect.isawaitable(result):
+                result = await result
+
+            # 3. Store Result
+            frame.store(instr.output, result)
+            
+            return result
+        finally:
+            # --- Resource Release ---
+            if self.resource_manager and requirements:
+                await self.resource_manager.release(requirements)
+~~~~~
+
+#### Acts 4: 更新 Engine 注入管理器
+
+最后，确保 `Engine` 在创建 VM 时将自己持有的 `ResourceManager` 和 `ConstraintManager` 传递进去。
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    async def _run_vm(self, target: Any) -> Any:
+        """
+        Executes the target using the AOT Blueprint/VM path.
+        """
+        # 1. Compile in template mode
+        builder = BlueprintBuilder()
+        blueprint = builder.build(target, template=True)
+
+        # 2. Extract Initial Arguments
+        # The BlueprintBuilder treats the root LazyResult's args/kwargs as the
+        # inputs for the blueprint.
+        initial_args = list(target.args)
+        initial_kwargs = dict(target.kwargs)
+
+        # 3. Execute
+        vm = VirtualMachine()
+        # TODO: Inject resources and specialized executors into VM if needed.
+        # For now, VM uses direct function calls.
+        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+~~~~~
+~~~~~python
+    async def _run_vm(self, target: Any) -> Any:
+        """
+        Executes the target using the AOT Blueprint/VM path.
+        """
+        # 1. Compile in template mode
+        builder = BlueprintBuilder()
+        blueprint = builder.build(target, template=True)
+
+        # 2. Extract Initial Arguments
+        # The BlueprintBuilder treats the root LazyResult's args/kwargs as the
+        # inputs for the blueprint.
+        initial_args = list(target.args)
+        initial_kwargs = dict(target.kwargs)
+
+        # 3. Execute
+        vm = VirtualMachine(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self._wakeup_event
+        )
+        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
 ~~~~~
 
 ### 下一步建议
-- **性能基准记录**: 建议使用 `observatory/scripts/profile_entry.py` 运行一次详细的性能画像分析，记录下当前的 CPU 分布情况作为“黄金基准”。
-- **VM 能力增强**: 考虑下一步在 VM 的 `_dispatch` 循环中集成 `ConstraintManager` 的检查逻辑，使 `TailCall` 递归中的每一跳都能享受到 Cascade 的并发治理能力。
+我们已经完成了 VM 的核心升级。现在可以运行 `run_fireflies.py`，并尝试使用 `cs-controller` 设置并发限制，来验证 VM 模式下是否能正确响应约束。如果验证成功，这标志着 Cascade 的高性能路径已具备生产级治理能力。

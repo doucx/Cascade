@@ -300,9 +300,11 @@ class Engine:
         initial_kwargs = dict(target.kwargs)
 
         # 3. Execute
-        vm = VirtualMachine()
-        # TODO: Inject resources and specialized executors into VM if needed.
-        # For now, VM uses direct function calls.
+        vm = VirtualMachine(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self._wakeup_event
+        )
         return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):

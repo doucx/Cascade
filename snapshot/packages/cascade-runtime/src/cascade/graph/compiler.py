@@ -31,10 +31,10 @@ class BlueprintBuilder:
             raise TypeError(f"Cannot compile non-LazyResult type: {type(target)}")
         
         return Blueprint(
-            instructions=self.instructions,
+            instructions=list(self.instructions),
             register_count=self._register_counter,
-            input_args=self._input_args_map,
-            input_kwargs=self._input_kwargs_map
+            input_args=list(self._input_args_map),
+            input_kwargs=dict(self._input_kwargs_map)
         )
 
     def _allocate_register(self) -> Register:

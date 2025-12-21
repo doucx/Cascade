@@ -42,14 +42,22 @@ addopts = "-ra --cov=cascade --cov-report=term-missing"
 dev = [
   "pytest",
   "pytest-cov",
-  "mypy",
   "pytest-aiohttp",
   "pytest-mock",
+  "mypy",
   "moto[s3]",
   "typer",
   "mkdocs",
   "mkdocs-material",
   "mkdocstrings[python]",
+  # Consolidated testing dependencies
+  "redis",
+  "aiobotocore",
+  "sqlalchemy",
+  "PyYAML",
+  "jinja2",
+  "aiohttp",
+  "python-constraint",
 ]
 
 [tool.hatch.metadata]

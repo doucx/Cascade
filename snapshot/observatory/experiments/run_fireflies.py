@@ -10,6 +10,7 @@ from cascade.spec.resource import resource
 from observatory.agents.kuramoto import firefly_agent
 from observatory.monitors.convergence import ConvergenceMonitor
 from observatory.monitors.aggregator import MetricsAggregator
+from observatory.networking.direct_channel import DirectChannel
 
 # Visualization
 from observatory.visualization.palette import Palettes
@@ -122,6 +123,10 @@ async def run_experiment(
         # Headless mode: Monitor prints to stdout
         monitor_task = asyncio.create_task(monitor.run(frequency_hz=2.0))
 
+    # --- Create Topology (DirectChannels) ---
+    print("Constructing Network Topology...")
+    channels = [DirectChannel(owner_id=f"agent_{i}", capacity=100) for i in range(num_agents)]
+
     # --- Create Agents ---
     agent_tasks = []
 
@@ -134,9 +139,10 @@ async def run_experiment(
     for i in range(num_agents):
         initial_phase = random.uniform(0, period)
 
+        # Topology Lookup
         neighbor_ids = get_neighbors(i, grid_width, grid_width)
-        neighbor_inboxes = [f"firefly/{nid}/inbox" for nid in neighbor_ids]
-        my_inbox = f"firefly/{i}/inbox"
+        my_neighbors = [channels[nid] for nid in neighbor_ids]
+        my_channel = channels[i]
 
         engine = cs.Engine(
             solver=cs.NativeSolver(),
@@ -151,8 +157,8 @@ async def run_experiment(
             initial_phase=initial_phase,
             period=period,
             nudge=nudge,
-            neighbor_inboxes=neighbor_inboxes,
-            my_inbox=my_inbox,
+            neighbors=my_neighbors,
+            my_channel=my_channel,
             connector=connector,
             refractory_period=period * 0.2,
         )

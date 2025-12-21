@@ -1,340 +1,434 @@
-## [WIP] explore(perf): 创建诊断脚本以隔离性能瓶颈
+简洁的回答：
+好的，我们将开始执行第一阶段：基座重铸。这将通过引入 `DirectChannel` 和重构 `firefly_agent` 来消除消息总线的开销，为万级节点规模做好准备。
+
+## [WIP] refactor(infra): 为 Firefly Agent 引入 DirectChannel 直连拓扑
 
 ### 用户需求
-创建一套独立的 Python 脚本，用于对 `observatory` 的核心组件（渲染器、Agent 逻辑）进行压力测试和性能分析，以定位当前 2500 节点模拟中的卡顿根源。
+执行“创世网络第二纪元战略规划”的第一阶段任务 `INFRA-1.1` 和 `INFRA-1.2`。
+具体是将 `firefly_agent` 的通信机制从基于 Topic 的总线发布/订阅模式，迁移到基于对象引用的 `DirectChannel` 点对点零拷贝模式，以支撑 10,000+ 节点的模拟规模。同时需要保持可视化功能的正常运行。
 
 ### 评论
-这是解决复杂性能问题的正确方法。通过“分而治之”的策略，我们可以分别测量渲染管线和核心模拟逻辑的吞吐量上限。将这两者的数据与完整实验的数据进行对比，我们就能精确地知道性能损失发生在哪里。
+这是一个关键的基础设施升级。当前的 `LocalBus` 在高频小消息场景下（10k agents * 1Hz = 10k msg/s, fanout 8 = 80k deliveries/s）会成为 CPU 瓶颈。`DirectChannel` 绕过了中间 Broker 的匹配和调度开销，直接将 Payload 放入目标 Queue，理论吞吐量提升显著。
 
 ### 目标
-1.  创建一个**渲染器压力测试脚本** (`debug_renderer_throughput.py`)，它将独立于 Agent 逻辑，以可控的速率向 `RawTerminalApp` 发送大量更新，以测量渲染管线的最大吞吐量。
-2.  创建一个**无头模式（Headless）模拟脚本** (`debug_headless_throughput.py`)，它将运行完整的 2500 个 Agent 模拟，但完全移除 UI 渲染部分，以测量核心 Agent 逻辑的净计算吞吐量。
-3.  创建一个**专用的性能剖析入口脚本** (`profile_entry.py`)，用于简化使用 `cProfile` 或 `py-spy` 等工具对完整实验进行剖析的过程。
+1.  将 `DirectChannel` 从 `protoplasm` 提升为正式组件 `observatory.networking.direct_channel`。
+2.  重构 `observatory.agents.kuramoto.py`：
+    *   移除 `fanout_signal` (Topic 模式)。
+    *   新增 `fanout_direct` (Channel 模式，保留一条通往 `connector` 的慢速通道用于可视化)。
+    *   新增 `safe_recv_channel` 替代 `safe_recv`，支持 `asyncio.wait_for` 超时控制。
+    *   更新 `firefly_agent` 签名，接收 `neighbors: List[DirectChannel]` 和 `my_channel: DirectChannel`。
+3.  重构 `observatory.experiments.run_fireflies.py`：
+    *   在实验初始化阶段构建 `DirectChannel` 拓扑。
+    *   将构建好的 Channel 注入到 Agent 中。
 
 ### 基本原理
-1.  **隔离变量**: `debug_renderer_throughput.py` 移除了 Agent 逻辑这个变量，`debug_headless_throughput.py` 移除了渲染器这个变量。
-2.  **建立基线**: 这两个脚本的输出将为我们提供“理想情况”下的性能基线。
-3.  **聚焦分析**: 将完整实验的性能与这两个基线对比，可以量化“Agent逻辑”和“渲染器”这两个子系统耦合在一起时产生的性能影响。`profile_entry.py` 将帮助我们深入分析这种耦合的内部细节。
+通过在图构建阶段（Setup）预先解析拓扑并注入直接引用，我们在运行时（Runtime）消除了所有的路由查找（Routing Lookup）和序列化（Serialization）成本。对于可视化，我们保留一个“旁路”机制，即 Agent 在通过快速通道通知邻居的同时，通过慢速的总线通道发送低频或采样的状态更新给观察者。
 
 ### 标签
-#intent/tooling #intent/explore #flow/ready #priority/high #comp/runtime #comp/tests #scope/dx
+#intent/refine #flow/ready #priority/high #comp/runtime #concept/communication #scope/core #ai/instruct
 #task/domain/infra
-#task/object/performance-profiling
-#task/action/instrumentation
-#task/state/continue
+#task/object/topology
+#task/action/refactor
+#task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 创建诊断脚本
+#### Acts 1: 提升 DirectChannel 组件
 
-我将一次性创建三个脚本文件，并将它们放置在 `observatory/scripts` 目录下以便于管理。
-
-##### 脚本 1: 渲染器吞吐量测试
-
-这个脚本将模拟大量的更新源，直接调用渲染器，测试其处理能力的上限。
+将 `DirectChannel` 移动到正式的 networking 包中，确立其作为核心基础设施的地位。
 
 ~~~~~act
-write_file
-observatory/scripts/debug_renderer_throughput.py
+move_file
+observatory/protoplasm/networking/direct_channel.py
+observatory/networking/direct_channel.py
+~~~~~
+
+#### Acts 2: 重构 Kuramoto Agent
+
+这是本次重构的核心。我们将修改 Agent 的感知（Input）和行动（Output）层，使其基于 `DirectChannel` 运作。
+
+~~~~~act
+read_file
+observatory/agents/kuramoto.py
+~~~~~
+
+~~~~~act
+patch_file
+observatory/agents/kuramoto.py
 ~~~~~
 ~~~~~python
-"""
-Debug Script 1: Renderer Throughput Test
-
-Purpose:
-  Isolates the RawTerminalApp renderer to measure its maximum update throughput
-  without the overhead of the Cascade engine or agent logic. This script
-  simulates a configurable number of "sources" that generate grid updates
-  at a high frequency.
-
-How to Run:
-  python -m observatory.scripts.debug_renderer_throughput
-
-Expected Output:
-  A terminal visualization running smoothly. The FPS and flush duration
-  metrics in the log file will tell us the renderer's baseline performance.
-  If FPS here is high (>30) and flush duration is low (<20ms), the renderer
-  itself is not the bottleneck.
-"""
 import asyncio
 import random
 import time
-
-from observatory.visualization.raw_app import RawTerminalApp
-from observatory.visualization.grid import GridView
-from observatory.visualization.status import StatusBar
-from observatory.visualization.palette import Palettes
-from observatory.monitors.aggregator import MetricsAggregator
-
-# --- Configuration ---
-NUM_SOURCES = 5000  # Number of simulated concurrent update sources
-UPDATES_PER_SOURCE_PER_S = 2 # Avg updates per source per second
-GRID_WIDTH = 50
-GRID_HEIGHT = 50
-SIMULATION_DURATION_S = 30.0
-
-
-async def source_coroutine(app: RawTerminalApp):
-    """A simple async task that randomly generates updates for the grid."""
-    while True:
-        # Generate a "flash"
-        x = random.randint(0, GRID_WIDTH - 1)
-        y = random.randint(0, GRID_HEIGHT - 1)
-        await app.direct_update_grid_batch([(x, y, 1.0)])
-        await asyncio.sleep(1.0 / UPDATES_PER_SOURCE_PER_S)
-
-
-async def main():
-    total_updates_per_s = NUM_SOURCES * UPDATES_PER_SOURCE_PER_S
-    print("🚀 Starting Renderer Throughput Test...")
-    print(f"   - Grid Size: {GRID_WIDTH}x{GRID_HEIGHT}")
-    print(f"   - Sources: {NUM_SOURCES}")
-    print(f"   - Target Rate: {total_updates_per_s:.0f} updates/sec")
-    log_filename = f"renderer_throughput_log_{int(time.time())}.jsonl"
-
-    aggregator = MetricsAggregator(log_filename)
-    aggregator.open()
-    print(f"📝 Logging metrics to [bold cyan]{log_filename}[/bold cyan]")
-
-    grid_view = GridView(
-        width=GRID_WIDTH, height=GRID_HEIGHT, palette_func=Palettes.firefly
-    )
-    status_bar = StatusBar(
-        initial_status={"Test": "Renderer Throughput", "Sources": NUM_SOURCES}
-    )
-    app = RawTerminalApp(grid_view, status_bar, aggregator=aggregator)
-    aggregator_task = asyncio.create_task(aggregator.run())
-    await app.start()
-
-    tasks = [asyncio.create_task(source_coroutine(app)) for _ in range(NUM_SOURCES)]
-
-    try:
-        await asyncio.sleep(SIMULATION_DURATION_S)
-    finally:
-        print("\nCleaning up...")
-        app.stop()
-        aggregator.close()
-        aggregator_task.cancel()
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(aggregator_task, *tasks, return_exceptions=True)
-        print("Test finished.")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-~~~~~
-
-##### 脚本 2: 无头模式计算吞吐量测试
-
-这个脚本运行完整的模拟逻辑，但剥离了所有UI，以测量纯计算性能。
-
-~~~~~act
-write_file
-observatory/scripts/debug_headless_throughput.py
-~~~~~
-~~~~~python
-"""
-Debug Script 2: Headless Throughput Test
-
-Purpose:
-  Isolates the core agent simulation logic to measure its maximum throughput
-  without the overhead of rendering. This script runs the full firefly
-  simulation but does not create or update any UI components.
-
-How to Run:
-  python -m observatory.scripts.debug_headless_throughput
-
-Expected Output:
-  A stream of text to the console reporting the number of flashes per second.
-  This number gives us a baseline for how fast the simulation *can* run. If this
-  number is very high (e.g., >20,000 flashes/sec), it means the agent logic
-  itself is fast, and the bottleneck likely appears when coupling it with the UI.
-"""
-import asyncio
-import random
-import time
-from collections import deque
-from typing import List
+from typing import Any, Dict, List
 
 import cascade as cs
-from cascade.spec.resource import resource
+from cascade.interfaces.protocols import Connector
 
-from observatory.agents.kuramoto import firefly_agent
+
+# --- Atomic Primitives for Agent Behavior ---
+
+
+@cs.task
+async def fanout_signal(
+    topics: List[str],
+    payload: Dict[str, Any],
+    should_send: bool,
+    connector: Connector,
+) -> None:
+    """A task to publish a message to multiple topics (Fan-out)."""
+    if should_send and connector and topics:
+        # Optimistic fan-out: we just fire tasks or await in loop.
+        # Since LocalBus.publish is non-blocking (just puts to queue), loop is fine.
+        for topic in topics:
+            await connector.publish(topic, payload)
+
+
+@cs.task
+async def safe_recv(
+    topic: str,
+    timeout: float,
+    connector: Connector,
+) -> Dict[str, Any]:
+    """
+    A custom receive task that treats timeouts as valid return values.
+    Also returns the time elapsed while waiting.
+    """
+    if not connector:
+        return {"signal": None, "timeout": True, "elapsed": 0.0}
+
+    future = asyncio.Future()
+
+    async def callback(topic: str, payload: Any):
+        if not future.done():
+            future.set_result(payload)
+
+    subscription = await connector.subscribe(topic, callback)
+    start_time = time.time()
+    try:
+        signal = await asyncio.wait_for(future, timeout=timeout)
+        elapsed = time.time() - start_time
+        return {"signal": signal, "timeout": False, "elapsed": elapsed}
+    except asyncio.TimeoutError:
+        elapsed = time.time() - start_time
+        return {"signal": None, "timeout": True, "elapsed": elapsed}
+    finally:
+        if subscription:
+            await subscription.unsubscribe()
+~~~~~
+~~~~~python
+import asyncio
+import random
+import time
+from typing import Any, Dict, List
+
+import cascade as cs
+from cascade.interfaces.protocols import Connector
 from observatory.networking.direct_channel import DirectChannel
 
-# --- Configuration ---
-NUM_AGENTS = 2500
-PERIOD = 5.0
-NUDGE = 0.2
-DURATION_SECONDS = 30.0
-GRID_SIDE = int(NUM_AGENTS**0.5)
+
+# --- Atomic Primitives for Agent Behavior ---
 
 
-def get_neighbors(index: int, width: int, height: int) -> List[int]:
-    x, y = index % width, index // width
-    neighbors = []
-    for dx in [-1, 0, 1]:
-        for dy in [-1, 0, 1]:
-            if dx == 0 and dy == 0:
-                continue
-            nx, ny = (x + dx) % width, (y + dy) % height
-            neighbors.append(ny * width + nx)
-    return neighbors
+@cs.task
+async def fanout_direct(
+    neighbors: List[DirectChannel],
+    payload: Dict[str, Any],
+    should_send: bool,
+    connector: Connector,  # For visualization/telemetry side-channel
+) -> None:
+    """
+    Fan-out using DirectChannel (Fast Path) + Connector (Slow Path).
+    """
+    if not should_send:
+        return
+
+    # 1. Fast Path: Zero-copy delivery to neighbors
+    # We yield to the event loop occasionally to prevent starvation if fan-out is huge
+    for i, neighbor in enumerate(neighbors):
+        await neighbor.send(payload)
+        if i % 10 == 0:
+            await asyncio.sleep(0)
+
+    # 2. Slow Path: Telemetry for Visualization
+    if connector:
+        # We publish to a known topic for the visualizer
+        await connector.publish("firefly/flash", payload)
 
 
-async def run_headless_experiment():
-    print("🚀 Starting Headless Throughput Test...")
-    print(f"   - Agents: {NUM_AGENTS}")
+@cs.task
+async def safe_recv_channel(
+    channel: DirectChannel,
+    timeout: float,
+) -> Dict[str, Any]:
+    """
+    Waits for a message on a DirectChannel with a timeout.
+    """
+    start_time = time.time()
+    try:
+        # DirectChannel.recv() returns the payload directly
+        signal = await asyncio.wait_for(channel.recv(), timeout=timeout)
+        elapsed = time.time() - start_time
+        return {"signal": signal, "timeout": False, "elapsed": elapsed}
+    except asyncio.TimeoutError:
+        elapsed = time.time() - start_time
+        return {"signal": None, "timeout": True, "elapsed": elapsed}
 
-    # --- Flash Counter ---
-    flash_count = 0
-    flash_times = deque()
 
-    class HeadlessConnector:
-        async def publish(self, topic, payload, **kwargs):
-            nonlocal flash_count
-            flash_count += 1
+# --- Core Agent Logic ---
 
-        async def connect(self): pass
-        async def disconnect(self): pass
-        async def subscribe(self, topic, callback):
-            class DummySub:
-                async def unsubscribe(self): pass
-            return DummySub()
 
-    connector = HeadlessConnector()
+def firefly_agent(
+    agent_id: int,
+    initial_phase: float,
+    period: float,
+    nudge: float,
+    neighbors: List[DirectChannel],
+    my_channel: DirectChannel,
+    connector: Connector,
+    refractory_period: float = 2.0,
+):
+    """
+    The main entry point for a single firefly agent.
+    Now uses DirectChannel topology.
+    """
 
-    channels = [DirectChannel(f"agent_{i}") for i in range(NUM_AGENTS)]
-    engine = cs.Engine(cs.NativeSolver(), cs.LocalExecutor(), cs.MessageBus())
+    def firefly_cycle(
+        agent_id: int,
+        phase: float,
+        period: float,
+        nudge: float,
+        neighbors: List[DirectChannel],
+        my_channel: DirectChannel,
+        connector: Connector,
+        refractory_period: float,
+    ):
+        # --- Logic Branching ---
 
-    @resource(name="connector")
-    def connector_provider():
-        yield connector
-    engine.register(connector_provider)
+        # 1. Refractory Check: If we are in the "blind" zone, just wait.
+        if phase < refractory_period:
+            # We are blind. Wait until we exit refractory period.
+            blind_wait_duration = refractory_period - phase
 
+            # Use cs.wait for pure time passage (no listening)
+            wait_action = cs.wait(blind_wait_duration)
+
+            @cs.task
+            def after_refractory(_):
+                # We have advanced time by 'blind_wait_duration'.
+                # Our phase is now exactly 'refractory_period'.
+                return firefly_cycle(
+                    agent_id,
+                    refractory_period,
+                    period,
+                    nudge,
+                    neighbors,
+                    my_channel,
+                    connector,
+                    refractory_period,
+                )
+
+            return after_refractory(wait_action)
+
+        # 2. Sensitive Check: We are past refractory. Listen for neighbors.
+        else:
+            time_to_flash = period - phase
+            # Ensure we don't have negative timeout due to floating point drift
+            wait_timeout = max(0.01, time_to_flash)
+
+            # Listen to MY channel
+            perception = safe_recv_channel(my_channel, timeout=wait_timeout)
+
+            @cs.task
+            def process_perception(p: Dict[str, Any]) -> cs.LazyResult:
+                is_timeout = p.get("timeout", False)
+                elapsed_time = p.get("elapsed", 0.0)
+
+                # Update actual phase based on real time passed
+                current_actual_phase = phase + elapsed_time
+
+                # Determine Action
+                if is_timeout:
+                    # We reached the end of the period. FLASH!
+                    flash_payload = {
+                        "agent_id": agent_id,
+                        "phase": current_actual_phase,
+                    }
+
+                    flash = fanout_direct(
+                        neighbors=neighbors,
+                        payload=flash_payload,
+                        should_send=True,
+                        connector=connector,
+                    )
+
+                    @cs.task
+                    def loop_reset(_, _flash):
+                        jitter = random.uniform(0.0, 0.1)
+                        return firefly_cycle(
+                            agent_id,
+                            0.0 + jitter,
+                            period,
+                            nudge,
+                            neighbors,
+                            my_channel,
+                            connector,
+                            refractory_period,
+                        )
+
+                    return loop_reset(p, flash)
+
+                else:
+                    # We heard a neighbor! NUDGE!
+                    next_phase = current_actual_phase + nudge
+                    return firefly_cycle(
+                        agent_id,
+                        next_phase,
+                        period,
+                        nudge,
+                        neighbors,
+                        my_channel,
+                        connector,
+                        refractory_period,
+                    )
+
+            return process_perception(perception)
+
+    return firefly_cycle(
+        agent_id,
+        initial_phase,
+        period,
+        nudge,
+        neighbors,
+        my_channel,
+        connector,
+        refractory_period,
+    )
+~~~~~
+
+#### Acts 3: 更新实验脚本
+
+更新 `run_fireflies.py` 以构建 `DirectChannel` 拓扑并注入 Agent。
+
+~~~~~act
+read_file
+observatory/experiments/run_fireflies.py
+~~~~~
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+from observatory.agents.kuramoto import firefly_agent
+from observatory.monitors.convergence import ConvergenceMonitor
+from observatory.monitors.aggregator import MetricsAggregator
+~~~~~
+~~~~~python
+from observatory.agents.kuramoto import firefly_agent
+from observatory.monitors.convergence import ConvergenceMonitor
+from observatory.monitors.aggregator import MetricsAggregator
+from observatory.networking.direct_channel import DirectChannel
+~~~~~
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+    # --- Create Agents ---
     agent_tasks = []
-    for i in range(NUM_AGENTS):
-        initial_phase = random.uniform(0, PERIOD)
-        neighbor_ids = get_neighbors(i, GRID_SIDE, GRID_SIDE)
+
+    @resource(name="_internal_connector", scope="run")
+    def shared_connector_provider():
+        yield connector
+
+    # Batch creation to avoid freezing UI loop
+    print("Generating Agent Workflows...")
+    for i in range(num_agents):
+        initial_phase = random.uniform(0, period)
+
+        neighbor_ids = get_neighbors(i, grid_width, grid_width)
+        neighbor_inboxes = [f"firefly/{nid}/inbox" for nid in neighbor_ids]
+        my_inbox = f"firefly/{i}/inbox"
+
+        engine = cs.Engine(
+            solver=cs.NativeSolver(),
+            executor=cs.LocalExecutor(),
+            bus=cs.MessageBus(),
+            connector=None,
+        )
+        engine.register(shared_connector_provider)
+
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=period,
+            nudge=nudge,
+            neighbor_inboxes=neighbor_inboxes,
+            my_inbox=my_inbox,
+            connector=connector,
+            refractory_period=period * 0.2,
+        )
+
+        agent_tasks.append(engine.run(agent_workflow))
+
+        # Yield every 500 agents to keep UI responsive during setup
+        if i > 0 and i % 500 == 0:
+            print(f"   ... {i} agents prepared.")
+            await asyncio.sleep(0)
+~~~~~
+~~~~~python
+    # --- Create Topology (DirectChannels) ---
+    print("Constructing Network Topology...")
+    channels = [DirectChannel(owner_id=f"agent_{i}", capacity=100) for i in range(num_agents)]
+
+    # --- Create Agents ---
+    agent_tasks = []
+
+    @resource(name="_internal_connector", scope="run")
+    def shared_connector_provider():
+        yield connector
+
+    # Batch creation to avoid freezing UI loop
+    print("Generating Agent Workflows...")
+    for i in range(num_agents):
+        initial_phase = random.uniform(0, period)
+
+        # Topology Lookup
+        neighbor_ids = get_neighbors(i, grid_width, grid_width)
         my_neighbors = [channels[nid] for nid in neighbor_ids]
         my_channel = channels[i]
 
-        workflow = firefly_agent(
+        engine = cs.Engine(
+            solver=cs.NativeSolver(),
+            executor=cs.LocalExecutor(),
+            bus=cs.MessageBus(),
+            connector=None,
+        )
+        engine.register(shared_connector_provider)
+
+        agent_workflow = firefly_agent(
             agent_id=i,
             initial_phase=initial_phase,
-            period=PERIOD,
-            nudge=NUDGE,
+            period=period,
+            nudge=nudge,
             neighbors=my_neighbors,
             my_channel=my_channel,
-            connector=cs.inject("connector"),
-            refractory_period=PERIOD * 0.2,
+            connector=connector,
+            refractory_period=period * 0.2,
         )
-        agent_tasks.append(engine.run(workflow))
 
-    all_tasks = asyncio.gather(*agent_tasks)
-    start_time = time.time()
-    last_report_time = start_time
+        agent_tasks.append(engine.run(agent_workflow))
 
-    try:
-        while time.time() - start_time < DURATION_SECONDS:
-            await asyncio.sleep(1.0)
-            now = time.time()
-            interval = now - last_report_time
-            rate = (flash_count - (flash_times[0] if flash_times else 0)) / interval
-            
-            # Simple reporting
-            current_rate = (flash_count - getattr(run_headless_experiment, 'last_flash_count', 0)) / interval
-            print(f"   - Flashes/sec: {current_rate:,.0f} (Total: {flash_count:,})")
-            
-            run_headless_experiment.last_flash_count = flash_count
-            last_report_time = now
-
-    finally:
-        print("\nCleaning up...")
-        all_tasks.cancel()
-        await asyncio.gather(all_tasks, return_exceptions=True)
-        print("Test finished.")
-
-# Add a stateful attribute for rate calculation
-run_headless_experiment.last_flash_count = 0
-
-if __name__ == "__main__":
-    asyncio.run(run_headless_experiment())
-~~~~~
-
-##### 脚本 3: 性能剖析入口
-
-这个脚本是一个简化的、无参数的入口，方便 `cProfile` 调用。
-
-~~~~~act
-write_file
-observatory/scripts/profile_entry.py
-~~~~~
-~~~~~python
-"""
-Debug Script 3: Profiling Entry Point
-
-Purpose:
-  Provides a clean, simple entry point for running the full experiment
-  with standard profiling tools like cProfile.
-
-How to Run with cProfile:
-  python -m cProfile -s tottime -o profile.out observatory/scripts/profile_entry.py
-  
-  Then, to view the stats:
-  python -c "import pstats; p = pstats.Stats('profile.out'); p.sort_stats('tottime').print_stats(20)"
-
-Expected Output:
-  The full experiment will run for a short duration and then exit. The key
-  output is the `profile.out` file, which contains detailed performance data.
-  We will analyze this file to see which functions are consuming the most CPU time.
-"""
-import asyncio
-from observatory.experiments import run_fireflies
-
-# Use a smaller number of agents and shorter duration for quicker profiling runs
-# And disable visualization as it adds noise to CPU profiles.
-async def main():
-    print("🚀 Starting Profiling Run (15 seconds, headless)...")
-    await run_fireflies.run_experiment(
-        num_agents=900,  # 30x30 grid, a significant but manageable number
-        duration_seconds=15.0,
-        visualize=False
-    )
-    print("\n✅ Profiling run finished.")
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        # Yield every 500 agents to keep UI responsive during setup
+        if i > 0 and i % 500 == 0:
+            print(f"   ... {i} agents prepared.")
+            await asyncio.sleep(0)
 ~~~~~
 
 ### 下一步建议
-
-请按顺序执行以下操作，并将每个脚本的**最终输出**或**概要**发给我：
-
-1.  **运行渲染器测试**:
-    ```bash
-    python -m observatory.scripts.debug_renderer_throughput
-    ```
-    *(让它运行30秒，然后按 Ctrl+C 停止。请分享生成的 `renderer_throughput_log_...jsonl` 文件中的最后几行日志。)*
-
-2.  **运行无头模式测试**:
-    ```bash
-    python -m observatory.scripts.debug_headless_throughput
-    ```
-    *(同样，运行30秒后停止，并分享最后几行的 `Flashes/sec` 输出。)*
-
-3.  **运行性能剖析**:
-    ```bash
-    python -m cProfile -s tottime -o profile.out observatory/scripts/profile_entry.py
-    ```
-    然后，运行这个命令来查看结果：
-    ```bash
-    python -c "import pstats; p = pstats.Stats('profile.out'); p.sort_stats('tottime').print_stats(30)"
-    ```
-    *(请将这个命令的**完整输出**发给我。)*
-
-有了这三份数据，我们就能像做CT扫描一样，精确地定位到性能肿瘤。
+运行 `python -m observatory.experiments.run_fireflies` 来验证新的拓扑结构是否正常工作。如果一切顺利，我们将继续执行战略计划的第二阶段：引入抑制性神经元。
 

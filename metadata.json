@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 架构直觉化 - 深度图构建与人体工程学优化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766299505.50357, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: Correct dry_run event to filter non-literal inputs", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766299728.8935938, "duration_ms": 0}}

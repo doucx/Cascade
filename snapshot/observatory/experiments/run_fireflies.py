@@ -2,6 +2,7 @@ import asyncio
 import random
 from typing import Dict, Any, List
 import time
+import numpy as np
 
 import cascade as cs
 from cascade.connectors.local import LocalBusConnector
@@ -19,13 +20,12 @@ from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 
 # --- Constants ---
-GRID_SIDE = 30
-NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
-PERIOD = 3.0  # Slowed down to allow CPU to catch up with 2500 agents
+GRID_SIDE = 50
+NUM_AGENTS = GRID_SIDE * GRID_SIDE
+PERIOD = 5.0
 
 
 def get_neighbors(index: int, width: int, height: int) -> List[int]:
-    """Calculate 8-neighbors (Moore neighborhood) with wrap-around (toroidal)."""
     x, y = index % width, index // width
     neighbors = []
     for dx in [-1, 0, 1]:
@@ -45,163 +45,106 @@ async def run_experiment(
     visualize: bool = True,
     decay_duty_cycle: float = 0.3,
 ):
-    """
-    Sets up and runs the firefly synchronization experiment.
-    """
     grid_width = int(num_agents**0.5)
-    print(
-        f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents ({grid_width}x{grid_width})..."
-    )
+    print(f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment...")
 
-    # 1. Initialize Shared Bus
+    # --- Setup Infrastructure ---
     LocalBusConnector._reset_broker_state()
-    connector = LocalBusConnector()
-    await connector.connect()
+    # Connector is now ONLY for the convergence monitor
+    monitor_connector = LocalBusConnector()
+    await monitor_connector.connect()
+
+    # 1. THE SHARED STATE VECTOR
+    # This vector holds the normalized phase (0-1) for rendering.
+    # It is written to by agents and read by the renderer.
+    state_vector = np.zeros(num_agents, dtype=np.float32)
 
     # --- Setup Monitor & Visualizer ---
-    # Monitor now needs to handle many more agents.
-    monitor = ConvergenceMonitor(num_agents, period, connector)
+    monitor = ConvergenceMonitor(num_agents, period, monitor_connector)
 
     app = None
     app_task = None
 
     if visualize:
-        # 1. Create visualization components
-        # A decay_per_second of 5.0 means a flash will fade in 1/5 = 0.2 seconds.
         grid_view = GridView(
             width=grid_width,
             height=grid_width,
             palette_func=Palettes.firefly,
             decay_per_second=1 / (period * decay_duty_cycle),
         )
-        status_bar = StatusBar(
-            initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."}
-        )
-        # --- Setup Aggregator (Unified Logger) ---
+        status_bar = StatusBar({"Agents": num_agents, "Sync (R)": "Initializing..."})
         log_filename = f"firefly_log_{int(time.time())}.jsonl"
         aggregator = MetricsAggregator(log_filename, interval_s=1.0)
         aggregator.open()
         print(f"📝 Logging telemetry to [bold cyan]{log_filename}[/bold cyan]")
-
-        # Inject aggregator into App to capture FPS/Jitter automatically
-        app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
+        
+        # Pass the state_vector to the app
+        app = TerminalApp(grid_view, status_bar, state_vector, aggregator=aggregator)
         aggregator_task = asyncio.create_task(aggregator.run())
 
-        # 2. Bridge Monitor -> Status Bar & Logger
         def monitor_callback(r_value: float, pulse_count: int):
-            # UI Update
             bar_len = 20
             filled = int(bar_len * r_value)
             bar = "█" * filled + "░" * (bar_len - filled)
             app.update_status("Sync", f"R={r_value:.3f} [{bar}] @ Pulse {pulse_count}")
-
-            # Data Logging (Async record to aggregator)
-            # Since this callback is synchronous (called by Monitor), we need to schedule the record
             asyncio.create_task(aggregator.record("r_value", r_value))
-            asyncio.create_task(aggregator.record("pulse", pulse_count))
-            asyncio.create_task(aggregator.record("flash_count", monitor._flash_count))
 
-        monitor_task = asyncio.create_task(
-            # Reduce monitor frequency to reduce CPU load
-            monitor.run(frequency_hz=2.0, callback=monitor_callback)
-        )
+        monitor_task = asyncio.create_task(monitor.run(frequency_hz=2.0, callback=monitor_callback))
+        
+        # The monitor is the ONLY thing that needs the slow bus now
+        await monitor_connector.subscribe("firefly/flash", monitor.on_flash)
 
-        # 3. Bridge Agent Flashes -> Grid
-        # Agents now also publish to "firefly/flash" for the visualizer/monitor
-        async def on_flash_visual(topic: str, payload: Dict[str, Any]):
-            aid = payload.get("agent_id")
-            if aid is not None and app:
-                x = aid % grid_width
-                y = aid // grid_width
-                # Use Fast Path (Batch Update) - Raw App expects a list of tuples
-                # Even for a single update, passing a list is the protocol.
-                await app.direct_update_grid_batch([(x, y, 1.0)])
-
-        await connector.subscribe("firefly/flash", on_flash_visual)
         app_task = asyncio.create_task(app.start())
     else:
-        # Headless mode: Monitor prints to stdout
         monitor_task = asyncio.create_task(monitor.run(frequency_hz=2.0))
 
     # --- Create Topology (DirectChannels) ---
     print("Constructing Network Topology...")
-    channels = [DirectChannel(owner_id=f"agent_{i}", capacity=100) for i in range(num_agents)]
-
+    channels = [DirectChannel(owner_id=f"agent_{i}") for i in range(num_agents)]
+    
     # --- Create Shared Engine ---
-    print("Initializing Shared Cascade Engine...")
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus(), # A silent bus for the engine itself
-        connector=None,
-    )
-
-    @resource(name="_internal_connector", scope="run")
-    def shared_connector_provider():
-        yield connector
-    engine.register(shared_connector_provider)
-
-
+    engine = cs.Engine(solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=cs.MessageBus())
+    
+    # The monitor connector is a resource for agents that need to publish flashes
+    @resource(name="monitor_connector")
+    def monitor_connector_provider():
+        yield monitor_connector
+    engine.register(monitor_connector_provider)
+    
     # --- Create Agents ---
     agent_tasks = []
-    # Batch creation to avoid freezing UI loop
     print("Generating Agent Workflows...")
     for i in range(num_agents):
         initial_phase = random.uniform(0, period)
-
-        # Topology Lookup
         neighbor_ids = get_neighbors(i, grid_width, grid_width)
-        my_neighbors = [channels[nid] for nid in neighbor_ids]
-        my_channel = channels[i]
-
+        
         agent_workflow = firefly_agent(
             agent_id=i,
             initial_phase=initial_phase,
             period=period,
             nudge=nudge,
-            neighbors=my_neighbors,
-            my_channel=my_channel,
-            connector=cs.inject("_internal_connector"),
+            neighbors=[channels[nid] for nid in neighbor_ids],
+            my_channel=channels[i],
+            state_vector=state_vector, # Pass the shared vector
             refractory_period=period * 0.2,
         )
-
-        # Schedule the workflow to run on the shared engine
         agent_tasks.append(engine.run(agent_workflow))
 
-        # Yield every 500 agents to keep UI responsive during setup
-        if i > 0 and i % 500 == 0:
-            print(f"   ... {i} agents prepared.")
-            await asyncio.sleep(0)
-
     print("🚀 All agents prepared. Launching...")
-
-    # --- Run ---
     all_agent_tasks = asyncio.gather(*agent_tasks)
     try:
         await asyncio.sleep(duration_seconds)
-    except (Exception, asyncio.CancelledError) as e:
-        print(f"Experiment interrupted or failed: {e}")
     finally:
         monitor.stop()
-        if app:
-            app.stop()
-
+        if app: app.stop()
         if "aggregator" in locals():
             aggregator.close()
-            if "aggregator_task" in locals():
-                aggregator_task.cancel()
-                await asyncio.gather(aggregator_task, return_exceptions=True)
-
-        if not all_agent_tasks.done():
-            all_agent_tasks.cancel()
-            await asyncio.gather(all_agent_tasks, return_exceptions=True)
-
-        await asyncio.gather(monitor_task, return_exceptions=True)
-        if app_task and not app_task.done():
-            await app_task
-
-        await connector.disconnect()
-
+            if "aggregator_task" in locals(): aggregator_task.cancel()
+        
+        all_agent_tasks.cancel()
+        await asyncio.gather(all_agent_tasks, monitor_task, return_exceptions=True)
+        if app_task and not app_task.done(): await app_task
+        await monitor_connector.disconnect()
 
 if __name__ == "__main__":
     asyncio.run(run_experiment(visualize=True))

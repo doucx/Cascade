@@ -8,7 +8,7 @@ from cascade.adapters.executors.local import LocalExecutor
 # --- Task Definitions ---
 
 @cs.task
-def noop():
+def noop(_dummy=None):
     """A task that does nothing, used to force graph complexity."""
     pass
 

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 在 TCO 基准测试中添加命令式循环作为性能参照", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766308411.4295702, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] test: 添加 TCO 性能基准测试脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766308509.8152878, "duration_ms": 0}}

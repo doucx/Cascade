@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, List, Union
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -10,7 +10,6 @@ class GraphBuilder:
         self._visited: Dict[str, Node] = {}
 
     def build(self, target: LazyResult) -> Graph:
-        # Target could be a MappedLazyResult too
         self._visit(target)
         return self.graph
 
@@ -26,6 +25,15 @@ class GraphBuilder:
         if result._uuid in self._visited:
             return self._visited[result._uuid]
 
+        # 1. Capture the structure of inputs
+        # We store the args/kwargs structure directly in literal_inputs.
+        # This structure contains LazyResult objects, which is fine for the runtime,
+        # but requires special handling for serialization.
+        literal_inputs = {
+            str(i): v for i, v in enumerate(result.args)
+        }
+        literal_inputs.update(result.kwargs)
+
         node = Node(
             id=result._uuid,
             name=result.task.name,
@@ -34,13 +42,16 @@ class GraphBuilder:
             retry_policy=result._retry_policy,
             cache_policy=result._cache_policy,
             constraints=result._constraints,
+            literal_inputs=literal_inputs,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
 
-        self._process_dependencies(node, result.args, is_kwargs=False)
-        self._process_dependencies(node, result.kwargs, is_kwargs=True)
+        # 2. Recursively scan inputs to add edges
+        self._scan_and_add_edges(node, result.args)
+        self._scan_and_add_edges(node, result.kwargs)
 
+        # 3. Handle conditionals
         if result._condition:
             source_node = self._visit(result._condition)
             edge = Edge(
@@ -51,18 +62,15 @@ class GraphBuilder:
             )
             self.graph.add_edge(edge)
 
-        # Process dynamic constraints
+        # 4. Handle dynamic constraints
         if result._constraints and not result._constraints.is_empty():
-            from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-
             for res_name, req_value in result._constraints.requirements.items():
                 if isinstance(req_value, (LazyResult, MappedLazyResult)):
                     source_node = self._visit(req_value)
-                    # Use EdgeType.CONSTRAINT instead of magic arg_name prefix
                     edge = Edge(
                         source=source_node,
                         target=node,
-                        arg_name=res_name,  # Use resource name as arg_name
+                        arg_name=res_name,
                         edge_type=EdgeType.CONSTRAINT,
                     )
                     self.graph.add_edge(edge)
@@ -81,13 +89,12 @@ class GraphBuilder:
             retry_policy=result._retry_policy,
             cache_policy=result._cache_policy,
             constraints=result._constraints,
+            literal_inputs=result.mapping_kwargs, # Map inputs are treated as kwargs
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
 
-        # Process dependencies in mapping_kwargs
-        # Note: These arguments are treated as kwargs
-        self._process_dependencies(node, result.mapping_kwargs, is_kwargs=True)
+        self._scan_and_add_edges(node, result.mapping_kwargs)
 
         if result._condition:
             source_node = self._visit(result._condition)
@@ -101,48 +108,54 @@ class GraphBuilder:
 
         return node
 
-    def _process_dependencies(self, target_node: Node, inputs: Any, is_kwargs: bool):
-        iterator = inputs.items() if is_kwargs else enumerate(inputs)
+    def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
+        """
+        Recursively scans the object for LazyResults and Routers to add edges.
+        """
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            source_node = self._visit(obj)
+            # We add a generic DATA edge. The exact argument position is determined
+            # by ArgumentResolver traversing literal_inputs, so arg_name here is
+            # mainly for visualization/debugging.
+            edge = Edge(
+                source=source_node,
+                target=target_node,
+                arg_name=path or "dependency",
+                edge_type=EdgeType.DATA,
+            )
+            self.graph.add_edge(edge)
 
-        for key, value in iterator:
-            arg_name = str(key)
+        elif isinstance(obj, Router):
+            # 1. Add edge for Selector
+            selector_node = self._visit(obj.selector)
+            edge = Edge(
+                source=selector_node,
+                target=target_node,
+                arg_name=f"{path}.selector" if path else "selector",
+                router=obj, # Important: Link Router to this edge for FlowManager
+                edge_type=EdgeType.DATA,
+            )
+            self.graph.add_edge(edge)
 
-            if isinstance(value, (LazyResult, MappedLazyResult)):
-                source_node = self._visit(value)
-                # Standard DATA edge
-                edge = Edge(
-                    source=source_node,
+            # 2. Add edges for Routes
+            for route_key, route_result in obj.routes.items():
+                route_node = self._visit(route_result)
+                imp_edge = Edge(
+                    source=route_node,
                     target=target_node,
-                    arg_name=arg_name,
-                    edge_type=EdgeType.DATA,
+                    arg_name=f"{path}.route[{route_key}]",
+                    edge_type=EdgeType.ROUTER_ROUTE,
                 )
-                self.graph.add_edge(edge)
-            elif isinstance(value, Router):
-                selector_node = self._visit(value.selector)
-                # Edge for the Router selector is a DATA edge that happens to carry Router metadata
-                edge = Edge(
-                    source=selector_node,
-                    target=target_node,
-                    arg_name=arg_name,
-                    router=value,
-                    edge_type=EdgeType.DATA,
-                )
-                self.graph.add_edge(edge)
+                self.graph.add_edge(imp_edge)
 
-                for route_key, route_result in value.routes.items():
-                    route_node = self._visit(route_result)
-                    # Specific edge type for Router routes, allowing dynamic pruning later
-                    imp_edge = Edge(
-                        source=route_node,
-                        target=target_node,
-                        arg_name=f"_route_{route_key}",
-                        edge_type=EdgeType.ROUTER_ROUTE,
-                    )
-                    self.graph.add_edge(imp_edge)
-            else:
-                target_node.literal_inputs[arg_name] = value
+        elif isinstance(obj, (list, tuple)):
+            for i, item in enumerate(obj):
+                self._scan_and_add_edges(target_node, item, path=f"{path}[{i}]" if path else str(i))
+        
+        elif isinstance(obj, dict):
+            for k, v in obj.items():
+                self._scan_and_add_edges(target_node, v, path=f"{path}.{k}" if path else str(k))
 
 
 def build_graph(target: LazyResult) -> Graph:
-    """Helper function to build a graph from a result."""
     return GraphBuilder().build(target)

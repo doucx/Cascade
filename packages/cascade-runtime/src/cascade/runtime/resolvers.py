@@ -1,17 +1,18 @@
 import inspect
 from typing import Any, Dict, List, Tuple
 
-from cascade.graph.model import Node, Graph, EdgeType
+from cascade.graph.model import Node, Graph
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.exceptions import DependencyMissingError
+from cascade.spec.routing import Router
+from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
 from cascade.interfaces.protocols import StateBackend
 
 
 class ArgumentResolver:
     """
-    Responsible for resolving the actual arguments (args, kwargs) for a node execution
-    from the graph structure, upstream results, and resource context.
+    Resolves arguments by traversing the structure stored in node.literal_inputs
+    and replacing LazyResult/Router/Inject placeholders with actual values.
     """
 
     def resolve(
@@ -22,101 +23,112 @@ class ArgumentResolver:
         resource_context: Dict[str, Any],
         user_params: Dict[str, Any] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
-        """
-        Resolves arguments for the node's callable from:
-        1. Literal inputs
-        2. Upstream dependency results (handling Routers) from the state backend
-        3. Injected resources
-        4. User provided params (for internal input tasks)
-
-        Raises DependencyMissingError if a required upstream result is missing.
-        """
-        # 0. Special handling for internal input tasks
+        
+        # Special handling for internal param fetcher
         from cascade.internal.inputs import _get_param_value
-
         if node.callable_obj is _get_param_value.func:
             final_kwargs = node.literal_inputs.copy()
             final_kwargs["params_context"] = user_params or {}
             return [], final_kwargs
 
-        # 1. Prepare arguments from literals and upstream results
-        final_kwargs = {k: v for k, v in node.literal_inputs.items() if not k.isdigit()}
-        positional_args = {
-            int(k): v for k, v in node.literal_inputs.items() if k.isdigit()
+        # Recursively resolve the structure
+        resolved_structure = self._resolve_structure(
+            node.literal_inputs, node.id, state_backend, resource_context
+        )
+
+        # Re-assemble args and kwargs
+        final_kwargs = {k: v for k, v in resolved_structure.items() if not k.isdigit()}
+        positional_args_dict = {
+            int(k): v for k, v in resolved_structure.items() if k.isdigit()
         }
+        
+        sorted_indices = sorted(positional_args_dict.keys())
+        args = [positional_args_dict[i] for i in sorted_indices]
 
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-
-        for edge in incoming_edges:
-            if edge.edge_type != EdgeType.DATA:
-                continue
-
-            dependency_id: str
-            if edge.router:
-                selector_result = state_backend.get_result(edge.source.id)
-                if selector_result is None:
-                    if not state_backend.has_result(edge.source.id):
-                        raise DependencyMissingError(
-                            node.id, "router_selector", edge.source.id
-                        )
-
-                try:
-                    selected_lazy_result = edge.router.routes[selector_result]
-                    dependency_id = selected_lazy_result._uuid
-                except KeyError:
-                    raise ValueError(
-                        f"Router selector returned '{selector_result}', "
-                        f"but no matching route found in {list(edge.router.routes.keys())}"
-                    )
-            else:
-                dependency_id = edge.source.id
-
-            if not state_backend.has_result(dependency_id):
-                raise DependencyMissingError(node.id, edge.arg_name, dependency_id)
-
-            result = state_backend.get_result(dependency_id)
-
-            if edge.arg_name.isdigit():
-                positional_args[int(edge.arg_name)] = result
-            else:
-                final_kwargs[edge.arg_name] = result
-
-        # 2. Prepare arguments from injected resources
+        # Handle Inject in defaults (if not overridden by inputs)
         if node.callable_obj:
             sig = inspect.signature(node.callable_obj)
             for param in sig.parameters.values():
                 if isinstance(param.default, Inject):
-                    resource_name = param.default.resource_name
-                    if resource_name in resource_context:
-                        final_kwargs[param.name] = resource_context[resource_name]
-                    else:
-                        raise NameError(
-                            f"Task '{node.name}' requires resource '{resource_name}' "
-                            "which was not found in the active context."
+                    if param.name not in final_kwargs:
+                        final_kwargs[param.name] = self._resolve_inject(
+                            param.default, node.name, resource_context
                         )
 
-        sorted_indices = sorted(positional_args.keys())
-        args = [positional_args[i] for i in sorted_indices]
-
-        resolved_args = []
-        for arg in args:
-            if isinstance(arg, Inject):
-                if arg.resource_name in resource_context:
-                    resolved_args.append(resource_context[arg.resource_name])
-                else:
-                    raise NameError(f"Resource '{arg.resource_name}' not found.")
-            else:
-                resolved_args.append(arg)
-        args = resolved_args
-
-        for key, value in final_kwargs.items():
-            if isinstance(value, Inject):
-                if value.resource_name in resource_context:
-                    final_kwargs[key] = resource_context[value.resource_name]
-                else:
-                    raise NameError(f"Resource '{value.resource_name}' not found.")
-
         return args, final_kwargs
+
+    def _resolve_structure(
+        self, obj: Any, consumer_id: str, state_backend: StateBackend, resource_context: Dict[str, Any]
+    ) -> Any:
+        """
+        Recursively traverses lists, tuples, and dicts. 
+        Replaces LazyResult, Router, and Inject.
+        """
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            return self._resolve_lazy(obj, consumer_id, state_backend)
+        
+        elif isinstance(obj, Router):
+            return self._resolve_router(obj, consumer_id, state_backend)
+        
+        elif isinstance(obj, Inject):
+            return self._resolve_inject(obj, consumer_id, resource_context)
+        
+        elif isinstance(obj, list):
+            return [
+                self._resolve_structure(item, consumer_id, state_backend, resource_context) 
+                for item in obj
+            ]
+        
+        elif isinstance(obj, tuple):
+            return tuple(
+                self._resolve_structure(item, consumer_id, state_backend, resource_context) 
+                for item in obj
+            )
+        
+        elif isinstance(obj, dict):
+            return {
+                k: self._resolve_structure(v, consumer_id, state_backend, resource_context)
+                for k, v in obj.items()
+            }
+        
+        return obj
+
+    def _resolve_lazy(self, lr: LazyResult, consumer_id: str, state_backend: StateBackend) -> Any:
+        if not state_backend.has_result(lr._uuid):
+            # Check for skip
+            if state_backend.get_skip_reason(lr._uuid):
+                raise DependencyMissingError(
+                    consumer_id, "unknown_arg", f"{lr._uuid} (skipped)"
+                )
+            raise DependencyMissingError(consumer_id, "unknown_arg", lr._uuid)
+        
+        return state_backend.get_result(lr._uuid)
+
+    def _resolve_router(self, router: Router, consumer_id: str, state_backend: StateBackend) -> Any:
+        # 1. Resolve Selector
+        selector_uuid = router.selector._uuid
+        if not state_backend.has_result(selector_uuid):
+             raise DependencyMissingError(consumer_id, "router_selector", selector_uuid)
+        
+        selector_value = state_backend.get_result(selector_uuid)
+
+        # 2. Pick Route
+        try:
+            selected_lr = router.routes[selector_value]
+        except KeyError:
+             raise ValueError(
+                f"Router selector returned '{selector_value}', "
+                f"but no matching route found in {list(router.routes.keys())}"
+            )
+
+        # 3. Resolve Route Result
+        return self._resolve_lazy(selected_lr, consumer_id, state_backend)
+
+    def _resolve_inject(self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]) -> Any:
+        if inject.resource_name in resource_context:
+            return resource_context[inject.resource_name]
+        
+        raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
 
 
 class ConstraintResolver:
@@ -129,41 +141,19 @@ class ConstraintResolver:
         node: Node,
         graph: Graph,
         state_backend: StateBackend,
-        constraint_manager: "ConstraintManager" = None,
+        constraint_manager: Any = None,
     ) -> Dict[str, Any]:
-        """
-        Resolves resource requirements from:
-        1. Node-level .with_constraints() (static & dynamic)
-        2. Global constraints (via ConstraintManager)
-        """
         resolved = {}
 
         # 1. Resolve Node-level constraints
         if node.constraints and not node.constraints.is_empty():
-            constraint_edges = [
-                e
-                for e in graph.edges
-                if e.target.id == node.id and e.edge_type == EdgeType.CONSTRAINT
-            ]
-
             for res, amount in node.constraints.requirements.items():
                 if isinstance(amount, (LazyResult, MappedLazyResult)):
-                    constraint_edge = next(
-                        (e for e in constraint_edges if e.arg_name == res), None
-                    )
-
-                    if constraint_edge is None:
-                        raise RuntimeError(
-                            f"Internal Error: Missing constraint edge for dynamic requirement '{res}' on task '{node.name}'"
-                        )
-
-                    if state_backend.has_result(constraint_edge.source.id):
-                        resolved[res] = state_backend.get_result(
-                            constraint_edge.source.id
-                        )
+                    if state_backend.has_result(amount._uuid):
+                         resolved[res] = state_backend.get_result(amount._uuid)
                     else:
                         raise DependencyMissingError(
-                            node.id, f"constraint:{res}", constraint_edge.source.id
+                            node.id, f"constraint:{res}", amount._uuid
                         )
                 else:
                     resolved[res] = amount
@@ -171,8 +161,6 @@ class ConstraintResolver:
         # 2. Resolve Global constraints
         if constraint_manager:
             extra = constraint_manager.get_extra_requirements(node)
-            # TODO: Handle conflict resolution? For now, we assume disjoint keys or additive.
-            # But concurrency resources have unique names, so conflicts are unlikely.
             resolved.update(extra)
 
         return resolved

@@ -104,7 +104,7 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         "id": node.id,
         "name": node.name,
         "node_type": node.node_type,
-        "literal_inputs": node.literal_inputs,  # Assumes JSON-serializable literals
+        "literal_inputs": _serialize_structure(node.literal_inputs),
     }
 
     if node.callable_obj:
@@ -143,6 +143,26 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         data["constraints"] = serialized_reqs
 
     return data
+
+
+def _serialize_structure(obj: Any) -> Any:
+    """Recursively serializes structure, replacing LazyResult/Router with stubs."""
+    if isinstance(obj, (LazyResult, MappedLazyResult)):
+        return {"__lazy_ref": obj._uuid}
+    elif isinstance(obj, Router):
+        # We don't fully serialize router here as it's handled in the 'routers' section of the graph dict.
+        # We just need a stub to indicate existence.
+        # Actually, serialize.py separates routers.
+        # But if a router is inside a list, we need to know.
+        # For visualization simplicity, let's just mark it.
+        return {"__router_ref": "complex_router"}
+    elif isinstance(obj, list):
+        return [_serialize_structure(x) for x in obj]
+    elif isinstance(obj, tuple):
+        return tuple(_serialize_structure(x) for x in obj)
+    elif isinstance(obj, dict):
+        return {k: _serialize_structure(v) for k, v in obj.items()}
+    return obj
 
 
 def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:

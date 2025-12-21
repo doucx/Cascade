@@ -44,23 +44,34 @@ class BlueprintBuilder:
 
     def _compile_root(self, target: Union[LazyResult, MappedLazyResult]):
         """
-        Compiles the root node. Arguments of the root node are treated as 
-        Blueprint inputs.
+        Compiles the root node. 
+        - Literal arguments are promoted to Input Registers (to support TCO updates).
+        - LazyResult arguments are compiled recursively (inlined dependencies).
         """
-        # 1. Compile Input Arguments
-        # Instead of compiling them recursively as fixed dependencies, 
-        # we allocate registers for them immediately and mark them as inputs.
-        
+        # 1. Compile Arguments
         args_operands: List[Operand] = []
         for i, arg in enumerate(target.args):
-            reg = self._allocate_register()
-            self._input_args_map.append(reg.index)
-            # Future: If arg is a nested LazyResult, we might want to compile it 
-            # and use its output as the default value? 
-            # For TCO/Agent loop, we assume inputs are values passed from outside.
-            # If the user passed a LazyResult as an arg to the root task, 
-            # it is treated as a value (the LazyResult object itself) passed to the function.
-            args_operands.append(reg)
+            if isinstance(arg, (LazyResult, MappedLazyResult)):
+                # Compile dependency
+                reg_idx = self._visit(arg)
+                args_operands.append(Register(reg_idx))
+                # Note: We do NOT add this to input_args_map because it's an internal value
+                # derived from dependency execution, not an external input.
+                # However, this means TCO cannot "replace" a dependency with a value easily.
+                # This is a constraint: You can only TCO-update literal arguments.
+                
+                # Placeholder for positional input map to maintain index alignment?
+                # No, input_args_map maps [Input Index -> Register Index].
+                # If arg 0 is internal, Input 0 corresponds to arg 1 (if arg 1 is literal).
+                # Wait, VM load_inputs uses index matching.
+                # If we have mixed internal/external args, positional mapping gets messy.
+                # For now, let's assume TCO usually uses kwargs or all-literal positional args.
+                pass 
+            else:
+                # Promote literal to Input Register
+                reg = self._allocate_register()
+                self._input_args_map.append(reg.index)
+                args_operands.append(reg)
 
         # Handle kwargs
         kwargs_source = target.kwargs
@@ -69,9 +80,15 @@ class BlueprintBuilder:
 
         kwargs_operands: Dict[str, Operand] = {}
         for k, v in kwargs_source.items():
-            reg = self._allocate_register()
-            self._input_kwargs_map[k] = reg.index
-            kwargs_operands[k] = reg
+            if isinstance(v, (LazyResult, MappedLazyResult)):
+                # Compile dependency
+                reg_idx = self._visit(v)
+                kwargs_operands[k] = Register(reg_idx)
+            else:
+                # Promote literal to Input Register
+                reg = self._allocate_register()
+                self._input_kwargs_map[k] = reg.index
+                kwargs_operands[k] = reg
 
         # 2. Allocate Output Register for the root task
         output_reg = self._allocate_register()

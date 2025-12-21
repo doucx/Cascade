@@ -49,6 +49,7 @@ def get_neighbors(index: int, width: int, height: int) -> List[int]:
 def worker_main(
     worker_id: int,
     agent_indices: List[int],
+    total_agents: int,
     uplink_queue: mp.Queue,
     concurrency_limit: Optional[int],
     grid_width: int,
@@ -70,13 +71,12 @@ def worker_main(
         await connector.connect()
 
         # 2. Setup Resources
-        # Note: Concurrency limits are currently PER PROCESS in this mode.
-        # To make them global across processes requires a distributed lock (e.g. Redis),
-        # which is out of scope for this MP queue-based MVP.
-        # We scale the limit down proportionally.
+        # We partition the global limit proportionally among workers.
         local_limit = None
         if concurrency_limit:
-            local_limit = max(1, concurrency_limit // len(agent_indices)) if agent_indices else 1
+            # Formula: (Global Limit * Agents in this Worker) / Total Agents
+            # Using math.ceil to ensure we don't end up with 0 due to rounding
+            local_limit = math.ceil(concurrency_limit * (len(agent_indices) / total_agents))
         
         resource_manager = None
         if local_limit:
@@ -233,7 +233,7 @@ async def run_orchestrator(
         p = mp.Process(
             target=worker_main,
             args=(
-                w_id, indices, uplink_queue, concurrency_limit,
+                w_id, indices, num_agents, uplink_queue, concurrency_limit,
                 grid_width, grid_width, period, nudge
             )
         )

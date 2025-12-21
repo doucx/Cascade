@@ -58,7 +58,7 @@ def test_provider_registry_namespace_resolution():
     # or that we registered them via pyproject.toml (if installed in editable mode).
     # If not installed, we can manually register for this unit test.
 
-    from cascade.providers import registry, ProviderNamespace
+    from cascade.providers.registry import registry, ProviderNamespace
     from cascade.providers.io import ReadTextProvider
 
     # Manual registration to ensure test isolation

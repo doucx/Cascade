@@ -1,65 +1,59 @@
-抱歉，船长。这是我在使用 `uv` 工具链时的疏忽。
+船长，这是重构后的一个小尾巴。
 
-`uv` 在处理 Monorepo 工作区时非常严格：任何在依赖列表（即使是 `dev` 依赖）中引用的本地包，都必须在 `[tool.uv.sources]` 部分显式注册为 `{ workspace = true }`，否则它会试图去 PyPI 寻找它们（或者像现在这样直接报错）。
+由于我们将 `ProviderRegistry` 和相关类（包括 `ProviderNamespace`）移到了 `cascade.providers.registry` 模块中，而 `cascade.providers` 现在只是一个纯粹的命名空间包（为了支持插件），它不再直接包含这些类的定义。
 
-我们之前添加了依赖，却忘了给它们发“工作区通行证”。
+尽管我们在 `__init__.py` 中重新导出了一些核心对象，但我确实漏掉了 `ProviderNamespace`，而且从架构整洁的角度来看，测试代码直接从定义它的地方导入这个内部类会更稳健。
 
-## [WIP] fix(build): 在 uv 配置中注册缺失的工作区成员
+我们来快速修复这个测试文件的导入路径。
+
+## [WIP] fix(tests): 修正 test_io.py 中 ProviderNamespace 的导入路径
 
 ### 用户需求
-`uv pip install` 失败，提示 `cascade-cli-controller` 等包缺少 `tool.uv.sources` 入口。需要修正 `pyproject.toml` 配置，以便 `uv` 能正确识别并链接这些本地工作区成员。
+`tests/cascade-py/providers/test_io.py` 失败，因为它试图从 `cascade.providers` 导入 `ProviderNamespace`，但该类已在架构重构中移动到了 `cascade.providers.registry`。
 
 ### 评论
-这是使用现代 Python 构建工具（如 `uv`, `hatch`）管理 Monorepo 时的常见配置要求。`dependencies` 声明了“我需要什么”，而 `tool.uv.sources` 声明了“去哪里找”。只有两者匹配，本地开发环境才能闭环。
+这是架构重构的常见后续效应。当我们将实现细节从 `__init__.py` 移出以支持命名空间包时，依赖于旧路径的测试代码需要同步更新。直接从 `registry` 子模块导入明确了依赖关系，也符合新的代码组织结构。
 
 ### 目标
-1.  在根 `pyproject.toml` 的 `[tool.uv.sources]` 部分，为 `cascade-cli-controller`、`cascade-cli-observer` 和 `cascade-connector-mqtt` 添加 `{ workspace = true }` 映射。
+1.  修改 `tests/cascade-py/providers/test_io.py`，将 `ProviderNamespace` 的导入源指向正确的 `cascade.providers.registry`。
 
 ### 基本原理
-显式声明工作区源是 `uv` 解析本地依赖图的前提。这告诉构建工具这些包不是来自 PyPI，而是直接位于当前的 `packages/` 目录下，应该以可编辑模式链接。
+`cascade.providers` 现在是一个纯命名空间，用于挂载各种插件。核心的注册表逻辑和辅助类（如 `ProviderNamespace`）物理上位于 `cascade.providers.registry` 模块中。更新导入路径以反映这一物理事实。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/config-uv #task/action/config-update #task/state/continue
+#intent/fix #flow/ready #priority/medium #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-suite #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 注册工作区源
-
-我们将缺失的包映射添加到 `[tool.uv.sources]` 部分。
+#### Acts 1: 修正测试导入
 
 ~~~~~act
 patch_file
-pyproject.toml
+tests/cascade-py/providers/test_io.py
 ~~~~~
-~~~~~toml
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-py = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
+~~~~~python
+    # If not installed, we can manually register for this unit test.
 
-[tool.hatch.workspaces]
+    from cascade.providers import registry, ProviderNamespace
+    from cascade.providers.io import ReadTextProvider
+
+    # Manual registration to ensure test isolation
 ~~~~~
-~~~~~toml
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-py = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
+~~~~~python
+    # If not installed, we can manually register for this unit test.
 
-[tool.hatch.workspaces]
+    from cascade.providers.registry import registry, ProviderNamespace
+    from cascade.providers.io import ReadTextProvider
+
+    # Manual registration to ensure test isolation
 ~~~~~
 
 ### 下一步建议
-这是最后一块拼图。
+这应该修复了最后一个 `ImportError`。
 
-请再次执行：
-1.  **安装**: `uv pip install -e .[dev]`
-2.  **测试**: `pytest`
+请执行：
+1.  `pytest`
 
-现在配置已经完整且闭环，环境搭建应该能顺利完成。
+现在，所有测试（包括 IPFS、S3、IO 以及所有核心逻辑）应该都能通过了。一旦看到全绿，我们就可以自信地提交了。

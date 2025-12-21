@@ -1,190 +1,97 @@
-好的，这是一个绝佳的想法。
-
-将声明式 TCO 优化的性能与原生命令式循环进行对比，可以为我们提供一个**“性能天花板”**或“黄金标准”。这能让我们清晰地量化出 Cascade 框架本身（即使在最优路径下）所带来的开销，是衡量我们优化成功与否的最终标尺。
-
-我将修改基准测试脚本，加入这个命令式循环的基准。
-
-## [WIP] test: 在 TCO 基准测试中添加命令式循环作为性能参照
+## [COMMIT] test: 添加 TCO 性能基准测试脚本
 
 ### 用户需求
-在现有的 TCO 性能基准测试脚本中，增加一个原生的、命令式的 `asyncio` `while` 循环作为性能参照，以便更全面地评估优化效果。
+在代码库中固化性能测试脚本，以便未来跟踪性能回归。
 
 ### 评论
-这是一个至关重要的补充。通过与“裸金属”的命令式循环进行比较，我们不仅能看到优化相对于未优化场景的提升，还能了解到我们的声明式抽象距离理论性能极限有多远。这个数据对于评估框架的“优雅成本”非常有价值。
+这个脚本现在包含了三个维度的对比：优化路径、重度非优化路径、以及原生命令式基准。它清晰地展示了优化的收益（10x）和框架的成本（46x），是极具价值的工程资产。
 
 ### 目标
-1.  在 `tco_performance.py` 中定义一个 `async def imperative_countdown` 函数，该函数使用简单的 `while` 循环实现倒计时。
-2.  创建一个新的基准测试运行器 `run_imperative_benchmark` 来调用和计时这个原生函数。
-3.  更新 `main` 函数，运行这个新的基准测试，并在最终的比较结果中展示它。
+提交 `observatory/benchmarks/tco_performance.py`。
 
 ### 基本原理
-命令式 `while` 循环不涉及任何 Cascade 的图构建、解析、状态管理或 TCO 逻辑，它代表了 Python `asyncio` 在此场景下能达到的最快速度。将我们优化后的 `simple_countdown` 的 TPS 与之对比，可以精确计算出 Cascade 运行时本身的开销。
+保存基准测试脚本，作为 CI/CD 或后续性能优化的参考。
 
 ### 标签
-#intent/tooling #intent/refine #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/runtime #task/object/tco-optimization #task/action/benchmark-refine #task/state/continue
+#intent/tooling #flow/ready #priority/medium #comp/tests #scope/dx #ai/instruct #task/domain/runtime #task/object/tco-optimization #task/action/benchmark-commit #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 增强基准测试脚本
-
-我们将对 `tco_performance.py` 进行三次 `patch` 操作：一次添加新的命令式函数，一次添加其专用的计时器，最后一次更新主逻辑以运行并展示比较结果。
-
-**1.1 添加命令式循环函数**
+#### Acts 1: 提交基准测试脚本
 
 ~~~~~act
-patch_file
+git_add
 observatory/benchmarks/tco_performance.py
 ~~~~~
-~~~~~python
-@cs.task
-def heavy_complex_countdown(n: int, _dummy=None):
-    """
-    A recursive task with a DEEP dependency chain, forcing a significant
-    graph build and solve cost on each iteration.
-    """
-    if n <= 0:
-        return "done"
-    
-    # Create a 10-node dependency chain to amplify the build/solve cost
-    dep_chain = noop()
-    for _ in range(10):
-        dep_chain = noop(_dummy=dep_chain)
-        
-    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
-~~~~~
-~~~~~python
-@cs.task
-def heavy_complex_countdown(n: int, _dummy=None):
-    """
-    A recursive task with a DEEP dependency chain, forcing a significant
-    graph build and solve cost on each iteration.
-    """
-    if n <= 0:
-        return "done"
-    
-    # Create a 10-node dependency chain to amplify the build/solve cost
-    dep_chain = noop()
-    for _ in range(10):
-        dep_chain = noop(_dummy=dep_chain)
-        
-    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
-
-
-async def imperative_countdown(n: int):
-    """
-    A raw, imperative asyncio loop to serve as the performance ground truth.
-    This has zero Cascade framework overhead.
-    """
-    i = n
-    while i > 0:
-        i -= 1
-        # await asyncio.sleep(0) is essential to yield control,
-        # mimicking how a long-running agent should behave.
-        await asyncio.sleep(0)
-    return "done"
-~~~~~
-
-**1.2 添加命令式循环的计时器**
 
 ~~~~~act
-patch_file
-observatory/benchmarks/tco_performance.py
+git_commit
 ~~~~~
-~~~~~python
-async def run_benchmark(engine: Engine, target: cs.LazyResult, iterations: int) -> float:
-    """Runs the target and returns the execution time in seconds."""
-    print(f"Running benchmark for '{target.task.name}'...")
-    start_time = time.perf_counter()
-    
-    result = await engine.run(target)
-    
-    end_time = time.perf_counter()
-    
-    assert result == "done"
-    return end_time - start_time
-~~~~~
-~~~~~python
-async def run_benchmark(engine: Engine, target: cs.LazyResult, iterations: int) -> float:
-    """Runs the target and returns the execution time in seconds."""
-    print(f"Running benchmark for '{target.task.name}'...")
-    start_time = time.perf_counter()
-    
-    result = await engine.run(target)
-    
-    end_time = time.perf_counter()
-    
-    assert result == "done"
-    return end_time - start_time
+~~~~~text
+test: Add TCO performance benchmark script
 
+Adds a benchmark script `observatory/benchmarks/tco_performance.py` to quantify the performance impact of the TCO "Zero-Overhead" optimization.
 
-async def run_imperative_benchmark(iterations: int) -> float:
-    """Runs the imperative loop and returns the execution time in seconds."""
-    print("Running benchmark for 'imperative_countdown'...")
-    start_time = time.perf_counter()
-    
-    result = await imperative_countdown(iterations)
-    
-    end_time = time.perf_counter()
-    
-    assert result == "done"
-    return end_time - start_time
-~~~~~
+The benchmark compares three scenarios:
+1.  **Optimized Path:** A simple recursive task triggering the graph reuse fast path (~17k TPS).
+2.  **Heavy Un-optimized Path:** A recursive task with a 10-node deep dependency chain, forcing full graph construction (~1.7k TPS).
+3.  **Imperative Ground Truth:** A raw asyncio `while` loop (~790k TPS).
 
-**1.3 更新主函数以运行并报告新基准**
-
-~~~~~act
-patch_file
-observatory/benchmarks/tco_performance.py
-~~~~~
-~~~~~python
-    # 2. Run Heavy Un-optimized Path
-    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
-    unoptimized_target = heavy_complex_countdown(iterations)
-    unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
-    unoptimized_tps = iterations / unoptimized_time
-    print(f"  Finished in {unoptimized_time:.4f} seconds.")
-    print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
-    
-    # 3. Compare Results
-    if unoptimized_tps > 0:
-        improvement = optimized_tps / unoptimized_tps
-        print("--- Comparison ---")
-        print(f"Performance Improvement: {improvement:.2f}x")
-~~~~~
-~~~~~python
-    # 2. Run Heavy Un-optimized Path
-    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
-    unoptimized_target = heavy_complex_countdown(iterations)
-    unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
-    unoptimized_tps = iterations / unoptimized_time
-    print(f"  Finished in {unoptimized_time:.4f} seconds.")
-    print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
-
-    # 3. Run Imperative Ground Truth
-    print("[3] Running Imperative Ground Truth (imperative_countdown)...")
-    imperative_time = await run_imperative_benchmark(iterations)
-    imperative_tps = iterations / imperative_time
-    print(f"  Finished in {imperative_time:.4f} seconds.")
-    print(f"  TPS: {imperative_tps:,.2f} calls/sec\n")
-    
-    # 4. Compare Results
-    print("--- Comparison ---")
-    if unoptimized_tps > 0:
-        heavy_vs_optimized = optimized_tps / unoptimized_tps
-        print(f"Optimized vs. Heavy (TCO Optimization): {heavy_vs_optimized:.2f}x faster")
-    
-    if imperative_tps > 0:
-        overhead_ratio = imperative_tps / optimized_tps
-        print(f"Imperative vs. Optimized (Framework Overhead): {overhead_ratio:.2f}x")
-        print(f"  (The optimized declarative path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)")
+Results confirm a ~10x performance improvement for the optimized path compared to the heavy graph construction path, validating the efficacy of the optimization for complex agent loops.
 ~~~~~
 
 ### 下一步建议
-现在脚本已经准备就绪。请运行它，我们将得到一个非常全面的性能画像。
+TCO 的第一阶段优化（针对单节点图的快速路径）已圆满完成。
 
-```bash
-python observatory/benchmarks/tco_performance.py
-```
+接下来我们有两个方向：
+1.  **横向扩展**: 将结构哈希缓存应用到 `GraphBuilder` 中，使得**多节点**的复杂图也能被缓存和复用。（这能将那个 "Heavy" 场景的 TPS 也拉升到接近 17k）。
+2.  **纵向深入**: 开始着手处理 `Engine` 中 `state_backend.clear()` 的逻辑，确保持久化后端的正确性（目前只测试了内存后端）。
+
+鉴于我们已经看到了 10x 的提升，且目前的 Agent 主要是单循环，我认为**第一阶段已经达成了核心目标**。我们应该先在此暂停优化工作，转而关注其他功能（如 `StateBackend` 的完善或 `Router` 的应用）。
+
+---
+
+
+是的，**46 倍 (4550%)** 的差距确实令人咋舌，但这在系统编程中其实是一个非常经典的**“抽象税 (Abstraction Tax)”**案例。
+
+让我们冷静地剖析一下这 **58 微秒 (Cascade)** vs **1.2 微秒 (Raw Python)** 的每一纳秒都花在哪了：
+
+### 1. 我们的钱花哪了？(Where did the cycles go?)
+
+当你运行 `await imperative_countdown(n)` 时，Python 虚拟机几乎只做两件事：
+1.  整数减法 (`i -= 1`)。
+2.  极简的上下文切换 (`await asyncio.sleep(0)`)。
+
+而当你运行 `await engine.run(simple_countdown(n))` 时，虽然我们在 TCO 层面“作弊”了（跳过了图构建），但 `Engine` 的每一次心跳依然在执行一套完整的**微型操作系统**逻辑：
+
+1.  **上下文管理 (`ExitStack`)**: 进入和退出 `run_stack` 和 `step_stack` 是有显著开销的。
+2.  **状态管理 (`StateBackend`)**: 即使是内存后端，字典的 `put` 和 `get` 操作，以及检查 `skip_reason`。
+3.  **事件总线 (`MessageBus`)**: 这是大头。每一步我们都发射了 `TaskExecutionStarted`, `TaskExecutionFinished` 等事件。这意味着要创建 Event 对象，遍历订阅者列表，调用回调函数。
+4.  **资源管理 (`ResourceManager`)**: 即使没有竞争，也会进行 `acquire` 和 `release` 的检查。
+5.  **参数解析 (`ArgumentResolver`)**: 遍历参数列表（即使是空的）。
+
+### 2. 这个交易划算吗？(Is it worth it?)
+
+**我们用 46 倍的 CPU 周期买到了什么？**
+
+*   **可观测性**: 那个原生循环是黑盒。而 Cascade 的循环，我们可以从外部实时监控每一步的状态，甚至通过 MQTT 广播出去。
+*   **可干预性**: 我们可以在运行时通过 `ConstraintManager` 暂停、限流这个循环，而原生循环一旦跑起来就无法从外部优雅控制。
+*   **可持久化**: 只要换一个 `StateBackend` (如 Redis)，这个循环就可以跨进程、跨机器甚至跨时间（重启后恢复）运行。原生循环做不到。
+
+### 3. 真正的胜利：9.7x 的内部提升
+
+对于 Cascade 的演进来说，最重要的数据其实是 **[1] Optimized (17k)** vs **[2] Heavy (1.7k)**。
+
+这 **10 倍** 的差距证明了我们的 **TCO 零开销优化** 是极其成功的。我们成功地将 $O(\text{GraphSize})$ 的构建成本移除，将其变成了一个常数级的开销。
+
+### 结论
+
+17,000 TPS 对于任何 I/O 密集型（如调用 LLM、数据库、API）的 Agent 来说，都是**过剩**的性能。Agent 思考一次需要 500ms 到 5s，而 Cascade 的调度开销仅为 0.05ms。这完全在可接受范围内。
+
+**我们应该接受这个结果。**
+
+现在，让我们将这个更有意义的基准测试脚本提交，作为此次优化的验收证明。
+
 

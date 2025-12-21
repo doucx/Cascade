@@ -1,69 +1,65 @@
-好的，我们又向前迈进了一步。测试套件大部分已经恢复，这证明了统一依赖管理的正确性。剩下的失败和错误为我们指明了最后的清理方向。
+Excellent catch, captain. You are absolutely right.
 
-你的分析非常到位：
-1.  **S3 测试错误 (`ModuleNotFoundError: No module named 'flask_cors'`)**: 这是 `moto` 库的一个隐性依赖。在某些情况下，它需要 `flask_cors` 来运行其模拟 S3 服务器。这再次印证了我们的策略：必须将所有这类“角落”依赖都统一管理起来。
-2.  **IPFS 测试失败 (`ImportError`)**: 这个问题比简单的依赖缺失更深层。错误信息 `No module named 'cascade.providers.ipfs'` 暗示 Python 的导入系统无法“看到”这个模块。这是典型的**命名空间包（Namespace Package）配置错误**。`cascade-provider-ipfs` 包缺少一个顶层的 `src/cascade/__init__.py` 文件来声明它参与 `cascade` 这个命名空间。
+Your previous command (`uv pip install -e packages/*`) was indeed a workaround that masked the true root cause. Your goal to have a single, clean installation from the root is the correct one, and the persistent failure of the IPFS tests reveals the final piece of the puzzle.
 
-我们继续执行“阶段一”，这是完成它的最后冲刺。
+Here is the deep analysis:
 
-## [WIP] chore(deps): 修复 S3 测试依赖与 IPFS 提供者打包问题
+1.  **What We Did**: We correctly added the namespace `__init__.py` to `cascade-provider-ipfs`. This is like putting a signpost on a house saying "This house is part of 'cascade' city".
+2.  **The Missing Link**: The city planning office (the **root `pyproject.toml`**) didn't have this house on its map. When you install from the root (`uv pip install -e .`), the installer only looks at the dependencies listed in the root `pyproject.toml`. It saw `cascade-py`, `cascade-runtime`, etc., but it had no instruction to also look at and include `cascade-provider-ipfs`.
+
+The fix is to make it explicit. We need to tell the root "meta-package" that the IPFS provider is part of its collection for our development setup.
+
+Let's complete Phase One with this final, crucial fix.
+
+## [WIP] fix(build): Include IPFS provider in root editable install
 
 ### 用户需求
-在执行 `pytest` 后，测试套件仍有部分失败和错误。需要彻底解决这些问题，以达成“一键安装，全部通过”的开发者体验（DX）目标。
+Despite previous fixes, `ImportError` for `cascade.providers.ipfs` persists when installing dependencies from the project root. A single `uv pip install -e .[dev]` command should make all workspace packages, including all providers, available for development and testing.
 
 ### 评论
-我们正在处理技术债务的“最后一公里”。`flask_cors` 的缺失是一个简单的依赖疏漏，而 IPFS 的 `ImportError` 则暴露了我们 Monorepo 命名空间包配置的一个结构性缺陷。修复后者对于保证所有插件式提供者（Provider）能被正确发现和加载至关重要。
+This is the final hurdle to achieving a truly seamless developer experience. The problem lies in the root `pyproject.toml` acting as a "meta-package" but failing to declare all its constituent parts. By explicitly adding `cascade-provider-ipfs` to its dependency list, we make the monorepo's structure fully transparent to the Python packaging tools during an editable installation. This is the key to making the workspace behave as a single, coherent unit.
 
 ### 目标
-1.  将 `moto` 库所需的 `flask_cors` 依赖添加到根 `pyproject.toml` 的 `[dev]` 组中。
-2.  为 `cascade-provider-ipfs` 包添加缺失的 `src/cascade/__init__.py` 文件，并包含正确的命名空间包声明代码，以修复其导入问题。
+1.  Modify the root `pyproject.toml` to include `cascade-provider-ipfs` as a core dependency of the `cascade` meta-package.
 
 ### 基本原理
-通过补全 `dev` 依赖，我们确保了测试环境的完整性，让 S3 相关的测试能够正常运行。通过修正 IPFS 提供者的包结构，我们遵循了 Python PEP 420 规范，使得 `cascade.providers.ipfs` 能够被解释器正确地识别为一个可被导入的模块，从而根除 `ImportError`。
+The `[tool.uv.workspace]` section tells `uv` how to find local packages when they are named as dependencies. By adding `"cascade-provider-ipfs"` to the `dependencies` list in the root `[project]` section, we are giving `uv` (or `pip`) the explicit instruction: "The top-level 'cascade' package requires the 'cascade-provider-ipfs' package". The workspace configuration then tells the installer, "...and you can find its source code right here in the `packages/` directory." This closes the loop, ensuring the IPFS provider's code is correctly linked into the `cascade` namespace.
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/dependency-and-packaging #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/dependency-management #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 补全测试依赖并修复包结构
+#### Acts 1: Add IPFS Provider to Root Dependencies
 
-首先，我们将 `flask_cors` 添加到根 `pyproject.toml` 的 `[dev]` 依赖组中，以解决 S3 测试的 `ModuleNotFoundError`。
+We will now edit the root `pyproject.toml` to make the inclusion of the IPFS provider explicit.
 
 ~~~~~act
 patch_file
 pyproject.toml
 ~~~~~
 ~~~~~toml
-  "aiohttp",
-  "python-constraint",
+dependencies = [
+    "cascade-interfaces",
+    "cascade-runtime",
+    "cascade-py",
 ]
 ~~~~~
 ~~~~~toml
-  "aiohttp",
-  "python-constraint",
-  "flask_cors",
+dependencies = [
+    "cascade-interfaces",
+    "cascade-runtime",
+    "cascade-py",
+    "cascade-provider-ipfs",
 ]
 ~~~~~
 
-其次，我们创建缺失的 `__init__.py` 文件，来修复 `cascade-provider-ipfs` 的命名空间包配置问题。
-
-~~~~~act
-write_file
-packages/cascade-provider-ipfs/src/cascade/__init__.py
-~~~~~
-~~~~~python
-# This must be the very first line to allow this package to coexist with other
-# namespace packages (like cascade-interfaces) in editable installs.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
-~~~~~
-
 ### 下一步建议
-我们已经完成了最后的修复。现在，请再次执行标准验证流程：
+This should be the definitive fix. Please run the validation sequence one last time:
 
-1.  **更新依赖**: `uv pip install -e .[dev]`
-2.  **运行测试**: `pytest`
+1.  **Install from Root**: `uv pip install -e .[dev]`
+2.  **Run Tests**: `pytest`
 
-这一次，我们预期将看到一个**完全通过**的测试结果。在你确认后，我们将结束这个 `[WIP]` 阶段，并创建一个 `[COMMIT]` 计划来庆祝我们重新获得了一个稳定、可靠的开发基线。
+I am confident that this will result in a fully green test suite. Once you confirm, we will have successfully completed "Phase One", and I will generate the `[COMMIT]` plan to finalize this foundational work.

@@ -58,6 +58,7 @@ dev = [
   "jinja2",
   "aiohttp",
   "python-constraint",
+  "flask_cors",
 ]
 
 [tool.hatch.metadata]

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] chore(deps): 统一开发依赖，建立确定性开发环境", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766297408.6222813, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] chore(deps): 修复 S3 测试依赖与 IPFS 提供者打包问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766298067.1435993, "duration_ms": 0}}

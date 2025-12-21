@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: Add smoke tests for deep dependency resolution and helper providers", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766299796.188401, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor: 架构直觉化与深度依赖支持", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766299872.5413394, "duration_ms": 0}}

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M test_vm_integration.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766315397.8207197, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(vm): Support mutual recursion via Blueprint switching", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766315489.9470992, "duration_ms": 0}}

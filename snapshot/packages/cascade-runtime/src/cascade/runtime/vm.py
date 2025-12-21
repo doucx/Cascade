@@ -25,9 +25,15 @@ class Frame:
 class VirtualMachine:
     """
     Executes compiled Blueprints.
-    Supports Zero-Overhead TCO via an internal loop.
+    Supports Zero-Overhead TCO via an internal loop and blueprint switching.
     """
     
+    def __init__(self):
+        self._blueprints: Dict[str, Blueprint] = {}
+
+    def register_blueprint(self, bp_id: str, blueprint: Blueprint):
+        self._blueprints[bp_id] = blueprint
+
     async def execute(
         self, 
         blueprint: Blueprint, 
@@ -35,37 +41,47 @@ class VirtualMachine:
         initial_kwargs: Dict[str, Any] = None
     ) -> Any:
         """
-        Executes the blueprint. If the result is a TailCall, it re-executes 
-        the blueprint with new arguments (TCO) until a final value is returned.
+        Executes the initial blueprint. Handles TailCalls to self or other registered blueprints.
         """
-        # 1. Allocate Frame once (reused across TCO steps for zero allocation overhead)
-        # Note: In a complex VM we might need a fresh frame, but for simple self-recursion reuse is faster.
-        # However, for safety and clarity in this version, let's just reset the registers.
-        frame = Frame(blueprint.register_count)
+        current_blueprint = blueprint
+        
+        # 1. Allocate Frame
+        # We start with the frame for the initial blueprint
+        frame = Frame(current_blueprint.register_count)
         
         # 2. Load Initial Inputs
-        self._load_inputs(frame, blueprint, initial_args or [], initial_kwargs or {})
+        self._load_inputs(frame, current_blueprint, initial_args or [], initial_kwargs or {})
 
         # 3. Main Execution Loop (The "Trampoline")
         while True:
             last_result = None
             
-            # Execute all instructions in the blueprint linearly
-            for instr in blueprint.instructions:
+            # Execute all instructions in the current blueprint
+            for instr in current_blueprint.instructions:
                 last_result = await self._dispatch(instr, frame)
 
             # Check for TCO
             if isinstance(last_result, TailCall):
-                # TODO: Handle target_blueprint_id for mutual recursion (Phase 3 Part 2)
+                # Determine target blueprint
+                if last_result.target_blueprint_id:
+                    if last_result.target_blueprint_id not in self._blueprints:
+                        raise ValueError(f"Unknown target blueprint ID: {last_result.target_blueprint_id}")
+                    current_blueprint = self._blueprints[last_result.target_blueprint_id]
+                    
+                    # For a new blueprint (mutual recursion), we MUST allocate a new frame
+                    # because the register layout and count might differ.
+                    frame = Frame(current_blueprint.register_count)
+                else:
+                    # Self-recursion: keep current_blueprint and current frame
+                    # Optimization: We could reuse the frame, just ensuring inputs are overwritten correctly.
+                    # Current Frame implementation allows overwriting, so reuse is fine.
+                    pass
                 
-                # Update frame inputs with new values from TailCall
-                # This effectively "resets" the function with new parameters
-                self._load_inputs(frame, blueprint, last_result.args, last_result.kwargs)
+                # Load inputs into the (potentially new) frame
+                self._load_inputs(frame, current_blueprint, last_result.args, last_result.kwargs)
                 
-                # Yield control to event loop to allow other coroutines (timers, IO) to run
-                # This is CRITICAL for long-running agents.
-                # await asyncio.sleep(0) # Optimization: Maybe do this only every N steps?
-                # For now, let's keep it simple.
+                # Yield control to event loop
+                # await asyncio.sleep(0) 
                 continue
             
             # Normal return

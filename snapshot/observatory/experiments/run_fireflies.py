@@ -163,7 +163,8 @@ async def run_experiment(
             refractory_period=period * 0.2,
         )
 
-        agent_tasks.append(engine.run(agent_workflow))
+        # Enable VM execution for TailCall support
+        agent_tasks.append(engine.run(agent_workflow, use_vm=True))
 
         # Yield every 500 agents to keep UI responsive during setup
         if i > 0 and i % 500 == 0:

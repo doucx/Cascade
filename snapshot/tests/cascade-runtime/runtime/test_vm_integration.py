@@ -27,9 +27,9 @@ async def test_vm_tco_integration():
     # The VM will override this with the initial_kwargs we pass to execute().
     target = recursive_countdown(count=0) 
 
-    # 2. Compile
+    # 2. Compile in template mode
     builder = BlueprintBuilder()
-    blueprint = builder.build(target)
+    blueprint = builder.build(target, template=True)
     
     # Verify compilation structure
     # Should have 1 input ('count') and 1 output

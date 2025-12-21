@@ -30,10 +30,10 @@ async def test_vm_mutual_recursion():
     builder = BlueprintBuilder()
     
     # Compile Ping (using dummy input to establish structure)
-    bp_ping = builder.build(ping(n=0))
+    bp_ping = builder.build(ping(n=0), template=True)
     
     # Compile Pong
-    bp_pong = builder.build(pong(n=0))
+    bp_pong = builder.build(pong(n=0), template=True)
     
     # 2. Setup VM
     vm = VirtualMachine()
@@ -52,8 +52,8 @@ async def test_vm_mutual_recursion_pong_ends():
     Tests case where recursion ends in the second function.
     """
     builder = BlueprintBuilder()
-    bp_ping = builder.build(ping(n=0))
-    bp_pong = builder.build(pong(n=0))
+    bp_ping = builder.build(ping(n=0), template=True)
+    bp_pong = builder.build(pong(n=0), template=True)
     
     vm = VirtualMachine()
     vm.register_blueprint("ping", bp_ping)

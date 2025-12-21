@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 启动 TCO 零开销优化第一阶段 - 结构哈希设计", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766307444.9343996, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 设计并实现 TCO 零开销优化的第一阶段（结构哈希与缓存）", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766307985.0391448, "duration_ms": 0}}

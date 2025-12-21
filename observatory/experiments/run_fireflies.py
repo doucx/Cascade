@@ -196,6 +196,9 @@ async def run_orchestrator(
             filled = int(bar_len * r_value)
             bar = "█" * filled + "░" * (bar_len - filled)
             app.update_status("Sync", f"R={r_value:.3f} [{bar}]")
+            app.update_status("Pulse", pulse_count)
+            # Expose raw flash count to make the relationship clear
+            app.update_status("Flashes", f"{monitor._flash_count:,}")
             
             asyncio.create_task(aggregator.record("r_value", r_value))
 
@@ -234,7 +237,7 @@ async def run_orchestrator(
             target=worker_main,
             args=(
                 w_id, indices, num_agents, uplink_queue, concurrency_limit,
-                grid_width, grid_width, period, nudge
+                grid_width, grid_width, period, nudge # grid_height is same as grid_width for square
             )
         )
         p.start()

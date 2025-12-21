@@ -1,276 +1,179 @@
-## [WIP] 这是第一阶段的实施。我们将创建蓝图 IR 定义，编写测试用例，并实现用于将 `LazyResult` DAG 编译为线性指令序列的编译器。
+## [WIP] 第二阶段：虚拟机核心 (The Virtual Machine Core)
 
 ### Script
 
-#### Acts 1: 定义蓝图 IR (Intermediate Representation)
+#### Acts 1: 创建虚拟机测试用例
 
-创建 `blueprint.py`，定义用于虚拟机执行的核心数据结构。
-
-~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/runtime/blueprint.py
-~~~~~
-~~~~~python
-from dataclasses import dataclass, field
-from typing import Any, List, Dict, Union
-
-@dataclass
-class Operand:
-    """Base class for instruction operands."""
-    pass
-
-@dataclass
-class Literal(Operand):
-    """Represents a static value known at compile time."""
-    value: Any
-
-@dataclass
-class Register(Operand):
-    """Represents a dynamic value stored in a virtual register."""
-    index: int
-
-@dataclass
-class Instruction:
-    """Base class for VM instructions."""
-    pass
-
-@dataclass
-class Call(Instruction):
-    """
-    Instruction to call a callable (function/task).
-    Results are stored in the 'output' register.
-    """
-    func: Any
-    output: Register
-    args: List[Operand] = field(default_factory=list)
-    kwargs: Dict[str, Operand] = field(default_factory=dict)
-
-@dataclass
-class Blueprint:
-    """
-    Represents a compiled workflow, ready for execution by the VM.
-    """
-    instructions: List[Instruction] = field(default_factory=list)
-    register_count: int = 0
-~~~~~
-
-#### Acts 2: 创建编译器测试用例
-
-创建 `test_compiler.py`。包含针对单个节点和数据依赖的测试。
+创建 `test_vm.py`。我们使用 `MagicMock` 来模拟任务函数的行为，以验证 VM 正确地解析了操作数、执行了调用并将结果存储到了寄存器中。
 
 ~~~~~act
 write_file
-tests/cascade-runtime/graph/test_compiler.py
+tests/cascade-runtime/runtime/test_vm.py
 ~~~~~
 ~~~~~python
 import pytest
-from typing import Any
-import cascade as cs
-from cascade.spec.lazy_types import LazyResult
-from cascade.graph.compiler import BlueprintBuilder
-from cascade.runtime.blueprint import Call, Literal, Register
+from unittest.mock import MagicMock
+from cascade.runtime.blueprint import Blueprint, Call, Literal, Register
+from cascade.runtime.vm import VirtualMachine, Frame
 
-# --- Helpers ---
-
-@cs.task
-def add_one(x: int) -> int:
-    return x + 1
-
-@cs.task
-def add(x: int, y: int) -> int:
-    return x + y
-
-# --- Tests ---
-
-def test_compile_single_node():
-    """Verify compiling a single task with literal arguments."""
-    target = add_one(x=10)
-
-    builder = BlueprintBuilder()
-    blueprint = builder.build(target)
-
-    assert blueprint.register_count == 1
-    assert len(blueprint.instructions) == 1
-
-    instr = blueprint.instructions[0]
-    assert isinstance(instr, Call)
-    assert instr.func == add_one.func
-    assert isinstance(instr.output, Register)
-    assert instr.output.index == 0
+def test_vm_executes_single_call():
+    """
+    Test execution of a simple blueprint: R0 = func(a=1)
+    """
+    # 1. Define Blueprint manually
+    mock_func = MagicMock(return_value=42)
     
-    # Check kwargs
-    assert "x" in instr.kwargs
-    arg_op = instr.kwargs["x"]
-    assert isinstance(arg_op, Literal)
-    assert arg_op.value == 10
+    # Instruction: R0 = mock_func(val=10)
+    instr = Call(
+        func=mock_func,
+        output=Register(0),
+        args=[],
+        kwargs={"val": Literal(10)}
+    )
+    blueprint = Blueprint(instructions=[instr], register_count=1)
 
-def test_compile_data_dependency():
-    """Verify compiling a task that depends on another task."""
-    # dependency = add_one(1)  -> returns 2
-    # target = add(dependency, 5) -> returns 7
-    dep = add_one(1)
-    target = add(dep, 5)
+    # 2. Execute
+    vm = VirtualMachine()
+    result = vm.execute(blueprint)
 
-    builder = BlueprintBuilder()
-    blueprint = builder.build(target)
+    # 3. Verify
+    assert result == 42
+    mock_func.assert_called_once_with(val=10)
 
-    # Should have 2 registers (one for dep output, one for target output)
-    assert blueprint.register_count == 2
-    assert len(blueprint.instructions) == 2
+def test_vm_handles_data_dependency():
+    """
+    Test R0 = func1(1); R1 = func2(R0)
+    """
+    func1 = MagicMock(return_value=100)
+    func2 = MagicMock(return_value=200)
 
-    # First instruction: dep
-    instr1 = blueprint.instructions[0]
-    assert isinstance(instr1, Call)
-    assert instr1.func == add_one.func
-    assert instr1.output.index == 0 # First register
-
-    # Second instruction: target
-    instr2 = blueprint.instructions[1]
-    assert isinstance(instr2, Call)
-    assert instr2.func == add.func
-    assert instr2.output.index == 1 # Second register
-
-    # Check args of second instruction
-    # First arg should be a Register pointing to instr1 output
-    assert len(instr2.args) == 2
-    arg0 = instr2.args[0]
-    assert isinstance(arg0, Register)
-    assert arg0.index == 0 
+    # I1: R0 = func1(1)
+    i1 = Call(
+        func=func1,
+        output=Register(0),
+        args=[Literal(1)],
+        kwargs={}
+    )
+    # I2: R1 = func2(R0)
+    i2 = Call(
+        func=func2,
+        output=Register(1),
+        args=[Register(0)],
+        kwargs={}
+    )
     
-    # Second arg should be a Literal
-    arg1 = instr2.args[1]
-    assert isinstance(arg1, Literal)
-    assert arg1.value == 5
+    blueprint = Blueprint(instructions=[i1, i2], register_count=2)
 
-def test_compile_diamond_dependency():
-    """Verify reuse of results (diamond dependency)."""
-    # A -> B, A -> C, D(B, C)
-    # But simpler: A -> B(A), C(A)
+    vm = VirtualMachine()
+    result = vm.execute(blueprint)
+
+    assert result == 200
+    func1.assert_called_once_with(1)
+    func2.assert_called_once_with(100) # Should receive result of func1
+
+def test_vm_async_execution():
+    """
+    Test handling of async functions.
+    """
+    import asyncio
     
-    root = add_one(1) # reg 0
-    b = add_one(root) # reg 1
-    c = add_one(root) # reg 2
-    target = add(b, c) # reg 3
+    async def async_add(x):
+        return x + 1
 
-    builder = BlueprintBuilder()
-    blueprint = builder.build(target)
+    blueprint = Blueprint(
+        instructions=[
+            Call(
+                func=async_add,
+                output=Register(0),
+                args=[],
+                kwargs={"x": Literal(5)}
+            )
+        ],
+        register_count=1
+    )
 
-    # Should have 4 instructions
-    assert len(blueprint.instructions) == 4
-    # Register count 4
-    assert blueprint.register_count == 4
+    vm = VirtualMachine()
+    # execute is sync wrapper for now? Or should it be async?
+    # Engine.run is async. VM.execute should likely be async too.
+    # We'll make VM.execute async.
     
-    # Check that root is computed once (only one instruction for it)
-    root_calls = [i for i in blueprint.instructions if i.func == add_one.func and isinstance(i.args[0], Literal)]
-    assert len(root_calls) == 1
+    loop = asyncio.new_event_loop()
+    result = loop.run_until_complete(vm.execute(blueprint))
+    assert result == 6
 ~~~~~
 
-#### Acts 3: 实现蓝图编译器
+#### Acts 2: 实现虚拟机核心
 
-创建 `compiler.py`，实现 `BlueprintBuilder`。它执行 DAG 的后序遍历（通过递归调用 `_visit` 并在处理参数后添加指令），从而生成拓扑排序的指令序列。
+创建 `vm.py`。
+*   **Frame**: 一个简单的列表，用于存储寄存器值。
+*   **VirtualMachine**: 包含指令分发逻辑。
+*   **注意**: 我们将 `execute` 实现为 `async` 方法，以支持原生异步任务。如果任务是同步的，我们直接调用；如果是协程，我们 `await` 它。这保持了 Cascade 对同步/异步混合工作流的支持。
 
 ~~~~~act
 write_file
-packages/cascade-runtime/src/cascade/graph/compiler.py
+packages/cascade-runtime/src/cascade/runtime/vm.py
 ~~~~~
 ~~~~~python
-from typing import Any, Dict, List, Optional
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.blueprint import Blueprint, Call, Literal, Register, Operand, Instruction
+import inspect
+from typing import Any, List, Dict
+from cascade.runtime.blueprint import Blueprint, Instruction, Call, Literal, Register, Operand
 
-class BlueprintBuilder:
+class Frame:
     """
-    Compiles a LazyResult dependency graph into a linear Blueprint for VM execution.
+    Represents the runtime stack frame for a blueprint execution.
+    It holds the values of virtual registers.
     """
-    def __init__(self):
-        self.instructions: List[Instruction] = []
-        # Maps LazyResult UUID to the Register index that holds its result
-        self._visited: Dict[str, int] = {} 
-        self._register_counter = 0
+    def __init__(self, size: int):
+        self.registers: List[Any] = [None] * size
 
-    def build(self, target: Any) -> Blueprint:
-        self.instructions.clear()
-        self._visited.clear()
-        self._register_counter = 0
+    def load(self, operand: Operand) -> Any:
+        if isinstance(operand, Literal):
+            return operand.value
+        elif isinstance(operand, Register):
+            return self.registers[operand.index]
+        else:
+            raise TypeError(f"Unknown operand type: {type(operand)}")
+
+    def store(self, register: Register, value: Any):
+        self.registers[register.index] = value
+
+
+class VirtualMachine:
+    """
+    Executes compiled Blueprints.
+    """
+    async def execute(self, blueprint: Blueprint) -> Any:
+        # 1. Allocate Frame
+        frame = Frame(blueprint.register_count)
         
-        self._visit(target)
+        # 2. Execute Instructions
+        last_result = None
+        for instr in blueprint.instructions:
+            last_result = await self._dispatch(instr, frame)
+            
+        # Return the result of the last instruction (implicit return of the workflow)
+        return last_result
+
+    async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
+        if isinstance(instr, Call):
+            return await self._execute_call(instr, frame)
+        else:
+            raise NotImplementedError(f"Unknown instruction: {type(instr)}")
+
+    async def _execute_call(self, instr: Call, frame: Frame) -> Any:
+        # 1. Resolve Arguments
+        args = [frame.load(op) for op in instr.args]
+        kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
+
+        # 2. Invoke Callable
+        result = instr.func(*args, **kwargs)
         
-        return Blueprint(
-            instructions=self.instructions,
-            register_count=self._register_counter
-        )
+        # Handle Async
+        if inspect.isawaitable(result):
+            result = await result
 
-    def _allocate_register(self) -> Register:
-        reg = Register(self._register_counter)
-        self._register_counter += 1
-        return reg
-
-    def _to_operand(self, value: Any) -> Operand:
-        """
-        Converts a value into an Operand. 
-        If value is a LazyResult, it recursively visits it and returns a Register.
-        Otherwise returns a Literal.
-        """
-        if isinstance(value, (LazyResult, MappedLazyResult)):
-            reg_index = self._visit(value)
-            return Register(reg_index)
+        # 3. Store Result
+        frame.store(instr.output, result)
         
-        # Future: Handle lists/dicts containing LazyResults (CompoundOperand)
-        # For now, we treat complex structures as Literals if they don't contain LazyResults at top level
-        # A more robust implementation would scan recursively.
-        return Literal(value)
-
-    def _visit(self, target: Any) -> int:
-        """
-        Visits a node, compiles it and its dependencies, and returns the 
-        register index where its result will be stored.
-        """
-        # Handle non-LazyResult (literals passed as target)
-        if not isinstance(target, (LazyResult, MappedLazyResult)):
-            # This case shouldn't strictly happen if _visit is called correctly,
-            # but allows compiling a simple literal into a NO-OP or handling edge cases.
-            # For now, we assume target is always LazyResult/MappedLazyResult.
-            raise TypeError(f"Cannot compile non-LazyResult type: {type(target)}")
-
-        # Memoization (Graph Reuse)
-        if target._uuid in self._visited:
-            return self._visited[target._uuid]
-
-        # 1. Compile Arguments (Recursion)
-        # This ensures dependencies are emitted BEFORE the current instruction (Post-order traversal)
-        args_operands = [self._to_operand(a) for a in target.args]
-        
-        # Determine kwargs source
-        kwargs_source = target.kwargs
-        if isinstance(target, MappedLazyResult):
-            kwargs_source = target.mapping_kwargs
-
-        kwargs_operands = {k: self._to_operand(v) for k, v in kwargs_source.items()}
-
-        # 2. Allocate Output Register
-        output_reg = self._allocate_register()
-
-        # 3. Emit Instruction
-        callable_obj = None
-        if isinstance(target, LazyResult):
-            callable_obj = target.task.func
-        elif isinstance(target, MappedLazyResult):
-            # Mapped tasks need special handling in VM, but for now compile as Call
-            # The VM will need to handle map logic. 
-            # For Phase 1, we treat it as calling the factory (incorrect semantically but fits structure).
-            # TODO: Add Map instruction type.
-            callable_obj = target.factory
-
-        instr = Call(
-            func=callable_obj,
-            output=output_reg,
-            args=args_operands,
-            kwargs=kwargs_operands
-        )
-        self.instructions.append(instr)
-
-        # 4. Mark Visited
-        self._visited[target._uuid] = output_reg.index
-        
-        return output_reg.index
+        return result
 ~~~~~

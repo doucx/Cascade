@@ -8,6 +8,7 @@ __pycache__/
 
 # Observatory log
 *.jsonl
+*.out
 
 # Distribution / packaging
 .Python

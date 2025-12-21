@@ -75,10 +75,12 @@ def firefly_agent(
     my_channel: DirectChannel,
     connector: Connector,
     refractory_period: float = 2.0,
+    agent_type: str = "EXCITATORY",  # "EXCITATORY" or "INHIBITORY"
+    inhibition_strength: float = 2.0,
 ):
     """
     The main entry point for a single firefly agent.
-    Now uses DirectChannel topology.
+    Now uses DirectChannel topology and supports inhibitory dynamics.
     """
 
     def firefly_cycle(
@@ -90,6 +92,7 @@ def firefly_agent(
         my_channel: DirectChannel,
         connector: Connector,
         refractory_period: float,
+        agent_type: str,
     ):
         # --- Logic Branching ---
 
@@ -141,6 +144,7 @@ def firefly_agent(
                     flash_payload = {
                         "agent_id": agent_id,
                         "phase": current_actual_phase,
+                        "type": agent_type,
                     }
 
                     flash = fanout_direct(
@@ -162,13 +166,24 @@ def firefly_agent(
                             my_channel,
                             connector,
                             refractory_period,
+                            agent_type,
                         )
 
                     return loop_reset(p, flash)
 
                 else:
-                    # We heard a neighbor! NUDGE!
-                    next_phase = current_actual_phase + nudge
+                    # We heard a neighbor!
+                    signal = p.get("signal", {})
+                    sender_type = signal.get("type", "EXCITATORY")
+                    
+                    if sender_type == "INHIBITORY":
+                        # Retard phase (slow down)
+                        delta = -(nudge * inhibition_strength)
+                    else:
+                        # Advance phase (speed up)
+                        delta = nudge
+
+                    next_phase = current_actual_phase + delta
                     return firefly_cycle(
                         agent_id,
                         next_phase,
@@ -178,6 +193,7 @@ def firefly_agent(
                         my_channel,
                         connector,
                         refractory_period,
+                        agent_type,
                     )
 
             return process_perception(perception)
@@ -191,4 +207,5 @@ def firefly_agent(
         my_channel,
         connector,
         refractory_period,
+        agent_type,
     )

@@ -27,14 +27,20 @@ class DirectChannel:
         self.sampling_rate = sampling_rate
         self.telemetry_connector = telemetry_connector
 
-    async def send(self, payload: Any):
+    async def send(self, payload: Any, latency: float = 0.0):
         """
         Directly puts a message into the channel. Zero-copy.
+        Supports synthetic latency.
         """
-        # 1. Core Logic: Direct Delivery
-        # We use await put() to handle backpressure and ensure fair scheduling.
-        # This prevents the producer from starving the consumer loop.
-        await self._inbox.put(payload)
+        # 1. Core Logic: Direct Delivery with optional Latency
+        if latency > 0:
+            # We use loop.call_later to schedule the put operation
+            # This is non-blocking and simulates propagation delay
+            loop = asyncio.get_running_loop()
+            loop.call_later(latency, self._inbox.put_nowait, payload)
+        else:
+            # We use await put() to handle backpressure and ensure fair scheduling.
+            await self._inbox.put(payload)
 
         # 2. Telemetry Probe (The "Leak")
         # Randomly sample traffic to the global bus for observability.

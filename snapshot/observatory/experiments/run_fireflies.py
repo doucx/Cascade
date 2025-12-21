@@ -19,9 +19,10 @@ from observatory.visualization.grid import GridView
 from observatory.visualization.status import StatusBar
 
 # --- Constants ---
-GRID_SIDE = 50
-NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
-PERIOD = 5.0  # Slowed down to allow CPU to catch up with 2500 agents
+GRID_SIDE = 50  # Increased for higher density wave patterns
+NUM_AGENTS = GRID_SIDE * GRID_SIDE
+PERIOD = 5.0
+INHIBITORY_RATIO = 0.2  # 20% of agents are inhibitory
 
 
 def get_neighbors(index: int, width: int, height: int) -> List[int]:
@@ -46,28 +47,28 @@ async def run_experiment(
     decay_duty_cycle: float = 0.3,
 ):
     """
-    Sets up and runs the firefly synchronization experiment.
+    Sets up and runs the firefly synchronization experiment using a SINGLE Engine
+    and a mix of Excitatory/Inhibitory agents.
     """
     grid_width = int(num_agents**0.5)
     print(
         f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents ({grid_width}x{grid_width})..."
     )
+    print(f"   - Single Engine Mode: ACTIVE")
+    print(f"   - Inhibitory Agents: {INHIBITORY_RATIO * 100:.0f}%")
 
-    # 1. Initialize Shared Bus
+    # 1. Initialize Shared Bus & Connector
     LocalBusConnector._reset_broker_state()
     connector = LocalBusConnector()
     await connector.connect()
 
     # --- Setup Monitor & Visualizer ---
-    # Monitor now needs to handle many more agents.
     monitor = ConvergenceMonitor(num_agents, period, connector)
 
     app = None
     app_task = None
 
     if visualize:
-        # 1. Create visualization components
-        # A decay_per_second of 5.0 means a flash will fade in 1/5 = 0.2 seconds.
         grid_view = GridView(
             width=grid_width,
             height=grid_width,
@@ -77,80 +78,80 @@ async def run_experiment(
         status_bar = StatusBar(
             initial_status={"Agents": num_agents, "Sync (R)": "Initializing..."}
         )
-        # --- Setup Aggregator (Unified Logger) ---
         log_filename = f"firefly_log_{int(time.time())}.jsonl"
         aggregator = MetricsAggregator(log_filename, interval_s=1.0)
         aggregator.open()
-        print(f"📝 Logging telemetry to [bold cyan]{log_filename}[/bold cyan]")
-
-        # Inject aggregator into App to capture FPS/Jitter automatically
+        
         app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
         aggregator_task = asyncio.create_task(aggregator.run())
 
-        # 2. Bridge Monitor -> Status Bar & Logger
         def monitor_callback(r_value: float, pulse_count: int):
-            # UI Update
             bar_len = 20
             filled = int(bar_len * r_value)
             bar = "█" * filled + "░" * (bar_len - filled)
             app.update_status("Sync", f"R={r_value:.3f} [{bar}] @ Pulse {pulse_count}")
-
-            # Data Logging (Async record to aggregator)
-            # Since this callback is synchronous (called by Monitor), we need to schedule the record
             asyncio.create_task(aggregator.record("r_value", r_value))
             asyncio.create_task(aggregator.record("pulse", pulse_count))
             asyncio.create_task(aggregator.record("flash_count", monitor._flash_count))
 
         monitor_task = asyncio.create_task(
-            # Reduce monitor frequency to reduce CPU load
             monitor.run(frequency_hz=2.0, callback=monitor_callback)
         )
 
-        # 3. Bridge Agent Flashes -> Grid
-        # Agents now also publish to "firefly/flash" for the visualizer/monitor
         async def on_flash_visual(topic: str, payload: Dict[str, Any]):
             aid = payload.get("agent_id")
+            atype = payload.get("type", "EXCITATORY")
             if aid is not None and app:
                 x = aid % grid_width
                 y = aid // grid_width
-                # Use Fast Path (Batch Update) - Raw App expects a list of tuples
-                # Even for a single update, passing a list is the protocol.
-                await app.direct_update_grid_batch([(x, y, 1.0)])
+                # Visual distinction: Inhibitory flashes are slightly dimmer or handled differently by palette?
+                # For now, just use 1.0 brightness, palette handles fade.
+                intensity = 1.0 if atype == "EXCITATORY" else 0.8
+                await app.direct_update_grid_batch([(x, y, intensity)])
 
         await connector.subscribe("firefly/flash", on_flash_visual)
         app_task = asyncio.create_task(app.start())
     else:
-        # Headless mode: Monitor prints to stdout
         monitor_task = asyncio.create_task(monitor.run(frequency_hz=2.0))
 
     # --- Create Topology (DirectChannels) ---
     print("Constructing Network Topology...")
     channels = [DirectChannel(owner_id=f"agent_{i}", capacity=100) for i in range(num_agents)]
 
-    # --- Create Agents ---
-    agent_tasks = []
+    # --- Setup Single Shared Engine ---
+    # CRITICAL: We pass connector=None to prevent the Engine from managing its lifecycle.
+    # The Engine will be "headless" in terms of external IO, but we will inject the connector as a resource.
+    shared_engine = cs.Engine(
+        solver=cs.NativeSolver(),
+        executor=cs.LocalExecutor(),
+        bus=cs.MessageBus(),
+        connector=None, 
+    )
 
     @resource(name="_internal_connector", scope="run")
     def shared_connector_provider():
+        # This provider allows agents to access the connector managed by this script
         yield connector
 
-    # Batch creation to avoid freezing UI loop
+    shared_engine.register(shared_connector_provider)
+
+    # --- Create Agents ---
+    agent_tasks = []
+
     print("Generating Agent Workflows...")
     for i in range(num_agents):
         initial_phase = random.uniform(0, period)
+        
+        # Determine Type
+        atype = "INHIBITORY" if random.random() < INHIBITORY_RATIO else "EXCITATORY"
 
         # Topology Lookup
         neighbor_ids = get_neighbors(i, grid_width, grid_width)
         my_neighbors = [channels[nid] for nid in neighbor_ids]
         my_channel = channels[i]
 
-        engine = cs.Engine(
-            solver=cs.NativeSolver(),
-            executor=cs.LocalExecutor(),
-            bus=cs.MessageBus(),
-            connector=None,
-        )
-        engine.register(shared_connector_provider)
+        # Inhibit stronger than excite to create contrast
+        inhibition = 4.0 if atype == "INHIBITORY" else 0.0
 
         agent_workflow = firefly_agent(
             agent_id=i,
@@ -159,13 +160,14 @@ async def run_experiment(
             nudge=nudge,
             neighbors=my_neighbors,
             my_channel=my_channel,
-            connector=connector,
+            connector=cs.inject("_internal_connector"), # Use injection
             refractory_period=period * 0.2,
+            agent_type=atype,
+            inhibition_strength=inhibition
         )
 
-        agent_tasks.append(engine.run(agent_workflow))
+        agent_tasks.append(shared_engine.run(agent_workflow))
 
-        # Yield every 500 agents to keep UI responsive during setup
         if i > 0 and i % 500 == 0:
             print(f"   ... {i} agents prepared.")
             await asyncio.sleep(0)

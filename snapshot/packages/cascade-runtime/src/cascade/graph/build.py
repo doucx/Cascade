@@ -1,4 +1,5 @@
 from typing import Dict, Any
+import inspect
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -32,11 +33,20 @@ class GraphBuilder:
         literal_inputs = {str(i): v for i, v in enumerate(result.args)}
         literal_inputs.update(result.kwargs)
 
+        # Pre-compute signature to avoid repeated reflection at runtime
+        sig = None
+        if result.task.func:
+            try:
+                sig = inspect.signature(result.task.func)
+            except (ValueError, TypeError):
+                pass
+
         node = Node(
             id=result._uuid,
             name=result.task.name,
             node_type="task",
             callable_obj=result.task.func,
+            signature=sig,
             retry_policy=result._retry_policy,
             cache_policy=result._cache_policy,
             constraints=result._constraints,

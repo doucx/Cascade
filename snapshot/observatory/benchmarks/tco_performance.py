@@ -51,12 +51,39 @@ def heavy_complex_countdown(n: int, _dummy=None):
     return heavy_complex_countdown(n - 1, _dummy=dep_chain)
 
 
+async def imperative_countdown(n: int):
+    """
+    A raw, imperative asyncio loop to serve as the performance ground truth.
+    This has zero Cascade framework overhead.
+    """
+    i = n
+    while i > 0:
+        i -= 1
+        # await asyncio.sleep(0) is essential to yield control,
+        # mimicking how a long-running agent should behave.
+        await asyncio.sleep(0)
+    return "done"
+
+
 async def run_benchmark(engine: Engine, target: cs.LazyResult, iterations: int) -> float:
     """Runs the target and returns the execution time in seconds."""
     print(f"Running benchmark for '{target.task.name}'...")
     start_time = time.perf_counter()
     
     result = await engine.run(target)
+    
+    end_time = time.perf_counter()
+    
+    assert result == "done"
+    return end_time - start_time
+
+
+async def run_imperative_benchmark(iterations: int) -> float:
+    """Runs the imperative loop and returns the execution time in seconds."""
+    print("Running benchmark for 'imperative_countdown'...")
+    start_time = time.perf_counter()
+    
+    result = await imperative_countdown(iterations)
     
     end_time = time.perf_counter()
     
@@ -93,12 +120,24 @@ async def main():
     unoptimized_tps = iterations / unoptimized_time
     print(f"  Finished in {unoptimized_time:.4f} seconds.")
     print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
+
+    # 3. Run Imperative Ground Truth
+    print("[3] Running Imperative Ground Truth (imperative_countdown)...")
+    imperative_time = await run_imperative_benchmark(iterations)
+    imperative_tps = iterations / imperative_time
+    print(f"  Finished in {imperative_time:.4f} seconds.")
+    print(f"  TPS: {imperative_tps:,.2f} calls/sec\n")
     
-    # 3. Compare Results
+    # 4. Compare Results
+    print("--- Comparison ---")
     if unoptimized_tps > 0:
-        improvement = optimized_tps / unoptimized_tps
-        print("--- Comparison ---")
-        print(f"Performance Improvement: {improvement:.2f}x")
+        heavy_vs_optimized = optimized_tps / unoptimized_tps
+        print(f"Optimized vs. Heavy (TCO Optimization): {heavy_vs_optimized:.2f}x faster")
+    
+    if imperative_tps > 0:
+        overhead_ratio = imperative_tps / optimized_tps
+        print(f"Imperative vs. Optimized (Framework Overhead): {overhead_ratio:.2f}x")
+        print(f"  (The optimized declarative path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)")
 
 
 if __name__ == "__main__":

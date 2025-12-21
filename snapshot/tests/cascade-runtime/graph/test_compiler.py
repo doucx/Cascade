@@ -17,27 +17,37 @@ def add(x: int, y: int) -> int:
 
 # --- Tests ---
 
-def test_compile_single_node():
-    """Verify compiling a single task with literal arguments."""
-    target = add_one(x=10)
+def test_compile_single_node_as_root():
+    """
+    Verify compiling a single task as root.
+    Arguments should be promoted to Input Registers.
+    """
+    target = add_one(x=10) # 10 here acts as the 'default' or 'template' value structure
 
     builder = BlueprintBuilder()
     blueprint = builder.build(target)
 
-    assert blueprint.register_count == 1
+    # Expected Registers:
+    # R0: input 'x'
+    # R1: output result
+    assert blueprint.register_count == 2
     assert len(blueprint.instructions) == 1
 
+    # Check Input Mapping
+    assert "x" in blueprint.input_kwargs
+    assert blueprint.input_kwargs["x"] == 0 # Mapped to Register 0
+
+    # Check Instruction
     instr = blueprint.instructions[0]
     assert isinstance(instr, Call)
     assert instr.func == add_one.func
-    assert isinstance(instr.output, Register)
-    assert instr.output.index == 0
+    assert instr.output.index == 1
     
-    # Check kwargs
+    # Argument for 'x' should be Register(0), NOT Literal(10)
     assert "x" in instr.kwargs
     arg_op = instr.kwargs["x"]
-    assert isinstance(arg_op, Literal)
-    assert arg_op.value == 10
+    assert isinstance(arg_op, Register)
+    assert arg_op.index == 0
 
 def test_compile_data_dependency():
     """Verify compiling a task that depends on another task."""

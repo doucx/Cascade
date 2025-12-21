@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.blueprint import Blueprint, Call, Literal, Register, Operand, Instruction
 
@@ -11,23 +11,88 @@ class BlueprintBuilder:
         # Maps LazyResult UUID to the Register index that holds its result
         self._visited: Dict[str, int] = {} 
         self._register_counter = 0
+        
+        # Track input registers for the blueprint
+        self._input_args_map: List[int] = []
+        self._input_kwargs_map: Dict[str, int] = {}
 
     def build(self, target: Any) -> Blueprint:
         self.instructions.clear()
         self._visited.clear()
         self._register_counter = 0
+        self._input_args_map = []
+        self._input_kwargs_map = {}
         
-        self._visit(target)
+        # Special handling for the root node to lift its arguments to input registers
+        if isinstance(target, (LazyResult, MappedLazyResult)):
+            self._compile_root(target)
+        else:
+            # Fallback for simple literals (though unlikely in practice)
+            raise TypeError(f"Cannot compile non-LazyResult type: {type(target)}")
         
         return Blueprint(
             instructions=self.instructions,
-            register_count=self._register_counter
+            register_count=self._register_counter,
+            input_args=self._input_args_map,
+            input_kwargs=self._input_kwargs_map
         )
 
     def _allocate_register(self) -> Register:
         reg = Register(self._register_counter)
         self._register_counter += 1
         return reg
+
+    def _compile_root(self, target: Union[LazyResult, MappedLazyResult]):
+        """
+        Compiles the root node. Arguments of the root node are treated as 
+        Blueprint inputs.
+        """
+        # 1. Compile Input Arguments
+        # Instead of compiling them recursively as fixed dependencies, 
+        # we allocate registers for them immediately and mark them as inputs.
+        
+        args_operands: List[Operand] = []
+        for i, arg in enumerate(target.args):
+            reg = self._allocate_register()
+            self._input_args_map.append(reg.index)
+            # Future: If arg is a nested LazyResult, we might want to compile it 
+            # and use its output as the default value? 
+            # For TCO/Agent loop, we assume inputs are values passed from outside.
+            # If the user passed a LazyResult as an arg to the root task, 
+            # it is treated as a value (the LazyResult object itself) passed to the function.
+            args_operands.append(reg)
+
+        # Handle kwargs
+        kwargs_source = target.kwargs
+        if isinstance(target, MappedLazyResult):
+            kwargs_source = target.mapping_kwargs
+
+        kwargs_operands: Dict[str, Operand] = {}
+        for k, v in kwargs_source.items():
+            reg = self._allocate_register()
+            self._input_kwargs_map[k] = reg.index
+            kwargs_operands[k] = reg
+
+        # 2. Allocate Output Register for the root task
+        output_reg = self._allocate_register()
+
+        # 3. Emit Root Call Instruction
+        callable_obj = None
+        if isinstance(target, LazyResult):
+            callable_obj = target.task.func
+        elif isinstance(target, MappedLazyResult):
+            callable_obj = target.factory
+
+        instr = Call(
+            func=callable_obj,
+            output=output_reg,
+            args=args_operands,
+            kwargs=kwargs_operands
+        )
+        self.instructions.append(instr)
+
+        # 4. Mark Visited (though not strictly needed for root)
+        self._visited[target._uuid] = output_reg.index
 
     def _to_operand(self, value: Any) -> Operand:
         """
@@ -39,32 +104,21 @@ class BlueprintBuilder:
             reg_index = self._visit(value)
             return Register(reg_index)
         
-        # Future: Handle lists/dicts containing LazyResults (CompoundOperand)
-        # For now, we treat complex structures as Literals if they don't contain LazyResults at top level
-        # A more robust implementation would scan recursively.
         return Literal(value)
 
     def _visit(self, target: Any) -> int:
         """
-        Visits a node, compiles it and its dependencies, and returns the 
-        register index where its result will be stored.
+        Visits a generic inner node (NOT root), compiles it and its dependencies.
         """
-        # Handle non-LazyResult (literals passed as target)
         if not isinstance(target, (LazyResult, MappedLazyResult)):
-            # This case shouldn't strictly happen if _visit is called correctly,
-            # but allows compiling a simple literal into a NO-OP or handling edge cases.
-            # For now, we assume target is always LazyResult/MappedLazyResult.
             raise TypeError(f"Cannot compile non-LazyResult type: {type(target)}")
 
-        # Memoization (Graph Reuse)
         if target._uuid in self._visited:
             return self._visited[target._uuid]
 
         # 1. Compile Arguments (Recursion)
-        # This ensures dependencies are emitted BEFORE the current instruction (Post-order traversal)
         args_operands = [self._to_operand(a) for a in target.args]
         
-        # Determine kwargs source
         kwargs_source = target.kwargs
         if isinstance(target, MappedLazyResult):
             kwargs_source = target.mapping_kwargs
@@ -79,10 +133,6 @@ class BlueprintBuilder:
         if isinstance(target, LazyResult):
             callable_obj = target.task.func
         elif isinstance(target, MappedLazyResult):
-            # Mapped tasks need special handling in VM, but for now compile as Call
-            # The VM will need to handle map logic. 
-            # For Phase 1, we treat it as calling the factory (incorrect semantically but fits structure).
-            # TODO: Add Map instruction type.
             callable_obj = target.factory
 
         instr = Call(
@@ -93,7 +143,6 @@ class BlueprintBuilder:
         )
         self.instructions.append(instr)
 
-        # 4. Mark Visited
         self._visited[target._uuid] = output_reg.index
         
         return output_reg.index

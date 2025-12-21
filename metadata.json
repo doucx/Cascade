@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(vm): 实现 VM 主循环与 TailCall 指令以支持 TCO", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766315238.5306756, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): Support input registers in BlueprintBuilder for TCO", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766315365.8766973, "duration_ms": 0}}

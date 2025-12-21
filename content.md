@@ -1,393 +1,304 @@
-## [WIP] feat(vm): 集成资源调度与约束检查至 VM 运行时
+简要回答：
+好的，我将在 `Engine` 中支持注入共享的 `ResourceManager`，并更新 `run_fireflies.py` 以支持通过 CLI 选项 `--concurrency-limit` 手动设置全局并发限制。
+
+## [WIP] feat(exp): 在 run_fireflies 中支持手动并发限制
 
 ### 用户需求
-让通过 VM (`TailCall` 模式) 执行的任务也能受到 `ResourceManager` (并发/容量控制) 和 `ConstraintManager` (速率/暂停控制) 的管辖。
+在 `run_fireflies.py` 实验中添加一个命令行选项，允许用户手动指定全局并发限制，以验证 VM 模式下的资源调度和约束检查是否生效。这需要多个 Agent（每个有独立的 Engine）共享同一个资源管理器。
 
 ### 评论
-这是将 VM 从“裸金属”执行器提升为“托管”运行时的关键一步。通过在指令级别引入资源获取和权限检查，我们确保了无论用户选择图模式还是 VM 模式，Cascade 的治理承诺（如“全局并发不超过 100”）始终有效。
+这是一个非常实用的功能验证需求。它不仅测试了 VM 的资源集成，还隐含地推动了 Engine 架构向支持“多租户/共享资源”的方向演进。通过显式注入 `ResourceManager`，我们可以打破 Engine 之间的资源隔离墙。
 
 ### 目标
-1.  更新 `Blueprint` 协议，使 `Call` 指令携带任务名称和约束元数据。
-2.  更新 `Compiler`，在编译时提取这些元数据。
-3.  更新 `VirtualMachine`，在执行 `Call` 指令前进行资源获取 (`acquire`) 和权限检查 (`check_permission`)。
-4.  更新 `Engine`，将内部的管理器注入到 VM 中。
+1.  修改 `Engine.__init__`，允许从外部注入 `ResourceManager` 实例。
+2.  重构 `run_fireflies.py`，使用 `typer` 处理命令行参数，并实现跨 Engine 的资源共享和约束应用。
 
 ### 基本原理
-我们在 VM 的指令分派循环 (`_execute_call`) 中插入了与 `Engine._execute_node` 类似的“中间件”逻辑。为了复用现有的 `ConstraintManager`，我们在 VM 内部构造了临时的 `Node` 对象来适配接口。这避免了重写管理器逻辑，保持了架构的一致性。
+目前的 `Engine` 在初始化时总是创建一个新的、私有的 `ResourceManager`，导致无法在多个 Engine 实例间实现全局限流。通过允许注入，我们可以创建一个全局的 Manager 并在所有 Agent 间共享。同时，利用 `LazyResult.with_constraints` 方法，我们可以动态地为每个 Agent 的任务附加资源需求。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/vm #scope/core #ai/instruct #task/domain/vm #task/object/resource-integration #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/runtime #comp/experiments #scope/api #ai/instruct #task/domain/runtime #task/object/engine #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 Blueprint 协议
+#### Acts 1: 允许 Engine 注入 ResourceManager
 
-首先，我们需要修改 `Call` 指令的定义，使其能够携带任务的元数据（名称）和静态约束定义。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/blueprint.py
-~~~~~
-~~~~~python
-from typing import Any, List, Dict, Optional
-
-@dataclass
-class Operand:
-~~~~~
-~~~~~python
-from typing import Any, List, Dict, Optional
-from cascade.spec.constraint import ResourceConstraint
-
-@dataclass
-class Operand:
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/blueprint.py
-~~~~~
-~~~~~python
-@dataclass
-class Call(Instruction):
-    """
-    Instruction to call a callable (function/task).
-    Results are stored in the 'output' register.
-    """
-    func: Any
-    output: Register
-    args: List[Operand] = field(default_factory=list)
-    kwargs: Dict[str, Operand] = field(default_factory=dict)
-
-@dataclass
-class TailCall:
-~~~~~
-~~~~~python
-@dataclass
-class Call(Instruction):
-    """
-    Instruction to call a callable (function/task).
-    Results are stored in the 'output' register.
-    """
-    func: Any
-    output: Register
-    args: List[Operand] = field(default_factory=list)
-    kwargs: Dict[str, Operand] = field(default_factory=dict)
-    
-    # Metadata for observability and constraints
-    task_name: str = "unknown"
-    constraints: Optional[ResourceConstraint] = None
-
-@dataclass
-class TailCall:
-~~~~~
-
-#### Acts 2: 更新 Compiler 填充元数据
-
-接着，更新 `BlueprintBuilder`，在生成 `Call` 指令时从 `LazyResult` 中提取相关信息。
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/graph/compiler.py
-~~~~~
-~~~~~python
-        # 3. Emit Instruction
-        callable_obj = None
-        if isinstance(target, LazyResult):
-            callable_obj = target.task.func
-        elif isinstance(target, MappedLazyResult):
-            callable_obj = target.factory
-
-        instr = Call(
-            func=callable_obj,
-            output=output_reg,
-            args=args_operands,
-            kwargs=kwargs_operands
-        )
-        self._instructions.append(instr)
-~~~~~
-~~~~~python
-        # 3. Emit Instruction
-        callable_obj = None
-        task_name = "unknown"
-        constraints = None
-
-        if isinstance(target, LazyResult):
-            callable_obj = target.task.func
-            task_name = target.task.name
-            constraints = target._constraints
-        elif isinstance(target, MappedLazyResult):
-            callable_obj = target.factory
-            task_name = getattr(target.factory, "name", "map")
-            constraints = target._constraints
-
-        instr = Call(
-            func=callable_obj,
-            output=output_reg,
-            args=args_operands,
-            kwargs=kwargs_operands,
-            task_name=task_name,
-            constraints=constraints
-        )
-        self._instructions.append(instr)
-~~~~~
-
-#### Acts 3: 更新 VM 实现资源逻辑
-
-这是核心变更。VM 需要能够接收管理器，并在执行调用前与其交互。
-
-~~~~~act
-write_file
-packages/cascade-runtime/src/cascade/runtime/vm.py
-~~~~~
-~~~~~python
-import inspect
-import asyncio
-from typing import Any, List, Dict, Optional
-from uuid import uuid4
-
-from cascade.runtime.blueprint import Blueprint, Instruction, Call, Literal, Register, Operand, TailCall
-from cascade.graph.model import Node
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.constraints import ConstraintManager
-
-class Frame:
-    """
-    Represents the runtime stack frame for a blueprint execution.
-    It holds the values of virtual registers.
-    """
-    def __init__(self, size: int):
-        self.registers: List[Any] = [None] * size
-
-    def load(self, operand: Operand) -> Any:
-        if isinstance(operand, Literal):
-            return operand.value
-        elif isinstance(operand, Register):
-            return self.registers[operand.index]
-        else:
-            raise TypeError(f"Unknown operand type: {type(operand)}")
-
-    def store(self, register: Register, value: Any):
-        self.registers[register.index] = value
-
-
-class VirtualMachine:
-    """
-    Executes compiled Blueprints.
-    Supports Zero-Overhead TCO via an internal loop and blueprint switching.
-    Now integrated with Resource and Constraint Managers.
-    """
-    
-    def __init__(
-        self, 
-        resource_manager: Optional[ResourceManager] = None,
-        constraint_manager: Optional[ConstraintManager] = None,
-        wakeup_event: Optional[asyncio.Event] = None
-    ):
-        self._blueprints: Dict[str, Blueprint] = {}
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.wakeup_event = wakeup_event
-
-    def register_blueprint(self, bp_id: str, blueprint: Blueprint):
-        self._blueprints[bp_id] = blueprint
-
-    async def execute(
-        self, 
-        blueprint: Blueprint, 
-        initial_args: List[Any] = None, 
-        initial_kwargs: Dict[str, Any] = None
-    ) -> Any:
-        """
-        Executes the initial blueprint. Handles TailCalls to self or other registered blueprints.
-        """
-        current_blueprint = blueprint
-        
-        # 1. Allocate Frame
-        # We start with the frame for the initial blueprint
-        frame = Frame(current_blueprint.register_count)
-        
-        # 2. Load Initial Inputs
-        self._load_inputs(frame, current_blueprint, initial_args or [], initial_kwargs or {})
-
-        # 3. Main Execution Loop (The "Trampoline")
-        while True:
-            last_result = None
-            
-            # Execute all instructions in the current blueprint
-            for instr in current_blueprint.instructions:
-                last_result = await self._dispatch(instr, frame)
-
-            # Check for TCO
-            if isinstance(last_result, TailCall):
-                # Determine target blueprint
-                if last_result.target_blueprint_id:
-                    if last_result.target_blueprint_id not in self._blueprints:
-                        raise ValueError(f"Unknown target blueprint ID: {last_result.target_blueprint_id}")
-                    current_blueprint = self._blueprints[last_result.target_blueprint_id]
-                    
-                    # For a new blueprint (mutual recursion), we MUST allocate a new frame
-                    frame = Frame(current_blueprint.register_count)
-                else:
-                    # Self-recursion: reuse current_blueprint
-                    pass
-                
-                # Load inputs into the (potentially new) frame
-                self._load_inputs(frame, current_blueprint, last_result.args, last_result.kwargs)
-                
-                # Yield control to event loop to allow IO/timers to process
-                await asyncio.sleep(0) 
-                continue
-            
-            # Normal return
-            return last_result
-
-    def _load_inputs(
-        self, 
-        frame: Frame, 
-        blueprint: Blueprint, 
-        args: List[Any], 
-        kwargs: Dict[str, Any]
-    ):
-        """Populates the frame's registers based on the blueprint's input mapping."""
-        
-        # Positional args
-        for i, val in enumerate(args):
-            if i < len(blueprint.input_args):
-                reg_index = blueprint.input_args[i]
-                frame.registers[reg_index] = val
-        
-        # Keyword args
-        for k, val in kwargs.items():
-            if k in blueprint.input_kwargs:
-                reg_index = blueprint.input_kwargs[k]
-                frame.registers[reg_index] = val
-
-    async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
-        if isinstance(instr, Call):
-            return await self._execute_call(instr, frame)
-        else:
-            raise NotImplementedError(f"Unknown instruction: {type(instr)}")
-
-    async def _execute_call(self, instr: Call, frame: Frame) -> Any:
-        # --- Resource & Constraint Logic ---
-        requirements = {}
-        
-        # Construct a temporary Node object for the ConstraintManager
-        # We assume node_type="task" for standard calls
-        temp_node = None
-        
-        if self.constraint_manager or (instr.constraints and not instr.constraints.is_empty()):
-            temp_node = Node(
-                id=str(uuid4()),
-                name=instr.task_name,
-                node_type="task",
-                constraints=instr.constraints
-            )
-
-        # 1. Permission Check (e.g. Rate Limits, Pauses)
-        if self.constraint_manager and temp_node:
-            while not self.constraint_manager.check_permission(temp_node):
-                if self.wakeup_event:
-                    await self.wakeup_event.wait()
-                    self.wakeup_event.clear()
-                else:
-                    # Fallback if no event provided (shouldn't happen in proper Engine setup)
-                    await asyncio.sleep(0.1)
-
-        # 2. Resource Resolution & Acquisition
-        if temp_node:
-            # Static constraints
-            if instr.constraints:
-                for res, amount in instr.constraints.requirements.items():
-                    # For VM, we assume constraints are resolved literals or handled simply
-                    # Dynamic constraints (LazyResults) inside VM are tricky, skipping for now
-                    requirements[res] = amount
-            
-            # Global/Dynamic constraints from Manager
-            if self.constraint_manager:
-                extra = self.constraint_manager.get_extra_requirements(temp_node)
-                requirements.update(extra)
-
-        if self.resource_manager and requirements:
-            await self.resource_manager.acquire(requirements)
-
-        try:
-            # --- Execution ---
-            # 1. Resolve Arguments
-            args = [frame.load(op) for op in instr.args]
-            kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
-
-            # 2. Invoke Callable
-            result = instr.func(*args, **kwargs)
-            
-            # Handle Async
-            if inspect.isawaitable(result):
-                result = await result
-
-            # 3. Store Result
-            frame.store(instr.output, result)
-            
-            return result
-        finally:
-            # --- Resource Release ---
-            if self.resource_manager and requirements:
-                await self.resource_manager.release(requirements)
-~~~~~
-
-#### Acts 4: 更新 Engine 注入管理器
-
-最后，确保 `Engine` 在创建 VM 时将自己持有的 `ResourceManager` 和 `ConstraintManager` 传递进去。
+首先，我们修改 `Engine` 的构造函数，使其接受一个可选的 `resource_manager` 参数。
 
 ~~~~~act
 patch_file
 packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-    async def _run_vm(self, target: Any) -> Any:
-        """
-        Executes the target using the AOT Blueprint/VM path.
-        """
-        # 1. Compile in template mode
-        builder = BlueprintBuilder()
-        blueprint = builder.build(target, template=True)
+        state_backend_factory: Callable[[str], StateBackend] = None,
+        system_resources: Optional[Dict[str, Any]] = None,
+        connector: Optional[Connector] = None,
+        cache_backend: Optional[Any] = None,
+    ):
+        self.solver = solver
+        self.executor = executor
+        self.bus = bus
+        self.connector = connector
+        # Default to InMemory factory if none provided
+        self.state_backend_factory = state_backend_factory or (
+            lambda run_id: InMemoryStateBackend(run_id)
+        )
+        self.cache_backend = cache_backend
+        self.resource_manager = ResourceManager(capacity=system_resources)
 
-        # 2. Extract Initial Arguments
-        # The BlueprintBuilder treats the root LazyResult's args/kwargs as the
-        # inputs for the blueprint.
-        initial_args = list(target.args)
-        initial_kwargs = dict(target.kwargs)
-
-        # 3. Execute
-        vm = VirtualMachine()
-        # TODO: Inject resources and specialized executors into VM if needed.
-        # For now, VM uses direct function calls.
-        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+        # Setup constraint manager with default handlers
+        self.constraint_manager = ConstraintManager(self.resource_manager)
 ~~~~~
 ~~~~~python
-    async def _run_vm(self, target: Any) -> Any:
-        """
-        Executes the target using the AOT Blueprint/VM path.
-        """
-        # 1. Compile in template mode
-        builder = BlueprintBuilder()
-        blueprint = builder.build(target, template=True)
-
-        # 2. Extract Initial Arguments
-        # The BlueprintBuilder treats the root LazyResult's args/kwargs as the
-        # inputs for the blueprint.
-        initial_args = list(target.args)
-        initial_kwargs = dict(target.kwargs)
-
-        # 3. Execute
-        vm = VirtualMachine(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event
+        state_backend_factory: Callable[[str], StateBackend] = None,
+        system_resources: Optional[Dict[str, Any]] = None,
+        connector: Optional[Connector] = None,
+        cache_backend: Optional[Any] = None,
+        resource_manager: Optional[ResourceManager] = None,
+    ):
+        self.solver = solver
+        self.executor = executor
+        self.bus = bus
+        self.connector = connector
+        # Default to InMemory factory if none provided
+        self.state_backend_factory = state_backend_factory or (
+            lambda run_id: InMemoryStateBackend(run_id)
         )
-        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+        self.cache_backend = cache_backend
+        
+        if resource_manager:
+            self.resource_manager = resource_manager
+            # If system_resources is also provided, we update the injected manager
+            if system_resources:
+                self.resource_manager.set_capacity(system_resources)
+        else:
+            self.resource_manager = ResourceManager(capacity=system_resources)
+
+        # Setup constraint manager with default handlers
+        self.constraint_manager = ConstraintManager(self.resource_manager)
+~~~~~
+
+#### Acts 2: 更新 run_fireflies.py 支持 CLI 和资源限制
+
+现在我们重构实验脚本。我们将引入 `typer`，创建共享的资源管理器，并在构建 Workflow 时应用约束。
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+import asyncio
+import random
+from typing import Dict, Any, List
+import time
+
+import cascade as cs
+from cascade.connectors.local import LocalBusConnector
+from cascade.spec.resource import resource
+
+from observatory.agents.kuramoto import firefly_agent
+from observatory.monitors.convergence import ConvergenceMonitor
+from observatory.monitors.aggregator import MetricsAggregator
+from observatory.networking.direct_channel import DirectChannel
+
+# Visualization
+from observatory.visualization.palette import Palettes
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+
+# --- Constants ---
+GRID_SIDE = 30
+NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
+PERIOD = 5.0  # Slowed down to allow CPU to catch up with 2500 agents
+~~~~~
+~~~~~python
+import asyncio
+import random
+from typing import Dict, Any, List, Optional
+import time
+import typer
+
+import cascade as cs
+from cascade.connectors.local import LocalBusConnector
+from cascade.spec.resource import resource
+from cascade.runtime.resource_manager import ResourceManager
+
+from observatory.agents.kuramoto import firefly_agent
+from observatory.monitors.convergence import ConvergenceMonitor
+from observatory.monitors.aggregator import MetricsAggregator
+from observatory.networking.direct_channel import DirectChannel
+
+# Visualization
+from observatory.visualization.palette import Palettes
+from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
+from observatory.visualization.grid import GridView
+from observatory.visualization.status import StatusBar
+
+# --- Constants ---
+GRID_SIDE = 30
+NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
+PERIOD = 5.0  # Slowed down to allow CPU to catch up with 2500 agents
+
+app = typer.Typer()
+~~~~~
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+async def run_experiment(
+    num_agents: int = NUM_AGENTS,
+    period: float = PERIOD,
+    nudge: float = 0.2,
+    duration_seconds: float = 3000.0,
+    visualize: bool = True,
+    decay_duty_cycle: float = 0.3,
+):
+    """
+    Sets up and runs the firefly synchronization experiment.
+    """
+    grid_width = int(num_agents**0.5)
+    print(
+        f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents ({grid_width}x{grid_width})..."
+    )
+
+    # 1. Initialize Shared Bus
+    LocalBusConnector._reset_broker_state()
+    connector = LocalBusConnector()
+    await connector.connect()
+
+    # --- Setup Monitor & Visualizer ---
+~~~~~
+~~~~~python
+async def run_experiment(
+    num_agents: int = NUM_AGENTS,
+    period: float = PERIOD,
+    nudge: float = 0.2,
+    duration_seconds: float = 3000.0,
+    visualize: bool = True,
+    decay_duty_cycle: float = 0.3,
+    concurrency_limit: Optional[int] = None,
+):
+    """
+    Sets up and runs the firefly synchronization experiment.
+    """
+    grid_width = int(num_agents**0.5)
+    print(
+        f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents ({grid_width}x{grid_width})..."
+    )
+    if concurrency_limit:
+        print(f"⚠️  Global Concurrency Limit: {concurrency_limit} slots")
+
+    # 1. Initialize Shared Bus and Resources
+    LocalBusConnector._reset_broker_state()
+    connector = LocalBusConnector()
+    await connector.connect()
+
+    # Shared Resource Manager for Global Limits
+    shared_resource_manager = None
+    if concurrency_limit:
+        # Define a global 'cpu_slot' resource
+        shared_resource_manager = ResourceManager(capacity={"cpu_slot": concurrency_limit})
+
+    # --- Setup Monitor & Visualizer ---
+~~~~~
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+        # Topology Lookup
+        neighbor_ids = get_neighbors(i, grid_width, grid_width)
+        my_neighbors = [channels[nid] for nid in neighbor_ids]
+        my_channel = channels[i]
+
+        engine = cs.Engine(
+            solver=cs.NativeSolver(),
+            executor=cs.LocalExecutor(),
+            bus=cs.MessageBus(),
+            connector=None,
+        )
+        engine.register(shared_connector_provider)
+
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=period,
+            nudge=nudge,
+            neighbors=my_neighbors,
+            my_channel=my_channel,
+            connector=connector,
+            refractory_period=period * 0.2,
+        )
+
+        # Enable VM execution for TailCall support
+        agent_tasks.append(engine.run(agent_workflow, use_vm=True))
+
+        # Yield every 500 agents to keep UI responsive during setup
+        if i > 0 and i % 500 == 0:
+~~~~~
+~~~~~python
+        # Topology Lookup
+        neighbor_ids = get_neighbors(i, grid_width, grid_width)
+        my_neighbors = [channels[nid] for nid in neighbor_ids]
+        my_channel = channels[i]
+
+        # Inject the shared resource manager if limits are active
+        engine = cs.Engine(
+            solver=cs.NativeSolver(),
+            executor=cs.LocalExecutor(),
+            bus=cs.MessageBus(),
+            connector=None,
+            resource_manager=shared_resource_manager,
+        )
+        engine.register(shared_connector_provider)
+
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=PERIOD,
+            nudge=nudge,
+            neighbors=my_neighbors,
+            my_channel=my_channel,
+            connector=connector,
+            refractory_period=period * 0.2,
+        )
+
+        # Apply constraints if limit is set
+        if concurrency_limit:
+            agent_workflow = agent_workflow.with_constraints(cpu_slot=1)
+
+        agent_tasks.append(engine.run(agent_workflow, use_vm=True))
+
+        # Yield every 500 agents to keep UI responsive during setup
+        if i > 0 and i % 500 == 0:
+~~~~~
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+if __name__ == "__main__":
+    asyncio.run(run_experiment(visualize=True))
+~~~~~
+~~~~~python
+@app.command()
+def main(
+    visualize: bool = typer.Option(True, help="Enable visualizer UI"),
+    agents: int = typer.Option(NUM_AGENTS, help="Number of agents"),
+    limit: Optional[int] = typer.Option(None, help="Global concurrency limit (cpu slots)"),
+):
+    asyncio.run(run_experiment(num_agents=agents, visualize=visualize, concurrency_limit=limit))
+
+if __name__ == "__main__":
+    app()
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 VM 的核心升级。现在可以运行 `run_fireflies.py`，并尝试使用 `cs-controller` 设置并发限制，来验证 VM 模式下是否能正确响应约束。如果验证成功，这标志着 Cascade 的高性能路径已具备生产级治理能力。
+现在您可以使用 `python -m observatory.experiments.run_fireflies --limit 100` 来运行实验，并观察是否只有一部分 Agent 能够同时活跃。这验证了 VM 路径、Engine 注入和全局资源共享的集成是否正常工作。

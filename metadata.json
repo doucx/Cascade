@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(build): Include IPFS provider in root editable install", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766298192.5624893, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(build): 纠正 IPFS 提供者的命名空间包结构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766298284.0499156, "duration_ms": 0}}

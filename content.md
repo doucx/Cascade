@@ -1,67 +1,304 @@
-船长，我必须承认，我之前的分析漏掉了一个关键环节，让你在迷雾中多耗费了宝贵的时间。我对此深表歉意。
+船长，你直觉非常敏锐。你的怀疑是完全正确的。
 
-你提供的 `test_ipfs.py` 代码和你的追问——“`uv pip install -e .[dev]` 真的能安装上吗？”——是最终的破案线索。它暴露了问题的真正根源，这个根源比我想象的更深，也更符合 Python 的打包规则。
+问题的核心不在于“安装”，而在于**Python 的导入机制被阻塞了**。
 
-**最终的根源分析**
+ 核心诊断：命名空间遮蔽 (Namespace Shadowing)
 
-1.  **问题核心**: `ImportError: No module named 'cascade.providers.ipfs'` 的真正原因是 `packages/cascade-provider-ipfs/src/cascade/providers/` 目录下的 **`ipfs` 文件夹本身没有被声明为一个 Python 包**。
-2.  **证据**: `test_ipfs.py` 中的 `monkeypatch.setattr("cascade.providers.ipfs.provider.IPFS_API_BASE_URL", ...)` 这一行，要求 `pytest` 在测试收集阶段就能直接 `import cascade.providers.ipfs.provider`。为了让这个导入路径成立，从 `cascade` 到 `providers` 再到 `ipfs` 的每一个层级都**必须**是一个包（即包含一个 `__init__.py` 文件）。
-3.  **我们遗漏的**: 我们在 `cascade/` 和 `cascade/providers/` 目录中正确地放置了 `__init__.py`，但我们忘记了在 `cascade/providers/ipfs/` 目录中也放置一个。没有它，`ipfs` 只是一个普通的文件夹，而不是一个可以从中导入子模块的包。
-4.  **关于安装**: 你是对的，`uv pip install -e .[dev]` **没有** 真正地将 `cascade-provider-ipfs` 安装到环境中，因为根 `pyproject.toml` 没有把它列为依赖。我之前撤销这个修改是个错误，因为对于一个需要协同测试的 **开发工作区 (development workspace)** 来说，根“元包”**必须**声明它所有的本地成员，以便安装工具能将它们全部链接起来。
+1.  **架构缺陷**: 目前 `cascade-py` 定义了 `cascade.providers` 包。但是，它把**具体的业务逻辑（`ProviderRegistry` 的实现）直接写在了 `cascade/providers/__init__.py` 文件里**。
+2.  **后果**: 在 Python 中，如果一个目录下的 `__init__.py` 包含实际代码（非纯命名空间声明），它就被视为一个**常规包 (Regular Package)**。
+3.  **冲突**: 常规包**不允许**被其他分布（如 `cascade-provider-ipfs`）扩展。当 Python 加载了 `cascade-py` 的 `cascade.providers` 后，它就认为这个包已经加载完毕，**停止**查找其他路径下的同名包。因此，`cascade-provider-ipfs` 里的内容永远不会被看见。
 
-现在，我们有了完整且确定的解决方案。
+ 解决方案：真正的插件化架构
 
-## [WIP] fix(build): 彻底修复 IPFS 提供者的包结构与安装问题
+我们需要做一次真正的架构重构，将“注册表逻辑”与“命名空间”分离。
+
+1.  **拆分**: 将 `ProviderRegistry` 的逻辑从 `cascade/providers/__init__.py` 移动到一个新文件 `cascade/providers/registry.py`。
+2.  **命名空间化**: 将 `cascade/providers/__init__.py` 清空，只保留命名空间声明代码。这将允许 `cascade-py`（内置提供者）和 `cascade-provider-ipfs`（外部提供者）共享 `cascade.providers` 命名空间。
+3.  **依赖管理**: 将 `cascade-provider-ipfs` 移入 `[dev]` 依赖。用户在生产环境不需要安装它，但在开发环境我们需要它。
+
+## [WIP] refactor(arch): 分离注册表逻辑，实现真正的命名空间插件架构
 
 ### 用户需求
-从项目根目录进行开发安装后，`cascade.providers.ipfs` 模块依然无法导入。需要一劳永逸地解决所有插件提供者的打包和安装问题，确保开发环境的绝对一致性和可靠性。
+1.  解决 `cascade.providers.ipfs` 无法被导入的问题。
+2.  避免强制所有用户安装 IPFS 依赖，实现按需安装。
+3.  纠正架构设计，允许 `cascade-py` 和外部包共同扩展 `cascade.providers` 命名空间。
 
 ### 评论
-这次我们直击了问题的根源：一个不完整的包结构。Python 的导入系统要求包路径中的每一级都必须是合法的包。通过为 `ipfs` 目录添加缺失的 `__init__.py`，我们完成了其作为 `cascade.providers` 命名空间一部分的“成人礼”。同时，我们将 `cascade-provider-ipfs` 重新添加回根依赖，这是确保**工作区一致性**的正确做法，保证了单一安装命令的有效性。
+这是一个从“单体思维”到“生态思维”的关键转折。通过将 `ProviderRegistry` 的实现移出 `__init__.py`，我们将 `cascade.providers` 变成了一个纯粹的、开放的命名空间容器。这不仅解决了当前的导入错误，也为未来任何人开发第三方 `cascade-provider-xyz` 铺平了道路，且无需修改核心代码。
 
 ### 目标
-1.  为 `cascade-provider-ipfs` 包创建最深层级、被遗漏的 `src/cascade/providers/ipfs/__init__.py` 文件。
-2.  将 `cascade-provider-ipfs` 作为依赖项重新添加到根 `pyproject.toml` 中，以确保它能在开发模式下被正确安装。
+1.  创建 `cascade/providers/registry.py`，承载原有的注册表逻辑。
+2.  将 `cascade/providers/__init__.py` 重写为纯命名空间声明。
+3.  更新 `cascade/__init__.py` 中的动态加载逻辑，使其指向新的 `registry` 模块。
+4.  优化根 `pyproject.toml`，将 `cascade-provider-ipfs` 仅作为开发/测试依赖。
 
 ### 基本原理
-双管齐下：
-1.  **结构修复**: `ipfs/__init__.py` 的存在，使得 `cascade.providers.ipfs` 成为一个有效的、可导入的 Python 包路径。
-2.  **安装修复**: 在根 `pyproject.toml` 中声明依赖，会指示 `uv` 在执行 `install -e .` 时，不仅安装 `cascade-py` 等，也会找到并以可编辑模式安装 `cascade-provider-ipfs`，从而将其正确的包结构链接到开发环境中。
+PEP 420 (Implicit Namespace Packages) 和传统的 pkgutil 风格命名空间包都要求父包不能是“常规包”。通过这次重构，我们明确了 `cascade.providers` 只是一个目录容器，而真正的逻辑存在于具体的模块中。对于依赖管理，利用 `dev` extra 可以确保开发环境的完整性，同时保持生产环境的纯净。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/brainstorm #task/domain/tooling #task/object/packaging #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/critical #comp/core #scope/arch #ai/brainstorm #task/domain/core #task/object/plugin-system #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 完成包结构并固化安装依赖
+#### Acts 1: 迁移注册表逻辑
 
-首先，我们创建那个被遗漏的最关键的 `__init__.py` 文件。
+首先，我们将逻辑从 `__init__.py` 移动到一个新的专用模块 `registry.py`。
+
+~~~~~act
+read_file
+packages/cascade-py/src/cascade/providers/__init__.py
+~~~~~
+~~~~~act
+write_file
+packages/cascade-py/src/cascade/providers/registry.py
+~~~~~
+~~~~~python
+import sys
+import importlib.metadata
+from typing import Any, Dict, Protocol
+
+
+class LazyFactory(Protocol):
+    """
+    Protocol for objects that can serve as task factories (must support .map).
+    """
+
+    def map(self, **kwargs) -> Any: ...
+    def __call__(self, *args, **kwargs) -> Any: ...
+
+
+class Provider(Protocol):
+    """
+    Interface that all Cascade providers must implement.
+    """
+
+    @property
+    def name(self) -> str:
+        """The name of the provider, used as the accessor (e.g., 'shell' -> cs.shell)."""
+        ...
+
+    def create_factory(self) -> LazyFactory:
+        """Returns the factory function/object to be exposed to the user."""
+        ...
+
+
+class ProviderNamespace:
+    """
+    A proxy object to handle nested provider names (e.g. cs.read.text).
+    """
+
+    def __init__(self, registry: "ProviderRegistry", prefix: str):
+        self._registry = registry
+        self._prefix = prefix
+
+    def __getattr__(self, name: str) -> Any:
+        full_name = f"{self._prefix}.{name}"
+        return self._registry.get(full_name)
+
+
+class ProviderRegistry:
+    """
+    Manages the discovery and loading of Cascade providers.
+    """
+
+    _instance = None
+
+    def __init__(self):
+        self._providers: Dict[str, LazyFactory] = {}
+        self._loaded = False
+
+    @classmethod
+    def instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def get(self, name: str) -> Any:
+        """
+        Retrieves a provider factory by name. Loads from entry points if not yet loaded.
+        Raises AttributeError if not found (to conform with __getattr__ semantics).
+        """
+        if not self._loaded:
+            self._discover_entry_points()
+            self._loaded = True
+
+        if name in self._providers:
+            return self._providers[name]
+
+        # Check for namespace match (e.g. asking for 'read' when 'read.text' exists)
+        prefix = name + "."
+        if any(key.startswith(prefix) for key in self._providers):
+            return ProviderNamespace(self, name)
+
+        raise AttributeError(f"Cascade provider '{name}' not found.")
+
+    def register(self, name: str, factory: LazyFactory):
+        """Manually register a factory (mostly for testing or internal use)."""
+        self._providers[name] = factory
+
+    def _discover_entry_points(self):
+        """Scans the 'cascade.providers' entry point group."""
+        if sys.version_info >= (3, 10):
+            entry_points = importlib.metadata.entry_points(group="cascade.providers")
+        else:
+            entry_points = importlib.metadata.entry_points().get(
+                "cascade.providers", []
+            )
+
+        for ep in entry_points:
+            try:
+                # Load the provider class
+                provider_cls = ep.load()
+                # Instantiate it
+                provider_instance = provider_cls()
+                # Validate interface
+                if not hasattr(provider_instance, "create_factory") or not hasattr(
+                    provider_instance, "name"
+                ):
+                    print(
+                        f"Warning: Plugin {ep.name} does not implement Provider protocol. Skipping."
+                    )
+                    continue
+
+                # Register
+                self._providers[provider_instance.name] = (
+                    provider_instance.create_factory()
+                )
+            except Exception as e:
+                print(f"Error loading plugin {ep.name}: {e}")
+
+
+# Global registry accessor
+registry = ProviderRegistry.instance()
+~~~~~
+
+#### Acts 2: 开放命名空间
+
+现在，将 `cascade/providers/__init__.py` 转换为纯粹的命名空间声明。这解除了“常规包”的锁定，允许其他包注入内容。
 
 ~~~~~act
 write_file
-packages/cascade-provider-ipfs/src/cascade/providers/ipfs/__init__.py
+packages/cascade-py/src/cascade/providers/__init__.py
 ~~~~~
 ~~~~~python
-# This file marks the 'ipfs' directory as a Python package,
-# allowing modules like 'provider' within it to be imported.
+# This allows 'cascade.providers' to be a namespace package,
+# extended by other installed packages (like cascade-provider-ipfs).
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+
+# We expose the core protocols for convenience, but implementation lives in registry.py
+from .registry import LazyFactory, Provider, registry
+
+__all__ = ["LazyFactory", "Provider", "registry"]
 ~~~~~
 
-其次，我们将 `cascade-provider-ipfs` 重新添加回根 `pyproject.toml` 的依赖项中，这是确保它在开发环境中被安装的正确方法。
+#### Acts 3: 更新入口点引用
+
+更新 `cascade/__init__.py`，使其从新的位置导入注册表。
+
+~~~~~act
+patch_file
+packages/cascade-py/src/cascade/__init__.py
+~~~~~
+~~~~~python
+# --- Dynamic Provider Loading ---
+
+
+def __getattr__(name: str) -> Any:
+    """
+    Dynamic attribute access to support plugin providers.
+    E.g., accessing `cascade.shell` will look up the 'shell' provider.
+    """
+    from .providers import registry
+
+    try:
+        return registry.get(name)
+    except AttributeError:
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+~~~~~
+~~~~~python
+# --- Dynamic Provider Loading ---
+
+
+def __getattr__(name: str) -> Any:
+    """
+    Dynamic attribute access to support plugin providers.
+    E.g., accessing `cascade.shell` will look up the 'shell' provider.
+    """
+    # Updated to import from the registry module, though .providers init re-exports it.
+    # Being explicit is safer.
+    from .providers.registry import registry
+
+    try:
+        return registry.get(name)
+    except AttributeError:
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+~~~~~
+
+#### Acts 4: 优化依赖配置
+
+最后，修复根 `pyproject.toml`。我们将 `cascade-provider-ipfs` 从核心依赖中移除（满足你的顾虑），并将其放入 `dev` 依赖（满足测试需求）。
 
 ~~~~~act
 patch_file
 pyproject.toml
 ~~~~~
 ~~~~~toml
-dependencies = [
-    "cascade-interfaces",
-    "cascade-runtime",
-    "cascade-py",
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "pytest-aiohttp",
+  "pytest-mock",
+  "mypy",
+  "moto[s3]",
+  "typer",
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocstrings[python]",
+  # Consolidated testing dependencies
+  "redis",
+  "aiobotocore",
+  "sqlalchemy",
+  "PyYAML",
+  "jinja2",
+  "aiohttp",
+  "python-constraint",
+  "flask_cors",
 ]
 ~~~~~
 ~~~~~toml
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "pytest-aiohttp",
+  "pytest-mock",
+  "moto[s3]",
+  "typer",
+  "mkdocs",
+  "mkdocs-material",
+  "mkdocstrings[python]",
+  # Consolidated testing dependencies
+  "redis",
+  "aiobotocore",
+  "sqlalchemy",
+  "PyYAML",
+  "jinja2",
+  "aiohttp",
+  "python-constraint",
+  "flask_cors",
+  # Local workspace providers needed for testing
+  "cascade-provider-ipfs",
+]
+~~~~~
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~
 dependencies = [
     "cascade-interfaces",
     "cascade-runtime",
@@ -69,13 +306,18 @@ dependencies = [
     "cascade-provider-ipfs",
 ]
 ~~~~~
+~~~~~
+dependencies = [
+    "cascade-interfaces",
+    "cascade-runtime",
+    "cascade-py",
+]
+~~~~~
 
 ### 下一步建议
-船长，这次的方案是结构性的、根本性的。它解决了 Python 导入机制和 `uv` 工作区安装机制两个层面的问题。
+我们进行了一次非常关键的架构外科手术。
 
-请执行最终的、决定性的验证：
+1.  **重装依赖**: 执行 `uv pip install -e .[dev]`。这次，它应该会因为 `dev` 组的声明而安装 IPFS 包，但不会污染核心依赖。
+2.  **验证**: 执行 `pytest`。
 
-1.  **统一安装**: `uv pip install -e .[dev]`
-2.  **运行测试**: `pytest`
-
-我坚信，在这次修复之后，我们将看到一个完全绿色的、健康的测试结果，标志着我们“阶段一”的使命圆满完成。之后，我将立即为您准备 `[COMMIT]` 计划。
+此时，由于 `cascade.providers` 已经不再是一个“霸道”的常规包，IPFS 模块应该能够顺利挂载。测试应该全绿。

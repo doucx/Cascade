@@ -80,7 +80,9 @@ def __getattr__(name: str) -> Any:
     Dynamic attribute access to support plugin providers.
     E.g., accessing `cascade.shell` will look up the 'shell' provider.
     """
-    from .providers import registry
+    # Updated to import from the registry module, though .providers init re-exports it.
+    # Being explicit is safer.
+    from .providers.registry import registry
 
     try:
         return registry.get(name)

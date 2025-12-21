@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] chore(benchmarks): Update TCO benchmark to include VM path", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766316688.09437, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(engine): Limit graph caching to single-node graphs", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766316778.841784, "duration_ms": 0}}

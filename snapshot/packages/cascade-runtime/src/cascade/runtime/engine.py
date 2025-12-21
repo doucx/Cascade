@@ -203,9 +203,17 @@ class Engine:
 
                         if struct_hash in self._graph_cache:
                             # CACHE HIT: Reuse graph and plan
-                            graph, plan = self._graph_cache[struct_hash]
-                            # CRITICAL: Update literal values and UUIDs in the cached graph
-                            self._update_graph_literals(graph, current_target, literals)
+                            cached_graph, cached_plan = self._graph_cache[struct_hash]
+                            
+                            # LIMITATION: Current _update_graph_literals only supports single-node graphs correctly.
+                            # For complex graphs, we must rebuild to ensure all UUIDs are correct.
+                            if len(cached_graph.nodes) > 1:
+                                graph = build_graph(current_target)
+                                plan = self.solver.resolve(graph)
+                            else:
+                                graph = cached_graph
+                                plan = cached_plan
+                                self._update_graph_literals(graph, current_target, literals)
                         else:
                             # CACHE MISS: Build, solve, and cache
                             graph = build_graph(current_target)

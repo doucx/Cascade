@@ -1,3 +1,4 @@
+from typing import Any
 import pytest
 import cascade as cs
 from cascade.graph.compiler import BlueprintBuilder

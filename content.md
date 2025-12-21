@@ -1,50 +1,144 @@
-简要回答
-这是一个关乎 Cascade 架构能否支撑高性能 Agent 的关键转折点。根据你提供的《通过优雅的声明式语法，实现命令式循环的性能.md》，我们将正式启动 **TCO 零开销优化 (TCO Zero-Overhead Optimization)** 的第一阶段：**结构哈希与缓存蓝图**。
+## [WIP] fix: 补全 Engine 优化逻辑的 patch 指令
 
-目前的 `uuid4` 标识符机制导致每次递归都重建图，这是性能瓶颈的根源。本计划将首先分析核心数据结构，为实现“稳定结构哈希 (Structural Hashing)”做准备。
-
-## [WIP] feat: 启动 TCO 零开销优化第一阶段 - 结构哈希设计
-
-### 用户需求
-为了让 Cascade 的递归 Agent 达到与命令式 `while True` 循环相当的性能，必须消除每次递归调用时重建计算图（Graph Building）的 CPU 开销。
-
-### 评论
-当前的 TCO 实现虽然防止了堆栈溢出，但在图构建上极其“浪费”。Agent 的递归通常是**拓扑结构不变，仅输入数据变化**。如果 Engine 能识别出“这是同一个图结构”，它就可以跳过构建阶段，直接复用已编译的执行计划。
-
-### 目标
-1.  分析 `LazyResult`、`Task` 和 `GraphBuilder` 的现有代码。
-2.  确定如何基于 `task.func` (代码引用) 和 `args/kwargs` (参数结构) 生成一个**确定性的、稳定的结构哈希**，替代随机的 UUID。
-3.  设计在 `GraphBuilder` 中引入缓存层的切入点。
-
-### 基本原理
-我们将遵循“读取-分析-设计”的路径。在修改代码之前，我们需要精确了解 `LazyResult` 在内存中的布局，以及如何处理嵌套的依赖（例如，作为参数的另一个 `LazyResult`），以确保哈希算法既能捕捉结构变化，又能忽略无关的运行时噪音（如内存地址）。
+我正在重新发送针对 `engine.py` 的修改指令，确保包含完整的 `path`、`old_str` 和 `new_str` 三部分内容，以实现 TCO 零开销优化。
 
 ### 标签
-#intent/architect #intent/perf #flow/draft #priority/critical
-#comp/runtime #comp/engine #concept/caching #concept/state
-#task/domain/core #task/object/tco-optimization #task/action/structural-hashing #task/state/begin
+#intent/perf #flow/ready #priority/high #comp/runtime #scope/core #ai/instruct #task/domain/runtime #task/object/tco-optimization #task/action/patch-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 读取核心图构建与类型定义文件
-我们需要深入检查 `LazyResult` 的定义以及 `GraphBuilder` 的遍历逻辑，以确定在哪里注入哈希计算和缓存查找逻辑。
+#### Acts 1: 补全 `engine.py` 的优化逻辑
+
+我们将分三步对 `engine.py` 进行精确修改。
+
+**1.1 注入 `_is_simple_task` 判定工具**
 
 ~~~~~act
-read_file
-packages/cascade-interfaces/src/cascade/spec/lazy_types.py
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    def register(self, resource_def: ResourceDefinition):
+        # We store the full ResourceDefinition to preserve metadata like scope.
+        self._resource_providers[resource_def.name] = resource_def
+
+    def get_resource_provider(self, name: str) -> Callable:
+~~~~~
+~~~~~python
+    def register(self, resource_def: ResourceDefinition):
+        # We store the full ResourceDefinition to preserve metadata like scope.
+        self._resource_providers[resource_def.name] = resource_def
+
+    def _is_simple_task(self, lr: Any) -> bool:
+        """
+        Checks if the LazyResult is a simple, flat task (no nested dependencies).
+        This allows for the Zero-Overhead TCO fast path.
+        """
+        if not isinstance(lr, LazyResult):
+            return False
+        if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
+            return False
+        
+        def _has_lazy(obj):
+            if isinstance(obj, (LazyResult, MappedLazyResult)):
+                return True
+            if isinstance(obj, (list, tuple)):
+                return any(_has_lazy(x) for x in obj)
+            if isinstance(obj, dict):
+                return any(_has_lazy(v) for v in obj.values())
+            return False
+
+        # Check args and kwargs recursively
+        for arg in lr.args:
+            if _has_lazy(arg):
+                return False
+        
+        for v in lr.kwargs.values():
+            if _has_lazy(v):
+                return False
+        
+        return True
+
+    def get_resource_provider(self, name: str) -> Callable:
 ~~~~~
 
-~~~~~act
-read_file
-packages/cascade-interfaces/src/cascade/spec/task.py
-~~~~~
+**1.2 在 `run` 方法中初始化 TCO 缓存变量**
 
 ~~~~~act
-read_file
-packages/cascade-runtime/src/cascade/graph/build.py
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+            # TCO Loop: We keep executing as long as the result is a LazyResult
+            current_target = target
+
+            # The global stack holds "run" scoped resources
+            with ExitStack() as run_stack:
+~~~~~
+~~~~~python
+            # TCO Loop: We keep executing as long as the result is a LazyResult
+            current_target = target
+
+            # Optimization: Reusable graph container for simple recursion (Zero-Overhead TCO)
+            # We keep the last simple graph to avoid rebuilding if the structure matches.
+            _tco_cached_graph: Optional[Graph] = None
+            _tco_cached_task_name: Optional[str] = None
+
+            # The global stack holds "run" scoped resources
+            with ExitStack() as run_stack:
+~~~~~
+
+**1.3 实现循环内的快速路径 (Fast Path) 调度**
+
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+                while True:
+                    # The step stack holds "task" (step) scoped resources
+                    with ExitStack() as step_stack:
+                        # 1. Build graph for current target
+                        graph = build_graph(current_target)
+
+                        # 2. Setup Resources (mixed scope)
+~~~~~
+~~~~~python
+                while True:
+                    # The step stack holds "task" (step) scoped resources
+                    with ExitStack() as step_stack:
+                        # 1. Build graph for current target
+                        graph = None
+                        
+                        # TCO Optimization: Fast path for simple recursion
+                        if self._is_simple_task(current_target):
+                            task_name = current_target.task.name
+                            if _tco_cached_graph and _tco_cached_task_name == task_name:
+                                # HIT: Reuse the graph, just update inputs
+                                node = _tco_cached_graph.nodes[0]
+                                # Re-construct literal inputs from current args/kwargs
+                                node.literal_inputs = {str(i): v for i, v in enumerate(current_target.args)}
+                                node.literal_inputs.update(current_target.kwargs)
+                                # Update UUID to match current target (important for state backend)
+                                node.id = current_target._uuid
+                                graph = _tco_cached_graph
+                            else:
+                                # MISS: Build and cache
+                                graph = build_graph(current_target)
+                                if len(graph.nodes) == 1:
+                                    _tco_cached_graph = graph
+                                    _tco_cached_task_name = task_name
+                                else:
+                                    _tco_cached_graph = None
+                        else:
+                            # Complex task, standard build
+                            graph = build_graph(current_target)
+                            _tco_cached_graph = None
+
+                        # 2. Setup Resources (mixed scope)
 ~~~~~
 
 ### 下一步建议
-在分析完这些文件后，我将提出一个具体的“结构哈希算法”设计文档（RFC），定义如何递归地计算一个 `LazyResult` 的哈希值，并演示它如何区分拓扑改变与单纯的数据改变。
+如果测试通过，我们将进行压力测试。你可以运行 `observatory/protoplasm/physics/recursion_test.py` 来直观感受优化前后的 TPS 差异。

@@ -1,91 +1,199 @@
-You are absolutely right to point out the test failures. My last fix for the compiler was correct in its logic, but I failed to update the new tests to use the `template=True` flag, causing them to test the wrong behavior. This is a classic testing oversight, and the test suite correctly caught it.
-
-The compiler itself is now sound. The fix lies in the tests that invoke it.
-
-## [WIP] test(vm): Correctly invoke BlueprintBuilder in template mode
+## [WIP] chore(benchmarks): Update TCO benchmark to include VM path
 
 ### 摘要头
-`# [WIP] test(vm): Correctly invoke BlueprintBuilder in template mode`
+`# [WIP] chore(benchmarks): Update TCO benchmark to include VM path`
 
 ### 用户需求
-Update the VM integration and mutual recursion tests to pass the `template=True` flag when compiling blueprints that are intended for TCO execution.
-
-### 错误分析
-The `BlueprintBuilder` was correctly refactored to distinguish between concrete compilation (for nested workflows) and template compilation (for TCO loops). However, the new tests designed to verify the TCO loop (`test_vm_tco_integration`, `test_vm_mutual_recursion`) were still calling `builder.build(target)` without the required `template=True` flag.
-
-This caused the builder to generate "concrete" blueprints where the initial arguments (e.g., `count=0`) were hardcoded as `Literal(0)`. Consequently, the VM loop never started because the base case was met immediately, and the blueprint had no input registers to accept the new values from `TailCall`, leading to the assertion failures.
+更新 `tco_performance.py` 脚本，增加对新实现的 VM 执行路径 (`use_vm=True`) 的基准测试。这需要定义一个显式返回 `TailCall` 的任务，并将其性能与现有的 JIT 图构建路径和原生 Python 循环进行对比。
 
 ### 评论
-This fix aligns the tests with the compiler's new, more explicit API. It's a crucial step to ensure we are testing the intended high-performance path.
+这是验证架构升级成果的关键时刻。我们预期 VM 路径的性能应显著优于旧的图构建路径，并接近原生 Python 循环。
 
 ### 目标
-1.  Modify `test_vm_integration.py` to use `builder.build(..., template=True)`.
-2.  Modify `test_vm_mutual.py` to use `builder.build(..., template=True)`.
-3.  Achieve a full "pass" on the test suite.
+1.  在脚本中导入 `TailCall`。
+2.  定义 `vm_countdown` 任务。
+3.  修改 `run_benchmark` 以支持传递 `use_vm` 参数。
+4.  在 `main` 中添加 VM 路径的测试步骤。
+5.  输出比较结果。
+
+### 基本原理
+通过显式的对比，量化 AOT/VM 架构带来的性能收益。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #concept/parser #scope/dx #ai/instruct #task/domain/runtime #task/object/compiler #task/action/bugfix #task/state/continue
+#intent/tooling #flow/ready #priority/medium #comp/benchmarks #concept/performance #scope/core #ai/instruct #task/domain/benchmarks #task/object/tco-script #task/action/update #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Fix the TCO integration test
+#### Acts 1: 更新 `tco_performance.py`
 
 ~~~~~act
 patch_file
-tests/cascade-runtime/runtime/test_vm_integration.py
+observatory/benchmarks/tco_performance.py
 ~~~~~
 ~~~~~python
-    # 2. Compile
-    builder = BlueprintBuilder()
-    blueprint = builder.build(target)
-    
-    # Verify compilation structure
-~~~~~
-~~~~~python
-    # 2. Compile in template mode
-    builder = BlueprintBuilder()
-    blueprint = builder.build(target, template=True)
-    
-    # Verify compilation structure
-~~~~~
+import asyncio
+import time
+import cascade as cs
+from cascade.runtime import Engine, MessageBus
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
-#### Acts 2: Fix the mutual recursion test
+# --- Task Definitions ---
+~~~~~
+~~~~~python
+import asyncio
+import time
+import cascade as cs
+from cascade.runtime import Engine, MessageBus
+from cascade.runtime.blueprint import TailCall
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
-~~~~~act
-patch_file
-tests/cascade-runtime/runtime/test_vm_mutual.py
-~~~~~
-~~~~~python
-    # Compile Ping (using dummy input to establish structure)
-    bp_ping = builder.build(ping(n=0))
-    
-    # Compile Pong
-    bp_pong = builder.build(pong(n=0))
-~~~~~
-~~~~~python
-    # Compile Ping (using dummy input to establish structure)
-    bp_ping = builder.build(ping(n=0), template=True)
-    
-    # Compile Pong
-    bp_pong = builder.build(pong(n=0), template=True)
+# --- Task Definitions ---
 ~~~~~
 
 ~~~~~act
 patch_file
-tests/cascade-runtime/runtime/test_vm_mutual.py
+observatory/benchmarks/tco_performance.py
 ~~~~~
 ~~~~~python
-    builder = BlueprintBuilder()
-    bp_ping = builder.build(ping(n=0))
-    bp_pong = builder.build(pong(n=0))
+    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
+
+
+async def imperative_countdown(n: int):
 ~~~~~
 ~~~~~python
-    builder = BlueprintBuilder()
-    bp_ping = builder.build(ping(n=0), template=True)
-    bp_pong = builder.build(pong(n=0), template=True)
+    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
+
+
+@cs.task
+def vm_countdown(n: int):
+    """
+    A recursive task explicitly designed for the Blueprint/VM path.
+    It returns a TailCall object to trigger zero-overhead recursion.
+    """
+    if n <= 0:
+        return "done"
+    return TailCall(kwargs={"n": n - 1})
+
+
+async def imperative_countdown(n: int):
+~~~~~
+
+~~~~~act
+patch_file
+observatory/benchmarks/tco_performance.py
+~~~~~
+~~~~~python
+async def run_benchmark(
+    engine: Engine, target: cs.LazyResult, iterations: int
+) -> float:
+    """Runs the target and returns the execution time in seconds."""
+    print(f"Running benchmark for '{target.task.name}'...")
+    start_time = time.perf_counter()
+
+    result = await engine.run(target)
+
+    end_time = time.perf_counter()
+
+    assert result == "done"
+    return end_time - start_time
+~~~~~
+~~~~~python
+async def run_benchmark(
+    engine: Engine, target: cs.LazyResult, iterations: int, use_vm: bool = False
+) -> float:
+    """Runs the target and returns the execution time in seconds."""
+    mode = "VM" if use_vm else "Graph/JIT"
+    print(f"Running benchmark for '{target.task.name}' [{mode}]...")
+    start_time = time.perf_counter()
+
+    result = await engine.run(target, use_vm=use_vm)
+
+    end_time = time.perf_counter()
+
+    assert result == "done"
+    return end_time - start_time
+~~~~~
+
+~~~~~act
+patch_file
+observatory/benchmarks/tco_performance.py
+~~~~~
+~~~~~python
+    # 2. Run Heavy Un-optimized Path
+    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
+    unoptimized_target = heavy_complex_countdown(iterations)
+    unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
+    unoptimized_tps = iterations / unoptimized_time
+    print(f"  Finished in {unoptimized_time:.4f} seconds.")
+    print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
+
+    # 3. Run Imperative Ground Truth
+    print("[3] Running Imperative Ground Truth (imperative_countdown)...")
+    imperative_time = await run_imperative_benchmark(iterations)
+    imperative_tps = iterations / imperative_time
+    print(f"  Finished in {imperative_time:.4f} seconds.")
+    print(f"  TPS: {imperative_tps:,.2f} calls/sec\n")
+
+    # 4. Compare Results
+    print("--- Comparison ---")
+    if unoptimized_tps > 0:
+        heavy_vs_optimized = optimized_tps / unoptimized_tps
+        print(
+            f"Optimized vs. Heavy (TCO Optimization): {heavy_vs_optimized:.2f}x faster"
+        )
+
+    if imperative_tps > 0:
+        overhead_ratio = imperative_tps / optimized_tps
+        print(f"Imperative vs. Optimized (Framework Overhead): {overhead_ratio:.2f}x")
+        print(
+            f"  (The optimized declarative path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)"
+        )
+~~~~~
+~~~~~python
+    # 2. Run Heavy Un-optimized Path
+    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
+    unoptimized_target = heavy_complex_countdown(iterations)
+    unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
+    unoptimized_tps = iterations / unoptimized_time
+    print(f"  Finished in {unoptimized_time:.4f} seconds.")
+    print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
+
+    # 3. Run VM Path
+    print("[3] Running VM Path (vm_countdown)...")
+    vm_target = vm_countdown(n=iterations)
+    vm_time = await run_benchmark(engine, vm_target, iterations, use_vm=True)
+    vm_tps = iterations / vm_time
+    print(f"  Finished in {vm_time:.4f} seconds.")
+    print(f"  TPS: {vm_tps:,.2f} calls/sec\n")
+
+    # 4. Run Imperative Ground Truth
+    print("[4] Running Imperative Ground Truth (imperative_countdown)...")
+    imperative_time = await run_imperative_benchmark(iterations)
+    imperative_tps = iterations / imperative_time
+    print(f"  Finished in {imperative_time:.4f} seconds.")
+    print(f"  TPS: {imperative_tps:,.2f} calls/sec\n")
+
+    # 5. Compare Results
+    print("--- Comparison ---")
+    if unoptimized_tps > 0:
+        vm_vs_heavy = vm_tps / unoptimized_tps
+        print(f"VM vs. Heavy (JIT): {vm_vs_heavy:.2f}x faster")
+
+    if optimized_tps > 0:
+        vm_vs_simple = vm_tps / optimized_tps
+        print(f"VM vs. Simple (Graph Caching): {vm_vs_simple:.2f}x faster")
+
+    if imperative_tps > 0:
+        overhead_ratio = imperative_tps / vm_tps
+        print(f"Imperative vs. VM (Framework Overhead): {overhead_ratio:.2f}x")
+        print(
+            f"  (The VM path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)"
+        )
 ~~~~~
 
 ### 下一步建议
-With all tests passing, the Blueprint/VM architecture is now complete and validated. We are finally ready for the ultimate test: applying this new engine to the `kuramoto.py` agent and running the `run_fireflies.py` experiment to verify that the original performance problem is solved.
+运行该脚本！这将是验证我们工作成果的决定性时刻。

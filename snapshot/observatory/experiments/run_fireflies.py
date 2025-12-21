@@ -127,13 +127,23 @@ async def run_experiment(
     print("Constructing Network Topology...")
     channels = [DirectChannel(owner_id=f"agent_{i}", capacity=100) for i in range(num_agents)]
 
-    # --- Create Agents ---
-    agent_tasks = []
+    # --- Create Shared Engine ---
+    print("Initializing Shared Cascade Engine...")
+    engine = cs.Engine(
+        solver=cs.NativeSolver(),
+        executor=cs.LocalExecutor(),
+        bus=cs.MessageBus(), # A silent bus for the engine itself
+        connector=None,
+    )
 
     @resource(name="_internal_connector", scope="run")
     def shared_connector_provider():
         yield connector
+    engine.register(shared_connector_provider)
 
+
+    # --- Create Agents ---
+    agent_tasks = []
     # Batch creation to avoid freezing UI loop
     print("Generating Agent Workflows...")
     for i in range(num_agents):
@@ -144,14 +154,6 @@ async def run_experiment(
         my_neighbors = [channels[nid] for nid in neighbor_ids]
         my_channel = channels[i]
 
-        engine = cs.Engine(
-            solver=cs.NativeSolver(),
-            executor=cs.LocalExecutor(),
-            bus=cs.MessageBus(),
-            connector=None,
-        )
-        engine.register(shared_connector_provider)
-
         agent_workflow = firefly_agent(
             agent_id=i,
             initial_phase=initial_phase,
@@ -159,10 +161,11 @@ async def run_experiment(
             nudge=nudge,
             neighbors=my_neighbors,
             my_channel=my_channel,
-            connector=connector,
+            connector=cs.inject("_internal_connector"),
             refractory_period=period * 0.2,
         )
 
+        # Schedule the workflow to run on the shared engine
         agent_tasks.append(engine.run(agent_workflow))
 
         # Yield every 500 agents to keep UI responsive during setup

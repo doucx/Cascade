@@ -589,14 +589,22 @@ class Engine:
                 sub_target._constraints = node.constraints
             sub_targets.append(sub_target)
 
-        # Each sub-task is a full workflow run from the engine's perspective
-        # but shares the parent's state backend to see results.
-        coros = [
-            self._execute_graph(
-                target, params, active_resources, run_id, parent_state_backend
+        # Each sub-task needs its own graph built before execution.
+        # They share the parent's state backend to see results of upstream tasks.
+        coros = []
+        for target in sub_targets:
+            # For each sub-target, build its graph and call _execute_graph with the correct signature.
+            sub_graph = build_graph(target)
+            coros.append(
+                self._execute_graph(
+                    sub_graph,
+                    target,
+                    params,
+                    active_resources,
+                    run_id,
+                    parent_state_backend,
+                )
             )
-            for target in sub_targets
-        ]
         return await asyncio.gather(*coros)
 
     def _scan_for_resources(self, graph: Graph) -> set[str]:

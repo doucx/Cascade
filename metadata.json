@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修正 test_io.py 中 ProviderNamespace 的导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766299096.044185, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] chore: 统一工作区依赖并正规化插件架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766299164.0573478, "duration_ms": 0}}

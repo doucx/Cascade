@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] docs: 建立开发契约与现代化入门指南", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766299919.7100608, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] docs: Create contribution guide and update getting-started tutorial", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766300034.3692164, "duration_ms": 0}}

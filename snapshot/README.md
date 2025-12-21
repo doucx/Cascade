@@ -75,6 +75,12 @@ pip install cascade-py
 pip install cascade-py[all]
 ```
 
+## 🧑‍💻 For Developers
+
+如果你希望为 Cascade 贡献代码，请查阅我们的贡献指南来设置你的开发环境。
+
+[**👉 查看贡献指南 (CONTRIBUTING.md)**](CONTRIBUTING.md)
+
 ## 📚 快速上手
 
 请查阅我们的官方文档，了解如何开始构建你的第一个 `Cascade` 工作流：

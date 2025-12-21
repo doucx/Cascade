@@ -3,7 +3,8 @@ from unittest.mock import MagicMock
 from cascade.runtime.blueprint import Blueprint, Call, Literal, Register
 from cascade.runtime.vm import VirtualMachine, Frame
 
-def test_vm_executes_single_call():
+@pytest.mark.asyncio
+async def test_vm_executes_single_call():
     """
     Test execution of a simple blueprint: R0 = func(a=1)
     """
@@ -21,13 +22,14 @@ def test_vm_executes_single_call():
 
     # 2. Execute
     vm = VirtualMachine()
-    result = vm.execute(blueprint)
+    result = await vm.execute(blueprint)
 
     # 3. Verify
     assert result == 42
     mock_func.assert_called_once_with(val=10)
 
-def test_vm_handles_data_dependency():
+@pytest.mark.asyncio
+async def test_vm_handles_data_dependency():
     """
     Test R0 = func1(1); R1 = func2(R0)
     """
@@ -52,7 +54,7 @@ def test_vm_handles_data_dependency():
     blueprint = Blueprint(instructions=[i1, i2], register_count=2)
 
     vm = VirtualMachine()
-    result = vm.execute(blueprint)
+    result = await vm.execute(blueprint)
 
     assert result == 200
     func1.assert_called_once_with(1)

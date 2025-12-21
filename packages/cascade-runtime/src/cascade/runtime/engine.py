@@ -66,7 +66,7 @@ class Engine:
             lambda run_id: InMemoryStateBackend(run_id)
         )
         self.cache_backend = cache_backend
-        
+
         if resource_manager:
             self.resource_manager = resource_manager
             # If system_resources is also provided, we update the injected manager
@@ -143,10 +143,7 @@ class Engine:
         self._resource_providers[name] = new_provider
 
     async def run(
-        self, 
-        target: Any, 
-        params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = False
+        self, target: Any, params: Optional[Dict[str, Any]] = None, use_vm: bool = False
     ) -> Any:
         # VM Fast Path
         if use_vm:
@@ -205,14 +202,14 @@ class Engine:
                         # 1. Get Graph and Plan, using Structural Hash Cache
                         hasher = StructuralHasher()
                         struct_hash, literals = hasher.hash(current_target)
-                        
+
                         graph = None
                         plan = None
 
                         if struct_hash in self._graph_cache:
                             # CACHE HIT: Reuse graph and plan
                             cached_graph, cached_plan = self._graph_cache[struct_hash]
-                            
+
                             # LIMITATION: Current _update_graph_literals only supports single-node graphs correctly.
                             # For complex graphs, we must rebuild to ensure all UUIDs are correct.
                             if len(cached_graph.nodes) > 1:
@@ -221,7 +218,9 @@ class Engine:
                             else:
                                 graph = cached_graph
                                 plan = cached_plan
-                                self._update_graph_literals(graph, current_target, literals)
+                                self._update_graph_literals(
+                                    graph, current_target, literals
+                                )
                         else:
                             # CACHE MISS: Build, solve, and cache
                             graph = build_graph(current_target)
@@ -311,9 +310,11 @@ class Engine:
         vm = VirtualMachine(
             resource_manager=self.resource_manager,
             constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event
+            wakeup_event=self._wakeup_event,
         )
-        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+        return await vm.execute(
+            blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs
+        )
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""
@@ -347,17 +348,19 @@ class Engine:
             # if it's waiting.
             self._wakeup_event.set()
 
-    def _update_graph_literals(self, graph: Graph, target: Any, literals: Dict[str, Any]):
+    def _update_graph_literals(
+        self, graph: Graph, target: Any, literals: Dict[str, Any]
+    ):
         """Injects new literal values and UUID into a cached graph."""
         # A simple graph has a predictable structure we can update directly.
         # This assumes a single root node for the target.
         node_map = {node.id: node for node in graph.nodes}
-        
+
         # This is a bit of a simplification. A full implementation would need to
         # traverse the target structure and map literals back to the graph nodes.
         # For now, let's assume the root node gets the new literals.
         # The most important part is updating the target's UUID.
-        
+
         # Find the node corresponding to the target LazyResult
         # In a cached graph, the ID is stale, so we find it by name or type.
         # For now, we assume the last node is the target node.
@@ -366,10 +369,11 @@ class Engine:
             target_node.id = target._uuid
             # This is a simplification; a robust solution would traverse and update.
             # For firefly, the structure is so simple this may be sufficient.
-            if hasattr(target, 'args') and hasattr(target, 'kwargs'):
-                 target_node.literal_inputs = {str(i): v for i, v in enumerate(target.args)}
-                 target_node.literal_inputs.update(target.kwargs)
-
+            if hasattr(target, "args") and hasattr(target, "kwargs"):
+                target_node.literal_inputs = {
+                    str(i): v for i, v in enumerate(target.args)
+                }
+                target_node.literal_inputs.update(target.kwargs)
 
     async def _execute_graph(
         self,
@@ -443,9 +447,7 @@ class Engine:
                     for node, res in zip(executable_this_pass, pass_results):
                         state_backend.put_result(node.id, res)
                         if flow_manager:
-                            flow_manager.register_result(
-                                node.id, res, state_backend
-                            )
+                            flow_manager.register_result(node.id, res, state_backend)
 
                 pending_nodes_in_stage = deferred_this_pass
 
@@ -654,8 +656,13 @@ class Engine:
             graph = build_graph(target)
             plan = self.solver.resolve(graph)
             return await self._execute_graph(
-                target, params, active_resources, run_id, parent_state_backend,
-                graph=graph, plan=plan
+                target,
+                params,
+                active_resources,
+                run_id,
+                parent_state_backend,
+                graph=graph,
+                plan=plan,
             )
 
         coros = [run_sub_target(target) for target in sub_targets]
@@ -667,7 +674,7 @@ class Engine:
             for value in node.literal_inputs.values():
                 if isinstance(value, Inject):
                     required.add(value.resource_name)
-            
+
             if node.signature:
                 for param in node.signature.parameters.values():
                     if isinstance(param.default, Inject):

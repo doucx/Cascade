@@ -16,6 +16,7 @@ Expected Output:
   If FPS here is high (>30) and flush duration is low (<20ms), the renderer
   itself is not the bottleneck.
 """
+
 import asyncio
 import random
 import time
@@ -28,7 +29,7 @@ from observatory.monitors.aggregator import MetricsAggregator
 
 # --- Configuration ---
 NUM_SOURCES = 5000  # Number of simulated concurrent update sources
-UPDATES_PER_SOURCE_PER_S = 2 # Avg updates per source per second
+UPDATES_PER_SOURCE_PER_S = 2  # Avg updates per source per second
 GRID_WIDTH = 50
 GRID_HEIGHT = 50
 SIMULATION_DURATION_S = 30.0

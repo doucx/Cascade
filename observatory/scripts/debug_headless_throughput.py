@@ -15,6 +15,7 @@ Expected Output:
   number is very high (e.g., >20,000 flashes/sec), it means the agent logic
   itself is fast, and the bottleneck likely appears when coupling it with the UI.
 """
+
 import asyncio
 import random
 import time
@@ -60,11 +61,17 @@ async def run_headless_experiment():
             nonlocal flash_count
             flash_count += 1
 
-        async def connect(self): pass
-        async def disconnect(self): pass
+        async def connect(self):
+            pass
+
+        async def disconnect(self):
+            pass
+
         async def subscribe(self, topic, callback):
             class DummySub:
-                async def unsubscribe(self): pass
+                async def unsubscribe(self):
+                    pass
+
             return DummySub()
 
     connector = HeadlessConnector()
@@ -75,6 +82,7 @@ async def run_headless_experiment():
     @resource(name="connector")
     def connector_provider():
         yield connector
+
     engine.register(connector_provider)
 
     agent_tasks = []
@@ -106,11 +114,13 @@ async def run_headless_experiment():
             now = time.time()
             interval = now - last_report_time
             rate = (flash_count - (flash_times[0] if flash_times else 0)) / interval
-            
+
             # Simple reporting
-            current_rate = (flash_count - getattr(run_headless_experiment, 'last_flash_count', 0)) / interval
+            current_rate = (
+                flash_count - getattr(run_headless_experiment, "last_flash_count", 0)
+            ) / interval
             print(f"   - Flashes/sec: {current_rate:,.0f} (Total: {flash_count:,})")
-            
+
             run_headless_experiment.last_flash_count = flash_count
             last_report_time = now
 
@@ -119,6 +129,7 @@ async def run_headless_experiment():
         all_tasks.cancel()
         await asyncio.gather(all_tasks, return_exceptions=True)
         print("Test finished.")
+
 
 # Add a stateful attribute for rate calculation
 run_headless_experiment.last_flash_count = 0

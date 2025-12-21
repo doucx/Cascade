@@ -1,7 +1,7 @@
-import asyncio
 from multiprocessing import Queue
 from typing import Any, Dict, Callable, Awaitable
 from cascade.interfaces.protocols import Connector, SubscriptionHandle
+
 
 class IpcUplinkConnector(Connector):
     """
@@ -25,7 +25,7 @@ class IpcUplinkConnector(Connector):
     ) -> None:
         if not self._is_connected:
             return
-        
+
         # We perform a blocking put (or put_nowait) into the MP queue.
         # Since this runs inside an async loop, we should ideally use run_in_executor,
         # but for high-throughput telemetry, direct put is often acceptable if the queue matches the generation rate.
@@ -41,4 +41,6 @@ class IpcUplinkConnector(Connector):
     ) -> SubscriptionHandle:
         # MVP: Workers do not receive commands from Master yet.
         # Implementation would require a Downlink Queue.
-        raise NotImplementedError("IpcUplinkConnector does not support subscriptions yet.")
+        raise NotImplementedError(
+            "IpcUplinkConnector does not support subscriptions yet."
+        )

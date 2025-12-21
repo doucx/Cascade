@@ -44,12 +44,13 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
         for node in stage:
             # Filter out non-literal dependencies from the inputs for cleaner output
             from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-            
+
             literals = {
-                k: v for k, v in node.literal_inputs.items() 
+                k: v
+                for k, v in node.literal_inputs.items()
                 if not isinstance(v, (LazyResult, MappedLazyResult))
             }
-            
+
             bus.publish(
                 PlanNodeInspected(
                     run_id=target._uuid,

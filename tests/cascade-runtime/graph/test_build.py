@@ -77,12 +77,18 @@ def test_build_graph_with_nested_dependencies():
     Validates that the GraphBuilder correctly discovers LazyResults
     nested inside lists and dictionaries.
     """
+
     @cs.task
-    def t_a(): return "a"
+    def t_a():
+        return "a"
+
     @cs.task
-    def t_b(): return "b"
+    def t_b():
+        return "b"
+
     @cs.task
-    def t_c(): return "c"
+    def t_c():
+        return "c"
 
     @cs.task
     def t_main(direct_dep, list_dep, dict_dep):

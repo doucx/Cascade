@@ -1,10 +1,11 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from cascade.spec.task import task
 from cascade.providers import LazyFactory, Provider
 
 
 # --- Tasks ---
+
 
 @task(name="dict")
 def _dict_task(**kwargs) -> Dict[str, Any]:
@@ -19,7 +20,7 @@ def _dict_task(**kwargs) -> Dict[str, Any]:
 def _format_task(template: str, *args, **kwargs) -> str:
     """
     Formats a string using Python's str.format syntax.
-    
+
     Usage:
         cs.format("Hello, {name}!", name=cs.Param("name"))
     """
@@ -27,6 +28,7 @@ def _format_task(template: str, *args, **kwargs) -> str:
 
 
 # --- Providers ---
+
 
 class DictProvider(Provider):
     name = "dict"

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(agent): Correct variable name in firefly agent logic", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766312691.1962602, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Acts 2: Fix the Broken Engine API Call", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766313659.2105389, "duration_ms": 0}}

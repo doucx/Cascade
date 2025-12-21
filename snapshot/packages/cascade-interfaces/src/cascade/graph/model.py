@@ -59,14 +59,16 @@ class Edge:
     router: Optional[Any] = None
 
 
-@dataclass
-class Graph:
-    """A container for nodes and edges representing the workflow."""
+from dataclasses import dataclass, field
+from typing import List, Callable, Optional, Any, Dict, Set
+from enum import Enum, auto
 
-    nodes: List[Node] = field(default_factory=list)
-    edges: List[Edge] = field(default_factory=list)
 
-    def add_node(self, node: Node):
+from cascade.spec.common import Param
+from cascade.spec.constraint import ResourceConstraint
+
+
+class EdgeType(Enum):
         if node not in self.nodes:
             self.nodes.append(node)
 

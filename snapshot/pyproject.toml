@@ -13,6 +13,7 @@ dependencies = [
     "cascade-interfaces",
     "cascade-runtime",
     "cascade-py",
+    "cascade-provider-ipfs",
 ]
 
 [tool.uv.workspace]

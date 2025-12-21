@@ -46,6 +46,7 @@ def get_neighbors(index: int, width: int, height: int) -> List[int]:
 
 # --- Worker Logic ---
 
+
 def worker_main(
     worker_id: int,
     agent_indices: List[int],
@@ -76,8 +77,10 @@ def worker_main(
         if concurrency_limit:
             # Formula: (Global Limit * Agents in this Worker) / Total Agents
             # Using math.ceil to ensure we don't end up with 0 due to rounding
-            local_limit = math.ceil(concurrency_limit * (len(agent_indices) / total_agents))
-        
+            local_limit = math.ceil(
+                concurrency_limit * (len(agent_indices) / total_agents)
+            )
+
         resource_manager = None
         if local_limit:
             resource_manager = ResourceManager(capacity={"cpu_slot": local_limit})
@@ -96,7 +99,7 @@ def worker_main(
 
         for i in agent_indices:
             initial_phase = random.uniform(0, period)
-            
+
             # Resolve neighbors
             # If a neighbor is not in local_channels, we skip it (Partitioned Grid)
             potential_neighbors = get_neighbors(i, grid_width, grid_height)
@@ -104,7 +107,7 @@ def worker_main(
             for nid in potential_neighbors:
                 if nid in local_channels:
                     my_neighbors.append(local_channels[nid])
-            
+
             my_channel = local_channels[i]
 
             engine = cs.Engine(
@@ -112,7 +115,7 @@ def worker_main(
                 executor=cs.LocalExecutor(),
                 bus=cs.MessageBus(),
                 connector=None,
-                resource_manager=resource_manager
+                resource_manager=resource_manager,
             )
             engine.register(shared_connector_provider)
 
@@ -131,7 +134,7 @@ def worker_main(
                 workflow = workflow.with_constraints(cpu_slot=1)
 
             agent_tasks.append(engine.run(workflow, use_vm=True))
-        
+
         # 5. Run Forever
         try:
             await asyncio.gather(*agent_tasks)
@@ -146,6 +149,7 @@ def worker_main(
 
 # --- Orchestrator Logic ---
 
+
 async def run_orchestrator(
     num_agents: int,
     grid_width: int,
@@ -157,10 +161,10 @@ async def run_orchestrator(
     duration_seconds: float,
     decay_duty_cycle: float,
 ):
-    print(f"🔥 Starting MULTI-CORE Firefly Experiment")
+    print("🔥 Starting MULTI-CORE Firefly Experiment")
     print(f"   - Agents: {num_agents} ({grid_width}x{grid_width})")
     print(f"   - Workers: {workers}")
-    print(f"   - Mode: Partitioned Islands (Cross-process links severed)")
+    print("   - Mode: Partitioned Islands (Cross-process links severed)")
 
     # 1. Setup Telemetry Hub (Main Process LocalBus)
     LocalBusConnector._reset_broker_state()
@@ -181,12 +185,19 @@ async def run_orchestrator(
             palette_func=Palettes.firefly,
             decay_per_second=1 / (period * decay_duty_cycle),
         )
-        status_bar = StatusBar(initial_status={"Agents": num_agents, "Workers": workers, "Period": period, "Nudge": nudge})
-        
+        status_bar = StatusBar(
+            initial_status={
+                "Agents": num_agents,
+                "Workers": workers,
+                "Period": period,
+                "Nudge": nudge,
+            }
+        )
+
         log_filename = f"firefly_mp_log_{int(time.time())}.jsonl"
         aggregator = MetricsAggregator(log_filename, interval_s=1.0)
         aggregator.open()
-        
+
         app = TerminalApp(grid_view, status_bar, aggregator=aggregator)
         aggregator_task = asyncio.create_task(aggregator.run())
 
@@ -199,7 +210,7 @@ async def run_orchestrator(
             app.update_status("Pulse", pulse_count)
             # Expose raw flash count to make the relationship clear
             app.update_status("Flashes", f"{monitor._flash_count:,}")
-            
+
             asyncio.create_task(aggregator.record("r_value", r_value))
 
         monitor_task = asyncio.create_task(
@@ -223,22 +234,29 @@ async def run_orchestrator(
     uplink_queue = mp.Queue()
     all_indices = list(range(num_agents))
     chunk_size = math.ceil(num_agents / workers)
-    
+
     processes = []
     for w_id in range(workers):
         start = w_id * chunk_size
         end = min(start + chunk_size, num_agents)
         indices = all_indices[start:end]
-        
+
         if not indices:
             continue
 
         p = mp.Process(
             target=worker_main,
             args=(
-                w_id, indices, num_agents, uplink_queue, concurrency_limit,
-                grid_width, grid_width, period, nudge # grid_height is same as grid_width for square
-            )
+                w_id,
+                indices,
+                num_agents,
+                uplink_queue,
+                concurrency_limit,
+                grid_width,
+                grid_width,
+                period,
+                nudge,  # grid_height is same as grid_width for square
+            ),
         )
         p.start()
         processes.append(p)
@@ -246,10 +264,10 @@ async def run_orchestrator(
     # 4. Telemetry Pump Loop
     # Reads from MP Queue and replays to LocalBus for the Monitor/Visualizer
     print("🚀 Workers launched. Bridging telemetry...")
-    
+
     # 4. Telemetry Pump Loop & Experiment Timer
     print("🚀 Workers launched. Bridging telemetry...")
-    
+
     start_time = time.time()
     try:
         while time.time() - start_time < duration_seconds:
@@ -260,7 +278,7 @@ async def run_orchestrator(
                 while not uplink_queue.empty():
                     topic, payload = uplink_queue.get_nowait()
                     await main_connector.publish(topic, payload)
-                
+
                 await asyncio.sleep(0.01)
             except Exception:
                 await asyncio.sleep(0.01)
@@ -271,39 +289,53 @@ async def run_orchestrator(
         print("\nShutting down...")
         for p in processes:
             p.terminate()
-        
-        if app: app.stop()
-        if aggregator: aggregator.close()
-        
+
+        if app:
+            app.stop()
+        if aggregator:
+            aggregator.close()
+
         # Cleanup tasks
         tasks = [t for t in [app_task, monitor_task, aggregator_task] if t]
-        for t in tasks: t.cancel()
+        for t in tasks:
+            t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
 
 
 @app.command()
 def main(
     visualize: bool = typer.Option(True, help="Enable visualizer UI"),
-    grid_side: int = typer.Option(GRID_SIDE, help="Side length of the square agent grid."),
+    grid_side: int = typer.Option(
+        GRID_SIDE, help="Side length of the square agent grid."
+    ),
     workers: int = typer.Option(1, help="Number of worker processes"),
-    limit: Optional[int] = typer.Option(None, help="Global concurrency limit (per process)"),
+    limit: Optional[int] = typer.Option(
+        None, help="Global concurrency limit (per process)"
+    ),
     period: float = typer.Option(PERIOD, help="Oscillation period for agents."),
     nudge: float = typer.Option(0.2, help="Coupling strength (phase nudge)."),
-    duration: float = typer.Option(300.0, help="Duration of the experiment in seconds."),
-    decay_duty_cycle: float = typer.Option(0.3, help="Flash visibility duration as a fraction of period."),
+    duration: float = typer.Option(
+        300.0, help="Duration of the experiment in seconds."
+    ),
+    decay_duty_cycle: float = typer.Option(
+        0.3, help="Flash visibility duration as a fraction of period."
+    ),
 ):
     num_agents = grid_side * grid_side
-    asyncio.run(run_orchestrator(
-        num_agents=num_agents,
-        grid_width=grid_side,
-        workers=workers,
-        concurrency_limit=limit,
-        visualize=visualize,
-        period=period,
-        nudge=nudge,
-        duration_seconds=duration,
-        decay_duty_cycle=decay_duty_cycle,
-    ))
+    asyncio.run(
+        run_orchestrator(
+            num_agents=num_agents,
+            grid_width=grid_side,
+            workers=workers,
+            concurrency_limit=limit,
+            visualize=visualize,
+            period=period,
+            nudge=nudge,
+            duration_seconds=duration,
+            decay_duty_cycle=decay_duty_cycle,
+        )
+    )
+
 
 if __name__ == "__main__":
     app()

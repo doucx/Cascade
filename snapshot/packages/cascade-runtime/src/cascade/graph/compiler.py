@@ -1,14 +1,23 @@
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.blueprint import Blueprint, Call, Literal, Register, Operand, Instruction
+from cascade.runtime.blueprint import (
+    Blueprint,
+    Call,
+    Literal,
+    Register,
+    Operand,
+    Instruction,
+)
+
 
 class BlueprintBuilder:
     """
     Compiles a LazyResult dependency graph into a linear Blueprint for VM execution.
     """
+
     def __init__(self):
         self._instructions: List[Instruction] = []
-        self._visited: Dict[str, int] = {} 
+        self._visited: Dict[str, int] = {}
         self._register_counter = 0
         self._input_args_map: List[int] = []
         self._input_kwargs_map: Dict[str, int] = {}
@@ -22,15 +31,15 @@ class BlueprintBuilder:
         self._input_args_map = []
         self._input_kwargs_map = {}
         self._is_template_mode = template
-        
+
         self._visit(target, is_root=True)
-        
+
         # Return a new Blueprint with copies of the internal state
         return Blueprint(
             instructions=list(self._instructions),
             register_count=self._register_counter,
             input_args=list(self._input_args_map),
-            input_kwargs=dict(self._input_kwargs_map)
+            input_kwargs=dict(self._input_kwargs_map),
         )
 
     def _allocate_register(self) -> Register:
@@ -58,7 +67,7 @@ class BlueprintBuilder:
         kwargs_source = target.kwargs
         if isinstance(target, MappedLazyResult):
             kwargs_source = target.mapping_kwargs
-        
+
         is_template_root = is_root and self._is_template_mode
 
         if is_template_root:
@@ -99,10 +108,10 @@ class BlueprintBuilder:
             args=args_operands,
             kwargs=kwargs_operands,
             task_name=task_name,
-            constraints=constraints
+            constraints=constraints,
         )
         self._instructions.append(instr)
 
         self._visited[target._uuid] = output_reg.index
-        
+
         return output_reg.index

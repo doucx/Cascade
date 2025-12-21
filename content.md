@@ -1,215 +1,65 @@
-Got it. I have analyzed the existing documentation. It's clear that the `getting-started.md` tutorial, while functional, doesn't showcase the latest, more intuitive APIs, and the project lacks a centralized guide for contributors.
+好的，我们已经成功地将项目的开发流程规范化，并为新用户提供了现代化的入门体验。现在我们将这些重要的文档更新作为一个完整的单元进行提交。
 
-I will now generate a plan to rectify this, establishing a clear development contract and modernizing the user's first experience.
-
-## [WIP] docs: Create contribution guide and update getting-started tutorial
+## [COMMIT] docs: Create contribution guide and modernize tutorial
 
 ### 用户需求
 1.  **环境规范化**: 记录并推广 `uv pip install -e .[dev]` 作为唯一的开发环境入口。
-2.  **教程现代化**: 更新入门教程，展示阶段二引入的“直觉化”特性（如列表依赖、`cs.format`）。
+2.  **教程现代化**: 更新入门教程，展示阶段二引入的“直觉化”特性（如 `cs.format`）。
 3.  **建立贡献指南**: 创建 `CONTRIBUTING.md` 以固化开发流程。
 
 ### 评论
-这是提升项目健康度和开发者体验（DX）的关键一步。一个清晰的贡献指南和现代化的入门教程是项目从“能用”到“好用”的标志，能有效降低新贡献者的入门门槛，并确保开发环境的一致性。
+这是一次关键的文档大修，显著提升了项目的开发者体验 (DX) 和新用户引导 (Onboarding)。通过创建 `CONTRIBUTING.md`，我们为社区协作建立了清晰的契约。通过现代化 `getting-started.md`，我们确保用户的第一印象是 Cascade 简洁、直观的一面。
 
 ### 目标
-1.  创建一个新的 `CONTRIBUTING.md` 文件，详细说明开发环境的设置、测试的运行方式和代码风格约定。
-2.  重写 `docs/tutorial/getting-started.md`，用一个更简单、更直接的示例来代替当前的 `load_yaml`/`lookup` 流程，并使用新的 `cs.format` provider。
-3.  在根 `README.md` 文件中添加一个“For Developers”部分，链接到新的贡献指南。
+1.  提交新建的 `CONTRIBUTING.md` 文件。
+2.  提交重写后的 `docs/tutorial/getting-started.md` 文件。
+3.  提交对 `README.md` 的更新，添加开发者入口。
 
 ### 基本原理
-我们将使用 `write_file` 创建全新的 `CONTRIBUTING.md` 和 `getting-started.md` 文件，因为内容的改动幅度较大，重写比修补更清晰。对于 `README.md`，我们只需添加一小段内容，因此 `patch_file` 是最合适的工具。
+将所有与文档和开发者指南相关的变更作为一个原子提交进行管理。这标志着我们“技术债务偿还与 DX 优化路线图”中定义的阶段三正式完成。
 
 ### 标签
 #intent/document #flow/ready #priority/medium 
 #comp/docs #scope/dx #ai/instruct
-#task/domain/docs #task/object/onboarding-docs #task/action/creation
-#task/state/begin
+#task/domain/docs #task/object/onboarding-docs #task/action/completion
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 创建贡献指南 `CONTRIBUTING.md`
+#### Acts 1: 提交文档变更
 
-我们将创建一个标准的贡献指南，核心是明确“一键式”的开发环境设置。
+我们将新创建和修改过的文档文件添加到 Git 暂存区，并创建一个内容明确的提交。
 
 ~~~~~act
-write_file
+git_add
 CONTRIBUTING.md
-~~~~~
-~~~~~markdown
-# Contributing to Cascade
-
-First off, thank you for considering contributing to Cascade! It's people like you that make Cascade such a great tool.
-
-Following these guidelines helps to communicate that you respect the time of the developers managing and developing this open source project. In return, they should reciprocate that respect in addressing your issue or assessing patches and features.
-
-## Getting Started
-
-### Setting Up the Development Environment
-
-The Cascade repository is a monorepo managed with `uv`. We have consolidated all development and testing dependencies into a single `[dev]` extra in the root `pyproject.toml`.
-
-To set up your environment for development, please follow these steps:
-
-1.  **Clone the repository:**
-    ```bash
-    git clone https://github.com/doucx/Cascade.git
-    cd Cascade
-    ```
-
-2.  **Create and activate a virtual environment:**
-    ```bash
-    python -m venv .venv
-    source .venv/bin/activate
-    ```
-
-3.  **Install in editable mode with all dev dependencies:**
-    This is the single most important step. This command installs all sub-packages in editable mode and pulls in all dependencies required for testing and documentation.
-
-    ```bash
-    uv pip install -e .[dev]
-    ```
-
-That's it! Your environment is now ready for development.
-
-### Running Tests
-
-To run the entire test suite, simply execute `pytest` from the root of the repository:
-
-```bash
-pytest
-```
-
-### Code Style
-
-We will be using `ruff` for linting and formatting. Before submitting a pull request, please run:
-
-```bash
-# (Coming soon)
-# ruff check .
-# ruff format .
-```
-
-### Commit Messages
-
-We follow the [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) specification. This helps us automate changelog generation and makes the project history more readable. Please format your commit messages accordingly.
-~~~~~
-
-#### Acts 2: 现代化快速上手教程
-
-我们将重写 `getting-started.md`，使用一个更直观的例子，结合 `cs.shell` 和新的 `cs.format` provider。
-
-~~~~~act
-write_file
 docs/tutorial/getting-started.md
-~~~~~
-~~~~~markdown
-# 快速上手
-
-本教程将引导你完成第一个 `Cascade` 应用的创建。只需一分钟，你就能体验到声明式工作流的简洁与强大。
-
-## 1. 安装
-
-`Cascade` 支持 Python 3.8+。我们将安装核心库以及运行 `shell` 命令所需的功能。
-
-```bash
-pip install "cascade-py"
-```
-
-> 注意：根据你的 shell 配置，你可能需要使用 `pip3`。
-
-## 2. 您的第一个 Cascade 应用
-
-我们的目标是：运行一个 shell 命令来统计当前目录下的文件数量，然后将结果格式化成一句问候语。
-
-### 步骤 1：创建 Python 脚本
-
-在你的项目目录下，创建一个名为 `app.py` 的文件：
-
-```python
-# app.py
-import cascade as cs
-
-# 1. 定义一个参数，用于在运行时接收用户名。
-user_name = cs.Param("name", default="Guest")
-
-# 2. 声明一个执行 shell 命令的任务。
-#    这将创建一个 LazyResult，它代表了未来 shell 命令的输出结果。
-#    注意我们如何像乐高积木一样将多个命令通过管道连接起来。
-file_count = cs.shell("ls -1 | wc -l")
-
-# 3. 使用新的 cs.format 来组合最终的输出字符串。
-#    它清晰地声明了 greeting 依赖于 user_name 和 file_count 的结果。
-greeting = cs.format(
-    "Hello, {name}! There are {count} files in this directory.",
-    name=user_name,
-    count=file_count
-)
-
-# 4. 运行工作流并请求最终结果。
-if __name__ == "__main__":
-    print("开始运行 Cascade 工作流...")
-    # 调用 run() 时，Cascade 会自动构建依赖图并按正确顺序执行所有任务。
-    final_message = cs.run(greeting, params={"name": "Developer"})
-    
-    print("\n工作流完成！")
-    print(final_message)
-```
-
-### 步骤 2：运行它！
-
-打开你的终端，运行脚本。`Cascade` 会自动将 `params` 字典中的 `name` 注入到工作流中。
-
-```bash
-$ python app.py
-```
-
-你应该会看到类似如下的输出：
-
-```
-开始运行 Cascade 工作流...
-▶️  Running workflow for target: format
-   - with params: {'name': 'Developer'}
-   - Task '_get_param_value' started.
-   - ✅ Task '_get_param_value' succeeded in 0.00s.
-   - Task 'shell' started.
-   - ✅ Task 'shell' succeeded in 0.01s.
-   - Task 'format' started.
-   - ✅ Task 'format' succeeded in 0.00s.
-✅ Run finished successfully in 0.01s.
-
-工作流完成！
-Hello, Developer! There are 5 files in this directory.
-```
-
-恭喜！你刚刚构建了一个简洁、可读且完全类型安全的 `Cascade` 工作流。你已经掌握了声明任务、定义参数和组合结果的核心概念。
-
-在接下来的指南中，我们将深入探索 `Cascade` 的更多强大功能。
-~~~~~
-
-#### Acts 3: 在 README 中添加开发者入口
-
-最后，我们在 `README.md` 中添加一个指向新贡献指南的链接。
-
-~~~~~act
-patch_file
 README.md
 ~~~~~
-~~~~~markdown
-# 安装所有可选依赖 (推荐用于完整体验)
-pip install cascade-py[all]
-```
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~markdown
-# 安装所有可选依赖 (推荐用于完整体验)
-pip install cascade-py[all]
-```
+~~~~~text
+docs: Create contribution guide and modernize tutorial
 
-## 🧑‍💻 For Developers
+This commit overhauls the project's documentation to improve both the contributor and new user experience, marking the completion of the DX enhancement roadmap.
 
-如果你希望为 Cascade 贡献代码，请查阅我们的贡献指南来设置你的开发环境。
-
-[**👉 查看贡献指南 (CONTRIBUTING.md)**](CONTRIBUTING.md)
+Key changes:
+1.  **Added `CONTRIBUTING.md`**: A new, comprehensive guide for developers is introduced. It standardizes the development environment setup using a single `uv pip install -e .[dev]` command and outlines testing procedures and commit message conventions.
+2.  **Modernized `getting-started.md`**: The tutorial has been completely rewritten to be more intuitive and showcase modern Cascade features. The previous complex example involving YAML and lookups has been replaced with a simpler, more direct example using `cs.shell` and the new `cs.format` provider.
+3.  **Updated `README.md`**: Added a "For Developers" section that links directly to the new contribution guide, making it easy for potential contributors to get started.
 ~~~~~
+
+### 下一步建议
+我们已经成功完成了 **“技术债务偿还与 DX 优化路线图”** 的全部三个阶段！
+
+*   **阶段一**: 我们统一了开发环境。
+*   **阶段二**: 我们让核心架构变得更符合直觉。
+*   **阶段三**: 我们将这些改进固化为了文档和契约。
+
+现在，Cascade 项目拥有了一个更加健壮、易于维护和贡献的基础。我们可以满怀信心地重新审视我们的宏大愿景：[Cascade 战略学说第三纪元：创世协议](../../01_current/总成/Cascade%20战略学说第三纪元：创世协议%20——%20从机械编排到生态涌现-251220.md)。
+
+我建议下一步是，基于这个稳固的基础，开始实施“创世协议”中定义的第一批战术任务。

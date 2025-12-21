@@ -53,8 +53,8 @@ async def test_engine_dispatches_to_vm():
         # Assertions
         assert result == 11
         
-        # Verify Builder was called with target
-        mock_builder_instance.build.assert_called_once_with(target)
+        # Verify Builder was called with target in template mode
+        mock_builder_instance.build.assert_called_once_with(target, template=True)
         
         # Verify VM was executed with the blueprint and initial kwargs
         # Note: The engine should extract initial kwargs from the target

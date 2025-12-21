@@ -58,8 +58,11 @@ dev = [
   "aiohttp",
   "python-constraint",
   "flask_cors",
-  # Local workspace providers needed for testing
+  # Local workspace packages needed for testing
   "cascade-provider-ipfs",
+  "cascade-cli-controller",
+  "cascade-cli-observer",
+  "cascade-connector-mqtt",
 ]
 
 [tool.hatch.metadata]

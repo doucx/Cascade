@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 Engine 中的变量作用域错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766311180.4156826, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(perf): 激活 TCO 缓存并消除运行时反射", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766311360.3455698, "duration_ms": 0}}

@@ -1,51 +1,3 @@
-好的，我们来创建一个专门的性能测试脚本来量化这次优化的效果。
-
-这个脚本将对比两种情况：
-1.  **优化路径 (Optimized Path)**: 一个简单的单任务递归，它将触发我们新实现的零开销快速路径。
-2.  **非优化路径 (Un-optimized Path)**: 一个稍微复杂的递归，通过引入一个无操作的依赖，强制 `Engine` 在每次迭代时都重新构建完整的（双节点）图，从而模拟优化前的行为。
-
-通过对比这两者的 TPS (Transactions Per Second)，我们可以清晰地看到性能提升的幅度。
-
-## [WIP] test: 创建 TCO 零开销优化的性能基准测试脚本
-
-### 用户需求
-创建一个性能测试脚本，用于量化 TCO 零开销快速路径优化所带来的性能提升。
-
-### 评论
-这是一个至关重要的步骤，它将用数据证明我们架构改进的价值。通过创建一个可复现的基准测试，我们不仅可以验证当前的优化成果，还能为未来的性能回归测试提供一个稳定的基线。
-
-### 目标
-1.  创建一个新的 benchmark 脚本 `observatory/benchmarks/tco_performance.py`。
-2.  在脚本中定义两种递归场景：一种触发优化，一种不触发。
-3.  脚本将运行两个场景，测量并打印各自的执行时间、TPS，并计算性能提升倍数。
-
-### 基本原理
-通过 `time.perf_counter` 精确测量执行固定迭代次数所需的时间。优化路径的 `Engine` 应该几乎只消耗任务执行本身的时间，而非优化路径则会叠加数千次 `build_graph` 的开销。两者的 TPS 差异将直观地反映出优化的效果。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/runtime #task/object/tco-optimization #task/action/benchmark #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 benchmark 目录和脚本文件
-
-我们将首先创建用于存放基准测试的目录结构，然后写入脚本的完整内容。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p observatory/benchmarks
-touch observatory/benchmarks/__init__.py
-~~~~~
-
-~~~~~act
-write_file
-observatory/benchmarks/tco_performance.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 import cascade as cs
@@ -134,14 +86,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-~~~~~
-
-### 下一步建议
-现在你可以直接运行这个脚本来查看优化的效果：
-
-```bash
-python observatory/benchmarks/tco_performance.py
-```
-
-根据运行结果，我们可以决定是否需要进一步的优化，或者将此基准测试集成到我们的持续集成（CI）流程中。
-

@@ -153,6 +153,9 @@ async def run_orchestrator(
     concurrency_limit: Optional[int],
     visualize: bool,
     period: float,
+    nudge: float,
+    duration_seconds: float,
+    decay_duty_cycle: float,
 ):
     print(f"🔥 Starting MULTI-CORE Firefly Experiment")
     print(f"   - Agents: {num_agents} ({grid_width}x{grid_width})")
@@ -176,9 +179,9 @@ async def run_orchestrator(
             width=grid_width,
             height=grid_width,
             palette_func=Palettes.firefly,
-            decay_per_second=1 / (period * 0.3),
+            decay_per_second=1 / (period * decay_duty_cycle),
         )
-        status_bar = StatusBar(initial_status={"Agents": num_agents, "Workers": workers})
+        status_bar = StatusBar(initial_status={"Agents": num_agents, "Workers": workers, "Period": period, "Nudge": nudge})
         
         log_filename = f"firefly_mp_log_{int(time.time())}.jsonl"
         aggregator = MetricsAggregator(log_filename, interval_s=1.0)
@@ -231,7 +234,7 @@ async def run_orchestrator(
             target=worker_main,
             args=(
                 w_id, indices, uplink_queue, concurrency_limit,
-                grid_width, grid_width, period, 0.2
+                grid_width, grid_width, period, nudge
             )
         )
         p.start()
@@ -241,18 +244,20 @@ async def run_orchestrator(
     # Reads from MP Queue and replays to LocalBus for the Monitor/Visualizer
     print("🚀 Workers launched. Bridging telemetry...")
     
+    # 4. Telemetry Pump Loop & Experiment Timer
+    print("🚀 Workers launched. Bridging telemetry...")
+    
+    start_time = time.time()
     try:
-        while any(p.is_alive() for p in processes):
-            # We assume high throughput, so we batch read or read continuously
-            # Using run_in_executor to avoid blocking the main loop with queue.get
+        while time.time() - start_time < duration_seconds:
+            if not any(p.is_alive() for p in processes):
+                print("🛑 All workers terminated prematurely.")
+                break
             try:
-                # Non-blocking get from queue
                 while not uplink_queue.empty():
                     topic, payload = uplink_queue.get_nowait()
-                    # Re-publish to local bus (driving the UI)
                     await main_connector.publish(topic, payload)
                 
-                # Yield to let UI render
                 await asyncio.sleep(0.01)
             except Exception:
                 await asyncio.sleep(0.01)
@@ -279,9 +284,23 @@ def main(
     grid_side: int = typer.Option(GRID_SIDE, help="Side length of the square agent grid."),
     workers: int = typer.Option(1, help="Number of worker processes"),
     limit: Optional[int] = typer.Option(None, help="Global concurrency limit (per process)"),
+    period: float = typer.Option(PERIOD, help="Oscillation period for agents."),
+    nudge: float = typer.Option(0.2, help="Coupling strength (phase nudge)."),
+    duration: float = typer.Option(300.0, help="Duration of the experiment in seconds."),
+    decay_duty_cycle: float = typer.Option(0.3, help="Flash visibility duration as a fraction of period."),
 ):
     num_agents = grid_side * grid_side
-    asyncio.run(run_orchestrator(num_agents, grid_side, workers, limit, visualize, PERIOD))
+    asyncio.run(run_orchestrator(
+        num_agents=num_agents,
+        grid_width=grid_side,
+        workers=workers,
+        concurrency_limit=limit,
+        visualize=visualize,
+        period=period,
+        nudge=nudge,
+        duration_seconds=duration,
+        decay_duty_cycle=decay_duty_cycle,
+    ))
 
 if __name__ == "__main__":
     app()

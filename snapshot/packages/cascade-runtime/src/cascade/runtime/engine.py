@@ -77,7 +77,6 @@ class Engine:
 
         self.arg_resolver = ArgumentResolver()
         self.constraint_resolver = ConstraintResolver()
-        self.flow_manager: Optional[FlowManager] = None
         self._managed_subscribers = []
 
     def add_subscriber(self, subscriber: Any):
@@ -259,7 +258,7 @@ class Engine:
         state_backend: StateBackend,
     ) -> Any:
         graph = build_graph(target)
-        self.flow_manager = FlowManager(graph, target._uuid)
+        flow_manager = FlowManager(graph, target._uuid)
         plan = self.solver.resolve(graph)
 
         # Track blocked state locally to avoid spamming Blocked events every loop tick
@@ -276,7 +275,7 @@ class Engine:
                     if node.node_type == "param":
                         continue  # Skip params, they don't execute
 
-                    skip_reason = self.flow_manager.should_skip(node, state_backend)
+                    skip_reason = flow_manager.should_skip(node, state_backend)
                     if skip_reason:
                         state_backend.mark_skipped(node.id, skip_reason)
                         self.bus.publish(
@@ -321,10 +320,9 @@ class Engine:
 
                     for node, res in zip(executable_this_pass, pass_results):
                         state_backend.put_result(node.id, res)
-                        if self.flow_manager:
-                            self.flow_manager.register_result(
-                                node.id, res, state_backend
-                            )
+                        flow_manager.register_result(
+                            node.id, res, state_backend
+                        )
 
                 pending_nodes_in_stage = deferred_this_pass
 

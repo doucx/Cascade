@@ -1,240 +1,273 @@
-简要回答：
-之前的 `patch_file` 操作未能正确更新 `kuramoto.py`，导致函数签名不匹配。我将使用 `write_file` 强制覆盖该文件，以确保代码完全更新。
+好的，分析完成。你的诊断非常精准，直指问题的核心。
 
-## [WIP] fix(infra): 强制更新 Kuramoto Agent 以匹配 DirectChannel 签名
+**日志分析**: `flush_duration_ms` 高达 218ms, `render_jitter_ms` 达到 204ms，这清楚地表明 `asyncio` 事件循环被严重阻塞。渲染器本身并没有消耗这么多时间，而是它在等待获得 CPU 时间片。这印证了我们的怀疑：系统开销过大。
 
-### 错误分析
-`TypeError: firefly_agent() got an unexpected keyword argument 'neighbors'` 错误表明 `run_fireflies.py` 已经更新并试图传递新的参数 `neighbors`，但 `kuramoto.py` 中的 `firefly_agent` 定义仍然是旧版本（接收 `neighbor_inboxes`）。
-这通常是因为上一步对 `kuramoto.py` 的 `patch_file` 操作失败了（可能是因为试图匹配并替换整个文件内容时，遇到了空白符或上下文匹配问题）。
-根据 `d3-principle-quipu-write-strategy`，对于这种涉及全文件重写或大幅度重构的情况，应当优先使用 `write_file`。
+**核心问题**: 你完全正确，为 2500 个 Agent 分别创建 2500 个 `Engine` 实例是性能瓶颈的根源。
+每个 `Engine` 实例都包含了自己的一整套重量级组件：`ResourceManager`、`ConstraintManager`、`MessageBus`、各种 `Handler` 和 `Resolver`。这造成了巨大的内存开销和 Python 对象管理开销，使得事件循环不堪重负。
+
+**关于“共享上下文的生命周期灾难”**:
+你对这个问题的警惕是正确的。之前的教训告诉我们，如果一个 `Engine` 的 `run` 方法附带了破坏共享资源的副作用（比如在 `finally` 中关闭一个共享的 `connector`），那么共享 `Engine` 实例是危险的。
+
+**代码审查结论**:
+经过对 `cascade-runtime` 核心代码的审查，我得出了关键结论：
+1.  **状态隔离是安全的**: `Engine.run()` 在每次调用时都会通过 `state_backend_factory` 创建一个**全新的、独立的 `StateBackend` 实例**。这意味着不同工作流的执行结果、跳过状态等是完全隔离的。
+2.  **资源作用域是安全的**: `ResourceManager` 的 `ExitStack` 机制确保了"run"作用域和"task"作用域的资源生命周期与**单次 `run()` 调用**绑定，而不是与 `Engine` 实例绑定。
+3.  **发现了一个并发 BUG**: `Engine` 将 `flow_manager` 存储在 `self.flow_manager` 上。如果多个 `run()` 在同一个 `Engine` 实例上并发执行，它们会互相覆盖 `self.flow_manager`，造成数据竞争和未定义行为。
+
+**解决方案**:
+我们可以、也**必须**重构为共享 `Engine` 模式。但这需要先修复上述的并发 BUG。修复方案是将 `flow_manager` 从 `Engine` 的实例变量，降级为 `_execute_graph` 方法内部的一个局部变量。这样，每次 `run` 调用都会有自己独立的 `FlowManager`，从而实现真正的并发安全。
+
+## [WIP] refactor(infra): Share a single Engine for all Firefly agents
 
 ### 用户需求
-修复 `TypeError`，确保 `firefly_agent` 的定义与 `run_fireflies.py` 中的调用一致，从而让第一阶段的重构生效。
+重构 `run_fireflies.py` 实验，使其使用单一的 `Engine` 实例来并发执行所有 2500 个 Agent 工作流，以解决性能瓶颈。
 
 ### 评论
-使用 `write_file` 可以消除 patch 匹配的不确定性，确保文件状态的一致性。
+这是一个根本性的架构优化。通过从“每个 Agent 一个重量级 Engine”模型迁移到“所有 Agent 共享一个 Engine，每个 Agent 是一个轻量级协程”的模型，我们将大幅降低系统开销，释放 `asyncio` 事件循环，从而让模拟流畅运行。
 
 ### 目标
-1.  使用 `write_file` 重写 `observatory/agents/kuramoto.py`，包含完整的、基于 `DirectChannel` 的实现。
+1.  **修复** `Engine` 中的 `flow_manager` 并发安全问题。
+2.  **重构** `run_fireflies.py`，在循环外创建唯一的 `Engine` 实例。
+3.  在该 `Engine` 实例上并发启动所有 Agent 的 `run` 协程。
 
 ### 基本原理
-直接覆盖文件是修复此类同步问题的最快且最可靠的方法。
+`FlowManager` 的生命周期应与单次图的执行绑定，而不是 `Engine` 实例。通过将其变为 `_execute_graph` 的局部变量，我们消除了并发执行 `engine.run()` 时的数据竞争。修复此问题后，我们就可以安全地让所有 Agent 共享同一个 `Engine` 的资源管理和调度基础设施，同时保持它们各自执行状态的隔离。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/runtime #scope/core #ai/instruct
+#intent/refine #intent/fix #flow/ready #priority/high #comp/runtime #concept/concurrency #scope/core #ai/brainstorm
 #task/domain/infra
-#task/object/topology
-#task/action/fix
+#task/object/engine-concurrency
+#task/action/refactor
 #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重写 Kuramoto Agent
+#### Acts 1: 修复 Engine 的并发安全问题
 
-我们直接写入完整的新文件内容。
+我们将 `flow_manager` 变为局部变量，以消除并发运行时的竞争条件。
 
 ~~~~~act
-write_file
-observatory/agents/kuramoto.py
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-"""
-Implementation of a Firefly agent based on the Kuramoto model
-of coupled oscillators, using pure Cascade primitives.
+        self.arg_resolver = ArgumentResolver()
+        self.constraint_resolver = ConstraintResolver()
+        self.flow_manager: Optional[FlowManager] = None
+        self._managed_subscribers = []
 
-REVISION 10: Refactored to use DirectChannel for O(1) communication.
-"""
+    def add_subscriber(self, subscriber: Any):
+~~~~~
+~~~~~python
+        self.arg_resolver = ArgumentResolver()
+        self.constraint_resolver = ConstraintResolver()
+        self._managed_subscribers = []
 
-import asyncio
-import random
-import time
-from typing import Any, Dict, List
+    def add_subscriber(self, subscriber: Any):
+~~~~~
 
-import cascade as cs
-from cascade.interfaces.protocols import Connector
-from observatory.networking.direct_channel import DirectChannel
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    async def _execute_graph(
+        self,
+        target: Any,
+        params: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        state_backend: StateBackend,
+    ) -> Any:
+        graph = build_graph(target)
+        self.flow_manager = FlowManager(graph, target._uuid)
+        plan = self.solver.resolve(graph)
 
+        # Track blocked state locally to avoid spamming Blocked events every loop tick
+        blocked_nodes = set()
 
-# --- Atomic Primitives for Agent Behavior ---
+        for stage in plan:
+            pending_nodes_in_stage = list(stage)
 
+            while pending_nodes_in_stage:
+                executable_this_pass: List[Node] = []
+                deferred_this_pass: List[Node] = []
 
-@cs.task
-async def fanout_direct(
-    neighbors: List[DirectChannel],
-    payload: Dict[str, Any],
-    should_send: bool,
-    connector: Connector,  # For visualization/telemetry side-channel
-) -> None:
-    """
-    Fan-out using DirectChannel (Fast Path) + Connector (Slow Path).
-    """
-    if not should_send:
-        return
+                for node in pending_nodes_in_stage:
+                    if node.node_type == "param":
+                        continue  # Skip params, they don't execute
 
-    # 1. Fast Path: Zero-copy delivery to neighbors
-    # We yield to the event loop occasionally to prevent starvation if fan-out is huge
-    for i, neighbor in enumerate(neighbors):
-        await neighbor.send(payload)
-        if i % 10 == 0:
-            await asyncio.sleep(0)
+                    skip_reason = self.flow_manager.should_skip(node, state_backend)
+                    if skip_reason:
+                        state_backend.mark_skipped(node.id, skip_reason)
+                        self.bus.publish(
+~~~~~
+~~~~~python
+    async def _execute_graph(
+        self,
+        target: Any,
+        params: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        state_backend: StateBackend,
+    ) -> Any:
+        graph = build_graph(target)
+        flow_manager = FlowManager(graph, target._uuid)
+        plan = self.solver.resolve(graph)
 
-    # 2. Slow Path: Telemetry for Visualization
-    if connector:
-        # We publish to a known topic for the visualizer
-        await connector.publish("firefly/flash", payload)
+        # Track blocked state locally to avoid spamming Blocked events every loop tick
+        blocked_nodes = set()
 
+        for stage in plan:
+            pending_nodes_in_stage = list(stage)
 
-@cs.task
-async def safe_recv_channel(
-    channel: DirectChannel,
-    timeout: float,
-) -> Dict[str, Any]:
-    """
-    Waits for a message on a DirectChannel with a timeout.
-    """
-    start_time = time.time()
-    try:
-        # DirectChannel.recv() returns the payload directly
-        signal = await asyncio.wait_for(channel.recv(), timeout=timeout)
-        elapsed = time.time() - start_time
-        return {"signal": signal, "timeout": False, "elapsed": elapsed}
-    except asyncio.TimeoutError:
-        elapsed = time.time() - start_time
-        return {"signal": None, "timeout": True, "elapsed": elapsed}
+            while pending_nodes_in_stage:
+                executable_this_pass: List[Node] = []
+                deferred_this_pass: List[Node] = []
 
+                for node in pending_nodes_in_stage:
+                    if node.node_type == "param":
+                        continue  # Skip params, they don't execute
 
-# --- Core Agent Logic ---
+                    skip_reason = flow_manager.should_skip(node, state_backend)
+                    if skip_reason:
+                        state_backend.mark_skipped(node.id, skip_reason)
+                        self.bus.publish(
+~~~~~
 
+~~~~~act
+patch_file
+packages/cascade-runtime/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+                    pass_results = await asyncio.gather(*tasks_to_run)
 
-def firefly_agent(
-    agent_id: int,
-    initial_phase: float,
-    period: float,
-    nudge: float,
-    neighbors: List[DirectChannel],
-    my_channel: DirectChannel,
-    connector: Connector,
-    refractory_period: float = 2.0,
-):
-    """
-    The main entry point for a single firefly agent.
-    Now uses DirectChannel topology.
-    """
+                    for node, res in zip(executable_this_pass, pass_results):
+                        state_backend.put_result(node.id, res)
+                        if self.flow_manager:
+                            self.flow_manager.register_result(
+                                node.id, res, state_backend
+                            )
 
-    def firefly_cycle(
-        agent_id: int,
-        phase: float,
-        period: float,
-        nudge: float,
-        neighbors: List[DirectChannel],
-        my_channel: DirectChannel,
-        connector: Connector,
-        refractory_period: float,
-    ):
-        # --- Logic Branching ---
+                pending_nodes_in_stage = deferred_this_pass
 
-        # 1. Refractory Check: If we are in the "blind" zone, just wait.
-        if phase < refractory_period:
-            # We are blind. Wait until we exit refractory period.
-            blind_wait_duration = refractory_period - phase
+                if pending_nodes_in_stage and not executable_this_pass:
+~~~~~
+~~~~~python
+                    pass_results = await asyncio.gather(*tasks_to_run)
 
-            # Use cs.wait for pure time passage (no listening)
-            wait_action = cs.wait(blind_wait_duration)
-
-            @cs.task
-            def after_refractory(_):
-                # We have advanced time by 'blind_wait_duration'.
-                # Our phase is now exactly 'refractory_period'.
-                return firefly_cycle(
-                    agent_id,
-                    refractory_period,
-                    period,
-                    nudge,
-                    neighbors,
-                    my_channel,
-                    connector,
-                    refractory_period,
-                )
-
-            return after_refractory(wait_action)
-
-        # 2. Sensitive Check: We are past refractory. Listen for neighbors.
-        else:
-            time_to_flash = period - phase
-            # Ensure we don't have negative timeout due to floating point drift
-            wait_timeout = max(0.01, time_to_flash)
-
-            # Listen to MY channel
-            perception = safe_recv_channel(my_channel, timeout=wait_timeout)
-
-            @cs.task
-            def process_perception(p: Dict[str, Any]) -> cs.LazyResult:
-                is_timeout = p.get("timeout", False)
-                elapsed_time = p.get("elapsed", 0.0)
-
-                # Update actual phase based on real time passed
-                current_actual_phase = phase + elapsed_time
-
-                # Determine Action
-                if is_timeout:
-                    # We reached the end of the period. FLASH!
-                    flash_payload = {
-                        "agent_id": agent_id,
-                        "phase": current_actual_phase,
-                    }
-
-                    flash = fanout_direct(
-                        neighbors=neighbors,
-                        payload=flash_payload,
-                        should_send=True,
-                        connector=connector,
-                    )
-
-                    @cs.task
-                    def loop_reset(_, _flash):
-                        jitter = random.uniform(0.0, 0.1)
-                        return firefly_cycle(
-                            agent_id,
-                            0.0 + jitter,
-                            period,
-                            nudge,
-                            neighbors,
-                            my_channel,
-                            connector,
-                            refractory_period,
+                    for node, res in zip(executable_this_pass, pass_results):
+                        state_backend.put_result(node.id, res)
+                        flow_manager.register_result(
+                            node.id, res, state_backend
                         )
 
-                    return loop_reset(p, flash)
+                pending_nodes_in_stage = deferred_this_pass
 
-                else:
-                    # We heard a neighbor! NUDGE!
-                    next_phase = current_actual_phase + nudge
-                    return firefly_cycle(
-                        agent_id,
-                        next_phase,
-                        period,
-                        nudge,
-                        neighbors,
-                        my_channel,
-                        connector,
-                        refractory_period,
-                    )
+                if pending_nodes_in_stage and not executable_this_pass:
+~~~~~
 
-            return process_perception(perception)
+#### Acts 2: 重构实验脚本以使用共享 Engine
 
-    return firefly_cycle(
-        agent_id,
-        initial_phase,
-        period,
-        nudge,
-        neighbors,
-        my_channel,
-        connector,
-        refractory_period,
+现在 `Engine` 是并发安全的了，我们可以放心地重构实验脚本。
+
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+    # --- Create Agents ---
+    agent_tasks = []
+
+    @resource(name="_internal_connector", scope="run")
+    def shared_connector_provider():
+        yield connector
+
+    # Batch creation to avoid freezing UI loop
+    print("Generating Agent Workflows...")
+    for i in range(num_agents):
+        initial_phase = random.uniform(0, period)
+
+        # Topology Lookup
+        neighbor_ids = get_neighbors(i, grid_width, grid_width)
+        my_neighbors = [channels[nid] for nid in neighbor_ids]
+        my_channel = channels[i]
+
+        engine = cs.Engine(
+            solver=cs.NativeSolver(),
+            executor=cs.LocalExecutor(),
+            bus=cs.MessageBus(),
+            connector=None,
+        )
+        engine.register(shared_connector_provider)
+
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=period,
+            nudge=nudge,
+            neighbors=my_neighbors,
+            my_channel=my_channel,
+            connector=connector,
+            refractory_period=period * 0.2,
+        )
+
+        agent_tasks.append(engine.run(agent_workflow))
+
+        # Yield every 500 agents to keep UI responsive during setup
+        if i > 0 and i % 500 == 0:
+            print(f"   ... {i} agents prepared.")
+            await asyncio.sleep(0)
+~~~~~
+~~~~~python
+    # --- Create Shared Engine ---
+    print("Initializing Shared Cascade Engine...")
+    engine = cs.Engine(
+        solver=cs.NativeSolver(),
+        executor=cs.LocalExecutor(),
+        bus=cs.MessageBus(), # A silent bus for the engine itself
+        connector=None,
     )
+
+    @resource(name="_internal_connector", scope="run")
+    def shared_connector_provider():
+        yield connector
+    engine.register(shared_connector_provider)
+
+
+    # --- Create Agents ---
+    agent_tasks = []
+    # Batch creation to avoid freezing UI loop
+    print("Generating Agent Workflows...")
+    for i in range(num_agents):
+        initial_phase = random.uniform(0, period)
+
+        # Topology Lookup
+        neighbor_ids = get_neighbors(i, grid_width, grid_width)
+        my_neighbors = [channels[nid] for nid in neighbor_ids]
+        my_channel = channels[i]
+
+        agent_workflow = firefly_agent(
+            agent_id=i,
+            initial_phase=initial_phase,
+            period=period,
+            nudge=nudge,
+            neighbors=my_neighbors,
+            my_channel=my_channel,
+            connector=cs.inject("_internal_connector"),
+            refractory_period=period * 0.2,
+        )
+
+        # Schedule the workflow to run on the shared engine
+        agent_tasks.append(engine.run(agent_workflow))
+
+        # Yield every 500 agents to keep UI responsive during setup
+        if i > 0 and i % 500 == 0:
+            print(f"   ... {i} agents prepared.")
+            await asyncio.sleep(0)
 ~~~~~
 
 ### 下一步建议
-再次运行 `python -m observatory.experiments.run_fireflies`。这次应该能够正常启动实验，并且由于采用了 `DirectChannel`，性能应该有显著提升（或者至少在高负载下更稳定）。如果验证通过，可以推进到第二阶段（抑制性神经元）。
+再次运行 `python -m observatory.experiments.run_fireflies`。我们预期会看到 `flush_duration_ms` 和 `render_jitter_ms` 大幅下降，模拟运行会变得非常流畅。如果成功，`INFRA-1.1` 和 `INFRA-1.2` 任务将正式完成。

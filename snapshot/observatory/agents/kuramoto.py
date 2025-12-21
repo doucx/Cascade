@@ -2,7 +2,7 @@
 Implementation of a Firefly agent based on the Kuramoto model
 of coupled oscillators, using pure Cascade primitives.
 
-REVISION 10: Refactored to use DirectChannel for O(1) communication.
+REVISION 9: Added Refractory Period to prevent 'echo' effects.
 """
 
 import asyncio
@@ -12,55 +12,57 @@ from typing import Any, Dict, List
 
 import cascade as cs
 from cascade.interfaces.protocols import Connector
-from observatory.networking.direct_channel import DirectChannel
 
 
 # --- Atomic Primitives for Agent Behavior ---
 
 
 @cs.task
-async def fanout_direct(
-    neighbors: List[DirectChannel],
+async def fanout_signal(
+    topics: List[str],
     payload: Dict[str, Any],
     should_send: bool,
-    connector: Connector,  # For visualization/telemetry side-channel
+    connector: Connector,
 ) -> None:
-    """
-    Fan-out using DirectChannel (Fast Path) + Connector (Slow Path).
-    """
-    if not should_send:
-        return
-
-    # 1. Fast Path: Zero-copy delivery to neighbors
-    # We yield to the event loop occasionally to prevent starvation if fan-out is huge
-    for i, neighbor in enumerate(neighbors):
-        await neighbor.send(payload)
-        if i % 10 == 0:
-            await asyncio.sleep(0)
-
-    # 2. Slow Path: Telemetry for Visualization
-    if connector:
-        # We publish to a known topic for the visualizer
-        await connector.publish("firefly/flash", payload)
+    """A task to publish a message to multiple topics (Fan-out)."""
+    if should_send and connector and topics:
+        # Optimistic fan-out: we just fire tasks or await in loop.
+        # Since LocalBus.publish is non-blocking (just puts to queue), loop is fine.
+        for topic in topics:
+            await connector.publish(topic, payload)
 
 
 @cs.task
-async def safe_recv_channel(
-    channel: DirectChannel,
+async def safe_recv(
+    topic: str,
     timeout: float,
+    connector: Connector,
 ) -> Dict[str, Any]:
     """
-    Waits for a message on a DirectChannel with a timeout.
+    A custom receive task that treats timeouts as valid return values.
+    Also returns the time elapsed while waiting.
     """
+    if not connector:
+        return {"signal": None, "timeout": True, "elapsed": 0.0}
+
+    future = asyncio.Future()
+
+    async def callback(topic: str, payload: Any):
+        if not future.done():
+            future.set_result(payload)
+
+    subscription = await connector.subscribe(topic, callback)
     start_time = time.time()
     try:
-        # DirectChannel.recv() returns the payload directly
-        signal = await asyncio.wait_for(channel.recv(), timeout=timeout)
+        signal = await asyncio.wait_for(future, timeout=timeout)
         elapsed = time.time() - start_time
         return {"signal": signal, "timeout": False, "elapsed": elapsed}
     except asyncio.TimeoutError:
         elapsed = time.time() - start_time
         return {"signal": None, "timeout": True, "elapsed": elapsed}
+    finally:
+        if subscription:
+            await subscription.unsubscribe()
 
 
 # --- Core Agent Logic ---
@@ -71,14 +73,13 @@ def firefly_agent(
     initial_phase: float,
     period: float,
     nudge: float,
-    neighbors: List[DirectChannel],
-    my_channel: DirectChannel,
+    neighbor_inboxes: List[str],
+    my_inbox: str,
     connector: Connector,
-    refractory_period: float = 2.0,
+    refractory_period: float = 2.0,  # Blind period after flash
 ):
     """
-    The main entry point for a single firefly agent.
-    Now uses DirectChannel topology.
+    This is the main entry point for a single firefly agent.
     """
 
     def firefly_cycle(
@@ -86,8 +87,8 @@ def firefly_agent(
         phase: float,
         period: float,
         nudge: float,
-        neighbors: List[DirectChannel],
-        my_channel: DirectChannel,
+        neighbor_inboxes: List[str],
+        my_inbox: str,
         connector: Connector,
         refractory_period: float,
     ):
@@ -110,8 +111,8 @@ def firefly_agent(
                     refractory_period,
                     period,
                     nudge,
-                    neighbors,
-                    my_channel,
+                    neighbor_inboxes,
+                    my_inbox,
                     connector,
                     refractory_period,
                 )
@@ -124,8 +125,8 @@ def firefly_agent(
             # Ensure we don't have negative timeout due to floating point drift
             wait_timeout = max(0.01, time_to_flash)
 
-            # Listen to MY channel
-            perception = safe_recv_channel(my_channel, timeout=wait_timeout)
+            # Listen only to MY inbox
+            perception = safe_recv(my_inbox, timeout=wait_timeout, connector=connector)
 
             @cs.task
             def process_perception(p: Dict[str, Any]) -> cs.LazyResult:
@@ -143,8 +144,16 @@ def firefly_agent(
                         "phase": current_actual_phase,
                     }
 
-                    flash = fanout_direct(
-                        neighbors=neighbors,
+                    # We fan-out the signal to all neighbors
+                    # Also publish to the global visualization topic (optional, but good for debug)
+                    # For performance, visualizer could subscribe to 'firefly/+/inbox' or a dedicated vis topic.
+                    # Let's add 'firefly/visualizer' to the target list if we want centralized viz.
+                    # For now, we assume visualizer subscribes to ALL inboxes or we add a specific one.
+                    # Let's add 'firefly/flash' for the visualizer to keep it simple.
+                    targets = neighbor_inboxes + ["firefly/flash"]
+
+                    flash = fanout_signal(
+                        topics=targets,
                         payload=flash_payload,
                         should_send=True,
                         connector=connector,
@@ -158,8 +167,8 @@ def firefly_agent(
                             0.0 + jitter,
                             period,
                             nudge,
-                            neighbors,
-                            my_channel,
+                            neighbor_inboxes,
+                            my_inbox,
                             connector,
                             refractory_period,
                         )
@@ -174,8 +183,8 @@ def firefly_agent(
                         next_phase,
                         period,
                         nudge,
-                        neighbors,
-                        my_channel,
+                        neighbor_inboxes,
+                        my_inbox,
                         connector,
                         refractory_period,
                     )
@@ -187,8 +196,8 @@ def firefly_agent(
         initial_phase,
         period,
         nudge,
-        neighbors,
-        my_channel,
+        neighbor_inboxes,
+        my_inbox,
         connector,
         refractory_period,
     )

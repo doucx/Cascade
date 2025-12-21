@@ -77,6 +77,7 @@ class Engine:
 
         self.arg_resolver = ArgumentResolver()
         self.constraint_resolver = ConstraintResolver()
+        self.flow_manager: Optional[FlowManager] = None
         self._managed_subscribers = []
 
     def add_subscriber(self, subscriber: Any):
@@ -88,6 +89,36 @@ class Engine:
     def register(self, resource_def: ResourceDefinition):
         # We store the full ResourceDefinition to preserve metadata like scope.
         self._resource_providers[resource_def.name] = resource_def
+
+    def _is_simple_task(self, lr: Any) -> bool:
+        """
+        Checks if the LazyResult is a simple, flat task (no nested dependencies).
+        This allows for the Zero-Overhead TCO fast path.
+        """
+        if not isinstance(lr, LazyResult):
+            return False
+        if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
+            return False
+
+        def _has_lazy(obj):
+            if isinstance(obj, (LazyResult, MappedLazyResult)):
+                return True
+            if isinstance(obj, (list, tuple)):
+                return any(_has_lazy(x) for x in obj)
+            if isinstance(obj, dict):
+                return any(_has_lazy(v) for v in obj.values())
+            return False
+
+        # Check args and kwargs recursively
+        for arg in lr.args:
+            if _has_lazy(arg):
+                return False
+
+        for v in lr.kwargs.values():
+            if _has_lazy(v):
+                return False
+
+        return True
 
     def get_resource_provider(self, name: str) -> Callable:
         provider = self._resource_providers[name]
@@ -134,6 +165,11 @@ class Engine:
             # TCO Loop: We keep executing as long as the result is a LazyResult
             current_target = target
 
+            # Optimization: Reusable graph container for simple recursion (Zero-Overhead TCO)
+            # We keep the last simple graph to avoid rebuilding if the structure matches.
+            _tco_cached_graph: Optional[Graph] = None
+            _tco_cached_task_name: Optional[str] = None
+
             # The global stack holds "run" scoped resources
             with ExitStack() as run_stack:
                 # Register the engine's connector as a special internal resource
@@ -152,7 +188,34 @@ class Engine:
                     # The step stack holds "task" (step) scoped resources
                     with ExitStack() as step_stack:
                         # 1. Build graph for current target
-                        graph = build_graph(current_target)
+                        graph = None
+
+                        # TCO Optimization: Fast path for simple recursion
+                        if self._is_simple_task(current_target):
+                            task_name = current_target.task.name
+                            if _tco_cached_graph and _tco_cached_task_name == task_name:
+                                # HIT: Reuse the graph, just update inputs
+                                node = _tco_cached_graph.nodes[0]
+                                # Re-construct literal inputs from current args/kwargs
+                                node.literal_inputs = {
+                                    str(i): v for i, v in enumerate(current_target.args)
+                                }
+                                node.literal_inputs.update(current_target.kwargs)
+                                # Update UUID to match current target (important for state backend)
+                                node.id = current_target._uuid
+                                graph = _tco_cached_graph
+                            else:
+                                # MISS: Build and cache
+                                graph = build_graph(current_target)
+                                if len(graph.nodes) == 1:
+                                    _tco_cached_graph = graph
+                                    _tco_cached_task_name = task_name
+                                else:
+                                    _tco_cached_graph = None
+                        else:
+                            # Complex task, standard build
+                            graph = build_graph(current_target)
+                            _tco_cached_graph = None
 
                         # 2. Setup Resources (mixed scope)
                         required_resources = self._scan_for_resources(graph)
@@ -258,7 +321,7 @@ class Engine:
         state_backend: StateBackend,
     ) -> Any:
         graph = build_graph(target)
-        flow_manager = FlowManager(graph, target._uuid)
+        self.flow_manager = FlowManager(graph, target._uuid)
         plan = self.solver.resolve(graph)
 
         # Track blocked state locally to avoid spamming Blocked events every loop tick
@@ -275,7 +338,7 @@ class Engine:
                     if node.node_type == "param":
                         continue  # Skip params, they don't execute
 
-                    skip_reason = flow_manager.should_skip(node, state_backend)
+                    skip_reason = self.flow_manager.should_skip(node, state_backend)
                     if skip_reason:
                         state_backend.mark_skipped(node.id, skip_reason)
                         self.bus.publish(
@@ -320,9 +383,10 @@ class Engine:
 
                     for node, res in zip(executable_this_pass, pass_results):
                         state_backend.put_result(node.id, res)
-                        flow_manager.register_result(
-                            node.id, res, state_backend
-                        )
+                        if self.flow_manager:
+                            self.flow_manager.register_result(
+                                node.id, res, state_backend
+                            )
 
                 pending_nodes_in_stage = deferred_this_pass
 

@@ -10,7 +10,6 @@ from cascade.spec.resource import resource
 from observatory.agents.kuramoto import firefly_agent
 from observatory.monitors.convergence import ConvergenceMonitor
 from observatory.monitors.aggregator import MetricsAggregator
-from observatory.networking.direct_channel import DirectChannel
 
 # Visualization
 from observatory.visualization.palette import Palettes
@@ -21,7 +20,7 @@ from observatory.visualization.status import StatusBar
 # --- Constants ---
 GRID_SIDE = 30
 NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
-PERIOD = 3.0  # Slowed down to allow CPU to catch up with 2500 agents
+PERIOD = 5.0  # Slowed down to allow CPU to catch up with 2500 agents
 
 
 def get_neighbors(index: int, width: int, height: int) -> List[int]:
@@ -123,49 +122,41 @@ async def run_experiment(
         # Headless mode: Monitor prints to stdout
         monitor_task = asyncio.create_task(monitor.run(frequency_hz=2.0))
 
-    # --- Create Topology (DirectChannels) ---
-    print("Constructing Network Topology...")
-    channels = [DirectChannel(owner_id=f"agent_{i}", capacity=100) for i in range(num_agents)]
-
-    # --- Create Shared Engine ---
-    print("Initializing Shared Cascade Engine...")
-    engine = cs.Engine(
-        solver=cs.NativeSolver(),
-        executor=cs.LocalExecutor(),
-        bus=cs.MessageBus(), # A silent bus for the engine itself
-        connector=None,
-    )
+    # --- Create Agents ---
+    agent_tasks = []
 
     @resource(name="_internal_connector", scope="run")
     def shared_connector_provider():
         yield connector
-    engine.register(shared_connector_provider)
 
-
-    # --- Create Agents ---
-    agent_tasks = []
     # Batch creation to avoid freezing UI loop
     print("Generating Agent Workflows...")
     for i in range(num_agents):
         initial_phase = random.uniform(0, period)
 
-        # Topology Lookup
         neighbor_ids = get_neighbors(i, grid_width, grid_width)
-        my_neighbors = [channels[nid] for nid in neighbor_ids]
-        my_channel = channels[i]
+        neighbor_inboxes = [f"firefly/{nid}/inbox" for nid in neighbor_ids]
+        my_inbox = f"firefly/{i}/inbox"
+
+        engine = cs.Engine(
+            solver=cs.NativeSolver(),
+            executor=cs.LocalExecutor(),
+            bus=cs.MessageBus(),
+            connector=None,
+        )
+        engine.register(shared_connector_provider)
 
         agent_workflow = firefly_agent(
             agent_id=i,
             initial_phase=initial_phase,
             period=period,
             nudge=nudge,
-            neighbors=my_neighbors,
-            my_channel=my_channel,
-            connector=cs.inject("_internal_connector"),
+            neighbor_inboxes=neighbor_inboxes,
+            my_inbox=my_inbox,
+            connector=connector,
             refractory_period=period * 0.2,
         )
 
-        # Schedule the workflow to run on the shared engine
         agent_tasks.append(engine.run(agent_workflow))
 
         # Yield every 500 agents to keep UI responsive during setup

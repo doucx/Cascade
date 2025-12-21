@@ -69,6 +69,15 @@ def process_perception_and_recurse(
     This task now contains the logic that was previously in the inner function.
     It returns the *next* LazyResult in the recursive chain.
     """
+    # Handle the case where the input comes from cs.wait() which returns None
+    if perception_result is None:
+        # This occurs after the refractory period wait. The phase is already advanced.
+        # We simply continue to the next cycle from the new phase.
+        return firefly_cycle(
+            agent_id, phase, period, nudge, neighbors,
+            my_channel, connector, refractory_period
+        )
+        
     is_timeout = perception_result.get("timeout", False)
     elapsed_time = perception_result.get("elapsed", 0.0)
     current_actual_phase = phase + elapsed_time
@@ -81,7 +90,7 @@ def process_perception_and_recurse(
             my_channel, connector, refractory_period
         )
     else:
-        # We were nudged. Update phase and recurse.
+        # We were nudged or the refractory wait finished. Update phase and recurse.
         next_phase = current_actual_phase + nudge
         return firefly_cycle(
             agent_id, next_phase, period, nudge, neighbors,

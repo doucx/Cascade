@@ -148,13 +148,12 @@ def worker_main(
 
 async def run_orchestrator(
     num_agents: int,
+    grid_width: int,
     workers: int,
     concurrency_limit: Optional[int],
     visualize: bool,
     period: float,
 ):
-    grid_width = int(num_agents**0.5)
-    
     print(f"🔥 Starting MULTI-CORE Firefly Experiment")
     print(f"   - Agents: {num_agents} ({grid_width}x{grid_width})")
     print(f"   - Workers: {workers}")
@@ -277,18 +276,12 @@ async def run_orchestrator(
 @app.command()
 def main(
     visualize: bool = typer.Option(True, help="Enable visualizer UI"),
-    agents: int = typer.Option(NUM_AGENTS, help="Number of agents"),
+    grid_side: int = typer.Option(GRID_SIDE, help="Side length of the square agent grid."),
     workers: int = typer.Option(1, help="Number of worker processes"),
-    limit: Optional[int] = typer.Option(None, help="Global concurrency limit (cpu slots)"),
+    limit: Optional[int] = typer.Option(None, help="Global concurrency limit (per process)"),
 ):
-    if workers > 1:
-        asyncio.run(run_orchestrator(agents, workers, limit, visualize, PERIOD))
-    else:
-        # Fallback to legacy single-process mode (omitted for brevity, or we can just run orchestrator with 1 worker)
-        # For simplicity in this refactor, we use the Orchestrator for 1 worker too, 
-        # as it effectively does the same thing but with overhead of MP queue.
-        # To match exact legacy behavior we'd keep the old function, but let's unify.
-        asyncio.run(run_orchestrator(agents, workers, limit, visualize, PERIOD))
+    num_agents = grid_side * grid_side
+    asyncio.run(run_orchestrator(num_agents, grid_side, workers, limit, visualize, PERIOD))
 
 if __name__ == "__main__":
     app()

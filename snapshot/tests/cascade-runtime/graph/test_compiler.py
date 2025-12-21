@@ -19,13 +19,13 @@ def add(x: int, y: int) -> int:
 
 def test_compile_single_node_as_root():
     """
-    Verify compiling a single task as root.
+    Verify compiling a single task as root in template mode.
     Arguments should be promoted to Input Registers.
     """
     target = add_one(x=10) # 10 here acts as the 'default' or 'template' value structure
 
     builder = BlueprintBuilder()
-    blueprint = builder.build(target)
+    blueprint = builder.build(target, template=True)
 
     # Expected Registers:
     # R0: input 'x'

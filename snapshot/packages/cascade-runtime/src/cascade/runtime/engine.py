@@ -281,9 +281,9 @@ class Engine:
         """
         Executes the target using the AOT Blueprint/VM path.
         """
-        # 1. Compile
+        # 1. Compile in template mode
         builder = BlueprintBuilder()
-        blueprint = builder.build(target)
+        blueprint = builder.build(target, template=True)
 
         # 2. Extract Initial Arguments
         # The BlueprintBuilder treats the root LazyResult's args/kwargs as the

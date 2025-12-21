@@ -1,209 +1,124 @@
-## [WIP] feat(engine): Integrate VM execution path into Engine
+I see the test failures. My previous refactoring of `BlueprintBuilder` was too aggressive and over-specialized it for the TCO "template" compilation, breaking its ability to compile normal, concrete workflows with nested dependencies. The tests correctly identified this regression.
+
+The proper fix is to restore the compiler's general-purpose capability while still supporting the new template mode, controlled by a flag.
+
+## [WIP] fix(compiler): Restore concrete graph compilation and add template mode
 
 ### 摘要头
-`# [WIP] feat(engine): Integrate VM execution path into Engine`
+`# [WIP] fix(compiler): Restore concrete graph compilation and add template mode`
 
 ### 用户需求
-1.  将 AOT/VM 执行路径集成到 `Engine.run` 中。
-2.  当用户显式请求（例如通过参数 `use_vm=True`）时，`Engine` 应使用 `BlueprintBuilder` 编译任务，并使用 `VirtualMachine` 执行，而不是使用传统的图求解器。
+1.  修复 `BlueprintBuilder` 以支持两种编译模式：
+    *   **Concrete Mode (default)**: Compiles a full `LazyResult` tree into an executable blueprint.
+    *   **Template Mode**: Compiles a single root `LazyResult` into a reusable blueprint "template" where its arguments are promoted to blueprint inputs, for use by the VM's TCO loop.
+2.  Update the `Engine` to explicitly request "Template Mode" when using the VM path.
+3.  Update the tests to correctly test both modes.
+
+### 错误分析
+The `test_compile_data_dependency` and `test_compile_diamond_dependency` tests failed because `BlueprintBuilder.build` was modified to *only* perform template-style compilation. It treated the root task's arguments as blueprint inputs and did not recursively compile them if they were `LazyResult` objects. This is correct for a TCO agent template but incorrect for a standard, multi-step workflow.
+
+The solution is to make the compilation mode explicit. The `build` method will default to concrete compilation (which handles nested dependencies) and will only enter template mode when a new `template=True` flag is passed.
 
 ### 评论
-这是连接新旧世界的桥梁。一旦完成，我们就可以在不破坏现有 API 的情况下，为特定的高性能任务（如 Agent 循环）启用 VM 模式。这为最终的无缝切换奠定了基础。
+This fix makes the compiler more robust and its behavior more explicit. It resolves the regression while preserving the new functionality required for high-performance TCO.
 
 ### 目标
-1.  编写 `test_engine_dispatches_to_vm` 测试用例。
-2.  修改 `Engine.run` 方法，接受 `use_vm` 参数（或类似的触发机制）。
-3.  在 `Engine` 内部实例化 `BlueprintBuilder` 和 `VirtualMachine` 并委托执行。
-
-### 基本原理
-为了最小化对现有逻辑的侵入，我们将在 `Engine.run` 的最外层添加一个分支判断。
+1.  Refactor `BlueprintBuilder` to support both compilation modes.
+2.  Update `Engine._run_vm` to call the builder in template mode.
+3.  Adjust compiler tests to reflect the new `build` signature.
+4.  Ensure all tests pass.
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/engine #task/action/integration #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/parser #scope/core #ai/instruct #task/domain/runtime #task/object/compiler #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建引擎集成测试 (`test_engine_integration.py`)
-我们需要验证 `Engine` 是否正确地将执行委托给了 VM。
+#### Acts 1: Refactor `BlueprintBuilder` to support dual modes
+
+I will rename the template-specific logic and add the mode-switching logic to the public `build` method.
 
 ~~~~~act
-write_file
-tests/cascade-runtime/integration/test_engine_vm_integration.py
+patch_file
+packages/cascade-runtime/src/cascade/graph/compiler.py
 ~~~~~
 ~~~~~python
-import pytest
-from unittest.mock import MagicMock, patch
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.runtime.blueprint import TailCall
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.bus import MessageBus
+    def build(self, target: Any) -> Blueprint:
+        self.instructions.clear()
+        self._visited.clear()
+        self._register_counter = 0
+        self._input_args_map = []
+        self._input_kwargs_map = {}
+        
+        # Special handling for the root node to lift its arguments to input registers
+        if isinstance(target, (LazyResult, MappedLazyResult)):
+            self._compile_root(target)
+        else:
+            # Fallback for simple literals (though unlikely in practice)
+            raise TypeError(f"Cannot compile non-LazyResult type: {type(target)}")
+        
+        return Blueprint(
+            instructions=list(self.instructions),
+            register_count=self._register_counter,
+            input_args=list(self._input_args_map),
+            input_kwargs=dict(self._input_kwargs_map)
+        )
 
-# --- Helper ---
-@cs.task
-def vm_task(x: int):
-    return x + 1
+    def _allocate_register(self) -> Register:
+        reg = Register(self._register_counter)
+        self._register_counter += 1
+        return reg
 
-@pytest.mark.asyncio
-async def test_engine_dispatches_to_vm():
-    """
-    Verifies that Engine.run(..., use_vm=True) compiles and runs the task via VM.
-    """
-    # Setup Engine
-    bus = MessageBus()
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus
-    )
-    
-    # Target task
-    target = vm_task(x=10)
-    
-    # Mock BlueprintBuilder and VirtualMachine to verify interaction
-    with patch("cascade.runtime.engine.BlueprintBuilder") as MockBuilder, \
-         patch("cascade.runtime.engine.VirtualMachine") as MockVM:
+    def _compile_root(self, target: Union[LazyResult, MappedLazyResult]):
+        """
+        Compiles the root node. Arguments of the root node are treated as 
+        Blueprint inputs.
+        """
+~~~~~
+~~~~~python
+    def build(self, target: Any, template: bool = False) -> Blueprint:
+        self.instructions.clear()
+        self._visited.clear()
+        self._register_counter = 0
+        self._input_args_map = []
+        self._input_kwargs_map = {}
         
-        mock_builder_instance = MockBuilder.return_value
-        mock_vm_instance = MockVM.return_value
+        if template:
+            if not isinstance(target, (LazyResult, MappedLazyResult)):
+                raise TypeError(f"Template compilation requires a LazyResult root, got {type(target)}")
+            self._compile_template(target)
+        else:
+            self._visit(target)
         
-        # Mock build result
-        mock_bp = MagicMock()
-        mock_builder_instance.build.return_value = mock_bp
-        
-        # Mock execute result
-        mock_vm_instance.execute = MagicMock(return_value=11)
-        # async mock is tricky, let's use a real async function or specific mock config
-        # Simpler: just ensure the call happens. The execute needs to be awaitable.
-        async def async_return(*args, **kwargs):
-            return 11
-        mock_vm_instance.execute.side_effect = async_return
+        return Blueprint(
+            instructions=list(self.instructions),
+            register_count=self._register_counter,
+            input_args=list(self._input_args_map),
+            input_kwargs=dict(self._input_kwargs_map)
+        )
 
-        # Run with VM flag
-        result = await engine.run(target, use_vm=True)
-        
-        # Assertions
-        assert result == 11
-        
-        # Verify Builder was called with target
-        mock_builder_instance.build.assert_called_once_with(target)
-        
-        # Verify VM was executed with the blueprint and initial kwargs
-        # Note: The engine should extract initial kwargs from the target
-        mock_vm_instance.execute.assert_called_once()
-        call_args = mock_vm_instance.execute.call_args
-        assert call_args[0][0] == mock_bp # First arg is blueprint
-        assert call_args[1]['initial_kwargs'] == {'x': 10}
+    def _allocate_register(self) -> Register:
+        reg = Register(self._register_counter)
+        self._register_counter += 1
+        return reg
 
-@pytest.mark.asyncio
-async def test_engine_vm_recursive_execution():
-    """
-    Integration test with a real recursive task (no mocks), verifying TCO.
-    """
-    # A real recursive task
-    @cs.task
-    def countdown(n: int):
-        if n > 0:
-            return TailCall(kwargs={"n": n - 1})
-        return "Liftoff"
-
-    bus = MessageBus()
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus
-    )
-    
-    target = countdown(n=5)
-    
-    # Run with VM
-    result = await engine.run(target, use_vm=True)
-    
-    assert result == "Liftoff"
+    def _compile_template(self, target: Union[LazyResult, MappedLazyResult]):
+        """
+        Compiles the root node as a template. Arguments of the root node are 
+        treated as Blueprint inputs and allocated input registers.
+        """
 ~~~~~
 
-#### Acts 2: 修改 `Engine` 以支持 VM 路径 (`engine.py`)
-我们需要导入 `BlueprintBuilder` 和 `VirtualMachine`，并在 `run` 方法中添加逻辑分支。
-同时，我们需要从 `target` 中提取初始参数（`args`/`kwargs`）传递给 VM。
+#### Acts 2: Update the Engine to use template mode
+
+The engine's VM path is the specific consumer of template blueprints.
 
 ~~~~~act
 patch_file
 packages/cascade-runtime/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-from cascade.adapters.state import InMemoryStateBackend
-
-
-class Engine:
-    """
-    Orchestrates the entire workflow execution.
-    """
-~~~~~
-~~~~~python
-from cascade.adapters.state import InMemoryStateBackend
-from cascade.graph.compiler import BlueprintBuilder
-from cascade.runtime.vm import VirtualMachine
-
-
-class Engine:
-    """
-    Orchestrates the entire workflow execution.
-    """
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-    def override_resource_provider(self, name: str, new_provider: Any):
-        # When overriding, we might lose metadata if a raw function is passed,
-        # but that's acceptable for testing overrides.
-        self._resource_providers[name] = new_provider
-
-    async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
-        run_id = str(uuid4())
-        start_time = time.time()
-~~~~~
-~~~~~python
-    def override_resource_provider(self, name: str, new_provider: Any):
-        # When overriding, we might lose metadata if a raw function is passed,
-        # but that's acceptable for testing overrides.
-        self._resource_providers[name] = new_provider
-
-    async def run(
-        self, 
-        target: Any, 
-        params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = False
-    ) -> Any:
-        # VM Fast Path
-        if use_vm:
-            return await self._run_vm(target)
-
-        run_id = str(uuid4())
-        start_time = time.time()
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-            if self.connector:
-                await self.connector.disconnect()
-                self.bus.publish(ConnectorDisconnected(run_id=run_id))
-
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-~~~~~
-~~~~~python
-            if self.connector:
-                await self.connector.disconnect()
-                self.bus.publish(ConnectorDisconnected(run_id=run_id))
-
     async def _run_vm(self, target: Any) -> Any:
         """
         Executes the target using the AOT Blueprint/VM path.
@@ -213,20 +128,53 @@ packages/cascade-runtime/src/cascade/runtime/engine.py
         blueprint = builder.build(target)
 
         # 2. Extract Initial Arguments
-        # The BlueprintBuilder treats the root LazyResult's args/kwargs as the
-        # inputs for the blueprint.
-        initial_args = list(target.args)
-        initial_kwargs = dict(target.kwargs)
+~~~~~
+~~~~~python
+    async def _run_vm(self, target: Any) -> Any:
+        """
+        Executes the target using the AOT Blueprint/VM path.
+        """
+        # 1. Compile in template mode
+        builder = BlueprintBuilder()
+        blueprint = builder.build(target, template=True)
 
-        # 3. Execute
-        vm = VirtualMachine()
-        # TODO: Inject resources and specialized executors into VM if needed.
-        # For now, VM uses direct function calls.
-        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+        # 2. Extract Initial Arguments
+~~~~~
 
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
+#### Acts 3: Update compiler tests to use the new flag
+
+The test that validates template compilation must now explicitly enable it. The other failing tests should now pass without changes.
+
+~~~~~act
+patch_file
+tests/cascade-runtime/graph/test_compiler.py
+~~~~~
+~~~~~python
+def test_compile_single_node_as_root():
+    """
+    Verify compiling a single task as root.
+    Arguments should be promoted to Input Registers.
+    """
+    target = add_one(x=10) # 10 here acts as the 'default' or 'template' value structure
+
+    builder = BlueprintBuilder()
+    blueprint = builder.build(target)
+
+    # Expected Registers:
+~~~~~
+~~~~~python
+def test_compile_single_node_as_root():
+    """
+    Verify compiling a single task as root in template mode.
+    Arguments should be promoted to Input Registers.
+    """
+    target = add_one(x=10) # 10 here acts as the 'default' or 'template' value structure
+
+    builder = BlueprintBuilder()
+    blueprint = builder.build(target, template=True)
+
+    # Expected Registers:
 ~~~~~
 
 ### 下一步建议
-运行 `tests/cascade-runtime/integration/test_engine_vm_integration.py` 验证集成是否成功。
-如果成功，我们将进入最后一个任务：**使用 `kuramoto.py` 和 `run_fireflies.py` 进行验证**，这将是一个激动人心的时刻！
+The compiler logic is now correct and robust for both use cases. All tests should pass. We can now proceed with the final validation step: applying this new machinery to the `kuramoto` agent in the fireflies experiment.

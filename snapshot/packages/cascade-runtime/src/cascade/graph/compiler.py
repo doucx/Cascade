@@ -16,19 +16,19 @@ class BlueprintBuilder:
         self._input_args_map: List[int] = []
         self._input_kwargs_map: Dict[str, int] = {}
 
-    def build(self, target: Any) -> Blueprint:
+    def build(self, target: Any, template: bool = False) -> Blueprint:
         self.instructions.clear()
         self._visited.clear()
         self._register_counter = 0
         self._input_args_map = []
         self._input_kwargs_map = {}
         
-        # Special handling for the root node to lift its arguments to input registers
-        if isinstance(target, (LazyResult, MappedLazyResult)):
-            self._compile_root(target)
+        if template:
+            if not isinstance(target, (LazyResult, MappedLazyResult)):
+                raise TypeError(f"Template compilation requires a LazyResult root, got {type(target)}")
+            self._compile_template(target)
         else:
-            # Fallback for simple literals (though unlikely in practice)
-            raise TypeError(f"Cannot compile non-LazyResult type: {type(target)}")
+            self._visit(target)
         
         return Blueprint(
             instructions=list(self.instructions),
@@ -42,10 +42,10 @@ class BlueprintBuilder:
         self._register_counter += 1
         return reg
 
-    def _compile_root(self, target: Union[LazyResult, MappedLazyResult]):
+    def _compile_template(self, target: Union[LazyResult, MappedLazyResult]):
         """
-        Compiles the root node. Arguments of the root node are treated as 
-        Blueprint inputs.
+        Compiles the root node as a template. Arguments of the root node are 
+        treated as Blueprint inputs and allocated input registers.
         """
         # 1. Compile Input Arguments
         # Instead of compiling them recursively as fixed dependencies, 

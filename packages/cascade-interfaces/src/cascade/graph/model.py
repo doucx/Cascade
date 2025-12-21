@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Any, Dict
 from enum import Enum, auto
+import inspect
 
 
 from cascade.spec.common import Param
@@ -29,6 +30,7 @@ class Node:
     # Core spec
     node_type: str = "task"  # "task", "param", or "map"
     callable_obj: Optional[Callable] = None
+    signature: Optional[inspect.Signature] = None  # Cached signature for performance
     param_spec: Optional[Param] = None
     mapping_factory: Optional[Any] = None  # Implements LazyFactory
 

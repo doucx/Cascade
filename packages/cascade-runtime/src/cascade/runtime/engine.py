@@ -234,6 +234,7 @@ class Engine:
                             active_resources,
                             run_id,
                             state_backend,
+                            graph=graph,
                         )
 
                     # 4. Check for Tail Call (LazyResult)
@@ -319,9 +320,12 @@ class Engine:
         active_resources: Dict[str, Any],
         run_id: str,
         state_backend: StateBackend,
+        graph: Optional[Graph] = None,
     ) -> Any:
-        graph = build_graph(target)
-        self.flow_manager = FlowManager(graph, target._uuid)
+        if graph is None:
+            graph = build_graph(target)
+            
+        flow_manager = FlowManager(graph, target._uuid)
         plan = self.solver.resolve(graph)
 
         # Track blocked state locally to avoid spamming Blocked events every loop tick
@@ -338,7 +342,7 @@ class Engine:
                     if node.node_type == "param":
                         continue  # Skip params, they don't execute
 
-                    skip_reason = self.flow_manager.should_skip(node, state_backend)
+                    skip_reason = flow_manager.should_skip(node, state_backend)
                     if skip_reason:
                         state_backend.mark_skipped(node.id, skip_reason)
                         self.bus.publish(
@@ -383,8 +387,8 @@ class Engine:
 
                     for node, res in zip(executable_this_pass, pass_results):
                         state_backend.put_result(node.id, res)
-                        if self.flow_manager:
-                            self.flow_manager.register_result(
+                        if flow_manager:
+                            flow_manager.register_result(
                                 node.id, res, state_backend
                             )
 
@@ -603,7 +607,12 @@ class Engine:
             for value in node.literal_inputs.values():
                 if isinstance(value, Inject):
                     required.add(value.resource_name)
-            if node.callable_obj:
+            
+            if node.signature:
+                for param in node.signature.parameters.values():
+                    if isinstance(param.default, Inject):
+                        required.add(param.default.resource_name)
+            elif node.callable_obj:
                 sig = inspect.signature(node.callable_obj)
                 for param in sig.parameters.values():
                     if isinstance(param.default, Inject):

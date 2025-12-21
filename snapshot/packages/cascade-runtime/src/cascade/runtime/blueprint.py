@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, List, Dict, Union
+from typing import Any, List, Dict, Optional
 
 @dataclass
 class Operand:
@@ -33,9 +33,24 @@ class Call(Instruction):
     kwargs: Dict[str, Operand] = field(default_factory=dict)
 
 @dataclass
+class TailCall:
+    """
+    A special return value indicating a request for tail-recursive execution.
+    The VM intercepts this object and restarts execution with the new arguments.
+    """
+    args: List[Any] = field(default_factory=list)
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+    target_blueprint_id: Optional[str] = None  # For mutual recursion in future
+
+@dataclass
 class Blueprint:
     """
     Represents a compiled workflow, ready for execution by the VM.
     """
     instructions: List[Instruction] = field(default_factory=list)
     register_count: int = 0
+    
+    # Maps input argument positions to Register indices.
+    # Used by the VM to populate the initial frame or refill it on TailCall.
+    input_args: List[int] = field(default_factory=list)
+    input_kwargs: Dict[str, int] = field(default_factory=dict)

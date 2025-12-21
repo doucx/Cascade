@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M run_fireflies.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766319152.4840503, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(exp): 修复 run_fireflies 多进程错误并强制平方网格", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766319152.9940698, "duration_ms": 0}}

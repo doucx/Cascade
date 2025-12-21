@@ -281,14 +281,14 @@ def main(
     workers: int = typer.Option(1, help="Number of worker processes"),
     limit: Optional[int] = typer.Option(None, help="Global concurrency limit (cpu slots)"),
 ):
-    if workers > 1:
-        asyncio.run(run_orchestrator(agents, workers, limit, visualize, PERIOD))
-    else:
-        # Fallback to legacy single-process mode (omitted for brevity, or we can just run orchestrator with 1 worker)
-        # For simplicity in this refactor, we use the Orchestrator for 1 worker too, 
-        # as it effectively does the same thing but with overhead of MP queue.
-        # To match exact legacy behavior we'd keep the old function, but let's unify.
-        asyncio.run(run_orchestrator(agents, workers, limit, visualize, PERIOD))
+    # Ensure square grid
+    side = int(math.isqrt(agents))
+    adjusted_agents = side * side
+    
+    if adjusted_agents != agents:
+        print(f"⚠️  Adjusting agent count from {agents} to {adjusted_agents} to fit a {side}x{side} square grid.")
+    
+    asyncio.run(run_orchestrator(adjusted_agents, workers, limit, visualize, PERIOD))
 
 if __name__ == "__main__":
     app()

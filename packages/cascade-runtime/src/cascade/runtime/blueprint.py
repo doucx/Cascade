@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, List, Dict, Optional
+from cascade.spec.constraint import ResourceConstraint
 
 @dataclass
 class Operand:
@@ -31,6 +32,10 @@ class Call(Instruction):
     output: Register
     args: List[Operand] = field(default_factory=list)
     kwargs: Dict[str, Operand] = field(default_factory=dict)
+    
+    # Metadata for observability and constraints
+    task_name: str = "unknown"
+    constraints: Optional[ResourceConstraint] = None
 
 @dataclass
 class TailCall:

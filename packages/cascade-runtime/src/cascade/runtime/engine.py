@@ -55,6 +55,7 @@ class Engine:
         system_resources: Optional[Dict[str, Any]] = None,
         connector: Optional[Connector] = None,
         cache_backend: Optional[Any] = None,
+        resource_manager: Optional[ResourceManager] = None,
     ):
         self.solver = solver
         self.executor = executor
@@ -65,7 +66,14 @@ class Engine:
             lambda run_id: InMemoryStateBackend(run_id)
         )
         self.cache_backend = cache_backend
-        self.resource_manager = ResourceManager(capacity=system_resources)
+        
+        if resource_manager:
+            self.resource_manager = resource_manager
+            # If system_resources is also provided, we update the injected manager
+            if system_resources:
+                self.resource_manager.set_capacity(system_resources)
+        else:
+            self.resource_manager = ResourceManager(capacity=system_resources)
 
         # Setup constraint manager with default handlers
         self.constraint_manager = ConstraintManager(self.resource_manager)
@@ -300,9 +308,11 @@ class Engine:
         initial_kwargs = dict(target.kwargs)
 
         # 3. Execute
-        vm = VirtualMachine()
-        # TODO: Inject resources and specialized executors into VM if needed.
-        # For now, VM uses direct function calls.
+        vm = VirtualMachine(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self._wakeup_event
+        )
         return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):

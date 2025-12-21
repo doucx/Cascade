@@ -1,11 +1,13 @@
 import asyncio
 import random
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import time
+import typer
 
 import cascade as cs
 from cascade.connectors.local import LocalBusConnector
 from cascade.spec.resource import resource
+from cascade.runtime.resource_manager import ResourceManager
 
 from observatory.agents.kuramoto import firefly_agent
 from observatory.monitors.convergence import ConvergenceMonitor
@@ -22,6 +24,8 @@ from observatory.visualization.status import StatusBar
 GRID_SIDE = 30
 NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
 PERIOD = 5.0  # Slowed down to allow CPU to catch up with 2500 agents
+
+app = typer.Typer()
 
 
 def get_neighbors(index: int, width: int, height: int) -> List[int]:
@@ -44,6 +48,7 @@ async def run_experiment(
     duration_seconds: float = 3000.0,
     visualize: bool = True,
     decay_duty_cycle: float = 0.3,
+    concurrency_limit: Optional[int] = None,
 ):
     """
     Sets up and runs the firefly synchronization experiment.
@@ -52,11 +57,19 @@ async def run_experiment(
     print(
         f"🔥 Starting {'VISUAL' if visualize else 'HEADLESS'} firefly experiment with {num_agents} agents ({grid_width}x{grid_width})..."
     )
+    if concurrency_limit:
+        print(f"⚠️  Global Concurrency Limit: {concurrency_limit} slots")
 
-    # 1. Initialize Shared Bus
+    # 1. Initialize Shared Bus and Resources
     LocalBusConnector._reset_broker_state()
     connector = LocalBusConnector()
     await connector.connect()
+
+    # Shared Resource Manager for Global Limits
+    shared_resource_manager = None
+    if concurrency_limit:
+        # Define a global 'cpu_slot' resource
+        shared_resource_manager = ResourceManager(capacity={"cpu_slot": concurrency_limit})
 
     # --- Setup Monitor & Visualizer ---
     # Monitor now needs to handle many more agents.
@@ -144,18 +157,20 @@ async def run_experiment(
         my_neighbors = [channels[nid] for nid in neighbor_ids]
         my_channel = channels[i]
 
+        # Inject the shared resource manager if limits are active
         engine = cs.Engine(
             solver=cs.NativeSolver(),
             executor=cs.LocalExecutor(),
             bus=cs.MessageBus(),
             connector=None,
+            resource_manager=shared_resource_manager,
         )
         engine.register(shared_connector_provider)
 
         agent_workflow = firefly_agent(
             agent_id=i,
             initial_phase=initial_phase,
-            period=period,
+            period=PERIOD,
             nudge=nudge,
             neighbors=my_neighbors,
             my_channel=my_channel,
@@ -163,7 +178,10 @@ async def run_experiment(
             refractory_period=period * 0.2,
         )
 
-        # Enable VM execution for TailCall support
+        # Apply constraints if limit is set
+        if concurrency_limit:
+            agent_workflow = agent_workflow.with_constraints(cpu_slot=1)
+
         agent_tasks.append(engine.run(agent_workflow, use_vm=True))
 
         # Yield every 500 agents to keep UI responsive during setup
@@ -201,5 +219,13 @@ async def run_experiment(
         await connector.disconnect()
 
 
+@app.command()
+def main(
+    visualize: bool = typer.Option(True, help="Enable visualizer UI"),
+    agents: int = typer.Option(NUM_AGENTS, help="Number of agents"),
+    limit: Optional[int] = typer.Option(None, help="Global concurrency limit (cpu slots)"),
+):
+    asyncio.run(run_experiment(num_agents=agents, visualize=visualize, concurrency_limit=limit))
+
 if __name__ == "__main__":
-    asyncio.run(run_experiment(visualize=True))
+    app()

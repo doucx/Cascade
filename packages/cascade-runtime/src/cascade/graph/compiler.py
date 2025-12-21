@@ -81,16 +81,25 @@ class BlueprintBuilder:
 
         # 3. Emit Instruction
         callable_obj = None
+        task_name = "unknown"
+        constraints = None
+
         if isinstance(target, LazyResult):
             callable_obj = target.task.func
+            task_name = target.task.name
+            constraints = target._constraints
         elif isinstance(target, MappedLazyResult):
             callable_obj = target.factory
+            task_name = getattr(target.factory, "name", "map")
+            constraints = target._constraints
 
         instr = Call(
             func=callable_obj,
             output=output_reg,
             args=args_operands,
-            kwargs=kwargs_operands
+            kwargs=kwargs_operands,
+            task_name=task_name,
+            constraints=constraints
         )
         self._instructions.append(instr)
 

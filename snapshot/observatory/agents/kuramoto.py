@@ -117,6 +117,7 @@ def firefly_agent(
                     my_channel,
                     connector,
                     refractory_period,
+                    agent_type,
                 )
 
             return after_refractory(wait_action)

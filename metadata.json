@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(sim): 实施单 Engine 模式与抑制性动力学", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766305187.9308825, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(agent): 修复递归闭包中的签名不匹配问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766305254.1445565, "duration_ms": 0}}

@@ -21,7 +21,7 @@ from observatory.visualization.status import StatusBar
 # --- Constants ---
 GRID_SIDE = 30
 NUM_AGENTS = GRID_SIDE * GRID_SIDE  # 2500
-PERIOD = 5.0  # Slowed down to allow CPU to catch up with 2500 agents
+PERIOD = 3.0  # Slowed down to allow CPU to catch up with 2500 agents
 
 
 def get_neighbors(index: int, width: int, height: int) -> List[int]:

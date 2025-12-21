@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Union
+from typing import Dict, Any
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -29,9 +29,7 @@ class GraphBuilder:
         # We store the args/kwargs structure directly in literal_inputs.
         # This structure contains LazyResult objects, which is fine for the runtime,
         # but requires special handling for serialization.
-        literal_inputs = {
-            str(i): v for i, v in enumerate(result.args)
-        }
+        literal_inputs = {str(i): v for i, v in enumerate(result.args)}
         literal_inputs.update(result.kwargs)
 
         node = Node(
@@ -89,7 +87,7 @@ class GraphBuilder:
             retry_policy=result._retry_policy,
             cache_policy=result._cache_policy,
             constraints=result._constraints,
-            literal_inputs=result.mapping_kwargs, # Map inputs are treated as kwargs
+            literal_inputs=result.mapping_kwargs,  # Map inputs are treated as kwargs
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
@@ -132,7 +130,7 @@ class GraphBuilder:
                 source=selector_node,
                 target=target_node,
                 arg_name=f"{path}.selector" if path else "selector",
-                router=obj, # Important: Link Router to this edge for FlowManager
+                router=obj,  # Important: Link Router to this edge for FlowManager
                 edge_type=EdgeType.DATA,
             )
             self.graph.add_edge(edge)
@@ -150,11 +148,15 @@ class GraphBuilder:
 
         elif isinstance(obj, (list, tuple)):
             for i, item in enumerate(obj):
-                self._scan_and_add_edges(target_node, item, path=f"{path}[{i}]" if path else str(i))
-        
+                self._scan_and_add_edges(
+                    target_node, item, path=f"{path}[{i}]" if path else str(i)
+                )
+
         elif isinstance(obj, dict):
             for k, v in obj.items():
-                self._scan_and_add_edges(target_node, v, path=f"{path}.{k}" if path else str(k))
+                self._scan_and_add_edges(
+                    target_node, v, path=f"{path}.{k}" if path else str(k)
+                )
 
 
 def build_graph(target: LazyResult) -> Graph:

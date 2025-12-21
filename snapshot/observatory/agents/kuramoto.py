@@ -66,7 +66,7 @@ def firefly_agent(
 
     # 1. Refractory Path
     if initial_phase < refractory_period:
-        wait_duration = refractory_period - phase
+        wait_duration = refractory_period - initial_phase
         wait_action = cs.wait(wait_duration)
 
         @cs.task

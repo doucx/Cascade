@@ -37,6 +37,8 @@ from cascade.runtime.constraints.handlers import (
     RateLimitConstraintHandler,
 )
 from cascade.adapters.state import InMemoryStateBackend
+from cascade.graph.compiler import BlueprintBuilder
+from cascade.runtime.vm import VirtualMachine
 
 
 class Engine:
@@ -132,7 +134,16 @@ class Engine:
         # but that's acceptable for testing overrides.
         self._resource_providers[name] = new_provider
 
-    async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
+    async def run(
+        self, 
+        target: Any, 
+        params: Optional[Dict[str, Any]] = None,
+        use_vm: bool = False
+    ) -> Any:
+        # VM Fast Path
+        if use_vm:
+            return await self._run_vm(target)
+
         run_id = str(uuid4())
         start_time = time.time()
 
@@ -265,6 +276,26 @@ class Engine:
             if self.connector:
                 await self.connector.disconnect()
                 self.bus.publish(ConnectorDisconnected(run_id=run_id))
+
+    async def _run_vm(self, target: Any) -> Any:
+        """
+        Executes the target using the AOT Blueprint/VM path.
+        """
+        # 1. Compile
+        builder = BlueprintBuilder()
+        blueprint = builder.build(target)
+
+        # 2. Extract Initial Arguments
+        # The BlueprintBuilder treats the root LazyResult's args/kwargs as the
+        # inputs for the blueprint.
+        initial_args = list(target.args)
+        initial_kwargs = dict(target.kwargs)
+
+        # 3. Execute
+        vm = VirtualMachine()
+        # TODO: Inject resources and specialized executors into VM if needed.
+        # For now, VM uses direct function calls.
+        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""

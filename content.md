@@ -1,55 +1,128 @@
 简要回答：
-好的，我们已经成功实现了多核并行仿真并优化了命令行交互。现在我将创建一个 `[COMMIT]` 计划，将这些改进正式入库。
+你的直觉非常敏锐。问题确实出在 `worker_main` 中对 `local_limit` 的计算逻辑上。由于一个数学错误，原本设定的限制被错误地缩小了 N 倍（N 为 Agent 数量），导致 `--limit 100` 实际上变成了 `--limit 1`。
 
-## [COMMIT] refactor(exp): 实现多核并行支持并增强萤火虫仿真 CLI
+## [WIP] fix(exp): 修正并行模式下的并发限制分配逻辑
+
+### 错误分析
+
+在 `worker_main` 函数中，目前的逻辑是：
+```python
+local_limit = concurrency_limit // len(agent_indices)
+```
+这里的意图是“分配给这个进程的配额”，但逻辑完全错了：
+1.  **分母错误**：`len(agent_indices)` 是该进程管理的 Agent 数量。如果全局限制是 100，进程管理 100 个 Agent，那么 `local_limit` 变成了 `100 // 100 = 1`。
+2.  **后果**：由于 `firefly_agent` 任务内部包含 `await asyncio.sleep` 和 `await asyncio.wait_for`，在执行这些异步等待时，它**仍然占据着资源槽位**。如果 `local_limit` 为 1，意味着整个进程中**同一时刻只能有一个 Agent 在运行**（包括在它的 refractory 或 sensitive 阶段等待）。其他 99 个 Agent 都在 `resource_manager.acquire` 处排队。这就是为什么屏幕上只有零星闪烁的原因。
 
 ### 用户需求
-将已验证的多进程并行架构、Bug 修复以及增强的命令行接口参数集成到主分支。
+修复并发限制的分配算法，使得 `--limit` 选项能按照预期（全局配额的比例分配）工作。
 
 ### 评论
-通过这次重构，`run_fireflies` 从一个单核原型进化为了一个生产级的多核仿真工具。它不仅在物理上通过并行化突破了性能瓶颈，还在交互上通过参数化提升了实验效率。`IpcUplinkConnector` 的引入也为未来更复杂的分布式遥测提供了基础模式。
+这是一个典型的“比例缩放”错误。在分布式或多进程系统中，全局资源的本地化（Localization）必须基于“进程贡献度”而非“个体数量”。修正后，即使开启了限制，只要 Agent 总数未超过限制，它们就应该能全部正常运行。
 
 ### 目标
-执行 Git 提交，持久化多核仿真能力和 CLI 优化成果。
+1.  在 `run_orchestrator` 中向 `worker_main` 传递 Agent 总数。
+2.  在 `worker_main` 中使用比例公式重新计算 `local_limit`：`local_limit = ceil(global_limit * (进程内 Agent 数 / 总 Agent 数))`。
 
 ### 基本原理
-遵循「脚本与 Git 操作互斥」原则，在代码功能（多核运行、参数传递、Bug 修复）通过手动运行验证后，使用独立的提交计划完成代码入库。
+为了在不使用中心化资源服务器（如 Redis）的情况下模拟全局限制，我们将全局容量按比例切割给每个工作进程。公式：$LocalCapacity = GlobalLimit \times \frac{LocalAgents}{TotalAgents}$。这确保了所有进程的本地容量之和近似等于全局限制。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/experiments #concept/multiprocessing #scope/perf #scope/dx #ai/instruct #task/domain/experiments #task/object/multiprocessing #task/action/refactor #task/state/end
+#intent/fix #flow/ready #priority/high #comp/experiments #scope/perf #ai/instruct #task/domain/experiments #task/object/resource-allocation #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 提交多核优化与 CLI 增强
+#### Acts 1: 修正分配逻辑
 
-我们将新创建的 IPC 连接器和重构后的实验脚本添加到暂存区。
+我们需要更新 `run_orchestrator` 传递参数的方式，并重写 `worker_main` 中的计算公式。
 
 ~~~~~act
-git_add
-observatory/networking/ipc.py
+patch_file
 observatory/experiments/run_fireflies.py
 ~~~~~
+~~~~~python
+def worker_main(
+    worker_id: int,
+    agent_indices: List[int],
+    uplink_queue: mp.Queue,
+    concurrency_limit: Optional[int],
+    grid_width: int,
+    grid_height: int,
+    period: float,
+    nudge: float,
+):
+~~~~~
+~~~~~python
+def worker_main(
+    worker_id: int,
+    agent_indices: List[int],
+    total_agents: int,
+    uplink_queue: mp.Queue,
+    concurrency_limit: Optional[int],
+    grid_width: int,
+    grid_height: int,
+    period: float,
+    nudge: float,
+):
+~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+observatory/experiments/run_fireflies.py
 ~~~~~
-~~~~~text
-refactor(exp): implement multi-core support and enhance CLI for firefly simulation
+~~~~~python
+        # 2. Setup Resources
+        # Note: Concurrency limits are currently PER PROCESS in this mode.
+        # To make them global across processes requires a distributed lock (e.g. Redis),
+        # which is out of scope for this MP queue-based MVP.
+        # We scale the limit down proportionally.
+        local_limit = None
+        if concurrency_limit:
+            local_limit = max(1, concurrency_limit // len(agent_indices)) if agent_indices else 1
+        
+        resource_manager = None
+~~~~~
+~~~~~python
+        # 2. Setup Resources
+        # We partition the global limit proportionally among workers.
+        local_limit = None
+        if concurrency_limit:
+            # Formula: (Global Limit * Agents in this Worker) / Total Agents
+            # Using math.ceil to ensure we don't end up with 0 due to rounding
+            local_limit = math.ceil(concurrency_limit * (len(agent_indices) / total_agents))
+        
+        resource_manager = None
+~~~~~
 
-This commit introduces significant performance and usability improvements to the firefly experiment:
-
-- **Multi-Core Parallelism**: Replaced single-loop execution with a multi-process architecture. Agents are now sharded across multiple worker processes, effectively bypassing Python's GIL for heavy logic.
-- **IPC Telemetry**: Added 'IpcUplinkConnector' to bridge telemetry from worker processes back to the main UI hub using multiprocessing queues.
-- **Enhanced CLI**: 
-  - Replaced ambiguous '--agents' with '--grid-side' to ensure perfect square grids.
-  - Exposed core physical parameters (--period, --nudge, --duration, --decay-duty-cycle) as CLI options for easier tuning.
-- **Bug Fixes**: Corrected a critical NameError in worker initialization.
-
-This refactoring allows for much larger simulations (N=10,000+) while maintaining high UI responsiveness.
+~~~~~act
+patch_file
+observatory/experiments/run_fireflies.py
+~~~~~
+~~~~~python
+        p = mp.Process(
+            target=worker_main,
+            args=(
+                w_id, indices, uplink_queue, concurrency_limit,
+                grid_width, grid_width, period, nudge
+            )
+        )
+~~~~~
+~~~~~python
+        p = mp.Process(
+            target=worker_main,
+            args=(
+                w_id, indices, num_agents, uplink_queue, concurrency_limit,
+                grid_width, grid_width, period, nudge
+            )
+        )
 ~~~~~
 
 ### 下一步建议
-- **压力测试**: 建议在高性能机器上运行 `python -m observatory.experiments.run_fireflies --grid-side 100 --workers 12`，观察 10,000 个 Agent 在多核下的同步行为和性能极限。
-- **跨进程连接**: 当前版本中跨进程的 Agent 连接是断开的。未来可以考虑引入基于 SharedMemory 或分布式 Redis 的连接器，实现跨核心的完整拓扑同步。
+现在你可以再次尝试运行：
+`python -m observatory.experiments.run_fireflies --grid-side 10 --limit 100`
+预期结果是：所有 100 个 Agent 都能流畅闪烁，因为此时 `local_limit` 应该被正确计算为 `100`。
+
+随后你可以尝试：
+`python -m observatory.experiments.run_fireflies --grid-side 20 --limit 100`
+此时你会看到 400 个 Agent 中只有约 1/4 在同时活跃，这验证了限制确实生效了。

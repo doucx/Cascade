@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(exp): 实现多核并行支持并增强萤火虫仿真 CLI", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766319879.5058289, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(exp): 修正并行模式下的并发限制分配逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766320351.145501, "duration_ms": 0}}

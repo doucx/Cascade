@@ -7,6 +7,7 @@ from uuid import uuid4
 from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
+from cascade.graph.hashing import StructuralHasher
 from cascade.graph.model import Node, Graph
 from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -36,6 +37,8 @@ from cascade.runtime.constraints.handlers import (
     RateLimitConstraintHandler,
 )
 from cascade.adapters.state import InMemoryStateBackend
+from cascade.graph.compiler import BlueprintBuilder
+from cascade.runtime.vm import VirtualMachine
 
 
 class Engine:
@@ -77,8 +80,8 @@ class Engine:
 
         self.arg_resolver = ArgumentResolver()
         self.constraint_resolver = ConstraintResolver()
-        self.flow_manager: Optional[FlowManager] = None
         self._managed_subscribers = []
+        self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
 
     def add_subscriber(self, subscriber: Any):
         """
@@ -131,7 +134,16 @@ class Engine:
         # but that's acceptable for testing overrides.
         self._resource_providers[name] = new_provider
 
-    async def run(self, target: Any, params: Optional[Dict[str, Any]] = None) -> Any:
+    async def run(
+        self, 
+        target: Any, 
+        params: Optional[Dict[str, Any]] = None,
+        use_vm: bool = False
+    ) -> Any:
+        # VM Fast Path
+        if use_vm:
+            return await self._run_vm(target)
+
         run_id = str(uuid4())
         start_time = time.time()
 
@@ -165,11 +177,6 @@ class Engine:
             # TCO Loop: We keep executing as long as the result is a LazyResult
             current_target = target
 
-            # Optimization: Reusable graph container for simple recursion (Zero-Overhead TCO)
-            # We keep the last simple graph to avoid rebuilding if the structure matches.
-            _tco_cached_graph: Optional[Graph] = None
-            _tco_cached_task_name: Optional[str] = None
-
             # The global stack holds "run" scoped resources
             with ExitStack() as run_stack:
                 # Register the engine's connector as a special internal resource
@@ -187,35 +194,31 @@ class Engine:
                 while True:
                     # The step stack holds "task" (step) scoped resources
                     with ExitStack() as step_stack:
-                        # 1. Build graph for current target
+                        # 1. Get Graph and Plan, using Structural Hash Cache
+                        hasher = StructuralHasher()
+                        struct_hash, literals = hasher.hash(current_target)
+                        
                         graph = None
+                        plan = None
 
-                        # TCO Optimization: Fast path for simple recursion
-                        if self._is_simple_task(current_target):
-                            task_name = current_target.task.name
-                            if _tco_cached_graph and _tco_cached_task_name == task_name:
-                                # HIT: Reuse the graph, just update inputs
-                                node = _tco_cached_graph.nodes[0]
-                                # Re-construct literal inputs from current args/kwargs
-                                node.literal_inputs = {
-                                    str(i): v for i, v in enumerate(current_target.args)
-                                }
-                                node.literal_inputs.update(current_target.kwargs)
-                                # Update UUID to match current target (important for state backend)
-                                node.id = current_target._uuid
-                                graph = _tco_cached_graph
-                            else:
-                                # MISS: Build and cache
+                        if struct_hash in self._graph_cache:
+                            # CACHE HIT: Reuse graph and plan
+                            cached_graph, cached_plan = self._graph_cache[struct_hash]
+                            
+                            # LIMITATION: Current _update_graph_literals only supports single-node graphs correctly.
+                            # For complex graphs, we must rebuild to ensure all UUIDs are correct.
+                            if len(cached_graph.nodes) > 1:
                                 graph = build_graph(current_target)
-                                if len(graph.nodes) == 1:
-                                    _tco_cached_graph = graph
-                                    _tco_cached_task_name = task_name
-                                else:
-                                    _tco_cached_graph = None
+                                plan = self.solver.resolve(graph)
+                            else:
+                                graph = cached_graph
+                                plan = cached_plan
+                                self._update_graph_literals(graph, current_target, literals)
                         else:
-                            # Complex task, standard build
+                            # CACHE MISS: Build, solve, and cache
                             graph = build_graph(current_target)
-                            _tco_cached_graph = None
+                            plan = self.solver.resolve(graph)
+                            self._graph_cache[struct_hash] = (graph, plan)
 
                         # 2. Setup Resources (mixed scope)
                         required_resources = self._scan_for_resources(graph)
@@ -235,6 +238,7 @@ class Engine:
                             run_id,
                             state_backend,
                             graph=graph,
+                            plan=plan,
                         )
 
                     # 4. Check for Tail Call (LazyResult)
@@ -281,6 +285,26 @@ class Engine:
                 await self.connector.disconnect()
                 self.bus.publish(ConnectorDisconnected(run_id=run_id))
 
+    async def _run_vm(self, target: Any) -> Any:
+        """
+        Executes the target using the AOT Blueprint/VM path.
+        """
+        # 1. Compile in template mode
+        builder = BlueprintBuilder()
+        blueprint = builder.build(target, template=True)
+
+        # 2. Extract Initial Arguments
+        # The BlueprintBuilder treats the root LazyResult's args/kwargs as the
+        # inputs for the blueprint.
+        initial_args = list(target.args)
+        initial_kwargs = dict(target.kwargs)
+
+        # 3. Execute
+        vm = VirtualMachine()
+        # TODO: Inject resources and specialized executors into VM if needed.
+        # For now, VM uses direct function calls.
+        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""
         try:
@@ -313,6 +337,30 @@ class Engine:
             # if it's waiting.
             self._wakeup_event.set()
 
+    def _update_graph_literals(self, graph: Graph, target: Any, literals: Dict[str, Any]):
+        """Injects new literal values and UUID into a cached graph."""
+        # A simple graph has a predictable structure we can update directly.
+        # This assumes a single root node for the target.
+        node_map = {node.id: node for node in graph.nodes}
+        
+        # This is a bit of a simplification. A full implementation would need to
+        # traverse the target structure and map literals back to the graph nodes.
+        # For now, let's assume the root node gets the new literals.
+        # The most important part is updating the target's UUID.
+        
+        # Find the node corresponding to the target LazyResult
+        # In a cached graph, the ID is stale, so we find it by name or type.
+        # For now, we assume the last node is the target node.
+        if graph.nodes:
+            target_node = graph.nodes[-1]
+            target_node.id = target._uuid
+            # This is a simplification; a robust solution would traverse and update.
+            # For firefly, the structure is so simple this may be sufficient.
+            if hasattr(target, 'args') and hasattr(target, 'kwargs'):
+                 target_node.literal_inputs = {str(i): v for i, v in enumerate(target.args)}
+                 target_node.literal_inputs.update(target.kwargs)
+
+
     async def _execute_graph(
         self,
         target: Any,
@@ -320,13 +368,10 @@ class Engine:
         active_resources: Dict[str, Any],
         run_id: str,
         state_backend: StateBackend,
-        graph: Optional[Graph] = None,
+        graph: Graph,
+        plan: Any,
     ) -> Any:
-        if graph is None:
-            graph = build_graph(target)
-            
         flow_manager = FlowManager(graph, target._uuid)
-        plan = self.solver.resolve(graph)
 
         # Track blocked state locally to avoid spamming Blocked events every loop tick
         blocked_nodes = set()
@@ -593,12 +638,17 @@ class Engine:
 
         # Each sub-task is a full workflow run from the engine's perspective
         # but shares the parent's state backend to see results.
-        coros = [
-            self._execute_graph(
-                target, params, active_resources, run_id, parent_state_backend
+        async def run_sub_target(target):
+            # For mapped tasks, we perform the full build/solve cycle for each item.
+            # TCO optimization does not apply here.
+            graph = build_graph(target)
+            plan = self.solver.resolve(graph)
+            return await self._execute_graph(
+                target, params, active_resources, run_id, parent_state_backend,
+                graph=graph, plan=plan
             )
-            for target in sub_targets
-        ]
+
+        coros = [run_sub_target(target) for target in sub_targets]
         return await asyncio.gather(*coros)
 
     def _scan_for_resources(self, graph: Graph) -> set[str]:

@@ -2,6 +2,7 @@ import asyncio
 import time
 import cascade as cs
 from cascade.runtime import Engine, MessageBus
+from cascade.runtime.blueprint import TailCall
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
@@ -54,6 +55,17 @@ def heavy_complex_countdown(n: int, _dummy=None):
     return heavy_complex_countdown(n - 1, _dummy=dep_chain)
 
 
+@cs.task
+def vm_countdown(n: int):
+    """
+    A recursive task explicitly designed for the Blueprint/VM path.
+    It returns a TailCall object to trigger zero-overhead recursion.
+    """
+    if n <= 0:
+        return "done"
+    return TailCall(kwargs={"n": n - 1})
+
+
 async def imperative_countdown(n: int):
     """
     A raw, imperative asyncio loop to serve as the performance ground truth.
@@ -69,13 +81,14 @@ async def imperative_countdown(n: int):
 
 
 async def run_benchmark(
-    engine: Engine, target: cs.LazyResult, iterations: int
+    engine: Engine, target: cs.LazyResult, iterations: int, use_vm: bool = False
 ) -> float:
     """Runs the target and returns the execution time in seconds."""
-    print(f"Running benchmark for '{target.task.name}'...")
+    mode = "VM" if use_vm else "Graph/JIT"
+    print(f"Running benchmark for '{target.task.name}' [{mode}]...")
     start_time = time.perf_counter()
 
-    result = await engine.run(target)
+    result = await engine.run(target, use_vm=use_vm)
 
     end_time = time.perf_counter()
 
@@ -122,26 +135,36 @@ async def main():
     print(f"  Finished in {unoptimized_time:.4f} seconds.")
     print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
 
-    # 3. Run Imperative Ground Truth
-    print("[3] Running Imperative Ground Truth (imperative_countdown)...")
+    # 3. Run VM Path
+    print("[3] Running VM Path (vm_countdown)...")
+    vm_target = vm_countdown(n=iterations)
+    vm_time = await run_benchmark(engine, vm_target, iterations, use_vm=True)
+    vm_tps = iterations / vm_time
+    print(f"  Finished in {vm_time:.4f} seconds.")
+    print(f"  TPS: {vm_tps:,.2f} calls/sec\n")
+
+    # 4. Run Imperative Ground Truth
+    print("[4] Running Imperative Ground Truth (imperative_countdown)...")
     imperative_time = await run_imperative_benchmark(iterations)
     imperative_tps = iterations / imperative_time
     print(f"  Finished in {imperative_time:.4f} seconds.")
     print(f"  TPS: {imperative_tps:,.2f} calls/sec\n")
 
-    # 4. Compare Results
+    # 5. Compare Results
     print("--- Comparison ---")
     if unoptimized_tps > 0:
-        heavy_vs_optimized = optimized_tps / unoptimized_tps
-        print(
-            f"Optimized vs. Heavy (TCO Optimization): {heavy_vs_optimized:.2f}x faster"
-        )
+        vm_vs_heavy = vm_tps / unoptimized_tps
+        print(f"VM vs. Heavy (JIT): {vm_vs_heavy:.2f}x faster")
+
+    if optimized_tps > 0:
+        vm_vs_simple = vm_tps / optimized_tps
+        print(f"VM vs. Simple (Graph Caching): {vm_vs_simple:.2f}x faster")
 
     if imperative_tps > 0:
-        overhead_ratio = imperative_tps / optimized_tps
-        print(f"Imperative vs. Optimized (Framework Overhead): {overhead_ratio:.2f}x")
+        overhead_ratio = imperative_tps / vm_tps
+        print(f"Imperative vs. VM (Framework Overhead): {overhead_ratio:.2f}x")
         print(
-            f"  (The optimized declarative path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)"
+            f"  (The VM path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)"
         )
 
 

@@ -72,17 +72,42 @@ KNOWN_SDK_EXPORTS = {
 
 
 def setup_path():
-    """Adds all package src directories to sys.path to ensure imports work."""
-    # Order matters: deps should be available.
-    # We simply add all 'src' folders found in 'packages/'
+    """
+    Adds all package src directories to sys.path.
+    CRITICAL: Ensures 'cascade-sdk' is the FIRST entry in sys.path.
+    
+    This is required because 'cascade' is a namespace package split across
+    multiple directories. When we do `import cascade`, Python loads the __init__.py
+    from the first matching path. Only 'cascade-sdk' has the __init__.py that
+    defines 'run', 'Param', etc. and exports 'cascade.providers.LazyFactory'.
+    """
+    sdk_path = None
+    other_paths = []
+
+    # 1. Identify paths
     for package_dir in PACKAGES_DIR.iterdir():
         if package_dir.is_dir():
             src_dir = package_dir / "src"
             if src_dir.exists():
-                sys.path.insert(0, str(src_dir))
+                if package_dir.name == "cascade-sdk":
+                    sdk_path = str(src_dir)
+                else:
+                    other_paths.append(str(src_dir))
     
-    # Also add root for good measure
+    # 2. Insert root first (will be pushed down by subsequent inserts)
     sys.path.insert(0, str(PROJECT_ROOT))
+    
+    # 3. Insert other packages (will be pushed down by SDK)
+    # We sort them to ensure deterministic behavior
+    for p in sorted(other_paths, reverse=True):
+        sys.path.insert(0, p)
+        
+    # 4. Insert SDK last (so it ends up at index 0)
+    if sdk_path:
+        sys.path.insert(0, sdk_path)
+        print(f"✅ Set sys.path[0] to SDK: {Path(sdk_path).relative_to(PROJECT_ROOT)}")
+    else:
+        print("⚠️  Warning: cascade-sdk source not found!", file=sys.stderr)
 
 
 def find_providers() -> Dict[str, str]:
@@ -125,15 +150,16 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
             formatted_doc = ""
 
         # Handle return annotation
-        # Safest bet: force it to simple LazyResult without [Any] to avoid 'Unknown'
-        # if the type checker can't resolve the generic or if it's not generic.
+        # FORCE simple LazyResult (no generics) to ensure IDE compatibility
         if sig.return_annotation != inspect.Signature.empty:
-             # Just replace whatever it is with LazyResult
              sig = sig.replace(return_annotation="LazyResult")
         
         signature_str = str(sig)
         # Remove quotes that might have been added by signature stringification
         signature_str = signature_str.replace("'LazyResult'", "LazyResult")
+        
+        # Double check: remove any lingering [Any] if replace failed or source was weird
+        signature_str = signature_str.replace("LazyResult[Any]", "LazyResult")
 
         return signature_str, formatted_doc
     except Exception as e:
@@ -208,13 +234,13 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
         for name, module_path in KNOWN_SDK_EXPORTS.items():
             if module_path == "cascade":
                 try:
-                    # Now that sys.path is setup, this should work
+                    # Now that sys.path is setup, this should work correctly
                     sdk_module = importlib.import_module("cascade")
                     native_func = getattr(sdk_module, name)
                     sdk_natives[name] = native_func
                 except Exception as e:
-                    # Fallback to Callable if inspection fails, so at least it exists
                     print(f"⚠️  Could not inspect native SDK export '{name}': {e}", file=sys.stderr)
+                    # Use fallback if still failing (shouldn't happen with correct path)
                     content_lines.append(f"{name}: Callable[..., Any]")
             else:
                 imports_by_module[module_path].append(name)
@@ -228,8 +254,10 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
                 sig_info = get_function_signature(func)
                 if sig_info:
                     sig_str, doc_str = sig_info
-                    # Use a clean definition with one newline
-                    provider_def = f"def {name}{sig_str}:\n{doc_str}"
+                    if doc_str:
+                         provider_def = f"def {name}{sig_str}:\n{doc_str}"
+                    else:
+                         provider_def = f"def {name}{sig_str}: ..."
                     content_lines.append(provider_def)
 
         content_lines.append("\n# --- Discovered Providers ---")
@@ -242,7 +270,10 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
             sig_info = get_provider_signature(value)
             if sig_info:
                 sig_str, doc_str = sig_info
-                provider_def = f"def {name}{sig_str}:\n{doc_str}"
+                if doc_str:
+                    provider_def = f"def {name}{sig_str}:\n{doc_str}"
+                else:
+                    provider_def = f"def {name}{sig_str}: ..."
                 pyi_providers.append(provider_def)
 
     if pyi_providers:
@@ -265,7 +296,7 @@ def main():
     """Main execution flow."""
     print("--- Cascade Provider Stub Generator ---")
     
-    # CRITICAL FIX: Ensure all package sources are visible
+    # CRITICAL: Setup sys.path with SDK priority BEFORE doing anything else
     setup_path()
 
     if not STUBS_OUTPUT_DIR.exists() or not PACKAGES_DIR.exists():

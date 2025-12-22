@@ -1,83 +1,67 @@
-You've caught the exact flaw. My apologies, the migration script was incomplete. It successfully renamed the packages and updated their internal dependencies, but it crucially missed updating the *workspace definition* in the root `pyproject.toml`.
-
-The error message from `uv` is perfect feedback: the workspace manager (`uv`) knows about a package named `cascade-spec` because it found the directory, but it can't find its configuration in the `[tool.uv.sources]` table because the key is still the old name, `cascade-interfaces`.
-
-I will now generate a plan to patch the root `pyproject.toml` to fix this inconsistency.
-
-## [WIP] fix: Synchronize root pyproject.toml with refactored workspace
+Thank you for providing the detailed file tree. This is incredibly helpful and reveals the exact problem. My apologies; my migration script was flawed in a very specific way.
 
 ### 错误分析
-The installation failed because the migration script did not update the workspace configuration keys (`cascade-interfaces`, `cascade-runtime`, etc.) in the root `pyproject.toml`'s `[tool.uv.sources]` and `[tool.hatch.workspaces]` sections. This created a mismatch between the physical package names on disk (`cascade-spec`) and the names defined in the workspace configuration, causing `uv` to fail.
+The file listing shows this structure:
+```
+packages
+└── cascade-sdk
+    └── cascade-py
+        ├── pyproject.toml
+        └── src
+```
+This confirms that the script did not *rename* `packages/cascade-py` to `packages/cascade-sdk`. Instead, it created a new directory `packages/cascade-sdk` and then *moved* the `cascade-py` directory **inside** it.
+
+This is a classic filesystem mistake. The consequence is that `uv` correctly finds the `cascade-sdk` directory but, as the error states, there is no `pyproject.toml` directly within it. The actual package is one level too deep.
+
+The fix is to correct this improper nesting.
+
+## [WIP] fix: Correct malformed package structure from failed migration
+
+### 错误分析
+The previous migration script incorrectly moved the `cascade-py` directory *inside* `cascade-sdk` instead of renaming it. This resulted in the path `packages/cascade-sdk/cascade-py`, breaking the workspace structure and causing the `uv` installation to fail because `pyproject.toml` was not at the expected location.
 
 ### 用户需求
-Correct the root `pyproject.toml` so that the workspace tooling can recognize the newly renamed packages, allowing the `uv pip install -e .[dev]` command to succeed.
+The workspace is in a broken, nested state. The file structure needs to be corrected so that `packages/cascade-sdk` is a valid package and the project can be installed.
 
 ### 评论
-This is a critical final step for the structural refactoring. The root `pyproject.toml` acts as the central index for the entire monorepo. Aligning it with the new package structure will resolve the installation error and properly reintegrate the refactored packages into the development environment.
+This plan executes a surgical fix for the filesystem error. By using a three-step move-delete-rename process, we can safely un-nest the `cascade-py` contents and restore the `cascade-sdk` package to its correct structure without any data loss. This will finally bring the repository into a consistent state that matches the workspace configuration.
 
 ### 目标
-1.  Patch the `pyproject.toml` file in the project root.
-2.  Update the keys in the `[tool.uv.sources]` table to match the new package names (`cascade-spec`, `cascade-engine`, `cascade-sdk`).
-3.  Update the paths in the `[tool.hatch.workspaces]` list to reflect the renamed package directories.
+1.  Move the nested `packages/cascade-sdk/cascade-py` directory to a temporary location at the top level of `packages`.
+2.  Delete the now-empty and problematic `packages/cascade-sdk` directory.
+3.  Rename the temporary directory to the correct final name, `packages/cascade-sdk`.
 
 ### 基本原理
-The previous script completed the most difficult part of the refactoring (moving files and directories). Now, a simple, targeted `patch_file` operation is the safest and most direct way to fix the configuration inconsistency in the root `pyproject.toml`.
+Directly moving the contents out of the nested directory is complex. A safer, more atomic approach is to move the entire valuable subdirectory (`cascade-py`) out to a temporary safe harbor (`cascade-py-temp`), remove the malformed container (`cascade-sdk`), and then rename the safe harbor to its final, correct name. This ensures the integrity of the package contents throughout the operation.
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/core #ai/instruct #task/domain/architecture #task/object/workspace-config #task/action/refactor #task/state/continue #task/status/active
+#intent/fix #flow/ready #priority/critical #comp/build #scope/core #ai/instruct #task/domain/architecture #task/object/package-structure #task/action/refactor #task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: Correct the workspace configuration in the root pyproject.toml
-We will apply two precise patches to the root `pyproject.toml` to update both the `uv` and `hatch` workspace definitions.
+#### Acts 1: Correct the nested package structure
+We will now execute the three-step fix.
 
+First, move the valuable nested directory to a safe temporary location.
 ~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~
-[tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-py = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
-~~~~~
-~~~~~
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
+move_file
+packages/cascade-sdk/cascade-py
+packages/cascade-py-temp
 ~~~~~
 
+Second, remove the now-empty, malformed `cascade-sdk` directory.
 ~~~~~act
-patch_file
-pyproject.toml
+run_command
 ~~~~~
 ~~~~~
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-interfaces",
-    "packages/cascade-runtime",
-    "packages/cascade-py",
-    "packages/cascade-provider-ipfs",
-]
-~~~~~
-~~~~~
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-spec",
-    "packages/cascade-engine",
-    "packages/cascade-sdk",
-    "packages/cascade-provider-ipfs",
-]
+rm -rf packages/cascade-sdk
 ~~~~~
 
+Finally, rename the temporary directory to its correct final name.
+~~~~~act
+move_file
+packages/cascade-py-temp
+packages/cascade-sdk
+~~~~~

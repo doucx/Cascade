@@ -13,14 +13,6 @@ from dataclasses import asdict
 from .harness import InProcessConnector, ControllerTestApp
 
 
-@pytest.fixture(autouse=True)
-def clean_connector_state():
-    """Ensures the LocalBusConnector's class-level state is reset for each test."""
-    InProcessConnector._reset_broker_state()
-    yield
-    InProcessConnector._reset_broker_state()
-
-
 @pytest.fixture
 def mock_ui_bus(monkeypatch):
     """Mocks the UI bus where it's used for constraint error logging."""

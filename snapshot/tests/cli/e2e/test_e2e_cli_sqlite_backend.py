@@ -1,42 +1,3 @@
-好的，我们正式开始路线图的第四步。
-
-这个计划将创建一个全新的端到端测试文件，以确保我们刚刚集成的 `SqliteConnector` 在 `cs-controller` 和 `cs-observer` 中的表现完全符合预期。
-
-## [WIP] test: Add e2e tests for SqliteConnector CLI integration
-
-### 用户需求
-根据项目路线图，需要完成 `SqliteConnector` 开发的第四步：编写全面的端到端测试，以验证其在 CLI 工具中的集成是正确和健壮的。
-
-### 评论
-这些端到端测试是此功能交付前的最后一道质量关卡。它们从用户的视角出发，通过模拟真实的命令行调用来验证整个工作流——从通过 `cs-controller` 写入数据库，到通过 `cs-observer` 读取状态——确保新引入的 `--backend sqlite` 选项在实际使用中表现稳定、可靠。
-
-### 目标
-1.  创建一个新的测试文件 `tests/cli/e2e/test_e2e_cli_sqlite_backend.py`。
-2.  实现一个 `pytest` fixture，该 fixture 能为每个测试用例提供一个隔离的、临时的 SQLite 数据库文件，以确保测试之间互不干扰。
-3.  编写测试用例，验证 `cs-controller set-limit --backend sqlite` 可以在该数据库文件中成功创建一条约束记录。
-4.  编写测试用例，验证 `cs-observer status --backend sqlite` 能够从数据库中读取并正确显示该约束。
-5.  编写测试用例，验证 `cs-controller resume --backend sqlite` 能够成功地从数据库中删除约束。
-6.  编写一个反向测试用例，确保当使用 `--backend mqtt` 时，SQLite 数据库文件不会被创建或修改。
-
-### 基本原理
-我们将使用 `write_file` 创建一个新的测试文件。测试的核心依赖于 `typer.testing.CliRunner` 来模拟命令行调用。为了实现测试隔离，我们将创建一个名为 `isolated_db_path` 的 `pytest` fixture。这个 fixture 会利用 `tmp_path` 创建一个临时数据库路径，并通过 `monkeypatch` 在测试运行时动态地重定向 `SqliteConnector` 和 `cs-observer` 中硬编码的默认数据库路径 (`~/.cascade/control.db`)，使其指向这个临时路径。这样，我们的测试就不会影响用户的实际配置文件，并且每次运行时都有一个干净的环境。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/cli #concept/state #scope/dx #ai/instruct #task/domain/cli #task/object/sqlite-connector #task/action/integration #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 SQLite 后端的端到端测试文件
-
-我们将创建 `tests/cli/e2e/test_e2e_cli_sqlite_backend.py` 并填充所有必要的测试用例和辅助工具。
-
-~~~~~act
-write_file
-tests/cli/e2e/test_e2e_cli_sqlite_backend.py
-~~~~~
-~~~~~python
 import pytest
 from typer.testing import CliRunner
 from pathlib import Path
@@ -138,11 +99,3 @@ def test_mqtt_backend_leaves_no_trace(isolated_db_path: Path, monkeypatch):
     # Even though the command "fails" without a mock, it shouldn't touch the filesystem.
     # The important check is that the db file was NOT created.
     assert not isolated_db_path.exists()
-~~~~~
-
-### 下一步建议
-我们已经为 `SqliteConnector` 的 CLI 集成添加了必要的端到端测试，标志着路线图的核心开发和质量保证阶段已经完成。
-
-现在是时候将这个功能的所有相关更改（包括实现和测试）作为一个逻辑单元提交了。我建议下一步创建一个 `[COMMIT]` 计划来完成这项工作。
-
-在那之后，我们可以开始路线图的最后一步：**步骤 5: [最终交付] 撰写用户文档**。

@@ -5,21 +5,22 @@
 Cascade Provider Stub Generator.
 
 This script scans the workspace for all `pyproject.toml` files, finds the
-providers registered under the 'cascade.providers' entry point, and generates
-a set of .pyi stub files.
-
-These stubs provide type hints for the dynamically loaded providers (like `cs.io`,
-`cs.shell`, etc.), enabling static analysis tools (like Pyright/Pylance) to
-offer autocompletion and type checking, significantly improving developer
-experience (DX).
+providers registered under the 'cascade.providers' entry point, dynamically
+inspects their function signatures and docstrings, and generates a set of
+rich .pyi stub files.
 
 Run this script from the root of the repository after adding or removing providers.
 """
 
 import sys
 import shutil
+import inspect
+import textwrap
+import importlib
+import re
 from pathlib import Path
 from collections import defaultdict
+from typing import Any, Callable, Dict, List, Tuple, Optional
 
 # tomllib is standard in Python 3.11+. For older versions, we need to import toml.
 if sys.version_info < (3, 11):
@@ -36,14 +37,10 @@ else:
     import tomllib as toml
 
 
-# The root directory of the project, assuming the script is in /scripts
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 PACKAGES_DIR = PROJECT_ROOT / "packages"
 STUBS_OUTPUT_DIR = PACKAGES_DIR / "cascade-sdk" / "src" / "cascade"
 
-# List of known public exports from cascade-sdk/src/cascade/__init__.py
-# This is crucial because a .pyi file completely overrides the module's public
-# interface for type checkers. We must re-export the actual API.
 KNOWN_SDK_EXPORTS = {
     # Core Specs
     "task": "cascade.spec.task",
@@ -52,11 +49,12 @@ KNOWN_SDK_EXPORTS = {
     "resource": "cascade.spec.resource",
     "inject": "cascade.spec.resource",
     "with_constraints": "cascade.spec.constraint",
-    # V1.3 Core Components
+    # V1.3 Core Components defined in cascade/__init__.py
     "Param": "cascade",
     "Env": "cascade",
-    # Runtime
+    # Runtime Entrypoint defined in cascade/__init__.py
     "run": "cascade",
+    # Other runtime exports
     "Engine": "cascade.runtime.engine",
     "Event": "cascade.runtime.events",
     "DependencyMissingError": "cascade.runtime.exceptions",
@@ -74,9 +72,31 @@ KNOWN_SDK_EXPORTS = {
 }
 
 
-def find_provider_names() -> list[str]:
-    """Finds all registered provider names from pyproject.toml files."""
-    provider_names = []
+def setup_path():
+    """Adds all package src directories to sys.path, prioritizing cascade-sdk."""
+    sdk_path = None
+    other_paths = []
+
+    for package_dir in PACKAGES_DIR.iterdir():
+        if package_dir.is_dir():
+            src_dir = package_dir / "src"
+            if src_dir.exists():
+                if package_dir.name == "cascade-sdk":
+                    sdk_path = str(src_dir)
+                else:
+                    other_paths.append(str(src_dir))
+    
+    sys.path.insert(0, str(PROJECT_ROOT))
+    for p in sorted(other_paths, reverse=True):
+        sys.path.insert(0, p)
+        
+    if sdk_path:
+        sys.path.insert(0, sdk_path)
+
+
+def find_providers() -> Dict[str, str]:
+    """Finds all registered providers and their entry points."""
+    providers = {}
     toml_files = list(PACKAGES_DIR.glob("**/pyproject.toml"))
     print(f"🔍 Found {len(toml_files)} pyproject.toml files to scan.")
 
@@ -86,104 +106,237 @@ def find_provider_names() -> list[str]:
                 data = toml.load(f)
 
             entry_points = data.get("project", {}).get("entry-points", {})
-            providers = entry_points.get("cascade.providers", {})
+            provider_eps = entry_points.get("cascade.providers", {})
 
-            if providers:
+            if provider_eps:
                 print(
-                    f"  - Found {len(providers)} providers in {toml_file.relative_to(PROJECT_ROOT)}"
+                    f"  - Found {len(provider_eps)} providers in {toml_file.relative_to(PROJECT_ROOT)}"
                 )
-                provider_names.extend(providers.keys())
+                providers.update(provider_eps)
 
         except Exception as e:
             print(f"⚠️  Could not parse {toml_file}: {e}", file=sys.stderr)
 
-    return sorted(list(set(provider_names)))
+    return dict(sorted(providers.items()))
 
 
-def build_provider_tree(names: list[str]) -> dict:
-    """Builds a nested dictionary from a flat list of dot-separated names."""
+def clean_type_str(type_str: str) -> str:
+    """Cleans up raw type strings."""
+    # Handle NoneType
+    type_str = type_str.replace("NoneType", "None")
+    
+    # Simplify full paths to short names
+    replacements = [
+        (r"cascade\.spec\.lazy_types\.LazyResult", "LazyResult"),
+        (r"cascade\.spec\.protocols\.Connector", "Connector"),
+        (r"cascade\.spec\.protocols\.StateBackend", "StateBackend"),
+        (r"cascade\.spec\.protocols\.CachePolicy", "CachePolicy"),
+        # Handle quotes
+        (r"'LazyResult\[Any\]'", "LazyResult"), 
+        (r"'LazyResult'", "LazyResult"),
+    ]
+    
+    for pattern, repl in replacements:
+        type_str = re.sub(pattern, repl, type_str)
+        
+    return type_str
+
+
+def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
+    """Inspects a function to get its signature and docstring."""
+    try:
+        sig = inspect.signature(target_func)
+        doc = inspect.getdoc(target_func)
+
+        if doc:
+            indented_doc = textwrap.indent(doc, "    ")
+            formatted_doc = f'    """\n{indented_doc}\n    """'
+        else:
+            formatted_doc = ""
+
+        # --- PARAMETER SANITIZATION ---
+        new_params = []
+        for param in sig.parameters.values():
+            # 1. Clean Type Annotation
+            new_annotation = inspect.Parameter.empty
+            if param.annotation != inspect.Parameter.empty:
+                type_name = str(param.annotation)
+                if isinstance(param.annotation, type):
+                    type_name = param.annotation.__name__
+                
+                clean_name = clean_type_str(str(type_name))
+                if "<class" in clean_name:
+                    clean_name = "Any"
+                new_annotation = clean_name
+
+            # 2. Clean Default Value
+            new_default = inspect.Parameter.empty
+            if param.default != inspect.Parameter.empty:
+                if param.default is None:
+                    new_default = None
+                elif isinstance(param.default, (int, float, bool, str)):
+                    new_default = param.default
+                else:
+                    new_default = ... 
+
+            # 3. Handle *args and **kwargs prefixes
+            param_name = param.name
+            if param.kind == inspect.Parameter.VAR_POSITIONAL:
+                param_name = "*" + param_name
+            elif param.kind == inspect.Parameter.VAR_KEYWORD:
+                param_name = "**" + param_name
+
+            # Reconstruct parameter string
+            param_str = param_name
+            if new_annotation != inspect.Parameter.empty:
+                param_str += f": {new_annotation}"
+            
+            if new_default != inspect.Parameter.empty:
+                if new_default is ...:
+                    param_str += " = ..."
+                elif new_default is None:
+                    param_str += " = None"
+                else:
+                    param_str += f" = {repr(new_default)}"
+            
+            new_params.append(param_str)
+
+        signature_str = f"({', '.join(new_params)})"
+
+        # Handle Return Type
+        if sig.return_annotation != inspect.Signature.empty:
+             signature_str += " -> LazyResult"
+        else:
+             signature_str += " -> LazyResult"
+
+        return signature_str, formatted_doc
+    except Exception as e:
+        print(f"⚠️  Could not inspect function '{getattr(target_func, '__name__', 'unknown')}': {e}", file=sys.stderr)
+        return None
+
+
+def get_provider_signature(entry_point: str) -> Optional[Tuple[str, str]]:
+    """Dynamically imports a provider and inspects its signature."""
+    try:
+        module_name, class_name = entry_point.split(":")
+        module = importlib.import_module(module_name)
+        provider_class = getattr(module, class_name)
+        provider_instance = provider_class()
+        factory = provider_instance.create_factory()
+        target_func = getattr(factory, "func", factory)
+        return get_function_signature(target_func)
+    except Exception as e:
+        print(f"⚠️  Could not load provider entry point '{entry_point}': {e}", file=sys.stderr)
+        return None
+
+
+def build_provider_tree(providers: Dict[str, str]) -> dict:
+    """Builds a nested dictionary from a flat dict of dot-separated names."""
     tree = {}
-    for name in names:
+    for name, entry_point in providers.items():
         parts = name.split(".")
         node = tree
         for part in parts[:-1]:
             node = node.setdefault(part, {})
-        # Mark the last part as a terminal node (a provider function)
-        node[parts[-1]] = True
+        node[parts[-1]] = entry_point
     return tree
 
 
 def generate_stubs(tree: dict, output_dir: Path):
-    """
-    Generates the directory structure and .pyi stub files recursively.
-    """
+    """Generates the directory structure and .pyi stub files recursively."""
     print(f"\n🗑️  Cleaning up old stubs in {output_dir.relative_to(PROJECT_ROOT)}...")
     if output_dir.exists():
         for item in output_dir.iterdir():
-            # Be careful: only remove .pyi files and directories that match our tree.
-            if item.is_file() and item.suffix == ".pyi":
-                if item.name != "__init__.pyi":  # Keep top-level __init__ for now
-                    item.unlink()
-            elif item.is_dir() and item.name in tree:
+            if item.is_dir() and item.name in tree:
                 shutil.rmtree(item)
+            elif item.is_file() and item.suffix == ".pyi" and item.name != "__init__.pyi":
+                item.unlink()
 
     output_dir.mkdir(exist_ok=True)
     print("✨ Generating new stubs...")
-
-    # Start the recursive generation
     _generate_level(tree, output_dir, is_root=True)
     print("\n✅ Stub generation complete!")
 
 
 def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
-    """
-    Writes the __init__.pyi for the current level and recurses for sub-namespaces.
-    """
+    """Writes the __init__.pyi for the current level and recurses."""
     current_dir.mkdir(exist_ok=True)
-    # CRITICAL FIX: Ensure the directory is a Python package by adding __init__.py
     (current_dir / "__init__.py").touch()
     init_pyi_path = current_dir / "__init__.pyi"
 
-    pyi_imports = [
+    content_lines = [
         "# This file is auto-generated by scripts/generate_stubs.py.",
         "# Do not edit this file directly.",
-        "from cascade.spec.protocols import LazyFactory",
-        "from typing import Any",
-        "\nNamespace = Any\n",
+        "from typing import Any, Callable, Dict, List, Optional, Union",
+        "from cascade.spec.lazy_types import LazyResult",
+        "from cascade.spec.protocols import Connector, StateBackend, CachePolicy",
     ]
 
-    pyi_declarations = []
-    pyi_submodules = []
+    pyi_providers = []
+    pyi_namespaces = []
 
-    # If it's the root __init__.pyi, add the known SDK exports
     if is_root:
-        pyi_imports.append("# --- Known SDK Exports ---")
-        # Group imports by module for cleanliness
+        content_lines.append("\n# --- Known SDK Exports ---")
         imports_by_module = defaultdict(list)
-        for name, module in KNOWN_SDK_EXPORTS.items():
-            imports_by_module[module].append(name)
+        sdk_natives = {}
 
-        for module, names in sorted(imports_by_module.items()):
-            pyi_imports.append(f"from {module} import {', '.join(sorted(names))}")
-        pyi_imports.append("\n# --- Discovered Providers ---")
+        for name, module_path in KNOWN_SDK_EXPORTS.items():
+            if module_path == "cascade":
+                try:
+                    sdk_module = importlib.import_module("cascade")
+                    native_func = getattr(sdk_module, name)
+                    sdk_natives[name] = native_func
+                except Exception as e:
+                    print(f"⚠️  Could not inspect native SDK export '{name}': {e}", file=sys.stderr)
+                    content_lines.append(f"{name}: Callable[..., Any]")
+            else:
+                imports_by_module[module_path].append(name)
+
+        for module_path, names in sorted(imports_by_module.items()):
+            # Use 'import X as X' to force re-export for type checkers
+            imports = ", ".join(f"{name} as {name}" for name in sorted(names))
+            content_lines.append(f"from {module_path} import {imports}")
+        
+        if sdk_natives:
+             content_lines.append("\n# --- Locally Defined Exports ---")
+             for name, func in sorted(sdk_natives.items()):
+                sig_info = get_function_signature(func)
+                if sig_info:
+                    sig_str, doc_str = sig_info
+                    if doc_str:
+                         provider_def = f"def {name}{sig_str}:\n{doc_str}"
+                    else:
+                         provider_def = f"def {name}{sig_str}: ..."
+                    content_lines.append(provider_def)
+
+        content_lines.append("\n# --- Discovered Providers ---")
 
     for name, value in sorted(subtree.items()):
-        if isinstance(value, dict):  # It's a namespace
-            pyi_declarations.append(f"{name}: Namespace")
-            pyi_submodules.append(
-                f"from . import {name}"
-            )  # This is not strictly needed if we declare as Namespace
-            # Recurse into the sub-directory
+        if isinstance(value, dict):
+            pyi_namespaces.append(name)
             _generate_level(value, current_dir / name)
-        else:  # It's a terminal node (a provider function)
-            pyi_declarations.append(f"{name}: LazyFactory")
+        else:
+            sig_info = get_provider_signature(value)
+            if sig_info:
+                sig_str, doc_str = sig_info
+                if doc_str:
+                    provider_def = f"def {name}{sig_str}:\n{doc_str}"
+                else:
+                    provider_def = f"def {name}{sig_str}: ..."
+                pyi_providers.append(provider_def)
 
-    # Write the __init__.pyi file for the current level
-    content = "\n".join(pyi_imports) + "\n" + "\n".join(pyi_declarations)
+    if pyi_providers:
+        content_lines.extend(pyi_providers)
 
+    if pyi_namespaces:
+        if pyi_providers:
+            content_lines.append("")
+        content_lines.extend(f"from . import {name} as {name}" for name in pyi_namespaces)
+
+    content = "\n".join(content_lines)
     with open(init_pyi_path, "w", encoding="utf-8") as f:
         f.write(content)
-        f.write("\n")  # Ensure trailing newline
+        f.write("\n")
 
     print(f"  - Wrote {init_pyi_path.relative_to(PROJECT_ROOT)}")
 
@@ -191,22 +344,22 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
 def main():
     """Main execution flow."""
     print("--- Cascade Provider Stub Generator ---")
+    setup_path()
 
     if not STUBS_OUTPUT_DIR.exists() or not PACKAGES_DIR.exists():
         print("Error: Script must be run from the project root.", file=sys.stderr)
-        print(f"Could not find required directory: {STUBS_OUTPUT_DIR}", file=sys.stderr)
         sys.exit(1)
 
-    provider_names = find_provider_names()
-    if not provider_names:
+    providers = find_providers()
+    if not providers:
         print("No providers found. Exiting.", file=sys.stderr)
         return
 
-    provider_tree = build_provider_tree(provider_names)
+    provider_tree = build_provider_tree(providers)
     generate_stubs(provider_tree, STUBS_OUTPUT_DIR)
 
     print(
-        "\n💡 Tip: You may need to restart your IDE's language server for changes to take effect."
+        "\n💡 Tip: You may need to restart your IDE's language server (e.g., 'Developer: Reload Window' in VS Code) for changes to take effect."
     )
 
 

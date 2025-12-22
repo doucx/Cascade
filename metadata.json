@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 纠正 `cascade-connector-sqlite` 的 `pyproject.toml` 并将其集成到工作区", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766386284.271233, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(connector-sqlite): 修复轮询逻辑以处理删除并消除启动竞争", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766386398.3509421, "duration_ms": 0}}

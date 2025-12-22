@@ -1,168 +1,225 @@
-您是对的，我的疏忽导致了严重的配置错误。非常感谢您提供如此精确的反馈和文件上下文，这让我能够立即定位问题的根源。我为之前计划中的错误道歉。
+好的，我收到了测试结果。您是正确的，指出“流程正常”意味着我们遵循了“开发->测试->发现问题->修复”的健康循环。测试发现了两个明确的失败场景，现在我的任务是分析并修复它们。
 
-我将立即生成一个计划来纠正这个配置问题。
+这是一个旨在修复这两个已识别错误的计划。
 
-## [WIP] fix: 纠正 `cascade-connector-sqlite` 的 `pyproject.toml` 并将其集成到工作区
+## [WIP] fix(connector-sqlite): 修复轮询逻辑以处理删除并消除启动竞争
 
 ### 错误分析
-测试失败的根本原因是 `AttributeError: module 'cascade' has no attribute 'task'`。这个错误清晰地表明，测试环境在执行 `import cascade as cs` 时，未能加载包含 `@cs.task` 装饰器的核心 `cascade-sdk` 包。
+测试套件暴露了两个独立的、严重的问题，导致了测试失败：
 
-经过对您提供的项目文件进行审查，我发现了我的错误所在：
+1.  **`test_polling_pause_and_resume_e2e` 失败**:
+    *   **症状**: `task_b` 在被命令暂停后依然执行了。仔细分析后发现，暂停命令生效了，但后续的**恢复命令（resume）被忽略了**。
+    *   **根本原因**: 当前的轮询逻辑 `SELECT ... WHERE updated_at > ?` 只能检测到行的**插入（insert）和更新（update）**。恢复命令是通过**删除（delete）**行来实现的。被删除的行自然不会出现在查询结果中，因此轮询机制完全“看不见”恢复操作，导致 `Engine` 永远不会收到恢复通知，任务保持暂停状态直到测试超时失败。
 
-1.  **构建系统不匹配**: 我为 `cascade-connector-sqlite` 生成的 `pyproject.toml` 使用了 `setuptools`，而整个项目工作区都明确地使用 `hatchling` 作为构建后端。这是一个严重的偏差。
-2.  **缺少依赖声明**: 新包的 `pyproject.toml` 没有声明它对工作区中其他包（如 `cascade-spec`）的依赖。虽然 `connector.py` 本身没有外部依赖，但它实现了 `cascade-spec` 中定义的协议，因此必须声明这个依赖关系。
-3.  **未在工作区注册**: 我没有在根 `pyproject.toml` 中将新的 `cascade-connector-sqlite` 包注册为工作区成员和开发依赖项。这导致 `pytest` 在运行时无法找到并安装这个新包，进而也无法解析出 `cascade-sdk` 等测试所需的其他核心包。
-
-总而言之，我创建了一个孤立的、配置错误的包，它没有被正确地集成到项目的 monorepo 结构中。
+2.  **`test_constraint_ttl_expiration_e2e` 失败**:
+    *   **症状**: `Engine` 任务立即完成了（`engine_run_task.done()` 为 `True`），而不是像预期的那样被带有 TTL 的 `pause` 约束所阻塞。
+    *   **根本原因**: 这是一个典型的**启动竞争条件（startup race condition）**。测试用例在 `Engine` 启动**之前**就发布了约束。然而，`SqliteConnector` 的 `subscribe` 方法立即返回并启动了一个在后台轮询的异步任务。`Engine` 没有等待第一次轮询完成，而是立即开始执行工作流。工作流非常快，在后台的轮询任务第一次唤醒并从数据库读到约束之前，它就已经执行完毕了。
 
 ### 用户需求
-修复 `cascade-connector-sqlite` 的包配置，并将其正确集成到项目的 `hatchling` 和 `uv` 工作区配置中，以解决测试失败的问题。
+修复 `SqliteConnector` 的实现，以解决删除操作无法被检测和启动时竞争条件的问题，从而使所有 E2E 测试都能通过。
 
 ### 评论
-这是一个典型的 monorepo 集成错误。修复方案必须双管齐下：不仅要纠正新包自身的 `pyproject.toml`，使其符合项目规范（使用 `hatchling` 并声明依赖），还必须更新根 `pyproject.toml`，让构建和测试工具“知道”这个新成员的存在。
+这两个都是非常关键的逻辑缺陷。修复它们将使 `SqliteConnector` 的行为与 `MqttConnector`（支持保留消息和明确的删除/空消息）更加一致，从而变得更加健壮和可预测。
+
+-   对于**恢复/删除问题**，我们将把轮询机制从“基于时间戳的增量更新”模型升级为“**基于全量快照的差异（diff）对比**”模型。连接器将在内存中维护一份上次看到的所有约束的快照。每次轮询时，它会获取数据库中的**所有**当前约束，并与内存快照进行对比，从而精确地计算出哪些约束被添加/更新，哪些被删除。
+
+-   对于**启动竞争问题**，我们将在 `subscribe` 方法中引入一个**初始同步（initial sync）**步骤。在启动后台轮询循环之前，它将立即、阻塞地（通过 `to_thread`）执行一次全量数据获取和回调。这确保了 `Engine` 在开始执行任何任务之前，其状态就与数据库的当前状态完全同步，完美地模拟了 MQTT 的保留消息（retained message）行为。
 
 ### 目标
-1.  **重写 `cascade-connector-sqlite/pyproject.toml`**: 使用 `hatchling` 替换 `setuptools`，并添加对 `cascade-spec` 的工作区依赖。
-2.  **更新根 `pyproject.toml`**:
-    *   在 `[tool.uv.sources]` 中添加 `cascade-connector-sqlite`。
-    *   在 `[tool.hatch.workspaces].packages` 列表中添加 `cascade-connector-sqlite`。
-    *   在 `[project.optional-dependencies].dev` 列表中添加 `cascade-connector-sqlite`，以确保它在测试环境中可用。
+1.  修改 `SqliteConnector` 的 `subscribe` 方法，在启动后台轮询任务之前，执行一次性的、同步的初始数据拉取，并将任何已存在的约束立即通知给 `Engine`。
+2.  重构 `_poll_for_changes` 方法和 `SqliteConnector` 的内部状态，使其维护一个 `_last_known_constraints` 字典作为内存快照。
+3.  修改轮询逻辑，使其每次都查询所有约束，然后与内存快照进行对比，以识别新增、变更和被删除的约束。
+4.  确保在检测到约束被删除时，向 `Engine` 回调一个带有空 payload 的消息，以触发恢复逻辑。
 
 ### 基本原理
-此计划将通过三个精确的操作来解决问题：
-1.  使用 `write_file` 彻底覆盖错误的 `packages/cascade-connector-sqlite/pyproject.toml` 文件，确保其内容与项目中的其他包保持一致。
-2.  使用两个 `patch_file` 操作来原子性地更新根 `pyproject.toml`。通过修补而不是重写整个文件，我们可以最大程度地减少引入其他错误的风险。
+此计划将使用一个 `write_file` 操作来完全替换 `packages/cascade-connector-sqlite/src/cascade/connectors/sqlite/connector.py` 的内容。鉴于逻辑变更的范围较大（引入了状态快照、差异对比和初始同步），一次性重写比多个零碎的 `patch` 操作更清晰、更不容易出错。
 
-完成这些修改后，`uv` 和 `pytest` 将能够正确地识别、安装和链接所有相关的包，从而解决 `AttributeError`。
+新的实现将包含一个 `_sync_and_notify` 的辅助方法，它封装了“查询所有约束、与快照对比、发送通知、更新快照”的核心逻辑。`subscribe` 方法将首先调用这个辅助方法以完成初始同步，然后后台的 `_poll_for_changes` 任务将在循环中反复调用它。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #comp/tests #concept/tooling #scope/dx #ai/instruct #task/domain/build #task/object/pyproject-toml #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/connector-sqlite #concept/state #concept/sync #ai/refine #task/domain/connectors #task/object/sqlite-connector #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 纠正 `cascade-connector-sqlite` 的 `pyproject.toml`
+#### Acts 1: 应用修复后的 `SqliteConnector` 实现
 
-我们将用一个符合项目规范的、基于 `hatchling` 的配置来完全替换错误的 `pyproject.toml` 文件。
+我们将用一个实现了“初始同步”和“差异化轮询”的、更健壮的版本来替换现有的 `connector.py`。
 
 ~~~~~act
 write_file
-packages/cascade-connector-sqlite/pyproject.toml
+packages/cascade-connector-sqlite/src/cascade/connectors/sqlite/connector.py
 ~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+~~~~~python
+import asyncio
+import json
+import sqlite3
+import time
+from pathlib import Path
+from typing import Callable, Awaitable, Dict, Any, List
 
-[project]
-name = "cascade-connector-sqlite"
-version = "0.1.0"
-description = "A zero-dependency SQLite connector for Cascade."
-requires-python = ">=3.8"
-dependencies = [
-  "cascade-spec"
-]
+from cascade.spec.protocols import Connector, SubscriptionHandle
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
+POLL_INTERVAL = 0.2  # seconds
 
-[tool.hatch.metadata]
-allow-direct-references = true
 
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-~~~~~
+class _SqliteSubscriptionHandle(SubscriptionHandle):
+    def __init__(self, parent: "SqliteConnector", polling_task: asyncio.Task):
+        self._parent = parent
+        self._polling_task = polling_task
 
-#### Acts 2: 将新包注册到根 `pyproject.toml` 的 Hatch 工作区和开发依赖中
+    async def unsubscribe(self) -> None:
+        self._polling_task.cancel()
+        try:
+            await self._polling_task
+        except asyncio.CancelledError:
+            pass
+        if self._polling_task in self._parent._polling_tasks:
+            self._parent._polling_tasks.remove(self._polling_task)
 
-现在，我们将新包添加到根 `pyproject.toml` 的 `hatch.workspaces` 列表和 `dev` 依赖项中。
 
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-spec",
-    "packages/cascade-engine",
-    "packages/cascade-sdk",
-    "packages/cascade-provider-ipfs",
-    "packages/cascade-graph",
-    "packages/cascade-library",
-]
-~~~~~
-~~~~~toml
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-spec",
-    "packages/cascade-engine",
-    "packages/cascade-sdk",
-    "packages/cascade-provider-ipfs",
-    "packages/cascade-graph",
-    "packages/cascade-library",
-    "packages/cascade-connector-sqlite",
-]
-~~~~~
+class SqliteConnector(Connector):
+    def __init__(self, db_path: str = "~/.cascade/control.db"):
+        self.db_path = Path(db_path).expanduser()
+        self._conn: sqlite3.Connection | None = None
+        self._is_connected = False
+        self._polling_tasks: List[asyncio.Task] = []
+        self._last_known_constraints: Dict[str, Dict[str, Any]] = {}
 
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml
-  # Local workspace packages needed for testing
-  "cascade-provider-ipfs",
-  "cascade-cli-controller",
-  "cascade-cli-observer",
-  "cascade-connector-mqtt",
-]
-~~~~~
-~~~~~toml
-  # Local workspace packages needed for testing
-  "cascade-provider-ipfs",
-  "cascade-cli-controller",
-  "cascade-cli-observer",
-  "cascade-connector-mqtt",
-  "cascade-connector-sqlite",
-]
-~~~~~
+    async def connect(self) -> None:
+        def _connect_and_setup():
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS constraints (
+                    id TEXT PRIMARY KEY,
+                    scope TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    params TEXT NOT NULL,
+                    expires_at REAL,
+                    updated_at REAL NOT NULL
+                )
+                """
+            )
+            # Create an index for faster lookups
+            cursor.execute("CREATE INDEX IF NOT EXISTS scope_idx ON constraints (scope)")
+            conn.commit()
+            return conn
 
-#### Acts 3: 将新包注册到根 `pyproject.toml` 的 UV 工作区源中
+        self._conn = await asyncio.to_thread(_connect_and_setup)
+        self._is_connected = True
+        return self
 
-最后，我们将其添加到 `uv` 的工作区源列表中，以完成集成。
+    async def __aenter__(self):
+        return await self.connect()
 
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-cascade-graph = { workspace = true }
-cascade-library = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
-~~~~~
-~~~~~toml
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-cascade-graph = { workspace = true }
-cascade-library = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
-cascade-connector-sqlite = { workspace = true }
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.disconnect()
+
+    async def disconnect(self) -> None:
+        self._is_connected = False
+        if self._polling_tasks:
+            for task in self._polling_tasks:
+                task.cancel()
+            await asyncio.gather(*self._polling_tasks, return_exceptions=True)
+            self._polling_tasks.clear()
+        if self._conn:
+            await asyncio.to_thread(self._conn.close)
+            self._conn = None
+
+    def _topic_to_scope(self, topic: str) -> str:
+        parts = topic.split("/")
+        if len(parts) > 2 and parts[0:2] == ["cascade", "constraints"]:
+            return ":".join(parts[2:])
+        return topic
+
+    def _scope_to_topic(self, scope: str) -> str:
+        return f"cascade/constraints/{scope.replace(':', '/')}"
+
+    async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:
+        if not self._is_connected:
+            raise RuntimeError("Connector is not connected.")
+        scope = self._topic_to_scope(topic)
+        
+        def _blocking_publish():
+            cursor = self._conn.cursor()
+            if not payload:
+                cursor.execute("DELETE FROM constraints WHERE scope = ?", (scope,))
+            else:
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO constraints (id, scope, type, params, expires_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        payload["id"], payload["scope"], payload["type"],
+                        json.dumps(payload["params"]), payload.get("expires_at"),
+                        time.time(),
+                    ),
+                )
+            self._conn.commit()
+        await asyncio.to_thread(_blocking_publish)
+
+    async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:
+        if not self._is_connected:
+            raise RuntimeError("Connector is not connected.")
+        
+        # Initial Sync: Perform one poll immediately to catch pre-existing constraints
+        await self._sync_and_notify(callback)
+
+        task = asyncio.create_task(self._poll_for_changes(callback))
+        self._polling_tasks.append(task)
+        return _SqliteSubscriptionHandle(self, task)
+
+    async def _sync_and_notify(self, callback: Callable):
+        def _blocking_fetch_all():
+            cursor = self._conn.cursor()
+            cursor.execute("SELECT * FROM constraints")
+            return cursor.fetchall()
+
+        rows = await asyncio.to_thread(_blocking_fetch_all)
+        
+        current_constraints: Dict[str, Dict] = {}
+        for row in rows:
+            constraint = dict(row)
+            current_constraints[constraint["id"]] = constraint
+        
+        # --- Diff Logic ---
+        # 1. Find new and updated constraints
+        for cid, current in current_constraints.items():
+            last = self._last_known_constraints.get(cid)
+            if not last or last['updated_at'] < current['updated_at']:
+                payload = {
+                    "id": current["id"], "scope": current["scope"], "type": current["type"],
+                    "params": json.loads(current["params"]), "expires_at": current["expires_at"]
+                }
+                await callback(self._scope_to_topic(current["scope"]), payload)
+
+        # 2. Find deleted constraints
+        deleted_ids = self._last_known_constraints.keys() - current_constraints.keys()
+        for cid in deleted_ids:
+            scope = self._last_known_constraints[cid]['scope']
+            await callback(self._scope_to_topic(scope), {}) # Empty payload for resume
+
+        self._last_known_constraints = current_constraints
+
+    async def _poll_for_changes(self, callback: Callable):
+        while self._is_connected:
+            try:
+                await asyncio.sleep(POLL_INTERVAL)
+                await self._sync_and_notify(callback)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                # Log error in a real app
+                await asyncio.sleep(POLL_INTERVAL * 5)
 ~~~~~
 
 ### 下一步建议
-我们已经彻底修正了包的配置和工作区集成。现在，依赖关系应该能被正确解析，测试环境也应该能找到所有的模块。
+我们已经对 `SqliteConnector` 的核心逻辑进行了重大重构，以解决之前测试中发现的两个关键问题。现在，新的实现应该能够正确处理约束的删除（恢复）操作，并且不会再有启动时的竞争条件。
 
-请重新运行测试。如果测试通过，我们将可以安全地继续路线图的**步骤 2**。
+请再次运行测试套件。如果所有测试都通过，我们就可以确认第一步（奠定基石）已圆满完成，并可以自信地进入**步骤 2：[性能优化] 增强 Unix Domain Socket (UDS) 信号机制**。

@@ -3,7 +3,7 @@
 from typing import Any, Callable, Dict, List, Optional, Union
 from cascade.spec.lazy_types import LazyResult
 from cascade.spec.protocols import Connector, StateBackend, CachePolicy
-def read_line(*_args) -> LazyResult:
+def read_line(_args) -> LazyResult:
     """
     Reads a single line from standard input.
     Accepts positional arguments to allow data dependencies for ordering.

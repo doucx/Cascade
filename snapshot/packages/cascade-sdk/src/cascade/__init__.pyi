@@ -26,14 +26,14 @@ def Env(name: str, default: Any = None, description: str = '') -> LazyResult:
     """
     定义一个环境变量依赖。
     """
-def Param(name: str, default: Any = None, type: Any = <class 'str'>, description: str = '') -> LazyResult:
+def Param(name: str, default: Any = None, type: Any = ..., description: str = '') -> LazyResult:
     """
     定义一个工作流参数。
 
     它会向工作流上下文注册其元数据，并返回一个 LazyResult，
     该 LazyResult 在执行时会从用户提供的参数中提取值。
     """
-def run(target: LazyResult, params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None) -> LazyResult:
+def run(target: LazyResult, params: typing.Optional[typing.Dict[str, typing.Any]] = None, system_resources: typing.Optional[typing.Dict[str, typing.Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: typing.Optional[Connector] = None, state_backend: typing.Union[str, typing.Callable[[str], StateBackend], None] = None) -> LazyResult:
     """
     Runs a Cascade workflow with a default engine configuration.
 
@@ -43,12 +43,12 @@ def run(target: LazyResult, params: Optional[Dict[str, Any]] = None, system_reso
     """
 
 # --- Discovered Providers ---
-def dict(**kwargs) -> LazyResult:
+def dict(kwargs) -> LazyResult:
     """
     Creates a dictionary from keyword arguments.
     Useful for composing dynamic contexts in the graph.
     """
-def format(template: str, *args, **kwargs) -> LazyResult:
+def format(template: str, args, kwargs) -> LazyResult:
     """
     Formats a string using Python's str.format syntax.
 
@@ -59,11 +59,11 @@ def load_yaml(path: str) -> LazyResult:
     """
     Asynchronously reads and parses a YAML file.
     """
-def lookup(source: Dict[str, Any], key: str) -> LazyResult:
+def lookup(source: typing.Dict[str, typing.Any], key: str) -> LazyResult:
     """
     Executes a dot-separated lookup in the provided dictionary.
     """
-def recv(topic: str, timeout: Optional[float] = None, connector: Connector = Inject(resource_name='_internal_connector')) -> LazyResult:
+def recv(topic: str, timeout: typing.Optional[float] = None, connector: Connector = ...) -> LazyResult:
     """
     Pauses execution until a signal is received on the given topic.
     """
@@ -71,7 +71,7 @@ def shell(command: str, check: bool = True) -> LazyResult:
     """
     Asynchronously executes a shell command and returns its stdout.
     """
-def sql(query: str, db: str, params: Optional[Dict[str, Any]] = None) -> LazyResult:
+def sql(query: str, db: str, params: typing.Optional[typing.Dict[str, typing.Any]] = None) -> LazyResult:
     """
     Factory function exposed as cs.sql.
 
@@ -83,7 +83,7 @@ def sql(query: str, db: str, params: Optional[Dict[str, Any]] = None) -> LazyRes
     Returns:
         A LazyResult that resolves to the query results.
     """
-def subflow(path: str, target: str, params: Optional[Dict[str, Any]] = None) -> LazyResult:
+def subflow(path: str, target: str, params: typing.Optional[typing.Dict[str, typing.Any]] = None) -> LazyResult:
     """
     Dynamically loads a workflow from a file and executes it in an isolated engine.
 
@@ -92,7 +92,7 @@ def subflow(path: str, target: str, params: Optional[Dict[str, Any]] = None) -> 
         target: The variable name in the module that holds the LazyResult (or callable).
         params: Parameters to inject into the sub-workflow.
     """
-def template(template_string: str, context: Optional[Dict[str, Any]] = None, **kwargs) -> LazyResult:
+def template(template_string: str, context: typing.Optional[typing.Dict[str, typing.Any]] = None, kwargs) -> LazyResult:
     """
     Renders a Jinja2 template string with the provided context.
 
@@ -104,7 +104,7 @@ def template(template_string: str, context: Optional[Dict[str, Any]] = None, **k
     Returns:
         The rendered string.
     """
-def wait(delay: Union[float, int]) -> LazyResult:
+def wait(delay: typing.Union[float, int]) -> LazyResult:
     """
     Asynchronously waits for a specified duration.
     This is a non-blocking operation.

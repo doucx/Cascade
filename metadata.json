@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 强制 SDK 路径优先级与类型去泛型化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766408105.285996, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.pyi, M __init__.pyi, M __init__.pyi ... and 7 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766408466.9357266, "duration_ms": 0}}

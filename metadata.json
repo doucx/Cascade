@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(observer): 实现 cs-observer watch 的 local 后端 (UDS 客户端)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766389777.094005, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: A test_e2e_watch_local_backend.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766389936.8038244, "duration_ms": 0}}

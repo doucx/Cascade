@@ -1,62 +1,65 @@
-非常好！我们已经成功完成了架构重构的最后一步，并且通过了所有测试。现在，我们将把这个最终的、干净的状态作为一次原子提交，为整个重构工作画上圆满的句号。
+好的，我将更新项目的许可证声明，将其从 MIT 更改为 Apache-2.0。
 
-## [COMMIT] refactor(arch): Decouple providers into a dedicated cascade-library package
+我将使用 `patch_file` 指令精确修改 `pyproject.toml` 中的许可证名称和 `README.md` 中的许可证徽章链接。
+
+## [WIP] chore: Update license from MIT to Apache-2.0
 
 ### 用户需求
-作为语义化重构的最后一步，创建一个独立的 `cascade-library` 包，并将所有内置的 Provider 实现从 `cascade-sdk` 中迁移过去。
+将项目许可证从 MIT 协议更改为 Apache License Version 2.0，并更新 `pyproject.toml` 和 `README.md` 以反映此更改。
 
 ### 评论
-这次重构是 Cascade “小核心，大生态”设计哲学的完美体现。通过将具体的 Provider 实现（“标准库”）与核心 SDK 分离，我们极大地净化了 `cascade-sdk`，使其只专注于提供定义工作流的核心语言和扩展机制。这不仅使核心库更加稳定和轻量，也为未来 Provider 生态的独立发展和版本控制奠定了基础。
+许可证是项目元数据中非常关键的一部分。本次更新将确保代码库的法律声明与实际采用的协议保持一致。
 
 ### 目标
-创建一个单一、清晰的 Git 提交，以原子方式记录 `cascade-library` 的创建以及 Provider 代码的成功迁移，正式完成本次系列性的架构重构。
+1.  在 `pyproject.toml` 中，将 `license = "MIT"` 更改为 `license = "Apache-2.0"`。
+2.  在 `README.md` 中，更新许可证徽章 URL，以显示 Apache 2.0。
 
 ### 基本原理
-测试套件的通过证明，在将 Provider 逻辑完全剥离到 `cascade-library` 后，系统的依赖注入和 `entry-points` 机制依然能够正确工作，整个项目处于功能完好、结构清晰的稳定状态。提交代码将永久性地记录下这一重大的架构改进。
+为了保持变更的原子性、可读性和稳定性，我将使用 `patch_file`。对于配置文件（如 `pyproject.toml`），直接更新许可证标识符；对于面向用户的文档（如 `README.md`），则更新用于视觉识别的徽章。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/build #scope/core #ai/instruct #task/domain/architecture #task/object/package-structure #task/action/refactor #task/state/end #task/status/completed
+#intent/tune #flow/ready #priority/high
+#comp/build #comp/docs #scope/core
+#ai/instruct
+#task/domain/build #task/object/license #task/action/update
+#task/state/begin #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存所有与 `cascade-library` 相关的变更
-我们将把新创建的 `cascade-library` 包、被修改的 `cascade-sdk` 包以及更新后的根 `pyproject.toml` 文件添加到暂存区。
+#### Acts 1: 更新 `pyproject.toml` 中的许可证标识符
+
+使用 `patch_file` 将配置中的 `MIT` 替换为 `Apache-2.0`。
 
 ~~~~~act
-git_add
+patch_file
 pyproject.toml
-packages/
-~~~~~
-
-#### Acts 2: 创建原子提交
-现在，我们将创建一个内容详尽的提交，以清晰地记录本次重构的目的和范围，并为整个重构宏任务画上句号。
-
-~~~~~act
-git_commit
 ~~~~~
 ~~~~~text
-refactor(arch): Decouple providers into a dedicated cascade-library package
+license = "MIT"
+~~~~~
+~~~~~text
+license = "Apache-2.0"
+~~~~~
 
-This commit completes the final phase of the semantic architecture refactoring by decoupling the built-in providers into a new, dedicated standard library package.
+#### Acts 2: 更新 `README.md` 中的许可证徽章
 
-Previously, `cascade-sdk` (formerly `cascade-py`) was responsible for both the core user-facing DSL (`@task`, etc.) and the implementation of all standard providers (`http`, `sql`, `io`, etc.). This bloated the core SDK and tightly coupled the language with its implementations.
+将 `README.md` 中引用的徽章 URL 更新，使其显示 Apache 2.0。
 
-This change introduces `cascade-library` to solve this:
-
-1.  **New `cascade-library` Package**: A new package is created to house all standard provider implementations.
-2.  **Configuration Migration**: All provider-related `optional-dependencies` and `entry-points` have been moved from `cascade-sdk`'s `pyproject.toml` to `cascade-library`'s.
-3.  **Code Migration**: All provider implementation files (`http.py`, `sql.py`, etc.) have been moved from `cascade-sdk` to `cascade-library`.
-4.  **Clean `cascade-sdk`**: The `cascade-sdk` is now a pure, lightweight core. Its `providers` directory only contains the registration and discovery mechanism (`registry.py`), not the implementations.
-
-This refactoring fully realizes the "small core, large ecosystem" philosophy, enhancing modularity and allowing the provider library to evolve independently of the core SDK.
+~~~~~act
+patch_file
+README.md
+~~~~~
+~~~~~markdown
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+~~~~~
+~~~~~markdown
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 ~~~~~
 
 ### 下一步建议
-我们已经成功地完成了《Cascade 架构重构建议书》中定义的所有核心任务！这是一个巨大的里程碑。
+现在文件已经修改完毕。你需要运行测试并验证更改。如果一切正常，下一步将是创建一个 `[COMMIT]` 计划来提交这些更改：
 
-在开启新功能开发之前，我建议进行一次“冷却”和“巩固”：
-1.  **全面审计与清理**：可以进行一次代码审查，专注于检查文档字符串、注释和内部文档，确保它们都反映了新的 `spec/engine/graph/sdk/library` 架构，消除任何残留的旧概念。
-2.  **处理技术债务**：我们可以回顾一下 `债务监测.md` 中的条目，看看是否有任何在这次重构后变得更容易解决的问题。
-3.  **规划新功能**：现在我们有了一个非常坚实的基础，是时候重新审视用户反馈中的新功能提案了，例如《引入流式编排原语 `cs.sequence` 与 `cs.pipeline`》。
+1.  `git_add pyproject.toml README.md`
+2.  `git_commit` (提交消息建议使用 `chore(meta): Update license from MIT to Apache-2.0`)

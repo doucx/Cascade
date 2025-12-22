@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A modern, declarative automation library for Python."
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
+license = "Apache-2.0"
 dependencies = [
     "cascade-spec",
     "cascade-engine",

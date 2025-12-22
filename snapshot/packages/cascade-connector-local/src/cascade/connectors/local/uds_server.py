@@ -46,19 +46,25 @@ class UdsTelemetryServer:
         if not self._server:
             return
 
-        # Close the main server socket
+        # 1. Stop accepting new connections
         self._server.close()
+
+        # 2. Forcefully disconnect all active clients to unblock wait_closed()
+        for writer in list(self._clients):
+            try:
+                if not writer.is_closing():
+                    writer.close()
+                    # We don't await wait_closed() here individually to avoid 
+                    # sequential blocking; the server's wait_closed will handle it.
+            except Exception:
+                pass
+        self._clients.clear()
+
+        # 3. Now wait for the server and its handlers to fully wind down
         await self._server.wait_closed()
         self._server = None
 
-        # Disconnect all active clients
-        for writer in list(self._clients):
-            if not writer.is_closing():
-                writer.close()
-                await writer.wait_closed()
-        self._clients.clear()
-
-        # Clean up the socket file
+        # 4. Clean up the socket file
         self.uds_path.unlink(missing_ok=True)
 
     async def broadcast(self, message: dict):

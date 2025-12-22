@@ -9,11 +9,6 @@ providers registered under the 'cascade.providers' entry point, dynamically
 inspects their function signatures and docstrings, and generates a set of
 rich .pyi stub files.
 
-These stubs provide precise type hints for dynamically loaded providers (like
-`cs.io`, `cs.shell`, etc.), enabling static analysis tools (like Pyright/
-Pylance) to offer full autocompletion, parameter info, and docstrings,
-significantly improving developer experience (DX).
-
 Run this script from the root of the repository after adding or removing providers.
 """
 
@@ -41,14 +36,10 @@ else:
     import tomllib as toml
 
 
-# The root directory of the project, assuming the script is in /scripts
 PROJECT_ROOT = Path(__file__).parent.parent.resolve()
 PACKAGES_DIR = PROJECT_ROOT / "packages"
 STUBS_OUTPUT_DIR = PACKAGES_DIR / "cascade-sdk" / "src" / "cascade"
 
-# List of known public exports from cascade-sdk/src/cascade/__init__.py
-# This is crucial because a .pyi file completely overrides the module's public
-# interface for type checkers. We must re-export the actual API.
 KNOWN_SDK_EXPORTS = {
     # Core Specs
     "task": "cascade.spec.task",
@@ -78,6 +69,20 @@ KNOWN_SDK_EXPORTS = {
     "from_json": "cascade.graph.serialize",
     "get_current_context": "cascade.context",
 }
+
+
+def setup_path():
+    """Adds all package src directories to sys.path to ensure imports work."""
+    # Order matters: deps should be available.
+    # We simply add all 'src' folders found in 'packages/'
+    for package_dir in PACKAGES_DIR.iterdir():
+        if package_dir.is_dir():
+            src_dir = package_dir / "src"
+            if src_dir.exists():
+                sys.path.insert(0, str(src_dir))
+    
+    # Also add root for good measure
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 
 def find_providers() -> Dict[str, str]:
@@ -110,22 +115,29 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
     """Inspects a function to get its signature and docstring."""
     try:
         sig = inspect.signature(target_func)
-        doc = inspect.getdoc(target_func) or ""
+        doc = inspect.getdoc(target_func)
 
-        # Format docstring with proper indentation
-        formatted_doc = '"""\n' + textwrap.indent(doc, "    ") + '\n    """'
+        if doc:
+            # Indent the docstring so it aligns with the function body
+            indented_doc = textwrap.indent(doc, "    ")
+            formatted_doc = f'    """\n{indented_doc}\n    """'
+        else:
+            formatted_doc = ""
 
-        # Replace return annotation if it's a provider factory
-        if "LazyResult" not in str(sig.return_annotation):
-             sig = sig.replace(return_annotation="LazyResult[Any]")
-
+        # Handle return annotation
+        # Safest bet: force it to simple LazyResult without [Any] to avoid 'Unknown'
+        # if the type checker can't resolve the generic or if it's not generic.
+        if sig.return_annotation != inspect.Signature.empty:
+             # Just replace whatever it is with LazyResult
+             sig = sig.replace(return_annotation="LazyResult")
+        
         signature_str = str(sig)
-        # Remove forward-reference quotes that confuse .pyi parsers
-        signature_str = signature_str.replace("'LazyResult[Any]'", "LazyResult[Any]")
+        # Remove quotes that might have been added by signature stringification
+        signature_str = signature_str.replace("'LazyResult'", "LazyResult")
 
         return signature_str, formatted_doc
     except Exception as e:
-        print(f"⚠️  Could not inspect function '{target_func.__name__}': {e}", file=sys.stderr)
+        print(f"⚠️  Could not inspect function '{getattr(target_func, '__name__', 'unknown')}': {e}", file=sys.stderr)
         return None
 
 
@@ -196,11 +208,14 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
         for name, module_path in KNOWN_SDK_EXPORTS.items():
             if module_path == "cascade":
                 try:
+                    # Now that sys.path is setup, this should work
                     sdk_module = importlib.import_module("cascade")
                     native_func = getattr(sdk_module, name)
                     sdk_natives[name] = native_func
-                except (ImportError, AttributeError) as e:
-                    print(f"Could not inspect native SDK export '{name}': {e}", file=sys.stderr)
+                except Exception as e:
+                    # Fallback to Callable if inspection fails, so at least it exists
+                    print(f"⚠️  Could not inspect native SDK export '{name}': {e}", file=sys.stderr)
+                    content_lines.append(f"{name}: Callable[..., Any]")
             else:
                 imports_by_module[module_path].append(name)
 
@@ -213,8 +228,8 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
                 sig_info = get_function_signature(func)
                 if sig_info:
                     sig_str, doc_str = sig_info
-                    indented_doc = textwrap.indent(doc_str, "    ")
-                    provider_def = f"def {name}{sig_str}:\n{indented_doc}\n"
+                    # Use a clean definition with one newline
+                    provider_def = f"def {name}{sig_str}:\n{doc_str}"
                     content_lines.append(provider_def)
 
         content_lines.append("\n# --- Discovered Providers ---")
@@ -227,8 +242,7 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
             sig_info = get_provider_signature(value)
             if sig_info:
                 sig_str, doc_str = sig_info
-                indented_doc = textwrap.indent(doc_str, "    ")
-                provider_def = f"def {name}{sig_str}:\n{indented_doc}\n"
+                provider_def = f"def {name}{sig_str}:\n{doc_str}"
                 pyi_providers.append(provider_def)
 
     if pyi_providers:
@@ -251,12 +265,8 @@ def main():
     """Main execution flow."""
     print("--- Cascade Provider Stub Generator ---")
     
-    # Add project packages to path to allow inspection
-    # This is crucial for importlib to find the modules.
-    sys.path.insert(0, str(PROJECT_ROOT))
-    sys.path.insert(0, str(PACKAGES_DIR / "cascade-spec" / "src"))
-    sys.path.insert(0, str(PACKAGES_DIR / "cascade-sdk" / "src"))
-    sys.path.insert(0, str(PACKAGES_DIR / "cascade-library" / "src"))
+    # CRITICAL FIX: Ensure all package sources are visible
+    setup_path()
 
     if not STUBS_OUTPUT_DIR.exists() or not PACKAGES_DIR.exists():
         print("Error: Script must be run from the project root.", file=sys.stderr)

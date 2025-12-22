@@ -131,9 +131,8 @@ def clean_type_str(type_str: str) -> str:
         (r"cascade\.spec\.protocols\.Connector", "Connector"),
         (r"cascade\.spec\.protocols\.StateBackend", "StateBackend"),
         (r"cascade\.spec\.protocols\.CachePolicy", "CachePolicy"),
-        # Handle quotes
-        (r"'LazyResult\[Any\]'", "LazyResult"),
-        (r"'LazyResult'", "LazyResult"),
+        # Handle quotes (but preserve generics like LazyResult[Any])
+        (r"'LazyResult'", "LazyResult"), 
     ]
 
     for pattern, repl in replacements:

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 实现使用 Cascade 的 CI/CD Dogfooding 流水线", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766394308.2208712, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: Add unit tests for CI/CD tasks", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766394574.919071, "duration_ms": 0}}

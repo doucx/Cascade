@@ -1,65 +1,57 @@
-好的，我将更新项目的许可证声明，将其从 MIT 更改为 Apache-2.0。
+好的，我将生成一个 **[COMMIT]** 计划来提交许可证变更。
 
-我将使用 `patch_file` 指令精确修改 `pyproject.toml` 中的许可证名称和 `README.md` 中的许可证徽章链接。
-
-## [WIP] chore: Update license from MIT to Apache-2.0
+## [COMMIT] chore(meta): Update license from MIT to Apache-2.0
 
 ### 用户需求
-将项目许可证从 MIT 协议更改为 Apache License Version 2.0，并更新 `pyproject.toml` 和 `README.md` 以反映此更改。
+提交在 `pyproject.toml` 和 `README.md` 中将许可证从 MIT 更改为 Apache 2.0 的文件修改。
 
 ### 评论
-许可证是项目元数据中非常关键的一部分。本次更新将确保代码库的法律声明与实际采用的协议保持一致。
+这个提交将项目元数据与法律协议保持同步。
 
 ### 目标
-1.  在 `pyproject.toml` 中，将 `license = "MIT"` 更改为 `license = "Apache-2.0"`。
-2.  在 `README.md` 中，更新许可证徽章 URL，以显示 Apache 2.0。
+通过 `git_add` 和 `git_commit` 指令，将许可证更新（`pyproject.toml` 和 `README.md` 中的两处修改）作为一个完整的、逻辑上的工作单元提交到 Git 历史。
 
 ### 基本原理
-为了保持变更的原子性、可读性和稳定性，我将使用 `patch_file`。对于配置文件（如 `pyproject.toml`），直接更新许可证标识符；对于面向用户的文档（如 `README.md`），则更新用于视觉识别的徽章。
+根据 Quipu 协议，文件系统修改和 Git 提交操作必须分离。在上一个计划中，我们完成了修改；在这个计划中，我们进行提交操作，确保了工作流的清晰和可回溯性。摘要状态设置为 `[COMMIT]` 且任务状态为 `#task/state/end`，标志着这个宏观任务的完成。
 
 ### 标签
-#intent/tune #flow/ready #priority/high
+#intent/tooling #flow/ready #priority/high
 #comp/build #comp/docs #scope/core
 #ai/instruct
 #task/domain/build #task/object/license #task/action/update
-#task/state/begin #task/status/active
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 `pyproject.toml` 中的许可证标识符
+#### Acts 1: 添加更改到暂存区
 
-使用 `patch_file` 将配置中的 `MIT` 替换为 `Apache-2.0`。
+将 `pyproject.toml` 和 `README.md` 文件添加到 Git 暂存区。
 
 ~~~~~act
-patch_file
+git_add
 pyproject.toml
-~~~~~
-~~~~~text
-license = "MIT"
-~~~~~
-~~~~~text
-license = "Apache-2.0"
-~~~~~
-
-#### Acts 2: 更新 `README.md` 中的许可证徽章
-
-将 `README.md` 中引用的徽章 URL 更新，使其显示 Apache 2.0。
-
-~~~~~act
-patch_file
 README.md
 ~~~~~
-~~~~~markdown
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+#### Acts 2: 提交变更
+
+创建一个描述性提交，完成许可证的更新。
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~markdown
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+~~~~~text
+chore(meta): Update license from MIT to Apache-2.0
+
+Updates the project license in `pyproject.toml` and `README.md` from MIT to Apache License Version 2.0.
+
+- `pyproject.toml`: Changed license identifier to "Apache-2.0".
+- `README.md`: Updated the license badge URL to reflect Apache 2.0.
 ~~~~~
 
 ### 下一步建议
-现在文件已经修改完毕。你需要运行测试并验证更改。如果一切正常，下一步将是创建一个 `[COMMIT]` 计划来提交这些更改：
+虽然元数据已更新，但 Apache 2.0 协议要求在项目中包含完整的 `LICENSE` 文件。如果你尚未创建或更新该文件，建议下一步：
 
-1.  `git_add pyproject.toml README.md`
-2.  `git_commit` (提交消息建议使用 `chore(meta): Update license from MIT to Apache-2.0`)
+1.  **创建或更新 `LICENSE` 文件**: 确保根目录下的 `LICENSE` 文件内容是完整的 Apache License Version 2.0 文本。

@@ -27,8 +27,8 @@ async def test_engine_dispatches_to_vm():
     target = vm_task(x=10)
 
     # Mock BlueprintBuilder and VirtualMachine to verify interaction
-    with patch("cascade.runtime.engine.BlueprintBuilder") as MockBuilder, patch(
-        "cascade.runtime.engine.VirtualMachine"
+    with patch("cascade.runtime.strategies.BlueprintBuilder") as MockBuilder, patch(
+        "cascade.runtime.strategies.VirtualMachine"
     ) as MockVM:
         mock_builder_instance = MockBuilder.return_value
         mock_vm_instance = MockVM.return_value

@@ -1,62 +1,132 @@
-好的，既然类型解析已经恢复正常，开发者体验（DX）得到了实质性的提升，我们现在就将这些构建层面的基础改进正式提交。
+好的，我来检查一下这个工作流卡死 Bug 的原因。
 
-## [COMMIT] fix(build): Standardize namespace packages and enable PEP 561 compliance
+这是一个非常严重的问题。控制平面的指令不应该导致工作流引擎死锁。根据你的描述，问题出在 `set-limit` 命令上，并且你怀疑是“解析问题”。这个线索非常关键。
+
+我将生成一个分析和修复计划。
+
+## [WIP] fix(engine): 使速率限制约束解析器健壮以防止死锁
+
+### 错误分析
+
+你的判断是正确的，这确实是一个解析问题，但其后果比预想的更严重，并直接导致了死锁。根本原因在于 `RateLimitConstraintHandler` 中的 `_parse_rate_string` 函数不够健壮，一个未处理的异常会使引擎的控制消息处理任务崩溃，从而导致死锁。
+
+详细的异常传递路径如下：
+
+1.  **入口点**: `Engine` 的 `_on_constraint_update` 方法异步地接收来自 `Connector` 的消息（例如 MQTT 消息）。这个方法是引擎与控制平面通信的“耳朵”。
+2.  **分发**: `_on_constraint_update` 将消息解析为 `GlobalConstraint` 对象，并调用 `constraint_manager.update_constraint()`。
+3.  **处理**: `ConstraintManager` 找到对应的 `RateLimitConstraintHandler` 并调用其 `on_constraint_add` 方法。
+4.  **解析**: `on_constraint_add` 内部调用了 `_parse_rate_string` 来转换 `rate` 参数（例如 `"0.5/s"`）。
+5.  **崩溃点**: `_parse_rate_string` 函数在设计上存在缺陷。如果 `rate` 字符串格式不正确（例如 `"foo/s"`），`float(parts[0])` 会抛出一个未被捕获的 `ValueError`。
+6.  **任务死亡**: 这个 `ValueError` 会沿着调用栈向上传播，最终导致运行 `_on_constraint_update` 的 `asyncio.Task` 崩溃。
+7.  **死锁**: `_on_constraint_update` 方法的 `finally` 块中，有一行至关重要的代码：`self._wakeup_event.set()`。如果引擎当前因为没有可执行任务而处于等待状态（`await self.wakeup_event.wait()`），这个事件就是唤醒它的唯一方式。由于处理消息的任务因异常而提前终止，`set()` 从未被调用。
+8.  **结果**: 引擎将永远等待一个永远不会被设置的事件，从而导致整个工作流卡死。
+
+因此，用户通过 `cs-controller` 发送一个格式错误的 `rate` 值，就能导致整个 `Engine` 实例永久挂起。这是一个严重的高可用性风险。
 
 ### 用户需求
-修复 IDE 中跨包类型（如 `LazyResult`）解析为 `Unknown` 的问题，确保自动补全和类型检查功能在 Monorepo 结构下能跨包正常工作。
+当 `Engine` 收到一个格式错误的 `rate_limit` 约束时，它应该能够优雅地处理这个错误（例如，打印一条错误日志），而不是整个系统卡死。
 
 ### 评论
-这是 Cascade 架构演进中的一个关键“阵痛”修复。通过统一命名空间包模式并遵循 PEP 561 规范，我们不仅解决了当前的 LSP 解析冲突，还显著增强了库在各种 IDE 环境（VS Code, PyCharm）下的稳健性。这是一个高杠杆的改进，直接降低了后续开发的认知负担。
+这是一个关键的可靠性修复。控制平面绝不能成为一个攻击向量，让一个无效的输入就能导致服务中断。修复这个问题将显著提升 Cascade 引擎在生产环境中的健壮性。
 
 ### 目标
-1.  在所有核心子包中启用 PEP 561 类型标记。
-2.  统一所有子包的命名空间声明模式，消除 LSP 的解析歧义。
+1.  修改 `_parse_rate_string` 函数，使其能够捕获因格式错误导致的 `ValueError`。
+2.  在捕获异常时，通过 `bus` 记录一条明确的错误日志，并返回一个安全地默认值。
+3.  确保即使在处理无效约束时，`Engine` 的消息处理循环也能正常完成，并最终唤醒主循环。
 
 ### 基本原理
-1.  **PEP 561 Compliance**: 引入 `py.typed` 文件是 Python 生态中声明“本包提供类型信息”的标准方式。没有它，即便存在 `.pyi` 文件，类型检查器也会保守地将其视为 `Unknown`。
-2.  **Namespace Standardization**: 混合使用 PEP 420（隐式）和 `pkgutil`（显式）命名空间模式在静态分析工具中容易引发解析权竞争。通过将所有包统一为显式模式，我们确保了 LSP 能一致地合并分布在不同路径下的 `cascade.*` 子模块。
+我们将通过在 `_parse_rate_string` 函数内部添加一个 `try...except ValueError` 块来解决这个问题。这种方法将错误隔离在最小的范围内，阻止了异常的破坏性传播。通过记录错误而不是让程序崩溃，我们遵循了健壮的服务器设计原则：即单个无效请求不应影响整个服务的可用性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/build #scope/dx #task/domain/tooling #task/object/ide-stubs #task/action/fix #task/state/end #task/status/completed
+#intent/fix #flow/ready #priority/critical #comp/engine #concept/state #scope/core #ai/brainstorm #task/domain/runtime #task/object/constraint-manager #task/action/bug-fix #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交构建配置与类型标记变更
+#### Acts 1: 增强 `_parse_rate_string` 的健壮性
 
-将所有新创建的 `py.typed` 文件和各子包的 `__init__.py` 添加到 Git 暂存区并提交。
-
-~~~~~act
-git_add
-packages/cascade-spec/src/cascade/py.typed
-packages/cascade-sdk/src/cascade/py.typed
-packages/cascade-engine/src/cascade/py.typed
-packages/cascade-common/src/cascade/py.typed
-packages/cascade-graph/src/cascade/py.typed
-packages/cascade-library/src/cascade/py.typed
-packages/cascade-spec/src/cascade/__init__.py
-packages/cascade-engine/src/cascade/__init__.py
-packages/cascade-graph/src/cascade/__init__.py
-packages/cascade-library/src/cascade/__init__.py
-~~~~~
+我们将修改位于 `packages/cascade-engine/src/cascade/runtime/constraints/handlers.py` 的 `_parse_rate_string` 函数，为其增加异常处理逻辑。
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-engine/src/cascade/runtime/constraints/handlers.py
 ~~~~~
-~~~~~text
-fix(build): Standardize namespace packages and enable PEP 561 compliance
+~~~~~python
+def _parse_rate_string(rate_str: str) -> float:
+    """Parses '10/m', '5/s', '300/h' into tokens per second."""
+    if not isinstance(rate_str, str):
+        return float(rate_str)
 
-This commit resolves critical IDE type inference issues (where core types like `LazyResult` were shown as `Unknown`) by standardizing the package structure across the monorepo.
+    parts = rate_str.split("/")
+    if len(parts) != 2:
+        try:
+            return float(rate_str)
+        except ValueError:
+            # Default fallback or error
+            return 1.0
 
-Key improvements:
-1.  **PEP 561 Compliance**: Added `py.typed` markers to all core packages (`spec`, `sdk`, `engine`, `common`, `graph`, `library`). This explicitly signals to type checkers (Pyright, mypy) that these packages provide valid type information.
-2.  **Explicit Namespace Packages**: Unified all sub-packages to use the `pkgutil.extend_path` pattern in their `cascade/__init__.py`. This prevents the `cascade-sdk` and `cascade-common` (which were already explicit) from shadowing implicit namespace packages like `cascade-spec` in static analysis environments.
+    count = float(parts[0])
+    unit = parts[1].lower()
 
-These changes ensure robust cross-package type resolution, autocompletion, and hover information in IDEs like VS Code and PyCharm.
+    divisor = 1.0
+    if unit in ("s", "sec", "second"):
+        divisor = 1.0
+    elif unit in ("m", "min", "minute"):
+        divisor = 60.0
+    elif unit in ("h", "hr", "hour"):
+        divisor = 3600.0
+
+    return count / divisor
+~~~~~
+~~~~~python
+from cascade.common.messaging import bus
+
+
+def _parse_rate_string(rate_str: str) -> float:
+    """Parses '10/m', '5/s', '300/h' into tokens per second."""
+    try:
+        if not isinstance(rate_str, str):
+            return float(rate_str)
+
+        parts = rate_str.split("/")
+        if len(parts) != 2:
+            return float(rate_str)
+
+        count = float(parts[0])
+        unit = parts[1].lower()
+
+        divisor = 1.0
+        if unit in ("s", "sec", "second"):
+            divisor = 1.0
+        elif unit in ("m", "min", "minute"):
+            divisor = 60.0
+        elif unit in ("h", "hr", "hour"):
+            divisor = 3600.0
+        else:
+            # Invalid unit, treat as malformed
+            raise ValueError(f"Unknown rate limit unit: '{unit}'")
+
+        return count / divisor
+    except (ValueError, TypeError) as e:
+        bus.error(
+            "constraint.parse.error",
+            constraint_type="rate_limit",
+            raw_value=rate_str,
+            error=str(e),
+        )
+        # Return a safe default (e.g., 1 token per second) to prevent crashes
+        return 1.0
 ~~~~~
 
 ### 下一步建议
-我们已经完成了一个重要的阶段性目标：**打造了一个干净、类型安全且对 IDE 友好的开发基线**。
 
-根据之前的梳理，接下来的高优先级“阵痛”是解决 **工作流卡死 Bug**（在使用 `set-limit` 时）。我建议我们现在转向 [工作流卡死与跨engine约束.md](../../02_暂存/用户反馈/P0/工作流卡死与跨engine约束.md) 进行排查和修复。这对于维持 Cascade 的可靠性承诺至关重要。
+代码修复后，我们必须添加一个专门的集成测试来防止此类问题再次发生。这个测试应该：
+
+1.  启动一个 `Engine` 实例。
+2.  通过 `Connector` 发送一个**格式错误**的 `rate_limit` 约束（例如，`{"rate": "foo/bar"}`）。
+3.  **Mock 消息总线 (`bus`)**，并断言 `bus.error("constraint.parse.error", ...)` 被调用。
+4.  发送一个**格式正确**的 `pause` 约束。
+5.  验证工作流确实被暂停了，以此证明 `Engine` 在处理完第一个无效消息后没有死锁，并能继续正常处理后续消息。
+
+这将确保我们的控制平面在未来能抵御无效输入的干扰。如果你同意，我将为你生成实现这个测试的计划。

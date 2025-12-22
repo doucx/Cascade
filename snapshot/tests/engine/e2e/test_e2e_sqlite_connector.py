@@ -1,58 +1,3 @@
-Of course. It's a critical best practice to write tests immediately after implementing a new feature to validate its behavior and prevent future regressions. Your direction is sound.
-
-I will now create a comprehensive end-to-end test suite for the polling-based `SqliteConnector` we just built.
-
-## [WIP] test: Add end-to-end tests for SqliteConnector
-
-### 用户需求
-为新实现的、基于轮询的 `SqliteConnector` 创建一个全面的端到端（E2E）测试套件。该测试套件需要验证其在真实 `Engine` 环境下的核心功能，包括通过数据库文件进行跨进程通信、约束的发布与撤销、更新逻辑的幂等性以及约束的 TTL（生存时间）功能。
-
-### 评论
-这是一个至关重要的步骤。这些 E2E 测试将作为 `SqliteConnector` 的最终行为契约。通过模拟 `cs-controller`（发布者）和 `Engine`（订阅者）之间的交互，我们可以确保连接器不仅在单元层面正确，而且在集成的、并发的真实世界场景中也能稳健运行。
-
-我将使用 `pytest` 的 `tmp_path` fixture 来为每个测试用例创建一个临时的、完全隔离的 SQLite 数据库文件。这保证了测试之间不会相互干扰，确保了结果的确定性和可靠性。测试的结构将借鉴现有的 E2E 测试，如 `test_e2e_control_plane.py`，使用一个后台运行的 `Engine` 和一个在主测试协程中操作的 "controller" 连接器。
-
-### 目标
-1.  在 `tests/engine/e2e/` 目录下创建新的测试文件 `test_e2e_sqlite_connector.py`。
-2.  **验证核心轮询机制**：实现一个测试用例 (`test_polling_pause_and_resume_e2e`)，它能：
-    *   发布一个 `pause` 约束。
-    *   验证 `Engine` 在一个轮询周期后停止执行新任务。
-    *   发布一个 `resume`（空 payload）命令。
-    *   验证 `Engine` 在下一个轮询周期后恢复执行。
-3.  **验证 `UPSERT` 逻辑**：实现一个测试用例 (`test_constraint_update_idempotency_e2e`)，它能：
-    *   发布一个慢速的 `rate_limit` 约束。
-    *   在 `Engine` 运行中，发布一个针对同一 `scope` 的快速 `rate_limit` 约束。
-    *   验证 `Engine` 的行为从慢速切换到快速，证明 `INSERT OR REPLACE` 逻辑正确无误。
-4.  **验证 TTL 功能**：实现一个测试用例 (`test_constraint_ttl_expiration_e2e`)，它能：
-    *   发布一个带有短暂 TTL 的 `pause` 约束。
-    *   验证 `Engine` 最初被阻塞。
-    *   等待超过 TTL 时间后，验证 `Engine` 的内部清理机制能够移除过期的约束，并自动恢复执行。
-
-### 基本原理
-本计划将通过一个 `write_file` 操作创建新的测试文件 `test_e2e_sqlite_connector.py`。该文件将包含所有必要的 `pytest` fixture 和测试用例。
-
--   **`sqlite_db_path` Fixture**: 利用 `tmp_path` 生成一个唯一的数据库文件路径，确保测试隔离。
--   **`controller_connector` Fixture**: 创建一个 `SqliteConnector` 实例，专门用于在测试中模拟 `cs-controller` 发布命令。
--   **`engine` Fixture**: 创建一个完整的 `Engine` 实例，配置为使用与 `controller_connector` 相同的数据库文件，并连接到事件总线 spy，以便我们断言其内部行为。
-
-测试逻辑将大量使用 `asyncio` 来并发地运行 `Engine`，同时在主测试流程中发布约束并检查事件流。`asyncio.sleep` 将被精确地用于等待超过 `POLL_INTERVAL` 的时间，以可靠地测试轮询行为。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/connector-sqlite #concept/state #concept/sync #ai/instruct #task/domain/testing #task/object/sqlite-connector #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 `SqliteConnector` 的端到端测试文件
-
-我们将一次性写入完整的测试文件。该文件包含了所有必要的 setup、fixtures 和测试用例，以全面验证 `SqliteConnector` 的功能。
-
-~~~~~act
-write_file
-tests/engine/e2e/test_e2e_sqlite_connector.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 import pytest
@@ -235,12 +180,3 @@ async def test_constraint_ttl_expiration_e2e(engine, controller_connector, bus_a
     # next wakeup and resume execution.
     final_result = await asyncio.wait_for(engine_run_task, timeout=POLL_INTERVAL * 2)
     assert final_result == "done"
-~~~~~
-
-### 下一步建议
-
-我们已经为 `SqliteConnector` 的初始轮询实现创建了一个健壮的端到端测试套件。这确保了我们交付的第一个版本是可靠且经过验证的。
-
-现在，我们可以放心地继续执行路线图的**步骤 2: [性能优化] 增强 Unix Domain Socket (UDS) 信号机制**。有了这些基线测试，我们可以在完成 UDS 实现后，轻松地扩展测试用例以验证新的、低延迟的行为。
-
-如果你同意，我将开始制定实现 UDS 信号机制的计划。

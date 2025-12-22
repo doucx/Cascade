@@ -83,6 +83,17 @@ class GraphBuilder:
                     )
                     self.graph.add_edge(edge)
 
+        # 5. Handle explicit sequence dependencies
+        for dep in result._dependencies:
+            source_node = self._visit(dep)
+            edge = Edge(
+                source=source_node,
+                target=node,
+                arg_name="<sequence>",
+                edge_type=EdgeType.SEQUENCE,
+            )
+            self.graph.add_edge(edge)
+
         return node
 
     def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
@@ -111,6 +122,17 @@ class GraphBuilder:
                 target=node,
                 arg_name="_condition",
                 edge_type=EdgeType.CONDITION,
+            )
+            self.graph.add_edge(edge)
+
+        # Handle explicit sequence dependencies for Mapped nodes
+        for dep in result._dependencies:
+            source_node = self._visit(dep)
+            edge = Edge(
+                source=source_node,
+                target=node,
+                arg_name="<sequence>",
+                edge_type=EdgeType.SEQUENCE,
             )
             self.graph.add_edge(edge)
 

@@ -41,6 +41,8 @@ def visualize(target: LazyResult[Any]) -> str:
             style = (
                 f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
             )
+        elif edge.edge_type == EdgeType.SEQUENCE:
+            style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
         else:
             style = f' [label="{edge.arg_name}"]'
 

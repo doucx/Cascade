@@ -1,7 +1,7 @@
 import inspect
 from typing import Any, Dict, List, Tuple
 
-from cascade.graph.model import Node, Graph
+from cascade.graph.model import Node, Graph, EdgeType
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -31,9 +31,9 @@ class ArgumentResolver:
             final_kwargs["params_context"] = user_params or {}
             return [], final_kwargs
 
-        # Recursively resolve the structure
+        # Recursively resolve the structure, passing the graph for context
         resolved_structure = self._resolve_structure(
-            node.literal_inputs, node.id, state_backend, resource_context
+            node.literal_inputs, node.id, state_backend, resource_context, graph
         )
 
         # Re-assemble args and kwargs
@@ -71,16 +71,17 @@ class ArgumentResolver:
         consumer_id: str,
         state_backend: StateBackend,
         resource_context: Dict[str, Any],
+        graph: Graph,
     ) -> Any:
         """
         Recursively traverses lists, tuples, and dicts.
         Replaces LazyResult, Router, and Inject.
         """
         if isinstance(obj, (LazyResult, MappedLazyResult)):
-            return self._resolve_lazy(obj, consumer_id, state_backend)
+            return self._resolve_lazy(obj, consumer_id, state_backend, graph)
 
         elif isinstance(obj, Router):
-            return self._resolve_router(obj, consumer_id, state_backend)
+            return self._resolve_router(obj, consumer_id, state_backend, graph)
 
         elif isinstance(obj, Inject):
             return self._resolve_inject(obj, consumer_id, resource_context)
@@ -88,7 +89,7 @@ class ArgumentResolver:
         elif isinstance(obj, list):
             return [
                 self._resolve_structure(
-                    item, consumer_id, state_backend, resource_context
+                    item, consumer_id, state_backend, resource_context, graph
                 )
                 for item in obj
             ]
@@ -96,7 +97,7 @@ class ArgumentResolver:
         elif isinstance(obj, tuple):
             return tuple(
                 self._resolve_structure(
-                    item, consumer_id, state_backend, resource_context
+                    item, consumer_id, state_backend, resource_context, graph
                 )
                 for item in obj
             )
@@ -104,7 +105,7 @@ class ArgumentResolver:
         elif isinstance(obj, dict):
             return {
                 k: self._resolve_structure(
-                    v, consumer_id, state_backend, resource_context
+                    v, consumer_id, state_backend, resource_context, graph
                 )
                 for k, v in obj.items()
             }
@@ -112,20 +113,55 @@ class ArgumentResolver:
         return obj
 
     def _resolve_lazy(
-        self, lr: LazyResult, consumer_id: str, state_backend: StateBackend
+        self,
+        lr: LazyResult,
+        consumer_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
     ) -> Any:
-        if not state_backend.has_result(lr._uuid):
-            # Check for skip
-            if state_backend.get_skip_reason(lr._uuid):
-                raise DependencyMissingError(
-                    consumer_id, "unknown_arg", f"{lr._uuid} (skipped)"
-                )
-            raise DependencyMissingError(consumer_id, "unknown_arg", lr._uuid)
+        # If result exists, return it immediately.
+        if state_backend.has_result(lr._uuid):
+            return state_backend.get_result(lr._uuid)
 
-        return state_backend.get_result(lr._uuid)
+        # If it doesn't exist, check if it was skipped.
+        if state_backend.get_skip_reason(lr._uuid):
+            # Attempt data penetration ONLY for pipeline-like structures.
+            # We look for a DATA input to the skipped node.
+            
+            # Find the edges leading into the skipped node
+            upstream_edges = [e for e in graph.edges if e.target.id == lr._uuid]
+            data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
+
+            if data_inputs:
+                # Prioritize the first DATA input for penetration.
+                # This is a simplification but correct for linear pipelines.
+                penetration_source_id = data_inputs[0].source.id
+                
+                # Create a temporary LazyResult to recursively resolve the penetrated source.
+                # We pass the original consumer_id down.
+                penetration_lr_stub = LazyResult(
+                    task=None, args=(), kwargs={}, _uuid=penetration_source_id
+                )
+                try:
+                    # If this succeeds, we have successfully penetrated the skipped node.
+                    return self._resolve_lazy(
+                        penetration_lr_stub, consumer_id, state_backend, graph
+                    )
+                except DependencyMissingError:
+                    # If the penetrated source is ALSO missing, we must fail.
+                    # This will fall through to the final DependencyMissingError.
+                    pass
+
+        # If not skipped, or if skipped but penetration failed/was not applicable, raise an error.
+        # This now correctly handles the test_run_if_false case.
+        skip_info = ""
+        if reason := state_backend.get_skip_reason(lr._uuid):
+            skip_info = f" (skipped: {reason})"
+
+        raise DependencyMissingError(consumer_id, "unknown_arg", f"{lr._uuid}{skip_info}")
 
     def _resolve_router(
-        self, router: Router, consumer_id: str, state_backend: StateBackend
+        self, router: Router, consumer_id: str, state_backend: StateBackend, graph: Graph
     ) -> Any:
         # 1. Resolve Selector
         selector_uuid = router.selector._uuid
@@ -144,7 +180,7 @@ class ArgumentResolver:
             )
 
         # 3. Resolve Route Result
-        return self._resolve_lazy(selected_lr, consumer_id, state_backend)
+        return self._resolve_lazy(selected_lr, consumer_id, state_backend, graph)
 
     def _resolve_inject(
         self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]

@@ -105,7 +105,6 @@ class FlowManager:
         for edge in self.in_edges[node.id]:
             if edge.edge_type == EdgeType.CONDITION:
                 if not state_backend.has_result(edge.source.id):
-                    # Propagate skip if condition source was skipped
                     if state_backend.get_skip_reason(edge.source.id):
                         return "UpstreamSkipped_Condition"
                     return "ConditionMissing"
@@ -113,6 +112,11 @@ class FlowManager:
                 condition_result = state_backend.get_result(edge.source.id)
                 if not condition_result:
                     return "ConditionFalse"
+            
+            # New explicit check for sequence abortion
+            elif edge.edge_type == EdgeType.SEQUENCE:
+                if state_backend.get_skip_reason(edge.source.id):
+                    return "UpstreamSkipped_Sequence"
 
         # 3. Upstream Skip Propagation
         active_route_key = None
@@ -134,6 +138,25 @@ class FlowManager:
 
             elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
                 if state_backend.get_skip_reason(edge.source.id):
-                    return "UpstreamSkipped_Data"
+                    # Check for data penetration possibility (for pipelines)
+                    can_penetrate = False
+                    # Look for inputs to the skipped node (edge.source)
+                    for upstream_edge in self.in_edges[edge.source.id]:
+                        # If the skipped node has a DATA input, and that input has a result...
+                        if (
+                            upstream_edge.edge_type == EdgeType.DATA
+                            and state_backend.has_result(upstream_edge.source.id)
+                        ):
+                            can_penetrate = True
+                            break
+
+                    if not can_penetrate:
+                        return "UpstreamSkipped_Data"
+                    # If it can penetrate, we don't return a skip reason.
+                    # We let the node proceed to execution, where ArgumentResolver will handle it.
+
+            elif edge.edge_type == EdgeType.SEQUENCE:
+                if state_backend.get_skip_reason(edge.source.id):
+                    return "UpstreamSkipped_Sequence"
 
         return None

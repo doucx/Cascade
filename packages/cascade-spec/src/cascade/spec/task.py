@@ -100,6 +100,18 @@ def _with_constraints(self: LazyResult, **kwargs) -> LazyResult:
 LazyResult.with_constraints = _with_constraints
 
 
+def _after(self: LazyResult, *predecessors: LazyResult) -> LazyResult:
+    """
+    Explicitly schedules this task to run after the given predecessor tasks,
+    without taking their output as input.
+    """
+    self._dependencies.extend(predecessors)
+    return self
+
+
+LazyResult.after = _after
+
+
 # --- MappedLazyResult Mixins ---
 
 
@@ -108,7 +120,13 @@ def _mapped_run_if(self: MappedLazyResult, condition: LazyResult) -> MappedLazyR
     return self
 
 
+def _mapped_after(self: MappedLazyResult, *predecessors: LazyResult) -> MappedLazyResult:
+    self._dependencies.extend(predecessors)
+    return self
+
+
 MappedLazyResult.run_if = _mapped_run_if
+MappedLazyResult.after = _mapped_after
 MappedLazyResult.with_retry = _with_retry
 MappedLazyResult.with_cache = _with_cache
 MappedLazyResult.with_constraints = _with_constraints

@@ -1,4 +1,4 @@
-from typing import TypeVar, Generic, Any, Dict, Optional
+from typing import TypeVar, Generic, Any, Dict, Optional, List
 from dataclasses import dataclass, field
 from uuid import uuid4
 
@@ -31,6 +31,7 @@ class LazyResult(Generic[T]):
     _cache_policy: Optional[Any] = None  # CachePolicy
     _condition: Optional["LazyResult"] = None
     _constraints: Optional[Any] = None  # ResourceConstraint
+    _dependencies: List["LazyResult"] = field(default_factory=list)  # Explicit sequencing
 
     def __hash__(self):
         return hash(self._uuid)
@@ -53,6 +54,7 @@ class MappedLazyResult(Generic[T]):
     _retry_policy: Optional[RetryPolicy] = None
     _cache_policy: Optional[Any] = None  # CachePolicy
     _constraints: Optional[Any] = None  # ResourceConstraint
+    _dependencies: List[LazyResult] = field(default_factory=list)
 
     def __hash__(self):
         return hash(self._uuid)

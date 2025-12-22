@@ -1,40 +1,3 @@
-好的。为这个新系统创建清晰的文档是至关重要的一步，这能帮助所有贡献者理解它的工作原理以及如何与之交互。
-
-我将创建一个 `README.md` 文件并将其放置在 `cicd/` 目录中，以便文档与它所描述的代码紧密地放在一起。
-
-## [WIP] docs(cicd): Add documentation for the dogfooding CI/CD pipeline
-
-### 用户需求
-为新实现的、基于 Cascade 的 CI/CD 流水线创建一个说明文件，解释其工作原理和使用方法。
-
-### 评论
-创建这份文档是完成 CI/CD Dogfooding 任务的关键收尾工作。它不仅能指导未来的贡献者，还能作为项目的一个范例，清晰地展示出将 CI/CD 流程代码化的优势——它变得透明、可理解且易于扩展。将文档与代码放在同一个目录下，也遵循了良好的软件工程实践。
-
-### 目标
-1.  在 `cicd/` 目录下创建一个 `README.md` 文件。
-2.  在文件中详细说明 CI/CD 的核心理念、架构、工作流以及如何与之交互。
-3.  为开发者提供在本地运行和测试 CI 步骤的指南。
-4.  为维护者阐明发布流程。
-
-### 基本原理
-这份文档将作为 `cicd/` 目录的入口点，为任何试图理解或修改 CI/CD 流程的人提供必要的上下文。它将强调“CI 即代码”的理念，并解释 Cascade 的动态图能力如何被用来高效地处理 Monorepo 的构建和测试。
-
-### 标签
-#intent/document #flow/ready #priority/medium #comp/docs #comp/build #scope/dx #ai/instruct #task/state/end #task/status/completed
-
----
-
-### Script
-
-#### Acts 1: 创建 CI/CD 流程的说明文档
-
-我们将创建 `cicd/README.md` 文件，并填充详细的说明内容。
-
-~~~~~act
-write_file
-cicd/README.md
-~~~~~
-~~~~~markdown
 # Cascade CI/CD Workflow
 
 欢迎来到 Cascade 项目的 CI/CD 系统。与传统的、基于 YAML 的流水线不同，我们的 CI/CD 流程本身就是一个使用 Cascade SDK 构建的、可测试、可维护的 Python 应用程序。我们“吃自己的狗粮”（Dogfooding），以此来展示 Cascade 的核心价值和能力。
@@ -128,4 +91,3 @@ CI 系统会自动运行，并只测试您修改过的部分。
 3.  **编写测试**: 在 `tests/cicd/test_tasks.py` 中为 `format_package` 任务添加单元测试。
 
 这就是全部！无需接触复杂的 YAML 语法，您就可以用纯 Python 来扩展和维护我们的 CI/CD 流水线。
-~~~~~

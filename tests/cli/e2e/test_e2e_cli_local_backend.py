@@ -5,7 +5,7 @@ from pathlib import Path
 # Apps to test
 from cascade.cli.controller.app import app as controller_app
 from cascade.cli.observer.app import app as observer_app
-from cascade.connectors.sqlite import SqliteConnector
+from cascade.connectors.local import LocalConnector
 
 
 @pytest.fixture
@@ -16,17 +16,17 @@ def isolated_db_path(tmp_path: Path, monkeypatch):
     """
     db_path = tmp_path / "test-control.db"
 
-    # Patch 1: The default path in the SqliteConnector constructor, used by cs-controller
+    # Patch 1: The default path in the LocalConnector constructor, used by cs-controller
     # We patch the class itself to replace the default __init__ behavior.
-    original_init = SqliteConnector.__init__
+    original_init = LocalConnector.__init__
 
     def patched_init(self, db_path=str(db_path), **kwargs):
         # We force our test db_path, ignoring whatever might be passed.
         original_init(self, db_path=str(db_path), **kwargs)
 
     monkeypatch.setattr(
-        "cascade.cli.controller.app.SqliteConnector",
-        lambda *args, **kwargs: SqliteConnector(db_path=str(db_path)),
+        "cascade.cli.controller.app.LocalConnector",
+        lambda *args, **kwargs: LocalConnector(db_path=str(db_path)),
     )
 
     # Patch 2: The hardcoded path in cs-observer's status command logic.
@@ -37,7 +37,7 @@ def isolated_db_path(tmp_path: Path, monkeypatch):
     return db_path
 
 
-def test_set_and_status_sqlite(isolated_db_path: Path):
+def test_set_and_status_local(isolated_db_path: Path):
     """
     Verify that `controller set-limit` creates a db entry and `observer status` can read it.
     """
@@ -46,20 +46,20 @@ def test_set_and_status_sqlite(isolated_db_path: Path):
     # 1. Set a constraint using the sqlite backend
     result_set = runner.invoke(
         controller_app,
-        ["set-limit", "--scope", "global", "--rate", "10/s", "--backend", "sqlite"],
+        ["set-limit", "--scope", "global", "--rate", "10/s", "--backend", "local"],
     )
     assert result_set.exit_code == 0
     assert isolated_db_path.exists()
 
     # 2. Check the status
-    result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
+    result_status = runner.invoke(observer_app, ["status", "--backend", "local"])
     assert result_status.exit_code == 0
     assert "global" in result_status.stderr
     assert "rate_limit" in result_status.stderr
     assert "{'rate': '10/s'}" in result_status.stderr
 
 
-def test_resume_sqlite(isolated_db_path: Path):
+def test_resume_local(isolated_db_path: Path):
     """
     Verify that `controller resume` correctly deletes a constraint from the database.
     """
@@ -75,19 +75,19 @@ def test_resume_sqlite(isolated_db_path: Path):
             "--concurrency",
             "5",
             "--backend",
-            "sqlite",
+            "local",
         ],
     )
     assert isolated_db_path.exists()
 
     # 2. Resume the scope
     result_resume = runner.invoke(
-        controller_app, ["resume", "task:api", "--backend", "sqlite"]
+        controller_app, ["resume", "task:api", "--backend", "local"]
     )
     assert result_resume.exit_code == 0
 
     # 3. Check the status and verify it's gone
-    result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
+    result_status = runner.invoke(observer_app, ["status", "--backend", "local"])
     assert result_status.exit_code == 0
     assert "No active constraints found" in result_status.stderr
     assert "task:api" not in result_status.stderr

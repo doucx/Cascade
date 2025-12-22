@@ -24,8 +24,8 @@ class UDSServerProtocol(asyncio.DatagramProtocol):
             self.on_recv.set()
 
 
-class _SqliteSubscriptionHandle(SubscriptionHandle):
-    def __init__(self, parent: "SqliteConnector", task: asyncio.Task):
+class _LocalSubscriptionHandle(SubscriptionHandle):
+    def __init__(self, parent: "LocalConnector", task: asyncio.Task):
         self._parent = parent
         self._task = task
 
@@ -44,7 +44,7 @@ class _SqliteSubscriptionHandle(SubscriptionHandle):
                 pass
 
 
-class SqliteConnector(Connector):
+class LocalConnector(Connector):
     def __init__(
         self,
         db_path: str = "~/.cascade/control.db",
@@ -173,7 +173,7 @@ class SqliteConnector(Connector):
         self._background_tasks.append(task)
         await ready_event.wait()
         await self._sync_and_notify(callback)
-        return _SqliteSubscriptionHandle(self, task)
+        return _LocalSubscriptionHandle(self, task)
 
     async def _sync_and_notify(self, callback: Callable):
         def _blocking_fetch_all():

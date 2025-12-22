@@ -93,7 +93,7 @@ def watch(
 @app.command()
 def status(
     backend: str = typer.Option(
-        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'sqlite')."
+        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'local')."
     ),
     hostname: str = typer.Option("localhost", help="MQTT broker hostname."),
     port: int = typer.Option(1883, help="MQTT broker port."),
@@ -109,7 +109,7 @@ def status(
 
 async def _get_status(backend: str, hostname: str, port: int):
     """Core logic for the status command."""
-    if backend == "sqlite":
+    if backend == "local":
         await _get_status_sqlite()
         return
 

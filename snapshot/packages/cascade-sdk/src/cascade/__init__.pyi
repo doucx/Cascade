@@ -21,89 +21,108 @@ from cascade.tools.preview import dry_run
 from cascade.tools.visualize import visualize
 
 # --- Locally Defined Exports ---
-Env: Callable[..., Any]
-Param: Callable[..., Any]
-run: Callable[..., Any]
+def Env(name: str, default: Any = None, description: str = '') -> cascade.spec.lazy_types.LazyResult:
+    """
+        定义一个环境变量依赖。
+        """
+
+def Param(name: str, default: Any = None, type: Any = <class 'str'>, description: str = '') -> cascade.spec.lazy_types.LazyResult:
+    """
+        定义一个工作流参数。
+
+        它会向工作流上下文注册其元数据，并返回一个 LazyResult，
+        该 LazyResult 在执行时会从用户提供的参数中提取值。
+        """
+
+def run(target: cascade.spec.lazy_types.LazyResult, params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[cascade.spec.protocols.Connector] = None, state_backend: Union[str, Callable[[str], cascade.spec.protocols.StateBackend], NoneType] = None) -> LazyResult[Any]:
+    """
+        Runs a Cascade workflow with a default engine configuration.
+
+        Args:
+            state_backend: A URI string (e.g. "redis://localhost") or a factory function
+                           that accepts a run_id and returns a StateBackend.
+        """
+
 
 # --- Discovered Providers ---
-def dict(**kwargs) -> 'LazyResult[Any]':
-"""
-    Creates a dictionary from keyword arguments.
-    Useful for composing dynamic contexts in the graph.
+def dict(**kwargs) -> LazyResult[Any]:
     """
+        Creates a dictionary from keyword arguments.
+        Useful for composing dynamic contexts in the graph.
+        """
 
-def format(template: str, *args, **kwargs) -> 'LazyResult[Any]':
-"""
-    Formats a string using Python's str.format syntax.
-
-    Usage:
-        cs.format("Hello, {name}!", name=cs.Param("name"))
+def format(template: str, *args, **kwargs) -> LazyResult[Any]:
     """
+        Formats a string using Python's str.format syntax.
 
-def load_yaml(path: str) -> 'LazyResult[Any]':
-"""
-    Asynchronously reads and parses a YAML file.
+        Usage:
+            cs.format("Hello, {name}!", name=cs.Param("name"))
+        """
+
+def load_yaml(path: str) -> LazyResult[Any]:
     """
+        Asynchronously reads and parses a YAML file.
+        """
 
-def lookup(source: Dict[str, Any], key: str) -> 'LazyResult[Any]':
-"""
-    Executes a dot-separated lookup in the provided dictionary.
+def lookup(source: Dict[str, Any], key: str) -> LazyResult[Any]:
     """
+        Executes a dot-separated lookup in the provided dictionary.
+        """
 
-def recv(topic: str, timeout: Optional[float] = None, connector: cascade.spec.protocols.Connector = Inject(resource_name='_internal_connector')) -> 'LazyResult[Any]':
-"""
-    Pauses execution until a signal is received on the given topic.
+def recv(topic: str, timeout: Optional[float] = None, connector: cascade.spec.protocols.Connector = Inject(resource_name='_internal_connector')) -> LazyResult[Any]:
     """
+        Pauses execution until a signal is received on the given topic.
+        """
 
-def shell(command: str, check: bool = True) -> 'LazyResult[Any]':
-"""
-    Asynchronously executes a shell command and returns its stdout.
+def shell(command: str, check: bool = True) -> LazyResult[Any]:
     """
+        Asynchronously executes a shell command and returns its stdout.
+        """
 
-def sql(query: str, db: str, params: Optional[Dict[str, Any]] = None) -> 'LazyResult[Any]':
-"""
-    Factory function exposed as cs.sql.
-
-    Args:
-        query: The SQL query string.
-        db: The name of the resource providing the SQLAlchemy connection/engine.
-        params: Optional parameters for the query.
-
-    Returns:
-        A LazyResult that resolves to the query results.
+def sql(query: str, db: str, params: Optional[Dict[str, Any]] = None) -> cascade.spec.lazy_types.LazyResult[typing.List[typing.Dict[str, typing.Any]]]:
     """
+        Factory function exposed as cs.sql.
 
-def subflow(path: str, target: str, params: Optional[Dict[str, Any]] = None) -> 'LazyResult[Any]':
-"""
-    Dynamically loads a workflow from a file and executes it in an isolated engine.
+        Args:
+            query: The SQL query string.
+            db: The name of the resource providing the SQLAlchemy connection/engine.
+            params: Optional parameters for the query.
 
-    Args:
-        path: Path to the Python file containing the workflow definition.
-        target: The variable name in the module that holds the LazyResult (or callable).
-        params: Parameters to inject into the sub-workflow.
+        Returns:
+            A LazyResult that resolves to the query results.
+        """
+
+def subflow(path: str, target: str, params: Optional[Dict[str, Any]] = None) -> LazyResult[Any]:
     """
+        Dynamically loads a workflow from a file and executes it in an isolated engine.
 
-def template(template_string: str, context: Optional[Dict[str, Any]] = None, **kwargs) -> 'LazyResult[Any]':
-"""
-    Renders a Jinja2 template string with the provided context.
+        Args:
+            path: Path to the Python file containing the workflow definition.
+            target: The variable name in the module that holds the LazyResult (or callable).
+            params: Parameters to inject into the sub-workflow.
+        """
 
-    Args:
-        template_string: The Jinja2 template string.
-        context: A dictionary of context variables.
-        **kwargs: Additional context variables passed as keyword arguments.
-
-    Returns:
-        The rendered string.
+def template(template_string: str, context: Optional[Dict[str, Any]] = None, **kwargs) -> LazyResult[Any]:
     """
+        Renders a Jinja2 template string with the provided context.
 
-def wait(delay: Union[float, int]) -> 'LazyResult[Any]':
-"""
-    Asynchronously waits for a specified duration.
-    This is a non-blocking operation.
+        Args:
+            template_string: The Jinja2 template string.
+            context: A dictionary of context variables.
+            **kwargs: Additional context variables passed as keyword arguments.
 
-    Args:
-        delay: The duration to wait in seconds.
+        Returns:
+            The rendered string.
+        """
+
+def wait(delay: Union[float, int]) -> LazyResult[Any]:
     """
+        Asynchronously waits for a specified duration.
+        This is a non-blocking operation.
+
+        Args:
+            delay: The duration to wait in seconds.
+        """
 
 
 from . import fs as fs

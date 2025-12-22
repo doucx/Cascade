@@ -67,6 +67,14 @@ class SqliteConnector(Connector):
         self._conn = await asyncio.to_thread(_connect_and_setup)
         self._is_connected = True
         self._last_check_ts = time.time()
+        return self
+
+    async def __aenter__(self):
+        await self.connect()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.disconnect()
 
     async def disconnect(self) -> None:
         self._is_connected = False

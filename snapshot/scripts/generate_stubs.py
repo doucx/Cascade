@@ -73,10 +73,7 @@ KNOWN_SDK_EXPORTS = {
 
 
 def setup_path():
-    """
-    Adds all package src directories to sys.path.
-    CRITICAL: Ensures 'cascade-sdk' is the FIRST entry in sys.path.
-    """
+    """Adds all package src directories to sys.path, prioritizing cascade-sdk."""
     sdk_path = None
     other_paths = []
 
@@ -123,23 +120,18 @@ def find_providers() -> Dict[str, str]:
     return dict(sorted(providers.items()))
 
 
-def clean_type_annotation(type_str: str) -> str:
-    """
-    Cleans up a raw type string from inspect.signature to make it PEP 484 compliant
-    and compatible with our .pyi imports.
-    """
-    # 1. Replace NoneType with None
+def clean_type_str(type_str: str) -> str:
+    """Cleans up raw type strings."""
+    # Handle NoneType
     type_str = type_str.replace("NoneType", "None")
     
-    # 2. Simplify full paths to short names
-    # e.g., cascade.spec.lazy_types.LazyResult -> LazyResult
-    # We use regex to be safe
+    # Simplify full paths to short names
     replacements = [
         (r"cascade\.spec\.lazy_types\.LazyResult", "LazyResult"),
         (r"cascade\.spec\.protocols\.Connector", "Connector"),
         (r"cascade\.spec\.protocols\.StateBackend", "StateBackend"),
         (r"cascade\.spec\.protocols\.CachePolicy", "CachePolicy"),
-        # Handle cases where quotes might be involved
+        # Handle quotes
         (r"'LazyResult\[Any\]'", "LazyResult"), 
         (r"'LazyResult'", "LazyResult"),
     ]
@@ -147,11 +139,6 @@ def clean_type_annotation(type_str: str) -> str:
     for pattern, repl in replacements:
         type_str = re.sub(pattern, repl, type_str)
         
-    # 3. Aggressive cleanup for generic LazyResult if inspect failed to be clean
-    # If we see LazyResult[...] we keep it (assuming imports are fine), 
-    # but if we see complex internal types inside, we might want to simplify.
-    # For now, let's just ensure return types are simple.
-    
     return type_str
 
 
@@ -167,17 +154,66 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
         else:
             formatted_doc = ""
 
-        # Modify the signature object itself before stringifying if possible,
-        # but string manipulation is often more robust for 'cleanup'.
-        
-        # Force return type to simple LazyResult
-        if sig.return_annotation != inspect.Signature.empty:
-             sig = sig.replace(return_annotation="LazyResult")
+        # --- PARAMETER SANITIZATION ---
+        new_params = []
+        for param in sig.parameters.values():
+            # 1. Clean Type Annotation
+            new_annotation = inspect.Parameter.empty
+            if param.annotation != inspect.Parameter.empty:
+                # Convert to string and clean
+                # Note: This is a simplification; complex nested types might need AST parsing,
+                # but string cleaning covers 90% of our cases.
+                type_name = str(param.annotation)
+                # If it's a class object (like <class 'str'>), get its name
+                if isinstance(param.annotation, type):
+                    type_name = param.annotation.__name__
+                
+                clean_name = clean_type_str(str(type_name))
+                # For safety, if cleaning didn't resolve <class '...'>, fallback to Any
+                if "<class" in clean_name:
+                    clean_name = "Any"
+                new_annotation = clean_name
 
-        signature_str = str(sig)
-        
-        # Apply cleaning
-        signature_str = clean_type_annotation(signature_str)
+            # 2. Clean Default Value
+            new_default = inspect.Parameter.empty
+            if param.default != inspect.Parameter.empty:
+                # Keep simple literals, replace everything else with Ellipsis (...)
+                if param.default is None:
+                    new_default = None
+                elif isinstance(param.default, (int, float, bool, str)):
+                    new_default = param.default
+                else:
+                    # e.g. Inject(...), or custom classes.
+                    # We use Ellipsis to signify "some default value" in stub files
+                    new_default = ... 
+
+            # Reconstruct parameter
+            # We can't pass string as annotation to Parameter constructor directly if using `inspect.Signature`
+            # to render. So we construct the string manually to avoid inspect's validation logic
+            # confusing our clean strings.
+            
+            param_str = param.name
+            if new_annotation != inspect.Parameter.empty:
+                param_str += f": {new_annotation}"
+            
+            if new_default != inspect.Parameter.empty:
+                if new_default is ...:
+                    param_str += " = ..."
+                elif new_default is None:
+                    param_str += " = None"
+                else:
+                    param_str += f" = {repr(new_default)}"
+            
+            new_params.append(param_str)
+
+        # Reconstruct signature string manually
+        signature_str = f"({', '.join(new_params)})"
+
+        # Handle Return Type
+        if sig.return_annotation != inspect.Signature.empty:
+             signature_str += " -> LazyResult"
+        else:
+             signature_str += " -> LazyResult" # Default for providers
 
         return signature_str, formatted_doc
     except Exception as e:
@@ -234,12 +270,10 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
     (current_dir / "__init__.py").touch()
     init_pyi_path = current_dir / "__init__.pyi"
 
-    # CRITICAL: Import ALL types that might appear in signatures
     content_lines = [
         "# This file is auto-generated by scripts/generate_stubs.py.",
         "# Do not edit this file directly.",
         "from typing import Any, Callable, Dict, List, Optional, Union",
-        # Import core types used in signatures
         "from cascade.spec.lazy_types import LazyResult",
         "from cascade.spec.protocols import Connector, StateBackend, CachePolicy",
     ]

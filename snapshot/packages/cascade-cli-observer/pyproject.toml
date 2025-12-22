@@ -11,7 +11,7 @@ dependencies = [
   "cascade-spec",
   "cascade-common",
   "cascade-connector-local",
-  "typer[all]",
+  "typer",
   "aiomqtt",
   "rich"
 ]

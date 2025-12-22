@@ -75,9 +75,9 @@ CI 系统会自动运行，并只测试您修改过的部分。
 1.  **添加任务**: 在 `cicd/tasks.py` 中创建一个新的 Cascade 任务。
     ```python
     @cs.task
-    async def format_package(package_name: str) -> str:
-        await cs.shell(f"uv run -- blue packages/{package_name}")
-        return f"FORMAT_OK_{package_name}"
+    def format_package(package_name: str) -> cs.LazyResult:
+        # 直接返回 cs.shell 创建的 LazyResult，引擎会自动执行它 (TCO)
+        return cs.shell(f"uv run -- blue packages/{package_name}")
     ```
 2.  **整合到工作流**: 在 `cicd/workflows.py` 中，将新任务添加到 `pr_check_workflow` 的依赖图中。
     ```python

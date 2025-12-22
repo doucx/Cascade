@@ -3,16 +3,11 @@ import re
 from typing import List
 
 @cs.task
-async def detect_changed_packages() -> List[str]:
+def parse_git_diff(git_diff_output: str) -> List[str]:
     """
-    Detects which packages have changed compared to the main branch.
-    For pull requests, it compares against the base branch.
+    Parses the output of 'git diff --name-only' and extracts changed package names.
+    This is a pure logic task with no I/O.
     """
-    # Note: This command is a simplification. A robust implementation would need
-    # to handle different base refs for PRs vs. pushes. For this PoC,
-    # comparing against 'origin/main' is a good starting point.
-    git_diff_output = await cs.shell("git diff --name-only origin/main...HEAD")
-    
     changed_packages = set()
     package_pattern = re.compile(r"^packages/([^/]+)/.*")
 
@@ -25,8 +20,9 @@ async def detect_changed_packages() -> List[str]:
         print("No package changes detected.")
         return []
 
-    print(f"Detected changed packages: {list(changed_packages)}")
-    return sorted(list(changed_packages))
+    sorted_packages = sorted(list(changed_packages))
+    print(f"Detected changed packages: {sorted_packages}")
+    return sorted_packages
 
 @cs.task
 async def lint_package(package_name: str) -> str:

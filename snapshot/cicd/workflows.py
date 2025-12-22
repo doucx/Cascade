@@ -1,7 +1,8 @@
 import cascade as cs
 from typing import List
+import cascade as cs
 from .tasks import (
-    detect_changed_packages,
+    parse_git_diff,
     lint_package,
     run_package_tests,
     build_package,
@@ -35,11 +36,17 @@ def pr_check_workflow() -> cs.LazyResult:
     Workflow for Pull Requests and pushes to main.
     Only lints and tests the packages that have changed.
     """
-    changed = detect_changed_packages()
+    # Step 1: Declare the action to get git diff output. This returns a LazyResult[str].
+    git_diff_output = cs.shell("git diff --name-only origin/main...HEAD")
+    
+    # Step 2: Declare the action to parse the output.
+    # We pass the LazyResult from step 1 directly as an argument.
+    # The Cascade engine will resolve it before executing parse_git_diff.
+    changed_packages = parse_git_diff(git_diff_output)
 
-    # Dynamically create lint and test tasks for each changed package
-    lint_results = lint_package.map(package_name=changed)
-    test_results = run_package_tests.map(package_name=changed)
+    # Step 3: Use the result of the parsing to dynamically build the rest of the graph.
+    lint_results = lint_package.map(package_name=changed_packages)
+    test_results = run_package_tests.map(package_name=changed_packages)
 
     # Enforce order: tests run only after linting passes for all packages
     test_results.after(lint_results)

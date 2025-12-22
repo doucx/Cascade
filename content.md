@@ -1,131 +1,188 @@
-好的。为这个新系统创建清晰的文档是至关重要的一步，这能帮助所有贡献者理解它的工作原理以及如何与之交互。
+啊，一个绝佳的错误！你发现了一个比之前在测试中遇到的问题更深层次、更根本的设计问题。这再次暴露了我在生成代码时，将传统 `async/await` 的命令式思维带入到了 Cascade 的声明式世界中。
 
-我将创建一个 `README.md` 文件并将其放置在 `cicd/` 目录中，以便文档与它所描述的代码紧密地放在一起。
+你的分析是正确的，这个 `TypeError` 的根源和上次在测试中遇到的完全一样，但这次是在**实际运行**中。
 
-## [WIP] docs(cicd): Add documentation for the dogfooding CI/CD pipeline
+ 错误分析：命令式执行 vs. 声明式构建
+
+1.  **问题的核心**:
+    在 `cicd/tasks.py` 中，`detect_changed_packages` 这个任务被定义为 `async def`，并且在其内部尝试 `await cs.shell(...)`。
+
+    ```python
+    @cs.task
+    async def detect_changed_packages():
+        # 这里是错误的根源
+        git_diff_output = await cs.shell(...) 
+        # ...
+    ```
+
+    这揭示了一个核心的误解：**一个 Cascade 任务的函数体，不应该去 `await` 另一个 Cascade 任务。**
+
+2.  **为什么这是错的？**
+    *   **Cascade 的工作模式**：当你调用 `cs.shell(...)` 时，它**不执行**命令，而是返回一个 `LazyResult` 对象。这个对象是一个**声明**或一个**配方**，意思是“将来需要用这个命令执行一个 shell 操作”。
+    *   **引擎的职责**：Cascade 引擎的工作就是接收这些 `LazyResult` 对象，构建一个依赖图，然后按照正确的顺序去实际执行它们。
+    *   **矛盾点**：`detect_changed_packages` 的函数体是**在引擎执行它时**才运行的。在那个时候，它应该接收**已经完成的**、上游任务的结果（一个字符串），而不是去尝试启动和等待一个新的任务。`await` 一个 `LazyResult` 对象，就像 `await` 一个菜谱一样，自然会产生 `TypeError`。
+
+ 解决方案：任务组合 (Task Composition)
+
+正确的 Cascade 模式是**组合**，而不是嵌套调用。我们需要将 `detect_changed_packages` 这个“大”任务拆分成两个更纯粹的部分：
+
+1.  **获取数据的任务**：这已经由 `cs.shell(...)` 完美地提供了。它负责 I/O，并产生一个 `LazyResult[str]`。
+2.  **处理数据的任务**：这是一个新的、更简单的任务，它的唯一职责是接收一个字符串（`git diff` 的输出），并从中解析出包列表。这个任务将是纯逻辑，甚至不需要是 `async` 的。
+
+我们将把这个逻辑应用到工作流的编排中。
+
+## [WIP] fix(cicd): Refactor tasks to use declarative composition
+
+### 错误分析
+在 `cicd/tasks.py` 中，`detect_changed_packages` 任务错误地尝试 `await` 另一个 Cascade 任务 (`cs.shell`) 的 `LazyResult` 返回值。这违反了 Cascade 的声明式执行模型，即任务之间通过 `LazyResult` 传递来声明依赖，而不是在一个任务体内命令式地执行另一个任务。
 
 ### 用户需求
-为新实现的、基于 Cascade 的 CI/CD 流水线创建一个说明文件，解释其工作原理和使用方法。
+修复在本地运行 `cicd/main.py` 时出现的 `TypeError`，使其能够正确执行。
 
 ### 评论
-创建这份文档是完成 CI/CD Dogfooding 任务的关键收尾工作。它不仅能指导未来的贡献者，还能作为项目的一个范例，清晰地展示出将 CI/CD 流程代码化的优势——它变得透明、可理解且易于扩展。将文档与代码放在同一个目录下，也遵循了良好的软件工程实践。
+这次重构是至关重要的，它将我们的 CI/CD 实现从一个混合了命令式和声明式思维的模糊状态，转变为一个完全遵循 Cascade 核心设计哲学的、清晰的声明式工作流。通过将“执行 shell 命令”和“解析其输出”这两个关注点分离到不同的任务中，我们不仅解决了 `TypeError`，还使得每个任务的职责更单一、逻辑更纯粹，从而更容易测试和理解。
 
 ### 目标
-1.  在 `cicd/` 目录下创建一个 `README.md` 文件。
-2.  在文件中详细说明 CI/CD 的核心理念、架构、工作流以及如何与之交互。
-3.  为开发者提供在本地运行和测试 CI 步骤的指南。
-4.  为维护者阐明发布流程。
+1.  **重构 `tasks.py`**: 移除 `detect_changed_packages` 任务，用一个新的、**同步的**、纯逻辑的 `parse_git_diff` 任务来代替。这个新任务只负责解析文本，不执行任何 I/O。
+2.  **重构 `workflows.py`**: 修改 `pr_check_workflow`，使其通过**任务组合**来构建依赖关系：首先调用 `cs.shell` 来获取 `git diff` 的 `LazyResult`，然后将这个 `LazyResult` 作为参数传递给新的 `parse_git_diff` 任务。
+3.  **确保执行成功**: 最终的代码应该能够在本地通过 `python -m cicd.main --event pull_request` 成功运行。
 
 ### 基本原理
-这份文档将作为 `cicd/` 目录的入口点，为任何试图理解或修改 CI/CD 流程的人提供必要的上下文。它将强调“CI 即代码”的理念，并解释 Cascade 的动态图能力如何被用来高效地处理 Monorepo 的构建和测试。
+我们将遵循 Cascade 的核心设计模式——**声明式数据流**。工作流的定义不再是一个包含了执行步骤的函数，而是一个描述了数据如何从一个任务流向下一个任务的图。`pr_check_workflow` 将首先声明一个需要 `git diff` 输出的 `LazyResult`，然后声明另一个任务，其输入直接连接到前一个任务的输出。Cascade 引擎会自动理解这个依赖关系，先执行 `shell` 任务，然后将其结果（一个字符串）注入到 `parse_git_diff` 任务中执行。
 
 ### 标签
-#intent/document #flow/ready #priority/medium #comp/docs #comp/build #scope/dx #ai/instruct #task/state/end #task/status/completed
+#intent/fix #intent/refine #flow/ready #priority/high #comp/build #scope/core #scope/dx #ai/instruct #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 CI/CD 流程的说明文档
+#### Acts 1: 重构任务以分离关注点
 
-我们将创建 `cicd/README.md` 文件，并填充详细的说明内容。
+我们将修改 `cicd/tasks.py`，用一个纯粹的解析任务替换掉原来错误的混合任务。
 
 ~~~~~act
-write_file
-cicd/README.md
+patch_file
+cicd/tasks.py
 ~~~~~
-~~~~~markdown
-# Cascade CI/CD Workflow
+~~~~~python
+import cascade as cs
+import re
+from typing import List
 
-欢迎来到 Cascade 项目的 CI/CD 系统。与传统的、基于 YAML 的流水线不同，我们的 CI/CD 流程本身就是一个使用 Cascade SDK 构建的、可测试、可维护的 Python 应用程序。我们“吃自己的狗粮”（Dogfooding），以此来展示 Cascade 的核心价值和能力。
+@cs.task
+async def detect_changed_packages() -> List[str]:
+    """
+    Detects which packages have changed compared to the main branch.
+    For pull requests, it compares against the base branch.
+    """
+    # Note: This command is a simplification. A robust implementation would need
+    # to handle different base refs for PRs vs. pushes. For this PoC,
+    # comparing against 'origin/main' is a good starting point.
+    git_diff_output = await cs.shell("git diff --name-only origin/main...HEAD")
+    
+    changed_packages = set()
+    package_pattern = re.compile(r"^packages/([^/]+)/.*")
 
-## 核心理念：CI/CD 即代码
+    for line in git_diff_output.splitlines():
+        match = package_pattern.match(line)
+        if match:
+            changed_packages.add(match.group(1))
+    
+    if not changed_packages:
+        print("No package changes detected.")
+        return []
 
-我们将 CI/CD 流水线视为一个声明式的 Python 应用，而不是一个静态的配置文件。这种方法带来了诸多优势：
+    print(f"Detected changed packages: {list(changed_packages)}")
+    return sorted(list(changed_packages))
+~~~~~
+~~~~~python
+import cascade as cs
+import re
+from typing import List
 
--   **表现力强**：复杂的逻辑、条件和依赖关系可以用 Python 清晰地表达。
--   **可测试**：我们可以为流水线的每一个步骤编写单元测试（参见 `tests/cicd/`），确保其逻辑的健壮性。
--   **可重用**：CI 任务（如 `lint_package`）是标准的 Cascade 任务，可以在不同的工作流中轻松复用和组合。
--   **动态与高效**：流水线能够动态地根据代码变更调整其执行图，这对于我们的 Monorepo 架构至关重要。
+@cs.task
+def parse_git_diff(git_diff_output: str) -> List[str]:
+    """
+    Parses the output of 'git diff --name-only' and extracts changed package names.
+    This is a pure logic task with no I/O.
+    """
+    changed_packages = set()
+    package_pattern = re.compile(r"^packages/([^/]+)/.*")
 
-## 架构
+    for line in git_diff_output.splitlines():
+        match = package_pattern.match(line)
+        if match:
+            changed_packages.add(match.group(1))
+    
+    if not changed_packages:
+        print("No package changes detected.")
+        return []
 
-我们的 CI/CD 系统由两部分组成：
+    sorted_packages = sorted(list(changed_packages))
+    print(f"Detected changed packages: {sorted_packages}")
+    return sorted_packages
+~~~~~
 
-1.  **触发器 (`.github/workflows/ci.yml`)**: 一个极其简洁的 GitHub Actions 配置文件。它的唯一职责是：
-    -   检出代码。
-    -   设置 Python 环境。
-    -   安装依赖。
-    -   调用我们的 Python CI/CD 入口点 (`cicd/main.py`)，并将 GitHub 事件的上下文作为参数传入。
+#### Acts 2: 在工作流中组合任务
 
-2.  **核心逻辑 (`cicd/` 目录)**:
-    -   `main.py`: CI/CD 的命令行入口，负责解析来自 GitHub Actions 的事件类型，并触发相应的工作流。
-    -   `tasks.py`: 定义构成流水线的原子任务（例如 `detect_changed_packages`, `lint_package`, `run_package_tests`）。
-    -   `workflows.py`: 将原子任务组合成高级工作流（例如 `pr_check_workflow`, `release_workflow`）。
+现在，我们修改 `cicd/workflows.py` 以正确地组合 `cs.shell` 和我们新的 `parse_git_diff` 任务。
 
-## 工作流详解
+~~~~~act
+patch_file
+cicd/workflows.py
+~~~~~
+~~~~~python
+from .tasks import (
+    detect_changed_packages,
+    lint_package,
+    run_package_tests,
+    build_package,
+    publish_packages,
+)
+~~~~~
+~~~~~python
+import cascade as cs
+from .tasks import (
+    parse_git_diff,
+    lint_package,
+    run_package_tests,
+    build_package,
+    publish_packages,
+)
+~~~~~
 
-### 1. `pr_check_workflow` (Pull Request 检查)
+~~~~~act
+patch_file
+cicd/workflows.py
+~~~~~
+~~~~~python
+def pr_check_workflow() -> cs.LazyResult:
+    """
+    Workflow for Pull Requests and pushes to main.
+    Only lints and tests the packages that have changed.
+    """
+    changed = detect_changed_packages()
 
--   **触发时机**: 当有新的 Pull Request 或代码被推送到 `main` 分支时触发。
--   **核心行为**:
-    1.  **检测变更**: `detect_changed_packages` 任务会运行 `git diff` 来找出哪些 `packages/*` 目录下的文件被修改了。
-    2.  **动态构建**: `cs.map` 会将 `lint_package` 和 `run_package_tests` 任务应用到所有已变更的包列表上。
-    3.  **并行执行**: Cascade 引擎会为每个受影响的包并行地执行 linting 和 testing 任务。
--   **优势**: 如果一个 PR 只修改了 `cascade-sdk`，那么只有 `cascade-sdk` 会被测试，从而极大地节省了 CI 的时间和资源。
+    # Dynamically create lint and test tasks for each changed package
+    lint_results = lint_package.map(package_name=changed)
+    test_results = run_package_tests.map(package_name=changed)
+~~~~~
+~~~~~python
+def pr_check_workflow() -> cs.LazyResult:
+    """
+    Workflow for Pull Requests and pushes to main.
+    Only lints and tests the packages that have changed.
+    """
+    # Step 1: Declare the action to get git diff output. This returns a LazyResult[str].
+    git_diff_output = cs.shell("git diff --name-only origin/main...HEAD")
+    
+    # Step 2: Declare the action to parse the output.
+    # We pass the LazyResult from step 1 directly as an argument.
+    # The Cascade engine will resolve it before executing parse_git_diff.
+    changed_packages = parse_git_diff(git_diff_output)
 
-### 2. `release_workflow` (发布流程)
-
--   **触发时机**: （未来规划）当一个符合 `vX.Y.Z` 格式的 Git 标签被推送到仓库时触发。
--   **核心行为**:
-    1.  **全量检查**: 与 `pr_check_workflow` 不同，发布流程会忽略变更检测，对**所有**包执行 linting 和 testing，以确保整个项目的健康度。
-    2.  **构建**: 在所有检查通过后，并行地为所有包构建发布产物（wheel 和 sdist）。
-    3.  **发布**: 将所有构建好的包发布到 PyPI。
-
-## 如何使用
-
-### 对于贡献者
-
-您的开发流程非常简单：
-
-1.  进行代码修改。
-2.  在本地运行检查（推荐）：
-    ```bash
-    # 对你修改的包运行 lint 和 test
-    uv run -- ruff check packages/<your-package-name>
-    uv run -- pytest packages/<your-package-name>
-    ```
-3.  提交 Pull Request。
-
-CI 系统会自动运行，并只测试您修改过的部分。
-
-### 对于维护者
-
-**执行发布流程**:
-
-当前，发布流程需要手动触发或通过未来的 Git 标签自动化来实现。当准备好发布时，请确保 `PYPI_TOKEN` 已在 GitHub Secrets 中配置。
-
-## 如何扩展
-
-要为 CI 流程添加一个新的步骤（例如，一个新的代码格式化检查工具 `blue`），您只需要：
-
-1.  **添加任务**: 在 `cicd/tasks.py` 中创建一个新的 Cascade 任务。
-    ```python
-    @cs.task
-    async def format_package(package_name: str) -> str:
-        await cs.shell(f"uv run -- blue packages/{package_name}")
-        return f"FORMAT_OK_{package_name}"
-    ```
-2.  **整合到工作流**: 在 `cicd/workflows.py` 中，将新任务添加到 `pr_check_workflow` 的依赖图中。
-    ```python
-    def pr_check_workflow() -> cs.LazyResult:
-        changed = detect_changed_packages()
-        format_results = format_package.map(package_name=changed)
-        lint_results = lint_package.map(package_name=changed).after(format_results)
-        test_results = run_package_tests.map(package_name=changed).after(lint_results)
-        return _ci_success_marker(test_results)
-    ```
-3.  **编写测试**: 在 `tests/cicd/test_tasks.py` 中为 `format_package` 任务添加单元测试。
-
-这就是全部！无需接触复杂的 YAML 语法，您就可以用纯 Python 来扩展和维护我们的 CI/CD 流水线。
+    # Step 3: Use the result of the parsing to dynamically build the rest of the graph.
+    lint_results = lint_package.map(package_name=changed_packages)
+    test_results = run_package_tests.map(package_name=changed_packages)
 ~~~~~

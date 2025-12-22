@@ -293,7 +293,9 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
                 imports_by_module[module_path].append(name)
 
         for module_path, names in sorted(imports_by_module.items()):
-            content_lines.append(f"from {module_path} import {', '.join(sorted(names))}")
+            # Use 'import X as X' to force re-export for type checkers
+            imports = ", ".join(f"{name} as {name}" for name in sorted(names))
+            content_lines.append(f"from {module_path} import {imports}")
         
         if sdk_natives:
              content_lines.append("\n# --- Locally Defined Exports ---")

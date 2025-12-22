@@ -18,12 +18,15 @@ def sqlite_db_path(tmp_path):
 
 
 @pytest.fixture
-async def controller_connector(sqlite_db_path):
-    """Provides a connector instance to act as the 'controller' CLI."""
+def controller_connector(sqlite_db_path, event_loop):
+    """
+    Provides a connector instance to act as the 'controller' CLI.
+    This is a sync fixture that manages an async resource.
+    """
     connector = SqliteConnector(db_path=str(sqlite_db_path))
-    await connector.connect()
+    event_loop.run_until_complete(connector.connect())
     yield connector
-    await connector.disconnect()
+    event_loop.run_until_complete(connector.disconnect())
 
 
 @pytest.fixture

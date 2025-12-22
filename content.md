@@ -1,77 +1,58 @@
-Of course. It's a critical best practice to write tests immediately after implementing a new feature to validate its behavior and prevent future regressions. Your direction is sound.
+您的分析请求已收到。
 
-I will now create a comprehensive end-to-end test suite for the polling-based `SqliteConnector` we just built.
+测试结果**不正常**。所有测试用例都在其**设置（setup）阶段失败**，而不是在执行阶段。这是一个阻断性问题，必须在继续路线图之前解决。
 
-## [WIP] test: Add end-to-end tests for SqliteConnector
+我将生成一个计划来修复这个错误。
+
+## [WIP] fix(test): 修复 pytest-asyncio 中异步 fixture 的弃用警告
+
+### 错误分析
+测试失败的根本原因是 `pytest.PytestRemovedIn9Warning`。该警告指出，一个测试请求了一个**异步 fixture** (`controller_connector`)，但 `pytest` 核心本身无法处理它。
+
+具体分析如下：
+
+1.  **问题的根源**: 我将 `controller_connector` fixture 定义为一个 `async def` 函数，并使用了 `yield`。这使其成为一个**异步生成器 (async generator)**。
+2.  **`pytest` 的限制**: `pytest` 的原生 fixture 机制只能处理同步函数和同步生成器。当它遇到一个 `async def` fixture 时，它不知道如何去 `await` 其设置和拆卸部分。
+3.  **`pytest-asyncio` 的角色**: `pytest-asyncio` 插件通过钩子（hook）来扩展 `pytest`，使其能够正确处理异步测试和异步 fixture。然而，在我们的案例中，这个钩子没有按预期工作，导致 `pytest` 的默认行为被触发。
+4.  **弃用警告**: `pytest` 正在逐步弃用对“同步测试请求异步 fixture”这种模糊模式的支持。虽然我们的测试本身是异步的（标记为 `@pytest.mark.asyncio`），但 fixture 的处理流程触发了这个警告，这表明我们的 fixture 定义方式不是最健壮的。
 
 ### 用户需求
-为新实现的、基于轮询的 `SqliteConnector` 创建一个全面的端到端（E2E）测试套件。该测试套件需要验证其在真实 `Engine` 环境下的核心功能，包括通过数据库文件进行跨进程通信、约束的发布与撤销、更新逻辑的幂等性以及约束的 TTL（生存时间）功能。
+修复 `test_e2e_sqlite_connector.py` 中的测试设置错误，使其能够成功运行并通过。
 
 ### 评论
-这是一个至关重要的步骤。这些 E2E 测试将作为 `SqliteConnector` 的最终行为契约。通过模拟 `cs-controller`（发布者）和 `Engine`（订阅者）之间的交互，我们可以确保连接器不仅在单元层面正确，而且在集成的、并发的真实世界场景中也能稳健运行。
+这个错误是 `pytest` 与 `pytest-asyncio` 交互时一个常见的微妙问题。最可靠、最符合 `pytest-asyncio` 最佳实践的解决方案是：将异步 fixture 重构为一个**同步 fixture**，并在其内部使用由 `pytest-asyncio` 提供的 `event_loop` fixture 来显式地运行异步的设置（setup）和拆卸（teardown）代码。
 
-我将使用 `pytest` 的 `tmp_path` fixture 来为每个测试用例创建一个临时的、完全隔离的 SQLite 数据库文件。这保证了测试之间不会相互干扰，确保了结果的确定性和可靠性。测试的结构将借鉴现有的 E2E 测试，如 `test_e2e_control_plane.py`，使用一个后台运行的 `Engine` 和一个在主测试协程中操作的 "controller" 连接器。
+这种方法消除了模糊性：
+-   从 `pytest` 的角度来看，`controller_connector` 是一个普通的同步生成器 fixture，它知道如何处理。
+-   在 fixture 内部，我们获得了对当前 `asyncio` 事件循环的完全控制，可以安全地执行 `await connector.connect()` 和 `await connector.disconnect()`。
+
+这将完全解决 `PytestRemovedIn9Warning` 警告，并使测试代码更加健壮和面向未来。
 
 ### 目标
-1.  在 `tests/engine/e2e/` 目录下创建新的测试文件 `test_e2e_sqlite_connector.py`。
-2.  **验证核心轮询机制**：实现一个测试用例 (`test_polling_pause_and_resume_e2e`)，它能：
-    *   发布一个 `pause` 约束。
-    *   验证 `Engine` 在一个轮询周期后停止执行新任务。
-    *   发布一个 `resume`（空 payload）命令。
-    *   验证 `Engine` 在下一个轮询周期后恢复执行。
-3.  **验证 `UPSERT` 逻辑**：实现一个测试用例 (`test_constraint_update_idempotency_e2e`)，它能：
-    *   发布一个慢速的 `rate_limit` 约束。
-    *   在 `Engine` 运行中，发布一个针对同一 `scope` 的快速 `rate_limit` 约束。
-    *   验证 `Engine` 的行为从慢速切换到快速，证明 `INSERT OR REPLACE` 逻辑正确无误。
-4.  **验证 TTL 功能**：实现一个测试用例 (`test_constraint_ttl_expiration_e2e`)，它能：
-    *   发布一个带有短暂 TTL 的 `pause` 约束。
-    *   验证 `Engine` 最初被阻塞。
-    *   等待超过 TTL 时间后，验证 `Engine` 的内部清理机制能够移除过期的约束，并自动恢复执行。
+1.  修改 `tests/engine/e2e/test_e2e_sqlite_connector.py` 文件。
+2.  重构 `controller_connector` fixture，将其从 `async def` 更改为 `def`。
+3.  将 `event_loop` fixture 注入到 `controller_connector` 中。
+4.  使用 `event_loop.run_until_complete()` 来包装异步的 `connect()` 和 `disconnect()` 调用。
 
 ### 基本原理
-本计划将通过一个 `write_file` 操作创建新的测试文件 `test_e2e_sqlite_connector.py`。该文件将包含所有必要的 `pytest` fixture 和测试用例。
-
--   **`sqlite_db_path` Fixture**: 利用 `tmp_path` 生成一个唯一的数据库文件路径，确保测试隔离。
--   **`controller_connector` Fixture**: 创建一个 `SqliteConnector` 实例，专门用于在测试中模拟 `cs-controller` 发布命令。
--   **`engine` Fixture**: 创建一个完整的 `Engine` 实例，配置为使用与 `controller_connector` 相同的数据库文件，并连接到事件总线 spy，以便我们断言其内部行为。
-
-测试逻辑将大量使用 `asyncio` 来并发地运行 `Engine`，同时在主测试流程中发布约束并检查事件流。`asyncio.sleep` 将被精确地用于等待超过 `POLL_INTERVAL` 的时间，以可靠地测试轮询行为。
+本计划将使用一个 `patch_file` 操作来精确地替换 `test_e2e_sqlite_connector.py` 中有问题的 fixture 定义。`old_str` 将包含旧的 `async def` 实现，而 `new_str` 将包含新的、使用 `event_loop` 的同步实现。这是一种原子化且精确的修复方式。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/connector-sqlite #concept/state #concept/sync #ai/instruct #task/domain/testing #task/object/sqlite-connector #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #comp/connector-sqlite #concept/tooling #scope/dx #ai/instruct #task/domain/testing #task/object/async-fixture #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `SqliteConnector` 的端到端测试文件
+#### Acts 1: 修复异步 fixture 的定义
 
-我们将一次性写入完整的测试文件。该文件包含了所有必要的 setup、fixtures 和测试用例，以全面验证 `SqliteConnector` 的功能。
+我们将 `controller_connector` fixture 从一个异步生成器重构为一个标准的同步生成器，并使用 `event_loop` fixture 来管理其内部的异步操作。
 
 ~~~~~act
-write_file
+patch_file
 tests/engine/e2e/test_e2e_sqlite_connector.py
 ~~~~~
 ~~~~~python
-import asyncio
-import time
-import pytest
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
-from cascade.connectors.sqlite.connector import SqliteConnector, POLL_INTERVAL
-
-
-# --- Fixtures ---
-
-@pytest.fixture
-def sqlite_db_path(tmp_path):
-    """Provides a unique, isolated SQLite database path for each test."""
-    return tmp_path / "test_control.db"
-
-
 @pytest.fixture
 async def controller_connector(sqlite_db_path):
     """Provides a connector instance to act as the 'controller' CLI."""
@@ -79,168 +60,21 @@ async def controller_connector(sqlite_db_path):
     await connector.connect()
     yield connector
     await connector.disconnect()
-
-
+~~~~~
+~~~~~python
 @pytest.fixture
-def engine(sqlite_db_path, bus_and_spy):
-    """Provides a fully configured Engine using the SqliteConnector."""
-    bus, _ = bus_and_spy
+def controller_connector(sqlite_db_path, event_loop):
+    """
+    Provides a connector instance to act as the 'controller' CLI.
+    This is a sync fixture that manages an async resource.
+    """
     connector = SqliteConnector(db_path=str(sqlite_db_path))
-    
-    # We need a mock executor that takes a bit of time to run
-    # so we can inject constraints during its execution.
-    class TimedMockExecutor(LocalExecutor):
-        async def execute(self, node, args, kwargs):
-            await asyncio.sleep(0.05)
-            return await super().execute(node, args, kwargs)
-
-    return Engine(
-        solver=NativeSolver(),
-        executor=TimedMockExecutor(),
-        bus=bus,
-        connector=connector,
-    )
-
-
-# --- Test Cases ---
-
-@pytest.mark.asyncio
-async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
-    """
-    Verifies the core polling loop for pause and resume functionality.
-    """
-    _, spy = bus_and_spy
-
-    @cs.task
-    def task_a():
-        return "A"
-
-    @cs.task
-    def task_b(dep):
-        return "B"
-
-    workflow = task_b(task_a())
-
-    # Start the engine in the background
-    engine_run_task = asyncio.create_task(engine.run(workflow))
-
-    # Wait for task_a to finish, so we are sure the engine is at the point
-    # of deciding whether to run task_b.
-    await asyncio.sleep(POLL_INTERVAL + 0.1) 
-
-    # Publish a pause for task_b
-    scope = "task:task_b"
-    topic = f"cascade/constraints/{scope.replace(':', '/')}"
-    pause_payload = {
-        "id": "pause-b", "scope": scope, "type": "pause", "params": {}
-    }
-    await controller_connector.publish(topic, pause_payload)
-
-    # Wait for the poll interval to pass, engine should pick up the pause
-    await asyncio.sleep(POLL_INTERVAL + 0.1)
-
-    # Assert that task_b has NOT started
-    started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
-    assert "task_b" not in started_tasks
-
-    # Now, publish a resume command (empty payload)
-    await controller_connector.publish(topic, {})
-
-    # Wait for the poll interval again for resume to be picked up
-    await asyncio.sleep(POLL_INTERVAL + 0.1)
-
-    # The workflow should now complete
-    final_result = await asyncio.wait_for(engine_run_task, timeout=1.0)
-    assert final_result == "B"
-
-    finished_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionFinished) if e.status == "Succeeded"}
-    assert finished_tasks == {"task_a", "task_b"}
-
-
-@pytest.mark.asyncio
-async def test_constraint_update_idempotency_e2e(engine, controller_connector, bus_and_spy):
-    """
-    Tests that publishing a new constraint for the same scope correctly replaces
-    the old one (UPSERT behavior).
-    """
-    scope = "global"
-    topic = "cascade/constraints/global"
-
-    @cs.task
-    def my_task(i):
-        return i
-
-    # A workflow of 5 independent tasks
-    workflow = my_task.map(i=list(range(5)))
-
-    # Set a very slow initial rate limit
-    slow_limit = {
-        "id": "rate-1", "scope": scope, "type": "rate_limit", "params": {"rate": f"1/{POLL_INTERVAL * 4}"} # 1 task per 4 polls
-    }
-    await controller_connector.publish(topic, slow_limit)
-    
-    start_time = time.time()
-    engine_run_task = asyncio.create_task(engine.run(workflow))
-
-    # Wait for at least one task to complete under the slow limit
-    await asyncio.sleep(POLL_INTERVAL * 5)
-
-    # Now, update the limit to be very fast
-    fast_limit = {
-        "id": "rate-2", "scope": scope, "type": "rate_limit", "params": {"rate": "100/s"}
-    }
-    await controller_connector.publish(topic, fast_limit)
-
-    # The rest of the tasks should complete quickly
-    await asyncio.wait_for(engine_run_task, timeout=2.0)
-    duration = time.time() - start_time
-
-    # 5 tasks * ~0.8s/task (slow) would be ~4s.
-    # 1 task slow (~0.8s) + 4 tasks fast (<0.1s) should be well under 2s.
-    assert duration < 2.0
-
-
-@pytest.mark.asyncio
-async def test_constraint_ttl_expiration_e2e(engine, controller_connector, bus_and_spy):
-    """
-    Verifies that constraints with a TTL are automatically removed after they expire.
-    """
-    scope = "global"
-    topic = "cascade/constraints/global"
-    ttl_seconds = POLL_INTERVAL * 2.5 # Make it expire after a couple of polls
-
-    @cs.task
-    def my_task():
-        return "done"
-
-    workflow = my_task()
-
-    # Publish a pause constraint that expires in the near future
-    expires_at = time.time() + ttl_seconds
-    pause_payload = {
-        "id": "pause-ttl", "scope": scope, "type": "pause", "params": {}, "expires_at": expires_at
-    }
-    await controller_connector.publish(topic, pause_payload)
-
-    engine_run_task = asyncio.create_task(engine.run(workflow))
-
-    # Wait for a poll, task should be blocked
-    await asyncio.sleep(POLL_INTERVAL + 0.1)
-    assert not engine_run_task.done()
-
-    # Wait for the TTL to expire
-    await asyncio.sleep(ttl_seconds)
-
-    # The engine's internal cleanup should detect the expired constraint on its
-    # next wakeup and resume execution.
-    final_result = await asyncio.wait_for(engine_run_task, timeout=POLL_INTERVAL * 2)
-    assert final_result == "done"
+    event_loop.run_until_complete(connector.connect())
+    yield connector
+    event_loop.run_until_complete(connector.disconnect())
 ~~~~~
 
 ### 下一步建议
+我们已经修复了测试代码中的阻断性错误。现在，我们应该重新运行测试以确认所有问题都已解决，并且 `SqliteConnector` 的行为符合预期。
 
-我们已经为 `SqliteConnector` 的初始轮询实现创建了一个健壮的端到端测试套件。这确保了我们交付的第一个版本是可靠且经过验证的。
-
-现在，我们可以放心地继续执行路线图的**步骤 2: [性能优化] 增强 Unix Domain Socket (UDS) 信号机制**。有了这些基线测试，我们可以在完成 UDS 实现后，轻松地扩展测试用例以验证新的、低延迟的行为。
-
-如果你同意，我将开始制定实现 UDS 信号机制的计划。
+一旦测试通过，我们就可以安全地继续执行路线图的**步骤 2: [性能优化] 增强 Unix Domain Socket (UDS) 信号机制**。

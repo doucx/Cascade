@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M flow.py, M resolvers.py, M flow.py ... and 3 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766383881.947157, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 创建脚本以自动生成 Provider 类型存根", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766383885.0462825, "duration_ms": 0}}

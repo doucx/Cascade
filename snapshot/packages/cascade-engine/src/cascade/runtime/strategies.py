@@ -240,11 +240,19 @@ class GraphExecutionStrategy:
 
         if not state_backend.has_result(target._uuid):
             if skip_reason := state_backend.get_skip_reason(target._uuid):
-                raise DependencyMissingError(
-                    task_id=target.task.name or "unknown",
-                    arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
-                )
+                # Distinguish between a valid control-flow skip and a data dependency failure.
+                # A skip due to a data dependency is an error. Other skips are valid terminations.
+                if "Data" in skip_reason or "Route" in skip_reason:
+                    raise DependencyMissingError(
+                        task_id=target.task.name or "unknown",
+                        arg_name="<Target Output>",
+                        dependency_id=f"Target was skipped (Reason: {skip_reason})",
+                    )
+                else:
+                    # Valid skip (e.g., ConditionFalse, UpstreamSkipped_Sequence).
+                    # The workflow finished successfully but produced no final result.
+                    return None
+
             raise KeyError(
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )

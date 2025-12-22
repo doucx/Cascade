@@ -23,5 +23,5 @@ packages = ["src/cascade"]
 allow-direct-references = true
 
 [tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-py = { path = "../cascade-py", editable = true }
+cascade-spec = { workspace = true }
+cascade-sdk = { path = "../cascade-sdk", editable = true }

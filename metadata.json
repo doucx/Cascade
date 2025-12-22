@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "错误分析", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766371953.2197409, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(build): Synchronize all intra-workspace dependencies", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766372172.0084364, "duration_ms": 0}}

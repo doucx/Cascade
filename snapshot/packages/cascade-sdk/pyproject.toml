@@ -20,7 +20,7 @@ sql = ["sqlalchemy"]
 cli = ["typer[all]"]
 config = ["PyYAML"]
 s3 = ["aiobotocore"]
-redis = ["cascade-runtime[redis]"]
+redis = ["cascade-engine[redis]"]
 all = [
   "jinja2",
   "aiohttp",
@@ -28,7 +28,7 @@ all = [
   "typer[all]",
   "PyYAML",
   "aiobotocore",
-  "cascade-runtime[redis]",
+  "cascade-engine[redis]",
 ]
 
 [project.entry-points."cascade.providers"]
@@ -71,6 +71,6 @@ packages = ["src/cascade"]
 allow-direct-references = true
 
 [tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
+cascade-spec = { workspace = true }
+cascade-engine = { workspace = true }
 cascade-common = { workspace = true }

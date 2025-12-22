@@ -36,7 +36,7 @@ packages = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/cascade-py/src/cascade"]
+packages = ["packages/cascade-sdk/src/cascade"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov=cascade --cov-report=term-missing"

@@ -23,5 +23,5 @@ packages = ["src/cascade"]
 allow-direct-references = true
 
 [tool.uv.sources]
-cascade-interfaces = { workspace = true }
+cascade-spec = { workspace = true }
 cascade-common = { workspace = true }

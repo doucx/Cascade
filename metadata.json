@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M test_llm_pattern.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766372410.727584, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(arch): Implement semantic package structure (spec, engine, sdk)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766372513.3663502, "duration_ms": 0}}

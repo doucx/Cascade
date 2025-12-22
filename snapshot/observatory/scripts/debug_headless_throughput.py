@@ -19,7 +19,6 @@ Expected Output:
 import asyncio
 import random
 import time
-from collections import deque
 from typing import List
 
 import cascade as cs
@@ -54,7 +53,6 @@ async def run_headless_experiment():
 
     # --- Flash Counter ---
     flash_count = 0
-    flash_times = deque()
 
     class HeadlessConnector:
         async def publish(self, topic, payload, **kwargs):

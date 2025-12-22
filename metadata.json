@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: Resolve 14 ruff linting errors across the codebase", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766393480.972664, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: Resolve final 3 ruff errors, including unused deque", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766393746.1067116, "duration_ms": 0}}

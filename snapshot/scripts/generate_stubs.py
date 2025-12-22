@@ -160,16 +160,11 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
             # 1. Clean Type Annotation
             new_annotation = inspect.Parameter.empty
             if param.annotation != inspect.Parameter.empty:
-                # Convert to string and clean
-                # Note: This is a simplification; complex nested types might need AST parsing,
-                # but string cleaning covers 90% of our cases.
                 type_name = str(param.annotation)
-                # If it's a class object (like <class 'str'>), get its name
                 if isinstance(param.annotation, type):
                     type_name = param.annotation.__name__
                 
                 clean_name = clean_type_str(str(type_name))
-                # For safety, if cleaning didn't resolve <class '...'>, fallback to Any
                 if "<class" in clean_name:
                     clean_name = "Any"
                 new_annotation = clean_name
@@ -177,22 +172,22 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
             # 2. Clean Default Value
             new_default = inspect.Parameter.empty
             if param.default != inspect.Parameter.empty:
-                # Keep simple literals, replace everything else with Ellipsis (...)
                 if param.default is None:
                     new_default = None
                 elif isinstance(param.default, (int, float, bool, str)):
                     new_default = param.default
                 else:
-                    # e.g. Inject(...), or custom classes.
-                    # We use Ellipsis to signify "some default value" in stub files
                     new_default = ... 
 
-            # Reconstruct parameter
-            # We can't pass string as annotation to Parameter constructor directly if using `inspect.Signature`
-            # to render. So we construct the string manually to avoid inspect's validation logic
-            # confusing our clean strings.
-            
-            param_str = param.name
+            # 3. Handle *args and **kwargs prefixes
+            param_name = param.name
+            if param.kind == inspect.Parameter.VAR_POSITIONAL:
+                param_name = "*" + param_name
+            elif param.kind == inspect.Parameter.VAR_KEYWORD:
+                param_name = "**" + param_name
+
+            # Reconstruct parameter string
+            param_str = param_name
             if new_annotation != inspect.Parameter.empty:
                 param_str += f": {new_annotation}"
             
@@ -206,14 +201,13 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
             
             new_params.append(param_str)
 
-        # Reconstruct signature string manually
         signature_str = f"({', '.join(new_params)})"
 
         # Handle Return Type
         if sig.return_annotation != inspect.Signature.empty:
              signature_str += " -> LazyResult"
         else:
-             signature_str += " -> LazyResult" # Default for providers
+             signature_str += " -> LazyResult"
 
         return signature_str, formatted_doc
     except Exception as e:

@@ -18,12 +18,15 @@ from cascade.cli.observer.app import on_message
 @pytest.mark.asyncio
 async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
     """
-    End-to-end test for the local UDS telemetry loop.
+    End-to-end test for the local UDS telemetry loop, using explicit synchronization.
     Engine -> LocalConnector -> UDS Server -> UDS Client -> on_message
     """
     db_path = tmp_path / "control.db"
     uds_path = str(tmp_path / "telemetry.sock")
-    
+
+    # Synchronization primitive
+    run_finished_event = asyncio.Event()
+
     # 1. Setup Captured Events list
     received_events = []
 
@@ -31,17 +34,20 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
         # Flatten the events for easy assertion
         body = payload.get("body", {})
         if body.get("type") == "LifecycleEvent":
-            received_events.append(body.get("event"))
+            event = body.get("event")
+            received_events.append(event)
+            if event == "ENGINE_STOPPED":
+                run_finished_event.set()  # Signal that the final event was received
         elif body.get("type") == "TaskStateEvent":
             received_events.append(f"{body.get('task_name')}:{body.get('state')}")
 
     # Use monkeypatch to redirect observer's on_message to our collector
+    # Note: We must patch the imported function where it is defined, but use the mock to control data capture.
     monkeypatch.setattr("cascade.cli.observer.app.on_message", mocked_on_message)
 
     # 2. Configure Engine with LocalConnector
     event_bus = MessageBus()
     connector = LocalConnector(db_path=str(db_path), telemetry_uds_path=uds_path)
-    # We must attach TelemetrySubscriber manually as cs.run would do
     TelemetrySubscriber(event_bus, connector)
 
     engine = Engine(
@@ -58,39 +64,55 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
 
     # 4. Start UDS Client (Watcher) in background
     async def run_client():
-        # Retry logic similar to observer app
         attempts = 0
         while attempts < 5:
             try:
+                # Client attempts to connect
                 reader, writer = await asyncio.open_unix_connection(uds_path)
-                while not reader.at_eof():
+                
+                # Main read loop: blocks until data or EOF
+                while True:
                     line = await reader.readline()
-                    if not line: break
-                    data = json.loads(line)
-                    await mocked_on_message("uds", data)
+                    if not line:
+                        break  # Server closed connection
+                    try:
+                        data = json.loads(line)
+                        await mocked_on_message("uds", data)
+                    except json.JSONDecodeError:
+                        continue
+                
                 writer.close()
                 await writer.wait_closed()
-                break
+                break  # Exit the retry loop after connection closes
+
             except (ConnectionRefusedError, FileNotFoundError):
                 await asyncio.sleep(0.1)
                 attempts += 1
-
+            except asyncio.CancelledError:
+                break
+        
     client_task = asyncio.create_task(run_client())
 
-    # 5. Run Engine
-    await engine.run(hello())
-    
-    # Give a small buffer for the final UDS messages to be flushed and read
-    await asyncio.sleep(0.2)
-    client_task.cancel()
+    # 5. Run Engine (start execution)
+    engine_run_task = asyncio.create_task(engine.run(hello()))
 
-    # 6. Assertions
-    # Expected sequence:
-    # - ENGINE_STARTED
-    # - hello:RUNNING
-    # - hello:COMPLETED
-    # - ENGINE_STOPPED
-    
+    # 6. Synchronize: Wait for the final ENGINE_STOPPED message to be processed.
+    try:
+        await asyncio.wait_for(run_finished_event.wait(), timeout=5.0)
+    except asyncio.TimeoutError:
+        # If timeout, it means the message was lost or the client task failed early.
+        pytest.fail(
+            f"Timed out waiting for ENGINE_STOPPED event ({5.0}s). Received: {received_events}"
+        )
+
+    # 7. Final Assertions
+    # Ensure the engine task itself finished cleanly (should be very fast after unblocking)
+    await asyncio.wait_for(engine_run_task, timeout=1.0)
+
+    # Clean up client task if it hasn't exited already due to server shutdown
+    if not client_task.done():
+        client_task.cancel()
+
     assert "ENGINE_STARTED" in received_events
     assert "hello:RUNNING" in received_events
     assert "hello:COMPLETED" in received_events

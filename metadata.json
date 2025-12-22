@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 UdsTelemetryServer 关闭时的死锁问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766390051.1648502, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 使用 asyncio.Event 修复 UDS 客户端 E2E 测试中的竞态条件", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766390134.434983, "duration_ms": 0}}

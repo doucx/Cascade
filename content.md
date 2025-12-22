@@ -1,87 +1,160 @@
-## [WIP] fix: 修复 UdsTelemetryServer 关闭时的死锁问题
+## [WIP] fix: 使用 asyncio.Event 修复 UDS 客户端 E2E 测试中的竞态条件
 
 ### 错误分析
-`UdsTelemetryServer.stop()` 在等待服务器关闭 (`wait_closed`) 之前没有主动关闭现有的客户端连接。这导致在 E2E 测试中，当后台客户端保持连接时，`engine.run()` 会在清理阶段无限期挂起，造成死锁。
+`ENGINE_STOPPED` 事件在 Engine 清理连接之前未能被 UDS 客户端及时读取，导致测试因竞态条件失败。
 
 ### 用户需求
-修复 `tests/cli/e2e/test_e2e_watch_local_backend.py` 测试挂起的问题。
+修复 `test_e2e_watch_local_uds_e2e` 中 `ENGINE_STOPPED` 消息丢失的问题。
 
 ### 评论
-这是一个在编写异步服务器时常见的陷阱。服务器的优雅退出不仅需要停止接受新连接，还需要妥善处理或强制结束现有连接。
+新的测试逻辑将更加健壮，不再依赖于模糊的 `asyncio.sleep` 时间，而是依赖于明确的消息传递信号，这完全符合我们的异步测试原则。
 
 ### 目标
-1.  修改 `packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py`。
-2.  调整 `stop()` 方法的顺序：先遍历并关闭 `self._clients` 中的所有 `writer`，然后再执行 `await self._server.wait_closed()`。
+1.  在测试函数中引入 `asyncio.Event`。
+2.  修改 `mocked_on_message`，使其在接收到 `ENGINE_STOPPED` 时设置该 Event。
+3.  修改主测试流程，使其等待此 Event。
 
 ### 基本原理
-通过先关闭客户端 `writer`，我们触发了客户端侧的连接关闭流程。对于服务器侧的 `_handle_client` 协程，这将导致其等待逻辑返回或抛出异常，从而结束处理函数。一旦所有处理函数结束且连接断开，`self._server.wait_closed()` 就能立即完成，打破死锁。
+通过在测试中实现精确的同步，我们消除了对事件循环调度时机的依赖，确保了 `ENGINE_STOPPED` 消息在断言发生前被可靠地捕获。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #concept/sync #scope/core #ai/instruct #task/domain/storage #task/object/uds-server #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #concept/sync #scope/core #ai/instruct #task/domain/testing #task/object/watch-local-backend #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 优化 UDS 服务器停止逻辑
+#### Acts 1: 用同步机制重写 E2E 测试函数
 
-我们将重写 `stop` 方法，确保先清理客户端。
+我们将用一个完全同步的、基于 `asyncio.Event` 的新版本替换整个测试函数。
 
 ~~~~~act
-patch_file
-packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py
+write_file
+tests/cli/e2e/test_e2e_watch_local_backend.py
 ~~~~~
 ~~~~~python
-    async def stop(self):
-        """Stops the server and disconnects all clients."""
-        if not self._server:
-            return
+import asyncio
+import json
+import sys
+import pytest
+import cascade as cs
+from cascade.runtime.engine import Engine
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.bus import MessageBus
+from cascade.connectors.local import LocalConnector
+from cascade.runtime.subscribers import TelemetrySubscriber
 
-        # Close the main server socket
-        self._server.close()
-        await self._server.wait_closed()
-        self._server = None
+# We import the internal logic from observer to test real-world behavior
+from cascade.cli.observer.app import on_message
 
-        # Disconnect all active clients
-        for writer in list(self._clients):
-            if not writer.is_closing():
+
+@pytest.mark.skipif(sys.platform == "win32", reason="UDS is not supported on Windows")
+@pytest.mark.asyncio
+async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
+    """
+    End-to-end test for the local UDS telemetry loop, using explicit synchronization.
+    Engine -> LocalConnector -> UDS Server -> UDS Client -> on_message
+    """
+    db_path = tmp_path / "control.db"
+    uds_path = str(tmp_path / "telemetry.sock")
+
+    # Synchronization primitive
+    run_finished_event = asyncio.Event()
+
+    # 1. Setup Captured Events list
+    received_events = []
+
+    async def mocked_on_message(topic, payload):
+        # Flatten the events for easy assertion
+        body = payload.get("body", {})
+        if body.get("type") == "LifecycleEvent":
+            event = body.get("event")
+            received_events.append(event)
+            if event == "ENGINE_STOPPED":
+                run_finished_event.set()  # Signal that the final event was received
+        elif body.get("type") == "TaskStateEvent":
+            received_events.append(f"{body.get('task_name')}:{body.get('state')}")
+
+    # Use monkeypatch to redirect observer's on_message to our collector
+    # Note: We must patch the imported function where it is defined, but use the mock to control data capture.
+    monkeypatch.setattr("cascade.cli.observer.app.on_message", mocked_on_message)
+
+    # 2. Configure Engine with LocalConnector
+    event_bus = MessageBus()
+    connector = LocalConnector(db_path=str(db_path), telemetry_uds_path=uds_path)
+    TelemetrySubscriber(event_bus, connector)
+
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=event_bus,
+        connector=connector,
+    )
+
+    # 3. Define a simple workflow
+    @cs.task
+    def hello():
+        return "world"
+
+    # 4. Start UDS Client (Watcher) in background
+    async def run_client():
+        attempts = 0
+        while attempts < 5:
+            try:
+                # Client attempts to connect
+                reader, writer = await asyncio.open_unix_connection(uds_path)
+                
+                # Main read loop: blocks until data or EOF
+                while True:
+                    line = await reader.readline()
+                    if not line:
+                        break  # Server closed connection
+                    try:
+                        data = json.loads(line)
+                        await mocked_on_message("uds", data)
+                    except json.JSONDecodeError:
+                        continue
+                
                 writer.close()
                 await writer.wait_closed()
-        self._clients.clear()
+                break  # Exit the retry loop after connection closes
 
-        # Clean up the socket file
-        self.uds_path.unlink(missing_ok=True)
-~~~~~
-~~~~~python
-    async def stop(self):
-        """Stops the server and disconnects all clients."""
-        if not self._server:
-            return
+            except (ConnectionRefusedError, FileNotFoundError):
+                await asyncio.sleep(0.1)
+                attempts += 1
+            except asyncio.CancelledError:
+                break
+        
+    client_task = asyncio.create_task(run_client())
 
-        # 1. Stop accepting new connections
-        self._server.close()
+    # 5. Run Engine (start execution)
+    engine_run_task = asyncio.create_task(engine.run(hello()))
 
-        # 2. Forcefully disconnect all active clients to unblock wait_closed()
-        for writer in list(self._clients):
-            try:
-                if not writer.is_closing():
-                    writer.close()
-                    # We don't await wait_closed() here individually to avoid 
-                    # sequential blocking; the server's wait_closed will handle it.
-            except Exception:
-                pass
-        self._clients.clear()
+    # 6. Synchronize: Wait for the final ENGINE_STOPPED message to be processed.
+    try:
+        await asyncio.wait_for(run_finished_event.wait(), timeout=5.0)
+    except asyncio.TimeoutError:
+        # If timeout, it means the message was lost or the client task failed early.
+        pytest.fail(
+            f"Timed out waiting for ENGINE_STOPPED event ({5.0}s). Received: {received_events}"
+        )
 
-        # 3. Now wait for the server and its handlers to fully wind down
-        await self._server.wait_closed()
-        self._server = None
+    # 7. Final Assertions
+    # Ensure the engine task itself finished cleanly (should be very fast after unblocking)
+    await asyncio.wait_for(engine_run_task, timeout=1.0)
 
-        # 4. Clean up the socket file
-        self.uds_path.unlink(missing_ok=True)
+    # Clean up client task if it hasn't exited already due to server shutdown
+    if not client_task.done():
+        client_task.cancel()
+
+    assert "ENGINE_STARTED" in received_events
+    assert "hello:RUNNING" in received_events
+    assert "hello:COMPLETED" in received_events
+    assert "ENGINE_STOPPED" in received_events
 ~~~~~
 
 ### 下一步建议
+我们已经完成了对 UDS 客户端和服务器端死锁与竞态条件的所有修复。我建议再次运行测试以确认整个本地可观测性功能（从 `Engine` 到 `Observer`）现在已完全稳定。
 
-修复此逻辑后，`test_watch_local_uds_e2e` 应该能够顺利完成。我建议再次运行该测试。
-
-如果测试通过，我们将完成路线图的最后一步，并准备最后的 `[COMMIT]`。
+如果测试通过，我们将进入最后的 `[COMMIT]` 阶段。

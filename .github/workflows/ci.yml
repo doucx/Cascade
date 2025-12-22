@@ -29,8 +29,10 @@ jobs:
       - name: Install uv
         run: curl -LsSf https://astral.sh/uv/install.sh | sh
 
-      - name: Install dependencies
-        run: uv pip install -e ".[dev]"
+      - name: Create Virtual Environment and Install Dependencies
+        run: |
+          uv venv
+          uv pip install -e ".[dev]"
 
       - name: Run Cascade CI Workflow
         run: python cicd/main.py --event ${{ github.event_name }}

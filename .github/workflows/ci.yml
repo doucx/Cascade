@@ -35,6 +35,6 @@ jobs:
           uv pip install -e ".[dev]"
 
       - name: Run Cascade CI Workflow
-        run: uv run python cicd/main.py --event ${{ github.event_name }}
+        run: uv run python -m cicd.main --event ${{ github.event_name }}
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}

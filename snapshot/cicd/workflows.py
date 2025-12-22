@@ -1,6 +1,5 @@
 import cascade as cs
 from typing import List
-import cascade as cs
 from .tasks import (
     parse_git_diff,
     lint_package,
@@ -24,12 +23,14 @@ ALL_PACKAGES = [
     "cascade-provider-ipfs",
 ]
 
+
 @cs.task
 def _ci_success_marker(results: List[str]):
     """A dummy task to act as a final success node in the graph."""
     print("CI checks completed successfully.")
     print("Results:", results)
     return "CI_SUCCESS"
+
 
 def pr_check_workflow() -> cs.LazyResult:
     """
@@ -38,7 +39,7 @@ def pr_check_workflow() -> cs.LazyResult:
     """
     # Step 1: Declare the action to get git diff output. This returns a LazyResult[str].
     git_diff_output = cs.shell("git diff --name-only origin/main...HEAD")
-    
+
     # Step 2: Declare the action to parse the output.
     # We pass the LazyResult from step 1 directly as an argument.
     # The Cascade engine will resolve it before executing parse_git_diff.
@@ -71,5 +72,5 @@ def release_workflow() -> cs.LazyResult:
 
     # Publish after all builds are complete
     publish_result = publish_packages().after(build_all)
-    
+
     return publish_result

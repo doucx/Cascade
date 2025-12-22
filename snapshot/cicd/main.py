@@ -1,9 +1,10 @@
 import sys
 import cascade as cs
 import typer
-from .workflows import pr_check_workflow, release_workflow
+from .workflows import pr_check_workflow
 
 app = typer.Typer()
+
 
 @app.command()
 def main(event: str = typer.Option(..., "--event", help="The GitHub event name.")):
@@ -30,6 +31,7 @@ def main(event: str = typer.Option(..., "--event", help="The GitHub event name."
     if target:
         # The log level is configured in the GHA workflow file
         cs.run(target, log_level="DEBUG")
+
 
 if __name__ == "__main__":
     app()

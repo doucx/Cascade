@@ -107,9 +107,7 @@ async def test_sequence_aborts_on_skipped_node(bus_and_spy):
     assert skipped_names == {"task_b", "task_c"}
 
     # Verify task_c was skipped because its sequence dependency was skipped
-    task_c_skipped_event = next(
-        e for e in skipped_events if e.task_name == "task_c"
-    )
+    task_c_skipped_event = next(e for e in skipped_events if e.task_name == "task_c")
     assert task_c_skipped_event.reason == "UpstreamSkipped_Sequence"
 
 

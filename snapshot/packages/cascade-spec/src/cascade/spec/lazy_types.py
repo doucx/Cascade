@@ -31,7 +31,9 @@ class LazyResult(Generic[T]):
     _cache_policy: Optional[Any] = None  # CachePolicy
     _condition: Optional["LazyResult"] = None
     _constraints: Optional[Any] = None  # ResourceConstraint
-    _dependencies: List["LazyResult"] = field(default_factory=list)  # Explicit sequencing
+    _dependencies: List["LazyResult"] = field(
+        default_factory=list
+    )  # Explicit sequencing
 
     def __hash__(self):
         return hash(self._uuid)

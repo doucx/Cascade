@@ -112,7 +112,7 @@ class FlowManager:
                 condition_result = state_backend.get_result(edge.source.id)
                 if not condition_result:
                     return "ConditionFalse"
-            
+
             # New explicit check for sequence abortion
             elif edge.edge_type == EdgeType.SEQUENCE:
                 if state_backend.get_skip_reason(edge.source.id):

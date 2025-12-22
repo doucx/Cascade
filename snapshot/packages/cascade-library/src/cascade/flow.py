@@ -1,4 +1,4 @@
-from typing import List, Union, Callable, Any, Sequence
+from typing import Union, Callable, Any, Sequence
 from cascade.spec.lazy_types import LazyResult
 
 

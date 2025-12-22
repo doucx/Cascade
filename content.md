@@ -1,270 +1,345 @@
-这是针对 **[架构建议：引入基于 AST 的 TCO 静态分析以增强图透明度.md]** 的修正实施计划。
+非常抱歉，在之前的指令中我违反了 Quipu 的 `patch_file` 协议格式（未提供 `` 和 `.new` 标记）。由于 `build.py` 的改动幅度较大且涉及签名变更，根据 `write_file` 使用策略，我将对该文件使用 `write_file` 以确保完整性和正确性。
 
-我已更正 `patch_file` 的参数，并将测试文件移动到符合项目结构的 `tests/engine/graph/` 目录下。
-
-## [WIP] feat(graph): 引入基于 AST 的静态 TCO 分析器与 POTENTIAL 边类型
+## [WIP] feat(graph): 集成 StaticTcoAnalyzer 到 GraphBuilder (修正版)
 
 ### 摘要头
-**[WIP] feat(graph): 引入基于 AST 的静态 TCO 分析器与 POTENTIAL 边类型**
+**[WIP] feat(graph): 集成 StaticTcoAnalyzer 到 GraphBuilder**
+
+### 错误分析
+在上一轮操作中，我在 `patch_file` 指令中错误地省略了 `` 和 `.new` 参数块，导致解析器报错。这违反了 D3 公理级约束。
 
 ### 用户需求
-用户希望提高 Cascade 图的透明度，特别是对于使用了 TCO (Tail Call Optimization) 模式的动态任务。当前，如果不实际运行代码，无法知道一个任务 (`return another_task()`) 可能会跳转到哪里。用户建议通过静态分析 Python 源代码 (AST) 来预测这些潜在的跳转路径，并在图中显式展示。
-
-### 评论
-这是一个极具价值的高级功能，它将 Cascade 的可观测性提升到了一个新的维度——“预测性观测”。实现它的难点在于如何从静态的 AST 中准确地解析出运行时的对象（如 Task 实例）。第一步我们先建立核心的基础设施：AST 分析器和新的边类型定义。
+将静态 TCO 分析器集成到图构建过程中，以便在可视化时展示潜在的跳转路径。
 
 ### 目标
-1.  在 `cascade.graph.model.EdgeType` 中引入新的枚举值 `POTENTIAL`，用于表示通过静态分析推断出的、非确定性的依赖关系。
-2.  创建 `cascade.graph.ast_analyzer` 模块，实现 `StaticTcoAnalyzer`。
-3.  编写单元测试验证分析器能正确识别简单的 TCO 跳转。
-
-### 基本原理
-我们将使用 Python 标准库 `ast` 和 `inspect`。通过解析函数源码并遍历 `ast.Return` 节点，尝试解析其返回的调用对象。解析过程是“尽力而为”的，利用函数的 `__globals__` 和 `__closure__` 将 AST 中的符号映射回内存中的 Task 对象。
+1.  更新 `GraphBuilder` 逻辑，支持 AST 扫描并在发现潜在跳转时创建 `POTENTIAL` 边。
+2.  更新 `visualize` 模块，为 `POTENTIAL` 边定义虚线样式。
+3.  通过单元测试验证。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/graph #concept/ast #task/domain/core #task/object/ast-analyzer #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/graph #concept/ast #task/domain/core #task/object/graph-builder #task/action/integration #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 扩展图模型定义
+#### Acts 1: 重写 GraphBuilder 以支持 TCO 扫描
 
-在 `EdgeType` 枚举中增加 `POTENTIAL` 类型。
+我们通过 `write_file` 替换 `packages/cascade-graph/src/cascade/graph/build.py` 的完整内容。
+
+~~~~~act
+write_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+from typing import Dict, Any, Optional
+import inspect
+from cascade.graph.model import Graph, Node, Edge, EdgeType
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.graph.ast_analyzer import analyze_task_source
+
+
+class GraphBuilder:
+    def __init__(self):
+        self.graph = Graph()
+        self._visited: Dict[str, Node] = {}
+
+    def build(self, target: LazyResult) -> Graph:
+        self._visit(target)
+        return self.graph
+
+    def _visit(self, value: Any, scan_for_tco: bool = True) -> Node:
+        if isinstance(value, LazyResult):
+            return self._visit_lazy_result(value, scan_for_tco)
+        elif isinstance(value, MappedLazyResult):
+            return self._visit_mapped_result(value)
+        else:
+            raise TypeError(f"Cannot build graph from type {type(value)}")
+
+    def _visit_lazy_result(self, result: LazyResult, scan_for_tco: bool = True) -> Node:
+        if result._uuid in self._visited:
+            return self._visited[result._uuid]
+
+        # 1. Capture the structure of inputs
+        literal_inputs = {str(i): v for i, v in enumerate(result.args)}
+        literal_inputs.update(result.kwargs)
+
+        # Pre-compute signature
+        sig = None
+        if result.task.func:
+            try:
+                sig = inspect.signature(result.task.func)
+            except (ValueError, TypeError):
+                pass
+
+        node = Node(
+            id=result._uuid,
+            name=result.task.name,
+            node_type="task",
+            callable_obj=result.task.func,
+            signature=sig,
+            retry_policy=result._retry_policy,
+            cache_policy=result._cache_policy,
+            constraints=result._constraints,
+            literal_inputs=literal_inputs,
+        )
+        self.graph.add_node(node)
+        self._visited[result._uuid] = node
+
+        # 2. Recursively scan inputs to add edges
+        self._scan_and_add_edges(node, result.args)
+        self._scan_and_add_edges(node, result.kwargs)
+
+        # 3. Handle conditionals
+        if result._condition:
+            source_node = self._visit(result._condition)
+            edge = Edge(
+                source=source_node,
+                target=node,
+                arg_name="_condition",
+                edge_type=EdgeType.CONDITION,
+            )
+            self.graph.add_edge(edge)
+
+        # 4. Handle dynamic constraints
+        if result._constraints and not result._constraints.is_empty():
+            for res_name, req_value in result._constraints.requirements.items():
+                if isinstance(req_value, (LazyResult, MappedLazyResult)):
+                    source_node = self._visit(req_value)
+                    edge = Edge(
+                        source=source_node,
+                        target=node,
+                        arg_name=res_name,
+                        edge_type=EdgeType.CONSTRAINT,
+                    )
+                    self.graph.add_edge(edge)
+
+        # 5. Handle explicit sequence dependencies
+        for dep in result._dependencies:
+            source_node = self._visit(dep)
+            edge = Edge(
+                source=source_node,
+                target=node,
+                arg_name="<sequence>",
+                edge_type=EdgeType.SEQUENCE,
+            )
+            self.graph.add_edge(edge)
+
+        # 6. Static TCO Analysis
+        if scan_for_tco and result.task.func:
+            potential_targets = analyze_task_source(result.task.func)
+            for target_task in potential_targets:
+                potential_uuid = f"potential:{result._uuid}:{target_task.name}"
+                
+                shadow_lr = LazyResult(
+                    task=target_task,
+                    args=(),
+                    kwargs={},
+                    _uuid=potential_uuid
+                )
+                
+                # Visit the shadow node, disable further TCO scanning to avoid infinite recursion
+                target_node = self._visit(shadow_lr, scan_for_tco=False)
+                
+                edge = Edge(
+                    source=node,
+                    target=target_node,
+                    arg_name="<potential>",
+                    edge_type=EdgeType.POTENTIAL
+                )
+                self.graph.add_edge(edge)
+
+        return node
+
+    def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
+        if result._uuid in self._visited:
+            return self._visited[result._uuid]
+
+        node = Node(
+            id=result._uuid,
+            name=f"map({getattr(result.factory, 'name', 'factory')})",
+            node_type="map",
+            mapping_factory=result.factory,
+            retry_policy=result._retry_policy,
+            cache_policy=result._cache_policy,
+            constraints=result._constraints,
+            literal_inputs=result.mapping_kwargs,
+        )
+        self.graph.add_node(node)
+        self._visited[result._uuid] = node
+
+        self._scan_and_add_edges(node, result.mapping_kwargs)
+
+        if result._condition:
+            source_node = self._visit(result._condition)
+            edge = Edge(
+                source=source_node,
+                target=node,
+                arg_name="_condition",
+                edge_type=EdgeType.CONDITION,
+            )
+            self.graph.add_edge(edge)
+
+        for dep in result._dependencies:
+            source_node = self._visit(dep)
+            edge = Edge(
+                source=source_node,
+                target=node,
+                arg_name="<sequence>",
+                edge_type=EdgeType.SEQUENCE,
+            )
+            self.graph.add_edge(edge)
+
+        return node
+
+    def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            source_node = self._visit(obj)
+            edge = Edge(
+                source=source_node,
+                target=target_node,
+                arg_name=path or "dependency",
+                edge_type=EdgeType.DATA,
+            )
+            self.graph.add_edge(edge)
+
+        elif isinstance(obj, Router):
+            selector_node = self._visit(obj.selector)
+            edge = Edge(
+                source=selector_node,
+                target=target_node,
+                arg_name=f"{path}.selector" if path else "selector",
+                router=obj,
+                edge_type=EdgeType.DATA,
+            )
+            self.graph.add_edge(edge)
+
+            for route_key, route_result in obj.routes.items():
+                route_node = self._visit(route_result)
+                imp_edge = Edge(
+                    source=route_node,
+                    target=target_node,
+                    arg_name=f"{path}.route[{route_key}]",
+                    edge_type=EdgeType.ROUTER_ROUTE,
+                )
+                self.graph.add_edge(imp_edge)
+
+        elif isinstance(obj, (list, tuple)):
+            for i, item in enumerate(obj):
+                self._scan_and_add_edges(
+                    target_node, item, path=f"{path}[{i}]" if path else str(i)
+                )
+
+        elif isinstance(obj, dict):
+            for k, v in obj.items():
+                self._scan_and_add_edges(
+                    target_node, v, path=f"{path}.{k}" if path else str(k)
+                )
+
+
+def build_graph(target: LazyResult) -> Graph:
+    return GraphBuilder().build(target)
+~~~~~
+
+#### Acts 2: 修正可视化逻辑（POTENTIAL 边渲染）
+
+现在使用正确的 `patch_file` 格式更新 `packages/cascade-sdk/src/cascade/tools/visualize.py`。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/graph/model.py
+packages/cascade-sdk/src/cascade/tools/visualize.py
 ~~~~~
 ~~~~~python
-    IMPLICIT = auto()  # An implicit structural dependency
-    SEQUENCE = auto()  # An explicit execution order dependency (no data transfer)
-    ROUTER_ROUTE = auto()  # A potential dependency branch for a Router
-
-
-@dataclass
+        elif edge.edge_type == EdgeType.SEQUENCE:
+            style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+        else:
+            style = f' [label="{edge.arg_name}"]'
 ~~~~~
 ~~~~~python
-    IMPLICIT = auto()  # An implicit structural dependency
-    SEQUENCE = auto()  # An explicit execution order dependency (no data transfer)
-    ROUTER_ROUTE = auto()  # A potential dependency branch for a Router
-    POTENTIAL = auto()  # A potential flow path inferred via static analysis (e.g. TCO)
-
-
-@dataclass
+        elif edge.edge_type == EdgeType.SEQUENCE:
+            style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+        elif edge.edge_type == EdgeType.POTENTIAL:
+            style = ' [style=dashed, color=red, arrowhead=open, label="potential"]'
+        else:
+            style = f' [label="{edge.arg_name}"]'
 ~~~~~
 
-#### Acts 2: 实现静态 TCO 分析器逻辑
+#### Acts 3: 编写集成测试
 
-创建 `packages/cascade-graph/src/cascade/graph/ast_analyzer.py`，包含符号解析器和 AST 访问器。
+验证 `build_graph` 是否能生成包含 `POTENTIAL` 边的图。
 
 ~~~~~act
 write_file
-packages/cascade-graph/src/cascade/graph/ast_analyzer.py
-~~~~~
-~~~~~python
-import ast
-import inspect
-from typing import Any, List, Dict, Optional, Set, Callable
-import logging
-import textwrap
-
-from cascade.spec.task import Task
-
-logger = logging.getLogger(__name__)
-
-
-class ReferenceResolver:
-    """
-    Helper class to resolve AST nodes (Name, Attribute) to runtime objects
-    using the function's global and closure contexts.
-    """
-
-    def __init__(self, func: Callable):
-        self.func = func
-        self.globals = getattr(func, "__globals__", {})
-        self.closure_vars = self._get_closure_vars(func)
-
-    def _get_closure_vars(self, func: Callable) -> Dict[str, Any]:
-        """Extracts variables from the function's closure."""
-        closure_vars = {}
-        if hasattr(func, "__closure__") and func.__closure__ and func.__code__.co_freevars:
-            for name, cell in zip(func.__code__.co_freevars, func.__closure__):
-                try:
-                    closure_vars[name] = cell.cell_contents
-                except ValueError:
-                    # Cell might be empty
-                    pass
-        return closure_vars
-
-    def resolve(self, node: ast.AST) -> Optional[Any]:
-        """Attempts to resolve an AST expression to a runtime object."""
-        try:
-            if isinstance(node, ast.Name):
-                return self._resolve_name(node.id)
-            elif isinstance(node, ast.Attribute):
-                parent = self.resolve(node.value)
-                if parent is not None:
-                    return getattr(parent, node.attr, None)
-        except Exception:
-            # Resolution is best-effort; suppress errors during static analysis
-            pass
-        return None
-
-    def _resolve_name(self, name: str) -> Optional[Any]:
-        if name in self.closure_vars:
-            return self.closure_vars[name]
-        if name in self.globals:
-            return self.globals[name]
-        return None
-
-
-class TcoVisitor(ast.NodeVisitor):
-    """
-    Visits the AST of a function to find 'return' statements that call other Tasks.
-    """
-
-    def __init__(self, resolver: ReferenceResolver):
-        self.resolver = resolver
-        self.potential_targets: Set[Any] = set()
-
-    def visit_Return(self, node: ast.Return):
-        """
-        Inspects return statements.
-        Supported patterns:
-          return my_task(...)
-          return my_task.map(...)
-        """
-        if node.value and isinstance(node.value, ast.Call):
-            self._analyze_call(node.value)
-        self.generic_visit(node)
-
-    def _analyze_call(self, call_node: ast.Call):
-        # 1. Resolve the function being called
-        func_obj = self.resolver.resolve(call_node.func)
-
-        if func_obj:
-            # Check if it is a Task
-            if isinstance(func_obj, Task):
-                self.potential_targets.add(func_obj)
-            
-            # Check for .map calls: Task.map(...)
-            if inspect.ismethod(func_obj) and func_obj.__name__ == "map":
-                # Check if the bound self is a Task
-                bound_self = getattr(func_obj, "__self__", None)
-                if isinstance(bound_self, Task):
-                    self.potential_targets.add(bound_self)
-
-
-def analyze_task_source(task_func: Callable) -> List[Task]:
-    """
-    Analyzes a task function's source code to find potential TCO targets.
-    """
-    try:
-        source = inspect.getsource(task_func)
-        source = textwrap.dedent(source)
-        tree = ast.parse(source)
-    except (OSError, SyntaxError) as e:
-        logger.warning(f"Could not parse source for {task_func.__name__}: {e}")
-        return []
-
-    resolver = ReferenceResolver(task_func)
-    visitor = TcoVisitor(resolver)
-    visitor.visit(tree)
-
-    return list(visitor.potential_targets)
-~~~~~
-
-#### Acts 3: 添加单元测试
-
-在 `tests/engine/graph/test_ast_analyzer.py` 中添加针对各种 TCO 返回模式的测试。
-
-~~~~~act
-write_file
-tests/engine/graph/test_ast_analyzer.py
+tests/engine/graph/test_build_tco.py
 ~~~~~
 ~~~~~python
 import pytest
 from cascade.spec.task import task
-from cascade.graph.ast_analyzer import analyze_task_source
-
-# --- Setup Dummy Tasks ---
-
-@task
-def downstream_a(x):
-    return x
+from cascade.graph.build import build_graph
+from cascade.graph.model import EdgeType
 
 @task
-def downstream_b(x):
-    return x * 2
+def leaf_task():
+    return "leaf"
 
-# --- Scenarios ---
+@task
+def orchestrator(x: int):
+    if x > 0:
+        return leaf_task()
+    return "done"
 
-def test_analyze_direct_return():
-    """Test standard 'return task(...)' pattern with branching."""
+def test_build_graph_with_potential_tco():
+    """
+    Test that the graph builder detects the potential TCO call from
+    orchestrator to leaf_task and creates a POTENTIAL edge.
+    """
+    workflow = orchestrator(10)
+    graph = build_graph(workflow)
     
-    @task
-    def orchestrator(x):
-        if x > 5:
-            return downstream_a(x)
-        else:
-            return downstream_b(x)
-
-    targets = analyze_task_source(orchestrator.func)
+    node_names = {n.name for n in graph.nodes}
+    assert "orchestrator" in node_names
+    assert "leaf_task" in node_names
     
-    target_names = {t.name for t in targets}
-    assert "downstream_a" in target_names
-    assert "downstream_b" in target_names
-    assert len(targets) == 2
-
-def test_analyze_map_return():
-    """Test 'return task.map(...)' pattern."""
+    potential_edges = [e for e in graph.edges if e.edge_type == EdgeType.POTENTIAL]
     
+    assert len(potential_edges) == 1
+    edge = potential_edges[0]
+    assert edge.source.name == "orchestrator"
+    assert edge.target.name == "leaf_task"
+    assert edge.arg_name == "<potential>"
+
+def test_build_graph_no_recursive_shadow_analysis():
+    """
+    Ensure that we don't infinitely analyze shadow nodes.
+    """
     @task
-    def mapper_orchestrator(items):
-        return downstream_a.map(x=items)
-
-    targets = analyze_task_source(mapper_orchestrator.func)
-    target_names = {t.name for t in targets}
-    assert "downstream_a" in target_names
-
-def test_analyze_with_alias_in_globals():
-    """Test when tasks are aliased in global scope."""
-    alias_task = downstream_a
+    def task_c():
+        return "C"
 
     @task
-    def alias_user():
-        return alias_task(1)
+    def task_b():
+        return task_c()
 
-    targets = analyze_task_source(alias_user.func)
-    target_names = {t.name for t in targets}
-    assert "downstream_a" in target_names
-
-def test_analyze_no_tco():
-    """Test that regular returns are ignored."""
     @task
-    def simple_calc():
-        return 42
+    def task_a():
+        return task_b()
 
-    targets = analyze_task_source(simple_calc.func)
-    assert len(targets) == 0
+    workflow = task_a()
+    graph = build_graph(workflow)
 
-def test_analyze_complex_attribute_access():
-    """Test resolving tasks within namespaces."""
-    class Actions:
-        op = downstream_b
+    node_names = {n.name for n in graph.nodes}
+    assert "task_a" in node_names
+    assert "task_b" in node_names
     
-    actions = Actions()
-    
-    @task
-    def namespace_user():
-        return actions.op(10)
-        
-    targets = analyze_task_source(namespace_user.func)
-    target_names = {t.name for t in targets}
-    assert "downstream_b" in target_names
+    # task_c should NOT be in the graph because we stop scanning at task_b
+    assert "task_c" not in node_names
+
+    potential_edges = [e for e in graph.edges if e.edge_type == EdgeType.POTENTIAL]
+    assert len(potential_edges) == 1
+    assert potential_edges[0].source.name == "task_a"
+    assert potential_edges[0].target.name == "task_b"
 ~~~~~
 
 ### 下一步建议
-1.  **集成到 GraphBuilder**: 修改 `packages/cascade-graph/src/cascade/graph/build.py`，在构建节点时自动调用分析器。
-2.  **可视化支持**: 更新 `packages/cascade-sdk/src/cascade/tools/visualize.py`，将 `POTENTIAL` 边渲染为虚线，并为这些推断出的目标创建“虚影节点”。
+基础设施现已就绪。建议运行这些测试，并可以尝试运行一个包含循环 TCO 的示例，通过 `visualize()` 生成 DOT 代码并查看其渲染出的虚线路径。

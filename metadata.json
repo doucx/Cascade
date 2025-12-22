@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(graph): 引入基于 AST 的静态 TCO 分析器与 POTENTIAL 边类型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766413886.1266026, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(graph): 集成 StaticTcoAnalyzer 到 GraphBuilder (修正版)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766414102.1059847, "duration_ms": 0}}

@@ -4,17 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-cicd/workflows.py                                  |  2 +-
- packages/cascade-sdk/src/cascade/__init__.pyi      | 24 +++++++++++-----------
- packages/cascade-sdk/src/cascade/fs/__init__.pyi   |  9 ++++----
- packages/cascade-sdk/src/cascade/http/__init__.pyi |  9 ++++----
- packages/cascade-sdk/src/cascade/io/__init__.pyi   |  9 ++++----
- .../cascade-sdk/src/cascade/io/local/__init__.pyi  |  9 ++++----
- .../cascade-sdk/src/cascade/io/s3/__init__.pyi     |  9 ++++----
- .../cascade-sdk/src/cascade/io/stdin/__init__.pyi  |  9 ++++----
- .../cascade-sdk/src/cascade/io/stdout/__init__.pyi |  9 ++++----
- packages/cascade-sdk/src/cascade/ipfs/__init__.pyi |  9 ++++----
- packages/cascade-sdk/src/cascade/read/__init__.pyi |  9 ++++----
- .../cascade-sdk/src/cascade/write/__init__.pyi     |  9 ++++----
- 12 files changed, 63 insertions(+), 53 deletions(-)
+scripts/generate_stubs.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 ```

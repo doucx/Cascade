@@ -20,7 +20,7 @@ import importlib
 import re
 from pathlib import Path
 from collections import defaultdict
-from typing import Callable, Dict, Tuple, Optional, List
+from typing import Callable, Dict, Tuple, Optional
 
 # tomllib is standard in Python 3.11+. For older versions, we need to import toml.
 if sys.version_info < (3, 11):

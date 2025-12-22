@@ -21,5 +21,8 @@
     "controller.publish_limit_success": "✅ Limits published successfully.",
     "controller.resuming": "📡 Publishing resume command for scope '[bold cyan]{scope}[/bold cyan]' to topic '[bold yellow]{topic}[/bold yellow]'...",
     "controller.resume_success": "✅ Resume command published successfully.",
-    "controller.error": "❌ An error occurred: {error}"
+    "controller.error": "❌ An error occurred: {error}",
+
+    "observer.sqlite.db_not_found": "⚠️  Database file not found at {path}. No constraints to show.",
+    "observer.sqlite.query_error": "❌ Failed to query SQLite database. Error: {error}"
 }

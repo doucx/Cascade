@@ -1,6 +1,10 @@
 import asyncio
+import json
 import time
+from enum import Enum
+from pathlib import Path
 import typer
+import aiosqlite
 from rich.console import Console
 from rich.table import Table
 
@@ -16,18 +20,21 @@ console = Console(stderr=True)
 seen_run_ids = set()
 
 
+class BackendChoice(str, Enum):
+    mqtt = "mqtt"
+    sqlite = "sqlite"
+
+
 async def on_message(topic: str, payload: dict):
     """Callback to process incoming telemetry messages."""
     global seen_run_ids
 
-    # The payload structure is flat for headers, with a nested 'body'
     body = payload.get("body", {})
     run_id = payload.get("run_id")
 
     if not run_id or not body:
         return
 
-    # Print a header for the first time we see a run_id
     if run_id not in seen_run_ids:
         bus.info("observer.telemetry.run_header", run_id=run_id)
         seen_run_ids.add(run_id)
@@ -56,9 +63,8 @@ def watch(
     port: int = typer.Option(1883, help="MQTT broker port."),
 ):
     """
-    Connect to the MQTT broker and watch for real-time telemetry events.
+    Watch for real-time telemetry events via MQTT.
     """
-
     async def main_loop():
         topic = f"cascade/telemetry/+/{project}/+/events"
         connector = MqttConnector(hostname=hostname, port=port)
@@ -67,7 +73,6 @@ def watch(
         bus.info(
             "observer.startup.watching", project=project, hostname=hostname, port=port
         )
-
         try:
             await connector.connect()
             bus.info("observer.startup.connected")
@@ -82,46 +87,96 @@ def watch(
     try:
         asyncio.run(main_loop())
     except KeyboardInterrupt:
-        # The finally block in main_loop will handle graceful shutdown
         pass
 
 
 @app.command()
 def status(
-    hostname: str = typer.Option("localhost", help="MQTT broker hostname."),
-    port: int = typer.Option(1883, help="MQTT broker port."),
+    backend: BackendChoice = typer.Option(
+        "mqtt", "--backend", help="The control plane backend to query."
+    ),
+    db_path: str = typer.Option(
+        str(Path.home() / ".cascade" / "control.db"),
+        "--db-path",
+        help="Path to SQLite DB file (if using --backend sqlite).",
+    ),
+    hostname: str = typer.Option(
+        "localhost", "--host", help="MQTT broker hostname (if using --backend mqtt)."
+    ),
+    port: int = typer.Option(
+        1883, "--port", help="MQTT broker port (if using --backend mqtt)."
+    ),
 ):
     """
-    Connect to the broker, query the current status of all constraints, and exit.
+    Query and display the current status of all active constraints.
     """
     try:
-        asyncio.run(_get_status(hostname=hostname, port=port))
+        asyncio.run(
+            _get_status(backend=backend, db_path=db_path, hostname=hostname, port=port)
+        )
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 
 
-async def _get_status(hostname: str, port: int):
-    """Core logic for the status command."""
+async def _get_status_from_mqtt(hostname: str, port: int) -> list[GlobalConstraint]:
+    """Fetch constraints from MQTT broker."""
     constraints: list[GlobalConstraint] = []
 
     async def on_status_message(topic, payload):
         if payload and isinstance(payload, dict):
             try:
-                # Filter out any malformed or non-constraint messages
                 if "scope" in payload and "type" in payload:
                     constraints.append(GlobalConstraint(**payload))
             except TypeError:
-                pass  # Ignore malformed payloads
+                pass
 
     connector = MqttConnector(hostname=hostname, port=port)
     bus.info("controller.connecting", hostname=hostname, port=port)
     await connector.connect()
     bus.info("controller.connected")
     await connector.subscribe("cascade/constraints/#", on_status_message)
-
-    # Wait a short moment for all retained messages to arrive from the broker
     await asyncio.sleep(0.5)
     await connector.disconnect()
+    return constraints
+
+
+async def _get_status_from_sqlite(db_path_str: str) -> list[GlobalConstraint]:
+    """Fetch constraints directly from SQLite database."""
+    constraints: list[GlobalConstraint] = []
+    db_path = Path(db_path_str).expanduser()
+    if not db_path.exists():
+        bus.warning("observer.sqlite.db_not_found", path=str(db_path))
+        return []
+
+    try:
+        db = await aiosqlite.connect(db_path)
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM constraints") as cursor:
+            async for row in cursor:
+                constraints.append(
+                    GlobalConstraint(
+                        id=row["id"],
+                        scope=row["scope"],
+                        type=row["type"],
+                        params=json.loads(row["params"]),
+                        expires_at=row["expires_at"],
+                    )
+                )
+        await db.close()
+    except Exception as e:
+        bus.error("observer.sqlite.query_error", error=e)
+    return constraints
+
+
+async def _get_status(
+    backend: BackendChoice, db_path: str, hostname: str, port: int
+):
+    """Core logic for the status command."""
+    if backend == BackendChoice.mqtt:
+        constraints = await _get_status_from_mqtt(hostname, port)
+    else:
+        constraints = await _get_status_from_sqlite(db_path)
+
     bus.info("observer.shutdown")
 
     table = Table(title="[bold]Active Cascade Constraints[/bold]", title_justify="left")
@@ -142,7 +197,7 @@ async def _get_status(hostname: str, port: int):
             if delta > 0:
                 expires_in = f"{delta:.1f}"
             else:
-                expires_in = "[red]- (expired)[/red]"
+                continue  # Don't show expired constraints from SQLite
         else:
             expires_in = "[dim]Never[/dim]"
 

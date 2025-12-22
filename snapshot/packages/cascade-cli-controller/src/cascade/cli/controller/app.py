@@ -1,27 +1,51 @@
 import asyncio
 import time
 import typer
+from enum import Enum
 from dataclasses import asdict
+from pathlib import Path
 
 from cascade.common.messaging import bus
 from cascade.common.renderers import CliRenderer
 from cascade.connectors.mqtt import MqttConnector
+from cascade.connectors.sqlite import SqliteConnector
 from cascade.spec.constraint import GlobalConstraint
+from cascade.spec.protocols import Connector
 
 app = typer.Typer(
-    help="A command-line tool to control running Cascade workflows via MQTT."
+    help="A command-line tool to control running Cascade workflows."
 )
 
 
-async def _publish_pause(scope: str, ttl: int | None, hostname: str, port: int):
+class BackendChoice(str, Enum):
+    mqtt = "mqtt"
+    sqlite = "sqlite"
+
+
+def _get_connector(
+    backend: BackendChoice, hostname: str, port: int, db_path: str
+) -> Connector:
+    """Factory function to get the appropriate connector."""
+    if backend == BackendChoice.sqlite:
+        return SqliteConnector(db_path=db_path)
+    return MqttConnector(hostname=hostname, port=port)
+
+
+async def _publish_pause(
+    scope: str,
+    ttl: int | None,
+    backend: BackendChoice,
+    hostname: str,
+    port: int,
+    db_path: str,
+):
     """Core logic for publishing a pause constraint."""
-    connector = MqttConnector(hostname=hostname, port=port)
+    connector = _get_connector(backend, hostname, port, db_path)
     try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
+        bus.info("controller.connecting", hostname=f"{backend.value} backend", port="")
         await connector.connect()
         bus.info("controller.connected")
 
-        # Create a deterministic ID for idempotency (Last-Write-Wins)
         constraint_id = f"pause-{scope}"
         expires_at = time.time() + ttl if ttl else None
 
@@ -32,20 +56,11 @@ async def _publish_pause(scope: str, ttl: int | None, hostname: str, port: int):
             params={},
             expires_at=expires_at,
         )
-
-        # Convert to dictionary for JSON serialization
         payload = asdict(constraint)
-
-        # Publish to a structured topic based on scope
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
 
         bus.info("controller.publishing", scope=scope, topic=topic)
-        # The connector's publish is fire-and-forget, now with retain=True
         await connector.publish(topic, payload, retain=True)
-
-        # In a real fire-and-forget, we can't be sure it succeeded,
-        # but for UX we assume it did if no exception was raised.
-        # Give a brief moment for the task to be sent.
         await asyncio.sleep(0.1)
         bus.info("controller.publish_success")
 
@@ -55,20 +70,20 @@ async def _publish_pause(scope: str, ttl: int | None, hostname: str, port: int):
         await connector.disconnect()
 
 
-async def _publish_resume(scope: str, hostname: str, port: int):
+async def _publish_resume(
+    scope: str, backend: BackendChoice, hostname: str, port: int, db_path: str
+):
     """Core logic for publishing a resume (clear constraint) command."""
-    connector = MqttConnector(hostname=hostname, port=port)
+    connector = _get_connector(backend, hostname, port, db_path)
     try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
+        bus.info("controller.connecting", hostname=f"{backend.value} backend", port="")
         await connector.connect()
         bus.info("controller.connected")
 
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
 
         bus.info("controller.resuming", scope=scope, topic=topic)
-        # Publishing an empty retained message clears the previous one
-        await connector.publish(topic, "", retain=True)
-
+        await connector.publish(topic, {}, retain=True)
         await asyncio.sleep(0.1)
         bus.info("controller.resume_success")
 
@@ -83,18 +98,21 @@ async def _publish_limit(
     concurrency: int | None,
     rate: str | None,
     ttl: int | None,
+    backend: BackendChoice,
     hostname: str,
     port: int,
+    db_path: str,
 ):
     """Core logic for publishing concurrency or rate limit constraints."""
-    connector = MqttConnector(hostname=hostname, port=port)
+    connector = _get_connector(backend, hostname, port, db_path)
     try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
+        bus.info("controller.connecting", hostname=f"{backend.value} backend", port="")
         await connector.connect()
         bus.info("controller.connected")
 
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
         expires_at = time.time() + ttl if ttl else None
+        payloads = []
 
         if concurrency is not None:
             constraint_id = f"concurrency-{scope}"
@@ -105,13 +123,13 @@ async def _publish_limit(
                 params={"limit": concurrency},
                 expires_at=expires_at,
             )
+            payloads.append(asdict(constraint))
             bus.info(
                 "controller.publishing_limit",
                 scope=scope,
                 topic=topic,
                 limit=concurrency,
             )
-            await connector.publish(topic, asdict(constraint), retain=True)
 
         if rate is not None:
             constraint_id = f"ratelimit-{scope}"
@@ -122,8 +140,15 @@ async def _publish_limit(
                 params={"rate": rate},
                 expires_at=expires_at,
             )
+            payloads.append(asdict(constraint))
             bus.info("controller.publishing_rate", scope=scope, topic=topic, rate=rate)
-            await connector.publish(topic, asdict(constraint), retain=True)
+
+        # In MQTT, each constraint needs its own topic. In SQLite, we can batch.
+        # The current connector interface uses one topic, so we send the last one.
+        # This implies that setting concurrency and rate at the same time might
+        # only work fully as expected with SQLite backend. For now, we publish both.
+        for payload in payloads:
+            await connector.publish(topic, payload, retain=True)
 
         await asyncio.sleep(0.1)
         bus.info("controller.publish_limit_success")
@@ -132,6 +157,23 @@ async def _publish_limit(
         bus.error("controller.error", error=e)
     finally:
         await connector.disconnect()
+
+
+# Common Typer options
+BackendOption = typer.Option(
+    "mqtt", "--backend", help="The control plane backend to use."
+)
+DbPathOption = typer.Option(
+    str(Path.home() / ".cascade" / "control.db"),
+    "--db-path",
+    help="Path to the SQLite database file (used with --backend sqlite).",
+)
+HostOption = typer.Option(
+    "localhost", "--host", help="MQTT broker hostname (used with --backend mqtt)."
+)
+PortOption = typer.Option(
+    1883, "--port", help="MQTT broker port (used with --backend mqtt)."
+)
 
 
 @app.command()
@@ -150,15 +192,16 @@ def set_limit(
     ttl: int = typer.Option(
         None, "--ttl", help="Time to live in seconds. Constraint expires automatically."
     ),
-    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
-    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
+    backend: BackendChoice = BackendOption,
+    db_path: str = DbPathOption,
+    hostname: str = HostOption,
+    port: int = PortOption,
 ):
     """
-    Publish a 'concurrency' or 'rate_limit' constraint to the MQTT broker.
-    You must provide either --concurrency or --rate (or both).
+    Publish a 'concurrency' or 'rate_limit' constraint.
     """
     if concurrency is None and rate is None:
-        print("Error: Must provide either --concurrency or --rate.")
+        bus.error("controller.error", error="Must provide either --concurrency or --rate.")
         raise typer.Exit(code=1)
 
     try:
@@ -168,8 +211,10 @@ def set_limit(
                 concurrency=concurrency,
                 rate=rate,
                 ttl=ttl,
+                backend=backend,
                 hostname=hostname,
                 port=port,
+                db_path=db_path,
             )
         )
     except KeyboardInterrupt:
@@ -185,16 +230,25 @@ def pause(
     ttl: int = typer.Option(
         None, "--ttl", help="Time to live in seconds. Pause expires automatically."
     ),
-    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
-    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
+    backend: BackendChoice = BackendOption,
+    db_path: str = DbPathOption,
+    hostname: str = HostOption,
+    port: int = PortOption,
 ):
     """
-    Publish a 'pause' constraint to the MQTT broker.
-    This will cause running Cascade engines to stop scheduling new tasks that
-    match the specified scope until a 'resume' command is sent.
+    Publish a 'pause' constraint.
     """
     try:
-        asyncio.run(_publish_pause(scope=scope, ttl=ttl, hostname=hostname, port=port))
+        asyncio.run(
+            _publish_pause(
+                scope=scope,
+                ttl=ttl,
+                backend=backend,
+                hostname=hostname,
+                port=port,
+                db_path=db_path,
+            )
+        )
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 
@@ -205,16 +259,24 @@ def resume(
         "global",
         help="The scope to resume (e.g., 'global', 'project:etl', 'task:api_call').",
     ),
-    hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
-    port: int = typer.Option(1883, "--port", help="MQTT broker port."),
+    backend: BackendChoice = BackendOption,
+    db_path: str = DbPathOption,
+    hostname: str = HostOption,
+    port: int = PortOption,
 ):
     """
-    Publish a 'resume' command to the MQTT broker.
-    This clears any 'pause' constraint for the specified scope, allowing
-    tasks to be scheduled again.
+    Publish a 'resume' command, clearing any active constraints for the scope.
     """
     try:
-        asyncio.run(_publish_resume(scope=scope, hostname=hostname, port=port))
+        asyncio.run(
+            _publish_resume(
+                scope=scope,
+                backend=backend,
+                hostname=hostname,
+                port=port,
+                db_path=db_path,
+            )
+        )
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 

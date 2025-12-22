@@ -132,7 +132,7 @@ def clean_type_str(type_str: str) -> str:
         (r"cascade\.spec\.protocols\.StateBackend", "StateBackend"),
         (r"cascade\.spec\.protocols\.CachePolicy", "CachePolicy"),
         # Handle quotes (but preserve generics like LazyResult[Any])
-        (r"'LazyResult'", "LazyResult"), 
+        (r"'LazyResult'", "LazyResult"),
     ]
 
     for pattern, repl in replacements:
@@ -357,7 +357,7 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
     # 3. Add Namespace Re-exports to imports_block (Must come before definitions for E402)
     if pyi_namespaces:
         if is_root:
-             imports_block.append("\n# --- Namespaces ---")
+            imports_block.append("\n# --- Namespaces ---")
         imports_block.extend(
             f"from . import {name} as {name}" for name in pyi_namespaces
         )
@@ -368,9 +368,9 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
 
     # 5. Combine and Write
     content = "\n".join(imports_block + [""] + definitions_block)
-    
+
     # Simple clean up of multiple newlines
-    content = re.sub(r'\n{3,}', '\n\n', content)
+    content = re.sub(r"\n{3,}", "\n\n", content)
 
     with open(init_pyi_path, "w", encoding="utf-8") as f:
         f.write(content)

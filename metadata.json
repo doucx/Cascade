@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(engine): 增强速率限制解析鲁棒性并修复潜在死锁", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766412762.8665888, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py, M handlers.py, M __init__.py ... and 12 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766412938.036619, "duration_ms": 0}}

@@ -134,7 +134,22 @@ class FlowManager:
 
             elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
                 if state_backend.get_skip_reason(edge.source.id):
-                    return "UpstreamSkipped_Data"
+                    # Check for data penetration possibility (for pipelines)
+                    can_penetrate = False
+                    # Look for inputs to the skipped node (edge.source)
+                    for upstream_edge in self.in_edges[edge.source.id]:
+                        # If the skipped node has a DATA input, and that input has a result...
+                        if (
+                            upstream_edge.edge_type == EdgeType.DATA
+                            and state_backend.has_result(upstream_edge.source.id)
+                        ):
+                            can_penetrate = True
+                            break
+
+                    if not can_penetrate:
+                        return "UpstreamSkipped_Data"
+                    # If it can penetrate, we don't return a skip reason.
+                    # We let the node proceed to execution, where ArgumentResolver will handle it.
 
             elif edge.edge_type == EdgeType.SEQUENCE:
                 if state_backend.get_skip_reason(edge.source.id):

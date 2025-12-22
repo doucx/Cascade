@@ -222,7 +222,12 @@ async def test_uds_signaling_is_near_instant(engine, controller_connector, bus_a
 
     async with controller_connector:
         # 1. Pause the engine immediately upon start
-        pause_payload = {"id": "pause-uds", "scope": scope, "type": "pause", "params": {}}
+        pause_payload = {
+            "id": "pause-uds",
+            "scope": scope,
+            "type": "pause",
+            "params": {},
+        }
         await controller_connector.publish(topic, pause_payload)
 
         # 2. Start the engine. It should connect, subscribe, get the pause, and block.

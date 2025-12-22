@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "这里是错误的根源", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766395132.4231405, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(cicd): Implement dogfooding CI/CD pipeline using Cascade", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766395240.8399842, "duration_ms": 0}}

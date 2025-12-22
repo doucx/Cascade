@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(ci): 使用 `uv run` 确保在虚拟环境中执行流水线脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766395530.4303286, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(ci): 使用模块模式运行流水线以支持相对导入", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766395602.9406238, "duration_ms": 0}}

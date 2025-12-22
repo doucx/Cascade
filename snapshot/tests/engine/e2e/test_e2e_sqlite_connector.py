@@ -48,27 +48,32 @@ def engine(sqlite_db_path, bus_and_spy):
 async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
     """
     Verifies the core polling loop for pause and resume functionality.
+    This version fixes a race condition in the test logic.
     """
     _, spy = bus_and_spy
+    task_a_started = asyncio.Event()
 
     @cs.task
-    def task_a():
+    async def slow_task_a():
+        task_a_started.set()
+        # Sleep long enough for the test to publish a constraint and for a poll cycle to run
+        await asyncio.sleep(POLL_INTERVAL * 2)
         return "A"
 
     @cs.task
     def task_b(dep):
         return "B"
 
-    workflow = task_b(task_a())
+    workflow = task_b(slow_task_a())
 
     async with controller_connector:
         # Start the engine in the background
         engine_run_task = asyncio.create_task(engine.run(workflow))
 
-        # Wait for task_a to finish
-        await asyncio.sleep(POLL_INTERVAL + 0.1) 
+        # 1. Wait for the slow task to start executing
+        await asyncio.wait_for(task_a_started.wait(), timeout=1.0)
 
-        # Publish a pause for task_b
+        # 2. While task_a is running, publish a pause for task_b
         scope = "task:task_b"
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
         pause_payload = {
@@ -76,25 +81,27 @@ async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_an
         }
         await controller_connector.publish(topic, pause_payload)
 
-        # Wait for the poll interval to pass
-        await asyncio.sleep(POLL_INTERVAL + 0.1)
-
-        # Assert that task_b has NOT started
+        # 3. Wait for slow_task_a to finish. During this time, the polling
+        #    task in the engine MUST have run and picked up the pause constraint.
+        #    We let slow_task_a finish its sleep.
+        await asyncio.sleep(POLL_INTERVAL * 2 + 0.1)
+        
+        # 4. Assert that task_b has NOT started
         started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
-        assert "task_b" not in started_tasks
+        assert "task_b" not in started_tasks, "task_b started despite pause constraint"
 
-        # Now, publish a resume command
+        # 5. Now, publish a resume command
         await controller_connector.publish(topic, {})
 
-        # Wait for the poll interval again
+        # 6. Wait for the next poll interval for the resume to be picked up
         await asyncio.sleep(POLL_INTERVAL + 0.1)
 
-        # The workflow should now complete
+        # 7. The workflow should now complete
         final_result = await asyncio.wait_for(engine_run_task, timeout=1.0)
         assert final_result == "B"
 
     finished_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionFinished) if e.status == "Succeeded"}
-    assert finished_tasks == {"task_a", "task_b"}
+    assert finished_tasks == {"slow_task_a", "task_b"}
 
 
 @pytest.mark.asyncio

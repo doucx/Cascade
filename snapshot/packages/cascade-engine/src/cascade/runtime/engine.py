@@ -235,6 +235,7 @@ class Engine:
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""
+        print(f"DEBUG: Engine received update on topic '{topic}': {payload}")
         try:
             # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
             if payload == {}:

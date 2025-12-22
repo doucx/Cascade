@@ -165,6 +165,7 @@ class RateLimitConstraintHandler(ConstraintHandler):
     def on_constraint_add(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
     ) -> None:
+        print(f"DEBUG: RateLimitHandler received constraint: {constraint}")
         rate_val = constraint.params.get("rate", "1/s")
         rate_hertz = _parse_rate_string(str(rate_val))
 

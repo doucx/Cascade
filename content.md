@@ -1,26 +1,24 @@
-好的，这是最稳妥的排查方式。我们不能盲目猜测，必须通过可观测的证据来定位问题。
+这是一个非常奇怪的现象。如果 `Mock calls` 是空的，且没有看到 `DEBUG: Caught exception...`，这强烈暗示**异常处理逻辑根本没有被触发**。这通常意味着消息没有被正确路由到 `Engine`，或者在到达 Handler 之前就被丢弃了。
 
-我们将分两步进行“插桩”调试：
+为了彻底查清消息是在哪里“消失”的，我们需要追踪消息在 `Engine` 内部的完整流转路径。
 
-1.  **在源代码中插桩**：确认代码是否真的捕获了异常并尝试调用 `bus.error`。
-2.  **在测试中插桩**：确认 Mock 对象的状态和调用记录。
-
-## [WIP] chore(debug): 为鲁棒性测试添加调试日志
+## [WIP] chore(debug): 增强调试探针以追踪消息流转
 
 ### 用户需求
-在 `RateLimitConstraintHandler` 的异常处理逻辑和测试用例中添加临时调试日志，以排查 Mock 断言失败的根本原因。
+在 `Engine` 的消息接收入口和 `ConstraintManager` 的分发逻辑中添加调试日志，以确定消息丢失的位置。
 
 ### 评论
-这种“探针”式修改是临时的，旨在获取运行时信息。一旦问题解决，我们将回滚这些修改。
+目前的调试信息不足以定位问题。我们需要知道：
+1.  `Engine` 是否从 `Connector` 收到了 MQTT 消息？
+2.  如果收到了，`ConstraintManager` 是否正确识别了它？
+3.  `ConstraintManager` 是否找到了对应的 `RateLimitConstraintHandler`？
 
 ### 目标
-1.  修改 `handlers.py`，在捕获异常时打印调试信息。
-2.  修改 `test_e2e_robustness.py`，打印 Mock 对象的详细调用记录。
+1.  修改 `cascade-engine/src/cascade/runtime/engine.py`，在 `_on_constraint_update` 中添加日志。
+2.  修改 `cascade-engine/src/cascade/runtime/constraints/handlers.py`，在 `on_constraint_add` 入口处添加日志。
 
 ### 基本原理
-通过对比控制台输出（stdout）中的调试信息，我们可以区分以下两种情况：
-1.  **逻辑未触发**: 如果没看到 `handlers.py` 的日志，说明异常捕获逻辑根本没执行。
-2.  **Mock 失效**: 如果看到了日志但测试断言失败，说明 Mock 对象注入的位置不对，或者被测试代码引用的是另一个 `bus` 实例。
+通过在数据流的关键节点（入口、路由、处理）打点，我们可以利用“排除法”快速锁定问题区域。
 
 ### 标签
 #intent/tooling #flow/ready #priority/high #comp/debug #scope/core #ai/instruct #task/domain/debugging #task/action/instrument #task/state/continue
@@ -29,69 +27,60 @@
 
 ### Script
 
-#### Acts 1: 在 `handlers.py` 中添加调试日志
+#### Acts 1: 在 `Engine` 消息入口添加日志
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
+        """Callback to handle incoming constraint messages."""
+        try:
+            # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
+            if payload == {}:
+~~~~~
+~~~~~python
+    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
+        """Callback to handle incoming constraint messages."""
+        print(f"DEBUG: Engine received update on topic '{topic}': {payload}")
+        try:
+            # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
+            if payload == {}:
+~~~~~
+
+#### Acts 2: 在 `RateLimitConstraintHandler` 入口添加日志
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/constraints/handlers.py
 ~~~~~
 ~~~~~python
-    except (ValueError, TypeError) as e:
-        bus.error(
-            "constraint.parse.error",
-            constraint_type="rate_limit",
-            raw_value=rate_str,
-            error=str(e),
-        )
-        # Return a safe default (e.g., 1 token per second) to prevent crashes
-~~~~~
-~~~~~python
-    except (ValueError, TypeError) as e:
-        print(f"DEBUG: Caught exception in _parse_rate_string: {e}")
-        bus.error(
-            "constraint.parse.error",
-            constraint_type="rate_limit",
-            raw_value=rate_str,
-            error=str(e),
-        )
-        # Return a safe default (e.g., 1 token per second) to prevent crashes
-~~~~~
+    def on_constraint_add(
+        self, constraint: GlobalConstraint, manager: "ConstraintManager"
+    ) -> None:
+        rate_val = constraint.params.get("rate", "1/s")
+        rate_hertz = _parse_rate_string(str(rate_val))
 
-#### Acts 2: 在测试中打印 Mock 状态
+        # We can optionally allow users to set burst capacity via params
+~~~~~
+~~~~~python
+    def on_constraint_add(
+        self, constraint: GlobalConstraint, manager: "ConstraintManager"
+    ) -> None:
+        print(f"DEBUG: RateLimitHandler received constraint: {constraint}")
+        rate_val = constraint.params.get("rate", "1/s")
+        rate_hertz = _parse_rate_string(str(rate_val))
 
-~~~~~act
-patch_file
-tests/engine/e2e/test_e2e_robustness.py
-~~~~~
-~~~~~python
-    # 5. Assert that a UI error was logged
-    # Give the engine a moment to process the bad message
-    await asyncio.sleep(0.01)
-    mock_ui_bus.error.assert_called_once_with(
-        "constraint.parse.error",
-        constraint_type="rate_limit",
-        raw_value="this-is-not-a-valid-rate",
-        error=ANY,
-    )
-~~~~~
-~~~~~python
-    # 5. Assert that a UI error was logged
-    # Give the engine a moment to process the bad message
-    await asyncio.sleep(0.01)
-    print(f"DEBUG: Mock calls: {mock_ui_bus.error.call_args_list}")
-    mock_ui_bus.error.assert_called_once_with(
-        "constraint.parse.error",
-        constraint_type="rate_limit",
-        raw_value="this-is-not-a-valid-rate",
-        error=ANY,
-    )
+        # We can optionally allow users to set burst capacity via params
 ~~~~~
 
 ### 下一步建议
 
-请运行测试并观察输出。
+请再次运行测试。
 
-*   **情况 A**: 如果你看不到 `DEBUG: Caught exception...`，说明 `_parse_rate_string` 没有被调用，或者是传入的参数没有触发 `ValueError`。这可能是因为 Mock Connector 没有正确触发回调。
-*   **情况 B**: 如果你看到了 `DEBUG: Caught exception...`，但 `Mock calls` 是空的 `[]`，说明代码调用的是**真正的 `bus` 对象**，而不是你的 Mock 对象。这意味着 `monkeypatch` 注入失败，或者模块导入顺序有问题。
+*   如果看不到 `DEBUG: Engine received update...`，说明 `Connector` 没有把消息推给 `Engine`（订阅路径问题）。
+*   如果看到了 `Engine received...` 但没看到 `RateLimitHandler received...`，说明 `ConstraintManager` 没调用 Handler（注册问题或类型匹配问题）。
+*   如果都看到了，但还是没异常日志，那就是玄学了（需要检查 `_parse_rate_string` 是否被 Mock 了？但这不可能）。
 
-根据输出结果，我们将制定下一步修复计划。
+根据输出，我们将知道下一步该修哪里。

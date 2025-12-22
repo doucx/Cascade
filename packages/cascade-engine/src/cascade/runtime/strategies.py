@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict, Protocol, Tuple, Optional, List, Callable
+from typing import Any, Dict, Protocol, Tuple, List
 
 from cascade.graph.model import Graph
 from cascade.graph.build import build_graph
@@ -33,8 +33,7 @@ class ExecutionStrategy(Protocol):
         state_backend: StateBackend,
         run_stack: ExitStack,
         active_resources: Dict[str, Any],
-    ) -> Any:
-        ...
+    ) -> Any: ...
 
 
 class GraphExecutionStrategy:

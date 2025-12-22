@@ -3,7 +3,6 @@ import asyncio
 from typing import Any, Dict, List, Callable, Awaitable
 
 from cascade.graph.model import Node, Graph
-from cascade.graph.build import build_graph
 from cascade.spec.protocols import Executor, StateBackend, Solver
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.resource_manager import ResourceManager
@@ -37,7 +36,7 @@ class NodeProcessor:
         self.resource_manager = resource_manager
         self.constraint_manager = constraint_manager
         self.solver = solver
-        
+
         # Resolvers are owned by the processor
         self.arg_resolver = ArgumentResolver()
         self.constraint_resolver = ConstraintResolver()
@@ -54,7 +53,7 @@ class NodeProcessor:
     ) -> Any:
         """
         Executes a node with all associated policies (constraints, cache, retry).
-        
+
         Args:
             sub_graph_runner: A callback to execute a sub-workflow (used for map nodes).
                               Signature: (target, params, parent_state_backend) -> result
@@ -79,7 +78,13 @@ class NodeProcessor:
         await self.resource_manager.acquire(requirements)
         try:
             return await self._execute_internal(
-                node, graph, state_backend, active_resources, run_id, params, sub_graph_runner
+                node,
+                graph,
+                state_backend,
+                active_resources,
+                run_id,
+                params,
+                sub_graph_runner,
             )
         finally:
             await self.resource_manager.release(requirements)
@@ -125,7 +130,13 @@ class NodeProcessor:
         # 5. Handle Map Nodes
         if node.node_type == "map":
             return await self._execute_map_node(
-                node, kwargs, active_resources, run_id, params, state_backend, sub_graph_runner
+                node,
+                kwargs,
+                active_resources,
+                run_id,
+                params,
+                state_backend,
+                sub_graph_runner,
             )
 
         # 6. Retry Loop & Execution
@@ -233,7 +244,7 @@ class NodeProcessor:
 
         # Execute sub-targets in parallel using the provided runner
         coros = [
-            sub_graph_runner(target, params, parent_state_backend) 
+            sub_graph_runner(target, params, parent_state_backend)
             for target in sub_targets
         ]
         return await asyncio.gather(*coros)

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(cicd): 重构任务以利用 TCO 机制并修正测试逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766396259.8739426, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(ci): align pipeline with cascade programming model", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766396698.5779135, "duration_ms": 0}}

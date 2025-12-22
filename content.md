@@ -1,52 +1,137 @@
-Excellent. The next logical step is to build a test suite for our new `cicd/` logic. This is the primary benefit of our "CI as code" approach: we can write robust, isolated, and fast unit tests for our pipeline logic, something that is nearly impossible with traditional YAML-based CI.
+非常棒的反馈。测试失败并给出了清晰的错误信息，这是我们改进流程的关键一步。
 
-I will create the necessary test files and implement mock-based unit tests for the tasks defined in `cicd/tasks.py`. This will ensure our core logic is verifiable and correct, independent of external tools like `git` or `ruff`.
+你的分析是完全正确的。这个 `TypeError` 指出了我们测试方法中的一个核心概念性错误，而 `PytestCollectionWarning` 则揭示了一个潜在的命名冲突。
 
-## [WIP] test: Add unit tests for CI/CD tasks
+我将生成一个计划来修复这些问题。
+
+## [COMMIT] fix(tests): 正确测试任务逻辑并解决 pytest 警告
+
+### 错误分析
+1.  **`TypeError: object LazyResult can't be used in 'await' expression`**:
+    这是最核心的问题。我的上一个计划错误地将使用 `@cs.task` 装饰的函数当作了普通的 `async` 函数来 `await`。然而，Cascade 的核心设计是：**调用一个被 `@cs.task` 装饰的函数并不会立即执行它，而是返回一个 `LazyResult` 对象**。这个对象是一个声明式的、可组合的“配方”，它描述了*将要*执行的工作，但它本身不是一个可等待的协程。我们的测试代码尝试 `await` 这个配方对象，因此导致了 `TypeError`。
+
+2.  **`PytestCollectionWarning: cannot collect 'test_package'`**:
+    `pytest` 在收集测试用例时，会自动查找所有以 `test_` 开头的函数。在我们的 `cicd/tasks.py` 文件中，有一个名为 `test_package` 的对象。尽管它是一个 `Task` 实例，`pytest` 仍然尝试将其作为测试用例收集，但因为它不是一个标准的测试函数，所以发出警告。这表明我们的任务命名与 `pytest` 的发现机制发生了冲突。
 
 ### 用户需求
-为新创建的 `cicd/` 目录下的任务逻辑创建一个基础的、无错误的 `pytest` 测试套件。
+修复 CI/CD 任务的单元测试，使其能够正确执行并通过。
 
 ### 评论
-这是将 CI/CD 作为应用程序来构建的核心优势的体现。通过为我们的 CI/CD 任务编写单元测试，我们确保了其逻辑的健壮性和可维护性。使用 Mocking 技术，我们可以将任务的内部逻辑（例如，解析 `git diff` 的输出）与外部依赖（实际执行 `git` 命令）完全解耦，从而实现快速、可靠的测试。
+这次修复至关重要，因为它澄清并实施了测试 Cascade 任务的正确模式。通过直接测试任务内部的 `.func` 属性，我们可以在不启动完整 Cascade 引擎的情况下，对任务的业务逻辑进行快速、隔离的单元测试。同时，通过重命名任务来解决 `pytest` 的警告，可以使我们的代码库更加清晰和规范。
 
 ### 目标
-1.  **创建测试目录结构**: 建立 `tests/cicd/` 目录以匹配我们的源代码结构。
-2.  **创建测试文件**: 添加 `tests/cicd/test_tasks.py` 文件。
-3.  **实现对 `detect_changed_packages` 的测试**: 使用 `monkeypatch` 和 `AsyncMock` 来模拟 `cs.shell("git diff ...")` 的调用，并验证我们的解析逻辑是否能正确地从模拟输出中提取出变更的包名。
-4.  **实现对其他原子任务的测试**: 为 `lint_package`、`test_package` 和 `build_package` 等任务创建参数化的测试，验证它们是否生成了正确的 shell 命令字符串并传递给 `cs.shell`。
-5.  **确保测试套件通过**: 保证新添加的测试在当前代码基础上可以无错误地通过。
+1.  **修正测试逻辑**: 修改 `tests/cicd/test_tasks.py`，不再 `await` `LazyResult` 对象，而是直接调用并 `await` 任务内部的原始函数（通过 `.func` 属性访问）。
+2.  **解决命名冲突**: 将 `cicd/tasks.py` 中的 `test_package` 任务重命名为 `run_package_tests`，以避免与 `pytest` 的测试发现机制冲突。
+3.  **更新工作流**: 在 `cicd/workflows.py` 中，更新对已重命名任务的引用。
+4.  **确保测试通过**: 最终的计划将产生一个可以通过 `pytest` 完整测试套件的代码状态。
 
 ### 基本原理
-我们将严格遵循“验证意图而非实现”的测试原则 (`d3-principle-python-testing-mock-intent`)。所有与外部 shell 命令交互的任务都将通过 `pytest` 的 `monkeypatch` fixture 进行测试。
-
-*   对于 `detect_changed_packages`，测试的重点是验证其**解析逻辑**。我们将模拟 `cs.shell` 以返回一个预定义的、多行的 `git diff` 输出字符串，然后断言该函数能否正确地解析这个字符串并返回预期的包名列表。
-*   对于 `lint_package` 等任务，测试的重点是验证其**命令构建逻辑**。我们将断言 `cs.shell` 被以一个**正确格式化的命令字符串**（例如 `uv run -- ruff check packages/cascade-sdk`）调用。
-
-这种方法使得我们的测试既快速又不依赖于文件系统或外部工具链的状态，从而保证了 CI 流程本身的稳定性。
+我们将采用以下修正策略：
+*   **测试内部函数**: 对于一个名为 `my_task` 的 Cascade 任务，正确的单元测试方法是调用 `my_task.func()`。这将直接调用被 `@cs.task` 装饰的原始 `async` 函数，允许我们对其内部逻辑进行断言，同时绕过了 `LazyResult` 的创建。
+*   **遵循命名约定**: 将任务 `test_package` 重命名为 `run_package_tests`，这既解决了 `pytest` 的警告，也使得任务的意图更加清晰明确——它是一个“运行测试”的动作，而不是一个“测试用例”。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/state/continue
+#intent/fix #intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建测试目录
+#### Acts 1: 重命名任务以解决 Pytest 警告
 
-我们首先为 CI/CD 相关的测试创建专属的目录。
+我们首先在 `cicd/tasks.py` 中将 `test_package` 重命名为 `run_package_tests`。
 
 ~~~~~act
-run_command
+patch_file
+cicd/tasks.py
 ~~~~~
+~~~~~python
+@cs.task
+async def test_package(package_name: str) -> str:
+    """Runs pytest on a specific package."""
+    print(f"Testing {package_name}...")
+    await cs.shell(f"uv run -- pytest packages/{package_name}")
+    return f"TEST_OK_{package_name}"
 ~~~~~
-mkdir -p tests/cicd
-touch tests/cicd/__init__.py
+~~~~~python
+@cs.task
+async def run_package_tests(package_name: str) -> str:
+    """Runs pytest on a specific package."""
+    print(f"Testing {package_name}...")
+    await cs.shell(f"uv run -- pytest packages/{package_name}")
+    return f"TEST_OK_{package_name}"
 ~~~~~
 
-#### Acts 2: 创建 CI/CD 任务的测试文件
+#### Acts 2: 更新工作流以使用重命名后的任务
 
-现在，我们将创建测试文件并填充内容。这些测试将使用 `pytest` 和 `unittest.mock.AsyncMock` 来模拟异步的 `cs.shell` 调用。
+接下来，在 `cicd/workflows.py` 中更新对这个任务的引用。
+
+~~~~~act
+patch_file
+cicd/workflows.py
+~~~~~
+~~~~~python
+from .tasks import (
+    detect_changed_packages,
+    lint_package,
+    test_package,
+    build_package,
+    publish_packages,
+)
+~~~~~
+~~~~~python
+from .tasks import (
+    detect_changed_packages,
+    lint_package,
+    run_package_tests,
+    build_package,
+    publish_packages,
+)
+~~~~~
+
+~~~~~act
+patch_file
+cicd/workflows.py
+~~~~~
+~~~~~python
+    # Dynamically create lint and test tasks for each changed package
+    lint_results = lint_package.map(package_name=changed)
+    test_results = test_package.map(package_name=changed)
+
+    # Enforce order: tests run only after linting passes for all packages
+    test_results.after(lint_results)
+
+    # The final result of the workflow depends on the test results
+    return _ci_success_marker(test_results)
+~~~~~
+~~~~~python
+    # Dynamically create lint and test tasks for each changed package
+    lint_results = lint_package.map(package_name=changed)
+    test_results = run_package_tests.map(package_name=changed)
+
+    # Enforce order: tests run only after linting passes for all packages
+    test_results.after(lint_results)
+
+    # The final result of the workflow depends on the test results
+    return _ci_success_marker(test_results)
+~~~~~
+
+~~~~~act
+patch_file
+cicd/workflows.py
+~~~~~
+~~~~~python
+    # Test all packages after all linting is done
+    test_all = test_package.map(package_name=ALL_PACKAGES).after(lint_all)
+~~~~~
+~~~~~python
+    # Test all packages after all linting is done
+    test_all = run_package_tests.map(package_name=ALL_PACKAGES).after(lint_all)
+~~~~~
+
+#### Acts 3: 修正测试逻辑
+
+最后，我们重写 `tests/cicd/test_tasks.py`，使用正确的 `.func` 属性来调用任务的内部逻辑，并更新对重命名任务的引用。
 
 ~~~~~act
 write_file
@@ -56,12 +141,10 @@ tests/cicd/test_tasks.py
 import pytest
 from unittest.mock import AsyncMock
 
-# Since tasks are in a sibling directory, we might need to adjust path for local runs
-# In a proper pytest setup, the root is usually added to PYTHONPATH, so this should work.
 from cicd.tasks import (
     detect_changed_packages,
     lint_package,
-    test_package,
+    run_package_tests,
     build_package,
 )
 
@@ -72,9 +155,9 @@ pytestmark = pytest.mark.asyncio
 async def test_detect_changed_packages_with_changes(monkeypatch):
     """
     Verify that detect_changed_packages correctly parses git diff output.
+    We test the underlying '.func' to bypass LazyResult creation.
     """
     mock_shell = AsyncMock()
-    # Simulate git diff output for changes in two packages
     mock_shell.return_value = (
         "packages/cascade-sdk/src/cascade/__init__.py\n"
         "packages/cascade-engine/src/cascade/runtime/engine.py\n"
@@ -83,12 +166,10 @@ async def test_detect_changed_packages_with_changes(monkeypatch):
     )
     monkeypatch.setattr("cicd.tasks.cs.shell", mock_shell)
 
-    result = await detect_changed_packages()
+    # Call the actual async function inside the task decorator
+    result = await detect_changed_packages.func()
 
-    # Assert that the correct command was called
     mock_shell.assert_awaited_once_with("git diff --name-only origin/main...HEAD")
-    
-    # Assert that the output was parsed correctly and sorted
     assert result == ["cascade-engine", "cascade-sdk"]
 
 
@@ -97,11 +178,10 @@ async def test_detect_changed_packages_with_no_package_changes(monkeypatch):
     Verify that detect_changed_packages returns an empty list if no packages changed.
     """
     mock_shell = AsyncMock()
-    # Simulate git diff output with only top-level file changes
     mock_shell.return_value = "README.md\n.gitignore\n"
     monkeypatch.setattr("cicd.tasks.cs.shell", mock_shell)
 
-    result = await detect_changed_packages()
+    result = await detect_changed_packages.func()
 
     assert result == []
 
@@ -115,7 +195,7 @@ async def test_detect_changed_packages_with_no_package_changes(monkeypatch):
             "uv run -- ruff check packages/cascade-sdk",
         ),
         (
-            test_package,
+            run_package_tests,
             "cascade-engine",
             "uv run -- pytest packages/cascade-engine",
         ),
@@ -131,15 +211,14 @@ async def test_package_specific_tasks(
 ):
     """
     Tests tasks like lint, test, and build to ensure they call cs.shell
-    with the correctly formatted command.
+    with the correctly formatted command by testing the underlying '.func'.
     """
     mock_shell = AsyncMock()
-    # The return value doesn't matter much here, we just need it to be awaitable
     mock_shell.return_value = "OK"
     monkeypatch.setattr("cicd.tasks.cs.shell", mock_shell)
 
-    await task_func(package_name)
+    # Call the actual async function inside the task decorator
+    await task_func.func(package_name)
 
-    # The key assertion: verify the correct command was executed
     mock_shell.assert_awaited_once_with(expected_command)
 ~~~~~

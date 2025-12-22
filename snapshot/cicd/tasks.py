@@ -36,7 +36,7 @@ async def lint_package(package_name: str) -> str:
     return f"LINT_OK_{package_name}"
 
 @cs.task
-async def test_package(package_name: str) -> str:
+async def run_package_tests(package_name: str) -> str:
     """Runs pytest on a specific package."""
     print(f"Testing {package_name}...")
     await cs.shell(f"uv run -- pytest packages/{package_name}")

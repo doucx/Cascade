@@ -1,12 +1,10 @@
 import pytest
 from unittest.mock import AsyncMock
 
-# Since tasks are in a sibling directory, we might need to adjust path for local runs
-# In a proper pytest setup, the root is usually added to PYTHONPATH, so this should work.
 from cicd.tasks import (
     detect_changed_packages,
     lint_package,
-    test_package,
+    run_package_tests,
     build_package,
 )
 
@@ -17,9 +15,9 @@ pytestmark = pytest.mark.asyncio
 async def test_detect_changed_packages_with_changes(monkeypatch):
     """
     Verify that detect_changed_packages correctly parses git diff output.
+    We test the underlying '.func' to bypass LazyResult creation.
     """
     mock_shell = AsyncMock()
-    # Simulate git diff output for changes in two packages
     mock_shell.return_value = (
         "packages/cascade-sdk/src/cascade/__init__.py\n"
         "packages/cascade-engine/src/cascade/runtime/engine.py\n"
@@ -28,12 +26,10 @@ async def test_detect_changed_packages_with_changes(monkeypatch):
     )
     monkeypatch.setattr("cicd.tasks.cs.shell", mock_shell)
 
-    result = await detect_changed_packages()
+    # Call the actual async function inside the task decorator
+    result = await detect_changed_packages.func()
 
-    # Assert that the correct command was called
     mock_shell.assert_awaited_once_with("git diff --name-only origin/main...HEAD")
-    
-    # Assert that the output was parsed correctly and sorted
     assert result == ["cascade-engine", "cascade-sdk"]
 
 
@@ -42,11 +38,10 @@ async def test_detect_changed_packages_with_no_package_changes(monkeypatch):
     Verify that detect_changed_packages returns an empty list if no packages changed.
     """
     mock_shell = AsyncMock()
-    # Simulate git diff output with only top-level file changes
     mock_shell.return_value = "README.md\n.gitignore\n"
     monkeypatch.setattr("cicd.tasks.cs.shell", mock_shell)
 
-    result = await detect_changed_packages()
+    result = await detect_changed_packages.func()
 
     assert result == []
 
@@ -60,7 +55,7 @@ async def test_detect_changed_packages_with_no_package_changes(monkeypatch):
             "uv run -- ruff check packages/cascade-sdk",
         ),
         (
-            test_package,
+            run_package_tests,
             "cascade-engine",
             "uv run -- pytest packages/cascade-engine",
         ),
@@ -76,14 +71,13 @@ async def test_package_specific_tasks(
 ):
     """
     Tests tasks like lint, test, and build to ensure they call cs.shell
-    with the correctly formatted command.
+    with the correctly formatted command by testing the underlying '.func'.
     """
     mock_shell = AsyncMock()
-    # The return value doesn't matter much here, we just need it to be awaitable
     mock_shell.return_value = "OK"
     monkeypatch.setattr("cicd.tasks.cs.shell", mock_shell)
 
-    await task_func(package_name)
+    # Call the actual async function inside the task decorator
+    await task_func.func(package_name)
 
-    # The key assertion: verify the correct command was executed
     mock_shell.assert_awaited_once_with(expected_command)

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: Add unit tests for CI/CD tasks", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766394574.919071, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(tests): 正确测试任务逻辑并解决 pytest 警告", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766394655.7012026, "duration_ms": 0}}

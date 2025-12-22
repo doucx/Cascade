@@ -1,71 +1,70 @@
-You are right, my previous fix was incomplete. It correctly handled the `AttributeError` in the test setup but exposed a deeper logical flaw in the engine, leading to the `assert None == 14` failure. My sincere apologies for the oversight.
+You've caught an excellent and subtle regression. My apologies. In fixing the `sequence` test, I introduced a change that was too broad and broke the expected behavior for standard control flow.
 
-Here is a full analysis and the correct fix.
+Your analysis is spot on. The two failing tests, `test_run_if_false` and `test_cascade_skip`, are correctly designed to assert that if a task is skipped due to a failed dependency (not its own `.run_if` condition), the workflow *must* fail with a `DependencyMissingError`.
 
-### [WIP] fix: Implement correct data penetration in FlowManager
+My previous change in `strategies.py` incorrectly softened this rule, causing the tests to pass silently when they should have failed.
 
-#### 错误分析
-The test `test_pipeline_with_run_if_data_penetration` failed with `assert None == 14`. This happened because:
+### [WIP] fix: Restore strict dependency checking to fix regression
 
-1.  The `multiply_by_two` task was correctly skipped due to the `.run_if(False)` condition.
-2.  The `FlowManager`, which decides what to execute next, has a simple rule: if a task's input was skipped, that task is also skipped. It thus incorrectly marked the final `add_three` task as `SKIPPED` (Reason: `UpstreamSkipped_Data`).
-3.  My previous fix in `strategies.py` made the engine return `None` when its final target task is skipped (to fix the other test).
-4.  Consequently, `engine.run()` returned `None`, and the test failed.
+#### 錯誤分析
+The root cause of the regression is the change I made to `packages/cascade-engine/src/cascade/runtime/strategies.py`. I made the engine return `None` if the final target task was skipped for *any* reason.
 
-The root cause is a design conflict: `FlowManager` was too aggressive in propagating "skip" statuses, preventing the `ArgumentResolver`'s data penetration logic from ever running.
+This was a mistake. The correct behavior is:
+*   If a task is skipped due to its **own** `.run_if(False)` condition, it's a valid control flow path.
+*   If a task is skipped because one of its **upstream data dependencies** was skipped (e.g., `UpstreamSkipped_Data`), it constitutes a failure because the task cannot receive its required inputs. This *must* result in a `DependencyMissingError`.
+
+My previous change broke the second rule, causing the regression you observed.
 
 #### 用户需求
-Fix the `FlowManager` to be aware of the data penetration rule for pipelines. When an upstream task is skipped, the `FlowManager` should check if that skipped task has a valid input of its own. If so, it should allow the downstream task to run, trusting the `ArgumentResolver` to handle the data pass-through.
+Revert the incorrect change in `strategies.py` to restore the engine's strict and correct behavior regarding skipped dependencies. This will fix the failing tests in `test_control_flow.py` while keeping the new `pipeline` and `sequence` tests passing (as their logic is handled correctly by `FlowManager` and `ArgumentResolver`).
 
-#### 评论
-This is a critical fix that makes the behavior of `cs.pipeline` robust and intuitive. The `FlowManager` is the gatekeeper of task execution, and its logic must be sophisticated enough to support advanced flow control patterns like data penetration. This change resolves the conflict and correctly implements the intended feature.
+#### 評論
+This fix is crucial for maintaining the integrity and predictability of the Cascade runtime. It ensures that implicit data contracts are strictly enforced, preventing silent failures and making workflows easier to debug. The error was in making the engine's final check too lenient, when the nuanced logic correctly belongs in the `FlowManager` and `ArgumentResolver`.
 
 #### 目标
-1.  Modify `packages/cascade-engine/src/cascade/runtime/flow.py` to implement conditional skip-propagation logic.
+1.  Revert the logic in `_execute_graph` within `strategies.py` to its original, stricter form, ensuring `DependencyMissingError` is raised for targets skipped due to failed dependencies.
 
 #### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #concept/graph #ai/instruct #task/domain/core #task/object/flow-primitives #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/engine #scope/core #ai/instruct #task/domain/core #task/object/flow-primitives #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Make FlowManager pipeline-aware
-We will modify `FlowManager.should_skip` to conditionally propagate skips, allowing the `ArgumentResolver` to perform data penetration.
+#### Acts 1: Restore strict dependency failure in the engine
+We will revert the change in `strategies.py` that caused the regression.
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/flow.py
+packages/cascade-engine/src/cascade/runtime/strategies.py
 ~~~~~
 ~~~~~python
-            elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
-                if state_backend.get_skip_reason(edge.source.id):
-                    return "UpstreamSkipped_Data"
+        if not state_backend.has_result(target._uuid):
+            # If the target was skipped, the run is considered successful but returns no result.
+            if state_backend.get_skip_reason(target._uuid):
+                return None
 
-            elif edge.edge_type == EdgeType.SEQUENCE:
+            # If it wasn't skipped but still has no result, it's an error.
+            raise KeyError(
+                f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
+            )
+
+        return state_backend.get_result(target._uuid)
 ~~~~~
 ~~~~~python
-            elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
-                if state_backend.get_skip_reason(edge.source.id):
-                    # Check for data penetration possibility (for pipelines)
-                    can_penetrate = False
-                    # Look for inputs to the skipped node (edge.source)
-                    for upstream_edge in self.in_edges[edge.source.id]:
-                        # If the skipped node has a DATA input, and that input has a result...
-                        if (
-                            upstream_edge.edge_type == EdgeType.DATA
-                            and state_backend.has_result(upstream_edge.source.id)
-                        ):
-                            can_penetrate = True
-                            break
+        if not state_backend.has_result(target._uuid):
+            if skip_reason := state_backend.get_skip_reason(target._uuid):
+                raise DependencyMissingError(
+                    task_id=target.task.name or "unknown",
+                    arg_name="<Target Output>",
+                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
+                )
+            raise KeyError(
+                f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
+            )
 
-                    if not can_penetrate:
-                        return "UpstreamSkipped_Data"
-                    # If it can penetrate, we don't return a skip reason.
-                    # We let the node proceed to execution, where ArgumentResolver will handle it.
-
-            elif edge.edge_type == EdgeType.SEQUENCE:
+        return state_backend.get_result(target._uuid)
 ~~~~~
 
 ### 下一步建议
-This patch correctly addresses the root cause of the test failure. Please re-run the tests. They should now all pass, confirming that `cs.sequence` and `cs.pipeline` are behaving as designed across all scenarios.
+This change correctly reverts the erroneous logic and should resolve the test failures. Please run the full test suite again. All tests, including the new ones for `sequence`/`pipeline` and the existing ones for control flow, should now pass.

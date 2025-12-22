@@ -28,7 +28,6 @@ from cascade.runtime.events import (
 from cascade.spec.protocols import Solver, Executor, StateBackend, Connector
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
 from cascade.runtime.flow import FlowManager
 from cascade.runtime.constraints import ConstraintManager
 from cascade.runtime.constraints.handlers import (
@@ -39,6 +38,7 @@ from cascade.runtime.constraints.handlers import (
 from cascade.adapters.state import InMemoryStateBackend
 from cascade.graph.compiler import BlueprintBuilder
 from cascade.runtime.vm import VirtualMachine
+from cascade.runtime.processor import NodeProcessor
 
 
 class Engine:
@@ -86,8 +86,15 @@ class Engine:
 
         self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
 
-        self.arg_resolver = ArgumentResolver()
-        self.constraint_resolver = ConstraintResolver()
+        # Delegate node execution logic to NodeProcessor
+        self.node_processor = NodeProcessor(
+            executor=self.executor,
+            bus=self.bus,
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            solver=self.solver,
+        )
+        
         self._managed_subscribers = []
         self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
 
@@ -435,9 +442,29 @@ class Engine:
                             blocked_nodes.add(node.id)
 
                 if executable_this_pass:
+                    # Define a callback for map nodes to execute sub-workflows
+                    async def sub_graph_runner(target, sub_params, parent_state):
+                        sub_graph = build_graph(target)
+                        sub_plan = self.solver.resolve(sub_graph)
+                        return await self._execute_graph(
+                            target,
+                            sub_params,
+                            active_resources,
+                            run_id,
+                            parent_state,
+                            graph=sub_graph,
+                            plan=sub_plan,
+                        )
+
                     tasks_to_run = [
-                        self._execute_node_with_policies(
-                            node, graph, state_backend, active_resources, run_id, params
+                        self.node_processor.process(
+                            node,
+                            graph,
+                            state_backend,
+                            active_resources,
+                            run_id,
+                            params,
+                            sub_graph_runner,
                         )
                         for node in executable_this_pass
                     ]
@@ -470,203 +497,6 @@ class Engine:
             )
 
         return state_backend.get_result(target._uuid)
-
-    async def _execute_node_with_policies(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-    ) -> Any:
-        requirements = self.constraint_resolver.resolve(
-            node, graph, state_backend, self.constraint_manager
-        )
-
-        # Pre-check for blocking to improve observability
-        if not self.resource_manager.can_acquire(requirements):
-            from cascade.runtime.events import TaskBlocked
-
-            self.bus.publish(
-                TaskBlocked(
-                    run_id=run_id,
-                    task_id=node.id,
-                    task_name=node.name,
-                    reason="ResourceContention",
-                )
-            )
-
-        await self.resource_manager.acquire(requirements)
-        try:
-            return await self._execute_node_internal(
-                node, graph, state_backend, active_resources, run_id, params
-            )
-        finally:
-            await self.resource_manager.release(requirements)
-
-    async def _execute_node_internal(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-    ) -> Any:
-        args, kwargs = self.arg_resolver.resolve(
-            node, graph, state_backend, active_resources, user_params=params
-        )
-
-        start_time = time.time()
-
-        if node.cache_policy:
-            inputs_for_cache = self._resolve_inputs_for_cache(
-                node, graph, state_backend
-            )
-            cached_value = await node.cache_policy.check(node.id, inputs_for_cache)
-            if cached_value is not None:
-                self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        reason="CacheHit",
-                    )
-                )
-                return cached_value
-
-        self.bus.publish(
-            TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
-        )
-
-        if node.node_type == "map":
-            # ... (Map logic remains complex, needs careful refactoring if touched)
-            # For now, we assume it can be called recursively with the state backend
-            return await self._execute_map_node(
-                node, args, kwargs, active_resources, run_id, params, state_backend
-            )
-
-        retry_policy = node.retry_policy
-        max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
-        delay = retry_policy.delay if retry_policy else 0.0
-        backoff = retry_policy.backoff if retry_policy else 1.0
-        attempt = 0
-        last_exception = None
-
-        while attempt < max_attempts:
-            attempt += 1
-            try:
-                result = await self.executor.execute(node, args, kwargs)
-                duration = time.time() - start_time
-                self.bus.publish(
-                    TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        status="Succeeded",
-                        duration=duration,
-                        result_preview=repr(result)[:100],
-                    )
-                )
-                if node.cache_policy:
-                    inputs_for_save = self._resolve_inputs_for_cache(
-                        node, graph, state_backend
-                    )
-                    await node.cache_policy.save(node.id, inputs_for_save, result)
-                return result
-            except Exception as e:
-                last_exception = e
-                if attempt < max_attempts:
-                    self.bus.publish(
-                        TaskRetrying(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            delay=delay,
-                            error=str(e),
-                        )
-                    )
-                    await asyncio.sleep(delay)
-                    delay *= backoff
-                else:
-                    duration = time.time() - start_time
-                    self.bus.publish(
-                        TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            status="Failed",
-                            duration=duration,
-                            error=f"{type(e).__name__}: {e}",
-                        )
-                    )
-                    raise last_exception
-        raise RuntimeError("Unexpected execution state")
-
-    def _resolve_inputs_for_cache(
-        self, node: Node, graph: Graph, state_backend: StateBackend
-    ) -> Dict[str, Any]:
-        inputs = {}
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-        for edge in incoming_edges:
-            if edge.arg_name.startswith("_"):
-                continue
-            if state_backend.has_result(edge.source.id):
-                inputs[edge.arg_name] = state_backend.get_result(edge.source.id)
-        return inputs
-
-    async def _execute_map_node(
-        self,
-        node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        parent_state_backend: StateBackend,
-    ) -> List[Any]:
-        factory = node.mapping_factory
-        if not kwargs:
-            return []
-        lengths = {k: len(v) for k, v in kwargs.items()}
-        first_len = list(lengths.values())[0]
-        if not all(length == first_len for length in lengths.values()):
-            raise ValueError(f"Mapped inputs have mismatched lengths: {lengths}")
-
-        sub_targets = []
-        for i in range(first_len):
-            item_kwargs = {k: v[i] for k, v in kwargs.items()}
-            sub_target = factory(**item_kwargs)
-            if node.retry_policy:
-                sub_target._retry_policy = node.retry_policy
-            if node.cache_policy:
-                sub_target._cache_policy = node.cache_policy
-            if node.constraints:
-                sub_target._constraints = node.constraints
-            sub_targets.append(sub_target)
-
-        # Each sub-task is a full workflow run from the engine's perspective
-        # but shares the parent's state backend to see results.
-        async def run_sub_target(target):
-            # For mapped tasks, we perform the full build/solve cycle for each item.
-            # TCO optimization does not apply here.
-            graph = build_graph(target)
-            plan = self.solver.resolve(graph)
-            return await self._execute_graph(
-                target,
-                params,
-                active_resources,
-                run_id,
-                parent_state_backend,
-                graph=graph,
-                plan=plan,
-            )
-
-        coros = [run_sub_target(target) for target in sub_targets]
-        return await asyncio.gather(*coros)
 
     def _scan_for_resources(self, graph: Graph) -> set[str]:
         required = set()

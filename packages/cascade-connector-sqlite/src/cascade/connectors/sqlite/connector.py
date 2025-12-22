@@ -52,7 +52,9 @@ class SqliteConnector(Connector):
                 """
             )
             # Create an index for faster lookups
-            cursor.execute("CREATE INDEX IF NOT EXISTS scope_idx ON constraints (scope)")
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS scope_idx ON constraints (scope)"
+            )
             conn.commit()
             return conn
 
@@ -90,7 +92,7 @@ class SqliteConnector(Connector):
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
         scope = self._topic_to_scope(topic)
-        
+
         def _blocking_publish():
             cursor = self._conn.cursor()
             if not payload:
@@ -102,18 +104,24 @@ class SqliteConnector(Connector):
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        payload["id"], payload["scope"], payload["type"],
-                        json.dumps(payload["params"]), payload.get("expires_at"),
+                        payload["id"],
+                        payload["scope"],
+                        payload["type"],
+                        json.dumps(payload["params"]),
+                        payload.get("expires_at"),
                         time.time(),
                     ),
                 )
             self._conn.commit()
+
         await asyncio.to_thread(_blocking_publish)
 
-    async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> SubscriptionHandle:
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
-        
+
         # Initial Sync: Perform one poll immediately to catch pre-existing constraints
         await self._sync_and_notify(callback)
 
@@ -128,28 +136,31 @@ class SqliteConnector(Connector):
             return cursor.fetchall()
 
         rows = await asyncio.to_thread(_blocking_fetch_all)
-        
+
         current_constraints: Dict[str, Dict] = {}
         for row in rows:
             constraint = dict(row)
             current_constraints[constraint["id"]] = constraint
-        
+
         # --- Diff Logic ---
         # 1. Find new and updated constraints
         for cid, current in current_constraints.items():
             last = self._last_known_constraints.get(cid)
-            if not last or last['updated_at'] < current['updated_at']:
+            if not last or last["updated_at"] < current["updated_at"]:
                 payload = {
-                    "id": current["id"], "scope": current["scope"], "type": current["type"],
-                    "params": json.loads(current["params"]), "expires_at": current["expires_at"]
+                    "id": current["id"],
+                    "scope": current["scope"],
+                    "type": current["type"],
+                    "params": json.loads(current["params"]),
+                    "expires_at": current["expires_at"],
                 }
                 await callback(self._scope_to_topic(current["scope"]), payload)
 
         # 2. Find deleted constraints
         deleted_ids = self._last_known_constraints.keys() - current_constraints.keys()
         for cid in deleted_ids:
-            scope = self._last_known_constraints[cid]['scope']
-            await callback(self._scope_to_topic(scope), {}) # Empty payload for resume
+            scope = self._last_known_constraints[cid]["scope"]
+            await callback(self._scope_to_topic(scope), {})  # Empty payload for resume
 
         self._last_known_constraints = current_constraints
 

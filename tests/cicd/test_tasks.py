@@ -1,5 +1,4 @@
 import pytest
-import cascade as cs
 
 from cicd.tasks import (
     parse_git_diff,
@@ -7,6 +6,7 @@ from cicd.tasks import (
     get_test_command,
     get_build_command,
 )
+
 
 # parse_git_diff is still a logic task, so we test it normally
 def test_parse_git_diff_with_changes():
@@ -20,10 +20,12 @@ def test_parse_git_diff_with_changes():
     result = parse_git_diff.func(diff_output)
     assert result == ["cascade-engine", "cascade-sdk"]
 
+
 def test_parse_git_diff_no_changes():
     diff_output = "README.md\n"
     result = parse_git_diff.func(diff_output)
     assert result == []
+
 
 # Tests for the command generator tasks
 @pytest.mark.parametrize(
@@ -38,6 +40,6 @@ def test_command_generation(task_func, package_name, expected_snippet):
     # Call the underlying function directly
     # These are now pure functions returning strings, so they are trivial to test
     cmd_string = task_func.func(package_name)
-    
+
     assert isinstance(cmd_string, str)
     assert expected_snippet in cmd_string

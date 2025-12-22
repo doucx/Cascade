@@ -34,6 +34,7 @@ def _ci_success_marker(results: List[str]):
 
 import os
 
+
 def pr_check_workflow() -> cs.LazyResult:
     """
     Workflow for Pull Requests and pushes to main.
@@ -41,18 +42,18 @@ def pr_check_workflow() -> cs.LazyResult:
     """
     # Step 1: Determine the correct git diff command based on the CI environment.
     event_name = os.getenv("GITHUB_EVENT_NAME")
-    
+
     if event_name == "pull_request":
         base_ref = os.getenv("GITHUB_BASE_REF", "main")
         diff_command = f"git diff --name-only origin/{base_ref}...HEAD"
         print(f"Running diff for Pull Request: {diff_command}")
-    else: 
+    else:
         diff_command = "git diff --name-only HEAD~1 HEAD"
         print(f"Running diff for Push/Local: {diff_command}")
 
     # Step 2: I/O - Get git diff
     git_diff_output = cs.shell(diff_command)
-    
+
     # Step 3: Pure Logic - Parse output
     changed_packages = parse_git_diff(git_diff_output)
 
@@ -86,9 +87,9 @@ def release_workflow() -> cs.LazyResult:
 
     # 2. Execute with dependencies
     lint_all = cs.shell.map(command=lint_cmds)
-    
+
     test_all = cs.shell.map(command=test_cmds).after(lint_all)
-    
+
     build_all = cs.shell.map(command=build_cmds).after(test_all)
 
     # publish_cmd is a LazyResult[str], passed to cs.shell

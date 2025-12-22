@@ -20,7 +20,7 @@ import importlib
 import re
 from pathlib import Path
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Tuple, Optional
+from typing import Callable, Dict, Tuple, Optional
 
 # tomllib is standard in Python 3.11+. For older versions, we need to import toml.
 if sys.version_info < (3, 11):
@@ -85,11 +85,11 @@ def setup_path():
                     sdk_path = str(src_dir)
                 else:
                     other_paths.append(str(src_dir))
-    
+
     sys.path.insert(0, str(PROJECT_ROOT))
     for p in sorted(other_paths, reverse=True):
         sys.path.insert(0, p)
-        
+
     if sdk_path:
         sys.path.insert(0, sdk_path)
 
@@ -124,7 +124,7 @@ def clean_type_str(type_str: str) -> str:
     """Cleans up raw type strings."""
     # Handle NoneType
     type_str = type_str.replace("NoneType", "None")
-    
+
     # Simplify full paths to short names
     replacements = [
         (r"cascade\.spec\.lazy_types\.LazyResult", "LazyResult"),
@@ -132,13 +132,13 @@ def clean_type_str(type_str: str) -> str:
         (r"cascade\.spec\.protocols\.StateBackend", "StateBackend"),
         (r"cascade\.spec\.protocols\.CachePolicy", "CachePolicy"),
         # Handle quotes
-        (r"'LazyResult\[Any\]'", "LazyResult"), 
+        (r"'LazyResult\[Any\]'", "LazyResult"),
         (r"'LazyResult'", "LazyResult"),
     ]
-    
+
     for pattern, repl in replacements:
         type_str = re.sub(pattern, repl, type_str)
-        
+
     return type_str
 
 
@@ -163,7 +163,7 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
                 type_name = str(param.annotation)
                 if isinstance(param.annotation, type):
                     type_name = param.annotation.__name__
-                
+
                 clean_name = clean_type_str(str(type_name))
                 if "<class" in clean_name:
                     clean_name = "Any"
@@ -177,7 +177,7 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
                 elif isinstance(param.default, (int, float, bool, str)):
                     new_default = param.default
                 else:
-                    new_default = ... 
+                    new_default = ...
 
             # 3. Handle *args and **kwargs prefixes
             param_name = param.name
@@ -190,7 +190,7 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
             param_str = param_name
             if new_annotation != inspect.Parameter.empty:
                 param_str += f": {new_annotation}"
-            
+
             if new_default != inspect.Parameter.empty:
                 if new_default is ...:
                     param_str += " = ..."
@@ -198,20 +198,23 @@ def get_function_signature(target_func: Callable) -> Optional[Tuple[str, str]]:
                     param_str += " = None"
                 else:
                     param_str += f" = {repr(new_default)}"
-            
+
             new_params.append(param_str)
 
         signature_str = f"({', '.join(new_params)})"
 
         # Handle Return Type
         if sig.return_annotation != inspect.Signature.empty:
-             signature_str += " -> LazyResult"
+            signature_str += " -> LazyResult"
         else:
-             signature_str += " -> LazyResult"
+            signature_str += " -> LazyResult"
 
         return signature_str, formatted_doc
     except Exception as e:
-        print(f"⚠️  Could not inspect function '{getattr(target_func, '__name__', 'unknown')}': {e}", file=sys.stderr)
+        print(
+            f"⚠️  Could not inspect function '{getattr(target_func, '__name__', 'unknown')}': {e}",
+            file=sys.stderr,
+        )
         return None
 
 
@@ -226,7 +229,10 @@ def get_provider_signature(entry_point: str) -> Optional[Tuple[str, str]]:
         target_func = getattr(factory, "func", factory)
         return get_function_signature(target_func)
     except Exception as e:
-        print(f"⚠️  Could not load provider entry point '{entry_point}': {e}", file=sys.stderr)
+        print(
+            f"⚠️  Could not load provider entry point '{entry_point}': {e}",
+            file=sys.stderr,
+        )
         return None
 
 
@@ -249,7 +255,9 @@ def generate_stubs(tree: dict, output_dir: Path):
         for item in output_dir.iterdir():
             if item.is_dir() and item.name in tree:
                 shutil.rmtree(item)
-            elif item.is_file() and item.suffix == ".pyi" and item.name != "__init__.pyi":
+            elif (
+                item.is_file() and item.suffix == ".pyi" and item.name != "__init__.pyi"
+            ):
                 item.unlink()
 
     output_dir.mkdir(exist_ok=True)
@@ -287,7 +295,10 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
                     native_func = getattr(sdk_module, name)
                     sdk_natives[name] = native_func
                 except Exception as e:
-                    print(f"⚠️  Could not inspect native SDK export '{name}': {e}", file=sys.stderr)
+                    print(
+                        f"⚠️  Could not inspect native SDK export '{name}': {e}",
+                        file=sys.stderr,
+                    )
                     content_lines.append(f"{name}: Callable[..., Any]")
             else:
                 imports_by_module[module_path].append(name)
@@ -296,17 +307,17 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
             # Use 'import X as X' to force re-export for type checkers
             imports = ", ".join(f"{name} as {name}" for name in sorted(names))
             content_lines.append(f"from {module_path} import {imports}")
-        
+
         if sdk_natives:
-             content_lines.append("\n# --- Locally Defined Exports ---")
-             for name, func in sorted(sdk_natives.items()):
+            content_lines.append("\n# --- Locally Defined Exports ---")
+            for name, func in sorted(sdk_natives.items()):
                 sig_info = get_function_signature(func)
                 if sig_info:
                     sig_str, doc_str = sig_info
                     if doc_str:
-                         provider_def = f"def {name}{sig_str}:\n{doc_str}"
+                        provider_def = f"def {name}{sig_str}:\n{doc_str}"
                     else:
-                         provider_def = f"def {name}{sig_str}: ..."
+                        provider_def = f"def {name}{sig_str}: ..."
                     content_lines.append(provider_def)
 
         content_lines.append("\n# --- Discovered Providers ---")
@@ -331,7 +342,9 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
     if pyi_namespaces:
         if pyi_providers:
             content_lines.append("")
-        content_lines.extend(f"from . import {name} as {name}" for name in pyi_namespaces)
+        content_lines.extend(
+            f"from . import {name} as {name}" for name in pyi_namespaces
+        )
 
     content = "\n".join(content_lines)
     with open(init_pyi_path, "w", encoding="utf-8") as f:

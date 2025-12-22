@@ -2,6 +2,7 @@ import cascade as cs
 import re
 from typing import List
 
+
 @cs.task
 def parse_git_diff(git_diff_output: str) -> List[str]:
     """
@@ -15,7 +16,7 @@ def parse_git_diff(git_diff_output: str) -> List[str]:
         match = package_pattern.match(line)
         if match:
             changed_packages.add(match.group(1))
-    
+
     if not changed_packages:
         print("No package changes detected.")
         return []
@@ -24,12 +25,14 @@ def parse_git_diff(git_diff_output: str) -> List[str]:
     print(f"Detected changed packages: {sorted_packages}")
     return sorted_packages
 
+
 @cs.task
 def get_lint_command(package_name: str) -> str:
     """
     Generates the shell command to run ruff on the package.
     """
     return f"uv run -- ruff check packages/{package_name}"
+
 
 @cs.task
 def get_test_command(package_name: str) -> str:
@@ -38,12 +41,14 @@ def get_test_command(package_name: str) -> str:
     """
     return f"uv run -- pytest packages/{package_name}"
 
+
 @cs.task
 def get_build_command(package_name: str) -> str:
     """
     Generates the shell command to build the package.
     """
     return f"uv run -- hatch build packages/{package_name}"
+
 
 @cs.task
 def get_publish_command() -> str:

@@ -1,6 +1,6 @@
 import inspect
 from contextlib import ExitStack
-from typing import Any, Dict, Callable, Union, Generator, Set, Optional
+from typing import Any, Dict, Callable, Union, Generator, Set
 
 from cascade.graph.model import Graph
 from cascade.spec.resource import ResourceDefinition, Inject

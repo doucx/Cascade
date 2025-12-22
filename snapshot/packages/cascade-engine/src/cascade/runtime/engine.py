@@ -1,7 +1,7 @@
 import sys
 import time
 import asyncio
-from typing import Any, Dict, Optional, Callable, Union
+from typing import Any, Dict, Optional, Callable
 from uuid import uuid4
 from contextlib import ExitStack
 
@@ -97,7 +97,7 @@ class Engine:
             constraint_manager=self.constraint_manager,
             wakeup_event=self._wakeup_event,
         )
-        
+
         self._managed_subscribers = []
 
     def add_subscriber(self, subscriber: Any):

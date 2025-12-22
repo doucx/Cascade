@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "IPFS providers for the Cascade ecosystem, enabling content-addressed data."
 requires-python = ">=3.8"
 dependencies = [
-  "cascade-interfaces",
+  "cascade-spec",
   "aiohttp"
 ]
 

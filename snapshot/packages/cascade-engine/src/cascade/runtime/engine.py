@@ -1,34 +1,21 @@
 import sys
 import time
-import inspect
 import asyncio
-from typing import Any, Dict, Optional, Generator, Callable, List, Union
+from typing import Any, Dict, Optional, Callable, Union
 from uuid import uuid4
 from contextlib import ExitStack
 
-from cascade.graph.build import build_graph
-from cascade.graph.hashing import StructuralHasher
-from cascade.graph.model import Node, Graph
-from cascade.spec.resource import ResourceDefinition, Inject
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.resource import ResourceDefinition
 from cascade.spec.constraint import GlobalConstraint
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
     RunStarted,
     RunFinished,
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-    TaskSkipped,
-    TaskRetrying,
-    ResourceAcquired,
-    ResourceReleased,
     ConnectorConnected,
     ConnectorDisconnected,
 )
 from cascade.spec.protocols import Solver, Executor, StateBackend, Connector
-from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.flow import FlowManager
 from cascade.runtime.constraints import ConstraintManager
 from cascade.runtime.constraints.handlers import (
     PauseConstraintHandler,
@@ -36,10 +23,9 @@ from cascade.runtime.constraints.handlers import (
     RateLimitConstraintHandler,
 )
 from cascade.adapters.state import InMemoryStateBackend
-from cascade.graph.compiler import BlueprintBuilder
-from cascade.runtime.vm import VirtualMachine
 from cascade.runtime.processor import NodeProcessor
 from cascade.runtime.resource_container import ResourceContainer
+from cascade.runtime.strategies import GraphExecutionStrategy, VMExecutionStrategy
 
 
 class Engine:
@@ -95,9 +81,24 @@ class Engine:
             constraint_manager=self.constraint_manager,
             solver=self.solver,
         )
+
+        # Initialize Strategies
+        self.graph_strategy = GraphExecutionStrategy(
+            solver=self.solver,
+            node_processor=self.node_processor,
+            resource_container=self.resource_container,
+            constraint_manager=self.constraint_manager,
+            bus=self.bus,
+            wakeup_event=self._wakeup_event,
+        )
+
+        self.vm_strategy = VMExecutionStrategy(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self._wakeup_event,
+        )
         
         self._managed_subscribers = []
-        self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
 
     def add_subscriber(self, subscriber: Any):
         """
@@ -147,10 +148,6 @@ class Engine:
     async def run(
         self, target: Any, params: Optional[Dict[str, Any]] = None, use_vm: bool = False
     ) -> Any:
-        # VM Fast Path
-        if use_vm:
-            return await self._run_vm(target)
-
         run_id = str(uuid4())
         start_time = time.time()
 
@@ -181,9 +178,10 @@ class Engine:
                 )
             )
 
-            # TCO Loop: We keep executing as long as the result is a LazyResult
-            current_target = target
+            # 3. Select Strategy
+            strategy = self.vm_strategy if use_vm else self.graph_strategy
 
+            # 4. Execute
             # The global stack holds "run" scoped resources
             with ExitStack() as run_stack:
                 # Register the engine's connector as a special internal resource
@@ -198,74 +196,14 @@ class Engine:
 
                 active_resources: Dict[str, Any] = {}
 
-                while True:
-                    # The step stack holds "task" (step) scoped resources
-                    with ExitStack() as step_stack:
-                        # 1. Get Graph and Plan, using Structural Hash Cache
-                        hasher = StructuralHasher()
-                        struct_hash, literals = hasher.hash(current_target)
-
-                        graph = None
-                        plan = None
-
-                        if struct_hash in self._graph_cache:
-                            # CACHE HIT: Reuse graph and plan
-                            cached_graph, cached_plan = self._graph_cache[struct_hash]
-
-                            # LIMITATION: Current _update_graph_literals only supports single-node graphs correctly.
-                            # For complex graphs, we must rebuild to ensure all UUIDs are correct.
-                            if len(cached_graph.nodes) > 1:
-                                graph = build_graph(current_target)
-                                plan = self.solver.resolve(graph)
-                            else:
-                                graph = cached_graph
-                                plan = cached_plan
-                                self._update_graph_literals(
-                                    graph, current_target, literals
-                                )
-                        else:
-                            # CACHE MISS: Build, solve, and cache
-                            graph = build_graph(current_target)
-                            plan = self.solver.resolve(graph)
-                            self._graph_cache[struct_hash] = (graph, plan)
-
-                        # 2. Setup Resources (mixed scope)
-                        required_resources = self.resource_container.scan(graph)
-                        self.resource_container.setup(
-                            required_resources,
-                            active_resources,
-                            run_stack,
-                            step_stack,
-                            run_id,
-                        )
-
-                        # 3. Execute
-                        result = await self._execute_graph(
-                            current_target,
-                            params or {},
-                            active_resources,
-                            run_id,
-                            state_backend,
-                            graph=graph,
-                            plan=plan,
-                        )
-
-                    # 4. Check for Tail Call (LazyResult)
-                    if isinstance(result, (LazyResult, MappedLazyResult)):
-                        current_target = result
-
-                        # STATE GC: Since we are moving to a new generation (new graph),
-                        # the transient state of the previous generation is no longer needed.
-                        # We clear it to prevent memory leaks in infinite recursion.
-                        if hasattr(state_backend, "clear"):
-                            state_backend.clear()
-
-                        # CRITICAL: Yield control to the event loop between TCO iterations.
-                        # This allows other tasks (like the experiment timeout) to run.
-                        await asyncio.sleep(0)
-                    else:
-                        final_result = result
-                        break
+                final_result = await strategy.execute(
+                    target=target,
+                    run_id=run_id,
+                    params=params or {},
+                    state_backend=state_backend,
+                    run_stack=run_stack,
+                    active_resources=active_resources,
+                )
 
             duration = time.time() - start_time
             self.bus.publish(
@@ -293,30 +231,6 @@ class Engine:
             if self.connector:
                 await self.connector.disconnect()
                 self.bus.publish(ConnectorDisconnected(run_id=run_id))
-
-    async def _run_vm(self, target: Any) -> Any:
-        """
-        Executes the target using the AOT Blueprint/VM path.
-        """
-        # 1. Compile in template mode
-        builder = BlueprintBuilder()
-        blueprint = builder.build(target, template=True)
-
-        # 2. Extract Initial Arguments
-        # The BlueprintBuilder treats the root LazyResult's args/kwargs as the
-        # inputs for the blueprint.
-        initial_args = list(target.args)
-        initial_kwargs = dict(target.kwargs)
-
-        # 3. Execute
-        vm = VirtualMachine(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event,
-        )
-        return await vm.execute(
-            blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs
-        )
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
         """Callback to handle incoming constraint messages."""
@@ -349,146 +263,3 @@ class Engine:
             # After any change (add, remove, or error), wake up the engine loop
             # if it's waiting.
             self._wakeup_event.set()
-
-    def _update_graph_literals(
-        self, graph: Graph, target: Any, literals: Dict[str, Any]
-    ):
-        """Injects new literal values and UUID into a cached graph."""
-        # A simple graph has a predictable structure we can update directly.
-        # This assumes a single root node for the target.
-        node_map = {node.id: node for node in graph.nodes}
-
-        # This is a bit of a simplification. A full implementation would need to
-        # traverse the target structure and map literals back to the graph nodes.
-        # For now, let's assume the root node gets the new literals.
-        # The most important part is updating the target's UUID.
-
-        # Find the node corresponding to the target LazyResult
-        # In a cached graph, the ID is stale, so we find it by name or type.
-        # For now, we assume the last node is the target node.
-        if graph.nodes:
-            target_node = graph.nodes[-1]
-            target_node.id = target._uuid
-            # This is a simplification; a robust solution would traverse and update.
-            # For firefly, the structure is so simple this may be sufficient.
-            if hasattr(target, "args") and hasattr(target, "kwargs"):
-                target_node.literal_inputs = {
-                    str(i): v for i, v in enumerate(target.args)
-                }
-                target_node.literal_inputs.update(target.kwargs)
-
-    async def _execute_graph(
-        self,
-        target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        state_backend: StateBackend,
-        graph: Graph,
-        plan: Any,
-    ) -> Any:
-        flow_manager = FlowManager(graph, target._uuid)
-
-        # Track blocked state locally to avoid spamming Blocked events every loop tick
-        blocked_nodes = set()
-
-        for stage in plan:
-            pending_nodes_in_stage = list(stage)
-
-            while pending_nodes_in_stage:
-                executable_this_pass: List[Node] = []
-                deferred_this_pass: List[Node] = []
-
-                for node in pending_nodes_in_stage:
-                    if node.node_type == "param":
-                        continue  # Skip params, they don't execute
-
-                    skip_reason = flow_manager.should_skip(node, state_backend)
-                    if skip_reason:
-                        state_backend.mark_skipped(node.id, skip_reason)
-                        self.bus.publish(
-                            TaskSkipped(
-                                run_id=run_id,
-                                task_id=node.id,
-                                task_name=node.name,
-                                reason=skip_reason,
-                            )
-                        )
-                        # Node is resolved (skipped), so not pending for next pass
-                        continue
-
-                    if self.constraint_manager.check_permission(node):
-                        executable_this_pass.append(node)
-                        if node.id in blocked_nodes:
-                            blocked_nodes.remove(node.id)
-                    else:
-                        deferred_this_pass.append(node)
-                        if node.id not in blocked_nodes:
-                            from cascade.runtime.events import TaskBlocked
-
-                            self.bus.publish(
-                                TaskBlocked(
-                                    run_id=run_id,
-                                    task_id=node.id,
-                                    task_name=node.name,
-                                    reason="ConstraintViolation",  # Detailed reason requires manager update
-                                )
-                            )
-                            blocked_nodes.add(node.id)
-
-                if executable_this_pass:
-                    # Define a callback for map nodes to execute sub-workflows
-                    async def sub_graph_runner(target, sub_params, parent_state):
-                        sub_graph = build_graph(target)
-                        sub_plan = self.solver.resolve(sub_graph)
-                        return await self._execute_graph(
-                            target,
-                            sub_params,
-                            active_resources,
-                            run_id,
-                            parent_state,
-                            graph=sub_graph,
-                            plan=sub_plan,
-                        )
-
-                    tasks_to_run = [
-                        self.node_processor.process(
-                            node,
-                            graph,
-                            state_backend,
-                            active_resources,
-                            run_id,
-                            params,
-                            sub_graph_runner,
-                        )
-                        for node in executable_this_pass
-                    ]
-
-                    pass_results = await asyncio.gather(*tasks_to_run)
-
-                    for node, res in zip(executable_this_pass, pass_results):
-                        state_backend.put_result(node.id, res)
-                        if flow_manager:
-                            flow_manager.register_result(node.id, res, state_backend)
-
-                pending_nodes_in_stage = deferred_this_pass
-
-                if pending_nodes_in_stage and not executable_this_pass:
-                    # All remaining nodes are blocked by constraints. Wait for a wakeup
-                    # signal (e.g., from a constraint change or TTL expiration) before retrying.
-                    await self._wakeup_event.wait()
-                    self._wakeup_event.clear()
-                    self.constraint_manager.cleanup_expired_constraints()
-
-        if not state_backend.has_result(target._uuid):
-            if skip_reason := state_backend.get_skip_reason(target._uuid):
-                raise DependencyMissingError(
-                    task_id=target.task.name,
-                    arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
-                )
-            raise KeyError(
-                f"Target task '{target.task.name}' did not produce a result."
-            )
-
-        return state_backend.get_result(target._uuid)

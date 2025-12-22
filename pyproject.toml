@@ -22,6 +22,7 @@ members = ["packages/*"]
 cascade-spec = { workspace = true }
 cascade-engine = { workspace = true }
 cascade-sdk = { workspace = true }
+cascade-graph = { workspace = true }
 cascade-provider-ipfs = { workspace = true }
 cascade-cli-controller = { workspace = true }
 cascade-cli-observer = { workspace = true }
@@ -33,6 +34,7 @@ packages = [
     "packages/cascade-engine",
     "packages/cascade-sdk",
     "packages/cascade-provider-ipfs",
+    "packages/cascade-graph",
 ]
 
 [tool.hatch.build.targets.wheel]

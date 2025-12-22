@@ -1,0 +1,21 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-graph"
+version = "0.1.0"
+description = "Graph building, compilation, and serialization logic for the Cascade ecosystem."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+cascade-spec = { workspace = true }

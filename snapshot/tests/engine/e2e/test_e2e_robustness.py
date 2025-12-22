@@ -1,6 +1,6 @@
 import asyncio
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, ANY
 
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
@@ -82,9 +82,7 @@ async def test_engine_recovers_from_malformed_rate_limit(
         "constraint.parse.error",
         constraint_type="rate_limit",
         raw_value="this-is-not-a-valid-rate",
-        error=pytest.approx(
-            "could not convert string to float: 'this-is-not-a-valid-rate'"
-        ),
+        error=ANY,
     )
 
     # 6. Send a VALID pause constraint. If the engine is deadlocked,

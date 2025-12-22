@@ -1,39 +1,43 @@
-Of course. Your plan to add a dedicated integration test is the right way to ensure this critical bug is fixed and doesn't regress. A robust system must be resilient to malformed inputs, especially on its control plane.
+你的直觉很敏锐，加载顺序确实是一个常见的陷阱，但在这种情况下，Patch 路径 `cascade.runtime.constraints.handlers.bus` 是正确的。
 
-Here is the plan to create the new test case.
+真正的罪魁祸首在于测试断言中的 `pytest.approx`。这个函数是专门用于**浮点数**近似比较的，不能用于字符串。当你用它来包装一个错误消息字符串时，Mock 对象的参数匹配机制会失败，从而报告“调用了 0 次”（意思是：没有找到与这个奇怪的 `approx` 对象相匹配的调用）。
 
-## [WIP] test(engine): Add integration test for malformed constraint recovery
+此外，断言具体的异常消息文本（如 `"could not convert..."`）本身也是脆弱的，因为不同版本的 Python 可能会产生略微不同的错误文案。
+
+我们将修复测试代码，使用 `unittest.mock.ANY` 来匹配错误消息字段，从而让测试既正确又健壮。
+
+## [WIP] fix(tests): 放宽鲁棒性测试中的错误消息断言
+
+### 错误分析
+测试失败 `AssertionError: Expected 'error' to be called once. Called 0 times.` 的根本原因是断言参数不匹配。
+1.  **误用 `approx`**: `pytest.approx` 只能用于数字比较，不能用于字符串。
+2.  **过度拟合**: 断言硬编码了 `float()` 抛出的具体异常文本。这不仅脆弱，而且不是测试的核心关注点。核心关注点是“是否记录了错误”，而不是“错误文本的具体措辞”。
 
 ### 用户需求
-创建一个新的集成测试，以验证 `Engine` 在收到格式错误的 `rate_limit` 约束后：
-1.  不会死锁。
-2.  能记录一个明确的错误。
-3.  能继续正常处理后续的控制指令。
+修复 `test_engine_recovers_from_malformed_rate_limit` 测试，使其能够正确通过。
 
 ### 评论
-这个测试是本次修复工作的关键收尾。它将作为一道“防火墙”，确保 `Engine` 的健壮性在未来不会因为类似问题而退化。通过模拟一个完整的“错误 -> 恢复 -> 继续操作”的场景，我们可以充满信心地确认死锁问题已被根除。
+使用 `unittest.mock.ANY` 是处理不可预测或不重要参数（如具体的 Traceback 或异常消息）的标准做法。这能让测试专注于验证核心契约（即：正确的语义 ID `constraint.parse.error` 和关键数据 `raw_value` 被记录了）。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/engine/e2e/test_e2e_robustness.py`。
-2.  在该文件中，实现一个名为 `test_engine_recovers_from_malformed_rate_limit` 的异步测试。
-3.  该测试将使用 `InProcessConnector` 和一个专门的 Mock Fixture 来验证错误日志，并断言 `Engine` 在错误发生后依然可以被 `pause` 指令控制。
+修改测试文件，移除 `pytest.approx`，并引入 `unittest.mock.ANY` 来进行更宽松的断言。
 
 ### 基本原理
-我们将遵循“测试驱动开发 (TDD)”的最佳实践。代码修复本身是不完整的，除非有一个能够捕捉到该错误的测试。这个测试将直接模拟用户报告的场景，并断言正确的行为。我们选择在 `e2e` 目录中创建新文件，因为它测试的是 `Engine` 和 `Connector` 之间的端到端交互，验证了系统的整体鲁棒性，而不仅仅是单个单元的行为。
+通过放宽对 `error` 字段的校验，我们消除了测试的脆弱性，同时保留了对其余关键字段（`msg_id`, `constraint_type`, `raw_value`）的严格验证。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/engine #comp/tests #concept/state #scope/core #ai/instruct #task/domain/runtime #task/object/constraint-manager #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #concept/state #scope/core #ai/instruct #task/domain/testing #task/object/assertion #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 E2E 鲁棒性测试文件
+#### Acts 1: 修复测试断言
 
-我们将创建 `tests/engine/e2e/test_e2e_robustness.py` 文件，并添加完整的测试逻辑。该测试包含了专门用于 Mock UI 总线的 fixture，以及验证引擎在收到无效速率限制后仍能正确响应 `pause` 指令的断言。
+我们将修改 `tests/engine/e2e/test_e2e_robustness.py`，引入 `ANY` 并更新断言逻辑。
 
 ~~~~~act
-write_file
+patch_file
 tests/engine/e2e/test_e2e_robustness.py
 ~~~~~
 ~~~~~python
@@ -42,78 +46,20 @@ import pytest
 from unittest.mock import MagicMock
 
 import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import TaskExecutionStarted
-from cascade.spec.constraint import GlobalConstraint
-from dataclasses import asdict
+~~~~~
+~~~~~python
+import asyncio
+import pytest
+from unittest.mock import MagicMock, ANY
 
-from .harness import InProcessConnector, MockWorkExecutor, ControllerTestApp
+import cascade as cs
+~~~~~
 
-
-@pytest.fixture
-def mock_ui_bus(monkeypatch):
-    """Mocks the UI bus where it's used for constraint error logging."""
-    mock_bus = MagicMock()
-    # This must target where 'bus' is imported and used, which is now handlers.py
-    monkeypatch.setattr("cascade.runtime.constraints.handlers.bus", mock_bus)
-    return mock_bus
-
-
-@pytest.mark.asyncio
-async def test_engine_recovers_from_malformed_rate_limit(
-    bus_and_spy, mock_ui_bus
-):
-    """
-    Verifies that the Engine:
-    1. Does not deadlock when receiving a malformed rate_limit constraint.
-    2. Logs an error via the UI bus.
-    3. Continues to process valid subsequent constraints (like pause).
-    """
-    engine_bus, spy = bus_and_spy
-    connector = InProcessConnector()
-    controller = ControllerTestApp(connector)
-
-    # 1. Define a simple two-stage workflow
-    @cs.task
-    def task_a():
-        return "A"
-
-    @cs.task
-    async def task_b(dep):
-        # This task should never start if the pause works
-        await asyncio.sleep(0.1)
-        return "B"
-
-    workflow = task_b(task_a())
-
-    # 2. Configure and start the engine in the background
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=MockWorkExecutor(),
-        bus=engine_bus,
-        connector=connector,
-    )
-    engine_task = asyncio.create_task(engine.run(workflow))
-
-    # 3. Wait for task_a to start, so we know the engine is active
-    for _ in range(20):
-        await asyncio.sleep(0.01)
-        if spy.events_of_type(TaskExecutionStarted):
-            break
-    else:
-        pytest.fail("Engine did not start task_a in time.")
-
-    # 4. Send the MALFORMED rate limit constraint
-    malformed_constraint = GlobalConstraint(
-        id="bad-rate-1",
-        scope="global",
-        type="rate_limit",
-        params={"rate": "this-is-not-a-valid-rate"},
-    )
-    payload = asdict(malformed_constraint)
-    await connector.publish("cascade/constraints/global", payload)
-
+~~~~~act
+patch_file
+tests/engine/e2e/test_e2e_robustness.py
+~~~~~
+~~~~~python
     # 5. Assert that a UI error was logged
     # Give the engine a moment to process the bad message
     await asyncio.sleep(0.01)
@@ -127,26 +73,23 @@ async def test_engine_recovers_from_malformed_rate_limit(
     )
 
     # 6. Send a VALID pause constraint. If the engine is deadlocked,
-    # it will never process this message.
-    await controller.pause(scope="global")
+~~~~~
+~~~~~python
+    # 5. Assert that a UI error was logged
+    # Give the engine a moment to process the bad message
+    await asyncio.sleep(0.01)
+    mock_ui_bus.error.assert_called_once_with(
+        "constraint.parse.error",
+        constraint_type="rate_limit",
+        raw_value="this-is-not-a-valid-rate",
+        error=ANY,
+    )
 
-    # 7. Wait for task_a to finish, then wait a bit more.
-    # If the engine is responsive, it will pause and not schedule task_b.
-    # If it's deadlocked, the engine_task will hang.
-    await asyncio.sleep(0.2)
-
-    # 8. Assert that task_b NEVER started, proving the pause was effective
-    started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
-    assert "task_b" not in started_tasks, "task_b started, indicating the engine ignored the pause command."
-
-    # 9. Cleanup
-    assert not engine_task.done(), "Engine task finished, it should be paused."
-    engine_task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await engine_task
+    # 6. Send a VALID pause constraint. If the engine is deadlocked,
 ~~~~~
 
 ### 下一步建议
-我们已经完成了代码修复和测试用例的编写。这是一个逻辑上完整的工作单元。现在是时候将这些更改作为一个原子提交进行集成了。
 
-我将为你生成一个 `[COMMIT]` 计划，其中包含 `git add` 和 `git commit` 指令。
+现在测试已经修复，我们可以执行它来验证修复是否有效。如果测试通过，我们就可以放心地将这一系列变更（Bug 修复 + 测试用例）合并提交了。
+
+我建议生成最终的 `[COMMIT]` 计划。

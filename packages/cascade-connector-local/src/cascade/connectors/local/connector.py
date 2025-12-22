@@ -8,9 +8,11 @@ from pathlib import Path
 from typing import Callable, Awaitable, Dict, Any, List
 
 from cascade.spec.protocols import Connector, SubscriptionHandle
+from .uds_server import UdsTelemetryServer
 
 POLL_INTERVAL = 0.2  # seconds
 DEFAULT_UDS_PATH = "/tmp/cascade.sock"
+DEFAULT_TELEMETRY_UDS_PATH = "/tmp/cascade-telemetry.sock"
 
 
 class UDSServerProtocol(asyncio.DatagramProtocol):
@@ -49,6 +51,7 @@ class LocalConnector(Connector):
         self,
         db_path: str = "~/.cascade/control.db",
         uds_path: str = DEFAULT_UDS_PATH,
+        telemetry_uds_path: str = DEFAULT_TELEMETRY_UDS_PATH,
     ):
         self.db_path = Path(db_path).expanduser()
         self.uds_path = uds_path
@@ -59,7 +62,16 @@ class LocalConnector(Connector):
         self._use_polling = sys.platform == "win32"
         self._uds_recv_event = asyncio.Event()
 
+        # UDS Telemetry Server (only for non-Windows platforms)
+        self._telemetry_server: UdsTelemetryServer | None = None
+        if not self._use_polling:
+            self._telemetry_server = UdsTelemetryServer(telemetry_uds_path)
+
     async def connect(self) -> None:
+        # Start telemetry server if it exists
+        if self._telemetry_server:
+            await self._telemetry_server.start()
+
         def _connect_and_setup():
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(self.db_path, check_same_thread=False)
@@ -100,6 +112,11 @@ class LocalConnector(Connector):
                 task.cancel()
             await asyncio.gather(*self._background_tasks, return_exceptions=True)
             self._background_tasks.clear()
+
+        # Stop telemetry server
+        if self._telemetry_server:
+            await self._telemetry_server.stop()
+
         if self._conn:
             await asyncio.to_thread(self._conn.close)
             self._conn = None
@@ -116,33 +133,41 @@ class LocalConnector(Connector):
     async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
-        scope = self._topic_to_scope(topic)
 
-        def _blocking_publish():
-            cursor = self._conn.cursor()
-            if not payload:
-                cursor.execute("DELETE FROM constraints WHERE scope = ?", (scope,))
-            else:
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO constraints (id, scope, type, params, expires_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        payload["id"],
-                        payload["scope"],
-                        payload["type"],
-                        json.dumps(payload["params"]),
-                        payload.get("expires_at"),
-                        time.time(),
-                    ),
-                )
-            self._conn.commit()
+        # Route message based on topic
+        if topic.startswith("cascade/telemetry/"):
+            if self._telemetry_server:
+                await self._telemetry_server.broadcast(payload)
+            return
 
-        await asyncio.to_thread(_blocking_publish)
+        if topic.startswith("cascade/constraints/"):
+            scope = self._topic_to_scope(topic)
 
-        if not self._use_polling:
-            await self._send_uds_signal()
+            def _blocking_publish():
+                cursor = self._conn.cursor()
+                if not payload:
+                    cursor.execute("DELETE FROM constraints WHERE scope = ?", (scope,))
+                else:
+                    cursor.execute(
+                        """
+                        INSERT OR REPLACE INTO constraints (id, scope, type, params, expires_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            payload["id"],
+                            payload["scope"],
+                            payload["type"],
+                            json.dumps(payload["params"]),
+                            payload.get("expires_at"),
+                            time.time(),
+                        ),
+                    )
+                self._conn.commit()
+
+            await asyncio.to_thread(_blocking_publish)
+
+            if not self._use_polling:
+                await self._send_uds_signal()
 
     async def _send_uds_signal(self):
         sock = None

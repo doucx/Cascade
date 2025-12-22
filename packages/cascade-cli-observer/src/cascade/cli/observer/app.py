@@ -2,6 +2,7 @@ import asyncio
 import json
 import sqlite3
 import time
+import sys
 from pathlib import Path
 
 import typer
@@ -11,6 +12,7 @@ from rich.table import Table
 from cascade.common.messaging import bus
 from .rendering import RichCliRenderer
 from cascade.connectors.mqtt import MqttConnector
+from cascade.connectors.local.connector import DEFAULT_TELEMETRY_UDS_PATH
 from cascade.spec.constraint import GlobalConstraint
 
 app = typer.Typer()
@@ -53,40 +55,89 @@ async def on_message(topic: str, payload: dict):
         bus.info("observer.telemetry.unknown_event", type=event_type)
 
 
-@app.command()
-def watch(
-    project: str = typer.Option("default", help="The project ID to watch."),
-    hostname: str = typer.Option("localhost", help="MQTT broker hostname."),
-    port: int = typer.Option(1883, help="MQTT broker port."),
-):
-    """
-    Connect to the MQTT broker and watch for real-time telemetry events.
-    """
+async def _run_mqtt_watcher(project: str, hostname: str, port: int):
+    """Connects to MQTT and watches for telemetry events."""
+    topic = f"cascade/telemetry/+/{project}/+/events"
+    connector = MqttConnector(hostname=hostname, port=port)
+    shutdown_event = asyncio.Event()
 
-    async def main_loop():
-        topic = f"cascade/telemetry/+/{project}/+/events"
-        connector = MqttConnector(hostname=hostname, port=port)
-        shutdown_event = asyncio.Event()
-
-        bus.info(
-            "observer.startup.watching", project=project, hostname=hostname, port=port
-        )
-
-        try:
-            await connector.connect()
-            bus.info("observer.startup.connected")
-            await connector.subscribe(topic, on_message)
-            await shutdown_event.wait()
-        except Exception as e:
-            bus.error("observer.startup.error", hostname=hostname, port=port, error=e)
-        finally:
-            bus.info("observer.shutdown")
-            await connector.disconnect()
+    bus.info(
+        "observer.startup.watching", project=project, hostname=hostname, port=port
+    )
 
     try:
-        asyncio.run(main_loop())
+        await connector.connect()
+        bus.info("observer.startup.connected")
+        await connector.subscribe(topic, on_message)
+        await shutdown_event.wait()
+    except Exception as e:
+        bus.error("observer.startup.error", hostname=hostname, port=port, error=e)
+    finally:
+        bus.info("observer.shutdown")
+        await connector.disconnect()
+
+
+async def _run_uds_watcher():
+    """Connects to a local UDS socket and watches for telemetry events."""
+    uds_path = DEFAULT_TELEMETRY_UDS_PATH
+    bus.info("observer.startup.watching_uds", path=uds_path)
+
+    while True:
+        try:
+            reader, writer = await asyncio.open_unix_connection(uds_path)
+            bus.info("observer.startup.connected_uds")
+            while not reader.at_eof():
+                line = await reader.readline()
+                if not line:
+                    break
+                try:
+                    data = json.loads(line)
+                    await on_message("local.telemetry", data)
+                except json.JSONDecodeError:
+                    continue  # Ignore malformed lines
+            bus.warning("observer.shutdown_uds_disconnected")
+        except FileNotFoundError:
+            bus.warning("observer.startup.uds_not_found", path=uds_path)
+        except ConnectionRefusedError:
+            bus.warning("observer.startup.uds_conn_refused", path=uds_path)
+        except Exception as e:
+            bus.error("observer.error_uds", error=e)
+        finally:
+            # Wait before retrying to avoid spamming connection attempts
+            await asyncio.sleep(2)
+
+
+@app.command()
+def watch(
+    backend: str = typer.Option(
+        "mqtt", "--backend", help="Telemetry backend ('mqtt' or 'local')."
+    ),
+    project: str = typer.Option(
+        "default", "--project", help="The project ID to watch (MQTT only)."
+    ),
+    hostname: str = typer.Option(
+        "localhost", "--host", help="MQTT broker hostname (MQTT only)."
+    ),
+    port: int = typer.Option(1883, "--port", help="MQTT broker port (MQTT only)."),
+):
+    """
+    Connect to a backend and watch for real-time telemetry events.
+    """
+    main_loop = None
+    if backend == "local":
+        if sys.platform == "win32":
+            bus.error("observer.error_uds_unsupported")
+            raise typer.Exit(1)
+        main_loop = _run_uds_watcher()
+    elif backend == "mqtt":
+        main_loop = _run_mqtt_watcher(project, hostname, port)
+    else:
+        bus.error("observer.error_invalid_backend", backend=backend)
+        raise typer.Exit(1)
+
+    try:
+        asyncio.run(main_loop)
     except KeyboardInterrupt:
-        # The finally block in main_loop will handle graceful shutdown
         pass
 
 

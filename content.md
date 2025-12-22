@@ -1,261 +1,168 @@
-您是对的，我的上一个修复引入了新的错误。非常感谢您提供详细的错误回溯，这清楚地指出了问题的根源。
+您是对的，我的疏忽导致了严重的配置错误。非常感谢您提供如此精确的反馈和文件上下文，这让我能够立即定位问题的根源。我为之前计划中的错误道歉。
 
-我将立即生成一个计划来纠正这个问题。
+我将立即生成一个计划来纠正这个配置问题。
 
-## [WIP] fix(test): 重构 SqliteConnector 测试以正确处理异步生命周期
+## [WIP] fix: 纠正 `cascade-connector-sqlite` 的 `pyproject.toml` 并将其集成到工作区
 
 ### 错误分析
-测试再次在设置阶段失败，但这次的原因不同且更为根本：`fixture 'event_loop' not found`。
+测试失败的根本原因是 `AttributeError: module 'cascade' has no attribute 'task'`。这个错误清晰地表明，测试环境在执行 `import cascade as cs` 时，未能加载包含 `@cs.task` 装饰器的核心 `cascade-sdk` 包。
 
-我的上一个修复方案是基于一个错误的假设：即 `pytest-asyncio` 插件总会提供一个名为 `event_loop` 的 fixture。然而，测试环境的输出明确指出，这个 fixture **不可用**。这通常意味着项目的 `pytest` 配置（可能在 `pytest.ini` 或 `pyproject.toml` 中）使用了 `asyncio_mode = auto` 或其他自定义设置，在这种模式下 `event_loop` fixture 不会被暴露出来。
+经过对您提供的项目文件进行审查，我发现了我的错误所在：
 
-因此，我之前将 `controller_connector` fixture 转换为同步函数并试图注入 `event_loop` 的尝试是行不通的。我们必须采用一种不依赖于这个特定 fixture 的模式。
+1.  **构建系统不匹配**: 我为 `cascade-connector-sqlite` 生成的 `pyproject.toml` 使用了 `setuptools`，而整个项目工作区都明确地使用 `hatchling` 作为构建后端。这是一个严重的偏差。
+2.  **缺少依赖声明**: 新包的 `pyproject.toml` 没有声明它对工作区中其他包（如 `cascade-spec`）的依赖。虽然 `connector.py` 本身没有外部依赖，但它实现了 `cascade-spec` 中定义的协议，因此必须声明这个依赖关系。
+3.  **未在工作区注册**: 我没有在根 `pyproject.toml` 中将新的 `cascade-connector-sqlite` 包注册为工作区成员和开发依赖项。这导致 `pytest` 在运行时无法找到并安装这个新包，进而也无法解析出 `cascade-sdk` 等测试所需的其他核心包。
+
+总而言之，我创建了一个孤立的、配置错误的包，它没有被正确地集成到项目的 monorepo 结构中。
 
 ### 用户需求
-修复 `test_e2e_sqlite_connector.py` 中由 `fixture 'event_loop' not found` 引起的测试设置错误，并确保测试能够正确运行。
+修复 `cascade-connector-sqlite` 的包配置，并将其正确集成到项目的 `hatchling` 和 `uv` 工作区配置中，以解决测试失败的问题。
 
 ### 评论
-这个错误暴露了依赖特定 `pytest` 插件内部实现（如 `event_loop` fixture）的脆弱性。最健壮、最不易出错的模式是将异步资源的生命周期管理（`connect`/`disconnect`）从 fixture 的 `yield` 语句中移出，转而在测试函数内部显式处理。
-
-为了避免在每个测试用例中重复编写 `try...finally` 块，我们可以采用一个优雅的 Python 模式：
-1.  创建一个**同步 fixture**，它只负责实例化 `SqliteConnector` 对象，不执行任何 `await` 操作。
-2.  在测试函数内部，使用 `async with` 语句和一个小型的异步上下文管理器来包装这个 connector 实例，从而管理其连接的建立和拆卸。
-
-由于 `SqliteConnector` 本身没有实现 `__aenter__` 和 `__aexit__`，我们可以使用 `contextlib.asynccontextmanager` 来轻松地创建一个临时的上下文管理器。
-
-然而，为了保持测试代码的简洁性，最直接的方法是修改 `SqliteConnector`，使其自身成为一个异步上下文管理器。这使得测试代码既干净又直观，完全符合 Python 的最佳实践。
+这是一个典型的 monorepo 集成错误。修复方案必须双管齐下：不仅要纠正新包自身的 `pyproject.toml`，使其符合项目规范（使用 `hatchling` 并声明依赖），还必须更新根 `pyproject.toml`，让构建和测试工具“知道”这个新成员的存在。
 
 ### 目标
-1.  **增强 `SqliteConnector`**: 在 `SqliteConnector` 类中实现 `__aenter__` 和 `__aexit__` 方法，使其能够被用于 `async with` 语句。`__aenter__` 将调用 `self.connect()`，而 `__aexit__` 将调用 `self.disconnect()`。
-2.  **简化 Test Fixture**: 将 `controller_connector` fixture 改为一个简单的同步函数，它只返回一个 `SqliteConnector` 的实例。
-3.  **重构测试用例**: 修改所有测试用例，使用 `async with` 语句来管理 `controller_connector` 的生命周期。
+1.  **重写 `cascade-connector-sqlite/pyproject.toml`**: 使用 `hatchling` 替换 `setuptools`，并添加对 `cascade-spec` 的工作区依赖。
+2.  **更新根 `pyproject.toml`**:
+    *   在 `[tool.uv.sources]` 中添加 `cascade-connector-sqlite`。
+    *   在 `[tool.hatch.workspaces].packages` 列表中添加 `cascade-connector-sqlite`。
+    *   在 `[project.optional-dependencies].dev` 列表中添加 `cascade-connector-sqlite`，以确保它在测试环境中可用。
 
 ### 基本原理
-本计划将采用两个 `patch_file` 操作。
+此计划将通过三个精确的操作来解决问题：
+1.  使用 `write_file` 彻底覆盖错误的 `packages/cascade-connector-sqlite/pyproject.toml` 文件，确保其内容与项目中的其他包保持一致。
+2.  使用两个 `patch_file` 操作来原子性地更新根 `pyproject.toml`。通过修补而不是重写整个文件，我们可以最大程度地减少引入其他错误的风险。
 
-第一个操作将为 `SqliteConnector` 添加上下文管理器协议的支持。这是一个向后兼容的增强，因为它不改变任何现有方法的行为。
-
-第二个操作将重构整个测试文件。通过使用 `async with`，我们不再需要 `pytest` 去处理复杂的异步生成器 fixture，从而彻底绕开了最初的 `PytestRemovedIn9Warning` 和后续的 `fixture not found` 错误。这种模式更加清晰、明确，并且完全不依赖于 `pytest-asyncio` 插件的内部实现细节。
+完成这些修改后，`uv` 和 `pytest` 将能够正确地识别、安装和链接所有相关的包，从而解决 `AttributeError`。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #comp/connector-sqlite #concept/tooling #scope/dx #ai/refine #task/domain/testing #task/object/async-fixture #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/build #comp/tests #concept/tooling #scope/dx #ai/instruct #task/domain/build #task/object/pyproject-toml #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 使 `SqliteConnector` 支持异步上下文管理
+#### Acts 1: 纠正 `cascade-connector-sqlite` 的 `pyproject.toml`
 
-我们将 `__aenter__` 和 `__aexit__` 方法添加到 `SqliteConnector` 类中，使其可以与 `async with` 配合使用。
-
-~~~~~act
-patch_file
-packages/cascade-connector-sqlite/src/cascade/connectors/sqlite/connector.py
-~~~~~
-~~~~~python
-        self._conn = await asyncio.to_thread(_connect_and_setup)
-        self._is_connected = True
-        self._last_check_ts = time.time()
-
-    async def disconnect(self) -> None:
-~~~~~
-~~~~~python
-        self._conn = await asyncio.to_thread(_connect_and_setup)
-        self._is_connected = True
-        self._last_check_ts = time.time()
-        return self
-
-    async def __aenter__(self):
-        await self.connect()
-        return self
-
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.disconnect()
-
-    async def disconnect(self) -> None:
-~~~~~
-
-#### Acts 2: 重构测试以使用 `async with`
-
-现在，我们重写测试文件。`controller_connector` fixture 变得非常简单，而测试用例则使用 `async with` 来清晰地管理连接的生命周期。
+我们将用一个符合项目规范的、基于 `hatchling` 的配置来完全替换错误的 `pyproject.toml` 文件。
 
 ~~~~~act
 write_file
-tests/engine/e2e/test_e2e_sqlite_connector.py
+packages/cascade-connector-sqlite/pyproject.toml
 ~~~~~
-~~~~~python
-import asyncio
-import time
-import pytest
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
-from cascade.connectors.sqlite.connector import SqliteConnector, POLL_INTERVAL
+~~~~~toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
+[project]
+name = "cascade-connector-sqlite"
+version = "0.1.0"
+description = "A zero-dependency SQLite connector for Cascade."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec"
+]
 
-# --- Fixtures ---
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
 
-@pytest.fixture
-def sqlite_db_path(tmp_path):
-    """Provides a unique, isolated SQLite database path for each test."""
-    return tmp_path / "test_control.db"
+[tool.hatch.metadata]
+allow-direct-references = true
 
-
-@pytest.fixture
-def controller_connector(sqlite_db_path):
-    """Provides a connector instance to act as the 'controller' CLI."""
-    return SqliteConnector(db_path=str(sqlite_db_path))
-
-
-@pytest.fixture
-def engine(sqlite_db_path, bus_and_spy):
-    """Provides a fully configured Engine using the SqliteConnector."""
-    bus, _ = bus_and_spy
-    connector = SqliteConnector(db_path=str(sqlite_db_path))
-    
-    class TimedMockExecutor(LocalExecutor):
-        async def execute(self, node, args, kwargs):
-            await asyncio.sleep(0.05)
-            return await super().execute(node, args, kwargs)
-
-    return Engine(
-        solver=NativeSolver(),
-        executor=TimedMockExecutor(),
-        bus=bus,
-        connector=connector,
-    )
-
-
-# --- Test Cases ---
-
-@pytest.mark.asyncio
-async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
-    """
-    Verifies the core polling loop for pause and resume functionality.
-    """
-    _, spy = bus_and_spy
-
-    @cs.task
-    def task_a():
-        return "A"
-
-    @cs.task
-    def task_b(dep):
-        return "B"
-
-    workflow = task_b(task_a())
-
-    async with controller_connector:
-        # Start the engine in the background
-        engine_run_task = asyncio.create_task(engine.run(workflow))
-
-        # Wait for task_a to finish
-        await asyncio.sleep(POLL_INTERVAL + 0.1) 
-
-        # Publish a pause for task_b
-        scope = "task:task_b"
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        pause_payload = {
-            "id": "pause-b", "scope": scope, "type": "pause", "params": {}
-        }
-        await controller_connector.publish(topic, pause_payload)
-
-        # Wait for the poll interval to pass
-        await asyncio.sleep(POLL_INTERVAL + 0.1)
-
-        # Assert that task_b has NOT started
-        started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
-        assert "task_b" not in started_tasks
-
-        # Now, publish a resume command
-        await controller_connector.publish(topic, {})
-
-        # Wait for the poll interval again
-        await asyncio.sleep(POLL_INTERVAL + 0.1)
-
-        # The workflow should now complete
-        final_result = await asyncio.wait_for(engine_run_task, timeout=1.0)
-        assert final_result == "B"
-
-    finished_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionFinished) if e.status == "Succeeded"}
-    assert finished_tasks == {"task_a", "task_b"}
-
-
-@pytest.mark.asyncio
-async def test_constraint_update_idempotency_e2e(engine, controller_connector, bus_and_spy):
-    """
-    Tests that publishing a new constraint for the same scope correctly replaces the old one.
-    """
-    scope = "global"
-    topic = "cascade/constraints/global"
-
-    @cs.task
-    def my_task(i):
-        return i
-
-    workflow = my_task.map(i=list(range(5)))
-    
-    async with controller_connector:
-        # Set a very slow initial rate limit
-        slow_limit = {
-            "id": "rate-1", "scope": scope, "type": "rate_limit", "params": {"rate": f"1/{POLL_INTERVAL * 4}"}
-        }
-        await controller_connector.publish(topic, slow_limit)
-        
-        start_time = time.time()
-        engine_run_task = asyncio.create_task(engine.run(workflow))
-
-        # Wait for at least one task to complete
-        await asyncio.sleep(POLL_INTERVAL * 5)
-
-        # Now, update the limit to be very fast
-        fast_limit = {
-            "id": "rate-2", "scope": scope, "type": "rate_limit", "params": {"rate": "100/s"}
-        }
-        await controller_connector.publish(topic, fast_limit)
-
-        # The rest of the tasks should complete quickly
-        await asyncio.wait_for(engine_run_task, timeout=2.0)
-        duration = time.time() - start_time
-
-    assert duration < 2.0
-
-
-@pytest.mark.asyncio
-async def test_constraint_ttl_expiration_e2e(engine, controller_connector, bus_and_spy):
-    """
-    Verifies that constraints with a TTL are automatically removed after they expire.
-    """
-    scope = "global"
-    topic = "cascade/constraints/global"
-    ttl_seconds = POLL_INTERVAL * 2.5
-
-    @cs.task
-    def my_task():
-        return "done"
-
-    workflow = my_task()
-
-    async with controller_connector:
-        # Publish a pause constraint that expires in the near future
-        expires_at = time.time() + ttl_seconds
-        pause_payload = {
-            "id": "pause-ttl", "scope": scope, "type": "pause", "params": {}, "expires_at": expires_at
-        }
-        await controller_connector.publish(topic, pause_payload)
-
-        engine_run_task = asyncio.create_task(engine.run(workflow))
-
-        # Wait for a poll, task should be blocked
-        await asyncio.sleep(POLL_INTERVAL + 0.1)
-        assert not engine_run_task.done()
-
-        # Wait for the TTL to expire
-        await asyncio.sleep(ttl_seconds)
-
-        # The engine's internal cleanup should resume execution.
-        final_result = await asyncio.wait_for(engine_run_task, timeout=POLL_INTERVAL * 2)
-        assert final_result == "done"
+[tool.uv.sources]
+cascade-spec = { workspace = true }
 ~~~~~
+
+#### Acts 2: 将新包注册到根 `pyproject.toml` 的 Hatch 工作区和开发依赖中
+
+现在，我们将新包添加到根 `pyproject.toml` 的 `hatch.workspaces` 列表和 `dev` 依赖项中。
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~toml
+[tool.hatch.workspaces]
+packages = [
+    "packages/cascade-spec",
+    "packages/cascade-engine",
+    "packages/cascade-sdk",
+    "packages/cascade-provider-ipfs",
+    "packages/cascade-graph",
+    "packages/cascade-library",
+]
+~~~~~
+~~~~~toml
+[tool.hatch.workspaces]
+packages = [
+    "packages/cascade-spec",
+    "packages/cascade-engine",
+    "packages/cascade-sdk",
+    "packages/cascade-provider-ipfs",
+    "packages/cascade-graph",
+    "packages/cascade-library",
+    "packages/cascade-connector-sqlite",
+]
+~~~~~
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~toml
+  # Local workspace packages needed for testing
+  "cascade-provider-ipfs",
+  "cascade-cli-controller",
+  "cascade-cli-observer",
+  "cascade-connector-mqtt",
+]
+~~~~~
+~~~~~toml
+  # Local workspace packages needed for testing
+  "cascade-provider-ipfs",
+  "cascade-cli-controller",
+  "cascade-cli-observer",
+  "cascade-connector-mqtt",
+  "cascade-connector-sqlite",
+]
+~~~~~
+
+#### Acts 3: 将新包注册到根 `pyproject.toml` 的 UV 工作区源中
+
+最后，我们将其添加到 `uv` 的工作区源列表中，以完成集成。
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~toml
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-engine = { workspace = true }
+cascade-sdk = { workspace = true }
+cascade-graph = { workspace = true }
+cascade-library = { workspace = true }
+cascade-provider-ipfs = { workspace = true }
+cascade-cli-controller = { workspace = true }
+cascade-cli-observer = { workspace = true }
+cascade-connector-mqtt = { workspace = true }
+~~~~~
+~~~~~toml
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-engine = { workspace = true }
+cascade-sdk = { workspace = true }
+cascade-graph = { workspace = true }
+cascade-library = { workspace = true }
+cascade-provider-ipfs = { workspace = true }
+cascade-cli-controller = { workspace = true }
+cascade-cli-observer = { workspace = true }
+cascade-connector-mqtt = { workspace = true }
+cascade-connector-sqlite = { workspace = true }
+~~~~~
+
+### 下一步建议
+我们已经彻底修正了包的配置和工作区集成。现在，依赖关系应该能被正确解析，测试环境也应该能找到所有的模块。
+
+请重新运行测试。如果测试通过，我们将可以安全地继续路线图的**步骤 2**。

@@ -105,7 +105,6 @@ class FlowManager:
         for edge in self.in_edges[node.id]:
             if edge.edge_type == EdgeType.CONDITION:
                 if not state_backend.has_result(edge.source.id):
-                    # Propagate skip if condition source was skipped
                     if state_backend.get_skip_reason(edge.source.id):
                         return "UpstreamSkipped_Condition"
                     return "ConditionMissing"
@@ -113,6 +112,11 @@ class FlowManager:
                 condition_result = state_backend.get_result(edge.source.id)
                 if not condition_result:
                     return "ConditionFalse"
+            
+            # New explicit check for sequence abortion
+            elif edge.edge_type == EdgeType.SEQUENCE:
+                if state_backend.get_skip_reason(edge.source.id):
+                    return "UpstreamSkipped_Sequence"
 
         # 3. Upstream Skip Propagation
         active_route_key = None

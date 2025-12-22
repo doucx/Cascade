@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: Differentiate skip reasons for final targets", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766382052.3834865, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 实现上下文感知的跳过传播逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766382243.8358924, "duration_ms": 0}}

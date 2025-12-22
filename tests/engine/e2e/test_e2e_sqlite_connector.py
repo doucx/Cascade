@@ -1,4 +1,5 @@
 import asyncio
+import sys
 import time
 import pytest
 import cascade as cs
@@ -13,22 +14,26 @@ from cascade.connectors.sqlite.connector import SqliteConnector, POLL_INTERVAL
 
 
 @pytest.fixture
-def sqlite_db_path(tmp_path):
-    """Provides a unique, isolated SQLite database path for each test."""
-    return tmp_path / "test_control.db"
+def unique_paths(tmp_path):
+    """Provides unique, isolated paths for DB and UDS for each test."""
+    db_path = tmp_path / "test_control.db"
+    uds_path = tmp_path / "cascade_test.sock"
+    return str(db_path), str(uds_path)
 
 
 @pytest.fixture
-def controller_connector(sqlite_db_path):
+def controller_connector(unique_paths):
     """Provides a connector instance to act as the 'controller' CLI."""
-    return SqliteConnector(db_path=str(sqlite_db_path))
+    db_path, uds_path = unique_paths
+    return SqliteConnector(db_path=db_path, uds_path=uds_path)
 
 
 @pytest.fixture
-def engine(sqlite_db_path, bus_and_spy):
+def engine(unique_paths, bus_and_spy):
     """Provides a fully configured Engine using the SqliteConnector."""
+    db_path, uds_path = unique_paths
     bus, _ = bus_and_spy
-    connector = SqliteConnector(db_path=str(sqlite_db_path))
+    connector = SqliteConnector(db_path=db_path, uds_path=uds_path)
 
     class TimedMockExecutor(LocalExecutor):
         async def execute(self, node, args, kwargs):
@@ -47,7 +52,7 @@ def engine(sqlite_db_path, bus_and_spy):
 
 
 @pytest.mark.asyncio
-async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
+async def test_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
     """
     Verifies the core polling loop for pause and resume functionality.
     This version fixes a race condition in the test logic.
@@ -197,3 +202,44 @@ async def test_constraint_ttl_expiration_e2e(engine, controller_connector, bus_a
             engine_run_task, timeout=POLL_INTERVAL * 2
         )
         assert final_result == "done"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="UDS is not available on Windows")
+@pytest.mark.asyncio
+async def test_uds_signaling_is_near_instant(engine, controller_connector, bus_and_spy):
+    """
+    Verifies that UDS signaling wakes up the engine almost instantly,
+    much faster than the polling interval.
+    """
+    scope = "global"
+    topic = "cascade/constraints/global"
+
+    @cs.task
+    def my_task():
+        return "done"
+
+    workflow = my_task()
+
+    async with controller_connector:
+        # 1. Pause the engine immediately upon start
+        pause_payload = {"id": "pause-uds", "scope": scope, "type": "pause", "params": {}}
+        await controller_connector.publish(topic, pause_payload)
+
+        # 2. Start the engine. It should connect, subscribe, get the pause, and block.
+        engine_run_task = asyncio.create_task(engine.run(workflow))
+
+        # Give the engine a moment to initialize and enter the blocked state
+        await asyncio.sleep(POLL_INTERVAL / 2)
+        assert not engine_run_task.done(), "Engine finished prematurely despite pause"
+
+        # 3. Resume and measure the wakeup time
+        start_time = time.time()
+        await controller_connector.publish(topic, {})  # Resume command
+        await asyncio.wait_for(engine_run_task, timeout=POLL_INTERVAL * 2)
+        duration = time.time() - start_time
+
+    # 4. Assert that the wakeup was much faster than polling
+    assert duration < POLL_INTERVAL, (
+        f"Wakeup took {duration:.4f}s, which is not faster than the polling "
+        f"interval of {POLL_INTERVAL}s. UDS signal likely failed."
+    )

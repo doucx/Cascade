@@ -13,6 +13,8 @@ dependencies = [
     "cascade-spec",
     "cascade-engine",
     "cascade-sdk",
+    "cascade-graph",
+    "cascade-library",
 ]
 
 [tool.uv.workspace]
@@ -23,6 +25,7 @@ cascade-spec = { workspace = true }
 cascade-engine = { workspace = true }
 cascade-sdk = { workspace = true }
 cascade-graph = { workspace = true }
+cascade-library = { workspace = true }
 cascade-provider-ipfs = { workspace = true }
 cascade-cli-controller = { workspace = true }
 cascade-cli-observer = { workspace = true }
@@ -35,6 +38,7 @@ packages = [
     "packages/cascade-sdk",
     "packages/cascade-provider-ipfs",
     "packages/cascade-graph",
+    "packages/cascade-library",
 ]
 
 [tool.hatch.build.targets.wheel]

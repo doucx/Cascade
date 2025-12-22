@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M __init__.pyi", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766409090.0089025, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(tooling): Revamp stub generator for accurate IDE type hints", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766409091.1089337, "duration_ms": 0}}

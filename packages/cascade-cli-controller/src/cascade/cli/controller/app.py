@@ -6,18 +6,32 @@ from dataclasses import asdict
 from cascade.common.messaging import bus
 from cascade.common.renderers import CliRenderer
 from cascade.connectors.mqtt import MqttConnector
+from cascade.connectors.sqlite import SqliteConnector
+from cascade.spec.protocols import Connector
 from cascade.spec.constraint import GlobalConstraint
 
 app = typer.Typer(
-    help="A command-line tool to control running Cascade workflows via MQTT."
+    help="A command-line tool to control running Cascade workflows."
 )
 
 
-async def _publish_pause(scope: str, ttl: int | None, hostname: str, port: int):
+def _get_connector(backend: str, hostname: str, port: int) -> Connector:
+    if backend == "sqlite":
+        return SqliteConnector()
+    elif backend == "mqtt":
+        return MqttConnector(hostname=hostname, port=port)
+    else:
+        # This case is primarily for safety, Typer's Choice/Enum would be better
+        raise typer.BadParameter(f"Unsupported backend: {backend}")
+
+
+async def _publish_pause(
+    scope: str, ttl: int | None, backend: str, hostname: str, port: int
+):
     """Core logic for publishing a pause constraint."""
-    connector = MqttConnector(hostname=hostname, port=port)
+    connector = _get_connector(backend, hostname, port)
     try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
+        bus.info("controller.connecting", backend=backend, hostname=hostname, port=port)
         await connector.connect()
         bus.info("controller.connected")
 
@@ -55,11 +69,11 @@ async def _publish_pause(scope: str, ttl: int | None, hostname: str, port: int):
         await connector.disconnect()
 
 
-async def _publish_resume(scope: str, hostname: str, port: int):
+async def _publish_resume(scope: str, backend: str, hostname: str, port: int):
     """Core logic for publishing a resume (clear constraint) command."""
-    connector = MqttConnector(hostname=hostname, port=port)
+    connector = _get_connector(backend, hostname, port)
     try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
+        bus.info("controller.connecting", backend=backend, hostname=hostname, port=port)
         await connector.connect()
         bus.info("controller.connected")
 
@@ -83,13 +97,14 @@ async def _publish_limit(
     concurrency: int | None,
     rate: str | None,
     ttl: int | None,
+    backend: str,
     hostname: str,
     port: int,
 ):
     """Core logic for publishing concurrency or rate limit constraints."""
-    connector = MqttConnector(hostname=hostname, port=port)
+    connector = _get_connector(backend, hostname, port)
     try:
-        bus.info("controller.connecting", hostname=hostname, port=port)
+        bus.info("controller.connecting", backend=backend, hostname=hostname, port=port)
         await connector.connect()
         bus.info("controller.connected")
 
@@ -150,11 +165,14 @@ def set_limit(
     ttl: int = typer.Option(
         None, "--ttl", help="Time to live in seconds. Constraint expires automatically."
     ),
+    backend: str = typer.Option(
+        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'sqlite')."
+    ),
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
     """
-    Publish a 'concurrency' or 'rate_limit' constraint to the MQTT broker.
+    Publish a 'concurrency' or 'rate_limit' constraint to the control plane.
     You must provide either --concurrency or --rate (or both).
     """
     if concurrency is None and rate is None:
@@ -168,6 +186,7 @@ def set_limit(
                 concurrency=concurrency,
                 rate=rate,
                 ttl=ttl,
+                backend=backend,
                 hostname=hostname,
                 port=port,
             )
@@ -185,16 +204,23 @@ def pause(
     ttl: int = typer.Option(
         None, "--ttl", help="Time to live in seconds. Pause expires automatically."
     ),
+    backend: str = typer.Option(
+        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'sqlite')."
+    ),
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
     """
-    Publish a 'pause' constraint to the MQTT broker.
+    Publish a 'pause' constraint to the control plane.
     This will cause running Cascade engines to stop scheduling new tasks that
     match the specified scope until a 'resume' command is sent.
     """
     try:
-        asyncio.run(_publish_pause(scope=scope, ttl=ttl, hostname=hostname, port=port))
+        asyncio.run(
+            _publish_pause(
+                scope=scope, ttl=ttl, backend=backend, hostname=hostname, port=port
+            )
+        )
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 
@@ -205,16 +231,21 @@ def resume(
         "global",
         help="The scope to resume (e.g., 'global', 'project:etl', 'task:api_call').",
     ),
+    backend: str = typer.Option(
+        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'sqlite')."
+    ),
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
     """
-    Publish a 'resume' command to the MQTT broker.
+    Publish a 'resume' command to the control plane.
     This clears any 'pause' constraint for the specified scope, allowing
     tasks to be scheduled again.
     """
     try:
-        asyncio.run(_publish_resume(scope=scope, hostname=hostname, port=port))
+        asyncio.run(
+            _publish_resume(scope=scope, backend=backend, hostname=hostname, port=port)
+        )
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 

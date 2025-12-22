@@ -52,6 +52,7 @@ class InProcessController:
         rate: str | None = None,
         concurrency: int | None = None,
         ttl: int | None = None,
+        backend: str = "mqtt",
     ):
         """Directly calls the async logic, providing defaults for missing args."""
         await controller_app._publish_limit(
@@ -59,6 +60,7 @@ class InProcessController:
             concurrency=concurrency,
             rate=rate,
             ttl=ttl,
+            backend=backend,
             hostname="localhost",  # Constant for test purposes
             port=1883,  # Constant for test purposes
         )

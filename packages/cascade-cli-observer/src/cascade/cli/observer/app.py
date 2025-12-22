@@ -1,5 +1,9 @@
 import asyncio
+import json
+import sqlite3
 import time
+from pathlib import Path
+
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -88,20 +92,27 @@ def watch(
 
 @app.command()
 def status(
+    backend: str = typer.Option(
+        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'sqlite')."
+    ),
     hostname: str = typer.Option("localhost", help="MQTT broker hostname."),
     port: int = typer.Option(1883, help="MQTT broker port."),
 ):
     """
-    Connect to the broker, query the current status of all constraints, and exit.
+    Connect to the backend, query the current status of all constraints, and exit.
     """
     try:
-        asyncio.run(_get_status(hostname=hostname, port=port))
+        asyncio.run(_get_status(backend=backend, hostname=hostname, port=port))
     except KeyboardInterrupt:
         bus.info("observer.shutdown")
 
 
-async def _get_status(hostname: str, port: int):
+async def _get_status(backend: str, hostname: str, port: int):
     """Core logic for the status command."""
+    if backend == "sqlite":
+        await _get_status_sqlite()
+        return
+
     constraints: list[GlobalConstraint] = []
 
     async def on_status_message(topic, payload):
@@ -114,7 +125,7 @@ async def _get_status(hostname: str, port: int):
                 pass  # Ignore malformed payloads
 
     connector = MqttConnector(hostname=hostname, port=port)
-    bus.info("controller.connecting", hostname=hostname, port=port)
+    bus.info("controller.connecting", backend=backend, hostname=hostname, port=port)
     await connector.connect()
     bus.info("controller.connected")
     await connector.subscribe("cascade/constraints/#", on_status_message)
@@ -124,6 +135,49 @@ async def _get_status(hostname: str, port: int):
     await connector.disconnect()
     bus.info("observer.shutdown")
 
+    _render_constraints_table(constraints)
+
+
+async def _get_status_sqlite():
+    """Fetches and displays constraints from the SQLite database."""
+    db_path = Path("~/.cascade/control.db").expanduser()
+    if not db_path.exists():
+        console.print(f"[yellow]SQLite database not found at:[/yellow] {db_path}")
+        console.print("[dim]No active constraints found.[/dim]")
+        return
+
+    def _blocking_read():
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM constraints")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
+
+    try:
+        rows = await asyncio.to_thread(_blocking_read)
+        constraints = []
+        for row in rows:
+            try:
+                constraints.append(
+                    GlobalConstraint(
+                        id=row["id"],
+                        scope=row["scope"],
+                        type=row["type"],
+                        params=json.loads(row["params"]),
+                        expires_at=row.get("expires_at"),
+                    )
+                )
+            except (json.JSONDecodeError, KeyError):
+                pass  # Ignore malformed rows
+        _render_constraints_table(constraints)
+    except Exception as e:
+        bus.error("observer.startup.error", hostname=str(db_path), port="", error=e)
+
+
+def _render_constraints_table(constraints: list[GlobalConstraint]):
+    """Renders a list of constraints into a Rich table."""
     table = Table(title="[bold]Active Cascade Constraints[/bold]", title_justify="left")
     table.add_column("Scope", style="cyan", no_wrap=True)
     table.add_column("Type", style="magenta")

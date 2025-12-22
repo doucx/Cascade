@@ -1,42 +1,3 @@
-Of course. Your plan to add a dedicated integration test is the right way to ensure this critical bug is fixed and doesn't regress. A robust system must be resilient to malformed inputs, especially on its control plane.
-
-Here is the plan to create the new test case.
-
-## [WIP] test(engine): Add integration test for malformed constraint recovery
-
-### 用户需求
-创建一个新的集成测试，以验证 `Engine` 在收到格式错误的 `rate_limit` 约束后：
-1.  不会死锁。
-2.  能记录一个明确的错误。
-3.  能继续正常处理后续的控制指令。
-
-### 评论
-这个测试是本次修复工作的关键收尾。它将作为一道“防火墙”，确保 `Engine` 的健壮性在未来不会因为类似问题而退化。通过模拟一个完整的“错误 -> 恢复 -> 继续操作”的场景，我们可以充满信心地确认死锁问题已被根除。
-
-### 目标
-1.  创建一个新的测试文件 `tests/engine/e2e/test_e2e_robustness.py`。
-2.  在该文件中，实现一个名为 `test_engine_recovers_from_malformed_rate_limit` 的异步测试。
-3.  该测试将使用 `InProcessConnector` 和一个专门的 Mock Fixture 来验证错误日志，并断言 `Engine` 在错误发生后依然可以被 `pause` 指令控制。
-
-### 基本原理
-我们将遵循“测试驱动开发 (TDD)”的最佳实践。代码修复本身是不完整的，除非有一个能够捕捉到该错误的测试。这个测试将直接模拟用户报告的场景，并断言正确的行为。我们选择在 `e2e` 目录中创建新文件，因为它测试的是 `Engine` 和 `Connector` 之间的端到端交互，验证了系统的整体鲁棒性，而不仅仅是单个单元的行为。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/engine #comp/tests #concept/state #scope/core #ai/instruct #task/domain/runtime #task/object/constraint-manager #task/action/bug-fix #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 E2E 鲁棒性测试文件
-
-我们将创建 `tests/engine/e2e/test_e2e_robustness.py` 文件，并添加完整的测试逻辑。该测试包含了专门用于 Mock UI 总线的 fixture，以及验证引擎在收到无效速率限制后仍能正确响应 `pause` 指令的断言。
-
-~~~~~act
-write_file
-tests/engine/e2e/test_e2e_robustness.py
-~~~~~
-~~~~~python
 import asyncio
 import pytest
 from unittest.mock import MagicMock
@@ -144,9 +105,3 @@ async def test_engine_recovers_from_malformed_rate_limit(
     engine_task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await engine_task
-~~~~~
-
-### 下一步建议
-我们已经完成了代码修复和测试用例的编写。这是一个逻辑上完整的工作单元。现在是时候将这些更改作为一个原子提交进行集成了。
-
-我将为你生成一个 `[COMMIT]` 计划，其中包含 `git add` 和 `git commit` 指令。

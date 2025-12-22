@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(engine): 使速率限制约束解析器健壮以防止死锁", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766411593.2801538, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(engine): Add integration test for malformed constraint recovery", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766411725.401011, "duration_ms": 0}}

@@ -201,3 +201,44 @@ async def test_constraint_ttl_expiration_e2e(engine, controller_connector, bus_a
             engine_run_task, timeout=POLL_INTERVAL * 2
         )
         assert final_result == "done"
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="UDS is not available on Windows")
+@pytest.mark.asyncio
+async def test_uds_signaling_is_near_instant(engine, controller_connector, bus_and_spy):
+    """
+    Verifies that UDS signaling wakes up the engine almost instantly,
+    much faster than the polling interval.
+    """
+    scope = "global"
+    topic = "cascade/constraints/global"
+
+    @cs.task
+    def my_task():
+        return "done"
+
+    workflow = my_task()
+
+    async with controller_connector:
+        # 1. Pause the engine immediately upon start
+        pause_payload = {"id": "pause-uds", "scope": scope, "type": "pause", "params": {}}
+        await controller_connector.publish(topic, pause_payload)
+
+        # 2. Start the engine. It should connect, subscribe, get the pause, and block.
+        engine_run_task = asyncio.create_task(engine.run(workflow))
+
+        # Give the engine a moment to initialize and enter the blocked state
+        await asyncio.sleep(POLL_INTERVAL / 2)
+        assert not engine_run_task.done(), "Engine finished prematurely despite pause"
+
+        # 3. Resume and measure the wakeup time
+        start_time = time.time()
+        await controller_connector.publish(topic, {})  # Resume command
+        await asyncio.wait_for(engine_run_task, timeout=POLL_INTERVAL * 2)
+        duration = time.time() - start_time
+
+    # 4. Assert that the wakeup was much faster than polling
+    assert duration < POLL_INTERVAL, (
+        f"Wakeup took {duration:.4f}s, which is not faster than the polling "
+        f"interval of {POLL_INTERVAL}s. UDS signal likely failed."
+    )

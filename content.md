@@ -1,92 +1,108 @@
-Excellent point. You've uncovered the next layer of complexity. My previous fix was a sledgehammer when a scalpel was needed. By making the engine *always* raise an error when the target is skipped, I correctly fixed the simple `run_if(False)` case but broke the more nuanced `sequence` case.
+Excellent. The tests are passing, and all the necessary changes are in the working directory. It's time to create a clean, comprehensive commit for this significant new feature.
 
-The test `test_sequence_aborts_on_skipped_node` fails because it *expects* the workflow to terminate gracefully without an exception when a sequence is aborted. The sequence correctly skips its later steps, and the test just wants to verify this happened by checking the event log. My aggressive fix turns this correct behavior into an unexpected error.
+I will now generate the `[COMMIT]` plan.
 
-Let's refine the logic with the necessary nuance.
-
-## [WIP] fix: Differentiate between graceful and exceptional workflow termination
-
-### 错误分析
-
-The current failure in `test_sequence_aborts_on_skipped_node` is a direct result of my previous "always raise" fix. The core issue is that not all "skipped target" scenarios are errors.
-
-1.  **Exceptional Skip (Error)**: A user calls `engine.run(some_task.run_if(False))`. The user has explicitly requested the result of `some_task`. The fact that it was skipped means the engine failed to fulfill its primary contract. This **must** raise an exception. The skip reason here is `ConditionFalse`.
-
-2.  **Graceful Skip (Success)**: A user calls `engine.run(cs.sequence([..., skipped_task, final_task]))`. The contract of `sequence` is to abort if a step is skipped. `final_task` (the target) is correctly skipped with reason `UpstreamSkipped_Sequence`. The `sequence` has executed its logic perfectly. The workflow should terminate successfully, returning `None` because the final task didn't produce a value.
-
-My previous patch treated both cases as errors. The correct solution is to empower the engine to distinguish between them. We can do this by inspecting the skip reason of the final target node.
+## [COMMIT] feat(sdk): Introduce flow primitives cs.sequence and cs.pipeline
 
 ### 用户需求
-
-The `Engine` must be able to distinguish between a graceful termination (like an aborted `sequence`) and an exceptional one (like a direct target being skipped by a condition). It should only raise `DependencyMissingError` in the exceptional case.
+引入 `cs.sequence` 和 `cs.pipeline` 两个高级流控制原语，以简化线性、顺序执行和链式数据处理工作流的定义，解决中间变量泛滥和控制流表达繁琐的问题。
 
 ### 评论
-
-This refinement is crucial for building intuitive and expressive control flow primitives. Users expect constructs like `sequence` to follow their defined rules without causing the entire run to fail if they terminate early as designed. This change makes the engine's behavior align with user expectations for higher-level patterns.
+这是一个里程碑式的 API 增强。`cs.sequence` 和 `cs.pipeline` 极大地提升了 Cascade 的表达能力和人体工程学，使得编排常见的自动化脚本和数据处理流水线变得前所未有地直观和简洁。底层的实现（特别是上下文感知的跳过传播逻辑）不仅健壮，也为未来更高级的控制流模式奠定了坚实的基础。
 
 ### 目标
-
-1.  Modify the final result-checking logic in `packages/cascade-engine/src/cascade/runtime/strategies.py`.
-2.  The logic will now check the `skip_reason`. If the reason is `UpstreamSkipped_Sequence`, it will return `None`, indicating a successful but result-less run.
-3.  For all other skip reasons, it will raise `DependencyMissingError`.
-4.  This will satisfy both `test_run_if_false` (which has a `ConditionFalse` reason and should raise) and `test_sequence_aborts_on_skipped_node` (which has an `UpstreamSkipped_Sequence` reason and should not).
+创建一个单一、原子化的 Git 提交，将 `cs.sequence` 和 `cs.pipeline` 的完整实现、相关的图模型变更、引擎执行逻辑修改、以及对应的测试用例全部纳入版本控制。
 
 ### 基本原理
-
-We will revert to a conditional check at the end of `_execute_graph`, but with more precise logic than the original implementation. The key is the insight that the reason `UpstreamSkipped_Sequence` explicitly signals a graceful termination of a control flow primitive. Any other reason for a skip on the final target implies the engine could not produce the value the user asked for, which is an error.
+该功能的所有代码实现和修复工作已经完成，并通过了完整的测试套件验证。现在需要将这些分散的修改整合为一个逻辑上完整的工作单元并提交，以正式地将该功能合并到代码库中。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/critical #comp/engine #concept/state #scope/core #ai/refine #task/domain/core #task/object/control-flow #task/action/refactor #task/state/continue
+#intent/build #flow/ready #priority/high #comp/engine #comp/spec #scope/api #scope/dx #ai/brainstorm #task/domain/sdk #task/object/flow-primitives #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: Implement nuanced skip handling in the execution strategy
+#### Acts 1: 暂存所有与流控制原语相关的变更
 
-This patch modifies my previous fix in `strategies.py`, adding back the conditional logic but with the correct distinction between graceful and exceptional skips.
+我们将把所有修改过和新添加的文件都加入到 Git 的暂存区，为提交做准备。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-engine/src/cascade/runtime/flow.py
+packages/cascade-engine/src/cascade/runtime/resolvers.py
 packages/cascade-engine/src/cascade/runtime/strategies.py
+packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-graph/src/cascade/graph/hashing.py
+packages/cascade-graph/src/cascade/graph/serialize.py
+packages/cascade-sdk/src/cascade/__init__.py
+packages/cascade-sdk/src/cascade/tools/visualize.py
+packages/cascade-spec/src/cascade/graph/model.py
+packages/cascade-spec/src/cascade/spec/lazy_types.py
+packages/cascade-spec/src/cascade/spec/task.py
+packages/cascade-library/src/cascade/flow.py
+tests/engine/runtime/test_flow_primitives.py
 ~~~~~
-~~~~~python
-        if not state_backend.has_result(target._uuid):
-            # If the target node was skipped, it's a specific type of dependency error.
-            if skip_reason := state_backend.get_skip_reason(target._uuid):
-                raise DependencyMissingError(
-                    task_id=target.task.name or "unknown",
-                    arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
-                )
 
-            # If it wasn't skipped but still has no result, it's a more generic failure.
-            raise KeyError(
-                f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
-            )
+#### Acts 2: 创建功能提交
 
-        return state_backend.get_result(target._uuid)
+现在，我们将创建一个内容详尽的 Git 提交，清晰地阐述本次变更的动机、实现和价值。
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-        if not state_backend.has_result(target._uuid):
-            if skip_reason := state_backend.get_skip_reason(target._uuid):
-                # A skip due to a sequence aborting is a valid, graceful termination.
-                # The workflow succeeded but produced no final value.
-                if skip_reason == "UpstreamSkipped_Sequence":
-                    return None
+~~~~~text
+feat(sdk): Introduce flow primitives cs.sequence and cs.pipeline
 
-                # For all other reasons, failing to produce the target result is an error.
-                raise DependencyMissingError(
-                    task_id=target.task.name or "unknown",
-                    arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
-                )
+Introduces two high-level flow control primitives to enhance expressiveness and reduce boilerplate in defining linear workflows. This addresses the common pain points of intermediate variable pollution and verbose control flow for simple sequential logic.
 
-            # If it wasn't skipped but still has no result, it's a generic failure.
-            raise KeyError(
-                f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
-            )
+### `cs.sequence` for Sequential Execution
 
-        return state_backend.get_result(target._uuid)
+-   **Purpose**: Executes a list of tasks in a guaranteed order, ignoring their return values except for the last one.
+-   **Use Case**: Ideal for imperative-style "do this, then do that" logic where data dependency is not the primary concern, such as logging, side-effects, or simple setup/teardown chains.
+-   **Behavior**: If any task in the sequence fails or is skipped, the entire subsequent sequence is aborted gracefully.
+
+```python
+# Before
+log_task = log_message("Starting...")
+result = process_data().after(log_task)
+
+# After
+result = cs.sequence([
+    log_message("Starting..."),
+    process_data()
+])
+```
+
+### `cs.pipeline` for Chained Data Processing
+
+-   **Purpose**: Creates a data processing pipeline, similar to shell pipes (`|`), where the output of one step becomes the input of the next.
+-   **Use Case**: Drastically simplifies data transformation workflows by eliminating the need to name every intermediate result.
+-   **Behavior**: Supports tasks, regular functions, and lambdas. A step skipped via `.run_if(False)` will allow data to "penetrate" from the previous step to the next, enabling optional processing stages.
+
+```python
+# Before
+data = read_file("data.json")
+items = parse_json(data)
+processed = process_items(items)
+
+# After
+processed = cs.pipeline(
+    "data.json",
+    [read_file, parse_json, process_items]
+)
+```
+
+### Core Engine Changes
+
+-   **`EdgeType.SEQUENCE`**: A new edge type was added to the graph model to represent non-data-transferring execution order.
+-   **Context-Aware Skip Logic**: `FlowManager` and `ArgumentResolver` are now smarter. They inspect the `EdgeType` to correctly propagate skip events:
+    -   `SEQUENCE` skips cause downstream abortion.
+    -   `DATA` skips (in pipelines) allow data penetration.
+-   **Graph Building**: The `GraphBuilder` was updated to correctly interpret these new primitives and construct the appropriate graph topology.
 ~~~~~
+
+### 下一步建议
+我们已经成功地引入了强大的新工具。为了最大化它们的价值，我建议：
+1.  **编写专门的文档**: 在官方文档中为 `cs.sequence` 和 `cs.pipeline` 创建专门的章节，包含详细的用例和“食谱”。
+2.  **探索 `cs.parallel`**: 作为一个自然的延伸，我们可以设计并实现一个 `cs.parallel` 原语，用于并行执行一组没有相互依赖的任务，进一步简化常见的并发模式。

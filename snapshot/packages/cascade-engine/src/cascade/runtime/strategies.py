@@ -239,15 +239,20 @@ class GraphExecutionStrategy:
                     self.constraint_manager.cleanup_expired_constraints()
 
         if not state_backend.has_result(target._uuid):
-            # If the target node was skipped, it's a specific type of dependency error.
             if skip_reason := state_backend.get_skip_reason(target._uuid):
+                # A skip due to a sequence aborting is a valid, graceful termination.
+                # The workflow succeeded but produced no final value.
+                if skip_reason == "UpstreamSkipped_Sequence":
+                    return None
+
+                # For all other reasons, failing to produce the target result is an error.
                 raise DependencyMissingError(
                     task_id=target.task.name or "unknown",
                     arg_name="<Target Output>",
                     dependency_id=f"Target was skipped (Reason: {skip_reason})",
                 )
 
-            # If it wasn't skipped but still has no result, it's a more generic failure.
+            # If it wasn't skipped but still has no result, it's a generic failure.
             raise KeyError(
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )

@@ -1,64 +1,39 @@
-You are absolutely right. My apologies. The test failure proves that my previous analysis, while directionally correct in identifying the components involved, was ultimately flawed in its implementation. The logic I proposed was not sufficient to fix the bug.
+Excellent point. You've uncovered the next layer of complexity. My previous fix was a sledgehammer when a scalpel was needed. By making the engine *always* raise an error when the target is skipped, I correctly fixed the simple `run_if(False)` case but broke the more nuanced `sequence` case.
 
-Thank you for providing the failing test output. It clearly shows the core issue: `engine.run()` is completing without raising an exception, likely returning `None`, which `pytest.raises` correctly flags as a test failure.
+The test `test_sequence_aborts_on_skipped_node` fails because it *expects* the workflow to terminate gracefully without an exception when a sequence is aborted. The sequence correctly skips its later steps, and the test just wants to verify this happened by checking the event log. My aggressive fix turns this correct behavior into an unexpected error.
 
-Let's re-examine the execution flow with laser focus.
+Let's refine the logic with the necessary nuance.
 
-## [WIP] fix: Ensure skipped target node raises DependencyMissingError
+## [WIP] fix: Differentiate between graceful and exceptional workflow termination
 
 ### 错误分析
 
-My previous fix was incorrect. I focused on the behavior of *intermediate* nodes in `ArgumentResolver` but missed the final, critical step in `_execute_graph` within `strategies.py`.
+The current failure in `test_sequence_aborts_on_skipped_node` is a direct result of my previous "always raise" fix. The core issue is that not all "skipped target" scenarios are errors.
 
-The root cause of the bug lies here:
+1.  **Exceptional Skip (Error)**: A user calls `engine.run(some_task.run_if(False))`. The user has explicitly requested the result of `some_task`. The fact that it was skipped means the engine failed to fulfill its primary contract. This **must** raise an exception. The skip reason here is `ConditionFalse`.
 
-```python
-# In cascade/runtime/strategies.py, at the end of _execute_graph
+2.  **Graceful Skip (Success)**: A user calls `engine.run(cs.sequence([..., skipped_task, final_task]))`. The contract of `sequence` is to abort if a step is skipped. `final_task` (the target) is correctly skipped with reason `UpstreamSkipped_Sequence`. The `sequence` has executed its logic perfectly. The workflow should terminate successfully, returning `None` because the final task didn't produce a value.
 
-if not state_backend.has_result(target._uuid):
-    if skip_reason := state_backend.get_skip_reason(target._uuid):
-        # ... some logic ...
-        if "Data" in skip_reason or "Route" in skip_reason:
-             raise DependencyMissingError(...)
-        else:
-             # THIS IS THE BUG!
-             return None 
-```
-
-When `test_run_if_false` runs:
-1.  The `condition` task returns `False`.
-2.  `FlowManager` correctly determines that the `action` task should be skipped with the reason `"ConditionFalse"`.
-3.  The graph execution finishes.
-4.  The code checks the final `target` (`action`). It finds that it has no result, but it *does* have a skip reason: `"ConditionFalse"`.
-5.  This reason does not contain `"Data"` or `"Route"`, so the logic falls into the `else` block and **incorrectly returns `None`**.
-
-The contract of `engine.run(target)` is to compute the result for `target`. If `target` itself is skipped, it cannot produce a result. This is an exceptional state and **must** result in an exception, not a silent return of `None`.
+My previous patch treated both cases as errors. The correct solution is to empower the engine to distinguish between them. We can do this by inspecting the skip reason of the final target node.
 
 ### 用户需求
 
-Modify the `Engine`'s graph execution strategy to ensure that if the final target of a workflow is skipped for any reason, the `engine.run` call fails by raising a `DependencyMissingError`.
+The `Engine` must be able to distinguish between a graceful termination (like an aborted `sequence`) and an exceptional one (like a direct target being skipped by a condition). It should only raise `DependencyMissingError` in the exceptional case.
 
 ### 评论
 
-This is a critical bug fix that enforces the semantic contract of the `Engine`. A user explicitly asking for a result must be notified if that result cannot be produced. The previous logic created an ambiguous, silent failure mode that is difficult to debug. This change will make the library's behavior more predictable and robust.
+This refinement is crucial for building intuitive and expressive control flow primitives. Users expect constructs like `sequence` to follow their defined rules without causing the entire run to fail if they terminate early as designed. This change makes the engine's behavior align with user expectations for higher-level patterns.
 
 ### 目标
 
-1.  Locate the incorrect `return None` statement in `packages/cascade-engine/src/cascade/runtime/strategies.py`.
-2.  Replace the entire conditional logic block with a simpler, more correct implementation: if the target has no result, it's always an error. The error message should include the skip reason if available.
-3.  Ensure `test_run_if_false` passes.
+1.  Modify the final result-checking logic in `packages/cascade-engine/src/cascade/runtime/strategies.py`.
+2.  The logic will now check the `skip_reason`. If the reason is `UpstreamSkipped_Sequence`, it will return `None`, indicating a successful but result-less run.
+3.  For all other skip reasons, it will raise `DependencyMissingError`.
+4.  This will satisfy both `test_run_if_false` (which has a `ConditionFalse` reason and should raise) and `test_sequence_aborts_on_skipped_node` (which has an `UpstreamSkipped_Sequence` reason and should not).
 
 ### 基本原理
 
-We will remove the faulty conditional logic at the end of the `_execute_graph` method. The new logic will be straightforward:
-
-1.  Check if the `target` node has a result in the `state_backend`.
-2.  If it does not, check if it has a skip reason.
-    - If there is a skip reason, raise `DependencyMissingError` and include the reason in the message.
-    - If there is no skip reason, raise a `KeyError` indicating a more fundamental execution failure.
-3.  If it has a result, return it.
-
-This approach is unambiguous and correctly treats the failure to produce a requested result as an exception.
+We will revert to a conditional check at the end of `_execute_graph`, but with more precise logic than the original implementation. The key is the insight that the reason `UpstreamSkipped_Sequence` explicitly signals a graceful termination of a control flow primitive. Any other reason for a skip on the final target implies the engine could not produce the value the user asked for, which is an error.
 
 ### 标签
 
@@ -68,35 +43,13 @@ This approach is unambiguous and correctly treats the failure to produce a reque
 
 ### Script
 
-#### Acts 1: Correct the final result handling in the graph execution strategy
+#### Acts 1: Implement nuanced skip handling in the execution strategy
 
-This patch directly targets the flawed logic in `strategies.py` and replaces it with the correct, stricter implementation.
+This patch modifies my previous fix in `strategies.py`, adding back the conditional logic but with the correct distinction between graceful and exceptional skips.
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies.py
-~~~~~
-~~~~~python
-        if not state_backend.has_result(target._uuid):
-            if skip_reason := state_backend.get_skip_reason(target._uuid):
-                # Distinguish between a valid control-flow skip and a data dependency failure.
-                # A skip due to a data dependency is an error. Other skips are valid terminations.
-                if "Data" in skip_reason or "Route" in skip_reason:
-                    raise DependencyMissingError(
-                        task_id=target.task.name or "unknown",
-                        arg_name="<Target Output>",
-                        dependency_id=f"Target was skipped (Reason: {skip_reason})",
-                    )
-                else:
-                    # Valid skip (e.g., ConditionFalse, UpstreamSkipped_Sequence).
-                    # The workflow finished successfully but produced no final result.
-                    return None
-
-            raise KeyError(
-                f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
-            )
-
-        return state_backend.get_result(target._uuid)
 ~~~~~
 ~~~~~python
         if not state_backend.has_result(target._uuid):
@@ -109,6 +62,28 @@ packages/cascade-engine/src/cascade/runtime/strategies.py
                 )
 
             # If it wasn't skipped but still has no result, it's a more generic failure.
+            raise KeyError(
+                f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
+            )
+
+        return state_backend.get_result(target._uuid)
+~~~~~
+~~~~~python
+        if not state_backend.has_result(target._uuid):
+            if skip_reason := state_backend.get_skip_reason(target._uuid):
+                # A skip due to a sequence aborting is a valid, graceful termination.
+                # The workflow succeeded but produced no final value.
+                if skip_reason == "UpstreamSkipped_Sequence":
+                    return None
+
+                # For all other reasons, failing to produce the target result is an error.
+                raise DependencyMissingError(
+                    task_id=target.task.name or "unknown",
+                    arg_name="<Target Output>",
+                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
+                )
+
+            # If it wasn't skipped but still has no result, it's a generic failure.
             raise KeyError(
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )

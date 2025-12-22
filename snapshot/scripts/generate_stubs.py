@@ -138,6 +138,8 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
     Writes the __init__.pyi for the current level and recurses for sub-namespaces.
     """
     current_dir.mkdir(exist_ok=True)
+    # CRITICAL FIX: Ensure the directory is a Python package by adding __init__.py
+    (current_dir / "__init__.py").touch()
     init_pyi_path = current_dir / "__init__.pyi"
 
     pyi_imports = [

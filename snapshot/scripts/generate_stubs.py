@@ -84,12 +84,14 @@ def find_provider_names() -> list[str]:
         try:
             with open(toml_file, "rb") as f:
                 data = toml.load(f)
-            
+
             entry_points = data.get("project", {}).get("entry-points", {})
             providers = entry_points.get("cascade.providers", {})
-            
+
             if providers:
-                print(f"  - Found {len(providers)} providers in {toml_file.relative_to(PROJECT_ROOT)}")
+                print(
+                    f"  - Found {len(providers)} providers in {toml_file.relative_to(PROJECT_ROOT)}"
+                )
                 provider_names.extend(providers.keys())
 
         except Exception as e:
@@ -120,14 +122,14 @@ def generate_stubs(tree: dict, output_dir: Path):
         for item in output_dir.iterdir():
             # Be careful: only remove .pyi files and directories that match our tree.
             if item.is_file() and item.suffix == ".pyi":
-                if item.name != "__init__.pyi": # Keep top-level __init__ for now
-                     item.unlink()
+                if item.name != "__init__.pyi":  # Keep top-level __init__ for now
+                    item.unlink()
             elif item.is_dir() and item.name in tree:
                 shutil.rmtree(item)
-    
+
     output_dir.mkdir(exist_ok=True)
     print("✨ Generating new stubs...")
-    
+
     # Start the recursive generation
     _generate_level(tree, output_dir, is_root=True)
     print("\n✅ Stub generation complete!")
@@ -149,27 +151,28 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
         "from typing import Any",
         "\nNamespace = Any\n",
     ]
-    
+
     pyi_declarations = []
     pyi_submodules = []
-    
+
     # If it's the root __init__.pyi, add the known SDK exports
     if is_root:
         pyi_imports.append("# --- Known SDK Exports ---")
         # Group imports by module for cleanliness
         imports_by_module = defaultdict(list)
         for name, module in KNOWN_SDK_EXPORTS.items():
-             imports_by_module[module].append(name)
-        
+            imports_by_module[module].append(name)
+
         for module, names in sorted(imports_by_module.items()):
             pyi_imports.append(f"from {module} import {', '.join(sorted(names))}")
         pyi_imports.append("\n# --- Discovered Providers ---")
 
-
     for name, value in sorted(subtree.items()):
         if isinstance(value, dict):  # It's a namespace
             pyi_declarations.append(f"{name}: Namespace")
-            pyi_submodules.append(f"from . import {name}") # This is not strictly needed if we declare as Namespace
+            pyi_submodules.append(
+                f"from . import {name}"
+            )  # This is not strictly needed if we declare as Namespace
             # Recurse into the sub-directory
             _generate_level(value, current_dir / name)
         else:  # It's a terminal node (a provider function)
@@ -177,20 +180,20 @@ def _generate_level(subtree: dict, current_dir: Path, is_root: bool = False):
 
     # Write the __init__.pyi file for the current level
     content = "\n".join(pyi_imports) + "\n" + "\n".join(pyi_declarations)
-    
+
     with open(init_pyi_path, "w", encoding="utf-8") as f:
         f.write(content)
-        f.write("\n") # Ensure trailing newline
-    
+        f.write("\n")  # Ensure trailing newline
+
     print(f"  - Wrote {init_pyi_path.relative_to(PROJECT_ROOT)}")
 
 
 def main():
     """Main execution flow."""
     print("--- Cascade Provider Stub Generator ---")
-    
+
     if not STUBS_OUTPUT_DIR.exists() or not PACKAGES_DIR.exists():
-        print(f"Error: Script must be run from the project root.", file=sys.stderr)
+        print("Error: Script must be run from the project root.", file=sys.stderr)
         print(f"Could not find required directory: {STUBS_OUTPUT_DIR}", file=sys.stderr)
         sys.exit(1)
 
@@ -201,8 +204,10 @@ def main():
 
     provider_tree = build_provider_tree(provider_names)
     generate_stubs(provider_tree, STUBS_OUTPUT_DIR)
-    
-    print("\n💡 Tip: You may need to restart your IDE's language server for changes to take effect.")
+
+    print(
+        "\n💡 Tip: You may need to restart your IDE's language server for changes to take effect."
+    )
 
 
 if __name__ == "__main__":

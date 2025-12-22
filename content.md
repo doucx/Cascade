@@ -1,21 +1,36 @@
-好的，确认了。由于缺少 `py.typed` 文件，PEP 561 兼容的类型检查器（如 Pyright/Pylance）会忽略包中的类型信息，即使我们生成了完美的 `.pyi` 文件。
+分析结果非常有趣。
 
-我们将执行以下操作：
-1.  **创建 `py.typed` 文件**：在所有相关包中添加此标记文件。
-2.  **优化 `generate_stubs.py`**：修改类型清理逻辑，允许 `LazyResult` 携带泛型参数（至少是 `[Any]`），而不是强行将其剥离。这将为未来更精确的类型推断打下基础。
+1.  **Namespace Package 结构**:
+    *   `cascade-spec` 和 `cascade-engine` 等确实是隐式 Namespace Package（`src/cascade/` 下**没有** `__init__.py`）。
+    *   `cascade-sdk` 是一个显式的 Namespace Package，它使用了 `pkgutil.extend_path`。
+    *   `cascade-common` 也有一个 `__init__.py`。
 
-## [WIP] fix(tooling): Add py.typed and preserve generics in stubs
+2.  **`pkgutil` 声明**:
+    `packages/cascade-sdk/src/cascade/__init__.py` 已经包含了：
+    ```python
+    __path__ = __import__("pkgutil").extend_path(__path__, __name__)
+    ```
+    这在理论上是正确的，它允许 `cascade` 包跨越多个位置。
+
+3.  **问题核心**：
+    问题在于 `cascade-spec` 和 `cascade-engine` 是**隐式 (Implicit)** Namespace Package (PEP 420)，而 `cascade-sdk` 是**显式 (Legacy/pkgutil)** Namespace Package。
+    虽然这在 Python 3.3+ 运行时是可以混合工作的，但静态分析工具（尤其是 Pyright/Pylance）对混合使用这两种模式的支持往往很脆弱。
+    **当存在一个包含 `__init__.py` 的目录时，LSP 往往会优先将其视为该包的唯一源，从而忽略其他隐式分布的包。**
+
+    为了解决这个问题，我们需要确保**所有**参与 `cascade` 命名空间的包都采用相同的模式。由于 `cascade-sdk` 必须有 `__init__.py`（为了暴露 API），我们应该将所有其他包也升级为**显式 Namespace Package**。这意味着我们需要在所有包的 `src/cascade/` 目录下添加一个仅包含 `pkgutil` 样板代码的 `__init__.py`。
+
+    这不仅能修复 LSP 问题，还能提高对旧版工具的兼容性，是一种更稳健的工程实践。
+
+## [WIP] fix(build): Standardize namespace packages to explicit pkgutil style
+
+### 错误分析
+LSP 无法解析 `LazyResult` 的原因确认为 Namespace Package 模式不一致。`cascade-sdk` 使用显式 `__init__.py`，遮蔽了 `cascade-spec` 的隐式命名空间。
 
 ### 用户需求
-1.  让 IDE 识别 `LazyResult` 类型（解决 `Unknown`）。
-2.  保留泛型信息（如 `LazyResult[Any]`）。
+让 LSP 正确解析跨包导入。
 
 ### 目标
-1.  在所有 `src/cascade` 目录创建 `py.typed`。
-2.  更新 stub 生成器以保留泛型语法。
-
-### 基本原理
-`py.typed` 是 PEP 561 的标准机制。而保留泛型信息可以让开发者明确知道 `LazyResult` 是一个容器类型，虽然目前自动生成的可能大多是 `Any`，但这比完全丢失信息要好。
+在所有子包（spec, engine, graph 等）的 `src/cascade/` 目录下创建 `__init__.py`，并填入 `pkgutil` 扩展代码。
 
 ### 标签
 #intent/fix #flow/ready #priority/high #comp/build #scope/dx #task/domain/tooling #task/object/ide-stubs #task/action/fix #task/state/continue
@@ -24,55 +39,53 @@
 
 ### Script
 
-#### Acts 1: 创建 `py.typed` 文件
-这一步对于启用类型检查至关重要。
+#### Acts 1: 为 `cascade-spec` 创建显式 `__init__.py`
 
 ~~~~~act
-run_command
+write_file
+packages/cascade-spec/src/cascade/__init__.py
 ~~~~~
-~~~~~
-touch packages/cascade-spec/src/cascade/py.typed
-touch packages/cascade-sdk/src/cascade/py.typed
-touch packages/cascade-engine/src/cascade/py.typed
-touch packages/cascade-common/src/cascade/py.typed
-touch packages/cascade-graph/src/cascade/py.typed
-touch packages/cascade-library/src/cascade/py.typed
+~~~~~python
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
 
-#### Acts 2: 修改 `scripts/generate_stubs.py` 以保留泛型
-我们将修改 `clean_type_str` 函数。目前的逻辑过于激进，会把 `LazyResult[Any]` 替换为 `LazyResult`。我们将移除这一替换规则，并确保 `LazyResult` 的完整路径被正确缩短但保留中括号。
+#### Acts 2: 为 `cascade-engine` 创建显式 `__init__.py`
 
 ~~~~~act
-patch_file
-scripts/generate_stubs.py
+write_file
+packages/cascade-engine/src/cascade/__init__.py
 ~~~~~
 ~~~~~python
-    # Simplify full paths to short names
-    replacements = [
-        (r"cascade\.spec\.lazy_types\.LazyResult", "LazyResult"),
-        (r"cascade\.spec\.protocols\.Connector", "Connector"),
-        (r"cascade\.spec\.protocols\.StateBackend", "StateBackend"),
-        (r"cascade\.spec\.protocols\.CachePolicy", "CachePolicy"),
-        # Handle quotes
-        (r"'LazyResult\[Any\]'", "LazyResult"),
-        (r"'LazyResult'", "LazyResult"),
-    ]
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+~~~~~
 
-    for pattern, repl in replacements:
+#### Acts 3: 为 `cascade-graph` 创建显式 `__init__.py`
+
+~~~~~act
+write_file
+packages/cascade-graph/src/cascade/__init__.py
 ~~~~~
 ~~~~~python
-    # Simplify full paths to short names
-    replacements = [
-        (r"cascade\.spec\.lazy_types\.LazyResult", "LazyResult"),
-        (r"cascade\.spec\.protocols\.Connector", "Connector"),
-        (r"cascade\.spec\.protocols\.StateBackend", "StateBackend"),
-        (r"cascade\.spec\.protocols\.CachePolicy", "CachePolicy"),
-        # Handle quotes (but preserve generics like LazyResult[Any])
-        (r"'LazyResult'", "LazyResult"), 
-    ]
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+~~~~~
 
-    for pattern, repl in replacements:
+#### Acts 4: 为 `cascade-library` 创建显式 `__init__.py`
+
+~~~~~act
+write_file
+packages/cascade-library/src/cascade/__init__.py
+~~~~~
+~~~~~python
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+~~~~~
+
+#### Acts 5: 检查 `cascade-common` 的 `__init__.py`
+之前 `ls` 显示它有文件，我们需要确认它是否已经包含了 `pkgutil` 声明。
+
+~~~~~act
+read_file
+packages/cascade-common/src/cascade/__init__.py
 ~~~~~
 
 ### 下一步建议
-这次操作后，IDE 应该能正确加载类型信息。如果 VS Code 仍然显示红色，通常需要执行 **Developer: Reload Window** 来强制重新索引。到此为止，我们已经彻底解决了 IDE 飘红和自动补全失效的问题。
+一旦所有包都统一为显式命名空间，LSP 应该就能正确地将它们“缝合”在一起。我们将再次检查 `cascade-common`，如果需要修改，将在下一个步骤中进行。之后，我们将创建一个包含 `py.typed` 和这些 `__init__.py` 的提交。

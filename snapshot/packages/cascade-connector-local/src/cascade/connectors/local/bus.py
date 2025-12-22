@@ -117,10 +117,6 @@ class LocalBusConnector(Connector):
             return
 
         async with self._get_lock():
-            # --- DEBUG ---
-            print(f"DEBUG PUBLISH '{topic}': WILDCARD SUBS: {list(self._wildcard_subscriptions.keys())}")
-            # --- END DEBUG ---
-
             # Handle Retention
             if retain:
                 if payload == {} or payload == "":

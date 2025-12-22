@@ -40,22 +40,23 @@ async def test_engine_recovers_from_malformed_rate_limit(
     3. Continues to process valid subsequent constraints (like pause).
     """
     engine_bus, spy = bus_and_spy
-    # CRITICAL: Engine and Controller must have separate connector INSTANCES
-    # to avoid the engine's disconnect() call from killing the controller's connection.
-    # They communicate via the shared CLASS-LEVEL state of LocalBusConnector.
     engine_connector = InProcessConnector()
     controller_connector = InProcessConnector()
     controller = ControllerTestApp(controller_connector)
 
-    # 1. Define a simple two-stage workflow
+    # Synchronization primitive to control workflow execution
+    task_a_can_finish = asyncio.Event()
+
+    # 1. Define a workflow that blocks until we allow it
     @cs.task
-    def task_a():
+    async def task_a():
+        # Signal that we have started and are now waiting
+        spy.events.append("task_a_waiting")
+        await task_a_can_finish.wait()
         return "A"
 
     @cs.task
-    async def task_b(dep):
-        # This task should never start if the pause works
-        await asyncio.sleep(0.1)
+    def task_b(dep):
         return "B"
 
     workflow = task_b(task_a())
@@ -69,15 +70,15 @@ async def test_engine_recovers_from_malformed_rate_limit(
     )
     engine_task = asyncio.create_task(engine.run(workflow))
 
-    # 3. Wait for task_a to start, so we know the engine is active
-    for _ in range(20):
+    # 3. Wait for the engine to be in a stable, blocked state inside task_a
+    for _ in range(50):
         await asyncio.sleep(0.01)
-        if spy.events_of_type(TaskExecutionStarted):
+        if "task_a_waiting" in spy.events:
             break
     else:
-        pytest.fail("Engine did not start task_a in time.")
+        pytest.fail("Engine did not enter the waiting state in task_a.")
 
-    # 4. Send the MALFORMED rate limit constraint
+    # 4. Send the MALFORMED rate limit constraint. Engine is guaranteed to be listening.
     malformed_constraint = GlobalConstraint(
         id="bad-rate-1",
         scope="global",
@@ -88,8 +89,7 @@ async def test_engine_recovers_from_malformed_rate_limit(
     await controller_connector.publish("cascade/constraints/global", payload)
 
     # 5. Assert that a UI error was logged
-    # Give the engine a moment to process the bad message
-    await asyncio.sleep(0.01)
+    await asyncio.sleep(0.02)  # Give listener loop time to process
     mock_ui_bus.error.assert_called_once_with(
         "constraint.parse.error",
         constraint_type="rate_limit",
@@ -97,21 +97,20 @@ async def test_engine_recovers_from_malformed_rate_limit(
         error=ANY,
     )
 
-    # 6. Send a VALID pause constraint. If the engine is deadlocked,
-    # it will never process this message.
+    # 6. Send a VALID pause constraint.
     await controller.pause(scope="global")
+    await asyncio.sleep(0.02)  # Allow pause to be processed
 
-    # 7. Wait for task_a to finish, then wait a bit more.
-    # If the engine is responsive, it will pause and not schedule task_b.
-    # If it's deadlocked, the engine_task will hang.
-    await asyncio.sleep(0.2)
+    # 7. Unblock task_a. The engine will now finish it and attempt to schedule task_b
+    task_a_can_finish.set()
+    await asyncio.sleep(0.02)
 
-    # 8. Assert that task_b NEVER started, proving the pause was effective
+    # 8. Assert that task_b NEVER started because of the pause
     started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
-    assert "task_b" not in started_tasks, "task_b started, indicating the engine ignored the pause command."
+    assert "task_b" not in started_tasks
 
     # 9. Cleanup
-    assert not engine_task.done(), "Engine task finished, it should be paused."
+    assert not engine_task.done(), "Engine should be paused, not finished."
     engine_task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await engine_task

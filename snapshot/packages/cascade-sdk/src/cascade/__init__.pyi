@@ -43,12 +43,12 @@ def run(target: LazyResult, params: typing.Optional[typing.Dict[str, typing.Any]
     """
 
 # --- Discovered Providers ---
-def dict(kwargs) -> LazyResult:
+def dict(**kwargs) -> LazyResult:
     """
     Creates a dictionary from keyword arguments.
     Useful for composing dynamic contexts in the graph.
     """
-def format(template: str, args, kwargs) -> LazyResult:
+def format(template: str, *args, **kwargs) -> LazyResult:
     """
     Formats a string using Python's str.format syntax.
 
@@ -92,7 +92,7 @@ def subflow(path: str, target: str, params: typing.Optional[typing.Dict[str, typ
         target: The variable name in the module that holds the LazyResult (or callable).
         params: Parameters to inject into the sub-workflow.
     """
-def template(template_string: str, context: typing.Optional[typing.Dict[str, typing.Any]] = None, kwargs) -> LazyResult:
+def template(template_string: str, context: typing.Optional[typing.Dict[str, typing.Any]] = None, **kwargs) -> LazyResult:
     """
     Renders a Jinja2 template string with the provided context.
 

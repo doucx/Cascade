@@ -1,45 +1,52 @@
-分析结果非常有趣。
+好的，`cascade-common` 已经正确配置。这确认了我们的诊断：`cascade-sdk` 和 `cascade-common` 作为显式命名空间包，遮蔽了其他隐式命名空间包。
 
-1.  **Namespace Package 结构**:
-    *   `cascade-spec` 和 `cascade-engine` 等确实是隐式 Namespace Package（`src/cascade/` 下**没有** `__init__.py`）。
-    *   `cascade-sdk` 是一个显式的 Namespace Package，它使用了 `pkgutil.extend_path`。
-    *   `cascade-common` 也有一个 `__init__.py`。
+现在我们将执行一个完整的计划，将所有相关的包都转换为显式命名空间包，并同时添加 `py.typed` 标记。这将从根本上解决 LSP 的类型解析问题。
 
-2.  **`pkgutil` 声明**:
-    `packages/cascade-sdk/src/cascade/__init__.py` 已经包含了：
-    ```python
-    __path__ = __import__("pkgutil").extend_path(__path__, __name__)
-    ```
-    这在理论上是正确的，它允许 `cascade` 包跨越多个位置。
-
-3.  **问题核心**：
-    问题在于 `cascade-spec` 和 `cascade-engine` 是**隐式 (Implicit)** Namespace Package (PEP 420)，而 `cascade-sdk` 是**显式 (Legacy/pkgutil)** Namespace Package。
-    虽然这在 Python 3.3+ 运行时是可以混合工作的，但静态分析工具（尤其是 Pyright/Pylance）对混合使用这两种模式的支持往往很脆弱。
-    **当存在一个包含 `__init__.py` 的目录时，LSP 往往会优先将其视为该包的唯一源，从而忽略其他隐式分布的包。**
-
-    为了解决这个问题，我们需要确保**所有**参与 `cascade` 命名空间的包都采用相同的模式。由于 `cascade-sdk` 必须有 `__init__.py`（为了暴露 API），我们应该将所有其他包也升级为**显式 Namespace Package**。这意味着我们需要在所有包的 `src/cascade/` 目录下添加一个仅包含 `pkgutil` 样板代码的 `__init__.py`。
-
-    这不仅能修复 LSP 问题，还能提高对旧版工具的兼容性，是一种更稳健的工程实践。
-
-## [WIP] fix(build): Standardize namespace packages to explicit pkgutil style
+## [WIP] fix(build): Standardize on explicit namespace packages and add py.typed
 
 ### 错误分析
-LSP 无法解析 `LazyResult` 的原因确认为 Namespace Package 模式不一致。`cascade-sdk` 使用显式 `__init__.py`，遮蔽了 `cascade-spec` 的隐式命名空间。
+1.  **Namespace 模式不一致**: `cascade-sdk` 和 `cascade-common` 使用了带 `__init__.py` 的显式命名空间包，而 `cascade-spec`, `cascade-engine` 等则使用了无 `__init__.py` 的隐式命名空间包。这种混合模式导致 Pyright/Pylance 等静态分析器无法正确合并 `cascade` 命名空间，从而找不到 `cascade.spec` 等子模块。
+2.  **缺少 `py.typed` 标记**: 所有包都缺少 PEP 561 规定的 `py.typed` 文件，这告诉类型检查器要忽略这些包的类型信息。
+
+这两个问题共同导致了 LSP 将跨包导入的类型（如 `LazyResult`）解析为 `Unknown`。
 
 ### 用户需求
-让 LSP 正确解析跨包导入。
+修复 LSP，使其能正确解析项目中的所有类型，消除 `Unknown` 状态。
+
+### 评论
+这是一个关键的开发者体验（DX）修复。通过将所有包统一为更稳健的显式（`pkgutil`）命名空间包，我们不仅解决了当前的 LSP 问题，还为项目的长期可维护性奠定了坚实的基础。
 
 ### 目标
-在所有子包（spec, engine, graph 等）的 `src/cascade/` 目录下创建 `__init__.py`，并填入 `pkgutil` 扩展代码。
+1.  在所有 `cascade-*` 包的 `src/cascade` 目录下创建 `py.typed` 文件，以启用类型检查。
+2.  在所有之前使用隐式命名空间的包（spec, engine, graph, library）的 `src/cascade` 目录下创建 `__init__.py`，并添加 `pkgutil` 扩展代码，将它们转换为显式命名空间包。
+
+### 基本原理
+通过强制所有参与 `cascade` 命名空间的包都遵循同一种显式声明模式，我们消除了静态分析工具的解析歧义。`pkgutil.extend_path` 是 Python 官方支持的、用于构建跨目录包的传统且可靠的机制。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/build #scope/dx #task/domain/tooling #task/object/ide-stubs #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/build #scope/dx #task/domain/tooling #task/object/ide-stubs #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 为 `cascade-spec` 创建显式 `__init__.py`
+#### Acts 1: Create `py.typed` markers
+在所有包中添加 PEP 561 标记文件，以启用类型检查。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~
+touch packages/cascade-spec/src/cascade/py.typed
+touch packages/cascade-sdk/src/cascade/py.typed
+touch packages/cascade-engine/src/cascade/py.typed
+touch packages/cascade-common/src/cascade/py.typed
+touch packages/cascade-graph/src/cascade/py.typed
+touch packages/cascade-library/src/cascade/py.typed
+~~~~~
+
+#### Acts 2: Standardize on explicit namespace packages
+为所有之前是隐式命名空间的包创建 `__init__.py`，使其与 `cascade-sdk` 和 `cascade-common` 保持一致。
 
 ~~~~~act
 write_file
@@ -49,8 +56,6 @@ packages/cascade-spec/src/cascade/__init__.py
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
 
-#### Acts 2: 为 `cascade-engine` 创建显式 `__init__.py`
-
 ~~~~~act
 write_file
 packages/cascade-engine/src/cascade/__init__.py
@@ -58,8 +63,6 @@ packages/cascade-engine/src/cascade/__init__.py
 ~~~~~python
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
-
-#### Acts 3: 为 `cascade-graph` 创建显式 `__init__.py`
 
 ~~~~~act
 write_file
@@ -69,8 +72,6 @@ packages/cascade-graph/src/cascade/__init__.py
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
 
-#### Acts 4: 为 `cascade-library` 创建显式 `__init__.py`
-
 ~~~~~act
 write_file
 packages/cascade-library/src/cascade/__init__.py
@@ -79,13 +80,7 @@ packages/cascade-library/src/cascade/__init__.py
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
 
-#### Acts 5: 检查 `cascade-common` 的 `__init__.py`
-之前 `ls` 显示它有文件，我们需要确认它是否已经包含了 `pkgutil` 声明。
-
-~~~~~act
-read_file
-packages/cascade-common/src/cascade/__init__.py
-~~~~~
-
 ### 下一步建议
-一旦所有包都统一为显式命名空间，LSP 应该就能正确地将它们“缝合”在一起。我们将再次检查 `cascade-common`，如果需要修改，将在下一个步骤中进行。之后，我们将创建一个包含 `py.typed` 和这些 `__init__.py` 的提交。
+我们已经完成了所有必要的文件系统修改。现在最关键的一步是**重启你的 IDE 或语言服务器**（例如，在 VS Code 中使用 `Developer: Reload Window` 命令）。这将强制 Pyright/Pylance 重新扫描工作区，并根据新的 `__init__.py` 和 `py.typed` 文件重新构建其类型索引。
+
+如果重启后问题解决，我们就可以创建一个 `[COMMIT]` 计划来最终提交这些更改。

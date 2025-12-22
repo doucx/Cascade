@@ -6,7 +6,7 @@ from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
-from cascade.interfaces.protocols import StateBackend
+from cascade.spec.protocols import StateBackend
 
 
 class ArgumentResolver:

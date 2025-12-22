@@ -4,7 +4,7 @@ import uuid
 from dataclasses import asdict
 
 from cascade.connectors.local import LocalBusConnector
-from cascade.interfaces.protocols import Connector, Executor
+from cascade.spec.protocols import Connector, Executor
 from cascade.spec.constraint import GlobalConstraint
 from cascade.graph.model import Node
 

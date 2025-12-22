@@ -3,7 +3,7 @@ from collections import defaultdict
 from cascade.graph.model import Node, Graph, EdgeType, Edge
 from cascade.spec.common import Param
 from cascade.spec.lazy_types import LazyResult
-from cascade.interfaces.protocols import StateBackend
+from cascade.spec.protocols import StateBackend
 
 
 class FlowManager:

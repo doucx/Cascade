@@ -3,7 +3,7 @@ from typing import Callable, Awaitable, Dict, Any
 
 import pytest
 
-from cascade.interfaces.protocols import Connector, Executor
+from cascade.spec.protocols import Connector, Executor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus

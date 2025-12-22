@@ -4,7 +4,7 @@ from typing import Optional, Any
 from cascade.spec.task import task
 from cascade.spec.resource import inject
 from cascade.providers import LazyFactory, Provider
-from cascade.interfaces.protocols import Connector
+from cascade.spec.protocols import Connector
 
 
 @task(name="recv")

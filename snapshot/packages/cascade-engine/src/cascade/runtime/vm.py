@@ -3,7 +3,7 @@ import asyncio
 from typing import Any, List, Dict, Optional
 from uuid import uuid4
 
-from cascade.runtime.blueprint import (
+from cascade.spec.blueprint import (
     Blueprint,
     Instruction,
     Call,

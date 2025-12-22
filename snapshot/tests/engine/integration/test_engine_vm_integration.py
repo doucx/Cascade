@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.runtime.blueprint import TailCall
+from cascade.spec.blueprint import TailCall
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.bus import MessageBus

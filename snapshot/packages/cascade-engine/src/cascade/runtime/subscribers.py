@@ -16,7 +16,7 @@ from .events import (
     ConnectorDisconnected,
     Event,
 )
-from cascade.interfaces.protocols import Connector
+from cascade.spec.protocols import Connector
 
 
 class HumanReadableLogSubscriber:

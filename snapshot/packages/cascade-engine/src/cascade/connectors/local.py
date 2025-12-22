@@ -1,7 +1,7 @@
 import asyncio
 from collections import defaultdict
 from typing import Dict, List, Any, Callable, Awaitable, Optional
-from cascade.interfaces.protocols import Connector, SubscriptionHandle
+from cascade.spec.protocols import Connector, SubscriptionHandle
 from cascade.common.messaging import bus
 
 

@@ -27,7 +27,7 @@ from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
 from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
 from cascade.runtime.exceptions import DependencyMissingError
-from cascade.interfaces.protocols import Connector, StateBackend
+from cascade.spec.protocols import Connector, StateBackend
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 

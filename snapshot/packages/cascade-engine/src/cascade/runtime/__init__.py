@@ -4,7 +4,7 @@ from .subscribers import HumanReadableLogSubscriber
 from .events import Event
 from .exceptions import DependencyMissingError
 from .resource_manager import ResourceManager
-from cascade.interfaces.protocols import ExecutionPlan, Solver, Executor, CachePolicy
+from cascade.spec.protocols import ExecutionPlan, Solver, Executor, CachePolicy
 
 __all__ = [
     "MessageBus",

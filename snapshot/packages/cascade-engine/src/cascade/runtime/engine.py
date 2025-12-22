@@ -25,7 +25,7 @@ from cascade.runtime.events import (
     ConnectorConnected,
     ConnectorDisconnected,
 )
-from cascade.interfaces.protocols import Solver, Executor, StateBackend, Connector
+from cascade.spec.protocols import Solver, Executor, StateBackend, Connector
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver

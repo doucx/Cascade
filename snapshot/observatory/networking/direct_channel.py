@@ -1,7 +1,7 @@
 import asyncio
 import random
 from typing import Any, Optional
-from cascade.interfaces.protocols import Connector
+from cascade.spec.protocols import Connector
 
 
 class DirectChannel:

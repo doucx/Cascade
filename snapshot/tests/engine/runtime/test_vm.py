@@ -1,7 +1,7 @@
 import pytest
 from typing import Any
 from cascade.runtime.vm import VirtualMachine
-from cascade.runtime.blueprint import Blueprint, Call, Register, TailCall
+from cascade.spec.blueprint import Blueprint, Call, Register, TailCall
 
 # --- Mock User Function ---
 

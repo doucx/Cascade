@@ -9,7 +9,7 @@ import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.interfaces.protocols import Node, Executor
+from cascade.spec.protocols import Node, Executor
 
 from .harness import InProcessConnector
 

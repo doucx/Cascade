@@ -1,6 +1,6 @@
 from multiprocessing import Queue
 from typing import Any, Dict, Callable, Awaitable
-from cascade.interfaces.protocols import Connector, SubscriptionHandle
+from cascade.spec.protocols import Connector, SubscriptionHandle
 
 
 class IpcUplinkConnector(Connector):

@@ -2,7 +2,7 @@ import asyncio
 import time
 import cascade as cs
 from cascade.runtime import Engine, MessageBus
-from cascade.runtime.blueprint import TailCall
+from cascade.spec.blueprint import TailCall
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 

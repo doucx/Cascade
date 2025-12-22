@@ -3,7 +3,7 @@ import pytest
 import cascade as cs
 from cascade.graph.compiler import BlueprintBuilder
 from cascade.runtime.vm import VirtualMachine
-from cascade.runtime.blueprint import TailCall
+from cascade.spec.blueprint import TailCall
 
 # --- Define Mutual Recursive Tasks ---
 

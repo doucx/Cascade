@@ -1,6 +1,6 @@
 from typing import Dict, List, Set
 from cascade.graph.model import Graph
-from cascade.interfaces.protocols import ExecutionPlan
+from cascade.spec.protocols import ExecutionPlan
 
 
 class NativeSolver:

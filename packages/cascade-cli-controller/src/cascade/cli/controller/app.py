@@ -10,9 +10,7 @@ from cascade.connectors.sqlite import SqliteConnector
 from cascade.spec.protocols import Connector
 from cascade.spec.constraint import GlobalConstraint
 
-app = typer.Typer(
-    help="A command-line tool to control running Cascade workflows."
-)
+app = typer.Typer(help="A command-line tool to control running Cascade workflows.")
 
 
 def _get_connector(backend: str, hostname: str, port: int) -> Connector:

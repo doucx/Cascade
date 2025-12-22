@@ -23,31 +23,43 @@ def _matches(scope: str, task_name: str) -> bool:
     return False
 
 
+from cascade.common.messaging import bus
+
+
 def _parse_rate_string(rate_str: str) -> float:
     """Parses '10/m', '5/s', '300/h' into tokens per second."""
-    if not isinstance(rate_str, str):
-        return float(rate_str)
-
-    parts = rate_str.split("/")
-    if len(parts) != 2:
-        try:
+    try:
+        if not isinstance(rate_str, str):
             return float(rate_str)
-        except ValueError:
-            # Default fallback or error
-            return 1.0
 
-    count = float(parts[0])
-    unit = parts[1].lower()
+        parts = rate_str.split("/")
+        if len(parts) != 2:
+            return float(rate_str)
 
-    divisor = 1.0
-    if unit in ("s", "sec", "second"):
+        count = float(parts[0])
+        unit = parts[1].lower()
+
         divisor = 1.0
-    elif unit in ("m", "min", "minute"):
-        divisor = 60.0
-    elif unit in ("h", "hr", "hour"):
-        divisor = 3600.0
+        if unit in ("s", "sec", "second"):
+            divisor = 1.0
+        elif unit in ("m", "min", "minute"):
+            divisor = 60.0
+        elif unit in ("h", "hr", "hour"):
+            divisor = 3600.0
+        else:
+            # Invalid unit, treat as malformed
+            raise ValueError(f"Unknown rate limit unit: '{unit}'")
 
-    return count / divisor
+        return count / divisor
+    except (ValueError, TypeError) as e:
+        bus.error(
+            "constraint.parse.error",
+            constraint_type="rate_limit",
+            raw_value=rate_str,
+            error=str(e),
+        )
+        # Return a safe default (e.g., 1 token per second) to prevent crashes
+        return 1.0
 
 
 class PauseConstraintHandler(ConstraintHandler):

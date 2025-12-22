@@ -19,9 +19,9 @@ dependencies = [
 members = ["packages/*"]
 
 [tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-py = { workspace = true }
+cascade-spec = { workspace = true }
+cascade-engine = { workspace = true }
+cascade-sdk = { workspace = true }
 cascade-provider-ipfs = { workspace = true }
 cascade-cli-controller = { workspace = true }
 cascade-cli-observer = { workspace = true }
@@ -29,9 +29,9 @@ cascade-connector-mqtt = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
-    "packages/cascade-interfaces",
-    "packages/cascade-runtime",
-    "packages/cascade-py",
+    "packages/cascade-spec",
+    "packages/cascade-engine",
+    "packages/cascade-sdk",
     "packages/cascade-provider-ipfs",
 ]
 

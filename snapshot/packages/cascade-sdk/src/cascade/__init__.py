@@ -30,6 +30,7 @@ from cascade.runtime.exceptions import DependencyMissingError
 from cascade.spec.protocols import Connector, StateBackend
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
+from cascade.flow import sequence, pipeline
 
 # Tools
 from .testing import override_resource
@@ -186,6 +187,8 @@ __all__ = [
     "run",
     "dry_run",
     "visualize",
+    "sequence",
+    "pipeline",
     "to_json",
     "from_json",
     "with_constraints",

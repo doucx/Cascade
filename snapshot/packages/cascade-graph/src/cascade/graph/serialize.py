@@ -142,6 +142,11 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
                 serialized_reqs[res] = amount
         data["constraints"] = serialized_reqs
 
+    # Note: Explicit dependencies (SEQUENCE edges) are implicitly handled
+    # by _edge_to_dict iterating over all graph edges. We don't need to store
+    # them on the node dict itself for graph reconstruction, as graph_from_dict
+    # rebuilds edges from the 'edges' list.
+
     return data
 
 

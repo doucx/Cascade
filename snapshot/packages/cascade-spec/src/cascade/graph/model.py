@@ -17,6 +17,7 @@ class EdgeType(Enum):
     CONDITION = auto()  # A control dependency for the run_if condition
     CONSTRAINT = auto()  # An implicit dependency for resolving dynamic constraints
     IMPLICIT = auto()  # An implicit structural dependency
+    SEQUENCE = auto()  # An explicit execution order dependency (no data transfer)
     ROUTER_ROUTE = auto()  # A potential dependency branch for a Router
 
 

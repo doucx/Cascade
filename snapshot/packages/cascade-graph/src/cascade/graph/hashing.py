@@ -82,6 +82,11 @@ class StructuralHasher:
             self._hash_components.append("Condition:")
             self._visit(lr._condition, f"{path}.condition")
 
+        if lr._dependencies:
+            self._hash_components.append("Deps:")
+            for i, dep in enumerate(lr._dependencies):
+                self._visit(dep, f"{path}.deps.{i}")
+
     def _visit_mapped(self, mlr: MappedLazyResult, path: str):
         factory_name = getattr(mlr.factory, "name", "unknown")
         self._hash_components.append(f"Map({factory_name})")
@@ -95,6 +100,11 @@ class StructuralHasher:
         if mlr._condition:
             self._hash_components.append("Condition:")
             self._visit(mlr._condition, f"{path}.condition")
+
+        if mlr._dependencies:
+            self._hash_components.append("Deps:")
+            for i, dep in enumerate(mlr._dependencies):
+                self._visit(dep, f"{path}.deps.{i}")
 
     def _visit_router(self, router: Router, path: str):
         self._hash_components.append("Router")

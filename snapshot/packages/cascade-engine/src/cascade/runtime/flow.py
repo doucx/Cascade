@@ -136,4 +136,8 @@ class FlowManager:
                 if state_backend.get_skip_reason(edge.source.id):
                     return "UpstreamSkipped_Data"
 
+            elif edge.edge_type == EdgeType.SEQUENCE:
+                if state_backend.get_skip_reason(edge.source.id):
+                    return "UpstreamSkipped_Sequence"
+
         return None

@@ -3,7 +3,7 @@ from typing import List, Any, Dict
 
 import cascade as cs
 from cascade.graph.build import build_graph
-from cascade.graph.model import Node, Graph
+from cascade.spec.model import Node, Graph
 from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
 
 

@@ -1,6 +1,6 @@
 import inspect
 from typing import Any, Dict, List
-from cascade.graph.model import Node
+from cascade.spec.model import Node
 
 
 class LocalExecutor:

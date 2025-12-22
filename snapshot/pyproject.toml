@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
 dependencies = [
-    "cascade-interfaces",
+    "cascade-spec",
     "cascade-runtime",
     "cascade-py",
 ]
@@ -19,7 +19,7 @@ dependencies = [
 members = ["packages/*"]
 
 [tool.uv.sources]
-cascade-interfaces = { workspace = true }
+cascade-spec = { workspace = true }
 cascade-runtime = { workspace = true }
 cascade-py = { workspace = true }
 cascade-provider-ipfs = { workspace = true }
@@ -29,7 +29,7 @@ cascade-connector-mqtt = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
-    "packages/cascade-interfaces",
+    "packages/cascade-spec",
     "packages/cascade-runtime",
     "packages/cascade-py",
     "packages/cascade-provider-ipfs",

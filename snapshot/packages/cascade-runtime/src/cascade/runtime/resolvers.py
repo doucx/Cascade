@@ -1,7 +1,7 @@
 import inspect
 from typing import Any, Dict, List, Tuple
 
-from cascade.graph.model import Node, Graph
+from cascade.spec.model import Node, Graph
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router

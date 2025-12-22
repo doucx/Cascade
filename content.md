@@ -1,163 +1,39 @@
-好的，我将执行重构计划。我们将编写一个 Python 脚本来自动化迁移过程，确保原子性和一致性。
+# 📸 Snapshot Capture
 
-## [WIP] refactor(arch): 建立 cascade-spec 包并迁移核心契约
+检测到工作区发生变更。
 
-### 用户需求
-根据《Cascade 架构重构建议书》，执行第一阶段重构：将 `cascade-interfaces` 演进为 `cascade-spec`，并将 `Blueprint` (从 Runtime) 和 `Graph Model` (从 Interfaces) 整合进这个新包中，确立系统的核心契约层。
-
-### 评论
-这是一个涉及文件移动、包重命名和全局引用更新的重大重构。为了确保操作的安全性和可复现性，我们采用编写一次性 Python 迁移脚本的方式来执行，而不是依赖一系列分散的 Shell 命令。这种方法允许我们精确控制迁移逻辑，处理边缘情况，并在发生错误时更容易调试。
-
-### 目标
-1.  创建 `packages/cascade-spec` (基于 `cascade-interfaces`)。
-2.  将 `Blueprint` 从 `cascade-runtime` 迁移到 `cascade-spec`。
-3.  将 `Graph Model` 移动到 `cascade-spec` 的核心位置。
-4.  更新所有 `pyproject.toml` 和源代码中的引用。
-5.  移除废弃的 `cascade-interfaces` 包。
-
-### 基本原理
-通过脚本化重构，我们可以一次性完成物理文件结构的变更和逻辑引用的修正，避免系统处于中间不稳定状态。脚本将执行以下关键转换：
-- 包名映射: `cascade-interfaces` -> `cascade-spec`
-- 模块路径映射: `cascade.runtime.blueprint` -> `cascade.spec.blueprint`
-- 模块路径映射: `cascade.graph.model` -> `cascade.spec.model`
-
-### 标签
-#intent/refine #flow/ready #priority/high #comp/build #concept/blueprint #scope/core #ai/instruct #task/domain/architecture #task/object/package-structure #task/action/refactor #task/state/continue #task/status/active
-
----
-
-### Script
-
-#### Acts 1: 创建重构脚本
-我们将编写一个功能完备的 Python 脚本来处理所有的文件操作和文本替换。
-
-~~~~~act
-write_file
-scripts/refactor_move_spec.py
-~~~~~
-~~~~~python
-import shutil
-import os
-import sys
-
-def main():
-    print("Starting refactor: extracting cascade-spec...")
-    
-    # Paths
-    root_dir = os.getcwd()
-    pkg_interfaces = os.path.join(root_dir, "packages/cascade-interfaces")
-    pkg_spec = os.path.join(root_dir, "packages/cascade-spec")
-    
-    # 1. Create cascade-spec from interfaces
-    if os.path.exists(pkg_spec):
-        print(f"Warning: {pkg_spec} already exists. Skipping copy.")
-    else:
-        if os.path.exists(pkg_interfaces):
-            print(f"Copying {pkg_interfaces} to {pkg_spec}...")
-            shutil.copytree(pkg_interfaces, pkg_spec)
-        else:
-            print(f"Error: Source {pkg_interfaces} not found.")
-            sys.exit(1)
-
-    # 2. Move Blueprint from Runtime to Spec
-    # Source: packages/cascade-runtime/src/cascade/runtime/blueprint.py
-    # Dest: packages/cascade-spec/src/cascade/spec/blueprint.py
-    src_bp = os.path.join(root_dir, "packages/cascade-runtime/src/cascade/runtime/blueprint.py")
-    dst_bp = os.path.join(pkg_spec, "src/cascade/spec/blueprint.py")
-    
-    if os.path.exists(src_bp):
-        print(f"Moving {src_bp} to {dst_bp}...")
-        # Ensure dest directory exists
-        os.makedirs(os.path.dirname(dst_bp), exist_ok=True)
-        shutil.move(src_bp, dst_bp)
-    else:
-        print(f"Warning: Source blueprint {src_bp} not found (maybe already moved?).")
-
-    # 3. Move Graph Model to Spec Model
-    # Source: packages/cascade-spec/src/cascade/graph/model.py
-    # Dest: packages/cascade-spec/src/cascade/spec/model.py
-    src_model = os.path.join(pkg_spec, "src/cascade/graph/model.py")
-    dst_model = os.path.join(pkg_spec, "src/cascade/spec/model.py")
-    
-    if os.path.exists(src_model):
-        print(f"Moving {src_model} to {dst_model}...")
-        shutil.move(src_model, dst_model)
-        # Clean up empty graph dir if it exists
-        graph_dir = os.path.dirname(src_model)
-        if os.path.exists(graph_dir) and not os.listdir(graph_dir):
-            os.rmdir(graph_dir)
-            print(f"Removed empty directory {graph_dir}")
-
-    # 4. Update pyproject.toml in cascade-spec
-    spec_toml = os.path.join(pkg_spec, "pyproject.toml")
-    if os.path.exists(spec_toml):
-        with open(spec_toml, "r") as f:
-            content = f.read()
-        
-        content = content.replace('name = "cascade-interfaces"', 'name = "cascade-spec"')
-        content = content.replace(
-            'description = "Interfaces, specifications, and data models for the Cascade ecosystem."', 
-            'description = "Core specifications, data models, and contracts for the Cascade ecosystem."'
-        )
-        
-        with open(spec_toml, "w") as f:
-            f.write(content)
-        print("Updated cascade-spec/pyproject.toml")
-
-    # 5. Global Search and Replace
-    replacements = {
-        "cascade-interfaces": "cascade-spec",
-        "cascade.runtime.blueprint": "cascade.spec.blueprint",
-        "cascade.graph.model": "cascade.spec.model",
-    }
-    
-    print("Performing global text replacements...")
-    for root, dirs, files in os.walk(root_dir):
-        # Skip hidden/system dirs and the script itself if in loop
-        if any(p.startswith(".") for p in root.split(os.sep)) or "venv" in root or "__pycache__" in root:
-            continue
-            
-        for file in files:
-            if file.endswith((".py", ".toml")):
-                path = os.path.join(root, file)
-                # Skip the file we are currently running if possible, though it's in scripts/
-                if path == __file__:
-                    continue
-
-                try:
-                    with open(path, "r") as f:
-                        old_content = f.read()
-                    
-                    new_content = old_content
-                    for old, new in replacements.items():
-                        new_content = new_content.replace(old, new)
-                    
-                    if new_content != old_content:
-                        print(f"Patching {path}...")
-                        with open(path, "w") as f:
-                            f.write(new_content)
-                except Exception as e:
-                    print(f"Failed to process {path}: {e}")
-
-    # 6. Remove old interfaces package
-    if os.path.exists(pkg_interfaces):
-        print(f"Removing old package {pkg_interfaces}...")
-        shutil.rmtree(pkg_interfaces)
-    
-    print("Refactor complete.")
-
-if __name__ == "__main__":
-    main()
-~~~~~
-
-### 下一步建议
-
-请运行
+### 📝 变更文件摘要:
 ```
-python3 scripts/refactor_move_spec.py
+observatory/agents/kuramoto.py                     |   2 +-
+ observatory/benchmarks/tco_performance.py          |   2 +-
+ packages/cascade-cli-controller/pyproject.toml     |   4 +-
+ .../cascade-cli-controller/src/cascade/__init__.py |   2 +-
+ .../src/cascade/cli/__init__.py                    |   2 +-
+ packages/cascade-cli-observer/pyproject.toml       |   4 +-
+ .../cascade-cli-observer/src/cascade/__init__.py   |   2 +-
+ .../src/cascade/cli/__init__.py                    |   2 +-
+ packages/cascade-common/src/cascade/__init__.py    |   2 +-
+ packages/cascade-connector-mqtt/pyproject.toml     |   4 +-
+ .../cascade-connector-mqtt/src/cascade/__init__.py |   2 +-
+ .../src/cascade/connectors/mqtt/__init__.py        |   2 +-
+ packages/cascade-interfaces/pyproject.toml         |  12 --
+ .../cascade-interfaces/src/cascade/graph/model.py  |  76 -----------
+ .../src/cascade/interfaces/protocols.py            | 144 ---------------------
+ .../src/cascade/spec/__init__.py                   |   0
+ .../cascade-interfaces/src/cascade/spec/common.py  |  12 --
+ .../src/cascade/spec/constraint.py                 |  38 ------
+ .../cascade-interfaces/src/cascade/spec/input.py   |  27 ----
+ .../src/cascade/spec/lazy_types.py                 |  58 ---------
+ .../src/cascade/spec/resource.py                   |  53 --------
+ .../cascade-interfaces/src/cascade/spec/routing.py |  18 ---
+ .../cascade-interfaces/src/cascade/spec/task.py    | 114 ----------------
+ .../src/cascade/spec/telemetry.py                  |  42 ------
+ packages/cascade-provider-ipfs/pyproject.toml      |   4 +-
+ .../cascade-provider-ipfs/src/cascade/__init__.py  |   2 +-
+ .../src/cascade/providers/__init__.py              |   2 +-
+ packages/cascade-py/pyproject.toml                 |   4 +-
+ packages/cascade-py/src/cascade/__init__.py        |   2 +-
+ packages/cascade-py/src/cascade/tools/visualize.py |   2 +-
+ ...
+ 56 files changed, 126 insertions(+), 720 deletions(-)
 ```
-
-脚本执行完毕后，物理结构应该已经改变。下一步我们需要：
-1.  运行测试以验证重构是否破坏了现有功能。
-2.  如果有任何 import 错误（特别是 `cascade.spec.blueprint` 相关的内部引用），进行修复。
-3.  提交变更。

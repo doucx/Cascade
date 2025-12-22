@@ -15,7 +15,7 @@ from typing import List
 
 import cascade as cs
 from cascade.interfaces.protocols import Connector
-from cascade.runtime.blueprint import TailCall
+from cascade.spec.blueprint import TailCall
 from observatory.networking.direct_channel import DirectChannel
 
 

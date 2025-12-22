@@ -1,6 +1,6 @@
 import cascade as cs
 from cascade.graph.compiler import BlueprintBuilder
-from cascade.runtime.blueprint import Call, Literal, Register
+from cascade.spec.blueprint import Call, Literal, Register
 
 # --- Helpers ---
 

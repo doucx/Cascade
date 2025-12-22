@@ -1,6 +1,6 @@
 import asyncio
 from cascade.adapters.executors.local import LocalExecutor
-from cascade.graph.model import Node
+from cascade.spec.model import Node
 from cascade.spec.task import task
 
 

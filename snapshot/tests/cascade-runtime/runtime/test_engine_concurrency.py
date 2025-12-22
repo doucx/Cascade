@@ -8,7 +8,7 @@ from cascade.interfaces.protocols import Connector, Executor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.graph.model import Node
+from cascade.spec.model import Node
 
 
 # --- Mocks ---

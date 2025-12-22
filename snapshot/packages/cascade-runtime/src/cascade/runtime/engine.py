@@ -8,7 +8,7 @@ from contextlib import ExitStack
 
 from cascade.graph.build import build_graph
 from cascade.graph.hashing import StructuralHasher
-from cascade.graph.model import Node, Graph
+from cascade.spec.model import Node, Graph
 from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.constraint import GlobalConstraint

@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from cascade.graph.model import Node, Edge, EdgeType
+from cascade.spec.model import Node, Edge, EdgeType
 from cascade.runtime.flow import FlowManager
 from cascade.adapters.state import InMemoryStateBackend
 from cascade.spec.lazy_types import LazyResult

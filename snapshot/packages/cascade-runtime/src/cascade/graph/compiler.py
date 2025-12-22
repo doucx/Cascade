@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.blueprint import (
+from cascade.spec.blueprint import (
     Blueprint,
     Call,
     Literal,

@@ -1,6 +1,6 @@
 from typing import Dict, Optional
 from collections import defaultdict
-from cascade.graph.model import Graph
+from cascade.spec.model import Graph
 from cascade.interfaces.protocols import ExecutionPlan
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 

@@ -1,5 +1,5 @@
 from typing import Dict, List, Set
-from cascade.graph.model import Graph
+from cascade.spec.model import Graph
 from cascade.interfaces.protocols import ExecutionPlan
 
 

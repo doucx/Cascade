@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Dict, Any
 import fnmatch
 
 from .protocols import ConstraintHandler
-from cascade.graph.model import Node
+from cascade.spec.model import Node
 from cascade.spec.constraint import GlobalConstraint
 from .rate_limiter import RateLimiter
 

@@ -10,6 +10,7 @@ requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
   "cascade-common",
+  "cascade-connector-local",
   "typer[all]",
   "aiomqtt",
   "rich"
@@ -27,3 +28,4 @@ allow-direct-references = true
 [tool.uv.sources]
 cascade-spec = { workspace = true }
 cascade-common = { workspace = true }
+cascade-connector-local = { workspace = true }

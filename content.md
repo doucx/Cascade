@@ -1,335 +1,408 @@
-好的，我们正式启动路线图的第二步。
+好的，我们来完成功能闭环。
 
-在这一步，我们将为 `Engine` 赋予广播实时事件的能力。我们将通过在 `LocalConnector` 内部实现一个基于 Unix Domain Socket (UDS) 的 `UdsTelemetryServer` 来完成此项工作。当 `Engine` 运行时，这个服务器会监听内部的遥测事件，并将它们实时广播给任何连接的客户端（例如 `cs-observer watch`）。
+现在 `Engine` 已经具备了通过 Unix Domain Socket (UDS) 广播遥测事件的能力，我们需要让 `cs-observer` 工具能够作为客户端连接上去，实时接收并渲染这些事件。这将最终点亮 `cs-observer watch --backend local` 功能。
 
-## [WIP] feat(connector): 在 LocalConnector 中实现 UDS Telemetry 服务器
+## [WIP] feat(observer): 实现 cs-observer watch 的 local 后端 (UDS 客户端)
 
 ### 用户需求
-执行“路线图：实现统一的 `local` 后端与实时 `watch` 功能”中的第二步，即“[核心机制] 实现基于 UDS 的 Telemetry 事件服务器”。这要求我们：
-1.  创建一个 `UdsTelemetryServer` 类，它能够通过 UDS 广播消息。
-2.  将该服务器集成到 `LocalConnector` 的生命周期中（在 `connect` 时启动，在 `disconnect` 时停止）。
-3.  修改 `LocalConnector.publish` 方法，使其能够将遥测（telemetry）事件路由到 UDS 服务器进行广播，同时保持对约束（constraint）消息的数据库处理。
+执行“路线图：实现统一的 `local` 后端与实时 `watch` 功能”中的第三步，即“[功能闭环] 实现 `cs-observer watch` 的 UDS 客户端”。具体要求：
+1.  修改 `cs-observer watch` 命令，使其支持 `--backend local` 选项。
+2.  为 `local` 后端实现 UDS 客户端逻辑，使其能连接到 `Engine` 广播的 socket。
+3.  从 socket 实时读取、解析 JSON Lines 格式的事件流。
+4.  将解析后的事件传递给现有的渲染逻辑，确保 UI 输出与 MQTT 模式一致。
+5.  在 Windows 平台上，如果使用 `local` 后端，应给出明确的不支持提示。
 
 ### 评论
-这是一个关键的功能实现，它将点亮 `watch` 模式的本地后端支持。将服务器逻辑封装在 `LocalConnector` 内部是一个优雅的架构决策，它遵循了关注点分离原则：`LocalConnector` 成为了所有“本地”通信（状态持久化和实时事件）的统一网关，而无需修改 `Engine` 或 `TelemetrySubscriber` 等核心组件。
+这是实现本地实时可观测性的最后一步，也是对前两步工作的最终检验。通过复用 `on_message` 回调和现有的 `rich` 渲染器，我们确保了无论是通过分布式 MQTT 还是本地 UDS，用户都能获得完全一致的、高质量的实时日志流体验。
 
 ### 目标
-1.  **创建新模块**: 在 `packages/cascade-connector-local/src/cascade/connectors/local/` 目录下创建一个新的 `uds_server.py` 文件，并实现 `UdsTelemetryServer` 类。该类将负责管理 UDS 服务器的生命周期和客户端连接。
-2.  **集成到连接器**: 修改 `LocalConnector`，使其在非 Windows 平台上实例化 `UdsTelemetryServer`。
-3.  **生命周期管理**: 在 `LocalConnector.connect()` 中启动 UDS 服务器，在 `disconnect()` 中关闭它。
-4.  **事件路由**: 增强 `LocalConnector.publish()` 方法，使其能够根据主题（topic）区分遥测事件和约束更新，并将遥测事件通过 UDS 服务器广播出去。
+1.  **添加依赖**: 为 `cascade-cli-observer` 包添加对 `cascade-connector-local` 的依赖，以便能够引用共享的 UDS socket 路径常量。
+2.  **实现 UDS 客户端**: 在 `cs-observer` 的 `app.py` 中，创建一个新的异步循环函数，专门负责处理 UDS 的连接、数据读取和重连逻辑。
+3.  **更新 `watch` 命令**: 重构 `watch` 命令，使其根据 `--backend` 参数的值，分派到新的 UDS 客户端逻辑或旧的 MQTT 客户端逻辑。
+4.  **平台兼容性**: 在 UDS 客户端逻辑的入口处添加 `sys.platform` 检查，为 Windows 用户提供清晰的错误信息。
 
 ### 基本原理
-通过 `asyncio.start_unix_server`，我们可以创建一个高性能的本地 IPC 服务器。`LocalConnector` 作为 `Engine` 与外部世界（即使是本地的）的桥梁，是管理这个服务器生命周期的最合适位置。`TelemetrySubscriber` 已经会将事件发布到 `Connector`，我们只需在 `LocalConnector` 的 `publish` 方法中增加一个逻辑分支，即可将这些事件“重定向”到 UDS，从而以最小的侵入性实现功能。所有 UDS 相关代码都将受到平台检查的保护，以确保在 Windows 系统上不会执行。
+我们将使用 `asyncio.open_unix_connection` 来建立与 `Engine` 的 UDS 连接，这是 Python 标准库中处理此类 IPC 的标准方法。通过 `StreamReader.readline()`，我们可以高效地、异步地处理以换行符分隔的 JSON Lines 数据流。通过将新旧逻辑分别封装在独立的函数中，并在 `watch` 命令中进行分派，我们保持了代码的清晰和可维护性。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/engine #concept/sync #scope/core #ai/instruct #task/domain/storage #task/object/uds-server #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/cli #concept/ui #concept/sync #scope/ux #ai/instruct #task/domain/ui #task/object/watch-client #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 UDS 服务器实现
+#### Acts 1: 添加 `cascade-connector-local` 依赖
 
-我们首先创建 `uds_server.py` 文件。这个类包含了启动/停止服务器、处理新客户端连接以及向所有已连接客户端广播消息的全部逻辑。
+首先，我们需要让 `observer` 能够访问 `local` 连接器中定义的 UDS 路径常量。
+
+~~~~~act
+patch_file
+packages/cascade-cli-observer/pyproject.toml
+~~~~~
+~~~~~toml
+dependencies = [
+  "cascade-spec",
+  "cascade-common",
+  "typer[all]",
+  "aiomqtt",
+  "rich"
+]
+~~~~~
+~~~~~toml
+dependencies = [
+  "cascade-spec",
+  "cascade-common",
+  "cascade-connector-local",
+  "typer[all]",
+  "aiomqtt",
+  "rich"
+]
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-cli-observer/pyproject.toml
+~~~~~
+~~~~~toml
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-common = { workspace = true }
+~~~~~
+~~~~~toml
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-common = { workspace = true }
+cascade-connector-local = { workspace = true }
+~~~~~
+
+#### Acts 2: 实现 UDS 客户端并重构 `watch` 命令
+
+现在，我们将重写 `app.py`。由于逻辑变更较大（引入新的循环、重构现有函数），使用 `write_file` 是最清晰和安全的方式。
 
 ~~~~~act
 write_file
-packages/cascade-connector-local/src/cascade/connectors/local/uds_server.py
+packages/cascade-cli-observer/src/cascade/cli/observer/app.py
 ~~~~~
 ~~~~~python
 import asyncio
 import json
+import sqlite3
+import time
 import sys
 from pathlib import Path
-from typing import List, Set
+
+import typer
+from rich.console import Console
+from rich.table import Table
+
+from cascade.common.messaging import bus
+from .rendering import RichCliRenderer
+from cascade.connectors.mqtt import MqttConnector
+from cascade.connectors.local.connector import DEFAULT_TELEMETRY_UDS_PATH
+from cascade.spec.constraint import GlobalConstraint
+
+app = typer.Typer()
+console = Console(stderr=True)
+
+# Keep track of runs to print headers only once
+seen_run_ids = set()
 
 
-class UdsTelemetryServer:
-    """
-    A server that broadcasts telemetry messages over a Unix Domain Socket.
-    """
+async def on_message(topic: str, payload: dict):
+    """Callback to process incoming telemetry messages."""
+    global seen_run_ids
 
-    def __init__(self, uds_path: str):
-        self.uds_path = Path(uds_path)
-        self._server: asyncio.Server | None = None
-        self._clients: Set[asyncio.StreamWriter] = set()
+    # The payload structure is flat for headers, with a nested 'body'
+    body = payload.get("body", {})
+    run_id = payload.get("run_id")
 
-    async def _handle_client(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ):
-        """Callback for new client connections."""
-        self._clients.add(writer)
-        try:
-            # Keep connection open until client closes it or an error occurs
-            await reader.read(1)  # Wait for EOF or data
-        except (ConnectionResetError, BrokenPipeError):
-            pass  # Client disconnected
-        finally:
-            if not writer.is_closing():
-                writer.close()
-                await writer.wait_closed()
-            self._clients.discard(writer)
+    if not run_id or not body:
+        return
 
-    async def start(self):
-        """Starts the UDS server."""
-        if self._server:
-            return
-        # Ensure the socket file does not exist from a previous unclean shutdown
-        self.uds_path.unlink(missing_ok=True)
-        self._server = await asyncio.start_unix_server(
-            self._handle_client, path=str(self.uds_path)
+    # Print a header for the first time we see a run_id
+    if run_id not in seen_run_ids:
+        bus.info("observer.telemetry.run_header", run_id=run_id)
+        seen_run_ids.add(run_id)
+
+    event_type = body.get("type")
+    if event_type == "LifecycleEvent":
+        event_name = body.get("event")
+        bus.info(f"observer.telemetry.lifecycle.{event_name}")
+    elif event_type == "TaskStateEvent":
+        state = body.get("state")
+        msg_id = f"observer.telemetry.task_state.{state}"
+        bus.info(
+            msg_id,
+            task_name=body.get("task_name", "N/A"),
+            duration_ms=body.get("duration_ms", 0),
+            error=body.get("error", ""),
         )
+    else:
+        bus.info("observer.telemetry.unknown_event", type=event_type)
 
-    async def stop(self):
-        """Stops the server and disconnects all clients."""
-        if not self._server:
-            return
 
-        # Close the main server socket
-        self._server.close()
-        await self._server.wait_closed()
-        self._server = None
+async def _run_mqtt_watcher(project: str, hostname: str, port: int):
+    """Connects to MQTT and watches for telemetry events."""
+    topic = f"cascade/telemetry/+/{project}/+/events"
+    connector = MqttConnector(hostname=hostname, port=port)
+    shutdown_event = asyncio.Event()
 
-        # Disconnect all active clients
-        for writer in list(self._clients):
-            if not writer.is_closing():
-                writer.close()
-                await writer.wait_closed()
-        self._clients.clear()
+    bus.info(
+        "observer.startup.watching", project=project, hostname=hostname, port=port
+    )
 
-        # Clean up the socket file
-        self.uds_path.unlink(missing_ok=True)
+    try:
+        await connector.connect()
+        bus.info("observer.startup.connected")
+        await connector.subscribe(topic, on_message)
+        await shutdown_event.wait()
+    except Exception as e:
+        bus.error("observer.startup.error", hostname=hostname, port=port, error=e)
+    finally:
+        bus.info("observer.shutdown")
+        await connector.disconnect()
 
-    async def broadcast(self, message: dict):
-        """Broadcasts a JSON-lined message to all connected clients."""
-        if not self._clients:
-            return
 
-        # Serialize once
+async def _run_uds_watcher():
+    """Connects to a local UDS socket and watches for telemetry events."""
+    uds_path = DEFAULT_TELEMETRY_UDS_PATH
+    bus.info("observer.startup.watching_uds", path=uds_path)
+
+    while True:
         try:
-            json_line = (json.dumps(message) + "\n").encode("utf-8")
-        except TypeError:
-            # Ignore non-serializable messages silently
-            return
+            reader, writer = await asyncio.open_unix_connection(uds_path)
+            bus.info("observer.startup.connected_uds")
+            while not reader.at_eof():
+                line = await reader.readline()
+                if not line:
+                    break
+                try:
+                    data = json.loads(line)
+                    await on_message("local.telemetry", data)
+                except json.JSONDecodeError:
+                    continue  # Ignore malformed lines
+            bus.warning("observer.shutdown_uds_disconnected")
+        except FileNotFoundError:
+            bus.warning("observer.startup.uds_not_found", path=uds_path)
+        except ConnectionRefusedError:
+            bus.warning("observer.startup.uds_conn_refused", path=uds_path)
+        except Exception as e:
+            bus.error("observer.error_uds", error=e)
+        finally:
+            # Wait before retrying to avoid spamming connection attempts
+            await asyncio.sleep(2)
 
-        dead_clients = set()
-        for writer in self._clients:
-            if writer.is_closing():
-                dead_clients.add(writer)
-                continue
+
+@app.command()
+def watch(
+    backend: str = typer.Option(
+        "mqtt", "--backend", help="Telemetry backend ('mqtt' or 'local')."
+    ),
+    project: str = typer.Option(
+        "default", "--project", help="The project ID to watch (MQTT only)."
+    ),
+    hostname: str = typer.Option(
+        "localhost", "--host", help="MQTT broker hostname (MQTT only)."
+    ),
+    port: int = typer.Option(1883, "--port", help="MQTT broker port (MQTT only)."),
+):
+    """
+    Connect to a backend and watch for real-time telemetry events.
+    """
+    main_loop = None
+    if backend == "local":
+        if sys.platform == "win32":
+            bus.error("observer.error_uds_unsupported")
+            raise typer.Exit(1)
+        main_loop = _run_uds_watcher()
+    elif backend == "mqtt":
+        main_loop = _run_mqtt_watcher(project, hostname, port)
+    else:
+        bus.error("observer.error_invalid_backend", backend=backend)
+        raise typer.Exit(1)
+
+    try:
+        asyncio.run(main_loop)
+    except KeyboardInterrupt:
+        pass
+
+
+@app.command()
+def status(
+    backend: str = typer.Option(
+        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'local')."
+    ),
+    hostname: str = typer.Option("localhost", help="MQTT broker hostname."),
+    port: int = typer.Option(1883, help="MQTT broker port."),
+):
+    """
+    Connect to the backend, query the current status of all constraints, and exit.
+    """
+    try:
+        asyncio.run(_get_status(backend=backend, hostname=hostname, port=port))
+    except KeyboardInterrupt:
+        bus.info("observer.shutdown")
+
+
+async def _get_status(backend: str, hostname: str, port: int):
+    """Core logic for the status command."""
+    if backend == "local":
+        await _get_status_sqlite()
+        return
+
+    constraints: list[GlobalConstraint] = []
+
+    async def on_status_message(topic, payload):
+        if payload and isinstance(payload, dict):
             try:
-                writer.write(json_line)
-                await writer.drain()
-            except (ConnectionResetError, BrokenPipeError):
-                dead_clients.add(writer)
+                # Filter out any malformed or non-constraint messages
+                if "scope" in payload and "type" in payload:
+                    constraints.append(GlobalConstraint(**payload))
+            except TypeError:
+                pass  # Ignore malformed payloads
 
-        # Clean up any clients that disconnected during broadcast
-        for writer in dead_clients:
-            self._clients.discard(writer)
-~~~~~
+    connector = MqttConnector(hostname=hostname, port=port)
+    bus.info("controller.connecting", backend=backend, hostname=hostname, port=port)
+    await connector.connect()
+    bus.info("controller.connected")
+    await connector.subscribe("cascade/constraints/#", on_status_message)
 
-#### Acts 2: 将 UDS 服务器集成到 LocalConnector
+    # Wait a short moment for all retained messages to arrive from the broker
+    await asyncio.sleep(0.5)
+    await connector.disconnect()
+    bus.info("observer.shutdown")
 
-现在，我们修改 `LocalConnector` 来管理 `UdsTelemetryServer` 的生命周期，并路由遥测事件。
+    _render_constraints_table(constraints)
 
-~~~~~act
-patch_file
-packages/cascade-connector-local/src/cascade/connectors/local/connector.py
-~~~~~
-~~~~~python
-import asyncio
-import json
-import sqlite3
-import time
-import sys
-import socket
-from pathlib import Path
-from typing import Callable, Awaitable, Dict, Any, List
 
-from cascade.spec.protocols import Connector, SubscriptionHandle
-~~~~~
-~~~~~python
-import asyncio
-import json
-import sqlite3
-import time
-import sys
-import socket
-from pathlib import Path
-from typing import Callable, Awaitable, Dict, Any, List
+async def _get_status_sqlite():
+    """Fetches and displays constraints from the SQLite database."""
+    db_path = Path("~/.cascade/control.db").expanduser()
+    if not db_path.exists():
+        console.print(f"[yellow]SQLite database not found at:[/yellow] {db_path}")
+        console.print("[dim]No active constraints found.[/dim]")
+        return
 
-from cascade.spec.protocols import Connector, SubscriptionHandle
-from .uds_server import UdsTelemetryServer
-~~~~~
+    def _blocking_read():
+        conn = sqlite3.connect(db_path, check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM constraints")
+        rows = cursor.fetchall()
+        conn.close()
+        return [dict(row) for row in rows]
 
-~~~~~act
-patch_file
-packages/cascade-connector-local/src/cascade/connectors/local/connector.py
-~~~~~
-~~~~~python
-DEFAULT_UDS_PATH = "/tmp/cascade.sock"
-~~~~~
-~~~~~python
-DEFAULT_UDS_PATH = "/tmp/cascade.sock"
-DEFAULT_TELEMETRY_UDS_PATH = "/tmp/cascade-telemetry.sock"
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-connector-local/src/cascade/connectors/local/connector.py
-~~~~~
-~~~~~python
-class LocalConnector(Connector):
-    def __init__(
-        self,
-        db_path: str = "~/.cascade/control.db",
-        uds_path: str = DEFAULT_UDS_PATH,
-    ):
-        self.db_path = Path(db_path).expanduser()
-        self.uds_path = uds_path
-        self._conn: sqlite3.Connection | None = None
-        self._is_connected = False
-        self._background_tasks: List[asyncio.Task] = []
-        self._last_known_constraints: Dict[str, Dict[str, Any]] = {}
-        self._use_polling = sys.platform == "win32"
-        self._uds_recv_event = asyncio.Event()
-
-    async def connect(self) -> None:
-        def _connect_and_setup():
-~~~~~
-~~~~~python
-class LocalConnector(Connector):
-    def __init__(
-        self,
-        db_path: str = "~/.cascade/control.db",
-        uds_path: str = DEFAULT_UDS_PATH,
-        telemetry_uds_path: str = DEFAULT_TELEMETRY_UDS_PATH,
-    ):
-        self.db_path = Path(db_path).expanduser()
-        self.uds_path = uds_path
-        self._conn: sqlite3.Connection | None = None
-        self._is_connected = False
-        self._background_tasks: List[asyncio.Task] = []
-        self._last_known_constraints: Dict[str, Dict[str, Any]] = {}
-        self._use_polling = sys.platform == "win32"
-        self._uds_recv_event = asyncio.Event()
-
-        # UDS Telemetry Server (only for non-Windows platforms)
-        self._telemetry_server: UdsTelemetryServer | None = None
-        if not self._use_polling:
-            self._telemetry_server = UdsTelemetryServer(telemetry_uds_path)
-
-    async def connect(self) -> None:
-        # Start telemetry server if it exists
-        if self._telemetry_server:
-            await self._telemetry_server.start()
-
-        def _connect_and_setup():
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-connector-local/src/cascade/connectors/local/connector.py
-~~~~~
-~~~~~python
-            await asyncio.gather(*self._background_tasks, return_exceptions=True)
-            self._background_tasks.clear()
-        if self._conn:
-            await asyncio.to_thread(self._conn.close)
-            self._conn = None
-~~~~~
-~~~~~python
-            await asyncio.gather(*self._background_tasks, return_exceptions=True)
-            self._background_tasks.clear()
-
-        # Stop telemetry server
-        if self._telemetry_server:
-            await self._telemetry_server.stop()
-
-        if self._conn:
-            await asyncio.to_thread(self._conn.close)
-            self._conn = None
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-connector-local/src/cascade/connectors/local/connector.py
-~~~~~
-~~~~~python
-    async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:
-        if not self._is_connected:
-            raise RuntimeError("Connector is not connected.")
-        scope = self._topic_to_scope(topic)
-
-        def _blocking_publish():
-            cursor = self._conn.cursor()
-            if not payload:
-                cursor.execute("DELETE FROM constraints WHERE scope = ?", (scope,))
-            else:
-                cursor.execute(
-                    """
-                    INSERT OR REPLACE INTO constraints (id, scope, type, params, expires_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        payload["id"],
-                        payload["scope"],
-                        payload["type"],
-                        json.dumps(payload["params"]),
-                        payload.get("expires_at"),
-                        time.time(),
-                    ),
-                )
-            self._conn.commit()
-
-        await asyncio.to_thread(_blocking_publish)
-
-        if not self._use_polling:
-            await self._send_uds_signal()
-~~~~~
-~~~~~python
-    async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:
-        if not self._is_connected:
-            raise RuntimeError("Connector is not connected.")
-
-        # Route message based on topic
-        if topic.startswith("cascade/telemetry/"):
-            if self._telemetry_server:
-                await self._telemetry_server.broadcast(payload)
-            return
-
-        if topic.startswith("cascade/constraints/"):
-            scope = self._topic_to_scope(topic)
-
-            def _blocking_publish():
-                cursor = self._conn.cursor()
-                if not payload:
-                    cursor.execute("DELETE FROM constraints WHERE scope = ?", (scope,))
-                else:
-                    cursor.execute(
-                        """
-                        INSERT OR REPLACE INTO constraints (id, scope, type, params, expires_at, updated_at)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                        """,
-                        (
-                            payload["id"],
-                            payload["scope"],
-                            payload["type"],
-                            json.dumps(payload["params"]),
-                            payload.get("expires_at"),
-                            time.time(),
-                        ),
+    try:
+        rows = await asyncio.to_thread(_blocking_read)
+        constraints = []
+        for row in rows:
+            try:
+                constraints.append(
+                    GlobalConstraint(
+                        id=row["id"],
+                        scope=row["scope"],
+                        type=row["type"],
+                        params=json.loads(row["params"]),
+                        expires_at=row.get("expires_at"),
                     )
-                self._conn.commit()
+                )
+            except (json.JSONDecodeError, KeyError):
+                pass  # Ignore malformed rows
+        _render_constraints_table(constraints)
+    except Exception as e:
+        bus.error("observer.startup.error", hostname=str(db_path), port="", error=e)
 
-            await asyncio.to_thread(_blocking_publish)
 
-            if not self._use_polling:
-                await self._send_uds_signal()
+def _render_constraints_table(constraints: list[GlobalConstraint]):
+    """Renders a list of constraints into a Rich table."""
+    table = Table(title="[bold]Active Cascade Constraints[/bold]", title_justify="left")
+    table.add_column("Scope", style="cyan", no_wrap=True)
+    table.add_column("Type", style="magenta")
+    table.add_column("Params", style="green")
+    table.add_column("Expires In (s)", justify="right", style="yellow")
+
+    now = time.time()
+    if not constraints:
+        console.print("[dim]No active constraints found.[/dim]")
+        return
+
+    for c in sorted(constraints, key=lambda x: x.scope):
+        expires_in = ""
+        if c.expires_at:
+            delta = c.expires_at - now
+            if delta > 0:
+                expires_in = f"{delta:.1f}"
+            else:
+                expires_in = "[red]- (expired)[/red]"
+        else:
+            expires_in = "[dim]Never[/dim]"
+
+        table.add_row(c.scope, c.type, str(c.params), expires_in)
+
+    console.print(table)
+
+
+def main():
+    bus.set_renderer(RichCliRenderer(store=bus.store))
+    app()
+
+
+if __name__ == "__main__":
+    main()
+~~~~~
+
+#### Acts 3: 添加新的用户反馈消息
+
+最后，我们需要为新的 UDS 客户端逻辑添加相应的用户反馈消息。
+
+~~~~~act
+patch_file
+packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
+~~~~~
+~~~~~json
+{
+    "observer.startup.watching": "🔭 Watching project: [bold cyan]{project}[/bold cyan] on [bold green]{hostname}:{port}[/bold green]...",
+    "observer.startup.connected": "✅ Connected to MQTT broker.",
+    "observer.startup.error": "❌ Failed to connect to MQTT broker at {hostname}:{port}. Error: {error}",
+    "observer.shutdown": "\n🔌 Disconnecting and shutting down...",
+    "observer.telemetry.run_header": "\n[bold yellow]─── Run Started: {run_id} ───[/bold yellow]",
+    "observer.telemetry.lifecycle.ENGINE_STARTED": "▶️  Engine started.",
+    "observer.telemetry.lifecycle.ENGINE_STOPPED": "✅ Engine stopped.",
+    "observer.telemetry.task_state.RUNNING": "   - Task '[bold]{task_name}[/bold]' started.",
+    "observer.telemetry.task_state.COMPLETED": "   - [green]✅ Task '[bold]{task_name}[/bold]' succeeded in {duration_ms:.0f}ms.[/green]",
+    "observer.telemetry.task_state.FAILED": "   - [bold red]❌ Task '[bold]{task_name}[/bold]' failed after {duration_ms:.0f}ms. Error: {error}[/bold red]",
+    "observer.telemetry.task_state.SKIPPED": "   - [dim]⚪ Task '[bold]{task_name}[/bold]' skipped.[/dim]",
+    "observer.telemetry.unknown_event": "[dim]Received unknown event type: {type}[/dim]",
+
+    "controller.connecting": "Connecting to {backend} backend at [bold green]{hostname}:{port}[/bold green]...",
+~~~~~
+~~~~~json
+{
+    "observer.startup.watching": "🔭 Watching project: [bold cyan]{project}[/bold cyan] via MQTT on [bold green]{hostname}:{port}[/bold green]...",
+    "observer.startup.watching_uds": "🔭 Watching for local engine via UDS at [bold green]{path}[/bold green]...",
+    "observer.startup.connected": "✅ Connected to MQTT broker.",
+    "observer.startup.connected_uds": "✅ Connected to local engine.",
+    "observer.startup.error": "❌ Failed to connect to MQTT broker at {hostname}:{port}. Error: {error}",
+    "observer.startup.uds_not_found": "🟡 Waiting for engine... (Socket not found at {path})",
+    "observer.startup.uds_conn_refused": "🟡 Waiting for engine... (Connection refused at {path})",
+    "observer.shutdown": "\n🔌 Disconnecting and shutting down...",
+    "observer.shutdown_uds_disconnected": "🔌 Engine disconnected. Retrying connection...",
+    "observer.error_uds": "❌ An unexpected error occurred with the UDS connection: {error}",
+    "observer.error_uds_unsupported": "❌ The 'local' backend is not supported on Windows.",
+    "observer.error_invalid_backend": "❌ Invalid backend '{backend}'. Choose 'mqtt' or 'local'.",
+    "observer.telemetry.run_header": "\n[bold yellow]─── Run Started: {run_id} ───[/bold yellow]",
+    "observer.telemetry.lifecycle.ENGINE_STARTED": "▶️  Engine started.",
+    "observer.telemetry.lifecycle.ENGINE_STOPPED": "✅ Engine stopped.",
+    "observer.telemetry.task_state.RUNNING": "   - Task '[bold]{task_name}[/bold]' started.",
+    "observer.telemetry.task_state.COMPLETED": "   - [green]✅ Task '[bold]{task_name}[/bold]' succeeded in {duration_ms:.0f}ms.[/green]",
+    "observer.telemetry.task_state.FAILED": "   - [bold red]❌ Task '[bold]{task_name}[/bold]' failed after {duration_ms:.0f}ms. Error: {error}[/bold red]",
+    "observer.telemetry.task_state.SKIPPED": "   - [dim]⚪ Task '[bold]{task_name}[/bold]' skipped.[/dim]",
+    "observer.telemetry.unknown_event": "[dim]Received unknown event type: {type}[/dim]",
+
+    "controller.connecting": "Connecting to {backend} backend at [bold green]{hostname}:{port}[/bold green]...",
 ~~~~~
 
 ### 下一步建议
-我们已经成功地在 `LocalConnector` 中实现了 UDS Telemetry 服务器的骨架，并完成了与 `Engine` 的集成。当 `Engine` 运行时，它现在应该会在文件系统上创建一个 UDS socket 文件，并准备好接受 `watch` 客户端的连接。
+我们已经完成了 `cs-observer watch` 的 UDS 客户端实现。现在，我们拥有了一个功能完整的、端到端的本地实时可观测性解决方案。
 
-下一步是 **步骤 3: [功能闭环] 实现 `cs-observer watch` 的 UDS 客户端**。这将使 `cs-observer` 能够连接到我们刚刚创建的服务器，并实时接收和渲染遥测事件流。
+在继续之前，最关键的一步是进行验证。下一步应该是 **步骤 4: [质量保证] 编写端到端集成测试**。我们需要创建一个新的测试文件来模拟一个 `Engine` 实例和一个 `watch` 客户端，并验证它们之间通过 UDS 的通信是可靠和正确的。如果你同意，我将开始制定这个测试计划。

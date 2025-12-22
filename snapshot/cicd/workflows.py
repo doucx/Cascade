@@ -32,20 +32,36 @@ def _ci_success_marker(results: List[str]):
     return "CI_SUCCESS"
 
 
+import os
+
 def pr_check_workflow() -> cs.LazyResult:
     """
     Workflow for Pull Requests and pushes to main.
     Only lints and tests the packages that have changed.
     """
-    # Step 1: Declare the action to get git diff output. This returns a LazyResult[str].
-    git_diff_output = cs.shell("git diff --name-only origin/main...HEAD")
+    # Step 1: Determine the correct git diff command based on the CI environment.
+    event_name = os.getenv("GITHUB_EVENT_NAME")
+    
+    if event_name == "pull_request":
+        # For PRs, compare against the merge base with the target branch.
+        # GHA provides the base ref in GITHUB_BASE_REF.
+        base_ref = os.getenv("GITHUB_BASE_REF", "main")
+        diff_command = f"git diff --name-only origin/{base_ref}...HEAD"
+        print(f"Running diff for Pull Request: {diff_command}")
+    else: # Handles "push", "workflow_dispatch", and local runs
+        # For pushes, compare the last two commits.
+        diff_command = "git diff --name-only HEAD~1 HEAD"
+        print(f"Running diff for Push/Local: {diff_command}")
 
-    # Step 2: Declare the action to parse the output.
-    # We pass the LazyResult from step 1 directly as an argument.
+    # Step 2: Declare the action to get git diff output. This returns a LazyResult[str].
+    git_diff_output = cs.shell(diff_command)
+    
+    # Step 3: Declare the action to parse the output.
+    # We pass the LazyResult from step 2 directly as an argument.
     # The Cascade engine will resolve it before executing parse_git_diff.
     changed_packages = parse_git_diff(git_diff_output)
 
-    # Step 3: Use the result of the parsing to dynamically build the rest of the graph.
+    # Step 4: Use the result of the parsing to dynamically build the rest of the graph.
     lint_results = lint_package.map(package_name=changed_packages)
     test_results = run_package_tests.map(package_name=changed_packages)
 

@@ -29,7 +29,7 @@ async def test_publish_pause_global_scope(mock_messaging_bus, mock_connector):
     """
     # Act: Call the core logic function
     await controller_app._publish_pause(
-        scope="global", ttl=None, hostname="mqtt.test", port=1234
+        scope="global", ttl=None, backend="mqtt", hostname="mqtt.test", port=1234
     )
 
     # Assert Connector Lifecycle
@@ -63,7 +63,11 @@ async def test_publish_pause_specific_scope(mock_messaging_bus, mock_connector):
     """
     # Act
     await controller_app._publish_pause(
-        scope="task:api_call", ttl=None, hostname="mqtt.test", port=1234
+        scope="task:api_call",
+        ttl=None,
+        backend="mqtt",
+        hostname="mqtt.test",
+        port=1234,
     )
 
     # Assert

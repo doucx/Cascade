@@ -1,55 +1,118 @@
-好的，收到了测试错误报告。
+当然，我来修复这些测试错误。
 
-这是一个典型的 Python 导入错误，我的上一个计划中存在疏忽。
+这是一个连锁反应：上一步我们修改了 `cs-controller` 中核心函数的签名以接受 `backend` 参数，但忘记了更新调用这些函数的测试用例，导致了 `TypeError`。
 
-## [WIP] fix: 修复 SqliteConnector 的包导出问题
+## [WIP] fix: 更新测试用例以匹配新的控制器函数签名
 
 ### 错误分析
-测试套件在收集测试用例时失败，抛出了 `ImportError: cannot import name 'SqliteConnector' from 'cascade.connectors.sqlite'`。
+测试因 `TypeError: ... missing 1 required positional argument: 'backend'` 而失败。
 
-根本原因在于 `packages/cascade-connector-sqlite/src/cascade/connectors/sqlite/__init__.py` 文件是空的。根据 Python 的包管理机制，为了能从一个包（`cascade.connectors.sqlite`）直接导入一个在子模块（`connector.py`）中定义的类（`SqliteConnector`），该包的 `__init__.py` 文件必须显式地将这个类导入到自己的命名空间中。
-
-由于 `__init__.py` 文件为空，`cascade.connectors.sqlite` 命名空间下没有任何对象，导致 `from cascade.connectors.sqlite import SqliteConnector` 语句失败。
+在我上一个计划中，我修改了 `cascade.cli.controller.app` 模块中的 `_publish_pause` 和 `_publish_limit` 函数，为它们添加了 `backend: str` 参数。然而，位于 `tests/cli-controller/test_controller_app.py` 和 `tests/engine/e2e/test_e2e_cli_integration.py` 中的测试用例仍然使用旧的函数签名进行调用，没有传递这个新的、必需的参数，从而导致了类型错误。
 
 ### 用户需求
-修复 `ImportError`，使测试套件能够正常运行。
+修复所有因函数签名不匹配而导致的 `TypeError`，使测试套件能够成功运行。
 
 ### 评论
-这是一个常见的打包错误，修复起来很简单，但它完全阻断了我们的测试流程，因此修复优先级很高。这也凸显了在创建新模块时，确保 `__init__.py` 文件正确配置的重要性。
+这是一个在重构过程中很常见的疏漏。修复它很简单，只需将测试代码与被测代码的最新 API 保持同步即可。这也证明了我们的集成测试覆盖是有效的，能够及时捕捉到这类接口变更带来的破坏。
 
 ### 目标
-修改 `packages/cascade-connector-sqlite/src/cascade/connectors/sqlite/__init__.py` 文件，使其正确地导出 `SqliteConnector` 类。
+1.  修改 `tests/cli-controller/test_controller_app.py` 中对 `_publish_pause` 的调用，为其传递 `backend="mqtt"` 参数。
+2.  修改 `tests/engine/e2e/test_e2e_cli_integration.py` 中测试工具 `InProcessController.set_limit` 的实现，使其能够接受并传递 `backend` 参数给 `_publish_limit` 函数。
 
 ### 基本原理
-为了解决这个问题并遵循项目中其他连接器包（如 `cascade-connector-mqtt`）的结构，我将使用 `write_file` 来更新 `__init__.py`。新的内容将包含：
-1.  一个标准的命名空间包声明，以确保在可编辑模式下安装的兼容性。
-2.  从同级目录的 `connector.py` 模块中导入 `SqliteConnector` 类。
-3.  将 `SqliteConnector` 添加到 `__all__` 列表中，以明确包的公共 API。
+我们将使用 `patch_file` 对两个测试文件进行精确修改。对于 `test_controller_app.py`，我们直接在函数调用处添加缺失的参数。对于 `test_e2e_cli_integration.py`，我们将更新测试辅助类的接口，使其与被测代码的接口保持一致，同时为 `backend` 参数提供默认值 `"mqtt"`，以确保现有测试的行为不变。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #concept/state #scope/dx #ai/instruct #task/domain/cli #task/object/sqlite-connector #task/action/integration #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/cli #task/object/sqlite-connector #task/action/integration #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 `__init__.py` 以导出 `SqliteConnector`
+#### Acts 1: 修复 `test_controller_app.py` 中的函数调用
 
-我们将覆写这个 `__init__.py` 文件，添加必要的导入语句。
+我们将更新两个测试用例中对 `_publish_pause` 的调用。
 
 ~~~~~act
-write_file
-packages/cascade-connector-sqlite/src/cascade/connectors/sqlite/__init__.py
+patch_file
+tests/cli-controller/test_controller_app.py
 ~~~~~
 ~~~~~python
-# This must be the very first line to allow this package to coexist with other
-# namespace packages (like cascade-engine) in editable installs.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+    await controller_app._publish_pause(
+        scope="global", ttl=None, hostname="mqtt.test", port=1234
+    )
+~~~~~
+~~~~~python
+    await controller_app._publish_pause(
+        scope="global", ttl=None, backend="mqtt", hostname="mqtt.test", port=1234
+    )
+~~~~~
 
-from .connector import SqliteConnector
+~~~~~act
+patch_file
+tests/cli-controller/test_controller_app.py
+~~~~~
+~~~~~python
+    await controller_app._publish_pause(
+        scope="task:api_call", ttl=None, hostname="mqtt.test", port=1234
+    )
+~~~~~
+~~~~~python
+    await controller_app._publish_pause(
+        scope="task:api_call",
+        ttl=None,
+        backend="mqtt",
+        hostname="mqtt.test",
+        port=1234,
+    )
+~~~~~
 
-__all__ = ["SqliteConnector"]
+#### Acts 2: 修复 `test_e2e_cli_integration.py` 中的测试辅助工具
+
+现在，我们更新 `InProcessController` 辅助类，使其正确传递 `backend` 参数。
+
+~~~~~act
+patch_file
+tests/engine/e2e/test_e2e_cli_integration.py
+~~~~~
+~~~~~python
+    async def set_limit(
+        self,
+        scope: str,
+        rate: str | None = None,
+        concurrency: int | None = None,
+        ttl: int | None = None,
+    ):
+        """Directly calls the async logic, providing defaults for missing args."""
+        await controller_app._publish_limit(
+            scope=scope,
+            concurrency=concurrency,
+            rate=rate,
+            ttl=ttl,
+            hostname="localhost",  # Constant for test purposes
+            port=1883,  # Constant for test purposes
+        )
+~~~~~
+~~~~~python
+    async def set_limit(
+        self,
+        scope: str,
+        rate: str | None = None,
+        concurrency: int | None = None,
+        ttl: int | None = None,
+        backend: str = "mqtt",
+    ):
+        """Directly calls the async logic, providing defaults for missing args."""
+        await controller_app._publish_limit(
+            scope=scope,
+            concurrency=concurrency,
+            rate=rate,
+            ttl=ttl,
+            backend=backend,
+            hostname="localhost",  # Constant for test purposes
+            port=1883,  # Constant for test purposes
+        )
 ~~~~~
 
 ### 下一步建议
-这个修复应该能解决测试收集阶段的 `ImportError`。请重新运行测试。如果测试通过，我们就可以继续执行原计划的 **步骤 4**，即为新的 CLI 功能编写全面的端到端测试。
+这些修复应该可以解决所有的 `TypeError`。请再次运行测试。一旦测试通过，我们就可以安全地继续进行 **步骤 4: [质量保证] 编写全面的端到端测试**，为我们新集成的 `sqlite` 后端添加专门的测试覆盖。

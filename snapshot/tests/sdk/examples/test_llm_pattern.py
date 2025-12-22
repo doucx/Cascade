@@ -45,7 +45,7 @@ async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):
     article_text = "This is a long article about software architecture..."
 
     summary = cs.subflow(
-        path="packages/cascade-py/src/cascade/examples/patterns/llm_openai.py",
+        path="packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py",
         target="result",  # 'result' is the final LazyResult in the subflow file
         params={
             "model": "gpt-3.5-turbo",

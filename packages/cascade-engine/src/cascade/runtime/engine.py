@@ -7,6 +7,7 @@ from contextlib import ExitStack
 
 from cascade.spec.resource import ResourceDefinition
 from cascade.spec.constraint import GlobalConstraint
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
     RunStarted,

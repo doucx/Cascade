@@ -39,6 +39,10 @@ from .tools.visualize import visualize
 from .tools.cli import create_cli
 from cascade.graph.serialize import to_json, from_json
 
+# Common utilities for the run entrypoint
+from cascade.common.messaging import bus
+from cascade.common.renderers import CliRenderer, JsonRenderer
+
 
 # --- V1.3 Factory Functions ---
 
@@ -92,8 +96,6 @@ def __getattr__(name: str) -> Any:
 
 
 # --- Main Run Entrypoint ---
-from cascade.common.messaging import bus
-from cascade.common.renderers import CliRenderer, JsonRenderer
 
 
 def _create_state_backend_factory(

@@ -1,3 +1,5 @@
+from typing import Any, Dict, Optional
+
 from cascade.spec.task import task
 from cascade.providers import LazyFactory
 
@@ -17,9 +19,6 @@ class TemplateProvider:
                 "Please install it with: pip install cascade-py[template]"
             )
         return render_template
-
-
-from typing import Dict, Any, Optional
 
 
 @task(name="template")

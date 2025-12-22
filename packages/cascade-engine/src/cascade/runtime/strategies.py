@@ -132,7 +132,6 @@ class GraphExecutionStrategy:
         self, graph: Graph, target: Any, literals: Dict[str, Any]
     ):
         # ... logic moved from Engine ...
-        node_map = {node.id: node for node in graph.nodes}
         if graph.nodes:
             target_node = graph.nodes[-1]
             target_node.id = target._uuid

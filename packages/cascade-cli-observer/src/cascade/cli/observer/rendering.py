@@ -1,4 +1,5 @@
 from rich.console import Console
+from rich.rule import Rule
 from rich.theme import Theme
 
 from cascade.common.messaging import protocols, MessageStore
@@ -19,9 +20,6 @@ custom_theme = Theme(
         "data": "green",
     }
 )
-
-
-from rich.rule import Rule
 
 
 class RichCliRenderer(protocols.Renderer):

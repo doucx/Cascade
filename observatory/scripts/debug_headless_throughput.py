@@ -19,7 +19,6 @@ Expected Output:
 import asyncio
 import random
 import time
-from collections import deque
 from typing import List
 
 import cascade as cs
@@ -54,7 +53,6 @@ async def run_headless_experiment():
 
     # --- Flash Counter ---
     flash_count = 0
-    flash_times = deque()
 
     class HeadlessConnector:
         async def publish(self, topic, payload, **kwargs):
@@ -113,7 +111,6 @@ async def run_headless_experiment():
             await asyncio.sleep(1.0)
             now = time.time()
             interval = now - last_report_time
-            rate = (flash_count - (flash_times[0] if flash_times else 0)) / interval
 
             # Simple reporting
             current_rate = (

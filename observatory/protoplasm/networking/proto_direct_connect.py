@@ -24,7 +24,6 @@ async def benchmark_local_bus():
 
     # Setup Consumers
     # Each consumer is a queue attached to a subscription
-    consumer_queues = []
 
     # We use a latch (Event) to signal completion
     completion_event = asyncio.Event()

@@ -1,8 +1,7 @@
 import asyncio
 import json
-import sys
 from pathlib import Path
-from typing import List, Set
+from typing import Set
 
 
 class UdsTelemetryServer:
@@ -54,7 +53,7 @@ class UdsTelemetryServer:
             try:
                 if not writer.is_closing():
                     writer.close()
-                    # We don't await wait_closed() here individually to avoid 
+                    # We don't await wait_closed() here individually to avoid
                     # sequential blocking; the server's wait_closed will handle it.
             except Exception:
                 pass

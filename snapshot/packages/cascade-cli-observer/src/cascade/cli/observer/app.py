@@ -61,9 +61,7 @@ async def _run_mqtt_watcher(project: str, hostname: str, port: int):
     connector = MqttConnector(hostname=hostname, port=port)
     shutdown_event = asyncio.Event()
 
-    bus.info(
-        "observer.startup.watching", project=project, hostname=hostname, port=port
-    )
+    bus.info("observer.startup.watching", project=project, hostname=hostname, port=port)
 
     try:
         await connector.connect()

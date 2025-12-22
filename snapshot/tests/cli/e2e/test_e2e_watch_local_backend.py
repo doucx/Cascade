@@ -11,7 +11,6 @@ from cascade.connectors.local import LocalConnector
 from cascade.runtime.subscribers import TelemetrySubscriber
 
 # We import the internal logic from observer to test real-world behavior
-from cascade.cli.observer.app import on_message
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="UDS is not supported on Windows")
@@ -23,7 +22,7 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
     """
     db_path = tmp_path / "control.db"
     uds_path = str(tmp_path / "telemetry.sock")
-    
+
     # 1. Setup Captured Events list
     received_events = []
 
@@ -41,7 +40,7 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
     # 2. Configure Engine with LocalConnector
     event_bus = MessageBus()
     connector = LocalConnector(db_path=str(db_path), telemetry_uds_path=uds_path)
-    
+
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
@@ -67,7 +66,8 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
                 reader, writer = await asyncio.open_unix_connection(uds_path)
                 while not reader.at_eof():
                     line = await reader.readline()
-                    if not line: break
+                    if not line:
+                        break
                     data = json.loads(line)
                     await mocked_on_message("uds", data)
                 writer.close()
@@ -81,7 +81,7 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
 
     # 5. Run Engine
     await engine.run(hello())
-    
+
     # Give a small buffer for the final UDS messages to be flushed and read
     await asyncio.sleep(0.2)
     client_task.cancel()
@@ -92,7 +92,7 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
     # - hello:RUNNING
     # - hello:COMPLETED
     # - ENGINE_STOPPED
-    
+
     assert "ENGINE_STARTED" in received_events
     assert "hello:RUNNING" in received_events
     assert "hello:COMPLETED" in received_events

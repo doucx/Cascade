@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(engine): 提取 `NodeProcessor` 以解耦节点执行逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766379906.303653, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(engine): 提取 `ResourceContainer` 以分离资源管理职责", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766380181.5155954, "duration_ms": 0}}

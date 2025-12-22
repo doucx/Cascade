@@ -1,373 +1,171 @@
-# [WIP] refactor(engine): 提取 `NodeProcessor` 以解耦节点执行逻辑
+# [WIP] refactor(engine): 提取 `ResourceContainer` 以分离资源管理职责
 
 ### 用户需求
-重构 `cascade.runtime.engine.Engine` 类，将其作为“上帝类”的职责进行拆分，以降低代码复杂度，提高可维护性和新手友好度。
+将 `cascade.runtime.engine.Engine` 类中负责资源定义管理、依赖扫描、实例化及生命周期管理的逻辑，提取到一个独立的 `ResourceContainer` 类中，以减轻 `Engine` 的职责负担。
 
 ### 评论
-`Engine` 类目前集成了图构建、资源管理、调度循环和节点执行等所有逻辑，代码量大且逻辑嵌套深。提取**单节点执行逻辑**是重构的第一步，也是最关键的一步，因为它包含 retry, cache, constraint, resource injection 等最复杂的策略组合。
-
-本次重构将引入 `NodeProcessor` 类，专门负责“如何执行一个节点”的逻辑，而 `Engine` 保留“如何调度整个图”的逻辑。
+资源管理是一个具有独立状态（资源定义表）和复杂行为（递归依赖解析、基于作用域的生命周期管理）的子系统。将其从 `Engine` 中剥离不仅符合单一职责原则，还能显著简化 `Engine` 的核心调度循环。
 
 ### 目标
-1.  创建 `cascade.runtime.processor.NodeProcessor` 类。
-2.  将 `Engine` 中的以下方法移至 `NodeProcessor`：
-    *   `_execute_node_with_policies`
-    *   `_execute_node_internal`
-    *   `_execute_map_node`
-    *   `_resolve_inputs_for_cache`
-3.  将 `ArgumentResolver` 和 `ConstraintResolver` 的所有权转移给 `NodeProcessor`。
-4.  更新 `Engine` 以委托 `NodeProcessor` 执行任务。
+1.  创建 `cascade.runtime.resource_container.ResourceContainer` 类。
+2.  将以下功能从 `Engine` 迁移至新类：
+    *   资源定义的注册与存储 (`_resource_providers`)。
+    *   依赖扫描 (`_scan_for_resources`)。
+    *   资源实例化与堆栈管理 (`_setup_resources`)。
+    *   资源销毁 (`_teardown_resource`)。
+3.  重构 `Engine` 以使用 `ResourceContainer`。
 
 ### 基本原理
-通过单一职责原则 (SRP) 将关注点分离。
-*   `Engine`: 负责宏观的生命周期、TCO 循环、Stage 调度和并发控制。
-*   `NodeProcessor`: 负责微观的单任务执行策略（参数解析、重试、缓存、实际调用）。
-
-对于 `map` 类型的节点，`NodeProcessor` 需要回调 `Engine` 的能力来执行子图。我们将通过在 `process` 方法中传递一个 `sub_graph_runner` 回调来实现这一点，从而避免循环依赖。
+`ResourceContainer` 将接管所有与 `@cs.resource` 相关的操作。`Engine` 仅保留对 `ResourceContainer` 的引用，并在 `run` 方法的适当生命周期点（如初始化前、步骤执行前）委托其进行资源的准备工作。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/runtime #comp/engine #scope/core #ai/instruct #task/domain/runtime #task/object/engine #task/action/refactor #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/runtime #comp/engine #scope/core #ai/instruct #task/domain/runtime #task/object/engine #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `NodeProcessor` 类
+#### Acts 1: 创建 `ResourceContainer` 类
 
-我们将创建一个新的文件 `packages/cascade-engine/src/cascade/runtime/processor.py`，并将节点执行相关的逻辑从 `Engine` 中提取出来。
+我们将创建一个新的模块 `cascade.runtime.resource_container`，并将资源管理逻辑封装其中。
 
 ~~~~~act
 write_file
-packages/cascade-engine/src/cascade/runtime/processor.py
+packages/cascade-engine/src/cascade/runtime/resource_container.py
 ~~~~~
 ~~~~~python
-import time
-import asyncio
-from typing import Any, Dict, List, Callable, Awaitable
+import inspect
+from contextlib import ExitStack
+from typing import Any, Dict, Callable, Union, Generator, Set, Optional
 
-from cascade.graph.model import Node, Graph
-from cascade.graph.build import build_graph
-from cascade.spec.protocols import Executor, StateBackend, Solver
+from cascade.graph.model import Graph
+from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.constraints.manager import ConstraintManager
-from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
-from cascade.runtime.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-    TaskSkipped,
-    TaskRetrying,
-    TaskBlocked,
-)
+from cascade.runtime.events import ResourceAcquired, ResourceReleased
 
 
-class NodeProcessor:
+class ResourceContainer:
     """
-    Responsible for executing a single node within a workflow graph.
-    Handles policies such as constraints, caching, retries, and argument resolution.
+    Manages the lifecycle, registration, and dependency injection of resources.
     """
 
-    def __init__(
-        self,
-        executor: Executor,
-        bus: MessageBus,
-        resource_manager: ResourceManager,
-        constraint_manager: ConstraintManager,
-        solver: Solver,  # Needed for map nodes
-    ):
-        self.executor = executor
+    def __init__(self, bus: MessageBus):
         self.bus = bus
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.solver = solver
-        
-        # Resolvers are owned by the processor
-        self.arg_resolver = ArgumentResolver()
-        self.constraint_resolver = ConstraintResolver()
+        self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
 
-    async def process(
+    def register(self, resource_def: ResourceDefinition):
+        """Registers a resource definition."""
+        self._resource_providers[resource_def.name] = resource_def
+
+    def get_provider(self, name: str) -> Callable:
+        """Retrieves the raw provider function for a resource."""
+        provider = self._resource_providers[name]
+        if isinstance(provider, ResourceDefinition):
+            return provider.func
+        return provider
+
+    def override_provider(self, name: str, new_provider: Any):
+        """Overrides a resource provider (useful for testing)."""
+        self._resource_providers[name] = new_provider
+
+    def scan(self, graph: Graph) -> Set[str]:
+        """
+        Scans the graph to identify all resources required by the nodes.
+        """
+        required = set()
+        for node in graph.nodes:
+            for value in node.literal_inputs.values():
+                if isinstance(value, Inject):
+                    required.add(value.resource_name)
+
+            if node.signature:
+                for param in node.signature.parameters.values():
+                    if isinstance(param.default, Inject):
+                        required.add(param.default.resource_name)
+            elif node.callable_obj:
+                sig = inspect.signature(node.callable_obj)
+                for param in sig.parameters.values():
+                    if isinstance(param.default, Inject):
+                        required.add(param.default.resource_name)
+        return required
+
+    def setup(
         self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
+        required_names: Set[str],
         active_resources: Dict[str, Any],
+        run_stack: ExitStack,
+        step_stack: ExitStack,
         run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
-    ) -> Any:
+    ) -> None:
         """
-        Executes a node with all associated policies (constraints, cache, retry).
-        
-        Args:
-            sub_graph_runner: A callback to execute a sub-workflow (used for map nodes).
-                              Signature: (target, params, parent_state_backend) -> result
+        Initializes required resources that are not yet active.
+        Decides whether to put them in run_stack or step_stack based on scope.
+        Updates active_resources in-place.
         """
-        # 1. Resolve Constraints & Resources
-        requirements = self.constraint_resolver.resolve(
-            node, graph, state_backend, self.constraint_manager
-        )
 
-        # Pre-check for blocking to improve observability
-        if not self.resource_manager.can_acquire(requirements):
-            self.bus.publish(
-                TaskBlocked(
-                    run_id=run_id,
-                    task_id=node.id,
-                    task_name=node.name,
-                    reason="ResourceContention",
-                )
-            )
+        def get_or_create(name: str):
+            if name in active_resources:
+                return active_resources[name]
 
-        # 2. Acquire Resources
-        await self.resource_manager.acquire(requirements)
+            provider_entry = self._resource_providers.get(name)
+            if not provider_entry:
+                raise NameError(f"Resource '{name}' is required but not registered.")
+
+            # Determine scope and func
+            scope = "run"
+            func = provider_entry
+            if isinstance(provider_entry, ResourceDefinition):
+                scope = provider_entry.scope
+                func = provider_entry.func
+
+            # Recursive dependency resolution
+            sig = inspect.signature(func)
+            deps = {
+                p_name: get_or_create(p.default.resource_name)
+                for p_name, p in sig.parameters.items()
+                if isinstance(p.default, Inject)
+            }
+
+            # Instantiate
+            gen = func(**deps)
+            instance = next(gen)
+
+            # Register in active dict
+            active_resources[name] = instance
+            self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
+
+            # Register teardown in appropriate stack
+            target_stack = step_stack if scope == "task" else run_stack
+
+            def cleanup():
+                self._teardown_resource(gen, run_id, name)
+                # Important: remove from active_resources so it can be re-created if needed later
+                active_resources.pop(name, None)
+
+            target_stack.callback(cleanup)
+            return instance
+
+        for name in required_names:
+            get_or_create(name)
+
+    def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):
         try:
-            return await self._execute_internal(
-                node, graph, state_backend, active_resources, run_id, params, sub_graph_runner
+            next(gen)
+        except StopIteration:
+            self.bus.publish(
+                ResourceReleased(run_id=run_id, resource_name=resource_name)
             )
-        finally:
-            await self.resource_manager.release(requirements)
-
-    async def _execute_internal(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable,
-    ) -> Any:
-        # 3. Resolve Arguments
-        args, kwargs = self.arg_resolver.resolve(
-            node, graph, state_backend, active_resources, user_params=params
-        )
-
-        start_time = time.time()
-
-        # 4. Cache Check
-        if node.cache_policy:
-            inputs_for_cache = self._resolve_inputs_for_cache(
-                node, graph, state_backend
-            )
-            cached_value = await node.cache_policy.check(node.id, inputs_for_cache)
-            if cached_value is not None:
-                self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        reason="CacheHit",
-                    )
-                )
-                return cached_value
-
-        self.bus.publish(
-            TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
-        )
-
-        # 5. Handle Map Nodes
-        if node.node_type == "map":
-            return await self._execute_map_node(
-                node, kwargs, active_resources, run_id, params, state_backend, sub_graph_runner
-            )
-
-        # 6. Retry Loop & Execution
-        retry_policy = node.retry_policy
-        max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
-        delay = retry_policy.delay if retry_policy else 0.0
-        backoff = retry_policy.backoff if retry_policy else 1.0
-        attempt = 0
-        last_exception = None
-
-        while attempt < max_attempts:
-            attempt += 1
-            try:
-                result = await self.executor.execute(node, args, kwargs)
-                duration = time.time() - start_time
-                self.bus.publish(
-                    TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        status="Succeeded",
-                        duration=duration,
-                        result_preview=repr(result)[:100],
-                    )
-                )
-                # Cache Save
-                if node.cache_policy:
-                    inputs_for_save = self._resolve_inputs_for_cache(
-                        node, graph, state_backend
-                    )
-                    await node.cache_policy.save(node.id, inputs_for_save, result)
-                return result
-            except Exception as e:
-                last_exception = e
-                if attempt < max_attempts:
-                    self.bus.publish(
-                        TaskRetrying(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            delay=delay,
-                            error=str(e),
-                        )
-                    )
-                    await asyncio.sleep(delay)
-                    delay *= backoff
-                else:
-                    duration = time.time() - start_time
-                    self.bus.publish(
-                        TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            status="Failed",
-                            duration=duration,
-                            error=f"{type(e).__name__}: {e}",
-                        )
-                    )
-                    raise last_exception
-        raise RuntimeError("Unexpected execution state")
-
-    def _resolve_inputs_for_cache(
-        self, node: Node, graph: Graph, state_backend: StateBackend
-    ) -> Dict[str, Any]:
-        inputs = {}
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-        for edge in incoming_edges:
-            if edge.arg_name.startswith("_"):
-                continue
-            if state_backend.has_result(edge.source.id):
-                inputs[edge.arg_name] = state_backend.get_result(edge.source.id)
-        return inputs
-
-    async def _execute_map_node(
-        self,
-        node: Node,
-        kwargs: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        parent_state_backend: StateBackend,
-        sub_graph_runner: Callable,
-    ) -> List[Any]:
-        factory = node.mapping_factory
-        if not kwargs:
-            return []
-        lengths = {k: len(v) for k, v in kwargs.items()}
-        first_len = list(lengths.values())[0]
-        if not all(length == first_len for length in lengths.values()):
-            raise ValueError(f"Mapped inputs have mismatched lengths: {lengths}")
-
-        sub_targets = []
-        for i in range(first_len):
-            item_kwargs = {k: v[i] for k, v in kwargs.items()}
-            sub_target = factory(**item_kwargs)
-            if node.retry_policy:
-                sub_target._retry_policy = node.retry_policy
-            if node.cache_policy:
-                sub_target._cache_policy = node.cache_policy
-            if node.constraints:
-                sub_target._constraints = node.constraints
-            sub_targets.append(sub_target)
-
-        # Execute sub-targets in parallel using the provided runner
-        coros = [
-            sub_graph_runner(target, params, parent_state_backend) 
-            for target in sub_targets
-        ]
-        return await asyncio.gather(*coros)
 ~~~~~
 
-#### Acts 2: 更新 `Engine` 类
+#### Acts 2: 重构 `Engine` 类
 
-现在我们重构 `Engine` 类，移除已移动的逻辑，并连接 `NodeProcessor`。
+移除 `Engine` 中相应的代码，并转而调用 `ResourceContainer`。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-from cascade.runtime.exceptions import DependencyMissingError
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
-from cascade.runtime.flow import FlowManager
-from cascade.runtime.constraints import ConstraintManager
-from cascade.runtime.constraints.handlers import (
-    PauseConstraintHandler,
-    ConcurrencyConstraintHandler,
-    RateLimitConstraintHandler,
-)
-from cascade.adapters.state import InMemoryStateBackend
-from cascade.graph.compiler import BlueprintBuilder
-from cascade.runtime.vm import VirtualMachine
-
-
-class Engine:
-    """
-    Orchestrates the entire workflow execution.
-    """
-
-    def __init__(
-        self,
-        solver: Solver,
-        executor: Executor,
-        bus: MessageBus,
-        state_backend_factory: Callable[[str], StateBackend] = None,
-        system_resources: Optional[Dict[str, Any]] = None,
-        connector: Optional[Connector] = None,
-        cache_backend: Optional[Any] = None,
-        resource_manager: Optional[ResourceManager] = None,
-    ):
-        self.solver = solver
-        self.executor = executor
-        self.bus = bus
-        self.connector = connector
-        # Default to InMemory factory if none provided
-        self.state_backend_factory = state_backend_factory or (
-            lambda run_id: InMemoryStateBackend(run_id)
-        )
-        self.cache_backend = cache_backend
-
-        if resource_manager:
-            self.resource_manager = resource_manager
-            # If system_resources is also provided, we update the injected manager
-            if system_resources:
-                self.resource_manager.set_capacity(system_resources)
-        else:
-            self.resource_manager = ResourceManager(capacity=system_resources)
-
-        # Setup constraint manager with default handlers
-        self.constraint_manager = ConstraintManager(self.resource_manager)
-        self.constraint_manager.register_handler(PauseConstraintHandler())
-        self.constraint_manager.register_handler(ConcurrencyConstraintHandler())
-        self.constraint_manager.register_handler(RateLimitConstraintHandler())
-
-        self._wakeup_event = asyncio.Event()
-        self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
-
-        self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
-
-        self.arg_resolver = ArgumentResolver()
-        self.constraint_resolver = ConstraintResolver()
-        self._managed_subscribers = []
-        self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
-
-    def add_subscriber(self, subscriber: Any):
-~~~~~
-~~~~~python
-from cascade.runtime.exceptions import DependencyMissingError
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.flow import FlowManager
-from cascade.runtime.constraints import ConstraintManager
-from cascade.runtime.constraints.handlers import (
-    PauseConstraintHandler,
-    ConcurrencyConstraintHandler,
-    RateLimitConstraintHandler,
-)
 from cascade.adapters.state import InMemoryStateBackend
 from cascade.graph.compiler import BlueprintBuilder
 from cascade.runtime.vm import VirtualMachine
@@ -375,45 +173,23 @@ from cascade.runtime.processor import NodeProcessor
 
 
 class Engine:
-    """
-    Orchestrates the entire workflow execution.
-    """
+~~~~~
+~~~~~python
+from cascade.adapters.state import InMemoryStateBackend
+from cascade.graph.compiler import BlueprintBuilder
+from cascade.runtime.vm import VirtualMachine
+from cascade.runtime.processor import NodeProcessor
+from cascade.runtime.resource_container import ResourceContainer
 
-    def __init__(
-        self,
-        solver: Solver,
-        executor: Executor,
-        bus: MessageBus,
-        state_backend_factory: Callable[[str], StateBackend] = None,
-        system_resources: Optional[Dict[str, Any]] = None,
-        connector: Optional[Connector] = None,
-        cache_backend: Optional[Any] = None,
-        resource_manager: Optional[ResourceManager] = None,
-    ):
-        self.solver = solver
-        self.executor = executor
-        self.bus = bus
-        self.connector = connector
-        # Default to InMemory factory if none provided
-        self.state_backend_factory = state_backend_factory or (
-            lambda run_id: InMemoryStateBackend(run_id)
-        )
-        self.cache_backend = cache_backend
 
-        if resource_manager:
-            self.resource_manager = resource_manager
-            # If system_resources is also provided, we update the injected manager
-            if system_resources:
-                self.resource_manager.set_capacity(system_resources)
-        else:
-            self.resource_manager = ResourceManager(capacity=system_resources)
+class Engine:
+~~~~~
 
-        # Setup constraint manager with default handlers
-        self.constraint_manager = ConstraintManager(self.resource_manager)
-        self.constraint_manager.register_handler(PauseConstraintHandler())
-        self.constraint_manager.register_handler(ConcurrencyConstraintHandler())
-        self.constraint_manager.register_handler(RateLimitConstraintHandler())
-
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
         self._wakeup_event = asyncio.Event()
         self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
 
@@ -421,327 +197,275 @@ class Engine:
 
         # Delegate node execution logic to NodeProcessor
         self.node_processor = NodeProcessor(
-            executor=self.executor,
-            bus=self.bus,
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            solver=self.solver,
-        )
-        
-        self._managed_subscribers = []
-        self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
-
-    def add_subscriber(self, subscriber: Any):
 ~~~~~
+~~~~~python
+        self._wakeup_event = asyncio.Event()
+        self.constraint_manager.set_wakeup_callback(self._wakeup_event.set)
 
-#### Acts 3: 更新 `_execute_graph` 以使用 `NodeProcessor` 并清理旧方法
+        self.resource_container = ResourceContainer(self.bus)
+
+        # Delegate node execution logic to NodeProcessor
+        self.node_processor = NodeProcessor(
+~~~~~
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python
-                if executable_this_pass:
-                    tasks_to_run = [
-                        self._execute_node_with_policies(
-                            node, graph, state_backend, active_resources, run_id, params
-                        )
-                        for node in executable_this_pass
-                    ]
+    def register(self, resource_def: ResourceDefinition):
+        # We store the full ResourceDefinition to preserve metadata like scope.
+        self._resource_providers[resource_def.name] = resource_def
 
-                    pass_results = await asyncio.gather(*tasks_to_run)
-
-                    for node, res in zip(executable_this_pass, pass_results):
-                        state_backend.put_result(node.id, res)
-                        if flow_manager:
-                            flow_manager.register_result(node.id, res, state_backend)
-
-                pending_nodes_in_stage = deferred_this_pass
-
-                if pending_nodes_in_stage and not executable_this_pass:
-                    # All remaining nodes are blocked by constraints. Wait for a wakeup
-                    # signal (e.g., from a constraint change or TTL expiration) before retrying.
-                    await self._wakeup_event.wait()
-                    self._wakeup_event.clear()
-                    self.constraint_manager.cleanup_expired_constraints()
-
-        if not state_backend.has_result(target._uuid):
-            if skip_reason := state_backend.get_skip_reason(target._uuid):
-                raise DependencyMissingError(
-                    task_id=target.task.name,
-                    arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
-                )
-            raise KeyError(
-                f"Target task '{target.task.name}' did not produce a result."
-            )
-
-        return state_backend.get_result(target._uuid)
-
-    async def _execute_node_with_policies(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-    ) -> Any:
-        requirements = self.constraint_resolver.resolve(
-            node, graph, state_backend, self.constraint_manager
-        )
-
-        # Pre-check for blocking to improve observability
-        if not self.resource_manager.can_acquire(requirements):
-            from cascade.runtime.events import TaskBlocked
-
-            self.bus.publish(
-                TaskBlocked(
-                    run_id=run_id,
-                    task_id=node.id,
-                    task_name=node.name,
-                    reason="ResourceContention",
-                )
-            )
-
-        await self.resource_manager.acquire(requirements)
-        try:
-            return await self._execute_node_internal(
-                node, graph, state_backend, active_resources, run_id, params
-            )
-        finally:
-            await self.resource_manager.release(requirements)
-
-    async def _execute_node_internal(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-    ) -> Any:
-        args, kwargs = self.arg_resolver.resolve(
-            node, graph, state_backend, active_resources, user_params=params
-        )
-
-        start_time = time.time()
-
-        if node.cache_policy:
-            inputs_for_cache = self._resolve_inputs_for_cache(
-                node, graph, state_backend
-            )
-            cached_value = await node.cache_policy.check(node.id, inputs_for_cache)
-            if cached_value is not None:
-                self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        reason="CacheHit",
-                    )
-                )
-                return cached_value
-
-        self.bus.publish(
-            TaskExecutionStarted(run_id=run_id, task_id=node.id, task_name=node.name)
-        )
-
-        if node.node_type == "map":
-            # ... (Map logic remains complex, needs careful refactoring if touched)
-            # For now, we assume it can be called recursively with the state backend
-            return await self._execute_map_node(
-                node, args, kwargs, active_resources, run_id, params, state_backend
-            )
-
-        retry_policy = node.retry_policy
-        max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
-        delay = retry_policy.delay if retry_policy else 0.0
-        backoff = retry_policy.backoff if retry_policy else 1.0
-        attempt = 0
-        last_exception = None
-
-        while attempt < max_attempts:
-            attempt += 1
-            try:
-                result = await self.executor.execute(node, args, kwargs)
-                duration = time.time() - start_time
-                self.bus.publish(
-                    TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.id,
-                        task_name=node.name,
-                        status="Succeeded",
-                        duration=duration,
-                        result_preview=repr(result)[:100],
-                    )
-                )
-                if node.cache_policy:
-                    inputs_for_save = self._resolve_inputs_for_cache(
-                        node, graph, state_backend
-                    )
-                    await node.cache_policy.save(node.id, inputs_for_save, result)
-                return result
-            except Exception as e:
-                last_exception = e
-                if attempt < max_attempts:
-                    self.bus.publish(
-                        TaskRetrying(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            delay=delay,
-                            error=str(e),
-                        )
-                    )
-                    await asyncio.sleep(delay)
-                    delay *= backoff
-                else:
-                    duration = time.time() - start_time
-                    self.bus.publish(
-                        TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.id,
-                            task_name=node.name,
-                            status="Failed",
-                            duration=duration,
-                            error=f"{type(e).__name__}: {e}",
-                        )
-                    )
-                    raise last_exception
-        raise RuntimeError("Unexpected execution state")
-
-    def _resolve_inputs_for_cache(
-        self, node: Node, graph: Graph, state_backend: StateBackend
-    ) -> Dict[str, Any]:
-        inputs = {}
-        incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
-        for edge in incoming_edges:
-            if edge.arg_name.startswith("_"):
-                continue
-            if state_backend.has_result(edge.source.id):
-                inputs[edge.arg_name] = state_backend.get_result(edge.source.id)
-        return inputs
-
-    async def _execute_map_node(
-        self,
-        node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        parent_state_backend: StateBackend,
-    ) -> List[Any]:
-        factory = node.mapping_factory
-        if not kwargs:
-            return []
-        lengths = {k: len(v) for k, v in kwargs.items()}
-        first_len = list(lengths.values())[0]
-        if not all(length == first_len for length in lengths.values()):
-            raise ValueError(f"Mapped inputs have mismatched lengths: {lengths}")
-
-        sub_targets = []
-        for i in range(first_len):
-            item_kwargs = {k: v[i] for k, v in kwargs.items()}
-            sub_target = factory(**item_kwargs)
-            if node.retry_policy:
-                sub_target._retry_policy = node.retry_policy
-            if node.cache_policy:
-                sub_target._cache_policy = node.cache_policy
-            if node.constraints:
-                sub_target._constraints = node.constraints
-            sub_targets.append(sub_target)
-
-        # Each sub-task is a full workflow run from the engine's perspective
-        # but shares the parent's state backend to see results.
-        async def run_sub_target(target):
-            # For mapped tasks, we perform the full build/solve cycle for each item.
-            # TCO optimization does not apply here.
-            graph = build_graph(target)
-            plan = self.solver.resolve(graph)
-            return await self._execute_graph(
-                target,
-                params,
-                active_resources,
-                run_id,
-                parent_state_backend,
-                graph=graph,
-                plan=plan,
-            )
-
-        coros = [run_sub_target(target) for target in sub_targets]
-        return await asyncio.gather(*coros)
-
-    def _scan_for_resources(self, graph: Graph) -> set[str]:
+    def _is_simple_task(self, lr: Any) -> bool:
+        """
+        Checks if the LazyResult is a simple, flat task (no nested dependencies).
+        This allows for the Zero-Overhead TCO fast path.
+        """
 ~~~~~
 ~~~~~python
-                if executable_this_pass:
-                    # Define a callback for map nodes to execute sub-workflows
-                    async def sub_graph_runner(target, sub_params, parent_state):
-                        sub_graph = build_graph(target)
-                        sub_plan = self.solver.resolve(sub_graph)
-                        return await self._execute_graph(
-                            target,
-                            sub_params,
+    def register(self, resource_def: ResourceDefinition):
+        self.resource_container.register(resource_def)
+
+    def _is_simple_task(self, lr: Any) -> bool:
+        """
+        Checks if the LazyResult is a simple, flat task (no nested dependencies).
+        This allows for the Zero-Overhead TCO fast path.
+        """
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    def get_resource_provider(self, name: str) -> Callable:
+        provider = self._resource_providers[name]
+        if isinstance(provider, ResourceDefinition):
+            return provider.func
+        return provider
+
+    def override_resource_provider(self, name: str, new_provider: Any):
+        # When overriding, we might lose metadata if a raw function is passed,
+        # but that's acceptable for testing overrides.
+        self._resource_providers[name] = new_provider
+
+    async def run(
+        self, target: Any, params: Optional[Dict[str, Any]] = None, use_vm: bool = False
+    ) -> Any:
+~~~~~
+~~~~~python
+    def get_resource_provider(self, name: str) -> Callable:
+        return self.resource_container.get_provider(name)
+
+    def override_resource_provider(self, name: str, new_provider: Any):
+        self.resource_container.override_provider(name, new_provider)
+
+    async def run(
+        self, target: Any, params: Optional[Dict[str, Any]] = None, use_vm: bool = False
+    ) -> Any:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+                        self._graph_cache[struct_hash] = (graph, plan)
+
+                        # 2. Setup Resources (mixed scope)
+                        required_resources = self._scan_for_resources(graph)
+                        self._setup_resources(
+                            required_resources,
                             active_resources,
+                            run_stack,
+                            step_stack,
                             run_id,
-                            parent_state,
-                            graph=sub_graph,
-                            plan=sub_plan,
                         )
 
-                    tasks_to_run = [
-                        self.node_processor.process(
-                            node,
-                            graph,
-                            state_backend,
+                        # 3. Execute
+                        result = await self._execute_graph(
+~~~~~
+~~~~~python
+                        self._graph_cache[struct_hash] = (graph, plan)
+
+                        # 2. Setup Resources (mixed scope)
+                        required_resources = self.resource_container.scan(graph)
+                        self.resource_container.setup(
+                            required_resources,
                             active_resources,
+                            run_stack,
+                            step_stack,
                             run_id,
-                            params,
-                            sub_graph_runner,
                         )
-                        for node in executable_this_pass
-                    ]
 
-                    pass_results = await asyncio.gather(*tasks_to_run)
+                        # 3. Execute
+                        result = await self._execute_graph(
+~~~~~
 
-                    for node, res in zip(executable_this_pass, pass_results):
-                        state_backend.put_result(node.id, res)
-                        if flow_manager:
-                            flow_manager.register_result(node.id, res, state_backend)
+#### Acts 3: 移除 `Engine` 中已废弃的资源管理方法
 
-                pending_nodes_in_stage = deferred_this_pass
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
+    def _update_graph_literals(
+        self, graph: Graph, target: Any, literals: Dict[str, Any]
+    ):
+        """Injects new literal values and UUID into a cached graph."""
+        # A simple graph has a predictable structure we can update directly.
+        # This assumes a single root node for the target.
+        node_map = {node.id: node for node in graph.nodes}
 
-                if pending_nodes_in_stage and not executable_this_pass:
-                    # All remaining nodes are blocked by constraints. Wait for a wakeup
-                    # signal (e.g., from a constraint change or TTL expiration) before retrying.
-                    await self._wakeup_event.wait()
-                    self._wakeup_event.clear()
-                    self.constraint_manager.cleanup_expired_constraints()
+        # This is a bit of a simplification. A full implementation would need to
+        # traverse the target structure and map literals back to the graph nodes.
+        # For now, let's assume the root node gets the new literals.
+        # The most important part is updating the target's UUID.
 
-        if not state_backend.has_result(target._uuid):
-            if skip_reason := state_backend.get_skip_reason(target._uuid):
-                raise DependencyMissingError(
-                    task_id=target.task.name,
-                    arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
-                )
-            raise KeyError(
-                f"Target task '{target.task.name}' did not produce a result."
-            )
+        # Find the node corresponding to the target LazyResult
+        # In a cached graph, the ID is stale, so we find it by name or type.
+        # For now, we assume the last node is the target node.
+        if graph.nodes:
+            target_node = graph.nodes[-1]
+            target_node.id = target._uuid
+            # This is a simplification; a robust solution would traverse and update.
+            # For firefly, the structure is so simple this may be sufficient.
+            if hasattr(target, "args") and hasattr(target, "kwargs"):
+                target_node.literal_inputs = {
+                    str(i): v for i, v in enumerate(target.args)
+                }
+                target_node.literal_inputs.update(target.kwargs)
 
+    async def _execute_graph(
+~~~~~
+~~~~~python
+    def _update_graph_literals(
+        self, graph: Graph, target: Any, literals: Dict[str, Any]
+    ):
+        """Injects new literal values and UUID into a cached graph."""
+        # A simple graph has a predictable structure we can update directly.
+        # This assumes a single root node for the target.
+        node_map = {node.id: node for node in graph.nodes}
+
+        # This is a bit of a simplification. A full implementation would need to
+        # traverse the target structure and map literals back to the graph nodes.
+        # For now, let's assume the root node gets the new literals.
+        # The most important part is updating the target's UUID.
+
+        # Find the node corresponding to the target LazyResult
+        # In a cached graph, the ID is stale, so we find it by name or type.
+        # For now, we assume the last node is the target node.
+        if graph.nodes:
+            target_node = graph.nodes[-1]
+            target_node.id = target._uuid
+            # This is a simplification; a robust solution would traverse and update.
+            # For firefly, the structure is so simple this may be sufficient.
+            if hasattr(target, "args") and hasattr(target, "kwargs"):
+                target_node.literal_inputs = {
+                    str(i): v for i, v in enumerate(target.args)
+                }
+                target_node.literal_inputs.update(target.kwargs)
+
+    async def _execute_graph(
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python
         return state_backend.get_result(target._uuid)
 
     def _scan_for_resources(self, graph: Graph) -> set[str]:
+        required = set()
+        for node in graph.nodes:
+            for value in node.literal_inputs.values():
+                if isinstance(value, Inject):
+                    required.add(value.resource_name)
+
+            if node.signature:
+                for param in node.signature.parameters.values():
+                    if isinstance(param.default, Inject):
+                        required.add(param.default.resource_name)
+            elif node.callable_obj:
+                sig = inspect.signature(node.callable_obj)
+                for param in sig.parameters.values():
+                    if isinstance(param.default, Inject):
+                        required.add(param.default.resource_name)
+        return required
+
+    def _setup_resources(
+        self,
+        required_names: set[str],
+        active_resources: Dict[str, Any],
+        run_stack: ExitStack,
+        step_stack: ExitStack,
+        run_id: str,
+    ) -> None:
+        """
+        Initializes required resources that are not yet active.
+        Decides whether to put them in run_stack or step_stack based on scope.
+        Updates active_resources in-place.
+        """
+
+        def get_or_create(name: str):
+            if name in active_resources:
+                return active_resources[name]
+
+            provider_entry = self._resource_providers.get(name)
+            if not provider_entry:
+                raise NameError(f"Resource '{name}' is required but not registered.")
+
+            # Determine scope and func
+            scope = "run"
+            func = provider_entry
+            if isinstance(provider_entry, ResourceDefinition):
+                scope = provider_entry.scope
+                func = provider_entry.func
+
+            # Recursive dependency resolution
+            sig = inspect.signature(func)
+            deps = {
+                p_name: get_or_create(p.default.resource_name)
+                for p_name, p in sig.parameters.items()
+                if isinstance(p.default, Inject)
+            }
+
+            # Instantiate
+            gen = func(**deps)
+            instance = next(gen)
+
+            # Register in active dict
+            active_resources[name] = instance
+            self.bus.publish(ResourceAcquired(run_id=run_id, resource_name=name))
+
+            # Register teardown in appropriate stack
+            target_stack = step_stack if scope == "task" else run_stack
+
+            def cleanup():
+                self._teardown_resource(gen, run_id, name)
+                # Important: remove from active_resources so it can be re-created if needed later
+                active_resources.pop(name, None)
+
+            target_stack.callback(cleanup)
+            return instance
+
+        for name in required_names:
+            get_or_create(name)
+
+    def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):
+        try:
+            next(gen)
+        except StopIteration:
+            self.bus.publish(
+                ResourceReleased(run_id=run_id, resource_name=resource_name)
+            )
+~~~~~
+~~~~~python
+        return state_backend.get_result(target._uuid)
 ~~~~~
 
 ### 下一步建议
-我们已经成功地将最复杂的单节点执行逻辑（包括策略、重试、缓存等）提取到了 `NodeProcessor` 中。这显著减少了 `Engine` 的体积。
-
-接下来的重构可以继续关注：
-1.  **资源管理分离**: 将 `_resource_providers`、`_scan_for_resources` 和 `_setup_resources` 提取到一个 `ResourceContainer` 或 `DependencyInjector` 类中。
-2.  **图构建分离**: 将 `StructuralHasher`、`build_graph` 和缓存逻辑提取到一个 `GraphLoader` 类中。
-3.  **VM 逻辑**: `_run_vm` 可以进一步封装，或者 `Engine` 可以变身为一个抽象基类，分别有 `GraphEngine` 和 `VMEngine` 实现。
+通过提取 `ResourceContainer`，`Engine` 的代码行数进一步减少，职责更加聚焦于调度。
+接下来，我们可以开始执行 **路线 3: VM 与图执行分离**。我们将定义一个 `ExecutionStrategy` 协议，并实现 `GraphExecutionStrategy` 和 `VMExecutionStrategy`，彻底清理 `Engine` 中的 `if use_vm:` 分支。

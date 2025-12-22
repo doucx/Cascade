@@ -1,47 +1,63 @@
-## [WIP] fix: 纠正 LocalConnector 中的 NameError
+我们已经完成了重构和相应的错误修复，现在是时候将这些修改作为一个完整的逻辑单元提交到版本控制系统。
 
-### 错误分析
-`LocalConnector.subscribe` 方法在返回订阅句柄时，错误地引用了已被重命名的 `_SqliteSubscriptionHandle` 类，导致 `NameError`。这个异常中断了 `engine.run()` 的初始化过程，是导致多个端到端测试失败的根本原因。
+## [COMMIT] feat(connector): Unify sqlite backend into local connector and fix namespace conflict
 
 ### 用户需求
-修复 `test_e2e_local_connector.py` 中由于 `NameError` 导致的所有测试失败。
+将之前两个计划中执行的“SQLite 后端重构为 Local 后端”和“解决由此产生的命名空间冲突及 NameError”的操作合并为一个原子提交。
 
 ### 评论
-这是一个简单的疏忽，但影响深远，凸显了在重构过程中保持代码一致性的重要性。幸运的是，错误信息非常明确，使得定位和修复变得直接。
+这个提交代表了将 Cascade 的零依赖状态/控制平面从特定技术名称（SQLite）提升到通用概念（Local）的重大架构步骤。它使 `cascade-connector-local` 成为所有单机、零依赖连接器（SQLite for state, LocalBus for in-memory events）的统一家园，为下一步实现 UDS Telemetry 服务器奠定了清晰、稳固的基础。
 
 ### 目标
-1.  定位 `packages/cascade-connector-local/src/cascade/connectors/local/connector.py` 中的 `subscribe` 方法。
-2.  将其 `return` 语句中对 `_SqliteSubscriptionHandle` 的调用更改为 `_LocalSubscriptionHandle`。
-3.  确保修复后，相关的端到端测试能够全部通过。
+1.  提交所有文件重命名和内容修改。
+2.  确保提交信息清晰地概括了本次重构的原因和结果。
 
 ### 基本原理
-通过修正这个 `NameError`，`LocalConnector` 将能够正确创建和返回订阅句柄，`Engine` 的初始化将不再中断。这将恢复控制平面的正常功能，并使依赖于它的端到端测试（暂停、恢复、TTL等）能够按预期执行。
+我们遵循 `d3-constraint-quipu-plan-script-rules-D3-P2` 约束，将文件系统变更（之前的两个 `[WIP]` 计划）与版本控制操作隔离。现在所有修改都已验证通过，可以安全地进行提交。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #comp/tests #scope/dx #ai/instruct #task/domain/storage #task/object/local-backend #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/cli #comp/engine #comp/tests #concept/config #scope/dx #ai/instruct #task/domain/storage #task/object/local-backend #task/action/refactor #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `subscribe` 方法中的类名引用
-
-我将直接修补 `connector.py` 文件中错误的返回语句。
+#### Acts 1: 添加所有更改的文件到暂存区
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-connector-local/pyproject.toml
+pyproject.toml
+packages/cascade-cli-controller/src/cascade/cli/controller/app.py
+packages/cascade-cli-observer/src/cascade/cli/observer/app.py
+tests/cli/e2e/test_e2e_cli_local_backend.py
+tests/engine/e2e/test_e2e_local_connector.py
+packages/cascade-connector-local/src/cascade/connectors/local/__init__.py
 packages/cascade-connector-local/src/cascade/connectors/local/connector.py
+packages/cascade-connector-local/src/cascade/connectors/local/bus.py
 ~~~~~
-~~~~~python
-        await ready_event.wait()
-        await self._sync_and_notify(callback)
-        return _SqliteSubscriptionHandle(self, task)
+
+#### Acts 2: 执行 Git 提交
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-        await ready_event.wait()
-        await self._sync_and_notify(callback)
-        return _LocalSubscriptionHandle(self, task)
+~~~~~text
+feat(connector): Unify sqlite backend into local connector and fix namespace conflict
+
+This commit completes the conceptual unification of the zero-dependency backend, renaming it from `sqlite` to the more generic `local`. This semantic change paves the way for integrating other local-only features, such as Unix Domain Socket (UDS) telemetry, into the same package.
+
+Key changes include:
+
+1.  **Refactoring**: Renamed `cascade-connector-sqlite` package to `cascade-connector-local`, and `SqliteConnector` class to `LocalConnector`.
+2.  **CLI Update**: Updated all references in `cs-controller` and `cs-observer` from `--backend sqlite` to `--backend local`.
+3.  **Namespace Fix**: Resolved a critical Python import error by moving the `LocalBusConnector` implementation from `cascade-engine` to the new `cascade-connector-local` package. This resolves a namespace collision and properly groups all local-focused connectors.
+
+All affected test files (`test_e2e_cli_local_backend.py` and `test_e2e_local_connector.py`) have been renamed and updated to use the new `LocalConnector` class and the correct module structure.
 ~~~~~
 
 ### 下一步建议
-这个补丁应该能解决所有报告的测试失败。在您确认此计划后，我建议重新运行测试套件。一旦所有测试通过，我们就可以放心地继续执行路线图的 **步骤 2: [核心机制] 实现基于 UDS 的 Telemetry 事件服务器**。
+
+我们已经完成了路线图中的 **步骤 1: [概念统一] 重构与重命名**，并成功解决了由此引入的所有问题。
+
+现在，我们可以专注于 **步骤 2: [核心机制] 实现基于 UDS 的 Telemetry 事件服务器**。这项任务涉及在 `LocalConnector` 内部实现一个新的异步服务器，用于实时广播事件，这将是实现本地实时 `watch` 功能的基础。

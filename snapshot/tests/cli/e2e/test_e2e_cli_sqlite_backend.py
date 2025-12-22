@@ -52,9 +52,9 @@ def test_set_and_status_sqlite(isolated_db_path: Path):
     # 2. Check the status
     result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
     assert result_status.exit_code == 0
-    assert "global" in result_status.stdout
-    assert "rate_limit" in result_status.stdout
-    assert "{'rate': '10/s'}" in result_status.stdout
+    assert "global" in result_status.stderr
+    assert "rate_limit" in result_status.stderr
+    assert "{'rate': '10/s'}" in result_status.stderr
 
 
 def test_resume_sqlite(isolated_db_path: Path):
@@ -79,8 +79,8 @@ def test_resume_sqlite(isolated_db_path: Path):
     # 3. Check the status and verify it's gone
     result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
     assert result_status.exit_code == 0
-    assert "No active constraints found" in result_status.stdout
-    assert "task:api" not in result_status.stdout
+    assert "No active constraints found" in result_status.stderr
+    assert "task:api" not in result_status.stderr
 
 
 def test_mqtt_backend_leaves_no_trace(isolated_db_path: Path, monkeypatch):

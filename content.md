@@ -1,148 +1,85 @@
-好的，我们正式开始路线图的第四步。
+好的，我来处理这个测试失败。
 
-这个计划将创建一个全新的端到端测试文件，以确保我们刚刚集成的 `SqliteConnector` 在 `cs-controller` 和 `cs-observer` 中的表现完全符合预期。
+这是一个经典的输出流问题。应用程序将它的输出打印到了标准错误（`stderr`），而我们的测试却在标准输出（`stdout`）中寻找结果。
 
-## [WIP] test: Add e2e tests for SqliteConnector CLI integration
+## [WIP] fix: 修正 CLI 测试以断言正确的输出流 (stderr)
+
+### 错误分析
+`test_set_and_status_sqlite` 和 `test_resume_sqlite` 两个测试用例失败，断言错误为 `AssertionError: assert '...' in ''`。这表明 `typer.testing.CliRunner` 捕获到的 `result.stdout` 是一个空字符串。
+
+经过分析 `packages/cascade-cli-observer/src/cascade/cli/observer/app.py` 的代码，我发现其 `rich.Console` 实例被硬编码初始化为向 `stderr` 输出：
+`console = Console(stderr=True)`
+
+因此，`cs-observer status` 命令的所有可视输出，包括我们期望的约束表格，都被发送到了标准错误流。而测试用例错误地断言了 `result.stdout`，导致了失败。
 
 ### 用户需求
-根据项目路线图，需要完成 `SqliteConnector` 开发的第四步：编写全面的端到端测试，以验证其在 CLI 工具中的集成是正确和健壮的。
+修复 `test_e2e_cli_sqlite_backend.py` 中的断言，使其能够正确验证 `cs-observer` 的输出，从而让测试通过。
 
 ### 评论
-这些端到端测试是此功能交付前的最后一道质量关卡。它们从用户的视角出发，通过模拟真实的命令行调用来验证整个工作流——从通过 `cs-controller` 写入数据库，到通过 `cs-observer` 读取状态——确保新引入的 `--backend sqlite` 选项在实际使用中表现稳定、可靠。
+这个修复很简单，但它强调了编写测试时的一个重要细节：必须了解并验证应用程序实际使用的输出流。将 UI 和元信息输出到 `stderr` 是一种常见的 CLI 设计模式，我们的测试应该遵循这一模式。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/cli/e2e/test_e2e_cli_sqlite_backend.py`。
-2.  实现一个 `pytest` fixture，该 fixture 能为每个测试用例提供一个隔离的、临时的 SQLite 数据库文件，以确保测试之间互不干扰。
-3.  编写测试用例，验证 `cs-controller set-limit --backend sqlite` 可以在该数据库文件中成功创建一条约束记录。
-4.  编写测试用例，验证 `cs-observer status --backend sqlite` 能够从数据库中读取并正确显示该约束。
-5.  编写测试用例，验证 `cs-controller resume --backend sqlite` 能够成功地从数据库中删除约束。
-6.  编写一个反向测试用例，确保当使用 `--backend mqtt` 时，SQLite 数据库文件不会被创建或修改。
+修改 `tests/cli/e2e/test_e2e_cli_sqlite_backend.py` 文件中失败的两个测试用例，将所有对 `result_status.stdout` 的断言更改为对 `result_status.stderr` 的断言。
 
 ### 基本原理
-我们将使用 `write_file` 创建一个新的测试文件。测试的核心依赖于 `typer.testing.CliRunner` 来模拟命令行调用。为了实现测试隔离，我们将创建一个名为 `isolated_db_path` 的 `pytest` fixture。这个 fixture 会利用 `tmp_path` 创建一个临时数据库路径，并通过 `monkeypatch` 在测试运行时动态地重定向 `SqliteConnector` 和 `cs-observer` 中硬编码的默认数据库路径 (`~/.cascade/control.db`)，使其指向这个临时路径。这样，我们的测试就不会影响用户的实际配置文件，并且每次运行时都有一个干净的环境。
+我们将使用 `patch_file` 对测试文件进行精确修改。通过将断言目标从 `.stdout` 更改为 `.stderr`，测试将与被测应用的实际行为保持一致，从而能够正确验证其功能。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/cli #concept/state #scope/dx #ai/instruct #task/domain/cli #task/object/sqlite-connector #task/action/integration #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/cli #task/object/sqlite-connector #task/action/integration #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 SQLite 后端的端到端测试文件
+#### Acts 1: 修正 `test_set_and_status_sqlite` 的断言
 
-我们将创建 `tests/cli/e2e/test_e2e_cli_sqlite_backend.py` 并填充所有必要的测试用例和辅助工具。
+我们将 `stdout` 更改为 `stderr`。
 
 ~~~~~act
-write_file
+patch_file
 tests/cli/e2e/test_e2e_cli_sqlite_backend.py
 ~~~~~
 ~~~~~python
-import pytest
-from typer.testing import CliRunner
-from pathlib import Path
-
-# Apps to test
-from cascade.cli.controller.app import app as controller_app
-from cascade.cli.observer.app import app as observer_app
-from cascade.connectors.sqlite import SqliteConnector
-
-
-@pytest.fixture
-def isolated_db_path(tmp_path: Path, monkeypatch):
-    """
-    Fixture to create an isolated SQLite database for tests and patch the
-    hardcoded default path in the CLI applications.
-    """
-    db_path = tmp_path / "test-control.db"
-
-    # Patch 1: The default path in the SqliteConnector constructor, used by cs-controller
-    # We patch the class itself to replace the default __init__ behavior.
-    original_init = SqliteConnector.__init__
-
-    def patched_init(self, db_path=str(db_path), **kwargs):
-        # We force our test db_path, ignoring whatever might be passed.
-        original_init(self, db_path=str(db_path), **kwargs)
-
-    monkeypatch.setattr(
-        "cascade.cli.controller.app.SqliteConnector",
-        lambda *args, **kwargs: SqliteConnector(db_path=str(db_path)),
-    )
-
-    # Patch 2: The hardcoded path in cs-observer's status command logic.
-    monkeypatch.setattr("cascade.cli.observer.app.Path.expanduser", lambda self: db_path)
-
-    return db_path
-
-
-def test_set_and_status_sqlite(isolated_db_path: Path):
-    """
-    Verify that `controller set-limit` creates a db entry and `observer status` can read it.
-    """
-    runner = CliRunner()
-
-    # 1. Set a constraint using the sqlite backend
-    result_set = runner.invoke(
-        controller_app,
-        ["set-limit", "--scope", "global", "--rate", "10/s", "--backend", "sqlite"],
-    )
-    assert result_set.exit_code == 0
-    assert isolated_db_path.exists()
-
     # 2. Check the status
     result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
     assert result_status.exit_code == 0
     assert "global" in result_status.stdout
     assert "rate_limit" in result_status.stdout
     assert "{'rate': '10/s'}" in result_status.stdout
+~~~~~
+~~~~~python
+    # 2. Check the status
+    result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
+    assert result_status.exit_code == 0
+    assert "global" in result_status.stderr
+    assert "rate_limit" in result_status.stderr
+    assert "{'rate': '10/s'}" in result_status.stderr
+~~~~~
 
+#### Acts 2: 修正 `test_resume_sqlite` 的断言
 
-def test_resume_sqlite(isolated_db_path: Path):
-    """
-    Verify that `controller resume` correctly deletes a constraint from the database.
-    """
-    runner = CliRunner()
+同样，我们将 `stdout` 更改为 `stderr`。
 
-    # 1. Set a constraint
-    runner.invoke(
-        controller_app,
-        ["set-limit", "--scope", "task:api", "--concurrency", "5", "--backend", "sqlite"],
-    )
-    assert isolated_db_path.exists()
-
-    # 2. Resume the scope
-    result_resume = runner.invoke(
-        controller_app, ["resume", "task:api", "--backend", "sqlite"]
-    )
-    assert result_resume.exit_code == 0
-
+~~~~~act
+patch_file
+tests/cli/e2e/test_e2e_cli_sqlite_backend.py
+~~~~~
+~~~~~python
     # 3. Check the status and verify it's gone
     result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
     assert result_status.exit_code == 0
     assert "No active constraints found" in result_status.stdout
     assert "task:api" not in result_status.stdout
-
-
-def test_mqtt_backend_leaves_no_trace(isolated_db_path: Path, monkeypatch):
-    """
-    Verify that running commands with `--backend mqtt` does not interact with the SQLite DB.
-    """
-    # We need to mock the MqttConnector to avoid network errors
-    monkeypatch.setattr("cascade.cli.controller.app.MqttConnector", lambda *a, **kw: None)
-
-    runner = CliRunner()
-    result = runner.invoke(
-        controller_app,
-        ["set-limit", "--scope", "global", "--rate", "1/s", "--backend", "mqtt"],
-    )
-
-    # Even though the command "fails" without a mock, it shouldn't touch the filesystem.
-    # The important check is that the db file was NOT created.
-    assert not isolated_db_path.exists()
+~~~~~
+~~~~~python
+    # 3. Check the status and verify it's gone
+    result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
+    assert result_status.exit_code == 0
+    assert "No active constraints found" in result_status.stderr
+    assert "task:api" not in result_status.stderr
 ~~~~~
 
 ### 下一步建议
-我们已经为 `SqliteConnector` 的 CLI 集成添加了必要的端到端测试，标志着路线图的核心开发和质量保证阶段已经完成。
+修复了测试断言后，请重新运行测试套件。测试应该会全部通过。
 
-现在是时候将这个功能的所有相关更改（包括实现和测试）作为一个逻辑单元提交了。我建议下一步创建一个 `[COMMIT]` 计划来完成这项工作。
-
-在那之后，我们可以开始路线图的最后一步：**步骤 5: [最终交付] 撰写用户文档**。
+一旦确认所有测试都已通过，我们就可以放心地将整个 `SqliteConnector` 功能（包括代码实现和所有测试）作为一个原子单元进行提交。如果你同意，我将准备一个 `[COMMIT]` 计划。

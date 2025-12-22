@@ -41,15 +41,17 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
     # 2. Configure Engine with LocalConnector
     event_bus = MessageBus()
     connector = LocalConnector(db_path=str(db_path), telemetry_uds_path=uds_path)
-    # We must attach TelemetrySubscriber manually as cs.run would do
-    TelemetrySubscriber(event_bus, connector)
-
+    
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
         bus=event_bus,
         connector=connector,
     )
+
+    # We must attach and REGISTER the TelemetrySubscriber so the engine manages its lifecycle
+    subscriber = TelemetrySubscriber(event_bus, connector)
+    engine.add_subscriber(subscriber)
 
     # 3. Define a simple workflow
     @cs.task

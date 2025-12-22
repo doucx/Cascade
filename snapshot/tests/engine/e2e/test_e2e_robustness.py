@@ -3,13 +3,14 @@ import pytest
 from unittest.mock import MagicMock, ANY
 
 import cascade as cs
+from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.events import TaskExecutionStarted
 from cascade.spec.constraint import GlobalConstraint
 from dataclasses import asdict
 
-from .harness import InProcessConnector, MockWorkExecutor, ControllerTestApp
+from .harness import InProcessConnector, ControllerTestApp
 
 
 @pytest.fixture(autouse=True)
@@ -64,7 +65,7 @@ async def test_engine_recovers_from_malformed_rate_limit(
     # 2. Configure and start the engine in the background
     engine = Engine(
         solver=NativeSolver(),
-        executor=MockWorkExecutor(),
+        executor=LocalExecutor(),
         bus=engine_bus,
         connector=engine_connector,
     )

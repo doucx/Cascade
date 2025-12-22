@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修正存根生成脚本以修复 IDE 自动补全和类型检查", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766406914.4480264, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: A a.py, M __init__.pyi, M __init__.pyi ... and 9 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766407256.671021, "duration_ms": 0}}

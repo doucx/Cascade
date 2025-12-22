@@ -9,7 +9,7 @@ description = "A command-line tool to control running Cascade workflows."
 requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
-  "typer[all]",
+  "typer",
   "aiomqtt"
 ]
 

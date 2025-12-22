@@ -173,14 +173,20 @@ class SqliteConnector(Connector):
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
 
-        await self._sync_and_notify(callback)
-
+        # Start the listener task FIRST to prevent a race condition where a publish
+        # could happen after the initial sync but before the listener is active.
         if self._use_polling:
             task = asyncio.create_task(self._poll_for_changes(callback))
         else:
             task = asyncio.create_task(self._uds_listener_loop(callback))
 
         self._background_tasks.append(task)
+
+        # Now, perform the initial sync. Any changes that occurred during listener
+        # setup will either be caught here or their UDS signal will have been
+        # queued for the now-active listener.
+        await self._sync_and_notify(callback)
+
         return _SqliteSubscriptionHandle(self, task)
 
     async def _sync_and_notify(self, callback: Callable):

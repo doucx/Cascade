@@ -30,7 +30,9 @@ def isolated_db_path(tmp_path: Path, monkeypatch):
     )
 
     # Patch 2: The hardcoded path in cs-observer's status command logic.
-    monkeypatch.setattr("cascade.cli.observer.app.Path.expanduser", lambda self: db_path)
+    monkeypatch.setattr(
+        "cascade.cli.observer.app.Path.expanduser", lambda self: db_path
+    )
 
     return db_path
 
@@ -66,7 +68,15 @@ def test_resume_sqlite(isolated_db_path: Path):
     # 1. Set a constraint
     runner.invoke(
         controller_app,
-        ["set-limit", "--scope", "task:api", "--concurrency", "5", "--backend", "sqlite"],
+        [
+            "set-limit",
+            "--scope",
+            "task:api",
+            "--concurrency",
+            "5",
+            "--backend",
+            "sqlite",
+        ],
     )
     assert isolated_db_path.exists()
 
@@ -88,7 +98,9 @@ def test_mqtt_backend_leaves_no_trace(isolated_db_path: Path, monkeypatch):
     Verify that running commands with `--backend mqtt` does not interact with the SQLite DB.
     """
     # We need to mock the MqttConnector to avoid network errors
-    monkeypatch.setattr("cascade.cli.controller.app.MqttConnector", lambda *a, **kw: None)
+    monkeypatch.setattr(
+        "cascade.cli.controller.app.MqttConnector", lambda *a, **kw: None
+    )
 
     runner = CliRunner()
     result = runner.invoke(

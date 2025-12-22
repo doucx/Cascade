@@ -112,19 +112,135 @@ class ArgumentResolver:
         return obj
 
     def _resolve_lazy(
-        self, lr: LazyResult, consumer_id: str, state_backend: StateBackend
+        self,
+        lr: LazyResult,
+        consumer_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
     ) -> Any:
         if not state_backend.has_result(lr._uuid):
-            # Check for skip
+            # Check for skip. If skipped, attempt data penetration.
             if state_backend.get_skip_reason(lr._uuid):
+                # Find the skipped node's primary data input
+                for edge in graph.edges:
+                    if edge.target.id == lr._uuid and edge.edge_type == EdgeType.DATA:
+                        # Found the upstream data source. Recursively resolve it.
+                        # This assumes a simple pipeline structure (one main data input).
+                        # Find the LazyResult corresponding to the source node.
+                        # This is tricky without a direct back-reference.
+                        # For now, we make a simplifying assumption this works for pipelines.
+                        # We need a way to get the LazyResult from a Node.
+                        # The resolver doesn't have this. Let's trace from the source node's result.
+                        source_lr_stub = LazyResult(task=None, args=(), kwargs={}, _uuid=edge.source.id)
+                        try:
+                            return self._resolve_lazy(
+                                source_lr_stub, consumer_id, state_backend, graph
+                            )
+                        except DependencyMissingError:
+                            # If the upstream of the skipped node is ALSO missing, then we fail.
+                            pass
+
+                # If penetration fails or it's not a pipeline-like structure, raise.
                 raise DependencyMissingError(
                     consumer_id, "unknown_arg", f"{lr._uuid} (skipped)"
                 )
+
             raise DependencyMissingError(consumer_id, "unknown_arg", lr._uuid)
 
         return state_backend.get_result(lr._uuid)
 
+    def _resolve_structure(
+        self,
+        obj: Any,
+        consumer_id: str,
+        state_backend: StateBackend,
+        resource_context: Dict[str, Any],
+        graph: Graph,
+    ) -> Any:
+        """
+        Recursively traverses lists, tuples, and dicts.
+        Replaces LazyResult, Router, and Inject.
+        """
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            return self._resolve_lazy(obj, consumer_id, state_backend, graph)
+
+        elif isinstance(obj, Router):
+            return self._resolve_router(obj, consumer_id, state_backend, graph)
+
+        elif isinstance(obj, Inject):
+            return self._resolve_inject(obj, consumer_id, resource_context)
+
+        elif isinstance(obj, list):
+            return [
+                self._resolve_structure(
+                    item, consumer_id, state_backend, resource_context, graph
+                )
+                for item in obj
+            ]
+
+        elif isinstance(obj, tuple):
+            return tuple(
+                self._resolve_structure(
+                    item, consumer_id, state_backend, resource_context, graph
+                )
+                for item in obj
+            )
+
+        elif isinstance(obj, dict):
+            return {
+                k: self._resolve_structure(
+                    v, consumer_id, state_backend, resource_context, graph
+                )
+                for k, v in obj.items()
+            }
+
+        return obj
+
     def _resolve_router(
+        self, router: Router, consumer_id: str, state_backend: StateBackend, graph: Graph
+    ) -> Any:
+        # 1. Resolve Selector
+        selector_uuid = router.selector._uuid
+        if not state_backend.has_result(selector_uuid):
+            raise DependencyMissingError(consumer_id, "router_selector", selector_uuid)
+
+        selector_value = state_backend.get_result(selector_uuid)
+
+        # 2. Pick Route
+        try:
+            selected_lr = router.routes[selector_value]
+        except KeyError:
+            raise ValueError(
+                f"Router selector returned '{selector_value}', "
+                f"but no matching route found in {list(router.routes.keys())}"
+            )
+
+        # 3. Resolve Route Result
+        return self._resolve_lazy(selected_lr, consumer_id, state_backend, graph)
+
+    def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        resource_context: Dict[str, Any],
+        user_params: Dict[str, Any] = None,
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        # Special handling for internal param fetcher
+        from cascade.internal.inputs import _get_param_value
+
+        if node.callable_obj is _get_param_value.func:
+            final_kwargs = node.literal_inputs.copy()
+            final_kwargs["params_context"] = user_params or {}
+            return [], final_kwargs
+
+        # Recursively resolve the structure
+        resolved_structure = self._resolve_structure(
+            node.literal_inputs, node.id, state_backend, resource_context, graph
+        )
+
+        # Re-assemble args and kwargs
+        final_kwargs = {k: v for k, v in resolved_structure.items() if not k.isdigit()}
         self, router: Router, consumer_id: str, state_backend: StateBackend
     ) -> Any:
         # 1. Resolve Selector

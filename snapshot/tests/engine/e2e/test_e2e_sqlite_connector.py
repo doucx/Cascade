@@ -11,6 +11,7 @@ from cascade.connectors.sqlite.connector import SqliteConnector, POLL_INTERVAL
 
 # --- Fixtures ---
 
+
 @pytest.fixture
 def sqlite_db_path(tmp_path):
     """Provides a unique, isolated SQLite database path for each test."""
@@ -28,7 +29,7 @@ def engine(sqlite_db_path, bus_and_spy):
     """Provides a fully configured Engine using the SqliteConnector."""
     bus, _ = bus_and_spy
     connector = SqliteConnector(db_path=str(sqlite_db_path))
-    
+
     class TimedMockExecutor(LocalExecutor):
         async def execute(self, node, args, kwargs):
             await asyncio.sleep(0.05)
@@ -43,6 +44,7 @@ def engine(sqlite_db_path, bus_and_spy):
 
 
 # --- Test Cases ---
+
 
 @pytest.mark.asyncio
 async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
@@ -76,16 +78,14 @@ async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_an
         # 2. While task_a is running, publish a pause for task_b
         scope = "task:task_b"
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        pause_payload = {
-            "id": "pause-b", "scope": scope, "type": "pause", "params": {}
-        }
+        pause_payload = {"id": "pause-b", "scope": scope, "type": "pause", "params": {}}
         await controller_connector.publish(topic, pause_payload)
 
         # 3. Wait for slow_task_a to finish. During this time, the polling
         #    task in the engine MUST have run and picked up the pause constraint.
         #    We let slow_task_a finish its sleep.
         await asyncio.sleep(POLL_INTERVAL * 2 + 0.1)
-        
+
         # 4. Assert that task_b has NOT started
         started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
         assert "task_b" not in started_tasks, "task_b started despite pause constraint"
@@ -100,12 +100,18 @@ async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_an
         final_result = await asyncio.wait_for(engine_run_task, timeout=1.0)
         assert final_result == "B"
 
-    finished_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionFinished) if e.status == "Succeeded"}
+    finished_tasks = {
+        e.task_name
+        for e in spy.events_of_type(TaskExecutionFinished)
+        if e.status == "Succeeded"
+    }
     assert finished_tasks == {"slow_task_a", "task_b"}
 
 
 @pytest.mark.asyncio
-async def test_constraint_update_idempotency_e2e(engine, controller_connector, bus_and_spy):
+async def test_constraint_update_idempotency_e2e(
+    engine, controller_connector, bus_and_spy
+):
     """
     Tests that publishing a new constraint for the same scope correctly replaces the old one.
     """
@@ -117,14 +123,17 @@ async def test_constraint_update_idempotency_e2e(engine, controller_connector, b
         return i
 
     workflow = my_task.map(i=list(range(5)))
-    
+
     async with controller_connector:
         # Set a very slow initial rate limit
         slow_limit = {
-            "id": "rate-1", "scope": scope, "type": "rate_limit", "params": {"rate": f"1/{POLL_INTERVAL * 4}"}
+            "id": "rate-1",
+            "scope": scope,
+            "type": "rate_limit",
+            "params": {"rate": f"1/{POLL_INTERVAL * 4}"},
         }
         await controller_connector.publish(topic, slow_limit)
-        
+
         start_time = time.time()
         engine_run_task = asyncio.create_task(engine.run(workflow))
 
@@ -133,7 +142,10 @@ async def test_constraint_update_idempotency_e2e(engine, controller_connector, b
 
         # Now, update the limit to be very fast
         fast_limit = {
-            "id": "rate-2", "scope": scope, "type": "rate_limit", "params": {"rate": "100/s"}
+            "id": "rate-2",
+            "scope": scope,
+            "type": "rate_limit",
+            "params": {"rate": "100/s"},
         }
         await controller_connector.publish(topic, fast_limit)
 
@@ -163,7 +175,11 @@ async def test_constraint_ttl_expiration_e2e(engine, controller_connector, bus_a
         # Publish a pause constraint that expires in the near future
         expires_at = time.time() + ttl_seconds
         pause_payload = {
-            "id": "pause-ttl", "scope": scope, "type": "pause", "params": {}, "expires_at": expires_at
+            "id": "pause-ttl",
+            "scope": scope,
+            "type": "pause",
+            "params": {},
+            "expires_at": expires_at,
         }
         await controller_connector.publish(topic, pause_payload)
 
@@ -177,5 +193,7 @@ async def test_constraint_ttl_expiration_e2e(engine, controller_connector, bus_a
         await asyncio.sleep(ttl_seconds)
 
         # The engine's internal cleanup should resume execution.
-        final_result = await asyncio.wait_for(engine_run_task, timeout=POLL_INTERVAL * 2)
+        final_result = await asyncio.wait_for(
+            engine_run_task, timeout=POLL_INTERVAL * 2
+        )
         assert final_result == "done"

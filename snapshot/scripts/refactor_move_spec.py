@@ -1,41 +1,3 @@
-好的，我将执行重构计划。我们将编写一个 Python 脚本来自动化迁移过程，确保原子性和一致性。
-
-## [WIP] refactor(arch): 建立 cascade-spec 包并迁移核心契约
-
-### 用户需求
-根据《Cascade 架构重构建议书》，执行第一阶段重构：将 `cascade-interfaces` 演进为 `cascade-spec`，并将 `Blueprint` (从 Runtime) 和 `Graph Model` (从 Interfaces) 整合进这个新包中，确立系统的核心契约层。
-
-### 评论
-这是一个涉及文件移动、包重命名和全局引用更新的重大重构。为了确保操作的安全性和可复现性，我们采用编写一次性 Python 迁移脚本的方式来执行，而不是依赖一系列分散的 Shell 命令。这种方法允许我们精确控制迁移逻辑，处理边缘情况，并在发生错误时更容易调试。
-
-### 目标
-1.  创建 `packages/cascade-spec` (基于 `cascade-interfaces`)。
-2.  将 `Blueprint` 从 `cascade-runtime` 迁移到 `cascade-spec`。
-3.  将 `Graph Model` 移动到 `cascade-spec` 的核心位置。
-4.  更新所有 `pyproject.toml` 和源代码中的引用。
-5.  移除废弃的 `cascade-interfaces` 包。
-
-### 基本原理
-通过脚本化重构，我们可以一次性完成物理文件结构的变更和逻辑引用的修正，避免系统处于中间不稳定状态。脚本将执行以下关键转换：
-- 包名映射: `cascade-interfaces` -> `cascade-spec`
-- 模块路径映射: `cascade.runtime.blueprint` -> `cascade.spec.blueprint`
-- 模块路径映射: `cascade.graph.model` -> `cascade.spec.model`
-
-### 标签
-#intent/refine #flow/ready #priority/high #comp/build #concept/blueprint #scope/core #ai/instruct #task/domain/architecture #task/object/package-structure #task/action/refactor #task/state/continue #task/status/active
-
----
-
-### Script
-
-#### Acts 1: 创建重构脚本
-我们将编写一个功能完备的 Python 脚本来处理所有的文件操作和文本替换。
-
-~~~~~act
-write_file
-scripts/refactor_move_spec.py
-~~~~~
-~~~~~python
 import shutil
 import os
 import sys
@@ -148,16 +110,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~
-
-### 下一步建议
-
-请运行
-```
-python3 scripts/refactor_move_spec.py
-```
-
-脚本执行完毕后，物理结构应该已经改变。下一步我们需要：
-1.  运行测试以验证重构是否破坏了现有功能。
-2.  如果有任何 import 错误（特别是 `cascade.spec.blueprint` 相关的内部引用），进行修复。
-3.  提交变更。

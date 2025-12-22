@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: A fix_spec_structure.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766370834.37812, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(build): 修复文件结构嵌套并完成 spec 迁移", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766370834.5338979, "duration_ms": 0}}

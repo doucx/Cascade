@@ -91,9 +91,10 @@ def __getattr__(name: str) -> Any:
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
-# --- Main Run Entrypoint ---
 from cascade.common.messaging import bus
 from cascade.common.renderers import CliRenderer, JsonRenderer
+
+# --- Main Run Entrypoint ---
 
 
 def _create_state_backend_factory(

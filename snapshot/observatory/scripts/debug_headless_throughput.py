@@ -113,7 +113,6 @@ async def run_headless_experiment():
             await asyncio.sleep(1.0)
             now = time.time()
             interval = now - last_report_time
-            rate = (flash_count - (flash_times[0] if flash_times else 0)) / interval
 
             # Simple reporting
             current_rate = (

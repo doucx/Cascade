@@ -103,7 +103,7 @@ def test_mqtt_backend_leaves_no_trace(isolated_db_path: Path, monkeypatch):
     )
 
     runner = CliRunner()
-    result = runner.invoke(
+    runner.invoke(
         controller_app,
         ["set-limit", "--scope", "global", "--rate", "1/s", "--backend", "mqtt"],
     )

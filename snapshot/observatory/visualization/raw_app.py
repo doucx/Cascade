@@ -159,7 +159,7 @@ class RawTerminalApp:
 
             # 1. Process Updates
             flush_start = time.perf_counter()
-            updates_count = await self._flush_buffer()
+            await self._flush_buffer()
             flush_ms = (time.perf_counter() - flush_start) * 1000
 
             # 2. Process Queue (Status & Legacy Grid)

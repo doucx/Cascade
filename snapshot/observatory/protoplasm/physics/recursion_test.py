@@ -124,7 +124,7 @@ async def run_recursion_experiment():
 
     try:
         # Wait for all agents to finish
-        results = await asyncio.gather(*tasks)
+        await asyncio.gather(*tasks)
         print(
             f"\n✅ Successfully reached {NUM_GENERATIONS} generations for all {NUM_AGENTS} agents."
         )

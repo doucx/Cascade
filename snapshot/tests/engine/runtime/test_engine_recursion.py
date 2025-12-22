@@ -122,7 +122,7 @@ async def test_resource_release_in_recursion(engine):
     # Or at least: run1 -> teardown -> run2
 
     try:
-        idx_run1 = calls.index(call.step_one_run())
+        calls.index(call.step_one_run())
         idx_run2 = calls.index(call.step_two_run())
     except ValueError:
         pytest.fail("Tasks did not run as expected.")

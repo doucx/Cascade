@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(connector): Add E2E test for SqliteConnector UDS signaling", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766387442.5501475, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M test_e2e_sqlite_connector.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766387466.7968156, "duration_ms": 0}}

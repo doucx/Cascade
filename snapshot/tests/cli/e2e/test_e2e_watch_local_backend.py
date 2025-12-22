@@ -1,42 +1,3 @@
-好的，我们来为这个新功能添加最后一道防线：集成测试。
-
-必须通过自动化的集成测试来验证 `Engine` (Server) 和 `cs-observer` (Client) 之间基于 UDS 的异步通信是可靠的。这将确保我们在 Linux 和 macOS 上承诺的“本地实时日志流”功能在未来不会被意外破坏。
-
-## [WIP] test: 添加 UDS Telemetry 的端到端集成测试
-
-### 用户需求
-执行“路线图：实现统一的 `local` 后端与实时 `watch` 功能”中的第四步，即“[质量保证] 编写端到端集成测试”。具体要求：
-1.  创建一个新的测试文件 `tests/cli/e2e/test_e2e_watch_local_backend.py`。
-2.  在该文件中编写测试用例，验证 `Engine` 能够通过 UDS 广播事件，且 `cs-observer` 的逻辑能够正确接收并处理这些事件。
-3.  确保测试在 Windows 上被跳过，因为 Windows 不支持 `asyncio` 的 UDS 功能。
-4.  测试应模拟真实的 `Engine` 运行和客户端连接过程。
-
-### 评论
-这个测试是架构健壮性的基石。由于 UDS 通信涉及两个独立的异步循环（服务器的广播循环和客户端的读取循环），手动测试很难覆盖所有的时序边缘情况（例如，客户端在服务器启动前连接，或者服务器在客户端连接后重启）。自动化测试将为我们提供这种信心。
-
-### 目标
-1.  **编写测试文件**: 创建 `tests/cli/e2e/test_e2e_watch_local_backend.py`。
-2.  **实现 `Engine` 驱动器**: 编写辅助函数，用于在后台任务中启动一个带有 `LocalConnector` 的 `Engine`，并执行一个简单的工作流。
-3.  **实现 `Watch` 客户端模拟器**: 编写测试逻辑，模拟 `cs-observer watch` 的核心循环（连接、读取、解析）。注意：我们不需要真正调用 `typer` CLI，只需验证核心的 UDS 读取逻辑即可，这样测试更稳定。
-4.  **断言**: 验证客户端接收到的消息列表是否包含预期的生命周期事件（STARTED, STOPPED）和任务状态事件。
-
-### 基本原理
-我们采用“黑盒+白盒”混合测试策略。对于 `Engine`，我们将其视为黑盒，让其真实运行并产生副作用（UDS 广播）。对于 `cs-observer`，我们不直接测试 CLI 的文本输出（这很脆弱），而是提取并测试其底层的 UDS 连接和消息解析逻辑（白盒），断言解析后的数据结构是否正确。这种方法既验证了端到端的数据流，又避免了 UI 测试的脆弱性。
-
-### 标签
-#intent/build #flow/ready #priority/high #comp/tests #concept/sync #scope/core #ai/instruct #task/domain/testing #task/object/e2e-uds #task/action/implementation #task/state/end
-
----
-
-### Script
-
-#### Acts 1: 创建 UDS 端到端测试文件
-
-~~~~~act
-write_file
-tests/cli/e2e/test_e2e_watch_local_backend.py
-~~~~~
-~~~~~python
 import asyncio
 import json
 import sys
@@ -161,9 +122,3 @@ async def test_e2e_uds_telemetry_flow(tmp_path):
     task_states = [m.get("body", {}).get("state") for m in received_messages if m.get("body", {}).get("type") == "TaskStateEvent"]
     assert "RUNNING" in task_states
     assert "COMPLETED" in task_states
-~~~~~
-
-### 下一步建议
-通过创建这个测试，我们将为“本地实时 `watch`”功能提供强有力的质量保证。
-
-一旦测试通过，我们就完成了整个“路线图：实现统一的 `local` 后端与实时 `watch` 功能”的所有技术工作。最后的步骤将是一个文档更新任务，但在此之前，我们需要确保测试能够顺利通过。

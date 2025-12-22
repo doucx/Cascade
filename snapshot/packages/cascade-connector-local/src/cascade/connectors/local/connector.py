@@ -173,7 +173,7 @@ class LocalConnector(Connector):
         self._background_tasks.append(task)
         await ready_event.wait()
         await self._sync_and_notify(callback)
-        return _SqliteSubscriptionHandle(self, task)
+        return _LocalSubscriptionHandle(self, task)
 
     async def _sync_and_notify(self, callback: Callable):
         def _blocking_fetch_all():

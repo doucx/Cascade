@@ -10,7 +10,12 @@ from typing import Callable, Awaitable, Dict, Any, List
 from cascade.spec.protocols import Connector, SubscriptionHandle
 
 POLL_INTERVAL = 0.2  # seconds
-UDS_PATH = "/tmp/cascade.sock"
+DEFAULT_UDS_PATH = "/tmp/cascade.sock"
+
+
+def log(msg: str):
+    """Helper for logging to stderr for test visibility."""
+    print(msg, file=sys.stderr)
 
 
 class UDSServerProtocol(asyncio.DatagramProtocol):
@@ -20,6 +25,7 @@ class UDSServerProtocol(asyncio.DatagramProtocol):
         self.on_recv = on_recv
 
     def datagram_received(self, data, addr):
+        log("[SQL-CONN-UDS] Datagram received, setting event.")
         if not self.on_recv.is_set():
             self.on_recv.set()
 
@@ -37,21 +43,21 @@ class _SqliteSubscriptionHandle(SubscriptionHandle):
             pass
         if self._task in self._parent._background_tasks:
             self._parent._background_tasks.remove(self._task)
-        
-        # Cleanup socket file if we were the listener
-        # Note: This is a bit simplistic. In a real multi-subscriber scenario
-        # we'd need ref counting. But for Engine (singleton subscriber), it's fine.
         if not self._parent._use_polling:
-             try:
+            try:
                 Path(self._parent.uds_path).unlink(missing_ok=True)
-             except OSError:
+            except OSError:
                 pass
 
 
 class SqliteConnector(Connector):
-    def __init__(self, db_path: str = "~/.cascade/control.db"):
+    def __init__(
+        self,
+        db_path: str = "~/.cascade/control.db",
+        uds_path: str = DEFAULT_UDS_PATH,
+    ):
         self.db_path = Path(db_path).expanduser()
-        self.uds_path = UDS_PATH
+        self.uds_path = uds_path
         self._conn: sqlite3.Connection | None = None
         self._is_connected = False
         self._background_tasks: List[asyncio.Task] = []
@@ -85,6 +91,7 @@ class SqliteConnector(Connector):
 
         self._conn = await asyncio.to_thread(_connect_and_setup)
         self._is_connected = True
+        log(f"[SQL-CONN] Connected. DB: {self.db_path}, UDS: {self.uds_path}")
         return self
 
     async def __aenter__(self):
@@ -100,13 +107,10 @@ class SqliteConnector(Connector):
                 task.cancel()
             await asyncio.gather(*self._background_tasks, return_exceptions=True)
             self._background_tasks.clear()
-
-        # Note: Socket cleanup is handled by SubscriptionHandle.unsubscribe now,
-        # or relies on the next run to clean up stale files.
-
         if self._conn:
             await asyncio.to_thread(self._conn.close)
             self._conn = None
+        log("[SQL-CONN] Disconnected.")
 
     def _topic_to_scope(self, topic: str) -> str:
         parts = topic.split("/")
@@ -121,6 +125,7 @@ class SqliteConnector(Connector):
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
         scope = self._topic_to_scope(topic)
+        log(f"[SQL-CONN-PUBLISH] Writing to DB for scope '{scope}': {payload.get('id', 'DELETE')}")
 
         def _blocking_publish():
             cursor = self._conn.cursor()
@@ -144,26 +149,23 @@ class SqliteConnector(Connector):
             self._conn.commit()
 
         await asyncio.to_thread(_blocking_publish)
+        log(f"[SQL-CONN-PUBLISH] DB write complete for {payload.get('id', 'DELETE')}")
 
         if not self._use_polling:
             await self._send_uds_signal()
 
     async def _send_uds_signal(self):
-        """Sends a 1-byte datagram to the UDS to wake up the listener."""
+        log(f"[SQL-CONN-PUBLISH] Sending UDS signal to {self.uds_path}")
         sock = None
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            # Use non-blocking send or just fire-and-forget
-            sock.setblocking(False) 
-            loop = asyncio.get_running_loop()
-            # Note: loop.sock_sendto isn't available in all versions/loops, 
-            # and sendto on DGRAM is effectively non-blocking if buffer isn't full.
-            # Simple sendto is usually fine for UDS DGRAM.
+            sock.setblocking(False)
             sock.sendto(b"\x01", self.uds_path)
-        except (ConnectionRefusedError, FileNotFoundError, BlockingIOError):
-            pass
-        except Exception:
-            pass
+            log("[SQL-CONN-PUBLISH] UDS signal sent.")
+        except (ConnectionRefusedError, FileNotFoundError):
+            log("[SQL-CONN-PUBLISH] UDS signal failed: No listener.")
+        except Exception as e:
+            log(f"[SQL-CONN-PUBLISH] UDS signal error: {e}")
         finally:
             if sock:
                 sock.close()
@@ -173,44 +175,42 @@ class SqliteConnector(Connector):
     ) -> SubscriptionHandle:
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
-
+        log(f"[SQL-CONN-SUBSCRIBE] Starting subscription for topic '{topic}'")
         ready_event = asyncio.Event()
 
-        # Start the listener task FIRST
         if self._use_polling:
             task = asyncio.create_task(self._poll_for_changes(callback))
-            ready_event.set() # Polling is always "ready" instantly
+            ready_event.set()
         else:
             task = asyncio.create_task(self._uds_listener_loop(callback, ready_event))
-
         self._background_tasks.append(task)
-
-        # Wait until the listener is actually bound and listening
+        log("[SQL-CONN-SUBSCRIBE] Waiting for listener to be ready...")
         await ready_event.wait()
-
-        # Now perform initial sync.
+        log("[SQL-CONN-SUBSCRIBE] Listener is ready. Performing initial sync.")
         await self._sync_and_notify(callback)
-
+        log("[SQL-CONN-SUBSCRIBE] Subscription complete and synced.")
         return _SqliteSubscriptionHandle(self, task)
 
     async def _sync_and_notify(self, callback: Callable):
+        log("[SQL-CONN-SYNC] Starting sync...")
         def _blocking_fetch_all():
             cursor = self._conn.cursor()
             cursor.execute("SELECT * FROM constraints")
             return cursor.fetchall()
 
         rows = await asyncio.to_thread(_blocking_fetch_all)
+        log(f"[SQL-CONN-SYNC] Fetched {len(rows)} rows from DB.")
 
-        current_constraints: Dict[str, Dict] = {}
-        for row in rows:
-            constraint = dict(row)
-            current_constraints[constraint["id"]] = constraint
+        current_constraints: Dict[str, Dict] = {dict(r)["id"]: dict(r) for r in rows}
+        log(f"[SQL-CONN-SYNC] Current DB state keys: {list(current_constraints.keys())}")
+        log(f"[SQL-CONN-SYNC] Last known state keys: {list(self._last_known_constraints.keys())}")
 
         # --- Diff Logic ---
         # 1. Find new and updated constraints
         for cid, current in current_constraints.items():
             last = self._last_known_constraints.get(cid)
             if not last or last["updated_at"] < current["updated_at"]:
+                log(f"[SQL-CONN-SYNC] Change detected (new/update): {cid}")
                 payload = {
                     "id": current["id"],
                     "scope": current["scope"],
@@ -223,56 +223,48 @@ class SqliteConnector(Connector):
         # 2. Find deleted constraints
         deleted_ids = self._last_known_constraints.keys() - current_constraints.keys()
         for cid in deleted_ids:
+            log(f"[SQL-CONN-SYNC] Change detected (delete): {cid}")
             scope = self._last_known_constraints[cid]["scope"]
-            await callback(self._scope_to_topic(scope), {})  # Empty payload for resume
+            await callback(self._scope_to_topic(scope), {})
 
         self._last_known_constraints = current_constraints
+        log("[SQL-CONN-SYNC] Sync finished.")
 
     async def _poll_for_changes(self, callback: Callable):
         while self._is_connected:
             try:
                 await asyncio.sleep(POLL_INTERVAL)
+                log("[SQL-CONN-POLL] Polling for changes...")
                 await self._sync_and_notify(callback)
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception as e:
+                log(f"[SQL-CONN-POLL] Error: {e}")
                 await asyncio.sleep(POLL_INTERVAL * 5)
 
     async def _uds_listener_loop(self, callback: Callable, ready_event: asyncio.Event):
-        """Listens on a UDS and triggers syncs on notification."""
         loop = asyncio.get_running_loop()
         transport = None
-        
-        # Cleanup old socket file before binding
         try:
             Path(self.uds_path).unlink(missing_ok=True)
-        except OSError:
-            pass
-
-        try:
+            log(f"[SQL-CONN-UDS] Creating datagram endpoint at {self.uds_path}")
             transport, _ = await loop.create_datagram_endpoint(
                 lambda: UDSServerProtocol(self._uds_recv_event),
                 local_addr=self.uds_path,
             )
-            # Signal that we are bound and listening
+            log("[SQL-CONN-UDS] Endpoint created. Signaling ready.")
             ready_event.set()
-
             while self._is_connected:
                 await self._uds_recv_event.wait()
                 self._uds_recv_event.clear()
                 await self._sync_and_notify(callback)
         except asyncio.CancelledError:
-            pass
-        except Exception:
-            # If binding fails, we should probably set ready_event to avoid deadlock,
-            # or let subscribe timeout? For now, we set it so tests don't hang,
-            # but in reality this is a fatal error for UDS mode.
+            log("[SQL-CONN-UDS] Listener cancelled.")
+        except Exception as e:
+            log(f"[SQL-CONN-UDS] Listener error: {e}")
             ready_event.set()
         finally:
             if transport:
                 transport.close()
-            # Ensure we clean up on exit
-            try:
-                Path(self.uds_path).unlink(missing_ok=True)
-            except OSError:
-                pass
+            Path(self.uds_path).unlink(missing_ok=True)
+            log("[SQL-CONN-UDS] Listener stopped and cleaned up.")

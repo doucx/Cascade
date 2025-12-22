@@ -13,22 +13,26 @@ from cascade.connectors.sqlite.connector import SqliteConnector, POLL_INTERVAL
 
 
 @pytest.fixture
-def sqlite_db_path(tmp_path):
-    """Provides a unique, isolated SQLite database path for each test."""
-    return tmp_path / "test_control.db"
+def unique_paths(tmp_path):
+    """Provides unique, isolated paths for DB and UDS for each test."""
+    db_path = tmp_path / "test_control.db"
+    uds_path = tmp_path / "cascade_test.sock"
+    return str(db_path), str(uds_path)
 
 
 @pytest.fixture
-def controller_connector(sqlite_db_path):
+def controller_connector(unique_paths):
     """Provides a connector instance to act as the 'controller' CLI."""
-    return SqliteConnector(db_path=str(sqlite_db_path))
+    db_path, uds_path = unique_paths
+    return SqliteConnector(db_path=db_path, uds_path=uds_path)
 
 
 @pytest.fixture
-def engine(sqlite_db_path, bus_and_spy):
+def engine(unique_paths, bus_and_spy):
     """Provides a fully configured Engine using the SqliteConnector."""
+    db_path, uds_path = unique_paths
     bus, _ = bus_and_spy
-    connector = SqliteConnector(db_path=str(sqlite_db_path))
+    connector = SqliteConnector(db_path=db_path, uds_path=uds_path)
 
     class TimedMockExecutor(LocalExecutor):
         async def execute(self, node, args, kwargs):
@@ -47,7 +51,7 @@ def engine(sqlite_db_path, bus_and_spy):
 
 
 @pytest.mark.asyncio
-async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
+async def test_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
     """
     Verifies the core polling loop for pause and resume functionality.
     This version fixes a race condition in the test logic.

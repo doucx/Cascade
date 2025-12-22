@@ -1,30 +1,33 @@
-分析完全正确。目前的失败是由两个相关的设计缺陷导致的：
+好的，我理解了。之前的修复没能解决问题，这说明问题比想象的更深。在没有明确线索的情况下，盲目修改是低效的。你要求加入日志来观察内部状态，这是一个完全正确且专业的调试思路。
 
-1.  **Socket 生命周期管理错误**: `connect()` 方法无差别地删除 socket 文件。这意味着即使是仅用于发布的 `Controller`（它不需要监听 socket），在连接时也会删除 `Engine` 正在使用的 socket 文件，导致通信中断。
-2.  **监听器启动的异步竞争**: `subscribe()` 仅仅是 `create_task` 了监听循环，并没有等待 socket 绑定真正完成。这导致在监听器准备好之前发出的信号（例如在测试开始时立即发出的信号）会因为 `FileNotFoundError` 而丢失。
+我怀疑问题可能出在 `_sync_and_notify` 的差分逻辑，或者在测试环境中存在某种状态污染。通过添加详细的日志，我们可以精确地追踪约束的发布、接收和处理流程。
 
-我将执行以下修复：
+## [WIP] fix(connector): Add diagnostic logging to SqliteConnector
 
-1.  **移除 `connect` 中的文件清理**: `connect` 方法不再负责删除 socket 文件。
-2.  **将文件清理移至 `_uds_listener_loop`**: 只有当你真正打算监听（即成为 Server）时，才清理旧的 socket 文件。
-3.  **引入同步机制**: 在 `subscribe` 中使用 `asyncio.Event` 来等待 `_uds_listener_loop` 确认 socket 已成功绑定。
+### 错误分析
+尽管我们修复了 `subscribe` 方法中的明显竞争条件，但测试仍然失败。这表明存在一个更微妙的问题。当前的黑盒行为使得我们无法判断故障点：
+1.  **发布失败？** `publish` 方法是否成功将数据写入了数据库并发送了 UDS 信号？
+2.  **信号丢失？** UDS 监听器是否真的收到了信号？
+3.  **差分逻辑错误？** `_sync_and_notify` 方法在唤醒后，其内部的差分逻辑是否正确识别出了变更？
+4.  **回调失败？** 变更被识别后，回调（`Engine._on_constraint_update`）是否被成功调用？
 
-## [WIP] fix(connector): Move socket lifecycle to listener and ensure bind readiness
+为了回答这些问题，我将在 `SqliteConnector` 的关键路径上插入详细的诊断日志。
+
+此外，我发现了一个潜在的测试污染源：**硬编码的 UDS 路径** (`/tmp/cascade.sock`)。如果多个测试并行运行，或者一个测试异常退出未能清理 socket 文件，后续测试可能会绑定失败或连接到错误的 socket。我将修改构造函数，使其接受一个可配置的 UDS 路径，并更新测试装置以提供唯一的路径，就像我们为数据库所做的那样。
 
 ### 用户需求
-修复 `SqliteConnector` 中的 UDS 通信故障，该故障导致 `e2e` 测试中的信号丢失。
+为 `SqliteConnector` 添加详细的日志记录，以诊断 `e2e` 测试持续失败的根本原因，并解决潜在的 UDS 路径冲突问题。
 
 ### 评论
-将 Socket 文件的生命周期管理从 `connect`（通用连接）移动到 `subscribe`（仅监听者），符合“谁创建谁负责”的原则，避免了 Publisher 误删 Server 资源的问题。同时，强制 `subscribe` 等待绑定完成，消除了启动时的竞争窗口。
+这是一个经典的调试场景。当直接修复无效时，最好的方法就是增强系统的可观测性。通过日志，我们将把隐性的状态变化变为显性的事件流，从而定位到问题的根源。同时修复硬编码的 UDS 路径，是提高测试健壮性的最佳实践。
 
 ### 目标
-1.  修改 `SqliteConnector`。
-2.  `connect` 方法不再处理 UDS 文件的删除。
-3.  `_uds_listener_loop` 在绑定前负责清理旧文件。
-4.  `subscribe` 方法必须等待监听器发出“已就绪”信号后，才执行初始同步和返回。
+1.  修改 `SqliteConnector`，使其在构造函数中接受一个可选的 `uds_path`。
+2.  在 `publish`, `_uds_listener_loop`, `_sync_and_notify` 等关键方法中添加 `print` 语句，将内部状态输出到 `stderr`。
+3.  修改 `tests/engine/e2e/test_e2e_sqlite_connector.py` 中的测试装置，为每个 `SqliteConnector` 实例提供唯一的 UDS 路径。
 
 ### 基本原理
-通过让 `subscribe` 等待 UDS 绑定的完成，我们确保了当我们从 `subscribe` 返回时，`Engine` 已经绝对准备好接收任何外部信号了。结合之前“先启动监听，后同步数据”的逻辑顺序调整，这将彻底消除信号丢失的可能性。
+我们将利用 `pytest` 的 `capsys` 或 `caplog` 装置（虽然这里直接 `print` 到 `stderr` 也能被 pytest 捕获）来观察连接器的内部行为。每个日志条目都会带上明确的前缀（如 `[SQL-CONN-PUBLISH]`），以便我们能清晰地追踪事件的顺序和每个方法的状态。
 
 ### 标签
 #intent/fix #flow/ready #priority/critical #comp/engine #concept/state #scope/core #ai/instruct #task/domain/storage #task/object/sqlite-connector #task/action/bug-fix #task/state/continue
@@ -33,9 +36,9 @@
 
 ### Script
 
-#### Acts 1: 重构 SqliteConnector 的连接与订阅逻辑
+#### Acts 1: 为 SqliteConnector 添加日志并修复 UDS 路径
 
-我将使用 `write_file` 重写整个文件，因为涉及到多个方法的内部逻辑调整和新的同步原语（`_uds_ready_event`）的引入，全量重写比多个 patch 更清晰且不易出错。
+我将重写 `connector.py` 以注入日志记录和新的 `uds_path` 参数。
 
 ~~~~~act
 write_file
@@ -54,7 +57,12 @@ from typing import Callable, Awaitable, Dict, Any, List
 from cascade.spec.protocols import Connector, SubscriptionHandle
 
 POLL_INTERVAL = 0.2  # seconds
-UDS_PATH = "/tmp/cascade.sock"
+DEFAULT_UDS_PATH = "/tmp/cascade.sock"
+
+
+def log(msg: str):
+    """Helper for logging to stderr for test visibility."""
+    print(msg, file=sys.stderr)
 
 
 class UDSServerProtocol(asyncio.DatagramProtocol):
@@ -64,6 +72,7 @@ class UDSServerProtocol(asyncio.DatagramProtocol):
         self.on_recv = on_recv
 
     def datagram_received(self, data, addr):
+        log("[SQL-CONN-UDS] Datagram received, setting event.")
         if not self.on_recv.is_set():
             self.on_recv.set()
 
@@ -81,21 +90,21 @@ class _SqliteSubscriptionHandle(SubscriptionHandle):
             pass
         if self._task in self._parent._background_tasks:
             self._parent._background_tasks.remove(self._task)
-        
-        # Cleanup socket file if we were the listener
-        # Note: This is a bit simplistic. In a real multi-subscriber scenario
-        # we'd need ref counting. But for Engine (singleton subscriber), it's fine.
         if not self._parent._use_polling:
-             try:
+            try:
                 Path(self._parent.uds_path).unlink(missing_ok=True)
-             except OSError:
+            except OSError:
                 pass
 
 
 class SqliteConnector(Connector):
-    def __init__(self, db_path: str = "~/.cascade/control.db"):
+    def __init__(
+        self,
+        db_path: str = "~/.cascade/control.db",
+        uds_path: str = DEFAULT_UDS_PATH,
+    ):
         self.db_path = Path(db_path).expanduser()
-        self.uds_path = UDS_PATH
+        self.uds_path = uds_path
         self._conn: sqlite3.Connection | None = None
         self._is_connected = False
         self._background_tasks: List[asyncio.Task] = []
@@ -129,6 +138,7 @@ class SqliteConnector(Connector):
 
         self._conn = await asyncio.to_thread(_connect_and_setup)
         self._is_connected = True
+        log(f"[SQL-CONN] Connected. DB: {self.db_path}, UDS: {self.uds_path}")
         return self
 
     async def __aenter__(self):
@@ -144,13 +154,10 @@ class SqliteConnector(Connector):
                 task.cancel()
             await asyncio.gather(*self._background_tasks, return_exceptions=True)
             self._background_tasks.clear()
-
-        # Note: Socket cleanup is handled by SubscriptionHandle.unsubscribe now,
-        # or relies on the next run to clean up stale files.
-
         if self._conn:
             await asyncio.to_thread(self._conn.close)
             self._conn = None
+        log("[SQL-CONN] Disconnected.")
 
     def _topic_to_scope(self, topic: str) -> str:
         parts = topic.split("/")
@@ -165,6 +172,7 @@ class SqliteConnector(Connector):
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
         scope = self._topic_to_scope(topic)
+        log(f"[SQL-CONN-PUBLISH] Writing to DB for scope '{scope}': {payload.get('id', 'DELETE')}")
 
         def _blocking_publish():
             cursor = self._conn.cursor()
@@ -188,26 +196,23 @@ class SqliteConnector(Connector):
             self._conn.commit()
 
         await asyncio.to_thread(_blocking_publish)
+        log(f"[SQL-CONN-PUBLISH] DB write complete for {payload.get('id', 'DELETE')}")
 
         if not self._use_polling:
             await self._send_uds_signal()
 
     async def _send_uds_signal(self):
-        """Sends a 1-byte datagram to the UDS to wake up the listener."""
+        log(f"[SQL-CONN-PUBLISH] Sending UDS signal to {self.uds_path}")
         sock = None
         try:
             sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-            # Use non-blocking send or just fire-and-forget
-            sock.setblocking(False) 
-            loop = asyncio.get_running_loop()
-            # Note: loop.sock_sendto isn't available in all versions/loops, 
-            # and sendto on DGRAM is effectively non-blocking if buffer isn't full.
-            # Simple sendto is usually fine for UDS DGRAM.
+            sock.setblocking(False)
             sock.sendto(b"\x01", self.uds_path)
-        except (ConnectionRefusedError, FileNotFoundError, BlockingIOError):
-            pass
-        except Exception:
-            pass
+            log("[SQL-CONN-PUBLISH] UDS signal sent.")
+        except (ConnectionRefusedError, FileNotFoundError):
+            log("[SQL-CONN-PUBLISH] UDS signal failed: No listener.")
+        except Exception as e:
+            log(f"[SQL-CONN-PUBLISH] UDS signal error: {e}")
         finally:
             if sock:
                 sock.close()
@@ -217,44 +222,42 @@ class SqliteConnector(Connector):
     ) -> SubscriptionHandle:
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
-
+        log(f"[SQL-CONN-SUBSCRIBE] Starting subscription for topic '{topic}'")
         ready_event = asyncio.Event()
 
-        # Start the listener task FIRST
         if self._use_polling:
             task = asyncio.create_task(self._poll_for_changes(callback))
-            ready_event.set() # Polling is always "ready" instantly
+            ready_event.set()
         else:
             task = asyncio.create_task(self._uds_listener_loop(callback, ready_event))
-
         self._background_tasks.append(task)
-
-        # Wait until the listener is actually bound and listening
+        log("[SQL-CONN-SUBSCRIBE] Waiting for listener to be ready...")
         await ready_event.wait()
-
-        # Now perform initial sync.
+        log("[SQL-CONN-SUBSCRIBE] Listener is ready. Performing initial sync.")
         await self._sync_and_notify(callback)
-
+        log("[SQL-CONN-SUBSCRIBE] Subscription complete and synced.")
         return _SqliteSubscriptionHandle(self, task)
 
     async def _sync_and_notify(self, callback: Callable):
+        log("[SQL-CONN-SYNC] Starting sync...")
         def _blocking_fetch_all():
             cursor = self._conn.cursor()
             cursor.execute("SELECT * FROM constraints")
             return cursor.fetchall()
 
         rows = await asyncio.to_thread(_blocking_fetch_all)
+        log(f"[SQL-CONN-SYNC] Fetched {len(rows)} rows from DB.")
 
-        current_constraints: Dict[str, Dict] = {}
-        for row in rows:
-            constraint = dict(row)
-            current_constraints[constraint["id"]] = constraint
+        current_constraints: Dict[str, Dict] = {dict(r)["id"]: dict(r) for r in rows}
+        log(f"[SQL-CONN-SYNC] Current DB state keys: {list(current_constraints.keys())}")
+        log(f"[SQL-CONN-SYNC] Last known state keys: {list(self._last_known_constraints.keys())}")
 
         # --- Diff Logic ---
         # 1. Find new and updated constraints
         for cid, current in current_constraints.items():
             last = self._last_known_constraints.get(cid)
             if not last or last["updated_at"] < current["updated_at"]:
+                log(f"[SQL-CONN-SYNC] Change detected (new/update): {cid}")
                 payload = {
                     "id": current["id"],
                     "scope": current["scope"],
@@ -267,60 +270,121 @@ class SqliteConnector(Connector):
         # 2. Find deleted constraints
         deleted_ids = self._last_known_constraints.keys() - current_constraints.keys()
         for cid in deleted_ids:
+            log(f"[SQL-CONN-SYNC] Change detected (delete): {cid}")
             scope = self._last_known_constraints[cid]["scope"]
-            await callback(self._scope_to_topic(scope), {})  # Empty payload for resume
+            await callback(self._scope_to_topic(scope), {})
 
         self._last_known_constraints = current_constraints
+        log("[SQL-CONN-SYNC] Sync finished.")
 
     async def _poll_for_changes(self, callback: Callable):
         while self._is_connected:
             try:
                 await asyncio.sleep(POLL_INTERVAL)
+                log("[SQL-CONN-POLL] Polling for changes...")
                 await self._sync_and_notify(callback)
             except asyncio.CancelledError:
                 break
-            except Exception:
+            except Exception as e:
+                log(f"[SQL-CONN-POLL] Error: {e}")
                 await asyncio.sleep(POLL_INTERVAL * 5)
 
     async def _uds_listener_loop(self, callback: Callable, ready_event: asyncio.Event):
-        """Listens on a UDS and triggers syncs on notification."""
         loop = asyncio.get_running_loop()
         transport = None
-        
-        # Cleanup old socket file before binding
         try:
             Path(self.uds_path).unlink(missing_ok=True)
-        except OSError:
-            pass
-
-        try:
+            log(f"[SQL-CONN-UDS] Creating datagram endpoint at {self.uds_path}")
             transport, _ = await loop.create_datagram_endpoint(
                 lambda: UDSServerProtocol(self._uds_recv_event),
                 local_addr=self.uds_path,
             )
-            # Signal that we are bound and listening
+            log("[SQL-CONN-UDS] Endpoint created. Signaling ready.")
             ready_event.set()
-
             while self._is_connected:
                 await self._uds_recv_event.wait()
                 self._uds_recv_event.clear()
                 await self._sync_and_notify(callback)
         except asyncio.CancelledError:
-            pass
-        except Exception:
-            # If binding fails, we should probably set ready_event to avoid deadlock,
-            # or let subscribe timeout? For now, we set it so tests don't hang,
-            # but in reality this is a fatal error for UDS mode.
+            log("[SQL-CONN-UDS] Listener cancelled.")
+        except Exception as e:
+            log(f"[SQL-CONN-UDS] Listener error: {e}")
             ready_event.set()
         finally:
             if transport:
                 transport.close()
-            # Ensure we clean up on exit
-            try:
-                Path(self.uds_path).unlink(missing_ok=True)
-            except OSError:
-                pass
+            Path(self.uds_path).unlink(missing_ok=True)
+            log("[SQL-CONN-UDS] Listener stopped and cleaned up.")
+~~~~~
+
+#### Acts 2: 更新测试装置以使用唯一的 UDS 路径
+
+现在，我将修改 `test_e2e_sqlite_connector.py` 来利用这个新的 `uds_path` 参数，确保每个测试都在完全隔离的环境中运行。
+
+~~~~~act
+patch_file
+tests/engine/e2e/test_e2e_sqlite_connector.py
+~~~~~
+~~~~~python
+@pytest.fixture
+def sqlite_db_path(tmp_path):
+    """Provides a unique, isolated SQLite database path for each test."""
+    return tmp_path / "test_control.db"
+
+
+@pytest.fixture
+def controller_connector(sqlite_db_path):
+    """Provides a connector instance to act as the 'controller' CLI."""
+    return SqliteConnector(db_path=str(sqlite_db_path))
+
+
+@pytest.fixture
+def engine(sqlite_db_path, bus_and_spy):
+    """Provides a fully configured Engine using the SqliteConnector."""
+    bus, _ = bus_and_spy
+    connector = SqliteConnector(db_path=str(sqlite_db_path))
+
+    class TimedMockExecutor(LocalExecutor):
+        async def execute(self, node, args, kwargs):
+~~~~~
+~~~~~python
+@pytest.fixture
+def unique_paths(tmp_path):
+    """Provides unique, isolated paths for DB and UDS for each test."""
+    db_path = tmp_path / "test_control.db"
+    uds_path = tmp_path / "cascade_test.sock"
+    return str(db_path), str(uds_path)
+
+
+@pytest.fixture
+def controller_connector(unique_paths):
+    """Provides a connector instance to act as the 'controller' CLI."""
+    db_path, uds_path = unique_paths
+    return SqliteConnector(db_path=db_path, uds_path=uds_path)
+
+
+@pytest.fixture
+def engine(unique_paths, bus_and_spy):
+    """Provides a fully configured Engine using the SqliteConnector."""
+    db_path, uds_path = unique_paths
+    bus, _ = bus_and_spy
+    connector = SqliteConnector(db_path=db_path, uds_path=uds_path)
+
+    class TimedMockExecutor(LocalExecutor):
+        async def execute(self, node, args, kwargs):
+~~~~~
+~~~~~act
+patch_file
+tests/engine/e2e/test_e2e_sqlite_connector.py
+~~~~~
+~~~~~python
+@pytest.mark.asyncio
+async def test_polling_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
+~~~~~
+~~~~~python
+@pytest.mark.asyncio
+async def test_pause_and_resume_e2e(engine, controller_connector, bus_and_spy):
 ~~~~~
 
 ### 下一步建议
-现在，我将再次运行测试套件。如果修复有效，那些因为信号丢失导致的超时和断言错误应该都会消失。如果一切顺利，我们就可以进行步骤 4 的收尾工作：编写专门的 UDS 测试。
+请重新运行测试。现在，终端应该会输出详细的日志流，精确地显示 `publish` 和 `subscribe` 路径中的每一步。这些信息将是定位问题的决定性证据。

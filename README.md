@@ -1,7 +1,7 @@
 # Cascade: 声明式自动化库
 
 [![PyPI Version](https://img.shields.io/pypi/v/cascade-py)](https://pypi.org/project/cascade-py/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 
 **Cascade** 是一个用于构建可靠、高效、可复用自动化工作流的 Python 库。
 它将传统的命令式脚本升级为**声明式计算图 (Declarative Computation Graph)**。

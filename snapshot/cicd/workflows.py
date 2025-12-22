@@ -1,3 +1,4 @@
+
 import cascade as cs
 from typing import List
 from .tasks import (
@@ -30,9 +31,6 @@ def _ci_success_marker(results: List[str]):
     print("CI checks completed successfully.")
     print("Results:", results)
     return "CI_SUCCESS"
-
-
-import os
 
 
 def pr_check_workflow() -> cs.LazyResult:

@@ -169,7 +169,12 @@ async def test_pipeline_with_run_if_data_penetration(bus_and_spy):
 
     false_condition = cs.task(lambda: False)()
     workflow = cs.pipeline(
-        10, [add_one, multiply_by_two.run_if(false_condition), add_three]
+        10,
+        [
+            add_one,
+            lambda x: multiply_by_two(x).run_if(false_condition),
+            add_three,
+        ],
     )
 
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)

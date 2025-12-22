@@ -239,12 +239,11 @@ class GraphExecutionStrategy:
                     self.constraint_manager.cleanup_expired_constraints()
 
         if not state_backend.has_result(target._uuid):
-            if skip_reason := state_backend.get_skip_reason(target._uuid):
-                raise DependencyMissingError(
-                    task_id=target.task.name or "unknown",
-                    arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
-                )
+            # If the target was skipped, the run is considered successful but returns no result.
+            if state_backend.get_skip_reason(target._uuid):
+                return None
+
+            # If it wasn't skipped but still has no result, it's an error.
             raise KeyError(
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )

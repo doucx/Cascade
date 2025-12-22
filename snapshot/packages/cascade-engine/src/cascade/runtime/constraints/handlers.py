@@ -52,6 +52,7 @@ def _parse_rate_string(rate_str: str) -> float:
 
         return count / divisor
     except (ValueError, TypeError) as e:
+        print(f"DEBUG: Caught exception in _parse_rate_string: {e}")
         bus.error(
             "constraint.parse.error",
             constraint_type="rate_limit",

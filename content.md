@@ -1,78 +1,67 @@
-你的直觉很敏锐，加载顺序确实是一个常见的陷阱，但在这种情况下，Patch 路径 `cascade.runtime.constraints.handlers.bus` 是正确的。
+好的，这是最稳妥的排查方式。我们不能盲目猜测，必须通过可观测的证据来定位问题。
 
-真正的罪魁祸首在于测试断言中的 `pytest.approx`。这个函数是专门用于**浮点数**近似比较的，不能用于字符串。当你用它来包装一个错误消息字符串时，Mock 对象的参数匹配机制会失败，从而报告“调用了 0 次”（意思是：没有找到与这个奇怪的 `approx` 对象相匹配的调用）。
+我们将分两步进行“插桩”调试：
 
-此外，断言具体的异常消息文本（如 `"could not convert..."`）本身也是脆弱的，因为不同版本的 Python 可能会产生略微不同的错误文案。
+1.  **在源代码中插桩**：确认代码是否真的捕获了异常并尝试调用 `bus.error`。
+2.  **在测试中插桩**：确认 Mock 对象的状态和调用记录。
 
-我们将修复测试代码，使用 `unittest.mock.ANY` 来匹配错误消息字段，从而让测试既正确又健壮。
-
-## [WIP] fix(tests): 放宽鲁棒性测试中的错误消息断言
-
-### 错误分析
-测试失败 `AssertionError: Expected 'error' to be called once. Called 0 times.` 的根本原因是断言参数不匹配。
-1.  **误用 `approx`**: `pytest.approx` 只能用于数字比较，不能用于字符串。
-2.  **过度拟合**: 断言硬编码了 `float()` 抛出的具体异常文本。这不仅脆弱，而且不是测试的核心关注点。核心关注点是“是否记录了错误”，而不是“错误文本的具体措辞”。
+## [WIP] chore(debug): 为鲁棒性测试添加调试日志
 
 ### 用户需求
-修复 `test_engine_recovers_from_malformed_rate_limit` 测试，使其能够正确通过。
+在 `RateLimitConstraintHandler` 的异常处理逻辑和测试用例中添加临时调试日志，以排查 Mock 断言失败的根本原因。
 
 ### 评论
-使用 `unittest.mock.ANY` 是处理不可预测或不重要参数（如具体的 Traceback 或异常消息）的标准做法。这能让测试专注于验证核心契约（即：正确的语义 ID `constraint.parse.error` 和关键数据 `raw_value` 被记录了）。
+这种“探针”式修改是临时的，旨在获取运行时信息。一旦问题解决，我们将回滚这些修改。
 
 ### 目标
-修改测试文件，移除 `pytest.approx`，并引入 `unittest.mock.ANY` 来进行更宽松的断言。
+1.  修改 `handlers.py`，在捕获异常时打印调试信息。
+2.  修改 `test_e2e_robustness.py`，打印 Mock 对象的详细调用记录。
 
 ### 基本原理
-通过放宽对 `error` 字段的校验，我们消除了测试的脆弱性，同时保留了对其余关键字段（`msg_id`, `constraint_type`, `raw_value`）的严格验证。
+通过对比控制台输出（stdout）中的调试信息，我们可以区分以下两种情况：
+1.  **逻辑未触发**: 如果没看到 `handlers.py` 的日志，说明异常捕获逻辑根本没执行。
+2.  **Mock 失效**: 如果看到了日志但测试断言失败，说明 Mock 对象注入的位置不对，或者被测试代码引用的是另一个 `bus` 实例。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #concept/state #scope/core #ai/instruct #task/domain/testing #task/object/assertion #task/action/fix #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/debug #scope/core #ai/instruct #task/domain/debugging #task/action/instrument #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复测试断言
+#### Acts 1: 在 `handlers.py` 中添加调试日志
 
-我们将修改 `tests/engine/e2e/test_e2e_robustness.py`，引入 `ANY` 并更新断言逻辑。
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/constraints/handlers.py
+~~~~~
+~~~~~python
+    except (ValueError, TypeError) as e:
+        bus.error(
+            "constraint.parse.error",
+            constraint_type="rate_limit",
+            raw_value=rate_str,
+            error=str(e),
+        )
+        # Return a safe default (e.g., 1 token per second) to prevent crashes
+~~~~~
+~~~~~python
+    except (ValueError, TypeError) as e:
+        print(f"DEBUG: Caught exception in _parse_rate_string: {e}")
+        bus.error(
+            "constraint.parse.error",
+            constraint_type="rate_limit",
+            raw_value=rate_str,
+            error=str(e),
+        )
+        # Return a safe default (e.g., 1 token per second) to prevent crashes
+~~~~~
+
+#### Acts 2: 在测试中打印 Mock 状态
 
 ~~~~~act
 patch_file
 tests/engine/e2e/test_e2e_robustness.py
-~~~~~
-~~~~~python
-import asyncio
-import pytest
-from unittest.mock import MagicMock
-
-import cascade as cs
-~~~~~
-~~~~~python
-import asyncio
-import pytest
-from unittest.mock import MagicMock, ANY
-
-import cascade as cs
-~~~~~
-
-~~~~~act
-patch_file
-tests/engine/e2e/test_e2e_robustness.py
-~~~~~
-~~~~~python
-    # 5. Assert that a UI error was logged
-    # Give the engine a moment to process the bad message
-    await asyncio.sleep(0.01)
-    mock_ui_bus.error.assert_called_once_with(
-        "constraint.parse.error",
-        constraint_type="rate_limit",
-        raw_value="this-is-not-a-valid-rate",
-        error=pytest.approx(
-            "could not convert string to float: 'this-is-not-a-valid-rate'"
-        ),
-    )
-
-    # 6. Send a VALID pause constraint. If the engine is deadlocked,
 ~~~~~
 ~~~~~python
     # 5. Assert that a UI error was logged
@@ -84,12 +73,25 @@ tests/engine/e2e/test_e2e_robustness.py
         raw_value="this-is-not-a-valid-rate",
         error=ANY,
     )
-
-    # 6. Send a VALID pause constraint. If the engine is deadlocked,
+~~~~~
+~~~~~python
+    # 5. Assert that a UI error was logged
+    # Give the engine a moment to process the bad message
+    await asyncio.sleep(0.01)
+    print(f"DEBUG: Mock calls: {mock_ui_bus.error.call_args_list}")
+    mock_ui_bus.error.assert_called_once_with(
+        "constraint.parse.error",
+        constraint_type="rate_limit",
+        raw_value="this-is-not-a-valid-rate",
+        error=ANY,
+    )
 ~~~~~
 
 ### 下一步建议
 
-现在测试已经修复，我们可以执行它来验证修复是否有效。如果测试通过，我们就可以放心地将这一系列变更（Bug 修复 + 测试用例）合并提交了。
+请运行测试并观察输出。
 
-我建议生成最终的 `[COMMIT]` 计划。
+*   **情况 A**: 如果你看不到 `DEBUG: Caught exception...`，说明 `_parse_rate_string` 没有被调用，或者是传入的参数没有触发 `ValueError`。这可能是因为 Mock Connector 没有正确触发回调。
+*   **情况 B**: 如果你看到了 `DEBUG: Caught exception...`，但 `Mock calls` 是空的 `[]`，说明代码调用的是**真正的 `bus` 对象**，而不是你的 Mock 对象。这意味着 `monkeypatch` 注入失败，或者模块导入顺序有问题。
+
+根据输出结果，我们将制定下一步修复计划。

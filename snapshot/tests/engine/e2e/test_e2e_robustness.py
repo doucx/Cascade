@@ -78,6 +78,7 @@ async def test_engine_recovers_from_malformed_rate_limit(
     # 5. Assert that a UI error was logged
     # Give the engine a moment to process the bad message
     await asyncio.sleep(0.01)
+    print(f"DEBUG: Mock calls: {mock_ui_bus.error.call_args_list}")
     mock_ui_bus.error.assert_called_once_with(
         "constraint.parse.error",
         constraint_type="rate_limit",

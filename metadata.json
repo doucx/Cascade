@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 放宽鲁棒性测试中的错误消息断言", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766411887.082961, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] chore(debug): 为鲁棒性测试添加调试日志", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766411969.1867526, "duration_ms": 0}}

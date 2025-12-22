@@ -52,7 +52,6 @@ def _parse_rate_string(rate_str: str) -> float:
 
         return count / divisor
     except (ValueError, TypeError) as e:
-        print(f"DEBUG: Caught exception in _parse_rate_string: {e}")
         bus.error(
             "constraint.parse.error",
             constraint_type="rate_limit",
@@ -165,7 +164,6 @@ class RateLimitConstraintHandler(ConstraintHandler):
     def on_constraint_add(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
     ) -> None:
-        print(f"DEBUG: RateLimitHandler received constraint: {constraint}")
         rate_val = constraint.params.get("rate", "1/s")
         rate_hertz = _parse_rate_string(str(rate_val))
 

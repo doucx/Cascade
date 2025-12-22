@@ -113,7 +113,6 @@ class LocalBusConnector(Connector):
     async def publish(
         self, topic: str, payload: Any, qos: int = 0, retain: bool = False
     ) -> None:
-        print(f"DEBUG: Connector publish {topic} connected={self._is_connected}")
         if not self._is_connected:
             return
 
@@ -136,16 +135,13 @@ class LocalBusConnector(Connector):
 
             # 2. Wildcard Matches (O(W))
             for sub_topic, queues in self._wildcard_subscriptions.items():
-                match = self._topic_matches(sub_topic, topic)
-                print(f"DEBUG: Checking match sub='{sub_topic}' topic='{topic}' -> {match}. Queues: {len(queues)}")
-                if match:
+                if self._topic_matches(sub_topic, topic):
                     for q in queues:
                         await q.put((topic, payload))
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
     ) -> SubscriptionHandle:
-        print(f"DEBUG: Connector subscribe {topic}")
         if not self._is_connected:
             raise RuntimeError("Connector is not connected.")
 

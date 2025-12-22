@@ -32,8 +32,12 @@ async def test_engine_recovers_from_malformed_rate_limit(
     3. Continues to process valid subsequent constraints (like pause).
     """
     engine_bus, spy = bus_and_spy
-    connector = InProcessConnector()
-    controller = ControllerTestApp(connector)
+    # CRITICAL: Engine and Controller must have separate connector INSTANCES
+    # to avoid the engine's disconnect() call from killing the controller's connection.
+    # They communicate via the shared CLASS-LEVEL state of LocalBusConnector.
+    engine_connector = InProcessConnector()
+    controller_connector = InProcessConnector()
+    controller = ControllerTestApp(controller_connector)
 
     # 1. Define a simple two-stage workflow
     @cs.task
@@ -53,7 +57,7 @@ async def test_engine_recovers_from_malformed_rate_limit(
         solver=NativeSolver(),
         executor=MockWorkExecutor(),
         bus=engine_bus,
-        connector=connector,
+        connector=engine_connector,
     )
     engine_task = asyncio.create_task(engine.run(workflow))
 
@@ -73,12 +77,11 @@ async def test_engine_recovers_from_malformed_rate_limit(
         params={"rate": "this-is-not-a-valid-rate"},
     )
     payload = asdict(malformed_constraint)
-    await connector.publish("cascade/constraints/global", payload)
+    await controller_connector.publish("cascade/constraints/global", payload)
 
     # 5. Assert that a UI error was logged
     # Give the engine a moment to process the bad message
     await asyncio.sleep(0.01)
-    print(f"DEBUG: Mock calls: {mock_ui_bus.error.call_args_list}")
     mock_ui_bus.error.assert_called_once_with(
         "constraint.parse.error",
         constraint_type="rate_limit",

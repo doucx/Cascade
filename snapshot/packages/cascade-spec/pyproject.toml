@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade-interfaces"
+name = "cascade-spec"
 version = "0.1.0"
 description = "Interfaces, specifications, and data models for the Cascade ecosystem."
 requires-python = ">=3.8"

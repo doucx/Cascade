@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade-py"
+name = "cascade-sdk"
 version = "0.1.0"
 description = "A modern, declarative automation library for Python."
 requires-python = ">=3.8"
 dependencies = [
-  "cascade-interfaces",
-  "cascade-runtime",
+  "cascade-spec",
+  "cascade-engine",
   "cascade-common"
 ]
 

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M app.py, M app.py, M __init__.py ... and 1 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766389302.7448769, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 将 sqlite 后端重构为统一的 local 后端", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766389307.6861954, "duration_ms": 0}}

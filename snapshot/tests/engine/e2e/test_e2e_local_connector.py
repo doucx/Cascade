@@ -7,7 +7,7 @@ from cascade.runtime.engine import Engine
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
-from cascade.connectors.sqlite.connector import SqliteConnector, POLL_INTERVAL
+from cascade.connectors.local.connector import LocalConnector, POLL_INTERVAL
 
 
 # --- Fixtures ---
@@ -25,15 +25,15 @@ def unique_paths(tmp_path):
 def controller_connector(unique_paths):
     """Provides a connector instance to act as the 'controller' CLI."""
     db_path, uds_path = unique_paths
-    return SqliteConnector(db_path=db_path, uds_path=uds_path)
+    return LocalConnector(db_path=db_path, uds_path=uds_path)
 
 
 @pytest.fixture
 def engine(unique_paths, bus_and_spy):
-    """Provides a fully configured Engine using the SqliteConnector."""
+    """Provides a fully configured Engine using the LocalConnector."""
     db_path, uds_path = unique_paths
     bus, _ = bus_and_spy
-    connector = SqliteConnector(db_path=db_path, uds_path=uds_path)
+    connector = LocalConnector(db_path=db_path, uds_path=uds_path)
 
     class TimedMockExecutor(LocalExecutor):
         async def execute(self, node, args, kwargs):

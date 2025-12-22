@@ -30,7 +30,7 @@ cascade-provider-ipfs = { workspace = true }
 cascade-cli-controller = { workspace = true }
 cascade-cli-observer = { workspace = true }
 cascade-connector-mqtt = { workspace = true }
-cascade-connector-sqlite = { workspace = true }
+cascade-connector-local = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
@@ -40,7 +40,7 @@ packages = [
     "packages/cascade-provider-ipfs",
     "packages/cascade-graph",
     "packages/cascade-library",
-    "packages/cascade-connector-sqlite",
+    "packages/cascade-connector-local",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -74,7 +74,7 @@ dev = [
   "cascade-cli-controller",
   "cascade-cli-observer",
   "cascade-connector-mqtt",
-  "cascade-connector-sqlite",
+  "cascade-connector-local",
 ]
 
 [tool.hatch.metadata]

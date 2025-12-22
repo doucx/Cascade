@@ -6,7 +6,7 @@ from dataclasses import asdict
 from cascade.common.messaging import bus
 from cascade.common.renderers import CliRenderer
 from cascade.connectors.mqtt import MqttConnector
-from cascade.connectors.sqlite import SqliteConnector
+from cascade.connectors.local import LocalConnector
 from cascade.spec.protocols import Connector
 from cascade.spec.constraint import GlobalConstraint
 
@@ -14,8 +14,8 @@ app = typer.Typer(help="A command-line tool to control running Cascade workflows
 
 
 def _get_connector(backend: str, hostname: str, port: int) -> Connector:
-    if backend == "sqlite":
-        return SqliteConnector()
+    if backend == "local":
+        return LocalConnector()
     elif backend == "mqtt":
         return MqttConnector(hostname=hostname, port=port)
     else:
@@ -164,7 +164,7 @@ def set_limit(
         None, "--ttl", help="Time to live in seconds. Constraint expires automatically."
     ),
     backend: str = typer.Option(
-        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'sqlite')."
+        "mqtt", "--backend", help="Control plane backend ('mqtt' or 'local')."
     ),
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),

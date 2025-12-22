@@ -1,85 +1,58 @@
-好的，我来处理这个测试失败。
+好的，所有功能实现和集成测试已经完成。我现在将生成一个 `[COMMIT]` 计划来封装这项工作。
 
-这是一个经典的输出流问题。应用程序将它的输出打印到了标准错误（`stderr`），而我们的测试却在标准输出（`stdout`）中寻找结果。
-
-## [WIP] fix: 修正 CLI 测试以断言正确的输出流 (stderr)
-
-### 错误分析
-`test_set_and_status_sqlite` 和 `test_resume_sqlite` 两个测试用例失败，断言错误为 `AssertionError: assert '...' in ''`。这表明 `typer.testing.CliRunner` 捕获到的 `result.stdout` 是一个空字符串。
-
-经过分析 `packages/cascade-cli-observer/src/cascade/cli/observer/app.py` 的代码，我发现其 `rich.Console` 实例被硬编码初始化为向 `stderr` 输出：
-`console = Console(stderr=True)`
-
-因此，`cs-observer status` 命令的所有可视输出，包括我们期望的约束表格，都被发送到了标准错误流。而测试用例错误地断言了 `result.stdout`，导致了失败。
+## [COMMIT] feat(connector): Integrate SqliteConnector into CLI tools
 
 ### 用户需求
-修复 `test_e2e_cli_sqlite_backend.py` 中的断言，使其能够正确验证 `cs-observer` 的输出，从而让测试通过。
+将 `SqliteConnector` 作为零依赖的控制平面后端，集成到 `cs-controller` 的 `set-limit/pause/resume` 命令以及 `cs-observer` 的 `status` 命令中，并提供 `--backend [mqtt|sqlite]` 选项。
 
 ### 评论
-这个修复很简单，但它强调了编写测试时的一个重要细节：必须了解并验证应用程序实际使用的输出流。将 UI 和元信息输出到 `stderr` 是一种常见的 CLI 设计模式，我们的测试应该遵循这一模式。
+这项工作为 Cascade 提供了关键的单机部署能力，允许用户在不依赖外部服务（如 MQTT broker）的情况下管理工作流约束，极大地增强了工具的实用性和解耦性。我们通过了一系列的测试来验证其在控制平面（写入）和观察平面（读取）上的功能都正确无误。
 
 ### 目标
-修改 `tests/cli/e2e/test_e2e_cli_sqlite_backend.py` 文件中失败的两个测试用例，将所有对 `result_status.stdout` 的断言更改为对 `result_status.stderr` 的断言。
+提交所有与 `SqliteConnector` CLI 集成相关的代码和测试文件。
 
 ### 基本原理
-我们将使用 `patch_file` 对测试文件进行精确修改。通过将断言目标从 `.stdout` 更改为 `.stderr`，测试将与被测应用的实际行为保持一致，从而能够正确验证其功能。
+在功能开发、测试修复和集成测试覆盖都已完成后，现在是一个逻辑上完整的、可交付的工作单元。提交将包括 CLI 逻辑重构、`SqliteConnector` 包导出修复、以及所有新的端到端测试文件。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/cli #task/object/sqlite-connector #task/action/integration #task/state/continue
+#intent/build #flow/ready #priority/high #comp/cli #comp/connector #comp/tests #scope/api #scope/ux #task/domain/connector #task/object/sqlite-connector #task/action/integration #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `test_set_and_status_sqlite` 的断言
-
-我们将 `stdout` 更改为 `stderr`。
+#### Acts 1: 添加所有更改的文件
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-cli-controller/src/cascade/cli/controller/app.py
+packages/cascade-cli-observer/src/cascade/cli/observer/app.py
+packages/cascade-common/src/cascade/common/locales/en/cli_messages.json
+packages/cascade-connector-sqlite/src/cascade/connectors/sqlite/__init__.py
+tests/cli-controller/test_controller_app.py
+tests/engine/e2e/test_e2e_cli_integration.py
 tests/cli/e2e/test_e2e_cli_sqlite_backend.py
 ~~~~~
-~~~~~python
-    # 2. Check the status
-    result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
-    assert result_status.exit_code == 0
-    assert "global" in result_status.stdout
-    assert "rate_limit" in result_status.stdout
-    assert "{'rate': '10/s'}" in result_status.stdout
-~~~~~
-~~~~~python
-    # 2. Check the status
-    result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
-    assert result_status.exit_code == 0
-    assert "global" in result_status.stderr
-    assert "rate_limit" in result_status.stderr
-    assert "{'rate': '10/s'}" in result_status.stderr
-~~~~~
 
-#### Acts 2: 修正 `test_resume_sqlite` 的断言
-
-同样，我们将 `stdout` 更改为 `stderr`。
+#### Acts 2: 执行提交
 
 ~~~~~act
-patch_file
-tests/cli/e2e/test_e2e_cli_sqlite_backend.py
+git_commit
 ~~~~~
-~~~~~python
-    # 3. Check the status and verify it's gone
-    result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
-    assert result_status.exit_code == 0
-    assert "No active constraints found" in result_status.stdout
-    assert "task:api" not in result_status.stdout
-~~~~~
-~~~~~python
-    # 3. Check the status and verify it's gone
-    result_status = runner.invoke(observer_app, ["status", "--backend", "sqlite"])
-    assert result_status.exit_code == 0
-    assert "No active constraints found" in result_status.stderr
-    assert "task:api" not in result_status.stderr
+~~~~~text
+feat(connector): Integrate SqliteConnector into CLI tools
+
+Integrates the zero-dependency SqliteConnector as an alternative control plane backend for the Cascade CLI utilities.
+
+This allows users to manage runtime constraints (`set-limit`, `pause`, `resume`) and observe current constraints (`status`) without needing an external MQTT broker, by using the `--backend sqlite` option.
+
+Key changes:
+- `cs-controller` and `cs-observer` now accept the `--backend [mqtt|sqlite]` flag.
+- `cs-observer status --backend sqlite` reads active constraints directly from the local SQLite database.
+- Fixed package exports and updated test fixtures to support this multi-backend architecture, ensuring CLI E2E tests pass reliably on both stdout/stderr separation and new backend logic.
 ~~~~~
 
 ### 下一步建议
-修复了测试断言后，请重新运行测试套件。测试应该会全部通过。
+我们已经完成了 `SqliteConnector` 的集成和测试。根据开发路线图，下一步是 **步骤 5: [最终交付] 撰写用户文档**。
 
-一旦确认所有测试都已通过，我们就可以放心地将整个 `SqliteConnector` 功能（包括代码实现和所有测试）作为一个原子单元进行提交。如果你同意，我将准备一个 `[COMMIT]` 计划。
+我建议创建一个新的计划来编写相关的用户文档，重点介绍 `SqliteConnector` 的优势、用法以及平台差异。

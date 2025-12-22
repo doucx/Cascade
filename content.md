@@ -1,24 +1,18 @@
-好的，我们立即开始第二阶段的架构重构。
+太好了！第二阶段的架构重构也顺利完成。现在我们将这个清晰的职责分离作为一个原子提交来保存。
 
-此计划将遵循您的指示，将所有与“图”相关的逻辑（构建、编译、哈希、序列化）从 `cascade-engine` 中剥离出来，并封装到一个全新的、职责单一的 `cascade-graph` 包中。
-
-## [WIP] refactor(arch): Isolate graph logic into a dedicated cascade-graph package
+## [COMMIT] refactor(arch): Isolate graph logic into dedicated cascade-graph package
 
 ### 用户需求
-根据架构建议书，将图的编译、构建、哈希和序列化逻辑从 `cascade-engine` 包中移出，创建一个新的 `cascade-graph` 包。
+作为语义化重构的第二步，将所有与图相关的逻辑（构建、编译、哈希、序列化）从 `cascade-engine` 中分离出来，形成一个独立的 `cascade-graph` 包。
 
 ### 评论
-这是语义化重构的下一步，也是非常关键的一步。将“逻辑表示”（Graph）与“物理执行”（Engine）分离，是实现高度模块化系统设计的核心原则。此举将使 `cascade-engine` 的职责更加纯粹，只关注于“如何运行指令”，而将“如何生成指令”的逻辑委托给 `cascade-graph`。
+这次重构是架构清晰化的又一重大进步。它将系统的“逻辑表示层”（如何定义和编译工作流）与“物理执行层”（如何运行工作流）彻底解耦。`cascade-engine` 现在可以更专注于其作为运行时的核心职责，而 `cascade-graph` 则成为所有静态分析和编译任务的权威中心。
 
 ### 目标
-1.  创建 `packages/cascade-graph` 的目录结构及其 `pyproject.toml` 文件。
-2.  将 `packages/cascade-engine/src/cascade/graph/` 目录整体移动到 `packages/cascade-graph/src/cascade/` 中。
-3.  更新根目录的 `pyproject.toml`，将 `cascade-graph` 添加为新的工作区成员。
-4.  更新 `cascade-engine` 和 `cascade-sdk` 的 `pyproject.toml`，添加对新 `cascade-graph` 包的依赖。
-5.  重新安装工作区依赖并运行测试，以验证重构的正确性。
+创建一个单一、清晰的 Git 提交，记录 `cascade-graph` 包的成功创建和相关代码的迁移。
 
 ### 基本原理
-通过创建 `cascade-graph` 包，我们为系统的“编译器”和“静态分析器”提供了一个明确的归属。`cascade-engine` 将从一个既是编译器又是执行器的“混合体”，演变为一个更纯粹的“运行时”。这种清晰的职责划分，极大地提高了代码的可维护性和可理解性。
+测试套件已经通过，证明在剥离了图逻辑之后，系统各部分之间的依赖关系已正确配置，并且整体功能完好无损。现在是记录这一稳定状态的最佳时机，为后续的重构（如创建 `cascade-library`）建立一个坚实的基础。
 
 ### 标签
 #intent/refine #flow/ready #priority/high #comp/build #scope/core #ai/instruct #task/domain/architecture #task/object/package-structure #task/action/refactor #task/state/continue #task/status/active
@@ -27,146 +21,42 @@
 
 ### Script
 
-#### Acts 1: 创建 `cascade-graph` 包结构和配置文件
-我们首先创建新包的目录和基础 `pyproject.toml`。它将依赖于 `cascade-spec`，因为图模型定义在 `spec` 包中。
+#### Acts 1: 暂存所有相关变更
+我们将把新创建的 `cascade-graph` 包、被修改的 `cascade-engine` 和 `cascade-sdk` 包，以及更新后的根 `pyproject.toml` 文件全部添加到暂存区。
 
 ~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p packages/cascade-graph/src/cascade
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-graph/pyproject.toml
-~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "cascade-graph"
-version = "0.1.0"
-description = "Graph building, compilation, and serialization logic for the Cascade ecosystem."
-requires-python = ">=3.8"
-dependencies = [
-  "cascade-spec"
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-~~~~~
-
-#### Acts 2: 移动图逻辑模块
-现在，我们将整个 `graph` 目录从 `engine` 移动到新创建的 `graph` 包中。
-
-~~~~~act
-move_file
-packages/cascade-engine/src/cascade/graph
-packages/cascade-graph/src/cascade/graph
-~~~~~
-
-#### Acts 3: 更新工作区配置
-我们需要让 monorepo 工具（uv, hatch）知道这个新包的存在。
-
-~~~~~act
-patch_file
+git_add
 pyproject.toml
+packages/
 ~~~~~
-~~~~~
-[tool.uv.workspace]
-members = ["packages/*"]
 
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-~~~~~
-~~~~~
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-cascade-graph = { workspace = true }
-~~~~~
+#### Acts 2: 创建原子提交
+现在，我们将创建一个内容详尽的提交，以清晰地记录本次重构的目的和范围。
 
 ~~~~~act
-patch_file
-pyproject.toml
+git_commit
 ~~~~~
-~~~~~
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-spec",
-    "packages/cascade-engine",
-    "packages/cascade-sdk",
-    "packages/cascade-provider-ipfs",
-]
-~~~~~
-~~~~~
-[tool.hatch.workspaces]
-packages = [
-    "packages/cascade-spec",
-    "packages/cascade-engine",
-    "packages/cascade-sdk",
-    "packages/cascade-provider-ipfs",
-    "packages/cascade-graph",
-]
-~~~~~
+~~~~~text
+refactor(arch): Isolate graph logic into dedicated cascade-graph package
 
-#### Acts 4: 更新依赖 `cascade-graph` 的包
-`cascade-engine` 和 `cascade-sdk` 现在需要显式地依赖于 `cascade-graph`。
+This commit executes the second phase of the semantic architecture refactoring by decoupling the graph-related logic from the execution engine.
 
-~~~~~act
-patch_file
-packages/cascade-engine/pyproject.toml
-~~~~~
-~~~~~
-dependencies = [
-  "cascade-spec",
-  "cascade-common"
-]
-~~~~~
-~~~~~
-dependencies = [
-  "cascade-spec",
-  "cascade-common",
-  "cascade-graph"
-]
-~~~~~
+Previously, `cascade-engine` was responsible for both compiling the workflow graph and executing it. This mixed the concerns of logical representation and physical execution.
 
-~~~~~act
-patch_file
-packages/cascade-sdk/pyproject.toml
-~~~~~
-~~~~~
-dependencies = [
-  "cascade-spec",
-  "cascade-engine",
-  "cascade-common"
-]
-~~~~~
-~~~~~
-dependencies = [
-  "cascade-spec",
-  "cascade-engine",
-  "cascade-common",
-  "cascade-graph"
-]
+This change introduces a new `cascade-graph` package with a single responsibility: to handle all aspects of the workflow graph's static form.
+
+Key changes:
+1.  **New `cascade-graph` Package**: A new package has been created to house all graph-related modules.
+2.  **Code Migration**: The `graph` directory (containing `build.py`, `compiler.py`, `hashing.py`, `serialize.py`) has been moved from `cascade-engine` to `cascade-graph`.
+3.  **Dependency Updates**: `cascade-engine` and `cascade-sdk` now explicitly depend on `cascade-graph`.
+4.  **Workspace Configuration**: The root `pyproject.toml` has been updated to include `cascade-graph` as a workspace member.
+
+This refactoring purifies the role of `cascade-engine`, making it a true runtime focused solely on execution, while establishing `cascade-graph` as the central authority for workflow compilation and analysis.
 ~~~~~
 
 ### 下一步建议
-如果本次重构成功，我们将只剩下最后一个核心架构调整：
+我们已经成功完成了两个阶段的重构。现在只剩下最后一步，也是能最大程度净化 `cascade-sdk` 的一步：
+
 **创建 `cascade-library` 包，并将所有内置的 provider（如 `http`, `sql`, `io` 等）从 `cascade-sdk` 中迁移过去。**
-这将使 `cascade-sdk` 成为一个纯粹的、轻量级的用户入口，而将具体的“功能实现”放入标准库中。
+
+这将使 `cascade-sdk` 成为一个纯粹、轻量级的用户入口，而将所有具体的“功能实现”放入一个可插拔的标准库中。如果你同意，我将为此创建下一个计划。

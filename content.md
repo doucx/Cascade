@@ -1,110 +1,73 @@
-**Bingo. The logs have revealed the root cause.**
+You are absolutely right to be suspicious. This is a classic sign of a subtle but fundamental issue in the test harness itself. The repeated failure, even after logical fixes, means we've been treating symptoms, not the disease.
 
-`DEBUG: Connector publish cascade/constraints/global connected=False`
+The logs gave us the final, crucial clue. The fact that *no* logs from the connector appeared when we expected them means the `publish` call is happening in a completely different, isolated context from the `subscribe` call.
 
-This is the smoking gun. The test is trying to publish a message, but the connector instance it's using has been disconnected.
+**The root cause is test state pollution.**
 
-Here is the chain of events:
+The `LocalBusConnector` uses **class-level variables** (`_wildcard_subscriptions`, `_retained_messages`, etc.) to simulate a shared broker. However, `pytest` runs tests in isolation, but it doesn't automatically reset class-level state between test functions in different files. A previous test that used `LocalBusConnector` (like `test_e2e_control_plane.py`) likely left the shared state in an unexpected condition, or its background tasks were not properly cleaned up, causing our test to fail.
 
-1.  The test creates a single instance of `InProcessConnector` (which is a `LocalBusConnector`).
-2.  This single instance is passed to *both* the `Engine` and the `ControllerTestApp`. They are sharing the exact same object.
-3.  The workflow `task_b(task_a())` is extremely fast. The `engine_task` starts, executes `task_a`, then `task_b`, and finishes.
-4.  As soon as `engine.run()` finishes, its `finally` block is executed. This block contains the critical line: `await self.connector.disconnect()`.
-5.  This call sets `self._is_connected = False` on the **shared connector instance**.
-6.  The test's main coroutine continues, and a few milliseconds later, it calls `connector.publish("cascade/constraints/global", ...)`.
-7.  The `publish` method immediately hits the guard clause `if not self._is_connected: return` and silently drops the message.
-8.  No message is ever sent. No logs are printed. The test fails.
+The solution is to explicitly and aggressively reset the connector's "broker state" before every test that uses it.
 
-The fundamental design flaw in the test is sharing a single connector **instance** between two components with different lifecycles. The `LocalBusConnector` correctly simulates a broker by sharing *class-level state*, so we don't need to share the instance itself.
-
-The solution is simple: give the `Engine` and the `Controller` their own separate instances. They will still talk to each other through the shared class-level "broker".
-
-## [WIP] fix(tests): Decouple connector instances in robustness test
+## [WIP] fix(tests): Isolate connector state to prevent test pollution
 
 ### 错误分析
-测试 `test_engine_recovers_from_malformed_rate_limit` 失败的根本原因是 `Engine` 和 `ControllerTestApp` 共享了同一个 `LocalBusConnector` 实例。由于测试中的工作流执行得非常快，`Engine` 在完成任务后会调用 `connector.disconnect()`，这会将共享实例的 `_is_connected` 标志位设为 `False`。随后，当测试代码尝试通过 `ControllerTestApp` 发布新的约束时，`publish` 调用会因为连接器已“断开”而被静默忽略，导致消息从未发出，测试断言失败。
+测试 `test_engine_recovers_from_malformed_rate_limit` 的持续失败，根源在于 `LocalBusConnector` 的类级别状态在不同的 `pytest` 测试会话之间发生了泄漏。由于 `_wildcard_subscriptions` 等核心状态字典是类变量，一个测试的残留状态会污染下一个测试，导致 `Engine` 的 `subscribe` 和 `Controller` 的 `publish` 运行在不一致的、被破坏的 broker 状态之上，消息因此丢失。
 
 ### 用户需求
-修复 `test_e2e_robustness.py` 测试，使其能够正确地模拟 `Engine` 和 `Controller` 之间的通信，并验证 `Engine` 对无效输入的鲁棒性。
+通过在测试开始前强制重置 `LocalBusConnector` 的共享状态，来修复测试的稳定性和可靠性。
 
 ### 评论
-这是一个经典的测试状态污染问题。通过为 `Engine` 和 `Controller` 提供独立的连接器实例，我们能正确地模拟真实世界中两个独立进程通过同一个消息代理进行通信的场景。`LocalBusConnector` 的类级别状态共享设计正是为此而生。
+这是一个至关重要的修复，它加固了我们整个端到端测试体系的基石。一个可靠的测试套件必须保证每个测试都在一个干净、可预测的环境中运行。通过引入一个专门的 fixture 来管理共享状态的生命周期，我们根除了这种跨测试污染的风险。
 
 ### 目标
-1.  修改 `test_e2e_robustness.py`，为 `Engine` 和 `ControllerTestApp` 分别创建独立的 `InProcessConnector` 实例。
-2.  移除之前添加的所有临时调试日志。
+1.  在 `test_e2e_robustness.py` 中创建一个新的 `pytest` fixture，该 fixture 在每次测试前调用 `InProcessConnector._reset_broker_state()`。
+2.  将此 fixture 应用于失败的测试函数。
+3.  为了最终验证，暂时在 `publish` 方法中重新加入一个调试日志，以确认 `Engine` 的订阅在 `publish` 时是可见的。
 
 ### 基本原理
-`LocalBusConnector` 实例的 `_is_connected` 状态是实例级别的，而其消息队列和主题是类级别的。因此，创建两个实例可以隔离它们的连接生命周期，同时仍然允许它们通过共享的类级“代理”进行通信。
+通过在测试的 `setup` 阶段调用 `_reset_broker_state()`，我们确保了 `_wildcard_subscriptions` 字典和 `_lock` 都是为当前测试的事件循环全新创建的，从而保证了测试的完全隔离和确定性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/test-harness #task/action/fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/test-harness #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 移除所有调试日志
+#### Acts 1: 创建并应用状态重置 Fixture
 
-现在问题已经定位，我们清理所有临时添加的 `print` 语句。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-        """Callback to handle incoming constraint messages."""
-        print(f"DEBUG: Engine received update on topic '{topic}': {payload}")
-        try:
-            # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
-            if payload == {}:
-~~~~~
-~~~~~python
-    async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-        """Callback to handle incoming constraint messages."""
-        try:
-            # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
-            if payload == {}:
-~~~~~
+我们将创建 `clean_connector_state` fixture 并将其应用到测试中。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/constraints/handlers.py
+tests/engine/e2e/test_e2e_robustness.py
 ~~~~~
 ~~~~~python
-    def on_constraint_add(
-        self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
-        print(f"DEBUG: RateLimitHandler received constraint: {constraint}")
-        rate_val = constraint.params.get("rate", "1/s")
-        rate_hertz = _parse_rate_string(str(rate_val))
+from .harness import InProcessConnector, MockWorkExecutor, ControllerTestApp
+
+
+@pytest.fixture
+def mock_ui_bus(monkeypatch):
 ~~~~~
 ~~~~~python
-    def on_constraint_add(
-        self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
-        rate_val = constraint.params.get("rate", "1/s")
-        rate_hertz = _parse_rate_string(str(rate_val))
+from .harness import InProcessConnector, MockWorkExecutor, ControllerTestApp
+
+
+@pytest.fixture(autouse=True)
+def clean_connector_state():
+    """Ensures the LocalBusConnector's class-level state is reset for each test."""
+    InProcessConnector._reset_broker_state()
+    yield
+    InProcessConnector._reset_broker_state()
+
+
+@pytest.fixture
+def mock_ui_bus(monkeypatch):
 ~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/constraints/handlers.py
-~~~~~
-~~~~~python
-    except (ValueError, TypeError) as e:
-        print(f"DEBUG: Caught exception in _parse_rate_string: {e}")
-        bus.error(
-            "constraint.parse.error",
-            constraint_type="rate_limit",
-~~~~~
-~~~~~python
-    except (ValueError, TypeError) as e:
-        bus.error(
-            "constraint.parse.error",
-            constraint_type="rate_limit",
-~~~~~
+#### Acts 2: 重新引入关键调试日志以进行最终验证
+
+我们只在 `publish` 方法中添加一个日志，打印出订阅列表的状态。这将是最终的证据。
 
 ~~~~~act
 patch_file
@@ -114,11 +77,12 @@ packages/cascade-connector-local/src/cascade/connectors/local/bus.py
     async def publish(
         self, topic: str, payload: Any, qos: int = 0, retain: bool = False
     ) -> None:
-        print(f"DEBUG: Connector publish {topic} connected={self._is_connected}")
         if not self._is_connected:
             return
 
         async with self._get_lock():
+            # Handle Retention
+            if retain:
 ~~~~~
 ~~~~~python
     async def publish(
@@ -128,144 +92,19 @@ packages/cascade-connector-local/src/cascade/connectors/local/bus.py
             return
 
         async with self._get_lock():
-~~~~~
+            # --- DEBUG ---
+            print(f"DEBUG PUBLISH '{topic}': WILDCARD SUBS: {list(self._wildcard_subscriptions.keys())}")
+            # --- END DEBUG ---
 
-~~~~~act
-patch_file
-packages/cascade-connector-local/src/cascade/connectors/local/bus.py
-~~~~~
-~~~~~python
-            # 2. Wildcard Matches (O(W))
-            for sub_topic, queues in self._wildcard_subscriptions.items():
-                match = self._topic_matches(sub_topic, topic)
-                print(f"DEBUG: Checking match sub='{sub_topic}' topic='{topic}' -> {match}. Queues: {len(queues)}")
-                if match:
-                    for q in queues:
-                        await q.put((topic, payload))
-~~~~~
-~~~~~python
-            # 2. Wildcard Matches (O(W))
-            for sub_topic, queues in self._wildcard_subscriptions.items():
-                if self._topic_matches(sub_topic, topic):
-                    for q in queues:
-                        await q.put((topic, payload))
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-connector-local/src/cascade/connectors/local/bus.py
-~~~~~
-~~~~~python
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> SubscriptionHandle:
-        print(f"DEBUG: Connector subscribe {topic}")
-        if not self._is_connected:
-            raise RuntimeError("Connector is not connected.")
-
-        queue = asyncio.Queue()
-~~~~~
-~~~~~python
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> SubscriptionHandle:
-        if not self._is_connected:
-            raise RuntimeError("Connector is not connected.")
-
-        queue = asyncio.Queue()
-~~~~~
-
-#### Acts 2: 修复测试逻辑并移除最后的调试日志
-
-我们将修改 `test_e2e_robustness.py`，为 `Engine` 和 `Controller` 创建独立的连接器实例，并移除 `print` 语句。
-
-~~~~~act
-patch_file
-tests/engine/e2e/test_e2e_robustness.py
-~~~~~
-~~~~~python
-    3. Continues to process valid subsequent constraints (like pause).
-    """
-    engine_bus, spy = bus_and_spy
-    connector = InProcessConnector()
-    controller = ControllerTestApp(connector)
-
-    # 1. Define a simple two-stage workflow
-    @cs.task
-~~~~~
-~~~~~python
-    3. Continues to process valid subsequent constraints (like pause).
-    """
-    engine_bus, spy = bus_and_spy
-    # CRITICAL: Engine and Controller must have separate connector INSTANCES
-    # to avoid the engine's disconnect() call from killing the controller's connection.
-    # They communicate via the shared CLASS-LEVEL state of LocalBusConnector.
-    engine_connector = InProcessConnector()
-    controller_connector = InProcessConnector()
-    controller = ControllerTestApp(controller_connector)
-
-    # 1. Define a simple two-stage workflow
-    @cs.task
-~~~~~
-
-~~~~~act
-patch_file
-tests/engine/e2e/test_e2e_robustness.py
-~~~~~
-~~~~~python
-    # 2. Configure and start the engine in the background
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=MockWorkExecutor(),
-        bus=engine_bus,
-        connector=connector,
-    )
-    engine_task = asyncio.create_task(engine.run(workflow))
-~~~~~
-~~~~~python
-    # 2. Configure and start the engine in the background
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=MockWorkExecutor(),
-        bus=engine_bus,
-        connector=engine_connector,
-    )
-    engine_task = asyncio.create_task(engine.run(workflow))
-~~~~~
-
-~~~~~act
-patch_file
-tests/engine/e2e/test_e2e_robustness.py
-~~~~~
-~~~~~python
-        params={"rate": "this-is-not-a-valid-rate"},
-    )
-    payload = asdict(malformed_constraint)
-    await connector.publish("cascade/constraints/global", payload)
-
-    # 5. Assert that a UI error was logged
-    # Give the engine a moment to process the bad message
-    await asyncio.sleep(0.01)
-    print(f"DEBUG: Mock calls: {mock_ui_bus.error.call_args_list}")
-    mock_ui_bus.error.assert_called_once_with(
-        "constraint.parse.error",
-        constraint_type="rate_limit",
-~~~~~
-~~~~~python
-        params={"rate": "this-is-not-a-valid-rate"},
-    )
-    payload = asdict(malformed_constraint)
-    await controller_connector.publish("cascade/constraints/global", payload)
-
-    # 5. Assert that a UI error was logged
-    # Give the engine a moment to process the bad message
-    await asyncio.sleep(0.01)
-    mock_ui_bus.error.assert_called_once_with(
-        "constraint.parse.error",
-        constraint_type="rate_limit",
+            # Handle Retention
+            if retain:
 ~~~~~
 
 ### 下一步建议
-我们已经完成了从发现问题、深入调试到最终修复的全过程。代码和测试现在都处于正确状态。
 
-是时候将这个完整的、经过验证的修复工作作为一个原子单元提交了。我将生成最终的 `[COMMIT]` 计划。
+请运行测试。
+
+这次，你应该会在日志中看到：
+`DEBUG PUBLISH 'cascade/constraints/global': WILDCARD SUBS: ['cascade/constraints/#']`
+
+紧接着，测试应该会通过。如果成功，我们就可以移除最后的调试日志，并生成最终的 `[COMMIT]` 计划了。

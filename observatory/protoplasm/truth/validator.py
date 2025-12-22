@@ -2,7 +2,7 @@ import asyncio
 import numpy as np
 from typing import Dict, Any, Optional
 
-from cascade.interfaces.protocols import Connector
+from cascade.spec.protocols import Connector
 from .golden_ca import GoldenLife
 from observatory.visualization.raw_app import RawTerminalApp as TerminalApp
 

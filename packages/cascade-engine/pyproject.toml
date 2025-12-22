@@ -3,14 +3,18 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade-connector-mqtt"
+name = "cascade-engine"
 version = "0.1.0"
-description = "An MQTT connector for the Cascade workflow engine."
+description = "The core runtime engine for Cascade workflows."
 requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
-  "aiomqtt"
+  "cascade-common"
 ]
+
+[project.optional-dependencies]
+csp_solver = ["python-constraint"]
+redis = ["redis"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]
@@ -20,3 +24,4 @@ allow-direct-references = true
 
 [tool.uv.sources]
 cascade-spec = { workspace = true }
+cascade-common = { workspace = true }

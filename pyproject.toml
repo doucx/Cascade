@@ -10,18 +10,18 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
 dependencies = [
-    "cascade-interfaces",
-    "cascade-runtime",
-    "cascade-py",
+    "cascade-spec",
+    "cascade-engine",
+    "cascade-sdk",
 ]
 
 [tool.uv.workspace]
 members = ["packages/*"]
 
 [tool.uv.sources]
-cascade-interfaces = { workspace = true }
-cascade-runtime = { workspace = true }
-cascade-py = { workspace = true }
+cascade-spec = { workspace = true }
+cascade-engine = { workspace = true }
+cascade-sdk = { workspace = true }
 cascade-provider-ipfs = { workspace = true }
 cascade-cli-controller = { workspace = true }
 cascade-cli-observer = { workspace = true }
@@ -29,14 +29,14 @@ cascade-connector-mqtt = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
-    "packages/cascade-interfaces",
-    "packages/cascade-runtime",
-    "packages/cascade-py",
+    "packages/cascade-spec",
+    "packages/cascade-engine",
+    "packages/cascade-sdk",
     "packages/cascade-provider-ipfs",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/cascade-py/src/cascade"]
+packages = ["packages/cascade-sdk/src/cascade"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov=cascade --cov-report=term-missing"

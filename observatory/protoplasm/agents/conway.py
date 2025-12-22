@@ -1,7 +1,7 @@
 import asyncio
 from typing import List, Dict, Tuple, Any
 import cascade as cs
-from cascade.interfaces.protocols import Connector
+from cascade.spec.protocols import Connector
 
 # --- Atomic Tasks (Updated to support explicit dependency chains) ---
 

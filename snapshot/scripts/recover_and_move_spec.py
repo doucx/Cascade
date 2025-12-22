@@ -1,47 +1,3 @@
-You are absolutely right. My apologies. The previous scripts failed catastrophically, leading to the deletion of the spec files from the file system instead of their correct migration. The `git status` clearly shows the files are staged for deletion, which is the root cause of the `ModuleNotFoundError`.
-
-I will now create a definitive recovery script. This script will use `git` to restore the deleted files and then move them, along with their tests, to the correct final destination. This should be a single, atomic operation to fix the broken state.
-
-## [WIP] fix(build): Restore deleted spec files and complete migration
-
-### 错误分析
-The prior refactoring scripts were flawed and non-atomic. They incorrectly handled the file operations, leading to a state where the original `cascade-interfaces` package and its contents were deleted from the filesystem and staged for removal by Git, but were never successfully copied to the new `cascade-spec` package. This left the project in a broken state, missing all core specification files like `task.py`, `model.py`, etc., causing the `ModuleNotFoundError`.
-
-### 用户需求
-The project is in a broken state with critical source files deleted. A robust script is needed to:
-1.  Recover the deleted files from Git's index.
-2.  Move them to their correct new location inside `packages/cascade-spec`.
-3.  Move the corresponding tests from `tests/interfaces` to a new `tests/spec` directory.
-4.  Clean up any remaining empty directories.
-
-### 评论
-This incident highlights the danger of non-idempotent, multi-step refactoring scripts. The correct approach, which we will now take, is to create a single, robust script that orchestrates both Git and filesystem commands to ensure the recovery and migration are completed successfully in one go.
-
-### 目标
-1.  Create a recovery script `scripts/recover_and_move_spec.py`.
-2.  Use the script to restore all deleted files from `packages/cascade-interfaces/src/cascade/` using `git restore`.
-3.  Move the restored files into `packages/cascade-spec/src/cascade/`.
-4.  Rename the `tests/interfaces` directory to `tests/spec` to align with the new package structure.
-5.  Clean up the now-empty `packages/cascade-interfaces` directory structure.
-
-### 基本原理
-The deleted files still exist in the Git index/history. We can leverage `git restore` to bring them back to the working directory. Once restored, the Python script can safely move them to their final destination. This two-phase (restore, then move) approach within a single script guarantees that we don't lose the files again. Renaming the test directory is a critical part of completing the migration.
-
-### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/core #ai/instruct #task/domain/architecture #task/object/package-structure #task/action/cleanup #task/state/continue #task/status/blocked
-
----
-
-### Script
-
-#### Acts 1: Create and execute the recovery and migration script
-This script will restore the deleted files and move them and their tests to the correct locations.
-
-~~~~~act
-write_file
-scripts/recover_and_move_spec.py
-~~~~~
-~~~~~python
 import os
 import shutil
 import subprocess
@@ -136,18 +92,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-python3 scripts/recover_and_move_spec.py
-~~~~~
-
-### 下一步建议
-This script should definitively fix the file structure. After it completes, please run the tests again. The `ModuleNotFoundError` for `cascade.spec.task` should be resolved. We may encounter new import errors *within* the moved files, which we can then address systematically.
-
-```bash
-pytest
-```

@@ -9,6 +9,7 @@ def add(path: str) -> LazyResult:
     """
     Creates a Cascade workflow to add a local file to IPFS and get its CID.
     """
+
 def cat(cid: str) -> LazyResult:
     """
     Creates a Cascade workflow to retrieve the contents of a file from IPFS.

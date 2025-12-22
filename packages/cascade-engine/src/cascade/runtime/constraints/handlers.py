@@ -1,5 +1,6 @@
 from typing import TYPE_CHECKING, Dict, Any
 import fnmatch
+from cascade.common.messaging import bus
 
 from .protocols import ConstraintHandler
 from cascade.graph.model import Node
@@ -21,9 +22,6 @@ def _matches(scope: str, task_name: str) -> bool:
         return fnmatch.fnmatch(task_name, pattern)
 
     return False
-
-
-from cascade.common.messaging import bus
 
 
 def _parse_rate_string(rate_str: str) -> float:

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(cicd): correct task implementation to use Tail Call Optimization", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766396197.0887082, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(cicd): 重构任务以利用 TCO 机制并修正测试逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766396259.8739426, "duration_ms": 0}}

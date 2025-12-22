@@ -127,7 +127,7 @@ class ArgumentResolver:
         if state_backend.get_skip_reason(lr._uuid):
             # Attempt data penetration ONLY for pipeline-like structures.
             # We look for a DATA input to the skipped node.
-            
+
             # Find the edges leading into the skipped node
             upstream_edges = [e for e in graph.edges if e.target.id == lr._uuid]
             data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
@@ -136,7 +136,7 @@ class ArgumentResolver:
                 # Prioritize the first DATA input for penetration.
                 # This is a simplification but correct for linear pipelines.
                 penetration_source_id = data_inputs[0].source.id
-                
+
                 # Create a temporary LazyResult to recursively resolve the penetrated source.
                 # We pass the original consumer_id down.
                 penetration_lr_stub = LazyResult(
@@ -158,10 +158,16 @@ class ArgumentResolver:
         if reason := state_backend.get_skip_reason(lr._uuid):
             skip_info = f" (skipped: {reason})"
 
-        raise DependencyMissingError(consumer_id, "unknown_arg", f"{lr._uuid}{skip_info}")
+        raise DependencyMissingError(
+            consumer_id, "unknown_arg", f"{lr._uuid}{skip_info}"
+        )
 
     def _resolve_router(
-        self, router: Router, consumer_id: str, state_backend: StateBackend, graph: Graph
+        self,
+        router: Router,
+        consumer_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
     ) -> Any:
         # 1. Resolve Selector
         selector_uuid = router.selector._uuid

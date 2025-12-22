@@ -120,7 +120,9 @@ def _mapped_run_if(self: MappedLazyResult, condition: LazyResult) -> MappedLazyR
     return self
 
 
-def _mapped_after(self: MappedLazyResult, *predecessors: LazyResult) -> MappedLazyResult:
+def _mapped_after(
+    self: MappedLazyResult, *predecessors: LazyResult
+) -> MappedLazyResult:
     self._dependencies.extend(predecessors)
     return self
 

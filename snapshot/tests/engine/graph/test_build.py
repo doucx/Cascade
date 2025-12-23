@@ -53,8 +53,8 @@ def test_build_graph_with_param_factory():
 
     # 断言它包含正确的 input_bindings (这是内部任务需要的参数)
     assert "name" in p_node.input_bindings
-    # The value is now a SlotRef or Constant, we check its existence
-    assert p_node.input_bindings["name"] is not None
+    # The value is now the literal string, not a reference
+    assert p_node.input_bindings["name"] == "x"
 
 
 def test_build_graph_with_env_factory():
@@ -71,7 +71,7 @@ def test_build_graph_with_env_factory():
     e_node = next(n for n in graph.nodes if n.name == "_get_env_var")
     assert e_node.node_type == "task"
     assert "name" in e_node.input_bindings
-    assert e_node.input_bindings["name"] is not None
+    assert e_node.input_bindings["name"] == "HOME"
 
 
 def test_build_graph_with_nested_dependencies():

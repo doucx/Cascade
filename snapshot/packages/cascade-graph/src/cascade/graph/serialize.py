@@ -9,7 +9,6 @@ from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.spec.task import Task
-from cascade.spec.binding import SlotRef, Constant
 
 
 # --- Helpers ---
@@ -106,8 +105,8 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         "id": node.id,
         "name": node.name,
         "node_type": node.node_type,
-        # Serializing bindings instead of literal_inputs
-        "input_bindings": _serialize_bindings(node.input_bindings),
+        # input_bindings now contains JSON-serializable literals directly.
+        "input_bindings": node.input_bindings,
     }
 
     if node.callable_obj:
@@ -146,20 +145,6 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         data["constraints"] = serialized_reqs
 
     return data
-
-
-def _serialize_bindings(bindings: Dict[str, Any]) -> Dict[str, Any]:
-    """Serializes the input_bindings dictionary."""
-    serialized = {}
-    for k, v in bindings.items():
-        if isinstance(v, SlotRef):
-            serialized[k] = {"__slot_ref": v.index}
-        elif isinstance(v, Constant):
-            serialized[k] = {"__constant": v.value} # Assuming value is JSON serializable
-        else:
-            # Fallback
-            serialized[k] = v
-    return serialized
 
 
 def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
@@ -255,9 +240,6 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     constraints = None
     if "constraints" in data:
         constraints = ResourceConstraint(requirements=data["constraints"])
-    
-    # Recover Bindings
-    input_bindings = _deserialize_bindings(data.get("input_bindings", {}))
 
     node = Node(
         id=data["id"],
@@ -268,20 +250,9 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
         param_spec=param_spec,
         retry_policy=retry_policy,
         constraints=constraints,
-        input_bindings=input_bindings, # Use reconstructed bindings
+        input_bindings=data.get("input_bindings", {}),
     )
     return node
-
-def _deserialize_bindings(data: Dict[str, Any]) -> Dict[str, Any]:
-    deserialized = {}
-    for k, v in data.items():
-        if isinstance(v, dict) and "__slot_ref" in v:
-            deserialized[k] = SlotRef(index=v["__slot_ref"])
-        elif isinstance(v, dict) and "__constant" in v:
-            deserialized[k] = Constant(value=v["__constant"])
-        else:
-            deserialized[k] = v
-    return deserialized
 
 
 # --- Main API ---

@@ -54,7 +54,7 @@ async def test_engine_follows_solver_plan():
         pass
 
     workflow = task_b(task_a())
-    graph = build_graph(workflow)
+    graph, _ = build_graph(workflow)
     node_a = next(n for n in graph.nodes if n.name == "task_a")
     node_b = next(n for n in graph.nodes if n.name == "task_b")
 

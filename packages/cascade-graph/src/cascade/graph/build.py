@@ -1,10 +1,11 @@
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 import inspect
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.graph.ast_analyzer import analyze_task_source, assign_tco_cycle_ids
 from cascade.spec.task import Task
+from cascade.spec.binding import SlotRef, Constant
 
 
 class GraphBuilder:
@@ -13,10 +14,25 @@ class GraphBuilder:
         self._visited: Dict[str, Node] = {}
         # Used to detect cycles during shadow node expansion
         self._shadow_visited: Dict[Task, Node] = {}
+        
+        # The meat: storage for extracted runtime data
+        self._data_buffer: List[Any] = []
 
-    def build(self, target: LazyResult) -> Graph:
+    def build(self, target: LazyResult) -> Tuple[Graph, Tuple[Any, ...]]:
+        """
+        Builds a GraphTemplate and extracts a DataTuple from the target LazyResult.
+        
+        Returns:
+            (Graph, DataTuple): The pure topological structure and the flattened runtime data.
+        """
         self._visit(target)
-        return self.graph
+        return self.graph, tuple(self._data_buffer)
+
+    def _register_data(self, value: Any) -> SlotRef:
+        """Appends data to the buffer and returns a reference to its index."""
+        index = len(self._data_buffer)
+        self._data_buffer.append(value)
+        return SlotRef(index)
 
     def _visit(self, value: Any, scan_for_tco: bool = True) -> Node:
         if isinstance(value, LazyResult):
@@ -30,9 +46,31 @@ class GraphBuilder:
         if result._uuid in self._visited:
             return self._visited[result._uuid]
 
-        # 1. Capture the structure of inputs
-        literal_inputs = {str(i): v for i, v in enumerate(result.args)}
-        literal_inputs.update(result.kwargs)
+        # 1. Process Inputs: Separate Structure (Edges) from Data (Bindings)
+        input_bindings = {}
+        
+        # Helper to process a single argument
+        def process_arg(key: str, val: Any):
+            # Recursion for nested structures (Lists/Dicts) containing LazyResults is not 
+            # fully supported in this version of the builder for simplicity.
+            # We assume top-level args are either LazyResult (Edge) or Data (Binding).
+            # Complex nested structures should be handled by specific providers or flattened.
+            
+            if isinstance(val, (LazyResult, MappedLazyResult)):
+                # It's a dependency, will be added as an Edge later
+                pass 
+            elif isinstance(val, Router):
+                # Router is a structural construct, handled in edges
+                pass
+            else:
+                # It's literal data, extract it!
+                input_bindings[key] = self._register_data(val)
+
+        for i, val in enumerate(result.args):
+            process_arg(str(i), val)
+        
+        for k, val in result.kwargs.items():
+            process_arg(k, val)
 
         # Pre-compute signature
         sig = None
@@ -51,12 +89,12 @@ class GraphBuilder:
             retry_policy=result._retry_policy,
             cache_policy=result._cache_policy,
             constraints=result._constraints,
-            literal_inputs=literal_inputs,
+            input_bindings=input_bindings, # Replaces literal_inputs
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
 
-        # 2. Recursively scan inputs to add edges
+        # 2. Recursively scan inputs to add edges (Topology)
         self._scan_and_add_edges(node, result.args)
         self._scan_and_add_edges(node, result.kwargs)
 
@@ -118,10 +156,7 @@ class GraphBuilder:
     def _visit_shadow_recursive(self, parent_node: Node, task: Task):
         """
         Recursively builds shadow nodes for static analysis.
-        If a task is already in the graph (either as a real node or shadow node),
-        it creates a POTENTIAL edge pointing to it, closing the loop.
         """
-        # If we have already visited this task in this build context, link to it
         if task in self._shadow_visited:
             target_node = self._shadow_visited[task]
             edge = Edge(
@@ -133,9 +168,6 @@ class GraphBuilder:
             self.graph.add_edge(edge)
             return
 
-        # Otherwise, create a new Shadow Node
-        # We use a deterministic ID based on the task name to allow some stability,
-        # but prefixed to avoid collision with real nodes.
         potential_uuid = f"shadow:{parent_node.id}:{task.name}"
         
         target_node = Node(
@@ -147,7 +179,6 @@ class GraphBuilder:
         )
         self.graph.add_node(target_node)
         
-        # Register in visited map
         self._shadow_visited[task] = target_node
 
         edge = Edge(
@@ -158,7 +189,6 @@ class GraphBuilder:
         )
         self.graph.add_edge(edge)
 
-        # Recursively expand its potential targets (using cache)
         potential_targets = analyze_task_source(task)
         
         for next_task in potential_targets:
@@ -168,6 +198,14 @@ class GraphBuilder:
         if result._uuid in self._visited:
             return self._visited[result._uuid]
 
+        # Extract bindings for mapped inputs
+        input_bindings = {}
+        # Mapped inputs in mapping_kwargs are typically lists/iterables.
+        # We treat the whole iterable as a single data unit for now.
+        for k, val in result.mapping_kwargs.items():
+            if not isinstance(val, (LazyResult, MappedLazyResult)):
+                 input_bindings[k] = self._register_data(val)
+
         node = Node(
             id=result._uuid,
             name=f"map({getattr(result.factory, 'name', 'factory')})",
@@ -176,7 +214,7 @@ class GraphBuilder:
             retry_policy=result._retry_policy,
             cache_policy=result._cache_policy,
             constraints=result._constraints,
-            literal_inputs=result.mapping_kwargs,
+            input_bindings=input_bindings,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
@@ -217,11 +255,13 @@ class GraphBuilder:
             self.graph.add_edge(edge)
 
         elif isinstance(obj, Router):
+            # The edge from the selector to the consumer represents the final resolved value
+            # of the router. Its arg_name must be the argument the consumer expects for the router.
             selector_node = self._visit(obj.selector)
             edge = Edge(
                 source=selector_node,
                 target=target_node,
-                arg_name=f"{path}.selector" if path else "selector",
+                arg_name=path,  # Use the router's own argument path
                 router=obj,
                 edge_type=EdgeType.DATA,
             )
@@ -250,5 +290,11 @@ class GraphBuilder:
                 )
 
 
-def build_graph(target: LazyResult) -> Graph:
+def build_graph(target: LazyResult) -> Tuple[Graph, Tuple[Any, ...]]:
+    """
+    Entry point for building a graph.
+    
+    Returns:
+        (Graph, DataTuple)
+    """
     return GraphBuilder().build(target)

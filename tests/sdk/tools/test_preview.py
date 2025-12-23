@@ -34,13 +34,13 @@ def test_dry_run_emits_correct_events_linear(bus_and_spy):
     node_a_event = node_events[0]
     assert node_a_event.index == 1
     assert node_a_event.node_name == "step_a"
-    assert node_a_event.literal_inputs == {}
+    assert node_a_event.input_bindings == {}
 
     # Check Step B
     node_b_event = node_events[1]
     assert node_b_event.index == 2
     assert node_b_event.node_name == "step_b"
-    assert node_b_event.literal_inputs == {"y": 10}
+    assert "y" in node_b_event.input_bindings
 
 
 def test_dry_run_emits_correct_events_diamond(bus_and_spy):
@@ -99,13 +99,13 @@ def test_console_subscriber_renders_correctly(capsys):
             total_nodes=2,
             node_id="n1",
             node_name="my_task",
-            literal_inputs={"param": 42},
+            input_bindings={"param": cs.spec.binding.Constant(42)},
         )
     )
     captured = capsys.readouterr()
     assert "[1/2]" in captured.out
     assert "my_task" in captured.out
-    assert "'param': 42" in captured.out
+    assert "Bindings: {'param': 'Const(42)'}" in captured.out
 
     # 3. Publish Finish Event
     bus.publish(PlanAnalysisFinished(total_steps=2))

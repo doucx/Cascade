@@ -116,55 +116,36 @@ class GraphExecutionStrategy:
             with ExitStack() as step_stack:
                 graph = None
                 plan = None
-                literals = None
+                data_tuple = () # The Flesh
                 is_fast_path = False
 
                 # --- 1. ZERO-OVERHEAD FAST PATH CHECK ---
                 # Check if we are in a recognized TCO loop (A -> B -> ... -> A)
-                # Conditions:
-                # 1. Target is a LazyResult and "simple" (no complex deps).
-                # 2. Target task has been statically analyzed as part of a TCO cycle.
-                # 3. We have a compiled template for this task.
-                # 4. (Optional but safe) The previous task was also part of a cycle (or we are starting one).
                 
                 if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
                     task_obj = current_target.task
                     cycle_id = getattr(task_obj, "_tco_cycle_id", None)
                     
-                    # If we have a cycle match or self-recursion match
                     if (cycle_id and cycle_id == last_tco_cycle_id) or (task_obj == last_executed_task):
                         if task_obj in self._task_templates:
                             is_fast_path = True
                             graph, plan = self._task_templates[task_obj]
-                            # Update literals in O(1) without hashing
-                            self._update_graph_literals(graph, current_target, {})
+                            # For fast path, we still need to extract data!
+                            # Since we skipped build_graph, we need a lightweight data extractor.
+                            # BUT, for V3 step 1, we can just call build_graph and throw away the graph 
+                            # if we want to be lazy, OR just disable fast path for now until we build a pure DataExtractor.
+                            # Disable fast path for this commit to ensure correctness first.
+                            is_fast_path = False 
                 
                 if not is_fast_path:
-                    # --- 2. SLOW PATH (Hashing & Cache) ---
-                    # Get Graph and Plan, using Structural Hash Cache
-                    hasher = StructuralHasher()
-                    struct_hash, literals = hasher.hash(current_target)
-
-                    if struct_hash in self._graph_cache:
-                        # CACHE HIT: Reuse graph and plan
-                        cached_graph, cached_plan = self._graph_cache[struct_hash]
-                        if len(cached_graph.nodes) > 1:
-                            graph = build_graph(current_target)
-                            plan = self.solver.resolve(graph)
-                        else:
-                            graph = cached_graph
-                            plan = cached_plan
-                            self._update_graph_literals(graph, current_target, literals)
-                    else:
-                        # CACHE MISS: Build, solve, and cache
-                        graph = build_graph(current_target)
-                        plan = self.solver.resolve(graph)
-                        self._graph_cache[struct_hash] = (graph, plan)
-                        
-                        # Populate Task Template Cache if this is a simple node
-                        # This "warms up" the fast path for future iterations
-                        if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
-                             self._task_templates[current_target.task] = (graph, plan)
+                    # --- 2. STANDARD PATH ---
+                    # Always build fresh for now to handle data extraction
+                    graph, data_tuple = build_graph(current_target)
+                    plan = self.solver.resolve(graph)
+                    
+                    # Store in template cache for future optimization (even if we don't fully use it yet)
+                    if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+                        self._task_templates[current_target.task] = (graph, plan)
 
                 # Update state for next iteration
                 if isinstance(current_target, LazyResult):
@@ -175,7 +156,7 @@ class GraphExecutionStrategy:
                     last_tco_cycle_id = None
 
                 # 2. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph)
+                required_resources = self.resource_container.scan(graph, data_tuple)
                 self.resource_container.setup(
                     required_resources,
                     active_resources,
@@ -192,6 +173,7 @@ class GraphExecutionStrategy:
                     run_id,
                     state_backend,
                     graph,
+                    data_tuple, # Pass the blood!
                     plan,
                 )
 
@@ -212,23 +194,6 @@ class GraphExecutionStrategy:
             else:
                 return result
 
-    def _update_graph_literals(
-        self, graph: Graph, target: Any, literals: Dict[str, Any]
-    ):
-        # ... logic moved from Engine ...
-        if graph.nodes:
-            # FIX: Previously used nodes[-1], which became incorrect when shadow nodes
-            # were appended to the end of the list by static analysis.
-            # GraphBuilder uses a top-down approach (pre-order traversal), so the
-            # root target node is always the FIRST node added to the graph.
-            target_node = graph.nodes[0]
-            target_node.id = target._uuid
-            if hasattr(target, "args") and hasattr(target, "kwargs"):
-                target_node.literal_inputs = {
-                    str(i): v for i, v in enumerate(target.args)
-                }
-                target_node.literal_inputs.update(target.kwargs)
-
     async def _execute_graph(
         self,
         target: Any,
@@ -237,6 +202,7 @@ class GraphExecutionStrategy:
         run_id: str,
         state_backend: StateBackend,
         graph: Graph,
+        data_tuple: Tuple[Any, ...],
         plan: Any,
     ) -> Any:
         flow_manager = FlowManager(graph, target._uuid)
@@ -286,7 +252,8 @@ class GraphExecutionStrategy:
                 if executable_this_pass:
                     # Callback for map nodes
                     async def sub_graph_runner(target, sub_params, parent_state):
-                        sub_graph = build_graph(target)
+                        # Recursive call: must build new graph and data
+                        sub_graph, sub_data = build_graph(target)
                         sub_plan = self.solver.resolve(sub_graph)
                         return await self._execute_graph(
                             target,
@@ -295,6 +262,7 @@ class GraphExecutionStrategy:
                             run_id,
                             parent_state,
                             graph=sub_graph,
+                            data_tuple=sub_data,
                             plan=sub_plan,
                         )
 
@@ -302,6 +270,7 @@ class GraphExecutionStrategy:
                         self.node_processor.process(
                             node,
                             graph,
+                            data_tuple,
                             state_backend,
                             active_resources,
                             run_id,
@@ -328,18 +297,14 @@ class GraphExecutionStrategy:
         if not state_backend.has_result(target._uuid):
             if skip_reason := state_backend.get_skip_reason(target._uuid):
                 # A skip due to a sequence aborting is a valid, graceful termination.
-                # The workflow succeeded but produced no final value.
                 if skip_reason == "UpstreamSkipped_Sequence":
                     return None
-
-                # For all other reasons, failing to produce the target result is an error.
                 raise DependencyMissingError(
                     task_id=target.task.name or "unknown",
                     arg_name="<Target Output>",
                     dependency_id=f"Target was skipped (Reason: {skip_reason})",
                 )
 
-            # If it wasn't skipped but still has no result, it's a generic failure.
             raise KeyError(
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )

@@ -1,6 +1,6 @@
 import time
 import asyncio
-from typing import Any, Dict, List, Callable, Awaitable
+from typing import Any, Dict, List, Callable, Awaitable, Tuple
 
 from cascade.graph.model import Node, Graph
 from cascade.spec.protocols import Executor, StateBackend, Solver
@@ -45,6 +45,7 @@ class NodeProcessor:
         self,
         node: Node,
         graph: Graph,
+        data_tuple: Tuple[Any, ...], # NEW
         state_backend: StateBackend,
         active_resources: Dict[str, Any],
         run_id: str,
@@ -53,10 +54,6 @@ class NodeProcessor:
     ) -> Any:
         """
         Executes a node with all associated policies (constraints, cache, retry).
-
-        Args:
-            sub_graph_runner: A callback to execute a sub-workflow (used for map nodes).
-                              Signature: (target, params, parent_state_backend) -> result
         """
         # 1. Resolve Constraints & Resources
         requirements = self.constraint_resolver.resolve(
@@ -80,6 +77,7 @@ class NodeProcessor:
             return await self._execute_internal(
                 node,
                 graph,
+                data_tuple,
                 state_backend,
                 active_resources,
                 run_id,
@@ -93,6 +91,7 @@ class NodeProcessor:
         self,
         node: Node,
         graph: Graph,
+        data_tuple: Tuple[Any, ...], # NEW
         state_backend: StateBackend,
         active_resources: Dict[str, Any],
         run_id: str,
@@ -101,7 +100,7 @@ class NodeProcessor:
     ) -> Any:
         # 3. Resolve Arguments
         args, kwargs = self.arg_resolver.resolve(
-            node, graph, state_backend, active_resources, user_params=params
+            node, graph, state_backend, active_resources, data_tuple, user_params=params
         )
 
         start_time = time.time()
@@ -203,6 +202,9 @@ class NodeProcessor:
     def _resolve_inputs_for_cache(
         self, node: Node, graph: Graph, state_backend: StateBackend
     ) -> Dict[str, Any]:
+        # TODO: This needs to be smarter for caching. 
+        # It should probably include data from input_bindings too?
+        # For now, keeping legacy behavior (edge results only).
         inputs = {}
         incoming_edges = [edge for edge in graph.edges if edge.target.id == node.id]
         for edge in incoming_edges:
@@ -234,6 +236,7 @@ class NodeProcessor:
         for i in range(first_len):
             item_kwargs = {k: v[i] for k, v in kwargs.items()}
             sub_target = factory(**item_kwargs)
+            # Propagate policies
             if node.retry_policy:
                 sub_target._retry_policy = node.retry_policy
             if node.cache_policy:

@@ -1,5 +1,4 @@
 import asyncio
-from unittest.mock import spy
 import pytest
 import cascade as cs
 from cascade.runtime import Engine, MessageBus
@@ -16,7 +15,7 @@ def static_task(n: int):
 
 
 @pytest.mark.asyncio
-async def test_jit_cache_is_hit_for_stable_structures():
+async def test_jit_cache_is_hit_for_stable_structures(mocker):
     """
     Verifies that for a TCO loop with a stable structure (like simple_countdown),
     the solver is only called once, and subsequent iterations hit the JIT cache.
@@ -25,7 +24,7 @@ async def test_jit_cache_is_hit_for_stable_structures():
     engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
 
     # Spy on the solver's resolve method to count its calls
-    resolve_spy = spy(solver, "resolve")
+    resolve_spy = mocker.spy(solver, "resolve")
 
     # Run a recursive task with a stable graph structure
     target = static_task(10)

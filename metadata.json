@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(runtime): 添加 JIT 缓存命中验证并提交节点模型重构修复", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766494068.0181735, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修正 JIT 缓存验证测试中的 spy 导入错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766494152.2688897, "duration_ms": 0}}

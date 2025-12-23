@@ -59,6 +59,40 @@ class GraphExecutionStrategy:
         self.wakeup_event = wakeup_event
         self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
 
+    def _is_simple_task(self, lr: Any) -> bool:
+        """
+        Checks if the LazyResult is a simple, flat task (no nested dependencies).
+        This allows for the Zero-Overhead TCO fast path.
+        """
+        if not isinstance(lr, LazyResult):
+            return False
+        if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
+            return False
+        
+        # Explicit dependencies
+        if lr._dependencies:
+            return False
+
+        def _has_lazy(obj):
+            if isinstance(obj, (LazyResult, MappedLazyResult)):
+                return True
+            if isinstance(obj, (list, tuple)):
+                return any(_has_lazy(x) for x in obj)
+            if isinstance(obj, dict):
+                return any(_has_lazy(v) for v in obj.values())
+            return False
+
+        # Check args and kwargs recursively
+        for arg in lr.args:
+            if _has_lazy(arg):
+                return False
+
+        for v in lr.kwargs.values():
+            if _has_lazy(v):
+                return False
+
+        return True
+
     async def execute(
         self,
         target: Any,
@@ -69,32 +103,59 @@ class GraphExecutionStrategy:
         active_resources: Dict[str, Any],
     ) -> Any:
         current_target = target
+        
+        # Optimization state for TCO Fast Path
+        last_executed_task = None
+        last_graph = None
+        last_plan = None
 
         while True:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
-                # 1. Get Graph and Plan, using Structural Hash Cache
-                hasher = StructuralHasher()
-                struct_hash, literals = hasher.hash(current_target)
-
                 graph = None
                 plan = None
+                literals = None
 
-                if struct_hash in self._graph_cache:
-                    # CACHE HIT: Reuse graph and plan
-                    cached_graph, cached_plan = self._graph_cache[struct_hash]
-                    if len(cached_graph.nodes) > 1:
+                # --- FAST PATH CHECK ---
+                is_fast_path = False
+                if (
+                    last_executed_task is not None
+                    and last_graph is not None
+                    and isinstance(current_target, LazyResult)
+                    and current_target.task == last_executed_task
+                ):
+                    if self._is_simple_task(current_target):
+                        is_fast_path = True
+                        graph = last_graph
+                        plan = last_plan
+                        # Update literals in O(1) without hashing
+                        self._update_graph_literals(graph, current_target, {})
+
+                if not is_fast_path:
+                    # --- SLOW PATH (Hashing & Cache) ---
+                    # 1. Get Graph and Plan, using Structural Hash Cache
+                    hasher = StructuralHasher()
+                    struct_hash, literals = hasher.hash(current_target)
+
+                    if struct_hash in self._graph_cache:
+                        # CACHE HIT: Reuse graph and plan
+                        cached_graph, cached_plan = self._graph_cache[struct_hash]
+                        if len(cached_graph.nodes) > 1:
+                            graph = build_graph(current_target)
+                            plan = self.solver.resolve(graph)
+                        else:
+                            graph = cached_graph
+                            plan = cached_plan
+                            self._update_graph_literals(graph, current_target, literals)
+                    else:
+                        # CACHE MISS: Build, solve, and cache
                         graph = build_graph(current_target)
                         plan = self.solver.resolve(graph)
-                    else:
-                        graph = cached_graph
-                        plan = cached_plan
-                        self._update_graph_literals(graph, current_target, literals)
-                else:
-                    # CACHE MISS: Build, solve, and cache
-                    graph = build_graph(current_target)
-                    plan = self.solver.resolve(graph)
-                    self._graph_cache[struct_hash] = (graph, plan)
+                        self._graph_cache[struct_hash] = (graph, plan)
+                    
+                    # Update cache for next iteration possibility
+                    last_graph = graph
+                    last_plan = plan
 
                 # 2. Setup Resources (mixed scope)
                 required_resources = self.resource_container.scan(graph)
@@ -116,6 +177,12 @@ class GraphExecutionStrategy:
                     graph,
                     plan,
                 )
+
+            # Capture the task we just executed BEFORE updating current_target
+            if isinstance(current_target, LazyResult):
+                last_executed_task = current_target.task
+            else:
+                last_executed_task = None
 
             # 4. Check for Tail Call (LazyResult)
             if isinstance(result, (LazyResult, MappedLazyResult)):

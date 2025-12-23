@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(engine): 实现递归静态分析与 TCO 循环零开销优化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766467080.974661, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(engine): 修正 Solver 过滤逻辑并更新递归分析测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766467317.3795958, "duration_ms": 0}}

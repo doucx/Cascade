@@ -1,39 +1,3 @@
-## [COMMIT] feat(sdk): 引入 Lisp 转译器 (`cs.to_lisp`)
-
-### 用户需求
-创建一个新工具，将 Cascade 的计算图转译为人类可读的 Lisp S-Expression 代码，以展示其声明式结构和数据流逻辑。
-
-### 评论
-Lisp 的 S-表达式是展示嵌套函数调用（Cascade 树状图）和局部变量绑定（Cascade DAG 共享节点）的完美格式。这个转译器实现了一个简单的编译器后端，能够进行引用计数分析、变量名分配和拓扑排序，从而生成既紧凑又准确的代码。
-
-### 目标
-1.  创建 `cascade/tools/lisp.py` 模块。
-2.  实现 `LispTranspiler` 类，具备引用计数分析 (`analyze_ref_counts`) 和智能代码生成 (`render_expr`) 能力。
-3.  实现 `let*` 绑定生成逻辑，用于处理被多次引用的共享节点 (DAG)。
-4.  实现 `(case ...)` 结构生成逻辑，用于处理 `Router` 动态路由。
-5.  在 `cascade.tools` 包中导出 `to_lisp` 函数。
-
-### 基本原理
-通过 `build_graph` 获取静态图后，我们首先计算每个节点的“被引用次数”（入度）。
--   **内联 (Inline)**: 如果一个节点只被消费一次，它会被直接内联到消费者的参数位置，形成嵌套的 `(f (g x))` 结构。
--   **提升 (Hoist)**: 如果一个节点被多个下游消费，或者是路由的选择器，它会被提升到顶层的 `let*` 块中，并在引用处使用变量名，形成 `(let* ((v1 (g x))) (f v1 v1))` 结构。这避免了逻辑的重复计算展示，并清晰地表达了共享依赖关系。
-
-### 标签
-#intent/build #flow/ready #priority/medium #comp/sdk #concept/ui #scope/dx #ai/instruct #task/domain/tooling #task/object/lisp-transpiler #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 Lisp 转译器模块
-
-实现核心转译逻辑，包括图遍历、引用计数、拓扑排序和 S-表达式渲染。
-
-~~~~~act
-write_file
-packages/cascade-sdk/src/cascade/tools/lisp.py
-~~~~~
-~~~~~python
 import json
 from typing import Any, Dict, List, Set, Optional
 from cascade.graph.model import Graph, Node, Edge, EdgeType
@@ -336,20 +300,3 @@ def to_lisp(target: Any) -> str:
         
     root = instance_map[target._uuid]
     return transpiler.transpile(root)
-~~~~~
-
-#### Acts 2: 导出工具
-
-更新 SDK 的 tools 包初始化文件，导出 `to_lisp` 函数。
-
-~~~~~act
-write_file
-packages/cascade-sdk/src/cascade/tools/__init__.py
-~~~~~
-~~~~~python
-from .cli import create_cli
-from .preview import dry_run, visualize
-from .lisp import to_lisp
-
-__all__ = ["create_cli", "dry_run", "visualize", "to_lisp"]
-~~~~~

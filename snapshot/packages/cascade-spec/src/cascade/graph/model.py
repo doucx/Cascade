@@ -47,6 +47,10 @@ class Node:
     # Pre-resolved literal inputs for the task
     literal_inputs: Dict[str, Any] = field(default_factory=dict)
 
+    # Optimization: Flag indicating if the node requires complex resolution 
+    # (e.g., has Inject markers or complex nested structures in bindings)
+    has_complex_inputs: bool = False
+
     def __hash__(self):
         return hash(self.id)
 

@@ -1,346 +1,40 @@
-## [COMMIT] feat(sdk): 引入 Lisp 转译器 (`cs.to_lisp`)
+简要回答
+非常抱歉，这是我的失误。我错误地假设 `visualize` 函数在 `preview.py` 中，但实际上它位于独立的 `visualize.py` 模块里。这也是为什么之前空的 `__init__.py` 没有报错，因为那时大家都是直接从子模块导入的。
+
+现在为了提供更整洁的 API（即允许 `from cascade.tools import visualize`），我们需要在 `__init__.py` 中正确地组织这些导入。
+
+## [WIP] fix(sdk): 修正 tools 包的导入路径错误
+
+### 错误分析
+`ImportError: cannot import name 'visualize' from 'cascade.tools.preview'`
+
+**原因**:
+在 `packages/cascade-sdk/src/cascade/tools/__init__.py` 中，我写了 `from .preview import dry_run, visualize`。
+然而，`visualize` 函数实际上定义在 `packages/cascade-sdk/src/cascade/tools/visualize.py` 文件中，而非 `preview.py`。
+
+**解决方案**:
+将导入语句拆分，从正确的子模块导入 `visualize`。
 
 ### 用户需求
-创建一个新工具，将 Cascade 的计算图转译为人类可读的 Lisp S-Expression 代码，以展示其声明式结构和数据流逻辑。
+修复 `cascade.tools` 包的导入错误，使其能正确导出 `visualize`、`dry_run` 和新的 `to_lisp`。
 
 ### 评论
-Lisp 的 S-表达式是展示嵌套函数调用（Cascade 树状图）和局部变量绑定（Cascade DAG 共享节点）的完美格式。这个转译器实现了一个简单的编译器后端，能够进行引用计数分析、变量名分配和拓扑排序，从而生成既紧凑又准确的代码。
+这是一个简单的路径引用修正，对于确保 SDK 的可用性至关重要。
 
 ### 目标
-1.  创建 `cascade/tools/lisp.py` 模块。
-2.  实现 `LispTranspiler` 类，具备引用计数分析 (`analyze_ref_counts`) 和智能代码生成 (`render_expr`) 能力。
-3.  实现 `let*` 绑定生成逻辑，用于处理被多次引用的共享节点 (DAG)。
-4.  实现 `(case ...)` 结构生成逻辑，用于处理 `Router` 动态路由。
-5.  在 `cascade.tools` 包中导出 `to_lisp` 函数。
+1.  修正 `cascade/tools/__init__.py` 中的导入语句。
 
 ### 基本原理
-通过 `build_graph` 获取静态图后，我们首先计算每个节点的“被引用次数”（入度）。
--   **内联 (Inline)**: 如果一个节点只被消费一次，它会被直接内联到消费者的参数位置，形成嵌套的 `(f (g x))` 结构。
--   **提升 (Hoist)**: 如果一个节点被多个下游消费，或者是路由的选择器，它会被提升到顶层的 `let*` 块中，并在引用处使用变量名，形成 `(let* ((v1 (g x))) (f v1 v1))` 结构。这避免了逻辑的重复计算展示，并清晰地表达了共享依赖关系。
+将 `visualize` 的导入源从 `.preview` 改为 `.visualize`。
 
 ### 标签
-#intent/build #flow/ready #priority/medium #comp/sdk #concept/ui #scope/dx #ai/instruct #task/domain/tooling #task/object/lisp-transpiler #task/action/implementation #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/sdk #scope/dx #ai/instruct #task/domain/tooling #task/object/package-structure #task/action/fix-import #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Lisp 转译器模块
-
-实现核心转译逻辑，包括图遍历、引用计数、拓扑排序和 S-表达式渲染。
-
-~~~~~act
-write_file
-packages/cascade-sdk/src/cascade/tools/lisp.py
-~~~~~
-~~~~~python
-import json
-from typing import Any, Dict, List, Set, Optional
-from cascade.graph.model import Graph, Node, Edge, EdgeType
-from cascade.graph.build import build_graph
-from cascade.spec.lazy_types import LazyResult
-
-
-class LispTranspiler:
-    def __init__(self, graph: Graph, instance_map: Dict[str, Node]):
-        self.graph = graph
-        self.instance_map = instance_map
-        self.ref_counts: Dict[str, int] = {}
-        self.shared_nodes: Set[str] = set()
-        self.node_var_names: Dict[str, str] = {}
-        # Tracks nodes that have been emitted in the let* block
-        self.generated_bindings: Set[str] = set()
-
-        self._analyze()
-
-    def _analyze(self):
-        """Analyzes the graph to determine ref counts and assign variable names."""
-        # 1. Initialize counts
-        for node in self.graph.nodes:
-            self.ref_counts[node.id] = 0
-
-        # 2. Count references (Source is dependency, Target is consumer)
-        for edge in self.graph.edges:
-            if edge.edge_type not in (EdgeType.IMPLICIT, EdgeType.POTENTIAL):
-                self.ref_counts[edge.source.id] += 1
-
-        # 3. Identify shared nodes and assign names
-        name_counts = {}
-        # Sort nodes by ID for deterministic naming
-        sorted_nodes = sorted(self.graph.nodes, key=lambda n: n.id)
-        
-        for node in sorted_nodes:
-            # Nodes referenced more than once OR nodes that are used as Router selectors
-            # (Router selectors are tricky to inline cleanly inside a case statement header)
-            is_router_selector = any(
-                e.router and e.router.selector._uuid in self.instance_map and 
-                self.instance_map[e.router.selector._uuid].id == node.id
-                for e in self.graph.edges
-            )
-            
-            if self.ref_counts[node.id] > 1 or is_router_selector:
-                self.shared_nodes.add(node.id)
-                base_name = self._sanitize_name(node.name)
-                count = name_counts.get(base_name, 0) + 1
-                name_counts[base_name] = count
-
-                if count == 1:
-                    self.node_var_names[node.id] = base_name
-                else:
-                    self.node_var_names[node.id] = f"{base_name}-{count}"
-
-    def _sanitize_name(self, name: str) -> str:
-        if not name:
-            return "anon"
-        return name.lower().replace("_", "-").replace(" ", "-")
-
-    def transpile(self, target_node: Node) -> str:
-        # 1. Identify relevant shared nodes (transitive dependencies of target)
-        deps = self._get_transitive_deps(target_node)
-        shared_in_scope = [n for n in deps if n.id in self.shared_nodes]
-
-        # 2. Topological Sort for let* order
-        sorted_shared = self._topo_sort(shared_in_scope)
-
-        if not sorted_shared:
-            return self._render_expr(target_node)
-
-        # 3. Generate let* block
-        lines = ["(let* ("]
-        for node in sorted_shared:
-            var_name = self.node_var_names[node.id]
-            # Mark as generated so subsequent references use the var name
-            self.generated_bindings.add(node.id)
-            expr = self._render_expr(node)
-            lines.append(f"  ({var_name} {expr})")
-
-        lines.append(")")
-        lines.append(f"  {self._render_expr(target_node)})")
-
-        return "\n".join(lines)
-
-    def _render_expr(self, node: Node) -> str:
-        parts = []
-
-        # Function Name
-        func_name = self._sanitize_name(node.name)
-        if node.node_type == "map":
-            parts.append(f"map {func_name}")
-        elif node.node_type == "param":
-            p_name = node.param_spec.name if node.param_spec else "?"
-            return f'(param "{p_name}")'
-        else:
-            parts.append(func_name)
-
-        # Merge Bindings and Edges
-        # We need to reconstruct the argument list.
-        # Strategy: Iterate through known bindings and incoming edges.
-
-        # 1. Positional Arguments
-        max_pos = -1
-        # Check bindings
-        for k in node.input_bindings:
-            if k.isdigit():
-                max_pos = max(max_pos, int(k))
-        
-        # Check edges
-        incoming_edges = [
-            e for e in self.graph.edges 
-            if e.target.id == node.id and e.edge_type == EdgeType.DATA
-        ]
-        edge_map = {e.arg_name: e for e in incoming_edges}
-        
-        for k in edge_map:
-            if k.isdigit():
-                max_pos = max(max_pos, int(k))
-
-        for i in range(max_pos + 1):
-            s_i = str(i)
-            if s_i in edge_map:
-                parts.append(self._render_edge_ref(edge_map[s_i]))
-            elif s_i in node.input_bindings:
-                parts.append(self._to_lisp_literal(node.input_bindings[s_i]))
-            else:
-                parts.append("nil")
-
-        # 2. Keyword Arguments
-        kw_keys = set()
-        for k in node.input_bindings:
-            if not k.isdigit():
-                kw_keys.add(k)
-        for k in edge_map:
-            if not k.isdigit() and not k.startswith("_"):
-                kw_keys.add(k)
-        
-        for k in sorted(kw_keys):
-            parts.append(f":{self._sanitize_name(k)}")
-            if k in edge_map:
-                parts.append(self._render_edge_ref(edge_map[k]))
-            elif k in node.input_bindings:
-                parts.append(self._to_lisp_literal(node.input_bindings[k]))
-            else:
-                parts.append("nil")
-
-        # 3. Conditions (run_if)
-        cond_edges = [
-            e for e in self.graph.edges 
-            if e.target.id == node.id and e.edge_type == EdgeType.CONDITION
-        ]
-        if cond_edges:
-            parts.append(":run-if")
-            parts.append(self._render_edge_ref(cond_edges[0]))
-
-        return f"({' '.join(parts)})"
-
-    def _render_edge_ref(self, edge: Edge) -> str:
-        if edge.router:
-            # Generate (case selector (val expr) ...)
-            selector_node = edge.source
-            selector_expr = self._resolve_node_ref(selector_node)
-
-            branches = []
-            # Sort routes by key for deterministic output
-            # Convert keys to string for sorting if necessary
-            sorted_routes = sorted(
-                edge.router.routes.items(), 
-                key=lambda item: str(item[0])
-            )
-            
-            for key, route_lr in sorted_routes:
-                route_uuid = route_lr._uuid
-                if route_uuid in self.instance_map:
-                    route_node = self.instance_map[route_uuid]
-                    branch_expr = self._resolve_node_ref(route_node)
-                else:
-                    branch_expr = "<unknown-node>"
-                
-                key_lit = self._to_lisp_literal(key)
-                branches.append(f"(({key_lit}) {branch_expr})")
-            
-            return f"(case {selector_expr} {' '.join(branches)})"
-        else:
-            return self._resolve_node_ref(edge.source)
-
-    def _resolve_node_ref(self, node: Node) -> str:
-        # If this node is shared AND we have already generated a binding for it
-        # (or are about to in the let* block), use the variable name.
-        if node.id in self.shared_nodes:
-            return self.node_var_names[node.id]
-        else:
-            # Inline it
-            return self._render_expr(node)
-
-    def _to_lisp_literal(self, val: Any) -> str:
-        if val is None:
-            return "nil"
-        if val is True:
-            return "#t"
-        if val is False:
-            return "#f"
-        if isinstance(val, str):
-            return json.dumps(val)
-        if isinstance(val, (int, float)):
-            return str(val)
-        if isinstance(val, list):
-            return "'(" + " ".join(self._to_lisp_literal(x) for x in val) + ")"
-        if isinstance(val, dict):
-            # Alist ((k . v) ...)
-            items = [f"({self._to_lisp_literal(k)} . {self._to_lisp_literal(v)})" for k, v in val.items()]
-            return "'(" + " ".join(items) + ")"
-        return str(val)
-
-    def _get_transitive_deps(self, root: Node) -> Set[Node]:
-        """BFS to find all upstream dependencies."""
-        visited = set()
-        queue = [root]
-        visited.add(root)
-        
-        relevant_nodes = set()
-        relevant_nodes.add(root)
-
-        while queue:
-            n = queue.pop(0)
-            # Find incoming edges
-            incoming = [e.source for e in self.graph.edges if e.target.id == n.id]
-            for source in incoming:
-                if source not in visited:
-                    visited.add(source)
-                    relevant_nodes.add(source)
-                    queue.append(source)
-        return relevant_nodes
-
-    def _topo_sort(self, nodes: List[Node]) -> List[Node]:
-        """
-        Standard Topological Sort.
-        Returns nodes in dependency order (Dependency before Consumer).
-        """
-        node_set = {n.id for n in nodes}
-        adj = {n.id: set() for n in nodes}
-        
-        # Build graph restricted to 'nodes'
-        for edge in self.graph.edges:
-            if edge.target.id in node_set and edge.source.id in node_set:
-                # Target depends on Source
-                adj[edge.target.id].add(edge.source.id)
-
-        result = []
-        visited = set()
-        temp_mark = set()
-
-        def visit(n_id):
-            if n_id in temp_mark:
-                return # Cycle detected, ignore
-            if n_id in visited:
-                return
-            
-            temp_mark.add(n_id)
-            for dep_id in sorted(adj[n_id]): # Sort for deterministic output
-                visit(dep_id)
-            temp_mark.remove(n_id)
-            visited.add(n_id)
-            result.append(n_id)
-
-        # Sort input nodes for deterministic start order
-        for n in sorted(nodes, key=lambda x: x.id):
-            visit(n.id)
-            
-        # result is [Deepest Dep, ..., Root]
-        id_map = {n.id: n for n in nodes}
-        return [id_map[nid] for nid in result]
-
-
-def to_lisp(target: Any) -> str:
-    """
-    Transpiles a Cascade workflow (LazyResult) into a Lisp S-Expression.
-    
-    This function analyzes the computation graph and generates a Lisp-like representation.
-    - Nodes referenced multiple times are hoisted into `let*` bindings.
-    - Nodes referenced once are inlined.
-    - Router/Switch logic is converted to `(case ...)` expressions.
-    
-    Args:
-        target: A Cascade LazyResult object representing the workflow.
-        
-    Returns:
-        A string containing the formatted Lisp S-Expression.
-    """
-    if not isinstance(target, LazyResult):
-        raise TypeError(f"Target must be a LazyResult, got {type(target)}")
-
-    graph, instance_map = build_graph(target)
-    transpiler = LispTranspiler(graph, instance_map)
-    
-    # Locate the root node corresponding to the target instance
-    if target._uuid not in instance_map:
-        raise RuntimeError("Target node not found in built graph")
-        
-    root = instance_map[target._uuid]
-    return transpiler.transpile(root)
-~~~~~
-
-#### Acts 2: 导出工具
-
-更新 SDK 的 tools 包初始化文件，导出 `to_lisp` 函数。
+#### Acts 1: 修正导入路径
 
 ~~~~~act
 write_file
@@ -348,7 +42,8 @@ packages/cascade-sdk/src/cascade/tools/__init__.py
 ~~~~~
 ~~~~~python
 from .cli import create_cli
-from .preview import dry_run, visualize
+from .preview import dry_run
+from .visualize import visualize
 from .lisp import to_lisp
 
 __all__ = ["create_cli", "dry_run", "visualize", "to_lisp"]

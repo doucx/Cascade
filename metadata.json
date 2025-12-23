@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(engine): 隔离静态分析元数据并修正目标节点定位", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766456744.206907, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(graph): 引入 TCO 静态分析并隔离其对运行时的影响", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766456938.9010713, "duration_ms": 0}}

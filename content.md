@@ -1,412 +1,93 @@
-简要回答：
-好的，我将执行“第一阶段”的紧急修复方案，通过修改 Solver 逻辑来剔除影子节点，并修正目标节点的定位策略。这将解决 TCO 失效和参数注入错误。
+好的，测试全部通过，这标志着我们已经成功地将静态分析功能集成进来，并解决了它带来的严重副作用。现在是时候将这个里程碑作为一个原子单元提交了。
 
-## [WIP] fix(engine): 隔离静态分析元数据并修正目标节点定位
+我将生成一个 `[COMMIT]` 计划来固化这些变更。
 
-### 错误分析
-1.  **参数缺失 (TypeError)**: `GraphExecutionStrategy` 错误地假设 `graph.nodes[-1]` 是目标节点。引入 AST 分析后，`graph.nodes` 末尾追加了“影子节点”（Shadow Nodes），导致初始参数被错误地注入给了影子节点，而真正的根节点（Root Node）因缺少参数而在执行时崩溃。
-2.  **TCO 失效 (Resource Leak)**: `NativeSolver` 将“影子节点”纳入了执行计划。由于影子节点通过 `POTENTIAL` 边与主任务连接，这破坏了 TCO 仅在“尾调用”时发生的假设，导致资源无法及时释放，递归深度增加。
+## [COMMIT] feat(graph): 引入 TCO 静态分析并隔离其对运行时的影响
 
 ### 用户需求
-1.  **Solver 隔离**: 修改求解器，使其在生成 `ExecutionPlan` 时完全忽略 `POTENTIAL` 边及其指向的影子节点。
-2.  **精确定位**: 修改执行策略，废弃基于索引（`[-1]`）的目标节点查找方式，采用更稳健的定位逻辑（基于 `GraphBuilder` 的 Top-Down 特性，`nodes[0]` 必定是 Root）。
+1.  实现一个基于 AST 的静态分析器，用于在不执行代码的情况下，预测和发现 `@cs.task` 中潜在的尾递归调用（TCO）路径。
+2.  在图构建阶段，将这些潜在路径表示为新的 `POTENTIAL` 边和“影子节点”，以增强图的可视化透明度。
+3.  修复因引入影子节点而导致的 TCO 失效和参数注入错误。
+4.  创建一个 Git 提交来记录这一系列完整的变更。
 
 ### 评论
-这是一次关键的架构“保卫战”。通过在执行层面彻底过滤掉静态分析产生的元数据，我们确立了“观测不影响执行”的原则。这不仅修复了当前的回归错误，也为未来引入更复杂的静态分析工具（如死锁检测、资源预估）铺平了道路，因为我们确信这些分析不会干扰运行时的稳定性。
+这是一次教科书式的“功能引入与架构加固”并行的操作。我们成功地为 Cascade 增加了一项业界领先的、极具价值的静态分析能力，能够“看透”动态 Agent 的未来走向。但更重要的是，我们通过在 Solver 和 Strategy 层面建立清晰的边界，确保了这种“观测”能力完全不会干扰到引擎的“执行”稳定性。这份提交不仅交付了一个新功能，更巩固了 Cascade 架构的健壮性。
 
 ### 目标
-1.  修改 `NativeSolver` 和 `CSPSolver`，使其在拓扑排序前过滤掉所有影子节点（即 `POTENTIAL` 边的目标）。
-2.  修改 `GraphExecutionStrategy._update_graph_literals`，将目标节点定位逻辑从 `nodes[-1]` 修正为 `nodes[0]`。
-3.  通过 `test_deep_recursion_tco` 和 `test_resource_release_in_recursion` 测试。
+将所有与 AST 分析器实现、图构建器集成、运行时隔离修复以及相关测试相关的变更，作为一个逻辑完整的单元提交到版本控制中。
 
 ### 基本原理
-1.  **过滤影子节点**: 影子节点仅由 `POTENTIAL` 边引入。在 Solver 层面，任何作为 `POTENTIAL` 边目标的节点都应被视为“不存在于动态执行图中”。剔除它们可以保证生成的 Plan 纯净。
-2.  **修正 Root 定位**: `GraphBuilder` 采用先序遍历（Top-Down）构建图，这意味着 `target` 对应的节点总是第一个被加入 `graph.nodes` 列表的。因此，`nodes[0]` 是指向 Root 的稳定指针，而 `nodes[-1]` 是脆弱的，容易受到子节点或影子节点追加的影响。
+我们已经完成了从功能实现到问题修复的整个闭环，并通过了完整的测试验证。现在，将这些变更合并到一个独立的、具有清晰描述的提交中，是保证代码库历史干净、可追溯的最佳实践。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/engine #task/object/solver #task/action/fix #task/state/begin
+#intent/build #intent/fix #flow/ready #priority/high #comp/graph #comp/engine #concept/state #scope/core #ai/instruct #task/domain/engine #task/object/solver #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 Solver 以忽略影子节点
+#### Acts 1: 暂存所有相关变更
 
-我们将修改 `NativeSolver` 和 `CSPSolver`。核心逻辑是：识别所有由 `POTENTIAL` 边指向的节点（影子节点），并将它们从待调度的节点集合中彻底剔除。同时，在构建依赖关系时忽略 `POTENTIAL` 边。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/adapters/solvers/native.py
-~~~~~
-~~~~~python
-from typing import Dict, List, Set
-from cascade.graph.model import Graph
-from cascade.spec.protocols import ExecutionPlan
-
-
-class NativeSolver:
-    """
-    A solver that produces a staged execution plan (layered topological sort).
-    Nodes in the same stage have no dependencies on each other and can be run in parallel.
-    """
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # 1. Calculate in-degrees for all nodes
-        in_degree: Dict[str, int] = {node.id: 0 for node in graph.nodes}
-        adj_list: Dict[str, List[str]] = {node.id: [] for node in graph.nodes}
-
-        for edge in graph.edges:
-            in_degree[edge.target.id] += 1
-            adj_list[edge.source.id].append(edge.target.id)
-
-        # 2. Identify initial layer (nodes with 0 in-degree)
-        current_stage = [node for node in graph.nodes if in_degree[node.id] == 0]
-
-        # Sort stage by name for deterministic behavior
-        current_stage.sort(key=lambda n: n.name)
-
-        plan: ExecutionPlan = []
-        processed_count = 0
-
-        while current_stage:
-            plan.append(current_stage)
-            processed_count += len(current_stage)
-            next_stage_nodes: Set[str] = set()
-
-            # 3. Simulate execution of current stage
-            for node in current_stage:
-                # For each downstream neighbor
-                for neighbor_id in adj_list[node.id]:
-                    in_degree[neighbor_id] -= 1
-                    if in_degree[neighbor_id] == 0:
-                        next_stage_nodes.add(neighbor_id)
-
-            # Prepare next stage
-            # We need to map IDs back to Node objects.
-            # Optimization: could use a lookup dict, but graph.nodes is usually small enough.
-            # Let's create a lookup for speed.
-            node_lookup = {n.id: n for n in graph.nodes}
-
-            next_stage = [node_lookup[nid] for nid in next_stage_nodes]
-            next_stage.sort(key=lambda n: n.name)  # Deterministic
-
-            current_stage = next_stage
-
-        # 4. Cycle detection
-        if processed_count < len(graph.nodes):
-            # Finding the cycle is complex, for now raise a generic error
-            raise ValueError("Cycle detected in the dependency graph.")
-
-        return plan
-~~~~~
-~~~~~python
-from typing import Dict, List, Set
-from cascade.graph.model import Graph, EdgeType
-from cascade.spec.protocols import ExecutionPlan
-
-
-class NativeSolver:
-    """
-    A solver that produces a staged execution plan (layered topological sort).
-    Nodes in the same stage have no dependencies on each other and can be run in parallel.
-    """
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # 0. Filter out Shadow Nodes (Targets of POTENTIAL edges)
-        # These nodes exist for static analysis but should not be executed.
-        shadow_ids = {
-            edge.target.id for edge in graph.edges if edge.edge_type == EdgeType.POTENTIAL
-        }
-        active_nodes = [node for node in graph.nodes if node.id not in shadow_ids]
-
-        # 1. Calculate in-degrees for all active nodes
-        in_degree: Dict[str, int] = {node.id: 0 for node in active_nodes}
-        adj_list: Dict[str, List[str]] = {node.id: [] for node in active_nodes}
-
-        for edge in graph.edges:
-            # Skip POTENTIAL edges and edges involving shadow nodes
-            if edge.edge_type == EdgeType.POTENTIAL:
-                continue
-            if edge.source.id in shadow_ids or edge.target.id in shadow_ids:
-                continue
-
-            in_degree[edge.target.id] += 1
-            adj_list[edge.source.id].append(edge.target.id)
-
-        # 2. Identify initial layer (nodes with 0 in-degree)
-        current_stage = [node for node in active_nodes if in_degree[node.id] == 0]
-
-        # Sort stage by name for deterministic behavior
-        current_stage.sort(key=lambda n: n.name)
-
-        plan: ExecutionPlan = []
-        processed_count = 0
-
-        # Optimization lookup for active nodes
-        node_lookup = {n.id: n for n in active_nodes}
-
-        while current_stage:
-            plan.append(current_stage)
-            processed_count += len(current_stage)
-            next_stage_nodes: Set[str] = set()
-
-            # 3. Simulate execution of current stage
-            for node in current_stage:
-                # For each downstream neighbor
-                for neighbor_id in adj_list[node.id]:
-                    in_degree[neighbor_id] -= 1
-                    if in_degree[neighbor_id] == 0:
-                        next_stage_nodes.add(neighbor_id)
-
-            # Prepare next stage
-            next_stage = [node_lookup[nid] for nid in next_stage_nodes]
-            next_stage.sort(key=lambda n: n.name)  # Deterministic
-
-            current_stage = next_stage
-
-        # 4. Cycle detection
-        if processed_count < len(active_nodes):
-            # Finding the cycle is complex, for now raise a generic error
-            raise ValueError("Cycle detected in the dependency graph.")
-
-        return plan
-~~~~~
+我们将 `git status` 中列出的所有新文件和修改过的文件添加到 Git 暂存区。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-engine/src/cascade/adapters/solvers/csp.py
-~~~~~
-~~~~~python
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        nodes = graph.nodes
-        if not nodes:
-            return []
-
-        # 1. Preprocessing: Extract static resource requirements
-        # node_id -> {resource_name: amount}
-        node_resources: Dict[str, Dict[str, float]] = {}
-        for node in nodes:
-            reqs = {}
-            if node.constraints:
-                for res, amount in node.constraints.requirements.items():
-                    # CSP currently only handles static constraints.
-                    # Dynamic constraints (LazyResults) are treated as 0 usage during planning.
-                    if not isinstance(amount, (LazyResult, MappedLazyResult)):
-                        reqs[res] = float(amount)
-            node_resources[node.id] = reqs
-
-        # 2. Iterative Deepening Search
-        # Try to find a schedule with K stages, starting from K=1 up to N (serial execution).
-        # Optimization: Start K from the length of the critical path (longest dependency chain)
-        # could be faster, but K=1 is a safe, simple start.
-
-        n_nodes = len(nodes)
-        solution = None
-
-        # We try max_stages from 1 to n_nodes.
-        # In the worst case (full serial), we need n_nodes stages.
-        for max_stages in range(1, n_nodes + 1):
-            solution = self._solve_csp(graph, node_resources, max_stages)
-            if solution:
-                break
-
-        if not solution:
-            raise RuntimeError(
-                "CSPSolver failed to find a valid schedule. "
-                "This usually implies circular dependencies or unsatisfiable resource constraints "
-                "(e.g., a single task requires more resources than system total)."
-            )
-
-        # 3. Convert solution to ExecutionPlan
-        # solution is {node_id: stage_index}
-        plan_dict = defaultdict(list)
-        for node_id, stage_idx in solution.items():
-            plan_dict[stage_idx].append(node_id)
-
-        # Sort stage indices
-        sorted_stages = sorted(plan_dict.keys())
-
-        # Build list of lists of Nodes
-        node_lookup = {n.id: n for n in nodes}
-        execution_plan = []
-
-        for stage_idx in sorted_stages:
-            node_ids = plan_dict[stage_idx]
-            stage_nodes = [node_lookup[nid] for nid in node_ids]
-            # Sort nodes in stage for determinism
-            stage_nodes.sort(key=lambda n: n.name)
-            execution_plan.append(stage_nodes)
-
-        return execution_plan
-
-    def _solve_csp(
-        self, graph: Graph, node_resources: Dict[str, Dict[str, float]], max_stages: int
-    ) -> Optional[Dict[str, int]]:
-        problem = constraint.Problem()
-
-        # Variables: Node IDs
-        # Domain: Possible Stage Indices [0, max_stages - 1]
-        domain = list(range(max_stages))
-        variables = [n.id for n in graph.nodes]
-        problem.addVariables(variables, domain)
-
-        # Constraint 1: Dependencies
-        # If A -> B, then stage(A) < stage(B)
-        for edge in graph.edges:
-            # Note: We use a lambda that captures nothing, args are passed by value in addConstraint
-            problem.addConstraint(
-                lambda s_src, s_tgt: s_src < s_tgt, (edge.source.id, edge.target.id)
-            )
-
-        # Constraint 2: Resources
-~~~~~
-~~~~~python
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        from cascade.graph.model import EdgeType
-
-        # 0. Filter out Shadow Nodes
-        shadow_ids = {
-            edge.target.id
-            for edge in graph.edges
-            if edge.edge_type == EdgeType.POTENTIAL
-        }
-        active_nodes = [node for node in graph.nodes if node.id not in shadow_ids]
-
-        if not active_nodes:
-            return []
-
-        # 1. Preprocessing: Extract static resource requirements
-        # node_id -> {resource_name: amount}
-        node_resources: Dict[str, Dict[str, float]] = {}
-        for node in active_nodes:
-            reqs = {}
-            if node.constraints:
-                for res, amount in node.constraints.requirements.items():
-                    # CSP currently only handles static constraints.
-                    # Dynamic constraints (LazyResults) are treated as 0 usage during planning.
-                    if not isinstance(amount, (LazyResult, MappedLazyResult)):
-                        reqs[res] = float(amount)
-            node_resources[node.id] = reqs
-
-        # 2. Iterative Deepening Search
-        # Try to find a schedule with K stages, starting from K=1 up to N (serial execution).
-        # Optimization: Start K from the length of the critical path (longest dependency chain)
-        # could be faster, but K=1 is a safe, simple start.
-
-        n_nodes = len(active_nodes)
-        solution = None
-
-        # We try max_stages from 1 to n_nodes.
-        # In the worst case (full serial), we need n_nodes stages.
-        for max_stages in range(1, n_nodes + 1):
-            solution = self._solve_csp(graph, active_nodes, shadow_ids, node_resources, max_stages)
-            if solution:
-                break
-
-        if not solution:
-            raise RuntimeError(
-                "CSPSolver failed to find a valid schedule. "
-                "This usually implies circular dependencies or unsatisfiable resource constraints "
-                "(e.g., a single task requires more resources than system total)."
-            )
-
-        # 3. Convert solution to ExecutionPlan
-        # solution is {node_id: stage_index}
-        plan_dict = defaultdict(list)
-        for node_id, stage_idx in solution.items():
-            plan_dict[stage_idx].append(node_id)
-
-        # Sort stage indices
-        sorted_stages = sorted(plan_dict.keys())
-
-        # Build list of lists of Nodes
-        node_lookup = {n.id: n for n in active_nodes}
-        execution_plan = []
-
-        for stage_idx in sorted_stages:
-            node_ids = plan_dict[stage_idx]
-            stage_nodes = [node_lookup[nid] for nid in node_ids]
-            # Sort nodes in stage for determinism
-            stage_nodes.sort(key=lambda n: n.name)
-            execution_plan.append(stage_nodes)
-
-        return execution_plan
-
-    def _solve_csp(
-        self,
-        graph: Graph,
-        active_nodes: list,
-        shadow_ids: set,
-        node_resources: Dict[str, Dict[str, float]],
-        max_stages: int,
-    ) -> Optional[Dict[str, int]]:
-        from cascade.graph.model import EdgeType
-
-        problem = constraint.Problem()
-
-        # Variables: Node IDs (only active ones)
-        # Domain: Possible Stage Indices [0, max_stages - 1]
-        domain = list(range(max_stages))
-        variables = [n.id for n in active_nodes]
-        problem.addVariables(variables, domain)
-
-        # Constraint 1: Dependencies
-        # If A -> B, then stage(A) < stage(B)
-        for edge in graph.edges:
-            # Skip POTENTIAL edges and edges involving shadow nodes
-            if edge.edge_type == EdgeType.POTENTIAL:
-                continue
-            if edge.source.id in shadow_ids or edge.target.id in shadow_ids:
-                continue
-
-            # Note: We use a lambda that captures nothing, args are passed by value in addConstraint
-            problem.addConstraint(
-                lambda s_src, s_tgt: s_src < s_tgt, (edge.source.id, edge.target.id)
-            )
-
-        # Constraint 2: Resources
+packages/cascade-engine/src/cascade/adapters/solvers/native.py
+packages/cascade-engine/src/cascade/runtime/strategies.py
+packages/cascade-graph/src/cascade/graph/ast_analyzer.py
+packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-sdk/src/cascade/tools/visualize.py
+packages/cascade-spec/src/cascade/graph/model.py
+tests/engine/graph/test_ast_analyzer.py
+tests/engine/graph/test_build_tco.py
 ~~~~~
 
-#### Acts 2: 修正目标节点定位逻辑
+#### Acts 2: 提交功能与修复
 
-修正 `GraphExecutionStrategy` 中的 `_update_graph_literals` 方法。我们将使用 `graph.nodes[0]` 来定位 Root 节点。这是基于 `GraphBuilder` Top-Down 构建过程的确定性事实。
+现在，我们创建一个内容详尽的提交，清晰地记录新功能的引入、它引发的问题以及最终的解决方案。
 
 ~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies.py
+git_commit
 ~~~~~
-~~~~~python
-    def _update_graph_literals(
-        self, graph: Graph, target: Any, literals: Dict[str, Any]
-    ):
-        # ... logic moved from Engine ...
-        if graph.nodes:
-            target_node = graph.nodes[-1]
-            target_node.id = target._uuid
-            if hasattr(target, "args") and hasattr(target, "kwargs"):
-                target_node.literal_inputs = {
-                    str(i): v for i, v in enumerate(target.args)
-                }
-                target_node.literal_inputs.update(target.kwargs)
-~~~~~
-~~~~~python
-    def _update_graph_literals(
-        self, graph: Graph, target: Any, literals: Dict[str, Any]
-    ):
-        # ... logic moved from Engine ...
-        if graph.nodes:
-            # FIX: Previously used nodes[-1], which became incorrect when shadow nodes
-            # were appended to the end of the list by static analysis.
-            # GraphBuilder uses a top-down approach (pre-order traversal), so the
-            # root target node is always the FIRST node added to the graph.
-            target_node = graph.nodes[0]
-            target_node.id = target._uuid
-            if hasattr(target, "args") and hasattr(target, "kwargs"):
-                target_node.literal_inputs = {
-                    str(i): v for i, v in enumerate(target.args)
-                }
-                target_node.literal_inputs.update(target.kwargs)
+~~~~~text
+feat(graph): Introduce static TCO analysis and isolate it from runtime
+
+Introduces a static analyzer for Tail Call Optimization (TCO) paths using Python's `ast` module. This significantly enhances graph transparency by visualizing potential state transitions before execution.
+
+This new capability added "shadow nodes" and `POTENTIAL` edges to the graph, which initially caused two critical regressions:
+1.  **TCO Failure & Resource Leaks:** The Solvers incorrectly included shadow nodes in the execution plan, breaking the TCO loop and preventing timely resource release.
+2.  **Argument Injection Failure:** `GraphExecutionStrategy` wrongly assumed the last node in the graph was the target, causing `TypeError` as initial parameters were injected into parameter-less shadow nodes.
+
+This commit resolves these issues by strictly isolating static analysis metadata from the runtime execution path:
+-   **Solver Isolation:** `NativeSolver` and `CSPSolver` are updated to explicitly filter out shadow nodes and ignore `POTENTIAL` edges when generating the execution plan.
+-   **Target Fix:** `GraphExecutionStrategy` is corrected to robustly locate the root node using `graph.nodes[0]`, which is guaranteed by the top-down build process.
+
+With these changes, the engine's stability and TCO guarantees are fully restored, while developers gain the full benefit of enhanced static graph observability.
 ~~~~~
 
-### 下一步建议
-在这些修改应用后，`NativeSolver` 和 `GraphExecutionStrategy` 应该能正确处理包含影子节点的图。建议立即运行测试套件（特别是 `tests/engine/runtime/test_engine_recursion.py`）来验证修复效果。如果测试通过，我们就可以确信静态分析的引入不再干扰核心引擎的稳定性。
+### 当前阶段分析与下一步建议
+
+**当前阶段分析：**
+
+我们已经成功完成了**“路线图：基于身份对齐的静态分析集成”**中的**第一阶段（Regression Fix）**。
+
+-   我们引入了 AST 静态分析这一核心能力。
+-   我们通过“边语义剪枝”（修改 Solver）和“精确目标节点定位”（修改 Strategy），彻底修复了它带来的严重回归问题。
+-   目前，引擎既拥有了静态分析的“远见”，又保持了动态执行的“稳健”。我们的架构边界是清晰和安全的。
+
+**下一步建议：**
+
+现在基础已经稳固，我们可以进入路线图的第二和第三阶段，将这项新能力转化为真正的用户价值和更好的代码质量。我建议从以下两个方向中选择一个作为下一步：
+
+1.  **选项 A (进入第二阶段 - 架构优化):**
+    *   **任务**: 实现 **“稳定身份标识符演进”**。具体来说，是在 `Node` 数据模型中增加一个 `is_shadow: bool = False` 字段。
+    *   **价值**: 让 Solver 的过滤逻辑从“检查边类型”变为“检查节点属性”，这在代码上更清晰、更类型安全，也更高效。这是一个提升内部代码质量的“健康度”任务。
+
+2.  **选项 B (进入第三阶段 - 能力释放):**
+    *   **任务**: 实现 **“全景透明度可视化”**。具体来说，是增强 `cs.visualize` 的渲染逻辑。
+    *   **价值**: 让用户能直观地看到静态分析的结果。例如，用**虚线和红色**来绘制 `POTENTIAL` 边，用**半透明或灰色**的样式来渲染影子节点。这将使 `visualize` 的输出信息量极大丰富，直接将新功能的价值交付给用户。
+
+我个人更**推荐选项 B**，因为它能让我们最快地“看到”我们的劳动成果，并获得直观的反馈。
+
+请确认你的选择，我将为你生成相应的计划。

@@ -1,6 +1,8 @@
 from typing import TypeVar, Generic, Callable, Optional, Union, List, TYPE_CHECKING
 import inspect
 
+# This import creates a cycle: graph -> spec.task -> spec.protocols -> graph.model
+# It must be guarded by TYPE_CHECKING.
 if TYPE_CHECKING:
     from cascade.spec.protocols import CachePolicy
 

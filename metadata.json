@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] 升级 `GraphExecutionStrategy`", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766480142.754696, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(spec): Break import cycle between spec and graph packages", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766480265.8896668, "duration_ms": 0}}

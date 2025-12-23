@@ -1,66 +1,78 @@
-好的，既然基准测试和回归测试均已顺利通过，这标志着我们成功解决了“结构-数据分离”重构后最隐蔽的两个图逻辑漏洞。
+好的，我们开始执行战略行动 A：**重新定义核心抽象**。
 
-关于你提到的微小性能变化，这主要是由于 `NativeSolver` 增加了白名单过滤开销，以及 `ShallowHasher` 处理 UUID 带来的额外字符串拼接成本。但在这种极致的性能压测下，这种量级的开销是确保逻辑正确性的必要代价。
+这是新路线图中最关键的第一步。我们将通过一次精确的手术，切除 `Node.id` 中代表“实例身份”的 `_uuid` 成分，使其回归纯粹的“结构身份”。
 
-我将生成最终的 `[COMMIT]` 计划。
+这将暂时性地破坏部分测试的正确性，但这是预期的、必要的过程。它为我们后续实现真正的通用缓存和性能优化扫清了最大的障碍。
 
-## [COMMIT] fix(engine): 解决图构建中的哈希冲突与影子节点执行问题
+我将生成一个计划来执行这个核心修改。
 
-### 错误分析
-本次修复针对的是在处理复杂递归任务时（如 `heavy_complex_countdown`）出现的 `ValueError: Cycle detected` 错误。
-
-1.  **哈希冲突 (真环)**: `ShallowHasher` 之前对嵌套 `LazyResult` 采用固定占位符，导致不同生命周期的任务实例在注册表中被错误合并，形成了物理上的数据依赖环。
-2.  **元数据干扰 (假环)**: `NativeSolver` 将 `POTENTIAL` 边误认为执行依赖，导致拓扑排序失败。
-3.  **影子节点调度 (崩溃)**: 在忽略元数据边后，仅用于分析的影子节点变成孤立节点并被推入执行队列，因缺少可执行体导致 `TypeError`。
+## [WIP] refactor: Decouple Node ID from instance UUID by purifying ShallowHasher
 
 ### 用户需求
-确保 Cascade 能够稳定处理复杂的、带有深度递归和动态依赖的计算图，并维持 TCO 优化的正确性。
+开始执行“战略行动 A”，其核心目标是重新定义 `Node` 的核心抽象，使其 `id` 成为一个纯粹的、与运行时实例无关的结构化哈希。
 
 ### 评论
-这次修复是“结构数据分离”架构走向成熟的关键一步。它确立了两个重要的原则：首先，执行调度必须严格基于“执行依赖白名单”；其次，节点的 Interning（去重）必须以保证实例唯一性为前提。这为后续实现更激进的 Hashlife 风格缓存奠定了稳固的安全基石。
+这是解决项目核心“身份危机”的决定性第一步。通过净化 `ShallowHasher`，我们强制 `Node.id` 只反映计算的“配方”（结构），而不再混入“烹饪过程”（实例）。这一改变将使我们能够实现《路线图：类 Git 模型与规范化缓存》中的核心目标：对任何结构相同的计算图进行缓存和复用。
+
+虽然这会立刻导致依赖实例唯一性的测试失败，但这些“失败”恰恰是我们取得进展的标志，因为它暴露了所有需要被新架构所修正的地方。
 
 ### 目标
-1.  提交对 `NativeSolver` 的改进，增加边类型白名单并彻底过滤影子节点。
-2.  提交对 `ShallowHasher` 的改进，引入 UUID 区分不同的 `LazyResult` 实例。
+1.  定位 `packages/cascade-graph/src/cascade/graph/hashing.py` 中的 `ShallowHasher._visit_arg` 方法。
+2.  移除在该方法中将 `LazyResult._uuid` 混入哈希计算的逻辑。
+3.  确保哈希计算现在只依赖于节点的静态结构，使其成为一个确定性的、可复用的标识符。
 
 ### 基本原理
-通过将“元数据（分析用）”与“执行数据（调度用）”在 Solver 层级进行显式隔离，并提高哈希的区分度，我们消除了图拓扑结构中的所有歧义。
+根据《战略原则：识别并解决战略性矛盾》，当前 `Node.id` 的语义是模糊的，它同时试图成为“结构哈希”和“实例哈希”，导致正确性与性能之间存在不可调和的冲突。
+
+本次修改遵循“身份必须明确”的原则，将 `Node.id` 的职责严格限定为“结构身份”。我们通过移除哈希计算中唯一的实例变量 (`_uuid`) 来实现这一点，从而使 `ShallowHasher` 成为一个纯粹的结构分析器。这是后续所有性能优化的基石。
 
 ### 标签
-#intent/fix #flow/ready #priority/high 
-#comp/engine #comp/graph #concept/hashing #concept/solver #scope/core 
-#ai/delegate
-#task/domain/core #task/object/graph-execution #task/action/bug-fix #task/state/end
+#intent/refine #flow/ready #priority/high
+#comp/graph #concept/state #scope/core
+#ai/instruct
+#task/domain/graph #task/object/hashing-model #task/action/refactor
+#task/state/begin #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 提交图逻辑修复代码
+#### Acts 1: Purify ShallowHasher
 
-我们将修改后的 `NativeSolver` 和 `ShallowHasher` 逻辑提交到仓库，标志着本次问题的圆满解决。
+我们将修改 `ShallowHasher`，移除其哈希计算中对 `LazyResult._uuid` 的依赖。
 
 ~~~~~act
-git_add
-packages/cascade-engine/src/cascade/adapters/solvers/native.py
+patch_file
 packages/cascade-graph/src/cascade/graph/hashing.py
 ~~~~~
+~~~~~python
+    def _visit_arg(self, obj: Any):
+        """A special visitor for arguments within a LazyResult."""
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            # Must include UUID to distinguish different instances with similar structure
+            # to prevent incorrect node merging (which causes cycles).
+            self._hash_components.append(f"LAZY({obj._uuid})")
+            return
 
-~~~~~act
-git_commit
+        if isinstance(obj, Router):
 ~~~~~
-~~~~~text
-fix(engine): resolve dependency cycles and shadow node execution
+~~~~~python
+    def _visit_arg(self, obj: Any):
+        """A special visitor for arguments within a LazyResult."""
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            # In the new model, we use a generic placeholder. The specific instance
+            # is tracked by the InstanceMap, not the structural hash.
+            self._hash_components.append("LAZY")
+            return
 
-This commit fixes critical issues in the execution graph logic that caused `ValueError: Cycle detected` during complex recursive tasks:
-
-1.  **Execution Edge Whitelist**: `NativeSolver` now uses a whitelist of edge types (`DATA`, `CONDITION`, etc.) for topological sorting. This prevents metadata edges like `POTENTIAL` (used for static analysis) from interfering with the runtime execution plan.
-2.  **Shadow Node Filtering**: `NativeSolver` now explicitly filters out shadow nodes (`is_shadow=True`) from the execution plan, preventing attempts to execute non-runnable analysis nodes.
-3.  **Hash Collision Prevention**: Updated `ShallowHasher` to include the `_uuid` of `LazyResult` arguments. This prevents unrelated task instances from being incorrectly merged into the same graph node, which previously created real dependency cycles.
-
-These changes stabilize the Graph/JIT path for complex recursive workflows and long-running agents.
+        if isinstance(obj, Router):
 ~~~~~
 
 ### 下一步建议
-- **性能巡检**: 虽然 103x 的加速已经非常可观，但如果未来对 `Graph/JIT` 路径有更高的 TPS 要求，我们可以考虑将 `NativeSolver` 的白名单过滤逻辑下移到 C/Rust 层级。
-- **完善静态分析**: 现在 Solver 已经可以安全处理影子节点，我们可以开始尝试在可视化工具中更好地展示这些 `POTENTIAL` 边，帮助开发者直观理解递归 Agent 的行为。
+我们已经完成了对核心哈希逻辑的修正。下一步是验证这一修改带来的影响。
+
+我建议立即运行完整的 `pytest` 测试套件。我们**预期会看到大量测试失败**，特别是 `tests/test_sequence.py` 和其他依赖“相同任务不同实例”的测试。
+
+这些失败是**好消息**，因为它们精确地指明了我们需要在新架构下进行适配的所有地方。
+
+在你确认后，我将生成一个运行测试的计划，并根据失败报告，制定下一步的重构计划，以适配 `GraphBuilder` 和 `GraphExecutionStrategy`。

@@ -4,6 +4,12 @@ from typing import Any, Dict, Callable, Union, Generator, Set, Tuple
 
 from cascade.graph.model import Graph
 from cascade.spec.resource import ResourceDefinition, Inject
+import inspect
+from contextlib import ExitStack, contextmanager
+from typing import Any, Dict, Callable, Union, Generator, Set
+
+from cascade.graph.model import Graph
+from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import ResourceAcquired, ResourceReleased
 
@@ -31,6 +37,21 @@ class ResourceContainer:
     def override_provider(self, name: str, new_provider: Any):
         """Overrides a resource provider (useful for testing)."""
         self._resource_providers[name] = new_provider
+    
+    @contextmanager
+    def override(self, name: str, new_provider: Any) -> Generator[None, None, None]:
+        """
+        A context manager to safely override a provider and guarantee restoration.
+        """
+        original = self._resource_providers.get(name)
+        self.override_provider(name, new_provider)
+        try:
+            yield
+        finally:
+            if original is not None:
+                self.override_provider(name, original)
+            else:
+                self._resource_providers.pop(name, None)
 
     def scan(self, graph: Graph) -> Set[str]:
         """

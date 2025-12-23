@@ -103,7 +103,7 @@ def test_run_with_redis_backend_uri(stateful_redis_mock):
     from cascade.graph.build import build_graph
     
     # The key of the hash field is the node's CANONICAL ID, not its instance UUID
-    _, _, instance_map = build_graph(workflow)
+    _, instance_map = build_graph(workflow)
     node = instance_map[workflow._uuid]
     
     stored_pickled_data = store[results_key][node.id]

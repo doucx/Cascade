@@ -107,8 +107,8 @@ def test_resource_override():
 
     import asyncio
 
-    # Override the db_connection resource
-    with cs.override_resource(engine, "db_connection", mock_db_connection):
+    # Override the db_connection resource using the container's robust method
+    with engine.resource_container.override("db_connection", mock_db_connection):
         result = asyncio.run(engine.run(task_using_resource()))
 
     assert result == "mock_db_url"

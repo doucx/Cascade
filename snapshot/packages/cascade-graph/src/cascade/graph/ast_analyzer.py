@@ -112,3 +112,59 @@ def analyze_task_source(task_func: Callable) -> List[Task]:
     visitor.visit(tree)
 
     return list(visitor.potential_targets)
+
+
+def assign_tco_cycle_ids(root_task: Task) -> None:
+    """
+    Performs a recursive static analysis starting from root_task to identify
+    Strongly Connected Components (cycles) in the task call graph.
+
+    If a cycle is detected (e.g., A -> B -> A), a unique 'tco_cycle_id' is
+    generated and assigned to the '_tco_cycle_id' attribute of all Tasks
+    involved in that cycle.
+
+    This enables the Engine to recognize multi-task TCO loops at runtime.
+    """
+    # Use a simple DFS to detect cycles
+    visited = set()
+    recursion_stack = set()
+    path: List[Task] = []
+
+    def _dfs(current_task: Task):
+        visited.add(current_task)
+        recursion_stack.add(current_task)
+        path.append(current_task)
+
+        # Get static targets (memoize if needed, but analyze_task_source is fast enough)
+        targets = analyze_task_source(current_task.func)
+
+        for target in targets:
+            if target not in visited:
+                _dfs(target)
+            elif target in recursion_stack:
+                # Cycle Detected!
+                # All tasks in path from 'target' to 'current_task' form the cycle.
+                try:
+                    start_index = path.index(target)
+                    cycle_members = path[start_index:]
+                    
+                    # Generate a deterministic ID for this cycle
+                    # Sort names to ensure stability regardless of entry point
+                    member_names = sorted(t.name for t in cycle_members if t.name)
+                    cycle_signature = "|".join(member_names)
+                    # Use a simple hash of the signature
+                    import hashlib
+                    cycle_id = hashlib.md5(cycle_signature.encode()).hexdigest()
+
+                    for member in cycle_members:
+                        # Only overwrite if not set or allow merging? 
+                        # For simplicity, last write wins or check consistency.
+                        member._tco_cycle_id = cycle_id
+
+                except ValueError:
+                    pass
+
+        recursion_stack.remove(current_task)
+        path.pop()
+
+    _dfs(root_task)

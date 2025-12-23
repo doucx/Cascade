@@ -1,5 +1,4 @@
 from cascade import task
-from cascade.graph.hashing import StructuralHasher
 from cascade.graph.build import build_graph
 
 

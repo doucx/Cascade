@@ -4,7 +4,6 @@ from typing import Any, Dict, Protocol, Tuple, List
 
 from cascade.graph.model import Graph
 from cascade.graph.build import build_graph
-from cascade.graph.hashing import StructuralHasher
 from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.bus import MessageBus

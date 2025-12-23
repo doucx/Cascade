@@ -1,243 +1,69 @@
-好的，我将执行修复计划。
-
-我需要在更新 `current_target` 之前，正确地将**当前正在执行的任务**保存为 `last_executed_task`，而不是像之前那样错误地保存了**下一个要执行的任务**。这消除了 `step_one` 错误地复用图结构去执行 `step_two` 导致的死循环。
+好的，性能已经恢复并超越了基线，所有测试也都通过了。现在我们将把这些修复工作作为一个原子提交来完成。
 
 ### 简要回答
-我将修复 `GraphExecutionStrategy` 中的 Fast Path 逻辑错误。之前错误地将 `result.task`（下一跳任务）记录为 `last_task`，导致非自递归的 TCO（如 A->B）在执行 B 时错误地与 B 自己比较并命中 Fast Path，从而复用 A 的图无限执行 A。修正后，将正确记录当前执行完毕的任务 A 为 `last_executed_task`，确保只有真正的自递归（A->A）才能触发优化。
+性能问题已成功解决。我将创建一个 `[COMMIT]` 计划，将相关的三个文件（`task.py`, `build.py`, `strategies.py`）添加到 Git，并撰写一份详细的提交信息，说明问题诊断和两阶段修复的过程。
 
-## [WIP] fix: 修正 TCO Fast Path 中 last_task 更新时机导致的无限递归
+## [COMMIT] perf(engine): Implement TCO fast path and AST caching for graph strategy
 
 ### 用户需求
-修复 `tests/engine/runtime/test_engine_recursion.py` 中的挂起/死循环问题。该问题由 TCO Fast Path 逻辑错误导致：在处理非自递归任务转换（如 `step_one` -> `step_two`）时，错误地复用了上一个任务的图结构。
+解决 TCO 循环中的严重性能回归，并将修复作为一个完整的、原子化的提交记录到版本历史中。
 
 ### 评论
-这是一个典型的“差一错误 (Off-by-one error)”变种。在状态机循环中，状态更新的时机至关重要。我错误地在迭代结束时，用“下一个状态”覆盖了“当前状态”的记录变量，导致下一次迭代开始时的“状态变更检测”失效（变成了“自己等于自己”）。
+这次性能调优是一个典型的“剥洋葱”过程。最初的 AST 缓存修复了“重路径”的性能，但却暴露了“轻路径”中更深层次的哈希瓶颈。最终通过引入 TCO 快速通道，我们彻底解决了问题，使图形策略的 TCO 性能达到了历史最佳水平。
 
 ### 目标
-在 `GraphExecutionStrategy.execute` 循环中，将 `last_task` 变量重命名为 `last_executed_task` 以明确语义，并确保它在 `current_target` 更新为 `result` **之前**被赋值。
+创建一个 Git 提交，包含以下逻辑变更：
+1.  在 `Task` 对象上添加 AST 分析结果的缓存字段。
+2.  在 `GraphBuilder` 中实现对该缓存的填充和使用。
+3.  在 `GraphExecutionStrategy` 中为简单的自递归 TCO 实现一个“快速通道”，以绕过结构化哈希。
+4.  修正“快速通道”中的逻辑 Bug，确保其能正确处理非自递归的 TCO 转换。
 
 ### 基本原理
-只有当 `current_target.task`（即将执行的任务）与 `last_executed_task`（刚刚执行完的任务）是同一个对象时，我们才能安全地复用图结构。
+该提交通过两个核心优化来恢复 TCO 性能。首先，通过在 `Task` 对象上缓存 AST 分析结果，将源码解析的成本从每次图构建平摊为每个任务定义一次。其次，通过在 `GraphExecutionStrategy` 中为简单的自递归循环引入一个“快速通道”，将每次 TCO 迭代的开销从昂贵的对象树哈希（O(N)）降低为几次引用检查（O(1)），从而彻底消除了性能瓶颈。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #task/domain/performance #task/object/tco-fast-path #task/action/bugfix #task/state/end
+#intent/refine #flow/ready #priority/critical #comp/engine #comp/graph #comp/spec #task/domain/performance #task/object/tco-loop #task/action/optimization #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 strategies.py 中的 last_task 更新逻辑
+#### Acts 1: 提交性能修复
+
+我们将把所有相关的修改添加到 Git 暂存区，并创建一个内容详尽的提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/task.py
+packages/cascade-graph/src/cascade/graph/build.py
 packages/cascade-engine/src/cascade/runtime/strategies.py
 ~~~~~
-~~~~~python
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
-        
-        # Optimization state for TCO Fast Path
-        last_task = None
-        last_graph = None
-        last_plan = None
 
-        while True:
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                graph = None
-                plan = None
-                literals = None
-
-                # --- FAST PATH CHECK ---
-                is_fast_path = False
-                if (
-                    last_task is not None
-                    and last_graph is not None
-                    and isinstance(current_target, LazyResult)
-                    and current_target.task == last_task
-                ):
-                    if self._is_simple_task(current_target):
-                        is_fast_path = True
-                        graph = last_graph
-                        plan = last_plan
-                        # Update literals in O(1) without hashing
-                        self._update_graph_literals(graph, current_target, {})
-
-                if not is_fast_path:
-                    # --- SLOW PATH (Hashing & Cache) ---
-                    # 1. Get Graph and Plan, using Structural Hash Cache
-                    hasher = StructuralHasher()
-                    struct_hash, literals = hasher.hash(current_target)
-
-                    if struct_hash in self._graph_cache:
-                        # CACHE HIT: Reuse graph and plan
-                        cached_graph, cached_plan = self._graph_cache[struct_hash]
-                        if len(cached_graph.nodes) > 1:
-                            graph = build_graph(current_target)
-                            plan = self.solver.resolve(graph)
-                        else:
-                            graph = cached_graph
-                            plan = cached_plan
-                            self._update_graph_literals(graph, current_target, literals)
-                    else:
-                        # CACHE MISS: Build, solve, and cache
-                        graph = build_graph(current_target)
-                        plan = self.solver.resolve(graph)
-                        self._graph_cache[struct_hash] = (graph, plan)
-                    
-                    # Update cache for next iteration possibility
-                    last_graph = graph
-                    last_plan = plan
-
-                # 2. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph)
-                self.resource_container.setup(
-                    required_resources,
-                    active_resources,
-                    run_stack,
-                    step_stack,
-                    run_id,
-                )
-
-                # 3. Execute Graph
-                result = await self._execute_graph(
-                    current_target,
-                    params,
-                    active_resources,
-                    run_id,
-                    state_backend,
-                    graph,
-                    plan,
-                )
-
-            # 4. Check for Tail Call (LazyResult)
-            if isinstance(result, (LazyResult, MappedLazyResult)):
-                if isinstance(result, LazyResult):
-                    last_task = result.task
-                else:
-                    # Mapped results are complex, disable fast path for next step
-                    last_task = None
-
-                current_target = result
-                # STATE GC
-                if hasattr(state_backend, "clear"):
-                    state_backend.clear()
-                # Yield control
-                await asyncio.sleep(0)
-            else:
-                return result
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
-        
-        # Optimization state for TCO Fast Path
-        last_executed_task = None
-        last_graph = None
-        last_plan = None
+~~~~~text
+perf(engine): Implement TCO fast path and AST caching for graph strategy
 
-        while True:
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                graph = None
-                plan = None
-                literals = None
+Resolves a severe performance regression (2.5x-3.6x slowdown) in the graph-based TCO loop by implementing a two-part optimization strategy.
 
-                # --- FAST PATH CHECK ---
-                is_fast_path = False
-                if (
-                    last_executed_task is not None
-                    and last_graph is not None
-                    and isinstance(current_target, LazyResult)
-                    and current_target.task == last_executed_task
-                ):
-                    if self._is_simple_task(current_target):
-                        is_fast_path = True
-                        graph = last_graph
-                        plan = last_plan
-                        # Update literals in O(1) without hashing
-                        self._update_graph_literals(graph, current_target, {})
+**Problem:**
+1.  **AST Re-analysis:** The `GraphBuilder` repeatedly called `analyze_task_source` (involving I/O and AST parsing) on every TCO iteration for uncached, complex graphs (`heavy_complex_countdown` benchmark).
+2.  **Repetitive Hashing:** For simple, cached graphs (`simple_countdown` benchmark), the `StructuralHasher` was invoked on every TCO iteration, creating significant overhead by traversing the object tree just to confirm the structure hadn't changed.
 
-                if not is_fast_path:
-                    # --- SLOW PATH (Hashing & Cache) ---
-                    # 1. Get Graph and Plan, using Structural Hash Cache
-                    hasher = StructuralHasher()
-                    struct_hash, literals = hasher.hash(current_target)
+**Solution:**
+1.  **Task-Level AST Caching:**
+    - A `_potential_tco_targets` cache field was added to the `cascade.spec.task.Task` class.
+    - `cascade.graph.build.GraphBuilder` now populates this cache on the first analysis and reuses the result on subsequent calls for the same task object, effectively amortizing the analysis cost to O(1) per task definition.
 
-                    if struct_hash in self._graph_cache:
-                        # CACHE HIT: Reuse graph and plan
-                        cached_graph, cached_plan = self._graph_cache[struct_hash]
-                        if len(cached_graph.nodes) > 1:
-                            graph = build_graph(current_target)
-                            plan = self.solver.resolve(graph)
-                        else:
-                            graph = cached_graph
-                            plan = cached_plan
-                            self._update_graph_literals(graph, current_target, literals)
-                    else:
-                        # CACHE MISS: Build, solve, and cache
-                        graph = build_graph(current_target)
-                        plan = self.solver.resolve(graph)
-                        self._graph_cache[struct_hash] = (graph, plan)
-                    
-                    # Update cache for next iteration possibility
-                    last_graph = graph
-                    last_plan = plan
+2.  **TCO Fast Path:**
+    - A "fast path" was introduced in `GraphExecutionStrategy`.
+    - It detects simple, self-recursive TCO calls by comparing the current task's object identity with the previously executed one.
+    - When triggered, it completely bypasses the `StructuralHasher` and graph cache lookup, reusing the existing graph structure and only updating literal values. This reduces the per-iteration overhead to near-O(1).
+    - A bug in the initial fast path logic that caused infinite loops with non-self-recursive TCO (A -> B) was also fixed by correcting the state update timing for `last_executed_task`.
 
-                # 2. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph)
-                self.resource_container.setup(
-                    required_resources,
-                    active_resources,
-                    run_stack,
-                    step_stack,
-                    run_id,
-                )
-
-                # 3. Execute Graph
-                result = await self._execute_graph(
-                    current_target,
-                    params,
-                    active_resources,
-                    run_id,
-                    state_backend,
-                    graph,
-                    plan,
-                )
-
-            # Capture the task we just executed BEFORE updating current_target
-            if isinstance(current_target, LazyResult):
-                last_executed_task = current_target.task
-            else:
-                last_executed_task = None
-
-            # 4. Check for Tail Call (LazyResult)
-            if isinstance(result, (LazyResult, MappedLazyResult)):
-                current_target = result
-                # STATE GC
-                if hasattr(state_backend, "clear"):
-                    state_backend.clear()
-                # Yield control
-                await asyncio.sleep(0)
-            else:
-                return result
+**Impact:**
+- `simple_countdown` benchmark TPS restored from ~1,300 to over 4,600.
+- `heavy_complex_countdown` benchmark TPS restored from ~180 to over 415.
+- All related tests, including `test_resource_release_in_recursion`, are now passing.
 ~~~~~
-
-### 下一步建议
-现在可以再次运行测试了。这个修复应该能够解决无限递归问题，并且不影响 TCO 的性能优化。

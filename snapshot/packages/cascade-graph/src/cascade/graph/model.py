@@ -83,10 +83,17 @@ class Graph:
 
     nodes: List[Node] = field(default_factory=list)
     edges: List[Edge] = field(default_factory=list)
+    
+    # O(1) index for fast lookup
+    _node_index: Dict[str, Node] = field(default_factory=dict, init=False, repr=False)
 
     def add_node(self, node: Node):
-        if node not in self.nodes:
+        if node.id not in self._node_index:
             self.nodes.append(node)
+            self._node_index[node.id] = node
+
+    def get_node(self, node_id: str) -> Optional[Node]:
+        return self._node_index.get(node_id)
 
     def add_edge(self, edge: Edge):
         self.edges.append(edge)

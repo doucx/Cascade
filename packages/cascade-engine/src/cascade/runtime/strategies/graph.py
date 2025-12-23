@@ -5,7 +5,7 @@ from typing import Any, Dict, List
 from cascade.graph.model import Graph, Node
 from cascade.graph.build import build_graph
 from cascade.graph.registry import NodeRegistry
-from cascade.spec.protocols import Solver, StateBackend, ExecutionPlan
+from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.resource_container import ResourceContainer
@@ -97,7 +97,9 @@ class GraphExecutionStrategy:
             # Check for Zero-Overhead TCO Fast Path
             # Use getattr safely as MappedLazyResult uses .factory instead of .task
             target_task = getattr(current_target, "task", None)
-            cycle_id = getattr(target_task, "_tco_cycle_id", None) if target_task else None
+            cycle_id = (
+                getattr(target_task, "_tco_cycle_id", None) if target_task else None
+            )
             fast_path_data = None
 
             if cycle_id and cycle_id in self._cycle_cache:
@@ -149,7 +151,12 @@ class GraphExecutionStrategy:
                     if cycle_id and cycle_id not in self._cycle_cache:
                         # Pre-scan resources and store them in the cycle cache
                         req_res = self.resource_container.scan(graph)
-                        self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id, req_res)
+                        self._cycle_cache[cycle_id] = (
+                            graph,
+                            indexed_plan,
+                            target_node.id,
+                            req_res,
+                        )
 
                 # 3. Setup Resources (mixed scope)
                 if fast_path_data:
@@ -176,7 +183,7 @@ class GraphExecutionStrategy:
                         active_resources,
                         params,
                         instance_map,
-                        input_overrides
+                        input_overrides,
                     )
                 else:
                     result = await self._execute_graph(
@@ -248,7 +255,7 @@ class GraphExecutionStrategy:
 
         # 2. Direct Execution (Skip NodeProcessor ceremony)
         result = await self.node_processor.executor.execute(node, args, kwargs)
-        
+
         # 3. Minimal State Update
         state_backend.put_result(node.id, result)
         return result
@@ -336,7 +343,9 @@ class GraphExecutionStrategy:
 
                     tasks_to_run = []
                     for node in executable_this_pass:
-                        overrides = root_input_overrides if node.id == target_node.id else None
+                        overrides = (
+                            root_input_overrides if node.id == target_node.id else None
+                        )
                         tasks_to_run.append(
                             self.node_processor.process(
                                 node,
@@ -347,7 +356,7 @@ class GraphExecutionStrategy:
                                 params,
                                 sub_graph_runner,
                                 instance_map,
-                                input_overrides=overrides
+                                input_overrides=overrides,
                             )
                         )
 

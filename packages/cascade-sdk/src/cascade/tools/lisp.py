@@ -1,5 +1,5 @@
 import json
-from typing import Any, Dict, List, Set, Optional
+from typing import Any, Dict, List, Set
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.graph.build import build_graph
 from cascade.spec.lazy_types import LazyResult
@@ -32,16 +32,17 @@ class LispTranspiler:
         name_counts = {}
         # Sort nodes by ID for deterministic naming
         sorted_nodes = sorted(self.graph.nodes, key=lambda n: n.id)
-        
+
         for node in sorted_nodes:
             # Nodes referenced more than once OR nodes that are used as Router selectors
             # (Router selectors are tricky to inline cleanly inside a case statement header)
             is_router_selector = any(
-                e.router and e.router.selector._uuid in self.instance_map and 
-                self.instance_map[e.router.selector._uuid].id == node.id
+                e.router
+                and e.router.selector._uuid in self.instance_map
+                and self.instance_map[e.router.selector._uuid].id == node.id
                 for e in self.graph.edges
             )
-            
+
             if self.ref_counts[node.id] > 1 or is_router_selector:
                 self.shared_nodes.add(node.id)
                 base_name = self._sanitize_name(node.name)
@@ -106,14 +107,15 @@ class LispTranspiler:
         for k in node.input_bindings:
             if k.isdigit():
                 max_pos = max(max_pos, int(k))
-        
+
         # Check edges
         incoming_edges = [
-            e for e in self.graph.edges 
+            e
+            for e in self.graph.edges
             if e.target.id == node.id and e.edge_type == EdgeType.DATA
         ]
         edge_map = {e.arg_name: e for e in incoming_edges}
-        
+
         for k in edge_map:
             if k.isdigit():
                 max_pos = max(max_pos, int(k))
@@ -135,7 +137,7 @@ class LispTranspiler:
         for k in edge_map:
             if not k.isdigit() and not k.startswith("_"):
                 kw_keys.add(k)
-        
+
         for k in sorted(kw_keys):
             parts.append(f":{self._sanitize_name(k)}")
             if k in edge_map:
@@ -147,7 +149,8 @@ class LispTranspiler:
 
         # 3. Conditions (run_if)
         cond_edges = [
-            e for e in self.graph.edges 
+            e
+            for e in self.graph.edges
             if e.target.id == node.id and e.edge_type == EdgeType.CONDITION
         ]
         if cond_edges:
@@ -166,10 +169,9 @@ class LispTranspiler:
             # Sort routes by key for deterministic output
             # Convert keys to string for sorting if necessary
             sorted_routes = sorted(
-                edge.router.routes.items(), 
-                key=lambda item: str(item[0])
+                edge.router.routes.items(), key=lambda item: str(item[0])
             )
-            
+
             for key, route_lr in sorted_routes:
                 route_uuid = route_lr._uuid
                 if route_uuid in self.instance_map:
@@ -177,10 +179,10 @@ class LispTranspiler:
                     branch_expr = self._resolve_node_ref(route_node)
                 else:
                     branch_expr = "<unknown-node>"
-                
+
                 key_lit = self._to_lisp_literal(key)
                 branches.append(f"(({key_lit}) {branch_expr})")
-            
+
             return f"(case {selector_expr} {' '.join(branches)})"
         else:
             return self._resolve_node_ref(edge.source)
@@ -209,7 +211,10 @@ class LispTranspiler:
             return "'(" + " ".join(self._to_lisp_literal(x) for x in val) + ")"
         if isinstance(val, dict):
             # Alist ((k . v) ...)
-            items = [f"({self._to_lisp_literal(k)} . {self._to_lisp_literal(v)})" for k, v in val.items()]
+            items = [
+                f"({self._to_lisp_literal(k)} . {self._to_lisp_literal(v)})"
+                for k, v in val.items()
+            ]
             return "'(" + " ".join(items) + ")"
         return str(val)
 
@@ -218,7 +223,7 @@ class LispTranspiler:
         visited = set()
         queue = [root]
         visited.add(root)
-        
+
         relevant_nodes = set()
         relevant_nodes.add(root)
 
@@ -240,7 +245,7 @@ class LispTranspiler:
         """
         node_set = {n.id for n in nodes}
         adj = {n.id: set() for n in nodes}
-        
+
         # Build graph restricted to 'nodes'
         for edge in self.graph.edges:
             if edge.target.id in node_set and edge.source.id in node_set:
@@ -253,12 +258,12 @@ class LispTranspiler:
 
         def visit(n_id):
             if n_id in temp_mark:
-                return # Cycle detected, ignore
+                return  # Cycle detected, ignore
             if n_id in visited:
                 return
-            
+
             temp_mark.add(n_id)
-            for dep_id in sorted(adj[n_id]): # Sort for deterministic output
+            for dep_id in sorted(adj[n_id]):  # Sort for deterministic output
                 visit(dep_id)
             temp_mark.remove(n_id)
             visited.add(n_id)
@@ -267,7 +272,7 @@ class LispTranspiler:
         # Sort input nodes for deterministic start order
         for n in sorted(nodes, key=lambda x: x.id):
             visit(n.id)
-            
+
         # result is [Deepest Dep, ..., Root]
         id_map = {n.id: n for n in nodes}
         return [id_map[nid] for nid in result]
@@ -276,15 +281,15 @@ class LispTranspiler:
 def to_lisp(target: Any) -> str:
     """
     Transpiles a Cascade workflow (LazyResult) into a Lisp S-Expression.
-    
+
     This function analyzes the computation graph and generates a Lisp-like representation.
     - Nodes referenced multiple times are hoisted into `let*` bindings.
     - Nodes referenced once are inlined.
     - Router/Switch logic is converted to `(case ...)` expressions.
-    
+
     Args:
         target: A Cascade LazyResult object representing the workflow.
-        
+
     Returns:
         A string containing the formatted Lisp S-Expression.
     """
@@ -293,10 +298,10 @@ def to_lisp(target: Any) -> str:
 
     graph, instance_map = build_graph(target)
     transpiler = LispTranspiler(graph, instance_map)
-    
+
     # Locate the root node corresponding to the target instance
     if target._uuid not in instance_map:
         raise RuntimeError("Target node not found in built graph")
-        
+
     root = instance_map[target._uuid]
     return transpiler.transpile(root)

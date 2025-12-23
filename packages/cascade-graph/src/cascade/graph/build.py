@@ -194,21 +194,29 @@ class GraphBuilder:
         # 3. Hash-consing: Query registry FIRST before doing more work
         node = self.registry.get(structural_hash)
         created_new = False
-        
+
         if not node:
             created_new = True
             # 2b. Compute TEMPLATE hash (Normalization) - ONLY if node is new
             template_components = [f"Task({getattr(result.task, 'name', 'unknown')})"]
             if result._retry_policy:
                 rp = result._retry_policy
-                template_components.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
+                template_components.append(
+                    f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})"
+                )
             if result._cache_policy:
-                template_components.append(f"Cache({type(result._cache_policy).__name__})")
+                template_components.append(
+                    f"Cache({type(result._cache_policy).__name__})"
+                )
 
             template_components.append("Args:")
-            template_components.extend(self._build_template_hash_components_from_arg(result.args, dep_nodes))
+            template_components.extend(
+                self._build_template_hash_components_from_arg(result.args, dep_nodes)
+            )
             template_components.append("Kwargs:")
-            template_components.extend(self._build_template_hash_components_from_arg(result.kwargs, dep_nodes))
+            template_components.extend(
+                self._build_template_hash_components_from_arg(result.kwargs, dep_nodes)
+            )
 
             if result._condition:
                 template_components.append("Condition:PRESENT")
@@ -242,22 +250,29 @@ class GraphBuilder:
             from cascade.internal.inputs import _get_param_value
 
             has_complex = False
-            
+
             # 1. Check for Runtime Context Injection (Special internal tasks)
             if result.task.func is _get_param_value.func:
                 has_complex = True
-            
+
             # 2. Check for Implicit Injection in Signature Defaults
             if not has_complex and sig:
-                has_complex = any(isinstance(p.default, InjectMarker) for p in sig.parameters.values())
-            
+                has_complex = any(
+                    isinstance(p.default, InjectMarker) for p in sig.parameters.values()
+                )
+
             # 3. Check for Explicit Injection in Bindings (recursively)
             if not has_complex:
+
                 def is_complex_value(v):
-                    if isinstance(v, InjectMarker): return True
-                    if isinstance(v, list): return any(is_complex_value(x) for x in v)
-                    if isinstance(v, dict): return any(is_complex_value(x) for x in v.values())
+                    if isinstance(v, InjectMarker):
+                        return True
+                    if isinstance(v, list):
+                        return any(is_complex_value(x) for x in v)
+                    if isinstance(v, dict):
+                        return any(is_complex_value(x) for x in v.values())
                     return False
+
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
             node = Node(
@@ -356,9 +371,7 @@ class GraphBuilder:
         structural_hash = self._get_merkle_hash(hash_components)
 
         # 2b. Compute TEMPLATE hash
-        template_components = [
-            f"Map({getattr(result.factory, 'name', 'factory')})"
-        ]
+        template_components = [f"Map({getattr(result.factory, 'name', 'factory')})"]
         template_components.append("MapKwargs:")
         template_components.extend(
             self._build_template_hash_components_from_arg(

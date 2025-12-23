@@ -65,8 +65,12 @@ def test_recursive_shadow_analysis():
     # Verify edge chain: a -> b -> c
     potential_edges = [e for e in graph.edges if e.edge_type == EdgeType.POTENTIAL]
     assert len(potential_edges) == 2
-    
+
     # a -> b
-    assert any(e.source.name == "task_a" and e.target.name == "task_b" for e in potential_edges)
+    assert any(
+        e.source.name == "task_a" and e.target.name == "task_b" for e in potential_edges
+    )
     # b -> c
-    assert any(e.source.name == "task_b" and e.target.name == "task_c" for e in potential_edges)
+    assert any(
+        e.source.name == "task_b" and e.target.name == "task_c" for e in potential_edges
+    )

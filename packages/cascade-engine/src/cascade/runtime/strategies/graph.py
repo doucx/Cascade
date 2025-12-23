@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict, Tuple, List
+from typing import Any, Dict, List
 
 from cascade.graph.model import Graph, Node
 from cascade.graph.build import build_graph
@@ -20,7 +20,7 @@ class GraphExecutionStrategy:
     """
     Executes tasks by dynamically building a dependency graph and running a TCO loop.
     This is the standard execution mode for Cascade.
-    
+
     Refactored for v3.2 architecture:
     - Strictly relies on build_graph returning (Graph, DataTuple, InstanceMap).
     - Uses InstanceMap to locate the target node within the structural graph.
@@ -42,7 +42,7 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
-        
+
         # JIT Compilation Cache
         # Maps structural hash (root_node_id) to a compiled ExecutionPlan
         self._plan_cache: Dict[str, ExecutionPlan] = {}
@@ -66,11 +66,15 @@ class GraphExecutionStrategy:
                 # 1. Build Graph (With Registry for interning)
                 # This constructs the structural graph and the instance map.
                 # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
-                graph, instance_map = build_graph(current_target, registry=self._node_registry)
-                
+                graph, instance_map = build_graph(
+                    current_target, registry=self._node_registry
+                )
+
                 # Identify the structural root
                 if current_target._uuid not in instance_map:
-                    raise RuntimeError(f"Critical: Target instance {current_target._uuid} not found in InstanceMap.")
+                    raise RuntimeError(
+                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                    )
                 target_node = instance_map[current_target._uuid]
                 root_node_id = target_node.id
 
@@ -130,10 +134,12 @@ class GraphExecutionStrategy:
     ) -> Any:
         # Locate the canonical node for the current target instance
         if target._uuid not in instance_map:
-            raise RuntimeError(f"Critical: Target instance {target._uuid} not found in InstanceMap.")
-        
+            raise RuntimeError(
+                f"Critical: Target instance {target._uuid} not found in InstanceMap."
+            )
+
         target_node = instance_map[target._uuid]
-        
+
         flow_manager = FlowManager(graph, target_node.id, instance_map)
         blocked_nodes = set()
 

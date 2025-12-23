@@ -1,15 +1,11 @@
 import inspect
 from contextlib import ExitStack
-from typing import Any, Dict, Callable, Union, Generator, Set, Tuple
-
-from cascade.graph.model import Graph
-from cascade.spec.resource import ResourceDefinition, Inject
-import inspect
-from contextlib import ExitStack, contextmanager
 from typing import Any, Dict, Callable, Union, Generator, Set
 
 from cascade.graph.model import Graph
 from cascade.spec.resource import ResourceDefinition, Inject
+from contextlib import contextmanager
+
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import ResourceAcquired, ResourceReleased
 
@@ -37,7 +33,7 @@ class ResourceContainer:
     def override_provider(self, name: str, new_provider: Any):
         """Overrides a resource provider (useful for testing)."""
         self._resource_providers[name] = new_provider
-    
+
     @contextmanager
     def override(self, name: str, new_provider: Any) -> Generator[None, None, None]:
         """
@@ -58,7 +54,7 @@ class ResourceContainer:
         Scans the graph to identify all resources required by the nodes.
         """
         required = set()
-        
+
         # 1. Scan Node Input Bindings for explicit Inject objects
         for node in graph.nodes:
             for value in node.input_bindings.values():

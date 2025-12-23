@@ -101,11 +101,11 @@ def test_run_with_redis_backend_uri(stateful_redis_mock):
     assert results_key is not None
 
     from cascade.graph.build import build_graph
-    
+
     # The key of the hash field is the node's CANONICAL ID, not its instance UUID
     _, instance_map = build_graph(workflow)
     node = instance_map[workflow._uuid]
-    
+
     stored_pickled_data = store[results_key][node.id]
 
     # Verify the stored data is correct

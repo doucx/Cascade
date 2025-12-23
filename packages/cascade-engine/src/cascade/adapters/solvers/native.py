@@ -34,7 +34,7 @@ class NativeSolver(Solver):
             EdgeType.CONSTRAINT,
             EdgeType.IMPLICIT,
             EdgeType.SEQUENCE,
-            EdgeType.ROUTER_ROUTE, # Considered a dependency for plan completeness
+            EdgeType.ROUTER_ROUTE,  # Considered a dependency for plan completeness
         }
 
         for edge in graph.edges:

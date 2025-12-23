@@ -33,8 +33,3 @@ class InMemoryStateBackend:
         """
         self._results.clear()
         self._skipped.clear()
-
-    def clear(self) -> None:
-        """Clears all stored state. Used for garbage collection between TCO steps."""
-        self._results.clear()
-        self._skipped.clear()

@@ -1,6 +1,6 @@
 import time
 import asyncio
-from typing import Any, Dict, List, Callable, Awaitable, Tuple
+from typing import Any, Dict, List, Callable, Awaitable
 
 from cascade.graph.model import Node, Graph
 from cascade.spec.protocols import Executor, StateBackend, Solver
@@ -208,7 +208,7 @@ class NodeProcessor:
     def _resolve_inputs_for_cache(
         self, node: Node, graph: Graph, state_backend: StateBackend
     ) -> Dict[str, Any]:
-        # TODO: This needs to be smarter for caching. 
+        # TODO: This needs to be smarter for caching.
         # It should probably include data from input_bindings too?
         # For now, keeping legacy behavior (edge results only).
         inputs = {}

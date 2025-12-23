@@ -1,12 +1,11 @@
 from dataclasses import dataclass, field
-from typing import List, Callable, Optional, Any, Dict, Union
+from typing import List, Callable, Optional, Any, Dict
 from enum import Enum, auto
 import inspect
 
 
 from cascade.spec.common import Param
 from cascade.spec.constraint import ResourceConstraint
-from cascade.spec.binding import Binding  # NEW
 
 
 class EdgeType(Enum):
@@ -27,7 +26,7 @@ class EdgeType(Enum):
 class Node:
     """
     Represents a node in the computation graph template.
-    
+
     A Node defines 'what' to execute (the callable) and 'how' to get its arguments
     (bindings or edges), but it DOES NOT contain the runtime data itself.
     """

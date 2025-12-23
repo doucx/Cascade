@@ -33,4 +33,6 @@ def test_hashing_distinguishes_nested_lazy_results():
     node1 = instance_map1[target1._uuid]
     node2 = instance_map2[target2._uuid]
 
-    assert node1.id != node2.id, "Hasher must distinguish between different nested LazyResult dependencies"
+    assert node1.id != node2.id, (
+        "Hasher must distinguish between different nested LazyResult dependencies"
+    )

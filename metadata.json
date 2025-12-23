@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 强制重置核心引擎文件以清除残留的错误逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766506190.598021, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 更新测试断言以适配 TCO Fast Path 优化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766506339.0514202, "duration_ms": 0}}

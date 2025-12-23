@@ -1,139 +1,171 @@
 简要回答：
-好的，我们将着手实现可视化增强，让静态分析的“潜能”在图中显形。
+`test_visualize.py` 失败是因为我们为节点添加了新的默认样式属性（`style`, `fillcolor`, `fontcolor`），但测试断言仍然在匹配旧的、简单的节点定义字符串。我将更新测试以匹配新的格式，并添加针对影子节点样式的测试用例。
 
-## [WIP] feat(sdk): 增强可视化以区分静态分析路径
+## [WIP] fix(tests): 更新可视化测试以匹配新的样式定义
 
 ### 摘要头
-`# [WIP] feat(sdk): Enhance visualization for static analysis paths`
+`# [WIP] fix(tests): Update visualize tests to match new style definitions`
 
 ### 用户需求
-用户希望在 `cs.visualize` 生成的架构图中，能够直观地、一眼区分出哪些是实际会被调度的“真实节点”，哪些是由静态分析预测出的“影子节点”（Potential Nodes）。
+1.  修复因 `cs.visualize` 输出格式变更（增加了默认样式属性）而导致的 `test_visualize_diamond_graph` 测试失败。
+2.  在 `test_visualize.py` 中增加新的测试用例，专门验证静态分析路径（POTENTIAL 边和 Shadow Nodes）的样式是否符合预期（虚线、灰色、`potential` 标签）。
 
 ### 评论
-可视化的核心价值在于降低认知负荷。如果所有节点看起来都一样，静态分析引入的大量影子节点反而会增加图的混乱度。通过样式的区分（如虚线、灰色、半透明），我们可以利用“前意识处理”（Pre-attentive Processing），让开发者在关注主流程的同时，也能感知到潜在的跳转路径，而不被其干扰。
+这是一个典型的测试维护任务。当我们改进了输出格式以提升用户体验时，必须同步更新那些对输出字符串进行精确匹配的测试。更好的做法是使用正则表达式或更灵活的断言，但在 DOT 字符串测试中，包含所有属性的精确匹配更能确保生成的图是我们期望的样子。
 
 ### 目标
-1.  修改 `visualize` 函数，在渲染前预扫描图结构，识别出所有通过 `POTENTIAL` 边引入的“影子节点”。
-2.  为影子节点应用独特的视觉样式：
-    *   **边框**: 虚线 (`style="dashed,filled"`)。
-    *   **填充**: 浅灰色 (`fillcolor="whitesmoke"` 或类似)。
-    *   **文字**: 灰色 (`fontcolor="gray50"`), 并附加 `(Potential)` 标记。
-3.  优化 `POTENTIAL` 边的样式，使其更符合“预测路径”的语义（如使用红色虚线）。
+1.  更新 `test_visualize_diamond_graph` 中的断言字符串，使其包含 `style="rounded,filled", fillcolor=white, fontcolor=black` 等新属性。
+2.  添加 `test_visualize_potential_path` 测试函数，验证影子节点的特殊样式。
 
 ### 基本原理
-我们复用 Solver 中用于剔除影子节点的逻辑：`shadow_ids = targets of POTENTIAL edges`。利用这个集合，我们在生成 DOT 节点定义时进行条件判断，动态注入样式属性。
+直接修改测试文件中的预期字符串。
 
 ### 标签
-#intent/build #flow/ready #priority/medium #comp/sdk #comp/docs #concept/ui #scope/ux #ai/instruct #task/domain/ui #task/object/visualizer #task/action/enhance #task/state/continue
+#intent/fix #intent/test #flow/ready #priority/medium #comp/sdk #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/visualizer #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 增强 `visualize.py` 渲染逻辑
+#### Acts 1: 更新并扩展 `test_visualize.py`
 
-我们将修改 `visualize.py`。
-1.  添加预处理步骤：扫描 `graph.edges`，收集所有 `EdgeType.POTENTIAL` 指向的目标节点 ID 到 `shadow_node_ids` 集合中。
-2.  在节点渲染循环中，检查当前节点是否在 `shadow_node_ids` 中。
-3.  如果是，覆盖默认的样式属性（虚线框、灰色文字等）。
+我们将修改 `tests/sdk/tools/test_visualize.py`。
+1.  **修复**: 更新 `test_visualize_diamond_graph` 中的断言，使其匹配包含默认样式属性的节点定义。
+2.  **新增**: 添加 `test_visualize_potential_path`，构建一个包含 TCO 逻辑的工作流，并断言其生成的 DOT 字符串包含预期的样式（虚线、红色边、灰底节点）。
 
 ~~~~~act
 write_file
-packages/cascade-sdk/src/cascade/tools/visualize.py
+tests/sdk/tools/test_visualize.py
 ~~~~~
 ~~~~~python
-from typing import Any, Set
-from cascade.spec.lazy_types import LazyResult
-from cascade.graph.build import build_graph
-from cascade.graph.model import Node, EdgeType
+import cascade as cs
+from cascade.spec.task import task
 
 
-def visualize(target: LazyResult[Any]) -> str:
+def test_visualize_diamond_graph():
     """
-    Builds the computation graph for a target and returns its representation
-    in the Graphviz DOT language format.
+    Tests that visualize() produces a correct DOT string for a diamond graph with standard data edges.
     """
-    graph = build_graph(target)
 
-    dot_parts = [
-        "digraph CascadeWorkflow {",
-        '  rankdir="TB";',
-        '  node [shape=box, style="rounded,filled", fillcolor=white];',
-    ]
+    @cs.task
+    def t_a():
+        return 1
 
-    # 0. Pre-scan: Identify Shadow Nodes (Targets of POTENTIAL edges)
-    shadow_node_ids: Set[str] = {
-        edge.target.id for edge in graph.edges if edge.edge_type == EdgeType.POTENTIAL
-    }
+    @cs.task
+    def t_b(x):
+        return x + 1
 
-    # 1. Define Nodes
-    for node in graph.nodes:
-        shape = _get_node_shape(node)
-        
-        # Default Style
-        style = '"rounded,filled"'
-        fillcolor = "white"
-        fontcolor = "black"
-        label_suffix = ""
+    @cs.task
+    def t_c(x):
+        return x * 2
 
-        # Shadow Style Override
-        if node.id in shadow_node_ids:
-            style = '"dashed,filled"'
-            fillcolor = "whitesmoke"  # Very light gray
-            fontcolor = "gray50"
-            label_suffix = "\\n(Potential)"
+    @cs.task
+    def t_d(y, z):
+        return y + z
 
-        label = f"{node.name}\\n({node.node_type}){label_suffix}"
-        
-        dot_parts.append(
-            f'  "{node.id}" [label="{label}", shape={shape}, style={style}, '
-            f'fillcolor={fillcolor}, fontcolor={fontcolor}];'
-        )
+    r_a = t_a()
+    r_b = t_b(r_a)
+    r_c = t_c(r_a)
+    r_d = t_d(r_b, z=r_c)
 
-    # 2. Define Edges
-    for edge in graph.edges:
-        style = ""
+    dot_string = cs.visualize(r_d)
 
-        if edge.edge_type == EdgeType.CONDITION:
-            style = ' [style=dashed, color=gray, label="run_if"]'
-        elif edge.edge_type == EdgeType.IMPLICIT:
-            style = ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
-        elif edge.edge_type == EdgeType.ROUTER_ROUTE:
-            # Router route edge
-            style = ' [style=dashed, color=orange, arrowhead=open, label="route"]'
-        elif edge.router:
-            # Router selector edge (which is EdgeType.DATA)
-            style = f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
-        elif edge.edge_type == EdgeType.CONSTRAINT:
-            style = (
-                f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
-            )
-        elif edge.edge_type == EdgeType.SEQUENCE:
-            style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
-        elif edge.edge_type == EdgeType.POTENTIAL:
-            # Use a reddish color to indicate a predicted/potential path, dashed
-            style = ' [style=dashed, color="#d9534f", fontcolor="#d9534f", arrowhead=open, label="potential"]'
-        else:
-            style = f' [label="{edge.arg_name}"]'
+    # Basic structural checks
+    assert dot_string.startswith("digraph CascadeWorkflow {")
+    assert dot_string.endswith("}")
+    assert 'rankdir="TB"' in dot_string
 
-        dot_parts.append(f'  \"{edge.source.id}\" -> \"{edge.target.id}\"{style};')
+    # Check node definitions with new default styles
+    # style="rounded,filled", fillcolor=white, fontcolor=black
+    assert (
+        f'"{r_a._uuid}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
+        in dot_string
+    )
+    assert (
+        f'"{r_b._uuid}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
+        in dot_string
+    )
 
-    dot_parts.append("}")
-    return "\n".join(dot_parts)
+    # Check data edge definitions
+    assert f'"{r_a._uuid}" -> "{r_b._uuid}" [label="0"];' in dot_string
+    assert f'"{r_c._uuid}" -> "{r_d._uuid}" [label="z"];' in dot_string
 
 
-def _get_node_shape(node: Node) -> str:
-    """Returns the Graphviz shape for a given node type."""
-    if node.node_type == "param":
-        return "ellipse"
-    if node.node_type == "map":
-        return "hexagon"
-    # Future: Routers could be a diamond, but they are edges in our model
-    return "box"
+def test_visualize_special_edge_types():
+    """
+    Tests that visualize() correctly styles edges for conditions and constraints.
+    """
+
+    @cs.task
+    def t_condition():
+        return True
+
+    @cs.task
+    def t_constraint_source():
+        return 2
+
+    @cs.task
+    def t_main(data_in):
+        return data_in
+
+    # Create a workflow with all edge types
+    cond = t_condition()
+    constraint_val = t_constraint_source()
+    data_source = cs.task(lambda: 1, name="data_source")()
+
+    # Apply run_if and dynamic constraints
+    target = (
+        t_main(data_in=data_source).run_if(cond).with_constraints(cpu=constraint_val)
+    )
+
+    dot_string = cs.visualize(target)
+
+    # 1. Assert Data Edge (standard style)
+    assert (
+        f'"{data_source._uuid}" -> "{target._uuid}" [label="data_in"];' in dot_string
+    )
+
+    # 2. Assert Condition Edge (dashed, gray)
+    expected_cond_edge = (
+        f'"{cond._uuid}" -> "{target._uuid}" [style=dashed, color=gray, label="run_if"]'
+    )
+    assert expected_cond_edge in dot_string
+
+    # 3. Assert Constraint Edge (dotted, purple)
+    expected_constraint_edge = f'"{constraint_val._uuid}" -> "{target._uuid}" [style=dotted, color=purple, label="constraint: cpu"]'
+    assert expected_constraint_edge in dot_string
+
+
+def test_visualize_potential_path():
+    """
+    Tests that static analysis (TCO) paths are visualized with distinct styles.
+    """
+
+    @task
+    def leaf_task():
+        return "leaf"
+
+    @task
+    def orchestrator(x: int):
+        if x > 0:
+            return leaf_task()
+        return "done"
+
+    workflow = orchestrator(10)
+    dot_string = cs.visualize(workflow)
+
+    # 1. Check POTENTIAL Edge Style (Red, Dashed)
+    # Since we can't predict the shadow node UUID easily without parsing,
+    # we look for the edge definition substring which is unique enough.
+    expected_edge_style = '[style=dashed, color="#d9534f", fontcolor="#d9534f", arrowhead=open, label="potential"]'
+    assert expected_edge_style in dot_string
+
+    # 2. Check Shadow Node Style (Dashed border, Gray fill, (Potential) label)
+    # We expect a node with label containing "(Potential)" and special style
+    expected_node_style_part = 'style="dashed,filled", fillcolor=whitesmoke, fontcolor=gray50'
+    assert expected_node_style_part in dot_string
+    assert "(Potential)" in dot_string
 ~~~~~
 
 ### 下一步建议
-我们已经完成了可视化逻辑的增强。
-1.  **验证**: 你可以使用 `test_visualize.py` 或者创建一个简单的脚本来生成一个包含 TCO 逻辑的 DOT 文件，然后用 Graphviz 渲染查看效果。
-2.  **合并**: 确认无误后，我们可以提交这个更改。这将完成路线图的第三阶段的一部分。
-3.  **后续**: 考虑是否需要为 `test_visualize.py` 添加针对 shadow nodes 样式的断言，以防止未来回归。
+运行测试。如果通过，提交整个变更（包括 `visualize.py` 的功能增强和测试修复）。这将是一个完整的交付物。

@@ -94,6 +94,7 @@ def test_serialize_params():
     param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
 
     assert param_node["node_type"] == "task"
+    assert isinstance(param_node["input_bindings"]["name"], dict)
     assert "__slot_ref" in param_node["input_bindings"]["name"]
 
     # Note: Serialization currently only saves graph structure, not the Context.
@@ -101,9 +102,10 @@ def test_serialize_params():
     # (which lives in WorkflowContext). This is expected behavior for v1.3.
 
     # Round trip
+    from cascade.spec.binding import SlotRef
     restored = from_json(to_json(graph))
     p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
-    assert "__slot_ref" in p_node.input_bindings["name"]
+    assert isinstance(p_node.input_bindings["name"], SlotRef)
 
 
 def test_serialize_with_retry():

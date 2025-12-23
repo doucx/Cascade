@@ -68,8 +68,12 @@ class ArgumentResolver:
         
         for edge in incoming_edges:
             if edge.edge_type == EdgeType.DATA:
-                val = self._resolve_dependency(edge, node.id, state_backend, graph)
-                
+                # NEW: Check if this edge is a router's output
+                if edge.router:
+                    val = self._resolve_router(edge.router, node.id, state_backend, graph)
+                else:
+                    val = self._resolve_dependency(edge, node.id, state_backend, graph)
+
                 # Handle positional vs keyword
                 if edge.arg_name.isdigit():
                     idx = int(edge.arg_name)
@@ -202,6 +206,42 @@ class ArgumentResolver:
             return resource_context[inject.resource_name]
 
         raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
+
+    def _resolve_router(
+        self,
+        router: Router,
+        consumer_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
+    ) -> Any:
+        # 1. Resolve Selector
+        selector_uuid = router.selector._uuid
+        if not state_backend.has_result(selector_uuid):
+            # To get the arg name, we need to find the edge from selector to consumer
+            edge = next((e for e in graph.edges if e.source.id == selector_uuid and e.target.id == consumer_id), None)
+            arg_name = edge.arg_name if edge else "router_selector"
+            raise DependencyMissingError(consumer_id, arg_name, selector_uuid)
+
+        selector_value = state_backend.get_result(selector_uuid)
+
+        # 2. Pick Route
+        try:
+            selected_lr = router.routes[selector_value]
+        except KeyError:
+            raise ValueError(
+                f"Router selector returned '{selector_value}', "
+                f"but no matching route found in {list(router.routes.keys())}"
+            )
+
+        # 3. Resolve Route Result by finding its dependency edge
+        # This is a bit indirect. We create a fake edge to resolve the dependency.
+        class FakeEdge:
+            def __init__(self, source_id):
+                self.source = type("FakeNode", (), {"id": source_id})
+                self.arg_name = "<route>"
+        
+        fake_edge = FakeEdge(selected_lr._uuid)
+        return self._resolve_dependency(fake_edge, consumer_id, state_backend, graph)
 
 
 class ConstraintResolver:

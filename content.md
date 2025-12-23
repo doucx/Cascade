@@ -1,93 +1,139 @@
-好的，测试全部通过，这标志着我们已经成功地将静态分析功能集成进来，并解决了它带来的严重副作用。现在是时候将这个里程碑作为一个原子单元提交了。
+简要回答：
+好的，我们将着手实现可视化增强，让静态分析的“潜能”在图中显形。
 
-我将生成一个 `[COMMIT]` 计划来固化这些变更。
+## [WIP] feat(sdk): 增强可视化以区分静态分析路径
 
-## [COMMIT] feat(graph): 引入 TCO 静态分析并隔离其对运行时的影响
+### 摘要头
+`# [WIP] feat(sdk): Enhance visualization for static analysis paths`
 
 ### 用户需求
-1.  实现一个基于 AST 的静态分析器，用于在不执行代码的情况下，预测和发现 `@cs.task` 中潜在的尾递归调用（TCO）路径。
-2.  在图构建阶段，将这些潜在路径表示为新的 `POTENTIAL` 边和“影子节点”，以增强图的可视化透明度。
-3.  修复因引入影子节点而导致的 TCO 失效和参数注入错误。
-4.  创建一个 Git 提交来记录这一系列完整的变更。
+用户希望在 `cs.visualize` 生成的架构图中，能够直观地、一眼区分出哪些是实际会被调度的“真实节点”，哪些是由静态分析预测出的“影子节点”（Potential Nodes）。
 
 ### 评论
-这是一次教科书式的“功能引入与架构加固”并行的操作。我们成功地为 Cascade 增加了一项业界领先的、极具价值的静态分析能力，能够“看透”动态 Agent 的未来走向。但更重要的是，我们通过在 Solver 和 Strategy 层面建立清晰的边界，确保了这种“观测”能力完全不会干扰到引擎的“执行”稳定性。这份提交不仅交付了一个新功能，更巩固了 Cascade 架构的健壮性。
+可视化的核心价值在于降低认知负荷。如果所有节点看起来都一样，静态分析引入的大量影子节点反而会增加图的混乱度。通过样式的区分（如虚线、灰色、半透明），我们可以利用“前意识处理”（Pre-attentive Processing），让开发者在关注主流程的同时，也能感知到潜在的跳转路径，而不被其干扰。
 
 ### 目标
-将所有与 AST 分析器实现、图构建器集成、运行时隔离修复以及相关测试相关的变更，作为一个逻辑完整的单元提交到版本控制中。
+1.  修改 `visualize` 函数，在渲染前预扫描图结构，识别出所有通过 `POTENTIAL` 边引入的“影子节点”。
+2.  为影子节点应用独特的视觉样式：
+    *   **边框**: 虚线 (`style="dashed,filled"`)。
+    *   **填充**: 浅灰色 (`fillcolor="whitesmoke"` 或类似)。
+    *   **文字**: 灰色 (`fontcolor="gray50"`), 并附加 `(Potential)` 标记。
+3.  优化 `POTENTIAL` 边的样式，使其更符合“预测路径”的语义（如使用红色虚线）。
 
 ### 基本原理
-我们已经完成了从功能实现到问题修复的整个闭环，并通过了完整的测试验证。现在，将这些变更合并到一个独立的、具有清晰描述的提交中，是保证代码库历史干净、可追溯的最佳实践。
+我们复用 Solver 中用于剔除影子节点的逻辑：`shadow_ids = targets of POTENTIAL edges`。利用这个集合，我们在生成 DOT 节点定义时进行条件判断，动态注入样式属性。
 
 ### 标签
-#intent/build #intent/fix #flow/ready #priority/high #comp/graph #comp/engine #concept/state #scope/core #ai/instruct #task/domain/engine #task/object/solver #task/action/fix #task/state/continue
+#intent/build #flow/ready #priority/medium #comp/sdk #comp/docs #concept/ui #scope/ux #ai/instruct #task/domain/ui #task/object/visualizer #task/action/enhance #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 暂存所有相关变更
+#### Acts 1: 增强 `visualize.py` 渲染逻辑
 
-我们将 `git status` 中列出的所有新文件和修改过的文件添加到 Git 暂存区。
+我们将修改 `visualize.py`。
+1.  添加预处理步骤：扫描 `graph.edges`，收集所有 `EdgeType.POTENTIAL` 指向的目标节点 ID 到 `shadow_node_ids` 集合中。
+2.  在节点渲染循环中，检查当前节点是否在 `shadow_node_ids` 中。
+3.  如果是，覆盖默认的样式属性（虚线框、灰色文字等）。
 
 ~~~~~act
-git_add
-packages/cascade-engine/src/cascade/adapters/solvers/csp.py
-packages/cascade-engine/src/cascade/adapters/solvers/native.py
-packages/cascade-engine/src/cascade/runtime/strategies.py
-packages/cascade-graph/src/cascade/graph/ast_analyzer.py
-packages/cascade-graph/src/cascade/graph/build.py
+write_file
 packages/cascade-sdk/src/cascade/tools/visualize.py
-packages/cascade-spec/src/cascade/graph/model.py
-tests/engine/graph/test_ast_analyzer.py
-tests/engine/graph/test_build_tco.py
+~~~~~
+~~~~~python
+from typing import Any, Set
+from cascade.spec.lazy_types import LazyResult
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, EdgeType
+
+
+def visualize(target: LazyResult[Any]) -> str:
+    """
+    Builds the computation graph for a target and returns its representation
+    in the Graphviz DOT language format.
+    """
+    graph = build_graph(target)
+
+    dot_parts = [
+        "digraph CascadeWorkflow {",
+        '  rankdir="TB";',
+        '  node [shape=box, style="rounded,filled", fillcolor=white];',
+    ]
+
+    # 0. Pre-scan: Identify Shadow Nodes (Targets of POTENTIAL edges)
+    shadow_node_ids: Set[str] = {
+        edge.target.id for edge in graph.edges if edge.edge_type == EdgeType.POTENTIAL
+    }
+
+    # 1. Define Nodes
+    for node in graph.nodes:
+        shape = _get_node_shape(node)
+        
+        # Default Style
+        style = '"rounded,filled"'
+        fillcolor = "white"
+        fontcolor = "black"
+        label_suffix = ""
+
+        # Shadow Style Override
+        if node.id in shadow_node_ids:
+            style = '"dashed,filled"'
+            fillcolor = "whitesmoke"  # Very light gray
+            fontcolor = "gray50"
+            label_suffix = "\\n(Potential)"
+
+        label = f"{node.name}\\n({node.node_type}){label_suffix}"
+        
+        dot_parts.append(
+            f'  "{node.id}" [label="{label}", shape={shape}, style={style}, '
+            f'fillcolor={fillcolor}, fontcolor={fontcolor}];'
+        )
+
+    # 2. Define Edges
+    for edge in graph.edges:
+        style = ""
+
+        if edge.edge_type == EdgeType.CONDITION:
+            style = ' [style=dashed, color=gray, label="run_if"]'
+        elif edge.edge_type == EdgeType.IMPLICIT:
+            style = ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
+        elif edge.edge_type == EdgeType.ROUTER_ROUTE:
+            # Router route edge
+            style = ' [style=dashed, color=orange, arrowhead=open, label="route"]'
+        elif edge.router:
+            # Router selector edge (which is EdgeType.DATA)
+            style = f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
+        elif edge.edge_type == EdgeType.CONSTRAINT:
+            style = (
+                f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
+            )
+        elif edge.edge_type == EdgeType.SEQUENCE:
+            style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+        elif edge.edge_type == EdgeType.POTENTIAL:
+            # Use a reddish color to indicate a predicted/potential path, dashed
+            style = ' [style=dashed, color="#d9534f", fontcolor="#d9534f", arrowhead=open, label="potential"]'
+        else:
+            style = f' [label="{edge.arg_name}"]'
+
+        dot_parts.append(f'  \"{edge.source.id}\" -> \"{edge.target.id}\"{style};')
+
+    dot_parts.append("}")
+    return "\n".join(dot_parts)
+
+
+def _get_node_shape(node: Node) -> str:
+    """Returns the Graphviz shape for a given node type."""
+    if node.node_type == "param":
+        return "ellipse"
+    if node.node_type == "map":
+        return "hexagon"
+    # Future: Routers could be a diamond, but they are edges in our model
+    return "box"
 ~~~~~
 
-#### Acts 2: 提交功能与修复
-
-现在，我们创建一个内容详尽的提交，清晰地记录新功能的引入、它引发的问题以及最终的解决方案。
-
-~~~~~act
-git_commit
-~~~~~
-~~~~~text
-feat(graph): Introduce static TCO analysis and isolate it from runtime
-
-Introduces a static analyzer for Tail Call Optimization (TCO) paths using Python's `ast` module. This significantly enhances graph transparency by visualizing potential state transitions before execution.
-
-This new capability added "shadow nodes" and `POTENTIAL` edges to the graph, which initially caused two critical regressions:
-1.  **TCO Failure & Resource Leaks:** The Solvers incorrectly included shadow nodes in the execution plan, breaking the TCO loop and preventing timely resource release.
-2.  **Argument Injection Failure:** `GraphExecutionStrategy` wrongly assumed the last node in the graph was the target, causing `TypeError` as initial parameters were injected into parameter-less shadow nodes.
-
-This commit resolves these issues by strictly isolating static analysis metadata from the runtime execution path:
--   **Solver Isolation:** `NativeSolver` and `CSPSolver` are updated to explicitly filter out shadow nodes and ignore `POTENTIAL` edges when generating the execution plan.
--   **Target Fix:** `GraphExecutionStrategy` is corrected to robustly locate the root node using `graph.nodes[0]`, which is guaranteed by the top-down build process.
-
-With these changes, the engine's stability and TCO guarantees are fully restored, while developers gain the full benefit of enhanced static graph observability.
-~~~~~
-
-### 当前阶段分析与下一步建议
-
-**当前阶段分析：**
-
-我们已经成功完成了**“路线图：基于身份对齐的静态分析集成”**中的**第一阶段（Regression Fix）**。
-
--   我们引入了 AST 静态分析这一核心能力。
--   我们通过“边语义剪枝”（修改 Solver）和“精确目标节点定位”（修改 Strategy），彻底修复了它带来的严重回归问题。
--   目前，引擎既拥有了静态分析的“远见”，又保持了动态执行的“稳健”。我们的架构边界是清晰和安全的。
-
-**下一步建议：**
-
-现在基础已经稳固，我们可以进入路线图的第二和第三阶段，将这项新能力转化为真正的用户价值和更好的代码质量。我建议从以下两个方向中选择一个作为下一步：
-
-1.  **选项 A (进入第二阶段 - 架构优化):**
-    *   **任务**: 实现 **“稳定身份标识符演进”**。具体来说，是在 `Node` 数据模型中增加一个 `is_shadow: bool = False` 字段。
-    *   **价值**: 让 Solver 的过滤逻辑从“检查边类型”变为“检查节点属性”，这在代码上更清晰、更类型安全，也更高效。这是一个提升内部代码质量的“健康度”任务。
-
-2.  **选项 B (进入第三阶段 - 能力释放):**
-    *   **任务**: 实现 **“全景透明度可视化”**。具体来说，是增强 `cs.visualize` 的渲染逻辑。
-    *   **价值**: 让用户能直观地看到静态分析的结果。例如，用**虚线和红色**来绘制 `POTENTIAL` 边，用**半透明或灰色**的样式来渲染影子节点。这将使 `visualize` 的输出信息量极大丰富，直接将新功能的价值交付给用户。
-
-我个人更**推荐选项 B**，因为它能让我们最快地“看到”我们的劳动成果，并获得直观的反馈。
-
-请确认你的选择，我将为你生成相应的计划。
+### 下一步建议
+我们已经完成了可视化逻辑的增强。
+1.  **验证**: 你可以使用 `test_visualize.py` 或者创建一个简单的脚本来生成一个包含 TCO 逻辑的 DOT 文件，然后用 Graphviz 渲染查看效果。
+2.  **合并**: 确认无误后，我们可以提交这个更改。这将完成路线图的第三阶段的一部分。
+3.  **后续**: 考虑是否需要为 `test_visualize.py` 添加针对 shadow nodes 样式的断言，以防止未来回归。

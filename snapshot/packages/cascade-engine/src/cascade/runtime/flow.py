@@ -132,9 +132,11 @@ class FlowManager:
         active_route_key = None
         router_edge = next((e for e in self.in_edges[node.id] if e.router), None)
         if router_edge:
-            selector_id = self._get_obj_id(router_edge.router.selector)
-            if state_backend.has_result(selector_id):
-                active_route_key = state_backend.get_result(selector_id)
+            selector_node = self._get_node_from_instance(router_edge.router.selector)
+            if selector_node:
+                selector_id = selector_node.id
+                if state_backend.has_result(selector_id):
+                    active_route_key = state_backend.get_result(selector_id)
 
         for edge in self.in_edges[node.id]:
             if edge.edge_type == EdgeType.ROUTER_ROUTE:

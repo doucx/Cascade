@@ -178,7 +178,8 @@ class ConstraintResolver:
         node: Node,
         graph: Graph,
         state_backend: StateBackend,
-        constraint_manager: Any = None,
+        constraint_manager: Any,
+        instance_map: Dict[str, Node],
     ) -> Dict[str, Any]:
         resolved = {}
 
@@ -186,11 +187,18 @@ class ConstraintResolver:
         if node.constraints and not node.constraints.is_empty():
             for res, amount in node.constraints.requirements.items():
                 if isinstance(amount, (LazyResult, MappedLazyResult)):
-                    if state_backend.has_result(amount._uuid):
-                        resolved[res] = state_backend.get_result(amount._uuid)
-                    else:
+                    # Get the canonical node for the dynamic constraint value
+                    constraint_node = instance_map.get(amount._uuid)
+                    if not constraint_node:
                         raise DependencyMissingError(
                             node.id, f"constraint:{res}", amount._uuid
+                        )
+
+                    if state_backend.has_result(constraint_node.id):
+                        resolved[res] = state_backend.get_result(constraint_node.id)
+                    else:
+                        raise DependencyMissingError(
+                            node.id, f"constraint:{res}", constraint_node.id
                         )
                 else:
                     resolved[res] = amount

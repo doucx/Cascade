@@ -39,6 +39,7 @@ class NodeProcessor:
 
         # Resolvers are owned by the processor
         self.arg_resolver = ArgumentResolver()
+        # ConstraintResolver now needs the instance map to resolve dynamic values
         self.constraint_resolver = ConstraintResolver()
 
     async def process(
@@ -58,7 +59,7 @@ class NodeProcessor:
         """
         # 1. Resolve Constraints & Resources
         requirements = self.constraint_resolver.resolve(
-            node, graph, state_backend, self.constraint_manager
+            node, graph, state_backend, self.constraint_manager, instance_map
         )
 
         # Pre-check for blocking to improve observability

@@ -208,7 +208,7 @@ class GraphExecutionStrategy:
         instance_map: Dict[str, Node],
     ) -> Any:
         target_node = instance_map[target._uuid]
-        flow_manager = FlowManager(graph, target_node.id)
+        flow_manager = FlowManager(graph, target_node.id, instance_map)
         blocked_nodes = set()
 
         for stage in plan:

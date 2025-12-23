@@ -12,9 +12,10 @@ class FlowManager:
     skipping tasks (Conditions) and pruning branches (Router).
     """
 
-    def __init__(self, graph: Graph, target_node_id: str):
+    def __init__(self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]):
         self.graph = graph
         self.target_node_id = target_node_id
+        self.instance_map = instance_map
 
         self.in_edges: Dict[str, List[Edge]] = defaultdict(list)
         self.routers_by_selector: Dict[str, List[Edge]] = defaultdict(list)
@@ -39,12 +40,11 @@ class FlowManager:
         # The final target always has at least 1 implicit demand (the user wants it)
         self.downstream_demand[target_node_id] += 1
 
-    def _get_obj_id(self, obj: Any) -> str:
-        if isinstance(obj, LazyResult):
-            return obj._uuid
-        elif isinstance(obj, Param):
-            return obj.name
-        return str(obj)
+    def _get_node_from_instance(self, instance: Any) -> Optional[Node]:
+        """Gets the canonical Node from a LazyResult instance."""
+        if isinstance(instance, (LazyResult, MappedLazyResult)):
+            return self.instance_map.get(instance._uuid)
+        return None
 
     def register_result(self, node_id: str, result: Any, state_backend: StateBackend):
         """
@@ -63,7 +63,10 @@ class FlowManager:
 
         for route_key, route_lazy_result in router.routes.items():
             if route_key != selected_route_key:
-                branch_root_id = self._get_obj_id(route_lazy_result)
+                branch_root_node = self._get_node_from_instance(route_lazy_result)
+                if not branch_root_node:
+                    continue  # Should not happen in a well-formed graph
+                branch_root_id = branch_root_node.id
                 # This branch is NOT selected.
                 # We decrement its demand. If it drops to 0, it gets pruned.
                 # Note: In the Router model, the "edge" carrying the router implies a demand

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(engine): Correct test unpacking and resolver ID usage", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766473955.804234, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(engine): Stabilize runtime after node interning refactor", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766474121.91881, "duration_ms": 0}}

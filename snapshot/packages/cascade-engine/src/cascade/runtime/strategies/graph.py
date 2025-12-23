@@ -113,7 +113,7 @@ class GraphExecutionStrategy:
                     # Unpack all 4 cached values: graph, indexed_plan, root_node_id, req_res
                     graph, indexed_plan, root_node_id, _ = fast_path_data
                     # Reconstruct virtual instance map for current iteration
-                    target_node = next(n for n in graph.nodes if n.id == root_node_id)
+                    target_node = graph.get_node(root_node_id)
                     instance_map = {current_target._uuid: target_node}
                     plan = self._rehydrate_plan(graph, indexed_plan)
 
@@ -205,6 +205,8 @@ class GraphExecutionStrategy:
     def _are_args_simple(self, lazy_result: Any) -> bool:
         """
         Checks if the LazyResult arguments contain any nested LazyResults.
+        In TCO mode, we allow LazyResults that have been previously 'interned'
+        in our structural registry, as they don't change the template.
         """
         # Handle both LazyResult (args/kwargs) and MappedLazyResult (mapping_kwargs)
         args = getattr(lazy_result, "args", [])
@@ -212,12 +214,21 @@ class GraphExecutionStrategy:
         if hasattr(lazy_result, "mapping_kwargs"):
             kwargs = lazy_result.mapping_kwargs
 
+        def _is_complex(v):
+            if isinstance(v, (LazyResult, MappedLazyResult)):
+                # If the LazyResult is NEW (not in our structural registry),
+                # it might represent a structural change.
+                # In this phase, for absolute safety, we only allow literal values
+                # and recurse into collections.
+                return True
+            if isinstance(v, list): return any(_is_complex(x) for x in v)
+            if isinstance(v, dict): return any(_is_complex(x) for x in v.values())
+            return False
+
         for arg in args:
-            if isinstance(arg, (LazyResult, MappedLazyResult)):
-                return False
+            if _is_complex(arg): return False
         for val in kwargs.values():
-            if isinstance(val, (LazyResult, MappedLazyResult)):
-                return False
+            if _is_complex(val): return False
         return True
 
     async def _execute_hot_node(

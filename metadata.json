@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "roll-back Capture: M __init__.py, A lisp.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766505232.7904117, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] perf: 实现“结构化 TCO 放行”与“索引化图查找”以突破性能上限", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766505298.237307, "duration_ms": 0}}

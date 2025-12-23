@@ -140,7 +140,7 @@ class GraphExecutionStrategy:
                 if not is_fast_path:
                     # --- 2. STANDARD PATH ---
                     # Always build fresh for now to handle data extraction
-                    graph, data_tuple = build_graph(current_target)
+                    graph, data_tuple, instance_map = build_graph(current_target)
                     plan = self.solver.resolve(graph)
                     
                     # Store in template cache for future optimization (even if we don't fully use it yet)
@@ -173,8 +173,9 @@ class GraphExecutionStrategy:
                     run_id,
                     state_backend,
                     graph,
-                    data_tuple, # Pass the blood!
+                    data_tuple,  # Pass the blood!
                     plan,
+                    instance_map,
                 )
 
             # Capture the task we just executed BEFORE updating current_target
@@ -204,8 +205,10 @@ class GraphExecutionStrategy:
         graph: Graph,
         data_tuple: Tuple[Any, ...],
         plan: Any,
+        instance_map: Dict[str, Node],
     ) -> Any:
-        flow_manager = FlowManager(graph, target._uuid)
+        target_node = instance_map[target._uuid]
+        flow_manager = FlowManager(graph, target_node.id)
         blocked_nodes = set()
 
         for stage in plan:
@@ -253,7 +256,7 @@ class GraphExecutionStrategy:
                     # Callback for map nodes
                     async def sub_graph_runner(target, sub_params, parent_state):
                         # Recursive call: must build new graph and data
-                        sub_graph, sub_data = build_graph(target)
+                        sub_graph, sub_data, sub_instance_map = build_graph(target)
                         sub_plan = self.solver.resolve(sub_graph)
                         return await self._execute_graph(
                             target,
@@ -264,6 +267,7 @@ class GraphExecutionStrategy:
                             graph=sub_graph,
                             data_tuple=sub_data,
                             plan=sub_plan,
+                            instance_map=sub_instance_map,
                         )
 
                     tasks_to_run = [
@@ -294,22 +298,23 @@ class GraphExecutionStrategy:
                     self.wakeup_event.clear()
                     self.constraint_manager.cleanup_expired_constraints()
 
-        if not state_backend.has_result(target._uuid):
-            if skip_reason := state_backend.get_skip_reason(target._uuid):
-                # A skip due to a sequence aborting is a valid, graceful termination.
+        # Use the mapped canonical node ID to check for the final result
+        if not state_backend.has_result(target_node.id):
+            # For debugging, check if the instance was skipped
+            if skip_reason := state_backend.get_skip_reason(target_node.id):
                 if skip_reason == "UpstreamSkipped_Sequence":
                     return None
                 raise DependencyMissingError(
                     task_id=target.task.name or "unknown",
                     arg_name="<Target Output>",
-                    dependency_id=f"Target was skipped (Reason: {skip_reason})",
+                    dependency_id=f"Target node '{target_node.name}' was skipped (Reason: {skip_reason})",
                 )
 
             raise KeyError(
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )
 
-        return state_backend.get_result(target._uuid)
+        return state_backend.get_result(target_node.id)
 
 
 class VMExecutionStrategy:

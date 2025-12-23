@@ -23,9 +23,9 @@ class GraphBuilder:
         self.registry = registry if registry is not None else NodeRegistry()
         self.hasher = ShallowHasher()
 
-    def build(self, target: Any) -> Tuple[Graph, Tuple[Any, ...]]:
+    def build(self, target: Any) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
         self._visit(target)
-        return self.graph, tuple(self._data_buffer)
+        return self.graph, tuple(self._data_buffer), self._visited_instances
 
     def _register_data(self, value: Any) -> SlotRef:
         index = len(self._data_buffer)
@@ -185,5 +185,7 @@ class GraphBuilder:
                 self._scan_and_add_edges(target_node, v, path=f"{path}.{k}" if path else str(k))
 
 
-def build_graph(target: Any, registry: NodeRegistry | None = None) -> Tuple[Graph, Tuple[Any, ...]]:
+def build_graph(
+    target: Any, registry: NodeRegistry | None = None
+) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
     return GraphBuilder(registry=registry).build(target)

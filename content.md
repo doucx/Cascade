@@ -1,409 +1,43 @@
 简要回答
-非常抱歉，我在生成 `patch_file` 指令时遗漏了必要的 `old_string` 和 `new_string` 区分标记。我将按照协议要求的 3 参数格式（路径、旧字符串块、新字符串块）重新生成完整的执行脚本。
+性能提升了约 65%（从 7.7k 到 12.8k），这证明了跳过图构建和求解的有效性。然而，距离 VM 模式的 11w+ TPS 仍有 10 倍左右的差距，这说明**“执行阶段”的编排开销（Orchestration Overhead）**成为了新的瓶颈。
 
-## [WIP] fix: 补全 `patch_file` 参数以实现零开销 TCO 快速通道
+我将生成一个针对性的优化计划（Phase 3.1.2），通过旁路掉冗余的资源扫描、流管理和处理器仪式，使图执行模式真正逼近 VM 的性能。
 
-### 评论
-这次补全将确保零开销 TCO 的逻辑能够正确注入到引擎中。核心在于通过 `input_overrides` 机制实现对缓存图的动态参数注入。
+## [WIP] perf: 实现 TCO 快速通道的执行旁路 (Execution Bypass)
+
+### 错误分析
+目前的快速通道虽然跳过了“编译”（Build & Resolve），但“运行”阶段仍然太重：
+1.  **重复扫描资源**: `resource_container.scan(graph)` 每轮都在递归扫描整个图，即便图是缓存的。
+2.  **流管理器开销**: `FlowManager` 每一轮都在实例化并扫描边，对于结构稳定的循环这是不必要的。
+3.  **处理器仪式**: `NodeProcessor` 内部包含大量的 `await`、事件发布和 `asyncio.gather`。即使是单节点任务，这些微小的开销在 10,000 次循环中也会累积成秒级的延迟。
+4.  **Telemetry 密度**: 图执行模式每一步都向 `MessageBus` 发送多个事件，而 VM 模式目前是“静默”的。
 
 ### 用户需求
-修正之前失败的指令，补全 `patch_file` 的参数，完成 3.1 阶段的任务。
+进一步压榨 TCO 性能，使 `GraphExecutionStrategy` 在处理稳定循环时达到与 VM 相当的吞吐量。
 
 ### 目标
-1.  准确修改 `ArgumentResolver` 以支持参数覆盖。
-2.  准确修改 `NodeProcessor` 以支持覆盖参数的透传。
-3.  在 `GraphExecutionStrategy` 中建立 `_cycle_cache` 并实现快速路径检测。
+1.  **缓存资源需求**: 在 `_cycle_cache` 中直接存储该循环所需的资源列表。
+2.  **实现单节点旁路**: 检测到单节点循环时，直接调用 `executor.execute`，绕过 `FlowManager` 和 `NodeProcessor` 的层层包装。
+3.  **减少事件发布**: 在快速通道执行期间，通过一个 `silent` 标志位抑制冗余的事件。
 
 ### 基本原理
-快速路径的本质是：如果当前任务与上一次任务属于同一个 TCO 循环（`tco_cycle_id` 相同），且输入参数不含复杂的 `LazyResult`，则无需重新构建图。我们只需要将新参数作为 `overrides` 传给 `ArgumentResolver`，它会优先使用这些值来执行缓存好的 `Node`。
+对于一个稳定的 TCO 循环，我们已经知道它需要什么资源，也知道它不需要复杂的流控制（因为它是单线运行的）。通过在 `GraphExecutionStrategy` 中直接持有 `Node` 对象和预解析的资源需求，我们可以像 VM 一样进行“直通式”调用。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/core #task/object/tco-fast-path #task/action/patch-fix #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/core #task/object/tco-fast-path #task/action/bypass-optimization #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 `ArgumentResolver` 以支持 `input_overrides`
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/resolvers.py
-~~~~~
-~~~~~python
-    def resolve(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        resource_context: Dict[str, Any],
-        instance_map: Dict[str, Node],
-        user_params: Dict[str, Any] = None,
-    ) -> Tuple[List[Any], Dict[str, Any]]:
-        args = []
-        kwargs = {}
-
-        # 1. Reconstruct initial args/kwargs from Bindings (Literals)
-        positional_args_dict = {}
-        for name, value_raw in node.input_bindings.items():
-            # Recursively resolve structures (e.g., lists containing Inject)
-            value = self._resolve_structure(
-                value_raw, node.id, state_backend, resource_context, graph
-            )
-
-            if name.isdigit():
-                positional_args_dict[int(name)] = value
-            else:
-                kwargs[name] = value
-~~~~~
-~~~~~python
-    def resolve(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        resource_context: Dict[str, Any],
-        instance_map: Dict[str, Node],
-        user_params: Dict[str, Any] = None,
-        input_overrides: Dict[str, Any] = None,
-    ) -> Tuple[List[Any], Dict[str, Any]]:
-        args = []
-        kwargs = {}
-
-        # 1. Reconstruct initial args/kwargs from Bindings (Literals)
-        # Apply overrides if provided (for TCO fast path)
-        bindings = node.input_bindings
-        if input_overrides:
-            bindings = bindings.copy()
-            bindings.update(input_overrides)
-
-        positional_args_dict = {}
-        for name, value_raw in bindings.items():
-            # Recursively resolve structures (e.g., lists containing Inject)
-            value = self._resolve_structure(
-                value_raw, node.id, state_backend, resource_context, graph
-            )
-
-            if name.isdigit():
-                positional_args_dict[int(name)] = value
-            else:
-                kwargs[name] = value
-~~~~~
-
-#### Acts 2: 更新 `NodeProcessor` 接口
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/processor.py
-~~~~~
-~~~~~python
-    async def process(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
-        instance_map: Dict[str, Node],
-    ) -> Any:
-        """
-        Executes a node with all associated policies (constraints, cache, retry).
-        """
-        # 1. Resolve Constraints & Resources
-        requirements = self.constraint_resolver.resolve(
-            node, graph, state_backend, self.constraint_manager, instance_map
-        )
-
-        # Pre-check for blocking to improve observability
-        if not self.resource_manager.can_acquire(requirements):
-            self.bus.publish(
-                TaskBlocked(
-                    run_id=run_id,
-                    task_id=node.id,
-                    task_name=node.name,
-                    reason="ResourceContention",
-                )
-            )
-
-        # 2. Acquire Resources
-        await self.resource_manager.acquire(requirements)
-        try:
-            return await self._execute_internal(
-                node,
-                graph,
-                state_backend,
-                active_resources,
-                run_id,
-                params,
-                sub_graph_runner,
-                instance_map,
-            )
-        finally:
-            await self.resource_manager.release(requirements)
-
-    async def _execute_internal(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable,
-        instance_map: Dict[str, Node],
-    ) -> Any:
-        # 3. Resolve Arguments
-        args, kwargs = self.arg_resolver.resolve(
-            node,
-            graph,
-            state_backend,
-            active_resources,
-            instance_map=instance_map,
-            user_params=params,
-        )
-~~~~~
-~~~~~python
-    async def process(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
-        instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] = None,
-    ) -> Any:
-        """
-        Executes a node with all associated policies (constraints, cache, retry).
-        """
-        # 1. Resolve Constraints & Resources
-        requirements = self.constraint_resolver.resolve(
-            node, graph, state_backend, self.constraint_manager, instance_map
-        )
-
-        # Pre-check for blocking to improve observability
-        if not self.resource_manager.can_acquire(requirements):
-            self.bus.publish(
-                TaskBlocked(
-                    run_id=run_id,
-                    task_id=node.id,
-                    task_name=node.name,
-                    reason="ResourceContention",
-                )
-            )
-
-        # 2. Acquire Resources
-        await self.resource_manager.acquire(requirements)
-        try:
-            return await self._execute_internal(
-                node,
-                graph,
-                state_backend,
-                active_resources,
-                run_id,
-                params,
-                sub_graph_runner,
-                instance_map,
-                input_overrides,
-            )
-        finally:
-            await self.resource_manager.release(requirements)
-
-    async def _execute_internal(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable,
-        instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] = None,
-    ) -> Any:
-        # 3. Resolve Arguments
-        args, kwargs = self.arg_resolver.resolve(
-            node,
-            graph,
-            state_backend,
-            active_resources,
-            instance_map=instance_map,
-            user_params=params,
-            input_overrides=input_overrides,
-        )
-~~~~~
-
-#### Acts 3: 在 `GraphExecutionStrategy` 中引入 `_cycle_cache`
+#### Acts 1: 优化资源扫描逻辑
+我们在 `_cycle_cache` 中增加对 `required_resources` 的缓存。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
 ~~~~~python
-        self.wakeup_event = wakeup_event
-
-        # JIT Compilation Cache
-        # Maps template_id to an IndexedExecutionPlan (List[List[int]])
-        # We store indices instead of Node objects to allow plan reuse across
-        # different graph instances that share the same structure (template).
-        self._template_plan_cache: Dict[str, List[List[int]]] = {}
-
-        # Persistent registry to ensure node object identity consistency across TCO iterations
-        self._node_registry = NodeRegistry()
-~~~~~
-~~~~~python
-        self.wakeup_event = wakeup_event
-
-        # JIT Compilation Cache
-        # Maps template_id to an IndexedExecutionPlan (List[List[int]])
-        # We store indices instead of Node objects to allow plan reuse across
-        # different graph instances that share the same structure (template).
-        self._template_plan_cache: Dict[str, List[List[int]]] = {}
-
-        # Zero-Overhead TCO Cache
-        # Maps tco_cycle_id to (Graph, IndexedPlan, root_node_id)
-        # Used to bypass build_graph for structurally stable recursive calls
-        self._cycle_cache: Dict[str, Any] = {}
-
-        # Persistent registry to ensure node object identity consistency across TCO iterations
-        self._node_registry = NodeRegistry()
-~~~~~
-
-#### Acts 4: 实现快速路径逻辑
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/graph.py
-~~~~~
-~~~~~python
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
-
-        while True:
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                # 1. Build Graph (With Registry for interning)
-                # This constructs the structural graph and the instance map.
-                # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
-                graph, instance_map = build_graph(
-                    current_target, registry=self._node_registry
-                )
-
-                # Identify the structural root
-                if current_target._uuid not in instance_map:
-                    raise RuntimeError(
-                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
-                    )
-                target_node = instance_map[current_target._uuid]
-                
-                # Use template_id for caching. Fallback to id if template_id is missing (should not happen).
-                cache_key = target_node.template_id or target_node.id
-
-                # 2. Resolve Plan (With JIT Template Caching)
-                if cache_key in self._template_plan_cache:
-                    # Hit: Rehydrate the indexed plan using the current graph's nodes.
-                    indexed_plan = self._template_plan_cache[cache_key]
-                    plan = self._rehydrate_plan(graph, indexed_plan)
-                else:
-                    # Miss: Ask solver to resolve.
-                    plan = self.solver.resolve(graph)
-                    # Index and cache the plan for future reuse.
-                    self._template_plan_cache[cache_key] = self._index_plan(graph, plan)
-
-                # 3. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph)
-                self.resource_container.setup(
-                    required_resources,
-                    active_resources,
-                    run_stack,
-                    step_stack,
-                    run_id,
-                )
-
-                # 4. Execute Graph
-                result = await self._execute_graph(
-                    current_target,
-                    params,
-                    active_resources,
-                    run_id,
-                    state_backend,
-                    graph,
-                    plan,
-                    instance_map,
-                )
-~~~~~
-~~~~~python
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
-
-        while True:
-            # Check for Zero-Overhead TCO Fast Path
-            cycle_id = getattr(current_target.task, "_tco_cycle_id", None)
-            fast_path_data = None
-
-            if cycle_id and cycle_id in self._cycle_cache:
-                if self._are_args_simple(current_target):
-                    fast_path_data = self._cycle_cache[cycle_id]
-
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                input_overrides = None
-
-                if fast_path_data:
-                    # FAST PATH: Reuse Graph & Plan
-                    graph, indexed_plan, root_node_id = fast_path_data
-                    # Reconstruct virtual instance map for current iteration
-                    target_node = next(n for n in graph.nodes if n.id == root_node_id)
-                    instance_map = {current_target._uuid: target_node}
-                    plan = self._rehydrate_plan(graph, indexed_plan)
-
-                    # Prepare Input Overrides
-                    input_overrides = {}
-                    for i, arg in enumerate(current_target.args):
-                        input_overrides[str(i)] = arg
-                    input_overrides.update(current_target.kwargs)
-                else:
-                    # SLOW PATH: Build Graph
-                    graph, instance_map = build_graph(
-                        current_target, registry=self._node_registry
-                    )
-
-                    if current_target._uuid not in instance_map:
-                        raise RuntimeError(
-                            f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
-                        )
-                    target_node = instance_map[current_target._uuid]
-                    cache_key = target_node.template_id or target_node.id
-
-                    # 2. Resolve Plan
-                    if cache_key in self._template_plan_cache:
-                        indexed_plan = self._template_plan_cache[cache_key]
-                        plan = self._rehydrate_plan(graph, indexed_plan)
-                    else:
-                        plan = self.solver.resolve(graph)
-                        indexed_plan = self._index_plan(graph, plan)
-                        self._template_plan_cache[cache_key] = indexed_plan
-
                     # Cache for Future TCO Fast Path
                     if cycle_id:
                         self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id)
@@ -417,7 +51,37 @@ packages/cascade-engine/src/cascade/runtime/strategies/graph.py
                     step_stack,
                     run_id,
                 )
+~~~~~
+~~~~~python
+                    # Cache for Future TCO Fast Path
+                    if cycle_id:
+                        # Pre-scan resources and store them in the cycle cache
+                        req_res = self.resource_container.scan(graph)
+                        self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id, req_res)
 
+                # 3. Setup Resources (mixed scope)
+                if fast_path_data:
+                    required_resources = fast_path_data[3]
+                else:
+                    required_resources = self.resource_container.scan(graph)
+
+                self.resource_container.setup(
+                    required_resources,
+                    active_resources,
+                    run_stack,
+                    step_stack,
+                    run_id,
+                )
+~~~~~
+
+#### Acts 2: 实现“热循环”旁路 (Hot-Loop Bypass)
+如果检测到该循环只有单阶段且单节点，我们将跳过 `_execute_graph`，直接进行最小化执行。
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
                 # 4. Execute Graph
                 result = await self._execute_graph(
                     current_target,
@@ -431,110 +95,89 @@ packages/cascade-engine/src/cascade/runtime/strategies/graph.py
                     input_overrides,
                 )
 ~~~~~
+~~~~~python
+                # 4. Execute Graph
+                # CHECK FOR HOT-LOOP BYPASS
+                # If it's a fast path and it's a simple single-node plan, bypass the orchestrator
+                if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
+                    result = await self._execute_hot_node(
+                        target_node,
+                        graph,
+                        state_backend,
+                        active_resources,
+                        run_id,
+                        params,
+                        instance_map,
+                        input_overrides
+                    )
+                else:
+                    result = await self._execute_graph(
+                        current_target,
+                        params,
+                        active_resources,
+                        run_id,
+                        state_backend,
+                        graph,
+                        plan,
+                        instance_map,
+                        input_overrides,
+                    )
+~~~~~
 
-#### Acts 5: 更新 `_execute_graph` 签名并实现 `_are_args_simple`
+#### Acts 3: 在 `GraphExecutionStrategy` 中实现 `_execute_hot_node`
+这个方法是 `NodeProcessor.process` 的极简版，去掉了事件发布和不必要的解析。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
 ~~~~~python
-            else:
-                return result
+    async def _execute_graph(
+        self,
+        target: Any,
+~~~~~
+~~~~~python
+    async def _execute_hot_node(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        active_resources: Dict[str, Any],
+        run_id: str,
+        params: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] = None,
+    ) -> Any:
+        """
+        A stripped-down version of NodeProcessor.process specifically for hot TCO loops.
+        Bypasses event bus, flow manager, and multiple resolvers for maximum performance.
+        """
+        # 1. Resolve Arguments (Minimal path)
+        args, kwargs = self.node_processor.arg_resolver.resolve(
+            node,
+            graph,
+            state_backend,
+            active_resources,
+            instance_map=instance_map,
+            user_params=params,
+            input_overrides=input_overrides,
+        )
+
+        # 2. Direct Execution (Skip NodeProcessor ceremony)
+        result = await self.node_processor.executor.execute(node, args, kwargs)
+        
+        # 3. Minimal State Update
+        state_backend.put_result(node.id, result)
+        return result
 
     async def _execute_graph(
         self,
         target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        state_backend: StateBackend,
-        graph: Graph,
-        plan: Any,
-        instance_map: Dict[str, Node],
-    ) -> Any:
-        # Locate the canonical node for the current target instance
-        if target._uuid not in instance_map:
-            raise RuntimeError(
-                f"Critical: Target instance {target._uuid} not found in InstanceMap."
-            )
-
-        target_node = instance_map[target._uuid]
-~~~~~
-~~~~~python
-            else:
-                return result
-
-    def _are_args_simple(self, lazy_result: LazyResult) -> bool:
-        """
-        Checks if the LazyResult arguments contain any nested LazyResults.
-        """
-        for arg in lazy_result.args:
-            if isinstance(arg, (LazyResult, MappedLazyResult)):
-                return False
-        for val in lazy_result.kwargs.values():
-            if isinstance(val, (LazyResult, MappedLazyResult)):
-                return False
-        return True
-
-    async def _execute_graph(
-        self,
-        target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        state_backend: StateBackend,
-        graph: Graph,
-        plan: Any,
-        instance_map: Dict[str, Node],
-        root_input_overrides: Dict[str, Any] = None,
-    ) -> Any:
-        # Locate the canonical node for the current target instance
-        if target._uuid not in instance_map:
-            raise RuntimeError(
-                f"Critical: Target instance {target._uuid} not found in InstanceMap."
-            )
-
-        target_node = instance_map[target._uuid]
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/graph.py
-~~~~~
-~~~~~python
-                    tasks_to_run = [
-                        self.node_processor.process(
-                            node,
-                            graph,
-                            state_backend,
-                            active_resources,
-                            run_id,
-                            params,
-                            sub_graph_runner,
-                            instance_map,
-                        )
-                        for node in executable_this_pass
-                    ]
-~~~~~
-~~~~~python
-                    tasks_to_run = []
-                    for node in executable_this_pass:
-                        overrides = root_input_overrides if node.id == target_node.id else None
-                        tasks_to_run.append(
-                            self.node_processor.process(
-                                node,
-                                graph,
-                                state_backend,
-                                active_resources,
-                                run_id,
-                                params,
-                                sub_graph_runner,
-                                instance_map,
-                                input_overrides=overrides
-                            )
-                        )
 ~~~~~
 
 ### 下一步建议
-我们已经完成了零开销 TCO 快速通道的逻辑注入。现在请运行 `observatory/benchmarks/tco_performance.py`，你应当能观察到 `simple_countdown` 的 TPS 有了质的飞跃。
+通过 Acts 3 中的 `_execute_hot_node`，我们绕过了整个 `FlowManager` 的循环检测和 `NodeProcessor` 的事件发送，这两个操作通常是异步代码中非常昂贵的。
+
+请再次运行 `observatory/benchmarks/tco_performance.py`。如果你发现 `simple_countdown` 的 TPS 现在达到了 **50,000 - 80,000**（虽然受限于 Python 的 `await` 开销可能仍低于 VM 的 11w，但应该已经处于同一个量级），那么我们的优化就是成功的。
+
+如果性能仍未达到预期，我们可能需要考虑在 `_execute_hot_node` 中进一步消除 `ArgumentResolver.resolve` 的开销。

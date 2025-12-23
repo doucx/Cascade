@@ -143,10 +143,16 @@ class GraphExecutionStrategy:
 
                     # Cache for Future TCO Fast Path
                     if cycle_id:
-                        self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id)
+                        # Pre-scan resources and store them in the cycle cache
+                        req_res = self.resource_container.scan(graph)
+                        self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id, req_res)
 
                 # 3. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph)
+                if fast_path_data:
+                    required_resources = fast_path_data[3]
+                else:
+                    required_resources = self.resource_container.scan(graph)
+
                 self.resource_container.setup(
                     required_resources,
                     active_resources,
@@ -156,17 +162,31 @@ class GraphExecutionStrategy:
                 )
 
                 # 4. Execute Graph
-                result = await self._execute_graph(
-                    current_target,
-                    params,
-                    active_resources,
-                    run_id,
-                    state_backend,
-                    graph,
-                    plan,
-                    instance_map,
-                    input_overrides,
-                )
+                # CHECK FOR HOT-LOOP BYPASS
+                # If it's a fast path and it's a simple single-node plan, bypass the orchestrator
+                if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
+                    result = await self._execute_hot_node(
+                        target_node,
+                        graph,
+                        state_backend,
+                        active_resources,
+                        run_id,
+                        params,
+                        instance_map,
+                        input_overrides
+                    )
+                else:
+                    result = await self._execute_graph(
+                        current_target,
+                        params,
+                        active_resources,
+                        run_id,
+                        state_backend,
+                        graph,
+                        plan,
+                        instance_map,
+                        input_overrides,
+                    )
 
             # 5. Check for Tail Call (LazyResult) - TCO Logic
             if isinstance(result, (LazyResult, MappedLazyResult)):
@@ -190,6 +210,39 @@ class GraphExecutionStrategy:
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 return False
         return True
+
+    async def _execute_hot_node(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        active_resources: Dict[str, Any],
+        run_id: str,
+        params: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] = None,
+    ) -> Any:
+        """
+        A stripped-down version of NodeProcessor.process specifically for hot TCO loops.
+        Bypasses event bus, flow manager, and multiple resolvers for maximum performance.
+        """
+        # 1. Resolve Arguments (Minimal path)
+        args, kwargs = self.node_processor.arg_resolver.resolve(
+            node,
+            graph,
+            state_backend,
+            active_resources,
+            instance_map=instance_map,
+            user_params=params,
+            input_overrides=input_overrides,
+        )
+
+        # 2. Direct Execution (Skip NodeProcessor ceremony)
+        result = await self.node_processor.executor.execute(node, args, kwargs)
+        
+        # 3. Minimal State Update
+        state_backend.put_result(node.id, result)
+        return result
 
     async def _execute_graph(
         self,

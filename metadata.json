@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(engine): Add verification tests for graph rebuild costs", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766498200.689616, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(engine): 修正 JIT 缓存验证测试中的签名与断言错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766498288.793417, "duration_ms": 0}}

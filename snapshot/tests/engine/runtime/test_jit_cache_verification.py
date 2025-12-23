@@ -133,7 +133,7 @@ async def test_jit_cache_is_hit_but_graph_is_rebuilt_in_loop(mocker):
         pass
 
     @cs.task
-    def recursive_with_rebuilt_deps(n: int):
+    def recursive_with_rebuilt_deps(n: int, _dummy=None):
         if n <= 0:
             return "done"
         # The dependency is REBUILT inside the loop, creating new LazyResult objects
@@ -192,7 +192,11 @@ async def test_jit_cache_is_hit_with_stable_graph_instance(mocker):
     assert result == "done"
 
     # The template cache should hit.
-    assert resolve_spy.call_count == 1
+    # Count is 2 because:
+    # 1. First call passes a LazyResult (noop) -> Template A
+    # 2. Second call passes the Result of noop (None) -> Template B
+    # 3. Third call passes None -> Template B (Hit)
+    assert resolve_spy.call_count == 2
 
     # The graph is still rebuilt, but the cost is lower as nodes are interned.
     assert build_graph_spy.call_count == iterations + 1

@@ -96,7 +96,9 @@ def test_serialize_params():
     assert param_node["node_type"] == "task"
     assert "name" in param_node["input_bindings"]
     assert param_node["input_bindings"]["name"] == "env"
-    assert param_node["input_bindings"]["default"] == "dev"
+    # The default value is part of the ParamSpec, not a direct input to the internal task node.
+    # So we should not expect it here.
+    assert "default" not in param_node["input_bindings"]
 
     # Note: Serialization currently only saves graph structure, not the Context.
     # So deserialized graph will have the node, but not the ParamSpec metadata
@@ -107,7 +109,7 @@ def test_serialize_params():
     p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
     assert "name" in p_node.input_bindings
     assert p_node.input_bindings["name"] == "env"
-    assert p_node.input_bindings["default"] == "dev"
+    assert "default" not in p_node.input_bindings
 
 
 def test_serialize_with_retry():

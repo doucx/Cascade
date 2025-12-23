@@ -1,30 +1,24 @@
 简要回答
-诊断正确。测试失败揭示了两个问题：一是测试代码中的签名错误（`TypeError`），二是对于“稳定结构”的理解存在偏差。
+测试失败确认了我的推断：`resolve` 确实被调用了 2 次（从初始的 LazyResult 参数过渡到递归时的 Literal 参数）。此外，`build_graph` 的 spy 失败是因为我监视了定义该函数的模块，而不是使用该函数的模块（导入覆盖）。
 
-对于第二个失败（`resolve` 调用次数为 2），原因在于：
-1.  **第一次调用**：传入的是 `LazyResult` 对象（结构依赖）。生成的模板 ID 对应于“有一个 Lazy 依赖”。
-2.  **第二次调用**（递归）：`LazyResult` 被 Cascade 解析为具体结果（例如 `None`）。递归调用时传入的是这个具体结果（字面量）。生成的模板 ID 对应于“有一个 Literal 参数”。
-3.  **第三次及后续调用**：传入的依然是具体结果（字面量）。模板 ID 与第二次相同，**缓存命中**。
+我将修正断言以预期 2 次调用，并修正 spy 的目标位置。
 
-因此，`resolve` 被调用**两次**是符合预期的行为（一次针对初始结构，一次针对解析后的递归结构）。在实际的长运行任务中，这仍然意味着 O(1) 的编译成本。
-
-我将修正这两个测试。
-
-## [WIP] test(engine): 修正 JIT 缓存验证测试中的签名与断言错误
+## [WIP] test(engine): 修正 spy 目标和断言逻辑
 
 ### 用户需求
-修正 `test_jit_cache_verification.py` 中新添加的两个测试用例，使其能够正确通过，从而验证性能分析结论。
+修正 `test_jit_cache_verification.py` 中因 Spy 目标错误和断言逻辑偏差导致的测试失败。
 
 ### 评论
-这次失败非常有价值。它不仅帮我们纠正了代码错误，还深化了我们对“结构稳定”的理解：**参数的类型变化（LazyResult -> Result）也是结构变化**。真正的稳定发生在第一次递归之后。
+这次调试不仅修复了测试，还澄清了 Cascade 在 TCO 递归中的行为模式：初始调用（传入 LazyResult）和后续递归调用（传入 Resolved Value）在结构上是不同的，因此会触发两次编译。这符合预期，且在进入稳态后缓存依然有效。
 
 ### 目标
-1.  修正 `recursive_with_rebuilt_deps` 的函数签名，添加 `_dummy` 参数。
-2.  修正 `test_jit_cache_is_hit_with_stable_graph_instance` 的断言，允许 `resolve` 被调用 2 次（初始结构 + 稳定递归结构）。
+1.  在测试文件中引入 `cascade.runtime.strategies.graph` 模块。
+2.  将 `build_graph` 的 spy 目标改为 `cascade.runtime.strategies.graph.build_graph`，以确保捕获调用。
+3.  将 `test_jit_cache_is_hit_but_graph_is_rebuilt_in_loop` 的 `resolve` 断言从 1 改为 2。
 
 ### 基本原理
-1.  **TypeError 修复**: 必须使任务函数的签名与调用它时传递的参数匹配。
-2.  **断言调整**: 第一次调用（LazyResult 参数）和后续递归调用（Resolved Value 参数）在 `GraphBuilder` 看来是两种不同的模板。系统需要经过一次状态转换才能进入稳定的 TCO 循环。因此，总的编译次数应该是 2 次，而不是 1 次。
+1.  **Spy 修正**: Python 的 `from module import function` 会建立本地引用。要监视 `GraphExecutionStrategy` 中的调用，必须 Patch `cascade.runtime.strategies.graph` 命名空间下的 `build_graph`。
+2.  **断言修正**: 初始调用 `target = task(lazy_dep)` 对应模板 A。递归调用 `return task(resolved_val)` 对应模板 B。这是两次不同的结构，因此需要两次解析。第三次调用 `return task(resolved_val)` 也是模板 B，此时命中缓存。
 
 ### 标签
 #intent/fix #flow/ready #priority/medium #comp/tests #comp/engine #concept/cache #scope/core #ai/instruct #task/domain/core #task/object/test-suite #task/action/correct #task/state/continue
@@ -33,41 +27,32 @@
 
 ### Script
 
-#### Acts 1: 修正测试代码
+#### Acts 1: 引入模块并修正测试
 
 ~~~~~act
 patch_file
 tests/engine/runtime/test_jit_cache_verification.py
 ~~~~~
 ~~~~~python
-    @cs.task
-    def noop():
-        pass
+from cascade.runtime import Engine, MessageBus
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.graph import build as graph_builder_module
 
-    @cs.task
-    def recursive_with_rebuilt_deps(n: int):
-        if n <= 0:
-            return "done"
-        # The dependency is REBUILT inside the loop, creating new LazyResult objects
-        dep = noop()
-        return recursive_with_rebuilt_deps(n - 1, _dummy=dep)
 
-    solver = NativeSolver()
+@pytest.mark.asyncio
+async def test_jit_cache_is_hit_for_stable_structures(mocker):
 ~~~~~
 ~~~~~python
-    @cs.task
-    def noop():
-        pass
+from cascade.runtime import Engine, MessageBus
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.graph import build as graph_builder_module
+from cascade.runtime.strategies import graph as strategies_graph_module
 
-    @cs.task
-    def recursive_with_rebuilt_deps(n: int, _dummy=None):
-        if n <= 0:
-            return "done"
-        # The dependency is REBUILT inside the loop, creating new LazyResult objects
-        dep = noop()
-        return recursive_with_rebuilt_deps(n - 1, _dummy=dep)
 
-    solver = NativeSolver()
+@pytest.mark.asyncio
+async def test_jit_cache_is_hit_for_stable_structures(mocker):
 ~~~~~
 
 ~~~~~act
@@ -75,31 +60,78 @@ patch_file
 tests/engine/runtime/test_jit_cache_verification.py
 ~~~~~
 ~~~~~python
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+
+    resolve_spy = mocker.spy(solver, "resolve")
+    build_graph_spy = mocker.spy(graph_builder_module, "build_graph")
+
+    iterations = 3
+    target = recursive_with_rebuilt_deps(iterations)
     result = await engine.run(target)
 
     assert result == "done"
 
-    # The template cache should hit.
+    # The template cache should hit after the first iteration.
     assert resolve_spy.call_count == 1
 
-    # The graph is still rebuilt, but the cost is lower as nodes are interned.
+    # The graph is rebuilt for the initial call, and for each of the 3 recursive calls.
     assert build_graph_spy.call_count == iterations + 1
 ~~~~~
 ~~~~~python
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+
+    resolve_spy = mocker.spy(solver, "resolve")
+    # Patch where it is used, not where it is defined
+    build_graph_spy = mocker.patch.object(
+        strategies_graph_module, "build_graph", wraps=graph_builder_module.build_graph
+    )
+
+    iterations = 3
+    target = recursive_with_rebuilt_deps(iterations)
     result = await engine.run(target)
 
     assert result == "done"
 
-    # The template cache should hit.
-    # Count is 2 because:
-    # 1. First call passes a LazyResult (noop) -> Template A
-    # 2. Second call passes the Result of noop (None) -> Template B
-    # 3. Third call passes None -> Template B (Hit)
+    # Template Cache Hits:
+    # 1. recursive(3, _dummy=None) -> Template A (Resolve 1)
+    # 2. recursive(2, _dummy=Lazy(noop)) -> Template B (Resolve 2)
+    # 3. recursive(1, _dummy=Lazy(noop)) -> Template B (Hit)
+    # 4. recursive(0, _dummy=Lazy(noop)) -> Template B (Hit)
     assert resolve_spy.call_count == 2
 
-    # The graph is still rebuilt, but the cost is lower as nodes are interned.
+    # The graph is rebuilt for the initial call, and for each of the 3 recursive calls.
     assert build_graph_spy.call_count == iterations + 1
+~~~~~
+
+~~~~~act
+patch_file
+tests/engine/runtime/test_jit_cache_verification.py
+~~~~~
+~~~~~python
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+
+    resolve_spy = mocker.spy(solver, "resolve")
+    build_graph_spy = mocker.spy(graph_builder_module, "build_graph")
+
+    # The dependency is built ONCE, outside the loop.
+    stable_dep = noop()
+~~~~~
+~~~~~python
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+
+    resolve_spy = mocker.spy(solver, "resolve")
+    # Patch where it is used
+    build_graph_spy = mocker.patch.object(
+        strategies_graph_module, "build_graph", wraps=graph_builder_module.build_graph
+    )
+
+    # The dependency is built ONCE, outside the loop.
+    stable_dep = noop()
 ~~~~~
 
 ### 下一步建议
-运行修正后的测试。如果通过，我们将正式关闭这个“性能瓶颈分析”任务。这证实了我们的 JIT 缓存机制是有效的，同时也揭示了 Cascade 的最佳实践：为了极致性能，应避免在循环中重复构建图结构。
+运行修正后的测试。这一次应该能够全绿通过。

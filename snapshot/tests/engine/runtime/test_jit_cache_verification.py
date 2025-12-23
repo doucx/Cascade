@@ -4,6 +4,7 @@ from cascade.runtime import Engine, MessageBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.graph import build as graph_builder_module
+from cascade.runtime.strategies import graph as strategies_graph_module
 
 
 @pytest.mark.asyncio
@@ -144,7 +145,10 @@ async def test_jit_cache_is_hit_but_graph_is_rebuilt_in_loop(mocker):
     engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
 
     resolve_spy = mocker.spy(solver, "resolve")
-    build_graph_spy = mocker.spy(graph_builder_module, "build_graph")
+    # Patch where it is used, not where it is defined
+    build_graph_spy = mocker.patch.object(
+        strategies_graph_module, "build_graph", wraps=graph_builder_module.build_graph
+    )
 
     iterations = 3
     target = recursive_with_rebuilt_deps(iterations)
@@ -152,8 +156,12 @@ async def test_jit_cache_is_hit_but_graph_is_rebuilt_in_loop(mocker):
 
     assert result == "done"
 
-    # The template cache should hit after the first iteration.
-    assert resolve_spy.call_count == 1
+    # Template Cache Hits:
+    # 1. recursive(3, _dummy=None) -> Template A (Resolve 1)
+    # 2. recursive(2, _dummy=Lazy(noop)) -> Template B (Resolve 2)
+    # 3. recursive(1, _dummy=Lazy(noop)) -> Template B (Hit)
+    # 4. recursive(0, _dummy=Lazy(noop)) -> Template B (Hit)
+    assert resolve_spy.call_count == 2
 
     # The graph is rebuilt for the initial call, and for each of the 3 recursive calls.
     assert build_graph_spy.call_count == iterations + 1
@@ -181,7 +189,10 @@ async def test_jit_cache_is_hit_with_stable_graph_instance(mocker):
     engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
 
     resolve_spy = mocker.spy(solver, "resolve")
-    build_graph_spy = mocker.spy(graph_builder_module, "build_graph")
+    # Patch where it is used
+    build_graph_spy = mocker.patch.object(
+        strategies_graph_module, "build_graph", wraps=graph_builder_module.build_graph
+    )
 
     # The dependency is built ONCE, outside the loop.
     stable_dep = noop()

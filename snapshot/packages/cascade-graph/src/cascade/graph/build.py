@@ -104,9 +104,18 @@ class GraphBuilder:
                     kwargs={},
                     _uuid=potential_uuid
                 )
-                
-                # Visit the shadow node, disable further TCO scanning to avoid infinite recursion
-                target_node = self._visit(shadow_lr, scan_for_tco=False)
+
+                # Shadow nodes are created by directly instantiating Node,
+                # not by visiting the LazyResult, to mark them explicitly.
+                # This avoids them being added to the `_visited` cache with a real UUID.
+                target_node = Node(
+                    id=potential_uuid,
+                    name=target_task.name,
+                    node_type="task",
+                    is_shadow=True,  # Explicitly mark as a shadow node
+                )
+                self.graph.add_node(target_node)
+                self._visited[potential_uuid] = target_node
                 
                 edge = Edge(
                     source=node,

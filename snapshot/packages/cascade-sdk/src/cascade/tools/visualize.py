@@ -17,11 +17,6 @@ def visualize(target: LazyResult[Any]) -> str:
         '  node [shape=box, style="rounded,filled", fillcolor=white];',
     ]
 
-    # 0. Pre-scan: Identify Shadow Nodes (Targets of POTENTIAL edges)
-    shadow_node_ids: Set[str] = {
-        edge.target.id for edge in graph.edges if edge.edge_type == EdgeType.POTENTIAL
-    }
-
     # 1. Define Nodes
     for node in graph.nodes:
         shape = _get_node_shape(node)
@@ -33,7 +28,7 @@ def visualize(target: LazyResult[Any]) -> str:
         label_suffix = ""
 
         # Shadow Style Override
-        if node.id in shadow_node_ids:
+        if node.is_shadow:
             style = '"dashed,filled"'
             fillcolor = "whitesmoke"  # Very light gray
             fontcolor = "gray50"

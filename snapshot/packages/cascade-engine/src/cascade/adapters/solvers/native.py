@@ -10,26 +10,28 @@ class NativeSolver:
     """
 
     def resolve(self, graph: Graph) -> ExecutionPlan:
-        # 0. Filter out Shadow Nodes (Targets of POTENTIAL edges)
-        # These nodes exist for static analysis but should not be executed.
-        shadow_ids = {
-            edge.target.id for edge in graph.edges if edge.edge_type == EdgeType.POTENTIAL
-        }
-        active_nodes = [node for node in graph.nodes if node.id not in shadow_ids]
+        # 0. Filter out Shadow Nodes using the explicit `is_shadow` flag.
+        active_nodes = [node for node in graph.nodes if not node.is_shadow]
+
+        if not active_nodes:
+            return []
 
         # 1. Calculate in-degrees for all active nodes
         in_degree: Dict[str, int] = {node.id: 0 for node in active_nodes}
         adj_list: Dict[str, List[str]] = {node.id: [] for node in active_nodes}
 
-        for edge in graph.edges:
-            # Skip POTENTIAL edges and edges involving shadow nodes
-            if edge.edge_type == EdgeType.POTENTIAL:
-                continue
-            if edge.source.id in shadow_ids or edge.target.id in shadow_ids:
-                continue
+        # Build a lookup for active nodes for efficient edge filtering
+        active_node_ids = {node.id for node in active_nodes}
 
-            in_degree[edge.target.id] += 1
-            adj_list[edge.source.id].append(edge.target.id)
+        for edge in graph.edges:
+            # An edge is only part of the execution plan if both its source
+            # and target are active nodes. This naturally filters out POTENTIAL edges.
+            if (
+                edge.source.id in active_node_ids
+                and edge.target.id in active_node_ids
+            ):
+                in_degree[edge.target.id] += 1
+                adj_list[edge.source.id].append(edge.target.id)
 
         # 2. Identify initial layer (nodes with 0 in-degree)
         current_stage = [node for node in active_nodes if in_degree[node.id] == 0]

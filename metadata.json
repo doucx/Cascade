@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(sdk): 增强可视化以显示静态分析路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766457396.4688401, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(spec): 在 Node 模型中引入 is_shadow 标志以提升代码清晰度", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766457715.0570726, "duration_ms": 0}}

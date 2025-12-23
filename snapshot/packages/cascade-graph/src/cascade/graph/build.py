@@ -6,6 +6,7 @@ from cascade.spec.routing import Router
 from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
 from cascade.spec.task import Task
 from cascade.spec.binding import SlotRef
+import hashlib
 
 from .hashing import ShallowHasher
 from .registry import NodeRegistry
@@ -77,14 +78,68 @@ class GraphBuilder:
         if result._uuid in self._visited_instances:
             return self._visited_instances[result._uuid]
 
-        shallow_hash = self.hasher.hash(result)
-        node_factory = lambda: self._create_node_from_lazy_result(result, shallow_hash)
-        node, created_new = self.registry.get_or_create(shallow_hash, node_factory)
+        # 1. Post-order traversal: Visit children FIRST to get their canonical IDs
+        child_edges: List[Tuple[Node, str, EdgeType, Any]] = []
+
+        def visit_child(obj: Any, path: str, edge_type: EdgeType = EdgeType.DATA, meta: Any = None):
+            if isinstance(obj, (LazyResult, MappedLazyResult)):
+                node = self._visit(obj)
+                child_edges.append((node, path, edge_type, meta))
+            elif isinstance(obj, Router):
+                # For routers, we visit the selector and routes
+                sel_node = self._visit(obj.selector)
+                child_edges.append((sel_node, path, edge_type, obj)) # Router object as meta
+                for k, route_res in obj.routes.items():
+                    r_node = self._visit(route_res)
+                    child_edges.append((r_node, f"{path}.route[{k}]", EdgeType.ROUTER_ROUTE, None))
+            elif isinstance(obj, (list, tuple)):
+                for i, item in enumerate(obj):
+                    visit_child(item, f"{path}[{i}]" if path else str(i), edge_type, meta)
+            elif isinstance(obj, dict):
+                for k, v in obj.items():
+                    visit_child(v, f"{path}.{k}" if path else str(k), edge_type, meta)
+        
+        # Scan args and kwargs
+        for i, val in enumerate(result.args):
+            visit_child(val, str(i))
+        for k, val in result.kwargs.items():
+            visit_child(val, k)
+        
+        # Scan special dependencies
+        if result._condition:
+            visit_child(result._condition, "_condition", EdgeType.CONDITION)
+        if result._constraints:
+             for res, req in result._constraints.requirements.items():
+                 if isinstance(req, (LazyResult, MappedLazyResult)):
+                     visit_child(req, res, EdgeType.CONSTRAINT)
+        for dep in result._dependencies:
+             visit_child(dep, "<sequence>", EdgeType.SEQUENCE)
+
+        # 2. Compute Merkle Hash
+        # The hash depends on the "Local Shell" (task name, literals) AND the IDs of children.
+        # ShallowHasher gives us the shell hash.
+        shell_hash = self.hasher.hash(result)
+        
+        # Combine with child IDs to form a Deep Structural Hash
+        hasher = hashlib.sha256(shell_hash.encode())
+        for child, path, etype, _ in child_edges:
+            # We mix in the Child ID, the Arg Path, and Edge Type.
+            # This ensures structural uniqueness.
+            combo = f"{child.id}|{path}|{etype.name}"
+            hasher.update(combo.encode())
+        
+        node_hash = hasher.hexdigest()
+
+        # 3. Create or Get Canonical Node
+        node_factory = lambda: self._create_node_from_lazy_result(result, node_hash)
+        node, created_new = self.registry.get_or_create(node_hash, node_factory)
 
         self._visited_instances[result._uuid] = node
 
         if created_new:
             self.graph.add_node(node)
+            
+            # Static Analysis for TCO (Shadow Nodes)
             if result.task.func:
                 if not getattr(result.task, "_tco_analysis_done", False):
                     assign_tco_cycle_ids(result.task)
@@ -94,23 +149,13 @@ class GraphBuilder:
                 self._shadow_visited[result.task] = node
                 for target_task in potential_targets:
                     self._visit_shadow_recursive(node, target_task)
-
-        self._scan_and_add_edges(node, result.args)
-        self._scan_and_add_edges(node, result.kwargs)
-
-        if result._condition:
-            source_node = self._visit(result._condition)
-            self.graph.add_edge(Edge(source=source_node, target=node, arg_name="_condition", edge_type=EdgeType.CONDITION))
-
-        if result._constraints:
-            for res, req in result._constraints.requirements.items():
-                if isinstance(req, (LazyResult, MappedLazyResult)):
-                    source = self._visit(req)
-                    self.graph.add_edge(Edge(source=source, target=node, arg_name=res, edge_type=EdgeType.CONSTRAINT))
-
-        for dep in result._dependencies:
-            source = self._visit(dep)
-            self.graph.add_edge(Edge(source=source, target=node, arg_name="<sequence>", edge_type=EdgeType.SEQUENCE))
+            
+            # Add edges (now that we have the parent node)
+            for child, path, etype, meta in child_edges:
+                edge = Edge(source=child, target=node, arg_name=path, edge_type=etype)
+                if etype == EdgeType.DATA and meta: # It's a router selector
+                     edge.router = meta
+                self.graph.add_edge(edge)
 
         return node
 
@@ -131,11 +176,16 @@ class GraphBuilder:
             self._visit_shadow_recursive(target_node, next_task)
 
     def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
-        # Mapped results are less likely to be canonical, but we support it.
+        # TODO: Implement Merkle hashing for MappedLazyResult too.
+        # For now, keeping legacy behavior but ensuring UUID reuse works locally.
         if result._uuid in self._visited_instances:
             return self._visited_instances[result._uuid]
             
-        shallow_hash = self.hasher.hash(result)
+        # Fallback to shallow hash for now (less critical for recursion benchmarks)
+        # In a full implementation, this should mirror _visit_lazy_result
+        shallow_hash = self.hasher.hash(result) 
+        # append UUID to prevent collisions in fallback mode
+        unique_hash = f"{shallow_hash}:{result._uuid}"
 
         def node_factory():
             input_bindings = {}
@@ -144,7 +194,7 @@ class GraphBuilder:
                     input_bindings[k] = self._register_data(val)
             
             return Node(
-                id=shallow_hash,
+                id=unique_hash,
                 name=f"map({getattr(result.factory, 'name', 'factory')})",
                 node_type="map",
                 mapping_factory=result.factory,
@@ -154,38 +204,21 @@ class GraphBuilder:
                 input_bindings=input_bindings,
             )
 
-        node, created_new = self.registry.get_or_create(shallow_hash, node_factory)
+        node, created_new = self.registry.get_or_create(unique_hash, node_factory)
         self._visited_instances[result._uuid] = node
 
         if created_new:
             self.graph.add_node(node)
+        
+        # Scan children (simplified for mapped)
+        def scan(obj, path):
+             if isinstance(obj, (LazyResult, MappedLazyResult)):
+                 src = self._visit(obj)
+                 self.graph.add_edge(Edge(source=src, target=node, arg_name=path, edge_type=EdgeType.DATA))
+             elif isinstance(obj, list):
+                 for i, x in enumerate(obj): scan(x, f"{path}[{i}]")
+        
+        for k, v in result.mapping_kwargs.items():
+            scan(v, k)
 
-        self._scan_and_add_edges(node, result.mapping_kwargs)
-        # ... (handle condition, dependencies for mapped results as well) ...
         return node
-
-    def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            source_node = self._visit(obj)
-            self.graph.add_edge(Edge(source=source_node, target=target_node, arg_name=path or "dep", edge_type=EdgeType.DATA))
-
-        elif isinstance(obj, Router):
-            selector_node = self._visit(obj.selector)
-            self.graph.add_edge(Edge(source=selector_node, target=target_node, arg_name=path, router=obj, edge_type=EdgeType.DATA))
-            for key, route_res in obj.routes.items():
-                route_node = self._visit(route_res)
-                self.graph.add_edge(Edge(source=route_node, target=target_node, arg_name=f"{path}.route[{key}]", edge_type=EdgeType.ROUTER_ROUTE))
-
-        elif isinstance(obj, (list, tuple)):
-            for i, item in enumerate(obj):
-                self._scan_and_add_edges(target_node, item, path=f"{path}[{i}]" if path else str(i))
-
-        elif isinstance(obj, dict):
-            for k, v in obj.items():
-                self._scan_and_add_edges(target_node, v, path=f"{path}.{k}" if path else str(k))
-
-
-def build_graph(
-    target: Any, registry: NodeRegistry | None = None
-) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
-    return GraphBuilder(registry=registry).build(target)

@@ -36,9 +36,7 @@ class ShallowHasher:
     def _visit_arg(self, obj: Any):
         """A special visitor for arguments within a LazyResult."""
         if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # Must include UUID to distinguish different instances with similar structure
-            # to prevent incorrect node merging (which causes cycles).
-            self._hash_components.append(f"LAZY({obj._uuid})")
+            self._hash_components.append("LAZY")
             return
 
         if isinstance(obj, Router):

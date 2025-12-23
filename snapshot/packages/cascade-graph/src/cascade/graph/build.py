@@ -222,3 +222,9 @@ class GraphBuilder:
             scan(v, k)
 
         return node
+
+
+def build_graph(
+    target: Any, registry: NodeRegistry | None = None
+) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
+    return GraphBuilder(registry=registry).build(target)

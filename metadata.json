@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] tool: 引入 `scripts/profile_entry.py` 进行深层架构分析", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766501304.3333137, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py, A lisp.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766505911.5472791, "duration_ms": 0}}

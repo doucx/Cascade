@@ -1,467 +1,199 @@
-为了实现路线图 2.3 的目标，我们将引入“参数归一化”机制。这将通过在 `Node` 对象中引入一个忽略具体字面量值的 `template_id` 来实现。
+简要回答
+是的，我将通过引入基于索引的计划缓存机制，将 `template_id` 实际上投入使用。这将允许不同数据的同构图共享同一个执行计划模板，从而大幅提升复杂递归任务的性能。
 
- 主要变更点
-
-1.  **数据模型升级**: 修改 `Node` 定义，增加 `template_id` 字段。该字段将作为“结构哈希”，用于识别在拓扑上等价但参数不同的计算图。
-2.  **构建逻辑增强**: 在 `GraphBuilder` 中实现 `template_id` 的计算逻辑。计算时将把 `LazyResult` 的参数中的字面量替换为占位符（`?`），从而实现归一化。
-
- 预期效果
-
-对于 `simple_countdown(10)` 和 `simple_countdown(9)`：
--   它们将生成不同的 `Node` 对象（`id` 不同，`input_bindings` 不同），保证了执行时的正确性。
--   但它们将拥有相同的 `template_id`。这将为下一步在 `GraphExecutionStrategy` 中实现基于模板索引的 Plan 缓存铺平道路。
-
-## [WIP] feat(core): 引入 `Node.template_id` 实现结构归一化
-
-### 错误分析
-不涉及错误修复。
+## [WIP] feat(engine): 实现基于 Template ID 的索引化 Plan 缓存
 
 ### 用户需求
-为了优化 TCO 循环和重复子图的性能，系统需要一种机制来识别“结构相同但数据不同”的任务，从而复用已生成的执行计划（Execution Plan）。
+用户希望 `GraphExecutionStrategy` 能够利用新引入的 `template_id` 来复用执行计划（Execution Plan）。目前的缓存机制是基于具体的 `Node.id`，这导致每次参数变化（如 `f(10)` -> `f(9)`）都会被视为缓存未命中，无法利用已有的拓扑排序结果。
 
 ### 评论
-这是路线图 v3.2 第二阶段的关键步骤。通过引入 `template_id`，我们将计算图的“骨架”（结构）与“血肉”（数据）在哈希层面进行了分离。这是实现 Hashlife 风格缓存和高性能 JIT 的先决条件。
+这是一个非常巧妙的优化。通过将 `ExecutionPlan` 抽象为“节点索引的列表”（即 `List[List[int]]`），我们解耦了计划的结构与具体的节点实例。结合 `template_id`，这使得 Cascade 能够像 Hashlife 算法一样，对所有结构相同的计算图只进行一次“编译”（Solver 解析），极大地降低了运行时开销。
 
 ### 目标
-1.  在 `Node` 模型中添加 `template_id` 字段。
-2.  在 `GraphBuilder` 中实现忽略字面量值的模板哈希计算逻辑。
-3.  确保 `LazyResult`、`MappedLazyResult` 和 `Router` 都能正确生成模板哈希。
+1.  在 `GraphExecutionStrategy` 中引入 `IndexedExecutionPlan` 概念（`List[List[int]]`）。
+2.  实现 `_index_plan` 方法：将 Solver 生成的 `ExecutionPlan` 转换为索引形式。
+3.  实现 `_rehydrate_plan` 方法：将缓存的索引计划应用到当前构建的 `Graph` 实例上，还原为可执行的 `ExecutionPlan`。
+4.  升级主执行循环：使用 `root_node.template_id` 作为缓存键，实现“一次编译，多次运行”。
 
 ### 基本原理
-目前的 `Node.id` 包含了所有参数的哈希值，导致 `f(10)` 和 `f(9)` 被视为完全不同的实体。通过增加一个将字面量视为占位符的 `template_id`，我们可以捕捉到这两者在计算结构上的同构性。后续的 `GraphExecutionStrategy` 将利用这个 `template_id` 作为缓存键，来复用拓扑排序的结果。
+1.  **确定性遍历**: `GraphBuilder` 使用后序遍历构建图，因此对于结构相同的图，其 `graph.nodes` 列表中的节点顺序是确定且一致的。
+2.  **索引映射**: 利用上述特性，我们可以安全地用“节点在 `graph.nodes` 中的索引”来代表节点在计划中的位置。
+3.  **模板复用**: `f(10)` 和 `f(9)` 虽然生成不同的 `Node` 对象，但它们拥有相同的 `template_id` 且图结构同构。因此，`f(10)` 计算出的索引计划（如 `[[0], [1]]`）可以直接应用在 `f(9)` 的图实例上。
 
 ### 标签
-#intent/build #flow/draft #priority/high #comp/engine #concept/history #scope/core #ai/instruct #task/domain/core #task/object/graph-builder #task/action/normalization #task/state/begin
+#intent/build #flow/ready #priority/high #comp/engine #concept/cache #scope/core #ai/instruct #task/domain/core #task/object/execution-strategy #task/action/optimize #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 `Node` 模型定义
+#### Acts 1: 升级 `GraphExecutionStrategy`
 
-我们需要同时更新 `cascade-spec` 和 `cascade-graph` 中的 `model.py`，为 `Node` 类添加 `template_id` 字段。为了向后兼容和简化初始化，我们将其设为可选（但在 Builder 中会强制赋值）。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/graph/model.py
-~~~~~
-~~~~~python
-    id: str
-    name: str
-    is_shadow: bool = False  # True if this node is for static analysis only
-    tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
-~~~~~
-~~~~~python
-    id: str
-    name: str
-    template_id: str = ""  # Structural hash (ignoring literals)
-    is_shadow: bool = False  # True if this node is for static analysis only
-    tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
-~~~~~
+我们将修改 `cascade-engine` 中的 `graph.py`，实现上述的索引化缓存逻辑。
 
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
 ~~~~~python
-    id: str
-    name: str
-    is_shadow: bool = False  # True if this node is for static analysis only
-    tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
-~~~~~
-~~~~~python
-    id: str
-    name: str
-    template_id: str = ""  # Structural hash (ignoring literals)
-    is_shadow: bool = False  # True if this node is for static analysis only
-    tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
-~~~~~
+    def __init__(
+        self,
+        solver: Solver,
+        node_processor: NodeProcessor,
+        resource_container: ResourceContainer,
+        constraint_manager: ConstraintManager,
+        bus: MessageBus,
+        wakeup_event: asyncio.Event,
+    ):
+        self.solver = solver
+        self.node_processor = node_processor
+        self.resource_container = resource_container
+        self.constraint_manager = constraint_manager
+        self.bus = bus
+        self.wakeup_event = wakeup_event
 
-#### Acts 2: 在 `GraphBuilder` 中实现模板哈希计算
+        # JIT Compilation Cache
+        # Maps structural hash (root_node_id) to a compiled ExecutionPlan
+        self._plan_cache: Dict[str, ExecutionPlan] = {}
+        # Persistent registry to ensure node object identity consistency across TCO iterations
+        self._node_registry = NodeRegistry()
 
-这是核心逻辑变更。我们将添加 `_build_template_hash_components` 方法，并在节点构建过程中调用它。
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        current_target = target
 
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/build.py
-~~~~~
-~~~~~python
-    def _build_hash_components_from_arg(
-        self, obj: Any, dep_nodes: Dict[str, Node]
-    ) -> List[str]:
-        """Recursively builds hash components from arguments, using pre-computed dependency nodes."""
-        components = []
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # Hash-Consing: The identity of this dependency is its structural ID.
-            components.append(f"LAZY({dep_nodes[obj._uuid].id})")
-        elif isinstance(obj, Router):
-            components.append("Router{")
-            components.append("Selector:")
-            components.extend(
-                self._build_hash_components_from_arg(obj.selector, dep_nodes)
-            )
-            components.append("Routes:")
-            for k in sorted(obj.routes.keys()):
-                components.append(f"Key({k})->")
-                components.extend(
-                    self._build_hash_components_from_arg(obj.routes[k], dep_nodes)
+        while True:
+            # The step stack holds "task" (step) scoped resources
+            with ExitStack() as step_stack:
+                # 1. Build Graph (With Registry for interning)
+                # This constructs the structural graph and the instance map.
+                # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
+                graph, instance_map = build_graph(
+                    current_target, registry=self._node_registry
                 )
-            components.append("}")
-        elif isinstance(obj, (list, tuple)):
-            components.append("List[")
-            for item in obj:
-                components.extend(self._build_hash_components_from_arg(item, dep_nodes))
-            components.append("]")
-        elif isinstance(obj, dict):
-            components.append("Dict{")
-            for k in sorted(obj.keys()):
-                components.append(f"{k}:")
-                components.extend(
-                    self._build_hash_components_from_arg(obj[k], dep_nodes)
-                )
-            components.append("}")
-        elif isinstance(obj, Inject):
-            components.append(f"Inject({obj.resource_name})")
-        else:
-            try:
-                components.append(repr(obj))
-            except Exception:
-                components.append("<unreprable>")
-        return components
 
-    def _find_dependencies(self, obj: Any, dep_nodes: Dict[str, Node]):
-~~~~~
-~~~~~python
-    def _build_hash_components_from_arg(
-        self, obj: Any, dep_nodes: Dict[str, Node]
-    ) -> List[str]:
-        """Recursively builds hash components from arguments, using pre-computed dependency nodes."""
-        components = []
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # Hash-Consing: The identity of this dependency is its structural ID.
-            components.append(f"LAZY({dep_nodes[obj._uuid].id})")
-        elif isinstance(obj, Router):
-            components.append("Router{")
-            components.append("Selector:")
-            components.extend(
-                self._build_hash_components_from_arg(obj.selector, dep_nodes)
-            )
-            components.append("Routes:")
-            for k in sorted(obj.routes.keys()):
-                components.append(f"Key({k})->")
-                components.extend(
-                    self._build_hash_components_from_arg(obj.routes[k], dep_nodes)
-                )
-            components.append("}")
-        elif isinstance(obj, (list, tuple)):
-            components.append("List[")
-            for item in obj:
-                components.extend(self._build_hash_components_from_arg(item, dep_nodes))
-            components.append("]")
-        elif isinstance(obj, dict):
-            components.append("Dict{")
-            for k in sorted(obj.keys()):
-                components.append(f"{k}:")
-                components.extend(
-                    self._build_hash_components_from_arg(obj[k], dep_nodes)
-                )
-            components.append("}")
-        elif isinstance(obj, Inject):
-            components.append(f"Inject({obj.resource_name})")
-        else:
-            try:
-                components.append(repr(obj))
-            except Exception:
-                components.append("<unreprable>")
-        return components
-
-    def _build_template_hash_components_from_arg(
-        self, obj: Any, dep_nodes: Dict[str, Node]
-    ) -> List[str]:
-        """
-        Recursively builds TEMPLATE hash components.
-        Literals are replaced by '?', but structure (Lists, Dicts, Routers) is preserved.
-        """
-        components = []
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # For dependencies, we use their TEMPLATE ID, not their instance ID.
-            components.append(f"LAZY({dep_nodes[obj._uuid].template_id})")
-        elif isinstance(obj, Router):
-            components.append("Router{")
-            components.append("Selector:")
-            components.extend(
-                self._build_template_hash_components_from_arg(obj.selector, dep_nodes)
-            )
-            components.append("Routes:")
-            # We assume Router keys are structural (control flow decisions)
-            for k in sorted(obj.routes.keys()):
-                components.append(f"Key({k})->")
-                components.extend(
-                    self._build_template_hash_components_from_arg(
-                        obj.routes[k], dep_nodes
+                # Identify the structural root
+                if current_target._uuid not in instance_map:
+                    raise RuntimeError(
+                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
                     )
+                target_node = instance_map[current_target._uuid]
+                root_node_id = target_node.id
+
+                # 2. Resolve Plan (With JIT Caching)
+                if root_node_id in self._plan_cache:
+                    # Hit: Reuse the existing plan directly.
+                    # Since we use a persistent NodeRegistry, the Nodes in this plan are valid for the current graph.
+                    plan = self._plan_cache[root_node_id]
+                else:
+                    # Miss: Ask solver to resolve and then cache it.
+                    plan = self.solver.resolve(graph)
+                    self._plan_cache[root_node_id] = plan
+
+                # 3. Setup Resources (mixed scope)
+~~~~~
+~~~~~python
+    def __init__(
+        self,
+        solver: Solver,
+        node_processor: NodeProcessor,
+        resource_container: ResourceContainer,
+        constraint_manager: ConstraintManager,
+        bus: MessageBus,
+        wakeup_event: asyncio.Event,
+    ):
+        self.solver = solver
+        self.node_processor = node_processor
+        self.resource_container = resource_container
+        self.constraint_manager = constraint_manager
+        self.bus = bus
+        self.wakeup_event = wakeup_event
+
+        # JIT Compilation Cache
+        # Maps template_id to an IndexedExecutionPlan (List[List[int]])
+        # We store indices instead of Node objects to allow plan reuse across
+        # different graph instances that share the same structure (template).
+        self._template_plan_cache: Dict[str, List[List[int]]] = {}
+
+        # Persistent registry to ensure node object identity consistency across TCO iterations
+        self._node_registry = NodeRegistry()
+
+    def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
+        """
+        Converts a Plan (List[List[Node]]) into an IndexedPlan (List[List[int]]).
+        The index corresponds to the node's position in graph.nodes.
+        """
+        # Create a fast lookup for node indices
+        id_to_idx = {node.id: i for i, node in enumerate(graph.nodes)}
+        indexed_plan = []
+        for stage in plan:
+            # Map each node in the stage to its index in the graph
+            indexed_stage = [id_to_idx[node.id] for node in stage]
+            indexed_plan.append(indexed_stage)
+        return indexed_plan
+
+    def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:
+        """
+        Converts an IndexedPlan back into a Plan using the nodes from the current graph.
+        """
+        plan = []
+        for stage_indices in indexed_plan:
+            # Map indices back to Node objects from the current graph instance
+            stage_nodes = [graph.nodes[idx] for idx in stage_indices]
+            plan.append(stage_nodes)
+        return plan
+
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        current_target = target
+
+        while True:
+            # The step stack holds "task" (step) scoped resources
+            with ExitStack() as step_stack:
+                # 1. Build Graph (With Registry for interning)
+                # This constructs the structural graph and the instance map.
+                # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
+                graph, instance_map = build_graph(
+                    current_target, registry=self._node_registry
                 )
-            components.append("}")
-        elif isinstance(obj, (list, tuple)):
-            components.append("List[")
-            for item in obj:
-                components.extend(
-                    self._build_template_hash_components_from_arg(item, dep_nodes)
-                )
-            components.append("]")
-        elif isinstance(obj, dict):
-            components.append("Dict{")
-            for k in sorted(obj.keys()):
-                components.append(f"{k}:")
-                components.extend(
-                    self._build_template_hash_components_from_arg(obj[k], dep_nodes)
-                )
-            components.append("}")
-        elif isinstance(obj, Inject):
-            components.append(f"Inject({obj.resource_name})")
-        else:
-            # This is the normalization magic: Literals become placeholders.
-            components.append("?")
-        return components
 
-    def _find_dependencies(self, obj: Any, dep_nodes: Dict[str, Node]):
-~~~~~
+                # Identify the structural root
+                if current_target._uuid not in instance_map:
+                    raise RuntimeError(
+                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                    )
+                target_node = instance_map[current_target._uuid]
+                
+                # Use template_id for caching. Fallback to id if template_id is missing (should not happen).
+                cache_key = target_node.template_id or target_node.id
 
-#### Acts 3: 在 `_visit_lazy_result` 中集成模板哈希
+                # 2. Resolve Plan (With JIT Template Caching)
+                if cache_key in self._template_plan_cache:
+                    # Hit: Rehydrate the indexed plan using the current graph's nodes.
+                    indexed_plan = self._template_plan_cache[cache_key]
+                    plan = self._rehydrate_plan(graph, indexed_plan)
+                else:
+                    # Miss: Ask solver to resolve.
+                    plan = self.solver.resolve(graph)
+                    # Index and cache the plan for future reuse.
+                    self._template_plan_cache[cache_key] = self._index_plan(graph, plan)
 
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/build.py
-~~~~~
-~~~~~python
-        structural_hash = self._get_merkle_hash(hash_components)
-
-        # 3. Hash-consing: intern the Node object
-        def node_factory():
-            input_bindings = {}
-
-            def process_arg(key: str, val: Any):
-                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    # Store literal value directly
-                    input_bindings[key] = val
-
-            for i, val in enumerate(result.args):
-                process_arg(str(i), val)
-            for k, val in result.kwargs.items():
-                process_arg(k, val)
-
-            sig = None
-            if result.task.func:
-                try:
-                    sig = inspect.signature(result.task.func)
-                except (ValueError, TypeError):
-                    pass
-
-            return Node(
-                id=structural_hash,
-                name=result.task.name,
-                node_type="task",
-                callable_obj=result.task.func,
-                signature=sig,
-                retry_policy=result._retry_policy,
-                cache_policy=result._cache_policy,
-                constraints=result._constraints,
-                input_bindings=input_bindings,
-            )
-~~~~~
-~~~~~python
-        structural_hash = self._get_merkle_hash(hash_components)
-
-        # 2b. Compute TEMPLATE hash (Normalization)
-        template_components = [f"Task({getattr(result.task, 'name', 'unknown')})"]
-        # Policies and Constraints are considered STRUCTURAL
-        if result._retry_policy:
-            rp = result._retry_policy
-            template_components.append(
-                f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})"
-            )
-        if result._cache_policy:
-            template_components.append(
-                f"Cache({type(result._cache_policy).__name__})"
-            )
-
-        template_components.append("Args:")
-        template_components.extend(
-            self._build_template_hash_components_from_arg(result.args, dep_nodes)
-        )
-        template_components.append("Kwargs:")
-        template_components.extend(
-            self._build_template_hash_components_from_arg(result.kwargs, dep_nodes)
-        )
-
-        if result._condition:
-            template_components.append("Condition:PRESENT")
-        if result._dependencies:
-            template_components.append(f"Deps:{len(result._dependencies)}")
-        if result._constraints:
-            keys = sorted(result._constraints.requirements.keys())
-            # We treat constraint keys as structural, values as literals?
-            # For safety, let's treat constraints as fully structural for now.
-            # If f(mem=4) and f(mem=2), they are different templates.
-            vals = [
-                f"{k}={result._constraints.requirements[k]}" for k in keys
-            ]  # This includes values in hash
-            template_components.append(f"Constraints({','.join(vals)})")
-
-        template_hash = self._get_merkle_hash(template_components)
-
-        # 3. Hash-consing: intern the Node object
-        def node_factory():
-            input_bindings = {}
-
-            def process_arg(key: str, val: Any):
-                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    # Store literal value directly
-                    input_bindings[key] = val
-
-            for i, val in enumerate(result.args):
-                process_arg(str(i), val)
-            for k, val in result.kwargs.items():
-                process_arg(k, val)
-
-            sig = None
-            if result.task.func:
-                try:
-                    sig = inspect.signature(result.task.func)
-                except (ValueError, TypeError):
-                    pass
-
-            return Node(
-                id=structural_hash,
-                template_id=template_hash,
-                name=result.task.name,
-                node_type="task",
-                callable_obj=result.task.func,
-                signature=sig,
-                retry_policy=result._retry_policy,
-                cache_policy=result._cache_policy,
-                constraints=result._constraints,
-                input_bindings=input_bindings,
-            )
-~~~~~
-
-#### Acts 4: 在 `_visit_mapped_result` 中集成模板哈希
-
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/build.py
-~~~~~
-~~~~~python
-        structural_hash = self._get_merkle_hash(hash_components)
-
-        # 3. Hash-consing
-        def node_factory():
-            input_bindings = {}
-            for k, val in result.mapping_kwargs.items():
-                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    input_bindings[k] = val
-
-            return Node(
-                id=structural_hash,
-                name=f"map({getattr(result.factory, 'name', 'factory')})",
-                node_type="map",
-                mapping_factory=result.factory,
-                retry_policy=result._retry_policy,
-                cache_policy=result._cache_policy,
-                constraints=result._constraints,
-                input_bindings=input_bindings,
-            )
-~~~~~
-~~~~~python
-        structural_hash = self._get_merkle_hash(hash_components)
-
-        # 2b. Compute TEMPLATE hash
-        template_components = [
-            f"Map({getattr(result.factory, 'name', 'factory')})"
-        ]
-        template_components.append("MapKwargs:")
-        template_components.extend(
-            self._build_template_hash_components_from_arg(
-                result.mapping_kwargs, dep_nodes
-            )
-        )
-
-        if result._condition:
-            template_components.append("Condition:PRESENT")
-        if result._dependencies:
-            template_components.append(f"Deps:{len(result._dependencies)}")
-
-        template_hash = self._get_merkle_hash(template_components)
-
-        # 3. Hash-consing
-        def node_factory():
-            input_bindings = {}
-            for k, val in result.mapping_kwargs.items():
-                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    input_bindings[k] = val
-
-            return Node(
-                id=structural_hash,
-                template_id=template_hash,
-                name=f"map({getattr(result.factory, 'name', 'factory')})",
-                node_type="map",
-                mapping_factory=result.factory,
-                retry_policy=result._retry_policy,
-                cache_policy=result._cache_policy,
-                constraints=result._constraints,
-                input_bindings=input_bindings,
-            )
-~~~~~
-
-#### Acts 5: 更新序列化逻辑以支持 `template_id`
-
-为了保持数据一致性，序列化工具也需要保存和恢复 `template_id`。
-
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/serialize.py
-~~~~~
-~~~~~python
-def _node_to_dict(node: Node) -> Dict[str, Any]:
-    data = {
-        "id": node.id,
-        "name": node.name,
-        "node_type": node.node_type,
-        # input_bindings now contains JSON-serializable literals directly.
-        "input_bindings": node.input_bindings,
-    }
-~~~~~
-~~~~~python
-def _node_to_dict(node: Node) -> Dict[str, Any]:
-    data = {
-        "id": node.id,
-        "template_id": node.template_id,
-        "name": node.name,
-        "node_type": node.node_type,
-        # input_bindings now contains JSON-serializable literals directly.
-        "input_bindings": node.input_bindings,
-    }
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/serialize.py
-~~~~~
-~~~~~python
-    node = Node(
-        id=data["id"],
-        name=data["name"],
-        node_type=data["node_type"],
-        callable_obj=_load_func_from_path(data.get("callable")),
-~~~~~
-~~~~~python
-    node = Node(
-        id=data["id"],
-        template_id=data.get("template_id", ""),
-        name=data["name"],
-        node_type=data["node_type"],
-        callable_obj=_load_func_from_path(data.get("callable")),
+                # 3. Setup Resources (mixed scope)
 ~~~~~
 
 ### 下一步建议
-实现 `GraphExecutionStrategy` 中的缓存逻辑升级，利用 `template_id` 和基于索引的 Plan 缓存来替代目前的基于 ID 的缓存。这将使 `f(10)` 和 `f(9)` 能够共享同一个 Plan 模板。
+我们已经完成了缓存逻辑的升级。现在，`tco_performance.py` 中的 `heavy_complex_countdown` 应该会表现出显著的性能提升。下一步，我们应该运行基准测试来验证这一改进。

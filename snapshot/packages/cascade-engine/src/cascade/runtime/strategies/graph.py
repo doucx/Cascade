@@ -44,10 +44,38 @@ class GraphExecutionStrategy:
         self.wakeup_event = wakeup_event
 
         # JIT Compilation Cache
-        # Maps structural hash (root_node_id) to a compiled ExecutionPlan
-        self._plan_cache: Dict[str, ExecutionPlan] = {}
+        # Maps template_id to an IndexedExecutionPlan (List[List[int]])
+        # We store indices instead of Node objects to allow plan reuse across
+        # different graph instances that share the same structure (template).
+        self._template_plan_cache: Dict[str, List[List[int]]] = {}
+
         # Persistent registry to ensure node object identity consistency across TCO iterations
         self._node_registry = NodeRegistry()
+
+    def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
+        """
+        Converts a Plan (List[List[Node]]) into an IndexedPlan (List[List[int]]).
+        The index corresponds to the node's position in graph.nodes.
+        """
+        # Create a fast lookup for node indices
+        id_to_idx = {node.id: i for i, node in enumerate(graph.nodes)}
+        indexed_plan = []
+        for stage in plan:
+            # Map each node in the stage to its index in the graph
+            indexed_stage = [id_to_idx[node.id] for node in stage]
+            indexed_plan.append(indexed_stage)
+        return indexed_plan
+
+    def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:
+        """
+        Converts an IndexedPlan back into a Plan using the nodes from the current graph.
+        """
+        plan = []
+        for stage_indices in indexed_plan:
+            # Map indices back to Node objects from the current graph instance
+            stage_nodes = [graph.nodes[idx] for idx in stage_indices]
+            plan.append(stage_nodes)
+        return plan
 
     async def execute(
         self,
@@ -76,17 +104,20 @@ class GraphExecutionStrategy:
                         f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
                     )
                 target_node = instance_map[current_target._uuid]
-                root_node_id = target_node.id
+                
+                # Use template_id for caching. Fallback to id if template_id is missing (should not happen).
+                cache_key = target_node.template_id or target_node.id
 
-                # 2. Resolve Plan (With JIT Caching)
-                if root_node_id in self._plan_cache:
-                    # Hit: Reuse the existing plan directly.
-                    # Since we use a persistent NodeRegistry, the Nodes in this plan are valid for the current graph.
-                    plan = self._plan_cache[root_node_id]
+                # 2. Resolve Plan (With JIT Template Caching)
+                if cache_key in self._template_plan_cache:
+                    # Hit: Rehydrate the indexed plan using the current graph's nodes.
+                    indexed_plan = self._template_plan_cache[cache_key]
+                    plan = self._rehydrate_plan(graph, indexed_plan)
                 else:
-                    # Miss: Ask solver to resolve and then cache it.
+                    # Miss: Ask solver to resolve.
                     plan = self.solver.resolve(graph)
-                    self._plan_cache[root_node_id] = plan
+                    # Index and cache the plan for future reuse.
+                    self._template_plan_cache[cache_key] = self._index_plan(graph, plan)
 
                 # 3. Setup Resources (mixed scope)
                 required_resources = self.resource_container.scan(graph)

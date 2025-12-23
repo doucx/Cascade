@@ -25,27 +25,11 @@ class ArgumentResolver:
         user_params: Dict[str, Any] = None,
         input_overrides: Dict[str, Any] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
-        # FAST PATH: If node is simple and we have no overrides or complex bindings
-        if not node.has_complex_inputs and not input_overrides:
-            incoming_edges = [e for e in graph.edges if e.target.id == node.id]
-            if not incoming_edges:
-                # No dependencies and no overrides: return bindings as is
-                args = []
-                kwargs = {}
-                for name, value in node.input_bindings.items():
-                    if name.isdigit():
-                        idx = int(name)
-                        while len(args) <= idx: args.append(None)
-                        args[idx] = value
-                    else:
-                        kwargs[name] = value
-                return args, kwargs
-
-        # SLOW PATH: Existing logic
         args = []
         kwargs = {}
 
         # 1. Reconstruct initial args/kwargs from Bindings (Literals)
+        # Apply overrides if provided (for TCO fast path)
         bindings = node.input_bindings
         if input_overrides:
             bindings = bindings.copy()
@@ -53,12 +37,10 @@ class ArgumentResolver:
 
         positional_args_dict = {}
         for name, value_raw in bindings.items():
-            if node.has_complex_inputs:
-                value = self._resolve_structure(
-                    value_raw, node.id, state_backend, resource_context, graph
-                )
-            else:
-                value = value_raw
+            # Recursively resolve structures (e.g., lists containing Inject)
+            value = self._resolve_structure(
+                value_raw, node.id, state_backend, resource_context, graph
+            )
 
             if name.isdigit():
                 positional_args_dict[int(name)] = value
@@ -69,11 +51,8 @@ class ArgumentResolver:
         args = [positional_args_dict[i] for i in sorted_indices]
 
         # 2. Overlay Dependencies from Edges
-        # Optimization: Filter once
-        incoming_edges = [e for e in graph.edges if e.target.id == node.id and e.edge_type == EdgeType.DATA]
-        if not incoming_edges:
-            return args, kwargs
-            
+        incoming_edges = [e for e in graph.edges if e.target.id == node.id]
+
         for edge in incoming_edges:
             if edge.edge_type == EdgeType.DATA:
                 val = self._resolve_dependency(

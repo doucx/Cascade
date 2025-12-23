@@ -24,12 +24,7 @@ class EdgeType(Enum):
 
 @dataclass
 class Node:
-    """
-    Represents a node in the computation graph template.
-
-    A Node defines 'what' to execute (the callable) and 'how' to get its arguments
-    (bindings or edges), but it DOES NOT contain the runtime data itself.
-    """
+    """Represents a node in the computation graph."""
 
     id: str
     name: str
@@ -49,10 +44,8 @@ class Node:
     cache_policy: Optional[Any] = None
     constraints: Optional[ResourceConstraint] = None
 
-    # Structural Bindings
-    # Maps argument names to their literal (JSON-serializable) values.
-    # This makes the Node self-contained.
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
+    # Pre-resolved literal inputs for the task
+    literal_inputs: Dict[str, Any] = field(default_factory=dict)
 
     def __hash__(self):
         return hash(self.id)
@@ -75,7 +68,7 @@ class Edge:
 
 @dataclass
 class Graph:
-    """A container for nodes and edges representing the workflow topology."""
+    """A container for nodes and edges representing the workflow."""
 
     nodes: List[Node] = field(default_factory=list)
     edges: List[Edge] = field(default_factory=list)

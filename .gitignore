@@ -10,10 +10,6 @@ __pycache__/
 *.jsonl
 *.out
 
-# perf log 
-
-*.prof
-
 # Distribution / packaging
 .Python
 build/

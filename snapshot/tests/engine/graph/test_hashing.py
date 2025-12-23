@@ -1,5 +1,5 @@
 from cascade import task
-from cascade.graph.hashing import StructuralHasher
+from cascade.graph.hashing import StructuralHasher, ShallowHasher
 
 
 @task

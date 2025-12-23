@@ -81,9 +81,7 @@ def test_visualize_special_edge_types():
     dot_string = cs.visualize(target)
 
     # 1. Assert Data Edge (standard style)
-    assert (
-        f'"{data_source._uuid}" -> "{target._uuid}" [label="data_in"];' in dot_string
-    )
+    assert f'"{data_source._uuid}" -> "{target._uuid}" [label="data_in"];' in dot_string
 
     # 2. Assert Condition Edge (dashed, gray)
     expected_cond_edge = (
@@ -122,6 +120,8 @@ def test_visualize_potential_path():
 
     # 2. Check Shadow Node Style (Dashed border, Gray fill, (Potential) label)
     # We expect a node with label containing "(Potential)" and special style
-    expected_node_style_part = 'style="dashed,filled", fillcolor=whitesmoke, fontcolor=gray50'
+    expected_node_style_part = (
+        'style="dashed,filled", fillcolor=whitesmoke, fontcolor=gray50'
+    )
     assert expected_node_style_part in dot_string
     assert "(Potential)" in dot_string

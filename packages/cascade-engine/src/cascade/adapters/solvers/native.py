@@ -1,5 +1,5 @@
 from typing import Dict, List, Set
-from cascade.graph.model import Graph, EdgeType
+from cascade.graph.model import Graph
 from cascade.spec.protocols import ExecutionPlan
 
 
@@ -26,10 +26,7 @@ class NativeSolver:
         for edge in graph.edges:
             # An edge is only part of the execution plan if both its source
             # and target are active nodes. This naturally filters out POTENTIAL edges.
-            if (
-                edge.source.id in active_node_ids
-                and edge.target.id in active_node_ids
-            ):
+            if edge.source.id in active_node_ids and edge.target.id in active_node_ids:
                 in_degree[edge.target.id] += 1
                 adj_list[edge.source.id].append(edge.target.id)
 

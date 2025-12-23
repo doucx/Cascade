@@ -145,7 +145,8 @@ class GraphExecutionStrategy:
                         self._template_plan_cache[cache_key] = indexed_plan
 
                     # Cache for Future TCO Fast Path
-                    if cycle_id:
+                    # Only scan and cache if we haven't already indexed this cycle
+                    if cycle_id and cycle_id not in self._cycle_cache:
                         # Pre-scan resources and store them in the cycle cache
                         req_res = self.resource_container.scan(graph)
                         self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id, req_res)
@@ -173,7 +174,6 @@ class GraphExecutionStrategy:
                         graph,
                         state_backend,
                         active_resources,
-                        run_id,
                         params,
                         instance_map,
                         input_overrides
@@ -226,7 +226,6 @@ class GraphExecutionStrategy:
         graph: Graph,
         state_backend: StateBackend,
         active_resources: Dict[str, Any],
-        run_id: str,
         params: Dict[str, Any],
         instance_map: Dict[str, Node],
         input_overrides: Dict[str, Any] = None,
@@ -236,6 +235,7 @@ class GraphExecutionStrategy:
         Bypasses event bus, flow manager, and multiple resolvers for maximum performance.
         """
         # 1. Resolve Arguments (Minimal path)
+        # We reuse the node_processor's resolver but bypass the process() wrapper
         args, kwargs = self.node_processor.arg_resolver.resolve(
             node,
             graph,

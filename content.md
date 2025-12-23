@@ -1,144 +1,178 @@
 简要回答
-非常抱歉，我在上一个计划中引入了两个严重的回归错误：一是在快速路径中解包缓存数据时少算了一个字段，二是在 `execute` 循环中错误地假设 `current_target` 总是具有 `.task` 属性（忽略了 `MappedLazyResult`）。我将立即生成修复计划。
+分析非常准确。`heavy_complex_countdown` 性能下降是因为我们在“慢速路径”中引入了**冗余的资源扫描**；而 `simple` 和 `stable` 的上升则归功于 **Hot-Loop Bypass**。
 
-## [WIP] fix: 修复 TCO 快速路径中的解包错误与类型兼容性问题
+以下是详细分析与修复计划：
 
-### 错误分析
-1.  **解包错误 (`ValueError`)**: 我将 `_cycle_cache` 修改为存储 4 个值（增加资源缓存），但在 `execute` 函数的快速路径解包逻辑中仍然只写了 3 个变量名。
-2.  **类型兼容性错误 (`AttributeError`)**: 在 `strategies/graph.py` 中，我使用了 `current_target.task` 来获取 `_tco_cycle_id`。然而，当用户使用 `.map()` 时，`current_target` 是 `MappedLazyResult` 类型，它没有 `task` 属性（应为 `factory`）。
+1. 性能分析 (Performance Diagnosis)
 
-### 用户需求
-修复 `tco_performance.py` 运行时的崩溃，并确保所有现有的 E2E 测试和 Map 测试能够通过。
+*   **为什么 `simple` 和 `stable` 变快了？**
+    *   它们命中了 `_cycle_cache` 并且满足 `_are_args_simple`（注意：`stable_complex_loop` 在测试脚本中传入的是 `_dummy=static_dep_chain` 的**结果**或预构建的 `LazyResult`，在快速路径中它被视为一个稳定的结构）。
+    *   它们进入了 `_execute_hot_node`，直接跳过了 `FlowManager` 的拓扑排序、`NodeProcessor` 的事件发布和 `asyncio.gather` 的调度开销。
+*   **为什么 `heavy_complex_countdown` 变慢了 (1.1k -> 440 TPS)？**
+    *   **强制慢速路径**: 它的参数中包含 `dep_chain`（一个 10 节点的 `LazyResult` 链）。`_are_args_simple` 检测到 `LazyResult` 会强制走慢速路径。
+    *   **冗余扫描 (Redundant Scan)**: 在慢速路径中，我之前的代码在每一轮循环都执行了 `self.resource_container.scan(graph)` 来尝试更新 `_cycle_cache`。对于一个 10 节点的图，这种递归扫描非常昂贵。由于它每一轮都走慢速路径，这个开销被放大了 10000 次。
+*   **为什么没能对齐 VM 模式？**
+    *   **异步调度成本**: 即使是 `_execute_hot_node`，依然存在 `await executor.execute` 和 `await asyncio.sleep(0)`（TCO 必需的让权）。VM 模式由于是纯同步指令流（直到遇到真正的 I/O），其指令派发开销极低。
+    *   **对象创建**: 即使跳过了 `build_graph`，每轮循环依然在创建新的 `LazyResult` 对象和 `instance_map` 字典。
+
+---
+
+## [WIP] perf: 消除慢速路径冗余并增强 TCO 稳定性
 
 ### 目标
-1.  修正 `graph.py` 中的快速路径解包逻辑。
-2.  使用 `getattr` 安全地从 `current_target` 获取 `task` 和 `_tco_cycle_id`。
-3.  确保 `MappedLazyResult` 也能兼容 `execute` 循环的初始化检查。
-
-### 基本原理
-在动态类型的异步循环中，必须始终通过 `getattr` 或显式的类型检查来访问可能不存在的属性。同时，缓存元组的结构必须在生产者和消费者之间保持严格同步。
+1.  **按需扫描**: 仅在 `cycle_id` 尚未缓存时才执行资源扫描，避免在慢速路径中重复支付该代价。
+2.  **优化 `_are_args_simple`**: 提高判断效率。
+3.  **解释性能限制**: 明确“图模式”与“VM 模式”在 Python 异步环境下的物理极限差异。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/core #task/object/tco-fast-path #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/core #task/object/tco-fast-path #task/action/fix-regression #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `GraphExecutionStrategy` 中的解包与属性访问
+#### Acts 1: 修复慢速路径中的冗余资源扫描
+我们必须确保 `scan(graph)` 只在填充缓存的那一刻发生。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
 ~~~~~python
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
+                    # Cache for Future TCO Fast Path
+                    if cycle_id:
+                        # Pre-scan resources and store them in the cycle cache
+                        req_res = self.resource_container.scan(graph)
+                        self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id, req_res)
 
-        while True:
-            # Check for Zero-Overhead TCO Fast Path
-            cycle_id = getattr(current_target.task, "_tco_cycle_id", None)
-            fast_path_data = None
-
-            if cycle_id and cycle_id in self._cycle_cache:
-                if self._are_args_simple(current_target):
-                    fast_path_data = self._cycle_cache[cycle_id]
-
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                input_overrides = None
-
-                if fast_path_data:
-                    # FAST PATH: Reuse Graph & Plan
-                    graph, indexed_plan, root_node_id = fast_path_data
-                    # Reconstruct virtual instance map for current iteration
-                    target_node = next(n for n in graph.nodes if n.id == root_node_id)
-                    instance_map = {current_target._uuid: target_node}
+                # 3. Setup Resources (mixed scope)
 ~~~~~
 ~~~~~python
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
+                    # Cache for Future TCO Fast Path
+                    # Only scan and cache if we haven't already indexed this cycle
+                    if cycle_id and cycle_id not in self._cycle_cache:
+                        # Pre-scan resources and store them in the cycle cache
+                        req_res = self.resource_container.scan(graph)
+                        self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id, req_res)
 
-        while True:
-            # Check for Zero-Overhead TCO Fast Path
-            # Use getattr safely as MappedLazyResult uses .factory instead of .task
-            target_task = getattr(current_target, "task", None)
-            cycle_id = getattr(target_task, "_tco_cycle_id", None) if target_task else None
-            fast_path_data = None
-
-            if cycle_id and cycle_id in self._cycle_cache:
-                if self._are_args_simple(current_target):
-                    fast_path_data = self._cycle_cache[cycle_id]
-
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                input_overrides = None
-
-                if fast_path_data:
-                    # FAST PATH: Reuse Graph & Plan
-                    # Unpack all 4 cached values: graph, indexed_plan, root_node_id, req_res
-                    graph, indexed_plan, root_node_id, _ = fast_path_data
-                    # Reconstruct virtual instance map for current iteration
-                    target_node = next(n for n in graph.nodes if n.id == root_node_id)
-                    instance_map = {current_target._uuid: target_node}
+                # 3. Setup Resources (mixed scope)
 ~~~~~
 
-#### Acts 2: 进一步增强 `_are_args_simple` 的兼容性
+#### Acts 2: 进一步精简 `_execute_hot_node`
+减少不必要的参数传递。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
 ~~~~~python
-    def _are_args_simple(self, lazy_result: LazyResult) -> bool:
+    async def _execute_hot_node(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        active_resources: Dict[str, Any],
+        run_id: str,
+        params: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] = None,
+    ) -> Any:
         """
-        Checks if the LazyResult arguments contain any nested LazyResults.
+        A stripped-down version of NodeProcessor.process specifically for hot TCO loops.
+        Bypasses event bus, flow manager, and multiple resolvers for maximum performance.
         """
-        for arg in lazy_result.args:
-            if isinstance(arg, (LazyResult, MappedLazyResult)):
-                return False
-        for val in lazy_result.kwargs.values():
-            if isinstance(val, (LazyResult, MappedLazyResult)):
-                return False
-        return True
+        # 1. Resolve Arguments (Minimal path)
+        args, kwargs = self.node_processor.arg_resolver.resolve(
+            node,
+            graph,
+            state_backend,
+            active_resources,
+            instance_map=instance_map,
+            user_params=params,
+            input_overrides=input_overrides,
+        )
+
+        # 2. Direct Execution (Skip NodeProcessor ceremony)
+        result = await self.node_processor.executor.execute(node, args, kwargs)
+        
+        # 3. Minimal State Update
+        state_backend.put_result(node.id, result)
+        return result
 ~~~~~
 ~~~~~python
-    def _are_args_simple(self, lazy_result: Any) -> bool:
+    async def _execute_hot_node(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        active_resources: Dict[str, Any],
+        params: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] = None,
+    ) -> Any:
         """
-        Checks if the LazyResult arguments contain any nested LazyResults.
+        A stripped-down version of NodeProcessor.process specifically for hot TCO loops.
+        Bypasses event bus, flow manager, and multiple resolvers for maximum performance.
         """
-        # Handle both LazyResult (args/kwargs) and MappedLazyResult (mapping_kwargs)
-        args = getattr(lazy_result, "args", [])
-        kwargs = getattr(lazy_result, "kwargs", {})
-        if hasattr(lazy_result, "mapping_kwargs"):
-            kwargs = lazy_result.mapping_kwargs
+        # 1. Resolve Arguments (Minimal path)
+        # We reuse the node_processor's resolver but bypass the process() wrapper
+        args, kwargs = self.node_processor.arg_resolver.resolve(
+            node,
+            graph,
+            state_backend,
+            active_resources,
+            instance_map=instance_map,
+            user_params=params,
+            input_overrides=input_overrides,
+        )
 
-        for arg in args:
-            if isinstance(arg, (LazyResult, MappedLazyResult)):
-                return False
-        for val in kwargs.values():
-            if isinstance(val, (LazyResult, MappedLazyResult)):
-                return False
-        return True
+        # 2. Direct Execution (Skip NodeProcessor ceremony)
+        result = await self.node_processor.executor.execute(node, args, kwargs)
+        
+        # 3. Minimal State Update
+        state_backend.put_result(node.id, result)
+        return result
+~~~~~
+
+#### Acts 3: 调整 `execute` 循环中的调用
+同步修改 `execute` 函数中的调用点。
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+                if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
+                    result = await self._execute_hot_node(
+                        target_node,
+                        graph,
+                        state_backend,
+                        active_resources,
+                        run_id,
+                        params,
+                        instance_map,
+                        input_overrides
+                    )
+~~~~~
+~~~~~python
+                if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
+                    result = await self._execute_hot_node(
+                        target_node,
+                        graph,
+                        state_backend,
+                        active_resources,
+                        params,
+                        instance_map,
+                        input_overrides
+                    )
 ~~~~~
 
 ### 下一步建议
-修复已经应用。现在请先运行 `pytest tests/engine/runtime/test_engine_recursion.py` 验证 TCO 基础功能，然后再次运行 `observatory/benchmarks/tco_performance.py` 查看优化后的性能数据。
+修复了慢速路径中的性能陷阱后，`heavy_complex_countdown` 的性能应该恢复到之前的水平（约 1.1k TPS）。
 
-我们目前实现了编译旁路（Acts 1）和一部分执行旁路（`_execute_hot_node`），如果性能仍有提升空间，我们可以考虑在 `_execute_hot_node` 内部实现针对热节点的参数预解析（Pre-binding）。
+**关于“对齐 VM 模式”的说明**: 
+虽然我们已经极大减少了开销，但“图执行模式”本质上仍然是在每一轮循环中维护一个完整的 `Graph` 对象上下文，并执行一次逻辑上的图遍历（哪怕只有一节点）。VM 模式之所以快，是因为它**没有图**，只有一组扁平的指令。
+
+要真正让图模式达到 VM 的级别，下一步可能需要引入 **Graph-to-Instruction 编译器**：在 `_cycle_cache` 中不存储 Graph，而是存储该 Graph 编译后的 `Blueprint`。如果你有兴趣，我们可以将此作为 3.3 阶段的任务。
+
+现在请再次运行 `tco_performance.py`。

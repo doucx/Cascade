@@ -1,43 +1,3 @@
-简要回答
-这是一个绝佳的主意！将 Cascade 的计算图转译为 Lisp S-Expression (S-表达式) 不仅是一种优雅的序列化方式，更是对 Cascade "声明式函数式" 本质的致敬。它能以一种极度紧凑、人类可读的方式展示复杂的嵌套逻辑，特别是对于深层递归结构。
-
-我将创建一个新的工具模块 `cascade.tools.lisp`，并实现智能的 **"自动内联 (Auto-Inlining)"** 算法：
-*   如果一个节点只被引用一次（树状结构），它会被**内联**到父表达式中，形成优雅的 `(f (g x))` 结构。
-*   如果一个节点被多次引用（DAG 结构），它会被自动提升为 `let*` 绑定，形成 `(let* ((x (g ...))) (f x x))` 结构。
-
-这相当于我们在 Python 中实现了一个针对 Cascade 图的 Lisp 反编译器。
-
-## [WIP] feat(sdk): 引入 Lisp 转译器 (`cs.to_lisp`)
-
-### 评论
-实现了将 Cascade 计算图转换为 Lisp (Scheme/Common Lisp 风格) 代码的功能。该转译器具备智能的拓扑分析能力，能够自动识别“树”与“图”的部分，并生成最具可读性的混合代码（嵌套表达式 + `let*` 绑定）。这不仅是序列化工具，更是理解 Cascade 运行逻辑的强大可视化辅助。
-
-### 用户需求
-创建一个新方法，将 cs 的图转码成 lisp。
-
-### 目标
-1.  在 `cascade-sdk` 中创建 `tools/lisp.py`。
-2.  实现 `to_lisp(target)` 函数，支持自动内联和 `let*` 块生成。
-3.  处理 Python 到 Lisp 的类型映射（`None` -> `nil`, `True` -> `#t`, `kwargs` -> `:key value`）。
-4.  支持 `Map` 节点和 `Router` 结构的转译。
-
-### 基本原理
-利用 `build_graph` 获取静态图，计算每个节点的入度（In-Degree）。入度为 1 的节点视为“私有依赖”，直接递归展开；入度 > 1 的节点视为“共享依赖”，在 `let*` 绑定段中定义。通过拓扑排序确定绑定的顺序。
-
-### 标签
-#intent/build #flow/ready #priority/medium #comp/sdk #scope/dx #ai/instruct #task/domain/tooling #task/object/lisp-transpiler #task/action/implementation #task/state/end
-
----
-
-### Script
-
-#### Acts 1: 实现 Lisp 转译器核心逻辑
-
-~~~~~act
-write_file
-packages/cascade-sdk/src/cascade/tools/lisp.py
-~~~~~
-~~~~~python
 from typing import Any, Dict, List, Set, Optional
 import json
 from cascade.graph.build import build_graph
@@ -230,27 +190,3 @@ def to_lisp(target: Any, indent: int = 2) -> str:
              
         lines.append(")")
         return "\n".join(lines)
-~~~~~
-
-#### Acts 2: 导出工具
-
-~~~~~act
-write_file
-packages/cascade-sdk/src/cascade/tools/__init__.py
-~~~~~
-~~~~~python
-from .preview import dry_run
-from .visualize import visualize
-from .cli import create_cli
-from .lisp import to_lisp
-
-__all__ = ["dry_run", "visualize", "create_cli", "to_lisp"]
-~~~~~
-
-
-### 下一步建议
-运行 `demo_lisp.py` 验证输出。你应该能看到：
-1.  **Simple Tree** 会生成干净的嵌套调用 `(mul (add 1 2) 3)`。
-2.  **DAG** 会自动生成 `let*` 绑定来复用变量，避免重复计算。
-
-这个工具不仅有趣，它未来可以作为 Cascade 的 **"IR (中间表示) 调试器"**。当你怀疑图构建有问题时，看 Lisp 代码往往比看 DOT 图形更直观，因为它展示了执行的**逻辑结构**而非物理拓扑。

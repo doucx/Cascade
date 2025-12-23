@@ -75,13 +75,24 @@ class GraphExecutionStrategy:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
                 struct_hash = self.hasher.hash(current_target)
+                
+                graph: Graph
+                plan: ExecutionPlan
+                instance_map: Dict[str, Node]
+                data_tuple: Tuple[Any, ...]
 
                 if struct_hash in self._plan_cache:
-                    # CACHE HIT: Reuse plan, only extract new data
+                    # CACHE HIT: Reuse canonical graph and plan.
                     graph, plan, canonical_target_node = self._plan_cache[struct_hash]
-                    _, data_tuple, instance_map = build_graph(current_target)
-                    # Align instance map to point to the canonical node from the cached graph
-                    instance_map[current_target._uuid] = canonical_target_node
+                    
+                    # We ONLY need to re-run build_graph to extract the new data_tuple.
+                    # The new graph and instance_map are DISCARDED.
+                    _, data_tuple, new_instance_map = build_graph(current_target)
+                    
+                    # The instance_map for this execution must point the current target's UUID
+                    # to the canonical node from the cached graph. This is the ONLY entry
+                    # from the new_instance_map we need.
+                    instance_map = {current_target._uuid: canonical_target_node}
                 else:
                     # CACHE MISS: Build graph and resolve plan for the first time
                     graph, data_tuple, instance_map = build_graph(current_target)
@@ -184,19 +195,15 @@ class GraphExecutionStrategy:
                 if executable_this_pass:
                     # Callback for map nodes
                     async def sub_graph_runner(target, sub_params, parent_state):
-                        # Recursive call: must build new graph and data
-                        sub_graph, sub_data, sub_instance_map = build_graph(target)
-                        sub_plan = self.solver.resolve(sub_graph)
-                        return await self._execute_graph(
+                        # For sub-graphs, we must run the full execution loop logic,
+                        # as they may have their own TCO cycles.
+                        return await self.execute(
                             target,
-                            sub_params,
-                            active_resources,
                             run_id,
+                            sub_params,
                             parent_state,
-                            graph=sub_graph,
-                            data_tuple=sub_data,
-                            plan=sub_plan,
-                            instance_map=sub_instance_map,
+                            ExitStack(), # Sub-flows don't share run_stack
+                            active_resources,
                         )
 
                     tasks_to_run = [
@@ -230,7 +237,6 @@ class GraphExecutionStrategy:
 
         # Use the mapped canonical node ID to check for the final result
         if not state_backend.has_result(target_node.id):
-            # For debugging, check if the instance was skipped
             if skip_reason := state_backend.get_skip_reason(target_node.id):
                 if skip_reason == "UpstreamSkipped_Sequence":
                     return None

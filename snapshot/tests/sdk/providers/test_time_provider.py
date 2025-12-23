@@ -73,7 +73,6 @@ async def test_wait_accepts_lazy_result(engine):
     await engine.run(workflow)
     duration = time.time() - start_time
 
-    # Allow for more generous framework/scheduling overhead
-    assert 0.1 <= duration < 0.2, (
+    assert 0.1 <= duration < 0.15, (
         f"cs.wait should have used the dynamic delay from upstream, but took {duration:.2f}s."
     )

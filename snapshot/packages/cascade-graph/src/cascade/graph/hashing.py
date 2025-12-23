@@ -5,9 +5,6 @@ from cascade.spec.routing import Router
 from cascade.spec.resource import Inject
 
 
-from cascade.spec.resource import Inject
-
-
 class ShallowHasher:
     """
     Generates a stable shallow structural hash for a LazyResult.
@@ -31,6 +28,8 @@ class ShallowHasher:
         elif isinstance(obj, MappedLazyResult):
             self._visit_mapped(obj)
         else:
+            # This path is for targets that aren't LazyResults, which shouldn't happen
+            # in normal execution but we handle it gracefully.
             self._visit_arg(obj)
 
     def _visit_arg(self, obj: Any):

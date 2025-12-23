@@ -133,10 +133,16 @@ class GraphExecutionStrategy:
                 if is_fast_path:
                     # FAST PATH: Reuse plan, rebuild graph quickly to get data
                     graph, plan = self._task_templates[current_target.task]
-                    # Re-run build_graph. This is efficient due to NodeRegistry caching the
-                    # graph structure. We discard the returned graph but keep the new data_tuple
-                    # and instance_map, effectively using it as a data extractor.
                     _, data_tuple, instance_map = build_graph(current_target)
+
+                    # BUGFIX: The instance_map from the new build_graph will contain a new,
+                    # ephemeral node ID for the current_target. However, the execution plan
+                    # uses the canonical node ID from the cached graph. We must align them.
+                    # For a simple TCO task, the canonical target is the first (and only)
+                    # node in the first stage of the plan.
+                    if plan and plan[0]:
+                        canonical_target_node = plan[0][0]
+                        instance_map[current_target._uuid] = canonical_target_node
                 else:
                     # STANDARD PATH: Build graph and resolve plan for the first time
                     graph, data_tuple, instance_map = build_graph(current_target)

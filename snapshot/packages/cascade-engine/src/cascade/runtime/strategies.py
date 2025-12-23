@@ -57,10 +57,6 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
-        # Universal Execution Plan Cache
-        # Key: Canonical Structural Hash (Root Node ID)
-        # Value: ExecutionPlan
-        self._plan_cache: Dict[str, Any] = {}
 
     async def execute(
         self,
@@ -76,33 +72,16 @@ class GraphExecutionStrategy:
         while True:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
-                # 1. Build Graph (Lightweight / Canonicalizing)
-                # We always run build_graph. Thanks to the new Merkle-hashing GraphBuilder,
-                # this is deterministic and produces canonical Node IDs based on structure.
+                # 1. Build Graph
                 graph, data_tuple, instance_map = build_graph(current_target)
                 
-                # 2. Identify Root Node
-                if isinstance(current_target, (LazyResult, MappedLazyResult)):
-                    root_node = instance_map[current_target._uuid]
-                    cache_key = root_node.id
-                else:
-                    # For raw literals (edge case in top level), no caching
-                    cache_key = None
+                # 2. Run Solver
+                # Note: For TCO optimization (Phase 4), we will need to implement
+                # a caching mechanism here that supports Data Hydration (reusing
+                # plan templates with new data). For now, we rebuild and solve every step.
+                plan = self.solver.resolve(graph)
 
-                # 3. Check Cache or Solve
-                plan = None
-                if cache_key and cache_key in self._plan_cache:
-                    # HIT: Reuse existing plan.
-                    # Because Node IDs are deterministic (Merkle), the cached plan
-                    # (which references Node IDs) is valid for the newly built graph.
-                    plan = self._plan_cache[cache_key]
-                else:
-                    # MISS: Run Solver (Expensive)
-                    plan = self.solver.resolve(graph)
-                    if cache_key:
-                        self._plan_cache[cache_key] = plan
-
-                # 4. Setup Resources (mixed scope)
+                # 3. Setup Resources (mixed scope)
                 required_resources = self.resource_container.scan(graph, data_tuple)
                 self.resource_container.setup(
                     required_resources,

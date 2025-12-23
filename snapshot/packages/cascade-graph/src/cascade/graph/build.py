@@ -6,7 +6,6 @@ from cascade.spec.routing import Router
 from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
 from cascade.spec.task import Task
 from cascade.spec.binding import SlotRef
-import hashlib
 
 from .hashing import ShallowHasher
 from .registry import NodeRegistry
@@ -78,7 +77,7 @@ class GraphBuilder:
         if result._uuid in self._visited_instances:
             return self._visited_instances[result._uuid]
 
-        # 1. Post-order traversal: Visit children FIRST to get their canonical IDs
+        # 1. Post-order traversal: Visit children FIRST
         child_edges: List[Tuple[Node, str, EdgeType, Any]] = []
 
         def visit_child(obj: Any, path: str, edge_type: EdgeType = EdgeType.DATA, meta: Any = None):
@@ -86,9 +85,8 @@ class GraphBuilder:
                 node = self._visit(obj)
                 child_edges.append((node, path, edge_type, meta))
             elif isinstance(obj, Router):
-                # For routers, we visit the selector and routes
                 sel_node = self._visit(obj.selector)
-                child_edges.append((sel_node, path, edge_type, obj)) # Router object as meta
+                child_edges.append((sel_node, path, edge_type, obj))
                 for k, route_res in obj.routes.items():
                     r_node = self._visit(route_res)
                     child_edges.append((r_node, f"{path}.route[{k}]", EdgeType.ROUTER_ROUTE, None))
@@ -99,13 +97,11 @@ class GraphBuilder:
                 for k, v in obj.items():
                     visit_child(v, f"{path}.{k}" if path else str(k), edge_type, meta)
         
-        # Scan args and kwargs
         for i, val in enumerate(result.args):
             visit_child(val, str(i))
         for k, val in result.kwargs.items():
             visit_child(val, k)
         
-        # Scan special dependencies
         if result._condition:
             visit_child(result._condition, "_condition", EdgeType.CONDITION)
         if result._constraints:
@@ -115,20 +111,21 @@ class GraphBuilder:
         for dep in result._dependencies:
              visit_child(dep, "<sequence>", EdgeType.SEQUENCE)
 
-        # 2. Compute Merkle Hash
-        # The hash depends on the "Local Shell" (task name, literals) AND the IDs of children.
-        # ShallowHasher gives us the shell hash.
+        # 2. Compute Structural ID (Fast Hash)
+        # We use Python's built-in hash() which is faster than sha256.
+        # CRITICAL: We MUST include result._uuid to distinguish different instances
+        # of the same task in a sequence (e.g. [a(), a()]).
+        # This sacrifices "Automatic Structural Deduping" for "Instance Correctness".
         shell_hash = self.hasher.hash(result)
         
-        # Combine with child IDs to form a Deep Structural Hash
-        hasher = hashlib.sha256(shell_hash.encode())
-        for child, path, etype, _ in child_edges:
-            # We mix in the Child ID, the Arg Path, and Edge Type.
-            # This ensures structural uniqueness.
-            combo = f"{child.id}|{path}|{etype.name}"
-            hasher.update(combo.encode())
+        # Combine shell, UUID, and children IDs
+        # We use a tuple to hash, which is very efficient in Python
+        child_hashes = tuple((c.id, path, etype) for c, path, etype, _ in child_edges)
         
-        node_hash = hasher.hexdigest()
+        # The node_hash uniquely identifies this specific instance in the graph
+        node_hash_int = hash((shell_hash, result._uuid, child_hashes))
+        # Convert to string for ID compatibility
+        node_hash = f"{node_hash_int:x}"
 
         # 3. Create or Get Canonical Node
         node_factory = lambda: self._create_node_from_lazy_result(result, node_hash)
@@ -139,7 +136,6 @@ class GraphBuilder:
         if created_new:
             self.graph.add_node(node)
             
-            # Static Analysis for TCO (Shadow Nodes)
             if result.task.func:
                 if not getattr(result.task, "_tco_analysis_done", False):
                     assign_tco_cycle_ids(result.task)
@@ -150,10 +146,9 @@ class GraphBuilder:
                 for target_task in potential_targets:
                     self._visit_shadow_recursive(node, target_task)
             
-            # Add edges (now that we have the parent node)
             for child, path, etype, meta in child_edges:
                 edge = Edge(source=child, target=node, arg_name=path, edge_type=etype)
-                if etype == EdgeType.DATA and meta: # It's a router selector
+                if etype == EdgeType.DATA and meta:
                      edge.router = meta
                 self.graph.add_edge(edge)
 
@@ -176,16 +171,13 @@ class GraphBuilder:
             self._visit_shadow_recursive(target_node, next_task)
 
     def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
-        # TODO: Implement Merkle hashing for MappedLazyResult too.
-        # For now, keeping legacy behavior but ensuring UUID reuse works locally.
         if result._uuid in self._visited_instances:
             return self._visited_instances[result._uuid]
             
-        # Fallback to shallow hash for now (less critical for recursion benchmarks)
-        # In a full implementation, this should mirror _visit_lazy_result
         shallow_hash = self.hasher.hash(result) 
-        # append UUID to prevent collisions in fallback mode
-        unique_hash = f"{shallow_hash}:{result._uuid}"
+        # append UUID to prevent collisions
+        node_hash_int = hash((shallow_hash, result._uuid))
+        unique_hash = f"{node_hash_int:x}"
 
         def node_factory():
             input_bindings = {}
@@ -210,7 +202,6 @@ class GraphBuilder:
         if created_new:
             self.graph.add_node(node)
         
-        # Scan children (simplified for mapped)
         def scan(obj, path):
              if isinstance(obj, (LazyResult, MappedLazyResult)):
                  src = self._visit(obj)

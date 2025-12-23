@@ -156,7 +156,7 @@ class GraphExecutionStrategy:
                     last_tco_cycle_id = None
 
                 # 2. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph)
+                required_resources = self.resource_container.scan(graph, data_tuple)
                 self.resource_container.setup(
                     required_resources,
                     active_resources,

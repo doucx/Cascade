@@ -1,6 +1,6 @@
 import inspect
 from contextlib import ExitStack
-from typing import Any, Dict, Callable, Union, Generator, Set
+from typing import Any, Dict, Callable, Union, Generator, Set, Tuple
 
 from cascade.graph.model import Graph
 from cascade.spec.resource import ResourceDefinition, Inject
@@ -32,26 +32,42 @@ class ResourceContainer:
         """Overrides a resource provider (useful for testing)."""
         self._resource_providers[name] = new_provider
 
-    def scan(self, graph: Graph) -> Set[str]:
+    def scan(self, graph: Graph, data_tuple: Tuple[Any, ...]) -> Set[str]:
         """
-        Scans the graph to identify all resources required by the nodes.
+        Scans the graph and data tuple to identify all resources required by the nodes.
         """
         required = set()
-        for node in graph.nodes:
-            for value in node.literal_inputs.values():
-                if isinstance(value, Inject):
-                    required.add(value.resource_name)
+        
+        # 1. Scan DataTuple for explicit Inject objects passed as arguments
+        for item in data_tuple:
+            self._scan_item(item, required)
 
+        # 2. Scan Node Signatures for Inject defaults
+        for node in graph.nodes:
             if node.signature:
                 for param in node.signature.parameters.values():
                     if isinstance(param.default, Inject):
                         required.add(param.default.resource_name)
             elif node.callable_obj:
-                sig = inspect.signature(node.callable_obj)
-                for param in sig.parameters.values():
-                    if isinstance(param.default, Inject):
-                        required.add(param.default.resource_name)
+                try:
+                    sig = inspect.signature(node.callable_obj)
+                    for param in sig.parameters.values():
+                        if isinstance(param.default, Inject):
+                            required.add(param.default.resource_name)
+                except (ValueError, TypeError):
+                    pass
         return required
+
+    def _scan_item(self, item: Any, required: Set[str]):
+        """Recursively scans an item for Inject objects."""
+        if isinstance(item, Inject):
+            required.add(item.resource_name)
+        elif isinstance(item, (list, tuple)):
+            for sub in item:
+                self._scan_item(sub, required)
+        elif isinstance(item, dict):
+            for sub in item.values():
+                self._scan_item(sub, required)
 
     def setup(
         self,
@@ -63,8 +79,6 @@ class ResourceContainer:
     ) -> None:
         """
         Initializes required resources that are not yet active.
-        Decides whether to put them in run_stack or step_stack based on scope.
-        Updates active_resources in-place.
         """
 
         def get_or_create(name: str):

@@ -25,6 +25,7 @@ class ArgumentResolver:
         state_backend: StateBackend,
         resource_context: Dict[str, Any],
         data_tuple: Tuple[Any, ...],
+        instance_map: Dict[str, Node],
         user_params: Dict[str, Any] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
         
@@ -52,7 +53,9 @@ class ArgumentResolver:
         
         for edge in incoming_edges:
             if edge.edge_type == EdgeType.DATA:
-                val = self._resolve_dependency(edge, node.id, state_backend, graph)
+                val = self._resolve_dependency(
+                    edge, node.id, state_backend, graph, instance_map
+                )
                 
                 if edge.arg_name.isdigit():
                     idx = int(edge.arg_name)
@@ -103,14 +106,21 @@ class ArgumentResolver:
         return obj
 
     def _resolve_dependency(
-        self, edge: Edge, consumer_id: str, state_backend: StateBackend, graph: Graph
+        self,
+        edge: Edge,
+        consumer_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
+        instance_map: Dict[str, Node],
     ) -> Any:
         # ** CORE ROUTER LOGIC FIX **
         if edge.router:
             # This edge represents a Router. Its source is the SELECTOR.
             # We must resolve the selector's value first.
-            selector_result = self._get_node_result(edge.source.id, consumer_id, "router_selector", state_backend, graph)
-            
+            selector_result = self._get_node_result(
+                edge.source.id, consumer_id, "router_selector", state_backend, graph
+            )
+
             # Use the result to pick the correct route.
             try:
                 selected_route_lr = edge.router.routes[selector_result]
@@ -119,12 +129,18 @@ class ArgumentResolver:
                     f"Router selector for '{consumer_id}' returned '{selector_result}', "
                     f"but no matching route found in {list(edge.router.routes.keys())}"
                 )
-            
+
             # Now, resolve the result of the SELECTED route.
-            return self._get_node_result(selected_route_lr._uuid, consumer_id, edge.arg_name, state_backend, graph)
+            # Convert instance UUID to canonical node ID using the map.
+            selected_node = instance_map[selected_route_lr._uuid]
+            return self._get_node_result(
+                selected_node.id, consumer_id, edge.arg_name, state_backend, graph
+            )
         else:
             # Standard dependency
-            return self._get_node_result(edge.source.id, consumer_id, edge.arg_name, state_backend, graph)
+            return self._get_node_result(
+                edge.source.id, consumer_id, edge.arg_name, state_backend, graph
+            )
 
     def _get_node_result(
         self, node_id: str, consumer_id: str, arg_name: str, 

@@ -51,6 +51,7 @@ class NodeProcessor:
         run_id: str,
         params: Dict[str, Any],
         sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
+        instance_map: Dict[str, Node],
     ) -> Any:
         """
         Executes a node with all associated policies (constraints, cache, retry).
@@ -83,6 +84,7 @@ class NodeProcessor:
                 run_id,
                 params,
                 sub_graph_runner,
+                instance_map,
             )
         finally:
             await self.resource_manager.release(requirements)
@@ -97,10 +99,17 @@ class NodeProcessor:
         run_id: str,
         params: Dict[str, Any],
         sub_graph_runner: Callable,
+        instance_map: Dict[str, Node],
     ) -> Any:
         # 3. Resolve Arguments
         args, kwargs = self.arg_resolver.resolve(
-            node, graph, state_backend, active_resources, data_tuple, user_params=params
+            node,
+            graph,
+            state_backend,
+            active_resources,
+            data_tuple,
+            user_params=params,
+            instance_map=instance_map,
         )
 
         start_time = time.time()

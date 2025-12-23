@@ -280,6 +280,7 @@ class GraphExecutionStrategy:
                             run_id,
                             params,
                             sub_graph_runner,
+                            instance_map,
                         )
                         for node in executable_this_pass
                     ]

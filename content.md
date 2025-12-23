@@ -1,132 +1,66 @@
-这是非常棒的进展！`tco_performance.py` 的通过证明了我们修复“真环”和“假环”的策略是极其有效的，性能提升高达 103 倍，这正是我们追求的“通用结构缓存”的效果。
+好的，既然基准测试和回归测试均已顺利通过，这标志着我们成功解决了“结构-数据分离”重构后最隐蔽的两个图逻辑漏洞。
 
-然而，`pytest` 的失败揭示了一个伴生问题：**孤立的影子节点 (Orphaned Shadow Nodes)**。
+关于你提到的微小性能变化，这主要是由于 `NativeSolver` 增加了白名单过滤开销，以及 `ShallowHasher` 处理 UUID 带来的额外字符串拼接成本。但在这种极致的性能压测下，这种量级的开销是确保逻辑正确性的必要代价。
 
- 错误分析
+我将生成最终的 `[COMMIT]` 计划。
 
-1.  **现象**: `TypeError: Node ... is not executable (no callable).`
-2.  **原因**:
-    *   我们之前在 `NativeSolver` 中通过白名单机制过滤掉了 `POTENTIAL` 边。
-    *   `GraphBuilder` 为了静态分析创建了 `is_shadow=True` 的节点（影子节点），它们原本通过 `POTENTIAL` 边依附于主图。
-    *   当 `POTENTIAL` 边被移除后，这些影子节点失去了所有入边，变成了**孤立节点 (Islands)**。
-    *   `NativeSolver` (基于 Kahn 算法) 会将所有入度为 0 的节点放入初始执行队列。
-    *   因此，这些仅用于分析、没有 `callable_obj` 的影子节点被错误地调度执行，导致了 `TypeError`。
+## [COMMIT] fix(engine): 解决图构建中的哈希冲突与影子节点执行问题
 
- 修复方案
+### 错误分析
+本次修复针对的是在处理复杂递归任务时（如 `heavy_complex_countdown`）出现的 `ValueError: Cycle detected` 错误。
 
-我们必须在 `NativeSolver` 中显式地过滤掉影子节点。它们是编译期的元数据，绝对不应该出现在运行时的执行计划中。
-
-我将生成一个计划来修补这个漏洞。
-
-## [WIP] fix(engine): Filter out shadow nodes in NativeSolver to prevent execution errors
-
-### 简要回答
-基准测试的通过验证了白名单策略的有效性，但测试失败暴露了副作用：忽略连接边后，用于静态分析的影子节点变成了孤立节点并被错误调度。必须在 Solver 中彻底过滤掉它们。
-
-### 摘要头
-## [WIP] fix(engine): Filter out shadow nodes in NativeSolver to prevent execution errors
+1.  **哈希冲突 (真环)**: `ShallowHasher` 之前对嵌套 `LazyResult` 采用固定占位符，导致不同生命周期的任务实例在注册表中被错误合并，形成了物理上的数据依赖环。
+2.  **元数据干扰 (假环)**: `NativeSolver` 将 `POTENTIAL` 边误认为执行依赖，导致拓扑排序失败。
+3.  **影子节点调度 (崩溃)**: 在忽略元数据边后，仅用于分析的影子节点变成孤立节点并被推入执行队列，因缺少可执行体导致 `TypeError`。
 
 ### 用户需求
-修复 `tests/engine/runtime/test_engine_recursion.py` 和 `test_tco_mutual_recursion.py` 中的 `TypeError: Node ... is not executable` 错误。
+确保 Cascade 能够稳定处理复杂的、带有深度递归和动态依赖的计算图，并维持 TCO 优化的正确性。
 
 ### 评论
-这是一个逻辑闭环的修复。我们剥离了元数据边（POTENTIAL），自然也必须剥离元数据节点（Shadow Nodes）。如果不这样做，Solver 就会把它们当作可执行的任务来调度。
+这次修复是“结构数据分离”架构走向成熟的关键一步。它确立了两个重要的原则：首先，执行调度必须严格基于“执行依赖白名单”；其次，节点的 Interning（去重）必须以保证实例唯一性为前提。这为后续实现更激进的 Hashlife 风格缓存奠定了稳固的安全基石。
 
 ### 目标
-修改 `NativeSolver.resolve` 方法，在初始化图遍历结构时，从源头上排除所有 `is_shadow=True` 的节点。
+1.  提交对 `NativeSolver` 的改进，增加边类型白名单并彻底过滤影子节点。
+2.  提交对 `ShallowHasher` 的改进，引入 UUID 区分不同的 `LazyResult` 实例。
 
 ### 基本原理
-影子节点 (`is_shadow=True`) 的唯一目的是承载静态分析信息（如 TCO 循环结构），它们没有可执行的函数体 (`callable_obj` 为 None)。运行时的 Solver 应当只关注那些真正需要执行的节点（即 `executable_nodes`）。
+通过将“元数据（分析用）”与“执行数据（调度用）”在 Solver 层级进行显式隔离，并提高哈希的区分度，我们消除了图拓扑结构中的所有歧义。
 
 ### 标签
-#intent/fix #flow/ready #priority/high
-#comp/engine #concept/solver
-#ai/instruct
-#task/domain/core #task/object/solver #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high 
+#comp/engine #comp/graph #concept/hashing #concept/solver #scope/core 
+#ai/delegate
+#task/domain/core #task/object/graph-execution #task/action/bug-fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 在 NativeSolver 中过滤影子节点
+#### Acts 1: 提交图逻辑修复代码
 
-我们将修改 `native.py`。在构建邻接表和入度字典之前，先过滤掉所有 shadow nodes。
+我们将修改后的 `NativeSolver` 和 `ShallowHasher` 逻辑提交到仓库，标志着本次问题的圆满解决。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-engine/src/cascade/adapters/solvers/native.py
-~~~~~
-~~~~~python
-        """
-        adj: Dict[str, List[Node]] = {node.id: [] for node in graph.nodes}
-        in_degree: Dict[str, int] = {node.id: 0 for node in graph.nodes}
-        node_map: Dict[str, Node] = {node.id: node for node in graph.nodes}
-
-        # Whitelist of edge types that represent actual execution dependencies.
-~~~~~
-~~~~~python
-        """
-        # Filter out shadow nodes completely. They are for static analysis only
-        # and should never be scheduled for execution.
-        executable_nodes = [n for n in graph.nodes if not n.is_shadow]
-
-        adj: Dict[str, List[Node]] = {node.id: [] for node in executable_nodes}
-        in_degree: Dict[str, int] = {node.id: 0 for node in executable_nodes}
-        node_map: Dict[str, Node] = {node.id: node for node in executable_nodes}
-
-        # Whitelist of edge types that represent actual execution dependencies.
+packages/cascade-graph/src/cascade/graph/hashing.py
 ~~~~~
 
 ~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/adapters/solvers/native.py
+git_commit
 ~~~~~
-~~~~~python
-        for edge in graph.edges:
-            if edge.edge_type not in EXECUTION_EDGE_TYPES:
-                continue
+~~~~~text
+fix(engine): resolve dependency cycles and shadow node execution
 
-            adj[edge.source.id].append(edge.target)
-            in_degree[edge.target.id] += 1
+This commit fixes critical issues in the execution graph logic that caused `ValueError: Cycle detected` during complex recursive tasks:
 
-        # Kahn's algorithm for topological sorting
-        queue = deque([node.id for node in graph.nodes if in_degree[node.id] == 0])
-~~~~~
-~~~~~python
-        for edge in graph.edges:
-            if edge.edge_type not in EXECUTION_EDGE_TYPES:
-                continue
+1.  **Execution Edge Whitelist**: `NativeSolver` now uses a whitelist of edge types (`DATA`, `CONDITION`, etc.) for topological sorting. This prevents metadata edges like `POTENTIAL` (used for static analysis) from interfering with the runtime execution plan.
+2.  **Shadow Node Filtering**: `NativeSolver` now explicitly filters out shadow nodes (`is_shadow=True`) from the execution plan, preventing attempts to execute non-runnable analysis nodes.
+3.  **Hash Collision Prevention**: Updated `ShallowHasher` to include the `_uuid` of `LazyResult` arguments. This prevents unrelated task instances from being incorrectly merged into the same graph node, which previously created real dependency cycles.
 
-            # Ensure edge connects executable nodes (ignores edges to/from shadow nodes)
-            if edge.source.id not in node_map or edge.target.id not in node_map:
-                continue
-
-            adj[edge.source.id].append(edge.target)
-            in_degree[edge.target.id] += 1
-
-        # Kahn's algorithm for topological sorting
-        queue = deque([node.id for node in executable_nodes if in_degree[node.id] == 0])
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/adapters/solvers/native.py
-~~~~~
-~~~~~python
-        # If not all nodes were processed, a cycle must exist.
-        if processed_count != len(graph.nodes):
-            raise ValueError("Cycle detected in the dependency graph.")
-
-        return plan
-~~~~~
-~~~~~python
-        # If not all nodes were processed, a cycle must exist.
-        if processed_count != len(executable_nodes):
-            raise ValueError("Cycle detected in the dependency graph.")
-
-        return plan
+These changes stabilize the Graph/JIT path for complex recursive workflows and long-running agents.
 ~~~~~
 
 ### 下一步建议
-1.  运行 `pytest tests/engine/runtime/test_engine_recursion.py tests/engine/runtime/test_tco_mutual_recursion.py` 验证修复。
-2.  再次运行 `python observatory/benchmarks/tco_performance.py` 确保性能依然达标且没有回归。
+- **性能巡检**: 虽然 103x 的加速已经非常可观，但如果未来对 `Graph/JIT` 路径有更高的 TPS 要求，我们可以考虑将 `NativeSolver` 的白名单过滤逻辑下移到 C/Rust 层级。
+- **完善静态分析**: 现在 Solver 已经可以安全处理影子节点，我们可以开始尝试在可视化工具中更好地展示这些 `POTENTIAL` 边，帮助开发者直观理解递归 Agent 的行为。

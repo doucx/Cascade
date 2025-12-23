@@ -1,5 +1,4 @@
 from typing import Any
-from cascade.spec.lazy_types import LazyResult
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, EdgeType
 

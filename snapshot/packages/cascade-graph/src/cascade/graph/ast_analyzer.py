@@ -101,7 +101,10 @@ def analyze_task_source(task: Task) -> List[Task]:
     Results are cached on the Task object to avoid redundant AST parsing.
     """
     # 1. Return cached results if available
-    if hasattr(task, "_potential_tco_targets") and task._potential_tco_targets is not None:
+    if (
+        hasattr(task, "_potential_tco_targets")
+        and task._potential_tco_targets is not None
+    ):
         return task._potential_tco_targets
 
     task_func = task.func
@@ -158,17 +161,18 @@ def assign_tco_cycle_ids(root_task: Task) -> None:
                 try:
                     start_index = path.index(target)
                     cycle_members = path[start_index:]
-                    
+
                     # Generate a deterministic ID for this cycle
                     # Sort names to ensure stability regardless of entry point
                     member_names = sorted(t.name for t in cycle_members if t.name)
                     cycle_signature = "|".join(member_names)
                     # Use a simple hash of the signature
                     import hashlib
+
                     cycle_id = hashlib.md5(cycle_signature.encode()).hexdigest()
 
                     for member in cycle_members:
-                        # Only overwrite if not set or allow merging? 
+                        # Only overwrite if not set or allow merging?
                         # For simplicity, last write wins or check consistency.
                         member._tco_cycle_id = cycle_id
 

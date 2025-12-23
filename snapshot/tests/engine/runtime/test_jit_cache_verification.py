@@ -1,4 +1,3 @@
-import asyncio
 import pytest
 import cascade as cs
 from cascade.runtime import Engine, MessageBus
@@ -11,9 +10,9 @@ async def test_jit_cache_is_hit_for_stable_structures(mocker):
     """
     Verifies that the JIT cache mechanism works when the Node structure
     (including arguments) is EXACTLY the same.
-    
-    Current Limitation: Since Node.id includes arguments, f(10) and f(9) 
-    are different nodes. To verify the cache works, we must use a 0-arg 
+
+    Current Limitation: Since Node.id includes arguments, f(10) and f(9)
+    are different nodes. To verify the cache works, we must use a 0-arg
     recursion that keeps the Node ID constant.
     """
     stop_flag = False
@@ -24,7 +23,7 @@ async def test_jit_cache_is_hit_for_stable_structures(mocker):
         if stop_flag:
             return "done"
         stop_flag = True
-        # Recurse with NO arguments changed. 
+        # Recurse with NO arguments changed.
         # This produces the exact same Node.id as the current one.
         return zero_arg_recursion()
 
@@ -41,7 +40,7 @@ async def test_jit_cache_is_hit_for_stable_structures(mocker):
     result = await engine.run(target)
 
     assert result == "done"
-    
+
     # We expect exactly 1 call to resolve().
     # The 1st iteration calls resolve() and populates cache.
     # The 2nd iteration finds the exact same Node.id in _plan_cache and skips resolve().
@@ -51,10 +50,10 @@ async def test_jit_cache_is_hit_for_stable_structures(mocker):
 @pytest.mark.asyncio
 async def test_jit_cache_is_hit_for_complex_stable_structures(mocker):
     """
-    Verifies that JIT cache works even for multi-node graphs, 
+    Verifies that JIT cache works even for multi-node graphs,
     as long as the structure is stable.
     """
-    
+
     @cs.task
     def noop():
         return "ok"
@@ -67,7 +66,7 @@ async def test_jit_cache_is_hit_for_complex_stable_structures(mocker):
         if stop_flag:
             return "done"
         stop_flag = True
-        
+
         # Crucial: We must reuse the EXACT same _dep instance (or a structurally identical one)
         # to ensure the Merkle hash remains stable.
         # Since 'noop()' produces a new LazyResult, but its structure is constant (0 args),

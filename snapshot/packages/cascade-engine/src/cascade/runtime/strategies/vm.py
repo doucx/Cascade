@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict, List
+from typing import Any, Dict
 
 from cascade.graph.compiler import BlueprintBuilder
 from cascade.runtime.vm import VirtualMachine

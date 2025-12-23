@@ -12,7 +12,9 @@ class FlowManager:
     skipping tasks (Conditions) and pruning branches (Router).
     """
 
-    def __init__(self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]):
+    def __init__(
+        self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]
+    ):
         self.graph = graph
         self.target_node_id = target_node_id
         self.instance_map = instance_map

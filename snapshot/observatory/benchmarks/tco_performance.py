@@ -61,16 +61,16 @@ def stable_complex_loop(counter_box: list, _dummy=None):
     A multi-node task that simulates a 'cache-friendly' TCO loop.
     It uses a mutable list (counter_box) to track iterations, so the
     arguments passed to the recursive call remain structurally IDENTICAL.
-    
+
     This allows Node.id to be stable, triggering the JIT cache.
     """
     if counter_box[0] <= 0:
         return "done"
-    
+
     counter_box[0] -= 1
-    
+
     # We pass the SAME _dummy structure every time.
-    # Note: If _dummy was rebuilt here, it would still hash the same 
+    # Note: If _dummy was rebuilt here, it would still hash the same
     # because it's built from static calls.
     return stable_complex_loop(counter_box, _dummy=_dummy)
 
@@ -161,7 +161,7 @@ async def main():
     static_dep_chain = noop()
     for _ in range(10):
         static_dep_chain = noop(_dummy=static_dep_chain)
-    
+
     stable_target = stable_complex_loop([iterations], _dummy=static_dep_chain)
     stable_time = await run_benchmark(engine, stable_target, iterations)
     stable_tps = iterations / stable_time

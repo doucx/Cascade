@@ -30,8 +30,9 @@ def test_visualize_diamond_graph():
 
     # Pre-build to get the instance map for stable IDs
     from cascade.graph.build import build_graph
+
     _, instance_map = build_graph(r_d)
-    
+
     node_a = instance_map[r_a._uuid]
     node_b = instance_map[r_b._uuid]
     node_c = instance_map[r_c._uuid]
@@ -88,6 +89,7 @@ def test_visualize_special_edge_types():
     )
 
     from cascade.graph.build import build_graph
+
     _, instance_map = build_graph(target)
 
     node_ds = instance_map[data_source._uuid]
@@ -101,9 +103,7 @@ def test_visualize_special_edge_types():
     assert f'"{node_ds.id}" -> "{node_target.id}" [label="data_in"];' in dot_string
 
     # 2. Assert Condition Edge (dashed, gray)
-    expected_cond_edge = (
-        f'"{node_cond.id}" -> "{node_target.id}" [style=dashed, color=gray, label="run_if"]'
-    )
+    expected_cond_edge = f'"{node_cond.id}" -> "{node_target.id}" [style=dashed, color=gray, label="run_if"]'
     assert expected_cond_edge in dot_string
 
     # 3. Assert Constraint Edge (dotted, purple)

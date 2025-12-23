@@ -1,4 +1,3 @@
-import asyncio
 import pytest
 import cascade as cs
 from cascade.runtime import Engine, MessageBus

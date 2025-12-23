@@ -5,6 +5,7 @@ from cascade.runtime import Engine, MessageBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
+
 @pytest.fixture
 def engine():
     return Engine(
@@ -13,17 +14,18 @@ def engine():
         bus=MessageBus(),
     )
 
+
 @pytest.mark.asyncio
 async def test_mutual_recursion_tco_optimization(engine):
     """
     Verifies that mutual recursion (A -> B -> A) is optimized via TCO.
     If the engine builds a new graph for every step without releasing memory/stack,
     or if it fails to use the fast path, this might be slow or crash on low-resource envs.
-    
-    But primarily we check correctness here. The O(1) property is verified by 
+
+    But primarily we check correctness here. The O(1) property is verified by
     inspecting internal cache behavior if we wanted to be deeper.
     """
-    
+
     # Increase depth to ensure we exceed default stack limits if TCO fails
     # Standard Python recursion limit is 1000. We do 2000 steps (1000 loops).
     sys.setrecursionlimit(1500)
@@ -44,7 +46,7 @@ async def test_mutual_recursion_tco_optimization(engine):
     # Force analysis to ensure cycle IDs are assigned (though engine should do it)
     # from cascade.graph.ast_analyzer import assign_tco_cycle_ids
     # assign_tco_cycle_ids(task_a)
-    
+
     result = await engine.run(task_a(TOTAL_STEPS))
     assert result == "Done"
 

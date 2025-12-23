@@ -75,6 +75,8 @@ class ShallowHasher:
             self._hash_components.append("<unreprable>")
 
     def _visit_lazy(self, lr: LazyResult):
+        # Include UUID to ensure topological distinctness in GraphBuilder
+        self._hash_components.append(f"UUID({lr._uuid})")
         task_name = getattr(lr.task, "name", "unknown")
         self._hash_components.append(f"Task({task_name})")
 
@@ -103,6 +105,8 @@ class ShallowHasher:
 
 
     def _visit_mapped(self, mlr: MappedLazyResult):
+        # Include UUID to ensure topological distinctness in GraphBuilder
+        self._hash_components.append(f"UUID({mlr._uuid})")
         factory_name = getattr(mlr.factory, "name", "unknown")
         self._hash_components.append(f"Map({factory_name})")
 

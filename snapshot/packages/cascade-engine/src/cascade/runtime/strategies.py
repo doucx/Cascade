@@ -68,7 +68,7 @@ class GraphExecutionStrategy:
             return False
         if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
             return False
-        
+
         # Explicit dependencies
         if lr._dependencies:
             return False
@@ -103,7 +103,7 @@ class GraphExecutionStrategy:
         active_resources: Dict[str, Any],
     ) -> Any:
         current_target = target
-        
+
         # Optimization state for TCO Fast Path
         last_executed_task = None
         last_graph = None
@@ -152,7 +152,7 @@ class GraphExecutionStrategy:
                         graph = build_graph(current_target)
                         plan = self.solver.resolve(graph)
                         self._graph_cache[struct_hash] = (graph, plan)
-                    
+
                     # Update cache for next iteration possibility
                     last_graph = graph
                     last_plan = plan

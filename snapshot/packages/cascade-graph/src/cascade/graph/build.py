@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import inspect
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -96,18 +96,13 @@ class GraphBuilder:
         if scan_for_tco and result.task.func:
             # Check cache on Task object to avoid re-parsing AST
             if getattr(result.task, "_potential_tco_targets", None) is None:
-                result.task._potential_tco_targets = analyze_task_source(result.task.func)
+                result.task._potential_tco_targets = analyze_task_source(
+                    result.task.func
+                )
 
             potential_targets = result.task._potential_tco_targets
             for target_task in potential_targets:
                 potential_uuid = f"potential:{result._uuid}:{target_task.name}"
-                
-                shadow_lr = LazyResult(
-                    task=target_task,
-                    args=(),
-                    kwargs={},
-                    _uuid=potential_uuid
-                )
 
                 # Shadow nodes are created by directly instantiating Node,
                 # not by visiting the LazyResult, to mark them explicitly.
@@ -120,12 +115,12 @@ class GraphBuilder:
                 )
                 self.graph.add_node(target_node)
                 self._visited[potential_uuid] = target_node
-                
+
                 edge = Edge(
                     source=node,
                     target=target_node,
                     arg_name="<potential>",
-                    edge_type=EdgeType.POTENTIAL
+                    edge_type=EdgeType.POTENTIAL,
                 )
                 self.graph.add_edge(edge)
 

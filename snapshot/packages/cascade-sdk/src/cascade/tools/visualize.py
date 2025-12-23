@@ -1,4 +1,4 @@
-from typing import Any, Set
+from typing import Any
 from cascade.spec.lazy_types import LazyResult
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, EdgeType
@@ -20,7 +20,7 @@ def visualize(target: LazyResult[Any]) -> str:
     # 1. Define Nodes
     for node in graph.nodes:
         shape = _get_node_shape(node)
-        
+
         # Default Style
         style = '"rounded,filled"'
         fillcolor = "white"
@@ -35,10 +35,10 @@ def visualize(target: LazyResult[Any]) -> str:
             label_suffix = "\\n(Potential)"
 
         label = f"{node.name}\\n({node.node_type}){label_suffix}"
-        
+
         dot_parts.append(
             f'  "{node.id}" [label="{label}", shape={shape}, style={style}, '
-            f'fillcolor={fillcolor}, fontcolor={fontcolor}];'
+            f"fillcolor={fillcolor}, fontcolor={fontcolor}];"
         )
 
     # 2. Define Edges
@@ -67,7 +67,7 @@ def visualize(target: LazyResult[Any]) -> str:
         else:
             style = f' [label="{edge.arg_name}"]'
 
-        dot_parts.append(f'  \"{edge.source.id}\" -> \"{edge.target.id}\"{style};')
+        dot_parts.append(f'  "{edge.source.id}" -> "{edge.target.id}"{style};')
 
     dot_parts.append("}")
     return "\n".join(dot_parts)

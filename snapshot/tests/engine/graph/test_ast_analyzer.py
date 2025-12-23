@@ -1,22 +1,25 @@
-import pytest
 from cascade.spec.task import task
 from cascade.graph.ast_analyzer import analyze_task_source
 
 # --- Setup Dummy Tasks ---
 
+
 @task
 def downstream_a(x):
     return x
+
 
 @task
 def downstream_b(x):
     return x * 2
 
+
 # --- Scenarios ---
+
 
 def test_analyze_direct_return():
     """Test standard 'return task(...)' pattern with branching."""
-    
+
     @task
     def orchestrator(x):
         if x > 5:
@@ -25,15 +28,16 @@ def test_analyze_direct_return():
             return downstream_b(x)
 
     targets = analyze_task_source(orchestrator.func)
-    
+
     target_names = {t.name for t in targets}
     assert "downstream_a" in target_names
     assert "downstream_b" in target_names
     assert len(targets) == 2
 
+
 def test_analyze_map_return():
     """Test 'return task.map(...)' pattern."""
-    
+
     @task
     def mapper_orchestrator(items):
         return downstream_a.map(x=items)
@@ -41,6 +45,7 @@ def test_analyze_map_return():
     targets = analyze_task_source(mapper_orchestrator.func)
     target_names = {t.name for t in targets}
     assert "downstream_a" in target_names
+
 
 def test_analyze_with_alias_in_globals():
     """Test when tasks are aliased in global scope."""
@@ -54,8 +59,10 @@ def test_analyze_with_alias_in_globals():
     target_names = {t.name for t in targets}
     assert "downstream_a" in target_names
 
+
 def test_analyze_no_tco():
     """Test that regular returns are ignored."""
+
     @task
     def simple_calc():
         return 42
@@ -63,17 +70,19 @@ def test_analyze_no_tco():
     targets = analyze_task_source(simple_calc.func)
     assert len(targets) == 0
 
+
 def test_analyze_complex_attribute_access():
     """Test resolving tasks within namespaces."""
+
     class Actions:
         op = downstream_b
-    
+
     actions = Actions()
-    
+
     @task
     def namespace_user():
         return actions.op(10)
-        
+
     targets = analyze_task_source(namespace_user.func)
     target_names = {t.name for t in targets}
     assert "downstream_b" in target_names

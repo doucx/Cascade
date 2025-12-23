@@ -23,7 +23,11 @@ class ReferenceResolver:
     def _get_closure_vars(self, func: Callable) -> Dict[str, Any]:
         """Extracts variables from the function's closure."""
         closure_vars = {}
-        if hasattr(func, "__closure__") and func.__closure__ and func.__code__.co_freevars:
+        if (
+            hasattr(func, "__closure__")
+            and func.__closure__
+            and func.__code__.co_freevars
+        ):
             for name, cell in zip(func.__code__.co_freevars, func.__closure__):
                 try:
                     closure_vars[name] = cell.cell_contents
@@ -82,7 +86,7 @@ class TcoVisitor(ast.NodeVisitor):
             # Check if it is a Task
             if isinstance(func_obj, Task):
                 self.potential_targets.add(func_obj)
-            
+
             # Check for .map calls: Task.map(...)
             if inspect.ismethod(func_obj) and func_obj.__name__ == "map":
                 # Check if the bound self is a Task

@@ -5,7 +5,6 @@ from cascade.graph.model import Node, Graph, Edge, EdgeType
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
-from cascade.spec.binding import Constant
 from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
 from cascade.spec.protocols import StateBackend
 

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(core): 清理 SlotRef 残留并修复序列化以完成节点模型重构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766492834.2360723, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(core): Remove Constant import and usage to finalize refactoring", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766492953.7525525, "duration_ms": 0}}

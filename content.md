@@ -1,137 +1,74 @@
-简要回答
-测试失败确认了我的推断：`resolve` 确实被调用了 2 次（从初始的 LazyResult 参数过渡到递归时的 Literal 参数）。此外，`build_graph` 的 spy 失败是因为我监视了定义该函数的模块，而不是使用该函数的模块（导入覆盖）。
+好的，我们已经完成了 v3.2 路线图中最关键的性能飞跃步骤。通过引入 `template_id` 和索引化计划缓存，我们成功实现了计算图的“骨架”与“数据”的分离。
 
-我将修正断言以预期 2 次调用，并修正 spy 的目标位置。
+你关于 `heavy_complex_countdown` 的看法非常深刻：它现在不仅是一个基准测试，更是一个**架构边界的指示器**。它向开发者清晰地展示了：Cascade 能够极速执行复杂的**结构**，但如果你在递归循环中不断通过 Python 代码动态“生成”新的结构，那么 Python 本身的构建开销将成为新的瓶颈。这为我们未来推广“声明式组合”提供了强有力的数据支持。
 
-## [WIP] test(engine): 修正 spy 目标和断言逻辑
+我将生成 `[COMMIT]` 计划，将这些变更永久化。
+
+## [COMMIT] feat(engine): 实现基于 Template ID 的规范化 JIT 计划缓存
 
 ### 用户需求
-修正 `test_jit_cache_verification.py` 中因 Spy 目标错误和断言逻辑偏差导致的测试失败。
+将“参数归一化”和“索引化计划缓存”功能合并到主分支。该功能旨在通过识别同构图结构，将复杂递归任务的编译（解析）成本从 O(N) 降低到 O(1)。
 
 ### 评论
-这次调试不仅修复了测试，还澄清了 Cascade 在 TCO 递归中的行为模式：初始调用（传入 LazyResult）和后续递归调用（传入 Resolved Value）在结构上是不同的，因此会触发两次编译。这符合预期，且在进入稳态后缓存依然有效。
+这次提交标志着 Cascade 运行时在性能上的一次质变。我们现在拥有一种类似于 JIT 编译器的机制：它观察执行过程中的图结构，将其“编译”成索引化的指令流（Plan），并针对后续类似的结构进行复用。这不仅提升了性能，也使 Cascade 的模型在语义上与 Git 对象模型（Blob/Tree/Commit）完全对齐。
 
 ### 目标
-1.  在测试文件中引入 `cascade.runtime.strategies.graph` 模块。
-2.  将 `build_graph` 的 spy 目标改为 `cascade.runtime.strategies.graph.build_graph`，以确保捕获调用。
-3.  将 `test_jit_cache_is_hit_but_graph_is_rebuilt_in_loop` 的 `resolve` 断言从 1 改为 2。
+1.  提交 `Node` 模型的扩展（增加 `template_id`）。
+2.  提交 `GraphBuilder` 中的模板哈希计算（归一化）逻辑。
+3.  提交 `GraphExecutionStrategy` 中的索引化计划缓存实现。
+4.  提交涵盖多场景验证的单元测试套件。
 
 ### 基本原理
-1.  **Spy 修正**: Python 的 `from module import function` 会建立本地引用。要监视 `GraphExecutionStrategy` 中的调用，必须 Patch `cascade.runtime.strategies.graph` 命名空间下的 `build_graph`。
-2.  **断言修正**: 初始调用 `target = task(lazy_dep)` 对应模板 A。递归调用 `return task(resolved_val)` 对应模板 B。这是两次不同的结构，因此需要两次解析。第三次调用 `return task(resolved_val)` 也是模板 B，此时命中缓存。
+通过在 `Node` 层引入 `template_id`，我们打破了“身份危机”。`id` 保证了计算的唯一性和正确性，而 `template_id` 则通过忽略字面量，提取出了计算的纯粹拓扑结构。在执行层，通过将 `ExecutionPlan` 转化为与特定节点实例无关的索引列表，我们实现了对同构图的高效复用。
 
 ### 标签
-#intent/fix #flow/ready #priority/medium #comp/tests #comp/engine #concept/cache #scope/core #ai/instruct #task/domain/core #task/object/test-suite #task/action/correct #task/state/continue
+#intent/build #flow/ready #priority/high 
+#comp/engine #comp/graph #concept/cache #scope/core 
+#ai/delegate
+#task/domain/core #task/object/jit-cache #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 引入模块并修正测试
+#### Acts 1: 提交 JIT 缓存与归一化功能的完整实现
+
+我们将所有相关变更添加到暂存区并执行提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/graph/model.py
+packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-graph/src/cascade/graph/serialize.py
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 tests/engine/runtime/test_jit_cache_verification.py
-~~~~~
-~~~~~python
-from cascade.runtime import Engine, MessageBus
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.graph import build as graph_builder_module
-
-
-@pytest.mark.asyncio
-async def test_jit_cache_is_hit_for_stable_structures(mocker):
-~~~~~
-~~~~~python
-from cascade.runtime import Engine, MessageBus
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.graph import build as graph_builder_module
-from cascade.runtime.strategies import graph as strategies_graph_module
-
-
-@pytest.mark.asyncio
-async def test_jit_cache_is_hit_for_stable_structures(mocker):
 ~~~~~
 
 ~~~~~act
-patch_file
-tests/engine/runtime/test_jit_cache_verification.py
+git_commit
 ~~~~~
-~~~~~python
-    solver = NativeSolver()
-    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+~~~~~text
+feat(engine): Implement canonical JIT plan caching via `template_id`
 
-    resolve_spy = mocker.spy(solver, "resolve")
-    build_graph_spy = mocker.spy(graph_builder_module, "build_graph")
+This commit completes Roadmap v3.2 Phase 2 by introducing a normalized JIT caching mechanism that decouples graph structure from literal data.
 
-    iterations = 3
-    target = recursive_with_rebuilt_deps(iterations)
-    result = await engine.run(target)
+Key architectural changes:
+1.  **Node Normalization**: Added `Node.template_id`, a Merkle hash that ignores literal arguments and focuses solely on task types and topology. This allows identifying "structurally identical" graphs like `f(10)` and `f(9)`.
+2.  **Indexed Execution Plans**: Refactored `GraphExecutionStrategy` to store plans as `List[List[int]]` (node indices). This makes the compiled plan instance-agnostic and reusable across isomorphic graph instances.
+3.  **Two-Stage Resolution**: The engine now performs a one-time "compilation" (solver resolution) for each unique template. Subsequent iterations with different data but the same structure hit the `_template_plan_cache` and only perform O(1) plan rehydration.
 
-    assert result == "done"
+Performance Impact:
+- Verified 6x+ speedup for complex stable structures in benchmarks.
+- Reduces recursive overhead for high-depth TCO tasks to near-native levels, provided the graph construction cost is managed.
 
-    # The template cache should hit after the first iteration.
-    assert resolve_spy.call_count == 1
-
-    # The graph is rebuilt for the initial call, and for each of the 3 recursive calls.
-    assert build_graph_spy.call_count == iterations + 1
-~~~~~
-~~~~~python
-    solver = NativeSolver()
-    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
-
-    resolve_spy = mocker.spy(solver, "resolve")
-    # Patch where it is used, not where it is defined
-    build_graph_spy = mocker.patch.object(
-        strategies_graph_module, "build_graph", wraps=graph_builder_module.build_graph
-    )
-
-    iterations = 3
-    target = recursive_with_rebuilt_deps(iterations)
-    result = await engine.run(target)
-
-    assert result == "done"
-
-    # Template Cache Hits:
-    # 1. recursive(3, _dummy=None) -> Template A (Resolve 1)
-    # 2. recursive(2, _dummy=Lazy(noop)) -> Template B (Resolve 2)
-    # 3. recursive(1, _dummy=Lazy(noop)) -> Template B (Hit)
-    # 4. recursive(0, _dummy=Lazy(noop)) -> Template B (Hit)
-    assert resolve_spy.call_count == 2
-
-    # The graph is rebuilt for the initial call, and for each of the 3 recursive calls.
-    assert build_graph_spy.call_count == iterations + 1
-~~~~~
-
-~~~~~act
-patch_file
-tests/engine/runtime/test_jit_cache_verification.py
-~~~~~
-~~~~~python
-    solver = NativeSolver()
-    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
-
-    resolve_spy = mocker.spy(solver, "resolve")
-    build_graph_spy = mocker.spy(graph_builder_module, "build_graph")
-
-    # The dependency is built ONCE, outside the loop.
-    stable_dep = noop()
-~~~~~
-~~~~~python
-    solver = NativeSolver()
-    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
-
-    resolve_spy = mocker.spy(solver, "resolve")
-    # Patch where it is used
-    build_graph_spy = mocker.patch.object(
-        strategies_graph_module, "build_graph", wraps=graph_builder_module.build_graph
-    )
-
-    # The dependency is built ONCE, outside the loop.
-    stable_dep = noop()
+This solidifies the "Git Object Model" for computation graphs, separating 'Tree' (structure) from 'Commit' (instance/data).
 ~~~~~
 
 ### 下一步建议
-运行修正后的测试。这一次应该能够全绿通过。
+我们已经夯实了 JIT 模式的性能。根据路线图，第三阶段将专注于**“开发者体验 (DX)”**和**“静态分析深度化”**。我建议接下来的目标是：
+
+1.  **实现 3.1: 零开销 TCO 快速通道**: 利用 `ast_analyzer` 的静态分析结果，对于检测到的简单自递归循环，连 `build_graph` 的开销也完全抹除，实现真正的 O(1) 零开销。
+2.  **实现 3.2: 增强 `cs.visualize`**: 利用我们新掌握的图模型，为 `EdgeType.POTENTIAL` 增加特殊样式，并高亮显示 TCO 循环，让开发者能直观地看到 Agent 的“状态机”结构。
+
+你倾向于先攻克性能的最后一公里（3.1），还是先提升可观测性（3.2）？

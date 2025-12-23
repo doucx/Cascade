@@ -30,12 +30,14 @@ class FlowManager:
             self.downstream_demand[edge.source.id] += 1
 
             if edge.router:
-                selector_id = self._get_obj_id(edge.router.selector)
-                self.routers_by_selector[selector_id].append(edge)
+                selector_node = self._get_node_from_instance(edge.router.selector)
+                if selector_node:
+                    self.routers_by_selector[selector_node.id].append(edge)
 
                 for key, route_result in edge.router.routes.items():
-                    route_source_id = self._get_obj_id(route_result)
-                    self.route_source_map[edge.target.id][route_source_id] = key
+                    route_node = self._get_node_from_instance(route_result)
+                    if route_node:
+                        self.route_source_map[edge.target.id][route_node.id] = key
 
         # The final target always has at least 1 implicit demand (the user wants it)
         self.downstream_demand[target_node_id] += 1
@@ -44,6 +46,11 @@ class FlowManager:
         """Gets the canonical Node from a LazyResult instance."""
         if isinstance(instance, (LazyResult, MappedLazyResult)):
             return self.instance_map.get(instance._uuid)
+        elif isinstance(instance, Param):
+            # Find the node that represents this param
+            for node in self.graph.nodes:
+                if node.param_spec and node.param_spec.name == instance.name:
+                    return node
         return None
 
     def register_result(self, node_id: str, result: Any, state_backend: StateBackend):

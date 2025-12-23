@@ -21,7 +21,7 @@ def dry_run(target: LazyResult[Any]) -> None:
     _analyze_plan(target, bus)
 
 
-def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
+def _analyze_plan(target: Any, bus: MessageBus) -> None:
     """
     Core logic for dry_run: builds the plan and emits events.
     Decoupled from any output mechanism.

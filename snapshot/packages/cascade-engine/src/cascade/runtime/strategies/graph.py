@@ -113,7 +113,7 @@ class GraphExecutionStrategy:
                     # Unpack all 4 cached values: graph, indexed_plan, root_node_id, req_res
                     graph, indexed_plan, root_node_id, _ = fast_path_data
                     # Reconstruct virtual instance map for current iteration
-                    target_node = next(n for n in graph.nodes if n.id == root_node_id)
+                    target_node = graph.get_node(root_node_id)
                     instance_map = {current_target._uuid: target_node}
                     plan = self._rehydrate_plan(graph, indexed_plan)
 

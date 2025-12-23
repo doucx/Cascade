@@ -51,8 +51,11 @@ class ArgumentResolver:
         args = [positional_args_dict[i] for i in sorted_indices]
 
         # 2. Overlay Dependencies from Edges
-        incoming_edges = [e for e in graph.edges if e.target.id == node.id]
-
+        # Optimization: Filter once
+        incoming_edges = [e for e in graph.edges if e.target.id == node.id and e.edge_type == EdgeType.DATA]
+        if not incoming_edges:
+            return args, kwargs
+            
         for edge in incoming_edges:
             if edge.edge_type == EdgeType.DATA:
                 val = self._resolve_dependency(

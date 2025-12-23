@@ -1,141 +1,263 @@
-你遇到的测试失败揭示了两个关键点：
-1.  **Solver 逻辑漏洞**: `NativeSolver` 在执行拓扑排序时，没有过滤掉 `POTENTIAL` 类型的边。当一个任务存在自递归或循环时，`GraphBuilder` 会创建一条从“真身节点”指向“真身节点”或“影子节点”的 `POTENTIAL` 边。由于真身节点处于 `active_node_ids` 中，Solver 错误地将其计入了入度，导致拓扑排序无法开始（入度不为 0），从而触发了“检测到环路”的错误。
-2.  **测试用例过时**: `test_build_graph_no_recursive_shadow_analysis` 是在“非递归分析”时期编写的，它的断言显式禁止了递归分析。由于我们现在的核心任务是**实现**递归分析，这个测试用例需要被更新以符合新的行为预期。
+基准测试结果非常清晰地揭示了本次优化的副作用：**“静态分析税” (Static Analysis Tax)**。
 
-我将生成计划来修复这些问题。
+结果分析
 
-## [WIP] fix(engine): 修正 Solver 过滤逻辑并更新递归分析测试
+1.  **[1] Optimized Path (simple_countdown)**:
+    *   性能保持稳定 (0.76s -> 0.74s)。
+    *   这证明了对于符合 `_is_simple_task` 的任务，O(1) 快速通道成功绕过了所有开销，达到了预期效果。
+
+2.  **[2] Heavy Un-optimized Path (heavy_complex_countdown)**:
+    *   **性能大幅下降** (8.68s -> 18.71s)，TPS 降低了约 **53%**。
+    *   **原因分析**: 
+        *   `heavy_complex_countdown` 包含 10 个 `noop` 任务依赖，因此它不满足 `_is_simple_task` 条件，被迫走“慢速通道”。
+        *   在慢速通道中，由于 `len(nodes) > 1`，引擎在每轮迭代都会调用 `build_graph`。
+        *   在新的 `GraphBuilder` 中，每次调用 `build_graph` 都会触发 `assign_tco_cycle_ids` 及其内部的递归 DFS。
+        *   **致命伤**: 在 `ast_analyzer.py` 的 DFS 过程中，我直接调用了 `analyze_task_source(current_task.func)`。这个函数内部包含 `inspect.getsource` 和 `ast.parse`，它们是极其昂贵的。
+        *   在 `heavy_complex_countdown` 的例子中，每轮迭代都会对 11 个任务进行 11 次完整的 AST 解析。10,000 次迭代意味着 110,000 次 AST 解析，这正是性能腰斩的原因。
+
+3.  **[3] VM Path & [4] Imperative**:
+    *   保持稳定，符合预期。
+
+解决方案
+
+我们需要消除“慢速通道”中的重复分析开销。核心思路是：**AST 分析结果必须在 Task 级别进行永久缓存**，确保每个 Task 在其生命周期内只被解析一次。
+
+---
+
+## [WIP] fix(engine): 消除静态分析重复开销，优化热路径性能
 
 ### 错误分析
-
-**1. `test_deep_recursion_tco` 失败原因**:
-在 `countdown` 任务中，`ast_analyzer` 识别出 `countdown -> countdown` 的调用。`GraphBuilder` 随后创建了一条 `POTENTIAL` 边。在 `NativeSolver` 中，它仅根据节点是否是“影子节点”来过滤边，但由于自递归的 `POTENTIAL` 边的起点和终点都是同一个“真身”节点，该边被计入了入度。这导致 `countdown` 节点的入度变为 1，拓扑排序无法将其放入初始执行阶段，最终抛出 `ValueError: Cycle detected`。
-
-**2. `test_build_graph_no_recursive_shadow_analysis` 失败原因**:
-该测试预期分析在第一层停止（即不进入 `task_b` 的源码去发现 `task_c`）。但根据新的“递归静态分析”需求，我们现在**需要**发现 `task_c`。因此，该测试的断言与新特性冲突。
+在 `assign_tco_cycle_ids` 的递归过程中，每次都重新解析源码，导致在无法进入快速通道的复杂循环中，每一轮迭代都承受了巨大的 AST 解析开销。
 
 ### 解决方案
-1.  **加固 Solver**: 修改 `NativeSolver`，在构建入度表时明确跳过所有 `EdgeType.POTENTIAL` 类型的边。
-2.  **更新测试**: 将 `test_build_graph_no_recursive_shadow_analysis` 重命名为 `test_recursive_shadow_analysis`，并更新其断言以验证递归发现能力（即 `task_c` 应该作为影子节点出现在图中）。
+1.  **缓存 `analyze_task_source`**: 在 `Task` 对象上缓存静态分析发现的潜在目标。
+2.  **优化 DFS 逻辑**: 让 `assign_tco_cycle_ids` 优先读取缓存，避免重复的 I/O 和解析操作。
+3.  **全局分析标记**: 为 `Task` 增加一个 `_static_analysis_done` 标记，确保 `assign_tco_cycle_ids` 对同一个起始任务只运行一次 DFS。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #comp/tests #concept/solver #scope/core #task/domain/testing #task/object/solver-recursion-fix #task/action/patch #task/state/continue
+#intent/perf #flow/ready #priority/critical #comp/graph #concept/tco #scope/core #task/domain/engine #task/object/ast-cache #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 NativeSolver 的边过滤逻辑
+#### Acts 1: 为 analyze_task_source 增加 Task 级缓存
 
-我们需要确保 Solver 只关注影响执行顺序的“硬依赖”（如 `DATA`, `SEQUENCE`, `CONDITION`），而忽略用于观测和优化的 `POTENTIAL` 边。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/adapters/solvers/native.py
-~~~~~
-~~~~~python
-        for edge in graph.edges:
-            # An edge is only part of the execution plan if both its source
-            # and target are active nodes. This naturally filters out POTENTIAL edges.
-            if edge.source.id in active_node_ids and edge.target.id in active_node_ids:
-                in_degree[edge.target.id] += 1
-                adj_list[edge.source.id].append(edge.target.id)
-~~~~~
-~~~~~python
-        from cascade.graph.model import EdgeType
-
-        for edge in graph.edges:
-            # POTENTIAL edges are for observation/TCO and must NOT affect execution scheduling.
-            if edge.edge_type == EdgeType.POTENTIAL:
-                continue
-
-            # An edge is only part of the execution plan if both its source
-            # and target are active nodes.
-            if edge.source.id in active_node_ids and edge.target.id in active_node_ids:
-                in_degree[edge.target.id] += 1
-                adj_list[edge.source.id].append(edge.target.id)
-~~~~~
-
-#### Acts 2: 更新 TCO 静态分析测试用例
-
-我们将过时的测试用例更新为“递归发现”模式。
+我们修改 `analyze_task_source`，使其接收 `Task` 对象而不是裸函数，从而能够利用缓存。
 
 ~~~~~act
 patch_file
-tests/engine/graph/test_build_tco.py
+packages/cascade-graph/src/cascade/graph/ast_analyzer.py
 ~~~~~
 ~~~~~python
-def test_build_graph_no_recursive_shadow_analysis():
+def analyze_task_source(task_func: Callable) -> List[Task]:
     """
-    Ensure that we don't infinitely analyze shadow nodes.
+    Analyzes a task function's source code to find potential TCO targets.
     """
+    try:
+        source = inspect.getsource(task_func)
+        source = textwrap.dedent(source)
+        tree = ast.parse(source)
+    except (OSError, SyntaxError) as e:
+        logger.warning(f"Could not parse source for {task_func.__name__}: {e}")
+        return []
 
-    @task
-    def task_c():
-        return "C"
+    resolver = ReferenceResolver(task_func)
+    visitor = TcoVisitor(resolver)
+    visitor.visit(tree)
 
-    @task
-    def task_b():
-        return task_c()
+    return list(visitor.potential_targets)
 
-    @task
-    def task_a():
-        return task_b()
 
-    workflow = task_a()
-    graph = build_graph(workflow)
-
-    node_names = {n.name for n in graph.nodes}
-    assert "task_a" in node_names
-    assert "task_b" in node_names
-
-    # task_c should NOT be in the graph because we stop scanning at task_b
-    assert "task_c" not in node_names
-
-    potential_edges = [e for e in graph.edges if e.edge_type == EdgeType.POTENTIAL]
-    assert len(potential_edges) == 1
-    assert potential_edges[0].source.name == "task_a"
-    assert potential_edges[0].target.name == "task_b"
+def assign_tco_cycle_ids(root_task: Task) -> None:
 ~~~~~
 ~~~~~python
-def test_recursive_shadow_analysis():
+def analyze_task_source(task: Task) -> List[Task]:
     """
-    Verify that the builder recursively analyzes potential TCO targets.
+    Analyzes a task function's source code to find potential TCO targets.
+    Results are cached on the Task object to avoid redundant AST parsing.
     """
+    # 1. Return cached results if available
+    if hasattr(task, "_potential_tco_targets") and task._potential_tco_targets is not None:
+        return task._potential_tco_targets
 
-    @task
-    def task_c():
-        return "C"
+    task_func = task.func
+    if not task_func:
+        return []
 
-    @task
-    def task_b():
-        return task_c()
+    try:
+        source = inspect.getsource(task_func)
+        source = textwrap.dedent(source)
+        tree = ast.parse(source)
+    except (OSError, SyntaxError, TypeError) as e:
+        # Some callables (like built-ins) might not have source code
+        logger.debug(f"Could not parse source for {task.name}: {e}")
+        task._potential_tco_targets = []
+        return []
 
-    @task
-    def task_a():
-        return task_b()
+    resolver = ReferenceResolver(task_func)
+    visitor = TcoVisitor(resolver)
+    visitor.visit(tree)
 
-    workflow = task_a()
-    graph = build_graph(workflow)
+    # 2. Cache the result
+    task._potential_tco_targets = list(visitor.potential_targets)
+    return task._potential_tco_targets
 
-    node_names = {n.name for n in graph.nodes}
-    assert "task_a" in node_names
-    assert "task_b" in node_names
-    # task_c should now be present as a shadow node due to recursive analysis
-    assert "task_c" in node_names
 
-    # Verify edge chain: a -> b -> c
-    potential_edges = [e for e in graph.edges if e.edge_type == EdgeType.POTENTIAL]
-    assert len(potential_edges) == 2
-    
-    # a -> b
-    assert any(e.source.name == "task_a" and e.target.name == "task_b" for e in potential_edges)
-    # b -> c
-    assert any(e.source.name == "task_b" and e.target.name == "task_c" for e in potential_edges)
+def assign_tco_cycle_ids(root_task: Task) -> None:
+~~~~~
+
+#### Acts 2: 优化 assign_tco_cycle_ids 避免重复 DFS
+
+我们确保对每个任务只进行一次完整的 TCO 循环分析，并使用缓存的调用图。
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/ast_analyzer.py
+~~~~~
+~~~~~python
+def assign_tco_cycle_ids(root_task: Task) -> None:
+    """
+    Performs a recursive static analysis starting from root_task to identify
+    Strongly Connected Components (cycles) in the task call graph.
+
+    If a cycle is detected (e.g., A -> B -> A), a unique 'tco_cycle_id' is
+    generated and assigned to the '_tco_cycle_id' attribute of all Tasks
+    involved in that cycle.
+
+    This enables the Engine to recognize multi-task TCO loops at runtime.
+    """
+    # Use a simple DFS to detect cycles
+    visited = set()
+    recursion_stack = set()
+    path: List[Task] = []
+
+    def _dfs(current_task: Task):
+        visited.add(current_task)
+        recursion_stack.add(current_task)
+        path.append(current_task)
+
+        # Get static targets (memoize if needed, but analyze_task_source is fast enough)
+        targets = analyze_task_source(current_task.func)
+
+        for target in targets:
+            if target not in visited:
+                _dfs(target)
+            elif target in recursion_stack:
+~~~~~
+~~~~~python
+def assign_tco_cycle_ids(root_task: Task) -> None:
+    """
+    Performs a recursive static analysis starting from root_task to identify
+    Strongly Connected Components (cycles) in the task call graph.
+    """
+    # 1. Skip if this branch has already been fully analyzed
+    if getattr(root_task, "_tco_analysis_done", False):
+        return
+
+    # Use a simple DFS to detect cycles
+    visited = set()
+    recursion_stack = set()
+    path: List[Task] = []
+
+    def _dfs(current_task: Task):
+        visited.add(current_task)
+        recursion_stack.add(current_task)
+        path.append(current_task)
+
+        # Get static targets using the cached analyzer
+        targets = analyze_task_source(current_task)
+
+        for target in targets:
+            if target not in visited:
+                _dfs(target)
+            elif target in recursion_stack:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/ast_analyzer.py
+~~~~~
+~~~~~python
+        recursion_stack.remove(current_task)
+        path.pop()
+
+    _dfs(root_task)
+~~~~~
+~~~~~python
+        recursion_stack.remove(current_task)
+        path.pop()
+        # Mark individual task as processed to avoid re-entering its branch in future DFS runs
+        current_task._tco_analysis_done = True
+
+    _dfs(root_task)
+~~~~~
+
+#### Acts 3: 适配 GraphBuilder 调整后的接口
+
+由于 `analyze_task_source` 现在的签名已变更，我们需要同步更新 `GraphBuilder`。
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+        # 6. Static TCO Analysis
+        if scan_for_tco and result.task.func:
+            # 6.1 Analyze and tag cycles if not already done
+            if getattr(result.task, "_tco_cycle_id", None) is None:
+                assign_tco_cycle_ids(result.task)
+            
+            # Propagate cycle ID to the Node
+            node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
+
+            # 6.2 Check cache on Task object to avoid re-parsing AST
+            if getattr(result.task, "_potential_tco_targets", None) is None:
+                result.task._potential_tco_targets = analyze_task_source(
+                    result.task.func
+                )
+
+            potential_targets = result.task._potential_tco_targets
+~~~~~
+~~~~~python
+        # 6. Static TCO Analysis
+        if scan_for_tco and result.task.func:
+            # 6.1 Analyze and tag cycles if not already done
+            if not getattr(result.task, "_tco_analysis_done", False):
+                assign_tco_cycle_ids(result.task)
+            
+            # Propagate cycle ID to the Node
+            node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
+
+            # 6.2 Retrieve potential targets (using cache)
+            potential_targets = analyze_task_source(result.task)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+        # Recursively expand its potential targets
+        if getattr(task, "_potential_tco_targets", None) is None:
+            task._potential_tco_targets = analyze_task_source(task.func)
+        
+        for next_task in task._potential_tco_targets:
+            self._visit_shadow_recursive(target_node, next_task)
+~~~~~
+~~~~~python
+        # Recursively expand its potential targets (using cache)
+        potential_targets = analyze_task_source(task)
+        
+        for next_task in potential_targets:
+            self._visit_shadow_recursive(target_node, next_task)
 ~~~~~
 
 ### 下一步建议
-修复 Solver 漏洞后，`test_deep_recursion_tco` 应该能够顺利通过。我们可以进行以下操作：
-1.  **提交代码**: 这是一个非常稳定的改进，建议进行一次 `[COMMIT]`。
-2.  **性能基准测试**: 运行 `observatory/benchmarks/tco_performance.py`，量化 `A->B->A` 互递归在开启 O(1) 快速通道前后的性能差异。你应该会看到 CPU 占用率显著下降。
-3.  **可视化增强**: 现在静态图已经能够“看穿”多层递归，我们可以着手改进 `cs.visualize`，让它在渲染时能用统一的 ID 标识同一个循环中的节点。
+
+修复缓存问题后，`heavy_complex_countdown` 的性能应该会恢复到接近 8s 的水平（甚至更好，因为虽然它没进快速通道，但其内部的 AST 解析也被缓存了）。
+
+接下来：
+1.  **重跑基准测试**: 验证分析开销是否已被成功摊平。
+2.  **Generalizing Structural Caching**: 按照路线图，下一步应该是让 `heavy_complex_countdown` 这种结构稳定但复杂的任务也能进入快速通道。目前它被 `_is_simple_task` 挡住了，因为 `_is_simple_task` 暂时禁止了带依赖的任务。
+3.  **[COMMIT]**: 将这些核心优化提交。

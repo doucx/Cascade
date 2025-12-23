@@ -95,36 +95,47 @@ class TcoVisitor(ast.NodeVisitor):
                     self.potential_targets.add(bound_self)
 
 
-def analyze_task_source(task_func: Callable) -> List[Task]:
+def analyze_task_source(task: Task) -> List[Task]:
     """
     Analyzes a task function's source code to find potential TCO targets.
+    Results are cached on the Task object to avoid redundant AST parsing.
     """
+    # 1. Return cached results if available
+    if hasattr(task, "_potential_tco_targets") and task._potential_tco_targets is not None:
+        return task._potential_tco_targets
+
+    task_func = task.func
+    if not task_func:
+        return []
+
     try:
         source = inspect.getsource(task_func)
         source = textwrap.dedent(source)
         tree = ast.parse(source)
-    except (OSError, SyntaxError) as e:
-        logger.warning(f"Could not parse source for {task_func.__name__}: {e}")
+    except (OSError, SyntaxError, TypeError) as e:
+        # Some callables (like built-ins) might not have source code
+        logger.debug(f"Could not parse source for {task.name}: {e}")
+        task._potential_tco_targets = []
         return []
 
     resolver = ReferenceResolver(task_func)
     visitor = TcoVisitor(resolver)
     visitor.visit(tree)
 
-    return list(visitor.potential_targets)
+    # 2. Cache the result
+    task._potential_tco_targets = list(visitor.potential_targets)
+    return task._potential_tco_targets
 
 
 def assign_tco_cycle_ids(root_task: Task) -> None:
     """
     Performs a recursive static analysis starting from root_task to identify
     Strongly Connected Components (cycles) in the task call graph.
-
-    If a cycle is detected (e.g., A -> B -> A), a unique 'tco_cycle_id' is
-    generated and assigned to the '_tco_cycle_id' attribute of all Tasks
-    involved in that cycle.
-
-    This enables the Engine to recognize multi-task TCO loops at runtime.
     """
+    # 1. Skip if this branch has already been fully analyzed
+    if getattr(root_task, "_tco_analysis_done", False):
+        return
+
     # Use a simple DFS to detect cycles
     visited = set()
     recursion_stack = set()
@@ -135,8 +146,8 @@ def assign_tco_cycle_ids(root_task: Task) -> None:
         recursion_stack.add(current_task)
         path.append(current_task)
 
-        # Get static targets (memoize if needed, but analyze_task_source is fast enough)
-        targets = analyze_task_source(current_task.func)
+        # Get static targets using the cached analyzer
+        targets = analyze_task_source(current_task)
 
         for target in targets:
             if target not in visited:
@@ -166,5 +177,7 @@ def assign_tco_cycle_ids(root_task: Task) -> None:
 
         recursion_stack.remove(current_task)
         path.pop()
+        # Mark individual task as processed to avoid re-entering its branch in future DFS runs
+        current_task._tco_analysis_done = True
 
     _dfs(root_task)

@@ -98,19 +98,14 @@ class GraphBuilder:
         # 6. Static TCO Analysis
         if scan_for_tco and result.task.func:
             # 6.1 Analyze and tag cycles if not already done
-            if getattr(result.task, "_tco_cycle_id", None) is None:
+            if not getattr(result.task, "_tco_analysis_done", False):
                 assign_tco_cycle_ids(result.task)
             
             # Propagate cycle ID to the Node
             node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
 
-            # 6.2 Check cache on Task object to avoid re-parsing AST
-            if getattr(result.task, "_potential_tco_targets", None) is None:
-                result.task._potential_tco_targets = analyze_task_source(
-                    result.task.func
-                )
-
-            potential_targets = result.task._potential_tco_targets
+            # 6.2 Retrieve potential targets (using cache)
+            potential_targets = analyze_task_source(result.task)
             
             # Register current node in shadow map to allow closing the loop back to root
             self._shadow_visited[result.task] = node
@@ -163,11 +158,10 @@ class GraphBuilder:
         )
         self.graph.add_edge(edge)
 
-        # Recursively expand its potential targets
-        if getattr(task, "_potential_tco_targets", None) is None:
-            task._potential_tco_targets = analyze_task_source(task.func)
+        # Recursively expand its potential targets (using cache)
+        potential_targets = analyze_task_source(task)
         
-        for next_task in task._potential_tco_targets:
+        for next_task in potential_targets:
             self._visit_shadow_recursive(target_node, next_task)
 
     def _visit_mapped_result(self, result: MappedLazyResult) -> Node:

@@ -6,7 +6,6 @@ from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
 from cascade.spec.task import Task
-from cascade.spec.binding import SlotRef
 from cascade.spec.resource import Inject
 
 from .registry import NodeRegistry

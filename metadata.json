@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(core): 适配 ResourceContainer 和 Serializer 到新数据模型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766471954.8421812, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 适配 test_engine_core 到新 build_graph 签名", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766472073.5764382, "duration_ms": 0}}

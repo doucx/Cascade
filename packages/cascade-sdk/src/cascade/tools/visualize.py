@@ -9,7 +9,7 @@ def visualize(target: Any) -> str:
     Builds the computation graph for a target and returns its representation
     in the Graphviz DOT language format.
     """
-    graph, _, _ = build_graph(target)
+    graph, _ = build_graph(target)
 
     dot_parts = [
         "digraph CascadeWorkflow {",

@@ -30,7 +30,7 @@ def test_visualize_diamond_graph():
 
     # Pre-build to get the instance map for stable IDs
     from cascade.graph.build import build_graph
-    _, _, instance_map = build_graph(r_d)
+    _, instance_map = build_graph(r_d)
     
     node_a = instance_map[r_a._uuid]
     node_b = instance_map[r_b._uuid]
@@ -88,7 +88,7 @@ def test_visualize_special_edge_types():
     )
 
     from cascade.graph.build import build_graph
-    _, _, instance_map = build_graph(target)
+    _, instance_map = build_graph(target)
 
     node_ds = instance_map[data_source._uuid]
     node_target = instance_map[target._uuid]

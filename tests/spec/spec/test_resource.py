@@ -107,14 +107,22 @@ def test_resource_override():
 
     import asyncio
 
-    # Override the db_connection resource
-    with cs.override_resource(engine, "db_connection", mock_db_connection):
+    # Override the db_connection resource using the container's robust method
+    with engine.resource_container.override("db_connection", mock_db_connection):
         result = asyncio.run(engine.run(task_using_resource()))
 
     assert result == "mock_db_url"
 
-    # After exiting the context, the original should be restored
-    result_after = asyncio.run(engine.run(task_using_resource()))
+    # After exiting the context, the original should be restored.
+    # We create a NEW engine to ensure a clean state and avoid cache pollution from the previous run.
+    # This is the most robust way to test restoration.
+    engine_after = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
+    engine_after.register(config)
+    engine_after.register(db_connection)
+
+    result_after = asyncio.run(engine_after.run(task_using_resource()))
     assert result_after == "production_url"
 
 

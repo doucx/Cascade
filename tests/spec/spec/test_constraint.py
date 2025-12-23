@@ -34,7 +34,7 @@ def test_constraint_propagation_to_node():
         pass
 
     target = heavy_task().with_constraints(io_bandwidth="high")
-    graph, _, _ = build_graph(target)
+    graph, _ = build_graph(target)
 
     node = next(n for n in graph.nodes if n.name == "heavy_task")
 

@@ -4,6 +4,12 @@ from typing import Any, Dict, Callable, Union, Generator, Set, Tuple
 
 from cascade.graph.model import Graph
 from cascade.spec.resource import ResourceDefinition, Inject
+import inspect
+from contextlib import ExitStack, contextmanager
+from typing import Any, Dict, Callable, Union, Generator, Set
+
+from cascade.graph.model import Graph
+from cascade.spec.resource import ResourceDefinition, Inject
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import ResourceAcquired, ResourceReleased
 
@@ -31,16 +37,32 @@ class ResourceContainer:
     def override_provider(self, name: str, new_provider: Any):
         """Overrides a resource provider (useful for testing)."""
         self._resource_providers[name] = new_provider
-
-    def scan(self, graph: Graph, data_tuple: Tuple[Any, ...]) -> Set[str]:
+    
+    @contextmanager
+    def override(self, name: str, new_provider: Any) -> Generator[None, None, None]:
         """
-        Scans the graph and data tuple to identify all resources required by the nodes.
+        A context manager to safely override a provider and guarantee restoration.
+        """
+        original = self._resource_providers.get(name)
+        self.override_provider(name, new_provider)
+        try:
+            yield
+        finally:
+            if original is not None:
+                self.override_provider(name, original)
+            else:
+                self._resource_providers.pop(name, None)
+
+    def scan(self, graph: Graph) -> Set[str]:
+        """
+        Scans the graph to identify all resources required by the nodes.
         """
         required = set()
         
-        # 1. Scan DataTuple for explicit Inject objects passed as arguments
-        for item in data_tuple:
-            self._scan_item(item, required)
+        # 1. Scan Node Input Bindings for explicit Inject objects
+        for node in graph.nodes:
+            for value in node.input_bindings.values():
+                self._scan_item(value, required)
 
         # 2. Scan Node Signatures for Inject defaults
         for node in graph.nodes:

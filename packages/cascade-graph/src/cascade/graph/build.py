@@ -6,7 +6,6 @@ from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
 from cascade.spec.task import Task
-from cascade.spec.binding import SlotRef
 from cascade.spec.resource import Inject
 
 from .registry import NodeRegistry
@@ -21,17 +20,11 @@ class GraphBuilder:
         # Used to detect cycles during static TCO analysis
         self._shadow_visited: Dict[Task, Node] = {}
 
-        self._data_buffer: List[Any] = []
         self.registry = registry if registry is not None else NodeRegistry()
 
-    def build(self, target: Any) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
+    def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:
         self._visit(target)
-        return self.graph, tuple(self._data_buffer), self._visited_instances
-
-    def _register_data(self, value: Any) -> SlotRef:
-        index = len(self._data_buffer)
-        self._data_buffer.append(value)
-        return SlotRef(index)
+        return self.graph, self._visited_instances
 
     def _visit(self, value: Any) -> Node:
         """Central dispatcher for the post-order traversal."""
@@ -144,7 +137,8 @@ class GraphBuilder:
             input_bindings = {}
             def process_arg(key: str, val: Any):
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    input_bindings[key] = self._register_data(val)
+                    # Store literal value directly
+                    input_bindings[key] = val
 
             for i, val in enumerate(result.args):
                 process_arg(str(i), val)
@@ -171,8 +165,10 @@ class GraphBuilder:
         node, created_new = self.registry.get_or_create(structural_hash, node_factory)
         self._visited_instances[result._uuid] = node
 
+        # Always add the node to the current graph, even if it was reused from the registry.
+        self.graph.add_node(node)
+
         if created_new:
-            self.graph.add_node(node)
             if result.task.func:
                 if not getattr(result.task, "_tco_analysis_done", False):
                     assign_tco_cycle_ids(result.task)
@@ -226,7 +222,7 @@ class GraphBuilder:
             input_bindings = {}
             for k, val in result.mapping_kwargs.items():
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    input_bindings[k] = self._register_data(val)
+                    input_bindings[k] = val
             
             return Node(
                 id=structural_hash,
@@ -242,8 +238,8 @@ class GraphBuilder:
         node, created_new = self.registry.get_or_create(structural_hash, node_factory)
         self._visited_instances[result._uuid] = node
 
-        if created_new:
-            self.graph.add_node(node)
+        # Always add the node to the current graph
+        self.graph.add_node(node)
 
         # 4. Add data edges
         self._scan_and_add_edges(node, result.mapping_kwargs)
@@ -296,5 +292,5 @@ class GraphBuilder:
 
 def build_graph(
     target: Any, registry: NodeRegistry | None = None
-) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
+) -> Tuple[Graph, Dict[str, Node]]:
     return GraphBuilder(registry=registry).build(target)

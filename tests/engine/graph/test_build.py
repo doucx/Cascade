@@ -14,7 +14,7 @@ def test_build_linear_graph():
     r1 = t1()
     r2 = t2(r1)
 
-    graph, _, _ = build_graph(r2)
+    graph, _ = build_graph(r2)
 
     assert len(graph.nodes) == 2
     assert len(graph.edges) == 1
@@ -39,7 +39,7 @@ def test_build_graph_with_param_factory():
 
     target = process(param_node)
 
-    graph, _, _ = build_graph(target)
+    graph, _ = build_graph(target)
 
     assert len(graph.nodes) == 2
 
@@ -53,8 +53,8 @@ def test_build_graph_with_param_factory():
 
     # 断言它包含正确的 input_bindings (这是内部任务需要的参数)
     assert "name" in p_node.input_bindings
-    # The value is now a SlotRef or Constant, we check its existence
-    assert p_node.input_bindings["name"] is not None
+    # The value is now the literal string, not a reference
+    assert p_node.input_bindings["name"] == "x"
 
 
 def test_build_graph_with_env_factory():
@@ -66,12 +66,12 @@ def test_build_graph_with_env_factory():
         return val
 
     target = echo(env_node)
-    graph, _, _ = build_graph(target)
+    graph, _ = build_graph(target)
 
     e_node = next(n for n in graph.nodes if n.name == "_get_env_var")
     assert e_node.node_type == "task"
     assert "name" in e_node.input_bindings
-    assert e_node.input_bindings["name"] is not None
+    assert e_node.input_bindings["name"] == "HOME"
 
 
 def test_build_graph_with_nested_dependencies():
@@ -99,7 +99,7 @@ def test_build_graph_with_nested_dependencies():
     # Create a workflow with nested dependencies
     target = t_main(t_c(), [t_a()], {"key": t_b()})
 
-    graph, _, _ = build_graph(target)
+    graph, _ = build_graph(target)
 
     # 4 nodes: t_a, t_b, t_c, and t_main
     assert len(graph.nodes) == 4

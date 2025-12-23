@@ -50,9 +50,9 @@ class Node:
     constraints: Optional[ResourceConstraint] = None
 
     # Structural Bindings
-    # Maps argument names to references (Slots or Constants).
-    # Actual values are stored in a separate DataTuple at runtime.
-    input_bindings: Dict[str, Binding] = field(default_factory=dict)
+    # Maps argument names to their literal (JSON-serializable) values.
+    # This makes the Node self-contained.
+    input_bindings: Dict[str, Any] = field(default_factory=dict)
 
     def __hash__(self):
         return hash(self.id)

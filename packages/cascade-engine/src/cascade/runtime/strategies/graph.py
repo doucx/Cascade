@@ -4,7 +4,8 @@ from typing import Any, Dict, Tuple, List
 
 from cascade.graph.model import Graph, Node
 from cascade.graph.build import build_graph
-from cascade.spec.protocols import Solver, StateBackend
+from cascade.graph.registry import NodeRegistry
+from cascade.spec.protocols import Solver, StateBackend, ExecutionPlan
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.resource_container import ResourceContainer
@@ -41,7 +42,12 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
-        # Caching removed for Correctness Phase (1.3)
+        
+        # JIT Compilation Cache
+        # Maps structural hash (root_node_id) to a compiled ExecutionPlan
+        self._plan_cache: Dict[str, ExecutionPlan] = {}
+        # Persistent registry to ensure node object identity consistency across TCO iterations
+        self._node_registry = NodeRegistry()
 
     async def execute(
         self,
@@ -57,16 +63,29 @@ class GraphExecutionStrategy:
         while True:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
-                # 1. Build Graph (No Caching)
+                # 1. Build Graph (With Registry for interning)
                 # This constructs the structural graph and the instance map.
-                graph, data_tuple, instance_map = build_graph(current_target)
+                # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
+                graph, instance_map = build_graph(current_target, registry=self._node_registry)
                 
-                # 2. Resolve Plan
-                # We resolve the plan every time.
-                plan = self.solver.resolve(graph)
+                # Identify the structural root
+                if current_target._uuid not in instance_map:
+                    raise RuntimeError(f"Critical: Target instance {current_target._uuid} not found in InstanceMap.")
+                target_node = instance_map[current_target._uuid]
+                root_node_id = target_node.id
+
+                # 2. Resolve Plan (With JIT Caching)
+                if root_node_id in self._plan_cache:
+                    # Hit: Reuse the existing plan directly.
+                    # Since we use a persistent NodeRegistry, the Nodes in this plan are valid for the current graph.
+                    plan = self._plan_cache[root_node_id]
+                else:
+                    # Miss: Ask solver to resolve and then cache it.
+                    plan = self.solver.resolve(graph)
+                    self._plan_cache[root_node_id] = plan
 
                 # 3. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph, data_tuple)
+                required_resources = self.resource_container.scan(graph)
                 self.resource_container.setup(
                     required_resources,
                     active_resources,
@@ -83,7 +102,6 @@ class GraphExecutionStrategy:
                     run_id,
                     state_backend,
                     graph,
-                    data_tuple,
                     plan,
                     instance_map,
                 )
@@ -107,7 +125,6 @@ class GraphExecutionStrategy:
         run_id: str,
         state_backend: StateBackend,
         graph: Graph,
-        data_tuple: Tuple[Any, ...],
         plan: Any,
         instance_map: Dict[str, Node],
     ) -> Any:
@@ -164,8 +181,8 @@ class GraphExecutionStrategy:
                 if executable_this_pass:
                     # Callback for map nodes
                     async def sub_graph_runner(target, sub_params, parent_state):
-                        # Recursive call: must build new graph and data
-                        sub_graph, sub_data, sub_instance_map = build_graph(target)
+                        # Recursive call: must build new graph
+                        sub_graph, sub_instance_map = build_graph(target)
                         sub_plan = self.solver.resolve(sub_graph)
                         return await self._execute_graph(
                             target,
@@ -174,7 +191,6 @@ class GraphExecutionStrategy:
                             run_id,
                             parent_state,
                             graph=sub_graph,
-                            data_tuple=sub_data,
                             plan=sub_plan,
                             instance_map=sub_instance_map,
                         )
@@ -183,7 +199,6 @@ class GraphExecutionStrategy:
                         self.node_processor.process(
                             node,
                             graph,
-                            data_tuple,
                             state_backend,
                             active_resources,
                             run_id,

@@ -53,7 +53,7 @@ def test_csp_solver_parallel_when_resources_sufficient():
     node_b = t_b().with_constraints(cpu=4)
     target = gather(node_a, node_b)
 
-    graph, _, _ = build_graph(target)
+    graph, _ = build_graph(target)
 
     solver = CSPSolver(system_resources={"cpu": 10})
     plan = solver.resolve(graph)
@@ -100,7 +100,7 @@ def test_csp_solver_serial_when_resources_insufficient():
     node_b = t_b().with_constraints(cpu=4)
     target = gather(node_a, node_b)
 
-    graph, _, _ = build_graph(target)
+    graph, _ = build_graph(target)
 
     # Limit system to 6 CPU
     solver = CSPSolver(system_resources={"cpu": 6})

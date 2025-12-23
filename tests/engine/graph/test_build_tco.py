@@ -21,7 +21,7 @@ def test_build_graph_with_potential_tco():
     orchestrator to leaf_task and creates a POTENTIAL edge.
     """
     workflow = orchestrator(10)
-    graph, _, _ = build_graph(workflow)
+    graph, _ = build_graph(workflow)
 
     node_names = {n.name for n in graph.nodes}
     assert "orchestrator" in node_names
@@ -54,7 +54,7 @@ def test_recursive_shadow_analysis():
         return task_b()
 
     workflow = task_a()
-    graph, _, _ = build_graph(workflow)
+    graph, _ = build_graph(workflow)
 
     node_names = {n.name for n in graph.nodes}
     assert "task_a" in node_names

@@ -30,7 +30,7 @@ def _analyze_plan(target: Any, bus: MessageBus) -> None:
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
     # 1. Build the graph statically
-    graph, _, _ = build_graph(target)
+    graph, _ = build_graph(target)
 
     # 2. Resolve the execution plan (topological sort)
     plan = engine.solver.resolve(graph)
@@ -71,10 +71,8 @@ class DryRunConsoleSubscriber:
         print("--- Cascade Execution Plan (Dry Run) ---")
 
     def on_node(self, event: PlanNodeInspected):
-        # Format input bindings for readability
-        bindings_repr = {
-            k: repr(v) for k, v in event.input_bindings.items()
-        }
+        # Format input bindings for readability without extra quotes from repr
+        bindings_repr = str(event.input_bindings)
         print(
             f"[{event.index}/{event.total_nodes}] {event.node_name} (Bindings: {bindings_repr})"
         )

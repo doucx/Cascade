@@ -46,7 +46,6 @@ class NodeProcessor:
         self,
         node: Node,
         graph: Graph,
-        data_tuple: Tuple[Any, ...], # NEW
         state_backend: StateBackend,
         active_resources: Dict[str, Any],
         run_id: str,
@@ -79,7 +78,6 @@ class NodeProcessor:
             return await self._execute_internal(
                 node,
                 graph,
-                data_tuple,
                 state_backend,
                 active_resources,
                 run_id,
@@ -94,7 +92,6 @@ class NodeProcessor:
         self,
         node: Node,
         graph: Graph,
-        data_tuple: Tuple[Any, ...], # NEW
         state_backend: StateBackend,
         active_resources: Dict[str, Any],
         run_id: str,
@@ -108,9 +105,8 @@ class NodeProcessor:
             graph,
             state_backend,
             active_resources,
-            data_tuple,
-            user_params=params,
             instance_map=instance_map,
+            user_params=params,
         )
 
         start_time = time.time()

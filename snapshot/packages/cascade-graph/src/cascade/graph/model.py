@@ -33,6 +33,7 @@ class Node:
 
     id: str
     name: str
+    template_id: str = ""  # Structural hash (ignoring literals)
     is_shadow: bool = False  # True if this node is for static analysis only
     tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
 

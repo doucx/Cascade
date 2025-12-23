@@ -1,363 +1,405 @@
-好的，性能测试的成功验证（不再报错且通过循环检测）是一个里程碑，它证明了我们 1.1 阶段对 **Merkle 哈希** 的实现是正确且具有鲁棒性的。
-
-现在我们推进到 **1.2 阶段：重构 `GraphBuilder` 为 Hash-Consing 构造器**。
-
-**1.2 阶段核心任务分析**
-
-虽然我们在 1.1 中已经初步引入了 `NodeRegistry`，但为了真正符合“类 Git 模型”并支持后续的 JIT 缓存，我们需要在 `GraphBuilder` 中完成以下深度重构：
-
-1.  **统一的 Hash-Consing 逻辑**:
-    *   1.1 中 `MappedLazyResult` 的哈希逻辑是简化的“临时方案”。我们需要将其提升到与 `LazyResult` 相同的高度，支持完全的后序遍历和递归哈希。
-2.  **强化 `InstanceMap` 的语义**:
-    *   按照路线图，`GraphBuilder.build` 返回的 `InstanceMap` 必须是连接“实例”与“结构”的**唯一合法桥梁**。我们需要确保它在所有边界情况（包括嵌套、映射、Shadow 节点）下都能提供一致的映射：`Dict[LazyResult._uuid, Node]`。
-3.  **消除构建冗余**:
-    *   确保 `GraphBuilder` 内部的 `_visited_instances` 和全局 `registry` 协作无间。对于同一个 `LazyResult` 实例，在同一次构建中绝对不应被处理两次。
-
-我将生成一个计划来完善这些细节。
-
-## [WIP] refactor(graph): Complete Hash-Consing implementation and unify mapping logic
+## [WIP] refactor(engine): Split strategies.py and simplify GraphExecutionStrategy for correctness
 
 ### 用户需求
-完成路线图 1.2 节。完善 `GraphBuilder` 的 Hash-Consing（哈希一致性）机制，特别是统一 `MappedLazyResult` 的构建逻辑，并确保 `InstanceMap` 的完整性。
+1.  执行路线图 1.3：适配 `GraphExecutionStrategy`。
+    *   移除所有缓存逻辑（`_graph_cache`, `_task_templates`）。
+    *   确保严格使用 `build_graph` 返回的 `InstanceMap` 来定位目标节点。
+    *   每一轮 TCO 循环都进行完整的图构建和求解。
+2.  将 `strategies.py` 拆分为模块：
+    *   `strategies/base.py`: 定义 `ExecutionStrategy` 协议。
+    *   `strategies/graph.py`: 实现 `GraphExecutionStrategy`。
+    *   `strategies/vm.py`: 实现 `VMExecutionStrategy`。
+    *   `strategies/__init__.py`: 导出策略类。
 
 ### 评论
-如果说 1.1 是解决了“身份识别”问题，那么 1.2 就是解决“身份复用”问题。我们将确保在 Cascade 内存中，任何结构相同的计算单元（无论是单任务还是映射任务）都指向同一个唯一的 `Node` 实例。这种“单例化”结构是实现 2.1 节 JIT 缓存的先决条件，因为它保证了缓存 Key 的绝对物理一致性。
+这是一个结构性的清理和重构。通过拆分文件，我们提高了代码的可维护性。更重要的是，通过移除 `GraphExecutionStrategy` 中的过早优化（缓存），我们将其回归到了一个“绝对正确”的基线状态。这符合“先上锁（正确性），再加速（性能）”的战略原则。现在 `GraphExecutionStrategy` 将完全依赖我们在 1.1 和 1.2 中构建的坚固的 Merkle 哈希和 `InstanceMap`。
 
 ### 目标
-1.  **重构 `_visit_mapped_result`**: 为 `MappedLazyResult` 实现与 `LazyResult` 完全一致的后序遍历和 Merkle 哈希逻辑。
-2.  **增强哈希一致性**: 确保 `GraphBuilder` 在处理 `Router` 和其他复杂嵌套结构时，也能生成稳定的、基于子节点 ID 的哈希。
-3.  **规范化 `InstanceMap`**: 明确 `build_graph` 返回的第三个值（`instance_map`）的结构和用途，确保它是后续执行引擎定位根节点的唯一依据。
+1.  删除 `packages/cascade-engine/src/cascade/runtime/strategies.py`。
+2.  创建 `packages/cascade-engine/src/cascade/runtime/strategies/` 目录。
+3.  创建 `base.py`, `graph.py`, `vm.py` 和 `__init__.py`。
+4.  在 `graph.py` 中实现简化版的 `GraphExecutionStrategy`。
 
 ### 基本原理
-Hash-Consing 技术（哈希一致性/共享技术）要求我们在创建对象之前，先检查是否存在结构等价的既有对象。在 1.1 的重构中，我们已经实现了 `registry`。1.2 的重点在于消除构建流程中的“特例”，让 `MappedLazyResult` 也能享受到结构哈希带来的去重收益。
+拆分大文件有助于关注点分离。简化策略逻辑是为了验证核心图模型的正确性，排除缓存逻辑引入的干扰。
 
 ### 标签
-#intent/refine #flow/ready #priority/high
-#comp/graph #concept/state #scope/core
+#intent/refine #flow/ready #priority/medium
+#comp/engine #scope/core
 #ai/instruct
-#task/domain/graph #task/object/graph-builder #task/action/refactor
+#task/domain/engine #task/object/execution-strategy #task/action/refactor
 #task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: Refine `GraphBuilder` for consistent Hash-Consing
+#### Acts 1: Remove old file and create directory
 
-我们将重写 `GraphBuilder` 中的部分方法，特别是统一 `MappedLazyResult` 的处理，并优化哈希计算的内部流程。
+首先，我们需要移除旧的单文件模块，并创建新的包目录。
+
+~~~~~act
+delete_file
+packages/cascade-engine/src/cascade/runtime/strategies.py
+~~~~~
+
+~~~~~act
+run_command
+~~~~~
+~~~~~
+mkdir -p packages/cascade-engine/src/cascade/runtime/strategies
+~~~~~
+
+#### Acts 2: Create `base.py`
+
+定义基础协议。
 
 ~~~~~act
 write_file
-packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-engine/src/cascade/runtime/strategies/base.py
 ~~~~~
 ~~~~~python
-from typing import Dict, Any, List, Tuple
-import inspect
-import hashlib
-from cascade.graph.model import Graph, Node, Edge, EdgeType
+from typing import Protocol, Any, Dict
+from contextlib import ExitStack
+from cascade.spec.protocols import StateBackend
+
+
+class ExecutionStrategy(Protocol):
+    """
+    Protocol defining a strategy for executing a workflow target.
+    """
+
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any: ...
+~~~~~
+
+#### Acts 3: Create `vm.py`
+
+迁移 `VMExecutionStrategy`，保持原有逻辑不变。
+
+~~~~~act
+write_file
+packages/cascade-engine/src/cascade/runtime/strategies/vm.py
+~~~~~
+~~~~~python
+import asyncio
+from contextlib import ExitStack
+from typing import Any, Dict, List
+
+from cascade.graph.compiler import BlueprintBuilder
+from cascade.runtime.vm import VirtualMachine
+from cascade.runtime.resource_manager import ResourceManager
+from cascade.runtime.constraints.manager import ConstraintManager
+from cascade.spec.protocols import StateBackend
+
+
+class VMExecutionStrategy:
+    """
+    Executes tasks by compiling them into a Blueprint and running them on a Virtual Machine.
+    """
+
+    def __init__(
+        self,
+        resource_manager: ResourceManager,
+        constraint_manager: ConstraintManager,
+        wakeup_event: asyncio.Event,
+    ):
+        self.resource_manager = resource_manager
+        self.constraint_manager = constraint_manager
+        self.wakeup_event = wakeup_event
+
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        # 1. Compile in template mode
+        builder = BlueprintBuilder()
+        blueprint = builder.build(target, template=True)
+
+        # 2. Extract Initial Arguments
+        initial_args = list(target.args)
+        initial_kwargs = dict(target.kwargs)
+
+        # 3. Execute
+        vm = VirtualMachine(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self.wakeup_event,
+        )
+        return await vm.execute(
+            blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs
+        )
+~~~~~
+
+#### Acts 4: Create `graph.py`
+
+这是核心修改。我们将实现一个**无缓存**、**基于 InstanceMap** 的执行策略。
+
+~~~~~act
+write_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+import asyncio
+from contextlib import ExitStack
+from typing import Any, Dict, Tuple, List
+
+from cascade.graph.model import Graph, Node
+from cascade.graph.build import build_graph
+from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.spec.routing import Router
-from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
-from cascade.spec.task import Task
-from cascade.spec.binding import SlotRef
-from cascade.spec.resource import Inject
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.resource_container import ResourceContainer
+from cascade.runtime.processor import NodeProcessor
+from cascade.runtime.flow import FlowManager
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.events import TaskSkipped, TaskBlocked
+from cascade.runtime.constraints.manager import ConstraintManager
 
-from .registry import NodeRegistry
 
+class GraphExecutionStrategy:
+    """
+    Executes tasks by dynamically building a dependency graph and running a TCO loop.
+    This is the standard execution mode for Cascade.
+    
+    Refactored for v3.2 architecture:
+    - Strictly relies on build_graph returning (Graph, DataTuple, InstanceMap).
+    - Uses InstanceMap to locate the target node within the structural graph.
+    - Caching is intentionally disabled in this phase to ensure correctness.
+    """
 
-class GraphBuilder:
-    def __init__(self, registry: NodeRegistry | None = None):
-        self.graph = Graph()
-        # InstanceMap: Dict[LazyResult._uuid, Node]
-        # Connecting the world of volatile instances to the world of stable structures.
-        self._visited_instances: Dict[str, Node] = {}
-        # Used to detect cycles during static TCO analysis
-        self._shadow_visited: Dict[Task, Node] = {}
+    def __init__(
+        self,
+        solver: Solver,
+        node_processor: NodeProcessor,
+        resource_container: ResourceContainer,
+        constraint_manager: ConstraintManager,
+        bus: MessageBus,
+        wakeup_event: asyncio.Event,
+    ):
+        self.solver = solver
+        self.node_processor = node_processor
+        self.resource_container = resource_container
+        self.constraint_manager = constraint_manager
+        self.bus = bus
+        self.wakeup_event = wakeup_event
+        # Caching removed for Correctness Phase (1.3)
 
-        self._data_buffer: List[Any] = []
-        self.registry = registry if registry is not None else NodeRegistry()
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        current_target = target
 
-    def build(self, target: Any) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
-        self._visit(target)
-        return self.graph, tuple(self._data_buffer), self._visited_instances
+        while True:
+            # The step stack holds "task" (step) scoped resources
+            with ExitStack() as step_stack:
+                # 1. Build Graph (No Caching)
+                # This constructs the structural graph and the instance map.
+                graph, data_tuple, instance_map = build_graph(current_target)
+                
+                # 2. Resolve Plan
+                # We resolve the plan every time.
+                plan = self.solver.resolve(graph)
 
-    def _register_data(self, value: Any) -> SlotRef:
-        index = len(self._data_buffer)
-        self._data_buffer.append(value)
-        return SlotRef(index)
+                # 3. Setup Resources (mixed scope)
+                required_resources = self.resource_container.scan(graph, data_tuple)
+                self.resource_container.setup(
+                    required_resources,
+                    active_resources,
+                    run_stack,
+                    step_stack,
+                    run_id,
+                )
 
-    def _visit(self, value: Any) -> Node:
-        """Central dispatcher for the post-order traversal."""
-        if isinstance(value, LazyResult):
-            return self._visit_lazy_result(value)
-        elif isinstance(value, MappedLazyResult):
-            return self._visit_mapped_result(value)
-        else:
-            raise TypeError(f"Cannot build graph from type {type(value)}")
+                # 4. Execute Graph
+                result = await self._execute_graph(
+                    current_target,
+                    params,
+                    active_resources,
+                    run_id,
+                    state_backend,
+                    graph,
+                    data_tuple,
+                    plan,
+                    instance_map,
+                )
 
-    def _get_merkle_hash(self, components: List[str]) -> str:
-        """Computes a stable hash from a list of string components."""
-        fingerprint = "|".join(components)
-        return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+            # 5. Check for Tail Call (LazyResult) - TCO Logic
+            if isinstance(result, (LazyResult, MappedLazyResult)):
+                current_target = result
+                # STATE GC
+                if hasattr(state_backend, "clear"):
+                    state_backend.clear()
+                # Yield control
+                await asyncio.sleep(0)
+            else:
+                return result
 
-    def _build_hash_components_from_arg(
-        self, obj: Any, dep_nodes: Dict[str, Node]
-    ) -> List[str]:
-        """Recursively builds hash components from arguments, using pre-computed dependency nodes."""
-        components = []
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # Hash-Consing: The identity of this dependency is its structural ID.
-            components.append(f"LAZY({dep_nodes[obj._uuid].id})")
-        elif isinstance(obj, Router):
-            components.append("Router{")
-            components.append("Selector:")
-            components.extend(self._build_hash_components_from_arg(obj.selector, dep_nodes))
-            components.append("Routes:")
-            for k in sorted(obj.routes.keys()):
-                components.append(f"Key({k})->")
-                components.extend(self._build_hash_components_from_arg(obj.routes[k], dep_nodes))
-            components.append("}")
-        elif isinstance(obj, (list, tuple)):
-            components.append("List[")
-            for item in obj:
-                components.extend(self._build_hash_components_from_arg(item, dep_nodes))
-            components.append("]")
-        elif isinstance(obj, dict):
-            components.append("Dict{")
-            for k in sorted(obj.keys()):
-                components.append(f"{k}:")
-                components.extend(self._build_hash_components_from_arg(obj[k], dep_nodes))
-            components.append("}")
-        elif isinstance(obj, Inject):
-            components.append(f"Inject({obj.resource_name})")
-        else:
-            try:
-                components.append(repr(obj))
-            except Exception:
-                components.append("<unreprable>")
-        return components
-
-    def _find_dependencies(self, obj: Any, dep_nodes: Dict[str, Node]):
-        """Helper for post-order traversal: finds and visits all nested LazyResults."""
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            if obj._uuid not in dep_nodes:
-                dep_node = self._visit(obj)
-                dep_nodes[obj._uuid] = dep_node
-        elif isinstance(obj, Router):
-            self._find_dependencies(obj.selector, dep_nodes)
-            for route in obj.routes.values():
-                self._find_dependencies(route, dep_nodes)
-        elif isinstance(obj, (list, tuple)):
-            for item in obj:
-                self._find_dependencies(item, dep_nodes)
-        elif isinstance(obj, dict):
-            for v in obj.values():
-                self._find_dependencies(v, dep_nodes)
-
-    def _visit_lazy_result(self, result: LazyResult) -> Node:
-        if result._uuid in self._visited_instances:
-            return self._visited_instances[result._uuid]
-
-        # 1. Post-order: Resolve all dependencies first
-        dep_nodes: Dict[str, Node] = {}
-        self._find_dependencies(result.args, dep_nodes)
-        self._find_dependencies(result.kwargs, dep_nodes)
-        if result._condition:
-            self._find_dependencies(result._condition, dep_nodes)
-        if result._constraints:
-            self._find_dependencies(result._constraints.requirements, dep_nodes)
-        if result._dependencies:
-            self._find_dependencies(result._dependencies, dep_nodes)
-
-        # 2. Compute structural Merkle hash
-        hash_components = [f"Task({getattr(result.task, 'name', 'unknown')})"]
-        if result._retry_policy:
-            rp = result._retry_policy
-            hash_components.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
-        if result._cache_policy:
-            hash_components.append(f"Cache({type(result._cache_policy).__name__})")
+    async def _execute_graph(
+        self,
+        target: Any,
+        params: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
+        data_tuple: Tuple[Any, ...],
+        plan: Any,
+        instance_map: Dict[str, Node],
+    ) -> Any:
+        # Locate the canonical node for the current target instance
+        if target._uuid not in instance_map:
+            raise RuntimeError(f"Critical: Target instance {target._uuid} not found in InstanceMap.")
         
-        hash_components.append("Args:")
-        hash_components.extend(self._build_hash_components_from_arg(result.args, dep_nodes))
-        hash_components.append("Kwargs:")
-        hash_components.extend(self._build_hash_components_from_arg(result.kwargs, dep_nodes))
-
-        if result._condition:
-            hash_components.append("Condition:PRESENT")
-        if result._dependencies:
-            hash_components.append(f"Deps:{len(result._dependencies)}")
-        if result._constraints:
-            keys = sorted(result._constraints.requirements.keys())
-            hash_components.append(f"Constraints({','.join(keys)})")
+        target_node = instance_map[target._uuid]
         
-        structural_hash = self._get_merkle_hash(hash_components)
+        flow_manager = FlowManager(graph, target_node.id, instance_map)
+        blocked_nodes = set()
 
-        # 3. Hash-consing: intern the Node object
-        def node_factory():
-            input_bindings = {}
-            def process_arg(key: str, val: Any):
-                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    input_bindings[key] = self._register_data(val)
+        for stage in plan:
+            pending_nodes_in_stage = list(stage)
 
-            for i, val in enumerate(result.args):
-                process_arg(str(i), val)
-            for k, val in result.kwargs.items():
-                process_arg(k, val)
+            while pending_nodes_in_stage:
+                executable_this_pass: List[Node] = []
+                deferred_this_pass: List[Node] = []
 
-            sig = None
-            if result.task.func:
-                try: sig = inspect.signature(result.task.func)
-                except (ValueError, TypeError): pass
+                for node in pending_nodes_in_stage:
+                    if node.node_type == "param":
+                        continue
 
-            return Node(
-                id=structural_hash,
-                name=result.task.name,
-                node_type="task",
-                callable_obj=result.task.func,
-                signature=sig,
-                retry_policy=result._retry_policy,
-                cache_policy=result._cache_policy,
-                constraints=result._constraints,
-                input_bindings=input_bindings,
+                    skip_reason = flow_manager.should_skip(node, state_backend)
+                    if skip_reason:
+                        state_backend.mark_skipped(node.id, skip_reason)
+                        self.bus.publish(
+                            TaskSkipped(
+                                run_id=run_id,
+                                task_id=node.id,
+                                task_name=node.name,
+                                reason=skip_reason,
+                            )
+                        )
+                        continue
+
+                    if self.constraint_manager.check_permission(node):
+                        executable_this_pass.append(node)
+                        if node.id in blocked_nodes:
+                            blocked_nodes.remove(node.id)
+                    else:
+                        deferred_this_pass.append(node)
+                        if node.id not in blocked_nodes:
+                            self.bus.publish(
+                                TaskBlocked(
+                                    run_id=run_id,
+                                    task_id=node.id,
+                                    task_name=node.name,
+                                    reason="ConstraintViolation",
+                                )
+                            )
+                            blocked_nodes.add(node.id)
+
+                if executable_this_pass:
+                    # Callback for map nodes
+                    async def sub_graph_runner(target, sub_params, parent_state):
+                        # Recursive call: must build new graph and data
+                        sub_graph, sub_data, sub_instance_map = build_graph(target)
+                        sub_plan = self.solver.resolve(sub_graph)
+                        return await self._execute_graph(
+                            target,
+                            sub_params,
+                            active_resources,
+                            run_id,
+                            parent_state,
+                            graph=sub_graph,
+                            data_tuple=sub_data,
+                            plan=sub_plan,
+                            instance_map=sub_instance_map,
+                        )
+
+                    tasks_to_run = [
+                        self.node_processor.process(
+                            node,
+                            graph,
+                            data_tuple,
+                            state_backend,
+                            active_resources,
+                            run_id,
+                            params,
+                            sub_graph_runner,
+                            instance_map,
+                        )
+                        for node in executable_this_pass
+                    ]
+
+                    pass_results = await asyncio.gather(*tasks_to_run)
+
+                    for node, res in zip(executable_this_pass, pass_results):
+                        state_backend.put_result(node.id, res)
+                        if flow_manager:
+                            flow_manager.register_result(node.id, res, state_backend)
+
+                pending_nodes_in_stage = deferred_this_pass
+
+                if pending_nodes_in_stage and not executable_this_pass:
+                    await self.wakeup_event.wait()
+                    self.wakeup_event.clear()
+                    self.constraint_manager.cleanup_expired_constraints()
+
+        # Use the mapped canonical node ID to check for the final result
+        if not state_backend.has_result(target_node.id):
+            # For debugging, check if the instance was skipped
+            if skip_reason := state_backend.get_skip_reason(target_node.id):
+                if skip_reason == "UpstreamSkipped_Sequence":
+                    return None
+                raise DependencyMissingError(
+                    task_id=target.task.name or "unknown",
+                    arg_name="<Target Output>",
+                    dependency_id=f"Target node '{target_node.name}' was skipped (Reason: {skip_reason})",
+                )
+
+            raise KeyError(
+                f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )
 
-        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
-        self._visited_instances[result._uuid] = node
+        return state_backend.get_result(target_node.id)
+~~~~~
 
-        if created_new:
-            self.graph.add_node(node)
-            if result.task.func:
-                if not getattr(result.task, "_tco_analysis_done", False):
-                    assign_tco_cycle_ids(result.task)
-                node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
-                potential_targets = analyze_task_source(result.task)
-                self._shadow_visited[result.task] = node
-                for target_task in potential_targets:
-                    self._visit_shadow_recursive(node, target_task)
+#### Acts 5: Create `__init__.py`
 
-        # 4. Finalize edges (idempotent)
-        self._scan_and_add_edges(node, result.args)
-        self._scan_and_add_edges(node, result.kwargs)
-        if result._condition:
-            source_node = self._visited_instances[result._condition._uuid]
-            self.graph.add_edge(Edge(source=source_node, target=node, arg_name="_condition", edge_type=EdgeType.CONDITION))
-        if result._constraints:
-             for res, req in result._constraints.requirements.items():
-                if isinstance(req, (LazyResult, MappedLazyResult)):
-                    source = self._visited_instances[req._uuid]
-                    self.graph.add_edge(Edge(source=source, target=node, arg_name=res, edge_type=EdgeType.CONSTRAINT))
-        for dep in result._dependencies:
-            source = self._visited_instances[dep._uuid]
-            self.graph.add_edge(Edge(source=source, target=node, arg_name="<sequence>", edge_type=EdgeType.SEQUENCE))
-        
-        return node
+导出策略，保持 API 兼容。
 
-    def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
-        if result._uuid in self._visited_instances:
-            return self._visited_instances[result._uuid]
-        
-        # 1. Post-order traversal for mapped inputs
-        dep_nodes: Dict[str, Node] = {}
-        self._find_dependencies(result.mapping_kwargs, dep_nodes)
-        if result._condition:
-            self._find_dependencies(result._condition, dep_nodes)
-        if result._dependencies:
-            self._find_dependencies(result._dependencies, dep_nodes)
+~~~~~act
+write_file
+packages/cascade-engine/src/cascade/runtime/strategies/__init__.py
+~~~~~
+~~~~~python
+from .base import ExecutionStrategy
+from .graph import GraphExecutionStrategy
+from .vm import VMExecutionStrategy
 
-        # 2. Compute structural hash for Map node
-        hash_components = [f"Map({getattr(result.factory, 'name', 'factory')})"]
-        hash_components.append("MapKwargs:")
-        hash_components.extend(self._build_hash_components_from_arg(result.mapping_kwargs, dep_nodes))
-        
-        if result._condition: hash_components.append("Condition:PRESENT")
-        if result._dependencies: hash_components.append(f"Deps:{len(result._dependencies)}")
-        
-        structural_hash = self._get_merkle_hash(hash_components)
-
-        # 3. Hash-consing
-        def node_factory():
-            input_bindings = {}
-            for k, val in result.mapping_kwargs.items():
-                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    input_bindings[k] = self._register_data(val)
-            
-            return Node(
-                id=structural_hash,
-                name=f"map({getattr(result.factory, 'name', 'factory')})",
-                node_type="map",
-                mapping_factory=result.factory,
-                retry_policy=result._retry_policy,
-                cache_policy=result._cache_policy,
-                constraints=result._constraints,
-                input_bindings=input_bindings,
-            )
-
-        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
-        self._visited_instances[result._uuid] = node
-
-        if created_new:
-            self.graph.add_node(node)
-
-        # 4. Add data edges
-        self._scan_and_add_edges(node, result.mapping_kwargs)
-        if result._condition:
-            source = self._visited_instances[result._condition._uuid]
-            self.graph.add_edge(Edge(source=source, target=node, arg_name="_condition", edge_type=EdgeType.CONDITION))
-        for dep in result._dependencies:
-            source = self._visited_instances[dep._uuid]
-            self.graph.add_edge(Edge(source=source, target=node, arg_name="<sequence>", edge_type=EdgeType.SEQUENCE))
-
-        return node
-
-    def _visit_shadow_recursive(self, parent_node: Node, task: Task):
-        if task in self._shadow_visited:
-            target_node = self._shadow_visited[task]
-            self.graph.add_edge(Edge(source=parent_node, target=target_node, arg_name="<potential>", edge_type=EdgeType.POTENTIAL))
-            return
-
-        potential_uuid = f"shadow:{parent_node.id}:{task.name}"
-        target_node = Node(id=potential_uuid, name=task.name, node_type="task", is_shadow=True, tco_cycle_id=getattr(task, "_tco_cycle_id", None))
-        
-        self.graph.add_node(target_node)
-        self._shadow_visited[task] = target_node
-        self.graph.add_edge(Edge(source=parent_node, target=target_node, arg_name="<potential>", edge_type=EdgeType.POTENTIAL))
-
-        for next_task in analyze_task_source(task):
-            self._visit_shadow_recursive(target_node, next_task)
-
-    def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
-        """Idempotently adds DATA and ROUTER edges based on pre-visited instances."""
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            source_node = self._visited_instances[obj._uuid]
-            self.graph.add_edge(Edge(source=source_node, target=target_node, arg_name=path or "dep", edge_type=EdgeType.DATA))
-
-        elif isinstance(obj, Router):
-            selector_node = self._visited_instances[obj.selector._uuid]
-            self.graph.add_edge(Edge(source=selector_node, target=target_node, arg_name=path, router=obj, edge_type=EdgeType.DATA))
-            for key, route_res in obj.routes.items():
-                route_node = self._visited_instances[route_res._uuid]
-                self.graph.add_edge(Edge(source=route_node, target=target_node, arg_name=f"{path}.route[{key}]", edge_type=EdgeType.ROUTER_ROUTE))
-
-        elif isinstance(obj, (list, tuple)):
-            for i, item in enumerate(obj):
-                self._scan_and_add_edges(target_node, item, path=f"{path}[{i}]" if path else str(i))
-
-        elif isinstance(obj, dict):
-            for k, v in obj.items():
-                self._scan_and_add_edges(target_node, v, path=f"{path}.{k}" if path else str(k))
-
-
-def build_graph(
-    target: Any, registry: NodeRegistry | None = None
-) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
-    return GraphBuilder(registry=registry).build(target)
+__all__ = ["ExecutionStrategy", "GraphExecutionStrategy", "VMExecutionStrategy"]
 ~~~~~
 
 ### 下一步建议
+我们已经完成了 1.3 阶段的重构。代码现在应该更加清晰，并且 `GraphExecutionStrategy` 已经完全适配了新的图构建 API。
 
-我们已经完成了 `GraphBuilder` 的“Hash-Consing”化重构。
-1.  **代码审查**: 注意 `_find_dependencies` 和 `_scan_and_add_edges` 的引入。它们确保了我们首先建立稳定的结构身份，然后才建立连接关系，且这一切都依赖于 `_visited_instances` (InstanceMap) 这个桥梁。
-2.  **验证**: 再次运行 `pytest` 确保 1.1 引入的哈希测试和现有的 217 个测试依然全部通过。
-3.  **推进 1.3**: 一旦验证通过，我们将进入 **1.3 阶段：适配 `GraphExecutionStrategy`**。我们将移除所有复杂的缓存逻辑，仅保留基于 `InstanceMap` 的、绝对正确的执行链路。
+请运行测试套件 (`pytest`)。这是关键的一步，因为它将验证整个新架构（Merkle Hash + Hash Consing + No-Cache Execution）的端到端正确性。
 
-请确认是否运行测试。
+如果测试全部通过，我们可以运行性能测试作为最终验证（预期是慢但正确）。

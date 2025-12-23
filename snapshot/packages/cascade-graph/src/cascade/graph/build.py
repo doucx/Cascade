@@ -165,8 +165,10 @@ class GraphBuilder:
         node, created_new = self.registry.get_or_create(structural_hash, node_factory)
         self._visited_instances[result._uuid] = node
 
+        # Always add the node to the current graph, even if it was reused from the registry.
+        self.graph.add_node(node)
+
         if created_new:
-            self.graph.add_node(node)
             if result.task.func:
                 if not getattr(result.task, "_tco_analysis_done", False):
                     assign_tco_cycle_ids(result.task)
@@ -236,8 +238,8 @@ class GraphBuilder:
         node, created_new = self.registry.get_or_create(structural_hash, node_factory)
         self._visited_instances[result._uuid] = node
 
-        if created_new:
-            self.graph.add_node(node)
+        # Always add the node to the current graph
+        self.graph.add_node(node)
 
         # 4. Add data edges
         self._scan_and_add_edges(node, result.mapping_kwargs)

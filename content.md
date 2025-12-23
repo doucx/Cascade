@@ -1,53 +1,100 @@
-好的，这是一个非常关键的发现。
+遵循 `d2-skill-quipu-decide-write-patch` 流程：
 
-所有单元测试和集成测试都通过了，但端到端的性能基准测试却失败了，并且复现了我们最初修复的 `DependencyMissingError`。
+简要回答：
+找到问题了。
 
-**这强烈表明我们的测试套件中存在一个盲点。** 我们的测试没有充分覆盖“带有内部依赖的、会命中 JIT 缓存的 TCO 循环”这一特定场景。`heavy_complex_countdown` 正是这种场景，而我们的常规测试不是。
+1.  **根本原因 (The Smoking Gun)**: 在 `GraphBuilder.build` 中，我错误地将 `self.graph.add_node(node)` 放在了 `if created_new:` 块内。这意味着，如果一个节点是从 `NodeRegistry` 中复用的（例如 TCO 循环中的静态依赖链），它就不会被添加到当前正在构建的 `Graph` 对象中。结果就是，`Solver` 面对的是一个只有边没有点（或只有部分点）的图，导致依赖项（`noop` 节点）没有被包含在执行计划中，最终在执行消费者节点时抛出 `DependencyMissingError`。
+2.  **测试失败**: `test_tco_cache.py` 失败是因为遗漏了 `@pytest.mark.asyncio` 装饰器。
 
-**根本原因分析**：
-JIT 缓存 (`_plan_cache`) 正在按预期工作。在 `heavy_complex_countdown` 的第二次 TCO 迭代中，`GraphExecutionStrategy` 成功地从缓存中获取了 `ExecutionPlan`，从而跳过了昂贵的 `solver.resolve()` 步骤。
+修复方案：
+1.  修改 `packages/cascade-graph/src/cascade/graph/build.py`，确保无论节点是否是新创建的，都将其添加到当前的 `graph` 中。
+2.  修改 `tests/engine/runtime/test_tco_cache.py`，添加缺失的装饰器。
 
-然而，TCO 循环的一个核心行为是在每次迭代之间**清除 `state_backend`**。这意味着，即使我们有正确的计划，我们也必须在**每次迭代中**从头到尾执行这个计划，以便为后续阶段（如 `heavy_complex_countdown` 节点本身）重新计算其依赖项（如 `noop` 链）的结果。
-
-当前的 `DependencyMissingError` 错误表明，在缓存命中的迭代中，`noop` 链没有被执行，其结果没有被放入已清空的 `state_backend` 中，因此当 `heavy_complex_countdown` 尝试解析其 `_dummy` 参数时，依赖项的结果缺失了。这指向一个潜在的问题：`InMemoryStateBackend` 可能没有正确地实现 `clear()` 方法，导致状态在 TCO 循环之间没有被完全重置。
-
-我将生成一个计划，首先创建一个专门捕获此回归错误的测试，然后实施修复。
-
-## [WIP] test(runtime): 为 TCO JIT 缓存添加依赖回归测试并修复状态泄露
+## [WIP] fix(core): 修复 GraphBuilder 在节点复用时丢失节点的 Bug
 
 ### 错误分析
--   **现象**: `heavy_complex_countdown` 在 TCO 循环的第二次（缓存命中）迭代中因 `DependencyMissingError` 失败。
--   **根因**: 尽管 `ExecutionPlan` 被成功缓存和复用，但在新的、已清空的 TCO 迭代上下文中，计划的前置依赖阶段没有被重新执行以填充 `state_backend`。这极有可能是因为 `InMemoryStateBackend` 缺乏一个 `clear()` 方法，导致 TCO 循环的状态清理步骤静默失败。
--   **测试盲点**: 现有测试没有覆盖“一个会命中 JIT 缓存、且包含内部数据依赖的 TCO 循环”的场景。
+-   **现象**: TCO 性能测试中的 `heavy_complex_countdown` 失败，报 `DependencyMissingError`。
+-   **根因**: `GraphBuilder` 仅将 `NodeRegistry` 中**新创建**的节点添加到当前 `Graph` 实例中。复用的节点（如递归中的静态依赖链）被遗漏，导致 `ExecutionPlan` 不完整，依赖项未执行。
+-   **测试问题**: 新增的回归测试因缺少 asyncio 标记而未能运行。
 
 ### 用户需求
-1.  创建一个新的回归测试，以在 `pytest` 套件内可靠地复现 `tco_performance.py` 中观察到的 `DependencyMissingError`。
-2.  修复 `InMemoryStateBackend`，确保 TCO 循环能够正确地重置状态，从而使缓存的计划能够成功执行。
+修复核心 Bug 以恢复 TCO 循环中的依赖项执行，并修复回归测试的配置。
 
 ### 评论
-这个 Bug 非常微妙，因为它只在缓存、TCO 和内部依赖这三个条件同时满足时才会触发。创建一个专门的测试用例至关重要，它将成为我们未来对 `Engine` 状态管理进行任何重构时的关键安全网。
+这是一个经典的“缓存失效”类 Bug。我们在引入“结构复用”时，混淆了“全局唯一性（Registry）”和“当前上下文完整性（Graph）”的概念。对于每个新的 `Graph` 构建过程，无论节点是否是全局“旧”的，对于这个 `Graph` 来说它都是“必需”的。
 
 ### 目标
-1.  创建新测试文件 `tests/engine/runtime/test_tco_cache.py`。
-2.  在新文件中实现 `test_jit_cache_handles_tco_with_dependencies` 测试用例，该用例将模拟 `heavy_complex_countdown` 的失败模式。
-3.  为 `InMemoryStateBackend` 添加一个 `clear()` 方法，以确保 TCO 循环的状态重置机制能够正常工作。
+1.  将 `self.graph.add_node(node)` 移出 `if created_new:` 块。
+2.  为 `test_tco_cache.py` 添加 `@pytest.mark.asyncio`。
 
 ### 基本原理
-新的测试用例将使 Bug 的复现自动化和确定化。通过在 `InMemoryStateBackend` 中实现 `clear()` 方法，我们修复了 `GraphExecutionStrategy` 中 TCO 循环的一个隐含假设（即 `state_backend` 是可重置的），从而确保了在缓存命中的情况下，执行流程也能在干净的状态上正确地重建所有必要的依赖结果。
+确保 `GraphBuilder` 构建的 `Graph` 对象包含所有遍历到的节点，从而保证 `Solver` 能生成完整的执行计划。
 
 ### 标签
-#intent/fix #intent/tooling #flow/ready #priority/critical #comp/runtime #comp/tests #concept/state #scope/core #ai/instruct #task/domain/testing #task/object/regression-test #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/graph #comp/tests #scope/core #ai/instruct #task/domain/architecture #task/object/graph-builder #task/action/bug-fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建新的回归测试
+#### Acts 1: 修复 `GraphBuilder` 逻辑
 
-我们将创建一个新的测试文件和测试用例，专门用于捕获这种 TCO 缓存下的依赖执行失败问题。
+强制将所有访问到的节点添加到当前图中。
 
 ~~~~~act
-write_file
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
+        self._visited_instances[result._uuid] = node
+
+        if created_new:
+            self.graph.add_node(node)
+            if result.task.func:
+                if not getattr(result.task, "_tco_analysis_done", False):
+~~~~~
+~~~~~python
+        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
+        self._visited_instances[result._uuid] = node
+
+        # Always add the node to the current graph, even if it was reused from the registry.
+        self.graph.add_node(node)
+
+        if created_new:
+            if result.task.func:
+                if not getattr(result.task, "_tco_analysis_done", False):
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
+        self._visited_instances[result._uuid] = node
+
+        if created_new:
+            self.graph.add_node(node)
+
+        # 4. Add data edges
+        self._scan_and_add_edges(node, result.mapping_kwargs)
+~~~~~
+~~~~~python
+        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
+        self._visited_instances[result._uuid] = node
+
+        # Always add the node to the current graph
+        self.graph.add_node(node)
+
+        # 4. Add data edges
+        self._scan_and_add_edges(node, result.mapping_kwargs)
+~~~~~
+
+#### Acts 2: 修复测试用例装饰器
+
+~~~~~act
+patch_file
 tests/engine/runtime/test_tco_cache.py
 ~~~~~
 ~~~~~python
@@ -62,17 +109,26 @@ from cascade.adapters.executors.local import LocalExecutor
 def noop():
     """A simple dependency task."""
     return "ok"
+~~~~~
+~~~~~python
+import asyncio
+import pytest
+import cascade as cs
+from cascade.runtime import Engine, MessageBus
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
 
 @cs.task
-def recursive_with_deps(n: int, _dep=None):
-    """
-    A task that recurses and has an internal dependency.
-    This structure is designed to fail if the JIT cache is hit, but the
-    dependencies are not re-calculated in the cleared TCO state.
-    """
-    if n <= 0:
-        return "done"
+def noop():
+    """A simple dependency task."""
+    return "ok"
+~~~~~
+~~~~~act
+patch_file
+tests/engine/runtime/test_tco_cache.py
+~~~~~
+~~~~~python
     return recursive_with_deps(n - 1, _dep=noop())
 
 
@@ -80,44 +136,21 @@ async def test_jit_cache_handles_tco_with_dependencies():
     """
     Validates that the GraphExecutionStrategy's JIT cache correctly handles
     TCO loops where each iteration has internal dependencies.
+~~~~~
+~~~~~python
+    return recursive_with_deps(n - 1, _dep=noop())
+
+
+@pytest.mark.asyncio
+async def test_jit_cache_handles_tco_with_dependencies():
     """
-    # This engine will use the GraphExecutionStrategy with its JIT cache enabled
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
-
-    # We run for a small number of iterations (e.g., 10 is enough).
-    # The first iteration will populate the cache.
-    # The subsequent 9 iterations will be cache hits.
-    # If the bug exists, it will fail on the 2nd iteration.
-    target = recursive_with_deps(10)
-
-    result = await engine.run(target)
-
-    assert result == "done"
-~~~~~
-
-#### Acts 2: 修复 `InMemoryStateBackend`
-
-我们将在 `InMemoryStateBackend` 中添加 `clear()` 方法，以确保 TCO 循环可以正确重置其状态。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/adapters/state/in_memory.py
-~~~~~
-~~~~~python
-        return self._skipped.get(node_id)
-~~~~~
-~~~~~python
-        return self._skipped.get(node_id)
-
-    def clear(self) -> None:
-        """
-        Clears all results and skip reasons. Used between TCO iterations.
-        """
-        self._results.clear()
-        self._skipped.clear()
+    Validates that the GraphExecutionStrategy's JIT cache correctly handles
+    TCO loops where each iteration has internal dependencies.
 ~~~~~
 
 ### 下一步建议
-我们已经创建了回归测试并实施了修复。请再次运行 `pytest`。新的测试 `test_jit_cache_handles_tco_with_dependencies` 应该会失败（如果没有修复）然后通过（在修复后）。
-
-如果所有测试都通过，请最后一次运行 `observatory/benchmarks/tco_performance.py`。这次它应该会成功完成，并且 `heavy_complex_countdown` 的 TPS 将会因为 JIT 缓存的正确工作而大幅提升。这将标志着路线图 v3.2 第二阶段的核心目标达成。
+这次修复应该是决定性的。
+1.  运行 `pytest tests/engine/runtime/test_tco_cache.py` 确认回归测试通过。
+2.  运行完整的 `pytest` 确保没有其他副作用。
+3.  运行 `python observatory/benchmarks/tco_performance.py`。这一次，我们应该能看到所有基准测试都通过，并且 `heavy_complex_countdown` 的性能应该有所提升（尽管由于我们确认了它是 cache miss，提升幅度取决于 `NodeRegistry` 减少了多少对象分配开销）。
+4.  根据基准测试结果，评估是否需要进一步优化（例如，是否真的需要解决 root node cache miss 的问题，或者目前的 Node 复用已经足够好）。

@@ -1,4 +1,5 @@
 import asyncio
+import pytest
 import cascade as cs
 from cascade.runtime import Engine, MessageBus
 from cascade.adapters.solvers.native import NativeSolver
@@ -23,6 +24,7 @@ def recursive_with_deps(n: int, _dep=None):
     return recursive_with_deps(n - 1, _dep=noop())
 
 
+@pytest.mark.asyncio
 async def test_jit_cache_handles_tco_with_dependencies():
     """
     Validates that the GraphExecutionStrategy's JIT cache correctly handles

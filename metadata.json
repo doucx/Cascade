@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修复 API 变更、断言及资源覆盖状态泄露 Bug", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766493516.4825077, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(runtime): 为 TCO JIT 缓存添加依赖回归测试并修复状态泄露", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766493690.5548487, "duration_ms": 0}}

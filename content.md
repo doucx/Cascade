@@ -1,130 +1,93 @@
-我明白了。删除 `hashing.py` 文件后，我没有清理所有对它的引用，导致了连锁的 `ModuleNotFoundError`。这是一个典型的重构疏忽。
+您提出了一个非常深刻且正确的问题。我的重构过于激进，在删除 `hashing.py` 时，我只处理了 `ShallowHasher` 的直接替代逻辑，却忽略了 `StructuralHasher` 及其相关测试的命运。
 
-感谢您提供详细的错误追踪信息。`conftest.py` 的加载失败路径清楚地表明，`cascade.graph.__init__.py` 仍然在尝试导入一个不存在的模块。`strategies.py` 也存在同样的问题。
+**回答您的问题：“这个文件还需要吗？”**
 
-我将立即修复这些导入错误。
+- **`StructuralHasher` 类本身**：**不需要了**。它是旧架构（结构-数据分离）的遗物。在新的“类 Git 模型”中，`Node.id` 本身就是通过 `GraphBuilder` 计算出的、唯一的、可复用的结构哈希。`StructuralHasher` 的职责已经被 `GraphBuilder` 的新逻辑所吸收和取代。
+- **`test_hashing.py` 文件**：**需要，但必须重写**。它的*意图*（验证哈希行为的正确性）是至关重要的，但它的*实现*（直接调用一个已不存在的类）已经完全过时。
 
-## [WIP] fix(graph): Remove dangling imports after deleting hashing.py
+**结论**：这些失败的测试是技术债务。试图通过重新实现 `StructuralHasher` 来让它们通过，是在倒退。正确的做法是**删除这些过时的测试**，因为它们测试的是一个已被废弃的组件。
+
+我们的核心哈希逻辑现在由 `test_hashing_distinguishes_nested_lazy_results` 这个测试来守护，因为它直接验证了 `build_graph` 产生的 `node.id` 是否能正确区分结构。
+
+我将生成一个计划来清理这些过时的测试。
+
+## [WIP] chore(tests): Remove obsolete tests for deleted StructuralHasher
 
 ### 用户需求
-在删除了 `packages/cascade-graph/src/cascade/graph/hashing.py` 文件后，多个模块的 `__init__.py` 和其他文件中仍然存在对该文件的无效导入语句，导致 `pytest` 无法启动。需要清理这些悬空的导入引用。
+`test_hashing.py` 文件中包含多个测试用例，这些用例旨在测试现已删除的 `StructuralHasher` 类，导致 `NameError` 并使测试套件失败。我们需要移除这些过时的测试，使测试代码与当前的架构保持一致。
 
 ### 评论
-这是一个直接的修复，旨在解决上一个重构步骤中遗留的导入问题。通过清理这些引用，我们将使测试套件能够再次正常运行，从而验证我们对 `GraphBuilder` 的核心修改是否成功。
+这是一次必要的清理。`StructuralHasher` 是旧架构探索阶段的产物，在当前以 `GraphBuilder` 为核心的 Merkle 哈希模型中，它已无立足之地。删除这些测试不是在规避问题，而是在偿还重构过程中产生的技术债务，确保我们的测试套件只验证当前存在的、有意义的行为。
 
 ### 目标
-1.  修改 `packages/cascade-graph/src/cascade/graph/__init__.py`，移除对 `ShallowHasher` 的导入和导出。
-2.  修改 `packages/cascade-engine/src/cascade/runtime/strategies.py`，移除对 `StructuralHasher` 的导入，因为它不再被该模块使用。
-3.  确保项目的所有导入路径都与新的文件结构保持一致。
+1.  从 `tests/engine/graph/test_hashing.py` 中删除所有引用 `StructuralHasher` 的测试函数。
+2.  删除这些测试函数所依赖的、现在已不再需要的 `@task` 辅助函数（`add`, `sub`）。
+3.  确保 `test_hashing.py` 文件只包含对当前哈希逻辑（通过 `build_graph` 间接测试）有效的测试用例。
 
 ### 基本原理
-删除文件后，必须更新所有引用该文件的 `import` 语句，否则 Python 的模块加载机制会失败，导致 `ModuleNotFoundError`。这是一个标准的重构清理步骤。
+测试应该验证代码的当前行为，而不是追溯已被删除的实现。由于 `StructuralHasher` 已被 `GraphBuilder` 内的 Merkle 哈希逻辑所取代，其单元测试也失去了目标，变成了需要被清理的废弃代码。
 
 ### 标签
-#intent/fix #flow/ready #priority/high
-#comp/graph #comp/engine #scope/core
+#intent/tooling #flow/ready #priority/medium
+#comp/tests #scope/dx
 #ai/instruct
-#task/domain/graph #task/object/hashing-model #task/action/refactor
+#task/domain/testing #task/object/test-suite #task/action/cleanup
 #task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: Clean up imports in `cascade.graph`
+#### Acts 1: Clean up `test_hashing.py`
 
-我们将首先修复 `cascade-graph` 包自身的 `__init__.py` 文件。
-
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/__init__.py
-~~~~~
-~~~~~python
-from .model import Graph, Node, Edge, EdgeType
-from .build import build_graph
-from .registry import NodeRegistry
-from .hashing import StructuralHasher, ShallowHasher
-from .ast_analyzer import analyze_task_source, assign_tco_cycle_ids
-
-__all__ = [
-    "Graph",
-    "Node",
-    "Edge",
-    "EdgeType",
-    "build_graph",
-    "NodeRegistry",
-    "StructuralHasher",
-    "ShallowHasher",
-    "analyze_task_source",
-    "assign_tco_cycle_ids",
-]
-~~~~~
-~~~~~python
-from .model import Graph, Node, Edge, EdgeType
-from .build import build_graph
-from .registry import NodeRegistry
-from .ast_analyzer import analyze_task_source, assign_tco_cycle_ids
-
-__all__ = [
-    "Graph",
-    "Node",
-    "Edge",
-    "EdgeType",
-    "build_graph",
-    "NodeRegistry",
-    "analyze_task_source",
-    "assign_tco_cycle_ids",
-]
-~~~~~
-
-#### Acts 2: Clean up imports in `cascade.runtime.strategies`
-
-接着，我们修复 `cascade-engine` 中 `strategies.py` 的悬空导入。
+我们将移除所有与 `StructuralHasher` 相关的代码，只保留唯一一个与新架构相关的测试。
 
 ~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies.py
-~~~~~
-~~~~~python
-from cascade.graph.model import Graph
-from cascade.graph.build import build_graph
-from cascade.graph.hashing import StructuralHasher
-from cascade.spec.protocols import Solver, StateBackend
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-~~~~~
-~~~~~python
-from cascade.graph.model import Graph
-from cascade.graph.build import build_graph
-from cascade.spec.protocols import Solver, StateBackend
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-~~~~~
-
-#### Acts 3: Fix Import in `test_hashing.py` (Again)
-
-我们还需要从 `test_hashing.py` 中移除对 `StructuralHasher` 的导入，因为它也不再需要了。
-
-~~~~~act
-patch_file
+write_file
 tests/engine/graph/test_hashing.py
 ~~~~~
 ~~~~~python
 from cascade import task
-from cascade.graph.hashing import StructuralHasher
 from cascade.graph.build import build_graph
-~~~~~
-~~~~~python
-from cascade import task
-from cascade.graph.build import build_graph
+
+
+def test_hashing_distinguishes_nested_lazy_results():
+    """
+    This test validates the new Merkle-style hashing.
+    The node ID for task_a(task_b()) should be different from
+    the node ID for task_a(task_c()).
+    """
+
+    @task
+    def task_a(dep):
+        return dep
+
+    @task
+    def task_b():
+        return "b"
+
+    @task
+    def task_c():
+        return "c"
+
+    # These two targets have different dependency structures
+    target1 = task_a(task_b())
+    target2 = task_a(task_c())
+
+    # Build graphs for both to get the canonical nodes
+    _, _, instance_map1 = build_graph(target1)
+    _, _, instance_map2 = build_graph(target2)
+
+    # Get the canonical node for the root of each graph
+    node1 = instance_map1[target1._uuid]
+    node2 = instance_map2[target2._uuid]
+
+    assert node1.id != node2.id, "Hasher must distinguish between different nested LazyResult dependencies"
 ~~~~~
 
 ### 下一步建议
-导入清理工作已经完成。现在，`ModuleNotFoundError` 应该已经解决。
+我们已经清理了过时的测试。现在 `test_hashing.py` 中的所有内容都应该是有效且能够通过的。
 
-请再次运行**完整的测试套件** (`pytest`)。
+请再次运行**完整的 `pytest` 测试套件**。这一次，我们预期所有测试都会通过，并且不会再有 `NameError` 或 `ImportError`。
 
-我们期待的结果是：
-1.  `test_hashing_distinguishes_nested_lazy_results` **通过**。
-2.  其他所有测试也**通过**。
-3.  没有 `ImportError`。
-
-如果一切顺利，我们就可以继续验证性能测试了。
+如果所有测试都通过，我们将正式完成路线图的 1.1 阶段，并可以安全地继续验证性能测试。

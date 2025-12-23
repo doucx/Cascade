@@ -25,11 +25,12 @@ class ArgumentResolver:
         user_params: Dict[str, Any] = None,
         input_overrides: Dict[str, Any] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
+        # [CLEANUP] Removed FAST PATH logic that was causing regressions.
+        
         args = []
         kwargs = {}
 
         # 1. Reconstruct initial args/kwargs from Bindings (Literals)
-        # Apply overrides if provided (for TCO fast path)
         bindings = node.input_bindings
         if input_overrides:
             bindings = bindings.copy()
@@ -37,7 +38,7 @@ class ArgumentResolver:
 
         positional_args_dict = {}
         for name, value_raw in bindings.items():
-            # Recursively resolve structures (e.g., lists containing Inject)
+            # Always resolve structures to handle nested Injects correctly
             value = self._resolve_structure(
                 value_raw, node.id, state_backend, resource_context, graph
             )
@@ -51,13 +52,11 @@ class ArgumentResolver:
         args = [positional_args_dict[i] for i in sorted_indices]
 
         # 2. Overlay Dependencies from Edges
-        # Optimization: Filter once
+        # [OPTIMIZATION] Filter edges once using list comprehension
         incoming_edges = [e for e in graph.edges if e.target.id == node.id and e.edge_type == EdgeType.DATA]
-        if not incoming_edges:
-            return args, kwargs
-            
-        for edge in incoming_edges:
-            if edge.edge_type == EdgeType.DATA:
+        
+        if incoming_edges:
+            for edge in incoming_edges:
                 val = self._resolve_dependency(
                     edge, node.id, state_backend, graph, instance_map
                 )
@@ -88,6 +87,7 @@ class ArgumentResolver:
                 pass
 
         # 4. Handle internal param fetching context
+        # [CRITICAL] This logic must always run for Param tasks
         from cascade.internal.inputs import _get_param_value
 
         if node.callable_obj is _get_param_value.func:

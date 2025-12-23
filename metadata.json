@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(engine): 消除静态分析重复开销，优化热路径性能", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766467647.9231346, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(engine): implement zero-overhead TCO for multi-task cycles", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766467749.1166968, "duration_ms": 0}}

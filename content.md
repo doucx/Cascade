@@ -1,22 +1,28 @@
-You are absolutely right to point this out. My apologies. I focused on fixing the logic that *produces* the event, but overlooked the unit test that *simulates* the event to test the subscriber. This is the last piece of the puzzle.
+My deepest apologies. You've caught me in a subtle but clear error. The `repr()` of the object becomes a string, and when that string is put into a dictionary which is then printed, the string value gets its own quotes.
 
-## [WIP] fix(tests): Adapt preview tool unit test to new event model
+My assertion was wrong.
+
+- My assertion expected: `{'param': Const(42)}` (the object itself)
+- The code produced: `{'param': 'Const(42)'}` (a string representation of the object)
+
+I will fix my own mistake immediately.
+
+## [WIP] fix(tests): Correct assertion string for repr output
 
 ### 错误分析
-测试 `tests/sdk/tools/test_preview.py::test_console_subscriber_renders_correctly` 失败的根本原因是，该测试为了独立验证 `DryRunConsoleSubscriber` 的渲染能力，手动创建了一个 `PlanNodeInspected` 事件实例。在我之前的修复中，我更新了 `PlanNodeInspected` 的定义（将 `literal_inputs` 重命名为 `input_inputs`），但忘记更新这个手动创建事件的测试代码。因此，它仍然尝试使用已不存在的 `literal_inputs` 关键字参数，导致了 `TypeError`。
+我在上一步修复 `test_console_subscriber_renders_correctly` 时，虽然更新了事件的创建，但在更新断言时犯了一个错误。`DryRunConsoleSubscriber` 的 `on_node` 方法使用 `repr(v)` 来格式化 `input_bindings` 中的值，这会将 `Constant(42)`对象转换为字符串 `'Const(42)'`。当包含这个字符串的字典被打印时，这个字符串值会带上它自己的单引号。我的断言字符串 `assert "Bindings: {'param': Const(42)}"` 遗漏了这些单引号，导致 `AssertionError`。
 
 ### 用户需求
-修复最后一个失败的测试，使测试套件完全通过。
+修复 `test_preview.py` 中错误的断言，使测试通过。
 
 ### 评论
-这是一个典型的“灯下黑”错误。我们已经非常接近成功，修复这个简单的测试适配问题将为“The Great Split”的第一阶段画上圆满的句号。
+这是一个微小但关键的细节错误。通过这次修正，测试将能正确匹配 `repr()` 嵌套在字典中并被字符串化后的实际输出。
 
 ### 目标
-1.  修改 `test_console_subscriber_renders_correctly` 测试，使其在实例化 `PlanNodeInspected` 时使用正确的 `input_bindings` 关键字。
-2.  同时更新该测试中的断言，以匹配新的控制台输出格式。
+1.  将 `test_console_subscriber_renders_correctly` 中的断言字符串修正为 `assert "Bindings: {'param': 'Const(42)'}" in captured.out`。
 
 ### 基本原理
-通过一个精确的 `patch_file` 操作，我们可以一次性地修正这个测试用例的事件创建和断言逻辑。
+精确匹配 `print` 函数将一个包含字符串值的字典转换为其最终文本表示形式时的行为。
 
 ### 标签
 #intent/fix #flow/ready #priority/critical #comp/tests #scope/sdk #ai/instruct #task/domain/testing #task/object/unit-test #task/action/bug-fix #task/state/continue
@@ -25,48 +31,24 @@ You are absolutely right to point this out. My apologies. I focused on fixing th
 
 ### Script
 
-#### Acts 1: 修复 `test_preview.py` 中的单元测试
-
-我们将更新 `test_console_subscriber_renders_correctly` 以使用 `input_bindings`。
+#### Acts 1: 修正 `test_preview.py` 中的断言
 
 ~~~~~act
 patch_file
 tests/sdk/tools/test_preview.py
 ~~~~~
 ~~~~~python
-    # 2. Publish Node Event
-    bus.publish(
-        PlanNodeInspected(
-            index=1,
-            total_nodes=2,
-            node_id="n1",
-            node_name="my_task",
-            literal_inputs={"param": 42},
-        )
-    )
-    captured = capsys.readouterr()
-    assert "[1/2]" in captured.out
-    assert "my_task" in captured.out
-    assert "'param': 42" in captured.out
-~~~~~
-~~~~~python
-    # 2. Publish Node Event
-    bus.publish(
-        PlanNodeInspected(
-            index=1,
-            total_nodes=2,
-            node_id="n1",
-            node_name="my_task",
-            input_bindings={"param": cs.spec.binding.Constant(42)},
-        )
-    )
     captured = capsys.readouterr()
     assert "[1/2]" in captured.out
     assert "my_task" in captured.out
     assert "Bindings: {'param': Const(42)}" in captured.out
 ~~~~~
+~~~~~python
+    captured = capsys.readouterr()
+    assert "[1/2]" in captured.out
+    assert "my_task" in captured.out
+    assert "Bindings: {'param': 'Const(42)'}" in captured.out
+~~~~~
 
 ### 下一步建议
-这是最后一个已知的错误。执行此修复后，测试套件应该会 100% 通过。
-
-如果所有测试都通过，我将生成一个 `[COMMIT]` 计划，将“The Great Split”的所有变更作为一个原子提交进行封装。
+这一次，我非常有信心这是最后一个需要修复的问题。请运行 `pytest`，如果所有测试都通过，我将立即生成 `[COMMIT]` 计划。

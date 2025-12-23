@@ -105,7 +105,7 @@ def test_console_subscriber_renders_correctly(capsys):
     captured = capsys.readouterr()
     assert "[1/2]" in captured.out
     assert "my_task" in captured.out
-    assert "Bindings: {'param': Const(42)}" in captured.out
+    assert "Bindings: {'param': 'Const(42)'}" in captured.out
 
     # 3. Publish Finish Event
     bus.publish(PlanAnalysisFinished(total_steps=2))

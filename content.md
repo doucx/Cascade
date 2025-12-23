@@ -1,52 +1,46 @@
-是的，完全正确。
+好的，你的诊断完全正确。这是一个典型的、由核心 API 变更引起的连锁反应。由于 `build_graph` 的签名变更，所有直接调用它并期望返回单个 `Graph` 对象的测试都失败了。
 
-`build_graph` 的返回值签名已经从 `Graph` 变成了 `(Graph, DataTuple)`，但这个测试用例显式调用了 `build_graph` 来准备 Mock 数据，却没有适配新的返回值，因此拿到了一个元组而不是图对象。
+使用 `sed` 进行批量修复是最高效的策略。我将生成一个计划来执行此操作。
 
-我们需要更新这个测试文件来解包返回值。
-
-## [WIP] fix(tests): 适配 test_engine_core 到新 build_graph 签名
+## [WIP] chore(tests): 批量适配测试套件到新 GraphBuilder 签名
 
 ### 用户需求
-修复 `tests/engine/runtime/test_engine_core.py` 中的 `AttributeError`，使其正确解包 `build_graph` 的返回值。
+使用命令行工具（如 `sed`）批量修复所有因 `build_graph` 返回值变更而失败的测试文件。
 
 ### 评论
-由于 `Engine` 内部已经适配了新的 `build_graph`，所以那些只调用 `Engine.run()` 的集成测试（如 `test_resource_scheduling.py`）已经可以通过了。现在我们需要修复那些手动调用构建器进行 Setup 的单元测试。
+这是一个非常好的实践，通过一次性的、自动化的脚本来处理机械性的代码重构，可以最大程度地减少手动操作引入的错误，并极大提高效率。
 
 ### 目标
-修改 `test_engine_core.py`，将 `graph = build_graph(...)` 更改为 `graph, _ = build_graph(...)`。
+执行一个 `sed` 命令，该命令会查找所有 `variable = build_graph(...)` 形式的赋值语句，并将其替换为 `variable, _ = build_graph(...)`，从而正确地解包 `build_graph` 返回的元组。
 
 ### 基本原理
-忽略返回的数据元组，因为在这个特定的测试中，我们在手动构造 Mock Plan，只关心图的拓扑结构（Nodes）来获取节点引用，并不关心运行时数据。
+我们将使用带有扩展正则表达式（`-E`）的 `sed` 命令来执行就地替换（`-i`）。正则表达式 `^(\s*[a-zA-Z0-9_]+) = build_graph\(` 会精确地匹配并捕获以变量赋值开头的 `build_graph` 调用行。然后，我们使用捕获的变量名（`\1`）来重写该行，添加 `, _` 以解包元组，从而修复错误。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/engine #ai/instruct #task/domain/testing #task/object/unit-test #task/action/bug-fix #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-suite #task/action/refactor #task-state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复测试用例
+#### Acts 1: 批量修复测试文件
+
+此命令将对搜索结果中所有受影响的文件执行替换操作。
 
 ~~~~~act
-patch_file
-tests/engine/runtime/test_engine_core.py
+run_command
 ~~~~~
-~~~~~python
-    workflow = task_b(task_a())
-    graph = build_graph(workflow)
-    node_a = next(n for n in graph.nodes if n.name == "task_a")
-    node_b = next(n for n in graph.nodes if n.name == "task_b")
-~~~~~
-~~~~~python
-    workflow = task_b(task_a())
-    graph, _ = build_graph(workflow)
-    node_a = next(n for n in graph.nodes if n.name == "task_a")
-    node_b = next(n for n in graph.nodes if n.name == "task_b")
+~~~~~bash
+sed -i -E 's/^(\s*[a-zA-Z0-9_]+) = build_graph\(/\1, _ = build_graph\(/g' \
+    tests/engine/adapters/solvers/test_csp.py \
+    tests/engine/adapters/solvers/test_native.py \
+    tests/engine/graph/test_serialize.py \
+    tests/engine/graph/test_build.py \
+    tests/engine/graph/test_build_tco.py \
+    tests/spec/spec/test_constraint.py \
+    packages/cascade-sdk/src/cascade/tools/visualize.py \
+    packages/cascade-sdk/src/cascade/tools/preview.py
 ~~~~~
 
 ### 下一步建议
-现在核心引擎逻辑 (`Engine`) 和核心测试 (`test_engine_core`) 都已适配完毕。
-
-接下来的工作量主要在于清理剩下的测试套件。大量的 `AttributeError: 'tuple' object has no attribute 'nodes'` 表明还有很多测试文件（特别是 `tests/engine/graph/test_build.py` 和可视化工具测试）需要类似的解包修复。
-
-建议执行一个批量修复计划：**[WIP] chore(tests): 批量适配测试套件到新 GraphBuilder 签名**。
+执行此命令后，所有因 `AttributeError: 'tuple' object has no attribute 'nodes'` 引起的测试失败都应得到解决。请再次运行 `pytest`。现在我们可以更清楚地看到本次重构是否引入了其他更深层次的逻辑问题。

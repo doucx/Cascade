@@ -30,7 +30,7 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
     # 1. Build the graph statically
-    graph = build_graph(target)
+    graph, _ = build_graph(target)
 
     # 2. Resolve the execution plan (topological sort)
     plan = engine.solver.resolve(graph)

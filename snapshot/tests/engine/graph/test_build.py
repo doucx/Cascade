@@ -14,7 +14,7 @@ def test_build_linear_graph():
     r1 = t1()
     r2 = t2(r1)
 
-    graph = build_graph(r2)
+    graph, _ = build_graph(r2)
 
     assert len(graph.nodes) == 2
     assert len(graph.edges) == 1
@@ -39,7 +39,7 @@ def test_build_graph_with_param_factory():
 
     target = process(param_node)
 
-    graph = build_graph(target)
+    graph, _ = build_graph(target)
 
     assert len(graph.nodes) == 2
 
@@ -65,7 +65,7 @@ def test_build_graph_with_env_factory():
         return val
 
     target = echo(env_node)
-    graph = build_graph(target)
+    graph, _ = build_graph(target)
 
     e_node = next(n for n in graph.nodes if n.name == "_get_env_var")
     assert e_node.node_type == "task"
@@ -97,7 +97,7 @@ def test_build_graph_with_nested_dependencies():
     # Create a workflow with nested dependencies
     target = t_main(t_c(), [t_a()], {"key": t_b()})
 
-    graph = build_graph(target)
+    graph, _ = build_graph(target)
 
     # 4 nodes: t_a, t_b, t_c, and t_main
     assert len(graph.nodes) == 4

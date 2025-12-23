@@ -105,7 +105,7 @@ class GraphExecutionStrategy:
         current_target = target
         
         # Optimization state for TCO Fast Path
-        last_task = None
+        last_executed_task = None
         last_graph = None
         last_plan = None
 
@@ -119,10 +119,10 @@ class GraphExecutionStrategy:
                 # --- FAST PATH CHECK ---
                 is_fast_path = False
                 if (
-                    last_task is not None
+                    last_executed_task is not None
                     and last_graph is not None
                     and isinstance(current_target, LazyResult)
-                    and current_target.task == last_task
+                    and current_target.task == last_executed_task
                 ):
                     if self._is_simple_task(current_target):
                         is_fast_path = True
@@ -178,14 +178,14 @@ class GraphExecutionStrategy:
                     plan,
                 )
 
+            # Capture the task we just executed BEFORE updating current_target
+            if isinstance(current_target, LazyResult):
+                last_executed_task = current_target.task
+            else:
+                last_executed_task = None
+
             # 4. Check for Tail Call (LazyResult)
             if isinstance(result, (LazyResult, MappedLazyResult)):
-                if isinstance(result, LazyResult):
-                    last_task = result.task
-                else:
-                    # Mapped results are complex, disable fast path for next step
-                    last_task = None
-
                 current_target = result
                 # STATE GC
                 if hasattr(state_backend, "clear"):

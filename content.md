@@ -1,77 +1,117 @@
 简要回答：
-好的，我将通过修复 `NativeSolver` 的循环检测逻辑，更新 `ShallowHasher` 以确保图构建的正确性，并在 `GraphExecutionStrategy` 中实现基于结构哈希的缓存机制，来解决性能测试失败的问题并优化长程递归任务的执行效率。
+我们将通过以下措施修复性能回退：1. 优化 `StructuralHasher`，从昂贵的字符串拼接+SHA256 转换为高效的 Python 原生元组哈希；2. 恢复针对简单任务的 `_is_simple_task` 快速通道优化；3. 引入专用的 `extract_data` 函数以避免在缓存命中时重复构建图。
 
-## [WIP] fix: 修复循环检测误报并实现通用图结构缓存
+## [WIP] perf: 优化 StructuralHasher 并恢复 TCO 快速通道
+
+### 错误分析
+性能基准测试显示 `simple_countdown` 的 TPS 从 ~8500 跌至 ~1300，`heavy_complex_countdown` 跌至 ~82。
+主要原因分析：
+1.  **哈希计算开销过大**: `StructuralHasher` 使用字符串列表拼接并计算 SHA256，这在紧密循环（TCO）中是非常昂贵的操作。对于 `heavy` 任务，每次迭代都要遍历 10 层深度的树并进行大量字符串操作。
+2.  **快速通道丢失**: 之前的 `_is_simple_task` 优化允许对简单递归直接使用 `id(task_obj)` 作为缓存键，这是 $O(1)$ 的操作。移除它意味着所有任务都必须走昂贵的哈希计算路径。
+3.  **重复图构建**: 即使缓存命中，`execute` 循环中仍然调用 `build_graph` 来提取数据。`build_graph` 会实例化大量的 `Node` 和 `Edge` 对象，这在只需提取 `DataTuple` 的场景下是巨大的浪费。
 
 ### 用户需求
-1.  修复 `NativeSolver` 将 `POTENTIAL` 边误判为依赖循环的问题，使 `heavy_complex_countdown` 测试能够运行。
-2.  在 `GraphExecutionStrategy` 中实现通用的图结构缓存（General Graph Structural Caching），使结构稳定的复杂递归任务（如 `heavy_complex_countdown`）能够复用 Execution Plan，避免重复的图构建和求解开销。
-
-### 评论
-当前的 `GraphExecutionStrategy` 依赖于旧的 `_is_simple_task` 检查来进行 TCO 优化，这对于包含子图结构的递归任务（如 Benchmark 中的例子）无效。通过引入基于 `StructuralHasher` 的缓存，我们将能够支持任意结构的 TCO 优化。同时，修复 `NativeSolver` 和 `ShallowHasher` 是保证新架构正确运行的必要前提。
+恢复 TCO 性能到重构前的水平（Simple > 8000 TPS），同时保持新架构的通用性（即支持 `heavy_complex_countdown` 运行且不报错）。
 
 ### 目标
-1.  修改 `NativeSolver.resolve`，在拓扑排序和循环检测中显式忽略 `EdgeType.POTENTIAL`。
-2.  修改 `ShallowHasher`，将 `_uuid` 纳入哈希计算，防止 `GraphBuilder` 错误地合并拓扑位置不同但结构相似的节点（这会导致自环）。
-3.  重构 `GraphExecutionStrategy`：
-    *   移除旧的 `_is_simple_task` 优化路径。
-    *   引入 `_plan_cache`，使用 `StructuralHasher` 计算的哈希作为 Key。
-    *   实现“缓存命中”逻辑：复用缓存的 `Graph` 和 `Plan`，仅调用 `build_graph` 提取新的数据元组 (`DataTuple`)。
-    *   更新 `_execute_graph` 签名，允许直接传递 `target_node`，从而绕过对 `instance_map` 的依赖。
+1.  **重写 `StructuralHasher`**: 放弃 SHA256，改用基于递归元组的 `hash()`，大幅降低常数因子。
+2.  **恢复 `GraphExecutionStrategy` 优化**:
+    *   重新引入 `_is_simple_task` 检查。
+    *   对简单任务使用 `id(task)` 作为缓存键。
+    *   对复杂任务使用优化后的 `StructuralHasher`。
+3.  **实现 `extract_data`**: 在 `GraphBuilder` 中添加一个轻量级的数据提取方法，仅遍历 `LazyResult` 树并收集 `SlotRef` 指向的数据，不创建任何图对象。
 
 ### 基本原理
-*   **NativeSolver**: `POTENTIAL` 边仅用于静态分析（如检测潜在的递归路径），不代表运行时的数据流依赖，因此不应参与拓扑排序。
-*   **ShallowHasher**: 在单次图构建中，如果两个 `LazyResult` 仅仅因为参数都是 `LazyResult` 类型而被视为相同（哈希冲突），会导致它们在图中被合并为同一个节点，从而形成错误的自环。引入 `_uuid` 可以保证节点的唯一性和 DAG 的正确性。
-*   **结构缓存**: 将“结构”（Graph/Plan）与“数据”（DataTuple）分离是 Hashlife 优化的核心。通过结构哈希识别出相同的图模板，我们可以跳过昂贵的 `solver.resolve` 步骤，仅需注入新的数据即可执行。
+*   **Python Hash**: Python 的内置 `hash()` 对于元组是非常高效的（C 语言层实现）。对于内存中的 TCO 循环，我们不需要跨进程/持久化的 SHA256 哈希稳定性，进程内的 `hash()` 足够且快得多。
+*   **Heuristic Optimization**: 绝大多数递归任务都是简单的自递归。保留针对这种情况的特化优化（Fast Path）是系统工程中的常见权衡。
+*   **Allocation Removal**: 在热路径中移除对象分配（`Node`, `Edge`）是提升 Python 性能的关键。
 
 ### 标签
-#intent/fix #intent/refine #flow/ready #priority/high #comp/engine #comp/graph #concept/tco #concept/cache #scope/core #ai/instruct #task/domain/optimization #task/object/graph-execution-strategy #task/action/structural-caching #task/state/begin
+#intent/refine #intent/perf #flow/ready #priority/critical #comp/engine #comp/graph #concept/tco #concept/optimization #scope/core #ai/refine #task/domain/optimization #task/object/graph-execution-strategy #task/action/performance-tuning #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 NativeSolver 忽略 POTENTIAL 边
+#### Acts 1: 优化 StructuralHasher 为 Tuple Hash
 
-在构建入度表和邻接表时，过滤掉 `POTENTIAL` 类型的边。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/adapters/solvers/native.py
-~~~~~
-~~~~~python
-        for edge in graph.edges:
-            # POTENTIAL edges are for observation/TCO and must NOT affect execution scheduling.
-            if edge.edge_type == EdgeType.POTENTIAL:
-                continue
-
-            # An edge is only part of the execution plan if both its source
-~~~~~
-~~~~~python
-        for edge in graph.edges:
-            # POTENTIAL edges are for observation/TCO and must NOT affect execution scheduling.
-            if edge.edge_type == EdgeType.POTENTIAL:
-                continue
-
-            # An edge is only part of the execution plan if both its source
-~~~~~
-
-#### Acts 2: 更新 ShallowHasher 以包含 UUID
-
-为了防止 `GraphBuilder` 在单次构建中错误地合并节点，我们在浅层哈希中加入 UUID。这确保了生成的图是正确的 DAG。
+将基于字符串的哈希计算替换为基于元组的结构哈希。
 
 ~~~~~act
-patch_file
+write_file
 packages/cascade-graph/src/cascade/graph/hashing.py
 ~~~~~
 ~~~~~python
-    def _visit_lazy(self, lr: LazyResult):
-        task_name = getattr(lr.task, "name", "unknown")
-        self._hash_components.append(f"Task({task_name})")
+from typing import Any, Dict, Tuple, List
+import hashlib
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.resource import Inject
 
-        if lr._retry_policy:
-~~~~~
-~~~~~python
+
+class ShallowHasher:
+    """
+    Generates a stable shallow structural hash for a LazyResult.
+    "Shallow" means it does NOT recursively hash nested LazyResults.
+    """
+
+    def __init__(self):
+        self._hash_components: List[str] = []
+
+    def hash(self, target: Any) -> str:
+        self._hash_components = []
+        self._visit_top_level(target)
+        fingerprint = "|".join(self._hash_components)
+        return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+
+    def _visit_top_level(self, obj: Any):
+        if isinstance(obj, LazyResult):
+            self._visit_lazy(obj)
+        elif isinstance(obj, MappedLazyResult):
+            self._visit_mapped(obj)
+        else:
+            self._visit_arg(obj)
+
+    def _visit_arg(self, obj: Any):
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            self._hash_components.append("LAZY")
+            return
+
+        if isinstance(obj, Router):
+            self._hash_components.append("Router{")
+            self._hash_components.append("Selector:")
+            self._visit_arg(obj.selector)
+            self._hash_components.append("Routes:")
+            for k in sorted(obj.routes.keys()):
+                self._hash_components.append(f"Key({k})->")
+                self._visit_arg(obj.routes[k])
+            self._hash_components.append("}")
+            return
+
+        if isinstance(obj, (list, tuple)):
+            self._hash_components.append("List[")
+            for item in obj:
+                self._visit_arg(item)
+            self._hash_components.append("]")
+            return
+
+        if isinstance(obj, dict):
+            self._hash_components.append("Dict{")
+            for k in sorted(obj.keys()):
+                self._hash_components.append(f"{k}:")
+                self._visit_arg(obj[k])
+            self._hash_components.append("}")
+            return
+
+        if isinstance(obj, Inject):
+            self._hash_components.append(f"Inject({obj.resource_name})")
+            return
+
+        try:
+            self._hash_components.append(repr(obj))
+        except Exception:
+            self._hash_components.append("<unreprable>")
+
     def _visit_lazy(self, lr: LazyResult):
         # Include UUID to ensure topological distinctness in GraphBuilder
         self._hash_components.append(f"UUID({lr._uuid})")
@@ -79,20 +119,30 @@ packages/cascade-graph/src/cascade/graph/hashing.py
         self._hash_components.append(f"Task({task_name})")
 
         if lr._retry_policy:
-~~~~~
+            rp = lr._retry_policy
+            self._hash_components.append(
+                f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})"
+            )
+        if lr._cache_policy:
+            self._hash_components.append(f"Cache({type(lr._cache_policy).__name__})")
 
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/hashing.py
-~~~~~
-~~~~~python
-    def _visit_mapped(self, mlr: MappedLazyResult):
-        factory_name = getattr(mlr.factory, "name", "unknown")
-        self._hash_components.append(f"Map({factory_name})")
+        self._hash_components.append("Args:")
+        for arg in lr.args:
+            self._visit_arg(arg)
 
-        self._hash_components.append("MapKwargs:")
-~~~~~
-~~~~~python
+        self._hash_components.append("Kwargs:")
+        for k in sorted(lr.kwargs.keys()):
+            self._hash_components.append(f"{k}=")
+            self._visit_arg(lr.kwargs[k])
+
+        if lr._condition:
+            self._hash_components.append("Condition:PRESENT")
+        if lr._dependencies:
+            self._hash_components.append(f"Deps:{len(lr._dependencies)}")
+        if lr._constraints:
+            keys = sorted(lr._constraints.requirements.keys())
+            self._hash_components.append(f"Constraints({','.join(keys)})")
+
     def _visit_mapped(self, mlr: MappedLazyResult):
         # Include UUID to ensure topological distinctness in GraphBuilder
         self._hash_components.append(f"UUID({mlr._uuid})")
@@ -100,204 +150,260 @@ packages/cascade-graph/src/cascade/graph/hashing.py
         self._hash_components.append(f"Map({factory_name})")
 
         self._hash_components.append("MapKwargs:")
-~~~~~
+        for k in sorted(mlr.mapping_kwargs.keys()):
+            self._hash_components.append(f"{k}=")
+            self._visit_arg(mlr.mapping_kwargs[k])
 
-#### Acts 3: 重构 GraphExecutionStrategy 实现缓存
+        if mlr._condition:
+            self._hash_components.append("Condition:PRESENT")
+        if mlr._dependencies:
+            self._hash_components.append(f"Deps:{len(mlr._dependencies)}")
+        if mlr._constraints:
+            keys = sorted(mlr._constraints.requirements.keys())
+            self._hash_components.append(f"Constraints({','.join(keys)})")
 
-我们将引入 `StructuralHasher`，并在 `execute` 方法中实现缓存查找逻辑。同时，我们将修改 `_execute_graph` 以接受明确的 `target_node`。
 
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies.py
-~~~~~
-~~~~~python
-from cascade.graph.hashing import StructuralHasher
-from cascade.spec.protocols import Solver, StateBackend
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.bus import MessageBus
-~~~~~
-~~~~~python
-from cascade.graph.hashing import StructuralHasher
-from cascade.spec.protocols import Solver, StateBackend
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.bus import MessageBus
-~~~~~
+class StructuralHasher:
+    """
+    Generates a stable structural hash for a LazyResult tree.
+    Uses Python's native tuple hashing for high performance.
+    """
 
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies.py
-~~~~~
-~~~~~python
-        self.constraint_manager = constraint_manager
-        self.bus = bus
-        self.wakeup_event = wakeup_event
-        # Cache for structural hashing (slow path)
-        self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
-        # Cache for Zero-Overhead TCO (fast path), keyed by Task object
-        self._task_templates: Dict[Any, Tuple[Graph, Any]] = {}
+    def __init__(self):
+        # We don't need state for tuple hashing, but keeping API consistent
+        pass
 
-    def _is_simple_task(self, lr: Any) -> bool:
-        """
-        Checks if the LazyResult is a simple, flat task (no nested dependencies).
-        This allows for the Zero-Overhead TCO fast path.
-        """
-        if not isinstance(lr, LazyResult):
-            return False
-        if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
-            return False
+    def hash(self, target: Any) -> Tuple[int, None]:
+        # Returns (hash_int, None). The second element is legacy 'literals' dict
+        # which we don't extract during hashing anymore for speed.
+        structure = self._visit(target)
+        return hash(structure), None
 
-        # Explicit dependencies
+    def _visit(self, obj: Any) -> Any:
+        if isinstance(obj, LazyResult):
+            return self._visit_lazy(obj)
+        elif isinstance(obj, MappedLazyResult):
+            return self._visit_mapped(obj)
+        elif isinstance(obj, Router):
+            return self._visit_router(obj)
+        elif isinstance(obj, (list, tuple)):
+            return tuple(self._visit(item) for item in obj)
+        elif isinstance(obj, dict):
+            # Sort keys for stability
+            return tuple((k, self._visit(obj[k])) for k in sorted(obj.keys()))
+        elif isinstance(obj, Inject):
+            return ("Inject", obj.resource_name)
+        else:
+            # Literal value marker. We don't include the value itself in the hash
+            # if we want strictly structural hashing, BUT:
+            # For template matching, structure includes "where the data slots are".
+            # The value itself effectively becomes a "Slot" in the template.
+            # So "LIT" is correct.
+            return "LIT"
+
+    def _visit_lazy(self, lr: LazyResult) -> Tuple:
+        components = ["Task", getattr(lr.task, "name", "unknown")]
+
+        if lr._retry_policy:
+            rp = lr._retry_policy
+            components.append(("Retry", rp.max_attempts, rp.delay, rp.backoff))
+        if lr._cache_policy:
+            components.append(("Cache", type(lr._cache_policy).__name__))
+
+        # Args
+        args_tuple = tuple(self._visit(arg) for arg in lr.args)
+        components.append(args_tuple)
+
+        # Kwargs
+        kwargs_tuple = tuple(
+            (k, self._visit(v)) for k, v in sorted(lr.kwargs.items())
+        )
+        components.append(kwargs_tuple)
+
+        if lr._condition:
+            components.append(("Condition", self._visit(lr._condition)))
+
         if lr._dependencies:
-            return False
+            deps_tuple = tuple(self._visit(dep) for dep in lr._dependencies)
+            components.append(("Deps", deps_tuple))
 
-        def _has_lazy(obj):
-            if isinstance(obj, (LazyResult, MappedLazyResult)):
-                return True
-            if isinstance(obj, (list, tuple)):
-                return any(_has_lazy(x) for x in obj)
-            if isinstance(obj, dict):
-                return any(_has_lazy(v) for v in obj.values())
-            return False
+        if lr._constraints:
+             # Just hash keys of constraints, values are data
+             keys = tuple(sorted(lr._constraints.requirements.keys()))
+             components.append(("Constraints", keys))
 
-        # Check args and kwargs recursively
-        for arg in lr.args:
-            if _has_lazy(arg):
-                return False
+        return tuple(components)
 
-        for v in lr.kwargs.values():
-            if _has_lazy(v):
-                return False
+    def _visit_mapped(self, mlr: MappedLazyResult) -> Tuple:
+        components = ["Map", getattr(mlr.factory, "name", "unknown")]
 
-        return True
+        # MapKwargs
+        kwargs_tuple = tuple(
+            (k, self._visit(v)) for k, v in sorted(mlr.mapping_kwargs.items())
+        )
+        components.append(kwargs_tuple)
 
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
+        if mlr._condition:
+             components.append(("Condition", self._visit(mlr._condition)))
+        if mlr._dependencies:
+             deps_tuple = tuple(self._visit(dep) for dep in mlr._dependencies)
+             components.append(("Deps", deps_tuple))
+        if mlr._constraints:
+             keys = tuple(sorted(mlr._constraints.requirements.keys()))
+             components.append(("Constraints", keys))
+        
+        return tuple(components)
 
-        # Optimization state for TCO Fast Path
-        last_executed_task = None
-        last_tco_cycle_id = None
+    def _visit_router(self, router: Router) -> Tuple:
+        # Selector structure
+        selector_struct = self._visit(router.selector)
+        
+        # Routes structure
+        routes_items = []
+        for k in sorted(router.routes.keys()):
+            # Route keys are structural
+            routes_items.append((k, self._visit(router.routes[k])))
+        
+        return ("Router", selector_struct, tuple(routes_items))
+~~~~~
 
-        while True:
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                graph, plan, data_tuple, instance_map = None, None, (), None
+#### Acts 2: 在 GraphBuilder 中实现 extract_data
 
-                is_fast_path = False
-                if isinstance(current_target, LazyResult) and self._is_simple_task(
-                    current_target
-                ):
-                    task_obj = current_target.task
-                    cycle_id = getattr(task_obj, "_tco_cycle_id", None)
+添加 `extract_data` 函数，它只负责提取数据元组，不构建图。
 
-                    is_tco_candidate = (
-                        cycle_id and cycle_id == last_tco_cycle_id
-                    ) or (task_obj == last_executed_task)
-
-                    if is_tco_candidate and task_obj in self._task_templates:
-                        is_fast_path = True
-
-                if is_fast_path:
-                    # FAST PATH: Reuse plan, rebuild graph quickly to get data
-                    graph, plan = self._task_templates[current_target.task]
-                    _, data_tuple, instance_map = build_graph(current_target)
-
-                    # BUGFIX: The instance_map from the new build_graph will contain a new,
-                    # ephemeral node ID for the current_target. However, the execution plan
-                    # uses the canonical node ID from the cached graph. We must align them.
-                    # For a simple TCO task, the canonical target is the first (and only)
-                    # node in the first stage of the plan.
-                    if plan and plan[0]:
-                        canonical_target_node = plan[0][0]
-                        instance_map[current_target._uuid] = canonical_target_node
-                else:
-                    # STANDARD PATH: Build graph and resolve plan for the first time
-                    graph, data_tuple, instance_map = build_graph(current_target)
-                    plan = self.solver.resolve(graph)
-
-                    # Cache the template for future TCO loops
-                    if isinstance(current_target, LazyResult) and self._is_simple_task(
-                        current_target
-                    ):
-                        self._task_templates[current_target.task] = (graph, plan)
-
-                # Update state for next iteration
-                if isinstance(current_target, LazyResult):
-                    last_executed_task = current_target.task
-                    last_tco_cycle_id = getattr(current_target.task, "_tco_cycle_id", None)
-                else:
-                    last_executed_task = None
-                    last_tco_cycle_id = None
-
-                # 2. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph, data_tuple)
-                self.resource_container.setup(
-                    required_resources,
-                    active_resources,
-                    run_stack,
-                    step_stack,
-                    run_id,
-                )
-
-                # 3. Execute Graph
-                result = await self._execute_graph(
-                    current_target,
-                    params,
-                    active_resources,
-                    run_id,
-                    state_backend,
-                    graph,
-                    data_tuple,  # Pass the blood!
-                    plan,
-                    instance_map,
-                )
-
-            # Capture the task we just executed BEFORE updating current_target
-            if isinstance(current_target, LazyResult):
-                last_executed_task = current_target.task
-            else:
-                last_executed_task = None
-
-            # 4. Check for Tail Call (LazyResult)
-            if isinstance(result, (LazyResult, MappedLazyResult)):
-                current_target = result
-                # STATE GC
-                if hasattr(state_backend, "clear"):
-                    state_backend.clear()
-                # Yield control
-                await asyncio.sleep(0)
-            else:
-                return result
-
-    async def _execute_graph(
-        self,
-        target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        state_backend: StateBackend,
-        graph: Graph,
-        data_tuple: Tuple[Any, ...],
-        plan: Any,
-        instance_map: Dict[str, Node],
-    ) -> Any:
-        target_node = instance_map[target._uuid]
-        flow_manager = FlowManager(graph, target_node.id, instance_map)
-        blocked_nodes = set()
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
 ~~~~~
 ~~~~~python
-        self.constraint_manager = constraint_manager
-        self.bus = bus
-        self.wakeup_event = wakeup_event
-        # Cache for structural hashing
-        # Key: structural_hash, Value: (Graph, Plan, TargetNodeID)
+def build_graph(
+    target: Any, registry: NodeRegistry | None = None
+) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
+    return GraphBuilder(registry=registry).build(target)
+~~~~~
+~~~~~python
+def build_graph(
+    target: Any, registry: NodeRegistry | None = None
+) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
+    return GraphBuilder(registry=registry).build(target)
+
+
+class DataExtractor:
+    """
+    A lightweight visitor that only extracts data literals from a LazyResult tree,
+    mirroring the traversal order of GraphBuilder but without creating Nodes.
+    """
+
+    def __init__(self):
+        self._data_buffer: List[Any] = []
+        self._visited: set = set()
+
+    def extract(self, target: Any) -> Tuple[Any, ...]:
+        self._visit(target)
+        return tuple(self._data_buffer)
+
+    def _register_data(self, value: Any):
+        self._data_buffer.append(value)
+
+    def _visit(self, value: Any):
+        if isinstance(value, LazyResult):
+            self._visit_lazy(value)
+        elif isinstance(value, MappedLazyResult):
+            self._visit_mapped(value)
+        else:
+            raise TypeError(f"Cannot extract data from type {type(value)}")
+
+    def _visit_lazy(self, result: LazyResult):
+        if result._uuid in self._visited:
+            return
+        self._visited.add(result._uuid)
+
+        # Arguments (must match GraphBuilder._create_node_from_lazy_result order)
+        for val in result.args:
+            self._process_arg(val)
+        for val in result.kwargs.values():
+            self._process_arg(val)
+
+        # Structure traversal (must match GraphBuilder._visit_lazy_result recursion)
+        if result._condition:
+            self._visit(result._condition)
+        
+        if result._constraints:
+             for req in result._constraints.requirements.values():
+                 if isinstance(req, (LazyResult, MappedLazyResult)):
+                     self._visit(req)
+
+        for dep in result._dependencies:
+            self._visit(dep)
+        
+        # Scan args again for structure recursion (graph edges)
+        self._scan_structure(result.args)
+        self._scan_structure(result.kwargs)
+
+    def _visit_mapped(self, result: MappedLazyResult):
+        if result._uuid in self._visited:
+            return
+        self._visited.add(result._uuid)
+
+        # Arguments
+        for val in result.mapping_kwargs.values():
+            self._process_arg(val)
+
+        # Structure
+        # ... mapped specific structure ...
+        self._scan_structure(result.mapping_kwargs)
+
+    def _process_arg(self, val: Any):
+        if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
+            self._register_data(val)
+
+    def _scan_structure(self, obj: Any):
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            self._visit(obj)
+        elif isinstance(obj, Router):
+            self._visit(obj.selector)
+            for route in obj.routes.values():
+                self._visit(route)
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                self._scan_structure(item)
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                self._scan_structure(v)
+
+
+def extract_data(target: Any) -> Tuple[Any, ...]:
+    return DataExtractor().extract(target)
+~~~~~
+
+#### Acts 3: 恢复 Fast Path 并使用 extract_data
+
+在 `GraphExecutionStrategy` 中重新引入优化逻辑。
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies.py
+~~~~~
+~~~~~python
+from cascade.graph.model import Graph
+from cascade.graph.build import build_graph
+from cascade.graph.hashing import StructuralHasher
+from cascade.spec.protocols import Solver, StateBackend
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+~~~~~
+~~~~~python
+from cascade.graph.model import Graph
+from cascade.graph.build import build_graph, extract_data
+from cascade.graph.hashing import StructuralHasher
+from cascade.spec.protocols import Solver, StateBackend
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies.py
+~~~~~
+~~~~~python
         self._plan_cache: Dict[str, Tuple[Graph, Any, str]] = {}
         self.hasher = StructuralHasher()
 
@@ -344,58 +450,102 @@ packages/cascade-engine/src/cascade/runtime/strategies.py
                     
                     target_node = instance_map[current_target._uuid]
                     self._plan_cache[struct_hash] = (graph, plan, target_node.id)
+~~~~~
+~~~~~python
+        self._plan_cache: Dict[Any, Tuple[Graph, Any, str]] = {}
+        self.hasher = StructuralHasher()
 
-                # 2. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph, data_tuple)
-                self.resource_container.setup(
-                    required_resources,
-                    active_resources,
-                    run_stack,
-                    step_stack,
-                    run_id,
-                )
+    def _is_simple_task(self, lr: Any) -> bool:
+        """
+        Checks if the LazyResult is a simple, flat task suitable for the Fast Path optimization.
+        """
+        if not isinstance(lr, LazyResult):
+            return False
+        if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
+            return False
+        if lr._dependencies:
+            return False
+        
+        # Shallow check for nested lazy objects in args/kwargs
+        # We don't recurse deeply to keep this check O(1) in depth
+        for arg in lr.args:
+            if isinstance(arg, (LazyResult, MappedLazyResult)):
+                return False
+        for v in lr.kwargs.values():
+             if isinstance(v, (LazyResult, MappedLazyResult)):
+                return False
+        
+        return True
 
-                # 3. Execute Graph
-                result = await self._execute_graph(
-                    target,
-                    params,
-                    active_resources,
-                    run_id,
-                    state_backend,
-                    graph,
-                    data_tuple,
-                    plan,
-                    instance_map,
-                    target_node,
-                )
-
-            # 4. Check for Tail Call (LazyResult)
-            if isinstance(result, (LazyResult, MappedLazyResult)):
-                current_target = result
-                # STATE GC
-                if hasattr(state_backend, "clear"):
-                    state_backend.clear()
-                # Yield control
-                await asyncio.sleep(0)
-            else:
-                return result
-
-    async def _execute_graph(
+    async def execute(
         self,
         target: Any,
-        params: Dict[str, Any],
-        active_resources: Dict[str, Any],
         run_id: str,
+        params: Dict[str, Any],
         state_backend: StateBackend,
-        graph: Graph,
-        data_tuple: Tuple[Any, ...],
-        plan: Any,
-        instance_map: Dict[str, Node],
-        target_node: Node,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
     ) -> Any:
-        flow_manager = FlowManager(graph, target_node.id, instance_map)
-        blocked_nodes = set()
+        current_target = target
+
+        while True:
+            # The step stack holds "task" (step) scoped resources
+            with ExitStack() as step_stack:
+                graph, plan, data_tuple, instance_map = None, None, (), None
+                target_node = None
+                
+                # 1. Structural Hashing & Caching
+                
+                # OPTIMIZATION: Check for simple recursion (Fast Path)
+                # If it's a simple task, we use the Task object identity as the cache key.
+                # This avoids tree traversal for hashing.
+                is_fast_path = False
+                cache_key = None
+                
+                if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+                     is_fast_path = True
+                     cache_key = id(current_target.task)
+                else:
+                     cache_key, _ = self.hasher.hash(current_target)
+
+                if cache_key in self._plan_cache:
+                    # CACHE HIT: Reuse Graph and Plan
+                    graph, plan, target_node_id = self._plan_cache[cache_key]
+                    
+                    # Extract ONLY the data tuple using the optimized extractor
+                    data_tuple = extract_data(current_target)
+                    
+                    # Resolve target node from cached graph
+                    target_node = next((n for n in graph.nodes if n.id == target_node_id), None)
+                    if not target_node:
+                         raise RuntimeError(f"Cached target node {target_node_id} not found in graph")
+                    
+                    # In cached mode, we don't have a valid instance_map for the new LazyResults.
+                    instance_map = {} 
+                else:
+                    # CACHE MISS: Full Build & Solve
+                    graph, data_tuple, instance_map = build_graph(current_target)
+                    plan = self.solver.resolve(graph)
+                    
+                    target_node = instance_map[current_target._uuid]
+                    self._plan_cache[cache_key] = (graph, plan, target_node.id)
 ~~~~~
 
-### 下一步建议
-运行 `python observatory/benchmarks/tco_performance.py` 来验证 `heavy_complex_countdown` 现在是否能够成功运行，并观察“VM vs. Heavy (JIT)”的性能对比。如果一切正常，您应该会看到 JIT 模式（GraphExecutionStrategy）的性能有显著提升。
+#### Acts 4: 修复 DataExtractor 的导入问题
+
+我注意到 Act 2 中 `DataExtractor` 的实现依赖了 `Router` 等类，需要确保导入完整。
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
+~~~~~
+~~~~~python
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
+~~~~~

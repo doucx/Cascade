@@ -3,7 +3,7 @@ from contextlib import ExitStack
 from typing import Any, Dict, Protocol, Tuple, List
 
 from cascade.graph.model import Graph
-from cascade.graph.build import build_graph
+from cascade.graph.build import build_graph, extract_data
 from cascade.graph.hashing import StructuralHasher
 from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -59,8 +59,30 @@ class GraphExecutionStrategy:
         self.wakeup_event = wakeup_event
         # Cache for structural hashing
         # Key: structural_hash, Value: (Graph, Plan, TargetNodeID)
-        self._plan_cache: Dict[str, Tuple[Graph, Any, str]] = {}
+        self._plan_cache: Dict[Any, Tuple[Graph, Any, str]] = {}
         self.hasher = StructuralHasher()
+
+    def _is_simple_task(self, lr: Any) -> bool:
+        """
+        Checks if the LazyResult is a simple, flat task suitable for the Fast Path optimization.
+        """
+        if not isinstance(lr, LazyResult):
+            return False
+        if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
+            return False
+        if lr._dependencies:
+            return False
+        
+        # Shallow check for nested lazy objects in args/kwargs
+        # We don't recurse deeply to keep this check O(1) in depth
+        for arg in lr.args:
+            if isinstance(arg, (LazyResult, MappedLazyResult)):
+                return False
+        for v in lr.kwargs.values():
+             if isinstance(v, (LazyResult, MappedLazyResult)):
+                return False
+        
+        return True
 
     async def execute(
         self,
@@ -78,17 +100,27 @@ class GraphExecutionStrategy:
             with ExitStack() as step_stack:
                 graph, plan, data_tuple, instance_map = None, None, (), None
                 target_node = None
-
+                
                 # 1. Structural Hashing & Caching
-                struct_hash, _ = self.hasher.hash(current_target)
+                
+                # OPTIMIZATION: Check for simple recursion (Fast Path)
+                # If it's a simple task, we use the Task object identity as the cache key.
+                # This avoids tree traversal for hashing.
+                is_fast_path = False
+                cache_key = None
+                
+                if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+                     is_fast_path = True
+                     cache_key = id(current_target.task)
+                else:
+                     cache_key, _ = self.hasher.hash(current_target)
 
-                if struct_hash in self._plan_cache:
+                if cache_key in self._plan_cache:
                     # CACHE HIT: Reuse Graph and Plan
-                    graph, plan, target_node_id = self._plan_cache[struct_hash]
+                    graph, plan, target_node_id = self._plan_cache[cache_key]
                     
-                    # We still need to build the graph to extract the NEW data tuple
-                    # The graph structure is identical, so the data extraction order will be identical.
-                    _, data_tuple, _ = build_graph(current_target)
+                    # Extract ONLY the data tuple using the optimized extractor
+                    data_tuple = extract_data(current_target)
                     
                     # Resolve target node from cached graph
                     target_node = next((n for n in graph.nodes if n.id == target_node_id), None)
@@ -96,7 +128,6 @@ class GraphExecutionStrategy:
                          raise RuntimeError(f"Cached target node {target_node_id} not found in graph")
                     
                     # In cached mode, we don't have a valid instance_map for the new LazyResults.
-                    # We pass an empty one, assuming no Routers/Dynamic Constraints in complex TCO loops.
                     instance_map = {} 
                 else:
                     # CACHE MISS: Full Build & Solve
@@ -104,7 +135,7 @@ class GraphExecutionStrategy:
                     plan = self.solver.resolve(graph)
                     
                     target_node = instance_map[current_target._uuid]
-                    self._plan_cache[struct_hash] = (graph, plan, target_node.id)
+                    self._plan_cache[cache_key] = (graph, plan, target_node.id)
 
                 # 2. Setup Resources (mixed scope)
                 required_resources = self.resource_container.scan(graph, data_tuple)

@@ -189,3 +189,91 @@ def build_graph(
     target: Any, registry: NodeRegistry | None = None
 ) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
     return GraphBuilder(registry=registry).build(target)
+
+
+class DataExtractor:
+    """
+    A lightweight visitor that only extracts data literals from a LazyResult tree,
+    mirroring the traversal order of GraphBuilder but without creating Nodes.
+    """
+
+    def __init__(self):
+        self._data_buffer: List[Any] = []
+        self._visited: set = set()
+
+    def extract(self, target: Any) -> Tuple[Any, ...]:
+        self._visit(target)
+        return tuple(self._data_buffer)
+
+    def _register_data(self, value: Any):
+        self._data_buffer.append(value)
+
+    def _visit(self, value: Any):
+        if isinstance(value, LazyResult):
+            self._visit_lazy(value)
+        elif isinstance(value, MappedLazyResult):
+            self._visit_mapped(value)
+        else:
+            raise TypeError(f"Cannot extract data from type {type(value)}")
+
+    def _visit_lazy(self, result: LazyResult):
+        if result._uuid in self._visited:
+            return
+        self._visited.add(result._uuid)
+
+        # Arguments (must match GraphBuilder._create_node_from_lazy_result order)
+        for val in result.args:
+            self._process_arg(val)
+        for val in result.kwargs.values():
+            self._process_arg(val)
+
+        # Structure traversal (must match GraphBuilder._visit_lazy_result recursion)
+        if result._condition:
+            self._visit(result._condition)
+        
+        if result._constraints:
+             for req in result._constraints.requirements.values():
+                 if isinstance(req, (LazyResult, MappedLazyResult)):
+                     self._visit(req)
+
+        for dep in result._dependencies:
+            self._visit(dep)
+        
+        # Scan args again for structure recursion (graph edges)
+        self._scan_structure(result.args)
+        self._scan_structure(result.kwargs)
+
+    def _visit_mapped(self, result: MappedLazyResult):
+        if result._uuid in self._visited:
+            return
+        self._visited.add(result._uuid)
+
+        # Arguments
+        for val in result.mapping_kwargs.values():
+            self._process_arg(val)
+
+        # Structure
+        # ... mapped specific structure ...
+        self._scan_structure(result.mapping_kwargs)
+
+    def _process_arg(self, val: Any):
+        if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
+            self._register_data(val)
+
+    def _scan_structure(self, obj: Any):
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            self._visit(obj)
+        elif isinstance(obj, Router):
+            self._visit(obj.selector)
+            for route in obj.routes.values():
+                self._visit(route)
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                self._scan_structure(item)
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                self._scan_structure(v)
+
+
+def extract_data(target: Any) -> Tuple[Any, ...]:
+    return DataExtractor().extract(target)

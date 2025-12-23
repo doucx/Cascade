@@ -69,10 +69,9 @@ class ShallowHasher:
             self._hash_components.append(f"Inject({obj.resource_name})")
             return
 
-        try:
-            self._hash_components.append(repr(obj))
-        except Exception:
-            self._hash_components.append("<unreprable>")
+        # For any other value, it's a literal. We record a placeholder, not the value itself.
+        # The actual value is handled by the GraphBuilder's data_tuple.
+        self._hash_components.append("LIT")
 
     def _visit_lazy(self, lr: LazyResult):
         task_name = getattr(lr.task, "name", "unknown")

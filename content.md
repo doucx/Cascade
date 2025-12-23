@@ -1,78 +1,99 @@
-好的，我们开始执行战略行动 A：**重新定义核心抽象**。
+好的，我完全理解。您的分析是正确的，这是一个经典的“灯下黑”问题：测试套件覆盖了所有已知的边界情况，但我们引入了一个全新的、未被预料到的故障模式——**由于哈希算法过于简化而导致的结构性哈HI希冲突**。
 
-这是新路线图中最关键的第一步。我们将通过一次精确的手术，切除 `Node.id` 中代表“实例身份”的 `_uuid` 成分，使其回归纯粹的“结构身份”。
+性能测试的失败和标准测试的通过，这两者结合在一起，为我们提供了无价的线索。它证明了 `sequence([a(), a()])` 这种“同级”实例唯一性的问题是解决的，但 `a(b(c()))` 这种“纵深”结构的唯一性问题被我们的修改破坏了，并且缺乏测试覆盖。
 
-这将暂时性地破坏部分测试的正确性，但这是预期的、必要的过程。它为我们后续实现真正的通用缓存和性能优化扫清了最大的障碍。
+我将严格遵循 TDD 流程。**此计划的唯一目标是创建一个会失败的测试**，以精确地捕获这个哈希冲突的 bug。在测试“变红”之前，我不会提出任何修复代码的建议。
 
-我将生成一个计划来执行这个核心修改。
-
-## [WIP] refactor: Decouple Node ID from instance UUID by purifying ShallowHasher
+## [WIP] test: Add failing test for structural hash collision in nested dependencies
 
 ### 用户需求
-开始执行“战略行动 A”，其核心目标是重新定义 `Node` 的核心抽象，使其 `id` 成为一个纯粹的、与运行时实例无关的结构化哈希。
+我们的 `ShallowHasher` 在上次修改后，无法区分包含不同 `LazyResult` 子节点的图结构，导致了哈希冲突和伪环的产生。我们需要遵循 TDD 原则，首先创建一个专门的测试用例来复现并证明这个 bug 的存在。
 
 ### 评论
-这是解决项目核心“身份危机”的决定性第一步。通过净化 `ShallowHasher`，我们强制 `Node.id` 只反映计算的“配方”（结构），而不再混入“烹饪过程”（实例）。这一改变将使我们能够实现《路线图：类 Git 模型与规范化缓存》中的核心目标：对任何结构相同的计算图进行缓存和复用。
-
-虽然这会立刻导致依赖实例唯一性的测试失败，但这些“失败”恰恰是我们取得进展的标志，因为它暴露了所有需要被新架构所修正的地方。
+这是一个至关重要的步骤，它将填补我们测试套件中的一个重大盲点。通过创建一个预期会失败的测试，我们不仅能精确地验证我们对问题根源的诊断，还能为后续的修复工作提供一个明确的、可衡量的“红灯”目标。这个测试将成为未来哈希算法健壮性的“守门员”。
 
 ### 目标
-1.  定位 `packages/cascade-graph/src/cascade/graph/hashing.py` 中的 `ShallowHasher._visit_arg` 方法。
-2.  移除在该方法中将 `LazyResult._uuid` 混入哈希计算的逻辑。
-3.  确保哈希计算现在只依赖于节点的静态结构，使其成为一个确定性的、可复用的标识符。
+1.  在 `tests/engine/graph/test_hashing.py` 文件中添加一个新的测试函数 `test_hashing_distinguishes_nested_lazy_results`。
+2.  该测试将构造两个结构相似但依赖不同的 `LazyResult`（例如 `task_a(task_b())` 和 `task_a(task_c())`）。
+3.  断言这两个 `LazyResult` 产生的结构哈希是**不相等**的。
+4.  根据我们当前的 `ShallowHasher` 实现，此断言**必定会失败**，从而成功地将测试套件置于“红色”状态。
 
 ### 基本原理
-根据《战略原则：识别并解决战略性矛盾》，当前 `Node.id` 的语义是模糊的，它同时试图成为“结构哈希”和“实例哈希”，导致正确性与性能之间存在不可调和的冲突。
+当前的 `ShallowHasher._visit_arg` 方法在遇到任何 `LazyResult` 时，都会简单地记录一个通用的 `"LAZY"` 占位符。这意味着它完全忽略了被嵌套的 `LazyResult` 本身的结构。
 
-本次修改遵循“身份必须明确”的原则，将 `Node.id` 的职责严格限定为“结构身份”。我们通过移除哈希计算中唯一的实例变量 (`_uuid`) 来实现这一点，从而使 `ShallowHasher` 成为一个纯粹的结构分析器。这是后续所有性能优化的基石。
+例如，对于 `task_a(task_b())`，哈希器看到的结构是 `Task(task_a), Args: [LAZY]`。对于 `task_a(task_c())`，它看到的结构**也是** `Task(task_a), Args: [LAZY]`。因此，它们产生了相同的哈希值，这是错误的。
+
+新的测试将直接断言 `hash(task_a(task_b())) != hash(task_a(task_c()))`，从而暴露这一缺陷。
 
 ### 标签
-#intent/refine #flow/ready #priority/high
-#comp/graph #concept/state #scope/core
+#intent/tooling #flow/ready #priority/critical
+#comp/graph #comp/tests #concept/state
 #ai/instruct
-#task/domain/graph #task/object/hashing-model #task/action/refactor
-#task/state/begin #task/status/active
+#task/domain/testing #task/object/hashing-bug #task/action/reproduction
+#task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: Purify ShallowHasher
+#### Acts 1: Add a Failing Test Case for Hash Collision
 
-我们将修改 `ShallowHasher`，移除其哈希计算中对 `LazyResult._uuid` 的依赖。
+我们将在 `test_hashing.py` 的末尾添加新的测试用例，用于捕获嵌套依赖的哈希冲突问题。
 
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/hashing.py
+tests/engine/graph/test_hashing.py
 ~~~~~
 ~~~~~python
-    def _visit_arg(self, obj: Any):
-        """A special visitor for arguments within a LazyResult."""
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # Must include UUID to distinguish different instances with similar structure
-            # to prevent incorrect node merging (which causes cycles).
-            self._hash_components.append(f"LAZY({obj._uuid})")
-            return
+    h1, _ = StructuralHasher().hash(t1)
+    h2, _ = StructuralHasher().hash(t2)
+    h3, _ = StructuralHasher().hash(t3)
 
-        if isinstance(obj, Router):
+    assert h1 == h2
+    assert h1 == h3
 ~~~~~
 ~~~~~python
-    def _visit_arg(self, obj: Any):
-        """A special visitor for arguments within a LazyResult."""
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # In the new model, we use a generic placeholder. The specific instance
-            # is tracked by the InstanceMap, not the structural hash.
-            self._hash_components.append("LAZY")
-            return
+    h1, _ = StructuralHasher().hash(t1)
+    h2, _ = StructuralHasher().hash(t2)
+    h3, _ = StructuralHasher().hash(t3)
 
-        if isinstance(obj, Router):
+    assert h1 == h2
+    assert h1 == h3
+
+
+def test_hashing_distinguishes_nested_lazy_results():
+    """
+    This is the critical test to expose the bug.
+    The structure of task_a(task_b()) and task_a(task_c()) should be different.
+    The current hasher will fail this test because it replaces both task_b()
+    and task_c() with a generic "LAZY" placeholder.
+    """
+
+    @task
+    def task_a(dep):
+        return dep
+
+    @task
+    def task_b():
+        return "b"
+
+    @task
+    def task_c():
+        return "c"
+
+    # These two targets have different dependency structures
+    target1 = task_a(task_b())
+    target2 = task_a(task_c())
+
+    # But the current ShallowHasher will produce the same hash for both
+    hasher = ShallowHasher()
+    hash1 = hasher.hash(target1)
+    hash2 = hasher.hash(target2)
+
+    assert hash1 != hash2, "Hasher must distinguish between different nested LazyResult dependencies"
 ~~~~~
 
 ### 下一步建议
-我们已经完成了对核心哈希逻辑的修正。下一步是验证这一修改带来的影响。
+我们已经成功地为 bug 创建了一个“陷阱”。下一步是运行测试，亲眼看到这个新测试失败，从而正式进入 TDD 的“红色”阶段。
 
-我建议立即运行完整的 `pytest` 测试套件。我们**预期会看到大量测试失败**，特别是 `tests/test_sequence.py` 和其他依赖“相同任务不同实例”的测试。
-
-这些失败是**好消息**，因为它们精确地指明了我们需要在新架构下进行适配的所有地方。
-
-在你确认后，我将生成一个运行测试的计划，并根据失败报告，制定下一步的重构计划，以适配 `GraphBuilder` 和 `GraphExecutionStrategy`。
+如果你同意，我将生成一个运行 `pytest tests/engine/graph/test_hashing.py` 的指令。

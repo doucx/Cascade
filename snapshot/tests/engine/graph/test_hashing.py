@@ -69,3 +69,35 @@ def test_hashing_kwargs():
 
     assert h1 == h2
     assert h1 == h3
+
+
+def test_hashing_distinguishes_nested_lazy_results():
+    """
+    This is the critical test to expose the bug.
+    The structure of task_a(task_b()) and task_a(task_c()) should be different.
+    The current hasher will fail this test because it replaces both task_b()
+    and task_c() with a generic "LAZY" placeholder.
+    """
+
+    @task
+    def task_a(dep):
+        return dep
+
+    @task
+    def task_b():
+        return "b"
+
+    @task
+    def task_c():
+        return "c"
+
+    # These two targets have different dependency structures
+    target1 = task_a(task_b())
+    target2 = task_a(task_c())
+
+    # But the current ShallowHasher will produce the same hash for both
+    hasher = ShallowHasher()
+    hash1 = hasher.hash(target1)
+    hash2 = hasher.hash(target2)
+
+    assert hash1 != hash2, "Hasher must distinguish between different nested LazyResult dependencies"

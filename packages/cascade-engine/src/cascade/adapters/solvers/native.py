@@ -1,75 +1,75 @@
-from typing import Dict, List, Set
-from cascade.graph.model import Graph
-from cascade.spec.protocols import ExecutionPlan
+from collections import deque
+from typing import Dict, List
+
+from cascade.graph.model import Graph, Node, EdgeType
+from cascade.spec.protocols import Solver, ExecutionPlan
 
 
-class NativeSolver:
+class NativeSolver(Solver):
     """
-    A solver that produces a staged execution plan (layered topological sort).
-    Nodes in the same stage have no dependencies on each other and can be run in parallel.
+    A simple solver that uses topological sort (Kahn's algorithm) to create
+    a sequential execution plan.
     """
 
     def resolve(self, graph: Graph) -> ExecutionPlan:
-        # 0. Filter out Shadow Nodes using the explicit `is_shadow` flag.
-        active_nodes = [node for node in graph.nodes if not node.is_shadow]
+        """
+        Resolves a dependency graph into a list of execution stages.
 
-        if not active_nodes:
-            return []
+        Raises:
+            ValueError: If a cycle is detected in the graph.
+        """
+        # Filter out shadow nodes completely. They are for static analysis only
+        # and should never be scheduled for execution.
+        executable_nodes = [n for n in graph.nodes if not n.is_shadow]
 
-        # 1. Calculate in-degrees for all active nodes
-        in_degree: Dict[str, int] = {node.id: 0 for node in active_nodes}
-        adj_list: Dict[str, List[str]] = {node.id: [] for node in active_nodes}
+        adj: Dict[str, List[Node]] = {node.id: [] for node in executable_nodes}
+        in_degree: Dict[str, int] = {node.id: 0 for node in executable_nodes}
+        node_map: Dict[str, Node] = {node.id: node for node in executable_nodes}
 
-        # Build a lookup for active nodes for efficient edge filtering
-        active_node_ids = {node.id for node in active_nodes}
-
-        from cascade.graph.model import EdgeType
+        # Whitelist of edge types that represent actual execution dependencies.
+        # This prevents metadata edges (like POTENTIAL) from creating cycles.
+        EXECUTION_EDGE_TYPES = {
+            EdgeType.DATA,
+            EdgeType.CONDITION,
+            EdgeType.CONSTRAINT,
+            EdgeType.IMPLICIT,
+            EdgeType.SEQUENCE,
+            EdgeType.ROUTER_ROUTE, # Considered a dependency for plan completeness
+        }
 
         for edge in graph.edges:
-            # POTENTIAL edges are for observation/TCO and must NOT affect execution scheduling.
-            if edge.edge_type == EdgeType.POTENTIAL:
+            if edge.edge_type not in EXECUTION_EDGE_TYPES:
                 continue
 
-            # An edge is only part of the execution plan if both its source
-            # and target are active nodes.
-            if edge.source.id in active_node_ids and edge.target.id in active_node_ids:
-                in_degree[edge.target.id] += 1
-                adj_list[edge.source.id].append(edge.target.id)
+            # Ensure edge connects executable nodes (ignores edges to/from shadow nodes)
+            if edge.source.id not in node_map or edge.target.id not in node_map:
+                continue
 
-        # 2. Identify initial layer (nodes with 0 in-degree)
-        current_stage = [node for node in active_nodes if in_degree[node.id] == 0]
+            adj[edge.source.id].append(edge.target)
+            in_degree[edge.target.id] += 1
 
-        # Sort stage by name for deterministic behavior
-        current_stage.sort(key=lambda n: n.name)
-
+        # Kahn's algorithm for topological sorting
+        queue = deque([node.id for node in executable_nodes if in_degree[node.id] == 0])
         plan: ExecutionPlan = []
         processed_count = 0
 
-        # Optimization lookup for active nodes
-        node_lookup = {n.id: n for n in active_nodes}
+        while queue:
+            # All nodes in the current queue can be run in parallel, forming one stage.
+            # Sort for deterministic output, useful for testing.
+            stage_ids = sorted(list(queue))
+            stage_nodes = [node_map[nid] for nid in stage_ids]
+            plan.append(stage_nodes)
+            queue.clear()
+            processed_count += len(stage_ids)
 
-        while current_stage:
-            plan.append(current_stage)
-            processed_count += len(current_stage)
-            next_stage_nodes: Set[str] = set()
+            for node_id in stage_ids:
+                for neighbor_node in adj[node_id]:
+                    in_degree[neighbor_node.id] -= 1
+                    if in_degree[neighbor_node.id] == 0:
+                        queue.append(neighbor_node.id)
 
-            # 3. Simulate execution of current stage
-            for node in current_stage:
-                # For each downstream neighbor
-                for neighbor_id in adj_list[node.id]:
-                    in_degree[neighbor_id] -= 1
-                    if in_degree[neighbor_id] == 0:
-                        next_stage_nodes.add(neighbor_id)
-
-            # Prepare next stage
-            next_stage = [node_lookup[nid] for nid in next_stage_nodes]
-            next_stage.sort(key=lambda n: n.name)  # Deterministic
-
-            current_stage = next_stage
-
-        # 4. Cycle detection
-        if processed_count < len(active_nodes):
-            # Finding the cycle is complex, for now raise a generic error
+        # If not all nodes were processed, a cycle must exist.
+        if processed_count != len(executable_nodes):
             raise ValueError("Cycle detected in the dependency graph.")
 
         return plan

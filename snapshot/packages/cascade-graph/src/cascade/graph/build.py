@@ -99,7 +99,10 @@ class GraphBuilder:
         
         for i, val in enumerate(result.args):
             visit_child(val, str(i))
-        for k, val in result.kwargs.items():
+        
+        # Sort kwargs keys to ensure deterministic traversal order
+        for k in sorted(result.kwargs.keys()):
+            val = result.kwargs[k]
             visit_child(val, k)
         
         if result._condition:
@@ -120,7 +123,26 @@ class GraphBuilder:
         
         # Combine shell, UUID, and children IDs
         # We use a tuple to hash, which is very efficient in Python
-        child_hashes = tuple((c.id, path, etype) for c, path, etype, _ in child_edges)
+        
+        # CRITICAL: Sort child hashes to ensure deterministic Node ID regardless of 
+        # dictionary iteration order (e.g. kwargs). This is vital for correct graph structure.
+        # However, for 'args' (positional), order matters.
+        # 'child_edges' is currently built by iterating args then kwargs.
+        # Since 'args' order is significant but 'kwargs' key order is sorted by the visitor,
+        # relying on list order is generally safe IF the visitor guarantees sorted kwargs.
+        
+        # Let's verify the visitor logic:
+        # for i, val in enumerate(result.args): ... (Ordered)
+        # for k, val in result.kwargs.items(): ... (Dict insertion order in Py3.7+, but let's be safe)
+        
+        # To be absolutely robust, we should trust the 'path' in child_edges to carry the order info.
+        # So sorting child_hashes by path is safe and correct.
+        
+        # Sort by path to ensure deterministic hashing
+        child_hashes = tuple(sorted(
+            ((c.id, path, etype) for c, path, etype, _ in child_edges),
+            key=lambda x: x[1] # Sort by arg path
+        ))
         
         # The node_hash uniquely identifies this specific instance in the graph
         node_hash_int = hash((shell_hash, result._uuid, child_hashes))

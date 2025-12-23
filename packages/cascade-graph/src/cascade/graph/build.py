@@ -83,6 +83,55 @@ class GraphBuilder:
                 components.append("<unreprable>")
         return components
 
+    def _build_template_hash_components_from_arg(
+        self, obj: Any, dep_nodes: Dict[str, Node]
+    ) -> List[str]:
+        """
+        Recursively builds TEMPLATE hash components.
+        Literals are replaced by '?', but structure (Lists, Dicts, Routers) is preserved.
+        """
+        components = []
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            # For dependencies, we use their TEMPLATE ID, not their instance ID.
+            components.append(f"LAZY({dep_nodes[obj._uuid].template_id})")
+        elif isinstance(obj, Router):
+            components.append("Router{")
+            components.append("Selector:")
+            components.extend(
+                self._build_template_hash_components_from_arg(obj.selector, dep_nodes)
+            )
+            components.append("Routes:")
+            # We assume Router keys are structural (control flow decisions)
+            for k in sorted(obj.routes.keys()):
+                components.append(f"Key({k})->")
+                components.extend(
+                    self._build_template_hash_components_from_arg(
+                        obj.routes[k], dep_nodes
+                    )
+                )
+            components.append("}")
+        elif isinstance(obj, (list, tuple)):
+            components.append("List[")
+            for item in obj:
+                components.extend(
+                    self._build_template_hash_components_from_arg(item, dep_nodes)
+                )
+            components.append("]")
+        elif isinstance(obj, dict):
+            components.append("Dict{")
+            for k in sorted(obj.keys()):
+                components.append(f"{k}:")
+                components.extend(
+                    self._build_template_hash_components_from_arg(obj[k], dep_nodes)
+                )
+            components.append("}")
+        elif isinstance(obj, Inject):
+            components.append(f"Inject({obj.resource_name})")
+        else:
+            # This is the normalization magic: Literals become placeholders.
+            components.append("?")
+        return components
+
     def _find_dependencies(self, obj: Any, dep_nodes: Dict[str, Node]):
         """Helper for post-order traversal: finds and visits all nested LazyResults."""
         if isinstance(obj, (LazyResult, MappedLazyResult)):
@@ -142,6 +191,44 @@ class GraphBuilder:
 
         structural_hash = self._get_merkle_hash(hash_components)
 
+        # 2b. Compute TEMPLATE hash (Normalization)
+        template_components = [f"Task({getattr(result.task, 'name', 'unknown')})"]
+        # Policies and Constraints are considered STRUCTURAL
+        if result._retry_policy:
+            rp = result._retry_policy
+            template_components.append(
+                f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})"
+            )
+        if result._cache_policy:
+            template_components.append(
+                f"Cache({type(result._cache_policy).__name__})"
+            )
+
+        template_components.append("Args:")
+        template_components.extend(
+            self._build_template_hash_components_from_arg(result.args, dep_nodes)
+        )
+        template_components.append("Kwargs:")
+        template_components.extend(
+            self._build_template_hash_components_from_arg(result.kwargs, dep_nodes)
+        )
+
+        if result._condition:
+            template_components.append("Condition:PRESENT")
+        if result._dependencies:
+            template_components.append(f"Deps:{len(result._dependencies)}")
+        if result._constraints:
+            keys = sorted(result._constraints.requirements.keys())
+            # We treat constraint keys as structural, values as literals?
+            # For safety, let's treat constraints as fully structural for now.
+            # If f(mem=4) and f(mem=2), they are different templates.
+            vals = [
+                f"{k}={result._constraints.requirements[k]}" for k in keys
+            ]  # This includes values in hash
+            template_components.append(f"Constraints({','.join(vals)})")
+
+        template_hash = self._get_merkle_hash(template_components)
+
         # 3. Hash-consing: intern the Node object
         def node_factory():
             input_bindings = {}
@@ -165,6 +252,7 @@ class GraphBuilder:
 
             return Node(
                 id=structural_hash,
+                template_id=template_hash,
                 name=result.task.name,
                 node_type="task",
                 callable_obj=result.task.func,
@@ -255,6 +343,24 @@ class GraphBuilder:
 
         structural_hash = self._get_merkle_hash(hash_components)
 
+        # 2b. Compute TEMPLATE hash
+        template_components = [
+            f"Map({getattr(result.factory, 'name', 'factory')})"
+        ]
+        template_components.append("MapKwargs:")
+        template_components.extend(
+            self._build_template_hash_components_from_arg(
+                result.mapping_kwargs, dep_nodes
+            )
+        )
+
+        if result._condition:
+            template_components.append("Condition:PRESENT")
+        if result._dependencies:
+            template_components.append(f"Deps:{len(result._dependencies)}")
+
+        template_hash = self._get_merkle_hash(template_components)
+
         # 3. Hash-consing
         def node_factory():
             input_bindings = {}
@@ -264,6 +370,7 @@ class GraphBuilder:
 
             return Node(
                 id=structural_hash,
+                template_id=template_hash,
                 name=f"map({getattr(result.factory, 'name', 'factory')})",
                 node_type="map",
                 mapping_factory=result.factory,

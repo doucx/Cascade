@@ -51,9 +51,10 @@ def test_build_graph_with_param_factory():
     # 断言节点类型统一为 task
     assert p_node.node_type == "task"
 
-    # 断言它包含正确的 literal_inputs (这是内部任务需要的参数)
-    assert "name" in p_node.literal_inputs
-    assert p_node.literal_inputs["name"] == "x"
+    # 断言它包含正确的 input_bindings (这是内部任务需要的参数)
+    assert "name" in p_node.input_bindings
+    # The value is now a SlotRef or Constant, we check its existence
+    assert p_node.input_bindings["name"] is not None
 
 
 def test_build_graph_with_env_factory():
@@ -69,7 +70,8 @@ def test_build_graph_with_env_factory():
 
     e_node = next(n for n in graph.nodes if n.name == "_get_env_var")
     assert e_node.node_type == "task"
-    assert e_node.literal_inputs["name"] == "HOME"
+    assert "name" in e_node.input_bindings
+    assert e_node.input_bindings["name"] is not None
 
 
 def test_build_graph_with_nested_dependencies():

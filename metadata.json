@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] chore(tests): 批量适配测试套件到新 GraphBuilder 签名", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766472212.514411, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(core): Repair router logic and adapt tests to data model", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766472336.9322336, "duration_ms": 0}}

@@ -255,11 +255,13 @@ class GraphBuilder:
             self.graph.add_edge(edge)
 
         elif isinstance(obj, Router):
+            # The edge from the selector to the consumer represents the final resolved value
+            # of the router. Its arg_name must be the argument the consumer expects for the router.
             selector_node = self._visit(obj.selector)
             edge = Edge(
                 source=selector_node,
                 target=target_node,
-                arg_name=f"{path}.selector" if path else "selector",
+                arg_name=path,  # Use the router's own argument path
                 router=obj,
                 edge_type=EdgeType.DATA,
             )

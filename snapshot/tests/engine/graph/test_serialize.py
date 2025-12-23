@@ -94,7 +94,7 @@ def test_serialize_params():
     param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
 
     assert param_node["node_type"] == "task"
-    assert param_node["literal_inputs"]["name"] == "env"
+    assert "__slot_ref" in param_node["input_bindings"]["name"]
 
     # Note: Serialization currently only saves graph structure, not the Context.
     # So deserialized graph will have the node, but not the ParamSpec metadata
@@ -103,7 +103,7 @@ def test_serialize_params():
     # Round trip
     restored = from_json(to_json(graph))
     p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
-    assert p_node.literal_inputs["name"] == "env"
+    assert "__slot_ref" in p_node.input_bindings["name"]
 
 
 def test_serialize_with_retry():

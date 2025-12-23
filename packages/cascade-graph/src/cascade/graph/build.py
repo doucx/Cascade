@@ -191,57 +191,44 @@ class GraphBuilder:
 
         structural_hash = self._get_merkle_hash(hash_components)
 
-        # 2b. Compute TEMPLATE hash (Normalization)
-        template_components = [f"Task({getattr(result.task, 'name', 'unknown')})"]
-        # Policies and Constraints are considered STRUCTURAL
-        if result._retry_policy:
-            rp = result._retry_policy
-            template_components.append(
-                f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})"
-            )
-        if result._cache_policy:
-            template_components.append(
-                f"Cache({type(result._cache_policy).__name__})"
-            )
+        # 3. Hash-consing: Query registry FIRST before doing more work
+        node = self.registry.get(structural_hash)
+        created_new = False
+        
+        if not node:
+            created_new = True
+            # 2b. Compute TEMPLATE hash (Normalization) - ONLY if node is new
+            template_components = [f"Task({getattr(result.task, 'name', 'unknown')})"]
+            if result._retry_policy:
+                rp = result._retry_policy
+                template_components.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
+            if result._cache_policy:
+                template_components.append(f"Cache({type(result._cache_policy).__name__})")
 
-        template_components.append("Args:")
-        template_components.extend(
-            self._build_template_hash_components_from_arg(result.args, dep_nodes)
-        )
-        template_components.append("Kwargs:")
-        template_components.extend(
-            self._build_template_hash_components_from_arg(result.kwargs, dep_nodes)
-        )
+            template_components.append("Args:")
+            template_components.extend(self._build_template_hash_components_from_arg(result.args, dep_nodes))
+            template_components.append("Kwargs:")
+            template_components.extend(self._build_template_hash_components_from_arg(result.kwargs, dep_nodes))
 
-        if result._condition:
-            template_components.append("Condition:PRESENT")
-        if result._dependencies:
-            template_components.append(f"Deps:{len(result._dependencies)}")
-        if result._constraints:
-            keys = sorted(result._constraints.requirements.keys())
-            # We treat constraint keys as structural, values as literals?
-            # For safety, let's treat constraints as fully structural for now.
-            # If f(mem=4) and f(mem=2), they are different templates.
-            vals = [
-                f"{k}={result._constraints.requirements[k]}" for k in keys
-            ]  # This includes values in hash
-            template_components.append(f"Constraints({','.join(vals)})")
+            if result._condition:
+                template_components.append("Condition:PRESENT")
+            if result._dependencies:
+                template_components.append(f"Deps:{len(result._dependencies)}")
+            if result._constraints:
+                keys = sorted(result._constraints.requirements.keys())
+                vals = [f"{k}={result._constraints.requirements[k]}" for k in keys]
+                template_components.append(f"Constraints({','.join(vals)})")
 
-        template_hash = self._get_merkle_hash(template_components)
+            template_hash = self._get_merkle_hash(template_components)
 
-        # 3. Hash-consing: intern the Node object
-        def node_factory():
+            # Extract bindings
             input_bindings = {}
-
-            def process_arg(key: str, val: Any):
-                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    # Store literal value directly
-                    input_bindings[key] = val
-
             for i, val in enumerate(result.args):
-                process_arg(str(i), val)
+                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
+                    input_bindings[str(i)] = val
             for k, val in result.kwargs.items():
-                process_arg(k, val)
+                if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
+                    input_bindings[k] = val
 
             sig = None
             if result.task.func:
@@ -250,7 +237,30 @@ class GraphBuilder:
                 except (ValueError, TypeError):
                     pass
 
-            return Node(
+            # Robustly determine complexity to enable FAST PATH in ArgumentResolver
+            from cascade.spec.resource import Inject as InjectMarker
+            from cascade.internal.inputs import _get_param_value
+
+            has_complex = False
+            
+            # 1. Check for Runtime Context Injection (Special internal tasks)
+            if result.task.func is _get_param_value.func:
+                has_complex = True
+            
+            # 2. Check for Implicit Injection in Signature Defaults
+            if not has_complex and sig:
+                has_complex = any(isinstance(p.default, InjectMarker) for p in sig.parameters.values())
+            
+            # 3. Check for Explicit Injection in Bindings (recursively)
+            if not has_complex:
+                def is_complex_value(v):
+                    if isinstance(v, InjectMarker): return True
+                    if isinstance(v, list): return any(is_complex_value(x) for x in v)
+                    if isinstance(v, dict): return any(is_complex_value(x) for x in v.values())
+                    return False
+                has_complex = any(is_complex_value(v) for v in input_bindings.values())
+
+            node = Node(
                 id=structural_hash,
                 template_id=template_hash,
                 name=result.task.name,
@@ -261,9 +271,11 @@ class GraphBuilder:
                 cache_policy=result._cache_policy,
                 constraints=result._constraints,
                 input_bindings=input_bindings,
+                has_complex_inputs=has_complex,
             )
+            self.registry._registry[structural_hash] = node
 
-        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
+        self._visited_instances[result._uuid] = node
         self._visited_instances[result._uuid] = node
 
         # Always add the node to the current graph, even if it was reused from the registry.

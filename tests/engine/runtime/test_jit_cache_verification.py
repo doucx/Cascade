@@ -209,5 +209,9 @@ async def test_jit_cache_is_hit_with_stable_graph_instance(mocker):
     # 3. Third call passes None -> Template B (Hit)
     assert resolve_spy.call_count == 2
 
-    # The graph is still rebuilt, but the cost is lower as nodes are interned.
-    assert build_graph_spy.call_count == iterations + 1
+    # With Zero-Overhead TCO (Fast Path), the graph is NOT rebuilt after the cycle is cached.
+    # 1. Initial call -> Builds Graph
+    # 2. First recursion -> Builds Graph (and caches cycle)
+    # 3. Subsequent recursions -> Fast Path (Skip Build)
+    # So we expect exactly 2 calls regardless of iterations.
+    assert build_graph_spy.call_count == 2

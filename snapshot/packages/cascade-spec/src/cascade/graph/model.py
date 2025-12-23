@@ -30,6 +30,10 @@ class Node:
     name: str
     is_shadow: bool = False  # True if this node is for static analysis only
     tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
+    
+    # The structural path of this node in the LazyResult tree (e.g. "root.args.0.dependencies.0")
+    # Used for mapping literals back to the graph during caching.
+    structure_path: Optional[str] = None
 
     # Core spec
     node_type: str = "task"  # "task", "param", or "map"

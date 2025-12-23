@@ -15,18 +15,18 @@ class GraphBuilder:
         self._shadow_visited: Dict[Task, Node] = {}
 
     def build(self, target: LazyResult) -> Graph:
-        self._visit(target)
+        self._visit(target, path="root")
         return self.graph
 
-    def _visit(self, value: Any, scan_for_tco: bool = True) -> Node:
+    def _visit(self, value: Any, path: str = "", scan_for_tco: bool = True) -> Node:
         if isinstance(value, LazyResult):
-            return self._visit_lazy_result(value, scan_for_tco)
+            return self._visit_lazy_result(value, path, scan_for_tco)
         elif isinstance(value, MappedLazyResult):
-            return self._visit_mapped_result(value)
+            return self._visit_mapped_result(value, path)
         else:
             raise TypeError(f"Cannot build graph from type {type(value)}")
 
-    def _visit_lazy_result(self, result: LazyResult, scan_for_tco: bool = True) -> Node:
+    def _visit_lazy_result(self, result: LazyResult, path: str, scan_for_tco: bool = True) -> Node:
         if result._uuid in self._visited:
             return self._visited[result._uuid]
 
@@ -52,17 +52,20 @@ class GraphBuilder:
             cache_policy=result._cache_policy,
             constraints=result._constraints,
             literal_inputs=literal_inputs,
+            structure_path=path,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
 
         # 2. Recursively scan inputs to add edges
-        self._scan_and_add_edges(node, result.args)
-        self._scan_and_add_edges(node, result.kwargs)
+        # Note: We must construct paths that match StructuralHasher
+        # StructuralHasher uses: path.args.i or path.kwargs.key
+        self._scan_and_add_edges(node, result.args, base_path=f"{path}.args")
+        self._scan_and_add_edges(node, result.kwargs, base_path=f"{path}.kwargs")
 
         # 3. Handle conditionals
         if result._condition:
-            source_node = self._visit(result._condition)
+            source_node = self._visit(result._condition, path=f"{path}._condition")
             edge = Edge(
                 source=source_node,
                 target=node,
@@ -75,7 +78,7 @@ class GraphBuilder:
         if result._constraints and not result._constraints.is_empty():
             for res_name, req_value in result._constraints.requirements.items():
                 if isinstance(req_value, (LazyResult, MappedLazyResult)):
-                    source_node = self._visit(req_value)
+                    source_node = self._visit(req_value, path=f"{path}._constraints.{res_name}")
                     edge = Edge(
                         source=source_node,
                         target=node,
@@ -85,8 +88,8 @@ class GraphBuilder:
                     self.graph.add_edge(edge)
 
         # 5. Handle explicit sequence dependencies
-        for dep in result._dependencies:
-            source_node = self._visit(dep)
+        for i, dep in enumerate(result._dependencies):
+            source_node = self._visit(dep, path=f"{path}._dependencies.{i}")
             edge = Edge(
                 source=source_node,
                 target=node,
@@ -164,7 +167,7 @@ class GraphBuilder:
         for next_task in potential_targets:
             self._visit_shadow_recursive(target_node, next_task)
 
-    def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
+    def _visit_mapped_result(self, result: MappedLazyResult, path: str) -> Node:
         if result._uuid in self._visited:
             return self._visited[result._uuid]
 
@@ -177,14 +180,15 @@ class GraphBuilder:
             cache_policy=result._cache_policy,
             constraints=result._constraints,
             literal_inputs=result.mapping_kwargs,
+            structure_path=path,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
 
-        self._scan_and_add_edges(node, result.mapping_kwargs)
+        self._scan_and_add_edges(node, result.mapping_kwargs, base_path=f"{path}.mapping_kwargs")
 
         if result._condition:
-            source_node = self._visit(result._condition)
+            source_node = self._visit(result._condition, path=f"{path}._condition")
             edge = Edge(
                 source=source_node,
                 target=node,
@@ -193,8 +197,8 @@ class GraphBuilder:
             )
             self.graph.add_edge(edge)
 
-        for dep in result._dependencies:
-            source_node = self._visit(dep)
+        for i, dep in enumerate(result._dependencies):
+            source_node = self._visit(dep, path=f"{path}._dependencies.{i}")
             edge = Edge(
                 source=source_node,
                 target=node,
@@ -205,34 +209,50 @@ class GraphBuilder:
 
         return node
 
-    def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
+    def _scan_and_add_edges(self, target_node: Node, obj: Any, base_path: str = "", sub_path: str = ""):
+        """
+        Recursively scans arguments/kwargs to find LazyResults and create edges.
+        
+        Args:
+            base_path: The path prefix for this collection (e.g. "root.args")
+            sub_path: The recursive path within the collection (e.g. "0" or "config.key")
+        """
+        # Construct the effective path for the current object relative to the target node's argument list
+        # If sub_path is empty, we are at the root of the collection.
+        # But wait, logic in _visit calls this with base_path="...args".
+        
+        # We need to be careful. The `path` passed to `_visit` (for the CHILD node) 
+        # must be the full structural path.
+        
+        current_full_path = f"{base_path}.{sub_path}" if sub_path else base_path
+
         if isinstance(obj, (LazyResult, MappedLazyResult)):
-            source_node = self._visit(obj)
+            source_node = self._visit(obj, path=current_full_path)
             edge = Edge(
                 source=source_node,
                 target=target_node,
-                arg_name=path or "dependency",
+                arg_name=sub_path or "dependency",  # arg_name in the edge is relative to the function signature
                 edge_type=EdgeType.DATA,
             )
             self.graph.add_edge(edge)
 
         elif isinstance(obj, Router):
-            selector_node = self._visit(obj.selector)
+            selector_node = self._visit(obj.selector, path=f"{current_full_path}.selector")
             edge = Edge(
                 source=selector_node,
                 target=target_node,
-                arg_name=f"{path}.selector" if path else "selector",
+                arg_name=f"{sub_path}.selector" if sub_path else "selector",
                 router=obj,
                 edge_type=EdgeType.DATA,
             )
             self.graph.add_edge(edge)
 
             for route_key, route_result in obj.routes.items():
-                route_node = self._visit(route_result)
+                route_node = self._visit(route_result, path=f"{current_full_path}.routes.{route_key}")
                 imp_edge = Edge(
                     source=route_node,
                     target=target_node,
-                    arg_name=f"{path}.route[{route_key}]",
+                    arg_name=f"{sub_path}.route[{route_key}]",
                     edge_type=EdgeType.ROUTER_ROUTE,
                 )
                 self.graph.add_edge(imp_edge)
@@ -240,13 +260,13 @@ class GraphBuilder:
         elif isinstance(obj, (list, tuple)):
             for i, item in enumerate(obj):
                 self._scan_and_add_edges(
-                    target_node, item, path=f"{path}[{i}]" if path else str(i)
+                    target_node, item, base_path=base_path, sub_path=f"{sub_path}[{i}]" if sub_path else str(i)
                 )
 
         elif isinstance(obj, dict):
             for k, v in obj.items():
                 self._scan_and_add_edges(
-                    target_node, v, path=f"{path}.{k}" if path else str(k)
+                    target_node, v, base_path=base_path, sub_path=f"{sub_path}.{k}" if sub_path else str(k)
                 )
 
 

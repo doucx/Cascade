@@ -147,14 +147,9 @@ class GraphExecutionStrategy:
 
                     if struct_hash in self._graph_cache:
                         # CACHE HIT: Reuse graph and plan
-                        cached_graph, cached_plan = self._graph_cache[struct_hash]
-                        if len(cached_graph.nodes) > 1:
-                            graph = build_graph(current_target)
-                            plan = self.solver.resolve(graph)
-                        else:
-                            graph = cached_graph
-                            plan = cached_plan
-                            self._update_graph_literals(graph, current_target, literals)
+                        # Now supports complex graphs by injecting literals into all nodes
+                        graph, plan = self._graph_cache[struct_hash]
+                        self._inject_literals(graph, literals)
                     else:
                         # CACHE MISS: Build, solve, and cache
                         graph = build_graph(current_target)
@@ -202,25 +197,16 @@ class GraphExecutionStrategy:
                 last_executed_task = None
 
             # 4. Check for Tail Call (LazyResult)
-            if isinstance(result, (LazyResult, MappedLazyResult)):
-                current_target = result
-                # STATE GC
-                if hasattr(state_backend, "clear"):
-                    state_backend.clear()
-                # Yield control
-                await asyncio.sleep(0)
-            else:
-                return result
+                if isinstance(current_target, LazyResult):
+                    last_executed_task = current_target.task
+                    last_tco_cycle_id = getattr(current_target.task, "_tco_cycle_id", None)
+                else:
+                    last_executed_task = None
+                    last_tco_cycle_id = None
 
-    def _update_graph_literals(
-        self, graph: Graph, target: Any, literals: Dict[str, Any]
-    ):
-        # ... logic moved from Engine ...
+    def _update_graph_literals(self, graph: Graph, target: Any, literals: Dict[str, Any]):
+        """Legacy helper for single-node fast path update."""
         if graph.nodes:
-            # FIX: Previously used nodes[-1], which became incorrect when shadow nodes
-            # were appended to the end of the list by static analysis.
-            # GraphBuilder uses a top-down approach (pre-order traversal), so the
-            # root target node is always the FIRST node added to the graph.
             target_node = graph.nodes[0]
             target_node.id = target._uuid
             if hasattr(target, "args") and hasattr(target, "kwargs"):
@@ -229,7 +215,53 @@ class GraphExecutionStrategy:
                 }
                 target_node.literal_inputs.update(target.kwargs)
 
-    async def _execute_graph(
+    def _inject_literals(self, graph: Graph, literals: Dict[str, Any]):
+        """
+        Injects literal values from the StructuralHasher into the reused Graph.
+        
+        It uses `structure_path` stored on Nodes to map flattened literal keys 
+        back to the specific Node and argument they belong to.
+        """
+        # Build an index for fast lookup: path -> Node
+        # Optimization: This could be cached on the Graph object if needed.
+        node_map = {node.structure_path: node for node in graph.nodes if node.structure_path}
+        
+        # Reset literal_inputs for all nodes to ensure no stale data
+        # (Though in practice, we usually overwrite all fields if structure is identical)
+        for node in graph.nodes:
+            node.literal_inputs = {}
+            # We must regenerate a new UUID for the node to represent this new execution instance
+            # This is critical for StateBackend to distinguish results.
+            # However, for TCO loops, we might reuse IDs? No, TCO usually implies new instances.
+            # Wait, `literals` doesn't contain UUIDs. We need to assign new UUIDs.
+            # BUT: StructuralHasher doesn't track UUIDs.
+            # If we reuse the graph, we are reusing the Node objects.
+            # We MUST update their IDs.
+            from uuid import uuid4
+            node.id = str(uuid4())
+
+        for key, value in literals.items():
+            # Key format: "root.args.0.kwargs.foo"
+            # We need to find the longest prefix that matches a node's structure_path.
+            
+            # This matching logic can be optimized. For now, we iterate nodes.
+            # A literal "root.args.0" belongs to node "root" at arg "0".
+            # A literal "root.dependencies.0.args.1" belongs to node "root.dependencies.0" at arg "1".
+            
+            # Heuristic: split key by dots, find split point.
+            # Since structure_path matches keys in literals exactly (except for the final leaf arg),
+            # we can try to peel off the last segment.
+            
+            if "." in key:
+                parent_path, arg_name = key.rsplit(".", 1)
+            else:
+                # Should not happen for valid paths starting with "root"
+                parent_path = key
+                arg_name = ""
+
+            if parent_path in node_map:
+                node = node_map[parent_path]
+                node.literal_inputs[arg_name] = value
         self,
         target: Any,
         params: Dict[str, Any],

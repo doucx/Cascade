@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(engine): 实现递归静态分析与 O(1) TCO 循环优化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766467917.4923446, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(engine): 实现通用图结构缓存以优化复杂递归性能", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766468231.5180585, "duration_ms": 0}}

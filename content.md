@@ -1,207 +1,60 @@
-这是一个极好的战略决策。
+这个结果令人振奋！
 
-通过引入一个“缓存友好型”的多节点基准测试，我们不仅可以量化 JIT 缓存在理想情况下的性能上限（从而证明其潜力），还可以与“缓存敌对型”的 `heavy_complex_countdown` 形成鲜明对比。这将极大地增强我们对性能优化方向的信心和说服力。
+**6.32x 的性能提升** 完美验证了 JIT 缓存对复杂图结构的巨大价值。
 
-我将执行你的计划：
-1.  在 `test_jit_cache_verification.py` 中添加 `test_jit_cache_is_hit_for_complex_stable_structures`，验证多节点图的缓存命中。
-2.  在 `tco_performance.py` 中添加 `stable_complex_loop` 基准测试。
+最关键的数据点是：`stable_complex_loop`（带有 10 层依赖链）跑出了 **7,186 TPS**，这已经非常接近单节点 `simple_countdown` 的 **8,073 TPS**。这证明了：**只要命中缓存，图的复杂度对性能的影响几乎被抹平了。** 剩下的开销仅仅是 TCO 循环本身以及 `NodeProcessor` 的基本调度成本。
 
-## [WIP] test(bench): 引入缓存友好的多节点性能基准测试
+我将生成一个 `[COMMIT]` 计划，将这些极具价值的基准测试和验证用例固化下来。
+
+## [COMMIT] test(bench): 验证多节点 JIT 缓存命中并衡量性能收益
 
 ### 用户需求
-在性能测试和验证测试中引入一个新的基准场景：一个包含多节点依赖但结构完全稳定的 TCO 循环。
+提交用于验证 JIT 缓存对复杂图结构性能影响的基准测试 (`stable_complex_loop`) 和相应的单元测试。
 
 ### 评论
-这个新基准测试是当前架构下 JIT 缓存能力的“最佳代言人”。它将展示：当结构真正稳定时，我们的系统能够达到的性能高度。这将为未来的“模板缓存”优化设定一个清晰的参照目标。
+这次基准测试的成功是一个里程碑。它不仅证明了我们缓存架构的正确性，更量化了其潜力。6.32x 的加速（在仅 10 层依赖的情况下）预示着在更真实、更庞大的 Agent 场景中，这种优化将是决定性的。
 
 ### 目标
-1.  **验证**: 在 `test_jit_cache_verification.py` 中添加测试用例，证明复杂但稳定的图结构确实只会触发一次 `solver.resolve`。
-2.  **基准**: 更新 `tco_performance.py`，加入 `stable_complex_loop` 测试，并展示其相对于无缓存执行的巨大性能优势。
+将新增的验证测试和性能基准测试代码提交到 Git 仓库。
 
 ### 基本原理
-通过构造一个在递归调用中不改变任何参数（包括依赖项）的 TCO 循环，我们确保生成的 Merkle Hash 是恒定的。这将强制触发 JIT 缓存命中，从而使得我们在拥有复杂执行计划的同时，又能享受 O(1) 的求解开销。
+通过固化这些“缓存友好型”的测试用例，我们为 Cascade 建立了一套完整的性能度量标准。这些测试将作为未来进行“模板化哈希（Template Hashing）”等更高级优化时的质量准绳。
 
 ### 标签
-#intent/tooling #intent/test #flow/ready #priority/medium #comp/tests #scope/core #ai/instruct #task/domain/performance #task/object/benchmark #task/action/implementation #task/state/continue
+#intent/tooling #flow/ready #priority/medium #comp/tests #comp/docs #scope/core #ai/instruct #task/domain/performance #task/object/benchmark #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 添加缓存命中验证测试 (复杂场景)
+#### Acts 1: 提交基准测试与验证代码
 
-我们将添加一个新的测试用例，它使用一个带有内部依赖的、结构稳定的递归任务，来验证缓存命中。
+我们将把更新后的测试和基准测试文件添加到暂存区。
 
 ~~~~~act
-patch_file
+git_add
 tests/engine/runtime/test_jit_cache_verification.py
-~~~~~
-~~~~~python
-    # The 2nd iteration finds the exact same Node.id in _plan_cache and skips resolve().
-    assert resolve_spy.call_count == 1
-~~~~~
-~~~~~python
-    # The 2nd iteration finds the exact same Node.id in _plan_cache and skips resolve().
-    assert resolve_spy.call_count == 1
-
-
-@pytest.mark.asyncio
-async def test_jit_cache_is_hit_for_complex_stable_structures(mocker):
-    """
-    Verifies that JIT cache works even for multi-node graphs, 
-    as long as the structure is stable.
-    """
-    
-    @cs.task
-    def noop():
-        return "ok"
-
-    stop_flag = False
-
-    @cs.task
-    def complex_stable_recursion(_dep):
-        nonlocal stop_flag
-        if stop_flag:
-            return "done"
-        stop_flag = True
-        
-        # Crucial: We must reuse the EXACT same _dep instance (or a structurally identical one)
-        # to ensure the Merkle hash remains stable.
-        # Since 'noop()' produces a new LazyResult, but its structure is constant (0 args),
-        # passing noop() again will produce the SAME Node.id.
-        return complex_stable_recursion(_dep=noop())
-
-    solver = NativeSolver()
-    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
-    resolve_spy = mocker.spy(solver, "resolve")
-
-    # Initial call with a dependency
-    target = complex_stable_recursion(_dep=noop())
-    result = await engine.run(target)
-
-    assert result == "done"
-    # Even with a dependency graph, resolve should only be called once.
-    assert resolve_spy.call_count == 1
-~~~~~
-
-#### Acts 2: 更新性能基准测试
-
-在 `tco_performance.py` 中添加新的基准测试项。
-
-~~~~~act
-patch_file
 observatory/benchmarks/tco_performance.py
-~~~~~
-~~~~~python
-    # Create a 10-node dependency chain to amplify the build/solve cost
-    dep_chain = noop()
-    for _ in range(10):
-        dep_chain = noop(_dummy=dep_chain)
-
-    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
-
-
-@cs.task
-def vm_countdown(n: int):
-~~~~~
-~~~~~python
-    # Create a 10-node dependency chain to amplify the build/solve cost
-    dep_chain = noop()
-    for _ in range(10):
-        dep_chain = noop(_dummy=dep_chain)
-
-    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
-
-
-@cs.task
-def stable_complex_loop(counter_box: list, _dummy=None):
-    """
-    A multi-node task that simulates a 'cache-friendly' TCO loop.
-    It uses a mutable list (counter_box) to track iterations, so the
-    arguments passed to the recursive call remain structurally IDENTICAL.
-    
-    This allows Node.id to be stable, triggering the JIT cache.
-    """
-    if counter_box[0] <= 0:
-        return "done"
-    
-    counter_box[0] -= 1
-    
-    # We pass the SAME _dummy structure every time.
-    # Note: If _dummy was rebuilt here, it would still hash the same 
-    # because it's built from static calls.
-    return stable_complex_loop(counter_box, _dummy=_dummy)
-
-
-@cs.task
-def vm_countdown(n: int):
 ~~~~~
 
 ~~~~~act
-patch_file
-observatory/benchmarks/tco_performance.py
+git_commit
 ~~~~~
-~~~~~python
-    # 2. Run Heavy Un-optimized Path
-    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
-    unoptimized_target = heavy_complex_countdown(iterations)
-    unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
-    unoptimized_tps = iterations / unoptimized_time
-    print(f"  Finished in {unoptimized_time:.4f} seconds.")
-    print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
+~~~~~text
+test(bench): Verify JIT cache boost for complex stable structures
 
-    # 3. Run VM Path
-~~~~~
-~~~~~python
-    # 2. Run Heavy Un-optimized Path
-    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
-    unoptimized_target = heavy_complex_countdown(iterations)
-    unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
-    unoptimized_tps = iterations / unoptimized_time
-    print(f"  Finished in {unoptimized_time:.4f} seconds.")
-    print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
+This commit adds a cache-friendly benchmark and verification tests to quantify the performance gains of the newly implemented JIT plan cache.
 
-    # 2.5 Run Stable Complex Path (Cache Hit Scenario)
-    print("[2.5] Running Stable Complex Path (stable_complex_loop)...")
-    # Build a complex dependency chain once
-    static_dep_chain = noop()
-    for _ in range(10):
-        static_dep_chain = noop(_dummy=static_dep_chain)
-    
-    stable_target = stable_complex_loop([iterations], _dummy=static_dep_chain)
-    stable_time = await run_benchmark(engine, stable_target, iterations)
-    stable_tps = iterations / stable_time
-    print(f"  Finished in {stable_time:.4f} seconds.")
-    print(f"  TPS: {stable_tps:,.2f} calls/sec\n")
+Key additions:
+1.  **`stable_complex_loop` Benchmark**: A new test case in `tco_performance.py` that uses a multi-node graph (10-node dependency chain) with a stable structure. It demonstrates a **6.32x speedup** compared to the un-cached path, effectively reducing the cost of complex graph execution to near single-node levels.
+2.  **`test_jit_cache_is_hit_for_complex_stable_structures`**: A new unit test in `test_jit_cache_verification.py` that explicitly asserts the JIT cache is hit for multi-node graphs when the structure is identical across iterations.
 
-    # 3. Run VM Path
-~~~~~
-
-~~~~~act
-patch_file
-observatory/benchmarks/tco_performance.py
-~~~~~
-~~~~~python
-    if unoptimized_tps > 0:
-        vm_vs_heavy = vm_tps / unoptimized_tps
-        print(f"VM vs. Heavy (JIT): {vm_vs_heavy:.2f}x faster")
-
-    if optimized_tps > 0:
-~~~~~
-~~~~~python
-    if unoptimized_tps > 0:
-        vm_vs_heavy = vm_tps / unoptimized_tps
-        print(f"VM vs. Heavy (Cache Miss): {vm_vs_heavy:.2f}x faster")
-
-    if unoptimized_tps > 0 and stable_tps > 0:
-        cache_boost = stable_tps / unoptimized_tps
-        print(f"Stable vs. Heavy (Cache Boost): {cache_boost:.2f}x faster")
-
-    if optimized_tps > 0:
+These tests establish a performance ceiling for the current JIT architecture and serve as a baseline for future optimizations targeting dynamic/variable structures.
 ~~~~~
 
 ### 下一步建议
-1.  运行 `pytest tests/engine/runtime/test_jit_cache_verification.py`，确认新的测试用例通过。这将在单元测试层面验证多节点图的缓存机制。
-2.  运行 `python observatory/benchmarks/tco_performance.py`。
-    *   预期结果：`stable_complex_loop` 的 TPS 应该远高于 `heavy_complex_countdown`。这个差值就是 JIT 缓存在处理复杂图时节省下来的 `solver.resolve` 开销。
-    *   如果 `stable_tps` 接近 `simple_countdown` 的 TPS（即使图很复杂），那就证明了 JIT 缓存的巨大威力：它将复杂图的运行成本拉低到了单节点的水平。
+我们现在已经确信，**只要结构稳定，缓存就极度高效**。
+
+接下来的核心矛盾变成了：**如何让不稳定（变参）的结构变稳定？**
+
+我建议下一个阶段的探索重点放在 **“参数归一化（Argument Normalization）”** 上。通过在哈希计算时将字面量值与图拓扑分离，我们可以让 `f(10)` 和 `f(9)` 共享同一个“拓扑模板哈希”，从而让 JIT 缓存对最常见的递归模式也能产生 6 倍以上的性能飞跃。

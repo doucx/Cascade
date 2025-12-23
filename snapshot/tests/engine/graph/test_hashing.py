@@ -1,5 +1,6 @@
 from cascade import task
-from cascade.graph.hashing import StructuralHasher, ShallowHasher
+from cascade.graph.hashing import StructuralHasher
+from cascade.graph.build import build_graph
 
 
 @task
@@ -73,10 +74,9 @@ def test_hashing_kwargs():
 
 def test_hashing_distinguishes_nested_lazy_results():
     """
-    This is the critical test to expose the bug.
-    The structure of task_a(task_b()) and task_a(task_c()) should be different.
-    The current hasher will fail this test because it replaces both task_b()
-    and task_c() with a generic "LAZY" placeholder.
+    This test validates the new Merkle-style hashing.
+    The node ID for task_a(task_b()) should be different from
+    the node ID for task_a(task_c()).
     """
 
     @task
@@ -95,9 +95,12 @@ def test_hashing_distinguishes_nested_lazy_results():
     target1 = task_a(task_b())
     target2 = task_a(task_c())
 
-    # But the current ShallowHasher will produce the same hash for both
-    hasher = ShallowHasher()
-    hash1 = hasher.hash(target1)
-    hash2 = hasher.hash(target2)
+    # Build graphs for both to get the canonical nodes
+    _, _, instance_map1 = build_graph(target1)
+    _, _, instance_map2 = build_graph(target2)
 
-    assert hash1 != hash2, "Hasher must distinguish between different nested LazyResult dependencies"
+    # Get the canonical node for the root of each graph
+    node1 = instance_map1[target1._uuid]
+    node2 = instance_map2[target2._uuid]
+
+    assert node1.id != node2.id, "Hasher must distinguish between different nested LazyResult dependencies"

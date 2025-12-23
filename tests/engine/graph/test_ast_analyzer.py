@@ -27,7 +27,7 @@ def test_analyze_direct_return():
         else:
             return downstream_b(x)
 
-    targets = analyze_task_source(orchestrator.func)
+    targets = analyze_task_source(orchestrator)
 
     target_names = {t.name for t in targets}
     assert "downstream_a" in target_names
@@ -42,7 +42,7 @@ def test_analyze_map_return():
     def mapper_orchestrator(items):
         return downstream_a.map(x=items)
 
-    targets = analyze_task_source(mapper_orchestrator.func)
+    targets = analyze_task_source(mapper_orchestrator)
     target_names = {t.name for t in targets}
     assert "downstream_a" in target_names
 
@@ -55,7 +55,7 @@ def test_analyze_with_alias_in_globals():
     def alias_user():
         return alias_task(1)
 
-    targets = analyze_task_source(alias_user.func)
+    targets = analyze_task_source(alias_user)
     target_names = {t.name for t in targets}
     assert "downstream_a" in target_names
 
@@ -67,7 +67,7 @@ def test_analyze_no_tco():
     def simple_calc():
         return 42
 
-    targets = analyze_task_source(simple_calc.func)
+    targets = analyze_task_source(simple_calc)
     assert len(targets) == 0
 
 
@@ -83,6 +83,6 @@ def test_analyze_complex_attribute_access():
     def namespace_user():
         return actions.op(10)
 
-    targets = analyze_task_source(namespace_user.func)
+    targets = analyze_task_source(namespace_user)
     target_names = {t.name for t in targets}
     assert "downstream_b" in target_names

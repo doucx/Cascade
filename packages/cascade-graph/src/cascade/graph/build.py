@@ -3,13 +3,16 @@ import inspect
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
-from cascade.graph.ast_analyzer import analyze_task_source
+from cascade.graph.ast_analyzer import analyze_task_source, assign_tco_cycle_ids
+from cascade.spec.task import Task
 
 
 class GraphBuilder:
     def __init__(self):
         self.graph = Graph()
         self._visited: Dict[str, Node] = {}
+        # Used to detect cycles during shadow node expansion
+        self._shadow_visited: Dict[Task, Node] = {}
 
     def build(self, target: LazyResult) -> Graph:
         self._visit(target)
@@ -94,37 +97,72 @@ class GraphBuilder:
 
         # 6. Static TCO Analysis
         if scan_for_tco and result.task.func:
-            # Check cache on Task object to avoid re-parsing AST
-            if getattr(result.task, "_potential_tco_targets", None) is None:
-                result.task._potential_tco_targets = analyze_task_source(
-                    result.task.func
-                )
+            # 6.1 Analyze and tag cycles if not already done
+            if not getattr(result.task, "_tco_analysis_done", False):
+                assign_tco_cycle_ids(result.task)
+            
+            # Propagate cycle ID to the Node
+            node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
 
-            potential_targets = result.task._potential_tco_targets
+            # 6.2 Retrieve potential targets (using cache)
+            potential_targets = analyze_task_source(result.task)
+            
+            # Register current node in shadow map to allow closing the loop back to root
+            self._shadow_visited[result.task] = node
+
             for target_task in potential_targets:
-                potential_uuid = f"potential:{result._uuid}:{target_task.name}"
-
-                # Shadow nodes are created by directly instantiating Node,
-                # not by visiting the LazyResult, to mark them explicitly.
-                # This avoids them being added to the `_visited` cache with a real UUID.
-                target_node = Node(
-                    id=potential_uuid,
-                    name=target_task.name,
-                    node_type="task",
-                    is_shadow=True,  # Explicitly mark as a shadow node
-                )
-                self.graph.add_node(target_node)
-                self._visited[potential_uuid] = target_node
-
-                edge = Edge(
-                    source=node,
-                    target=target_node,
-                    arg_name="<potential>",
-                    edge_type=EdgeType.POTENTIAL,
-                )
-                self.graph.add_edge(edge)
+                self._visit_shadow_recursive(node, target_task)
 
         return node
+
+    def _visit_shadow_recursive(self, parent_node: Node, task: Task):
+        """
+        Recursively builds shadow nodes for static analysis.
+        If a task is already in the graph (either as a real node or shadow node),
+        it creates a POTENTIAL edge pointing to it, closing the loop.
+        """
+        # If we have already visited this task in this build context, link to it
+        if task in self._shadow_visited:
+            target_node = self._shadow_visited[task]
+            edge = Edge(
+                source=parent_node,
+                target=target_node,
+                arg_name="<potential>",
+                edge_type=EdgeType.POTENTIAL,
+            )
+            self.graph.add_edge(edge)
+            return
+
+        # Otherwise, create a new Shadow Node
+        # We use a deterministic ID based on the task name to allow some stability,
+        # but prefixed to avoid collision with real nodes.
+        potential_uuid = f"shadow:{parent_node.id}:{task.name}"
+        
+        target_node = Node(
+            id=potential_uuid,
+            name=task.name,
+            node_type="task",
+            is_shadow=True,
+            tco_cycle_id=getattr(task, "_tco_cycle_id", None)
+        )
+        self.graph.add_node(target_node)
+        
+        # Register in visited map
+        self._shadow_visited[task] = target_node
+
+        edge = Edge(
+            source=parent_node,
+            target=target_node,
+            arg_name="<potential>",
+            edge_type=EdgeType.POTENTIAL,
+        )
+        self.graph.add_edge(edge)
+
+        # Recursively expand its potential targets (using cache)
+        potential_targets = analyze_task_source(task)
+        
+        for next_task in potential_targets:
+            self._visit_shadow_recursive(target_node, next_task)
 
     def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
         if result._uuid in self._visited:

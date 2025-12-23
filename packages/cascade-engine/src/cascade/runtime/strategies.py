@@ -57,7 +57,10 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
+        # Cache for structural hashing (slow path)
         self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
+        # Cache for Zero-Overhead TCO (fast path), keyed by Task object
+        self._task_templates: Dict[Any, Tuple[Graph, Any]] = {}
 
     def _is_simple_task(self, lr: Any) -> bool:
         """
@@ -106,8 +109,7 @@ class GraphExecutionStrategy:
 
         # Optimization state for TCO Fast Path
         last_executed_task = None
-        last_graph = None
-        last_plan = None
+        last_tco_cycle_id = None
 
         while True:
             # The step stack holds "task" (step) scoped resources
@@ -115,25 +117,31 @@ class GraphExecutionStrategy:
                 graph = None
                 plan = None
                 literals = None
-
-                # --- FAST PATH CHECK ---
                 is_fast_path = False
-                if (
-                    last_executed_task is not None
-                    and last_graph is not None
-                    and isinstance(current_target, LazyResult)
-                    and current_target.task == last_executed_task
-                ):
-                    if self._is_simple_task(current_target):
-                        is_fast_path = True
-                        graph = last_graph
-                        plan = last_plan
-                        # Update literals in O(1) without hashing
-                        self._update_graph_literals(graph, current_target, {})
 
+                # --- 1. ZERO-OVERHEAD FAST PATH CHECK ---
+                # Check if we are in a recognized TCO loop (A -> B -> ... -> A)
+                # Conditions:
+                # 1. Target is a LazyResult and "simple" (no complex deps).
+                # 2. Target task has been statically analyzed as part of a TCO cycle.
+                # 3. We have a compiled template for this task.
+                # 4. (Optional but safe) The previous task was also part of a cycle (or we are starting one).
+                
+                if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+                    task_obj = current_target.task
+                    cycle_id = getattr(task_obj, "_tco_cycle_id", None)
+                    
+                    # If we have a cycle match or self-recursion match
+                    if (cycle_id and cycle_id == last_tco_cycle_id) or (task_obj == last_executed_task):
+                        if task_obj in self._task_templates:
+                            is_fast_path = True
+                            graph, plan = self._task_templates[task_obj]
+                            # Update literals in O(1) without hashing
+                            self._update_graph_literals(graph, current_target, {})
+                
                 if not is_fast_path:
-                    # --- SLOW PATH (Hashing & Cache) ---
-                    # 1. Get Graph and Plan, using Structural Hash Cache
+                    # --- 2. SLOW PATH (Hashing & Cache) ---
+                    # Get Graph and Plan, using Structural Hash Cache
                     hasher = StructuralHasher()
                     struct_hash, literals = hasher.hash(current_target)
 
@@ -152,10 +160,19 @@ class GraphExecutionStrategy:
                         graph = build_graph(current_target)
                         plan = self.solver.resolve(graph)
                         self._graph_cache[struct_hash] = (graph, plan)
+                        
+                        # Populate Task Template Cache if this is a simple node
+                        # This "warms up" the fast path for future iterations
+                        if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+                             self._task_templates[current_target.task] = (graph, plan)
 
-                    # Update cache for next iteration possibility
-                    last_graph = graph
-                    last_plan = plan
+                # Update state for next iteration
+                if isinstance(current_target, LazyResult):
+                    last_executed_task = current_target.task
+                    last_tco_cycle_id = getattr(current_target.task, "_tco_cycle_id", None)
+                else:
+                    last_executed_task = None
+                    last_tco_cycle_id = None
 
                 # 2. Setup Resources (mixed scope)
                 required_resources = self.resource_container.scan(graph)

@@ -23,9 +23,15 @@ class NativeSolver:
         # Build a lookup for active nodes for efficient edge filtering
         active_node_ids = {node.id for node in active_nodes}
 
+        from cascade.graph.model import EdgeType
+
         for edge in graph.edges:
+            # POTENTIAL edges are for observation/TCO and must NOT affect execution scheduling.
+            if edge.edge_type == EdgeType.POTENTIAL:
+                continue
+
             # An edge is only part of the execution plan if both its source
-            # and target are active nodes. This naturally filters out POTENTIAL edges.
+            # and target are active nodes.
             if edge.source.id in active_node_ids and edge.target.id in active_node_ids:
                 in_degree[edge.target.id] += 1
                 adj_list[edge.source.id].append(edge.target.id)

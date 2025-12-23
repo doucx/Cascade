@@ -1,199 +1,86 @@
-简要回答
-是的，我将通过引入基于索引的计划缓存机制，将 `template_id` 实际上投入使用。这将允许不同数据的同构图共享同一个执行计划模板，从而大幅提升复杂递归任务的性能。
+好的，遵照指示。我们严格遵循 TDD 流程。
 
-## [WIP] feat(engine): 实现基于 Template ID 的索引化 Plan 缓存
+这是一个标准的“红-绿-重构”循环的“红”阶段。我们的目标是创建一个新的测试用例，这个用例在当前的代码实现下**必须失败**。它的失败将精确地暴露出现有缓存逻辑的缺陷，为我们下一步的修复提供一个明确的目标。
+
+## [WIP] test(engine): Add failing test for template cache with varying args
+
+### 错误分析
+基准测试 `tco_performance.py` 的结果显示，`heavy_complex_countdown` 的性能并未如预期般提升。这强烈暗示我们新实现的、基于 `template_id` 的 JIT 缓存机制存在缺陷。
+
+根本原因很可能是：尽管我们的设计意图是让 `countdown(n)` 和 `countdown(n-1)` 共享同一个计划模板，但当前的 `GraphBuilder` 实现可能仍在 `template_id` 的计算中错误地混入了某些与 `n` 相关的实例信息，导致每次迭代都生成了**不同**的 `template_id`，从而造成缓存永远无法命中。
+
+我们将通过编写一个专门的测试用例来验证这一假设。该测试将创建一个简单的递归任务 `countdown(n)`，并断言 `solver.resolve` 方法在整个递归链中**只被调用一次**。我们预期此测试将会失败（`resolve` 会被多次调用），从而为我们提供一个确凿的失败证据。
 
 ### 用户需求
-用户希望 `GraphExecutionStrategy` 能够利用新引入的 `template_id` 来复用执行计划（Execution Plan）。目前的缓存机制是基于具体的 `Node.id`，这导致每次参数变化（如 `f(10)` -> `f(9)`）都会被视为缓存未命中，无法利用已有的拓扑排序结果。
+需要一个单元测试来验证 JIT 缓存是否能对“结构相同但字面量参数不同”的递归任务（如 `countdown(n)` -> `countdown(n-1)`)正确命中，以确保性能优化的有效性。
 
 ### 评论
-这是一个非常巧妙的优化。通过将 `ExecutionPlan` 抽象为“节点索引的列表”（即 `List[List[int]]`），我们解耦了计划的结构与具体的节点实例。结合 `template_id`，这使得 Cascade 能够像 Hashlife 算法一样，对所有结构相同的计算图只进行一次“编译”（Solver 解析），极大地降低了运行时开销。
+这是一个至关重要的测试。它将成为我们缓存归一化逻辑正确性的“试金石”。遵循 TDD 原则，先让这个测试失败，可以确保我们后续的修复是精准且有效的，同时也能防止未来的代码变更无意中破坏这个核心优化。
 
 ### 目标
-1.  在 `GraphExecutionStrategy` 中引入 `IndexedExecutionPlan` 概念（`List[List[int]]`）。
-2.  实现 `_index_plan` 方法：将 Solver 生成的 `ExecutionPlan` 转换为索引形式。
-3.  实现 `_rehydrate_plan` 方法：将缓存的索引计划应用到当前构建的 `Graph` 实例上，还原为可执行的 `ExecutionPlan`。
-4.  升级主执行循环：使用 `root_node.template_id` 作为缓存键，实现“一次编译，多次运行”。
+1.  在 `tests/engine/runtime/test_jit_cache_verification.py` 文件中，新增一个名为 `test_jit_template_cache_is_hit_for_varying_arguments` 的测试函数。
+2.  该测试将模拟一个简单的递归调用，并使用 `mocker.spy` 来监视 `solver.resolve` 的调用次数。
+3.  断言 `resolve` 只被调用一次。
+4.  确保此计划在执行后，测试套件会因为这个新测试的失败而失败。
 
 ### 基本原理
-1.  **确定性遍历**: `GraphBuilder` 使用后序遍历构建图，因此对于结构相同的图，其 `graph.nodes` 列表中的节点顺序是确定且一致的。
-2.  **索引映射**: 利用上述特性，我们可以安全地用“节点在 `graph.nodes` 中的索引”来代表节点在计划中的位置。
-3.  **模板复用**: `f(10)` 和 `f(9)` 虽然生成不同的 `Node` 对象，但它们拥有相同的 `template_id` 且图结构同构。因此，`f(10)` 计算出的索引计划（如 `[[0], [1]]`）可以直接应用在 `f(9)` 的图实例上。
+我们严格遵循测试驱动开发（TDD）的“红”阶段。在修复任何代码之前，我们必须先拥有一个能够稳定复现该问题的自动化测试。这个失败的测试不仅证明了问题的存在，也为我们接下来的“绿”阶段（修复代码）定义了明确的成功标准：让这个测试通过。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/engine #concept/cache #scope/core #ai/instruct #task/domain/core #task/object/execution-strategy #task/action/optimize #task/state/continue
+#intent/tooling #flow/draft #priority/critical #comp/tests #comp/engine #concept/cache #scope/core #ai/instruct #task/domain/core #task/object/graph-builder #task/action/normalization #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 升级 `GraphExecutionStrategy`
+#### Acts 1: 在测试套件中添加预期的失败测试
 
-我们将修改 `cascade-engine` 中的 `graph.py`，实现上述的索引化缓存逻辑。
+我们将向 `test_jit_cache_verification.py` 添加新的测试用例。此测试用例旨在验证具有不同参数的同一任务是否可以命中 JIT 缓存。根据我们的分析，此测试在当前的代码库中应该会失败。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+tests/engine/runtime/test_jit_cache_verification.py
 ~~~~~
 ~~~~~python
-    def __init__(
-        self,
-        solver: Solver,
-        node_processor: NodeProcessor,
-        resource_container: ResourceContainer,
-        constraint_manager: ConstraintManager,
-        bus: MessageBus,
-        wakeup_event: asyncio.Event,
-    ):
-        self.solver = solver
-        self.node_processor = node_processor
-        self.resource_container = resource_container
-        self.constraint_manager = constraint_manager
-        self.bus = bus
-        self.wakeup_event = wakeup_event
-
-        # JIT Compilation Cache
-        # Maps structural hash (root_node_id) to a compiled ExecutionPlan
-        self._plan_cache: Dict[str, ExecutionPlan] = {}
-        # Persistent registry to ensure node object identity consistency across TCO iterations
-        self._node_registry = NodeRegistry()
-
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
-
-        while True:
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                # 1. Build Graph (With Registry for interning)
-                # This constructs the structural graph and the instance map.
-                # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
-                graph, instance_map = build_graph(
-                    current_target, registry=self._node_registry
-                )
-
-                # Identify the structural root
-                if current_target._uuid not in instance_map:
-                    raise RuntimeError(
-                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
-                    )
-                target_node = instance_map[current_target._uuid]
-                root_node_id = target_node.id
-
-                # 2. Resolve Plan (With JIT Caching)
-                if root_node_id in self._plan_cache:
-                    # Hit: Reuse the existing plan directly.
-                    # Since we use a persistent NodeRegistry, the Nodes in this plan are valid for the current graph.
-                    plan = self._plan_cache[root_node_id]
-                else:
-                    # Miss: Ask solver to resolve and then cache it.
-                    plan = self.solver.resolve(graph)
-                    self._plan_cache[root_node_id] = plan
-
-                # 3. Setup Resources (mixed scope)
+    # Even with a dependency graph, resolve should only be called once.
+    assert resolve_spy.call_count == 1
 ~~~~~
 ~~~~~python
-    def __init__(
-        self,
-        solver: Solver,
-        node_processor: NodeProcessor,
-        resource_container: ResourceContainer,
-        constraint_manager: ConstraintManager,
-        bus: MessageBus,
-        wakeup_event: asyncio.Event,
-    ):
-        self.solver = solver
-        self.node_processor = node_processor
-        self.resource_container = resource_container
-        self.constraint_manager = constraint_manager
-        self.bus = bus
-        self.wakeup_event = wakeup_event
+    # Even with a dependency graph, resolve should only be called once.
+    assert resolve_spy.call_count == 1
 
-        # JIT Compilation Cache
-        # Maps template_id to an IndexedExecutionPlan (List[List[int]])
-        # We store indices instead of Node objects to allow plan reuse across
-        # different graph instances that share the same structure (template).
-        self._template_plan_cache: Dict[str, List[List[int]]] = {}
 
-        # Persistent registry to ensure node object identity consistency across TCO iterations
-        self._node_registry = NodeRegistry()
+@pytest.mark.asyncio
+async def test_jit_template_cache_is_hit_for_varying_arguments(mocker):
+    """
+    Verifies that the JIT cache hits for tasks that are structurally identical
+    but have varying literal arguments, e.g., countdown(10) vs countdown(9).
+    This is the core test for argument normalization via template_id.
+    """
 
-    def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
-        """
-        Converts a Plan (List[List[Node]]) into an IndexedPlan (List[List[int]]).
-        The index corresponds to the node's position in graph.nodes.
-        """
-        # Create a fast lookup for node indices
-        id_to_idx = {node.id: i for i, node in enumerate(graph.nodes)}
-        indexed_plan = []
-        for stage in plan:
-            # Map each node in the stage to its index in the graph
-            indexed_stage = [id_to_idx[node.id] for node in stage]
-            indexed_plan.append(indexed_stage)
-        return indexed_plan
+    @cs.task
+    def countdown(n: int):
+        if n <= 0:
+            return "done"
+        return countdown(n - 1)
 
-    def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:
-        """
-        Converts an IndexedPlan back into a Plan using the nodes from the current graph.
-        """
-        plan = []
-        for stage_indices in indexed_plan:
-            # Map indices back to Node objects from the current graph instance
-            stage_nodes = [graph.nodes[idx] for idx in stage_indices]
-            plan.append(stage_nodes)
-        return plan
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+    resolve_spy = mocker.spy(solver, "resolve")
 
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        current_target = target
+    # Run a recursion chain from 2 -> 1 -> 0.
+    # We expect:
+    # 1. countdown(2): Cache miss, solver.resolve() is called. Plan is cached against template_id.
+    # 2. countdown(1): Cache hit, solver.resolve() is NOT called.
+    # 3. countdown(0): Returns "done", loop terminates.
+    target = countdown(2)
+    result = await engine.run(target)
 
-        while True:
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                # 1. Build Graph (With Registry for interning)
-                # This constructs the structural graph and the instance map.
-                # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
-                graph, instance_map = build_graph(
-                    current_target, registry=self._node_registry
-                )
+    assert result == "done"
 
-                # Identify the structural root
-                if current_target._uuid not in instance_map:
-                    raise RuntimeError(
-                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
-                    )
-                target_node = instance_map[current_target._uuid]
-                
-                # Use template_id for caching. Fallback to id if template_id is missing (should not happen).
-                cache_key = target_node.template_id or target_node.id
-
-                # 2. Resolve Plan (With JIT Template Caching)
-                if cache_key in self._template_plan_cache:
-                    # Hit: Rehydrate the indexed plan using the current graph's nodes.
-                    indexed_plan = self._template_plan_cache[cache_key]
-                    plan = self._rehydrate_plan(graph, indexed_plan)
-                else:
-                    # Miss: Ask solver to resolve.
-                    plan = self.solver.resolve(graph)
-                    # Index and cache the plan for future reuse.
-                    self._template_plan_cache[cache_key] = self._index_plan(graph, plan)
-
-                # 3. Setup Resources (mixed scope)
+    # Therefore, resolve should have been called exactly once for the whole chain.
+    assert resolve_spy.call_count == 1
 ~~~~~
 
 ### 下一步建议
-我们已经完成了缓存逻辑的升级。现在，`tco_performance.py` 中的 `heavy_complex_countdown` 应该会表现出显著的性能提升。下一步，我们应该运行基准测试来验证这一改进。
+请执行此计划。计划执行成功后，请运行 `pytest tests/engine/runtime/test_jit_cache_verification.py`。我们预期会看到一个失败的测试。在确认测试失败后，我将为您创建一个修复 `GraphBuilder` 中 `template_id` 计算逻辑的计划，以使这个新测试通过。

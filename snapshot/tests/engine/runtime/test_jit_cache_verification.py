@@ -3,6 +3,7 @@ import cascade as cs
 from cascade.runtime import Engine, MessageBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
+from cascade.graph import build as graph_builder_module
 
 
 @pytest.mark.asyncio
@@ -116,3 +117,82 @@ async def test_jit_template_cache_is_hit_for_varying_arguments(mocker):
 
     # Therefore, resolve should have been called exactly once for the whole chain.
     assert resolve_spy.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_jit_cache_is_hit_but_graph_is_rebuilt_in_loop(mocker):
+    """
+    Verifies the "heavy_complex_countdown" scenario.
+    - The JIT cache for the solver SHOULD be hit (resolve() called once).
+    - But the graph itself IS REBUILT on each iteration (build_graph() called multiple times).
+    This test proves that the performance bottleneck is graph construction, not solving.
+    """
+
+    @cs.task
+    def noop():
+        pass
+
+    @cs.task
+    def recursive_with_rebuilt_deps(n: int):
+        if n <= 0:
+            return "done"
+        # The dependency is REBUILT inside the loop, creating new LazyResult objects
+        dep = noop()
+        return recursive_with_rebuilt_deps(n - 1, _dummy=dep)
+
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+
+    resolve_spy = mocker.spy(solver, "resolve")
+    build_graph_spy = mocker.spy(graph_builder_module, "build_graph")
+
+    iterations = 3
+    target = recursive_with_rebuilt_deps(iterations)
+    result = await engine.run(target)
+
+    assert result == "done"
+
+    # The template cache should hit after the first iteration.
+    assert resolve_spy.call_count == 1
+
+    # The graph is rebuilt for the initial call, and for each of the 3 recursive calls.
+    assert build_graph_spy.call_count == iterations + 1
+
+
+@pytest.mark.asyncio
+async def test_jit_cache_is_hit_with_stable_graph_instance(mocker):
+    """
+    Verifies the "stable_complex_loop" scenario.
+    When a pre-built dependency is passed in, the build cost is lower and the cache still hits.
+    """
+
+    @cs.task
+    def noop():
+        pass
+
+    @cs.task
+    def recursive_with_stable_deps(n: int, dep):
+        if n <= 0:
+            return "done"
+        # The SAME dependency instance is passed along
+        return recursive_with_stable_deps(n - 1, dep=dep)
+
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+
+    resolve_spy = mocker.spy(solver, "resolve")
+    build_graph_spy = mocker.spy(graph_builder_module, "build_graph")
+
+    # The dependency is built ONCE, outside the loop.
+    stable_dep = noop()
+    iterations = 3
+    target = recursive_with_stable_deps(iterations, dep=stable_dep)
+    result = await engine.run(target)
+
+    assert result == "done"
+
+    # The template cache should hit.
+    assert resolve_spy.call_count == 1
+
+    # The graph is still rebuilt, but the cost is lower as nodes are interned.
+    assert build_graph_spy.call_count == iterations + 1

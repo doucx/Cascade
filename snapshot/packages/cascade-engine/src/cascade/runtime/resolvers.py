@@ -23,13 +23,20 @@ class ArgumentResolver:
         resource_context: Dict[str, Any],
         instance_map: Dict[str, Node],
         user_params: Dict[str, Any] = None,
+        input_overrides: Dict[str, Any] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
         args = []
         kwargs = {}
 
         # 1. Reconstruct initial args/kwargs from Bindings (Literals)
+        # Apply overrides if provided (for TCO fast path)
+        bindings = node.input_bindings
+        if input_overrides:
+            bindings = bindings.copy()
+            bindings.update(input_overrides)
+
         positional_args_dict = {}
-        for name, value_raw in node.input_bindings.items():
+        for name, value_raw in bindings.items():
             # Recursively resolve structures (e.g., lists containing Inject)
             value = self._resolve_structure(
                 value_raw, node.id, state_backend, resource_context, graph

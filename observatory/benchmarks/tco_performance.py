@@ -56,6 +56,26 @@ def heavy_complex_countdown(n: int, _dummy=None):
 
 
 @cs.task
+def stable_complex_loop(counter_box: list, _dummy=None):
+    """
+    A multi-node task that simulates a 'cache-friendly' TCO loop.
+    It uses a mutable list (counter_box) to track iterations, so the
+    arguments passed to the recursive call remain structurally IDENTICAL.
+    
+    This allows Node.id to be stable, triggering the JIT cache.
+    """
+    if counter_box[0] <= 0:
+        return "done"
+    
+    counter_box[0] -= 1
+    
+    # We pass the SAME _dummy structure every time.
+    # Note: If _dummy was rebuilt here, it would still hash the same 
+    # because it's built from static calls.
+    return stable_complex_loop(counter_box, _dummy=_dummy)
+
+
+@cs.task
 def vm_countdown(n: int):
     """
     A recursive task explicitly designed for the Blueprint/VM path.
@@ -135,6 +155,19 @@ async def main():
     print(f"  Finished in {unoptimized_time:.4f} seconds.")
     print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
 
+    # 2.5 Run Stable Complex Path (Cache Hit Scenario)
+    print("[2.5] Running Stable Complex Path (stable_complex_loop)...")
+    # Build a complex dependency chain once
+    static_dep_chain = noop()
+    for _ in range(10):
+        static_dep_chain = noop(_dummy=static_dep_chain)
+    
+    stable_target = stable_complex_loop([iterations], _dummy=static_dep_chain)
+    stable_time = await run_benchmark(engine, stable_target, iterations)
+    stable_tps = iterations / stable_time
+    print(f"  Finished in {stable_time:.4f} seconds.")
+    print(f"  TPS: {stable_tps:,.2f} calls/sec\n")
+
     # 3. Run VM Path
     print("[3] Running VM Path (vm_countdown)...")
     vm_target = vm_countdown(n=iterations)
@@ -154,7 +187,11 @@ async def main():
     print("--- Comparison ---")
     if unoptimized_tps > 0:
         vm_vs_heavy = vm_tps / unoptimized_tps
-        print(f"VM vs. Heavy (JIT): {vm_vs_heavy:.2f}x faster")
+        print(f"VM vs. Heavy (Cache Miss): {vm_vs_heavy:.2f}x faster")
+
+    if unoptimized_tps > 0 and stable_tps > 0:
+        cache_boost = stable_tps / unoptimized_tps
+        print(f"Stable vs. Heavy (Cache Boost): {cache_boost:.2f}x faster")
 
     if optimized_tps > 0:
         vm_vs_simple = vm_tps / optimized_tps

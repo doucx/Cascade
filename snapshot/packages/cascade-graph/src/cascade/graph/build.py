@@ -94,7 +94,11 @@ class GraphBuilder:
 
         # 6. Static TCO Analysis
         if scan_for_tco and result.task.func:
-            potential_targets = analyze_task_source(result.task.func)
+            # Check cache on Task object to avoid re-parsing AST
+            if getattr(result.task, "_potential_tco_targets", None) is None:
+                result.task._potential_tco_targets = analyze_task_source(result.task.func)
+
+            potential_targets = result.task._potential_tco_targets
             for target_task in potential_targets:
                 potential_uuid = f"potential:{result._uuid}:{target_task.name}"
                 

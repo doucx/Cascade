@@ -27,6 +27,8 @@ class Task(Generic[T]):
         self.name = name or func.__name__
         self._signature = inspect.signature(func)
         self.is_async = inspect.iscoroutinefunction(func)
+        # Cache for AST analysis results to verify TCO paths
+        self._potential_tco_targets: Optional[List["Task"]] = None
 
     def __call__(self, *args, **kwargs) -> LazyResult[T]:
         # When called, it creates a LazyResult, inheriting RetryPolicy etc. from the Task?

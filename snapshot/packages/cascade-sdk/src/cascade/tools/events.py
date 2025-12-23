@@ -28,7 +28,7 @@ class PlanNodeInspected(ToolEvent):
     total_nodes: int = 0
     node_id: str = ""
     node_name: str = ""
-    literal_inputs: Dict[str, Any] = field(default_factory=dict)
+    input_bindings: Dict[str, Any] = field(default_factory=dict)
 
     def _get_payload(self) -> Dict[str, Any]:
         return {
@@ -36,7 +36,7 @@ class PlanNodeInspected(ToolEvent):
             "total_nodes": self.total_nodes,
             "node_id": self.node_id,
             "node_name": self.node_name,
-            "literal_inputs": self.literal_inputs,
+            "input_bindings": self.input_bindings,
         }
 
 

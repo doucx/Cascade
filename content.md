@@ -1,135 +1,324 @@
-Of course. We've successfully fixed the initial layer of errors, and now the test suite is revealing the more subtle, logical consequences of the refactoring. This is an expected and productive part of the process.
+Excellent. We've cleared the major structural errors, and now we're down to a smaller, more focused set of logical bugs and adaptation tasks. This is great progress.
 
-Let's analyze the new failures.
+Let's break down the remaining failures.
 
-## [WIP] fix(core): Repair router logic and adapt tests to data model
+## [WIP] fix(core): Correct Router resolution and finalize data model adaptation
 
 ### 错误分析
-测试失败可以分为两类：
+当前的 8 个失败指向了三个 distinct 的问题：
 
-1.  **`TypeError: ... got an unexpected keyword argument '....selector'`**:
-    *   **根本原因**: 这是 `GraphBuilder` 中的一个逻辑错误。在处理 `Router` 时，我错误地将连接 *Router Selector* 和 *Consumer Task* 的边的 `arg_name` 设置为了一个路径，如 `data.selector`。当 `ArgumentResolver` 解析这条边时，它试图将 selector 的结果注入到一个名为 `data.selector` 的关键字参数中，而消费任务（如 `process(data)`) 根本没有这个参数，从而导致 `TypeError`。
-    *   **解决方案**: 修复 `GraphBuilder`，确保这条边的 `arg_name` 就是 `Router` 对象本身在消费任务中的参数名（例如，`data`），而不是派生出来的 `data.selector`。
+1.  **Router 逻辑错误 (AssertionError & DID NOT RAISE)**: `test_router_pruning.py` 和 `test_routing.py` 中的所有失败都显示，`Engine` 错误地将 `Router` 的 *selector* 的值（例如 "a"）作为最终结果，而不是去执行被选中的 *route*（例如 `task_a`）并返回其结果（"A"）。这是 `ArgumentResolver` 中的一个核心逻辑缺陷。它没有正确地“解引用”`Router` 对象。
 
-2.  **`AttributeError` / `KeyError` on `literal_inputs`**:
-    *   **根本原因**: 尽管我们用 `sed` 修复了很多文件，但仍有一些测试在直接检查 `Node` 对象的 `literal_inputs` 属性（或序列化后的 `dict` 中的 `literal_inputs` 键），而这个属性已经被 `input_bindings` 替代。
-    *   **解决方案**: 手动修复剩余的几个测试文件，将 `node.literal_inputs` 的访问更新为 `node.input_bindings`。
+2.  **SDK 工具未适配 (AttributeError)**: `test_preview.py` 仍然失败，因为它依赖的 `PlanNodeInspected` 事件和 `_analyze_plan` 函数还在引用已删除的 `literal_inputs` 属性。
+
+3.  **测试断言错误 (TypeError)**: `test_serialize.py` 的失败是由于我上次修复引入的一个错误断言。`"__slot_ref" in param_node["input_bindings"]["name"]` 试图在一个 `SlotRef` 对象上进行迭代，这是不允许的。
 
 ### 用户需求
-修复所有由 `GraphBuilder` 中错误的 `Router` 逻辑和部分测试未适配 `input_bindings` 模型导致的测试失败。
+修复上述三个问题，使测试套件完全通过，从而正式完成“The Great Split”重构的第一步。
 
 ### 评论
-这些失败是“The Great Split”重构的直接后果，修复它们是完成第一阶段的关键。修复 Router 逻辑将验证我们新数据流的正确性，而更新测试断言则是完成适配的收尾工作。
+我们已经非常接近终点。修复 `ArgumentResolver` 是最后的核心逻辑挑战，它将使 `Router` 这一关键动态特性在新数据模型下恢复正常工作。其余的都是对工具和测试的直接适配。
 
 ### 目标
-1.  修正 `GraphBuilder` 中为 Router Selector 创建 Edge 时的 `arg_name`。
-2.  更新 `test_build.py`, `test_serialize.py`, 和 `test_preview.py` 中对 `literal_inputs` 的断言。
+1.  重构 `ArgumentResolver` 以正确处理 `Router` 对象的解析。
+2.  更新 `cascade-sdk` 中的 `preview` 工具及其相关事件，使其使用 `input_bindings`。
+3.  修正 `test_serialize.py` 中错误的 `TypeError` 断言。
 
 ### 基本原理
-我们将首先通过 `patch_file` 纠正 `GraphBuilder` 中的核心逻辑 bug。然后，针对性地修复几个仍在引用旧 `Node` 属性的测试文件。
+我们将重写 `ArgumentResolver` 中的依赖解析逻辑，使其在遇到附带 `Router` 的边时，首先解析 `selector` 的值，然后用该值从 `Router` 的 `routes` 字典中选择正确的上游 `LazyResult`，最后再解析这个被选中的 `LazyResult` 的结果。对于 SDK 工具，我们将完成从 `literal_inputs` 到 `input_bindings` 的迁移。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/graph #comp/tests #concept/routing #scope/core #ai/instruct #task/domain/core #task/object/graph-builder #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/engine #comp/sdk #comp/tests #concept/routing #scope/core #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 GraphBuilder 中 Router 的 `arg_name` 逻辑
+#### Acts 1: 修复核心 Router 解析逻辑
 
-这是最关键的修复，将解决所有的 `TypeError` 问题。
+这是最关键的修复。我们将重构 `ArgumentResolver`，使其能正确“解引用”Router。
+
+~~~~~act
+write_file
+packages/cascade-engine/src/cascade/runtime/resolvers.py
+~~~~~
+~~~~~python
+import inspect
+from typing import Any, Dict, List, Tuple, Optional
+
+from cascade.graph.model import Node, Graph, Edge, EdgeType
+from cascade.spec.resource import Inject
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.binding import SlotRef, Constant
+from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
+from cascade.spec.protocols import StateBackend
+
+
+class ArgumentResolver:
+    """
+    Resolves arguments by combining:
+    1. Structural bindings (SlotRefs pointing to DataTuple)
+    2. Upstream dependencies (Edges)
+    3. Resource injections
+    """
+
+    def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        resource_context: Dict[str, Any],
+        data_tuple: Tuple[Any, ...],
+        user_params: Dict[str, Any] = None,
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        
+        args = []
+        kwargs = {}
+
+        # 1. Reconstruct initial args/kwargs from Bindings + DataTuple
+        positional_args_dict = {}
+        for name, binding in node.input_bindings.items():
+            value = self._resolve_binding(binding, data_tuple)
+            
+            # Recursively resolve structures (e.g., lists containing Inject)
+            value = self._resolve_structure(value, node.id, state_backend, resource_context, graph)
+
+            if name.isdigit():
+                positional_args_dict[int(name)] = value
+            else:
+                kwargs[name] = value
+
+        sorted_indices = sorted(positional_args_dict.keys())
+        args = [positional_args_dict[i] for i in sorted_indices]
+        
+        # 2. Overlay Dependencies from Edges
+        incoming_edges = [e for e in graph.edges if e.target.id == node.id]
+        
+        for edge in incoming_edges:
+            if edge.edge_type == EdgeType.DATA:
+                val = self._resolve_dependency(edge, node.id, state_backend, graph)
+                
+                if edge.arg_name.isdigit():
+                    idx = int(edge.arg_name)
+                    while len(args) <= idx:
+                        args.append(None)
+                    args[idx] = val
+                else:
+                    kwargs[edge.arg_name] = val
+
+        # 3. Handle Resource Injection in Defaults
+        if node.signature:
+            # Create a bound arguments object to see which args are not yet filled
+            try:
+                bound_args = node.signature.bind_partial(*args, **kwargs)
+                for param in node.signature.parameters.values():
+                    if isinstance(param.default, Inject) and param.name not in bound_args.arguments:
+                        kwargs[param.name] = self._resolve_inject(param.default, node.name, resource_context)
+            except TypeError:
+                # This can happen if args/kwargs are not yet valid, but we can still try a simpler check
+                pass
+
+        # 4. Handle internal param fetching context
+        from cascade.internal.inputs import _get_param_value
+        if node.callable_obj is _get_param_value.func:
+             kwargs["params_context"] = user_params or {}
+
+        return args, kwargs
+
+    def _resolve_binding(self, binding: Any, data_tuple: Tuple[Any, ...]) -> Any:
+        if isinstance(binding, SlotRef):
+            return data_tuple[binding.index]
+        elif isinstance(binding, Constant):
+            return binding.value
+        return binding
+
+    def _resolve_structure(
+        self, obj: Any, consumer_id: str, state_backend: StateBackend,
+        resource_context: Dict[str, Any], graph: Graph,
+    ) -> Any:
+        if isinstance(obj, Inject):
+            return self._resolve_inject(obj, consumer_id, resource_context)
+        elif isinstance(obj, list):
+            return [self._resolve_structure(item, consumer_id, state_backend, resource_context, graph) for item in obj]
+        elif isinstance(obj, tuple):
+            return tuple(self._resolve_structure(item, consumer_id, state_backend, resource_context, graph) for item in obj)
+        elif isinstance(obj, dict):
+            return {k: self._resolve_structure(v, consumer_id, state_backend, resource_context, graph) for k, v in obj.items()}
+        return obj
+
+    def _resolve_dependency(
+        self, edge: Edge, consumer_id: str, state_backend: StateBackend, graph: Graph
+    ) -> Any:
+        # ** CORE ROUTER LOGIC FIX **
+        if edge.router:
+            # This edge represents a Router. Its source is the SELECTOR.
+            # We must resolve the selector's value first.
+            selector_result = self._get_node_result(edge.source.id, consumer_id, "router_selector", state_backend, graph)
+            
+            # Use the result to pick the correct route.
+            try:
+                selected_route_lr = edge.router.routes[selector_result]
+            except KeyError:
+                raise ValueError(
+                    f"Router selector for '{consumer_id}' returned '{selector_result}', "
+                    f"but no matching route found in {list(edge.router.routes.keys())}"
+                )
+            
+            # Now, resolve the result of the SELECTED route.
+            return self._get_node_result(selected_route_lr._uuid, consumer_id, edge.arg_name, state_backend, graph)
+        else:
+            # Standard dependency
+            return self._get_node_result(edge.source.id, consumer_id, edge.arg_name, state_backend, graph)
+
+    def _get_node_result(
+        self, node_id: str, consumer_id: str, arg_name: str, 
+        state_backend: StateBackend, graph: Graph
+    ) -> Any:
+        """Helper to get a node's result, with skip penetration logic."""
+        if state_backend.has_result(node_id):
+            return state_backend.get_result(node_id)
+        
+        if state_backend.get_skip_reason(node_id):
+            upstream_edges = [e for e in graph.edges if e.target.id == node_id]
+            data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
+            if data_inputs:
+                # Recursively try to penetrate the skipped node
+                return self._get_node_result(data_inputs[0].source.id, consumer_id, arg_name, state_backend, graph)
+
+        skip_info = f" (skipped: {state_backend.get_skip_reason(node_id)})" if state_backend.get_skip_reason(node_id) else ""
+        raise DependencyMissingError(consumer_id, arg_name, f"{node_id}{skip_info}")
+
+    def _resolve_inject(
+        self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]
+    ) -> Any:
+        if inject.resource_name in resource_context:
+            return resource_context[inject.resource_name]
+        raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
+~~~~~
+
+#### Acts 2: 适配 SDK Preview 工具
+
+首先，更新 `events.py` 中的事件定义。
 
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-sdk/src/cascade/tools/events.py
 ~~~~~
 ~~~~~python
-        elif isinstance(obj, Router):
-            selector_node = self._visit(obj.selector)
-            edge = Edge(
-                source=selector_node,
-                target=target_node,
-                arg_name=f"{path}.selector" if path else "selector",
-                router=obj,
-                edge_type=EdgeType.DATA,
+@dataclass(frozen=True)
+class PlanNodeInspected(ToolEvent):
+    """Fired for each node in the resolved execution plan."""
+
+    index: int = 0
+    total_nodes: int = 0
+    node_id: str = ""
+    node_name: str = ""
+    literal_inputs: Dict[str, Any] = field(default_factory=dict)
+
+    def _get_payload(self) -> Dict[str, Any]:
+        return {
+            "index": self.index,
+            "total_nodes": self.total_nodes,
+            "node_id": self.node_id,
+            "node_name": self.node_name,
+            "literal_inputs": self.literal_inputs,
+        }
+~~~~~
+~~~~~python
+@dataclass(frozen=True)
+class PlanNodeInspected(ToolEvent):
+    """Fired for each node in the resolved execution plan."""
+
+    index: int = 0
+    total_nodes: int = 0
+    node_id: str = ""
+    node_name: str = ""
+    input_bindings: Dict[str, Any] = field(default_factory=dict)
+
+    def _get_payload(self) -> Dict[str, Any]:
+        return {
+            "index": self.index,
+            "total_nodes": self.total_nodes,
+            "node_id": self.node_id,
+            "node_name": self.node_name,
+            "input_bindings": self.input_bindings,
+        }
+~~~~~
+
+然后，更新 `preview.py` 的逻辑和视图以使用 `input_bindings`。
+
+~~~~~act
+patch_file
+packages/cascade-sdk/src/cascade/tools/preview.py
+~~~~~
+~~~~~python
+            # Filter out non-literal dependencies from the inputs for cleaner output
+            from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+
+            literals = {
+                k: v
+                for k, v in node.literal_inputs.items()
+                if not isinstance(v, (LazyResult, MappedLazyResult))
+            }
+
+            bus.publish(
+                PlanNodeInspected(
+                    run_id=target._uuid,
+                    index=current_index,
+                    total_nodes=total_steps,
+                    node_id=node.id,
+                    node_name=node.name,
+                    literal_inputs=literals,
+                )
             )
-            self.graph.add_edge(edge)
-
-            for route_key, route_result in obj.routes.items():
 ~~~~~
 ~~~~~python
-        elif isinstance(obj, Router):
-            # The edge from the selector to the consumer represents the final resolved value
-            # of the router. Its arg_name must be the argument the consumer expects for the router.
-            selector_node = self._visit(obj.selector)
-            edge = Edge(
-                source=selector_node,
-                target=target_node,
-                arg_name=path,  # Use the router's own argument path
-                router=obj,
-                edge_type=EdgeType.DATA,
+            bus.publish(
+                PlanNodeInspected(
+                    run_id=target._uuid,
+                    index=current_index,
+                    total_nodes=total_steps,
+                    node_id=node.id,
+                    node_name=node.name,
+                    input_bindings=node.input_bindings,
+                )
             )
-            self.graph.add_edge(edge)
-
-            for route_key, route_result in obj.routes.items():
-~~~~~
-
-#### Acts 2: 适配 `test_build.py`
-
-更新测试以检查 `input_bindings` 而不是 `literal_inputs`。
-
-~~~~~act
-patch_file
-tests/engine/graph/test_build.py
-~~~~~
-~~~~~python
-    # 断言它包含正确的 literal_inputs (这是内部任务需要的参数)
-    assert "name" in p_node.literal_inputs
-    assert p_node.literal_inputs["name"] == "x"
-~~~~~
-~~~~~python
-    # 断言它包含正确的 input_bindings (这是内部任务需要的参数)
-    assert "name" in p_node.input_bindings
-    # The value is now a SlotRef or Constant, we check its existence
-    assert p_node.input_bindings["name"] is not None
 ~~~~~
 
 ~~~~~act
 patch_file
-tests/engine/graph/test_build.py
+packages/cascade-sdk/src/cascade/tools/preview.py
 ~~~~~
 ~~~~~python
-    e_node = next(n for n in graph.nodes if n.name == "_get_env_var")
-    assert e_node.node_type == "task"
-    assert e_node.literal_inputs["name"] == "HOME"
+    def on_node(self, event: PlanNodeInspected):
+        # Format literal inputs for readability
+        literals_repr = {
+            k: (f"<LazyResult of '{v.task.name}'>" if isinstance(v, LazyResult) else v)
+            for k, v in event.literal_inputs.items()
+        }
+        print(
+            f"[{event.index}/{event.total_nodes}] {event.node_name} (Literals: {literals_repr})"
+        )
 ~~~~~
 ~~~~~python
-    e_node = next(n for n in graph.nodes if n.name == "_get_env_var")
-    assert e_node.node_type == "task"
-    assert "name" in e_node.input_bindings
-    assert e_node.input_bindings["name"] is not None
+    def on_node(self, event: PlanNodeInspected):
+        # Format input bindings for readability
+        bindings_repr = {
+            k: repr(v) for k, v in event.input_bindings.items()
+        }
+        print(
+            f"[{event.index}/{event.total_nodes}] {event.node_name} (Bindings: {bindings_repr})"
+        )
 ~~~~~
 
-#### Acts 3: 适配 `test_serialize.py`
+#### Acts 3: 修复 `test_serialize.py` 的断言
 
-更新测试以检查序列化后的 `input_bindings` 键。
+将错误的 `in` 检查替换为 `isinstance`。
 
 ~~~~~act
 patch_file
 tests/engine/graph/test_serialize.py
-~~~~~
-~~~~~python
-    assert param_node["node_type"] == "task"
-    assert param_node["literal_inputs"]["name"] == "env"
-
-    # Note: Serialization currently only saves graph structure, not the Context.
-    # So deserialized graph will have the node, but not the ParamSpec metadata
-    # (which lives in WorkflowContext). This is expected behavior for v1.3.
-
-    # Round trip
-    restored = from_json(to_json(graph))
-    p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
-    assert p_node.literal_inputs["name"] == "env"
 ~~~~~
 ~~~~~python
     assert param_node["node_type"] == "task"
@@ -144,41 +333,23 @@ tests/engine/graph/test_serialize.py
     p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
     assert "__slot_ref" in p_node.input_bindings["name"]
 ~~~~~
-
-#### Acts 4: 适配 `test_preview.py`
-
-更新 `DryRunConsoleSubscriber` 事件断言以检查 `input_bindings`。
-
-~~~~~act
-patch_file
-tests/sdk/tools/test_preview.py
-~~~~~
 ~~~~~python
-    # Check Step A
-    node_a_event = node_events[0]
-    assert node_a_event.index == 1
-    assert node_a_event.node_name == "step_a"
-    assert node_a_event.literal_inputs == {}
+    from cascade.spec.binding import SlotRef
 
-    # Check Step B
-    node_b_event = node_events[1]
-    assert node_b_event.index == 2
-    assert node_b_event.node_name == "step_b"
-    assert node_b_event.literal_inputs == {"y": 10}
-~~~~~
-~~~~~python
-    # Check Step A
-    node_a_event = node_events[0]
-    assert node_a_event.index == 1
-    assert node_a_event.node_name == "step_a"
-    assert node_a_event.input_bindings == {}
+    assert param_node["node_type"] == "task"
+    assert "name" in param_node["input_bindings"]
+    assert "__slot_ref" in param_node["input_bindings"]["name"]
 
-    # Check Step B
-    node_b_event = node_events[1]
-    assert node_b_event.index == 2
-    assert node_b_event.node_name == "step_b"
-    assert "y" in node_b_event.input_bindings
+    # Note: Serialization currently only saves graph structure, not the Context.
+    # So deserialized graph will have the node, but not the ParamSpec metadata
+    # (which lives in WorkflowContext). This is expected behavior for v1.3.
+
+    # Round trip
+    restored = from_json(to_json(graph))
+    p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
+    assert "name" in p_node.input_bindings
+    assert isinstance(p_node.input_bindings["name"], SlotRef)
 ~~~~~
 
 ### 下一步建议
-这些修复应该能解决当前报告的所有 10 个失败。请再次运行 `pytest`。如果测试全部通过，我们就可以认为“The Great Split”的第一阶段核心重构已经完成且稳定，可以准备进入下一步了。
+我们已经解决了所有已知的逻辑错误和适配问题。这次修复应该能让测试套件完全通过。请再次运行 `pytest`。如果所有测试都通过，我们可以自信地宣布 **[COMMIT 1] The Great Split** 已经完成。

@@ -93,7 +93,10 @@ def test_serialize_params():
     # In v1.3, Param produces a task named '_get_param_value'
     param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
 
+    from cascade.spec.binding import SlotRef
+
     assert param_node["node_type"] == "task"
+    assert "name" in param_node["input_bindings"]
     assert "__slot_ref" in param_node["input_bindings"]["name"]
 
     # Note: Serialization currently only saves graph structure, not the Context.
@@ -103,7 +106,8 @@ def test_serialize_params():
     # Round trip
     restored = from_json(to_json(graph))
     p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
-    assert "__slot_ref" in p_node.input_bindings["name"]
+    assert "name" in p_node.input_bindings
+    assert isinstance(p_node.input_bindings["name"], SlotRef)
 
 
 def test_serialize_with_retry():

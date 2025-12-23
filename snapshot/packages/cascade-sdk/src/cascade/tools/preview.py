@@ -42,15 +42,6 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
     current_index = 1
     for stage in plan:
         for node in stage:
-            # Filter out non-literal dependencies from the inputs for cleaner output
-            from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-
-            literals = {
-                k: v
-                for k, v in node.literal_inputs.items()
-                if not isinstance(v, (LazyResult, MappedLazyResult))
-            }
-
             bus.publish(
                 PlanNodeInspected(
                     run_id=target._uuid,
@@ -58,7 +49,7 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
                     total_nodes=total_steps,
                     node_id=node.id,
                     node_name=node.name,
-                    literal_inputs=literals,
+                    input_bindings=node.input_bindings,
                 )
             )
             current_index += 1
@@ -80,13 +71,12 @@ class DryRunConsoleSubscriber:
         print("--- Cascade Execution Plan (Dry Run) ---")
 
     def on_node(self, event: PlanNodeInspected):
-        # Format literal inputs for readability
-        literals_repr = {
-            k: (f"<LazyResult of '{v.task.name}'>" if isinstance(v, LazyResult) else v)
-            for k, v in event.literal_inputs.items()
+        # Format input bindings for readability
+        bindings_repr = {
+            k: repr(v) for k, v in event.input_bindings.items()
         }
         print(
-            f"[{event.index}/{event.total_nodes}] {event.node_name} (Literals: {literals_repr})"
+            f"[{event.index}/{event.total_nodes}] {event.node_name} (Bindings: {bindings_repr})"
         )
 
     def on_finish(self, event: PlanAnalysisFinished):

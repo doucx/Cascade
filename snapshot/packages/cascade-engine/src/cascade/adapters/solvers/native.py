@@ -22,11 +22,19 @@ class NativeSolver(Solver):
         in_degree: Dict[str, int] = {node.id: 0 for node in graph.nodes}
         node_map: Dict[str, Node] = {node.id: node for node in graph.nodes}
 
+        # Whitelist of edge types that represent actual execution dependencies.
+        # This prevents metadata edges (like POTENTIAL) from creating cycles.
+        EXECUTION_EDGE_TYPES = {
+            EdgeType.DATA,
+            EdgeType.CONDITION,
+            EdgeType.CONSTRAINT,
+            EdgeType.IMPLICIT,
+            EdgeType.SEQUENCE,
+            EdgeType.ROUTER_ROUTE, # Considered a dependency for plan completeness
+        }
+
         for edge in graph.edges:
-            # --- CRITICAL FIX ---
-            # Ignore potential edges during topological sort. They are metadata for
-            # static analysis and caching, not execution dependencies for the current step.
-            if edge.edge_type == EdgeType.POTENTIAL:
+            if edge.edge_type not in EXECUTION_EDGE_TYPES:
                 continue
 
             adj[edge.source.id].append(edge.target)

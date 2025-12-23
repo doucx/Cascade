@@ -4,12 +4,12 @@ from cascade.graph.build import build_graph
 from cascade.graph.model import Node, EdgeType
 
 
-def visualize(target: LazyResult[Any]) -> str:
+def visualize(target: Any) -> str:
     """
     Builds the computation graph for a target and returns its representation
     in the Graphviz DOT language format.
     """
-    graph, _ = build_graph(target)
+    graph, _, _ = build_graph(target)
 
     dot_parts = [
         "digraph CascadeWorkflow {",

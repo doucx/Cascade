@@ -21,7 +21,7 @@ def dry_run(target: LazyResult[Any]) -> None:
     _analyze_plan(target, bus)
 
 
-def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
+def _analyze_plan(target: Any, bus: MessageBus) -> None:
     """
     Core logic for dry_run: builds the plan and emits events.
     Decoupled from any output mechanism.
@@ -30,7 +30,7 @@ def _analyze_plan(target: LazyResult[Any], bus: MessageBus) -> None:
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
     # 1. Build the graph statically
-    graph, _ = build_graph(target)
+    graph, _, _ = build_graph(target)
 
     # 2. Resolve the execution plan (topological sort)
     plan = engine.solver.resolve(graph)

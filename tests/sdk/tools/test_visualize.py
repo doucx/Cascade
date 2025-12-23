@@ -28,6 +28,15 @@ def test_visualize_diamond_graph():
     r_c = t_c(r_a)
     r_d = t_d(r_b, z=r_c)
 
+    # Pre-build to get the instance map for stable IDs
+    from cascade.graph.build import build_graph
+    _, _, instance_map = build_graph(r_d)
+    
+    node_a = instance_map[r_a._uuid]
+    node_b = instance_map[r_b._uuid]
+    node_c = instance_map[r_c._uuid]
+    node_d = instance_map[r_d._uuid]
+
     dot_string = cs.visualize(r_d)
 
     # Basic structural checks
@@ -38,17 +47,17 @@ def test_visualize_diamond_graph():
     # Check node definitions with new default styles
     # style="rounded,filled", fillcolor=white, fontcolor=black
     assert (
-        f'"{r_a._uuid}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
+        f'"{node_a.id}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
         in dot_string
     )
     assert (
-        f'"{r_b._uuid}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
+        f'"{node_b.id}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
         in dot_string
     )
 
     # Check data edge definitions
-    assert f'"{r_a._uuid}" -> "{r_b._uuid}" [label="0"];' in dot_string
-    assert f'"{r_c._uuid}" -> "{r_d._uuid}" [label="z"];' in dot_string
+    assert f'"{node_a.id}" -> "{node_b.id}" [label="0"];' in dot_string
+    assert f'"{node_c.id}" -> "{node_d.id}" [label="z"];' in dot_string
 
 
 def test_visualize_special_edge_types():
@@ -78,19 +87,27 @@ def test_visualize_special_edge_types():
         t_main(data_in=data_source).run_if(cond).with_constraints(cpu=constraint_val)
     )
 
+    from cascade.graph.build import build_graph
+    _, _, instance_map = build_graph(target)
+
+    node_ds = instance_map[data_source._uuid]
+    node_target = instance_map[target._uuid]
+    node_cond = instance_map[cond._uuid]
+    node_constraint = instance_map[constraint_val._uuid]
+
     dot_string = cs.visualize(target)
 
     # 1. Assert Data Edge (standard style)
-    assert f'"{data_source._uuid}" -> "{target._uuid}" [label="data_in"];' in dot_string
+    assert f'"{node_ds.id}" -> "{node_target.id}" [label="data_in"];' in dot_string
 
     # 2. Assert Condition Edge (dashed, gray)
     expected_cond_edge = (
-        f'"{cond._uuid}" -> "{target._uuid}" [style=dashed, color=gray, label="run_if"]'
+        f'"{node_cond.id}" -> "{node_target.id}" [style=dashed, color=gray, label="run_if"]'
     )
     assert expected_cond_edge in dot_string
 
     # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{constraint_val._uuid}" -> "{target._uuid}" [style=dotted, color=purple, label="constraint: cpu"]'
+    expected_constraint_edge = f'"{node_constraint.id}" -> "{node_target.id}" [style=dotted, color=purple, label="constraint: cpu"]'
     assert expected_constraint_edge in dot_string
 
 

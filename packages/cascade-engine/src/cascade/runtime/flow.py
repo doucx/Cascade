@@ -2,7 +2,7 @@ from typing import Dict, Any, Optional, List
 from collections import defaultdict
 from cascade.graph.model import Node, Graph, EdgeType, Edge
 from cascade.spec.common import Param
-from cascade.spec.lazy_types import LazyResult
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.protocols import StateBackend
 
 
@@ -12,9 +12,10 @@ class FlowManager:
     skipping tasks (Conditions) and pruning branches (Router).
     """
 
-    def __init__(self, graph: Graph, target_node_id: str):
+    def __init__(self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]):
         self.graph = graph
         self.target_node_id = target_node_id
+        self.instance_map = instance_map
 
         self.in_edges: Dict[str, List[Edge]] = defaultdict(list)
         self.routers_by_selector: Dict[str, List[Edge]] = defaultdict(list)
@@ -29,22 +30,28 @@ class FlowManager:
             self.downstream_demand[edge.source.id] += 1
 
             if edge.router:
-                selector_id = self._get_obj_id(edge.router.selector)
-                self.routers_by_selector[selector_id].append(edge)
+                selector_node = self._get_node_from_instance(edge.router.selector)
+                if selector_node:
+                    self.routers_by_selector[selector_node.id].append(edge)
 
                 for key, route_result in edge.router.routes.items():
-                    route_source_id = self._get_obj_id(route_result)
-                    self.route_source_map[edge.target.id][route_source_id] = key
+                    route_node = self._get_node_from_instance(route_result)
+                    if route_node:
+                        self.route_source_map[edge.target.id][route_node.id] = key
 
         # The final target always has at least 1 implicit demand (the user wants it)
         self.downstream_demand[target_node_id] += 1
 
-    def _get_obj_id(self, obj: Any) -> str:
-        if isinstance(obj, LazyResult):
-            return obj._uuid
-        elif isinstance(obj, Param):
-            return obj.name
-        return str(obj)
+    def _get_node_from_instance(self, instance: Any) -> Optional[Node]:
+        """Gets the canonical Node from a LazyResult instance."""
+        if isinstance(instance, (LazyResult, MappedLazyResult)):
+            return self.instance_map.get(instance._uuid)
+        elif isinstance(instance, Param):
+            # Find the node that represents this param
+            for node in self.graph.nodes:
+                if node.param_spec and node.param_spec.name == instance.name:
+                    return node
+        return None
 
     def register_result(self, node_id: str, result: Any, state_backend: StateBackend):
         """
@@ -63,7 +70,10 @@ class FlowManager:
 
         for route_key, route_lazy_result in router.routes.items():
             if route_key != selected_route_key:
-                branch_root_id = self._get_obj_id(route_lazy_result)
+                branch_root_node = self._get_node_from_instance(route_lazy_result)
+                if not branch_root_node:
+                    continue  # Should not happen in a well-formed graph
+                branch_root_id = branch_root_node.id
                 # This branch is NOT selected.
                 # We decrement its demand. If it drops to 0, it gets pruned.
                 # Note: In the Router model, the "edge" carrying the router implies a demand
@@ -122,9 +132,11 @@ class FlowManager:
         active_route_key = None
         router_edge = next((e for e in self.in_edges[node.id] if e.router), None)
         if router_edge:
-            selector_id = self._get_obj_id(router_edge.router.selector)
-            if state_backend.has_result(selector_id):
-                active_route_key = state_backend.get_result(selector_id)
+            selector_node = self._get_node_from_instance(router_edge.router.selector)
+            if selector_node:
+                selector_id = selector_node.id
+                if state_backend.has_result(selector_id):
+                    active_route_key = state_backend.get_result(selector_id)
 
         for edge in self.in_edges[node.id]:
             if edge.edge_type == EdgeType.ROUTER_ROUTE:

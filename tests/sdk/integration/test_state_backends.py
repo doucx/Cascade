@@ -100,9 +100,13 @@ def test_run_with_redis_backend_uri(stateful_redis_mock):
     results_key = next((k for k in store if "results" in k), None)
     assert results_key is not None
 
-    # The key of the hash field is the node's UUID
-    node_uuid = workflow._uuid
-    stored_pickled_data = store[results_key][node_uuid]
+    from cascade.graph.build import build_graph
+    
+    # The key of the hash field is the node's CANONICAL ID, not its instance UUID
+    _, _, instance_map = build_graph(workflow)
+    node = instance_map[workflow._uuid]
+    
+    stored_pickled_data = store[results_key][node.id]
 
     # Verify the stored data is correct
     assert pickle.loads(stored_pickled_data) == 3

@@ -74,9 +74,12 @@ def test_flow_manager_pruning_logic():
     graph = MagicMock()
     graph.nodes = nodes
     graph.edges = edges
+    
+    # Create a mock instance_map for the test
+    instance_map = {"S": n_map["S"], "A": n_map["A"], "B": n_map["B"]}
 
     # 4. Initialize Manager & Backend
-    manager = FlowManager(graph, target_node_id="C")
+    manager = FlowManager(graph, target_node_id="C", instance_map=instance_map)
     state_backend = InMemoryStateBackend(run_id="test_run")
 
     # Initial state check

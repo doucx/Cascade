@@ -49,6 +49,11 @@ class GraphExecutionStrategy:
         # different graph instances that share the same structure (template).
         self._template_plan_cache: Dict[str, List[List[int]]] = {}
 
+        # Zero-Overhead TCO Cache
+        # Maps tco_cycle_id to (Graph, IndexedPlan, root_node_id)
+        # Used to bypass build_graph for structurally stable recursive calls
+        self._cycle_cache: Dict[str, Any] = {}
+
         # Persistent registry to ensure node object identity consistency across TCO iterations
         self._node_registry = NodeRegistry()
 
@@ -89,38 +94,69 @@ class GraphExecutionStrategy:
         current_target = target
 
         while True:
+            # Check for Zero-Overhead TCO Fast Path
+            # Use getattr safely as MappedLazyResult uses .factory instead of .task
+            target_task = getattr(current_target, "task", None)
+            cycle_id = getattr(target_task, "_tco_cycle_id", None) if target_task else None
+            fast_path_data = None
+
+            if cycle_id and cycle_id in self._cycle_cache:
+                if self._are_args_simple(current_target):
+                    fast_path_data = self._cycle_cache[cycle_id]
+
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
-                # 1. Build Graph (With Registry for interning)
-                # This constructs the structural graph and the instance map.
-                # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
-                graph, instance_map = build_graph(
-                    current_target, registry=self._node_registry
-                )
+                input_overrides = None
 
-                # Identify the structural root
-                if current_target._uuid not in instance_map:
-                    raise RuntimeError(
-                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
-                    )
-                target_node = instance_map[current_target._uuid]
-                
-                # Use template_id for caching. Fallback to id if template_id is missing (should not happen).
-                cache_key = target_node.template_id or target_node.id
-
-                # 2. Resolve Plan (With JIT Template Caching)
-                if cache_key in self._template_plan_cache:
-                    # Hit: Rehydrate the indexed plan using the current graph's nodes.
-                    indexed_plan = self._template_plan_cache[cache_key]
+                if fast_path_data:
+                    # FAST PATH: Reuse Graph & Plan
+                    # Unpack all 4 cached values: graph, indexed_plan, root_node_id, req_res
+                    graph, indexed_plan, root_node_id, _ = fast_path_data
+                    # Reconstruct virtual instance map for current iteration
+                    target_node = graph.get_node(root_node_id)
+                    instance_map = {current_target._uuid: target_node}
                     plan = self._rehydrate_plan(graph, indexed_plan)
+
+                    # Prepare Input Overrides
+                    input_overrides = {}
+                    for i, arg in enumerate(current_target.args):
+                        input_overrides[str(i)] = arg
+                    input_overrides.update(current_target.kwargs)
                 else:
-                    # Miss: Ask solver to resolve.
-                    plan = self.solver.resolve(graph)
-                    # Index and cache the plan for future reuse.
-                    self._template_plan_cache[cache_key] = self._index_plan(graph, plan)
+                    # SLOW PATH: Build Graph
+                    graph, instance_map = build_graph(
+                        current_target, registry=self._node_registry
+                    )
+
+                    if current_target._uuid not in instance_map:
+                        raise RuntimeError(
+                            f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                        )
+                    target_node = instance_map[current_target._uuid]
+                    cache_key = target_node.template_id or target_node.id
+
+                    # 2. Resolve Plan
+                    if cache_key in self._template_plan_cache:
+                        indexed_plan = self._template_plan_cache[cache_key]
+                        plan = self._rehydrate_plan(graph, indexed_plan)
+                    else:
+                        plan = self.solver.resolve(graph)
+                        indexed_plan = self._index_plan(graph, plan)
+                        self._template_plan_cache[cache_key] = indexed_plan
+
+                    # Cache for Future TCO Fast Path
+                    # Only scan and cache if we haven't already indexed this cycle
+                    if cycle_id and cycle_id not in self._cycle_cache:
+                        # Pre-scan resources and store them in the cycle cache
+                        req_res = self.resource_container.scan(graph)
+                        self._cycle_cache[cycle_id] = (graph, indexed_plan, target_node.id, req_res)
 
                 # 3. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph)
+                if fast_path_data:
+                    required_resources = fast_path_data[3]
+                else:
+                    required_resources = self.resource_container.scan(graph)
+
                 self.resource_container.setup(
                     required_resources,
                     active_resources,
@@ -130,16 +166,30 @@ class GraphExecutionStrategy:
                 )
 
                 # 4. Execute Graph
-                result = await self._execute_graph(
-                    current_target,
-                    params,
-                    active_resources,
-                    run_id,
-                    state_backend,
-                    graph,
-                    plan,
-                    instance_map,
-                )
+                # CHECK FOR HOT-LOOP BYPASS
+                # If it's a fast path and it's a simple single-node plan, bypass the orchestrator
+                if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
+                    result = await self._execute_hot_node(
+                        target_node,
+                        graph,
+                        state_backend,
+                        active_resources,
+                        params,
+                        instance_map,
+                        input_overrides
+                    )
+                else:
+                    result = await self._execute_graph(
+                        current_target,
+                        params,
+                        active_resources,
+                        run_id,
+                        state_backend,
+                        graph,
+                        plan,
+                        instance_map,
+                        input_overrides,
+                    )
 
             # 5. Check for Tail Call (LazyResult) - TCO Logic
             if isinstance(result, (LazyResult, MappedLazyResult)):
@@ -152,6 +202,68 @@ class GraphExecutionStrategy:
             else:
                 return result
 
+    def _are_args_simple(self, lazy_result: Any) -> bool:
+        """
+        Checks if the LazyResult arguments contain any nested LazyResults.
+        In TCO mode, we allow LazyResults that have been previously 'interned'
+        in our structural registry, as they don't change the template.
+        """
+        # Handle both LazyResult (args/kwargs) and MappedLazyResult (mapping_kwargs)
+        args = getattr(lazy_result, "args", [])
+        kwargs = getattr(lazy_result, "kwargs", {})
+        if hasattr(lazy_result, "mapping_kwargs"):
+            kwargs = lazy_result.mapping_kwargs
+
+        def _is_complex(v):
+            if isinstance(v, (LazyResult, MappedLazyResult)):
+                # If the LazyResult is NEW (not in our structural registry),
+                # it might represent a structural change.
+                # In this phase, for absolute safety, we only allow literal values
+                # and recurse into collections.
+                return True
+            if isinstance(v, list): return any(_is_complex(x) for x in v)
+            if isinstance(v, dict): return any(_is_complex(x) for x in v.values())
+            return False
+
+        for arg in args:
+            if _is_complex(arg): return False
+        for val in kwargs.values():
+            if _is_complex(val): return False
+        return True
+
+    async def _execute_hot_node(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        active_resources: Dict[str, Any],
+        params: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] = None,
+    ) -> Any:
+        """
+        A stripped-down version of NodeProcessor.process specifically for hot TCO loops.
+        Bypasses event bus, flow manager, and multiple resolvers for maximum performance.
+        """
+        # 1. Resolve Arguments (Minimal path)
+        # We reuse the node_processor's resolver but bypass the process() wrapper
+        args, kwargs = self.node_processor.arg_resolver.resolve(
+            node,
+            graph,
+            state_backend,
+            active_resources,
+            instance_map=instance_map,
+            user_params=params,
+            input_overrides=input_overrides,
+        )
+
+        # 2. Direct Execution (Skip NodeProcessor ceremony)
+        result = await self.node_processor.executor.execute(node, args, kwargs)
+        
+        # 3. Minimal State Update
+        state_backend.put_result(node.id, result)
+        return result
+
     async def _execute_graph(
         self,
         target: Any,
@@ -162,6 +274,7 @@ class GraphExecutionStrategy:
         graph: Graph,
         plan: Any,
         instance_map: Dict[str, Node],
+        root_input_overrides: Dict[str, Any] = None,
     ) -> Any:
         # Locate the canonical node for the current target instance
         if target._uuid not in instance_map:
@@ -232,19 +345,22 @@ class GraphExecutionStrategy:
                             instance_map=sub_instance_map,
                         )
 
-                    tasks_to_run = [
-                        self.node_processor.process(
-                            node,
-                            graph,
-                            state_backend,
-                            active_resources,
-                            run_id,
-                            params,
-                            sub_graph_runner,
-                            instance_map,
+                    tasks_to_run = []
+                    for node in executable_this_pass:
+                        overrides = root_input_overrides if node.id == target_node.id else None
+                        tasks_to_run.append(
+                            self.node_processor.process(
+                                node,
+                                graph,
+                                state_backend,
+                                active_resources,
+                                run_id,
+                                params,
+                                sub_graph_runner,
+                                instance_map,
+                                input_overrides=overrides
+                            )
                         )
-                        for node in executable_this_pass
-                    ]
 
                     pass_results = await asyncio.gather(*tasks_to_run)
 

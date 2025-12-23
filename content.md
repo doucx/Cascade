@@ -1,172 +1,92 @@
-好的，我分析了最后两个失败的测试。
+太棒了。测试的全面通过标志着我们成功跨越了架构重构中最困难的一个关口：**从“基于实例的图”演进为“基于模板的图”**。
 
- 错误分析
+这不仅是性能上的优化（通过 Interning 减少了内存占用），更是语义上的飞跃。现在，Cascade 终于拥有了稳定的、能够跨越不同任务调用甚至不同运行周期而保持一致的“结构身份”。这是实现 Hashlife 模型和全局计算缓存的绝对前提。
 
-**根本原因**：在引入节点复用（interning）重构后，图中的节点 ID 不再是 `LazyResult._uuid`（一个临时的实例 ID），而是 `Node.id`（一个基于其内容的稳定结构化哈希）。然而，`test_visualize.py` 中的测试用例仍然错误地断言 DOT 文件中包含的是旧的 `_uuid`。
+我将生成一个 `[COMMIT]` 计划，将这些具有里程碑意义的改动永久记录下来。
 
-`cs.visualize()` 的新实现是正确的，因为它现在使用了稳定的、可预测的结构化哈希作为节点标识符。失败的根源在于**测试用例本身已经过时**，它们需要被更新以反映这一新的、更健壮的架构。
-
-**解决方案**：
-我将修改这两个失败的测试，使其不再依赖不稳定的 `_uuid`。取而代之，它们将：
-1.  首先调用 `build_graph` 来获取从 `_uuid` 到其对应 `Node` 对象的 `instance_map`。
-2.  使用这个映射来查找每个 `LazyResult` 实例对应的、具有稳定 `Node.id` 的 `Node` 对象。
-3.  更新断言，以验证 DOT 字符串中包含的是这些正确的、稳定的 `Node.id`。
-
-这个修复将使测试与新的架构保持一致，并验证 `visualize` 工具的正确行为。
-
-## [WIP] fix(tests): Update visualize tests to use stable node IDs
-
-### 错误分析
-`test_visualize.py` 中的测试用例在节点复用（interning）重构后未能更新。它们仍然错误地断言 `cs.visualize()` 生成的 DOT 字符串中的节点 ID 是临时的 `LazyResult._uuid`，而新实现正确地使用了稳定的 `Node.id`（结构化哈希）。这导致了断言失败。
+## [COMMIT] feat(graph): Implement node interning and stable structural identifiers
 
 ### 用户需求
-修复 `test_visualize.py` 中的两个失败测试，使其适应使用 `Node.id` 而非 `_uuid` 的新架构。
+完成路线图第二阶段 2.1 节，实现全局/会话级的节点注册表（Node Interning），并确保计算图的每个节点都由一个稳定的结构化 ID（哈希）唯一标识。
 
 ### 评论
-这是一个典型的“测试需要跟随实现演进”的案例。`visualize` 工具的行为是正确的，因为它现在暴露了更稳定、更有意义的节点标识符。修复测试用例不仅能使测试通过，还能使其本身变得更加健壮，因为它将验证 `visualize` 是否正确地使用了规范化的节点 ID。
+这是一次深度的架构演进。我们不仅实现了一个用于节点复用的 `NodeRegistry`，还通过引入 `ShallowHasher` 和 `instance_map` 机制，彻底解决了节点“结构身份”与“调用实例”的分离。虽然过程中面临了 ID 语义转换带来的巨大集成挑战，但目前的实现非常稳固，且为后续的“骨架-血肉分离（Skeleton-Flesh Split）”铺平了道路。
 
 ### 目标
-1.  修改 `test_visualize_diamond_graph` 和 `test_visualize_special_edge_types`。
-2.  在测试中调用 `build_graph` 以获取 `instance_map`。
-3.  使用 `instance_map` 查找 `LazyResult` 对应的 `Node` 对象及其稳定的 `id`。
-4.  更新 `assert` 语句以使用正确的 `Node.id`。
-5.  使所有测试通过。
+1.  提交 `NodeRegistry`、`ShallowHasher` 以及重构后的 `GraphBuilder` 核心代码。
+2.  提交所有为适配新的 ID 模型而进行的运行时组件（`FlowManager`, `Resolvers`, `Engine`）的更新。
+3.  提交已同步更新的 SDK 工具（`visualize`, `preview`）及其测试套件。
 
 ### 基本原理
-我们将重构测试逻辑，使其首先通过 `build_graph(target)` 获取 `graph`, `data_tuple`, 和 `instance_map`。然后，对于测试中定义的每个 `LazyResult` 实例（如 `r_a`, `r_b`），我们将使用 `instance_map[r_a._uuid]` 来获取其对应的、唯一的 `Node` 对象。最后，我们将使用 `node.id` 来构造预期的 DOT 字符串片段，从而使断言与 `visualize` 函数的实际输出保持一致。
+通过将 `Node.id` 锁定为节点的浅层结构哈希，我们使计算图在逻辑上变得可复用。引入 `instance_map` 是本次重构的点睛之笔，它充当了临时实例与持久模板之间的翻译层，使得现有的、基于实例构建的复杂逻辑（如路由剪枝）在不破坏向后兼容性的前提下，依然能在新的规范化模型中正确运行。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #comp/sdk #scope/core #ai/instruct #task/domain/testing #task/object/test-failures #task/action/bug-fix #task/state/continue
+#intent/architect #intent/refine #flow/ready #priority/high 
+#comp/graph #comp/engine #comp/sdk #comp/tests
+#concept/interning #concept/hashing #concept/state
+#task/domain/graph #task/object/node-interning #task/action/implementation #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修复可视化测试用例
+#### Acts 1: 提交节点复用与稳定标识符架构
 
-我们将一次性修复 `tests/sdk/tools/test_visualize.py` 中的两个失败测试，使其使用正确的节点 ID 进行断言。
+我们将所有核心模块、运行时组件、SDK 工具以及对应的测试文件添加到暂存区。这是一个涵盖了模型层、逻辑层和展示层的内聚提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-engine/src/cascade/runtime/engine.py
+packages/cascade-engine/src/cascade/runtime/flow.py
+packages/cascade-engine/src/cascade/runtime/processor.py
+packages/cascade-engine/src/cascade/runtime/resolvers.py
+packages/cascade-engine/src/cascade/runtime/strategies.py
+packages/cascade-graph/src/cascade/graph/__init__.py
+packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-graph/src/cascade/graph/hashing.py
+packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-graph/src/cascade/graph/registry.py
+packages/cascade-graph/src/cascade/graph/serialize.py
+packages/cascade-sdk/src/cascade/tools/preview.py
+packages/cascade-sdk/src/cascade/tools/visualize.py
+tests/engine/adapters/solvers/test_csp.py
+tests/engine/adapters/solvers/test_native.py
+tests/engine/graph/test_build.py
+tests/engine/graph/test_build_tco.py
+tests/engine/graph/test_serialize.py
+tests/engine/runtime/test_engine_core.py
+tests/engine/runtime/test_flow_manager.py
+tests/engine/runtime/test_router_pruning.py
+tests/sdk/integration/test_state_backends.py
+tests/sdk/tools/test_preview.py
 tests/sdk/tools/test_visualize.py
+tests/spec/spec/test_constraint.py
+tests/spec/spec/test_routing.py
 ~~~~~
-~~~~~python
-    r_c = t_c(r_a)
-    r_d = t_d(r_b, z=r_c)
 
-    dot_string = cs.visualize(r_d)
-
-    # Basic structural checks
-    assert dot_string.startswith("digraph CascadeWorkflow {")
-    assert dot_string.endswith("}")
-    assert 'rankdir="TB"' in dot_string
-
-    # Check node definitions with new default styles
-    # style="rounded,filled", fillcolor=white, fontcolor=black
-    assert (
-        f'"{r_a._uuid}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
-        in dot_string
-    )
-    assert (
-        f'"{r_b._uuid}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
-        in dot_string
-    )
-
-    # Check data edge definitions
-    assert f'"{r_a._uuid}" -> "{r_b._uuid}" [label="0"];' in dot_string
-    assert f'"{r_c._uuid}" -> "{r_d._uuid}" [label="z"];' in dot_string
-~~~~~
-~~~~~python
-    r_c = t_c(r_a)
-    r_d = t_d(r_b, z=r_c)
-
-    # Pre-build to get the instance map for stable IDs
-    from cascade.graph.build import build_graph
-    _, _, instance_map = build_graph(r_d)
-    
-    node_a = instance_map[r_a._uuid]
-    node_b = instance_map[r_b._uuid]
-    node_c = instance_map[r_c._uuid]
-    node_d = instance_map[r_d._uuid]
-
-    dot_string = cs.visualize(r_d)
-
-    # Basic structural checks
-    assert dot_string.startswith("digraph CascadeWorkflow {")
-    assert dot_string.endswith("}")
-    assert 'rankdir="TB"' in dot_string
-
-    # Check node definitions with new default styles
-    # style="rounded,filled", fillcolor=white, fontcolor=black
-    assert (
-        f'"{node_a.id}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
-        in dot_string
-    )
-    assert (
-        f'"{node_b.id}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
-        in dot_string
-    )
-
-    # Check data edge definitions
-    assert f'"{node_a.id}" -> "{node_b.id}" [label="0"];' in dot_string
-    assert f'"{node_c.id}" -> "{node_d.id}" [label="z"];' in dot_string
-~~~~~
 ~~~~~act
-patch_file
-tests/sdk/tools/test_visualize.py
+git_commit
 ~~~~~
-~~~~~python
-    target = (
-        t_main(data_in=data_source).run_if(cond).with_constraints(cpu=constraint_val)
-    )
+~~~~~text
+feat(graph): Implement node interning and stable structural identifiers
 
-    dot_string = cs.visualize(target)
+This milestone marks the full implementation of Node Interning, shifting Cascade's execution model from transient instance-based graphs to reusable template-based graphs.
 
-    # 1. Assert Data Edge (standard style)
-    assert f'"{data_source._uuid}" -> "{target._uuid}" [label="data_in"];' in dot_string
+Key Innovations:
+1. **NodeRegistry & ShallowHasher**: Introduced a session-level registry that uses structural hashing to ensure any structurally identical node (same task, policies, and literal inputs) is represented by a single, unique Node object.
+2. **Skeleton-Flesh Separation**: Decoupled the Node's stable identity (structural ID) from its runtime invocation (LazyResult UUID).
+3. **Instance Mapping**: Implemented 'instance_map' to bridge the gap between instance-aware logic (like Router pruning) and the new canonical graph model, ensuring full consistency across resolvers and state backends.
+4. **Resilient Runtime**: Updated FlowManager, ArgumentResolver, and ConstraintResolver to correctly handle ID translation, resolving complex integration issues with dynamic routing and resource scheduling.
 
-    # 2. Assert Condition Edge (dashed, gray)
-    expected_cond_edge = (
-        f'"{cond._uuid}" -> "{target._uuid}" [style=dashed, color=gray, label="run_if"]'
-    )
-    assert expected_cond_edge in dot_string
-
-    # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{constraint_val._uuid}" -> "{target._uuid}" [style=dotted, color=purple, label="constraint: cpu"]'
-    assert expected_constraint_edge in dot_string
-~~~~~
-~~~~~python
-    target = (
-        t_main(data_in=data_source).run_if(cond).with_constraints(cpu=constraint_val)
-    )
-
-    from cascade.graph.build import build_graph
-    _, _, instance_map = build_graph(target)
-
-    node_ds = instance_map[data_source._uuid]
-    node_target = instance_map[target._uuid]
-    node_cond = instance_map[cond._uuid]
-    node_constraint = instance_map[constraint_val._uuid]
-
-    dot_string = cs.visualize(target)
-
-    # 1. Assert Data Edge (standard style)
-    assert f'"{node_ds.id}" -> "{node_target.id}" [label="data_in"];' in dot_string
-
-    # 2. Assert Condition Edge (dashed, gray)
-    expected_cond_edge = (
-        f'"{node_cond.id}" -> "{node_target.id}" [style=dashed, color=gray, label="run_if"]'
-    )
-    assert expected_cond_edge in dot_string
-
-    # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{node_constraint.id}" -> "{node_target.id}" [style=dotted, color=purple, label="constraint: cpu"]'
-    assert expected_constraint_edge in dot_string
+This refactor provides the mandatory foundation for the upcoming "Universal Graph Cache" and Hashlife-inspired performance optimizations.
 ~~~~~
 
 ### 下一步建议
-我们已经修复了最后两个失败的测试。现在，整个测试套件应该能够完全通过了。
 
-这标志着**“第二阶段：构建器演进 - 2.1 节点复用”** 的所有核心实现和相关的 bug 修复工作都已完成。代码库现在处于一个稳定的状态。
+随着 2.1 节（节点复用）的正式闭环，我们下一步将进入 **2.2 分离的数据提取流程 (Separated Data Extraction)**。
 
-我建议我们正式结束这一阶段，并准备开始路线图的下一个主要任务：**“2.2 分离的数据提取流程”**。
+虽然我们在 `GraphBuilder` 中已经初步引入了 `_data_buffer`，但当前的提取逻辑仍然分散在节点创建过程中。下一阶段的目标是：
+- **纯化提取逻辑**：实现一个独立的 `DataExtractor` 类或优化 `Builder`，使其能以更系统、更高效的方式从复杂的嵌套结构中剥离“血肉（字面量数据）”。
+- **增强水合（Hydration）**：优化 `ArgumentResolver` 的性能，使其在利用 `SlotRef` 从 `DataTuple` 还原参数时达到零开销级别。
+
+如果你准备好了，我们可以开始 2.2 节的详细方案设计。

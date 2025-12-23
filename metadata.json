@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(engine): Stabilize runtime post-interning and fix all tests", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766474275.343022, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M flow.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766474586.3977828, "duration_ms": 0}}

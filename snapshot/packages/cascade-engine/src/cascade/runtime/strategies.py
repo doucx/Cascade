@@ -57,44 +57,11 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
-        # Cache for structural hashing (slow path)
-        self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
-        # Cache for Zero-Overhead TCO (fast path), keyed by Task object
-        self._task_templates: Dict[Any, Tuple[Graph, Any]] = {}
-
-    def _is_simple_task(self, lr: Any) -> bool:
-        """
-        Checks if the LazyResult is a simple, flat task (no nested dependencies).
-        This allows for the Zero-Overhead TCO fast path.
-        """
-        if not isinstance(lr, LazyResult):
-            return False
-        if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
-            return False
-
-        # Explicit dependencies
-        if lr._dependencies:
-            return False
-
-        def _has_lazy(obj):
-            if isinstance(obj, (LazyResult, MappedLazyResult)):
-                return True
-            if isinstance(obj, (list, tuple)):
-                return any(_has_lazy(x) for x in obj)
-            if isinstance(obj, dict):
-                return any(_has_lazy(v) for v in obj.values())
-            return False
-
-        # Check args and kwargs recursively
-        for arg in lr.args:
-            if _has_lazy(arg):
-                return False
-
-        for v in lr.kwargs.values():
-            if _has_lazy(v):
-                return False
-
-        return True
+        # Generalized Structural Cache
+        # Key: structural_hash (str)
+        # Value: (Graph, ExecutionPlan, canonical_target_node_id)
+        self._graph_cache: Dict[str, Tuple[Graph, Any, str]] = {}
+        self._hasher = StructuralHasher()
 
     async def execute(
         self,
@@ -107,60 +74,73 @@ class GraphExecutionStrategy:
     ) -> Any:
         current_target = target
 
-        # Optimization state for TCO Fast Path
-        last_executed_task = None
-        last_tco_cycle_id = None
-
         while True:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
                 graph, plan, data_tuple, instance_map = None, None, (), None
+                
+                # 1. Structural Hashing & Cache Lookup
+                # We always compute the hash first. This is O(N) traversal but avoids O(V+E) Solver.
+                # It also extracts the data_list (flesh) in the process.
+                struct_hash, data_list = self._hasher.hash(current_target)
+                data_tuple = tuple(data_list)
 
-                is_fast_path = False
-                if isinstance(current_target, LazyResult) and self._is_simple_task(
-                    current_target
-                ):
-                    task_obj = current_target.task
-                    cycle_id = getattr(task_obj, "_tco_cycle_id", None)
-
-                    is_tco_candidate = (
-                        cycle_id and cycle_id == last_tco_cycle_id
-                    ) or (task_obj == last_executed_task)
-
-                    if is_tco_candidate and task_obj in self._task_templates:
-                        is_fast_path = True
-
-                if is_fast_path:
-                    # FAST PATH: Reuse plan, rebuild graph quickly to get data
-                    graph, plan = self._task_templates[current_target.task]
-                    _, data_tuple, instance_map = build_graph(current_target)
-
-                    # BUGFIX: The instance_map from the new build_graph will contain a new,
-                    # ephemeral node ID for the current_target. However, the execution plan
-                    # uses the canonical node ID from the cached graph. We must align them.
-                    # For a simple TCO task, the canonical target is the first (and only)
-                    # node in the first stage of the plan.
-                    if plan and plan[0]:
-                        canonical_target_node = plan[0][0]
-                        instance_map[current_target._uuid] = canonical_target_node
+                if struct_hash in self._graph_cache:
+                    # HIT: Zero-Overhead Hydration
+                    graph, plan, canonical_target_id = self._graph_cache[struct_hash]
+                    
+                    # We need a minimal instance_map to map the current_target's UUID 
+                    # to the canonical node ID in the plan.
+                    # Note: We ONLY map the target node because that's what we need to return.
+                    # Intermediate nodes in the plan use canonical IDs which match the Graph.
+                    instance_map = {
+                        current_target._uuid: Node(id=canonical_target_id, name="cached_target") 
+                    }
                 else:
-                    # STANDARD PATH: Build graph and resolve plan for the first time
-                    graph, data_tuple, instance_map = build_graph(current_target)
+                    # MISS: Build, Solve, and Cache
+                    graph, _, full_instance_map = build_graph(current_target)
                     plan = self.solver.resolve(graph)
+                    
+                    # Identify the canonical target ID
+                    canonical_target_node = full_instance_map[current_target._uuid]
+                    
+                    # Cache the template
+                    self._graph_cache[struct_hash] = (graph, plan, canonical_target_node.id)
+                    instance_map = full_instance_map
 
-                    # Cache the template for future TCO loops
-                    if isinstance(current_target, LazyResult) and self._is_simple_task(
-                        current_target
-                    ):
-                        self._task_templates[current_target.task] = (graph, plan)
+                # 2. Setup Resources (mixed scope)
+                required_resources = self.resource_container.scan(graph, data_tuple)
+                self.resource_container.setup(
+                    required_resources,
+                    active_resources,
+                    run_stack,
+                    step_stack,
+                    run_id,
+                )
 
-                # Update state for next iteration
-                if isinstance(current_target, LazyResult):
-                    last_executed_task = current_target.task
-                    last_tco_cycle_id = getattr(current_target.task, "_tco_cycle_id", None)
-                else:
-                    last_executed_task = None
-                    last_tco_cycle_id = None
+                # 3. Execute Graph
+                result = await self._execute_graph(
+                    current_target,
+                    params,
+                    active_resources,
+                    run_id,
+                    state_backend,
+                    graph,
+                    data_tuple,  # Injected Flesh
+                    plan,
+                    instance_map,
+                )
+
+            # 4. Check for Tail Call (LazyResult)
+            if isinstance(result, (LazyResult, MappedLazyResult)):
+                current_target = result
+                # STATE GC
+                if hasattr(state_backend, "clear"):
+                    state_backend.clear()
+                # Yield control
+                await asyncio.sleep(0)
+            else:
+                return result
 
                 # 2. Setup Resources (mixed scope)
                 required_resources = self.resource_container.scan(graph, data_tuple)

@@ -125,41 +125,41 @@ class ShallowHasher:
 class StructuralHasher:
     """
     Generates a stable structural hash for a LazyResult tree and extracts
-    literal values that fill the structure.
+    literal values that fill the structure into a linear list.
     """
 
     def __init__(self):
-        # Flattened map of {canonical_node_path: {arg_name: value}}
-        # path examples: "root", "root.args.0", "root.kwargs.data.selector"
-        self.literals: Dict[str, Any] = {}
+        # Linear list of literals extracted in the exact traversal order as GraphBuilder.
+        # This corresponds to the DataTuple used at runtime.
+        self.data_list: List[Any] = []
         self._hash_components: List[str] = []
 
-    def hash(self, target: Any) -> Tuple[str, Dict[str, Any]]:
-        self._visit(target, path="root")
+    def hash(self, target: Any) -> Tuple[str, List[Any]]:
+        self._visit(target)
 
         # Create a deterministic hash string
         fingerprint = "|".join(self._hash_components)
         hash_val = hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
-        return hash_val, self.literals
+        return hash_val, self.data_list
 
-    def _visit(self, obj: Any, path: str):
+    def _visit(self, obj: Any):
         if isinstance(obj, LazyResult):
-            self._visit_lazy(obj, path)
+            self._visit_lazy(obj)
         elif isinstance(obj, MappedLazyResult):
-            self._visit_mapped(obj, path)
+            self._visit_mapped(obj)
         elif isinstance(obj, Router):
-            self._visit_router(obj, path)
+            self._visit_router(obj)
         elif isinstance(obj, (list, tuple)):
             self._hash_components.append("List[")
             for i, item in enumerate(obj):
-                self._visit(item, f"{path}[{i}]")
+                self._visit(item)
             self._hash_components.append("]")
         elif isinstance(obj, dict):
             self._hash_components.append("Dict{")
             for k in sorted(obj.keys()):
                 self._hash_components.append(f"{k}:")
-                self._visit(obj[k], f"{path}.{k}")
+                self._visit(obj[k])
             self._hash_components.append("}")
         elif isinstance(obj, Inject):
             self._hash_components.append(f"Inject({obj.resource_name})")
@@ -167,9 +167,9 @@ class StructuralHasher:
             # It's a literal value.
             # We record a placeholder in the hash, and save the value.
             self._hash_components.append("LIT")
-            self.literals[path] = obj
+            self.data_list.append(obj)
 
-    def _visit_lazy(self, lr: LazyResult, path: str):
+    def _visit_lazy(self, lr: LazyResult):
         # Identification
         task_name = getattr(lr.task, "name", "unknown")
         self._hash_components.append(f"Task({task_name})")
@@ -186,25 +186,25 @@ class StructuralHasher:
         # Args
         self._hash_components.append("Args:")
         for i, arg in enumerate(lr.args):
-            self._visit(arg, f"{path}.args.{i}")
+            self._visit(arg)
 
         # Kwargs
         self._hash_components.append("Kwargs:")
         for k in sorted(lr.kwargs.keys()):
             self._hash_components.append(f"{k}=")
-            self._visit(lr.kwargs[k], f"{path}.kwargs.{k}")
+            self._visit(lr.kwargs[k])
 
         # Condition
         if lr._condition:
             self._hash_components.append("Condition:")
-            self._visit(lr._condition, f"{path}.condition")
+            self._visit(lr._condition)
 
         if lr._dependencies:
             self._hash_components.append("Deps:")
             for i, dep in enumerate(lr._dependencies):
-                self._visit(dep, f"{path}.deps.{i}")
+                self._visit(dep)
 
-    def _visit_mapped(self, mlr: MappedLazyResult, path: str):
+    def _visit_mapped(self, mlr: MappedLazyResult):
         factory_name = getattr(mlr.factory, "name", "unknown")
         self._hash_components.append(f"Map({factory_name})")
 
@@ -212,24 +212,24 @@ class StructuralHasher:
         self._hash_components.append("MapKwargs:")
         for k in sorted(mlr.mapping_kwargs.keys()):
             self._hash_components.append(f"{k}=")
-            self._visit(mlr.mapping_kwargs[k], f"{path}.kwargs.{k}")
+            self._visit(mlr.mapping_kwargs[k])
 
         if mlr._condition:
             self._hash_components.append("Condition:")
-            self._visit(mlr._condition, f"{path}.condition")
+            self._visit(mlr._condition)
 
         if mlr._dependencies:
             self._hash_components.append("Deps:")
             for i, dep in enumerate(mlr._dependencies):
-                self._visit(dep, f"{path}.deps.{i}")
+                self._visit(dep)
 
-    def _visit_router(self, router: Router, path: str):
+    def _visit_router(self, router: Router):
         self._hash_components.append("Router")
         self._hash_components.append("Selector:")
-        self._visit(router.selector, f"{path}.selector")
+        self._visit(router.selector)
 
         self._hash_components.append("Routes:")
         for k in sorted(router.routes.keys()):
             # Note: Route keys (k) are structural! (e.g. "prod", "dev")
             self._hash_components.append(f"Key({k})->")
-            self._visit(router.routes[k], f"{path}.routes.{k}")
+            self._visit(router.routes[k])

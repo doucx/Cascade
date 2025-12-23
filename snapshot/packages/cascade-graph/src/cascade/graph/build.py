@@ -51,8 +51,9 @@ class GraphBuilder:
 
         for i, val in enumerate(result.args):
             process_arg(str(i), val)
-        for k, val in result.kwargs.items():
-            process_arg(k, val)
+        # Sort kwargs to ensure deterministic SlotRef indexing matches StructuralHasher
+        for k in sorted(result.kwargs.keys()):
+            process_arg(k, result.kwargs[k])
 
         sig = None
         if result.task.func:

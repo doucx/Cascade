@@ -1,4 +1,5 @@
 import cascade as cs
+from cascade.spec.task import task
 
 
 def test_visualize_diamond_graph():
@@ -34,9 +35,16 @@ def test_visualize_diamond_graph():
     assert dot_string.endswith("}")
     assert 'rankdir="TB"' in dot_string
 
-    # Check node definitions
-    assert f'"{r_a._uuid}" [label="t_a\\n(task)", shape=box];' in dot_string
-    assert f'"{r_b._uuid}" [label="t_b\\n(task)", shape=box];' in dot_string
+    # Check node definitions with new default styles
+    # style="rounded,filled", fillcolor=white, fontcolor=black
+    assert (
+        f'"{r_a._uuid}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
+        in dot_string
+    )
+    assert (
+        f'"{r_b._uuid}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
+        in dot_string
+    )
 
     # Check data edge definitions
     assert f'"{r_a._uuid}" -> "{r_b._uuid}" [label="0"];' in dot_string
@@ -73,7 +81,9 @@ def test_visualize_special_edge_types():
     dot_string = cs.visualize(target)
 
     # 1. Assert Data Edge (standard style)
-    assert f'"{data_source._uuid}" -> "{target._uuid}" [label="data_in"];' in dot_string
+    assert (
+        f'"{data_source._uuid}" -> "{target._uuid}" [label="data_in"];' in dot_string
+    )
 
     # 2. Assert Condition Edge (dashed, gray)
     expected_cond_edge = (
@@ -84,3 +94,34 @@ def test_visualize_special_edge_types():
     # 3. Assert Constraint Edge (dotted, purple)
     expected_constraint_edge = f'"{constraint_val._uuid}" -> "{target._uuid}" [style=dotted, color=purple, label="constraint: cpu"]'
     assert expected_constraint_edge in dot_string
+
+
+def test_visualize_potential_path():
+    """
+    Tests that static analysis (TCO) paths are visualized with distinct styles.
+    """
+
+    @task
+    def leaf_task():
+        return "leaf"
+
+    @task
+    def orchestrator(x: int):
+        if x > 0:
+            return leaf_task()
+        return "done"
+
+    workflow = orchestrator(10)
+    dot_string = cs.visualize(workflow)
+
+    # 1. Check POTENTIAL Edge Style (Red, Dashed)
+    # Since we can't predict the shadow node UUID easily without parsing,
+    # we look for the edge definition substring which is unique enough.
+    expected_edge_style = '[style=dashed, color="#d9534f", fontcolor="#d9534f", arrowhead=open, label="potential"]'
+    assert expected_edge_style in dot_string
+
+    # 2. Check Shadow Node Style (Dashed border, Gray fill, (Potential) label)
+    # We expect a node with label containing "(Potential)" and special style
+    expected_node_style_part = 'style="dashed,filled", fillcolor=whitesmoke, fontcolor=gray50'
+    assert expected_node_style_part in dot_string
+    assert "(Potential)" in dot_string

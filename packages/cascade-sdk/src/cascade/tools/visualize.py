@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Set
 from cascade.spec.lazy_types import LazyResult
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, EdgeType
@@ -17,11 +17,34 @@ def visualize(target: LazyResult[Any]) -> str:
         '  node [shape=box, style="rounded,filled", fillcolor=white];',
     ]
 
+    # 0. Pre-scan: Identify Shadow Nodes (Targets of POTENTIAL edges)
+    shadow_node_ids: Set[str] = {
+        edge.target.id for edge in graph.edges if edge.edge_type == EdgeType.POTENTIAL
+    }
+
     # 1. Define Nodes
     for node in graph.nodes:
         shape = _get_node_shape(node)
-        label = f"{node.name}\\n({node.node_type})"
-        dot_parts.append(f'  "{node.id}" [label="{label}", shape={shape}];')
+        
+        # Default Style
+        style = '"rounded,filled"'
+        fillcolor = "white"
+        fontcolor = "black"
+        label_suffix = ""
+
+        # Shadow Style Override
+        if node.id in shadow_node_ids:
+            style = '"dashed,filled"'
+            fillcolor = "whitesmoke"  # Very light gray
+            fontcolor = "gray50"
+            label_suffix = "\\n(Potential)"
+
+        label = f"{node.name}\\n({node.node_type}){label_suffix}"
+        
+        dot_parts.append(
+            f'  "{node.id}" [label="{label}", shape={shape}, style={style}, '
+            f'fillcolor={fillcolor}, fontcolor={fontcolor}];'
+        )
 
     # 2. Define Edges
     for edge in graph.edges:
@@ -44,11 +67,12 @@ def visualize(target: LazyResult[Any]) -> str:
         elif edge.edge_type == EdgeType.SEQUENCE:
             style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
         elif edge.edge_type == EdgeType.POTENTIAL:
-            style = ' [style=dashed, color=red, arrowhead=open, label="potential"]'
+            # Use a reddish color to indicate a predicted/potential path, dashed
+            style = ' [style=dashed, color="#d9534f", fontcolor="#d9534f", arrowhead=open, label="potential"]'
         else:
             style = f' [label="{edge.arg_name}"]'
 
-        dot_parts.append(f'  "{edge.source.id}" -> "{edge.target.id}"{style};')
+        dot_parts.append(f'  \"{edge.source.id}\" -> \"{edge.target.id}\"{style};')
 
     dot_parts.append("}")
     return "\n".join(dot_parts)

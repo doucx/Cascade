@@ -82,5 +82,38 @@ async def test_jit_cache_is_hit_for_complex_stable_structures(mocker):
     result = await engine.run(target)
 
     assert result == "done"
+python
     # Even with a dependency graph, resolve should only be called once.
+    assert resolve_spy.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_jit_template_cache_is_hit_for_varying_arguments(mocker):
+    """
+    Verifies that the JIT cache hits for tasks that are structurally identical
+    but have varying literal arguments, e.g., countdown(10) vs countdown(9).
+    This is the core test for argument normalization via template_id.
+    """
+
+    @cs.task
+    def countdown(n: int):
+        if n <= 0:
+            return "done"
+        return countdown(n - 1)
+
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=LocalExecutor(), bus=MessageBus())
+    resolve_spy = mocker.spy(solver, "resolve")
+
+    # Run a recursion chain from 2 -> 1 -> 0.
+    # We expect:
+    # 1. countdown(2): Cache miss, solver.resolve() is called. Plan is cached against template_id.
+    # 2. countdown(1): Cache hit, solver.resolve() is NOT called.
+    # 3. countdown(0): Returns "done", loop terminates.
+    target = countdown(2)
+    result = await engine.run(target)
+
+    assert result == "done"
+
+    # Therefore, resolve should have been called exactly once for the whole chain.
     assert resolve_spy.call_count == 1

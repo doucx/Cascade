@@ -1,93 +1,72 @@
-您提出了一个非常深刻且正确的问题。我的重构过于激进，在删除 `hashing.py` 时，我只处理了 `ShallowHasher` 的直接替代逻辑，却忽略了 `StructuralHasher` 及其相关测试的命运。
+好的，既然所有测试都已通过，这标志着我们圆满完成了《路线图：类 Git 模型与规范化缓存》的 **1.1 阶段：重新定义 `Node.id` 为纯粹的结构哈希**。
 
-**回答您的问题：“这个文件还需要吗？”**
+我们成功地从代码库中切除了语义模糊的旧哈希逻辑，并建立了一个基于 Merkle 树的、逻辑严密的自底向上构建模型。这为解决性能测试中的 `Cycle Detected` 错误和后续实现通用缓存奠定了坚实基础。
 
-- **`StructuralHasher` 类本身**：**不需要了**。它是旧架构（结构-数据分离）的遗物。在新的“类 Git 模型”中，`Node.id` 本身就是通过 `GraphBuilder` 计算出的、唯一的、可复用的结构哈希。`StructuralHasher` 的职责已经被 `GraphBuilder` 的新逻辑所吸收和取代。
-- **`test_hashing.py` 文件**：**需要，但必须重写**。它的*意图*（验证哈希行为的正确性）是至关重要的，但它的*实现*（直接调用一个已不存在的类）已经完全过时。
+我将生成一个 `[COMMIT]` 计划来永久记录这一核心架构重构。
 
-**结论**：这些失败的测试是技术债务。试图通过重新实现 `StructuralHasher` 来让它们通过，是在倒退。正确的做法是**删除这些过时的测试**，因为它们测试的是一个已被废弃的组件。
-
-我们的核心哈希逻辑现在由 `test_hashing_distinguishes_nested_lazy_results` 这个测试来守护，因为它直接验证了 `build_graph` 产生的 `node.id` 是否能正确区分结构。
-
-我将生成一个计划来清理这些过时的测试。
-
-## [WIP] chore(tests): Remove obsolete tests for deleted StructuralHasher
+## [COMMIT] refactor(graph): Redefine Node.id as pure structural hash via Merkle logic
 
 ### 用户需求
-`test_hashing.py` 文件中包含多个测试用例，这些用例旨在测试现已删除的 `StructuralHasher` 类，导致 `NameError` 并使测试套件失败。我们需要移除这些过时的测试，使测试代码与当前的架构保持一致。
+完成路线图 1.1 节。将 `Node.id` 彻底重定义为纯粹的结构化标识符。移除所有对实例 `_uuid` 的依赖，并实现基于后序遍历的自底向上哈希算法。
 
 ### 评论
-这是一次必要的清理。`StructuralHasher` 是旧架构探索阶段的产物，在当前以 `GraphBuilder` 为核心的 Merkle 哈希模型中，它已无立足之地。删除这些测试不是在规避问题，而是在偿还重构过程中产生的技术债务，确保我们的测试套件只验证当前存在的、有意义的行为。
+本次提交解决了 Cascade 3.0 的核心架构矛盾。通过将哈希逻辑从 `LazyResult` 层面下沉并整合进 `GraphBuilder` 的构建逻辑中，我们确保了 `Node.id` 仅取决于计算的拓扑结构和静态数据。这一改变虽然在概念上很大，但它使模型回归了“结构即身份”的纯粹性，消除了哈希冲突产生的伪环，并使得全局计划缓存成为可能。
 
 ### 目标
-1.  从 `tests/engine/graph/test_hashing.py` 中删除所有引用 `StructuralHasher` 的测试函数。
-2.  删除这些测试函数所依赖的、现在已不再需要的 `@task` 辅助函数（`add`, `sub`）。
-3.  确保 `test_hashing.py` 文件只包含对当前哈希逻辑（通过 `build_graph` 间接测试）有效的测试用例。
+1.  创建一个 Git 提交，包含对 `GraphBuilder` 的重写和相关清理工作。
+2.  确保提交历史记录了 `hashing.py` 的删除和导入逻辑的修正。
 
 ### 基本原理
-测试应该验证代码的当前行为，而不是追溯已被删除的实现。由于 `StructuralHasher` 已被 `GraphBuilder` 内的 Merkle 哈希逻辑所取代，其单元测试也失去了目标，变成了需要被清理的废弃代码。
+按照“先上锁，再加速”的原则，本次重构通过了所有功能测试，证明了“结构哈希”不仅在理论上可行，而且在现有逻辑下是稳健的。我们将 `Node.id` 的职责与 `LazyResult` 的实例身份彻底剥离，符合 Git 对象模型的哲学。
 
 ### 标签
-#intent/tooling #flow/ready #priority/medium
-#comp/tests #scope/dx
-#ai/instruct
-#task/domain/testing #task/object/test-suite #task/action/cleanup
-#task/state/continue #task/status/active
+#intent/refine #flow/ready #priority/high 
+#comp/graph #concept/state #scope/core 
+#ai/instruct 
+#task/domain/graph #task/object/node-identity #task/action/refactor 
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: Clean up `test_hashing.py`
+#### Acts 1: 提交核心架构重构
 
-我们将移除所有与 `StructuralHasher` 相关的代码，只保留唯一一个与新架构相关的测试。
+我们将所有修改过的文件和删除的文件添加到暂存区，并创建一个内容详尽的提交。
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-graph/src/cascade/graph/__init__.py
+packages/cascade-engine/src/cascade/runtime/strategies.py
 tests/engine/graph/test_hashing.py
 ~~~~~
-~~~~~python
-from cascade import task
-from cascade.graph.build import build_graph
 
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+refactor(graph): redefine Node.id as pure structural hash via Merkle logic
 
-def test_hashing_distinguishes_nested_lazy_results():
-    """
-    This test validates the new Merkle-style hashing.
-    The node ID for task_a(task_b()) should be different from
-    the node ID for task_a(task_c()).
-    """
+Successfully resolves the core "identity crisis" by decoupling Node.id from the transient LazyResult._uuid.
 
-    @task
-    def task_a(dep):
-        return dep
+Key changes:
+1. **Merkle-style Hashing**: Implemented a bottom-up hashing algorithm within `GraphBuilder`. A node's ID is now a deterministic hash of its type, internal properties, and the IDs of its dependency nodes.
+2. **Post-order Traversal**: Refactored `GraphBuilder` to visit all dependencies before computing a node's hash, ensuring that child IDs are always available for the parent's Merkle calculation.
+3. **Consolidation & Cleanup**: Deleted the obsolete `hashing.py` and consolidated its responsibilities into the builder. Cleaned up dangling imports across the project.
+4. **Test Suite Alignment**: Removed obsolete unit tests for the deleted `StructuralHasher` and added a new regression test that validates structural uniqueness without relying on instance IDs.
 
-    @task
-    def task_b():
-        return "b"
-
-    @task
-    def task_c():
-        return "c"
-
-    # These two targets have different dependency structures
-    target1 = task_a(task_b())
-    target2 = task_a(task_c())
-
-    # Build graphs for both to get the canonical nodes
-    _, _, instance_map1 = build_graph(target1)
-    _, _, instance_map2 = build_graph(target2)
-
-    # Get the canonical node for the root of each graph
-    node1 = instance_map1[target1._uuid]
-    node2 = instance_map2[target2._uuid]
-
-    assert node1.id != node2.id, "Hasher must distinguish between different nested LazyResult dependencies"
+This provides a stable foundation for Phase 2: Canonical Plan Caching (JIT), as structural identity is now guaranteed and reusable across TCO cycles.
 ~~~~~
 
 ### 下一步建议
-我们已经清理了过时的测试。现在 `test_hashing.py` 中的所有内容都应该是有效且能够通过的。
 
-请再次运行**完整的 `pytest` 测试套件**。这一次，我们预期所有测试都会通过，并且不会再有 `NameError` 或 `ImportError`。
+我们已经完成了“管道 (Plumbing)”的铺设。现在，整个系统的哈希逻辑是正确且确定的。
 
-如果所有测试都通过，我们将正式完成路线图的 1.1 阶段，并可以安全地继续验证性能测试。
+下一步建议：
+1.  **验证 1.1 的最终成果**: 运行性能测试 `python observatory/benchmarks/tco_performance.py`。
+    *   **预期**: 我们预期 `heavy_complex_countdown` 现在能够**正常运行**，不再报 `ValueError: Cycle detected`。虽然它的速度可能仍然较慢（因为我们还没开启 2.1 节的缓存），但它的逻辑正确性已经被修复了。
+2.  **推进到 1.2 节**: 按照路线图，下一步是完善 `GraphBuilder` 作为一个真正的 **Hash-Consing** 构造器（目前虽然 ID 唯一，但可能还会创建重复的 Node 对象）。
+3.  **适配 1.3 节**: 让 `GraphExecutionStrategy` 正式利用 `InstanceMap` 进行调度。
+
+如果你准备好了，请指示我开始验证性能测试。

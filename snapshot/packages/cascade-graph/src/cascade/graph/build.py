@@ -13,10 +13,21 @@ class GraphBuilder:
         self._visited: Dict[str, Node] = {}
         # Used to detect cycles during shadow node expansion
         self._shadow_visited: Dict[Task, Node] = {}
+        
+        # Structural ID tracking (must match StructuralHasher logic)
+        self._structural_counter = 0
+        # Map LazyResult UUID -> structural_id to handle DAG shared references
+        self._structural_map: Dict[str, int] = {}
 
     def build(self, target: LazyResult) -> Graph:
         self._visit(target)
         return self.graph
+    
+    def _get_structural_id(self, uuid: str) -> int:
+        if uuid not in self._structural_map:
+            self._structural_map[uuid] = self._structural_counter
+            self._structural_counter += 1
+        return self._structural_map[uuid]
 
     def _visit(self, value: Any, scan_for_tco: bool = True) -> Node:
         if isinstance(value, LazyResult):
@@ -27,6 +38,11 @@ class GraphBuilder:
             raise TypeError(f"Cannot build graph from type {type(value)}")
 
     def _visit_lazy_result(self, result: LazyResult, scan_for_tco: bool = True) -> Node:
+        # Assign structural ID *before* checking visited to ensure counter increments correctly
+        # for new nodes, or retrieves existing ID for visited ones.
+        # Note: Hasher increments only on first visit. We do same here via _get_structural_id.
+        sid = self._get_structural_id(result._uuid)
+
         if result._uuid in self._visited:
             return self._visited[result._uuid]
 
@@ -52,6 +68,7 @@ class GraphBuilder:
             cache_policy=result._cache_policy,
             constraints=result._constraints,
             literal_inputs=literal_inputs,
+            structural_id=sid,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
@@ -165,6 +182,8 @@ class GraphBuilder:
             self._visit_shadow_recursive(target_node, next_task)
 
     def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
+        sid = self._get_structural_id(result._uuid)
+
         if result._uuid in self._visited:
             return self._visited[result._uuid]
 
@@ -177,6 +196,7 @@ class GraphBuilder:
             cache_policy=result._cache_policy,
             constraints=result._constraints,
             literal_inputs=result.mapping_kwargs,
+            structural_id=sid,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node

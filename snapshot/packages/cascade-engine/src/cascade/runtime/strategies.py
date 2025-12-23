@@ -213,21 +213,35 @@ class GraphExecutionStrategy:
                 return result
 
     def _update_graph_literals(
-        self, graph: Graph, target: Any, literals: Dict[str, Any]
+        self, graph: Graph, target: Any, literals: Dict[int, Dict[str, Any]]
     ):
-        # ... logic moved from Engine ...
-        if graph.nodes:
-            # FIX: Previously used nodes[-1], which became incorrect when shadow nodes
-            # were appended to the end of the list by static analysis.
-            # GraphBuilder uses a top-down approach (pre-order traversal), so the
-            # root target node is always the FIRST node added to the graph.
-            target_node = graph.nodes[0]
-            target_node.id = target._uuid
-            if hasattr(target, "args") and hasattr(target, "kwargs"):
-                target_node.literal_inputs = {
-                    str(i): v for i, v in enumerate(target.args)
-                }
-                target_node.literal_inputs.update(target.kwargs)
+        """
+        Hydrates a template graph with new literal values.
+        Matches nodes by their 'structural_id'.
+        """
+        # Create a fast lookup for graph nodes by structural_id
+        # We assume the graph structure is static, so we could cache this map on the graph object
+        # but for now we build it on the fly (O(N)).
+        nodes_by_sid = {n.structural_id: n for n in graph.nodes if n.structural_id is not None}
+
+        # The 'target' passed here is the root of the NEW LazyResult tree.
+        # We need to assign its UUID to the root node of the graph (which has structural_id 0).
+        # This ensures that subsequent lookups for the target result succeed.
+        if 0 in nodes_by_sid:
+            root_node = nodes_by_sid[0]
+            root_node.id = target._uuid
+        
+        # Inject literals
+        for sid, inputs in literals.items():
+            if sid in nodes_by_sid:
+                node = nodes_by_sid[sid]
+                # Update in-place. Note: this modifies the graph object!
+                # Since we are reusing the graph instance from cache, this assumes
+                # single-threaded execution or that we copy the graph before hydration.
+                # Given Python's GIL and current architecture, modifying the cached graph
+                # effectively resets it for the current run. 
+                # TODO: If we move to concurrent graph usage, we must deepcopy the graph first.
+                node.literal_inputs = inputs.copy()
 
     async def _execute_graph(
         self,

@@ -1,70 +1,144 @@
-太棒了。性能测试的结果非常理想，它完美验证了我们路线图第一阶段的成果：
+遵循 `d2-skill-generate-quipu-plan` 流程生成计划：
 
-1.  **逻辑正确性 (`heavy_complex_countdown`)**: 耗时 11.3 秒，不再报错。虽然它比 `simple_countdown` 慢了近 10 倍，但这正是我们**主动移除缓存**后的预期表现。它证明了我们的 Merkle 哈希和后序遍历构建逻辑在处理深度嵌套依赖时是绝对正确的，没有循环。
-2.  **VM 路径性能**: TPS 达到 5.5 万，这为我们提供了一个高性能的参考基准。
-3.  **架构清晰度**: 策略模式的拆分和执行逻辑的简化，让代码库更加稳健。
+简要回答：
+好的，这是实现“通用结构缓存”的关键一步。
 
-我们现在正式完成了 **第一阶段：实现“管道 (Plumbing)”——构建规范化的图对象数据库**。现在是时候提交这个阶段的最终成果了。
+正如路线图所规划的，我们将通过在 `GraphExecutionStrategy` 中引入 `_plan_cache` 和持久化的 `NodeRegistry` 来激活 JIT 缓存。这将使得结构相同的计算图（由规范化的 `Node.id` 标识）能够复用已解析的 `ExecutionPlan`，从而在 TCO 循环中跳过昂贵的求解过程。
 
-## [COMMIT] refactor: Finalize Git-like graph model and modularize execution strategies
+我们将执行以下操作：
+1.  在策略初始化时创建 `_plan_cache` 和 `_node_registry`。
+2.  将 `_node_registry` 传递给 `build_graph` 以实现跨迭代的节点对象复用（Hash-Consing）。
+3.  利用 `target_node.id`（结构哈希）作为键来实现计划的查找和缓存。
+
+这将是 Cascade 性能飞跃的基石。
+
+## [WIP] feat(runtime): 在 GraphExecutionStrategy 中实现结构化计划缓存
 
 ### 用户需求
-完成路线图 1.2 和 1.3 节。完善 Hash-Consing 机制，将执行策略拆分为独立模块，并确保 `GraphExecutionStrategy` 在新的 Merkle 图模型下能够正确（即使目前较慢）地运行，通过所有功能与性能测试。
+在 `GraphExecutionStrategy` 中实现基于 `Node.id`（结构哈希）的通用计划缓存 (JIT Cache)，以消除重复图结构的求解开销，并优化 TCO 循环性能。
 
 ### 评论
-这是一个具有里程碑意义的提交。我们不仅实现了逻辑上的“结构-实例分离”，还完成了代码结构上的模块化。通过将策略拆分，我们为未来的 JIT 优化（第二阶段）提供了一个干净的舞台。性能测试中 `heavy_complex_countdown` 的成功运行（无 Cycle）宣告了 Cascade 3.0 最核心的图构建难题已被彻底攻克。
+这是架构路线图 v3.2 第二阶段的核心任务。通过将“构建”和“求解”的结果缓存起来，我们将 O(N) 的图处理开销降低为 O(1)（对于缓存命中的情况）。引入 `NodeRegistry` 的复用也进一步减少了内存分配 churn。
 
 ### 目标
-1.  创建一个 Git 提交，包含 `GraphBuilder` 的完善逻辑和策略模块的拆分。
-2.  确保提交记录了对 `test_engine_vm_integration.py` 的路径修正。
+1.  在 `GraphExecutionStrategy` 中引入 `_plan_cache` 和 `_node_registry`。
+2.  修改执行循环，使其在构建图时使用持久化的 registry。
+3.  实现“查缓存 -> 命中复用 / 未命中求解并存入”的逻辑。
 
 ### 基本原理
-按照路线图战略，我们首先建立了一个“缓慢但绝对正确”的基线。通过移除所有不稳定的缓存并完全依赖 `InstanceMap`，我们验证了 Merkle 哈希模型的稳健性。文件拆分则进一步提升了 Monorepo 的工程质量，为后续各组件的独立演进做好了准备。
+-   **结构稳定性**: `Node.id` 现在是基于 Merkle Hash 的纯结构标识符，与运行时实例解耦。这意味着如果两个 `current_target` 对应同一个 `Node.id`，它们的执行计划必然是相同的。
+-   **Registry 复用**: 通过在策略生命周期内保持一个 `NodeRegistry`，我们确保了相同结构的 Node 在内存中只有一份副本，这不仅节省内存，也保证了 `plan` 中缓存的 Node 对象与新 `build_graph` 返回的 Node 对象是完全一致的实例。
 
 ### 标签
-#intent/refine #flow/ready #priority/high 
-#comp/engine #comp/graph #scope/core 
-#ai/instruct 
-#task/domain/engine #task/object/execution-strategies #task/action/refactor 
-#task/state/end #task/status/completed
+#intent/build #flow/ready #priority/high #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/performance #task/object/jit-cache #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 提交管道阶段最终成果
+#### Acts 1: 更新 `GraphExecutionStrategy` 以启用缓存
 
-我们将新的策略子包、重构后的构建器以及修正后的测试文件添加到暂存区。
+我们将修改 `graph.py`，导入必要的类，并在 `execute` 方法中植入缓存逻辑。
 
 ~~~~~act
-git_add
-packages/cascade-graph/src/cascade/graph/build.py
-packages/cascade-engine/src/cascade/runtime/strategies/
-tests/engine/integration/test_engine_vm_integration.py
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+from typing import Any, Dict, Tuple, List
+
+from cascade.graph.model import Graph, Node
+from cascade.graph.build import build_graph
+from cascade.spec.protocols import Solver, StateBackend
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+~~~~~
+~~~~~python
+from typing import Any, Dict, Tuple, List
+
+from cascade.graph.model import Graph, Node
+from cascade.graph.build import build_graph
+from cascade.graph.registry import NodeRegistry
+from cascade.spec.protocols import Solver, StateBackend, ExecutionPlan
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 ~~~~~
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
-~~~~~text
-refactor: finalize Git-like graph model and modularize execution strategies
+~~~~~python
+        self.bus = bus
+        self.wakeup_event = wakeup_event
+        # Caching removed for Correctness Phase (1.3)
 
-Successfully completes Phase 1 (Plumbing) of the v3.2 Roadmap.
+    async def execute(
+        self,
+        target: Any,
+~~~~~
+~~~~~python
+        self.bus = bus
+        self.wakeup_event = wakeup_event
+        
+        # JIT Compilation Cache
+        # Maps structural hash (root_node_id) to a compiled ExecutionPlan
+        self._plan_cache: Dict[str, ExecutionPlan] = {}
+        # Persistent registry to ensure node object identity consistency across TCO iterations
+        self._node_registry = NodeRegistry()
 
-Key changes:
-1. **Full Hash-Consing**: Refined `GraphBuilder` with consistent post-order traversal for both `LazyResult` and `MappedLazyResult`. Node identity is now strictly structural across all task types.
-2. **Strategy Modularization**: Split the monolithic `strategies.py` into a modular package (`cascade.runtime.strategies`). This improves maintainability and provides isolated files for Graph and VM execution modes.
-3. **Correctness Baseline**: Simplified `GraphExecutionStrategy` to remove all legacy/unstable caching. It now reliably uses the `InstanceMap` to locate targets. Performance tests confirm that complex nested graphs (e.g., heavy_complex_countdown) now run without false cycle detection, albeit with a baseline build/solve cost.
-4. **Test Alignment**: Updated VM integration tests to reflect the new module structure.
+    async def execute(
+        self,
+        target: Any,
+~~~~~
 
-This commit provides a verified, "correctness-locked" foundation for Phase 2: Canonical Plan Caching (JIT).
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+        while True:
+            # The step stack holds "task" (step) scoped resources
+            with ExitStack() as step_stack:
+                # 1. Build Graph (No Caching)
+                # This constructs the structural graph and the instance map.
+                graph, data_tuple, instance_map = build_graph(current_target)
+                
+                # 2. Resolve Plan
+                # We resolve the plan every time.
+                plan = self.solver.resolve(graph)
+
+                # 3. Setup Resources (mixed scope)
+                required_resources = self.resource_container.scan(graph, data_tuple)
+~~~~~
+~~~~~python
+        while True:
+            # The step stack holds "task" (step) scoped resources
+            with ExitStack() as step_stack:
+                # 1. Build Graph (With Registry for interning)
+                # This constructs the structural graph and the instance map.
+                # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
+                graph, data_tuple, instance_map = build_graph(current_target, registry=self._node_registry)
+                
+                # Identify the structural root
+                if current_target._uuid not in instance_map:
+                    raise RuntimeError(f"Critical: Target instance {current_target._uuid} not found in InstanceMap.")
+                target_node = instance_map[current_target._uuid]
+                root_node_id = target_node.id
+
+                # 2. Resolve Plan (With JIT Caching)
+                if root_node_id in self._plan_cache:
+                    # Hit: Reuse the existing plan directly.
+                    # Since we use a persistent NodeRegistry, the Nodes in this plan are valid for the current graph.
+                    plan = self._plan_cache[root_node_id]
+                else:
+                    # Miss: Ask solver to resolve and then cache it.
+                    plan = self.solver.resolve(graph)
+                    self._plan_cache[root_node_id] = plan
+
+                # 3. Setup Resources (mixed scope)
+                required_resources = self.resource_container.scan(graph, data_tuple)
 ~~~~~
 
 ### 下一步建议
-
-管道已经铺设完毕，压力测试已经通过。现在我们可以放心地开启“加速”模式了。
-
-下一步：**第二阶段：实现“高级接口 (Porcelain)”——激活通用 JIT 缓存**。
-*   `[ ]` **2.1 在 `GraphExecutionStrategy` 中实现通用计划缓存**：我们将重新引入 `_plan_cache`，但这一次，我们将使用规范化的 `Node.id` 作为 Key，实现真正的全局计划复用。
-
-如果你准备好了，我们将开始让 `heavy_complex_countdown` 的速度再次起飞。
+实现缓存后，虽然理论上逻辑是健壮的，但我们应该验证其性能收益以及是否引入了任何回归。
+建议运行现有的测试套件，特别是那些涉及 TCO 循环的测试，以确保一切正常。
+接下来可以着手实现“2.2 验证”，即运行 `tco_performance.py` 基准测试（如果有权限访问的话）。

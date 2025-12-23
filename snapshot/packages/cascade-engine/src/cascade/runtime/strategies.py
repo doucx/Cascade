@@ -133,7 +133,11 @@ class GraphExecutionStrategy:
     ):
         # ... logic moved from Engine ...
         if graph.nodes:
-            target_node = graph.nodes[-1]
+            # FIX: Previously used nodes[-1], which became incorrect when shadow nodes
+            # were appended to the end of the list by static analysis.
+            # GraphBuilder uses a top-down approach (pre-order traversal), so the
+            # root target node is always the FIRST node added to the graph.
+            target_node = graph.nodes[0]
             target_node.id = target._uuid
             if hasattr(target, "args") and hasattr(target, "kwargs"):
                 target_node.literal_inputs = {

@@ -33,14 +33,23 @@ class CSPSolver:
         self.system_resources = system_resources
 
     def resolve(self, graph: Graph) -> ExecutionPlan:
-        nodes = graph.nodes
-        if not nodes:
+        from cascade.graph.model import EdgeType
+
+        # 0. Filter out Shadow Nodes
+        shadow_ids = {
+            edge.target.id
+            for edge in graph.edges
+            if edge.edge_type == EdgeType.POTENTIAL
+        }
+        active_nodes = [node for node in graph.nodes if node.id not in shadow_ids]
+
+        if not active_nodes:
             return []
 
         # 1. Preprocessing: Extract static resource requirements
         # node_id -> {resource_name: amount}
         node_resources: Dict[str, Dict[str, float]] = {}
-        for node in nodes:
+        for node in active_nodes:
             reqs = {}
             if node.constraints:
                 for res, amount in node.constraints.requirements.items():
@@ -55,13 +64,13 @@ class CSPSolver:
         # Optimization: Start K from the length of the critical path (longest dependency chain)
         # could be faster, but K=1 is a safe, simple start.
 
-        n_nodes = len(nodes)
+        n_nodes = len(active_nodes)
         solution = None
 
         # We try max_stages from 1 to n_nodes.
         # In the worst case (full serial), we need n_nodes stages.
         for max_stages in range(1, n_nodes + 1):
-            solution = self._solve_csp(graph, node_resources, max_stages)
+            solution = self._solve_csp(graph, active_nodes, shadow_ids, node_resources, max_stages)
             if solution:
                 break
 
@@ -82,7 +91,7 @@ class CSPSolver:
         sorted_stages = sorted(plan_dict.keys())
 
         # Build list of lists of Nodes
-        node_lookup = {n.id: n for n in nodes}
+        node_lookup = {n.id: n for n in active_nodes}
         execution_plan = []
 
         for stage_idx in sorted_stages:
@@ -95,19 +104,32 @@ class CSPSolver:
         return execution_plan
 
     def _solve_csp(
-        self, graph: Graph, node_resources: Dict[str, Dict[str, float]], max_stages: int
+        self,
+        graph: Graph,
+        active_nodes: list,
+        shadow_ids: set,
+        node_resources: Dict[str, Dict[str, float]],
+        max_stages: int,
     ) -> Optional[Dict[str, int]]:
+        from cascade.graph.model import EdgeType
+
         problem = constraint.Problem()
 
-        # Variables: Node IDs
+        # Variables: Node IDs (only active ones)
         # Domain: Possible Stage Indices [0, max_stages - 1]
         domain = list(range(max_stages))
-        variables = [n.id for n in graph.nodes]
+        variables = [n.id for n in active_nodes]
         problem.addVariables(variables, domain)
 
         # Constraint 1: Dependencies
         # If A -> B, then stage(A) < stage(B)
         for edge in graph.edges:
+            # Skip POTENTIAL edges and edges involving shadow nodes
+            if edge.edge_type == EdgeType.POTENTIAL:
+                continue
+            if edge.source.id in shadow_ids or edge.target.id in shadow_ids:
+                continue
+
             # Note: We use a lambda that captures nothing, args are passed by value in addConstraint
             problem.addConstraint(
                 lambda s_src, s_tgt: s_src < s_tgt, (edge.source.id, edge.target.id)

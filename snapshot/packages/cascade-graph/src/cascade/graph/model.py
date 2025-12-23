@@ -54,6 +54,10 @@ class Node:
     # This makes the Node self-contained.
     input_bindings: Dict[str, Any] = field(default_factory=dict)
 
+    # Optimization: Flag indicating if the node requires complex resolution 
+    # (e.g., has Inject markers or complex nested structures in bindings)
+    has_complex_inputs: bool = False
+
     def __hash__(self):
         return hash(self.id)
 

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] perf: 实现 TCO 快速通道的执行旁路 (Execution Bypass)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766499430.3511121, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 TCO 快速路径中的解包错误与类型兼容性问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766500989.5299342, "duration_ms": 0}}

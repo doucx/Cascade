@@ -95,7 +95,9 @@ class GraphExecutionStrategy:
 
         while True:
             # Check for Zero-Overhead TCO Fast Path
-            cycle_id = getattr(current_target.task, "_tco_cycle_id", None)
+            # Use getattr safely as MappedLazyResult uses .factory instead of .task
+            target_task = getattr(current_target, "task", None)
+            cycle_id = getattr(target_task, "_tco_cycle_id", None) if target_task else None
             fast_path_data = None
 
             if cycle_id and cycle_id in self._cycle_cache:
@@ -108,7 +110,8 @@ class GraphExecutionStrategy:
 
                 if fast_path_data:
                     # FAST PATH: Reuse Graph & Plan
-                    graph, indexed_plan, root_node_id = fast_path_data
+                    # Unpack all 4 cached values: graph, indexed_plan, root_node_id, req_res
+                    graph, indexed_plan, root_node_id, _ = fast_path_data
                     # Reconstruct virtual instance map for current iteration
                     target_node = next(n for n in graph.nodes if n.id == root_node_id)
                     instance_map = {current_target._uuid: target_node}
@@ -199,14 +202,20 @@ class GraphExecutionStrategy:
             else:
                 return result
 
-    def _are_args_simple(self, lazy_result: LazyResult) -> bool:
+    def _are_args_simple(self, lazy_result: Any) -> bool:
         """
         Checks if the LazyResult arguments contain any nested LazyResults.
         """
-        for arg in lazy_result.args:
+        # Handle both LazyResult (args/kwargs) and MappedLazyResult (mapping_kwargs)
+        args = getattr(lazy_result, "args", [])
+        kwargs = getattr(lazy_result, "kwargs", {})
+        if hasattr(lazy_result, "mapping_kwargs"):
+            kwargs = lazy_result.mapping_kwargs
+
+        for arg in args:
             if isinstance(arg, (LazyResult, MappedLazyResult)):
                 return False
-        for val in lazy_result.kwargs.values():
+        for val in kwargs.values():
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 return False
         return True

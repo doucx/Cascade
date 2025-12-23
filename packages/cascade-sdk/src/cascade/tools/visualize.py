@@ -43,6 +43,8 @@ def visualize(target: LazyResult[Any]) -> str:
             )
         elif edge.edge_type == EdgeType.SEQUENCE:
             style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+        elif edge.edge_type == EdgeType.POTENTIAL:
+            style = ' [style=dashed, color=red, arrowhead=open, label="potential"]'
         else:
             style = f' [label="{edge.arg_name}"]'
 

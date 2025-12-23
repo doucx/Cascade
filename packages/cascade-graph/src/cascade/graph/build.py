@@ -1,8 +1,9 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import inspect
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
+from cascade.graph.ast_analyzer import analyze_task_source
 
 
 class GraphBuilder:
@@ -14,26 +15,23 @@ class GraphBuilder:
         self._visit(target)
         return self.graph
 
-    def _visit(self, value: Any) -> Node:
+    def _visit(self, value: Any, scan_for_tco: bool = True) -> Node:
         if isinstance(value, LazyResult):
-            return self._visit_lazy_result(value)
+            return self._visit_lazy_result(value, scan_for_tco)
         elif isinstance(value, MappedLazyResult):
             return self._visit_mapped_result(value)
         else:
             raise TypeError(f"Cannot build graph from type {type(value)}")
 
-    def _visit_lazy_result(self, result: LazyResult) -> Node:
+    def _visit_lazy_result(self, result: LazyResult, scan_for_tco: bool = True) -> Node:
         if result._uuid in self._visited:
             return self._visited[result._uuid]
 
         # 1. Capture the structure of inputs
-        # We store the args/kwargs structure directly in literal_inputs.
-        # This structure contains LazyResult objects, which is fine for the runtime,
-        # but requires special handling for serialization.
         literal_inputs = {str(i): v for i, v in enumerate(result.args)}
         literal_inputs.update(result.kwargs)
 
-        # Pre-compute signature to avoid repeated reflection at runtime
+        # Pre-compute signature
         sig = None
         if result.task.func:
             try:
@@ -94,6 +92,30 @@ class GraphBuilder:
             )
             self.graph.add_edge(edge)
 
+        # 6. Static TCO Analysis
+        if scan_for_tco and result.task.func:
+            potential_targets = analyze_task_source(result.task.func)
+            for target_task in potential_targets:
+                potential_uuid = f"potential:{result._uuid}:{target_task.name}"
+                
+                shadow_lr = LazyResult(
+                    task=target_task,
+                    args=(),
+                    kwargs={},
+                    _uuid=potential_uuid
+                )
+                
+                # Visit the shadow node, disable further TCO scanning to avoid infinite recursion
+                target_node = self._visit(shadow_lr, scan_for_tco=False)
+                
+                edge = Edge(
+                    source=node,
+                    target=target_node,
+                    arg_name="<potential>",
+                    edge_type=EdgeType.POTENTIAL
+                )
+                self.graph.add_edge(edge)
+
         return node
 
     def _visit_mapped_result(self, result: MappedLazyResult) -> Node:
@@ -108,7 +130,7 @@ class GraphBuilder:
             retry_policy=result._retry_policy,
             cache_policy=result._cache_policy,
             constraints=result._constraints,
-            literal_inputs=result.mapping_kwargs,  # Map inputs are treated as kwargs
+            literal_inputs=result.mapping_kwargs,
         )
         self.graph.add_node(node)
         self._visited[result._uuid] = node
@@ -125,7 +147,6 @@ class GraphBuilder:
             )
             self.graph.add_edge(edge)
 
-        # Handle explicit sequence dependencies for Mapped nodes
         for dep in result._dependencies:
             source_node = self._visit(dep)
             edge = Edge(
@@ -139,14 +160,8 @@ class GraphBuilder:
         return node
 
     def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
-        """
-        Recursively scans the object for LazyResults and Routers to add edges.
-        """
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             source_node = self._visit(obj)
-            # We add a generic DATA edge. The exact argument position is determined
-            # by ArgumentResolver traversing literal_inputs, so arg_name here is
-            # mainly for visualization/debugging.
             edge = Edge(
                 source=source_node,
                 target=target_node,
@@ -156,18 +171,16 @@ class GraphBuilder:
             self.graph.add_edge(edge)
 
         elif isinstance(obj, Router):
-            # 1. Add edge for Selector
             selector_node = self._visit(obj.selector)
             edge = Edge(
                 source=selector_node,
                 target=target_node,
                 arg_name=f"{path}.selector" if path else "selector",
-                router=obj,  # Important: Link Router to this edge for FlowManager
+                router=obj,
                 edge_type=EdgeType.DATA,
             )
             self.graph.add_edge(edge)
 
-            # 2. Add edges for Routes
             for route_key, route_result in obj.routes.items():
                 route_node = self._visit(route_result)
                 imp_edge = Edge(

@@ -19,6 +19,7 @@ class EdgeType(Enum):
     IMPLICIT = auto()  # An implicit structural dependency
     SEQUENCE = auto()  # An explicit execution order dependency (no data transfer)
     ROUTER_ROUTE = auto()  # A potential dependency branch for a Router
+    POTENTIAL = auto()  # A potential flow path inferred via static analysis (e.g. TCO)
 
 
 @dataclass

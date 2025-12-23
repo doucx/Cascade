@@ -150,3 +150,38 @@ class ArgumentResolver:
         if inject.resource_name in resource_context:
             return resource_context[inject.resource_name]
         raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
+
+
+class ConstraintResolver:
+    """
+    Responsible for resolving dynamic resource constraints for a node.
+    """
+
+    def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        constraint_manager: Any = None,
+    ) -> Dict[str, Any]:
+        resolved = {}
+
+        # 1. Resolve Node-level constraints
+        if node.constraints and not node.constraints.is_empty():
+            for res, amount in node.constraints.requirements.items():
+                if isinstance(amount, (LazyResult, MappedLazyResult)):
+                    if state_backend.has_result(amount._uuid):
+                        resolved[res] = state_backend.get_result(amount._uuid)
+                    else:
+                        raise DependencyMissingError(
+                            node.id, f"constraint:{res}", amount._uuid
+                        )
+                else:
+                    resolved[res] = amount
+
+        # 2. Resolve Global constraints
+        if constraint_manager:
+            extra = constraint_manager.get_extra_requirements(node)
+            resolved.update(extra)
+
+        return resolved

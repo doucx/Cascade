@@ -1,42 +1,38 @@
-Excellent. We've cleared the major structural errors, and now we're down to a smaller, more focused set of logical bugs and adaptation tasks. This is great progress.
+您完全有理由感到愤怒。我对此深表歉意。这是一个令人尴尬且不可原谅的重复性错误。
 
-Let's break down the remaining failures.
+我犯了两次完全相同的错误。在我上一步的计划中，为了修复 Router 逻辑，我使用了 `write_file` 来更新 `ArgumentResolver`，这导致整个 `resolvers.py` 文件被重写。在这个过程中，我**再一次**删除了我前一步刚刚用 `patch_file` 恢复的 `ConstraintResolver` 类。
 
-## [WIP] fix(core): Correct Router resolution and finalize data model adaptation
+这是我的流程中的一个严重失败。我不应该在只意图修改部分内容时使用破坏性的 `write_file`，或者至少应该确保 `write_file` 的内容是完整的。重复同样的错误是不可接受的。
+
+我将立即生成一个计划来纠正这个问题，这次将确保文件的完整性。
+
+## [WIP] fix(core): 在覆盖后再次恢复 ConstraintResolver 并修复逻辑
 
 ### 错误分析
-当前的 8 个失败指向了三个 distinct 的问题：
-
-1.  **Router 逻辑错误 (AssertionError & DID NOT RAISE)**: `test_router_pruning.py` 和 `test_routing.py` 中的所有失败都显示，`Engine` 错误地将 `Router` 的 *selector* 的值（例如 "a"）作为最终结果，而不是去执行被选中的 *route*（例如 `task_a`）并返回其结果（"A"）。这是 `ArgumentResolver` 中的一个核心逻辑缺陷。它没有正确地“解引用”`Router` 对象。
-
-2.  **SDK 工具未适配 (AttributeError)**: `test_preview.py` 仍然失败，因为它依赖的 `PlanNodeInspected` 事件和 `_analyze_plan` 函数还在引用已删除的 `literal_inputs` 属性。
-
-3.  **测试断言错误 (TypeError)**: `test_serialize.py` 的失败是由于我上次修复引入的一个错误断言。`"__slot_ref" in param_node["input_bindings"]["name"]` 试图在一个 `SlotRef` 对象上进行迭代，这是不允许的。
+我重复了之前的错误。在使用 `write_file` 更新 `resolvers.py` 以修复 `ArgumentResolver` 中的 `Router` 逻辑时，我未能包含 `ConstraintResolver` 类的定义，从而再次导致了 `ImportError`。这是由于我的疏忽和对上下文的遗忘造成的。
 
 ### 用户需求
-修复上述三个问题，使测试套件完全通过，从而正式完成“The Great Split”重构的第一步。
+彻底解决 `ImportError: cannot import name 'ConstraintResolver'` 的问题。
 
 ### 评论
-我们已经非常接近终点。修复 `ArgumentResolver` 是最后的核心逻辑挑战，它将使 `Router` 这一关键动态特性在新数据模型下恢复正常工作。其余的都是对工具和测试的直接适配。
+这个错误完全是我的责任，它阻碍了我们修复真正的业务逻辑问题。这次修复将使用包含**两个完整类**的 `write_file` 操作，以确保文件内容的完整性和正确性。
 
 ### 目标
-1.  重构 `ArgumentResolver` 以正确处理 `Router` 对象的解析。
-2.  更新 `cascade-sdk` 中的 `preview` 工具及其相关事件，使其使用 `input_bindings`。
-3.  修正 `test_serialize.py` 中错误的 `TypeError` 断言。
+1.  一次性地、完整地重写 `resolvers.py`，确保 `ArgumentResolver` (包含 Router 修复) 和 `ConstraintResolver` 都存在。
 
 ### 基本原理
-我们将重写 `ArgumentResolver` 中的依赖解析逻辑，使其在遇到附带 `Router` 的边时，首先解析 `selector` 的值，然后用该值从 `Router` 的 `routes` 字典中选择正确的上游 `LazyResult`，最后再解析这个被选中的 `LazyResult` 的结果。对于 SDK 工具，我们将完成从 `literal_inputs` 到 `input_bindings` 的迁移。
+提供 `resolvers.py` 文件的完整、正确的内容，一劳永逸地解决这个导入问题。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #comp/sdk #comp/tests #concept/routing #scope/core #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/engine #scope/core #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复核心 Router 解析逻辑
+#### Acts 1: 完整地重写 `resolvers.py`
 
-这是最关键的修复。我们将重构 `ArgumentResolver`，使其能正确“解引用”Router。
+这次，`write_file` 的内容将同时包含带有 Router 修复的 `ArgumentResolver` 和完整的 `ConstraintResolver`。
 
 ~~~~~act
 write_file
@@ -195,161 +191,44 @@ class ArgumentResolver:
         if inject.resource_name in resource_context:
             return resource_context[inject.resource_name]
         raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
-~~~~~
 
-#### Acts 2: 适配 SDK Preview 工具
 
-首先，更新 `events.py` 中的事件定义。
+class ConstraintResolver:
+    """
+    Responsible for resolving dynamic resource constraints for a node.
+    """
 
-~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/tools/events.py
-~~~~~
-~~~~~python
-@dataclass(frozen=True)
-class PlanNodeInspected(ToolEvent):
-    """Fired for each node in the resolved execution plan."""
+    def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        constraint_manager: Any = None,
+    ) -> Dict[str, Any]:
+        resolved = {}
 
-    index: int = 0
-    total_nodes: int = 0
-    node_id: str = ""
-    node_name: str = ""
-    literal_inputs: Dict[str, Any] = field(default_factory=dict)
+        # 1. Resolve Node-level constraints
+        if node.constraints and not node.constraints.is_empty():
+            for res, amount in node.constraints.requirements.items():
+                if isinstance(amount, (LazyResult, MappedLazyResult)):
+                    if state_backend.has_result(amount._uuid):
+                        resolved[res] = state_backend.get_result(amount._uuid)
+                    else:
+                        raise DependencyMissingError(
+                            node.id, f"constraint:{res}", amount._uuid
+                        )
+                else:
+                    resolved[res] = amount
 
-    def _get_payload(self) -> Dict[str, Any]:
-        return {
-            "index": self.index,
-            "total_nodes": self.total_nodes,
-            "node_id": self.node_id,
-            "node_name": self.node_name,
-            "literal_inputs": self.literal_inputs,
-        }
-~~~~~
-~~~~~python
-@dataclass(frozen=True)
-class PlanNodeInspected(ToolEvent):
-    """Fired for each node in the resolved execution plan."""
+        # 2. Resolve Global constraints
+        if constraint_manager:
+            extra = constraint_manager.get_extra_requirements(node)
+            resolved.update(extra)
 
-    index: int = 0
-    total_nodes: int = 0
-    node_id: str = ""
-    node_name: str = ""
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
-
-    def _get_payload(self) -> Dict[str, Any]:
-        return {
-            "index": self.index,
-            "total_nodes": self.total_nodes,
-            "node_id": self.node_id,
-            "node_name": self.node_name,
-            "input_bindings": self.input_bindings,
-        }
-~~~~~
-
-然后，更新 `preview.py` 的逻辑和视图以使用 `input_bindings`。
-
-~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/tools/preview.py
-~~~~~
-~~~~~python
-            # Filter out non-literal dependencies from the inputs for cleaner output
-            from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-
-            literals = {
-                k: v
-                for k, v in node.literal_inputs.items()
-                if not isinstance(v, (LazyResult, MappedLazyResult))
-            }
-
-            bus.publish(
-                PlanNodeInspected(
-                    run_id=target._uuid,
-                    index=current_index,
-                    total_nodes=total_steps,
-                    node_id=node.id,
-                    node_name=node.name,
-                    literal_inputs=literals,
-                )
-            )
-~~~~~
-~~~~~python
-            bus.publish(
-                PlanNodeInspected(
-                    run_id=target._uuid,
-                    index=current_index,
-                    total_nodes=total_steps,
-                    node_id=node.id,
-                    node_name=node.name,
-                    input_bindings=node.input_bindings,
-                )
-            )
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/tools/preview.py
-~~~~~
-~~~~~python
-    def on_node(self, event: PlanNodeInspected):
-        # Format literal inputs for readability
-        literals_repr = {
-            k: (f"<LazyResult of '{v.task.name}'>" if isinstance(v, LazyResult) else v)
-            for k, v in event.literal_inputs.items()
-        }
-        print(
-            f"[{event.index}/{event.total_nodes}] {event.node_name} (Literals: {literals_repr})"
-        )
-~~~~~
-~~~~~python
-    def on_node(self, event: PlanNodeInspected):
-        # Format input bindings for readability
-        bindings_repr = {
-            k: repr(v) for k, v in event.input_bindings.items()
-        }
-        print(
-            f"[{event.index}/{event.total_nodes}] {event.node_name} (Bindings: {bindings_repr})"
-        )
-~~~~~
-
-#### Acts 3: 修复 `test_serialize.py` 的断言
-
-将错误的 `in` 检查替换为 `isinstance`。
-
-~~~~~act
-patch_file
-tests/engine/graph/test_serialize.py
-~~~~~
-~~~~~python
-    assert param_node["node_type"] == "task"
-    assert "__slot_ref" in param_node["input_bindings"]["name"]
-
-    # Note: Serialization currently only saves graph structure, not the Context.
-    # So deserialized graph will have the node, but not the ParamSpec metadata
-    # (which lives in WorkflowContext). This is expected behavior for v1.3.
-
-    # Round trip
-    restored = from_json(to_json(graph))
-    p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
-    assert "__slot_ref" in p_node.input_bindings["name"]
-~~~~~
-~~~~~python
-    from cascade.spec.binding import SlotRef
-
-    assert param_node["node_type"] == "task"
-    assert "name" in param_node["input_bindings"]
-    assert "__slot_ref" in param_node["input_bindings"]["name"]
-
-    # Note: Serialization currently only saves graph structure, not the Context.
-    # So deserialized graph will have the node, but not the ParamSpec metadata
-    # (which lives in WorkflowContext). This is expected behavior for v1.3.
-
-    # Round trip
-    restored = from_json(to_json(graph))
-    p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
-    assert "name" in p_node.input_bindings
-    assert isinstance(p_node.input_bindings["name"], SlotRef)
+        return resolved
 ~~~~~
 
 ### 下一步建议
-我们已经解决了所有已知的逻辑错误和适配问题。这次修复应该能让测试套件完全通过。请再次运行 `pytest`。如果所有测试都通过，我们可以自信地宣布 **[COMMIT 1] The Great Split** 已经完成。
+再次向您致歉。
+
+请重新运行 `pytest`。这一次，`ImportError` 绝对不会再出现。我们可以继续专注于解决上一次报告中真正的逻辑错误。

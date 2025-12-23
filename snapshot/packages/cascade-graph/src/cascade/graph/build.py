@@ -21,17 +21,11 @@ class GraphBuilder:
         # Used to detect cycles during static TCO analysis
         self._shadow_visited: Dict[Task, Node] = {}
 
-        self._data_buffer: List[Any] = []
         self.registry = registry if registry is not None else NodeRegistry()
 
-    def build(self, target: Any) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
+    def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:
         self._visit(target)
-        return self.graph, tuple(self._data_buffer), self._visited_instances
-
-    def _register_data(self, value: Any) -> SlotRef:
-        index = len(self._data_buffer)
-        self._data_buffer.append(value)
-        return SlotRef(index)
+        return self.graph, self._visited_instances
 
     def _visit(self, value: Any) -> Node:
         """Central dispatcher for the post-order traversal."""
@@ -144,7 +138,8 @@ class GraphBuilder:
             input_bindings = {}
             def process_arg(key: str, val: Any):
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    input_bindings[key] = self._register_data(val)
+                    # Store literal value directly
+                    input_bindings[key] = val
 
             for i, val in enumerate(result.args):
                 process_arg(str(i), val)
@@ -226,7 +221,7 @@ class GraphBuilder:
             input_bindings = {}
             for k, val in result.mapping_kwargs.items():
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
-                    input_bindings[k] = self._register_data(val)
+                    input_bindings[k] = val
             
             return Node(
                 id=structural_hash,
@@ -296,5 +291,5 @@ class GraphBuilder:
 
 def build_graph(
     target: Any, registry: NodeRegistry | None = None
-) -> Tuple[Graph, Tuple[Any, ...], Dict[str, Node]]:
+) -> Tuple[Graph, Dict[str, Node]]:
     return GraphBuilder(registry=registry).build(target)

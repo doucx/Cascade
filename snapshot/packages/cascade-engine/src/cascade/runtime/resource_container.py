@@ -32,15 +32,16 @@ class ResourceContainer:
         """Overrides a resource provider (useful for testing)."""
         self._resource_providers[name] = new_provider
 
-    def scan(self, graph: Graph, data_tuple: Tuple[Any, ...]) -> Set[str]:
+    def scan(self, graph: Graph) -> Set[str]:
         """
-        Scans the graph and data tuple to identify all resources required by the nodes.
+        Scans the graph to identify all resources required by the nodes.
         """
         required = set()
         
-        # 1. Scan DataTuple for explicit Inject objects passed as arguments
-        for item in data_tuple:
-            self._scan_item(item, required)
+        # 1. Scan Node Input Bindings for explicit Inject objects
+        for node in graph.nodes:
+            for value in node.input_bindings.values():
+                self._scan_item(value, required)
 
         # 2. Scan Node Signatures for Inject defaults
         for node in graph.nodes:

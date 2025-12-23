@@ -66,7 +66,7 @@ class GraphExecutionStrategy:
                 # 1. Build Graph (With Registry for interning)
                 # This constructs the structural graph and the instance map.
                 # We reuse _node_registry to ensure that if the structure repeats, we get the exact same Node objects.
-                graph, data_tuple, instance_map = build_graph(current_target, registry=self._node_registry)
+                graph, instance_map = build_graph(current_target, registry=self._node_registry)
                 
                 # Identify the structural root
                 if current_target._uuid not in instance_map:
@@ -85,7 +85,7 @@ class GraphExecutionStrategy:
                     self._plan_cache[root_node_id] = plan
 
                 # 3. Setup Resources (mixed scope)
-                required_resources = self.resource_container.scan(graph, data_tuple)
+                required_resources = self.resource_container.scan(graph)
                 self.resource_container.setup(
                     required_resources,
                     active_resources,
@@ -102,7 +102,6 @@ class GraphExecutionStrategy:
                     run_id,
                     state_backend,
                     graph,
-                    data_tuple,
                     plan,
                     instance_map,
                 )
@@ -126,7 +125,6 @@ class GraphExecutionStrategy:
         run_id: str,
         state_backend: StateBackend,
         graph: Graph,
-        data_tuple: Tuple[Any, ...],
         plan: Any,
         instance_map: Dict[str, Node],
     ) -> Any:
@@ -183,8 +181,8 @@ class GraphExecutionStrategy:
                 if executable_this_pass:
                     # Callback for map nodes
                     async def sub_graph_runner(target, sub_params, parent_state):
-                        # Recursive call: must build new graph and data
-                        sub_graph, sub_data, sub_instance_map = build_graph(target)
+                        # Recursive call: must build new graph
+                        sub_graph, sub_instance_map = build_graph(target)
                         sub_plan = self.solver.resolve(sub_graph)
                         return await self._execute_graph(
                             target,
@@ -193,7 +191,6 @@ class GraphExecutionStrategy:
                             run_id,
                             parent_state,
                             graph=sub_graph,
-                            data_tuple=sub_data,
                             plan=sub_plan,
                             instance_map=sub_instance_map,
                         )
@@ -202,7 +199,6 @@ class GraphExecutionStrategy:
                         self.node_processor.process(
                             node,
                             graph,
-                            data_tuple,
                             state_backend,
                             active_resources,
                             run_id,

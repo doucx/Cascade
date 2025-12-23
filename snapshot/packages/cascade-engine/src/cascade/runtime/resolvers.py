@@ -5,7 +5,7 @@ from cascade.graph.model import Node, Graph, Edge, EdgeType
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
-from cascade.spec.binding import SlotRef, Constant
+from cascade.spec.binding import Constant
 from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
 from cascade.spec.protocols import StateBackend
 
@@ -13,7 +13,7 @@ from cascade.spec.protocols import StateBackend
 class ArgumentResolver:
     """
     Resolves arguments by combining:
-    1. Structural bindings (SlotRefs pointing to DataTuple)
+    1. Structural bindings (Literal values stored in Node)
     2. Upstream dependencies (Edges)
     3. Resource injections
     """
@@ -24,7 +24,6 @@ class ArgumentResolver:
         graph: Graph,
         state_backend: StateBackend,
         resource_context: Dict[str, Any],
-        data_tuple: Tuple[Any, ...],
         instance_map: Dict[str, Node],
         user_params: Dict[str, Any] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
@@ -32,13 +31,11 @@ class ArgumentResolver:
         args = []
         kwargs = {}
 
-        # 1. Reconstruct initial args/kwargs from Bindings + DataTuple
+        # 1. Reconstruct initial args/kwargs from Bindings (Literals)
         positional_args_dict = {}
-        for name, binding in node.input_bindings.items():
-            value = self._resolve_binding(binding, data_tuple)
-            
+        for name, value_raw in node.input_bindings.items():
             # Recursively resolve structures (e.g., lists containing Inject)
-            value = self._resolve_structure(value, node.id, state_backend, resource_context, graph)
+            value = self._resolve_structure(value_raw, node.id, state_backend, resource_context, graph)
 
             if name.isdigit():
                 positional_args_dict[int(name)] = value
@@ -83,13 +80,6 @@ class ArgumentResolver:
              kwargs["params_context"] = user_params or {}
 
         return args, kwargs
-
-    def _resolve_binding(self, binding: Any, data_tuple: Tuple[Any, ...]) -> Any:
-        if isinstance(binding, SlotRef):
-            return data_tuple[binding.index]
-        elif isinstance(binding, Constant):
-            return binding.value
-        return binding
 
     def _resolve_structure(
         self, obj: Any, consumer_id: str, state_backend: StateBackend,

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(runtime): 在 GraphExecutionStrategy 中实现结构化计划缓存", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766492232.3515964, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(core): 废弃 DataTuple，实现自包含的 Node 以修复缓存复用 Bug", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766492591.5792408, "duration_ms": 0}}

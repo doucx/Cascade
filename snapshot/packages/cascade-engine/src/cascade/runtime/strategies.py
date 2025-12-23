@@ -2,7 +2,7 @@ import asyncio
 from contextlib import ExitStack
 from typing import Any, Dict, Protocol, Tuple, List
 
-from cascade.graph.model import Graph
+from cascade.graph.model import Graph, Node
 from cascade.graph.build import build_graph
 from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -13,10 +13,6 @@ from cascade.runtime.flow import FlowManager
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.events import TaskSkipped, TaskBlocked
 from cascade.runtime.constraints.manager import ConstraintManager
-from cascade.graph.compiler import BlueprintBuilder
-from cascade.runtime.vm import VirtualMachine
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.graph.model import Node
 
 
 class ExecutionStrategy(Protocol):
@@ -38,7 +34,7 @@ class ExecutionStrategy(Protocol):
 class GraphExecutionStrategy:
     """
     Executes tasks by dynamically building a dependency graph and running a TCO loop.
-    This is the standard execution mode for Cascade.
+    Standard execution mode for Cascade, aligned with the Git-like structural model.
     """
 
     def __init__(
@@ -56,44 +52,7 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
-        # Cache for structural hashing (slow path)
-        self._graph_cache: Dict[str, Tuple[Graph, Any]] = {}
-        # Cache for Zero-Overhead TCO (fast path), keyed by Task object
-        self._task_templates: Dict[Any, Tuple[Graph, Any]] = {}
-
-    def _is_simple_task(self, lr: Any) -> bool:
-        """
-        Checks if the LazyResult is a simple, flat task (no nested dependencies).
-        This allows for the Zero-Overhead TCO fast path.
-        """
-        if not isinstance(lr, LazyResult):
-            return False
-        if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
-            return False
-
-        # Explicit dependencies
-        if lr._dependencies:
-            return False
-
-        def _has_lazy(obj):
-            if isinstance(obj, (LazyResult, MappedLazyResult)):
-                return True
-            if isinstance(obj, (list, tuple)):
-                return any(_has_lazy(x) for x in obj)
-            if isinstance(obj, dict):
-                return any(_has_lazy(v) for v in obj.values())
-            return False
-
-        # Check args and kwargs recursively
-        for arg in lr.args:
-            if _has_lazy(arg):
-                return False
-
-        for v in lr.kwargs.values():
-            if _has_lazy(v):
-                return False
-
-        return True
+        # Note: All caching logic removed in Phase 1.3 for correctness-first baseline.
 
     async def execute(
         self,
@@ -106,62 +65,15 @@ class GraphExecutionStrategy:
     ) -> Any:
         current_target = target
 
-        # Optimization state for TCO Fast Path
-        last_executed_task = None
-        last_tco_cycle_id = None
-
         while True:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
-                graph, plan, data_tuple, instance_map = None, None, (), None
+                # 1. Build & Resolve
+                # In Phase 1.3, we build and solve every time to ensure absolute correctness.
+                graph, data_tuple, instance_map = build_graph(current_target)
+                plan = self.solver.resolve(graph)
 
-                is_fast_path = False
-                if isinstance(current_target, LazyResult) and self._is_simple_task(
-                    current_target
-                ):
-                    task_obj = current_target.task
-                    cycle_id = getattr(task_obj, "_tco_cycle_id", None)
-
-                    is_tco_candidate = (
-                        cycle_id and cycle_id == last_tco_cycle_id
-                    ) or (task_obj == last_executed_task)
-
-                    if is_tco_candidate and task_obj in self._task_templates:
-                        is_fast_path = True
-
-                if is_fast_path:
-                    # FAST PATH: Reuse plan, rebuild graph quickly to get data
-                    graph, plan = self._task_templates[current_target.task]
-                    _, data_tuple, instance_map = build_graph(current_target)
-
-                    # BUGFIX: The instance_map from the new build_graph will contain a new,
-                    # ephemeral node ID for the current_target. However, the execution plan
-                    # uses the canonical node ID from the cached graph. We must align them.
-                    # For a simple TCO task, the canonical target is the first (and only)
-                    # node in the first stage of the plan.
-                    if plan and plan[0]:
-                        canonical_target_node = plan[0][0]
-                        instance_map[current_target._uuid] = canonical_target_node
-                else:
-                    # STANDARD PATH: Build graph and resolve plan for the first time
-                    graph, data_tuple, instance_map = build_graph(current_target)
-                    plan = self.solver.resolve(graph)
-
-                    # Cache the template for future TCO loops
-                    if isinstance(current_target, LazyResult) and self._is_simple_task(
-                        current_target
-                    ):
-                        self._task_templates[current_target.task] = (graph, plan)
-
-                # Update state for next iteration
-                if isinstance(current_target, LazyResult):
-                    last_executed_task = current_target.task
-                    last_tco_cycle_id = getattr(current_target.task, "_tco_cycle_id", None)
-                else:
-                    last_executed_task = None
-                    last_tco_cycle_id = None
-
-                # 2. Setup Resources (mixed scope)
+                # 2. Setup Resources
                 required_resources = self.resource_container.scan(graph, data_tuple)
                 self.resource_container.setup(
                     required_resources,
@@ -179,24 +91,18 @@ class GraphExecutionStrategy:
                     run_id,
                     state_backend,
                     graph,
-                    data_tuple,  # Pass the blood!
+                    data_tuple,
                     plan,
                     instance_map,
                 )
 
-            # Capture the task we just executed BEFORE updating current_target
-            if isinstance(current_target, LazyResult):
-                last_executed_task = current_target.task
-            else:
-                last_executed_task = None
-
             # 4. Check for Tail Call (LazyResult)
             if isinstance(result, (LazyResult, MappedLazyResult)):
                 current_target = result
-                # STATE GC
+                # State Garbage Collection
                 if hasattr(state_backend, "clear"):
                     state_backend.clear()
-                # Yield control
+                # Yield control to event loop
                 await asyncio.sleep(0)
             else:
                 return result
@@ -213,6 +119,7 @@ class GraphExecutionStrategy:
         plan: Any,
         instance_map: Dict[str, Node],
     ) -> Any:
+        # Map the instance to its canonical structural node
         target_node = instance_map[target._uuid]
         flow_manager = FlowManager(graph, target_node.id, instance_map)
         blocked_nodes = set()
@@ -225,6 +132,7 @@ class GraphExecutionStrategy:
                 deferred_this_pass: List[Node] = []
 
                 for node in pending_nodes_in_stage:
+                    # Param nodes are virtual and handled by resolvers
                     if node.node_type == "param":
                         continue
 
@@ -259,13 +167,12 @@ class GraphExecutionStrategy:
                             blocked_nodes.add(node.id)
 
                 if executable_this_pass:
-                    # Callback for map nodes
-                    async def sub_graph_runner(target, sub_params, parent_state):
-                        # Recursive call: must build new graph and data
-                        sub_graph, sub_data, sub_instance_map = build_graph(target)
+                    # Recursive runner for map nodes
+                    async def sub_graph_runner(sub_target, sub_params, parent_state):
+                        sub_graph, sub_data, sub_instance_map = build_graph(sub_target)
                         sub_plan = self.solver.resolve(sub_graph)
                         return await self._execute_graph(
-                            target,
+                            sub_target,
                             sub_params,
                             active_resources,
                             run_id,
@@ -295,8 +202,7 @@ class GraphExecutionStrategy:
 
                     for node, res in zip(executable_this_pass, pass_results):
                         state_backend.put_result(node.id, res)
-                        if flow_manager:
-                            flow_manager.register_result(node.id, res, state_backend)
+                        flow_manager.register_result(node.id, res, state_backend)
 
                 pending_nodes_in_stage = deferred_this_pass
 
@@ -305,63 +211,19 @@ class GraphExecutionStrategy:
                     self.wakeup_event.clear()
                     self.constraint_manager.cleanup_expired_constraints()
 
-        # Use the mapped canonical node ID to check for the final result
+        # Check for final result on the structural node
         if not state_backend.has_result(target_node.id):
-            # For debugging, check if the instance was skipped
             if skip_reason := state_backend.get_skip_reason(target_node.id):
                 if skip_reason == "UpstreamSkipped_Sequence":
                     return None
                 raise DependencyMissingError(
-                    task_id=target.task.name or "unknown",
+                    task_id=target.task.name if hasattr(target, "task") else "unknown",
                     arg_name="<Target Output>",
-                    dependency_id=f"Target node '{target_node.name}' was skipped (Reason: {skip_reason})",
+                    dependency_id=f"Target node '{target_node.name}' skipped (Reason: {skip_reason})",
                 )
 
             raise KeyError(
-                f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
+                f"Target task '{target.task.name if hasattr(target, 'task') else 'unknown'}' produced no result."
             )
 
         return state_backend.get_result(target_node.id)
-
-
-class VMExecutionStrategy:
-    """
-    Executes tasks by compiling them into a Blueprint and running them on a Virtual Machine.
-    """
-
-    def __init__(
-        self,
-        resource_manager: ResourceManager,
-        constraint_manager: ConstraintManager,
-        wakeup_event: asyncio.Event,
-    ):
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.wakeup_event = wakeup_event
-
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        # 1. Compile in template mode
-        builder = BlueprintBuilder()
-        blueprint = builder.build(target, template=True)
-
-        # 2. Extract Initial Arguments
-        initial_args = list(target.args)
-        initial_kwargs = dict(target.kwargs)
-
-        # 3. Execute
-        vm = VirtualMachine(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self.wakeup_event,
-        )
-        return await vm.execute(
-            blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs
-        )

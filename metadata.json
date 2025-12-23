@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] perf: 在执行策略中激活 O(1) 图查找", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766506492.5953882, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] perf: 恢复 ArgumentResolver 快速路径以达成 21k+ TPS", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766506633.9559066, "duration_ms": 0}}

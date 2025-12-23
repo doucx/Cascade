@@ -237,6 +237,29 @@ class GraphBuilder:
                 except (ValueError, TypeError):
                     pass
 
+            # Robustly determine complexity to enable FAST PATH in ArgumentResolver
+            from cascade.spec.resource import Inject as InjectMarker
+            from cascade.internal.inputs import _get_param_value
+
+            has_complex = False
+            
+            # 1. Check for Runtime Context Injection (Special internal tasks)
+            if result.task.func is _get_param_value.func:
+                has_complex = True
+            
+            # 2. Check for Implicit Injection in Signature Defaults
+            if not has_complex and sig:
+                has_complex = any(isinstance(p.default, InjectMarker) for p in sig.parameters.values())
+            
+            # 3. Check for Explicit Injection in Bindings (recursively)
+            if not has_complex:
+                def is_complex_value(v):
+                    if isinstance(v, InjectMarker): return True
+                    if isinstance(v, list): return any(is_complex_value(x) for x in v)
+                    if isinstance(v, dict): return any(is_complex_value(x) for x in v.values())
+                    return False
+                has_complex = any(is_complex_value(v) for v in input_bindings.values())
+
             node = Node(
                 id=structural_hash,
                 template_id=template_hash,
@@ -248,6 +271,7 @@ class GraphBuilder:
                 cache_policy=result._cache_policy,
                 constraints=result._constraints,
                 input_bindings=input_bindings,
+                has_complex_inputs=has_complex,
             )
             self.registry._registry[structural_hash] = node
 

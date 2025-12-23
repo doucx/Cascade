@@ -1,92 +1,116 @@
-太棒了。测试的全面通过标志着我们成功跨越了架构重构中最困难的一个关口：**从“基于实例的图”演进为“基于模板的图”**。
+好的，我们正式开始执行路线图中的第四步。
 
-这不仅是性能上的优化（通过 Interning 减少了内存占用），更是语义上的飞跃。现在，Cascade 终于拥有了稳定的、能够跨越不同任务调用甚至不同运行周期而保持一致的“结构身份”。这是实现 Hashlife 模型和全局计算缓存的绝对前提。
+本次的核心任务是重构 `GraphExecutionStrategy` 以实现真正的零开销尾递归优化（TCO），这是发挥新架构全部威力的关键一步。我们将启用并完善 TCO “快速通道”逻辑，让引擎能够识别并缓存可复用的执行计划，从而跳过绝大多数重复计算。
 
-我将生成一个 `[COMMIT]` 计划，将这些具有里程碑意义的改动永久记录下来。
+我将生成一个计划来完成这项工作。
 
-## [COMMIT] feat(graph): Implement node interning and stable structural identifiers
+## [WIP] refactor(engine): Implement TCO fast path in GraphExecutionStrategy
 
 ### 用户需求
-完成路线图第二阶段 2.1 节，实现全局/会话级的节点注册表（Node Interning），并确保计算图的每个节点都由一个稳定的结构化 ID（哈希）唯一标识。
+根据重构路线图，完成第四步，即重构 `GraphExecutionStrategy` 中的 TCO 逻辑，使其能够缓存和复用执行计划，实现对 TCO 循环的零开销优化。
 
 ### 评论
-这是一次深度的架构演进。我们不仅实现了一个用于节点复用的 `NodeRegistry`，还通过引入 `ShallowHasher` 和 `instance_map` 机制，彻底解决了节点“结构身份”与“调用实例”的分离。虽然过程中面临了 ID 语义转换带来的巨大集成挑战，但目前的实现非常稳固，且为后续的“骨架-血肉分离（Skeleton-Flesh Split）”铺平了道路。
+这是一个至关重要的性能优化，是本次架构重构的“回报”所在。通过实现真正的 TCO 快速通道，我们将兑现 Cascade 的核心承诺之一：让递归的、Agent 风格的任务能够以接近原生循环的性能无限运行。这一改进将直接利用我们在前几步中构建的“模板-实例分离”和节点规范化（`NodeRegistry`）的基础设施。
 
 ### 目标
-1.  提交 `NodeRegistry`、`ShallowHasher` 以及重构后的 `GraphBuilder` 核心代码。
-2.  提交所有为适配新的 ID 模型而进行的运行时组件（`FlowManager`, `Resolvers`, `Engine`）的更新。
-3.  提交已同步更新的 SDK 工具（`visualize`, `preview`）及其测试套件。
+1.  修改 `GraphExecutionStrategy.execute` 的主循环，以正确识别 TCO 循环候选者。
+2.  当一个 TCO 候选任务被识别，并且其 `(GraphTemplate, ExecutionPlan)` 已被缓存时，进入“快速通道”。
+3.  在快速通道中，**跳过**昂贵的 `solver.resolve()` 步骤，直接复用缓存的 `ExecutionPlan`。
+4.  在快速通道中，仍然调用 `build_graph()`。这是一种高效的做法，因为 `NodeRegistry` 会确保图的“骨架”部分因缓存而快速构建，同时此调用能正确地从新的 `LazyResult` 实例中提取出新的运行时数据（“血肉”`data_tuple`）。
+5.  使用缓存的计划和新的数据继续执行，从而完成一次零开销的 TCO 迭代。
 
 ### 基本原理
-通过将 `Node.id` 锁定为节点的浅层结构哈希，我们使计算图在逻辑上变得可复用。引入 `instance_map` 是本次重构的点睛之笔，它充当了临时实例与持久模板之间的翻译层，使得现有的、基于实例构建的复杂逻辑（如路由剪枝）在不破坏向后兼容性的前提下，依然能在新的规范化模型中正确运行。
+在新的架构下，TCO 循环中每一轮迭代的“图模板”和“执行计划”都是完全相同的，变化的仅仅是传入的运行时数据（`data_tuple`）。因此，最大的性能开销——求解器解析图拓扑以生成执行计划（`solver.resolve()`）——是完全可以避免的。
+
+我们将通过 `_task_templates` 字典缓存每个 TCO 候选任务的 `(Graph, ExecutionPlan)`。在后续迭代中，如果识别到同一个任务，我们就直接从缓存中取出计划。同时，我们依然调用 `build_graph()`，但其目的已经从“构建图”转变为“提取数据”。得益于 `NodeRegistry` 的存在，`build_graph` 在处理已见过的结构时会非常快，因为它只需进行字典查找，而无需创建新对象。这种“复用计划，提取数据”的模式，便是实现零开销 TCO 的核心。
 
 ### 标签
-#intent/architect #intent/refine #flow/ready #priority/high 
-#comp/graph #comp/engine #comp/sdk #comp/tests
-#concept/interning #concept/hashing #concept/state
-#task/domain/graph #task/object/node-interning #task/action/implementation #task/state/end #task/status/completed
+#intent/refine #flow/ready #priority/high #comp/engine #concept/state #scope/core #ai/instruct #task/domain/runtime #task/object/tco-optimization #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 提交节点复用与稳定标识符架构
+#### Acts 1: 启用并实现 TCO 快速通道
 
-我们将所有核心模块、运行时组件、SDK 工具以及对应的测试文件添加到暂存区。这是一个涵盖了模型层、逻辑层和展示层的内聚提交。
+我们将修改 `strategies.py` 文件，重写 `GraphExecutionStrategy.execute` 方法中的 TCO 检查和执行路径逻辑。
 
 ~~~~~act
-git_add
-packages/cascade-engine/src/cascade/runtime/engine.py
-packages/cascade-engine/src/cascade/runtime/flow.py
-packages/cascade-engine/src/cascade/runtime/processor.py
-packages/cascade-engine/src/cascade/runtime/resolvers.py
+patch_file
 packages/cascade-engine/src/cascade/runtime/strategies.py
-packages/cascade-graph/src/cascade/graph/__init__.py
-packages/cascade-graph/src/cascade/graph/build.py
-packages/cascade-graph/src/cascade/graph/hashing.py
-packages/cascade-graph/src/cascade/graph/model.py
-packages/cascade-graph/src/cascade/graph/registry.py
-packages/cascade-graph/src/cascade/graph/serialize.py
-packages/cascade-sdk/src/cascade/tools/preview.py
-packages/cascade-sdk/src/cascade/tools/visualize.py
-tests/engine/adapters/solvers/test_csp.py
-tests/engine/adapters/solvers/test_native.py
-tests/engine/graph/test_build.py
-tests/engine/graph/test_build_tco.py
-tests/engine/graph/test_serialize.py
-tests/engine/runtime/test_engine_core.py
-tests/engine/runtime/test_flow_manager.py
-tests/engine/runtime/test_router_pruning.py
-tests/sdk/integration/test_state_backends.py
-tests/sdk/tools/test_preview.py
-tests/sdk/tools/test_visualize.py
-tests/spec/spec/test_constraint.py
-tests/spec/spec/test_routing.py
 ~~~~~
+~~~~~python
+                graph = None
+                plan = None
+                data_tuple = () # The Flesh
+                is_fast_path = False
 
-~~~~~act
-git_commit
+                # --- 1. ZERO-OVERHEAD FAST PATH CHECK ---
+                # Check if we are in a recognized TCO loop (A -> B -> ... -> A)
+                
+                if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+                    task_obj = current_target.task
+                    cycle_id = getattr(task_obj, "_tco_cycle_id", None)
+                    
+                    if (cycle_id and cycle_id == last_tco_cycle_id) or (task_obj == last_executed_task):
+                        if task_obj in self._task_templates:
+                            is_fast_path = True
+                            graph, plan = self._task_templates[task_obj]
+                            # For fast path, we still need to extract data!
+                            # Since we skipped build_graph, we need a lightweight data extractor.
+                            # BUT, for V3 step 1, we can just call build_graph and throw away the graph 
+                            # if we want to be lazy, OR just disable fast path for now until we build a pure DataExtractor.
+                            # Disable fast path for this commit to ensure correctness first.
+                            is_fast_path = False 
+                
+                if not is_fast_path:
+                    # --- 2. STANDARD PATH ---
+                    # Always build fresh for now to handle data extraction
+                    graph, data_tuple, instance_map = build_graph(current_target)
+                    plan = self.solver.resolve(graph)
+                    
+                    # Store in template cache for future optimization (even if we don't fully use it yet)
+                    if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+                        self._task_templates[current_target.task] = (graph, plan)
 ~~~~~
-~~~~~text
-feat(graph): Implement node interning and stable structural identifiers
+~~~~~python
+                graph, plan, data_tuple, instance_map = None, None, (), None
 
-This milestone marks the full implementation of Node Interning, shifting Cascade's execution model from transient instance-based graphs to reusable template-based graphs.
+                is_fast_path = False
+                if isinstance(current_target, LazyResult) and self._is_simple_task(
+                    current_target
+                ):
+                    task_obj = current_target.task
+                    cycle_id = getattr(task_obj, "_tco_cycle_id", None)
 
-Key Innovations:
-1. **NodeRegistry & ShallowHasher**: Introduced a session-level registry that uses structural hashing to ensure any structurally identical node (same task, policies, and literal inputs) is represented by a single, unique Node object.
-2. **Skeleton-Flesh Separation**: Decoupled the Node's stable identity (structural ID) from its runtime invocation (LazyResult UUID).
-3. **Instance Mapping**: Implemented 'instance_map' to bridge the gap between instance-aware logic (like Router pruning) and the new canonical graph model, ensuring full consistency across resolvers and state backends.
-4. **Resilient Runtime**: Updated FlowManager, ArgumentResolver, and ConstraintResolver to correctly handle ID translation, resolving complex integration issues with dynamic routing and resource scheduling.
+                    is_tco_candidate = (
+                        cycle_id and cycle_id == last_tco_cycle_id
+                    ) or (task_obj == last_executed_task)
 
-This refactor provides the mandatory foundation for the upcoming "Universal Graph Cache" and Hashlife-inspired performance optimizations.
+                    if is_tco_candidate and task_obj in self._task_templates:
+                        is_fast_path = True
+
+                if is_fast_path:
+                    # FAST PATH: Reuse plan, rebuild graph quickly to get data
+                    graph, plan = self._task_templates[current_target.task]
+                    # Re-run build_graph. This is efficient due to NodeRegistry caching the
+                    # graph structure. We discard the returned graph but keep the new data_tuple
+                    # and instance_map, effectively using it as a data extractor.
+                    _, data_tuple, instance_map = build_graph(current_target)
+                else:
+                    # STANDARD PATH: Build graph and resolve plan for the first time
+                    graph, data_tuple, instance_map = build_graph(current_target)
+                    plan = self.solver.resolve(graph)
+
+                    # Cache the template for future TCO loops
+                    if isinstance(current_target, LazyResult) and self._is_simple_task(
+                        current_target
+                    ):
+                        self._task_templates[current_target.task] = (graph, plan)
 ~~~~~
 
 ### 下一步建议
 
-随着 2.1 节（节点复用）的正式闭环，我们下一步将进入 **2.2 分离的数据提取流程 (Separated Data Extraction)**。
+我们已经完成了核心的 TCO 逻辑重构。下一步是进入路线图的 **第五步：[COMMIT 5] 清理与收尾**。
 
-虽然我们在 `GraphBuilder` 中已经初步引入了 `_data_buffer`，但当前的提取逻辑仍然分散在节点创建过程中。下一阶段的目标是：
-- **纯化提取逻辑**：实现一个独立的 `DataExtractor` 类或优化 `Builder`，使其能以更系统、更高效的方式从复杂的嵌套结构中剥离“血肉（字面量数据）”。
-- **增强水合（Hydration）**：优化 `ArgumentResolver` 的性能，使其在利用 `SlotRef` 从 `DataTuple` 还原参数时达到零开销级别。
-
-如果你准备好了，我们可以开始 2.2 节的详细方案设计。
+我建议我们首先全面审查代码，删除所有与旧数据模型相关的、被注释掉的或不再使用的代码。然后，我们可以创建一个 `[COMMIT]` 计划，将这次重构作为一个原子性的、完整的提交记录下来。

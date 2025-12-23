@@ -114,37 +114,38 @@ class GraphExecutionStrategy:
         while True:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
-                graph = None
-                plan = None
-                data_tuple = () # The Flesh
-                is_fast_path = False
+                graph, plan, data_tuple, instance_map = None, None, (), None
 
-                # --- 1. ZERO-OVERHEAD FAST PATH CHECK ---
-                # Check if we are in a recognized TCO loop (A -> B -> ... -> A)
-                
-                if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+                is_fast_path = False
+                if isinstance(current_target, LazyResult) and self._is_simple_task(
+                    current_target
+                ):
                     task_obj = current_target.task
                     cycle_id = getattr(task_obj, "_tco_cycle_id", None)
-                    
-                    if (cycle_id and cycle_id == last_tco_cycle_id) or (task_obj == last_executed_task):
-                        if task_obj in self._task_templates:
-                            is_fast_path = True
-                            graph, plan = self._task_templates[task_obj]
-                            # For fast path, we still need to extract data!
-                            # Since we skipped build_graph, we need a lightweight data extractor.
-                            # BUT, for V3 step 1, we can just call build_graph and throw away the graph 
-                            # if we want to be lazy, OR just disable fast path for now until we build a pure DataExtractor.
-                            # Disable fast path for this commit to ensure correctness first.
-                            is_fast_path = False 
-                
-                if not is_fast_path:
-                    # --- 2. STANDARD PATH ---
-                    # Always build fresh for now to handle data extraction
+
+                    is_tco_candidate = (
+                        cycle_id and cycle_id == last_tco_cycle_id
+                    ) or (task_obj == last_executed_task)
+
+                    if is_tco_candidate and task_obj in self._task_templates:
+                        is_fast_path = True
+
+                if is_fast_path:
+                    # FAST PATH: Reuse plan, rebuild graph quickly to get data
+                    graph, plan = self._task_templates[current_target.task]
+                    # Re-run build_graph. This is efficient due to NodeRegistry caching the
+                    # graph structure. We discard the returned graph but keep the new data_tuple
+                    # and instance_map, effectively using it as a data extractor.
+                    _, data_tuple, instance_map = build_graph(current_target)
+                else:
+                    # STANDARD PATH: Build graph and resolve plan for the first time
                     graph, data_tuple, instance_map = build_graph(current_target)
                     plan = self.solver.resolve(graph)
-                    
-                    # Store in template cache for future optimization (even if we don't fully use it yet)
-                    if isinstance(current_target, LazyResult) and self._is_simple_task(current_target):
+
+                    # Cache the template for future TCO loops
+                    if isinstance(current_target, LazyResult) and self._is_simple_task(
+                        current_target
+                    ):
                         self._task_templates[current_target.task] = (graph, plan)
 
                 # Update state for next iteration

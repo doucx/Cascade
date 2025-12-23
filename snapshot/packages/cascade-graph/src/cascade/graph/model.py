@@ -54,7 +54,7 @@ class Node:
     # This makes the Node self-contained.
     input_bindings: Dict[str, Any] = field(default_factory=dict)
 
-    # Optimization: Flag indicating if the node requires complex resolution 
+    # Optimization: Flag indicating if the node requires complex resolution
     # (e.g., has Inject markers, complex nested structures, or runtime context needs)
     has_complex_inputs: bool = False
 
@@ -83,7 +83,7 @@ class Graph:
 
     nodes: List[Node] = field(default_factory=list)
     edges: List[Edge] = field(default_factory=list)
-    
+
     # O(1) index for fast lookup
     _node_index: Dict[str, Node] = field(default_factory=dict, init=False, repr=False)
 

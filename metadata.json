@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] perf(engine): 恢复高性能快速路径与稳健的复杂性检测", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766506712.998865, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M resolvers.py, M graph.py, M build.py ... and 4 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766507027.3196812, "duration_ms": 0}}

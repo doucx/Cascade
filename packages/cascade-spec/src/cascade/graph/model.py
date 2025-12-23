@@ -28,6 +28,7 @@ class Node:
 
     id: str
     name: str
+    is_shadow: bool = False  # True if this node is for static analysis only
 
     # Core spec
     node_type: str = "task"  # "task", "param", or "map"

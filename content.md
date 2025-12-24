@@ -1,61 +1,368 @@
-好的，我们已经完成了针对 `ArgumentResolver` 优先级缺陷的修复，并为“快速路径”和“复杂路径”都建立了稳固的回归测试。现在我们将这些变更作为一个完整的逻辑单元提交到版本库中。
+Excellent. This refactoring will significantly improve the long-term maintainability of the `ArgumentResolver`. I will now generate a plan to eliminate the code duplication you identified.
 
-## [COMMIT] fix(engine): 确保 TCO 跳转参数优先于静态图依赖
+## [WIP] refactor(engine): Unify ArgumentResolver edge resolution logic
 
 ### 用户需求
-修复在使用 `cs.Param` 作为递归任务初始值时，`cs.Jump` 传递的更新参数被原始参数值覆盖，导致死循环的问题。
+Refactor the `ArgumentResolver` to remove the duplicated code for handling data edge resolution between its "Fast Path" and "Complex Path".
 
 ### 评论
-这个修复解决了运行时参数解析逻辑中的一个核心优先级冲突。在 TCO（尾调用优化）场景下，明确的运行时干预（Jump 数据）在语义上必须覆盖静态图定义的默认依赖。该修复同时覆盖了 `ArgumentResolver` 的优化路径和通用路径，保证了系统行为的一致性和稳健性。
+This is a high-value refactoring. The previous duplication was a classic 'optimization-induced debt' that made the code harder to reason about and prone to bugs, as demonstrated by our recent fix. Unifying the logic under a single private method will make the component more robust and adhere to the DRY (Don't Repeat Yourself) principle.
 
 ### 目标
-1.  提交对 `packages/cascade-engine/src/cascade/runtime/resolvers.py` 的修复，确保 `input_overrides` 的优先级最高。
-2.  提交新增的 `tests/engine/e2e/test_tco_param_override.py` 测试文件，作为该问题的永久性回归测试。
+1.  Create a new private method `_resolve_data_edges` within `ArgumentResolver`.
+2.  This method will contain the shared logic for iterating through incoming data edges, checking for `input_overrides`, and resolving dependency values.
+3.  Refactor both the "Fast Path" and "Complex Path" within the main `resolve` method to call this new shared method.
+4.  Ensure all existing tests, especially `test_tco_param_override.py`, continue to pass after the change.
 
 ### 基本原理
-通过在 `ArgumentResolver` 解析数据边（DATA Edges）之前引入显式的优先级检查，如果参数已由 `input_overrides` 提供，则跳过对该参数对应依赖边的解析。这确保了递归状态能通过 Jump 信号正确传递，不受静态图中 `cs.Param` 或其他上游任务的影响。
+The principle is to apply the 'Extract Method' refactoring technique. By isolating the common logic of edge resolution into a single, well-defined private method, we eliminate code duplication. The main `resolve` method's responsibility is simplified to orchestrating the steps: handling bindings, calling the new edge resolver, and then handling injections or other complex logic.
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #concept/tco #scope/core #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/bug-fix #task/state/end
+#intent/refine #flow/ready #priority/medium #comp/runtime #scope/core #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交修复与测试
+#### Acts 1: Refactor `ArgumentResolver` to use a shared method
 
-我们将修复后的代码和新增的测试用例添加到 Git 暂存区并执行提交。
+We will use `write_file` for this structural refactoring, as it's cleaner than multiple complex patches. The new implementation will introduce `_resolve_data_edges` and have both paths in the `resolve` method call it.
 
 ~~~~~act
-git_add
+write_file
 packages/cascade-engine/src/cascade/runtime/resolvers.py
-tests/engine/e2e/test_tco_param_override.py
 ~~~~~
+~~~~~python
+from typing import Any, Dict, List, Tuple
 
-~~~~~act
-git_commit
-~~~~~
-~~~~~text
-fix(engine): ensure TCO overrides take precedence over dependencies
+from cascade.graph.model import Node, Graph, Edge, EdgeType
+from cascade.spec.resource import Inject
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
+from cascade.spec.protocols import StateBackend
 
-Fixed a critical bug in ArgumentResolver where data provided via 'cs.Jump'
-(input_overrides) was being overwritten by static graph dependencies
-(e.g., 'cs.Param') during the resolution process.
 
-In recursive TCO workflows, this led to infinite loops because the
-decremented state passed to the next iteration was ignored in favor of
-re-resolving the original param value from the starting node.
+class ArgumentResolver:
+    """
+    Resolves arguments by combining:
+    1. Structural bindings (Literal values stored in Node)
+    2. Upstream dependencies (Edges)
+    3. Resource injections
+    """
 
-Changes:
-1.  Modified 'ArgumentResolver' to check if an argument is already present
-    in 'input_overrides' before resolving its corresponding edge in the
-    static graph.
-2.  Applied the fix to both the 'Fast Path' (simple tasks) and the
-    'Complex Path' (tasks with injections or complex structures).
-3.  Added a new E2E test suite 'tests/engine/e2e/test_tco_param_override.py'
-    that explicitly verifies the fix for both resolution paths.
+    async def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        resource_context: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        user_params: Dict[str, Any] = None,
+        input_overrides: Dict[str, Any] = None,
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
+        if not node.has_complex_inputs:
+            # Reconstruct args/kwargs from Bindings (Literals) and Overrides
+            bindings = node.input_bindings
+            if input_overrides:
+                bindings = bindings.copy()
+                bindings.update(input_overrides)
+
+            # 1. Fill from bindings
+            f_args: List[Any] = []
+            f_kwargs: Dict[str, Any] = {}
+            for k, v in bindings.items():
+                if k.isdigit():
+                    idx = int(k)
+                    while len(f_args) <= idx:
+                        f_args.append(None)
+                    f_args[idx] = v
+                else:
+                    f_kwargs[k] = v
+
+            # 2. Fill from edges using the unified helper
+            resolved_edge_values = await self._resolve_data_edges(
+                node, graph, state_backend, instance_map, input_overrides
+            )
+            for k, v in resolved_edge_values.items():
+                if k.isdigit():
+                    idx = int(k)
+                    while len(f_args) <= idx:
+                        f_args.append(None)
+                    f_args[idx] = v
+                else:
+                    f_kwargs[k] = v
+
+            return f_args, f_kwargs
+
+        # --- COMPLEX PATH ---
+        args: List[Any] = []
+        kwargs: Dict[str, Any] = {}
+
+        # 1. Reconstruct initial args/kwargs from Bindings (Literals)
+        bindings = node.input_bindings
+        if input_overrides:
+            bindings = bindings.copy()
+            bindings.update(input_overrides)
+
+        positional_args_dict = {}
+        for name, value_raw in bindings.items():
+            # Always resolve structures to handle nested Injects correctly
+            value = self._resolve_structure(
+                value_raw, node.structural_id, state_backend, resource_context, graph
+            )
+
+            if name.isdigit():
+                positional_args_dict[int(name)] = value
+            else:
+                kwargs[name] = value
+
+        sorted_indices = sorted(positional_args_dict.keys())
+        args = [positional_args_dict[i] for i in sorted_indices]
+
+        # 2. Overlay Dependencies from Edges using the unified helper
+        resolved_edge_values = await self._resolve_data_edges(
+            node, graph, state_backend, instance_map, input_overrides
+        )
+        for k, v in resolved_edge_values.items():
+            if k.isdigit():
+                idx = int(k)
+                while len(args) <= idx:
+                    args.append(None)
+                args[idx] = v
+            else:
+                kwargs[k] = v
+
+        # 3. Handle Resource Injection in Defaults
+        if node.signature:
+            # Create a bound arguments object to see which args are not yet filled
+            try:
+                bound_args = node.signature.bind_partial(*args, **kwargs)
+                for param in node.signature.parameters.values():
+                    if (
+                        isinstance(param.default, Inject)
+                        and param.name not in bound_args.arguments
+                    ):
+                        kwargs[param.name] = self._resolve_inject(
+                            param.default, node.name, resource_context
+                        )
+            except TypeError:
+                # This can happen if args/kwargs are not yet valid, but we can still try a simpler check
+                pass
+
+        # 4. Handle internal param fetching context
+        # [CRITICAL] This logic must always run for Param tasks
+        from cascade.internal.inputs import _get_param_value
+
+        if node.callable_obj is _get_param_value.func:
+            kwargs["params_context"] = user_params or {}
+
+        return args, kwargs
+
+    async def _resolve_data_edges(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] | None,
+    ) -> Dict[str, Any]:
+        """
+        Shared helper to resolve all incoming DATA edges for a node,
+        respecting the priority of input_overrides from TCO Jumps.
+        """
+        resolved_values = {}
+        incoming_edges = [
+            e
+            for e in graph.edges
+            if e.target.structural_id == node.structural_id
+            and e.edge_type == EdgeType.DATA
+        ]
+
+        if not incoming_edges:
+            return {}
+
+        for edge in incoming_edges:
+            # [CRITICAL] Unified Priority Check:
+            # Overrides from Jump must take precedence over the static graph.
+            if input_overrides and edge.arg_name in input_overrides:
+                continue
+
+            val = await self._resolve_dependency(
+                edge, node.structural_id, state_backend, graph, instance_map
+            )
+            resolved_values[edge.arg_name] = val
+
+        return resolved_values
+
+    def _resolve_structure(
+        self,
+        obj: Any,
+        consumer_id: str,
+        state_backend: StateBackend,
+        resource_context: Dict[str, Any],
+        graph: Graph,
+    ) -> Any:
+        if isinstance(obj, Inject):
+            return self._resolve_inject(obj, consumer_id, resource_context)
+        elif isinstance(obj, list):
+            return [
+                self._resolve_structure(
+                    item, consumer_id, state_backend, resource_context, graph
+                )
+                for item in obj
+            ]
+        elif isinstance(obj, tuple):
+            return tuple(
+                self._resolve_structure(
+                    item, consumer_id, state_backend, resource_context, graph
+                )
+                for item in obj
+            )
+        elif isinstance(obj, dict):
+            return {
+                k: self._resolve_structure(
+                    v, consumer_id, state_backend, resource_context, graph
+                )
+                for k, v in obj.items()
+            }
+        return obj
+
+    async def _resolve_dependency(
+        self,
+        edge: Edge,
+        consumer_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
+        instance_map: Dict[str, Node],
+    ) -> Any:
+        # ** CORE ROUTER LOGIC FIX **
+        if edge.router:
+            # This edge represents a Router. Its source is the SELECTOR.
+            # We must resolve the selector's value first.
+            selector_result = await self._get_node_result(
+                edge.source.structural_id,
+                consumer_id,
+                "router_selector",
+                state_backend,
+                graph,
+            )
+
+            # Use the result to pick the correct route.
+            try:
+                selected_route_lr = edge.router.routes[selector_result]
+            except KeyError:
+                raise ValueError(
+                    f"Router selector for '{consumer_id}' returned '{selector_result}', "
+                    f"but no matching route found in {list(edge.router.routes.keys())}"
+                )
+
+            # Now, resolve the result of the SELECTED route.
+            # Convert instance UUID to canonical node ID using the map.
+            selected_node = instance_map[selected_route_lr._uuid]
+            return await self._get_node_result(
+                selected_node.structural_id,
+                consumer_id,
+                edge.arg_name,
+                state_backend,
+                graph,
+            )
+        else:
+            # Standard dependency
+            return await self._get_node_result(
+                edge.source.structural_id,
+                consumer_id,
+                edge.arg_name,
+                state_backend,
+                graph,
+            )
+
+    async def _get_node_result(
+        self,
+        node_id: str,
+        consumer_id: str,
+        arg_name: str,
+        state_backend: StateBackend,
+        graph: Graph,
+    ) -> Any:
+        """Helper to get a node's result, with skip penetration logic."""
+        if await state_backend.has_result(node_id):
+            return await state_backend.get_result(node_id)
+
+        # Slow Path: Check for skip/penetration
+        skip_reason = await state_backend.get_skip_reason(node_id)
+        if skip_reason:
+            upstream_edges = [
+                e for e in graph.edges if e.target.structural_id == node_id
+            ]
+            data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
+            if data_inputs:
+                # Recursively try to penetrate the skipped node
+                return await self._get_node_result(
+                    data_inputs[0].source.structural_id,
+                    consumer_id,
+                    arg_name,
+                    state_backend,
+                    graph,
+                )
+
+        skip_info = f" (skipped: {skip_reason})" if skip_reason else ""
+        raise DependencyMissingError(consumer_id, arg_name, f"{node_id}{skip_info}")
+
+    def _resolve_inject(
+        self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]
+    ) -> Any:
+        if inject.resource_name in resource_context:
+            return resource_context[inject.resource_name]
+        raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
+
+
+class ConstraintResolver:
+    """
+    Responsible for resolving dynamic resource constraints for a node.
+    """
+
+    async def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        constraint_manager: Any,
+        instance_map: Dict[str, Node],
+    ) -> Dict[str, Any]:
+        resolved = {}
+
+        # 1. Resolve Node-level constraints
+        if node.constraints and not node.constraints.is_empty():
+            for res, amount in node.constraints.requirements.items():
+                if isinstance(amount, (LazyResult, MappedLazyResult)):
+                    # Get the canonical node for the dynamic constraint value
+                    constraint_node = instance_map.get(amount._uuid)
+                    if not constraint_node:
+                        raise DependencyMissingError(
+                            node.structural_id, f"constraint:{res}", amount._uuid
+                        )
+
+                    if await state_backend.has_result(constraint_node.structural_id):
+                        resolved[res] = await state_backend.get_result(
+                            constraint_node.structural_id
+                        )
+                    else:
+                        raise DependencyMissingError(
+                            node.structural_id,
+                            f"constraint:{res}",
+                            constraint_node.structural_id,
+                        )
+                else:
+                    resolved[res] = amount
+
+        # 2. Resolve Global constraints
+        if constraint_manager:
+            extra = constraint_manager.get_extra_requirements(node)
+            resolved.update(extra)
+
+        return resolved
 ~~~~~
 
 ### 下一步建议
-- **性能回归检查**: 虽然此修复引入的 `if` 检查开销极低，但在超大规模 TCO 循环（百万级迭代）中，建议观察一下 CPU 使用率的变化。
-- **文档更新**: 可以在开发者文档中明确说明 Jump 数据的覆盖优先级，帮助用户更好地理解 Cascade 的动态调度行为。
+After applying this refactoring, it is crucial to run the entire test suite, paying close attention to `tests/engine/e2e/test_tco_param_override.py`, to ensure that our changes have not introduced any regressions and that both code paths still function as expected.

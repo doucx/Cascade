@@ -33,32 +33,9 @@ class ArgumentResolver:
                 bindings = bindings.copy()
                 bindings.update(input_overrides)
 
-            # Identify data dependencies (edges)
-            incoming_edges = [
-                e
-                for e in graph.edges
-                if e.target.structural_id == node.structural_id
-                and e.edge_type == EdgeType.DATA
-            ]
-
-            if not incoming_edges:
-                # ABSOLUTE FASTEST PATH: Literals/Overrides only, no edges.
-                f_args = []
-                f_kwargs = {}
-                for k, v in bindings.items():
-                    if k.isdigit():
-                        idx = int(k)
-                        while len(f_args) <= idx:
-                            f_args.append(None)
-                        f_args[idx] = v
-                    else:
-                        f_kwargs[k] = v
-                return f_args, f_kwargs
-
-            # FAST PATH WITH EDGES: Simple node, but has upstream data.
-            # We merge literals and edges without reflection.
-            f_args = []
             # 1. Fill from bindings
+            f_args: List[Any] = []
+            f_kwargs: Dict[str, Any] = {}
             for k, v in bindings.items():
                 if k.isdigit():
                     idx = int(k)
@@ -66,35 +43,26 @@ class ArgumentResolver:
                         f_args.append(None)
                     f_args[idx] = v
                 else:
-                    # Note: We use a temp dict for kwargs to avoid modifying bindings if cached
-                    # But bindings is already a copy from node if input_overrides was present,
-                    # or node.input_bindings directly. To be safe, we create a new dict.
-                    pass
+                    f_kwargs[k] = v
 
-            f_kwargs = {k: v for k, v in bindings.items() if not k.isdigit()}
-
-            # 2. Fill from edges
-            for edge in incoming_edges:
-                # [CRITICAL FIX] Fast Path Priority Check:
-                # See Complex Path below for reasoning. Overrides from Jump must take precedence.
-                if input_overrides and edge.arg_name in input_overrides:
-                    continue
-
-                val = await self._resolve_dependency(
-                    edge, node.structural_id, state_backend, graph, instance_map
-                )
-                if edge.arg_name.isdigit():
-                    idx = int(edge.arg_name)
+            # 2. Fill from edges using the unified helper
+            resolved_edge_values = await self._resolve_data_edges(
+                node, graph, state_backend, instance_map, input_overrides
+            )
+            for k, v in resolved_edge_values.items():
+                if k.isdigit():
+                    idx = int(k)
                     while len(f_args) <= idx:
                         f_args.append(None)
-                    f_args[idx] = val
+                    f_args[idx] = v
                 else:
-                    f_kwargs[edge.arg_name] = val
+                    f_kwargs[k] = v
 
             return f_args, f_kwargs
 
-        args = []
-        kwargs = {}
+        # --- COMPLEX PATH ---
+        args: List[Any] = []
+        kwargs: Dict[str, Any] = {}
 
         # 1. Reconstruct initial args/kwargs from Bindings (Literals)
         bindings = node.input_bindings
@@ -117,35 +85,18 @@ class ArgumentResolver:
         sorted_indices = sorted(positional_args_dict.keys())
         args = [positional_args_dict[i] for i in sorted_indices]
 
-        # 2. Overlay Dependencies from Edges
-        # [OPTIMIZATION] Filter edges once using list comprehension
-        incoming_edges = [
-            e
-            for e in graph.edges
-            if e.target.structural_id == node.structural_id
-            and e.edge_type == EdgeType.DATA
-        ]
-
-        if incoming_edges:
-            for edge in incoming_edges:
-                # [CRITICAL FIX] Priority Check:
-                # If this argument is already provided by an override (e.g., from a TCO Jump),
-                # do NOT overwrite it with the upstream dependency. The override represents
-                # the latest state of the loop and must take precedence over the static graph structure.
-                if input_overrides and edge.arg_name in input_overrides:
-                    continue
-
-                val = await self._resolve_dependency(
-                    edge, node.structural_id, state_backend, graph, instance_map
-                )
-
-                if edge.arg_name.isdigit():
-                    idx = int(edge.arg_name)
-                    while len(args) <= idx:
-                        args.append(None)
-                    args[idx] = val
-                else:
-                    kwargs[edge.arg_name] = val
+        # 2. Overlay Dependencies from Edges using the unified helper
+        resolved_edge_values = await self._resolve_data_edges(
+            node, graph, state_backend, instance_map, input_overrides
+        )
+        for k, v in resolved_edge_values.items():
+            if k.isdigit():
+                idx = int(k)
+                while len(args) <= idx:
+                    args.append(None)
+                args[idx] = v
+            else:
+                kwargs[k] = v
 
         # 3. Handle Resource Injection in Defaults
         if node.signature:
@@ -172,6 +123,42 @@ class ArgumentResolver:
             kwargs["params_context"] = user_params or {}
 
         return args, kwargs
+
+    async def _resolve_data_edges(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] | None,
+    ) -> Dict[str, Any]:
+        """
+        Shared helper to resolve all incoming DATA edges for a node,
+        respecting the priority of input_overrides from TCO Jumps.
+        """
+        resolved_values = {}
+        incoming_edges = [
+            e
+            for e in graph.edges
+            if e.target.structural_id == node.structural_id
+            and e.edge_type == EdgeType.DATA
+        ]
+
+        if not incoming_edges:
+            return {}
+
+        for edge in incoming_edges:
+            # [CRITICAL] Unified Priority Check:
+            # Overrides from Jump must take precedence over the static graph.
+            if input_overrides and edge.arg_name in input_overrides:
+                continue
+
+            val = await self._resolve_dependency(
+                edge, node.structural_id, state_backend, graph, instance_map
+            )
+            resolved_values[edge.arg_name] = val
+
+        return resolved_values
 
     def _resolve_structure(
         self,

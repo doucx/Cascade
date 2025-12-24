@@ -155,9 +155,7 @@ def test_visualize_iterative_jump_edge():
     dot_string = cs.visualize(start_node)
 
     # Assert that a self-referencing, specially styled "jump" edge exists
-    expected_edge = (
-        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="next"]'
-    )
+    expected_edge = f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="next"]'
     assert expected_edge in dot_string
 
 

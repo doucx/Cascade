@@ -1,53 +1,45 @@
-好的，我们正式进入 RED 阶段。
+你说得完全正确。
 
-我将生成一个计划，该计划的唯一目的是向现有的测试文件 `tests/engine/runtime/test_explicit_control_flow.py` 中添加一个新的、注定会失败的测试用例。这个测试用例将精确地模拟我们刚刚讨论的 “下游节点返回 Jump 信号” 的场景，从而暴露当前实现的架构缺陷。
+我为之前的错误操作道歉。我错误地编写了一个“断言失败”的测试，它在代码有缺陷时通过了，这违背了 TDD 的核心原则。一个真正的 RED 测试应该是在代码有缺陷时**失败**，而不是在有缺陷时**通过**。我制造了一个“假阴性”的绿色状态，这掩盖了问题，而不是暴露它。
 
-## [WIP] test: 添加下游节点返回 Jump 信号的失败测试
+感谢你的纠正。我现在将修正这个错误。我将重写这个测试，使其断言**正确的最终行为**。这样，在当前有缺陷的代码下，它会因为未捕获的 `RuntimeError` 而失败，从而将我们的测试套件置于一个真正的、字面意义上的 **RED** 状态。
+
+## [WIP] fix(test): 修正下游跳转测试以断言成功，进入 RED 状态
+
+### 错误分析
+上一个计划中创建的测试 `test_explicit_jump_from_downstream_task_fails_as_expected` 是一个 TDD 反模式。它通过 `pytest.raises` 来断言一个已知的 `RuntimeError`，导致测试在代码存在缺陷的情况下反而显示为 `PASSED`。一个正确的 TDD 测试应该断言期望的**成功**结果，并在代码有缺陷时因为异常或断言失败而明确地 `FAILED`。
 
 ### 用户需求
-为了驱动下一轮重构，需要创建一个新的测试用-例，该用例会因为 `GraphExecutionStrategy` 无法处理来自非根节点的 `Jump` 信号而失败，并产生一个可预期的 `RuntimeError`。
+修改 `test_explicit_jump_from_downstream_task_fails_as_expected` 测试，移除 `pytest.raises`，并改为断言工作流的最终正确输出结果。这将使测试套件进入一个真正的 RED 状态，为后续的修复工作提供一个明确的目标。
 
 ### 评论
-这是一个完美的“红灯”测试。它精确地靶向了我们识别出的架构弱点——上下文丢失。通过创建一个能够稳定复现这个 `RuntimeError` 的测试，我们为接下来的 GREEN 阶段（即实施 `GraphExecutionResult` 重构）设置了一个清晰、无歧义的成功标准。
+这是一个关键的流程修正。通过将测试的目的从“证明存在一个 bug”转变为“定义正确的行为”，我们回到了 TDD 的正轨。现在，这个测试的失败将直接、无歧义地告诉我们 `GraphExecutionStrategy` 的上下文丢失问题尚未解决。
 
 ### 目标
-1.  在 `tests/engine/runtime/test_explicit_control_flow.py` 中添加一个名为 `test_explicit_jump_from_downstream_task` 的新测试。
-2.  该测试将构建一个两层的工作流：一个 `main_task` 调用一个 `decider_task`。
-3.  `Jump` 信号由下游的 `decider_task` 返回。
-4.  `cs.bind` 调用将绑定在 `decider_task` 上。
-5.  断言该工作流会因为引擎无法在 `decider_task` 节点上找到跳转边而失败。
+1.  重命名测试函数为 `test_explicit_jump_from_downstream_task`。
+2.  移除 `with pytest.raises(...)` 上下文管理器。
+3.  捕获 `engine.run` 的返回值。
+4.  在测试末尾添加 `assert final_result == 0`，断言循环的正确最终结果。
 
 ### 基本原理
-当前的 `GraphExecutionStrategy` 在收到 `Jump` 信号时，错误地假设信号来源于当前执行步骤的根节点 (`current_target`)。本测试通过构建一个 `main_task -> decider_task` 的图，并让 `decider_task` 返回 `Jump`，来打破这一假设。
-
-由于 `bind` 是正确地绑定在 `decider_task` 上的，图本身是正确的。但引擎的运行时逻辑会错误地在 `main_task` 上寻找跳转边，导致查找失败，从而触发我们预期的 `RuntimeError`。这个失败将驱动我们重构 `_execute_graph` 的返回契约。
+通过断言最终状态（`final_result == 0`），我们为引擎的行为定义了一个清晰的契约：无论 `Jump` 信号来自何处，引擎都必须正确地路由控制流并完成循环。在当前的代码实现下，这个测试会因为未处理的 `RuntimeError` 而中断并失败，这正是 TDD 流程中一个有效的 RED 信号。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/engine #concept/state #concept/navigation #scope/core #ai/instruct #task/domain/engine #task/object/control-flow #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/tdd-process #task/action/correction #task-state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 添加暴露架构缺陷的测试用例
+#### Acts 1: 将测试修正为断言成功
 
-我们将通过 `patch_file` 在 `test_explicit_control_flow.py` 的末尾追加一个新的测试函数。
+我们将使用 `patch_file` 替换整个函数，将其从一个“期望失败”的测试改为一个“期望成功”的测试。
 
 ~~~~~act
 patch_file
 tests/engine/runtime/test_explicit_control_flow.py
 ~~~~~
 ~~~~~python
-    # The loop should terminate when n is 0, and the data from the final
-    # jump signal (n=0) should be the return value.
-    assert final_result == 0
-~~~~~
-~~~~~python
-    # The loop should terminate when n is 0, and the data from the final
-    # jump signal (n=0) should be the return value.
-    assert final_result == 0
-
-
 @pytest.mark.asyncio
 async def test_explicit_jump_from_downstream_task_fails_as_expected():
     """
@@ -97,8 +89,55 @@ async def test_explicit_jump_from_downstream_task_fails_as_expected():
     ):
         await engine.run(main_task(3))
 ~~~~~
+~~~~~python
+@pytest.mark.asyncio
+async def test_explicit_jump_from_downstream_task():
+    """
+    Tests that the engine can correctly handle a Jump signal that originates
+    from a downstream task, not the root of the execution graph for that step.
+    """
+
+    @cs.task
+    def decider(n: int):
+        if n <= 0:
+            return cs.Jump(target_key="exit", data=n)
+        else:
+            return cs.Jump(target_key="continue", data=n - 1)
+
+    @cs.task
+    def main_task(n: int):
+        # This task delegates the jump decision to a downstream task
+        return decider(n)
+
+    # The jump selector's target must be the task that receives the new data.
+    # Here, 'decider' is the task that gets re-invoked with new data.
+    loop_node = decider(cs.Param("next_n"))
+
+    jump_selector = cs.select_jump(
+        {
+            "continue": loop_node,
+            "exit": None,
+        }
+    )
+
+    # CRITICAL: The binding is correctly placed on the task that returns the
+    # Jump signal (`decider`), which is instantiated here as `loop_node`.
+    cs.bind(loop_node, jump_selector)
+
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),
+    )
+
+    # We run the main_task. The engine must be smart enough to identify that
+    # the Jump signal came from `decider` and find the binding there.
+    final_result = await engine.run(main_task(3))
+
+    assert final_result == 0
+~~~~~
 
 ### 下一步建议
-我们已经成功地创建了一个测试用例来复现架构缺陷，代码库现在处于明确的 RED 状态。
+我们已经将测试修正为正确的 TDD 形式。现在，当您运行测试时，它应该会因为未捕获的 `RuntimeError` 而失败，从而使测试套件进入一个真正的 RED 状态。
 
-下一步，我们将进入 GREEN 阶段。我将生成一个新计划，通过实施 `GraphExecutionResult` 重构方案来修复这个问题，其核心是修改 `_execute_graph` 的返回契约，使其能够将 `source_node_id` 传递回主执行循环。这将使新旧两个测试都通过。
+下一步，我们将进入 GREEN 阶段。我将生成一个新计划，通过实施 `GraphExecutionResult` 重构方案来修复这个问题，让两个测试都通过。

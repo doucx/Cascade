@@ -56,12 +56,10 @@ async def test_explicit_jump_loop():
 
 
 @pytest.mark.asyncio
-async def test_explicit_jump_from_downstream_task_fails_as_expected():
+async def test_explicit_jump_from_downstream_task():
     """
-    This test is designed to FAIL with the current architecture to prove a flaw.
-    The Jump signal is returned by a downstream task (`decider`), not the
-    graph root (`main_task`). The engine is expected to lose context and fail
-    to find the ITERATIVE_JUMP edge, which is correctly bound to `decider`.
+    Tests that the engine can correctly handle a Jump signal that originates
+    from a downstream task, not the root of the execution graph for that step.
     """
 
     @cs.task
@@ -76,7 +74,8 @@ async def test_explicit_jump_from_downstream_task_fails_as_expected():
         # This task delegates the jump decision to a downstream task
         return decider(n)
 
-    # The jump selector's target must be the task that receives the new data
+    # The jump selector's target must be the task that receives the new data.
+    # Here, 'decider' is the task that gets re-invoked with new data.
     loop_node = decider(cs.Param("next_n"))
 
     jump_selector = cs.select_jump(
@@ -86,7 +85,8 @@ async def test_explicit_jump_from_downstream_task_fails_as_expected():
         }
     )
 
-    # CRITICAL: The binding is correctly placed on the task that returns the Jump signal.
+    # CRITICAL: The binding is correctly placed on the task that returns the
+    # Jump signal (`decider`), which is instantiated here as `loop_node`.
     cs.bind(loop_node, jump_selector)
 
     engine = Engine(
@@ -95,11 +95,8 @@ async def test_explicit_jump_from_downstream_task_fails_as_expected():
         bus=MessageBus(),
     )
 
-    # We run the main_task, which is the root of the graph for this step.
-    # The engine is expected to fail because it will look for a jump edge on
-    # `main_task`'s node, not on `decider`'s node.
-    with pytest.raises(
-        RuntimeError,
-        match="Task returned a Jump signal but has no bound 'select_jump'",
-    ):
-        await engine.run(main_task(3))
+    # We run the main_task. The engine must be smart enough to identify that
+    # the Jump signal came from `decider` and find the binding there.
+    final_result = await engine.run(main_task(3))
+
+    assert final_result == 0

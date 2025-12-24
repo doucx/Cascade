@@ -1,56 +1,143 @@
-好的，所有的测试都已经通过。这意味着我们不仅完成了 `visualize` 的功能增强，还通过对 `GraphBuilder` 的重构，让 Cascade 的静态图结构变得更加准确和健壮。
+这是一个非常好的主意。通过一个具体的、可运行的示例，我们可以直观地展示显式控制流在静态图中是如何呈现的，以及它如何帮助开发者理解复杂的循环逻辑。
 
-现在，我将生成一个 `[COMMIT]` 计划，将这些改进作为一个完整的逻辑单元提交。
+我将生成一个计划，在 `examples/` 目录下创建一个名为 `visualize_explicit_jumps.py` 的示例脚本。
 
-## [COMMIT] feat(sdk): 通用化显式跳转的可视化渲染
+## [COMMIT] docs: 添加演示显式跳转可视化的示例脚本
 
 ### 用户需求
-用户需要 `cs.visualize` 工具能够准确地展示包含显式跳转 (`cs.Jump`, `cs.bind`) 的复杂工作流拓扑，包括自引用循环和多节点循环。
+创建一个可运行的演示脚本，展示 `cs.visualize` 如何处理包含显式跳转（自循环和多节点循环）的复杂 Cascade 工作流。
 
 ### 评论
-这是一个重要的里程碑。通过这一改动，我们将 `ITERATIVE_JUMP` 从一个仅用于运行时的“黑盒”占位符，提升为了静态图中完全透明、拓扑正确的“一等公民”。这不仅极大地提升了开发者在构建复杂状态机时的观测效率，也为未来更高层次的图分析和优化奠定了基础。
+这个示例不仅是一个功能演示，更是一份鲜活的“活文档”。它向用户展示了如何使用 `cs.bind`, `cs.select_jump` 和 `cs.Jump` 构建复杂的控制流，并证明了 Cascade 能够将这些逻辑清晰地转化为可视化的拓扑图。对于推广新架构的编程模型具有重要价值。
 
 ### 目标
-创建一个 Git 提交，包含对 `GraphBuilder` 拓扑构建逻辑的通用化重构、`visualize` 渲染器的样式增强，以及完整的 TDD 测试套件。
+1.  在 `examples/` 目录下创建一个新的 Python 脚本。
+2.  在脚本中构建一个模拟“持续集成与修复”过程的复杂工作流：
+    *   `checkout` -> `lint` -> `test`。
+    *   如果 `test` 失败，跳转到 `fix` 节点。
+    *   `fix` 节点跳回 `lint` 节点重新开始流程。
+    *   如果 `test` 成功，流程结束。
+3.  脚本运行后将输出完整的 DOT 语言字符串，并打印如何将其渲染为图片的说明。
 
 ### 基本原理
-我们遵循了“单一真相来源”的原则，将跳转逻辑的解析工作从渲染器移回了 `GraphBuilder`。这使得图本身就能准确反映潜在的控制流转移。渲染器随后根据边类型应用一致的视觉样式。这种架构上的清晰性也反映在我们的测试套件中，它现在涵盖了从简单自循环到复杂循环路径的多种场景。
+我们选择了一个具有代表性的“CI/CD”场景，因为它天然包含顺序执行、条件判断和循环（回退修复）。通过 `cs.bind` 在不同深度的节点之间建立连接，我们可以充分展示 `GraphBuilder` 准确捕捉跨节点跳转的能力，以及 `visualize` 渲染器如何用醒目的样式标注这些非线性的控制流路径。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/graph #comp/sdk #comp/tests #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/explicit-jumps #task/action/implementation #task/state/end
+#intent/document #flow/ready #priority/medium #comp/docs #concept/ui #scope/dx #ai/instruct #task/domain/documentation #task/object/visualization-demo #task/action/implementation #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交可视化增强功能
+#### Acts 1: 创建可视化演示脚本
 
-将涉及图构建、可视化渲染以及测试用例的修改添加到暂存区并提交。
-
-~~~~~act
-git_add
-packages/cascade-graph/src/cascade/graph/build.py
-packages/cascade-sdk/src/cascade/tools/visualize.py
-tests/sdk/tools/test_visualize.py
-~~~~~
+我们将使用 `write_file` 创建这个新的示例文件。
 
 ~~~~~act
-git_commit
+write_file
+examples/visualize_explicit_jumps.py
 ~~~~~
-~~~~~text
-feat(sdk): Generalize visualization of explicit iterative jumps
+~~~~~python
+"""
+Cascade 显式跳转可视化演示 (v1.4+)
 
-Enhanced 'cs.visualize' and 'GraphBuilder' to correctly represent and render explicit control flow transitions created via 'cs.bind' and 'cs.Jump'.
+本示例演示了如何构建一个包含多节点循环的复杂工作流，并使用 cs.visualize
+将其渲染为拓扑图。
 
-Key Changes:
-1. **GraphBuilder**: Refactored ITERATIVE_JUMP edge creation to move away from placeholders. It now iterates through all routes in a 'JumpSelector' and creates distinct, topologically correct edges for each jump target. The jump key (e.g., "next", "restart") is now stored as the edge's 'arg_name'.
-2. **Visualize**: Updated to use the correct target and label (from 'arg_name') provided by the edge object. Iterative jumps are now rendered as bold blue edges, regardless of whether they are self-referencing or point to upstream nodes.
-3. **Tests**: Added comprehensive TDD cases in 'test_visualize.py' covering self-loops and multi-node cycles (e.g., A -> B -> C -> A), verifying both the structure and the dynamic labels.
+场景：模拟一个 CI/CD 流程
+1. 代码签出 (Checkout)
+2. 静态检查 (Lint) -> 失败则跳到修复 (Fix)
+3. 单元测试 (Test) -> 失败则跳到修复 (Fix)
+4. 修复 (Fix) -> 修复后跳回 Lint 重新开始
+"""
 
-This ensures that the static graph representation of a workflow perfectly matches its potential runtime execution paths, providing superior observability for complex state machines.
+import cascade as cs
+
+# --- 1. 定义原子任务 ---
+
+@cs.task
+def checkout():
+    print("--- 正在签出代码...")
+    return "source_code_v1"
+
+@cs.task
+def lint(code):
+    print(f"--- 正在对 {code} 进行 Lint 检查...")
+    # 模拟 Lint 失败的情况
+    return cs.Jump("needs_fix", data="lint_errors")
+
+@cs.task
+def unit_test(code):
+    print(f"--- 正在对 {code} 运行测试...")
+    # 模拟测试失败的情况
+    return cs.Jump("needs_fix", data="test_failures")
+
+@cs.task
+def fix_issue(reason):
+    print(f"--- 正在修复问题: {reason}...")
+    return "fixed_source_code"
+
+# --- 2. 构建包含循环的图 ---
+
+def create_cicd_workflow():
+    # A. 定义基本路径
+    src = checkout()
+    linter_run = lint(src)
+    tester_run = unit_test(linter_run)
+    fixer_run = fix_issue("some_error") # 这里的输入稍后会被 Jump 数据覆盖
+
+    # B. 定义跳转选择器 (JumpSelectors)
+    
+    # Lint 失败跳转到 Fix，成功则正常流向 Test
+    lint_selector = cs.select_jump({
+        "needs_fix": fixer_run,
+        None: tester_run
+    })
+    
+    # Test 失败跳转到 Fix，成功则结束
+    test_selector = cs.select_jump({
+        "needs_fix": fixer_run,
+        None: None 
+    })
+    
+    # Fix 之后跳回 Lint 重新开始
+    fix_selector = cs.select_jump({
+        "retry": linter_run
+    })
+
+    # C. 进行显式绑定 (Static Binding)
+    cs.bind(linter_run, lint_selector)
+    cs.bind(tester_run, test_selector)
+    cs.bind(fixer_run, fix_selector)
+
+    return tester_run
+
+# --- 3. 生成可视化结果 ---
+
+if __name__ == "__main__":
+    workflow = create_cicd_workflow()
+    
+    dot_output = cs.visualize(workflow)
+    
+    print("\n" + "="*40)
+    print("      CASCADE 可视化演示 (DOT 输出)")
+    print("="*40 + "\n")
+    print(dot_output)
+    print("\n" + "="*40)
+    print("提示：你可以将上面的输出复制到 https://dreampuf.github.io/GraphvizOnline/")
+    print("或者在本地运行: python examples/visualize_explicit_jumps.py | dot -Tpng -o workflow.png")
+    print("="*40)
 ~~~~~
 
 ### 下一步建议
-我们已经完成了可视化的升级。根据路线图，现在的 Cascade 已经具备了显式状态转移的能力，并且它是可观测的。
 
-为了进一步释放这个新架构的潜力，我建议下一步我们考虑 **`cs.select_jump` 的动态化增强**。目前它的路由表是静态的，如果我们允许根据前序任务的结果来动态决定跳转目标，Cascade 将能实现更复杂的动态分支策略。或者，我们可以开始实现 **阶段四：统一的双层身份体系**，为后续的执行计划缓存做准备。你倾向于哪个方向？
+示例脚本已经准备好。你可以直接运行它：
+```bash
+python examples/visualize_explicit_jumps.py
+```
+
+它会输出一个包含加粗蓝色“跳转”边的 DOT 图。
+
+如果你对可视化效果感到满意，我建议接下来的方向是：
+- **探索 `cs.Jump` 的执行路径**：我们可以开始编写针对这种多节点循环的执行测试，确保 `Engine` 能够正确地在这些复杂的静态跳转边上“冲浪”。
+- **阶段四：统一身份体系**：既然静态图已经如此准确，我们可以开始引入 `Blueprint Hash`，实现真正的高性能执行计划缓存。

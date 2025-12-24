@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
-from cascade.graph.model import Node, Graph, Edge, EdgeType, Edge
+from cascade.graph.model import Node, Graph, EdgeType, Edge
 from cascade.spec.common import Param
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.protocols import StateBackend

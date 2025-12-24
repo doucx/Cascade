@@ -1,3 +1,4 @@
+import asyncio
 import pickle
 from typing import Any, Optional
 
@@ -26,31 +27,36 @@ class RedisStateBackend:
         self._results_key = f"cascade:run:{run_id}:results"
         self._skipped_key = f"cascade:run:{run_id}:skipped"
 
-    def put_result(self, node_id: str, result: Any) -> None:
+    async def put_result(self, node_id: str, result: Any) -> None:
         data = pickle.dumps(result)
-        # Use a pipeline to set data and ensure expiry is set
+        await asyncio.to_thread(self._sync_put, node_id, data)
+
+    def _sync_put(self, node_id: str, data: bytes):
         pipe = self._client.pipeline()
         pipe.hset(self._results_key, node_id, data)
         pipe.expire(self._results_key, self._ttl)
         pipe.execute()
 
-    def get_result(self, node_id: str) -> Optional[Any]:
-        data = self._client.hget(self._results_key, node_id)
+    async def get_result(self, node_id: str) -> Optional[Any]:
+        data = await asyncio.to_thread(self._client.hget, self._results_key, node_id)
         if data is None:
             return None
         return pickle.loads(data)
 
-    def has_result(self, node_id: str) -> bool:
-        return self._client.hexists(self._results_key, node_id)
+    async def has_result(self, node_id: str) -> bool:
+        return await asyncio.to_thread(self._client.hexists, self._results_key, node_id)
 
-    def mark_skipped(self, node_id: str, reason: str) -> None:
+    async def mark_skipped(self, node_id: str, reason: str) -> None:
+        await asyncio.to_thread(self._sync_mark_skipped, node_id, reason)
+
+    def _sync_mark_skipped(self, node_id: str, reason: str):
         pipe = self._client.pipeline()
         pipe.hset(self._skipped_key, node_id, reason)
         pipe.expire(self._skipped_key, self._ttl)
         pipe.execute()
 
-    def get_skip_reason(self, node_id: str) -> Optional[str]:
-        data = self._client.hget(self._skipped_key, node_id)
+    async def get_skip_reason(self, node_id: str) -> Optional[str]:
+        data = await asyncio.to_thread(self._client.hget, self._skipped_key, node_id)
         if data:
             return data.decode("utf-8")
         return None

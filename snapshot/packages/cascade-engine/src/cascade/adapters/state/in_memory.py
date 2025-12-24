@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Dict, Optional
 
 
@@ -12,24 +13,24 @@ class InMemoryStateBackend:
         self._results: Dict[str, Any] = {}
         self._skipped: Dict[str, str] = {}
 
-    def put_result(self, node_id: str, result: Any) -> None:
-        self._results[node_id] = result
+    async def put_result(self, node_id: str, result: Any) -> None:
+        await asyncio.to_thread(self._results.__setitem__, node_id, result)
 
-    def get_result(self, node_id: str) -> Optional[Any]:
-        return self._results.get(node_id)
+    async def get_result(self, node_id: str) -> Optional[Any]:
+        return await asyncio.to_thread(self._results.get, node_id)
 
-    def has_result(self, node_id: str) -> bool:
-        return node_id in self._results
+    async def has_result(self, node_id: str) -> bool:
+        return await asyncio.to_thread(self._results.__contains__, node_id)
 
-    def mark_skipped(self, node_id: str, reason: str) -> None:
-        self._skipped[node_id] = reason
+    async def mark_skipped(self, node_id: str, reason: str) -> None:
+        await asyncio.to_thread(self._skipped.__setitem__, node_id, reason)
 
-    def get_skip_reason(self, node_id: str) -> Optional[str]:
-        return self._skipped.get(node_id)
+    async def get_skip_reason(self, node_id: str) -> Optional[str]:
+        return await asyncio.to_thread(self._skipped.get, node_id)
 
-    def clear(self) -> None:
+    async def clear(self) -> None:
         """
         Clears all results and skip reasons. Used between TCO iterations.
         """
-        self._results.clear()
-        self._skipped.clear()
+        await asyncio.to_thread(self._results.clear)
+        await asyncio.to_thread(self._skipped.clear)

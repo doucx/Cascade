@@ -1,6 +1,6 @@
 import pickle
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, AsyncMock
 
 # We import the module to patch its members
 from cascade.adapters.state import redis as redis_state_module
@@ -27,7 +27,8 @@ def test_redis_state_backend_dependency_check(monkeypatch):
         RedisStateBackend(run_id="test", client=MagicMock())
 
 
-def test_put_result(mock_redis_client):
+@pytest.mark.asyncio
+async def test_put_result(mock_redis_client):
     """
     Verifies that put_result serializes data and calls Redis HSET and EXPIRE.
     """
@@ -35,7 +36,7 @@ def test_put_result(mock_redis_client):
     backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
 
     test_result = {"status": "ok", "data": [1, 2]}
-    backend.put_result("node_a", test_result)
+    await backend.put_result("node_a", test_result)
 
     expected_key = "cascade:run:run123:results"
     expected_data = pickle.dumps(test_result)
@@ -46,7 +47,8 @@ def test_put_result(mock_redis_client):
     pipeline.execute.assert_called_once()
 
 
-def test_get_result(mock_redis_client):
+@pytest.mark.asyncio
+async def test_get_result(mock_redis_client):
     """
     Verifies that get_result retrieves and deserializes data correctly.
     """
@@ -58,11 +60,11 @@ def test_get_result(mock_redis_client):
     pickled_result = pickle.dumps(test_result)
     client.hget.return_value = pickled_result
 
-    result = backend.get_result("node_b")
+    result = await backend.get_result("node_b")
 
     client.hget.assert_called_once_with("cascade:run:run123:results", "node_b")
     assert result == test_result
 
     # Case 2: Result not found
     client.hget.return_value = None
-    assert backend.get_result("node_c") is None
+    assert await backend.get_result("node_c") is None

@@ -1,93 +1,69 @@
-好的，我们已经完成了核心架构的演进，现在是时候将这些强大的新能力暴露给开发者了。
+好的，我们现在处于 "RED" 状态，目标是转向 "GREEN"。
 
-你的思路非常正确，让新功能变得**可观测**是第一要务。`cs.visualize` 是我们向开发者展示静态图结构的最直观窗口，增强它以支持新的控制流原语是完美的起点。
+我将生成一个计划来修改 `visualize.py` 的实现，使其能够正确识别和渲染新的 `ITERATIVE_JUMP` 边，从而让我们刚刚创建的 TDD 测试通过。
 
-遵从我们的 TDD 协议，我将首先生成一个计划，只添加一个预期的、将会失败的测试用例。这将为我们建立一个明确的“RED”状态。
-
-## [WIP] test: 为 visualize 添加显式跳转边的 TDD 测试用例
+## [WIP] feat: 增强 visualize 以渲染显式跳转边
 
 ### 用户需求
-更新 `cs.visualize` 功能，使其能够识别并以独特的样式渲染由 `cs.bind` 创建的新的显式跳转 (`ITERATIVE_JUMP`) 边。
+修改 `cascade.tools.visualize.visualize` 函数，使其能够为 `EdgeType.ITERATIVE_JUMP` 类型的边生成一个独特的、自引用的可视化表示，从而让 TDD 测试通过。
 
 ### 评论
-这是提升新架构开发者体验 (DX) 的关键一步。如果没有可视化支持，新的静态控制流图对于用户来说只是一个抽象概念。通过在 `visualize` 中清晰地展示出循环和状态转移，我们能让这个强大的新功能变得直观、易于理解和调试。
+这是 TDD 流程中的 "GREEN" 阶段。通过实现这个可视化功能，我们不仅修复了测试，更重要的是，我们为用户提供了一个强大的工具来理解和调试基于新架构的、包含循环的工作流。这是一个高价值的开发者体验 (DX) 改进。
 
 ### 目标
-1.  在 `tests/sdk/tools/test_visualize.py` 中创建一个新的测试用例。
-2.  该测试将构建一个使用 `cs.bind`, `cs.select_jump` 和 `cs.Jump` 的最小化循环工作流。
-3.  断言 `cs.visualize` 的输出 DOT 字符串中包含代表 `ITERATIVE_JUMP` 的、特定样式的边。
-4.  此测试在当前代码下预期会失败，从而为我们建立一个清晰的 TDD “RED” 状态。
+1.  定位 `visualize.py` 中处理边渲染的循环。
+2.  添加一个新的条件分支来专门处理 `EdgeType.ITERATIVE_JUMP`。
+3.  在该分支中，生成一个自引用（`source -> source`）的、样式为 `bold`、颜色为 `blue`、标签为 `jump` 的 DOT 语言边。
+4.  确保此修改能让 `test_visualize_iterative_jump_edge` 测试成功通过。
 
 ### 基本原理
-我们将遵循严格的 TDD 流程。此计划只负责创建“靶子”（失败的测试）。测试用例会定义我们期望的最终结果：一个从任务节点指向自身的、加粗的蓝色 "jump" 边。这清晰地定义了下一阶段实现工作的验收标准。一旦此测试按预期失败，我们就可以安全地进入 GREEN 阶段的开发。
+我们将直接在 `visualize.py` 的边处理循环中添加一个 `elif` 子句。由于 `ITERATIVE_JUMP` 边的渲染逻辑（自引用）与标准 `source -> target` 边的逻辑不同，我们将在该子句内部直接构建并添加完整的 DOT 字符串到 `dot_parts` 列表中，然后使用 `continue` 跳过循环末尾的通用边渲染代码。这种方法确保了特殊逻辑的隔离和代码的清晰性。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/sdk #comp/tests #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/explicit-jumps #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/sdk #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/explicit-jumps #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 在 `test_visualize.py` 中添加 TDD 测试用例
+#### Acts 1: 修改 `visualize.py` 以支持 `ITERATIVE_JUMP`
 
-我们将向现有的可视化测试文件中追加一个新的测试函数，专门用于验证 `ITERATIVE_JUMP` 边的渲染。
+我们将 `patch` `visualize.py` 文件，在边的渲染逻辑中插入一个专门处理 `ITERATIVE_JUMP` 的新分支。
 
 ~~~~~act
 patch_file
-tests/sdk/tools/test_visualize.py
+packages/cascade-sdk/src/cascade/tools/visualize.py
 ~~~~~
 ~~~~~python
-    # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{node_constraint.structural_id}" -> "{node_target.structural_id}" [style=dotted, color=purple, label="constraint: cpu"]'
-    assert expected_constraint_edge in dot_string
+        elif edge.edge_type == EdgeType.SEQUENCE:
+            style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+        else:
+            style = f' [label="{edge.arg_name}"]'
+
+        dot_parts.append(
+            f'  "{edge.source.structural_id}" -> "{edge.target.structural_id}"{style};'
+        )
 ~~~~~
 ~~~~~python
-    # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{node_constraint.structural_id}" -> "{node_target.structural_id}" [style=dotted, color=purple, label="constraint: cpu"]'
-    assert expected_constraint_edge in dot_string
+        elif edge.edge_type == EdgeType.SEQUENCE:
+            style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+        elif edge.edge_type == EdgeType.ITERATIVE_JUMP:
+            # Special case for self-referencing jump edges
+            style = ' [style=bold, color=blue, label="jump"]'
+            dot_parts.append(
+                f'  "{edge.source.structural_id}" -> "{edge.source.structural_id}"{style};'
+            )
+            # Continue to the next edge to avoid double-printing
+            continue
+        else:
+            style = f' [label="{edge.arg_name}"]'
 
-
-def test_visualize_iterative_jump_edge():
-    """
-    Tests that visualize() correctly renders an ITERATIVE_JUMP edge created via cs.bind.
-    """
-
-    @cs.task
-    def state_machine(data: int):
-        if data < 3:
-            # Signal a jump to the "next" state
-            return cs.Jump(target_key="next", data=data + 1)
-        # Signal a normal exit
-        return "done"
-
-    # The selector maps jump keys to their target LazyResults
-    selector = cs.select_jump(
-        {
-            "next": state_machine,  # A jump to "next" re-invokes the same task
-            None: None,  # A normal return value exits the loop
-        }
-    )
-
-    # Initial call to the task, starting the state machine
-    start_node = state_machine(0)
-
-    # Statically bind the task's jump signals to the selector
-    cs.bind(start_node, selector)
-
-    # Build the graph to get the stable node ID for assertion
-    from cascade.graph.build import build_graph
-
-    _, instance_map = build_graph(start_node)
-    node_id = instance_map[start_node._uuid].structural_id
-
-    dot_string = cs.visualize(start_node)
-
-    # Assert that a self-referencing, specially styled "jump" edge exists
-    expected_edge = (
-        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="jump"]'
-    )
-    assert expected_edge in dot_string
+        dot_parts.append(
+            f'  "{edge.source.structural_id}" -> "{edge.target.structural_id}"{style};'
+        )
 ~~~~~
 
 ### 下一步建议
-我们已经成功地定义了验收标准。下一步，请指示我生成一个新的计划来修改 `packages/cascade-sdk/src/cascade/tools/visualize.py` 文件，使其能够识别 `EdgeType.ITERATIVE_JUMP` 并按照我们刚刚在测试中定义的方式进行渲染，从而让测试通过（进入 GREEN 状态）。
+我们已经完成了代码的修复，测试现在应该会通过了。这是一个逻辑上完整的工作单元，非常适合进行一次 Git 提交。
+
+我建议我们现在创建一个 `[COMMIT]` 计划，将 `test_visualize.py` 的修改和 `visualize.py` 的修复作为一个原子提交进行暂存和提交。这将正式结束这个微型任务，并为我们留下清晰的变更历史。如果你同意，请告诉我。

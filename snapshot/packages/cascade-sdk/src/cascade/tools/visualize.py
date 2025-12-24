@@ -45,6 +45,14 @@ def visualize(target: Any) -> str:
             )
         elif edge.edge_type == EdgeType.SEQUENCE:
             style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+        elif edge.edge_type == EdgeType.ITERATIVE_JUMP:
+            # Special case for self-referencing jump edges
+            style = ' [style=bold, color=blue, label="jump"]'
+            dot_parts.append(
+                f'  "{edge.source.structural_id}" -> "{edge.source.structural_id}"{style};'
+            )
+            # Continue to the next edge to avoid double-printing
+            continue
         else:
             style = f' [label="{edge.arg_name}"]'
 

@@ -27,33 +27,34 @@ class ArgumentResolver:
     ) -> Tuple[List[Any], Dict[str, Any]]:
         # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
         if not node.has_complex_inputs:
+            # Reconstruct args/kwargs from Bindings (Literals) and Overrides
+            bindings = node.input_bindings
             if input_overrides:
-                # FASTEST PATH: Used by TCO loops
-                # We trust overrides contain the full argument set or correct deltas.
-                final_bindings = node.input_bindings.copy()
-                final_bindings.update(input_overrides)
+                bindings = bindings.copy()
+                bindings.update(input_overrides)
+            
+            # Identify data dependencies (edges)
+            incoming_edges = [
+                e
+                for e in graph.edges
+                if e.target.structural_id == node.structural_id
+                and e.edge_type == EdgeType.DATA
+            ]
 
-                # Convert to args/kwargs
+            if not incoming_edges:
+                # ABSOLUTE FASTEST PATH: Literals/Overrides only, no edges.
+                # Just return them. Note: we don't convert to list here to save time,
+                # as executors can handle positional-args-as-dict if they are careful,
+                # but to maintain protocol, we'll do a quick conversion.
                 f_args = []
                 f_kwargs = {}
-                # Find max positional index
-                max_pos = -1
-                for k in final_bindings:
+                for k, v in bindings.items():
                     if k.isdigit():
                         idx = int(k)
-                        if idx > max_pos:
-                            max_pos = idx
-
-                if max_pos >= 0:
-                    f_args = [None] * (max_pos + 1)
-                    for k, v in final_bindings.items():
-                        if k.isdigit():
-                            f_args[int(k)] = v
-                        else:
-                            f_kwargs[k] = v
-                else:
-                    f_kwargs = final_bindings
-
+                        while len(f_args) <= idx: f_args.append(None)
+                        f_args[idx] = v
+                    else:
+                        f_kwargs[k] = v
                 return f_args, f_kwargs
 
         args = []

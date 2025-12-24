@@ -74,8 +74,24 @@ class NodeProcessor:
             )
 
         # 2. Acquire Resources
-        await self.resource_manager.acquire(requirements)
-        try:
+        if requirements:
+            await self.resource_manager.acquire(requirements)
+            try:
+                return await self._execute_internal(
+                    node,
+                    graph,
+                    state_backend,
+                    active_resources,
+                    run_id,
+                    params,
+                    sub_graph_runner,
+                    instance_map,
+                    input_overrides,
+                )
+            finally:
+                await self.resource_manager.release(requirements)
+        else:
+            # FAST PATH: No resources required
             return await self._execute_internal(
                 node,
                 graph,
@@ -87,8 +103,6 @@ class NodeProcessor:
                 instance_map,
                 input_overrides,
             )
-        finally:
-            await self.resource_manager.release(requirements)
 
     async def _execute_internal(
         self,

@@ -302,23 +302,43 @@ class GraphExecutionStrategy:
                             else None
                         )
                         tasks_to_run.append(
-                            self.node_processor.process(
+                            (
                                 node,
-                                graph,
-                                state_backend,
-                                active_resources,
-                                run_id,
-                                params,
-                                sub_graph_runner,
-                                instance_map,
-                                input_overrides=overrides,
+                                self.node_processor.process(
+                                    node,
+                                    graph,
+                                    state_backend,
+                                    active_resources,
+                                    run_id,
+                                    params,
+                                    sub_graph_runner,
+                                    instance_map,
+                                    input_overrides=overrides,
+                                ),
                             )
                         )
 
-                    pass_results = await asyncio.gather(*tasks_to_run)
-
-                    for node, res in zip(executable_this_pass, pass_results):
+                    if len(tasks_to_run) == 1:
+                        # FAST PATH: Single task in stage, avoid gather
+                        node, coro = tasks_to_run[0]
+                        res = await coro
                         await state_backend.put_result(node.structural_id, res)
+                        if flow_manager:
+                            await flow_manager.register_result(
+                                node.structural_id, res, state_backend
+                            )
+                    else:
+                        # Standard parallel execution
+                        nodes_in_pass = [t[0] for t in tasks_to_run]
+                        coros = [t[1] for t in tasks_to_run]
+                        pass_results = await asyncio.gather(*coros)
+
+                        for node, res in zip(nodes_in_pass, pass_results):
+                            await state_backend.put_result(node.structural_id, res)
+                            if flow_manager:
+                                await flow_manager.register_result(
+                                    node.structural_id, res, state_backend
+                                )
                         if flow_manager:
                             await flow_manager.register_result(
                                 node.structural_id, res, state_backend

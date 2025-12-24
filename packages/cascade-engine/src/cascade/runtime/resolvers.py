@@ -15,7 +15,7 @@ class ArgumentResolver:
     3. Resource injections
     """
 
-    def resolve(
+    async def resolve(
         self,
         node: Node,
         graph: Graph,
@@ -26,35 +26,7 @@ class ArgumentResolver:
         input_overrides: Dict[str, Any] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
         # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
-        # Note: We rely on GraphBuilder to correctly set has_complex_inputs.
-        # We also check that there are no upstream dependencies (edges) to resolve.
-        # (Usually simple TCO nodes have 0 edges because dependencies are passed as literals/overrides)
         if not node.has_complex_inputs:
-            # Quick check for edges without iterating (O(1) if optimized Graph used, else O(E))
-            # But we filtered edges in step 2. Let's do a lightweight check here.
-            # Actually, if we are in TCO Fast Path, input_overrides usually contains all args.
-
-            # Optimization: If we have overrides, we assume they satisfy requirements if node is simple.
-            # If we don't have overrides, we need to check edges.
-            # Let's keep it safe: Fast path only if no edges OR if overrides cover everything?
-            # Simpler: Just rely on bindings + overrides.
-            # If there ARE edges, we must resolve them.
-
-            # Optimization: Check if graph has edges targeting this node.
-            # This linear scan might defeat the purpose if many edges exist in graph.
-            # But in TCO loops, graph is usually small or we just don't have edges for this node.
-
-            # Let's try the optimistic approach:
-            # 1. Reconstruct from bindings
-            # 2. Apply overrides
-            # 3. Return.
-
-            # Limitation: This ignores Edges!
-            # But wait, TCO fast path passes arguments via `input_overrides`.
-            # And `GraphExecutionStrategy` passes `input_overrides` containing ALL args.
-            # So for TCO fast path, we effectively ignore edges anyway?
-            # Yes! input_overrides contains the *new* arguments for the recursion.
-
             if input_overrides:
                 # FASTEST PATH: Used by TCO loops
                 # We trust overrides contain the full argument set or correct deltas.
@@ -62,7 +34,6 @@ class ArgumentResolver:
                 final_bindings.update(input_overrides)
 
                 # Convert to args/kwargs
-                # This duplicates logic below but is much faster (no _resolve_structure)
                 f_args = []
                 f_kwargs = {}
                 # Find max positional index
@@ -120,7 +91,7 @@ class ArgumentResolver:
 
         if incoming_edges:
             for edge in incoming_edges:
-                val = self._resolve_dependency(
+                val = await self._resolve_dependency(
                     edge, node.structural_id, state_backend, graph, instance_map
                 )
 
@@ -191,7 +162,7 @@ class ArgumentResolver:
             }
         return obj
 
-    def _resolve_dependency(
+    async def _resolve_dependency(
         self,
         edge: Edge,
         consumer_id: str,
@@ -203,7 +174,7 @@ class ArgumentResolver:
         if edge.router:
             # This edge represents a Router. Its source is the SELECTOR.
             # We must resolve the selector's value first.
-            selector_result = self._get_node_result(
+            selector_result = await self._get_node_result(
                 edge.source.structural_id,
                 consumer_id,
                 "router_selector",
@@ -223,7 +194,7 @@ class ArgumentResolver:
             # Now, resolve the result of the SELECTED route.
             # Convert instance UUID to canonical node ID using the map.
             selected_node = instance_map[selected_route_lr._uuid]
-            return self._get_node_result(
+            return await self._get_node_result(
                 selected_node.structural_id,
                 consumer_id,
                 edge.arg_name,
@@ -232,7 +203,7 @@ class ArgumentResolver:
             )
         else:
             # Standard dependency
-            return self._get_node_result(
+            return await self._get_node_result(
                 edge.source.structural_id,
                 consumer_id,
                 edge.arg_name,
@@ -240,7 +211,7 @@ class ArgumentResolver:
                 graph,
             )
 
-    def _get_node_result(
+    async def _get_node_result(
         self,
         node_id: str,
         consumer_id: str,
@@ -249,17 +220,18 @@ class ArgumentResolver:
         graph: Graph,
     ) -> Any:
         """Helper to get a node's result, with skip penetration logic."""
-        if state_backend.has_result(node_id):
-            return state_backend.get_result(node_id)
+        if await state_backend.has_result(node_id):
+            return await state_backend.get_result(node_id)
 
-        if state_backend.get_skip_reason(node_id):
+        skip_reason = await state_backend.get_skip_reason(node_id)
+        if skip_reason:
             upstream_edges = [
                 e for e in graph.edges if e.target.structural_id == node_id
             ]
             data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
             if data_inputs:
                 # Recursively try to penetrate the skipped node
-                return self._get_node_result(
+                return await self._get_node_result(
                     data_inputs[0].source.structural_id,
                     consumer_id,
                     arg_name,
@@ -267,11 +239,7 @@ class ArgumentResolver:
                     graph,
                 )
 
-        skip_info = (
-            f" (skipped: {state_backend.get_skip_reason(node_id)})"
-            if state_backend.get_skip_reason(node_id)
-            else ""
-        )
+        skip_info = f" (skipped: {skip_reason})" if skip_reason else ""
         raise DependencyMissingError(consumer_id, arg_name, f"{node_id}{skip_info}")
 
     def _resolve_inject(
@@ -287,7 +255,7 @@ class ConstraintResolver:
     Responsible for resolving dynamic resource constraints for a node.
     """
 
-    def resolve(
+    async def resolve(
         self,
         node: Node,
         graph: Graph,
@@ -308,8 +276,8 @@ class ConstraintResolver:
                             node.structural_id, f"constraint:{res}", amount._uuid
                         )
 
-                    if state_backend.has_result(constraint_node.structural_id):
-                        resolved[res] = state_backend.get_result(
+                    if await state_backend.has_result(constraint_node.structural_id):
+                        resolved[res] = await state_backend.get_result(
                             constraint_node.structural_id
                         )
                     else:

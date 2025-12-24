@@ -58,7 +58,7 @@ class NodeProcessor:
         Executes a node with all associated policies (constraints, cache, retry).
         """
         # 1. Resolve Constraints & Resources
-        requirements = self.constraint_resolver.resolve(
+        requirements = await self.constraint_resolver.resolve(
             node, graph, state_backend, self.constraint_manager, instance_map
         )
 
@@ -103,7 +103,7 @@ class NodeProcessor:
         input_overrides: Dict[str, Any] = None,
     ) -> Any:
         # 3. Resolve Arguments
-        args, kwargs = self.arg_resolver.resolve(
+        args, kwargs = await self.arg_resolver.resolve(
             node,
             graph,
             state_backend,
@@ -117,7 +117,7 @@ class NodeProcessor:
 
         # 4. Cache Check
         if node.cache_policy:
-            inputs_for_cache = self._resolve_inputs_for_cache(
+            inputs_for_cache = await self._resolve_inputs_for_cache(
                 node, graph, state_backend
             )
             cached_value = await node.cache_policy.check(
@@ -177,7 +177,7 @@ class NodeProcessor:
                 )
                 # Cache Save
                 if node.cache_policy:
-                    inputs_for_save = self._resolve_inputs_for_cache(
+                    inputs_for_save = await self._resolve_inputs_for_cache(
                         node, graph, state_backend
                     )
                     await node.cache_policy.save(
@@ -215,7 +215,7 @@ class NodeProcessor:
                     raise last_exception
         raise RuntimeError("Unexpected execution state")
 
-    def _resolve_inputs_for_cache(
+    async def _resolve_inputs_for_cache(
         self, node: Node, graph: Graph, state_backend: StateBackend
     ) -> Dict[str, Any]:
         # TODO: This needs to be smarter for caching.
@@ -230,8 +230,8 @@ class NodeProcessor:
         for edge in incoming_edges:
             if edge.arg_name.startswith("_"):
                 continue
-            if state_backend.has_result(edge.source.structural_id):
-                inputs[edge.arg_name] = state_backend.get_result(
+            if await state_backend.has_result(edge.source.structural_id):
+                inputs[edge.arg_name] = await state_backend.get_result(
                     edge.source.structural_id
                 )
         return inputs

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M .gitignore, D profile_simple_1000.prof, M profile_entry.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766554353.279276, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(core): 强制 StateBackend 异步化并消除性能开销", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766554353.8401423, "duration_ms": 0}}

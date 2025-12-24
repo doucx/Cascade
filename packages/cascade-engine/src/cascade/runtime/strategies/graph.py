@@ -127,6 +127,14 @@ class GraphExecutionStrategy:
                     input_overrides.update(current_target.kwargs)
                 else:
                     # SLOW PATH: Build Graph
+                    # STATE GC (Asynchronous)
+                    if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
+                        state_backend.clear
+                    ):
+                        await state_backend.clear()
+                    # Yield control
+                    await asyncio.sleep(0)
+
                     graph, instance_map = build_graph(
                         current_target, registry=self._node_registry
                     )
@@ -202,13 +210,6 @@ class GraphExecutionStrategy:
             # 5. Check for Tail Call (LazyResult) - TCO Logic
             if isinstance(result, (LazyResult, MappedLazyResult)):
                 current_target = result
-                # STATE GC (Asynchronous)
-                if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
-                    state_backend.clear
-                ):
-                    await state_backend.clear()
-                # Yield control
-                await asyncio.sleep(0)
             else:
                 return result
 

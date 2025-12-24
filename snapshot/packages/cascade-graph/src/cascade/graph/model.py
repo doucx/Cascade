@@ -35,8 +35,6 @@ class Node:
     structural_id: str
     name: str
     template_id: str = ""  # Structural hash (ignoring literals)
-    is_shadow: bool = False  # True if this node is for static analysis only
-    tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
 
     # Core spec
     node_type: str = "task"  # "task", "param", or "map"
@@ -58,9 +56,6 @@ class Node:
     # Optimization: Flag indicating if the node requires complex resolution
     # (e.g., has Inject markers, complex nested structures, or runtime context needs)
     has_complex_inputs: bool = False
-
-    # Metadata from static analysis
-    warns_dynamic_recursion: bool = False
 
     def __hash__(self):
         return hash(self.structural_id)

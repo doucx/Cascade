@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(engine): 在运行时强制执行静态图完整性", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766575919.683152, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 移除隐式 TCO 机制与重写执行策略", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766576573.1665344, "duration_ms": 0}}

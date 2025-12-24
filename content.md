@@ -1,148 +1,56 @@
-Of course. The test failed exactly as we predicted, but the failure reveals a deeper truth than just a rendering issue. My previous "fix" was flawed because I didn't trace the problem to its source.
+好的，所有的测试都已经通过。这意味着我们不仅完成了 `visualize` 的功能增强，还通过对 `GraphBuilder` 的重构，让 Cascade 的静态图结构变得更加准确和健壮。
 
-Let's break it down.
+现在，我将生成一个 `[COMMIT]` 计划，将这些改进作为一个完整的逻辑单元提交。
 
-测试失败的直接原因是 `visualize.py` 渲染了一个从 `C` 到 `C` 的自引用边，而不是我们期望的 `C` 到 `A` 的边。然而，这只是症状，不是病因。
-
-根本原因在于 `cascade-graph/src/cascade/graph/build.py` 中的 `GraphBuilder`。当前，当它遇到 `cs.bind()` 创建的 `ITERATIVE_JUMP` 边时，它会创建一个**占位符**边，其 `target` 硬编码为 `source` 节点，如代码注释所示 (`target=node,  # Placeholder, engine uses jump_selector`)。这个占位符对于运行时引擎是足够的，因为它可以在执行时动态查询 `jump_selector`。但是，对于静态分析工具 `visualize` 来说，它看到的就是一个错误的、自引用的图。
-
-因此，真正的修复方案必须双管齐下：
-1.  **修正 `GraphBuilder`**: 让它构建一个能准确反映所有静态跳转路径的图。
-2.  **修正 `visualize`**: 让它能通用地渲染这些正确的跳转边，并使用跳转键 (`"next"`, `"restart"`) 作为标签，这比硬编码的 `"jump"` 更具信息量。
-
-我将生成一个计划来同时解决这两个问题，并更新我们的测试用例以反映这个更智能的标签。
-
-## [WIP] feat: 通用化跳转边的图构建与可视化逻辑
+## [COMMIT] feat(sdk): 通用化显式跳转的可视化渲染
 
 ### 用户需求
-修正 `GraphBuilder` 和 `visualize`，使其能够正确构建和渲染任意 `ITERATIVE_JUMP` 边（包括多节点循环），从而让所有相关测试通过。
+用户需要 `cs.visualize` 工具能够准确地展示包含显式跳转 (`cs.Jump`, `cs.bind`) 的复杂工作流拓扑，包括自引用循环和多节点循环。
 
 ### 评论
-这次修复将从根本上提升新架构的质量。通过让 `GraphBuilder` 创建一个拓扑上完全准确的图，我们不仅修复了 `visualize`，还为未来任何需要静态分析控制流的工具（如 Linter、优化器）打下了坚实的基础。这是从“运行时 Hack”到“架构性正确”的关键一步。
+这是一个重要的里程碑。通过这一改动，我们将 `ITERATIVE_JUMP` 从一个仅用于运行时的“黑盒”占位符，提升为了静态图中完全透明、拓扑正确的“一等公民”。这不仅极大地提升了开发者在构建复杂状态机时的观测效率，也为未来更高层次的图分析和优化奠定了基础。
 
 ### 目标
-1.  **`GraphBuilder`**: 修改 `_visit_lazy_result` 方法。当处理 `_jump_selector` 时，不再创建单个占位符边，而是遍历 `selector.routes` 中的每一条路由，为每个非 `None` 的目标创建一个独立的、`source` 和 `target` 均正确的 `ITERATIVE_JUMP` 边。将路由的键（如 `"restart"`）用作边的 `arg_name`。
-2.  **`visualize.py`**: 修改 `ITERATIVE_JUMP` 的处理逻辑。不再硬编码自引用 (`source -> source`)，而是使用边对象上正确的 `source` 和 `target`。同时，使用 `edge.arg_name` 作为边的标签。
-3.  **`test_visualize.py`**: 更新两个跳转测试用例的断言，使其检查正确的动态标签（`"next"` 和 `"restart"`），而不是之前硬编码的 `"jump"`。
+创建一个 Git 提交，包含对 `GraphBuilder` 拓扑构建逻辑的通用化重构、`visualize` 渲染器的样式增强，以及完整的 TDD 测试套件。
 
 ### 基本原理
-我们将把智能逻辑前移到 `GraphBuilder` 中。`GraphBuilder` 将成为静态拓扑的唯一真相来源，它会明确地在图中创建出 `C -> A` 这样的边。这样一来，`visualize` 就可以变回一个“哑”渲染器，它只需为 `ITERATIVE_JUMP` 类型的边应用特殊样式即可，无需理解复杂的跳转逻辑。这种职责分离使得两个组件都更加健壮和可维护。
+我们遵循了“单一真相来源”的原则，将跳转逻辑的解析工作从渲染器移回了 `GraphBuilder`。这使得图本身就能准确反映潜在的控制流转移。渲染器随后根据边类型应用一致的视觉样式。这种架构上的清晰性也反映在我们的测试套件中，它现在涵盖了从简单自循环到复杂循环路径的多种场景。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/graph #comp/sdk #scope/core #ai/instruct #task/domain/visualization #task/object/explicit-jumps #task/action/refactor #task/state/continue
+#intent/build #flow/ready #priority/high #comp/graph #comp/sdk #comp/tests #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/explicit-jumps #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `GraphBuilder` 以创建拓扑正确的跳转边
+#### Acts 1: 提交可视化增强功能
 
-我们将修改 `build.py`，用一个循环替换掉创建占位符边的逻辑。
+将涉及图构建、可视化渲染以及测试用例的修改添加到暂存区并提交。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-graph/src/cascade/graph/build.py
-~~~~~
-~~~~~python
-                # Create the ITERATIVE_JUMP edge
-                self.graph.add_edge(
-                    Edge(
-                        source=node,
-                        target=node,  # Placeholder, engine uses jump_selector
-                        arg_name="<jump>",
-                        edge_type=EdgeType.ITERATIVE_JUMP,
-                        jump_selector=selector,
-                    )
-                )
-~~~~~
-~~~~~python
-                # Create a distinct ITERATIVE_JUMP edge for each potential jump target.
-                # This makes the static graph correctly represent all potential control flows.
-                for key, route_target_lr in selector.routes.items():
-                    if route_target_lr is None:
-                        continue  # Skip exit routes, as they don't form an edge
-
-                    # We have already visited the target, so it's in the instance map
-                    target_node = self._visited_instances[route_target_lr._uuid]
-
-                    self.graph.add_edge(
-                        Edge(
-                            source=node,
-                            target=target_node,
-                            arg_name=key,  # Use the jump key as the edge label
-                            edge_type=EdgeType.ITERATIVE_JUMP,
-                            # We can still attach the selector for the engine's use
-                            jump_selector=selector,
-                        )
-                    )
-~~~~~
-
-#### Acts 2: 通用化 `visualize.py` 的跳转边渲染逻辑
-
-现在 `GraphBuilder` 提供了正确的边，我们来修正渲染器，让它使用这些信息。
-
-~~~~~act
-patch_file
 packages/cascade-sdk/src/cascade/tools/visualize.py
-~~~~~
-~~~~~python
-        elif edge.edge_type == EdgeType.ITERATIVE_JUMP:
-            # Special case for self-referencing jump edges
-            style = ' [style=bold, color=blue, label="jump"]'
-            dot_parts.append(
-                f'  "{edge.source.structural_id}" -> "{edge.source.structural_id}"{style};'
-            )
-            # Continue to the next edge to avoid double-printing
-            continue
-~~~~~
-~~~~~python
-        elif edge.edge_type == EdgeType.ITERATIVE_JUMP:
-            style = f' [style=bold, color=blue, label="{edge.arg_name}"]'
-~~~~~
-
-#### Acts 3: 更新测试用例以断言正确的动态标签
-
-最后，我们更新两个测试用例，让它们检查新的、信息更丰富的标签。
-
-~~~~~act
-patch_file
 tests/sdk/tools/test_visualize.py
-~~~~~
-~~~~~python
-    # Assert that a self-referencing, specially styled "jump" edge exists
-    expected_edge = (
-        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="jump"]'
-    )
-    assert expected_edge in dot_string
-~~~~~
-~~~~~python
-    # Assert that a self-referencing, specially styled "jump" edge exists
-    expected_edge = (
-        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="next"]'
-    )
-    assert expected_edge in dot_string
 ~~~~~
 
 ~~~~~act
-patch_file
-tests/sdk/tools/test_visualize.py
+git_commit
 ~~~~~
-~~~~~python
-    # 5. Assert that the styled jump edge from C to A exists
-    expected_edge = (
-        f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="jump"]'
-    )
-    assert expected_edge in dot_string
-~~~~~
-~~~~~python
-    # 5. Assert that the styled jump edge from C to A exists
-    expected_edge = (
-        f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="restart"]'
-    )
-    assert expected_edge in dot_string
+~~~~~text
+feat(sdk): Generalize visualization of explicit iterative jumps
+
+Enhanced 'cs.visualize' and 'GraphBuilder' to correctly represent and render explicit control flow transitions created via 'cs.bind' and 'cs.Jump'.
+
+Key Changes:
+1. **GraphBuilder**: Refactored ITERATIVE_JUMP edge creation to move away from placeholders. It now iterates through all routes in a 'JumpSelector' and creates distinct, topologically correct edges for each jump target. The jump key (e.g., "next", "restart") is now stored as the edge's 'arg_name'.
+2. **Visualize**: Updated to use the correct target and label (from 'arg_name') provided by the edge object. Iterative jumps are now rendered as bold blue edges, regardless of whether they are self-referencing or point to upstream nodes.
+3. **Tests**: Added comprehensive TDD cases in 'test_visualize.py' covering self-loops and multi-node cycles (e.g., A -> B -> C -> A), verifying both the structure and the dynamic labels.
+
+This ensures that the static graph representation of a workflow perfectly matches its potential runtime execution paths, providing superior observability for complex state machines.
 ~~~~~
 
 ### 下一步建议
-我们已经从根本上解决了图构建和可视化的问题。现在所有测试都应该通过，并且我们的可视化工具变得更加强大和准确。
+我们已经完成了可视化的升级。根据路线图，现在的 Cascade 已经具备了显式状态转移的能力，并且它是可观测的。
 
-这是一个逻辑上完整且重要的改进。我强烈建议我们现在创建一个 `[COMMIT]` 计划，将这三个文件的修改作为一个原子提交进行暂存和提交，以清晰地记录这次从“占位符”到“拓扑正确”的架构演进。
+为了进一步释放这个新架构的潜力，我建议下一步我们考虑 **`cs.select_jump` 的动态化增强**。目前它的路由表是静态的，如果我们允许根据前序任务的结果来动态决定跳转目标，Cascade 将能实现更复杂的动态分支策略。或者，我们可以开始实现 **阶段四：统一的双层身份体系**，为后续的执行计划缓存做准备。你倾向于哪个方向？

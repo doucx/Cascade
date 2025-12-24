@@ -13,6 +13,8 @@
     "engine.connector.connected": "📡 Engine connected to external connector.",
     "engine.connector.disconnected": "🔌 Engine disconnected from external connector.",
 
+    "graph.analysis.warning": "   - ⚠️  [CS-W001] Static analysis warning for task '{task_name}': {message}",
+
     "localbus.callback_error": "[LocalBus] Callback error on topic '{topic}': {error}",
     "localbus.retained_callback_error": "[LocalBus] Sync/Retained callback error on topic '{topic}': {error}"
 }

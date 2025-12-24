@@ -1,83 +1,82 @@
-好的，我分析了错误日志。
+# [WIP] fix: 在 ArgumentResolver 的 Fast Path 中同样应用 Jump Override 优先级
 
-你完全正确，我在上一步创建的测试用例中引入了一个错误。它因为错误的 import 语句而失败，我将立即修复它。
-
-## [WIP] fix(tests): 纠正 TCO 覆盖测试中的 MessageBus 导入
+## 摘要头
+## [WIP] fix(engine): 修复 Fast Path 中 TCO 跳转参数被覆盖的问题
 
 ### 错误分析
-测试 `test_jump_overrides_param` 失败的原因是 `TypeError: MessageBus.__init__() missing 1 required positional argument: 'store'`。
-
-这是因为测试文件错误地从 `cascade.common.messaging` 导入了 `MessageBus`。这个 Bus 是面向 UI 的、用于渲染用户消息的，因此需要一个 `MessageStore`。
-
-然而，`Engine` 的 `bus` 参数期望的是用于内部事件分发的、位于 `cascade.runtime.bus` 的 `MessageBus`，该类的构造函数是无参数的。这是一个在编写测试时不慎引入的疏忽。
+之前的修复只覆盖了 `ArgumentResolver` 的“复杂路径 (Complex Path)”，但 `ArgumentResolver` 包含一个针对简单任务的“快速路径 (Fast Path)”。
+1.  **现状**：我的测试用例 `recursive_task` 是一个简单的任务（没有 Inject，没有复杂结构），因此运行时走了 `Fast Path`。
+2.  **遗漏**：在 `Fast Path` 的逻辑中，依然存在“先应用 Bindings（含 Overrides），再无条件解析 Edges 并覆盖”的错误顺序。
+3.  **结果**：即使 Override 存在，Edge 依然被解析并覆盖了 Override 的值，导致测试依然失败。
 
 ### 用户需求
-修复 `tests/engine/e2e/test_tco_param_override.py` 中由于 `MessageBus` 实例化不正确而导致的 `TypeError`。
+确保无论任务走的是 Fast Path 还是 Complex Path，`cs.Jump` 提供的参数覆盖都必须优于静态图的依赖。
 
 ### 评论
-这是一个简单的修复，但它暴露了 Cascade 架构中两个总线系统之间清晰的界限：一个用于内部事件 (`runtime`)，另一个用于外部呈现 (`common`)。在测试中正确区分这两者至关重要。
+这是一个典型的“优化导致的分叉”问题。由于有两个代码路径处理相似的逻辑，修复必须同时应用到两处。
 
 ### 目标
-修改 `test_tco_param_override.py` 中的 `import` 语句，使其指向正确的 `MessageBus` 类。
+在 `ArgumentResolver` 的 `Fast Path` 处理循环中，加入与 `Complex Path` 相同的 Override 检查逻辑。
 
 ### 基本原理
-通过将 `import` 路径从 `cascade.common.messaging` 更改为 `cascade.runtime.bus`，测试将实例化 `Engine` 所期望的内部事件总线，从而解决构造函数错误，并使测试能够按预期验证 TCO 逻辑。
+在 `Fast Path` 的 `incoming_edges` 循环中，如果 `edge.arg_name` 存在于 `input_overrides` 中，则跳过该 Edge 的解析和赋值。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/tco #scope/core #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 纠正 `MessageBus` 的 import 路径
+#### Acts 1: 修复 ArgumentResolver 的 Fast Path
 
-我们将 `test_tco_param_override.py` 文件中的 import 语句指向 `cascade.runtime.bus`。
+我们将对 `resolvers.py` 进行补丁，这次针对 `FAST PATH` 部分。同时我也会检查一下之前对 `Complex Path` 的修改是否需要调整（不需要，之前的修改是正确的，只是不完整）。
 
 ~~~~~act
 patch_file
-tests/engine/e2e/test_tco_param_override.py
+packages/cascade-engine/src/cascade/runtime/resolvers.py
 ~~~~~
 ~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.common.messaging import MessageBus
+            f_kwargs = {k: v for k, v in bindings.items() if not k.isdigit()}
 
-@pytest.mark.asyncio
-async def test_jump_overrides_param():
+            # 2. Fill from edges
+            for edge in incoming_edges:
+                val = await self._resolve_dependency(
+                    edge, node.structural_id, state_backend, graph, instance_map
+                )
+                if edge.arg_name.isdigit():
+                    idx = int(edge.arg_name)
+                    while len(f_args) <= idx:
+                        f_args.append(None)
+                    f_args[idx] = val
+                else:
+                    f_kwargs[edge.arg_name] = val
+
+            return f_args, f_kwargs
 ~~~~~
 ~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.bus import MessageBus
+            f_kwargs = {k: v for k, v in bindings.items() if not k.isdigit()}
 
-@pytest.mark.asyncio
-async def test_jump_overrides_param():
-~~~~~
-~~~~~act
-patch_file
-tests/engine/e2e/test_tco_param_override.py
-~~~~~
-~~~~~python
-    cs.bind(t, cs.select_jump({"continue": t}))
+            # 2. Fill from edges
+            for edge in incoming_edges:
+                # [CRITICAL FIX] Fast Path Priority Check:
+                # See Complex Path below for reasoning. Overrides from Jump must take precedence.
+                if input_overrides and edge.arg_name in input_overrides:
+                    continue
 
-    bus = MessageBus()
-    engine = Engine(
-        solver=NativeSolver(),
-~~~~~
-~~~~~python
-    cs.bind(t, cs.select_jump({"continue": t}))
+                val = await self._resolve_dependency(
+                    edge, node.structural_id, state_backend, graph, instance_map
+                )
+                if edge.arg_name.isdigit():
+                    idx = int(edge.arg_name)
+                    while len(f_args) <= idx:
+                        f_args.append(None)
+                    f_args[idx] = val
+                else:
+                    f_kwargs[edge.arg_name] = val
 
-    bus = MessageBus()
-    engine = Engine(
-        solver=NativeSolver(),
+            return f_args, f_kwargs
 ~~~~~
 
 ### 下一步建议
-现在测试文件已经修复，请再次运行测试 `pytest tests/engine/e2e/test_tco_param_override.py`。它现在应该能够成功通过，从而验证我们最初对 `ArgumentResolver` 的修复是正确的。
+再次运行测试 `pytest tests/engine/e2e/test_tco_param_override.py`。这次应该能覆盖所有路径。

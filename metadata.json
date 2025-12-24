@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 纠正 TCO 覆盖测试中的 MessageBus 导入", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766583949.4307067, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 在 ArgumentResolver 的 Fast Path 中同样应用 Jump Override 优先级", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766584022.7213228, "duration_ms": 0}}

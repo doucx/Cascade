@@ -75,6 +75,11 @@ class ArgumentResolver:
 
             # 2. Fill from edges
             for edge in incoming_edges:
+                # [CRITICAL FIX] Fast Path Priority Check:
+                # See Complex Path below for reasoning. Overrides from Jump must take precedence.
+                if input_overrides and edge.arg_name in input_overrides:
+                    continue
+
                 val = await self._resolve_dependency(
                     edge, node.structural_id, state_backend, graph, instance_map
                 )

@@ -83,6 +83,14 @@ class TaskBlocked(TaskEvent):
 
 
 @dataclass(frozen=True)
+class StaticAnalysisWarning(TaskEvent):
+    """Fired when static analysis detects a potential issue."""
+
+    warning_code: str = ""  # e.g. "CS-W001"
+    message: str = ""
+
+
+@dataclass(frozen=True)
 class ResourceEvent(Event):
     """Base for events related to resources."""
 

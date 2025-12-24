@@ -13,7 +13,7 @@ from cascade.runtime.resource_container import ResourceContainer
 from cascade.runtime.processor import NodeProcessor
 from cascade.runtime.flow import FlowManager
 from cascade.runtime.exceptions import DependencyMissingError
-from cascade.runtime.events import TaskSkipped, TaskBlocked
+from cascade.runtime.events import TaskSkipped, TaskBlocked, StaticAnalysisWarning
 from cascade.runtime.constraints.manager import ConstraintManager
 
 
@@ -43,6 +43,9 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
+
+        # Tracks warnings issued in this run to avoid duplicates
+        self._issued_warnings: Set[str] = set()
 
         # JIT Compilation Cache
         # Maps template_id to an IndexedExecutionPlan (List[List[int]])
@@ -143,6 +146,25 @@ class GraphExecutionStrategy:
                         raise RuntimeError(
                             f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
                         )
+
+                    # Post-build analysis checks
+                    for node in graph.nodes:
+                        if node.warns_dynamic_recursion and node.name not in self._issued_warnings:
+                            self.bus.publish(
+                                StaticAnalysisWarning(
+                                    run_id=run_id,
+                                    task_id=node.structural_id,
+                                    task_name=node.name,
+                                    warning_code="CS-W001",
+                                    message=(
+                                        f"Task '{node.name}' uses a dynamic recursion pattern (calling other "
+                                        "tasks in its arguments) which disables TCO optimizations, "
+                                        "leading to significant performance degradation."
+                                    ),
+                                )
+                            )
+                            self._issued_warnings.add(node.name)
+
                     target_node = instance_map[current_target._uuid]
                     cache_key = target_node.template_id or target_node.structural_id
 

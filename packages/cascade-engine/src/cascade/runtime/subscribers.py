@@ -12,6 +12,7 @@ from .events import (
     TaskSkipped,
     TaskRetrying,
     TaskBlocked,
+    StaticAnalysisWarning,
     ConnectorConnected,
     ConnectorDisconnected,
     Event,
@@ -34,8 +35,17 @@ class HumanReadableLogSubscriber:
         event_bus.subscribe(TaskExecutionFinished, self.on_task_finished)
         event_bus.subscribe(TaskSkipped, self.on_task_skipped)
         event_bus.subscribe(TaskRetrying, self.on_task_retrying)
+        event_bus.subscribe(StaticAnalysisWarning, self.on_static_analysis_warning)
         event_bus.subscribe(ConnectorConnected, self.on_connector_connected)
         event_bus.subscribe(ConnectorDisconnected, self.on_connector_disconnected)
+
+    def on_static_analysis_warning(self, event: StaticAnalysisWarning):
+        bus.warning(
+            "graph.analysis.warning",
+            task_name=event.task_name,
+            warning_code=event.warning_code,
+            message=event.message,
+        )
 
     def on_run_started(self, event: RunStarted):
         bus.info("run.started", target_tasks=event.target_tasks)

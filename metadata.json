@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: Simplify HashingService to only produce instance hashes", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766577401.4940612, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: Implement BlueprintHasher for plan caching", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766577477.5785575, "duration_ms": 0}}

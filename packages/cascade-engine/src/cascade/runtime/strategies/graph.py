@@ -344,7 +344,9 @@ class GraphExecutionStrategy:
                     tasks_to_run = []
                     for node in executable_this_pass:
                         overrides = (
-                            root_input_overrides if node.structural_id == target_node.structural_id else None
+                            root_input_overrides
+                            if node.structural_id == target_node.structural_id
+                            else None
                         )
                         tasks_to_run.append(
                             self.node_processor.process(
@@ -365,7 +367,9 @@ class GraphExecutionStrategy:
                     for node, res in zip(executable_this_pass, pass_results):
                         state_backend.put_result(node.structural_id, res)
                         if flow_manager:
-                            flow_manager.register_result(node.structural_id, res, state_backend)
+                            flow_manager.register_result(
+                                node.structural_id, res, state_backend
+                            )
 
                 pending_nodes_in_stage = deferred_this_pass
 

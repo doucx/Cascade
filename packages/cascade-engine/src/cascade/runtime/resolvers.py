@@ -114,7 +114,8 @@ class ArgumentResolver:
         incoming_edges = [
             e
             for e in graph.edges
-            if e.target.structural_id == node.structural_id and e.edge_type == EdgeType.DATA
+            if e.target.structural_id == node.structural_id
+            and e.edge_type == EdgeType.DATA
         ]
 
         if incoming_edges:
@@ -203,7 +204,11 @@ class ArgumentResolver:
             # This edge represents a Router. Its source is the SELECTOR.
             # We must resolve the selector's value first.
             selector_result = self._get_node_result(
-                edge.source.structural_id, consumer_id, "router_selector", state_backend, graph
+                edge.source.structural_id,
+                consumer_id,
+                "router_selector",
+                state_backend,
+                graph,
             )
 
             # Use the result to pick the correct route.
@@ -219,12 +224,20 @@ class ArgumentResolver:
             # Convert instance UUID to canonical node ID using the map.
             selected_node = instance_map[selected_route_lr._uuid]
             return self._get_node_result(
-                selected_node.structural_id, consumer_id, edge.arg_name, state_backend, graph
+                selected_node.structural_id,
+                consumer_id,
+                edge.arg_name,
+                state_backend,
+                graph,
             )
         else:
             # Standard dependency
             return self._get_node_result(
-                edge.source.structural_id, consumer_id, edge.arg_name, state_backend, graph
+                edge.source.structural_id,
+                consumer_id,
+                edge.arg_name,
+                state_backend,
+                graph,
             )
 
     def _get_node_result(
@@ -240,7 +253,9 @@ class ArgumentResolver:
             return state_backend.get_result(node_id)
 
         if state_backend.get_skip_reason(node_id):
-            upstream_edges = [e for e in graph.edges if e.target.structural_id == node_id]
+            upstream_edges = [
+                e for e in graph.edges if e.target.structural_id == node_id
+            ]
             data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
             if data_inputs:
                 # Recursively try to penetrate the skipped node
@@ -294,10 +309,14 @@ class ConstraintResolver:
                         )
 
                     if state_backend.has_result(constraint_node.structural_id):
-                        resolved[res] = state_backend.get_result(constraint_node.structural_id)
+                        resolved[res] = state_backend.get_result(
+                            constraint_node.structural_id
+                        )
                     else:
                         raise DependencyMissingError(
-                            node.structural_id, f"constraint:{res}", constraint_node.structural_id
+                            node.structural_id,
+                            f"constraint:{res}",
+                            constraint_node.structural_id,
                         )
                 else:
                     resolved[res] = amount

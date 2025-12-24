@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any, List, Dict, Tuple, Optional
+from typing import Any, List, Dict, Tuple
 from cascade.graph.model import Node
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -50,7 +50,9 @@ class HashingService:
             base_comps.append(f"Cache({type(result._cache_policy).__name__})")
 
         # 2. Argument Components (Structural vs Template)
-        struct_args = self._build_hash_components(result.args, dep_nodes, template=False)
+        struct_args = self._build_hash_components(
+            result.args, dep_nodes, template=False
+        )
         temp_args = self._build_hash_components(result.args, dep_nodes, template=True)
 
         struct_kwargs = self._build_hash_components(
@@ -89,7 +91,7 @@ class HashingService:
         # But for migration safety, I will replicate the *intent* of correct hashing:
         # Structural = Keys + Values. Template = Keys (maybe values if they are structural?).
         # Let's fix the logic: Structural should be strict.
-        
+
         # Re-reading old code:
         # Structural: keys only.
         # Template: values included.
@@ -102,7 +104,7 @@ class HashingService:
             keys = sorted(result._constraints.requirements.keys())
             vals = [f"{k}={result._constraints.requirements[k]}" for k in keys]
             constraint_comps.append(f"Constraints({','.join(vals)})")
-        
+
         # Assemble Structural
         struct_list = (
             base_comps
@@ -133,7 +135,7 @@ class HashingService:
         self, result: MappedLazyResult, dep_nodes: Dict[str, Node]
     ) -> Tuple[str, str]:
         base_comps = [f"Map({getattr(result.factory, 'name', 'factory')})"]
-        
+
         meta_comps = []
         if result._condition:
             meta_comps.append("Condition:PRESENT")
@@ -165,7 +167,7 @@ class HashingService:
         If template=True, literals are replaced by '?', but structure is preserved.
         """
         components = []
-        
+
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             # Hash-Consing: The identity of this dependency.
             # Structural: Use the dependency's structural ID.
@@ -173,7 +175,7 @@ class HashingService:
             node = dep_nodes[obj._uuid]
             ref_id = node.template_id if template else node.structural_id
             components.append(f"LAZY({ref_id})")
-        
+
         elif isinstance(obj, Router):
             components.append("Router{")
             components.append("Selector:")
@@ -187,13 +189,15 @@ class HashingService:
                     self._build_hash_components(obj.routes[k], dep_nodes, template)
                 )
             components.append("}")
-        
+
         elif isinstance(obj, (list, tuple)):
             components.append("List[")
             for item in obj:
-                components.extend(self._build_hash_components(item, dep_nodes, template))
+                components.extend(
+                    self._build_hash_components(item, dep_nodes, template)
+                )
             components.append("]")
-        
+
         elif isinstance(obj, dict):
             components.append("Dict{")
             for k in sorted(obj.keys()):
@@ -202,10 +206,10 @@ class HashingService:
                     self._build_hash_components(obj[k], dep_nodes, template)
                 )
             components.append("}")
-        
+
         elif isinstance(obj, Inject):
             components.append(f"Inject({obj.resource_name})")
-        
+
         else:
             if template:
                 # Normalization: Literals become placeholders
@@ -215,5 +219,5 @@ class HashingService:
                     components.append(repr(obj))
                 except Exception:
                     components.append("<unreprable>")
-        
+
         return components

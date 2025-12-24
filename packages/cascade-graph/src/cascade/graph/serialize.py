@@ -242,7 +242,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     if "constraints" in data:
         constraints = ResourceConstraint(requirements=data["constraints"])
 
-    node = Node(structural_id=data["structural_id"],
+    node = Node(
+        structural_id=data["structural_id"],
         template_id=data.get("template_id", ""),
         name=data["name"],
         node_type=data["node_type"],

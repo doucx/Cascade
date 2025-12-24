@@ -22,9 +22,13 @@ class NativeSolver(Solver):
         # and should never be scheduled for execution.
         executable_nodes = [n for n in graph.nodes if not n.is_shadow]
 
-        adj: Dict[str, List[Node]] = {node.structural_id: [] for node in executable_nodes}
+        adj: Dict[str, List[Node]] = {
+            node.structural_id: [] for node in executable_nodes
+        }
         in_degree: Dict[str, int] = {node.structural_id: 0 for node in executable_nodes}
-        node_map: Dict[str, Node] = {node.structural_id: node for node in executable_nodes}
+        node_map: Dict[str, Node] = {
+            node.structural_id: node for node in executable_nodes
+        }
 
         # Whitelist of edge types that represent actual execution dependencies.
         # This prevents metadata edges (like POTENTIAL) from creating cycles.
@@ -42,14 +46,23 @@ class NativeSolver(Solver):
                 continue
 
             # Ensure edge connects executable nodes (ignores edges to/from shadow nodes)
-            if edge.source.structural_id not in node_map or edge.target.structural_id not in node_map:
+            if (
+                edge.source.structural_id not in node_map
+                or edge.target.structural_id not in node_map
+            ):
                 continue
 
             adj[edge.source.structural_id].append(edge.target)
             in_degree[edge.target.structural_id] += 1
 
         # Kahn's algorithm for topological sorting
-        queue = deque([node.structural_id for node in executable_nodes if in_degree[node.structural_id] == 0])
+        queue = deque(
+            [
+                node.structural_id
+                for node in executable_nodes
+                if in_degree[node.structural_id] == 0
+            ]
+        )
         plan: ExecutionPlan = []
         processed_count = 0
 

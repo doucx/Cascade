@@ -155,7 +155,8 @@ class VirtualMachine:
         if self.constraint_manager or (
             instr.constraints and not instr.constraints.is_empty()
         ):
-            temp_node = Node(structural_id=str(uuid4()),
+            temp_node = Node(
+                structural_id=str(uuid4()),
                 name=instr.task_name,
                 node_type="task",
                 constraints=instr.constraints,

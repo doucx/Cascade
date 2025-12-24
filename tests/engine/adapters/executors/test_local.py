@@ -38,7 +38,9 @@ def test_local_executor_async_execution():
         await asyncio.sleep(0.01)
         return x + 1
 
-    node_async = Node(structural_id="async_add", name="async_add", callable_obj=async_add.func)
+    node_async = Node(
+        structural_id="async_add", name="async_add", callable_obj=async_add.func
+    )
 
     resolved_args = [5]
     resolved_kwargs = {}

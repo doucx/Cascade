@@ -24,12 +24,8 @@ def explicit_countdown_step(n: int):
 
 
 def create_explicit_loop(n: int):
-    # This represents the new way to build loops in Cascade
-    # It creates a static graph with a jump back to the target
     step = explicit_countdown_step(n)
-
     selector = cs.select_jump({"loop": step, "exit": None})
-
     cs.bind(step, selector)
     return step
 
@@ -43,7 +39,6 @@ def heavy_step(n: int, _structure=None):
 
 
 def create_heavy_explicit_loop(n: int, complexity: int = 20):
-    # Build a massive static dependency tree that remains stable during the loop
     dep_chain = noop()
     for _ in range(complexity):
         dep_chain = noop(_dummy=dep_chain)
@@ -84,16 +79,15 @@ async def run_benchmark(
 
 
 async def main():
-    iterations = 5_000
+    iterations = 5000
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
-    print("--- Cascade v1.4 Performance Benchmark (Nodes Per Second) ---")
+    print("--- Cascade v1.4 Performance Benchmark ---")
     print(f"Iterations: {iterations}\n")
 
-    # [1] Explicit Jump Loop (Simple)
-    # Nodes per iter: 1 (the step task itself)
+    # Explicit Jump Loop (Simple)
     nodes_per_iter_1 = 1
-    print("[1] Running Explicit Jump Loop (Simple)...")
+    print(" Running Explicit Jump Loop (Simple)...")
     target_1 = create_explicit_loop(iterations)
     time_1 = await run_benchmark(engine, target_1)
     tps_1 = iterations / time_1
@@ -101,11 +95,10 @@ async def main():
     print(f"  TPS: {tps_1:,.2f} iter/sec")
     print(f"  NPS: {nps_1:,.2f} nodes/sec\n")
 
-    # [2] Heavy Explicit Loop
-    # Nodes per iter: 20 (chain) + 1 (step) = 21
+    # Heavy Explicit Loop
     complexity = 20
     nodes_per_iter_2 = complexity + 1
-    print(f"[2] Running Heavy Explicit Loop (Complexity={complexity})...")
+    print(f" Running Heavy Explicit Loop (Complexity={complexity})...")
     target_2 = create_heavy_explicit_loop(iterations, complexity=complexity)
     time_2 = await run_benchmark(engine, target_2)
     tps_2 = iterations / time_2
@@ -113,19 +106,19 @@ async def main():
     print(f"  TPS: {tps_2:,.2f} iter/sec")
     print(f"  NPS: {nps_2:,.2f} nodes/sec")
     
-    efficiency = ((nps_2 / nps_1) - 1) * 100
-    print(f"  Throughput Gain vs Simple: {efficiency:+.1f}% (Batching Efficiency)\n")
+    # Calculate the difference in efficiency, not just raw speed
+    efficiency_gain = ((nps_2 / nps_1) - 1) * 100
+    print(f"  Throughput Gain vs Simple: {efficiency_gain:+.1f}% (Batching Efficiency)\n")
 
-    # [3] VM Path
-    print("[3] Running VM Path (TailCall)...")
+    # VM Path
+    print(" Running VM Path (TailCall)...")
     target_3 = vm_countdown(n=iterations)
     time_3 = await run_benchmark(engine, target_3, use_vm=True)
     tps_3 = iterations / time_3
-    print(f"  TPS: {tps_3:,.2f} iter/sec")
-    print(f"  (VM bypasses graph logic, pure dispatch speed)\n")
+    print(f"  TPS: {tps_3:,.2f} iter/sec\n")
 
-    # [4] Imperative
-    print("[4] Running Imperative Ground Truth...")
+    # Imperative Ground Truth
+    print(" Running Imperative Ground Truth...")
     start_imp = time.perf_counter()
     await imperative_countdown(iterations)
     time_imp = time.perf_counter() - start_imp
@@ -133,8 +126,10 @@ async def main():
     print(f"  TPS: {tps_imp:,.2f} iter/sec\n")
 
     print("--- Conclusion ---")
-    print(f"Engine processes {nps_2:,.0f} nodes/sec under load.")
-    print(f"Explicit Control Flow adds {(time_1 - time_imp)/iterations*1000000:.1f} microsec overhead per step vs raw Python.")
+    print(f"Engine processes {nps_2:,.0f} nodes/sec under load (Heavy Explicit Loop).")
+    print(f"VM path is {nps_1 / tps_3:.2f}x faster than Simple Explicit Jump.")
+    print(f"Explicit Control Flow adds {(time_1 - time_imp)/iterations*1e6:.1f} microseconds overhead per step vs raw Python loop.")
+    print(f"Heavy Explicit Loop overhead vs VM: {((time_3 / time_2) - 1)*100:.1f}%")
 
 
 if __name__ == "__main__":

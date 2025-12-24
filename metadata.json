@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(engine): 为 TCO 参数覆盖添加复杂路径测试用例", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766584135.3118892, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(engine): 确保 TCO 跳转参数优先于静态图依赖", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766584279.199448, "duration_ms": 0}}

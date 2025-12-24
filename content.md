@@ -1,97 +1,61 @@
-好的，现在核心逻辑已在两个代码路径中都得到修复和验证，我们应当为这个修复创建一个完整的测试覆盖，以防止未来发生回归。
+好的，我们已经完成了针对 `ArgumentResolver` 优先级缺陷的修复，并为“快速路径”和“复杂路径”都建立了稳固的回归测试。现在我们将这些变更作为一个完整的逻辑单元提交到版本库中。
 
-我将为您生成一个计划，在现有的测试文件中增加一个专门针对“复杂路径”的测试用例。
-
-## [WIP] test(engine): 为 TCO 参数覆盖添加复杂路径测试用例
+## [COMMIT] fix(engine): 确保 TCO 跳转参数优先于静态图依赖
 
 ### 用户需求
-在 `tests/engine/e2e/test_tco_param_override.py` 文件中增加一个新的测试用例，该用例通过引入 `cs.inject` 来强制 `ArgumentResolver` 走“复杂路径”，从而验证我们的修复在两种实现路径下都有效。
+修复在使用 `cs.Param` 作为递归任务初始值时，`cs.Jump` 传递的更新参数被原始参数值覆盖，导致死循环的问题。
 
 ### 评论
-这是一个优秀的测试实践。通过为代码的两个主要分支（Fast Path 和 Complex Path）分别创建专门的测试用例，我们极大地增强了测试套件的健壮性，并确保了 `ArgumentResolver` 的行为在未来重构中保持一致。
+这个修复解决了运行时参数解析逻辑中的一个核心优先级冲突。在 TCO（尾调用优化）场景下，明确的运行时干预（Jump 数据）在语义上必须覆盖静态图定义的默认依赖。该修复同时覆盖了 `ArgumentResolver` 的优化路径和通用路径，保证了系统行为的一致性和稳健性。
 
 ### 目标
-1.  在 `test_tco_param_override.py` 中添加一个新的测试函数 `test_jump_overrides_param_complex_path`。
-2.  该函数将定义一个带有 `cs.inject` 依赖的递归任务，以触发 `ArgumentResolver` 的复杂解析逻辑。
-3.  验证在该路径下，`cs.Jump` 的参数覆盖依然能够正确工作。
+1.  提交对 `packages/cascade-engine/src/cascade/runtime/resolvers.py` 的修复，确保 `input_overrides` 的优先级最高。
+2.  提交新增的 `tests/engine/e2e/test_tco_param_override.py` 测试文件，作为该问题的永久性回归测试。
 
 ### 基本原理
-`GraphBuilder` 在构建图时，如果检测到任务的默认参数中包含 `cs.inject`，会将节点的 `has_complex_inputs` 标志位设为 `True`。`ArgumentResolver` 会根据这个标志位选择不同的代码路径。通过创建一个注入了虚拟资源的测试任务，我们可以确保覆盖到我们之前修复的第二个代码分支，从而完成对整个功能的验证。
+通过在 `ArgumentResolver` 解析数据边（DATA Edges）之前引入显式的优先级检查，如果参数已由 `input_overrides` 提供，则跳过对该参数对应依赖边的解析。这确保了递归状态能通过 Jump 信号正确传递，不受静态图中 `cs.Param` 或其他上游任务的影响。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #concept/tco #scope/core #ai/instruct #task/domain/core #task/object/argument-resolver #task/action/bug-fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 增加复杂路径测试用例
+#### Acts 1: 提交修复与测试
 
-我们将通过 `patch_file` 在 `test_tco_param_override.py` 的末尾追加新的测试函数。
+我们将修复后的代码和新增的测试用例添加到 Git 暂存区并执行提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-engine/src/cascade/runtime/resolvers.py
 tests/engine/e2e/test_tco_param_override.py
 ~~~~~
-~~~~~python
-    # Expect: [3, 2, 1, 0]
-    # If bug: [3, 3, 3, ...] -> "InfiniteLoopDetected"
-    assert results == [3, 2, 1, 0]
-    assert final_res == "Done"
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-    # Expect: [3, 2, 1, 0]
-    # If bug: [3, 3, 3, ...] -> "InfiniteLoopDetected"
-    assert results == [3, 2, 1, 0]
-    assert final_res == "Done"
+~~~~~text
+fix(engine): ensure TCO overrides take precedence over dependencies
 
+Fixed a critical bug in ArgumentResolver where data provided via 'cs.Jump'
+(input_overrides) was being overwritten by static graph dependencies
+(e.g., 'cs.Param') during the resolution process.
 
-@pytest.mark.asyncio
-async def test_jump_overrides_param_complex_path():
-    """
-    Same as the above test, but forces the ArgumentResolver's "complex path"
-    by including a resource injection, ensuring the fix works in both code paths.
-    """
-    results = []
+In recursive TCO workflows, this led to infinite loops because the
+decremented state passed to the next iteration was ignored in favor of
+re-resolving the original param value from the starting node.
 
-    # Define a dummy resource to trigger the complex path
-    @cs.resource
-    def dummy_resource():
-        yield "dummy_value"
-
-    @cs.task
-    def recursive_task_with_injection(n, injected=cs.inject("dummy_resource")):
-        # Ensure resource was injected correctly
-        assert injected == "dummy_value"
-
-        if len(results) > 10:
-            return "InfiniteLoopDetected"
-            
-        results.append(n)
-        if n <= 0:
-            return "Done"
-        
-        return cs.Jump(target_key="continue", data=n - 1)
-
-    t = recursive_task_with_injection(cs.Param("n", 3, int))
-    cs.bind(t, cs.select_jump({"continue": t}))
-
-    bus = MessageBus()
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus
-    )
-    # Register the resource required by the task
-    engine.register(dummy_resource)
-    
-    final_res = await engine.run(t, params={"n": 3})
-
-    assert results == [3, 2, 1, 0]
-    assert final_res == "Done"
+Changes:
+1.  Modified 'ArgumentResolver' to check if an argument is already present
+    in 'input_overrides' before resolving its corresponding edge in the
+    static graph.
+2.  Applied the fix to both the 'Fast Path' (simple tasks) and the
+    'Complex Path' (tasks with injections or complex structures).
+3.  Added a new E2E test suite 'tests/engine/e2e/test_tco_param_override.py'
+    that explicitly verifies the fix for both resolution paths.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了对 `ArgumentResolver` 错误的修复，并为简单和复杂两种路径都添加了回归测试。现在是时候将这些修改作为一个完整的逻辑单元提交了。
-
-我将生成一个 `[COMMIT]` 计划来提交这些变更。
+- **性能回归检查**: 虽然此修复引入的 `if` 检查开销极低，但在超大规模 TCO 循环（百万级迭代）中，建议观察一下 CPU 使用率的变化。
+- **文档更新**: 可以在开发者文档中明确说明 Jump 数据的覆盖优先级，帮助用户更好地理解 Cascade 的动态调度行为。

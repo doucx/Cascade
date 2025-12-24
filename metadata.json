@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(engine): Unify ArgumentResolver edge resolution logic", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766584487.5611107, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(engine): 统一 ArgumentResolver 的数据边解析逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766584628.4630072, "duration_ms": 0}}

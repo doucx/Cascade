@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(tests, tools): 移除 TCO 静态分析的残留代码", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766576832.1405737, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修正并清理 visualize 工具的测试用例", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766576930.7655282, "duration_ms": 0}}

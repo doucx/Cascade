@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修正并清理 visualize 工具的测试用例", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766576930.7655282, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] feat(core): 实现显式控制流并废除隐式 TCO 机制", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766577006.885571, "duration_ms": 0}}

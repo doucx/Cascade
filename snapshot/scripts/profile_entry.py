@@ -26,6 +26,8 @@ sys.path.append(
 from observatory.benchmarks.tco_performance import (
     simple_countdown,
     heavy_complex_countdown,
+    stable_complex_loop,
+    noop,
     run_benchmark,
 )
 from cascade.runtime import Engine, MessageBus
@@ -40,6 +42,13 @@ async def profile_target(name: str, iterations: int):
         target = simple_countdown(iterations)
     elif name == "heavy":
         target = heavy_complex_countdown(iterations)
+    elif name == "stable":
+        # Recreate the dependency chain locally to keep the script self-contained
+        # for this specific test case, as per user instruction. Redundancy is fine.
+        static_dep_chain = noop()
+        for _ in range(10):
+            static_dep_chain = noop(_dummy=static_dep_chain)
+        target = stable_complex_loop([iterations], _dummy=static_dep_chain)
     else:
         print(f"Unknown target: {name}")
         return
@@ -64,8 +73,8 @@ async def profile_target(name: str, iterations: int):
 
 
 if __name__ == "__main__":
-    target_name = sys.argv[1] if len(sys.argv) > 1 else "simple"
-    count = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
+    target_name = sys.argv if len(sys.argv) > 1 else "simple"
+    count = int(sys.argv) if len(sys.argv) > 2 else 1000
 
     print(f"Profiling {target_name} for {count} iterations...")
     asyncio.run(profile_target(target_name, count))

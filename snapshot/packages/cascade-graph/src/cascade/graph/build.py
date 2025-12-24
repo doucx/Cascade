@@ -297,7 +297,8 @@ class GraphBuilder:
             )
         )
 
-        for next_task in analyze_task_source(task):
+        analysis = analyze_task_source(task)
+        for next_task in analysis.targets:
             self._visit_shadow_recursive(target_node, next_task)
 
     def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):

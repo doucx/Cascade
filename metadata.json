@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(graph): 实现动态递归反模式的静态分析", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766555349.2572482, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 适配 ast_analyzer 返回值变更", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766555570.5026083, "duration_ms": 0}}

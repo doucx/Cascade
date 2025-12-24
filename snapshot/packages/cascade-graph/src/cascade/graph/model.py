@@ -58,6 +58,9 @@ class Node:
     # (e.g., has Inject markers, complex nested structures, or runtime context needs)
     has_complex_inputs: bool = False
 
+    # Metadata from static analysis
+    warns_dynamic_recursion: bool = False
+
     def __hash__(self):
         return hash(self.structural_id)
 

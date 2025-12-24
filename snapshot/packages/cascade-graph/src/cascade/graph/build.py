@@ -125,6 +125,8 @@ class GraphBuilder:
 
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
+            analysis = analyze_task_source(result.task)
+
             node = Node(
                 structural_id=structural_hash,
                 template_id=template_hash,
@@ -137,10 +139,10 @@ class GraphBuilder:
                 constraints=result._constraints,
                 input_bindings=input_bindings,
                 has_complex_inputs=has_complex,
+                warns_dynamic_recursion=analysis.has_dynamic_recursion,
             )
             self.registry._registry[structural_hash] = node
 
-        self._visited_instances[result._uuid] = node
         self._visited_instances[result._uuid] = node
 
         # Always add the node to the current graph, even if it was reused from the registry.
@@ -151,7 +153,8 @@ class GraphBuilder:
                 if not getattr(result.task, "_tco_analysis_done", False):
                     assign_tco_cycle_ids(result.task)
                 node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
-                potential_targets = analyze_task_source(result.task)
+                analysis = analyze_task_source(result.task)
+                potential_targets = analysis.targets
                 self._shadow_visited[result.task] = node
                 for target_task in potential_targets:
                     self._visit_shadow_recursive(node, target_task)

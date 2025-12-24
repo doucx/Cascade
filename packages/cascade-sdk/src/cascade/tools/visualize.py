@@ -45,6 +45,8 @@ def visualize(target: Any) -> str:
             )
         elif edge.edge_type == EdgeType.SEQUENCE:
             style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
+        elif edge.edge_type == EdgeType.ITERATIVE_JUMP:
+            style = f' [style=bold, color=blue, label="{edge.arg_name}"]'
         else:
             style = f' [label="{edge.arg_name}"]'
 

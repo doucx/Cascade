@@ -110,3 +110,102 @@ def test_visualize_special_edge_types():
     # 3. Assert Constraint Edge (dotted, purple)
     expected_constraint_edge = f'"{node_constraint.structural_id}" -> "{node_target.structural_id}" [style=dotted, color=purple, label="constraint: cpu"]'
     assert expected_constraint_edge in dot_string
+
+
+def test_visualize_iterative_jump_edge():
+    """
+    Tests that visualize() correctly renders an ITERATIVE_JUMP edge created via cs.bind.
+    """
+
+    @cs.task
+    def state_machine(data: int):
+        if data < 3:
+            # Signal a jump to the "next" state
+            return cs.Jump(target_key="next", data=data + 1)
+        # Signal a normal exit
+        return "done"
+
+    # The selector maps jump keys to their target LazyResults
+    # The target MUST be a LazyResult instance, not a raw Task.
+    # To create a loop, we point it back to the start_node itself.
+    start_node = state_machine(0)
+
+    selector = cs.select_jump(
+        {
+            "next": start_node,  # A jump to "next" re-invokes the same task
+            None: None,  # A normal return value exits the loop
+        }
+    )
+
+    # Initial call to the task, starting the state machine
+    # start_node = state_machine(0) <-- This is now defined before selector
+
+    # Statically bind the task's jump signals to the selector
+    cs.bind(start_node, selector)
+
+    # Statically bind the task's jump signals to the selector
+    cs.bind(start_node, selector)
+
+    # Build the graph to get the stable node ID for assertion
+    from cascade.graph.build import build_graph
+
+    _, instance_map = build_graph(start_node)
+    node_id = instance_map[start_node._uuid].structural_id
+
+    dot_string = cs.visualize(start_node)
+
+    # Assert that a self-referencing, specially styled "jump" edge exists
+    expected_edge = (
+        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="next"]'
+    )
+    assert expected_edge in dot_string
+
+
+def test_visualize_multi_node_jump_edge():
+    """
+    Tests that a jump from a downstream node to an upstream node is visualized correctly.
+    Creates a workflow like A -> B -> C -> A.
+    """
+
+    @cs.task
+    def task_a():
+        return 1
+
+    @cs.task
+    def task_b(val):
+        return val + 1
+
+    @cs.task
+    def task_c(val):
+        # This task will jump back to the start
+        return cs.Jump(target_key="restart")
+
+    # 1. Define the workflow chain
+    node_a = task_a()
+    node_b = task_b(node_a)
+    node_c = task_c(node_b)
+
+    # 2. Define the selector that creates the C -> A loop
+    selector = cs.select_jump(
+        {
+            "restart": node_a,  # A jump to "restart" re-invokes the first task
+        }
+    )
+
+    # 3. Bind the jump signal from C to the selector
+    cs.bind(node_c, selector)
+
+    # 4. Build graph to get stable IDs
+    from cascade.graph.build import build_graph
+
+    _, instance_map = build_graph(node_c)
+    source_id = instance_map[node_c._uuid].structural_id
+    target_id = instance_map[node_a._uuid].structural_id
+
+    dot_string = cs.visualize(node_c)
+
+    # 5. Assert that the styled jump edge from C to A exists
+    expected_edge = (
+        f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="restart"]'
+    )
+    assert expected_edge in dot_string

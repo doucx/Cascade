@@ -20,24 +20,11 @@ def visualize(target: Any) -> str:
     for node in graph.nodes:
         shape = _get_node_shape(node)
 
-        # Default Style
-        style = '"rounded,filled"'
-        fillcolor = "white"
-        fontcolor = "black"
         label_suffix = ""
-
-        # Shadow Style Override
-        if node.is_shadow:
-            style = '"dashed,filled"'
-            fillcolor = "whitesmoke"  # Very light gray
-            fontcolor = "gray50"
-            label_suffix = "\\n(Potential)"
-
         label = f"{node.name}\\n({node.node_type}){label_suffix}"
 
         dot_parts.append(
-            f'  "{node.structural_id}" [label="{label}", shape={shape}, style={style}, '
-            f"fillcolor={fillcolor}, fontcolor={fontcolor}];"
+            f'  "{node.structural_id}" [label="{label}", shape={shape}];'
         )
 
     # 2. Define Edges
@@ -60,9 +47,6 @@ def visualize(target: Any) -> str:
             )
         elif edge.edge_type == EdgeType.SEQUENCE:
             style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
-        elif edge.edge_type == EdgeType.POTENTIAL:
-            # Use a reddish color to indicate a predicted/potential path, dashed
-            style = ' [style=dashed, color="#d9534f", fontcolor="#d9534f", arrowhead=open, label="potential"]'
         else:
             style = f' [label="{edge.arg_name}"]'
 

@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
 
 from .model import Graph, Node, Edge, EdgeType
-from cascade.spec.common import Param
+from cascade.spec.input import ParamSpec
 from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -222,7 +222,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     if "param_spec" in data:
         ps_data = data["param_spec"]
         # Recovering type is hard without `pydoc.locate` or similar, defaulting to None or str
-        param_spec = Param(
+        param_spec = ParamSpec(
             name=ps_data["name"],
             default=ps_data["default"],
             description=ps_data["description"],

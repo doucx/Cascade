@@ -10,6 +10,8 @@ __pycache__/
 *.jsonl
 *.out
 
+*.prof
+
 # Distribution / packaging
 .Python
 build/

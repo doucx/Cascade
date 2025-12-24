@@ -73,8 +73,8 @@ async def profile_target(name: str, iterations: int):
 
 
 if __name__ == "__main__":
-    target_name = sys.argv if len(sys.argv) > 1 else "simple"
-    count = int(sys.argv) if len(sys.argv) > 2 else 1000
+    target_name = sys.argv[1] if len(sys.argv) > 1 else "simple"
+    count = int(sys.argv[2]) if len(sys.argv) > 2 else 1000
 
     print(f"Profiling {target_name} for {count} iterations...")
     asyncio.run(profile_target(target_name, count))

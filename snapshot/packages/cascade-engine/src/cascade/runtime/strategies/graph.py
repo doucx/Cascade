@@ -112,8 +112,6 @@ class GraphExecutionStrategy:
 
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
-                input_overrides = None
-
                 if fast_path_data:
                     # FAST PATH: Reuse Graph & Plan
                     # Unpack all 4 cached values: graph, indexed_plan, root_node_id, req_res
@@ -122,12 +120,6 @@ class GraphExecutionStrategy:
                     target_node = graph.get_node(root_node_id)
                     instance_map = {current_target._uuid: target_node}
                     plan = self._rehydrate_plan(graph, indexed_plan)
-
-                    # Prepare Input Overrides
-                    input_overrides = {}
-                    for i, arg in enumerate(current_target.args):
-                        input_overrides[str(i)] = arg
-                    input_overrides.update(current_target.kwargs)
                 else:
                     # SLOW PATH: Build Graph
                     # STATE GC (Asynchronous)
@@ -206,31 +198,24 @@ class GraphExecutionStrategy:
                     run_id,
                 )
 
-                # 4. Execute Graph
-                # CHECK FOR HOT-LOOP BYPASS
-                # If it's a fast path and it's a simple single-node plan, bypass the orchestrator
-                if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
-                    result = await self._execute_hot_node(
-                        target_node,
-                        graph,
-                        state_backend,
-                        active_resources,
-                        params,
-                        instance_map,
-                        input_overrides,
-                    )
-                else:
-                    result = await self._execute_graph(
-                        current_target,
-                        params,
-                        active_resources,
-                        run_id,
-                        state_backend,
-                        graph,
-                        plan,
-                        instance_map,
-                        input_overrides,
-                    )
+                # 4. Execute Graph (UNIFIED LOGIC)
+                input_overrides = {}
+                # Always prepare parameter overrides for the root node of the current TCO iteration
+                for i, arg in enumerate(current_target.args):
+                    input_overrides[str(i)] = arg
+                input_overrides.update(current_target.kwargs)
+
+                result = await self._execute_graph(
+                    current_target,
+                    params,
+                    active_resources,
+                    run_id,
+                    state_backend,
+                    graph,
+                    plan,
+                    instance_map,
+                    root_input_overrides=input_overrides,
+                )
 
             # 5. Check for Tail Call (LazyResult) - TCO Logic
             if isinstance(result, (LazyResult, MappedLazyResult)):

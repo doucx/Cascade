@@ -84,44 +84,57 @@ async def run_benchmark(
 
 
 async def main():
-    iterations = 5_000  # Reasonable count for comparison
+    iterations = 5_000
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
-    print("--- Cascade v1.4 Performance Benchmark ---")
+    print("--- Cascade v1.4 Performance Benchmark (Nodes Per Second) ---")
     print(f"Iterations: {iterations}\n")
 
-    # [1] Explicit Jump (Graph Strategy)
-    # This tests the "Blueprint Cache Hit" speed
-    print("[1] Running Explicit Jump Loop (Blueprint Cache)...")
+    # [1] Explicit Jump Loop (Simple)
+    # Nodes per iter: 1 (the step task itself)
+    nodes_per_iter_1 = 1
+    print("[1] Running Explicit Jump Loop (Simple)...")
     target_1 = create_explicit_loop(iterations)
     time_1 = await run_benchmark(engine, target_1)
-    print(f"  TPS: {iterations / time_1:,.2f} calls/sec\n")
+    tps_1 = iterations / time_1
+    nps_1 = tps_1 * nodes_per_iter_1
+    print(f"  TPS: {tps_1:,.2f} iter/sec")
+    print(f"  NPS: {nps_1:,.2f} nodes/sec\n")
 
-    # [2] Heavy Explicit Jump
-    # This verifies that solve cost is ZERO even for complex graphs after iteration 1
-    print("[2] Running Heavy Explicit Loop (Complexity=20)...")
-    target_2 = create_heavy_explicit_loop(iterations, complexity=20)
+    # [2] Heavy Explicit Loop
+    # Nodes per iter: 20 (chain) + 1 (step) = 21
+    complexity = 20
+    nodes_per_iter_2 = complexity + 1
+    print(f"[2] Running Heavy Explicit Loop (Complexity={complexity})...")
+    target_2 = create_heavy_explicit_loop(iterations, complexity=complexity)
     time_2 = await run_benchmark(engine, target_2)
-    print(f"  TPS: {iterations / time_2:,.2f} calls/sec")
-    print(f"  Penalty for complexity: {((time_2/time_1)-1)*100:.1f}%\n")
+    tps_2 = iterations / time_2
+    nps_2 = tps_2 * nodes_per_iter_2
+    print(f"  TPS: {tps_2:,.2f} iter/sec")
+    print(f"  NPS: {nps_2:,.2f} nodes/sec")
+    
+    efficiency = ((nps_2 / nps_1) - 1) * 100
+    print(f"  Throughput Gain vs Simple: {efficiency:+.1f}% (Batching Efficiency)\n")
 
     # [3] VM Path
     print("[3] Running VM Path (TailCall)...")
     target_3 = vm_countdown(n=iterations)
     time_3 = await run_benchmark(engine, target_3, use_vm=True)
-    print(f"  TPS: {iterations / time_3:,.2f} calls/sec\n")
+    tps_3 = iterations / time_3
+    print(f"  TPS: {tps_3:,.2f} iter/sec")
+    print(f"  (VM bypasses graph logic, pure dispatch speed)\n")
 
-    # [4] Imperative Ground Truth
+    # [4] Imperative
     print("[4] Running Imperative Ground Truth...")
     start_imp = time.perf_counter()
     await imperative_countdown(iterations)
     time_imp = time.perf_counter() - start_imp
-    print(f"  TPS: {iterations / time_imp:,.2f} calls/sec\n")
+    tps_imp = iterations / time_imp
+    print(f"  TPS: {tps_imp:,.2f} iter/sec\n")
 
-    # Summary
-    print("--- Summary ---")
-    print(f"VM path is {time_1 / time_3:.2f}x faster than Graph Jump.")
-    print(f"Graph Jump is {time_imp / time_1:.2f}x slower than native loop.")
+    print("--- Conclusion ---")
+    print(f"Engine processes {nps_2:,.0f} nodes/sec under load.")
+    print(f"Explicit Control Flow adds {(time_1 - time_imp)/iterations*1000000:.1f} microsec overhead per step vs raw Python.")
 
 
 if __name__ == "__main__":

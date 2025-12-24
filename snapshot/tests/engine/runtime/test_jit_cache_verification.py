@@ -163,8 +163,11 @@ async def test_jit_cache_is_hit_but_graph_is_rebuilt_in_loop(mocker):
     # 4. recursive(0, _dummy=Lazy(noop)) -> Template B (Hit)
     assert resolve_spy.call_count == 2
 
-    # The graph is rebuilt for the initial call, and for each of the 3 recursive calls.
-    assert build_graph_spy.call_count == iterations + 1
+    # The graph is rebuilt for the initial call, and for the first recursive call.
+    # After the second call, the `_cycle_cache` is populated, and all subsequent
+    # calls hit the fast path, which bypasses `build_graph` entirely.
+    # Therefore, we expect exactly 2 calls regardless of the number of iterations.
+    assert build_graph_spy.call_count == 2
 
 
 @pytest.mark.asyncio

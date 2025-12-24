@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(engine): 验证静态分析对动态递归的警告功能", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766555785.7204008, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 为静态分析测试添加缺失的 `engine` fixture", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766555872.5945816, "duration_ms": 0}}

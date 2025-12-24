@@ -1,61 +1,53 @@
-好的，我们来完成“阶段二”的最后一步：编写测试来验证我们新加的 Linter 是否能按预期工作。
+好的，收到了新的测试错误。
 
-这是一个典型的 TDD (测试驱动开发) 流程中的“绿”灯环节：我们已经有了实现，现在需要编写一个测试来证明它是正确的。
+ 错误分析
 
-我将生成一个计划，该计划会首先更新消息定义文件，然后创建一个新的测试文件来验证警告功能。
+错误日志非常清晰：`fixture 'engine' not found`。
 
-## [WIP] test(engine): 验证静态分析对动态递归的警告功能
+这表明我新创建的测试文件 `tests/engine/runtime/test_static_analysis.py` 试图使用一个名为 `engine` 的 Pytest Fixture，但这个 Fixture 在测试的上下文中并不存在。
+
+通常，`engine` Fixture 是在特定的测试文件或通用的 `conftest.py` 文件中定义的，用于创建一个配置好的 `Engine` 实例供测试使用。我在编写测试时，错误地假设了 `engine` Fixture 是全局可用的。
+
+ 解决方案
+
+解决方案是在 `tests/engine/runtime/test_static_analysis.py` 文件内部定义一个局部的 `engine` Fixture。这个 Fixture 将会：
+1.  导入必要的组件，如 `Engine`, `NativeSolver`, `LocalExecutor`, 和 `MessageBus`。
+2.  创建一个配置好的 `Engine` 实例。
+3.  `yield` 这个实例给测试函数使用。
+
+这将使测试能够找到并使用一个有效的 `Engine` 实例，从而解决 `fixture not found` 的错误。
+
+我将生成一个计划来修复这个问题。
+
+## [WIP] fix(tests): 为静态分析测试添加缺失的 `engine` fixture
+
+### 错误分析
+新创建的集成测试 `tests/engine/runtime/test_static_analysis.py` 依赖于一个名为 `engine` 的 Pytest Fixture，但该 Fixture 并未在该文件的作用域内定义，导致 `fixture 'engine' not found` 错误。
 
 ### 用户需求
-为新实现的动态递归静态分析器编写一个集成测试。该测试需要验证当引擎运行一个包含“动态递归”反模式的工作流时，会通过消息总线发出一个特定的警告。
+在 `test_static_analysis.py` 文件中添加一个 `engine` Fixture 的定义，以修复测试设置错误。
 
 ### 评论
-这是“阶段二：防线建设”的收官之作。通过编写这个测试，我们不仅能确保新功能的正确性，还能为未来的回归测试建立一道防线。遵循“测试意图而非实现”的原则，我们将通过 Mock 消息总线来断言正确的警告“意图”是否被发出，而不是去匹配具体的 UI 文本。
+这是一个常见的测试编写疏忽。通过提供一个局部的、配置正确的 `engine` Fixture，我们可以确保测试环境的完整性和隔离性，让测试能够专注于验证其核心逻辑——静态分析警告功能。
 
 ### 目标
-1.  在 `cascade-common` 的 `runtime_events.json` 中为新的警告消息添加一个条目。
-2.  创建一个新的测试文件 `tests/engine/runtime/test_static_analysis.py`。
-3.  在该文件中定义一个包含“动态递归”反模式的任务。
-4.  使用 `pytest` 和 `monkeypatch` 来 Mock 全局消息总线。
-5.  运行工作流，并断言 `mock_bus.warning` 方法被以正确的语义 ID (`graph.analysis.warning`) 和预期的参数调用。
-6.  （可选但推荐）添加一个反向测试，确保一个普通的递归任务**不会**触发警告。
+1.  在 `tests/engine/runtime/test_static_analysis.py` 文件中导入 `Engine` 和其他必要的依赖。
+2.  创建一个名为 `engine` 的 Pytest Fixture。
+3.  在该 Fixture 中实例化并返回一个 `Engine` 对象。
 
 ### 基本原理
-我们将创建一个集成测试，该测试会完整地运行 `Engine` 的图构建和执行流程。在 `GraphBuilder` 阶段，我们新加的分析逻辑会识别出反模式并在 `Node` 对象上设置 `warns_dynamic_recursion` 标志。随后，在 `GraphExecutionStrategy` 中，这个标志会被检测到，并通过 `bus` 发布一个 `StaticAnalysisWarning` 事件。我们的测试将拦截这个最终的 `bus.warning` 调用，从而验证整个链路的功能是通畅且正确的。
+Pytest 的 Fixture 机制允许我们注入测试所需的依赖。通过在测试文件中定义一个与测试函数参数同名的 Fixture，Pytest 会在运行测试时自动调用该 Fixture 并将其返回值作为参数传入。我们将利用此机制来提供一个可用的 `Engine` 实例。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/engine #scope/dx #ai/instruct #task/domain/runtime #task/object/static-analysis #task/action/verification #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/pytest-fixture #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新消息模板
+#### Acts 1: 修复 `test_static_analysis.py`
 
-首先，我们在 `runtime_events.json` 中添加新的警告消息模板。
-
-~~~~~act
-patch_file
-packages/cascade-common/src/cascade/common/locales/en/runtime_events.json
-~~~~~
-~~~~~json
-    "task.retrying": "   - ⚠️ Task '{task_name}' failed, retrying (attempt {attempt}/{max_attempts}). Delaying for {delay:.2f}s. Error: {error}",
-
-    "engine.connector.connected": "📡 Engine connected to external connector.",
-    "engine.connector.disconnected": "🔌 Engine disconnected from external connector.",
-~~~~~
-~~~~~json
-    "task.retrying": "   - ⚠️ Task '{task_name}' failed, retrying (attempt {attempt}/{max_attempts}). Delaying for {delay:.2f}s. Error: {error}",
-
-    "graph.analysis.warning": "   - ⚠️ [Static Analysis][{warning_code}] in '{task_name}': {message}",
-
-    "engine.connector.connected": "📡 Engine connected to external connector.",
-    "engine.connector.disconnected": "🔌 Engine disconnected from external connector.",
-~~~~~
-
-#### Acts 2: 创建静态分析的集成测试
-
-现在，我们创建新的测试文件，并编写验证逻辑。
+我将使用 `write_file` 覆盖整个测试文件，以添加 Fixture 定义并确保所有导入都已就位。
 
 ~~~~~act
 write_file
@@ -65,13 +57,29 @@ tests/engine/runtime/test_static_analysis.py
 import pytest
 import cascade as cs
 from unittest.mock import MagicMock
+
+# Imports for the new fixture
 from cascade.runtime.engine import Engine
+from cascade.adapters.solvers import NativeSolver
+from cascade.adapters.executors import LocalExecutor
+from cascade.runtime.bus import MessageBus
+
+
+@pytest.fixture
+def engine() -> Engine:
+    """Provides a standard Engine instance for integration tests."""
+    return Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),  # A silent bus for clean test output
+    )
 
 
 @pytest.fixture
 def mock_messaging_bus(monkeypatch):
     """Mocks the global message bus where it is used by subscribers."""
     mock_bus = MagicMock()
+    # Patch the bus used by HumanReadableLogSubscriber
     monkeypatch.setattr("cascade.runtime.subscribers.bus", mock_bus)
     return mock_bus
 

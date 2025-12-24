@@ -1,13 +1,29 @@
 import pytest
 import cascade as cs
 from unittest.mock import MagicMock
+
+# Imports for the new fixture
 from cascade.runtime.engine import Engine
+from cascade.adapters.solvers import NativeSolver
+from cascade.adapters.executors import LocalExecutor
+from cascade.runtime.bus import MessageBus
+
+
+@pytest.fixture
+def engine() -> Engine:
+    """Provides a standard Engine instance for integration tests."""
+    return Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),  # A silent bus for clean test output
+    )
 
 
 @pytest.fixture
 def mock_messaging_bus(monkeypatch):
     """Mocks the global message bus where it is used by subscribers."""
     mock_bus = MagicMock()
+    # Patch the bus used by HumanReadableLogSubscriber
     monkeypatch.setattr("cascade.runtime.subscribers.bus", mock_bus)
     return mock_bus
 

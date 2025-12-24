@@ -123,6 +123,13 @@ class ArgumentResolver:
 
         if incoming_edges:
             for edge in incoming_edges:
+                # [CRITICAL FIX] Priority Check:
+                # If this argument is already provided by an override (e.g., from a TCO Jump),
+                # do NOT overwrite it with the upstream dependency. The override represents
+                # the latest state of the loop and must take precedence over the static graph structure.
+                if input_overrides and edge.arg_name in input_overrides:
+                    continue
+
                 val = await self._resolve_dependency(
                     edge, node.structural_id, state_backend, graph, instance_map
                 )

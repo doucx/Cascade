@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(spec): 修复移除 Param 类后的残留引用错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766583398.6465163, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 TCO 跳转参数无法覆盖 Param 依赖的问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766583855.2846732, "duration_ms": 0}}

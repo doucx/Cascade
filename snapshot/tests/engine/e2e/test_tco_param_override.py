@@ -3,7 +3,7 @@ import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
-from cascade.common.messaging import MessageBus
+from cascade.runtime.bus import MessageBus
 
 @pytest.mark.asyncio
 async def test_jump_overrides_param():

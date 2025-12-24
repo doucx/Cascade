@@ -26,7 +26,7 @@ class EdgeType(Enum):
 class Node:
     """Represents a node in the computation graph."""
 
-    id: str
+    structural_id: str
     name: str
     template_id: str = ""  # Structural hash (ignoring literals)
     is_shadow: bool = False  # True if this node is for static analysis only
@@ -48,7 +48,7 @@ class Node:
     literal_inputs: Dict[str, Any] = field(default_factory=dict)
 
     def __hash__(self):
-        return hash(self.id)
+        return hash(self.structural_id)
 
 
 @dataclass

@@ -1,14 +1,13 @@
 from typing import Dict, Any, List, Tuple
 import inspect
-import hashlib
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
 from cascade.spec.task import Task
-from cascade.spec.resource import Inject
 
 from .registry import NodeRegistry
+from .hashing import HashingService
 
 
 class GraphBuilder:
@@ -21,6 +20,7 @@ class GraphBuilder:
         self._shadow_visited: Dict[Task, Node] = {}
 
         self.registry = registry if registry is not None else NodeRegistry()
+        self.hashing_service = HashingService()
 
     def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:
         self._visit(target)
@@ -34,103 +34,6 @@ class GraphBuilder:
             return self._visit_mapped_result(value)
         else:
             raise TypeError(f"Cannot build graph from type {type(value)}")
-
-    def _get_merkle_hash(self, components: List[str]) -> str:
-        """Computes a stable hash from a list of string components."""
-        fingerprint = "|".join(components)
-        return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
-
-    def _build_hash_components_from_arg(
-        self, obj: Any, dep_nodes: Dict[str, Node]
-    ) -> List[str]:
-        """Recursively builds hash components from arguments, using pre-computed dependency nodes."""
-        components = []
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # Hash-Consing: The identity of this dependency is its structural ID.
-            components.append(f"LAZY({dep_nodes[obj._uuid].id})")
-        elif isinstance(obj, Router):
-            components.append("Router{")
-            components.append("Selector:")
-            components.extend(
-                self._build_hash_components_from_arg(obj.selector, dep_nodes)
-            )
-            components.append("Routes:")
-            for k in sorted(obj.routes.keys()):
-                components.append(f"Key({k})->")
-                components.extend(
-                    self._build_hash_components_from_arg(obj.routes[k], dep_nodes)
-                )
-            components.append("}")
-        elif isinstance(obj, (list, tuple)):
-            components.append("List[")
-            for item in obj:
-                components.extend(self._build_hash_components_from_arg(item, dep_nodes))
-            components.append("]")
-        elif isinstance(obj, dict):
-            components.append("Dict{")
-            for k in sorted(obj.keys()):
-                components.append(f"{k}:")
-                components.extend(
-                    self._build_hash_components_from_arg(obj[k], dep_nodes)
-                )
-            components.append("}")
-        elif isinstance(obj, Inject):
-            components.append(f"Inject({obj.resource_name})")
-        else:
-            try:
-                components.append(repr(obj))
-            except Exception:
-                components.append("<unreprable>")
-        return components
-
-    def _build_template_hash_components_from_arg(
-        self, obj: Any, dep_nodes: Dict[str, Node]
-    ) -> List[str]:
-        """
-        Recursively builds TEMPLATE hash components.
-        Literals are replaced by '?', but structure (Lists, Dicts, Routers) is preserved.
-        """
-        components = []
-        if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # For dependencies, we use their TEMPLATE ID, not their instance ID.
-            components.append(f"LAZY({dep_nodes[obj._uuid].template_id})")
-        elif isinstance(obj, Router):
-            components.append("Router{")
-            components.append("Selector:")
-            components.extend(
-                self._build_template_hash_components_from_arg(obj.selector, dep_nodes)
-            )
-            components.append("Routes:")
-            # We assume Router keys are structural (control flow decisions)
-            for k in sorted(obj.routes.keys()):
-                components.append(f"Key({k})->")
-                components.extend(
-                    self._build_template_hash_components_from_arg(
-                        obj.routes[k], dep_nodes
-                    )
-                )
-            components.append("}")
-        elif isinstance(obj, (list, tuple)):
-            components.append("List[")
-            for item in obj:
-                components.extend(
-                    self._build_template_hash_components_from_arg(item, dep_nodes)
-                )
-            components.append("]")
-        elif isinstance(obj, dict):
-            components.append("Dict{")
-            for k in sorted(obj.keys()):
-                components.append(f"{k}:")
-                components.extend(
-                    self._build_template_hash_components_from_arg(obj[k], dep_nodes)
-                )
-            components.append("}")
-        elif isinstance(obj, Inject):
-            components.append(f"Inject({obj.resource_name})")
-        else:
-            # This is the normalization magic: Literals become placeholders.
-            components.append("?")
-        return components
 
     def _find_dependencies(self, obj: Any, dep_nodes: Dict[str, Node]):
         """Helper for post-order traversal: finds and visits all nested LazyResults."""
@@ -164,32 +67,10 @@ class GraphBuilder:
         if result._dependencies:
             self._find_dependencies(result._dependencies, dep_nodes)
 
-        # 2. Compute structural Merkle hash
-        hash_components = [f"Task({getattr(result.task, 'name', 'unknown')})"]
-        if result._retry_policy:
-            rp = result._retry_policy
-            hash_components.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
-        if result._cache_policy:
-            hash_components.append(f"Cache({type(result._cache_policy).__name__})")
-
-        hash_components.append("Args:")
-        hash_components.extend(
-            self._build_hash_components_from_arg(result.args, dep_nodes)
+        # 2. Compute hashes using HashingService
+        structural_hash, template_hash = self.hashing_service.compute_hashes(
+            result, dep_nodes
         )
-        hash_components.append("Kwargs:")
-        hash_components.extend(
-            self._build_hash_components_from_arg(result.kwargs, dep_nodes)
-        )
-
-        if result._condition:
-            hash_components.append("Condition:PRESENT")
-        if result._dependencies:
-            hash_components.append(f"Deps:{len(result._dependencies)}")
-        if result._constraints:
-            keys = sorted(result._constraints.requirements.keys())
-            hash_components.append(f"Constraints({','.join(keys)})")
-
-        structural_hash = self._get_merkle_hash(hash_components)
 
         # 3. Hash-consing: Query registry FIRST before doing more work
         node = self.registry.get(structural_hash)
@@ -197,37 +78,6 @@ class GraphBuilder:
 
         if not node:
             created_new = True
-            # 2b. Compute TEMPLATE hash (Normalization) - ONLY if node is new
-            template_components = [f"Task({getattr(result.task, 'name', 'unknown')})"]
-            if result._retry_policy:
-                rp = result._retry_policy
-                template_components.append(
-                    f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})"
-                )
-            if result._cache_policy:
-                template_components.append(
-                    f"Cache({type(result._cache_policy).__name__})"
-                )
-
-            template_components.append("Args:")
-            template_components.extend(
-                self._build_template_hash_components_from_arg(result.args, dep_nodes)
-            )
-            template_components.append("Kwargs:")
-            template_components.extend(
-                self._build_template_hash_components_from_arg(result.kwargs, dep_nodes)
-            )
-
-            if result._condition:
-                template_components.append("Condition:PRESENT")
-            if result._dependencies:
-                template_components.append(f"Deps:{len(result._dependencies)}")
-            if result._constraints:
-                keys = sorted(result._constraints.requirements.keys())
-                vals = [f"{k}={result._constraints.requirements[k]}" for k in keys]
-                template_components.append(f"Constraints({','.join(vals)})")
-
-            template_hash = self._get_merkle_hash(template_components)
 
             # Extract bindings
             input_bindings = {}
@@ -356,35 +206,10 @@ class GraphBuilder:
         if result._dependencies:
             self._find_dependencies(result._dependencies, dep_nodes)
 
-        # 2. Compute structural hash for Map node
-        hash_components = [f"Map({getattr(result.factory, 'name', 'factory')})"]
-        hash_components.append("MapKwargs:")
-        hash_components.extend(
-            self._build_hash_components_from_arg(result.mapping_kwargs, dep_nodes)
+        # 2. Compute hashes using HashingService
+        structural_hash, template_hash = self.hashing_service.compute_hashes(
+            result, dep_nodes
         )
-
-        if result._condition:
-            hash_components.append("Condition:PRESENT")
-        if result._dependencies:
-            hash_components.append(f"Deps:{len(result._dependencies)}")
-
-        structural_hash = self._get_merkle_hash(hash_components)
-
-        # 2b. Compute TEMPLATE hash
-        template_components = [f"Map({getattr(result.factory, 'name', 'factory')})"]
-        template_components.append("MapKwargs:")
-        template_components.extend(
-            self._build_template_hash_components_from_arg(
-                result.mapping_kwargs, dep_nodes
-            )
-        )
-
-        if result._condition:
-            template_components.append("Condition:PRESENT")
-        if result._dependencies:
-            template_components.append(f"Deps:{len(result._dependencies)}")
-
-        template_hash = self._get_merkle_hash(template_components)
 
         # 3. Hash-consing
         def node_factory():

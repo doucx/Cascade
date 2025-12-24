@@ -24,10 +24,9 @@ sys.path.append(
 )
 
 from observatory.benchmarks.tco_performance import (
-    simple_countdown,
-    heavy_complex_countdown,
-    stable_complex_loop,
-    noop,
+    create_explicit_loop,
+    create_heavy_explicit_loop,
+    vm_countdown,
     run_benchmark,
 )
 from cascade.runtime import Engine, MessageBus
@@ -38,17 +37,15 @@ from cascade.adapters.executors.local import LocalExecutor
 async def profile_target(name: str, iterations: int):
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
-    if name == "simple":
-        target = simple_countdown(iterations)
+    if name == "graph":
+        target = create_explicit_loop(iterations)
+        use_vm = False
     elif name == "heavy":
-        target = heavy_complex_countdown(iterations)
-    elif name == "stable":
-        # Recreate the dependency chain locally to keep the script self-contained
-        # for this specific test case, as per user instruction. Redundancy is fine.
-        static_dep_chain = noop()
-        for _ in range(10):
-            static_dep_chain = noop(_dummy=static_dep_chain)
-        target = stable_complex_loop([iterations], _dummy=static_dep_chain)
+        target = create_heavy_explicit_loop(iterations, complexity=20)
+        use_vm = False
+    elif name == "vm":
+        target = vm_countdown(n=iterations)
+        use_vm = True
     else:
         print(f"Unknown target: {name}")
         return
@@ -56,7 +53,7 @@ async def profile_target(name: str, iterations: int):
     pr = cProfile.Profile()
     pr.enable()
 
-    await run_benchmark(engine, target, iterations)
+    await run_benchmark(engine, target, use_vm=use_vm)
 
     pr.disable()
 

@@ -10,6 +10,8 @@
     "task.skipped": "   - ⚪ Task '{task_name}' skipped. Reason: {reason}",
     "task.retrying": "   - ⚠️ Task '{task_name}' failed, retrying (attempt {attempt}/{max_attempts}). Delaying for {delay:.2f}s. Error: {error}",
 
+    "graph.analysis.warning": "   - ⚠️ [Static Analysis][{warning_code}] in '{task_name}': {message}",
+
     "engine.connector.connected": "📡 Engine connected to external connector.",
     "engine.connector.disconnected": "🔌 Engine disconnected from external connector.",
 

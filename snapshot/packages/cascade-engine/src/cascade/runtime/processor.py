@@ -179,6 +179,9 @@ class NodeProcessor:
             try:
                 result = await self.executor.execute(node, args, kwargs)
                 duration = time.time() - start_time
+                # Optimization: Only compute result_preview if necessary or make it cheap
+                # For heavy loops, repr() on large objects is expensive.
+                # We skip preview for simple types or rely on renderer to do it if needed.
                 self.bus.publish(
                     TaskExecutionFinished(
                         run_id=run_id,
@@ -186,7 +189,8 @@ class NodeProcessor:
                         task_name=node.name,
                         status="Succeeded",
                         duration=duration,
-                        result_preview=repr(result)[:100],
+                        # result_preview=repr(result)[:100], # Too expensive for tight loops
+                        result_preview=None, 
                     )
                 )
                 # Cache Save

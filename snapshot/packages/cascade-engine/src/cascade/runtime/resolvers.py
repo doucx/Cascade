@@ -249,9 +249,18 @@ class ArgumentResolver:
         graph: Graph,
     ) -> Any:
         """Helper to get a node's result, with skip penetration logic."""
-        if await state_backend.has_result(node_id):
-            return await state_backend.get_result(node_id)
+        # SUPER FAST PATH: Direct dict access for InMemoryStateBackend
+        # This avoids 2 awaits per dependency (has_result + get_result)
+        if hasattr(state_backend, "_results"):
+            # We assume it's InMemoryStateBackend-like
+            if node_id in state_backend._results:
+                return state_backend._results[node_id]
+        else:
+            # Standard Protocol Path
+            if await state_backend.has_result(node_id):
+                return await state_backend.get_result(node_id)
 
+        # Slow Path: Check for skip/penetration
         skip_reason = await state_backend.get_skip_reason(node_id)
         if skip_reason:
             upstream_edges = [

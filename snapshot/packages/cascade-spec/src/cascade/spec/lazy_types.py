@@ -34,6 +34,7 @@ class LazyResult(Generic[T]):
     _dependencies: List["LazyResult"] = field(
         default_factory=list
     )  # Explicit sequencing
+    _jump_selector: Optional[Any] = None  # Explicit Control Flow (JumpSelector)
 
     def __hash__(self):
         return hash(self._uuid)

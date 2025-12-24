@@ -101,11 +101,9 @@ class GraphExecutionStrategy:
                 input_overrides = None
 
                 # 1. State GC (Crucial for TCO stability)
-                if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
-                    state_backend.clear
-                ):
-                    await state_backend.clear()
-                await asyncio.sleep(0)
+                # We skip the explicit inspect check here as state_backends are expected
+                # to be async in v1.4.
+                await state_backend.clear()
 
                 # 2. Check Local Context Cache (FAST PATH)
                 if current_target._uuid in local_context_cache:

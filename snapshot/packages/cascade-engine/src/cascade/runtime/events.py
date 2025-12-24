@@ -1,14 +1,16 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from uuid import uuid4
 import time
+import itertools
 
+# Fast, thread-safe counter for event IDs
+_event_id_gen = itertools.count()
 
 @dataclass(frozen=True)
 class Event:
     """Base class for all runtime events."""
 
-    event_id: str = field(default_factory=lambda: str(uuid4()))
+    event_id: str = field(default_factory=lambda: str(next(_event_id_gen)))
     timestamp: float = field(default_factory=time.time)
 
     # In a real run, this would be injected by the Engine context

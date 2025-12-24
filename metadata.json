@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(engine): 在 adapter 包中暴露核心类以修复导入错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766556087.927746, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修正静态分析警告逻辑并修复单元测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766556187.287768, "duration_ms": 0}}

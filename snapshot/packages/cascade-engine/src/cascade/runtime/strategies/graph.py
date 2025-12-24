@@ -44,6 +44,9 @@ class GraphExecutionStrategy:
         self.bus = bus
         self.wakeup_event = wakeup_event
 
+        # Tracks warnings issued in this run to avoid duplicates
+        self._issued_warnings: Set[str] = set()
+
         # JIT Compilation Cache
         # Maps template_id to an IndexedExecutionPlan (List[List[int]])
         # We store indices instead of Node objects to allow plan reuse across
@@ -146,7 +149,7 @@ class GraphExecutionStrategy:
 
                     # Post-build analysis checks
                     for node in graph.nodes:
-                        if node.warns_dynamic_recursion:
+                        if node.warns_dynamic_recursion and node.name not in self._issued_warnings:
                             self.bus.publish(
                                 StaticAnalysisWarning(
                                     run_id=run_id,
@@ -160,6 +163,7 @@ class GraphExecutionStrategy:
                                     ),
                                 )
                             )
+                            self._issued_warnings.add(node.name)
 
                     target_node = instance_map[current_target._uuid]
                     cache_key = target_node.template_id or target_node.structural_id

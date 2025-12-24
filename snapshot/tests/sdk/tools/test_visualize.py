@@ -110,3 +110,45 @@ def test_visualize_special_edge_types():
     # 3. Assert Constraint Edge (dotted, purple)
     expected_constraint_edge = f'"{node_constraint.structural_id}" -> "{node_target.structural_id}" [style=dotted, color=purple, label="constraint: cpu"]'
     assert expected_constraint_edge in dot_string
+
+
+def test_visualize_iterative_jump_edge():
+    """
+    Tests that visualize() correctly renders an ITERATIVE_JUMP edge created via cs.bind.
+    """
+
+    @cs.task
+    def state_machine(data: int):
+        if data < 3:
+            # Signal a jump to the "next" state
+            return cs.Jump(target_key="next", data=data + 1)
+        # Signal a normal exit
+        return "done"
+
+    # The selector maps jump keys to their target LazyResults
+    selector = cs.select_jump(
+        {
+            "next": state_machine,  # A jump to "next" re-invokes the same task
+            None: None,  # A normal return value exits the loop
+        }
+    )
+
+    # Initial call to the task, starting the state machine
+    start_node = state_machine(0)
+
+    # Statically bind the task's jump signals to the selector
+    cs.bind(start_node, selector)
+
+    # Build the graph to get the stable node ID for assertion
+    from cascade.graph.build import build_graph
+
+    _, instance_map = build_graph(start_node)
+    node_id = instance_map[start_node._uuid].structural_id
+
+    dot_string = cs.visualize(start_node)
+
+    # Assert that a self-referencing, specially styled "jump" edge exists
+    expected_edge = (
+        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="jump"]'
+    )
+    assert expected_edge in dot_string

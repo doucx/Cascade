@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: D test_ast_analyzer.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766576700.040754, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(engine): 修复 Solver 中过时的 is_shadow 引用", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766576702.9812706, "duration_ms": 0}}

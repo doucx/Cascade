@@ -18,9 +18,7 @@ class NativeSolver(Solver):
         Raises:
             ValueError: If a cycle is detected in the graph.
         """
-        # Filter out shadow nodes completely. They are for static analysis only
-        # and should never be scheduled for execution.
-        executable_nodes = [n for n in graph.nodes if not n.is_shadow]
+        executable_nodes = graph.nodes
 
         adj: Dict[str, List[Node]] = {
             node.structural_id: [] for node in executable_nodes
@@ -45,7 +43,7 @@ class NativeSolver(Solver):
             if edge.edge_type not in EXECUTION_EDGE_TYPES:
                 continue
 
-            # Ensure edge connects executable nodes (ignores edges to/from shadow nodes)
+            # Ensure edge connects executable nodes
             if (
                 edge.source.structural_id not in node_map
                 or edge.target.structural_id not in node_map

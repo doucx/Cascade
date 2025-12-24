@@ -156,7 +156,7 @@ def test_visualize_iterative_jump_edge():
 
     # Assert that a self-referencing, specially styled "jump" edge exists
     expected_edge = (
-        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="jump"]'
+        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="next"]'
     )
     assert expected_edge in dot_string
 
@@ -206,6 +206,6 @@ def test_visualize_multi_node_jump_edge():
 
     # 5. Assert that the styled jump edge from C to A exists
     expected_edge = (
-        f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="jump"]'
+        f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="restart"]'
     )
     assert expected_edge in dot_string

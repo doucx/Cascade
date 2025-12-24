@@ -151,16 +151,25 @@ class GraphBuilder:
                     if route_target is not None:
                         self._visit(route_target)
 
-                # Create the ITERATIVE_JUMP edge
-                self.graph.add_edge(
-                    Edge(
-                        source=node,
-                        target=node,  # Placeholder, engine uses jump_selector
-                        arg_name="<jump>",
-                        edge_type=EdgeType.ITERATIVE_JUMP,
-                        jump_selector=selector,
+                # Create a distinct ITERATIVE_JUMP edge for each potential jump target.
+                # This makes the static graph correctly represent all potential control flows.
+                for key, route_target_lr in selector.routes.items():
+                    if route_target_lr is None:
+                        continue  # Skip exit routes, as they don't form an edge
+
+                    # We have already visited the target, so it's in the instance map
+                    target_node = self._visited_instances[route_target_lr._uuid]
+
+                    self.graph.add_edge(
+                        Edge(
+                            source=node,
+                            target=target_node,
+                            arg_name=key,  # Use the jump key as the edge label
+                            edge_type=EdgeType.ITERATIVE_JUMP,
+                            # We can still attach the selector for the engine's use
+                            jump_selector=selector,
+                        )
                     )
-                )
 
         if result._condition:
             source_node = self._visited_instances[result._condition._uuid]

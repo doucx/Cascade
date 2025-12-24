@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any, List, Dict, Tuple
+from typing import Any, List, Dict, Tuple, Optional
 from cascade.graph.model import Node
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -9,22 +9,26 @@ from cascade.spec.resource import Inject
 class HashingService:
     """
     Service responsible for computing stable Merkle hashes for Cascade objects.
-    It separates the concern of 'Identity' from 'Graph Construction'.
+
+    FORMAL HASHING SEMANTICS (The Hashing Manifest):
+    
+    1. Structural Hash (Instance Identity):
+       - Purpose: Uniquely identify a specific, fully-parameterized node instance.
+       - Use Case: Key for results caching (e.g., in Redis).
+       - Logic: Includes task ID, policies, and ALL literal values for arguments and constraints.
+
+    2. Template Hash (Blueprint Identity):
+       - Purpose: Identify a reusable computation "blueprint" or "structure".
+       - Use Case: Key for JIT compilation cache (ExecutionPlan reuse).
+       - Logic: Includes task ID and structural keys, but normalizes all literal values 
+                (arguments and constraint amounts) to a placeholder '?'.
     """
 
     def compute_hashes(
         self, result: Any, dep_nodes: Dict[str, Node]
     ) -> Tuple[str, str]:
         """
-        Computes both Structural Hash (Instance Identity) and Template Hash (Blueprint Identity)
-        for a given result object.
-
-        Args:
-            result: The LazyResult or MappedLazyResult to hash.
-            dep_nodes: A map of UUIDs to canonical Nodes for dependencies that have already been visited.
-
-        Returns:
-            (structural_hash, template_hash)
+        Computes both Structural Hash and Template Hash for a given result object.
         """
         if isinstance(result, LazyResult):
             return self._compute_lazy_result_hashes(result, dep_nodes)
@@ -41,7 +45,7 @@ class HashingService:
     def _compute_lazy_result_hashes(
         self, result: LazyResult, dep_nodes: Dict[str, Node]
     ) -> Tuple[str, str]:
-        # 1. Base Components
+        # 1. Base Components (Task identity and Policies)
         base_comps = [f"Task({getattr(result.task, 'name', 'unknown')})"]
         if result._retry_policy:
             rp = result._retry_policy
@@ -49,10 +53,8 @@ class HashingService:
         if result._cache_policy:
             base_comps.append(f"Cache({type(result._cache_policy).__name__})")
 
-        # 2. Argument Components (Structural vs Template)
-        struct_args = self._build_hash_components(
-            result.args, dep_nodes, template=False
-        )
+        # 2. Argument Components
+        struct_args = self._build_hash_components(result.args, dep_nodes, template=False)
         temp_args = self._build_hash_components(result.args, dep_nodes, template=True)
 
         struct_kwargs = self._build_hash_components(
@@ -62,72 +64,38 @@ class HashingService:
             result.kwargs, dep_nodes, template=True
         )
 
-        # 3. Metadata Components
+        # 3. Metadata Components (Structural properties)
         meta_comps = []
         if result._condition:
             meta_comps.append("Condition:PRESENT")
         if result._dependencies:
             meta_comps.append(f"Deps:{len(result._dependencies)}")
+
+        # 4. Constraint Components (Differentiated)
+        struct_constraints = []
+        temp_constraints = []
         if result._constraints:
             keys = sorted(result._constraints.requirements.keys())
-            meta_comps.append(f"Constraints({','.join(keys)})")
-
-        # Template hash for constraints needs values too?
-        # Current logic in build.py:
-        # Structural: f"Constraints({','.join(keys)})"
-        # Template: f"Constraints({','.join(vals)})"
-        # Wait, build.py logic was:
-        # Structural used keys only (implying requirement existence matters, value matters? build.py line 125)
-        # Actually build.py line 125 only used keys for structural hash.
-        # But for template hash (line 166), it included values.
-        # This seems inverted? Template should be looser (ignore literals), Structural should be stricter.
-        # Let's check the old code...
-        # Old code: Structural -> keys only. Template -> keys AND values.
-        # This looks like a potential bug in the old code or I'm misreading.
-        # Typically Structural (Instance) Identity should include EVERYTHING (keys + values).
-        # Template Identity should include Structure (keys).
-        # However, for Constraints, maybe specific resource requirements define the 'shape' of execution?
-        # Let's stick to a safe default: Structural includes EVERYTHING. Template includes KEYS.
-        # But for migration safety, I will replicate the *intent* of correct hashing:
-        # Structural = Keys + Values. Template = Keys (maybe values if they are structural?).
-        # Let's fix the logic: Structural should be strict.
-
-        # Re-reading old code:
-        # Structural: keys only.
-        # Template: values included.
-        # This is definitely weird. I will implement a sane version:
-        # Structural: keys + values.
-        # Template: keys + values (constraints are usually structural properties of the node).
-
-        constraint_comps = []
-        if result._constraints:
-            keys = sorted(result._constraints.requirements.keys())
-            vals = [f"{k}={result._constraints.requirements[k]}" for k in keys]
-            constraint_comps.append(f"Constraints({','.join(vals)})")
-
-        # Assemble Structural
-        struct_list = (
-            base_comps
-            + ["Args:"]
-            + struct_args
-            + ["Kwargs:"]
-            + struct_kwargs
-            + meta_comps
-            + constraint_comps
+            
+            # Structural: Exact resource amounts
+            s_vals = [f"{k}={result._constraints.requirements[k]}" for k in keys]
+            struct_constraints.append(f"Constraints({','.join(s_vals)})")
+            
+            # Template: Normalized amounts for JIT reuse
+            t_vals = [f"{k}=?" for k in keys]
+            temp_constraints.append(f"Constraints({','.join(t_vals)})")
+        
+        # Assemble Structural ID
+        structural_hash = self._get_merkle_hash(
+            base_comps + ["Args:"] + struct_args + ["Kwargs:"] + struct_kwargs 
+            + meta_comps + struct_constraints
         )
-        structural_hash = self._get_merkle_hash(struct_list)
 
-        # Assemble Template
-        temp_list = (
-            base_comps
-            + ["Args:"]
-            + temp_args
-            + ["Kwargs:"]
-            + temp_kwargs
-            + meta_comps
-            + constraint_comps
+        # Assemble Template ID
+        template_hash = self._get_merkle_hash(
+            base_comps + ["Args:"] + temp_args + ["Kwargs:"] + temp_kwargs 
+            + meta_comps + temp_constraints
         )
-        template_hash = self._get_merkle_hash(temp_list)
 
         return structural_hash, template_hash
 
@@ -135,7 +103,7 @@ class HashingService:
         self, result: MappedLazyResult, dep_nodes: Dict[str, Node]
     ) -> Tuple[str, str]:
         base_comps = [f"Map({getattr(result.factory, 'name', 'factory')})"]
-
+        
         meta_comps = []
         if result._condition:
             meta_comps.append("Condition:PRESENT")
@@ -151,11 +119,12 @@ class HashingService:
         )
 
         # Assemble
-        struct_list = base_comps + ["MapKwargs:"] + struct_kwargs + meta_comps
-        structural_hash = self._get_merkle_hash(struct_list)
-
-        temp_list = base_comps + ["MapKwargs:"] + temp_kwargs + meta_comps
-        template_hash = self._get_merkle_hash(temp_list)
+        structural_hash = self._get_merkle_hash(
+            base_comps + ["MapKwargs:"] + struct_kwargs + meta_comps
+        )
+        template_hash = self._get_merkle_hash(
+            base_comps + ["MapKwargs:"] + temp_kwargs + meta_comps
+        )
 
         return structural_hash, template_hash
 
@@ -167,49 +136,39 @@ class HashingService:
         If template=True, literals are replaced by '?', but structure is preserved.
         """
         components = []
-
+        
         if isinstance(obj, (LazyResult, MappedLazyResult)):
-            # Hash-Consing: The identity of this dependency.
-            # Structural: Use the dependency's structural ID.
-            # Template: Use the dependency's TEMPLATE ID.
             node = dep_nodes[obj._uuid]
+            # Use appropriate ID depending on the hashing goal
             ref_id = node.template_id if template else node.structural_id
             components.append(f"LAZY({ref_id})")
-
+        
         elif isinstance(obj, Router):
             components.append("Router{")
             components.append("Selector:")
-            components.extend(
-                self._build_hash_components(obj.selector, dep_nodes, template)
-            )
+            components.extend(self._build_hash_components(obj.selector, dep_nodes, template))
             components.append("Routes:")
             for k in sorted(obj.routes.keys()):
                 components.append(f"Key({k})->")
-                components.extend(
-                    self._build_hash_components(obj.routes[k], dep_nodes, template)
-                )
+                components.extend(self._build_hash_components(obj.routes[k], dep_nodes, template))
             components.append("}")
-
+        
         elif isinstance(obj, (list, tuple)):
             components.append("List[")
             for item in obj:
-                components.extend(
-                    self._build_hash_components(item, dep_nodes, template)
-                )
+                components.extend(self._build_hash_components(item, dep_nodes, template))
             components.append("]")
-
+        
         elif isinstance(obj, dict):
             components.append("Dict{")
             for k in sorted(obj.keys()):
                 components.append(f"{k}:")
-                components.extend(
-                    self._build_hash_components(obj[k], dep_nodes, template)
-                )
+                components.extend(self._build_hash_components(obj[k], dep_nodes, template))
             components.append("}")
-
+        
         elif isinstance(obj, Inject):
             components.append(f"Inject({obj.resource_name})")
-
+        
         else:
             if template:
                 # Normalization: Literals become placeholders
@@ -219,5 +178,5 @@ class HashingService:
                     components.append(repr(obj))
                 except Exception:
                     components.append("<unreprable>")
-
+        
         return components

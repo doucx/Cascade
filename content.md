@@ -1,41 +1,44 @@
-好的，我们已经确认了之前的修改方向存在问题，现在回滚并采纳新的、更根本的重构方案。
+好的，我们采纳新的战略。
 
-根据**《综合架构演进建议书：统一 TCO 快速通道与动态参数修补》**，我们将开始执行第一阶段：**核心重构**。
+我们将立即开始重构 `GraphExecutionStrategy`，以实现一个由 JIT 缓存 (`_cycle_cache`) 驱动的、统一且高效的 TCO 快速通道。这个新的快速通道将恢复 `_execute_hot_node` 的零开销理念，但使用更健壮的触发机制，最终目标是统一并提升所有结构稳定递归的性能。
 
-这个计划的目标是废除特定于单节点的“热循环旁路” (`_execute_hot_node`)，并将 JIT 缓存统一为所有 TCO 优化的唯一快速通道。我们将重构核心调度器 `_execute_graph`，使其原生支持“动态参数修补”，从而创建一个单一、健壮且逻辑一致的高性能执行模型。
+这将是一个 `[WIP]` 计划，专注于实现这一核心逻辑变更。
 
-## [WIP] refactor(engine): Unify TCO fast path logic
+## [WIP] perf(engine): Implement unified zero-overhead TCO fast path
 
 ### 用户需求
-执行《综合架构演ви建议书：统一 TCO 快速通道与动态参数修补》中的第一阶段，即对 `GraphExecutionStrategy` 进行核心重构，以统一 TCO 的快速通道逻辑。
+根据新的战略决议，重构 `GraphExecutionStrategy` 以实现一个统一的、高性能的 TCO 快速通道。该通道应由 `_cycle_cache` 驱动，并绕过常规的、高开销的图执行调度逻辑。
 
 ### 评论
-这是一次关键的架构简化，它解决了先前存在的“热循环旁路”和“JIT 缓存”两条优化路径相互冲突的根本性问题。通过废除仅适用于单节点图的特殊优化，并将动态参数修补能力整合到通用的 `_execute_graph` 方法中，我们不仅能修复当前的性能回归 bug，还能建立一个更清晰、更可维护、性能表现更一致的 TCO 执行模型。
+这次重构是解决性能回归的关键。通过将 `_cycle_cache` 的健壮缓存机制与一个类似于 `_execute_hot_node` 的零开销执行循环相结合，我们旨在创建一个既高效又可靠的 TCO 模型。这个新模型不仅应该恢复 `simple_countdown` 和 `stable_complex_loop` 的高性能，而且为未来支持动态参数的“重型路径”优化铺平了道路。
 
 ### 目标
-1.  **重构 `GraphExecutionStrategy.execute`**: 移除调用 `_execute_hot_node` 的特殊分支，使所有 JIT 缓存命中的 TCO 循环都通过统一的逻辑调用 `_execute_graph`。
-2.  **统一参数覆盖逻辑**: 确保在每一次 TCO 迭代中，都为当前的根任务节点准备动态参数覆盖。
-3.  **改造 `_execute_graph`**: 修改其方法签名和内部实现，使其能够接收这些参数覆盖，并将它们仅应用于当前迭代的根节点。
+1.  **重构 `GraphExecutionStrategy.execute`**: 在 TCO 循环的顶部引入一个明确的快速通道分支，当 `_cycle_cache` 命中时激活。
+2.  **实现快速通道逻辑**: 在此分支内，实现一个高度优化的执行循环，它：
+    *   从缓存中解包出图和根节点信息。
+    *   直接调用 `_execute_hot_node` (或其等效逻辑) 来执行单节点图的核心逻辑。
+    *   完全绕过重量级的 `_execute_graph` 及其所有相关的调度、资源和流管理开销。
+3.  **保留慢速路径**: 确保在缓存未命中时，系统能优雅地回退到现有的、完整的图构建和执行路径。
 
 ### 基本原理
-根本的架构缺陷在于存在两条冲突的快速通道。之前的修改试图将动态参数修补逻辑错误地嫁接到仅为单节点设计的“热循环旁路”上，导致了失败。
+我们识别出之前的性能来源于一个脆弱但极速的“热循环旁路”，而当前的性能瓶颈在于废除它之后，所有TCO迭代都强制承担了完整的调度开销。新的战略是重建一个“热循环”，但使其由更通用的 `_cycle_cache`（基于模板哈希）来触发。
 
-本次重构通过废除这条特殊的旁路，将 JIT 缓存确立为唯一的快速通道。主执行器 `_execute_graph` 将被赋予处理动态参数的能力。这样，无论是简单的单节点递归还是复杂的多节点递归，只要其结构稳定（即 `template_id` 不变），就能从 JIT 缓存中获益，从而实现架构的简化和性能的统一。
+这样，任何结构稳定的递归（无论简单还是复杂）在第二次迭代时都会进入这个零开销的快速通道，从而恢复其应有的高性能。这从根本上统一了优化路径，解决了“正确性与性能”的矛盾。
 
 ### 标签
-#intent/refine #flow/ready #priority/critical
-#comp/engine #concept/executor #scope/core
-#ai/instruct
+#intent/refine #intent/fix #flow/ready #priority/critical
+#comp/engine #concept/executor #scope/core #perf
+#ai/brainstorm
 #task/domain/runtime #task/object/tco-fast-path #task/action/unification
-#task/state/begin
+#task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 对 `GraphExecutionStrategy` 应用统一的快速通道逻辑
+#### Acts 1: 重构 `graph.py` 以实现新的统一快速通道
 
-由于本次重构涉及多个相互关联的修改点（`execute` 方法的逻辑流、`_execute_graph` 的签名和实现），为了确保原子性和正确性，我将使用 `write_file` 提供 `graph.py` 的完整目标内容。
+我们将再次对 `packages/cascade-engine/src/cascade/runtime/strategies/graph.py` 文件进行修改。核心变更是调整 `execute` 方法的顶层循环，引入一个明确的 `if fast_path_data:` 块来处理缓存命中的情况，并在这个块内部直接执行节点并处理循环，而不是继续向下执行到重量级的 `_execute_graph`。
 
 ~~~~~act
 write_file
@@ -142,98 +145,116 @@ class GraphExecutionStrategy:
         current_target = target
 
         while True:
-            # Check for Zero-Overhead TCO Fast Path
-            # Use getattr safely as MappedLazyResult uses .factory instead of .task
+            # --- START: UNIFIED FAST PATH LOGIC ---
             target_task = getattr(current_target, "task", None)
             cycle_id = (
                 getattr(target_task, "_tco_cycle_id", None) if target_task else None
             )
-            fast_path_data = None
 
-            if cycle_id and cycle_id in self._cycle_cache:
-                if self._are_args_simple(current_target):
-                    fast_path_data = self._cycle_cache[cycle_id]
+            fast_path_data = self._cycle_cache.get(cycle_id)
 
-            # The step stack holds "task" (step) scoped resources
-            with ExitStack() as step_stack:
-                if fast_path_data:
-                    # FAST PATH: Reuse Graph & Plan
-                    # Unpack all 4 cached values: graph, indexed_plan, root_node_id, req_res
-                    graph, indexed_plan, root_node_id, _ = fast_path_data
-                    # Reconstruct virtual instance map for current iteration
-                    target_node = graph.get_node(root_node_id)
-                    instance_map = {current_target._uuid: target_node}
-                    plan = self._rehydrate_plan(graph, indexed_plan)
-                else:
-                    # SLOW PATH: Build Graph
-                    # STATE GC (Asynchronous)
-                    if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
-                        state_backend.clear
-                    ):
-                        await state_backend.clear()
-                    # Yield control
-                    await asyncio.sleep(0)
+            if fast_path_data:
+                # FAST PATH: JIT Cache Hit. Bypass full graph build and orchestration.
+                graph, _, root_node_id, required_resources = fast_path_data
+                target_node = graph.get_node(root_node_id)
 
-                    graph, instance_map = build_graph(
-                        current_target, registry=self._node_registry
+                with ExitStack() as step_stack:
+                    self.resource_container.setup(
+                        required_resources,
+                        active_resources,
+                        run_stack,
+                        step_stack,
+                        run_id,
+                    )
+                    # Prepare dynamic arguments for this specific iteration
+                    input_overrides = {}
+                    for i, arg in enumerate(current_target.args):
+                        input_overrides[str(i)] = arg
+                    input_overrides.update(current_target.kwargs)
+
+                    # Use the hot-loop executor
+                    result = await self._execute_hot_node(
+                        target_node,
+                        graph,
+                        state_backend,
+                        active_resources,
+                        params,
+                        {current_target._uuid: target_node},  # Minimal instance map
+                        input_overrides,
                     )
 
-                    if current_target._uuid not in instance_map:
-                        raise RuntimeError(
-                            f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
-                        )
-
-                    # Post-build analysis checks
-                    for node in graph.nodes:
-                        if (
-                            node.warns_dynamic_recursion
-                            and node.name not in self._issued_warnings
-                        ):
-                            self.bus.publish(
-                                StaticAnalysisWarning(
-                                    run_id=run_id,
-                                    task_id=node.structural_id,
-                                    task_name=node.name,
-                                    warning_code="CS-W001",
-                                    message=(
-                                        f"Task '{node.name}' uses a dynamic recursion pattern (calling other "
-                                        "tasks in its arguments) which disables TCO optimizations, "
-                                        "leading to significant performance degradation."
-                                    ),
-                                )
-                            )
-                            self._issued_warnings.add(node.name)
-
-                    target_node = instance_map[current_target._uuid]
-                    cache_key = target_node.template_id or target_node.structural_id
-
-                    # 2. Resolve Plan
-                    if cache_key in self._template_plan_cache:
-                        indexed_plan = self._template_plan_cache[cache_key]
-                        plan = self._rehydrate_plan(graph, indexed_plan)
-                    else:
-                        plan = self.solver.resolve(graph)
-                        indexed_plan = self._index_plan(graph, plan)
-                        self._template_plan_cache[cache_key] = indexed_plan
-
-                    # Cache for Future TCO Fast Path
-                    # Only scan and cache if we haven't already indexed this cycle
-                    if cycle_id and cycle_id not in self._cycle_cache:
-                        # Pre-scan resources and store them in the cycle cache
-                        req_res = self.resource_container.scan(graph)
-                        self._cycle_cache[cycle_id] = (
-                            graph,
-                            indexed_plan,
-                            target_node.structural_id,
-                            req_res,
-                        )
-
-                # 3. Setup Resources (mixed scope)
-                if fast_path_data:
-                    required_resources = fast_path_data[3]
+                if isinstance(result, (LazyResult, MappedLazyResult)):
+                    current_target = result
+                    await asyncio.sleep(0)  # Yield control in the hot loop
+                    continue
                 else:
-                    required_resources = self.resource_container.scan(graph)
+                    return result
+            # --- END: UNIFIED FAST PATH LOGIC ---
 
+            # --- SLOW PATH: Build Graph and orchestrate ---
+            with ExitStack() as step_stack:
+                # STATE GC (Asynchronous)
+                if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
+                    state_backend.clear
+                ):
+                    await state_backend.clear()
+                # Yield control
+                await asyncio.sleep(0)
+
+                graph, instance_map = build_graph(
+                    current_target, registry=self._node_registry
+                )
+
+                if current_target._uuid not in instance_map:
+                    raise RuntimeError(
+                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                    )
+
+                # Post-build analysis checks
+                for node in graph.nodes:
+                    if (
+                        node.warns_dynamic_recursion
+                        and node.name not in self._issued_warnings
+                    ):
+                        self.bus.publish(
+                            StaticAnalysisWarning(
+                                run_id=run_id,
+                                task_id=node.structural_id,
+                                task_name=node.name,
+                                warning_code="CS-W001",
+                                message=(
+                                    f"Task '{node.name}' uses a dynamic recursion pattern (calling other "
+                                    "tasks in its arguments) which disables TCO optimizations, "
+                                    "leading to significant performance degradation."
+                                ),
+                            )
+                        )
+                        self._issued_warnings.add(node.name)
+
+                target_node = instance_map[current_target._uuid]
+                cache_key = target_node.template_id or target_node.structural_id
+
+                # 2. Resolve Plan
+                if cache_key in self._template_plan_cache:
+                    indexed_plan = self._template_plan_cache[cache_key]
+                    plan = self._rehydrate_plan(graph, indexed_plan)
+                else:
+                    plan = self.solver.resolve(graph)
+                    indexed_plan = self._index_plan(graph, plan)
+                    self._template_plan_cache[cache_key] = indexed_plan
+
+                # Cache for Future TCO Fast Path
+                if cycle_id and cycle_id not in self._cycle_cache:
+                    req_res = self.resource_container.scan(graph)
+                    self._cycle_cache[cycle_id] = (
+                        graph,
+                        indexed_plan,
+                        target_node.structural_id,
+                        req_res,
+                    )
+
+                # 3. Setup Resources
+                required_resources = self.resource_container.scan(graph)
                 self.resource_container.setup(
                     required_resources,
                     active_resources,
@@ -242,13 +263,7 @@ class GraphExecutionStrategy:
                     run_id,
                 )
 
-                # 4. Execute Graph (UNIFIED LOGIC)
-                input_overrides = {}
-                # Always prepare parameter overrides for the root node of the current TCO iteration
-                for i, arg in enumerate(current_target.args):
-                    input_overrides[str(i)] = arg
-                input_overrides.update(current_target.kwargs)
-
+                # 4. Execute Graph
                 result = await self._execute_graph(
                     current_target,
                     params,
@@ -258,7 +273,6 @@ class GraphExecutionStrategy:
                     graph,
                     plan,
                     instance_map,
-                    root_input_overrides=input_overrides,
                 )
 
             # 5. Check for Tail Call (LazyResult) - TCO Logic
@@ -266,24 +280,6 @@ class GraphExecutionStrategy:
                 current_target = result
             else:
                 return result
-
-    def _are_args_simple(self, lazy_result: Any) -> bool:
-        """
-        Checks if the LazyResult arguments contain any nested LazyResults.
-        """
-        # Handle both LazyResult (args/kwargs) and MappedLazyResult (mapping_kwargs)
-        args = getattr(lazy_result, "args", [])
-        kwargs = getattr(lazy_result, "kwargs", {})
-        if hasattr(lazy_result, "mapping_kwargs"):
-            kwargs = lazy_result.mapping_kwargs
-
-        for arg in args:
-            if isinstance(arg, (LazyResult, MappedLazyResult)):
-                return False
-        for val in kwargs.values():
-            if isinstance(val, (LazyResult, MappedLazyResult)):
-                return False
-        return True
 
     async def _execute_hot_node(
         self,
@@ -300,8 +296,6 @@ class GraphExecutionStrategy:
         Bypasses event bus, flow manager, and multiple resolvers for maximum performance.
         """
         # 1. Resolve Arguments (Minimal path)
-        # We reuse the node_processor's resolver but bypass the process() wrapper
-        # Resolver is now ASYNC
         args, kwargs = await self.node_processor.arg_resolver.resolve(
             node,
             graph,
@@ -462,11 +456,12 @@ class GraphExecutionStrategy:
 ~~~~~
 
 ### 下一步建议
-我们已经完成了核心重构的第一步。现在，代码库中包含了一个未被使用的 `_execute_hot_node` 方法。
+我们已经成功地将零开销快速通道逻辑重新引入了 `GraphExecutionStrategy` 的主执行循环中。下一步是验证这个修改是否达到了预期的性能目标。
 
-我建议进行**第二阶段：代码清理**。
-这将包括：
-1.  安全地移除 `_execute_hot_node` 方法。
-2.  审查 `_are_args_simple` 方法的必要性，如果它仅由 `_execute_hot_node` 的逻辑使用，也应一并移除。
+我建议立即运行 `observatory/benchmarks/tco_performance.py` 基准测试。
 
-完成清理后，代码将更整洁，也为第三阶段——编写高保真性能回归测试——做好了准备。如果你同意，我将生成执行清理的计划。
+预期的结果是：
+- `simple_countdown` 和 `stable_complex_loop` 的性能应该会**大幅回升**，接近之前的 ~100k TPS 水平。
+- `heavy_complex_countdown` 的性能应该保持不变，因为它不满足 JIT 缓存的条件。
+
+这将是验证我们新战略是否成功的关键一步。请执行基准测试并提供结果。

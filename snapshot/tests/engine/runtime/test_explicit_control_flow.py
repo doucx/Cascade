@@ -55,48 +55,7 @@ async def test_explicit_jump_loop():
     assert final_result == 0
 
 
-@pytest.mark.asyncio
-async def test_explicit_jump_from_downstream_task():
-    """
-    Tests that the engine can correctly handle a Jump signal that originates
-    from a downstream task, not the root of the execution graph for that step.
-    """
-
-    @cs.task
-    def decider(n: int):
-        if n <= 0:
-            return cs.Jump(target_key="exit", data=n)
-        else:
-            return cs.Jump(target_key="continue", data=n - 1)
-
-    @cs.task
-    def main_task(n: int):
-        # This task delegates the jump decision to a downstream task
-        return decider(n)
-
-    # The jump selector's target must be the task that receives the new data.
-    # Here, 'decider' is the task that gets re-invoked with new data.
-    loop_node = decider(cs.Param("next_n"))
-
-    jump_selector = cs.select_jump(
-        {
-            "continue": loop_node,
-            "exit": None,
-        }
-    )
-
-    # CRITICAL: The binding is correctly placed on the task that returns the
-    # Jump signal (`decider`), which is instantiated here as `loop_node`.
-    cs.bind(loop_node, jump_selector)
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus(),
-    )
-
-    # We run the main_task. The engine must be smart enough to identify that
-    # the Jump signal came from `decider` and find the binding there.
-    final_result = await engine.run(main_task(3))
-
-    assert final_result == 0
+# The test `test_explicit_jump_from_downstream_task` has been removed.
+# It was based on a flawed premise that tasks should be able to return
+# LazyResults. The new strategic direction is to forbid this pattern at the
+# graph build stage, making the runtime test obsolete.

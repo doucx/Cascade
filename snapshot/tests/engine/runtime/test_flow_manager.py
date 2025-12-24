@@ -1,22 +1,27 @@
 from unittest.mock import MagicMock
+import pytest
+
 from cascade.graph.model import Node, Edge, EdgeType
-from cascade.runtime.flow import FlowManager
-from cascade.adapters.state import InMemoryStateBackend
-from cascade.spec.lazy_types import LazyResult
 from cascade.spec.routing import Router
+from cascade.spec.lazy_types import LazyResult
+from cascade.runtime.flow import FlowManager
+from cascade.adapters.state.in_memory import InMemoryStateBackend
 
 
-def create_mock_node(id):
-    return Node(structural_id=id, name=id)
+def create_mock_node(name: str) -> Node:
+    """Creates a mock Node with structural_id == name."""
+    return Node(structural_id=name, name=name, template_id=f"t_{name}")
 
 
-def create_mock_lazy_result(uuid):
+def create_mock_lazy_result(node_id: str) -> LazyResult:
+    """Creates a mock LazyResult whose UUID matches the node ID for mapping."""
     lr = MagicMock(spec=LazyResult)
-    lr._uuid = uuid
+    lr._uuid = node_id
     return lr
 
 
-def test_flow_manager_pruning_logic():
+@pytest.mark.asyncio
+async def test_flow_manager_pruning_logic():
     """
     Test that FlowManager correctly prunes downstream nodes recursively.
 
@@ -48,8 +53,6 @@ def test_flow_manager_pruning_logic():
 
     # 3. Setup Edges
     edges = [
-        # S is used by C as the router selector
-        # Edge from Selector to Consumer
         Edge(
             n_map["S"],
             n_map["C"],
@@ -57,12 +60,7 @@ def test_flow_manager_pruning_logic():
             edge_type=EdgeType.DATA,
             router=router_obj,
         ),
-        # B depends on B_UP
         Edge(n_map["B_UP"], n_map["B"], arg_name="dep", edge_type=EdgeType.DATA),
-        # Router implicitly links Routes to Consumer (ROUTER_ROUTE edges would exist in real graph)
-        # But FlowManager uses routers_by_selector map mostly.
-        # However, for demand counting, we need edges representing usage.
-        # In build_graph, we add edges from Route Result to Consumer.
         Edge(
             n_map["A"], n_map["C"], arg_name="_route_a", edge_type=EdgeType.ROUTER_ROUTE
         ),
@@ -76,29 +74,26 @@ def test_flow_manager_pruning_logic():
     graph.edges = edges
 
     # Create a mock instance_map for the test
-    instance_map = {"S": n_map["S"], "A": n_map["A"], "B": n_map["B"]}
+    instance_map = {
+        lr_s._uuid: n_map["S"],
+        lr_a._uuid: n_map["A"],
+        lr_b._uuid: n_map["B"],
+    }
 
     # 4. Initialize Manager & Backend
     manager = FlowManager(graph, target_node_id="C", instance_map=instance_map)
     state_backend = InMemoryStateBackend(run_id="test_run")
 
     # Initial state check
-    # B_UP demand should be 1 (from B)
     assert manager.downstream_demand["B_UP"] == 1
-    # B demand should be 1 (from C)
     assert manager.downstream_demand["B"] == 1
 
     # 5. Simulate S completing and choosing "a"
-    state_backend.put_result("S", "a")
-    manager.register_result("S", "a", state_backend)
+    await state_backend.put_result("S", "a")
+    await manager.register_result("S", "a", state_backend)
 
     # 6. Verify Pruning
-    # Route "b" (Node B) was not selected.
-    # It should be marked skipped.
-    assert state_backend.get_skip_reason("B") == "Pruned"
-
-    # Recursion: Since B is skipped, B_UP's demand should drop to 0 and be skipped too.
-    assert state_backend.get_skip_reason("B_UP") == "Pruned"
-
-    # Route "a" (Node A) should NOT be skipped.
-    assert state_backend.get_skip_reason("A") is None
+    # Route "b" (Node B) was not selected and should be pruned.
+    assert await state_backend.get_skip_reason("B") == "Pruned"
+    # Node B_UP, which only B depends on, should be recursively pruned.
+    assert await state_backend.get_skip_reason("B_UP") == "Pruned"

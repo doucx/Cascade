@@ -1,90 +1,106 @@
-My apologies. The test failure indicates a deeper issue that I overlooked. The failure is not in the `visualize.py` change I proposed, but in the TDD test case I created. The traceback is extremely clear.
+Excellent. Tests passing means the initial implementation was correct for the self-loop case. Now we can expand on that foundation.
 
-Thank you for providing the error log and the performance benchmark files. They were crucial in diagnosing the problem.
+Your new requirement is a fantastic test case because it moves from a simple self-loop to a more complex, multi-node cycle. This will force our visualization logic to be more robust and correctly handle the general case for `ITERATIVE_JUMP` edges, which aren't always self-referential.
 
-I will now generate a new plan to fix this issue.
+Following our TDD process, I will first create a new plan that adds this failing test case.
 
-## [WIP] fix: 修正 visualize 测试用例中错误的跳转目标类型
-
-### 错误分析
-测试失败的根本原因在于我创建的 TDD 测试用例中，向 `cs.select_jump` 传递了一个错误的类型。
-
-1.  **错误根源**: 在 `test_visualize_iterative_jump_edge` 中，`cs.select_jump` 的 `routes` 字典被定义为 `{"next": state_machine}`。这里的 `state_machine` 是 `@cs.task` 装饰器返回的 `Task` 对象本身，而不是一个 `LazyResult` 实例（即对 `state_machine()` 的一次调用）。
-2.  **`GraphBuilder` 的行为**: 当 `GraphBuilder` 遍历图的依赖关系时，它会检查 `JumpSelector` 内部的 `routes`。它期望找到 `LazyResult` 实例（代表图中的节点）作为跳转目标。
-3.  **冲突点**: 当 `GraphBuilder` 遇到裸露的 `Task` 对象时，它不知道如何处理，因为它不是图的一个有效组成部分（它是一个节点的“模板”，而不是节点本身），因此正确地抛出了 `TypeError: Cannot build graph from type <class 'cascade.spec.task.Task'>`。
-4.  **正确用法佐证**: 您提供的性能测试文件 `tco_performance.py` 中的 `create_explicit_loop` 函数清晰地展示了正确模式：`step` 是一个 `LazyResult`，然后这个 `step` 被传递给 `cs.select_jump`，从而构成一个自引用的循环。我的测试代码没有遵循这个模式。
+## [WIP] test: 为 visualize 添加多节点循环跳转的 TDD 测试
 
 ### 用户需求
-修正 `tests/sdk/tools/test_visualize.py` 中的 `test_visualize_iterative_jump_edge` 测试用例，确保传递给 `cs.select_jump` 的跳转目标是 `LazyResult` 实例，而不是 `Task` 对象。
+增强 `cs.visualize` 的测试套件，添加一个测试用例，用于验证一个从下游节点 (`C`) 指向上游节点 (`A`) 的 `ITERATIVE_JUMP` 边能否被正确渲染。
 
 ### 评论
-这是一个典型的 TDD 成功案例。测试在暴露我们预期的渲染问题**之前**，先暴露了一个更深层次的、关于如何正确构建循环图的 API 使用错误。这证明了编写高保真度测试的重要性。通过修正这个测试，我们不仅能继续验证可视化功能，还能确保我们的测试套件本身就是新 API 的正确使用范例。
+这是一个非常好的演进。我们已经验证了 `A -> A` 的情况，现在 `A -> B -> C -> A` 的场景将确保我们的可视化逻辑不仅仅是为简单的自循环硬编码的，而是能够正确理解和绘制图中任意的显式跳转。这大大增强了我们对该功能健壮性的信心。
 
 ### 目标
-1.  修改 `test_visualize_iterative_jump_edge` 函数。
-2.  将 `cs.select_jump` 的定义从 `{"next": state_machine}` 更改为 `{"next": start_node}`，其中 `start_node` 是我们希望循环跳转到的 `LazyResult` 实例。
+1.  在 `tests/sdk/tools/test_visualize.py` 文件中添加一个新的测试函数。
+2.  该测试将构建一个三节点工作流 (`A -> B -> C`)。
+3.  节点 `C` 将通过 `cs.bind` 绑定到一个 `JumpSelector`，该选择器可以将控制流跳回节点 `A`。
+4.  断言 `cs.visualize` 的输出中包含一条从节点 `C` 指向节点 `A` 的、具有特定 "jump" 样式的边。
+5.  此测试预期会失败，因为当前实现硬编码了自引用边 (`source -> source`)。
 
 ### 基本原理
-为了在图中创建一个自引用的循环，`select_jump` 的目标必须是图中已经存在的节点。在我们的测试场景中，`start_node` (即 `state_machine(0)`) 就是这个节点。通过将 `start_node` 自身作为 `next` 键的目标，我们正确地声明了一个状态机，其中 "next" 状态就是重新执行状态机本身（但带有新数据）。此修正将使图构建成功，从而允许我们真正地测试 `visualize.py` 的渲染逻辑。
+我们继续严格遵循 TDD。此计划将定义一个新的、更复杂的验收标准。我们知道当前的实现是 `dot_parts.append(f' "{edge.source.structural_id}" -> "{edge.source.structural_id}"{style};')`，它总是创建一个自环。而我们的新测试将断言一个 `C -> A` 的边。因此，这个测试必然会失败，从而为我们进入下一个 "GREEN" 阶段设置一个明确的目标：通用化 `ITERATIVE_JUMP` 边的渲染逻辑，使其使用 `edge.target`（由图构建器正确设置）而不是硬编码的 `edge.source`。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/visualization #task/object/explicit-jumps #task/action/bug-fix #task/state/continue
+#intent/tooling #flow/ready #priority/medium #comp/sdk #comp/tests #concept/ui #scope/dx #ai/instruct #task/domain/visualization #task/object/explicit-jumps #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `test_visualize.py` 中错误的跳转目标
+#### Acts 1: 添加多节点循环跳转的可视化测试
 
-我们将 `patch` 测试文件，将传递给 `select_jump` 的 `Task` 对象替换为正确的 `LazyResult` 实例。
+我们将再次 `patch` 测试文件，在末尾追加新的测试用例。
 
 ~~~~~act
 patch_file
 tests/sdk/tools/test_visualize.py
 ~~~~~
 ~~~~~python
-    # The selector maps jump keys to their target LazyResults
+    expected_edge = (
+        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="jump"]'
+    )
+    assert expected_edge in dot_string
+~~~~~
+~~~~~python
+    expected_edge = (
+        f'"{node_id}" -> "{node_id}" [style=bold, color=blue, label="jump"]'
+    )
+    assert expected_edge in dot_string
+
+
+def test_visualize_multi_node_jump_edge():
+    """
+    Tests that a jump from a downstream node to an upstream node is visualized correctly.
+    Creates a workflow like A -> B -> C -> A.
+    """
+
+    @cs.task
+    def task_a():
+        return 1
+
+    @cs.task
+    def task_b(val):
+        return val + 1
+
+    @cs.task
+    def task_c(val):
+        # This task will jump back to the start
+        return cs.Jump(target_key="restart")
+
+    # 1. Define the workflow chain
+    node_a = task_a()
+    node_b = task_b(node_a)
+    node_c = task_c(node_b)
+
+    # 2. Define the selector that creates the C -> A loop
     selector = cs.select_jump(
         {
-            "next": state_machine,  # A jump to "next" re-invokes the same task
-            None: None,  # A normal return value exits the loop
-        }
-    )
-~~~~~
-~~~~~python
-    # The selector maps jump keys to their target LazyResults
-    # The target MUST be a LazyResult instance, not a raw Task.
-    # To create a loop, we point it back to the start_node itself.
-    start_node = state_machine(0)
-
-    selector = cs.select_jump(
-        {
-            "next": start_node,  # A jump to "next" re-invokes the same task
-            None: None,  # A normal return value exits the loop
+            "restart": node_a,  # A jump to "restart" re-invokes the first task
         }
     )
 
-    # Initial call to the task, starting the state machine
-    # start_node = state_machine(0) <-- This is now defined before selector
+    # 3. Bind the jump signal from C to the selector
+    cs.bind(node_c, selector)
 
-    # Statically bind the task's jump signals to the selector
-    cs.bind(start_node, selector)
-~~~~~
-~~~~~act
-patch_file
-tests/sdk/tools/test_visualize.py
-~~~~~
-~~~~~python
-    # Initial call to the task, starting the state machine
-    start_node = state_machine(0)
+    # 4. Build graph to get stable IDs
+    from cascade.graph.build import build_graph
 
-    # Statically bind the task's jump signals to the selector
-    cs.bind(start_node, selector)
-~~~~~
-~~~~~python
-    # Statically bind the task's jump signals to the selector
-    cs.bind(start_node, selector)
+    _, instance_map = build_graph(node_c)
+    source_id = instance_map[node_c._uuid].structural_id
+    target_id = instance_map[node_a._uuid].structural_id
+
+    dot_string = cs.visualize(node_c)
+
+    # 5. Assert that the styled jump edge from C to A exists
+    expected_edge = (
+        f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="jump"]'
+    )
+    assert expected_edge in dot_string
 ~~~~~
 
 ### 下一步建议
-我们已经修复了测试用例本身的问题。现在，请重新运行测试。如果测试通过，说明我们之前对 `visualize.py` 的修改是正确的，我们可以继续进行 `[COMMIT]` 计划。如果测试仍然失败，但出现了新的、与渲染相关的断言错误，那也意味着我们已经进入了 TDD 的正确轨道。
+我们已经成功地为更复杂的循环场景定义了验收标准。这个测试现在应该会失败。
+
+下一步，请指示我生成一个新的计划来修正 `packages/cascade-sdk/src/cascade/tools/visualize.py` 中的 `ITERATIVE_JUMP` 处理逻辑。我们将移除硬编码的自引用，并使其正确地使用 `GraphBuilder` 在 `Edge` 对象中解析出的、真正的 `target` 节点。

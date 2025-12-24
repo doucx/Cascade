@@ -4,7 +4,7 @@ from enum import Enum, auto
 import inspect
 
 
-from cascade.spec.common import Param
+from cascade.spec.input import ParamSpec
 from cascade.spec.constraint import ResourceConstraint
 
 
@@ -39,7 +39,7 @@ class Node:
     node_type: str = "task"  # "task", "param", or "map"
     callable_obj: Optional[Callable] = None
     signature: Optional[inspect.Signature] = None  # Cached signature for performance
-    param_spec: Optional[Param] = None
+    param_spec: Optional[ParamSpec] = None
     mapping_factory: Optional[Any] = None  # Implements LazyFactory
 
     # Metadata for execution strategies

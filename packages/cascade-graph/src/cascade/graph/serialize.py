@@ -102,7 +102,7 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
 
 def _node_to_dict(node: Node) -> Dict[str, Any]:
     data = {
-        "id": node.id,
+        "structural_id": node.structural_id,
         "template_id": node.template_id,
         "name": node.name,
         "node_type": node.node_type,
@@ -150,8 +150,8 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
 
 def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
     data = {
-        "source_id": edge.source.id,
-        "target_id": edge.target.id,
+        "source_id": edge.source.structural_id,
+        "target_id": edge.target.structural_id,
         "arg_name": edge.arg_name,
         "edge_type": edge.edge_type.name,
     }
@@ -176,7 +176,7 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
     # 1. Reconstruct Nodes
     for nd in nodes_data:
         node = _dict_to_node(nd)
-        node_map[node.id] = node
+        node_map[node.structural_id] = node
         graph.add_node(node)
 
     # 2. Reconstruct Routers
@@ -242,8 +242,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     if "constraints" in data:
         constraints = ResourceConstraint(requirements=data["constraints"])
 
-    node = Node(
-        id=data["id"],
+    node = Node(structural_id=data["structural_id"],
         template_id=data.get("template_id", ""),
         name=data["name"],
         node_type=data["node_type"],

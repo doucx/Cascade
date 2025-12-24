@@ -36,7 +36,7 @@ def visualize(target: Any) -> str:
         label = f"{node.name}\\n({node.node_type}){label_suffix}"
 
         dot_parts.append(
-            f'  "{node.id}" [label="{label}", shape={shape}, style={style}, '
+            f'  "{node.structural_id}" [label="{label}", shape={shape}, style={style}, '
             f"fillcolor={fillcolor}, fontcolor={fontcolor}];"
         )
 
@@ -66,7 +66,7 @@ def visualize(target: Any) -> str:
         else:
             style = f' [label="{edge.arg_name}"]'
 
-        dot_parts.append(f'  "{edge.source.id}" -> "{edge.target.id}"{style};')
+        dot_parts.append(f'  "{edge.source.structural_id}" -> "{edge.target.structural_id}"{style};')
 
     dot_parts.append("}")
     return "\n".join(dot_parts)

@@ -37,11 +37,11 @@ class CSPSolver:
 
         # 0. Filter out Shadow Nodes
         shadow_ids = {
-            edge.target.id
+            edge.target.structural_id
             for edge in graph.edges
             if edge.edge_type == EdgeType.POTENTIAL
         }
-        active_nodes = [node for node in graph.nodes if node.id not in shadow_ids]
+        active_nodes = [node for node in graph.nodes if node.structural_id not in shadow_ids]
 
         if not active_nodes:
             return []
@@ -57,7 +57,7 @@ class CSPSolver:
                     # Dynamic constraints (LazyResults) are treated as 0 usage during planning.
                     if not isinstance(amount, (LazyResult, MappedLazyResult)):
                         reqs[res] = float(amount)
-            node_resources[node.id] = reqs
+            node_resources[node.structural_id] = reqs
 
         # 2. Iterative Deepening Search
         # Try to find a schedule with K stages, starting from K=1 up to N (serial execution).
@@ -93,7 +93,7 @@ class CSPSolver:
         sorted_stages = sorted(plan_dict.keys())
 
         # Build list of lists of Nodes
-        node_lookup = {n.id: n for n in active_nodes}
+        node_lookup = {n.structural_id: n for n in active_nodes}
         execution_plan = []
 
         for stage_idx in sorted_stages:
@@ -120,7 +120,7 @@ class CSPSolver:
         # Variables: Node IDs (only active ones)
         # Domain: Possible Stage Indices [0, max_stages - 1]
         domain = list(range(max_stages))
-        variables = [n.id for n in active_nodes]
+        variables = [n.structural_id for n in active_nodes]
         problem.addVariables(variables, domain)
 
         # Constraint 1: Dependencies
@@ -129,12 +129,12 @@ class CSPSolver:
             # Skip POTENTIAL edges and edges involving shadow nodes
             if edge.edge_type == EdgeType.POTENTIAL:
                 continue
-            if edge.source.id in shadow_ids or edge.target.id in shadow_ids:
+            if edge.source.structural_id in shadow_ids or edge.target.structural_id in shadow_ids:
                 continue
 
             # Note: We use a lambda that captures nothing, args are passed by value in addConstraint
             problem.addConstraint(
-                lambda s_src, s_tgt: s_src < s_tgt, (edge.source.id, edge.target.id)
+                lambda s_src, s_tgt: s_src < s_tgt, (edge.source.structural_id, edge.target.structural_id)
             )
 
         # Constraint 2: Resources

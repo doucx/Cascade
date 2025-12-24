@@ -28,18 +28,18 @@ class FlowManager:
         self.downstream_demand: Dict[str, int] = defaultdict(int)
 
         for edge in self.graph.edges:
-            self.in_edges[edge.target.id].append(edge)
-            self.downstream_demand[edge.source.id] += 1
+            self.in_edges[edge.target.structural_id].append(edge)
+            self.downstream_demand[edge.source.structural_id] += 1
 
             if edge.router:
                 selector_node = self._get_node_from_instance(edge.router.selector)
                 if selector_node:
-                    self.routers_by_selector[selector_node.id].append(edge)
+                    self.routers_by_selector[selector_node.structural_id].append(edge)
 
                 for key, route_result in edge.router.routes.items():
                     route_node = self._get_node_from_instance(route_result)
                     if route_node:
-                        self.route_source_map[edge.target.id][route_node.id] = key
+                        self.route_source_map[edge.target.structural_id][route_node.structural_id] = key
 
         # The final target always has at least 1 implicit demand (the user wants it)
         self.downstream_demand[target_node_id] += 1
@@ -75,7 +75,7 @@ class FlowManager:
                 branch_root_node = self._get_node_from_instance(route_lazy_result)
                 if not branch_root_node:
                     continue  # Should not happen in a well-formed graph
-                branch_root_id = branch_root_node.id
+                branch_root_id = branch_root_node.structural_id
                 # This branch is NOT selected.
                 # We decrement its demand. If it drops to 0, it gets pruned.
                 # Note: In the Router model, the "edge" carrying the router implies a demand
@@ -102,7 +102,7 @@ class FlowManager:
                 # Special case: If the edge is from a Router, do we prune the Router selector?
                 # No, the selector might be used by other branches.
                 # Standard dependency logic applies: reduce demand on source.
-                self._decrement_demand_and_prune(edge.source.id, state_backend)
+                self._decrement_demand_and_prune(edge.source.structural_id, state_backend)
 
     def should_skip(self, node: Node, state_backend: StateBackend) -> Optional[str]:
         """
@@ -110,56 +110,56 @@ class FlowManager:
         Returns the reason string if it should be skipped, or None otherwise.
         """
         # 1. Check if already skipped (e.g., by router pruning)
-        if reason := state_backend.get_skip_reason(node.id):
+        if reason := state_backend.get_skip_reason(node.structural_id):
             return reason
 
         # 2. Condition Check (run_if)
-        for edge in self.in_edges[node.id]:
+        for edge in self.in_edges[node.structural_id]:
             if edge.edge_type == EdgeType.CONDITION:
-                if not state_backend.has_result(edge.source.id):
-                    if state_backend.get_skip_reason(edge.source.id):
+                if not state_backend.has_result(edge.source.structural_id):
+                    if state_backend.get_skip_reason(edge.source.structural_id):
                         return "UpstreamSkipped_Condition"
                     return "ConditionMissing"
 
-                condition_result = state_backend.get_result(edge.source.id)
+                condition_result = state_backend.get_result(edge.source.structural_id)
                 if not condition_result:
                     return "ConditionFalse"
 
             # New explicit check for sequence abortion
             elif edge.edge_type == EdgeType.SEQUENCE:
-                if state_backend.get_skip_reason(edge.source.id):
+                if state_backend.get_skip_reason(edge.source.structural_id):
                     return "UpstreamSkipped_Sequence"
 
         # 3. Upstream Skip Propagation
         active_route_key = None
-        router_edge = next((e for e in self.in_edges[node.id] if e.router), None)
+        router_edge = next((e for e in self.in_edges[node.structural_id] if e.router), None)
         if router_edge:
             selector_node = self._get_node_from_instance(router_edge.router.selector)
             if selector_node:
-                selector_id = selector_node.id
+                selector_id = selector_node.structural_id
                 if state_backend.has_result(selector_id):
                     active_route_key = state_backend.get_result(selector_id)
 
-        for edge in self.in_edges[node.id]:
+        for edge in self.in_edges[node.structural_id]:
             if edge.edge_type == EdgeType.ROUTER_ROUTE:
                 if active_route_key is not None:
-                    edge_key = self.route_source_map[node.id].get(edge.source.id)
+                    edge_key = self.route_source_map[node.structural_id].get(edge.source.structural_id)
                     if edge_key != active_route_key:
                         continue
 
-                if state_backend.get_skip_reason(edge.source.id):
+                if state_backend.get_skip_reason(edge.source.structural_id):
                     return "UpstreamSkipped_Route"
 
             elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
-                if state_backend.get_skip_reason(edge.source.id):
+                if state_backend.get_skip_reason(edge.source.structural_id):
                     # Check for data penetration possibility (for pipelines)
                     can_penetrate = False
                     # Look for inputs to the skipped node (edge.source)
-                    for upstream_edge in self.in_edges[edge.source.id]:
+                    for upstream_edge in self.in_edges[edge.source.structural_id]:
                         # If the skipped node has a DATA input, and that input has a result...
                         if (
                             upstream_edge.edge_type == EdgeType.DATA
-                            and state_backend.has_result(upstream_edge.source.id)
+                            and state_backend.has_result(upstream_edge.source.structural_id)
                         ):
                             can_penetrate = True
                             break
@@ -170,7 +170,7 @@ class FlowManager:
                     # We let the node proceed to execution, where ArgumentResolver will handle it.
 
             elif edge.edge_type == EdgeType.SEQUENCE:
-                if state_backend.get_skip_reason(edge.source.id):
+                if state_backend.get_skip_reason(edge.source.structural_id):
                     return "UpstreamSkipped_Sequence"
 
         return None

@@ -63,11 +63,11 @@ class GraphExecutionStrategy:
         The index corresponds to the node's position in graph.nodes.
         """
         # Create a fast lookup for node indices
-        id_to_idx = {node.id: i for i, node in enumerate(graph.nodes)}
+        id_to_idx = {node.structural_id: i for i, node in enumerate(graph.nodes)}
         indexed_plan = []
         for stage in plan:
             # Map each node in the stage to its index in the graph
-            indexed_stage = [id_to_idx[node.id] for node in stage]
+            indexed_stage = [id_to_idx[node.structural_id] for node in stage]
             indexed_plan.append(indexed_stage)
         return indexed_plan
 
@@ -135,7 +135,7 @@ class GraphExecutionStrategy:
                             f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
                         )
                     target_node = instance_map[current_target._uuid]
-                    cache_key = target_node.template_id or target_node.id
+                    cache_key = target_node.template_id or target_node.structural_id
 
                     # 2. Resolve Plan
                     if cache_key in self._template_plan_cache:
@@ -154,7 +154,7 @@ class GraphExecutionStrategy:
                         self._cycle_cache[cycle_id] = (
                             graph,
                             indexed_plan,
-                            target_node.id,
+                            target_node.structural_id,
                             req_res,
                         )
 
@@ -257,7 +257,7 @@ class GraphExecutionStrategy:
         result = await self.node_processor.executor.execute(node, args, kwargs)
 
         # 3. Minimal State Update
-        state_backend.put_result(node.id, result)
+        state_backend.put_result(node.structural_id, result)
         return result
 
     async def _execute_graph(
@@ -280,7 +280,7 @@ class GraphExecutionStrategy:
 
         target_node = instance_map[target._uuid]
 
-        flow_manager = FlowManager(graph, target_node.id, instance_map)
+        flow_manager = FlowManager(graph, target_node.structural_id, instance_map)
         blocked_nodes = set()
 
         for stage in plan:
@@ -296,11 +296,11 @@ class GraphExecutionStrategy:
 
                     skip_reason = flow_manager.should_skip(node, state_backend)
                     if skip_reason:
-                        state_backend.mark_skipped(node.id, skip_reason)
+                        state_backend.mark_skipped(node.structural_id, skip_reason)
                         self.bus.publish(
                             TaskSkipped(
                                 run_id=run_id,
-                                task_id=node.id,
+                                task_id=node.structural_id,
                                 task_name=node.name,
                                 reason=skip_reason,
                             )
@@ -309,20 +309,20 @@ class GraphExecutionStrategy:
 
                     if self.constraint_manager.check_permission(node):
                         executable_this_pass.append(node)
-                        if node.id in blocked_nodes:
-                            blocked_nodes.remove(node.id)
+                        if node.structural_id in blocked_nodes:
+                            blocked_nodes.remove(node.structural_id)
                     else:
                         deferred_this_pass.append(node)
-                        if node.id not in blocked_nodes:
+                        if node.structural_id not in blocked_nodes:
                             self.bus.publish(
                                 TaskBlocked(
                                     run_id=run_id,
-                                    task_id=node.id,
+                                    task_id=node.structural_id,
                                     task_name=node.name,
                                     reason="ConstraintViolation",
                                 )
                             )
-                            blocked_nodes.add(node.id)
+                            blocked_nodes.add(node.structural_id)
 
                 if executable_this_pass:
                     # Callback for map nodes
@@ -344,7 +344,7 @@ class GraphExecutionStrategy:
                     tasks_to_run = []
                     for node in executable_this_pass:
                         overrides = (
-                            root_input_overrides if node.id == target_node.id else None
+                            root_input_overrides if node.structural_id == target_node.structural_id else None
                         )
                         tasks_to_run.append(
                             self.node_processor.process(
@@ -363,9 +363,9 @@ class GraphExecutionStrategy:
                     pass_results = await asyncio.gather(*tasks_to_run)
 
                     for node, res in zip(executable_this_pass, pass_results):
-                        state_backend.put_result(node.id, res)
+                        state_backend.put_result(node.structural_id, res)
                         if flow_manager:
-                            flow_manager.register_result(node.id, res, state_backend)
+                            flow_manager.register_result(node.structural_id, res, state_backend)
 
                 pending_nodes_in_stage = deferred_this_pass
 
@@ -375,9 +375,9 @@ class GraphExecutionStrategy:
                     self.constraint_manager.cleanup_expired_constraints()
 
         # Use the mapped canonical node ID to check for the final result
-        if not state_backend.has_result(target_node.id):
+        if not state_backend.has_result(target_node.structural_id):
             # For debugging, check if the instance was skipped
-            if skip_reason := state_backend.get_skip_reason(target_node.id):
+            if skip_reason := state_backend.get_skip_reason(target_node.structural_id):
                 if skip_reason == "UpstreamSkipped_Sequence":
                     return None
                 raise DependencyMissingError(
@@ -390,4 +390,4 @@ class GraphExecutionStrategy:
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )
 
-        return state_backend.get_result(target_node.id)
+        return state_backend.get_result(target_node.structural_id)

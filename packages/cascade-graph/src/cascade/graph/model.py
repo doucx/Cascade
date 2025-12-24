@@ -31,7 +31,7 @@ class Node:
     (bindings or edges), but it DOES NOT contain the runtime data itself.
     """
 
-    id: str
+    structural_id: str
     name: str
     template_id: str = ""  # Structural hash (ignoring literals)
     is_shadow: bool = False  # True if this node is for static analysis only
@@ -59,7 +59,7 @@ class Node:
     has_complex_inputs: bool = False
 
     def __hash__(self):
-        return hash(self.id)
+        return hash(self.structural_id)
 
 
 @dataclass
@@ -88,9 +88,9 @@ class Graph:
     _node_index: Dict[str, Node] = field(default_factory=dict, init=False, repr=False)
 
     def add_node(self, node: Node):
-        if node.id not in self._node_index:
+        if node.structural_id not in self._node_index:
             self.nodes.append(node)
-            self._node_index[node.id] = node
+            self._node_index[node.structural_id] = node
 
     def get_node(self, node_id: str) -> Optional[Node]:
         return self._node_index.get(node_id)

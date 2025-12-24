@@ -26,9 +26,7 @@ async def test_task_returning_lazy_result_is_forbidden_at_runtime():
 
     workflow = task_a_violating()
 
-    engine = Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus()
-    )
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
     # This test will FAIL initially because the LocalExecutor does not yet
     # raise StaticGraphError. It will pass once the validation is implemented.

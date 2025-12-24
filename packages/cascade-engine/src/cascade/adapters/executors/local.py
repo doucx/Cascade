@@ -1,4 +1,3 @@
-import inspect
 from typing import Any, Dict, List
 from cascade.graph.model import Node
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -9,8 +8,6 @@ class LocalExecutor:
     """
     An executor that runs tasks sequentially in the current process.
     """
-
-
 
     async def execute(
         self,

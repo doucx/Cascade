@@ -23,9 +23,7 @@ def visualize(target: Any) -> str:
         label_suffix = ""
         label = f"{node.name}\\n({node.node_type}){label_suffix}"
 
-        dot_parts.append(
-            f'  "{node.structural_id}" [label="{label}", shape={shape}];'
-        )
+        dot_parts.append(f'  "{node.structural_id}" [label="{label}", shape={shape}];')
 
     # 2. Define Edges
     for edge in graph.edges:

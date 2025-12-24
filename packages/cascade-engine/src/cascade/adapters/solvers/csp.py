@@ -63,9 +63,7 @@ class CSPSolver:
         # We try max_stages from 1 to n_nodes.
         # In the worst case (full serial), we need n_nodes stages.
         for max_stages in range(1, n_nodes + 1):
-            solution = self._solve_csp(
-                graph, active_nodes, node_resources, max_stages
-            )
+            solution = self._solve_csp(graph, active_nodes, node_resources, max_stages)
             if solution:
                 break
 

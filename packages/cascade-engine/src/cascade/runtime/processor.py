@@ -190,7 +190,7 @@ class NodeProcessor:
                         status="Succeeded",
                         duration=duration,
                         # result_preview=repr(result)[:100], # Too expensive for tight loops
-                        result_preview=None, 
+                        result_preview=None,
                     )
                 )
                 # Cache Save

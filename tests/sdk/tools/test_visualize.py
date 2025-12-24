@@ -1,5 +1,4 @@
 import cascade as cs
-from cascade.spec.task import task
 
 
 def test_visualize_diamond_graph():
@@ -46,12 +45,8 @@ def test_visualize_diamond_graph():
     assert 'rankdir="TB"' in dot_string
 
     # Check node definitions with new simplified style
-    assert (
-        f'"{node_a.structural_id}" [label="t_a\\n(task)", shape=box];' in dot_string
-    )
-    assert (
-        f'"{node_b.structural_id}" [label="t_b\\n(task)", shape=box];' in dot_string
-    )
+    assert f'"{node_a.structural_id}" [label="t_a\\n(task)", shape=box];' in dot_string
+    assert f'"{node_b.structural_id}" [label="t_b\\n(task)", shape=box];' in dot_string
 
     # Check data edge definitions
     assert (

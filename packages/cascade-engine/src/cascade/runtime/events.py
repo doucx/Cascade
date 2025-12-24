@@ -6,6 +6,7 @@ import itertools
 # Fast, thread-safe counter for event IDs
 _event_id_gen = itertools.count()
 
+
 @dataclass(frozen=True)
 class Event:
     """Base class for all runtime events."""

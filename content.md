@@ -1,278 +1,104 @@
-## [WIP] refactor: 将 Bind 状态迁移至 LazyResult 对象
+好的，我们正式进入 RED 阶段。
+
+我将生成一个计划，该计划的唯一目的是向现有的测试文件 `tests/engine/runtime/test_explicit_control_flow.py` 中添加一个新的、注定会失败的测试用例。这个测试用例将精确地模拟我们刚刚讨论的 “下游节点返回 Jump 信号” 的场景，从而暴露当前实现的架构缺陷。
+
+## [WIP] test: 添加下游节点返回 Jump 信号的失败测试
 
 ### 用户需求
-修复 `test_explicit_jump_loop` 失败的问题。将 `cs.bind` 的实现从基于 `ContextVar` 的全局注册表模式，迁移为直接修改 `LazyResult` 对象状态的模式。这能确保绑定信息与任务定义紧密耦合，避免上下文丢失导致图构建时丢失 `ITERATIVE_JUMP` 边。
+为了驱动下一轮重构，需要创建一个新的测试用-例，该用例会因为 `GraphExecutionStrategy` 无法处理来自非根节点的 `Jump` 信号而失败，并产生一个可预期的 `RuntimeError`。
 
 ### 评论
-你的直觉非常敏锐。使用 `ContextVar` 来传递绑定信息确实引入了不必要的隐式状态和时序依赖。将绑定信息直接作为元数据（如 `_jump_selector`）附加在 `LazyResult` 上，不仅符合现有的 `_retry_policy` 等设计模式，而且更加健壮和直观。
+这是一个完美的“红灯”测试。它精确地靶向了我们识别出的架构弱点——上下文丢失。通过创建一个能够稳定复现这个 `RuntimeError` 的测试，我们为接下来的 GREEN 阶段（即实施 `GraphExecutionResult` 重构）设置了一个清晰、无歧义的成功标准。
 
 ### 目标
-1.  修改 `LazyResult`，增加 `_jump_selector` 字段。
-2.  修改 `cs.bind`，使其直接操作 `LazyResult` 实例。
-3.  重构 `GraphBuilder`，移除 `binding.py` 依赖，改为在遍历 `LazyResult` 时直接处理跳转绑定。
-4.  删除多余的 `cascade-graph/src/cascade/graph/binding.py`。
+1.  在 `tests/engine/runtime/test_explicit_control_flow.py` 中添加一个名为 `test_explicit_jump_from_downstream_task` 的新测试。
+2.  该测试将构建一个两层的工作流：一个 `main_task` 调用一个 `decider_task`。
+3.  `Jump` 信号由下游的 `decider_task` 返回。
+4.  `cs.bind` 调用将绑定在 `decider_task` 上。
+5.  断言该工作流会因为引擎无法在 `decider_task` 节点上找到跳转边而失败。
+
+### 基本原理
+当前的 `GraphExecutionStrategy` 在收到 `Jump` 信号时，错误地假设信号来源于当前执行步骤的根节点 (`current_target`)。本测试通过构建一个 `main_task -> decider_task` 的图，并让 `decider_task` 返回 `Jump`，来打破这一假设。
+
+由于 `bind` 是正确地绑定在 `decider_task` 上的，图本身是正确的。但引擎的运行时逻辑会错误地在 `main_task` 上寻找跳转边，导致查找失败，从而触发我们预期的 `RuntimeError`。这个失败将驱动我们重构 `_execute_graph` 的返回契约。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/spec #comp/graph #comp/sdk #concept/control-flow #scope/core #ai/instruct #task/domain/engine #task/object/control-flow #task/action/refactor #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/engine #concept/state #concept/navigation #scope/core #ai/instruct #task/domain/engine #task/object/control-flow #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 LazyResult Spec
+#### Acts 1: 添加暴露架构缺陷的测试用例
 
-在 `LazyResult` 中添加 `_jump_selector` 字段。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/lazy_types.py
-~~~~~
-~~~~~python
-    _retry_policy: Optional[RetryPolicy] = None
-    _cache_policy: Optional[Any] = None  # CachePolicy
-    _condition: Optional["LazyResult"] = None
-    _constraints: Optional[Any] = None  # ResourceConstraint
-    _dependencies: List["LazyResult"] = field(
-        default_factory=list
-    )  # Explicit sequencing
-~~~~~
-~~~~~python
-    _retry_policy: Optional[RetryPolicy] = None
-    _cache_policy: Optional[Any] = None  # CachePolicy
-    _condition: Optional["LazyResult"] = None
-    _constraints: Optional[Any] = None  # ResourceConstraint
-    _dependencies: List["LazyResult"] = field(
-        default_factory=list
-    )  # Explicit sequencing
-    _jump_selector: Optional[Any] = None  # Explicit Control Flow (JumpSelector)
-~~~~~
-
-#### Acts 2: 更新 SDK Bind 实现
-
-修改 `bind` 函数，使其直接修改对象的 `_jump_selector` 属性。
+我们将通过 `patch_file` 在 `test_explicit_control_flow.py` 的末尾追加一个新的测试函数。
 
 ~~~~~act
 patch_file
-packages/cascade-sdk/src/cascade/control_flow.py
+tests/engine/runtime/test_explicit_control_flow.py
 ~~~~~
 ~~~~~python
-from typing import Dict, Optional, Any
-from cascade.spec.lazy_types import LazyResult
-from cascade.spec.jump import Jump, JumpSelector
-from cascade.graph.binding import bind as _register_bind
-
-
-def select_jump(routes: Dict[str, Optional[LazyResult]]) -> JumpSelector:
-    """
-    Creates a JumpSelector for explicit control flow.
-    """
-    return JumpSelector(routes=routes)
-
-
-def bind(source: LazyResult, target: Any):
-    """
-    Statically binds a source task to a control flow target (e.g. JumpSelector).
-    This creates a structural edge in the graph.
-    """
-    _register_bind(source._uuid, target)
+    # The loop should terminate when n is 0, and the data from the final
+    # jump signal (n=0) should be the return value.
+    assert final_result == 0
 ~~~~~
 ~~~~~python
-from typing import Dict, Optional, Any
-from cascade.spec.lazy_types import LazyResult
-from cascade.spec.jump import JumpSelector
+    # The loop should terminate when n is 0, and the data from the final
+    # jump signal (n=0) should be the return value.
+    assert final_result == 0
 
 
-def select_jump(routes: Dict[str, Optional[LazyResult]]) -> JumpSelector:
+@pytest.mark.asyncio
+async def test_explicit_jump_from_downstream_task_fails_as_expected():
     """
-    Creates a JumpSelector for explicit control flow.
+    This test is designed to FAIL with the current architecture to prove a flaw.
+    The Jump signal is returned by a downstream task (`decider`), not the
+    graph root (`main_task`). The engine is expected to lose context and fail
+    to find the ITERATIVE_JUMP edge, which is correctly bound to `decider`.
     """
-    return JumpSelector(routes=routes)
 
+    @cs.task
+    def decider(n: int):
+        if n <= 0:
+            return cs.Jump(target_key="exit", data=n)
+        else:
+            return cs.Jump(target_key="continue", data=n - 1)
 
-def bind(source: LazyResult, target: Any):
-    """
-    Statically binds a source task to a control flow target (e.g. JumpSelector).
-    This creates a structural edge in the graph.
-    """
-    source._jump_selector = target
-~~~~~
+    @cs.task
+    def main_task(n: int):
+        # This task delegates the jump decision to a downstream task
+        return decider(n)
 
-#### Acts 3: 重构 GraphBuilder
+    # The jump selector's target must be the task that receives the new data
+    loop_node = decider(cs.Param("next_n"))
 
-移除 `binding` 相关的引用，并在 `_visit_lazy_result` 中直接处理跳转逻辑。
+    jump_selector = cs.select_jump(
+        {
+            "continue": loop_node,
+            "exit": None,
+        }
+    )
 
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/build.py
-~~~~~
-~~~~~python
-from cascade.spec.routing import Router
-from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
-from cascade.spec.task import Task
-from cascade.spec.jump import JumpSelector
+    # CRITICAL: The binding is correctly placed on the task that returns the Jump signal.
+    cs.bind(loop_node, jump_selector)
 
-from .registry import NodeRegistry
-from .hashing import HashingService
-from .binding import consume_bindings
-from .hashing import HashingService
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),
+    )
 
-
-class GraphBuilder:
-    def __init__(self, registry: NodeRegistry | None = None):
-~~~~~
-~~~~~python
-from cascade.spec.routing import Router
-from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
-from cascade.spec.task import Task
-from cascade.spec.jump import JumpSelector
-
-from .registry import NodeRegistry
-from .hashing import HashingService
-
-
-class GraphBuilder:
-    def __init__(self, registry: NodeRegistry | None = None):
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/build.py
-~~~~~
-~~~~~python
-    def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:
-        self._visit(target)
-        self._process_bindings()
-        return self.graph, self._visited_instances
-
-    def _process_bindings(self):
-        """Applies any pending bindings to the graph."""
-        bindings = consume_bindings()
-        for source_uuid, selector in bindings:
-            if source_uuid in self._visited_instances:
-                source_node = self._visited_instances[source_uuid]
-
-                if isinstance(selector, JumpSelector):
-                    # Ensure all potential targets in the selector are built/visited
-                    for route_target in selector.routes.values():
-                        if route_target is not None:
-                            self._visit(route_target)
-
-                    # Create the ITERATIVE_JUMP edge
-                    self.graph.add_edge(
-                        Edge(
-                            source=source_node,
-                            target=source_node,  # Placeholder, engine uses jump_selector
-                            arg_name="<jump>",
-                            edge_type=EdgeType.ITERATIVE_JUMP,
-                            jump_selector=selector,
-                        )
-                    )
-
-    def _visit(self, value: Any) -> Node:
-~~~~~
-~~~~~python
-    def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:
-        self._visit(target)
-        return self.graph, self._visited_instances
-
-    def _visit(self, value: Any) -> Node:
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/build.py
-~~~~~
-~~~~~python
-        # Always add the node to the current graph, even if it was reused from the registry.
-        self.graph.add_node(node)
-
-        if created_new:
-            if result.task.func:
-                if not getattr(result.task, "_tco_analysis_done", False):
-                    assign_tco_cycle_ids(result.task)
-                node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
-                analysis = analyze_task_source(result.task)
-                potential_targets = analysis.targets
-                self._shadow_visited[result.task] = node
-                for target_task in potential_targets:
-                    self._visit_shadow_recursive(node, target_task)
-
-        # 4. Finalize edges (idempotent)
-        self._scan_and_add_edges(node, result.args)
-        self._scan_and_add_edges(node, result.kwargs)
-        if result._condition:
-            source_node = self._visited_instances[result._condition._uuid]
-            self.graph.add_edge(
-                Edge(
-                    source=source_node,
-                    target=node,
-                    arg_name="_condition",
-                    edge_type=EdgeType.CONDITION,
-                )
-            )
-~~~~~
-~~~~~python
-        # Always add the node to the current graph, even if it was reused from the registry.
-        self.graph.add_node(node)
-
-        if created_new:
-            if result.task.func:
-                if not getattr(result.task, "_tco_analysis_done", False):
-                    assign_tco_cycle_ids(result.task)
-                node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
-                analysis = analyze_task_source(result.task)
-                potential_targets = analysis.targets
-                self._shadow_visited[result.task] = node
-                for target_task in potential_targets:
-                    self._visit_shadow_recursive(node, target_task)
-
-        # 4. Finalize edges (idempotent)
-        self._scan_and_add_edges(node, result.args)
-        self._scan_and_add_edges(node, result.kwargs)
-
-        # 4.1 Handle Explicit Jump Binding
-        if result._jump_selector:
-            selector = result._jump_selector
-            if isinstance(selector, JumpSelector):
-                # Ensure all potential targets in the selector are built/visited
-                for route_target in selector.routes.values():
-                    if route_target is not None:
-                        self._visit(route_target)
-
-                # Create the ITERATIVE_JUMP edge
-                self.graph.add_edge(
-                    Edge(
-                        source=node,
-                        target=node,  # Placeholder, engine uses jump_selector
-                        arg_name="<jump>",
-                        edge_type=EdgeType.ITERATIVE_JUMP,
-                        jump_selector=selector,
-                    )
-                )
-
-        if result._condition:
-            source_node = self._visited_instances[result._condition._uuid]
-            self.graph.add_edge(
-                Edge(
-                    source=source_node,
-                    target=node,
-                    arg_name="_condition",
-                    edge_type=EdgeType.CONDITION,
-                )
-            )
-~~~~~
-
-#### Acts 4: 清理文件
-
-删除 `binding.py`。
-
-~~~~~act
-delete_file
-packages/cascade-graph/src/cascade/graph/binding.py
+    # We run the main_task, which is the root of the graph for this step.
+    # The engine is expected to fail because it will look for a jump edge on
+    # `main_task`'s node, not on `decider`'s node.
+    with pytest.raises(
+        RuntimeError,
+        match="Task returned a Jump signal but has no bound 'select_jump'",
+    ):
+        await engine.run(main_task(3))
 ~~~~~
 
 ### 下一步建议
-现在架构更加清晰了。请重新运行测试 `tests/engine/runtime/test_explicit_control_flow.py`。
+我们已经成功地创建了一个测试用例来复现架构缺陷，代码库现在处于明确的 RED 状态。
 
-如果测试通过，我们将正式完成阶段一。
-如果失败，请检查 `Jump` 信号在 Engine 中的处理逻辑是否正确获取了 `EdgeType.ITERATIVE_JUMP` 边。
+下一步，我们将进入 GREEN 阶段。我将生成一个新计划，通过实施 `GraphExecutionResult` 重构方案来修复这个问题，其核心是修改 `_execute_graph` 的返回契约，使其能够将 `source_node_id` 传递回主执行循环。这将使新旧两个测试都通过。

@@ -1,105 +1,91 @@
-Excellent. The test results confirm our progress and guide our next steps precisely.
+好的，我们已经成功完成了阶段四的核心任务，并修复了所有受影响的下游逻辑。
 
-1.  **Success Confirmation**: The primary test, `test_engine_reuses_plan_for_structurally_identical_graphs`, is no longer failing. This is a huge success. It proves that our new `BlueprintHasher` is working correctly and the engine's JIT plan caching is fully restored on a superior architectural foundation. We have successfully returned to a **GREEN** state for our main objective.
+现在，我们拥有了一个逻辑清晰、职责分离的**双层身份体系**：
+1.  **实例层 (Instance Level)**: 使用 `structural_id`（由 `HashingService` 计算），它包含所有字面量参数，用于精确的结果缓存。
+2.  **结构层 (Blueprint Level)**: 使用 `Blueprint Hash`（由 `BlueprintHasher` 计算），它忽略字面量参数，只代表图的拓扑结构，用于高效的执行计划缓存。
 
-2.  **Downstream Failure Analysis**: The new failures in `test_serialize.py` and `test_flow_manager.py` are the expected and predictable consequences of our refactoring. By removing the `template_id` field from the `Node` model, we have broken the contracts for serialization helpers and test mocks that were not updated. This is a healthy sign that our test suite is catching inconsistencies.
+我将生成 `[COMMIT]` 计划，将这些具有里程碑意义的改动保存到版本历史中。
 
-My immediate next step is to fix these downstream failures to bring the entire test suite to 100% pass, completing this phase of the TDD cycle.
-
-## [WIP] fix: Update serialization and tests after template_id removal
+## [COMMIT] refactor(core): Implement dual-layered identity system for caching
 
 ### 用户需求
-在 `Node` 模型中移除 `template_id` 字段后，需要修复 `cascade-graph` 包中的序列化逻辑和相关测试辅助函数，以使其与新的数据模型保持一致。
+根据架构演进路线图，实现双层身份体系以优化缓存策略：
+1.  **实例哈希 (`structural_id`)**: 用于节点结果缓存。
+2.  **蓝图哈希 (Blueprint Hash)**: 用于执行计划缓存。
+并确保在该体系下，引擎能够对结构相同的工作流复用其执行计划。
 
 ### 评论
-这是一次常规的、必要的清理性修复。在完成核心的架构重构后，我们需要确保所有依赖旧数据模型的辅助模块（如序列化和测试 Mocks）都得到同步更新。完成此步骤将使整个代码库在概念上保持一致，并让我们的测试套件完全恢复到 **GREEN** 状态。
+这次重构是 Cascade 向“确定性执行框架”迈进的关键一步。通过将一个具体节点实例的身份（用于结果缓存）与一个工作流拓扑结构的身份（用于计划缓存）进行物理分离，我们不仅简化了代码结构（移除了脆弱的 `template_id` 耦合），还极大地增强了系统的概念清晰度和可扩展性。
 
 ### 目标
-1.  修改 `packages/cascade-graph/src/cascade/graph/serialize.py`，移除所有对 `node.template_id` 的读写操作。
-2.  修改 `tests/engine/runtime/test_flow_manager.py` 中的 `create_mock_node` 辅助函数，使其在实例化 `Node` 时不再传递 `template_id` 参数。
+1.  通过一个完整的提交，固化阶段四“统一身份体系”的所有改动。
+2.  确保 `HashingService`、`BlueprintHasher`、`Engine` 和 `Serialization` 模块在新的架构下完全对齐。
 
 ### 基本原理
-这些失败是由于代码的不同部分与 `Node` 数据模型的定义不同步造成的。通过移除对已废弃字段 `template_id` 的引用，我们将恢复代码库的一致性并解决测试失败。
+我们采用 TDD 流程完成了这次重构。通过先添加集成测试、再执行破坏性重构、最后通过引入专门的 `BlueprintHasher` 服务来修复系统，我们证明了新架构的正确性和有效性。这种“职责分离”模式确保了系统中的每一个哈希都有单一、明确的职责。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/graph #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/plan-caching #task/action/integration #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/graph #comp/engine #comp/tests #concept/state #scope/core #ai/instruct #task/domain/core #task/object/dual-identity-system #task/action/integration #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修复序列化逻辑
+#### Acts 1: 提交双层身份体系的重构成果
 
-我们将更新 `serialize.py` 中的 `_node_to_dict` 和 `_dict_to_node` 函数，移除对 `template_id` 的处理。
+我们将所有修改过的文件和新添加的测试文件添加到 Git 暂存区，并执行提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-graph/src/cascade/graph/hashing.py
+packages/cascade-graph/src/cascade/graph/build.py
 packages/cascade-graph/src/cascade/graph/serialize.py
-~~~~~
-~~~~~python
-def _node_to_dict(node: Node) -> Dict[str, Any]:
-    data = {
-        "structural_id": node.structural_id,
-        "template_id": node.template_id,
-        "name": node.name,
-        "node_type": node.node_type,
-        # input_bindings now contains JSON-serializable literals directly.
-~~~~~
-~~~~~python
-def _node_to_dict(node: Node) -> Dict[str, Any]:
-    data = {
-        "structural_id": node.structural_id,
-        "name": node.name,
-        "node_type": node.node_type,
-        # input_bindings now contains JSON-serializable literals directly.
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/serialize.py
-~~~~~
-~~~~~python
-    node = Node(
-        structural_id=data["structural_id"],
-        template_id=data.get("template_id", ""),
-        name=data["name"],
-        node_type=data["node_type"],
-        callable_obj=_load_func_from_path(data.get("callable")),
-~~~~~
-~~~~~python
-    node = Node(
-        structural_id=data["structural_id"],
-        name=data["name"],
-        node_type=data["node_type"],
-        callable_obj=_load_func_from_path(data.get("callable")),
-~~~~~
-
-#### Acts 2: 修复 `test_flow_manager` 中的测试辅助函数
-
-现在，我们将更新 `test_flow_manager.py` 中的 `create_mock_node` 函数。
-
-~~~~~act
-patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+tests/engine/integration/test_plan_caching.py
 tests/engine/runtime/test_flow_manager.py
 ~~~~~
-~~~~~python
-def create_mock_node(name: str) -> Node:
-    """Creates a mock Node with structural_id == name."""
-    return Node(structural_id=name, name=name, template_id=f"t_{name}")
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-def create_mock_node(name: str) -> Node:
-    """Creates a mock Node with structural_id == name."""
-    return Node(structural_id=name, name=name)
+~~~~~text
+refactor(core): implement dual-layered identity system for caching
+
+This commit implements a unified, two-layer identity system that separates the
+concerns of result caching and execution plan caching, fulfilling the goals
+of Phase 4 of the architectural roadmap.
+
+Key changes:
+1.  **Identity Decoupling**: Removed 'template_id' from the Node model.
+2.  **Instance Hash (Level 1)**: Refactored 'HashingService' to focus solely on
+    computing the 'structural_id' (Instance Hash), which includes all literal
+    parameters for precise results caching.
+3.  **Blueprint Hash (Level 2)**: Introduced a new 'BlueprintHasher' service that
+    computes a stable hash based on graph topology while ignoring literal inputs.
+4.  **Engine Optimization**: Updated 'GraphExecutionStrategy' to use the new
+    Blueprint Hash for indexing its JIT execution plan cache. This ensures
+    that structurally identical workflows (e.g., 'add(1, 2)' and 'add(3, 4)')
+    share the same plan, avoiding redundant Solver calls.
+5.  **Robust Serialization**: Updated serialization logic and test mocks to align
+    with the new single-hash Node model.
+6.  **Verified via TDD**: Added a new integration test 'test_plan_caching.py'
+    that explicitly asserts the reuse of execution plans for different instances
+    of the same workflow structure.
+
+This reorganization eradicates ambiguity in node identities and provides a cleaner,
+more predictable foundation for future performance optimizations like AOT
+compilation.
 ~~~~~
 
 ### 下一步建议
+我们已经圆满完成了阶段四的任务。至此，[Cascade 架构演进路线图 - 显式控制流与统一身份体系](Cascade%20架构演进路线图%20-%20显式控制流与统一身份体系.md) 中定义的所有四个阶段均已成功结项。
 
-我们已经应用了所有必要的修复。现在，整个测试套件应该能 100% 通过了。
+**Cascade 现在是一个完全基于显式状态转移和确定性身份体系的运行时。**
 
-我们已经完成了一个逻辑上非常完整的工作单元：
-1.  **定义契约**: 创建了一个测试来保证计划缓存的正确性 (Green)。
-2.  **重构**: 故意破坏了实现，使测试失败 (Red)。
-3.  **修复**: 引入了更优越的 `BlueprintHasher` 并修复了所有下游依赖，使测试再次通过 (Green)。
+接下来的重点可以转向：
+1.  **性能压测**: 利用新架构对 TCO 快速路径和大规模图的缓存效率进行极限压力测试。
+2.  **文档更新**: 基于最新的 API（`bind`, `Jump`, `select_jump`）更新用户手册，向开发者推广显式控制流模式。
+3.  **功能扩展**: 考虑利用 `Blueprint Hash` 实现持久化的、跨进程的执行计划缓存（例如存储在 Redis 中）。
 
-这是一个完美的 TDD 周期，也是一个理想的提交点。我建议我们现在创建一个 `[COMMIT]` 计划，将阶段四的所有相关变更作为一个原子提交进行保存。如果你同意，请告诉我，我将生成该计划。
+如果您有任何特定的新方向或需要进一步的优化，请指示！

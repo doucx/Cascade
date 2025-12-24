@@ -1,171 +1,688 @@
-好的，我们正处于 RED 状态，目标明确。现在是实施修复，让 `test_task_returning_lazy_result_is_forbidden` 测试通过的时候了。
+好的，我们已经达到了一个关键的里程碑：新的显式控制流模型已经可以工作，而旧的隐式模型已经被运行时检查所禁止。现在是时候根据路线图的 `[Cleanup]` 阶段，彻底移除所有与旧的、基于 AST 的 TCO 相关的代码，以偿还技术债务。
 
-经过分析，我发现我之前的思考有一个偏差：这个检查**不能**在 `GraphBuilder` 中静态完成，因为它无法预知一个任务在运行时的返回值类型。这个检查**必须**在任务被实际执行后，在运行时进行。
+我将生成一个 `[WIP]` 计划，因为它代表一个完整的、逻辑独立的重构单元。
 
-因此，我们的测试用例 `test_task_returning_lazy_result_is_forbidden` 的方向是正确的，但它测试了错误的目标 (`build_graph`)。它应该测试 **执行时** 的行为 (`engine.run`)。
-
-我将生成一个计划来同时完成两件事：
-1.  修正测试用例，使其正确地调用 `engine.run` 来触发运行时检查。
-2.  在 `LocalExecutor` 中实现这个运行时检查，当检测到返回 `LazyResult` 时抛出 `StaticGraphError`。
-
-## [WIP] feat(engine): 在运行时强制执行静态图完整性
-
-### 错误分析
-测试 `test_task_returning_lazy_result_is_forbidden` 失败的直接原因是它错误地期望 `build_graph` 抛出 `StaticGraphError`。然而，图的构建过程无法静态地知道任务的返回值类型。这个“任务返回 `LazyResult`”的反模式只能在任务被**实际执行**时才能被检测到。因此，检查逻辑必须位于执行器（Executor）中，而测试用例必须触发执行器。
+## [WIP] refactor(core): 废弃并移除隐式 TCO 体系
 
 ### 用户需求
-实施新的战略原则，即在运行时检测并禁止任务返回 `LazyResult`，从而使静态图完整性测试通过。
+根据新的战略决议和架构演进路线图，彻底移除所有与基于 AST 的隐式尾递归优化（TCO）相关的代码、缓存和测试。
 
 ### 评论
-这是一个关键的实现步骤，它将我们的战略决议转化为具体的代码护栏。通过在 `LocalExecutor` 中添加这个检查，我们创建了一个强大的安全网，确保旧的、隐式的 TCO 行为被彻底根除，并为用户提供清晰、可操作的错误信息，引导他们使用新的 `cs.Jump` 模式。
+这是一次重要的架构简化。通过移除脆弱的 `ast_analyzer` 和 `GraphExecutionStrategy` 中复杂的“快速路径”缓存逻辑，我们大幅降低了内核的复杂性和维护成本。这使得代码库更加清晰，完全拥抱了新的、基于 `cs.Jump` 的显式控制流模型。
 
 ### 目标
-1.  修改 `test_task_returning_lazy_result_is_forbidden` 测试，使其调用 `engine.run` 而非 `build_graph`，从而正确地测试运行时行为。
-2.  修改 `LocalExecutor`，在执行完任务后检查其返回值。如果返回值是 `LazyResult` 或 `MappedLazyResult`，则抛出 `StaticGraphError`。
+1.  删除 `ast_analyzer.py` 模块及其相关测试。
+2.  删除所有专门测试旧 TCO 行为的测试文件。
+3.  从 `Node` 模型中移除 TCO 相关的字段。
+4.  从 `GraphBuilder` 中移除对 AST 分析的调用。
+5.  从 `GraphExecutionStrategy` 中移除所有隐式 TCO 的 JIT 缓存和“快速路径”执行逻辑。
 
 ### 基本原理
-我们将把验证逻辑放在它唯一能够生效的地方：`LocalExecutor.execute` 方法中，在任务函数被调用并返回结果之后。同时，我们将修正测试用例，使其从一个错误的“构建时”测试转变为一个正确的“运行时”测试。这两项修改将协同工作，使我们的测试套件能够正确地验证并强制执行新的架构原则。
+新的显式控制流模型 (`cs.Jump`, `cs.bind`) 已经通过测试并被证实是更健壮的方案。同时，`LocalExecutor` 现在会主动禁止旧的“任务返回 `LazyResult`”的反模式。因此，所有支持隐式 TCO 的代码不仅已经过时，而且成为了无法被触及的“死代码”，构成了技术债务。本次清理将使代码库与新的架构原则完全对齐。
 
 ### 标签
-#intent/build #intent/refine #flow/ready #priority/high #comp/engine #comp/tests #concept/graph-integrity #scope/core #ai/instruct #task/domain/engine #task/object/executor #task/action/validation-enforcement #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/graph #comp/engine #concept/control-flow #scope/core #ai/instruct #task/domain/engine #task/object/tco-implicit #task/action/deprecation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正测试用例以测试运行时
+#### Acts 1: 删除 AST 分析器及其相关测试
 
-我们将重写 `test_static_integrity.py` 中的测试，使其成为一个 `async` 测试，并调用 `engine.run`。
+这是本次清理的核心。我们将删除 `ast_analyzer` 模块和所有专门为它编写的测试。
 
 ~~~~~act
-write_file
-tests/engine/graph/test_static_integrity.py
-~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from cascade.graph import StaticGraphError
-from cascade.runtime import Engine, MessageBus
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-
-
-@pytest.mark.asyncio
-async def test_task_returning_lazy_result_is_forbidden_at_runtime():
-    """
-    Verifies that the Executor rejects the anti-pattern of a task
-    returning a LazyResult at runtime. This violates the static, declarative nature
-    of Cascade graphs and the new explicit control flow model.
-    """
-
-    @cs.task
-    def task_b():
-        return "B"
-
-    @cs.task
-    def task_a_violating():
-        # This is the anti-pattern: a task's logic should not be
-        # building new graph components at runtime. It should return data or a Jump.
-        return task_b()
-
-    workflow = task_a_violating()
-
-    engine = Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus()
-    )
-
-    # This test will FAIL initially because the LocalExecutor does not yet
-    # raise StaticGraphError. It will pass once the validation is implemented.
-    with pytest.raises(
-        StaticGraphError,
-        match="Task 'task_a_violating' illegally returned a LazyResult",
-    ):
-        await engine.run(workflow)
+delete_file
+packages/cascade-graph/src/cascade/graph/ast_analyzer.py
 ~~~~~
 
-#### Acts 2: 在 LocalExecutor 中实现运行时检查
+~~~~~act
+delete_file
+tests/engine/graph/test_ast_analyzer.py
+~~~~~
 
-现在，我们在 `LocalExecutor` 中添加检查逻辑，使其在检测到反模式时抛出 `StaticGraphError`。
+~~~~~act
+delete_file
+tests/engine/runtime/test_engine_recursion.py
+~~~~~
+
+~~~~~act
+delete_file
+tests/engine/runtime/test_tco_cache.py
+~~~~~
+
+~~~~~act
+delete_file
+tests/engine/runtime/test_tco_mutual_recursion.py
+~~~~~
+
+~~~~~act
+delete_file
+tests/engine/runtime/test_static_analysis.py
+~~~~~
+
+#### Acts 2: 清理 `cascade-graph` 包
+
+现在我们移除 `cascade-graph` 包中对 AST 分析器的所有引用。
+
+首先是 `__init__.py` 的导出。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/adapters/executors/local.py
+packages/cascade-graph/src/cascade/graph/__init__.py
 ~~~~~
 ~~~~~python
-import inspect
-from typing import Any, Dict, List
-from cascade.graph.model import Node
+from .model import Graph, Node, Edge, EdgeType
+from .build import build_graph
+from .registry import NodeRegistry
+from .ast_analyzer import analyze_task_source, assign_tco_cycle_ids
+from .exceptions import StaticGraphError
 
-
-class LocalExecutor:
-    """
-    An executor that runs tasks sequentially in the current process.
-    """
-
-    async def execute(
-        self,
-        node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-    ) -> Any:
-        """
-        Executes a single node's callable object with the provided arguments.
-        """
-        if node.callable_obj is None:
-            raise TypeError(
-                f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
-            )
-
-        if inspect.iscoroutinefunction(node.callable_obj):
-            return await node.callable_obj(*args, **kwargs)
-        else:
-            return node.callable_obj(*args, **kwargs)
+__all__ = [
+    "Graph",
+    "Node",
+    "Edge",
+    "EdgeType",
+    "build_graph",
+    "NodeRegistry",
+    "analyze_task_source",
+    "assign_tco_cycle_ids",
+    "StaticGraphError",
+]
 ~~~~~
 ~~~~~python
+from .model import Graph, Node, Edge, EdgeType
+from .build import build_graph
+from .registry import NodeRegistry
+from .exceptions import StaticGraphError
+
+__all__ = [
+    "Graph",
+    "Node",
+    "Edge",
+    "EdgeType",
+    "build_graph",
+    "NodeRegistry",
+    "StaticGraphError",
+]
+~~~~~
+
+接着，从 `Node` 模型中移除 `tco_cycle_id` 和 `warns_dynamic_recursion` 字段。
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/model.py
+~~~~~
+~~~~~python
+    structural_id: str
+    name: str
+    template_id: str = ""  # Structural hash (ignoring literals)
+    is_shadow: bool = False  # True if this node is for static analysis only
+    tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
+
+    # Core spec
+    node_type: str = "task"  # "task", "param", or "map"
+~~~~~
+~~~~~python
+    structural_id: str
+    name: str
+    template_id: str = ""  # Structural hash (ignoring literals)
+
+    # Core spec
+    node_type: str = "task"  # "task", "param", or "map"
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/model.py
+~~~~~
+~~~~~python
+    # (e.g., has Inject markers, complex nested structures, or runtime context needs)
+    has_complex_inputs: bool = False
+
+    # Metadata from static analysis
+    warns_dynamic_recursion: bool = False
+
+    def __hash__(self):
+        return hash(self.structural_id)
+~~~~~
+~~~~~python
+    # (e.g., has Inject markers, complex nested structures, or runtime context needs)
+    has_complex_inputs: bool = False
+
+    def __hash__(self):
+        return hash(self.structural_id)
+~~~~~
+
+最后，从 `GraphBuilder` 中移除所有对 AST 分析的调用。
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+from typing import Dict, Any, Tuple
 import inspect
-from typing import Any, Dict, List
-from cascade.graph.model import Node
+from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.graph.exceptions import StaticGraphError
+from cascade.spec.routing import Router
+from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
+from cascade.spec.task import Task
+from cascade.spec.jump import JumpSelector
+
+from .registry import NodeRegistry
+~~~~~
+~~~~~python
+from typing import Dict, Any, Tuple
+import inspect
+from cascade.graph.model import Graph, Node, Edge, EdgeType
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.task import Task
+from cascade.spec.jump import JumpSelector
+
+from .registry import NodeRegistry
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+        # InstanceMap: Dict[LazyResult._uuid, Node]
+        # Connecting the world of volatile instances to the world of stable structures.
+        self._visited_instances: Dict[str, Node] = {}
+        # Used to detect cycles during static TCO analysis
+        self._shadow_visited: Dict[Task, Node] = {}
+
+        self.registry = registry if registry is not None else NodeRegistry()
+        self.hashing_service = HashingService()
+~~~~~
+~~~~~python
+        # InstanceMap: Dict[LazyResult._uuid, Node]
+        # Connecting the world of volatile instances to the world of stable structures.
+        self._visited_instances: Dict[str, Node] = {}
+        self.registry = registry if registry is not None else NodeRegistry()
+        self.hashing_service = HashingService()
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+            node = Node(
+                structural_id=structural_hash,
+                template_id=template_hash,
+                name=result.task.name,
+                node_type="task",
+                callable_obj=result.task.func,
+                signature=sig,
+                retry_policy=result._retry_policy,
+                cache_policy=result._cache_policy,
+                constraints=result._constraints,
+                input_bindings=input_bindings,
+                has_complex_inputs=has_complex,
+                warns_dynamic_recursion=analysis.has_dynamic_recursion,
+            )
+            self.registry._registry[structural_hash] = node
+
+        self._visited_instances[result._uuid] = node
+
+        # Always add the node to the current graph, even if it was reused from the registry.
+        self.graph.add_node(node)
+
+        if created_new:
+            if result.task.func:
+                if not getattr(result.task, "_tco_analysis_done", False):
+                    assign_tco_cycle_ids(result.task)
+                node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
+                analysis = analyze_task_source(result.task)
+                potential_targets = analysis.targets
+                self._shadow_visited[result.task] = node
+                for target_task in potential_targets:
+                    self._visit_shadow_recursive(node, target_task)
+
+        # 4. Finalize edges (idempotent)
+~~~~~
+~~~~~python
+            node = Node(
+                structural_id=structural_hash,
+                template_id=template_hash,
+                name=result.task.name,
+                node_type="task",
+                callable_obj=result.task.func,
+                signature=sig,
+                retry_policy=result._retry_policy,
+                cache_policy=result._cache_policy,
+                constraints=result._constraints,
+                input_bindings=input_bindings,
+                has_complex_inputs=has_complex,
+            )
+            self.registry._registry[structural_hash] = node
+
+        self._visited_instances[result._uuid] = node
+
+        # Always add the node to the current graph, even if it was reused from the registry.
+        self.graph.add_node(node)
+
+        # 4. Finalize edges (idempotent)
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-graph/src/cascade/graph/hashing.py
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/build.py
+~~~~~
+~~~~~python
+    def _visit_shadow_recursive(self, parent_node: Node, task: Task):
+        if task in self._shadow_visited:
+            target_node = self._shadow_visited[task]
+            self.graph.add_edge(
+                Edge(
+                    source=parent_node,
+                    target=target_node,
+                    arg_name="<potential>",
+                    edge_type=EdgeType.POTENTIAL,
+                )
+            )
+            return
+
+        potential_uuid = f"shadow:{parent_node.structural_id}:{task.name}"
+        target_node = Node(
+            structural_id=potential_uuid,
+            name=task.name,
+            node_type="task",
+            is_shadow=True,
+            tco_cycle_id=getattr(task, "_tco_cycle_id", None),
+        )
+
+        self.graph.add_node(target_node)
+        self._shadow_visited[task] = target_node
+        self.graph.add_edge(
+            Edge(
+                source=parent_node,
+                target=target_node,
+                arg_name="<potential>",
+                edge_type=EdgeType.POTENTIAL,
+            )
+        )
+
+        analysis = analyze_task_source(task)
+        for next_task in analysis.targets:
+            self._visit_shadow_recursive(target_node, next_task)
+
+    def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
+~~~~~
+~~~~~python
+    def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
+~~~~~
+
+#### Acts 3: 大幅简化 `GraphExecutionStrategy`
+
+这是最大的一块清理。我们将移除所有与 TCO 快速路径相关的逻辑。
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.events import TaskSkipped, TaskBlocked, StaticAnalysisWarning
+from cascade.runtime.constraints.manager import ConstraintManager
 
 
-class LocalExecutor:
-    """
-    An executor that runs tasks sequentially in the current process.
-    """
+@dataclass
+~~~~~
+~~~~~python
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.events import TaskSkipped, TaskBlocked
+from cascade.runtime.constraints.manager import ConstraintManager
 
 
+@dataclass
+~~~~~
 
-    async def execute(
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+        # JIT Compilation Cache
+        # Maps template_id to an IndexedExecutionPlan (List[List[int]])
+        # We store indices instead of Node objects to allow plan reuse across
+        # different graph instances that share the same structure (template).
+        self._template_plan_cache: Dict[str, List[List[int]]] = {}
+
+        # Zero-Overhead TCO Cache
+        # Maps tco_cycle_id to (Graph, IndexedPlan, root_node_id)
+        # Used to bypass build_graph for structurally stable recursive calls
+        self._cycle_cache: Dict[str, Any] = {}
+
+        # Persistent registry to ensure node object identity consistency across TCO iterations
+        self._node_registry = NodeRegistry()
+~~~~~
+~~~~~python
+        # JIT Compilation Cache for execution plans
+        self._plan_cache: Dict[str, List[List[int]]] = {}
+
+        # Persistent registry to ensure node object identity consistency across iterations
+        self._node_registry = NodeRegistry()
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+        current_target = target
+        next_input_overrides = None
+
+        while True:
+            # Check for Zero-Overhead TCO Fast Path
+            # Use getattr safely as MappedLazyResult uses .factory instead of .task
+            target_task = getattr(current_target, "task", None)
+            cycle_id = (
+                getattr(target_task, "_tco_cycle_id", None) if target_task else None
+            )
+            fast_path_data = None
+
+            if cycle_id and cycle_id in self._cycle_cache:
+                if self._are_args_simple(current_target):
+                    fast_path_data = self._cycle_cache[cycle_id]
+
+            # The step stack holds "task" (step) scoped resources
+            with ExitStack() as step_stack:
+                input_overrides = None
+
+                if fast_path_data:
+                    # FAST PATH: Reuse Graph & Plan
+                    # Unpack all 4 cached values: graph, indexed_plan, root_node_id, req_res
+                    graph, indexed_plan, root_node_id, _ = fast_path_data
+                    # Reconstruct virtual instance map for current iteration
+                    target_node = graph.get_node(root_node_id)
+                    instance_map = {current_target._uuid: target_node}
+                    plan = self._rehydrate_plan(graph, indexed_plan)
+
+                    # Prepare Input Overrides
+                    input_overrides = {}
+                    if next_input_overrides:
+                        input_overrides.update(next_input_overrides)
+                        next_input_overrides = None
+                    else:
+                        for i, arg in enumerate(current_target.args):
+                            input_overrides[str(i)] = arg
+                        input_overrides.update(current_target.kwargs)
+                else:
+                    # SLOW PATH: Build Graph
+                    # STATE GC (Asynchronous)
+                    if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
+                        state_backend.clear
+                    ):
+                        await state_backend.clear()
+                    # Yield control
+                    await asyncio.sleep(0)
+
+                    graph, instance_map = build_graph(
+                        current_target, registry=self._node_registry
+                    )
+
+                    if current_target._uuid not in instance_map:
+                        raise RuntimeError(
+                            f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                        )
+
+                    # Post-build analysis checks
+                    for node in graph.nodes:
+                        if (
+                            node.warns_dynamic_recursion
+                            and node.name not in self._issued_warnings
+                        ):
+                            self.bus.publish(
+                                StaticAnalysisWarning(
+                                    run_id=run_id,
+                                    task_id=node.structural_id,
+                                    task_name=node.name,
+                                    warning_code="CS-W001",
+                                    message=(
+                                        f"Task '{node.name}' uses a dynamic recursion pattern (calling other "
+                                        "tasks in its arguments) which disables TCO optimizations, "
+                                        "leading to significant performance degradation."
+                                    ),
+                                )
+                            )
+                            self._issued_warnings.add(node.name)
+
+                    target_node = instance_map[current_target._uuid]
+                    cache_key = target_node.template_id or target_node.structural_id
+
+                    # 2. Resolve Plan
+                    if cache_key in self._template_plan_cache:
+                        indexed_plan = self._template_plan_cache[cache_key]
+                        plan = self._rehydrate_plan(graph, indexed_plan)
+                    else:
+                        plan = self.solver.resolve(graph)
+                        indexed_plan = self._index_plan(graph, plan)
+                        self._template_plan_cache[cache_key] = indexed_plan
+
+                    # Cache for Future TCO Fast Path
+                    # Only scan and cache if we haven't already indexed this cycle
+                    if cycle_id and cycle_id not in self._cycle_cache:
+                        # Pre-scan resources and store them in the cycle cache
+                        req_res = self.resource_container.scan(graph)
+                        self._cycle_cache[cycle_id] = (
+                            graph,
+                            indexed_plan,
+                            target_node.structural_id,
+                            req_res,
+                        )
+
+                # 3. Setup Resources (mixed scope)
+                if fast_path_data:
+                    required_resources = fast_path_data[3]
+                else:
+                    required_resources = self.resource_container.scan(graph)
+~~~~~
+~~~~~python
+        current_target = target
+        next_input_overrides = None
+
+        while True:
+            # The step stack holds "task" (step) scoped resources
+            with ExitStack() as step_stack:
+                # Always build the graph for now. Future optimizations will add a
+                # fast path for explicit jumps.
+                if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
+                    state_backend.clear
+                ):
+                    await state_backend.clear()
+                await asyncio.sleep(0)
+
+                graph, instance_map = build_graph(
+                    current_target, registry=self._node_registry
+                )
+
+                if current_target._uuid not in instance_map:
+                    raise RuntimeError(
+                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                    )
+
+                target_node = instance_map[current_target._uuid]
+                cache_key = target_node.template_id or target_node.structural_id
+
+                # 2. Resolve Plan
+                if cache_key in self._plan_cache:
+                    indexed_plan = self._plan_cache[cache_key]
+                    plan = self._rehydrate_plan(graph, indexed_plan)
+                else:
+                    plan = self.solver.resolve(graph)
+                    indexed_plan = self._index_plan(graph, plan)
+                    self._plan_cache[cache_key] = indexed_plan
+
+                # 3. Setup Resources
+                required_resources = self.resource_container.scan(graph)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+                # 4. Execute Graph and get a contextual result
+                if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
+                    graph_result = await self._execute_hot_node(
+                        target_node,
+                        graph,
+                        state_backend,
+                        active_resources,
+                        params,
+                        instance_map,
+                        input_overrides,
+                    )
+                else:
+                    root_overrides = None
+                    if next_input_overrides:
+                        root_overrides = next_input_overrides
+                        next_input_overrides = None
+
+                    graph_result = await self._execute_graph(
+                        current_target,
+                        params,
+                        active_resources,
+                        run_id,
+                        state_backend,
+                        graph,
+                        plan,
+                        instance_map,
+                        root_input_overrides=root_overrides,
+                    )
+~~~~~
+~~~~~python
+                # 4. Execute Graph and get a contextual result
+                root_overrides = None
+                if next_input_overrides:
+                    root_overrides = next_input_overrides
+                    next_input_overrides = None
+
+                graph_result = await self._execute_graph(
+                    current_target,
+                    params,
+                    active_resources,
+                    run_id,
+                    state_backend,
+                    graph,
+                    plan,
+                    instance_map,
+                    root_input_overrides=root_overrides,
+                )
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+            elif isinstance(result, Jump):
+                # Handle Explicit Jump using the unambiguous source_node_id
+                source_node_id = graph_result.source_node_id
+
+                jump_edge = next(
+                    (
+                        e
+                        for e in graph.edges
+                        if e.source.structural_id == source_node_id
+                        and e.edge_type == EdgeType.ITERATIVE_JUMP
+                    ),
+                    None,
+                )
+~~~~~
+~~~~~python
+            elif isinstance(result, Jump):
+                # Handle Explicit Jump using the unambiguous source_node_id
+                source_node_id = graph_result.source_node_id
+
+                # The graph object is only valid within the `with step_stack` context,
+                # so we must find the edge before the context exits.
+                jump_edge = next(
+                    (
+                        e
+                        for e in graph.edges
+                        if e.source.structural_id == source_node_id
+                        and e.edge_type == EdgeType.ITERATIVE_JUMP
+                    ),
+                    None,
+                )
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+~~~~~
+~~~~~python
+    def _are_args_simple(self, lazy_result: Any) -> bool:
+        """
+        Checks if the LazyResult arguments contain any nested LazyResults.
+        """
+        # Handle both LazyResult (args/kwargs) and MappedLazyResult (mapping_kwargs)
+        args = getattr(lazy_result, "args", [])
+        kwargs = getattr(lazy_result, "kwargs", {})
+        if hasattr(lazy_result, "mapping_kwargs"):
+            kwargs = lazy_result.mapping_kwargs
+
+        for arg in args:
+            if isinstance(arg, (LazyResult, MappedLazyResult)):
+                return False
+        for val in kwargs.values():
+            if isinstance(val, (LazyResult, MappedLazyResult)):
+                return False
+        return True
+
+    async def _execute_hot_node(
         self,
         node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
+        graph: Graph,
+        state_backend: StateBackend,
+        active_resources: Dict[str, Any],
+        params: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] = None,
     ) -> Any:
         """
-        Executes a single node's callable object with the provided arguments.
+        A stripped-down version of NodeProcessor.process specifically for hot TCO loops.
+        Bypasses event bus, flow manager, and multiple resolvers for maximum performance.
         """
-        if node.callable_obj is None:
-            raise TypeError(
-                f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
-            )
+        # 1. Resolve Arguments (Minimal path)
+        # We reuse the node_processor's resolver but bypass the process() wrapper
+        # Resolver is now ASYNC
+        args, kwargs = await self.node_processor.arg_resolver.resolve(
+            node,
+            graph,
+            state_backend,
+            active_resources,
+            instance_map=instance_map,
+            user_params=params,
+            input_overrides=input_overrides,
+        )
 
-        if inspect.iscoroutinefunction(node.callable_obj):
-            result = await node.callable_obj(*args, **kwargs)
-        else:
-            result = node.callable_obj(*args, **kwargs)
+        # 2. Direct Execution (Skip NodeProcessor ceremony)
+        result = await self.node_processor.executor.execute(node, args, kwargs)
 
-        # Runtime guard against the "task returns LazyResult" anti-pattern.
-        if isinstance(result, (LazyResult, MappedLazyResult)):
-            raise StaticGraphError(
-                f"Task '{node.name}' illegally returned a LazyResult. "
-                "Tasks must return data. For control flow, return a cs.Jump(...) signal instead."
-            )
+        # 3. Minimal State Update (Async)
+        await state_backend.put_result(node.structural_id, result)
+        return GraphExecutionResult(value=result, source_node_id=node.structural_id)
 
-        return result
+    async def _execute_graph(
+~~~~~
+~~~~~python
+    async def _execute_graph(
 ~~~~~
 
 ### 下一步建议
-我们已经完成了运行时检查的实现和相应测试的修正。现在，请再次运行测试。我们期望 `test_static_integrity.py` 和 `test_explicit_control_flow.py` 都能通过，将测试套件带回 GREEN 状态。
+我们已经完成了对隐式 TCO 体系的彻底清理。代码库现在更加简洁，并且完全符合我们新的、基于显式跳转的控制流模型。
 
-一旦成功，我们将彻底废弃隐式 TCO，并可以安全地清理 `GraphExecutionStrategy` 中所有相关的旧代码（如 `_cycle_cache`），进一步简化架构。
+1.  **验证**: 请运行完整的测试套件，确保我们的清理没有引入任何回归问题。
+2.  **路线图**: 我们现在正式完成了路线图的 `[Cleanup]` 阶段。下一步将是 `[Optimization]` 阶段，即为新的 `Jump` 机制实现一个高效的“快速路径”，以恢复并超越旧 TCO 模型的性能。

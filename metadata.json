@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 在 ArgumentResolver 的 Fast Path 中同样应用 Jump Override 优先级", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766584022.7213228, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(engine): 为 TCO 参数覆盖添加复杂路径测试用例", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766584135.3118892, "duration_ms": 0}}

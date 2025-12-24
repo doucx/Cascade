@@ -43,9 +43,6 @@ class ArgumentResolver:
 
             if not incoming_edges:
                 # ABSOLUTE FASTEST PATH: Literals/Overrides only, no edges.
-                # Just return them. Note: we don't convert to list here to save time,
-                # as executors can handle positional-args-as-dict if they are careful,
-                # but to maintain protocol, we'll do a quick conversion.
                 f_args = []
                 f_kwargs = {}
                 for k, v in bindings.items():
@@ -56,6 +53,37 @@ class ArgumentResolver:
                     else:
                         f_kwargs[k] = v
                 return f_args, f_kwargs
+            
+            # FAST PATH WITH EDGES: Simple node, but has upstream data.
+            # We merge literals and edges without reflection.
+            f_args = []
+            # 1. Fill from bindings
+            for k, v in bindings.items():
+                if k.isdigit():
+                    idx = int(k)
+                    while len(f_args) <= idx: f_args.append(None)
+                    f_args[idx] = v
+                else:
+                    # Note: We use a temp dict for kwargs to avoid modifying bindings if cached
+                    # But bindings is already a copy from node if input_overrides was present,
+                    # or node.input_bindings directly. To be safe, we create a new dict.
+                    pass
+            
+            f_kwargs = {k: v for k, v in bindings.items() if not k.isdigit()}
+
+            # 2. Fill from edges
+            for edge in incoming_edges:
+                val = await self._resolve_dependency(
+                    edge, node.structural_id, state_backend, graph, instance_map
+                )
+                if edge.arg_name.isdigit():
+                    idx = int(edge.arg_name)
+                    while len(f_args) <= idx: f_args.append(None)
+                    f_args[idx] = val
+                else:
+                    f_kwargs[edge.arg_name] = val
+            
+            return f_args, f_kwargs
 
         args = []
         kwargs = {}

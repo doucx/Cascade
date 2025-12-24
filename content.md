@@ -1,128 +1,71 @@
-好的，我们来完成“阶段二”的验证工作。
+好的，收到了测试收集阶段的 `ImportError`。
 
-首先，我需要为新的静态分析警告添加一个对应的用户可见消息。然后，我将编写一个集成测试来验证当引擎遇到“动态递归”反模式时，这个警告能够被正确地触发和发布。
+错误分析
 
-这个测试将严格遵循“验证意图而非实现”的原则，通过 Mock 消息总线来断言正确的语义 ID 和数据负载被调用。
+这是一个典型的 Python 包结构问题。
 
-## [WIP] test(engine): 添加静态分析警告的集成测试
+1.  **错误**: `ImportError: cannot import name 'NativeSolver' from 'cascade.adapters.solvers'`.
+2.  **原因**: 我们在测试文件 `test_static_analysis.py` 中尝试从 `cascade.adapters.solvers` 这个包直接导入 `NativeSolver`。
+3.  **代码结构**: 文件浏览器显示，`NativeSolver` 类实际上定义在 `cascade.adapters.solvers.native` 这个模块中。
+4.  **根本问题**: `cascade.adapters.solvers/__init__.py` 文件是空的。它没有从 `native.py` 模块中导入 `NativeSolver` 类，因此 `NativeSolver` 没有被“提升”或暴露在包的顶层命名空间中。
+
+同样的结构性问题也存在于 `cascade.adapters.executors` 包中，它的 `__init__.py` 也是空的，而 `LocalExecutor` 定义在 `local.py` 模块里。
+
+解决方案
+
+我们将修复这两个包的 `__init__.py` 文件，将它们的核心类导入到包的命名空间中。这是一种标准的 Python 实践，可以为库的使用者提供更简洁、更稳定的 API。
+
+## [WIP] fix(engine): 在 adapter 包中暴露核心类以修复导入错误
+
+### 错误分析
+测试收集失败，因为 `test_static_analysis.py` 无法从 `cascade.adapters.solvers` 导入 `NativeSolver`。根本原因是 `cascade.adapters.solvers/__init__.py` 是空的，没有将其模块内的 `NativeSolver` 类暴露到包级别。`cascade.adapters.executors` 包也存在同样的问题。
 
 ### 用户需求
-编写一个集成测试，以验证当 `GraphExecutionStrategy` 检测到 `warns_dynamic_recursion` 标志时，能够通过 `HumanReadableLogSubscriber` 正确地发布一个警告消息。
+修复 `ImportError`，使 `pytest` 能够成功收集并运行测试。
 
 ### 评论
-这是对“阶段二”成果的关键验证。一个没有被测试覆盖的功能是不存在的。这个测试将确保我们为提升开发者体验所做的静态分析工作能够端到端地正常运作，从图构建时的检测，到执行策略中的事件发布，再到最终通过消息总线呈现给用户。
+这是一个简单的包结构维护任务，但对开发者体验（DX）至关重要。通过在 `__init__.py` 中定义包的公共 API，我们可以提供更清晰、更易于使用的导入路径，并避免此类导入错误的发生。
 
 ### 目标
-1.  在 `cascade-common` 的 `runtime_events.json` 中为新的警告添加消息模板。
-2.  创建一个新的测试文件 `tests/engine/runtime/test_static_analysis.py`。
-3.  在该文件中，定义一个包含“动态递归”反模式的工作流。
-4.  编写一个测试用例，运行该工作流，并断言 `cascade.common.messaging.bus` 的 `warning` 方法被以 `graph.analysis.warning` 的消息 ID 调用。
+1.  修改 `packages/cascade-engine/src/cascade/adapters/solvers/__init__.py`，使其导入并暴露 `NativeSolver` 和 `CSPSolver`。
+2.  修改 `packages/cascade-engine/src/cascade/adapters/executors/__init__.py`，使其导入并暴露 `LocalExecutor`。
 
 ### 基本原理
-测试将使用 `monkeypatch` 来替换 `cascade.runtime.subscribers` 模块中导入的全局 `bus` 单例为一个 `MagicMock` 对象。然后，我们会配置一个真实的 `Engine`，并让其运行一个包含反模式的任务。`Engine` 的 `GraphExecutionStrategy` 会检测到节点的 `warns_dynamic_recursion` 标志并发布 `StaticAnalysisWarning` 事件。`HumanReadableLogSubscriber` 监听到此事件后，会调用被我们 Mock 的全局 `bus` 的 `.warning()` 方法。最后，我们对这个 Mock 对象的调用进行断言，从而验证了整个流程的正确意图。
+在包的 `__init__.py` 文件中使用 `from .module import Class` 语句，可以将模块内部的类提升到包的顶层命名空间。这样做之后，`from package import Class` 这样的导入语句就能成功解析。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/engine #scope/dx #ai/instruct #task/domain/runtime #task/object/static-analysis #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/engine #scope/dx #ai/instruct #task/domain/runtime #task/object/package-api #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: `cascade-common` - 添加警告消息模板
+#### Acts 1: 修复 `adapters` 的 `__init__.py` 文件
 
-我们首先在 `runtime_events.json` 中定义用户将看到的警告文本。
-
-~~~~~act
-patch_file
-packages/cascade-common/src/cascade/common/locales/en/runtime_events.json
-~~~~~
-~~~~~json
-    "engine.connector.connected": "📡 Engine connected to external connector.",
-    "engine.connector.disconnected": "🔌 Engine disconnected from external connector.",
-
-    "localbus.callback_error": "[LocalBus] Callback error on topic '{topic}': {error}",
-    "localbus.retained_callback_error": "[LocalBus] Sync/Retained callback error on topic '{topic}': {error}"
-}
-~~~~~
-~~~~~json
-    "engine.connector.connected": "📡 Engine connected to external connector.",
-    "engine.connector.disconnected": "🔌 Engine disconnected from external connector.",
-
-    "graph.analysis.warning": "   - ⚠️  [CS-W001] Static analysis warning for task '{task_name}': {message}",
-
-    "localbus.callback_error": "[LocalBus] Callback error on topic '{topic}': {error}",
-    "localbus.retained_callback_error": "[LocalBus] Sync/Retained callback error on topic '{topic}': {error}"
-}
-~~~~~
-
-#### Acts 2: `cascade-engine` - 编写集成测试
-
-现在，我们创建新的测试文件并编写测试用例。
+我们将使用 `write_file` 来更新 `solvers` 和 `executors` 包的 `__init__.py` 文件，使其正确地暴露其核心组件。
 
 ~~~~~act
 write_file
-tests/engine/runtime/test_static_analysis.py
+packages/cascade-engine/src/cascade/adapters/solvers/__init__.py
 ~~~~~
 ~~~~~python
-import pytest
-from unittest.mock import MagicMock
+from .native import NativeSolver
+from .csp import CSPSolver
 
-import cascade as cs
-from cascade.runtime import Engine, HumanReadableLogSubscriber, MessageBus
-from cascade.adapters.solvers import NativeSolver
-from cascade.adapters.executors import LocalExecutor
+__all__ = ["NativeSolver", "CSPSolver"]
+~~~~~
 
+~~~~~act
+write_file
+packages/cascade-engine/src/cascade/adapters/executors/__init__.py
+~~~~~
+~~~~~python
+from .local import LocalExecutor
 
-@pytest.mark.asyncio
-async def test_dynamic_recursion_emits_warning(monkeypatch):
-    """
-    Verifies that the engine emits a static analysis warning when it detects
-    the dynamic recursion anti-pattern.
-    """
-    # 1. Mock the user-facing message bus that the subscriber uses
-    mock_bus = MagicMock()
-    monkeypatch.setattr("cascade.runtime.subscribers.bus", mock_bus)
-
-    # 2. Define the anti-pattern
-    @cs.task
-    def some_other_task(x):
-        return x  # A simple task
-
-    @cs.task
-    def dynamic_recursive_task(x):
-        if x <= 0:
-            return "done"
-        # ANTI-PATTERN: Recursive call with another task call in its arguments
-        return dynamic_recursive_task(some_other_task(x - 1))
-
-    # 3. Setup a real engine and subscriber
-    engine_event_bus = MessageBus()
-    # The subscriber listens to the engine's events
-    _ = HumanReadableLogSubscriber(engine_event_bus)
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=engine_event_bus,  # Engine uses its internal event bus
-    )
-
-    # 4. Run the workflow
-    await engine.run(dynamic_recursive_task(1))
-
-    # 5. Assert the INTENT on the mocked user-facing bus
-    mock_bus.warning.assert_called_once_with(
-        "graph.analysis.warning",
-        task_name="dynamic_recursive_task",
-        warning_code="CS-W001",
-        message=(
-            "Task 'dynamic_recursive_task' uses a dynamic recursion pattern (calling other "
-            "tasks in its arguments) which disables TCO optimizations, "
-            "leading to significant performance degradation."
-        ),
-    )
+__all__ = ["LocalExecutor"]
 ~~~~~
 
 ### 下一步建议
-我们已经成功为“阶段二”的功能添加了验证，确保了其健壮性。现在，我们已经为路线图的下一个主要步骤做好了充分准备。
+我们已经修复了导致测试收集失败的导入错误。现在，所有测试都应该能够被 `pytest` 正常发现和执行。
 
-我建议我们正式开始 **阶段三：内核突破 —— 结构化 JIT 与动态修补**。这项工作的核心目标是改造 `GraphExecutionStrategy`，使其利用 `template_id` 来缓存执行计划，从而彻底解决 Heavy Path 的性能瓶颈。
+我建议你重新运行测试。我们应该会看到 `test_static_analysis.py` 中的测试用例实际执行的结果。

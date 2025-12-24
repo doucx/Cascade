@@ -1,115 +1,80 @@
-## [WIP] fix(tests): Apply targeted patches for `structural_id` rename
+好的，所有测试都已通过。我们已经成功完成了这次关键的架构重构，现在是时候将其作为一个逻辑单元提交了。
+
+我将生成一个 `[COMMIT]` 计划。
+
+## [COMMIT] refactor(core, graph): Rename Node.id to structural_id and extract HashingService
 
 ### 用户需求
-修复上次重构脚本遗漏的、导致测试失败的 `node.id` 引用。
+解决 `GraphBuilder` 的职责耦合（SoC Violation）问题，并通过将 `Node.id` 重命名为 `Node.structural_id` 来澄清其模糊的语义。
 
 ### 评论
-自动化脚本未能覆盖所有场景，特别是在测试文件中使用了不同变量名来引用 `Node` 对象。根据您提供的详细错误日志，问题主要集中在 `test_hashing.py` 和 `test_visualize.py` 中。与其尝试另一个可能不完美的脚本，不如使用精确的 `patch_file` 操作来修复这些已知故障点，这样更安全、更可靠。
+这是一次根本性的架构改进。通过提取 `HashingService` 并将 `id` 重命名为 `structural_id`，我们为节点身份建立了一个清晰、正式的定义。这解决了实例唯一性（正确性）和模板可复用性（性能）之间的战略性矛盾，为未来的 JIT 缓存等高级优化铺平了道路。
 
 ### 目标
-1.  修复 `tests/engine/graph/test_hashing.py` 中的 `AttributeError`。
-2.  修复 `tests/sdk/tools/test_visualize.py` 中的所有 `AttributeError`。
+创建一个单一、原子的 Git 提交，封装所有与 `structural_id` 重构和 `HashingService` 创建相关的变更。
 
 ### 基本原理
-通过对已知错误的具体代码块应用 `patch_file`，我们可以确保只修改必要的部分，避免对其他文件（如 `test_local.py`、`test_csp.py` 等，我们尚未查看其源码）造成意外影响。这是一个增量、安全的修复策略。
+重构已完成，所有测试均已通过，这标志着项目达到了一个稳定的、逻辑上完整的检查点。立即提交可以将这一基础性架构变更与后续工作（如修复其他架构缺陷）清晰地隔离开来，并形成有价值的历史记录。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/core #task/object/node-identity #task/action/fix-renaming-fallout #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/core #comp/graph #comp/tests #concept/graph #scope/api #scope/core #ai/refine #task/domain/core #task/object/graph-builder #task/action/refactor #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修复测试文件中的属性访问错误
+#### Acts 1: 暂存所有相关变更
 
-我们将对 `test_hashing.py` 和 `test_visualize.py` 应用精确的补丁来更正属性名称。
+我们将所有被修改和新建的文件添加到 Git 的暂存区。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-graph/src/cascade/graph/hashing.py
+packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-graph/src/cascade/graph/serialize.py
+packages/cascade-engine/src/cascade/runtime/flow.py
+packages/cascade-engine/src/cascade/runtime/resolvers.py
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+packages/cascade-engine/src/cascade/adapters/solvers/csp.py
+packages/cascade-engine/src/cascade/adapters/solvers/native.py
+packages/cascade-engine/src/cascade/runtime/processor.py
+packages/cascade-sdk/src/cascade/tools/visualize.py
+packages/cascade-sdk/src/cascade/tools/lisp.py
+packages/cascade-sdk/src/cascade/tools/preview.py
 tests/engine/graph/test_hashing.py
+tests/sdk/tools/test_visualize.py
+tests/engine/adapters/executors/test_local.py
+tests/engine/adapters/solvers/test_csp.py
+tests/engine/graph/test_serialize.py
+tests/engine/integration/test_engine_vm_integration.py
+tests/engine/runtime/test_flow_manager.py
+tests/engine/runtime/test_router_pruning.py
+tests/spec/spec/test_routing.py
 ~~~~~
-~~~~~python
-    node1 = instance_map1[target1._uuid]
-    node2 = instance_map2[target2._uuid]
 
-    assert node1.id != node2.id, (
-        "Hasher must distinguish between different nested LazyResult dependencies"
-    )
-~~~~~
-~~~~~python
-    node1 = instance_map1[target1._uuid]
-    node2 = instance_map2[target2._uuid]
+#### Acts 2: 提交变更
 
-    assert node1.structural_id != node2.structural_id, (
-        "Hasher must distinguish between different nested LazyResult dependencies"
-    )
-~~~~~
+现在，我们创建一个内容详尽的提交，记录本次重构的动机和实现。
 
 ~~~~~act
-patch_file
-tests/sdk/tools/test_visualize.py
+git_commit
 ~~~~~
-~~~~~python
-    # Check node definitions with new default styles
-    # style="rounded,filled", fillcolor=white, fontcolor=black
-    assert (
-        f'"{node_a.id}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
-        in dot_string
-    )
-    assert (
-        f'"{node_b.id}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
-        in dot_string
-    )
+~~~~~text
+refactor(core, graph): Rename Node.id to structural_id and extract HashingService
 
-    # Check data edge definitions
-    assert f'"{node_a.id}" -> "{node_b.id}" [label="0"];' in dot_string
-    assert f'"{node_c.id}" -> "{node_d.id}" [label="z"];' in dot_string
+This commit addresses a core architectural flaw and a strategic contradiction in the definition of node identity.
+
+**Problem:**
+1.  **SoC Violation:** `GraphBuilder` was a "God Object" responsible for graph traversal, hashing, and static analysis.
+2.  **Semantic Ambiguity:** `Node.id` was a confusing term, trying to represent an instance's unique identity while `Node.template_id` represented its structural blueprint. The hashing logic for constraints was inverted, compromising both correctness and performance goals.
+
+**Solution:**
+1.  **Extract `HashingService`:** All Merkle hash computation logic is now encapsulated in `cascade.graph.hashing.HashingService`. This isolates the concern of "identity" from "construction". `GraphBuilder` is now a pure structure mapper.
+2.  **Rename `Node.id` to `Node.structural_id`:** This makes the purpose of the ID explicit. It is the hash of the node's complete structure, including literal values, making it the perfect key for instance-specific caching.
+3.  **Formalize Hashing Rules:** The `HashingService` implements the new, correct hashing semantics:
+    - `structural_id` includes all information (keys and values) to guarantee instance uniqueness.
+    - `template_id` normalizes literals to enable performance optimizations like JIT plan caching.
+
+This change resolves the strategic conflict, clarifies the core data model, and provides a stable foundation for future performance enhancements outlined in the architecture roadmap.
 ~~~~~
-~~~~~python
-    # Check node definitions with new default styles
-    # style="rounded,filled", fillcolor=white, fontcolor=black
-    assert (
-        f'"{node_a.structural_id}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
-        in dot_string
-    )
-    assert (
-        f'"{node_b.structural_id}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
-        in dot_string
-    )
-
-    # Check data edge definitions
-    assert f'"{node_a.structural_id}" -> "{node_b.structural_id}" [label="0"];' in dot_string
-    assert f'"{node_c.structural_id}" -> "{node_d.structural_id}" [label="z"];' in dot_string
-~~~~~
-
-~~~~~act
-patch_file
-tests/sdk/tools/test_visualize.py
-~~~~~
-~~~~~python
-    # 1. Assert Data Edge (standard style)
-    assert f'"{node_ds.id}" -> "{node_target.id}" [label="data_in"];' in dot_string
-
-    # 2. Assert Condition Edge (dashed, gray)
-    expected_cond_edge = f'"{node_cond.id}" -> "{node_target.id}" [style=dashed, color=gray, label="run_if"]'
-    assert expected_cond_edge in dot_string
-
-    # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{node_constraint.id}" -> "{node_target.id}" [style=dotted, color=purple, label="constraint: cpu"]'
-    assert expected_constraint_edge in dot_string
-~~~~~
-~~~~~python
-    # 1. Assert Data Edge (standard style)
-    assert f'"{node_ds.structural_id}" -> "{node_target.structural_id}" [label="data_in"];' in dot_string
-
-    # 2. Assert Condition Edge (dashed, gray)
-    expected_cond_edge = f'"{node_cond.structural_id}" -> "{node_target.structural_id}" [style=dashed, color=gray, label="run_if"]'
-    assert expected_cond_edge in dot_string
-
-    # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{node_constraint.structural_id}" -> "{node_target.structural_id}" [style=dotted, color=purple, label="constraint: cpu"]'
-    assert expected_constraint_edge in dot_string
-~~~~~
-
-### 下一步建议
-我们已经修复了日志中明确指出的 `AttributeError`。现在应该重新运行测试，看看是否还有其他因为构造函数调用 (`TypeError`) 或其他未被发现的属性访问错误导致的问题。

@@ -8,6 +8,7 @@ from cascade.graph.build import build_graph
 from cascade.graph.registry import NodeRegistry
 from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.jump import Jump
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.resource_container import ResourceContainer
 from cascade.runtime.processor import NodeProcessor
@@ -96,6 +97,7 @@ class GraphExecutionStrategy:
         active_resources: Dict[str, Any],
     ) -> Any:
         current_target = target
+        next_input_overrides = None
 
         while True:
             # Check for Zero-Overhead TCO Fast Path
@@ -125,9 +127,13 @@ class GraphExecutionStrategy:
 
                     # Prepare Input Overrides
                     input_overrides = {}
-                    for i, arg in enumerate(current_target.args):
-                        input_overrides[str(i)] = arg
-                    input_overrides.update(current_target.kwargs)
+                    if next_input_overrides:
+                        input_overrides.update(next_input_overrides)
+                        next_input_overrides = None
+                    else:
+                        for i, arg in enumerate(current_target.args):
+                            input_overrides[str(i)] = arg
+                        input_overrides.update(current_target.kwargs)
                 else:
                     # SLOW PATH: Build Graph
                     # STATE GC (Asynchronous)
@@ -220,6 +226,11 @@ class GraphExecutionStrategy:
                         input_overrides,
                     )
                 else:
+                    root_overrides = None
+                    if next_input_overrides:
+                        root_overrides = next_input_overrides
+                        next_input_overrides = None
+
                     result = await self._execute_graph(
                         current_target,
                         params,
@@ -229,12 +240,56 @@ class GraphExecutionStrategy:
                         graph,
                         plan,
                         instance_map,
-                        input_overrides,
+                        root_input_overrides=root_overrides,
                     )
 
             # 5. Check for Tail Call (LazyResult) - TCO Logic
             if isinstance(result, (LazyResult, MappedLazyResult)):
                 current_target = result
+            elif isinstance(result, Jump):
+                # Handle Explicit Jump
+                source_node_id = None
+                if target_node := instance_map.get(current_target._uuid):
+                    source_node_id = target_node.structural_id
+
+                if not source_node_id and fast_path_data:
+                    source_node_id = fast_path_data[2]
+
+                if not source_node_id:
+                    raise RuntimeError("Could not locate source node for Jump.")
+
+                # Find outgoing ITERATIVE_JUMP edge
+                jump_edge = next(
+                    (
+                        e
+                        for e in graph.edges
+                        if e.source.structural_id == source_node_id
+                        and e.edge_type == EdgeType.ITERATIVE_JUMP
+                    ),
+                    None,
+                )
+
+                if not jump_edge or not jump_edge.jump_selector:
+                    raise RuntimeError(
+                        f"Task returned a Jump signal but has no bound 'select_jump' (Edge not found for {source_node_id})."
+                    )
+
+                selector = jump_edge.jump_selector
+                next_target = selector.routes.get(result.target_key)
+
+                if next_target is None:
+                    return result.data
+
+                # Prepare for next iteration
+                current_target = next_target
+
+                if isinstance(result.data, dict):
+                    next_input_overrides = result.data
+                elif result.data is not None:
+                    next_input_overrides = {"0": result.data}
+                else:
+                    next_input_overrides = {}
+
             else:
                 return result
 

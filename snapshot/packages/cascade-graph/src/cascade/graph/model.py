@@ -20,6 +20,7 @@ class EdgeType(Enum):
     SEQUENCE = auto()  # An explicit execution order dependency (no data transfer)
     ROUTER_ROUTE = auto()  # A potential dependency branch for a Router
     POTENTIAL = auto()  # A potential flow path inferred via static analysis (e.g. TCO)
+    ITERATIVE_JUMP = auto()  # An explicit state transition (Jump)
 
 
 @dataclass
@@ -78,6 +79,9 @@ class Edge:
 
     # If set, implies this edge is the selector for a dynamic router
     router: Optional[Any] = None
+
+    # If set, implies this edge is an explicit jump transition
+    jump_selector: Optional[Any] = None
 
 
 @dataclass

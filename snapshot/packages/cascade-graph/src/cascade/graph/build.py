@@ -5,8 +5,11 @@ from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
 from cascade.spec.task import Task
+from cascade.spec.jump import JumpSelector
 
 from .registry import NodeRegistry
+from .hashing import HashingService
+from .binding import consume_bindings
 from .hashing import HashingService
 
 
@@ -24,7 +27,32 @@ class GraphBuilder:
 
     def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:
         self._visit(target)
+        self._process_bindings()
         return self.graph, self._visited_instances
+
+    def _process_bindings(self):
+        """Applies any pending bindings to the graph."""
+        bindings = consume_bindings()
+        for source_uuid, selector in bindings:
+            if source_uuid in self._visited_instances:
+                source_node = self._visited_instances[source_uuid]
+
+                if isinstance(selector, JumpSelector):
+                    # Ensure all potential targets in the selector are built/visited
+                    for route_target in selector.routes.values():
+                        if route_target is not None:
+                            self._visit(route_target)
+
+                    # Create the ITERATIVE_JUMP edge
+                    self.graph.add_edge(
+                        Edge(
+                            source=source_node,
+                            target=source_node,  # Placeholder, engine uses jump_selector
+                            arg_name="<jump>",
+                            edge_type=EdgeType.ITERATIVE_JUMP,
+                            jump_selector=selector,
+                        )
+                    )
 
     def _visit(self, value: Any) -> Node:
         """Central dispatcher for the post-order traversal."""

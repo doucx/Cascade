@@ -1,12 +1,16 @@
 import inspect
 from typing import Any, Dict, List
 from cascade.graph.model import Node
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.graph.exceptions import StaticGraphError
 
 
 class LocalExecutor:
     """
     An executor that runs tasks sequentially in the current process.
     """
+
+
 
     async def execute(
         self,
@@ -23,6 +27,15 @@ class LocalExecutor:
             )
 
         if inspect.iscoroutinefunction(node.callable_obj):
-            return await node.callable_obj(*args, **kwargs)
+            result = await node.callable_obj(*args, **kwargs)
         else:
-            return node.callable_obj(*args, **kwargs)
+            result = node.callable_obj(*args, **kwargs)
+
+        # Runtime guard against the "task returns LazyResult" anti-pattern.
+        if isinstance(result, (LazyResult, MappedLazyResult)):
+            raise StaticGraphError(
+                f"Task '{node.name}' illegally returned a LazyResult. "
+                "Tasks must return data. For control flow, return a cs.Jump(...) signal instead."
+            )
+
+        return result

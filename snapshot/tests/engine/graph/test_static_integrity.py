@@ -1,13 +1,17 @@
 import pytest
 import cascade as cs
-from cascade.graph import build_graph, StaticGraphError
+from cascade.graph import StaticGraphError
+from cascade.runtime import Engine, MessageBus
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 
-def test_task_returning_lazy_result_is_forbidden():
+@pytest.mark.asyncio
+async def test_task_returning_lazy_result_is_forbidden_at_runtime():
     """
-    Verifies that the GraphBuilder rejects the anti-pattern of a task
-    returning a LazyResult. This violates the static, declarative nature
-    of Cascade graphs.
+    Verifies that the Executor rejects the anti-pattern of a task
+    returning a LazyResult at runtime. This violates the static, declarative nature
+    of Cascade graphs and the new explicit control flow model.
     """
 
     @cs.task
@@ -17,15 +21,19 @@ def test_task_returning_lazy_result_is_forbidden():
     @cs.task
     def task_a_violating():
         # This is the anti-pattern: a task's logic should not be
-        # building new graph components at runtime.
+        # building new graph components at runtime. It should return data or a Jump.
         return task_b()
 
     workflow = task_a_violating()
 
-    # This test will FAIL initially, because build_graph does not yet
+    engine = Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus()
+    )
+
+    # This test will FAIL initially because the LocalExecutor does not yet
     # raise StaticGraphError. It will pass once the validation is implemented.
     with pytest.raises(
         StaticGraphError,
-        match="Task 'task_a_violating' returns a LazyResult",
+        match="Task 'task_a_violating' illegally returned a LazyResult",
     ):
-        build_graph(workflow)
+        await engine.run(workflow)

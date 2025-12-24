@@ -1,101 +1,41 @@
-Excellent. This is a critical strategic decision that will simplify the architecture and make the programming model much more robust. By completely abandoning the old, implicit TCO model, we eliminate ambiguity and make the entire system more predictable.
+好的，我们正处于 RED 状态，目标明确。现在是实施修复，让 `test_task_returning_lazy_result_is_forbidden` 测试通过的时候了。
 
-We will now proceed with TDD to enforce this new, stricter model. Our first step is to create a test that fails because the `GraphBuilder` *doesn't yet* reject the anti-pattern (a task returning a `LazyResult`).
+经过分析，我发现我之前的思考有一个偏差：这个检查**不能**在 `GraphBuilder` 中静态完成，因为它无法预知一个任务在运行时的返回值类型。这个检查**必须**在任务被实际执行后，在运行时进行。
 
-## [WIP] test: 添加静态图完整性校验的失败测试
+因此，我们的测试用例 `test_task_returning_lazy_result_is_forbidden` 的方向是正确的，但它测试了错误的目标 (`build_graph`)。它应该测试 **执行时** 的行为 (`engine.run`)。
+
+我将生成一个计划来同时完成两件事：
+1.  修正测试用例，使其正确地调用 `engine.run` 来触发运行时检查。
+2.  在 `LocalExecutor` 中实现这个运行时检查，当检测到返回 `LazyResult` 时抛出 `StaticGraphError`。
+
+## [WIP] feat(engine): 在运行时强制执行静态图完整性
+
+### 错误分析
+测试 `test_task_returning_lazy_result_is_forbidden` 失败的直接原因是它错误地期望 `build_graph` 抛出 `StaticGraphError`。然而，图的构建过程无法静态地知道任务的返回值类型。这个“任务返回 `LazyResult`”的反模式只能在任务被**实际执行**时才能被检测到。因此，检查逻辑必须位于执行器（Executor）中，而测试用例必须触发执行器。
 
 ### 用户需求
-根据新的战略决议，我们必须禁止任务返回 `LazyResult`。为了驱动这一变更，需要创建一个新的测试用例。该测试用例应尝试构建一个包含此反模式的图，并断言 `GraphBuilder` 会抛出一个新的、特定的 `StaticGraphError`。
+实施新的战略原则，即在运行时检测并禁止任务返回 `LazyResult`，从而使静态图完整性测试通过。
 
 ### 评论
-这是一个决定性的步骤，它将 Cascade 的编程模型从“灵活但模糊”转变为“严格但清晰”。通过在 `GraphBuilder` 层面设立一个“看门人”，我们从根本上杜绝了运行时可能出现的歧义和上下文丢失问题。这个测试将成为新架构原则的第一个守护者。
+这是一个关键的实现步骤，它将我们的战略决议转化为具体的代码护栏。通过在 `LocalExecutor` 中添加这个检查，我们创建了一个强大的安全网，确保旧的、隐式的 TCO 行为被彻底根除，并为用户提供清晰、可操作的错误信息，引导他们使用新的 `cs.Jump` 模式。
 
 ### 目标
-1.  在 `cascade-graph` 中创建一个新的异常类型 `StaticGraphError`。
-2.  创建一个新的测试文件 `tests/engine/graph/test_static_integrity.py`。
-3.  在新测试文件中，编写一个名为 `test_task_returning_lazy_result_is_forbidden` 的测试。
-4.  此测试将定义一个返回 `LazyResult` 的任务，并调用 `build_graph`。
-5.  测试将使用 `pytest.raises(StaticGraphError)` 来断言 `build_graph` 的行为。
-6.  **预期结果**: 此测试将**失败**，因为 `build_graph` 目前会成功构建图，而不会抛出我们期望的 `StaticGraphError`。
+1.  修改 `test_task_returning_lazy_result_is_forbidden` 测试，使其调用 `engine.run` 而非 `build_graph`，从而正确地测试运行时行为。
+2.  修改 `LocalExecutor`，在执行完任务后检查其返回值。如果返回值是 `LazyResult` 或 `MappedLazyResult`，则抛出 `StaticGraphError`。
 
 ### 基本原理
-我们正在将一个曾经导致**运行时错误**（`RuntimeError`）的问题，转变为一个**构建时错误**（`StaticGraphError`）。这是“快速失败”原则的体现。此测试的目的是验证 `GraphBuilder` 的验证逻辑。在当前代码下，由于验证逻辑尚不存在，`pytest.raises` 将捕获不到任何异常，从而导致测试失败，使我们进入一个清晰的 RED 状态。
+我们将把验证逻辑放在它唯一能够生效的地方：`LocalExecutor.execute` 方法中，在任务函数被调用并返回结果之后。同时，我们将修正测试用例，使其从一个错误的“构建时”测试转变为一个正确的“运行时”测试。这两项修改将协同工作，使我们的测试套件能够正确地验证并强制执行新的架构原则。
 
 ### 标签
-#intent/refine #intent/tooling #flow/ready #priority/high #comp/graph #comp/tests #concept/graph-integrity #scope/api #scope/dx #ai/instruct #task/domain/engine #task/object/graph-builder #task/action/validation-enforcement #task/state/continue
+#intent/build #intent/refine #flow/ready #priority/high #comp/engine #comp/tests #concept/graph-integrity #scope/core #ai/instruct #task/domain/engine #task/object/executor #task/action/validation-enforcement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 定义新的异常类型
+#### Acts 1: 修正测试用例以测试运行时
 
-我们首先在 `cascade-graph` 包中创建新的异常文件和类型。
-
-~~~~~act
-write_file
-packages/cascade-graph/src/cascade/graph/exceptions.py
-~~~~~
-~~~~~python
-class CascadeGraphError(Exception):
-    """Base class for errors in the cascade-graph package."""
-
-    pass
-
-
-class StaticGraphError(CascadeGraphError):
-    """
-    Raised when an anti-pattern that violates static graph principles
-    is detected during the build process.
-    """
-
-    pass
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/__init__.py
-~~~~~
-~~~~~python
-from .model import Graph, Node, Edge, EdgeType
-from .build import build_graph
-from .registry import NodeRegistry
-from .ast_analyzer import analyze_task_source, assign_tco_cycle_ids
-
-__all__ = [
-    "Graph",
-    "Node",
-    "Edge",
-    "EdgeType",
-    "build_graph",
-    "NodeRegistry",
-    "analyze_task_source",
-    "assign_tco_cycle_ids",
-]
-~~~~~
-~~~~~python
-from .model import Graph, Node, Edge, EdgeType
-from .build import build_graph
-from .registry import NodeRegistry
-from .ast_analyzer import analyze_task_source, assign_tco_cycle_ids
-from .exceptions import StaticGraphError
-
-__all__ = [
-    "Graph",
-    "Node",
-    "Edge",
-    "EdgeType",
-    "build_graph",
-    "NodeRegistry",
-    "analyze_task_source",
-    "assign_tco_cycle_ids",
-    "StaticGraphError",
-]
-~~~~~
-
-#### Acts 2: 创建新的失败测试文件
-
-现在，我们创建 `test_static_integrity.py` 文件，其中包含我们的 RED 测试。
+我们将重写 `test_static_integrity.py` 中的测试，使其成为一个 `async` 测试，并调用 `engine.run`。
 
 ~~~~~act
 write_file
@@ -104,14 +44,18 @@ tests/engine/graph/test_static_integrity.py
 ~~~~~python
 import pytest
 import cascade as cs
-from cascade.graph import build_graph, StaticGraphError
+from cascade.graph import StaticGraphError
+from cascade.runtime import Engine, MessageBus
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
 
-def test_task_returning_lazy_result_is_forbidden():
+@pytest.mark.asyncio
+async def test_task_returning_lazy_result_is_forbidden_at_runtime():
     """
-    Verifies that the GraphBuilder rejects the anti-pattern of a task
-    returning a LazyResult. This violates the static, declarative nature
-    of Cascade graphs.
+    Verifies that the Executor rejects the anti-pattern of a task
+    returning a LazyResult at runtime. This violates the static, declarative nature
+    of Cascade graphs and the new explicit control flow model.
     """
 
     @cs.task
@@ -121,83 +65,107 @@ def test_task_returning_lazy_result_is_forbidden():
     @cs.task
     def task_a_violating():
         # This is the anti-pattern: a task's logic should not be
-        # building new graph components at runtime.
+        # building new graph components at runtime. It should return data or a Jump.
         return task_b()
 
     workflow = task_a_violating()
 
-    # This test will FAIL initially, because build_graph does not yet
+    engine = Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus()
+    )
+
+    # This test will FAIL initially because the LocalExecutor does not yet
     # raise StaticGraphError. It will pass once the validation is implemented.
     with pytest.raises(
         StaticGraphError,
-        match="Task 'task_a_violating' returns a LazyResult",
+        match="Task 'task_a_violating' illegally returned a LazyResult",
     ):
-        build_graph(workflow)
+        await engine.run(workflow)
 ~~~~~
 
-#### Acts 3: 删除旧的、有缺陷的测试
+#### Acts 2: 在 LocalExecutor 中实现运行时检查
 
-既然我们已经有了新的、更根本的测试，`test_explicit_jump_from_downstream_task` 就变得多余且具有误导性了。我们将其删除。
+现在，我们在 `LocalExecutor` 中添加检查逻辑，使其在检测到反模式时抛出 `StaticGraphError`。
 
 ~~~~~act
 patch_file
-tests/engine/runtime/test_explicit_control_flow.py
+packages/cascade-engine/src/cascade/adapters/executors/local.py
 ~~~~~
 ~~~~~python
-@pytest.mark.asyncio
-async def test_explicit_jump_from_downstream_task():
+import inspect
+from typing import Any, Dict, List
+from cascade.graph.model import Node
+
+
+class LocalExecutor:
     """
-    Tests that the engine can correctly handle a Jump signal that originates
-    from a downstream task, not the root of the execution graph for that step.
+    An executor that runs tasks sequentially in the current process.
     """
 
-    @cs.task
-    def decider(n: int):
-        if n <= 0:
-            return cs.Jump(target_key="exit", data=n)
+    async def execute(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        """
+        Executes a single node's callable object with the provided arguments.
+        """
+        if node.callable_obj is None:
+            raise TypeError(
+                f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
+            )
+
+        if inspect.iscoroutinefunction(node.callable_obj):
+            return await node.callable_obj(*args, **kwargs)
         else:
-            return cs.Jump(target_key="continue", data=n - 1)
-
-    @cs.task
-    def main_task(n: int):
-        # This task delegates the jump decision to a downstream task
-        return decider(n)
-
-    # The jump selector's target must be the task that receives the new data.
-    # Here, 'decider' is the task that gets re-invoked with new data.
-    loop_node = decider(cs.Param("next_n"))
-
-    jump_selector = cs.select_jump(
-        {
-            "continue": loop_node,
-            "exit": None,
-        }
-    )
-
-    # CRITICAL: The binding is correctly placed on the task that returns the
-    # Jump signal (`decider`), which is instantiated here as `loop_node`.
-    cs.bind(loop_node, jump_selector)
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus(),
-    )
-
-    # We run the main_task. The engine must be smart enough to identify that
-    # the Jump signal came from `decider` and find the binding there.
-    final_result = await engine.run(main_task(3))
-
-    assert final_result == 0
+            return node.callable_obj(*args, **kwargs)
 ~~~~~
 ~~~~~python
-# The test `test_explicit_jump_from_downstream_task` has been removed.
-# It was based on a flawed premise that tasks should be able to return
-# LazyResults. The new strategic direction is to forbid this pattern at the
-# graph build stage, making the runtime test obsolete.
+import inspect
+from typing import Any, Dict, List
+from cascade.graph.model import Node
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.graph.exceptions import StaticGraphError
+
+
+class LocalExecutor:
+    """
+    An executor that runs tasks sequentially in the current process.
+    """
+
+
+
+    async def execute(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        """
+        Executes a single node's callable object with the provided arguments.
+        """
+        if node.callable_obj is None:
+            raise TypeError(
+                f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
+            )
+
+        if inspect.iscoroutinefunction(node.callable_obj):
+            result = await node.callable_obj(*args, **kwargs)
+        else:
+            result = node.callable_obj(*args, **kwargs)
+
+        # Runtime guard against the "task returns LazyResult" anti-pattern.
+        if isinstance(result, (LazyResult, MappedLazyResult)):
+            raise StaticGraphError(
+                f"Task '{node.name}' illegally returned a LazyResult. "
+                "Tasks must return data. For control flow, return a cs.Jump(...) signal instead."
+            )
+
+        return result
 ~~~~~
 
 ### 下一步建议
-我们已经成功地将测试套件置于一个真正的 RED 状态。新的测试 `test_task_returning_lazy_result_is_forbidden` 现在会失败，因为它期望一个 `StaticGraphError`，但 `GraphBuilder` 尚未实现此检查。
+我们已经完成了运行时检查的实现和相应测试的修正。现在，请再次运行测试。我们期望 `test_static_integrity.py` 和 `test_explicit_control_flow.py` 都能通过，将测试套件带回 GREEN 状态。
 
-下一步，我们将进入 GREEN 阶段。我将生成一个新计划，修改 `GraphBuilder` 和 `NodeProcessor` 以检测并拒绝这种反模式，从而使我们的新测试通过。
+一旦成功，我们将彻底废弃隐式 TCO，并可以安全地清理 `GraphExecutionStrategy` 中所有相关的旧代码（如 `_cycle_cache`），进一步简化架构。

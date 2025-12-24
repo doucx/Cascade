@@ -34,7 +34,6 @@ class Node:
 
     structural_id: str
     name: str
-    template_id: str = ""  # Structural hash (ignoring literals)
 
     # Core spec
     node_type: str = "task"  # "task", "param", or "map"

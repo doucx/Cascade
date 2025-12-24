@@ -113,7 +113,7 @@ class GraphExecutionStrategy:
                     )
 
                 target_node = instance_map[current_target._uuid]
-                cache_key = target_node.template_id or target_node.structural_id
+                cache_key = target_node.structural_id
 
                 # 2. Resolve Plan (with caching)
                 if cache_key in self._template_plan_cache:

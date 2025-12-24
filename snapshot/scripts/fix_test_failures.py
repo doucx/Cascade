@@ -1,39 +1,3 @@
-## [WIP] fix(tests): Resolve `Node.id` renaming failures in test suite
-
-### 用户需求
-批量修复因 `Node.id` 重命名为 `Node.structural_id` 导致的大量测试失败。
-
-### 评论
-错误日志清晰地指向了两个主要问题：
-1.  **构造函数调用错误**: 测试代码手动实例化 `Node(id=...)` 时使用了旧参数名。
-2.  **遗漏的属性访问**: 部分代码（如 `flow.py:42` 和测试文件）中仍存在 `route_node.id` 这样的访问。
-
-这是自动化脚本的覆盖盲区，通常是因为变量名（如 `route_node`）不在简单的正则替换列表中。我们需要扩大搜索范围并手动修复这些遗漏。
-
-### 目标
-1.  编写并执行更激进的修复脚本，处理 `Node(id=...)` 构造函数调用。
-2.  修复 `flow.py` 中遗漏的属性访问。
-3.  修复测试文件中遗漏的属性访问（如 `tests/engine/runtime/test_router_pruning.py` 等）。
-
-### 基本原理
-我们将使用 `sed` 或特定的 Python 脚本来替换测试文件中的构造函数调用模式，并手动修补已知的运行时代码遗漏。
-
-### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/core #task/object/node-identity #task/action/fix-renaming-fallout #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建修复脚本 (针对构造函数和遗漏属性)
-
-这个脚本将处理 `Node(id=...)` 这种模式，以及日志中暴露的具体属性访问错误。
-
-~~~~~act
-write_file
-scripts/fix_test_failures.py
-~~~~~
-~~~~~python
 import os
 import re
 
@@ -84,4 +48,3 @@ for root_dir in root_dirs:
         for file in files:
             if file.endswith(".py"):
                 process_file(os.path.join(root, file))
-~~~~~

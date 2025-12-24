@@ -2,6 +2,7 @@ import asyncio
 import inspect
 from contextlib import ExitStack
 from typing import Any, Dict, List, Set
+from dataclasses import dataclass
 
 from cascade.graph.model import Graph, Node, EdgeType
 from cascade.graph.build import build_graph

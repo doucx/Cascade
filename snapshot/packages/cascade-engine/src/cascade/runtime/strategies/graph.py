@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from contextlib import ExitStack
 from typing import Any, Dict, List
 
@@ -201,9 +202,11 @@ class GraphExecutionStrategy:
             # 5. Check for Tail Call (LazyResult) - TCO Logic
             if isinstance(result, (LazyResult, MappedLazyResult)):
                 current_target = result
-                # STATE GC
-                if hasattr(state_backend, "clear"):
-                    state_backend.clear()
+                # STATE GC (Asynchronous)
+                if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
+                    state_backend.clear
+                ):
+                    await state_backend.clear()
                 # Yield control
                 await asyncio.sleep(0)
             else:
@@ -243,7 +246,8 @@ class GraphExecutionStrategy:
         """
         # 1. Resolve Arguments (Minimal path)
         # We reuse the node_processor's resolver but bypass the process() wrapper
-        args, kwargs = self.node_processor.arg_resolver.resolve(
+        # Resolver is now ASYNC
+        args, kwargs = await self.node_processor.arg_resolver.resolve(
             node,
             graph,
             state_backend,
@@ -256,8 +260,8 @@ class GraphExecutionStrategy:
         # 2. Direct Execution (Skip NodeProcessor ceremony)
         result = await self.node_processor.executor.execute(node, args, kwargs)
 
-        # 3. Minimal State Update
-        state_backend.put_result(node.structural_id, result)
+        # 3. Minimal State Update (Async)
+        await state_backend.put_result(node.structural_id, result)
         return result
 
     async def _execute_graph(
@@ -294,9 +298,12 @@ class GraphExecutionStrategy:
                     if node.node_type == "param":
                         continue
 
-                    skip_reason = flow_manager.should_skip(node, state_backend)
+                    # ASYNC CHECK
+                    skip_reason = await flow_manager.should_skip(node, state_backend)
                     if skip_reason:
-                        state_backend.mark_skipped(node.structural_id, skip_reason)
+                        await state_backend.mark_skipped(
+                            node.structural_id, skip_reason
+                        )
                         self.bus.publish(
                             TaskSkipped(
                                 run_id=run_id,
@@ -365,9 +372,9 @@ class GraphExecutionStrategy:
                     pass_results = await asyncio.gather(*tasks_to_run)
 
                     for node, res in zip(executable_this_pass, pass_results):
-                        state_backend.put_result(node.structural_id, res)
+                        await state_backend.put_result(node.structural_id, res)
                         if flow_manager:
-                            flow_manager.register_result(
+                            await flow_manager.register_result(
                                 node.structural_id, res, state_backend
                             )
 
@@ -379,9 +386,11 @@ class GraphExecutionStrategy:
                     self.constraint_manager.cleanup_expired_constraints()
 
         # Use the mapped canonical node ID to check for the final result
-        if not state_backend.has_result(target_node.structural_id):
+        if not await state_backend.has_result(target_node.structural_id):
             # For debugging, check if the instance was skipped
-            if skip_reason := state_backend.get_skip_reason(target_node.structural_id):
+            if skip_reason := await state_backend.get_skip_reason(
+                target_node.structural_id
+            ):
                 if skip_reason == "UpstreamSkipped_Sequence":
                     return None
                 raise DependencyMissingError(
@@ -394,4 +403,4 @@ class GraphExecutionStrategy:
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )
 
-        return state_backend.get_result(target_node.structural_id)
+        return await state_backend.get_result(target_node.structural_id)

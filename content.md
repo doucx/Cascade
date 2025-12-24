@@ -1,525 +1,40 @@
-由于“架构缺陷 B”是一个涉及多个核心组件的重大重构，本计划将一次性执行所有必要的更改，以确保系统处于一致状态。这包括协议定义、后端实现、解析器、流管理器、执行策略以及测试套件的更新。
+好的，我们开始执行“第一阶段：修复引擎内核”。
 
-## [WIP] refactor(core): 强制 StateBackend 异步化以确立 I/O 边界
+我将生成一个计划，该计划将系统性地修复 `cascade-engine` 内部因“StateBackend 异步化”重构而遗漏的所有 `await` 调用。这个计划严格限制在引擎核心代码，不涉及测试套件的修改。
+
+## [WIP] fix(engine): 在运行时内核中为异步 StateBackend 补全 await
+
+### 错误分析
+在将 `StateBackend` 协议迁移到 `async def` 后，引擎内部的多个关键组件（`FlowManager`, `GraphExecutionStrategy` 等）未能相应地更新其调用方式。这导致了 `RuntimeWarning: coroutine ... was never awaited` 警告，并引发了严重的逻辑错误：
+1.  **逻辑判断失效**: `if state_backend.has_result(...)` 这样的代码中，协程对象本身总是 `True`，导致 `if` 条件判断永远失败。
+2.  **控制流破坏**: 同样，`if flow_manager.should_skip(...)` 的逻辑也被破坏，使得 `run_if` 和 `Router` 剪枝等核心功能完全失效。
+
+这些是导致大规模测试失败的根本原因。
 
 ### 用户需求
-1.  **架构合规**: 强制 `StateBackend` 协议使用 `async def`，消除 IO 边界的模糊性。
-2.  **安全性**: 在 `InMemoryStateBackend` 中示范性地使用 `asyncio.to_thread`，确保即使是同步操作也不会阻塞主事件循环。
-3.  **兼容性**: 更新所有核心运行时组件（解析器、流管理器、策略）以适配新的异步契约。
+执行“第一阶段”修复，即只修正 `cascade-engine` 内核代码，为所有对 `StateBackend` 及其相关异步方法的调用添加 `await` 关键字。
 
 ### 评论
-这是一个“断骨增高”式的重构。虽然它会在短期内破坏所有依赖 `StateBackend` 的代码，但长远来看，它为引入持久化存储（如 Redis, SQLite, 文件系统）扫清了最大的架构障碍，并确立了 Cascade 作为一个真正非阻塞框架的地位。
+这是一个精确的外科手术式修复。我们的目标是让引擎的内部逻辑与其依赖的异步协议（`StateBackend`）恢复一致。完成此步骤后，引擎内核将处于一个逻辑上正确的状态，为第二阶段修复测试套le套件奠定基础。
 
 ### 目标
-1.  更新 `cascade-spec` 中的 `StateBackend` 协议。
-2.  更新 `InMemoryStateBackend` 和 `RedisStateBackend` 实现。
-3.  更新 `ArgumentResolver`, `ConstraintResolver`, `FlowManager`, `NodeProcessor`, `GraphExecutionStrategy` 以异步方式调用状态后端。
-4.  添加/更新测试以验证异步行为。
+1.  审查 `runtime/flow.py` 并为其所有 `state_backend` 调用添加 `await`。
+2.  审查 `runtime/processor.py` 并为其所有 `state_backend` 和 `resolver` 调用添加 `await`。
+3.  审查 `runtime/strategies/graph.py`，确保所有对 `flow_manager` 和 `state_backend` 的调用都已正确 `await`。
 
 ### 基本原理
-通过在协议层强制 `async`，利用 Python 的类型系统和运行时检查来防止同步 I/O 意外阻塞事件循环。在同步实现中使用 `asyncio.to_thread` 是为了模拟真实 I/O 场景下的线程隔离，确保架构的一致性。
+通过全面审计并修复所有遗漏的 `await`，我们将完成“StateBackend 异步化”重构的后半部分工作。这将恢复引擎的控制流正确性，并消除所有相关的 `RuntimeWarning`。
 
 ### 标签
-#intent/refactor #flow/ready #priority/critical #comp/engine #comp/interfaces #concept/state #scope/core #ai/instruct #task/domain/core #task/object/state-backend #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/engine #concept/state #scope/core #ai/instruct #task/domain/core #task/object/state-backend #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新协议定义
+#### Acts 1: 修复 FlowManager
 
-将 `StateBackend` 协议的所有方法更新为异步方法。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/protocols.py
-~~~~~
-~~~~~python
-class StateBackend(Protocol):
-    """
-    Protocol for a backend that stores the transient state of a single workflow run.
-    This includes task results and skip statuses.
-    """
-
-    def put_result(self, node_id: str, result: Any) -> None:
-        """Stores the result of a completed task."""
-        ...
-
-    def get_result(self, node_id: str) -> Optional[Any]:
-        """Retrieves the result of a task. Returns None if not found."""
-        ...
-
-    def has_result(self, node_id: str) -> bool:
-        """Checks if a result for a given task ID exists."""
-        ...
-
-    def mark_skipped(self, node_id: str, reason: str) -> None:
-        """Marks a task as skipped."""
-        ...
-
-    def get_skip_reason(self, node_id: str) -> Optional[str]:
-        """Retrieves the reason a task was skipped. Returns None if not skipped."""
-        ...
-~~~~~
-~~~~~python
-class StateBackend(Protocol):
-    """
-    Protocol for a backend that stores the transient state of a single workflow run.
-    This includes task results and skip statuses.
-    """
-
-    async def put_result(self, node_id: str, result: Any) -> None:
-        """Stores the result of a completed task."""
-        ...
-
-    async def get_result(self, node_id: str) -> Optional[Any]:
-        """Retrieves the result of a task. Returns None if not found."""
-        ...
-
-    async def has_result(self, node_id: str) -> bool:
-        """Checks if a result for a given task ID exists."""
-        ...
-
-    async def mark_skipped(self, node_id: str, reason: str) -> None:
-        """Marks a task as skipped."""
-        ...
-
-    async def get_skip_reason(self, node_id: str) -> Optional[str]:
-        """Retrieves the reason a task was skipped. Returns None if not skipped."""
-        ...
-~~~~~
-
-#### Acts 2: 更新 InMemoryStateBackend
-
-实现异步接口，并使用 `asyncio.to_thread` 包装操作以确保非阻塞（即使字典操作很快，也要遵守架构契约）。同时将 `clear` 方法也改为异步。
-
-~~~~~act
-write_file
-packages/cascade-engine/src/cascade/adapters/state/in_memory.py
-~~~~~
-~~~~~python
-import asyncio
-from typing import Any, Dict, Optional
-
-
-class InMemoryStateBackend:
-    """
-    An in-memory implementation of the StateBackend protocol using Python dictionaries.
-    This is the default backend for local, single-process runs.
-    """
-
-    def __init__(self, run_id: str):
-        self._run_id = run_id
-        self._results: Dict[str, Any] = {}
-        self._skipped: Dict[str, str] = {}
-
-    async def put_result(self, node_id: str, result: Any) -> None:
-        await asyncio.to_thread(self._results.__setitem__, node_id, result)
-
-    async def get_result(self, node_id: str) -> Optional[Any]:
-        return await asyncio.to_thread(self._results.get, node_id)
-
-    async def has_result(self, node_id: str) -> bool:
-        return await asyncio.to_thread(self._results.__contains__, node_id)
-
-    async def mark_skipped(self, node_id: str, reason: str) -> None:
-        await asyncio.to_thread(self._skipped.__setitem__, node_id, reason)
-
-    async def get_skip_reason(self, node_id: str) -> Optional[str]:
-        return await asyncio.to_thread(self._skipped.get, node_id)
-
-    async def clear(self) -> None:
-        """
-        Clears all results and skip reasons. Used between TCO iterations.
-        """
-        await asyncio.to_thread(self._results.clear)
-        await asyncio.to_thread(self._skipped.clear)
-~~~~~
-
-#### Acts 3: 更新 RedisStateBackend
-
-实现异步接口，并使用 `asyncio.to_thread` 包装同步的 Redis 客户端调用。
-
-~~~~~act
-write_file
-packages/cascade-engine/src/cascade/adapters/state/redis.py
-~~~~~
-~~~~~python
-import asyncio
-import pickle
-from typing import Any, Optional
-
-try:
-    import redis
-except ImportError:
-    redis = None
-
-
-class RedisStateBackend:
-    """
-    A StateBackend implementation that persists results to Redis.
-    """
-
-    def __init__(self, run_id: str, client: "redis.Redis", ttl: int = 86400):
-        if redis is None:
-            raise ImportError(
-                "The 'redis' library is required to use RedisStateBackend."
-            )
-
-        self._run_id = run_id
-        self._client = client
-        self._ttl = ttl
-
-        # Keys
-        self._results_key = f"cascade:run:{run_id}:results"
-        self._skipped_key = f"cascade:run:{run_id}:skipped"
-
-    async def put_result(self, node_id: str, result: Any) -> None:
-        data = pickle.dumps(result)
-        await asyncio.to_thread(self._sync_put, node_id, data)
-
-    def _sync_put(self, node_id: str, data: bytes):
-        pipe = self._client.pipeline()
-        pipe.hset(self._results_key, node_id, data)
-        pipe.expire(self._results_key, self._ttl)
-        pipe.execute()
-
-    async def get_result(self, node_id: str) -> Optional[Any]:
-        data = await asyncio.to_thread(self._client.hget, self._results_key, node_id)
-        if data is None:
-            return None
-        return pickle.loads(data)
-
-    async def has_result(self, node_id: str) -> bool:
-        return await asyncio.to_thread(self._client.hexists, self._results_key, node_id)
-
-    async def mark_skipped(self, node_id: str, reason: str) -> None:
-        await asyncio.to_thread(self._sync_mark_skipped, node_id, reason)
-
-    def _sync_mark_skipped(self, node_id: str, reason: str):
-        pipe = self._client.pipeline()
-        pipe.hset(self._skipped_key, node_id, reason)
-        pipe.expire(self._skipped_key, self._ttl)
-        pipe.execute()
-
-    async def get_skip_reason(self, node_id: str) -> Optional[str]:
-        data = await asyncio.to_thread(self._client.hget, self._skipped_key, node_id)
-        if data:
-            return data.decode("utf-8")
-        return None
-~~~~~
-
-#### Acts 4: 更新解析器 (Resolvers)
-
-将 `ArgumentResolver` 和 `ConstraintResolver` 改为异步，以支持异步的状态后端查询。
-
-~~~~~act
-write_file
-packages/cascade-engine/src/cascade/runtime/resolvers.py
-~~~~~
-~~~~~python
-from typing import Any, Dict, List, Tuple
-
-from cascade.graph.model import Node, Graph, Edge, EdgeType
-from cascade.spec.resource import Inject
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
-from cascade.spec.protocols import StateBackend
-
-
-class ArgumentResolver:
-    """
-    Resolves arguments by combining:
-    1. Structural bindings (Literal values stored in Node)
-    2. Upstream dependencies (Edges)
-    3. Resource injections
-    """
-
-    async def resolve(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        resource_context: Dict[str, Any],
-        instance_map: Dict[str, Node],
-        user_params: Dict[str, Any] = None,
-        input_overrides: Dict[str, Any] = None,
-    ) -> Tuple[List[Any], Dict[str, Any]]:
-        # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
-        if not node.has_complex_inputs:
-            if input_overrides:
-                # FASTEST PATH: Used by TCO loops
-                # We trust overrides contain the full argument set or correct deltas.
-                final_bindings = node.input_bindings.copy()
-                final_bindings.update(input_overrides)
-
-                # Convert to args/kwargs
-                f_args = []
-                f_kwargs = {}
-                # Find max positional index
-                max_pos = -1
-                for k in final_bindings:
-                    if k.isdigit():
-                        idx = int(k)
-                        if idx > max_pos:
-                            max_pos = idx
-
-                if max_pos >= 0:
-                    f_args = [None] * (max_pos + 1)
-                    for k, v in final_bindings.items():
-                        if k.isdigit():
-                            f_args[int(k)] = v
-                        else:
-                            f_kwargs[k] = v
-                else:
-                    f_kwargs = final_bindings
-
-                return f_args, f_kwargs
-
-        args = []
-        kwargs = {}
-
-        # 1. Reconstruct initial args/kwargs from Bindings (Literals)
-        bindings = node.input_bindings
-        if input_overrides:
-            bindings = bindings.copy()
-            bindings.update(input_overrides)
-
-        positional_args_dict = {}
-        for name, value_raw in bindings.items():
-            # Always resolve structures to handle nested Injects correctly
-            value = self._resolve_structure(
-                value_raw, node.structural_id, state_backend, resource_context, graph
-            )
-
-            if name.isdigit():
-                positional_args_dict[int(name)] = value
-            else:
-                kwargs[name] = value
-
-        sorted_indices = sorted(positional_args_dict.keys())
-        args = [positional_args_dict[i] for i in sorted_indices]
-
-        # 2. Overlay Dependencies from Edges
-        # [OPTIMIZATION] Filter edges once using list comprehension
-        incoming_edges = [
-            e
-            for e in graph.edges
-            if e.target.structural_id == node.structural_id
-            and e.edge_type == EdgeType.DATA
-        ]
-
-        if incoming_edges:
-            for edge in incoming_edges:
-                val = await self._resolve_dependency(
-                    edge, node.structural_id, state_backend, graph, instance_map
-                )
-
-                if edge.arg_name.isdigit():
-                    idx = int(edge.arg_name)
-                    while len(args) <= idx:
-                        args.append(None)
-                    args[idx] = val
-                else:
-                    kwargs[edge.arg_name] = val
-
-        # 3. Handle Resource Injection in Defaults
-        if node.signature:
-            # Create a bound arguments object to see which args are not yet filled
-            try:
-                bound_args = node.signature.bind_partial(*args, **kwargs)
-                for param in node.signature.parameters.values():
-                    if (
-                        isinstance(param.default, Inject)
-                        and param.name not in bound_args.arguments
-                    ):
-                        kwargs[param.name] = self._resolve_inject(
-                            param.default, node.name, resource_context
-                        )
-            except TypeError:
-                # This can happen if args/kwargs are not yet valid, but we can still try a simpler check
-                pass
-
-        # 4. Handle internal param fetching context
-        # [CRITICAL] This logic must always run for Param tasks
-        from cascade.internal.inputs import _get_param_value
-
-        if node.callable_obj is _get_param_value.func:
-            kwargs["params_context"] = user_params or {}
-
-        return args, kwargs
-
-    def _resolve_structure(
-        self,
-        obj: Any,
-        consumer_id: str,
-        state_backend: StateBackend,
-        resource_context: Dict[str, Any],
-        graph: Graph,
-    ) -> Any:
-        if isinstance(obj, Inject):
-            return self._resolve_inject(obj, consumer_id, resource_context)
-        elif isinstance(obj, list):
-            return [
-                self._resolve_structure(
-                    item, consumer_id, state_backend, resource_context, graph
-                )
-                for item in obj
-            ]
-        elif isinstance(obj, tuple):
-            return tuple(
-                self._resolve_structure(
-                    item, consumer_id, state_backend, resource_context, graph
-                )
-                for item in obj
-            )
-        elif isinstance(obj, dict):
-            return {
-                k: self._resolve_structure(
-                    v, consumer_id, state_backend, resource_context, graph
-                )
-                for k, v in obj.items()
-            }
-        return obj
-
-    async def _resolve_dependency(
-        self,
-        edge: Edge,
-        consumer_id: str,
-        state_backend: StateBackend,
-        graph: Graph,
-        instance_map: Dict[str, Node],
-    ) -> Any:
-        # ** CORE ROUTER LOGIC FIX **
-        if edge.router:
-            # This edge represents a Router. Its source is the SELECTOR.
-            # We must resolve the selector's value first.
-            selector_result = await self._get_node_result(
-                edge.source.structural_id,
-                consumer_id,
-                "router_selector",
-                state_backend,
-                graph,
-            )
-
-            # Use the result to pick the correct route.
-            try:
-                selected_route_lr = edge.router.routes[selector_result]
-            except KeyError:
-                raise ValueError(
-                    f"Router selector for '{consumer_id}' returned '{selector_result}', "
-                    f"but no matching route found in {list(edge.router.routes.keys())}"
-                )
-
-            # Now, resolve the result of the SELECTED route.
-            # Convert instance UUID to canonical node ID using the map.
-            selected_node = instance_map[selected_route_lr._uuid]
-            return await self._get_node_result(
-                selected_node.structural_id,
-                consumer_id,
-                edge.arg_name,
-                state_backend,
-                graph,
-            )
-        else:
-            # Standard dependency
-            return await self._get_node_result(
-                edge.source.structural_id,
-                consumer_id,
-                edge.arg_name,
-                state_backend,
-                graph,
-            )
-
-    async def _get_node_result(
-        self,
-        node_id: str,
-        consumer_id: str,
-        arg_name: str,
-        state_backend: StateBackend,
-        graph: Graph,
-    ) -> Any:
-        """Helper to get a node's result, with skip penetration logic."""
-        if await state_backend.has_result(node_id):
-            return await state_backend.get_result(node_id)
-
-        skip_reason = await state_backend.get_skip_reason(node_id)
-        if skip_reason:
-            upstream_edges = [
-                e for e in graph.edges if e.target.structural_id == node_id
-            ]
-            data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
-            if data_inputs:
-                # Recursively try to penetrate the skipped node
-                return await self._get_node_result(
-                    data_inputs[0].source.structural_id,
-                    consumer_id,
-                    arg_name,
-                    state_backend,
-                    graph,
-                )
-
-        skip_info = f" (skipped: {skip_reason})" if skip_reason else ""
-        raise DependencyMissingError(consumer_id, arg_name, f"{node_id}{skip_info}")
-
-    def _resolve_inject(
-        self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]
-    ) -> Any:
-        if inject.resource_name in resource_context:
-            return resource_context[inject.resource_name]
-        raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
-
-
-class ConstraintResolver:
-    """
-    Responsible for resolving dynamic resource constraints for a node.
-    """
-
-    async def resolve(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        constraint_manager: Any,
-        instance_map: Dict[str, Node],
-    ) -> Dict[str, Any]:
-        resolved = {}
-
-        # 1. Resolve Node-level constraints
-        if node.constraints and not node.constraints.is_empty():
-            for res, amount in node.constraints.requirements.items():
-                if isinstance(amount, (LazyResult, MappedLazyResult)):
-                    # Get the canonical node for the dynamic constraint value
-                    constraint_node = instance_map.get(amount._uuid)
-                    if not constraint_node:
-                        raise DependencyMissingError(
-                            node.structural_id, f"constraint:{res}", amount._uuid
-                        )
-
-                    if await state_backend.has_result(constraint_node.structural_id):
-                        resolved[res] = await state_backend.get_result(
-                            constraint_node.structural_id
-                        )
-                    else:
-                        raise DependencyMissingError(
-                            node.structural_id,
-                            f"constraint:{res}",
-                            constraint_node.structural_id,
-                        )
-                else:
-                    resolved[res] = amount
-
-        # 2. Resolve Global constraints
-        if constraint_manager:
-            extra = constraint_manager.get_extra_requirements(node)
-            resolved.update(extra)
-
-        return resolved
-~~~~~
-
-#### Acts 5: 更新流管理器 (FlowManager)
-
-将 `FlowManager` 中涉及 `state_backend` 的操作全异步化。
+`FlowManager` 中的所有方法都依赖 `StateBackend`，因此它们自身也必须是异步的，并且所有内部调用都必须被 `await`。
 
 ~~~~~act
 write_file
@@ -721,232 +236,15 @@ class FlowManager:
         return None
 ~~~~~
 
-#### Acts 6: 更新节点处理器 (NodeProcessor)
+#### Acts 2: 修复 NodeProcessor
 
-调整 `NodeProcessor` 以等待异步的解析器和状态检查。
+`_resolve_inputs_for_cache` 方法需要 `await` 对 `state_backend` 的调用。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-engine/src/cascade/runtime/processor.py
 ~~~~~
 ~~~~~python
-import time
-import asyncio
-from typing import Any, Dict, List, Callable, Awaitable
-
-from cascade.graph.model import Node, Graph
-from cascade.spec.protocols import Executor, StateBackend, Solver
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.constraints.manager import ConstraintManager
-from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
-from cascade.runtime.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-    TaskSkipped,
-    TaskRetrying,
-    TaskBlocked,
-)
-
-
-class NodeProcessor:
-    """
-    Responsible for executing a single node within a workflow graph.
-    Handles policies such as constraints, caching, retries, and argument resolution.
-    """
-
-    def __init__(
-        self,
-        executor: Executor,
-        bus: MessageBus,
-        resource_manager: ResourceManager,
-        constraint_manager: ConstraintManager,
-        solver: Solver,  # Needed for map nodes
-    ):
-        self.executor = executor
-        self.bus = bus
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.solver = solver
-
-        # Resolvers are owned by the processor
-        self.arg_resolver = ArgumentResolver()
-        # ConstraintResolver now needs the instance map to resolve dynamic values
-        self.constraint_resolver = ConstraintResolver()
-
-    async def process(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
-        instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] = None,
-    ) -> Any:
-        """
-        Executes a node with all associated policies (constraints, cache, retry).
-        """
-        # 1. Resolve Constraints & Resources
-        requirements = await self.constraint_resolver.resolve(
-            node, graph, state_backend, self.constraint_manager, instance_map
-        )
-
-        # Pre-check for blocking to improve observability
-        if not self.resource_manager.can_acquire(requirements):
-            self.bus.publish(
-                TaskBlocked(
-                    run_id=run_id,
-                    task_id=node.structural_id,
-                    task_name=node.name,
-                    reason="ResourceContention",
-                )
-            )
-
-        # 2. Acquire Resources
-        await self.resource_manager.acquire(requirements)
-        try:
-            return await self._execute_internal(
-                node,
-                graph,
-                state_backend,
-                active_resources,
-                run_id,
-                params,
-                sub_graph_runner,
-                instance_map,
-                input_overrides,
-            )
-        finally:
-            await self.resource_manager.release(requirements)
-
-    async def _execute_internal(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        sub_graph_runner: Callable,
-        instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] = None,
-    ) -> Any:
-        # 3. Resolve Arguments
-        args, kwargs = await self.arg_resolver.resolve(
-            node,
-            graph,
-            state_backend,
-            active_resources,
-            instance_map=instance_map,
-            user_params=params,
-            input_overrides=input_overrides,
-        )
-
-        start_time = time.time()
-
-        # 4. Cache Check
-        if node.cache_policy:
-            inputs_for_cache = await self._resolve_inputs_for_cache(
-                node, graph, state_backend
-            )
-            cached_value = await node.cache_policy.check(
-                node.structural_id, inputs_for_cache
-            )
-            if cached_value is not None:
-                self.bus.publish(
-                    TaskSkipped(
-                        run_id=run_id,
-                        task_id=node.structural_id,
-                        task_name=node.name,
-                        reason="CacheHit",
-                    )
-                )
-                return cached_value
-
-        self.bus.publish(
-            TaskExecutionStarted(
-                run_id=run_id, task_id=node.structural_id, task_name=node.name
-            )
-        )
-
-        # 5. Handle Map Nodes
-        if node.node_type == "map":
-            return await self._execute_map_node(
-                node,
-                kwargs,
-                active_resources,
-                run_id,
-                params,
-                state_backend,
-                sub_graph_runner,
-            )
-
-        # 6. Retry Loop & Execution
-        retry_policy = node.retry_policy
-        max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
-        delay = retry_policy.delay if retry_policy else 0.0
-        backoff = retry_policy.backoff if retry_policy else 1.0
-        attempt = 0
-        last_exception = None
-
-        while attempt < max_attempts:
-            attempt += 1
-            try:
-                result = await self.executor.execute(node, args, kwargs)
-                duration = time.time() - start_time
-                self.bus.publish(
-                    TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.structural_id,
-                        task_name=node.name,
-                        status="Succeeded",
-                        duration=duration,
-                        result_preview=repr(result)[:100],
-                    )
-                )
-                # Cache Save
-                if node.cache_policy:
-                    inputs_for_save = await self._resolve_inputs_for_cache(
-                        node, graph, state_backend
-                    )
-                    await node.cache_policy.save(
-                        node.structural_id, inputs_for_save, result
-                    )
-                return result
-            except Exception as e:
-                last_exception = e
-                if attempt < max_attempts:
-                    self.bus.publish(
-                        TaskRetrying(
-                            run_id=run_id,
-                            task_id=node.structural_id,
-                            task_name=node.name,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            delay=delay,
-                            error=str(e),
-                        )
-                    )
-                    await asyncio.sleep(delay)
-                    delay *= backoff
-                else:
-                    duration = time.time() - start_time
-                    self.bus.publish(
-                        TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.structural_id,
-                            task_name=node.name,
-                            status="Failed",
-                            duration=duration,
-                            error=f"{type(e).__name__}: {e}",
-                        )
-                    )
-                    raise last_exception
-        raise RuntimeError("Unexpected execution state")
-
     async def _resolve_inputs_for_cache(
         self, node: Node, graph: Graph, state_backend: StateBackend
     ) -> Dict[str, Any]:
@@ -967,53 +265,37 @@ class NodeProcessor:
                     edge.source.structural_id
                 )
         return inputs
-
-    async def _execute_map_node(
-        self,
-        node: Node,
-        kwargs: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        parent_state_backend: StateBackend,
-        sub_graph_runner: Callable,
-    ) -> List[Any]:
-        factory = node.mapping_factory
-        if not kwargs:
-            return []
-        lengths = {k: len(v) for k, v in kwargs.items()}
-        first_len = list(lengths.values())[0]
-        if not all(length == first_len for length in lengths.values()):
-            raise ValueError(f"Mapped inputs have mismatched lengths: {lengths}")
-
-        sub_targets = []
-        for i in range(first_len):
-            item_kwargs = {k: v[i] for k, v in kwargs.items()}
-            sub_target = factory(**item_kwargs)
-            # Propagate policies
-            if node.retry_policy:
-                sub_target._retry_policy = node.retry_policy
-            if node.cache_policy:
-                sub_target._cache_policy = node.cache_policy
-            if node.constraints:
-                sub_target._constraints = node.constraints
-            sub_targets.append(sub_target)
-
-        # Execute sub-targets in parallel using the provided runner
-        coros = [
-            sub_graph_runner(target, params, parent_state_backend)
-            for target in sub_targets
+~~~~~
+~~~~~python
+    async def _resolve_inputs_for_cache(
+        self, node: Node, graph: Graph, state_backend: StateBackend
+    ) -> Dict[str, Any]:
+        # TODO: This needs to be smarter for caching.
+        # It should probably include data from input_bindings too?
+        # For now, keeping legacy behavior (edge results only).
+        inputs = {}
+        incoming_edges = [
+            edge
+            for edge in graph.edges
+            if edge.target.structural_id == node.structural_id
         ]
-        return await asyncio.gather(*coros)
+        for edge in incoming_edges:
+            if edge.arg_name.startswith("_"):
+                continue
+            if await state_backend.has_result(edge.source.structural_id):
+                inputs[edge.arg_name] = await state_backend.get_result(
+                    edge.source.structural_id
+                )
+        return inputs
 ~~~~~
 
-#### Acts 7: 更新执行策略 (GraphExecutionStrategy)
+#### Acts 3: 修复 GraphExecutionStrategy
 
-最后更新执行策略，以确保所有对 `state_backend` 和 `flow_manager` 的调用都是异步等待的。
+这是最关键的修复。所有对 `flow_manager` 和 `state_backend` 的调用都必须被 `await`，尤其是在 `if` 条件判断中。
 
 ~~~~~act
 write_file
-packages/cascade-engine/src/cascade/strategies/graph.py
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
 ~~~~~python
 import asyncio
@@ -1424,153 +706,9 @@ class GraphExecutionStrategy:
         return await state_backend.get_result(target_node.structural_id)
 ~~~~~
 
-#### Acts 8: 添加和更新测试
-
-1.  更新 `test_redis_state.py` 为异步测试。
-2.  新建 `test_in_memory_state.py` 以验证 `asyncio.to_thread` 的使用。
-
-~~~~~act
-write_file
-tests/engine/adapters/state/test_redis_state.py
-~~~~~
-~~~~~python
-import pickle
-import pytest
-from unittest.mock import MagicMock, AsyncMock
-
-# We import the module to patch its members
-from cascade.adapters.state import redis as redis_state_module
-
-
-@pytest.fixture
-def mock_redis_client():
-    """Provides a MagicMock for the redis.Redis client."""
-    mock_client = MagicMock()
-    # Mock the pipeline context manager
-    mock_pipeline = MagicMock()
-    mock_client.pipeline.return_value = mock_pipeline
-    return mock_client, mock_pipeline
-
-
-def test_redis_state_backend_dependency_check(monkeypatch):
-    """
-    Ensures RedisStateBackend raises ImportError if 'redis' is not installed.
-    """
-    monkeypatch.setattr(redis_state_module, "redis", None)
-    with pytest.raises(ImportError, match="The 'redis' library is required"):
-        from cascade.adapters.state.redis import RedisStateBackend
-
-        RedisStateBackend(run_id="test", client=MagicMock())
-
-
-@pytest.mark.asyncio
-async def test_put_result(mock_redis_client):
-    """
-    Verifies that put_result serializes data and calls Redis HSET and EXPIRE.
-    """
-    client, pipeline = mock_redis_client
-    backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
-
-    test_result = {"status": "ok", "data": [1, 2]}
-    await backend.put_result("node_a", test_result)
-
-    expected_key = "cascade:run:run123:results"
-    expected_data = pickle.dumps(test_result)
-
-    client.pipeline.assert_called_once()
-    pipeline.hset.assert_called_once_with(expected_key, "node_a", expected_data)
-    pipeline.expire.assert_called_once_with(expected_key, 86400)
-    pipeline.execute.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_get_result(mock_redis_client):
-    """
-    Verifies that get_result retrieves and deserializes data correctly.
-    """
-    client, _ = mock_redis_client
-    backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
-
-    # Case 1: Result found
-    test_result = {"value": 42}
-    pickled_result = pickle.dumps(test_result)
-    client.hget.return_value = pickled_result
-
-    result = await backend.get_result("node_b")
-
-    client.hget.assert_called_once_with("cascade:run:run123:results", "node_b")
-    assert result == test_result
-
-    # Case 2: Result not found
-    client.hget.return_value = None
-    assert await backend.get_result("node_c") is None
-~~~~~
-
-~~~~~act
-write_file
-tests/engine/adapters/state/test_in_memory_state.py
-~~~~~
-~~~~~python
-import pytest
-import asyncio
-from unittest.mock import patch, ANY
-from cascade.adapters.state.in_memory import InMemoryStateBackend
-
-
-@pytest.mark.asyncio
-async def test_in_memory_uses_to_thread():
-    """
-    Verifies that InMemoryStateBackend uses asyncio.to_thread for its operations,
-    ensuring compliance with the non-blocking I/O contract even for dict operations.
-    """
-    backend = InMemoryStateBackend("test_run")
-
-    # We patch asyncio.to_thread in the module where the backend is defined
-    with patch("cascade.adapters.state.in_memory.asyncio.to_thread") as mock_to_thread:
-        # We need to make the mock awaitable because the method awaits it
-        async def async_mock(*args, **kwargs):
-            return "mocked_result"
-
-        mock_to_thread.side_effect = async_mock
-
-        # Test put_result
-        await backend.put_result("node_1", "data")
-        mock_to_thread.assert_called_with(ANY, "node_1", "data")
-
-        # Test get_result
-        await backend.get_result("node_1")
-        mock_to_thread.assert_called_with(ANY, "node_1")
-
-
-@pytest.mark.asyncio
-async def test_in_memory_functional():
-    """
-    Functional test to ensure it actually works as a backend.
-    """
-    backend = InMemoryStateBackend("test_run")
-
-    # Put
-    await backend.put_result("node_a", {"foo": "bar"})
-
-    # Check
-    assert await backend.has_result("node_a") is True
-    assert await backend.has_result("node_b") is False
-
-    # Get
-    val = await backend.get_result("node_a")
-    assert val == {"foo": "bar"}
-
-    # Skip
-    await backend.mark_skipped("node_b", "ConditionFalse")
-    assert await backend.get_skip_reason("node_b") == "ConditionFalse"
-    assert await backend.get_skip_reason("node_a") is None
-
-    # Clear
-    await backend.clear()
-    assert await backend.has_result("node_a") is False
-    assert await backend.get_skip_reason("node_b") is None
-~~~~~
-
 ### 下一步建议
-我们已经完成了核心的状态后端异步化重构。接下来的工作重点应该转向验证这一变更对整个系统的影响。
-建议运行完整的集成测试套件，特别是 `tests/engine/e2e` 下的测试，确保端到端的执行流没有因为引入异步等待而出现死锁或竞争条件。如果 E2E 测试通过，则说明此次重构成功且安全。
+我们已经完成了对引擎内核的系统性修复。现在，`cascade-engine` 内部的逻辑与 `StateBackend` 的异步契约已经完全对齐。
+
+然而，**测试套件仍然是失败的**，因为它们还没有被更新以适应这些异步变化（例如，将测试函数标记为 `async def` 并使用 `await` 调用 `engine.run`）。
+
+下一步是执行“**第二阶段：修复测试套件**”，这将使我们的 CI 恢复绿灯，并最终完成这次重构。

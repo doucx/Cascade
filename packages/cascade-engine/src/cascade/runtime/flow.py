@@ -1,7 +1,6 @@
 from typing import Dict, Any, Optional, List
 from collections import defaultdict
 from cascade.graph.model import Node, Graph, EdgeType, Edge
-from cascade.spec.common import Param
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.protocols import StateBackend
 
@@ -50,11 +49,6 @@ class FlowManager:
         """Gets the canonical Node from a LazyResult instance."""
         if isinstance(instance, (LazyResult, MappedLazyResult)):
             return self.instance_map.get(instance._uuid)
-        elif isinstance(instance, Param):
-            # Find the node that represents this param
-            for node in self.graph.nodes:
-                if node.param_spec and node.param_spec.name == instance.name:
-                    return node
         return None
 
     async def register_result(

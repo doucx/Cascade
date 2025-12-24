@@ -48,17 +48,17 @@ def test_visualize_diamond_graph():
     # Check node definitions with new default styles
     # style="rounded,filled", fillcolor=white, fontcolor=black
     assert (
-        f'"{node_a.id}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
+        f'"{node_a.structural_id}" [label="t_a\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
         in dot_string
     )
     assert (
-        f'"{node_b.id}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
+        f'"{node_b.structural_id}" [label="t_b\\n(task)", shape=box, style="rounded,filled", fillcolor=white, fontcolor=black];'
         in dot_string
     )
 
     # Check data edge definitions
-    assert f'"{node_a.id}" -> "{node_b.id}" [label="0"];' in dot_string
-    assert f'"{node_c.id}" -> "{node_d.id}" [label="z"];' in dot_string
+    assert f'"{node_a.structural_id}" -> "{node_b.structural_id}" [label="0"];' in dot_string
+    assert f'"{node_c.structural_id}" -> "{node_d.structural_id}" [label="z"];' in dot_string
 
 
 def test_visualize_special_edge_types():
@@ -100,14 +100,14 @@ def test_visualize_special_edge_types():
     dot_string = cs.visualize(target)
 
     # 1. Assert Data Edge (standard style)
-    assert f'"{node_ds.id}" -> "{node_target.id}" [label="data_in"];' in dot_string
+    assert f'"{node_ds.structural_id}" -> "{node_target.structural_id}" [label="data_in"];' in dot_string
 
     # 2. Assert Condition Edge (dashed, gray)
-    expected_cond_edge = f'"{node_cond.id}" -> "{node_target.id}" [style=dashed, color=gray, label="run_if"]'
+    expected_cond_edge = f'"{node_cond.structural_id}" -> "{node_target.structural_id}" [style=dashed, color=gray, label="run_if"]'
     assert expected_cond_edge in dot_string
 
     # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{node_constraint.id}" -> "{node_target.id}" [style=dotted, color=purple, label="constraint: cpu"]'
+    expected_constraint_edge = f'"{node_constraint.structural_id}" -> "{node_target.structural_id}" [style=dotted, color=purple, label="constraint: cpu"]'
     assert expected_constraint_edge in dot_string
 
 

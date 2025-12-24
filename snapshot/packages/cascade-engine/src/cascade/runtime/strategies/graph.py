@@ -1,7 +1,7 @@
 import asyncio
 import inspect
 from contextlib import ExitStack
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Set
 
 from cascade.graph.model import Graph, Node
 from cascade.graph.build import build_graph
@@ -149,7 +149,10 @@ class GraphExecutionStrategy:
 
                     # Post-build analysis checks
                     for node in graph.nodes:
-                        if node.warns_dynamic_recursion and node.name not in self._issued_warnings:
+                        if (
+                            node.warns_dynamic_recursion
+                            and node.name not in self._issued_warnings
+                        ):
                             self.bus.publish(
                                 StaticAnalysisWarning(
                                     run_id=run_id,

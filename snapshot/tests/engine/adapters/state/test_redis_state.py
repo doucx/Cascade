@@ -1,6 +1,6 @@
 import pickle
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 
 # We import the module to patch its members
 from cascade.adapters.state import redis as redis_state_module

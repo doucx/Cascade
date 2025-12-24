@@ -103,7 +103,6 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
 def _node_to_dict(node: Node) -> Dict[str, Any]:
     data = {
         "structural_id": node.structural_id,
-        "template_id": node.template_id,
         "name": node.name,
         "node_type": node.node_type,
         # input_bindings now contains JSON-serializable literals directly.
@@ -244,7 +243,6 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
 
     node = Node(
         structural_id=data["structural_id"],
-        template_id=data.get("template_id", ""),
         name=data["name"],
         node_type=data["node_type"],
         callable_obj=_load_func_from_path(data.get("callable")),

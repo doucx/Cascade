@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from cascade.graph.model import Graph, Node, EdgeType
 from cascade.graph.build import build_graph
 from cascade.graph.registry import NodeRegistry
+from cascade.graph.hashing import BlueprintHasher
 from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.jump import Jump
@@ -48,9 +49,10 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
+        self.blueprint_hasher = BlueprintHasher()
 
         # JIT Compilation Cache
-        # Maps template_id to an IndexedExecutionPlan (List[List[int]])
+        # Maps a graph's blueprint hash to an IndexedExecutionPlan (List[List[int]])
         self._template_plan_cache: Dict[str, List[List[int]]] = {}
 
         # Persistent registry for node interning
@@ -113,16 +115,16 @@ class GraphExecutionStrategy:
                     )
 
                 target_node = instance_map[current_target._uuid]
-                cache_key = target_node.template_id or target_node.structural_id
 
-                # 2. Resolve Plan (with caching)
-                if cache_key in self._template_plan_cache:
-                    indexed_plan = self._template_plan_cache[cache_key]
+                # 2. Resolve Plan (with caching based on blueprint hash)
+                blueprint_hash = self.blueprint_hasher.compute_hash(graph)
+                if blueprint_hash in self._template_plan_cache:
+                    indexed_plan = self._template_plan_cache[blueprint_hash]
                     plan = self._rehydrate_plan(graph, indexed_plan)
                 else:
                     plan = self.solver.resolve(graph)
                     indexed_plan = self._index_plan(graph, plan)
-                    self._template_plan_cache[cache_key] = indexed_plan
+                    self._template_plan_cache[blueprint_hash] = indexed_plan
 
                 # 3. Setup Resources
                 required_resources = self.resource_container.scan(graph)

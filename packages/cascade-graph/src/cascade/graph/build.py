@@ -64,8 +64,8 @@ class GraphBuilder:
         if result._dependencies:
             self._find_dependencies(result._dependencies, dep_nodes)
 
-        # 2. Compute hashes using HashingService
-        structural_hash, template_hash = self.hashing_service.compute_hashes(
+        # 2. Compute structural hash using HashingService
+        structural_hash = self.hashing_service.compute_structural_hash(
             result, dep_nodes
         )
 
@@ -124,7 +124,6 @@ class GraphBuilder:
 
             node = Node(
                 structural_id=structural_hash,
-                template_id=template_hash,
                 name=result.task.name,
                 node_type="task",
                 callable_obj=result.task.func,
@@ -213,8 +212,8 @@ class GraphBuilder:
         if result._dependencies:
             self._find_dependencies(result._dependencies, dep_nodes)
 
-        # 2. Compute hashes using HashingService
-        structural_hash, template_hash = self.hashing_service.compute_hashes(
+        # 2. Compute structural hash using HashingService
+        structural_hash = self.hashing_service.compute_structural_hash(
             result, dep_nodes
         )
 
@@ -227,7 +226,6 @@ class GraphBuilder:
 
             return Node(
                 structural_id=structural_hash,
-                template_id=template_hash,
                 name=f"map({getattr(result.factory, 'name', 'factory')})",
                 node_type="map",
                 mapping_factory=result.factory,

@@ -10,7 +10,7 @@ from cascade.adapters.state.in_memory import InMemoryStateBackend
 
 def create_mock_node(name: str) -> Node:
     """Creates a mock Node with structural_id == name."""
-    return Node(structural_id=name, name=name, template_id=f"t_{name}")
+    return Node(structural_id=name, name=name)
 
 
 def create_mock_lazy_result(node_id: str) -> LazyResult:

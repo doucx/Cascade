@@ -23,6 +23,8 @@ class EdgeType(Enum):
     ITERATIVE_JUMP = auto()  # An explicit state transition (Jump)
 
 
+import inspect
+
 @dataclass
 class Node:
     """
@@ -55,6 +57,13 @@ class Node:
     # Optimization: Flag indicating if the node requires complex resolution
     # (e.g., has Inject markers, complex nested structures, or runtime context needs)
     has_complex_inputs: bool = False
+
+    # Cached reflection results
+    is_async: bool = False
+
+    def __post_init__(self):
+        if self.callable_obj:
+            self.is_async = inspect.iscoroutinefunction(self.callable_obj)
 
     def __hash__(self):
         return hash(self.structural_id)

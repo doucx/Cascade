@@ -91,40 +91,47 @@ class GraphExecutionStrategy:
         current_target = target
         next_input_overrides = None
 
+        # Optimization: Local Graph Cache for the duration of this run
+        # Maps LazyResult._uuid -> (Graph, InstanceMap, Plan)
+        local_context_cache = {}
+
         while True:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
                 input_overrides = None
 
-                # STATE GC (Asynchronous)
-                if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
-                    state_backend.clear
-                ):
-                    await state_backend.clear()
-                # Yield control
-                await asyncio.sleep(0)
+                # 1. State GC (Crucial for TCO stability)
+                # We skip the explicit inspect check here as state_backends are expected
+                # to be async in v1.4.
+                await state_backend.clear()
 
-                # 1. Build Graph
-                graph, instance_map = build_graph(
-                    current_target, registry=self._node_registry
-                )
-
-                if current_target._uuid not in instance_map:
-                    raise RuntimeError(
-                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                # 2. Check Local Context Cache (FAST PATH)
+                if current_target._uuid in local_context_cache:
+                    graph, instance_map, plan = local_context_cache[current_target._uuid]
+                else:
+                    # SLOW PATH: First time building this structure in this run
+                    # 2.1 Build Graph
+                    graph, instance_map = build_graph(
+                        current_target, registry=self._node_registry
                     )
 
-                target_node = instance_map[current_target._uuid]
+                    if current_target._uuid not in instance_map:
+                        raise RuntimeError(
+                            f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                        )
 
-                # 2. Resolve Plan (with caching based on blueprint hash)
-                blueprint_hash = self.blueprint_hasher.compute_hash(graph)
-                if blueprint_hash in self._template_plan_cache:
-                    indexed_plan = self._template_plan_cache[blueprint_hash]
-                    plan = self._rehydrate_plan(graph, indexed_plan)
-                else:
-                    plan = self.solver.resolve(graph)
-                    indexed_plan = self._index_plan(graph, plan)
-                    self._template_plan_cache[blueprint_hash] = indexed_plan
+                    # 2.2 Resolve Plan (with caching based on blueprint hash)
+                    blueprint_hash = self.blueprint_hasher.compute_hash(graph)
+                    if blueprint_hash in self._template_plan_cache:
+                        indexed_plan = self._template_plan_cache[blueprint_hash]
+                        plan = self._rehydrate_plan(graph, indexed_plan)
+                    else:
+                        plan = self.solver.resolve(graph)
+                        indexed_plan = self._index_plan(graph, plan)
+                        self._template_plan_cache[blueprint_hash] = indexed_plan
+
+                    # Update local cache
+                    local_context_cache[current_target._uuid] = (graph, instance_map, plan)
 
                 # 3. Setup Resources
                 required_resources = self.resource_container.scan(graph)
@@ -295,23 +302,43 @@ class GraphExecutionStrategy:
                             else None
                         )
                         tasks_to_run.append(
-                            self.node_processor.process(
+                            (
                                 node,
-                                graph,
-                                state_backend,
-                                active_resources,
-                                run_id,
-                                params,
-                                sub_graph_runner,
-                                instance_map,
-                                input_overrides=overrides,
+                                self.node_processor.process(
+                                    node,
+                                    graph,
+                                    state_backend,
+                                    active_resources,
+                                    run_id,
+                                    params,
+                                    sub_graph_runner,
+                                    instance_map,
+                                    input_overrides=overrides,
+                                ),
                             )
                         )
 
-                    pass_results = await asyncio.gather(*tasks_to_run)
-
-                    for node, res in zip(executable_this_pass, pass_results):
+                    if len(tasks_to_run) == 1:
+                        # FAST PATH: Single task in stage, avoid gather
+                        node, coro = tasks_to_run[0]
+                        res = await coro
                         await state_backend.put_result(node.structural_id, res)
+                        if flow_manager:
+                            await flow_manager.register_result(
+                                node.structural_id, res, state_backend
+                            )
+                    else:
+                        # Standard parallel execution
+                        nodes_in_pass = [t[0] for t in tasks_to_run]
+                        coros = [t[1] for t in tasks_to_run]
+                        pass_results = await asyncio.gather(*coros)
+
+                        for node, res in zip(nodes_in_pass, pass_results):
+                            await state_backend.put_result(node.structural_id, res)
+                            if flow_manager:
+                                await flow_manager.register_result(
+                                    node.structural_id, res, state_backend
+                                )
                         if flow_manager:
                             await flow_manager.register_result(
                                 node.structural_id, res, state_backend

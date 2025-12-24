@@ -60,3 +60,13 @@ class RedisStateBackend:
         if data:
             return data.decode("utf-8")
         return None
+
+    async def clear(self) -> None:
+        """
+        Clears the state for the current run.
+        For Redis, since TCO reuses the same run_id and overwrites keys,
+        explicit clearing might be expensive (SCAN+DEL).
+        For now, we treat this as a no-op to satisfy the protocol,
+        relying on key overwrite semantics.
+        """
+        pass

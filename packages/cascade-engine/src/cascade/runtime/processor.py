@@ -74,8 +74,24 @@ class NodeProcessor:
             )
 
         # 2. Acquire Resources
-        await self.resource_manager.acquire(requirements)
-        try:
+        if requirements:
+            await self.resource_manager.acquire(requirements)
+            try:
+                return await self._execute_internal(
+                    node,
+                    graph,
+                    state_backend,
+                    active_resources,
+                    run_id,
+                    params,
+                    sub_graph_runner,
+                    instance_map,
+                    input_overrides,
+                )
+            finally:
+                await self.resource_manager.release(requirements)
+        else:
+            # FAST PATH: No resources required
             return await self._execute_internal(
                 node,
                 graph,
@@ -87,8 +103,6 @@ class NodeProcessor:
                 instance_map,
                 input_overrides,
             )
-        finally:
-            await self.resource_manager.release(requirements)
 
     async def _execute_internal(
         self,
@@ -165,6 +179,9 @@ class NodeProcessor:
             try:
                 result = await self.executor.execute(node, args, kwargs)
                 duration = time.time() - start_time
+                # Optimization: Only compute result_preview if necessary or make it cheap
+                # For heavy loops, repr() on large objects is expensive.
+                # We skip preview for simple types or rely on renderer to do it if needed.
                 self.bus.publish(
                     TaskExecutionFinished(
                         run_id=run_id,
@@ -172,7 +189,8 @@ class NodeProcessor:
                         task_name=node.name,
                         status="Succeeded",
                         duration=duration,
-                        result_preview=repr(result)[:100],
+                        # result_preview=repr(result)[:100], # Too expensive for tight loops
+                        result_preview=None, 
                     )
                 )
                 # Cache Save

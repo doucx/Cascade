@@ -11,6 +11,7 @@ __pycache__/
 *.out
 
 *.prof
+*.html
 
 # Distribution / packaging
 .Python

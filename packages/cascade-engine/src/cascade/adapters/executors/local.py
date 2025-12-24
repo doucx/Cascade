@@ -26,7 +26,7 @@ class LocalExecutor:
                 f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
             )
 
-        if inspect.iscoroutinefunction(node.callable_obj):
+        if node.is_async:
             result = await node.callable_obj(*args, **kwargs)
         else:
             result = node.callable_obj(*args, **kwargs)

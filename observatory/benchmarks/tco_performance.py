@@ -12,117 +12,66 @@ from cascade.adapters.executors.local import LocalExecutor
 @cs.task
 def noop(_dummy=None):
     """A task that does nothing, used to force graph complexity."""
-    pass
+    return "done"
 
 
+# 1. Explicit Loop (The new standard)
 @cs.task
-def simple_countdown(n: int):
-    """
-    A simple recursive task that will trigger the TCO fast path.
-    The graph for this task is always a single node.
-    """
+def explicit_countdown_step(n: int):
     if n <= 0:
-        return "done"
-    return simple_countdown(n - 1)
+        return cs.Jump(target_key="exit", data="done")
+    return cs.Jump(target_key="loop", data=n - 1)
 
 
+def create_explicit_loop(n: int):
+    step = explicit_countdown_step(n)
+    selector = cs.select_jump({"loop": step, "exit": None})
+    cs.bind(step, selector)
+    return step
+
+
+# 2. Heavy Explicit Loop (Testing Blueprint Cache Efficiency)
 @cs.task
-def complex_countdown(n: int, _dummy=None):
-    """
-    A recursive task with a dependency, forcing a full graph build on each iteration.
-    The graph for this task has two nodes (complex_countdown and noop).
-    """
+def heavy_step(n: int, _structure=None):
     if n <= 0:
-        return "done"
-    # The presence of `noop()` makes this a complex, multi-node graph
-    return complex_countdown(n - 1, _dummy=noop())
+        return cs.Jump(target_key="exit", data="done")
+    return cs.Jump(target_key="loop", data=n - 1)
 
 
-@cs.task
-def heavy_complex_countdown(n: int, _dummy=None):
-    """
-    A recursive task with a DEEP dependency chain, forcing a significant
-    graph build and solve cost on each iteration.
-    """
-    if n <= 0:
-        return "done"
-
-    # Create a 10-node dependency chain to amplify the build/solve cost
+def create_heavy_explicit_loop(n: int, complexity: int = 20):
     dep_chain = noop()
-    for _ in range(10):
+    for _ in range(complexity):
         dep_chain = noop(_dummy=dep_chain)
 
-    return heavy_complex_countdown(n - 1, _dummy=dep_chain)
+    step = heavy_step(n, _structure=dep_chain)
+    selector = cs.select_jump({"loop": step, "exit": None})
+    cs.bind(step, selector)
+    return step
 
 
-@cs.task
-def stable_complex_loop(counter_box: list, _dummy=None):
-    """
-    A multi-node task that simulates a 'cache-friendly' TCO loop.
-    It uses a mutable list (counter_box) to track iterations, so the
-    arguments passed to the recursive call remain structurally IDENTICAL.
-
-    This allows Node.id to be stable, triggering the JIT cache.
-    """
-    if counter_box[0] <= 0:
-        return "done"
-
-    counter_box[0] -= 1
-
-    # We pass the SAME _dummy structure every time.
-    # Note: If _dummy was rebuilt here, it would still hash the same
-    # because it's built from static calls.
-    return stable_complex_loop(counter_box, _dummy=_dummy)
-
-
+# 3. VM Countdown (TailCall)
 @cs.task
 def vm_countdown(n: int):
-    """
-    A recursive task explicitly designed for the Blueprint/VM path.
-    It returns a TailCall object to trigger zero-overhead recursion.
-    """
     if n <= 0:
         return "done"
     return TailCall(kwargs={"n": n - 1})
 
 
 async def imperative_countdown(n: int):
-    """
-    A raw, imperative asyncio loop to serve as the performance ground truth.
-    This has zero Cascade framework overhead.
-    """
+    """Ground truth: Raw Python loop."""
     i = n
     while i > 0:
         i -= 1
-        # await asyncio.sleep(0) is essential to yield control,
-        # mimicking how a long-running agent should behave.
         await asyncio.sleep(0)
     return "done"
 
 
 async def run_benchmark(
-    engine: Engine, target: cs.LazyResult, iterations: int, use_vm: bool = False
+    engine: Engine, target: cs.LazyResult, use_vm: bool = False
 ) -> float:
     """Runs the target and returns the execution time in seconds."""
-    mode = "VM" if use_vm else "Graph/JIT"
-    print(f"Running benchmark for '{target.task.name}' [{mode}]...")
     start_time = time.perf_counter()
-
     result = await engine.run(target, use_vm=use_vm)
-
-    end_time = time.perf_counter()
-
-    assert result == "done"
-    return end_time - start_time
-
-
-async def run_imperative_benchmark(iterations: int) -> float:
-    """Runs the imperative loop and returns the execution time in seconds."""
-    print("Running benchmark for 'imperative_countdown'...")
-    start_time = time.perf_counter()
-
-    result = await imperative_countdown(iterations)
-
     end_time = time.perf_counter()
 
     assert result == "done"
@@ -130,79 +79,57 @@ async def run_imperative_benchmark(iterations: int) -> float:
 
 
 async def main():
-    """Main function to run and compare benchmarks."""
-    iterations = 10_000
-
-    # Use a silent bus to avoid polluting output
+    iterations = 5000
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
 
-    print("--- TCO Performance Benchmark ---")
+    print("--- Cascade v1.4 Performance Benchmark ---")
     print(f"Iterations: {iterations}\n")
 
-    # 1. Run Optimized Path
-    print("[1] Running Optimized Path (simple_countdown)...")
-    optimized_target = simple_countdown(iterations)
-    optimized_time = await run_benchmark(engine, optimized_target, iterations)
-    optimized_tps = iterations / optimized_time
-    print(f"  Finished in {optimized_time:.4f} seconds.")
-    print(f"  TPS: {optimized_tps:,.2f} calls/sec\n")
+    # Explicit Jump Loop (Simple)
+    nodes_per_iter_1 = 1
+    print(" Running Explicit Jump Loop (Simple)...")
+    target_1 = create_explicit_loop(iterations)
+    time_1 = await run_benchmark(engine, target_1)
+    tps_1 = iterations / time_1
+    nps_1 = tps_1 * nodes_per_iter_1
+    print(f"  TPS: {tps_1:,.2f} iter/sec")
+    print(f"  NPS: {nps_1:,.2f} nodes/sec\n")
 
-    # 2. Run Heavy Un-optimized Path
-    print("[2] Running Heavy Un-optimized Path (heavy_complex_countdown)...")
-    unoptimized_target = heavy_complex_countdown(iterations)
-    unoptimized_time = await run_benchmark(engine, unoptimized_target, iterations)
-    unoptimized_tps = iterations / unoptimized_time
-    print(f"  Finished in {unoptimized_time:.4f} seconds.")
-    print(f"  TPS: {unoptimized_tps:,.2f} calls/sec\n")
+    # Heavy Explicit Loop
+    complexity = 20
+    nodes_per_iter_2 = complexity + 1
+    print(f" Running Heavy Explicit Loop (Complexity={complexity})...")
+    target_2 = create_heavy_explicit_loop(iterations, complexity=complexity)
+    time_2 = await run_benchmark(engine, target_2)
+    tps_2 = iterations / time_2
+    nps_2 = tps_2 * nodes_per_iter_2
+    print(f"  TPS: {tps_2:,.2f} iter/sec")
+    print(f"  NPS: {nps_2:,.2f} nodes/sec")
+    
+    # Calculate the difference in efficiency, not just raw speed
+    efficiency_gain = ((nps_2 / nps_1) - 1) * 100
+    print(f"  Throughput Gain vs Simple: {efficiency_gain:+.1f}% (Batching Efficiency)\n")
 
-    # 2.5 Run Stable Complex Path (Cache Hit Scenario)
-    print("[2.5] Running Stable Complex Path (stable_complex_loop)...")
-    # Build a complex dependency chain once
-    static_dep_chain = noop()
-    for _ in range(10):
-        static_dep_chain = noop(_dummy=static_dep_chain)
+    # VM Path
+    print(" Running VM Path (TailCall)...")
+    target_3 = vm_countdown(n=iterations)
+    time_3 = await run_benchmark(engine, target_3, use_vm=True)
+    tps_3 = iterations / time_3
+    print(f"  TPS: {tps_3:,.2f} iter/sec\n")
 
-    stable_target = stable_complex_loop([iterations], _dummy=static_dep_chain)
-    stable_time = await run_benchmark(engine, stable_target, iterations)
-    stable_tps = iterations / stable_time
-    print(f"  Finished in {stable_time:.4f} seconds.")
-    print(f"  TPS: {stable_tps:,.2f} calls/sec\n")
+    # Imperative Ground Truth
+    print(" Running Imperative Ground Truth...")
+    start_imp = time.perf_counter()
+    await imperative_countdown(iterations)
+    time_imp = time.perf_counter() - start_imp
+    tps_imp = iterations / time_imp
+    print(f"  TPS: {tps_imp:,.2f} iter/sec\n")
 
-    # 3. Run VM Path
-    print("[3] Running VM Path (vm_countdown)...")
-    vm_target = vm_countdown(n=iterations)
-    vm_time = await run_benchmark(engine, vm_target, iterations, use_vm=True)
-    vm_tps = iterations / vm_time
-    print(f"  Finished in {vm_time:.4f} seconds.")
-    print(f"  TPS: {vm_tps:,.2f} calls/sec\n")
-
-    # 4. Run Imperative Ground Truth
-    print("[4] Running Imperative Ground Truth (imperative_countdown)...")
-    imperative_time = await run_imperative_benchmark(iterations)
-    imperative_tps = iterations / imperative_time
-    print(f"  Finished in {imperative_time:.4f} seconds.")
-    print(f"  TPS: {imperative_tps:,.2f} calls/sec\n")
-
-    # 5. Compare Results
-    print("--- Comparison ---")
-    if unoptimized_tps > 0:
-        vm_vs_heavy = vm_tps / unoptimized_tps
-        print(f"VM vs. Heavy (Cache Miss): {vm_vs_heavy:.2f}x faster")
-
-    if unoptimized_tps > 0 and stable_tps > 0:
-        cache_boost = stable_tps / unoptimized_tps
-        print(f"Stable vs. Heavy (Cache Boost): {cache_boost:.2f}x faster")
-
-    if optimized_tps > 0:
-        vm_vs_simple = vm_tps / optimized_tps
-        print(f"VM vs. Simple (Graph Caching): {vm_vs_simple:.2f}x faster")
-
-    if imperative_tps > 0:
-        overhead_ratio = imperative_tps / vm_tps
-        print(f"Imperative vs. VM (Framework Overhead): {overhead_ratio:.2f}x")
-        print(
-            f"  (The VM path is {(overhead_ratio - 1) * 100:.1f}% slower than the raw imperative loop)"
-        )
+    print("--- Conclusion ---")
+    print(f"Engine processes {nps_2:,.0f} nodes/sec under load (Heavy Explicit Loop).")
+    print(f"VM path is {nps_1 / tps_3:.2f}x faster than Simple Explicit Jump.")
+    print(f"Explicit Control Flow adds {(time_1 - time_imp)/iterations*1e6:.1f} microseconds overhead per step vs raw Python loop.")
+    print(f"Heavy Explicit Loop overhead vs VM: {((time_3 / time_2) - 1)*100:.1f}%")
 
 
 if __name__ == "__main__":

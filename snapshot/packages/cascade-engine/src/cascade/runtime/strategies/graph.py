@@ -19,6 +19,14 @@ from cascade.runtime.events import TaskSkipped, TaskBlocked, StaticAnalysisWarni
 from cascade.runtime.constraints.manager import ConstraintManager
 
 
+@dataclass
+class GraphExecutionResult:
+    """Internal result carrier to avoid context loss."""
+
+    value: Any
+    source_node_id: str
+
+
 class GraphExecutionStrategy:
     """
     Executes tasks by dynamically building a dependency graph and running a TCO loop.
@@ -213,11 +221,9 @@ class GraphExecutionStrategy:
                     run_id,
                 )
 
-                # 4. Execute Graph
-                # CHECK FOR HOT-LOOP BYPASS
-                # If it's a fast path and it's a simple single-node plan, bypass the orchestrator
+                # 4. Execute Graph and get a contextual result
                 if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
-                    result = await self._execute_hot_node(
+                    graph_result = await self._execute_hot_node(
                         target_node,
                         graph,
                         state_backend,
@@ -232,7 +238,7 @@ class GraphExecutionStrategy:
                         root_overrides = next_input_overrides
                         next_input_overrides = None
 
-                    result = await self._execute_graph(
+                    graph_result = await self._execute_graph(
                         current_target,
                         params,
                         active_resources,
@@ -244,22 +250,15 @@ class GraphExecutionStrategy:
                         root_input_overrides=root_overrides,
                     )
 
-            # 5. Check for Tail Call (LazyResult) - TCO Logic
+            # 5. Check for Tail Call & Jumps using the contextual result
+            result = graph_result.value
+
             if isinstance(result, (LazyResult, MappedLazyResult)):
                 current_target = result
             elif isinstance(result, Jump):
-                # Handle Explicit Jump
-                source_node_id = None
-                if target_node := instance_map.get(current_target._uuid):
-                    source_node_id = target_node.structural_id
+                # Handle Explicit Jump using the unambiguous source_node_id
+                source_node_id = graph_result.source_node_id
 
-                if not source_node_id and fast_path_data:
-                    source_node_id = fast_path_data[2]
-
-                if not source_node_id:
-                    raise RuntimeError("Could not locate source node for Jump.")
-
-                # Find outgoing ITERATIVE_JUMP edge
                 jump_edge = next(
                     (
                         e
@@ -344,7 +343,7 @@ class GraphExecutionStrategy:
 
         # 3. Minimal State Update (Async)
         await state_backend.put_result(node.structural_id, result)
-        return result
+        return GraphExecutionResult(value=result, source_node_id=node.structural_id)
 
     async def _execute_graph(
         self,
@@ -419,7 +418,8 @@ class GraphExecutionStrategy:
                         # Recursive call: must build new graph
                         sub_graph, sub_instance_map = build_graph(target)
                         sub_plan = self.solver.resolve(sub_graph)
-                        return await self._execute_graph(
+                        # The map node expects the raw value, not the result object
+                        result_obj = await self._execute_graph(
                             target,
                             sub_params,
                             active_resources,
@@ -429,6 +429,7 @@ class GraphExecutionStrategy:
                             plan=sub_plan,
                             instance_map=sub_instance_map,
                         )
+                        return result_obj.value
 
                     tasks_to_run = []
                     for node in executable_this_pass:
@@ -474,7 +475,9 @@ class GraphExecutionStrategy:
                 target_node.structural_id
             ):
                 if skip_reason == "UpstreamSkipped_Sequence":
-                    return None
+                    return GraphExecutionResult(
+                        value=None, source_node_id=target_node.structural_id
+                    )
                 raise DependencyMissingError(
                     task_id=target.task.name or "unknown",
                     arg_name="<Target Output>",
@@ -485,4 +488,7 @@ class GraphExecutionStrategy:
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )
 
-        return await state_backend.get_result(target_node.structural_id)
+        final_value = await state_backend.get_result(target_node.structural_id)
+        return GraphExecutionResult(
+            value=final_value, source_node_id=target_node.structural_id
+        )

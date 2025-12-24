@@ -1,87 +1,15 @@
-## [WIP] fix(tests): Resolve `Node.id` renaming failures in test suite
+# 📸 Snapshot Capture
 
-### 用户需求
-批量修复因 `Node.id` 重命名为 `Node.structural_id` 导致的大量测试失败。
+检测到工作区发生变更。
 
-### 评论
-错误日志清晰地指向了两个主要问题：
-1.  **构造函数调用错误**: 测试代码手动实例化 `Node(id=...)` 时使用了旧参数名。
-2.  **遗漏的属性访问**: 部分代码（如 `flow.py:42` 和测试文件）中仍存在 `route_node.id` 这样的访问。
-
-这是自动化脚本的覆盖盲区，通常是因为变量名（如 `route_node`）不在简单的正则替换列表中。我们需要扩大搜索范围并手动修复这些遗漏。
-
-### 目标
-1.  编写并执行更激进的修复脚本，处理 `Node(id=...)` 构造函数调用。
-2.  修复 `flow.py` 中遗漏的属性访问。
-3.  修复测试文件中遗漏的属性访问（如 `tests/engine/runtime/test_router_pruning.py` 等）。
-
-### 基本原理
-我们将使用 `sed` 或特定的 Python 脚本来替换测试文件中的构造函数调用模式，并手动修补已知的运行时代码遗漏。
-
-### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/core #task/object/node-identity #task/action/fix-renaming-fallout #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建修复脚本 (针对构造函数和遗漏属性)
-
-这个脚本将处理 `Node(id=...)` 这种模式，以及日志中暴露的具体属性访问错误。
-
-~~~~~act
-write_file
-scripts/fix_test_failures.py
-~~~~~
-~~~~~python
-import os
-import re
-
-root_dirs = ["packages", "tests"]
-
-def process_file(filepath):
-    with open(filepath, 'r') as f:
-        content = f.read()
-    
-    original_content = content
-
-    # 1. Fix Node constructor calls: Node(..., id="foo", ...) -> Node(..., structural_id="foo", ...)
-    # Look for id= as a keyword argument in Node(...) calls.
-    # Simple regex approach: replace `id=` with `structural_id=` if it looks like a kwarg inside a call context.
-    # But `id=` is common. We target specific known patterns in tests.
-    
-    # Target: Node(id=...)
-    content = re.sub(r'Node\(\s*id=', 'Node(structural_id=', content)
-    
-    # Target: Node(..., id=...) - handling multiline or comma separated
-    # This is risky globally. Let's be specific to test files where Node is instantiated manually.
-    if "tests/" in filepath:
-        content = re.sub(r',\s*id=', ', structural_id=', content)
-    
-    # 2. Fix specific attribute access missed by previous script
-    # Log showed: route_node.id
-    content = re.sub(r'\broute_node\.id\b', 'route_node.structural_id', content)
-    
-    # Log showed: node.id in test files might use different variable names
-    # Let's fix common test variable names
-    test_var_names = ["n", "start_node", "end_node", "task_node", "root_node", "leaf_node"]
-    for var in test_var_names:
-        content = re.sub(rf'\b{var}\.id\b', f'{var}.structural_id', content)
-
-    # 3. Fix flow.py specific error
-    if filepath.endswith("cascade/runtime/flow.py"):
-        content = content.replace("route_node.id", "route_node.structural_id")
-
-    if content != original_content:
-        print(f"Patching {filepath}")
-        with open(filepath, 'w') as f:
-            f.write(content)
-
-for root_dir in root_dirs:
-    if not os.path.exists(root_dir):
-        continue
-    for root, dirs, files in os.walk(root_dir):
-        for file in files:
-            if file.endswith(".py"):
-                process_file(os.path.join(root, file))
-~~~~~
+### 📝 变更文件摘要:
+```
+.../cascade-engine/src/cascade/adapters/solvers/csp.py     |  4 ++--
+ packages/cascade-engine/src/cascade/runtime/flow.py        |  2 +-
+ packages/cascade-engine/src/cascade/runtime/vm.py          |  3 +--
+ packages/cascade-graph/src/cascade/graph/serialize.py      |  3 +--
+ packages/cascade-sdk/src/cascade/tools/lisp.py             | 14 +++++++-------
+ tests/engine/adapters/executors/test_local.py              |  4 ++--
+ tests/engine/runtime/test_flow_manager.py                  |  4 ++--
+ 7 files changed, 16 insertions(+), 18 deletions(-)
+```

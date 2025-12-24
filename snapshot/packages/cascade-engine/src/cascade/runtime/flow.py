@@ -39,7 +39,7 @@ class FlowManager:
                 for key, route_result in edge.router.routes.items():
                     route_node = self._get_node_from_instance(route_result)
                     if route_node:
-                        self.route_source_map[edge.target.structural_id][route_node.id] = key
+                        self.route_source_map[edge.target.structural_id][route_node.structural_id] = key
 
         # The final target always has at least 1 implicit demand (the user wants it)
         self.downstream_demand[target_node_id] += 1

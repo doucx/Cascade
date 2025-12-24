@@ -93,7 +93,7 @@ class CSPSolver:
         sorted_stages = sorted(plan_dict.keys())
 
         # Build list of lists of Nodes
-        node_lookup = {n.id: n for n in active_nodes}
+        node_lookup = {n.structural_id: n for n in active_nodes}
         execution_plan = []
 
         for stage_idx in sorted_stages:
@@ -120,7 +120,7 @@ class CSPSolver:
         # Variables: Node IDs (only active ones)
         # Domain: Possible Stage Indices [0, max_stages - 1]
         domain = list(range(max_stages))
-        variables = [n.id for n in active_nodes]
+        variables = [n.structural_id for n in active_nodes]
         problem.addVariables(variables, domain)
 
         # Constraint 1: Dependencies

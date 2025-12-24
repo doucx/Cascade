@@ -16,7 +16,7 @@ def test_local_executor_sync_execution():
         return x + y + z
 
     # 2. Simulate the Node (Only callable_obj is needed here)
-    node_add = Node(id="add", name="add", callable_obj=add.func)
+    node_add = Node(structural_id="add", name="add", callable_obj=add.func)
 
     # 3. Simulate arguments resolved by the Engine
     resolved_args = [5]  # positional argument 'x'
@@ -38,7 +38,7 @@ def test_local_executor_async_execution():
         await asyncio.sleep(0.01)
         return x + 1
 
-    node_async = Node(id="async_add", name="async_add", callable_obj=async_add.func)
+    node_async = Node(structural_id="async_add", name="async_add", callable_obj=async_add.func)
 
     resolved_args = [5]
     resolved_kwargs = {}

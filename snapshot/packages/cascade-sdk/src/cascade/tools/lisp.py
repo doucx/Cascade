@@ -31,7 +31,7 @@ class LispTranspiler:
         # 3. Identify shared nodes and assign names
         name_counts = {}
         # Sort nodes by ID for deterministic naming
-        sorted_nodes = sorted(self.graph.nodes, key=lambda n: n.id)
+        sorted_nodes = sorted(self.graph.nodes, key=lambda n: n.structural_id)
 
         for node in sorted_nodes:
             # Nodes referenced more than once OR nodes that are used as Router selectors
@@ -62,7 +62,7 @@ class LispTranspiler:
     def transpile(self, target_node: Node) -> str:
         # 1. Identify relevant shared nodes (transitive dependencies of target)
         deps = self._get_transitive_deps(target_node)
-        shared_in_scope = [n for n in deps if n.id in self.shared_nodes]
+        shared_in_scope = [n for n in deps if n.structural_id in self.shared_nodes]
 
         # 2. Topological Sort for let* order
         sorted_shared = self._topo_sort(shared_in_scope)
@@ -230,7 +230,7 @@ class LispTranspiler:
         while queue:
             n = queue.pop(0)
             # Find incoming edges
-            incoming = [e.source for e in self.graph.edges if e.target.structural_id == n.id]
+            incoming = [e.source for e in self.graph.edges if e.target.structural_id == n.structural_id]
             for source in incoming:
                 if source not in visited:
                     visited.add(source)
@@ -243,8 +243,8 @@ class LispTranspiler:
         Standard Topological Sort.
         Returns nodes in dependency order (Dependency before Consumer).
         """
-        node_set = {n.id for n in nodes}
-        adj = {n.id: set() for n in nodes}
+        node_set = {n.structural_id for n in nodes}
+        adj = {n.structural_id: set() for n in nodes}
 
         # Build graph restricted to 'nodes'
         for edge in self.graph.edges:
@@ -271,10 +271,10 @@ class LispTranspiler:
 
         # Sort input nodes for deterministic start order
         for n in sorted(nodes, key=lambda x: x.id):
-            visit(n.id)
+            visit(n.structural_id)
 
         # result is [Deepest Dep, ..., Root]
-        id_map = {n.id: n for n in nodes}
+        id_map = {n.structural_id: n for n in nodes}
         return [id_map[nid] for nid in result]
 
 

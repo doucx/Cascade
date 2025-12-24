@@ -1,96 +1,53 @@
-好的，我们开始执行 “阶段零：性能基线优化”。
+这是对上一步性能优化的一个关键记录点。性能测试数据显示我们成功地将 TCO 快速路径的性能恢复到了 100k TPS 以上，这证明了异步税已经被成功消除。
 
-你的分析是正确的。在将 `StateBackend` 异步化之后，`GraphExecutionStrategy` 的 TCO 循环（快速路径）中被引入了 `await state_backend.clear()` 和 `await asyncio.sleep(0)`。这两个 `await` 在每一次“热循环”迭代中都会强制进行不必要的事件循环上下文切换，导致了显著的性能回退。
+我将创建一个 `[COMMIT]` 计划来记录这次变更。
 
-我们的目标是将这些异步操作移出 TCO 快速路径，仅在进入“慢速路径”（即需要构建新图时）执行。这样可以确保快速路径的循环体对事件循环是零开销的，从而恢复其应有的性能基线。
-
-我将生成一个计划来执行这个重构。
-
-## [WIP] refactor: 移除 TCO 快速路径中的异步开销
+## [COMMIT] perf(runtime): 消除 TCO 快速路径中的异步税
 
 ### 用户需求
-根据《综合架构演进建议书》中的定义，执行“阶段零：性能基线优化”，将 TCO 快速路径中的 `await state_backend.clear()` 和 `await asyncio.sleep(0)` 调用移至慢速路径。
+提交对 `GraphExecutionStrategy` 的性能优化，该优化旨在消除 TCO 快速路径中不必要的异步调用，恢复性能基线。
 
 ### 评论
-这是一个关键的性能基线校准步骤。只有将 TCO 快速路径的性能恢复到其“零开销”的最佳状态，我们才能准确地衡量后续阶段（如统一哈希管道）引入的计算开销。这次重构将使我们的性能测试和优化工作建立在一个稳定可靠的基础上。
+本次提交是恢复 Cascade 引擎性能基线的关键一步。性能测试结果（超过 100k TPS）验证了将 `await` 调用从 TCO 热循环中剥离的巨大价值。这为后续的性能优化（尤其是针对 Heavy Path 的 JIT 结构化哈希）提供了一个可靠的、高标准的参照基准。
 
 ### 目标
-1.  定位 `GraphExecutionStrategy.execute` 方法中的 TCO `while True:` 循环。
-2.  从循环末尾的快速路径逻辑中移除 `await state_backend.clear()` 和 `await asyncio.sleep(0)`。
-3.  将这两个调用移动到慢速路径（`else` 块）中，在调用 `build_graph` 之前。
+通过 Git 提交，记录以下变更：将 `state_backend.clear()` 和 `asyncio.sleep(0)` 逻辑从 `GraphExecutionStrategy.execute` 的 TCO 循环末尾移除，并将其移动到 Slow Path 的图构建之前。
 
 ### 基本原理
-TCO 快速路径（Fast Path）的核心价值在于其近乎零成本的循环。每一次迭代都不应该与 `asyncio` 事件循环发生交互。因此，任何 `await` 操作都应该被排除。相反，慢速路径（Slow Path）本身就是高成本操作（因为它需要构建图、求解计划等），在此处增加两个异步调用所带来的额外开销可以忽略不计，却是逻辑上正确的位置（在开始构建新图之前清理状态并让出控制权）。
+TCO 快速路径的目标是零开销循环。任何 `await` 调用，即便是 `asyncio.sleep(0)`，也会强制进行上下文切换。将这些操作转移到只在缓存未命中时才触发的慢速路径，确保了 Fast Path 能够以接近裸 Python 循环的效率运行。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/engine #scope/core #ai/instruct #task/domain/runtime #task/object/tco-fast-path #task/action/optimization #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/engine #scope/core #ai/instruct #task/domain/runtime #task/object/tco-fast-path #task/action/optimization #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `GraphExecutionStrategy` 的 TCO 循环
+#### Acts 1: 提交性能优化变更
 
-我们将修改 `graph.py` 文件。首先，从 `while` 循环的末尾移除异步状态清理和 `sleep` 调用。然后，将这段逻辑粘贴到进入慢速路径（`else` 块）的开头。
+将修改后的 `graph.py` 文件添加到暂存区，并创建一个内容详尽的提交。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-engine/src/cascade/runtime/strategies/graph.py
-~~~~~
-~~~~~python
-            # 5. Check for Tail Call (LazyResult) - TCO Logic
-            if isinstance(result, (LazyResult, MappedLazyResult)):
-                current_target = result
-                # STATE GC (Asynchronous)
-                if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
-                    state_backend.clear
-                ):
-                    await state_backend.clear()
-                # Yield control
-                await asyncio.sleep(0)
-            else:
-                return result
-~~~~~
-~~~~~python
-            # 5. Check for Tail Call (LazyResult) - TCO Logic
-            if isinstance(result, (LazyResult, MappedLazyResult)):
-                current_target = result
-            else:
-                return result
 ~~~~~
 
 ~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+git_commit
 ~~~~~
-~~~~~python
-                else:
-                    # SLOW PATH: Build Graph
-                    graph, instance_map = build_graph(
-                        current_target, registry=self._node_registry
-                    )
+~~~~~text
+perf(runtime): Eliminate async tax in TCO fast path
 
-                    if current_target._uuid not in instance_map:
-~~~~~
-~~~~~python
-                else:
-                    # SLOW PATH: Build Graph
-                    # STATE GC (Asynchronous)
-                    if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
-                        state_backend.clear
-                    ):
-                        await state_backend.clear()
-                    # Yield control
-                    await asyncio.sleep(0)
+The Zero-Overhead TCO fast path was severely degraded due to two unnecessary `await` calls (`state_backend.clear()` and `asyncio.sleep(0)`) at the end of every loop iteration. These calls forced an unnecessary event loop context switch on every hot-loop cycle.
 
-                    graph, instance_map = build_graph(
-                        current_target, registry=self._node_registry
-                    )
+The change moves these asynchronous clean-up/yield operations to the Slow Path (Graph rebuilding path) where the overhead is negligible, restoring the Fast Path performance to over 100k TPS.
 
-                    if current_target._uuid not in instance_map:
+This fulfills the "Phase Zero: Performance Baseline Optimization" requirement from the architecture roadmap.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了性能基线的恢复工作。现在，我们可以放心地进行下一步的重构，并且能够准确地衡量其带来的影响。
+性能基线现已恢复。我们应立即开始执行 **阶段一：基石重构 —— 统一哈希管道**。该阶段将 `HashingService` 引入，实现 `Structural Hash` 和 `Template Hash` 的彻底分离，为解决当前 Heavy Path 的性能瓶颈做架构准备。
 
-根据路线图，我建议我们开始实施 **阶段一：基石重构 —— 统一哈希管道 (The Hashing Pipeline)**。如果你同意，我将为此准备一个新的计划。
+我建议下一个计划的目标是：
+1.  在 `packages/cascade-graph/src/cascade/graph/hashing.py` 中，定义并实现 `Template Hash` 的计算逻辑：它必须忽略所有字面量参数，只关注结构和依赖。
+2.  更新 `GraphBuilder` 的 `_visit_lazy_result` 方法，确保它能够计算并存储 `Template Hash`。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 移除 TCO 快速路径中的异步开销", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766554711.8391314, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] perf(runtime): 消除 TCO 快速路径中的异步税", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766554789.328791, "duration_ms": 0}}

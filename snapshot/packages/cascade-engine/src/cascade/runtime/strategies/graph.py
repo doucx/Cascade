@@ -107,41 +107,47 @@ class GraphExecutionStrategy:
             fast_path_data = self._cycle_cache.get(cycle_id)
 
             if fast_path_data:
-                # FAST PATH: JIT Cache Hit. Bypass full graph build and orchestration.
-                graph, _, root_node_id, required_resources = fast_path_data
-                target_node = graph.get_node(root_node_id)
+                # FAST PATH: JIT Cache Hit.
+                # We add a guard here: the zero-overhead path is only safe if the
+                # arguments are simple literals. If they contain other LazyResults,
+                # the graph structure may have changed, and we must fall back to
+                # the full build path to ensure correctness.
+                if self._are_args_simple(current_target):
+                    # Bypass full graph build and orchestration.
+                    graph, _, root_node_id, required_resources = fast_path_data
+                    target_node = graph.get_node(root_node_id)
 
-                with ExitStack() as step_stack:
-                    self.resource_container.setup(
-                        required_resources,
-                        active_resources,
-                        run_stack,
-                        step_stack,
-                        run_id,
-                    )
-                    # Prepare dynamic arguments for this specific iteration
-                    input_overrides = {}
-                    for i, arg in enumerate(current_target.args):
-                        input_overrides[str(i)] = arg
-                    input_overrides.update(current_target.kwargs)
+                    with ExitStack() as step_stack:
+                        self.resource_container.setup(
+                            required_resources,
+                            active_resources,
+                            run_stack,
+                            step_stack,
+                            run_id,
+                        )
+                        # Prepare dynamic arguments for this specific iteration
+                        input_overrides = {}
+                        for i, arg in enumerate(current_target.args):
+                            input_overrides[str(i)] = arg
+                        input_overrides.update(current_target.kwargs)
 
-                    # Use the hot-loop executor
-                    result = await self._execute_hot_node(
-                        target_node,
-                        graph,
-                        state_backend,
-                        active_resources,
-                        params,
-                        {current_target._uuid: target_node},  # Minimal instance map
-                        input_overrides,
-                    )
+                        # Use the hot-loop executor
+                        result = await self._execute_hot_node(
+                            target_node,
+                            graph,
+                            state_backend,
+                            active_resources,
+                            params,
+                            {current_target._uuid: target_node},  # Minimal instance map
+                            input_overrides,
+                        )
 
-                if isinstance(result, (LazyResult, MappedLazyResult)):
-                    current_target = result
-                    await asyncio.sleep(0)  # Yield control in the hot loop
-                    continue
-                else:
-                    return result
+                    if isinstance(result, (LazyResult, MappedLazyResult)):
+                        current_target = result
+                        await asyncio.sleep(0)  # Yield control in the hot loop
+                        continue
+                    else:
+                        return result
             # --- END: UNIFIED FAST PATH LOGIC ---
 
             # --- SLOW PATH: Build Graph and orchestrate ---

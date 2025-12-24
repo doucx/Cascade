@@ -120,7 +120,9 @@ class NodeProcessor:
             inputs_for_cache = self._resolve_inputs_for_cache(
                 node, graph, state_backend
             )
-            cached_value = await node.cache_policy.check(node.structural_id, inputs_for_cache)
+            cached_value = await node.cache_policy.check(
+                node.structural_id, inputs_for_cache
+            )
             if cached_value is not None:
                 self.bus.publish(
                     TaskSkipped(
@@ -133,7 +135,9 @@ class NodeProcessor:
                 return cached_value
 
         self.bus.publish(
-            TaskExecutionStarted(run_id=run_id, task_id=node.structural_id, task_name=node.name)
+            TaskExecutionStarted(
+                run_id=run_id, task_id=node.structural_id, task_name=node.name
+            )
         )
 
         # 5. Handle Map Nodes
@@ -176,7 +180,9 @@ class NodeProcessor:
                     inputs_for_save = self._resolve_inputs_for_cache(
                         node, graph, state_backend
                     )
-                    await node.cache_policy.save(node.structural_id, inputs_for_save, result)
+                    await node.cache_policy.save(
+                        node.structural_id, inputs_for_save, result
+                    )
                 return result
             except Exception as e:
                 last_exception = e
@@ -216,12 +222,18 @@ class NodeProcessor:
         # It should probably include data from input_bindings too?
         # For now, keeping legacy behavior (edge results only).
         inputs = {}
-        incoming_edges = [edge for edge in graph.edges if edge.target.structural_id == node.structural_id]
+        incoming_edges = [
+            edge
+            for edge in graph.edges
+            if edge.target.structural_id == node.structural_id
+        ]
         for edge in incoming_edges:
             if edge.arg_name.startswith("_"):
                 continue
             if state_backend.has_result(edge.source.structural_id):
-                inputs[edge.arg_name] = state_backend.get_result(edge.source.structural_id)
+                inputs[edge.arg_name] = state_backend.get_result(
+                    edge.source.structural_id
+                )
         return inputs
 
     async def _execute_map_node(

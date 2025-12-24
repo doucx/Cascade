@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, Tuple
 import inspect
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult

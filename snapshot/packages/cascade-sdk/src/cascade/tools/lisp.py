@@ -112,7 +112,8 @@ class LispTranspiler:
         incoming_edges = [
             e
             for e in self.graph.edges
-            if e.target.structural_id == node.structural_id and e.edge_type == EdgeType.DATA
+            if e.target.structural_id == node.structural_id
+            and e.edge_type == EdgeType.DATA
         ]
         edge_map = {e.arg_name: e for e in incoming_edges}
 
@@ -151,7 +152,8 @@ class LispTranspiler:
         cond_edges = [
             e
             for e in self.graph.edges
-            if e.target.structural_id == node.structural_id and e.edge_type == EdgeType.CONDITION
+            if e.target.structural_id == node.structural_id
+            and e.edge_type == EdgeType.CONDITION
         ]
         if cond_edges:
             parts.append(":run-if")
@@ -230,7 +232,11 @@ class LispTranspiler:
         while queue:
             n = queue.pop(0)
             # Find incoming edges
-            incoming = [e.source for e in self.graph.edges if e.target.structural_id == n.structural_id]
+            incoming = [
+                e.source
+                for e in self.graph.edges
+                if e.target.structural_id == n.structural_id
+            ]
             for source in incoming:
                 if source not in visited:
                     visited.add(source)
@@ -248,7 +254,10 @@ class LispTranspiler:
 
         # Build graph restricted to 'nodes'
         for edge in self.graph.edges:
-            if edge.target.structural_id in node_set and edge.source.structural_id in node_set:
+            if (
+                edge.target.structural_id in node_set
+                and edge.source.structural_id in node_set
+            ):
                 # Target depends on Source
                 adj[edge.target.structural_id].add(edge.source.structural_id)
 

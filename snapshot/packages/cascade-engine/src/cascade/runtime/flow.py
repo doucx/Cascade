@@ -39,7 +39,9 @@ class FlowManager:
                 for key, route_result in edge.router.routes.items():
                     route_node = self._get_node_from_instance(route_result)
                     if route_node:
-                        self.route_source_map[edge.target.structural_id][route_node.structural_id] = key
+                        self.route_source_map[edge.target.structural_id][
+                            route_node.structural_id
+                        ] = key
 
         # The final target always has at least 1 implicit demand (the user wants it)
         self.downstream_demand[target_node_id] += 1
@@ -102,7 +104,9 @@ class FlowManager:
                 # Special case: If the edge is from a Router, do we prune the Router selector?
                 # No, the selector might be used by other branches.
                 # Standard dependency logic applies: reduce demand on source.
-                self._decrement_demand_and_prune(edge.source.structural_id, state_backend)
+                self._decrement_demand_and_prune(
+                    edge.source.structural_id, state_backend
+                )
 
     def should_skip(self, node: Node, state_backend: StateBackend) -> Optional[str]:
         """
@@ -132,7 +136,9 @@ class FlowManager:
 
         # 3. Upstream Skip Propagation
         active_route_key = None
-        router_edge = next((e for e in self.in_edges[node.structural_id] if e.router), None)
+        router_edge = next(
+            (e for e in self.in_edges[node.structural_id] if e.router), None
+        )
         if router_edge:
             selector_node = self._get_node_from_instance(router_edge.router.selector)
             if selector_node:
@@ -143,7 +149,9 @@ class FlowManager:
         for edge in self.in_edges[node.structural_id]:
             if edge.edge_type == EdgeType.ROUTER_ROUTE:
                 if active_route_key is not None:
-                    edge_key = self.route_source_map[node.structural_id].get(edge.source.structural_id)
+                    edge_key = self.route_source_map[node.structural_id].get(
+                        edge.source.structural_id
+                    )
                     if edge_key != active_route_key:
                         continue
 
@@ -159,7 +167,9 @@ class FlowManager:
                         # If the skipped node has a DATA input, and that input has a result...
                         if (
                             upstream_edge.edge_type == EdgeType.DATA
-                            and state_backend.has_result(upstream_edge.source.structural_id)
+                            and state_backend.has_result(
+                                upstream_edge.source.structural_id
+                            )
                         ):
                             can_penetrate = True
                             break

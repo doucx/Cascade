@@ -41,7 +41,9 @@ class CSPSolver:
             for edge in graph.edges
             if edge.edge_type == EdgeType.POTENTIAL
         }
-        active_nodes = [node for node in graph.nodes if node.structural_id not in shadow_ids]
+        active_nodes = [
+            node for node in graph.nodes if node.structural_id not in shadow_ids
+        ]
 
         if not active_nodes:
             return []
@@ -129,12 +131,16 @@ class CSPSolver:
             # Skip POTENTIAL edges and edges involving shadow nodes
             if edge.edge_type == EdgeType.POTENTIAL:
                 continue
-            if edge.source.structural_id in shadow_ids or edge.target.structural_id in shadow_ids:
+            if (
+                edge.source.structural_id in shadow_ids
+                or edge.target.structural_id in shadow_ids
+            ):
                 continue
 
             # Note: We use a lambda that captures nothing, args are passed by value in addConstraint
             problem.addConstraint(
-                lambda s_src, s_tgt: s_src < s_tgt, (edge.source.structural_id, edge.target.structural_id)
+                lambda s_src, s_tgt: s_src < s_tgt,
+                (edge.source.structural_id, edge.target.structural_id),
             )
 
         # Constraint 2: Resources

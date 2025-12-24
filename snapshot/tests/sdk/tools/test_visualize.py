@@ -57,8 +57,14 @@ def test_visualize_diamond_graph():
     )
 
     # Check data edge definitions
-    assert f'"{node_a.structural_id}" -> "{node_b.structural_id}" [label="0"];' in dot_string
-    assert f'"{node_c.structural_id}" -> "{node_d.structural_id}" [label="z"];' in dot_string
+    assert (
+        f'"{node_a.structural_id}" -> "{node_b.structural_id}" [label="0"];'
+        in dot_string
+    )
+    assert (
+        f'"{node_c.structural_id}" -> "{node_d.structural_id}" [label="z"];'
+        in dot_string
+    )
 
 
 def test_visualize_special_edge_types():
@@ -100,7 +106,10 @@ def test_visualize_special_edge_types():
     dot_string = cs.visualize(target)
 
     # 1. Assert Data Edge (standard style)
-    assert f'"{node_ds.structural_id}" -> "{node_target.structural_id}" [label="data_in"];' in dot_string
+    assert (
+        f'"{node_ds.structural_id}" -> "{node_target.structural_id}" [label="data_in"];'
+        in dot_string
+    )
 
     # 2. Assert Condition Edge (dashed, gray)
     expected_cond_edge = f'"{node_cond.structural_id}" -> "{node_target.structural_id}" [style=dashed, color=gray, label="run_if"]'

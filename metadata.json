@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: D fix_test_failures.py, D refactor_node_ids.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766548329.3235466, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M csp.py, M native.py, M flow.py ... and 11 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766551686.093964, "duration_ms": 0}}

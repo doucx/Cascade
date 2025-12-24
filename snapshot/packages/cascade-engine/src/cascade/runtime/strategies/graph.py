@@ -91,40 +91,49 @@ class GraphExecutionStrategy:
         current_target = target
         next_input_overrides = None
 
+        # Optimization: Local Graph Cache for the duration of this run
+        # Maps LazyResult._uuid -> (Graph, InstanceMap, Plan)
+        local_context_cache = {}
+
         while True:
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
                 input_overrides = None
 
-                # STATE GC (Asynchronous)
+                # 1. State GC (Crucial for TCO stability)
                 if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
                     state_backend.clear
                 ):
                     await state_backend.clear()
-                # Yield control
                 await asyncio.sleep(0)
 
-                # 1. Build Graph
-                graph, instance_map = build_graph(
-                    current_target, registry=self._node_registry
-                )
-
-                if current_target._uuid not in instance_map:
-                    raise RuntimeError(
-                        f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                # 2. Check Local Context Cache (FAST PATH)
+                if current_target._uuid in local_context_cache:
+                    graph, instance_map, plan = local_context_cache[current_target._uuid]
+                else:
+                    # SLOW PATH: First time building this structure in this run
+                    # 2.1 Build Graph
+                    graph, instance_map = build_graph(
+                        current_target, registry=self._node_registry
                     )
 
-                target_node = instance_map[current_target._uuid]
+                    if current_target._uuid not in instance_map:
+                        raise RuntimeError(
+                            f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                        )
 
-                # 2. Resolve Plan (with caching based on blueprint hash)
-                blueprint_hash = self.blueprint_hasher.compute_hash(graph)
-                if blueprint_hash in self._template_plan_cache:
-                    indexed_plan = self._template_plan_cache[blueprint_hash]
-                    plan = self._rehydrate_plan(graph, indexed_plan)
-                else:
-                    plan = self.solver.resolve(graph)
-                    indexed_plan = self._index_plan(graph, plan)
-                    self._template_plan_cache[blueprint_hash] = indexed_plan
+                    # 2.2 Resolve Plan (with caching based on blueprint hash)
+                    blueprint_hash = self.blueprint_hasher.compute_hash(graph)
+                    if blueprint_hash in self._template_plan_cache:
+                        indexed_plan = self._template_plan_cache[blueprint_hash]
+                        plan = self._rehydrate_plan(graph, indexed_plan)
+                    else:
+                        plan = self.solver.resolve(graph)
+                        indexed_plan = self._index_plan(graph, plan)
+                        self._template_plan_cache[blueprint_hash] = indexed_plan
+
+                    # Update local cache
+                    local_context_cache[current_target._uuid] = (graph, instance_map, plan)
 
                 # 3. Setup Resources
                 required_resources = self.resource_container.scan(graph)

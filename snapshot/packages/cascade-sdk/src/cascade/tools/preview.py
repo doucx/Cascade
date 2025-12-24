@@ -47,7 +47,7 @@ def _analyze_plan(target: Any, bus: MessageBus) -> None:
                     run_id=target._uuid,
                     index=current_index,
                     total_nodes=total_steps,
-                    node_id=node.id,
+                    node_id=node.structural_id,
                     node_name=node.name,
                     input_bindings=node.input_bindings,
                 )

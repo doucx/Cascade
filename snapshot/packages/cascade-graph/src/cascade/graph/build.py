@@ -126,7 +126,7 @@ class GraphBuilder:
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
             node = Node(
-                id=structural_hash,
+                structural_id=structural_hash,
                 template_id=template_hash,
                 name=result.task.name,
                 node_type="task",
@@ -219,7 +219,7 @@ class GraphBuilder:
                     input_bindings[k] = val
 
             return Node(
-                id=structural_hash,
+                structural_id=structural_hash,
                 template_id=template_hash,
                 name=f"map({getattr(result.factory, 'name', 'factory')})",
                 node_type="map",
@@ -274,9 +274,9 @@ class GraphBuilder:
             )
             return
 
-        potential_uuid = f"shadow:{parent_node.id}:{task.name}"
+        potential_uuid = f"shadow:{parent_node.structural_id}:{task.name}"
         target_node = Node(
-            id=potential_uuid,
+            structural_id=potential_uuid,
             name=task.name,
             node_type="task",
             is_shadow=True,

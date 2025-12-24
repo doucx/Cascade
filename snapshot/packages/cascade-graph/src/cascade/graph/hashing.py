@@ -171,7 +171,7 @@ class HashingService:
             # Structural: Use the dependency's structural ID.
             # Template: Use the dependency's TEMPLATE ID.
             node = dep_nodes[obj._uuid]
-            ref_id = node.template_id if template else node.id
+            ref_id = node.template_id if template else node.structural_id
             components.append(f"LAZY({ref_id})")
         
         elif isinstance(obj, Router):

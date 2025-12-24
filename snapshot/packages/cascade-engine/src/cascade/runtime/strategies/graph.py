@@ -3,7 +3,7 @@ import inspect
 from contextlib import ExitStack
 from typing import Any, Dict, List, Set
 
-from cascade.graph.model import Graph, Node
+from cascade.graph.model import Graph, Node, EdgeType
 from cascade.graph.build import build_graph
 from cascade.graph.registry import NodeRegistry
 from cascade.spec.protocols import Solver, StateBackend

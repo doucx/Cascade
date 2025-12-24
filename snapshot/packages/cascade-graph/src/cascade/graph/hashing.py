@@ -1,5 +1,5 @@
 import hashlib
-from typing import Any, List, Dict, Tuple
+from typing import Any, List, Dict
 from cascade.graph.model import Graph, Node
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -88,9 +88,7 @@ class HashingService:
             base_comps + ["MapKwargs:"] + struct_kwargs + meta_comps
         )
 
-    def _build_hash_components(
-        self, obj: Any, dep_nodes: Dict[str, Node]
-    ) -> List[str]:
+    def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Node]) -> List[str]:
         """
         Recursively builds hash components, always including literal values.
         """

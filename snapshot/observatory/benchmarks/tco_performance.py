@@ -105,10 +105,12 @@ async def main():
     nps_2 = tps_2 * nodes_per_iter_2
     print(f"  TPS: {tps_2:,.2f} iter/sec")
     print(f"  NPS: {nps_2:,.2f} nodes/sec")
-    
+
     # Calculate the difference in efficiency, not just raw speed
     efficiency_gain = ((nps_2 / nps_1) - 1) * 100
-    print(f"  Throughput Gain vs Simple: {efficiency_gain:+.1f}% (Batching Efficiency)\n")
+    print(
+        f"  Throughput Gain vs Simple: {efficiency_gain:+.1f}% (Batching Efficiency)\n"
+    )
 
     # VM Path
     print(" Running VM Path (TailCall)...")
@@ -128,8 +130,10 @@ async def main():
     print("--- Conclusion ---")
     print(f"Engine processes {nps_2:,.0f} nodes/sec under load (Heavy Explicit Loop).")
     print(f"VM path is {nps_1 / tps_3:.2f}x faster than Simple Explicit Jump.")
-    print(f"Explicit Control Flow adds {(time_1 - time_imp)/iterations*1e6:.1f} microseconds overhead per step vs raw Python loop.")
-    print(f"Heavy Explicit Loop overhead vs VM: {((time_3 / time_2) - 1)*100:.1f}%")
+    print(
+        f"Explicit Control Flow adds {(time_1 - time_imp) / iterations * 1e6:.1f} microseconds overhead per step vs raw Python loop."
+    )
+    print(f"Heavy Explicit Loop overhead vs VM: {((time_3 / time_2) - 1) * 100:.1f}%")
 
 
 if __name__ == "__main__":

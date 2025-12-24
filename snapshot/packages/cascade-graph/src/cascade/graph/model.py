@@ -23,8 +23,6 @@ class EdgeType(Enum):
     ITERATIVE_JUMP = auto()  # An explicit state transition (Jump)
 
 
-import inspect
-
 @dataclass
 class Node:
     """

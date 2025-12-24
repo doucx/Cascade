@@ -71,11 +71,8 @@ class GraphBuilder:
 
         # 3. Hash-consing: Query registry FIRST before doing more work
         node = self.registry.get(structural_hash)
-        created_new = False
 
         if not node:
-            created_new = True
-
             # Extract bindings
             input_bindings = {}
             for i, val in enumerate(result.args):

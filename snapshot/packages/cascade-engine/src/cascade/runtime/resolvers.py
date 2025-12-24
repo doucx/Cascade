@@ -32,7 +32,7 @@ class ArgumentResolver:
             if input_overrides:
                 bindings = bindings.copy()
                 bindings.update(input_overrides)
-            
+
             # Identify data dependencies (edges)
             incoming_edges = [
                 e
@@ -48,12 +48,13 @@ class ArgumentResolver:
                 for k, v in bindings.items():
                     if k.isdigit():
                         idx = int(k)
-                        while len(f_args) <= idx: f_args.append(None)
+                        while len(f_args) <= idx:
+                            f_args.append(None)
                         f_args[idx] = v
                     else:
                         f_kwargs[k] = v
                 return f_args, f_kwargs
-            
+
             # FAST PATH WITH EDGES: Simple node, but has upstream data.
             # We merge literals and edges without reflection.
             f_args = []
@@ -61,14 +62,15 @@ class ArgumentResolver:
             for k, v in bindings.items():
                 if k.isdigit():
                     idx = int(k)
-                    while len(f_args) <= idx: f_args.append(None)
+                    while len(f_args) <= idx:
+                        f_args.append(None)
                     f_args[idx] = v
                 else:
                     # Note: We use a temp dict for kwargs to avoid modifying bindings if cached
                     # But bindings is already a copy from node if input_overrides was present,
                     # or node.input_bindings directly. To be safe, we create a new dict.
                     pass
-            
+
             f_kwargs = {k: v for k, v in bindings.items() if not k.isdigit()}
 
             # 2. Fill from edges
@@ -78,11 +80,12 @@ class ArgumentResolver:
                 )
                 if edge.arg_name.isdigit():
                     idx = int(edge.arg_name)
-                    while len(f_args) <= idx: f_args.append(None)
+                    while len(f_args) <= idx:
+                        f_args.append(None)
                     f_args[idx] = val
                 else:
                     f_kwargs[edge.arg_name] = val
-            
+
             return f_args, f_kwargs
 
         args = []

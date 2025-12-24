@@ -1,5 +1,4 @@
 import asyncio
-import inspect
 from contextlib import ExitStack
 from typing import Any, Dict, List
 from dataclasses import dataclass
@@ -9,7 +8,6 @@ from cascade.graph.build import build_graph
 from cascade.graph.registry import NodeRegistry
 from cascade.graph.hashing import BlueprintHasher
 from cascade.spec.protocols import Solver, StateBackend
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.jump import Jump
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.resource_container import ResourceContainer
@@ -107,7 +105,9 @@ class GraphExecutionStrategy:
 
                 # 2. Check Local Context Cache (FAST PATH)
                 if current_target._uuid in local_context_cache:
-                    graph, instance_map, plan = local_context_cache[current_target._uuid]
+                    graph, instance_map, plan = local_context_cache[
+                        current_target._uuid
+                    ]
                 else:
                     # SLOW PATH: First time building this structure in this run
                     # 2.1 Build Graph
@@ -131,7 +131,11 @@ class GraphExecutionStrategy:
                         self._template_plan_cache[blueprint_hash] = indexed_plan
 
                     # Update local cache
-                    local_context_cache[current_target._uuid] = (graph, instance_map, plan)
+                    local_context_cache[current_target._uuid] = (
+                        graph,
+                        instance_map,
+                        plan,
+                    )
 
                 # 3. Setup Resources
                 required_resources = self.resource_container.scan(graph)

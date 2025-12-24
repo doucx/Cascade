@@ -1,36 +1,3 @@
-## [WIP] refactor(core): Rename `Node.id` to `Node.structural_id` for semantic clarity
-
-### 用户需求
-将 `Node.id` 重命名为 `Node.structural_id`，以明确其作为“实例结构哈希”的语义，消除与“模板哈希”(`template_id`) 的混淆。这是一次全库范围的重构。
-
-### 评论
-这是一次非常必要的语义校准。`structural_id` 清楚地表明了该 ID 来源于实例的完整结构（包括字面量），这对于理解缓存行为和节点身份至关重要。使用脚本进行批量重命名是处理此类广泛变更的最佳实践。
-
-### 目标
-1.  修改 `cascade.graph.model.Node` 定义，将 `id` 字段重命名为 `structural_id`。
-2.  更新全库代码中对 `node.id` 的引用。
-3.  更新序列化逻辑，确保 JSON 输出字段也更新为 `structural_id`。
-4.  更新 `GraphBuilder` 中的节点实例化逻辑。
-
-### 基本原理
-通过自动化脚本执行重构，可以最大限度地减少人为错误，并确保变更的一致性。排除 `ast_analyzer.py` 等处理 Python AST 的文件是为了避免误伤标准库的 `ast.Name.id` 属性。
-
-### 标签
-#intent/refine #flow/ready #priority/high #comp/core #concept/graph #scope/core #ai/instruct #task/domain/core #task/object/node-identity #task/action/rename-id #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建并执行重构脚本
-
-我们将创建一个临时的 Python 脚本来执行重命名操作。该脚本包含了针对 `model.py`、`serialize.py` 和 `build.py` 的特殊处理逻辑，以及针对全库的通用属性替换逻辑。
-
-~~~~~act
-write_file
-scripts/refactor_node_ids.py
-~~~~~
-~~~~~python
 import os
 import re
 
@@ -99,13 +66,3 @@ for root_dir in root_dirs:
         for file in files:
             if file.endswith(".py"):
                 process_file(os.path.join(root, file))
-~~~~~
-
-### 下一步建议
-重构脚本执行完毕后，`Node` 模型及其引用应该已经更新。
-
-接下来，我们需要确认 `HashingService` 的逻辑是否符合我们在战略讨论中确定的新定义：
-1.  **Structural Hash**: 包含所有键**和**值（包括约束）。
-2.  **Template Hash**: 包含结构键，忽略字面量值。
-
-我们应该检查并可能修改 `cascade/graph/hashing.py`，确保其逻辑与新名称和新定义完全一致，特别是关于 `ResourceConstraint` 的哈希处理逻辑。

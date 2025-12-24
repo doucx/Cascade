@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M __init__.py, M __init__.py, M in_memory.py ... and 12 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766556399.4283268, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 为显式控制流原语添加失败的测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766573904.4399652, "duration_ms": 0}}

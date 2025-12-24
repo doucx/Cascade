@@ -1,62 +1,430 @@
-好的，我们正式启动阶段三。
+## [WIP] refactor(engine): Implement a hot plan executor to unlock multi-node TCO performance
 
-这是 Cascade 引擎性能演进中最关键的一步。前两个阶段的重构（统一哈希管道、静态分析）都是为了此刻的性能突破做准备。通过实现结构化 JIT，我们将彻底消除 TCO “简单路径”和“重型路径”之间巨大的性能鸿沟。
+### 错误分析
+The performance benchmarks and profiling after the last change reveal a critical bottleneck. While the JIT cache (`_cycle_cache`) is now correctly hit by the `heavy_complex_countdown` task, its performance remains poor (~1.4k TPS) because the execution strategy contains a fatal flaw:
 
-我将为你生成执行此项核心改造的计划。
+```python
+if fast_path_data and len(plan) == 1 and len(plan[0]) == 1:
+    result = await self._execute_hot_node(...) # Hyper-fast path
+else:
+    result = await self._execute_graph(...) # Slow path orchestrator
+```
 
-## [WIP] feat(engine): 实现结构化 JIT 以启用 TCO 重型路径的快速通道
+The true zero-overhead execution path (`_execute_hot_node`) is only triggered for plans containing a single node. Since `heavy_complex_countdown` produces a multi-node plan, it falls into the `else` block on every iteration, running the full, slow `_execute_graph` orchestrator. We are caching the plan but not executing it efficiently.
 
 ### 用户需求
-开始实施“综合架构演进建议书”中的第三阶段：内核突破——结构化 JIT 与动态修补。
+Refactor the TCO fast path to execute any cached plan, including multi-node ones, with minimal overhead, thereby achieving performance parity between simple and heavy TCO paths.
 
 ### 评论
-这是一个决定性的、里程碑式的改进。它将使 Cascade 的 TCO 性能从“特定场景下很快”提升到“在所有结构稳定的递归场景下都很快”，是引擎从一个原型演进为高性能生产级运行时的关键。
+This is the final and most crucial step in the TCO optimization saga. By creating a true "hot plan executor", we unify the performance characteristics of all structurally stable recursive tasks. This change will solidify the engine's core performance claims and make its behavior predictable and powerful.
 
 ### 目标
-1.  修改 `GraphExecutionStrategy.execute` 的核心逻辑，移除脆弱的 `_are_args_simple` 检查。
-2.  这将允许包含 `LazyResult` 参数的递归调用（即“重型路径”）能够命中 JIT 缓存 (`_cycle_cache`)，从而进入快速执行通道。
-3.  利用现有的 `_execute_hot_node` 和 `ArgumentResolver`，通过 `input_overrides` 机制实现“动态参数修补”，即时地从 `state_backend` 解析新的动态参数，而无需重建整个计算图。
+1.  Rename `_execute_hot_node` to `_execute_hot_plan` to reflect its new, broader responsibility.
+2.  Rewrite the logic within `_execute_hot_plan` to iterate through the stages and nodes of a cached `plan`, executing them in parallel where appropriate.
+3.  Remove the restrictive `len(plan) == 1` check in the main `execute` loop, directing all JIT cache hits to the new `_execute_hot_plan` function.
+4.  Remove the now-redundant `_are_args_simple` method.
 
 ### 基本原理
-前序阶段已经确立了 `Template Hash` (体现在 `_tco_cycle_id` 中) 作为计算结构“蓝图”的唯一标识。`_are_args_simple` 检查是一个保守的、临时的保护措施，它阻止了参数动态变化的递归进入快速通道。
-
-现在，我们将信任 `Template Hash`。如果 `_tco_cycle_id` 匹配，就意味着计算的“骨架”是完全相同的，即使流经其中的“血肉”（动态参数）在变化。通过移除这个检查，我们让所有结构稳定的递归调用都进入快速通道。在这个通道中，`_execute_hot_node` 会将新的、动态的 `LazyResult` 参数作为 `input_overrides` 传递给 `ArgumentResolver`，后者会直接从状态后端获取它们的值，从而实现了“动态修补”，在纳秒级的时间内将新数据注入到缓存的旧执行计划中。
+The core principle is to extend the zero-overhead execution logic from a single node to an entire pre-computed plan. The new `_execute_hot_plan` will act as a minimal, JIT-powered orchestrator. It will loop through the plan's stages, gather the coroutines for all nodes in a parallel stage, and execute them with `asyncio.gather`. For each node, it will perform the same hyper-efficient argument resolution and direct execution that `_execute_hot_node` did, using `input_overrides` to inject the new dynamic parameters for the root node of the recursion. This eliminates the massive overhead of the `FlowManager`, event bus, and repeated checks present in `_execute_graph`.
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/engine #concept/state #scope/core #ai/instruct #task/domain/performance #task/object/tco-heavy-path #task/action/optimization #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/engine #concept/state #scope/core #ai/instruct #task/domain/performance #task/object/tco-heavy-path #task/action/optimization #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 移除 `_are_args_simple` 检查以启用 JIT
+#### Acts 1: Refactor `GraphExecutionStrategy` to use a hot plan executor
 
-我们将修改 `GraphExecutionStrategy`，移除对 TCO 快速路径的参数检查限制。这将允许所有具有稳定结构签名的递归调用（无论其参数是否包含 `LazyResult`）都能利用缓存的图和执行计划。
+The following is a comprehensive rewrite of `cascade.runtime.strategies.graph.py`. It replaces the flawed node-based hot path with a new plan-based one, streamlines the logic, and removes dead code. A `write_file` is necessary here due to the intertwined nature of the changes.
 
 ~~~~~act
-patch_file
+write_file
 packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
 ~~~~~python
-            if cycle_id and cycle_id in self._cycle_cache:
-                if self._are_args_simple(current_target):
-                    fast_path_data = self._cycle_cache[cycle_id]
+import asyncio
+import inspect
+from contextlib import ExitStack
+from typing import Any, Dict, List, Set
 
-            # The step stack holds "task" (step) scoped resources
-~~~~~
-~~~~~python
-            if cycle_id and cycle_id in self._cycle_cache:
-                fast_path_data = self._cycle_cache[cycle_id]
+from cascade.graph.model import Graph, Node
+from cascade.graph.build import build_graph
+from cascade.graph.registry import NodeRegistry
+from cascade.spec.protocols import Solver, StateBackend
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.resource_container import ResourceContainer
+from cascade.runtime.processor import NodeProcessor
+from cascade.runtime.flow import FlowManager
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.runtime.events import TaskSkipped, TaskBlocked, StaticAnalysisWarning
+from cascade.runtime.constraints.manager import ConstraintManager
 
-            # The step stack holds "task" (step) scoped resources
+
+class GraphExecutionStrategy:
+    """
+    Executes tasks by dynamically building a dependency graph and running a TCO loop.
+    This is the standard execution mode for Cascade.
+    """
+
+    def __init__(
+        self,
+        solver: Solver,
+        node_processor: NodeProcessor,
+        resource_container: ResourceContainer,
+        constraint_manager: ConstraintManager,
+        bus: MessageBus,
+        wakeup_event: asyncio.Event,
+    ):
+        self.solver = solver
+        self.node_processor = node_processor
+        self.resource_container = resource_container
+        self.constraint_manager = constraint_manager
+        self.bus = bus
+        self.wakeup_event = wakeup_event
+
+        # Tracks warnings issued in this run to avoid duplicates
+        self._issued_warnings: Set[str] = set()
+
+        # JIT Compilation Cache for execution plans
+        self._template_plan_cache: Dict[str, List[List[int]]] = {}
+
+        # Zero-Overhead TCO Cache for full graph/plan structures
+        self._cycle_cache: Dict[str, Any] = {}
+
+        # Persistent registry for node object identity
+        self._node_registry = NodeRegistry()
+
+    def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
+        """Converts a Plan (List[List[Node]]) into an IndexedPlan (List[List[int]])."""
+        id_to_idx = {node.structural_id: i for i, node in enumerate(graph.nodes)}
+        return [
+            [id_to_idx[node.structural_id] for node in stage] for stage in plan
+        ]
+
+    def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:
+        """Converts an IndexedPlan back into a Plan using nodes from the current graph."""
+        return [[graph.nodes[idx] for idx in stage_indices] for stage_indices in indexed_plan]
+
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        current_target = target
+
+        while True:
+            target_task = getattr(current_target, "task", None)
+            cycle_id = getattr(target_task, "_tco_cycle_id", None) if target_task else None
+            fast_path_data = self._cycle_cache.get(cycle_id) if cycle_id else None
+
+            with ExitStack() as step_stack:
+                if fast_path_data:
+                    # FAST PATH: Reuse cached Graph & Plan
+                    graph, indexed_plan, root_node_id, req_res = fast_path_data
+                    target_node = graph.get_node(root_node_id)
+                    instance_map = {current_target._uuid: target_node}
+                    plan = self._rehydrate_plan(graph, indexed_plan)
+
+                    # Prepare Input Overrides for the root node of the recursion
+                    input_overrides = {}
+                    for i, arg in enumerate(current_target.args):
+                        input_overrides[str(i)] = arg
+                    input_overrides.update(current_target.kwargs)
+
+                    self.resource_container.setup(
+                        req_res, active_resources, run_stack, step_stack, run_id
+                    )
+
+                    result = await self._execute_hot_plan(
+                        plan,
+                        target_node,
+                        graph,
+                        state_backend,
+                        active_resources,
+                        params,
+                        instance_map,
+                        input_overrides,
+                    )
+                else:
+                    # SLOW PATH: Build Graph from scratch
+                    if hasattr(state_backend, "clear") and inspect.iscoroutinefunction(
+                        state_backend.clear
+                    ):
+                        await state_backend.clear()
+                    await asyncio.sleep(0)
+
+                    graph, instance_map = build_graph(
+                        current_target, registry=self._node_registry
+                    )
+
+                    if current_target._uuid not in instance_map:
+                        raise RuntimeError(
+                            f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
+                        )
+
+                    # Post-build analysis and warnings
+                    for node in graph.nodes:
+                        if (
+                            node.warns_dynamic_recursion
+                            and node.name not in self._issued_warnings
+                        ):
+                            self.bus.publish(
+                                StaticAnalysisWarning(
+                                    run_id=run_id,
+                                    task_id=node.structural_id,
+                                    task_name=node.name,
+                                    warning_code="CS-W001",
+                                    message=f"Task '{node.name}' uses a dynamic recursion pattern.",
+                                )
+                            )
+                            self._issued_warnings.add(node.name)
+
+                    target_node = instance_map[current_target._uuid]
+                    cache_key = target_node.template_id or target_node.structural_id
+
+                    # Resolve Plan (with caching)
+                    if cache_key in self._template_plan_cache:
+                        indexed_plan = self._template_plan_cache[cache_key]
+                        plan = self._rehydrate_plan(graph, indexed_plan)
+                    else:
+                        plan = self.solver.resolve(graph)
+                        indexed_plan = self._index_plan(graph, plan)
+                        self._template_plan_cache[cache_key] = indexed_plan
+
+                    # Cache for future TCO cycles
+                    if cycle_id and cycle_id not in self._cycle_cache:
+                        req_res = self.resource_container.scan(graph)
+                        self._cycle_cache[cycle_id] = (
+                            graph,
+                            indexed_plan,
+                            target_node.structural_id,
+                            req_res,
+                        )
+
+                    # Setup resources
+                    required_resources = self.resource_container.scan(graph)
+                    self.resource_container.setup(
+                        required_resources, active_resources, run_stack, step_stack, run_id
+                    )
+
+                    # Execute graph using the full orchestrator
+                    result = await self._execute_graph(
+                        current_target,
+                        params,
+                        active_resources,
+                        run_id,
+                        state_backend,
+                        graph,
+                        plan,
+                        instance_map,
+                    )
+
+            if isinstance(result, (LazyResult, MappedLazyResult)):
+                current_target = result
+            else:
+                return result
+
+    async def _execute_hot_plan(
+        self,
+        plan: List[List[Node]],
+        root_node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        active_resources: Dict[str, Any],
+        params: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        root_input_overrides: Dict[str, Any],
+    ) -> Any:
+        """
+        A highly optimized executor for pre-computed plans in TCO hot loops.
+        It bypasses most of the standard orchestration overhead.
+        """
+        for stage in plan:
+            tasks_to_run = []
+            for node in stage:
+                overrides = (
+                    root_input_overrides
+                    if node.structural_id == root_node.structural_id
+                    else None
+                )
+                tasks_to_run.append(
+                    self._execute_hot_node(
+                        node, graph, state_backend, active_resources, params, instance_map, overrides
+                    )
+                )
+
+            # Await all tasks in the stage concurrently
+            if tasks_to_run:
+                await asyncio.gather(*tasks_to_run)
+
+        # The final result is the result of the root_node of the TCO cycle
+        return await state_backend.get_result(root_node.structural_id)
+
+    async def _execute_hot_node(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        active_resources: Dict[str, Any],
+        params: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        input_overrides: Dict[str, Any] = None,
+    ) -> None:
+        """
+        Processes a single node in a hot path, resolving its arguments and executing it.
+        The result is stored in the state_backend.
+        """
+        args, kwargs = await self.node_processor.arg_resolver.resolve(
+            node,
+            graph,
+            state_backend,
+            active_resources,
+            instance_map=instance_map,
+            user_params=params,
+            input_overrides=input_overrides,
+        )
+        result = await self.node_processor.executor.execute(node, args, kwargs)
+        await state_backend.put_result(node.structural_id, result)
+
+
+    async def _execute_graph(
+        self,
+        target: Any,
+        params: Dict[str, Any],
+        active_resources: Dict[str, Any],
+        run_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
+        plan: Any,
+        instance_map: Dict[str, Node],
+        root_input_overrides: Dict[str, Any] = None,
+    ) -> Any:
+        if target._uuid not in instance_map:
+            raise RuntimeError(
+                f"Critical: Target instance {target._uuid} not found in InstanceMap."
+            )
+        target_node = instance_map[target._uuid]
+
+        flow_manager = FlowManager(graph, target_node.structural_id, instance_map)
+        blocked_nodes = set()
+
+        for stage in plan:
+            pending_nodes_in_stage = list(stage)
+
+            while pending_nodes_in_stage:
+                executable_this_pass: List[Node] = []
+                deferred_this_pass: List[Node] = []
+
+                for node in pending_nodes_in_stage:
+                    if node.node_type == "param":
+                        continue
+
+                    skip_reason = await flow_manager.should_skip(node, state_backend)
+                    if skip_reason:
+                        await state_backend.mark_skipped(node.structural_id, skip_reason)
+                        self.bus.publish(
+                            TaskSkipped(
+                                run_id=run_id,
+                                task_id=node.structural_id,
+                                task_name=node.name,
+                                reason=skip_reason,
+                            )
+                        )
+                        continue
+
+                    if self.constraint_manager.check_permission(node):
+                        executable_this_pass.append(node)
+                        if node.structural_id in blocked_nodes:
+                            blocked_nodes.remove(node.structural_id)
+                    else:
+                        deferred_this_pass.append(node)
+                        if node.structural_id not in blocked_nodes:
+                            self.bus.publish(
+                                TaskBlocked(
+                                    run_id=run_id,
+                                    task_id=node.structural_id,
+                                    task_name=node.name,
+                                    reason="ConstraintViolation",
+                                )
+                            )
+                            blocked_nodes.add(node.structural_id)
+
+                if executable_this_pass:
+                    async def sub_graph_runner(target, sub_params, parent_state):
+                        sub_graph, sub_instance_map = build_graph(target)
+                        sub_plan = self.solver.resolve(sub_graph)
+                        return await self._execute_graph(
+                            target,
+                            sub_params,
+                            active_resources,
+                            run_id,
+                            parent_state,
+                            graph=sub_graph,
+                            plan=sub_plan,
+                            instance_map=sub_instance_map,
+                        )
+
+                    tasks_to_run = []
+                    for node in executable_this_pass:
+                        overrides = (
+                            root_input_overrides
+                            if node.structural_id == target_node.structural_id
+                            else None
+                        )
+                        tasks_to_run.append(
+                            self.node_processor.process(
+                                node,
+                                graph,
+                                state_backend,
+                                active_resources,
+                                run_id,
+                                params,
+                                sub_graph_runner,
+                                instance_map,
+                                input_overrides=overrides,
+                            )
+                        )
+
+                    pass_results = await asyncio.gather(*tasks_to_run)
+
+                    for node, res in zip(executable_this_pass, pass_results):
+                        await state_backend.put_result(node.structural_id, res)
+                        if flow_manager:
+                            await flow_manager.register_result(
+                                node.structural_id, res, state_backend
+                            )
+
+                pending_nodes_in_stage = deferred_this_pass
+
+                if pending_nodes_in_stage and not executable_this_pass:
+                    await self.wakeup_event.wait()
+                    self.wakeup_event.clear()
+                    self.constraint_manager.cleanup_expired_constraints()
+
+        if not await state_backend.has_result(target_node.structural_id):
+            if skip_reason := await state_backend.get_skip_reason(target_node.structural_id):
+                if skip_reason == "UpstreamSkipped_Sequence":
+                    return None
+                raise DependencyMissingError(
+                    task_id=target.task.name or "unknown",
+                    arg_name="<Target Output>",
+                    dependency_id=f"Target node '{target_node.name}' was skipped (Reason: {skip_reason})",
+                )
+            raise KeyError(f"Target task '{getattr(target.task, 'name', 'unknown')}' did not produce a result.")
+
+        return await state_backend.get_result(target_node.structural_id)
 ~~~~~
 
 ### 下一步建议
-我们已经完成了核心逻辑的修改。现在最关键的一步是**验证性能收益**。
+我们已经完成了这项关键的重构。现在，请再次运行 `observatory/benchmarks/tco_performance.py` 性能测试套件。
 
-我强烈建议你立即运行位于 `observatory/benchmarks/tco_performance.py` 的性能测试套件。
+**新的预期结果**：
+这一次，`test_heavy_path_performance` 的 TPS 应该会**真正地**与 `test_simple_path_performance` 和 `test_stable_complex_loop` 的性能持平，达到 **~100k TPS** 的水平。
 
-**预期结果**：
-在本次修改之后，`test_heavy_path_performance` 测试用例的性能指标（TPS）应该会有一个**数量级**的提升，从之前的 ~800 TPS 跃升至与 `test_simple_path_performance`（~100k TPS）相近的水平。
-
-这将是本次架构演进成功的直接证明。如果你确认性能达标，我们将进入下一个阶段：为这个里程碑式的改进创建测试和提交。
+如果达到这个目标，就意味着我们已经成功征服了 TCO 性能的最后一个堡垒。之后，我们将为此功能添加专门的回归测试，并创建一个干净的 Git 提交。

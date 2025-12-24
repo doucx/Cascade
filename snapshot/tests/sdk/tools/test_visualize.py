@@ -126,15 +126,22 @@ def test_visualize_iterative_jump_edge():
         return "done"
 
     # The selector maps jump keys to their target LazyResults
+    # The target MUST be a LazyResult instance, not a raw Task.
+    # To create a loop, we point it back to the start_node itself.
+    start_node = state_machine(0)
+
     selector = cs.select_jump(
         {
-            "next": state_machine,  # A jump to "next" re-invokes the same task
+            "next": start_node,  # A jump to "next" re-invokes the same task
             None: None,  # A normal return value exits the loop
         }
     )
 
     # Initial call to the task, starting the state machine
-    start_node = state_machine(0)
+    # start_node = state_machine(0) <-- This is now defined before selector
+
+    # Statically bind the task's jump signals to the selector
+    cs.bind(start_node, selector)
 
     # Statically bind the task's jump signals to the selector
     cs.bind(start_node, selector)

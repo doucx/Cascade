@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 增强 visualize 以渲染显式跳转边", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766581172.6692977, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修正 visualize 测试用例中错误的跳转目标类型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766581281.4532616, "duration_ms": 0}}

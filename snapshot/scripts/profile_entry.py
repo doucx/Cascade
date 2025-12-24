@@ -5,6 +5,11 @@ import io
 import sys
 import os
 
+try:
+    from pyinstrument import Profiler
+except ImportError:
+    Profiler = None
+
 # Ensure we can import cascade from the current workspace
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 sys.path.append(
@@ -50,23 +55,27 @@ async def profile_target(name: str, iterations: int):
         print(f"Unknown target: {name}")
         return
 
-    pr = cProfile.Profile()
-    pr.enable()
+    if Profiler:
+        profiler = Profiler(async_mode="enabled")
+        with profiler:
+            await run_benchmark(engine, target, use_vm=use_vm)
+        profiler.print()
+        # Save as HTML for deep inspection
+        html_file = f"profile_{name}_{iterations}.html"
+        with open(html_file, "w") as f:
+            f.write(profiler.output_html())
+        print(f"Pyinstrument HTML report saved to {html_file}")
+    else:
+        pr = cProfile.Profile()
+        pr.enable()
+        await run_benchmark(engine, target, use_vm=use_vm)
+        pr.disable()
 
-    await run_benchmark(engine, target, use_vm=use_vm)
-
-    pr.disable()
-
-    s = io.StringIO()
-    sortby = "cumulative"
-    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
-    ps.print_stats(20)  # Show top 20
-    print(s.getvalue())
-
-    # Also save to file for external tools like snakeviz
-    filename = f"profile_{name}_{iterations}.prof"
-    ps.dump_stats(filename)
-    print(f"Full profile dumped to {filename}")
+        s = io.StringIO()
+        sortby = "cumulative"
+        ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+        ps.print_stats(20)
+        print(s.getvalue())
 
 
 if __name__ == "__main__":

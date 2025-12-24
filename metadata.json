@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "战略诊断：战术勤奋掩盖了架构缺陷", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766578172.6319525, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] perf: Use Pyinstrument for deep profiling & fix Cache-Miss in Explicit Jump", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766578471.1009598, "duration_ms": 0}}

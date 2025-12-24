@@ -3,8 +3,7 @@ import inspect
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
-from cascade.graph.ast_analyzer import assign_tco_cycle_ids, analyze_task_source
-from cascade.spec.task import Task
+from cascade.spec.jump import JumpSelector
 
 from .registry import NodeRegistry
 from .hashing import HashingService
@@ -16,8 +15,6 @@ class GraphBuilder:
         # InstanceMap: Dict[LazyResult._uuid, Node]
         # Connecting the world of volatile instances to the world of stable structures.
         self._visited_instances: Dict[str, Node] = {}
-        # Used to detect cycles during static TCO analysis
-        self._shadow_visited: Dict[Task, Node] = {}
 
         self.registry = registry if registry is not None else NodeRegistry()
         self.hashing_service = HashingService()
@@ -125,8 +122,6 @@ class GraphBuilder:
 
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
-            analysis = analyze_task_source(result.task)
-
             node = Node(
                 structural_id=structural_hash,
                 template_id=template_hash,
@@ -139,7 +134,6 @@ class GraphBuilder:
                 constraints=result._constraints,
                 input_bindings=input_bindings,
                 has_complex_inputs=has_complex,
-                warns_dynamic_recursion=analysis.has_dynamic_recursion,
             )
             self.registry._registry[structural_hash] = node
 
@@ -148,20 +142,30 @@ class GraphBuilder:
         # Always add the node to the current graph, even if it was reused from the registry.
         self.graph.add_node(node)
 
-        if created_new:
-            if result.task.func:
-                if not getattr(result.task, "_tco_analysis_done", False):
-                    assign_tco_cycle_ids(result.task)
-                node.tco_cycle_id = getattr(result.task, "_tco_cycle_id", None)
-                analysis = analyze_task_source(result.task)
-                potential_targets = analysis.targets
-                self._shadow_visited[result.task] = node
-                for target_task in potential_targets:
-                    self._visit_shadow_recursive(node, target_task)
-
         # 4. Finalize edges (idempotent)
         self._scan_and_add_edges(node, result.args)
         self._scan_and_add_edges(node, result.kwargs)
+
+        # 4.1 Handle Explicit Jump Binding
+        if result._jump_selector:
+            selector = result._jump_selector
+            if isinstance(selector, JumpSelector):
+                # Ensure all potential targets in the selector are built/visited
+                for route_target in selector.routes.values():
+                    if route_target is not None:
+                        self._visit(route_target)
+
+                # Create the ITERATIVE_JUMP edge
+                self.graph.add_edge(
+                    Edge(
+                        source=node,
+                        target=node,  # Placeholder, engine uses jump_selector
+                        arg_name="<jump>",
+                        edge_type=EdgeType.ITERATIVE_JUMP,
+                        jump_selector=selector,
+                    )
+                )
+
         if result._condition:
             source_node = self._visited_instances[result._condition._uuid]
             self.graph.add_edge(
@@ -263,43 +267,6 @@ class GraphBuilder:
             )
 
         return node
-
-    def _visit_shadow_recursive(self, parent_node: Node, task: Task):
-        if task in self._shadow_visited:
-            target_node = self._shadow_visited[task]
-            self.graph.add_edge(
-                Edge(
-                    source=parent_node,
-                    target=target_node,
-                    arg_name="<potential>",
-                    edge_type=EdgeType.POTENTIAL,
-                )
-            )
-            return
-
-        potential_uuid = f"shadow:{parent_node.structural_id}:{task.name}"
-        target_node = Node(
-            structural_id=potential_uuid,
-            name=task.name,
-            node_type="task",
-            is_shadow=True,
-            tco_cycle_id=getattr(task, "_tco_cycle_id", None),
-        )
-
-        self.graph.add_node(target_node)
-        self._shadow_visited[task] = target_node
-        self.graph.add_edge(
-            Edge(
-                source=parent_node,
-                target=target_node,
-                arg_name="<potential>",
-                edge_type=EdgeType.POTENTIAL,
-            )
-        )
-
-        analysis = analyze_task_source(task)
-        for next_task in analysis.targets:
-            self._visit_shadow_recursive(target_node, next_task)
 
     def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
         """Idempotently adds DATA and ROUTER edges based on pre-visited instances."""

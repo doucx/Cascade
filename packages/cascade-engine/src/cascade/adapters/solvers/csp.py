@@ -33,17 +33,8 @@ class CSPSolver:
         self.system_resources = system_resources
 
     def resolve(self, graph: Graph) -> ExecutionPlan:
-        from cascade.graph.model import EdgeType
-
-        # 0. Filter out Shadow Nodes
-        shadow_ids = {
-            edge.target.structural_id
-            for edge in graph.edges
-            if edge.edge_type == EdgeType.POTENTIAL
-        }
-        active_nodes = [
-            node for node in graph.nodes if node.structural_id not in shadow_ids
-        ]
+        # 0. Active Nodes
+        active_nodes = graph.nodes
 
         if not active_nodes:
             return []
@@ -73,7 +64,7 @@ class CSPSolver:
         # In the worst case (full serial), we need n_nodes stages.
         for max_stages in range(1, n_nodes + 1):
             solution = self._solve_csp(
-                graph, active_nodes, shadow_ids, node_resources, max_stages
+                graph, active_nodes, node_resources, max_stages
             )
             if solution:
                 break
@@ -111,7 +102,6 @@ class CSPSolver:
         self,
         graph: Graph,
         active_nodes: list,
-        shadow_ids: set,
         node_resources: Dict[str, Dict[str, float]],
         max_stages: int,
     ) -> Optional[Dict[str, int]]:
@@ -128,13 +118,8 @@ class CSPSolver:
         # Constraint 1: Dependencies
         # If A -> B, then stage(A) < stage(B)
         for edge in graph.edges:
-            # Skip POTENTIAL edges and edges involving shadow nodes
+            # Skip POTENTIAL edges
             if edge.edge_type == EdgeType.POTENTIAL:
-                continue
-            if (
-                edge.source.structural_id in shadow_ids
-                or edge.target.structural_id in shadow_ids
-            ):
                 continue
 
             # Note: We use a lambda that captures nothing, args are passed by value in addConstraint

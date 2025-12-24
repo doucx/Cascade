@@ -16,6 +16,8 @@ from cascade.spec.constraint import with_constraints
 from .context import get_current_context
 from cascade.spec.input import ParamSpec, EnvSpec
 from .internal.inputs import _get_param_value, _get_env_var
+from .control_flow import select_jump, bind
+from cascade.spec.jump import Jump
 
 # Legacy / Spec Compat
 # We keep Param class import removed/hidden as we are overriding it below.
@@ -196,6 +198,9 @@ __all__ = [
     "with_constraints",
     "LazyResult",
     "Router",
+    "Jump",
+    "select_jump",
+    "bind",
     "resource",
     "inject",
     "Engine",

@@ -20,6 +20,7 @@ class EdgeType(Enum):
     SEQUENCE = auto()  # An explicit execution order dependency (no data transfer)
     ROUTER_ROUTE = auto()  # A potential dependency branch for a Router
     POTENTIAL = auto()  # A potential flow path inferred via static analysis (e.g. TCO)
+    ITERATIVE_JUMP = auto()  # An explicit state transition (Jump)
 
 
 @dataclass
@@ -34,8 +35,6 @@ class Node:
     structural_id: str
     name: str
     template_id: str = ""  # Structural hash (ignoring literals)
-    is_shadow: bool = False  # True if this node is for static analysis only
-    tco_cycle_id: Optional[str] = None  # ID of the TCO cycle this node belongs to
 
     # Core spec
     node_type: str = "task"  # "task", "param", or "map"
@@ -58,9 +57,6 @@ class Node:
     # (e.g., has Inject markers, complex nested structures, or runtime context needs)
     has_complex_inputs: bool = False
 
-    # Metadata from static analysis
-    warns_dynamic_recursion: bool = False
-
     def __hash__(self):
         return hash(self.structural_id)
 
@@ -78,6 +74,9 @@ class Edge:
 
     # If set, implies this edge is the selector for a dynamic router
     router: Optional[Any] = None
+
+    # If set, implies this edge is an explicit jump transition
+    jump_selector: Optional[Any] = None
 
 
 @dataclass

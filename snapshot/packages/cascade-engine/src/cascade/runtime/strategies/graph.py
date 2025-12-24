@@ -107,8 +107,7 @@ class GraphExecutionStrategy:
             fast_path_data = None
 
             if cycle_id and cycle_id in self._cycle_cache:
-                if self._are_args_simple(current_target):
-                    fast_path_data = self._cycle_cache[cycle_id]
+                fast_path_data = self._cycle_cache[cycle_id]
 
             # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:

@@ -1,321 +1,265 @@
-好的，我已经掌握了 SDK 中现有工具的源代码。现在我们可以开始执行 ADR-013 的第三阶段：将 `visualize` 和 `dry_run` 迁移到 `CascadeApp`。
+好的，我们正式开始执行 ADR-013 的第四阶段，这是确保向后兼容性的关键一步。
 
-## [WIP] feat(arch): 统一 API 入口点 (阶段三)
+我将重构 `cascade-sdk`，使其成为 `cascade-application` 层的一个轻量级、用户友好的门面 (Facade)，同时清理掉其中已过时的逻辑。
+
+## [WIP] feat(sdk): 将全局 API 重构为 CascadeApp 的包装器
 
 ### 用户需求
-执行 ADR-013 阶段三：将 `visualize` 和 `dry_run` 的核心逻辑从 `cascade-sdk` 迁移到 `CascadeApp` 中，实现统一的 API 入口点。
+执行 ADR-013 路线图的第四阶段：更新 `cascade-sdk` 的依赖，并将其全局函数 (`run`, `visualize`, `dry_run`) 重构为对 `CascadeApp` 的调用，以确保向后兼容性。
 
 ### 评论
-当前，`cs.run`, `cs.visualize`, `cs.dry_run` 的图构建和预处理逻辑（如自动汇合）分散在不同的函数中。通过将它们作为 `CascadeApp` 的方法实现，我们可以复用 `__init__` 中已经统一的 `workflow_target` 处理逻辑，从而确保所有操作都基于完全相同的图结构。这不仅消除了代码重复，还增强了系统的行为一致性。
+这是实现架构解耦的决定性一步。通过将 SDK 的全局函数转变为对 `CascadeApp` 的简单包装，我们将所有核心的基础设施和执行逻辑都固化在了 `cascade-application` 包中。这使得 `cascade-sdk` 重新聚焦于其核心职责：提供一个简洁、稳定的用户 API。此举在不破坏现有用户代码的前提下，完成了底层的战略重构。
 
 ### 目标
-1.  在 `CascadeApp` 中实现 `visualize` 方法。这需要移植 `_get_node_shape` 等辅助函数。
-2.  在 `CascadeApp` 中实现 `dry_run` 方法。这需要移植 `DryRunConsoleSubscriber` 和 `_analyze_plan` 的逻辑。
-3.  为了支持 `dry_run`，我们需要将 `ToolEvent` 及其子类从 `cascade-sdk` 迁移到 `cascade-application`（或者在 `application` 中重新定义，如果不希望引入对 SDK 的反向依赖）。考虑到 `ToolEvent` 实际上是运行时的一部分，在 `application` 层定义它们是合理的。
+1.  更新 `packages/cascade-sdk/pyproject.toml`，添加对 `cascade-application` 的依赖。
+2.  重写 `packages/cascade-sdk/src/cascade/__init__.py`，用 `CascadeApp` 的包装器替换 `run`, `visualize`, `dry_run` 的实现。
+3.  删除 `cascade-sdk` 中现已过时和重复的 `tools/preview.py` 和 `tools/visualize.py` 模块。
+4.  更新 `cascade-sdk` 的 `tools` 子模块，移除对已删除模块的导出。
 
 ### 基本原理
-我们将采用“重新实现”的策略，将 SDK 中的逻辑复制并适配到 `CascadeApp` 的方法中。由于 `CascadeApp` 已经处理了 `target` 的标准化（`_internal_gather`），新的实现将直接操作 `self.workflow_target`，从而简化了代码。
+我们将首先通过 `patch_file` 更新构建配置，声明新的依赖关系。然后，使用 `write_file` 对 SDK 的主入口点 `__init__.py` 进行结构性重写，这是最清晰和最安全的方式。最后，使用 `delete_file` 和 `patch_file` 清理掉因为逻辑迁移而变得多余的旧模块，保持代码库的整洁。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/application #scope/api #scope/dx #ai/instruct #task/domain/architecture #task/object/cascade-app #task/action/unify-api #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/sdk #comp/application #scope/api #ai/instruct #task/domain/architecture #task/object/cascade-app #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 在 CascadeApp 中实现 visualize 和 dry_run
+#### Acts 1: 更新 cascade-sdk 的依赖
 
-我们将更新 `packages/cascade-application/src/cascade/app/__init__.py`，填入 `visualize` 和 `dry_run` 的具体实现，并添加必要的辅助类和事件定义。
+我们将 `cascade-application` 添加到 `cascade-sdk` 的依赖项中，以便 SDK 可以引用 `CascadeApp`。
 
-为了保持文件整洁，我将把 `ToolEvent` 相关定义放在同一个文件中（或作为私有类），因为它们目前仅被 `dry_run` 使用。
+~~~~~act
+patch_file
+packages/cascade-sdk/pyproject.toml
+~~~~~
+~~~~~toml
+dependencies = [
+  "cascade-spec",
+  "cascade-engine",
+  "cascade-common",
+  "cascade-graph"
+]
+~~~~~
+~~~~~toml
+dependencies = [
+  "cascade-spec",
+  "cascade-engine",
+  "cascade-common",
+  "cascade-graph",
+  "cascade-application"
+]
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-sdk/pyproject.toml
+~~~~~
+~~~~~toml
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-engine = { workspace = true }
+cascade-common = { workspace = true }
+~~~~~
+~~~~~toml
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-engine = { workspace = true }
+cascade-common = { workspace = true }
+cascade-application = { workspace = true }
+cascade-graph = { workspace = true }
+~~~~~
+
+#### Acts 2: 清理过时的 SDK 工具模块
+
+由于 `visualize` 和 `dry_run` 的逻辑现在由 `CascadeApp` 处理，SDK 中的相应模块已不再需要。
+
+~~~~~act
+delete_file
+packages/cascade-sdk/src/cascade/tools/preview.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-sdk/src/cascade/tools/visualize.py
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-sdk/src/cascade/tools/__init__.py
+~~~~~
+~~~~~python
+from .cli import create_cli
+from .preview import dry_run
+from .visualize import visualize
+from .lisp import to_lisp
+
+__all__ = ["create_cli", "dry_run", "visualize", "to_lisp"]
+~~~~~
+~~~~~python
+from .cli import create_cli
+from .lisp import to_lisp
+
+__all__ = ["create_cli", "to_lisp"]
+~~~~~
+
+#### Acts 3: 重构 SDK 入口点以使用 CascadeApp
+
+这是核心步骤。我们将重写 `cascade-sdk` 的主 `__init__.py` 文件，将全局函数转换为 `CascadeApp` 的简单包装器。
 
 ~~~~~act
 write_file
-packages/cascade-application/src/cascade/app/__init__.py
+packages/cascade-sdk/src/cascade/__init__.py
 ~~~~~
 ~~~~~python
-import asyncio
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Tuple, Union, Optional, Callable
+# This must be the very first line to allow this package to coexist with other
+# namespace packages (like cascade-interfaces) in editable installs.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
-from cascade.spec.lazy_types import LazyResult
+from typing import Any, Dict, Optional, Union, Callable, List
+
+# --- New Application Layer ---
+from cascade.app import CascadeApp
+
+# --- Core Specs & Legacy Components ---
 from cascade.spec.task import task
-from cascade.spec.protocols import Connector, StateBackend
+from cascade.spec.lazy_types import LazyResult
+from cascade.spec.routing import Router
+from cascade.spec.resource import resource, inject
+from cascade.spec.constraint import with_constraints
+from .context import get_current_context
+from cascade.spec.input import ParamSpec, EnvSpec
+from .internal.inputs import _get_param_value, _get_env_var
+from .control_flow import select_jump, bind
+from cascade.spec.jump import Jump
 
-from cascade.graph.build import build_graph
-from cascade.graph.model import Node, EdgeType
-
+# --- Runtime (for type hints and exceptions) ---
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
-from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.spec.protocols import Connector, StateBackend
+from cascade.flow import sequence, pipeline
 
-from cascade.common.messaging import bus
-from cascade.common.renderers import CliRenderer, JsonRenderer
-
-
-# --- Internal Helpers ---
-
-@task(name="_internal_gather", pure=True)
-def _internal_gather(*args: Any) -> Any:
-    """An internal pure task used to gather results from a list."""
-    return list(args)
+# --- Tools ---
+from .testing import override_resource
+from .tools.cli import create_cli
+from cascade.graph.serialize import to_json, from_json
 
 
-def _create_state_backend_factory(
-    backend_spec: Union[str, Callable[[str], StateBackend], None],
-) -> Optional[Callable[[str], StateBackend]]:
-    if backend_spec is None:
-        return None
+# --- V1.4 Factory Functions (Unchanged) ---
 
-    if callable(backend_spec):
-        return backend_spec
-
-    if isinstance(backend_spec, str):
-        if backend_spec.startswith("redis://"):
-            try:
-                import redis
-                from cascade.adapters.state.redis import RedisStateBackend
-            except ImportError:
-                raise ImportError(
-                    "The 'redis' library is required for redis:// backends."
-                )
-            client = redis.from_url(backend_spec)
-            def factory(run_id: str) -> StateBackend:
-                return RedisStateBackend(run_id=run_id, client=client)
-            return factory
-        else:
-            raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
-
-    raise TypeError(f"Invalid state_backend type: {type(backend_spec)}")
+def Param(
+    name: str, default: Any = None, type: Any = str, description: str = ""
+) -> LazyResult:
+    spec = ParamSpec(name=name, default=default, type=type, description=description)
+    get_current_context().register(spec)
+    return _get_param_value(name=name)
 
 
-def _get_node_shape(node: Node) -> str:
-    """Returns the Graphviz shape for a given node type."""
-    if node.node_type == "param":
-        return "ellipse"
-    if node.node_type == "map":
-        return "hexagon"
-    return "box"
+def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
+    spec = EnvSpec(name=name, default=default, description=description)
+    get_current_context().register(spec)
+    return _get_env_var(name=name)
 
 
-# --- Tool Events (Scoped to Application Layer for now) ---
+# --- V1.4 Refactored Global Functions (Wrappers) ---
 
-@dataclass(frozen=True)
-class ToolEvent(Event):
-    """Base class for all events emitted by developer tools."""
-    pass
-
-@dataclass(frozen=True)
-class PlanAnalysisStarted(ToolEvent):
-    target_node_id: str = ""
-
-@dataclass(frozen=True)
-class PlanNodeInspected(ToolEvent):
-    index: int = 0
-    total_nodes: int = 0
-    node_id: str = ""
-    node_name: str = ""
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
-
-@dataclass(frozen=True)
-class PlanAnalysisFinished(ToolEvent):
-    total_steps: int = 0
-
-
-class DryRunConsoleSubscriber:
+def run(
+    target: Union[LazyResult, List[Any], tuple[Any, ...]],
+    params: Optional[Dict[str, Any]] = None,
+    system_resources: Optional[Dict[str, Any]] = None,
+    log_level: str = "INFO",
+    log_format: str = "human",
+    connector: Optional[Connector] = None,
+    state_backend: Union[str, Callable[[str], StateBackend], None] = None,
+) -> Any:
     """
-    Listens to plan analysis events and prints a human-readable report.
+    Runs a Cascade workflow. This is a backward-compatible wrapper
+    around the CascadeApp interface.
     """
-    def __init__(self, bus: MessageBus):
-        bus.subscribe(PlanAnalysisStarted, self.on_start)
-        bus.subscribe(PlanNodeInspected, self.on_node)
-        bus.subscribe(PlanAnalysisFinished, self.on_finish)
-
-    def on_start(self, event: PlanAnalysisStarted):
-        print("--- Cascade Execution Plan (Dry Run) ---")
-
-    def on_node(self, event: PlanNodeInspected):
-        bindings_repr = str(event.input_bindings)
-        print(f"[{event.index}/{event.total_nodes}] {event.node_name} (Bindings: {bindings_repr})")
-
-    def on_finish(self, event: PlanAnalysisFinished):
-        print("----------------------------------------")
+    app = CascadeApp(
+        target=target,
+        params=params,
+        system_resources=system_resources,
+        log_level=log_level,
+        log_format=log_format,
+        connector=connector,
+        state_backend=state_backend,
+    )
+    return app.run()
 
 
-# --- CascadeApp ---
-
-class CascadeApp:
+def visualize(target: Any) -> str:
     """
-    The central manager for a workflow's lifecycle, encapsulating all
-    infrastructure, configuration, and top-level operations.
+    Builds and visualizes the computation graph for a target.
+    This is a backward-compatible wrapper.
     """
+    app = CascadeApp(target=target)
+    return app.visualize()
 
-    def __init__(
-        self,
-        target: Union[LazyResult, List[Any], Tuple[Any, ...]],
-        params: Optional[Dict[str, Any]] = None,
-        system_resources: Optional[Dict[str, Any]] = None,
-        log_level: str = "INFO",
-        log_format: str = "human",
-        connector: Optional[Connector] = None,
-        state_backend: Union[str, Callable[[str], StateBackend], None] = None,
-    ):
-        self.raw_target = target
-        self.params = params
-        self.system_resources = system_resources
-        self.connector = connector
 
-        # 1. Handle Auto-Gathering
-        if isinstance(target, (list, tuple)):
-            if not target:
-                self.workflow_target = _internal_gather()  # Empty gather
-            else:
-                self.workflow_target = _internal_gather(*target)
-        else:
-            self.workflow_target = target
+def dry_run(target: Any) -> None:
+    """
+    Builds and prints the execution plan for a target.
+    This is a backward-compatible wrapper.
+    """
+    app = CascadeApp(target=target)
+    app.dry_run()
 
-        # 2. Setup Messaging & Rendering
-        if log_format == "json":
-            self.renderer = JsonRenderer(min_level=log_level)
-        else:
-            self.renderer = CliRenderer(store=bus.store, min_level=log_level)
-        
-        bus.set_renderer(self.renderer)
 
-        # 3. Setup Event System
-        self.event_bus = MessageBus()
-        self.log_subscriber = HumanReadableLogSubscriber(self.event_bus)
-        
-        self.telemetry_subscriber = None
-        if self.connector:
-            self.telemetry_subscriber = TelemetrySubscriber(self.event_bus, self.connector)
+# --- Dynamic Provider Loading (Unchanged) ---
 
-        # 4. Setup Engine Components
-        self.solver = NativeSolver()
-        self.executor = LocalExecutor()
-        self.sb_factory = _create_state_backend_factory(state_backend)
+def __getattr__(name: str) -> Any:
+    from .providers.registry import registry
+    try:
+        return registry.get(name)
+    except AttributeError:
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
-        # 5. Create Engine
-        self.engine = Engine(
-            solver=self.solver,
-            executor=self.executor,
-            bus=self.event_bus,
-            system_resources=self.system_resources,
-            connector=self.connector,
-            state_backend_factory=self.sb_factory,
-        )
 
-        if self.telemetry_subscriber:
-            self.engine.add_subscriber(self.telemetry_subscriber)
+# --- Public API Export ---
 
-    def run(self) -> Any:
-        """
-        Executes the workflow and returns the final result.
-        """
-        return asyncio.run(
-            self.engine.run(self.workflow_target, params=self.params)
-        )
-
-    def visualize(self) -> str:
-        """
-        Generates and returns a Graphviz DOT string of the workflow.
-        """
-        # Note: If workflow_target is an empty list gather (from empty input), 
-        # build_graph handles it but we might want a cleaner check.
-        if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
-             return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
-
-        graph, _ = build_graph(self.workflow_target)
-
-        dot_parts = [
-            "digraph CascadeWorkflow {",
-            '  rankdir="TB";',
-            '  node [shape=box, style="rounded,filled", fillcolor=white];',
-        ]
-
-        for node in graph.nodes:
-            shape = _get_node_shape(node)
-            label = f"{node.name}\\n({node.node_type})"
-            dot_parts.append(f'  "{node.structural_id}" [label="{label}", shape={shape}];')
-
-        for edge in graph.edges:
-            style = ""
-            if edge.edge_type == EdgeType.CONDITION:
-                style = ' [style=dashed, color=gray, label="run_if"]'
-            elif edge.edge_type == EdgeType.IMPLICIT:
-                style = ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
-            elif edge.edge_type == EdgeType.ROUTER_ROUTE:
-                style = ' [style=dashed, color=orange, arrowhead=open, label="route"]'
-            elif edge.router:
-                style = f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
-            elif edge.edge_type == EdgeType.CONSTRAINT:
-                style = f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
-            elif edge.edge_type == EdgeType.SEQUENCE:
-                style = ' [style=dashed, color=darkgray, arrowhead=open, label="next"]'
-            elif edge.edge_type == EdgeType.ITERATIVE_JUMP:
-                style = f' [style=bold, color=blue, label="{edge.arg_name}"]'
-            else:
-                style = f' [label="{edge.arg_name}"]'
-
-            dot_parts.append(
-                f'  "{edge.source.structural_id}" -> "{edge.target.structural_id}"{style};'
-            )
-
-        dot_parts.append("}")
-        return "\n".join(dot_parts)
-
-    def dry_run(self) -> None:
-        """
-        Builds and prints the execution plan without running any tasks.
-        """
-        # Create a temporary local bus for the dry run report
-        # We don't want to use the main app bus because dry_run 
-        # is a special analysis mode, not a "run".
-        local_bus = MessageBus()
-        DryRunConsoleSubscriber(local_bus)
-
-        # Handle empty case
-        if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
-             local_bus.publish(PlanAnalysisStarted(run_id="empty", target_node_id="empty"))
-             local_bus.publish(PlanAnalysisFinished(run_id="empty", total_steps=0))
-             return
-
-        # 1. Build Graph
-        graph, _ = build_graph(self.workflow_target)
-
-        # 2. Resolve Plan using the app's solver
-        plan = self.solver.resolve(graph)
-        total_steps = sum(len(stage) for stage in plan)
-
-        run_id = self.workflow_target._uuid
-        local_bus.publish(PlanAnalysisStarted(run_id=run_id, target_node_id=run_id))
-
-        current_index = 1
-        for stage in plan:
-            for node in stage:
-                local_bus.publish(
-                    PlanNodeInspected(
-                        run_id=run_id,
-                        index=current_index,
-                        total_nodes=total_steps,
-                        node_id=node.structural_id,
-                        node_name=node.name,
-                        input_bindings=node.input_bindings,
-                    )
-                )
-                current_index += 1
-
-        local_bus.publish(PlanAnalysisFinished(run_id=run_id, total_steps=total_steps))
+__all__ = [
+    # Core API
+    "task",
+    "Param",
+    "Env",
+    "run",
+    "dry_run",
+    "visualize",
+    # Advanced Flow Control
+    "sequence",
+    "pipeline",
+    "Router",
+    "Jump",
+    "select_jump",
+    "bind",
+    # Policies & Resources
+    "with_constraints",
+    "resource",
+    "inject",
+    # Types & Classes
+    "LazyResult",
+    "Engine",
+    "Event",
+    # Tools & Utilities
+    "to_json",
+    "from_json",
+    "override_resource",
+    "create_cli",
+    # Exceptions
+    "DependencyMissingError",
+    # Context (for advanced usage)
+    "get_current_context",
+]
 ~~~~~
 
 ### 下一步建议
-阶段三已完成。`CascadeApp` 现在是一个全功能的入口点，涵盖了 `run`, `visualize`, `dry_run`。
+我们已经成功完成了 ADR-013 的第四阶段。`cascade-sdk` 现在已经完全建立在新的 `cascade-application` 层之上，同时保持了对外的 API 兼容性。
 
-接下来的**阶段四**是确保向后兼容性。我们需要修改 `packages/cascade-sdk/src/cascade/__init__.py`，将原有的全局函数重构为使用 `CascadeApp` 的包装器。同时，我们需要更新 SDK 的依赖，确保它包含 `cascade-application`。
+剩下的**第五阶段**是可选的推广应用，主要是重构 CLI 工具（如 `cs-controller`）以使用 `CascadeApp`，并更新文档。这可以作为一个独立的、后续的任务来处理。
 
-在进行阶段四之前，我建议先**安装**新的 `cascade-application` 包，以确保环境处于正确状态。
+**核心重构任务至此已基本完成。**
 
-请指示是否进行安装和阶段四。
+我们可以将这个系列的工作标记为完成，并生成一个 `[COMMIT]` 计划来固化这些变更。你同意吗？

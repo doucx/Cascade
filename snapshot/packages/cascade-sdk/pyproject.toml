@@ -11,7 +11,8 @@ dependencies = [
   "cascade-spec",
   "cascade-engine",
   "cascade-common",
-  "cascade-graph"
+  "cascade-graph",
+  "cascade-application"
 ]
 
 [project.optional-dependencies]
@@ -28,3 +29,5 @@ allow-direct-references = true
 cascade-spec = { workspace = true }
 cascade-engine = { workspace = true }
 cascade-common = { workspace = true }
+cascade-application = { workspace = true }
+cascade-graph = { workspace = true }

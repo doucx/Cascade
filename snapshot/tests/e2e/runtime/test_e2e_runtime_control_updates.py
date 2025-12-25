@@ -8,7 +8,8 @@ from cascade.spec.constraint import GlobalConstraint
 from dataclasses import asdict
 import uuid
 
-from .harness import InProcessConnector, MockWorkExecutor
+from .harness import InProcessConnector
+from cascade.testing import MockExecutor
 
 
 async def set_rate_limit(
@@ -48,7 +49,7 @@ async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
 
     engine = Engine(
         solver=NativeSolver(),
-        executor=MockWorkExecutor(),
+        executor=MockExecutor(),
         bus=bus,
         connector=connector,
     )

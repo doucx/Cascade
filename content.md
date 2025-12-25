@@ -1,185 +1,100 @@
-这是一个用于引入任务纯度模型 (Task Purity Model) 的第一阶段计划。
+我们已成功进入 RED 状态：测试用例确认了当前系统无法区分两个相同的 Impure 任务实例。
 
-为了能够编写测试用例来验证 CP-006 的行为，我们需要首先在 API 层面引入 `pure` 参数的支持。
+现在我们将修改哈希逻辑，引入“任务纯度”检查。
 
-**本计划将执行以下操作：**
-1.  **API 准备**：修改 `Task` 类和 `task` 装饰器，使其能够接收并存储 `pure` 属性（默认为 `False`）。这一步**不会**改变底层的哈希逻辑，因此 Impure 任务暂时仍会被去重。
-2.  **创建测试 (RED)**：创建一个新的测试文件，断言“Impure 任务应该生成不同的 ID”以及“Pure 任务应该生成相同的 ID”。由于哈希逻辑尚未修改，针对 Impure 任务的断言预期会**失败**，从而让我们进入一个有效的 RED 状态。
-
-## 简要回答
-我将修改 `Task` 定义以支持 `pure` 参数，并创建一个测试文件来验证 ID 生成行为，预期该测试最初会失败。
-
-## [WIP] feat(spec): 引入 pure 参数并添加行为验证测试
+## [WIP] feat(graph): 在哈希计算中实现纯度检查
 
 ### 用户需求
-实现 CP-006 提案，将任务分为默认的“副作用任务 (Impure)”和显式的“纯函数任务 (Pure)”。Impure 任务应具有唯一的实例标识，而 Pure 任务应支持结构化去重。
+使 `HashingService` 能够识别任务的 `pure` 属性。
+- 对于 `pure=False`（默认，Impure）的任务，在哈希计算中注入实例 UUID 作为 Salt，确保每次调用生成唯一的节点 ID。
+- 对于 `pure=True`（Pure）的任务，保持原有的基于内容的哈希逻辑，确保相同的输入生成相同的节点 ID（去重）。
 
 ### 评论
-当前系统默认对所有任务进行结构化去重 (Hash-Consing)，这对于包含副作用（如随机数生成、数据库写入）的任务来说是不直观且危险的。本计划是 TDD 流程的第一步：定义 API 并暴露当前行为与期望行为之间的差距。
+这是 CP-006 的核心实现。通过简单的 UUID 注入，我们从根本上改变了引擎对“节点身份”的判定方式，解决了副作用任务被意外去重的问题，同时保留了纯函数任务的优化能力。
 
 ### 目标
-1.  修改 `cascade-spec` 中的 `Task` 类，增加 `pure` 字段。
-2.  更新 `@task` 装饰器以支持 `pure=True` 参数。
-3.  创建一个测试用例 `tests/core/test_purity_model.py`，证明当前系统无法区分两个相同的 Impure 任务实例。
+1.  修改 `cascade-graph` 中的 `HashingService`。
+2.  在 `_compute_lazy_result_hash` 和 `_compute_mapped_result_hash` 中添加对 `pure` 属性的检查。
+3.  通过现有的测试用例。
 
 ### 基本原理
-我们遵循 TDD 原则。首先定义接口（API），然后编写一个在当前实现下会失败的测试（RED）。只有在下一个计划中修改了哈希逻辑后，测试才会通过（GREEN）。
+利用 `LazyResult` 和 `MappedLazyResult` 自身已有的 `_uuid` 字段作为天然的 Instance Salt。对于 Impure 任务，将其加入哈希计算流程即可破坏结构哈希的碰撞，从而强制生成新的节点。
 
 ### 标签
-#intent/build #flow/draft #priority/high #comp/spec #comp/tests #concept/state #scope/core #ai/instruct #task/domain/core #task/object/task-purity #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/graph #concept/state #scope/core #ai/instruct #task/domain/core #task/object/task-purity #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 Task 定义以支持 Purity 属性
+#### Acts 1: 修改 HashingService 以支持 Purity
 
-我们需要在 `Task` 类和 `@task` 装饰器中添加 `pure` 参数。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/task.py
-~~~~~
-~~~~~python
-class Task(Generic[T]):
-    """
-    Wraps a callable to make it return a LazyResult when called.
-    """
-
-    def __init__(self, func: Callable[..., T], name: Optional[str] = None):
-        self.func = func
-        self.name = name or func.__name__
-        self._signature = inspect.signature(func)
-~~~~~
-~~~~~python
-class Task(Generic[T]):
-    """
-    Wraps a callable to make it return a LazyResult when called.
-    """
-
-    def __init__(
-        self, func: Callable[..., T], name: Optional[str] = None, pure: bool = False
-    ):
-        self.func = func
-        self.name = name or func.__name__
-        self.pure = pure
-        self._signature = inspect.signature(func)
-~~~~~
+我们将修改 `packages/cascade-graph/src/cascade/graph/hashing.py`，在计算哈希时检查任务的 `pure` 属性。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/task.py
+packages/cascade-graph/src/cascade/graph/hashing.py
 ~~~~~
 ~~~~~python
-def task(
-    func: Optional[Callable[..., T]] = None, *, name: Optional[str] = None
-) -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:
-    """
-    Decorator to convert a function into a Task.
-    """
-
-    def wrapper(f: Callable[..., T]) -> Task[T]:
-        return Task(f, name=name)
-
-    if func:
-        return wrapper(func)
-    else:
-        return wrapper
+    def _compute_lazy_result_hash(
+        self, result: LazyResult, dep_nodes: Dict[str, Node]
+    ) -> str:
+        # 1. Base Components (Task identity and Policies)
+        base_comps = [f"Task({getattr(result.task, 'name', 'unknown')})"]
+        if result._retry_policy:
+            rp = result._retry_policy
+            base_comps.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
 ~~~~~
 ~~~~~python
-def task(
-    func: Optional[Callable[..., T]] = None,
-    *,
-    name: Optional[str] = None,
-    pure: bool = False,
-) -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:
-    """
-    Decorator to convert a function into a Task.
-    """
+    def _compute_lazy_result_hash(
+        self, result: LazyResult, dep_nodes: Dict[str, Node]
+    ) -> str:
+        # 1. Base Components (Task identity and Policies)
+        base_comps = [f"Task({getattr(result.task, 'name', 'unknown')})"]
 
-    def wrapper(f: Callable[..., T]) -> Task[T]:
-        return Task(f, name=name, pure=pure)
+        # [CP-006] Purity Check
+        # Default is Impure (pure=False). Impure tasks get a unique salt (UUID)
+        # to ensure every instance is a unique node in the graph.
+        is_pure = getattr(result.task, "pure", False)
+        if not is_pure:
+            base_comps.append(f"Salt({result._uuid})")
 
-    if func:
-        return wrapper(func)
-    else:
-        return wrapper
+        if result._retry_policy:
+            rp = result._retry_policy
+            base_comps.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
 ~~~~~
-
-#### Acts 2: 创建 TDD 测试用例 (Expect Failure)
-
-我们创建一个测试，明确断言 Impure 任务的实例 ID 必须不同，而 Pure 任务的实例 ID 必须相同。
 
 ~~~~~act
-write_file
-tests/core/test_purity_model.py
+patch_file
+packages/cascade-graph/src/cascade/graph/hashing.py
 ~~~~~
 ~~~~~python
-import pytest
-from cascade.spec.task import task
-from cascade.graph.build import build_graph
+    def _compute_mapped_result_hash(
+        self, result: MappedLazyResult, dep_nodes: Dict[str, Node]
+    ) -> str:
+        base_comps = [f"Map({getattr(result.factory, 'name', 'factory')})"]
 
+        meta_comps = []
+        if result._condition:
+            meta_comps.append("Condition:PRESENT")
+~~~~~
+~~~~~python
+    def _compute_mapped_result_hash(
+        self, result: MappedLazyResult, dep_nodes: Dict[str, Node]
+    ) -> str:
+        base_comps = [f"Map({getattr(result.factory, 'name', 'factory')})"]
 
-def test_impure_tasks_have_unique_identities():
-    """
-    验证默认任务（Impure）是否具有唯一的结构标识。
-    
-    场景：
-    我们调用同一个任务两次，即使参数相同。
-    
-    期望（CP-006）：
-    系统应将它们视为图中的两个独立节点，具有不同的 structural_id。
-    
-    当前行为（Fail）：
-    系统通过 Hash-Consing 将它们合并为一个节点。
-    """
-    @task  # 默认 pure=False
-    def random_int():
-        return 42
+        # [CP-006] Purity Check for Map
+        is_pure = getattr(result.factory, "pure", False)
+        if not is_pure:
+            base_comps.append(f"Salt({result._uuid})")
 
-    # 创建两个实例
-    a = random_int()
-    b = random_int()
-
-    # 构建图
-    # 注意：我们需要一个虚拟的目标来包含这两个节点，或者分别构建
-    # 这里为了简单，我们检查构建后的节点 ID
-    graph_a, instance_map_a = build_graph(a)
-    graph_b, instance_map_b = build_graph(b)
-    
-    node_a = instance_map_a[a._uuid]
-    node_b = instance_map_b[b._uuid]
-
-    # 断言：对于副作用任务，即使函数和参数完全相同，它们也是不同的实体
-    assert node_a.structural_id != node_b.structural_id, (
-        "Impure tasks (default) must have unique structural IDs to avoid incorrect deduplication."
-    )
-
-
-def test_pure_tasks_are_deduplicated():
-    """
-    验证纯函数任务（Pure）是否被正确去重。
-    """
-    @task(pure=True)
-    def add(x, y):
-        return x + y
-
-    a = add(1, 2)
-    b = add(1, 2)
-
-    graph_a, instance_map_a = build_graph(a)
-    graph_b, instance_map_b = build_graph(b)
-
-    node_a = instance_map_a[a._uuid]
-    node_b = instance_map_b[b._uuid]
-
-    # 断言：纯函数任务应基于内容寻址（Content-Addressable）
-    assert node_a.structural_id == node_b.structural_id, (
-        "Pure tasks must be deduplicated based on their content (function + args)."
-    )
+        meta_comps = []
+        if result._condition:
+            meta_comps.append("Condition:PRESENT")
 ~~~~~
 
 ### 下一步建议
-一旦执行此计划，请运行测试 `pytest tests/core/test_purity_model.py`。
-预期结果：`test_impure_tasks_have_unique_identities` 将会**失败**。
-这将确认我们处于正确的 RED 状态。接下来的计划将修改 `HashingService` 来修复此测试。
+运行测试 `pytest tests/core/test_purity_model.py`。
+预期结果：测试应该通过 (GREEN)。
+如果测试通过，我们将提交这些更改。

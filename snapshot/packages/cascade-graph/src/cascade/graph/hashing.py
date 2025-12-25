@@ -34,6 +34,14 @@ class HashingService:
     ) -> str:
         # 1. Base Components (Task identity and Policies)
         base_comps = [f"Task({getattr(result.task, 'name', 'unknown')})"]
+
+        # [CP-006] Purity Check
+        # Default is Impure (pure=False). Impure tasks get a unique salt (UUID)
+        # to ensure every instance is a unique node in the graph.
+        is_pure = getattr(result.task, "pure", False)
+        if not is_pure:
+            base_comps.append(f"Salt({result._uuid})")
+
         if result._retry_policy:
             rp = result._retry_policy
             base_comps.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
@@ -73,6 +81,11 @@ class HashingService:
         self, result: MappedLazyResult, dep_nodes: Dict[str, Node]
     ) -> str:
         base_comps = [f"Map({getattr(result.factory, 'name', 'factory')})"]
+
+        # [CP-006] Purity Check for Map
+        is_pure = getattr(result.factory, "pure", False)
+        if not is_pure:
+            base_comps.append(f"Salt({result._uuid})")
 
         meta_comps = []
         if result._condition:

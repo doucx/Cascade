@@ -1,6 +1,7 @@
 from typing import Any
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, EdgeType
+from cascade.internal.inputs import _internal_gather
 
 
 def visualize(target: Any) -> str:
@@ -8,7 +9,15 @@ def visualize(target: Any) -> str:
     Builds the computation graph for a target and returns its representation
     in the Graphviz DOT language format.
     """
-    graph, _ = build_graph(target)
+    if isinstance(target, (list, tuple)):
+        if not target:
+            # Return an empty graph for an empty list
+            return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
+        workflow_target = _internal_gather(*target)
+    else:
+        workflow_target = target
+
+    graph, _ = build_graph(workflow_target)
 
     dot_parts = [
         "digraph CascadeWorkflow {",

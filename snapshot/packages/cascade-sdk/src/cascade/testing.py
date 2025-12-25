@@ -67,6 +67,20 @@ class SpySolver(Solver):
         pass
 
 
+class MockSolver(Solver):
+    """
+    A test double for the Solver protocol that returns a pre-programmed plan,
+    bypassing any real resolution logic.
+    """
+
+    def __init__(self, plan: ExecutionPlan):
+        self._plan = plan
+
+    def resolve(self, graph: Graph) -> ExecutionPlan:
+        # Return the pre-programmed plan regardless of the input graph
+        return self._plan
+
+
 class SpyExecutor(Executor):
     """A test double for the Executor protocol that logs all calls to `execute`."""
 
@@ -88,6 +102,8 @@ class MockExecutor(Executor):
     A generic mock for the Executor protocol that can simulate various
     behaviors like delays or returning specific values.
     """
+
+
 
     def __init__(self, delay: float = 0, return_value: Any = "result"):
         self.delay = delay

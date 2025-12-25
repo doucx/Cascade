@@ -4,20 +4,8 @@ from typing import List, Any, Dict
 import cascade as cs
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, Graph
-from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
-from cascade.testing import SpyExecutor
-
-
-# --- Test Doubles (Mocks and Spies) ---
-
-
-class MockSolver(Solver):
-    def __init__(self, plan: ExecutionPlan):
-        self._plan = plan
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # Return the pre-programmed plan
-        return self._plan
+from cascade.runtime import Engine, MessageBus, ExecutionPlan
+from cascade.testing import SpyExecutor, MockSolver
 
 
 # --- Test Case ---

@@ -5,24 +5,7 @@ from unittest.mock import MagicMock
 from cascade.runtime.events import TaskExecutionFinished
 from cascade.runtime.subscribers import TelemetrySubscriber
 from cascade.cli.observer.app import on_message
-
-
-# Mock connector to capture the published payload
-class CaptureConnector:
-    def __init__(self):
-        self.captured_payload = None
-
-    async def publish(self, topic, payload, **kwargs):
-        self.captured_payload = payload
-
-    async def connect(self):
-        pass
-
-    async def disconnect(self):
-        pass
-
-    async def subscribe(self, topic, callback):
-        pass
+from cascade.testing import MockConnector
 
 
 @pytest.mark.asyncio
@@ -32,7 +15,7 @@ async def test_telemetry_subscriber_to_observer_contract():
     consumed by the cs-observer's on_message handler.
     """
     # 1. ARRANGE: Producer side
-    connector = CaptureConnector()
+    connector = MockConnector()
     subscriber = TelemetrySubscriber(MagicMock(), connector)
 
     # 2. PRODUCE: Create a runtime event and have the subscriber process it
@@ -48,8 +31,10 @@ async def test_telemetry_subscriber_to_observer_contract():
     # Let the asyncio.create_task in on_event run
     await asyncio.sleep(0.01)
 
-    # 3. ASSERT: The payload was captured
-    produced_payload = connector.captured_payload
+    # 3. ASSERT: The payload was captured in the publish log
+    assert len(connector.publish_log) == 1
+    produced_payload = connector.publish_log[0]["payload"]
+
     assert produced_payload is not None
     assert produced_payload["run_id"] == "run-contract-test"
     assert produced_payload["body"]["task_name"] == "contract_task"

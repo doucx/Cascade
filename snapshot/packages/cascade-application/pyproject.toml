@@ -24,4 +24,4 @@ allow-direct-references = true
 cascade-spec = { workspace = true }
 cascade-engine = { workspace = true }
 cascade-graph = { workspace = true }
-cascade-sdk = { workspace = true }
+cascade-common = { workspace = true }

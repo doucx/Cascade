@@ -1,43 +1,58 @@
-## [WIP] refactor: Consolidate and clarify integration test structure
+好的，我们已经成功完成了测试目录结构的重构，解决了 Fixture 发现问题，并优化了测试的隔离性。现在是时候将这些改进作为一个完整的逻辑单元提交了。
+
+我将生成一个 `[COMMIT]` 计划，将所有更改添加到 Git 暂存区并创建一个详细的提交。
+
+## [COMMIT] refactor(tests): Co-locate tests with packages and optimize structure
 
 ### 用户需求
-用户要求识别任何在重构后仍然位置不当的测试，并提出一个计划来优化其结构，以提高项目的清晰度和可维护性。
+用户要求将之前的所有更改（包括测试目录重构、Fixture 修复和结构优化）作为一个完整的提交记录。
 
 ### 评论
-这是一个非常有价值的整理步骤。在大型重构之后，进行一次“细粒度”的调整可以巩固成果，并确保项目遵循一致、清晰的架构原则。清理冗余的目录结构将改善开发者的体验，并使测试的意图更加明确。
+这次重构不仅改善了项目的物理布局，还通过修正 Pytest 发现机制和增强测试隔离性，显著提升了测试套件的健壮性和可维护性。现在的结构符合现代 Python “代码与测试共存”的最佳实践，为每个包的独立开发和分发打下了坚实基础。
 
 ### 目标
-1.  将位于 `tests/e2e/e2e/` 目录下的 E2E 测试文件移动到其父目录 `tests/e2e/`。
-2.  删除现在已经为空的 `tests/e2e/e2e` 目录。
+1. 将所有修改后的文件添加到 Git 暂存区。
+2. 创建一个详尽的、符合 Conventional Commits 规范的提交。
 
 ### 基本原理
-顶级 `tests` 目录的目的是存放跨越多个内部包的集成（Integration）和端到端（E2E）测试。当前的 `tests/e2e/e2e` 结构是多余的。通过将测试文件提升一级到 `tests/e2e/`，我们创建了一个更扁平、更直观的结构，这使得定位和理解这些高阶测试变得更加容易。
+我们使用 `git_add .` 来捕获所有的结构性变更（包括目录移动、新文件的创建和现有文件的修改）。提交信息将详细说明此次重构的动机、采取的行动以及解决的关键问题。
 
 ### 标签
-#intent/refine #flow/ready #priority/medium #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/directory-structure #task/action/refactor #task/state/end
+#intent/tooling #flow/ready #priority/medium #comp/tests #comp/build #scope/dx #ai/instruct #task/domain/testing #task/object/git-commit #task/action/commit #task/state/end #task/status/completed
 
 ---
 ### Script
 
-#### Acts 1: 移动 E2E 测试并清理目录
+#### Acts 1: 提交变更
 
-我们将把 E2E 测试文件上移一级，然后删除多余的空目录。
+我们将所有更改添加到暂存区，并创建一个内容详尽的提交。
 
 ~~~~~act
-run_command
+git_add
+.
 ~~~~~
+
+~~~~~act
+git_commit
 ~~~~~
-mv tests/e2e/e2e/* tests/e2e/
-rmdir tests/e2e/e2e
+~~~~~text
+refactor(tests): Co-locate tests with packages and optimize structure
+
+This commit performs a major overhaul of the testing infrastructure to align with modern Python "code-co-location" best practices.
+
+Key Changes:
+- Relocated package-specific tests from the top-level 'tests/' directory into 'packages/*/tests/'.
+- Implemented localized 'conftest.py' files within each package to fix Pytest fixture discovery issues (notably 'bus_and_spy').
+- Moved the 'cleanup_local_bus' autouse fixture to 'packages/cascade-engine/tests/e2e/conftest.py' to ensure proper test isolation and prevent state leakage between E2E tests.
+- Flattened the redundant 'tests/e2e/e2e/' directory structure into 'tests/e2e/'.
+- Fixed a NameError and harness configuration in 'test_e2e_robustness.py' where the controller and engine were not sharing a connector instance.
+
+Results:
+- Improved modularity: Packages are now self-contained with their own tests and fixtures.
+- Enhanced DX: Related code and tests are physically closer, reducing cognitive load.
+- Stable CI: Eliminated race conditions and fixture failures caused by the previous directory mismatch.
 ~~~~~
 
 ### 下一步建议
-
-我们已经完成了对测试结构的最终整理。现在，项目在单元测试、包内集成测试和跨包 E2E 测试之间有了清晰的界限。
-
--   **Unit & Integration Tests**: 位于各自的 `packages/*/tests/` 目录下。
--   **E2E & Contract Tests**: 位于顶级的 `tests/` 目录下。
-
-我建议最后运行一次完整的测试套件，以确保所有测试（包括移动后的 E2E 测试）都能被 `pytest` 正确发现并成功执行。
-
-`pytest`
+- **CI 验证**: 建议在远程 CI 环境中运行一次完整的测试，以确保环境差异不会影响测试的发现。
+- **文档更新**: 如果有开发者文档描述了如何运行测试，可能需要更新相关指令，建议使用 `pytest packages/` 或针对特定包运行。

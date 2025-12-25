@@ -17,6 +17,11 @@ def default_task():
     return 3
 
 
+@task
+def collect_results(c, b, d):
+    return [c, b, d]
+
+
 def test_execution_mode_is_passed_to_node():
     """
     Verifies that the `mode` parameter from the @task decorator
@@ -28,13 +33,10 @@ def test_execution_mode_is_passed_to_node():
     bt = blocking_task()
     dt = default_task()
 
-    # We need a target to build the graph
-    target = [ct, bt, dt]
+    # Create a single target that depends on all other tasks
+    target = collect_results(ct, bt, dt)
 
     # 2. Build the graph
-    # NOTE: We are building from a list, which is not a valid final target for
-    # the engine, but it is sufficient for build_graph to explore all dependencies.
-    # The build_graph function does not require a single root LazyResult.
     graph, instance_map = build_graph(target)
 
     # 3. Find the nodes in the graph

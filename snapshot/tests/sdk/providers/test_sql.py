@@ -30,7 +30,7 @@ def sqlite_db():
     engine.dispose()
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def db_engine():
     """Provides a Cascade Engine with the sqlite_db resource pre-registered."""
     engine = cs.Engine(

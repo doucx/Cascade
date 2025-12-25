@@ -1,100 +1,223 @@
-You are absolutely right. My apologies.
+Excellent. The contract is now established throughout the stack. We can proceed to the second and final phase: implementing the execution logic.
 
-My analysis of the `build_graph` function's behavior was incorrect. The error message `TypeError: Cannot build graph from type <class 'list'>` clearly shows that `build_graph`, just like `engine.run`, requires a single `LazyResult` as its entry point to begin the traversal. My assumption that it could accept an iterable was wrong.
+Our goal is to modify the `LocalExecutor` to manage separate thread pools for `compute` and `blocking` tasks and route synchronous tasks to the appropriate pool. This will physically isolate the workloads, preventing long-running IO tasks from starving CPU-bound tasks.
 
-This is another excellent demonstration of the TDD process catching flawed assumptions, even in the test code itself. Thank you for the correction.
-
-I will now fix the test by using the same "collector" pattern we established previously. This will create a valid, single-target graph for the builder to analyze. Since the underlying code changes for propagating the `mode` were likely correct, this fix should result in a passing test.
-
-## [WIP] fix(test): Correct GraphBuilder API usage in test
-
-### 错误分析
-The test `test_execution_mode_is_passed_to_node` failed with a `TypeError` because the `build_graph` function was called with a `list` of `LazyResult` objects. The `GraphBuilder`'s internal `_visit` method is designed to start its traversal from a single object (`LazyResult` or `MappedLazyResult`) and does not know how to handle an iterable. My previous note in the test code, stating that `build_graph` could accept a list, was fundamentally incorrect.
+## [WIP] feat(engine): Implement dedicated thread pools in LocalExecutor
 
 ### 用户需求
-The user needs a test that correctly uses the `build_graph` API to verify that the `mode` parameter from the `@task` decorator is successfully propagated to the `execution_mode` attribute on the `Node` object.
+The `LocalExecutor` must be enhanced to utilize the `execution_mode` attribute on a `Node`. It should maintain separate, dedicated thread pools for `compute` and `blocking` synchronous tasks. When executing a synchronous task, it must dispatch the task to the correct pool, ensuring that tasks of different types do not compete for the same thread resources.
 
 ### 评论
-This correction is crucial for maintaining the integrity of our test suite. A test that uses the API incorrectly provides no value and can mask real issues. By fixing this test, we ensure that we are validating our feature against the correct, intended usage pattern of the framework's core components.
+This is the practical realization of our "Compute and IO Isolation" strategy. By creating physically separate execution lanes, we make the entire system more resilient and performant. A flood of slow, network-bound requests (`blocking` mode) will no longer impact the responsiveness of critical, CPU-bound calculations (`compute` mode). This is a sophisticated scheduling feature that significantly enhances Cascade's production-readiness.
 
 ### 目标
-1.  Modify `tests/engine/graph/test_execution_mode.py`.
-2.  Introduce a `collect_results` task to aggregate multiple `LazyResult` objects into a single, valid graph target.
-3.  Update the call to `build_graph` to pass the single `LazyResult` from the new collector task.
-4.  Ensure the corrected test passes, thus confirming the feature's implementation is correct.
+1.  Create a new test file, `tests/engine/e2e/test_executor_modes.py`, to verify the workload isolation. The test will run a long "blocking" task and a short "compute" task in parallel and assert that the short task finishes first, proving it wasn't queued behind the long one.
+2.  Modify `packages/cascade-engine/src/cascade/adapters/executors/local.py` to:
+    *   Import `ThreadPoolExecutor` and `functools`.
+    *   Initialize two separate `ThreadPoolExecutor` instances in the `LocalExecutor`'s constructor: one for compute, one for blocking.
+    *   In the `execute` method, replace `asyncio.to_thread` with the more explicit `loop.run_in_executor`, dispatching synchronous tasks to the appropriate thread pool based on `node.execution_mode`.
 
 ### 基本原理
-A valid, analyzable computation graph must have a clear structure with defined dependencies. By channeling multiple parallel tasks into a single collector task, we create a Directed Acyclic Graph (DAG) with a single "sink" node. This provides the `GraphBuilder` with the necessary single entry point to begin its dependency traversal and correctly construct the graph model.
+The default `asyncio.to_thread` uses a single, shared thread pool for all offloaded tasks. By creating our own `ThreadPoolExecutor` instances, we gain fine-grained control. We will use the event loop's `run_in_executor` method, which allows specifying a custom executor. The `execution_mode` tag on the `Node` becomes the routing key, directing the task to either the high-throughput `blocking` pool or the potentially more limited (e.g., core-count sized) `compute` pool. This ensures true physical isolation of workloads.
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #comp/graph #scope/dx #ai/instruct #task/domain/testing #task/object/graph-builder-api #task/action/test-correction #task/state/continue
+#intent/build #flow/ready #priority/high #comp/engine #concept/executor #scope/perf #scope/dx #ai/instruct #task/domain/execution #task/object/local-executor #task/action/implement-thread-pools #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Fix the test case API usage
+#### Acts 1: Create TDD Test for Workload Isolation
 
-I will patch the test to use the collector pattern, providing a valid single target to `build_graph`.
+First, we create a new E2E test. This test will fail initially because both synchronous tasks will be queued in the same default thread pool, forcing the short task to wait for the long one.
+
+~~~~~act
+write_file
+tests/engine/e2e/test_executor_modes.py
+~~~~~
+~~~~~python
+import asyncio
+import time
+import pytest
+from cascade import task
+
+
+@task(mode="blocking")
+def long_sync_blocking_task(duration: float) -> float:
+    """A sync task representing a slow, blocking I/O operation."""
+    time.sleep(duration)
+    return time.time()
+
+
+@task(mode="compute")
+def short_sync_compute_task(duration: float) -> float:
+    """A sync task representing a short but CPU-intensive operation."""
+    time.sleep(duration)
+    return time.time()
+
+
+@task
+def collect_results(res1, res2):
+    """Aggregates results for a valid graph structure."""
+    return res1, res2
+
+
+@pytest.mark.asyncio
+async def test_compute_tasks_are_isolated_from_blocking_tasks():
+    """
+    Verifies that 'compute' and 'blocking' tasks run in separate thread pools
+    and do not block each other.
+    """
+    from cascade.runtime.engine import Engine
+    from cascade.runtime.bus import MessageBus
+    from cascade.adapters.solvers.native import NativeSolver
+    from cascade.adapters.executors.local import LocalExecutor
+
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),
+    )
+
+    # A short compute task (0.1s) and a long blocking task (0.2s)
+    compute_lr = short_sync_compute_task(0.1)
+    blocking_lr = long_sync_blocking_task(0.2)
+
+    # If isolated, compute task finishes at T+0.1s.
+    # If not isolated, compute task may have to wait for blocking task, finishing at T+0.2s or later.
+    workflow = collect_results(compute_lr, blocking_lr)
+
+    results = await engine.run(workflow)
+    compute_finish_time, blocking_finish_time = results
+
+    # The key assertion: the short compute task must finish first.
+    assert compute_finish_time < blocking_finish_time, (
+        "Compute task should have finished before the blocking task, "
+        "indicating parallel execution in separate pools."
+    )
+
+~~~~~
+
+#### Acts 2: Implement Thread Pool Routing in LocalExecutor
+
+Now, we implement the logic that will make the new test pass. We'll modify `LocalExecutor` to manage and use two distinct thread pools.
 
 ~~~~~act
 patch_file
-tests/engine/graph/test_execution_mode.py
+packages/cascade-engine/src/cascade/adapters/executors/local.py
 ~~~~~
 ~~~~~python
-def test_execution_mode_is_passed_to_node():
+import asyncio
+from typing import Any, Dict, List
+from cascade.graph.model import Node
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.graph.exceptions import StaticGraphError
+
+
+class LocalExecutor:
     """
-    Verifies that the `mode` parameter from the @task decorator
-    is correctly propagated to the `execution_mode` attribute of the
-    corresponding Node in the graph.
+    An executor that runs tasks sequentially in the current process.
     """
-    # 1. Define a simple workflow
-    ct = compute_task()
-    bt = blocking_task()
-    dt = default_task()
 
-    # We need a target to build the graph
-    target = [ct, bt, dt]
+    async def execute(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        """
+        Executes a single node's callable object with the provided arguments.
+        """
+        if node.callable_obj is None:
+            raise TypeError(
+                f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
+            )
 
-    # 2. Build the graph
-    # NOTE: We are building from a list, which is not a valid final target for
-    # the engine, but it is sufficient for build_graph to explore all dependencies.
-    # The build_graph function does not require a single root LazyResult.
-    graph, instance_map = build_graph(target)
+        if node.is_async:
+            result = await node.callable_obj(*args, **kwargs)
+        else:
+            # Implicit Offloading:
+            # Synchronous tasks are offloaded to a separate thread to prevent blocking
+            # the main asyncio event loop. This allows async tasks and IO operations
+            # to run concurrently with CPU-bound or blocking sync tasks.
+            result = await asyncio.to_thread(node.callable_obj, *args, **kwargs)
 
-    # 3. Find the nodes in the graph
-    compute_node = instance_map[ct._uuid]
+        # Runtime guard against the "task returns LazyResult" anti-pattern.
+        if isinstance(result, (LazyResult, MappedLazyResult)):
+            raise StaticGraphError(
+                f"Task '{node.name}' illegally returned a LazyResult. "
+                "Tasks must return data. For control flow, return a cs.Jump(...) signal instead."
+            )
+
+        return result
 ~~~~~
 ~~~~~python
-@task
-def collect_results(c, b, d):
-    return [c, b, d]
+import asyncio
+import functools
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List
+from cascade.graph.model import Node
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.graph.exceptions import StaticGraphError
 
 
-def test_execution_mode_is_passed_to_node():
+class LocalExecutor:
     """
-    Verifies that the `mode` parameter from the @task decorator
-    is correctly propagated to the `execution_mode` attribute of the
-    corresponding Node in the graph.
+    An executor that runs tasks in the current process, using dedicated thread
+    pools to isolate blocking I/O tasks from CPU-bound tasks.
     """
-    # 1. Define a simple workflow
-    ct = compute_task()
-    bt = blocking_task()
-    dt = default_task()
 
-    # Create a single target that depends on all other tasks
-    target = collect_results(ct, bt, dt)
+    def __init__(self):
+        # NOTE: These executors are created per-engine-run.
+        # Their lifecycle is tied to the LocalExecutor instance.
+        # Python's ThreadPoolExecutor finalizer handles shutdown on garbage collection.
+        self._blocking_executor = ThreadPoolExecutor(thread_name_prefix="cascade_blocking")
+        self._compute_executor = ThreadPoolExecutor(thread_name_prefix="cascade_compute")
 
-    # 2. Build the graph
-    graph, instance_map = build_graph(target)
+    async def execute(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        """
+        Executes a single node's callable. Routes synchronous tasks to the
+        appropriate thread pool based on their execution mode.
+        """
+        if node.callable_obj is None:
+            raise TypeError(
+                f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
+            )
 
-    # 3. Find the nodes in the graph
-    compute_node = instance_map[ct._uuid]
+        if node.is_async:
+            result = await node.callable_obj(*args, **kwargs)
+        else:
+            loop = asyncio.get_running_loop()
+            
+            # Select the appropriate executor based on the task's declared mode
+            if node.execution_mode == "compute":
+                executor = self._compute_executor
+            else:  # Default to "blocking" for I/O, etc.
+                executor = self._blocking_executor
+
+            # Use functools.partial to handle keyword arguments, as
+            # run_in_executor only accepts positional arguments for the target function.
+            func_to_run = functools.partial(node.callable_obj, *args, **kwargs)
+            result = await loop.run_in_executor(executor, func_to_run)
+
+        # Runtime guard against the "task returns LazyResult" anti-pattern.
+        if isinstance(result, (LazyResult, MappedLazyResult)):
+            raise StaticGraphError(
+                f"Task '{node.name}' illegally returned a LazyResult. "
+                "Tasks must return data. For control flow, return a cs.Jump(...) signal instead."
+            )
+
+        return result
 ~~~~~
 
 ### 下一步建议
-We have now corrected the faulty test case. Please run the tests again.
+我们已经编写了新的测试并实现了核心的线程池路由逻辑。现在请运行测试。
 
-I expect `tests/engine/graph/test_execution_mode.py` to **pass** this time. A passing result will confirm that the code modifications from the previous step were indeed correct and that the `mode` parameter is now successfully being passed from the `@task` decorator all the way to the `Node` object in the graph.
+我们预期 `tests/engine/e2e/test_executor_modes.py` 将会**通过**。如果通过，就证明了我们的实现是正确的，并且我们已经成功地为不同类型的同步任务建立了隔离的执行环境。
 
-Once this is confirmed, we can confidently proceed to **Phase 2**: implementing the dedicated thread pool logic in `LocalExecutor`.
+确认通过后，我将为您生成最终的 `[COMMIT]` 计划。

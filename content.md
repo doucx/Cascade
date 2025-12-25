@@ -1,108 +1,259 @@
-好的，我已仔细审查了你提供的文件。现在我将遵循 TDD（测试驱动开发）原则，首先创建一个新的测试文件。这个测试用例将直接调用 `cs.run([task_a, task_b])`，它在当前的代码库中必然会失败，从而将我们的开发流程置于一个明确的 "RED" 状态。
+Excellent. The tests failed with the expected `AttributeError`, confirming our test suite is correctly identifying the problem. We are now in a clear "RED" state.
 
-这是实现自动汇合功能的第一步。
+The traceback shows the error occurs deep inside the engine's graph execution strategy, which correctly received a `list` where it expected a `LazyResult`. This is exactly the scenario our new logic in `cs.run` will prevent.
 
-## [WIP] test: 为自动汇合语法糖添加 TDD 测试
+I will now generate the plan to implement the auto-gathering feature, turning our tests from RED to GREEN.
+
+## [WIP] feat: Implement auto-gathering for cs.run
 
 ### 用户需求
-根据提案 CP-011，`cs.run()` 函数应支持接收 `LazyResult` 对象的列表或元组作为其 `target` 参数，并自动将它们并行执行，最后返回一个包含所有结果的列表。
+根据提案 CP-011，`cs.run()` 函数需要被扩展，以接受 `LazyResult` 对象的列表或元组作为其 `target` 参数。当接收到此类输入时，它应自动将这些任务并行执行，并返回一个包含所有结果的列表。
 
 ### 评论
-这是一个高价值的开发者体验（DX）改进。它消除了为并行任务编写样板“收集器”函数的需要，使 API 更符合 Python 开发者使用 `asyncio.gather` 等工具的直觉。
+这个功能是提升开发者体验（DX）的关键一步。通过在 API 入口层处理可迭代对象，我们向 Python 开发者熟悉的 `asyncio.gather` 模式看齐，消除了不必要的样板代码，使得并行工作流的定义更加直观和简洁。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/sdk/integration/test_auto_gathering.py`。
-2.  在该文件中定义一个测试用例，它直接调用 `cs.run()` 并传入一个 `LazyResult` 列表。
-3.  确保此测试在当前的代码实现下会失败（例如，抛出 `AttributeError` 或 `TypeError`），从而为后续的 GREEN 阶段建立一个明确的、可验证的目标。
+1.  在 `cascade.internal.inputs` 中创建一个新的内部任务 `_internal_gather`, 它应被标记为 `pure=True`，并能接收任意数量的位置参数，将它们作为列表返回。
+2.  修改 `cascade.run` 函数的逻辑：
+    *   检测 `target` 参数是否为列表或元组。
+    *   如果是，则将 `target` 包装在一个对 `_internal_gather` 的 `LazyResult` 调用中。
+    *   处理空列表的边缘情况，直接返回一个空列表以避免不必要的引擎启动。
+    *   将包装后的 `LazyResult` (或原始 `target`) 传递给引擎执行。
 
 ### 基本原理
-我们严格遵循 TDD 流程。通过首先创建一个失败的测试，我们精确地定义了新功能必须满足的行为契约。这不仅确保了最终实现的正确性，也验证了我们对问题的理解是准确的。
+我们将在 `cs.run` 这个面向用户的 API 门面中实现转换逻辑。通过检查 `target` 的类型，我们可以无缝地将 `[task_a, task_b]` 这样的用户输入，转换为引擎可以理解的单一根节点 `_internal_gather(task_a, task_b)`。由于 `_internal_gather` 是一个纯任务，它不会引入任何执行开销，同时又能确保图构建器和求解器能正确地处理依赖关系，从而以最小的架构侵入性实现这个强大的语法糖。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/sdk #concept/ui #scope/dx #ai/instruct #task/domain/sdk #task/object/auto-gathering #task/action/tdd-setup #task/state/begin
+#intent/build #flow/ready #priority/high #comp/sdk #scope/api #scope/dx #ai/instruct #task/domain/sdk #task/object/auto-gathering #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建新的 TDD 测试文件
+#### Acts 1: 定义内部 `_internal_gather` 任务
 
-我将创建一个新的测试文件，用于验证 `cs.run` 的自动汇合功能。
+首先，我们在 `internal/inputs.py` 中创建这个核心的、纯粹的汇合任务。
 
 ~~~~~act
-write_file
-tests/sdk/integration/test_auto_gathering.py
+patch_file
+packages/cascade-sdk/src/cascade/internal/inputs.py
 ~~~~~
 ~~~~~python
-import pytest
-import cascade as cs
+# 这个任务的职责是从 OS 环境中获取值。
+@task(name="_get_env_var")
+def _get_env_var(name: str) -> Optional[str]:
+    return os.getenv(name)
+~~~~~
+~~~~~python
+# 这个任务的职责是从 OS 环境中获取值。
+@task(name="_get_env_var")
+def _get_env_var(name: str) -> Optional[str]:
+    return os.getenv(name)
 
 
-@cs.task(pure=True)
-def task_one():
-    return 1
+@task(name="_internal_gather", pure=True)
+def _internal_gather(*args: Any) -> Any:
+    """An internal pure task used by cs.run to gather results from a list."""
+    return list(args)
+~~~~~
+
+#### Acts 2: 在 `cs.run` 中实现自动汇合逻辑
+
+现在，我们修改 `cs.run` 函数，使其能够处理列表和元组输入。
+
+~~~~~act
+patch_file
+packages/cascade-sdk/src/cascade/__init__.py
+~~~~~
+~~~~~python
+# --- Main Run Entrypoint ---
 
 
-@cs.task(pure=True)
-def task_two():
-    return "two"
-
-
-@cs.task(pure=True)
-def identity(val: any) -> any:
-    return val
-
-
-def test_run_with_list_of_lazy_results():
+def _create_state_backend_factory(
+    backend_spec: Union[str, Callable[[str], StateBackend], None],
+):
     """
-    Verifies that cs.run can accept a list of LazyResults,
-    execute them in parallel, and return a list of their results.
+    Helper to create a factory function from a backend specification (URI or object).
     """
-    lr1 = task_one()
-    lr2 = task_two()
+    if backend_spec is None:
+        return None  # Engine defaults to InMemory
 
-    # This is the proposed intuitive usage
-    results = cs.run([lr1, lr2])
+    if callable(backend_spec):
+        return backend_spec
 
-    assert results == [1, "two"]
+    if isinstance(backend_spec, str):
+        if backend_spec.startswith("redis://"):
+            try:
+                import redis
+                from cascade.adapters.state.redis import RedisStateBackend
+            except ImportError:
+                raise ImportError(
+                    "The 'redis' library is required for redis:// backends."
+                )
+
+            # Create a shared client pool
+            client = redis.from_url(backend_spec)
+
+            def factory(run_id: str) -> StateBackend:
+                return RedisStateBackend(run_id=run_id, client=client)
+
+            return factory
+        else:
+            raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
+
+    raise TypeError(f"Invalid state_backend type: {type(backend_spec)}")
 
 
-def test_run_with_tuple_of_lazy_results():
+def run(
+    target: LazyResult,
+    params: Optional[Dict[str, Any]] = None,
+    system_resources: Optional[Dict[str, Any]] = None,
+    log_level: str = "INFO",
+    log_format: str = "human",
+    connector: Optional[Connector] = None,
+    state_backend: Union[str, Callable[[str], StateBackend], None] = None,
+) -> Any:
     """
-    Verifies that cs.run also works with tuples.
+    Runs a Cascade workflow with a default engine configuration.
+
+    Args:
+        state_backend: A URI string (e.g. "redis://localhost") or a factory function
+                       that accepts a run_id and returns a StateBackend.
     """
-    lr1 = task_one()
-    lr2 = task_two()
+    # 1. Setup the messaging renderer
+    if log_format == "json":
+        renderer = JsonRenderer(min_level=log_level)
+    else:
+        renderer = CliRenderer(store=bus.store, min_level=log_level)
+    bus.set_renderer(renderer)
 
-    results = cs.run((lr1, lr2))
+    # 2. Setup the event system
+    event_bus = MessageBus()
+    # Attach the human-readable log translator
+    HumanReadableLogSubscriber(event_bus)
+    # Attach the telemetry publisher if a connector is provided
+    if connector:
+        TelemetrySubscriber(event_bus, connector)
 
-    # Per the proposal, the return type is unified to a list
-    assert results == [1, "two"]
+    # 3. Assemble the default Engine
+    solver = NativeSolver()
+    executor = LocalExecutor()
+
+    sb_factory = _create_state_backend_factory(state_backend)
+
+    engine = Engine(
+        solver=solver,
+        executor=executor,
+        bus=event_bus,
+        system_resources=system_resources,
+        connector=connector,
+        state_backend_factory=sb_factory,
+    )
+
+    return asyncio.run(engine.run(target, params=params))
+~~~~~
+~~~~~python
+# --- Main Run Entrypoint ---
 
 
-def test_run_with_mixed_list_of_lazy_results_and_literals():
+def _create_state_backend_factory(
+    backend_spec: Union[str, Callable[[str], StateBackend], None],
+):
     """
-    Verifies that literals mixed in with LazyResults are passed through correctly.
+    Helper to create a factory function from a backend specification (URI or object).
     """
-    lr1 = task_one()
-    literal_str = "I am a literal"
-    lr2 = task_two()
+    if backend_spec is None:
+        return None  # Engine defaults to InMemory
 
-    # The graph should effectively be gather(lr1, identity("..."), lr2)
-    results = cs.run([lr1, literal_str, lr2])
+    if callable(backend_spec):
+        return backend_spec
 
-    assert results == [1, "I am a literal", "two"]
+    if isinstance(backend_spec, str):
+        if backend_spec.startswith("redis://"):
+            try:
+                import redis
+                from cascade.adapters.state.redis import RedisStateBackend
+            except ImportError:
+                raise ImportError(
+                    "The 'redis' library is required for redis:// backends."
+                )
+
+            # Create a shared client pool
+            client = redis.from_url(backend_spec)
+
+            def factory(run_id: str) -> StateBackend:
+                return RedisStateBackend(run_id=run_id, client=client)
+
+            return factory
+        else:
+            raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
+
+    raise TypeError(f"Invalid state_backend type: {type(backend_spec)}")
 
 
-def test_run_with_empty_list():
+def run(
+    target: Union[LazyResult, List[Any], tuple[Any, ...]],
+    params: Optional[Dict[str, Any]] = None,
+    system_resources: Optional[Dict[str, Any]] = None,
+    log_level: str = "INFO",
+    log_format: str = "human",
+    connector: Optional[Connector] = None,
+    state_backend: Union[str, Callable[[str], StateBackend], None] = None,
+) -> Any:
     """
-    Verifies that passing an empty list is a valid operation and returns an empty list.
-    """
-    results = cs.run([])
-    assert results == []
+    Runs a Cascade workflow with a default engine configuration.
 
+    Args:
+        target: The LazyResult to execute, or a list/tuple of LazyResults
+                and literals to execute in parallel.
+        state_backend: A URI string (e.g. "redis://localhost") or a factory function
+                       that accepts a run_id and returns a StateBackend.
+    """
+    # 1. Setup the messaging renderer
+    if log_format == "json":
+        renderer = JsonRenderer(min_level=log_level)
+    else:
+        renderer = CliRenderer(store=bus.store, min_level=log_level)
+    bus.set_renderer(renderer)
+
+    # 2. Setup the event system
+    event_bus = MessageBus()
+    # Attach the human-readable log translator
+    HumanReadableLogSubscriber(event_bus)
+    # Attach the telemetry publisher if a connector is provided
+    if connector:
+        TelemetrySubscriber(event_bus, connector)
+
+    # 3. Handle Auto-Gathering
+    from .internal.inputs import _internal_gather
+
+    if isinstance(target, (list, tuple)):
+        # Handle edge case of empty list
+        if not target:
+            return []
+        # Wrap the iterable in the internal gather task
+        workflow_target = _internal_gather(*target)
+    else:
+        workflow_target = target
+
+    # 4. Assemble the default Engine
+    solver = NativeSolver()
+    executor = LocalExecutor()
+
+    sb_factory = _create_state_backend_factory(state_backend)
+
+    engine = Engine(
+        solver=solver,
+        executor=executor,
+        bus=event_bus,
+        system_resources=system_resources,
+        connector=connector,
+        state_backend_factory=sb_factory,
+    )
+
+    return asyncio.run(engine.run(workflow_target, params=params))
 ~~~~~
 
 ### 下一步建议
 
-我们已经创建了定义新功能的测试用例。下一步是执行这个测试并确认它会失败。一旦我们处于 RED 状态，我将生成下一个计划来修改 `cascade-sdk/src/cascade/__init__.py` 和 `cascade-sdk/src/cascade/internal/inputs.py` 以实现自动汇合逻辑，从而使这个测试通过 (GREEN)。
+我们已经成功地将 RED 状态转换为实现代码。现在，请重新运行 `tests/sdk/integration/test_auto_gathering.py` 中的测试。我预期所有测试都将通过，将我们的 TDD 周期推进到 GREEN 状态。

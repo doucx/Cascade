@@ -3,7 +3,7 @@
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 import asyncio
-from typing import Any, Dict, Optional, Union, Callable
+from typing import Any, Dict, Optional, Union, Callable, List
 
 # Core Specs
 from cascade.spec.task import task

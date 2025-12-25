@@ -1,367 +1,441 @@
-Excellent. With the core `MockExecutor` and `MockConnector` now centralized, we can proceed to the next tier of test doubles.
+很好，我们已经完成了核心协议 mock 的整合。现在，我们来处理最后一类——行为特化的 `Executor` 替身。
 
-Your analysis correctly identified `MockSolver` and `CaptureConnector` as the next targets. `MockSolver` is a classic "stub" that provides a canned response, perfect for isolating the `Engine` from the `Solver` logic.
+根据我们最初的分析，有三个分散的、用于模拟特定执行行为的 `Executor` 实现：`MockWorkExecutor`, `SlowWorkExecutor`, 和 `TimingWorkExecutor`。我们的通用 `cascade.testing.MockExecutor` 已经足够强大，可以完全取代它们。
 
-Interestingly, the functionality of `CaptureConnector` (a "spy" for the `publish` method) is already provided by our new, robust `MockConnector` via its `publish_log` attribute. This is a great outcome, as we can replace a custom implementation with our new standard tool, further reducing code duplication.
+这个计划将完成这项最后的整合工作，并在这个过程中顺便提升一个测试用例的健壮性。
 
-Here is the plan to extract `MockSolver` and refactor the test that uses `CaptureConnector`.
-
-## [WIP] refactor: Consolidate MockSolver and replace CaptureConnector
+## [WIP] refactor: 使用 MockExecutor 统一所有行为型测试替身
 
 ### 用户需求
-1.  将 `test_engine_core.py`中的 `MockSolver` 提取到 `cascade.testing` 模块中。
-2.  重构 `test_telemetry_contract.py`，用 `cascade.testing` 中通用的 `MockConnector` 替换其本地的 `CaptureConnector` 实现。
+将所有用于模拟特定行为（如延迟、计时）的 `Executor` 实现 (`MockWorkExecutor`, `SlowWorkExecutor`, `TimingWorkExecutor`) 替换为 `cascade.testing` 中统一的 `MockExecutor`。
 
 ### 评论
-这次重构有两个好处：一是将 `MockSolver` 这个重要的测试桩（stub）标准化，使其可被复用；二是通过移除 `CaptureConnector` 并改用 `MockConnector`，我们验证了通用测试工具的价值和设计，并进一步减少了项目中的冗余代码。
+这是对测试基础设施进行标准化的收官之战。通过这次重构，我们将彻底消除所有重复的 `Executor` 测试辅助类，确保所有相关测试都依赖于一个统一的、行为可预测的来源。这不仅能让代码库更整洁，也使得未来的测试编写工作更加简单。
 
 ### 目标
-1.  在 `packages/cascade-sdk/src/cascade/testing.py` 文件中添加 `MockSolver` 类。
-2.  更新 `packages/cascade-engine/tests/runtime/test_engine_core.py`，移除本地的 `MockSolver` 定义，改为从 `cascade.testing` 导入。
-3.  更新 `packages/cascade-cli-observer/tests/test_telemetry_contract.py`，移除 `CaptureConnector` 类，并修改测试逻辑以使用 `MockConnector` 的 `publish_log` 属性来捕获和断言 payload。
+1.  重构 `tests/e2e/runtime/harness.py`，移除 `MockWorkExecutor`。
+2.  重构 `tests/e2e/runtime/test_e2e_cli_integration.py`，使其使用通用的 `MockExecutor`。
+3.  重构 `tests/e2e/runtime/test_e2e_concurrency_control.py`，用 `MockExecutor(delay=0.05)` 替换本地的 `SlowWorkExecutor`。
+4.  重构 `tests/e2e/runtime/test_e2e_rate_limit_control.py`，用 `MockExecutor` 替换 `TimingWorkExecutor`，并改进其测试逻辑，通过事件总线 (`MessageBus` 和 `SpySubscriber`) 来断言任务完成的时间，而不是依赖 `Executor` 的返回值。
 
 ### 基本原理
-我们将分三步完成此次重构。首先，通过 `write_file` 将 `MockSolver` 添加到 `cascade.testing` 中。接着，用 `write_file` 覆盖 `test_engine_core.py` 以使用新的导入。最后，用 `write_file` 覆盖 `test_telemetry_contract.py`，不仅移除旧的 `CaptureConnector`，还相应地调整了测试断言逻辑，以适配 `MockConnector` 记录发布历史的方式。
+我们将逐一替换这些特化的 `Executor`。对于 `MockWorkExecutor` 和 `SlowWorkExecutor`，这是一个直接的替换。对于 `TimingWorkExecutor`，情况稍微复杂，因为它被设计为返回任务的完成时间戳。与其让通用的 `MockExecutor` 支持这个特例，不如遵循“验证意图而非实现”的原则，改进测试本身。我们将修改 `test_e2e_rate_limit_control`，让它通过监听 `TaskExecutionFinished` 事件来获取任务的完成时间。这是一种更健壮的测试模式，因为它直接观察系统的外部行为（事件），而不是依赖一个内部组件（Executor）的特定返回值。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/tests #comp/cli #scope/dx #ai/instruct #task/domain/testing #task/object/test-doubles #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-doubles #task/action/refactor #task/state/end
 
 ---
 ### Script
 
-#### Acts 1: 将 MockSolver 添加到 `cascade.testing`
+#### Acts 1: 移除 `harness.py` 中的 `MockWorkExecutor`
 
-我们将 `MockSolver` 类添加到 `testing.py` 模块，使其成为一个可共享的测试工具。
+首先，我们清理测试工具集 `harness.py`，移除现在已经冗余的 `MockWorkExecutor`。
 
 ~~~~~act
 write_file
-packages/cascade-sdk/src/cascade/testing.py
+tests/e2e/runtime/harness.py
 ~~~~~
 ~~~~~python
-from contextlib import contextmanager
-from typing import Callable, Any, List, Dict, Awaitable
-from unittest.mock import MagicMock
 import asyncio
+from typing import Dict, Any, List
+import uuid
+from dataclasses import asdict
 
+from cascade.connectors.local import LocalBusConnector
+from cascade.spec.protocols import Connector, Executor
+from cascade.spec.constraint import GlobalConstraint
+from cascade.graph.model import Node
+
+
+# Alias for backward compatibility with existing e2e tests
+# LocalBusConnector handles its own global state internally.
+InProcessConnector = LocalBusConnector
+
+
+class ControllerTestApp:
+    """A lightweight simulator for the cs-controller CLI tool."""
+
+    def __init__(self, connector: Connector):
+        self.connector = connector
+
+    async def pause(self, scope: str = "global"):
+        constraint = GlobalConstraint(
+            id=f"pause-{scope}-{uuid.uuid4().hex[:8]}",
+            scope=scope,
+            type="pause",
+            params={},
+        )
+        await self._publish(scope, constraint)
+
+    async def resume(self, scope: str = "global"):
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+        # Sending an empty dict simulates the connector's behavior for an empty payload
+        await self.connector.publish(topic, {}, retain=True)
+
+    async def _publish(self, scope: str, constraint: GlobalConstraint):
+        payload = asdict(constraint)
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+        await self.connector.publish(topic, payload, retain=True)
+~~~~~
+
+#### Acts 2: 更新 CLI 集成测试以使用 `MockExecutor`
+
+接着，我们更新 `test_e2e_cli_integration.py`，使其从 `cascade.testing` 导入并使用 `MockExecutor`。
+
+~~~~~act
+write_file
+tests/e2e/runtime/test_e2e_cli_integration.py
+~~~~~
+~~~~~python
+import asyncio
+import pytest
+import cascade as cs
+from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
-from cascade.spec.protocols import Solver, Executor, ExecutionPlan, Connector
-from cascade.graph.model import Node, Graph
+from cascade.runtime.events import TaskExecutionFinished
+from cascade.testing import MockExecutor
+
+# 导入 app 模块中的核心异步逻辑函数
+from cascade.cli.controller import app as controller_app
+
+from .harness import InProcessConnector
+
+# --- Test Harness for In-Process CLI Interaction ---
 
 
-@contextmanager
-def override_resource(
-    engine: "Engine", name: str, new_resource_func: Callable[[], Any]
-):
+class SharedInstanceConnector:
     """
-    A context manager to temporarily override a resource for testing purposes.
-
-    Usage:
-        engine = Engine()
-        engine.register(production_db)
-
-        with override_resource(engine, "production_db", mock_db):
-            engine.run(my_task) # my_task will receive mock_db
-    """
-    if not hasattr(engine, "override_resource_provider"):
-        raise TypeError("The provided engine does not support resource overriding.")
-
-    original = engine.get_resource_provider(name)
-    try:
-        engine.override_resource_provider(name, new_resource_func)
-        yield
-    finally:
-        engine.override_resource_provider(name, original)
-
-
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
-
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
-
-    def collect(self, event: Event):
-        self.events.append(event)
-
-    def events_of_type(self, event_type):
-        """Returns a list of all events of a specific type."""
-        return [e for e in self.events if isinstance(e, event_type)]
-
-
-class SpySolver(Solver):
-    """
-    A test double for the Solver protocol that spies on calls to `resolve`
-    while delegating to a real underlying solver.
+    Wraps an InProcessConnector to prevent 'disconnect' calls from affecting
+    the underlying shared instance. This allows the Engine to stay connected
+    even when the short-lived CLI command 'disconnects'.
     """
 
-    def __init__(self, underlying_solver: Solver):
-        self.underlying_solver = underlying_solver
-        self.resolve = MagicMock(wraps=self.underlying_solver.resolve)
+    def __init__(self, delegate: InProcessConnector):
+        self._delegate = delegate
 
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # This method's body is effectively replaced by the MagicMock wrapper,
-        # but is required to satisfy the Solver protocol's type signature.
-        # The actual call is handled by the `wraps` argument in __init__.
+    async def connect(self):
+        # Ensure the underlying connector is active
+        await self._delegate.connect()
+
+    async def disconnect(self):
+        # CRITICAL: Ignore disconnects from the CLI.
+        # Since we share the single InProcessConnector instance with the Engine,
+        # checking out would kill the Engine's subscription loop too.
         pass
 
+    async def publish(self, *args, **kwargs):
+        await self._delegate.publish(*args, **kwargs)
 
-class MockSolver(Solver):
-    """
-    A test double for the Solver protocol that returns a pre-programmed plan,
-    bypassing any real resolution logic.
-    """
-
-    def __init__(self, plan: ExecutionPlan):
-        self._plan = plan
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # Return the pre-programmed plan regardless of the input graph
-        return self._plan
+    async def subscribe(self, *args, **kwargs):
+        await self._delegate.subscribe(*args, **kwargs)
 
 
-class SpyExecutor(Executor):
-    """A test double for the Executor protocol that logs all calls to `execute`."""
+class InProcessController:
+    """A test double for the controller CLI that calls its core logic in-process."""
 
-    def __init__(self):
-        self.call_log: List[Node] = []
+    def __init__(self, connector: InProcessConnector):
+        self.connector = connector
 
-    async def execute(
+    async def set_limit(
         self,
-        node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-    ) -> Any:
-        self.call_log.append(node)
-        return f"executed_{node.name}"
-
-
-class MockExecutor(Executor):
-    """
-    A generic mock for the Executor protocol that can simulate various
-    behaviors like delays or returning specific values.
-    """
-
-
-
-    def __init__(self, delay: float = 0, return_value: Any = "result"):
-        self.delay = delay
-        self.return_value = return_value
-
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        if self.delay > 0:
-            await asyncio.sleep(self.delay)
-
-        # A simple logic to return something from inputs if available
-        if args:
-            return args[0]
-        if kwargs:
-            return next(iter(kwargs.values()))
-
-        return self.return_value
-
-
-class MockConnector(Connector):
-    """
-    A mock connector for testing that simulates MQTT behavior,
-    including retained messages and topic matching.
-    """
-
-    def __init__(self):
-        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
-        # Simulate broker storage for retained messages: topic -> payload
-        self.retained_messages: Dict[str, Dict[str, Any]] = {}
-        self.connected: bool = False
-        self.disconnected: bool = False
-        self.publish_log: List[Dict[str, Any]] = []
-
-    async def connect(self) -> None:
-        self.connected = True
-        self.disconnected = False
-
-    async def disconnect(self) -> None:
-        self.disconnected = True
-        self.connected = False
-
-    async def publish(
-        self, topic: str, payload: Dict[str, Any], retain: bool = False, qos: int = 0
-    ) -> None:
-        """Simulates publishing a message, triggering subscribers and handling retention."""
-        self.publish_log.append(
-            {"topic": topic, "payload": payload, "retain": retain, "qos": qos}
+        scope: str,
+        rate: str | None = None,
+        concurrency: int | None = None,
+        ttl: int | None = None,
+        backend: str = "mqtt",
+    ):
+        """Directly calls the async logic, providing defaults for missing args."""
+        await controller_app._publish_limit(
+            scope=scope,
+            concurrency=concurrency,
+            rate=rate,
+            ttl=ttl,
+            backend=backend,
+            hostname="localhost",  # Constant for test purposes
+            port=1883,  # Constant for test purposes
         )
 
-        if retain:
-            if payload:
-                self.retained_messages[topic] = payload
-            elif topic in self.retained_messages:
-                # An empty payload on a retained topic clears it
-                del self.retained_messages[topic]
 
-        await self._trigger_message(topic, payload)
+@pytest.fixture
+def controller_runner(monkeypatch):
+    """
+    Provides a way to run cs-controller commands in-process with a mocked connector.
+    """
+    # 1. Create the master connector that holds the state (topics, queues)
+    master_connector = InProcessConnector()
 
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        self.subscriptions[topic] = callback
+    # 2. Create a wrapper for the CLI that won't close the master connector
+    cli_connector_wrapper = SharedInstanceConnector(master_connector)
 
-        # Immediate delivery of matching retained messages upon subscription
-        for retained_topic, payload in self.retained_messages.items():
-            if self._topic_matches(subscription=topic, topic=retained_topic):
-                # Run in a task to avoid blocking the subscribe call itself
-                asyncio.create_task(callback(retained_topic, payload))
+    # 3. Patch the CLI app to use our wrapper
+    monkeypatch.setattr(
+        controller_app.MqttConnector,
+        "__new__",
+        lambda cls, *args, **kwargs: cli_connector_wrapper,
+    )
 
-    def seed_retained_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to pre-seed a retained message on the 'broker' for test setup."""
-        self.retained_messages[topic] = payload
-
-    async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to simulate receiving a message, used by tests and publish()."""
-        for sub_topic, callback in self.subscriptions.items():
-            if self._topic_matches(subscription=sub_topic, topic=topic):
-                await callback(topic, payload)
-
-    def _topic_matches(self, subscription: str, topic: str) -> bool:
-        # Simple topic matching for direct match and wildcard at the end
-        if subscription == topic:
-            return True
-        if subscription.endswith("/#"):
-            prefix = subscription[:-2]
-            if topic.startswith(prefix):
-                return True
-        return False
-~~~~~
-
-#### Acts 2: 重构 `test_engine_core.py`
-
-现在，我们将更新 `test_engine_core.py` 以使用 `cascade.testing` 中的 `MockSolver`。
-
-~~~~~act
-write_file
-packages/cascade-engine/tests/runtime/test_engine_core.py
-~~~~~
-~~~~~python
-import pytest
-from typing import List, Any, Dict
-
-import cascade as cs
-from cascade.graph.build import build_graph
-from cascade.graph.model import Node, Graph
-from cascade.runtime import Engine, MessageBus, ExecutionPlan
-from cascade.testing import SpyExecutor, MockSolver
+    # 4. Return the controller initialized with the MASTER connector
+    #    (The Engine will use this master connector directly)
+    return InProcessController(master_connector)
 
 
-# --- Test Case ---
+# --- The Failing Test Case ---
 
 
 @pytest.mark.asyncio
-async def test_engine_follows_solver_plan():
+async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
     """
-    Tests that Engine correctly iterates over the plan provided by a Solver
-    and calls the Executor for each node in the correct order.
+    This test is EXPECTED TO FAIL with a timeout on the pre-fix codebase.
+    It verifies that a non-idempotent CLI controller creates conflicting
+    constraints that deadlock the engine. After the fix is applied, this
+    test should pass.
     """
-
-    # 1. Define a simple workflow (the graph structure doesn't matter much
-    # as the MockSolver will override the plan)
-    @cs.task
-    def task_a():
-        pass
+    bus, spy = bus_and_spy
 
     @cs.task
-    def task_b(x):
-        pass
+    def fast_task(i: int):
+        return i
 
-    workflow = task_b(task_a())
-    graph, _ = build_graph(workflow)
-    node_a = next(n for n in graph.nodes if n.name == "task_a")
-    node_b = next(n for n in graph.nodes if n.name == "task_b")
+    workflow = fast_task.map(i=range(10))
 
-    # 2. Define the execution plan that the MockSolver will return
-    # A simple sequential plan: [A], then [B]
-    mock_plan: ExecutionPlan = [[node_a], [node_b]]
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(),
+        bus=bus,
+        connector=controller_runner.connector,
+    )
 
-    # 3. Setup test doubles and Engine
-    solver = MockSolver(plan=mock_plan)
-    executor = SpyExecutor()
-    bus = MessageBus()
+    engine_task = asyncio.create_task(engine.run(workflow))
 
-    engine = Engine(solver=solver, executor=executor, bus=bus)
+    try:
+        # 1. Set a slow limit.
+        await controller_runner.set_limit(scope="global", rate="1/s")
 
-    # 4. Run the engine
-    await engine.run(workflow)
+        # 2. Wait to confirm the engine is throttled.
+        for _ in range(20):
+            await asyncio.sleep(0.1)
+            if len(spy.events_of_type(TaskExecutionFinished)) > 0:
+                break
 
-    # 5. Assert the executor was called in the correct order
-    assert len(executor.call_log) == 2
-    assert executor.call_log[0].name == "task_a"
-    assert executor.call_log[1].name == "task_b"
+        assert len(spy.events_of_type(TaskExecutionFinished)) >= 1, (
+            "Engine did not start processing tasks under the initial slow rate limit."
+        )
+
+        # 3. Set a fast limit. The bug causes this to ADD a new conflicting constraint.
+        await controller_runner.set_limit(scope="global", rate="100/s")
+
+        # 4. The engine should now finish quickly. The bug will cause a timeout here.
+        await asyncio.wait_for(engine_task, timeout=2.0)
+
+    finally:
+        # Cleanup: ensure engine task is cancelled if it's still running
+        if not engine_task.done():
+            engine_task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await engine_task
+
+    # This part is only reached if the test passes (i.e., after the bug is fixed).
+    assert len(spy.events_of_type(TaskExecutionFinished)) == 10
 ~~~~~
 
-#### Acts 3: 重构 `test_telemetry_contract.py`
+#### Acts 3: 更新并发控制测试
 
-最后，我们将用 `MockConnector` 替换 `CaptureConnector`，并相应地调整测试代码。
+然后，我们重构 `test_e2e_concurrency_control.py`，用 `MockExecutor` 替换 `SlowWorkExecutor`。
 
 ~~~~~act
 write_file
-packages/cascade-cli-observer/tests/test_telemetry_contract.py
+tests/e2e/runtime/test_e2e_concurrency_control.py
 ~~~~~
 ~~~~~python
-import pytest
 import asyncio
-from unittest.mock import MagicMock
+import time
+from typing import Dict, Any, List
+import uuid
+from dataclasses import asdict
 
-from cascade.runtime.events import TaskExecutionFinished
-from cascade.runtime.subscribers import TelemetrySubscriber
-from cascade.cli.observer.app import on_message
-from cascade.testing import MockConnector
+import pytest
+import cascade as cs
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.testing import MockExecutor
+
+from .harness import InProcessConnector
 
 
 @pytest.mark.asyncio
-async def test_telemetry_subscriber_to_observer_contract():
+async def test_e2e_concurrency_control():
     """
-    Verifies that the JSON produced by TelemetrySubscriber is correctly
-    consumed by the cs-observer's on_message handler.
+    Full end-to-end test with Retained Messages.
+    1. Controller publishes constraint (Retained).
+    2. Engine starts, connects, receives config, AND THEN executes.
     """
-    # 1. ARRANGE: Producer side
-    connector = MockConnector()
-    subscriber = TelemetrySubscriber(MagicMock(), connector)
+    # 1. Setup shared communication bus
+    connector = InProcessConnector()
 
-    # 2. PRODUCE: Create a runtime event and have the subscriber process it
-    event = TaskExecutionFinished(
-        run_id="run-contract-test",
-        task_id="task-abc",
-        task_name="contract_task",
-        status="Succeeded",
-        duration=0.123,
+    # 2. Setup the Controller (simulated by manual publish helper in this test context if needed,
+    # or using the simplified helper from harness but constructing payload manually as in original test)
+    # The ControllerTestApp in harness is generic. We can extend it or use it.
+    # The original test had set_concurrency_limit helper. Let's replicate or inline it.
+
+    # Inline setting concurrency limit using standard controller app logic
+    # But wait, harness ControllerTestApp only has pause/resume.
+    # Let's use the connector directly or update harness later?
+    # To keep this atomic, I'll just publish via connector here or extend ControllerTestApp locally if needed.
+    # Actually, let's just do manual publish to keep it simple as in harness.
+
+    # To avoid changing harness too much in Acts 1, I will implement helper here.
+    from cascade.spec.constraint import GlobalConstraint
+
+    async def set_concurrency_limit(scope: str, limit: int):
+        constraint = GlobalConstraint(
+            id=f"concurrency-{scope}-{uuid.uuid4().hex[:8]}",
+            scope=scope,
+            type="concurrency",
+            params={"limit": limit},
+        )
+        payload = asdict(constraint)
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+        await connector.publish(topic, payload, retain=True)
+
+    # 3. Publish the constraint FIRST (Simulating existing environment config)
+    # Limit task concurrency to 1
+    await set_concurrency_limit(scope="task:slow_task", limit=1)
+
+    # 4. Define the workflow
+    @cs.task
+    def slow_task(x):
+        return x
+
+    # 4 tasks that would normally run in parallel in ~0.05s
+    workflow = slow_task.map(x=[1, 2, 3, 4])
+
+    # 5. Setup the Engine
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(delay=0.05),
+        bus=MessageBus(),
+        connector=connector,
     )
-    subscriber.on_event(event)
 
-    # Let the asyncio.create_task in on_event run
-    await asyncio.sleep(0.01)
+    # 6. Run the engine
+    start_time = time.time()
+    results = await engine.run(workflow)
+    duration = time.time() - start_time
 
-    # 3. ASSERT: The payload was captured in the publish log
-    assert len(connector.publish_log) == 1
-    produced_payload = connector.publish_log[0]["payload"]
+    # 7. Assertions
+    assert sorted(results) == [1, 2, 3, 4]
 
-    assert produced_payload is not None
-    assert produced_payload["run_id"] == "run-contract-test"
-    assert produced_payload["body"]["task_name"] == "contract_task"
-
-    # 4. ARRANGE: Consumer side
-    mock_bus = MagicMock()
-
-    # 5. CONSUME: Feed the produced JSON directly to the observer's handler
-    # We patch the bus used by the observer to intercept the result
-    observer_app_bus_path = "cascade.cli.observer.app.bus"
-    with pytest.MonkeyPatch.context() as m:
-        m.setattr(observer_app_bus_path, mock_bus)
-        await on_message("a/topic", produced_payload)
-
-    # 6. ASSERT: The observer called the bus with the correct, parsed information
-    mock_bus.info.assert_any_call(
-        "observer.telemetry.task_state.COMPLETED",
-        task_name="contract_task",
-        duration_ms=123.0,
-        error="",
+    # With limit=1, 4 tasks of 0.05s should take >= 0.2s.
+    assert duration >= 0.18, (
+        f"Expected serial execution (~0.2s), but took {duration:.4f}s"
     )
+~~~~~
+
+#### Acts 4: 更新速率限制测试并改进其断言逻辑
+
+最后，我们重构 `test_e2e_rate_limit_control.py`，用 `MockExecutor` 替换 `TimingWorkExecutor`，并引入 `SpySubscriber` 来进行更可靠的时间断言。
+
+~~~~~act
+write_file
+tests/e2e/runtime/test_e2e_rate_limit_control.py
+~~~~~
+~~~~~python
+import time
+import asyncio
+import pytest
+import cascade as cs
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import TaskExecutionFinished
+from cascade.testing import MockExecutor, SpySubscriber
+
+from .harness import InProcessConnector
+
+
+@pytest.mark.asyncio
+async def test_e2e_rate_limit_control(bus_and_spy):
+    """
+    Full end-to-end test for rate limiting.
+    1. Controller publishes a rate limit constraint (Retained).
+    2. Engine starts, receives the constraint, and throttles execution.
+    """
+    # 1. Setup shared communication bus
+    connector = InProcessConnector()
+    bus, spy = bus_and_spy
+
+    # 2. Setup Helper (Inline to avoid complex harness changes for now)
+    from cascade.spec.constraint import GlobalConstraint
+    from dataclasses import asdict
+    import uuid
+
+    async def set_rate_limit(scope: str, rate: str, capacity: float = None):
+        params = {"rate": rate}
+        if capacity is not None:
+            params["capacity"] = capacity
+
+        constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
+        constraint = GlobalConstraint(
+            id=constraint_id,
+            scope=scope,
+            type="rate_limit",
+            params=params,
+        )
+        payload = asdict(constraint)
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+        await connector.publish(topic, payload, retain=True)
+
+    # 3. Publish the constraint FIRST.
+    # Limit to 5 tasks/sec (1 every 0.2s), with a burst capacity of 2.
+    await set_rate_limit(scope="task:fast_task", rate="5/s", capacity=2)
+
+    # 4. Define the workflow
+    @cs.task
+    def fast_task():
+        return  # Does almost nothing
+
+    # 4 tasks that should be rate-limited
+    workflow = fast_task.map(x=[1, 2, 3, 4])
+
+    # 5. Setup the Engine
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(delay=0.01),  # Short work time
+        bus=bus,
+        connector=connector,
+    )
+
+    # 6. Run the engine
+    start_time = time.time()
+    await engine.run(workflow)
+    duration = time.time() - start_time
+
+    # 7. Assertions based on event timestamps
+    finished_events = spy.events_of_type(TaskExecutionFinished)
+    assert len(finished_events) == 4
+
+    finish_times = sorted([e.timestamp - start_time for e in finished_events])
+
+    # Expected timing:
+    # - Capacity=2, so Task 1 & 2 run immediately in the first 0.01s slot.
+    # - Rate=5/s -> 1 token refills every 0.2s.
+    # - T=0.01s: T1, T2 finish. Bucket is empty.
+    # - T=0.20s: 1 token available. T3 starts.
+    # - T=0.21s: T3 finishes.
+    # - T=0.40s: 1 token available. T4 starts.
+    # - T=0.41s: T4 finishes.
+    # Total duration should be ~0.4s. Without rate limit, it's ~0.01s.
+
+    assert duration >= 0.38, (
+        f"Expected throttled execution (~0.4s), but took {duration:.4f}s"
+    )
+
+    # Check the timestamps to verify sequential execution after burst
+    # First two should be very close together
+    assert finish_times[1] - finish_times[0] < 0.05
+    # Gap between 2nd and 3rd should be ~0.2s
+    assert finish_times[2] - finish_times[1] > 0.18
+    # Gap between 3rd and 4th should be ~0.2s
+    assert finish_times[3] - finish_times[2] > 0.18
 ~~~~~

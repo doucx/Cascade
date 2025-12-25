@@ -9,17 +9,6 @@ from cascade.spec.constraint import GlobalConstraint
 from cascade.graph.model import Node
 
 
-class MockWorkExecutor(Executor):
-    """Executor that simulates short, time-consuming work."""
-
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        # Yield control to event loop to simulate async boundary
-        await asyncio.sleep(0)
-        if kwargs:
-            return next(iter(kwargs.values()))
-        return "done"
-
-
 # Alias for backward compatibility with existing e2e tests
 # LocalBusConnector handles its own global state internally.
 InProcessConnector = LocalBusConnector

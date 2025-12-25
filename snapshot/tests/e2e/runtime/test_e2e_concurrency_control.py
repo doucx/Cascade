@@ -9,18 +9,9 @@ import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.spec.protocols import Node, Executor
+from cascade.testing import MockExecutor
 
 from .harness import InProcessConnector
-
-
-# Override harness executor to simulate specific timing for this test
-class SlowWorkExecutor(Executor):
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        await asyncio.sleep(0.05)
-        if kwargs:
-            return next(iter(kwargs.values()))
-        return "result"
 
 
 @pytest.mark.asyncio
@@ -73,7 +64,7 @@ async def test_e2e_concurrency_control():
     # 5. Setup the Engine
     engine = Engine(
         solver=NativeSolver(),
-        executor=SlowWorkExecutor(),
+        executor=MockExecutor(delay=0.05),
         bus=MessageBus(),
         connector=connector,
     )

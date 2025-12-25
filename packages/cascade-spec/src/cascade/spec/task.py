@@ -22,9 +22,12 @@ class Task(Generic[T]):
     Wraps a callable to make it return a LazyResult when called.
     """
 
-    def __init__(self, func: Callable[..., T], name: Optional[str] = None):
+    def __init__(
+        self, func: Callable[..., T], name: Optional[str] = None, pure: bool = False
+    ):
         self.func = func
         self.name = name or func.__name__
+        self.pure = pure
         self._signature = inspect.signature(func)
         self.is_async = inspect.iscoroutinefunction(func)
         # Cache for AST analysis results to verify TCO paths
@@ -49,14 +52,17 @@ class Task(Generic[T]):
 
 
 def task(
-    func: Optional[Callable[..., T]] = None, *, name: Optional[str] = None
+    func: Optional[Callable[..., T]] = None,
+    *,
+    name: Optional[str] = None,
+    pure: bool = False,
 ) -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:
     """
     Decorator to convert a function into a Task.
     """
 
     def wrapper(f: Callable[..., T]) -> Task[T]:
-        return Task(f, name=name)
+        return Task(f, name=name, pure=pure)
 
     if func:
         return wrapper(func)

@@ -1,117 +1,57 @@
-## [WIP] feat(engine): 在 LocalExecutor 中实现同步任务的自动线程卸载
+太棒了！测试通过意味着我们的隐式卸载逻辑已经生效，能够正确地在不阻塞事件循环的情况下运行同步任务。现在，我将生成一个 `[COMMIT]` 计划，将这些变更作为一个逻辑单元提交到代码库。
+
+## [COMMIT] feat(engine): implement implicit thread offloading for sync tasks
 
 ### 用户需求
-根据建议书的第一点，我们需要实现对同步任务的“隐式卸载”。这意味着当 `Executor` 遇到一个普通的同步函数 (`def`) 时，不应直接在当前的事件循环线程中运行它（这会阻塞整个引擎），而应将其放到一个独立的线程中运行。
-
-### 错误分析
-当前的测试失败 `AssertionError: Async task finished at ..., which is after Sync task ...` 证实了在现有的实现中，同步任务 (`time.sleep(0.2)`) 阻塞了事件循环，导致并发的异步任务 (`asyncio.sleep(0.1)`) 只能在同步任务完成后才开始执行，从而出现了异步任务反而比同步任务结束得晚的现象。
+实现“计算与 IO 隔离”建议书中的核心功能：框架应自动检测同步任务 (`def`)，并利用 `asyncio.to_thread` 将其卸载到独立线程中执行，以防止阻塞主事件循环，从而实现同步与异步任务的真正并发。
 
 ### 评论
-这个修复是 Cascade 向“高性能运行时”迈进的一大步。它利用 Python 的 `asyncio.to_thread`（或等价机制）来自动管理阻塞操作，使得用户无需深入理解异步编程的细节（如 `run_in_executor`），就能写出高性能的混合工作流。这也符合我们“降低认知负担”的设计哲学。
+这是一个重大的架构升级。通过消除同步阻塞任务对引擎的负面影响，我们极大地提高了 Cascade 运行时的鲁棒性和性能。开发者现在可以放心地在任务中使用同步库（如 `requests`, `pandas`, `time.sleep` 等），而不会导致整个智能体系统的遥测或控制逻辑响应中断。
 
 ### 目标
-1.  修改 `packages/cascade-engine/src/cascade/adapters/executors/local.py`。
-2.  引入 `asyncio` 模块。
-3.  在 `execute` 方法中，利用 `node.is_async` 标志进行分支处理：
-    *   如果是异步节点，保持原有的 `await` 调用。
-    *   如果是同步节点，使用 `await asyncio.to_thread(node.callable_obj, *args, **kwargs)` 进行执行。
+1.  将 `LocalExecutor` 的逻辑变更添加到暂存区。
+2.  将新创建的 E2E 测试文件添加到暂存区。
+3.  创建一个详细的 Git 提交。
 
 ### 基本原理
-`asyncio.to_thread` 会在一个独立的线程中运行提供的函数，并返回一个协程。这允许主事件循环在等待线程完成的同时，继续处理其他协程（如我们的异步任务、心跳检测、IO回调等）。这样，`time.sleep(0.2)` 只会阻塞那个工作线程，而不会阻塞主循环，从而实现了真正的并行。
+该功能的实现逻辑简单但高效：它将执行决策权从用户手中移交给了运行时引擎。通过这种方式，我们不仅解决了技术上的性能瓶颈，更重要的是降低了用户的心理负担，使其能专注于业务逻辑而非底层调度细节。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/engine #concept/executor #scope/perf #scope/dx #ai/instruct #task/domain/execution #task/object/local-executor #task/action/implement-offloading #task/state/continue
+#intent/build #flow/ready #priority/high #comp/engine #concept/executor #scope/perf #scope/dx #ai/instruct #task/domain/execution #task/object/offloading-feature #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 LocalExecutor 以支持隐式卸载
+#### Acts 1: 提交隐式线程卸载功能及其测试
 
-我们将更新 `LocalExecutor`，使其能够区分同步和异步任务，并将同步任务自动分派到线程池中。
+我将把受影响的文件添加到 Git 暂存区，并创建一个内容详尽的提交记录。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-engine/src/cascade/adapters/executors/local.py
+tests/engine/e2e/test_offloading.py
 ~~~~~
-~~~~~python
-from typing import Any, Dict, List
-from cascade.graph.model import Node
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.graph.exceptions import StaticGraphError
 
-
-class LocalExecutor:
-    """
-    An executor that runs tasks sequentially in the current process.
-    """
-
-    async def execute(
-        self,
-        node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-    ) -> Any:
-        """
-        Executes a single node's callable object with the provided arguments.
-        """
-        if node.callable_obj is None:
-            raise TypeError(
-                f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
-            )
-
-        if node.is_async:
-            result = await node.callable_obj(*args, **kwargs)
-        else:
-            result = node.callable_obj(*args, **kwargs)
-
-        # Runtime guard against the "task returns LazyResult" anti-pattern.
-        if isinstance(result, (LazyResult, MappedLazyResult)):
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-import asyncio
-from typing import Any, Dict, List
-from cascade.graph.model import Node
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.graph.exceptions import StaticGraphError
+~~~~~text
+feat(engine): implement implicit thread offloading for sync tasks
 
+Introduces automatic thread offloading for synchronous tasks within the LocalExecutor, as proposed in the "Compute and IO Isolation" roadmap.
 
-class LocalExecutor:
-    """
-    An executor that runs tasks sequentially in the current process.
-    """
+Key changes:
+1.  **LocalExecutor Enhancement**: The executor now checks the `is_async` flag of a Node. Synchronous tasks (defined with 'def') are automatically wrapped in `asyncio.to_thread`, ensuring they run in a separate thread pool and do not block the main event loop.
+2.  **Performance & DX**: This allows standard Python blocking operations (like time.sleep, synchronous I/O, or heavy CPU tasks) to coexist with async tasks without starving the engine's core scheduling or telemetry logic.
+3.  **New E2E Test**: Added `tests/engine/e2e/test_offloading.py` which strictly verifies that a 0.1s async task can finish before a 0.2s blocking sync task, proving parallel execution.
 
-    async def execute(
-        self,
-        node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-    ) -> Any:
-        """
-        Executes a single node's callable object with the provided arguments.
-        """
-        if node.callable_obj is None:
-            raise TypeError(
-                f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
-            )
-
-        if node.is_async:
-            result = await node.callable_obj(*args, **kwargs)
-        else:
-            # Implicit Offloading:
-            # Synchronous tasks are offloaded to a separate thread to prevent blocking
-            # the main asyncio event loop. This allows async tasks and IO operations
-            # to run concurrently with CPU-bound or blocking sync tasks.
-            result = await asyncio.to_thread(node.callable_obj, *args, **kwargs)
-
-        # Runtime guard against the "task returns LazyResult" anti-pattern.
-        if isinstance(result, (LazyResult, MappedLazyResult)):
+This change significantly improves the runtime's reliability in mixed-workload environments.
 ~~~~~
 
 ### 下一步建议
-代码修改完成后，我们将再次运行 `tests/engine/e2e/test_offloading.py`。这一次，我们预期：
-1.  异步任务将先于同步任务完成（因为它只需要 0.1s，且不再被阻塞）。
-2.  测试将通过 (GREEN)。
-3.  这标志着 P0 级任务“关于引入‘计算与 IO 隔离’调度语法糖的建议书”的第一阶段目标达成。
+我们已经完成了建议书中的第一阶段任务。接下来，我们可以按照路线图继续推进：
+- **语义化调度标签**: 允许用户显式标记 `@cs.task(mode="compute")` 以便使用专用的线程池。
+- **性能诊断辅助**: 在 `dry_run` 阶段检测未标记卸载的潜在耗时同步任务并发出警告。
 
-接下来，我们将考虑建议书中的其他优化点，如“语义化调度标签”或“开发者诊断辅助”，但首先要确保这个核心功能稳固。
+如果你准备好进行下一步，我建议先实施“语义化调度标签”，这能进一步优化资源分配策略。

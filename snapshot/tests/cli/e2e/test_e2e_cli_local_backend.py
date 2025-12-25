@@ -8,12 +8,20 @@ from cascade.cli.observer.app import app as observer_app
 from cascade.connectors.local import LocalConnector
 
 
+from cascade.common.messaging import bus
+from cascade.common.renderers import CliRenderer
+
+
 @pytest.fixture
 def isolated_db_path(tmp_path: Path, monkeypatch):
     """
     Fixture to create an isolated SQLite database for tests and patch the
     hardcoded default path in the CLI applications.
     """
+    # CRITICAL: Reset the global message bus renderer before each test run.
+    # This prevents state pollution where the bus holds a renderer pointing to
+    # a closed stream from a previous CliRunner context.
+    bus.set_renderer(CliRenderer(store=bus.store))
     db_path = tmp_path / "test-control.db"
 
     # Patch 1: The default path in the LocalConnector constructor, used by cs-controller

@@ -80,5 +80,6 @@ def test_app_dry_run_with_list_input(capsys):
     # Header, t_a, t_b, _internal_gather, Footer
     assert len(lines) == 5
     assert "_internal_gather" in lines[-2]
-    node_names = {l.split(' ')[1] for l in lines[1:-2]}
+    # The slice should be [1:-1] to capture all nodes between header and footer
+    node_names = {l.split(' ')[1] for l in lines[1:-1]}
     assert node_names == {"t_a", "t_b", "_internal_gather"}

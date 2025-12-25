@@ -1,104 +1,102 @@
-您的观察非常敏锐，这就是我们进行这次大扫除的原因。
+好的，看来我们遇到了“似曾相识”的问题。
 
-经过对测试结果和目录结构的深入比对，我们发现了“消失的测试”和“臃肿的引擎”的真实原因：
+错误分析
 
-1.  **测试“流离失所” (`cascade-sdk` 劫持了 Provider 测试)**:
-    *   `cascade-library` 和 `cascade-provider-ipfs` 显示没有测试。
-    *   但在 `packages/cascade-sdk/tests/providers/` 目录下，我们找到了大量本该属于它们的测试文件（如 `test_http.py`, `test_s3.py`, `test_ipfs.py`）。
-    *   **原因**: 之前的重构可能将代码从 SDK 拆分到了 Library，但忘记了迁移对应的测试。
+当我们将测试文件从 `packages/cascade-engine/tests/e2e/` 移动到 `tests/e2e/runtime/` 时，我们实际上将它们移出了 `cascade-engine` 包的上下文。
 
-2.  **引擎“不堪重负” (`cascade-engine` 仍包含系统级测试)**:
-    *   `packages/cascade-engine/tests/e2e` 包含了大量如 `test_e2e_cli_integration.py` 的文件。这些测试验证的是 CLI、Controller 和 Engine 的协同工作，属于**系统级测试**，不应放在 Engine 包内部。
-    *   `packages/cascade-engine/tests/integration` 包含 `test_end_to_end.py`，这同样是跨组件的集成测试。
+1.  **Fixture 丢失 (`bus_and_spy`)**:
+    *   `bus_and_spy` 是在 `packages/cascade-engine/tests/conftest.py` 中定义的。
+    *   被移动后的测试现在位于 `tests/e2e/runtime/`。根据 Pytest 的发现规则，它们**无法再看到**位于 `packages/...` 内部的 `conftest.py`。
+    *   因此，所有依赖 `bus_and_spy` 的测试都报错了。
 
-**结论**: 我们需要进行一次“测试归位”行动：将 Provider 测试归还给 `library` 和 `ipfs` 包，将系统级测试从 `engine` 移出到根目录的 `tests/` 下。
+2.  **`conftest.py` 的尴尬位置**:
+    *   我们之前在 `packages/cascade-engine/tests/e2e/conftest.py` 中定义了 `cleanup_local_bus`。这个文件也被移动到了 `tests/e2e/runtime/conftest.py`。
+    *   日志显示 `cleanup_local_bus` 是可用的（在 `available fixtures` 列表中）。这意味着这个移动后的 `conftest.py` 被正确加载了。
 
-我将制定计划来执行这次迁移。
+**结论**: 问题在于 `bus_and_spy` 这个 Fixture 被留在了 `packages/cascade-engine` 内部，但现在位于外部的 E2E 测试也需要使用它。
 
-## [WIP] refactor(tests): Migrate stray tests to correct locations
+我们需要将 `bus_and_spy` 提升为一个共享的、或者在 E2E 环境中重新定义的 Fixture。考虑到 E2E 测试是针对 Engine 的，它们实际上需要的是一套能观察 Engine 行为的工具。
+
+我将生成一个计划来修复这个问题。
+
+## [WIP] fix(tests): Restore fixtures for relocated E2E tests
 
 ### 错误分析
-1.  **Provider 测试位置错误**: `cascade-library` 和 `cascade-provider-ipfs` 的测试目前被错误地放置在 `cascade-sdk` 包中。这导致 SDK 包的测试臃肿，而 Library 和 IPFS 包被误报为零覆盖率。
-2.  **Engine 包包含系统级测试**: `cascade-engine` 包内部包含了涉及 CLI 和其他组件的 E2E 及集成测试。这违反了包的独立性原则。这些测试应该位于顶层的 `tests/` 目录中，因为它们验证的是多个包的协同工作。
+E2E 测试被移动到 `tests/e2e/runtime` 后，失去了对定义在 `packages/cascade-engine/tests/conftest.py` 中的 `bus_and_spy` Fixture 的访问权限。这是因为 Pytest 只在测试目录及其父目录中查找 `conftest.py`，而 `packages/cascade-engine` 不再是这些测试的父目录。
+
+这些 E2E 测试严重依赖 `bus_and_spy` 来监控系统行为。
 
 ### 用户需求
-用户要求清理 `cascade-engine` 中残留的 E2E 文件，并修复其他包（Library, IPFS）完全没有测试的问题。
+用户要求修复因 `bus_and_spy` Fixture 丢失而导致的大量 E2E 测试错误。
 
 ### 评论
-这是架构重构的收官之战。通过这次迁移，我们将实现：
-1.  **SDK**: 只包含核心 SDK 逻辑的测试。
-2.  **Library/IPFS**: 拥有自己的、独立的测试套件。
-3.  **Engine**: 瘦身，只包含核心运行时的单元测试。
-4.  **Root Tests**: 汇集所有跨包的系统级测试。
+这验证了之前的架构决策：`bus_and_spy` 是一个通用的测试工具，不应仅局限于单元测试。既然 E2E 测试也需要它，我们需要将其定义复制到 E2E 测试的上下文中，或者将其提升到更全局的位置。考虑到 E2E 测试环境的独立性，最好的做法是在 `tests/e2e/conftest.py` 中提供这个 Fixture，使其对所有 E2E 测试可用。
 
 ### 目标
-1.  将 `packages/cascade-sdk/tests/providers/test_ipfs.py` 移动到 `packages/cascade-provider-ipfs/tests/`。
-2.  将 `packages/cascade-sdk/tests/providers/` 下的其余文件移动到 `packages/cascade-library/tests/`。
-3.  将 `packages/cascade-engine/tests/e2e` 和 `packages/cascade-engine/tests/integration` 移动到根目录的 `tests/` 下，分别重组为 `tests/e2e/runtime` 和 `tests/e2e/integration`（归并入统一的 E2E/集成测试层）。
+1.  修改 `tests/e2e/runtime/conftest.py`（这是随测试一起移动过来的），添加 `SpySubscriber` 类和 `bus_and_spy` Fixture 的定义。
 
 ### 基本原理
-**各归其位**。源代码在哪里，单元测试就应该在哪里。涉及多个组件的系统测试，就应该在顶层。这不仅是为了覆盖率报告的好看，更是为了让开发者在修改某部分代码时，能清楚地知道应该运行哪些测试。
+通过在 E2E 测试的直接上下文中提供所需的 Fixture，我们切断了对具体包内部测试设施的隐式依赖。这使得 E2E 测试成为真正独立的实体，能够在任何环境中运行，只要安装了 `cascade-engine` 包即可。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-suite #task/action/relocation #task/state/end
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/fixtures #task/action/restoration #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 准备目标目录
+#### Acts 1: 在 E2E conftest 中恢复 `bus_and_spy`
 
-确保 Library 和 IPFS 包有测试目录。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p packages/cascade-library/tests
-mkdir -p packages/cascade-provider-ipfs/tests
-mkdir -p tests/e2e/runtime
-mkdir -p tests/e2e/integration
-~~~~~
-
-#### Acts 2: 归还 IPFS 测试
-
-将 IPFS 相关的测试移出 SDK。
+我们将把 `SpySubscriber` 和 `bus_and_spy` 的代码添加到 `tests/e2e/runtime/conftest.py` 中。
 
 ~~~~~act
-run_command
+patch_file
+tests/e2e/runtime/conftest.py
 ~~~~~
+~~~~~python
+    if LocalBusConnector:
+        LocalBusConnector._reset_broker_state()
+    yield
+    if LocalBusConnector:
+        LocalBusConnector._reset_broker_state()
 ~~~~~
-mv packages/cascade-sdk/tests/providers/test_ipfs.py packages/cascade-provider-ipfs/tests/
-~~~~~
+~~~~~python
+    if LocalBusConnector:
+        LocalBusConnector._reset_broker_state()
+    yield
+    if LocalBusConnector:
+        LocalBusConnector._reset_broker_state()
 
-#### Acts 3: 归还 Library 测试
 
-将剩余的 Provider 测试从 SDK 移至 Library。
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
 
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mv packages/cascade-sdk/tests/providers/* packages/cascade-library/tests/
-rmdir packages/cascade-sdk/tests/providers
-~~~~~
 
-#### Acts 4: 移出 Engine 的系统级测试
+class SpySubscriber:
+    """A test utility to collect events from a MessageBus."""
 
-将 Engine 中的 E2E 和 Integration 测试移至根目录的 `tests/e2e` 结构中。注意我们需要连同 `harness.py` 和 `conftest.py` 一起移动。
+    def __init__(self, bus: MessageBus):
+        self.events = []
+        bus.subscribe(Event, self.collect)
 
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mv packages/cascade-engine/tests/e2e/* tests/e2e/runtime/
-mv packages/cascade-engine/tests/integration/* tests/e2e/integration/
-rmdir packages/cascade-engine/tests/e2e
-rmdir packages/cascade-engine/tests/integration
+    def collect(self, event: Event):
+        self.events.append(event)
+
+    def events_of_type(self, event_type):
+        """Returns a list of all events of a specific type."""
+        return [e for e in self.events if isinstance(e, event_type)]
+
+
+@pytest.fixture
+def bus_and_spy():
+    """Provides a MessageBus instance and an attached SpySubscriber."""
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    return bus, spy
 ~~~~~
 
 ### 下一步建议
 
-现在结构应该非常清晰了。请再次运行您的测试循环 `for i in (ls packages/); pytest packages/$i ; end`。您应该会看到：
-1.  `cascade-library` 和 `cascade-provider-ipfs` 现在有测试在该跑了。
-2.  `cascade-engine` 的测试数量会减少，只剩下真正的单元测试（coverage 依然会显示，但那是针对核心逻辑的）。
-3.  要运行移出的系统级测试，您现在需要运行 `pytest tests/e2e`。
+Fixture 已恢复。现在请再次运行 E2E 测试：
+`pytest tests/e2e/runtime`
+
+这应该能解决所有的 "fixture not found" 错误。

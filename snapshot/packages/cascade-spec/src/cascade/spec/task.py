@@ -23,11 +23,16 @@ class Task(Generic[T]):
     """
 
     def __init__(
-        self, func: Callable[..., T], name: Optional[str] = None, pure: bool = False
+        self,
+        func: Callable[..., T],
+        name: Optional[str] = None,
+        pure: bool = False,
+        mode: str = "blocking",
     ):
         self.func = func
         self.name = name or func.__name__
         self.pure = pure
+        self.mode = mode
         self._signature = inspect.signature(func)
         self.is_async = inspect.iscoroutinefunction(func)
         # Cache for AST analysis results to verify TCO paths
@@ -56,13 +61,14 @@ def task(
     *,
     name: Optional[str] = None,
     pure: bool = False,
+    mode: str = "blocking",
 ) -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:
     """
     Decorator to convert a function into a Task.
     """
 
     def wrapper(f: Callable[..., T]) -> Task[T]:
-        return Task(f, name=name, pure=pure)
+        return Task(f, name=name, pure=pure, mode=mode)
 
     if func:
         return wrapper(func)

@@ -123,6 +123,7 @@ class GraphBuilder:
                 structural_id=structural_hash,
                 name=result.task.name,
                 node_type="task",
+                execution_mode=result.task.mode,
                 callable_obj=result.task.func,
                 signature=sig,
                 retry_policy=result._retry_policy,

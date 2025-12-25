@@ -76,7 +76,9 @@ def test_app_dry_run_with_list_input(capsys):
     captured = capsys.readouterr().out
     lines = [line.strip() for line in captured.strip().split('\n')]
 
-    assert len(lines) == 6 # Header, 3 nodes, Footer, empty line
+    # .strip() removes the final newline, so we expect 5 lines:
+    # Header, t_a, t_b, _internal_gather, Footer
+    assert len(lines) == 5
     assert "_internal_gather" in lines[-2]
     node_names = {l.split(' ')[1] for l in lines[1:-2]}
     assert node_names == {"t_a", "t_b", "_internal_gather"}

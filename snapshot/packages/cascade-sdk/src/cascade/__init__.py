@@ -21,6 +21,7 @@ from cascade.spec.jump import Jump
 
 # --- Runtime (for type hints and exceptions) ---
 from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.spec.protocols import Connector, StateBackend

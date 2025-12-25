@@ -19,6 +19,12 @@ async def non_blocking_async_task() -> float:
     return time.time()
 
 
+@task(pure=True)
+def collect_results(sync_res, async_res):
+    """一个简单的收集器任务，用于创建有效的图结构。"""
+    return [sync_res, async_res]
+
+
 @pytest.mark.asyncio
 async def test_sync_task_offloading_prevents_blocking():
     """
@@ -44,11 +50,11 @@ async def test_sync_task_offloading_prevents_blocking():
     sync_result_lr = blocking_sync_task(0.2)
     async_result_lr = non_blocking_async_task()
 
-    # 工作流的目标是这两个任务的结果列表。
-    workflow = [sync_result_lr, async_result_lr]
+    # 工作流的目标是收集这两个任务的结果。
+    workflow_target = collect_results(sync_result_lr, async_result_lr)
 
     start_time = time.time()
-    results = await engine.run(workflow)
+    results = await engine.run(workflow_target)
     end_time = time.time()
 
     # 从结果中解包完成时间

@@ -1,64 +1,51 @@
-好的，我们开始实施“关于引入‘计算与 IO 隔离’调度语法糖的建议书”中提出的改进。
+你说得对，非常感谢你的指正。
 
-这是一个重要的架构升级，旨在通过自动将同步阻塞任务卸载到线程池，来防止它们阻塞核心事件循环，从而显著提升开发者体验 (DX) 和运行时性能。
+我的诊断是：我之前生成的测试用例存在一个根本性的错误，它使用了 `engine.run` 不支持的 API 模式。`AttributeError: 'list' object has no attribute '_uuid'` 这个错误清晰地表明，`engine.run` 的 `target` 参数期望接收一个单一的 `LazyResult` 实例作为图的“根”或“目标”，而不是一个 `LazyResult` 的列表。
 
-我将严格遵循 TDD (测试驱动开发) 流程。第一步是创建一个新的测试文件，并编写一个明确的、当前会失败的测试用例。这个测试用例将精确地描述我们期望实现的行为：一个同步阻塞任务不应阻塞并发的异步任务。
+我的失误在于将一个 Python 列表直接传递给了执行引擎，而引擎的图构建器需要从一个唯一的、可追溯的 `_uuid` 开始遍历依赖关系。
 
-## [WIP] feat: 为同步任务实现隐式线程卸载
+这是一个很好的例子，说明了为什么我们需要一个严格的、会失败的（RED）测试阶段。它不仅能暴露代码中的缺陷，还能暴露我们对 API 理解上的偏差。
+
+我现在将纠正这个错误，重写测试用例，使其遵循正确的模式：定义一个最终的“收集器”任务，该任务将其他任务的结果作为输入并返回一个列表。这个收集器任务的 `LazyResult` 将成为传递给 `engine.run` 的唯一、合法的目标。
+
+## [WIP] fix(test): 修正工作流定义以符合 engine.run API
+
+### 错误分析
+测试 `test_sync_task_offloading_prevents_blocking` 失败的直接原因是向 `engine.run` 传递了一个 `list` 对象，而 `GraphExecutionStrategy` 期望的 `target` 是一个拥有 `_uuid` 属性的对象（如 `LazyResult`），以便在缓存和图构建中使用。
+
+根本原因是测试用例的实现违反了 Cascade 的核心编程模型：一个工作流必须有一个单一的、最终的目标节点 (`LazyResult`)，图的构建和执行计划都是从这个目标节点逆向推导出来的。直接传递一个列表无法构成一个有效的、可分析的计算图。
 
 ### 用户需求
-根据建议书的第一点，实现对同步 (`def`) 任务的“隐式卸载”。框架应能自动识别同步任务，并将其执行过程移至独立的线程中，以避免阻塞 `asyncio` 事件循环。
+用户需要一个能正确使用 `engine.run` API 并且能够验证“同步任务阻塞事件循环”这一当前缺陷的测试用例。该测试用例必须处于一个有效的、可复现的“RED”（失败）状态。
 
 ### 评论
-这是对 Cascade 核心调度逻辑的一次关键增强。它解决了 Python 异步编程中的一个普遍痛点，使得开发者可以自然地混合使用同步和异步代码，而无需手动管理线程池。这使得框架更加智能、健壮，也更符合直觉。
+这次修正是至关重要的，因为它确保了我们的测试用例本身是建立在正确的 API 使用方式之上的。一个错误的测试用例可能会引导我们去实现一个非预期的、甚至是错误的功能。通过修正测试，我们重新校准了目标，确保了后续对引擎的修改是为了满足一个真实、合法的用户场景。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/engine/e2e/test_offloading.py`。
-2.  在该文件中，编写一个名为 `test_sync_task_offloading_prevents_blocking` 的测试用例。
-3.  此测试用例将定义一个同步的、使用 `time.sleep` 的阻塞任务和一个普通的异步任务。
-4.  它将断言异步任务的完成时间早于同步任务，并且总执行时间证明了它们是并行运行的。
-5.  在当前的代码实现下，此测试**必须失败**，从而为我们的 TDD 流程建立一个清晰的“RED”状态。
+1.  修改 `tests/engine/e2e/test_offloading.py` 文件。
+2.  引入一个新的 `@task`，名为 `collect_results`，它接收两个任务的结果，并返回一个列表。
+3.  将传递给 `engine.run` 的目标从一个 Python `list` 改为调用 `collect_results` 任务后返回的单一 `LazyResult`。
+4.  确保修正后的测试在当前代码下仍然失败，但失败的原因是由于断言失败（阻塞导致），而不是 `AttributeError`。
 
 ### 基本原理
-我们遵循 TDD 的“红-绿-重构”循环。第一步（RED）至关重要，它要求我们首先定义“完成”的标准。通过编写一个失败的测试，我们精确地捕获了当前系统不符合预期的行为（即事件循环被阻塞）。这个测试将成为后续代码修改的最终验证标准。只有当这个测试通过时，我们才能确定新功能已正确实现。
+通过将多个并行的任务汇聚到一个最终的“收集器”任务中，我们创建了一个结构上有效的 DAG（有向无环图）。这个图有一个明确的“汇聚点”（sink node），图构建器可以从这个点开始进行依赖分析。这种模式不仅是正确的 API 用法，也更清晰地表达了工作流的最终意图——即“我需要这两个任务都完成，并得到它们的聚合结果”。
 
 ### 标签
-#intent/build #intent/tooling #flow/ready #priority/high #comp/engine #comp/spec #comp/tests #concept/executor #scope/dx #ai/instruct #task/domain/testing #task/object/offloading-feature #task/action/tdd-setup #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/offloading-feature #task/action/test-correction #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 TDD 测试文件
+#### Acts 1: 修正测试用例中的工作流定义
 
-我将创建新的测试文件 `tests/engine/e2e/test_offloading.py`，其中包含一个用于验证同步任务卸载功能的、当前注定会失败的测试。
+我将使用 `patch_file` 来修复 `test_offloading.py` 中的 API 使用错误，确保它定义了一个有效的、单一目标的工作流。
 
 ~~~~~act
-write_file
+patch_file
 tests/engine/e2e/test_offloading.py
 ~~~~~
 ~~~~~python
-import asyncio
-import time
-import pytest
-from cascade import task
-
-
-@task(pure=True)
-def blocking_sync_task(duration: float) -> float:
-    """一个同步任务，通过 time.sleep 模拟一个阻塞的 CPU 密集型或 IO 操作。"""
-    time.sleep(duration)
-    return time.time()
-
-
-@task(pure=True)
-async def non_blocking_async_task() -> float:
-    """一个异步任务，它应该能够并发执行。"""
-    # 睡眠0秒以确保它能将控制权交还给事件循环
-    await asyncio.sleep(0)
-    return time.time()
-
-
 @pytest.mark.asyncio
 async def test_sync_task_offloading_prevents_blocking():
     """
@@ -90,26 +77,54 @@ async def test_sync_task_offloading_prevents_blocking():
     start_time = time.time()
     results = await engine.run(workflow)
     end_time = time.time()
+~~~~~
+~~~~~python
+@task(pure=True)
+def collect_results(sync_res, async_res):
+    """一个简单的收集器任务，用于创建有效的图结构。"""
+    return [sync_res, async_res]
 
-    # 从结果中解包完成时间
-    sync_finish_time, async_finish_time = results
-    total_duration = end_time - start_time
 
-    # 核心断言：
-    # 1. 异步任务的完成时间戳应该小于同步任务的完成时间戳。
-    #    (当前会失败，因为同步任务阻塞了事件循环)
-    assert async_finish_time < sync_finish_time
+@pytest.mark.asyncio
+async def test_sync_task_offloading_prevents_blocking():
+    """
+    测试一个同步的阻塞任务是否被卸载到线程中，
+    从而允许其他异步任务并发执行而不会被阻塞。
 
-    # 2. 总运行时间应该略大于阻塞任务的持续时间，证明它们是并行运行的。
-    #    (当前会失败，因为总时间约等于两者之和)
-    assert 0.2 < total_duration < 0.25
+    此测试在功能实现前会失败，因为同步任务会阻塞整个事件循环，
+    导致异步任务在其完成后才能执行。
+    """
+    from cascade.runtime.engine import Engine
+    from cascade.runtime.bus import MessageBus
+    from cascade.adapters.solvers.native import NativeSolver
+    from cascade.adapters.executors.local import LocalExecutor
+
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),  # 使用一个静默的总线以保持测试输出干净
+    )
+
+    # 这两个任务彼此独立，应该并行运行。
+    # 理想情况下，异步任务会立即执行，而同步任务会在一个独立的线程中阻塞。
+    sync_result_lr = blocking_sync_task(0.2)
+    async_result_lr = non_blocking_async_task()
+
+    # 工作流的目标是收集这两个任务的结果。
+    workflow_target = collect_results(sync_result_lr, async_result_lr)
+
+    start_time = time.time()
+    results = await engine.run(workflow_target)
+    end_time = time.time()
 ~~~~~
 
 ### 下一步建议
-我们已经成功创建了失败的测试用例 (RED 状态)。下一步是修改 `cascade-spec` 和 `cascade-engine` 的代码，以实现隐式卸载逻辑，最终使这个测试通过 (GREEN 状态)。
+我们现在有了一个结构正确、但因业务逻辑未实现而失败的测试用例（真正的 RED 状态）。
 
-具体的修改将涉及：
-1.  在 `cascade.spec.task.Task` 类中，增加一个标志来识别函数是同步还是异步。
-2.  修改 `cascade.adapters.executors.local.LocalExecutor`，使其在执行同步任务时，使用 `asyncio.to_thread` 将其调用包装起来。
+下一步是进入 TDD 的 GREEN 阶段：修改 `cascade-spec` 和 `cascade-engine` 的代码，实现对同步任务的隐式卸载，使这个测试通过。
 
-如果你同意，我将生成下一个计划来执行这些代码修改。
+我将按原计划进行：
+1.  在 `cascade.spec.task.Task` 中添加 `is_async` 属性，以便在图构建时就能识别任务类型。
+2.  修改 `cascade.adapters.executors.local.LocalExecutor` 的 `execute` 方法，对 `is_async` 为 `False` 的任务使用 `asyncio.to_thread`。
+
+如果你同意，我将立即生成执行这些代码修改的计划。

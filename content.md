@@ -1,120 +1,139 @@
-好的，我来分析问题。
+好的，我来分析这些测试失败的原因。
+
+ 错误分析
+
+上次的修复解决了 Fixture 的发现问题，但暴露出了更深层次的、与测试隔离性相关的故障。失败的测试都是端到端（E2E）测试，它们对时序和组件间的通信非常敏感。
+
+经过分析，我发现了两个独立但相关的问题：
+
+1.  **关键的 `autouse` Fixture 位置错误**：在之前的重构中，一个名为 `cleanup_local_bus` 的、带有 `@pytest.fixture(autouse=True)` 标记的 Fixture 被留在了根目录的 `tests/conftest.py` 中。这个 Fixture 的作用是在每次测试前后重置 `InProcessConnector`（一个内存消息代理）的状态。由于它现在的位置，`cascade-engine` 包内的 E2E 测试**无法发现并执行它**。这导致了**测试间的状态泄漏**：一个测试留下的消息（例如 "pause" 或 "resume"）会干扰下一个测试的执行，从而引发各种不可预测的行为，包括 `TimeoutError` 和死锁。
+
+2.  **测试桩（Test Double）配置错误**：在 `test_e2e_robustness.py` 文件中，测试代码创建了两个**完全独立**的 `InProcessConnector` 实例：一个给 `Engine` (`engine_connector`)，另一个给 `ControllerTestApp` (`controller_connector`)。这意味着控制器发布命令的总线与引擎监听的总线根本不是同一个，它们之间无法通信。因此，测试中断言引擎会进入等待状态的逻辑永远不会成功，因为它从未收到任何指令。
+
+这两个问题共同导致了 E2E 测试的失败。根本解决方案是：**将特定于 `cascade-engine` E2E 测试的 Fixture 移动到正确的位置，并修复错误的测试桩配置。**
+
+## [WIP] fix: Isolate engine E2E tests and repair harness
 
 ### 错误分析
+在解决了 Fixture 的发现问题后，E2E 测试仍然失败，表现为超时和断言失败。根本原因有两个：
 
-你的诊断完全正确。上次的重构将测试文件移动到了各自的包中，这是一个正确的方向，但它遗漏了关键的一步：处理 `conftest.py` 文件。
-
-1.  **Pytest Fixture 发现机制**: `pytest` 通过查找当前测试文件所在目录及其所有**父目录**中的 `conftest.py` 文件来发现共享的 Fixture。
-2.  **重构后的结构**: 测试（例如 `packages/cascade-engine/tests/runtime/test_bus.py`）现在位于 `packages/cascade-engine/tests/` 目录下。它的父目录链是 `.../tests`, `.../cascade-engine`, `.../packages`, `/`。
-3.  **问题的根源**: 定义 `bus_and_spy` 的 `conftest.py` 文件位于 `/tests/conftest.py`。这个路径**不在**任何一个 `cascade-engine` 测试文件的父目录链中。因此，`pytest` 在为 `cascade-engine` 运行测试时，永远无法找到并加载这个 Fixture，导致了大量的 `fixture not found` 错误。
-4.  **范围确认**: `rg` 的输出清晰地表明，`bus_and_spy` 这个 Fixture **仅**被 `packages/cascade-engine` 内部的测试所使用。
-
-**结论**: 这个 Fixture 是 `cascade-engine` 包的内部测试工具，它应该与 `cascade-engine` 的测试代码放在一起，而不是留在全局的集成测试目录中。
-
-我将生成一个计划来纠正这个问题。
-
-## [WIP] fix: Relocate engine-specific test fixtures
-
-### 错误分析
-在之前的重构中，测试文件被正确地移动到了它们各自的 `packages` 目录中，以实现代码与测试的共存。然而，一个关键的 `conftest.py` 文件被遗留在了旧的顶层 `tests` 目录中。
-
-`pytest` 的 Fixture 发现机制要求 `conftest.py` 必须位于测试文件的当前或父目录中。由于 `packages/cascade-engine/tests/` 与顶层的 `tests/` 目录是两个完全分离的分支，`cascade-engine` 下的所有测试都无法再找到位于 `/tests/conftest.py` 中定义的 `bus_and_spy` Fixture，从而导致了大量的 "fixture not found" 错误。
-
-通过分析可知，`bus_and_spy` Fixture 仅被 `cascade-engine` 包内的测试使用，因此它属于该包的测试基础设施。
+1.  **测试状态泄漏**：一个用于清理 `InProcessConnector` 状态的全局 `autouse` Fixture (`cleanup_local_bus`) 在上次重构后被留在了顶层 `tests/conftest.py` 中。由于 `pytest` 的发现规则，`cascade-engine` 包内的测试无法再找到并执行这个 Fixture。这导致了测试间的状态污染，一个测试留下的消息会影响后续测试的正确性，从而引发了看似随机的超时和死锁。
+2.  **测试桩配置错误**：在 `test_e2e_robustness.py` 中，测试控制器和被测引擎被错误地配置了两个独立的 `InProcessConnector` 实例，导致它们之间无法通信，测试逻辑因此失败。
 
 ### 用户需求
-用户要求修复因 `bus_and_spy` Fixture 无法被找到而导致的大量测试失败。
+用户要求修复 `cascade-engine` 包中失败的 E2E 测试，这些测试表现为超时和逻辑断言失败。
 
 ### 评论
-这是一个经典的重构后遗留问题。将包特有的测试辅助工具（如 Fixture）迁移到包内部，是完善“代码共存”模式、增强包封装性和独立性的关键一步。这个修复将使 `cascade-engine` 成为一个完全自包含的、可独立测试的单元。
+这些失败是典型的在大型重构后出现的“第二波”问题。修复这些问题对于确保测试套件的可靠性和稳定性至关重要。将特定于领域的测试基础设施（如此处的 `conftest.py`）与其测试代码放在一起，是实现真正模块化和可维护性的最后一步。
 
 ### 目标
-1.  在 `packages/cascade-engine/tests/` 目录下创建一个新的 `conftest.py` 文件。
-2.  将 `SpySubscriber` 类和 `bus_and_spy` Fixture 的定义从根 `tests/conftest.py` 文件移动到这个新创建的文件中。
-3.  清理根 `tests/conftest.py`，只保留全局性的 Fixture。
+1.  在 `packages/cascade-engine/tests/e2e/` 目录下创建一个新的 `conftest.py` 文件。
+2.  将 `cleanup_local_bus` Fixture 从根 `tests/conftest.py` 移动到这个新文件中，以确保它能被所有 `cascade-engine` E2E 测试自动应用。
+3.  修改 `test_e2e_robustness.py`，确保控制器和引擎共享同一个 `InProcessConnector` 实例。
 
 ### 基本原理
-通过在 `packages/cascade-engine/tests/` 目录下创建 `conftest.py`，我们可以确保 `pytest` 在执行该目录下的任何测试时都能自动发现并加载其中定义的 Fixture。这遵循了 `pytest` 的标准发现规则，并解决了当前的问题。同时，保留根 `tests/conftest.py` 用于定义真正跨所有包的全局或集成测试 Fixture，保持了结构的清晰性。
+通过在 `e2e` 测试目录下创建 `conftest.py` 并移入 `cleanup_local_bus` Fixture，我们利用 `pytest` 的 Fixture 发现机制，确保了每个 E2E 测试在运行时都能享有一个干净、隔离的消息总线环境，从而消除了状态泄漏。同时，通过修正 `test_e2e_robustness.py` 中的测试桩，我们恢复了被测系统与测试控制器之间的通信链路，使其能够按预期工作。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/fixtures #task/action/relocation #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/test-isolation #task/action/refactor #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 为 `cascade-engine` 创建专属的 conftest.py
+#### Acts 1: 为 Engine E2E 测试创建专属的 conftest
 
-我们将在 `cascade-engine` 的测试目录中创建一个新的 `conftest.py`，并将 `SpySubscriber` 和 `bus_and_spy` 的定义放入其中。
+我们将为 `cascade-engine` 的 E2E 测试创建一个 `conftest.py` 文件，并将用于状态清理的 `autouse` Fixture 移入其中。
 
 ~~~~~act
 write_file
-packages/cascade-engine/tests/conftest.py
+packages/cascade-engine/tests/e2e/conftest.py
 ~~~~~
 ~~~~~python
 import pytest
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
+
+# Attempt to import LocalBusConnector for global cleanup
+try:
+    from cascade.connectors.local.bus import LocalBusConnector
+except ImportError:
+    LocalBusConnector = None
 
 
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
-
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
-
-    def collect(self, event: Event):
-        self.events.append(event)
-
-    def events_of_type(self, event_type):
-        """Returns a list of all events of a specific type."""
-        return [e for e in self.events if isinstance(e, event_type)]
-
-
-@pytest.fixture
-def bus_and_spy():
-    """Provides a MessageBus instance and an attached SpySubscriber."""
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    return bus, spy
+@pytest.fixture(autouse=True)
+def cleanup_local_bus():
+    """
+    Ensures that the memory broker state is completely cleared between tests.
+    This prevents state leakage (retained messages/subscriptions) which
+    causes unpredictable failures in E2E tests.
+    """
+    if LocalBusConnector:
+        LocalBusConnector._reset_broker_state()
+    yield
+    if LocalBusConnector:
+        LocalBusConnector._reset_broker_state()
 ~~~~~
 
-#### Acts 2: 清理根目录下的 conftest.py
+#### Acts 2: 清理根目录的 conftest.py
 
-现在，从根 `tests/conftest.py` 中移除已经迁移的定义，只保留全局 Fixture。
+现在，从根 `tests/conftest.py` 文件中移除已经迁移的 Fixture。由于这是其中唯一的 Fixture，该文件将变为空。
 
 ~~~~~act
 patch_file
 tests/conftest.py
 ~~~~~
 ~~~~~python
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
+import pytest
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
 
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
-
-    def collect(self, event: Event):
-        self.events.append(event)
-
-    def events_of_type(self, event_type):
-        """Returns a list of all events of a specific type."""
-        return [e for e in self.events if isinstance(e, event_type)]
+# Attempt to import LocalBusConnector for global cleanup
+try:
+    from cascade.connectors.local import LocalBusConnector
+except ImportError:
+    LocalBusConnector = None
 
 
-@pytest.fixture
-def bus_and_spy():
-    """Provides a MessageBus instance and an attached SpySubscriber."""
-    bus = MessageBus()
-    spy = SpySubscriber(bus)
-    return bus, spy
+@pytest.fixture(autouse=True)
+def cleanup_local_bus():
+    """
+    Ensures that the memory broker state is completely cleared between tests.
+    This prevents state leakage (retained messages/subscriptions) which
+    causes unpredictable failures in E2E tests.
+    """
+    if LocalBusConnector:
+        LocalBusConnector._reset_broker_state()
+    yield
+    if LocalBusConnector:
+        LocalBusConnector._reset_broker_state()
 ~~~~~
 ~~~~~python
+# This file is intentionally left empty. It serves as a pytest discovery root
+# for integration tests that span multiple packages.
+# Fixtures specific to a single package should be placed in that package's
+# own tests/conftest.py file.
+~~~~~
+
+#### Acts 3: 修复 `test_e2e_robustness.py` 中的连接器配置
+
+我们将修改此测试，确保引擎和控制器共享同一个 `InProcessConnector` 实例。
+
+~~~~~act
+patch_file
+packages/cascade-engine/tests/e2e/test_e2e_robustness.py
+~~~~~
+~~~~~python
+    engine_bus, spy = bus_and_spy
+    engine_connector = InProcessConnector()
+    controller_connector = InProcessConnector()
+    controller = ControllerTestApp(controller_connector)
+~~~~~
+~~~~~python
+    engine_bus, spy = bus_and_spy
+    engine_connector = InProcessConnector()
+    controller = ControllerTestApp(engine_connector)
 ~~~~~
 
 ### 下一步建议
 
-现在 Fixture 已经放到了正确的位置。我建议您立即重新运行 `cascade-engine` 包的测试套件，以验证问题是否已完全解决。
+我们已经解决了测试隔离性和测试桩配置这两个核心问题。现在，测试套件应该能够稳定地通过了。我强烈建议您立即重新运行整个测试套件，以确认所有问题都已解决。
 
-`pytest packages/cascade-engine/`
+`pytest`

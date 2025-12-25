@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-application"
+version = "0.1.0"
+description = "The application layer for Cascade, providing a unified API entrypoint."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec",
+  "cascade-engine",
+  "cascade-graph",
+  "cascade-sdk"
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-engine = { workspace = true }
+cascade-graph = { workspace = true }
+cascade-sdk = { workspace = true }

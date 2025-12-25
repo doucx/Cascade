@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M local.py, M __init__.pyi, M preview.py ... and 4 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766643795.6675034, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(arch): 实现 Application 层重构的第一阶段", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766643798.4595659, "duration_ms": 0}}

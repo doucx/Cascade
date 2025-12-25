@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M resolvers.py, M test_tco_param_override.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766632937.4855847, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "简要回答", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766632938.6941724, "duration_ms": 0}}

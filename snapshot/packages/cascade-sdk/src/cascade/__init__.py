@@ -128,6 +128,7 @@ __all__ = [
     "LazyResult",
     "Engine",
     "Event",
+    "MessageBus",  # Added MessageBus
     # Tools & Utilities
     "to_json",
     "from_json",

@@ -1,4 +1,6 @@
 import asyncio
+import functools
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 from cascade.graph.model import Node
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -7,8 +9,16 @@ from cascade.graph.exceptions import StaticGraphError
 
 class LocalExecutor:
     """
-    An executor that runs tasks sequentially in the current process.
+    An executor that runs tasks in the current process, using dedicated thread
+    pools to isolate blocking I/O tasks from CPU-bound tasks.
     """
+
+    def __init__(self):
+        # NOTE: These executors are created per-engine-run.
+        # Their lifecycle is tied to the LocalExecutor instance.
+        # Python's ThreadPoolExecutor finalizer handles shutdown on garbage collection.
+        self._blocking_executor = ThreadPoolExecutor(thread_name_prefix="cascade_blocking")
+        self._compute_executor = ThreadPoolExecutor(thread_name_prefix="cascade_compute")
 
     async def execute(
         self,
@@ -17,7 +27,8 @@ class LocalExecutor:
         kwargs: Dict[str, Any],
     ) -> Any:
         """
-        Executes a single node's callable object with the provided arguments.
+        Executes a single node's callable. Routes synchronous tasks to the
+        appropriate thread pool based on their execution mode.
         """
         if node.callable_obj is None:
             raise TypeError(
@@ -27,11 +38,18 @@ class LocalExecutor:
         if node.is_async:
             result = await node.callable_obj(*args, **kwargs)
         else:
-            # Implicit Offloading:
-            # Synchronous tasks are offloaded to a separate thread to prevent blocking
-            # the main asyncio event loop. This allows async tasks and IO operations
-            # to run concurrently with CPU-bound or blocking sync tasks.
-            result = await asyncio.to_thread(node.callable_obj, *args, **kwargs)
+            loop = asyncio.get_running_loop()
+            
+            # Select the appropriate executor based on the task's declared mode
+            if node.execution_mode == "compute":
+                executor = self._compute_executor
+            else:  # Default to "blocking" for I/O, etc.
+                executor = self._blocking_executor
+
+            # Use functools.partial to handle keyword arguments, as
+            # run_in_executor only accepts positional arguments for the target function.
+            func_to_run = functools.partial(node.callable_obj, *args, **kwargs)
+            result = await loop.run_in_executor(executor, func_to_run)
 
         # Runtime guard against the "task returns LazyResult" anti-pattern.
         if isinstance(result, (LazyResult, MappedLazyResult)):

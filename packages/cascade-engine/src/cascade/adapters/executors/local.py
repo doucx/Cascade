@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Dict, List
 from cascade.graph.model import Node
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -26,7 +27,11 @@ class LocalExecutor:
         if node.is_async:
             result = await node.callable_obj(*args, **kwargs)
         else:
-            result = node.callable_obj(*args, **kwargs)
+            # Implicit Offloading:
+            # Synchronous tasks are offloaded to a separate thread to prevent blocking
+            # the main asyncio event loop. This allows async tasks and IO operations
+            # to run concurrently with CPU-bound or blocking sync tasks.
+            result = await asyncio.to_thread(node.callable_obj, *args, **kwargs)
 
         # Runtime guard against the "task returns LazyResult" anti-pattern.
         if isinstance(result, (LazyResult, MappedLazyResult)):

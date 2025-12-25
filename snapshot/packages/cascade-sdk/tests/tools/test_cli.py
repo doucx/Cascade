@@ -16,7 +16,6 @@ def test_cli_generator_from_context():
     """
 
     # 1. 定义工作流构建函数
-    # 这是一个新模式：为了让 CLI 扫描到参数，我们需要执行定义逻辑
     def workflow_def():
         # 清理上下文以确保测试隔离
         if hasattr(get_current_context(), "input_specs"):
@@ -34,27 +33,30 @@ def test_cli_generator_from_context():
     # 2. 模拟“导入时执行”：先运行一次定义，填充上下文
     target = workflow_def()
 
-    # Debug: Verify context is populated
-    specs = get_current_context().get_all_specs()
-    assert len(specs) == 2, f"Context should have 2 specs, got {len(specs)}"
-
     # 3. 生成 CLI
     app = cs.create_cli(target)
 
-    # 4. 验证参数定义 (Robust method: Inspect data, not UI)
-    # Instead of checking the --help string, we inspect the Typer app's
-    # internal configuration. This is resilient to formatting changes.
-    # The main command is the first registered one.
-    params = {p.name: p for p in app.registered_commands[0].params}
-    assert "name" in params
-    assert "count" in params
-    assert params["name"].help == "User name"
-    assert params["count"].default == 1
-    assert params["count"].type.name == "int"
+    # 4. 验证参数定义 (Robust method: Inspect the signature on the callback)
+    # The dynamically generated signature is attached to the callback function
+    # stored within the first registered CommandInfo object.
+    assert len(app.registered_commands) == 1
+    sig_params = app.registered_commands[0].callback.__signature__.parameters
+
+    assert "name" in sig_params
+    assert "count" in sig_params
+
+    # The typer.Option object is the default value of the inspect.Parameter
+    name_param = sig_params["name"]
+    count_param = sig_params["count"]
+
+    assert name_param.default.help == "User name"
+    assert count_param.default.default == 1
+
+    # The type is the annotation of the inspect.Parameter
+    assert count_param.annotation is int
 
     # 5. 验证执行
     result = runner.invoke(app, ["--name", "World", "--count", "2"])
     assert result.exit_code == 0
-    # Engine logs 默认可能在 stderr
     output = result.stdout + result.stderr
     assert "Hello World Hello World" in output

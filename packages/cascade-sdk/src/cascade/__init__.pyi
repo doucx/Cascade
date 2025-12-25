@@ -46,7 +46,7 @@ def Param(
     """
 
 def run(
-    target: LazyResult,
+    target: typing.Union[LazyResult, typing.List[typing.Any], tuple[typing.Any, ...]],
     params: typing.Optional[typing.Dict[str, typing.Any]] = None,
     system_resources: typing.Optional[typing.Dict[str, typing.Any]] = None,
     log_level: str = "INFO",
@@ -58,6 +58,8 @@ def run(
     Runs a Cascade workflow with a default engine configuration.
 
     Args:
+        target: The LazyResult to execute, or a list/tuple of LazyResults
+                and literals to execute in parallel.
         state_backend: A URI string (e.g. "redis://localhost") or a factory function
                        that accepts a run_id and returns a StateBackend.
     """

@@ -3,7 +3,7 @@
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 import asyncio
-from typing import Any, Dict, Optional, Union, Callable
+from typing import Any, Dict, Optional, Union, Callable, List
 
 # Core Specs
 from cascade.spec.task import task
@@ -136,7 +136,7 @@ def _create_state_backend_factory(
 
 
 def run(
-    target: LazyResult,
+    target: Union[LazyResult, List[Any], tuple[Any, ...]],
     params: Optional[Dict[str, Any]] = None,
     system_resources: Optional[Dict[str, Any]] = None,
     log_level: str = "INFO",
@@ -148,6 +148,8 @@ def run(
     Runs a Cascade workflow with a default engine configuration.
 
     Args:
+        target: The LazyResult to execute, or a list/tuple of LazyResults
+                and literals to execute in parallel.
         state_backend: A URI string (e.g. "redis://localhost") or a factory function
                        that accepts a run_id and returns a StateBackend.
     """

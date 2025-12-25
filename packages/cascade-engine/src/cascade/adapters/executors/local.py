@@ -17,8 +17,12 @@ class LocalExecutor:
         # NOTE: These executors are created per-engine-run.
         # Their lifecycle is tied to the LocalExecutor instance.
         # Python's ThreadPoolExecutor finalizer handles shutdown on garbage collection.
-        self._blocking_executor = ThreadPoolExecutor(thread_name_prefix="cascade_blocking")
-        self._compute_executor = ThreadPoolExecutor(thread_name_prefix="cascade_compute")
+        self._blocking_executor = ThreadPoolExecutor(
+            thread_name_prefix="cascade_blocking"
+        )
+        self._compute_executor = ThreadPoolExecutor(
+            thread_name_prefix="cascade_compute"
+        )
 
     async def execute(
         self,
@@ -39,7 +43,7 @@ class LocalExecutor:
             result = await node.callable_obj(*args, **kwargs)
         else:
             loop = asyncio.get_running_loop()
-            
+
             # Select the appropriate executor based on the task's declared mode
             if node.execution_mode == "compute":
                 executor = self._compute_executor

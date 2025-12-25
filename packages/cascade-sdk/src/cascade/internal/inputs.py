@@ -25,3 +25,9 @@ def _get_param_value(name: str, params_context: Dict[str, Any]) -> Any:
 @task(name="_get_env_var")
 def _get_env_var(name: str) -> Optional[str]:
     return os.getenv(name)
+
+
+@task(name="_internal_gather", pure=True)
+def _internal_gather(*args: Any) -> Any:
+    """An internal pure task used by cs.run to gather results from a list."""
+    return list(args)

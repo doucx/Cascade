@@ -1,4 +1,3 @@
-import asyncio
 import time
 import pytest
 from cascade import task
@@ -16,12 +15,6 @@ def short_sync_compute_task(duration: float) -> float:
     """A sync task representing a short but CPU-intensive operation."""
     time.sleep(duration)
     return time.time()
-
-
-@task
-def collect_results(res1, res2):
-    """Aggregates results for a valid graph structure."""
-    return res1, res2
 
 
 @pytest.mark.asyncio
@@ -47,9 +40,7 @@ async def test_compute_tasks_are_isolated_from_blocking_tasks():
 
     # If isolated, compute task finishes at T+0.1s.
     # If not isolated, compute task may have to wait for blocking task, finishing at T+0.2s or later.
-    workflow = collect_results(compute_lr, blocking_lr)
-
-    results = await engine.run(workflow)
+    results = await engine.run([compute_lr, blocking_lr])
     compute_finish_time, blocking_finish_time = results
 
     # The key assertion: the short compute task must finish first.

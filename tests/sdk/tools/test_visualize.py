@@ -207,3 +207,30 @@ def test_visualize_multi_node_jump_edge():
         f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="restart"]'
     )
     assert expected_edge in dot_string
+
+
+def test_visualize_with_list_of_lazy_results():
+    """
+    Verifies that visualize() can accept a list of LazyResults and
+    correctly renders the implicit gather node.
+    """
+
+    @cs.task(pure=True)
+    def t_a():
+        return "a"
+
+    @cs.task(pure=True)
+    def t_b():
+        return "b"
+
+    lr_a = t_a()
+    lr_b = t_b()
+
+    dot_string = cs.visualize([lr_a, lr_b])
+
+    # Assert that the nodes for the parallel tasks are present
+    assert 'label="t_a\\n(task)"' in dot_string
+    assert 'label="t_b\\n(task)"' in dot_string
+
+    # Assert that the implicit gather node, which becomes the root, is present
+    assert 'label="_internal_gather\\n(task)"' in dot_string

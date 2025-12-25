@@ -23,14 +23,6 @@ async def non_blocking_async_task(duration: float) -> float:
     return time.time()
 
 
-@task(pure=True)
-def collect_results(sync_res, async_res):
-    """
-    Aggregates results to form a single target for the workflow.
-    """
-    return [sync_res, async_res]
-
-
 @pytest.mark.asyncio
 async def test_sync_task_offloading_prevents_blocking():
     """
@@ -68,10 +60,8 @@ async def test_sync_task_offloading_prevents_blocking():
     # If parallel: Async finishes at T+0.1, Sync at T+0.2
     # If serial: Sync finishes at T+0.2, Async starts then finishes at T+0.3
 
-    workflow_target = collect_results(sync_result_lr, async_result_lr)
-
     start_time = time.time()
-    results = await engine.run(workflow_target)
+    results = await engine.run([sync_result_lr, async_result_lr])
     end_time = time.time()
 
     sync_finish_time, async_finish_time = results

@@ -1,74 +1,123 @@
-好的，我们现在开始执行 ADR-013 路线图的第一阶段。
-
-这是一个纯粹的奠基性工作，我们将创建 `cascade-application` 包，定义 `CascadeApp` 的初始接口，并将其正确地集成到项目的 Monorepo 构建系统中，确保命名空间和类型提示的正确性。
-
-## [WIP] feat(arch): 实现 Application 层重构的第一阶段
+## [WIP] feat(arch): 迁移核心执行逻辑至 CascadeApp
 
 ### 用户需求
-执行 ADR-013 路线图的第一阶段：创建 `cascade-application` 包，定义 `CascadeApp` 接口，并更新根 `pyproject.toml` 以集成新包。
+执行 ADR-013 阶段二：将 `cs.run` 中的核心执行逻辑（Engine 实例化、基础设施配置等）迁移并封装到 `CascadeApp` 类中。
 
 ### 评论
-这是 Application 层重构的第一个具体步骤。正确设置包结构、命名空间和构建配置是保证 Monorepo 健康和提供良好开发者体验（DX）的关键。此阶段完成后，我们将拥有一个清晰的目标模块来承接后续阶段的逻辑迁移。
+为了打破潜在的循环依赖（`sdk` <-> `application`），我们将采取“代码复制与解耦”的策略。我们将把 `_internal_gather` 和 `_create_state_backend_factory` 等辅助逻辑直接实现在 `CascadeApp` 模块内部（或作为私有辅助函数），而不是从 `sdk` 导入。同时，我们将从 `cascade-application` 的依赖列表中移除 `cascade-sdk`。这将使 `CascadeApp` 成为一个独立的、底层的执行协调器，为后续 `sdk` 层对其的引用扫清障碍。
 
 ### 目标
-1.  创建 `packages/cascade-application` 的目录结构。
-2.  定义一个空的 `CascadeApp` 类接口，作为后续实现的契约。
-3.  创建符合 PEP 561 和显式命名空间规范的 `__init__.py` 和 `py.typed` 文件。
-4.  为新包创建 `pyproject.toml` 文件。
-5.  修改根 `pyproject.toml`，将新包加入工作区。
+1.  修改 `packages/cascade-application/pyproject.toml`，移除对 `cascade-sdk` 的依赖。
+2.  在 `packages/cascade-application/src/cascade/app/__init__.py` 中完整实现 `CascadeApp` 类：
+    *   实现 `__init__`：处理配置、初始化 `Engine`、`MessageBus`、`Renderer` 和 `Subscribers`。
+    *   实现 `run`：调用 `engine.run`。
+    *   实现辅助逻辑：`_internal_gather` (作为本地 Task) 和 `state_backend_factory` 创建逻辑。
 
 ### 基本原理
-通过 `run_command` 创建目录和空文件可以快速完成结构搭建。使用 `write_file` 写入新文件的完整内容，可以确保原子性和准确性。对于根 `pyproject.toml` 的修改，使用 `patch_file` 可以在不重写整个文件的情况下精确地添加所需条目，降低了操作风险。
+通过在 `CascadeApp` 中独立实现所有必要的辅助逻辑，我们消除了对 `cascade-sdk` 的运行时依赖。这不仅解决了循环依赖问题，也使得 `Application` 层更加自包含和健壮。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/architecture #task/object/application-layer #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/application #comp/engine #concept/architecture #scope/core #ai/instruct #task/domain/architecture #task/object/cascade-app #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建包目录结构和基础文件
+#### Acts 1: 调整依赖关系
 
-首先，我们创建 `cascade-application` 包所需的完整目录结构和空的 Python 模块文件。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p packages/cascade-application/src/cascade/app
-touch packages/cascade-application/src/cascade/__init__.py
-touch packages/cascade-application/src/cascade/app/__init__.py
-touch packages/cascade-application/src/cascade/py.typed
-touch packages/cascade-application/pyproject.toml
-~~~~~
-
-#### Acts 2: 填充新包的配置文件和接口
-
-现在，我们为新创建的文件写入内容，包括命名空间声明、`CascadeApp` 的初始接口定义以及新包的 `pyproject.toml`。
+首先，我们从 `cascade-application` 的构建配置中移除 `cascade-sdk`，这是打破循环依赖的关键一步。
 
 ~~~~~act
-write_file
-packages/cascade-application/src/cascade/__init__.py
+patch_file
+packages/cascade-application/pyproject.toml
 ~~~~~
-~~~~~python
-# This must be the very first line to allow this package to coexist with other
-# namespace packages (like cascade-engine) in editable installs.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+~~~~~toml
+dependencies = [
+  "cascade-spec",
+  "cascade-engine",
+  "cascade-graph",
+  "cascade-sdk"
+]
 ~~~~~
+~~~~~toml
+dependencies = [
+  "cascade-spec",
+  "cascade-engine",
+  "cascade-graph",
+  "cascade-common"
+]
+~~~~~
+
+#### Acts 2: 实现 CascadeApp
+
+现在，我们在 `packages/cascade-application/src/cascade/app/__init__.py` 中实现完整的 `CascadeApp` 逻辑。我们将引入所有必要的底层组件，并重新实现 `_internal_gather` 和状态后端工厂逻辑。
 
 ~~~~~act
 write_file
 packages/cascade-application/src/cascade/app/__init__.py
 ~~~~~
 ~~~~~python
-from typing import Any, Dict, List, Tuple, Union
+import asyncio
+from typing import Any, Dict, List, Tuple, Union, Optional, Callable
 
-# Use a string forward reference to avoid circular dependency at this stage
-if "LazyResult" not in globals():
-    from typing import TYPE_CHECKING
-    if TYPE_CHECKING:
-        from cascade.spec.lazy_types import LazyResult
+from cascade.spec.lazy_types import LazyResult
+from cascade.spec.task import task
+from cascade.spec.protocols import Connector, StateBackend
 
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+
+from cascade.common.messaging import bus
+from cascade.common.renderers import CliRenderer, JsonRenderer
+
+
+# --- Internal Helpers (Duplicated from sdk to avoid circular dependency) ---
+
+@task(name="_internal_gather", pure=True)
+def _internal_gather(*args: Any) -> Any:
+    """An internal pure task used to gather results from a list."""
+    return list(args)
+
+
+def _create_state_backend_factory(
+    backend_spec: Union[str, Callable[[str], StateBackend], None],
+) -> Optional[Callable[[str], StateBackend]]:
+    """
+    Helper to create a factory function from a backend specification (URI or object).
+    """
+    if backend_spec is None:
+        return None  # Engine defaults to InMemory
+
+    if callable(backend_spec):
+        return backend_spec
+
+    if isinstance(backend_spec, str):
+        if backend_spec.startswith("redis://"):
+            try:
+                import redis
+                from cascade.adapters.state.redis import RedisStateBackend
+            except ImportError:
+                raise ImportError(
+                    "The 'redis' library is required for redis:// backends."
+                )
+
+            # Create a shared client pool
+            client = redis.from_url(backend_spec)
+
+            def factory(run_id: str) -> StateBackend:
+                return RedisStateBackend(run_id=run_id, client=client)
+
+            return factory
+        else:
+            raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
+
+    raise TypeError(f"Invalid state_backend type: {type(backend_spec)}")
+
+
+# --- CascadeApp ---
 
 class CascadeApp:
     """
@@ -76,139 +125,104 @@ class CascadeApp:
     infrastructure, configuration, and top-level operations.
     """
 
-    def __init__(self, target: Union["LazyResult", List[Any], Tuple[Any, ...]]):
+    def __init__(
+        self,
+        target: Union[LazyResult, List[Any], Tuple[Any, ...]],
+        params: Optional[Dict[str, Any]] = None,
+        system_resources: Optional[Dict[str, Any]] = None,
+        log_level: str = "INFO",
+        log_format: str = "human",
+        connector: Optional[Connector] = None,
+        state_backend: Union[str, Callable[[str], StateBackend], None] = None,
+    ):
         """
-        Initializes the application context for a given workflow target.
+        Initializes the application context.
 
-        This constructor is responsible for:
-        - Setting up the internal Engine, MessageBus, and other infrastructure.
-        - Applying pre-processing to the target, such as auto-gathering lists.
+        Args:
+            target: The workflow target (LazyResult, list, or tuple).
+            params: Parameters to pass to the workflow.
+            system_resources: System-wide resources capacity (e.g. {"gpu": 1}).
+            log_level: Logging level (DEBUG, INFO, WARNING, ERROR).
+            log_format: Logging format ("human" or "json").
+            connector: Optional external connector (e.g. MQTT).
+            state_backend: State persistence backend URI or factory.
         """
-        pass
+        self.raw_target = target
+        self.params = params
+        self.system_resources = system_resources
+        self.connector = connector
 
-    def run(self, params: Dict[str, Any] = None) -> Any:
-        """Executes the workflow and returns the final result."""
-        pass
+        # 1. Handle Auto-Gathering
+        if isinstance(target, (list, tuple)):
+            if not target:
+                self.workflow_target = _internal_gather()  # Empty gather
+            else:
+                self.workflow_target = _internal_gather(*target)
+        else:
+            self.workflow_target = target
+
+        # 2. Setup Messaging & Rendering
+        if log_format == "json":
+            self.renderer = JsonRenderer(min_level=log_level)
+        else:
+            self.renderer = CliRenderer(store=bus.store, min_level=log_level)
+        
+        # Inject renderer into the GLOBAL bus (as per current architecture)
+        # TODO: In future, we might want scoped buses per App instance.
+        bus.set_renderer(self.renderer)
+
+        # 3. Setup Event System
+        self.event_bus = MessageBus()
+        self.log_subscriber = HumanReadableLogSubscriber(self.event_bus)
+        
+        self.telemetry_subscriber = None
+        if self.connector:
+            self.telemetry_subscriber = TelemetrySubscriber(self.event_bus, self.connector)
+
+        # 4. Setup Engine Components
+        self.solver = NativeSolver()
+        self.executor = LocalExecutor()
+        self.sb_factory = _create_state_backend_factory(state_backend)
+
+        # 5. Create Engine
+        self.engine = Engine(
+            solver=self.solver,
+            executor=self.executor,
+            bus=self.event_bus,
+            system_resources=self.system_resources,
+            connector=self.connector,
+            state_backend_factory=self.sb_factory,
+        )
+
+        # Register managed subscribers for graceful shutdown
+        # (Engine handles this via add_subscriber, but currently Engine implementation 
+        #  of add_subscriber expects objects with 'shutdown' method. 
+        #  TelemetrySubscriber has it. HumanReadableLogSubscriber does not.)
+        if self.telemetry_subscriber:
+            self.engine.add_subscriber(self.telemetry_subscriber)
+
+    def run(self) -> Any:
+        """
+        Executes the workflow and returns the final result.
+        """
+        return asyncio.run(
+            self.engine.run(self.workflow_target, params=self.params)
+        )
 
     def visualize(self) -> str:
         """Generates and returns a Graphviz DOT string of the workflow."""
-        pass
+        # TODO: Implement in Stage 3
+        raise NotImplementedError("visualize() is not yet implemented in CascadeApp")
 
     def dry_run(self) -> None:
         """Builds and prints the execution plan without running any tasks."""
-        pass
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-application/src/cascade/py.typed
-~~~~~
-~~~~~
-# This file is intentionally empty.
-# It signals to type checkers that this package supports type hints (PEP 561).
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-application/pyproject.toml
-~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[project]
-name = "cascade-application"
-version = "0.1.0"
-description = "The application layer for Cascade, providing a unified API entrypoint."
-requires-python = ">=3.8"
-dependencies = [
-  "cascade-spec",
-  "cascade-engine",
-  "cascade-graph",
-  "cascade-sdk"
-]
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-graph = { workspace = true }
-cascade-sdk = { workspace = true }
-~~~~~
-
-#### Acts 3: 将新包集成到 Monorepo 工作区
-
-最后，我们修改根目录的 `pyproject.toml`，将 `cascade-application` 正式注册为工作区的一个成员，并使其在开发环境中可用。
-
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-cascade-graph = { workspace = true }
-cascade-library = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
-cascade-connector-local = { workspace = true }
-~~~~~
-~~~~~toml
-[tool.uv.workspace]
-members = ["packages/*"]
-
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-cascade-graph = { workspace = true }
-cascade-library = { workspace = true }
-cascade-application = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
-cascade-connector-local = { workspace = true }
-~~~~~
-
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml
-  # Local workspace packages needed for testing
-  "cascade-provider-ipfs",
-  "cascade-cli-controller",
-  "cascade-cli-observer",
-  "cascade-connector-mqtt",
-  "cascade-connector-local",
-]
-~~~~~
-~~~~~toml
-  # Local workspace packages needed for testing
-  "cascade-application",
-  "cascade-provider-ipfs",
-  "cascade-cli-controller",
-  "cascade-cli-observer",
-  "cascade-connector-mqtt",
-  "cascade-connector-local",
-]
+        # TODO: Implement in Stage 3
+        raise NotImplementedError("dry_run() is not yet implemented in CascadeApp")
 ~~~~~
 
 ### 下一步建议
-我们已经成功完成了路线图的第一阶段。`cascade-application` 包的骨架已经搭建完毕并集成到了项目中。
+阶段二已完成。`CascadeApp` 现在拥有了完整的初始化和运行逻辑，并且没有引入不必要的依赖。
 
-接下来的**第二阶段**将是核心逻辑的迁移：我们会将 `cs.run()` 函数中关于 `Engine` 实例化、消息总线配置和渲染器注入的逻辑，逐步迁移到 `CascadeApp` 类的 `__init__` 方法和 `run` 方法中。如果你同意，我将为你生成执行此阶段的计划。
+接下来的**阶段三**是统一所有入口点。我们需要实现 `visualize` 和 `dry_run` 方法。这意味着我们需要将 `cascade-sdk` 中 `visualize` 和 `dry_run` 的逻辑（主要是图构建和分析部分）迁移到 `CascadeApp` 中。由于这涉及到 `cascade-graph` 和 `cascade-sdk.tools` 中的一些逻辑，我们需要小心处理依赖。`cascade-application` 已经依赖了 `cascade-graph`，所以图构建部分应该没问题。
+
+请指示是否继续执行阶段三。

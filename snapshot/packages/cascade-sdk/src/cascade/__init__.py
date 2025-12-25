@@ -35,6 +35,7 @@ from cascade.graph.serialize import to_json, from_json
 
 # --- V1.4 Factory Functions (Unchanged) ---
 
+
 def Param(
     name: str, default: Any = None, type: Any = str, description: str = ""
 ) -> LazyResult:
@@ -50,6 +51,7 @@ def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
 
 
 # --- V1.4 Refactored Global Functions (Wrappers) ---
+
 
 def run(
     target: Union[LazyResult, List[Any], tuple[Any, ...]],
@@ -96,8 +98,10 @@ def dry_run(target: Any) -> None:
 
 # --- Dynamic Provider Loading (Unchanged) ---
 
+
 def __getattr__(name: str) -> Any:
     from .providers.registry import registry
+
     try:
         return registry.get(name)
     except AttributeError:

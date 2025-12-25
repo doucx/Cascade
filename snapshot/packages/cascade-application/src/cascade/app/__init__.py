@@ -22,6 +22,7 @@ from cascade.common.renderers import CliRenderer, JsonRenderer
 
 # --- Internal Helpers ---
 
+
 @task(name="_internal_gather", pure=True)
 def _internal_gather(*args: Any) -> Any:
     """An internal pure task used to gather results from a list."""
@@ -47,8 +48,10 @@ def _create_state_backend_factory(
                     "The 'redis' library is required for redis:// backends."
                 )
             client = redis.from_url(backend_spec)
+
             def factory(run_id: str) -> StateBackend:
                 return RedisStateBackend(run_id=run_id, client=client)
+
             return factory
         else:
             raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
@@ -67,14 +70,18 @@ def _get_node_shape(node: Node) -> str:
 
 # --- Tool Events (Scoped to Application Layer for now) ---
 
+
 @dataclass(frozen=True)
 class ToolEvent(Event):
     """Base class for all events emitted by developer tools."""
+
     pass
+
 
 @dataclass(frozen=True)
 class PlanAnalysisStarted(ToolEvent):
     target_node_id: str = ""
+
 
 @dataclass(frozen=True)
 class PlanNodeInspected(ToolEvent):
@@ -83,6 +90,7 @@ class PlanNodeInspected(ToolEvent):
     node_id: str = ""
     node_name: str = ""
     input_bindings: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass(frozen=True)
 class PlanAnalysisFinished(ToolEvent):
@@ -93,6 +101,7 @@ class DryRunConsoleSubscriber:
     """
     Listens to plan analysis events and prints a human-readable report.
     """
+
     def __init__(self, bus: MessageBus):
         bus.subscribe(PlanAnalysisStarted, self.on_start)
         bus.subscribe(PlanNodeInspected, self.on_node)
@@ -103,13 +112,16 @@ class DryRunConsoleSubscriber:
 
     def on_node(self, event: PlanNodeInspected):
         bindings_repr = str(event.input_bindings)
-        print(f"[{event.index}/{event.total_nodes}] {event.node_name} (Bindings: {bindings_repr})")
+        print(
+            f"[{event.index}/{event.total_nodes}] {event.node_name} (Bindings: {bindings_repr})"
+        )
 
     def on_finish(self, event: PlanAnalysisFinished):
         print("----------------------------------------")
 
 
 # --- CascadeApp ---
+
 
 class CascadeApp:
     """
@@ -146,16 +158,18 @@ class CascadeApp:
             self.renderer = JsonRenderer(min_level=log_level)
         else:
             self.renderer = CliRenderer(store=bus.store, min_level=log_level)
-        
+
         bus.set_renderer(self.renderer)
 
         # 3. Setup Event System
         self.event_bus = MessageBus()
         self.log_subscriber = HumanReadableLogSubscriber(self.event_bus)
-        
+
         self.telemetry_subscriber = None
         if self.connector:
-            self.telemetry_subscriber = TelemetrySubscriber(self.event_bus, self.connector)
+            self.telemetry_subscriber = TelemetrySubscriber(
+                self.event_bus, self.connector
+            )
 
         # 4. Setup Engine Components
         self.solver = NativeSolver()
@@ -179,18 +193,16 @@ class CascadeApp:
         """
         Executes the workflow and returns the final result.
         """
-        return asyncio.run(
-            self.engine.run(self.workflow_target, params=self.params)
-        )
+        return asyncio.run(self.engine.run(self.workflow_target, params=self.params))
 
     def visualize(self) -> str:
         """
         Generates and returns a Graphviz DOT string of the workflow.
         """
-        # Note: If workflow_target is an empty list gather (from empty input), 
+        # Note: If workflow_target is an empty list gather (from empty input),
         # build_graph handles it but we might want a cleaner check.
         if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
-             return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
+            return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
 
         graph, _ = build_graph(self.workflow_target)
 
@@ -203,18 +215,24 @@ class CascadeApp:
         for node in graph.nodes:
             shape = _get_node_shape(node)
             label = f"{node.name}\\n({node.node_type})"
-            dot_parts.append(f'  "{node.structural_id}" [label="{label}", shape={shape}];')
+            dot_parts.append(
+                f'  "{node.structural_id}" [label="{label}", shape={shape}];'
+            )
 
         for edge in graph.edges:
             style = ""
             if edge.edge_type == EdgeType.CONDITION:
                 style = ' [style=dashed, color=gray, label="run_if"]'
             elif edge.edge_type == EdgeType.IMPLICIT:
-                style = ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
+                style = (
+                    ' [style=dotted, color=lightgray, arrowhead=none, label="implicit"]'
+                )
             elif edge.edge_type == EdgeType.ROUTER_ROUTE:
                 style = ' [style=dashed, color=orange, arrowhead=open, label="route"]'
             elif edge.router:
-                style = f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
+                style = (
+                    f' [style=dashed, color=blue, label="route via: {edge.arg_name}"]'
+                )
             elif edge.edge_type == EdgeType.CONSTRAINT:
                 style = f' [style=dotted, color=purple, label="constraint: {edge.arg_name}"]'
             elif edge.edge_type == EdgeType.SEQUENCE:
@@ -236,16 +254,18 @@ class CascadeApp:
         Builds and prints the execution plan without running any tasks.
         """
         # Create a temporary local bus for the dry run report
-        # We don't want to use the main app bus because dry_run 
+        # We don't want to use the main app bus because dry_run
         # is a special analysis mode, not a "run".
         local_bus = MessageBus()
         DryRunConsoleSubscriber(local_bus)
 
         # Handle empty case
         if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
-             local_bus.publish(PlanAnalysisStarted(run_id="empty", target_node_id="empty"))
-             local_bus.publish(PlanAnalysisFinished(run_id="empty", total_steps=0))
-             return
+            local_bus.publish(
+                PlanAnalysisStarted(run_id="empty", target_node_id="empty")
+            )
+            local_bus.publish(PlanAnalysisFinished(run_id="empty", total_steps=0))
+            return
 
         # 1. Build Graph
         graph, _ = build_graph(self.workflow_target)

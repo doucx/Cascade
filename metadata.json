@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(arch): 引入 Application 层并统一 API 入口点", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766644926.393801, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py, M __init__.py, M __init__.py ... and 1 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766645043.5241852, "duration_ms": 0}}

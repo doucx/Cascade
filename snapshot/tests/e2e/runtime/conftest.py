@@ -1,4 +1,7 @@
 import pytest
+from cascade.runtime.bus import MessageBus
+from cascade.testing import SpySubscriber
+
 
 # Attempt to import LocalBusConnector for global cleanup
 try:
@@ -19,10 +22,6 @@ def cleanup_local_bus():
     yield
     if LocalBusConnector:
         LocalBusConnector._reset_broker_state()
-
-
-from cascade.runtime.bus import MessageBus
-from cascade.testing import SpySubscriber
 
 
 @pytest.fixture

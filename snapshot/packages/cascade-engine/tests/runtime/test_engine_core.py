@@ -1,9 +1,7 @@
 import pytest
-from typing import List, Any, Dict
 
 import cascade as cs
 from cascade.graph.build import build_graph
-from cascade.graph.model import Node, Graph
 from cascade.runtime import Engine, MessageBus, ExecutionPlan
 from cascade.testing import SpyExecutor, MockSolver
 

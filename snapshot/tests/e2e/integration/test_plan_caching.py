@@ -1,12 +1,9 @@
 import pytest
-from unittest.mock import MagicMock
 
 from cascade import task, Engine
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.bus import MessageBus
-from cascade.spec.protocols import Solver
-from cascade.graph.model import Graph
 from cascade.testing import SpySolver
 
 

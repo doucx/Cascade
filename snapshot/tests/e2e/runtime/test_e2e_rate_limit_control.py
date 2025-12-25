@@ -1,12 +1,10 @@
 import time
-import asyncio
 import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import TaskExecutionFinished
-from cascade.testing import MockExecutor, SpySubscriber
+from cascade.testing import MockExecutor
 
 from .harness import InProcessConnector
 

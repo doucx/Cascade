@@ -103,8 +103,6 @@ class MockExecutor(Executor):
     behaviors like delays or returning specific values.
     """
 
-
-
     def __init__(self, delay: float = 0, return_value: Any = "result"):
         self.delay = delay
         self.return_value = return_value

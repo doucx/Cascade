@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(engine): implement semantic scheduling modes with dedicated thread pools", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766640700.9277616, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 为自动汇合语法糖添加 TDD 测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766641531.9230492, "duration_ms": 0}}

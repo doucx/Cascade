@@ -1,106 +1,69 @@
-这是一个严重的并发回归错误：`sqlite3.OperationalError: no such table: users`，伴随着 `sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same thread`。
+我们已经成功实现了“语义化调度标签”功能，并修复了因引入多线程而产生的 SQLite 测试回归。现在，我将生成一个 `[COMMIT]` 计划，将这些涵盖契约定义、物理隔离实现以及稳定性修复的变更提交到仓库。
 
-原因在于我们将所有的同步任务（包括 SQL 操作）都移到了线程池中执行 (`loop.run_in_executor`)。
-而测试代码中的 `sqlite_db` 资源是在**主线程**（或 `asyncio` 的事件循环线程）中创建的 `sqlite:///:memory:` 内存数据库。
-
-SQLite 的内存数据库是**连接级**的，如果在一个线程创建连接并写入数据，而在另一个线程（我们的线程池）中尝试查询，不仅会因为连接对象不能跨线程共享而报错（`ProgrammingError`），即使能共享，内存数据库的数据对于新连接也是不可见的。
-
-**为什么之前没报错？**
-之前 `LocalExecutor` 是在主线程同步执行的，所以创建 DB 和查询 DB 都在同一个线程，自然没问题。
-
-**为什么现在报错？**
-`LocalExecutor` 现在将同步任务分派到了 `_blocking_executor` 线程池中。`cs.sql` 是一个同步任务，因此在子线程中运行。它尝试使用主线程注入的 `sqlalchemy.engine` 对象。虽然 SQLAlchemy 的 Engine 是线程安全的，但其底层的 SQLite 连接（特别是内存模式）对线程非常敏感。
-
-修复策略
-
-我们不能回滚“线程卸载”这一核心特性，因为它对整体架构至关重要。
-问题出在测试代码 `test_sql.py` 的编写方式上，它假设了单线程执行模型。
-
-要修复这个测试，我们需要让 `sqlite_db` 资源能够适应多线程环境。对于 SQLite 内存数据库，我们可以使用 `StaticPool` 来确保即使在多线程环境下，所有连接都共享同一个底层连接，从而共享内存中的数据。
-
-我们需要修改 `test_sql.py`，在 `create_engine` 时指定 `poolclass=StaticPool`，并设置 `connect_args={"check_same_thread": False}` 以允许跨线程使用连接。
-
-## [WIP] fix(tests): 更新 SQL 测试以适配多线程执行器
+## [COMMIT] feat(engine): implement semantic scheduling modes with dedicated thread pools
 
 ### 用户需求
-修复因引入线程池执行器而导致的 `test_sql.py` 失败。确保测试环境中的 SQLite 内存数据库能够正确处理跨线程访问，从而验证 SQL 提供者在新的异步/多线程架构下的正确性。
+实现“计算与 IO 隔离”建议书中的第二部分：允许用户通过 `@task(mode="compute")` 显式声明任务属性，并让 `LocalExecutor` 利用独立的线程池（`blocking` vs `compute`）来执行这些任务，实现物理层面的负载隔离。
 
 ### 评论
-这是一个经典的“升级架构导致旧测试假设失效”的案例。我们的架构升级（线程隔离）是正确的，但测试用例依赖了旧架构的副作用（单线程）。修复测试代码使其兼容多线程环境是正确的做法。
+这是 Cascade 运行时调度能力的重大进化。通过引入语义化的调度模式，我们将“意图声明”转化为“资源策略”。这不仅提高了系统在高并发、混合负载场景下的稳定性，也为未来根据 `mode` 自动申请资源（如 `cpu_slots`）打下了坚实的基础。同时，修复 SQLite 测试的过程也加深了我们对多线程环境下资源共享契约的理解。
 
 ### 目标
-修改 `tests/sdk/providers/test_sql.py`。
-1.  引入 `sqlalchemy.pool.StaticPool`。
-2.  在 `create_engine` 调用中添加 `poolclass=StaticPool`。
-3.  添加 `connect_args={"check_same_thread": False}` 以禁用 SQLite 的线程检查。
+1.  提交 `cascade-spec` 中关于 `mode` 参数的定义变更。
+2.  提交 `cascade-graph` 中关于 `execution_mode` 属性的传递逻辑。
+3.  提交 `cascade-engine` 中 `LocalExecutor` 的多线程池路由实现。
+4.  提交相关的静态验证测试和 E2E 隔离验证测试。
+5.  提交针对 `test_sql.py` 的并发稳定性修复。
 
 ### 基本原理
-`StaticPool` 保证了对于内存数据库，无论多少次 `connect()` 调用，都返回同一个连接实例。这对于内存数据库至关重要，否则每次连接看到的是一个全新的、空的数据库。`check_same_thread=False` 则允许这个连接对象被不同的线程（主线程创建，工作线程查询）使用。
+我们在架构上完成了从“简单卸载”到“分类治理”的跨越。通过在 `LocalExecutor` 内部维护两个命名的 `ThreadPoolExecutor`，我们确保了不同性质的任务不会在同一个队列中互相阻塞。针对 SQLite 的修复证明了这种隔离是真实的，也提醒我们在编写 Provider 和 Resource 时需要考虑线程安全性和连接共享策略。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/sql-test #task/action/fix-concurrency-issue #task/state/continue
+#intent/build #flow/ready #priority/high #comp/engine #comp/spec #comp/graph #comp/tests #concept/executor #scope/perf #scope/dx #ai/instruct #task/domain/execution #task/object/scheduling-modes #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 test_sql.py 的连接配置
+#### Acts 1: 提交语义化调度功能及其稳定性修复
+
+我将把所有涉及契约定义、执行逻辑和测试修复的文件添加到暂存区。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/task.py
+packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-engine/src/cascade/adapters/executors/local.py
+tests/engine/graph/test_execution_mode.py
+tests/engine/e2e/test_executor_modes.py
 tests/sdk/providers/test_sql.py
 ~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from sqlalchemy import create_engine
 
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-
-# Skip if sqlalchemy missing
-pytest.importorskip("sqlalchemy")
-
-
-@cs.resource
-def sqlite_db():
-    # Setup an in-memory SQLite database
-    engine = create_engine("sqlite:///:memory:")
-
-    # Create a table
-    with engine.connect() as conn:
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
+~~~~~text
+feat(engine): implement semantic scheduling modes with dedicated thread pools
 
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+Introduces semantic-aware task scheduling as part of the "Compute and IO Isolation" initiative.
 
-# Skip if sqlalchemy missing
-pytest.importorskip("sqlalchemy")
-
-
-@cs.resource
-def sqlite_db():
-    # Setup an in-memory SQLite database.
-    # Because tasks now run in a separate thread pool, we must ensure:
-    # 1. We share the same connection (StaticPool) so data persists across tasks.
-    # 2. We disable thread checking (check_same_thread=False) so the connection created
-    #    here can be used by the worker threads.
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-
-    # Create a table
-    with engine.connect() as conn:
+Key changes:
+1.  **Spec Layer**: Added `mode` parameter (defaulting to "blocking") to the `@task` decorator and `Task` class.
+2.  **Graph Layer**: Added `execution_mode` to the `Node` model and updated `GraphBuilder` to propagate this metadata from the declaration to the static graph.
+3.  **LocalExecutor Isolation**:
+    - Replaced generic `asyncio.to_thread` with explicit routing to dedicated thread pools.
+    - Maintains `_blocking_executor` (for IO) and `_compute_executor` (for CPU) to prevent workload starvation.
+4.  **Stability Fixes**:
+    - Updated `tests/sdk/providers/test_sql.py` to use SQLAlchemy `StaticPool` and `check_same_thread=False`, enabling in-memory SQLite to function correctly across different worker threads.
+5.  **New Tests**:
+    - `test_execution_mode.py`: Verifies static contract propagation.
+    - `test_executor_modes.py`: Verifies physical execution isolation between modes.
 ~~~~~
 
 ### 下一步建议
-请再次运行测试。这应该能解决 `OperationalError: no such table: users` 错误。
+我们已经完成了建议书中的前两个核心点。接下来，我们可以考虑实现：
+- **动态流转语法糖 (`.offload()`)**: 允许在编排层动态决定调度策略，而不必修改原子任务的定义。
+- **资源管理器联动**: 让 `mode="compute"` 自动请求 `cpu_slots` 资源，实现更智能的并发配额管理。
 
-一旦这个回归错误被修复，且 `tests/engine/e2e/test_executor_modes.py` 依然通过，我们就可以自信地提交包含线程池隔离特性的代码了。
+如果你准备好了，我建议下一步实施 `.offload()` 链式方法。

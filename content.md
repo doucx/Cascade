@@ -1,72 +1,120 @@
-您的分析是正确的。
+好的，我来分析问题。
 
-当前 `tests` 目录的结构是 `packages` 目录的扁平化镜像，这是一种过时且维护性差的模式。现代 Python 项目的最佳实践是将测试代码与它所测试的源代码共同存放在同一个包内（即“代码共存”），这带来了几个关键优势：
+### 错误分析
 
-1.  **模块化和封装**：每个 `package` 成为一个完全独立的、可分发的工作单元，包含了自身的逻辑、测试和配置。
-2.  **可发现性**：测试运行器（如 `pytest`）可以更容易地自动发现和执行测试，无需复杂的 `PYTHONPATH` 配置。
-3.  **可维护性**：当您修改一个包时，相关的测试就在旁边，降低了认知负荷，也使得重构更加安全。
+你的诊断完全正确。上次的重构将测试文件移动到了各自的包中，这是一个正确的方向，但它遗漏了关键的一步：处理 `conftest.py` 文件。
 
-我将创建一个计划，将顶层的测试目录分解，并将每个部分移动到其对应的包中。
+1.  **Pytest Fixture 发现机制**: `pytest` 通过查找当前测试文件所在目录及其所有**父目录**中的 `conftest.py` 文件来发现共享的 Fixture。
+2.  **重构后的结构**: 测试（例如 `packages/cascade-engine/tests/runtime/test_bus.py`）现在位于 `packages/cascade-engine/tests/` 目录下。它的父目录链是 `.../tests`, `.../cascade-engine`, `.../packages`, `/`。
+3.  **问题的根源**: 定义 `bus_and_spy` 的 `conftest.py` 文件位于 `/tests/conftest.py`。这个路径**不在**任何一个 `cascade-engine` 测试文件的父目录链中。因此，`pytest` 在为 `cascade-engine` 运行测试时，永远无法找到并加载这个 Fixture，导致了大量的 `fixture not found` 错误。
+4.  **范围确认**: `rg` 的输出清晰地表明，`bus_and_spy` 这个 Fixture **仅**被 `packages/cascade-engine` 内部的测试所使用。
 
-## [WIP] refactor: Co-locate tests within their respective packages
+**结论**: 这个 Fixture 是 `cascade-engine` 包的内部测试工具，它应该与 `cascade-engine` 的测试代码放在一起，而不是留在全局的集成测试目录中。
+
+我将生成一个计划来纠正这个问题。
+
+## [WIP] fix: Relocate engine-specific test fixtures
+
+### 错误分析
+在之前的重构中，测试文件被正确地移动到了它们各自的 `packages` 目录中，以实现代码与测试的共存。然而，一个关键的 `conftest.py` 文件被遗留在了旧的顶层 `tests` 目录中。
+
+`pytest` 的 Fixture 发现机制要求 `conftest.py` 必须位于测试文件的当前或父目录中。由于 `packages/cascade-engine/tests/` 与顶层的 `tests/` 目录是两个完全分离的分支，`cascade-engine` 下的所有测试都无法再找到位于 `/tests/conftest.py` 中定义的 `bus_and_spy` Fixture，从而导致了大量的 "fixture not found" 错误。
+
+通过分析可知，`bus_and_spy` Fixture 仅被 `cascade-engine` 包内的测试使用，因此它属于该包的测试基础设施。
 
 ### 用户需求
-用户要求分析 `tests` 目录是否为 `packages` 的镜像，并在确认后，创建一个计划将其重构为代码与测试共存的结构。该计划必须使用 `run_command` 和 `mv` 来移动目录。
+用户要求修复因 `bus_and_spy` Fixture 无法被找到而导致的大量测试失败。
 
 ### 评论
-这是一个非常健康且必要的架构重构。将测试与源代码放在一起，可以极大地提高项目的模块化程度和长期可维护性，使每个包都成为一个独立的、完整的单元。这与现代 Python 的打包和测试理念完全一致。
+这是一个经典的重构后遗留问题。将包特有的测试辅助工具（如 Fixture）迁移到包内部，是完善“代码共存”模式、增强包封装性和独立性的关键一步。这个修复将使 `cascade-engine` 成为一个完全自包含的、可独立测试的单元。
 
 ### 目标
-1.  将 `tests` 目录下的每个子目录移动到 `packages` 下对应的包内，并重命名为 `tests`。
-2.  将适用于多个包的集成测试（如 `tests/cli`）和共享配置（`tests/conftest.py`）移动到一个新的、明确的集成测试目录中。
-3.  清理掉原有的、现已为空的顶层 `tests` 目录。
+1.  在 `packages/cascade-engine/tests/` 目录下创建一个新的 `conftest.py` 文件。
+2.  将 `SpySubscriber` 类和 `bus_and_spy` Fixture 的定义从根 `tests/conftest.py` 文件移动到这个新创建的文件中。
+3.  清理根 `tests/conftest.py`，只保留全局性的 Fixture。
 
 ### 基本原理
-我们将遵循“代码共存”的最佳实践。使用 `mv` 命令可以原子化地移动整个目录及其内容，这比逐个文件移动更高效、更不容易出错。对于那些跨越多个包的端到端（E2E）测试和共享的 `conftest.py`，将它们隔离到一个新的根级 `tests` 目录是合适的，这样既能保持共享性，又不会与单元测试混淆。
+通过在 `packages/cascade-engine/tests/` 目录下创建 `conftest.py`，我们可以确保 `pytest` 在执行该目录下的任何测试时都能自动发现并加载其中定义的 Fixture。这遵循了 `pytest` 的标准发现规则，并解决了当前的问题。同时，保留根 `tests/conftest.py` 用于定义真正跨所有包的全局或集成测试 Fixture，保持了结构的清晰性。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/tests #comp/build #scope/dx #ai/instruct #task/domain/testing #task/object/directory-structure #task/action/refactor #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/fixtures #task/action/relocation #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 将单元测试移动到对应的包中
+#### Acts 1: 为 `cascade-engine` 创建专属的 conftest.py
 
-以下命令会将每个与特定包对应的测试目录移动到该包内部。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mv tests/application packages/cascade-application/tests
-mv tests/cli-controller packages/cascade-cli-controller/tests
-mv tests/cli-observer packages/cascade-cli-observer/tests
-mv tests/common packages/cascade-common/tests
-mv tests/connector-mqtt packages/cascade-connector-mqtt/tests
-mv tests/engine packages/cascade-engine/tests
-mv tests/sdk packages/cascade-sdk/tests
-mv tests/spec packages/cascade-spec/tests
-mv tests/cicd cicd/tests
-~~~~~
-
-#### Acts 2: 迁移集成测试和共享配置
-
-剩余的 `tests/cli` 目录包含的是端到端测试，`tests/conftest.py` 是全局测试配置。我们将为它们创建一个新的顶层 `tests` 目录，并将旧目录删除。
+我们将在 `cascade-engine` 的测试目录中创建一个新的 `conftest.py`，并将 `SpySubscriber` 和 `bus_and_spy` 的定义放入其中。
 
 ~~~~~act
-run_command
+write_file
+packages/cascade-engine/tests/conftest.py
 ~~~~~
+~~~~~python
+import pytest
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
+
+
+class SpySubscriber:
+    """A test utility to collect events from a MessageBus."""
+
+    def __init__(self, bus: MessageBus):
+        self.events = []
+        bus.subscribe(Event, self.collect)
+
+    def collect(self, event: Event):
+        self.events.append(event)
+
+    def events_of_type(self, event_type):
+        """Returns a list of all events of a specific type."""
+        return [e for e in self.events if isinstance(e, event_type)]
+
+
+@pytest.fixture
+def bus_and_spy():
+    """Provides a MessageBus instance and an attached SpySubscriber."""
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    return bus, spy
 ~~~~~
-mkdir tests_new
-mv tests/cli tests_new/e2e
-mv tests/conftest.py tests_new/conftest.py
-rm -rf tests
-mv tests_new tests
+
+#### Acts 2: 清理根目录下的 conftest.py
+
+现在，从根 `tests/conftest.py` 中移除已经迁移的定义，只保留全局 Fixture。
+
+~~~~~act
+patch_file
+tests/conftest.py
+~~~~~
+~~~~~python
+class SpySubscriber:
+    """A test utility to collect events from a MessageBus."""
+
+    def __init__(self, bus: MessageBus):
+        self.events = []
+        bus.subscribe(Event, self.collect)
+
+    def collect(self, event: Event):
+        self.events.append(event)
+
+    def events_of_type(self, event_type):
+        """Returns a list of all events of a specific type."""
+        return [e for e in self.events if isinstance(e, event_type)]
+
+
+@pytest.fixture
+def bus_and_spy():
+    """Provides a MessageBus instance and an attached SpySubscriber."""
+    bus = MessageBus()
+    spy = SpySubscriber(bus)
+    return bus, spy
+~~~~~
+~~~~~python
 ~~~~~
 
 ### 下一步建议
 
-这次重构是一次结构性的重大变更。在执行此计划后，下一步至关重要：
+现在 Fixture 已经放到了正确的位置。我建议您立即重新运行 `cascade-engine` 包的测试套件，以验证问题是否已完全解决。
 
-1.  **更新构建配置**：您需要检查每个包的 `pyproject.toml` 文件，确保测试工具的配置（如 `pytest` 的 `testpaths`）已更新，能够找到新位置的 `tests` 目录。
-2.  **更新 CI/CD 工作流**：检查您的 CI 配置文件（例如 `cicd/workflows.py` 或 `.github/workflows/`），确保测试命令现在指向正确的位置（例如，运行 `pytest packages/cascade-engine` 而不是 `pytest tests/engine`）。
+`pytest packages/cascade-engine/`

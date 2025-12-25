@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: Co-locate tests within their respective packages", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766647099.955507, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "错误分析", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766647267.0138288, "duration_ms": 0}}

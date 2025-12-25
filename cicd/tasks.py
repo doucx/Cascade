@@ -31,7 +31,7 @@ def get_lint_command(package_name: str) -> str:
     """
     Generates the shell command to run ruff on the package.
     """
-    return f"uv run -- ruff check packages/{package_name}"
+    return f"ruff check packages/{package_name}"
 
 
 @cs.task
@@ -39,7 +39,7 @@ def get_test_command(package_name: str) -> str:
     """
     Generates the shell command to run pytest on the package.
     """
-    return f"uv run -- pytest packages/{package_name}"
+    return f"pytest packages/{package_name}"
 
 
 @cs.task
@@ -47,7 +47,7 @@ def get_build_command(package_name: str) -> str:
     """
     Generates the shell command to build the package.
     """
-    return f"uv run -- hatch build packages/{package_name}"
+    return f"hatch build packages/{package_name}"
 
 
 @cs.task
@@ -56,4 +56,4 @@ def get_publish_command() -> str:
     Generates the shell command to publish packages.
     """
     # Using 'twine upload' which expects credentials in env vars.
-    return "TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPI_TOKEN uv run -- twine upload 'dist/*'"
+    return "TWINE_USERNAME=__token__ TWINE_PASSWORD=$PYPI_TOKEN twine upload 'dist/*'"

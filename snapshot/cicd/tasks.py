@@ -35,11 +35,14 @@ def get_lint_command(package_name: str) -> str:
 
 
 @cs.task
-def get_test_command(package_name: str) -> str:
+def get_aggregated_test_command(package_names: List[str]) -> str:
     """
-    Generates the shell command to run pytest on the package.
+    Generates a single pytest command to run tests for multiple packages.
     """
-    return f"pytest packages/{package_name}"
+    if not package_names:
+        return "echo 'No tests to run.'"
+    paths = " ".join([f"packages/{name}" for name in package_names])
+    return f"pytest {paths}"
 
 
 @cs.task

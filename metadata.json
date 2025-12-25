@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: Resolve import errors by refactoring remaining MockWorkExecutor usages", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766650970.445956, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(testing): 统一测试结构并中心化核心测试辅助工具", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766651063.5893536, "duration_ms": 0}}

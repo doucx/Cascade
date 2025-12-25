@@ -1,228 +1,72 @@
-You are absolutely right. My apologies. My previous refactoring plan was incomplete. I removed `MockWorkExecutor` from `harness.py` but failed to identify and update two other test files that were still importing and using it. This is a classic dependency issue.
+是的，我们已经完成了这项重构任务的所有工作。
 
-The test collection errors are a direct result of this oversight. I will now generate a plan to fix these import errors and complete the refactoring.
+您的总结非常准确。我们不仅完成了您列出的前四个阶段的结构性重构，而且在后续的交互中，我们已经成功地解决了您指出的所有“遗留问题”：
 
-## [WIP] fix: Resolve import errors by refactoring remaining MockWorkExecutor usages
+1.  **Mock 提取**: 我们已将 `MockExecutor`, `MockConnector` 和所有相关的行为变体 (`SlowWorkExecutor` 等) 全部提取并统一到了 `cascade.testing`。
+2.  **遗留的 MockSolver**: 我们也已将 `MockSolver` 成功提取。
 
-### 错误分析
-The previous refactoring plan removed `MockWorkExecutor` from `tests/e2e/runtime/harness.py` but failed to update two other test files (`test_e2e_runtime_control_updates.py` and `test_e2e_ttl.py`) that still depended on it. This resulted in an `ImportError` during pytest's test collection phase, as the import target no longer exists.
+现在，代码库的测试基础设施已经高度统一和整洁，所有已识别的冗余都已被消除。这是一个完整的、可交付的工作单元。
+
+我将生成一个 `[COMMIT]` 计划来提交这些成果。
+
+## [COMMIT] refactor(testing): 统一测试结构并中心化核心测试辅助工具
 
 ### 用户需求
-Fix the test collection errors by completing the refactoring of all `Executor` test doubles.
+对整个项目的测试基础设施进行深度重构，包括：
+1.  将测试代码与源代码并置 (Co-location)。
+2.  消除跨包的测试依赖。
+3.  解决测试隔离性问题。
+4.  将所有重复定义的测试辅助类（Spies, Mocks, Stubs）中心化到一个统一的模块中。
 
 ### 评论
-This is a necessary cleanup step to complete the previous refactoring. It highlights the importance of identifying all dependencies before removing a shared component. By fixing these final two files, we will achieve a fully consistent test suite.
+这是一次至关重要的、影响深远的重构。它极大地提升了项目的架构健康度和开发者体验 (DX)。通过建立一个清晰、隔离且无冗余的测试环境，我们为未来的功能开发和维护工作奠定了坚实的基础。
 
 ### 目标
-1.  Modify `tests/e2e/runtime/test_e2e_runtime_control_updates.py` to import and use the standardized `MockExecutor` from `cascade.testing`.
-2.  Modify `tests/e2e/runtime/test_e2e_ttl.py` to do the same, thus resolving all import errors.
+1.  将自上次提交以来的所有文件结构变更和代码修改提交到版本库。
+2.  创建一个清晰、全面的 Git 提交信息，记录下这次重构的完整范围和基本原理。
 
 ### 基本原理
-The strategy is to complete the work started in the previous step. By replacing the last remaining usages of the specialized `MockWorkExecutor` with the standardized `MockExecutor` from `cascade.testing`, we will resolve the import errors and finalize the test infrastructure cleanup. We will use `write_file` for each affected file to ensure the imports and instantiations are corrected.
+这次重构分两个主要阶段完成：
+1.  **结构整理**: 通过将测试文件移动到其所属包的 `tests/` 目录下，实现了代码和测试的并置，增强了模块的内聚性。同时解决了由此引发的 Fixture 和测试状态泄漏问题。
+2.  **工具集中心化**: 通过在 `cascade.testing` 模块中创建并统一 `MockExecutor`, `MockConnector`, `MockSolver` 以及所有 `Spy*` 类，彻底贯彻了 DRY 原则。这确保了整个测试套件中使用行为一致的测试替身，简化了未来的测试编写工作。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-doubles #task/action/refactor #task/state/end
+#intent/refine #flow/ready #priority/high #comp/tests #comp/build #scope/dx #ai/instruct #task/domain/testing #task/object/test-doubles #task/action/refactor #task/state/end
 
 ---
 ### Script
 
-#### Acts 1: Refactor control updates test
+#### Acts 1: 提交所有重构变更
 
-We will update `test_e2e_runtime_control_updates.py` to use the correct, centralized `MockExecutor`.
-
-~~~~~act
-write_file
-tests/e2e/runtime/test_e2e_runtime_control_updates.py
-~~~~~
-~~~~~python
-import asyncio
-import pytest
-import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import TaskExecutionFinished
-from cascade.spec.constraint import GlobalConstraint
-from dataclasses import asdict
-import uuid
-
-from .harness import InProcessConnector
-from cascade.testing import MockExecutor
-
-
-async def set_rate_limit(
-    connector: InProcessConnector, scope: str, rate: str, constraint_id: str = None
-):
-    """Helper to publish a rate limit constraint."""
-    if not constraint_id:
-        constraint_id = f"ratelimit-{scope}-{uuid.uuid4().hex[:8]}"
-    constraint = GlobalConstraint(
-        id=constraint_id,
-        scope=scope,
-        type="rate_limit",
-        params={"rate": rate},
-    )
-    payload = asdict(constraint)
-    topic = f"cascade/constraints/{scope.replace(':', '/')}"
-    await connector.publish(topic, payload, retain=True)
-
-
-@pytest.mark.asyncio
-async def test_updating_rate_limit_unblocks_engine(bus_and_spy):
-    """
-    Regression test for the rate-limit update deadlock.
-    Verifies that updating a slow rate limit to a fast one wakes up a sleeping
-    engine and allows it to proceed at the new rate.
-    """
-    bus, spy = bus_and_spy
-    connector = InProcessConnector()
-
-    # ARRANGE
-    @cs.task
-    def fast_task(i: int):
-        return i
-
-    # A workflow with enough tasks to clearly see the rate limit effect
-    workflow = fast_task.map(i=range(5))
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=MockExecutor(),
-        bus=bus,
-        connector=connector,
-    )
-
-    # Use a fixed ID to simulate an UPDATE, not adding a second constraint
-    limit_id = "global-rate-limit-1"
-
-    # Publish a very slow rate limit *before* starting
-    await set_rate_limit(connector, scope="global", rate="1/s", constraint_id=limit_id)
-
-    # ACT & ASSERT
-    run_task = asyncio.create_task(engine.run(workflow))
-
-    # Wait for the first task to finish, confirming the engine is running and throttled
-    for _ in range(20):  # Give it 2 seconds to finish the first task
-        await asyncio.sleep(0.1)
-        if len(spy.events_of_type(TaskExecutionFinished)) > 0:
-            break
-
-    assert len(spy.events_of_type(TaskExecutionFinished)) >= 1, (
-        "Engine did not start processing tasks under the initial slow rate limit."
-    )
-
-    # Now, publish a very fast rate limit using the SAME ID. This should unblock the engine.
-    await set_rate_limit(
-        connector, scope="global", rate="100/s", constraint_id=limit_id
-    )
-
-    # The engine should now wake up and finish the remaining ~4 tasks very quickly.
-    # If it's deadlocked, this await will time out.
-    try:
-        results = await asyncio.wait_for(run_task, timeout=1.0)
-    except asyncio.TimeoutError:
-        pytest.fail(
-            "Engine deadlocked and did not respond to the updated rate limit within the timeout."
-        )
-
-    # Final verification
-    assert sorted(results) == [0, 1, 2, 3, 4]
-    assert len(spy.events_of_type(TaskExecutionFinished)) == 5
-~~~~~
-
-#### Acts 2: Refactor TTL test
-
-Similarly, we will update `test_e2e_ttl.py` to resolve the final import error.
+我们将把所有已暂存的变更提交到 Git 仓库，形成一个逻辑上完整的提交。
 
 ~~~~~act
-write_file
-tests/e2e/runtime/test_e2e_ttl.py
+git_add
+.
 ~~~~~
-~~~~~python
-import time
-import pytest
-import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.testing import MockExecutor
 
-from .harness import InProcessConnector
-
-
-@pytest.mark.asyncio
-async def test_e2e_ttl_expiration():
-    """
-    Tests that a pause constraint automatically expires after TTL.
-    """
-    connector = InProcessConnector()
-
-    # Helper to avoid complex harness logic for now
-    from cascade.spec.constraint import GlobalConstraint
-    from dataclasses import asdict
-    import uuid
-
-    async def pause_with_ttl(scope: str, ttl: float):
-        constraint_id = f"pause-{scope}-{uuid.uuid4().hex[:8]}"
-        expires_at = time.time() + ttl
-        constraint = GlobalConstraint(
-            id=constraint_id,
-            scope=scope,
-            type="pause",
-            params={},
-            expires_at=expires_at,
-        )
-        payload = asdict(constraint)
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        await connector.publish(topic, payload, retain=True)
-
-    # 1. Publish a pause with short TTL (0.2s)
-    # We use a slightly longer TTL than the check interval to ensure we catch the pause state
-    await pause_with_ttl(scope="global", ttl=0.25)
-
-    @cs.task
-    def simple_task():
-        return True
-
-    workflow = simple_task()
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=MockExecutor(),
-        bus=MessageBus(),
-        connector=connector,
-    )
-
-    # 1. Publish a pause with short TTL (0.2s)
-    # We use a slightly longer TTL than the check interval to ensure we catch the pause state
-    await pause_with_ttl(scope="global", ttl=0.25)
-
-    @cs.task
-    def simple_task():
-        return True
-
-    workflow = simple_task()
-
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=MockExecutor(),
-        bus=MessageBus(),
-        connector=connector,
-    )
-
-    start_time = time.time()
-
-    # 2. Run engine. It should be paused initially.
-    # The Engine loop will wait on wakeup.
-    # ConstraintManager should have scheduled a wakeup at T+0.25s.
-    # At T+0.25s, Engine wakes up, cleans expired constraint, and unblocks.
-    await engine.run(workflow)
-
-    duration = time.time() - start_time
-
-    # 3. Assertions
-    # Duration must be at least the TTL (0.25s), proving it was blocked.
-    assert duration >= 0.24, f"Engine didn't wait for TTL! Duration: {duration:.3f}s"
-
-    # But it shouldn't wait forever (e.g. < 1s)
-    assert duration < 1.0, "Engine waited too long or didn't recover."
+~~~~~act
+git_commit
 ~~~~~
+~~~~~text
+refactor(testing): Unify test structure and centralize core test doubles
+
+This extensive refactoring overhauls the entire testing infrastructure to improve modularity, developer experience, and maintainability. The changes are in two main categories:
+
+1.  **Test Co-location and Isolation:**
+    -   Moved all package-specific tests from the root `tests/` directory to a `tests/` subdirectory within each respective package (e.g., `packages/cascade-engine/tests/`).
+    -   Relocated tests that were "parasitic" in other packages to their correct homes (e.g., graph tests moved to `cascade-graph`, connector tests to `cascade-connector-local`).
+    -   Resolved test isolation issues, particularly state leakage from the `LocalBusConnector` in E2E tests, by introducing a scoped conftest.
+
+2.  **Centralization of Test Doubles (DRY):**
+    -   Created a canonical `cascade.testing` module to act as a centralized home for all test utilities.
+    -   Consolidated all variations of Spies, Mocks, and Stubs into this module, removing dozens of redundant local definitions across the test suite.
+    -   Key centralized classes include: `MockExecutor`, `MockConnector`, `MockSolver`, `SpyExecutor`, `SpySolver`, and `SpySubscriber`.
+    -   Refactored all tests to import and use these standardized doubles, ensuring consistent mock behavior and simplifying test setup.
+
+This commit represents a foundational improvement, making the codebase cleaner, more organized, and easier to work with.
+~~~~~
+
+### 下一步建议
+- **文档化**: 考虑为 `cascade.testing` 模块添加文档字符串或一篇简短的开发者文档，说明如何使用这些新的、统一的测试辅助工具。
+- **新功能**: 现在测试基础设施已经非常稳固，我们可以更有信心地开始构建下一个主要功能。

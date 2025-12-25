@@ -4,7 +4,7 @@ from typing import List
 from .tasks import (
     parse_git_diff,
     get_lint_command,
-    get_test_command,
+    get_aggregated_test_command,
     get_build_command,
     get_publish_command,
 )
@@ -22,6 +22,7 @@ ALL_PACKAGES = [
     "cascade-cli-controller",
     "cascade-cli-observer",
     "cascade-provider-ipfs",
+    "cascade-application",
 ]
 
 
@@ -55,15 +56,15 @@ def pr_check_workflow() -> cs.LazyResult:
     # Step 3: Pure Logic - Parse output
     changed_packages = parse_git_diff(git_diff_output)
 
-    # Step 4: Pure Logic - Generate commands (Recipe Generation)
-    # These return LazyResult[List[str]]
+    # Step 4: Generate commands
     lint_commands = get_lint_command.map(package_name=changed_packages)
-    test_commands = get_test_command.map(package_name=changed_packages)
+    # Generate one single test command for all changed packages
+    test_command = get_aggregated_test_command(changed_packages)
 
-    # Step 5: I/O - Execute commands (Explicit Execution)
-    # The 'command' argument of cs.shell will be resolved from the upstream lists
+    # Step 5: Execute commands
     lint_results = cs.shell.map(command=lint_commands)
-    test_results = cs.shell.map(command=test_commands)
+    # Execute the single test command
+    test_results = cs.shell(command=test_command)
 
     # Enforce order: tests run only after linting passes for all packages
     test_results.after(lint_results)
@@ -79,14 +80,16 @@ def release_workflow() -> cs.LazyResult:
     """
     # 1. Generate commands
     lint_cmds = get_lint_command.map(package_name=ALL_PACKAGES)
-    test_cmds = get_test_command.map(package_name=ALL_PACKAGES)
+    # Generate one single test command for all packages
+    test_cmd = get_aggregated_test_command(ALL_PACKAGES)
     build_cmds = get_build_command.map(package_name=ALL_PACKAGES)
     publish_cmd = get_publish_command()
 
     # 2. Execute with dependencies
     lint_all = cs.shell.map(command=lint_cmds)
 
-    test_all = cs.shell.map(command=test_cmds).after(lint_all)
+    # Execute the single test command
+    test_all = cs.shell(command=test_cmd).after(lint_all)
 
     build_all = cs.shell.map(command=build_cmds).after(test_all)
 

@@ -3,21 +3,16 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade-sdk"
+name = "cascade-application"
 version = "0.1.0"
-description = "A modern, declarative automation library for Python."
+description = "The application layer for Cascade, providing a unified API entrypoint."
 requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
   "cascade-engine",
-  "cascade-common",
   "cascade-graph",
-  "cascade-application"
+  "cascade-common"
 ]
-
-[project.optional-dependencies]
-# Providers and their dependencies are now in cascade-library
-all = []
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]
@@ -28,6 +23,5 @@ allow-direct-references = true
 [tool.uv.sources]
 cascade-spec = { workspace = true }
 cascade-engine = { workspace = true }
-cascade-common = { workspace = true }
-cascade-application = { workspace = true }
 cascade-graph = { workspace = true }
+cascade-common = { workspace = true }

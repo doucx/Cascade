@@ -37,6 +37,7 @@ class Node:
 
     # Core spec
     node_type: str = "task"  # "task", "param", or "map"
+    execution_mode: str = "blocking"  # "blocking", "compute"
     callable_obj: Optional[Callable] = None
     signature: Optional[inspect.Signature] = None  # Cached signature for performance
     param_spec: Optional[ParamSpec] = None

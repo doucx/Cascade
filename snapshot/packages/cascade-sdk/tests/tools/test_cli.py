@@ -39,18 +39,17 @@ def test_cli_generator_from_context():
     assert len(specs) == 2, f"Context should have 2 specs, got {len(specs)}"
 
     # 3. 生成 CLI
-    # 注意：v1.3 cs.cli 可能既支持 LazyResult (为了兼容)，
-    # 也支持直接利用 Context。这里我们传 target，验证它能否正确提取 Context 中的 Specs。
     app = cs.create_cli(target)
 
-    # 4. 验证 Help 信息 (证明 Spec 被正确读取)
-    result = runner.invoke(app, ["--help"])
-    if result.exit_code != 0:
-        print(result.stdout)
-    assert result.exit_code == 0
-    assert "--name" in result.stdout
-    assert "--count" in result.stdout
-    assert "User name" in result.stdout
+    # 4. 验证参数定义 (Robust method: Inspect data, not UI)
+    # Instead of checking the --help string, we inspect the Typer app's
+    # internal configuration. This is resilient to formatting changes.
+    params = {p.name: p for p in app.registered_cli.params}
+    assert "name" in params
+    assert "count" in params
+    assert params["name"].help == "User name"
+    assert params["count"].default == 1
+    assert params["count"].type.name == "int"
 
     # 5. 验证执行
     result = runner.invoke(app, ["--name", "World", "--count", "2"])

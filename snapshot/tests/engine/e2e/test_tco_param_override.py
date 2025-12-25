@@ -5,6 +5,7 @@ from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.bus import MessageBus
 
+
 @pytest.mark.asyncio
 async def test_jump_overrides_param():
     """
@@ -18,11 +19,11 @@ async def test_jump_overrides_param():
         # Safety break to prevent infinite loop if bug exists
         if len(results) > 10:
             return "InfiniteLoopDetected"
-            
+
         results.append(n)
         if n <= 0:
             return "Done"
-        
+
         # Pass n-1 to the next iteration
         return cs.Jump(target_key="continue", data=n - 1)
 
@@ -32,12 +33,8 @@ async def test_jump_overrides_param():
     cs.bind(t, cs.select_jump({"continue": t}))
 
     bus = MessageBus()
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus
-    )
-    
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
+
     # Run with initial param n=3
     final_res = await engine.run(t, params={"n": 3})
 
@@ -67,25 +64,21 @@ async def test_jump_overrides_param_complex_path():
 
         if len(results) > 10:
             return "InfiniteLoopDetected"
-            
+
         results.append(n)
         if n <= 0:
             return "Done"
-        
+
         return cs.Jump(target_key="continue", data=n - 1)
 
     t = recursive_task_with_injection(cs.Param("n", 3, int))
     cs.bind(t, cs.select_jump({"continue": t}))
 
     bus = MessageBus()
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=bus
-    )
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     # Register the resource required by the task
     engine.register(dummy_resource)
-    
+
     final_res = await engine.run(t, params={"n": 3})
 
     assert results == [3, 2, 1, 0]

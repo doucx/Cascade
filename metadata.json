@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: Add auto-gathering support to cs.visualize", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766641988.6263406, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: Add auto-gathering to dry_run and finalize feature", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766642157.2552304, "duration_ms": 0}}

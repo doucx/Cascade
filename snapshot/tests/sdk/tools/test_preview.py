@@ -111,3 +111,36 @@ def test_console_subscriber_renders_correctly(capsys):
     bus.publish(PlanAnalysisFinished(total_steps=2))
     captured = capsys.readouterr()
     assert "---" in captured.out
+
+
+def test_dry_run_with_list_of_lazy_results(bus_and_spy):
+    """
+    Verifies that dry_run can accept a list of LazyResults and
+    prints the correct plan, including the implicit gather node.
+    """
+    bus, spy = bus_and_spy
+
+    @cs.task(pure=True)
+    def t_a():
+        return "a"
+
+    @cs.task(pure=True)
+    def t_b():
+        return "b"
+
+    lr_a = t_a()
+    lr_b = t_b()
+
+    _analyze_plan([lr_a, lr_b], bus)
+
+    node_events = spy.events_of_type(PlanNodeInspected)
+    # 3 nodes: t_a, t_b, and the final _internal_gather
+    assert len(node_events) == 3
+
+    names = [e.node_name for e in node_events]
+    assert names[-1] == "_internal_gather"
+    assert "t_a" in names
+    assert "t_b" in names
+
+    finish_event = spy.events_of_type(PlanAnalysisFinished)[0]
+    assert finish_event.total_steps == 3

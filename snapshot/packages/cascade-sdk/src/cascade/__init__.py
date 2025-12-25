@@ -168,19 +168,7 @@ def run(
     if connector:
         TelemetrySubscriber(event_bus, connector)
 
-    # 3. Handle Auto-Gathering
-    from .internal.inputs import _internal_gather
-
-    if isinstance(target, (list, tuple)):
-        # Handle edge case of empty list
-        if not target:
-            return []
-        # Wrap the iterable in the internal gather task
-        workflow_target = _internal_gather(*target)
-    else:
-        workflow_target = target
-
-    # 4. Assemble the default Engine
+    # 3. Assemble the default Engine
     solver = NativeSolver()
     executor = LocalExecutor()
 
@@ -195,7 +183,7 @@ def run(
         state_backend_factory=sb_factory,
     )
 
-    return asyncio.run(engine.run(workflow_target, params=params))
+    return asyncio.run(engine.run(target, params=params))
 
 
 __all__ = [

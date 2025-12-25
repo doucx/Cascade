@@ -147,8 +147,21 @@ class Engine:
         self.resource_container.override_provider(name, new_provider)
 
     async def run(
-        self, target: Any, params: Optional[Dict[str, Any]] = None, use_vm: bool = False
+        self,
+        target: Any,
+        params: Optional[Dict[str, Any]] = None,
+        use_vm: bool = False,
     ) -> Any:
+        # Handle Auto-Gathering
+        from cascade.internal.inputs import _internal_gather
+
+        if isinstance(target, (list, tuple)):
+            if not target:
+                return []
+            workflow_target = _internal_gather(*target)
+        else:
+            workflow_target = target
+
         run_id = str(uuid4())
         start_time = time.time()
 
@@ -198,7 +211,7 @@ class Engine:
                 active_resources: Dict[str, Any] = {}
 
                 final_result = await strategy.execute(
-                    target=target,
+                    target=workflow_target,
                     run_id=run_id,
                     params=params or {},
                     state_backend=state_backend,

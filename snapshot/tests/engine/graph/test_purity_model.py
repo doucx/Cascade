@@ -62,3 +62,36 @@ def test_pure_tasks_are_deduplicated():
     assert node_a.structural_id == node_b.structural_id, (
         "Pure tasks must be deduplicated based on their content (function + args)."
     )
+
+
+def test_impurity_propagates_through_pure_functions():
+    """
+    Verifies that impurity from an upstream task propagates to downstream
+    pure tasks, ensuring they also get unique identities.
+    """
+
+    @task(pure=False)
+    def impure_source():
+        return 1
+
+    @task(pure=True)
+    def pure_consumer(source):
+        return source + 1
+
+    # Create two identical compositions. Because the source is impure,
+    # the consuming pure tasks should NOT be deduplicated.
+    a = pure_consumer(impure_source())
+    b = pure_consumer(impure_source())
+
+    graph_a, instance_map_a = build_graph(a)
+    graph_b, instance_map_b = build_graph(b)
+
+    node_a = instance_map_a[a._uuid]
+    node_b = instance_map_b[b._uuid]
+
+    # Assert: The two `pure_consumer` nodes must be distinct because their
+    # `impure_source` dependencies are distinct.
+    assert node_a.structural_id != node_b.structural_id, (
+        "Impurity must propagate upwards, preventing deduplication of pure tasks "
+        "that consume different impure results."
+    )

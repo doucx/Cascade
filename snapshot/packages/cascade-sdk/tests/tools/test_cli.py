@@ -44,7 +44,8 @@ def test_cli_generator_from_context():
     # 4. 验证参数定义 (Robust method: Inspect data, not UI)
     # Instead of checking the --help string, we inspect the Typer app's
     # internal configuration. This is resilient to formatting changes.
-    params = {p.name: p for p in app.registered_cli.params}
+    # The main command is the first registered one.
+    params = {p.name: p for p in app.registered_commands[0].params}
     assert "name" in params
     assert "count" in params
     assert params["name"].help == "User name"

@@ -4,11 +4,12 @@ import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.events import TaskExecutionFinished
+from cascade.testing import MockExecutor
 
 # 导入 app 模块中的核心异步逻辑函数
 from cascade.cli.controller import app as controller_app
 
-from .harness import InProcessConnector, MockWorkExecutor
+from .harness import InProcessConnector
 
 # --- Test Harness for In-Process CLI Interaction ---
 
@@ -110,7 +111,7 @@ async def test_cli_idempotency_unblocks_engine(controller_runner, bus_and_spy):
 
     engine = Engine(
         solver=NativeSolver(),
-        executor=MockWorkExecutor(),
+        executor=MockExecutor(),
         bus=bus,
         connector=controller_runner.connector,
     )

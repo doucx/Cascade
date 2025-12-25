@@ -1,36 +1,9 @@
 import pytest
-from typing import List, Any, Dict
 
 import cascade as cs
 from cascade.graph.build import build_graph
-from cascade.graph.model import Node, Graph
-from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
-
-
-# --- Test Doubles (Mocks and Spies) ---
-
-
-class MockSolver(Solver):
-    def __init__(self, plan: ExecutionPlan):
-        self._plan = plan
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # Return the pre-programmed plan
-        return self._plan
-
-
-class SpyExecutor(Executor):
-    def __init__(self):
-        self.call_log: List[Node] = []
-
-    async def execute(
-        self,
-        node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-    ) -> Any:
-        self.call_log.append(node)
-        return f"executed_{node.name}"
+from cascade.runtime import Engine, MessageBus, ExecutionPlan
+from cascade.testing import SpyExecutor, MockSolver
 
 
 # --- Test Case ---

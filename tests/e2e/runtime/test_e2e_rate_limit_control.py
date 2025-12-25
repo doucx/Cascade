@@ -1,25 +1,16 @@
 import time
-import asyncio
 import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.spec.protocols import Node, Executor
-from typing import List, Any, Dict
+from cascade.runtime.events import TaskExecutionFinished
+from cascade.testing import MockExecutor
 
 from .harness import InProcessConnector
 
 
-# Specific executor for rate limit timing
-class TimingWorkExecutor(Executor):
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        await asyncio.sleep(0.01)  # Short work time
-        return time.time()
-
-
 @pytest.mark.asyncio
-async def test_e2e_rate_limit_control():
+async def test_e2e_rate_limit_control(bus_and_spy):
     """
     Full end-to-end test for rate limiting.
     1. Controller publishes a rate limit constraint (Retained).
@@ -27,6 +18,7 @@ async def test_e2e_rate_limit_control():
     """
     # 1. Setup shared communication bus
     connector = InProcessConnector()
+    bus, spy = bus_and_spy
 
     # 2. Setup Helper (Inline to avoid complex harness changes for now)
     from cascade.spec.constraint import GlobalConstraint
@@ -56,7 +48,7 @@ async def test_e2e_rate_limit_control():
     # 4. Define the workflow
     @cs.task
     def fast_task():
-        return  # Does almost nothing, just returns its finish time via executor
+        return  # Does almost nothing
 
     # 4 tasks that should be rate-limited
     workflow = fast_task.map(x=[1, 2, 3, 4])
@@ -64,18 +56,21 @@ async def test_e2e_rate_limit_control():
     # 5. Setup the Engine
     engine = Engine(
         solver=NativeSolver(),
-        executor=TimingWorkExecutor(),
-        bus=MessageBus(),
+        executor=MockExecutor(delay=0.01),  # Short work time
+        bus=bus,
         connector=connector,
     )
 
     # 6. Run the engine
     start_time = time.time()
-    results = await engine.run(workflow)
+    await engine.run(workflow)
     duration = time.time() - start_time
 
-    # 7. Assertions
-    finish_times = sorted([t - start_time for t in results])
+    # 7. Assertions based on event timestamps
+    finished_events = spy.events_of_type(TaskExecutionFinished)
+    assert len(finished_events) == 4
+
+    finish_times = sorted([e.timestamp - start_time for e in finished_events])
 
     # Expected timing:
     # - Capacity=2, so Task 1 & 2 run immediately in the first 0.01s slot.

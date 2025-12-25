@@ -1,62 +1,15 @@
 import asyncio
-from typing import Callable, Awaitable, Dict, Any
 
 import pytest
 
-from cascade.spec.protocols import Connector, Executor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.spec.constraint import GlobalConstraint
+from cascade.testing import MockConnector, MockExecutor
 
 
 # --- Test Fixtures and Mocks ---
-
-
-class MockConnector(Connector):
-    """A mock connector for testing Engine's subscription logic."""
-
-    def __init__(self):
-        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
-        self.connected = False
-        self.disconnected = False
-
-    async def connect(self) -> None:
-        self.connected = True
-
-    async def disconnect(self) -> None:
-        self.disconnected = True
-
-    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
-        pass  # Not needed for this test
-
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        self.subscriptions[topic] = callback
-
-    async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to simulate receiving a message."""
-        # Check all subscriptions for a match
-        for sub_topic, callback in self.subscriptions.items():
-            is_match = False
-            if sub_topic == topic:
-                is_match = True
-            elif sub_topic.endswith("/#"):
-                prefix = sub_topic[:-2]
-                if topic.startswith(prefix):
-                    is_match = True
-
-            if is_match:
-                await callback(topic, payload)
-
-
-class MockExecutor(Executor):
-    async def execute(self, node, args, kwargs):
-        # Simulate execution time to allow test control flow to inject constraints
-        # while the engine is "busy" waiting for this task.
-        await asyncio.sleep(0.05)
-        return f"Result for {node.name}"
 
 
 @pytest.fixture
@@ -68,7 +21,7 @@ def mock_connector():
 def engine_with_connector(mock_connector):
     return Engine(
         solver=NativeSolver(),
-        executor=MockExecutor(),
+        executor=MockExecutor(delay=0.05),
         bus=MessageBus(),
         connector=mock_connector,
     )
@@ -236,7 +189,7 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
     bus, spy = bus_and_spy
     engine = Engine(
         solver=NativeSolver(),
-        executor=MockExecutor(),
+        executor=MockExecutor(delay=0.05),
         bus=bus,
         connector=mock_connector,
     )
@@ -306,7 +259,7 @@ async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_s
     bus, spy = bus_and_spy
     engine = Engine(
         solver=NativeSolver(),
-        executor=MockExecutor(),
+        executor=MockExecutor(delay=0.05),
         bus=bus,
         connector=mock_connector,
     )
@@ -374,6 +327,7 @@ async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_s
 
     # 9. Verify the final result
     final_result = await run_task
-    # Note: Since we use MockExecutor, the result is the fixed string it returns,
-    # not the result of the actual task function.
-    assert final_result == "Result for task_c"
+    # Note: The unified MockExecutor passes input values through. Since task_a
+    # has no inputs, it returns the default "result", which is passed
+    # through the entire chain.
+    assert final_result == "result"

@@ -4,79 +4,11 @@ from typing import Callable, Awaitable, Dict, Any, List
 
 import pytest
 import cascade as cs
-from cascade.spec.protocols import Connector, Executor
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.graph.model import Node
-
-
-# --- Mocks ---
-
-
-class MockConnector(Connector):
-    """
-    A mock connector that simulates MQTT behavior, including Retained Messages.
-    """
-
-    def __init__(self):
-        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
-        # Simulate broker storage for retained messages: topic -> payload
-        self.retained_messages: Dict[str, Dict[str, Any]] = {}
-
-    async def connect(self) -> None:
-        pass
-
-    async def disconnect(self) -> None:
-        pass
-
-    async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0) -> None:
-        pass
-
-    def seed_retained_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to pre-seed a retained message on the broker."""
-        self.retained_messages[topic] = payload
-
-    async def subscribe(
-        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        self.subscriptions[topic] = callback
-
-        # Immediate delivery of matching retained messages upon subscription
-        # This simulates MQTT behavior
-        for retained_topic, payload in self.retained_messages.items():
-            if self._topic_matches(subscription=topic, topic=retained_topic):
-                # For testing purposes, we await the callback to ensure
-                # the initial state is consistent before the engine starts scheduling.
-                await callback(retained_topic, payload)
-
-    async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to simulate receiving a live message."""
-        for sub_topic, callback in self.subscriptions.items():
-            if self._topic_matches(subscription=sub_topic, topic=topic):
-                await callback(topic, payload)
-
-    def _topic_matches(self, subscription: str, topic: str) -> bool:
-        if subscription == topic:
-            return True
-        if subscription.endswith("/#"):
-            prefix = subscription[:-2]
-            if topic.startswith(prefix):
-                return True
-        return False
-
-
-class MockExecutor(Executor):
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
-        # Simulate work duration
-        await asyncio.sleep(0.05)
-
-        # Return the first available argument, or a default
-        if args:
-            return args[0]
-        if kwargs:
-            return next(iter(kwargs.values()))
-        return "result"
+from cascade.testing import MockConnector, MockExecutor
 
 
 # --- Fixtures ---
@@ -91,7 +23,7 @@ def mock_connector():
 def engine(mock_connector):
     return Engine(
         solver=NativeSolver(),
-        executor=MockExecutor(),
+        executor=MockExecutor(delay=0.05),
         bus=MessageBus(),
         connector=mock_connector,
         system_resources={},

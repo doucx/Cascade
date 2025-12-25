@@ -1,90 +1,86 @@
-您的分析非常精准。我们刚刚完成了对 `SpySubscriber` 的中心化，现在您已经发现了下一个可以应用相同模式的绝佳候选对象。您提供的 `rg` 输出清晰地表明，大量用于模拟核心协议（`Solver`, `Executor`, `Connector`）的测试辅助类（Test Doubles）都以“一次性”的方式定义在各自的测试文件中。
+当然，我们继续推进测试工具的重构。将 `MockConnector` 提取并通用化是继 `MockExecutor` 之后最合理的步骤，这将进一步减少测试代码的重复，并提供一个更强大、行为更一致的测试替身。
 
-这正是 `cascade.testing` 模块旨在解决的问题。
+我将生成一个计划，首先在 `cascade.testing` 模块中创建一个统一的、功能完备的 `MockConnector`，然后重构 `test_engine_concurrency.py` 和 `test_engine_constraints.py` 以使用这个新的通用组件。
 
-您指出的 `MockSolver`, `SpyExecutor`, `TimingWorkExecutor` 等都是完美的提取候选对象。它们可以被归为几类：
-
-1.  **协议的“侦察兵” (Spies)**:
-    *   `SpySolver` (`test_plan_caching.py`): 记录对 `resolve` 方法的调用，同时委托给真实实现。
-    *   `SpyExecutor` (`test_engine_core.py`): 记录被调用的任务顺序。
-    *   `CaptureConnector` (`test_telemetry_contract.py`): 捕获通过连接器发布的 payload。
-    这些工具的目的是**观察和断言**系统在测试过程中的行为，它们是验证交互模式的理想选择。
-
-2.  **协议的“替身演员” (Mocks/Stubs)**:
-    *   `MockSolver` (`test_engine_core.py`): 返回一个预设的、硬编码的执行计划，完全绕过真实的解析逻辑。
-    *   `MockConnector` (`test_engine_concurrency.py`, `test_engine_constraints.py`): 一个功能更全的 `Connector` 模拟，支持订阅和模拟消息接收。
-    这些工具的目的是**控制和隔离**被测系统，为其提供一个可预测的、静态的环境。
-
-3.  **行为的“特技演员” (Behavioral Doubles)**:
-    *   `SlowWorkExecutor`, `TimingWorkExecutor`, `MockWorkExecutor`: 这些都是 `Executor` 的变体，用于模拟不同类型的任务执行行为（例如，耗时操作、记录完成时间等），对于测试并发、限流和调度至关重要。
-
-**结论**:
-我们可以分阶段将这些最有价值、最通用的测试辅助工具全部迁移到 `cascade.testing` 模块中。第一步，我们将从您指出的 `SpySolver` 和一个同样重要的 `SpyExecutor` 开始。
-
-我将生成一个计划来执行这次提取。
-
-## [WIP] refactor(tests): Extract common test doubles into cascade.testing
-
-### 错误分析
-代码库在多个测试文件中包含了 `MockSolver`, `SpySolver`, `SpyExecutor` 等临时的测试辅助类（Test Doubles）定义。这种做法导致了代码重复，并且使得在不同测试之间共享和复用这些有价值的测试工具变得不可能。一个测试文件的改进无法惠及其他文件。
+## [WIP] refactor: 将 MockConnector 整合到 cascade.testing
 
 ### 用户需求
-用户要求分析并提取像 `MockSolver` 这样可复用的测试辅助类，以减少代码冗余并建立统一的测试工具集。
+将 `test_engine_concurrency.py` 和 `test_engine_constraints.py` 中各自的 `MockConnector` 实现合并为一个功能更全面的版本，并将其迁移到 `cascade.testing` 模块中，供所有测试共享使用。
 
 ### 评论
-这是一个能显著提升项目测试基础设施成熟度的重构。将这些核心协议的 Spies 和 Mocks 提升为 SDK 的一部分，等于是在为所有 Cascade 的使用者提供一套官方的“测试套件开发工具包”。这不仅能让我们自己的测试更清晰、更易于维护，也赋能了社区，让他们能更容易地为自己的 Cascade 工作流编写高质量的测试。
+这是一个优秀的重构任务。它遵循了 Don't Repeat Yourself (DRY) 原则，将测试基础设施集中化。一个强大且统一的 `MockConnector` 不仅能简化现有测试，还能使未来编写依赖 `Connector` 协议的测试变得更加容易和可靠。
 
 ### 目标
-1.  将 `SpySolver` 的定义从 `tests/e2e/integration/test_plan_caching.py` 移动到 `packages/cascade-sdk/src/cascade/testing.py`。
-2.  将 `SpyExecutor` 的定义从 `packages/cascade-engine/tests/runtime/test_engine_core.py` 移动到 `packages/cascade-sdk/src/cascade/testing.py`。
-3.  重构原始的测试文件，使其从 `cascade.testing` 导入并使用这些集中的测试工具。
+1.  在 `packages/cascade-sdk/src/cascade/testing.py` 中创建一个新的 `MockConnector` 类。这个类将整合现有两个版本的功能，特别是对 retained messages 的支持。
+2.  同时，基于你之前的说明，在 `cascade.testing` 中添加一个通用的 `MockExecutor`，它能够模拟执行延迟。
+3.  重构 `packages/cascade-engine/tests/runtime/test_engine_concurrency.py`，移除其本地的 `MockConnector` 和 `MockExecutor` 定义，转而从 `cascade.testing` 导入并使用它们。
+4.  同样地，重构 `packages/cascade-engine/tests/runtime/test_engine_constraints.py`，使其也依赖于 `cascade.testing` 中新的测试辅助类。
 
 ### 基本原理
-我们遵循与 `SpySubscriber` 相同的模式：将通用的、可复用的测试辅助工具集中到 `cascade.testing` 模块中，为它们创建一个单一的事实来源。这使得任何测试模块都可以通过简单的 `import` 来使用这些工具，从而消除了代码重复，并促进了在整个项目中测试模式的一致性。
+我们采取与 `MockExecutor` 相同的整合策略。通过分析 `test_engine_concurrency.py` 中的实现（它包含了对 retained acks 的关键模拟，这是 MQTT 的一个核心特性），我们将其作为新 `MockConnector` 的蓝本。然后，我们确保新版本也涵盖了 `test_engine_constraints.py` 中的用例。最终，我们用一个 `write_file` 操作更新 `cascade.testing` 模块，并用另外两个 `write_file` 操作以原子方式替换掉旧的测试文件内容，确保它们能无缝地切换到新的通用测试工具上。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/tests #comp/sdk #scope/dx #ai/brainstorm #task/domain/testing #task/object/test-doubles #task/action/centralize #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/tests #concept/executor #scope/dx #ai/instruct #task/domain/testing #task/object/test-doubles #task/action/refactor #task/state/begin
 
 ---
 ### Script
 
-#### Acts 1: 扩展 `cascade.testing` 以包含 Solver 和 Executor Doubles
+#### Acts 1: 创建通用的 MockExecutor 和 MockConnector
 
-我们将首先更新 `cascade.testing`，添加 `SpySolver` 和 `SpyExecutor` 的定义及其所需的导入。
+首先，我们将更新 `cascade.testing` 模块，加入一个全新的、功能更全面的 `MockConnector`，以及一个可配置延迟的 `MockExecutor`。
 
 ~~~~~act
-patch_file
+write_file
 packages/cascade-sdk/src/cascade/testing.py
 ~~~~~
 ~~~~~python
 from contextlib import contextmanager
-from typing import Callable, Any
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
-~~~~~
-~~~~~python
-from contextlib import contextmanager
-from typing import Callable, Any, List, Dict
+from typing import Callable, Any, List, Dict, Awaitable
 from unittest.mock import MagicMock
+import asyncio
 
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
-from cascade.spec.protocols import Solver, Executor, ExecutionPlan
+from cascade.spec.protocols import Solver, Executor, ExecutionPlan, Connector
 from cascade.graph.model import Node, Graph
-~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/testing.py
-~~~~~
-~~~~~python
-    def events_of_type(self, event_type):
-        """Returns a list of all events of a specific type."""
-        return [e for e in self.events if isinstance(e, event_type)]
-~~~~~
-~~~~~python
+
+@contextmanager
+def override_resource(
+    engine: "Engine", name: str, new_resource_func: Callable[[], Any]
+):
+    """
+    A context manager to temporarily override a resource for testing purposes.
+
+    Usage:
+        engine = Engine()
+        engine.register(production_db)
+
+        with override_resource(engine, "production_db", mock_db):
+            engine.run(my_task) # my_task will receive mock_db
+    """
+    if not hasattr(engine, "override_resource_provider"):
+        raise TypeError("The provided engine does not support resource overriding.")
+
+    original = engine.get_resource_provider(name)
+    try:
+        engine.override_resource_provider(name, new_resource_func)
+        yield
+    finally:
+        engine.override_resource_provider(name, original)
+
+
+class SpySubscriber:
+    """A test utility to collect events from a MessageBus."""
+
+    def __init__(self, bus: MessageBus):
+        self.events = []
+        bus.subscribe(Event, self.collect)
+
+    def collect(self, event: Event):
+        self.events.append(event)
+
     def events_of_type(self, event_type):
         """Returns a list of all events of a specific type."""
         return [e for e in self.events if isinstance(e, event_type)]
@@ -121,131 +117,562 @@ class SpyExecutor(Executor):
     ) -> Any:
         self.call_log.append(node)
         return f"executed_{node.name}"
-~~~~~
-
-#### Acts 2: 重构 `test_plan_caching.py`
-
-现在，我们清理 `test_plan_caching.py`，让它从 `cascade.testing` 导入 `SpySolver`。
-
-~~~~~act
-patch_file
-tests/e2e/integration/test_plan_caching.py
-~~~~~
-~~~~~python
-from cascade.spec.protocols import Solver
-from cascade.graph.model import Graph
 
 
-# Define a simple task for testing
-@task
-def add(a: int, b: int) -> int:
-    return a + b
+class MockExecutor(Executor):
+    """
+    A generic mock for the Executor protocol that can simulate various
+    behaviors like delays or returning specific values.
+    """
+
+    def __init__(self, delay: float = 0, return_value: Any = "result"):
+        self.delay = delay
+        self.return_value = return_value
+
+    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
+        if self.delay > 0:
+            await asyncio.sleep(self.delay)
+
+        # A simple logic to return something from inputs if available
+        if args:
+            return args[0]
+        if kwargs:
+            return next(iter(kwargs.values()))
+
+        return self.return_value
 
 
-class SpySolver(Solver):
-    """A solver that spies on calls and delegates to a real solver."""
+class MockConnector(Connector):
+    """
+    A mock connector for testing that simulates MQTT behavior,
+    including retained messages and topic matching.
+    """
 
-    def __init__(self, underlying_solver: Solver):
-        self.underlying_solver = underlying_solver
-        # Use MagicMock to wrap the real resolve method. This allows us to track
-        # calls while still executing the real logic.
-        self.resolve = MagicMock(wraps=self.underlying_solver.resolve)
-
-    def resolve(self, graph: Graph):
-        # This method's body is effectively replaced by the MagicMock wrapper,
-        # but is required to satisfy the Solver protocol.
-        pass
-~~~~~
-~~~~~python
-from cascade.spec.protocols import Solver
-from cascade.graph.model import Graph
-from cascade.testing import SpySolver
-
-
-# Define a simple task for testing
-@task
-def add(a: int, b: int) -> int:
-    return a + b
-~~~~~
-
-#### Acts 3: 重构 `test_engine_core.py`
-
-最后，清理 `test_engine_core.py`，让它导入 `SpyExecutor`，并移除不再需要的本地 `MockSolver` 和 `SpyExecutor` 定义。
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/runtime/test_engine_core.py
-~~~~~
-~~~~~python
-import pytest
-from typing import List, Any, Dict
-
-import cascade as cs
-from cascade.graph.build import build_graph
-from cascade.graph.model import Node, Graph
-from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
-
-
-# --- Test Doubles (Mocks and Spies) ---
-
-
-class MockSolver(Solver):
-    def __init__(self, plan: ExecutionPlan):
-        self._plan = plan
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # Return the pre-programmed plan
-        return self._plan
-
-
-class SpyExecutor(Executor):
     def __init__(self):
-        self.call_log: List[Node] = []
+        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
+        # Simulate broker storage for retained messages: topic -> payload
+        self.retained_messages: Dict[str, Dict[str, Any]] = {}
+        self.connected: bool = False
+        self.disconnected: bool = False
+        self.publish_log: List[Dict[str, Any]] = []
 
-    async def execute(
-        self,
-        node: Node,
-        args: List[Any],
-        kwargs: Dict[str, Any],
-    ) -> Any:
-        self.call_log.append(node)
-        return f"executed_{node.name}"
+    async def connect(self) -> None:
+        self.connected = True
+        self.disconnected = False
 
+    async def disconnect(self) -> None:
+        self.disconnected = True
+        self.connected = False
 
-# --- Test Case ---
+    async def publish(
+        self, topic: str, payload: Dict[str, Any], retain: bool = False, qos: int = 0
+    ) -> None:
+        """Simulates publishing a message, triggering subscribers and handling retention."""
+        self.publish_log.append(
+            {"topic": topic, "payload": payload, "retain": retain, "qos": qos}
+        )
+
+        if retain:
+            if payload:
+                self.retained_messages[topic] = payload
+            elif topic in self.retained_messages:
+                # An empty payload on a retained topic clears it
+                del self.retained_messages[topic]
+
+        await self._trigger_message(topic, payload)
+
+    async def subscribe(
+        self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
+    ) -> None:
+        self.subscriptions[topic] = callback
+
+        # Immediate delivery of matching retained messages upon subscription
+        for retained_topic, payload in self.retained_messages.items():
+            if self._topic_matches(subscription=topic, topic=retained_topic):
+                # Run in a task to avoid blocking the subscribe call itself
+                asyncio.create_task(callback(retained_topic, payload))
+
+    def seed_retained_message(self, topic: str, payload: Dict[str, Any]):
+        """Helper to pre-seed a retained message on the 'broker' for test setup."""
+        self.retained_messages[topic] = payload
+
+    async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
+        """Helper to simulate receiving a message, used by tests and publish()."""
+        for sub_topic, callback in self.subscriptions.items():
+            if self._topic_matches(subscription=sub_topic, topic=topic):
+                await callback(topic, payload)
+
+    def _topic_matches(self, subscription: str, topic: str) -> bool:
+        # Simple topic matching for direct match and wildcard at the end
+        if subscription == topic:
+            return True
+        if subscription.endswith("/#"):
+            prefix = subscription[:-2]
+            if topic.startswith(prefix):
+                return True
+        return False
+~~~~~
+
+#### Acts 2: 重构并发测试
+
+现在，我们将重构 `test_engine_concurrency.py`，移除本地的辅助类，并切换到 `cascade.testing` 中的新实现。
+
+~~~~~act
+write_file
+packages/cascade-engine/tests/runtime/test_engine_concurrency.py
 ~~~~~
 ~~~~~python
+import asyncio
+import time
+from typing import Callable, Awaitable, Dict, Any, List
+
 import pytest
-from typing import List, Any, Dict
-
 import cascade as cs
-from cascade.graph.build import build_graph
-from cascade.graph.model import Node, Graph
-from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
-from cascade.testing import SpyExecutor
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.graph.model import Node
+from cascade.testing import MockConnector, MockExecutor
 
 
-# --- Test Doubles (Mocks and Spies) ---
+# --- Fixtures ---
 
 
-class MockSolver(Solver):
-    def __init__(self, plan: ExecutionPlan):
-        self._plan = plan
-
-    def resolve(self, graph: Graph) -> ExecutionPlan:
-        # Return the pre-programmed plan
-        return self._plan
+@pytest.fixture
+def mock_connector():
+    return MockConnector()
 
 
-# --- Test Case ---
+@pytest.fixture
+def engine(mock_connector):
+    return Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(delay=0.05),
+        bus=MessageBus(),
+        connector=mock_connector,
+        system_resources={},
+    )
+
+
+# --- Tests ---
+
+
+@pytest.mark.asyncio
+async def test_concurrency_constraint_on_map(engine, mock_connector):
+    """
+    Verify that a concurrency constraint limits the parallelism of a mapped task.
+    """
+
+    @cs.task
+    def slow_task(x):
+        return x
+
+    inputs = [1, 2, 3, 4]
+    workflow = slow_task.map(x=inputs)
+
+    # 1. Pre-seed the constraint as a retained message.
+    # This ensures it is applied immediately when the engine subscribes at startup.
+    scope = "task:slow_task"
+    payload = {
+        "id": "limit-slow-task",
+        "scope": scope,
+        "type": "concurrency",
+        "params": {"limit": 1},
+    }
+    mock_connector.seed_retained_message(
+        f"cascade/constraints/{scope.replace(':', '/')}", payload
+    )
+
+    # 2. Run execution
+    start_time = time.time()
+    results = await engine.run(workflow)
+    duration = time.time() - start_time
+
+    assert sorted(results) == [1, 2, 3, 4]
+
+    # With limit=1, 4 tasks of 0.05s should take >= 0.2s
+    # (Allowing slight buffer for overhead, so maybe >= 0.18s)
+    assert duration >= 0.18, f"Expected serial execution, got {duration}s"
+
+
+@pytest.mark.asyncio
+async def test_global_concurrency_limit(engine, mock_connector):
+    """
+    Verify that a global concurrency constraint limits total tasks running.
+    """
+
+    @cs.task
+    def task_a(x):
+        return x
+
+    @cs.task
+    def task_b(x):
+        return x
+
+    # Pass dependencies as separate arguments so GraphBuilder detects them
+    @cs.task
+    def wrapper(res_a, res_b):
+        return [res_a, res_b]
+
+    workflow = wrapper(task_a(1), task_b(2))
+
+    payload = {
+        "id": "global-limit",
+        "scope": "global",
+        "type": "concurrency",
+        "params": {"limit": 1},
+    }
+    mock_connector.seed_retained_message("cascade/constraints/global", payload)
+
+    # 2. Run
+    start_time = time.time()
+    await engine.run(workflow)
+    duration = time.time() - start_time
+
+    # 2 tasks of 0.05s in serial => >= 0.1s
+    assert duration >= 0.09, f"Expected serial execution, got {duration}s"
 ~~~~~
 
-### 下一步建议
+#### Acts 3: 重构约束测试
 
-我们已经成功地将两个最核心的测试辅助工具 `SpySolver` 和 `SpyExecutor` 提取到了 `cascade.testing` 中。
+最后，我们对 `test_engine_constraints.py` 执行同样的操作，完成整个重构。
 
-下一步，我们可以采用完全相同的模式，继续处理：
--   **Executor 变体**: 将 `SlowWorkExecutor`, `TimingWorkExecutor` 等提取到 `cascade.testing`。
--   **Connector Mocks**: 将 `MockConnector` 和 `harness.py` 中的 `ControllerTestApp` 等更复杂的 E2E 测试工具也整合到 `cascade.testing` 中。
+~~~~~act
+write_file
+packages/cascade-engine/tests/runtime/test_engine_constraints.py
+~~~~~
+~~~~~python
+import asyncio
+from typing import Callable, Awaitable, Dict, Any
 
-这将使我们的测试代码库变得前所未有的干净、模块化和易于维护。如果您同意，我将准备下一个提取计划。
+import pytest
+
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.spec.constraint import GlobalConstraint
+from cascade.testing import MockConnector, MockExecutor
+
+
+# --- Test Fixtures and Mocks ---
+
+
+@pytest.fixture
+def mock_connector():
+    return MockConnector()
+
+
+@pytest.fixture
+def engine_with_connector(mock_connector):
+    return Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(delay=0.05),
+        bus=MessageBus(),
+        connector=mock_connector,
+    )
+
+
+async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
+    """Helper coroutine to wait for a specific task to finish."""
+    from cascade.runtime.events import TaskExecutionFinished
+
+    start_time = asyncio.get_event_loop().time()
+    while asyncio.get_event_loop().time() - start_time < timeout:
+        finished_events = spy.events_of_type(TaskExecutionFinished)
+        if any(e.task_name == task_name for e in finished_events):
+            return
+        await asyncio.sleep(0.01)
+    pytest.fail(f"Timeout waiting for task '{task_name}' to finish.")
+
+
+async def wait_for_task_start(spy, task_name: str, timeout: float = 2.0):
+    """Helper coroutine to wait for a specific task to start."""
+    from cascade.runtime.events import TaskExecutionStarted
+
+    start_time = asyncio.get_event_loop().time()
+    while asyncio.get_event_loop().time() - start_time < timeout:
+        started_events = spy.events_of_type(TaskExecutionStarted)
+        if any(e.task_name == task_name for e in started_events):
+            return
+        await asyncio.sleep(0.01)
+    pytest.fail(f"Timeout waiting for task '{task_name}' to start.")
+
+
+# --- Test Cases ---
+
+
+@pytest.mark.asyncio
+async def test_engine_subscribes_to_constraints(engine_with_connector, mock_connector):
+    """
+    Verify that the Engine subscribes to the correct topic upon starting a run.
+    """
+    from cascade.spec.task import task
+
+    @task
+    def dummy_task():
+        pass
+
+    await engine_with_connector.run(dummy_task())
+
+    # Assert that subscribe was called with the correct topic
+    # The actual topic is cascade/constraints/#, our mock logic handles the match
+    assert "cascade/constraints/#" in mock_connector.subscriptions
+    assert callable(mock_connector.subscriptions["cascade/constraints/#"])
+
+
+@pytest.mark.asyncio
+async def test_engine_updates_constraints_on_message(
+    engine_with_connector, mock_connector
+):
+    """
+    Verify that the Engine's ConstraintManager is updated when a valid message is received.
+    """
+    from cascade.spec.task import task
+
+    @task
+    def dummy_task():
+        pass
+
+    # Start the run to establish subscriptions
+    run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
+
+    # Wait until subscription is established
+    for _ in range(50):
+        if "cascade/constraints/#" in mock_connector.subscriptions:
+            break
+        await asyncio.sleep(0.01)
+    else:
+        pytest.fail("Timeout waiting for engine to subscribe to constraints")
+
+    # Simulate receiving a constraint message
+    constraint_payload = {
+        "id": "global-pause",
+        "scope": "global",
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message(
+        "cascade/constraints/control", constraint_payload
+    )
+
+    # Check the internal state of the ConstraintManager
+    constraint_manager = engine_with_connector.constraint_manager
+    stored_constraint = constraint_manager._constraints.get("global-pause")
+
+    assert stored_constraint is not None
+    assert isinstance(stored_constraint, GlobalConstraint)
+    assert stored_constraint.id == "global-pause"
+    assert stored_constraint.scope == "global"
+    assert stored_constraint.type == "pause"
+
+    # Allow the run to complete
+    run_task.cancel()
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_engine_handles_malformed_constraint_payload(
+    engine_with_connector, mock_connector, capsys
+):
+    """
+    Verify that the Engine logs an error but does not crash on a malformed payload.
+    """
+    from cascade.spec.task import task
+
+    @task
+    def dummy_task():
+        pass
+
+    run_task = asyncio.create_task(engine_with_connector.run(dummy_task()))
+
+    # Wait until subscription is established
+    for _ in range(50):
+        if "cascade/constraints/#" in mock_connector.subscriptions:
+            break
+        await asyncio.sleep(0.01)
+    else:
+        pytest.fail("Timeout waiting for engine to subscribe to constraints")
+
+    # Payload missing the required 'id' key
+    malformed_payload = {
+        "scope": "global",
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message(
+        "cascade/constraints/control", malformed_payload
+    )
+
+    # The engine should not have crashed.
+    # We can check stderr for the error message.
+    captured = capsys.readouterr()
+    assert "[Engine] Error processing constraint" in captured.err
+    assert "'id'" in captured.err  # Specifically mentions the missing key
+
+    # Assert that no constraint was added
+    assert not engine_with_connector.constraint_manager._constraints
+
+    run_task.cancel()
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
+    """
+    End-to-end test verifying the global pause functionality.
+    It checks that after a pause command is received, no new tasks are started.
+    """
+    from cascade.spec.task import task
+    from cascade.runtime.events import TaskExecutionStarted
+
+    bus, spy = bus_and_spy
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(delay=0.05),
+        bus=bus,
+        connector=mock_connector,
+    )
+
+    # 1. Define a declarative workflow
+    @task
+    def task_a():
+        return "A"
+
+    @task
+    def task_b(a):
+        return f"B after {a}"
+
+    @task
+    def task_c(b):
+        return f"C after {b}"
+
+    workflow = task_c(b=task_b(a=task_a()))
+
+    # 2. Start the engine in a concurrent task
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # 3. Wait for the first task to START.
+    # We want to inject the pause while A is running (or at least before B starts).
+    # Since Engine awaits tasks in a stage, injecting here ensures the constraint
+    # is ready when Engine wakes up for Stage 2.
+    await wait_for_task_start(spy, "task_a")
+
+    # 4. Inject the pause command immediately
+    pause_payload = {
+        "id": "global-pause",
+        "scope": "global",
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message("cascade/constraints/control", pause_payload)
+
+    # 5. Wait to ensure A finishes and Engine has had time to process Stage 2 logic
+    # We wait for A to finish first
+    await wait_for_task_finish(spy, "task_a")
+    # Then wait a bit more to allow Engine to potentially (incorrectly) start B
+    await asyncio.sleep(0.2)
+
+    # 6. Assert based on the event stream
+    started_task_names = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
+
+    assert "task_a" in started_task_names
+    assert "task_b" not in started_task_names, "task_b should have been paused"
+    assert "task_c" not in started_task_names
+
+    # 7. Cleanup
+    run_task.cancel()
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):
+    """
+    End-to-end test for task-specific pause and resume functionality.
+    """
+    from cascade.spec.task import task
+    from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
+
+    bus, spy = bus_and_spy
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=MockExecutor(delay=0.05),
+        bus=bus,
+        connector=mock_connector,
+    )
+
+    # 1. Workflow: A -> B -> C
+    @task
+    def task_a():
+        return "A"
+
+    @task
+    def task_b(a):
+        return f"B after {a}"
+
+    @task
+    def task_c(b):
+        return f"C after {b}"
+
+    workflow = task_c(task_b(task_a()))
+
+    # 2. Start the engine in a background task
+    run_task = asyncio.create_task(engine.run(workflow))
+
+    # 3. Wait for 'task_a' to START (instead of finish).
+    # This allows us to inject the constraint while A is running.
+    await wait_for_task_start(spy, "task_a")
+
+    # 4. Inject a PAUSE command specifically for 'task_b'
+    pause_scope = "task:task_b"
+    pause_payload = {
+        "id": "pause-b",
+        "scope": pause_scope,
+        "type": "pause",
+        "params": {},
+    }
+    await mock_connector._trigger_message(
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", pause_payload
+    )
+
+    # Wait for A to finish naturally
+    await wait_for_task_finish(spy, "task_a")
+
+    # 5. Wait briefly and assert that 'task_b' has NOT started
+    # Give the engine a moment to potentially (incorrectly) schedule B
+    await asyncio.sleep(0.2)
+    started_tasks = {e.task_name for e in spy.events_of_type(TaskExecutionStarted)}
+    assert "task_b" not in started_tasks, "'task_b' started despite pause constraint"
+
+    # 6. Inject a RESUME command for 'task_b'
+    # An empty payload on a retained topic clears the constraint. The connector
+    # translates this to an empty dictionary.
+    await mock_connector._trigger_message(
+        f"cascade/constraints/{pause_scope.replace(':', '/')}", {}
+    )
+
+    # 7. Wait for the rest of the workflow to complete
+    await wait_for_task_finish(spy, "task_c", timeout=1.0)
+
+    # 8. Final assertions on the complete event stream
+    finished_tasks = {
+        e.task_name
+        for e in spy.events_of_type(TaskExecutionFinished)
+        if e.status == "Succeeded"
+    }
+    assert finished_tasks == {"task_a", "task_b", "task_c"}
+
+    # 9. Verify the final result
+    final_result = await run_task
+    # Note: Since we use MockExecutor, the result is the fixed string it returns,
+    # not the result of the actual task function.
+    assert final_result == "Result for task_c"
+~~~~~

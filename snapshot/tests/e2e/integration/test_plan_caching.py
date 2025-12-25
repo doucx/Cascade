@@ -7,27 +7,13 @@ from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.bus import MessageBus
 from cascade.spec.protocols import Solver
 from cascade.graph.model import Graph
+from cascade.testing import SpySolver
 
 
 # Define a simple task for testing
 @task
 def add(a: int, b: int) -> int:
     return a + b
-
-
-class SpySolver(Solver):
-    """A solver that spies on calls and delegates to a real solver."""
-
-    def __init__(self, underlying_solver: Solver):
-        self.underlying_solver = underlying_solver
-        # Use MagicMock to wrap the real resolve method. This allows us to track
-        # calls while still executing the real logic.
-        self.resolve = MagicMock(wraps=self.underlying_solver.resolve)
-
-    def resolve(self, graph: Graph):
-        # This method's body is effectively replaced by the MagicMock wrapper,
-        # but is required to satisfy the Solver protocol.
-        pass
 
 
 @pytest.fixture

@@ -1,48 +1,56 @@
-您是对的，我的上一个修复方案解决了眼前的问题，但引入了您指出的这个更严重的架构问题：**大量的代码冗余**。`rg` 的输出一针见血，`SpySubscriber` 作为一个通用的测试工具，现在被复制得到处都是。
+您的分析非常精准。我们刚刚完成了对 `SpySubscriber` 的中心化，现在您已经发现了下一个可以应用相同模式的绝佳候选对象。您提供的 `rg` 输出清晰地表明，大量用于模拟核心协议（`Solver`, `Executor`, `Connector`）的测试辅助类（Test Doubles）都以“一次性”的方式定义在各自的测试文件中。
 
-这是一种典型的技术债，现在是偿还它的时候了。
+这正是 `cascade.testing` 模块旨在解决的问题。
 
-问题的根源在于，`SpySubscriber` 是一个被多个、位于不同测试根目录下的测试套件（`packages/cascade-engine/tests` 和 `tests/e2e`）所共享的测试辅助工具。
+您指出的 `MockSolver`, `SpyExecutor`, `TimingWorkExecutor` 等都是完美的提取候选对象。它们可以被归为几类：
 
-1.  **局部定义**: `packages/cascade-engine/tests/runtime/` 下的几个文件在没有共享 Fixture 的早期，各自拷贝了一份 `SpySubscriber` 的定义，这是最初的冗余来源。
-2.  **Fixture 提升**: 当我们需要在多个测试文件中共享 `SpySubscriber` 时，我们把它提升到了 `packages/cascade-engine/tests/conftest.py`。但此时，旧的局部定义没有被清理掉。
-3.  **为修复而复制**: 当我为了修复 E2E 测试而将 `SpySubscriber` 复制到 `tests/e2e/runtime/conftest.py` 时，我制造了新的、更上层的冗余。
+1.  **协议的“侦察兵” (Spies)**:
+    *   `SpySolver` (`test_plan_caching.py`): 记录对 `resolve` 方法的调用，同时委托给真实实现。
+    *   `SpyExecutor` (`test_engine_core.py`): 记录被调用的任务顺序。
+    *   `CaptureConnector` (`test_telemetry_contract.py`): 捕获通过连接器发布的 payload。
+    这些工具的目的是**观察和断言**系统在测试过程中的行为，它们是验证交互模式的理想选择。
 
-**解决方案**:
-正确的做法是遵循 DRY (Don't Repeat Yourself) 原则。像 `SpySubscriber` 这样的测试工具，应该有一个**唯一、权威的定义来源**，并且这个来源应该能被所有需要它的测试代码方便地导入。
+2.  **协议的“替身演员” (Mocks/Stubs)**:
+    *   `MockSolver` (`test_engine_core.py`): 返回一个预设的、硬编码的执行计划，完全绕过真实的解析逻辑。
+    *   `MockConnector` (`test_engine_concurrency.py`, `test_engine_constraints.py`): 一个功能更全的 `Connector` 模拟，支持订阅和模拟消息接收。
+    这些工具的目的是**控制和隔离**被测系统，为其提供一个可预测的、静态的环境。
 
-`cascade-sdk` 包中已经存在的 `cascade/testing.py` 文件正是为此目的而设计的理想位置。将 `SpySubscriber` 放入其中，意味着我们将其正式提升为 SDK 提供的一个官方测试工具。
+3.  **行为的“特技演员” (Behavioral Doubles)**:
+    *   `SlowWorkExecutor`, `TimingWorkExecutor`, `MockWorkExecutor`: 这些都是 `Executor` 的变体，用于模拟不同类型的任务执行行为（例如，耗时操作、记录完成时间等），对于测试并发、限流和调度至关重要。
 
-我将生成一个计划来执行这次彻底的去冗余重构。
+**结论**:
+我们可以分阶段将这些最有价值、最通用的测试辅助工具全部迁移到 `cascade.testing` 模块中。第一步，我们将从您指出的 `SpySolver` 和一个同样重要的 `SpyExecutor` 开始。
 
-## [WIP] refactor(tests): Centralize SpySubscriber into cascade.testing
+我将生成一个计划来执行这次提取。
+
+## [WIP] refactor(tests): Extract common test doubles into cascade.testing
 
 ### 错误分析
-代码库中存在大量重复的 `SpySubscriber` 类定义。这个通用的测试辅助工具被复制到了多个 `conftest.py` 文件以及独立的测试模块中。这种代码冗余使得维护变得困难（例如，修复一个 Bug 需要在多个地方修改），也违反了 DRY 原则。根本原因是没有一个统一的、可共享的位置来存放这类公共的测试基础设施。
+代码库在多个测试文件中包含了 `MockSolver`, `SpySolver`, `SpyExecutor` 等临时的测试辅助类（Test Doubles）定义。这种做法导致了代码重复，并且使得在不同测试之间共享和复用这些有价值的测试工具变得不可能。一个测试文件的改进无法惠及其他文件。
 
 ### 用户需求
-用户要求解决 `SpySubscriber` 类在代码库中大量重复定义的问题。
+用户要求分析并提取像 `MockSolver` 这样可复用的测试辅助类，以减少代码冗余并建立统一的测试工具集。
 
 ### 评论
-这是一个非常重要的架构改进。将通用的测试辅助工具（如 `SpySubscriber`）整合到 SDK 的 `testing` 模块中，不仅消除了代码冗余，还极大地增强了 SDK 的价值。它为所有使用 Cascade 的开发者提供了一套官方的、可复用的工具来测试他们的工作流，从而提升了整个生态系统的开发体验和测试质量。
+这是一个能显著提升项目测试基础设施成熟度的重构。将这些核心协议的 Spies 和 Mocks 提升为 SDK 的一部分，等于是在为所有 Cascade 的使用者提供一套官方的“测试套件开发工具包”。这不仅能让我们自己的测试更清晰、更易于维护，也赋能了社区，让他们能更容易地为自己的 Cascade 工作流编写高质量的测试。
 
 ### 目标
-1.  将 `SpySubscriber` 类的权威定义移动到 `packages/cascade-sdk/src/cascade/testing.py` 中。
-2.  修改所有 `conftest.py` 文件，让它们从 `cascade.testing` 导入 `SpySubscriber`，而不是在本地定义它。
-3.  从所有独立的测试文件中移除局部的 `SpySubscriber` 定义，并改为从 `cascade.testing` 导入。
+1.  将 `SpySolver` 的定义从 `tests/e2e/integration/test_plan_caching.py` 移动到 `packages/cascade-sdk/src/cascade/testing.py`。
+2.  将 `SpyExecutor` 的定义从 `packages/cascade-engine/tests/runtime/test_engine_core.py` 移动到 `packages/cascade-sdk/src/cascade/testing.py`。
+3.  重构原始的测试文件，使其从 `cascade.testing` 导入并使用这些集中的测试工具。
 
 ### 基本原理
-通过将 `SpySubscriber` 提升为 `cascade-sdk` 的一部分，我们为这个工具创建了一个单一的事实来源（Single Source of Truth）。任何需要它的测试代码（无论是包内单元测试还是跨包 E2E 测试）都可以通过标准的 Python `import` 语句来使用它。这彻底解决了代码重复问题，并建立了一个清晰、可维护的测试工具共享模式。
+我们遵循与 `SpySubscriber` 相同的模式：将通用的、可复用的测试辅助工具集中到 `cascade.testing` 模块中，为它们创建一个单一的事实来源。这使得任何测试模块都可以通过简单的 `import` 来使用这些工具，从而消除了代码重复，并促进了在整个项目中测试模式的一致性。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/tests #comp/sdk #scope/dx #ai/brainstorm #task/domain/testing #task/object/code-duplication #task/action/centralize #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/tests #comp/sdk #scope/dx #ai/brainstorm #task/domain/testing #task/object/test-doubles #task/action/centralize #task/state/begin
 
 ---
 ### Script
 
-#### Acts 1: 将 `SpySubscriber` 添加到 `cascade.testing`
+#### Acts 1: 扩展 `cascade.testing` 以包含 Solver 和 Executor Doubles
 
-我们将 `SpySubscriber` 类及其所需的导入添加到 SDK 的 `testing.py` 模块中。
+我们将首先更新 `cascade.testing`，添加 `SpySolver` 和 `SpyExecutor` 的定义及其所需的导入。
 
 ~~~~~act
 patch_file
@@ -52,13 +60,19 @@ packages/cascade-sdk/src/cascade/testing.py
 from contextlib import contextmanager
 from typing import Callable, Any
 from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
 ~~~~~
 ~~~~~python
 from contextlib import contextmanager
-from typing import Callable, Any
+from typing import Callable, Any, List, Dict
+from unittest.mock import MagicMock
+
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
+from cascade.spec.protocols import Solver, Executor, ExecutionPlan
+from cascade.graph.model import Node, Graph
 ~~~~~
 
 ~~~~~act
@@ -66,250 +80,172 @@ patch_file
 packages/cascade-sdk/src/cascade/testing.py
 ~~~~~
 ~~~~~python
-    try:
-        engine.override_resource_provider(name, new_resource_func)
-        yield
-    finally:
-        engine.override_resource_provider(name, original)
-~~~~~
-~~~~~python
-    try:
-        engine.override_resource_provider(name, new_resource_func)
-        yield
-    finally:
-        engine.override_resource_provider(name, original)
-
-
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
-
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
-
-    def collect(self, event: Event):
-        self.events.append(event)
-
-    def events_of_type(self, event_type):
-        """Returns a list of all events of a specific type."""
-        return [e for e in self.events if isinstance(e, event_type)]
-~~~~~
-
-#### Acts 2: 更新所有 `conftest.py` 文件
-
-现在，我们修改 `conftest.py` 文件，用 `import` 替换本地定义。
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/conftest.py
-~~~~~
-~~~~~python
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
-
-
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
-
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
-
-    def collect(self, event: Event):
-        self.events.append(event)
-
     def events_of_type(self, event_type):
         """Returns a list of all events of a specific type."""
         return [e for e in self.events if isinstance(e, event_type)]
 ~~~~~
 ~~~~~python
-from cascade.runtime.bus import MessageBus
-from cascade.testing import SpySubscriber
-~~~~~
-
-~~~~~act
-patch_file
-tests/e2e/runtime/conftest.py
-~~~~~
-~~~~~python
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
-
-
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
-
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
-
-    def collect(self, event: Event):
-        self.events.append(event)
-
     def events_of_type(self, event_type):
         """Returns a list of all events of a specific type."""
         return [e for e in self.events if isinstance(e, event_type)]
-~~~~~
-~~~~~python
-from cascade.runtime.bus import MessageBus
-from cascade.testing import SpySubscriber
+
+
+class SpySolver(Solver):
+    """
+    A test double for the Solver protocol that spies on calls to `resolve`
+    while delegating to a real underlying solver.
+    """
+
+    def __init__(self, underlying_solver: Solver):
+        self.underlying_solver = underlying_solver
+        self.resolve = MagicMock(wraps=self.underlying_solver.resolve)
+
+    def resolve(self, graph: Graph) -> ExecutionPlan:
+        # This method's body is effectively replaced by the MagicMock wrapper,
+        # but is required to satisfy the Solver protocol's type signature.
+        # The actual call is handled by the `wraps` argument in __init__.
+        pass
+
+
+class SpyExecutor(Executor):
+    """A test double for the Executor protocol that logs all calls to `execute`."""
+
+    def __init__(self):
+        self.call_log: List[Node] = []
+
+    async def execute(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        self.call_log.append(node)
+        return f"executed_{node.name}"
 ~~~~~
 
-#### Acts 3: 清理 `runtime` 测试文件中的冗余定义
+#### Acts 2: 重构 `test_plan_caching.py`
 
-最后，我们清理所有在测试文件中直接定义的 `SpySubscriber`。
+现在，我们清理 `test_plan_caching.py`，让它从 `cascade.testing` 导入 `SpySolver`。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/tests/runtime/test_control_flow.py
+tests/e2e/integration/test_plan_caching.py
 ~~~~~
 ~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import Event, TaskSkipped
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.spec.protocols import Solver
+from cascade.graph.model import Graph
 
 
-class SpySubscriber:
-    """A standard test utility to collect events from a MessageBus."""
+# Define a simple task for testing
+@task
+def add(a: int, b: int) -> int:
+    return a + b
 
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
 
-    def collect(self, event: Event):
-        self.events.append(event)
+class SpySolver(Solver):
+    """A solver that spies on calls and delegates to a real solver."""
 
-    def events_of_type(self, event_type):
-        return [e for e in self.events if isinstance(e, event_type)]
+    def __init__(self, underlying_solver: Solver):
+        self.underlying_solver = underlying_solver
+        # Use MagicMock to wrap the real resolve method. This allows us to track
+        # calls while still executing the real logic.
+        self.resolve = MagicMock(wraps=self.underlying_solver.resolve)
+
+    def resolve(self, graph: Graph):
+        # This method's body is effectively replaced by the MagicMock wrapper,
+        # but is required to satisfy the Solver protocol.
+        pass
 ~~~~~
 ~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import TaskSkipped
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.testing import SpySubscriber
+from cascade.spec.protocols import Solver
+from cascade.graph.model import Graph
+from cascade.testing import SpySolver
+
+
+# Define a simple task for testing
+@task
+def add(a: int, b: int) -> int:
+    return a + b
 ~~~~~
+
+#### Acts 3: 重构 `test_engine_core.py`
+
+最后，清理 `test_engine_core.py`，让它导入 `SpyExecutor`，并移除不再需要的本地 `MockSolver` 和 `SpyExecutor` 定义。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/tests/runtime/test_map_policies.py
+packages/cascade-engine/tests/runtime/test_engine_core.py
 ~~~~~
 ~~~~~python
 import pytest
-import asyncio
-import time
+from typing import List, Any, Dict
+
 import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import TaskRetrying, Event
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph
+from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
 
 
-class SpySubscriber:
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
+# --- Test Doubles (Mocks and Spies) ---
 
-    def collect(self, event: Event):
-        self.events.append(event)
 
-    def events_of_type(self, event_type):
-        return [e for e in self.events if isinstance(e, event_type)]
+class MockSolver(Solver):
+    def __init__(self, plan: ExecutionPlan):
+        self._plan = plan
+
+    def resolve(self, graph: Graph) -> ExecutionPlan:
+        # Return the pre-programmed plan
+        return self._plan
+
+
+class SpyExecutor(Executor):
+    def __init__(self):
+        self.call_log: List[Node] = []
+
+    async def execute(
+        self,
+        node: Node,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ) -> Any:
+        self.call_log.append(node)
+        return f"executed_{node.name}"
+
+
+# --- Test Case ---
 ~~~~~
 ~~~~~python
 import pytest
-import asyncio
-import time
+from typing import List, Any, Dict
+
 import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import TaskRetrying
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.testing import SpySubscriber
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/runtime/test_retry.py
-~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event, TaskRetrying, TaskExecutionFinished
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.graph.build import build_graph
+from cascade.graph.model import Node, Graph
+from cascade.runtime import Engine, MessageBus, Solver, Executor, ExecutionPlan
+from cascade.testing import SpyExecutor
 
 
-class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
-
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.collect)
-
-    def collect(self, event: Event):
-        self.events.append(event)
-
-    def events_of_type(self, event_type):
-        return [e for e in self.events if isinstance(e, event_type)]
-~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import TaskRetrying, TaskExecutionFinished
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.testing import SpySubscriber
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/runtime/test_router_pruning.py
-~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import Event, TaskSkipped
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+# --- Test Doubles (Mocks and Spies) ---
 
 
-class SpySubscriber:
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.events.append)
+class MockSolver(Solver):
+    def __init__(self, plan: ExecutionPlan):
+        self._plan = plan
 
-    def events_of_type(self, event_type):
-        return [e for e in self.events if isinstance(e, event_type)]
-~~~~~
-~~~~~python
-import pytest
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import TaskSkipped
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.testing import SpySubscriber
+    def resolve(self, graph: Graph) -> ExecutionPlan:
+        # Return the pre-programmed plan
+        return self._plan
+
+
+# --- Test Case ---
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了对 `SpySubscriber` 的彻底清理和中心化。代码库现在更加干净、易于维护。
+我们已经成功地将两个最核心的测试辅助工具 `SpySolver` 和 `SpyExecutor` 提取到了 `cascade.testing` 中。
 
-请运行完整的测试套件 (`pytest`)，以确保我们的重构没有破坏任何东西。所有的测试都应该能像以前一样通过，但代码的内部结构已经得到了极大的改善。
+下一步，我们可以采用完全相同的模式，继续处理：
+-   **Executor 变体**: 将 `SlowWorkExecutor`, `TimingWorkExecutor` 等提取到 `cascade.testing`。
+-   **Connector Mocks**: 将 `MockConnector` 和 `harness.py` 中的 `ControllerTestApp` 等更复杂的 E2E 测试工具也整合到 `cascade.testing` 中。
+
+这将使我们的测试代码库变得前所未有的干净、模块化和易于维护。如果您同意，我将准备下一个提取计划。

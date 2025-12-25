@@ -6,33 +6,48 @@ from cascade import task
 
 @task(pure=True)
 def blocking_sync_task(duration: float) -> float:
-    """一个同步任务，通过 time.sleep 模拟一个阻塞的 CPU 密集型或 IO 操作。"""
+    """
+    A synchronous task that blocks the thread using time.sleep.
+    Represents a CPU-bound or blocking I/O operation.
+    """
     time.sleep(duration)
     return time.time()
 
 
 @task(pure=True)
-async def non_blocking_async_task() -> float:
-    """一个异步任务，它应该能够并发执行。"""
-    # 睡眠0秒以确保它能将控制权交还给事件循环
-    await asyncio.sleep(0)
+async def non_blocking_async_task(duration: float) -> float:
+    """
+    An asynchronous task that yields control using asyncio.sleep.
+    """
+    await asyncio.sleep(duration)
     return time.time()
 
 
 @task(pure=True)
 def collect_results(sync_res, async_res):
-    """一个简单的收集器任务，用于创建有效的图结构。"""
+    """
+    Aggregates results to form a single target for the workflow.
+    """
     return [sync_res, async_res]
 
 
 @pytest.mark.asyncio
 async def test_sync_task_offloading_prevents_blocking():
     """
-    测试一个同步的阻塞任务是否被卸载到线程中，
-    从而允许其他异步任务并发执行而不会被阻塞。
+    Verifies that synchronous blocking tasks are offloaded to a separate thread,
+    allowing other async tasks to execute concurrently.
 
-    此测试在功能实现前会失败，因为同步任务会阻塞整个事件循环，
-    导致异步任务在其完成后才能执行。
+    FAILURE CONDITION (Current):
+        Since offloading is not implemented, 'blocking_sync_task' will block the
+        main event loop for 0.2s. 'non_blocking_async_task' will only start
+        AFTER the sync task finishes.
+        Result: async_task finishes AFTER sync_task.
+
+    SUCCESS CONDITION (Expected):
+        'blocking_sync_task' is offloaded. Both tasks start roughly at the same time.
+        Since async task (0.1s) is shorter than sync task (0.2s), it should
+        finish first.
+        Result: async_task finishes BEFORE sync_task.
     """
     from cascade.runtime.engine import Engine
     from cascade.runtime.bus import MessageBus
@@ -42,30 +57,37 @@ async def test_sync_task_offloading_prevents_blocking():
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),  # 使用一个静默的总线以保持测试输出干净
+        bus=MessageBus(),  # Silent bus
     )
 
-    # 这两个任务彼此独立，应该并行运行。
-    # 理想情况下，异步任务会立即执行，而同步任务会在一个独立的线程中阻塞。
+    # 1. Sync task takes 0.2s
     sync_result_lr = blocking_sync_task(0.2)
-    async_result_lr = non_blocking_async_task()
+    # 2. Async task takes 0.1s
+    async_result_lr = non_blocking_async_task(0.1)
 
-    # 工作流的目标是收集这两个任务的结果。
+    # If parallel: Async finishes at T+0.1, Sync at T+0.2
+    # If serial: Sync finishes at T+0.2, Async starts then finishes at T+0.3
+
     workflow_target = collect_results(sync_result_lr, async_result_lr)
 
     start_time = time.time()
     results = await engine.run(workflow_target)
     end_time = time.time()
 
-    # 从结果中解包完成时间
     sync_finish_time, async_finish_time = results
     total_duration = end_time - start_time
 
-    # 核心断言：
-    # 1. 异步任务的完成时间戳应该小于同步任务的完成时间戳。
-    #    (当前会失败，因为同步任务阻塞了事件循环)
-    assert async_finish_time < sync_finish_time
+    # Assertion 1: The async task should finish BEFORE the sync task.
+    # This proves they were running in parallel.
+    assert async_finish_time < sync_finish_time, (
+        f"Async task finished at {async_finish_time}, which is after Sync task {sync_finish_time}. "
+        "This indicates sequential execution (loop blocked)."
+    )
 
-    # 2. 总运行时间应该略大于阻塞任务的持续时间，证明它们是并行运行的。
-    #    (当前会失败，因为总时间约等于两者之和)
-    assert 0.2 < total_duration < 0.25
+    # Assertion 2: Total duration should be close to the longest task (0.2s),
+    # not the sum of both (0.3s).
+    # We allow a small buffer for overhead (0.25s).
+    assert total_duration < 0.25, (
+        f"Total duration {total_duration}s exceeds expected parallel time. "
+        "This indicates sequential execution."
+    )

@@ -4,6 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-tests/application/test_app_tools.py | 2 +-
- 1 file changed, 1 insertion(+), 1 deletion(-)
+packages/cascade-sdk/src/cascade/__init__.pyi | 24 ++++--------------------
+ 1 file changed, 4 insertions(+), 20 deletions(-)
 ```

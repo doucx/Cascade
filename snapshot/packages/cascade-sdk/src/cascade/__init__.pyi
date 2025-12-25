@@ -30,21 +30,10 @@ from . import read as read
 from . import write as write
 
 # --- Locally Defined Exports ---
-def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
-    """
-    定义一个环境变量依赖。
-    """
-
+def Env(name: str, default: Any = None, description: str = "") -> LazyResult: ...
 def Param(
     name: str, default: Any = None, type: Any = ..., description: str = ""
-) -> LazyResult:
-    """
-    定义一个工作流参数。
-
-    它会向工作流上下文注册其元数据，并返回一个 LazyResult，
-    该 LazyResult 在执行时会从用户提供的参数中提取值。
-    """
-
+) -> LazyResult: ...
 def run(
     target: typing.Union[LazyResult, typing.List[typing.Any], tuple[typing.Any, ...]],
     params: typing.Optional[typing.Dict[str, typing.Any]] = None,
@@ -55,13 +44,8 @@ def run(
     state_backend: typing.Union[str, typing.Callable[[str], StateBackend], None] = None,
 ) -> LazyResult:
     """
-    Runs a Cascade workflow with a default engine configuration.
-
-    Args:
-        target: The LazyResult to execute, or a list/tuple of LazyResults
-                and literals to execute in parallel.
-        state_backend: A URI string (e.g. "redis://localhost") or a factory function
-                       that accepts a run_id and returns a StateBackend.
+    Runs a Cascade workflow. This is a backward-compatible wrapper
+    around the CascadeApp interface.
     """
 
 # --- Discovered Providers ---

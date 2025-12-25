@@ -1,61 +1,106 @@
-Excellent catch. You've correctly identified a regression. This is a classic and subtle side-effect of introducing threading, and it's a perfect example of why comprehensive test suites are critical.
+这是一个严重的并发回归错误：`sqlite3.OperationalError: no such table: users`，伴随着 `sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same thread`。
 
-## [WIP] fix(test): Correct fixture scope to prevent SQLite threading errors
+原因在于我们将所有的同步任务（包括 SQL 操作）都移到了线程池中执行 (`loop.run_in_executor`)。
+而测试代码中的 `sqlite_db` 资源是在**主线程**（或 `asyncio` 的事件循环线程）中创建的 `sqlite:///:memory:` 内存数据库。
 
-### 错误分析
-The root cause is a **threading conflict** with SQLite's in-memory database, which was exposed by our change to `LocalExecutor`.
+SQLite 的内存数据库是**连接级**的，如果在一个线程创建连接并写入数据，而在另一个线程（我们的线程池）中尝试查询，不仅会因为连接对象不能跨线程共享而报错（`ProgrammingError`），即使能共享，内存数据库的数据对于新连接也是不可见的。
 
-1.  **The Cause of the Error**: The key error message is `sqlite3.ProgrammingError: SQLite objects created in a thread can only be used in that same thread`.
-2.  **The Lifecycle**:
-    *   The `db_engine` fixture in `test_sql.py` has `scope="module"`. This means it is created **once** for the entire test file, in the main `pytest` thread (let's call it Thread A).
-    *   When it's created, the `@cs.resource def sqlite_db()` is registered. This resource provider function, when called, creates an **in-memory** SQLite database.
-    *   When `await db_engine.run(users)` is called in the test, the `cs.sql` task, being a synchronous task, is now offloaded by our new `LocalExecutor` to a worker thread (Thread B).
-    *   Inside Thread B, the `cs.sql` task injects and uses the `sqlite_db` resource. The first time this happens, the resource provider runs *in Thread B*, creating the in-memory database and the `users` table.
-    *   However, `sqlalchemy`'s connection pool, created by `create_engine` in the fixture setup, might hold a connection that was implicitly created back in Thread A. When the task in Thread B tries to use a connection object created in Thread A, SQLite's strict thread-safety rules are violated.
-3.  **Why `no such table: users`?**: For in-memory SQLite databases, when a connection is used from a different thread, it often behaves as if it's connecting to a *brand new, empty* in-memory database. So from the perspective of the worker thread (Thread B), the `users` table created during the fixture setup (in Thread A) simply does not exist.
+**为什么之前没报错？**
+之前 `LocalExecutor` 是在主线程同步执行的，所以创建 DB 和查询 DB 都在同一个线程，自然没问题。
+
+**为什么现在报错？**
+`LocalExecutor` 现在将同步任务分派到了 `_blocking_executor` 线程池中。`cs.sql` 是一个同步任务，因此在子线程中运行。它尝试使用主线程注入的 `sqlalchemy.engine` 对象。虽然 SQLAlchemy 的 Engine 是线程安全的，但其底层的 SQLite 连接（特别是内存模式）对线程非常敏感。
+
+修复策略
+
+我们不能回滚“线程卸载”这一核心特性，因为它对整体架构至关重要。
+问题出在测试代码 `test_sql.py` 的编写方式上，它假设了单线程执行模型。
+
+要修复这个测试，我们需要让 `sqlite_db` 资源能够适应多线程环境。对于 SQLite 内存数据库，我们可以使用 `StaticPool` 来确保即使在多线程环境下，所有连接都共享同一个底层连接，从而共享内存中的数据。
+
+我们需要修改 `test_sql.py`，在 `create_engine` 时指定 `poolclass=StaticPool`，并设置 `connect_args={"check_same_thread": False}` 以允许跨线程使用连接。
+
+## [WIP] fix(tests): 更新 SQL 测试以适配多线程执行器
 
 ### 用户需求
-The user needs to fix the `test_sql.py` failures without removing the new thread offloading feature. The fix must address the underlying resource lifecycle and threading issue.
+修复因引入线程池执行器而导致的 `test_sql.py` 失败。确保测试环境中的 SQLite 内存数据库能够正确处理跨线程访问，从而验证 SQL 提供者在新的异步/多线程架构下的正确性。
 
 ### 评论
-This regression highlights the importance of managing resource lifecycles, especially for thread-sensitive resources like SQLite connections. Our fix will align the resource's scope with its usage scope, which is a core principle of robust testing and dependency injection.
+这是一个经典的“升级架构导致旧测试假设失效”的案例。我们的架构升级（线程隔离）是正确的，但测试用例依赖了旧架构的副作用（单线程）。修复测试代码使其兼容多线程环境是正确的做法。
 
 ### 目标
-1.  Modify `tests/sdk/providers/test_sql.py`.
-2.  Change the scope of the `db_engine` pytest fixture from `module` to the default `function` scope.
+修改 `tests/sdk/providers/test_sql.py`。
+1.  引入 `sqlalchemy.pool.StaticPool`。
+2.  在 `create_engine` 调用中添加 `poolclass=StaticPool`。
+3.  添加 `connect_args={"check_same_thread": False}` 以禁用 SQLite 的线程检查。
 
 ### 基本原理
-By changing `@pytest.fixture(scope="module")` to `@pytest.fixture`, we ensure that a fresh `db_engine` is created for *each test function*. This means that the `sqlite_db` resource provider will be called within the context of a single test run. Crucially, the database connection will be established and used within the same worker thread that our `LocalExecutor` dispatches the `cs.sql` task to, thereby satisfying SQLite's same-thread constraint.
+`StaticPool` 保证了对于内存数据库，无论多少次 `connect()` 调用，都返回同一个连接实例。这对于内存数据库至关重要，否则每次连接看到的是一个全新的、空的数据库。`check_same_thread=False` 则允许这个连接对象被不同的线程（主线程创建，工作线程查询）使用。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #comp/engine #concept/executor #scope/dx #ai/instruct #task/domain/testing #task/object/test-fixture #task/action/scope-correction #task-state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/sql-test #task/action/fix-concurrency-issue #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Correct the scope of the `db_engine` fixture
-
-I will change the fixture scope to ensure resource creation and usage happen in the same thread context.
+#### Acts 1: 修复 test_sql.py 的连接配置
 
 ~~~~~act
 patch_file
 tests/sdk/providers/test_sql.py
 ~~~~~
 ~~~~~python
-@pytest.fixture(scope="module")
-def db_engine():
-    """Provides a Cascade Engine with the sqlite_db resource pre-registered."""
-    engine = cs.Engine(
+import pytest
+import cascade as cs
+from sqlalchemy import create_engine
+
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
+
+# Skip if sqlalchemy missing
+pytest.importorskip("sqlalchemy")
+
+
+@cs.resource
+def sqlite_db():
+    # Setup an in-memory SQLite database
+    engine = create_engine("sqlite:///:memory:")
+
+    # Create a table
+    with engine.connect() as conn:
 ~~~~~
 ~~~~~python
-@pytest.fixture
-def db_engine():
-    """Provides a Cascade Engine with the sqlite_db resource pre-registered."""
-    engine = cs.Engine(
+import pytest
+import cascade as cs
+from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
+
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
+
+# Skip if sqlalchemy missing
+pytest.importorskip("sqlalchemy")
+
+
+@cs.resource
+def sqlite_db():
+    # Setup an in-memory SQLite database.
+    # Because tasks now run in a separate thread pool, we must ensure:
+    # 1. We share the same connection (StaticPool) so data persists across tasks.
+    # 2. We disable thread checking (check_same_thread=False) so the connection created
+    #    here can be used by the worker threads.
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+
+    # Create a table
+    with engine.connect() as conn:
 ~~~~~
 
 ### 下一步建议
-The fixture scope has been corrected. Please run the full test suite again.
+请再次运行测试。这应该能解决 `OperationalError: no such table: users` 错误。
 
-I expect that the `test_sql.py` failures will now be resolved, and our new tests (`test_offloading.py`, `test_executor_modes.py`) will continue to pass. Once all tests are green, we will have a stable state ready for a final commit.
+一旦这个回归错误被修复，且 `tests/engine/e2e/test_executor_modes.py` 依然通过，我们就可以自信地提交包含线程池隔离特性的代码了。

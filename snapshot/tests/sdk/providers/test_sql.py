@@ -1,6 +1,7 @@
 import pytest
 import cascade as cs
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
@@ -11,8 +12,16 @@ pytest.importorskip("sqlalchemy")
 
 @cs.resource
 def sqlite_db():
-    # Setup an in-memory SQLite database
-    engine = create_engine("sqlite:///:memory:")
+    # Setup an in-memory SQLite database.
+    # Because tasks now run in a separate thread pool, we must ensure:
+    # 1. We share the same connection (StaticPool) so data persists across tasks.
+    # 2. We disable thread checking (check_same_thread=False) so the connection created
+    #    here can be used by the worker threads.
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
 
     # Create a table
     with engine.connect() as conn:

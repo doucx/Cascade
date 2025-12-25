@@ -2,18 +2,10 @@ import pytest
 import cascade as cs
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.engine import Engine
-from cascade.runtime.events import Event, TaskSkipped
+from cascade.runtime.events import TaskSkipped
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
-
-
-class SpySubscriber:
-    def __init__(self, bus: MessageBus):
-        self.events = []
-        bus.subscribe(Event, self.events.append)
-
-    def events_of_type(self, event_type):
-        return [e for e in self.events if isinstance(e, event_type)]
+from cascade.testing import SpySubscriber
 
 
 @pytest.mark.asyncio

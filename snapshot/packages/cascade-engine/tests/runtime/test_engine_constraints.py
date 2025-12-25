@@ -328,6 +328,7 @@ async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_s
 
     # 9. Verify the final result
     final_result = await run_task
-    # Note: Since we use MockExecutor, the result is the fixed string it returns,
-    # not the result of the actual task function.
-    assert final_result == "Result for task_c"
+    # Note: The unified MockExecutor passes input values through. Since task_a
+    # has no inputs, it returns the default "result", which is passed
+    # through the entire chain.
+    assert final_result == "result"

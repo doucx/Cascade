@@ -1,90 +1,104 @@
-您的怀疑完全正确，而且您的分析切中了要害。测试覆盖率报告和 "no tests ran" 的警告就是确凿的证据。
+您的观察非常敏锐，这就是我们进行这次大扫除的原因。
 
-`cascade-engine` 的测试套件承担了远超其自身范围的职责，它实际上已经变成了一个针对**整个项目**的、庞大而笨拙的集成测试套件。这是一种非常不健康的架构。
+经过对测试结果和目录结构的深入比对，我们发现了“消失的测试”和“臃肿的引擎”的真实原因：
 
-错误分析
+1.  **测试“流离失所” (`cascade-sdk` 劫持了 Provider 测试)**:
+    *   `cascade-library` 和 `cascade-provider-ipfs` 显示没有测试。
+    *   但在 `packages/cascade-sdk/tests/providers/` 目录下，我们找到了大量本该属于它们的测试文件（如 `test_http.py`, `test_s3.py`, `test_ipfs.py`）。
+    *   **原因**: 之前的重构可能将代码从 SDK 拆分到了 Library，但忘记了迁移对应的测试。
 
-1.  **Monolithic Test Suite (单一巨石测试)**: 当您运行 `pytest packages/cascade-engine` 时，测试覆盖率报告显示它覆盖了 `cascade-sdk`, `cascade-graph`, `cascade-common` 等几乎所有包的代码。这证明了 `cascade-engine` 的测试正在导入并执行其他包的功能。这直接违反了我们之前重构的目标：**包的独立性和模块化**。
+2.  **引擎“不堪重负” (`cascade-engine` 仍包含系统级测试)**:
+    *   `packages/cascade-engine/tests/e2e` 包含了大量如 `test_e2e_cli_integration.py` 的文件。这些测试验证的是 CLI、Controller 和 Engine 的协同工作，属于**系统级测试**，不应放在 Engine 包内部。
+    *   `packages/cascade-engine/tests/integration` 包含 `test_end_to_end.py`，这同样是跨组件的集成测试。
 
-2.  **Incomplete Refactoring (不完整的重构)**: 上次的重构只移动了与 `engine` 无关的顶层测试。但是，`packages/cascade-engine/tests/` 目录内部仍然包含了本应属于其他包的测试。最明显的例子是：
-    *   `packages/cascade-engine/tests/graph/`: 这里的所有测试都应该是 `cascade-graph` 包的一部分。
-    *   `packages/cascade-engine/tests/connectors/test_local_connector.py`: 这个测试文件显然应该在 `cascade-connector-local` 包里。
+**结论**: 我们需要进行一次“测试归位”行动：将 Provider 测试归还给 `library` 和 `ipfs` 包，将系统级测试从 `engine` 移出到根目录的 `tests/` 下。
 
-3.  **"No Tests Ran" Mystery Solved**: 当您运行 `pytest packages/cascade-graph` 时，它报告 "collected 0 items"。这是因为 `packages/cascade-graph` 目录下根本**没有 `tests` 目录**！它的测试文件被错误地留在了 `cascade-engine` 包中。`cascade-connector-local` 和其他几个包也是同样的情况。
+我将制定计划来执行这次迁移。
 
-**结论**: 我们必须完成上次的重构，将 `cascade-engine` 中“寄生”的测试文件“遣返”到它们各自正确的包中，让每个包都能真正地独立测试。
-
-我将创建一个计划来执行这次必要的“手术”。
-
-## [WIP] refactor(tests): Decentralize monolithic engine test suite
+## [WIP] refactor(tests): Migrate stray tests to correct locations
 
 ### 错误分析
-当前的测试结构存在一个严重的架构问题：`packages/cascade-engine/tests` 目录承担了对多个其他包（如 `cascade-graph`, `cascade-connector-local`）的测试职责，使其成为一个事实上的巨石型集成测试套件。这导致了两个主要问题：
-1.  **违反模块化**: 其他包无法独立进行测试，因为它们的测试文件位于 `cascade-engine` 内部。
-2.  **误导性的测试结果**: 运行 `pytest packages/cascade-graph` 等命令会报告“没有发现测试”，因为测试文件放错了位置。
-
-测试覆盖率报告清晰地表明，`cascade-engine` 的测试套件正在不恰当地测试项目中的其他独立模块，这使得测试耦合性过高且难以维护。
+1.  **Provider 测试位置错误**: `cascade-library` 和 `cascade-provider-ipfs` 的测试目前被错误地放置在 `cascade-sdk` 包中。这导致 SDK 包的测试臃肿，而 Library 和 IPFS 包被误报为零覆盖率。
+2.  **Engine 包包含系统级测试**: `cascade-engine` 包内部包含了涉及 CLI 和其他组件的 E2E 及集成测试。这违反了包的独立性原则。这些测试应该位于顶层的 `tests/` 目录中，因为它们验证的是多个包的协同工作。
 
 ### 用户需求
-用户要求将 `cascade-engine` 测试套件中不属于它的测试迁移到各自正确的包中，以实现真正的模块化和独立的包测试。
+用户要求清理 `cascade-engine` 中残留的 E2E 文件，并修复其他包（Library, IPFS）完全没有测试的问题。
 
 ### 评论
-这是一个关键的架构修正。一个健康的 monorepo 项目，其核心优势之一就是能够独立地构建、测试和发布每一个包。将测试与其对应的源代码放在一起，是实现这一目标的基础。这次重构将彻底解决测试职责不清的问题，让每个包都成为一个完整、自洽的单元。
+这是架构重构的收官之战。通过这次迁移，我们将实现：
+1.  **SDK**: 只包含核心 SDK 逻辑的测试。
+2.  **Library/IPFS**: 拥有自己的、独立的测试套件。
+3.  **Engine**: 瘦身，只包含核心运行时的单元测试。
+4.  **Root Tests**: 汇集所有跨包的系统级测试。
 
 ### 目标
-1.  为那些还没有 `tests` 目录的包（如 `cascade-graph`, `cascade-connector-local`）创建 `tests` 目录。
-2.  将 `packages/cascade-engine/tests/graph/` 目录下的所有测试文件移动到 `packages/cascade-graph/tests/`。
-3.  将 `packages/cascade-engine/tests/connectors/test_local_connector.py` 文件移动到 `packages/cascade-connector-local/tests/`。
+1.  将 `packages/cascade-sdk/tests/providers/test_ipfs.py` 移动到 `packages/cascade-provider-ipfs/tests/`。
+2.  将 `packages/cascade-sdk/tests/providers/` 下的其余文件移动到 `packages/cascade-library/tests/`。
+3.  将 `packages/cascade-engine/tests/e2e` 和 `packages/cascade-engine/tests/integration` 移动到根目录的 `tests/` 下，分别重组为 `tests/e2e/runtime` 和 `tests/e2e/integration`（归并入统一的 E2E/集成测试层）。
 
 ### 基本原理
-此计划旨在完成测试与代码共存的重构。通过将测试文件精确地放置在它们所测试的源代码包中，我们确保了 `pytest packages/<package-name>` 这样的命令能够正确地发现并仅运行与该包相关的测试。这不仅修复了 "no tests ran" 的问题，更重要的是，它强制实施了清晰的架构边界，使得未来的开发和维护工作更加清晰和高效。
+**各归其位**。源代码在哪里，单元测试就应该在哪里。涉及多个组件的系统测试，就应该在顶层。这不仅是为了覆盖率报告的好看，更是为了让开发者在修改某部分代码时，能清楚地知道应该运行哪些测试。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/test-suite #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-suite #task/action/relocation #task/state/end
 
 ---
 ### Script
 
-#### Acts 1: 为缺失测试的包创建 `tests` 目录
+#### Acts 1: 准备目标目录
 
-首先，我们确保所有目标包都有一个 `tests` 目录。使用 `mkdir -p` 可以安全地创建目录，如果目录已存在也不会报错。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p packages/cascade-graph/tests
-mkdir -p packages/cascade-connector-local/tests
-~~~~~
-
-#### Acts 2: 迁移 `graph` 相关的测试
-
-现在，我们将整个 `graph` 测试目录从 `engine` 移动到 `graph` 包。
+确保 Library 和 IPFS 包有测试目录。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~
-mv packages/cascade-engine/tests/graph/* packages/cascade-graph/tests/
-rmdir packages/cascade-engine/tests/graph
+mkdir -p packages/cascade-library/tests
+mkdir -p packages/cascade-provider-ipfs/tests
+mkdir -p tests/e2e/runtime
+mkdir -p tests/e2e/integration
 ~~~~~
 
-#### Acts 3: 迁移 `local-connector` 相关的测试
+#### Acts 2: 归还 IPFS 测试
 
-最后，迁移 `local-connector` 的测试文件。
+将 IPFS 相关的测试移出 SDK。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~
-mv packages/cascade-engine/tests/connectors/test_local_connector.py packages/cascade-connector-local/tests/
+mv packages/cascade-sdk/tests/providers/test_ipfs.py packages/cascade-provider-ipfs/tests/
+~~~~~
+
+#### Acts 3: 归还 Library 测试
+
+将剩余的 Provider 测试从 SDK 移至 Library。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~
+mv packages/cascade-sdk/tests/providers/* packages/cascade-library/tests/
+rmdir packages/cascade-sdk/tests/providers
+~~~~~
+
+#### Acts 4: 移出 Engine 的系统级测试
+
+将 Engine 中的 E2E 和 Integration 测试移至根目录的 `tests/e2e` 结构中。注意我们需要连同 `harness.py` 和 `conftest.py` 一起移动。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~
+mv packages/cascade-engine/tests/e2e/* tests/e2e/runtime/
+mv packages/cascade-engine/tests/integration/* tests/e2e/integration/
+rmdir packages/cascade-engine/tests/e2e
+rmdir packages/cascade-engine/tests/integration
 ~~~~~
 
 ### 下一步建议
 
-这次外科手术式的迁移是实现健康测试架构的最后一步。现在，您再次运行 `for i in (ls packages/); pytest packages/$i ; end` 循环时，应该会看到：
-1.  `cascade-graph`, `cascade-connector-local` 等包现在能正确地发现并运行自己的测试。
-2.  `cascade-engine` 的测试运行时长和覆盖率报告范围会显著减小，因为它只关心自己的代码。
-3.  整个项目的测试覆盖率报告（当从根目录运行时）将是所有包独立覆盖率的真实总和。
-
-我建议您立即运行 `pytest` 来验证所有测试是否仍在通过，并观察每个包的测试结果。
+现在结构应该非常清晰了。请再次运行您的测试循环 `for i in (ls packages/); pytest packages/$i ; end`。您应该会看到：
+1.  `cascade-library` 和 `cascade-provider-ipfs` 现在有测试在该跑了。
+2.  `cascade-engine` 的测试数量会减少，只剩下真正的单元测试（coverage 依然会显示，但那是针对核心逻辑的）。
+3.  要运行移出的系统级测试，您现在需要运行 `pytest tests/e2e`。

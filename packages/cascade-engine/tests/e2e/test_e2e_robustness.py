@@ -32,8 +32,7 @@ async def test_engine_recovers_from_malformed_rate_limit(bus_and_spy, mock_ui_bu
     """
     engine_bus, spy = bus_and_spy
     engine_connector = InProcessConnector()
-    controller_connector = InProcessConnector()
-    controller = ControllerTestApp(controller_connector)
+    controller = ControllerTestApp(engine_connector)
 
     # Synchronization primitive to control workflow execution
     task_a_can_finish = asyncio.Event()
@@ -77,7 +76,7 @@ async def test_engine_recovers_from_malformed_rate_limit(bus_and_spy, mock_ui_bu
         params={"rate": "this-is-not-a-valid-rate"},
     )
     payload = asdict(malformed_constraint)
-    await controller_connector.publish("cascade/constraints/global", payload)
+    await engine_connector.publish("cascade/constraints/global", payload)
 
     # 5. Assert that a UI error was logged
     await asyncio.sleep(0.02)  # Give listener loop time to process

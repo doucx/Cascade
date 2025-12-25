@@ -1,51 +1,43 @@
-My apologies, that was a clear mistake on my part. My previous patch correctly identified that the engine and controller needed to share one connector, but I failed to update all usages of the old variable name. I removed `controller_connector` but missed the direct `.publish()` call that was still using it.
-
-I will create a plan to fix this simple `NameError`.
-
-## [WIP] fix: Correct variable name after test harness refactor
-
-### 错误分析
-在 `test_e2e_robustness.py` 测试中，我之前的修改旨在统一 `Engine` 和 `ControllerTestApp` 使用同一个 `InProcessConnector` 实例。我正确地将 `engine_connector` 传递给了 `ControllerTestApp`，但随后完全删除了 `controller_connector` 变量。
-
-然而，测试的后续部分有一行代码 `await controller_connector.publish(...)`，它绕过了 `ControllerTestApp` 的抽象，直接向连接器发布一个格式错误的消息。由于 `controller_connector` 变量已被删除，这行代码现在引发了 `NameError`。
-
-正确的做法是让这个直接调用也使用共享的 `engine_connector` 实例。
+## [WIP] refactor: Consolidate and clarify integration test structure
 
 ### 用户需求
-用户要求修复在 `test_e2e_robustness.py` 中因变量未定义而导致的 `NameError`。
+用户要求识别任何在重构后仍然位置不当的测试，并提出一个计划来优化其结构，以提高项目的清晰度和可维护性。
 
 ### 评论
-这是一个简单的疏忽。在重构中统一变量是正确的，但我没有完成所有引用的更新。这个修复将完成上一个计划的意图，使测试逻辑正确无误。
+这是一个非常有价值的整理步骤。在大型重构之后，进行一次“细粒度”的调整可以巩固成果，并确保项目遵循一致、清晰的架构原则。清理冗余的目录结构将改善开发者的体验，并使测试的意图更加明确。
 
 ### 目标
-1.  在 `test_e2e_robustness.py` 文件中，将对未定义的 `controller_connector` 的调用替换为对 `engine_connector` 的调用。
+1.  将位于 `tests/e2e/e2e/` 目录下的 E2E 测试文件移动到其父目录 `tests/e2e/`。
+2.  删除现在已经为空的 `tests/e2e/e2e` 目录。
 
 ### 基本原理
-为了让测试正常工作，向消息总线发布消息的操作（无论是通过测试辅助工具还是直接调用）都必须使用引擎正在监听的同一个连接器实例。在当前上下文中，这个实例由 `engine_connector` 变量持有。因此，我们只需将错误的变量名更正为正确的即可。
+顶级 `tests` 目录的目的是存放跨越多个内部包的集成（Integration）和端到端（E2E）测试。当前的 `tests/e2e/e2e` 结构是多余的。通过将测试文件提升一级到 `tests/e2e/`，我们创建了一个更扁平、更直观的结构，这使得定位和理解这些高阶测试变得更加容易。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-harness #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/medium #comp/tests #scope/dx #ai/brainstorm #task/domain/testing #task/object/directory-structure #task/action/refactor #task/state/end
 
 ---
 ### Script
 
-#### Acts 1: 修正 `test_e2e_robustness.py` 中的变量名
+#### Acts 1: 移动 E2E 测试并清理目录
 
-我们将修改该文件，使用正确的连接器变量 `engine_connector` 来发布消息。
+我们将把 E2E 测试文件上移一级，然后删除多余的空目录。
 
 ~~~~~act
-patch_file
-packages/cascade-engine/tests/e2e/test_e2e_robustness.py
+run_command
 ~~~~~
-~~~~~python
-    payload = asdict(malformed_constraint)
-    await controller_connector.publish("cascade/constraints/global", payload)
 ~~~~~
-~~~~~python
-    payload = asdict(malformed_constraint)
-    await engine_connector.publish("cascade/constraints/global", payload)
+mv tests/e2e/e2e/* tests/e2e/
+rmdir tests/e2e/e2e
 ~~~~~
 
 ### 下一步建议
 
-这个小修正应该能解决最后的测试失败。请重新运行测试套件以确认所有测试现在都已通过。
+我们已经完成了对测试结构的最终整理。现在，项目在单元测试、包内集成测试和跨包 E2E 测试之间有了清晰的界限。
+
+-   **Unit & Integration Tests**: 位于各自的 `packages/*/tests/` 目录下。
+-   **E2E & Contract Tests**: 位于顶级的 `tests/` 目录下。
+
+我建议最后运行一次完整的测试套件，以确保所有测试（包括移动后的 E2E 测试）都能被 `pytest` 正确发现并成功执行。
+
+`pytest`

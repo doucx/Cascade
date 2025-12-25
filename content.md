@@ -1,100 +1,49 @@
-You are absolutely right. My apologies. I refactored the task generation logic by removing `get_test_command` but completely forgot to update its corresponding test file. The `ImportError` is a direct result of my oversight.
+我已经完成了 CI 任务重构引发的测试同步工作，并确认了当前的文件状态。现在我将生成一个 `[COMMIT]` 计划来提交所有关于 CI 修复的变更。
 
-I will now create a plan to fix this by updating the test file to match the new implementation.
-
-## [WIP] fix(ci): Update tests to match refactored command generation logic
-
-### 错误分析
-During the previous refactoring, I removed the `get_test_command` function from `cicd/tasks.py` and replaced it with `get_aggregated_test_command`. However, I failed to update `cicd/tests/test_tasks.py`, which was still attempting to import and test the now-deleted function, leading to a test collection `ImportError`.
+## [COMMIT] fix(ci): Resolve coverage concurrency issue and import errors
 
 ### 用户需求
-Fix the `pytest` error in the `cicd` tests.
+修复 CI/CD 流程中的稳定性问题，包括：
+1.  解决并发 `pytest-cov` 写入导致的 `.coverage` 文件损坏问题 (`coverage.exceptions.DataError`)。
+2.  修复因移除 `get_test_command` 任务后，测试文件 (`cicd/tests/test_tasks.py`) 导致的 `ImportError`。
 
 ### 评论
-This is a straightforward but necessary fix to synchronize the test code with the refactored source code. It completes the previous change by ensuring the new logic is properly tested.
+这次提交确保了 CI 流程的健壮性。通过将所有测试合并到一个单一的 `pytest` 进程中执行，我们解决了覆盖率报告中的致命竞态条件。同时，我们同步更新了测试用例，使测试基础设施的完整性得到了维护。
 
 ### 目标
-1.  Modify `cicd/tests/test_tasks.py` to stop importing `get_test_command`.
-2.  Remove the test case for the obsolete `get_test_command` function.
-3.  Add new test cases for the `get_aggregated_test_command` function to ensure its logic is correctly validated, including the edge case of an empty package list.
+1.  提交 `cicd/tasks.py` 和 `cicd/workflows.py` 中关于测试命令聚合的逻辑变更。
+2.  提交 `cicd/tests/test_tasks.py` 中对新聚合逻辑的测试。
 
 ### 基本原理
-We will use a `write_file` operation to replace the contents of `cicd/tests/test_tasks.py`. The new content will correctly import the new `get_aggregated_test_command` function and include parametrized tests that verify its behavior for multiple packages, a single package, and an empty list of packages.
+1.  **并发修复**: 移除 `cicd/tasks.py` 中的 `get_test_command`，并引入 `get_aggregated_test_command(package_names: List[str])`。新的任务将所有待测试包路径聚合为一个 `pytest packages/a packages/b ...` 命令。
+2.  **流程更新**: 修改 `cicd/workflows.py`，确保 `pr_check_workflow` 和 `release_workflow` 调用新的聚合任务，从而保证所有测试在一个进程内执行。
+3.  **测试同步**: 更新 `cicd/tests/test_tasks.py`，移除对旧任务的依赖，并新增对 `get_aggregated_test_command` 的断言，包括测试空列表输入的健壮性。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/instruct
+#intent/fix #flow/ready #priority/high #comp/build #concept/state #scope/dx #ai/instruct
 
 ---
 ### Script
 
-#### Acts 1: Synchronize CI task tests with source code
-
-We will rewrite the test file to correctly test the new and existing CI tasks.
+#### Acts 1: 提交 CI 修复和同步代码
 
 ~~~~~act
-write_file
+git_add
+cicd/tasks.py
+cicd/workflows.py
 cicd/tests/test_tasks.py
 ~~~~~
-~~~~~python
-import pytest
 
-from cicd.tasks import (
-    parse_git_diff,
-    get_lint_command,
-    get_aggregated_test_command,
-    get_build_command,
-)
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+fix(ci): Resolve coverage concurrency issue and consolidate test commands
 
+The previous CI workflow executed tests for changed packages using separate `cs.shell.map` calls, resulting in multiple concurrent `pytest --cov` processes. This caused a race condition and corruption of the shared `.coverage` SQLite file, leading to CI failures.
 
-# parse_git_diff is still a logic task, so we test it normally
-def test_parse_git_diff_with_changes():
-    diff_output = (
-        "packages/cascade-sdk/src/cascade/__init__.py\n"
-        "packages/cascade-engine/src/cascade/runtime/engine.py\n"
-        "packages/cascade-sdk/pyproject.toml\n"
-        "README.md\n"
-    )
-    # Call the underlying function directly
-    result = parse_git_diff.func(diff_output)
-    assert result == ["cascade-engine", "cascade-sdk"]
-
-
-def test_parse_git_diff_no_changes():
-    diff_output = "README.md\n"
-    result = parse_git_diff.func(diff_output)
-    assert result == []
-
-
-# Tests for the command generator tasks
-@pytest.mark.parametrize(
-    "task_func, package_name, expected_snippet",
-    [
-        (get_lint_command, "cascade-sdk", "ruff check packages/cascade-sdk"),
-        (get_build_command, "cascade-graph", "hatch build packages/cascade-graph"),
-    ],
-)
-def test_single_package_command_generation(task_func, package_name, expected_snippet):
-    # Call the underlying function directly
-    # These are now pure functions returning strings, so they are trivial to test
-    cmd_string = task_func.func(package_name)
-
-    assert isinstance(cmd_string, str)
-    assert expected_snippet in cmd_string
-
-
-@pytest.mark.parametrize(
-    "package_list, expected_command",
-    [
-        (
-            ["cascade-engine", "cascade-sdk"],
-            "pytest packages/cascade-engine packages/cascade-sdk",
-        ),
-        (["cascade-graph"], "pytest packages/cascade-graph"),
-        ([], "echo 'No tests to run.'"),
-    ],
-)
-def test_get_aggregated_test_command(package_list, expected_command):
-    """Tests the aggregated test command generation."""
-    cmd_string = get_aggregated_test_command.func(package_list)
-    assert cmd_string == expected_command
+This commit resolves the issue by:
+1.  **Aggregating Test Commands**: Replacing the old `get_test_command` task with `get_aggregated_test_command`, which generates a single `pytest packages/a packages/b` command string.
+2.  **Updating Workflows**: Modifying `pr_check_workflow` and `release_workflow` to execute this single, aggregated test command, ensuring all tests run within a coordinated process and avoiding coverage file corruption.
+3.  **Synchronizing Tests**: Updating `cicd/tests/test_tasks.py` to test the new aggregated command logic and removing references to the deleted task, fixing the final `ImportError`.
 ~~~~~

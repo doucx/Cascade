@@ -1,100 +1,121 @@
-我们已成功进入 RED 状态：测试用例确认了当前系统无法区分两个相同的 Impure 任务实例。
+好的，测试已通过 (GREEN)。现在我将执行您要求的代码清理，然后创建一个最终的 `[COMMIT]` 计划来完成这项工作。
 
-现在我们将修改哈希逻辑，引入“任务纯度”检查。
+这是一个中间计划，用于移动测试文件并更新其注释。
 
-## [WIP] feat(graph): 在哈希计算中实现纯度检查
+## [WIP] chore: Relocate purity model test and update comments
 
 ### 用户需求
-使 `HashingService` 能够识别任务的 `pure` 属性。
-- 对于 `pure=False`（默认，Impure）的任务，在哈希计算中注入实例 UUID 作为 Salt，确保每次调用生成唯一的节点 ID。
-- 对于 `pure=True`（Pure）的任务，保持原有的基于内容的哈希逻辑，确保相同的输入生成相同的节点 ID（去重）。
+将 `test_purity_model.py` 文件移动到更合适的规范位置 `tests/engine/graph/`，并将其中的中文注释和文档字符串翻译为英文，以符合项目规范。
 
 ### 评论
-这是 CP-006 的核心实现。通过简单的 UUID 注入，我们从根本上改变了引擎对“节点身份”的判定方式，解决了副作用任务被意外去重的问题，同时保留了纯函数任务的优化能力。
+这是一个良好的重构步骤。将测试用例与其所测试的核心逻辑（图构建和哈希）放在一起，可以提高代码库的可维护性和开发者体验 (DX)。
 
 ### 目标
-1.  修改 `cascade-graph` 中的 `HashingService`。
-2.  在 `_compute_lazy_result_hash` 和 `_compute_mapped_result_hash` 中添加对 `pure` 属性的检查。
-3.  通过现有的测试用例。
+1.  将 `tests/core/test_purity_model.py` 移动到 `tests/engine/graph/test_purity_model.py`。
+2.  使用英文重写该文件中的所有文档字符串和注释。
+3.  删除现已为空的 `tests/core` 目录。
 
 ### 基本原理
-利用 `LazyResult` 和 `MappedLazyResult` 自身已有的 `_uuid` 字段作为天然的 Instance Salt。对于 Impure 任务，将其加入哈希计算流程即可破坏结构哈希的碰撞，从而强制生成新的节点。
+我们遵循“测试代码应与被测代码相邻”的原则。任务纯度模型的核心实现在 `cascade-graph` 包中，因此其测试也应归于 `tests/engine/graph` 目录下。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/graph #concept/state #scope/core #ai/instruct #task/domain/core #task/object/task-purity #task/action/implementation #task/state/continue
+#intent/refine #intent/tune #flow/ready #priority/low #comp/tests #scope/dx #ai/instruct #task/domain/core #task/object/task-purity #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 HashingService 以支持 Purity
+#### Acts 1: Relocate and Update Test File
 
-我们将修改 `packages/cascade-graph/src/cascade/graph/hashing.py`，在计算哈希时检查任务的 `pure` 属性。
+首先，我们将测试文件移动到新的位置，并用更新后的、包含英文注释的完整内容覆盖它。
 
 ~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/hashing.py
-~~~~~
-~~~~~python
-    def _compute_lazy_result_hash(
-        self, result: LazyResult, dep_nodes: Dict[str, Node]
-    ) -> str:
-        # 1. Base Components (Task identity and Policies)
-        base_comps = [f"Task({getattr(result.task, 'name', 'unknown')})"]
-        if result._retry_policy:
-            rp = result._retry_policy
-            base_comps.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
-~~~~~
-~~~~~python
-    def _compute_lazy_result_hash(
-        self, result: LazyResult, dep_nodes: Dict[str, Node]
-    ) -> str:
-        # 1. Base Components (Task identity and Policies)
-        base_comps = [f"Task({getattr(result.task, 'name', 'unknown')})"]
-
-        # [CP-006] Purity Check
-        # Default is Impure (pure=False). Impure tasks get a unique salt (UUID)
-        # to ensure every instance is a unique node in the graph.
-        is_pure = getattr(result.task, "pure", False)
-        if not is_pure:
-            base_comps.append(f"Salt({result._uuid})")
-
-        if result._retry_policy:
-            rp = result._retry_policy
-            base_comps.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
+move_file
+tests/core/test_purity_model.py
+tests/engine/graph/test_purity_model.py
 ~~~~~
 
 ~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/hashing.py
+write_file
+tests/engine/graph/test_purity_model.py
 ~~~~~
 ~~~~~python
-    def _compute_mapped_result_hash(
-        self, result: MappedLazyResult, dep_nodes: Dict[str, Node]
-    ) -> str:
-        base_comps = [f"Map({getattr(result.factory, 'name', 'factory')})"]
+import pytest
+from cascade.spec.task import task
+from cascade.graph.build import build_graph
 
-        meta_comps = []
-        if result._condition:
-            meta_comps.append("Condition:PRESENT")
+
+def test_impure_tasks_have_unique_identities():
+    """
+    Verifies that default tasks (Impure) have unique structural identities.
+
+    Scenario:
+    The same task is called twice, even with identical arguments.
+
+    Expected Behavior (CP-006):
+    The system should treat them as two separate nodes in the graph, each
+    with a different structural_id.
+
+    Previous Behavior (Fixed):
+    The system would merge them into a single node via hash-consing.
+    """
+
+    @task  # Defaults to pure=False
+    def random_int():
+        return 42
+
+    # Create two instances
+    a = random_int()
+    b = random_int()
+
+    # Build graphs for each instance
+    graph_a, instance_map_a = build_graph(a)
+    graph_b, instance_map_b = build_graph(b)
+
+    node_a = instance_map_a[a._uuid]
+    node_b = instance_map_b[b._uuid]
+
+    # Assert: For side-effecting tasks, even if the function and arguments are
+    # identical, they are distinct entities.
+    assert node_a.structural_id != node_b.structural_id, (
+        "Impure tasks (default) must have unique structural IDs to avoid incorrect deduplication."
+    )
+
+
+def test_pure_tasks_are_deduplicated():
+    """
+    Verifies that pure tasks are correctly deduplicated.
+    """
+
+    @task(pure=True)
+    def add(x, y):
+        return x + y
+
+    a = add(1, 2)
+    b = add(1, 2)
+
+    graph_a, instance_map_a = build_graph(a)
+    graph_b, instance_map_b = build_graph(b)
+
+    node_a = instance_map_a[a._uuid]
+    node_b = instance_map_b[b._uuid]
+
+    # Assert: Pure tasks should be content-addressable.
+    assert node_a.structural_id == node_b.structural_id, (
+        "Pure tasks must be deduplicated based on their content (function + args)."
+    )
 ~~~~~
-~~~~~python
-    def _compute_mapped_result_hash(
-        self, result: MappedLazyResult, dep_nodes: Dict[str, Node]
-    ) -> str:
-        base_comps = [f"Map({getattr(result.factory, 'name', 'factory')})"]
 
-        # [CP-006] Purity Check for Map
-        is_pure = getattr(result.factory, "pure", False)
-        if not is_pure:
-            base_comps.append(f"Salt({result._uuid})")
+#### Acts 2: Remove Old Directory
 
-        meta_comps = []
-        if result._condition:
-            meta_comps.append("Condition:PRESENT")
+现在 `tests/core` 目录是空的，我们将其删除。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~
+rm -r tests/core
 ~~~~~
 
 ### 下一步建议
-运行测试 `pytest tests/core/test_purity_model.py`。
-预期结果：测试应该通过 (GREEN)。
-如果测试通过，我们将提交这些更改。
+在您执行此计划后，代码库将处于一个干净的状态。请指示我生成最终的 `[COMMIT]` 计划以完成此功能的开发。

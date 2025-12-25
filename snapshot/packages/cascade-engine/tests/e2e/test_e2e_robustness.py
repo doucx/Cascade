@@ -76,7 +76,7 @@ async def test_engine_recovers_from_malformed_rate_limit(bus_and_spy, mock_ui_bu
         params={"rate": "this-is-not-a-valid-rate"},
     )
     payload = asdict(malformed_constraint)
-    await controller_connector.publish("cascade/constraints/global", payload)
+    await engine_connector.publish("cascade/constraints/global", payload)
 
     # 5. Assert that a UI error was logged
     await asyncio.sleep(0.02)  # Give listener loop time to process

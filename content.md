@@ -1,275 +1,81 @@
-Excellent. We have successfully reached the "GREEN" state for the auto-gathering feature. Now is the perfect time to refactor existing code to adopt this cleaner syntax, just as you suggested.
+You are absolutely right. API consistency is crucial for a good developer experience. The `visualize` function should behave just like the `run` function and support the new auto-gathering syntax. This is an excellent catch.
 
-Your request to refactor the tests has revealed a valuable architectural improvement. Currently, the auto-gathering logic is only in the high-level, synchronous `cs.run` function. To make this feature available to our asynchronous E2E tests (which build their own `Engine` instance), I will move the logic into the core `Engine.run` method. This makes auto-gathering a more fundamental feature of Cascade and simplifies the `cs.run` function into an even cleaner wrapper.
+Following our TDD process, I will first add a new test case to `test_visualize.py` that uses this new syntax. This test will fail, establishing our "RED" state, and will precisely define the behavior we need to implement.
 
-Based on this, I will refactor `test_executor_modes.py` and also `test_offloading.py` as it follows the same pattern.
-
-However, I will **not** modify `tests/engine/graph/test_execution_mode.py`. This is a deliberate choice because that file is a unit test for the low-level `build_graph` function. `build_graph` correctly and necessarily expects a single `LazyResult` as its root node. Applying the syntax sugar there would mask what the test is designed to verify. We want to keep that test focused on the core graph-building contract.
-
-Here is the plan to perform the refactoring.
-
-## [WIP] refactor: Move auto-gathering to Engine and adopt in tests
+## [WIP] test: Add TDD test for visualize() auto-gathering
 
 ### 用户需求
-将 `test_executor_modes.py` 和 `test_offloading.py` 中的并行测试样板代码，重构为使用新的自动汇合（auto-gathering）语法。
+`cs.visualize()` 函数的 API 应与 `cs.run()` 保持一致，支持接收一个包含 `LazyResult` 实例的列表或元组，并为这个隐式的并行工作流生成正确的图表示。
 
 ### 评论
-这是一个出色的重构。它不仅清理了测试代码，还促使我们将自动汇合功能从一个简单的 API 语法糖，提升为 `Engine` 的核心特性。这使得该功能对所有 `Engine` 的使用者（包括我们的内部测试套件和高级用户）都可用，从而改善了整体架构。
+这是一个重要的 API 一致性改进。让 `visualize` 和 `run` 支持相同的输入类型，可以减少用户的困惑，并强化 Cascade 声明式 API 的直观性。用户期望能够可视化他们将要运行的任何有效目标。
 
 ### 目标
-1.  将自动汇合的逻辑从 `cascade.run` 迁移到 `Engine.run` 中。
-2.  简化 `cascade.run` 函数，使其直接调用 `Engine.run`。
-3.  重构 `tests/engine/e2e/test_executor_modes.py` 和 `tests/engine/e2e/test_offloading.py`，移除 `collect_results` 样板任务，并直接将 `LazyResult` 列表传递给 `engine.run()`。
+1.  向 `tests/sdk/tools/test_visualize.py` 文件中添加一个新的测试用例。
+2.  这个测试将使用 `cs.visualize([lr_a, lr_b])` 的方式调用函数。
+3.  测试将断言生成的 DOT 字符串中包含了 `t_a`、`t_b` 以及隐式的 `_internal_gather` 任务对应的节点。
+4.  确保此测试在当前代码下会失败。
 
 ### 基本原理
-通过将列表检测和包装逻辑移入 `Engine.run`，我们确保了 Cascade 的核心行为是一致的，无论它是通过高级 `cs.run` 入口点调用，还是在测试或高级应用中被直接实例化和调用。这遵循了“Don't Repeat Yourself” (DRY) 原则，并使我们的端到端测试能够以更接近用户直觉的方式编写，从而提高了测试代码的可读性和可维护性。
+通过创建一个失败的测试，我们为 `visualize` 函数定义了一个新的行为契约。这个测试将作为我们实现此功能的明确指南和最终的验收标准，确保我们完全满足 API 一致性的要求。
 
 ### 标签
-#intent/refine #flow/ready #priority/medium #comp/engine #comp/sdk #comp/tests #scope/dx #task/domain/sdk #task/object/auto-gathering #task/action/refactor #task/state/continue
+#intent/tooling #flow/ready #priority/medium #comp/sdk #scope/api #scope/dx #ai/instruct #task/domain/sdk #task/object/visualize #task/action/tdd-setup #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 将自动汇合逻辑移至 `Engine.run`
+#### Acts 1: 为 `visualize` 添加自动汇合测试用例
 
-我们将修改 `Engine` 的 `run` 方法，使其成为处理自动汇合逻辑的中心点。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-    async def run(
-        self, target: Any, params: Optional[Dict[str, Any]] = None, use_vm: bool = False
-    ) -> Any:
-        run_id = str(uuid4())
-        start_time = time.time()
-~~~~~
-~~~~~python
-    async def run(
-        self,
-        target: Any,
-        params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = False,
-    ) -> Any:
-        # Handle Auto-Gathering
-        from cascade.internal.inputs import _internal_gather
-
-        if isinstance(target, (list, tuple)):
-            if not target:
-                return []
-            workflow_target = _internal_gather(*target)
-        else:
-            workflow_target = target
-
-        run_id = str(uuid4())
-        start_time = time.time()
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python
-                active_resources: Dict[str, Any] = {}
-
-                final_result = await strategy.execute(
-                    target=target,
-                    run_id=run_id,
-                    params=params or {},
-                    state_backend=state_backend,
-                    run_stack=run_stack,
-                    active_resources=active_resources,
-                )
-~~~~~
-~~~~~python
-                active_resources: Dict[str, Any] = {}
-
-                final_result = await strategy.execute(
-                    target=workflow_target,
-                    run_id=run_id,
-                    params=params or {},
-                    state_backend=state_backend,
-                    run_stack=run_stack,
-                    active_resources=active_resources,
-                )
-~~~~~
-
-#### Acts 2: 简化 `cascade.run` 函数
-
-现在 `Engine` 负责处理逻辑，`cs.run` 变成一个非常薄的包装器。
+我将向 `test_visualize.py` 文件追加一个新的测试，用于验证列表输入。
 
 ~~~~~act
 patch_file
-packages/cascade-sdk/src/cascade/__init__.py
+tests/sdk/tools/test_visualize.py
 ~~~~~
 ~~~~~python
-    # 3. Handle Auto-Gathering
-    from .internal.inputs import _internal_gather
-
-    if isinstance(target, (list, tuple)):
-        # Handle edge case of empty list
-        if not target:
-            return []
-        # Wrap the iterable in the internal gather task
-        workflow_target = _internal_gather(*target)
-    else:
-        workflow_target = target
-
-    # 4. Assemble the default Engine
-    solver = NativeSolver()
-~~~~~
-~~~~~python
-    # 3. Assemble the default Engine
-    solver = NativeSolver()
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/__init__.py
-~~~~~
-~~~~~python
-        state_backend_factory=sb_factory,
+    # 5. Assert that the styled jump edge from C to A exists
+    expected_edge = (
+        f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="restart"]'
     )
-
-    return asyncio.run(engine.run(workflow_target, params=params))
+    assert expected_edge in dot_string
 ~~~~~
 ~~~~~python
-        state_backend_factory=sb_factory,
+    # 5. Assert that the styled jump edge from C to A exists
+    expected_edge = (
+        f'"{source_id}" -> "{target_id}" [style=bold, color=blue, label="restart"]'
     )
-
-    return asyncio.run(engine.run(target, params=params))
-~~~~~
-
-#### Acts 3: 重构 `test_executor_modes.py`
-
-现在，我们将第一个测试文件更新为使用新的简洁语法。
-
-~~~~~act
-patch_file
-tests/engine/e2e/test_executor_modes.py
-~~~~~
-~~~~~python
-@task
-def collect_results(res1, res2):
-    """Aggregates results for a valid graph structure."""
-    return res1, res2
+    assert expected_edge in dot_string
 
 
-@pytest.mark.asyncio
-async def test_compute_tasks_are_isolated_from_blocking_tasks():
+def test_visualize_with_list_of_lazy_results():
     """
-    Verifies that 'compute' and 'blocking' tasks run in separate thread pools
-    and do not block each other.
+    Verifies that visualize() can accept a list of LazyResults and
+    correctly renders the implicit gather node.
     """
-    from cascade.runtime.engine import Engine
-    from cascade.runtime.bus import MessageBus
-    from cascade.adapters.solvers.native import NativeSolver
-    from cascade.adapters.executors.local import LocalExecutor
 
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus(),
-    )
+    @cs.task(pure=True)
+    def t_a():
+        return "a"
 
-    # A short compute task (0.1s) and a long blocking task (0.2s)
-    compute_lr = short_sync_compute_task(0.1)
-    blocking_lr = long_sync_blocking_task(0.2)
+    @cs.task(pure=True)
+    def t_b():
+        return "b"
 
-    # If isolated, compute task finishes at T+0.1s.
-    # If not isolated, compute task may have to wait for blocking task, finishing at T+0.2s or later.
-    workflow = collect_results(compute_lr, blocking_lr)
+    lr_a = t_a()
+    lr_b = t_b()
 
-    results = await engine.run(workflow)
-    compute_finish_time, blocking_finish_time = results
+    dot_string = cs.visualize([lr_a, lr_b])
 
-    # The key assertion: the short compute task must finish first.
-    assert compute_finish_time < blocking_finish_time, (
-        "Compute task should have finished before the blocking task, "
-        "indicating parallel execution in separate pools."
-    )
-~~~~~
-~~~~~python
-@pytest.mark.asyncio
-async def test_compute_tasks_are_isolated_from_blocking_tasks():
-    """
-    Verifies that 'compute' and 'blocking' tasks run in separate thread pools
-    and do not block each other.
-    """
-    from cascade.runtime.engine import Engine
-    from cascade.runtime.bus import MessageBus
-    from cascade.adapters.solvers.native import NativeSolver
-    from cascade.adapters.executors.local import LocalExecutor
+    # Assert that the nodes for the parallel tasks are present
+    assert 'label="t_a\\n(task)"' in dot_string
+    assert 'label="t_b\\n(task)"' in dot_string
 
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus(),
-    )
-
-    # A short compute task (0.1s) and a long blocking task (0.2s)
-    compute_lr = short_sync_compute_task(0.1)
-    blocking_lr = long_sync_blocking_task(0.2)
-
-    # If isolated, compute task finishes at T+0.1s.
-    # If not isolated, compute task may have to wait for blocking task, finishing at T+0.2s or later.
-    results = await engine.run([compute_lr, blocking_lr])
-    compute_finish_time, blocking_finish_time = results
-
-    # The key assertion: the short compute task must finish first.
-    assert compute_finish_time < blocking_finish_time, (
-        "Compute task should have finished before the blocking task, "
-        "indicating parallel execution in separate pools."
-    )
-~~~~~
-
-#### Acts 4: 重构 `test_offloading.py`
-
-最后，我们清理第二个测试文件。
-
-~~~~~act
-patch_file
-tests/engine/e2e/test_offloading.py
-~~~~~
-~~~~~python
-@task(pure=True)
-def collect_results(sync_res, async_res):
-    """
-    Aggregates results to form a single target for the workflow.
-    """
-    return [sync_res, async_res]
-
-
-@pytest.mark.asyncio
-async def test_sync_task_offloading_prevents_blocking():
-~~~~~
-~~~~~python
-@pytest.mark.asyncio
-async def test_sync_task_offloading_prevents_blocking():
-~~~~~
-~~~~~act
-patch_file
-tests/engine/e2e/test_offloading.py
-~~~~~
-~~~~~python
-    # If parallel: Async finishes at T+0.1, Sync at T+0.2
-    # If serial: Sync finishes at T+0.2, Async starts then finishes at T+0.3
-
-    workflow_target = collect_results(sync_result_lr, async_result_lr)
-
-    start_time = time.time()
-    results = await engine.run(workflow_target)
-    end_time = time.time()
-~~~~~
-~~~~~python
-    # If parallel: Async finishes at T+0.1, Sync at T+0.2
-    # If serial: Sync finishes at T+0.2, Async starts then finishes at T+0.3
-
-    start_time = time.time()
-    results = await engine.run([sync_result_lr, async_result_lr])
-    end_time = time.time()
+    # Assert that the implicit gather node, which becomes the root, is present
+    assert 'label="_internal_gather\\n(task)"' in dot_string
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了代码和测试的重构。现在是时候将这个功能作为一个完整的逻辑单元进行提交了。我建议生成一个 `[COMMIT]` 计划，将所有相关的修改（TDD 测试、核心实现和重构）包含在一个原子提交中。
+我们已经为 `visualize` 函数添加了新的测试用例。请运行测试套件。我预期这个新测试会因为 `build_graph` 无法处理列表输入而失败。一旦我们确认了 "RED" 状态，我将生成下一个计划来修改 `visualize.py` 以支持自动汇合。

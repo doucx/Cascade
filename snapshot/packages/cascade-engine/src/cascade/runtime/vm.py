@@ -18,10 +18,6 @@ from cascade.runtime.constraints import ConstraintManager
 
 
 class Frame:
-    """
-    Represents the runtime stack frame for a blueprint execution.
-    It holds the values of virtual registers.
-    """
 
     def __init__(self, size: int):
         self.registers: List[Any] = [None] * size
@@ -39,11 +35,6 @@ class Frame:
 
 
 class VirtualMachine:
-    """
-    Executes compiled Blueprints.
-    Supports Zero-Overhead TCO via an internal loop and blueprint switching.
-    Now integrated with Resource and Constraint Managers.
-    """
 
     def __init__(
         self,
@@ -65,9 +56,6 @@ class VirtualMachine:
         initial_args: List[Any] = None,
         initial_kwargs: Dict[str, Any] = None,
     ) -> Any:
-        """
-        Executes the initial blueprint. Handles TailCalls to self or other registered blueprints.
-        """
         current_blueprint = blueprint
 
         # 1. Allocate Frame
@@ -124,7 +112,6 @@ class VirtualMachine:
         args: List[Any],
         kwargs: Dict[str, Any],
     ):
-        """Populates the frame's registers based on the blueprint's input mapping."""
 
         # Positional args
         for i, val in enumerate(args):

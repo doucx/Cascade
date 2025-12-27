@@ -7,7 +7,6 @@ T = TypeVar("T")
 
 @dataclass
 class ResourceDefinition(Generic[T]):
-    """Represents the definition of a resource provider."""
 
     func: Callable[..., T]
     name: str
@@ -21,7 +20,6 @@ class ResourceDefinition(Generic[T]):
 
 
 class Inject:
-    """A marker object to indicate a resource dependency."""
 
     def __init__(self, resource_name: str):
         self.resource_name = resource_name
@@ -33,7 +31,6 @@ class Inject:
 def resource(
     func: Callable[..., T] = None, *, name: Optional[str] = None, scope: str = "run"
 ):
-    """Decorator to define a resource provider."""
 
     def wrapper(f: Callable[..., T]) -> ResourceDefinition[T]:
         resource_name = name or f.__name__
@@ -46,8 +43,4 @@ def resource(
 
 
 def inject(resource_name: str) -> Any:
-    """
-    Function to be used as a default value in a task's signature
-    to declare a dependency on a resource.
-    """
     return Inject(resource_name)

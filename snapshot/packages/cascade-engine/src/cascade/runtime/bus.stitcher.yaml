@@ -1,0 +1,6 @@
+"MessageBus": |-
+  A simple in-memory message bus for dispatching events to subscribers.
+"MessageBus.publish": |-
+  Dispatch an event to all relevant subscribers.
+"MessageBus.subscribe": |-
+  Register a handler for a specific event type.

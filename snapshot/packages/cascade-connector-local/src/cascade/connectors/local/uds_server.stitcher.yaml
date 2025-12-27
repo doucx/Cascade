@@ -1,0 +1,10 @@
+"UdsTelemetryServer": |-
+  A server that broadcasts telemetry messages over a Unix Domain Socket.
+"UdsTelemetryServer._handle_client": |-
+  Callback for new client connections.
+"UdsTelemetryServer.broadcast": |-
+  Broadcasts a JSON-lined message to all connected clients.
+"UdsTelemetryServer.start": |-
+  Starts the UDS server.
+"UdsTelemetryServer.stop": |-
+  Stops the server and disconnects all clients.

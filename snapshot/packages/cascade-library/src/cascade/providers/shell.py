@@ -13,9 +13,6 @@ class ShellProvider:
 # Define the task logic (moved from stdlib.py)
 @task(name="shell")
 async def _shell_task(command: str, check: bool = True) -> str:
-    """
-    Asynchronously executes a shell command and returns its stdout.
-    """
     proc = await asyncio.create_subprocess_shell(
         command,
         stdout=asyncio.subprocess.PIPE,

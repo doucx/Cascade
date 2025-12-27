@@ -1,0 +1,9 @@
+"recursive_countdown": |-
+  A simple recursive function.
+  If count > 0, returns TailCall(count - 1).
+  If count == 0, returns "Done".
+"test_vm_handles_simple_recursion": |-
+  Verifies that the VM can execute a recursive loop using TailCall
+  without crashing or returning early.
+"test_vm_propagates_exceptions": |-
+  Ensure exceptions break the loop correctly.

@@ -1,0 +1,19 @@
+"LazyFactory": |-
+  Protocol for objects that can serve as task factories (must support .map).
+"Provider": |-
+  Interface that all Cascade providers must implement.
+"Provider.create_factory": |-
+  Returns the factory function/object to be exposed to the user.
+"Provider.name": |-
+  The name of the provider, used as the accessor (e.g., 'shell' -> cs.shell).
+"ProviderNamespace": |-
+  A proxy object to handle nested provider names (e.g. cs.read.text).
+"ProviderRegistry": |-
+  Manages the discovery and loading of Cascade providers.
+"ProviderRegistry._discover_entry_points": |-
+  Scans the 'cascade.providers' entry point group.
+"ProviderRegistry.get": |-
+  Retrieves a provider factory by name. Loads from entry points if not yet loaded.
+  Raises AttributeError if not found (to conform with __getattr__ semantics).
+"ProviderRegistry.register": |-
+  Manually register a factory (mostly for testing or internal use).

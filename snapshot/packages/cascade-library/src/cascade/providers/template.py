@@ -25,17 +25,6 @@ class TemplateProvider:
 def render_template(
     template_string: str, context: Optional[Dict[str, Any]] = None, **kwargs
 ) -> str:
-    """
-    Renders a Jinja2 template string with the provided context.
-
-    Args:
-        template_string: The Jinja2 template string.
-        context: A dictionary of context variables.
-        **kwargs: Additional context variables passed as keyword arguments.
-
-    Returns:
-        The rendered string.
-    """
     template = jinja2.Template(template_string)
     final_context = {}
     if context:

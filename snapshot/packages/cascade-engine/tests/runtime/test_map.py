@@ -16,7 +16,6 @@ def sum_all(numbers: list[int]) -> int:
 
 @pytest.mark.asyncio
 async def test_map_basic():
-    """Test mapping a task over a static list."""
     inputs = [1, 2, 3]
 
     # 1. Map 'double' over the inputs -> [2, 4, 6]
@@ -34,7 +33,6 @@ async def test_map_basic():
 
 @pytest.mark.asyncio
 async def test_map_empty():
-    """Test mapping over an empty list returns an empty list."""
     inputs = []
 
     mapped_results = double.map(x=inputs)
@@ -49,7 +47,6 @@ async def test_map_empty():
 
 @pytest.mark.asyncio
 async def test_map_dynamic_input():
-    """Test mapping over a list produced by an upstream task."""
 
     @cs.task
     def generate_numbers(n: int) -> list[int]:
@@ -73,7 +70,6 @@ async def test_map_dynamic_input():
 
 @pytest.mark.asyncio
 async def test_map_multiple_args():
-    """Test mapping with multiple iterable arguments."""
 
     @cs.task
     def add(a: int, b: int) -> int:
@@ -95,7 +91,6 @@ async def test_map_multiple_args():
 
 @pytest.mark.asyncio
 async def test_map_mismatched_lengths():
-    """Test that mapping with mismatched lengths raises an error."""
 
     @cs.task
     def add(a: int, b: int) -> int:

@@ -1,0 +1,15 @@
+"test_round_trip_top_level_functions": |-
+  Test full round-trip (serialize -> deserialize) with top-level functions.
+  Only top-level functions can be reliably pickled/imported.
+"test_serialize_basic_graph": |-
+  Test serializing a simple linear graph.
+"test_serialize_edge_types": |-
+  Test serialization and deserialization of various EdgeType instances.
+"test_serialize_params": |-
+  Test serialization of Param nodes (now standard tasks).
+"test_serialize_router": |-
+  Test full round-trip serialization of a Router.
+"test_serialize_with_constraints": |-
+  Test serialization of resource constraints.
+"test_serialize_with_retry": |-
+  Test serialization of retry policy including backoff.

@@ -1,0 +1,8 @@
+"db_engine": |-
+  Provides a Cascade Engine with the sqlite_db resource pre-registered.
+"test_sql_missing_resource": |-
+  Test failure when the specified DB resource is not registered.
+"test_sql_query_success": |-
+  Test a basic SELECT query.
+"test_sql_with_params": |-
+  Test a query with parameters.

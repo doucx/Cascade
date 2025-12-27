@@ -1,0 +1,11 @@
+"_StubLazyResult": |-
+  A minimal stub to satisfy Router's type hints and runtime requirements
+  (specifically accessing ._uuid) during deserialization.
+"_get_func_path": |-
+  Extracts module and qualname from a callable.
+"_load_func_from_path": |-
+  Dynamically loads a function from module and qualname.
+"from_json": |-
+  Deserializes a Graph from a JSON string.
+"to_json": |-
+  Serializes a Graph to a JSON string.

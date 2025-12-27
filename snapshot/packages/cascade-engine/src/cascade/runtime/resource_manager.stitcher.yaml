@@ -1,0 +1,18 @@
+"ResourceManager": |-
+  Manages system resources and ensures task concurrency respects resource constraints.
+  Uses asyncio.Condition to coordinate resource acquisition.
+"ResourceManager._can_acquire": |-
+  Internal check to see if resources are currently available.
+"ResourceManager._validate_feasibility": |-
+  Checks if the requirement exceeds total system capacity.
+"ResourceManager.acquire": |-
+  Atomically acquires the requested resources.
+  Waits until all resources are available.
+"ResourceManager.can_acquire": |-
+  Checks if the requested resources are currently available without blocking.
+"ResourceManager.release": |-
+  Releases the resources and notifies waiting tasks.
+"ResourceManager.set_capacity": |-
+  Updates system capacity configuration.
+"ResourceManager.update_resource": |-
+  Dynamically updates or creates a single resource's capacity.

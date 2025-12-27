@@ -1,0 +1,2 @@
+"S3ProviderBase": |-
+  Base class for S3 providers handling dependency checks.

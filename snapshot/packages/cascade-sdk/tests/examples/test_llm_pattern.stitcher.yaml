@@ -1,0 +1,4 @@
+"mock_http_post": |-
+  Mocks cs.http.post to avoid real network calls.
+"test_llm_pattern_via_subflow": |-
+  Tests the full LLM pattern by calling it as a subflow.

@@ -32,9 +32,6 @@ def engine(mock_connector):
 
 @pytest.mark.asyncio
 async def test_concurrency_constraint_on_map(engine, mock_connector):
-    """
-    Verify that a concurrency constraint limits the parallelism of a mapped task.
-    """
 
     @cs.task
     def slow_task(x):
@@ -70,9 +67,6 @@ async def test_concurrency_constraint_on_map(engine, mock_connector):
 
 @pytest.mark.asyncio
 async def test_global_concurrency_limit(engine, mock_connector):
-    """
-    Verify that a global concurrency constraint limits total tasks running.
-    """
 
     @cs.task
     def task_a(x):

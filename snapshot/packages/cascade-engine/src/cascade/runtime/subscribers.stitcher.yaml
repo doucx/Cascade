@@ -1,0 +1,12 @@
+"HumanReadableLogSubscriber": |-
+  Listens to runtime events and translates them into semantic messages
+  on the messaging bus. It acts as a bridge between the event domain
+  and the user-facing message domain.
+"TelemetrySubscriber": |-
+  Listens to runtime events and publishes them as structured telemetry
+  data via a Connector.
+"TelemetrySubscriber.on_event": |-
+  Handles incoming events synchronously and schedules asynchronous publishing.
+  This bridges the synchronous MessageBus with the asynchronous Connector.
+"TelemetrySubscriber.shutdown": |-
+  Waits for all pending telemetry tasks to complete.

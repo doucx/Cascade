@@ -1,0 +1,16 @@
+"IpfsCacheBackend": |-
+  A cache backend that stores results in IPFS via its HTTP RPC API.
+
+  It uses a secondary 'metadata_backend' (like Redis or In-Memory) to map
+  application cache keys to IPFS Content Identifiers (CIDs).
+
+  Structure:
+     App Key -> Metadata Backend -> CID -> IPFS -> Serialized Data
+"IpfsCacheBackend.__init__": |-
+  Args:
+      metadata_backend: A fast K-V backend to store Key->CID mappings.
+      ipfs_api_url: The base URL of the IPFS RPC API (default: local Kubo node).
+"IpfsCacheBackend.get": |-
+  Retrieves a CID from metadata and then fetches content from IPFS.
+"IpfsCacheBackend.set": |-
+  Serializes value, adds it to IPFS to get a CID, then stores key->CID mapping.

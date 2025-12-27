@@ -1,0 +1,5 @@
+"_stdin_read_line_task": |-
+  Reads a single line from standard input.
+  Accepts positional arguments to allow data dependencies for ordering.
+"_stdout_write_task": |-
+  Writes text to standard output.

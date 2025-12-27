@@ -6,7 +6,6 @@ pytest.importorskip("jinja2")
 
 
 def test_template_with_literals():
-    """Tests basic rendering with static values."""
 
     # cs.template is loaded dynamically via __getattr__
     rendered_text = cs.template("Hello, {{ name }}!", name="World")
@@ -16,7 +15,6 @@ def test_template_with_literals():
 
 
 def test_template_with_lazy_result():
-    """Tests that the template correctly depends on an upstream task."""
 
     @cs.task
     def get_username():
@@ -37,10 +35,4 @@ def test_template_with_lazy_result():
 
 
 def test_template_missing_dependency_install():
-    """
-    This test is more conceptual and would require manipulating sys.modules
-    to simulate jinja2 not being installed. It's complex to set up reliably.
-    The runtime check in the provider is sufficient for now.
-    We can assume the ImportError is raised correctly if jinja2 is absent.
-    """
     pass

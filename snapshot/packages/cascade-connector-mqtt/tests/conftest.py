@@ -5,14 +5,6 @@ from unittest.mock import MagicMock, AsyncMock
 
 @pytest.fixture(autouse=True)
 def mock_aiomqtt_module(mocker):
-    """
-    Creates a completely isolated, fake 'aiomqtt' module and injects it into
-    sys.modules.
-
-    CRITICAL: This fixture also aggressively removes 'cascade.connectors.mqtt'
-    from sys.modules to force a reload. This guarantees that the business logic
-    imports our FAKE aiomqtt, even if the REAL one was loaded by a previous test.
-    """
     # 1. Force reload of the target module
     # We must remove any existing loaded versions of our connector modules
     # so that they are forced to re-import 'aiomqtt' (which we are about to mock).

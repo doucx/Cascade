@@ -1,0 +1,6 @@
+"test_context_isolation": |-
+  验证上下文是隔离的。
+"test_env_factory_registration": |-
+  验证调用 cs.Env() 的行为。
+"test_param_factory_registration": |-
+  验证调用 cs.Param() 会自动注册 spec 到全局上下文。

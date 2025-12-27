@@ -1,0 +1,10 @@
+"create_cli": |-
+  A factory that generates a Typer-based command-line interface for a Cascade workflow.
+  It inspects the workflow context for `cs.Param` definitions and converts them into
+  CLI options.
+
+  Args:
+      target: The final LazyResult of the Cascade workflow.
+
+  Returns:
+      A function that, when called, will run the Typer CLI application.

@@ -10,10 +10,6 @@ from cascade.testing import MockConnector
 
 @pytest.mark.asyncio
 async def test_telemetry_subscriber_to_observer_contract():
-    """
-    Verifies that the JSON produced by TelemetrySubscriber is correctly
-    consumed by the cs-observer's on_message handler.
-    """
     # 1. ARRANGE: Producer side
     connector = MockConnector()
     subscriber = TelemetrySubscriber(MagicMock(), connector)

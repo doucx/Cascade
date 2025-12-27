@@ -1,0 +1,9 @@
+"Engine": |-
+  Orchestrates the entire workflow execution.
+"Engine._is_simple_task": |-
+  Checks if the LazyResult is a simple, flat task (no nested dependencies).
+  This allows for the Zero-Overhead TCO fast path.
+"Engine._on_constraint_update": |-
+  Callback to handle incoming constraint messages.
+"Engine.add_subscriber": |-
+  Adds a subscriber whose lifecycle (e.g., shutdown) the engine should manage.

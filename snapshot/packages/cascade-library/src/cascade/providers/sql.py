@@ -26,17 +26,6 @@ class SqlProvider:
 def _sql_factory(
     query: str, db: str, params: Optional[Dict[str, Any]] = None
 ) -> LazyResult[List[Dict[str, Any]]]:
-    """
-    Factory function exposed as cs.sql.
-
-    Args:
-        query: The SQL query string.
-        db: The name of the resource providing the SQLAlchemy connection/engine.
-        params: Optional parameters for the query.
-
-    Returns:
-        A LazyResult that resolves to the query results.
-    """
     # We dynamically inject the resource by converting the 'db' string name
     # into an Inject object and passing it to the 'conn' argument of the task.
     return _sql_task(query=query, params=params or {}, conn=inject(db))
@@ -44,9 +33,6 @@ def _sql_factory(
 
 @task(name="sql_query")
 def _sql_task(query: str, params: Dict[str, Any], conn: Any) -> List[Dict[str, Any]]:
-    """
-    Executes a SQL query using the provided connection.
-    """
     # 'conn' can be an Engine or a Connection.
     # We use a context manager to ensure proper handling.
 

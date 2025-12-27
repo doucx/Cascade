@@ -1,0 +1,3 @@
+"test_pause_command_dispatches_correctly": |-
+  Tests that the 'cs-controller pause' CLI command correctly parses arguments
+  and calls the underlying business logic function.

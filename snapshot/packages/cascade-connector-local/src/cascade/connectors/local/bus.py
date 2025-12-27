@@ -6,7 +6,6 @@ from cascade.common.messaging import bus
 
 
 class _LocalSubscriptionHandle(SubscriptionHandle):
-    """Implementation of the subscription handle for the LocalBusConnector."""
 
     def __init__(
         self,
@@ -54,13 +53,6 @@ class _LocalSubscriptionHandle(SubscriptionHandle):
 
 
 class LocalBusConnector(Connector):
-    """
-    A robust, in-memory implementation of the Connector protocol.
-    Acts as a local MQTT broker, supporting:
-    - Shared state across instances (simulating a network broker)
-    - Retained messages
-    - Topic wildcards (+ and #)
-    """
 
     # --- Broker State (Shared across all instances) ---
     _exact_subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)
@@ -75,10 +67,6 @@ class LocalBusConnector(Connector):
 
     @classmethod
     def _get_lock(cls) -> asyncio.Lock:
-        """
-        Ensures the lock is bound to the current running event loop.
-        This is critical for pytest where each test has its own loop.
-        """
         loop = asyncio.get_running_loop()
         try:
             # In modern Python, accessing or using a lock created in a different
@@ -91,7 +79,6 @@ class LocalBusConnector(Connector):
 
     @classmethod
     def _reset_broker_state(cls):
-        """Helper for tests to clear the 'broker'."""
         cls._exact_subscriptions.clear()
         cls._wildcard_subscriptions.clear()
         cls._retained_messages.clear()
@@ -178,7 +165,6 @@ class LocalBusConnector(Connector):
         return _LocalSubscriptionHandle(self, topic, queue, task)
 
     async def _listener_loop(self, queue: asyncio.Queue, callback):
-        """Consumes messages from the subscription queue and invokes callback."""
         try:
             while self._is_connected:
                 # Use a small timeout or just wait. wait_for allows easier cancellation?
@@ -196,9 +182,6 @@ class LocalBusConnector(Connector):
 
     @staticmethod
     def _topic_matches(subscription: str, topic: str) -> bool:
-        """
-        Checks if a concrete topic matches a subscription pattern (supporting + and #).
-        """
         if subscription == "#":
             return True
         if subscription == topic:

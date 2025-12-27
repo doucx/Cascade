@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M pyproject.toml", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766737481.5627172, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py, A __init__.stitcher.yaml, M test_app_tools.py ... and 271 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766824625.5287786, "duration_ms": 0}}

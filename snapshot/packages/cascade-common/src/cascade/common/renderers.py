@@ -14,9 +14,6 @@ LOG_LEVELS = {
 
 
 class CliRenderer(protocols.Renderer):
-    """
-    Renders messages as human-readable, formatted text strings.
-    """
 
     def __init__(
         self,
@@ -35,9 +32,6 @@ class CliRenderer(protocols.Renderer):
 
 
 class JsonRenderer(protocols.Renderer):
-    """
-    Renders messages as structured, JSON-formatted strings.
-    """
 
     def __init__(
         self,
@@ -57,7 +51,6 @@ class JsonRenderer(protocols.Renderer):
             }
 
             def default_serializer(o):
-                """Handle non-serializable objects gracefully."""
                 return repr(o)
 
             json_str = json.dumps(log_record, default=default_serializer)

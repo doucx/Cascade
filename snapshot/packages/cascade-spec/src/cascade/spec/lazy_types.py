@@ -18,10 +18,6 @@ class RetryPolicy:
 
 @dataclass
 class LazyResult(Generic[T]):
-    """
-    A placeholder for the result of a task execution.
-    It holds the task that produces it and the arguments passed to that task.
-    """
 
     task: Any  # Should be 'Task[T]'
     args: tuple
@@ -45,10 +41,6 @@ class LazyResult(Generic[T]):
 
 @dataclass
 class MappedLazyResult(Generic[T]):
-    """
-    Represents the result of mapping a factory over a set of inputs.
-    It resolves to a list of results.
-    """
 
     factory: Any  # Should be LazyFactory
     mapping_kwargs: Dict[str, Any]

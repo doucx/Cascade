@@ -4,9 +4,6 @@ from cascade.adapters.state.in_memory import InMemoryStateBackend
 
 @pytest.mark.asyncio
 async def test_in_memory_functional():
-    """
-    Functional test to ensure it actually works as a backend.
-    """
     backend = InMemoryStateBackend("test_run")
 
     # Put

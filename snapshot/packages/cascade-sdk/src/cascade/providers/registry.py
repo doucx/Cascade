@@ -4,33 +4,22 @@ from typing import Any, Dict, Protocol
 
 
 class LazyFactory(Protocol):
-    """
-    Protocol for objects that can serve as task factories (must support .map).
-    """
 
     def map(self, **kwargs) -> Any: ...
     def __call__(self, *args, **kwargs) -> Any: ...
 
 
 class Provider(Protocol):
-    """
-    Interface that all Cascade providers must implement.
-    """
 
     @property
     def name(self) -> str:
-        """The name of the provider, used as the accessor (e.g., 'shell' -> cs.shell)."""
         ...
 
     def create_factory(self) -> LazyFactory:
-        """Returns the factory function/object to be exposed to the user."""
         ...
 
 
 class ProviderNamespace:
-    """
-    A proxy object to handle nested provider names (e.g. cs.read.text).
-    """
 
     def __init__(self, registry: "ProviderRegistry", prefix: str):
         self._registry = registry
@@ -42,9 +31,6 @@ class ProviderNamespace:
 
 
 class ProviderRegistry:
-    """
-    Manages the discovery and loading of Cascade providers.
-    """
 
     _instance = None
 
@@ -59,10 +45,6 @@ class ProviderRegistry:
         return cls._instance
 
     def get(self, name: str) -> Any:
-        """
-        Retrieves a provider factory by name. Loads from entry points if not yet loaded.
-        Raises AttributeError if not found (to conform with __getattr__ semantics).
-        """
         if not self._loaded:
             self._discover_entry_points()
             self._loaded = True
@@ -78,11 +60,9 @@ class ProviderRegistry:
         raise AttributeError(f"Cascade provider '{name}' not found.")
 
     def register(self, name: str, factory: LazyFactory):
-        """Manually register a factory (mostly for testing or internal use)."""
         self._providers[name] = factory
 
     def _discover_entry_points(self):
-        """Scans the 'cascade.providers' entry point group."""
         if sys.version_info >= (3, 10):
             entry_points = importlib.metadata.entry_points(group="cascade.providers")
         else:

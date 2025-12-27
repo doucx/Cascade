@@ -1,0 +1,16 @@
+"Blueprint": |-
+  Represents a compiled workflow, ready for execution by the VM.
+"Call": |-
+  Instruction to call a callable (function/task).
+  Results are stored in the 'output' register.
+"Instruction": |-
+  Base class for VM instructions.
+"Literal": |-
+  Represents a static value known at compile time.
+"Operand": |-
+  Base class for instruction operands.
+"Register": |-
+  Represents a dynamic value stored in a virtual register.
+"TailCall": |-
+  A special return value indicating a request for tail-recursive execution.
+  The VM intercepts this object and restarts execution with the new arguments.

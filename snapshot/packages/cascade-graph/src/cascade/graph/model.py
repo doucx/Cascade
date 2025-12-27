@@ -9,7 +9,6 @@ from cascade.spec.constraint import ResourceConstraint
 
 
 class EdgeType(Enum):
-    """Defines the semantic type of a dependency edge."""
 
     DATA = (
         auto()
@@ -25,12 +24,6 @@ class EdgeType(Enum):
 
 @dataclass
 class Node:
-    """
-    Represents a node in the computation graph template.
-
-    A Node defines 'what' to execute (the callable) and 'how' to get its arguments
-    (bindings or edges), but it DOES NOT contain the runtime data itself.
-    """
 
     structural_id: str
     name: str
@@ -70,7 +63,6 @@ class Node:
 
 @dataclass
 class Edge:
-    """Represents a directed dependency from source node to target node."""
 
     source: Node
     target: Node
@@ -88,7 +80,6 @@ class Edge:
 
 @dataclass
 class Graph:
-    """A container for nodes and edges representing the workflow topology."""
 
     nodes: List[Node] = field(default_factory=list)
     edges: List[Edge] = field(default_factory=list)

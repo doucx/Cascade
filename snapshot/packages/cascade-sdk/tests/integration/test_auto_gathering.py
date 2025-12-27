@@ -17,10 +17,6 @@ def identity(val: any) -> any:
 
 
 def test_run_with_list_of_lazy_results():
-    """
-    Verifies that cs.run can accept a list of LazyResults,
-    execute them in parallel, and return a list of their results.
-    """
     lr1 = task_one()
     lr2 = task_two()
 
@@ -31,9 +27,6 @@ def test_run_with_list_of_lazy_results():
 
 
 def test_run_with_tuple_of_lazy_results():
-    """
-    Verifies that cs.run also works with tuples.
-    """
     lr1 = task_one()
     lr2 = task_two()
 
@@ -44,9 +37,6 @@ def test_run_with_tuple_of_lazy_results():
 
 
 def test_run_with_mixed_list_of_lazy_results_and_literals():
-    """
-    Verifies that literals mixed in with LazyResults are passed through correctly.
-    """
     lr1 = task_one()
     literal_str = "I am a literal"
     lr2 = task_two()
@@ -58,8 +48,5 @@ def test_run_with_mixed_list_of_lazy_results_and_literals():
 
 
 def test_run_with_empty_list():
-    """
-    Verifies that passing an empty list is a valid operation and returns an empty list.
-    """
     results = cs.run([])
     assert results == []

@@ -1,0 +1,9 @@
+"test_run_with_empty_list": |-
+  Verifies that passing an empty list is a valid operation and returns an empty list.
+"test_run_with_list_of_lazy_results": |-
+  Verifies that cs.run can accept a list of LazyResults,
+  execute them in parallel, and return a list of their results.
+"test_run_with_mixed_list_of_lazy_results_and_literals": |-
+  Verifies that literals mixed in with LazyResults are passed through correctly.
+"test_run_with_tuple_of_lazy_results": |-
+  Verifies that cs.run also works with tuples.

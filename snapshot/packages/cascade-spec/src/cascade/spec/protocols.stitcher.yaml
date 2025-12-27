@@ -1,0 +1,53 @@
+"CacheBackend": |-
+  Protocol for a storage backend that persists cached results.
+"CacheBackend.get": |-
+  Retrieves a value by key.
+"CacheBackend.set": |-
+  Sets a value for a key, optionally with a TTL in seconds.
+"CachePolicy": |-
+  Protocol for a caching strategy.
+"CachePolicy.check": |-
+  Checks if a result is cached.
+  Returns None if not found, or the cached value if found.
+"CachePolicy.save": |-
+  Saves a result to the cache.
+"Connector": |-
+  Protocol for a connector that bridges the Cascade runtime with the outside world.
+  It's responsible for all non-business-logic I/O, primarily for telemetry and control.
+"Connector.connect": |-
+  Establishes a connection to the external system (e.g., MQTT Broker).
+"Connector.disconnect": |-
+  Disconnects from the external system and cleans up resources.
+"Connector.publish": |-
+  Publishes a message (e.g., a telemetry event) to a specific topic.
+"Connector.subscribe": |-
+  Subscribes to a topic to receive messages (e.g., control commands).
+  Returns a handle that can be used to unsubscribe.
+"Executor": |-
+  Protocol for an executor that runs a single task.
+"Executor.execute": |-
+  Executes the node's callable with the provided fully-resolved arguments.
+"LazyFactory": |-
+  Protocol for any object that can produce a MappedLazyResult via a .map() method.
+  Example: Task, ShellTask, etc.
+"LazyFactory.map": |-
+  Creates a mapped lazy result by applying this factory over iterables.
+"Solver": |-
+  Protocol for a solver that resolves a graph into an execution plan.
+"StateBackend": |-
+  Protocol for a backend that stores the transient state of a single workflow run.
+  This includes task results and skip statuses.
+"StateBackend.get_result": |-
+  Retrieves the result of a task. Returns None if not found.
+"StateBackend.get_skip_reason": |-
+  Retrieves the reason a task was skipped. Returns None if not skipped.
+"StateBackend.has_result": |-
+  Checks if a result for a given task ID exists.
+"StateBackend.mark_skipped": |-
+  Marks a task as skipped.
+"StateBackend.put_result": |-
+  Stores the result of a completed task.
+"SubscriptionHandle": |-
+  A handle to an active subscription, allowing it to be cancelled.
+"SubscriptionHandle.unsubscribe": |-
+  Cancels the subscription.

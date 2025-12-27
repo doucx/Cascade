@@ -1,0 +1,5 @@
+"bind": |-
+  Statically binds a source task to a control flow target (e.g. JumpSelector).
+  This creates a structural edge in the graph.
+"select_jump": |-
+  Creates a JumpSelector for explicit control flow.

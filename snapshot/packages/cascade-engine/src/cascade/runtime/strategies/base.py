@@ -4,9 +4,6 @@ from cascade.spec.protocols import StateBackend
 
 
 class ExecutionStrategy(Protocol):
-    """
-    Protocol defining a strategy for executing a workflow target.
-    """
 
     async def execute(
         self,

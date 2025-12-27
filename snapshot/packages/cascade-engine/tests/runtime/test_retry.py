@@ -10,9 +10,6 @@ from cascade.testing import SpySubscriber
 
 @pytest.mark.asyncio
 async def test_retry_success_after_failure():
-    """
-    Tests that a task retries based on events and eventually succeeds.
-    """
     call_count = 0
 
     @cs.task
@@ -46,9 +43,6 @@ async def test_retry_success_after_failure():
 
 @pytest.mark.asyncio
 async def test_retry_exhausted_failure():
-    """
-    Tests that a task fails after exhausting all retries, based on events.
-    """
     call_count = 0
 
     @cs.task

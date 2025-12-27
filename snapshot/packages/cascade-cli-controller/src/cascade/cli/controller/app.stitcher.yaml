@@ -1,0 +1,17 @@
+"_publish_limit": |-
+  Core logic for publishing concurrency or rate limit constraints.
+"_publish_pause": |-
+  Core logic for publishing a pause constraint.
+"_publish_resume": |-
+  Core logic for publishing a resume (clear constraint) command.
+"pause": |-
+  Publish a 'pause' constraint to the control plane.
+  This will cause running Cascade engines to stop scheduling new tasks that
+  match the specified scope until a 'resume' command is sent.
+"resume": |-
+  Publish a 'resume' command to the control plane.
+  This clears any 'pause' constraint for the specified scope, allowing
+  tasks to be scheduled again.
+"set_limit": |-
+  Publish a 'concurrency' or 'rate_limit' constraint to the control plane.
+  You must provide either --concurrency or --rate (or both).

@@ -3,9 +3,6 @@ import time
 
 
 class InMemoryCacheBackend:
-    """
-    A simple in-memory implementation of the CacheBackend protocol.
-    """
 
     def __init__(self):
         self._store: Dict[str, Any] = {}

@@ -1,0 +1,8 @@
+"test_shell_map": |-
+  Tests mapping shell commands.
+"test_shell_task_failure_with_check": |-
+  Tests that a failing command with check=True raises an error.
+"test_shell_task_integration": |-
+  Tests that the output of a shell task can be used by another task.
+"test_shell_task_success": |-
+  Tests that a simple shell command runs and captures stdout.

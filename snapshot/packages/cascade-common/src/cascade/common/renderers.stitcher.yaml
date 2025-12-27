@@ -1,0 +1,4 @@
+"CliRenderer": |-
+  Renders messages as human-readable, formatted text strings.
+"JsonRenderer": |-
+  Renders messages as structured, JSON-formatted strings.

@@ -1,0 +1,14 @@
+"ConcurrencyConstraintHandler": |-
+  Handles the 'concurrency' constraint type.
+  Maps concurrency limits to dynamic system resources.
+"PauseConstraintHandler": |-
+  Handles the 'pause' constraint type.
+  It can pause execution globally or for a specific task.
+"PauseConstraintHandler.check_permission": |-
+  Returns False (permission denied) if the task matches the constraint's scope.
+"RateLimitConstraintHandler": |-
+  Handles 'rate_limit' constraints using a Token Bucket algorithm.
+"_matches": |-
+  Helper to check if a task name matches a scope pattern.
+"_parse_rate_string": |-
+  Parses '10/m', '5/s', '300/h' into tokens per second.

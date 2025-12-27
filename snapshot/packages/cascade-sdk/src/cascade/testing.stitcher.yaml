@@ -1,0 +1,33 @@
+"MockConnector": |-
+  A mock connector for testing that simulates MQTT behavior,
+  including retained messages and topic matching.
+"MockConnector._trigger_message": |-
+  Helper to simulate receiving a message, used by tests and publish().
+"MockConnector.publish": |-
+  Simulates publishing a message, triggering subscribers and handling retention.
+"MockConnector.seed_retained_message": |-
+  Helper to pre-seed a retained message on the 'broker' for test setup.
+"MockExecutor": |-
+  A generic mock for the Executor protocol that can simulate various
+  behaviors like delays or returning specific values.
+"MockSolver": |-
+  A test double for the Solver protocol that returns a pre-programmed plan,
+  bypassing any real resolution logic.
+"SpyExecutor": |-
+  A test double for the Executor protocol that logs all calls to `execute`.
+"SpySolver": |-
+  A test double for the Solver protocol that spies on calls to `resolve`
+  while delegating to a real underlying solver.
+"SpySubscriber": |-
+  A test utility to collect events from a MessageBus.
+"SpySubscriber.events_of_type": |-
+  Returns a list of all events of a specific type.
+"override_resource": |-
+  A context manager to temporarily override a resource for testing purposes.
+
+  Usage:
+      engine = Engine()
+      engine.register(production_db)
+
+      with override_resource(engine, "production_db", mock_db):
+          engine.run(my_task) # my_task will receive mock_db

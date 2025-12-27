@@ -1,0 +1,5 @@
+"NodeProcessor": |-
+  Responsible for executing a single node within a workflow graph.
+  Handles policies such as constraints, caching, retries, and argument resolution.
+"NodeProcessor.process": |-
+  Executes a node with all associated policies (constraints, cache, retry).

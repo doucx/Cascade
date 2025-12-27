@@ -3,10 +3,6 @@ from cascade.app import CascadeApp
 
 
 def test_app_dry_run_linear_workflow(capsys):
-    """
-    Tests that CascadeApp.dry_run() prints the correct plan for a simple
-    linear workflow.
-    """
 
     @cs.task
     def step_a():
@@ -29,9 +25,6 @@ def test_app_dry_run_linear_workflow(capsys):
 
 
 def test_app_dry_run_diamond_workflow(capsys):
-    """
-    Tests that CascadeApp.dry_run() correctly orders a diamond-shaped graph.
-    """
 
     @cs.task
     def t_a():
@@ -67,10 +60,6 @@ def test_app_dry_run_diamond_workflow(capsys):
 
 
 def test_app_dry_run_with_list_input(capsys):
-    """
-    Verifies that dry_run handles a list of LazyResults and includes the
-    implicit gather node in its plan.
-    """
 
     @cs.task(pure=True)
     def t_a():

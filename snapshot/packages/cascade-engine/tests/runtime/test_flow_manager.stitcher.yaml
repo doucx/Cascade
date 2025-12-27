@@ -1,0 +1,20 @@
+"create_mock_lazy_result": |-
+  Creates a mock LazyResult whose UUID matches the node ID for mapping.
+"create_mock_node": |-
+  Creates a mock Node with structural_id == name.
+"test_flow_manager_pruning_logic": |-
+  Test that FlowManager correctly prunes downstream nodes recursively.
+
+  Graph Topology:
+  S (Selector) -> chooses "a" or "b"
+
+  Routes:
+  - "a": A
+  - "b": B -> B_UP (B depends on B_UP)
+
+  Consumer C depends on Router(S)
+
+  If S chooses "a":
+  1. Route "b" (Node B) is not selected.
+  2. B should be pruned.
+  3. B_UP (only used by B) should be recursively pruned.

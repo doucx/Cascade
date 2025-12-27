@@ -1,0 +1,2 @@
+"InMemoryCacheBackend": |-
+  A simple in-memory implementation of the CacheBackend protocol.

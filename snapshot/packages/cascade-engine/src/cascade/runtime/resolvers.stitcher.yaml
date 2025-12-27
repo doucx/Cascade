@@ -1,0 +1,12 @@
+"ArgumentResolver": |-
+  Resolves arguments by combining:
+  1. Structural bindings (Literal values stored in Node)
+  2. Upstream dependencies (Edges)
+  3. Resource injections
+"ArgumentResolver._get_node_result": |-
+  Helper to get a node's result, with skip penetration logic.
+"ArgumentResolver._resolve_data_edges": |-
+  Shared helper to resolve all incoming DATA edges for a node,
+  respecting the priority of input_overrides from TCO Jumps.
+"ConstraintResolver": |-
+  Responsible for resolving dynamic resource constraints for a node.

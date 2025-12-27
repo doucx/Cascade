@@ -1,0 +1,7 @@
+"mock_aiomqtt_module": |-
+  Creates a completely isolated, fake 'aiomqtt' module and injects it into
+  sys.modules.
+
+  CRITICAL: This fixture also aggressively removes 'cascade.connectors.mqtt'
+  from sys.modules to force a reload. This guarantees that the business logic
+  imports our FAKE aiomqtt, even if the REAL one was loaded by a previous test.

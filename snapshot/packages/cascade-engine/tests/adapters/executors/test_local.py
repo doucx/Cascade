@@ -5,10 +5,6 @@ from cascade.spec.task import task
 
 
 def test_local_executor_sync_execution():
-    """
-    Tests that the LocalExecutor can execute a synchronous function
-    with resolved positional and keyword arguments.
-    """
 
     # 1. Define the callable
     @task
@@ -29,9 +25,6 @@ def test_local_executor_sync_execution():
 
 
 def test_local_executor_async_execution():
-    """
-    Tests that the LocalExecutor can execute an asynchronous function.
-    """
 
     @task
     async def async_add(x: int) -> int:

@@ -3,7 +3,6 @@ from cascade.spec.input import ParamSpec, EnvSpec
 
 
 def test_context_isolation():
-    """验证上下文是隔离的。"""
     ctx1 = WorkflowContext()
     ctx2 = WorkflowContext()
 
@@ -15,7 +14,6 @@ def test_context_isolation():
 
 
 def test_param_factory_registration():
-    """验证调用 cs.Param() 会自动注册 spec 到全局上下文。"""
     import cascade as cs
 
     # 获取并清理上下文
@@ -45,7 +43,6 @@ def test_param_factory_registration():
 
 
 def test_env_factory_registration():
-    """验证调用 cs.Env() 的行为。"""
     import cascade as cs
 
     ctx = get_current_context()

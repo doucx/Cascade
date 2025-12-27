@@ -2,9 +2,6 @@ import cascade as cs
 
 
 def test_visualize_diamond_graph():
-    """
-    Tests that visualize() produces a correct DOT string for a diamond graph with standard data edges.
-    """
 
     @cs.task
     def t_a():
@@ -60,9 +57,6 @@ def test_visualize_diamond_graph():
 
 
 def test_visualize_special_edge_types():
-    """
-    Tests that visualize() correctly styles edges for conditions and constraints.
-    """
 
     @cs.task
     def t_condition():
@@ -113,9 +107,6 @@ def test_visualize_special_edge_types():
 
 
 def test_visualize_iterative_jump_edge():
-    """
-    Tests that visualize() correctly renders an ITERATIVE_JUMP edge created via cs.bind.
-    """
 
     @cs.task
     def state_machine(data: int):
@@ -160,10 +151,6 @@ def test_visualize_iterative_jump_edge():
 
 
 def test_visualize_multi_node_jump_edge():
-    """
-    Tests that a jump from a downstream node to an upstream node is visualized correctly.
-    Creates a workflow like A -> B -> C -> A.
-    """
 
     @cs.task
     def task_a():
@@ -210,10 +197,6 @@ def test_visualize_multi_node_jump_edge():
 
 
 def test_visualize_with_list_of_lazy_results():
-    """
-    Verifies that visualize() can accept a list of LazyResults and
-    correctly renders the implicit gather node.
-    """
 
     @cs.task(pure=True)
     def t_a():

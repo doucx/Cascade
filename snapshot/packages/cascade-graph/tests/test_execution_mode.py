@@ -23,11 +23,6 @@ def collect_results(c, b, d):
 
 
 def test_execution_mode_is_passed_to_node():
-    """
-    Verifies that the `mode` parameter from the @task decorator
-    is correctly propagated to the `execution_mode` attribute of the
-    corresponding Node in the graph.
-    """
     # 1. Define a simple workflow
     ct = compute_task()
     bt = blocking_task()

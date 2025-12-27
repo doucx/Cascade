@@ -1,0 +1,15 @@
+"test_engine_handles_malformed_constraint_payload": |-
+  Verify that the Engine logs an error but does not crash on a malformed payload.
+"test_engine_pauses_and_resumes_specific_task": |-
+  End-to-end test for task-specific pause and resume functionality.
+"test_engine_pauses_on_global_pause_constraint": |-
+  End-to-end test verifying the global pause functionality.
+  It checks that after a pause command is received, no new tasks are started.
+"test_engine_subscribes_to_constraints": |-
+  Verify that the Engine subscribes to the correct topic upon starting a run.
+"test_engine_updates_constraints_on_message": |-
+  Verify that the Engine's ConstraintManager is updated when a valid message is received.
+"wait_for_task_finish": |-
+  Helper coroutine to wait for a specific task to finish.
+"wait_for_task_start": |-
+  Helper coroutine to wait for a specific task to start.

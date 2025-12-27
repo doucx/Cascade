@@ -1,0 +1,16 @@
+"ResourceContainer": |-
+  Manages the lifecycle, registration, and dependency injection of resources.
+"ResourceContainer._scan_item": |-
+  Recursively scans an item for Inject objects.
+"ResourceContainer.get_provider": |-
+  Retrieves the raw provider function for a resource.
+"ResourceContainer.override": |-
+  A context manager to safely override a provider and guarantee restoration.
+"ResourceContainer.override_provider": |-
+  Overrides a resource provider (useful for testing).
+"ResourceContainer.register": |-
+  Registers a resource definition.
+"ResourceContainer.scan": |-
+  Scans the graph to identify all resources required by the nodes.
+"ResourceContainer.setup": |-
+  Initializes required resources that are not yet active.

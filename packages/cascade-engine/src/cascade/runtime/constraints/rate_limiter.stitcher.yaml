@@ -1,0 +1,16 @@
+"RateLimiter": |-
+  Implements a Token Bucket algorithm for rate limiting.
+  Manages multiple independent buckets identified by a key (scope).
+"RateLimiter.try_acquire": |-
+  Attempts to acquire tokens from the bucket.
+
+  Returns:
+      0.0 if successful.
+      >0.0 if failed, representing the seconds to wait until enough tokens are available.
+"RateLimiter.update_bucket": |-
+  Updates or creates a bucket configuration.
+
+  Args:
+      key: Unique identifier for the bucket.
+      rate: Tokens per second.
+      capacity: Max tokens. Defaults to rate (i.e., 1 second worth of tokens).

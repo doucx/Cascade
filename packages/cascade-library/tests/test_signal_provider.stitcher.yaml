@@ -1,0 +1,14 @@
+"engine": |-
+  Provides an engine instance configured with a LocalBusConnector.
+"local_connector": |-
+  Provides a fresh LocalBusConnector for each test.
+"test_recv_blocks_and_wakes_up": |-
+  Test Case 8 (From Firefly Plan): Asynchronous Wake-up.
+
+  Verifies that a task executing cs.recv pauses until a matching signal
+  is published on the connector, at which point it resumes.
+"test_recv_times_out": |-
+  Test Case 9 (From Firefly Plan): Timeout and Fallback.
+
+  Verifies that cs.recv raises TimeoutError if a signal is not received
+  within the specified timeout period.

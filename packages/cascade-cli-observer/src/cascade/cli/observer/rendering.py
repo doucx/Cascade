@@ -23,10 +23,6 @@ custom_theme = Theme(
 
 
 class RichCliRenderer(protocols.Renderer):
-    """
-    A renderer that uses the 'rich' library for formatted, colorful output.
-    """
-
     def __init__(
         self,
         store: MessageStore,

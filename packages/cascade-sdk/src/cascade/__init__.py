@@ -62,10 +62,6 @@ def run(
     connector: Optional[Connector] = None,
     state_backend: Union[str, Callable[[str], StateBackend], None] = None,
 ) -> Any:
-    """
-    Runs a Cascade workflow. This is a backward-compatible wrapper
-    around the CascadeApp interface.
-    """
     app = CascadeApp(
         target=target,
         params=params,
@@ -79,19 +75,11 @@ def run(
 
 
 def visualize(target: Any) -> str:
-    """
-    Builds and visualizes the computation graph for a target.
-    This is a backward-compatible wrapper.
-    """
     app = CascadeApp(target=target)
     return app.visualize()
 
 
 def dry_run(target: Any) -> None:
-    """
-    Builds and prints the execution plan for a target.
-    This is a backward-compatible wrapper.
-    """
     app = CascadeApp(target=target)
     app.dry_run()
 

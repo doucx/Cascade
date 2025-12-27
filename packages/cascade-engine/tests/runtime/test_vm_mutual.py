@@ -26,9 +26,6 @@ def pong(n: int) -> Any:
 
 @pytest.mark.asyncio
 async def test_vm_mutual_recursion():
-    """
-    Tests A -> B -> A execution flow.
-    """
     # 1. Compile both tasks
     builder = BlueprintBuilder()
 
@@ -52,9 +49,6 @@ async def test_vm_mutual_recursion():
 
 @pytest.mark.asyncio
 async def test_vm_mutual_recursion_pong_ends():
-    """
-    Tests case where recursion ends in the second function.
-    """
     builder = BlueprintBuilder()
     bp_ping = builder.build(ping(n=0), template=True)
     bp_pong = builder.build(pong(n=0), template=True)

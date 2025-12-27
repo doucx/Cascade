@@ -1,0 +1,30 @@
+"ConnectorConnected": |-
+  Fired when the engine successfully connects to an external connector.
+"ConnectorDisconnected": |-
+  Fired when the engine disconnects from an external connector.
+"Event": |-
+  Base class for all runtime events.
+"ResourceAcquired": |-
+  Fired when a resource is successfully initialized (setup complete).
+"ResourceEvent": |-
+  Base for events related to resources.
+"ResourceReleased": |-
+  Fired when a resource is successfully torn down.
+"RunFinished": |-
+  Fired when the engine finishes a run.
+"RunStarted": |-
+  Fired when the engine starts a new run.
+"StaticAnalysisWarning": |-
+  Fired when static analysis detects a potential issue.
+"TaskBlocked": |-
+  Fired when a task is deferred due to constraint violations.
+"TaskEvent": |-
+  Base for events related to a specific task instance.
+"TaskExecutionFinished": |-
+  Fired after a task's function finishes, successfully or not.
+"TaskExecutionStarted": |-
+  Fired just before a task's function is executed.
+"TaskRetrying": |-
+  Fired when a task fails but is about to be retried.
+"TaskSkipped": |-
+  Fired when a task is skipped due to caching or conditional logic.

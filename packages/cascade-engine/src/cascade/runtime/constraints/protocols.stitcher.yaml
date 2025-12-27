@@ -1,0 +1,15 @@
+"ConstraintHandler": |-
+  Protocol for a pluggable handler that implements the logic for a specific
+  type of global constraint (e.g., "pause", "rate_limit").
+"ConstraintHandler.append_requirements": |-
+  Allows the handler to inject dynamic resource requirements for the task.
+  Modifies the 'requirements' dictionary in-place.
+"ConstraintHandler.check_permission": |-
+  Evaluates the constraint against the given task.
+  Returns: True if permitted, False if deferred.
+"ConstraintHandler.handles_type": |-
+  Returns the constraint type this handler is responsible for.
+"ConstraintHandler.on_constraint_add": |-
+  Called when a new constraint of this type is added or updated.
+"ConstraintHandler.on_constraint_remove": |-
+  Called when a constraint is removed.

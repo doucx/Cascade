@@ -1,0 +1,10 @@
+"test_map_basic": |-
+  Test mapping a task over a static list.
+"test_map_dynamic_input": |-
+  Test mapping over a list produced by an upstream task.
+"test_map_empty": |-
+  Test mapping over an empty list returns an empty list.
+"test_map_mismatched_lengths": |-
+  Test that mapping with mismatched lengths raises an error.
+"test_map_multiple_args": |-
+  Test mapping with multiple iterable arguments.

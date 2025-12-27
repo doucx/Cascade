@@ -1,0 +1,9 @@
+"Task": |-
+  Wraps a callable to make it return a LazyResult when called.
+"Task.map": |-
+  Applies the task over a sequence of inputs.
+"_after": |-
+  Explicitly schedules this task to run after the given predecessor tasks,
+  without taking their output as input.
+"task": |-
+  Decorator to convert a function into a Task.

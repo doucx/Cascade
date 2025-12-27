@@ -1,0 +1,9 @@
+"GraphExecutionResult": |-
+  Internal result carrier to avoid context loss.
+"GraphExecutionStrategy": |-
+  Executes tasks by dynamically building a dependency graph.
+  Supports explicit control flow via `cs.Jump` and `cs.bind`.
+"GraphExecutionStrategy._index_plan": |-
+  Converts a Plan (List[List[Node]]) into an IndexedPlan (List[List[int]]).
+"GraphExecutionStrategy._rehydrate_plan": |-
+  Converts an IndexedPlan back into a Plan using the nodes from the current graph.

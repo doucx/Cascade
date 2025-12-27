@@ -2,7 +2,6 @@ from cascade.common.messaging import MessageStore, MessageBus
 
 
 def test_message_store_loads_defaults():
-    """Test that the message store loads default locale messages."""
     store = MessageStore(locale="en")
     # We expect some basic keys to be present from runtime_events.json
     # We don't check exact values to avoid brittleness, just key existence/format
@@ -11,7 +10,6 @@ def test_message_store_loads_defaults():
 
 
 def test_message_bus_renderer_delegation():
-    """Test that the bus delegates to the renderer."""
     store = MessageStore()
     store._messages["test.msg"] = "Value: {val}"
     bus = MessageBus(store)

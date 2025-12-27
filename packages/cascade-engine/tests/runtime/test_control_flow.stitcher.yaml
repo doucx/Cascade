@@ -1,0 +1,2 @@
+"test_cascade_skip": |-
+  Test that if A is skipped, B (which depends on A) is also skipped.

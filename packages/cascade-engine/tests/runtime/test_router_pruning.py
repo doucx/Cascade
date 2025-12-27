@@ -10,10 +10,6 @@ from cascade.testing import SpySubscriber
 
 @pytest.mark.asyncio
 async def test_pruning_exclusive_branches():
-    """
-    Test that branches exclusive to a router are pruned when not selected.
-    """
-
     @cs.task
     def get_route():
         return "a"
@@ -69,11 +65,6 @@ async def test_pruning_exclusive_branches():
 
 @pytest.mark.asyncio
 async def test_pruning_shared_dependency():
-    """
-    Test that a dependency shared between branches (or external tasks)
-    is NOT pruned even if one consumer branch is pruned.
-    """
-
     @cs.task
     def get_route():
         return "a"

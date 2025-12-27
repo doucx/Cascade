@@ -1,0 +1,6 @@
+"test_http_get_success": |-
+  Tests a successful GET request using cs.http.get.
+"test_http_post_success": |-
+  Tests a successful POST request using cs.http.post.
+"test_http_with_template": |-
+  Tests that cs.http.get works correctly with cs.template for dynamic URLs.

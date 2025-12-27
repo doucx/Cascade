@@ -8,13 +8,11 @@ pytest.importorskip("constraint")
 
 
 def test_csp_solver_init():
-    """Test that CSPSolver can be initialized with resources."""
     solver = CSPSolver(system_resources={"cpu": 4, "ram": 16})
     assert solver.system_resources == {"cpu": 4, "ram": 16}
 
 
 def test_csp_solver_missing_dependency(monkeypatch):
-    """Test that meaningful error is raised if dependency is missing."""
     import cascade.adapters.solvers.csp as csp_module
 
     # Simulate missing dependency by setting constraint to None
@@ -25,15 +23,6 @@ def test_csp_solver_missing_dependency(monkeypatch):
 
 
 def test_csp_solver_parallel_when_resources_sufficient():
-    """
-    Scenario: System has 10 CPU.
-    Task A needs 4 CPU.
-    Task B needs 4 CPU.
-    No dependencies.
-
-    Expected: Both run in Stage 0 (Parallel).
-    """
-
     @task
     def t_a():
         pass
@@ -74,16 +63,6 @@ def test_csp_solver_parallel_when_resources_sufficient():
 
 
 def test_csp_solver_serial_when_resources_insufficient():
-    """
-    Scenario: System has 6 CPU.
-    Task A needs 4 CPU.
-    Task B needs 4 CPU.
-    No dependencies.
-
-    Expected: Run in separate stages (Serial) to respect limit.
-    Plan should be 3 stages: [A], [B], [Gather] OR [B], [A], [Gather].
-    """
-
     @task
     def t_a():
         pass

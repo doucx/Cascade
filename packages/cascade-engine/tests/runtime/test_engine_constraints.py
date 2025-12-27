@@ -28,7 +28,6 @@ def engine_with_connector(mock_connector):
 
 
 async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
-    """Helper coroutine to wait for a specific task to finish."""
     from cascade.runtime.events import TaskExecutionFinished
 
     start_time = asyncio.get_event_loop().time()
@@ -41,7 +40,6 @@ async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):
 
 
 async def wait_for_task_start(spy, task_name: str, timeout: float = 2.0):
-    """Helper coroutine to wait for a specific task to start."""
     from cascade.runtime.events import TaskExecutionStarted
 
     start_time = asyncio.get_event_loop().time()
@@ -58,9 +56,6 @@ async def wait_for_task_start(spy, task_name: str, timeout: float = 2.0):
 
 @pytest.mark.asyncio
 async def test_engine_subscribes_to_constraints(engine_with_connector, mock_connector):
-    """
-    Verify that the Engine subscribes to the correct topic upon starting a run.
-    """
     from cascade.spec.task import task
 
     @task
@@ -79,9 +74,6 @@ async def test_engine_subscribes_to_constraints(engine_with_connector, mock_conn
 async def test_engine_updates_constraints_on_message(
     engine_with_connector, mock_connector
 ):
-    """
-    Verify that the Engine's ConstraintManager is updated when a valid message is received.
-    """
     from cascade.spec.task import task
 
     @task
@@ -132,9 +124,6 @@ async def test_engine_updates_constraints_on_message(
 async def test_engine_handles_malformed_constraint_payload(
     engine_with_connector, mock_connector, capsys
 ):
-    """
-    Verify that the Engine logs an error but does not crash on a malformed payload.
-    """
     from cascade.spec.task import task
 
     @task
@@ -179,10 +168,6 @@ async def test_engine_handles_malformed_constraint_payload(
 
 @pytest.mark.asyncio
 async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
-    """
-    End-to-end test verifying the global pause functionality.
-    It checks that after a pause command is received, no new tasks are started.
-    """
     from cascade.spec.task import task
     from cascade.runtime.events import TaskExecutionStarted
 
@@ -250,9 +235,6 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
 
 @pytest.mark.asyncio
 async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):
-    """
-    End-to-end test for task-specific pause and resume functionality.
-    """
     from cascade.spec.task import task
     from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
 

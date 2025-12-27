@@ -8,13 +8,6 @@ from cascade.spec.protocols import StateBackend
 
 
 class ArgumentResolver:
-    """
-    Resolves arguments by combining:
-    1. Structural bindings (Literal values stored in Node)
-    2. Upstream dependencies (Edges)
-    3. Resource injections
-    """
-
     async def resolve(
         self,
         node: Node,
@@ -132,10 +125,6 @@ class ArgumentResolver:
         instance_map: Dict[str, Node],
         input_overrides: Dict[str, Any] | None,
     ) -> Dict[str, Any]:
-        """
-        Shared helper to resolve all incoming DATA edges for a node,
-        respecting the priority of input_overrides from TCO Jumps.
-        """
         resolved_values = {}
         incoming_edges = [
             e
@@ -250,7 +239,6 @@ class ArgumentResolver:
         state_backend: StateBackend,
         graph: Graph,
     ) -> Any:
-        """Helper to get a node's result, with skip penetration logic."""
         if await state_backend.has_result(node_id):
             return await state_backend.get_result(node_id)
 
@@ -283,10 +271,6 @@ class ArgumentResolver:
 
 
 class ConstraintResolver:
-    """
-    Responsible for resolving dynamic resource constraints for a node.
-    """
-
     async def resolve(
         self,
         node: Node,

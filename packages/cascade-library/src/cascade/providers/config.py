@@ -12,9 +12,6 @@ import asyncio
 
 @task(name="load_yaml")
 async def _read_yaml_task(path: str) -> Dict[str, Any]:
-    """
-    Asynchronously reads and parses a YAML file.
-    """
     if yaml is None:
         raise ImportError(
             "The 'PyYAML' library is required to use the YAML loader. "
@@ -30,9 +27,6 @@ async def _read_yaml_task(path: str) -> Dict[str, Any]:
 
 @task(name="lookup")
 def _lookup_task(source: Dict[str, Any], key: str) -> Any:
-    """
-    Executes a dot-separated lookup in the provided dictionary.
-    """
     parts = key.split(".")
     current = source
 

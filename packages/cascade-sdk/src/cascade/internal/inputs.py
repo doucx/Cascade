@@ -29,5 +29,4 @@ def _get_env_var(name: str) -> Optional[str]:
 
 @task(name="_internal_gather", pure=True)
 def _internal_gather(*args: Any) -> Any:
-    """An internal pure task used by cs.run to gather results from a list."""
     return list(args)

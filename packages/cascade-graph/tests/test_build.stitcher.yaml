@@ -1,0 +1,8 @@
+"test_build_graph_with_env_factory": |-
+  验证 cs.Env() 生成标准任务节点。
+"test_build_graph_with_nested_dependencies": |-
+  Validates that the GraphBuilder correctly discovers LazyResults
+  nested inside lists and dictionaries.
+"test_build_graph_with_param_factory": |-
+  [V1.3 更新] 验证 cs.Param() 现在生成一个标准的任务节点，
+  而不是旧版的 'param' 类型节点。

@@ -8,11 +8,6 @@ from cascade.graph.exceptions import StaticGraphError
 
 
 class LocalExecutor:
-    """
-    An executor that runs tasks in the current process, using dedicated thread
-    pools to isolate blocking I/O tasks from CPU-bound tasks.
-    """
-
     def __init__(self):
         # NOTE: These executors are created per-engine-run.
         # Their lifecycle is tied to the LocalExecutor instance.
@@ -30,10 +25,6 @@ class LocalExecutor:
         args: List[Any],
         kwargs: Dict[str, Any],
     ) -> Any:
-        """
-        Executes a single node's callable. Routes synchronous tasks to the
-        appropriate thread pool based on their execution mode.
-        """
         if node.callable_obj is None:
             raise TypeError(
                 f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."

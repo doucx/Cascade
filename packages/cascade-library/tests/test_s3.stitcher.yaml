@@ -1,0 +1,10 @@
+"aws_credentials": |-
+  Mocked AWS Credentials for moto.
+"s3_mock": |-
+  A sync fixture that runs moto in server mode and configures client via env var.
+"test_s3_import_error": |-
+  Tests that an ImportError is raised if aiobotocore is missing.
+"test_s3_write_read_bytes": |-
+  Tests writing and reading a binary file from S3.
+"test_s3_write_read_text": |-
+  Tests writing and reading a text file from S3.

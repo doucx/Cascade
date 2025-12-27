@@ -9,31 +9,15 @@ logger = logging.getLogger(__name__)
 
 
 class IpfsCacheBackend(CacheBackend):
-    """
-    A cache backend that stores results in IPFS via its HTTP RPC API.
-
-    It uses a secondary 'metadata_backend' (like Redis or In-Memory) to map
-    application cache keys to IPFS Content Identifiers (CIDs).
-
-    Structure:
-       App Key -> Metadata Backend -> CID -> IPFS -> Serialized Data
-    """
-
     def __init__(
         self,
         metadata_backend: CacheBackend,
         ipfs_api_url: str = "http://127.0.0.1:5001",
     ):
-        """
-        Args:
-            metadata_backend: A fast K-V backend to store Key->CID mappings.
-            ipfs_api_url: The base URL of the IPFS RPC API (default: local Kubo node).
-        """
         self._meta_db = metadata_backend
         self._api_base = ipfs_api_url.rstrip("/")
 
     async def get(self, key: str) -> Optional[Any]:
-        """Retrieves a CID from metadata and then fetches content from IPFS."""
         # 1. Resolve Key -> CID
         cid = await self._meta_db.get(key)
         if not cid:
@@ -59,7 +43,6 @@ class IpfsCacheBackend(CacheBackend):
             return None
 
     async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:
-        """Serializes value, adds it to IPFS to get a CID, then stores key->CID mapping."""
         try:
             # 1. Serialize
             data = pickle.dumps(value)

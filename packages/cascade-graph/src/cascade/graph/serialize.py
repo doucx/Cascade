@@ -16,16 +16,10 @@ from cascade.spec.task import Task
 
 @dataclass
 class _StubLazyResult:
-    """
-    A minimal stub to satisfy Router's type hints and runtime requirements
-    (specifically accessing ._uuid) during deserialization.
-    """
-
     _uuid: str
 
 
 def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
-    """Extracts module and qualname from a callable."""
     if func is None:
         return None
 
@@ -38,7 +32,6 @@ def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
 
 
 def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:
-    """Dynamically loads a function from module and qualname."""
     if not data:
         return None
     module_name = data.get("module")
@@ -259,10 +252,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
 
 
 def to_json(graph: Graph, indent: int = 2) -> str:
-    """Serializes a Graph to a JSON string."""
     return json.dumps(graph_to_dict(graph), indent=indent)
 
 
 def from_json(json_str: str) -> Graph:
-    """Deserializes a Graph from a JSON string."""
     return graph_from_dict(json.loads(json_str))

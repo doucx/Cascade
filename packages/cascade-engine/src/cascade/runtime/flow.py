@@ -6,11 +6,6 @@ from cascade.spec.protocols import StateBackend
 
 
 class FlowManager:
-    """
-    Manages the control flow of the execution, implementing logic for
-    skipping tasks (Conditions) and pruning branches (Router).
-    """
-
     def __init__(
         self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]
     ):
@@ -46,7 +41,6 @@ class FlowManager:
         self.downstream_demand[target_node_id] += 1
 
     def _get_node_from_instance(self, instance: Any) -> Optional[Node]:
-        """Gets the canonical Node from a LazyResult instance."""
         if isinstance(instance, (LazyResult, MappedLazyResult)):
             return self.instance_map.get(instance._uuid)
         return None
@@ -54,10 +48,6 @@ class FlowManager:
     async def register_result(
         self, node_id: str, result: Any, state_backend: StateBackend
     ):
-        """
-        Notifies FlowManager of a task completion.
-        Triggers pruning if the node was a Router selector.
-        """
         if node_id in self.routers_by_selector:
             for edge_with_router in self.routers_by_selector[node_id]:
                 await self._process_router_decision(
@@ -83,10 +73,6 @@ class FlowManager:
     async def _decrement_demand_and_prune(
         self, node_id: str, state_backend: StateBackend
     ):
-        """
-        Decrements demand for a node. If demand hits 0, marks it pruned
-        and recursively processes its upstreams.
-        """
         # If already skipped/pruned, no need to do anything further
         if await state_backend.get_skip_reason(node_id):
             return
@@ -108,10 +94,6 @@ class FlowManager:
     async def should_skip(
         self, node: Node, state_backend: StateBackend
     ) -> Optional[str]:
-        """
-        Determines if a node should be skipped based on the current state.
-        Returns the reason string if it should be skipped, or None otherwise.
-        """
         # 1. Check if already skipped (e.g., by router pruning)
         if reason := await state_backend.get_skip_reason(node.structural_id):
             return reason

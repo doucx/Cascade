@@ -1,0 +1,8 @@
+"local_bus": |-
+  Provides a fresh LocalBus environment for each test.
+"test_bus_connectivity_between_instances": |-
+  Test that two separate instances share the same 'bus'.
+"test_retained_messages": |-
+  Test that retained messages are delivered to new subscribers immediately.
+"test_wildcards_and_clearing_retain": |-
+  Test wildcards (+) and clearing retained messages.

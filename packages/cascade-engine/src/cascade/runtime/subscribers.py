@@ -21,12 +21,6 @@ from cascade.spec.protocols import Connector
 
 
 class HumanReadableLogSubscriber:
-    """
-    Listens to runtime events and translates them into semantic messages
-    on the messaging bus. It acts as a bridge between the event domain
-    and the user-facing message domain.
-    """
-
     def __init__(self, event_bus: MessageBus):
         # Subscribe to relevant events from the core event_bus
         event_bus.subscribe(RunStarted, self.on_run_started)
@@ -105,11 +99,6 @@ class HumanReadableLogSubscriber:
 
 
 class TelemetrySubscriber:
-    """
-    Listens to runtime events and publishes them as structured telemetry
-    data via a Connector.
-    """
-
     def __init__(self, event_bus: MessageBus, connector: Connector):
         self._connector = connector
         self._source_id = f"{platform.node()}-{os.getpid()}"
@@ -117,7 +106,6 @@ class TelemetrySubscriber:
         event_bus.subscribe(Event, self.on_event)
 
     async def shutdown(self):
-        """Waits for all pending telemetry tasks to complete."""
         if self._pending_tasks:
             await asyncio.gather(*self._pending_tasks, return_exceptions=True)
 
@@ -132,10 +120,6 @@ class TelemetrySubscriber:
         }
 
     def on_event(self, event: Event):
-        """
-        Handles incoming events synchronously and schedules asynchronous publishing.
-        This bridges the synchronous MessageBus with the asynchronous Connector.
-        """
         if not event.run_id:
             return
 

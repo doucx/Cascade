@@ -9,12 +9,6 @@ except ImportError:
 
 
 class RedisCacheBackend:
-    """
-    A CacheBackend implementation using Redis.
-    Uses asyncio.to_thread to wrap synchronous redis client calls to ensure
-    compatibility with the async Protocol without blocking the loop.
-    """
-
     def __init__(self, client: "redis.Redis", prefix: str = "cascade:cache:"):
         if redis is None:
             raise ImportError(

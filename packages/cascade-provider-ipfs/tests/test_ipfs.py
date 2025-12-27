@@ -14,7 +14,6 @@ FAKE_ADD_RESPONSE = b'{"Name":"test.txt","Hash":"QmHash","Size":"16"}\n'
 
 
 async def mock_ipfs_cat_handler(request: web.Request):
-    """A mock aiohttp handler for the `ipfs cat` RPC call."""
     if request.method != "POST":
         return web.Response(status=405)
 
@@ -25,7 +24,6 @@ async def mock_ipfs_cat_handler(request: web.Request):
 
 
 async def mock_ipfs_add_handler(request: web.Request):
-    """A mock aiohttp handler for the `ipfs add` RPC call."""
     if request.method != "POST":
         return web.Response(status=405)
 
@@ -51,8 +49,6 @@ async def mock_ipfs_add_handler(request: web.Request):
 
 @pytest.fixture
 def mock_ipfs_server(aiohttp_client, monkeypatch):
-    """Fixture to setup the mock IPFS server and patch the provider."""
-
     async def _setup():
         app = web.Application()
         app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
@@ -70,9 +66,6 @@ def mock_ipfs_server(aiohttp_client, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_ipfs_cat_provider(mock_ipfs_server):
-    """
-    Tests the cs.ipfs.cat provider.
-    """
     await mock_ipfs_server()
 
     # Define the Cascade workflow
@@ -88,9 +81,6 @@ async def test_ipfs_cat_provider(mock_ipfs_server):
 
 @pytest.mark.asyncio
 async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
-    """
-    Tests the cs.ipfs.add provider with local file upload.
-    """
     await mock_ipfs_server()
 
     # Create a temporary file to upload

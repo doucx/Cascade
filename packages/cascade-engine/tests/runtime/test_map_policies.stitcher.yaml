@@ -1,0 +1,4 @@
+"test_map_with_constraints_policy": |-
+  Test that .with_constraints() applied to .map() limits concurrency of sub-tasks.
+"test_map_with_retry_policy": |-
+  Test that .with_retry() applied to .map() is propagated to sub-tasks.

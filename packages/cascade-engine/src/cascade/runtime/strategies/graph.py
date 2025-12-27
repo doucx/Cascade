@@ -20,18 +20,11 @@ from cascade.runtime.constraints.manager import ConstraintManager
 
 @dataclass
 class GraphExecutionResult:
-    """Internal result carrier to avoid context loss."""
-
     value: Any
     source_node_id: str
 
 
 class GraphExecutionStrategy:
-    """
-    Executes tasks by dynamically building a dependency graph.
-    Supports explicit control flow via `cs.Jump` and `cs.bind`.
-    """
-
     def __init__(
         self,
         solver: Solver,
@@ -57,9 +50,6 @@ class GraphExecutionStrategy:
         self._node_registry = NodeRegistry()
 
     def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
-        """
-        Converts a Plan (List[List[Node]]) into an IndexedPlan (List[List[int]]).
-        """
         id_to_idx = {node.structural_id: i for i, node in enumerate(graph.nodes)}
         indexed_plan = []
         for stage in plan:
@@ -68,9 +58,6 @@ class GraphExecutionStrategy:
         return indexed_plan
 
     def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:
-        """
-        Converts an IndexedPlan back into a Plan using the nodes from the current graph.
-        """
         plan = []
         for stage_indices in indexed_plan:
             stage_nodes = [graph.nodes[idx] for idx in stage_indices]

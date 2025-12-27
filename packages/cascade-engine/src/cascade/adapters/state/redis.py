@@ -9,10 +9,6 @@ except ImportError:
 
 
 class RedisStateBackend:
-    """
-    A StateBackend implementation that persists results to Redis.
-    """
-
     def __init__(self, run_id: str, client: "redis.Redis", ttl: int = 86400):
         if redis is None:
             raise ImportError(
@@ -62,11 +58,4 @@ class RedisStateBackend:
         return None
 
     async def clear(self) -> None:
-        """
-        Clears the state for the current run.
-        For Redis, since TCO reuses the same run_id and overwrites keys,
-        explicit clearing might be expensive (SCAN+DEL).
-        For now, we treat this as a no-op to satisfy the protocol,
-        relying on key overwrite semantics.
-        """
         pass

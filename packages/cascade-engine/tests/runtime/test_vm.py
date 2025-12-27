@@ -7,11 +7,6 @@ from cascade.spec.blueprint import Blueprint, Call, Register, TailCall
 
 
 def recursive_countdown(count: int) -> Any:
-    """
-    A simple recursive function.
-    If count > 0, returns TailCall(count - 1).
-    If count == 0, returns "Done".
-    """
     if count > 0:
         return TailCall(kwargs={"count": count - 1})
     return "Done"
@@ -22,10 +17,6 @@ def recursive_countdown(count: int) -> Any:
 
 @pytest.mark.asyncio
 async def test_vm_handles_simple_recursion():
-    """
-    Verifies that the VM can execute a recursive loop using TailCall
-    without crashing or returning early.
-    """
     # 1. Manually construct a Blueprint for 'recursive_countdown'
     # It has 1 input: 'count', mapped to Register(0)
     # Instruction: res = recursive_countdown(count) -> Register(1)
@@ -62,8 +53,6 @@ async def test_vm_handles_simple_recursion():
 
 @pytest.mark.asyncio
 async def test_vm_propagates_exceptions():
-    """Ensure exceptions break the loop correctly."""
-
     def failing_task(x):
         raise ValueError("Boom")
 

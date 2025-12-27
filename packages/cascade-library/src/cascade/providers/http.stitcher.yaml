@@ -1,0 +1,8 @@
+"HttpResponse": |-
+  A simple, safe data holder for the HTTP response.
+"HttpResponse.json": |-
+  Parses the response body as JSON and returns a Python object.
+"HttpResponse.text": |-
+  Decodes the response body into a string.
+"_perform_request": |-
+  Core logic to perform an HTTP request using aiohttp.

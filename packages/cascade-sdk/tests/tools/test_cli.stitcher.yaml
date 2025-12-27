@@ -1,0 +1,3 @@
+"test_cli_generator_from_context": |-
+  [V1.3 更新] 验证 CLI 生成器是从全局上下文读取 ParamSpec，
+  而不是解析图结构。

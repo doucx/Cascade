@@ -24,7 +24,6 @@ class GraphBuilder:
         return self.graph, self._visited_instances
 
     def _visit(self, value: Any) -> Node:
-        """Central dispatcher for the post-order traversal."""
         if isinstance(value, LazyResult):
             return self._visit_lazy_result(value)
         elif isinstance(value, MappedLazyResult):
@@ -33,7 +32,6 @@ class GraphBuilder:
             raise TypeError(f"Cannot build graph from type {type(value)}")
 
     def _find_dependencies(self, obj: Any, dep_nodes: Dict[str, Node]):
-        """Helper for post-order traversal: finds and visits all nested LazyResults."""
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             if obj._uuid not in dep_nodes:
                 dep_node = self._visit(obj)
@@ -274,7 +272,6 @@ class GraphBuilder:
         return node
 
     def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
-        """Idempotently adds DATA and ROUTER edges based on pre-visited instances."""
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             source_node = self._visited_instances[obj._uuid]
             self.graph.add_edge(

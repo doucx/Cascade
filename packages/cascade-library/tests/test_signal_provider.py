@@ -11,13 +11,11 @@ from cascade.connectors.local import LocalBusConnector
 
 @pytest.fixture
 def local_connector():
-    """Provides a fresh LocalBusConnector for each test."""
     return LocalBusConnector()
 
 
 @pytest.fixture
 def engine(local_connector):
-    """Provides an engine instance configured with a LocalBusConnector."""
     return Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
@@ -28,12 +26,6 @@ def engine(local_connector):
 
 @pytest.mark.asyncio
 async def test_recv_blocks_and_wakes_up(engine, local_connector):
-    """
-    Test Case 8 (From Firefly Plan): Asynchronous Wake-up.
-
-    Verifies that a task executing cs.recv pauses until a matching signal
-    is published on the connector, at which point it resumes.
-    """
     topic = "firefly/sync/pulse"
     payload = {"source": "firefly-01"}
 
@@ -61,12 +53,6 @@ async def test_recv_blocks_and_wakes_up(engine, local_connector):
 
 @pytest.mark.asyncio
 async def test_recv_times_out(engine):
-    """
-    Test Case 9 (From Firefly Plan): Timeout and Fallback.
-
-    Verifies that cs.recv raises TimeoutError if a signal is not received
-    within the specified timeout period.
-    """
     topic = "firefly/no-reply"
     timeout_duration = 0.05
 

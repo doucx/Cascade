@@ -1,0 +1,4 @@
+"_lookup_task": |-
+  Executes a dot-separated lookup in the provided dictionary.
+"_read_yaml_task": |-
+  Asynchronously reads and parses a YAML file.

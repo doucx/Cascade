@@ -16,8 +16,6 @@ DEFAULT_TELEMETRY_UDS_PATH = "/tmp/cascade-telemetry.sock"
 
 
 class UDSServerProtocol(asyncio.DatagramProtocol):
-    """Protocol that sets an event when a datagram is received."""
-
     def __init__(self, on_recv: asyncio.Event):
         self.on_recv = on_recv
 

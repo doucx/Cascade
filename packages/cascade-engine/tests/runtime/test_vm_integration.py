@@ -17,13 +17,6 @@ def recursive_countdown(count: int) -> Any:
 
 @pytest.mark.asyncio
 async def test_vm_tco_integration():
-    """
-    End-to-end test of TCO:
-    1. Define a recursive task.
-    2. Compile it using BlueprintBuilder.
-    3. Execute it using VirtualMachine.
-    """
-
     # 1. Define the workflow template
     # We pass an initial value (5), but this mainly sets the structure.
     # The VM will override this with the initial_kwargs we pass to execute().

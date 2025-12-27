@@ -14,13 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class MqttConnector:
-    """
-    Implements the Connector protocol for MQTT.
-
-    This connector enables Cascade to publish telemetry data to an MQTT broker
-    and subscribe to control commands.
-    """
-
     def __init__(self, hostname: str, port: int = 1883, **kwargs):
         if aiomqtt is None:
             raise ImportError(
@@ -36,7 +29,6 @@ class MqttConnector:
         self._source_id = f"{platform.node()}-{os.getpid()}"
 
     async def connect(self) -> None:
-        """Establishes a connection to the MQTT Broker."""
         if self._client:
             return
 
@@ -58,7 +50,6 @@ class MqttConnector:
         self._loop_task = asyncio.create_task(self._message_loop())
 
     async def disconnect(self) -> None:
-        """Disconnects from the MQTT Broker and cleans up resources."""
         if self._loop_task:
             self._loop_task.cancel()
             try:
@@ -74,9 +65,6 @@ class MqttConnector:
     async def publish(
         self, topic: str, payload: Any, qos: int = 0, retain: bool = False
     ) -> None:
-        """
-        Publishes a message in a non-blocking, fire-and-forget manner.
-        """
         if not self._client:
             logger.warning("Attempted to publish without an active MQTT connection.")
             return
@@ -101,7 +89,6 @@ class MqttConnector:
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
     ) -> None:
-        """Subscribes to a topic to receive messages."""
         if not self._client:
             logger.warning("Attempted to subscribe without an active MQTT connection.")
             return
@@ -121,9 +108,6 @@ class MqttConnector:
 
     @staticmethod
     def _topic_matches(subscription: str, topic: str) -> bool:
-        """
-        Checks if a concrete topic matches a subscription pattern (supporting + and #).
-        """
         if subscription == topic:
             return True
 
@@ -152,7 +136,6 @@ class MqttConnector:
         return len(sub_parts) == len(topic_parts)
 
     async def _message_loop(self):
-        """Background task to process incoming MQTT messages."""
         if not self._client:
             return
 

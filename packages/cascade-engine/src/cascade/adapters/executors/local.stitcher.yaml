@@ -1,0 +1,6 @@
+"LocalExecutor": |-
+  An executor that runs tasks in the current process, using dedicated thread
+  pools to isolate blocking I/O tasks from CPU-bound tasks.
+"LocalExecutor.execute": |-
+  Executes a single node's callable. Routes synchronous tasks to the
+  appropriate thread pool based on their execution mode.

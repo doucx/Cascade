@@ -1,0 +1,9 @@
+"GlobalConstraint": |-
+  Represents a global, environment-aware constraint that can affect workflow execution.
+"ResourceConstraint": |-
+  Defines the resource requirements for a Task.
+
+  The keys represent the resource name (e.g., "memory_gb", "gpu_count")
+  and the values represent the required amount (literal value or a LazyResult).
+"with_constraints": |-
+  Helper function for task definitions.

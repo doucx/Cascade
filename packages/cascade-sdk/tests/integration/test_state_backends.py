@@ -18,10 +18,6 @@ def identity(x):
 
 @pytest.fixture
 def stateful_redis_mock(monkeypatch):
-    """
-    A fixture that provides a stateful mock for the redis client,
-    simulating hset/hget operations with an in-memory dictionary.
-    """
     mock_store = {}
 
     def mock_hset(name, key, value):
@@ -74,10 +70,6 @@ def stateful_redis_mock(monkeypatch):
 
 
 def test_run_with_redis_backend_uri(stateful_redis_mock):
-    """
-    Tests that cs.run with a redis:// URI correctly uses the RedisStateBackend
-    and that the put/get cycle for the final result is successful.
-    """
     # 1. Define a simple workflow
     workflow = add(1, 2)
 
@@ -113,9 +105,6 @@ def test_run_with_redis_backend_uri(stateful_redis_mock):
 
 
 def test_run_with_redis_backend_raises_if_not_installed(monkeypatch):
-    """
-    Ensures cs.run raises ImportError if redis is requested but not installed.
-    """
     # Simulate redis not being installed by making the import fail
     monkeypatch.setitem(__import__("sys").modules, "redis", None)
 

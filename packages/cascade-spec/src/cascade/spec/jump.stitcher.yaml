@@ -1,0 +1,4 @@
+"Jump": |-
+  A signal returned by a task to indicate a transfer of control flow.
+"JumpSelector": |-
+  A routing table for explicit jumps. Maps keys to LazyResults.

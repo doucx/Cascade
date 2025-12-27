@@ -1,0 +1,4 @@
+"test_file_existence_cache_hit": |-
+  Test that a task is skipped if the target file exists.
+"test_file_existence_cache_miss": |-
+  Test that a task runs if the target file does not exist.

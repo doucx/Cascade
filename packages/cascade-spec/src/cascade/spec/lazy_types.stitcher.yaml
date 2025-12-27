@@ -1,0 +1,6 @@
+"LazyResult": |-
+  A placeholder for the result of a task execution.
+  It holds the task that produces it and the arguments passed to that task.
+"MappedLazyResult": |-
+  Represents the result of mapping a factory over a set of inputs.
+  It resolves to a list of results.

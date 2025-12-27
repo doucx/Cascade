@@ -1,0 +1,10 @@
+"test_cache_get_non_existent_key": |-
+  Test that getting a non-existent key returns None.
+"test_cache_set_and_get": |-
+  Test basic set and get functionality.
+"test_cache_set_overwrite": |-
+  Test that setting an existing key overwrites the value.
+"test_cache_ttl_expired": |-
+  Test that a key returns None after its TTL expires.
+"test_cache_ttl_not_expired": |-
+  Test that a key can be retrieved before its TTL expires.

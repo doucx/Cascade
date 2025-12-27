@@ -14,16 +14,6 @@ from cascade.graph.model import Node, Graph
 def override_resource(
     engine: "Engine", name: str, new_resource_func: Callable[[], Any]
 ):
-    """
-    A context manager to temporarily override a resource for testing purposes.
-
-    Usage:
-        engine = Engine()
-        engine.register(production_db)
-
-        with override_resource(engine, "production_db", mock_db):
-            engine.run(my_task) # my_task will receive mock_db
-    """
     if not hasattr(engine, "override_resource_provider"):
         raise TypeError("The provided engine does not support resource overriding.")
 
@@ -36,8 +26,6 @@ def override_resource(
 
 
 class SpySubscriber:
-    """A test utility to collect events from a MessageBus."""
-
     def __init__(self, bus: MessageBus):
         self.events = []
         bus.subscribe(Event, self.collect)
@@ -46,16 +34,10 @@ class SpySubscriber:
         self.events.append(event)
 
     def events_of_type(self, event_type):
-        """Returns a list of all events of a specific type."""
         return [e for e in self.events if isinstance(e, event_type)]
 
 
 class SpySolver(Solver):
-    """
-    A test double for the Solver protocol that spies on calls to `resolve`
-    while delegating to a real underlying solver.
-    """
-
     def __init__(self, underlying_solver: Solver):
         self.underlying_solver = underlying_solver
         self.resolve = MagicMock(wraps=self.underlying_solver.resolve)
@@ -68,11 +50,6 @@ class SpySolver(Solver):
 
 
 class MockSolver(Solver):
-    """
-    A test double for the Solver protocol that returns a pre-programmed plan,
-    bypassing any real resolution logic.
-    """
-
     def __init__(self, plan: ExecutionPlan):
         self._plan = plan
 
@@ -82,8 +59,6 @@ class MockSolver(Solver):
 
 
 class SpyExecutor(Executor):
-    """A test double for the Executor protocol that logs all calls to `execute`."""
-
     def __init__(self):
         self.call_log: List[Node] = []
 
@@ -98,11 +73,6 @@ class SpyExecutor(Executor):
 
 
 class MockExecutor(Executor):
-    """
-    A generic mock for the Executor protocol that can simulate various
-    behaviors like delays or returning specific values.
-    """
-
     def __init__(self, delay: float = 0, return_value: Any = "result"):
         self.delay = delay
         self.return_value = return_value
@@ -121,11 +91,6 @@ class MockExecutor(Executor):
 
 
 class MockConnector(Connector):
-    """
-    A mock connector for testing that simulates MQTT behavior,
-    including retained messages and topic matching.
-    """
-
     def __init__(self):
         self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
         # Simulate broker storage for retained messages: topic -> payload
@@ -145,7 +110,6 @@ class MockConnector(Connector):
     async def publish(
         self, topic: str, payload: Dict[str, Any], retain: bool = False, qos: int = 0
     ) -> None:
-        """Simulates publishing a message, triggering subscribers and handling retention."""
         self.publish_log.append(
             {"topic": topic, "payload": payload, "retain": retain, "qos": qos}
         )
@@ -171,11 +135,9 @@ class MockConnector(Connector):
                 asyncio.create_task(callback(retained_topic, payload))
 
     def seed_retained_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to pre-seed a retained message on the 'broker' for test setup."""
         self.retained_messages[topic] = payload
 
     async def _trigger_message(self, topic: str, payload: Dict[str, Any]):
-        """Helper to simulate receiving a message, used by tests and publish()."""
         for sub_topic, callback in self.subscriptions.items():
             if self._topic_matches(subscription=sub_topic, topic=topic):
                 await callback(topic, payload)

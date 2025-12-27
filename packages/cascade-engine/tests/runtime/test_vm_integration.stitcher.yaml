@@ -1,0 +1,5 @@
+"test_vm_tco_integration": |-
+  End-to-end test of TCO:
+  1. Define a recursive task.
+  2. Compile it using BlueprintBuilder.
+  3. Execute it using VirtualMachine.

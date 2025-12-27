@@ -1,0 +1,8 @@
+"test_app_dry_run_diamond_workflow": |-
+  Tests that CascadeApp.dry_run() correctly orders a diamond-shaped graph.
+"test_app_dry_run_linear_workflow": |-
+  Tests that CascadeApp.dry_run() prints the correct plan for a simple
+  linear workflow.
+"test_app_dry_run_with_list_input": |-
+  Verifies that dry_run handles a list of LazyResults and includes the
+  implicit gather node in its plan.

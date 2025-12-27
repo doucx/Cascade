@@ -10,7 +10,6 @@ from cascade.cli.observer import app as observer_app
 
 @pytest.fixture
 def mock_messaging_bus(monkeypatch) -> MagicMock:
-    """Mocks the global message bus used by the observer app."""
     mock_bus = MagicMock()
     monkeypatch.setattr("cascade.cli.observer.app.bus", mock_bus)
     return mock_bus
@@ -18,7 +17,6 @@ def mock_messaging_bus(monkeypatch) -> MagicMock:
 
 @pytest.fixture
 def mock_connector(monkeypatch) -> AsyncMock:
-    """Mocks the MqttConnector class to prevent network calls."""
     mock_instance = AsyncMock()
     mock_class = MagicMock(return_value=mock_instance)
     monkeypatch.setattr("cascade.cli.observer.app.MqttConnector", mock_class)
@@ -30,9 +28,6 @@ def mock_connector(monkeypatch) -> AsyncMock:
 
 @pytest.mark.asyncio
 async def test_on_message_handles_task_running_event(mock_messaging_bus):
-    """
-    Verify that a 'RUNNING' TaskStateEvent is correctly parsed and rendered.
-    """
     # Arrange: Reset global state and define payload
     observer_app.seen_run_ids.clear()
     payload = {
@@ -59,9 +54,6 @@ async def test_on_message_handles_task_running_event(mock_messaging_bus):
 
 @pytest.mark.asyncio
 async def test_on_message_handles_task_completed_event(mock_messaging_bus):
-    """
-    Verify that a 'COMPLETED' TaskStateEvent is correctly parsed.
-    """
     # Arrange
     observer_app.seen_run_ids.clear()
     payload = {
@@ -88,9 +80,6 @@ async def test_on_message_handles_task_completed_event(mock_messaging_bus):
 
 @pytest.mark.asyncio
 async def test_on_message_handles_task_failed_event(mock_messaging_bus):
-    """
-    Verify that a 'FAILED' TaskStateEvent is correctly parsed.
-    """
     # Arrange
     observer_app.seen_run_ids.clear()
     payload = {
@@ -118,9 +107,6 @@ async def test_on_message_handles_task_failed_event(mock_messaging_bus):
 
 @pytest.mark.asyncio
 async def test_on_message_prints_run_header_only_once(mock_messaging_bus):
-    """
-    Verify that the run header is printed only for the first message of a new run.
-    """
     payload1 = {
         "run_id": "run-abc",
         "body": {"type": "LifecycleEvent", "event": "ENGINE_STARTED"},

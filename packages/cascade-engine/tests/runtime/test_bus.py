@@ -7,9 +7,6 @@ from cascade.common.renderers import CliRenderer
 
 
 def test_message_bus_dispatch(bus_and_spy):
-    """
-    Tests that the bus correctly dispatches events to specifically subscribed handlers.
-    """
     bus, spy = bus_and_spy
 
     specific_received = []
@@ -40,9 +37,6 @@ def test_message_bus_dispatch(bus_and_spy):
 
 
 def test_message_bus_wildcard(bus_and_spy):
-    """
-    Tests that a wildcard subscriber (listening to base Event) receives all events.
-    """
     bus, spy = bus_and_spy
 
     bus.publish(RunStarted(target_tasks=[], params={}))
@@ -58,10 +52,6 @@ def test_message_bus_wildcard(bus_and_spy):
 
 
 def test_human_readable_subscriber_integration():
-    """
-    Integration test for the full logging pipeline:
-    EventBus -> Subscriber -> MessageBus(UI) -> Renderer -> Output
-    """
     event_bus = EventBus()
     output = io.StringIO()
     # Use the global ui_bus store and inject a test renderer
@@ -98,9 +88,6 @@ def test_human_readable_subscriber_integration():
 
 
 def test_human_readable_subscriber_log_level_filtering():
-    """
-    Tests that the min_level setting in the CliRenderer correctly filters messages.
-    """
     event_bus = EventBus()
     output = io.StringIO()
     # Set renderer level to ERROR

@@ -9,7 +9,6 @@ from cascade.adapters.executors.local import LocalExecutor
 
 @pytest.fixture
 def engine():
-    """Provides a default engine instance."""
     return Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
@@ -19,12 +18,6 @@ def engine():
 
 @pytest.mark.asyncio
 async def test_wait_is_non_blocking(engine):
-    """
-    Test Case 6 (From Firefly Plan): Non-blocking Tick.
-
-    Verifies that cs.wait(t) pauses for approximately t seconds, and does so
-    without blocking the execution of other concurrent tasks.
-    """
     start_time = time.time()
 
     @cs.task
@@ -55,12 +48,6 @@ async def test_wait_is_non_blocking(engine):
 
 @pytest.mark.asyncio
 async def test_wait_accepts_lazy_result(engine):
-    """
-    Test Case 7 (From Firefly Plan): Dynamic Parameterized Time.
-
-    Verifies that the delay argument of cs.wait can be a LazyResult
-    from an upstream task.
-    """
     start_time = time.time()
 
     @cs.task

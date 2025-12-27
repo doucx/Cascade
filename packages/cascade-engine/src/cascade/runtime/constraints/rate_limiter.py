@@ -12,23 +12,10 @@ class Bucket:
 
 
 class RateLimiter:
-    """
-    Implements a Token Bucket algorithm for rate limiting.
-    Manages multiple independent buckets identified by a key (scope).
-    """
-
     def __init__(self):
         self._buckets: Dict[str, Bucket] = {}
 
     def update_bucket(self, key: str, rate: float, capacity: float = None):
-        """
-        Updates or creates a bucket configuration.
-
-        Args:
-            key: Unique identifier for the bucket.
-            rate: Tokens per second.
-            capacity: Max tokens. Defaults to rate (i.e., 1 second worth of tokens).
-        """
         if capacity is None:
             capacity = rate
 
@@ -49,13 +36,6 @@ class RateLimiter:
             b.tokens = min(b.tokens, b.capacity)
 
     def try_acquire(self, key: str, cost: float = 1.0) -> float:
-        """
-        Attempts to acquire tokens from the bucket.
-
-        Returns:
-            0.0 if successful.
-            >0.0 if failed, representing the seconds to wait until enough tokens are available.
-        """
         bucket = self._buckets.get(key)
         if not bucket:
             # No limit defined for this key implies infinite tokens

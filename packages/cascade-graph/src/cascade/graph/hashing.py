@@ -7,16 +7,7 @@ from cascade.spec.resource import Inject
 
 
 class HashingService:
-    """
-    Service responsible for computing a stable Merkle hash for a node instance.
-    This is the `Instance Hash`, which uniquely identifies a specific, fully-parameterized
-    node instance. It is used for results caching and node de-duplication within a graph.
-    """
-
     def compute_structural_hash(self, result: Any, dep_nodes: Dict[str, Node]) -> str:
-        """
-        Computes the Structural Hash (Instance Hash) for a given result object.
-        """
         if isinstance(result, LazyResult):
             return self._compute_lazy_result_hash(result, dep_nodes)
         elif isinstance(result, MappedLazyResult):
@@ -25,7 +16,6 @@ class HashingService:
             raise TypeError(f"Cannot compute hash for type {type(result)}")
 
     def _get_merkle_hash(self, components: List[str]) -> str:
-        """Computes a stable hash from a list of string components."""
         fingerprint = "|".join(components)
         return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
@@ -102,9 +92,6 @@ class HashingService:
         )
 
     def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Node]) -> List[str]:
-        """
-        Recursively builds hash components, always including literal values.
-        """
         components = []
 
         if isinstance(obj, (LazyResult, MappedLazyResult)):
@@ -148,13 +135,7 @@ class HashingService:
 
 
 class BlueprintHasher:
-    """
-    Computes a hash for a Graph's topology, ignoring literal input values.
-    This hash is used to cache compiled execution plans.
-    """
-
     def compute_hash(self, graph: Graph) -> str:
-        """Computes the blueprint hash for the entire graph."""
         all_components = []
         # Sort nodes by structural_id to ensure deterministic traversal
         sorted_nodes = sorted(graph.nodes, key=lambda n: n.structural_id)
@@ -165,12 +146,10 @@ class BlueprintHasher:
         return self._get_merkle_hash(all_components)
 
     def _get_merkle_hash(self, components: List[str]) -> str:
-        """Computes a stable hash from a list of string components."""
         fingerprint = "|".join(components)
         return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
     def _get_node_components(self, node: Node, graph: Graph) -> List[str]:
-        """Gets the hash components for a single node, normalizing literals."""
         components = [f"Node({node.name}, type={node.node_type})"]
 
         # Policies are part of the structure

@@ -6,18 +6,7 @@ from cascade.spec.protocols import Solver, ExecutionPlan
 
 
 class NativeSolver(Solver):
-    """
-    A simple solver that uses topological sort (Kahn's algorithm) to create
-    a sequential execution plan.
-    """
-
     def resolve(self, graph: Graph) -> ExecutionPlan:
-        """
-        Resolves a dependency graph into a list of execution stages.
-
-        Raises:
-            ValueError: If a cycle is detected in the graph.
-        """
         executable_nodes = graph.nodes
 
         adj: Dict[str, List[Node]] = {

@@ -1,0 +1,7 @@
+"CascadeRuntimeError": |-
+  Base class for runtime errors in Cascade.
+"DependencyMissingError": |-
+  Raised when a task cannot execute because an upstream dependency result is missing.
+  This usually happens if the upstream task was skipped or failed silently.
+"ResourceNotFoundError": |-
+  Raised when a requested resource is not available in the context.

@@ -21,11 +21,6 @@ def sum_all(numbers: list[int]) -> int:
 
 @pytest.mark.asyncio
 async def test_map_reduce_pipeline():
-    """
-    Test the flow: generate -> map(double) -> sum_all.
-    This verifies if a MappedLazyResult can be passed directly to a downstream task
-    and is correctly resolved as a list of values.
-    """
     # 1. Generate dynamic input: [0, 1, 2, 3, 4]
     nums = generate_range(5)
 

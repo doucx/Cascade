@@ -1,0 +1,9 @@
+"test_human_readable_subscriber_integration": |-
+  Integration test for the full logging pipeline:
+  EventBus -> Subscriber -> MessageBus(UI) -> Renderer -> Output
+"test_human_readable_subscriber_log_level_filtering": |-
+  Tests that the min_level setting in the CliRenderer correctly filters messages.
+"test_message_bus_dispatch": |-
+  Tests that the bus correctly dispatches events to specifically subscribed handlers.
+"test_message_bus_wildcard": |-
+  Tests that a wildcard subscriber (listening to base Event) receives all events.

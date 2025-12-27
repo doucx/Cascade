@@ -30,7 +30,6 @@ class IpfsAddProvider(Provider):
 
 @cs.task(name="_ipfs_parse_cat_response")
 def _parse_cat_response(response: HttpResponse) -> bytes:
-    """Parses the raw body from an HttpResponse."""
     if response.status >= 400:
         raise RuntimeError(f"IPFS API Error ({response.status}): {response.text()}")
     return response.body
@@ -38,7 +37,6 @@ def _parse_cat_response(response: HttpResponse) -> bytes:
 
 @cs.task(name="_ipfs_parse_add_response")
 def _parse_add_response(response: HttpResponse) -> str:
-    """Parses the JSON response from `ipfs add` and returns the CID."""
     if response.status >= 400:
         raise RuntimeError(f"IPFS API Error ({response.status}): {response.text()}")
     # The response is a stream of JSON objects, newline-separated.
@@ -54,11 +52,6 @@ def _parse_add_response(response: HttpResponse) -> str:
 
 
 def cat(cid: str) -> "cs.LazyResult[bytes]":
-    """
-    Creates a Cascade workflow to retrieve the contents of a file from IPFS.
-
-    This is a composition of `cs.http.post` and a parsing task.
-    """
     api_url = f"{IPFS_API_BASE_URL}/api/v0/cat"
 
     # Step 1: Call the IPFS RPC API
@@ -69,9 +62,6 @@ def cat(cid: str) -> "cs.LazyResult[bytes]":
 
 
 def add(path: str) -> "cs.LazyResult[str]":
-    """
-    Creates a Cascade workflow to add a local file to IPFS and get its CID.
-    """
     api_url = f"{IPFS_API_BASE_URL}/api/v0/add"
 
     # Step 1: Call the IPFS RPC API with a file upload

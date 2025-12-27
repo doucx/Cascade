@@ -1,0 +1,2 @@
+"_recv_task": |-
+  Pauses execution until a signal is received on the given topic.

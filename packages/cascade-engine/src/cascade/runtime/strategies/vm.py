@@ -10,10 +10,6 @@ from cascade.spec.protocols import StateBackend
 
 
 class VMExecutionStrategy:
-    """
-    Executes tasks by compiling them into a Blueprint and running them on a Virtual Machine.
-    """
-
     def __init__(
         self,
         resource_manager: ResourceManager,

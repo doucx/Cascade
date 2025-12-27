@@ -13,7 +13,6 @@ mock_openai_response = {
 
 @pytest.fixture
 def mock_http_post(monkeypatch):
-    """Mocks cs.http.post to avoid real network calls."""
     MagicMock()
 
     # The mock needs to return a coroutine that resolves to an HttpResponse
@@ -35,9 +34,6 @@ def mock_http_post(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):
-    """
-    Tests the full LLM pattern by calling it as a subflow.
-    """
     # Mock the environment variable
     monkeypatch.setenv("OPENAI_API_KEY", "fake-key")
 

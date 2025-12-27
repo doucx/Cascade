@@ -1,0 +1,14 @@
+"FlowManager": |-
+  Manages the control flow of the execution, implementing logic for
+  skipping tasks (Conditions) and pruning branches (Router).
+"FlowManager._decrement_demand_and_prune": |-
+  Decrements demand for a node. If demand hits 0, marks it pruned
+  and recursively processes its upstreams.
+"FlowManager._get_node_from_instance": |-
+  Gets the canonical Node from a LazyResult instance.
+"FlowManager.register_result": |-
+  Notifies FlowManager of a task completion.
+  Triggers pruning if the node was a Router selector.
+"FlowManager.should_skip": |-
+  Determines if a node should be skipped based on the current state.
+  Returns the reason string if it should be skipped, or None otherwise.

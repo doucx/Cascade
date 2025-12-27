@@ -3,7 +3,6 @@ from cascade.adapters.caching import FileExistenceCache
 
 
 def test_file_existence_cache_hit(tmp_path):
-    """Test that a task is skipped if the target file exists."""
     target_file = tmp_path / "output.txt"
     target_file.touch()  # Create the file to simulate cache hit
 
@@ -27,7 +26,6 @@ def test_file_existence_cache_hit(tmp_path):
 
 
 def test_file_existence_cache_miss(tmp_path):
-    """Test that a task runs if the target file does not exist."""
     target_file = tmp_path / "output_miss.txt"
 
     call_count = 0

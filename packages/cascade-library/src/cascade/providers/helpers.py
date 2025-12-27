@@ -9,21 +9,11 @@ from cascade.providers import LazyFactory, Provider
 
 @task(name="dict")
 def _dict_task(**kwargs) -> Dict[str, Any]:
-    """
-    Creates a dictionary from keyword arguments.
-    Useful for composing dynamic contexts in the graph.
-    """
     return kwargs
 
 
 @task(name="format")
 def _format_task(template: str, *args, **kwargs) -> str:
-    """
-    Formats a string using Python's str.format syntax.
-
-    Usage:
-        cs.format("Hello, {name}!", name=cs.Param("name"))
-    """
     return template.format(*args, **kwargs)
 
 

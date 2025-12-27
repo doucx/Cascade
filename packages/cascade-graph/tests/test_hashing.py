@@ -3,12 +3,6 @@ from cascade.graph.build import build_graph
 
 
 def test_hashing_distinguishes_nested_lazy_results():
-    """
-    This test validates the new Merkle-style hashing.
-    The node ID for task_a(task_b()) should be different from
-    the node ID for task_a(task_c()).
-    """
-
     @task
     def task_a(dep):
         return dep

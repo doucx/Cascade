@@ -1,0 +1,19 @@
+"BlueprintHasher": |-
+  Computes a hash for a Graph's topology, ignoring literal input values.
+  This hash is used to cache compiled execution plans.
+"BlueprintHasher._get_merkle_hash": |-
+  Computes a stable hash from a list of string components.
+"BlueprintHasher._get_node_components": |-
+  Gets the hash components for a single node, normalizing literals.
+"BlueprintHasher.compute_hash": |-
+  Computes the blueprint hash for the entire graph.
+"HashingService": |-
+  Service responsible for computing a stable Merkle hash for a node instance.
+  This is the `Instance Hash`, which uniquely identifies a specific, fully-parameterized
+  node instance. It is used for results caching and node de-duplication within a graph.
+"HashingService._build_hash_components": |-
+  Recursively builds hash components, always including literal values.
+"HashingService._get_merkle_hash": |-
+  Computes a stable hash from a list of string components.
+"HashingService.compute_structural_hash": |-
+  Computes the Structural Hash (Instance Hash) for a given result object.

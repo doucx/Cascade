@@ -60,10 +60,6 @@ async def test_run_if_false():
 
 @pytest.mark.asyncio
 async def test_cascade_skip():
-    """
-    Test that if A is skipped, B (which depends on A) is also skipped.
-    """
-
     @cs.task
     def condition():
         return False

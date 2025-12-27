@@ -1,0 +1,25 @@
+"ConstraintManager": |-
+  Manages a collection of global constraints and dispatches them to pluggable
+  handlers for evaluation.
+"ConstraintManager._remove_constraint_by_id": |-
+  Helper to remove a constraint and notify handler.
+"ConstraintManager.check_permission": |-
+  Evaluates all active constraints against a task. If any handler denies
+  permission, the task is deferred.
+"ConstraintManager.cleanup_expired_constraints": |-
+  Removes constraints that have exceeded their TTL.
+"ConstraintManager.get_extra_requirements": |-
+  Collects dynamic resource requirements from all applicable constraints.
+"ConstraintManager.register_handler": |-
+  Registers a constraint handler for the type it handles.
+"ConstraintManager.remove_constraints_by_scope": |-
+  Removes all constraints that match the given scope.
+"ConstraintManager.request_wakeup": |-
+  Requests the engine to wake up after a specified delay (in seconds).
+  Used by time-based constraints (like rate limits).
+"ConstraintManager.set_wakeup_callback": |-
+  Sets the callback to trigger an engine wakeup.
+"ConstraintManager.update_constraint": |-
+  Adds a new constraint or updates an existing one.
+  Ensures strict 'Last-Write-Wins' behavior by removing any existing
+  constraints with the same (scope, type) but different ID.

@@ -1,0 +1,4 @@
+"test_message_bus_renderer_delegation": |-
+  Test that the bus delegates to the renderer.
+"test_message_store_loads_defaults": |-
+  Test that the message store loads default locale messages.

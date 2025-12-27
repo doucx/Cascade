@@ -1,0 +1,20 @@
+"LispTranspiler._analyze": |-
+  Analyzes the graph to determine ref counts and assign variable names.
+"LispTranspiler._get_transitive_deps": |-
+  BFS to find all upstream dependencies.
+"LispTranspiler._topo_sort": |-
+  Standard Topological Sort.
+  Returns nodes in dependency order (Dependency before Consumer).
+"to_lisp": |-
+  Transpiles a Cascade workflow (LazyResult) into a Lisp S-Expression.
+
+  This function analyzes the computation graph and generates a Lisp-like representation.
+  - Nodes referenced multiple times are hoisted into `let*` bindings.
+  - Nodes referenced once are inlined.
+  - Router/Switch logic is converted to `(case ...)` expressions.
+
+  Args:
+      target: A Cascade LazyResult object representing the workflow.
+
+  Returns:
+      A string containing the formatted Lisp S-Expression.

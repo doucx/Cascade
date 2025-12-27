@@ -10,10 +10,6 @@ pytest.importorskip("aiohttp")
 
 @pytest.mark.asyncio
 async def test_http_get_success(aiohttp_client):
-    """
-    Tests a successful GET request using cs.http.get.
-    """
-
     async def handler(request):
         from aiohttp import web
 
@@ -44,10 +40,6 @@ async def test_http_get_success(aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_http_post_success(aiohttp_client):
-    """
-    Tests a successful POST request using cs.http.post.
-    """
-
     async def handler(request):
         from aiohttp import web
 
@@ -84,10 +76,6 @@ async def test_http_post_success(aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_http_with_template(aiohttp_client):
-    """
-    Tests that cs.http.get works correctly with cs.template for dynamic URLs.
-    """
-
     async def user_handler(request):
         from aiohttp import web
 

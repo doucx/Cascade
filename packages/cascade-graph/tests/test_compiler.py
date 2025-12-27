@@ -19,10 +19,6 @@ def add(x: int, y: int) -> int:
 
 
 def test_compile_single_node_as_root():
-    """
-    Verify compiling a single task as root in template mode.
-    Arguments should be promoted to Input Registers.
-    """
     target = add_one(
         x=10
     )  # 10 here acts as the 'default' or 'template' value structure
@@ -54,7 +50,6 @@ def test_compile_single_node_as_root():
 
 
 def test_compile_data_dependency():
-    """Verify compiling a task that depends on another task."""
     # dependency = add_one(1)  -> returns 2
     # target = add(dependency, 5) -> returns 7
     dep = add_one(1)
@@ -93,7 +88,6 @@ def test_compile_data_dependency():
 
 
 def test_compile_diamond_dependency():
-    """Verify reuse of results (diamond dependency)."""
     # A -> B, A -> C, D(B, C)
     # But simpler: A -> B(A), C(A)
 

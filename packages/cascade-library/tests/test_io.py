@@ -52,7 +52,6 @@ async def test_fs_exists_provider(test_file):
 
 
 def test_provider_registry_namespace_resolution():
-    """Verify that accessing intermediate namespaces returns a proxy."""
     # This requires the entry points to be loaded.
     # Since we are in a test env, we might need to rely on the fact that 'cs' import loaded them
     # or that we registered them via pyproject.toml (if installed in editable mode).

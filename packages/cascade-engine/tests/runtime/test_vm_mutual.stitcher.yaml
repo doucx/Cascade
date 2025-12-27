@@ -1,0 +1,4 @@
+"test_vm_mutual_recursion": |-
+  Tests A -> B -> A execution flow.
+"test_vm_mutual_recursion_pong_ends": |-
+  Tests case where recursion ends in the second function.

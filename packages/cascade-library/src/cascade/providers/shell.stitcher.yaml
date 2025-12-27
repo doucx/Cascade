@@ -1,0 +1,2 @@
+"_shell_task": |-
+  Asynchronously executes a shell command and returns its stdout.

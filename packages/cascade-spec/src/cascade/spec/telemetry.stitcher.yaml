@@ -1,0 +1,8 @@
+"LifecycleEvent": |-
+  Represents engine lifecycle events.
+"ResourceEvent": |-
+  Represents an event related to a resource's lifecycle.
+"TaskStateEvent": |-
+  Represents a change in a task's execution state.
+"TelemetryHeader": |-
+  Standard header for all telemetry messages.

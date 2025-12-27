@@ -35,7 +35,6 @@ def t_target(x):
 
 
 def test_serialize_basic_graph():
-    """Test serializing a simple linear graph."""
     target = another_task(simple_task(x=10))
     graph, _ = build_graph(target)
 
@@ -60,10 +59,6 @@ def test_serialize_basic_graph():
 
 
 def test_round_trip_top_level_functions():
-    """
-    Test full round-trip (serialize -> deserialize) with top-level functions.
-    Only top-level functions can be reliably pickled/imported.
-    """
     # We use the top-level tasks defined in this module
     target = another_task(simple_task(x=5))
     original_graph, _ = build_graph(target)
@@ -84,7 +79,6 @@ def test_round_trip_top_level_functions():
 
 
 def test_serialize_params():
-    """Test serialization of Param nodes (now standard tasks)."""
     p = cs.Param("env", default="dev", description="Environment")
     target = simple_task(p)
     graph, _ = build_graph(target)
@@ -113,7 +107,6 @@ def test_serialize_params():
 
 
 def test_serialize_with_retry():
-    """Test serialization of retry policy including backoff."""
     t = simple_task(x=1).with_retry(max_attempts=5, delay=1.0, backoff=2.0)
     graph, _ = build_graph(t)
 
@@ -132,7 +125,6 @@ def test_serialize_with_retry():
 
 
 def test_serialize_with_constraints():
-    """Test serialization of resource constraints."""
     t = simple_task(x=1).with_constraints(gpu_count=1, memory_gb=16)
     graph, _ = build_graph(t)
 
@@ -153,8 +145,6 @@ def test_serialize_with_constraints():
 
 
 def test_serialize_edge_types():
-    """Test serialization and deserialization of various EdgeType instances."""
-
     # 1. Condition edge
     target_condition = t_target(t_dynamic_constraint(1)).run_if(t_condition())
 
@@ -215,8 +205,6 @@ def consumer(val):
 
 
 def test_serialize_router():
-    """Test full round-trip serialization of a Router."""
-
     # Construct a router using top-level tasks
     selector = get_route()
     route_a = task_a()

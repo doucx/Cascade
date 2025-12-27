@@ -7,14 +7,10 @@ from cascade.adapters.cache import redis as redis_cache_module
 
 @pytest.fixture
 def mock_redis_client():
-    """Provides a MagicMock for the redis.Redis client."""
     return MagicMock()
 
 
 def test_redis_cache_backend_dependency_check(monkeypatch):
-    """
-    Ensures RedisCacheBackend raises ImportError if 'redis' is not installed.
-    """
     monkeypatch.setattr(redis_cache_module, "redis", None)
     with pytest.raises(ImportError, match="The 'redis' library is required"):
         from cascade.adapters.cache.redis import RedisCacheBackend
@@ -24,9 +20,6 @@ def test_redis_cache_backend_dependency_check(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_set_cache(mock_redis_client):
-    """
-    Verifies that set() serializes data and calls Redis SET with TTL.
-    """
     backend = redis_cache_module.RedisCacheBackend(client=mock_redis_client)
 
     value = {"result": "cached"}
@@ -40,9 +33,6 @@ async def test_set_cache(mock_redis_client):
 
 @pytest.mark.asyncio
 async def test_get_cache(mock_redis_client):
-    """
-    Verifies that get() retrieves and deserializes data correctly.
-    """
     backend = redis_cache_module.RedisCacheBackend(client=mock_redis_client)
 
     # Case 1: Cache hit

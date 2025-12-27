@@ -11,34 +11,24 @@ from cascade.runtime.events import ResourceAcquired, ResourceReleased
 
 
 class ResourceContainer:
-    """
-    Manages the lifecycle, registration, and dependency injection of resources.
-    """
-
     def __init__(self, bus: MessageBus):
         self.bus = bus
         self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
 
     def register(self, resource_def: ResourceDefinition):
-        """Registers a resource definition."""
         self._resource_providers[resource_def.name] = resource_def
 
     def get_provider(self, name: str) -> Callable:
-        """Retrieves the raw provider function for a resource."""
         provider = self._resource_providers[name]
         if isinstance(provider, ResourceDefinition):
             return provider.func
         return provider
 
     def override_provider(self, name: str, new_provider: Any):
-        """Overrides a resource provider (useful for testing)."""
         self._resource_providers[name] = new_provider
 
     @contextmanager
     def override(self, name: str, new_provider: Any) -> Generator[None, None, None]:
-        """
-        A context manager to safely override a provider and guarantee restoration.
-        """
         original = self._resource_providers.get(name)
         self.override_provider(name, new_provider)
         try:
@@ -50,9 +40,6 @@ class ResourceContainer:
                 self._resource_providers.pop(name, None)
 
     def scan(self, graph: Graph) -> Set[str]:
-        """
-        Scans the graph to identify all resources required by the nodes.
-        """
         required = set()
 
         # 1. Scan Node Input Bindings for explicit Inject objects
@@ -77,7 +64,6 @@ class ResourceContainer:
         return required
 
     def _scan_item(self, item: Any, required: Set[str]):
-        """Recursively scans an item for Inject objects."""
         if isinstance(item, Inject):
             required.add(item.resource_name)
         elif isinstance(item, (list, tuple)):
@@ -95,10 +81,6 @@ class ResourceContainer:
         step_stack: ExitStack,
         run_id: str,
     ) -> None:
-        """
-        Initializes required resources that are not yet active.
-        """
-
         def get_or_create(name: str):
             if name in active_resources:
                 return active_resources[name]

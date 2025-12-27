@@ -7,7 +7,6 @@ from cascade.cli.controller import app as controller_app
 
 @pytest.fixture
 def mock_messaging_bus(monkeypatch) -> MagicMock:
-    """Mocks the global message bus used by the controller app."""
     mock_bus = MagicMock()
     monkeypatch.setattr("cascade.cli.controller.app.bus", mock_bus)
     return mock_bus
@@ -15,7 +14,6 @@ def mock_messaging_bus(monkeypatch) -> MagicMock:
 
 @pytest.fixture
 def mock_connector(monkeypatch) -> AsyncMock:
-    """Mocks the MqttConnector class to prevent network calls."""
     mock_instance = AsyncMock()
     mock_class = MagicMock(return_value=mock_instance)
     monkeypatch.setattr("cascade.cli.controller.app.MqttConnector", mock_class)
@@ -24,9 +22,6 @@ def mock_connector(monkeypatch) -> AsyncMock:
 
 @pytest.mark.asyncio
 async def test_publish_pause_global_scope(mock_messaging_bus, mock_connector):
-    """
-    Verify publishing a pause command for the 'global' scope.
-    """
     # Act: Call the core logic function
     await controller_app._publish_pause(
         scope="global", ttl=None, backend="mqtt", hostname="mqtt.test", port=1234
@@ -58,9 +53,6 @@ async def test_publish_pause_global_scope(mock_messaging_bus, mock_connector):
 
 @pytest.mark.asyncio
 async def test_publish_pause_specific_scope(mock_messaging_bus, mock_connector):
-    """
-    Verify that a scoped pause command generates the correct MQTT topic.
-    """
     # Act
     await controller_app._publish_pause(
         scope="task:api_call",

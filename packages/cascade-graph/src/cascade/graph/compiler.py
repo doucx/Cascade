@@ -11,10 +11,6 @@ from cascade.spec.blueprint import (
 
 
 class BlueprintBuilder:
-    """
-    Compiles a LazyResult dependency graph into a linear Blueprint for VM execution.
-    """
-
     def __init__(self):
         self._instructions: List[Instruction] = []
         self._visited: Dict[str, int] = {}

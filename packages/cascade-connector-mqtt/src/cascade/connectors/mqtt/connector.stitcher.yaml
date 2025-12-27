@@ -1,0 +1,17 @@
+"MqttConnector": |-
+  Implements the Connector protocol for MQTT.
+
+  This connector enables Cascade to publish telemetry data to an MQTT broker
+  and subscribe to control commands.
+"MqttConnector._message_loop": |-
+  Background task to process incoming MQTT messages.
+"MqttConnector._topic_matches": |-
+  Checks if a concrete topic matches a subscription pattern (supporting + and #).
+"MqttConnector.connect": |-
+  Establishes a connection to the MQTT Broker.
+"MqttConnector.disconnect": |-
+  Disconnects from the MQTT Broker and cleans up resources.
+"MqttConnector.publish": |-
+  Publishes a message in a non-blocking, fire-and-forget manner.
+"MqttConnector.subscribe": |-
+  Subscribes to a topic to receive messages.

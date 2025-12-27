@@ -1,0 +1,9 @@
+"Inject": |-
+  A marker object to indicate a resource dependency.
+"ResourceDefinition": |-
+  Represents the definition of a resource provider.
+"inject": |-
+  Function to be used as a default value in a task's signature
+  to declare a dependency on a resource.
+"resource": |-
+  Decorator to define a resource provider.

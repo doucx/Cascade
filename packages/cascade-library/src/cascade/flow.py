@@ -3,12 +3,6 @@ from cascade.spec.lazy_types import LazyResult
 
 
 def sequence(tasks: Sequence[LazyResult]) -> LazyResult:
-    """
-    Enforces a sequential execution order for the provided list of tasks:
-    tasks[0] -> tasks[1] -> ... -> tasks[N].
-
-    Returns the last task in the sequence.
-    """
     if not tasks:
         raise ValueError("cs.sequence requires at least one task.")
 
@@ -22,17 +16,6 @@ def sequence(tasks: Sequence[LazyResult]) -> LazyResult:
 def pipeline(
     initial: Any, steps: Sequence[Union[Callable[[Any], Any], LazyResult]]
 ) -> LazyResult:
-    """
-    Constructs a data processing pipeline where the output of one step
-    is passed as the input to the next.
-
-    Args:
-        initial: The initial input data (or LazyResult).
-        steps: A list of callables (functions, tasks) or LazyResults to apply in order.
-
-    Returns:
-        The LazyResult of the final step.
-    """
     current_result = initial
 
     for step in steps:

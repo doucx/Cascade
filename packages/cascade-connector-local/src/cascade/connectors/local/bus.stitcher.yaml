@@ -1,0 +1,17 @@
+"LocalBusConnector": |-
+  A robust, in-memory implementation of the Connector protocol.
+  Acts as a local MQTT broker, supporting:
+  - Shared state across instances (simulating a network broker)
+  - Retained messages
+  - Topic wildcards (+ and #)
+"LocalBusConnector._get_lock": |-
+  Ensures the lock is bound to the current running event loop.
+  This is critical for pytest where each test has its own loop.
+"LocalBusConnector._listener_loop": |-
+  Consumes messages from the subscription queue and invokes callback.
+"LocalBusConnector._reset_broker_state": |-
+  Helper for tests to clear the 'broker'.
+"LocalBusConnector._topic_matches": |-
+  Checks if a concrete topic matches a subscription pattern (supporting + and #).
+"_LocalSubscriptionHandle": |-
+  Implementation of the subscription handle for the LocalBusConnector.

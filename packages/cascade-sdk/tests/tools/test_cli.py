@@ -10,11 +10,6 @@ runner = CliRunner()
 
 
 def test_cli_generator_from_context():
-    """
-    [V1.3 更新] 验证 CLI 生成器是从全局上下文读取 ParamSpec，
-    而不是解析图结构。
-    """
-
     # 1. 定义工作流构建函数
     def workflow_def():
         # 清理上下文以确保测试隔离

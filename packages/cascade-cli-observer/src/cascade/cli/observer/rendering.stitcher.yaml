@@ -1,0 +1,2 @@
+"RichCliRenderer": |-
+  A renderer that uses the 'rich' library for formatted, colorful output.

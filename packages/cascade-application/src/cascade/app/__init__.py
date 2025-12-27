@@ -25,7 +25,6 @@ from cascade.common.renderers import CliRenderer, JsonRenderer
 
 @task(name="_internal_gather", pure=True)
 def _internal_gather(*args: Any) -> Any:
-    """An internal pure task used to gather results from a list."""
     return list(args)
 
 
@@ -60,7 +59,6 @@ def _create_state_backend_factory(
 
 
 def _get_node_shape(node: Node) -> str:
-    """Returns the Graphviz shape for a given node type."""
     if node.node_type == "param":
         return "ellipse"
     if node.node_type == "map":
@@ -73,8 +71,6 @@ def _get_node_shape(node: Node) -> str:
 
 @dataclass(frozen=True)
 class ToolEvent(Event):
-    """Base class for all events emitted by developer tools."""
-
     pass
 
 
@@ -98,10 +94,6 @@ class PlanAnalysisFinished(ToolEvent):
 
 
 class DryRunConsoleSubscriber:
-    """
-    Listens to plan analysis events and prints a human-readable report.
-    """
-
     def __init__(self, bus: MessageBus):
         bus.subscribe(PlanAnalysisStarted, self.on_start)
         bus.subscribe(PlanNodeInspected, self.on_node)
@@ -124,11 +116,6 @@ class DryRunConsoleSubscriber:
 
 
 class CascadeApp:
-    """
-    The central manager for a workflow's lifecycle, encapsulating all
-    infrastructure, configuration, and top-level operations.
-    """
-
     def __init__(
         self,
         target: Union[LazyResult, List[Any], Tuple[Any, ...]],
@@ -190,15 +177,9 @@ class CascadeApp:
             self.engine.add_subscriber(self.telemetry_subscriber)
 
     def run(self) -> Any:
-        """
-        Executes the workflow and returns the final result.
-        """
         return asyncio.run(self.engine.run(self.workflow_target, params=self.params))
 
     def visualize(self) -> str:
-        """
-        Generates and returns a Graphviz DOT string of the workflow.
-        """
         # Note: If workflow_target is an empty list gather (from empty input),
         # build_graph handles it but we might want a cleaner check.
         if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
@@ -250,9 +231,6 @@ class CascadeApp:
         return "\n".join(dot_parts)
 
     def dry_run(self) -> None:
-        """
-        Builds and prints the execution plan without running any tasks.
-        """
         # Create a temporary local bus for the dry run report
         # We don't want to use the main app bus because dry_run
         # is a special analysis mode, not a "run".

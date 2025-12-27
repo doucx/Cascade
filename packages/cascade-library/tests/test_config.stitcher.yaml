@@ -1,0 +1,12 @@
+"dummy_config_file": |-
+  Creates a temporary YAML file.
+"test_load_yaml_provider": |-
+  Tests that cs.load_yaml correctly loads and parses a file.
+"test_lookup_invalid_path_raises_type_error": |-
+  Tests that lookup on a non-container value raises TypeError.
+"test_lookup_missing_key_raises_error": |-
+  Tests that a missing key raises a KeyError.
+"test_lookup_on_static_dict": |-
+  Tests that cs.lookup can also work on a simple dictionary provided by a task.
+"test_lookup_provider_basic": |-
+  Tests cs.lookup on a dynamically loaded source.

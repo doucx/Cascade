@@ -1,15 +1,8 @@
 class CascadeRuntimeError(Exception):
-    """Base class for runtime errors in Cascade."""
-
     pass
 
 
 class DependencyMissingError(CascadeRuntimeError):
-    """
-    Raised when a task cannot execute because an upstream dependency result is missing.
-    This usually happens if the upstream task was skipped or failed silently.
-    """
-
     def __init__(self, task_id: str, arg_name: str, dependency_id: str):
         self.task_id = task_id
         self.arg_name = arg_name
@@ -21,8 +14,6 @@ class DependencyMissingError(CascadeRuntimeError):
 
 
 class ResourceNotFoundError(CascadeRuntimeError):
-    """Raised when a requested resource is not available in the context."""
-
     def __init__(self, resource_name: str, consumer_name: str = "unknown"):
         super().__init__(
             f"Resource '{resource_name}' required by '{consumer_name}' was not found. "

@@ -1,0 +1,19 @@
+"InMemoryStateBackend": |-
+  An in-memory implementation of the StateBackend protocol using Python dictionaries.
+  This is the default backend for local, single-process runs.
+
+  ARCHITECTURAL NOTE on ASYNC IMPLEMENTATION:
+  This class adheres to the `async def` contract of the StateBackend protocol,
+  but it does NOT use `asyncio.to_thread`. This is an intentional performance
+  optimization.
+
+  Dictionary operations are synchronous but are pure-CPU and extremely fast
+  (nanosecond-scale). They do not perform blocking I/O. Using `to_thread`
+  would introduce significant overhead (context switching, thread pool management)
+  for a non-existent problem, crippling performance in high-throughput scenarios
+  like TCO fast paths.
+
+  This implementation provides a compliant async interface with minimal overhead,
+  making it suitable for its primary role as a high-performance, single-process backend.
+"InMemoryStateBackend.clear": |-
+  Clears all results and skip reasons. Used between TCO iterations.

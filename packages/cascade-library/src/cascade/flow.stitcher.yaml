@@ -1,0 +1,15 @@
+"pipeline": |-
+  Constructs a data processing pipeline where the output of one step
+  is passed as the input to the next.
+
+  Args:
+      initial: The initial input data (or LazyResult).
+      steps: A list of callables (functions, tasks) or LazyResults to apply in order.
+
+  Returns:
+      The LazyResult of the final step.
+"sequence": |-
+  Enforces a sequential execution order for the provided list of tasks:
+  tasks[0] -> tasks[1] -> ... -> tasks[N].
+
+  Returns the last task in the sequence.

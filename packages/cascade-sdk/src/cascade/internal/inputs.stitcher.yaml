@@ -1,0 +1,2 @@
+"_internal_gather": |-
+  An internal pure task used by cs.run to gather results from a list.

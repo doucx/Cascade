@@ -16,10 +16,6 @@ def mock_publish_pause():
 
 
 def test_pause_command_dispatches_correctly(mock_publish_pause):
-    """
-    Tests that the 'cs-controller pause' CLI command correctly parses arguments
-    and calls the underlying business logic function.
-    """
     # Act: Simulate command line invocation
     result = runner.invoke(app, ["pause", "task:my-task", "--ttl", "300"])
 

@@ -1,0 +1,6 @@
+"GraphBuilder._find_dependencies": |-
+  Helper for post-order traversal: finds and visits all nested LazyResults.
+"GraphBuilder._scan_and_add_edges": |-
+  Idempotently adds DATA and ROUTER edges based on pre-visited instances.
+"GraphBuilder._visit": |-
+  Central dispatcher for the post-order traversal.

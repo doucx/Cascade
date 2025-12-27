@@ -8,7 +8,6 @@ from cascade.adapters.state import redis as redis_state_module
 
 @pytest.fixture
 def mock_redis_client():
-    """Provides a MagicMock for the redis.Redis client."""
     mock_client = MagicMock()
     # Mock the pipeline context manager
     mock_pipeline = MagicMock()
@@ -17,9 +16,6 @@ def mock_redis_client():
 
 
 def test_redis_state_backend_dependency_check(monkeypatch):
-    """
-    Ensures RedisStateBackend raises ImportError if 'redis' is not installed.
-    """
     monkeypatch.setattr(redis_state_module, "redis", None)
     with pytest.raises(ImportError, match="The 'redis' library is required"):
         from cascade.adapters.state.redis import RedisStateBackend
@@ -29,9 +25,6 @@ def test_redis_state_backend_dependency_check(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_put_result(mock_redis_client):
-    """
-    Verifies that put_result serializes data and calls Redis HSET and EXPIRE.
-    """
     client, pipeline = mock_redis_client
     backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
 
@@ -49,9 +42,6 @@ async def test_put_result(mock_redis_client):
 
 @pytest.mark.asyncio
 async def test_get_result(mock_redis_client):
-    """
-    Verifies that get_result retrieves and deserializes data correctly.
-    """
     client, _ = mock_redis_client
     backend = redis_state_module.RedisStateBackend(run_id="run123", client=client)
 

@@ -1,0 +1,5 @@
+"test_local_executor_async_execution": |-
+  Tests that the LocalExecutor can execute an asynchronous function.
+"test_local_executor_sync_execution": |-
+  Tests that the LocalExecutor can execute a synchronous function
+  with resolved positional and keyword arguments.

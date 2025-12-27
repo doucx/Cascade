@@ -1,0 +1,8 @@
+"mock_connector": |-
+  Mocks the MqttConnector class to prevent network calls.
+"mock_messaging_bus": |-
+  Mocks the global message bus used by the controller app.
+"test_publish_pause_global_scope": |-
+  Verify publishing a pause command for the 'global' scope.
+"test_publish_pause_specific_scope": |-
+  Verify that a scoped pause command generates the correct MQTT topic.

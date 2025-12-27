@@ -23,7 +23,6 @@ seen_run_ids = set()
 
 
 async def on_message(topic: str, payload: dict):
-    """Callback to process incoming telemetry messages."""
     global seen_run_ids
 
     # The payload structure is flat for headers, with a nested 'body'
@@ -56,7 +55,6 @@ async def on_message(topic: str, payload: dict):
 
 
 async def _run_mqtt_watcher(project: str, hostname: str, port: int):
-    """Connects to MQTT and watches for telemetry events."""
     topic = f"cascade/telemetry/+/{project}/+/events"
     connector = MqttConnector(hostname=hostname, port=port)
     shutdown_event = asyncio.Event()
@@ -76,7 +74,6 @@ async def _run_mqtt_watcher(project: str, hostname: str, port: int):
 
 
 async def _run_uds_watcher():
-    """Connects to a local UDS socket and watches for telemetry events."""
     uds_path = DEFAULT_TELEMETRY_UDS_PATH
     bus.info("observer.startup.watching_uds", path=uds_path)
 
@@ -118,9 +115,6 @@ def watch(
     ),
     port: int = typer.Option(1883, "--port", help="MQTT broker port (MQTT only)."),
 ):
-    """
-    Connect to a backend and watch for real-time telemetry events.
-    """
     main_loop = None
     if backend == "local":
         if sys.platform == "win32":
@@ -147,9 +141,6 @@ def status(
     hostname: str = typer.Option("localhost", help="MQTT broker hostname."),
     port: int = typer.Option(1883, help="MQTT broker port."),
 ):
-    """
-    Connect to the backend, query the current status of all constraints, and exit.
-    """
     try:
         asyncio.run(_get_status(backend=backend, hostname=hostname, port=port))
     except KeyboardInterrupt:
@@ -157,7 +148,6 @@ def status(
 
 
 async def _get_status(backend: str, hostname: str, port: int):
-    """Core logic for the status command."""
     if backend == "local":
         await _get_status_sqlite()
         return
@@ -188,7 +178,6 @@ async def _get_status(backend: str, hostname: str, port: int):
 
 
 async def _get_status_sqlite():
-    """Fetches and displays constraints from the SQLite database."""
     db_path = Path("~/.cascade/control.db").expanduser()
     if not db_path.exists():
         console.print(f"[yellow]SQLite database not found at:[/yellow] {db_path}")
@@ -226,7 +215,6 @@ async def _get_status_sqlite():
 
 
 def _render_constraints_table(constraints: list[GlobalConstraint]):
-    """Renders a list of constraints into a Rich table."""
     table = Table(title="[bold]Active Cascade Constraints[/bold]", title_justify="left")
     table.add_column("Scope", style="cyan", no_wrap=True)
     table.add_column("Type", style="magenta")

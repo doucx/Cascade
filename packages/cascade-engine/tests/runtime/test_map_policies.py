@@ -12,9 +12,6 @@ from cascade.testing import SpySubscriber
 
 @pytest.mark.asyncio
 async def test_map_with_retry_policy():
-    """
-    Test that .with_retry() applied to .map() is propagated to sub-tasks.
-    """
     call_counts = {}
 
     @cs.task
@@ -64,10 +61,6 @@ async def test_map_with_retry_policy():
 
 @pytest.mark.asyncio
 async def test_map_with_constraints_policy():
-    """
-    Test that .with_constraints() applied to .map() limits concurrency of sub-tasks.
-    """
-
     @cs.task
     async def slow_task(x):
         await asyncio.sleep(0.05)

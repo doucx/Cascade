@@ -1,0 +1,13 @@
+"test_connect_and_disconnect_lifecycle": |-
+  Tests that connect() creates and connects a client with LWT, and disconnect() disconnects it.
+"test_mqtt_connector_instantiation": |-
+  Tests that the MqttConnector can be instantiated.
+"test_publish_sends_json_and_is_fire_and_forget": |-
+  Tests that publish() serializes the payload to JSON and sends it in a
+  non-blocking manner.
+"test_publish_without_connect_does_nothing": |-
+  Tests that calling publish() before connect() does not raise an error
+  and does not try to publish anything (Fail-Silent Telemetry).
+"test_subscribe_receives_messages": |-
+  Tests that the connector starts a listener loop, and when messages arrive,
+  the registered callback is invoked with decoded data.

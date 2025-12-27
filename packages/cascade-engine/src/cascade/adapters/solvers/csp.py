@@ -11,20 +11,7 @@ except ImportError:
 
 
 class CSPSolver:
-    """
-    A solver that uses Constraint Satisfaction Problem (CSP) techniques to produce
-    a resource-aware execution plan.
-
-    It employs Iterative Deepening Search to find the schedule with the minimum
-    number of stages (Makespan) that satisfies all dependency and resource constraints.
-    """
-
     def __init__(self, system_resources: Dict[str, float]):
-        """
-        Args:
-            system_resources: A dictionary defining the total available capacity
-                              for each resource (e.g., {"gpu": 2, "memory_gb": 32}).
-        """
         if constraint is None:
             raise ImportError(
                 "The 'python-constraint' library is required to use the CSPSolver. "

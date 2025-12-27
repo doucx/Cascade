@@ -1,0 +1,8 @@
+"PlanAnalysisFinished": |-
+  Fired when dry_run analysis is complete.
+"PlanAnalysisStarted": |-
+  Fired when dry_run starts analyzing a target.
+"PlanNodeInspected": |-
+  Fired for each node in the resolved execution plan.
+"ToolEvent": |-
+  Base class for all events emitted by developer tools.

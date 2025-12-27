@@ -1,0 +1,8 @@
+"mock_redis_client": |-
+  Provides a MagicMock for the redis.Redis client.
+"test_get_cache": |-
+  Verifies that get() retrieves and deserializes data correctly.
+"test_redis_cache_backend_dependency_check": |-
+  Ensures RedisCacheBackend raises ImportError if 'redis' is not installed.
+"test_set_cache": |-
+  Verifies that set() serializes data and calls Redis SET with TTL.

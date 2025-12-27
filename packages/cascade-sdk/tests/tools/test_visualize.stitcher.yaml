@@ -1,0 +1,12 @@
+"test_visualize_diamond_graph": |-
+  Tests that visualize() produces a correct DOT string for a diamond graph with standard data edges.
+"test_visualize_iterative_jump_edge": |-
+  Tests that visualize() correctly renders an ITERATIVE_JUMP edge created via cs.bind.
+"test_visualize_multi_node_jump_edge": |-
+  Tests that a jump from a downstream node to an upstream node is visualized correctly.
+  Creates a workflow like A -> B -> C -> A.
+"test_visualize_special_edge_types": |-
+  Tests that visualize() correctly styles edges for conditions and constraints.
+"test_visualize_with_list_of_lazy_results": |-
+  Verifies that visualize() can accept a list of LazyResults and
+  correctly renders the implicit gather node.

@@ -18,10 +18,6 @@ T = TypeVar("T")
 
 
 class Task(Generic[T]):
-    """
-    Wraps a callable to make it return a LazyResult when called.
-    """
-
     def __init__(
         self,
         func: Callable[..., T],
@@ -44,9 +40,6 @@ class Task(Generic[T]):
         return LazyResult(task=self, args=args, kwargs=kwargs)
 
     def map(self, **kwargs) -> MappedLazyResult[List[T]]:
-        """
-        Applies the task over a sequence of inputs.
-        """
         return MappedLazyResult(factory=self, mapping_kwargs=kwargs)
 
     def __repr__(self):
@@ -63,10 +56,6 @@ def task(
     pure: bool = False,
     mode: str = "blocking",
 ) -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:
-    """
-    Decorator to convert a function into a Task.
-    """
-
     def wrapper(f: Callable[..., T]) -> Task[T]:
         return Task(f, name=name, pure=pure, mode=mode)
 
@@ -115,10 +104,6 @@ LazyResult.with_constraints = _with_constraints
 
 
 def _after(self: LazyResult, *predecessors: LazyResult) -> LazyResult:
-    """
-    Explicitly schedules this task to run after the given predecessor tasks,
-    without taking their output as input.
-    """
     self._dependencies.extend(predecessors)
     return self
 

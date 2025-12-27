@@ -1,0 +1,10 @@
+"mock_ipfs_add_handler": |-
+  A mock aiohttp handler for the `ipfs add` RPC call.
+"mock_ipfs_cat_handler": |-
+  A mock aiohttp handler for the `ipfs cat` RPC call.
+"mock_ipfs_server": |-
+  Fixture to setup the mock IPFS server and patch the provider.
+"test_ipfs_add_provider": |-
+  Tests the cs.ipfs.add provider with local file upload.
+"test_ipfs_cat_provider": |-
+  Tests the cs.ipfs.cat provider.

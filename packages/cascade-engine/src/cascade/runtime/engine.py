@@ -30,10 +30,6 @@ from cascade.runtime.strategies import GraphExecutionStrategy, VMExecutionStrate
 
 
 class Engine:
-    """
-    Orchestrates the entire workflow execution.
-    """
-
     def __init__(
         self,
         solver: Solver,
@@ -102,19 +98,12 @@ class Engine:
         self._managed_subscribers = []
 
     def add_subscriber(self, subscriber: Any):
-        """
-        Adds a subscriber whose lifecycle (e.g., shutdown) the engine should manage.
-        """
         self._managed_subscribers.append(subscriber)
 
     def register(self, resource_def: ResourceDefinition):
         self.resource_container.register(resource_def)
 
     def _is_simple_task(self, lr: Any) -> bool:
-        """
-        Checks if the LazyResult is a simple, flat task (no nested dependencies).
-        This allows for the Zero-Overhead TCO fast path.
-        """
         if not isinstance(lr, LazyResult):
             return False
         if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
@@ -247,7 +236,6 @@ class Engine:
                 self.bus.publish(ConnectorDisconnected(run_id=run_id))
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-        """Callback to handle incoming constraint messages."""
         try:
             # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
             if payload == {}:

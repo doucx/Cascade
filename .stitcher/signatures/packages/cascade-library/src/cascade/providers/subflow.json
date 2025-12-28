@@ -1,0 +1,11 @@
+{
+  "SubflowProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "_subflow_task": {
+    "baseline_code_signature_text": "async def _subflow_task(path: str, target: str, params: Optional[Dict[str, Any]] = None) -> Any:",
+    "baseline_code_structure_hash": "521dcf32ae0d5fd8fc565222c5b38c02a31bc7c7e6665d3365d25bbf91b1300f",
+    "baseline_yaml_content_hash": "4525879aa9a1aa905aebbe52e8a8e17e03b90f739d69288b6432677be80e3826"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "test_cascade_skip": {
+    "baseline_code_signature_text": "async def test_cascade_skip():",
+    "baseline_code_structure_hash": "6eadd9d4d07371a8dfaf316541a282634ec0946fb7c09e8048cd7668f64ed9a3",
+    "baseline_yaml_content_hash": "7121048450b1d7286e045f4f8036cf536d05c40177129c206d5a6ec6aea01bbf"
+  },
+  "test_run_if_false": {
+    "baseline_code_signature_text": "async def test_run_if_false():",
+    "baseline_code_structure_hash": "75c41633fc8c5fd586eadc1fe5dbc50f760b37e74a20ef8a51c65005c5a890c7"
+  },
+  "test_run_if_true": {
+    "baseline_code_signature_text": "async def test_run_if_true():",
+    "baseline_code_structure_hash": "f664110c7a9a3556b719050ec12d25453b856276b0bb2947097e0249964c3c2b"
+  }
+}

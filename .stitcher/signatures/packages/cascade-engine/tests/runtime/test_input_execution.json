@@ -1,0 +1,12 @@
+{
+  "test_engine_executes_env_task": {
+    "baseline_code_signature_text": "async def test_engine_executes_env_task(monkeypatch):",
+    "baseline_code_structure_hash": "58e8d7d306a3753277e0d57334089f530962d88667c88c1870113a9aa7a390e2",
+    "baseline_yaml_content_hash": "15340f057a54da86c158b022f3508e65522472e90d0c7788bab9f6cef0e4a855"
+  },
+  "test_engine_executes_param_task": {
+    "baseline_code_signature_text": "async def test_engine_executes_param_task():",
+    "baseline_code_structure_hash": "e254860e2999f4693dcaad2c6646b498ea1b52192b01822fad1e0e893780626b",
+    "baseline_yaml_content_hash": "eee8e7a80e0cc023f30a69d138b554a2d7e04b50f722665a64242a8238e4312a"
+  }
+}

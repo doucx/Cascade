@@ -1,0 +1,34 @@
+{
+  "InMemoryStateBackend": {
+    "baseline_yaml_content_hash": "9904b9548540673796311ab76d9069ad1546bf8424a0c5af79e38fe094f09cce"
+  },
+  "InMemoryStateBackend.__init__": {
+    "baseline_code_signature_text": "def __init__(self, run_id: str):",
+    "baseline_code_structure_hash": "8ee5d58d74c8d1d55b6e68bd8c849ecc35c6e3cebc8337c747b3b13e8e6cf1b4"
+  },
+  "InMemoryStateBackend.clear": {
+    "baseline_code_signature_text": "async def clear(self) -> None:",
+    "baseline_code_structure_hash": "1e1d110f0d48734e2552a9d1d1561437c16def8309d251c39c34e0312fdb6011",
+    "baseline_yaml_content_hash": "831be28b83b6a381161b0e61c2b2ab9dc8158a45778614e74050e24302662113"
+  },
+  "InMemoryStateBackend.get_result": {
+    "baseline_code_signature_text": "async def get_result(self, node_id: str) -> Optional[Any]:",
+    "baseline_code_structure_hash": "51418bf92cec6631beb3552551485f2acf34a8f96c917cbb7611cd62c6b63e60"
+  },
+  "InMemoryStateBackend.get_skip_reason": {
+    "baseline_code_signature_text": "async def get_skip_reason(self, node_id: str) -> Optional[str]:",
+    "baseline_code_structure_hash": "0fddd65837891612049ea67bc2f3dd668a0fd2597b3e84fa27e07f92a0f1e315"
+  },
+  "InMemoryStateBackend.has_result": {
+    "baseline_code_signature_text": "async def has_result(self, node_id: str) -> bool:",
+    "baseline_code_structure_hash": "3804e2a04b3507c99010837c3f8d45db9d438716cbbc57b162671c5f0ccaf690"
+  },
+  "InMemoryStateBackend.mark_skipped": {
+    "baseline_code_signature_text": "async def mark_skipped(self, node_id: str, reason: str) -> None:",
+    "baseline_code_structure_hash": "25910ebf3b914a401566c1f8fad34221b95acc460c520fc039cdb4c3b924a135"
+  },
+  "InMemoryStateBackend.put_result": {
+    "baseline_code_signature_text": "async def put_result(self, node_id: str, result: Any) -> None:",
+    "baseline_code_structure_hash": "0a0d2dc66a8690f5a2a1c7bdfa5418fde426a0a4a55d94eb7282f1a9f3965091"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "CascadeApp": {
+    "baseline_yaml_content_hash": "b3520f79b9b6da64cabe7665b97ccbfa5773ba3f6911c38866f4360593ab05e5"
+  },
+  "CascadeApp.__init__": {
+    "baseline_code_signature_text": "def __init__(self, target: Union[LazyResult, List[Any], Tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = \"INFO\", log_format: str = \"human\", connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None):",
+    "baseline_code_structure_hash": "0292af17a1d7cd0ced879b236fdb0c67064d66ba2f108077f1e793d7ad4c335d"
+  },
+  "CascadeApp.dry_run": {
+    "baseline_code_signature_text": "def dry_run(self) -> None:",
+    "baseline_code_structure_hash": "491bc3afe244751cf7a0504e2074c1e63f625da8700807dc3e2e08c103813ddc",
+    "baseline_yaml_content_hash": "9fa676fe1392b880d2e60c169e03aa3800c8101e8106142bc67d3d994bf2ae33"
+  },
+  "CascadeApp.run": {
+    "baseline_code_signature_text": "def run(self) -> Any:",
+    "baseline_code_structure_hash": "8f1710dd2fa4060b644ec50de7354d0fcbab022690385dc05530f9098cce2bce",
+    "baseline_yaml_content_hash": "d306b5a0657bf726f3379f5dec9e54bcdc1fd36e9be33d9fe334f401ef51bc37"
+  },
+  "CascadeApp.visualize": {
+    "baseline_code_signature_text": "def visualize(self) -> str:",
+    "baseline_code_structure_hash": "1f0b0ca039b1719081729287e03d3f990b817d0186b2494c3dbba1aa3dcb2bc1",
+    "baseline_yaml_content_hash": "85fc40663a40146ea4d44c8e009a751f65cfb1b79d763d69b432f963ab0aca84"
+  },
+  "DryRunConsoleSubscriber": {
+    "baseline_yaml_content_hash": "92b2b5d2a5642e20775d1bbe90bcbef117575bf9f7b5029bdea0f5fa5ee039e9"
+  },
+  "DryRunConsoleSubscriber.__init__": {
+    "baseline_code_signature_text": "def __init__(self, bus: MessageBus):",
+    "baseline_code_structure_hash": "a1efdcdf83398161dcb0fa10a726ccece737051e0692e435d96e134300becd61"
+  },
+  "DryRunConsoleSubscriber.on_finish": {
+    "baseline_code_signature_text": "def on_finish(self, event: PlanAnalysisFinished):",
+    "baseline_code_structure_hash": "441b1ccc409ea710356bc74d8e45c9a587d2fe2ecef9fc454420a7076db208e1"
+  },
+  "DryRunConsoleSubscriber.on_node": {
+    "baseline_code_signature_text": "def on_node(self, event: PlanNodeInspected):",
+    "baseline_code_structure_hash": "0cd9f0b12c0acaae2466ee815adf311d911869341e4a2adcafb999e942b58197"
+  },
+  "DryRunConsoleSubscriber.on_start": {
+    "baseline_code_signature_text": "def on_start(self, event: PlanAnalysisStarted):",
+    "baseline_code_structure_hash": "9b93769f19380fb0e04fdd2c770e9410df29c3d0ac3f62dbbe186208311e6188"
+  },
+  "ToolEvent": {
+    "baseline_yaml_content_hash": "18a6cf2948b84d4c7acf979f7eb8f811c4c4790d9b371dd5d65f1c2536465378"
+  },
+  "_create_state_backend_factory": {
+    "baseline_code_signature_text": "def _create_state_backend_factory(backend_spec: Union[str, Callable[[str], StateBackend], None]) -> Optional[Callable[[str], StateBackend]]:",
+    "baseline_code_structure_hash": "5dc0b78b461db22c8253128030859e02c6cd56b0d833cbddf405a7e31c9ebf76"
+  },
+  "_get_node_shape": {
+    "baseline_code_signature_text": "def _get_node_shape(node: Node) -> str:",
+    "baseline_code_structure_hash": "4021344cae574d5f3c18470df50bb60fe42dd95a111dfc016d5633d06e566af4",
+    "baseline_yaml_content_hash": "0ac2e3d86f5e87af2feb37e44c8d8fc6115166127425b8c9909fb063ac244250"
+  },
+  "_internal_gather": {
+    "baseline_code_signature_text": "def _internal_gather() -> Any:",
+    "baseline_code_structure_hash": "078ce2e516502e4f9cf061e883233ef8a56ea7ba7d20138384ea1c8d67fea645",
+    "baseline_yaml_content_hash": "05ce77832e5f72a99990fa7531e4e48721aa54af1018a1e9c233f195532293f0"
+  }
+}

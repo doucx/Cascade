@@ -1,0 +1,25 @@
+{
+  "add": {
+    "baseline_code_signature_text": "def add(x: int, y: int) -> int:",
+    "baseline_code_structure_hash": "8276b45e2127ff4424a3739f0f576d946dc119f7a84c24ad2492d5a13bbc2f3b"
+  },
+  "add_one": {
+    "baseline_code_signature_text": "def add_one(x: int) -> int:",
+    "baseline_code_structure_hash": "f5f26c8cc27d71a0fc62e4216d4e509503e9a6f28e8fc37e54d953169f2cdd90"
+  },
+  "test_compile_data_dependency": {
+    "baseline_code_signature_text": "def test_compile_data_dependency():",
+    "baseline_code_structure_hash": "b80b3ee8c4696ac6afabade50da8e4e46120c1fef14fbc314bc4875a1cd1b43d",
+    "baseline_yaml_content_hash": "2d2b9fda5bf41b11768d37505e241c611fa0a5a358bd27446c84c89336572874"
+  },
+  "test_compile_diamond_dependency": {
+    "baseline_code_signature_text": "def test_compile_diamond_dependency():",
+    "baseline_code_structure_hash": "fa9f0ea7d5358ab8818eec4f9b5fcfbce1f726e48be45b74818fe21b12740a29",
+    "baseline_yaml_content_hash": "80b42735b220a5298e5a004f05a913cb3f29bc9f179b6a406799a76f6dd54f0c"
+  },
+  "test_compile_single_node_as_root": {
+    "baseline_code_signature_text": "def test_compile_single_node_as_root():",
+    "baseline_code_structure_hash": "7582ca30efe2f780244ed6f90fc38efc03eff3ddf1d1ddfd8ddc4ed1f8e16c1f",
+    "baseline_yaml_content_hash": "937aa57d9e57aa3c9cb9190ecce62cdf14b6183e56497808b81289507a2009f9"
+  }
+}

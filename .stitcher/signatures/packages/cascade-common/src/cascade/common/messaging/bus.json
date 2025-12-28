@@ -1,0 +1,46 @@
+{
+  "MessageBus.__init__": {
+    "baseline_code_signature_text": "def __init__(self, store: MessageStore):",
+    "baseline_code_structure_hash": "5040b88be06643bddcbfbf61c0cb7dd729aa4df78c9ef146ace3c1f75f8dc2cb"
+  },
+  "MessageBus._render": {
+    "baseline_code_signature_text": "def _render(self, level: str, msg_id: str, **kwargs: Any) -> None:",
+    "baseline_code_structure_hash": "316672ac0414128ee364f42946f43facf6e788100805e375ba12fe9ae4200a56"
+  },
+  "MessageBus.error": {
+    "baseline_code_signature_text": "def error(self, msg_id: str, **kwargs: Any) -> None:",
+    "baseline_code_structure_hash": "84a9764f3ca8fcb60c944c91c89ac249ecd342e73f3febb558281b42ed3499d1"
+  },
+  "MessageBus.info": {
+    "baseline_code_signature_text": "def info(self, msg_id: str, **kwargs: Any) -> None:",
+    "baseline_code_structure_hash": "3e1046913040a8cf4509de7d35aca870950df29cfcfa4da5d1bff78768844373"
+  },
+  "MessageBus.set_renderer": {
+    "baseline_code_signature_text": "def set_renderer(self, renderer: Renderer):",
+    "baseline_code_structure_hash": "ce3ded2742fb947176e357aadf1a2a16da320a95d72c9a6c393d91f26a2c70a4"
+  },
+  "MessageBus.store": {
+    "baseline_code_signature_text": "def store(self) -> MessageStore:",
+    "baseline_code_structure_hash": "dd826ea09e0e5193364733e58ce1d7f5e512595afb95e3c24b03be0e4cdde4a8"
+  },
+  "MessageBus.warning": {
+    "baseline_code_signature_text": "def warning(self, msg_id: str, **kwargs: Any) -> None:",
+    "baseline_code_structure_hash": "be57ff4a1d5205b937e12341e7993cb7cd6330be843e5b9ed929c061d2392eab"
+  },
+  "MessageStore.__init__": {
+    "baseline_code_signature_text": "def __init__(self, locale: str = \"en\"):",
+    "baseline_code_structure_hash": "36af0cc822092558038fd0f0f7a4d5fb661239a6a3391427091f5a10fec95836"
+  },
+  "MessageStore._find_locales_dir": {
+    "baseline_code_signature_text": "def _find_locales_dir(self) -> Optional[Path]:",
+    "baseline_code_structure_hash": "02193bf75f7f5a553b0228a25f6d5b23b2c958ae1bfb54853912c766da534df2"
+  },
+  "MessageStore._load_messages": {
+    "baseline_code_signature_text": "def _load_messages(self):",
+    "baseline_code_structure_hash": "8674d570a06445321b723026b09b798de3b061f6120b58ce658b9042a36e31bb"
+  },
+  "MessageStore.get": {
+    "baseline_code_signature_text": "def get(self, msg_id: str, default: str = \"\", **kwargs) -> str:",
+    "baseline_code_structure_hash": "d47ed1ebfbb1e481047748b0316bbee29f48f52008aae1c0d7cb4fe76d527b7c"
+  }
+}

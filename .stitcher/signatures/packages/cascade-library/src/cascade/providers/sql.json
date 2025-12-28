@@ -1,0 +1,16 @@
+{
+  "SqlProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "_sql_factory": {
+    "baseline_code_signature_text": "def _sql_factory(query: str, db: str, params: Optional[Dict[str, Any]] = None) -> LazyResult[List[Dict[str, Any]]]:",
+    "baseline_code_structure_hash": "5f207f2fc9ec2e432c573e84464199dff6821509c147b9418ab13b5e2840aaa2",
+    "baseline_yaml_content_hash": "829d579838c2c41e173cd4a8fef0eebb8fff5e5362190c101606afefc27d82b8"
+  },
+  "_sql_task": {
+    "baseline_code_signature_text": "def _sql_task(query: str, params: Dict[str, Any], conn: Any) -> List[Dict[str, Any]]:",
+    "baseline_code_structure_hash": "8bc1fba00a02787fa4e1eefdc98f8c6f6f9ffdd816b54f34f334f4763eda7d36",
+    "baseline_yaml_content_hash": "d76247e1cfdb11aa7eee233a7612c533349d8787938bab3c0acd11eee7b11841"
+  }
+}

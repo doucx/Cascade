@@ -1,0 +1,19 @@
+{
+  "MessageBus": {
+    "baseline_yaml_content_hash": "46d41ed34d0699603ecb124c4893a1979e0cd172c0d88d9efc26999d249098f2"
+  },
+  "MessageBus.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "MessageBus.publish": {
+    "baseline_code_signature_text": "def publish(self, event: Event):",
+    "baseline_code_structure_hash": "8af1449f40bb54d7c3cb3e911e803addabc3e4083a5af32083200df7b936dd74",
+    "baseline_yaml_content_hash": "c89a42b644b1dbeee03599e4511710773962d04b0d8b4b88ba893b3df8325c6c"
+  },
+  "MessageBus.subscribe": {
+    "baseline_code_signature_text": "def subscribe(self, event_type: Type[Event], handler: Handler):",
+    "baseline_code_structure_hash": "d7409aa8a0504d6bccbdca20aadce93d300ca8aec9ad28b54d98501e21b80772",
+    "baseline_yaml_content_hash": "1ca5a3a9080a3e707774c5a0f6d759c6551efb321e9e57ea075ef7aa7522885f"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "CascadeRuntimeError": {
+    "baseline_yaml_content_hash": "154f8e74f5af6493b16e9eed6de19b42f71c9a8abed1d284916cc6d7c47cc9c7"
+  },
+  "DependencyMissingError": {
+    "baseline_yaml_content_hash": "aa80c6a26d194d9eb1641d96ddf9e1f435e32a5fa378de3ff1ea9e2fd14665c8"
+  },
+  "DependencyMissingError.__init__": {
+    "baseline_code_signature_text": "def __init__(self, task_id: str, arg_name: str, dependency_id: str):",
+    "baseline_code_structure_hash": "36385b354185649aa66cb05fc2531a12237ab2997ab22b66470a4b81ef3da86e"
+  },
+  "ResourceNotFoundError": {
+    "baseline_yaml_content_hash": "a709a43fd47740090d927e29e4a3c053653083861fc1b69d15505d7fe894c225"
+  },
+  "ResourceNotFoundError.__init__": {
+    "baseline_code_signature_text": "def __init__(self, resource_name: str, consumer_name: str = \"unknown\"):",
+    "baseline_code_structure_hash": "fffb91492fe29d87e44ee7ed0ad82fbf2cb46c2ab387c4f123e6a51bb7ca330f"
+  }
+}

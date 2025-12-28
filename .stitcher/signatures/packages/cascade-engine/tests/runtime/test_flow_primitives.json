@@ -1,0 +1,30 @@
+{
+  "test_pipeline_chains_data_correctly": {
+    "baseline_code_signature_text": "async def test_pipeline_chains_data_correctly(bus_and_spy):",
+    "baseline_code_structure_hash": "2c9e1854d99c8ac59446b204e8e65fe5afdbf75634b2afca4f898863682d1a31"
+  },
+  "test_pipeline_with_lazy_initial_input": {
+    "baseline_code_signature_text": "async def test_pipeline_with_lazy_initial_input(bus_and_spy):",
+    "baseline_code_structure_hash": "83093f0ebe87efec6704a99186be1a7b1b1c7e827cdd5edad0ba1362bef210c9"
+  },
+  "test_pipeline_with_run_if_data_penetration": {
+    "baseline_code_signature_text": "async def test_pipeline_with_run_if_data_penetration(bus_and_spy):",
+    "baseline_code_structure_hash": "f542d9f17115fa5316bfb80c5a0a99fc3c92b4d860cbe4e3adb4a4849bbf276f"
+  },
+  "test_sequence_aborts_on_failure": {
+    "baseline_code_signature_text": "async def test_sequence_aborts_on_failure(bus_and_spy):",
+    "baseline_code_structure_hash": "d320e32fc176820b5292f01a6071b341c4354fec053e357c4a0f391323ee934b"
+  },
+  "test_sequence_aborts_on_skipped_node": {
+    "baseline_code_signature_text": "async def test_sequence_aborts_on_skipped_node(bus_and_spy):",
+    "baseline_code_structure_hash": "d55740f7033bd34c53fa273744cee59eaf33af9b1b4324e421495da5a1ede667"
+  },
+  "test_sequence_executes_in_order": {
+    "baseline_code_signature_text": "async def test_sequence_executes_in_order(bus_and_spy):",
+    "baseline_code_structure_hash": "088a928018105f02f76f3ef0966eb04cb30c71fd7b2dc0b6dc7e847a713f06b5"
+  },
+  "test_sequence_forwards_last_result": {
+    "baseline_code_signature_text": "async def test_sequence_forwards_last_result(bus_and_spy):",
+    "baseline_code_structure_hash": "ab165e93ba32266d655170a1a5d9026ad165a70aade672694730e77999493100"
+  }
+}

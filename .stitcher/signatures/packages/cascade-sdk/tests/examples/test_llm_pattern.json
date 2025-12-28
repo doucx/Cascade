@@ -1,0 +1,12 @@
+{
+  "mock_http_post": {
+    "baseline_code_signature_text": "def mock_http_post(monkeypatch):",
+    "baseline_code_structure_hash": "03c9be31274ab840a4a22f1b3221f6b5f8f15aa0d8d1108489804b1936e4c2c8",
+    "baseline_yaml_content_hash": "8af47e0d17639956d4426dc0772efc68e4df409aa0f5b732332d4974750ac4e2"
+  },
+  "test_llm_pattern_via_subflow": {
+    "baseline_code_signature_text": "async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):",
+    "baseline_code_structure_hash": "798af51c8dfc4ff1e9d0ea9f98152faf31fb297d5a60d0dfe7fe6935dd28a916",
+    "baseline_yaml_content_hash": "700626dfddb455e197827b07186092c7f07eafc72da45d9de33d3fae15ebedc4"
+  }
+}

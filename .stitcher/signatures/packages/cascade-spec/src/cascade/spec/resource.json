@@ -1,0 +1,30 @@
+{
+  "Inject": {
+    "baseline_yaml_content_hash": "413c3a605e322b420f97de64093d7324c4057d3a172e0e2a0b0c809618ab79ca"
+  },
+  "Inject.__init__": {
+    "baseline_code_signature_text": "def __init__(self, resource_name: str):",
+    "baseline_code_structure_hash": "33f8d07e1299302c6f823d1869412b44bb842edec189a099f597d20e7ffd959c"
+  },
+  "Inject.__repr__": {
+    "baseline_code_signature_text": "def __repr__(self):",
+    "baseline_code_structure_hash": "383221bb82433f1b2631e268430b5d2a01c9ca111a0fb45f7b938de2bbe279fd"
+  },
+  "ResourceDefinition": {
+    "baseline_yaml_content_hash": "d589a75068165b6eb29f50d99cbe491442a6bec6c8ec21943d9398a918b49858"
+  },
+  "ResourceDefinition.__post_init__": {
+    "baseline_code_signature_text": "def __post_init__(self):",
+    "baseline_code_structure_hash": "d76c52aed18252fe1b9610ae87c04381ffbbceaa56939bbbf1ef7e1efdd44409"
+  },
+  "inject": {
+    "baseline_code_signature_text": "def inject(resource_name: str) -> Any:",
+    "baseline_code_structure_hash": "057e42f050bd37f3c5e2916db36b9aac069ad11f4660de02f37a17cbddaf93b9",
+    "baseline_yaml_content_hash": "db19bc0705fbce18209f300191499b91e15a429a0c118fe75daa2e87c2d36cff"
+  },
+  "resource": {
+    "baseline_code_signature_text": "def resource(func: Callable[..., T] = None, *, name: Optional[str] = None, scope: str = \"run\"):",
+    "baseline_code_structure_hash": "d7355b6c2e7769978baf65a2dc51e5da49d72f3a9b8a13e371c2360f82a481e4",
+    "baseline_yaml_content_hash": "09567d1089508c2182e271bdb31933dde66762ad9e3d1de9d69cf54d5a6ce35e"
+  }
+}

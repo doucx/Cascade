@@ -1,0 +1,6 @@
+{
+  "parse_response": {
+    "baseline_code_signature_text": "def parse_response(response: \"HttpResponse\"):",
+    "baseline_code_structure_hash": "9c27961f9cafe8c23677e2ab675d2766f3c51c5f9129859f8db873094c60d643"
+  }
+}

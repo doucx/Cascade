@@ -1,0 +1,40 @@
+{
+  "Engine": {
+    "baseline_yaml_content_hash": "f49d0f50dc9efdf79f71c60acd66f35710e51f4badbd0bebb6ca717391f463ce"
+  },
+  "Engine.__init__": {
+    "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: MessageBus, state_backend_factory: Callable[[str], StateBackend] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None):",
+    "baseline_code_structure_hash": "730d07f55a05f87a1b0c3f8ffdbc50acd6c146c9fcc0ebd1b42e0a96c3b93cb2"
+  },
+  "Engine._is_simple_task": {
+    "baseline_code_signature_text": "def _is_simple_task(self, lr: Any) -> bool:",
+    "baseline_code_structure_hash": "ab3b4f902ec588d911cd296be79c4cb9dff75507849fefb34e27d836b57b6ddd",
+    "baseline_yaml_content_hash": "320895a40ef8271f5725f1091710433048134cc759ecc97198bd2897cc1a63d7"
+  },
+  "Engine._on_constraint_update": {
+    "baseline_code_signature_text": "async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):",
+    "baseline_code_structure_hash": "eddcb0897166dbfc907df5478fd877f9b8a961b202d84857fdd4c735fa143f65",
+    "baseline_yaml_content_hash": "e2a92e49627d102435c531b3f6b908631f82e5b12bdf7eea30b29b75b3edebe4"
+  },
+  "Engine.add_subscriber": {
+    "baseline_code_signature_text": "def add_subscriber(self, subscriber: Any):",
+    "baseline_code_structure_hash": "fd8b4d554a3f47348bb688c9ac8ae282886af2b68bc926c7e88d44f15e159d3c",
+    "baseline_yaml_content_hash": "5fcebcde8508430d49d09d388c820257796f8d8f1ad9d0b4829495864e9e65ce"
+  },
+  "Engine.get_resource_provider": {
+    "baseline_code_signature_text": "def get_resource_provider(self, name: str) -> Callable:",
+    "baseline_code_structure_hash": "9b5f8b6794b4783dce19c51aadf6d0565b5aa338ed1375b699cea09f2ae4b2d0"
+  },
+  "Engine.override_resource_provider": {
+    "baseline_code_signature_text": "def override_resource_provider(self, name: str, new_provider: Any):",
+    "baseline_code_structure_hash": "e105d26af5dec613d5e98e51508f08b7a7725753c3996041dfe280d968bc0170"
+  },
+  "Engine.register": {
+    "baseline_code_signature_text": "def register(self, resource_def: ResourceDefinition):",
+    "baseline_code_structure_hash": "156f5944fd1ebcf8849a88cf6422d18be15b5cb1477a39f4c3605dc400cb03de"
+  },
+  "Engine.run": {
+    "baseline_code_signature_text": "async def run(self, target: Any, params: Optional[Dict[str, Any]] = None, use_vm: bool = False) -> Any:",
+    "baseline_code_structure_hash": "dcf32b5c6d2401f8f636dfc254cc972ca1680fab11bfc238121841feb42056f6"
+  }
+}

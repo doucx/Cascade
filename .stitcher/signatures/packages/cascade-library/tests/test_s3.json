@@ -1,0 +1,27 @@
+{
+  "aws_credentials": {
+    "baseline_code_signature_text": "def aws_credentials():",
+    "baseline_code_structure_hash": "3e98fbb675485a0f537036924545ed77310dd1613559ab30e4617e747e11e06a",
+    "baseline_yaml_content_hash": "c727ed9ee39bb9563d5f3fcb07cb21bf37346ea3bea6f9953b453de316833185"
+  },
+  "s3_mock": {
+    "baseline_code_signature_text": "def s3_mock(aws_credentials, monkeypatch):",
+    "baseline_code_structure_hash": "f0cf9a36a76ea611bcfbd9b981587644b9400a09c24c8c1c0bc20307362376bf",
+    "baseline_yaml_content_hash": "71037db655a97c0d2d608e151c17f6c391d4c9b426c7e4e1a5c55a9801e7e141"
+  },
+  "test_s3_import_error": {
+    "baseline_code_signature_text": "def test_s3_import_error(monkeypatch):",
+    "baseline_code_structure_hash": "c7f7d949b6a33eae7c075125fea68f982bd9e92e86469e63a6c1f0fe225b0a47",
+    "baseline_yaml_content_hash": "d882049a465757232c83c20d66235277ed105577becff6b1a6a21ef7566fcebb"
+  },
+  "test_s3_write_read_bytes": {
+    "baseline_code_signature_text": "async def test_s3_write_read_bytes(s3_mock):",
+    "baseline_code_structure_hash": "a9b84823eef9546f17ca02266e2cf7a63bbe2743e899dd6a56a8451a2d05ab5d",
+    "baseline_yaml_content_hash": "1c89d86422eea4c1e0bce89eb17220b4c85a7e36a826a045c0994cf4a566f59b"
+  },
+  "test_s3_write_read_text": {
+    "baseline_code_signature_text": "async def test_s3_write_read_text(s3_mock):",
+    "baseline_code_structure_hash": "30cd482e3b42605bef02f7daf14bc29285968251d8085aa15c8ea4b952716392",
+    "baseline_yaml_content_hash": "29c85d0a7e16e3fd66495bcb6e324a95ad5eb1034447913fbd59707e4757a900"
+  }
+}

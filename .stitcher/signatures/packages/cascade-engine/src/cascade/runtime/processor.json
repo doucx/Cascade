@@ -1,0 +1,26 @@
+{
+  "NodeProcessor": {
+    "baseline_yaml_content_hash": "93a85bea35b9acec92b111a122fdae2fa2fb6bc9c6348258e6c749fe5ea531ea"
+  },
+  "NodeProcessor.__init__": {
+    "baseline_code_signature_text": "def __init__(self, executor: Executor, bus: MessageBus, resource_manager: ResourceManager, constraint_manager: ConstraintManager, solver: Solver):",
+    "baseline_code_structure_hash": "28d338685fc8acc4c8a2f1bb8af86a3b394a063813b8b579f5765d8ed0b8ef4c"
+  },
+  "NodeProcessor._execute_internal": {
+    "baseline_code_signature_text": "async def _execute_internal(self, node: Node, graph: Graph, state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable, instance_map: Dict[str, Node], input_overrides: Dict[str, Any] = None) -> Any:",
+    "baseline_code_structure_hash": "ed973da8a1df37fcdaef6c1f7f0efe23d2dff9d4b55f3c04fb3c02cea2543da4"
+  },
+  "NodeProcessor._execute_map_node": {
+    "baseline_code_signature_text": "async def _execute_map_node(self, node: Node, kwargs: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], parent_state_backend: StateBackend, sub_graph_runner: Callable) -> List[Any]:",
+    "baseline_code_structure_hash": "e321e430b85fee5c0a31589e2f9c016aca5c45c0d8127ecd7c7909325a720f77"
+  },
+  "NodeProcessor._resolve_inputs_for_cache": {
+    "baseline_code_signature_text": "async def _resolve_inputs_for_cache(self, node: Node, graph: Graph, state_backend: StateBackend) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "e6521b71134fcf63eb6d852e731fffb8d3aea62c9f7acb37eb9f205088518c85"
+  },
+  "NodeProcessor.process": {
+    "baseline_code_signature_text": "async def process(self, node: Node, graph: Graph, state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]], instance_map: Dict[str, Node], input_overrides: Dict[str, Any] = None) -> Any:",
+    "baseline_code_structure_hash": "4c3a21be57656983c52eb6896c0f5b5e46d25282da6e460496cc1dac145d1b97",
+    "baseline_yaml_content_hash": "1af59a7b75e04d2e216a2bad2ad9e73b115011e0558c331f3bc70442239951e9"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "HttpDeleteProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "HttpGetProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "HttpPostProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "HttpPutProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "HttpRequestProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "HttpResponse": {
+    "baseline_yaml_content_hash": "1e83ddbbfbe88b8a908e9973a49a9c54eef9c2d35d01479de2d551e20469945a"
+  },
+  "HttpResponse.__repr__": {
+    "baseline_code_signature_text": "def __repr__(self) -> str:",
+    "baseline_code_structure_hash": "bad8a83d11cc0211d4eb2e5e3e8f72eeb0697d2d378d38bfad954e19bf228f6e"
+  },
+  "HttpResponse.json": {
+    "baseline_code_signature_text": "def json(self) -> Any:",
+    "baseline_code_structure_hash": "84adb4baada8e865d756b3ee3c678a5dc1bdeccda6f9ab1ceb8120fd4d495365",
+    "baseline_yaml_content_hash": "3ef4a6895134e23bfffb3307fc4c75501655ee330c7cb0a7af41648ca4d8c287"
+  },
+  "HttpResponse.text": {
+    "baseline_code_signature_text": "def text(self, encoding: str = \"utf-8\") -> str:",
+    "baseline_code_structure_hash": "166d9076d445dd6005e529bd13cce471c853b658938e9d1c61e8188bff6f2725",
+    "baseline_yaml_content_hash": "e628893aa4367a8446457ad3dbf2fa603d040da86c8a1f1de7671c8895a88ed1"
+  },
+  "_http_delete_task": {
+    "baseline_code_signature_text": "async def _http_delete_task(url: str, headers: Optional[Dict[str, str]] = None) -> HttpResponse:",
+    "baseline_code_structure_hash": "3cae4f4a0299109878667103b8caad68335723f7e02fe908dd6ba08098ca744b"
+  },
+  "_http_get_task": {
+    "baseline_code_signature_text": "async def _http_get_task(url: str, params: Optional[Dict[str, str]] = None, headers: Optional[Dict[str, str]] = None) -> HttpResponse:",
+    "baseline_code_structure_hash": "4cb8f5b0bdcf5c7e329d1d5f1eea26f755c5f3f3a001ceffccbfff1232eb87e8"
+  },
+  "_http_post_task": {
+    "baseline_code_signature_text": "async def _http_post_task(url: str, json: Optional[Any] = None, data: Optional[Any] = None, files: Optional[Dict[str, str]] = None, headers: Optional[Dict[str, str]] = None, params: Optional[Dict[str, str]] = None) -> HttpResponse:",
+    "baseline_code_structure_hash": "e77abc4197aa8109709ec903183e12f31ed38333ffb51232cd87e4451d678bea"
+  },
+  "_http_put_task": {
+    "baseline_code_signature_text": "async def _http_put_task(url: str, json: Optional[Any] = None, data: Optional[Any] = None, files: Optional[Dict[str, str]] = None, headers: Optional[Dict[str, str]] = None) -> HttpResponse:",
+    "baseline_code_structure_hash": "edea51d7e44e3be39f79558154b1c663d4af37b09d63165cdb107bb0ae77474d"
+  },
+  "_http_request_task": {
+    "baseline_code_signature_text": "async def _http_request_task(url: str, method: str = \"GET\", params: Optional[Dict[str, str]] = None, json: Optional[Any] = None, data: Optional[Any] = None, files: Optional[Dict[str, str]] = None, headers: Optional[Dict[str, str]] = None) -> HttpResponse:",
+    "baseline_code_structure_hash": "2ede6c1dcfd18fd1f3ea95201b61fbcba72280a23c7833da34babbd6b39dc4d5"
+  },
+  "_perform_request": {
+    "baseline_code_signature_text": "async def _perform_request(url: str, method: str, params: Optional[Dict[str, str]] = None, json_data: Optional[Any] = None, headers: Optional[Dict[str, str]] = None, data: Optional[Any] = None, files: Optional[Dict[str, str]] = None) -> HttpResponse:",
+    "baseline_code_structure_hash": "56860b43ea04e94c05f9a588e66d9f370be947e063573505a07d5511557f1caf",
+    "baseline_yaml_content_hash": "6893f670152f2a86ae4428906d01c59b7ae37ebc24d23a33c2cea34cd95abb7b"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "test_file": {
+    "baseline_code_signature_text": "def test_file(tmp_path):",
+    "baseline_code_structure_hash": "17fffa2320fe4a4ae94bc7cf6c6c480975476c8e7ff47f289516f0071872d23a"
+  },
+  "test_fs_exists_provider": {
+    "baseline_code_signature_text": "async def test_fs_exists_provider(test_file):",
+    "baseline_code_structure_hash": "4a4d5652a66ab2944e7cac3cf93ea85ed6a21871f9a08f45483de23a69521cf6"
+  },
+  "test_provider_registry_namespace_resolution": {
+    "baseline_code_signature_text": "def test_provider_registry_namespace_resolution():",
+    "baseline_code_structure_hash": "b1b1e6703a6ab8d0e29165f163484ad65ec2d76037d192e1f6fab092633aee99",
+    "baseline_yaml_content_hash": "2f9ea61e48bf4d0cadf761bd7b862f814b6db03ebaa4b2c4c8a3856cb0c46e4f"
+  },
+  "test_read_text_provider": {
+    "baseline_code_signature_text": "async def test_read_text_provider(test_file):",
+    "baseline_code_structure_hash": "58ba8183f6542b01b18c58c2b08caa0d5fa2823d25388bb2baaaf2690f6967b5"
+  },
+  "test_write_text_provider": {
+    "baseline_code_signature_text": "async def test_write_text_provider(test_file):",
+    "baseline_code_structure_hash": "9c9a773501854ae0ff8d391eec2bd64314be1c4a94e15836315da5baf2694374"
+  }
+}

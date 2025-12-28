@@ -1,0 +1,41 @@
+{
+  "S3ProviderBase": {
+    "baseline_yaml_content_hash": "1e862e389161674ff5c01c28e9b485873302b6cb56cb9dd3c287e334b3cd87a7"
+  },
+  "S3ProviderBase._check_dependency": {
+    "baseline_code_signature_text": "def _check_dependency(self):",
+    "baseline_code_structure_hash": "29726e52ffcd0fd34cc93ef08cbab0886ca6aa31b77b2a69b35e2fdcacf1c6be"
+  },
+  "S3ReadBytesProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "S3ReadTextProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "S3WriteBytesProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "S3WriteTextProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "_s3_read_bytes": {
+    "baseline_code_signature_text": "async def _s3_read_bytes(bucket: str, key: str) -> bytes:",
+    "baseline_code_structure_hash": "9ddbb708d402ee40d1cce6658b0ec5f004cc40021ba4345383a61d65666fc0df"
+  },
+  "_s3_read_text": {
+    "baseline_code_signature_text": "async def _s3_read_text(bucket: str, key: str, encoding: str = \"utf-8\") -> str:",
+    "baseline_code_structure_hash": "82bc8fef04294b9888dcc29fc9199e5f14e64eb31015c6f74bb7d6164df37d07"
+  },
+  "_s3_write_bytes": {
+    "baseline_code_signature_text": "async def _s3_write_bytes(bucket: str, key: str, content: bytes) -> None:",
+    "baseline_code_structure_hash": "216614c7012b04a24dcebac74279a7f71519137f75478f9db652c0c173df49e2"
+  },
+  "_s3_write_text": {
+    "baseline_code_signature_text": "async def _s3_write_text(bucket: str, key: str, content: str, encoding: str = \"utf-8\") -> None:",
+    "baseline_code_structure_hash": "ad4276fd53fd8caab7bd84ed91600e863e335cf5cd325f37df1b74c9010805f3"
+  }
+}

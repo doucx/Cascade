@@ -71,7 +71,6 @@ def _get_node_shape(node: Node) -> str:
 
 @dataclass(frozen=True)
 class ToolEvent(Event):
-
     pass
 
 
@@ -95,7 +94,6 @@ class PlanAnalysisFinished(ToolEvent):
 
 
 class DryRunConsoleSubscriber:
-
     def __init__(self, bus: MessageBus):
         bus.subscribe(PlanAnalysisStarted, self.on_start)
         bus.subscribe(PlanNodeInspected, self.on_node)
@@ -118,7 +116,6 @@ class DryRunConsoleSubscriber:
 
 
 class CascadeApp:
-
     def __init__(
         self,
         target: Union[LazyResult, List[Any], Tuple[Any, ...]],

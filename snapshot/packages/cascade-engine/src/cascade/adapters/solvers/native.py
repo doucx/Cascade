@@ -6,7 +6,6 @@ from cascade.spec.protocols import Solver, ExecutionPlan
 
 
 class NativeSolver(Solver):
-
     def resolve(self, graph: Graph) -> ExecutionPlan:
         executable_nodes = graph.nodes
 

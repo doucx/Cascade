@@ -29,7 +29,6 @@ databases:
 
 @pytest.mark.asyncio
 async def test_load_yaml_provider(dummy_config_file):
-
     loaded_data = cs.load_yaml(dummy_config_file)
 
     engine = cs.Engine(
@@ -43,7 +42,6 @@ async def test_load_yaml_provider(dummy_config_file):
 
 @pytest.mark.asyncio
 async def test_lookup_provider_basic(dummy_config_file):
-
     # 1. Explicitly load the config
     config_source = cs.load_yaml(dummy_config_file)
 
@@ -60,7 +58,6 @@ async def test_lookup_provider_basic(dummy_config_file):
 
 @pytest.mark.asyncio
 async def test_lookup_on_static_dict():
-
     @cs.task
     def provide_dict():
         return {"a": {"b": 10}}
@@ -77,7 +74,6 @@ async def test_lookup_on_static_dict():
 
 @pytest.mark.asyncio
 async def test_lookup_missing_key_raises_error():
-
     @cs.task
     def provide_dict():
         return {"a": 1}
@@ -95,7 +91,6 @@ async def test_lookup_missing_key_raises_error():
 
 @pytest.mark.asyncio
 async def test_lookup_invalid_path_raises_type_error():
-
     @cs.task
     def provide_dict():
         return {"a": 1}

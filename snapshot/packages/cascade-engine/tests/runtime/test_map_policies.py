@@ -61,7 +61,6 @@ async def test_map_with_retry_policy():
 
 @pytest.mark.asyncio
 async def test_map_with_constraints_policy():
-
     @cs.task
     async def slow_task(x):
         await asyncio.sleep(0.05)

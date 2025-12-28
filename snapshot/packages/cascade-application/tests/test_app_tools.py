@@ -3,7 +3,6 @@ from cascade.app import CascadeApp
 
 
 def test_app_dry_run_linear_workflow(capsys):
-
     @cs.task
     def step_a():
         return 1
@@ -25,7 +24,6 @@ def test_app_dry_run_linear_workflow(capsys):
 
 
 def test_app_dry_run_diamond_workflow(capsys):
-
     @cs.task
     def t_a():
         return 1
@@ -60,7 +58,6 @@ def test_app_dry_run_diamond_workflow(capsys):
 
 
 def test_app_dry_run_with_list_input(capsys):
-
     @cs.task(pure=True)
     def t_a():
         return "a"

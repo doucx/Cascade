@@ -13,7 +13,6 @@ except ImportError:
 
 @dataclass
 class HttpResponse:
-
     status: int
     headers: Dict[str, str]
     body: bytes

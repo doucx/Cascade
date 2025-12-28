@@ -10,7 +10,6 @@ pytest.importorskip("aiohttp")
 
 @pytest.mark.asyncio
 async def test_http_get_success(aiohttp_client):
-
     async def handler(request):
         from aiohttp import web
 
@@ -41,7 +40,6 @@ async def test_http_get_success(aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_http_post_success(aiohttp_client):
-
     async def handler(request):
         from aiohttp import web
 
@@ -78,7 +76,6 @@ async def test_http_post_success(aiohttp_client):
 
 @pytest.mark.asyncio
 async def test_http_with_template(aiohttp_client):
-
     async def user_handler(request):
         from aiohttp import web
 

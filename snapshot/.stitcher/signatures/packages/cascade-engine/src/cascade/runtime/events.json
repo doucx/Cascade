@@ -1,0 +1,47 @@
+{
+  "ConnectorConnected": {
+    "baseline_yaml_content_hash": "a287c27474a9d53328e9ebc46bd9572c8bbde8c44b778d7532d0016ffdac29a9"
+  },
+  "ConnectorDisconnected": {
+    "baseline_yaml_content_hash": "19fd4c9c83f546122149c3d8797427f5319f8e01cf64b267733c612e6e8b3ff8"
+  },
+  "Event": {
+    "baseline_yaml_content_hash": "b91735986a5f040819a1a79dac9e07b4f57954fdc92f97c0e39820b6007a384a"
+  },
+  "ResourceAcquired": {
+    "baseline_yaml_content_hash": "3122475986e163f3bd1645defacaf01f8b24551b828413b7c5f1fd568000c88f"
+  },
+  "ResourceEvent": {
+    "baseline_yaml_content_hash": "15aebd02bd11e6b16ba4ef770888740682d9ad0263fe16765ffaeb673133c767"
+  },
+  "ResourceReleased": {
+    "baseline_yaml_content_hash": "a7521b27a8697259e74ad6efdefd94aa5025e8d285a572e23a59c0bf31bd416a"
+  },
+  "RunFinished": {
+    "baseline_yaml_content_hash": "fe44c81ce14927ce451293a876e9bf32484f181975a963544e8fa287579457e3"
+  },
+  "RunStarted": {
+    "baseline_yaml_content_hash": "b64bd0bf7e1cab2ad8df48ec58c79e8d6f2c96a146fdea1a51fa8fba4a164e71"
+  },
+  "StaticAnalysisWarning": {
+    "baseline_yaml_content_hash": "ff21ada34f84a43d8dab77af8a6ad4bbe53434d7c65adb67d7b944576a53fe23"
+  },
+  "TaskBlocked": {
+    "baseline_yaml_content_hash": "88042baee5ef6482aca4ff06d6ba8cc74950fc133e1bfa0119ef29d9bb97600c"
+  },
+  "TaskEvent": {
+    "baseline_yaml_content_hash": "bcfdd3c3168246a1d8198406962ae8cb08f28539fdba758d3ed6dd8e8e0fb10f"
+  },
+  "TaskExecutionFinished": {
+    "baseline_yaml_content_hash": "13a5ba80dc689f45c86bcf556c102e7381de89ef2da9a243d506724900f29f78"
+  },
+  "TaskExecutionStarted": {
+    "baseline_yaml_content_hash": "17cfb02ca2611b75f1b9a9a6a70f5c99d0f27e45d3b62b66a1e7cf340c5c8365"
+  },
+  "TaskRetrying": {
+    "baseline_yaml_content_hash": "c41b1c6958378de52be009251260151912820fdfb21c147708d51359298ce774"
+  },
+  "TaskSkipped": {
+    "baseline_yaml_content_hash": "aece4add060321a85b44916f967bbb4e86e77527ddb19b252ea53fcde6bf5d33"
+  }
+}

@@ -5,31 +5,26 @@ from cascade.spec.constraint import ResourceConstraint
 
 @dataclass
 class Operand:
-
     pass
 
 
 @dataclass
 class Literal(Operand):
-
     value: Any
 
 
 @dataclass
 class Register(Operand):
-
     index: int
 
 
 @dataclass
 class Instruction:
-
     pass
 
 
 @dataclass
 class Call(Instruction):
-
     func: Any
     output: Register
     args: List[Operand] = field(default_factory=list)
@@ -42,7 +37,6 @@ class Call(Instruction):
 
 @dataclass
 class TailCall:
-
     args: List[Any] = field(default_factory=list)
     kwargs: Dict[str, Any] = field(default_factory=dict)
     target_blueprint_id: Optional[str] = None  # For mutual recursion in future
@@ -50,7 +44,6 @@ class TailCall:
 
 @dataclass
 class Blueprint:
-
     instructions: List[Instruction] = field(default_factory=list)
     register_count: int = 0
 

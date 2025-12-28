@@ -7,7 +7,6 @@ from cascade.runtime.resource_manager import ResourceManager
 
 
 class ConstraintManager:
-
     def __init__(self, resource_manager: ResourceManager):
         self.resource_manager = resource_manager
         # Stores active constraints by their unique ID

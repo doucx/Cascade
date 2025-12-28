@@ -4,7 +4,6 @@ from cascade.spec.protocols import StateBackend
 
 
 class ExecutionStrategy(Protocol):
-
     async def execute(
         self,
         target: Any,

@@ -11,7 +11,6 @@ from cascade.runtime.events import ResourceAcquired, ResourceReleased
 
 
 class ResourceContainer:
-
     def __init__(self, bus: MessageBus):
         self.bus = bus
         self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
@@ -82,7 +81,6 @@ class ResourceContainer:
         step_stack: ExitStack,
         run_id: str,
     ) -> None:
-
         def get_or_create(name: str):
             if name in active_resources:
                 return active_resources[name]

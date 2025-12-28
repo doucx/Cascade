@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class IpfsCacheBackend(CacheBackend):
-
     def __init__(
         self,
         metadata_backend: CacheBackend,

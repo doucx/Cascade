@@ -20,13 +20,11 @@ from cascade.runtime.constraints.manager import ConstraintManager
 
 @dataclass
 class GraphExecutionResult:
-
     value: Any
     source_node_id: str
 
 
 class GraphExecutionStrategy:
-
     def __init__(
         self,
         solver: Solver,

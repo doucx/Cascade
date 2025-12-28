@@ -13,7 +13,6 @@ def test_resource_constraint_definition():
 
 
 def test_lazy_result_constraint_chaining():
-
     @cs.task
     def heavy_task():
         pass
@@ -25,7 +24,6 @@ def test_lazy_result_constraint_chaining():
 
 
 def test_constraint_propagation_to_node():
-
     @cs.task
     def heavy_task():
         pass

@@ -26,7 +26,6 @@ result_node = process(10, multiplier)
 
 @pytest.mark.asyncio
 async def test_subflow_execution(subflow_file):
-
     # Define a parent workflow that calls the subflow
     # subflow is loaded via provider registry
     sub_result = cs.subflow(
@@ -51,7 +50,6 @@ async def test_subflow_execution(subflow_file):
 
 @pytest.mark.asyncio
 async def test_subflow_file_not_found():
-
     workflow = cs.subflow(path="non_existent.py", target="foo")
 
     engine = cs.Engine(
@@ -64,7 +62,6 @@ async def test_subflow_file_not_found():
 
 @pytest.mark.asyncio
 async def test_subflow_target_not_found(subflow_file):
-
     workflow = cs.subflow(path=subflow_file, target="missing_var")
 
     engine = cs.Engine(

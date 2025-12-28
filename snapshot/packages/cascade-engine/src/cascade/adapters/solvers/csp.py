@@ -11,7 +11,6 @@ except ImportError:
 
 
 class CSPSolver:
-
     def __init__(self, system_resources: Dict[str, float]):
         if constraint is None:
             raise ImportError(

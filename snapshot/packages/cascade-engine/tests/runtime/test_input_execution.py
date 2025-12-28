@@ -8,7 +8,6 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @pytest.mark.asyncio
 async def test_engine_executes_param_task():
-
     # 定义参数
     p = cs.Param("count", type=int)
 

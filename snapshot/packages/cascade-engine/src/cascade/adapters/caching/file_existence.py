@@ -3,7 +3,6 @@ from typing import Any, Dict, Callable, Union
 
 
 class FileExistenceCache:
-
     def __init__(self, target_path: Union[str, Callable[[Dict[str, Any]], str]]):
         self.target_path = target_path
 

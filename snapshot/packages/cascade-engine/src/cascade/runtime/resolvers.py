@@ -8,7 +8,6 @@ from cascade.spec.protocols import StateBackend
 
 
 class ArgumentResolver:
-
     async def resolve(
         self,
         node: Node,
@@ -272,7 +271,6 @@ class ArgumentResolver:
 
 
 class ConstraintResolver:
-
     async def resolve(
         self,
         node: Node,

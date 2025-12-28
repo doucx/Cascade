@@ -145,7 +145,6 @@ def test_serialize_with_constraints():
 
 
 def test_serialize_edge_types():
-
     # 1. Condition edge
     target_condition = t_target(t_dynamic_constraint(1)).run_if(t_condition())
 
@@ -206,7 +205,6 @@ def consumer(val):
 
 
 def test_serialize_router():
-
     # Construct a router using top-level tasks
     selector = get_route()
     route_a = task_a()

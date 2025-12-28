@@ -5,13 +5,11 @@ from cascade.runtime.events import Event
 
 @dataclass(frozen=True)
 class ToolEvent(Event):
-
     pass
 
 
 @dataclass(frozen=True)
 class PlanAnalysisStarted(ToolEvent):
-
     target_node_id: str = ""
 
     def _get_payload(self) -> Dict[str, Any]:
@@ -20,7 +18,6 @@ class PlanAnalysisStarted(ToolEvent):
 
 @dataclass(frozen=True)
 class PlanNodeInspected(ToolEvent):
-
     index: int = 0
     total_nodes: int = 0
     node_id: str = ""
@@ -39,7 +36,6 @@ class PlanNodeInspected(ToolEvent):
 
 @dataclass(frozen=True)
 class PlanAnalysisFinished(ToolEvent):
-
     total_steps: int = 0
 
     def _get_payload(self) -> Dict[str, Any]:

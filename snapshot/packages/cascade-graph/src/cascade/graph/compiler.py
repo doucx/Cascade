@@ -11,7 +11,6 @@ from cascade.spec.blueprint import (
 
 
 class BlueprintBuilder:
-
     def __init__(self):
         self._instructions: List[Instruction] = []
         self._visited: Dict[str, int] = {}

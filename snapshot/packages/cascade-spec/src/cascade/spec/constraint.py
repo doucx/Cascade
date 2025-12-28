@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ResourceConstraint:
-
     requirements: Dict[str, Any] = field(default_factory=dict)
 
     def is_empty(self) -> bool:
@@ -20,7 +19,6 @@ def with_constraints(**kwargs) -> ResourceConstraint:
 
 @dataclass
 class GlobalConstraint:
-
     id: str
     scope: str  # e.g., "global", "project:quipu", "task:openai_request"
     type: str  # "concurrency", "rate_limit", "pause"

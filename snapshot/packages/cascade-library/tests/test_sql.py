@@ -50,7 +50,6 @@ def db_engine():
 
 @pytest.mark.asyncio
 async def test_sql_query_success(db_engine):
-
     # Define a workflow using the 'sqlite_db' resource
     users = cs.sql("SELECT * FROM users ORDER BY name", db="sqlite_db")
 
@@ -63,7 +62,6 @@ async def test_sql_query_success(db_engine):
 
 @pytest.mark.asyncio
 async def test_sql_with_params(db_engine):
-
     target = cs.sql(
         "SELECT * FROM users WHERE name = :name", db="sqlite_db", params={"name": "Bob"}
     )
@@ -76,7 +74,6 @@ async def test_sql_with_params(db_engine):
 
 @pytest.mark.asyncio
 async def test_sql_missing_resource():
-
     target = cs.sql("SELECT 1", db="non_existent_db")
 
     engine = cs.Engine(

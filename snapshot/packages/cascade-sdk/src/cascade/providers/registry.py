@@ -4,23 +4,18 @@ from typing import Any, Dict, Protocol
 
 
 class LazyFactory(Protocol):
-
     def map(self, **kwargs) -> Any: ...
     def __call__(self, *args, **kwargs) -> Any: ...
 
 
 class Provider(Protocol):
-
     @property
-    def name(self) -> str:
-        ...
+    def name(self) -> str: ...
 
-    def create_factory(self) -> LazyFactory:
-        ...
+    def create_factory(self) -> LazyFactory: ...
 
 
 class ProviderNamespace:
-
     def __init__(self, registry: "ProviderRegistry", prefix: str):
         self._registry = registry
         self._prefix = prefix
@@ -31,7 +26,6 @@ class ProviderNamespace:
 
 
 class ProviderRegistry:
-
     _instance = None
 
     def __init__(self):

@@ -53,7 +53,6 @@ async def test_vm_handles_simple_recursion():
 
 @pytest.mark.asyncio
 async def test_vm_propagates_exceptions():
-
     def failing_task(x):
         raise ValueError("Boom")
 

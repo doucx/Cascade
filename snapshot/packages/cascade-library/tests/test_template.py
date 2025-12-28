@@ -6,7 +6,6 @@ pytest.importorskip("jinja2")
 
 
 def test_template_with_literals():
-
     # cs.template is loaded dynamically via __getattr__
     rendered_text = cs.template("Hello, {{ name }}!", name="World")
 
@@ -15,7 +14,6 @@ def test_template_with_literals():
 
 
 def test_template_with_lazy_result():
-
     @cs.task
     def get_username():
         return "Cascade"

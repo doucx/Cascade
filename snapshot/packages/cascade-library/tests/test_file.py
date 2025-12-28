@@ -79,7 +79,6 @@ async def test_file_exists_false(tmp_path):
 
 @pytest.mark.asyncio
 async def test_file_json_parsing_composition(dummy_file):
-
     @cs.task
     def parse_json(text: str):
         return json.loads(text)
@@ -100,7 +99,6 @@ async def test_file_json_parsing_composition(dummy_file):
 
 @pytest.mark.asyncio
 async def test_file_dynamic_path_dependency(tmp_path):
-
     @cs.task
     def generate_path() -> str:
         p = tmp_path / "dynamic.txt"

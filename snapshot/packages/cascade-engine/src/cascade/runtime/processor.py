@@ -18,7 +18,6 @@ from cascade.runtime.events import (
 
 
 class NodeProcessor:
-
     def __init__(
         self,
         executor: Executor,

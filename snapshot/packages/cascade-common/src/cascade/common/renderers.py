@@ -14,7 +14,6 @@ LOG_LEVELS = {
 
 
 class CliRenderer(protocols.Renderer):
-
     def __init__(
         self,
         store: MessageStore,
@@ -32,7 +31,6 @@ class CliRenderer(protocols.Renderer):
 
 
 class JsonRenderer(protocols.Renderer):
-
     def __init__(
         self,
         stream: Optional[TextIO] = None,

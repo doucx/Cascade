@@ -16,7 +16,6 @@ from cascade.spec.task import Task
 
 @dataclass
 class _StubLazyResult:
-
     _uuid: str
 
 

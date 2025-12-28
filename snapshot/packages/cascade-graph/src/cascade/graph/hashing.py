@@ -7,7 +7,6 @@ from cascade.spec.resource import Inject
 
 
 class HashingService:
-
     def compute_structural_hash(self, result: Any, dep_nodes: Dict[str, Node]) -> str:
         if isinstance(result, LazyResult):
             return self._compute_lazy_result_hash(result, dep_nodes)
@@ -136,7 +135,6 @@ class HashingService:
 
 
 class BlueprintHasher:
-
     def compute_hash(self, graph: Graph) -> str:
         all_components = []
         # Sort nodes by structural_id to ensure deterministic traversal

@@ -1,0 +1,14 @@
+{
+  "LocalExecutor": {
+    "baseline_yaml_content_hash": "f5dfe5a64dbd130850f936e3cc431d955ba90773f9382d7c1db599c14e3c773d"
+  },
+  "LocalExecutor.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "LocalExecutor.execute": {
+    "baseline_code_signature_text": "async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
+    "baseline_code_structure_hash": "6ab959946345cf1f86e292dcc605b71552e8872be8e3625a41d658e4379943ca",
+    "baseline_yaml_content_hash": "9aac987dbf0023c6e1d401d0d53b30e7ccd93ec96f1ca0a4426b2c72f355705b"
+  }
+}

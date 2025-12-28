@@ -18,7 +18,6 @@ from cascade.runtime.constraints import ConstraintManager
 
 
 class Frame:
-
     def __init__(self, size: int):
         self.registers: List[Any] = [None] * size
 
@@ -35,7 +34,6 @@ class Frame:
 
 
 class VirtualMachine:
-
     def __init__(
         self,
         resource_manager: Optional[ResourceManager] = None,
@@ -112,7 +110,6 @@ class VirtualMachine:
         args: List[Any],
         kwargs: Dict[str, Any],
     ):
-
         # Positional args
         for i, val in enumerate(args):
             if i < len(blueprint.input_args):

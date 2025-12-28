@@ -4,7 +4,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class InputSpec:
-
     name: str
     default: Any = None
     description: str = ""
@@ -14,11 +13,9 @@ class InputSpec:
 
 @dataclass(frozen=True)
 class ParamSpec(InputSpec):
-
     type: Any = str  # 用于 CLI 类型转换
 
 
 @dataclass(frozen=True)
 class EnvSpec(InputSpec):
-
     pass

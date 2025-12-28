@@ -10,7 +10,6 @@ from cascade.testing import SpySubscriber
 
 @pytest.mark.asyncio
 async def test_pruning_exclusive_branches():
-
     @cs.task
     def get_route():
         return "a"
@@ -66,7 +65,6 @@ async def test_pruning_exclusive_branches():
 
 @pytest.mark.asyncio
 async def test_pruning_shared_dependency():
-
     @cs.task
     def get_route():
         return "a"

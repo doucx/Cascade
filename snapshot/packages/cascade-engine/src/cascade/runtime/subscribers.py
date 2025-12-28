@@ -21,7 +21,6 @@ from cascade.spec.protocols import Connector
 
 
 class HumanReadableLogSubscriber:
-
     def __init__(self, event_bus: MessageBus):
         # Subscribe to relevant events from the core event_bus
         event_bus.subscribe(RunStarted, self.on_run_started)
@@ -100,7 +99,6 @@ class HumanReadableLogSubscriber:
 
 
 class TelemetrySubscriber:
-
     def __init__(self, event_bus: MessageBus, connector: Connector):
         self._connector = connector
         self._source_id = f"{platform.node()}-{os.getpid()}"

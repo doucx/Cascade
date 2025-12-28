@@ -12,7 +12,6 @@ class Bucket:
 
 
 class RateLimiter:
-
     def __init__(self):
         self._buckets: Dict[str, Bucket] = {}
 

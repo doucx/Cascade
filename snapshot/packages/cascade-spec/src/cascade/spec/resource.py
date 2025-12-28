@@ -7,7 +7,6 @@ T = TypeVar("T")
 
 @dataclass
 class ResourceDefinition(Generic[T]):
-
     func: Callable[..., T]
     name: str
     scope: str = "run"  # Default scope
@@ -20,7 +19,6 @@ class ResourceDefinition(Generic[T]):
 
 
 class Inject:
-
     def __init__(self, resource_name: str):
         self.resource_name = resource_name
 
@@ -31,7 +29,6 @@ class Inject:
 def resource(
     func: Callable[..., T] = None, *, name: Optional[str] = None, scope: str = "run"
 ):
-
     def wrapper(f: Callable[..., T]) -> ResourceDefinition[T]:
         resource_name = name or f.__name__
         return ResourceDefinition(func=f, name=resource_name, scope=scope)

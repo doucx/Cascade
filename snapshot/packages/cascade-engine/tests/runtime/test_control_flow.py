@@ -60,7 +60,6 @@ async def test_run_if_false():
 
 @pytest.mark.asyncio
 async def test_cascade_skip():
-
     @cs.task
     def condition():
         return False

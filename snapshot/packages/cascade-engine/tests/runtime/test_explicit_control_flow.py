@@ -8,7 +8,6 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @pytest.mark.asyncio
 async def test_explicit_jump_loop():
-
     @cs.task
     def counter(n: int):
         if n <= 0:

@@ -2,7 +2,6 @@ import cascade as cs
 
 
 def test_visualize_diamond_graph():
-
     @cs.task
     def t_a():
         return 1
@@ -57,7 +56,6 @@ def test_visualize_diamond_graph():
 
 
 def test_visualize_special_edge_types():
-
     @cs.task
     def t_condition():
         return True
@@ -107,7 +105,6 @@ def test_visualize_special_edge_types():
 
 
 def test_visualize_iterative_jump_edge():
-
     @cs.task
     def state_machine(data: int):
         if data < 3:
@@ -151,7 +148,6 @@ def test_visualize_iterative_jump_edge():
 
 
 def test_visualize_multi_node_jump_edge():
-
     @cs.task
     def task_a():
         return 1
@@ -197,7 +193,6 @@ def test_visualize_multi_node_jump_edge():
 
 
 def test_visualize_with_list_of_lazy_results():
-
     @cs.task(pure=True)
     def t_a():
         return "a"

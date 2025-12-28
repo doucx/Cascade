@@ -1,0 +1,21 @@
+{
+  "GlobalConstraint": {
+    "baseline_yaml_content_hash": "8ebc2a8e6cfe46d64568731d50965495885258597686397f8f2aae85f40ba868"
+  },
+  "ResourceConstraint": {
+    "baseline_yaml_content_hash": "d6db72dcb917faa13a48b381488767f5a66f79f4f788866445cb29cfd680bc49"
+  },
+  "ResourceConstraint.__bool__": {
+    "baseline_code_signature_text": "def __bool__(self):",
+    "baseline_code_structure_hash": "dc95f5b00084898b8f8392c038cfb7547b20cddf05a946721544343282d1b35d"
+  },
+  "ResourceConstraint.is_empty": {
+    "baseline_code_signature_text": "def is_empty(self) -> bool:",
+    "baseline_code_structure_hash": "ddcb445ea400195dedebc032c4acf2e1c9a4a49b257bebd1781593be3fd89ab6"
+  },
+  "with_constraints": {
+    "baseline_code_signature_text": "def with_constraints(**kwargs) -> ResourceConstraint:",
+    "baseline_code_structure_hash": "e22e8ce34830b5c70f7ca0f0c7ab2cd316f4a9a9c9a24d071bc643271a8cf56c",
+    "baseline_yaml_content_hash": "197ce8134335759cc9c24292cae5e315aeb98789e9ddd0fc112f78eee4c9bccc"
+  }
+}

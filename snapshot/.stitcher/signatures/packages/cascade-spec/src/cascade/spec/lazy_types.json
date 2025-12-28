@@ -1,0 +1,16 @@
+{
+  "LazyResult": {
+    "baseline_yaml_content_hash": "95f323f2eec3bb760ff56deb857a8754748b017e50e4103c0e5f48bdc6ce7638"
+  },
+  "LazyResult.__hash__": {
+    "baseline_code_signature_text": "def __hash__(self):",
+    "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
+  },
+  "MappedLazyResult": {
+    "baseline_yaml_content_hash": "45846379de8994d63db0714dc606f3ad49d8c68b59e9aa05a0b46ffcb5893fa3"
+  },
+  "MappedLazyResult.__hash__": {
+    "baseline_code_signature_text": "def __hash__(self):",
+    "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
+  }
+}

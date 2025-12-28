@@ -8,7 +8,6 @@ except ImportError:
 
 
 class S3ProviderBase(Provider):
-
     def _check_dependency(self):
         if aiobotocore is None:
             raise ImportError(

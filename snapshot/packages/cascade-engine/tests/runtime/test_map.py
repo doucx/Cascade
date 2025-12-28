@@ -47,7 +47,6 @@ async def test_map_empty():
 
 @pytest.mark.asyncio
 async def test_map_dynamic_input():
-
     @cs.task
     def generate_numbers(n: int) -> list[int]:
         return list(range(n))
@@ -70,7 +69,6 @@ async def test_map_dynamic_input():
 
 @pytest.mark.asyncio
 async def test_map_multiple_args():
-
     @cs.task
     def add(a: int, b: int) -> int:
         return a + b
@@ -91,7 +89,6 @@ async def test_map_multiple_args():
 
 @pytest.mark.asyncio
 async def test_map_mismatched_lengths():
-
     @cs.task
     def add(a: int, b: int) -> int:
         return a + b

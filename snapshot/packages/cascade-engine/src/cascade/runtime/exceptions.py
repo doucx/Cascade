@@ -1,10 +1,8 @@
 class CascadeRuntimeError(Exception):
-
     pass
 
 
 class DependencyMissingError(CascadeRuntimeError):
-
     def __init__(self, task_id: str, arg_name: str, dependency_id: str):
         self.task_id = task_id
         self.arg_name = arg_name
@@ -16,7 +14,6 @@ class DependencyMissingError(CascadeRuntimeError):
 
 
 class ResourceNotFoundError(CascadeRuntimeError):
-
     def __init__(self, resource_name: str, consumer_name: str = "unknown"):
         super().__init__(
             f"Resource '{resource_name}' required by '{consumer_name}' was not found. "

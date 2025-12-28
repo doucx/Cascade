@@ -11,7 +11,6 @@ from cascade.testing import SpyExecutor, MockSolver
 
 @pytest.mark.asyncio
 async def test_engine_follows_solver_plan():
-
     # 1. Define a simple workflow (the graph structure doesn't matter much
     # as the MockSolver will override the plan)
     @cs.task

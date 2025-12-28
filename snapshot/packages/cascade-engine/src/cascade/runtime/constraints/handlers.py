@@ -59,7 +59,6 @@ def _parse_rate_string(rate_str: str) -> float:
 
 
 class PauseConstraintHandler(ConstraintHandler):
-
     def handles_type(self) -> str:
         return "pause"
 
@@ -91,7 +90,6 @@ class PauseConstraintHandler(ConstraintHandler):
 
 
 class ConcurrencyConstraintHandler(ConstraintHandler):
-
     def handles_type(self) -> str:
         return "concurrency"
 
@@ -133,7 +131,6 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
 
 
 class RateLimitConstraintHandler(ConstraintHandler):
-
     def __init__(self):
         self.limiter = RateLimiter()
 

@@ -9,7 +9,6 @@ from cascade.providers import LazyFactory, Provider
 
 @task(name="stdout_write")
 async def _stdout_write_task(text: str) -> None:
-
     def blocking_write():
         # Using print ensures newline handling consistent with user expectations.
         print(text, file=sys.stdout)
@@ -20,7 +19,6 @@ async def _stdout_write_task(text: str) -> None:
 
 @task(name="stdin_read_line")
 async def _stdin_read_line_task(*_args) -> str:
-
     def blocking_read():
         return sys.stdin.readline().strip()
 

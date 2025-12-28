@@ -10,7 +10,6 @@ from cascade.spec.protocols import StateBackend
 
 
 class VMExecutionStrategy:
-
     def __init__(
         self,
         resource_manager: ResourceManager,

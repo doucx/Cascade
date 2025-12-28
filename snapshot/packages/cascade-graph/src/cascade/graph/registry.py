@@ -3,7 +3,6 @@ from cascade.graph.model import Node
 
 
 class NodeRegistry:
-
     def __init__(self):
         # Maps a node's shallow structural hash to the Node object
         self._registry: Dict[str, Node] = {}

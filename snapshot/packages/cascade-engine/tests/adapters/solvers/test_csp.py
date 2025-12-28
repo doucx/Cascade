@@ -23,7 +23,6 @@ def test_csp_solver_missing_dependency(monkeypatch):
 
 
 def test_csp_solver_parallel_when_resources_sufficient():
-
     @task
     def t_a():
         pass
@@ -64,7 +63,6 @@ def test_csp_solver_parallel_when_resources_sufficient():
 
 
 def test_csp_solver_serial_when_resources_insufficient():
-
     @task
     def t_a():
         pass

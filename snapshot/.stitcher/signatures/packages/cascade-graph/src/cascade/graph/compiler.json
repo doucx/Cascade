@@ -1,0 +1,25 @@
+{
+  "BlueprintBuilder": {
+    "baseline_yaml_content_hash": "a93e02af49ddb96b9056864d2d5b1e1bc539ad95ff2bdeebdf3633fc3653c302"
+  },
+  "BlueprintBuilder.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "BlueprintBuilder._allocate_register": {
+    "baseline_code_signature_text": "def _allocate_register(self) -> Register:",
+    "baseline_code_structure_hash": "3a48de66f5bd8f5d25d671cd0dd7bf7224ba1b5e784105d920fb77500a175629"
+  },
+  "BlueprintBuilder._to_operand": {
+    "baseline_code_signature_text": "def _to_operand(self, value: Any) -> Operand:",
+    "baseline_code_structure_hash": "e8a57dc222ac9bed3b1517e61320efaf5cf2e39eff80894971b8310aaf5bbbb6"
+  },
+  "BlueprintBuilder._visit": {
+    "baseline_code_signature_text": "def _visit(self, target: Any, is_root: bool) -> int:",
+    "baseline_code_structure_hash": "d44e5f6dbc3b9660a8de84039885f61b6f2404ba99e14a7d7eea0b4948b29c22"
+  },
+  "BlueprintBuilder.build": {
+    "baseline_code_signature_text": "def build(self, target: Any, template: bool = False) -> Blueprint:",
+    "baseline_code_structure_hash": "b468e67ee071d007a76f1219fb0baa05b2fbca0f7cd3734c3e1552bcf6cb253e"
+  }
+}

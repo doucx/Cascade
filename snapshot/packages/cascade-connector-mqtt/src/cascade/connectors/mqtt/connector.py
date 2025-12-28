@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 
 class MqttConnector:
-
     def __init__(self, hostname: str, port: int = 1883, **kwargs):
         if aiomqtt is None:
             raise ImportError(

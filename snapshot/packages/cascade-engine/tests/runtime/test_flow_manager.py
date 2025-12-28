@@ -20,7 +20,6 @@ def create_mock_lazy_result(node_id: str) -> LazyResult:
 
 @pytest.mark.asyncio
 async def test_flow_manager_pruning_logic():
-
     # 1. Setup Nodes
     nodes = [create_mock_node(n) for n in ["S", "A", "B", "B_UP", "C"]]
     n_map = {n.structural_id: n for n in nodes}

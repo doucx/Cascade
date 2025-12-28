@@ -3,7 +3,6 @@ import time
 
 
 class InMemoryCacheBackend:
-
     def __init__(self):
         self._store: Dict[str, Any] = {}
         self._expiry: Dict[str, float] = {}

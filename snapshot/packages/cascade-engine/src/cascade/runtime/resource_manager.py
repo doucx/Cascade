@@ -3,7 +3,6 @@ from typing import Dict, Union, Optional
 
 
 class ResourceManager:
-
     def __init__(self, capacity: Optional[Dict[str, Union[int, float]]] = None):
         # Total capacity of the system (e.g., {"gpu": 2, "memory_gb": 16})
         # If a resource is not in capacity dict, it is assumed to be infinite.

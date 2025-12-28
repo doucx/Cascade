@@ -9,7 +9,6 @@ except ImportError:
 
 
 class RedisStateBackend:
-
     def __init__(self, run_id: str, client: "redis.Redis", ttl: int = 86400):
         if redis is None:
             raise ImportError(

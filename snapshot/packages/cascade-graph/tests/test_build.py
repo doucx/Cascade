@@ -70,7 +70,6 @@ def test_build_graph_with_env_factory():
 
 
 def test_build_graph_with_nested_dependencies():
-
     @cs.task
     def t_a():
         return "a"

@@ -18,7 +18,6 @@ class RetryPolicy:
 
 @dataclass
 class LazyResult(Generic[T]):
-
     task: Any  # Should be 'Task[T]'
     args: tuple
     kwargs: Dict[str, Any]
@@ -41,7 +40,6 @@ class LazyResult(Generic[T]):
 
 @dataclass
 class MappedLazyResult(Generic[T]):
-
     factory: Any  # Should be LazyFactory
     mapping_kwargs: Dict[str, Any]
     _uuid: str = field(default_factory=lambda: str(uuid4()))

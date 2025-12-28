@@ -6,7 +6,6 @@ from cascade.spec.protocols import StateBackend
 
 
 class FlowManager:
-
     def __init__(
         self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]
     ):

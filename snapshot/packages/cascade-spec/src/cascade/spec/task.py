@@ -18,7 +18,6 @@ T = TypeVar("T")
 
 
 class Task(Generic[T]):
-
     def __init__(
         self,
         func: Callable[..., T],
@@ -57,7 +56,6 @@ def task(
     pure: bool = False,
     mode: str = "blocking",
 ) -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:
-
     def wrapper(f: Callable[..., T]) -> Task[T]:
         return Task(f, name=name, pure=pure, mode=mode)
 

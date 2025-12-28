@@ -2,7 +2,6 @@ from typing import Any, Dict, Optional
 
 
 class InMemoryStateBackend:
-
     def __init__(self, run_id: str):
         self._run_id = run_id
         self._results: Dict[str, Any] = {}

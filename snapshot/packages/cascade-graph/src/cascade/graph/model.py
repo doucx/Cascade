@@ -9,7 +9,6 @@ from cascade.spec.constraint import ResourceConstraint
 
 
 class EdgeType(Enum):
-
     DATA = (
         auto()
     )  # A standard data dependency (the output of Source is an input to Target)
@@ -24,7 +23,6 @@ class EdgeType(Enum):
 
 @dataclass
 class Node:
-
     structural_id: str
     name: str
 
@@ -63,7 +61,6 @@ class Node:
 
 @dataclass
 class Edge:
-
     source: Node
     target: Node
     # Metadata like argument name in the target function
@@ -80,7 +77,6 @@ class Edge:
 
 @dataclass
 class Graph:
-
     nodes: List[Node] = field(default_factory=list)
     edges: List[Edge] = field(default_factory=list)
 

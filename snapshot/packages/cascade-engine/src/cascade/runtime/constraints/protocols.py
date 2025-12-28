@@ -8,24 +8,19 @@ if TYPE_CHECKING:
 
 
 class ConstraintHandler(Protocol):
-
-    def handles_type(self) -> str:
-        ...
+    def handles_type(self) -> str: ...
 
     def on_constraint_add(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def on_constraint_remove(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
-        ...
+    ) -> None: ...
 
     def check_permission(
         self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> bool:
-        ...
+    ) -> bool: ...
 
     def append_requirements(
         self,
@@ -33,5 +28,4 @@ class ConstraintHandler(Protocol):
         constraint: GlobalConstraint,
         requirements: Dict[str, Any],
         manager: "ConstraintManager",
-    ) -> None:
-        ...
+    ) -> None: ...

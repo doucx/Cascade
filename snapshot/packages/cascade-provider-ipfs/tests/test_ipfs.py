@@ -49,7 +49,6 @@ async def mock_ipfs_add_handler(request: web.Request):
 
 @pytest.fixture
 def mock_ipfs_server(aiohttp_client, monkeypatch):
-
     async def _setup():
         app = web.Application()
         app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)

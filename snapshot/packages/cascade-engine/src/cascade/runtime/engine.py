@@ -30,7 +30,6 @@ from cascade.runtime.strategies import GraphExecutionStrategy, VMExecutionStrate
 
 
 class Engine:
-
     def __init__(
         self,
         solver: Solver,

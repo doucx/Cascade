@@ -17,7 +17,6 @@ def test_shell_task_failure_with_check():
 
 
 def test_shell_task_integration():
-
     @cs.task
     def process_output(text: str):
         return f"Processed: {text.upper()}"

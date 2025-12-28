@@ -6,7 +6,6 @@ from cascade.common.messaging import bus
 
 
 class _LocalSubscriptionHandle(SubscriptionHandle):
-
     def __init__(
         self,
         parent: "LocalBusConnector",
@@ -53,7 +52,6 @@ class _LocalSubscriptionHandle(SubscriptionHandle):
 
 
 class LocalBusConnector(Connector):
-
     # --- Broker State (Shared across all instances) ---
     _exact_subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)
     _wildcard_subscriptions: Dict[str, List["asyncio.Queue"]] = defaultdict(list)

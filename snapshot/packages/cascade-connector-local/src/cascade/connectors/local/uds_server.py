@@ -5,7 +5,6 @@ from typing import Set
 
 
 class UdsTelemetryServer:
-
     def __init__(self, uds_path: str):
         self.uds_path = Path(uds_path)
         self._server: asyncio.Server | None = None

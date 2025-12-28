@@ -1,0 +1,94 @@
+{
+  "ConcurrencyConstraintHandler": {
+    "baseline_yaml_content_hash": "433a09cd7017109ebd9abe6488cbe26d2952a5cbef62913b4c90b33abe831836"
+  },
+  "ConcurrencyConstraintHandler._get_resource_name": {
+    "baseline_code_signature_text": "def _get_resource_name(self, constraint: GlobalConstraint) -> str:",
+    "baseline_code_structure_hash": "798635f534a638d16e1baa295c41527fbf3a8f2aaac56003878bada6628fb7fb"
+  },
+  "ConcurrencyConstraintHandler.append_requirements": {
+    "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "417c51e6a71058baf50dfe33eb4dc7138ed77d64abe547858ae7c64965c6e0b7"
+  },
+  "ConcurrencyConstraintHandler.check_permission": {
+    "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> bool:",
+    "baseline_code_structure_hash": "f6f45f031f29e2806bf101b1ecd24fb0b55fd2305dec35a721f3403cf30cd539"
+  },
+  "ConcurrencyConstraintHandler.handles_type": {
+    "baseline_code_signature_text": "def handles_type(self) -> str:",
+    "baseline_code_structure_hash": "743c22711ab27d46af11128528f8d6c98c8344ae0367289e2f6faacaf7c952f7"
+  },
+  "ConcurrencyConstraintHandler.on_constraint_add": {
+    "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "ac4ccc6a20a24375409c950ddb4f6802c1f4b316ab6d7b473a5e47bb416ea5a0"
+  },
+  "ConcurrencyConstraintHandler.on_constraint_remove": {
+    "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "0f5a3474c622e641efb8e830cfcd5f43a08fff663e8473d8701b71218a2788b4"
+  },
+  "PauseConstraintHandler": {
+    "baseline_yaml_content_hash": "f5750885c4f0385a6366d40ac5ecb2542aded7bd459115c7ceb5bae8315e866d"
+  },
+  "PauseConstraintHandler.append_requirements": {
+    "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "417c51e6a71058baf50dfe33eb4dc7138ed77d64abe547858ae7c64965c6e0b7"
+  },
+  "PauseConstraintHandler.check_permission": {
+    "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> bool:",
+    "baseline_code_structure_hash": "f6f45f031f29e2806bf101b1ecd24fb0b55fd2305dec35a721f3403cf30cd539",
+    "baseline_yaml_content_hash": "cdbdd46309f2f1013393e79d3c7fef883716095afe778462ed2d383f3838c507"
+  },
+  "PauseConstraintHandler.handles_type": {
+    "baseline_code_signature_text": "def handles_type(self) -> str:",
+    "baseline_code_structure_hash": "743c22711ab27d46af11128528f8d6c98c8344ae0367289e2f6faacaf7c952f7"
+  },
+  "PauseConstraintHandler.on_constraint_add": {
+    "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "ac4ccc6a20a24375409c950ddb4f6802c1f4b316ab6d7b473a5e47bb416ea5a0"
+  },
+  "PauseConstraintHandler.on_constraint_remove": {
+    "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "0f5a3474c622e641efb8e830cfcd5f43a08fff663e8473d8701b71218a2788b4"
+  },
+  "RateLimitConstraintHandler": {
+    "baseline_yaml_content_hash": "190b9ccd4121debeff0c8f4600463ddb70236a612f1401787a94db2ac472680b"
+  },
+  "RateLimitConstraintHandler.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "RateLimitConstraintHandler._get_scope_key": {
+    "baseline_code_signature_text": "def _get_scope_key(self, constraint: GlobalConstraint) -> str:",
+    "baseline_code_structure_hash": "d2f09861af8c24bde417e3284695a13bc1fa71c0b4bccbb8d832f23b60e7c8a4"
+  },
+  "RateLimitConstraintHandler.append_requirements": {
+    "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "417c51e6a71058baf50dfe33eb4dc7138ed77d64abe547858ae7c64965c6e0b7"
+  },
+  "RateLimitConstraintHandler.check_permission": {
+    "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> bool:",
+    "baseline_code_structure_hash": "f6f45f031f29e2806bf101b1ecd24fb0b55fd2305dec35a721f3403cf30cd539"
+  },
+  "RateLimitConstraintHandler.handles_type": {
+    "baseline_code_signature_text": "def handles_type(self) -> str:",
+    "baseline_code_structure_hash": "743c22711ab27d46af11128528f8d6c98c8344ae0367289e2f6faacaf7c952f7"
+  },
+  "RateLimitConstraintHandler.on_constraint_add": {
+    "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "ac4ccc6a20a24375409c950ddb4f6802c1f4b316ab6d7b473a5e47bb416ea5a0"
+  },
+  "RateLimitConstraintHandler.on_constraint_remove": {
+    "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> None:",
+    "baseline_code_structure_hash": "0f5a3474c622e641efb8e830cfcd5f43a08fff663e8473d8701b71218a2788b4"
+  },
+  "_matches": {
+    "baseline_code_signature_text": "def _matches(scope: str, task_name: str) -> bool:",
+    "baseline_code_structure_hash": "288ef2b7154494bbbdf5e7ed5a5c1b69a1bd9e7c3eb2f9aea149afc53093d3e7",
+    "baseline_yaml_content_hash": "6f54e6c75b514e9fad034d725a0330558d946dc81feea79a513ece83af7dca87"
+  },
+  "_parse_rate_string": {
+    "baseline_code_signature_text": "def _parse_rate_string(rate_str: str) -> float:",
+    "baseline_code_structure_hash": "d56658335652c04b6a734e0ac54fa7affc83bd04d02e653713a88050f2ef5a88",
+    "baseline_yaml_content_hash": "dc3eb4b198376028a31296e8fd25b1ad8787c1f57c9e7b57409d997b82b76a6c"
+  }
+}

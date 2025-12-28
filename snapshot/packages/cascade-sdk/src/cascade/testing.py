@@ -26,7 +26,6 @@ def override_resource(
 
 
 class SpySubscriber:
-
     def __init__(self, bus: MessageBus):
         self.events = []
         bus.subscribe(Event, self.collect)
@@ -39,7 +38,6 @@ class SpySubscriber:
 
 
 class SpySolver(Solver):
-
     def __init__(self, underlying_solver: Solver):
         self.underlying_solver = underlying_solver
         self.resolve = MagicMock(wraps=self.underlying_solver.resolve)
@@ -52,7 +50,6 @@ class SpySolver(Solver):
 
 
 class MockSolver(Solver):
-
     def __init__(self, plan: ExecutionPlan):
         self._plan = plan
 
@@ -62,7 +59,6 @@ class MockSolver(Solver):
 
 
 class SpyExecutor(Executor):
-
     def __init__(self):
         self.call_log: List[Node] = []
 
@@ -77,7 +73,6 @@ class SpyExecutor(Executor):
 
 
 class MockExecutor(Executor):
-
     def __init__(self, delay: float = 0, return_value: Any = "result"):
         self.delay = delay
         self.return_value = return_value
@@ -96,7 +91,6 @@ class MockExecutor(Executor):
 
 
 class MockConnector(Connector):
-
     def __init__(self):
         self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
         # Simulate broker storage for retained messages: topic -> payload

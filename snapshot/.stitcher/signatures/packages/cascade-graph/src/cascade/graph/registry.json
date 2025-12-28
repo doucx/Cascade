@@ -1,0 +1,19 @@
+{
+  "NodeRegistry": {
+    "baseline_yaml_content_hash": "6ffdccf9568f23c59acc2e2c65c4620a03a56f786a647aa034043dcbf77a3dfb"
+  },
+  "NodeRegistry.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "NodeRegistry.get": {
+    "baseline_code_signature_text": "def get(self, key: str) -> Node | None:",
+    "baseline_code_structure_hash": "b7d1390f7d1887f34daf22655234ae57a79292972acec9fe07695657f7954ab4",
+    "baseline_yaml_content_hash": "c07e354e64f25460fcf2f24b1c55313faabd8d6058477fcd2200962ea6e2b8b7"
+  },
+  "NodeRegistry.get_or_create": {
+    "baseline_code_signature_text": "def get_or_create(self, key: str, node_factory: Callable[[], Node]) -> tuple[Node, bool]:",
+    "baseline_code_structure_hash": "6615e983f417e80fd4395b9d7dd42be5837766cccabca12b1372d4faefcd63ca",
+    "baseline_yaml_content_hash": "05fc82b65abba404d463755a3a3d372838eca801945ba6f3cf6cb05ae22b464d"
+  }
+}

@@ -8,7 +8,6 @@ from cascade.graph.exceptions import StaticGraphError
 
 
 class LocalExecutor:
-
     def __init__(self):
         # NOTE: These executors are created per-engine-run.
         # Their lifecycle is tied to the LocalExecutor instance.

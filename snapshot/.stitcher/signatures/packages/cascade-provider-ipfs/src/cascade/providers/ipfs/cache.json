@@ -1,0 +1,20 @@
+{
+  "IpfsCacheBackend": {
+    "baseline_yaml_content_hash": "db884c67a75ff0d8f1ea9cc9d49cad8126ddf7d3839c0a27fe2b730b96333a10"
+  },
+  "IpfsCacheBackend.__init__": {
+    "baseline_code_signature_text": "def __init__(self, metadata_backend: CacheBackend, ipfs_api_url: str = \"http://127.0.0.1:5001\"):",
+    "baseline_code_structure_hash": "50ef7e02cfbc5020bc56159bb31354c05a93fb1f3b98515f1bc840024f667008",
+    "baseline_yaml_content_hash": "4ee4523531b0af88a006f34516aac550169fdee07fe953d2a14f4ad519db99a4"
+  },
+  "IpfsCacheBackend.get": {
+    "baseline_code_signature_text": "async def get(self, key: str) -> Optional[Any]:",
+    "baseline_code_structure_hash": "0263c0801dbd274812febe322c51e71f4302e88c2beffb3eb7b90cd0b14d1b81",
+    "baseline_yaml_content_hash": "fa7c71aa0506f6b880092d2ddaa1770ede24b973927d8030e41ac2cca9ea02f9"
+  },
+  "IpfsCacheBackend.set": {
+    "baseline_code_signature_text": "async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:",
+    "baseline_code_structure_hash": "5cbbe649289a0cf5b98f366b906705cde113ad0ec23b5139aab01e9c2e618b89",
+    "baseline_yaml_content_hash": "340db383e00ddfd0af16189556f47e122b8c3df46b28796d26cfec78aeb5ea97"
+  }
+}

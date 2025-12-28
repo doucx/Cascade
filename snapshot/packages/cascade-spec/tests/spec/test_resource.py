@@ -84,7 +84,6 @@ def test_resource_events():
 
 
 def test_resource_override():
-
     @cs.resource
     def mock_db_connection():
         print("SETUP: mock_db_connection")

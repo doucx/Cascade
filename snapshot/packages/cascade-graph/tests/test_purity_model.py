@@ -3,7 +3,6 @@ from cascade.graph.build import build_graph
 
 
 def test_impure_tasks_have_unique_identities():
-
     @task  # Defaults to pure=False
     def random_int():
         return 42
@@ -27,7 +26,6 @@ def test_impure_tasks_have_unique_identities():
 
 
 def test_pure_tasks_are_deduplicated():
-
     @task(pure=True)
     def add(x, y):
         return x + y

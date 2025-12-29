@@ -14,17 +14,6 @@ class HashingService:
         result: Any,  # LazyResult or MappedLazyResult
         dep_nodes: Dict[str, Node],
     ) -> str:
-        """
-        Computes the unique structural ID for a Node instance.
-
-        Formula:
-          Hash(
-             Definition.Fingerprint['current_code_structure_hash']
-             | Instance.Policies
-             | Instance.Bindings (merged args/kwargs)
-             | Instance.PuritySalt (if impure)
-          )
-        """
         # 1. Start with the Stable Code Fingerprint
         code_hash = definition.fingerprint["current_code_structure_hash"]
         components = [f"CodeHash:{code_hash}"]

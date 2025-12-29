@@ -1,4 +1,23 @@
 {
+  "ControllerTestApp": {
+    "baseline_yaml_content_hash": "b628b899644b9edd0197a0cd89877810a04b7f1f9e19705536647198dce1b97d"
+  },
+  "ControllerTestApp.__init__": {
+    "baseline_code_signature_text": "def __init__(self, connector: Connector):",
+    "baseline_code_structure_hash": "246225c5f80ebdf5fe3c6d08b1663ead39b39bf4f06bd4a3d3d8d86ff4db6ee5"
+  },
+  "ControllerTestApp._publish": {
+    "baseline_code_signature_text": "async def _publish(self, scope: str, constraint: GlobalConstraint):",
+    "baseline_code_structure_hash": "c18f62b7fd20bc8f164d85b0fc9e1815aac490926607dfc9edf8cf0bfa6b4437"
+  },
+  "ControllerTestApp.pause": {
+    "baseline_code_signature_text": "async def pause(self, scope: str = \"global\"):",
+    "baseline_code_structure_hash": "24286f0cac8e1bb0962d8dc0de62c8e488c9dcfb1d548e666fadcc14a8dd0bb2"
+  },
+  "ControllerTestApp.resume": {
+    "baseline_code_signature_text": "async def resume(self, scope: str = \"global\"):",
+    "baseline_code_structure_hash": "39dec974c06daf7654911984b59f5df0226c2ffedb1fd6219e7f073542f475b7"
+  },
   "MockConnector": {
     "baseline_yaml_content_hash": "a14a00b10d5ec116e2b07e69017fcbf9b02108ab9f0734b36f610402301d691d"
   },

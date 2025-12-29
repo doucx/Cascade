@@ -50,10 +50,10 @@
     "baseline_code_structure_hash": "aedaabbb267caaaf20934ddbad4fba0eed8e867bbeb2f9b5871d09d602e1e5e7",
     "baseline_yaml_content_hash": "52bc35cf86cf7401c5e6ea24848a3cc7606c5faaad865e354d96fe041b0ce362"
   },
-  "test_serialize_params": {
-    "baseline_code_signature_text": "def test_serialize_params():",
-    "baseline_code_structure_hash": "8c81485192102463abc27feb44d5e1830aed77c865f487baf834c6a5c5e312f3",
-    "baseline_yaml_content_hash": "fb2456016b63d522f136467ff0c751366dd88b0b54d4810005b7c12a984f12cc"
+  "test_serialize_params": {},
+  "test_serialize_params_structure_only": {
+    "baseline_code_signature_text": "def test_serialize_params_structure_only():",
+    "baseline_code_structure_hash": "b631183349ed923d81a8b1e88df033db941bcfb2b4f140142f2dda2181323efb"
   },
   "test_serialize_router": {
     "baseline_code_signature_text": "def test_serialize_router():",

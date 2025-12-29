@@ -1,0 +1,10 @@
+"ArgumentDef": |-
+  A specific definition of a single argument in a task's signature.
+  Designed to be serializable.
+"ArgumentKind": |-
+  Defines the kind of an argument, aligning with Python's inspect.Parameter kinds
+  and the Stitcher specification.
+"TaskDef": |-
+  The static intermediate representation (IR) of a Task.
+  This separates the 'definition' of what a task is from the 'node'
+  of where it is used in a graph.

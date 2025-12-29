@@ -25,22 +25,15 @@
     "baseline_code_structure_hash": "c0690bf5a0b16166dfa6d1b79feabef38d265ef8a79876054e4892c4bf343bf9",
     "baseline_yaml_content_hash": "24d5175fd76c79d824e7b90ac1004034aeeaa7795ee5823a6573d74df413d44d"
   },
-  "HashingService._compute_lazy_result_hash": {
-    "baseline_code_signature_text": "def _compute_lazy_result_hash(self, result: LazyResult, dep_nodes: Dict[str, Node]) -> str:",
-    "baseline_code_structure_hash": "007aa9f4f2bfe8a3171373db09e3af47daa0e8ff71d7f66c9e243161cf1b11a9"
-  },
-  "HashingService._compute_mapped_result_hash": {
-    "baseline_code_signature_text": "def _compute_mapped_result_hash(self, result: MappedLazyResult, dep_nodes: Dict[str, Node]) -> str:",
-    "baseline_code_structure_hash": "6d0e042cf15df7c84b0a715ded734d3afb6799d5e960e2184551cb8edf7506ca"
-  },
   "HashingService._get_merkle_hash": {
     "baseline_code_signature_text": "def _get_merkle_hash(self, components: List[str]) -> str:",
     "baseline_code_structure_hash": "f6f4c15396ae743d076c4bcd2e7abf1e927b864e3fb94a364c3089b1320a006b",
     "baseline_yaml_content_hash": "40a59ed341ca1a7959cb5cb7272b29cfac96acacf9c727f57bcbcb4f50b8aedc"
   },
-  "HashingService.compute_structural_hash": {
-    "baseline_code_signature_text": "def compute_structural_hash(self, result: Any, dep_nodes: Dict[str, Node]) -> str:",
-    "baseline_code_structure_hash": "7252652571556a31c80116f645a6dbee5125a582bd274ef0bb36ffdf8aa21b56",
-    "baseline_yaml_content_hash": "f45bede6eb7f321f9c44404bea20c563428a786acc3833455a2d2b5fac78f144"
-  }
+  "HashingService.compute_node_instance_hash": {
+    "baseline_code_signature_text": "def compute_node_instance_hash(self, definition: TaskDef, result: Any, dep_nodes: Dict[str, Node]) -> str:",
+    "baseline_code_structure_hash": "4ee3787af6af821e52472560e97e38e5d72f48d62d9683ad59bdd55f58791ede",
+    "baseline_yaml_content_hash": "9c0d41ae62605989baa6c9f2d4b6e089dbc5bd2938ecdd78176441d803728554"
+  },
+  "HashingService.compute_structural_hash": {}
 }

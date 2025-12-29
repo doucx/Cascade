@@ -112,6 +112,7 @@ class GraphBuilder:
                     return False
                  has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
+            # Note: execution_mode is now part of task_def (definition.mode)
             node = Node(
                 structural_id=node_hash,
                 definition=task_def,

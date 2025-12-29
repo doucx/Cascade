@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 from cascade.foundation.identity.fingerprint import Fingerprint
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Definition:
     """
     Base class for all IR Level 0 definitions.

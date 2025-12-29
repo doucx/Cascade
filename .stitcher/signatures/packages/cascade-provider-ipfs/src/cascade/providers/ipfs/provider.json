@@ -18,12 +18,12 @@
     "baseline_yaml_content_hash": "83ee736c4e098ebd5ac940fcc593a9d62697b4ca9f0ce95bdb618773edd51be7"
   },
   "add": {
-    "baseline_code_signature_text": "def add(path: str, **kwargs) -> \"cs.LazyResult[str]\":",
+    "baseline_code_signature_text": "def add(path: str, **kwargs = {}) -> cs.LazyResult[str]:",
     "baseline_code_structure_hash": "bd5245947d3e1aaac6cf6db5c0b4e7e974402807957fbdbec4b29d8b28c86993",
     "baseline_yaml_content_hash": "801c0ab439cee19acdf429b5064928479f677d2dd6f6a1810b2993a8aadf2a0c"
   },
   "cat": {
-    "baseline_code_signature_text": "def cat(cid: str, **kwargs) -> \"cs.LazyResult[bytes]\":",
+    "baseline_code_signature_text": "def cat(cid: str, **kwargs = {}) -> cs.LazyResult[bytes]:",
     "baseline_code_structure_hash": "b951c568570eddd3278014081facc0506bcaf625bd60b944195482ec9bfacbe2",
     "baseline_yaml_content_hash": "7195ba25fc79e4c14e69e17fc50df19ab14925ba12c418c7710a0a163bdbfe67"
   }

@@ -23,7 +23,7 @@
     "baseline_yaml_content_hash": "db19bc0705fbce18209f300191499b91e15a429a0c118fe75daa2e87c2d36cff"
   },
   "resource": {
-    "baseline_code_signature_text": "def resource(func: Optional[Callable[..., T]] = None, name: Optional[str] = None, scope: str = \"run\"):",
+    "baseline_code_signature_text": "def resource(func: Optional[Callable[..., T]] = None, name: Optional[str] = None, scope: str = 'run'):",
     "baseline_code_structure_hash": "9442776f7720cb9d8ec47445c27e97e662432e51c4659a65d927112fdbc64f12",
     "baseline_yaml_content_hash": "09567d1089508c2182e271bdb31933dde66762ad9e3d1de9d69cf54d5a6ce35e"
   }

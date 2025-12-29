@@ -4,7 +4,7 @@
     "baseline_code_structure_hash": "cfaa0d20b1f7ec834a295b0cfbdbbc55353e201952fcc10a53a830612bc56408"
   },
   "ProviderNamespace.__init__": {
-    "baseline_code_signature_text": "def __init__(self, registry: \"ProviderRegistry\", prefix: str):",
+    "baseline_code_signature_text": "def __init__(self, registry: ProviderRegistry, prefix: str):",
     "baseline_code_structure_hash": "a8f232c8be26720d4b17e7ce3e62b5fd83fd975e0b2a825e98fc72027556a6ec"
   },
   "ProviderRegistry.__init__": {

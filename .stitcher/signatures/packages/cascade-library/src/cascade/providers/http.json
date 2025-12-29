@@ -32,7 +32,7 @@
     "baseline_yaml_content_hash": "3ef4a6895134e23bfffb3307fc4c75501655ee330c7cb0a7af41648ca4d8c287"
   },
   "HttpResponse.text": {
-    "baseline_code_signature_text": "def text(self, encoding: str = \"utf-8\") -> str:",
+    "baseline_code_signature_text": "def text(self, encoding: str = 'utf-8') -> str:",
     "baseline_code_structure_hash": "672f4d786813f9fd785ef066d61255b2e603ab6954861383f5b0a8af57c730dc",
     "baseline_yaml_content_hash": "e628893aa4367a8446457ad3dbf2fa603d040da86c8a1f1de7671c8895a88ed1"
   },
@@ -53,7 +53,7 @@
     "baseline_code_structure_hash": "edea51d7e44e3be39f79558154b1c663d4af37b09d63165cdb107bb0ae77474d"
   },
   "_http_request_task": {
-    "baseline_code_signature_text": "async def _http_request_task(url: str, method: str = \"GET\", params: Optional[Dict[str, str]] = None, json: Optional[Any] = None, data: Optional[Any] = None, files: Optional[Dict[str, str]] = None, headers: Optional[Dict[str, str]] = None) -> HttpResponse:",
+    "baseline_code_signature_text": "async def _http_request_task(url: str, method: str = 'GET', params: Optional[Dict[str, str]] = None, json: Optional[Any] = None, data: Optional[Any] = None, files: Optional[Dict[str, str]] = None, headers: Optional[Dict[str, str]] = None) -> HttpResponse:",
     "baseline_code_structure_hash": "0d00a8aae113c5c424b02441193a9c9ff719703a0639375e6db04636a882ae11"
   },
   "_perform_request": {

@@ -26,9 +26,5 @@
   "Node.__hash__": {
     "baseline_code_signature_text": "def __hash__(self):",
     "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
-  },
-  "Node.name": {
-    "baseline_code_signature_text": "def name(self) -> str:",
-    "baseline_code_structure_hash": "c94b9438ef99f34eb50d548685beb18b9e3a9c12da68c2ff32b217d099daebe4"
   }
 }

@@ -8,7 +8,7 @@
     "baseline_code_structure_hash": "289430569ad14cc1bede7e9a09df9629107b4905d143309fb313446d088f3e90"
   },
   "_internal_gather": {
-    "baseline_code_signature_text": "def _internal_gather(*args: Any) -> Any:",
+    "baseline_code_signature_text": "def _internal_gather(*args: Any = ()) -> Any:",
     "baseline_code_structure_hash": "ece9f6e336b8a654bdd08585147b22f87ab7960d29a36fc76b83357304833a44",
     "baseline_yaml_content_hash": "63437486191571cba16ee4e7d92da0338aee8f6db9d55bdac94a72cc6d9fc5bd"
   }

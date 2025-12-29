@@ -7,6 +7,7 @@ from cascade.spec.task import task
 from cascade.spec.ir.models import TaskDef
 from cascade.spec.fingerprint import Fingerprint
 
+
 def test_local_executor_sync_execution():
     # 1. Define the callable
     @task
@@ -34,7 +35,9 @@ def test_local_executor_async_execution():
         return x + 1
 
     # Must explicit set is_async=True for the executor to treat it as a coroutine
-    stub_def = TaskDef(name="async_add", args=[], fingerprint=Fingerprint(), is_async=True)
+    stub_def = TaskDef(
+        name="async_add", args=[], fingerprint=Fingerprint(), is_async=True
+    )
     node_async = Node(
         structural_id="async_add", definition=stub_def, callable_obj=async_add.func
     )

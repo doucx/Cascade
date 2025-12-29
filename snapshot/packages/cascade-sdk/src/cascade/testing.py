@@ -8,13 +8,13 @@ from dataclasses import asdict
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
-from cascade.spec.protocols import ( 
-    Solver, 
-    Executor, 
-    ExecutionPlan, 
-    Connector, 
-    SubscriptionHandle, 
-) 
+from cascade.spec.protocols import (
+    Solver,
+    Executor,
+    ExecutionPlan,
+    Connector,
+    SubscriptionHandle,
+)
 from cascade.graph.model import Node, Graph
 from cascade.spec.constraint import GlobalConstraint
 
@@ -165,13 +165,13 @@ class MockConnector(Connector):
             if self._topic_matches(subscription=sub_topic, topic=topic):
                 await callback(topic, payload)
 
-    def _topic_matches(self, subscription: str, topic: str) -> bool: 
+    def _topic_matches(self, subscription: str, topic: str) -> bool:
         # Simple topic matching for direct match and wildcard at the end
-        if subscription == topic: 
+        if subscription == topic:
             return True
-        if subscription.endswith("/#"): 
-            prefix = subscription[:-2] 
-            if topic.startswith(prefix): 
+        if subscription.endswith("/#"):
+            prefix = subscription[:-2]
+            if topic.startswith(prefix):
                 return True
         return False
 

@@ -9,18 +9,18 @@ from cascade.spec.resource import Inject
 
 class HashingService:
     def compute_node_instance_hash(
-        self, 
-        definition: TaskDef, 
-        result: Any, # LazyResult or MappedLazyResult
-        dep_nodes: Dict[str, Node]
+        self,
+        definition: TaskDef,
+        result: Any,  # LazyResult or MappedLazyResult
+        dep_nodes: Dict[str, Node],
     ) -> str:
         """
         Computes the unique structural ID for a Node instance.
-        
+
         Formula:
-          Hash( 
-             Definition.Fingerprint['current_code_structure_hash'] 
-             | Instance.Policies 
+          Hash(
+             Definition.Fingerprint['current_code_structure_hash']
+             | Instance.Policies
              | Instance.Bindings (merged args/kwargs)
              | Instance.PuritySalt (if impure)
           )
@@ -33,7 +33,7 @@ class HashingService:
         # Get purity from the Task wrapper if available, else assume False (Impure) for safety
         task_obj = getattr(result, "task", None) or getattr(result, "factory", None)
         is_pure = getattr(task_obj, "pure", False) if task_obj else False
-        
+
         if not is_pure:
             # Impure tasks are instance-identity based.
             # We use the LazyResult's UUID as a salt.
@@ -48,18 +48,20 @@ class HashingService:
 
         # 4. Bindings (Instance Arguments)
         if isinstance(result, MappedLazyResult):
-             components.append("MapKwargs:")
-             components.extend(self._build_hash_components(result.mapping_kwargs, dep_nodes))
+            components.append("MapKwargs:")
+            components.extend(
+                self._build_hash_components(result.mapping_kwargs, dep_nodes)
+            )
         else:
-             components.append("Args:")
-             components.extend(self._build_hash_components(result.args, dep_nodes))
-             components.append("Kwargs:")
-             components.extend(self._build_hash_components(result.kwargs, dep_nodes))
+            components.append("Args:")
+            components.extend(self._build_hash_components(result.args, dep_nodes))
+            components.append("Kwargs:")
+            components.extend(self._build_hash_components(result.kwargs, dep_nodes))
 
         # 5. Metadata
         if result._condition:
             components.append("Condition:PRESENT")
-        
+
         # 6. Constraints
         if result._constraints:
             keys = sorted(result._constraints.requirements.keys())
@@ -131,12 +133,14 @@ class BlueprintHasher:
     def _get_node_components(self, node: Node, graph: Graph) -> List[str]:
         # Updated to use node.definition
         components = [f"Node({node.definition.name}, type={node.node_type})"]
-        components.append(f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})")
+        components.append(
+            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
+        )
 
         if node.retry_policy:
             rp = node.retry_policy
             components.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
-        
+
         # ... Edge logic remains same
         incoming_edges = sorted(
             [e for e in graph.edges if e.target.structural_id == node.structural_id],

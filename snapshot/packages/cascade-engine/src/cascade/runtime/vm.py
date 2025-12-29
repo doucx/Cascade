@@ -145,9 +145,9 @@ class VirtualMachine:
             stub_def = TaskDef(
                 name=instr.task_name,
                 args=[],  # VM handles args via registers, not needed for constraint check
-                fingerprint=Fingerprint() 
+                fingerprint=Fingerprint(),
             )
-            
+
             temp_node = Node(
                 structural_id=str(uuid4()),
                 definition=stub_def,

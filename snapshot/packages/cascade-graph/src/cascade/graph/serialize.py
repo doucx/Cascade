@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
 
 from .model import Graph, Node, Edge, EdgeType
-from cascade.spec.input import ParamSpec
 from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -222,7 +221,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     # This is a stub definition to satisfy the Node contract for deserialization
     from cascade.spec.ir.models import TaskDef
     from cascade.spec.fingerprint import Fingerprint
-    
+
     # We use a dummy fingerprint for deserialized nodes if not present
     fp = Fingerprint()
     # If we serialized the code hash, we should restore it, but for now we put a placeholder
@@ -230,8 +229,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
 
     stub_def = TaskDef(
         name=data["name"],
-        args=[], # Args info lost in simplified serialization, ok for basic runtime restoration if callables are loaded
-        fingerprint=fp
+        args=[],  # Args info lost in simplified serialization, ok for basic runtime restoration if callables are loaded
+        fingerprint=fp,
     )
 
     node = Node(

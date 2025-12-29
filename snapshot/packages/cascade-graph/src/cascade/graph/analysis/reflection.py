@@ -21,20 +21,22 @@ class ReflectionAnalyzer(TaskAnalyzer):
         # Determine the underlying function and metadata source
         func = target
         mode = "blocking"
-        
+
         # Check if it's a cascade.spec.task.Task wrapper
         if hasattr(target, "func") and hasattr(target, "mode"):
             func = target.func
             mode = getattr(target, "mode", "blocking")
 
         if not callable(func):
-            raise TypeError(f"Target {target} must be callable (or enclose a callable) to be analyzed.")
+            raise TypeError(
+                f"Target {target} must be callable (or enclose a callable) to be analyzed."
+            )
 
         # 1. Basic Metadata
         name = getattr(func, "__name__", "unknown")
         docstring = inspect.getdoc(func)
         is_async = inspect.iscoroutinefunction(func)
-        
+
         # Extract return annotation if available
         sig = inspect.signature(func)
         return_annotation = None
@@ -50,7 +52,7 @@ class ReflectionAnalyzer(TaskAnalyzer):
         structure_hash = self._compute_structure_hash(
             name, args, return_annotation, docstring, is_async, mode
         )
-        
+
         fingerprint = Fingerprint()
         fingerprint["current_code_structure_hash"] = structure_hash
 
@@ -68,7 +70,7 @@ class ReflectionAnalyzer(TaskAnalyzer):
         args = []
         for param in sig.parameters.values():
             kind = ArgumentKind[param.kind.name]
-            
+
             annotation = None
             if param.annotation is not inspect.Parameter.empty:
                 annotation = str(param.annotation)
@@ -83,22 +85,24 @@ class ReflectionAnalyzer(TaskAnalyzer):
                 except Exception:
                     default_repr = "<unrepresentable>"
 
-            args.append(ArgumentDef(
-                name=param.name,
-                kind=kind,
-                annotation=annotation,
-                default_value_repr=default_repr
-            ))
+            args.append(
+                ArgumentDef(
+                    name=param.name,
+                    kind=kind,
+                    annotation=annotation,
+                    default_value_repr=default_repr,
+                )
+            )
         return args
 
     def _compute_structure_hash(
-        self, 
-        name: str, 
-        args: List[ArgumentDef], 
-        return_annotation: Optional[str], 
-        docstring: Optional[str], 
+        self,
+        name: str,
+        args: List[ArgumentDef],
+        return_annotation: Optional[str],
+        docstring: Optional[str],
         is_async: bool,
-        mode: str
+        mode: str,
     ) -> str:
         """
         Computes a deterministic hash of the task's structure.
@@ -108,10 +112,10 @@ class ReflectionAnalyzer(TaskAnalyzer):
         components.append(f"Mode:{mode}")
         if return_annotation:
             components.append(f"Return:{return_annotation}")
-        
-        # Include Docstring in hash? 
+
+        # Include Docstring in hash?
         # Yes, for 'code_structure', doc changes imply structure changes in strict mode,
-        # but arguably docs shouldn't affect execution identity. 
+        # but arguably docs shouldn't affect execution identity.
         # For now, we include it to detect ANY definition change, as docstrings might act as prompts.
         if docstring:
             components.append(f"Doc:{docstring}")

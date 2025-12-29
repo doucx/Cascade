@@ -33,8 +33,8 @@ class Node:
 
     # Node-specific type ("task", "map", "param") - might be merged into definition later?
     # For now, it distinguishes how the definition is APPLIED.
-    node_type: str = "task" 
-    
+    node_type: str = "task"
+
     # Instance-specific configuration
     retry_policy: Optional[Any] = None
     cache_policy: Optional[Any] = None
@@ -45,13 +45,13 @@ class Node:
 
     # Structural Bindings (Literals)
     input_bindings: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Optimization flag
     has_complex_inputs: bool = False
 
     def __hash__(self):
         return hash(self.structural_id)
-    
+
     @property
     def name(self) -> str:
         # SHORTCUT for debugging/logging, but code should prefer definition.name where possible

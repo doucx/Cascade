@@ -88,7 +88,7 @@ class GraphBuilder:
             has_complex = False
             if result.task.func is _get_param_value.func:
                 has_complex = True
-            
+
             # Note: Signature check is now implicit in TaskDef/Analyzer?
             # We still need to check for Inject markers in defaults, but ReflectionAnalyzer
             # serialized defaults to strings. We might need raw access here or rely on runtime.
@@ -99,18 +99,24 @@ class GraphBuilder:
                 try:
                     sig = inspect.signature(result.task.func)
                     has_complex = any(
-                        isinstance(p.default, InjectMarker) for p in sig.parameters.values()
+                        isinstance(p.default, InjectMarker)
+                        for p in sig.parameters.values()
                     )
                 except ValueError:
                     pass
 
             if not has_complex:
-                 def is_complex_value(v):
-                    if isinstance(v, InjectMarker): return True
-                    if isinstance(v, list): return any(is_complex_value(x) for x in v)
-                    if isinstance(v, dict): return any(is_complex_value(x) for x in v.values())
+
+                def is_complex_value(v):
+                    if isinstance(v, InjectMarker):
+                        return True
+                    if isinstance(v, list):
+                        return any(is_complex_value(x) for x in v)
+                    if isinstance(v, dict):
+                        return any(is_complex_value(x) for x in v.values())
                     return False
-                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
+
+                has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
             # Note: execution_mode is now part of task_def (definition.mode)
             node = Node(
@@ -132,7 +138,7 @@ class GraphBuilder:
         # 5. Edges
         self._scan_and_add_edges(node, result.args)
         self._scan_and_add_edges(node, result.kwargs)
-        
+
         # ... Jump Selector logic ...
         if result._jump_selector:
             selector = result._jump_selector
@@ -141,26 +147,53 @@ class GraphBuilder:
                     if route_target is not None:
                         self._visit(route_target)
                 for key, route_target_lr in selector.routes.items():
-                    if route_target_lr is None: continue
+                    if route_target_lr is None:
+                        continue
                     target_node = self._visited_instances[route_target_lr._uuid]
-                    self.graph.add_edge(Edge(
-                        source=node, target=target_node, arg_name=key,
-                        edge_type=EdgeType.ITERATIVE_JUMP, jump_selector=selector
-                    ))
+                    self.graph.add_edge(
+                        Edge(
+                            source=node,
+                            target=target_node,
+                            arg_name=key,
+                            edge_type=EdgeType.ITERATIVE_JUMP,
+                            jump_selector=selector,
+                        )
+                    )
 
         if result._condition:
             source_node = self._visited_instances[result._condition._uuid]
-            self.graph.add_edge(Edge(source=source_node, target=node, arg_name="_condition", edge_type=EdgeType.CONDITION))
-        
+            self.graph.add_edge(
+                Edge(
+                    source=source_node,
+                    target=node,
+                    arg_name="_condition",
+                    edge_type=EdgeType.CONDITION,
+                )
+            )
+
         if result._constraints:
-             for res, req in result._constraints.requirements.items():
+            for res, req in result._constraints.requirements.items():
                 if isinstance(req, (LazyResult, MappedLazyResult)):
                     source = self._visited_instances[req._uuid]
-                    self.graph.add_edge(Edge(source=source, target=node, arg_name=res, edge_type=EdgeType.CONSTRAINT))
-        
+                    self.graph.add_edge(
+                        Edge(
+                            source=source,
+                            target=node,
+                            arg_name=res,
+                            edge_type=EdgeType.CONSTRAINT,
+                        )
+                    )
+
         for dep in result._dependencies:
             source = self._visited_instances[dep._uuid]
-            self.graph.add_edge(Edge(source=source, target=node, arg_name="<sequence>", edge_type=EdgeType.SEQUENCE))
+            self.graph.add_edge(
+                Edge(
+                    source=source,
+                    target=node,
+                    arg_name="<sequence>",
+                    edge_type=EdgeType.SEQUENCE,
+                )
+            )
 
         return node
 
@@ -170,8 +203,10 @@ class GraphBuilder:
 
         dep_nodes: Dict[str, Node] = {}
         self._find_dependencies(result.mapping_kwargs, dep_nodes)
-        if result._condition: self._find_dependencies(result._condition, dep_nodes)
-        if result._dependencies: self._find_dependencies(result._dependencies, dep_nodes)
+        if result._condition:
+            self._find_dependencies(result._condition, dep_nodes)
+        if result._dependencies:
+            self._find_dependencies(result._dependencies, dep_nodes)
 
         # Analyze Factory
         task_def = self.analyzer.analyze(result.factory)
@@ -196,7 +231,7 @@ class GraphBuilder:
                 retry_policy=result._retry_policy,
                 cache_policy=result._cache_policy,
                 constraints=result._constraints,
-                input_bindings=input_bindings
+                input_bindings=input_bindings,
             )
             self.registry._registry[node_hash] = node
 
@@ -204,36 +239,78 @@ class GraphBuilder:
         self.graph.add_node(node)
 
         self._scan_and_add_edges(node, result.mapping_kwargs)
-        
+
         if result._condition:
             source = self._visited_instances[result._condition._uuid]
-            self.graph.add_edge(Edge(source=source, target=node, arg_name="_condition", edge_type=EdgeType.CONDITION))
-        
+            self.graph.add_edge(
+                Edge(
+                    source=source,
+                    target=node,
+                    arg_name="_condition",
+                    edge_type=EdgeType.CONDITION,
+                )
+            )
+
         for dep in result._dependencies:
             source = self._visited_instances[dep._uuid]
-            self.graph.add_edge(Edge(source=source, target=node, arg_name="<sequence>", edge_type=EdgeType.SEQUENCE))
+            self.graph.add_edge(
+                Edge(
+                    source=source,
+                    target=node,
+                    arg_name="<sequence>",
+                    edge_type=EdgeType.SEQUENCE,
+                )
+            )
 
         return node
 
     def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             source_node = self._visited_instances[obj._uuid]
-            self.graph.add_edge(Edge(source=source_node, target=target_node, arg_name=path or "dep", edge_type=EdgeType.DATA))
-        
+            self.graph.add_edge(
+                Edge(
+                    source=source_node,
+                    target=target_node,
+                    arg_name=path or "dep",
+                    edge_type=EdgeType.DATA,
+                )
+            )
+
         elif isinstance(obj, Router):
             selector_node = self._visited_instances[obj.selector._uuid]
-            self.graph.add_edge(Edge(source=selector_node, target=target_node, arg_name=path, router=obj, edge_type=EdgeType.DATA))
+            self.graph.add_edge(
+                Edge(
+                    source=selector_node,
+                    target=target_node,
+                    arg_name=path,
+                    router=obj,
+                    edge_type=EdgeType.DATA,
+                )
+            )
             for key, route_res in obj.routes.items():
                 route_node = self._visited_instances[route_res._uuid]
-                self.graph.add_edge(Edge(source=route_node, target=target_node, arg_name=f"{path}.route[{key}]", edge_type=EdgeType.ROUTER_ROUTE))
+                self.graph.add_edge(
+                    Edge(
+                        source=route_node,
+                        target=target_node,
+                        arg_name=f"{path}.route[{key}]",
+                        edge_type=EdgeType.ROUTER_ROUTE,
+                    )
+                )
 
         elif isinstance(obj, (list, tuple)):
             for i, item in enumerate(obj):
-                self._scan_and_add_edges(target_node, item, path=f"{path}[{i}]" if path else str(i))
+                self._scan_and_add_edges(
+                    target_node, item, path=f"{path}[{i}]" if path else str(i)
+                )
 
         elif isinstance(obj, dict):
             for k, v in obj.items():
-                self._scan_and_add_edges(target_node, v, path=f"{path}.{k}" if path else str(k))
+                self._scan_and_add_edges(
+                    target_node, v, path=f"{path}.{k}" if path else str(k)
+                )
+
+
 def build_graph(
     target: Any, registry: NodeRegistry | None = None
 ) -> Tuple[Graph, Dict[str, Node]]:

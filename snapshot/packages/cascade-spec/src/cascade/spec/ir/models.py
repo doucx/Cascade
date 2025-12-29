@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional
 
@@ -10,11 +10,12 @@ class ArgumentKind(str, Enum):
     Defines the kind of an argument, aligning with Python's inspect.Parameter kinds
     and the Stitcher specification.
     """
+
     POSITIONAL_ONLY = "POSITIONAL_ONLY"
     POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
     VAR_POSITIONAL = "VAR_POSITIONAL"  # *args
     KEYWORD_ONLY = "KEYWORD_ONLY"
-    VAR_KEYWORD = "VAR_KEYWORD"        # **kwargs
+    VAR_KEYWORD = "VAR_KEYWORD"  # **kwargs
 
 
 @dataclass(frozen=True)
@@ -23,6 +24,7 @@ class ArgumentDef:
     A specific definition of a single argument in a task's signature.
     Designed to be serializable.
     """
+
     name: str
     kind: ArgumentKind
     annotation: Optional[str] = None
@@ -36,6 +38,7 @@ class TaskDef:
     This separates the 'definition' of what a task is from the 'node'
     of where it is used in a graph.
     """
+
     name: str
     args: List[ArgumentDef]
     # The stable semantic identity of this task definition.

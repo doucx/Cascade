@@ -4,8 +4,8 @@
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
   "_sql_factory": {
-    "baseline_code_signature_text": "def _sql_factory(query: str, db: str, params: Optional[Dict[str, Any]] = None) -> LazyResult[List[Dict[str, Any]]]:",
-    "baseline_code_structure_hash": "5f207f2fc9ec2e432c573e84464199dff6821509c147b9418ab13b5e2840aaa2",
+    "baseline_code_signature_text": "def _sql_factory(query: str, db: str, params: Optional[Dict[str, Any]] = None, **kwargs) -> LazyResult[List[Dict[str, Any]]]:",
+    "baseline_code_structure_hash": "37210aac892822160b2d514924bdf6da17f3ca7e3858651a0caa47b185c7bb46",
     "baseline_yaml_content_hash": "829d579838c2c41e173cd4a8fef0eebb8fff5e5362190c101606afefc27d82b8"
   },
   "_sql_task": {

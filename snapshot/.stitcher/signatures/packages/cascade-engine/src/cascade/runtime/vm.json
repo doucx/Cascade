@@ -35,8 +35,8 @@
     "baseline_yaml_content_hash": "703ad4e553948518986b40e7bda731f48941cb08c60d3f318db23bdaebd164d8"
   },
   "VirtualMachine.execute": {
-    "baseline_code_signature_text": "async def execute(self, blueprint: Blueprint, initial_args: List[Any] = None, initial_kwargs: Dict[str, Any] = None) -> Any:",
-    "baseline_code_structure_hash": "8e3d35a32d3372617465490badfcc98f7f4dce8f8b4ad8bda5d6aaeb74ed7c0d",
+    "baseline_code_signature_text": "async def execute(self, blueprint: Blueprint, initial_args: Optional[List[Any]] = None, initial_kwargs: Optional[Dict[str, Any]] = None) -> Any:",
+    "baseline_code_structure_hash": "dd0dd65ac8f93a38e478b751217ff2def11bd637335cf2988acea99a13ffca73",
     "baseline_yaml_content_hash": "8a649f09efc156b657c0fb0d2a1fbfe29f94b653abdfd06d998e05150caa43c6"
   },
   "VirtualMachine.register_blueprint": {

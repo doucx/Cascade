@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "143c000dc4b43f24b34427beaca498959ae7a1ec2f0ec116c2a044bf0ccecd3f"
   },
   "RedisCacheBackend.__init__": {
-    "baseline_code_signature_text": "def __init__(self, client: \"redis.Redis\", prefix: str = \"cascade:cache:\"):",
-    "baseline_code_structure_hash": "892535fffc680f8c170018ad2fe7f6edaf7bfdfa90ca1b48b3e7e17f3b5a974e"
+    "baseline_code_signature_text": "def __init__(self, client: Any, prefix: str = \"cascade:cache:\"):",
+    "baseline_code_structure_hash": "67ca96c9f7910af793858aec82c1e85d22988b4183ecf23ba935910354aa1264"
   },
   "RedisCacheBackend.get": {
     "baseline_code_signature_text": "async def get(self, key: str) -> Optional[Any]:",

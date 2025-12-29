@@ -7,8 +7,8 @@
     "baseline_code_structure_hash": "28d338685fc8acc4c8a2f1bb8af86a3b394a063813b8b579f5765d8ed0b8ef4c"
   },
   "NodeProcessor._execute_internal": {
-    "baseline_code_signature_text": "async def _execute_internal(self, node: Node, graph: Graph, state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable, instance_map: Dict[str, Node], input_overrides: Dict[str, Any] = None) -> Any:",
-    "baseline_code_structure_hash": "ed973da8a1df37fcdaef6c1f7f0efe23d2dff9d4b55f3c04fb3c02cea2543da4"
+    "baseline_code_signature_text": "async def _execute_internal(self, node: Node, graph: Graph, state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable, instance_map: Dict[str, Node], input_overrides: Optional[Dict[str, Any]] = None) -> Any:",
+    "baseline_code_structure_hash": "3ba95935a4866cd84d7a89cce6cbd515e497bdec7c3a611b29fe36e004d386cf"
   },
   "NodeProcessor._execute_map_node": {
     "baseline_code_signature_text": "async def _execute_map_node(self, node: Node, kwargs: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], parent_state_backend: StateBackend, sub_graph_runner: Callable) -> List[Any]:",
@@ -19,8 +19,8 @@
     "baseline_code_structure_hash": "e6521b71134fcf63eb6d852e731fffb8d3aea62c9f7acb37eb9f205088518c85"
   },
   "NodeProcessor.process": {
-    "baseline_code_signature_text": "async def process(self, node: Node, graph: Graph, state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]], instance_map: Dict[str, Node], input_overrides: Dict[str, Any] = None) -> Any:",
-    "baseline_code_structure_hash": "4c3a21be57656983c52eb6896c0f5b5e46d25282da6e460496cc1dac145d1b97",
+    "baseline_code_signature_text": "async def process(self, node: Node, graph: Graph, state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]], instance_map: Dict[str, Node], input_overrides: Optional[Dict[str, Any]] = None) -> Any:",
+    "baseline_code_structure_hash": "6eaa1f4f7466f338ab9ec287931e1fe45a3870564e1420a91a7072d8c8a62fdc",
     "baseline_yaml_content_hash": "1af59a7b75e04d2e216a2bad2ad9e73b115011e0558c331f3bc70442239951e9"
   }
 }

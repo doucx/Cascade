@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "9d9685a60f761ccc2ceb10497988d225a6a2da309d1e36b0765b6c209501091f"
   },
   "RedisStateBackend.__init__": {
-    "baseline_code_signature_text": "def __init__(self, run_id: str, client: \"redis.Redis\", ttl: int = 86400):",
-    "baseline_code_structure_hash": "9a569b86ce549dea6b5c1076d6546eca7733eed4a94f57d11d4f7fdeafa4d855"
+    "baseline_code_signature_text": "def __init__(self, run_id: str, client: Any, ttl: int = 86400):",
+    "baseline_code_structure_hash": "12fe5b94509d1f9711c5d774e2638da6adaf53ecd53905f765eda33d2d118a55"
   },
   "RedisStateBackend._sync_mark_skipped": {
     "baseline_code_signature_text": "def _sync_mark_skipped(self, node_id: str, reason: str):",

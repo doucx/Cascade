@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "f49d0f50dc9efdf79f71c60acd66f35710e51f4badbd0bebb6ca717391f463ce"
   },
   "Engine.__init__": {
-    "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: MessageBus, state_backend_factory: Callable[[str], StateBackend] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None):",
-    "baseline_code_structure_hash": "730d07f55a05f87a1b0c3f8ffdbc50acd6c146c9fcc0ebd1b42e0a96c3b93cb2"
+    "baseline_code_signature_text": "def __init__(self, solver: Solver, executor: Executor, bus: MessageBus, state_backend_factory: Optional[Callable[[str], StateBackend]] = None, system_resources: Optional[Dict[str, Any]] = None, connector: Optional[Connector] = None, cache_backend: Optional[Any] = None, resource_manager: Optional[ResourceManager] = None):",
+    "baseline_code_structure_hash": "0fcec846fa00f082273037e4d3726ee371b8ee3d10d0c12584f3f8018110feee"
   },
   "Engine._is_simple_task": {
     "baseline_code_signature_text": "def _is_simple_task(self, lr: Any) -> bool:",

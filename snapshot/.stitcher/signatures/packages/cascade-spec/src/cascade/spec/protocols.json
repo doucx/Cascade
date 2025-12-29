@@ -64,6 +64,10 @@
     "baseline_code_structure_hash": "3e3276a4635f41b00278a305b35e3a3b2e32157ca6230aa49d4b51646a41d76d",
     "baseline_yaml_content_hash": "0c78a88c5094b90262d759acb0cc0a15bfbc22e74ca9101389a253edd30fa653"
   },
+  "Provider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
   "Solver": {
     "baseline_yaml_content_hash": "318cc31e7fd0a59eaa93650f0b83d25b8a40ada0b209f911f890db962a4c2935"
   },
@@ -73,6 +77,10 @@
   },
   "StateBackend": {
     "baseline_yaml_content_hash": "9484567b44378176c2318c4155aaaf5df0881448318b41d7759ae8ce1d805071"
+  },
+  "StateBackend.clear": {
+    "baseline_code_signature_text": "async def clear(self) -> None:",
+    "baseline_code_structure_hash": "1e1d110f0d48734e2552a9d1d1561437c16def8309d251c39c34e0312fdb6011"
   },
   "StateBackend.get_result": {
     "baseline_code_signature_text": "async def get_result(self, node_id: str) -> Optional[Any]:",

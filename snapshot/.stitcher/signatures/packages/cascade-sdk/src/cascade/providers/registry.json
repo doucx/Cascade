@@ -1,63 +1,11 @@
 {
-  "LazyFactory": {
-    "baseline_yaml_content_hash": "0fe3744fc105868a7fa5f09691b06441e3397c2d0ca2e29f0a88fe4af68353f2"
-  },
-  "LazyFactory.__call__": {
-    "baseline_code_signature_text": "def __call__(self, **kwargs) -> Any:",
-    "baseline_code_structure_hash": "8862a703c4e9b637b3dd8d3a51936f51fc19add4635171f203ab16bbae02c4b9"
-  },
-  "LazyFactory.map": {
-    "baseline_code_signature_text": "def map(self, **kwargs) -> Any:",
-    "baseline_code_structure_hash": "3e3276a4635f41b00278a305b35e3a3b2e32157ca6230aa49d4b51646a41d76d"
-  },
-  "Provider": {
-    "baseline_yaml_content_hash": "088c4f881008e4f50229357b93440f3d7b118f02e054c83cc698c267a5892c19"
-  },
-  "Provider.create_factory": {
-    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
-    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387",
-    "baseline_yaml_content_hash": "f375a4919c7295201bcfb4bc9c623949f73438f2662190426e1d295a2336feb8"
-  },
-  "Provider.name": {
-    "baseline_code_signature_text": "def name(self) -> str:",
-    "baseline_code_structure_hash": "c94b9438ef99f34eb50d548685beb18b9e3a9c12da68c2ff32b217d099daebe4",
-    "baseline_yaml_content_hash": "5ad9beacdaffbb19e29c66b8d36ceb7d2c92fe17d30345565d3bb050ed0e4d0f"
-  },
-  "ProviderNamespace": {
-    "baseline_yaml_content_hash": "6bfa9c39cecc3e6081bd9ecdbc6dd8fe9fed1fbcfc6f56427bb58bf44b038d65"
-  },
-  "ProviderNamespace.__getattr__": {
-    "baseline_code_signature_text": "def __getattr__(self, name: str) -> Any:",
-    "baseline_code_structure_hash": "cfaa0d20b1f7ec834a295b0cfbdbbc55353e201952fcc10a53a830612bc56408"
-  },
-  "ProviderNamespace.__init__": {
-    "baseline_code_signature_text": "def __init__(self, registry: \"ProviderRegistry\", prefix: str):",
-    "baseline_code_structure_hash": "a8f232c8be26720d4b17e7ce3e62b5fd83fd975e0b2a825e98fc72027556a6ec"
-  },
-  "ProviderRegistry": {
-    "baseline_yaml_content_hash": "deda42e4adb60b7940db3a00530d982082a68dec96cf4a4a2f8e5b2b89095ae2"
-  },
-  "ProviderRegistry.__init__": {
-    "baseline_code_signature_text": "def __init__(self):",
-    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
-  },
-  "ProviderRegistry._discover_entry_points": {
-    "baseline_code_signature_text": "def _discover_entry_points(self):",
-    "baseline_code_structure_hash": "feae498188d5710e59ce2c37009299db9a718d916f2c78e033daa39e553d10f9",
-    "baseline_yaml_content_hash": "f231cc6d21c1c88d4eab4bc244c87f46cd84c577ff8efe3013691bb8b88ae763"
-  },
-  "ProviderRegistry.get": {
-    "baseline_code_signature_text": "def get(self, name: str) -> Any:",
-    "baseline_code_structure_hash": "20149c8db212ebe10ebdef3a06b61bc0f0025fcbd15c1d03512ea6603e670d82",
-    "baseline_yaml_content_hash": "01be2bcb50166bc1265f07a5ef7ea71147e71b7468100c3e7ff4de9fa2aa199d"
-  },
-  "ProviderRegistry.instance": {
-    "baseline_code_signature_text": "def instance(cls):",
-    "baseline_code_structure_hash": "514e9ea8fe4101d1f586c541a9436c33d7621b7f170f0f10d801cf56584667f6"
-  },
-  "ProviderRegistry.register": {
-    "baseline_code_signature_text": "def register(self, name: str, factory: LazyFactory):",
-    "baseline_code_structure_hash": "7d0606566b3a8d20b4b89c0b9589195fbe5ecc82a98d903802f57daa36a60823",
-    "baseline_yaml_content_hash": "08f9e4c245a7a53642e8aa83266349f43bbc16680b8b9bf0426315c83ca6c5bf"
-  }
+  "LazyFactory": {},
+  "Provider": {},
+  "Provider.create_factory": {},
+  "Provider.name": {},
+  "ProviderNamespace": {},
+  "ProviderRegistry": {},
+  "ProviderRegistry._discover_entry_points": {},
+  "ProviderRegistry.get": {},
+  "ProviderRegistry.register": {}
 }

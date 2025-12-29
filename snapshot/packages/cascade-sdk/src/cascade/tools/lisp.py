@@ -38,7 +38,7 @@ class LispTranspiler:
             is_router_selector = any(
                 e.router
                 and e.router.selector._uuid in self.instance_map
-                and self.instance_map[e.router.selector._uuid].id == node.structural_id
+                and self.instance_map[e.router.selector._uuid].structural_id == node.structural_id
                 for e in self.graph.edges
             )
 
@@ -273,7 +273,7 @@ class LispTranspiler:
             result.append(n_id)
 
         # Sort input nodes for deterministic start order
-        for n in sorted(nodes, key=lambda x: x.id):
+        for n in sorted(nodes, key=lambda x: x.structural_id):
             visit(n.structural_id)
 
         # result is [Deepest Dep, ..., Root]

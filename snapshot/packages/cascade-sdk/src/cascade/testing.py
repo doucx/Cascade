@@ -6,7 +6,7 @@ import asyncio
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
-from cascade.spec.protocols import Solver, Executor, ExecutionPlan, Connector
+from cascade.spec.protocols import Solver, Executor, ExecutionPlan, Connector, SubscriptionHandle
 from cascade.graph.model import Node, Graph
 
 
@@ -46,7 +46,7 @@ class SpySolver(Solver):
         # This method's body is effectively replaced by the MagicMock wrapper,
         # but is required to satisfy the Solver protocol's type signature.
         # The actual call is handled by the `wraps` argument in __init__.
-        pass
+        return self.underlying_solver.resolve(graph)
 
 
 class MockSolver(Solver):
@@ -90,6 +90,16 @@ class MockExecutor(Executor):
         return self.return_value
 
 
+class MockSubscriptionHandle(SubscriptionHandle):
+    def __init__(self, parent: "MockConnector", topic: str):
+        self._parent = parent
+        self._topic = topic
+
+    async def unsubscribe(self) -> None:
+        if self._topic in self._parent.subscriptions:
+            del self._parent.subscriptions[self._topic]
+
+
 class MockConnector(Connector):
     def __init__(self):
         self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
@@ -108,7 +118,7 @@ class MockConnector(Connector):
         self.connected = False
 
     async def publish(
-        self, topic: str, payload: Dict[str, Any], retain: bool = False, qos: int = 0
+        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
     ) -> None:
         self.publish_log.append(
             {"topic": topic, "payload": payload, "retain": retain, "qos": qos}
@@ -125,7 +135,7 @@ class MockConnector(Connector):
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
+    ) -> SubscriptionHandle:
         self.subscriptions[topic] = callback
 
         # Immediate delivery of matching retained messages upon subscription
@@ -133,6 +143,8 @@ class MockConnector(Connector):
             if self._topic_matches(subscription=topic, topic=retained_topic):
                 # Run in a task to avoid blocking the subscribe call itself
                 asyncio.create_task(callback(retained_topic, payload))
+        
+        return MockSubscriptionHandle(self, topic)
 
     def seed_retained_message(self, topic: str, payload: Dict[str, Any]):
         self.retained_messages[topic] = payload

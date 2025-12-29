@@ -129,7 +129,7 @@ class LocalConnector(Connector):
         return f"cascade/constraints/{scope.replace(':', '/')}"
 
     async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:
-        if not self._is_connected:
+        if not self._is_connected or not self._conn:
             raise RuntimeError("Connector is not connected.")
 
         # Route message based on topic
@@ -142,6 +142,8 @@ class LocalConnector(Connector):
             scope = self._topic_to_scope(topic)
 
             def _blocking_publish():
+                if not self._conn:
+                    return
                 cursor = self._conn.cursor()
                 if not payload:
                     cursor.execute("DELETE FROM constraints WHERE scope = ?", (scope,))

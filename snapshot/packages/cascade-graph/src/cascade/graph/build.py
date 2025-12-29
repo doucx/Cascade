@@ -63,12 +63,12 @@ class GraphBuilder:
             self._find_dependencies(result._dependencies, dep_nodes)
 
         # 2. Compute structural hash using HashingService
-        structural_hash = self.hashing_service.compute_structural_hash(
+        current_code_structure_hash = self.hashing_service.compute_structural_hash(
             result, dep_nodes
         )
 
         # 3. Hash-consing: Query registry FIRST before doing more work
-        node = self.registry.get(structural_hash)
+        node = self.registry.get(current_code_structure_hash)
 
         if not node:
             # Extract bindings
@@ -130,7 +130,7 @@ class GraphBuilder:
                 input_bindings=input_bindings,
                 has_complex_inputs=has_complex,
             )
-            self.registry._registry[structural_hash] = node
+            self.registry._registry[current_code_structure_hash] = node
 
         self._visited_instances[result._uuid] = node
 
@@ -218,7 +218,7 @@ class GraphBuilder:
             self._find_dependencies(result._dependencies, dep_nodes)
 
         # 2. Compute structural hash using HashingService
-        structural_hash = self.hashing_service.compute_structural_hash(
+        current_code_structure_hash = self.hashing_service.compute_structural_hash(
             result, dep_nodes
         )
 
@@ -240,7 +240,9 @@ class GraphBuilder:
                 input_bindings=input_bindings,
             )
 
-        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
+        node, created_new = self.registry.get_or_create(
+            current_code_structure_hash, node_factory
+        )
         self._visited_instances[result._uuid] = node
 
         # Always add the node to the current graph

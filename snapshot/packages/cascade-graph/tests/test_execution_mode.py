@@ -39,13 +39,13 @@ def test_execution_mode_is_passed_to_node():
     blocking_node = instance_map[bt._uuid]
     default_node = instance_map[dt._uuid]
 
-    # 4. Assert the execution modes
-    assert compute_node.execution_mode == "compute", (
+    # 4. Assert the execution modes (now in definition)
+    assert compute_node.definition.mode == "compute", (
         "Node for compute_task should have mode 'compute'"
     )
-    assert blocking_node.execution_mode == "blocking", (
+    assert blocking_node.definition.mode == "blocking", (
         "Node for blocking_task should have mode 'blocking'"
     )
-    assert default_node.execution_mode == "blocking", (
+    assert default_node.definition.mode == "blocking", (
         "Node for default_task should have the default mode 'blocking'"
     )

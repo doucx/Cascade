@@ -233,3 +233,7 @@ class GraphBuilder:
         elif isinstance(obj, dict):
             for k, v in obj.items():
                 self._scan_and_add_edges(target_node, v, path=f"{path}.{k}" if path else str(k))
+def build_graph(
+    target: Any, registry: NodeRegistry | None = None
+) -> Tuple[Graph, Dict[str, Node]]:
+    return GraphBuilder(registry=registry).build(target)

@@ -20,7 +20,8 @@ async def _read_yaml_task(path: str) -> Dict[str, Any]:
 
     def blocking_read():
         with open(path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            # Using cast because yaml is Any/Module and pyright complains about optional access
+            return yaml.safe_load(f)  # type: ignore
 
     return await asyncio.to_thread(blocking_read)
 

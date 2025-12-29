@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING, Dict, Any, Optional
 import fnmatch
 from cascade.common.messaging import bus
 
@@ -148,12 +148,13 @@ class RateLimitConstraintHandler(ConstraintHandler):
 
         # We can optionally allow users to set burst capacity via params
         # For now, default burst = rate (1 second worth)
-        capacity = constraint.params.get("capacity")
-        if capacity is not None:
-            capacity = float(capacity)
+        capacity_val: Optional[float] = None
+        raw_capacity = constraint.params.get("capacity")
+        if raw_capacity is not None:
+            capacity_val = float(raw_capacity)
 
         self.limiter.update_bucket(
-            self._get_scope_key(constraint), rate_hertz, capacity
+            self._get_scope_key(constraint), rate_hertz, capacity_val
         )
 
     def on_constraint_remove(

@@ -155,12 +155,11 @@ class Engine:
         start_time = time.time()
 
         # Robustly determine initial target name for logging
-        if hasattr(target, "task"):
+        target_name = "unknown"
+        if isinstance(target, LazyResult):
             target_name = getattr(target.task, "name", "unknown")
-        elif hasattr(target, "factory"):
+        elif isinstance(target, MappedLazyResult):
             target_name = f"map({getattr(target.factory, 'name', 'unknown')})"
-        else:
-            target_name = "unknown"
 
         # Initialize State Backend using the factory
         state_backend = self.state_backend_factory(run_id)

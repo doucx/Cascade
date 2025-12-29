@@ -96,7 +96,8 @@ def create_cli(target: "LazyResult[Any]") -> Callable[[], None]:
         sig_params.append(sig_param)
 
     # Set the dynamic signature on the main function
-    main.__signature__ = inspect.Signature(parameters=sig_params)
+    # Pyright doesn't like assigning to __signature__ on a function
+    setattr(main, "__signature__", inspect.Signature(parameters=sig_params))
     # Give it a docstring for better --help
     main.__doc__ = "Runs the Cascade workflow."
 

@@ -42,6 +42,8 @@ class StateBackend(Protocol):
 
     async def get_skip_reason(self, node_id: str) -> Optional[str]: ...
 
+    async def clear(self) -> None: ...
+
 
 class SubscriptionHandle(Protocol):
     async def unsubscribe(self) -> None: ...
@@ -49,6 +51,12 @@ class SubscriptionHandle(Protocol):
 
 class LazyFactory(Protocol):
     def map(self, **kwargs) -> Any: ...
+
+
+class Provider(Protocol):
+    name: str
+
+    def create_factory(self) -> LazyFactory: ...
 
 
 class Connector(Protocol):

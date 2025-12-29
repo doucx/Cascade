@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 from cascade.graph.model import Node, Graph, Edge, EdgeType
 from cascade.spec.resource import Inject
@@ -15,8 +15,8 @@ class ArgumentResolver:
         state_backend: StateBackend,
         resource_context: Dict[str, Any],
         instance_map: Dict[str, Node],
-        user_params: Dict[str, Any] = None,
-        input_overrides: Dict[str, Any] = None,
+        user_params: Optional[Dict[str, Any]] = None,
+        input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
         # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
         if not node.has_complex_inputs:
@@ -123,7 +123,7 @@ class ArgumentResolver:
         graph: Graph,
         state_backend: StateBackend,
         instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] | None,
+        input_overrides: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
         resolved_values = {}
         incoming_edges = [

@@ -24,10 +24,11 @@ class SqlProvider:
 
 
 def _sql_factory(
-    query: str, db: str, params: Optional[Dict[str, Any]] = None
+    query: str, db: str, params: Optional[Dict[str, Any]] = None, **kwargs
 ) -> LazyResult[List[Dict[str, Any]]]:
     # We dynamically inject the resource by converting the 'db' string name
     # into an Inject object and passing it to the 'conn' argument of the task.
+    # Note: **kwargs is required to satisfy LazyFactory protocol (map support)
     return _sql_task(query=query, params=params or {}, conn=inject(db))
 
 

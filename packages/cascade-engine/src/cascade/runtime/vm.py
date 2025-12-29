@@ -51,8 +51,8 @@ class VirtualMachine:
     async def execute(
         self,
         blueprint: Blueprint,
-        initial_args: List[Any] = None,
-        initial_kwargs: Dict[str, Any] = None,
+        initial_args: Optional[List[Any]] = None,
+        initial_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Any:
         current_blueprint = blueprint
 

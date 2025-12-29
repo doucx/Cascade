@@ -148,7 +148,9 @@ class MockConnector(Connector):
         for retained_topic, payload in self.retained_messages.items():
             if self._topic_matches(subscription=topic, topic=retained_topic):
                 # Run in a task to avoid blocking the subscribe call itself
-                asyncio.create_task(callback(retained_topic, payload))
+                coro = callback(retained_topic, payload)
+                # Cast to avoid Pyright complaining about Awaitable vs Coroutine
+                asyncio.create_task(coro)  # type: ignore
 
         return MockSubscriptionHandle(self, topic)
 

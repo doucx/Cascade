@@ -58,6 +58,8 @@ class FlowManager:
         self, edge: Edge, selector_value: Any, state_backend: StateBackend
     ):
         router = edge.router
+        if not router:
+            return
         selected_route_key = selector_value
 
         for route_key, route_lazy_result in router.routes.items():

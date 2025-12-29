@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
 from cascade.graph.model import Graph, Node, EdgeType
@@ -209,7 +209,7 @@ class GraphExecutionStrategy:
         graph: Graph,
         plan: Any,
         instance_map: Dict[str, Node],
-        root_input_overrides: Dict[str, Any] = None,
+        root_input_overrides: Optional[Dict[str, Any]] = None,
     ) -> GraphExecutionResult:
         # Locate the canonical node for the current target instance
         if target._uuid not in instance_map:
@@ -330,10 +330,6 @@ class GraphExecutionStrategy:
                                 await flow_manager.register_result(
                                     node.structural_id, res, state_backend
                                 )
-                        if flow_manager:
-                            await flow_manager.register_result(
-                                node.structural_id, res, state_backend
-                            )
 
                 pending_nodes_in_stage = deferred_this_pass
 

@@ -1,6 +1,6 @@
 import time
 import asyncio
-from typing import Any, Dict, List, Callable, Awaitable
+from typing import Any, Dict, List, Callable, Awaitable, Optional
 
 from cascade.graph.model import Node, Graph
 from cascade.spec.protocols import Executor, StateBackend, Solver
@@ -47,7 +47,7 @@ class NodeProcessor:
         params: Dict[str, Any],
         sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
         instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] = None,
+        input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Any:
         # 1. Resolve Constraints & Resources
         requirements = await self.constraint_resolver.resolve(
@@ -106,7 +106,7 @@ class NodeProcessor:
         params: Dict[str, Any],
         sub_graph_runner: Callable,
         instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] = None,
+        input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Any:
         # 3. Resolve Arguments
         args, kwargs = await self.arg_resolver.resolve(

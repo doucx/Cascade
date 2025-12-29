@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(runtime): 适配 Node 对象重构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767010385.8091402, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M resolvers.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767010615.4538527, "duration_ms": 0}}

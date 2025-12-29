@@ -6,6 +6,8 @@ from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
 from cascade.spec.protocols import StateBackend
 
+import inspect
+
 
 class ArgumentResolver:
     async def resolve(

@@ -3,7 +3,7 @@ from typing import Callable, Any, Optional, Dict
 from .base import Definition
 
 
-@dataclass
+@dataclass(kw_only=True)
 class TaskDef(Definition):
     """
     Represents a computational task definition.
@@ -26,7 +26,7 @@ class TaskDef(Definition):
         return f"<TaskDef {self.name}>"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ServiceDef(Definition):
     """
     Represents a configuration for an external service operation.
@@ -38,7 +38,7 @@ class ServiceDef(Definition):
     params: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MapDef(Definition):
     """
     Represents a mapping operation over another definition.

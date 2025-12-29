@@ -1,93 +1,116 @@
-I understand. The error is a classic monorepo configuration issue with `uv`. It requires each package that depends on another local workspace package to explicitly declare it in a `[tool.uv.sources]` table.
-
-I'll generate a plan to fix this by updating the `pyproject.toml` for `cascade-compiler` and ensuring the root configuration is also consistent.
-
-## [WIP] fix(build): Configure uv workspace sources for new packages
+## [WIP] fix: Resolve Dataclass Inheritance Order Issue in TaskDef
 
 ### 错误分析
-`uv`'s workspace feature requires explicit configuration. The error message `cascade-foundation is included as a workspace member, but is missing an entry in tool.uv.sources` indicates that `cascade-compiler/pyproject.toml` declares a dependency on `cascade-foundation` but fails to tell `uv` that this dependency should be resolved from the local workspace instead of PyPI.
-
-This is a configuration error that prevents the project from being installed correctly in a development environment.
+测试失败的原因是 `TypeError: non-default argument 'func' follows default argument 'metadata'`。
+这是 Python `dataclasses` 继承的一个经典陷阱。
+1.  **基类 `Definition`**: 定义了带默认值的字段 `metadata` (`metadata: Dict[str, Any] = field(default_factory=dict)`).
+2.  **子类 `TaskDef`**: 定义了无默认值的字段 `func` 和 `name`。
+3.  **继承机制**: Python 合并字段时，基类的字段在前，子类的在后。结果生成的 `__init__` 签名类似于 `__init__(self, fingerprint=None, metadata={}, func, name)`。这违反了 Python 语法规则：**所有带默认值的参数必须放在无默认值参数之后**。
 
 ### 用户需求
-修复 `uv pip install packages/*` 命令失败的问题，使其能够正确识别并安装本地的 workspace 包。
+修复 `cascade-foundation` 中的 `dataclass` 定义，使其符合 Python 的继承规则。
 
 ### 评论
-这是一个对开发者体验（DX）至关重要的修复。正确配置 workspace 依赖是 monorepo 能够顺利工作的基本前提。通过为 `uv` 提供正确的元数据，我们可以确保本地开发和 CI/CD 流程的稳定性和可预测性。
+这个问题必须在 Phase 2 TDD 的早期解决。如果不修复，任何涉及 `TaskDef` 的测试都无法运行。
 
 ### 目标
-1.  更新 `packages/cascade-compiler/pyproject.toml`，为 `cascade-foundation` 依赖项添加 `[tool.uv.sources]` 配置。
-2.  更新根目录的 `pyproject.toml`，将新的 V2 包 (`cascade-foundation`, `cascade-compiler`) 正式纳入 workspace source 管理，以保持一致性。
+调整 `Definition` 和 `TaskDef` 的字段定义，确保生成的 `__init__` 方法签名合法。
 
 ### 基本原理
-`uv` 为了性能和确定性，不会自动扫描文件系统来解析 workspace 依赖。我们必须在每个消费本地包的 `pyproject.toml` 文件中，通过 `[tool.uv.sources]` 表来明确告知 `uv` 哪些依赖项是本地 workspace 成员。此修复将添加这些缺失的声明。
+对于 `dataclasses` 继承问题，主要有两种解决方案：
+1.  **KW_ONLY (Python 3.10+)**: 强制所有有默认值的字段变为 Keyword-Only 参数。这通常是最干净的解法，特别是对于基类中的元数据字段。
+2.  **重排**: 将基类中的所有字段都设为无默认值（不可行，因为 `metadata` 应该是可选的）。
+3.  **子类提供默认值**: 也不可行。
+
+我们将采用 **`kw_only=True`** 策略。这将强制所有后续字段（包括子类的新字段）都必须作为关键字参数传递，从而绕过“非默认跟随默认”的顺序限制，或者仅仅将基类的带默认值字段标记为 `kw_only`。但在 3.10+ 中，最简单的是在基类 `Definition` 的装饰器中添加 `kw_only=True`。
 
 ### 标签
 #intent/fix #flow/ready #priority/critical
-#comp/build #scope/dx
+#comp/foundation #scope/core
 #ai/instruct
-#task/domain/build #task/object/uv-config #task/action/fix
+#task/domain/core #task/object/ir #task/action/fix
+#task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 配置 cascade-compiler 的 workspace 依赖
-我们将 `[tool.uv.sources]` 添加到 `cascade-compiler/pyproject.toml` 中，以解决核心构建错误。同时添加 `[tool.hatch.metadata]` 以保持与其他包的配置一致。
+#### Acts 1: 修正 Definition 基类
+将 `Definition` 标记为 `kw_only=True`。这会使得 `fingerprint` 和 `metadata` 在 `__init__` 中成为 Keyword-Only 参数，从而不再干扰子类的位置参数顺序。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/pyproject.toml
+packages/cascade-foundation/src/cascade/foundation/definitions/base.py
 ~~~~~
-~~~~~toml.old
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
+~~~~~python.old
+@dataclass
+class Definition:
+    """
+    Base class for all IR Level 0 definitions.
 ~~~~~
-~~~~~toml.new
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.uv.sources]
-cascade-foundation = { workspace = true }
+~~~~~python.new
+@dataclass(kw_only=True)
+class Definition:
+    """
+    Base class for all IR Level 0 definitions.
 ~~~~~
 
-#### Acts 2: 更新根 pyproject.toml 以包含新包
-为了保持整个 workspace 的配置完整和一致，我们将新的 V2 包添加到根 `pyproject.toml` 的 `tool.uv.sources` 中。
+#### Acts 2: 修正 TaskDef 子类
+为了保持一致性（且通常是良好的实践），我们也建议将子类标记为 `kw_only=True`，或者至少确保它的无默认值字段在语义上是可以接受的。如果基类是 `kw_only=True`，子类的无默认值字段将变成位置参数（如果子类没有 `kw_only=True`），或者也变成关键字参数（如果子类有）。
+为了 API 的清晰性，我们统一让所有 IR 定义都使用关键字参数构造。
 
 ~~~~~act
 patch_file
-pyproject.toml
+packages/cascade-foundation/src/cascade/foundation/definitions/model.py
 ~~~~~
-~~~~~toml.old
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-cascade-graph = { workspace = true }
-cascade-library = { workspace = true }
-cascade-application = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
-cascade-connector-local = { workspace = true }
+~~~~~python.old
+@dataclass
+class TaskDef(Definition):
+    """
+    Represents a computational task definition.
 ~~~~~
-~~~~~toml.new
-[tool.uv.sources]
-cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
-cascade-sdk = { workspace = true }
-cascade-graph = { workspace = true }
-cascade-library = { workspace = true }
-cascade-application = { workspace = true }
-cascade-provider-ipfs = { workspace = true }
-cascade-cli-controller = { workspace = true }
-cascade-cli-observer = { workspace = true }
-cascade-connector-mqtt = { workspace = true }
-cascade-connector-local = { workspace = true }
-cascade-foundation = { workspace = true }
-cascade-compiler = { workspace = true }
+~~~~~python.new
+@dataclass(kw_only=True)
+class TaskDef(Definition):
+    """
+    Represents a computational task definition.
 ~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-foundation/src/cascade/foundation/definitions/model.py
+~~~~~
+~~~~~python.old
+@dataclass
+class ServiceDef(Definition):
+    """
+    Represents a configuration for an external service operation.
+~~~~~
+~~~~~python.new
+@dataclass(kw_only=True)
+class ServiceDef(Definition):
+    """
+    Represents a configuration for an external service operation.
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-foundation/src/cascade/foundation/definitions/model.py
+~~~~~
+~~~~~python.old
+@dataclass
+class MapDef(Definition):
+    """
+    Represents a mapping operation over another definition.
+    """
+~~~~~
+~~~~~python.new
+@dataclass(kw_only=True)
+class MapDef(Definition):
+    """
+    Represents a mapping operation over another definition.
+    """
+~~~~~
+
+### 下一步建议
+重新运行测试。现在 `TaskDef(...)` 调用必须使用关键字参数（例如 `TaskDef(name="foo", ...)`），检查测试代码 `test_builder.py` 是否已经使用了关键字参数（看起来是的，`TaskDef(name="my_task", ...)`）。如果不符合，也需要更新测试代码。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(core): 强制执行哈希长命名公理，消除概念性债务", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767007853.8367631, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(spec): 引入 Fingerprint 类及命名公理", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767009386.9285297, "duration_ms": 0}}

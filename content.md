@@ -1,118 +1,116 @@
 简要回答
-我们将把 `stitcher` 项目中的 `Fingerprint` 逻辑及其命名公理移植到 `cascade-spec` 包中。这确立了 `[State]_[Source]_[Object]_[Type]` 的哈希命名规范，为后续的 IR 系统奠定基础。
+我们将实现 Cascade 的中间表示 (IR) 层，定义用于描述任务静态结构的 `TaskDef` 和 `ArgumentDef` 模型，并将 `Fingerprint` 集成其中作为核心身份标识。
 
-## [WIP] feat(spec): 引入 Fingerprint 类及命名公理
+## [WIP] feat(spec): 引入 IR 层与 TaskDef 定义
 
 ### 用户需求
-将 `stitcher` 项目中用于规范化哈希命名的 `Fingerprint` 类及相关公理（Axiom）移植到 Cascade 中。这包括强制执行 `^(baseline|current)_[a-z]+_[a-z]+_(hash|text)$` 的正则表达式校验。
+在 `cascade.spec.ir` 包中实现 IR 层，具体包含 `ArgumentDef` 和 `TaskDef` 数据类。`TaskDef` 必须将之前引入的 `Fingerprint` 类作为其核心属性，用于承载任务的稳定标识符。
 
 ### 评论
-这是一个纯粹的规范引入，不改变现有运行时逻辑。它为解决“概念模糊与哈希脆弱性”问题提供了数据结构基础，强制执行了 `State_Source_Object_Type` 的长命名规范，消除了概念性债务。
+这是“解构 Node 对象”提案的第一步物理落地。通过将任务的“定义 (Definition)”与“图节点 (Node)”分离，我们将为未来的序列化、分布式执行和增量编译打下坚实的基础。
 
 ### 目标
-1.  在 `cascade.spec` 中创建 `fingerprint.py`。
-2.  在 `cascade.spec` 导出口暴露 `Fingerprint` 和异常。
+1.  创建 `cascade.spec.ir` 包结构。
+2.  实现 `ArgumentKind` 枚举（与 Stitcher 对齐）。
+3.  实现 `ArgumentDef` 和 `TaskDef`，其中 `TaskDef` 包含 `fingerprint: Fingerprint` 字段。
 
 ### 基本原理
-复用 `stitcher` 的成熟设计。`Fingerprint` 类不仅仅是一个字典封装，它是一个“可验证的类型”，确保了在系统各处流转的哈希值都携带了完整的语义上下文（来源、对象、状态），防止了错误类型的哈希被混用。
+IR 是静态分析和运行时之间的契约。
+-   **类型安全**: 使用 `Enum` 和 `dataclass` 确保定义的严格性。
+-   **身份明确**: 通过强制包含 `Fingerprint` 对象，我们在定义阶段就确立了“身份 (Identity)”的首要地位，遵循“稳定标识符”的架构原则。
+-   **对应关系**: `ArgumentDef` 对应 Python 的参数定义，但针对序列化进行了简化（例如 `default_value_repr` 存储字符串而非对象）。
 
 ### 标签
-#intent/architect #flow/ready #priority/high #comp/interfaces #concept/state #scope/core #ai/copy-paste #task/domain/core #task/object/fingerprint #task/action/implementation #task/state/begin
+#intent/architect #flow/ready #priority/high #comp/interfaces #concept/ir #scope/core #ai/instruct #task/domain/core #task/object/ir-models #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Fingerprint 规范文件
+#### Acts 1: 创建 IR 包结构
 
-我们将直接使用 `stitcher` 的实现，将其放置在 `cascade-spec` 包中。
+创建存放 IR 模型的目录。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+mkdir -p packages/cascade-spec/src/cascade/spec/ir
+~~~~~
+
+#### Acts 2: 实现 IR 模型
+
+创建 `cascade/spec/ir/models.py`，定义核心数据结构。
 
 ~~~~~act
 write_file
-packages/cascade-spec/src/cascade/spec/fingerprint.py
+packages/cascade-spec/src/cascade/spec/ir/models.py
 ~~~~~
 ~~~~~python
-import re
 from dataclasses import dataclass, field
-from typing import Dict, Any, Optional
+from enum import Enum
+from typing import List, Optional
 
-# Axiom: [State]_[Source]_[Object]_[Type]
-# Example: baseline_code_structure_hash, baseline_code_signature_text
-# We enforce 4 segments, starting with state, ending with type (hash or text).
-FINGERPRINT_KEY_PATTERN = re.compile(r"^(baseline|current)_[a-z]+_[a-z]+_(hash|text)$")
+from cascade.spec.fingerprint import Fingerprint
 
 
-class InvalidFingerprintKeyError(KeyError):
-    def __init__(self, key: str):
-        super().__init__(
-            f"Key '{key}' does not conform to the Fingerprint naming axiom "
-            "('^(baseline|current)_[a-z]+_[a-z]+_(hash|text)$')."
-        )
+class ArgumentKind(str, Enum):
+    """
+    Defines the kind of an argument, aligning with Python's inspect.Parameter kinds
+    and the Stitcher specification.
+    """
+    POSITIONAL_ONLY = "POSITIONAL_ONLY"
+    POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
+    VAR_POSITIONAL = "VAR_POSITIONAL"  # *args
+    KEYWORD_ONLY = "KEYWORD_ONLY"
+    VAR_KEYWORD = "VAR_KEYWORD"        # **kwargs
 
 
-@dataclass
-class Fingerprint:
-    _hashes: Dict[str, str] = field(default_factory=dict)
+@dataclass(frozen=True)
+class ArgumentDef:
+    """
+    A specific definition of a single argument in a task's signature.
+    Designed to be serializable.
+    """
+    name: str
+    kind: ArgumentKind
+    annotation: Optional[str] = None
+    default_value_repr: Optional[str] = None
 
-    @staticmethod
-    def _validate_key(key: str) -> None:
-        if not FINGERPRINT_KEY_PATTERN.match(key):
-            raise InvalidFingerprintKeyError(key)
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Fingerprint":
-        validated_hashes = {}
-        for key, value in data.items():
-            cls._validate_key(key)
-            if value is not None:
-                validated_hashes[key] = str(value)
-        return cls(_hashes=validated_hashes)
-
-    def to_dict(self) -> Dict[str, str]:
-        return self._hashes.copy()
-
-    def get(self, key: str, default: Optional[str] = None) -> Optional[str]:
-        # We validate key on read too, to ensure consumer uses correct keys
-        self._validate_key(key)
-        return self._hashes.get(key, default)
-
-    def __getitem__(self, key: str) -> str:
-        self._validate_key(key)
-        return self._hashes[key]
-
-    def __setitem__(self, key: str, value: str) -> None:
-        self._validate_key(key)
-        self._hashes[key] = value
-
-    def __delitem__(self, key: str) -> None:
-        self._validate_key(key)
-        del self._hashes[key]
-
-    def __contains__(self, key: str) -> bool:
-        return key in self._hashes
-
-    def items(self):
-        return self._hashes.items()
-
-    def __eq__(self, other: Any) -> bool:
-        if not isinstance(other, Fingerprint):
-            return NotImplemented
-        return self._hashes == other._hashes
+@dataclass(frozen=True)
+class TaskDef:
+    """
+    The static intermediate representation (IR) of a Task.
+    This separates the 'definition' of what a task is from the 'node'
+    of where it is used in a graph.
+    """
+    name: str
+    args: List[ArgumentDef]
+    # The stable semantic identity of this task definition.
+    # Must contain keys like 'current_code_structure_hash'.
+    fingerprint: Fingerprint
+    return_annotation: Optional[str] = None
+    docstring: Optional[str] = None
+    is_async: bool = False
 ~~~~~
 
-#### Acts 2: 导出 Fingerprint
+#### Acts 3: 导出 IR 模块
 
-更新 `packages/cascade-spec/src/cascade/spec/__init__.py` 以导出新的类。此前该文件为空。
+创建 `cascade/spec/ir/__init__.py` 以公开新的模型。
 
 ~~~~~act
 write_file
-packages/cascade-spec/src/cascade/spec/__init__.py
+packages/cascade-spec/src/cascade/spec/ir/__init__.py
 ~~~~~
 ~~~~~python
-from .fingerprint import Fingerprint, InvalidFingerprintKeyError
+from .models import ArgumentKind, ArgumentDef, TaskDef
 
-__all__ = ["Fingerprint", "InvalidFingerprintKeyError"]
+__all__ = ["ArgumentKind", "ArgumentDef", "TaskDef"]
 ~~~~~
 
 ### 下一步建议
-Fingerprint 基础已就绪。下一步应开始实现 IR 层 (`cascade.spec.ir`)，定义 `TaskDef` 和 `ArgumentDef`，并将 Fingerprint 作为其核心属性之一，这是解构 `Node` 对象的关键步骤。
+IR 层的基本模型定义完成。接下来的逻辑步骤是：
+1.  定义 `Analyzer` 协议 (`cascade.graph.analysis.protocols`)。
+2.  实现默认的 `ReflectionAnalyzer`，这是将 Python 可调用对象转换为这些 IR 模型的桥梁。
+3.  最后修改 `Node` 对象以使用新的 `TaskDef`。

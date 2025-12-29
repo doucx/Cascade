@@ -44,8 +44,5 @@ def test_compiler_stable_identity():
     c2 = Compiler()
     g2 = c2.compile(task2)
     
-    # Note: In Phase 2 start, we might still be using id(), so this test expects FAIL 
-    # until we implement real fingerprinting. 
-    # But for TDD, we write the expectation now.
-    # assert g1.root_op_id == g2.root_op_id 
-    pass
+    # Now that we have fingerprinting, this must pass
+    assert g1.root_op_id == g2.root_op_id

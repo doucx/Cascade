@@ -53,6 +53,12 @@ class LazyFactory(Protocol):
     def map(self, **kwargs) -> Any: ...
 
 
+class Provider(Protocol):
+    name: str
+
+    def create_factory(self) -> LazyFactory: ...
+
+
 class Connector(Protocol):
     async def connect(self) -> None: ...
 

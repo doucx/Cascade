@@ -27,7 +27,10 @@ class Inject:
 
 
 def resource(
-    func: Optional[Callable[..., T]] = None, *, name: Optional[str] = None, scope: str = "run"
+    func: Optional[Callable[..., T]] = None,
+    *,
+    name: Optional[str] = None,
+    scope: str = "run",
 ):
     def wrapper(f: Callable[..., T]) -> ResourceDefinition[T]:
         resource_name = name or f.__name__

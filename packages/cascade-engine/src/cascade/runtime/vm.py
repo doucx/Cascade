@@ -13,6 +13,8 @@ from cascade.spec.blueprint import (
     TailCall,
 )
 from cascade.graph.model import Node
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.fingerprint import Fingerprint
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.constraints import ConstraintManager
 
@@ -139,9 +141,16 @@ class VirtualMachine:
         if self.constraint_manager or (
             instr.constraints and not instr.constraints.is_empty()
         ):
+            # Create a stub definition for the temporary node
+            stub_def = TaskDef(
+                name=instr.task_name,
+                args=[],  # VM handles args via registers, not needed for constraint check
+                fingerprint=Fingerprint(),
+            )
+
             temp_node = Node(
                 structural_id=str(uuid4()),
-                name=instr.task_name,
+                definition=stub_def,
                 node_type="task",
                 constraints=instr.constraints,
             )

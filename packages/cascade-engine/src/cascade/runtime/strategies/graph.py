@@ -108,7 +108,9 @@ class GraphExecutionStrategy:
                         )
 
                     # 2.2 Resolve Plan (with caching based on blueprint hash)
-                    current_graph_structure_hash = self.blueprint_hasher.compute_hash(graph)
+                    current_graph_structure_hash = self.blueprint_hasher.compute_hash(
+                        graph
+                    )
                     if current_graph_structure_hash in self._template_plan_cache:
                         indexed_plan = self._template_plan_cache[
                             current_graph_structure_hash
@@ -117,9 +119,9 @@ class GraphExecutionStrategy:
                     else:
                         plan = self.solver.resolve(graph)
                         indexed_plan = self._index_plan(graph, plan)
-                        self._template_plan_cache[
-                            current_graph_structure_hash
-                        ] = indexed_plan
+                        self._template_plan_cache[current_graph_structure_hash] = (
+                            indexed_plan
+                        )
 
                     # Update local cache
                     local_context_cache[current_target._uuid] = (

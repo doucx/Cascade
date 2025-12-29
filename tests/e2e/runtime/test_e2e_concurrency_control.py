@@ -1,5 +1,4 @@
 import time
-import uuid
 from dataclasses import asdict
 
 import pytest
@@ -7,59 +6,46 @@ import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.testing import MockExecutor
+from cascade.spec.constraint import GlobalConstraint
 
-from .harness import InProcessConnector
+# Use the deterministic Mock infrastructure from the SDK
+from cascade.testing import MockExecutor, MockConnector
 
 
 @pytest.mark.asyncio
 async def test_e2e_concurrency_control():
     """
     Full end-to-end test with Retained Messages.
-    1. Controller publishes constraint (Retained).
-    2. Engine starts, connects, receives config, AND THEN executes.
+    1. Controller state is pre-seeded (Retained).
+    2. Engine starts, connects, receives config immediately, AND THEN executes.
     """
-    # 1. Setup shared communication bus
-    connector = InProcessConnector()
+    # 1. Setup deterministic connector
+    connector = MockConnector()
 
-    # 2. Setup the Controller (simulated by manual publish helper in this test context if needed,
-    # or using the simplified helper from harness but constructing payload manually as in original test)
-    # The ControllerTestApp in harness is generic. We can extend it or use it.
-    # The original test had set_concurrency_limit helper. Let's replicate or inline it.
+    # 2. Pre-seed the constraint (Simulating existing environment config)
+    # Instead of "acting" (publishing), we "arrange" (seed state).
+    # This prevents race conditions where the publish might not be processed
+    # before the engine starts tasks.
+    constraint = GlobalConstraint(
+        id="concurrency-task:slow_task-fixed",
+        scope="task:slow_task",
+        type="concurrency",
+        params={"limit": 1},
+    )
+    # The topic format usually follows MQTT conventions: cascade/constraints/<scope_path>
+    topic = "cascade/constraints/task/slow_task"
+    connector.seed_retained_message(topic, asdict(constraint))
 
-    # Inline setting concurrency limit using standard controller app logic
-    # But wait, harness ControllerTestApp only has pause/resume.
-    # Let's use the connector directly or update harness later?
-    # To keep this atomic, I'll just publish via connector here or extend ControllerTestApp locally if needed.
-    # Actually, let's just do manual publish to keep it simple as in harness.
-
-    # To avoid changing harness too much in Acts 1, I will implement helper here.
-    from cascade.spec.constraint import GlobalConstraint
-
-    async def set_concurrency_limit(scope: str, limit: int):
-        constraint = GlobalConstraint(
-            id=f"concurrency-{scope}-{uuid.uuid4().hex[:8]}",
-            scope=scope,
-            type="concurrency",
-            params={"limit": limit},
-        )
-        payload = asdict(constraint)
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        await connector.publish(topic, payload, retain=True)
-
-    # 3. Publish the constraint FIRST (Simulating existing environment config)
-    # Limit task concurrency to 1
-    await set_concurrency_limit(scope="task:slow_task", limit=1)
-
-    # 4. Define the workflow
+    # 3. Define the workflow
     @cs.task
     def slow_task(x):
         return x
 
     # 4 tasks that would normally run in parallel in ~0.05s
+    # Total work = 4 * 0.05s = 0.20s
     workflow = slow_task.map(x=[1, 2, 3, 4])
 
-    # 5. Setup the Engine
+    # 4. Setup the Engine
     engine = Engine(
         solver=NativeSolver(),
         executor=MockExecutor(delay=0.05),
@@ -67,15 +53,19 @@ async def test_e2e_concurrency_control():
         connector=connector,
     )
 
-    # 6. Run the engine
+    # 5. Run the engine
     start_time = time.time()
     results = await engine.run(workflow)
     duration = time.time() - start_time
 
-    # 7. Assertions
+    # 6. Assertions
     assert sorted(results) == [1, 2, 3, 4]
 
-    # With limit=1, 4 tasks of 0.05s should take >= 0.2s.
+    # With limit=1 (serial execution):
+    # Expected time >= 4 * 0.05 = 0.20s.
+    # Allowing for slight overhead or timer grit, 0.18s is a safe lower bound
+    # to distinguish from parallel execution (which would be ~0.05s).
     assert duration >= 0.18, (
-        f"Expected serial execution (~0.2s), but took {duration:.4f}s"
+        f"Expected serial execution (~0.2s), but took {duration:.4f}s. "
+        "Concurrency constraint may not have been applied."
     )

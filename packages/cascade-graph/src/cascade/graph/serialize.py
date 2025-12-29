@@ -4,7 +4,6 @@ from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
 
 from .model import Graph, Node, Edge, EdgeType
-from cascade.spec.input import ParamSpec
 from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -108,15 +107,8 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
     if node.mapping_factory:
         data["mapping_factory"] = _get_func_path(node.mapping_factory)
 
-    if node.param_spec:
-        data["param_spec"] = {
-            "name": node.param_spec.name,
-            "default": node.param_spec.default,
-            "type_name": node.param_spec.type.__name__
-            if node.param_spec.type
-            else None,
-            "description": node.param_spec.description,
-        }
+    # Note: param_spec serialization removed as Node no longer holds it directly.
+    # Future implementation should serialize definition metadata if needed.
 
     if node.retry_policy:
         data["retry_policy"] = {
@@ -210,16 +202,7 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
 
 
 def _dict_to_node(data: Dict[str, Any]) -> Node:
-    # Recover Param Spec
-    param_spec = None
-    if "param_spec" in data:
-        ps_data = data["param_spec"]
-        # Recovering type is hard without `pydoc.locate` or similar, defaulting to None or str
-        param_spec = ParamSpec(
-            name=ps_data["name"],
-            default=ps_data["default"],
-            description=ps_data["description"],
-        )
+    # Note: param_spec recovery removed
 
     # Recover Retry Policy
     retry_policy = None
@@ -234,13 +217,28 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     if "constraints" in data:
         constraints = ResourceConstraint(requirements=data["constraints"])
 
+    # Reconstruct a minimal TaskDef for the Node from the serialized data
+    # This is a stub definition to satisfy the Node contract for deserialization
+    from cascade.spec.ir.models import TaskDef
+    from cascade.spec.fingerprint import Fingerprint
+
+    # We use a dummy fingerprint for deserialized nodes if not present
+    fp = Fingerprint()
+    # If we serialized the code hash, we should restore it, but for now we put a placeholder
+    fp["current_code_structure_hash"] = "restored_from_json"
+
+    stub_def = TaskDef(
+        name=data["name"],
+        args=[],  # Args info lost in simplified serialization, ok for basic runtime restoration if callables are loaded
+        fingerprint=fp,
+    )
+
     node = Node(
         structural_id=data["structural_id"],
-        name=data["name"],
+        definition=stub_def,
         node_type=data["node_type"],
         callable_obj=_load_func_from_path(data.get("callable")),
         mapping_factory=_load_func_from_path(data.get("mapping_factory")),
-        param_spec=param_spec,
         retry_policy=retry_policy,
         constraints=constraints,
         input_bindings=data.get("input_bindings", {}),

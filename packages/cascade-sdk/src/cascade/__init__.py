@@ -28,7 +28,7 @@ from cascade.spec.protocols import Connector, StateBackend
 from cascade.flow import sequence, pipeline
 
 # --- Tools ---
-from .testing import override_resource
+from .testing import override_resource, ControllerTestApp
 from .tools.cli import create_cli
 from cascade.graph.serialize import to_json, from_json
 
@@ -126,6 +126,7 @@ __all__ = [
     "to_json",
     "from_json",
     "override_resource",
+    "ControllerTestApp",
     "create_cli",
     # Exceptions
     "DependencyMissingError",

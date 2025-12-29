@@ -6,6 +6,8 @@ from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
 from cascade.spec.protocols import StateBackend
 
+import inspect
+
 
 class ArgumentResolver:
     async def resolve(
@@ -92,11 +94,12 @@ class ArgumentResolver:
                 kwargs[k] = v
 
         # 3. Handle Resource Injection in Defaults
-        if node.signature:
-            # Create a bound arguments object to see which args are not yet filled
+        if node.callable_obj:
             try:
-                bound_args = node.signature.bind_partial(*args, **kwargs)
-                for param in node.signature.parameters.values():
+                # Re-inspect signature on demand
+                sig = inspect.signature(node.callable_obj)
+                bound_args = sig.bind_partial(*args, **kwargs)
+                for param in sig.parameters.values():
                     if (
                         isinstance(param.default, Inject)
                         and param.name not in bound_args.arguments
@@ -104,8 +107,7 @@ class ArgumentResolver:
                         kwargs[param.name] = self._resolve_inject(
                             param.default, node.name, resource_context
                         )
-            except TypeError:
-                # This can happen if args/kwargs are not yet valid, but we can still try a simpler check
+            except (ValueError, TypeError):
                 pass
 
         # 4. Handle internal param fetching context

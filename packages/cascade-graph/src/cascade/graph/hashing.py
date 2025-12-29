@@ -1,102 +1,85 @@
 import hashlib
 from typing import Any, List, Dict
 from cascade.graph.model import Graph, Node
+from cascade.spec.ir.models import TaskDef
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.spec.resource import Inject
 
 
 class HashingService:
-    def compute_structural_hash(self, result: Any, dep_nodes: Dict[str, Node]) -> str:
-        if isinstance(result, LazyResult):
-            return self._compute_lazy_result_hash(result, dep_nodes)
-        elif isinstance(result, MappedLazyResult):
-            return self._compute_mapped_result_hash(result, dep_nodes)
+    def compute_node_instance_hash(
+        self,
+        definition: TaskDef,
+        result: Any,  # LazyResult or MappedLazyResult
+        dep_nodes: Dict[str, Node],
+    ) -> str:
+        """
+        Computes the unique structural ID for a Node instance.
+
+        Formula:
+          Hash(
+             Definition.Fingerprint['current_code_structure_hash']
+             | Instance.Policies
+             | Instance.Bindings (merged args/kwargs)
+             | Instance.PuritySalt (if impure)
+          )
+        """
+        # 1. Start with the Stable Code Fingerprint
+        code_hash = definition.fingerprint["current_code_structure_hash"]
+        components = [f"CodeHash:{code_hash}"]
+
+        # 2. Purity Salt
+        # Get purity from the Task wrapper if available, else assume False (Impure) for safety
+        task_obj = getattr(result, "task", None) or getattr(result, "factory", None)
+        is_pure = getattr(task_obj, "pure", False) if task_obj else False
+
+        if not is_pure:
+            # Impure tasks are instance-identity based.
+            # We use the LazyResult's UUID as a salt.
+            components.append(f"Salt({result._uuid})")
+
+        # 3. Policies
+        if result._retry_policy:
+            rp = result._retry_policy
+            components.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
+        if result._cache_policy:
+            components.append(f"Cache({type(result._cache_policy).__name__})")
+
+        # 4. Bindings (Instance Arguments)
+        if isinstance(result, MappedLazyResult):
+            components.append("MapKwargs:")
+            components.extend(
+                self._build_hash_components(result.mapping_kwargs, dep_nodes)
+            )
         else:
-            raise TypeError(f"Cannot compute hash for type {type(result)}")
+            components.append("Args:")
+            components.extend(self._build_hash_components(result.args, dep_nodes))
+            components.append("Kwargs:")
+            components.extend(self._build_hash_components(result.kwargs, dep_nodes))
+
+        # 5. Metadata
+        if result._condition:
+            components.append("Condition:PRESENT")
+
+        # 6. Constraints
+        if result._constraints:
+            keys = sorted(result._constraints.requirements.keys())
+            s_vals = [f"{k}={result._constraints.requirements[k]}" for k in keys]
+            components.append(f"Constraints({','.join(s_vals)})")
+
+        return self._get_merkle_hash(components)
 
     def _get_merkle_hash(self, components: List[str]) -> str:
         fingerprint = "|".join(components)
         return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
-    def _compute_lazy_result_hash(
-        self, result: LazyResult, dep_nodes: Dict[str, Node]
-    ) -> str:
-        # 1. Base Components (Task identity and Policies)
-        base_comps = [f"Task({getattr(result.task, 'name', 'unknown')})"]
-
-        # [CP-006] Purity Check
-        # Default is Impure (pure=False). Impure tasks get a unique salt (UUID)
-        # to ensure every instance is a unique node in the graph.
-        is_pure = getattr(result.task, "pure", False)
-        if not is_pure:
-            base_comps.append(f"Salt({result._uuid})")
-
-        if result._retry_policy:
-            rp = result._retry_policy
-            base_comps.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
-        if result._cache_policy:
-            base_comps.append(f"Cache({type(result._cache_policy).__name__})")
-
-        # 2. Argument Components (Always structural)
-        struct_args = self._build_hash_components(result.args, dep_nodes)
-        struct_kwargs = self._build_hash_components(result.kwargs, dep_nodes)
-
-        # 3. Metadata Components (Structural properties)
-        meta_comps = []
-        if result._condition:
-            meta_comps.append("Condition:PRESENT")
-        if result._dependencies:
-            meta_comps.append(f"Deps:{len(result._dependencies)}")
-
-        # 4. Constraint Components (Always structural)
-        struct_constraints = []
-        if result._constraints:
-            keys = sorted(result._constraints.requirements.keys())
-            s_vals = [f"{k}={result._constraints.requirements[k]}" for k in keys]
-            struct_constraints.append(f"Constraints({','.join(s_vals)})")
-
-        # Assemble Structural ID
-        return self._get_merkle_hash(
-            base_comps
-            + ["Args:"]
-            + struct_args
-            + ["Kwargs:"]
-            + struct_kwargs
-            + meta_comps
-            + struct_constraints
-        )
-
-    def _compute_mapped_result_hash(
-        self, result: MappedLazyResult, dep_nodes: Dict[str, Node]
-    ) -> str:
-        base_comps = [f"Map({getattr(result.factory, 'name', 'factory')})"]
-
-        # [CP-006] Purity Check for Map
-        is_pure = getattr(result.factory, "pure", False)
-        if not is_pure:
-            base_comps.append(f"Salt({result._uuid})")
-
-        meta_comps = []
-        if result._condition:
-            meta_comps.append("Condition:PRESENT")
-        if result._dependencies:
-            meta_comps.append(f"Deps:{len(result._dependencies)}")
-
-        # Arguments (Always structural)
-        struct_kwargs = self._build_hash_components(result.mapping_kwargs, dep_nodes)
-
-        # Assemble
-        return self._get_merkle_hash(
-            base_comps + ["MapKwargs:"] + struct_kwargs + meta_comps
-        )
-
     def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Node]) -> List[str]:
+        # This recursive helper remains largely similar, just updated type hints if needed
         components = []
 
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             node = dep_nodes[obj._uuid]
-            # The reference is always to the full structural ID of the dependency
             components.append(f"LAZY({node.structural_id})")
 
         elif isinstance(obj, Router):
@@ -135,14 +118,12 @@ class HashingService:
 
 
 class BlueprintHasher:
+    # Existing logic for Blueprint hashing (can be updated later if needed)
     def compute_hash(self, graph: Graph) -> str:
         all_components = []
-        # Sort nodes by structural_id to ensure deterministic traversal
         sorted_nodes = sorted(graph.nodes, key=lambda n: n.structural_id)
-
         for node in sorted_nodes:
             all_components.extend(self._get_node_components(node, graph))
-
         return self._get_merkle_hash(all_components)
 
     def _get_merkle_hash(self, components: List[str]) -> str:
@@ -150,21 +131,17 @@ class BlueprintHasher:
         return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
     def _get_node_components(self, node: Node, graph: Graph) -> List[str]:
-        components = [f"Node({node.name}, type={node.node_type})"]
+        # Updated to use node.definition
+        components = [f"Node({node.definition.name}, type={node.node_type})"]
+        components.append(
+            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
+        )
 
-        # Policies are part of the structure
         if node.retry_policy:
             rp = node.retry_policy
             components.append(f"Retry({rp.max_attempts},{rp.delay},{rp.backoff})")
-        if node.cache_policy:
-            components.append(f"Cache({type(node.cache_policy).__name__})")
 
-        # IMPORTANT: Normalize literal bindings
-        if node.input_bindings:
-            components.append("Bindings:?")
-
-        # Dependencies are structural
-        # Sort edges to ensure determinism
+        # ... Edge logic remains same
         incoming_edges = sorted(
             [e for e in graph.edges if e.target.structural_id == node.structural_id],
             key=lambda e: e.source.structural_id,
@@ -173,5 +150,4 @@ class BlueprintHasher:
             components.append(
                 f"Edge(from={edge.source.structural_id}, to={node.structural_id}, type={edge.edge_type.name})"
             )
-
         return components

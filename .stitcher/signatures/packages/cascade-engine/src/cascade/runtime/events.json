@@ -8,6 +8,18 @@
   "Event": {
     "baseline_yaml_content_hash": "b91735986a5f040819a1a79dac9e07b4f57954fdc92f97c0e39820b6007a384a"
   },
+  "PlanAnalysisFinished._get_payload": {
+    "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
+  },
+  "PlanAnalysisStarted._get_payload": {
+    "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
+  },
+  "PlanNodeInspected._get_payload": {
+    "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
+  },
   "ResourceAcquired": {
     "baseline_yaml_content_hash": "3122475986e163f3bd1645defacaf01f8b24551b828413b7c5f1fd568000c88f"
   },

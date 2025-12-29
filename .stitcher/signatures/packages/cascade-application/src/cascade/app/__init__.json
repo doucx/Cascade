@@ -40,9 +40,7 @@
     "baseline_code_signature_text": "def on_start(self, event: PlanAnalysisStarted):",
     "baseline_code_structure_hash": "9b93769f19380fb0e04fdd2c770e9410df29c3d0ac3f62dbbe186208311e6188"
   },
-  "ToolEvent": {
-    "baseline_yaml_content_hash": "18a6cf2948b84d4c7acf979f7eb8f811c4c4790d9b371dd5d65f1c2536465378"
-  },
+  "ToolEvent": {},
   "_create_state_backend_factory": {
     "baseline_code_signature_text": "def _create_state_backend_factory(backend_spec: Union[str, Callable[[str], StateBackend], None]) -> Optional[Callable[[str], StateBackend]]:",
     "baseline_code_structure_hash": "5dc0b78b461db22c8253128030859e02c6cd56b0d833cbddf405a7e31c9ebf76"
@@ -53,7 +51,7 @@
     "baseline_yaml_content_hash": "0ac2e3d86f5e87af2feb37e44c8d8fc6115166127425b8c9909fb063ac244250"
   },
   "_internal_gather": {
-    "baseline_code_signature_text": "def _internal_gather() -> Any:",
+    "baseline_code_signature_text": "def _internal_gather(*args: Any) -> Any:",
     "baseline_code_structure_hash": "ece9f6e336b8a654bdd08585147b22f87ab7960d29a36fc76b83357304833a44",
     "baseline_yaml_content_hash": "05ce77832e5f72a99990fa7531e4e48721aa54af1018a1e9c233f195532293f0"
   }

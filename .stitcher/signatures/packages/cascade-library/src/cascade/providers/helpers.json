@@ -13,7 +13,7 @@
     "baseline_yaml_content_hash": "6cac4d45c386a480e6a7e7dc6a21b1099f1b162ec85d9752bdcec2cfb9d9789c"
   },
   "_format_task": {
-    "baseline_code_signature_text": "def _format_task(template: str, **kwargs) -> str:",
+    "baseline_code_signature_text": "def _format_task(template: str, *args, **kwargs) -> str:",
     "baseline_code_structure_hash": "b096ea7f44c5d893d9585ee511f62f5f9c1d7c1cfc7fe6349d750f2231115f3b",
     "baseline_yaml_content_hash": "db0e0c1cb89326f66cd30c2a2c1bca23ae2199f5c605cdfa6dfd825a39a67673"
   }

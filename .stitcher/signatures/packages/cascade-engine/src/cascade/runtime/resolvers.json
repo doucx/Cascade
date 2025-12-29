@@ -8,8 +8,8 @@
     "baseline_yaml_content_hash": "787b4389d197676af24626696a0c00b5a21ffa6f046600f129348408e579e189"
   },
   "ArgumentResolver._resolve_data_edges": {
-    "baseline_code_signature_text": "async def _resolve_data_edges(self, node: Node, graph: Graph, state_backend: StateBackend, instance_map: Dict[str, Node], input_overrides: Dict[str, Any] | None) -> Dict[str, Any]:",
-    "baseline_code_structure_hash": "12b291bd49ac48a1deec9babe9ef2d4254662ea0edd4c792ff8e3f438448f4ac",
+    "baseline_code_signature_text": "async def _resolve_data_edges(self, node: Node, graph: Graph, state_backend: StateBackend, instance_map: Dict[str, Node], input_overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "72015d77a94291bc707a02b5ebbee5d23e2761e68b0f2cadc41878d583efdabb",
     "baseline_yaml_content_hash": "5c577a29a3bb6db0ead143011356a74dbd013f8ba27fa85c378c4ad39e34fbeb"
   },
   "ArgumentResolver._resolve_dependency": {
@@ -25,8 +25,8 @@
     "baseline_code_structure_hash": "f1a0b0f1f2f084102eeaa28256d3799bc48d835b1c51a28899bf2d8834a2f8b5"
   },
   "ArgumentResolver.resolve": {
-    "baseline_code_signature_text": "async def resolve(self, node: Node, graph: Graph, state_backend: StateBackend, resource_context: Dict[str, Any], instance_map: Dict[str, Node], user_params: Dict[str, Any] = None, input_overrides: Dict[str, Any] = None) -> Tuple[List[Any], Dict[str, Any]]:",
-    "baseline_code_structure_hash": "abd57eaecfb77cc9e9ed20a0615a404dd0f0e761bbf5e5430746678ef4af841b"
+    "baseline_code_signature_text": "async def resolve(self, node: Node, graph: Graph, state_backend: StateBackend, resource_context: Dict[str, Any], instance_map: Dict[str, Node], user_params: Optional[Dict[str, Any]] = None, input_overrides: Optional[Dict[str, Any]] = None) -> Tuple[List[Any], Dict[str, Any]]:",
+    "baseline_code_structure_hash": "a96d7028c5f1104341589c5d53436c28e785bd634deb6e962b030dcb5e10df42"
   },
   "ConstraintResolver": {
     "baseline_yaml_content_hash": "50008426f8b26531fce85d5ccf58075a1ddd35ff45099c8cb29af33bc0e715f7"

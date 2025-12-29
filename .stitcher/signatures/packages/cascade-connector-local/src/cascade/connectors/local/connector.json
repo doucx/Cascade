@@ -44,8 +44,8 @@
     "baseline_code_structure_hash": "5cb5a725bc2266bd83ffa2d30312eb2bb861f0934cbf1791166722c3e9f5572b"
   },
   "LocalConnector.publish": {
-    "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:",
-    "baseline_code_structure_hash": "f0326f6fae392bc7e0875442cd7b8628c1475428b8e2ae0213e8a54a6c0d2b3a"
+    "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False) -> None:",
+    "baseline_code_structure_hash": "fffa806eb7ae282b4fdadb2aa14bf5887f8f964a3f437db025760cfd8a8d5c66"
   },
   "LocalConnector.subscribe": {
     "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",

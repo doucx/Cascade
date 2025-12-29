@@ -16,8 +16,8 @@
     "baseline_yaml_content_hash": "3861388532d0e6c6c652ceec3cb547d1cb82a4d70c86bd947c487cfc08c7c182"
   },
   "RateLimiter.update_bucket": {
-    "baseline_code_signature_text": "def update_bucket(self, key: str, rate: float, capacity: float = None):",
-    "baseline_code_structure_hash": "1b266c32faea4d1feb3bfb6526ea6f21a243907875dc853bbbe7c88ad64cf912",
+    "baseline_code_signature_text": "def update_bucket(self, key: str, rate: float, capacity: Optional[float] = None):",
+    "baseline_code_structure_hash": "3dff4f4fd8cee92b1be05931132603e60b9fb6943760252dd2591ae6d65fe623",
     "baseline_yaml_content_hash": "3eba8b9ac0f9ddb416031a90bcbec4710fbd5d2c77f80d3628b5d41b8734e18a"
   }
 }

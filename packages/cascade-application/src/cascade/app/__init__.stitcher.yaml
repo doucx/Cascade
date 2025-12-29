@@ -9,8 +9,6 @@
   Generates and returns a Graphviz DOT string of the workflow.
 "DryRunConsoleSubscriber": |-
   Listens to plan analysis events and prints a human-readable report.
-"ToolEvent": |-
-  Base class for all events emitted by developer tools.
 "_get_node_shape": |-
   Returns the Graphviz shape for a given node type.
 "_internal_gather": |-

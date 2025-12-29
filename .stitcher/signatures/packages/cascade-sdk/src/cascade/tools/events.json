@@ -1,26 +1,6 @@
 {
-  "PlanAnalysisFinished": {
-    "baseline_yaml_content_hash": "4c82c3d3ff665d073a5ea1921af499379a1cd0cadfd9579d082d137224834aa5"
-  },
-  "PlanAnalysisFinished._get_payload": {
-    "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
-    "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
-  },
-  "PlanAnalysisStarted": {
-    "baseline_yaml_content_hash": "6e1e575acda2aad56c5bf37d522414e248a3f4b3c46f3bb0bd2558204d459575"
-  },
-  "PlanAnalysisStarted._get_payload": {
-    "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
-    "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
-  },
-  "PlanNodeInspected": {
-    "baseline_yaml_content_hash": "db4cd56c9145124d42670f448ebd8498e86639213461593070b3ce7483b9b8a8"
-  },
-  "PlanNodeInspected._get_payload": {
-    "baseline_code_signature_text": "def _get_payload(self) -> Dict[str, Any]:",
-    "baseline_code_structure_hash": "6619d32cdab965ae139074ac31390603ae9f5122f9b064b533268ffe327d2e4a"
-  },
-  "ToolEvent": {
-    "baseline_yaml_content_hash": "18a6cf2948b84d4c7acf979f7eb8f811c4c4790d9b371dd5d65f1c2536465378"
-  }
+  "PlanAnalysisFinished": {},
+  "PlanAnalysisStarted": {},
+  "PlanNodeInspected": {},
+  "ToolEvent": {}
 }

@@ -24,8 +24,8 @@
     "baseline_code_structure_hash": "5cb5a725bc2266bd83ffa2d30312eb2bb861f0934cbf1791166722c3e9f5572b"
   },
   "MockConnector.publish": {
-    "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], retain: bool = False, qos: int = 0) -> None:",
-    "baseline_code_structure_hash": "8dcd710d44c11ca3f8a6acf87e634c34c14b35ef4565cb6f0d64c6d159114785",
+    "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False) -> None:",
+    "baseline_code_structure_hash": "fffa806eb7ae282b4fdadb2aa14bf5887f8f964a3f437db025760cfd8a8d5c66",
     "baseline_yaml_content_hash": "eb8d2b442816041fa59795395636abe5c6d55021d8e397f912ba80da8cbcc266"
   },
   "MockConnector.seed_retained_message": {
@@ -34,8 +34,8 @@
     "baseline_yaml_content_hash": "b4610b15a72b7a94a2854c01f389ffe3e100804d512bc2bab0c3774a32781b91"
   },
   "MockConnector.subscribe": {
-    "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> None:",
-    "baseline_code_structure_hash": "b593901fbea6611e09defb32c906df6eab2085f9a7650518433635c9fa557221"
+    "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",
+    "baseline_code_structure_hash": "c2addf29fd60240c9ff8400c72be68453d50b874a54b87a5fba2cd3b64ad5e02"
   },
   "MockExecutor": {
     "baseline_yaml_content_hash": "57ef73fe14a2dc9ed6b4c3c257b4a0fd0296ac84cce6daa1d9bf1cc193aadd9d"
@@ -58,6 +58,14 @@
   "MockSolver.resolve": {
     "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
     "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
+  },
+  "MockSubscriptionHandle.__init__": {
+    "baseline_code_signature_text": "def __init__(self, parent: \"MockConnector\", topic: str):",
+    "baseline_code_structure_hash": "eb1347152c253fd68e8051fb6718bf8056157e78d316629a707f85bb5bb5eac5"
+  },
+  "MockSubscriptionHandle.unsubscribe": {
+    "baseline_code_signature_text": "async def unsubscribe(self) -> None:",
+    "baseline_code_structure_hash": "8db3add491babae6d33f8c27a23af07c012ac7395e700a61a643648621a7a3ef"
   },
   "SpyExecutor": {
     "baseline_yaml_content_hash": "74c48ffa3a5da4a617000d5d534207e276ee016eb1c7d56b257d0f32b3f0b8d9"

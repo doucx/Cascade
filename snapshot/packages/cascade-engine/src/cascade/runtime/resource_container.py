@@ -55,7 +55,9 @@ class ResourceContainer:
                         required.add(param.default.resource_name)
             elif node.callable_obj:
                 try:
-                    sig = inspect.signature(node.callable_obj)
+                    # Cast to Any to bypass strict signature check for ResourceDefinition
+                    obj_to_inspect: Any = node.callable_obj
+                    sig = inspect.signature(obj_to_inspect)
                     for param in sig.parameters.values():
                         if isinstance(param.default, Inject):
                             required.add(param.default.resource_name)

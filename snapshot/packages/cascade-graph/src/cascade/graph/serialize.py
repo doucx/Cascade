@@ -198,7 +198,7 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
 
             # Re-attach Router object if present
             if "router_index" in ed:
-                r_idx = ed["router_index"]
+                r_idx = int(ed["router_index"])
                 if 0 <= r_idx < len(restored_routers):
                     edge.router = restored_routers[r_idx]
 

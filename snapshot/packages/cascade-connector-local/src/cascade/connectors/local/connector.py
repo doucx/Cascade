@@ -95,10 +95,10 @@ class LocalConnector(Connector):
 
         self._conn = await asyncio.to_thread(_connect_and_setup)
         self._is_connected = True
-        return self
 
     async def __aenter__(self):
-        return await self.connect()
+        await self.connect()
+        return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.disconnect()
@@ -128,7 +128,9 @@ class LocalConnector(Connector):
     def _scope_to_topic(self, scope: str) -> str:
         return f"cascade/constraints/{scope.replace(':', '/')}"
 
-    async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:
+    async def publish(
+        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
+    ) -> None:
         if not self._is_connected or not self._conn:
             raise RuntimeError("Connector is not connected.")
 
@@ -140,11 +142,10 @@ class LocalConnector(Connector):
 
         if topic.startswith("cascade/constraints/"):
             scope = self._topic_to_scope(topic)
+            conn = self._conn
 
             def _blocking_publish():
-                if not self._conn:
-                    return
-                cursor = self._conn.cursor()
+                cursor = conn.cursor()
                 if not payload:
                     cursor.execute("DELETE FROM constraints WHERE scope = ?", (scope,))
                 else:
@@ -162,7 +163,7 @@ class LocalConnector(Connector):
                             time.time(),
                         ),
                     )
-                self._conn.commit()
+                conn.commit()
 
             await asyncio.to_thread(_blocking_publish)
 

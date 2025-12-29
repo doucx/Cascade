@@ -9,7 +9,7 @@ except ImportError:
 
 
 class RedisCacheBackend:
-    def __init__(self, client: "redis.Redis", prefix: str = "cascade:cache:"):
+    def __init__(self, client: Any, prefix: str = "cascade:cache:"):
         if redis is None:
             raise ImportError(
                 "The 'redis' library is required to use RedisCacheBackend."

@@ -5,8 +5,7 @@ from cascade.spec.protocols import LazyFactory
 
 
 class Provider(Protocol):
-    @property
-    def name(self) -> str: ...
+    name: str
 
     def create_factory(self) -> LazyFactory: ...
 

@@ -51,7 +51,8 @@ def _parse_add_response(response: HttpResponse) -> str:
 # --- User-Facing Factory Functions ---
 
 
-def cat(cid: str) -> "cs.LazyResult[bytes]":
+def cat(cid: str, **kwargs) -> "cs.LazyResult[bytes]":
+    # **kwargs required for LazyFactory compatibility
     api_url = f"{IPFS_API_BASE_URL}/api/v0/cat"
 
     # Step 1: Call the IPFS RPC API
@@ -61,7 +62,7 @@ def cat(cid: str) -> "cs.LazyResult[bytes]":
     return _parse_cat_response(api_response)
 
 
-def add(path: str) -> "cs.LazyResult[str]":
+def add(path: str, **kwargs) -> "cs.LazyResult[str]":
     api_url = f"{IPFS_API_BASE_URL}/api/v0/add"
 
     # Step 1: Call the IPFS RPC API with a file upload

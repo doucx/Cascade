@@ -92,6 +92,9 @@ class CSPSolver:
     ) -> Optional[Dict[str, int]]:
         from cascade.graph.model import EdgeType
 
+        if constraint is None:
+            raise ImportError("python-constraint is required")
+
         problem = constraint.Problem()
 
         # Variables: Node IDs (only active ones)

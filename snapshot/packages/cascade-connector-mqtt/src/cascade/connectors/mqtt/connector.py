@@ -25,14 +25,17 @@ class MqttConnector:
         self.hostname = hostname
         self.port = port
         self.client_kwargs = kwargs
-        self._client: "aiomqtt.Client" | None = None
-        self._loop_task: asyncio.Task | None = None
+        self._client: Optional["aiomqtt.Client"] = None
+        self._loop_task: Optional[asyncio.Task] = None
         self._subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
         self._source_id = f"{platform.node()}-{os.getpid()}"
 
     async def connect(self) -> None:
         if self._client:
             return
+
+        if aiomqtt is None:
+            raise ImportError("aiomqtt is not installed")
 
         # Define the Last Will and Testament message
         lwt_topic = f"cascade/status/{self._source_id}"
@@ -67,7 +70,8 @@ class MqttConnector:
     async def publish(
         self, topic: str, payload: Any, qos: int = 0, retain: bool = False
     ) -> None:
-        if not self._client:
+        client = self._client
+        if not client:
             logger.warning("Attempted to publish without an active MQTT connection.")
             return
 
@@ -79,7 +83,7 @@ class MqttConnector:
                 else:
                     final_payload = payload
 
-                await self._client.publish(
+                await client.publish(
                     topic, payload=final_payload, qos=qos, retain=retain
                 )
             except Exception as e:

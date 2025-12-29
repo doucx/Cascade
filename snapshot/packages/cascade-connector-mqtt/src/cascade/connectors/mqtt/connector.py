@@ -10,6 +10,8 @@ try:
 except ImportError:
     aiomqtt = None
 
+from cascade.spec.protocols import SubscriptionHandle
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,7 +90,7 @@ class MqttConnector:
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> "SubscriptionHandle":
+    ) -> SubscriptionHandle:
         if not self._client:
             raise RuntimeError("Attempted to subscribe without an active MQTT connection.")
 
@@ -106,23 +108,6 @@ class MqttConnector:
             pass
 
         return _MqttSubscriptionHandle(self, topic)
-
-
-from cascade.spec.protocols import SubscriptionHandle
-
-class _MqttSubscriptionHandle(SubscriptionHandle):
-    def __init__(self, parent: "MqttConnector", topic: str):
-        self._parent = parent
-        self._topic = topic
-
-    async def unsubscribe(self) -> None:
-        if self._topic in self._parent._subscriptions:
-            del self._parent._subscriptions[self._topic]
-        if self._parent._client:
-            try:
-                await self._parent._client.unsubscribe(self._topic)
-            except Exception:
-                pass
 
     @staticmethod
     def _topic_matches(subscription: str, topic: str) -> bool:
@@ -204,3 +189,18 @@ class _MqttSubscriptionHandle(SubscriptionHandle):
             # Unexpected error in loop, log it.
             # In a robust system we might want to restart the loop.
             logger.error(f"MQTT message loop crashed: {e}")
+
+
+class _MqttSubscriptionHandle(SubscriptionHandle):
+    def __init__(self, parent: "MqttConnector", topic: str):
+        self._parent = parent
+        self._topic = topic
+
+    async def unsubscribe(self) -> None:
+        if self._topic in self._parent._subscriptions:
+            del self._parent._subscriptions[self._topic]
+        if self._parent._client:
+            try:
+                await self._parent._client.unsubscribe(self._topic)
+            except Exception:
+                pass

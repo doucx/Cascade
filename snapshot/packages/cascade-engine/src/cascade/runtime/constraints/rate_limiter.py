@@ -1,5 +1,5 @@
 import time
-from typing import Dict
+from typing import Dict, Optional
 from dataclasses import dataclass
 
 

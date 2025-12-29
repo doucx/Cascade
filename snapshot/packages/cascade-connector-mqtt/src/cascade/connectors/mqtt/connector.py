@@ -3,7 +3,7 @@ import json
 import logging
 import platform
 import os
-from typing import Callable, Awaitable, Dict, Any
+from typing import Callable, Awaitable, Dict, Any, Optional
 
 try:
     import aiomqtt

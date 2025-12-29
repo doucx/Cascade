@@ -1,6 +1,6 @@
 import time
 import asyncio
-from typing import Any, Dict, List, Callable, Awaitable
+from typing import Any, Dict, List, Callable, Awaitable, Optional
 
 from cascade.graph.model import Node, Graph
 from cascade.spec.protocols import Executor, StateBackend, Solver

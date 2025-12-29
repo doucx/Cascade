@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
 from cascade.graph.model import Graph, Node, EdgeType

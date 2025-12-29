@@ -1,0 +1,12 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-foundation"
+version = "2.0.0-alpha"
+description = "Foundation IR and Identity system for Cascade V2"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]

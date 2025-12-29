@@ -245,8 +245,9 @@ class Engine:
                     self.constraint_manager.remove_constraints_by_scope(scope)
             else:
                 # Basic validation, could be improved with a schema library
+                c_id = payload.get("constraint_id", payload.get("id"))
                 constraint = GlobalConstraint(
-                    id=payload["id"],
+                    constraint_id=c_id,
                     scope=payload["scope"],
                     type=payload["type"],
                     params=payload["params"],

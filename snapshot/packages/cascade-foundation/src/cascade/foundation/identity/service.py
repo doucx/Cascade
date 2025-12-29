@@ -28,14 +28,11 @@ class IdentityService:
         config_hash = hashlib.sha256(config_str.encode("utf-8")).hexdigest()
         
         # 3. Structure Identity (Bindings)
-        # Note: This is computed by the Compiler usually, because it involves
-        # resolving dependencies recursively. 
-        # However, IdentityService defines the *rule* for the hash.
-        # For now, we return a partial fingerprint, the Compiler will augment it
-        # with input hashes to form the final Op ID.
+        # This is computed by the Compiler.
         
         fp = Fingerprint()
         fp["baseline_code_signature_hash"] = code_hash
+        # FIX: Conforming to 4-segment naming axiom
         fp["baseline_task_config_hash"] = config_hash
         return fp
 
@@ -47,6 +44,6 @@ class IdentityService:
         """
         # Mix code, config, and inputs
         seed = fingerprint["baseline_code_signature_hash"] + \
-               fingerprint["baseline_config_hash"] + \
+               fingerprint["baseline_task_config_hash"] + \
                input_hash
         return hashlib.sha256(seed.encode("utf-8")).hexdigest()

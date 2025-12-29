@@ -40,13 +40,13 @@ class ConstraintManager:
             for cid, c in self._constraints.items()
             if c.scope == constraint.scope
             and c.type == constraint.type
-            and cid != constraint.id
+            and cid != constraint.constraint_id
         ]
         for cid in conflicting_ids:
             self._remove_constraint_by_id(cid)
 
         # 2. Add/Update the new constraint
-        self._constraints[constraint.id] = constraint
+        self._constraints[constraint.constraint_id] = constraint
 
         # Schedule wakeup if TTL is set
         if constraint.expires_at:

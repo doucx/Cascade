@@ -11,7 +11,7 @@ class Op:
     """
     # The structural hash/fingerprint of this operation.
     # Serves as the primary key for caching and identification.
-    id: str
+    structural_id: str
 
     # Data dependencies: Map[ArgName, UpstreamOpID]
     # Represents the flow of data from upstream ops to this op's arguments.

@@ -78,7 +78,7 @@ class LocalConnector(Connector):
             cursor.execute(
                 """
                 CREATE TABLE IF NOT EXISTS constraints (
-                    id TEXT PRIMARY KEY,
+                    constraint_id TEXT PRIMARY KEY,
                     scope TEXT NOT NULL,
                     type TEXT NOT NULL,
                     params TEXT NOT NULL,

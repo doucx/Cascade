@@ -38,7 +38,7 @@ async def _publish_pause(
         expires_at = time.time() + ttl if ttl else None
 
         constraint = GlobalConstraint(
-            id=constraint_id,
+            constraint_id=constraint_id,
             scope=scope,
             type="pause",
             params={},

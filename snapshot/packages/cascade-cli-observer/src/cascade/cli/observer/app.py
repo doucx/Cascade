@@ -159,6 +159,9 @@ async def _get_status(backend: str, hostname: str, port: int):
             try:
                 # Filter out any malformed or non-constraint messages
                 if "scope" in payload and "type" in payload:
+                    # Rename 'id' to 'constraint_id' if legacy payload
+                    if "id" in payload and "constraint_id" not in payload:
+                        payload["constraint_id"] = payload.pop("id")
                     constraints.append(GlobalConstraint(**payload))
             except TypeError:
                 pass  # Ignore malformed payloads

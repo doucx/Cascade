@@ -12,3 +12,9 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+cascade-foundation = { workspace = true }

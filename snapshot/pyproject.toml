@@ -32,6 +32,8 @@ cascade-cli-controller = { workspace = true }
 cascade-cli-observer = { workspace = true }
 cascade-connector-mqtt = { workspace = true }
 cascade-connector-local = { workspace = true }
+cascade-foundation = { workspace = true }
+cascade-compiler = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [

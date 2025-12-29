@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M manager.py, M registry.py, M resource.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767002667.0183403, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(type): 修复全仓库类型错误并重构 Provider 协议架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767002667.4582996, "duration_ms": 0}}

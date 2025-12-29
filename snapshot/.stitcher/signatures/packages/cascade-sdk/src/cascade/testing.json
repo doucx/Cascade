@@ -42,7 +42,7 @@
   },
   "MockExecutor.__init__": {
     "baseline_code_signature_text": "def __init__(self, delay: float = 0, return_value: Any = \"result\"):",
-    "baseline_code_structure_hash": "d9e8b777f2a9d712a0f80bb318d7428b37d4ddcafa611ee11bfe583c402a74b8"
+    "baseline_code_structure_hash": "16511409a3efcd874093dc26849daab50fd1c8b62c53756c0a57970774eaa540"
   },
   "MockExecutor.execute": {
     "baseline_code_signature_text": "async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):",
@@ -99,7 +99,7 @@
   },
   "override_resource": {
     "baseline_code_signature_text": "def override_resource(engine: \"Engine\", name: str, new_resource_func: Callable[[], Any]):",
-    "baseline_code_structure_hash": "e964ac37bbde423ddeb0c02068691338d64d151f9074d8782ff6e0e0fdd00d0c",
+    "baseline_code_structure_hash": "8ea5effc00233918706c1f47ca08a5994e229e50505d8abaab84129f15c7613a",
     "baseline_yaml_content_hash": "932b22888c00cdf70b11aef13d71f64faa42b8626587592469a9e8b0dea3fad0"
   }
 }

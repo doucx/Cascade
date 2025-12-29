@@ -9,7 +9,7 @@
   },
   "_stdin_read_line_task": {
     "baseline_code_signature_text": "async def _stdin_read_line_task() -> str:",
-    "baseline_code_structure_hash": "4e52cccc0406dc1a763c336b4e99e7546ad026be5f146d3acb9e0d6bd1f9e472",
+    "baseline_code_structure_hash": "17e4a2397c38261254d4271bc2d8e6ac19ead351b28861aea46b328767aeb58d",
     "baseline_yaml_content_hash": "1859370c8d764dfe80e77f2769da1376a0537e131e1ff0e72cd784405e493dc4"
   },
   "_stdout_write_task": {

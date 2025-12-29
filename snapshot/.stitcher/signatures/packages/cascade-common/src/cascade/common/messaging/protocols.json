@@ -4,7 +4,7 @@
   },
   "Renderer.render": {
     "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs: Any) -> None:",
-    "baseline_code_structure_hash": "d41a20dc147240559f118cbe30bd59bf3d44877c1d909c8ff5c2ee60e7d5a775",
+    "baseline_code_structure_hash": "2785386165127926edf6b708c1e63953c18505e0f1a1e4391b2166ee367c0988",
     "baseline_yaml_content_hash": "8fec06ffc806128cfe6f1bb50b530fa46af9930cff2e16cb92b0b047abd9f0a5"
   }
 }

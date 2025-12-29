@@ -4,7 +4,7 @@
   },
   "CascadeApp.__init__": {
     "baseline_code_signature_text": "def __init__(self, target: Union[LazyResult, List[Any], Tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = \"INFO\", log_format: str = \"human\", connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None):",
-    "baseline_code_structure_hash": "0292af17a1d7cd0ced879b236fdb0c67064d66ba2f108077f1e793d7ad4c335d"
+    "baseline_code_structure_hash": "71469f926459e79318e4ebb6b09d7b22e7d15767595ca2bd41b1e9e042059110"
   },
   "CascadeApp.dry_run": {
     "baseline_code_signature_text": "def dry_run(self) -> None:",
@@ -54,7 +54,7 @@
   },
   "_internal_gather": {
     "baseline_code_signature_text": "def _internal_gather() -> Any:",
-    "baseline_code_structure_hash": "078ce2e516502e4f9cf061e883233ef8a56ea7ba7d20138384ea1c8d67fea645",
+    "baseline_code_structure_hash": "ece9f6e336b8a654bdd08585147b22f87ab7960d29a36fc76b83357304833a44",
     "baseline_yaml_content_hash": "05ce77832e5f72a99990fa7531e4e48721aa54af1018a1e9c233f195532293f0"
   }
 }

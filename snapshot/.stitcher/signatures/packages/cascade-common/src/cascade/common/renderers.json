@@ -4,21 +4,21 @@
   },
   "CliRenderer.__init__": {
     "baseline_code_signature_text": "def __init__(self, store: MessageStore, stream: Optional[TextIO] = None, min_level: str = \"INFO\"):",
-    "baseline_code_structure_hash": "cc52d28b6da8d1e35f7909667aaa231ecf008371bb073f2da5d6cbe37bf1f6fa"
+    "baseline_code_structure_hash": "8929cadf5779d099461f073793e387f7a1f4c1bdac68a960b7cb2464b8b70ddb"
   },
   "CliRenderer.render": {
     "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs):",
-    "baseline_code_structure_hash": "9137fcfb2c9a3436e6400f5fae759309f58c56c806d5947b8d75f60cfb1639ea"
+    "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
   },
   "JsonRenderer": {
     "baseline_yaml_content_hash": "f51dd940d708a72b5511930b8d4a0a6c304ac6f0ca6fec583c4c9c15cb4e8acd"
   },
   "JsonRenderer.__init__": {
     "baseline_code_signature_text": "def __init__(self, stream: Optional[TextIO] = None, min_level: str = \"INFO\"):",
-    "baseline_code_structure_hash": "5cc5578f62463fb7be799aaf64e0f89e574b3c1bb6d7adce2e2fa6773128a2fe"
+    "baseline_code_structure_hash": "999c4cf218c2844df2f5fdeaa0cbc5893e50681f16db49867984d6dd1eef4607"
   },
   "JsonRenderer.render": {
     "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs):",
-    "baseline_code_structure_hash": "9137fcfb2c9a3436e6400f5fae759309f58c56c806d5947b8d75f60cfb1639ea"
+    "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
   }
 }

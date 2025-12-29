@@ -47,7 +47,7 @@
   },
   "_LocalSubscriptionHandle.__init__": {
     "baseline_code_signature_text": "def __init__(self, parent: \"LocalBusConnector\", topic: str, queue: asyncio.Queue, listener_task: asyncio.Task):",
-    "baseline_code_structure_hash": "3952902f5fcd4d97c7f91fab36f2fc0b2be32c5cd0660d290718420179951f0e"
+    "baseline_code_structure_hash": "c2c01fb0d334e08e521f0d55878693f56fc32add841525ef06c90fd2345466f7"
   },
   "_LocalSubscriptionHandle.unsubscribe": {
     "baseline_code_signature_text": "async def unsubscribe(self) -> None:",

@@ -4,12 +4,12 @@
   },
   "ConstraintHandler.append_requirements": {
     "baseline_code_signature_text": "def append_requirements(self, task: Node, constraint: GlobalConstraint, requirements: Dict[str, Any], manager: \"ConstraintManager\") -> None:",
-    "baseline_code_structure_hash": "417c51e6a71058baf50dfe33eb4dc7138ed77d64abe547858ae7c64965c6e0b7",
+    "baseline_code_structure_hash": "1c1b5d025ac6937774fc33a39f53c79432c771333281f2117b6458e5a79bfdd9",
     "baseline_yaml_content_hash": "919db870c078eab775f6e8abbba643810c56e2eefe522fc7ac26d19031fb4b05"
   },
   "ConstraintHandler.check_permission": {
     "baseline_code_signature_text": "def check_permission(self, task: Node, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> bool:",
-    "baseline_code_structure_hash": "f6f45f031f29e2806bf101b1ecd24fb0b55fd2305dec35a721f3403cf30cd539",
+    "baseline_code_structure_hash": "8e660ecffbd8bd7a4c8a45b6ae22a462161fb1c545c2e5edbf56be6187755649",
     "baseline_yaml_content_hash": "49ef2de3b824360af35dfd5909d9fe61e58d89ea4caf8d18a99a58e22322a157"
   },
   "ConstraintHandler.handles_type": {
@@ -19,12 +19,12 @@
   },
   "ConstraintHandler.on_constraint_add": {
     "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> None:",
-    "baseline_code_structure_hash": "ac4ccc6a20a24375409c950ddb4f6802c1f4b316ab6d7b473a5e47bb416ea5a0",
+    "baseline_code_structure_hash": "34291215f40644dd07dea6253e3e21bb31be5b8ec054586f8efb82323b23b094",
     "baseline_yaml_content_hash": "e73a1dbf255c51acde75bf22b1b1923d0ec543fc30e62dd7f8ca7a692e0bd0c3"
   },
   "ConstraintHandler.on_constraint_remove": {
     "baseline_code_signature_text": "def on_constraint_remove(self, constraint: GlobalConstraint, manager: \"ConstraintManager\") -> None:",
-    "baseline_code_structure_hash": "0f5a3474c622e641efb8e830cfcd5f43a08fff663e8473d8701b71218a2788b4",
+    "baseline_code_structure_hash": "96cb9a4ff14b3de9d6e193004cd638a1f842d384a49229a3b86f755e94f94503",
     "baseline_yaml_content_hash": "33b0d136ff048ca9cc857dd9f4fc84b1c5bcdf1157f9b39e5f96c99c9c2d9c07"
   }
 }

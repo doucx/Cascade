@@ -4,7 +4,7 @@
   },
   "RedisCacheBackend.__init__": {
     "baseline_code_signature_text": "def __init__(self, client: \"redis.Redis\", prefix: str = \"cascade:cache:\"):",
-    "baseline_code_structure_hash": "97588f27198c81d79234866280278e3a0d3a1c27b513eae962332f4e4a3b486f"
+    "baseline_code_structure_hash": "892535fffc680f8c170018ad2fe7f6edaf7bfdfa90ca1b48b3e7e17f3b5a974e"
   },
   "RedisCacheBackend.get": {
     "baseline_code_signature_text": "async def get(self, key: str) -> Optional[Any]:",

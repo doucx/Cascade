@@ -28,7 +28,7 @@
   },
   "_s3_read_text": {
     "baseline_code_signature_text": "async def _s3_read_text(bucket: str, key: str, encoding: str = \"utf-8\") -> str:",
-    "baseline_code_structure_hash": "82bc8fef04294b9888dcc29fc9199e5f14e64eb31015c6f74bb7d6164df37d07"
+    "baseline_code_structure_hash": "504a2b74fef5564c9c74530e7ef2d17ac16508661af24435f21d1ff98628f5c5"
   },
   "_s3_write_bytes": {
     "baseline_code_signature_text": "async def _s3_write_bytes(bucket: str, key: str, content: bytes) -> None:",
@@ -36,6 +36,6 @@
   },
   "_s3_write_text": {
     "baseline_code_signature_text": "async def _s3_write_text(bucket: str, key: str, content: str, encoding: str = \"utf-8\") -> None:",
-    "baseline_code_structure_hash": "ad4276fd53fd8caab7bd84ed91600e863e335cf5cd325f37df1b74c9010805f3"
+    "baseline_code_structure_hash": "9db59d0b7dff4c57e0a023646c957c2569df8e17ca5b99d5d4d9f565da2d7646"
   }
 }

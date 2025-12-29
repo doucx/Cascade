@@ -4,7 +4,7 @@
   },
   "RedisStateBackend.__init__": {
     "baseline_code_signature_text": "def __init__(self, run_id: str, client: \"redis.Redis\", ttl: int = 86400):",
-    "baseline_code_structure_hash": "5c87244f2212d5d0db69712544b9fbaf3aef57c39a6ca35d74e37575dd394b65"
+    "baseline_code_structure_hash": "9a569b86ce549dea6b5c1076d6546eca7733eed4a94f57d11d4f7fdeafa4d855"
   },
   "RedisStateBackend._sync_mark_skipped": {
     "baseline_code_signature_text": "def _sync_mark_skipped(self, node_id: str, reason: str):",

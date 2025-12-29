@@ -4,11 +4,11 @@
   },
   "LazyFactory.__call__": {
     "baseline_code_signature_text": "def __call__(self, **kwargs) -> Any:",
-    "baseline_code_structure_hash": "d1532fd56e9fe92c175c968247a2b1eb8fb8e59bfd38e86d81e6752bf36d43e1"
+    "baseline_code_structure_hash": "8862a703c4e9b637b3dd8d3a51936f51fc19add4635171f203ab16bbae02c4b9"
   },
   "LazyFactory.map": {
     "baseline_code_signature_text": "def map(self, **kwargs) -> Any:",
-    "baseline_code_structure_hash": "30576d6f1a42224861c5db41b317d5537924aace23bc926f7f5b65a2a9f202d6"
+    "baseline_code_structure_hash": "3e3276a4635f41b00278a305b35e3a3b2e32157ca6230aa49d4b51646a41d76d"
   },
   "Provider": {
     "baseline_yaml_content_hash": "088c4f881008e4f50229357b93440f3d7b118f02e054c83cc698c267a5892c19"
@@ -32,7 +32,7 @@
   },
   "ProviderNamespace.__init__": {
     "baseline_code_signature_text": "def __init__(self, registry: \"ProviderRegistry\", prefix: str):",
-    "baseline_code_structure_hash": "ffaa525ec8c1a7a755312988f4d711e5e35edc1aa4f713baac0baf25435d5caf"
+    "baseline_code_structure_hash": "a8f232c8be26720d4b17e7ce3e62b5fd83fd975e0b2a825e98fc72027556a6ec"
   },
   "ProviderRegistry": {
     "baseline_yaml_content_hash": "deda42e4adb60b7940db3a00530d982082a68dec96cf4a4a2f8e5b2b89095ae2"

@@ -4,7 +4,7 @@
   },
   "IpfsCacheBackend.__init__": {
     "baseline_code_signature_text": "def __init__(self, metadata_backend: CacheBackend, ipfs_api_url: str = \"http://127.0.0.1:5001\"):",
-    "baseline_code_structure_hash": "50ef7e02cfbc5020bc56159bb31354c05a93fb1f3b98515f1bc840024f667008",
+    "baseline_code_structure_hash": "c37962558f18d89f9dcff29d0b7829d82ea44d584fd085277633638df3a66dad",
     "baseline_yaml_content_hash": "4ee4523531b0af88a006f34516aac550169fdee07fe953d2a14f4ad519db99a4"
   },
   "IpfsCacheBackend.get": {

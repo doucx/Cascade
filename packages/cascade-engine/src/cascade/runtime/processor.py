@@ -1,6 +1,6 @@
 import time
 import asyncio
-from typing import Any, Dict, List, Callable, Awaitable
+from typing import Any, Dict, List, Callable, Awaitable, Optional
 
 from cascade.graph.model import Node, Graph
 from cascade.spec.protocols import Executor, StateBackend, Solver
@@ -18,11 +18,6 @@ from cascade.runtime.events import (
 
 
 class NodeProcessor:
-    """
-    Responsible for executing a single node within a workflow graph.
-    Handles policies such as constraints, caching, retries, and argument resolution.
-    """
-
     def __init__(
         self,
         executor: Executor,
@@ -52,11 +47,8 @@ class NodeProcessor:
         params: Dict[str, Any],
         sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
         instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] = None,
+        input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        """
-        Executes a node with all associated policies (constraints, cache, retry).
-        """
         # 1. Resolve Constraints & Resources
         requirements = await self.constraint_resolver.resolve(
             node, graph, state_backend, self.constraint_manager, instance_map
@@ -114,7 +106,7 @@ class NodeProcessor:
         params: Dict[str, Any],
         sub_graph_runner: Callable,
         instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] = None,
+        input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Any:
         # 3. Resolve Arguments
         args, kwargs = await self.arg_resolver.resolve(

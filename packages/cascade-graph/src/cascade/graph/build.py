@@ -7,24 +7,22 @@ from cascade.spec.jump import JumpSelector
 
 from .registry import NodeRegistry
 from .hashing import HashingService
+from .analysis.reflection import ReflectionAnalyzer
 
 
 class GraphBuilder:
     def __init__(self, registry: NodeRegistry | None = None):
         self.graph = Graph()
-        # InstanceMap: Dict[LazyResult._uuid, Node]
-        # Connecting the world of volatile instances to the world of stable structures.
         self._visited_instances: Dict[str, Node] = {}
-
         self.registry = registry if registry is not None else NodeRegistry()
         self.hashing_service = HashingService()
+        self.analyzer = ReflectionAnalyzer()
 
     def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:
         self._visit(target)
         return self.graph, self._visited_instances
 
     def _visit(self, value: Any) -> Node:
-        """Central dispatcher for the post-order traversal."""
         if isinstance(value, LazyResult):
             return self._visit_lazy_result(value)
         elif isinstance(value, MappedLazyResult):
@@ -33,7 +31,6 @@ class GraphBuilder:
             raise TypeError(f"Cannot build graph from type {type(value)}")
 
     def _find_dependencies(self, obj: Any, dep_nodes: Dict[str, Node]):
-        """Helper for post-order traversal: finds and visits all nested LazyResults."""
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             if obj._uuid not in dep_nodes:
                 dep_node = self._visit(obj)
@@ -64,16 +61,18 @@ class GraphBuilder:
         if result._dependencies:
             self._find_dependencies(result._dependencies, dep_nodes)
 
-        # 2. Compute structural hash using HashingService
-        structural_hash = self.hashing_service.compute_structural_hash(
-            result, dep_nodes
+        # 2. Analyze Code to get TaskDef
+        task_def = self.analyzer.analyze(result.task)
+
+        # 3. Compute Node Instance Hash
+        node_hash = self.hashing_service.compute_node_instance_hash(
+            task_def, result, dep_nodes
         )
 
-        # 3. Hash-consing: Query registry FIRST before doing more work
-        node = self.registry.get(structural_hash)
-
+        # 4. Hash-consing / Create Node
+        node = self.registry.get(node_hash)
         if not node:
-            # Extract bindings
+            # Extract bindings (Literals)
             input_bindings = {}
             for i, val in enumerate(result.args):
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
@@ -82,30 +81,30 @@ class GraphBuilder:
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
                     input_bindings[k] = val
 
-            sig = None
-            if result.task.func:
-                try:
-                    sig = inspect.signature(result.task.func)
-                except (ValueError, TypeError):
-                    pass
-
-            # Robustly determine complexity to enable FAST PATH in ArgumentResolver
+            # Complexity check
             from cascade.spec.resource import Inject as InjectMarker
             from cascade.internal.inputs import _get_param_value
 
             has_complex = False
-
-            # 1. Check for Runtime Context Injection (Special internal tasks)
             if result.task.func is _get_param_value.func:
                 has_complex = True
 
-            # 2. Check for Implicit Injection in Signature Defaults
-            if not has_complex and sig:
-                has_complex = any(
-                    isinstance(p.default, InjectMarker) for p in sig.parameters.values()
-                )
+            # Note: Signature check is now implicit in TaskDef/Analyzer?
+            # We still need to check for Inject markers in defaults, but ReflectionAnalyzer
+            # serialized defaults to strings. We might need raw access here or rely on runtime.
+            # For now, let's keep the simplistic check if possible, or assume analyzer handled it?
+            # Actually, we need to inspect the raw function again for runtime injection logic.
+            # This is a runtime concern, so inspecting result.task.func is fine.
+            if not has_complex:
+                try:
+                    sig = inspect.signature(result.task.func)
+                    has_complex = any(
+                        isinstance(p.default, InjectMarker)
+                        for p in sig.parameters.values()
+                    )
+                except ValueError:
+                    pass
 
-            # 3. Check for Explicit Injection in Bindings (recursively)
             if not has_complex:
 
                 def is_complex_value(v):
@@ -119,55 +118,44 @@ class GraphBuilder:
 
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
+            # Note: execution_mode is now part of task_def (definition.mode)
             node = Node(
-                structural_id=structural_hash,
-                name=result.task.name,
-                node_type="task",
-                execution_mode=result.task.mode,
+                structural_id=node_hash,
+                definition=task_def,
                 callable_obj=result.task.func,
-                signature=sig,
+                node_type="task",
                 retry_policy=result._retry_policy,
                 cache_policy=result._cache_policy,
                 constraints=result._constraints,
                 input_bindings=input_bindings,
                 has_complex_inputs=has_complex,
             )
-            self.registry._registry[structural_hash] = node
+            self.registry._registry[node_hash] = node
 
         self._visited_instances[result._uuid] = node
-
-        # Always add the node to the current graph, even if it was reused from the registry.
         self.graph.add_node(node)
 
-        # 4. Finalize edges (idempotent)
+        # 5. Edges
         self._scan_and_add_edges(node, result.args)
         self._scan_and_add_edges(node, result.kwargs)
 
-        # 4.1 Handle Explicit Jump Binding
+        # ... Jump Selector logic ...
         if result._jump_selector:
             selector = result._jump_selector
             if isinstance(selector, JumpSelector):
-                # Ensure all potential targets in the selector are built/visited
                 for route_target in selector.routes.values():
                     if route_target is not None:
                         self._visit(route_target)
-
-                # Create a distinct ITERATIVE_JUMP edge for each potential jump target.
-                # This makes the static graph correctly represent all potential control flows.
                 for key, route_target_lr in selector.routes.items():
                     if route_target_lr is None:
-                        continue  # Skip exit routes, as they don't form an edge
-
-                    # We have already visited the target, so it's in the instance map
+                        continue
                     target_node = self._visited_instances[route_target_lr._uuid]
-
                     self.graph.add_edge(
                         Edge(
                             source=node,
                             target=target_node,
-                            arg_name=key,  # Use the jump key as the edge label
+                            arg_name=key,
                             edge_type=EdgeType.ITERATIVE_JUMP,
-                            # We can still attach the selector for the engine's use
                             jump_selector=selector,
                         )
                     )
@@ -182,6 +170,7 @@ class GraphBuilder:
                     edge_type=EdgeType.CONDITION,
                 )
             )
+
         if result._constraints:
             for res, req in result._constraints.requirements.items():
                 if isinstance(req, (LazyResult, MappedLazyResult)):
@@ -194,6 +183,7 @@ class GraphBuilder:
                             edge_type=EdgeType.CONSTRAINT,
                         )
                     )
+
         for dep in result._dependencies:
             source = self._visited_instances[dep._uuid]
             self.graph.add_edge(
@@ -211,7 +201,6 @@ class GraphBuilder:
         if result._uuid in self._visited_instances:
             return self._visited_instances[result._uuid]
 
-        # 1. Post-order traversal for mapped inputs
         dep_nodes: Dict[str, Node] = {}
         self._find_dependencies(result.mapping_kwargs, dep_nodes)
         if result._condition:
@@ -219,21 +208,24 @@ class GraphBuilder:
         if result._dependencies:
             self._find_dependencies(result._dependencies, dep_nodes)
 
-        # 2. Compute structural hash using HashingService
-        structural_hash = self.hashing_service.compute_structural_hash(
-            result, dep_nodes
+        # Analyze Factory
+        task_def = self.analyzer.analyze(result.factory)
+
+        # Compute Hash
+        node_hash = self.hashing_service.compute_node_instance_hash(
+            task_def, result, dep_nodes
         )
 
-        # 3. Hash-consing
-        def node_factory():
+        node = self.registry.get(node_hash)
+        if not node:
             input_bindings = {}
             for k, val in result.mapping_kwargs.items():
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
                     input_bindings[k] = val
 
-            return Node(
-                structural_id=structural_hash,
-                name=f"map({getattr(result.factory, 'name', 'factory')})",
+            node = Node(
+                structural_id=node_hash,
+                definition=task_def,
                 node_type="map",
                 mapping_factory=result.factory,
                 retry_policy=result._retry_policy,
@@ -241,15 +233,13 @@ class GraphBuilder:
                 constraints=result._constraints,
                 input_bindings=input_bindings,
             )
+            self.registry._registry[node_hash] = node
 
-        node, created_new = self.registry.get_or_create(structural_hash, node_factory)
         self._visited_instances[result._uuid] = node
-
-        # Always add the node to the current graph
         self.graph.add_node(node)
 
-        # 4. Add data edges
         self._scan_and_add_edges(node, result.mapping_kwargs)
+
         if result._condition:
             source = self._visited_instances[result._condition._uuid]
             self.graph.add_edge(
@@ -260,6 +250,7 @@ class GraphBuilder:
                     edge_type=EdgeType.CONDITION,
                 )
             )
+
         for dep in result._dependencies:
             source = self._visited_instances[dep._uuid]
             self.graph.add_edge(
@@ -274,7 +265,6 @@ class GraphBuilder:
         return node
 
     def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = ""):
-        """Idempotently adds DATA and ROUTER edges based on pre-visited instances."""
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             source_node = self._visited_instances[obj._uuid]
             self.graph.add_edge(

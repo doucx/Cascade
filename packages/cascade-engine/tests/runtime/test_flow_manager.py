@@ -6,15 +6,16 @@ from cascade.spec.routing import Router
 from cascade.spec.lazy_types import LazyResult
 from cascade.runtime.flow import FlowManager
 from cascade.adapters.state.in_memory import InMemoryStateBackend
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.fingerprint import Fingerprint
 
 
 def create_mock_node(name: str) -> Node:
-    """Creates a mock Node with structural_id == name."""
-    return Node(structural_id=name, name=name)
+    stub_def = TaskDef(name=name, args=[], fingerprint=Fingerprint())
+    return Node(structural_id=name, definition=stub_def)
 
 
 def create_mock_lazy_result(node_id: str) -> LazyResult:
-    """Creates a mock LazyResult whose UUID matches the node ID for mapping."""
     lr = MagicMock(spec=LazyResult)
     lr._uuid = node_id
     return lr
@@ -22,24 +23,6 @@ def create_mock_lazy_result(node_id: str) -> LazyResult:
 
 @pytest.mark.asyncio
 async def test_flow_manager_pruning_logic():
-    """
-    Test that FlowManager correctly prunes downstream nodes recursively.
-
-    Graph Topology:
-    S (Selector) -> chooses "a" or "b"
-
-    Routes:
-    - "a": A
-    - "b": B -> B_UP (B depends on B_UP)
-
-    Consumer C depends on Router(S)
-
-    If S chooses "a":
-    1. Route "b" (Node B) is not selected.
-    2. B should be pruned.
-    3. B_UP (only used by B) should be recursively pruned.
-    """
-
     # 1. Setup Nodes
     nodes = [create_mock_node(n) for n in ["S", "A", "B", "B_UP", "C"]]
     n_map = {n.structural_id: n for n in nodes}

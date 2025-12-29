@@ -1,0 +1,14 @@
+"config": |-
+  A simple resource that provides a config dict.
+"db_connection": |-
+  A resource that depends on another resource.
+"task_using_resource": |-
+  A task that injects a resource.
+"test_di_end_to_end": |-
+  Tests the full lifecycle: registration, injection, execution, teardown.
+"test_resource_events": |-
+  Tests that resource lifecycle events are emitted.
+"test_resource_must_be_generator": |-
+  Tests that a non-generator function cannot be a resource.
+"test_resource_override": |-
+  Tests that a resource can be overridden for testing.

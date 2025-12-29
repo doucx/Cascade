@@ -1,0 +1,12 @@
+"engine": |-
+  Provides a default engine instance.
+"test_wait_accepts_lazy_result": |-
+  Test Case 7 (From Firefly Plan): Dynamic Parameterized Time.
+
+  Verifies that the delay argument of cs.wait can be a LazyResult
+  from an upstream task.
+"test_wait_is_non_blocking": |-
+  Test Case 6 (From Firefly Plan): Non-blocking Tick.
+
+  Verifies that cs.wait(t) pauses for approximately t seconds, and does so
+  without blocking the execution of other concurrent tasks.

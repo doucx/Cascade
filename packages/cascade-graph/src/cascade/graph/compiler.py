@@ -11,10 +11,6 @@ from cascade.spec.blueprint import (
 
 
 class BlueprintBuilder:
-    """
-    Compiles a LazyResult dependency graph into a linear Blueprint for VM execution.
-    """
-
     def __init__(self):
         self._instructions: List[Instruction] = []
         self._visited: Dict[str, int] = {}
@@ -64,15 +60,18 @@ class BlueprintBuilder:
         args_operands: List[Operand] = []
         kwargs_operands: Dict[str, Operand] = {}
 
-        kwargs_source = target.kwargs
         if isinstance(target, MappedLazyResult):
             kwargs_source = target.mapping_kwargs
+            args_list = []  # MappedLazyResult has no args
+        else:
+            kwargs_source = target.kwargs
+            args_list = target.args
 
         is_template_root = is_root and self._is_template_mode
 
         if is_template_root:
             # Template Mode: Promote arguments to input registers
-            for arg in target.args:
+            for arg in args_list:
                 reg = self._allocate_register()
                 self._input_args_map.append(reg.index)
                 args_operands.append(reg)
@@ -82,7 +81,7 @@ class BlueprintBuilder:
                 kwargs_operands[k] = reg
         else:
             # Concrete Mode: Compile arguments as dependencies
-            args_operands = [self._to_operand(a) for a in target.args]
+            args_operands = [self._to_operand(a) for a in args_list]
             kwargs_operands = {k: self._to_operand(v) for k, v in kwargs_source.items()}
 
         # 2. Allocate Output Register

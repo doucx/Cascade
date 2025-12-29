@@ -7,11 +7,6 @@ from cascade.runtime.resource_manager import ResourceManager
 
 
 class ConstraintManager:
-    """
-    Manages a collection of global constraints and dispatches them to pluggable
-    handlers for evaluation.
-    """
-
     def __init__(self, resource_manager: ResourceManager):
         self.resource_manager = resource_manager
         # Stores active constraints by their unique ID
@@ -22,14 +17,9 @@ class ConstraintManager:
         self._wakeup_callback: Any = None
 
     def set_wakeup_callback(self, callback: Any) -> None:
-        """Sets the callback to trigger an engine wakeup."""
         self._wakeup_callback = callback
 
     def request_wakeup(self, delay: float) -> None:
-        """
-        Requests the engine to wake up after a specified delay (in seconds).
-        Used by time-based constraints (like rate limits).
-        """
         if self._wakeup_callback:
             import asyncio
 
@@ -41,15 +31,9 @@ class ConstraintManager:
                 pass
 
     def register_handler(self, handler: ConstraintHandler) -> None:
-        """Registers a constraint handler for the type it handles."""
         self._handlers[handler.handles_type()] = handler
 
     def update_constraint(self, constraint: GlobalConstraint) -> None:
-        """
-        Adds a new constraint or updates an existing one.
-        Ensures strict 'Last-Write-Wins' behavior by removing any existing
-        constraints with the same (scope, type) but different ID.
-        """
         # 1. Clean up conflicts: Remove any existing constraint with same scope & type
         conflicting_ids = [
             cid
@@ -75,7 +59,6 @@ class ConstraintManager:
             handler.on_constraint_add(constraint, self)
 
     def _remove_constraint_by_id(self, cid: str) -> None:
-        """Helper to remove a constraint and notify handler."""
         if cid not in self._constraints:
             return
         constraint = self._constraints[cid]
@@ -85,7 +68,6 @@ class ConstraintManager:
         del self._constraints[cid]
 
     def remove_constraints_by_scope(self, scope: str) -> None:
-        """Removes all constraints that match the given scope."""
         ids_to_remove = [
             cid for cid, c in self._constraints.items() if c.scope == scope
         ]
@@ -93,7 +75,6 @@ class ConstraintManager:
             self._remove_constraint_by_id(cid)
 
     def cleanup_expired_constraints(self) -> None:
-        """Removes constraints that have exceeded their TTL."""
         now = time.time()
         expired_ids = [
             cid
@@ -116,10 +97,6 @@ class ConstraintManager:
             self.request_wakeup(max(0, next_expiry - now + 0.1))
 
     def check_permission(self, task: Node) -> bool:
-        """
-        Evaluates all active constraints against a task. If any handler denies
-        permission, the task is deferred.
-        """
         for constraint in self._constraints.values():
             handler = self._handlers.get(constraint.type)
             if not handler:
@@ -133,9 +110,6 @@ class ConstraintManager:
         return True
 
     def get_extra_requirements(self, task: Node) -> Dict[str, Any]:
-        """
-        Collects dynamic resource requirements from all applicable constraints.
-        """
         requirements: Dict[str, Any] = {}
         for constraint in self._constraints.values():
             handler = self._handlers.get(constraint.type)

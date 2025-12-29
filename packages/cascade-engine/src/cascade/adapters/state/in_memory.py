@@ -2,25 +2,6 @@ from typing import Any, Dict, Optional
 
 
 class InMemoryStateBackend:
-    """
-    An in-memory implementation of the StateBackend protocol using Python dictionaries.
-    This is the default backend for local, single-process runs.
-
-    ARCHITECTURAL NOTE on ASYNC IMPLEMENTATION:
-    This class adheres to the `async def` contract of the StateBackend protocol,
-    but it does NOT use `asyncio.to_thread`. This is an intentional performance
-    optimization.
-
-    Dictionary operations are synchronous but are pure-CPU and extremely fast
-    (nanosecond-scale). They do not perform blocking I/O. Using `to_thread`
-    would introduce significant overhead (context switching, thread pool management)
-    for a non-existent problem, crippling performance in high-throughput scenarios
-    like TCO fast paths.
-
-    This implementation provides a compliant async interface with minimal overhead,
-    making it suitable for its primary role as a high-performance, single-process backend.
-    """
-
     def __init__(self, run_id: str):
         self._run_id = run_id
         self._results: Dict[str, Any] = {}
@@ -42,8 +23,5 @@ class InMemoryStateBackend:
         return self._skipped.get(node_id)
 
     async def clear(self) -> None:
-        """
-        Clears all results and skip reasons. Used between TCO iterations.
-        """
         self._results.clear()
         self._skipped.clear()

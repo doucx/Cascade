@@ -1,0 +1,11 @@
+"Frame": |-
+  Represents the runtime stack frame for a blueprint execution.
+  It holds the values of virtual registers.
+"VirtualMachine": |-
+  Executes compiled Blueprints.
+  Supports Zero-Overhead TCO via an internal loop and blueprint switching.
+  Now integrated with Resource and Constraint Managers.
+"VirtualMachine._load_inputs": |-
+  Populates the frame's registers based on the blueprint's input mapping.
+"VirtualMachine.execute": |-
+  Executes the initial blueprint. Handles TailCalls to self or other registered blueprints.

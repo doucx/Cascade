@@ -1,0 +1,4 @@
+"test_map_reduce_pipeline": |-
+  Test the flow: generate -> map(double) -> sum_all.
+  This verifies if a MappedLazyResult can be passed directly to a downstream task
+  and is correctly resolved as a list of values.

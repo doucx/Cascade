@@ -41,7 +41,6 @@ def sqlite_db():
 
 @pytest.fixture
 def db_engine():
-    """Provides a Cascade Engine with the sqlite_db resource pre-registered."""
     engine = cs.Engine(
         solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
     )
@@ -51,8 +50,6 @@ def db_engine():
 
 @pytest.mark.asyncio
 async def test_sql_query_success(db_engine):
-    """Test a basic SELECT query."""
-
     # Define a workflow using the 'sqlite_db' resource
     users = cs.sql("SELECT * FROM users ORDER BY name", db="sqlite_db")
 
@@ -65,8 +62,6 @@ async def test_sql_query_success(db_engine):
 
 @pytest.mark.asyncio
 async def test_sql_with_params(db_engine):
-    """Test a query with parameters."""
-
     target = cs.sql(
         "SELECT * FROM users WHERE name = :name", db="sqlite_db", params={"name": "Bob"}
     )
@@ -79,8 +74,6 @@ async def test_sql_with_params(db_engine):
 
 @pytest.mark.asyncio
 async def test_sql_missing_resource():
-    """Test failure when the specified DB resource is not registered."""
-
     target = cs.sql("SELECT 1", db="non_existent_db")
 
     engine = cs.Engine(

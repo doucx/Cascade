@@ -1,0 +1,20 @@
+{
+  "StdInReadLineProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "StdOutWriteProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "_stdin_read_line_task": {
+    "baseline_code_signature_text": "async def _stdin_read_line_task(*_args) -> str:",
+    "baseline_code_structure_hash": "17e4a2397c38261254d4271bc2d8e6ac19ead351b28861aea46b328767aeb58d",
+    "baseline_yaml_content_hash": "1859370c8d764dfe80e77f2769da1376a0537e131e1ff0e72cd784405e493dc4"
+  },
+  "_stdout_write_task": {
+    "baseline_code_signature_text": "async def _stdout_write_task(text: str) -> None:",
+    "baseline_code_structure_hash": "a69a50703aaf0163f3c7435ff0a364c337d863e7610573ec700dabc038deef5e",
+    "baseline_yaml_content_hash": "f7215398eb9682dcccc1cbdba177b876641a3ad6304c7d044d9748a835d5c5ca"
+  }
+}

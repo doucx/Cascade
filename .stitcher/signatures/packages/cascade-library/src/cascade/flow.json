@@ -1,0 +1,12 @@
+{
+  "pipeline": {
+    "baseline_code_signature_text": "def pipeline(initial: Any, steps: Sequence[Union[Callable[[Any], Any], LazyResult]]) -> LazyResult:",
+    "baseline_code_structure_hash": "29e7a84a4dbdf757a18d394ef5f49e27f7578a36f31c7fc8ec9575d65c277803",
+    "baseline_yaml_content_hash": "5ceabbffde91f8428ba9467787b5f5012f1f90c477576724d9b0f07cc103c5b3"
+  },
+  "sequence": {
+    "baseline_code_signature_text": "def sequence(tasks: Sequence[LazyResult]) -> LazyResult:",
+    "baseline_code_structure_hash": "62ab1ea0938f61de9e74817f802d4976f7976195300cbe38f98f25b27918e933",
+    "baseline_yaml_content_hash": "35227118ab0d48278505fbdf62b021936bc105a6a7ef8e2b40109a5cf2e9b161"
+  }
+}

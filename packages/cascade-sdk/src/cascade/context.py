@@ -22,5 +22,4 @@ _current_context = ContextVar("cascade_workflow_context", default=WorkflowContex
 
 
 def get_current_context() -> WorkflowContext:
-    """获取当前的 WorkflowContext。"""
     return _current_context.get()

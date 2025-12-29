@@ -1,0 +1,2 @@
+"test_provider_registry_namespace_resolution": |-
+  Verify that accessing intermediate namespaces returns a proxy.

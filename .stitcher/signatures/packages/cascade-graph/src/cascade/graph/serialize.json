@@ -1,0 +1,45 @@
+{
+  "_StubLazyResult": {
+    "baseline_yaml_content_hash": "8917382cd5c656db60936c79d2d771ebb7724be643622d1a24d4b36d45275ef5"
+  },
+  "_dict_to_node": {
+    "baseline_code_signature_text": "def _dict_to_node(data: Dict[str, Any]) -> Node:",
+    "baseline_code_structure_hash": "5a9d03e01b6a13d79ce196088d5eeb98027dce628ccb025eeb0f76e2ef232336"
+  },
+  "_edge_to_dict": {
+    "baseline_code_signature_text": "def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "827ba034909b93cceb5edbf7edb5c4bd7329ae9491a78649277f912cdff3b790"
+  },
+  "_get_func_path": {
+    "baseline_code_signature_text": "def _get_func_path(func: Any) -> Optional[Dict[str, str]]:",
+    "baseline_code_structure_hash": "8721f01f16708118a7827cd77d9988798a276ece8ba4016dc8971d8b6243a3df",
+    "baseline_yaml_content_hash": "5c46ab787ba4afc53a088f51a99b01cbd21ac6f0ec44079a953496ef41e9bfad"
+  },
+  "_load_func_from_path": {
+    "baseline_code_signature_text": "def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:",
+    "baseline_code_structure_hash": "d598960409c99e8746ad3999484cbfbc4af46de8d3ed68467a52fdb87f37fe7f",
+    "baseline_yaml_content_hash": "5da916cacd303b9bea1bb58331cf59dcd18a9b229ab1ad66dd469d2d69245b5d"
+  },
+  "_node_to_dict": {
+    "baseline_code_signature_text": "def _node_to_dict(node: Node) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "3d19f702de943611841a134ac98e1c132c91f174667d4f0f32f28eebba0dc9c8"
+  },
+  "from_json": {
+    "baseline_code_signature_text": "def from_json(json_str: str) -> Graph:",
+    "baseline_code_structure_hash": "0ea9a61fb28b68c6cbb577c64b7de923e9cb5a54f1e8ba3464ddea73060126d1",
+    "baseline_yaml_content_hash": "04497bd5ecfefb579db419b4178199fbfdeab174579afd2ddd60fcbba0b54b37"
+  },
+  "graph_from_dict": {
+    "baseline_code_signature_text": "def graph_from_dict(data: Dict[str, Any]) -> Graph:",
+    "baseline_code_structure_hash": "89ebb22f776a492d87e65384281e1a44e7ce813d39351eaafd96d166fe56ef1b"
+  },
+  "graph_to_dict": {
+    "baseline_code_signature_text": "def graph_to_dict(graph: Graph) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "92e9773a1e7631222f0b3d9f314cd610a0f9e602c494f4e0feb29b228c547e2c"
+  },
+  "to_json": {
+    "baseline_code_signature_text": "def to_json(graph: Graph, indent: int = 2) -> str:",
+    "baseline_code_structure_hash": "3b1ba3c6bf16efc3da49e56fae564ff80cb2e75f46d1319792767add3086f13e",
+    "baseline_yaml_content_hash": "17c2450feb5fc88280e571e9bc92b5190f3d9f225dd8ba7f3ae96b91fc8ff483"
+  }
+}

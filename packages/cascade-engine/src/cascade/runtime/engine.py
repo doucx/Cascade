@@ -30,16 +30,12 @@ from cascade.runtime.strategies import GraphExecutionStrategy, VMExecutionStrate
 
 
 class Engine:
-    """
-    Orchestrates the entire workflow execution.
-    """
-
     def __init__(
         self,
         solver: Solver,
         executor: Executor,
         bus: MessageBus,
-        state_backend_factory: Callable[[str], StateBackend] = None,
+        state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
         system_resources: Optional[Dict[str, Any]] = None,
         connector: Optional[Connector] = None,
         cache_backend: Optional[Any] = None,
@@ -102,19 +98,12 @@ class Engine:
         self._managed_subscribers = []
 
     def add_subscriber(self, subscriber: Any):
-        """
-        Adds a subscriber whose lifecycle (e.g., shutdown) the engine should manage.
-        """
         self._managed_subscribers.append(subscriber)
 
     def register(self, resource_def: ResourceDefinition):
         self.resource_container.register(resource_def)
 
     def _is_simple_task(self, lr: Any) -> bool:
-        """
-        Checks if the LazyResult is a simple, flat task (no nested dependencies).
-        This allows for the Zero-Overhead TCO fast path.
-        """
         if not isinstance(lr, LazyResult):
             return False
         if lr._condition or (lr._constraints and not lr._constraints.is_empty()):
@@ -166,12 +155,11 @@ class Engine:
         start_time = time.time()
 
         # Robustly determine initial target name for logging
-        if hasattr(target, "task"):
+        target_name = "unknown"
+        if isinstance(target, LazyResult):
             target_name = getattr(target.task, "name", "unknown")
-        elif hasattr(target, "factory"):
+        elif isinstance(target, MappedLazyResult):
             target_name = f"map({getattr(target.factory, 'name', 'unknown')})"
-        else:
-            target_name = "unknown"
 
         # Initialize State Backend using the factory
         state_backend = self.state_backend_factory(run_id)
@@ -247,7 +235,6 @@ class Engine:
                 self.bus.publish(ConnectorDisconnected(run_id=run_id))
 
     async def _on_constraint_update(self, topic: str, payload: Dict[str, Any]):
-        """Callback to handle incoming constraint messages."""
         try:
             # An empty payload, which becomes {}, signifies a cleared retained message (a resume command)
             if payload == {}:

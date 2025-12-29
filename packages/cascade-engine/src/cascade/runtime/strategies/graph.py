@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
 
 from cascade.graph.model import Graph, Node, EdgeType
@@ -20,18 +20,11 @@ from cascade.runtime.constraints.manager import ConstraintManager
 
 @dataclass
 class GraphExecutionResult:
-    """Internal result carrier to avoid context loss."""
-
     value: Any
     source_node_id: str
 
 
 class GraphExecutionStrategy:
-    """
-    Executes tasks by dynamically building a dependency graph.
-    Supports explicit control flow via `cs.Jump` and `cs.bind`.
-    """
-
     def __init__(
         self,
         solver: Solver,
@@ -57,9 +50,6 @@ class GraphExecutionStrategy:
         self._node_registry = NodeRegistry()
 
     def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
-        """
-        Converts a Plan (List[List[Node]]) into an IndexedPlan (List[List[int]]).
-        """
         id_to_idx = {node.structural_id: i for i, node in enumerate(graph.nodes)}
         indexed_plan = []
         for stage in plan:
@@ -68,9 +58,6 @@ class GraphExecutionStrategy:
         return indexed_plan
 
     def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:
-        """
-        Converts an IndexedPlan back into a Plan using the nodes from the current graph.
-        """
         plan = []
         for stage_indices in indexed_plan:
             stage_nodes = [graph.nodes[idx] for idx in stage_indices]
@@ -121,14 +108,20 @@ class GraphExecutionStrategy:
                         )
 
                     # 2.2 Resolve Plan (with caching based on blueprint hash)
-                    blueprint_hash = self.blueprint_hasher.compute_hash(graph)
-                    if blueprint_hash in self._template_plan_cache:
-                        indexed_plan = self._template_plan_cache[blueprint_hash]
+                    current_graph_structure_hash = self.blueprint_hasher.compute_hash(
+                        graph
+                    )
+                    if current_graph_structure_hash in self._template_plan_cache:
+                        indexed_plan = self._template_plan_cache[
+                            current_graph_structure_hash
+                        ]
                         plan = self._rehydrate_plan(graph, indexed_plan)
                     else:
                         plan = self.solver.resolve(graph)
                         indexed_plan = self._index_plan(graph, plan)
-                        self._template_plan_cache[blueprint_hash] = indexed_plan
+                        self._template_plan_cache[current_graph_structure_hash] = (
+                            indexed_plan
+                        )
 
                     # Update local cache
                     local_context_cache[current_target._uuid] = (
@@ -222,7 +215,7 @@ class GraphExecutionStrategy:
         graph: Graph,
         plan: Any,
         instance_map: Dict[str, Node],
-        root_input_overrides: Dict[str, Any] = None,
+        root_input_overrides: Optional[Dict[str, Any]] = None,
     ) -> GraphExecutionResult:
         # Locate the canonical node for the current target instance
         if target._uuid not in instance_map:
@@ -343,10 +336,6 @@ class GraphExecutionStrategy:
                                 await flow_manager.register_result(
                                     node.structural_id, res, state_backend
                                 )
-                        if flow_manager:
-                            await flow_manager.register_result(
-                                node.structural_id, res, state_backend
-                            )
 
                 pending_nodes_in_stage = deferred_this_pass
 

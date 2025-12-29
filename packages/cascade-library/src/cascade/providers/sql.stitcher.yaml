@@ -1,0 +1,12 @@
+"_sql_factory": |-
+  Factory function exposed as cs.sql.
+
+  Args:
+      query: The SQL query string.
+      db: The name of the resource providing the SQLAlchemy connection/engine.
+      params: Optional parameters for the query.
+
+  Returns:
+      A LazyResult that resolves to the query results.
+"_sql_task": |-
+  Executes a SQL query using the provided connection.

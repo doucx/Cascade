@@ -12,9 +12,6 @@ import asyncio
 
 @task(name="load_yaml")
 async def _read_yaml_task(path: str) -> Dict[str, Any]:
-    """
-    Asynchronously reads and parses a YAML file.
-    """
     if yaml is None:
         raise ImportError(
             "The 'PyYAML' library is required to use the YAML loader. "
@@ -23,16 +20,14 @@ async def _read_yaml_task(path: str) -> Dict[str, Any]:
 
     def blocking_read():
         with open(path, "r", encoding="utf-8") as f:
-            return yaml.safe_load(f)
+            # Using cast because yaml is Any/Module and pyright complains about optional access
+            return yaml.safe_load(f)  # type: ignore
 
     return await asyncio.to_thread(blocking_read)
 
 
 @task(name="lookup")
 def _lookup_task(source: Dict[str, Any], key: str) -> Any:
-    """
-    Executes a dot-separated lookup in the provided dictionary.
-    """
     parts = key.split(".")
     current = source
 

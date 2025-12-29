@@ -82,3 +82,6 @@ dev = [
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.stitcher]
+scan_paths = ["packages"]

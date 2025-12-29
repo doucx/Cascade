@@ -8,14 +8,6 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @pytest.mark.asyncio
 async def test_explicit_jump_loop():
-    """
-    Tests the core explicit state transition mechanism.
-    - A task returns a `cs.Jump` signal.
-    - `cs.bind` statically connects the task to a `cs.select_jump` chooser.
-    - The engine interprets the jump and reschedules the next task with new data,
-      bypassing graph rebuilding.
-    """
-
     @cs.task
     def counter(n: int):
         if n <= 0:

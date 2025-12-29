@@ -1,0 +1,42 @@
+{
+  "FsExistsProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "ReadBytesProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "ReadTextProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "WriteBytesProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "WriteTextProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "_exists_task": {
+    "baseline_code_signature_text": "async def _exists_task(path: str) -> bool:",
+    "baseline_code_structure_hash": "a820359bf1f69ff19f4d8068f3b55673c5484e4c0916e53b0d4c8a8e77e2d082"
+  },
+  "_read_bytes_task": {
+    "baseline_code_signature_text": "async def _read_bytes_task(path: str) -> bytes:",
+    "baseline_code_structure_hash": "5bc308728d46f1b27e6696b62d586c8ca659234339e728a0bf837fb37ee8982e"
+  },
+  "_read_text_task": {
+    "baseline_code_signature_text": "async def _read_text_task(path: str, encoding: str = \"utf-8\") -> str:",
+    "baseline_code_structure_hash": "69b862af4123ec187ff1370f584a41c71638ac3b9b9f38d08f6ddb95744552e9"
+  },
+  "_write_bytes_task": {
+    "baseline_code_signature_text": "async def _write_bytes_task(path: str, content: bytes) -> None:",
+    "baseline_code_structure_hash": "d27b969a1cf1e51e5dbdfd37fe890003d157ccbae59f23170d8d02520094a214"
+  },
+  "_write_text_task": {
+    "baseline_code_signature_text": "async def _write_text_task(path: str, content: str, encoding: str = \"utf-8\") -> None:",
+    "baseline_code_structure_hash": "fc6968cbfb8cef8ad9c3b21d017c53e9bb08ebe036ffcbb9e299047624048638"
+  }
+}

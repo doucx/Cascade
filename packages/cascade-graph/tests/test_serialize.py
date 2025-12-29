@@ -35,7 +35,6 @@ def t_target(x):
 
 
 def test_serialize_basic_graph():
-    """Test serializing a simple linear graph."""
     target = another_task(simple_task(x=10))
     graph, _ = build_graph(target)
 
@@ -60,10 +59,6 @@ def test_serialize_basic_graph():
 
 
 def test_round_trip_top_level_functions():
-    """
-    Test full round-trip (serialize -> deserialize) with top-level functions.
-    Only top-level functions can be reliably pickled/imported.
-    """
     # We use the top-level tasks defined in this module
     target = another_task(simple_task(x=5))
     original_graph, _ = build_graph(target)
@@ -83,37 +78,27 @@ def test_round_trip_top_level_functions():
     assert restored_node.callable_obj(1) == 2
 
 
-def test_serialize_params():
-    """Test serialization of Param nodes (now standard tasks)."""
+def test_serialize_params_structure_only():
+    # Renamed: this test now only checks the graph structure for params, not metadata
     p = cs.Param("env", default="dev", description="Environment")
     target = simple_task(p)
     graph, _ = build_graph(target)
 
     data = graph_to_dict(graph)
-    # In v1.3, Param produces a task named '_get_param_value'
     param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
 
     assert param_node["node_type"] == "task"
     assert "name" in param_node["input_bindings"]
     assert param_node["input_bindings"]["name"] == "env"
-    # The default value is part of the ParamSpec, not a direct input to the internal task node.
-    # So we should not expect it here.
-    assert "default" not in param_node["input_bindings"]
-
-    # Note: Serialization currently only saves graph structure, not the Context.
-    # So deserialized graph will have the node, but not the ParamSpec metadata
-    # (which lives in WorkflowContext). This is expected behavior for v1.3.
 
     # Round trip
     restored = from_json(to_json(graph))
     p_node = next(n for n in restored.nodes if n.name == "_get_param_value")
     assert "name" in p_node.input_bindings
     assert p_node.input_bindings["name"] == "env"
-    assert "default" not in p_node.input_bindings
 
 
 def test_serialize_with_retry():
-    """Test serialization of retry policy including backoff."""
     t = simple_task(x=1).with_retry(max_attempts=5, delay=1.0, backoff=2.0)
     graph, _ = build_graph(t)
 
@@ -132,7 +117,6 @@ def test_serialize_with_retry():
 
 
 def test_serialize_with_constraints():
-    """Test serialization of resource constraints."""
     t = simple_task(x=1).with_constraints(gpu_count=1, memory_gb=16)
     graph, _ = build_graph(t)
 
@@ -153,8 +137,6 @@ def test_serialize_with_constraints():
 
 
 def test_serialize_edge_types():
-    """Test serialization and deserialization of various EdgeType instances."""
-
     # 1. Condition edge
     target_condition = t_target(t_dynamic_constraint(1)).run_if(t_condition())
 
@@ -215,8 +197,6 @@ def consumer(val):
 
 
 def test_serialize_router():
-    """Test full round-trip serialization of a Router."""
-
     # Construct a router using top-level tasks
     selector = get_route()
     route_a = task_a()

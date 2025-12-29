@@ -14,9 +14,6 @@ async def _recv_task(
     # This is a special, undocumented resource provided by the Engine
     connector: Connector = inject("_internal_connector"),
 ) -> Any:
-    """
-    Pauses execution until a signal is received on the given topic.
-    """
     if connector is None:
         raise RuntimeError(
             "cs.recv cannot be used because no Connector is configured in the Engine."

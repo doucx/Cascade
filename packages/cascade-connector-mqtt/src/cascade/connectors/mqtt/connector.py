@@ -3,24 +3,19 @@ import json
 import logging
 import platform
 import os
-from typing import Callable, Awaitable, Dict, Any
+from typing import Callable, Awaitable, Dict, Any, Optional
 
 try:
     import aiomqtt
 except ImportError:
     aiomqtt = None
 
+from cascade.spec.protocols import SubscriptionHandle
+
 logger = logging.getLogger(__name__)
 
 
 class MqttConnector:
-    """
-    Implements the Connector protocol for MQTT.
-
-    This connector enables Cascade to publish telemetry data to an MQTT broker
-    and subscribe to control commands.
-    """
-
     def __init__(self, hostname: str, port: int = 1883, **kwargs):
         if aiomqtt is None:
             raise ImportError(
@@ -30,15 +25,17 @@ class MqttConnector:
         self.hostname = hostname
         self.port = port
         self.client_kwargs = kwargs
-        self._client: "aiomqtt.Client" | None = None
-        self._loop_task: asyncio.Task | None = None
+        self._client: Optional["aiomqtt.Client"] = None
+        self._loop_task: Optional[asyncio.Task] = None
         self._subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
         self._source_id = f"{platform.node()}-{os.getpid()}"
 
     async def connect(self) -> None:
-        """Establishes a connection to the MQTT Broker."""
         if self._client:
             return
+
+        if aiomqtt is None:
+            raise ImportError("aiomqtt is not installed")
 
         # Define the Last Will and Testament message
         lwt_topic = f"cascade/status/{self._source_id}"
@@ -58,7 +55,6 @@ class MqttConnector:
         self._loop_task = asyncio.create_task(self._message_loop())
 
     async def disconnect(self) -> None:
-        """Disconnects from the MQTT Broker and cleans up resources."""
         if self._loop_task:
             self._loop_task.cancel()
             try:
@@ -74,10 +70,8 @@ class MqttConnector:
     async def publish(
         self, topic: str, payload: Any, qos: int = 0, retain: bool = False
     ) -> None:
-        """
-        Publishes a message in a non-blocking, fire-and-forget manner.
-        """
-        if not self._client:
+        client = self._client
+        if not client:
             logger.warning("Attempted to publish without an active MQTT connection.")
             return
 
@@ -89,7 +83,7 @@ class MqttConnector:
                 else:
                     final_payload = payload
 
-                await self._client.publish(
+                await client.publish(
                     topic, payload=final_payload, qos=qos, retain=retain
                 )
             except Exception as e:
@@ -100,11 +94,11 @@ class MqttConnector:
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
-        """Subscribes to a topic to receive messages."""
+    ) -> SubscriptionHandle:
         if not self._client:
-            logger.warning("Attempted to subscribe without an active MQTT connection.")
-            return
+            raise RuntimeError(
+                "Attempted to subscribe without an active MQTT connection."
+            )
 
         # 1. Register callback locally
         self._subscriptions[topic] = callback
@@ -112,18 +106,17 @@ class MqttConnector:
         # 2. Send subscribe command to broker
         try:
             await self._client.subscribe(topic)
-            # Give the broker a moment to send retained messages before the
-            # engine's main loop continues. This is a pragmatic way to solve
-            # the startup race condition.
+            # Give the broker a moment to send retained messages
             await asyncio.sleep(0.2)
         except Exception as e:
             logger.error(f"Failed to subscribe to topic '{topic}': {e}")
+            # Even if subscribe fails on broker, we return a handle to clean up local registry
+            pass
+
+        return _MqttSubscriptionHandle(self, topic)
 
     @staticmethod
     def _topic_matches(subscription: str, topic: str) -> bool:
-        """
-        Checks if a concrete topic matches a subscription pattern (supporting + and #).
-        """
         if subscription == topic:
             return True
 
@@ -152,7 +145,6 @@ class MqttConnector:
         return len(sub_parts) == len(topic_parts)
 
     async def _message_loop(self):
-        """Background task to process incoming MQTT messages."""
         if not self._client:
             return
 
@@ -203,3 +195,18 @@ class MqttConnector:
             # Unexpected error in loop, log it.
             # In a robust system we might want to restart the loop.
             logger.error(f"MQTT message loop crashed: {e}")
+
+
+class _MqttSubscriptionHandle(SubscriptionHandle):
+    def __init__(self, parent: "MqttConnector", topic: str):
+        self._parent = parent
+        self._topic = topic
+
+    async def unsubscribe(self) -> None:
+        if self._topic in self._parent._subscriptions:
+            del self._parent._subscriptions[self._topic]
+        if self._parent._client:
+            try:
+                await self._parent._client.unsubscribe(self._topic)
+            except Exception:
+                pass

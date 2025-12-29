@@ -1,0 +1,3 @@
+"test_engine_follows_solver_plan": |-
+  Tests that Engine correctly iterates over the plan provided by a Solver
+  and calls the Executor for each node in the correct order.

@@ -8,8 +8,6 @@ except ImportError:
 
 
 class S3ProviderBase(Provider):
-    """Base class for S3 providers handling dependency checks."""
-
     def _check_dependency(self):
         if aiobotocore is None:
             raise ImportError(
@@ -23,8 +21,8 @@ class S3ProviderBase(Provider):
 
 @task(name="s3_read_text")
 async def _s3_read_text(bucket: str, key: str, encoding: str = "utf-8") -> str:
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3") as client:
+    session = aiobotocore.session.get_session()  # type: ignore
+    async with session.create_client("s3") as client:  # type: ignore
         response = await client.get_object(Bucket=bucket, Key=key)
         async with response["Body"] as stream:
             data = await stream.read()
@@ -33,8 +31,8 @@ async def _s3_read_text(bucket: str, key: str, encoding: str = "utf-8") -> str:
 
 @task(name="s3_read_bytes")
 async def _s3_read_bytes(bucket: str, key: str) -> bytes:
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3") as client:
+    session = aiobotocore.session.get_session()  # type: ignore
+    async with session.create_client("s3") as client:  # type: ignore
         response = await client.get_object(Bucket=bucket, Key=key)
         async with response["Body"] as stream:
             return await stream.read()
@@ -45,15 +43,15 @@ async def _s3_write_text(
     bucket: str, key: str, content: str, encoding: str = "utf-8"
 ) -> None:
     data = content.encode(encoding)
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3") as client:
+    session = aiobotocore.session.get_session()  # type: ignore
+    async with session.create_client("s3") as client:  # type: ignore
         await client.put_object(Bucket=bucket, Key=key, Body=data)
 
 
 @task(name="s3_write_bytes")
 async def _s3_write_bytes(bucket: str, key: str, content: bytes) -> None:
-    session = aiobotocore.session.get_session()
-    async with session.create_client("s3") as client:
+    session = aiobotocore.session.get_session()  # type: ignore
+    async with session.create_client("s3") as client:  # type: ignore
         await client.put_object(Bucket=bucket, Key=key, Body=content)
 
 

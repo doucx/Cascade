@@ -10,7 +10,6 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @pytest.fixture
 def dummy_file(tmp_path):
-    """Creates a temporary file with known JSON content."""
     p = tmp_path / "test_data.json"
     content = {"status": "ok", "value": 123}
     p.write_text(json.dumps(content))
@@ -19,7 +18,6 @@ def dummy_file(tmp_path):
 
 @pytest.fixture
 def binary_file(tmp_path):
-    """Creates a temporary file with binary content."""
     p = tmp_path / "binary_data.bin"
     content = b"\x01\x02\x03\x04"
     p.write_bytes(content)
@@ -31,7 +29,6 @@ def binary_file(tmp_path):
 
 @pytest.mark.asyncio
 async def test_file_read_text_success(dummy_file):
-    """Tests reading a file as text using the new cs.read.text provider."""
     read_result = cs.read.text(dummy_file)
 
     engine = cs.Engine(
@@ -45,7 +42,6 @@ async def test_file_read_text_success(dummy_file):
 
 @pytest.mark.asyncio
 async def test_file_read_bytes_success(binary_file):
-    """Tests reading a file as bytes using cs.read.bytes."""
     read_result = cs.read.bytes(binary_file)
 
     engine = cs.Engine(
@@ -58,7 +54,6 @@ async def test_file_read_bytes_success(binary_file):
 
 @pytest.mark.asyncio
 async def test_file_exists_true(dummy_file):
-    """Tests checking existence for an existing file using cs.fs.exists."""
     exist_result = cs.fs.exists(dummy_file)
 
     engine = cs.Engine(
@@ -71,7 +66,6 @@ async def test_file_exists_true(dummy_file):
 
 @pytest.mark.asyncio
 async def test_file_exists_false(tmp_path):
-    """Tests checking existence for a non-existing file using cs.fs.exists."""
     path = str(tmp_path / "non_existent.txt")
     exist_result = cs.fs.exists(path)
 
@@ -85,8 +79,6 @@ async def test_file_exists_false(tmp_path):
 
 @pytest.mark.asyncio
 async def test_file_json_parsing_composition(dummy_file):
-    """Tests composing read_text with a JSON parsing task."""
-
     @cs.task
     def parse_json(text: str):
         return json.loads(text)
@@ -107,8 +99,6 @@ async def test_file_json_parsing_composition(dummy_file):
 
 @pytest.mark.asyncio
 async def test_file_dynamic_path_dependency(tmp_path):
-    """Tests dependency where the file path comes from an upstream task."""
-
     @cs.task
     def generate_path() -> str:
         p = tmp_path / "dynamic.txt"

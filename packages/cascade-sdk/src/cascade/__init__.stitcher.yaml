@@ -1,0 +1,9 @@
+"dry_run": |-
+  Builds and prints the execution plan for a target.
+  This is a backward-compatible wrapper.
+"run": |-
+  Runs a Cascade workflow. This is a backward-compatible wrapper
+  around the CascadeApp interface.
+"visualize": |-
+  Builds and visualizes the computation graph for a target.
+  This is a backward-compatible wrapper.

@@ -1,0 +1,2 @@
+"bus_and_spy": |-
+  Provides a MessageBus instance and an attached SpySubscriber.

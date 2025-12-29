@@ -1,0 +1,56 @@
+{
+  "LocalBusConnector": {
+    "baseline_yaml_content_hash": "2c1f6e988d8e42253fb957d6bfe17d8c11cc5ed628fa3eea088a3e91fd55c290"
+  },
+  "LocalBusConnector.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "LocalBusConnector._get_lock": {
+    "baseline_code_signature_text": "def _get_lock(cls) -> asyncio.Lock:",
+    "baseline_code_structure_hash": "66cd40ea38ff46da03aeaa24ed02d302510cf2be1f8d7c71a84ab6a24471aa70",
+    "baseline_yaml_content_hash": "4b69d2bed8c17458f0c041f120da42515c4dfa5417161333d5983772f98c8fd7"
+  },
+  "LocalBusConnector._listener_loop": {
+    "baseline_code_signature_text": "async def _listener_loop(self, queue: asyncio.Queue, callback):",
+    "baseline_code_structure_hash": "b1e312b3c929aabf1bacc47a3cdb9959490f9b9210e03079e9145d3d576ea140",
+    "baseline_yaml_content_hash": "08fae2514f3fda3b23320c9f090ebfcee57bb394c8bdd051bd5a4498cc46df9c"
+  },
+  "LocalBusConnector._reset_broker_state": {
+    "baseline_code_signature_text": "def _reset_broker_state(cls):",
+    "baseline_code_structure_hash": "ee4fa8baee64b14c40ab55841fa834fd816ebb5a2209d3c3916396f4e869014b",
+    "baseline_yaml_content_hash": "e30cb96a53460e0ed7a08525a5f300b9abda9371f4f72c1da5e4119e06267586"
+  },
+  "LocalBusConnector._topic_matches": {
+    "baseline_code_signature_text": "def _topic_matches(subscription: str, topic: str) -> bool:",
+    "baseline_code_structure_hash": "364368f2b303a3c1308fd43d9e8d1a833c90bb8bd8f5f393b27680394ee29f67",
+    "baseline_yaml_content_hash": "bf5326dfadc6969751802dcb1508fcac7d679120ab447845ff26906d0b372dcb"
+  },
+  "LocalBusConnector.connect": {
+    "baseline_code_signature_text": "async def connect(self) -> None:",
+    "baseline_code_structure_hash": "2ee85c950427d812bd0d9f58ac0d3106ee4fab5647f8bfa600b5aa45efa28869"
+  },
+  "LocalBusConnector.disconnect": {
+    "baseline_code_signature_text": "async def disconnect(self) -> None:",
+    "baseline_code_structure_hash": "5cb5a725bc2266bd83ffa2d30312eb2bb861f0934cbf1791166722c3e9f5572b"
+  },
+  "LocalBusConnector.publish": {
+    "baseline_code_signature_text": "async def publish(self, topic: str, payload: Any, qos: int = 0, retain: bool = False) -> None:",
+    "baseline_code_structure_hash": "2731780de702dde0101c29d54b0426ec7616e486bc563c8e99a48df0becd1a50"
+  },
+  "LocalBusConnector.subscribe": {
+    "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",
+    "baseline_code_structure_hash": "c2addf29fd60240c9ff8400c72be68453d50b874a54b87a5fba2cd3b64ad5e02"
+  },
+  "_LocalSubscriptionHandle": {
+    "baseline_yaml_content_hash": "dfce1195a894b39135e28d794ca1ef75ffe29c2a02adf40d07a65fab71c38436"
+  },
+  "_LocalSubscriptionHandle.__init__": {
+    "baseline_code_signature_text": "def __init__(self, parent: \"LocalBusConnector\", topic: str, queue: asyncio.Queue, listener_task: asyncio.Task):",
+    "baseline_code_structure_hash": "c2c01fb0d334e08e521f0d55878693f56fc32add841525ef06c90fd2345466f7"
+  },
+  "_LocalSubscriptionHandle.unsubscribe": {
+    "baseline_code_signature_text": "async def unsubscribe(self) -> None:",
+    "baseline_code_structure_hash": "8db3add491babae6d33f8c27a23af07c012ac7395e700a61a643648621a7a3ef"
+  }
+}

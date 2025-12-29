@@ -1,0 +1,12 @@
+"mock_connector": |-
+  Mocks the MqttConnector class to prevent network calls.
+"mock_messaging_bus": |-
+  Mocks the global message bus used by the observer app.
+"test_on_message_handles_task_completed_event": |-
+  Verify that a 'COMPLETED' TaskStateEvent is correctly parsed.
+"test_on_message_handles_task_failed_event": |-
+  Verify that a 'FAILED' TaskStateEvent is correctly parsed.
+"test_on_message_handles_task_running_event": |-
+  Verify that a 'RUNNING' TaskStateEvent is correctly parsed and rendered.
+"test_on_message_prints_run_header_only_once": |-
+  Verify that the run header is printed only for the first message of a new run.

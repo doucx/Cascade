@@ -3,16 +3,7 @@ from typing import Any, Dict, Callable, Union
 
 
 class FileExistenceCache:
-    """
-    A simple cache policy that considers a task 'cached' if a specific file exists.
-    """
-
     def __init__(self, target_path: Union[str, Callable[[Dict[str, Any]], str]]):
-        """
-        Args:
-            target_path: A string path or a function that accepts task inputs
-                         (args/kwargs dict) and returns a path string.
-        """
         self.target_path = target_path
 
     def _resolve_path(self, inputs: Dict[str, Any]) -> str:

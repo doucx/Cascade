@@ -1,0 +1,16 @@
+"_get_status": |-
+  Core logic for the status command.
+"_get_status_sqlite": |-
+  Fetches and displays constraints from the SQLite database.
+"_render_constraints_table": |-
+  Renders a list of constraints into a Rich table.
+"_run_mqtt_watcher": |-
+  Connects to MQTT and watches for telemetry events.
+"_run_uds_watcher": |-
+  Connects to a local UDS socket and watches for telemetry events.
+"on_message": |-
+  Callback to process incoming telemetry messages.
+"status": |-
+  Connect to the backend, query the current status of all constraints, and exit.
+"watch": |-
+  Connect to a backend and watch for real-time telemetry events.

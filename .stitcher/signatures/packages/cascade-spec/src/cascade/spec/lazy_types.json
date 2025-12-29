@@ -1,0 +1,56 @@
+{
+  "LazyResult": {
+    "baseline_yaml_content_hash": "95f323f2eec3bb760ff56deb857a8754748b017e50e4103c0e5f48bdc6ce7638"
+  },
+  "LazyResult.__hash__": {
+    "baseline_code_signature_text": "def __hash__(self):",
+    "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
+  },
+  "LazyResult.after": {
+    "baseline_code_signature_text": "def after(self, *predecessors: \"LazyResult\") -> \"LazyResult[T]\":",
+    "baseline_code_structure_hash": "be4e7d6f5f06c9778010bef6769f59feb7b3c668ece6ce8b919a59e996a65995"
+  },
+  "LazyResult.run_if": {
+    "baseline_code_signature_text": "def run_if(self, condition: \"LazyResult\") -> \"LazyResult[T]\":",
+    "baseline_code_structure_hash": "da4afc870bb49ec1c7ba7b63378470d8b60c88f4735216bfb931c07b7e84d6db"
+  },
+  "LazyResult.with_cache": {
+    "baseline_code_signature_text": "def with_cache(self, policy: \"CachePolicy\") -> \"LazyResult[T]\":",
+    "baseline_code_structure_hash": "1393f4ac7006d23c75e7aaf636b1dc726bfed2a35b150671c9c885cfd95489c2"
+  },
+  "LazyResult.with_constraints": {
+    "baseline_code_signature_text": "def with_constraints(self, **kwargs) -> \"LazyResult[T]\":",
+    "baseline_code_structure_hash": "17ea1c52d10556fe6e0372c171308c55f08316f0fc2f977a21aaf51645fc96c2"
+  },
+  "LazyResult.with_retry": {
+    "baseline_code_signature_text": "def with_retry(self, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0) -> \"LazyResult[T]\":",
+    "baseline_code_structure_hash": "6d2a6811828746a835ad7e065775c96300a9b8c70cfcfbd31cb61b8edcdb1b33"
+  },
+  "MappedLazyResult": {
+    "baseline_yaml_content_hash": "45846379de8994d63db0714dc606f3ad49d8c68b59e9aa05a0b46ffcb5893fa3"
+  },
+  "MappedLazyResult.__hash__": {
+    "baseline_code_signature_text": "def __hash__(self):",
+    "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
+  },
+  "MappedLazyResult.after": {
+    "baseline_code_signature_text": "def after(self, *predecessors: LazyResult) -> \"MappedLazyResult[T]\":",
+    "baseline_code_structure_hash": "1f7f7d77a27f9446febc4598df92c5be1dbc14c7d015fdad8773ea27543288f7"
+  },
+  "MappedLazyResult.run_if": {
+    "baseline_code_signature_text": "def run_if(self, condition: LazyResult) -> \"MappedLazyResult[T]\":",
+    "baseline_code_structure_hash": "87a70529a6336df6d0e72469bfb03cecaa546f2c286e6fd0cb349d3978a5f172"
+  },
+  "MappedLazyResult.with_cache": {
+    "baseline_code_signature_text": "def with_cache(self, policy: \"CachePolicy\") -> \"MappedLazyResult[T]\":",
+    "baseline_code_structure_hash": "d2d63259d1ec1270e3dcb3c770dbb2418d9bbe14ec1acb4dce7a9b1f02954dee"
+  },
+  "MappedLazyResult.with_constraints": {
+    "baseline_code_signature_text": "def with_constraints(self, **kwargs) -> \"MappedLazyResult[T]\":",
+    "baseline_code_structure_hash": "0603b7e503907924fcd0b388e962b787b774fb9336f71418f3c6440554898e3f"
+  },
+  "MappedLazyResult.with_retry": {
+    "baseline_code_signature_text": "def with_retry(self, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0) -> \"MappedLazyResult[T]\":",
+    "baseline_code_structure_hash": "586cd1292764616d4430b45beb46069125e64727a1e12f559bfe3bb7a2ba4284"
+  }
+}

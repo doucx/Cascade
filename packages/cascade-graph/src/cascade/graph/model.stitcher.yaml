@@ -1,0 +1,11 @@
+"Edge": |-
+  Represents a directed dependency from source node to target node.
+"EdgeType": |-
+  Defines the semantic type of a dependency edge.
+"Graph": |-
+  A container for nodes and edges representing the workflow topology.
+"Node": |-
+  Represents a node in the computation graph template.
+
+  A Node defines 'what' to execute (the callable) and 'how' to get its arguments
+  (bindings or edges), but it DOES NOT contain the runtime data itself.

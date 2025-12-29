@@ -4,7 +4,6 @@ from cascade.spec.constraint import ResourceConstraint
 
 
 def test_resource_constraint_definition():
-    """Test the basic definition of ResourceConstraint."""
     constraints = cs.with_constraints(gpu_count=1, memory_gb=8)
 
     assert isinstance(constraints, ResourceConstraint)
@@ -14,8 +13,6 @@ def test_resource_constraint_definition():
 
 
 def test_lazy_result_constraint_chaining():
-    """Test that .with_constraints is chainable and attaches metadata."""
-
     @cs.task
     def heavy_task():
         pass
@@ -27,8 +24,6 @@ def test_lazy_result_constraint_chaining():
 
 
 def test_constraint_propagation_to_node():
-    """Test that the constraint metadata is correctly stored on the graph node."""
-
     @cs.task
     def heavy_task():
         pass

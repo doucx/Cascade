@@ -10,14 +10,14 @@ from cascade.adapters.executors.local import LocalExecutor
 
 
 @cs.task
-def noop(_dummy=None):
+async def noop(_dummy=None):
     """A task that does nothing, used to force graph complexity."""
     return "done"
 
 
 # 1. Explicit Loop (The new standard)
 @cs.task
-def explicit_countdown_step(n: int):
+async def explicit_countdown_step(n: int):
     if n <= 0:
         return cs.Jump(target_key="exit", data="done")
     return cs.Jump(target_key="loop", data=n - 1)
@@ -32,7 +32,7 @@ def create_explicit_loop(n: int):
 
 # 2. Heavy Explicit Loop (Testing Blueprint Cache Efficiency)
 @cs.task
-def heavy_step(n: int, _structure=None):
+async def heavy_step(n: int, _structure=None):
     if n <= 0:
         return cs.Jump(target_key="exit", data="done")
     return cs.Jump(target_key="loop", data=n - 1)
@@ -51,7 +51,7 @@ def create_heavy_explicit_loop(n: int, complexity: int = 20):
 
 # 3. VM Countdown (TailCall)
 @cs.task
-def vm_countdown(n: int):
+async def vm_countdown(n: int):
     if n <= 0:
         return "done"
     return TailCall(kwargs={"n": n - 1})

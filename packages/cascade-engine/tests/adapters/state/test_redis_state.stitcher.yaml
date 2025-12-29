@@ -1,0 +1,8 @@
+"mock_redis_client": |-
+  Provides a MagicMock for the redis.Redis client.
+"test_get_result": |-
+  Verifies that get_result retrieves and deserializes data correctly.
+"test_put_result": |-
+  Verifies that put_result serializes data and calls Redis HSET and EXPIRE.
+"test_redis_state_backend_dependency_check": |-
+  Ensures RedisStateBackend raises ImportError if 'redis' is not installed.

@@ -8,8 +8,6 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @pytest.mark.asyncio
 async def test_engine_executes_param_task():
-    """验证 Engine 能正确地将 params 注入到 _get_param_value 任务中。"""
-
     # 定义参数
     p = cs.Param("count", type=int)
 
@@ -33,7 +31,6 @@ async def test_engine_executes_param_task():
 
 @pytest.mark.asyncio
 async def test_engine_executes_env_task(monkeypatch):
-    """验证 Engine 能正确执行 _get_env_var 任务。"""
     monkeypatch.setenv("TEST_VAR", "cascade_value")
 
     e = cs.Env("TEST_VAR")

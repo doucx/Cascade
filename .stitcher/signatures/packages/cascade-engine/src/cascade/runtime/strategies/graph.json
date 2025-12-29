@@ -1,0 +1,30 @@
+{
+  "GraphExecutionResult": {
+    "baseline_yaml_content_hash": "e01c47c954ac173636dae7ec566f136769b19188a67ebeae7cff6c91324a6e09"
+  },
+  "GraphExecutionStrategy": {
+    "baseline_yaml_content_hash": "bd5924665138bd4c44570cb37df4bc3acf814d06b01b440761995100e8f174d0"
+  },
+  "GraphExecutionStrategy.__init__": {
+    "baseline_code_signature_text": "def __init__(self, solver: Solver, node_processor: NodeProcessor, resource_container: ResourceContainer, constraint_manager: ConstraintManager, bus: MessageBus, wakeup_event: asyncio.Event):",
+    "baseline_code_structure_hash": "89e5fde89c513b836bd9df72b73716c1174d9f0c7543aadf52bad85d0286a223"
+  },
+  "GraphExecutionStrategy._execute_graph": {
+    "baseline_code_signature_text": "async def _execute_graph(self, target: Any, params: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, state_backend: StateBackend, graph: Graph, plan: Any, instance_map: Dict[str, Node], root_input_overrides: Optional[Dict[str, Any]] = None) -> GraphExecutionResult:",
+    "baseline_code_structure_hash": "167acd88abb76475acd118b97c0e9c30c8e589e02de4650acc29ec9ae189ce95"
+  },
+  "GraphExecutionStrategy._index_plan": {
+    "baseline_code_signature_text": "def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:",
+    "baseline_code_structure_hash": "5e894e79c670e7d3c8ab307c801c290df4ad0f64355e2a0871affd02bb2a8637",
+    "baseline_yaml_content_hash": "e9458f1b1b05bd258dabe169a7c29cce237a9df78baca693d7de62ad3ee8c10f"
+  },
+  "GraphExecutionStrategy._rehydrate_plan": {
+    "baseline_code_signature_text": "def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:",
+    "baseline_code_structure_hash": "23d79fe6bf6d50043583c7874b422e3b63b269fdf69e163d9146c03e5ed0f478",
+    "baseline_yaml_content_hash": "b895bf1a247e171a40c02369deb1343b342a1e1e7b0791ee8df1cfed82a6422c"
+  },
+  "GraphExecutionStrategy.execute": {
+    "baseline_code_signature_text": "async def execute(self, target: Any, run_id: str, params: Dict[str, Any], state_backend: StateBackend, run_stack: ExitStack, active_resources: Dict[str, Any]) -> Any:",
+    "baseline_code_structure_hash": "bc85b62d5769841ab7d658588b85b86c20b5ec8d61f0e2759e0468b00c48357e"
+  }
+}

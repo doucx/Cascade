@@ -5,7 +5,6 @@ from cascade.adapters.cache.in_memory import InMemoryCacheBackend
 
 @pytest.mark.asyncio
 async def test_cache_set_and_get():
-    """Test basic set and get functionality."""
     cache = InMemoryCacheBackend()
     await cache.set("key1", "value1")
     assert await cache.get("key1") == "value1"
@@ -13,14 +12,12 @@ async def test_cache_set_and_get():
 
 @pytest.mark.asyncio
 async def test_cache_get_non_existent_key():
-    """Test that getting a non-existent key returns None."""
     cache = InMemoryCacheBackend()
     assert await cache.get("non_existent") is None
 
 
 @pytest.mark.asyncio
 async def test_cache_set_overwrite():
-    """Test that setting an existing key overwrites the value."""
     cache = InMemoryCacheBackend()
     await cache.set("key1", "value1")
     await cache.set("key1", "value2")
@@ -29,7 +26,6 @@ async def test_cache_set_overwrite():
 
 @pytest.mark.asyncio
 async def test_cache_ttl_not_expired():
-    """Test that a key can be retrieved before its TTL expires."""
     cache = InMemoryCacheBackend()
     with patch("time.time", return_value=1000):
         await cache.set("key_ttl", "value_ttl", ttl=60)
@@ -40,7 +36,6 @@ async def test_cache_ttl_not_expired():
 
 @pytest.mark.asyncio
 async def test_cache_ttl_expired():
-    """Test that a key returns None after its TTL expires."""
     cache = InMemoryCacheBackend()
     with patch("time.time", return_value=1000):
         await cache.set("key_ttl", "value_ttl", ttl=60)

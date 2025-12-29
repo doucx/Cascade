@@ -7,7 +7,6 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @pytest.fixture
 def engine():
-    """Provides a default Cascade Engine for tests."""
     return cs.Engine(
         solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
     )
@@ -15,9 +14,6 @@ def engine():
 
 @pytest.mark.asyncio
 async def test_stdout_write(engine, capsys):
-    """
-    Tests that cs.io.stdout.write correctly prints to standard output.
-    """
     workflow = cs.io.stdout.write("Hello, Interactive World!")
 
     await engine.run(workflow)
@@ -28,9 +24,6 @@ async def test_stdout_write(engine, capsys):
 
 @pytest.mark.asyncio
 async def test_stdin_read_line(engine, monkeypatch):
-    """
-    Tests that cs.io.stdin.read_line correctly reads from standard input.
-    """
     # Simulate user typing 'test input' and pressing Enter
     mock_stdin = io.StringIO("test input\n")
     monkeypatch.setattr("sys.stdin", mock_stdin)
@@ -50,9 +43,6 @@ async def test_stdin_read_line(engine, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_prompt_composition(engine, capsys, monkeypatch):
-    """
-    Tests the composition of write and read to simulate a user prompt.
-    """
     mock_stdin = io.StringIO("Cascade User\n")
     monkeypatch.setattr("sys.stdin", mock_stdin)
 

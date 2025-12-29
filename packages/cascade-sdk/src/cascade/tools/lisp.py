@@ -18,7 +18,6 @@ class LispTranspiler:
         self._analyze()
 
     def _analyze(self):
-        """Analyzes the graph to determine ref counts and assign variable names."""
         # 1. Initialize counts
         for node in self.graph.nodes:
             self.ref_counts[node.structural_id] = 0
@@ -39,7 +38,8 @@ class LispTranspiler:
             is_router_selector = any(
                 e.router
                 and e.router.selector._uuid in self.instance_map
-                and self.instance_map[e.router.selector._uuid].id == node.structural_id
+                and self.instance_map[e.router.selector._uuid].structural_id
+                == node.structural_id
                 for e in self.graph.edges
             )
 
@@ -221,7 +221,6 @@ class LispTranspiler:
         return str(val)
 
     def _get_transitive_deps(self, root: Node) -> Set[Node]:
-        """BFS to find all upstream dependencies."""
         visited = set()
         queue = [root]
         visited.add(root)
@@ -245,10 +244,6 @@ class LispTranspiler:
         return relevant_nodes
 
     def _topo_sort(self, nodes: List[Node]) -> List[Node]:
-        """
-        Standard Topological Sort.
-        Returns nodes in dependency order (Dependency before Consumer).
-        """
         node_set = {n.structural_id for n in nodes}
         adj = {n.structural_id: set() for n in nodes}
 
@@ -279,7 +274,7 @@ class LispTranspiler:
             result.append(n_id)
 
         # Sort input nodes for deterministic start order
-        for n in sorted(nodes, key=lambda x: x.id):
+        for n in sorted(nodes, key=lambda x: x.structural_id):
             visit(n.structural_id)
 
         # result is [Deepest Dep, ..., Root]
@@ -288,20 +283,6 @@ class LispTranspiler:
 
 
 def to_lisp(target: Any) -> str:
-    """
-    Transpiles a Cascade workflow (LazyResult) into a Lisp S-Expression.
-
-    This function analyzes the computation graph and generates a Lisp-like representation.
-    - Nodes referenced multiple times are hoisted into `let*` bindings.
-    - Nodes referenced once are inlined.
-    - Router/Switch logic is converted to `(case ...)` expressions.
-
-    Args:
-        target: A Cascade LazyResult object representing the workflow.
-
-    Returns:
-        A string containing the formatted Lisp S-Expression.
-    """
     if not isinstance(target, LazyResult):
         raise TypeError(f"Target must be a LazyResult, got {type(target)}")
 

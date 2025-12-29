@@ -10,7 +10,6 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @cs.resource
 def config():
-    """A simple resource that provides a config dict."""
     print("SETUP: config")
     yield {"db_url": "production_url"}
     print("TEARDOWN: config")
@@ -18,7 +17,6 @@ def config():
 
 @cs.resource
 def db_connection(config: dict = cs.inject("config")):
-    """A resource that depends on another resource."""
     print(f"SETUP: db_connection using {config['db_url']}")
     connection = MagicMock()
     connection.url = config["db_url"]
@@ -32,7 +30,6 @@ def db_connection(config: dict = cs.inject("config")):
 
 @cs.task
 def task_using_resource(conn=cs.inject("db_connection")):
-    """A task that injects a resource."""
     assert isinstance(conn, MagicMock)
     return conn.url
 
@@ -41,7 +38,6 @@ def task_using_resource(conn=cs.inject("db_connection")):
 
 
 def test_di_end_to_end():
-    """Tests the full lifecycle: registration, injection, execution, teardown."""
     import asyncio
 
     engine = cs.Engine(
@@ -56,7 +52,6 @@ def test_di_end_to_end():
 
 
 def test_resource_events():
-    """Tests that resource lifecycle events are emitted."""
     import asyncio
 
     events = []
@@ -89,8 +84,6 @@ def test_resource_events():
 
 
 def test_resource_override():
-    """Tests that a resource can be overridden for testing."""
-
     @cs.resource
     def mock_db_connection():
         print("SETUP: mock_db_connection")
@@ -127,7 +120,6 @@ def test_resource_override():
 
 
 def test_resource_must_be_generator():
-    """Tests that a non-generator function cannot be a resource."""
     with pytest.raises(TypeError, match="must be a generator"):
 
         @cs.resource

@@ -1,0 +1,54 @@
+{
+  "ConstraintManager": {
+    "baseline_yaml_content_hash": "0cdcae9f76e8d4a8ef1386de88678e8886744b1c0ff17f7c70f7f0ef88f6d2e6"
+  },
+  "ConstraintManager.__init__": {
+    "baseline_code_signature_text": "def __init__(self, resource_manager: ResourceManager):",
+    "baseline_code_structure_hash": "7bd1df028d74a0de2baee7627801f8be13ea2ead2e739623bbaf16b0f53a75b7"
+  },
+  "ConstraintManager._remove_constraint_by_id": {
+    "baseline_code_signature_text": "def _remove_constraint_by_id(self, cid: str) -> None:",
+    "baseline_code_structure_hash": "e7abbb87af0c60d800f42bcde477280e6c92a46de57911b47bbccd5b36705d70",
+    "baseline_yaml_content_hash": "e13d16065a1252eee356b5e9d505c4cbbc207911d5a2b058acc1090ea803a50d"
+  },
+  "ConstraintManager.check_permission": {
+    "baseline_code_signature_text": "def check_permission(self, task: Node) -> bool:",
+    "baseline_code_structure_hash": "fbc27c8071ce636f781e37b1995c655b932be4a3d29d0e96436250e86348f55c",
+    "baseline_yaml_content_hash": "fe900a39030262cfccedfa603422a2b74977e5532bfe80ef5d89bad03b620f98"
+  },
+  "ConstraintManager.cleanup_expired_constraints": {
+    "baseline_code_signature_text": "def cleanup_expired_constraints(self) -> None:",
+    "baseline_code_structure_hash": "9d6ed13b1ebee00e504bbbb561392eec3d41a81d5747f0478937efaeff12b3b0",
+    "baseline_yaml_content_hash": "8d4ffe35b8135ab6056beb3ccd7ddaf559c863e9f6b8092a8e8be7c8ce91b412"
+  },
+  "ConstraintManager.get_extra_requirements": {
+    "baseline_code_signature_text": "def get_extra_requirements(self, task: Node) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "b20492eb07a318f7cc8428c9fc5a95b7b30116b79196b3ae18e41a5029f9d496",
+    "baseline_yaml_content_hash": "effae41e0c1c1672067cc84bf48490f5e67ed5303daa698f1c07cdb94d468871"
+  },
+  "ConstraintManager.register_handler": {
+    "baseline_code_signature_text": "def register_handler(self, handler: ConstraintHandler) -> None:",
+    "baseline_code_structure_hash": "573a523abfcebe239e63df7db3a699fc051cccee0fe3188f7d93df7ce0625768",
+    "baseline_yaml_content_hash": "2b196545a91a24c92c97f35b1acbc89de705d10dbb72cfa09178a37963e83bb7"
+  },
+  "ConstraintManager.remove_constraints_by_scope": {
+    "baseline_code_signature_text": "def remove_constraints_by_scope(self, scope: str) -> None:",
+    "baseline_code_structure_hash": "c62a302e8375416363d5dc7a8469c0fba162a5ffea31c43e302abda55577715d",
+    "baseline_yaml_content_hash": "6e17ca1d6f36d1dce2deb04e939e10ab8ab72ab8f03b545b22466c4312d9f3af"
+  },
+  "ConstraintManager.request_wakeup": {
+    "baseline_code_signature_text": "def request_wakeup(self, delay: float) -> None:",
+    "baseline_code_structure_hash": "9202e143017c7268dd1855b4de32eaf3db746564acae68e73c3ae59ff0951fee",
+    "baseline_yaml_content_hash": "fe9f531fcee506433822ae6409f9da2b7819ecdf8e7d6c3cc66500b63d96c0df"
+  },
+  "ConstraintManager.set_wakeup_callback": {
+    "baseline_code_signature_text": "def set_wakeup_callback(self, callback: Any) -> None:",
+    "baseline_code_structure_hash": "481b7b52d067faf440ebc757749646416c64f25bf73bd99c1e4fa72def293eb8",
+    "baseline_yaml_content_hash": "98399f7a1300aaf5dec2f0b90bba72ff60dc9d390bc8bc540cd1ef3a4f53e624"
+  },
+  "ConstraintManager.update_constraint": {
+    "baseline_code_signature_text": "def update_constraint(self, constraint: GlobalConstraint) -> None:",
+    "baseline_code_structure_hash": "645732b6825f7fbfe15962365159701da5d915a7433cc3fcdcc8f35d956b9338",
+    "baseline_yaml_content_hash": "ea834b5bcab70a5b321c9da220fa1bc26e2b8767d6c4acc0dced6ee97e55e595"
+  }
+}

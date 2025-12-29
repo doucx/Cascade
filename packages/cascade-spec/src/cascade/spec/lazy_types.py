@@ -1,11 +1,11 @@
-from typing import TypeVar, Generic, Any, Dict, Optional, List
+from typing import TypeVar, Generic, Any, Dict, Optional, List, TYPE_CHECKING
 from dataclasses import dataclass, field
 from uuid import uuid4
 
-# Forward references for policies to avoid circular imports
-# (e.g., CachePolicy is in runtime.protocols which depends on LazyResult)
-# We use Any for typing policies in the definition stage.
+if TYPE_CHECKING:
+    from cascade.spec.protocols import CachePolicy
 
+# Forward reference for ResourceConstraint
 T = TypeVar("T")
 
 
@@ -18,11 +18,6 @@ class RetryPolicy:
 
 @dataclass
 class LazyResult(Generic[T]):
-    """
-    A placeholder for the result of a task execution.
-    It holds the task that produces it and the arguments passed to that task.
-    """
-
     task: Any  # Should be 'Task[T]'
     args: tuple
     kwargs: Dict[str, Any]
@@ -39,17 +34,34 @@ class LazyResult(Generic[T]):
     def __hash__(self):
         return hash(self._uuid)
 
-    # Note: Chaining methods (.run_if, .with_retry, etc.) remain in spec/task.py
-    # as they tightly couple to Task logic and protocols.
+    def run_if(self, condition: "LazyResult") -> "LazyResult[T]":
+        self._condition = condition
+        return self
+
+    def with_retry(
+        self, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0
+    ) -> "LazyResult[T]":
+        self._retry_policy = RetryPolicy(max_attempts, delay, backoff)
+        return self
+
+    def with_cache(self, policy: "CachePolicy") -> "LazyResult[T]":
+        self._cache_policy = policy
+        return self
+
+    def with_constraints(self, **kwargs) -> "LazyResult[T]":
+        # Import internally to avoid circular dependency at module level
+        from cascade.spec.constraint import ResourceConstraint
+
+        self._constraints = ResourceConstraint(requirements=kwargs)
+        return self
+
+    def after(self, *predecessors: "LazyResult") -> "LazyResult[T]":
+        self._dependencies.extend(predecessors)
+        return self
 
 
 @dataclass
 class MappedLazyResult(Generic[T]):
-    """
-    Represents the result of mapping a factory over a set of inputs.
-    It resolves to a list of results.
-    """
-
     factory: Any  # Should be LazyFactory
     mapping_kwargs: Dict[str, Any]
     _uuid: str = field(default_factory=lambda: str(uuid4()))
@@ -61,3 +73,27 @@ class MappedLazyResult(Generic[T]):
 
     def __hash__(self):
         return hash(self._uuid)
+
+    def run_if(self, condition: LazyResult) -> "MappedLazyResult[T]":
+        self._condition = condition
+        return self
+
+    def with_retry(
+        self, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0
+    ) -> "MappedLazyResult[T]":
+        self._retry_policy = RetryPolicy(max_attempts, delay, backoff)
+        return self
+
+    def with_cache(self, policy: "CachePolicy") -> "MappedLazyResult[T]":
+        self._cache_policy = policy
+        return self
+
+    def with_constraints(self, **kwargs) -> "MappedLazyResult[T]":
+        from cascade.spec.constraint import ResourceConstraint
+
+        self._constraints = ResourceConstraint(requirements=kwargs)
+        return self
+
+    def after(self, *predecessors: LazyResult) -> "MappedLazyResult[T]":
+        self._dependencies.extend(predecessors)
+        return self

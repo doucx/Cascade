@@ -1,0 +1,7 @@
+"test_compile_data_dependency": |-
+  Verify compiling a task that depends on another task.
+"test_compile_diamond_dependency": |-
+  Verify reuse of results (diamond dependency).
+"test_compile_single_node_as_root": |-
+  Verify compiling a single task as root in template mode.
+  Arguments should be promoted to Input Registers.

@@ -1,0 +1,73 @@
+{
+  "another_task": {
+    "baseline_code_signature_text": "def another_task(y):",
+    "baseline_code_structure_hash": "66b07d6dff73efb59d0f00294bd2f3c5d6d0094d85f47e9ba955515d52aef38f"
+  },
+  "consumer": {
+    "baseline_code_signature_text": "def consumer(val):",
+    "baseline_code_structure_hash": "3611739b46d243b2f4854014cf82adb914bd43cf71918db9e3c735dac153e30d"
+  },
+  "get_route": {
+    "baseline_code_signature_text": "def get_route():",
+    "baseline_code_structure_hash": "8293de70c46331b93cad8e38c874a08931f917081bad94d1ae889d6294d586c9"
+  },
+  "simple_task": {
+    "baseline_code_signature_text": "def simple_task(x):",
+    "baseline_code_structure_hash": "979e039020049a1b4b62c186950ac1b37132dcc62986fce2bbde7e51f7d2afb1"
+  },
+  "t_condition": {
+    "baseline_code_signature_text": "def t_condition():",
+    "baseline_code_structure_hash": "dcc1bf01962755a455e4c5a1be73d994b1d3a5d18607cf161677fdd128f9053e"
+  },
+  "t_dynamic_constraint": {
+    "baseline_code_signature_text": "def t_dynamic_constraint(val):",
+    "baseline_code_structure_hash": "9151c22354cea61384a3e376b8edc65e25924cff30826a10d5b6a06339bd8b2e"
+  },
+  "t_target": {
+    "baseline_code_signature_text": "def t_target(x):",
+    "baseline_code_structure_hash": "75ce430f9355e7bec65b38e88810dcf780275c3b8d38aa4b75b139921c2720a0"
+  },
+  "task_a": {
+    "baseline_code_signature_text": "def task_a():",
+    "baseline_code_structure_hash": "5fea6af0063c28734f8c3e221114a6f6fa31e9f7cf0fa6337bc1c9e7dd4e3150"
+  },
+  "task_b": {
+    "baseline_code_signature_text": "def task_b():",
+    "baseline_code_structure_hash": "31c80af2144e7db3659d2fd9da36d9a5bcf18a30f7c878585a5efd1aa0bde973"
+  },
+  "test_round_trip_top_level_functions": {
+    "baseline_code_signature_text": "def test_round_trip_top_level_functions():",
+    "baseline_code_structure_hash": "ab9f3879d5de01021732dcba50257d11525cdd2deaacb7f371cc83297f86f1ba",
+    "baseline_yaml_content_hash": "94590a6289cd6977a160b97b87b6f01b090206c363ac60a8d3fca2b9583cbce8"
+  },
+  "test_serialize_basic_graph": {
+    "baseline_code_signature_text": "def test_serialize_basic_graph():",
+    "baseline_code_structure_hash": "cf1a89483a08de9f2c7c664481d7a6429815fadeaa0613f235a71a73e3a2c33e",
+    "baseline_yaml_content_hash": "bcac8b780f95f2140877d69cca1444d86191f1210311cccc931e3e5baa4d6073"
+  },
+  "test_serialize_edge_types": {
+    "baseline_code_signature_text": "def test_serialize_edge_types():",
+    "baseline_code_structure_hash": "aedaabbb267caaaf20934ddbad4fba0eed8e867bbeb2f9b5871d09d602e1e5e7",
+    "baseline_yaml_content_hash": "52bc35cf86cf7401c5e6ea24848a3cc7606c5faaad865e354d96fe041b0ce362"
+  },
+  "test_serialize_params": {},
+  "test_serialize_params_structure_only": {
+    "baseline_code_signature_text": "def test_serialize_params_structure_only():",
+    "baseline_code_structure_hash": "b631183349ed923d81a8b1e88df033db941bcfb2b4f140142f2dda2181323efb"
+  },
+  "test_serialize_router": {
+    "baseline_code_signature_text": "def test_serialize_router():",
+    "baseline_code_structure_hash": "45264230ae655d216fc0f3a887de4ccbdb321b15d20cc78f3c1f60f8c615f9bb",
+    "baseline_yaml_content_hash": "1cafb2e0c023b64da024213239f57a4bce2dc1acb636ff7e05121da0d25ae9dc"
+  },
+  "test_serialize_with_constraints": {
+    "baseline_code_signature_text": "def test_serialize_with_constraints():",
+    "baseline_code_structure_hash": "1672014842cdab72410dd7e23a31b3dc88dd2daf80f77df2100913a0395abfd6",
+    "baseline_yaml_content_hash": "614ed146f903eec6ee395e650c98f011c0a30586b89ce9b5fb448491ca4714a9"
+  },
+  "test_serialize_with_retry": {
+    "baseline_code_signature_text": "def test_serialize_with_retry():",
+    "baseline_code_structure_hash": "393e4cc1d71eae783daa23485993449d4622c9495912250c920e65c950c05e08",
+    "baseline_yaml_content_hash": "7794a0e28820312d26b40376510815d27d011ba2b8c1116bd1edc551347a3e3c"
+  }
+}

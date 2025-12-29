@@ -13,18 +13,14 @@ except ImportError:
 
 @dataclass
 class HttpResponse:
-    """A simple, safe data holder for the HTTP response."""
-
     status: int
     headers: Dict[str, str]
     body: bytes
 
     def text(self, encoding: str = "utf-8") -> str:
-        """Decodes the response body into a string."""
         return self.body.decode(encoding)
 
     def json(self) -> Any:
-        """Parses the response body as JSON and returns a Python object."""
         import json
 
         return json.loads(self.text())
@@ -42,7 +38,6 @@ async def _perform_request(
     data: Optional[Any] = None,
     files: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
-    """Core logic to perform an HTTP request using aiohttp."""
     if aiohttp is None:
         raise ImportError(
             "The 'aiohttp' library is required to use the http provider. "

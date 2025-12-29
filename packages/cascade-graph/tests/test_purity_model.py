@@ -3,20 +3,6 @@ from cascade.graph.build import build_graph
 
 
 def test_impure_tasks_have_unique_identities():
-    """
-    Verifies that default tasks (Impure) have unique structural identities.
-
-    Scenario:
-    The same task is called twice, even with identical arguments.
-
-    Expected Behavior (CP-006):
-    The system should treat them as two separate nodes in the graph, each
-    with a different structural_id.
-
-    Previous Behavior (Fixed):
-    The system would merge them into a single node via hash-consing.
-    """
-
     @task  # Defaults to pure=False
     def random_int():
         return 42
@@ -40,10 +26,6 @@ def test_impure_tasks_have_unique_identities():
 
 
 def test_pure_tasks_are_deduplicated():
-    """
-    Verifies that pure tasks are correctly deduplicated.
-    """
-
     @task(pure=True)
     def add(x, y):
         return x + y

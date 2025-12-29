@@ -1,0 +1,11 @@
+{
+  "TemplateProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "render_template": {
+    "baseline_code_signature_text": "def render_template(template_string: str, context: Optional[Dict[str, Any]] = None, **kwargs) -> str:",
+    "baseline_code_structure_hash": "6272459227be2f9d43c1d009fcc51c32904e21abca7106dfa7ad1224b5e2fa14",
+    "baseline_yaml_content_hash": "b6059930cdb4a0c40d3d73bc6ba96bb5caeeb7c19a3876df446ed996e17bd9d4"
+  }
+}

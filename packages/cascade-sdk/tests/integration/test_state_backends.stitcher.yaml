@@ -1,0 +1,8 @@
+"stateful_redis_mock": |-
+  A fixture that provides a stateful mock for the redis client,
+  simulating hset/hget operations with an in-memory dictionary.
+"test_run_with_redis_backend_raises_if_not_installed": |-
+  Ensures cs.run raises ImportError if redis is requested but not installed.
+"test_run_with_redis_backend_uri": |-
+  Tests that cs.run with a redis:// URI correctly uses the RedisStateBackend
+  and that the put/get cycle for the final result is successful.

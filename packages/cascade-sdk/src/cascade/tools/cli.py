@@ -12,17 +12,6 @@ from cascade.spec.input import ParamSpec
 
 
 def create_cli(target: "LazyResult[Any]") -> Callable[[], None]:
-    """
-    A factory that generates a Typer-based command-line interface for a Cascade workflow.
-    It inspects the workflow context for `cs.Param` definitions and converts them into
-    CLI options.
-
-    Args:
-        target: The final LazyResult of the Cascade workflow.
-
-    Returns:
-        A function that, when called, will run the Typer CLI application.
-    """
     if typer is None:
         raise ImportError(
             "The 'typer' library is required to use the cli tool. "
@@ -42,7 +31,6 @@ def create_cli(target: "LazyResult[Any]") -> Callable[[], None]:
     }
 
     def main(**kwargs):
-        """The actual function that Typer will wrap."""
         from cascade import run as cascade_run
 
         # Extract log_level explicitly since it's injected by Typer via the dynamic signature
@@ -108,7 +96,8 @@ def create_cli(target: "LazyResult[Any]") -> Callable[[], None]:
         sig_params.append(sig_param)
 
     # Set the dynamic signature on the main function
-    main.__signature__ = inspect.Signature(parameters=sig_params)
+    # Pyright doesn't like assigning to __signature__ on a function
+    setattr(main, "__signature__", inspect.Signature(parameters=sig_params))
     # Give it a docstring for better --help
     main.__doc__ = "Runs the Cascade workflow."
 

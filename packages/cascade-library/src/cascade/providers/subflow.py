@@ -21,14 +21,6 @@ class SubflowProvider(Provider):
 async def _subflow_task(
     path: str, target: str, params: Optional[Dict[str, Any]] = None
 ) -> Any:
-    """
-    Dynamically loads a workflow from a file and executes it in an isolated engine.
-
-    Args:
-        path: Path to the Python file containing the workflow definition.
-        target: The variable name in the module that holds the LazyResult (or callable).
-        params: Parameters to inject into the sub-workflow.
-    """
     # 1. Validate and Load Module
     file_path = Path(path).resolve()
     if not file_path.exists():

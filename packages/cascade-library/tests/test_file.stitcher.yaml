@@ -1,0 +1,16 @@
+"binary_file": |-
+  Creates a temporary file with binary content.
+"dummy_file": |-
+  Creates a temporary file with known JSON content.
+"test_file_dynamic_path_dependency": |-
+  Tests dependency where the file path comes from an upstream task.
+"test_file_exists_false": |-
+  Tests checking existence for a non-existing file using cs.fs.exists.
+"test_file_exists_true": |-
+  Tests checking existence for an existing file using cs.fs.exists.
+"test_file_json_parsing_composition": |-
+  Tests composing read_text with a JSON parsing task.
+"test_file_read_bytes_success": |-
+  Tests reading a file as bytes using cs.read.bytes.
+"test_file_read_text_success": |-
+  Tests reading a file as text using the new cs.read.text provider.

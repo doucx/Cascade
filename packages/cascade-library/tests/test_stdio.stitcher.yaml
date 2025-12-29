@@ -1,0 +1,8 @@
+"engine": |-
+  Provides a default Cascade Engine for tests.
+"test_prompt_composition": |-
+  Tests the composition of write and read to simulate a user prompt.
+"test_stdin_read_line": |-
+  Tests that cs.io.stdin.read_line correctly reads from standard input.
+"test_stdout_write": |-
+  Tests that cs.io.stdout.write correctly prints to standard output.

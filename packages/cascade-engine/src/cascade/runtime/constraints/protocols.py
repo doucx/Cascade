@@ -8,35 +8,19 @@ if TYPE_CHECKING:
 
 
 class ConstraintHandler(Protocol):
-    """
-    Protocol for a pluggable handler that implements the logic for a specific
-    type of global constraint (e.g., "pause", "rate_limit").
-    """
-
-    def handles_type(self) -> str:
-        """Returns the constraint type this handler is responsible for."""
-        ...
+    def handles_type(self) -> str: ...
 
     def on_constraint_add(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
-        """Called when a new constraint of this type is added or updated."""
-        ...
+    ) -> None: ...
 
     def on_constraint_remove(
         self, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> None:
-        """Called when a constraint is removed."""
-        ...
+    ) -> None: ...
 
     def check_permission(
         self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
-    ) -> bool:
-        """
-        Evaluates the constraint against the given task.
-        Returns: True if permitted, False if deferred.
-        """
-        ...
+    ) -> bool: ...
 
     def append_requirements(
         self,
@@ -44,9 +28,4 @@ class ConstraintHandler(Protocol):
         constraint: GlobalConstraint,
         requirements: Dict[str, Any],
         manager: "ConstraintManager",
-    ) -> None:
-        """
-        Allows the handler to inject dynamic resource requirements for the task.
-        Modifies the 'requirements' dictionary in-place.
-        """
-        ...
+    ) -> None: ...

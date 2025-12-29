@@ -1,0 +1,37 @@
+{
+  "GraphBuilder.__init__": {
+    "baseline_code_signature_text": "def __init__(self, registry: NodeRegistry | None = None):",
+    "baseline_code_structure_hash": "1b29c62d544d5df0b3398e2c7f929e11089d04e1ddef98e8cbde7a544874a3db"
+  },
+  "GraphBuilder._find_dependencies": {
+    "baseline_code_signature_text": "def _find_dependencies(self, obj: Any, dep_nodes: Dict[str, Node]):",
+    "baseline_code_structure_hash": "cc33b5e255f6551f47212a9a4088e2f60833982e2dcbaea33dbf2073d1e5f88b",
+    "baseline_yaml_content_hash": "988de4ace73f5c1db41f612fb047fc9a41cc42181399dfbceafb1b37dc954480"
+  },
+  "GraphBuilder._scan_and_add_edges": {
+    "baseline_code_signature_text": "def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = \"\"):",
+    "baseline_code_structure_hash": "792edcc2a83764bee7af1f0a3cfa03a874d229defc221447bb126e82d960813f",
+    "baseline_yaml_content_hash": "088541d4323183078d39cb1aa1bc2a6ffe1fac127ee902c3755eb3b3dd2c654e"
+  },
+  "GraphBuilder._visit": {
+    "baseline_code_signature_text": "def _visit(self, value: Any) -> Node:",
+    "baseline_code_structure_hash": "ef1a7343ca2049143010966c8b3ee86f4d7dffb5cf304d96311f84ebc6410859",
+    "baseline_yaml_content_hash": "3018202429a9b3337a5acb3eed8fc15bb54f3c55e731415f3fddaa0bc548dc60"
+  },
+  "GraphBuilder._visit_lazy_result": {
+    "baseline_code_signature_text": "def _visit_lazy_result(self, result: LazyResult) -> Node:",
+    "baseline_code_structure_hash": "119bae654fabb8424372b500e0a14aae9ac5e4fa9c7fdacddd42cd16da084069"
+  },
+  "GraphBuilder._visit_mapped_result": {
+    "baseline_code_signature_text": "def _visit_mapped_result(self, result: MappedLazyResult) -> Node:",
+    "baseline_code_structure_hash": "549b54d96d759b08b43c13b774e5576bbbc03e673c33c7d430f81176c8e31cbd"
+  },
+  "GraphBuilder.build": {
+    "baseline_code_signature_text": "def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:",
+    "baseline_code_structure_hash": "27f0af28cbe7b5f2d1c99f771700fc31efb6afc2ae55145881d6c00087f93be2"
+  },
+  "build_graph": {
+    "baseline_code_signature_text": "def build_graph(target: Any, registry: NodeRegistry | None = None) -> Tuple[Graph, Dict[str, Node]]:",
+    "baseline_code_structure_hash": "05216073462e0fd129677552c65d1d71622dac247ad2c058fdee5ea685238e9c"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "CliRenderer": {
+    "baseline_yaml_content_hash": "e4f4b61572965c0c314c7421a4a16138741e4959dd3106fa5135e959cfb88df0"
+  },
+  "CliRenderer.__init__": {
+    "baseline_code_signature_text": "def __init__(self, store: MessageStore, stream: Optional[TextIO] = None, min_level: str = \"INFO\"):",
+    "baseline_code_structure_hash": "8929cadf5779d099461f073793e387f7a1f4c1bdac68a960b7cb2464b8b70ddb"
+  },
+  "CliRenderer.render": {
+    "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs):",
+    "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
+  },
+  "JsonRenderer": {
+    "baseline_yaml_content_hash": "f51dd940d708a72b5511930b8d4a0a6c304ac6f0ca6fec583c4c9c15cb4e8acd"
+  },
+  "JsonRenderer.__init__": {
+    "baseline_code_signature_text": "def __init__(self, stream: Optional[TextIO] = None, min_level: str = \"INFO\"):",
+    "baseline_code_structure_hash": "999c4cf218c2844df2f5fdeaa0cbc5893e50681f16db49867984d6dd1eef4607"
+  },
+  "JsonRenderer.render": {
+    "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs):",
+    "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
+  }
+}

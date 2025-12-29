@@ -1,0 +1,11 @@
+{
+  "recursive_countdown": {
+    "baseline_code_signature_text": "def recursive_countdown(count: int) -> Any:",
+    "baseline_code_structure_hash": "d37cc3ea739afa927cc7451452255528cb575a0b20ace077d61675391225908f"
+  },
+  "test_vm_tco_integration": {
+    "baseline_code_signature_text": "async def test_vm_tco_integration():",
+    "baseline_code_structure_hash": "f4ad2559eaad51f85f4fa0138220cca7fc27051958db2b35db2c0db926084a1b",
+    "baseline_yaml_content_hash": "5da88ae76a932e556e992fee3d6de38c9e9ca19a281c1f395b1a62885c2617bf"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "MqttConnector": {
+    "baseline_yaml_content_hash": "193bf19c4d9f5c64ffbdfa72d2d8f90f9dc63959ff8651864002c4b13a341c3c"
+  },
+  "MqttConnector.__init__": {
+    "baseline_code_signature_text": "def __init__(self, hostname: str, port: int = 1883, **kwargs):",
+    "baseline_code_structure_hash": "839278ebc6693142d79a618e63fe473fac2e1e8823d11265b0582544d638eb18"
+  },
+  "MqttConnector._message_loop": {
+    "baseline_code_signature_text": "async def _message_loop(self):",
+    "baseline_code_structure_hash": "f4bcd487ca0b894f1871b0fe291e57de39372b586be08adf86051b47bd872984",
+    "baseline_yaml_content_hash": "b495281eef6339cf4e51e54f1b8759bafee1c89f67a0a3b5dc3fd20bae7e14c2"
+  },
+  "MqttConnector._topic_matches": {
+    "baseline_code_signature_text": "def _topic_matches(subscription: str, topic: str) -> bool:",
+    "baseline_code_structure_hash": "364368f2b303a3c1308fd43d9e8d1a833c90bb8bd8f5f393b27680394ee29f67",
+    "baseline_yaml_content_hash": "bf5326dfadc6969751802dcb1508fcac7d679120ab447845ff26906d0b372dcb"
+  },
+  "MqttConnector.connect": {
+    "baseline_code_signature_text": "async def connect(self) -> None:",
+    "baseline_code_structure_hash": "2ee85c950427d812bd0d9f58ac0d3106ee4fab5647f8bfa600b5aa45efa28869",
+    "baseline_yaml_content_hash": "0841bcd8c36124a166b16e2f367b5501a00b0c104883ffb4409d9cd166b60529"
+  },
+  "MqttConnector.disconnect": {
+    "baseline_code_signature_text": "async def disconnect(self) -> None:",
+    "baseline_code_structure_hash": "5cb5a725bc2266bd83ffa2d30312eb2bb861f0934cbf1791166722c3e9f5572b",
+    "baseline_yaml_content_hash": "2eb195e6492f08dd331807a79a3b0bcfd0b298cc8bd0afeb739f0cd480911fb2"
+  },
+  "MqttConnector.publish": {
+    "baseline_code_signature_text": "async def publish(self, topic: str, payload: Any, qos: int = 0, retain: bool = False) -> None:",
+    "baseline_code_structure_hash": "2731780de702dde0101c29d54b0426ec7616e486bc563c8e99a48df0becd1a50",
+    "baseline_yaml_content_hash": "894b2a06e8699e09f8171c07b0cb1ca5a951c74e51427e41dca0aa765cd7f48d"
+  },
+  "MqttConnector.subscribe": {
+    "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",
+    "baseline_code_structure_hash": "c2addf29fd60240c9ff8400c72be68453d50b874a54b87a5fba2cd3b64ad5e02",
+    "baseline_yaml_content_hash": "0084f24434d3d9f76c211fdfc62185dd61e834460fa14f3814e26e92554aa249"
+  },
+  "_MqttSubscriptionHandle.__init__": {
+    "baseline_code_signature_text": "def __init__(self, parent: \"MqttConnector\", topic: str):",
+    "baseline_code_structure_hash": "fc2b8e15453045b1f749478bc7e40aefe502b19592c8812d8554210ebb35725e"
+  },
+  "_MqttSubscriptionHandle.unsubscribe": {
+    "baseline_code_signature_text": "async def unsubscribe(self) -> None:",
+    "baseline_code_structure_hash": "8db3add491babae6d33f8c27a23af07c012ac7395e700a61a643648621a7a3ef"
+  }
+}

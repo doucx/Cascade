@@ -1,0 +1,6 @@
+"test_constraint_propagation_to_node": |-
+  Test that the constraint metadata is correctly stored on the graph node.
+"test_lazy_result_constraint_chaining": |-
+  Test that .with_constraints is chainable and attaches metadata.
+"test_resource_constraint_definition": |-
+  Test the basic definition of ResourceConstraint.

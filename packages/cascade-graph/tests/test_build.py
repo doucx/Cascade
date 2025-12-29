@@ -26,10 +26,6 @@ def test_build_linear_graph():
 
 
 def test_build_graph_with_param_factory():
-    """
-    [V1.3 更新] 验证 cs.Param() 现在生成一个标准的任务节点，
-    而不是旧版的 'param' 类型节点。
-    """
     # 定义工作流
     param_node = cs.Param("x", default=1)
 
@@ -58,7 +54,6 @@ def test_build_graph_with_param_factory():
 
 
 def test_build_graph_with_env_factory():
-    """验证 cs.Env() 生成标准任务节点。"""
     env_node = cs.Env("HOME")
 
     @cs.task
@@ -75,11 +70,6 @@ def test_build_graph_with_env_factory():
 
 
 def test_build_graph_with_nested_dependencies():
-    """
-    Validates that the GraphBuilder correctly discovers LazyResults
-    nested inside lists and dictionaries.
-    """
-
     @cs.task
     def t_a():
         return "a"

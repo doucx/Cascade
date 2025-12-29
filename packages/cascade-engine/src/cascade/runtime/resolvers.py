@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 from cascade.graph.model import Node, Graph, Edge, EdgeType
 from cascade.spec.resource import Inject
@@ -6,15 +6,10 @@ from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
 from cascade.spec.protocols import StateBackend
 
+import inspect
+
 
 class ArgumentResolver:
-    """
-    Resolves arguments by combining:
-    1. Structural bindings (Literal values stored in Node)
-    2. Upstream dependencies (Edges)
-    3. Resource injections
-    """
-
     async def resolve(
         self,
         node: Node,
@@ -22,8 +17,8 @@ class ArgumentResolver:
         state_backend: StateBackend,
         resource_context: Dict[str, Any],
         instance_map: Dict[str, Node],
-        user_params: Dict[str, Any] = None,
-        input_overrides: Dict[str, Any] = None,
+        user_params: Optional[Dict[str, Any]] = None,
+        input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
         # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
         if not node.has_complex_inputs:
@@ -99,11 +94,12 @@ class ArgumentResolver:
                 kwargs[k] = v
 
         # 3. Handle Resource Injection in Defaults
-        if node.signature:
-            # Create a bound arguments object to see which args are not yet filled
+        if node.callable_obj:
             try:
-                bound_args = node.signature.bind_partial(*args, **kwargs)
-                for param in node.signature.parameters.values():
+                # Re-inspect signature on demand
+                sig = inspect.signature(node.callable_obj)
+                bound_args = sig.bind_partial(*args, **kwargs)
+                for param in sig.parameters.values():
                     if (
                         isinstance(param.default, Inject)
                         and param.name not in bound_args.arguments
@@ -111,8 +107,7 @@ class ArgumentResolver:
                         kwargs[param.name] = self._resolve_inject(
                             param.default, node.name, resource_context
                         )
-            except TypeError:
-                # This can happen if args/kwargs are not yet valid, but we can still try a simpler check
+            except (ValueError, TypeError):
                 pass
 
         # 4. Handle internal param fetching context
@@ -130,12 +125,8 @@ class ArgumentResolver:
         graph: Graph,
         state_backend: StateBackend,
         instance_map: Dict[str, Node],
-        input_overrides: Dict[str, Any] | None,
+        input_overrides: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
-        """
-        Shared helper to resolve all incoming DATA edges for a node,
-        respecting the priority of input_overrides from TCO Jumps.
-        """
         resolved_values = {}
         incoming_edges = [
             e
@@ -250,7 +241,6 @@ class ArgumentResolver:
         state_backend: StateBackend,
         graph: Graph,
     ) -> Any:
-        """Helper to get a node's result, with skip penetration logic."""
         if await state_backend.has_result(node_id):
             return await state_backend.get_result(node_id)
 
@@ -283,10 +273,6 @@ class ArgumentResolver:
 
 
 class ConstraintResolver:
-    """
-    Responsible for resolving dynamic resource constraints for a node.
-    """
-
     async def resolve(
         self,
         node: Node,

@@ -4,8 +4,6 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class InputSpec:
-    """描述一个外部输入契约的元数据基类。"""
-
     name: str
     default: Any = None
     description: str = ""
@@ -15,13 +13,9 @@ class InputSpec:
 
 @dataclass(frozen=True)
 class ParamSpec(InputSpec):
-    """描述一个命令行参数的元数据。"""
-
     type: Any = str  # 用于 CLI 类型转换
 
 
 @dataclass(frozen=True)
 class EnvSpec(InputSpec):
-    """描述一个环境变量的元数据。"""
-
     pass

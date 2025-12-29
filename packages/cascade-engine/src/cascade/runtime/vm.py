@@ -13,16 +13,13 @@ from cascade.spec.blueprint import (
     TailCall,
 )
 from cascade.graph.model import Node
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.fingerprint import Fingerprint
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.constraints import ConstraintManager
 
 
 class Frame:
-    """
-    Represents the runtime stack frame for a blueprint execution.
-    It holds the values of virtual registers.
-    """
-
     def __init__(self, size: int):
         self.registers: List[Any] = [None] * size
 
@@ -39,12 +36,6 @@ class Frame:
 
 
 class VirtualMachine:
-    """
-    Executes compiled Blueprints.
-    Supports Zero-Overhead TCO via an internal loop and blueprint switching.
-    Now integrated with Resource and Constraint Managers.
-    """
-
     def __init__(
         self,
         resource_manager: Optional[ResourceManager] = None,
@@ -62,12 +53,9 @@ class VirtualMachine:
     async def execute(
         self,
         blueprint: Blueprint,
-        initial_args: List[Any] = None,
-        initial_kwargs: Dict[str, Any] = None,
+        initial_args: Optional[List[Any]] = None,
+        initial_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        """
-        Executes the initial blueprint. Handles TailCalls to self or other registered blueprints.
-        """
         current_blueprint = blueprint
 
         # 1. Allocate Frame
@@ -124,8 +112,6 @@ class VirtualMachine:
         args: List[Any],
         kwargs: Dict[str, Any],
     ):
-        """Populates the frame's registers based on the blueprint's input mapping."""
-
         # Positional args
         for i, val in enumerate(args):
             if i < len(blueprint.input_args):
@@ -155,9 +141,16 @@ class VirtualMachine:
         if self.constraint_manager or (
             instr.constraints and not instr.constraints.is_empty()
         ):
+            # Create a stub definition for the temporary node
+            stub_def = TaskDef(
+                name=instr.task_name,
+                args=[],  # VM handles args via registers, not needed for constraint check
+                fingerprint=Fingerprint(),
+            )
+
             temp_node = Node(
                 structural_id=str(uuid4()),
-                name=instr.task_name,
+                definition=stub_def,
                 node_type="task",
                 constraints=instr.constraints,
             )

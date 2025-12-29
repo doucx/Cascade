@@ -1,0 +1,118 @@
+{
+  "CacheBackend": {
+    "baseline_yaml_content_hash": "64f890f7d6ea7734aa374bb288952fa6fc258257b6909017108215d09d62b83e"
+  },
+  "CacheBackend.get": {
+    "baseline_code_signature_text": "async def get(self, key: str) -> Optional[Any]:",
+    "baseline_code_structure_hash": "0263c0801dbd274812febe322c51e71f4302e88c2beffb3eb7b90cd0b14d1b81",
+    "baseline_yaml_content_hash": "7ccd36108cfed575df27f18d32d10db9db7858c2bc12af593aa55b4fd2f8c963"
+  },
+  "CacheBackend.set": {
+    "baseline_code_signature_text": "async def set(self, key: str, value: Any, ttl: Optional[int] = None) -> None:",
+    "baseline_code_structure_hash": "5cbbe649289a0cf5b98f366b906705cde113ad0ec23b5139aab01e9c2e618b89",
+    "baseline_yaml_content_hash": "9e125b4b7714a563622464c54f3c270db276d407eb4a9089386b64226427575a"
+  },
+  "CachePolicy": {
+    "baseline_yaml_content_hash": "5df93dad43cb7b4da8affb4a901bcb35baba1e3dbc8d4529675bce973eb17b93"
+  },
+  "CachePolicy.check": {
+    "baseline_code_signature_text": "async def check(self, task_id: str, inputs: Dict[str, Any]) -> Any:",
+    "baseline_code_structure_hash": "322c4936483cab3a21d31b06e7586d7befaeaedb3968550b7e39bb57e265e792",
+    "baseline_yaml_content_hash": "220e8f6cc6d49ea22dbf3f04f10227b62cf82241355fcc5448f2cc36f2cc316f"
+  },
+  "CachePolicy.save": {
+    "baseline_code_signature_text": "async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:",
+    "baseline_code_structure_hash": "f546c4844285c0c1ba655ce7a64d193904a664a659480b6558ac6944127771f2",
+    "baseline_yaml_content_hash": "13655ecd0ac8d04888e14a04a73f4bb0ad8d22399216fb25293499a71ba01269"
+  },
+  "Connector": {
+    "baseline_yaml_content_hash": "444b4bca6af3a6f00fa5123a9c7c2e4e18536ce1ed7cfe30d642b865c039d532"
+  },
+  "Connector.connect": {
+    "baseline_code_signature_text": "async def connect(self) -> None:",
+    "baseline_code_structure_hash": "2ee85c950427d812bd0d9f58ac0d3106ee4fab5647f8bfa600b5aa45efa28869",
+    "baseline_yaml_content_hash": "c278881472898be7789c5cbd9eed8336961013686e69537d1e55e075564b031c"
+  },
+  "Connector.disconnect": {
+    "baseline_code_signature_text": "async def disconnect(self) -> None:",
+    "baseline_code_structure_hash": "5cb5a725bc2266bd83ffa2d30312eb2bb861f0934cbf1791166722c3e9f5572b",
+    "baseline_yaml_content_hash": "a443856c7f1f84a3034146f057fbcc5fcb70cdc107776a296104550bd9e09494"
+  },
+  "Connector.publish": {
+    "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False) -> None:",
+    "baseline_code_structure_hash": "fffa806eb7ae282b4fdadb2aa14bf5887f8f964a3f437db025760cfd8a8d5c66",
+    "baseline_yaml_content_hash": "20541f2234843d32ae6f2067cb0ecd279922f8123d3f67823303da2a0ad63337"
+  },
+  "Connector.subscribe": {
+    "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> \"SubscriptionHandle\":",
+    "baseline_code_structure_hash": "c2addf29fd60240c9ff8400c72be68453d50b874a54b87a5fba2cd3b64ad5e02",
+    "baseline_yaml_content_hash": "279bb45a6b82bbdddc2afddec72198d7f51cdb3ce78d412ebab00952565a79c6"
+  },
+  "Executor": {
+    "baseline_yaml_content_hash": "fd30b29648cc3914f93a39d7115adac3d6288f5a2c68bad69cd3d12430d46607"
+  },
+  "Executor.execute": {
+    "baseline_code_signature_text": "async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
+    "baseline_code_structure_hash": "6ab959946345cf1f86e292dcc605b71552e8872be8e3625a41d658e4379943ca",
+    "baseline_yaml_content_hash": "65845f05ecd6bab98df93b153d4737a89c6fa860aa581cb5cabfc0b8593e10be"
+  },
+  "LazyFactory": {
+    "baseline_yaml_content_hash": "0fed39bdb60e7665095667f41af296936f531f5fd54eca88e23257abd580d070"
+  },
+  "LazyFactory.map": {
+    "baseline_code_signature_text": "def map(self, **kwargs) -> Any:",
+    "baseline_code_structure_hash": "3e3276a4635f41b00278a305b35e3a3b2e32157ca6230aa49d4b51646a41d76d",
+    "baseline_yaml_content_hash": "0c78a88c5094b90262d759acb0cc0a15bfbc22e74ca9101389a253edd30fa653"
+  },
+  "Provider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "Solver": {
+    "baseline_yaml_content_hash": "318cc31e7fd0a59eaa93650f0b83d25b8a40ada0b209f911f890db962a4c2935"
+  },
+  "Solver.resolve": {
+    "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
+    "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
+  },
+  "StateBackend": {
+    "baseline_yaml_content_hash": "9484567b44378176c2318c4155aaaf5df0881448318b41d7759ae8ce1d805071"
+  },
+  "StateBackend.clear": {
+    "baseline_code_signature_text": "async def clear(self) -> None:",
+    "baseline_code_structure_hash": "1e1d110f0d48734e2552a9d1d1561437c16def8309d251c39c34e0312fdb6011"
+  },
+  "StateBackend.get_result": {
+    "baseline_code_signature_text": "async def get_result(self, node_id: str) -> Optional[Any]:",
+    "baseline_code_structure_hash": "51418bf92cec6631beb3552551485f2acf34a8f96c917cbb7611cd62c6b63e60",
+    "baseline_yaml_content_hash": "db87373c8bc5dd03b7f6248e49b0ee82ccc0b689cc940605b21a1208c06d73b7"
+  },
+  "StateBackend.get_skip_reason": {
+    "baseline_code_signature_text": "async def get_skip_reason(self, node_id: str) -> Optional[str]:",
+    "baseline_code_structure_hash": "0fddd65837891612049ea67bc2f3dd668a0fd2597b3e84fa27e07f92a0f1e315",
+    "baseline_yaml_content_hash": "2b0d9f8baf237d6ced51129da7ca0f8f6c25300358975125578d9f1832ce7bdd"
+  },
+  "StateBackend.has_result": {
+    "baseline_code_signature_text": "async def has_result(self, node_id: str) -> bool:",
+    "baseline_code_structure_hash": "3804e2a04b3507c99010837c3f8d45db9d438716cbbc57b162671c5f0ccaf690",
+    "baseline_yaml_content_hash": "d3dbb2d622899635061dc17f52ca4b02c442c8b2c910a040af45d080d04d25b3"
+  },
+  "StateBackend.mark_skipped": {
+    "baseline_code_signature_text": "async def mark_skipped(self, node_id: str, reason: str) -> None:",
+    "baseline_code_structure_hash": "25910ebf3b914a401566c1f8fad34221b95acc460c520fc039cdb4c3b924a135",
+    "baseline_yaml_content_hash": "31c1798cf02db9da0fd7efb136f16a9c9b071fd9126bc1188ee16405a1999e8d"
+  },
+  "StateBackend.put_result": {
+    "baseline_code_signature_text": "async def put_result(self, node_id: str, result: Any) -> None:",
+    "baseline_code_structure_hash": "0a0d2dc66a8690f5a2a1c7bdfa5418fde426a0a4a55d94eb7282f1a9f3965091",
+    "baseline_yaml_content_hash": "882a29561e38058b811620c18ccc479d9c71b9a69a6a0221331d48580c3b3bb1"
+  },
+  "SubscriptionHandle": {
+    "baseline_yaml_content_hash": "82c27c71ca158afaef964926a706684a8af01d19df273ec6a77e4f20422bb604"
+  },
+  "SubscriptionHandle.unsubscribe": {
+    "baseline_code_signature_text": "async def unsubscribe(self) -> None:",
+    "baseline_code_structure_hash": "8db3add491babae6d33f8c27a23af07c012ac7395e700a61a643648621a7a3ef",
+    "baseline_yaml_content_hash": "b6ba0bdfac540fb31729ad42d6fa07a24faf5862c89b0aa4f228bb230d89c7f2"
+  }
+}

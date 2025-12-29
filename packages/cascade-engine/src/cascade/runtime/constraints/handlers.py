@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING, Dict, Any, Optional
 import fnmatch
 from cascade.common.messaging import bus
 
@@ -13,7 +13,6 @@ if TYPE_CHECKING:
 
 
 def _matches(scope: str, task_name: str) -> bool:
-    """Helper to check if a task name matches a scope pattern."""
     if scope == "global":
         return True
 
@@ -25,7 +24,6 @@ def _matches(scope: str, task_name: str) -> bool:
 
 
 def _parse_rate_string(rate_str: str) -> float:
-    """Parses '10/m', '5/s', '300/h' into tokens per second."""
     try:
         if not isinstance(rate_str, str):
             return float(rate_str)
@@ -61,11 +59,6 @@ def _parse_rate_string(rate_str: str) -> float:
 
 
 class PauseConstraintHandler(ConstraintHandler):
-    """
-    Handles the 'pause' constraint type.
-    It can pause execution globally or for a specific task.
-    """
-
     def handles_type(self) -> str:
         return "pause"
 
@@ -82,9 +75,6 @@ class PauseConstraintHandler(ConstraintHandler):
     def check_permission(
         self, task: Node, constraint: GlobalConstraint, manager: "ConstraintManager"
     ) -> bool:
-        """
-        Returns False (permission denied) if the task matches the constraint's scope.
-        """
         if _matches(constraint.scope, task.name):
             return False
         return True
@@ -100,11 +90,6 @@ class PauseConstraintHandler(ConstraintHandler):
 
 
 class ConcurrencyConstraintHandler(ConstraintHandler):
-    """
-    Handles the 'concurrency' constraint type.
-    Maps concurrency limits to dynamic system resources.
-    """
-
     def handles_type(self) -> str:
         return "concurrency"
 
@@ -146,10 +131,6 @@ class ConcurrencyConstraintHandler(ConstraintHandler):
 
 
 class RateLimitConstraintHandler(ConstraintHandler):
-    """
-    Handles 'rate_limit' constraints using a Token Bucket algorithm.
-    """
-
     def __init__(self):
         self.limiter = RateLimiter()
 
@@ -167,12 +148,13 @@ class RateLimitConstraintHandler(ConstraintHandler):
 
         # We can optionally allow users to set burst capacity via params
         # For now, default burst = rate (1 second worth)
-        capacity = constraint.params.get("capacity")
-        if capacity is not None:
-            capacity = float(capacity)
+        capacity_val: Optional[float] = None
+        raw_capacity = constraint.params.get("capacity")
+        if raw_capacity is not None:
+            capacity_val = float(raw_capacity)
 
         self.limiter.update_bucket(
-            self._get_scope_key(constraint), rate_hertz, capacity
+            self._get_scope_key(constraint), rate_hertz, capacity_val
         )
 
     def on_constraint_remove(

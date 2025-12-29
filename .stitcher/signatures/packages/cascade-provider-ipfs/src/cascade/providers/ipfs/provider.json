@@ -1,0 +1,30 @@
+{
+  "IpfsAddProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "IpfsCatProvider.create_factory": {
+    "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
+    "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "_parse_add_response": {
+    "baseline_code_signature_text": "def _parse_add_response(response: HttpResponse) -> str:",
+    "baseline_code_structure_hash": "38466e8cd6b0d1aeaa641c73f5e4b7fcfda144c8b5b6808354cbed59cccd8ae0",
+    "baseline_yaml_content_hash": "3ddd3a90262aebcd3dd8b77a463d01565eb817d72ae4c10a46da700e18c5323a"
+  },
+  "_parse_cat_response": {
+    "baseline_code_signature_text": "def _parse_cat_response(response: HttpResponse) -> bytes:",
+    "baseline_code_structure_hash": "a5e8b26b1a3f0030ed3bb64ab19b5dc1a4a5d74ad9d090e85c79fadb8bd5c697",
+    "baseline_yaml_content_hash": "83ee736c4e098ebd5ac940fcc593a9d62697b4ca9f0ce95bdb618773edd51be7"
+  },
+  "add": {
+    "baseline_code_signature_text": "def add(path: str, **kwargs) -> \"cs.LazyResult[str]\":",
+    "baseline_code_structure_hash": "bd5245947d3e1aaac6cf6db5c0b4e7e974402807957fbdbec4b29d8b28c86993",
+    "baseline_yaml_content_hash": "801c0ab439cee19acdf429b5064928479f677d2dd6f6a1810b2993a8aadf2a0c"
+  },
+  "cat": {
+    "baseline_code_signature_text": "def cat(cid: str, **kwargs) -> \"cs.LazyResult[bytes]\":",
+    "baseline_code_structure_hash": "b951c568570eddd3278014081facc0506bcaf625bd60b944195482ec9bfacbe2",
+    "baseline_yaml_content_hash": "7195ba25fc79e4c14e69e17fc50df19ab14925ba12c418c7710a0a163bdbfe67"
+  }
+}

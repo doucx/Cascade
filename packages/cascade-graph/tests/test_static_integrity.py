@@ -8,12 +8,6 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @pytest.mark.asyncio
 async def test_task_returning_lazy_result_is_forbidden_at_runtime():
-    """
-    Verifies that the Executor rejects the anti-pattern of a task
-    returning a LazyResult at runtime. This violates the static, declarative nature
-    of Cascade graphs and the new explicit control flow model.
-    """
-
     @cs.task
     def task_b():
         return "B"

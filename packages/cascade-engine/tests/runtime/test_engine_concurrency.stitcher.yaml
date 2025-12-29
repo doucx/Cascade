@@ -1,0 +1,4 @@
+"test_concurrency_constraint_on_map": |-
+  Verify that a concurrency constraint limits the parallelism of a mapped task.
+"test_global_concurrency_limit": |-
+  Verify that a global concurrency constraint limits total tasks running.

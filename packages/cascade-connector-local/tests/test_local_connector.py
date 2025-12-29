@@ -5,7 +5,6 @@ from cascade.connectors.local import LocalBusConnector
 
 @pytest.fixture
 def local_bus():
-    """Provides a fresh LocalBus environment for each test."""
     # LocalBusConnector uses shared class state, so we must clear it before each test
     LocalBusConnector._reset_broker_state()
     yield
@@ -14,7 +13,6 @@ def local_bus():
 
 @pytest.mark.asyncio
 async def test_bus_connectivity_between_instances(local_bus):
-    """Test that two separate instances share the same 'bus'."""
     pub_connector = LocalBusConnector()
     sub_connector = LocalBusConnector()
     await pub_connector.connect()
@@ -43,7 +41,6 @@ async def test_bus_connectivity_between_instances(local_bus):
 
 @pytest.mark.asyncio
 async def test_retained_messages(local_bus):
-    """Test that retained messages are delivered to new subscribers immediately."""
     pub_connector = LocalBusConnector()
     await pub_connector.connect()
 
@@ -77,7 +74,6 @@ async def test_retained_messages(local_bus):
 
 @pytest.mark.asyncio
 async def test_wildcards_and_clearing_retain(local_bus):
-    """Test wildcards (+) and clearing retained messages."""
     connector = LocalBusConnector()
     await connector.connect()
 

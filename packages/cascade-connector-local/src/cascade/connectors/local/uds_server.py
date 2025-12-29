@@ -5,10 +5,6 @@ from typing import Set
 
 
 class UdsTelemetryServer:
-    """
-    A server that broadcasts telemetry messages over a Unix Domain Socket.
-    """
-
     def __init__(self, uds_path: str):
         self.uds_path = Path(uds_path)
         self._server: asyncio.Server | None = None
@@ -17,7 +13,6 @@ class UdsTelemetryServer:
     async def _handle_client(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ):
-        """Callback for new client connections."""
         self._clients.add(writer)
         try:
             # Keep connection open until client closes it or an error occurs
@@ -31,7 +26,6 @@ class UdsTelemetryServer:
             self._clients.discard(writer)
 
     async def start(self):
-        """Starts the UDS server."""
         if self._server:
             return
         # Ensure the socket file does not exist from a previous unclean shutdown
@@ -41,7 +35,6 @@ class UdsTelemetryServer:
         )
 
     async def stop(self):
-        """Stops the server and disconnects all clients."""
         if not self._server:
             return
 
@@ -67,7 +60,6 @@ class UdsTelemetryServer:
         self.uds_path.unlink(missing_ok=True)
 
     async def broadcast(self, message: dict):
-        """Broadcasts a JSON-lined message to all connected clients."""
         if not self._clients:
             return
 

@@ -11,7 +11,6 @@ pytest.importorskip("yaml")
 
 @pytest.fixture
 def dummy_config_file(tmp_path):
-    """Creates a temporary YAML file."""
     p = tmp_path / "config.yml"
     content = """
 project:
@@ -30,8 +29,6 @@ databases:
 
 @pytest.mark.asyncio
 async def test_load_yaml_provider(dummy_config_file):
-    """Tests that cs.load_yaml correctly loads and parses a file."""
-
     loaded_data = cs.load_yaml(dummy_config_file)
 
     engine = cs.Engine(
@@ -45,8 +42,6 @@ async def test_load_yaml_provider(dummy_config_file):
 
 @pytest.mark.asyncio
 async def test_lookup_provider_basic(dummy_config_file):
-    """Tests cs.lookup on a dynamically loaded source."""
-
     # 1. Explicitly load the config
     config_source = cs.load_yaml(dummy_config_file)
 
@@ -63,8 +58,6 @@ async def test_lookup_provider_basic(dummy_config_file):
 
 @pytest.mark.asyncio
 async def test_lookup_on_static_dict():
-    """Tests that cs.lookup can also work on a simple dictionary provided by a task."""
-
     @cs.task
     def provide_dict():
         return {"a": {"b": 10}}
@@ -81,8 +74,6 @@ async def test_lookup_on_static_dict():
 
 @pytest.mark.asyncio
 async def test_lookup_missing_key_raises_error():
-    """Tests that a missing key raises a KeyError."""
-
     @cs.task
     def provide_dict():
         return {"a": 1}
@@ -100,8 +91,6 @@ async def test_lookup_missing_key_raises_error():
 
 @pytest.mark.asyncio
 async def test_lookup_invalid_path_raises_type_error():
-    """Tests that lookup on a non-container value raises TypeError."""
-
     @cs.task
     def provide_dict():
         return {"a": 1}

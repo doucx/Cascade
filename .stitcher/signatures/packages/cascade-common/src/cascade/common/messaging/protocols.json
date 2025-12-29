@@ -1,0 +1,10 @@
+{
+  "Renderer": {
+    "baseline_yaml_content_hash": "c8bd37bdec87fe22fb9fafb6abc892e9b0bbad1fcbe7a6ed770d8eaf56b82d1c"
+  },
+  "Renderer.render": {
+    "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs: Any) -> None:",
+    "baseline_code_structure_hash": "2785386165127926edf6b708c1e63953c18505e0f1a1e4391b2166ee367c0988",
+    "baseline_yaml_content_hash": "8fec06ffc806128cfe6f1bb50b530fa46af9930cff2e16cb92b0b047abd9f0a5"
+  }
+}

@@ -28,7 +28,7 @@ from cascade.spec.protocols import Connector, StateBackend
 from cascade.flow import sequence, pipeline
 
 # --- Tools ---
-from .testing import override_resource
+from .testing import override_resource, ControllerTestApp
 from .tools.cli import create_cli
 from cascade.graph.serialize import to_json, from_json
 
@@ -62,10 +62,6 @@ def run(
     connector: Optional[Connector] = None,
     state_backend: Union[str, Callable[[str], StateBackend], None] = None,
 ) -> Any:
-    """
-    Runs a Cascade workflow. This is a backward-compatible wrapper
-    around the CascadeApp interface.
-    """
     app = CascadeApp(
         target=target,
         params=params,
@@ -79,19 +75,11 @@ def run(
 
 
 def visualize(target: Any) -> str:
-    """
-    Builds and visualizes the computation graph for a target.
-    This is a backward-compatible wrapper.
-    """
     app = CascadeApp(target=target)
     return app.visualize()
 
 
 def dry_run(target: Any) -> None:
-    """
-    Builds and prints the execution plan for a target.
-    This is a backward-compatible wrapper.
-    """
     app = CascadeApp(target=target)
     app.dry_run()
 
@@ -138,6 +126,7 @@ __all__ = [
     "to_json",
     "from_json",
     "override_resource",
+    "ControllerTestApp",
     "create_cli",
     # Exceptions
     "DependencyMissingError",

@@ -17,6 +17,7 @@ def _get_connector(backend: str, hostname: str, port: int) -> Connector:
     if backend == "local":
         return LocalConnector()
     elif backend == "mqtt":
+        # MqttConnector now satisfies the protocol
         return MqttConnector(hostname=hostname, port=port)
     else:
         # This case is primarily for safety, Typer's Choice/Enum would be better
@@ -26,7 +27,6 @@ def _get_connector(backend: str, hostname: str, port: int) -> Connector:
 async def _publish_pause(
     scope: str, ttl: int | None, backend: str, hostname: str, port: int
 ):
-    """Core logic for publishing a pause constraint."""
     connector = _get_connector(backend, hostname, port)
     try:
         bus.info("controller.connecting", backend=backend, hostname=hostname, port=port)
@@ -68,7 +68,6 @@ async def _publish_pause(
 
 
 async def _publish_resume(scope: str, backend: str, hostname: str, port: int):
-    """Core logic for publishing a resume (clear constraint) command."""
     connector = _get_connector(backend, hostname, port)
     try:
         bus.info("controller.connecting", backend=backend, hostname=hostname, port=port)
@@ -79,7 +78,7 @@ async def _publish_resume(scope: str, backend: str, hostname: str, port: int):
 
         bus.info("controller.resuming", scope=scope, topic=topic)
         # Publishing an empty retained message clears the previous one
-        await connector.publish(topic, "", retain=True)
+        await connector.publish(topic, {}, retain=True)
 
         await asyncio.sleep(0.1)
         bus.info("controller.resume_success")
@@ -99,7 +98,6 @@ async def _publish_limit(
     hostname: str,
     port: int,
 ):
-    """Core logic for publishing concurrency or rate limit constraints."""
     connector = _get_connector(backend, hostname, port)
     try:
         bus.info("controller.connecting", backend=backend, hostname=hostname, port=port)
@@ -169,10 +167,6 @@ def set_limit(
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
-    """
-    Publish a 'concurrency' or 'rate_limit' constraint to the control plane.
-    You must provide either --concurrency or --rate (or both).
-    """
     if concurrency is None and rate is None:
         print("Error: Must provide either --concurrency or --rate.")
         raise typer.Exit(code=1)
@@ -208,11 +202,6 @@ def pause(
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
-    """
-    Publish a 'pause' constraint to the control plane.
-    This will cause running Cascade engines to stop scheduling new tasks that
-    match the specified scope until a 'resume' command is sent.
-    """
     try:
         asyncio.run(
             _publish_pause(
@@ -235,11 +224,6 @@ def resume(
     hostname: str = typer.Option("localhost", "--host", help="MQTT broker hostname."),
     port: int = typer.Option(1883, "--port", help="MQTT broker port."),
 ):
-    """
-    Publish a 'resume' command to the control plane.
-    This clears any 'pause' constraint for the specified scope, allowing
-    tasks to be scheduled again.
-    """
     try:
         asyncio.run(
             _publish_resume(scope=scope, backend=backend, hostname=hostname, port=port)

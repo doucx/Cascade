@@ -1,0 +1,4 @@
+"test_retry_exhausted_failure": |-
+  Tests that a task fails after exhausting all retries, based on events.
+"test_retry_success_after_failure": |-
+  Tests that a task retries based on events and eventually succeeds.

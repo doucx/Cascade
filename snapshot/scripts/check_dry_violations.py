@@ -1,45 +1,3 @@
-这个需求非常有价值。在大型架构中，"复制粘贴编程"（Copy-Paste Programming）和命名空间的混乱是技术债务的主要来源。
-
-我将为你创建一个基于 Python 标准库 `ast` (Abstract Syntax Tree) 模块的深度分析工具。它将超越简单的文本比对，通过分析代码的语法结构来识别重复。
-
-## [WIP] feat: 创建 DRY 违规检测工具 (AST & 命名分析)
-
-### 用户需求
-创建一个名为 `scripts/check_dry_violations.py` 的脚本，用于扫描代码库中的重复代码和命名冲突。脚本需要分阶段执行检查：
-1.  **Stage 1 (AST 级重复)**: 识别结构和逻辑完全相同的类或函数（忽略格式、注释和文档字符串）。
-2.  **Stage 2 (命名重复)**: 识别跨文件重复使用的类名和顶层函数名，以帮助发现潜在的命名空间污染或概念混淆。
-
-### 评论
-这个脚本将作为“架构守护者”的一部分。与简单的 `cpd` (Copy Paste Detector) 不同，基于 AST 的分析可以忽略空格、换行和文档字符串的差异，专注于**逻辑意图**的重复。这将帮助我们发现那些“看起来不一样，但做着同样事情”的代码块。
-
-### 目标
-1.  创建脚本 `scripts/check_dry_violations.py`。
-2.  实现 **AST 标准化**：在哈希计算前移除行号、列偏移和文档字符串。
-3.  实现 **AST 重复检测**：报告逻辑完全相同的函数和类。
-4.  实现 **符号索引**：报告在多个文件中出现的非私有、非 Dunder（双下划线）的类名和函数名。
-5.  输出清晰的 CLI 报告。
-
-### 基本原理
-1.  **AST Dump & Hash**: 使用 `ast.dump(node, include_attributes=False)` 获取节点的结构化表示。在此之前，先遍历 AST 树移除 `Expr(value=Constant(value=str))` 节点（即文档字符串），确保仅比较业务逻辑。
-2.  **符号表**: 在遍历 AST 时，同时维护一个全局符号表 `SymbolTable[name] -> List[Path]`。
-3.  **过滤器**: 对于命名检查，我们需要过滤掉 `__init__` 等常见的魔术方法，只关注可能具有业务含义的名称。
-
-### 标签
-#intent/tooling #flow/ready #priority/medium #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/validation-script #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 DRY 检测脚本
-
-我们将创建核心分析脚本。
-
-~~~~~act
-write_file
-scripts/check_dry_violations.py
-~~~~~
-~~~~~python
 #!/usr/bin/env python3
 import ast
 import sys
@@ -207,21 +165,3 @@ if __name__ == "__main__":
     root = Path(__file__).parent.parent.resolve()
     hashes, symbols = analyze_codebase(root)
     sys.exit(report(hashes, symbols))
-~~~~~
-
-#### Acts 2: 赋予执行权限
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-chmod +x scripts/check_dry_violations.py
-~~~~~
-
-### 下一步建议
-运行该脚本：
-```bash
-./scripts/check_dry_violations.py
-```
-
-这将为你提供一个关于代码库中潜在的“复制粘贴”区域和命名混乱区域的鸟瞰图。特别关注 **STAGE 1** 的输出，那里通常隐藏着需要被重构为共享工具函数或基类的机会。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(graph): 恢复 build_graph 导出并适配单元测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767010067.151668, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(runtime): 适配 Node 对象重构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767010385.8091402, "duration_ms": 0}}

@@ -9,12 +9,12 @@
   },
   "_dict_task": {
     "baseline_code_signature_text": "def _dict_task(**kwargs) -> Dict[str, Any]:",
-    "baseline_code_structure_hash": "4d98f21843846796a7a6904becbff57760c7bf7feaa2561d20a907b727e24e09",
+    "baseline_code_structure_hash": "a3aafa317258aa2f557bee0a496b3d005a4e987ccebc0e06aa1850efa67447d5",
     "baseline_yaml_content_hash": "6cac4d45c386a480e6a7e7dc6a21b1099f1b162ec85d9752bdcec2cfb9d9789c"
   },
   "_format_task": {
     "baseline_code_signature_text": "def _format_task(template: str, **kwargs) -> str:",
-    "baseline_code_structure_hash": "339764ac2999995df835799adbe8522bc6cfaa53eecbf6d258f0c3e5c37bf55c",
+    "baseline_code_structure_hash": "b096ea7f44c5d893d9585ee511f62f5f9c1d7c1cfc7fe6349d750f2231115f3b",
     "baseline_yaml_content_hash": "db0e0c1cb89326f66cd30c2a2c1bca23ae2199f5c605cdfa6dfd825a39a67673"
   }
 }

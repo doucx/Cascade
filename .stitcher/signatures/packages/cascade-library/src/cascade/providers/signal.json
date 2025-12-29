@@ -5,7 +5,7 @@
   },
   "_recv_task": {
     "baseline_code_signature_text": "async def _recv_task(topic: str, timeout: Optional[float] = None, connector: Connector = inject(\"_internal_connector\")) -> Any:",
-    "baseline_code_structure_hash": "ea5ac473c713d4e4508557778a95ad6a0b52532e88763a7ba6459e534679a765",
+    "baseline_code_structure_hash": "acea109a8b6f43f36e1cf14c93aef25e82f9b570c1742aa58be219c277504ab3",
     "baseline_yaml_content_hash": "e2971c64ea593551623460749498a3768ab160138dcb58dcd62780a54d3e8623"
   }
 }

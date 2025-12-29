@@ -4,11 +4,11 @@
   },
   "Task.__call__": {
     "baseline_code_signature_text": "def __call__(self, **kwargs) -> LazyResult[T]:",
-    "baseline_code_structure_hash": "d555053bdacbbd64a0569804bc3d9b377d9051fa02d4e2e7a4a66722a5427f0c"
+    "baseline_code_structure_hash": "1a1ff06cca8147661d780160497271999370a40610b44198ec1f1af756d65033"
   },
   "Task.__init__": {
     "baseline_code_signature_text": "def __init__(self, func: Callable[..., T], name: Optional[str] = None, pure: bool = False, mode: str = \"blocking\"):",
-    "baseline_code_structure_hash": "5e13f9923e61df3f9757930e09d5825d78900cb526fd97e8b2e2612a75233979"
+    "baseline_code_structure_hash": "6e9744e98cd97a790ff6059942c75cefe3cd3f5bb002f302160998cdd2c37a04"
   },
   "Task.__repr__": {
     "baseline_code_signature_text": "def __repr__(self):",
@@ -16,17 +16,17 @@
   },
   "Task.map": {
     "baseline_code_signature_text": "def map(self, **kwargs) -> MappedLazyResult[List[T]]:",
-    "baseline_code_structure_hash": "cded0d3824f36f903a7ee9232215423ffcbf9c8f29b4aac3be377263c072cbb0",
+    "baseline_code_structure_hash": "ea35e6a9c6a20e9f44615704152f07116f11c139cf49a27efed489a9f4e42dc3",
     "baseline_yaml_content_hash": "21511096f5464d5ab33ca2e537a5c303d12b29c7791eaefe347f3367c27ce35e"
   },
   "_after": {
     "baseline_code_signature_text": "def _after(self: LazyResult) -> LazyResult:",
-    "baseline_code_structure_hash": "6659275f9decd4c8fc11e606c47694815f27e202ff86f092e1dcbf6631c05de3",
+    "baseline_code_structure_hash": "5ff5aae782ce113820d434d964317b0b94518166ead82b2fea02a895883a8143",
     "baseline_yaml_content_hash": "174b33a9b5a750a146ee86f3c9b29136acb208f4e0d6edf15001b558790eadc8"
   },
   "_mapped_after": {
     "baseline_code_signature_text": "def _mapped_after(self: MappedLazyResult) -> MappedLazyResult:",
-    "baseline_code_structure_hash": "255a3f006a3336c80fe21022ee9e5c5bac2bdeff5f1ebeeb610146f922f9dfc8"
+    "baseline_code_structure_hash": "80de0b9c575db506f8f938eeef901acd6726b3fb7a62d956d91db1903157d172"
   },
   "_mapped_run_if": {
     "baseline_code_signature_text": "def _mapped_run_if(self: MappedLazyResult, condition: LazyResult) -> MappedLazyResult:",
@@ -38,11 +38,11 @@
   },
   "_with_cache": {
     "baseline_code_signature_text": "def _with_cache(self: LazyResult, policy: \"CachePolicy\") -> LazyResult:",
-    "baseline_code_structure_hash": "8d01fe0af9f1f77333e2620c3053e1c81a740ee243369a6f6509e43916c81f74"
+    "baseline_code_structure_hash": "961773c514535fc7ce440fbe77f4ce7b657b4deea111694ba494c27ddc006fb5"
   },
   "_with_constraints": {
     "baseline_code_signature_text": "def _with_constraints(self: LazyResult, **kwargs) -> LazyResult:",
-    "baseline_code_structure_hash": "cddc19a3e69084fa3838b7265e5d1326d96840c94a2cee673eaf522a961ca1b3"
+    "baseline_code_structure_hash": "3027be30b1dffce6ee4662393cf941f7f2411ca6ba35726ff7b2c6971ce76210"
   },
   "_with_retry": {
     "baseline_code_signature_text": "def _with_retry(self: LazyResult, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0) -> LazyResult:",
@@ -50,7 +50,7 @@
   },
   "task": {
     "baseline_code_signature_text": "def task(func: Optional[Callable[..., T]] = None, *, name: Optional[str] = None, pure: bool = False, mode: str = \"blocking\") -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:",
-    "baseline_code_structure_hash": "69dd20e85a1066a71257750e61331e3db21de3bedbee1255230d8fa2ead33d36",
+    "baseline_code_structure_hash": "bd816ae8efa5ba5d4442e3f7b6d75dad324df69d169aeebd1ccdf10e357f25f6",
     "baseline_yaml_content_hash": "4cbdfd35d2ec1e242f52e8caac881489239399799d519716d882ae5f0aaa6788"
   }
 }

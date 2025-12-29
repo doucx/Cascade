@@ -45,7 +45,7 @@
   },
   "Connector.subscribe": {
     "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> \"SubscriptionHandle\":",
-    "baseline_code_structure_hash": "d488ca8e13411c4c0bc8b6f87bc727cca8bdf538b11a116ae511b0ceb44bdfeb",
+    "baseline_code_structure_hash": "c2addf29fd60240c9ff8400c72be68453d50b874a54b87a5fba2cd3b64ad5e02",
     "baseline_yaml_content_hash": "279bb45a6b82bbdddc2afddec72198d7f51cdb3ce78d412ebab00952565a79c6"
   },
   "Executor": {
@@ -61,7 +61,7 @@
   },
   "LazyFactory.map": {
     "baseline_code_signature_text": "def map(self, **kwargs) -> Any:",
-    "baseline_code_structure_hash": "30576d6f1a42224861c5db41b317d5537924aace23bc926f7f5b65a2a9f202d6",
+    "baseline_code_structure_hash": "3e3276a4635f41b00278a305b35e3a3b2e32157ca6230aa49d4b51646a41d76d",
     "baseline_yaml_content_hash": "0c78a88c5094b90262d759acb0cc0a15bfbc22e74ca9101389a253edd30fa653"
   },
   "Solver": {

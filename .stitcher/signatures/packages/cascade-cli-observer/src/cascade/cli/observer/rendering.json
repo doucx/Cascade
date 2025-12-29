@@ -4,10 +4,10 @@
   },
   "RichCliRenderer.__init__": {
     "baseline_code_signature_text": "def __init__(self, store: MessageStore, min_level: str = \"INFO\"):",
-    "baseline_code_structure_hash": "984af1dff73d84bb34b96c8a6c2cbc4c665ff714f80d2d0fad220a1ffcc206ed"
+    "baseline_code_structure_hash": "3f95d647f380edf48175e97c25d076ccc5156b502c135165c9b20d40631b229d"
   },
   "RichCliRenderer.render": {
     "baseline_code_signature_text": "def render(self, msg_id: str, level: str, **kwargs):",
-    "baseline_code_structure_hash": "9137fcfb2c9a3436e6400f5fae759309f58c56c806d5947b8d75f60cfb1639ea"
+    "baseline_code_structure_hash": "c438733019671bd6e48f78113dcac51c0aa917869062a939b662e77cbab596a8"
   }
 }

@@ -9,7 +9,7 @@
   },
   "LocalConnector.__init__": {
     "baseline_code_signature_text": "def __init__(self, db_path: str = \"~/.cascade/control.db\", uds_path: str = DEFAULT_UDS_PATH, telemetry_uds_path: str = DEFAULT_TELEMETRY_UDS_PATH):",
-    "baseline_code_structure_hash": "77bd8bb233dfbb3de6016df84b452bdb386c522cacb448147a029b1b58d1b929"
+    "baseline_code_structure_hash": "1e91026c9d11e0df5e3559f86e2a4fc46a3b7a7119ad82d10d78f8e2219e0a2e"
   },
   "LocalConnector._poll_for_changes": {
     "baseline_code_signature_text": "async def _poll_for_changes(self, callback: Callable):",
@@ -45,7 +45,7 @@
   },
   "LocalConnector.publish": {
     "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:",
-    "baseline_code_structure_hash": "3eebaf3391a5e142a8b30e7c481ed5af0745114ac69400f789fe8fd3e79121f3"
+    "baseline_code_structure_hash": "f0326f6fae392bc7e0875442cd7b8628c1475428b8e2ae0213e8a54a6c0d2b3a"
   },
   "LocalConnector.subscribe": {
     "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",
@@ -64,7 +64,7 @@
   },
   "_LocalSubscriptionHandle.__init__": {
     "baseline_code_signature_text": "def __init__(self, parent: \"LocalConnector\", task: asyncio.Task):",
-    "baseline_code_structure_hash": "fa097921393e22b6673977741f879062d1b6ffaa89015610d3ca918ffba33a20"
+    "baseline_code_structure_hash": "05dbafb52dd2af0fb9d38de1cb244bd00dacfc9d8f57781e2fc04faf8aa42fd8"
   },
   "_LocalSubscriptionHandle.unsubscribe": {
     "baseline_code_signature_text": "async def unsubscribe(self) -> None:",

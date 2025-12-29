@@ -5,15 +5,15 @@
   },
   "MessageBus._render": {
     "baseline_code_signature_text": "def _render(self, level: str, msg_id: str, **kwargs: Any) -> None:",
-    "baseline_code_structure_hash": "316672ac0414128ee364f42946f43facf6e788100805e375ba12fe9ae4200a56"
+    "baseline_code_structure_hash": "7b67b33671aee186d0dc28c75867da51167de2ba06bbc2409bc9952631e6959b"
   },
   "MessageBus.error": {
     "baseline_code_signature_text": "def error(self, msg_id: str, **kwargs: Any) -> None:",
-    "baseline_code_structure_hash": "84a9764f3ca8fcb60c944c91c89ac249ecd342e73f3febb558281b42ed3499d1"
+    "baseline_code_structure_hash": "74d0e1591df1ba06fd66e12c1295ee60cd7c01bb3259f824dd0a77c2c4f80d78"
   },
   "MessageBus.info": {
     "baseline_code_signature_text": "def info(self, msg_id: str, **kwargs: Any) -> None:",
-    "baseline_code_structure_hash": "3e1046913040a8cf4509de7d35aca870950df29cfcfa4da5d1bff78768844373"
+    "baseline_code_structure_hash": "817afd5b683cfac505c18cbd0364e790a65d78753b848dcdde052c7850b79b84"
   },
   "MessageBus.set_renderer": {
     "baseline_code_signature_text": "def set_renderer(self, renderer: Renderer):",
@@ -25,11 +25,11 @@
   },
   "MessageBus.warning": {
     "baseline_code_signature_text": "def warning(self, msg_id: str, **kwargs: Any) -> None:",
-    "baseline_code_structure_hash": "be57ff4a1d5205b937e12341e7993cb7cd6330be843e5b9ed929c061d2392eab"
+    "baseline_code_structure_hash": "a6b1deb421acfd2525d3145f5beb41d63b230ec1ea40663f73d3852c239d3e05"
   },
   "MessageStore.__init__": {
     "baseline_code_signature_text": "def __init__(self, locale: str = \"en\"):",
-    "baseline_code_structure_hash": "36af0cc822092558038fd0f0f7a4d5fb661239a6a3391427091f5a10fec95836"
+    "baseline_code_structure_hash": "f164a2dd5f9d11755204babace26e8807b83d4df64015d6fc82bbe78e518b443"
   },
   "MessageStore._find_locales_dir": {
     "baseline_code_signature_text": "def _find_locales_dir(self) -> Optional[Path]:",
@@ -41,6 +41,6 @@
   },
   "MessageStore.get": {
     "baseline_code_signature_text": "def get(self, msg_id: str, default: str = \"\", **kwargs) -> str:",
-    "baseline_code_structure_hash": "d47ed1ebfbb1e481047748b0316bbee29f48f52008aae1c0d7cb4fe76d527b7c"
+    "baseline_code_structure_hash": "6495b38cd6eee18bd02002e79fc95b23c49da555ce5533124f58eec2a898e38c"
   }
 }

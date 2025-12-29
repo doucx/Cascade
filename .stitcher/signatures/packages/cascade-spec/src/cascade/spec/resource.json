@@ -24,7 +24,7 @@
   },
   "resource": {
     "baseline_code_signature_text": "def resource(func: Callable[..., T] = None, *, name: Optional[str] = None, scope: str = \"run\"):",
-    "baseline_code_structure_hash": "d7355b6c2e7769978baf65a2dc51e5da49d72f3a9b8a13e371c2360f82a481e4",
+    "baseline_code_structure_hash": "8ba0251677099e6fb2ce3d74699e5adce22724511c5ae2461d096997d88d70a8",
     "baseline_yaml_content_hash": "09567d1089508c2182e271bdb31933dde66762ad9e3d1de9d69cf54d5a6ce35e"
   }
 }

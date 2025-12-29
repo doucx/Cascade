@@ -10,7 +10,7 @@
   },
   "GraphBuilder._scan_and_add_edges": {
     "baseline_code_signature_text": "def _scan_and_add_edges(self, target_node: Node, obj: Any, path: str = \"\"):",
-    "baseline_code_structure_hash": "4249e9650e33a4c03ea5c05dc08cb695926f4c948517bb95e6c8039e344dfeca",
+    "baseline_code_structure_hash": "792edcc2a83764bee7af1f0a3cfa03a874d229defc221447bb126e82d960813f",
     "baseline_yaml_content_hash": "088541d4323183078d39cb1aa1bc2a6ffe1fac127ee902c3755eb3b3dd2c654e"
   },
   "GraphBuilder._visit": {

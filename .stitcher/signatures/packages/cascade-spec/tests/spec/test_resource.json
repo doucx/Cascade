@@ -6,12 +6,12 @@
   },
   "db_connection": {
     "baseline_code_signature_text": "def db_connection(config: dict = cs.inject(\"config\")):",
-    "baseline_code_structure_hash": "2dbd16daa133136de1c8afb7d0b89ec863c05ea2fe7e7073f0604157e7f4d865",
+    "baseline_code_structure_hash": "ab9b4012823265c4c5b97ce2c452ad4b775bfd84f1ed67a4571a2a020d02651a",
     "baseline_yaml_content_hash": "a85ad809129c912a4b5b2ea0624afb38c0894c26e05ac0553827a3d699dfb838"
   },
   "task_using_resource": {
     "baseline_code_signature_text": "def task_using_resource(conn = cs.inject(\"db_connection\")):",
-    "baseline_code_structure_hash": "da92ab5fc6f2545ceeaa3063d5999e1ce59e4ecdb4d28417758b788974f650ff",
+    "baseline_code_structure_hash": "8890abe46c3eb380e74855879f0cb31a6c7668e0f0182e367e6250ee00b4d3cb",
     "baseline_yaml_content_hash": "45e4e9eb3965b5a2f3359b3fefa2135ed174269317b10ece22a7dd8e4d7ffcf3"
   },
   "test_di_end_to_end": {

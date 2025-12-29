@@ -4,7 +4,7 @@
   },
   "MqttConnector.__init__": {
     "baseline_code_signature_text": "def __init__(self, hostname: str, port: int = 1883, **kwargs):",
-    "baseline_code_structure_hash": "3475748ef0eed4826ce9cf7d75406dc9f38d0261095a9cb9cd4a310e009062f7"
+    "baseline_code_structure_hash": "839278ebc6693142d79a618e63fe473fac2e1e8823d11265b0582544d638eb18"
   },
   "MqttConnector._message_loop": {
     "baseline_code_signature_text": "async def _message_loop(self):",

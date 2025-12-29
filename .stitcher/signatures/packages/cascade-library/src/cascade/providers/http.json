@@ -33,7 +33,7 @@
   },
   "HttpResponse.text": {
     "baseline_code_signature_text": "def text(self, encoding: str = \"utf-8\") -> str:",
-    "baseline_code_structure_hash": "166d9076d445dd6005e529bd13cce471c853b658938e9d1c61e8188bff6f2725",
+    "baseline_code_structure_hash": "672f4d786813f9fd785ef066d61255b2e603ab6954861383f5b0a8af57c730dc",
     "baseline_yaml_content_hash": "e628893aa4367a8446457ad3dbf2fa603d040da86c8a1f1de7671c8895a88ed1"
   },
   "_http_delete_task": {
@@ -54,7 +54,7 @@
   },
   "_http_request_task": {
     "baseline_code_signature_text": "async def _http_request_task(url: str, method: str = \"GET\", params: Optional[Dict[str, str]] = None, json: Optional[Any] = None, data: Optional[Any] = None, files: Optional[Dict[str, str]] = None, headers: Optional[Dict[str, str]] = None) -> HttpResponse:",
-    "baseline_code_structure_hash": "2ede6c1dcfd18fd1f3ea95201b61fbcba72280a23c7833da34babbd6b39dc4d5"
+    "baseline_code_structure_hash": "0d00a8aae113c5c424b02441193a9c9ff719703a0639375e6db04636a882ae11"
   },
   "_perform_request": {
     "baseline_code_signature_text": "async def _perform_request(url: str, method: str, params: Optional[Dict[str, str]] = None, json_data: Optional[Any] = None, headers: Optional[Dict[str, str]] = None, data: Optional[Any] = None, files: Optional[Dict[str, str]] = None) -> HttpResponse:",

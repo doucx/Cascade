@@ -1,7 +1,11 @@
 from typing import Dict, Any, List, Optional
+import hashlib
+import json
+
 from cascade.foundation.definitions.base import Definition
 from cascade.foundation.definitions.model import TaskDef, ServiceDef
 from cascade.foundation.ir.ops import Op, ComputeOp, ConstantOp
+from cascade.foundation.identity.service import IdentityService
 
 # A simple graph container for now
 class ExecutionGraph:
@@ -16,8 +20,11 @@ class ExecutionGraph:
 class Compiler:
     def __init__(self):
         self.graph = ExecutionGraph()
-        # Memoization for structural sharing: Definition Fingerprint -> Op ID
-        self._memo: Dict[str, str] = {}
+        self.identity_service = IdentityService()
+        # Memoization for structural sharing: Definition Object ID -> Op ID
+        # Note: We use object ID for memoization during a single compile pass
+        # to handle DAG diamonds/cycles, but the produced Op IDs are deterministic.
+        self._memo: Dict[int, str] = {}
 
     def compile(self, target_def: Definition) -> ExecutionGraph:
         """
@@ -31,12 +38,11 @@ class Compiler:
         """
         Recursively lowers a Definition into an Op, returning the Op ID.
         """
-        # TODO: integrate real fingerprinting in Phase 2
-        # For now, we use object ID as a temporary placeholder for identity
-        def_id = str(id(definition))
+        # Use object ID only for cycle detection/memoization within this run
+        obj_id = id(definition)
         
-        if def_id in self._memo:
-            return self._memo[def_id]
+        if obj_id in self._memo:
+            return self._memo[obj_id]
 
         op_id = None
 
@@ -47,29 +53,44 @@ class Compiler:
         else:
             raise NotImplementedError(f"Cannot compile definition type: {type(definition)}")
 
-        self._memo[def_id] = op_id
+        self._memo[obj_id] = op_id
         return op_id
 
     def _lower_task(self, task_def: TaskDef) -> str:
-        # 1. Resolve Inputs
+        # 1. Resolve Inputs and calculate Input Hash
         inputs = {}
+        input_hash_parts = []
         
-        for arg_name, arg_val in task_def.bindings.items():
+        # Sort keys for deterministic hashing
+        for arg_name in sorted(task_def.bindings.keys()):
+            arg_val = task_def.bindings[arg_name]
+            
             if isinstance(arg_val, Definition):
                 # Recursively lower dependency
-                inputs[arg_name] = self._lower(arg_val)
+                upstream_op_id = self._lower(arg_val)
+                inputs[arg_name] = upstream_op_id
+                input_hash_parts.append(f"{arg_name}:{upstream_op_id}")
             else:
                 # Literal -> ConstantOp
-                # TODO: Use content hash for ID in next step
-                const_id = f"const-{id(arg_val)}"
+                # Calculate stable hash for literal
+                lit_hash = hashlib.sha256(repr(arg_val).encode("utf-8")).hexdigest()
+                const_id = f"const-{lit_hash}"
+                
                 if const_id not in self.graph.ops:
                     const_op = ConstantOp(id=const_id, value=arg_val)
                     self.graph.add_op(const_op)
+                
                 inputs[arg_name] = const_id
+                input_hash_parts.append(f"{arg_name}:{const_id}")
 
-        # 2. Create ComputeOp
-        # TODO: Use Fingerprint for ID
-        op_id = f"op-{task_def.name}-{id(task_def)}"
+        input_hash = hashlib.sha256("|".join(input_hash_parts).encode("utf-8")).hexdigest()
+
+        # 2. Calculate Static Fingerprint
+        static_fp = self.identity_service.compute_fingerprint(task_def)
+        task_def.fingerprint = static_fp # Store it back
+
+        # 3. Generate Final Op ID
+        op_id = IdentityService.compute_op_id(static_fp, input_hash)
         
         op = ComputeOp(
             id=op_id,

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修复异步任务定义与 Mock 节点构造", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767010718.9599395, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(runtime): 修复 VM Node 构造与 E2E 测试断言", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767011072.0572405, "duration_ms": 0}}

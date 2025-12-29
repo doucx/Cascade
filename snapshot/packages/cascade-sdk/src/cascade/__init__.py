@@ -27,8 +27,8 @@ from cascade.runtime.exceptions import DependencyMissingError
 from cascade.spec.protocols import Connector, StateBackend
 from cascade.flow import sequence, pipeline
 
-# --- Tools ---
-from .testing import override_resource
+# --- Tools --- 
+from .testing import override_resource, ControllerTestApp
 from .tools.cli import create_cli
 from cascade.graph.serialize import to_json, from_json
 
@@ -123,12 +123,13 @@ __all__ = [
     "Event",
     "MessageBus",  # Added MessageBus
     # Tools & Utilities
-    "to_json",
-    "from_json",
-    "override_resource",
-    "create_cli",
+    "to_json", 
+    "from_json", 
+    "override_resource", 
+    "ControllerTestApp",
+    "create_cli", 
     # Exceptions
-    "DependencyMissingError",
-    # Context (for advanced usage)
-    "get_current_context",
+    "DependencyMissingError", 
+    # Context (for advanced usage) 
+    "get_current_context", 
 ]

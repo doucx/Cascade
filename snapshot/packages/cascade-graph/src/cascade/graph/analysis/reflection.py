@@ -6,24 +6,37 @@ from cascade.spec.ir.models import TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
 from cascade.graph.analysis.protocols import TaskAnalyzer
 
+# Type hint for the Cascade Task wrapper
+# We use Any here to avoid circular imports, but conceptually it is cascade.spec.task.Task
+TaskWrapper = Any
+
 
 class ReflectionAnalyzer(TaskAnalyzer):
     """
     A TaskAnalyzer implementation that uses Python's built-in `inspect` module
-    to analyze callable objects at runtime.
+    to analyze callable objects (or Task wrappers) at runtime.
     """
 
     def analyze(self, target: Any) -> TaskDef:
-        if not callable(target):
-            raise TypeError(f"Target {target} must be callable to be analyzed.")
+        # Determine the underlying function and metadata source
+        func = target
+        mode = "blocking"
+        
+        # Check if it's a cascade.spec.task.Task wrapper
+        if hasattr(target, "func") and hasattr(target, "mode"):
+            func = target.func
+            mode = getattr(target, "mode", "blocking")
+
+        if not callable(func):
+            raise TypeError(f"Target {target} must be callable (or enclose a callable) to be analyzed.")
 
         # 1. Basic Metadata
-        name = getattr(target, "__name__", "unknown")
-        docstring = inspect.getdoc(target)
-        is_async = inspect.iscoroutinefunction(target)
+        name = getattr(func, "__name__", "unknown")
+        docstring = inspect.getdoc(func)
+        is_async = inspect.iscoroutinefunction(func)
         
         # Extract return annotation if available
-        sig = inspect.signature(target)
+        sig = inspect.signature(func)
         return_annotation = None
         if sig.return_annotation is not inspect.Signature.empty:
             # We store the string representation for serialization safety
@@ -35,7 +48,7 @@ class ReflectionAnalyzer(TaskAnalyzer):
         # 3. Compute Fingerprint
         # We compute a structural hash based on the definition's content.
         structure_hash = self._compute_structure_hash(
-            name, args, return_annotation, docstring, is_async
+            name, args, return_annotation, docstring, is_async, mode
         )
         
         fingerprint = Fingerprint()
@@ -48,6 +61,7 @@ class ReflectionAnalyzer(TaskAnalyzer):
             return_annotation=return_annotation,
             docstring=docstring,
             is_async=is_async,
+            mode=mode,
         )
 
     def _analyze_arguments(self, sig: inspect.Signature) -> List[ArgumentDef]:
@@ -83,13 +97,15 @@ class ReflectionAnalyzer(TaskAnalyzer):
         args: List[ArgumentDef], 
         return_annotation: Optional[str], 
         docstring: Optional[str], 
-        is_async: bool
+        is_async: bool,
+        mode: str
     ) -> str:
         """
         Computes a deterministic hash of the task's structure.
         """
         components = [f"Name:{name}"]
         components.append(f"Async:{is_async}")
+        components.append(f"Mode:{mode}")
         if return_annotation:
             components.append(f"Return:{return_annotation}")
         

@@ -44,3 +44,5 @@ class TaskDef:
     return_annotation: Optional[str] = None
     docstring: Optional[str] = None
     is_async: bool = False
+    # Execution mode (e.g. "blocking", "compute") derived from the task definition
+    mode: str = "blocking"

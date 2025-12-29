@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(graph): 实现 TaskAnalyzer 协议与反射分析器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767009636.3863277, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(core): 集成 TaskDef 并解构 Node 对象", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767009829.9831653, "duration_ms": 0}}

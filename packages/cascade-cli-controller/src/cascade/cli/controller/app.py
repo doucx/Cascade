@@ -17,6 +17,7 @@ def _get_connector(backend: str, hostname: str, port: int) -> Connector:
     if backend == "local":
         return LocalConnector()
     elif backend == "mqtt":
+        # MqttConnector now satisfies the protocol
         return MqttConnector(hostname=hostname, port=port)
     else:
         # This case is primarily for safety, Typer's Choice/Enum would be better
@@ -77,7 +78,7 @@ async def _publish_resume(scope: str, backend: str, hostname: str, port: int):
 
         bus.info("controller.resuming", scope=scope, topic=topic)
         # Publishing an empty retained message clears the previous one
-        await connector.publish(topic, "", retain=True)
+        await connector.publish(topic, {}, retain=True)
 
         await asyncio.sleep(0.1)
         bus.info("controller.resume_success")

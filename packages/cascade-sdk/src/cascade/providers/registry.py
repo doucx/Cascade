@@ -1,11 +1,7 @@
 import sys
 import importlib.metadata
 from typing import Any, Dict, Protocol
-
-
-class LazyFactory(Protocol):
-    def map(self, **kwargs) -> Any: ...
-    def __call__(self, *args, **kwargs) -> Any: ...
+from cascade.spec.protocols import LazyFactory
 
 
 class Provider(Protocol):

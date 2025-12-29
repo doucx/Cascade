@@ -10,6 +10,8 @@ try:
 except ImportError:
     aiomqtt = None
 
+from cascade.spec.protocols import SubscriptionHandle
+
 logger = logging.getLogger(__name__)
 
 
@@ -88,10 +90,11 @@ class MqttConnector:
 
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
-    ) -> None:
+    ) -> SubscriptionHandle:
         if not self._client:
-            logger.warning("Attempted to subscribe without an active MQTT connection.")
-            return
+            raise RuntimeError(
+                "Attempted to subscribe without an active MQTT connection."
+            )
 
         # 1. Register callback locally
         self._subscriptions[topic] = callback
@@ -99,12 +102,14 @@ class MqttConnector:
         # 2. Send subscribe command to broker
         try:
             await self._client.subscribe(topic)
-            # Give the broker a moment to send retained messages before the
-            # engine's main loop continues. This is a pragmatic way to solve
-            # the startup race condition.
+            # Give the broker a moment to send retained messages
             await asyncio.sleep(0.2)
         except Exception as e:
             logger.error(f"Failed to subscribe to topic '{topic}': {e}")
+            # Even if subscribe fails on broker, we return a handle to clean up local registry
+            pass
+
+        return _MqttSubscriptionHandle(self, topic)
 
     @staticmethod
     def _topic_matches(subscription: str, topic: str) -> bool:
@@ -186,3 +191,18 @@ class MqttConnector:
             # Unexpected error in loop, log it.
             # In a robust system we might want to restart the loop.
             logger.error(f"MQTT message loop crashed: {e}")
+
+
+class _MqttSubscriptionHandle(SubscriptionHandle):
+    def __init__(self, parent: "MqttConnector", topic: str):
+        self._parent = parent
+        self._topic = topic
+
+    async def unsubscribe(self) -> None:
+        if self._topic in self._parent._subscriptions:
+            del self._parent._subscriptions[self._topic]
+        if self._parent._client:
+            try:
+                await self._parent._client.unsubscribe(self._topic)
+            except Exception:
+                pass

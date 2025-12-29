@@ -35,7 +35,7 @@ class Engine:
         solver: Solver,
         executor: Executor,
         bus: MessageBus,
-        state_backend_factory: Callable[[str], StateBackend] = None,
+        state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
         system_resources: Optional[Dict[str, Any]] = None,
         connector: Optional[Connector] = None,
         cache_backend: Optional[Any] = None,

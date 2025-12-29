@@ -1,4 +1,4 @@
-from typing import Protocol, List, Any, Dict, Optional, Callable, Awaitable
+from typing import Protocol, List, Any, Dict, Optional, Callable, Awaitable, Union
 from cascade.graph.model import Graph, Node
 
 # An execution plan is a list of stages, where each stage is a list of nodes
@@ -48,7 +48,9 @@ class SubscriptionHandle(Protocol):
 
 
 class LazyFactory(Protocol):
-    def map(self, **kwargs) -> Any: ...
+    # map is optional depending on implementation (e.g. Task has it, simple functions don't)
+    # def map(self, **kwargs) -> Any: ...
+    def __call__(self, *args, **kwargs) -> Any: ...
 
 
 class Connector(Protocol):
@@ -63,3 +65,10 @@ class Connector(Protocol):
     async def subscribe(
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
     ) -> "SubscriptionHandle": ...
+
+
+class Provider(Protocol):
+    # name can be a property or a class attribute
+    name: str
+
+    def create_factory(self) -> LazyFactory: ...

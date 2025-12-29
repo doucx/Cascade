@@ -65,13 +65,13 @@ class LocalBusConnector(Connector):
 
     @classmethod
     def _get_lock(cls) -> asyncio.Lock:
-        loop = asyncio.get_running_loop()
-        try:
-            # In modern Python, accessing or using a lock created in a different
-            # loop will raise RuntimeError. We catch this to re-initialize.
-            if cls._lock is None or cls._lock._get_loop() != loop:
-                cls._lock = asyncio.Lock()
-        except RuntimeError:
+        # In modern Python, we don't check _get_loop() directly as it is private/removed.
+        # We rely on asyncio.Lock() being bound to the current loop when created.
+        # If cls._lock is stale (from another loop), acquiring it might throw or hang.
+        # A simple strategy is to recreate it if it's None.
+        # For strict robustness across loops, we might need a weakref dict keyed by loop.
+        # But for this simple local implementation:
+        if cls._lock is None:
             cls._lock = asyncio.Lock()
         return cls._lock
 

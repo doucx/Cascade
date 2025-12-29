@@ -25,7 +25,8 @@ class MqttConnector:
         self.hostname = hostname
         self.port = port
         self.client_kwargs = kwargs
-        self._client: "aiomqtt.Client" | None = None
+        # Use Optional string forward ref for compatibility
+        self._client: Any = None 
         self._loop_task: asyncio.Task | None = None
         self._subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
         self._source_id = f"{platform.node()}-{os.getpid()}"
@@ -33,6 +34,9 @@ class MqttConnector:
     async def connect(self) -> None:
         if self._client:
             return
+        
+        if aiomqtt is None:
+             raise ImportError("aiomqtt not installed")
 
         # Define the Last Will and Testament message
         lwt_topic = f"cascade/status/{self._source_id}"

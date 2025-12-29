@@ -95,7 +95,6 @@ class LocalConnector(Connector):
 
         self._conn = await asyncio.to_thread(_connect_and_setup)
         self._is_connected = True
-        return self
 
     async def __aenter__(self):
         return await self.connect()
@@ -128,7 +127,9 @@ class LocalConnector(Connector):
     def _scope_to_topic(self, scope: str) -> str:
         return f"cascade/constraints/{scope.replace(':', '/')}"
 
-    async def publish(self, topic: str, payload: Dict[str, Any], **kwargs) -> None:
+    async def publish(
+        self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False
+    ) -> None:
         if not self._is_connected or not self._conn:
             raise RuntimeError("Connector is not connected.")
 
@@ -202,6 +203,8 @@ class LocalConnector(Connector):
 
     async def _sync_and_notify(self, callback: Callable):
         def _blocking_fetch_all():
+            if not self._conn:
+                return []
             cursor = self._conn.cursor()
             cursor.execute("SELECT * FROM constraints")
             return cursor.fetchall()

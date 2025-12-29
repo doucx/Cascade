@@ -107,11 +107,22 @@ class VirtualMachine:
         self,
         frame: Frame,
         blueprint: Blueprint,
-        args: List[Any],
-        kwargs: Dict[str, Any],
+        args: List[Any] | None,
+        kwargs: Dict[str, Any] | None,
     ):
-        # Positional args
-        for i, val in enumerate(args):
+        if args:
+            # Positional args
+            for i, val in enumerate(args):
+                if i < len(blueprint.input_args):
+                    reg_index = blueprint.input_args[i]
+                    frame.registers[reg_index] = val
+
+        if kwargs:
+            # Keyword args
+            for k, val in kwargs.items():
+                if k in blueprint.input_kwargs:
+                    reg_index = blueprint.input_kwargs[k]
+                    frame.registers[reg_index] = val
             if i < len(blueprint.input_args):
                 reg_index = blueprint.input_args[i]
                 frame.registers[reg_index] = val

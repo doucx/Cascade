@@ -6,6 +6,6 @@ T = TypeVar("T")
 
 
 @dataclass
-class Router:
+class Router(Generic[T]):
     selector: LazyResult[Any]
     routes: Dict[Any, LazyResult[T]]

@@ -99,6 +99,10 @@ class MockSubscriptionHandle(SubscriptionHandle):
         if self._topic in self._parent.subscriptions:
             del self._parent.subscriptions[self._topic]
 
+class MockConnector(Connector):
+    def __init__(self):
+        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
+
 
 class MockConnector(Connector):
     def __init__(self):

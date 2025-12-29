@@ -5,6 +5,8 @@ try:
     from sqlalchemy import text
 except ImportError:
     sqlalchemy = None
+    # Mock text for static analysis if sqlalchemy missing
+    def text(s): return s
 
 from cascade.spec.task import task, LazyResult
 from cascade.spec.resource import inject

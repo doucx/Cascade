@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[PASS]", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766999421.7367709, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 全面修复 Pyright 类型检查错误 (Phase 1)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1766999627.312743, "duration_ms": 0}}

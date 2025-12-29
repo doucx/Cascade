@@ -324,17 +324,13 @@ class GraphExecutionStrategy:
                         coros = [t[1] for t in tasks_to_run]
                         pass_results = await asyncio.gather(*coros)
 
-                        for node, res in zip(nodes_in_pass, pass_results):
-                            await state_backend.put_result(node.structural_id, res)
+                        for node_in_loop, res_in_loop in zip(nodes_in_pass, pass_results):
+                            await state_backend.put_result(node_in_loop.structural_id, res_in_loop)
                             if flow_manager:
                                 await flow_manager.register_result(
-                                    node.structural_id, res, state_backend
+                                    node_in_loop.structural_id, res_in_loop, state_backend
                                 )
-                        if flow_manager:
-                            await flow_manager.register_result(
-                                node.structural_id, res, state_backend
-                            )
-
+                
                 pending_nodes_in_stage = deferred_this_pass
 
                 if pending_nodes_in_stage and not executable_this_pass:

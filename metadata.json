@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] perf: 将基准测试任务转换为异步以避免线程开销", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767013450.1842873, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] chore: 为提高清晰度重命名性能分析脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767013576.92639, "duration_ms": 0}}

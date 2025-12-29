@@ -2,18 +2,21 @@ from contextlib import contextmanager
 from typing import Callable, Any, List, Dict, Awaitable
 from unittest.mock import MagicMock
 import asyncio
+import uuid
+from dataclasses import asdict
 
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
-from cascade.spec.protocols import (
-    Solver,
-    Executor,
-    ExecutionPlan,
-    Connector,
-    SubscriptionHandle,
-)
+from cascade.spec.protocols import ( 
+    Solver, 
+    Executor, 
+    ExecutionPlan, 
+    Connector, 
+    SubscriptionHandle, 
+) 
 from cascade.graph.model import Node, Graph
+from cascade.spec.constraint import GlobalConstraint
 
 
 @contextmanager
@@ -162,12 +165,42 @@ class MockConnector(Connector):
             if self._topic_matches(subscription=sub_topic, topic=topic):
                 await callback(topic, payload)
 
-    def _topic_matches(self, subscription: str, topic: str) -> bool:
+    def _topic_matches(self, subscription: str, topic: str) -> bool: 
         # Simple topic matching for direct match and wildcard at the end
-        if subscription == topic:
+        if subscription == topic: 
             return True
-        if subscription.endswith("/#"):
-            prefix = subscription[:-2]
-            if topic.startswith(prefix):
+        if subscription.endswith("/#"): 
+            prefix = subscription[:-2] 
+            if topic.startswith(prefix): 
                 return True
         return False
+
+
+class ControllerTestApp:
+    """
+    A lightweight simulator for the cs-controller CLI tool.
+    Useful for testing how a workflow responds to control plane events (pause, resume).
+    """
+
+    def __init__(self, connector: Connector):
+        self.connector = connector
+
+    async def pause(self, scope: str = "global"):
+        constraint = GlobalConstraint(
+            id=f"pause-{scope}-{uuid.uuid4().hex[:8]}",
+            scope=scope,
+            type="pause",
+            params={},
+        )
+        await self._publish(scope, constraint)
+
+    async def resume(self, scope: str = "global"):
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+        # Sending an empty dict simulates the connector's behavior for an empty payload
+        # (clearing the retained message)
+        await self.connector.publish(topic, {}, retain=True)
+
+    async def _publish(self, scope: str, constraint: GlobalConstraint):
+        payload = asdict(constraint)
+        topic = f"cascade/constraints/{scope.replace(':', '/')}"
+        await self.connector.publish(topic, payload, retain=True)

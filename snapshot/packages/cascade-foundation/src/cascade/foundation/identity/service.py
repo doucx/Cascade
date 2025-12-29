@@ -36,7 +36,7 @@ class IdentityService:
         
         fp = Fingerprint()
         fp["baseline_code_signature_hash"] = code_hash
-        fp["baseline_config_hash"] = config_hash
+        fp["baseline_task_config_hash"] = config_hash
         return fp
 
     @staticmethod

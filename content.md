@@ -1,36 +1,78 @@
-## [WIP] fix: Remove Legacy ID Usage in Test
+简要回答
+你的测试失败揭示了两个问题：一是代码库中残留了基于 `id()` 的非确定性 ID 生成逻辑（导致 `op-t-...` 格式的 ID）；二是 `IdentityService` 生成的指纹键名违反了 `Fingerprint` 类的严格命名公理（缺少一个段）。
+
+我将重写 `builder.py` 以强制启用基于 SHA256 的确定性 ID 生成，并修复 `IdentityService.py` 中的键名以符合 `[State]_[Source]_[Object]_[Type]` 的四段式规范。
+
+## [WIP] fix(compiler): enforce deterministic Op IDs and fix fingerprint schema
 
 ### 错误分析
-测试失败 `assert 'op-t-124313387834768' == 'op-t-124313387824496'` 暴露出 `test_dependency_linking.py` 中的 `test_deterministic_identity` 断言失败。
-这表明 Compiler **仍然在使用 Python 对象 ID (`id(task_def)`)** 来生成 `op_id`，而不是我们刚刚实现的 `IdentityService` 逻辑。
-
-仔细检查上一步的 `patch_file` 操作，我发现我们在 Acts 3 中更新了 `_lower` 和 `_lower_task`，但我遗漏了一个关键点：
-我更新了 `builder.py` 的代码逻辑，但我没有移除之前在 `_lower_task` 末尾的旧代码或者我可能在 patch 时出错了。让我们检查一下 `builder.py` 的实际状态。
-
-根据报错信息 `op-t-124313387824496`，这显然还是 `f"op-{task_def.name}-{id(task_def)}"` 的格式。说明我之前的 patch 没有正确覆盖到这一行，或者我保留了旧的 ID 生成逻辑作为 fallback。
+1.  **非确定性 ID**: 测试失败显示 Op ID 为 `op-t-131...`，这是典型的 `f"op-{name}-{id(obj)}"` 格式。这说明 `Compiler` 在某些路径下使用了对象的内存地址作为 ID，而非基于内容的哈希。这违反了 Phase 2 的核心目标。
+2.  **Schema 违规风险**: 代码审查发现 `IdentityService` 使用了 `baseline_config_hash`（3 段），而 `Fingerprint` 的正则 `^(baseline|current)_[a-z]+_[a-z]+_(hash|text)$` 强制要求 4 段（State_Source_Object_Type）。这虽然可能未直接导致断言失败（取决于测试环境的指纹类版本），但必须修正以避免运行时崩溃。
 
 ### 用户需求
-修复 Compiler，使其在生成 Op ID 时**绝对不要**使用 `id()`，而是使用 `IdentityService.compute_op_id`。
-
-### 评论
-这是 TDD 的价值所在。测试通过红色状态告诉我们重构未完成。
+*   修复 `test_compiler_stable_identity` 和 `test_deterministic_identity` 的断言错误。
+*   强制使用长哈希（SHA256 Hex）作为 Op ID。
+*   确保 `Compiler` 的输出具有跨实例的确定性（Structural Sharing）。
 
 ### 目标
-彻底替换 `builder.py` 中的 `_lower_task` 方法，确保只使用指纹。
+1.  重构 `cascade.compiler.builder.Compiler._lower_task`，确保它始终调用 `IdentityService.compute_op_id` 生成 SHA256 ID。
+2.  修正 `cascade.foundation.identity.service.IdentityService`，使其生成的指纹键名符合 Axiom（将 `baseline_config_hash` 改为 `baseline_task_config_hash`）。
+
+### 基本原理
+通过消除对 Python 内置 `id()` 的依赖，改用基于代码签名（Module+Qualname）、配置（JSON Dump）和输入依赖（Recursive Hash）的 Merkle Tree 哈希策略，我们可以保证：
+1.  **稳定性**: 同一代码在不同进程/机器生成的 ID 一致。
+2.  **去重**: 相同的任务定义在图中只生成一个 Op 节点。
+3.  **合规性**: 严格遵守架构定义的指纹命名规范。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical
-#comp/compiler #scope/core
-#ai/instruct
-#task/domain/core #task/object/compiler #task/action/fix
-#task/state/continue #task/status/active
+#intent/fix #flow/ready #priority/critical #comp/compiler #scope/core #task/domain/compiler #task/object/identity #task/action/enforce
 
 ---
 
 ### Script
 
-#### Acts 1: 强制重写 Compiler 的 _lower_task 方法
-我将整个重写 `_lower_task` 方法，确保没有残留的 `id()` 逻辑。
+#### Acts 1: 修复 IdentityService 的键名 Schema
+
+我们将 `baseline_config_hash` 修正为 `baseline_task_config_hash` 以满足 4 段式命名规范。
+
+~~~~~act
+patch_file
+packages/cascade-foundation/src/cascade/foundation/identity/service.py
+~~~~~
+~~~~~old
+        fp = Fingerprint()
+        fp["baseline_code_signature_hash"] = code_hash
+        fp["baseline_config_hash"] = config_hash
+        return fp
+
+    @staticmethod
+~~~~~
+~~~~~new
+        fp = Fingerprint()
+        fp["baseline_code_signature_hash"] = code_hash
+        fp["baseline_task_config_hash"] = config_hash
+        return fp
+
+    @staticmethod
+~~~~~
+~~~~~old
+        # Mix code, config, and inputs
+        seed = fingerprint["baseline_code_signature_hash"] + \
+               fingerprint["baseline_config_hash"] + \
+               input_hash
+        return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+~~~~~
+~~~~~new
+        # Mix code, config, and inputs
+        seed = fingerprint["baseline_code_signature_hash"] + \
+               fingerprint["baseline_task_config_hash"] + \
+               input_hash
+        return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+~~~~~
+
+#### Acts 2: 强制 Compiler 使用确定性 ID 生成逻辑
+
+我们将重写 `builder.py`，确保没有任何回退到 `id()` 的逻辑，并正确处理 ConstantOp 的哈希。
 
 ~~~~~act
 write_file
@@ -144,36 +186,6 @@ class Compiler:
         return op_id
 ~~~~~
 
-#### Acts 2: 更新测试用例
-由于我们改变了 Op ID 的格式（从 `op-name-id` 变成了 `sha256`），之前的测试断言可能需要更新。
-检查 `test_builder.py` 中的断言。
-`test_compiler_lowering_basic_task` 没有断言 ID 格式，只断言了结构，所以应该没问题。
-`test_dependency_linking.py` 中的 `test_deterministic_identity` 正是我们想要的。
-
-但是，`test_builder.py` 中被注释掉的断言：
-```python
-    # Note: In Phase 2 start, we might still be using id(), so this test expects FAIL 
-    # until we implement real fingerprinting. 
-    # But for TDD, we write the expectation now.
-    # assert g1.root_op_id == g2.root_op_id 
-```
-现在我们已经实现了指纹，是时候启用这个测试了。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_builder.py
-~~~~~
-~~~~~python.old
-    # Note: In Phase 2 start, we might still be using id(), so this test expects FAIL 
-    # until we implement real fingerprinting. 
-    # But for TDD, we write the expectation now.
-    # assert g1.root_op_id == g2.root_op_id 
-    pass
-~~~~~
-~~~~~python.new
-    # Now that we have fingerprinting, this must pass
-    assert g1.root_op_id == g2.root_op_id
-~~~~~
-
 ### 下一步建议
-再次运行测试。现在 `test_dependency_linking.py` 和 `test_builder.py` 都应该通过。
+- 运行测试 `pytest packages/cascade-compiler/tests/` 验证修复是否生效。
+- 考虑在 `IdentityService` 中添加更健壮的输入校验，确保所有传入的哈希值都是有效的 SHA256 字符串。

@@ -51,23 +51,26 @@ class Compiler:
         return op_id
 
     def _lower_task(self, task_def: TaskDef) -> str:
-        # 1. Resolve Inputs (Recursively lower dependencies)
-        # Note: This is a skeleton. Real implementation needs to inspect
-        # task_def bindings (which we haven't fully defined in Phase 0 model yet).
+        # 1. Resolve Inputs
         inputs = {}
         
-        # Mocking input resolution for now
-        # for arg_name, arg_val in task_def.bindings.items():
-        #     if isinstance(arg_val, Definition):
-        #         inputs[arg_name] = self._lower(arg_val)
-        #     else:
-        #         # Literal -> ConstantOp
-        #         const_op = ConstantOp(id=f"const-{id(arg_val)}", value=arg_val)
-        #         self.graph.add_op(const_op)
-        #         inputs[arg_name] = const_op.id
+        for arg_name, arg_val in task_def.bindings.items():
+            if isinstance(arg_val, Definition):
+                # Recursively lower dependency
+                inputs[arg_name] = self._lower(arg_val)
+            else:
+                # Literal -> ConstantOp
+                # TODO: Use content hash for ID in next step
+                const_id = f"const-{id(arg_val)}"
+                if const_id not in self.graph.ops:
+                    const_op = ConstantOp(id=const_id, value=arg_val)
+                    self.graph.add_op(const_op)
+                inputs[arg_name] = const_id
 
         # 2. Create ComputeOp
+        # TODO: Use Fingerprint for ID
         op_id = f"op-{task_def.name}-{id(task_def)}"
+        
         op = ComputeOp(
             id=op_id,
             inputs=inputs,

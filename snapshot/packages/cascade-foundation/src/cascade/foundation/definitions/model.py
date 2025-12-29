@@ -17,6 +17,10 @@ class TaskDef(Definition):
     # but these will be replaced by strict Policy objects in Phase 1.
     retry_policy: Optional[Dict[str, Any]] = None
     cache_policy: Optional[Dict[str, Any]] = None
+
+    # Argument bindings: Map[ArgName, Value]
+    # Value can be a literal, or another Definition (representing a dependency).
+    bindings: Dict[str, Any] = field(default_factory=dict)
     
     def __repr__(self):
         return f"<TaskDef {self.name}>"

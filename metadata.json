@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] architect: Cascade V2 Phase 1 - IR Ops & Compiler Skeleton", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767005860.353544, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] architect: Cascade V2 Phase 2 - Compiler with TDD", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767005974.6956174, "duration_ms": 0}}

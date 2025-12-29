@@ -6,9 +6,14 @@ from pathlib import Path
 
 # Standard namespace package declaration patterns
 NAMESPACE_PATTERNS = [
-    re.compile(r"^__path__\s*=\s*__import__\(['\"]pkgutil['\"]\)\.extend_path\(__path__,\s*__name__\)\s*$"),
-    re.compile(r"^__import__\(['\"]pkg_resources['\"]\)\.declare_namespace\(__name__\)\s*$"),
+    re.compile(
+        r"^__path__\s*=\s*__import__\(['\"]pkgutil['\"]\)\.extend_path\(__path__,\s*__name__\)\s*$"
+    ),
+    re.compile(
+        r"^__import__\(['\"]pkg_resources['\"]\)\.declare_namespace\(__name__\)\s*$"
+    ),
 ]
+
 
 def is_namespace_package_boilerplate(file_path):
     """
@@ -22,27 +27,27 @@ def is_namespace_package_boilerplate(file_path):
         # If we can't read it, assume it's substantive (better safe than sorry)
         return False
 
-    has_code = False
     for line in lines:
         stripped = line.strip()
         if not stripped:
             continue
         if stripped.startswith("#"):
             continue
-        
+
         # If we find a line of code, check if it matches known boilerplate
         matched = False
         for pattern in NAMESPACE_PATTERNS:
             if pattern.match(stripped):
                 matched = True
                 break
-        
+
         if not matched:
             # Found a line of code that isn't boilerplate
             return False
-            
+
     # If we get here, all code lines were boilerplate (or there were no code lines)
     return True
+
 
 def find_duplicate_modules(root_dir="."):
     """
@@ -76,37 +81,42 @@ def find_duplicate_modules(root_dir="."):
                 # Check if it's just a namespace placeholder
                 if is_namespace_package_boilerplate(path):
                     is_substantive = False
-            
+
             # Case 2: It's a module file (.py)
             elif path.is_file() and path.suffix == ".py":
                 # Exclude __init__.py files as they are handled above
                 if path.stem == "__init__":
                     continue
-                
+
                 module_parts = list(path.relative_to(src_path).parts)
-                module_parts[-1] = path.stem # remove .py extension
+                module_parts[-1] = path.stem  # remove .py extension
                 module_name = ".".join(module_parts)
                 # Regular .py files are always substantive definitions
                 is_substantive = True
-            
+
             if module_name:
-                definitions[module_name].append({
-                    "package": package_name,
-                    "is_substantive": is_substantive,
-                    "path": str(path)
-                })
+                definitions[module_name].append(
+                    {
+                        "package": package_name,
+                        "is_substantive": is_substantive,
+                        "path": str(path),
+                    }
+                )
 
     conflicts = {}
 
     for module, defs in definitions.items():
         # Filter for substantive definitions (those containing actual code)
         substantive_defs = [d for d in defs if d["is_substantive"]]
-        
+
         # Conflict Condition 1: Multiple packages define substantive logic for the same module/package
         if len(substantive_defs) > 1:
             conflicts[module] = {
                 "reason": "Multiple substantive definitions (logic collision)",
-                "sources": [f"{d['package']} ({'substantive' if d['is_substantive'] else 'namespace'})" for d in defs]
+                "sources": [
+                    f"{d['package']} ({'substantive' if d['is_substantive'] else 'namespace'})"
+                    for d in defs
+                ],
             }
         # Conflict Condition 2: Regular module file (.py) vs Package dir (__init__.py)
         # This is implicitly handled because one would be 'foo' and the other 'foo'
@@ -120,14 +130,15 @@ def find_duplicate_modules(root_dir="."):
         for module, info in sorted_conflicts:
             print(f"- Module: {module}", file=sys.stderr)
             print(f"  Reason: {info['reason']}", file=sys.stderr)
-            print(f"  Defined in:", file=sys.stderr)
-            for src in info['sources']:
+            print("  Defined in:", file=sys.stderr)
+            for src in info["sources"]:
                 print(f"    * {src}", file=sys.stderr)
             print("", file=sys.stderr)
         return 1
     else:
         print("✅ No duplicate module definitions found.")
         return 0
+
 
 if __name__ == "__main__":
     # Assuming the script is run from the repository root

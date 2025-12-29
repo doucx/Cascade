@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(arch): 消除核心包之间的代码重复", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767001002.4522312, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py, M events.py, M check_dry_violations.py ... and 1 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767002113.2597094, "duration_ms": 0}}

@@ -1,5 +1,4 @@
 import asyncio
-from dataclasses import dataclass, field
 from typing import Any, Dict, List, Tuple, Union, Optional, Callable
 
 from cascade.spec.lazy_types import LazyResult
@@ -12,7 +11,6 @@ from cascade.graph.model import Node, EdgeType
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import (
-    Event,
     PlanAnalysisStarted,
     PlanNodeInspected,
     PlanAnalysisFinished,

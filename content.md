@@ -1,227 +1,313 @@
-这个需求非常有价值。在大型架构中，"复制粘贴编程"（Copy-Paste Programming）和命名空间的混乱是技术债务的主要来源。
-
-我将为你创建一个基于 Python 标准库 `ast` (Abstract Syntax Tree) 模块的深度分析工具。它将超越简单的文本比对，通过分析代码的语法结构来识别重复。
-
-## [WIP] feat: 创建 DRY 违规检测工具 (AST & 命名分析)
+## [WIP] refactor: 消除 SDK 与 Core 之间的代码重复
 
 ### 用户需求
-创建一个名为 `scripts/check_dry_violations.py` 的脚本，用于扫描代码库中的重复代码和命名冲突。脚本需要分阶段执行检查：
-1.  **Stage 1 (AST 级重复)**: 识别结构和逻辑完全相同的类或函数（忽略格式、注释和文档字符串）。
-2.  **Stage 2 (命名重复)**: 识别跨文件重复使用的类名和顶层函数名，以帮助发现潜在的命名空间污染或概念混淆。
+修复由 `check_dry_violations.py` 发现的 `src` 目录下的代码重复问题，具体针对 `LazyFactory` 协议和 `ToolEvent` 系列类。
 
 ### 评论
-这个脚本将作为“架构守护者”的一部分。与简单的 `cpd` (Copy Paste Detector) 不同，基于 AST 的分析可以忽略空格、换行和文档字符串的差异，专注于**逻辑意图**的重复。这将帮助我们发现那些“看起来不一样，但做着同样事情”的代码块。
+消除这些重复将确保类型的一致性，并防止未来在修改一个定义时忘记修改另一个定义的错误。将工具事件下沉到 `spec` 层也符合 Cascade 的架构分层原则：规范 (Spec) 定义数据形状，应用 (App/SDK) 使用它们。
 
 ### 目标
-1.  创建脚本 `scripts/check_dry_violations.py`。
-2.  实现 **AST 标准化**：在哈希计算前移除行号、列偏移和文档字符串。
-3.  实现 **AST 重复检测**：报告逻辑完全相同的函数和类。
-4.  实现 **符号索引**：报告在多个文件中出现的非私有、非 Dunder（双下划线）的类名和函数名。
-5.  输出清晰的 CLI 报告。
+1.  在 `packages/cascade-spec/src/cascade/spec/tooling.py` 中集中定义 `ToolEvent`, `PlanAnalysisStarted` 等类。
+2.  重构 `packages/cascade-application/src/cascade/app/__init__.py` 以导入上述类。
+3.  重构 `packages/cascade-sdk/src/cascade/tools/events.py` 以导入上述类（或者如果该文件仅包含这些定义，则考虑删除该文件并更新引用）。
+4.  修改 `packages/cascade-sdk/src/cascade/providers/registry.py`，从 `cascade.spec.protocols` 导入 `LazyFactory` 而不是重新定义。
 
 ### 基本原理
-1.  **AST Dump & Hash**: 使用 `ast.dump(node, include_attributes=False)` 获取节点的结构化表示。在此之前，先遍历 AST 树移除 `Expr(value=Constant(value=str))` 节点（即文档字符串），确保仅比较业务逻辑。
-2.  **符号表**: 在遍历 AST 时，同时维护一个全局符号表 `SymbolTable[name] -> List[Path]`。
-3.  **过滤器**: 对于命名检查，我们需要过滤掉 `__init__` 等常见的魔术方法，只关注可能具有业务含义的名称。
+*   **LazyFactory**: `cascade-spec` 是协议定义的权威来源。
+*   **ToolEvent**: 这些事件代表了系统行为的契约（例如 Dry Run 的输出格式）。将它们移至 `cascade-spec` 使得契约明确且共享。
 
 ### 标签
-#intent/tooling #flow/ready #priority/medium #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/validation-script #task/action/implementation #task/state/begin
+#intent/refine #flow/ready #priority/medium #comp/interfaces #scope/core #ai/instruct #task/domain/refactoring #task/object/dry-compliance #task/action/deduplicate #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 DRY 检测脚本
+#### Acts 1: 创建 Tooling Spec 定义
 
-我们将创建核心分析脚本。
+**解决方案**: 我们需要在 `cascade-spec` 中定义一个纯粹的 `ToolEvent` 数据结构，或者承认这些事件属于 Runtime 层面。
+鉴于 `Event` 基类包含 `run_id`, `timestamp` 等运行时信息，它确实属于 Runtime。
+但是，`cascade-application` 和 `cascade-sdk` 都依赖 `cascade-engine`。
+所以，正确的去重位置应该是 **`cascade-engine`**，或者保持在 `cascade-application` 中并让 SDK 引用它。
+考虑到这些事件是由 `CascadeApp` (在 `cascade-application` 中) 产生的，它们应该定义在哪里？
+`CascadeApp` 使用 `DryRunConsoleSubscriber` 来消费这些事件。
+最好的位置是 `cascade.runtime.events` (在 `cascade-engine` 包中)，因为它们是 `Event` 的子类。
+
+让我们重新调整 Acts 1：将这些类移动到 `packages/cascade-engine/src/cascade/runtime/events.py`。
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/events.py
+~~~~~
+~~~~~python.old
+@dataclass(frozen=True)
+class ConnectorDisconnected(Event):
+    pass
+~~~~~
+~~~~~python.new
+@dataclass(frozen=True)
+class ConnectorDisconnected(Event):
+    pass
+
+
+# --- Tooling Events ---
+
+
+@dataclass(frozen=True)
+class ToolEvent(Event):
+    pass
+
+
+@dataclass(frozen=True)
+class PlanAnalysisStarted(ToolEvent):
+    target_node_id: str = ""
+
+    def _get_payload(self) -> Dict[str, Any]:
+        return {"target_node_id": self.target_node_id}
+
+
+@dataclass(frozen=True)
+class PlanNodeInspected(ToolEvent):
+    index: int = 0
+    total_nodes: int = 0
+    node_id: str = ""
+    node_name: str = ""
+    input_bindings: Dict[str, Any] = field(default_factory=dict)
+
+    def _get_payload(self) -> Dict[str, Any]:
+        return {
+            "index": self.index,
+            "total_nodes": self.total_nodes,
+            "node_id": self.node_id,
+            "node_name": self.node_name,
+            "input_bindings": self.input_bindings,
+        }
+
+
+@dataclass(frozen=True)
+class PlanAnalysisFinished(ToolEvent):
+    total_steps: int = 0
+
+    def _get_payload(self) -> Dict[str, Any]:
+        return {"total_steps": self.total_steps}
+~~~~~
+
+#### Acts 2: 更新 Cascade Application
+
+现在我们可以从 `cascade.runtime.events` 导入这些类，而不是在 `__init__.py` 中重新定义。
+
+~~~~~act
+read_file
+packages/cascade-application/src/cascade/app/__init__.py
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-application/src/cascade/app/__init__.py
+~~~~~
+~~~~~python.old
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
+from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+
+from cascade.common.messaging import bus
+from cascade.common.renderers import CliRenderer, JsonRenderer
+
+
+# --- Internal Helpers ---
+
+
+@task(name="_internal_gather", pure=True)
+def _internal_gather(*args: Any) -> Any:
+    return list(args)
+
+
+def _create_state_backend_factory(
+    backend_spec: Union[str, Callable[[str], StateBackend], None],
+) -> Optional[Callable[[str], StateBackend]]:
+    if backend_spec is None:
+        return None
+
+    if callable(backend_spec):
+        return backend_spec
+
+    if isinstance(backend_spec, str):
+        if backend_spec.startswith("redis://"):
+            try:
+                import redis
+                from cascade.adapters.state.redis import RedisStateBackend
+            except ImportError:
+                raise ImportError(
+                    "The 'redis' library is required for redis:// backends."
+                )
+            client = redis.from_url(backend_spec)
+
+            def factory(run_id: str) -> StateBackend:
+                return RedisStateBackend(run_id=run_id, client=client)
+
+            return factory
+        else:
+            raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
+
+    raise TypeError(f"Invalid state_backend type: {type(backend_spec)}")
+
+
+def _get_node_shape(node: Node) -> str:
+    if node.node_type == "param":
+        return "ellipse"
+    if node.node_type == "map":
+        return "hexagon"
+    return "box"
+
+
+# --- Tool Events (Scoped to Application Layer for now) ---
+
+
+@dataclass(frozen=True)
+class ToolEvent(Event):
+    pass
+
+
+@dataclass(frozen=True)
+class PlanAnalysisStarted(ToolEvent):
+    target_node_id: str = ""
+
+
+@dataclass(frozen=True)
+class PlanNodeInspected(ToolEvent):
+    index: int = 0
+    total_nodes: int = 0
+    node_id: str = ""
+    node_name: str = ""
+    input_bindings: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PlanAnalysisFinished(ToolEvent):
+    total_steps: int = 0
+
+
+class DryRunConsoleSubscriber:
+~~~~~
+~~~~~python.new
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import (
+    Event,
+    PlanAnalysisStarted,
+    PlanNodeInspected,
+    PlanAnalysisFinished,
+)
+from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+
+from cascade.common.messaging import bus
+from cascade.common.renderers import CliRenderer, JsonRenderer
+
+
+# --- Internal Helpers ---
+
+
+@task(name="_internal_gather", pure=True)
+def _internal_gather(*args: Any) -> Any:
+    return list(args)
+
+
+def _create_state_backend_factory(
+    backend_spec: Union[str, Callable[[str], StateBackend], None],
+) -> Optional[Callable[[str], StateBackend]]:
+    if backend_spec is None:
+        return None
+
+    if callable(backend_spec):
+        return backend_spec
+
+    if isinstance(backend_spec, str):
+        if backend_spec.startswith("redis://"):
+            try:
+                import redis
+                from cascade.adapters.state.redis import RedisStateBackend
+            except ImportError:
+                raise ImportError(
+                    "The 'redis' library is required for redis:// backends."
+                )
+            client = redis.from_url(backend_spec)
+
+            def factory(run_id: str) -> StateBackend:
+                return RedisStateBackend(run_id=run_id, client=client)
+
+            return factory
+        else:
+            raise ValueError(f"Unsupported state backend URI scheme: {backend_spec}")
+
+    raise TypeError(f"Invalid state_backend type: {type(backend_spec)}")
+
+
+def _get_node_shape(node: Node) -> str:
+    if node.node_type == "param":
+        return "ellipse"
+    if node.node_type == "map":
+        return "hexagon"
+    return "box"
+
+
+class DryRunConsoleSubscriber:
+~~~~~
+
+#### Acts 3: 删除 SDK 中的冗余定义
+
+`packages/cascade-sdk/src/cascade/tools/events.py` 现在完全多余了，因为所有定义都已在 `runtime.events` 中，或者应该从那里导入。为了保持 SDK 的导出结构，我们将修改它以重导出这些类。
 
 ~~~~~act
 write_file
-scripts/check_dry_violations.py
+packages/cascade-sdk/src/cascade/tools/events.py
 ~~~~~
 ~~~~~python
-#!/usr/bin/env python3
-import ast
-import sys
-import hashlib
-from collections import defaultdict
-from pathlib import Path
-from typing import List, Dict, Tuple, Set, Any
+from cascade.runtime.events import (
+    ToolEvent,
+    PlanAnalysisStarted,
+    PlanNodeInspected,
+    PlanAnalysisFinished,
+)
 
-# 配置：忽略的常见名称，不参与命名重复检查
-IGNORE_NAMES = {
-    "__init__", "__str__", "__repr__", "__call__", "__hash__", "__eq__",
-    "__enter__", "__exit__", "__getattr__", "__setattr__", "run", "main",
-    "setup", "teardown", "validate", "process", "handler"
-}
-
-# 配置：忽略极短的代码块（行数阈值），防止误报空函数
-MIN_CODE_LINES = 3
-
-class ASTCleaner(ast.NodeTransformer):
-    """
-    Cleans the AST for comparison:
-    1. Removes docstrings.
-    2. (Implicitly via ast.dump) Removes line numbers and col offsets.
-    """
-    def visit_FunctionDef(self, node):
-        self._remove_docstring(node)
-        return self.generic_visit(node)
-
-    def visit_ClassDef(self, node):
-        self._remove_docstring(node)
-        return self.generic_visit(node)
-
-    def _remove_docstring(self, node):
-        """Remove docstring if it exists as the first statement."""
-        if (node.body and isinstance(node.body[0], ast.Expr) and 
-            isinstance(node.body[0].value, ast.Constant) and 
-            isinstance(node.body[0].value.value, str)):
-            node.body.pop(0)
-
-def get_ast_hash(node: ast.AST) -> str:
-    """
-    Computes a hash of the AST node structure, ignoring formatting and positions.
-    """
-    # include_attributes=False ignores lineno and col_offset (Python 3.9+)
-    # We strip annotations to focus on logic, not types (optional, strictness choice)
-    # For now, we KEEP types because type hints are part of the 'definition'.
-    dump = ast.dump(node, include_attributes=False)
-    return hashlib.sha256(dump.encode("utf-8")).hexdigest()
-
-def get_loc(node: ast.AST) -> int:
-    """Estimate lines of code for the node."""
-    # This is rough because we removed attributes, but useful for thresholding
-    # We can't use node.lineno because we might have modified the tree.
-    # Just counting the complexity of the dump is a decent proxy, 
-    # but strictly we assume simple definitions aren't duplicates worth fixing.
-    return len(node.body) if hasattr(node, "body") else 0
-
-def analyze_codebase(root_dir: Path):
-    packages_dir = root_dir / "packages"
-    
-    # Storage for Stage 1: AST Duplication
-    # Hash -> List[(name, filepath, lineno)]
-    ast_hashes: Dict[str, List[Tuple[str, str, int]]] = defaultdict(list)
-    
-    # Storage for Stage 2: Name Duplication
-    # Name -> List[filepath]
-    symbol_table: Dict[str, Set[str]] = defaultdict(set)
-
-    print(f"🔍 Scanning {packages_dir} ...")
-
-    for py_file in packages_dir.rglob("*.py"):
-        try:
-            with open(py_file, "r", encoding="utf-8") as f:
-                source = f.read()
-            
-            tree = ast.parse(source, filename=str(py_file))
-            cleaner = ASTCleaner()
-            
-            # We iterate top-level definitions and nested ones
-            for node in ast.walk(tree):
-                if isinstance(node, (ast.FunctionDef, ast.ClassDef, ast.AsyncFunctionDef)):
-                    # --- Stage 2: Name Collection ---
-                    name = node.name
-                    if name not in IGNORE_NAMES and not name.startswith("_"):
-                        symbol_table[name].add(str(py_file.relative_to(root_dir)))
-
-                    # --- Stage 1: AST Hash Collection ---
-                    # Filter out tiny functions (empty or just pass)
-                    if get_loc(node) < MIN_CODE_LINES:
-                        continue
-                    
-                    # Create a detached copy/cleaned version for hashing
-                    # We simply clear the docstring in place since we are just reading
-                    # But since ast.walk yields references, modifying them affects the tree.
-                    # That's fine as we don't write back.
-                    cleaner.visit(node)
-                    
-                    node_hash = get_ast_hash(node)
-                    ast_hashes[node_hash].append((name, str(py_file.relative_to(root_dir)), getattr(node, 'lineno', 0)))
-                    
-        except SyntaxError:
-            pass # Ignore unparseable files
-        except Exception as e:
-            print(f"Warning: Failed to parse {py_file}: {e}", file=sys.stderr)
-
-    return ast_hashes, symbol_table
-
-def report(ast_hashes, symbol_table):
-    exit_code = 0
-    
-    print("\n" + "="*60)
-    print("STAGE 1: AST Logic Duplication (Strict Copy-Paste)")
-    print("="*60)
-    
-    duplicate_groups = [v for k, v in ast_hashes.items() if len(v) > 1]
-    # Sort by number of duplicates * size of group
-    duplicate_groups.sort(key=lambda x: len(x), reverse=True)
-    
-    found_ast_dupes = False
-    for group in duplicate_groups:
-        # Check if they are all in the same file (sometimes ok, but still smelly)
-        files = {item[1] for item in group}
-        names = {item[0] for item in group}
-        
-        # If it's just the same function name in the same file multiple times, 
-        # that's usually impossible in valid python (redefinition), 
-        # or it's method overrides in nested scopes.
-        
-        print(f"\n🔴 Found {len(group)} indentical implementations:")
-        print(f"   Names involved: {', '.join(names)}")
-        for name, path, lineno in group:
-            print(f"   - {path}:{lineno} ({name})")
-        found_ast_dupes = True
-        exit_code = 1
-
-    if not found_ast_dupes:
-        print("✅ No AST logic duplicates found.")
-
-    print("\n" + "="*60)
-    print("STAGE 2: Naming Collisions (Potential Conceptual Confusion)")
-    print("="*60)
-    
-    found_name_dupes = False
-    # Sort by number of files defining it
-    sorted_symbols = sorted(symbol_table.items(), key=lambda x: len(x[1]), reverse=True)
-    
-    for name, paths in sorted_symbols:
-        if len(paths) > 1:
-            # Heuristic: If it appears in > 5 files, it might be a generic name like 'Context' or 'Result'
-            # We still report it but maybe mark it as 'Generic'
-            tag = " [Generic?]" if len(paths) > 5 else ""
-            print(f"\n🟡 Symbol '{name}' defined in {len(paths)} files{tag}:")
-            for p in sorted(list(paths)):
-                print(f"   - {p}")
-            found_name_dupes = True
-            # We don't fail the build for naming collisions yet, just warn
-            # exit_code = 1 
-            
-    if not found_name_dupes:
-        print("✅ No naming collisions found.")
-
-    return exit_code
-
-if __name__ == "__main__":
-    root = Path(__file__).parent.parent.resolve()
-    hashes, symbols = analyze_codebase(root)
-    sys.exit(report(hashes, symbols))
+__all__ = [
+    "ToolEvent",
+    "PlanAnalysisStarted",
+    "PlanNodeInspected",
+    "PlanAnalysisFinished",
+]
 ~~~~~
 
-#### Acts 2: 赋予执行权限
+#### Acts 4: 修复 SDK 中的 LazyFactory 重复
 
 ~~~~~act
-run_command
+patch_file
+packages/cascade-sdk/src/cascade/providers/registry.py
 ~~~~~
+~~~~~python.old
+import sys
+import importlib.metadata
+from typing import Any, Dict, Protocol
+
+
+class LazyFactory(Protocol):
+    def map(self, **kwargs) -> Any: ...
+    def __call__(self, *args, **kwargs) -> Any: ...
+
+
+class Provider(Protocol):
 ~~~~~
-chmod +x scripts/check_dry_violations.py
+~~~~~python.new
+import sys
+import importlib.metadata
+from typing import Any, Dict, Protocol
+from cascade.spec.protocols import LazyFactory
+
+
+class Provider(Protocol):
 ~~~~~
 
 ### 下一步建议
-运行该脚本：
-```bash
-./scripts/check_dry_violations.py
-```
-
-这将为你提供一个关于代码库中潜在的“复制粘贴”区域和命名混乱区域的鸟瞰图。特别关注 **STAGE 1** 的输出，那里通常隐藏着需要被重构为共享工具函数或基类的机会。
+运行 `scripts/check_dry_violations.py` 验证修复效果。`LazyFactory` 和 `ToolEvent` 相关的警告应该消失。

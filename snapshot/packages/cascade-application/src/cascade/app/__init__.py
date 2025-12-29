@@ -11,7 +11,12 @@ from cascade.graph.model import Node, EdgeType
 
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import Event
+from cascade.runtime.events import (
+    Event,
+    PlanAnalysisStarted,
+    PlanNodeInspected,
+    PlanAnalysisFinished,
+)
 from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
@@ -64,33 +69,6 @@ def _get_node_shape(node: Node) -> str:
     if node.node_type == "map":
         return "hexagon"
     return "box"
-
-
-# --- Tool Events (Scoped to Application Layer for now) ---
-
-
-@dataclass(frozen=True)
-class ToolEvent(Event):
-    pass
-
-
-@dataclass(frozen=True)
-class PlanAnalysisStarted(ToolEvent):
-    target_node_id: str = ""
-
-
-@dataclass(frozen=True)
-class PlanNodeInspected(ToolEvent):
-    index: int = 0
-    total_nodes: int = 0
-    node_id: str = ""
-    node_name: str = ""
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class PlanAnalysisFinished(ToolEvent):
-    total_steps: int = 0
 
 
 class DryRunConsoleSubscriber:

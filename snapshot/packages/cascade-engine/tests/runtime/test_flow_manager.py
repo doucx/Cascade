@@ -6,10 +6,13 @@ from cascade.spec.routing import Router
 from cascade.spec.lazy_types import LazyResult
 from cascade.runtime.flow import FlowManager
 from cascade.adapters.state.in_memory import InMemoryStateBackend
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.fingerprint import Fingerprint
 
 
 def create_mock_node(name: str) -> Node:
-    return Node(structural_id=name, name=name)
+    stub_def = TaskDef(name=name, args=[], fingerprint=Fingerprint())
+    return Node(structural_id=name, definition=stub_def)
 
 
 def create_mock_lazy_result(node_id: str) -> LazyResult:

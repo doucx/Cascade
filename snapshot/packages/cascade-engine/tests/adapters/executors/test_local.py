@@ -33,7 +33,8 @@ def test_local_executor_async_execution():
         await asyncio.sleep(0.01)
         return x + 1
 
-    stub_def = TaskDef(name="async_add", args=[], fingerprint=Fingerprint())
+    # Must explicit set is_async=True for the executor to treat it as a coroutine
+    stub_def = TaskDef(name="async_add", args=[], fingerprint=Fingerprint(), is_async=True)
     node_async = Node(
         structural_id="async_add", definition=stub_def, callable_obj=async_add.func
     )

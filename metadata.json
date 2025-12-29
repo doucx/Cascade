@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(executors): 修复 LocalExecutor 对 Node 属性的访问", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767010616.327137, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修复异步任务定义与 Mock 节点构造", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767010718.9599395, "duration_ms": 0}}

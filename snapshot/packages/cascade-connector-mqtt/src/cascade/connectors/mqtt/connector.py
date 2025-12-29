@@ -92,7 +92,9 @@ class MqttConnector:
         self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]
     ) -> SubscriptionHandle:
         if not self._client:
-            raise RuntimeError("Attempted to subscribe without an active MQTT connection.")
+            raise RuntimeError(
+                "Attempted to subscribe without an active MQTT connection."
+            )
 
         # 1. Register callback locally
         self._subscriptions[topic] = callback

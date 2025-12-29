@@ -38,7 +38,8 @@ class LispTranspiler:
             is_router_selector = any(
                 e.router
                 and e.router.selector._uuid in self.instance_map
-                and self.instance_map[e.router.selector._uuid].structural_id == node.structural_id
+                and self.instance_map[e.router.selector._uuid].structural_id
+                == node.structural_id
                 for e in self.graph.edges
             )
 

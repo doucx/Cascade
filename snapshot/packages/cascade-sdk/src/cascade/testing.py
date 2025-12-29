@@ -6,7 +6,13 @@ import asyncio
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
-from cascade.spec.protocols import Solver, Executor, ExecutionPlan, Connector, SubscriptionHandle
+from cascade.spec.protocols import (
+    Solver,
+    Executor,
+    ExecutionPlan,
+    Connector,
+    SubscriptionHandle,
+)
 from cascade.graph.model import Node, Graph
 
 
@@ -143,7 +149,7 @@ class MockConnector(Connector):
             if self._topic_matches(subscription=topic, topic=retained_topic):
                 # Run in a task to avoid blocking the subscribe call itself
                 asyncio.create_task(callback(retained_topic, payload))
-        
+
         return MockSubscriptionHandle(self, topic)
 
     def seed_retained_message(self, topic: str, payload: Dict[str, Any]):

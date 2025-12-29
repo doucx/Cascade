@@ -1,14 +1,21 @@
-from typing import TypeVar, Generic, Callable, Optional, Union, List, TYPE_CHECKING, overload
+from typing import (
+    TypeVar,
+    Generic,
+    Callable,
+    Optional,
+    Union,
+    List,
+    TYPE_CHECKING,
+    overload,
+)
 import inspect
 
 if TYPE_CHECKING:
-    from cascade.spec.protocols import CachePolicy
+    pass
 
-from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.lazy_types import (
     LazyResult,
     MappedLazyResult,
-    RetryPolicy,
 )
 
 T = TypeVar("T")
@@ -46,10 +53,12 @@ class Task(Generic[T]):
 
 # --- Decorator ---
 
+
 @overload
 def task(
     func: Callable[..., T],
 ) -> Task[T]: ...
+
 
 @overload
 def task(
@@ -59,6 +68,7 @@ def task(
     mode: str = "blocking",
 ) -> Callable[[Callable[..., T]], Task[T]]: ...
 
+
 @overload
 def task(
     func: Callable[..., T],
@@ -67,6 +77,7 @@ def task(
     pure: bool = False,
     mode: str = "blocking",
 ) -> Task[T]: ...
+
 
 def task(
     func: Optional[Callable[..., T]] = None,

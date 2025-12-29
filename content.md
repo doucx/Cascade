@@ -1,69 +1,63 @@
-我的分析有误。这是一个更深层次的包结构和导入路径问题，而不是简单的忘记导出。我把注意力集中在了 *哪里* 导出，而忽略了 *如何* 导入。
+好的。`git status` 显示的变更完全符合 **“Cascade 架构提案：引入中间表示 (IR) 并解构 Node 对象”** 的实施范围。我们已经成功完成了所有阶段：
 
-## [WIP] fix(tests): Correct import path for ControllerTestApp in E2E harness
+1.  **定义接口 (Phase 0)**：创建了 `cascade-spec` 中的 `ir` 模块和 `fingerprint` 模块。
+2.  **默认实现 (Phase 1)**：创建了 `cascade-graph` 中的 `analysis` 模块和 `ReflectionAnalyzer`。
+3.  **核心重构 (Phase 2)**：修改了 `Node`, `GraphBuilder`, `HashingService` 等核心组件。
+4.  **验证清理 (Phase 3)**：更新了大量测试并通过，证明了重构的正确性。
 
-### 错误分析
-我的上一个修复是朝着正确的方向，但只完成了一半。
+现在是时候将这个里程碑式的重构作为一个原子提交并入了。
 
-1.  **我做了什么**：我修改了 `packages/cascade-sdk/src/cascade/__init__.py`，将 `ControllerTestApp` 从 `cascade.testing` 模块提升到了顶层的 `cascade` 包的命名空间中。这意味着，`ControllerTestApp` 现在可以通过 `from cascade import ControllerTestApp` 来访问。
-
-2.  **我没做什么**：我没有更新消费这个 API 的地方（即 `tests/e2e/runtime/harness.py`）来使用这个新的、正确的导入路径。它仍然在尝试 `from cascade.testing import ControllerTestApp`。
-
-3.  **根本原因**: `cascade.testing` 不是一个公共的子包。根据 `cascade` 包的 `__init__.py` 文件，它是一个内部模块，其部分内容（如 `override_resource` 和现在我添加的 `ControllerTestApp`）被提升到了顶层的 `cascade` 命名空间。因此，任何外部代码都应该直接从 `cascade` 导入这些工具，而不是试图深入到其内部的 `testing` 模块。
+## [COMMIT] refactor(core): Introduce IR layer and decouple Node object
 
 ### 用户需求
-修复 E2E 测试中的 `ImportError`，确保测试工具可以被正确地导入和使用。
+根据“Cascade 架构提案”，通过引入一个纯粹的、面向数据的**中间表示 (IR) 层**和一个**分析器 (`Analyzer`) 协议**，将任务的“静态定义”与图节点的“运行时实例”彻底解耦。
 
 ### 评论
-这次修复纠正了API消费者（测试代码）与API提供者（SDK包）之间的不匹配。这是一个常见的包维护错误，通过统一导入路径，我们可以使代码更加清晰和健壮。
+这是一个基础性的、影响深远的架构重构，它从根本上解决了“`Node` 上帝对象”问题。通过将节点的静态定义 (`TaskDef`) 与其实例状态分离，我们极大地提升了系统的模块化、可测试性，并为未来的序列化、分布式执行和可插拔静态分析引擎（如 `Stitcher`）奠定了坚不可摧的基石。
 
 ### 目标
-1.  修改 `tests/e2e/runtime/harness.py`。
-2.  将其中的 `from cascade.testing import ControllerTestApp` 修改为 `from cascade import ControllerTestApp`。
+创建一个单一的、原子化的 Git 提交，将这次 IR 重构的全部工作整合到代码库中。
 
 ### 基本原理
-API 的使用者必须遵循该 API 的公共接口定义。`cascade/__init__.py` 将 `ControllerTestApp` 定义为 `cascade` 包的一部分，因此导入路径必须是 `from cascade import ...`。
+所有相关代码已经实现并通过了所有单元测试、集成测试和 E2E 测试，证明了这次重构在逻辑上是完整且正确的。将其作为一个原子提交，可以为项目历史建立一个清晰的、重要的架构演进节点。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/sdk #comp/tests #scope/api #ai/fix #task/domain/testing #task/object/harness #task/action/promote #task/state/continue
+#intent/refine #flow/ready #priority/critical #comp/engine #comp/graph #comp/spec #concept/ir #scope/core #scope/api #ai/instruct #task/domain/architecture #task/object/ir-refactoring #task/action/completion #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `harness.py` 中的导入路径
+#### Acts 1: 提交 IR 重构
 
-我们将修改 `harness.py` 文件，使其从正确的顶层包路径导入 `ControllerTestApp`。
+所有相关文件已经暂存，现在创建一个内容详尽的 Git 提交来记录这次重要的架构演进。
 
 ~~~~~act
-patch_file
-tests/e2e/runtime/harness.py
+git_commit
 ~~~~~
-~~~~~python.old
-from cascade.connectors.local import LocalBusConnector
+~~~~~text
+refactor(core): Introduce IR layer and decouple Node object
 
-# Re-export ControllerTestApp from the official SDK testing module
-from cascade.testing import ControllerTestApp
+This commit implements the "Intermediate Representation (IR)" proposal, fundamentally refactoring the core graph model to resolve the "Node God Object" problem.
 
-# Alias for backward compatibility with existing e2e tests
-# LocalBusConnector handles its own global state internally.
-InProcessConnector = LocalBusConnector
+Previously, the `Node` object was a complex mixture of a task's static definition (function signature, name), its topological role in the graph, and its runtime state (callable object, bound arguments). This tight coupling made the system difficult to maintain, test, and extend.
 
-# ControllerTestApp is now imported from cascade.testing
-__all__ = ["InProcessConnector", "ControllerTestApp"]
-~~~~~
-~~~~~python.new
-from cascade.connectors.local import LocalBusConnector
-# Import ControllerTestApp from the top-level package where it's exposed
-from cascade import ControllerTestApp
+This refactoring introduces two key concepts:
+1.  **IR Layer (`cascade.spec.ir`):** A new set of pure, serializable dataclasses (`TaskDef`, `ArgumentDef`) that represent the static, immutable definition of a task.
+2.  **Analyzer Protocol (`cascade.graph.analysis`):** A protocol (`TaskAnalyzer`) and a default implementation (`ReflectionAnalyzer`) responsible for converting a Python callable into a static `TaskDef`.
 
-# Alias for backward compatibility with existing e2e tests
-# LocalBusConnector handles its own global state internally. 
-InProcessConnector = LocalBusConnector
+Key changes:
+-   **`Node` Simplification:** The `Node` object is no longer responsible for self-analysis. It now holds a single `definition: TaskDef` attribute, which is the single source of truth for its static properties.
+-   **`GraphBuilder` Refactoring:** The `GraphBuilder` now uses an `Analyzer` instance to produce a `TaskDef` for each task, decoupling graph construction from runtime reflection details.
+-   **Stable Hashing:** The `HashingService` now computes structural hashes based on the stable, explicit fields of `TaskDef` (via `Fingerprint`), leading to more robust and predictable node identity.
 
-# ControllerTestApp is now imported from cascade
-__all__ = ["InProcessConnector", "ControllerTestApp"]
+Benefits:
+-   **Decoupling:** Clear separation of concerns between what a task is (`TaskDef`), where it is (`Node`), and how it's analyzed (`Analyzer`).
+-   **Testability:** `ReflectionAnalyzer` and `TaskDef` are pure, easily testable components.
+-   **Foundation for Future:** This lays the essential groundwork for serialization (making `TaskDef` distributable), pluggable static analysis engines (e.g., `StitcherAnalyzer`), and more advanced caching strategies.
 ~~~~~
 
 ### 下一步建议
-所有测试现在应该可以通过了。由于我们识别出 `InProcessConnector` 的潜在不稳定性，下一步应该系统性地审查所有其他使用 `.harness` 的 E2E 测试，并将它们迁移到使用确定性的 `cascade.testing.MockConnector`。
+这次重构是 Cascade 迈向 V2.0 架构的核心一步。我们现在已经解锁了许多可能性，下一步可以考虑：
+1.  **实现 `StitcherAnalyzer`**: 创建 `cascade-provider-stitcher` 包，提供一个基于 `LibCST` 的静态分析器，并允许用户通过 `CascadeApp(analyzer=StitcherAnalyzer())` 无缝切换。
+2.  **探索序列化**:  基于可序列化的 `TaskDef`，我们可以开始设计将整个计算图传输到远程工作节点或持久化到磁盘的机制。

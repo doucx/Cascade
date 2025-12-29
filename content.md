@@ -1,51 +1,31 @@
-好的，这是一个很有用的工具，特别是在管理一个包含多个命名空间包（namespace packages）的复杂代码库时。重复的模块定义可能会导致难以追踪的导入错误和意外行为。
-
-我将为你创建一个脚本，它会：
-1.  遍历 `packages` 目录下的所有子包。
-2.  解析每个子包的 `src` 目录结构，将其转换为 Python 模块路径。
-3.  构建一个从模块路径到定义该模块的包列表的映射。
-4.  报告所有被一个以上包定义的模块。
-
-这个脚本将被放置在 `scripts/check_duplicate_modules.py`。
-
-## [WIP] chore: 创建脚本以检查重复的模块定义
+## [WIP] fix: 改进重复模块检查脚本以支持命名空间包
 
 ### 用户需求
-创建一个脚本，用于扫描代码库并识别在多个包中被重复定义的模块，以确保命名空间包的健康和唯一性。
+当前的 `check_duplicate_modules.py` 脚本过于严格，将合法的 Python 命名空间包（Namespace Packages，例如多个包共享 `cascade` 顶级目录）误报为冲突。用户需要一个更智能的脚本，能够区分“合法的命名空间合并”和“非法的模块覆盖”。
 
 ### 评论
-这是一个至关重要的开发者体验（DX）和代码库健康工具。在像 Cascade 这样的 monorepo 中，模块可能被意外地在多个地方定义，导致模糊的导入行为。这个脚本将使这类问题显而易见，并可以集成到 CI 中以防止未来的问题。
+在现代 Python 开发中，尤其是 monorepo 环境下，命名空间包是常态。如果不改进此逻辑，该工具将无法在实际项目中使用。我们需要引入对 `__init__.py` 内容的简单静态分析，以忽略那些仅包含命名空间声明样板代码的文件。
 
 ### 目标
-1.  创建一个名为 `scripts/check_duplicate_modules.py` 的新脚本。
-2.  该脚本应能独立运行，不需要外部依赖（标准库即可）。
-3.  脚本需要扫描 `packages` 目录，并识别出所有 Python 模块。
-4.  如果发现任何模块被多个包定义，脚本应打印出详细的冲突报告并以非零状态码退出。
-5.  如果没有发现冲突，脚本应打印成功信息并以零状态码退出。
-6.  确保新创建的脚本具有可执行权限。
+1.  修改 `scripts/check_duplicate_modules.py`。
+2.  **策略调整**：
+    *   对于非 `__init__.py` 的 `.py` 文件：保持严格的唯一性检查。任何重复都是错误。
+    *   对于 `__init__.py` 文件：检查其内容。如果文件为空，或仅包含标准的 `pkgutil` 命名空间声明代码（忽略注释和空行），则将其视为“非实质性定义”。
+3.  **冲突判定**：只有当同一个模块存在多个“实质性定义”时，才报告为冲突。如果多个包都定义了同一个命名空间（例如 `cascade`），但它们都只是声明了命名空间而没有业务逻辑，则不视为冲突。
 
 ### 基本原理
-脚本的核心逻辑是文件系统遍历和路径转换。它将 `packages/*/src` 目录视为 Python 模块的根。通过递归地查找 `__init__.py` 文件（代表包）和 `.py` 文件（代表模块），它可以将文件系统路径（例如 `packages/cascade-engine/src/cascade/runtime/engine.py`）转换为模块路径（`cascade.runtime.engine`）和其来源包（`cascade-engine`）。
-
-通过将这些信息聚合到一个字典中（`{module_path: [package1, package2]}`），我们就可以轻易地筛选出那些包列表长度大于 1 的条目，这些就是我们寻找的重复定义。
+Python 的 `pkgutil` 风格命名空间包允许不同目录下的 `__init__.py` 文件共存，只要它们都包含扩展 `__path__` 的样板代码。真正的冲突发生在该文件包含特定的初始化逻辑（如变量定义、特定导入）时，因为 Python 解释器只会加载其中一个（取决于 `sys.path`顺序），从而导致不可预测的行为。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/validation-script #task/action/implementation #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/validation-script #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建脚本目录和文件
+#### Acts 1: 更新检查脚本
 
-首先，我们将确保 `scripts` 目录存在，然后创建 `check_duplicate_modules.py` 脚本文件。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p scripts
-~~~~~
+我们将重写 `find_duplicate_modules` 函数的核心逻辑，加入对 `__init__.py` 内容的分析。
 
 ~~~~~act
 write_file
@@ -54,19 +34,62 @@ scripts/check_duplicate_modules.py
 ~~~~~python
 #!/usr/bin/env python3
 import sys
+import re
 from collections import defaultdict
 from pathlib import Path
+
+# Standard namespace package declaration patterns
+NAMESPACE_PATTERNS = [
+    re.compile(r"^__path__\s*=\s*__import__\(['\"]pkgutil['\"]\)\.extend_path\(__path__,\s*__name__\)\s*$"),
+    re.compile(r"^__import__\(['\"]pkg_resources['\"]\)\.declare_namespace\(__name__\)\s*$"),
+]
+
+def is_namespace_package_boilerplate(file_path):
+    """
+    Checks if an __init__.py file contains only namespace declaration boilerplate,
+    comments, or whitespace.
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+    except Exception:
+        # If we can't read it, assume it's substantive (better safe than sorry)
+        return False
+
+    has_code = False
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("#"):
+            continue
+        
+        # If we find a line of code, check if it matches known boilerplate
+        matched = False
+        for pattern in NAMESPACE_PATTERNS:
+            if pattern.match(stripped):
+                matched = True
+                break
+        
+        if not matched:
+            # Found a line of code that isn't boilerplate
+            return False
+            
+    # If we get here, all code lines were boilerplate (or there were no code lines)
+    return True
 
 def find_duplicate_modules(root_dir="."):
     """
     Scans the 'packages' directory to find modules defined in multiple packages.
+    Distinguishes between strict file conflicts and namespace package merges.
     """
     packages_dir = Path(root_dir) / "packages"
     if not packages_dir.is_dir():
         print(f"Error: Directory not found: {packages_dir}", file=sys.stderr)
         return 1
 
-    module_map = defaultdict(list)
+    # Map of module_name -> list of (package_name, is_substantive)
+    definitions = defaultdict(list)
     package_dirs = [d for d in packages_dir.iterdir() if d.is_dir()]
 
     for package_path in package_dirs:
@@ -77,40 +100,64 @@ def find_duplicate_modules(root_dir="."):
             continue
 
         for path in src_path.rglob("*"):
-            module_parts = []
-            
+            module_name = None
+            is_substantive = True
+
             # Case 1: It's a package directory (contains __init__.py)
             if path.is_file() and path.name == "__init__.py":
                 module_parts = path.parent.relative_to(src_path).parts
+                module_name = ".".join(module_parts)
+                # Check if it's just a namespace placeholder
+                if is_namespace_package_boilerplate(path):
+                    is_substantive = False
             
             # Case 2: It's a module file (.py)
             elif path.is_file() and path.suffix == ".py":
-                # Exclude __init__.py files as they are handled by their parent dir
+                # Exclude __init__.py files as they are handled above
                 if path.stem == "__init__":
                     continue
                 
-                module_parts_with_stem = list(path.relative_to(src_path).parts)
-                module_parts_with_stem[-1] = path.stem # remove .py extension
-                module_parts = module_parts_with_stem
-            
-            if module_parts:
-                # Handle the case where the src dir itself is a module root (e.g., src/cascade)
+                module_parts = list(path.relative_to(src_path).parts)
+                module_parts[-1] = path.stem # remove .py extension
                 module_name = ".".join(module_parts)
-                module_map[module_name].append(package_name)
+                # Regular .py files are always substantive definitions
+                is_substantive = True
+            
+            if module_name:
+                definitions[module_name].append({
+                    "package": package_name,
+                    "is_substantive": is_substantive,
+                    "path": str(path)
+                })
 
-    duplicates = {
-        module: sorted(packages)
-        for module, packages in module_map.items()
-        if len(packages) > 1
-    }
+    conflicts = {}
 
-    if duplicates:
+    for module, defs in definitions.items():
+        # Filter for substantive definitions (those containing actual code)
+        substantive_defs = [d for d in defs if d["is_substantive"]]
+        
+        # Conflict Condition 1: Multiple packages define substantive logic for the same module/package
+        if len(substantive_defs) > 1:
+            conflicts[module] = {
+                "reason": "Multiple substantive definitions (logic collision)",
+                "sources": [f"{d['package']} ({'substantive' if d['is_substantive'] else 'namespace'})" for d in defs]
+            }
+        # Conflict Condition 2: Regular module file (.py) vs Package dir (__init__.py)
+        # This is implicitly handled because one would be 'foo' and the other 'foo'
+        # But we need to make sure we don't have a file 'foo.py' and a dir 'foo/' both substantive.
+        # (The script logic above maps them to the same dotted name, so len > 1 catches this too)
+
+    if conflicts:
         print("❌ Found duplicate module definitions:", file=sys.stderr)
         print("-------------------------------------", file=sys.stderr)
-        sorted_duplicates = sorted(duplicates.items())
-        for module, packages in sorted_duplicates:
+        sorted_conflicts = sorted(conflicts.items())
+        for module, info in sorted_conflicts:
             print(f"- Module: {module}", file=sys.stderr)
-            print(f"  Defined in: {', '.join(packages)}\n", file=sys.stderr)
+            print(f"  Reason: {info['reason']}", file=sys.stderr)
+            print(f"  Defined in:", file=sys.stderr)
+            for src in info['sources']:
+                print(f"    * {src}", file=sys.stderr)
+            print("", file=sys.stderr)
         return 1
     else:
         print("✅ No duplicate module definitions found.")
@@ -122,22 +169,9 @@ if __name__ == "__main__":
     sys.exit(find_duplicate_modules(repo_root))
 ~~~~~
 
-#### Acts 2: 赋予脚本可执行权限
-
-为了方便直接从命令行运行，我们将为脚本添加可执行权限。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-chmod +x scripts/check_duplicate_modules.py
-~~~~~
-
 ### 下一步建议
-现在脚本已经创建，你可以立即运行它来检查当前代码库的状态：
-
+再次运行脚本进行验证：
 ```bash
 ./scripts/check_duplicate_modules.py
 ```
-
-如果发现了任何重复项，你可以根据报告进行清理。之后，强烈建议将此脚本集成到你的 CI/CD 流程中，作为一个检查步骤，以防止未来再次引入重复的模块定义。
+这次应该会忽略所有的命名空间包声明，只报告真正的代码冲突（如果有的话）。

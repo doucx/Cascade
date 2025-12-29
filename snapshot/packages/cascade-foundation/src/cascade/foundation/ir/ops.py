@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Any, Optional
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Op:
     """
     Base class for Level 1 IR Operations.
@@ -22,7 +22,7 @@ class Op:
     control_deps: List[str] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ComputeOp(Op):
     """
     Represents a computational task (function execution).
@@ -34,7 +34,7 @@ class ComputeOp(Op):
     config: Dict[str, Any] = field(default_factory=dict)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ConstantOp(Op):
     """
     Represents a static value.
@@ -43,7 +43,7 @@ class ConstantOp(Op):
     value: Any
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ResourceOp(Op):
     """
     Represents a resource lifecycle action.
@@ -53,7 +53,7 @@ class ResourceOp(Op):
     action: str  # "acquire" or "release"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MultiplexOp(Op):
     """
     Represents a branching decision (Router).

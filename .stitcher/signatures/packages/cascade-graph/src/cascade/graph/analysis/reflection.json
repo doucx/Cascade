@@ -1,0 +1,18 @@
+{
+  "ReflectionAnalyzer": {
+    "baseline_yaml_content_hash": "012c47616b4da9e366b6c4cf4864184bc7d5899cc074e5fb79300e4dd32a74df"
+  },
+  "ReflectionAnalyzer._analyze_arguments": {
+    "baseline_code_signature_text": "def _analyze_arguments(self, sig: inspect.Signature) -> List[ArgumentDef]:",
+    "baseline_code_structure_hash": "4ae94df8b7652fd05235e85acbc96d70842d7aeb282aa3c052ddcc2900f091ca"
+  },
+  "ReflectionAnalyzer._compute_structure_hash": {
+    "baseline_code_signature_text": "def _compute_structure_hash(self, name: str, args: List[ArgumentDef], return_annotation: Optional[str], docstring: Optional[str], is_async: bool, mode: str) -> str:",
+    "baseline_code_structure_hash": "71959ab259dba1e22458edeed4f3d43728ed7a028c4192b62ddd8629b67dcf8b",
+    "baseline_yaml_content_hash": "6781501ed6c47ed1ee9ecf0d2992a61886417017f11df6bf1a425e5f814fccf5"
+  },
+  "ReflectionAnalyzer.analyze": {
+    "baseline_code_signature_text": "def analyze(self, target: Any) -> TaskDef:",
+    "baseline_code_structure_hash": "ff303c7bf15e56389fc1b8c71691c49ff71336d72e67454b5e71f71193b7c5fa"
+  }
+}

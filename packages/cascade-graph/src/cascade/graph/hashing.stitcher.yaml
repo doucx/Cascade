@@ -15,5 +15,13 @@
   Recursively builds hash components, always including literal values.
 "HashingService._get_merkle_hash": |-
   Computes a stable hash from a list of string components.
-"HashingService.compute_structural_hash": |-
-  Computes the Structural Hash (Instance Hash) for a given result object.
+"HashingService.compute_node_instance_hash": |-
+  Computes the unique structural ID for a Node instance.
+
+  Formula:
+    Hash(
+       Definition.Fingerprint['current_code_structure_hash']
+       | Instance.Policies
+       | Instance.Bindings (merged args/kwargs)
+       | Instance.PuritySalt (if impure)
+    )

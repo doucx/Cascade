@@ -5,8 +5,6 @@
   Test serializing a simple linear graph.
 "test_serialize_edge_types": |-
   Test serialization and deserialization of various EdgeType instances.
-"test_serialize_params": |-
-  Test serialization of Param nodes (now standard tasks).
 "test_serialize_router": |-
   Test full round-trip serialization of a Router.
 "test_serialize_with_constraints": |-

@@ -19,7 +19,6 @@
     "baseline_code_structure_hash": "ea35e6a9c6a20e9f44615704152f07116f11c139cf49a27efed489a9f4e42dc3",
     "baseline_yaml_content_hash": "21511096f5464d5ab33ca2e537a5c303d12b29c7791eaefe347f3367c27ce35e"
   },
-  "_after": {},
   "task": {
     "baseline_code_signature_text": "def task(func: Optional[Callable[..., T]] = None, name: Optional[str] = None, pure: bool = False, mode: str = \"blocking\") -> Union[Task[T], Callable[[Callable[..., T]], Task[T]]]:",
     "baseline_code_structure_hash": "bd816ae8efa5ba5d4442e3f7b6d75dad324df69d169aeebd1ccdf10e357f25f6",

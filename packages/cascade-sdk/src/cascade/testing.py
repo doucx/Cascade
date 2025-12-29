@@ -177,11 +177,6 @@ class MockConnector(Connector):
 
 
 class ControllerTestApp:
-    """
-    A lightweight simulator for the cs-controller CLI tool.
-    Useful for testing how a workflow responds to control plane events (pause, resume).
-    """
-
     def __init__(self, connector: Connector):
         self.connector = connector
 

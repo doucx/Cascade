@@ -1,3 +1,6 @@
+"ControllerTestApp": |-
+  A lightweight simulator for the cs-controller CLI tool.
+  Useful for testing how a workflow responds to control plane events (pause, resume).
 "MockConnector": |-
   A mock connector for testing that simulates MQTT behavior,
   including retained messages and topic matching.

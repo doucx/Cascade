@@ -40,7 +40,6 @@
     "baseline_code_signature_text": "def on_start(self, event: PlanAnalysisStarted):",
     "baseline_code_structure_hash": "9b93769f19380fb0e04fdd2c770e9410df29c3d0ac3f62dbbe186208311e6188"
   },
-  "ToolEvent": {},
   "_create_state_backend_factory": {
     "baseline_code_signature_text": "def _create_state_backend_factory(backend_spec: Union[str, Callable[[str], StateBackend], None]) -> Optional[Callable[[str], StateBackend]]:",
     "baseline_code_structure_hash": "5dc0b78b461db22c8253128030859e02c6cd56b0d833cbddf405a7e31c9ebf76"

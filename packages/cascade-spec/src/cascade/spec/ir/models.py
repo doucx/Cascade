@@ -6,11 +6,6 @@ from cascade.spec.fingerprint import Fingerprint
 
 
 class ArgumentKind(str, Enum):
-    """
-    Defines the kind of an argument, aligning with Python's inspect.Parameter kinds
-    and the Stitcher specification.
-    """
-
     POSITIONAL_ONLY = "POSITIONAL_ONLY"
     POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
     VAR_POSITIONAL = "VAR_POSITIONAL"  # *args
@@ -20,11 +15,6 @@ class ArgumentKind(str, Enum):
 
 @dataclass(frozen=True)
 class ArgumentDef:
-    """
-    A specific definition of a single argument in a task's signature.
-    Designed to be serializable.
-    """
-
     name: str
     kind: ArgumentKind
     annotation: Optional[str] = None
@@ -33,12 +23,6 @@ class ArgumentDef:
 
 @dataclass(frozen=True)
 class TaskDef:
-    """
-    The static intermediate representation (IR) of a Task.
-    This separates the 'definition' of what a task is from the 'node'
-    of where it is used in a graph.
-    """
-
     name: str
     args: List[ArgumentDef]
     # The stable semantic identity of this task definition.

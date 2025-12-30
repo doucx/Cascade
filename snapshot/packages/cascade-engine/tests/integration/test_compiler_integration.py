@@ -1,20 +1,17 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.bus import MessageBus
-
-# NOTE: We expect this test to FAIL (AssertionError) initially.
-# The current Engine implementation uses the old 'cascade.graph.compiler.BlueprintBuilder',
-# so it will NOT call 'cascade.compiler.frontend.Frontend.compile'.
+from cascade.spec.ir.models import GraphIR
 
 @pytest.mark.asyncio
 async def test_engine_activates_new_compiler_pipeline():
     """
     Verifies that Engine.run(use_vm=True) delegates to the new cascade.compiler package
-    instead of the legacy cascade.graph.compiler implementation.
+    and executes the full pipeline.
     """
     # 1. Define a simple workflow
     @cs.task
@@ -30,21 +27,34 @@ async def test_engine_activates_new_compiler_pipeline():
         bus=MessageBus(),
     )
 
-    # 3. Patch the NEW Frontend to verify it gets called.
-    # We patch it where it is defined.
-    with patch("cascade.compiler.frontend.Frontend.compile") as mock_frontend_compile:
-        # Mock the return value to avoid cascading errors downstream (if the wiring were partially complete)
-        # But in the RED state, we expect the code to completely bypass this and use the old logic.
-        # The run might succeed (using old VM) or fail (if old VM is broken), but our assertion
-        # focuses solely on whether the NEW path was taken.
+    # 3. Patch the entire pipeline to verify wiring without running real logic
+    # We want to ensure data flows: Frontend -> Optimizer -> Backend -> VM
+    with patch("cascade.compiler.frontend.Frontend.compile") as mock_front, \
+         patch("cascade.compiler.optimizer.Optimizer.optimize") as mock_opt, \
+         patch("cascade.compiler.backend.Backend.compile") as mock_back, \
+         patch("cascade.compiler.vm.VirtualMachine.execute") as mock_vm_exec:
+
+        # Setup Mocks
+        mock_ir = MagicMock(spec=GraphIR)
+        mock_front.return_value = mock_ir
         
-        # We wrap in try/except because running the OLD vm logic might trigger unrelated errors
-        # depending on the environment, but we only care about the spy.
-        try:
-            await engine.run(workflow, use_vm=True)
-        except Exception:
-            # We ignore execution errors, we just want to know if the new compiler was invoked.
-            pass
+        mock_plan = [["node_1"]]
+        mock_opt.return_value = mock_plan
         
-        # This assertion MUST FAIL for the test to be valid in the RED stage.
-        mock_frontend_compile.assert_called_once()
+        mock_bp = MagicMock()
+        mock_back.return_value = mock_bp
+        
+        mock_vm_exec.return_value = 11
+
+        # 4. Act
+        result = await engine.run(workflow, use_vm=True)
+
+        # 5. Assert
+        assert result == 11
+        
+        mock_front.assert_called_once_with(workflow)
+        mock_opt.assert_called_once_with(mock_ir)
+        mock_back.assert_called_once_with(mock_ir, mock_plan)
+        mock_vm_exec.assert_called_once()
+        # Verify VM received the blueprint
+        assert mock_vm_exec.call_args[0][0] == mock_bp

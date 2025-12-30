@@ -1,2 +1,4 @@
 "VMExecutionStrategy": |-
-  Executes tasks by compiling them into a Blueprint and running them on a Virtual Machine.
+  Executes tasks using the new compiler pipeline:
+  Frontend -> Optimizer -> Backend -> VirtualMachine.
+  This strategy decouples execution from the graph building process.

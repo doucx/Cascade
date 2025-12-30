@@ -120,24 +120,10 @@ class GraphBuilder:
 
             # Note: execution_mode is now part of task_def (definition.mode)
             if result.task.func is _get_param_value.func:
-                # Retrieve the ParamSpec from the global context to attach to the node
-                from cascade.context import get_current_context
+                # The arg at index 0 is the param name.
+                # We enforce extraction here to ensure the node is self-contained.
+                param_key = input_bindings.get("0") or input_bindings.get("name") or ""
                 
-                # The arg at index 0 is the param name
-                param_name = input_bindings.get("0") or input_bindings.get("name")
-                param_spec = None
-                if param_name:
-                    ctx = get_current_context()
-                    # Linear scan is okay for build time, or we could optimize context lookup
-                    for spec in ctx.get_all_specs():
-                        if spec.name == param_name:
-                            # We import inside to avoid top-level circular imports if possible, 
-                            # though ParamSpec is imported in ParamNode definition
-                            from cascade.spec.input import ParamSpec
-                            if isinstance(spec, ParamSpec):
-                                param_spec = spec
-                            break
-
                 node = ParamNode(
                     structural_id=node_hash,
                     definition=task_def,
@@ -146,7 +132,7 @@ class GraphBuilder:
                     cache_policy=result._cache_policy,
                     constraints=result._constraints,
                     input_bindings=input_bindings,
-                    param_spec=param_spec,
+                    param_key=str(param_key),
                     has_complex_inputs=True,
                 )
             else:

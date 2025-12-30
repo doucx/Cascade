@@ -108,8 +108,7 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         if node.mapping_factory:
             data["mapping_factory"] = _get_func_path(node.mapping_factory)
     elif isinstance(node, ParamNode):
-        # We don't serialize the spec for now, but could in the future
-        pass
+        data["param_key"] = node.param_key
 
     # Note: param_spec serialization removed as Node no longer holds it directly.
     # Future implementation should serialize definition metadata if needed.
@@ -252,10 +251,6 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             input_bindings=input_bindings,
         )
     elif node_type == "param":
-        # Note: We don't currently serialize the full ParamSpec, 
-        # so restored ParamNodes will have param_spec=None. 
-        # This is acceptable for simple visualization/analysis, 
-        # but execution of restored ParamNodes might need the spec context.
         node = ParamNode(
             structural_id=data["structural_id"],
             definition=stub_def,
@@ -264,6 +259,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             cache_policy=None,
             constraints=constraints,
             input_bindings=input_bindings,
+            param_key=str(data.get("param_key", "")),
             has_complex_inputs=True, # ParamNode always needs the complex path
         )
     else:

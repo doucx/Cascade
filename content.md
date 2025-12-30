@@ -1,91 +1,116 @@
-好的，我理解了当前的断裂状态和修复路线图。这是一个典型的在大型重构中出现的“中间态”问题，需要对系统的多个层面进行对齐，以恢复一致性。你的路线图非常清晰，我将严格按照此计划执行。
+这就是 Phase 1 的执行计划。
 
-我将生成一个计划，其中包含一系列 `patch_file` 和 `write_file` 操作，以完成 Node 多态化重构的收尾工作。
+我们将重构 `Node` 模型通过清晰的继承来消除歧义，并简化 `ParamNode` 的构建逻辑，使其不再依赖脆弱的上下文查找，而是直接存储参数名称。
 
-## [WIP] fix: 完成 Node 多态化重构并对齐系统各层
-
-### 错误分析
-系统当前处于一个不稳定的中间状态。核心 `Node` 模型的重构（拆分为 `TaskNode`, `MapNode`, `ParamNode`）未完全同步到系统的其他部分，导致了连锁故障：
-1.  **接口不一致**: 部分新的 `Node` 子类缺少父类已有的属性（如 `has_complex_inputs`），导致依赖此接口的 `ArgumentResolver` 出现 `AttributeError`。
-2.  **逻辑断裂**: `ParamNode` 因为错误的 `has_complex_inputs` 标志（`False`），被 `ArgumentResolver` 走了错误的“简单路径”，未能注入必要的 `params_context`，最终导致下游任务出现 `DependencyMissingError`。
-3.  **序列化层崩溃**: `serialize.py` 未更新以识别新的节点类型，同时存在代码错误（如引用不存在的变量），导致其无法工作。
-4.  **测试过时**: 测试用例仍在引用旧的 `Node` 构造函数和断言逻辑，无法正确验证新模型，产生了大量直接的 `TypeError` 和 `AssertionError`。
+## [WIP] refactor: 显式化 Node 多态并解耦构建逻辑
 
 ### 用户需求
-核心目标是消除所有因本次重构引入的 `AttributeError`、`DependencyMissingError` 和 `NameError`，完成 Node 多态化，实现整个计算图生命周期的类型安全和功能正确。
+重构 `Node` 类及其子类，消除基类中的冗余字段，建立清晰的继承契约。同时简化 `ParamNode` 的构建过程，使其不再依赖构建时的上下文查找，而是将参数名作为不可变状态存储。
 
 ### 评论
-这是一个非常关键的修复计划。它解决了重构过程中的技术债，将一个不稳定的、半完成的特性推向稳定状态。完成此次对齐后，核心数据模型的表达将更加清晰和健壮，为后续的开发和维护打下坚实的基础。
+当前的 `Node` 模型是一个混杂了各种职责的“上帝类”，依赖属性是否存在来判断类型，不仅容易出错，也让静态分析失效。此外，`GraphBuilder` 在构建 `ParamNode` 时试图访问全局上下文来获取 `ParamSpec`，这引入了不必要的耦合，导致了测试中的环境依赖问题。
 
 ### 目标
-1.  **稳固模型**：为 `MapNode` 和 `ParamNode` 添加 `has_complex_inputs` 属性，统一接口。
-2.  **修正构建逻辑**：在 `build.py` 中为 `ParamNode` 强制设置 `has_complex_inputs=True`，确保参数注入逻辑能被正确触发。
-3.  **修复序列化**：重构 `serialize.py`，使其能够正确地序列化和反序列化多态的 `Node` 对象。
-4.  **对齐测试**：更新所有受影响的测试用例，使其与新的 `Node` 模型（`TaskNode`）和断言逻辑（`node_type`）保持一致。
+1.  **重构 `cascade/graph/model.py`**: 将 `Node` 转变为纯粹的抽象基类（或包含通用字段的基类），移除 `callable_obj` 等多态属性的默认实现。确保 `ParamNode` 显式存储 `param_key`。
+2.  **重构 `cascade/graph/build.py`**: 移除构建 `ParamNode` 时的全局上下文查找逻辑。直接从 `LazyResult` 的输入绑定中提取参数名。
+3.  **适配 `cascade/graph/serialize.py`**: 确保序列化和反序列化逻辑适配新的模型结构。
 
 ### 基本原理
-我们将采用一系列精确的、原子化的补丁操作来逐一修复上述断点。
--   首先，从最底层的 `model.py` 开始，确保数据模型本身是一致和完整的。
--   其次，修复直接依赖模型的 `build.py` 和 `serialize.py`，恢复图的构建和持久化能力。
--   最后，更新上层的测试代码，使其能够正确地验证新模型的行为，从而将整个系统恢复到可测试、可验证的健康状态。
+通过**显式多态**，我们让每个节点类型只携带它真正需要的数据。`ParamNode` 不再需要是一个“会自动执行的任务”，它就是一个“参数的占位符”，其唯一职责就是持有参数名。这种数据结构的纯粹性是后续修复运行时逻辑的基础。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/graph #comp/engine #comp/tests #concept/state #scope/core #ai/instruct #task/domain/core-model #task/object/node-polymorphism #task/action/refactor-completion #task/state/continue
+#intent/refine #flow/ready #priority/high
+#comp/engine #concept/history #scope/core
+#ai/instruct
+#task/domain/core #task/object/graph-model #task/action/refactor #task/state/begin
 
 ---
+
 ### Script
 
-#### Acts 1: 稳固底层模型 (`model.py`)
-
-首先，我们为 `MapNode` 和 `ParamNode` 添加缺失的 `has_complex_inputs` 属性，以确保所有 `Node` 子类都符合 `ArgumentResolver` 所期望的接口。
+#### Acts 1: 重构 Node 模型
+我们将清理 `Node` 基类，并为 `ParamNode` 添加明确的 `param_key` 字段。
 
 ~~~~~act
-patch_file
+write_file
 packages/cascade-graph/src/cascade/graph/model.py
 ~~~~~
-~~~~~python.old
+~~~~~python
+from dataclasses import dataclass, field
+from typing import List, Callable, Optional, Any, Dict
+from enum import Enum, auto
+
+from cascade.spec.constraint import ResourceConstraint
+from cascade.spec.ir.models import TaskDef
+
+
+class EdgeType(Enum):
+    DATA = auto()
+    CONDITION = auto()
+    CONSTRAINT = auto()
+    IMPLICIT = auto()
+    SEQUENCE = auto()
+    ROUTER_ROUTE = auto()
+    POTENTIAL = auto()
+    ITERATIVE_JUMP = auto()
+
+
+@dataclass
+class Node:
+    """Base class for all nodes in the Cascade graph."""
+
+    # Stable identifier for the node instance in the graph.
+    structural_id: str
+
+    # The static definition of the task.
+    definition: TaskDef
+
+    # Optional legacy type tag ("task", "map", "param").
+    # Prefer isinstance checks over this string.
+    node_type: str = "task"
+
+    # Instance-specific configuration
+    retry_policy: Optional[Any] = None
+    cache_policy: Optional[Any] = None
+    constraints: Optional[ResourceConstraint] = None
+
+    # Structural Bindings (Literals)
+    # Maps argument names (or indices) to literal values.
+    # For TaskNode, this holds arguments.
+    # For ParamNode, this is usually empty or holds raw config.
+    input_bindings: Dict[str, Any] = field(default_factory=dict)
+
+    # Optimization flag for Resolvers
+    has_complex_inputs: bool = False
+
+    def __hash__(self):
+        return hash(self.structural_id)
+
+    @property
+    def name(self) -> str:
+        return self.definition.name
+
+
+@dataclass
+class TaskNode(Node):
+    """Represents a standard executable task."""
+
+    # The actual python executable object.
+    _callable: Optional[Callable] = None
+
+    @property
+    def callable_obj(self) -> Optional[Callable]:
+        return self._callable
+
+
 @dataclass
 class MapNode(Node):
     """Represents a mapped task execution."""
 
     mapping_factory: Optional[Callable] = None
 
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
-
     @property
     def callable_obj(self) -> Optional[Callable]:
-        # For map nodes, the factory is the closest thing to a callable
-        return self.mapping_factory
-
-
-@dataclass
-class ParamNode(Node):
-    """Represents an external parameter injection."""
-    
-    # We store the ParamSpec here explicitly for type safety
-    from cascade.spec.input import ParamSpec
-    param_spec: Optional[ParamSpec] = None
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        # Param nodes use a special internal task to retrieve values
-        from cascade.internal.inputs import _get_param_value
-        return _get_param_value.func
-~~~~~
-~~~~~python.new
-@dataclass
-class MapNode(Node):
-    """Represents a mapped task execution."""
-
-    mapping_factory: Optional[Callable] = None
-
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        # For map nodes, the factory is the closest thing to a callable
         return self.mapping_factory
 
 
@@ -93,42 +118,69 @@ class MapNode(Node):
 class ParamNode(Node):
     """Represents an external parameter injection."""
 
-    # We store the ParamSpec here explicitly for type safety
-    from cascade.spec.input import ParamSpec
+    # The key to look up in the parameters dictionary
+    param_key: str = ""
 
-    param_spec: Optional[ParamSpec] = None
+    # Note: We do NOT store ParamSpec here. The spec is a definition-time artifact.
+    # The Node only cares about the runtime key.
 
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
 
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        # Param nodes use a special internal task to retrieve values
-        from cascade.internal.inputs import _get_param_value
-        return _get_param_value.func
+@dataclass
+class Edge:
+    source: Node
+    target: Node
+    arg_name: str
+    edge_type: EdgeType = EdgeType.DATA
+    router: Optional[Any] = None
+    jump_selector: Optional[Any] = None
+
+
+@dataclass
+class Graph:
+    nodes: List[Node] = field(default_factory=list)
+    edges: List[Edge] = field(default_factory=list)
+    _node_index: Dict[str, Node] = field(default_factory=dict, init=False, repr=False)
+
+    def add_node(self, node: Node):
+        if node.structural_id not in self._node_index:
+            self.nodes.append(node)
+            self._node_index[node.structural_id] = node
+
+    def get_node(self, node_id: str) -> Optional[Node]:
+        return self._node_index.get(node_id)
+
+    def add_edge(self, edge: Edge):
+        self.edges.append(edge)
 ~~~~~
 
-#### Acts 2: 修正图构建逻辑 (`build.py`)
-
-接下来，我们修正 `build.py`。导入新的 Node 类型，并为 `ParamNode` 设置 `has_complex_inputs=True`，这是修复参数注入的关键。
+#### Acts 2: 重构 GraphBuilder
+我们将简化 `_visit_lazy_result` 中对 `ParamNode` 的处理，移除上下文查找，直接从绑定中提取参数名。
 
 ~~~~~act
 patch_file
 packages/cascade-graph/src/cascade/graph/build.py
 ~~~~~
-~~~~~python.old
-                node = ParamNode(
-                    structural_id=node_hash,
-                    definition=task_def,
-                    node_type="param",
-                    retry_policy=result._retry_policy,
-                    cache_policy=result._cache_policy,
-                    constraints=result._constraints,
-                    input_bindings=input_bindings,
-                    param_spec=param_spec
-                )
-~~~~~
-~~~~~python.new
+~~~~~old
+            # Note: execution_mode is now part of task_def (definition.mode)
+            if result.task.func is _get_param_value.func:
+                # Retrieve the ParamSpec from the global context to attach to the node
+                from cascade.context import get_current_context
+                
+                # The arg at index 0 is the param name
+                param_name = input_bindings.get("0") or input_bindings.get("name")
+                param_spec = None
+                if param_name:
+                    ctx = get_current_context()
+                    # Linear scan is okay for build time, or we could optimize context lookup
+                    for spec in ctx.get_all_specs():
+                        if spec.name == param_name:
+                            # We import inside to avoid top-level circular imports if possible, 
+                            # though ParamSpec is imported in ParamNode definition
+                            from cascade.spec.input import ParamSpec
+                            if isinstance(spec, ParamSpec):
+                                param_spec = spec
+                            break
+
                 node = ParamNode(
                     structural_id=node_hash,
                     definition=task_def,
@@ -140,111 +192,37 @@ packages/cascade-graph/src/cascade/graph/build.py
                     param_spec=param_spec,
                     has_complex_inputs=True,
                 )
+            else:
+~~~~~
+~~~~~new
+            # Note: execution_mode is now part of task_def (definition.mode)
+            if result.task.func is _get_param_value.func:
+                # The arg at index 0 is the param name.
+                # We enforce extraction here to ensure the node is self-contained.
+                param_key = input_bindings.get("0") or input_bindings.get("name") or ""
+                
+                node = ParamNode(
+                    structural_id=node_hash,
+                    definition=task_def,
+                    node_type="param",
+                    retry_policy=result._retry_policy,
+                    cache_policy=result._cache_policy,
+                    constraints=result._constraints,
+                    input_bindings=input_bindings,
+                    param_key=str(param_key),
+                    has_complex_inputs=True,
+                )
+            else:
 ~~~~~
 
-#### Acts 3: 修复序列化层 (`serialize.py`)
-
-序列化模块的改动较大，涉及多处逻辑修正和类型导入。因此，我们使用 `write_file` 进行覆盖式更新，确保其内部逻辑的完整性和正确性。
+#### Acts 3: 适配 Serializer
+我们需要更新序列化逻辑，以支持新的 `ParamNode` 结构。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-graph/src/cascade/graph/serialize.py
 ~~~~~
-~~~~~python
-import json
-import importlib
-from typing import Any, Dict, Optional, List
-from dataclasses import dataclass
-
-from .model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
-from cascade.spec.constraint import ResourceConstraint
-from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
-from cascade.spec.routing import Router
-from cascade.spec.task import Task
-
-
-# --- Helpers ---
-
-
-@dataclass
-class _StubLazyResult:
-    _uuid: str
-
-
-def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
-    if func is None:
-        return None
-
-    # If it's a Task instance, serialize the underlying function
-    if isinstance(func, Task):
-        func = func.func
-
-    # Handle wrapped functions or partials if necessary in future
-    return {"module": func.__module__, "qualname": func.__qualname__}
-
-
-def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:
-    if not data:
-        return None
-    module_name = data.get("module")
-    qualname = data.get("qualname")
-
-    if not module_name or not qualname:
-        return None
-
-    try:
-        module = importlib.import_module(module_name)
-        # Handle nested classes/functions (e.g. MyClass.method)
-        obj = module
-        for part in qualname.split("."):
-            obj = getattr(obj, part)
-
-        # If the object is a Task wrapper (due to @task decorator), unwrap it
-        if isinstance(obj, Task):
-            return obj.func
-
-        return obj
-    except (ImportError, AttributeError) as e:
-        raise ValueError(f"Could not restore function {module_name}.{qualname}: {e}")
-
-
-# --- Graph to Dict ---
-
-
-def graph_to_dict(graph: Graph) -> Dict[str, Any]:
-    # 1. Collect and Deduplicate Routers
-    # Map id(router_obj) -> index_in_list
-    router_map: Dict[int, int] = {}
-    routers_data: List[Dict[str, Any]] = []
-
-    for edge in graph.edges:
-        if edge.router and id(edge.router) not in router_map:
-            idx = len(routers_data)
-            router_map[id(edge.router)] = idx
-
-            # Serialize the Router object
-            # We only need the UUIDs of the selector and routes to reconstruct dependencies
-            routers_data.append(
-                {
-                    "selector_id": edge.router.selector._uuid,
-                    "routes": {k: v._uuid for k, v in edge.router.routes.items()},
-                }
-            )
-
-    # 2. Serialize Nodes
-    nodes_data = [_node_to_dict(n) for n in graph.nodes]
-
-    # 3. Serialize Edges (referencing routers by index)
-    edges_data = [_edge_to_dict(e, router_map) for e in graph.edges]
-
-    return {
-        "nodes": nodes_data,
-        "edges": edges_data,
-        "routers": routers_data,
-        # TODO: Add data_tuple serialization support
-    }
-
-
+~~~~~old
 def _node_to_dict(node: Node) -> Dict[str, Any]:
     data = {
         "structural_id": node.structural_id,
@@ -268,131 +246,40 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
     # Future implementation should serialize definition metadata if needed.
 
     if node.retry_policy:
-        data["retry_policy"] = {
-            "max_attempts": node.retry_policy.max_attempts,
-            "delay": node.retry_policy.delay,
-            "backoff": node.retry_policy.backoff,
-        }
-
-    if node.constraints:
-        # Dynamic constraints contain LazyResult/MappedLazyResult which are not JSON serializable.
-        # We must replace them with their UUID reference.
-        serialized_reqs = {}
-        for res, amount in node.constraints.requirements.items():
-            if isinstance(amount, (LazyResult, MappedLazyResult)):
-                # Store the UUID reference as a JSON serializable dict.
-                serialized_reqs[res] = {"__lazy_ref": amount._uuid}
-            else:
-                serialized_reqs[res] = amount
-        data["constraints"] = serialized_reqs
-
-    return data
-
-
-def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
+~~~~~
+~~~~~new
+def _node_to_dict(node: Node) -> Dict[str, Any]:
     data = {
-        "source_id": edge.source.structural_id,
-        "target_id": edge.target.structural_id,
-        "arg_name": edge.arg_name,
-        "edge_type": edge.edge_type.name,
+        "structural_id": node.structural_id,
+        "name": node.name,
+        "node_type": node.node_type,
+        # input_bindings now contains JSON-serializable literals directly.
+        "input_bindings": node.input_bindings,
     }
-    if edge.router:
-        # Store the index to the routers list
-        if id(edge.router) in router_map:
-            data["router_index"] = router_map[id(edge.router)]
-    return data
 
+    if isinstance(node, TaskNode):
+        if node.callable_obj:
+            data["callable"] = _get_func_path(node.callable_obj)
+    elif isinstance(node, MapNode):
+        if node.mapping_factory:
+            data["mapping_factory"] = _get_func_path(node.mapping_factory)
+    elif isinstance(node, ParamNode):
+        data["param_key"] = node.param_key
 
-# --- Dict to Graph ---
+    # Note: param_spec serialization removed as Node no longer holds it directly.
+    # Future implementation should serialize definition metadata if needed.
 
+    if node.retry_policy:
+~~~~~
 
-def graph_from_dict(data: Dict[str, Any]) -> Graph:
-    nodes_data = data.get("nodes", [])
-    edges_data = data.get("edges", [])
-    routers_data = data.get("routers", [])
+#### Acts 4: 适配 Deserializer
+更新 `_dict_to_node` 以恢复 `ParamNode`。
 
-    node_map: Dict[str, Node] = {}
-    graph = Graph()
-
-    # 1. Reconstruct Nodes
-    for nd in nodes_data:
-        node = _dict_to_node(nd)
-        node_map[node.structural_id] = node
-        graph.add_node(node)
-
-    # 2. Reconstruct Routers
-    # We create Router objects populated with _StubLazyResult
-    restored_routers: List[Router] = []
-    for rd in routers_data:
-        selector_stub = _StubLazyResult(rd["selector_id"])
-        routes_stubs = {k: _StubLazyResult(uuid) for k, uuid in rd["routes"].items()}
-        # Note: Type checker might complain because we are passing Stubs instead of LazyResults,
-        # but Python is duck-typed and this satisfies the runtime needs.
-        restored_routers.append(Router(selector=selector_stub, routes=routes_stubs))  # type: ignore
-
-    # 3. Reconstruct Edges
-    for ed in edges_data:
-        source = node_map.get(ed["source_id"])
-        target = node_map.get(ed["target_id"])
-        if source and target:
-            edge_type_name = ed.get("edge_type", "DATA")
-            edge_type = EdgeType[edge_type_name]
-
-            edge = Edge(
-                source=source,
-                target=target,
-                arg_name=ed["arg_name"],
-                edge_type=edge_type,
-            )
-
-            # Re-attach Router object if present
-            if "router_index" in ed:
-                r_idx = int(ed["router_index"])
-                if 0 <= r_idx < len(restored_routers):
-                    edge.router = restored_routers[r_idx]
-
-            graph.add_edge(edge)
-        else:
-            raise ValueError(f"Edge references unknown node: {ed}")
-
-    return graph
-
-
-def _dict_to_node(data: Dict[str, Any]) -> Node:
-    # Note: param_spec recovery removed
-
-    # Recover Retry Policy
-    retry_policy = None
-    if "retry_policy" in data:
-        rp = data["retry_policy"]
-        retry_policy = RetryPolicy(
-            max_attempts=rp["max_attempts"], delay=rp["delay"], backoff=rp["backoff"]
-        )
-
-    # Recover Constraints
-    constraints = None
-    if "constraints" in data:
-        constraints = ResourceConstraint(requirements=data["constraints"])
-
-    # Reconstruct a minimal TaskDef for the Node from the serialized data
-    # This is a stub definition to satisfy the Node contract for deserialization
-    from cascade.spec.ir.models import TaskDef
-    from cascade.spec.fingerprint import Fingerprint
-
-    # We use a dummy fingerprint for deserialized nodes if not present
-    fp = Fingerprint()
-    # If we serialized the code hash, we should restore it, but for now we put a placeholder
-    fp["current_code_structure_hash"] = "restored_from_json"
-
-    stub_def = TaskDef(
-        name=data["name"],
-        args=[],  # Args info lost in simplified serialization, ok for basic runtime restoration if callables are loaded
-        fingerprint=fp,
-    )
-
-    node_type = data["node_type"]
-    input_bindings = data.get("input_bindings", {})
-    
+~~~~~act
+patch_file
+packages/cascade-graph/src/cascade/graph/serialize.py
+~~~~~
+~~~~~old
     if node_type == "map":
         node = MapNode(
             structural_id=data["structural_id"],
@@ -421,186 +308,34 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
         )
     else:
         # Default to TaskNode
-        node = TaskNode(
+~~~~~
+~~~~~new
+    if node_type == "map":
+        node = MapNode(
             structural_id=data["structural_id"],
             definition=stub_def,
-            node_type="task",
-            _callable=_load_func_from_path(data.get("callable")),
+            node_type="map",
+            mapping_factory=_load_func_from_path(data.get("mapping_factory")),
+            retry_policy=retry_policy,
+            cache_policy=None, # Serialization of cache policy not implemented yet
+            constraints=constraints,
+            input_bindings=input_bindings,
+        )
+    elif node_type == "param":
+        node = ParamNode(
+            structural_id=data["structural_id"],
+            definition=stub_def,
+            node_type="param",
             retry_policy=retry_policy,
             cache_policy=None,
             constraints=constraints,
             input_bindings=input_bindings,
-            # has_complex_inputs is an optimization flag, safe to default False on restore
-            has_complex_inputs=False, 
+            param_key=str(data.get("param_key", "")),
+            has_complex_inputs=True, # ParamNode always needs the complex path
         )
-    return node
-
-
-# --- Main API ---
-
-
-def to_json(graph: Graph, indent: int = 2) -> str:
-    return json.dumps(graph_to_dict(graph), indent=indent)
-
-
-def from_json(json_str: str) -> Graph:
-    return graph_from_dict(json.loads(json_str))
-~~~~~
-
-#### Acts 4: 对齐执行器测试 (`test_local.py`)
-
-现在，我们更新执行器测试，用 `TaskNode` 替换旧的 `Node` 实例化，并修正构造函数参数。
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/adapters/executors/test_local.py
-~~~~~
-~~~~~python.old
-import asyncio
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.graph.model import Node
-from cascade.spec.task import task
-
-
-from cascade.spec.ir.models import TaskDef
-from cascade.spec.fingerprint import Fingerprint
-
-
-def test_local_executor_sync_execution():
-    # 1. Define the callable
-    @task
-    def add(x: int, y: int, z: int = 0) -> int:
-        return x + y + z
-
-    # 2. Simulate the Node with Definition
-    stub_def = TaskDef(name="add", args=[], fingerprint=Fingerprint())
-    node_add = Node(structural_id="add", definition=stub_def, callable_obj=add.func)
-
-    # 3. Simulate arguments resolved by the Engine
-    resolved_args = [5]  # positional argument 'x'
-    resolved_kwargs = {"y": 10, "z": 2}  # keyword arguments 'y' and 'z'
-
-    executor = LocalExecutor()
-    result = asyncio.run(executor.execute(node_add, resolved_args, resolved_kwargs))
-
-    assert result == 17  # 5 + 10 + 2
-
-
-def test_local_executor_async_execution():
-    @task
-    async def async_add(x: int) -> int:
-        await asyncio.sleep(0.01)
-        return x + 1
-
-    # Must explicit set is_async=True for the executor to treat it as a coroutine
-    stub_def = TaskDef(
-        name="async_add", args=[], fingerprint=Fingerprint(), is_async=True
-    )
-    node_async = Node(
-        structural_id="async_add", definition=stub_def, callable_obj=async_add.func
-    )
-
-    resolved_args = [5]
-    resolved_kwargs = {}
-
-    executor = LocalExecutor()
-    result = asyncio.run(executor.execute(node_async, resolved_args, resolved_kwargs))
-
-    assert result == 6
-~~~~~
-~~~~~python.new
-import asyncio
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.graph.model import TaskNode
-from cascade.spec.task import task
-
-
-from cascade.spec.ir.models import TaskDef
-from cascade.spec.fingerprint import Fingerprint
-
-
-def test_local_executor_sync_execution():
-    # 1. Define the callable
-    @task
-    def add(x: int, y: int, z: int = 0) -> int:
-        return x + y + z
-
-    # 2. Simulate the Node with Definition
-    stub_def = TaskDef(name="add", args=[], fingerprint=Fingerprint())
-    node_add = TaskNode(structural_id="add", definition=stub_def, _callable=add.func)
-
-    # 3. Simulate arguments resolved by the Engine
-    resolved_args = [5]  # positional argument 'x'
-    resolved_kwargs = {"y": 10, "z": 2}  # keyword arguments 'y' and 'z'
-
-    executor = LocalExecutor()
-    result = asyncio.run(executor.execute(node_add, resolved_args, resolved_kwargs))
-
-    assert result == 17  # 5 + 10 + 2
-
-
-def test_local_executor_async_execution():
-    @task
-    async def async_add(x: int) -> int:
-        await asyncio.sleep(0.01)
-        return x + 1
-
-    # Must explicit set is_async=True for the executor to treat it as a coroutine
-    stub_def = TaskDef(
-        name="async_add", args=[], fingerprint=Fingerprint(), is_async=True
-    )
-    node_async = TaskNode(
-        structural_id="async_add", definition=stub_def, _callable=async_add.func
-    )
-
-    resolved_args = [5]
-    resolved_kwargs = {}
-
-    executor = LocalExecutor()
-    result = asyncio.run(executor.execute(node_async, resolved_args, resolved_kwargs))
-
-    assert result == 6
-~~~~~
-
-#### Acts 5: 更新测试断言 (`test_build.py` & `test_serialize.py`)
-
-最后，我们更新图构建和序列化测试中的断言，使其反映 `ParamNode` 正确的 `node_type`。
-
-~~~~~act
-patch_file
-packages/cascade-graph/tests/test_build.py
-~~~~~
-~~~~~python.old
-    # 断言节点类型统一为 task
-    assert p_node.node_type == "task"
-
-    # 断言它包含正确的 input_bindings (这是内部任务需要的参数)
-~~~~~
-~~~~~python.new
-    # The node type should now be correctly identified as 'param'
-    assert p_node.node_type == "param"
-
-    # 断言它包含正确的 input_bindings (这是内部任务需要的参数)
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-graph/tests/test_serialize.py
-~~~~~
-~~~~~python.old
-    param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
-
-    assert param_node["node_type"] == "task"
-    assert "name" in param_node["input_bindings"]
-~~~~~
-~~~~~python.new
-    param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
-
-    assert param_node["node_type"] == "param"
-    assert "name" in param_node["input_bindings"]
+    else:
+        # Default to TaskNode
 ~~~~~
 
 ### 下一步建议
-我们已经根据路线图应用了所有必要的修复。现在，最关键的步骤是重新运行完整的测试套件，以验证这些改动是否已经解决了所有已识别的故障，并且没有引入新的回归问题。
-
-我建议你立即执行 `pytest`，并检查输出，特别是 `test_input_execution.py` 和 `test_serialize.py` 的测试结果。如果所有测试通过，我将生成一个 `[COMMIT]` 计划来提交这些变更。
+Model 和 Build 层的重构完成后，我们需要立即进入 Phase 2，修改 `ArgumentResolver` 和 `Processor` 以配合新的 `ParamNode` 结构，修复参数解析的 Bug。

@@ -27,17 +27,23 @@ class Node:
     # The static definition of the task.
     definition: TaskDef
 
-    # Node-specific type ("task", "map", "param")
-    # Kept for serialization and legacy checks, but logic should prefer isinstance.
+    # Optional legacy type tag ("task", "map", "param").
+    # Prefer isinstance checks over this string.
     node_type: str = "task"
 
-    # Instance-specific configuration common to most executable nodes
+    # Instance-specific configuration
     retry_policy: Optional[Any] = None
     cache_policy: Optional[Any] = None
     constraints: Optional[ResourceConstraint] = None
 
     # Structural Bindings (Literals)
+    # Maps argument names (or indices) to literal values.
+    # For TaskNode, this holds arguments.
+    # For ParamNode, this is usually empty or holds raw config.
     input_bindings: Dict[str, Any] = field(default_factory=dict)
+
+    # Optimization flag for Resolvers
+    has_complex_inputs: bool = False
 
     def __hash__(self):
         return hash(self.structural_id)
@@ -46,11 +52,6 @@ class Node:
     def name(self) -> str:
         return self.definition.name
 
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        """Polymorphic accessor for the executable object."""
-        return None
-
 
 @dataclass
 class TaskNode(Node):
@@ -58,9 +59,6 @@ class TaskNode(Node):
 
     # The actual python executable object.
     _callable: Optional[Callable] = None
-    
-    # Optimization flag
-    has_complex_inputs: bool = False
 
     @property
     def callable_obj(self) -> Optional[Callable]:
@@ -73,12 +71,8 @@ class MapNode(Node):
 
     mapping_factory: Optional[Callable] = None
 
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
-
     @property
     def callable_obj(self) -> Optional[Callable]:
-        # For map nodes, the factory is the closest thing to a callable
         return self.mapping_factory
 
 
@@ -86,19 +80,11 @@ class MapNode(Node):
 class ParamNode(Node):
     """Represents an external parameter injection."""
 
-    # We store the ParamSpec here explicitly for type safety
-    from cascade.spec.input import ParamSpec
+    # The key to look up in the parameters dictionary
+    param_key: str = ""
 
-    param_spec: Optional[ParamSpec] = None
-
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        # Param nodes use a special internal task to retrieve values
-        from cascade.internal.inputs import _get_param_value
-        return _get_param_value.func
+    # Note: We do NOT store ParamSpec here. The spec is a definition-time artifact.
+    # The Node only cares about the runtime key.
 
 
 @dataclass

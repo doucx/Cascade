@@ -2,11 +2,7 @@ import pytest
 import asyncio
 from cascade.spec.blueprint import Blueprint, Call, Register, Literal
 
-# RED State: VM not yet implemented in the new package location
-try:
-    from cascade.compiler.vm import VirtualMachine
-except ImportError:
-    pass
+from cascade.compiler.vm import VirtualMachine
 
 
 def _add(a: int, b: int) -> int:
@@ -21,7 +17,6 @@ async def _async_add(a: int, b: int) -> int:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="VM not implemented", raises=(ImportError, NameError))
 async def test_vm_instruction_execution():
     """
     Case 1: The CPU Test (Synchronous).
@@ -62,7 +57,6 @@ async def test_vm_instruction_execution():
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="VM not implemented", raises=(ImportError, NameError))
 async def test_vm_async_execution():
     """
     Case 2: Async Execution.

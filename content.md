@@ -1,127 +1,215 @@
-## [WIP] test(vm): 为虚拟机创建 RED 状态测试
+好的，我们进入 GREEN 阶段，实现 `VirtualMachine`。
+
+## [WIP] feat(compiler): 实现 VirtualMachine 运行时
+
+### 摘要头
+## [WIP] feat(compiler): 实现 VirtualMachine 运行时
 
 ### 用户需求
-根据 TDD 重构路线图的 "Phase 4: VM Runtime"，我们需要创建 `VirtualMachine` 的测试用例。虚拟机是执行编译器生成的 `Blueprint` 的运行时组件。它不依赖任何图构建逻辑，只负责执行线性的指令集。
-用户强调“绝对严谨的测试”，这意味着测试必须基于纯粹的指令集操作，不依赖编译器的输出，而是手动构造 `Blueprint` 进行测试，从而实现 VM 的独立验证。
+实现 `cascade.compiler.vm.VirtualMachine` 类，使其能够执行 `Blueprint` 指令集并通过 "Phase 4" 的 TDD 测试。这要求 VM 能够处理同步和异步的函数调用，并正确管理寄存器状态。
 
 ### 评论
-VM 的核心职责是：加载指令、管理寄存器帧（Frame）、分发指令（Dispatch）并执行。
-我们的测试策略将包括：
-1.  **CPU 测试 (The CPU Test)**: 不使用任何编译器，手动构造包含 `Literal` 和 `Register` 操作数的 `Call` 指令，验证 VM 能否正确加载字面量、传递寄存器值，并将结果写回寄存器。这将验证 "Fetch-Decode-Execute" 循环的基本功能。
-2.  **异步支持测试**: 验证 VM 能否正确处理 `async` 函数的 `await` 操作。
+这是 "焦土政策" 路线图中的一个核心里程碑，我们正在构建新的运行时核心。此 VM 实现是一个经典的、基于寄存器的虚拟机，包含一个 `Frame` 用于状态管理和一个指令分发循环 (`_dispatch`)。它严格遵守 `Blueprint` 契约，与图构建和编译过程完全解耦，确保了其作为一个独立组件的可测试性和健壮性。
 
 ### 目标
-1.  创建 `packages/cascade-compiler/tests/test_vm.py`。
-2.  实现 `test_vm_instruction_execution`：手动编排包含 `add` 操作的指令序列，验证数据在寄存器间的流动。
-3.  实现 `test_vm_async_execution`：验证 VM 对异步 `Call` 的支持。
+1.  创建 `packages/cascade-compiler/src/cascade/compiler/vm.py` 文件。
+2.  在 `vm.py` 中实现 `Frame` 类来管理寄存器。
+3.  在 `vm.py` 中实现 `VirtualMachine` 类，包括 `execute` 和 `_dispatch` 循环。
+4.  确保 `_dispatch` 逻辑能正确 `await` 异步函数。
+5.  更新 `__init__.py` 导出 `VirtualMachine`。
+6.  更新 `test_vm.py` 测试文件，移除 `xfail` 标记，验证 GREEN 状态。
 
 ### 基本原理
-通过手动构造 `Blueprint`，我们将 VM 的测试与编译器的正确性解耦。如果 VM 测试失败，那是 VM 的问题；如果 VM 测试通过但端到端失败，那是编译器的问题。这种隔离对于复杂系统的调试至关重要。
-此外，我们将在测试中显式定义一个简单的加法函数，以确保测试环境是完全受控的。
+VM 的实现遵循了标准的 "Fetch-Decode-Execute" 模式：
+1.  **Fetch**: `execute` 方法遍历 `Blueprint` 中的指令。
+2.  **Decode**: `_dispatch` 方法判断指令类型（目前只有 `Call`）。
+3.  **Execute**: `_execute_call` 方法执行具体操作：
+    a.  **参数加载**: 使用 `Frame.load` 从 `Register` 或 `Literal` 操作数中解析出实际值。
+    b.  **函数调用**: 执行 `Call` 指令中引用的函数。
+    c.  **异步处理**: 使用 `inspect.isawaitable` 判断并 `await` 协程。
+    d.  **结果存储**: 使用 `Frame.store` 将结果写回输出寄存器。
+
+这种设计确保了 VM 的逻辑清晰、高效且易于扩展。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/runtime #concept/vm #scope/core #ai/instruct #task/domain/refactor #task/object/vm #task/action/define #task/state/continue
+#intent/build #flow/ready #priority/high #comp/runtime #concept/vm #scope/core #ai/instruct #task/domain/refactor #task/object/vm #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 VM 的 RED 测试文件
+#### Acts 1: 实现 VirtualMachine 类
 
-此文件定义了 VM 作为纯指令执行器的行为契约。
+创建 `vm.py` 并实现 `Frame` 和 `VirtualMachine` 的核心逻辑。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/tests/test_vm.py
+packages/cascade-compiler/src/cascade/compiler/vm.py
 ~~~~~
 ~~~~~python
-import pytest
+import inspect
 import asyncio
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal
+from typing import Any, List, Dict, Optional
 
+from cascade.spec.blueprint import (
+    Blueprint,
+    Instruction,
+    Call,
+    Literal,
+    Register,
+    Operand,
+)
+
+
+class Frame:
+    """Represents the runtime stack frame for a blueprint execution."""
+
+    def __init__(self, size: int):
+        self.registers: List[Any] = [None] * size
+
+    def load(self, operand: Operand) -> Any:
+        """Loads a value from an operand (either a Literal or a Register)."""
+        if isinstance(operand, Literal):
+            return operand.value
+        elif isinstance(operand, Register):
+            if operand.index >= len(self.registers):
+                raise IndexError(f"Invalid register index: {operand.index}")
+            return self.registers[operand.index]
+        else:
+            raise TypeError(f"Unknown operand type: {type(operand)}")
+
+    def store(self, register: Register, value: Any):
+        """Stores a value into a register."""
+        if register.index >= len(self.registers):
+            raise IndexError(f"Invalid register index: {register.index}")
+        self.registers[register.index] = value
+
+
+class VirtualMachine:
+    """Executes compiled Blueprints."""
+
+    async def execute(self, blueprint: Blueprint) -> Any:
+        """Executes the blueprint and returns the result of the final instruction."""
+        frame = Frame(blueprint.register_count)
+        last_result = None
+
+        for instr in blueprint.instructions:
+            last_result = await self._dispatch(instr, frame)
+
+        return last_result
+
+    async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
+        """Decodes and executes a single instruction."""
+        if isinstance(instr, Call):
+            return await self._execute_call(instr, frame)
+        else:
+            raise NotImplementedError(f"Unknown instruction type: {type(instr)}")
+
+    async def _execute_call(self, instr: Call, frame: Frame) -> Any:
+        """Handles the Call instruction."""
+        # 1. Resolve arguments from operands
+        args = [frame.load(op) for op in instr.args]
+        kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
+
+        # 2. Invoke the function
+        if instr.func is None:
+             raise ValueError(f"Instruction for task '{instr.task_name}' has no function to call.")
+        result = instr.func(*args, **kwargs)
+
+        # 3. Handle async functions
+        if inspect.isawaitable(result):
+            result = await result
+
+        # 4. Store the result in the output register
+        frame.store(instr.output, result)
+
+        return result
+~~~~~
+
+#### Acts 2: 导出 VirtualMachine
+
+更新 `__init__.py` 以便测试可以找到 `VirtualMachine`。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/__init__.py
+~~~~~
+~~~~~python.old
+from .frontend import Frontend
+from .optimizer import Optimizer, ExecutionPlan
+from .backend import Backend
+from .exceptions import CompilerError, CycleDetectedError
+
+__all__ = [
+    "Frontend",
+    "Optimizer",
+    "ExecutionPlan",
+    "Backend",
+    "CompilerError",
+    "CycleDetectedError",
+]
+~~~~~
+~~~~~python.new
+from .frontend import Frontend
+from .optimizer import Optimizer, ExecutionPlan
+from .backend import Backend
+from .vm import VirtualMachine
+from .exceptions import CompilerError, CycleDetectedError
+
+__all__ = [
+    "Frontend",
+    "Optimizer",
+    "ExecutionPlan",
+    "Backend",
+    "VirtualMachine",
+    "CompilerError",
+    "CycleDetectedError",
+]
+~~~~~
+
+#### Acts 3: 更新测试用例 (GREEN)
+
+移除 `xfail` 标记和 `try-except` 块，让测试可以运行。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/tests/test_vm.py
+~~~~~
+~~~~~python.old
 # RED State: VM not yet implemented in the new package location
 try:
     from cascade.compiler.vm import VirtualMachine
 except ImportError:
     pass
+~~~~~
+~~~~~python.new
+from cascade.compiler.vm import VirtualMachine
+~~~~~
 
-
-def _add(a: int, b: int) -> int:
-    """Helper function for testing synchronous execution."""
-    return a + b
-
-
-async def _async_add(a: int, b: int) -> int:
-    """Helper function for testing asynchronous execution."""
-    await asyncio.sleep(0.01)
-    return a + b
-
-
+~~~~~act
+patch_file
+packages/cascade-compiler/tests/test_vm.py
+~~~~~
+~~~~~python.old
 @pytest.mark.asyncio
 @pytest.mark.xfail(reason="VM not implemented", raises=(ImportError, NameError))
 async def test_vm_instruction_execution():
-    """
-    Case 1: The CPU Test (Synchronous).
-    Manually construct a program:
-      r0 = add(1, 2)
-      r1 = add(r0, 3)
-    Verify that r1 contains 6.
-    """
-    # Program:
-    # 1. r0 = _add(1, 2)
-    instr1 = Call(
-        func=_add,
-        output=Register(0),
-        args=[Literal(1), Literal(2)],
-        kwargs={},
-        task_name="add_1"
-    )
-    
-    # 2. r1 = _add(r0, 3)
-    instr2 = Call(
-        func=_add,
-        output=Register(1),
-        args=[Register(0), Literal(3)],
-        kwargs={},
-        task_name="add_2"
-    )
-    
-    blueprint = Blueprint(
-        instructions=[instr1, instr2],
-        register_count=2
-    )
+~~~~~
+~~~~~python.new
+@pytest.mark.asyncio
+async def test_vm_instruction_execution():
+~~~~~
 
-    vm = VirtualMachine()
-    result = await vm.execute(blueprint)
-
-    # The result of the last instruction should be returned
-    assert result == 6
-
-
+~~~~~act
+patch_file
+packages/cascade-compiler/tests/test_vm.py
+~~~~~
+~~~~~python.old
 @pytest.mark.asyncio
 @pytest.mark.xfail(reason="VM not implemented", raises=(ImportError, NameError))
 async def test_vm_async_execution():
-    """
-    Case 2: Async Execution.
-    Manually construct a program:
-      r0 = async_add(10, 20)
-    Verify that VM awaits the result correctly.
-    """
-    instr = Call(
-        func=_async_add,
-        output=Register(0),
-        args=[Literal(10), Literal(20)],
-        kwargs={},
-        task_name="async_add"
-    )
-    
-    blueprint = Blueprint(
-        instructions=[instr],
-        register_count=1
-    )
-
-    vm = VirtualMachine()
-    result = await vm.execute(blueprint)
-
-    assert result == 30
+~~~~~
+~~~~~python.new
+@pytest.mark.asyncio
+async def test_vm_async_execution():
 ~~~~~

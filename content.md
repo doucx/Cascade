@@ -1,173 +1,50 @@
-## [WIP] feat(compiler): 实现编译器前端逻辑
+好的，我们开始 "Phase 2: Compiler Optimizer" 的 TDD 流程。
 
-### 摘要头
-## [WIP] feat(compiler): 实现编译器前端逻辑
+我将生成一个计划，创建 `Optimizer` 的 RED 状态测试。这包括定义一个新的异常类型 `CycleDetectedError` 和编写两个核心测试用例：一个用于验证循环依赖的检测，另一个用于验证菱形依赖图的正确拓扑排序。
+
+## [WIP] test(compiler): 为 Optimizer 创建 RED 状态测试
 
 ### 用户需求
-完成 `cascade-compiler` 包的 `Frontend` 类实现，使处于 RED 状态的测试用例通过。这包括：
-1.  实现 `Frontend.compile()` 方法，该方法接收 `LazyResult` 并返回 `GraphIR`。
-2.  实现递归的依赖遍历逻辑，将 `LazyResult` 树转换为平坦的节点列表和边列表。
-3.  集成 `ReflectionAnalyzer` 以生成符合哈希命名公理的 `TaskDef`。
-4.  集成 `HashingService` 为节点生成稳定的结构化 ID。
+根据 TDD 重构路线图的 "Phase 2"，我们需要为新的 `Optimizer` 组件创建初始的、失败的（RED 状态）测试用例。这些测试用例需要定义 `Optimizer` 的核心契约：能够对 `GraphIR` 进行拓扑排序，并能在遇到循环依赖时抛出特定的错误。
 
 ### 评论
-这是 "Phase 1: Compiler Frontend" 的核心实现。我们将原有的图构建逻辑（`cascade-graph/build.py`）移植并净化到新的编译器前端中。新实现直接操作纯数据结构 (`NodeIR`, `EdgeIR`)，去除了旧版 `Node` 对象中混杂的运行时逻辑（如 `callable_obj` 绑定），向纯粹的 "Compiler-Runtime" 架构迈进。
+这是编译器开发的关键一步。`Optimizer` 负责将无序的 `GraphIR` 转换为可执行的计划，并在此过程中执行静态验证（如循环检测）。预先定义这些测试，可以确保我们实现的算法是正确且健壮的，并明确了 `Optimizer` 的输入（`GraphIR`）和输出（`ExecutionPlan` 或 `CycleDetectedError`）接口。
 
 ### 目标
-1.  创建 `packages/cascade-compiler/src/cascade/compiler/frontend.py`。
-2.  更新 `packages/cascade-compiler/src/cascade/compiler/__init__.py` 导出 `Frontend`。
-3.  更新 `packages/cascade-compiler/tests/test_frontend.py`，移除 `xfail` 标记和兼容性代码，验证 GREEN 状态。
+1.  在 `cascade.compiler` 中创建 `exceptions.py` 文件并定义 `CycleDetectedError`。
+2.  创建新的测试文件 `packages/cascade-compiler/tests/test_optimizer.py`。
+3.  在该测试文件中，添加一个测试用例，断言当输入一个循环 `GraphIR` 时会抛出 `CycleDetectedError`。
+4.  添加第二个测试用例，断言当输入一个菱形依赖 `GraphIR` 时，会生成一个逻辑上正确的拓扑排序计划。
 
 ### 基本原理
-我们利用 `cascade-graph` 现有的 `ReflectionAnalyzer` 和 `HashingService` 来保证哈希计算的一致性（避免重复造轮子导致的不兼容）。通过一个内部的 `_GraphBuilder` 类来封装遍历状态（visited 集合、节点映射等），保持 `Frontend.compile` 接口的无状态性。
+我们严格遵循 TDD 流程。通过 `write_file` 创建新的测试和异常类，我们为 `Optimizer` 组件设定了明确的开发目标。`pytest.xfail` 标记的使用表明我们预期这些测试会因为 `Optimizer` 尚未实现而失败，这正是 TDD 流程中 "RED" 阶段的标志。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/compiler #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/compiler-frontend #task/action/implement #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/compiler #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/compiler-optimizer #task/action/define #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 实现 Frontend 类
+#### Acts 1: 定义编译器异常
 
-我们将创建 `frontend.py`。注意，为了复用 `HashingService`（它期望依赖节点具有 `structural_id` 属性），我们在 `_GraphBuilder` 中使用了一个简单的 `NodeIDShim` 适配器。
+我们需要一个特定的异常来表示循环依赖，以便测试可以精确捕获它。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/src/cascade/compiler/frontend.py
+packages/cascade-compiler/src/cascade/compiler/exceptions.py
 ~~~~~
 ~~~~~python
-from typing import Any, Dict, List, cast
-from dataclasses import dataclass
+class CompilerError(Exception):
+    """Base class for compiler-related errors."""
+    pass
 
-from cascade.spec.lazy_types import LazyResult
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR
-from cascade.graph.analysis.reflection import ReflectionAnalyzer
-from cascade.graph.hashing import HashingService
-
-
-@dataclass
-class NodeIDShim:
-    """Helper to satisfy HashingService's expectation of objects with structural_id."""
-
-    structural_id: str
-
-
-class Frontend:
-    """
-    Compiler Frontend: Transforms user-facing LazyResults into Intermediate Representation (GraphIR).
-    """
-
-    @staticmethod
-    def compile(target: Any) -> GraphIR:
-        builder = _GraphBuilder()
-        return builder.build(target)
-
-
-class _GraphBuilder:
-    def __init__(self):
-        self.nodes: Dict[str, NodeIR] = {}  # Map structural_id -> NodeIR
-        self.edges: List[EdgeIR] = []
-        self._visited_lazy_uuids: Dict[str, str] = {}  # Map LazyResult.uuid -> structural_id
-
-        # Services from cascade-graph (reused for stability)
-        self.analyzer = ReflectionAnalyzer()
-        self.hashing_service = HashingService()
-
-    def build(self, target: Any) -> GraphIR:
-        # Currently we only support single root compilation, but the IR supports lists.
-        # This will be expanded later.
-        self._visit(target)
-        return GraphIR(nodes=list(self.nodes.values()), edges=self.edges)
-
-    def _visit(self, obj: Any) -> str:
-        """
-        Visits a LazyResult (or other objects), creating NodeIRs and EdgeIRs.
-        Returns the structural_id of the visited object.
-        """
-        if not isinstance(obj, LazyResult):
-            raise TypeError(f"Frontend currently only supports LazyResult, got {type(obj)}")
-
-        # 1. Memoization check
-        if obj._uuid in self._visited_lazy_uuids:
-            return self._visited_lazy_uuids[obj._uuid]
-
-        # 2. Visit Dependencies (Post-order traversal)
-        # We need to gather dependency IDs to compute the current node's hash
-        dep_shims: Dict[str, NodeIDShim] = {}
-
-        # 2.1 Args
-        for i, arg in enumerate(obj.args):
-            if isinstance(arg, LazyResult):
-                dep_id = self._visit(arg)
-                dep_shims[arg._uuid] = NodeIDShim(structural_id=dep_id)
-
-        # 2.2 Kwargs
-        for k, val in obj.kwargs.items():
-            if isinstance(val, LazyResult):
-                dep_id = self._visit(val)
-                dep_shims[val._uuid] = NodeIDShim(structural_id=dep_id)
-
-        # 3. Analyze Task Definition
-        # ReflectionAnalyzer generates TaskDef with 'current_code_structure_hash'
-        task_def = self.analyzer.analyze(obj.task)
-
-        # 4. Compute Structural ID
-        # HashingService uses the shims to verify/link dependencies in the hash
-        node_id = self.hashing_service.compute_node_instance_hash(
-            task_def, obj, cast(Dict[str, Any], dep_shims)
-        )
-
-        # 5. Create NodeIR
-        if node_id not in self.nodes:
-            # Extract Literal Inputs
-            # Inputs include both literals and references to dependencies, 
-            # but for NodeIR.inputs we typically store literals. 
-            # Dependency edges represent the dynamic inputs.
-            literal_inputs = {}
-            for i, arg in enumerate(obj.args):
-                if not isinstance(arg, LazyResult):
-                    # We store positional args with string keys "0", "1", etc.
-                    literal_inputs[str(i)] = arg
-            
-            for k, val in obj.kwargs.items():
-                if not isinstance(val, LazyResult):
-                    literal_inputs[k] = val
-
-            node = NodeIR(
-                id=node_id,
-                definition=task_def,
-                inputs=literal_inputs
-            )
-            self.nodes[node_id] = node
-
-        # 6. Create Edges
-        # Edges connect the dependencies visited in step 2 to this node
-        for i, arg in enumerate(obj.args):
-            if isinstance(arg, LazyResult):
-                source_id = dep_shims[arg._uuid].structural_id
-                self.edges.append(EdgeIR(
-                    source_id=source_id,
-                    target_id=node_id,
-                    target_arg=str(i)
-                ))
-
-        for k, val in obj.kwargs.items():
-            if isinstance(val, LazyResult):
-                source_id = dep_shims[val._uuid].structural_id
-                self.edges.append(EdgeIR(
-                    source_id=source_id,
-                    target_id=node_id,
-                    target_arg=k
-                ))
-
-        self._visited_lazy_uuids[obj._uuid] = node_id
-        return node_id
+class CycleDetectedError(CompilerError):
+    """Raised when a cycle is detected in the dependency graph."""
+    pass
 ~~~~~
 
-#### Acts 2: 导出 Frontend
-
-更新包的 `__init__.py`。
+#### Acts 2: 更新 `__init__.py` 导出异常
 
 ~~~~~act
 patch_file
@@ -175,57 +52,107 @@ packages/cascade-compiler/src/cascade/compiler/__init__.py
 ~~~~~
 ~~~~~python.old
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
-~~~~~
-~~~~~python.new
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 from .frontend import Frontend
 
 __all__ = ["Frontend"]
 ~~~~~
+~~~~~python.new
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
-#### Acts 3: 更新测试用例 (GREEN)
+from .frontend import Frontend
+from .exceptions import CompilerError, CycleDetectedError
 
-移除 `xfail` 标记，并删除 try-except 块，因为现在我们期望这些导入是成功的。
+__all__ = ["Frontend", "CompilerError", "CycleDetectedError"]
+~~~~~
+
+#### Acts 3: 创建 Optimizer 的 RED 测试文件
+
+这个测试文件定义了 `Optimizer` 必须满足的两个核心行为。
 
 ~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_frontend.py
+write_file
+packages/cascade-compiler/tests/test_optimizer.py
 ~~~~~
-~~~~~python.old
+~~~~~python
 import pytest
+from typing import List
 
-# NOTE: The 'cascade.compiler.frontend' module does not exist yet.
-# This is the expected RED state for Phase 1.
+# These are defined in Phase 1, so they should import correctly.
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef
+from cascade.spec.fingerprint import Fingerprint
+
+# NOTE: The Optimizer and its specific exception are not yet implemented.
+# We expect an ImportError, which will cause the tests to fail (RED state).
 try:
-    from cascade.compiler.frontend import Frontend
-    from cascade.spec.task import task
-    from cascade.spec.ir.models import GraphIR
+    from cascade.compiler.optimizer import Optimizer, ExecutionPlan
+    from cascade.compiler.exceptions import CycleDetectedError
 except ImportError:
-    pass
+    # Define a placeholder for type hinting if the import fails
+    ExecutionPlan = List[List[str]]
 
 
-@pytest.mark.xfail(reason="Frontend not implemented", raises=(ImportError, NameError))
-def test_compile_single_task_structure():
-~~~~~
-~~~~~python.new
-import pytest
-from cascade.compiler.frontend import Frontend
-from cascade.spec.task import task
-from cascade.spec.ir.models import GraphIR
+def _create_dummy_node_ir(node_id: str) -> NodeIR:
+    """Helper to create a minimal NodeIR for topology tests."""
+    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
+    task_def = TaskDef(name=node_id, args=[], fingerprint=fp)
+    return NodeIR(id=node_id, definition=task_def)
 
 
-def test_compile_single_task_structure():
-~~~~~
+@pytest.mark.xfail(reason="Optimizer not implemented", raises=(ImportError, NameError))
+def test_optimizer_detects_cycle():
+    """
+    Case 1: Cycle Detection
+    Verify that the optimizer raises CycleDetectedError for a graph with a loop.
+    """
+    node_a = _create_dummy_node_ir("A")
+    node_b = _create_dummy_node_ir("B")
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_frontend.py
-~~~~~
-~~~~~python.old
-@pytest.mark.xfail(reason="Frontend not implemented", raises=(ImportError, NameError))
-def test_compile_linear_dependency():
-~~~~~
-~~~~~python.new
-def test_compile_linear_dependency():
+    # A -> B -> A
+    cyclic_ir = GraphIR(
+        nodes=[node_a, node_b],
+        edges=[
+            EdgeIR(source_id="A", target_id="B", target_arg="data"),
+            EdgeIR(source_id="B", target_id="A", target_arg="data"),
+        ],
+    )
+
+    with pytest.raises(CycleDetectedError):
+        Optimizer.optimize(cyclic_ir)
+
+
+@pytest.mark.xfail(reason="Optimizer not implemented", raises=(ImportError, NameError))
+def test_optimizer_schedules_diamond_graph():
+    """
+    Case 2: Topological Sort of a diamond dependency graph.
+    A -> B, A -> C, B -> D, C -> D
+    """
+    node_a = _create_dummy_node_ir("A")
+    node_b = _create_dummy_node_ir("B")
+    node_c = _create_dummy_node_ir("C")
+    node_d = _create_dummy_node_ir("D")
+
+    diamond_ir = GraphIR(
+        nodes=[node_a, node_b, node_c, node_d],
+        edges=[
+            EdgeIR(source_id="A", target_id="B", target_arg="a_val"),
+            EdgeIR(source_id="A", target_id="C", target_arg="a_val"),
+            EdgeIR(source_id="B", target_id="D", target_arg="b_val"),
+            EdgeIR(source_id="C", target_id="D", target_arg="c_val"),
+        ],
+    )
+
+    plan: ExecutionPlan = Optimizer.optimize(diamond_ir)
+
+    # Expected plan is 3 stages
+    assert len(plan) == 3
+
+    # Stage 0: Must contain only A
+    assert plan[0] == ["A"]
+
+    # Stage 1: Must contain B and C (order is not guaranteed)
+    assert set(plan[1]) == {"B", "C"}
+
+    # Stage 2: Must contain only D
+    assert plan[2] == ["D"]
 ~~~~~

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 解耦 ResourceDefinition 的元数据与提供者函数", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767068037.9984949, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] 是的，分析覆盖率报告后，我认为**有必要添加新的测试用例**来增强 `ResourceContainer` 的健壮性。", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767068126.3333623, "duration_ms": 0}}

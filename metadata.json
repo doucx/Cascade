@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 正确实现 `ipfs` 异步测试 Fixture", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767066647.4871347, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 添加 pytest-asyncio 依赖以支持异步测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767067043.6304088, "duration_ms": 0}}

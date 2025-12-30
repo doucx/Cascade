@@ -56,9 +56,9 @@ def test_lisp_transpile_shared_param_in_let():
     # The name is sanitized from the node name (_get_param_value)
     expected_lines = [
         "(let* (",
-        "  (get-param-value (param \"user_input\"))",
+        "  (-get-param-value (param \"user_input\"))",
         ")",
-        "  (gather (task-a get-param-value) (task-b get-param-value)))",
+        "  (gather (task-a -get-param-value) (task-b -get-param-value)))",
     ]
     assert lisp_code == "\n".join(expected_lines)
 
@@ -89,9 +89,9 @@ def test_lisp_transpile_router_with_param_selector():
     # The param is shared (as a selector), so it's hoisted.
     expected_lines = [
         "(let* (",
-        "  (get-param-value (param \"mode\"))",
+        "  (-get-param-value (param \"mode\"))",
         ")",
-        '  (consumer (case get-param-value (("a") (branch-a)) (("b") (branch-b)))))',
+        '  (consumer (case -get-param-value (("a") (branch-a)) (("b") (branch-b)))))',
     ]
 
     assert lisp_code == "\n".join(expected_lines)

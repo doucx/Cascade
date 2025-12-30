@@ -125,3 +125,48 @@ def test_resource_must_be_generator():
         @cs.resource
         def not_a_generator():
             return "foo"
+
+
+def test_unregistered_resource_raises_error():
+    """
+    Verifies that asking for an unregistered resource raises a NameError.
+    This covers the missing line 98 in resource_container.py.
+    """
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
+    # Note: We do NOT register any resources.
+
+    @cs.task
+    def task_needs_unregistered(conn=cs.inject("non_existent_db")):
+        pass
+
+    with pytest.raises(NameError, match="Resource 'non_existent_db' is required but not registered"):
+        import asyncio
+        asyncio.run(engine.run(task_needs_unregistered()))
+
+
+def test_resource_scan_finds_inject_in_dict():
+    """
+    Verifies that resource scanning correctly finds Inject objects
+    nested inside dictionaries. This covers missing line 84.
+    """
+    from cascade.runtime.resource_container import ResourceContainer
+    from cascade.graph.build import build_graph
+
+    @cs.resource
+    def my_res():
+        yield "foo"
+
+    @cs.task
+    def task_with_dict_inject(config: dict):
+        pass
+
+    # The Inject object is nested inside a dict
+    flow = task_with_dict_inject(config={"db": cs.inject("my_res")})
+    graph, _ = build_graph(flow)
+
+    container = ResourceContainer(bus=cs.MessageBus())
+    required = container.scan(graph)
+
+    assert "my_res" in required

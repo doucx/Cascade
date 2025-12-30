@@ -87,23 +87,26 @@ class ResourceContainer:
             if not provider_entry:
                 raise NameError(f"Resource '{name}' is required but not registered.")
 
-            # Determine scope and func
+            # Determine scope and the actual provider function
             scope = "run"
-            func = provider_entry
+            provider_func: Callable
             if isinstance(provider_entry, ResourceDefinition):
                 scope = provider_entry.scope
-                func = provider_entry.func
+                provider_func = provider_entry.func
+            else:
+                # It's a raw callable, likely for testing or simple cases
+                provider_func = provider_entry
 
             # Recursive dependency resolution
-            sig = inspect.signature(func)
+            sig = inspect.signature(provider_func)
             deps = {
                 p_name: get_or_create(p.default.resource_name)
                 for p_name, p in sig.parameters.items()
                 if isinstance(p.default, Inject)
             }
 
-            # Instantiate
-            gen = func(**deps)
+            # Instantiate using the explicitly resolved function
+            gen = provider_func(**deps)
             instance = next(gen)
 
             # Register in active dict

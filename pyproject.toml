@@ -49,6 +49,7 @@ packages = ["packages/cascade-sdk/src/cascade"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov=cascade --cov-report=term-missing"
+asyncio_mode = "auto"
 
 [project.optional-dependencies]
 dev = [
@@ -56,6 +57,7 @@ dev = [
   "pytest-cov",
   "pytest-aiohttp",
   "pytest-mock",
+  "pytest-asyncio",
   "moto[s3]",
   "typer",
   "mkdocs",

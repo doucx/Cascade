@@ -8,10 +8,10 @@ except ImportError:
 
 from cascade.spec.task import task, LazyResult
 from cascade.spec.resource import inject
-from cascade.providers import LazyFactory
+from cascade.providers import LazyFactory, Provider
 
 
-class SqlProvider:
+class SqlProvider(Provider):
     name = "sql"
 
     def create_factory(self) -> LazyFactory:
@@ -20,23 +20,30 @@ class SqlProvider:
                 "The 'sqlalchemy' library is required to use the sql provider. "
                 "Please install it with: pip install cascade-py[sql]"
             )
-        return _sql_factory
-
-
-def _sql_factory(
-    query: str, db: str, params: Optional[Dict[str, Any]] = None, **kwargs
-) -> LazyResult[List[Dict[str, Any]]]:
-    # We dynamically inject the resource by converting the 'db' string name
-    # into an Inject object and passing it to the 'conn' argument of the task.
-    # Note: **kwargs is required to satisfy LazyFactory protocol (map support)
-    return _sql_task(query=query, params=params or {}, conn=inject(db))
+        # Directly return the Task object, satisfying the LazyFactory protocol.
+        return _sql_task
 
 
 @task(name="sql_query")
-def _sql_task(query: str, params: Dict[str, Any], conn: Any) -> List[Dict[str, Any]]:
+def _sql_task(
+    query: str,
+    conn: Any,  # The connection object is now an explicit, injectable argument
+    params: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Executes a SQL query using the provided connection.
+
+    Note on API Change:
+    The user-facing API is now more explicit. Instead of cs.sql(db="my_db"),
+    the call should be cs.sql(conn=cs.inject("my_db"), ...).
+    """
+    if sqlalchemy is None:
+        # This check is redundant if create_factory is called, but good for safety
+        raise ImportError("SQLAlchemy is not installed.")
+
     # 'conn' can be an Engine or a Connection.
     # We use a context manager to ensure proper handling.
-
+    params = params or {}
     stmt = text(query)
 
     # Check if it's an Engine or Connection by looking for 'connect' method

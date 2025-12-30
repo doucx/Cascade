@@ -101,10 +101,13 @@ def __getattr__(name: str) -> Any:
     """
     from .providers.registry import registry
 
-    # This will raise an AttributeError for names that are not registered providers,
-    # which is the correct behavior. We no longer need a try/except block that
-    # could mask other import-related issues.
-    return registry.get(name)
+    try:
+        # Attempt to resolve the name as a provider.
+        return registry.get(name)
+    except AttributeError:
+        # If the provider registry doesn't know the name, we raise the standard
+        # module-level AttributeError to maintain expected Python behavior.
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
 # --- Public API Export ---

@@ -1,39 +1,3 @@
-## [WIP] test(compiler): 为 Backend 创建 RED 状态测试
-
-### 用户需求
-根据 TDD 重构路线图的 "Phase 3: Compiler Backend"，我们需要创建 `Backend` 组件的测试用例。`Backend` 的职责是接收 `GraphIR` 和 `ExecutionPlan`，并生成可执行的 `Blueprint`（包含虚拟机指令）。
-用户特别强调了设计的严谨性，要求 Backend 明确接收 `(GraphIR, ExecutionPlan)` 这一对参数，以避免过度简化导致的耦合。
-
-### 评论
-Backend 是编译器的后端代码生成器 (Codegen)。它不应该关心拓扑排序或循环检测（这是 Optimizer 的工作），也不应该关心 Python 对象的解析（这是 Frontend 的工作）。它的核心职责是**寄存器分配 (Register Allocation)** 和 **指令生成 (Instruction Generation)**。
-测试用例将重点验证：
-1.  简单的函数调用是否生成了正确的 `Call` 指令。
-2.  依赖关系是否被正确转换为寄存器引用（即上游的 `output_register` 是下游的输入 `Operand`）。
-
-### 目标
-1.  创建 `packages/cascade-compiler/tests/test_backend.py`。
-2.  实现 `test_compile_single_node`：验证单节点图生成包含 `Literal` 参数的指令。
-3.  实现 `test_compile_dependency_registers`：验证 A->B 依赖图中，B 的输入参数正确指向了 A 的输出寄存器。
-
-### 基本原理
-我们继续遵循 TDD 的 "RED" 阶段。通过编写断言 `Blueprint` 内部结构的测试，我们定义了 Backend 的预期行为。特别是第二个测试用例，它强制要求 Backend 实现一个寄存器分配表（Symbol Table 或 Register Map），这是编译器的核心逻辑之一。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/compiler #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/compiler-backend #task/action/define #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 Backend 的 RED 测试文件
-
-此文件定义了代码生成器的输入输出契约。
-
-~~~~~act
-write_file
-packages/cascade-compiler/tests/test_backend.py
-~~~~~
-~~~~~python
 import pytest
 from typing import List
 
@@ -137,4 +101,3 @@ def test_compile_dependency_registers():
     
     assert isinstance(operand_in_b, Register)
     assert operand_in_b.index == reg_out_a.index
-~~~~~

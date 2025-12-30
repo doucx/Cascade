@@ -1,140 +1,217 @@
-## [WIP] test(compiler): 为 Backend 创建 RED 状态测试
+好的，我们现在进入 GREEN 阶段，实现 `Backend` 的逻辑以通过测试。
+
+## [WIP] feat(compiler): 实现 Backend 代码生成器
+
+### 摘要头
+## [WIP] feat(compiler): 实现 Backend 代码生成器
 
 ### 用户需求
-根据 TDD 重构路线图的 "Phase 3: Compiler Backend"，我们需要创建 `Backend` 组件的测试用例。`Backend` 的职责是接收 `GraphIR` 和 `ExecutionPlan`，并生成可执行的 `Blueprint`（包含虚拟机指令）。
-用户特别强调了设计的严谨性，要求 Backend 明确接收 `(GraphIR, ExecutionPlan)` 这一对参数，以避免过度简化导致的耦合。
+根据 TDD 流程，实现 `cascade.compiler.Backend` 类。该类需要接收 `GraphIR` 和 `ExecutionPlan` 作为输入，并生成一个 `Blueprint` 对象，其中包含一个线性的、可由 VM 执行的指令序列。
 
 ### 评论
-Backend 是编译器的后端代码生成器 (Codegen)。它不应该关心拓扑排序或循环检测（这是 Optimizer 的工作），也不应该关心 Python 对象的解析（这是 Frontend 的工作）。它的核心职责是**寄存器分配 (Register Allocation)** 和 **指令生成 (Instruction Generation)**。
-测试用例将重点验证：
-1.  简单的函数调用是否生成了正确的 `Call` 指令。
-2.  依赖关系是否被正确转换为寄存器引用（即上游的 `output_register` 是下游的输入 `Operand`）。
+这是编译器管线的最后一步：代码生成 (Codegen)。我们将实现一个内部的 `_BlueprintBuilder` 来处理状态，包括最关键的**寄存器分配**。通过遍历 `ExecutionPlan`，我们可以保证在处理一个节点时，其所有上游依赖节点的输出寄存器都已经分配好了，从而正确地将数据流连接起来。
 
 ### 目标
-1.  创建 `packages/cascade-compiler/tests/test_backend.py`。
-2.  实现 `test_compile_single_node`：验证单节点图生成包含 `Literal` 参数的指令。
-3.  实现 `test_compile_dependency_registers`：验证 A->B 依赖图中，B 的输入参数正确指向了 A 的输出寄存器。
+1.  创建 `packages/cascade-compiler/src/cascade/compiler/backend.py` 文件并实现 `Backend` 类。
+2.  更新 `packages/cascade-compiler/src/cascade/compiler/__init__.py` 以导出 `Backend`。
+3.  更新 `packages/cascade-compiler/tests/test_backend.py`，移除 `xfail` 标记，使测试能够运行并通过。
 
 ### 基本原理
-我们继续遵循 TDD 的 "RED" 阶段。通过编写断言 `Blueprint` 内部结构的测试，我们定义了 Backend 的预期行为。特别是第二个测试用例，它强制要求 Backend 实现一个寄存器分配表（Symbol Table 或 Register Map），这是编译器的核心逻辑之一。
+`Backend` 的核心是一个状态机，它将图的拓扑结构（通过 `ExecutionPlan`）和节点信息（通过 `GraphIR`）转换为一个线性指令序列。
+-   **寄存器分配**: 我们维护一个 `node_output_registers` 字典，作为从节点 ID 到其输出寄存器的符号表。
+-   **操作数解析**: 当为一个节点生成 `Call` 指令时，它的输入参数（`Operands`）会根据来源被解析：
+    -   如果输入来自上游节点（通过 `EdgeIR`），操作数就是上游节点在符号表中的 `Register`。
+    -   如果输入是节点自带的字面量（`NodeIR.inputs`），操作数就是 `Literal`。
+这个过程确保了计算图中的数据流被正确地翻译为 VM 中的寄存器间数据流动。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/compiler #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/compiler-backend #task/action/define #task/state/continue
+#intent/build #flow/ready #priority/high #comp/compiler #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/compiler-backend #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Backend 的 RED 测试文件
+#### Acts 1: 实现 Backend 类
 
-此文件定义了代码生成器的输入输出契约。
+创建 `backend.py` 并实现代码生成逻辑。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/tests/test_backend.py
+packages/cascade-compiler/src/cascade/compiler/backend.py
 ~~~~~
 ~~~~~python
-import pytest
-from typing import List
+from typing import List, Dict, Tuple, Any
 
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef, ArgumentDef, ArgumentKind
-from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR
+from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Operand
+from .optimizer import ExecutionPlan
 
+
+class Backend:
+    """
+    Compiler Backend (Codegen): Transforms a scheduled IR into a linear Blueprint.
+    """
+
+    @staticmethod
+    def compile(graph: GraphIR, plan: ExecutionPlan) -> Blueprint:
+        builder = _BlueprintBuilder(graph, plan)
+        return builder.build()
+
+
+class _BlueprintBuilder:
+    def __init__(self, graph: GraphIR, plan: ExecutionPlan):
+        self._graph = graph
+        self._plan = plan
+        self._instructions: List[Call] = []
+        self._register_counter = 0
+
+        # The "Symbol Table" for register allocation
+        self._node_output_registers: Dict[str, Register] = {}
+        
+        # Fast lookups
+        self._nodes_map: Dict[str, NodeIR] = {n.id: n for n in graph.nodes}
+        self._incoming_edges_map: Dict[str, List[EdgeIR]] = {}
+        for edge in graph.edges:
+            if edge.target_id not in self._incoming_edges_map:
+                self._incoming_edges_map[edge.target_id] = []
+            self._incoming_edges_map[edge.target_id].append(edge)
+
+    def _allocate_register(self) -> Register:
+        reg = Register(self._register_counter)
+        self._register_counter += 1
+        return reg
+
+    def build(self) -> Blueprint:
+        for stage in self._plan:
+            for node_id in stage:
+                self._process_node(node_id)
+        
+        return Blueprint(
+            instructions=self._instructions,
+            register_count=self._register_counter
+        )
+
+    def _process_node(self, node_id: str):
+        node = self._nodes_map[node_id]
+
+        # 1. Resolve Input Operands
+        args: List[Operand] = []  # Positional args not yet fully supported by this IR
+        kwargs: Dict[str, Operand] = {}
+
+        # 1a. From Literals
+        for key, value in node.inputs.items():
+            kwargs[key] = Literal(value)
+
+        # 1b. From Edges (Dependencies)
+        incoming_edges = self._incoming_edges_map.get(node_id, [])
+        for edge in incoming_edges:
+            # The source node must have been processed in a previous stage,
+            # so its output register must be in our map.
+            source_register = self._node_output_registers.get(edge.source_id)
+            if source_register is None:
+                # This indicates a flaw in the ExecutionPlan or this compiler's logic
+                raise RuntimeError(
+                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
+                    "was not assigned a register before being used."
+                )
+            kwargs[edge.target_arg] = source_register
+
+        # 2. Allocate Output Register for this node
+        output_register = self._allocate_register()
+        self._node_output_registers[node_id] = output_register
+
+        # 3. Create Instruction
+        # For now, we assume the IR definition's callable is magically available.
+        # A real implementation would need a way to resolve/load the actual function.
+        # For testing, the function itself isn't invoked, so we can use a placeholder.
+        
+        # We also pass task name for better observability in the VM
+        instr = Call(
+            func=None,  # The VM will need to resolve this later
+            output=output_register,
+            args=args,
+            kwargs=kwargs,
+            task_name=node.definition.name
+        )
+        self._instructions.append(instr)
+~~~~~
+
+#### Acts 2: 导出 Backend
+
+更新 `__init__.py`。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/__init__.py
+~~~~~
+~~~~~python.old
+from .frontend import Frontend
+from .optimizer import Optimizer, ExecutionPlan
+from .exceptions import CompilerError, CycleDetectedError
+
+__all__ = [
+    "Frontend",
+    "Optimizer",
+    "ExecutionPlan",
+    "CompilerError",
+    "CycleDetectedError",
+]
+~~~~~
+~~~~~python.new
+from .frontend import Frontend
+from .optimizer import Optimizer, ExecutionPlan
+from .backend import Backend
+from .exceptions import CompilerError, CycleDetectedError
+
+__all__ = [
+    "Frontend",
+    "Optimizer",
+    "ExecutionPlan",
+    "Backend",
+    "CompilerError",
+    "CycleDetectedError",
+]
+~~~~~
+
+#### Acts 3: 更新测试用例 (GREEN)
+
+移除 `xfail` 标记并启用测试。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/tests/test_backend.py
+~~~~~
+~~~~~python.old
 # RED State: Backend not implemented
 try:
     from cascade.compiler.backend import Backend
 except ImportError:
     pass
+~~~~~
+~~~~~python.new
+from cascade.compiler.backend import Backend
+~~~~~
 
-
-def _create_dummy_task_def(name: str) -> TaskDef:
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_{name}"})
-    return TaskDef(name=name, args=[], fingerprint=fp)
-
-
+~~~~~act
+patch_file
+packages/cascade-compiler/tests/test_backend.py
+~~~~~
+~~~~~python.old
 @pytest.mark.xfail(reason="Backend not implemented", raises=(ImportError, NameError))
 def test_compile_single_node_literals():
-    """
-    Case 1: Single Node with Literals.
-    Verify that Backend generates a Blueprint with a single Call instruction,
-    and correctly maps literal inputs to Literal operands.
-    """
-    # 1. Setup IR
-    # Node A(x=1, y="hello")
-    task_def = _create_dummy_task_def("task_A")
-    node = NodeIR(id="A", definition=task_def, inputs={"x": 1, "y": "hello"})
-    
-    ir = GraphIR(nodes=[node], edges=[])
-    plan = [["A"]] # Single stage
+~~~~~
+~~~~~python.new
+def test_compile_single_node_literals():
+~~~~~
 
-    # 2. Execute Backend
-    blueprint = Backend.compile(ir, plan)
-
-    # 3. Assertions
-    assert isinstance(blueprint, Blueprint)
-    assert len(blueprint.instructions) == 1
-    
-    instr = blueprint.instructions[0]
-    assert isinstance(instr, Call)
-    assert instr.task_name == "task_A"
-    
-    # Check outputs
-    assert isinstance(instr.output, Register)
-    
-    # Check inputs (Literals)
-    assert "x" in instr.kwargs
-    arg_x = instr.kwargs["x"]
-    assert isinstance(arg_x, Literal)
-    assert arg_x.value == 1
-    
-    assert "y" in instr.kwargs
-    arg_y = instr.kwargs["y"]
-    assert isinstance(arg_y, Literal)
-    assert arg_y.value == "hello"
-
-
+~~~~~act
+patch_file
+packages/cascade-compiler/tests/test_backend.py
+~~~~~
+~~~~~python.old
 @pytest.mark.xfail(reason="Backend not implemented", raises=(ImportError, NameError))
 def test_compile_dependency_registers():
-    """
-    Case 2: Dependency (A -> B).
-    Verify that Backend correctly allocates registers for data flow.
-    The output register of A must be used as a Register operand for B.
-    """
-    # 1. Setup IR
-    # A produces result. B consumes result as 'val'.
-    node_a = NodeIR(id="A", definition=_create_dummy_task_def("producer"))
-    node_b = NodeIR(id="B", definition=_create_dummy_task_def("consumer"))
-    
-    edge = EdgeIR(source_id="A", target_id="B", target_arg="val")
-    
-    ir = GraphIR(
-        nodes=[node_a, node_b],
-        edges=[edge]
-    )
-    plan = [["A"], ["B"]] # Two stages
-
-    # 2. Execute Backend
-    blueprint = Backend.compile(ir, plan)
-
-    # 3. Assertions
-    assert len(blueprint.instructions) == 2
-    
-    # We expect instructions in topological order based on the plan
-    instr_a = blueprint.instructions[0]
-    instr_b = blueprint.instructions[1]
-    
-    assert instr_a.task_name == "producer"
-    assert instr_b.task_name == "consumer"
-    
-    # Critical Check: Register Linkage
-    # A's output -> Register R_k
-    # B's input 'val' -> Register R_k
-    reg_out_a = instr_a.output
-    
-    assert "val" in instr_b.kwargs
-    operand_in_b = instr_b.kwargs["val"]
-    
-    assert isinstance(operand_in_b, Register)
-    assert operand_in_b.index == reg_out_a.index
+~~~~~
+~~~~~python.new
+def test_compile_dependency_registers():
 ~~~~~

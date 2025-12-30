@@ -1,0 +1,94 @@
+from typing import List, Dict, Tuple, Any
+
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR
+from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Operand
+from .optimizer import ExecutionPlan
+
+
+class Backend:
+    """
+    Compiler Backend (Codegen): Transforms a scheduled IR into a linear Blueprint.
+    """
+
+    @staticmethod
+    def compile(graph: GraphIR, plan: ExecutionPlan) -> Blueprint:
+        builder = _BlueprintBuilder(graph, plan)
+        return builder.build()
+
+
+class _BlueprintBuilder:
+    def __init__(self, graph: GraphIR, plan: ExecutionPlan):
+        self._graph = graph
+        self._plan = plan
+        self._instructions: List[Call] = []
+        self._register_counter = 0
+
+        # The "Symbol Table" for register allocation
+        self._node_output_registers: Dict[str, Register] = {}
+        
+        # Fast lookups
+        self._nodes_map: Dict[str, NodeIR] = {n.id: n for n in graph.nodes}
+        self._incoming_edges_map: Dict[str, List[EdgeIR]] = {}
+        for edge in graph.edges:
+            if edge.target_id not in self._incoming_edges_map:
+                self._incoming_edges_map[edge.target_id] = []
+            self._incoming_edges_map[edge.target_id].append(edge)
+
+    def _allocate_register(self) -> Register:
+        reg = Register(self._register_counter)
+        self._register_counter += 1
+        return reg
+
+    def build(self) -> Blueprint:
+        for stage in self._plan:
+            for node_id in stage:
+                self._process_node(node_id)
+        
+        return Blueprint(
+            instructions=self._instructions,
+            register_count=self._register_counter
+        )
+
+    def _process_node(self, node_id: str):
+        node = self._nodes_map[node_id]
+
+        # 1. Resolve Input Operands
+        args: List[Operand] = []  # Positional args not yet fully supported by this IR
+        kwargs: Dict[str, Operand] = {}
+
+        # 1a. From Literals
+        for key, value in node.inputs.items():
+            kwargs[key] = Literal(value)
+
+        # 1b. From Edges (Dependencies)
+        incoming_edges = self._incoming_edges_map.get(node_id, [])
+        for edge in incoming_edges:
+            # The source node must have been processed in a previous stage,
+            # so its output register must be in our map.
+            source_register = self._node_output_registers.get(edge.source_id)
+            if source_register is None:
+                # This indicates a flaw in the ExecutionPlan or this compiler's logic
+                raise RuntimeError(
+                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
+                    "was not assigned a register before being used."
+                )
+            kwargs[edge.target_arg] = source_register
+
+        # 2. Allocate Output Register for this node
+        output_register = self._allocate_register()
+        self._node_output_registers[node_id] = output_register
+
+        # 3. Create Instruction
+        # For now, we assume the IR definition's callable is magically available.
+        # A real implementation would need a way to resolve/load the actual function.
+        # For testing, the function itself isn't invoked, so we can use a placeholder.
+        
+        # We also pass task name for better observability in the VM
+        instr = Call(
+            func=None,  # The VM will need to resolve this later
+            output=output_register,
+            args=args,
+            kwargs=kwargs,
+            task_name=node.definition.name
+        )
+        self._instructions.append(instr)

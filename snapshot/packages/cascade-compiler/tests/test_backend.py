@@ -5,11 +5,7 @@ from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef, ArgumentDef
 from cascade.spec.fingerprint import Fingerprint
 from cascade.spec.blueprint import Blueprint, Call, Register, Literal
 
-# RED State: Backend not implemented
-try:
-    from cascade.compiler.backend import Backend
-except ImportError:
-    pass
+from cascade.compiler.backend import Backend
 
 
 def _create_dummy_task_def(name: str) -> TaskDef:
@@ -17,7 +13,6 @@ def _create_dummy_task_def(name: str) -> TaskDef:
     return TaskDef(name=name, args=[], fingerprint=fp)
 
 
-@pytest.mark.xfail(reason="Backend not implemented", raises=(ImportError, NameError))
 def test_compile_single_node_literals():
     """
     Case 1: Single Node with Literals.
@@ -58,7 +53,6 @@ def test_compile_single_node_literals():
     assert arg_y.value == "hello"
 
 
-@pytest.mark.xfail(reason="Backend not implemented", raises=(ImportError, NameError))
 def test_compile_dependency_registers():
     """
     Case 2: Dependency (A -> B).

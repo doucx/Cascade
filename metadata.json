@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(cli): 统一 CLI 包的 API 暴露模式", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767075221.1837568, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "in cascade/cli/observer/__init__.py", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767075322.9457314, "duration_ms": 0}}

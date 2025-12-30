@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock
 
 # The module we are testing
-from cascade.cli.observer import app as observer_app
+import cascade.cli.observer.app as observer_app
 
 # The objects we need to mock
 # We will patch 'bus' and 'MqttConnector' where they are USED.

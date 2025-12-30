@@ -1,77 +1,81 @@
-好的，审查开始。
 
-我将系统性地检查 `packages` 目录下的所有 `__init__.py` 文件，寻找与我们刚刚修复的问题类似的反模式、不一致的 API 暴露方式或潜在的导入问题。
+您发现的问题是 Python 导入系统中的一个经典陷阱。我的上一个计划中，对 `cascade/cli/observer/__init__.py` 和 `cascade/cli/controller/__init__.py` 的修改是：
 
-1.  **Namespace Packages (`__path__ = ...`)**:
-    *   在所有需要作为命名空间包（如 `cascade/`, `cascade/cli/`, `cascade/connectors/`）的地方，都正确地使用了 `__path__ = __import__("pkgutil").extend_path(__path__, __name__)`。这是**正确的**，并且是项目能够以 monorepo 形式工作的关键。
+```python
+# in cascade/cli/observer/__init__.py
+from .app import app
+__all__ = ["app"]
+```
 
-2.  **组件 API 暴露 (`__all__` 和 `from . import ...`)**:
-    *   `cascade-common/src/cascade/common/messaging/__init__.py`: **优秀**。清晰地从 `bus.py` 和 `protocols.py` 导入并暴露了 `bus`, `MessageBus` 等核心 API，并定义了 `__all__`.
-    *   `cascade-engine/src/cascade/runtime/__init__.py`: **优秀**。作为 `runtime` 模块的入口，它清晰地暴露了 `Engine`, `MessageBus`, `DependencyMissingError` 等关键类。
-    *   `cascade-graph/src/cascade/graph/__init__.py`: **优秀**。同样，为 `graph` 模块提供了清晰的公共 API。
-    *   `cascade-connector-*` 包：所有 connector 包的 `__init__.py` 都遵循了良好的模式，只暴露了主要的 `Connector` 类。
+这个修改使得当 `pytest` 的 `monkeypatch` 尝试解析字符串 `"cascade.cli.observer.app.bus"` 时，它首先加载 `cascade.cli.observer` 模块（也就是执行 `__init__.py`），然后尝试访问 `.app` 属性。因为 `__init__.py` 已经将 `app` 这个 **Typer 对象** 导入到了包的命名空间中，所以 `cascade.cli.observer.app` 解析为了该 Typer 对象，而不是 `app.py` 这个**模块**。
 
-3.  **我们刚刚修复的文件**:
-    *   `cascade-sdk/src/cascade/__init__.py`: 现在是**正确的**。它显式地导入和导出了核心 API，并将 `__getattr__` 的功能限定在 providers 的动态加载上，同时提供了标准的错误信息。
+因此，`monkeypatch` 实际上在尝试执行 `getattr(<Typer object>, 'bus')`，这自然会失败，并抛出 `AttributeError: 'Typer' object has no attribute 'bus'`，与您观察到的错误完全一致。
 
-4.  **待改进项**:
-    *   **`cascade-cli-controller/src/cascade/cli/controller/__init__.py`**: 当前为空。
-    *   **`cascade-cli-observer/src/cascade/cli/observer/__init__.py`**: 当前为空。
-    *   **分析**: 这两个文件是提升一致性的机会点。按照其他包的最佳实践，它们应该从其子模块 (`app.py`) 中导入并暴露核心对象（即 Typer `app`），使用户可以通过 `from cascade.cli.controller import app` 这样更简洁的方式来访问它。虽然当前的方式（`from cascade.cli.controller.app import app`）也能工作，但它暴露了内部的文件结构，不够优雅。
+解决方案不是撤销我们的 API 改进，而是使测试代码更加健壮，使其不受 `__init__.py` 中 API 暴露方式的影响。测试应该直接针对它所测试的模块 (`app.py`)，而不是通过包的公共 API 入口。
 
-审查发现，项目整体的导入结构是比较健康的，我们修复的 `__getattr__` 确实是主要的异常点。除了这个已修复的问题外，只有 CLI 包中的 `__init__.py` 文件可以进行一些小的优化，以使其 API 暴露方式与其他包（如 `cascade.runtime`）完全一致。
+我将修改受影响的测试文件 (`test_observer_app.py` 和 `test_controller_app.py`) 中的导入语句，使其直接导入模块，而不是从 `__init__.py` 中导入对象。
 
-我将生成一个计划来执行这些小的改进。
-
-## [WIP] refactor(cli): 统一 CLI 包的 API 暴露模式
+## [WIP] fix(tests): 调整 CLI 测试以适应 API 导入重构
 
 ### 用户需求
-在修复了 `cascade-sdk` 的导入问题后，对整个 `cascade` 生态的 `__init__.py` 文件进行全面审查，以确保导入和 API 暴露的一致性。
+修复因 `__init__.py` 重构而导致的 `monkeypatch` 测试失败。
 
 ### 评论
-这是一个有益的重构。通过在 `__init__.py` 文件中暴露子模块的核心对象，我们为库的使用者提供了一个更稳定、更简洁的 API 接口。这隐藏了内部文件结构的实现细节，并使得所有 `cascade` 子包的行为模式更加统一。
+这是一个很好的例子，说明了测试（特别是依赖 `monkeypatch` 字符串路径的测试）与实现细节耦合的风险。修复方案将通过使测试直接引用它们的目标模块来解耦这种关系，从而使测试对未来 `__init__.py` 的 API 调整更具弹性。
 
 ### 目标
-1.  修改 `packages/cascade-cli-controller/src/cascade/cli/controller/__init__.py`，使其导入并暴露 `app.py` 中的 `app` 对象。
-2.  修改 `packages-cli-observer/src/cascade/cli/observer/__init__.py`，使其导入并暴露 `app.py` 中的 `app` 对象。
-3.  在这两个文件中添加 `__all__` 列表，明确声明其公共 API。
+1.  修改 `packages/cascade-cli-observer/tests/test_observer_app.py` 中的导入语句。
+2.  修改 `packages/cascade-cli-controller/tests/test_controller_app.py` 中的导入语句。
+3.  确保修改后的导入方式能够解决 `monkeypatch` 的 `AttributeError`，并使所有测试通过。
 
 ### 基本原理
-此重构遵循了 Python 包设计的最佳实践。通过在包的 `__init__.py` 中提升关键对象，我们将实现（`app.py` 文件）与接口（`cascade.cli.controller` 包）解耦。这使得未来的内部重构（例如，将 `app.py` 拆分成多个文件）对库的最终用户是透明的。
+我们将把测试文件中的导入语句从 `from cascade.cli.observer import app as observer_app` 改为 `import cascade.cli.observer.app as observer_app`。这个改动确保了 `observer_app` 这个别名始终指向 `app.py` **模块本身**，而不是模块中定义的 `app` 对象。这样，`monkeypatch` 的字符串路径 `"cascade.cli.observer.app.bus"` 就能被正确解析：它会找到 `app` 模块，然后找到该模块内的 `bus` 变量，这正是我们想要 patch 的目标。
 
 ### 标签
-#intent/refine #flow/ready #priority/low #comp/cli #scope/dx #ai/instruct #task/domain/architecture #task/object/api-surface #task/action/refactor #task/state/continue
+#intent/fix #intent/tooling #flow/ready #priority/medium #comp/cli #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/test-robustness #task/action/refactor #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 改进 `cascade-cli-controller`
+#### Acts 1: 修复 `test_observer_app.py`
 
-我们将更新 `controller` 包的 `__init__.py`，使其 API 更加清晰。
-
-~~~~~act
-write_file
-packages/cascade-cli-controller/src/cascade/cli/controller/__init__.py
-~~~~~
-~~~~~python
-from .app import app
-
-__all__ = ["app"]
-~~~~~
-
-#### Acts 2: 改进 `cascade-cli-observer`
-
-同样，我们更新 `observer` 包的 `__init__.py`。
+我们将修改测试文件中的 `import` 语句，使其直接引用模块。
 
 ~~~~~act
-write_file
-packages/cascade-cli-observer/src/cascade/cli/observer/__init__.py
+patch_file
+packages/cascade-cli-observer/tests/test_observer_app.py
 ~~~~~
-~~~~~python
-from .app import app
+~~~~~python.old
+# The module we are testing
+from cascade.cli.observer import app as observer_app
 
-__all__ = ["app"]
+# The objects we need to mock
+# We will patch 'bus' and 'MqttConnector' where they are USED.
+~~~~~
+~~~~~python.new
+# The module we are testing
+import cascade.cli.observer.app as observer_app
+
+# The objects we need to mock
+# We will patch 'bus' and 'MqttConnector' where they are USED.
+~~~~~
+
+#### Acts 2: 修复 `test_controller_app.py`
+
+对 `controller` 的测试文件也进行同样的修改。
+
+~~~~~act
+patch_file
+packages/cascade-cli-controller/tests/test_controller_app.py
+~~~~~
+~~~~~python.old
+# The module we are testing
+from cascade.cli.controller import app as controller_app
+~~~~~
+~~~~~python.new
+# The module we are testing
+import cascade.cli.controller.app as controller_app
 ~~~~~
 
 ### 下一步建议
-这些是细微但有益的改进。在应用这些更改后，我们可以认为审查和相关的重构工作已经完成。接下来，我们可以提交这些重构变更。
+我们已经修复了测试文件中的导入问题。现在，请再次运行测试。所有测试都应该能通过。如果通过，我将把这两个 `[WIP]` 计划合并，并生成一个最终的 `[COMMIT]` 计划来提交所有相关的重构和修复。

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock
 
 # The module we are testing
-from cascade.cli.controller import app as controller_app
+import cascade.cli.controller.app as controller_app
 
 
 @pytest.fixture

@@ -5,14 +5,8 @@ from typing import List
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef
 from cascade.spec.fingerprint import Fingerprint
 
-# NOTE: The Optimizer and its specific exception are not yet implemented.
-# We expect an ImportError, which will cause the tests to fail (RED state).
-try:
-    from cascade.compiler.optimizer import Optimizer, ExecutionPlan
-    from cascade.compiler.exceptions import CycleDetectedError
-except ImportError:
-    # Define a placeholder for type hinting if the import fails
-    ExecutionPlan = List[List[str]]
+from cascade.compiler.optimizer import Optimizer, ExecutionPlan
+from cascade.compiler.exceptions import CycleDetectedError
 
 
 def _create_dummy_node_ir(node_id: str) -> NodeIR:
@@ -22,7 +16,6 @@ def _create_dummy_node_ir(node_id: str) -> NodeIR:
     return NodeIR(id=node_id, definition=task_def)
 
 
-@pytest.mark.xfail(reason="Optimizer not implemented", raises=(ImportError, NameError))
 def test_optimizer_detects_cycle():
     """
     Case 1: Cycle Detection
@@ -44,7 +37,6 @@ def test_optimizer_detects_cycle():
         Optimizer.optimize(cyclic_ir)
 
 
-@pytest.mark.xfail(reason="Optimizer not implemented", raises=(ImportError, NameError))
 def test_optimizer_schedules_diamond_graph():
     """
     Case 2: Topological Sort of a diamond dependency graph.

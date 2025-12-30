@@ -260,6 +260,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             structural_id=data["structural_id"],
             definition=stub_def,
             node_type="param",
+            _callable=_load_func_from_path(data.get("callable")),
             retry_policy=retry_policy,
             cache_policy=None,
             constraints=constraints,

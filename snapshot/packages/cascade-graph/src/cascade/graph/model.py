@@ -83,7 +83,7 @@ class MapNode(Node):
 
 
 @dataclass
-class ParamNode(Node):
+class ParamNode(TaskNode):
     """Represents an external parameter injection."""
 
     # We store the ParamSpec here explicitly for type safety
@@ -93,12 +93,8 @@ class ParamNode(Node):
 
     # Optimization flag, required for consistent interface
     has_complex_inputs: bool = False
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        # Param nodes use a special internal task to retrieve values
-        from cascade.internal.inputs import _get_param_value
-        return _get_param_value.func
+    
+    # Inherits callable_obj property from TaskNode
 
 
 @dataclass

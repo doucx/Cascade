@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 完成 Node 多态化重构并对齐系统各层", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767069850.8665514, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(core): 统一 ParamNode 执行模型以修复依赖解析问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767071345.519516, "duration_ms": 0}}

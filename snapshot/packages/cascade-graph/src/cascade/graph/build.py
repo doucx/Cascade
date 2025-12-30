@@ -142,6 +142,7 @@ class GraphBuilder:
                     structural_id=node_hash,
                     definition=task_def,
                     node_type="param",
+                    _callable=result.task.func,
                     retry_policy=result._retry_policy,
                     cache_policy=result._cache_policy,
                     constraints=result._constraints,

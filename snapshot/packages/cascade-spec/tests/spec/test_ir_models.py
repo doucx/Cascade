@@ -1,39 +1,3 @@
-Of course. The roadmap is clear, and your provided test case is an excellent starting point for the TDD process. We will begin Phase 0 by creating the initial, failing test file. This action establishes the "RED" state, defining the contract that our new IR model implementation must fulfill.
-
-I will now generate the plan to create this test file.
-
-## [WIP] test: Create failing tests for IR data models
-
-### 用户需求
-As per the TDD refactoring roadmap (`01KDQNYD1QYXC9V1HH6AVS8WKJ`), we need to start Phase 0 by creating the initial (and currently failing) test file for the new Intermediate Representation (IR) data models. This file, `test_ir_models.py`, will serve as the "RED" state in our TDD cycle.
-
-### 评论
-This is a crucial first step. Following a strict TDD process ensures that every piece of the new architecture is built on a solid, verifiable foundation. Creating the failing test first defines the contract that the implementation must fulfill, validating the design before any production code is written.
-
-### 目标
-1.  Create a new test file at `packages/cascade-spec/tests/spec/test_ir_models.py`.
-2.  Populate this file with tests that will fail because the `cascade.spec.ir` module and its classes (`GraphIR`, `NodeIR`, `EdgeIR`, `Instruction`, etc.) do not yet exist.
-3.  The tests will cover both the instantiation and the JSON serialization capabilities of the future IR models.
-
-### 基本原理
-Following the "Scorched Earth Policy" roadmap, we are building the new architecture from the ground up, driven by tests. This `write_file` action establishes the first test, putting us in the "RED" state of the TDD cycle. The test content is based on your provided example and the roadmap's requirements, ensuring we define a clear target for the subsequent implementation step.
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/spec #comp/tests #scope/dx #ai/instruct #task/domain/refactor #task/object/ir-models #task/action/define #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: Create the test file for IR models
-
-This action creates the new test file. It will fail when run with `pytest` because the necessary `cascade.spec.ir` models have not been defined yet, which is the desired outcome for this step.
-
-~~~~~act
-write_file
-packages/cascade-spec/tests/spec/test_ir_models.py
-~~~~~
-~~~~~python
 import json
 from dataclasses import asdict
 
@@ -139,4 +103,3 @@ def test_instruction_serialization():
     assert len(loaded) == 2
     assert loaded[0]["type"] == "Call"
     assert loaded[1]["source"] == "r0"
-~~~~~

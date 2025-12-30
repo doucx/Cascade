@@ -1,215 +1,95 @@
-好的，我们进入 GREEN 阶段，实现 `VirtualMachine`。
-
-## [WIP] feat(compiler): 实现 VirtualMachine 运行时
-
-### 摘要头
-## [WIP] feat(compiler): 实现 VirtualMachine 运行时
+## [WIP] test(engine): 创建新编译器栈的集成测试 (RED)
 
 ### 用户需求
-实现 `cascade.compiler.vm.VirtualMachine` 类，使其能够执行 `Blueprint` 指令集并通过 "Phase 4" 的 TDD 测试。这要求 VM 能够处理同步和异步的函数调用，并正确管理寄存器状态。
+开始 "Phase 5: 集成与 API 门面 (Integration)" 的开发。首要任务是创建一个处于 RED 状态的集成测试，用于验证 `cascade-engine` 是否正确集成了新的 `cascade-compiler` 组件栈。
 
 ### 评论
-这是 "焦土政策" 路线图中的一个核心里程碑，我们正在构建新的运行时核心。此 VM 实现是一个经典的、基于寄存器的虚拟机，包含一个 `Frame` 用于状态管理和一个指令分发循环 (`_dispatch`)。它严格遵守 `Blueprint` 契约，与图构建和编译过程完全解耦，确保了其作为一个独立组件的可测试性和健壮性。
+当前 `cascade-engine` 中的 `VMExecutionStrategy` 仍然依赖于旧的 `cascade.graph.compiler.BlueprintBuilder` 和 `cascade.runtime.vm.VirtualMachine`。
+为了驱动重构，我们需要编写一个测试，断言当调用 `Engine.run(..., use_vm=True)` 时，系统调用的是 **新** 包 `cascade.compiler` 中的 `Frontend.compile` 方法。由于目前代码尚未修改，该断言必然失败（RED 状态），从而证实了旧逻辑仍在运行。
 
 ### 目标
-1.  创建 `packages/cascade-compiler/src/cascade/compiler/vm.py` 文件。
-2.  在 `vm.py` 中实现 `Frame` 类来管理寄存器。
-3.  在 `vm.py` 中实现 `VirtualMachine` 类，包括 `execute` 和 `_dispatch` 循环。
-4.  确保 `_dispatch` 逻辑能正确 `await` 异步函数。
-5.  更新 `__init__.py` 导出 `VirtualMachine`。
-6.  更新 `test_vm.py` 测试文件，移除 `xfail` 标记，验证 GREEN 状态。
+1.  确保 `packages/cascade-engine/tests/integration` 目录存在。
+2.  创建 `packages/cascade-engine/tests/integration/test_compiler_integration.py`。
+3.  编写测试用例 `test_engine_activates_new_compiler_pipeline`，使用 `mock.patch` 验证 `cascade.compiler.frontend.Frontend.compile` 是否被调用。
 
 ### 基本原理
-VM 的实现遵循了标准的 "Fetch-Decode-Execute" 模式：
-1.  **Fetch**: `execute` 方法遍历 `Blueprint` 中的指令。
-2.  **Decode**: `_dispatch` 方法判断指令类型（目前只有 `Call`）。
-3.  **Execute**: `_execute_call` 方法执行具体操作：
-    a.  **参数加载**: 使用 `Frame.load` 从 `Register` 或 `Literal` 操作数中解析出实际值。
-    b.  **函数调用**: 执行 `Call` 指令中引用的函数。
-    c.  **异步处理**: 使用 `inspect.isawaitable` 判断并 `await` 协程。
-    d.  **结果存储**: 使用 `Frame.store` 将结果写回输出寄存器。
-
-这种设计确保了 VM 的逻辑清晰、高效且易于扩展。
+此测试充当“探针”。如果它通过，说明我们成功地切断了旧的 VM 执行路径，并将其重定向到了新的 Compiler->VM 管线。我们选择 Mock `Frontend.compile` 作为切入点，因为它是新管线的入口。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/vm #scope/core #ai/instruct #task/domain/refactor #task/object/vm #task/action/implement #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/engine #concept/integration #scope/core #ai/instruct #task/domain/refactor #task/object/integration-test #task/action/create #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 实现 VirtualMachine 类
+#### Acts 1: 创建集成测试目录
 
-创建 `vm.py` 并实现 `Frame` 和 `VirtualMachine` 的核心逻辑。
+确保测试目录存在。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~
+mkdir -p packages/cascade-engine/tests/integration
+~~~~~
+
+#### Acts 2: 创建 RED 状态的集成测试
+
+该测试断言 `Engine` 在 `use_vm=True` 模式下会调用新的编译器前端。目前这会失败，因为 Engine 还在用旧的 `BlueprintBuilder`。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/src/cascade/compiler/vm.py
+packages/cascade-engine/tests/integration/test_compiler_integration.py
 ~~~~~
 ~~~~~python
-import inspect
-import asyncio
-from typing import Any, List, Dict, Optional
+import pytest
+from unittest.mock import patch
+import cascade as cs
+from cascade.runtime.engine import Engine
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.bus import MessageBus
 
-from cascade.spec.blueprint import (
-    Blueprint,
-    Instruction,
-    Call,
-    Literal,
-    Register,
-    Operand,
-)
+# NOTE: We expect this test to FAIL (AssertionError) initially.
+# The current Engine implementation uses the old 'cascade.graph.compiler.BlueprintBuilder',
+# so it will NOT call 'cascade.compiler.frontend.Frontend.compile'.
 
-
-class Frame:
-    """Represents the runtime stack frame for a blueprint execution."""
-
-    def __init__(self, size: int):
-        self.registers: List[Any] = [None] * size
-
-    def load(self, operand: Operand) -> Any:
-        """Loads a value from an operand (either a Literal or a Register)."""
-        if isinstance(operand, Literal):
-            return operand.value
-        elif isinstance(operand, Register):
-            if operand.index >= len(self.registers):
-                raise IndexError(f"Invalid register index: {operand.index}")
-            return self.registers[operand.index]
-        else:
-            raise TypeError(f"Unknown operand type: {type(operand)}")
-
-    def store(self, register: Register, value: Any):
-        """Stores a value into a register."""
-        if register.index >= len(self.registers):
-            raise IndexError(f"Invalid register index: {register.index}")
-        self.registers[register.index] = value
-
-
-class VirtualMachine:
-    """Executes compiled Blueprints."""
-
-    async def execute(self, blueprint: Blueprint) -> Any:
-        """Executes the blueprint and returns the result of the final instruction."""
-        frame = Frame(blueprint.register_count)
-        last_result = None
-
-        for instr in blueprint.instructions:
-            last_result = await self._dispatch(instr, frame)
-
-        return last_result
-
-    async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
-        """Decodes and executes a single instruction."""
-        if isinstance(instr, Call):
-            return await self._execute_call(instr, frame)
-        else:
-            raise NotImplementedError(f"Unknown instruction type: {type(instr)}")
-
-    async def _execute_call(self, instr: Call, frame: Frame) -> Any:
-        """Handles the Call instruction."""
-        # 1. Resolve arguments from operands
-        args = [frame.load(op) for op in instr.args]
-        kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
-
-        # 2. Invoke the function
-        if instr.func is None:
-             raise ValueError(f"Instruction for task '{instr.task_name}' has no function to call.")
-        result = instr.func(*args, **kwargs)
-
-        # 3. Handle async functions
-        if inspect.isawaitable(result):
-            result = await result
-
-        # 4. Store the result in the output register
-        frame.store(instr.output, result)
-
-        return result
-~~~~~
-
-#### Acts 2: 导出 VirtualMachine
-
-更新 `__init__.py` 以便测试可以找到 `VirtualMachine`。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/__init__.py
-~~~~~
-~~~~~python.old
-from .frontend import Frontend
-from .optimizer import Optimizer, ExecutionPlan
-from .backend import Backend
-from .exceptions import CompilerError, CycleDetectedError
-
-__all__ = [
-    "Frontend",
-    "Optimizer",
-    "ExecutionPlan",
-    "Backend",
-    "CompilerError",
-    "CycleDetectedError",
-]
-~~~~~
-~~~~~python.new
-from .frontend import Frontend
-from .optimizer import Optimizer, ExecutionPlan
-from .backend import Backend
-from .vm import VirtualMachine
-from .exceptions import CompilerError, CycleDetectedError
-
-__all__ = [
-    "Frontend",
-    "Optimizer",
-    "ExecutionPlan",
-    "Backend",
-    "VirtualMachine",
-    "CompilerError",
-    "CycleDetectedError",
-]
-~~~~~
-
-#### Acts 3: 更新测试用例 (GREEN)
-
-移除 `xfail` 标记和 `try-except` 块，让测试可以运行。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_vm.py
-~~~~~
-~~~~~python.old
-# RED State: VM not yet implemented in the new package location
-try:
-    from cascade.compiler.vm import VirtualMachine
-except ImportError:
-    pass
-~~~~~
-~~~~~python.new
-from cascade.compiler.vm import VirtualMachine
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_vm.py
-~~~~~
-~~~~~python.old
 @pytest.mark.asyncio
-@pytest.mark.xfail(reason="VM not implemented", raises=(ImportError, NameError))
-async def test_vm_instruction_execution():
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_vm_instruction_execution():
-~~~~~
+async def test_engine_activates_new_compiler_pipeline():
+    """
+    Verifies that Engine.run(use_vm=True) delegates to the new cascade.compiler package
+    instead of the legacy cascade.graph.compiler implementation.
+    """
+    # 1. Define a simple workflow
+    @cs.task
+    def add_one(x: int) -> int:
+        return x + 1
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_vm.py
-~~~~~
-~~~~~python.old
-@pytest.mark.asyncio
-@pytest.mark.xfail(reason="VM not implemented", raises=(ImportError, NameError))
-async def test_vm_async_execution():
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_vm_async_execution():
+    workflow = add_one(x=10)
+
+    # 2. Setup Engine
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),
+    )
+
+    # 3. Patch the NEW Frontend to verify it gets called.
+    # We patch it where it is defined.
+    with patch("cascade.compiler.frontend.Frontend.compile") as mock_frontend_compile:
+        # Mock the return value to avoid cascading errors downstream (if the wiring were partially complete)
+        # But in the RED state, we expect the code to completely bypass this and use the old logic.
+        # The run might succeed (using old VM) or fail (if old VM is broken), but our assertion
+        # focuses solely on whether the NEW path was taken.
+        
+        # We wrap in try/except because running the OLD vm logic might trigger unrelated errors
+        # depending on the environment, but we only care about the spy.
+        try:
+            await engine.run(workflow, use_vm=True)
+        except Exception:
+            # We ignore execution errors, we just want to know if the new compiler was invoked.
+            pass
+        
+        # This assertion MUST FAIL for the test to be valid in the RED stage.
+        mock_frontend_compile.assert_called_once()
 ~~~~~

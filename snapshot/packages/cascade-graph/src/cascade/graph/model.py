@@ -39,6 +39,11 @@ class Node:
     # Structural Bindings (Literals)
     input_bindings: Dict[str, Any] = field(default_factory=dict)
 
+    def __eq__(self, other):
+        if not isinstance(other, Node):
+            return NotImplemented
+        return self.structural_id == other.structural_id
+
     def __hash__(self):
         return hash(self.structural_id)
 

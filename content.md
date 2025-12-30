@@ -1,142 +1,199 @@
-Of course. The roadmap is clear, and your provided test case is an excellent starting point for the TDD process. We will begin Phase 0 by creating the initial, failing test file. This action establishes the "RED" state, defining the contract that our new IR model implementation must fulfill.
+好的，我们现在进入 TDD 流程的“GREEN”阶段。我已经创建了失败的测试（RED），现在我将生成实现 `cascade.spec.ir` 模块的代码，以使这些测试通过。
 
-I will now generate the plan to create this test file.
+这个计划将创建所需的数据模型，为整个重构奠定数据契约的基础。
 
-## [WIP] test: Create failing tests for IR data models
+## [WIP] feat(spec): 实现核心 IR 数据模型
 
 ### 用户需求
-As per the TDD refactoring roadmap (`01KDQNYD1QYXC9V1HH6AVS8WKJ`), we need to start Phase 0 by creating the initial (and currently failing) test file for the new Intermediate Representation (IR) data models. This file, `test_ir_models.py`, will serve as the "RED" state in our TDD cycle.
+根据 TDD 流程，需要实现 `cascade.spec.ir.models` 模块中的核心数据类，以满足 `test_ir_models.py` 中定义的契约，从而使测试套件从“RED”状态转为“GREEN”状态。
 
 ### 评论
-This is a crucial first step. Following a strict TDD process ensures that every piece of the new architecture is built on a solid, verifiable foundation. Creating the failing test first defines the contract that the implementation must fulfill, validating the design before any production code is written.
+这是整个“焦土政策”重构计划的基石。通过定义这些纯粹的、不可变的数据结构，我们为编译器和运行时之间建立了一个稳定且可序列化的契约。这是将旧架构的耦合问题从根本上解决的第一步。遵循测试驱动开发可以确保我们的实现从一开始就是正确且符合预期的。
 
 ### 目标
-1.  Create a new test file at `packages/cascade-spec/tests/spec/test_ir_models.py`.
-2.  Populate this file with tests that will fail because the `cascade.spec.ir` module and its classes (`GraphIR`, `NodeIR`, `EdgeIR`, `Instruction`, etc.) do not yet exist.
-3.  The tests will cover both the instantiation and the JSON serialization capabilities of the future IR models.
+1.  创建 `packages/cascade-spec/src/cascade/spec/ir/` 目录。
+2.  创建 `models.py` 文件，并在其中使用 `@dataclass(frozen=True)` 定义所有必需的 IR 模型，包括 `GraphIR`, `NodeIR`, `EdgeIR`, `TaskDef`, `ArgumentDef`, `ArgumentKind` 以及 `Instruction` 指令集。
+3.  创建 `__init__.py` 文件，并从中导出所有新定义的模型，使它们成为 `cascade.spec.ir` 公开 API 的一部分。
+4.  本次实现应足以让 `packages/cascade-spec/tests/spec/test_ir_models.py` 中的所有测试用例通过。
 
 ### 基本原理
-Following the "Scorched Earth Policy" roadmap, we are building the new architecture from the ground up, driven by tests. This `write_file` action establishes the first test, putting us in the "RED" state of the TDD cycle. The test content is based on your provided example and the roadmap's requirements, ensuring we define a clear target for the subsequent implementation step.
+我们将使用 Python 标准库中的 `dataclasses` 模块来定义这些 IR 模型。选择 `dataclasses` 是因为它轻量、无依赖，并且其生成的类默认支持序列化（通过 `asdict`），完全符合我们对纯数据结构的需求。将它们设置为 `frozen=True` 可以强制实现 IR 的不可变性，确保数据在编译器各阶段传递过程中的一致性和线程安全。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/spec #comp/tests #scope/dx #ai/instruct #task/domain/refactor #task/object/ir-models #task/action/define #task/state/begin
+#intent/build #flow/ready #priority/high #comp/spec #concept/ir #scope/api #ai/instruct #task/domain/refactor #task/object/ir-models #task/action/define #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Create the test file for IR models
+#### Acts 1: 创建 IR 模块目录结构
 
-This action creates the new test file. It will fail when run with `pytest` because the necessary `cascade.spec.ir` models have not been defined yet, which is the desired outcome for this step.
+首先，我们创建 `ir` 子包的目录。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+mkdir -p packages/cascade-spec/src/cascade/spec/ir
+~~~~~
+
+#### Acts 2: 实现 IR 数据模型
+
+接下来，我们创建 `models.py` 文件并定义所有需要的数据类。这些定义直接响应了测试文件中的断言。
 
 ~~~~~act
 write_file
-packages/cascade-spec/tests/spec/test_ir_models.py
+packages/cascade-spec/src/cascade/spec/ir/models.py
 ~~~~~
 ~~~~~python
-import json
-from dataclasses import asdict
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-import pytest
-
-# NOTE: These classes are not yet defined. We expect an ImportError here.
-# This is the normal "RED" state of the TDD process.
-try:
-    from cascade.spec.ir.models import (
-        GraphIR,
-        NodeIR,
-        EdgeIR,
-        TaskDef,
-        ArgumentDef,
-        ArgumentKind,
-        Instruction,
-        Call,
-        Return,
-    )
-    from cascade.spec.fingerprint import Fingerprint
-except ImportError:
-    # We allow the import to fail so that the test file itself is syntactically valid,
-    # but the tests below will fail at runtime if the classes do not exist.
-    pass
+from cascade.spec.fingerprint import Fingerprint
 
 
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
-def test_ir_structures_exist():
-    """Verify that GraphIR, NodeIR, and EdgeIR can be instantiated."""
-    # This test will fail until the models are created.
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
+class ArgumentKind(str, Enum):
+    """
+    Defines the kind of an argument, aligning with Python's inspect.Parameter kinds.
+    """
 
-    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
-
-    node = NodeIR(id="node_1", definition=task_def, inputs={"x": 1, "y": "hello"})
-
-    edge = EdgeIR(source_id="node_1", target_id="node_2", target_arg="data")
-
-    graph = GraphIR(nodes=[node], edges=[edge], meta={"version": "1.0"})
-
-    assert graph.nodes[0].id == "node_1"
-    assert graph.edges[0].source_id == "node_1"
-    assert graph.meta["version"] == "1.0"
+    POSITIONAL_ONLY = "POSITIONAL_ONLY"
+    POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
+    VAR_POSITIONAL = "VAR_POSITIONAL"  # *args
+    KEYWORD_ONLY = "KEYWORD_ONLY"
+    VAR_KEYWORD = "VAR_KEYWORD"  # **kwargs
 
 
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
-def test_ir_serialization_roundtrip():
-    """Verify that IR structures can be serialized to and from JSON."""
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
+@dataclass(frozen=True)
+class ArgumentDef:
+    """
+    A serializable, static definition of a single argument in a task's signature.
+    """
 
-    arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
-    task_def = TaskDef(name="test_task", args=[arg_def], fingerprint=fp)
-
-    node = NodeIR(id="n1", definition=task_def, inputs={"val": 42})
-
-    graph = GraphIR(nodes=[node], edges=[])
-
-    # Convert to dictionary using dataclasses.asdict
-    data = asdict(graph)
-
-    # Verify key fields
-    assert data["nodes"][0]["id"] == "n1"
-    assert data["nodes"][0]["inputs"]["val"] == 42
-    assert data["nodes"][0]["definition"]["name"] == "test_task"
-    assert data["nodes"][0]["definition"]["args"][0]["kind"] == "POSITIONAL_OR_KEYWORD"
-
-    # Verify JSON serialization compatibility
-    json_str = json.dumps(data)
-    loaded = json.loads(json_str)
-
-    assert loaded["nodes"][0]["id"] == "n1"
+    name: str
+    kind: ArgumentKind
+    annotation: Optional[str] = None
+    default_value_repr: Optional[str] = None
 
 
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
-def test_instruction_serialization():
-    """Verify that Instruction dataclasses can be instantiated and serialized."""
-    # This test covers the second part of Phase 0's implementation goal.
-    call_instruction = Call(
-        id="instr_1",
-        task_name="my_task",
-        args=[1, "hello"],
-        output_register="r0",
-    )
-    return_instruction = Return(id="instr_2", source_register="r0")
+@dataclass(frozen=True)
+class TaskDef:
+    """
+    The static intermediate representation (IR) of a Task.
+    This separates the 'definition' of what a task is from its usage 'node' in a graph.
+    """
 
-    program: list[Instruction] = [call_instruction, return_instruction]
+    name: str
+    args: List[ArgumentDef]
+    fingerprint: Fingerprint
+    return_annotation: Optional[str] = None
+    docstring: Optional[str] = None
+    is_async: bool = False
+    mode: str = "blocking"
 
-    # This crude serialization check is enough to drive the implementation.
-    # We are not using asdict because Instruction is a base class.
-    # A real implementation would need a polymorphic serializer.
-    serialized = [
-        {"type": "Call", "id": i.id, "task": i.task_name}
-        if isinstance(i, Call)
-        else {"type": "Return", "id": i.id, "source": i.source_register}
-        for i in program
-    ]
 
-    json_str = json.dumps(serialized)
-    loaded = json.loads(json_str)
+@dataclass(frozen=True)
+class NodeIR:
+    """
+    Represents a single node in the computation graph IR.
+    """
 
-    assert len(loaded) == 2
-    assert loaded[0]["type"] == "Call"
-    assert loaded[1]["source"] == "r0"
+    id: str
+    definition: TaskDef
+    inputs: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class EdgeIR:
+    """
+    Represents a dependency edge between two nodes in the graph IR.
+    """
+
+    source_id: str
+    target_id: str
+    target_arg: str
+
+
+@dataclass(frozen=True)
+class GraphIR:
+    """
+    Represents the entire computation graph IR.
+    """
+
+    nodes: List[NodeIR] = field(default_factory=list)
+    edges: List[EdgeIR] = field(default_factory=list)
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+# --- VM Instruction Set IR ---
+
+
+@dataclass(frozen=True)
+class Instruction:
+    """
+    Base class for all VM instructions.
+    """
+
+    id: str
+
+
+@dataclass(frozen=True)
+class Call(Instruction):
+    """
+
+    Represents a function call instruction.
+    """
+
+    task_name: str
+    args: List[Any]
+    output_register: str
+
+
+@dataclass(frozen=True)
+class Return(Instruction):
+    """
+    Represents a return instruction from a function.
+    """
+
+    source_register: str
 ~~~~~
+
+#### Acts 3: 导出新的 IR 模型
+
+最后，创建 `__init__.py` 文件，将所有新定义的类导出，使它们成为包的公共 API 的一部分。
+
+~~~~~act
+write_file
+packages/cascade-spec/src/cascade/spec/ir/__init__.py
+~~~~~
+~~~~~python
+from .models import (
+    ArgumentKind,
+    ArgumentDef,
+    TaskDef,
+    NodeIR,
+    EdgeIR,
+    GraphIR,
+    Instruction,
+    Call,
+    Return,
+)
+
+__all__ = [
+    "ArgumentKind",
+    "ArgumentDef",
+    "TaskDef",
+    "NodeIR",
+    "EdgeIR",
+    "GraphIR",
+    "Instruction",
+    "Call",
+    "Return",
+]
+~~~~~
+
+### 下一步建议
+我们已经完成了 Phase 0 的实现。现在应该运行测试套件，验证 `test_ir_models.py` 中的测试是否全部通过，从而确认我们已经达到了 TDD 流程的“GREEN”状态。
+
+如果你同意，请告诉我，我将生成一个运行测试的 `run_command` 计划。

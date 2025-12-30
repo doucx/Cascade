@@ -57,7 +57,7 @@ class Node:
         return None
 
 
-@dataclass
+@dataclass(eq=False)
 class TaskNode(Node):
     """Represents a standard executable task."""
 
@@ -72,7 +72,7 @@ class TaskNode(Node):
         return self._callable
 
 
-@dataclass
+@dataclass(eq=False)
 class MapNode(Node):
     """Represents a mapped task execution."""
 
@@ -87,7 +87,7 @@ class MapNode(Node):
         return self.mapping_factory
 
 
-@dataclass
+@dataclass(eq=False)
 class ParamNode(TaskNode):
     """Represents an external parameter injection."""
 

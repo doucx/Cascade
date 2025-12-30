@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 添加 pytest-asyncio 依赖以支持异步测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767067043.6304088, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: Explicitly configure pytest-asyncio mode to fix fixture handling", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767067183.5968874, "duration_ms": 0}}

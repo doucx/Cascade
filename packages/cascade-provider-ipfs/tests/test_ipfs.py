@@ -55,9 +55,9 @@ async def mock_ipfs_server(aiohttp_client):
     app = web.Application()
     app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
     app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
-    
+
     client = await aiohttp_client(app)
-    
+
     mock_base_url = f"http://{client.server.host}:{client.server.port}"
     yield mock_base_url
 

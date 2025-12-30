@@ -93,6 +93,8 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
 
 
 def _node_to_dict(node: Node) -> Dict[str, Any]:
+    from .model import TaskNode, MapNode, ParamNode
+
     data = {
         "structural_id": node.structural_id,
         "name": node.name,
@@ -101,11 +103,15 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         "input_bindings": node.input_bindings,
     }
 
-    if node.callable_obj:
-        data["callable"] = _get_func_path(node.callable_obj)
-
-    if node.mapping_factory:
-        data["mapping_factory"] = _get_func_path(node.mapping_factory)
+    if isinstance(node, TaskNode):
+        if node.callable_obj:
+            data["callable"] = _get_func_path(node.callable_obj)
+    elif isinstance(node, MapNode):
+        if node.mapping_factory:
+            data["mapping_factory"] = _get_func_path(node.mapping_factory)
+    elif isinstance(node, ParamNode):
+        # We don't serialize the spec for now, but could in the future
+        pass
 
     # Note: param_spec serialization removed as Node no longer holds it directly.
     # Future implementation should serialize definition metadata if needed.

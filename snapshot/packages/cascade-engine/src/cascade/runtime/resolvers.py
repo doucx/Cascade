@@ -20,6 +20,21 @@ class ArgumentResolver:
         user_params: Optional[Dict[str, Any]] = None,
         input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
+        from cascade.graph.model import ParamNode
+        
+        # Handle ParamNode as a special case that doesn't execute but resolves from context
+        if isinstance(node, ParamNode):
+            param_name = node.param_spec.name if node.param_spec else node.name
+            params = user_params or {}
+            if param_name in params:
+                # The "result" of a ParamNode is its value from the params dict.
+                # We must put this into the state_backend so downstream tasks can find it.
+                val = params[param_name]
+                await state_backend.put_result(node.structural_id, val)
+                # Param nodes themselves don't have args/kwargs to execute, but we return the value
+                # for consistency, though it's the side effect on state_backend that matters.
+                return [val], {}
+
         # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
         if not node.has_complex_inputs:
             # Reconstruct args/kwargs from Bindings (Literals) and Overrides

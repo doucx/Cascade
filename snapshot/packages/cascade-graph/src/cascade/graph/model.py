@@ -73,6 +73,9 @@ class MapNode(Node):
 
     mapping_factory: Optional[Callable] = None
 
+    # Optimization flag, required for consistent interface
+    has_complex_inputs: bool = False
+
     @property
     def callable_obj(self) -> Optional[Callable]:
         # For map nodes, the factory is the closest thing to a callable

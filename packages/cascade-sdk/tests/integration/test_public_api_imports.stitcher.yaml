@@ -1,0 +1,6 @@
+"test_accessing_non_existent_attribute_raises_attribute_error": |-
+  Ensures that accessing a truly non-existent attribute on the cascade module
+  raises a standard AttributeError, not an error from the provider system.
+"test_core_components_are_accessible_from_top_level": |-
+  Verifies that essential classes from cascade-engine and other core packages
+  are importable from the `cascade` namespace directly.

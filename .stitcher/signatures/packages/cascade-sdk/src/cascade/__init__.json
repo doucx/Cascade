@@ -10,7 +10,8 @@
   "__all__": {},
   "__getattr__": {
     "baseline_code_signature_text": "def __getattr__(name: str) -> Any:",
-    "baseline_code_structure_hash": "e4c6375eacd59d709311f755b6d45a5256cf3f5517bc10b7eaf8e38228d9701f"
+    "baseline_code_structure_hash": "e4c6375eacd59d709311f755b6d45a5256cf3f5517bc10b7eaf8e38228d9701f",
+    "baseline_yaml_content_hash": "9265b396bb63a1fdad9e8c3d8e4b07dec07c10062dc7622d98b195611ef94a05"
   },
   "__path__": {},
   "dry_run": {

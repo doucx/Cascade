@@ -4,9 +4,6 @@ __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 from typing import Any, Dict, Optional, Union, Callable, List
 
-# --- New Application Layer ---
-from cascade.app import CascadeApp
-
 # --- Core Specs & Legacy Components ---
 from cascade.spec.task import task
 from cascade.spec.lazy_types import LazyResult
@@ -20,11 +17,15 @@ from .control_flow import select_jump, bind
 from cascade.spec.jump import Jump
 
 # --- Runtime (for type hints and exceptions) ---
+# Core components explicitly exposed in the public API
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.spec.protocols import Connector, StateBackend
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+
 from cascade.flow import sequence, pipeline
 
 # --- Tools ---
@@ -50,7 +51,7 @@ def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
     return _get_env_var(name=name)
 
 
-# --- V1.4 Refactored Global Functions (Wrappers) ---
+# --- V1.4 Refactored Global Functions (Wrappers with deferred import) ---
 
 
 def run(
@@ -62,6 +63,8 @@ def run(
     connector: Optional[Connector] = None,
     state_backend: Union[str, Callable[[str], StateBackend], None] = None,
 ) -> Any:
+    from cascade.app import CascadeApp
+
     app = CascadeApp(
         target=target,
         params=params,
@@ -75,11 +78,15 @@ def run(
 
 
 def visualize(target: Any) -> str:
+    from cascade.app import CascadeApp
+
     app = CascadeApp(target=target)
     return app.visualize()
 
 
 def dry_run(target: Any) -> None:
+    from cascade.app import CascadeApp
+
     app = CascadeApp(target=target)
     app.dry_run()
 
@@ -88,11 +95,18 @@ def dry_run(target: Any) -> None:
 
 
 def __getattr__(name: str) -> Any:
+    """
+    Dynamically loads providers from the registry when they are accessed as attributes
+    on the `cascade` module (e.g., `cs.read.text`).
+    """
     from .providers.registry import registry
 
     try:
+        # Attempt to resolve the name as a provider.
         return registry.get(name)
     except AttributeError:
+        # If the provider registry doesn't know the name, we raise the standard
+        # module-level AttributeError to maintain expected Python behavior.
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 
@@ -121,7 +135,9 @@ __all__ = [
     "LazyResult",
     "Engine",
     "Event",
-    "MessageBus",  # Added MessageBus
+    "MessageBus",
+    "NativeSolver",
+    "LocalExecutor",
     # Tools & Utilities
     "to_json",
     "from_json",

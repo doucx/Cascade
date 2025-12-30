@@ -12,3 +12,9 @@
   Tests that a non-generator function cannot be a resource.
 "test_resource_override": |-
   Tests that a resource can be overridden for testing.
+"test_resource_scan_finds_inject_in_dict": |-
+  Verifies that resource scanning correctly finds Inject objects
+  nested inside dictionaries. This covers missing line 84.
+"test_unregistered_resource_raises_error": |-
+  Verifies that asking for an unregistered resource raises a NameError.
+  This covers the missing line 98 in resource_container.py.

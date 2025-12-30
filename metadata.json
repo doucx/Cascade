@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(sdk): 延迟 CascadeApp 导入以修复循环依赖", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767072608.4416473, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(sdk): 为公共 API 导入添加集成测试并修复", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767074993.3941839, "duration_ms": 0}}

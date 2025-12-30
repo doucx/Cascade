@@ -1,64 +1,105 @@
-简要回答
-`AttributeError: module 'cascade' has no attribute 'NativeSolver'` 这个错误是由于 `cascade-sdk` 的 `__init__.py` 与 `cascade-application` 之间存在**模块级循环导入依赖**所导致的。
+分析完全正确。
 
-`cascade-sdk` 尝试在顶层导入 `CascadeApp`，而 `CascadeApp` 又依赖于从 `cascade.adapters` 等其他包中导入的组件。这导致在 `cascade` 命名空间完全构建之前，`CascadeApp` 就试图引用尚不存在的子模块，触发了 `cascade-sdk` 的 `__getattr__` 捕获器，进而导致查找 `NativeSolver` 失败并崩溃。
+`cascade` 模块的顶层 `__init__.py` 文件中的 `__getattr__` 实现过于宽泛，它将所有未找到的属性都委托给了 provider registry 进行查找。这是一个反模式，因为像 `NativeSolver`、`Engine` 这样的核心组件并非 provider，而是应该被明确导出的 API。这导致了用户遇到的 `AttributeError`。
 
-## [WIP] refactor(sdk): 延迟 CascadeApp 导入以修复循环依赖
+我们将遵循测试驱动开发 (TDD) 的流程来解决这个问题：
+
+1.  **Red**: 首先，我会创建一个新的集成测试，该测试会尝试从顶层 `cascade` 包导入这些核心组件。这个测试目前会失败，从而精确地复现你报告的错误。
+2.  **Green**: 接着，我会修改 `cascade-sdk` 的 `__init__.py` 文件，移除有问题的 `__getattr__` 逻辑中关于 provider 的部分，并用显式的导入语句替换它，以正确地暴露核心 API。
+3.  **Refactor**: 最后，我们将确保代码整洁，并且新加入的测试能够清晰地记录和保护我们所期望的公共 API 接口。
+
+我将生成一个计划来实现这个 TDD 流程。
+
+## [WIP] test(sdk): 为公共 API 导入添加集成测试并修复
 
 ### 错误分析
-1.  **启动流程**：用户执行 `import cascade`，加载 `packages/cascade-sdk/src/cascade/__init__.py`。
-2.  **顶层导入**：此 `__init__.py` 文件在模块顶层执行 `from cascade.app import CascadeApp`。
-3.  **依赖链**：`cascade.app` (即 `cascade-application` 包) 为了初始化 `CascadeApp`，需要从其他 `cascade` 子包中导入组件，例如 `from cascade.adapters.solvers.native import NativeSolver`。
-4.  **查找失败**：在 `cascade.app` 执行其导入时，Python 解释器试图解析 `cascade.adapters`。然而，此时 `cascade` 命名空间还未完全构建，`adapters` 作为子模块尚不可见。
-5.  **`__getattr__` 陷阱**：属性查找失败 (`cascade.adapters`) 触发了 `cascade-sdk` 的 `__init__.py` 中定义的 `__getattr__` 函数。这个函数被设计用来动态加载 *Provider*，而不是核心模块。
-6.  **崩溃**：`__getattr__` 无法在 Provider 注册表中找到名为 `adapters` 的条目，因此抛出最终的 `AttributeError`。本例中，对`NativeSolver`的查找也走了同样失败的路径。
+`observatory/experiments/run_fireflies.py` 脚本在执行 `cs.NativeSolver()` 时失败，抛出 `AttributeError`。根本原因在于 `packages/cascade-sdk/src/cascade/__init__.py` 中实现的 `__getattr__` 函数。该函数错误地拦截了所有在 `cascade` 模块上未找到的属性访问，并尝试将它们作为 "provider" 从 `registry` 中加载。
+
+然而，像 `NativeSolver`, `LocalExecutor`, `Engine` 和 `MessageBus` 这样的核心类是引擎的关键组件，而不是通过插件系统加载的 provider。因此，当 `__getattr__` 尝试在 provider 注册表中查找 `NativeSolver` 时，它失败了，并抛出一个误导性的 `AttributeError: Cascade provider 'NativeSolver' not found.`，最终被包装成顶层的 `AttributeError: module 'cascade' has no attribute 'NativeSolver'`。
 
 ### 用户需求
-修复启动时的 `AttributeError`，确保应用的内部组件能够正确加载。
+用户要求遵循 TDD 流程解决 `cascade` 模块混乱的导入问题，确保核心组件能够作为稳定的公共 API 被正确访问，并增加测试覆盖率以防止未来出现类似问题。
 
 ### 评论
-这是一个经典的 Python 架构问题。将实现细节（`CascadeApp`）的导入推迟到函数调用时，是一种有效的解耦策略，可以避免复杂的模块级依赖问题，使包的初始化过程更加健壮和可预测。
+这是一个至关重要的修复。一个库的公共 API 应该是明确、稳定且可预测的。当前使用 `__getattr__` 来动态解析核心组件的行为非常脆弱，且违反了“显式优于隐式”的 Python 设计哲学。通过 TDD 流程，我们不仅能修复当前的 bug，还能建立一个回归测试屏障，确保核心 API 的稳定性。
 
 ### 目标
-修改 `packages/cascade-sdk/src/cascade/__init__.py`，将 `CascadeApp` 的导入从模块顶层移至 `run`, `visualize`, 和 `dry_run` 函数内部。
+1.  在 `packages/cascade-sdk/tests/integration/` 目录下创建一个新的测试文件 `test_public_api_imports.py`。
+2.  在该文件中编写一个测试用例，专门用于验证核心引擎组件（`NativeSolver`, `LocalExecutor`, `Engine`, `MessageBus`）是否可以从顶层 `cascade` 包中成功导入。此测试在修改前应该会失败。
+3.  修改 `packages/cascade-sdk/src/cascade/__init__.py`，移除 `__getattr__` 的不当使用，并添加显式的导入语句来暴露上述核心组件。
+4.  更新 `__init__.py` 中的 `__all__` 列表，以包含这些新暴露的公共 API。
+5.  确保新添加的测试在修改后能够通过。
 
 ### 基本原理
-通过延迟导入，我们打破了模块加载时的循环依赖。当用户调用 `cs.run()` 时，`cascade` 命名空间已经由 Python 的命名空间包机制完全构建好了，此时再在函数内部执行 `from cascade.app import CascadeApp`，解释器就能够成功地找到 `cascade.app` 及其所有下游依赖（如 `cascade.adapters`），从而避免触发 `__getattr__` 陷阱。
+我们将遵循 TDD 的核心原则。首先编写一个失败的测试来捕获问题，这能确保我们的修复是针对性且有效的。然后，我们将修改 `cascade-sdk` 的入口文件 `__init__.py`。我们将把 `__getattr__` 的功能限制在它设计的初衷——动态加载 providers，而不是拦截所有属性。核心 API 组件将通过标准的 `from ... import ...` 语句进行显式导入和导出。这种方法使 API 更加清晰、易于静态分析工具理解，并从根本上解决了此类 `AttributeError` 问题。
 
 ### 标签
-#intent/fix #intent/refine #flow/ready #priority/critical #comp/sdk #concept/dependency #scope/core #ai/brainstorm #task/domain/core #task/object/import-cycle #task/action/decouple #task/state/begin
+#intent/fix #intent/tooling #flow/ready #priority/high #comp/sdk #comp/engine #comp/tests #concept/api #scope/dx #ai/instruct #task/domain/testing #task/object/api-surface #task/action/stabilization #task/state/begin
 
 ---
-
 ### Script
 
-#### Acts 1: 延迟 CascadeApp 的导入以解耦
+#### Acts 1: [RED] 创建一个失败的集成测试
 
-我们将重写 `packages/cascade-sdk/src/cascade/__init__.py`，将 `CascadeApp` 的导入推迟到需要使用它的函数内部。
+我们将首先创建一个新的测试文件，用于验证从 `cascade` 顶层包导入核心类的行为。这个测试现在会失败，因为它暴露了当前的 `AttributeError` 问题。
 
 ~~~~~act
 write_file
-packages/cascade-sdk/src/cascade/__init__.py
+packages/cascade-sdk/tests/integration/test_public_api_imports.py
 ~~~~~
 ~~~~~python
-# This must be the very first line to allow this package to coexist with other
-# namespace packages (like cascade-interfaces) in editable installs.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+"""
+Tests that core components are correctly exposed through the top-level `cascade` package.
+This is a regression test for issues related to the package's __init__.py structure.
+"""
 
-from typing import Any, Dict, Optional, Union, Callable, List
+import pytest
 
-# --- Core Specs & Legacy Components ---
-from cascade.spec.task import task
-from cascade.spec.lazy_types import LazyResult
-from cascade.spec.routing import Router
-from cascade.spec.resource import resource, inject
-from cascade.spec.constraint import with_constraints
-from .context import get_current_context
-from cascade.spec.input import ParamSpec, EnvSpec
-from .internal.inputs import _get_param_value, _get_env_var
-from .control_flow import select_jump, bind
-from cascade.spec.jump import Jump
 
+def test_core_components_are_accessible_from_top_level():
+    """
+    Verifies that essential classes from cascade-engine and other core packages
+    are importable from the `cascade` namespace directly.
+    """
+    try:
+        from cascade import (
+            Engine,
+            MessageBus,
+            NativeSolver,
+            LocalExecutor,
+            DependencyMissingError,
+        )
+    except ImportError as e:
+        pytest.fail(f"Failed to import core components from top-level 'cascade': {e}")
+
+    # Dummy assertion to ensure the test runs if imports succeed
+    assert Engine is not None
+    assert MessageBus is not None
+    assert NativeSolver is not None
+    assert LocalExecutor is not None
+    assert DependencyMissingError is not None
+
+
+def test_accessing_non_existent_attribute_raises_attribute_error():
+    """
+    Ensures that accessing a truly non-existent attribute on the cascade module
+    raises a standard AttributeError, not an error from the provider system.
+    """
+    import cascade as cs
+
+    with pytest.raises(AttributeError, match="module 'cascade' has no attribute 'ThisClassShouldNotExist'"):
+        _ = cs.ThisClassShouldNotExist
+~~~~~
+
+#### Acts 2: [GREEN] 修复 `cascade` SDK 的 `__init__.py`
+
+现在，我们将修改 `packages/cascade-sdk/src/cascade/__init__.py`。我们会显式导入核心组件，并调整 `__getattr__` 的逻辑，使其不再错误地拦截对这些核心组件的访问。我们还会更新 `__all__` 列表。
+
+~~~~~act
+patch_file
+packages/cascade-sdk/src/cascade/__init__.py
+~~~~~
+~~~~~python.old
 # --- Runtime (for type hints and exceptions) ---
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
@@ -66,73 +107,26 @@ from cascade.runtime.events import Event
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.spec.protocols import Connector, StateBackend
 from cascade.flow import sequence, pipeline
+~~~~~
+~~~~~python.new
+# --- Runtime (for type hints and exceptions) ---
+# Core components explicitly exposed in the public API
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.spec.protocols import Connector, StateBackend
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 
-# --- Tools ---
-from .testing import override_resource, ControllerTestApp
-from .tools.cli import create_cli
-from cascade.graph.serialize import to_json, from_json
+from cascade.flow import sequence, pipeline
+~~~~~
 
-
-# --- V1.4 Factory Functions (Unchanged) ---
-
-
-def Param(
-    name: str, default: Any = None, type: Any = str, description: str = ""
-) -> LazyResult:
-    spec = ParamSpec(name=name, default=default, type=type, description=description)
-    get_current_context().register(spec)
-    return _get_param_value(name=name)
-
-
-def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
-    spec = EnvSpec(name=name, default=default, description=description)
-    get_current_context().register(spec)
-    return _get_env_var(name=name)
-
-
-# --- V1.4 Refactored Global Functions (Wrappers with deferred import) ---
-
-
-def run(
-    target: Union[LazyResult, List[Any], tuple[Any, ...]],
-    params: Optional[Dict[str, Any]] = None,
-    system_resources: Optional[Dict[str, Any]] = None,
-    log_level: str = "INFO",
-    log_format: str = "human",
-    connector: Optional[Connector] = None,
-    state_backend: Union[str, Callable[[str], StateBackend], None] = None,
-) -> Any:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(
-        target=target,
-        params=params,
-        system_resources=system_resources,
-        log_level=log_level,
-        log_format=log_format,
-        connector=connector,
-        state_backend=state_backend,
-    )
-    return app.run()
-
-
-def visualize(target: Any) -> str:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(target=target)
-    return app.visualize()
-
-
-def dry_run(target: Any) -> None:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(target=target)
-    app.dry_run()
-
-
-# --- Dynamic Provider Loading (Unchanged) ---
-
-
+~~~~~act
+patch_file
+packages/cascade-sdk/src/cascade/__init__.py
+~~~~~
+~~~~~python.old
 def __getattr__(name: str) -> Any:
     from .providers.registry import registry
 
@@ -142,10 +136,26 @@ def __getattr__(name: str) -> Any:
         # This is the original error that was being hit incorrectly.
         # It's correct for its intended purpose (provider loading).
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+~~~~~
+~~~~~python.new
+def __getattr__(name: str) -> Any:
+    """
+    Dynamically loads providers from the registry when they are accessed as attributes
+    on the `cascade` module (e.g., `cs.read.text`).
+    """
+    from .providers.registry import registry
 
+    # This will raise an AttributeError for names that are not registered providers,
+    # which is the correct behavior. We no longer need a try/except block that
+    # could mask other import-related issues.
+    return registry.get(name)
+~~~~~
 
-# --- Public API Export ---
-
+~~~~~act
+patch_file
+packages/cascade-sdk/src/cascade/__init__.py
+~~~~~
+~~~~~python.old
 __all__ = [
     # Core API
     "task",
@@ -182,6 +192,47 @@ __all__ = [
     "get_current_context",
 ]
 ~~~~~
+~~~~~python.new
+__all__ = [
+    # Core API
+    "task",
+    "Param",
+    "Env",
+    "run",
+    "dry_run",
+    "visualize",
+    # Advanced Flow Control
+    "sequence",
+    "pipeline",
+    "Router",
+    "Jump",
+    "select_jump",
+    "bind",
+    # Policies & Resources
+    "with_constraints",
+    "resource",
+    "inject",
+    # Types & Classes
+    "LazyResult",
+    "Engine",
+    "Event",
+    "MessageBus",
+    "NativeSolver",
+    "LocalExecutor",
+    # Tools & Utilities
+    "to_json",
+    "from_json",
+    "override_resource",
+    "ControllerTestApp",
+    "create_cli",
+    # Exceptions
+    "DependencyMissingError",
+    # Context (for advanced usage)
+    "get_current_context",
+]
+~~~~~
 
 ### 下一步建议
-这次重构应该已经解决了启动崩溃的问题。请重新运行应用或相关测试。如果问题解决，我们可以将这个任务标记为完成并提交。
+1.  **运行测试**: 执行 `pytest packages/cascade-sdk/` 来验证我们新添加的测试 `test_public_api_imports.py` 现在是否通过，并确保没有引入任何回归错误。
+2.  **提交变更**: 在测试通过后，将这些修改作为一个逻辑单元进行提交。
+3.  **代码审查**: 可以在 `cascade` 包的其他 `__init__.py` 文件中进行类似的审查，以确保导入和 API 暴露的一致性。

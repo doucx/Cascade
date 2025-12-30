@@ -17,11 +17,15 @@ from .control_flow import select_jump, bind
 from cascade.spec.jump import Jump
 
 # --- Runtime (for type hints and exceptions) ---
+# Core components explicitly exposed in the public API
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.events import Event
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.spec.protocols import Connector, StateBackend
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+
 from cascade.flow import sequence, pipeline
 
 # --- Tools ---
@@ -91,14 +95,16 @@ def dry_run(target: Any) -> None:
 
 
 def __getattr__(name: str) -> Any:
+    """
+    Dynamically loads providers from the registry when they are accessed as attributes
+    on the `cascade` module (e.g., `cs.read.text`).
+    """
     from .providers.registry import registry
 
-    try:
-        return registry.get(name)
-    except AttributeError:
-        # This is the original error that was being hit incorrectly.
-        # It's correct for its intended purpose (provider loading).
-        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+    # This will raise an AttributeError for names that are not registered providers,
+    # which is the correct behavior. We no longer need a try/except block that
+    # could mask other import-related issues.
+    return registry.get(name)
 
 
 # --- Public API Export ---
@@ -126,7 +132,9 @@ __all__ = [
     "LazyResult",
     "Engine",
     "Event",
-    "MessageBus",  # Added MessageBus
+    "MessageBus",
+    "NativeSolver",
+    "LocalExecutor",
     # Tools & Utilities
     "to_json",
     "from_json",

@@ -1,71 +1,186 @@
 简要回答
-所有测试已通过，核心重构已完成。现在我将生成一个 **[COMMIT]** 计划，其中包含所有修改文件的 `git add` 和一个详尽的 `git commit` 信息，以及对未来的建议。
+你的怀疑非常正确。`LispTranspiler` 的实现与我们刚刚完成的运行时重构**完全脱节**，并且确实**缺乏专门的测试覆盖**。
 
-## [COMMIT] feat(core): ParamNode 统一为 TaskNode 子类，修复循环依赖和参数覆盖
+## [WIP] feat(lisp): 更新 Lisp 转译器以适配统一的 ParamNode 模型并增加测试
+
+### 错误分析
+`cascade/tools/lisp.py` 中的 `LispTranspiler` 存在两个严重问题：
+
+1.  **架构不一致（过时的实现）**: 它依然保留了 `elif isinstance(node, ParamNode):` 的特殊分支。这与我们将 `ParamNode` 视为标准 `TaskNode` 的核心重构思想背道而驰。正确的做法应该是检查 `node.name == "_get_param_value"`，因为节点的 **语义** 来自于它执行的函数，而不是它的 Python 类。
+
+2.  **实现逻辑脆弱**: 在这个特殊分支中，它试图通过 `node.param_spec.name` 获取参数名。这个属性在某些情况下（如从序列化恢复）可能为 `None`。我们已经确定，参数名的**唯一事实来源**应该是 `node.input_bindings['name']`。
+
+这两个问题共同导致了转译器在面对 `cs.Param` 时行为不可预测，一旦遇到之前测试未覆盖的场景就会失败。
 
 ### 用户需求
-期望 `ParamNode` 能像普通任务一样，由运行时引擎调度执行，并通过标准的参数解析流程处理 `cs.Jump` 带来的参数覆盖。
+1.  重构 `LispTranspiler`，使其不再特殊处理 `ParamNode` 类型，而是通过检查节点名称 `_get_param_value` 来识别参数节点，并从 `input_bindings` 中安全地提取参数名。
+2.  为 `LispTranspiler` 补充必要的单元测试，确保其能够正确处理包含 `cs.Param` 的各种图结构。
 
 ### 评论
-这次重构是 Cascade 运行时核心架构的一个重要里程碑。通过将 `ParamNode` 集成到现有 `TaskNode` 的多态体系中，我们极大地简化了 `ArgumentResolver` 的逻辑，消除了特殊处理的路径，使得 `cs.Param` 在 TCO/Jump 场景下的行为符合预期，并提升了整个系统的健壮性和可维护性。
+这是一个典型的“重构后遗症”。我们更新了核心运行时，但忘记了与之配套的工具链。增加测试不仅是修复当前问题的必要步骤，更是确保未来重构不会再次破坏此功能的关键保障。
 
 ### 目标
-1.  **统一 `ParamNode` 语义**：将 `ParamNode` 重构为 `TaskNode` 的子类，使其拥有 `_callable` 等所有 `TaskNode` 的特性。
-2.  **标准化执行流程**：移除 `ArgumentResolver` 中针对 `ParamNode` 的特殊解析和状态写入逻辑，强制 `ParamNode` 走 `Processor` 和 `Executor` 的标准执行路径。
-3.  **修复 TCO 参数覆盖**：确保 `cs.Jump` 带来的 `input_overrides` 在 `ArgumentResolver` 中正确应用于 `ParamNode`（通过其 `_callable` 获取值），修复循环依赖时参数不生效的问题。
-4.  **提高代码一致性**：删除 `GraphExecutionStrategy` 中遗留的对 `ParamNode` 的跳过逻辑。
+1.  修改 `packages/cascade-sdk/src/cascade/tools/lisp.py` 中的 `_render_expr` 方法，使其基于 `node.name` 而非 `isinstance(node, ParamNode)` 来生成 `(param ...)` 表达式。
+2.  创建新的测试文件 `packages/cascade-sdk/tests/tools/test_lisp.py`。
+3.  在该测试文件中，添加至少三个核心测试用例：
+    *   一个 `cs.Param` 的直接转译。
+    *   `cs.Param` 作为另一个任务的依赖。
+    *   `cs.Param` 作为 `Router` 的选择器。
 
 ### 基本原理
-通过彻底移除 `ParamNode` 作为特殊节点的身份，并将其整合到 `TaskNode` 的结构和执行模型中，所有的参数解析和执行都遵循单一、统一的流程。现在，`_get_param_value` 任务作为一个普通任务，其参数（包括通过 `cs.Param` 定义的初始值和通过 `cs.Jump` 传递的覆盖值）都将由 `ArgumentResolver` 的标准机制进行优先级判定和注入。这不仅解决了当前的 `DependencyMissingError`，也消除了潜在的逻辑不一致性，使得未来对任务类型的扩展更加容易。
+通过将转译器的逻辑与运行时的逻辑对齐（都基于 `_get_param_value` 这个可执行任务的身份来识别参数），我们消除了架构上的不一致性。同时，通过从 `input_bindings` 读取参数名，我们确保了数据来源的稳定性和正确性。补充测试则将这一行为固化为协议的一部分。
 
 ### 标签
-#intent/refine #intent/fix #flow/done #priority/critical #comp/engine #concept/node #concept/execution #concept/parser #concept/state #scope/core #ai/delegate #task/domain/core #task/object/param-node #task/action/unify #task/state/end
+#intent/refine #intent/tooling #flow/ready #priority/high #comp/cli #concept/parser #scope/dx #ai/brainstorm #task/domain/tooling #task/object/lisp-transpiler #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 添加所有更改到暂存区
+#### Acts 1: 重构 Lisp 转译器
+
+我们将修改 `_render_expr` 方法，使其不再以类型区分 `ParamNode`，而是通过检查节点名称来识别并处理参数。
 
 ~~~~~act
-git_add
-packages/cascade-engine/src/cascade/runtime/strategies/graph.py
-packages/cascade-engine/tests/adapters/executors/test_local.py
-packages/cascade-graph/src/cascade/graph/build.py
-packages/cascade-graph/src/cascade/graph/model.py
-packages/cascade-graph/src/cascade/graph/serialize.py
-packages/cascade-graph/tests/test_build.py
-packages/cascade-graph/tests/test_serialize.py
+patch_file
 packages/cascade-sdk/src/cascade/tools/lisp.py
-packages/cascade-engine/src/cascade/runtime/resolvers.py
+~~~~~
+~~~~~python.old
+        # Function Name
+        if isinstance(node, MapNode):
+            func_name = self._sanitize_name(node.definition.name)
+            parts.append(f"map {func_name}")
+        elif isinstance(node, ParamNode):
+            # Safe access with fallback if param_spec is missing (e.g. from restore)
+            p_name = node.param_spec.name if node.param_spec else "unknown"
+            return f'(param "{p_name}")'
+        else:
+            func_name = self._sanitize_name(node.name)
+            parts.append(func_name)
+~~~~~
+~~~~~python.new
+        # Function Name
+        if isinstance(node, MapNode): 
+            func_name = self._sanitize_name(node.definition.name) 
+            parts.append(f"map {func_name}") 
+        elif node.name == "_get_param_value":
+            # Correctly identify Param nodes by their callable's name, not their class.
+            # The parameter name is reliably stored in input_bindings.
+            p_name = node.input_bindings.get("name", "unknown")
+            return f'(param "{p_name}")'
+        else: 
+            func_name = self._sanitize_name(node.name) 
+            parts.append(func_name)
 ~~~~~
 
-#### Acts 2: 提交更改
+#### Acts 2: 增加 Lisp 转译器测试
+
+创建新的测试文件并添加必要的测试用例，确保 `cs.Param` 在不同场景下都能被正确转译。
 
 ~~~~~act
-git_commit
+write_file
+packages/cascade-sdk/tests/tools/test_lisp.py
 ~~~~~
-~~~~~text
-feat(core): Unify ParamNode as TaskNode subtype, fix TCO and parameter override
+~~~~~python
+import pytest
+import cascade as cs
+from cascade.tools.lisp import to_lisp
 
-Refactored `ParamNode` to inherit from `TaskNode`, unifying its execution model with regular tasks. This change eliminates the special-casing of `ParamNode` within `ArgumentResolver` and `GraphExecutionStrategy`, resolving several critical issues:
+# Skip if typer is not installed (dependency of cs.create_cli, often in same env)
+pytest.importorskip("typer")
 
--   **Fixes `DependencyMissingError`**: `ParamNode`s are now properly scheduled and executed by the `Executor` via the `_get_param_value` callable, ensuring they produce results in the `StateBackend`.
--   **Enables `cs.Jump` parameter override**: The `ArgumentResolver`'s standard logic for handling `input_overrides` (from `cs.Jump`) now correctly applies to `ParamNode`s, allowing dynamic parameter changes in iterative workflows. Previously, a faulty special branch for `ParamNode` in the resolver incorrectly ignored overrides, leading to infinite loops in TCO tests.
--   **Resolves `AttributeError`**: `ParamNode` now properly exposes `callable_obj` (pointing to `_get_param_value.func`), satisfying API contracts for tools like the CLI generator.
--   **Simplifies Runtime Logic**: Removes redundant and inconsistent code paths, making the core engine more robust and easier to extend.
 
-**Changes Details:**
--   **`cascade-graph/model.py`**: `ParamNode` now inherits from `TaskNode`.
--   **`cascade-graph/build.py`**: Ensures `_callable` (pointing to `_get_param_value.func`) is explicitly set when building `ParamNode`s.
--   **`cascade-graph/serialize.py`**: Updated serialization to handle `ParamNode`'s `_callable`.
--   **`cascade-engine/runtime/resolvers.py`**: Removed the special `if isinstance(ParamNode)` block, relying on the generic argument resolution.
--   **`cascade-engine/runtime/strategies/graph.py`**: Removed the explicit `if node.node_type == "param": continue` line that was preventing `ParamNode` execution.
+# --- Test Cases ---
 
-This refactoring significantly enhances the consistency and reliability of Cascade's core runtime.
+def test_lisp_transpile_simple_param():
+    """Tests that a standalone Param is correctly transpiled."""
+    target = cs.Param("my_param", description="A test parameter")
+    lisp_code = to_lisp(target)
+    assert lisp_code == '(param "my_param")'
+
+
+def test_lisp_transpile_param_as_dependency():
+    """Tests transpilation when a Param is an input to another task."""
+
+    @cs.task
+    def process_data(data, scale: int = 1):
+        pass
+
+    target = process_data(cs.Param("user_input"), scale=10)
+    lisp_code = to_lisp(target)
+
+    # Note: Param is not shared, so it's inlined.
+    expected = "(process-data (param \"user_input\") :scale 10)"
+    assert lisp_code == expected
+
+
+def test_lisp_transpile_shared_param_in_let():
+    """Tests that a Param used multiple times is hoisted to a let* block."""
+
+    @cs.task
+    def task_a(dep):
+        pass
+
+    @cs.task
+    def task_b(dep):
+        pass
+
+    @cs.task
+    def gather(a, b):
+        pass
+
+    # 'user_input' is shared between task_a and task_b
+    param = cs.Param("user_input")
+    target = gather(task_a(param), task_b(param))
+
+    lisp_code = to_lisp(target)
+    print(lisp_code)
+
+    # We expect 'user-input' to be defined in let* and referenced by name.
+    # The name is sanitized from the node name (_get_param_value)
+    expected_lines = [
+        "(let* (",
+        "  (get-param-value (param \"user_input\"))",
+        ")",
+        "  (gather (task-a get-param-value) (task-b get-param-value)))",
+    ]
+    assert lisp_code == "\n".join(expected_lines)
+
+
+def test_lisp_transpile_router_with_param_selector():
+    """Tests a complex case where a Param acts as a router selector."""
+
+    @cs.task
+    def branch_a():
+        pass
+
+    @cs.task
+    def branch_b():
+        pass
+
+    router = cs.Router(
+        selector=cs.Param("mode"), routes={"a": branch_a(), "b": branch_b()}
+    )
+
+    @cs.task
+    def consumer(val):
+        pass
+
+    target = consumer(router)
+    lisp_code = to_lisp(target)
+    print(lisp_code)
+    
+    # The param is shared (as a selector), so it's hoisted.
+    expected_lines = [
+        "(let* (",
+        "  (get-param-value (param \"mode\"))",
+        ")",
+        '  (consumer (case get-param-value (("a") (branch-a)) (("b") (branch-b)))))',
+    ]
+
+    assert lisp_code == "\n".join(expected_lines)
+
 ~~~~~
 
 ### 下一步建议
-1.  **文档更新**: 更新任何关于 `ParamNode` 特殊行为的文档，以反映其现在作为 `TaskNode` 子类的统一身份。
-2.  **性能审查**: 尽管这次是重构，但仍值得关注对 `ArgumentResolver` 的性能影响，尤其是在大量 ParamNode 的场景下。
-3.  **Lisp 转译器审查**: 检查 `packages/cascade-sdk/src/cascade/tools/lisp.py` 是否完全适配了 `ParamNode` 的新结构。本次更改解决了 `AttributeError`，但 Lisp 转译器可能还有其他假设。
+运行我们刚刚创建的新测试文件 `packages/cascade-sdk/tests/tools/test_lisp.py`，以验证我们的修复是否正确且全面。

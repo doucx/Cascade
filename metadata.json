@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(core): ParamNode 统一为 TaskNode 子类，修复循环依赖和参数覆盖", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767071897.3549998, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(lisp): 更新 Lisp 转译器以适配统一的 ParamNode 模型并增加测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767072102.0025942, "duration_ms": 0}}

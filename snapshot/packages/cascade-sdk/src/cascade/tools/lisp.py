@@ -90,15 +90,16 @@ class LispTranspiler:
         from cascade.graph.model import MapNode, ParamNode
 
         # Function Name
-        if isinstance(node, MapNode):
-            func_name = self._sanitize_name(node.definition.name)
-            parts.append(f"map {func_name}")
-        elif isinstance(node, ParamNode):
-            # Safe access with fallback if param_spec is missing (e.g. from restore)
-            p_name = node.param_spec.name if node.param_spec else "unknown"
+        if isinstance(node, MapNode): 
+            func_name = self._sanitize_name(node.definition.name) 
+            parts.append(f"map {func_name}") 
+        elif node.name == "_get_param_value":
+            # Correctly identify Param nodes by their callable's name, not their class.
+            # The parameter name is reliably stored in input_bindings.
+            p_name = node.input_bindings.get("name", "unknown")
             return f'(param "{p_name}")'
-        else:
-            func_name = self._sanitize_name(node.name)
+        else: 
+            func_name = self._sanitize_name(node.name) 
             parts.append(func_name)
 
         # Merge Bindings and Edges

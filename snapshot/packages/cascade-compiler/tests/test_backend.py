@@ -1,39 +1,3 @@
-好的，我们继续 TDD 流程，进入 "Phase 3: Compiler Backend" 的 RED 阶段。
-
-我将生成一个计划，创建 `Backend` 组件的 RED 状态测试。此测试将定义 `Backend` 的核心功能：将经过优化的 `GraphIR` 转换为线性的、可由 VM 执行的指令集 (`Blueprint`)。
-
-## [WIP] test(compiler): 为 Backend 创建 RED 状态测试
-
-### 用户需求
-根据 TDD 重构路线图的 "Phase 3"，我们需要为编译器后端 (`Backend`) 创建初始的、失败的（RED 状态）测试用例。测试需要验证 `Backend` 能够将 `GraphIR` 转换为包含正确指令（如 `Call`）和寄存器分配（`Register`）的 `Blueprint`。
-
-### 评论
-这是连接静态图分析与动态虚拟机执行的关键桥梁。`Backend` (或 Codegen) 的职责是将拓扑有序的图结构线性化为指令序列。通过预先编写测试，我们能确保生成的指令集正确反映了原始图的数据流依赖关系，例如一个任务的输出（存入寄存器）如何成为另一个任务的输入（从寄存器加载）。
-
-### 目标
-1.  创建新的测试文件 `packages/cascade-compiler/tests/test_backend.py`。
-2.  在该文件中，添加一个测试用例，断言单个任务节点的 `GraphIR` 能被转换为包含一个 `Call` 指令的 `Blueprint`。
-3.  添加第二个测试用例，断言线性依赖（A -> B）的 `GraphIR` 能被转换为两条 `Call` 指令，且第二条指令的输入操作数是第一条指令的输出寄存器。
-
-### 基本原理
-我们继续遵循 TDD 流程。通过 `write_file` 创建新的测试文件，我们为 `Backend` 组件设定了明确的开发目标。`pytest.xfail` 标记的使用表明我们预期这些测试会因为 `Backend` 尚未实现而失败，这正是 TDD 流程中 "RED" 阶段的标志。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/compiler #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/compiler-backend #task/action/define #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 Backend 的 RED 测试文件
-
-这个测试文件定义了 `Backend` 必须满足的两个核心代码生成行为。
-
-~~~~~act
-write_file
-packages/cascade-compiler/tests/test_backend.py
-~~~~~
-~~~~~python
 import pytest
 
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef, ArgumentDef, ArgumentKind
@@ -124,4 +88,3 @@ def test_backend_allocates_registers_for_dependency():
     
     assert isinstance(call_b.output, Register)
     assert call_b.output.index != register_a_out.index
-~~~~~

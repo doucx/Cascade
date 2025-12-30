@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import inspect
-from cascade.graph.model import Graph, Node, Edge, EdgeType
+from cascade.graph.model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.spec.jump import JumpSelector
@@ -119,17 +119,49 @@ class GraphBuilder:
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
             # Note: execution_mode is now part of task_def (definition.mode)
-            node = Node(
-                structural_id=node_hash,
-                definition=task_def,
-                callable_obj=result.task.func,
-                node_type="task",
-                retry_policy=result._retry_policy,
-                cache_policy=result._cache_policy,
-                constraints=result._constraints,
-                input_bindings=input_bindings,
-                has_complex_inputs=has_complex,
-            )
+            if result.task.func is _get_param_value.func:
+                # Retrieve the ParamSpec from the global context to attach to the node
+                from cascade.context import get_current_context
+                
+                # The arg at index 0 is the param name
+                param_name = input_bindings.get("0") or input_bindings.get("name")
+                param_spec = None
+                if param_name:
+                    ctx = get_current_context()
+                    # Linear scan is okay for build time, or we could optimize context lookup
+                    for spec in ctx.get_all_specs():
+                        if spec.name == param_name:
+                            # We import inside to avoid top-level circular imports if possible, 
+                            # though ParamSpec is imported in ParamNode definition
+                            from cascade.spec.input import ParamSpec
+                            if isinstance(spec, ParamSpec):
+                                param_spec = spec
+                            break
+
+                node = ParamNode(
+                    structural_id=node_hash,
+                    definition=task_def,
+                    node_type="param",
+                    _callable=result.task.func,
+                    retry_policy=result._retry_policy,
+                    cache_policy=result._cache_policy,
+                    constraints=result._constraints,
+                    input_bindings=input_bindings,
+                    param_spec=param_spec,
+                    has_complex_inputs=True,
+                )
+            else:
+                node = TaskNode(
+                    structural_id=node_hash,
+                    definition=task_def,
+                    _callable=result.task.func,
+                    node_type="task",
+                    retry_policy=result._retry_policy,
+                    cache_policy=result._cache_policy,
+                    constraints=result._constraints,
+                    input_bindings=input_bindings,
+                    has_complex_inputs=has_complex,
+                )
             self.registry._registry[node_hash] = node
 
         self._visited_instances[result._uuid] = node
@@ -223,7 +255,7 @@ class GraphBuilder:
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
                     input_bindings[k] = val
 
-            node = Node(
+            node = MapNode(
                 structural_id=node_hash,
                 definition=task_def,
                 node_type="map",

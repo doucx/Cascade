@@ -87,7 +87,7 @@ def test_serialize_params_structure_only():
     data = graph_to_dict(graph)
     param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
 
-    assert param_node["node_type"] == "task"
+    assert param_node["node_type"] == "param"
     assert "name" in param_node["input_bindings"]
     assert param_node["input_bindings"]["name"] == "env"
 

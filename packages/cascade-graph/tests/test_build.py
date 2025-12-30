@@ -44,8 +44,8 @@ def test_build_graph_with_param_factory():
     # 我们需要通过任务名称或 ID 查找
     p_node = next(n for n in graph.nodes if n.name == "_get_param_value")
 
-    # 断言节点类型统一为 task
-    assert p_node.node_type == "task"
+    # The node type should now be correctly identified as 'param'
+    assert p_node.node_type == "param"
 
     # 断言它包含正确的 input_bindings (这是内部任务需要的参数)
     assert "name" in p_node.input_bindings

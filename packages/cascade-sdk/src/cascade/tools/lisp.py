@@ -87,14 +87,18 @@ class LispTranspiler:
     def _render_expr(self, node: Node) -> str:
         parts = []
 
+        from cascade.graph.model import MapNode, ParamNode
+
         # Function Name
-        func_name = self._sanitize_name(node.name)
-        if node.node_type == "map":
+        if isinstance(node, MapNode):
+            func_name = self._sanitize_name(node.definition.name)
             parts.append(f"map {func_name}")
-        elif node.node_type == "param":
-            p_name = node.param_spec.name if node.param_spec else "?"
+        elif isinstance(node, ParamNode):
+            # Safe access with fallback if param_spec is missing (e.g. from restore)
+            p_name = node.param_spec.name if node.param_spec else "unknown"
             return f'(param "{p_name}")'
         else:
+            func_name = self._sanitize_name(node.name)
             parts.append(func_name)
 
         # Merge Bindings and Edges

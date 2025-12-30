@@ -39,6 +39,11 @@ class Node:
     # Structural Bindings (Literals)
     input_bindings: Dict[str, Any] = field(default_factory=dict)
 
+    def __eq__(self, other):
+        if not isinstance(other, Node):
+            return NotImplemented
+        return self.structural_id == other.structural_id
+
     def __hash__(self):
         return hash(self.structural_id)
 
@@ -52,7 +57,7 @@ class Node:
         return None
 
 
-@dataclass
+@dataclass(eq=False)
 class TaskNode(Node):
     """Represents a standard executable task."""
 
@@ -67,7 +72,7 @@ class TaskNode(Node):
         return self._callable
 
 
-@dataclass
+@dataclass(eq=False)
 class MapNode(Node):
     """Represents a mapped task execution."""
 
@@ -82,7 +87,7 @@ class MapNode(Node):
         return self.mapping_factory
 
 
-@dataclass
+@dataclass(eq=False)
 class ParamNode(TaskNode):
     """Represents an external parameter injection."""
 

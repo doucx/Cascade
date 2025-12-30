@@ -1,226 +1,245 @@
-好的，信息已收到并完全内化。
+非常好。这些测试失败是**完全符合预期的**，它们精确地验证了我们上一步进行的 API 变更已经生效。测试用例现在就像一个“锁”，防止了旧的、不一致的 API 被意外使用，这正是测试驱动开发（TDD）的价值所在。
 
-你提供的 `cascade/spec/task.py` 和 `cascade/spec/protocols.py` 文件是解开这个谜题的关键。它们 100% 证实了我的核心分析：
-
-1.  **`LazyFactory` 协议**：明确要求实现者提供一个 `.map()` 方法。
-2.  **`Task` 类**：`cascade.spec.task.Task` 类是 `@task` 装饰器的产物，它**确实**提供了 `.map()` 方法。
-3.  **结论**：任何 `Provider` 的 `create_factory()` 方法都**必须**返回一个 `Task` 实例，才能满足 `LazyFactory` 协议的契约。
-
-当前 `sql.py` 和 `ipfs/provider.py` 的实现返回了普通的 Python 函数，这些函数没有 `.map()` 方法，因此 `pyright` 正确地报告了类型不兼容错误。这是系统 DSL 一致性的一个严重裂痕。
-
-现在，我们将执行之前制定的路线图，生成一个具体的、可执行的计划来修复这个问题。
-
-我将生成一个计划，通过重构 `sql.py` 和 `ipfs/provider.py` 来解决这个核心的架构不一致问题。这将使它们与 `shell.py` 等行为正确的提供者保持一致。
+现在，我们的任务就是更新这些测试，使其与新的、更健壮的 API 契约保持一致。
 
 ---
-## [WIP] refactor: 统一提供者工厂以返回 Task 对象
+1.  **`test_sql.py` 失败 (x3)**:
+    *   **错误**: `TypeError: _sql_task() got an unexpected keyword argument 'db'`
+    *   **原因**: 我们已经将 `cs.sql` 的 API 从 `cs.sql(..., db="resource_name")` 修改为了 `cs.sql(..., conn=cs.inject("resource_name"))`。测试代码仍在传递旧的 `db` 关键字参数，而新的底层任务 `_sql_task` 并不接受它，因此抛出 `TypeError`。
+
+2.  **`test_ipfs.py` 失败 (x2)**:
+    *   **错误**: `AttributeError: ... has no attribute 'IPFS_API_BASE_URL'`
+    *   **原因**: 我们将 `ipfs` 提供者重构为了原子化的任务，并移除了模块级的全局常量 `IPFS_API_BASE_URL`，转而使用一个带有默认值的、可配置的任务参数 `api_base_url`。测试夹具 `mock_ipfs_server` 仍然试图通过 `monkeypatch` 修改那个已不存在的全局常量，因此引发 `AttributeError`。
+
+---
+## [WIP] fix: 更新测试用例以适应重构后的提供者 API
 
 ### 用户需求
-系统的核心抽象 `LazyFactory` 与其实现存在严重的不一致。`sql` 和 `ipfs` 等提供者返回的是普通函数，而不是像标准 `@cs.task` 那样返回可组合的 `Task` 对象（即带有 `.map()` 等方法的对象），这破坏了 DSL 的一致性并导致了 `pyright` 类型错误。
+修复因 `sql` 和 `ipfs` 提供者 API 变更而导致的单元测试失败。
 
 ### 评论
-这是一个至关重要的架构级重构。通过强制所有提供者都返回一个功能完备的 `Task` 对象，我们能确保 Cascade 的 DSL 具备完全一致的行为。用户将能够对 `cs.sql` 或 `cs.ipfs.cat` 等内置提供者使用 `.map()`、`.with_retry()` 等所有策略方法，就像他们对自己定义的任务所做的那样。这将极大地提升开发者体验（DX）和系统的可预测性。
+这是一次非常有价值的测试重构。对于 `sql` 测试，我们将使其明确地测试新的依赖注入模式。对于 `ipfs` 测试，我们将移除对全局状态的猴子补丁（monkeypatching），转而通过向任务传递参数来注入 mock URL。这使得测试更加健壮、隔离性更好，并且清晰地记录了任务的依赖关系，是测试实践的一次重要改进。
 
 ### 目标
-1.  重构 `cascade.providers.sql.py`，使其 `SqlProvider` 返回一个 `Task` 对象。
-2.  重构 `cascade.providers.ipfs.provider.py`，使其 `IpfsCatProvider` 和 `IpfsAddProvider` 返回 `Task` 对象。
-3.  确保修改后的代码符合 `LazyFactory` 协议，从而消除相关的 `pyright` 错误。
-4.  接受为了架构一致性而引入的、对 `cs.sql` 和 `cs.ipfs.*` API 的破坏性变更。
+1.  修改 `packages/cascade-library/tests/test_sql.py`，更新所有对 `cs.sql` 的调用，使用新的 `conn=cs.inject("resource_name")` API。
+2.  增加一个新的测试用例，明确验证 `cs.sql` 对象本身是一个 `Task`（即拥有 `.map` 方法），以防止未来发生回归。
+3.  修改 `packages/cascade-provider-ipfs/tests/test_ipfs.py`，调整 `mock_ipfs_server` 夹具，使其不再使用 `monkeypatch`，而是将 mock 服务器的 URL 作为参数传递给 `cs.ipfs.cat` 和 `cs.ipfs.add` 任务。
 
 ### 基本原理
-问题的根源在于 `LazyFactory` 协议要求返回的对象必须有 `.map()` 方法，而只有 `@task` 装饰器产生的 `Task` 对象才满足此条件。当前 `sql.py` 和 `ipfs/provider.py` 返回的是普通的 Python 函数，违反了此协议。
+我们将直接修改测试文件以匹配新的 API 签名。
 
-我们的策略是：
-
-1.  **遵循正确模式**：以 `cascade.providers.shell.py` 为范本，该提供者正确地返回了一个被 `@task` 装饰的 `_shell_task` 对象。
-2.  **原子化任务**：对于 `sql` 和 `ipfs`，我们将它们重构为更底层的、自包含的原子任务。原有的图构建逻辑（如 IPFS 提供者中对 `http.post` 的调用）将被合并到任务函数体内部。这使得任务本身成为一个独立的、可执行的单元。
-3.  **API 变更**：为了实现类型正确，我们必须调整 `cs.sql` 的调用签名。`db="res_name"` 的“魔术”将被替换为更明确的 `conn=cs.inject("res_name")`。虽然这是一个破坏性变更，但它使依赖注入机制变得明确和一致，符合 Cascade 的设计哲学。对于 `ipfs`，我们将把 API URL 作为任务的一个参数，以提高其灵活性和可测试性。
-
-此方案将一劳永逸地解决 DSL 的双轨制问题，使所有核心提供者都成为 Cascade 生态中的“一等公民”。
+*   对于 SQL 测试，这意味着将 `db="sqlite_db"` 替换为 `conn=cs.inject("sqlite_db")`。此外，由于 `_sql_factory` 被移除，我们需要确保 `sqlite_db` 资源 fixture 中使用的 `text` 函数来自 `sqlalchemy` 本身。
+*   对于 IPFS 测试，这意味着 `mock_ipfs_server` 夹具将 `yield` 出 mock URL，测试函数接收这个 URL，并将其作为 `api_base_url` 参数传递给 `cs.ipfs.cat` 和 `cs.ipfs.add`。这是一种更清晰、更符合依赖注入原则的测试方式。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/engine #comp/interfaces #concept/parser #scope/api #scope/dx #ai/brainstorm #task/domain/architecture #task/object/provider-contract #task/action/refactor #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/architecture #task/object/provider-contract #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `sql.py` 以符合 `LazyFactory` 协议
+#### Acts 1: 修复 `test_sql.py`
 
-我们将重写 `sql.py`。关键变更：移除 `_sql_factory` 包装函数，将 `_sql_task` 作为核心任务，并更新 `SqlProvider` 直接返回这个 `Task` 对象。这将改变 `cs.sql` 的公共 API。
-
-~~~~~act
-write_file
-packages/cascade-library/src/cascade/providers/sql.py
-~~~~~
-~~~~~python
-from typing import Any, List, Dict, Optional
-
-try:
-    import sqlalchemy
-    from sqlalchemy import text
-except ImportError:
-    sqlalchemy = None
-
-from cascade.spec.task import task, LazyResult
-from cascade.spec.resource import inject
-from cascade.providers import LazyFactory, Provider
-
-
-class SqlProvider(Provider):
-    name = "sql"
-
-    def create_factory(self) -> LazyFactory:
-        if sqlalchemy is None:
-            raise ImportError(
-                "The 'sqlalchemy' library is required to use the sql provider. "
-                "Please install it with: pip install cascade-py[sql]"
-            )
-        # Directly return the Task object, satisfying the LazyFactory protocol.
-        return _sql_task
-
-
-@task(name="sql_query")
-def _sql_task(
-    query: str,
-    conn: Any,  # The connection object is now an explicit, injectable argument
-    params: Optional[Dict[str, Any]] = None,
-) -> List[Dict[str, Any]]:
-    """
-    Executes a SQL query using the provided connection.
-
-    Note on API Change:
-    The user-facing API is now more explicit. Instead of cs.sql(db="my_db"),
-    the call should be cs.sql(conn=cs.inject("my_db"), ...).
-    """
-    if sqlalchemy is None:
-        # This check is redundant if create_factory is called, but good for safety
-        raise ImportError("SQLAlchemy is not installed.")
-
-    # 'conn' can be an Engine or a Connection.
-    # We use a context manager to ensure proper handling.
-    params = params or {}
-    stmt = text(query)
-
-    # Check if it's an Engine or Connection by looking for 'connect' method
-    if hasattr(conn, "connect"):
-        with conn.connect() as active_conn:
-            result = active_conn.execute(stmt, params)
-            # Try to commit if available (for transaction handling)
-            if hasattr(active_conn, "commit"):
-                active_conn.commit()
-
-            # Fetch results if it returns rows
-            if result.returns_rows:
-                # Use mappings() to get dict-like rows
-                return [dict(row) for row in result.mappings()]
-            return []
-    else:
-        # Assume it's an already open Connection
-        result = conn.execute(stmt, params)
-        if hasattr(conn, "commit"):
-            conn.commit()
-
-        if result.returns_rows:
-            return [dict(row) for row in result.mappings()]
-        return []
-~~~~~
-
-#### Acts 2: 重构 `ipfs/provider.py` 使其原子化并符合协议
-
-我们将重写 `ipfs/provider.py`。关键变更：移除作为图构建函数的 `cat` 和 `add`，用两个新的、自包含的 `@task` 取代它们，这两个任务内部处理 HTTP 请求和解析。提供者将直接返回这些新的 `Task` 对象。
+我们将重写 `test_sql.py` 以使用新的 `conn=cs.inject(...)` 语法，并添加一个新测试来验证 `cs.sql` 现在是一个 `Task` 对象。
 
 ~~~~~act
 write_file
-packages/cascade-provider-ipfs/src/cascade/providers/ipfs/provider.py
+packages/cascade-library/tests/test_sql.py
 ~~~~~
 ~~~~~python
-import json
+import pytest
 import cascade as cs
-from cascade.providers import Provider, LazyFactory
+from sqlalchemy import create_engine, text
+from sqlalchemy.pool import StaticPool
 
-try:
-    import aiohttp
-except ImportError:
-    aiohttp = None
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
 
-
-# --- Provider Implementations ---
-
-
-class IpfsCatProvider(Provider):
-    name = "ipfs.cat"
-
-    def create_factory(self) -> LazyFactory:
-        if aiohttp is None:
-            raise ImportError(
-                "The 'aiohttp' library is required. Please install it with: pip install aiohttp"
-            )
-        return _ipfs_cat_task
+# Skip if sqlalchemy missing
+pytest.importorskip("sqlalchemy")
 
 
-class IpfsAddProvider(Provider):
-    name = "ipfs.add"
+@cs.resource
+def sqlite_db():
+    # Setup an in-memory SQLite database.
+    # Because tasks now run in a separate thread pool, we must ensure:
+    # 1. We share the same connection (StaticPool) so data persists across tasks.
+    # 2. We disable thread checking (check_same_thread=False) so the connection created
+    #    here can be used by the worker threads.
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
 
-    def create_factory(self) -> LazyFactory:
-        if aiohttp is None:
-            raise ImportError(
-                "The 'aiohttp' library is required. Please install it with: pip install aiohttp"
-            )
-        return _ipfs_add_task
+    # Create a table
+    with engine.connect() as conn:
+        conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT)"))
+        conn.execute(text("INSERT INTO users (name) VALUES ('Alice')"))
+        conn.execute(text("INSERT INTO users (name) VALUES ('Bob')"))
+        conn.commit()
+
+    yield engine
+
+    engine.dispose()
 
 
-# --- Atomic Tasks ---
+@pytest.fixture
+def db_engine():
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
+    engine.register(sqlite_db)
+    return engine
 
 
-@cs.task(name="ipfs_cat")
-async def _ipfs_cat_task(
-    cid: str, api_base_url: str = "http://127.0.0.1:5001"
-) -> bytes:
+@pytest.mark.asyncio
+async def test_sql_query_success(db_engine):
+    # Define a workflow using the 'sqlite_db' resource via explicit injection
+    users = cs.sql(
+        "SELECT * FROM users ORDER BY name", conn=cs.inject("sqlite_db")
+    )
+
+    result = await db_engine.run(users)
+
+    assert len(result) == 2
+    assert result[0]["name"] == "Alice"
+    assert result[1]["name"] == "Bob"
+
+
+@pytest.mark.asyncio
+async def test_sql_with_params(db_engine):
+    target = cs.sql(
+        "SELECT * FROM users WHERE name = :name",
+        conn=cs.inject("sqlite_db"),
+        params={"name": "Bob"},
+    )
+
+    result = await db_engine.run(target)
+
+    assert len(result) == 1
+    assert result[0]["name"] == "Bob"
+
+
+@pytest.mark.asyncio
+async def test_sql_missing_resource():
+    target = cs.sql("SELECT 1", conn=cs.inject("non_existent_db"))
+
+    engine = cs.Engine(
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+    )
+    # We don't register anything
+
+    # With the new scanning logic, it should fail at setup time!
+    with pytest.raises(NameError, match="not registered"):
+        await engine.run(target)
+
+
+def test_sql_factory_returns_task_object():
     """
-    Fetches content from IPFS for a given CID.
+    Verify that cs.sql is now a Task object that supports composition.
     """
-    async with aiohttp.ClientSession() as session:
-        url = f"{api_base_url}/api/v0/cat"
-        async with session.post(url, params={"arg": cid}) as resp:
-            if resp.status >= 400:
-                body = await resp.text()
-                raise RuntimeError(f"IPFS API Error ({resp.status}): {body}")
-            return await resp.read()
-
-
-@cs.task(name="ipfs_add")
-async def _ipfs_add_task(
-    path: str, api_base_url: str = "http://127.0.0.1:5001"
-) -> str:
-    """
-    Adds a local file to IPFS and returns its CID.
-    """
-    form = aiohttp.FormData()
-    # Note: This reads the whole file into memory. For large files, a streaming
-    # approach would be better, but this simplifies the task implementation.
-    with open(path, "rb") as f:
-        form.add_field("file", f)
-
-        async with aiohttp.ClientSession() as session:
-            url = f"{api_base_url}/api/v0/add"
-            async with session.post(url, data=form) as resp:
-                if resp.status >= 400:
-                    body = await resp.text()
-                    raise RuntimeError(f"IPFS API Error ({resp.status}): {body}")
-
-                # The response is a stream of JSON objects, newline-separated.
-                # The last one is the summary for the whole directory/file.
-                lines = (await resp.text()).strip().split("\n")
-                last_line = lines[-1]
-                return json.loads(last_line)["Hash"]
+    assert hasattr(cs.sql, "map")
+    assert hasattr(cs.sql, "with_retry")
+    assert callable(cs.sql.map)
 ~~~~~
 
-### 下一步建议
-我们已经对 `sql` 和 `ipfs` 两个提供者进行了根本性的、符合架构原则的重构。
+#### Acts 2: 修复 `test_ipfs.py`
 
-1.  **审查与验证**：在应用这些变更后，应重新运行 `pyright`，确认与 `LazyFactory` 相关的所有错误都已消除。
-2.  **更新测试**：由于 `cs.sql` 和 `cs.ipfs.*` 的 API 发生了变更，相关的单元测试和集成测试需要被更新以匹配新的调用签名。例如，`test_sql.py` 中调用 `cs.sql` 的地方需要修改，而 `test_ipfs.py` 中的 `mock_ipfs_server` fixture 需要调整以支持新的 `api_base_url` 参数。
-3.  **文档更新**：必须更新所有涉及到 `cs.sql` 和 `cs.ipfs` 的文档和示例代码，以反映新的 API。
+我们将重写 `test_ipfs.py`，移除 `monkeypatch`，并显式地将 mock URL 传递给 `cs.ipfs` 任务。
 
-如果你同意，我将开始制定更新相关测试文件的计划。
+~~~~~act
+write_file
+packages/cascade-provider-ipfs/tests/test_ipfs.py
+~~~~~
+~~~~~python
+import pytest
+import cascade as cs
+from aiohttp import web
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+
+# The CID we will request in the test
+TEST_CID = "QmZULkCELmmk5XNfCgTnflahDcwr9ssAAkAJd15uiNpdEp"
+# The content our mock IPFS node will return for that CID
+FAKE_CONTENT = b"hello ipfs world"
+FAKE_ADD_RESPONSE = b'{"Name":"test.txt","Hash":"QmHash","Size":"16"}\n'
+
+
+async def mock_ipfs_cat_handler(request: web.Request):
+    if request.method != "POST":
+        return web.Response(status=405)
+
+    if request.query.get("arg") == TEST_CID:
+        return web.Response(body=FAKE_CONTENT, content_type="application/octet-stream")
+    else:
+        return web.Response(status=404, text="CID not found")
+
+
+async def mock_ipfs_add_handler(request: web.Request):
+    if request.method != "POST":
+        return web.Response(status=405)
+
+    # Check if the request is multipart
+    if not request.content_type.startswith("multipart/form-data"):
+        return web.Response(status=400, text="Expected multipart/form-data")
+
+    reader = await request.multipart()
+    part = await reader.next()
+
+    # We expect a part named 'file'
+    if part and part.name != "file":
+        return web.Response(status=400, text="Expected 'file' part")
+
+    # Read content to verify
+    if part:
+        content = await part.read()
+        if content != FAKE_CONTENT:
+            return web.Response(status=400, text="Content mismatch")
+
+    # Return standard IPFS add JSON response
+    return web.Response(body=FAKE_ADD_RESPONSE, content_type="application/json")
+
+
+@pytest.fixture
+async def mock_ipfs_server(aiohttp_client):
+    app = web.Application()
+    app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
+    app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
+    client = await aiohttp_client(app)
+
+    mock_base_url = f"http://{client.server.host}:{client.server.port}"
+    yield mock_base_url
+
+
+@pytest.mark.asyncio
+async def test_ipfs_cat_provider(mock_ipfs_server):
+    # Define the Cascade workflow, passing the mock URL explicitly
+    workflow = cs.ipfs.cat(cid=TEST_CID, api_base_url=mock_ipfs_server)
+
+    # Run the workflow
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    result = await engine.run(workflow)
+
+    # Assert the result
+    assert result == FAKE_CONTENT
+
+
+@pytest.mark.asyncio
+async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
+    # Create a temporary file to upload
+    test_file = tmp_path / "test.txt"
+    test_file.write_bytes(FAKE_CONTENT)
+
+    # Define workflow, passing the mock URL explicitly
+    workflow = cs.ipfs.add(path=str(test_file), api_base_url=mock_ipfs_server)
+
+    # Run
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    result = await engine.run(workflow)
+
+    # Assert we got the hash from the JSON response
+    assert result == "QmHash"
+~~~~~

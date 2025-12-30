@@ -35,41 +35,34 @@ async def mock_ipfs_add_handler(request: web.Request):
     part = await reader.next()
 
     # We expect a part named 'file'
-    if part.name != "file":
+    if part and part.name != "file":
         return web.Response(status=400, text="Expected 'file' part")
 
     # Read content to verify
-    content = await part.read()
-    if content != FAKE_CONTENT:
-        return web.Response(status=400, text="Content mismatch")
+    if part:
+        content = await part.read()
+        if content != FAKE_CONTENT:
+            return web.Response(status=400, text="Content mismatch")
 
     # Return standard IPFS add JSON response
     return web.Response(body=FAKE_ADD_RESPONSE, content_type="application/json")
 
 
 @pytest.fixture
-def mock_ipfs_server(aiohttp_client, monkeypatch):
-    async def _setup():
-        app = web.Application()
-        app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
-        app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
-        client = await aiohttp_client(app)
+async def mock_ipfs_server(aiohttp_client):
+    app = web.Application()
+    app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
+    app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
+    client = await aiohttp_client(app)
 
-        mock_base_url = f"http://{client.server.host}:{client.server.port}"
-        monkeypatch.setattr(
-            "cascade.providers.ipfs.provider.IPFS_API_BASE_URL", mock_base_url
-        )
-        return client
-
-    return _setup
+    mock_base_url = f"http://{client.server.host}:{client.server.port}"
+    yield mock_base_url
 
 
 @pytest.mark.asyncio
 async def test_ipfs_cat_provider(mock_ipfs_server):
-    await mock_ipfs_server()
-
-    # Define the Cascade workflow
-    workflow = cs.ipfs.cat(cid=TEST_CID)
+    # Define the Cascade workflow, passing the mock URL explicitly
+    workflow = cs.ipfs.cat(cid=TEST_CID, api_base_url=mock_ipfs_server)
 
     # Run the workflow
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
@@ -81,14 +74,12 @@ async def test_ipfs_cat_provider(mock_ipfs_server):
 
 @pytest.mark.asyncio
 async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
-    await mock_ipfs_server()
-
     # Create a temporary file to upload
     test_file = tmp_path / "test.txt"
     test_file.write_bytes(FAKE_CONTENT)
 
-    # Define workflow
-    workflow = cs.ipfs.add(path=str(test_file))
+    # Define workflow, passing the mock URL explicitly
+    workflow = cs.ipfs.add(path=str(test_file), api_base_url=mock_ipfs_server)
 
     # Run
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())

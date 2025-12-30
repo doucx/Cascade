@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Any, Dict
 from enum import Enum, auto
+from abc import ABC
 
 from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.ir.models import TaskDef
+from cascade.spec.input import ParamSpec
 
 
 class EdgeType(Enum):
@@ -18,44 +20,73 @@ class EdgeType(Enum):
 
 
 @dataclass
-class Node:
+class Node(ABC):
+    """Abstract base class for all nodes in the computation graph."""
+
     # Stable identifier for the node instance in the graph.
-    # Computed from TaskDef fingerprint + Instance configuration (bindings, policies)
     structural_id: str
-
-    # The static definition of the task.
-    # Single Source of Truth for name, signature, mode, etc.
-    definition: TaskDef
-
-    # The actual python executable object.
-    # This is NOT part of the definition (it's runtime state), but checked here for convenience.
-    callable_obj: Optional[Callable] = None
-
-    # Node-specific type ("task", "map", "param") - might be merged into definition later?
-    # For now, it distinguishes how the definition is APPLIED.
-    node_type: str = "task"
-
-    # Instance-specific configuration
-    retry_policy: Optional[Any] = None
-    cache_policy: Optional[Any] = None
-    constraints: Optional[ResourceConstraint] = None
-
-    # Mapping logic (only for node_type='map')
-    mapping_factory: Optional[Any] = None
-
-    # Structural Bindings (Literals)
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
-
-    # Optimization flag
-    has_complex_inputs: bool = False
 
     def __hash__(self):
         return hash(self.structural_id)
 
     @property
     def name(self) -> str:
-        # SHORTCUT for debugging/logging, but code should prefer definition.name where possible
+        # Each subclass must provide a way to get its name.
+        raise NotImplementedError
+
+
+@dataclass
+class TaskNode(Node):
+    """Represents a standard computation task."""
+
+    # The static definition of the task.
+    definition: TaskDef
+    # The actual python executable object.
+    callable_obj: Optional[Callable]
+    # Instance-specific configuration
+    retry_policy: Optional[Any] = None
+    cache_policy: Optional[Any] = None
+    constraints: Optional[ResourceConstraint] = None
+    # Structural Bindings (Literals)
+    input_bindings: Dict[str, Any] = field(default_factory=dict)
+    # Optimization flag
+    has_complex_inputs: bool = False
+
+    @property
+    def name(self) -> str:
         return self.definition.name
+
+
+@dataclass
+class MapNode(Node):
+    """Represents a .map() operation over a factory."""
+
+    # The static definition of the task factory being mapped.
+    definition: TaskDef
+    # The task factory to be called for each item.
+    mapping_factory: Any
+    # Instance-specific configuration
+    retry_policy: Optional[Any] = None
+    cache_policy: Optional[Any] = None
+    constraints: Optional[ResourceConstraint] = None
+    # Structural Bindings (Literals) for the map call itself.
+    input_bindings: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def name(self) -> str:
+        return f"map({self.definition.name})"
+
+
+@dataclass
+class ParamNode(Node):
+    """Represents a cs.Param, a runtime input source."""
+
+    # The specification of the parameter.
+    param_spec: ParamSpec
+
+    @property
+    def name(self) -> str:
+        return f"param({self.param_spec.name})"
 
 
 @dataclass

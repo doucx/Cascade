@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor: Decouple ResourceDefinition metadata from implementation", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767068198.6514285, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 实现 Node 的显式多态化层次结构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767068742.0029848, "duration_ms": 0}}

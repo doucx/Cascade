@@ -111,10 +111,9 @@ class ArgumentResolver:
                 pass
 
         # 4. Handle internal param fetching context
+        from cascade.graph.model import ParamNode
         # [CRITICAL] This logic must always run for Param tasks
-        from cascade.internal.inputs import _get_param_value
-
-        if node.callable_obj is _get_param_value.func:
+        if isinstance(node, ParamNode):
             kwargs["params_context"] = user_params or {}
 
         return args, kwargs

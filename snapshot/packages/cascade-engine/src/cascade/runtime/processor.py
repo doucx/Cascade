@@ -146,8 +146,9 @@ class NodeProcessor:
             )
         )
 
+        from cascade.graph.model import MapNode
         # 5. Handle Map Nodes
-        if node.node_type == "map":
+        if isinstance(node, MapNode):
             return await self._execute_map_node(
                 node,
                 kwargs,

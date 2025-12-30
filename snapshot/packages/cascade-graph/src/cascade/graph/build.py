@@ -118,18 +118,24 @@ class GraphBuilder:
 
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
-            # Note: execution_mode is now part of task_def (definition.mode)
-            node = Node(
-                structural_id=node_hash,
-                definition=task_def,
-                callable_obj=result.task.func,
-                node_type="task",
-                retry_policy=result._retry_policy,
-                cache_policy=result._cache_policy,
-                constraints=result._constraints,
-                input_bindings=input_bindings,
-                has_complex_inputs=has_complex,
-            )
+            from cascade.graph.model import TaskNode, ParamNode
+
+            if result._param_spec:
+                node = ParamNode(
+                    structural_id=node_hash,
+                    param_spec=result._param_spec
+                )
+            else:
+                node = TaskNode(
+                    structural_id=node_hash,
+                    definition=task_def,
+                    callable_obj=result.task.func,
+                    retry_policy=result._retry_policy,
+                    cache_policy=result._cache_policy,
+                    constraints=result._constraints,
+                    input_bindings=input_bindings,
+                    has_complex_inputs=has_complex,
+                )
             self.registry._registry[node_hash] = node
 
         self._visited_instances[result._uuid] = node
@@ -223,10 +229,10 @@ class GraphBuilder:
                 if not isinstance(val, (LazyResult, MappedLazyResult, Router)):
                     input_bindings[k] = val
 
-            node = Node(
+            from cascade.graph.model import MapNode
+            node = MapNode(
                 structural_id=node_hash,
                 definition=task_def,
-                node_type="map",
                 mapping_factory=result.factory,
                 retry_policy=result._retry_policy,
                 cache_policy=result._cache_policy,

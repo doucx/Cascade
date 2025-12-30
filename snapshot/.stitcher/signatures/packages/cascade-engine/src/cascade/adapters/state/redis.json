@@ -6,6 +6,10 @@
     "baseline_code_signature_text": "def __init__(self, run_id: str, client: Any, ttl: int = 86400):",
     "baseline_code_structure_hash": "12fe5b94509d1f9711c5d774e2638da6adaf53ecd53905f765eda33d2d118a55"
   },
+  "RedisStateBackend._client": {},
+  "RedisStateBackend._results_key": {},
+  "RedisStateBackend._run_id": {},
+  "RedisStateBackend._skipped_key": {},
   "RedisStateBackend._sync_mark_skipped": {
     "baseline_code_signature_text": "def _sync_mark_skipped(self, node_id: str, reason: str):",
     "baseline_code_structure_hash": "22d66ac958389ff96e7f2e76759e543105ea92105ecca5806d79a3e91a90b5cf"
@@ -14,6 +18,7 @@
     "baseline_code_signature_text": "def _sync_put(self, node_id: str, data: bytes):",
     "baseline_code_structure_hash": "817c4902be0deeb131febd4a1d52463b2d6544f666db671021ce3f277e5d56e5"
   },
+  "RedisStateBackend._ttl": {},
   "RedisStateBackend.clear": {
     "baseline_code_signature_text": "async def clear(self) -> None:",
     "baseline_code_structure_hash": "1e1d110f0d48734e2552a9d1d1561437c16def8309d251c39c34e0312fdb6011",

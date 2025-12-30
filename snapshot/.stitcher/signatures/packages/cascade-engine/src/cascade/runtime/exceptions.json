@@ -9,6 +9,9 @@
     "baseline_code_signature_text": "def __init__(self, task_id: str, arg_name: str, dependency_id: str):",
     "baseline_code_structure_hash": "36385b354185649aa66cb05fc2531a12237ab2997ab22b66470a4b81ef3da86e"
   },
+  "DependencyMissingError.arg_name": {},
+  "DependencyMissingError.dependency_id": {},
+  "DependencyMissingError.task_id": {},
   "ResourceNotFoundError": {
     "baseline_yaml_content_hash": "a709a43fd47740090d927e29e4a3c053653083861fc1b69d15505d7fe894c225"
   },

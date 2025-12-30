@@ -2,22 +2,37 @@
   "Blueprint": {
     "baseline_yaml_content_hash": "8b5b62174d807e74a8cfaffb5f687576b8f1b879bbdd3a8de6bd7d865ca15550"
   },
+  "Blueprint.input_args": {},
+  "Blueprint.input_kwargs": {},
+  "Blueprint.instructions": {},
+  "Blueprint.register_count": {},
   "Call": {
     "baseline_yaml_content_hash": "270e6c55c2f8b4190a0b7051482076941cd53b628936d49911982b5b8bbc6ba4"
   },
+  "Call.args": {},
+  "Call.constraints": {},
+  "Call.func": {},
+  "Call.kwargs": {},
+  "Call.output": {},
+  "Call.task_name": {},
   "Instruction": {
     "baseline_yaml_content_hash": "d44093eedd659f3b7f78c02e416fe3720c854869c52594cccaf064ae1a602f1d"
   },
   "Literal": {
     "baseline_yaml_content_hash": "ea0abadceae13ec72380f1ba05058b6d2a5c3913c8757bad592a8a484b66c7e8"
   },
+  "Literal.value": {},
   "Operand": {
     "baseline_yaml_content_hash": "04dd39e776a7927dc043f490275b1311ffa895a5a34b069a4283d07f4d6257ff"
   },
   "Register": {
     "baseline_yaml_content_hash": "039538dd9e73ac19adc931d8bef4b10715d0c04283b819297e17ddac2ccafb71"
   },
+  "Register.index": {},
   "TailCall": {
     "baseline_yaml_content_hash": "dae66d1e7ee8d7cc347e6606cbd036b0ee2668f8b2164fbd8976f928e20866d0"
-  }
+  },
+  "TailCall.args": {},
+  "TailCall.kwargs": {},
+  "TailCall.target_blueprint_id": {}
 }

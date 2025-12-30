@@ -24,6 +24,8 @@
     "baseline_code_structure_hash": "e1a7cf130d9304845a91cb26cb74fb4e58d8f5e478579e2f1eb86f6cf98ee985",
     "baseline_yaml_content_hash": "917a6689cc309ed4de1dc6098f31bfa4ad3da2fa3b85c41e24d9326304488597"
   },
+  "app": {},
+  "console": {},
   "main": {
     "baseline_code_signature_text": "def main():",
     "baseline_code_structure_hash": "ec3ee86290baaf2be43d796e40266959fcd8b2d57b6599f49808563639b00d28"
@@ -33,6 +35,7 @@
     "baseline_code_structure_hash": "8a49428abd1c6800a70f8f390eca68110aee50a980da244d902a5aba77d87275",
     "baseline_yaml_content_hash": "0a8e33713abcdf22c122348df6927dc5b403708f3dbf0677c682b59dead39c41"
   },
+  "seen_run_ids": {},
   "status": {
     "baseline_code_signature_text": "def status(backend: str = typer.Option('mqtt', '--backend', help=\"Control plane backend ('mqtt' or 'local').\"), hostname: str = typer.Option('localhost', help='MQTT broker hostname.'), port: int = typer.Option(1883, help='MQTT broker port.')):",
     "baseline_code_structure_hash": "cb8eaff76dbd13e615174a8f8878d6ae707ef6881b8121434e10f6866aef1963",

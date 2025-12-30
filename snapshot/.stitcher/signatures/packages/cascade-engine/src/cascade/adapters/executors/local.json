@@ -6,6 +6,8 @@
     "baseline_code_signature_text": "def __init__(self):",
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
   },
+  "LocalExecutor._blocking_executor": {},
+  "LocalExecutor._compute_executor": {},
   "LocalExecutor.execute": {
     "baseline_code_signature_text": "async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
     "baseline_code_structure_hash": "6ab959946345cf1f86e292dcc605b71552e8872be8e3625a41d658e4379943ca",

@@ -53,9 +53,7 @@ async def _ipfs_cat_task(
 
 
 @cs.task(name="ipfs_add")
-async def _ipfs_add_task(
-    path: str, api_base_url: str = "http://127.0.0.1:5001"
-) -> str:
+async def _ipfs_add_task(path: str, api_base_url: str = "http://127.0.0.1:5001") -> str:
     """
     Adds a local file to IPFS and returns its CID.
     """

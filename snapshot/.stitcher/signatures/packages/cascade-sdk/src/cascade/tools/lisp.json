@@ -1,4 +1,5 @@
 {
+  "LispTranspiler": {},
   "LispTranspiler.__init__": {
     "baseline_code_signature_text": "def __init__(self, graph: Graph, instance_map: Dict[str, Node]):",
     "baseline_code_structure_hash": "8343029c41908329b1f3ffb532ca4f98620293c8541132e090bf565cc99eb445"
@@ -38,6 +39,12 @@
     "baseline_code_structure_hash": "3dd2cbd7b9976005ff26a2b8d13d01376bb09e7a46237c92811702a979f828ac",
     "baseline_yaml_content_hash": "48a3d9fc20a64e2a85408fe69c430e2665f5146170c2fc7bf1f5570e08d9f80e"
   },
+  "LispTranspiler.generated_bindings": {},
+  "LispTranspiler.graph": {},
+  "LispTranspiler.instance_map": {},
+  "LispTranspiler.node_var_names": {},
+  "LispTranspiler.ref_counts": {},
+  "LispTranspiler.shared_nodes": {},
   "LispTranspiler.transpile": {
     "baseline_code_signature_text": "def transpile(self, target_node: Node) -> str:",
     "baseline_code_structure_hash": "6e562a412fd954908d41597289bac1eda9d53d2ca467b67dc3590413d134f275"

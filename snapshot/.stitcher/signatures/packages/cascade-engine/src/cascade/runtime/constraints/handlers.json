@@ -73,6 +73,7 @@
     "baseline_code_signature_text": "def handles_type(self) -> str:",
     "baseline_code_structure_hash": "743c22711ab27d46af11128528f8d6c98c8344ae0367289e2f6faacaf7c952f7"
   },
+  "RateLimitConstraintHandler.limiter": {},
   "RateLimitConstraintHandler.on_constraint_add": {
     "baseline_code_signature_text": "def on_constraint_add(self, constraint: GlobalConstraint, manager: ConstraintManager) -> None:",
     "baseline_code_structure_hash": "34291215f40644dd07dea6253e3e21bb31be5b8ec054586f8efb82323b23b094"

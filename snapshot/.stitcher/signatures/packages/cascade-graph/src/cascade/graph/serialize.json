@@ -2,6 +2,7 @@
   "_StubLazyResult": {
     "baseline_yaml_content_hash": "8917382cd5c656db60936c79d2d771ebb7724be643622d1a24d4b36d45275ef5"
   },
+  "_StubLazyResult._uuid": {},
   "_dict_to_node": {
     "baseline_code_signature_text": "def _dict_to_node(data: Dict[str, Any]) -> Node:",
     "baseline_code_structure_hash": "5a9d03e01b6a13d79ce196088d5eeb98027dce628ccb025eeb0f76e2ef232336"

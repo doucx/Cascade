@@ -10,6 +10,7 @@
     "baseline_code_signature_text": "def __repr__(self):",
     "baseline_code_structure_hash": "383221bb82433f1b2631e268430b5d2a01c9ca111a0fb45f7b938de2bbe279fd"
   },
+  "Inject.resource_name": {},
   "ResourceDefinition": {
     "baseline_yaml_content_hash": "d589a75068165b6eb29f50d99cbe491442a6bec6c8ec21943d9398a918b49858"
   },
@@ -17,6 +18,10 @@
     "baseline_code_signature_text": "def __post_init__(self):",
     "baseline_code_structure_hash": "d76c52aed18252fe1b9610ae87c04381ffbbceaa56939bbbf1ef7e1efdd44409"
   },
+  "ResourceDefinition.func": {},
+  "ResourceDefinition.name": {},
+  "ResourceDefinition.scope": {},
+  "T": {},
   "inject": {
     "baseline_code_signature_text": "def inject(resource_name: str) -> Any:",
     "baseline_code_structure_hash": "057e42f050bd37f3c5e2916db36b9aac069ad11f4660de02f37a17cbddaf93b9",

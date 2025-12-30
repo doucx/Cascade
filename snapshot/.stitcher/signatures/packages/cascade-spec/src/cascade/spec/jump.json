@@ -2,11 +2,15 @@
   "Jump": {
     "baseline_yaml_content_hash": "f4e5bcf0971bce75538b37fb1cb2b7e0b5e403b8015ca7521d2d5ebbbb88eaf1"
   },
+  "Jump.data": {},
+  "Jump.target_key": {},
   "JumpSelector": {
     "baseline_yaml_content_hash": "7e26eaef897caa60d3a0c87685b2279b2a57013d25d3aa18a667b996a3e127c2"
   },
   "JumpSelector.__hash__": {
     "baseline_code_signature_text": "def __hash__(self):",
     "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
-  }
+  },
+  "JumpSelector._uuid": {},
+  "JumpSelector.routes": {}
 }

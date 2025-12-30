@@ -47,9 +47,7 @@ def db_engine():
 @pytest.mark.asyncio
 async def test_sql_query_success(db_engine):
     # Define a workflow using the 'sqlite_db' resource via explicit injection
-    users = cs.sql(
-        "SELECT * FROM users ORDER BY name", conn=cs.inject("sqlite_db")
-    )
+    users = cs.sql("SELECT * FROM users ORDER BY name", conn=cs.inject("sqlite_db"))
 
     result = await db_engine.run(users)
 

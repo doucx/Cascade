@@ -1,12 +1,16 @@
 {
+  "StdInReadLineProvider": {},
   "StdInReadLineProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "StdInReadLineProvider.name": {},
+  "StdOutWriteProvider": {},
   "StdOutWriteProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "StdOutWriteProvider.name": {},
   "_stdin_read_line_task": {
     "baseline_code_signature_text": "async def _stdin_read_line_task(*_args = ()) -> str:",
     "baseline_code_structure_hash": "17e4a2397c38261254d4271bc2d8e6ac19ead351b28861aea46b328767aeb58d",

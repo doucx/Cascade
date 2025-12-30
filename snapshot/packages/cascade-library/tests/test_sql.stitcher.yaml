@@ -1,5 +1,10 @@
 "db_engine": |-
   Provides a Cascade Engine with the sqlite_db resource pre-registered.
+"test_sql_factory_returns_task_object": |-
+  Verify that cs.sql is now a Task object that supports composition.
+"test_sql_lazy_result_supports_policies": |-
+  Verify that the result of calling cs.sql(...) is a LazyResult
+  that supports policy chaining.
 "test_sql_missing_resource": |-
   Test failure when the specified DB resource is not registered.
 "test_sql_query_success": |-

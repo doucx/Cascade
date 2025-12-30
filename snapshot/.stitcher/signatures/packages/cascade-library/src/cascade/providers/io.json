@@ -1,24 +1,44 @@
 {
+  "FsExistsProvider": {},
   "FsExistsProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "FsExistsProvider.name": {},
+  "IoLocalExistsProvider": {},
+  "IoLocalExistsProvider.name": {},
+  "IoLocalReadBytesProvider": {},
+  "IoLocalReadBytesProvider.name": {},
+  "IoLocalReadTextProvider": {},
+  "IoLocalReadTextProvider.name": {},
+  "IoLocalWriteBytesProvider": {},
+  "IoLocalWriteBytesProvider.name": {},
+  "IoLocalWriteTextProvider": {},
+  "IoLocalWriteTextProvider.name": {},
+  "ReadBytesProvider": {},
   "ReadBytesProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "ReadBytesProvider.name": {},
+  "ReadTextProvider": {},
   "ReadTextProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "ReadTextProvider.name": {},
+  "WriteBytesProvider": {},
   "WriteBytesProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "WriteBytesProvider.name": {},
+  "WriteTextProvider": {},
   "WriteTextProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "WriteTextProvider.name": {},
   "_exists_task": {
     "baseline_code_signature_text": "async def _exists_task(path: str) -> bool:",
     "baseline_code_structure_hash": "a820359bf1f69ff19f4d8068f3b55673c5484e4c0916e53b0d4c8a8e77e2d082"

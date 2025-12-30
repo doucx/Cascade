@@ -11,6 +11,9 @@
     "baseline_code_structure_hash": "87ecaeec41bb3ba81ef626088388c081c7ae115cbb8851eb4071a3b69686d5e3",
     "baseline_yaml_content_hash": "dbf5ef3f1bf921b89d63e662f7eacf6fe545945e5b2d3a9ee9b40e410ef17087"
   },
+  "ResourceManager._capacity": {},
+  "ResourceManager._condition": {},
+  "ResourceManager._usage": {},
   "ResourceManager._validate_feasibility": {
     "baseline_code_signature_text": "def _validate_feasibility(self, requirements: Dict[str, Union[int, float]]):",
     "baseline_code_structure_hash": "b6168130effee5664ea7ca15d66aced3500f3d6475568b40efa135726cd2b874",

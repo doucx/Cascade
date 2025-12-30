@@ -1,24 +1,34 @@
 {
+  "HttpDeleteProvider": {},
   "HttpDeleteProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "HttpDeleteProvider.name": {},
+  "HttpGetProvider": {},
   "HttpGetProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "HttpGetProvider.name": {},
+  "HttpPostProvider": {},
   "HttpPostProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "HttpPostProvider.name": {},
+  "HttpPutProvider": {},
   "HttpPutProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "HttpPutProvider.name": {},
+  "HttpRequestProvider": {},
   "HttpRequestProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "HttpRequestProvider.name": {},
   "HttpResponse": {
     "baseline_yaml_content_hash": "1e83ddbbfbe88b8a908e9973a49a9c54eef9c2d35d01479de2d551e20469945a"
   },
@@ -26,11 +36,14 @@
     "baseline_code_signature_text": "def __repr__(self) -> str:",
     "baseline_code_structure_hash": "bad8a83d11cc0211d4eb2e5e3e8f72eeb0697d2d378d38bfad954e19bf228f6e"
   },
+  "HttpResponse.body": {},
+  "HttpResponse.headers": {},
   "HttpResponse.json": {
     "baseline_code_signature_text": "def json(self) -> Any:",
     "baseline_code_structure_hash": "84adb4baada8e865d756b3ee3c678a5dc1bdeccda6f9ab1ceb8120fd4d495365",
     "baseline_yaml_content_hash": "3ef4a6895134e23bfffb3307fc4c75501655ee330c7cb0a7af41648ca4d8c287"
   },
+  "HttpResponse.status": {},
   "HttpResponse.text": {
     "baseline_code_signature_text": "def text(self, encoding: str = 'utf-8') -> str:",
     "baseline_code_structure_hash": "672f4d786813f9fd785ef066d61255b2e603ab6954861383f5b0a8af57c730dc",

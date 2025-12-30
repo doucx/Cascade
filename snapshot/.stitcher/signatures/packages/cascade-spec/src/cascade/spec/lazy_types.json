@@ -6,14 +6,24 @@
     "baseline_code_signature_text": "def __hash__(self):",
     "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
   },
+  "LazyResult._cache_policy": {},
+  "LazyResult._condition": {},
+  "LazyResult._constraints": {},
+  "LazyResult._dependencies": {},
+  "LazyResult._jump_selector": {},
+  "LazyResult._retry_policy": {},
+  "LazyResult._uuid": {},
   "LazyResult.after": {
     "baseline_code_signature_text": "def after(self, *predecessors: LazyResult = ()) -> LazyResult[T]:",
     "baseline_code_structure_hash": "be4e7d6f5f06c9778010bef6769f59feb7b3c668ece6ce8b919a59e996a65995"
   },
+  "LazyResult.args": {},
+  "LazyResult.kwargs": {},
   "LazyResult.run_if": {
     "baseline_code_signature_text": "def run_if(self, condition: LazyResult) -> LazyResult[T]:",
     "baseline_code_structure_hash": "da4afc870bb49ec1c7ba7b63378470d8b60c88f4735216bfb931c07b7e84d6db"
   },
+  "LazyResult.task": {},
   "LazyResult.with_cache": {
     "baseline_code_signature_text": "def with_cache(self, policy: CachePolicy) -> LazyResult[T]:",
     "baseline_code_structure_hash": "1393f4ac7006d23c75e7aaf636b1dc726bfed2a35b150671c9c885cfd95489c2"
@@ -33,10 +43,18 @@
     "baseline_code_signature_text": "def __hash__(self):",
     "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
   },
+  "MappedLazyResult._cache_policy": {},
+  "MappedLazyResult._condition": {},
+  "MappedLazyResult._constraints": {},
+  "MappedLazyResult._dependencies": {},
+  "MappedLazyResult._retry_policy": {},
+  "MappedLazyResult._uuid": {},
   "MappedLazyResult.after": {
     "baseline_code_signature_text": "def after(self, *predecessors: LazyResult = ()) -> MappedLazyResult[T]:",
     "baseline_code_structure_hash": "1f7f7d77a27f9446febc4598df92c5be1dbc14c7d015fdad8773ea27543288f7"
   },
+  "MappedLazyResult.factory": {},
+  "MappedLazyResult.mapping_kwargs": {},
   "MappedLazyResult.run_if": {
     "baseline_code_signature_text": "def run_if(self, condition: LazyResult) -> MappedLazyResult[T]:",
     "baseline_code_structure_hash": "87a70529a6336df6d0e72469bfb03cecaa546f2c286e6fd0cb349d3978a5f172"
@@ -52,5 +70,10 @@
   "MappedLazyResult.with_retry": {
     "baseline_code_signature_text": "def with_retry(self, max_attempts: int = 3, delay: float = 0.0, backoff: float = 1.0) -> MappedLazyResult[T]:",
     "baseline_code_structure_hash": "586cd1292764616d4430b45beb46069125e64727a1e12f559bfe3bb7a2ba4284"
-  }
+  },
+  "RetryPolicy": {},
+  "RetryPolicy.backoff": {},
+  "RetryPolicy.delay": {},
+  "RetryPolicy.max_attempts": {},
+  "T": {}
 }

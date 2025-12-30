@@ -1,4 +1,9 @@
 {
+  "Bucket": {},
+  "Bucket.capacity": {},
+  "Bucket.last_refill": {},
+  "Bucket.rate": {},
+  "Bucket.tokens": {},
   "RateLimiter": {
     "baseline_yaml_content_hash": "a42c6a3c341a69a2a1e4f3b948de64612be3918582e23fcbcdc613b23e302c07"
   },
@@ -6,6 +11,7 @@
     "baseline_code_signature_text": "def __init__(self):",
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
   },
+  "RateLimiter._buckets": {},
   "RateLimiter._refill": {
     "baseline_code_signature_text": "def _refill(self, bucket: Bucket, now: float):",
     "baseline_code_structure_hash": "f822f78f2dd01990e7501e39ae5daec7f7320874e6d9943347f55f5d19b22145"

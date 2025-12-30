@@ -20,14 +20,21 @@
     "baseline_code_signature_text": "async def _process_router_decision(self, edge: Edge, selector_value: Any, state_backend: StateBackend):",
     "baseline_code_structure_hash": "fd527827501b77da346f57446edc9cd0796af965103d44777ca72222d834e5a0"
   },
+  "FlowManager.downstream_demand": {},
+  "FlowManager.graph": {},
+  "FlowManager.in_edges": {},
+  "FlowManager.instance_map": {},
   "FlowManager.register_result": {
     "baseline_code_signature_text": "async def register_result(self, node_id: str, result: Any, state_backend: StateBackend):",
     "baseline_code_structure_hash": "f5d7930a315ee6d7182b70916e9ef1963326e473b1584d44a28a8c4bf43141ec",
     "baseline_yaml_content_hash": "ee9a242cd6c0c0ab0dc143a5faea161628b9bf083cad86c714fe5d7d214a3f7b"
   },
+  "FlowManager.route_source_map": {},
+  "FlowManager.routers_by_selector": {},
   "FlowManager.should_skip": {
     "baseline_code_signature_text": "async def should_skip(self, node: Node, state_backend: StateBackend) -> Optional[str]:",
     "baseline_code_structure_hash": "21c1abd6a4fc30188e981c0ed3799e4276a98fabae395299b67a14ce95afa996",
     "baseline_yaml_content_hash": "fa68e53770b5853550160fb78f4200d8f72f14fb357b334b38ebcfe04edd2870"
-  }
+  },
+  "FlowManager.target_node_id": {}
 }

@@ -2,6 +2,11 @@
   "GlobalConstraint": {
     "baseline_yaml_content_hash": "8ebc2a8e6cfe46d64568731d50965495885258597686397f8f2aae85f40ba868"
   },
+  "GlobalConstraint.expires_at": {},
+  "GlobalConstraint.id": {},
+  "GlobalConstraint.params": {},
+  "GlobalConstraint.scope": {},
+  "GlobalConstraint.type": {},
   "ResourceConstraint": {
     "baseline_yaml_content_hash": "d6db72dcb917faa13a48b381488767f5a66f79f4f788866445cb29cfd680bc49"
   },
@@ -13,6 +18,7 @@
     "baseline_code_signature_text": "def is_empty(self) -> bool:",
     "baseline_code_structure_hash": "ddcb445ea400195dedebc032c4acf2e1c9a4a49b257bebd1781593be3fd89ab6"
   },
+  "ResourceConstraint.requirements": {},
   "with_constraints": {
     "baseline_code_signature_text": "def with_constraints(**kwargs = {}) -> ResourceConstraint:",
     "baseline_code_structure_hash": "ec3dc20a1bb3918f90d8c2e79b7358456d6c8410e1a2ab8c8e38110dfda1f9eb",

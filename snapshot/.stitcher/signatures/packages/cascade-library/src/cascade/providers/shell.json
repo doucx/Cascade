@@ -1,8 +1,10 @@
 {
+  "ShellProvider": {},
   "ShellProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "ShellProvider.name": {},
   "_shell_task": {
     "baseline_code_signature_text": "async def _shell_task(command: str, check: bool = True) -> str:",
     "baseline_code_structure_hash": "7842aabe52f53634df285cdfda7aac13824437e88e6ee2218b53b3dc66ba6248",

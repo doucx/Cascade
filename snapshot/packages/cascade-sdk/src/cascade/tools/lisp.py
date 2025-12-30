@@ -87,7 +87,7 @@ class LispTranspiler:
     def _render_expr(self, node: Node) -> str:
         parts = []
 
-        from cascade.graph.model import MapNode, ParamNode
+        from cascade.graph.model import MapNode
 
         # Function Name
         if isinstance(node, MapNode): 

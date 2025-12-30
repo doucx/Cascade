@@ -1,3 +1,6 @@
+"__getattr__": |-
+  Dynamically loads providers from the registry when they are accessed as attributes
+  on the `cascade` module (e.g., `cs.read.text`).
 "dry_run": |-
   Builds and prints the execution plan for a target.
   This is a backward-compatible wrapper.

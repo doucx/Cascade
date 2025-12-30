@@ -1,0 +1,12 @@
+{
+  "test_accessing_non_existent_attribute_raises_attribute_error": {
+    "baseline_code_signature_text": "def test_accessing_non_existent_attribute_raises_attribute_error():",
+    "baseline_code_structure_hash": "807ed953abab89db64d2d06f3afa4972030677efae1a40799ffade544ea58bb1",
+    "baseline_yaml_content_hash": "a941584de926559d0e5e75d3e3a7cc893fc1898da2ed9a79b94bfbc2e90f0bf1"
+  },
+  "test_core_components_are_accessible_from_top_level": {
+    "baseline_code_signature_text": "def test_core_components_are_accessible_from_top_level():",
+    "baseline_code_structure_hash": "f3ad32addc776d8cc7656c197c62abe6df1702240dbbc10c989c6c03a862261e",
+    "baseline_yaml_content_hash": "098026b982ebc326bc61153cf7f14fe1f695673f8a64ea51287324aa5925878f"
+  }
+}

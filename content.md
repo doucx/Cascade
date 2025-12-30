@@ -1,69 +1,187 @@
 简要回答
-所有测试已通过，`LispTranspiler` 的更新及相关的对象模型修复已完成。现在我将生成一个 **[COMMIT]** 计划，其中包含所有修改文件的 `git add` 和一个详尽的 `git commit` 信息，以及对未来的建议。
+`AttributeError: module 'cascade' has no attribute 'NativeSolver'` 这个错误是由于 `cascade-sdk` 的 `__init__.py` 与 `cascade-application` 之间存在**模块级循环导入依赖**所导致的。
 
-## [COMMIT] fix(graph, sdk): Resolve Node unhashable + Lisp transpiler consistency
+`cascade-sdk` 尝试在顶层导入 `CascadeApp`，而 `CascadeApp` 又依赖于从 `cascade.adapters` 等其他包中导入的组件。这导致在 `cascade` 命名空间完全构建之前，`CascadeApp` 就试图引用尚不存在的子模块，触发了 `cascade-sdk` 的 `__getattr__` 捕获器，进而导致查找 `NativeSolver` 失败并崩溃。
+
+## [WIP] refactor(sdk): 延迟 CascadeApp 导入以修复循环依赖
+
+### 错误分析
+1.  **启动流程**：用户执行 `import cascade`，加载 `packages/cascade-sdk/src/cascade/__init__.py`。
+2.  **顶层导入**：此 `__init__.py` 文件在模块顶层执行 `from cascade.app import CascadeApp`。
+3.  **依赖链**：`cascade.app` (即 `cascade-application` 包) 为了初始化 `CascadeApp`，需要从其他 `cascade` 子包中导入组件，例如 `from cascade.adapters.solvers.native import NativeSolver`。
+4.  **查找失败**：在 `cascade.app` 执行其导入时，Python 解释器试图解析 `cascade.adapters`。然而，此时 `cascade` 命名空间还未完全构建，`adapters` 作为子模块尚不可见。
+5.  **`__getattr__` 陷阱**：属性查找失败 (`cascade.adapters`) 触发了 `cascade-sdk` 的 `__init__.py` 中定义的 `__getattr__` 函数。这个函数被设计用来动态加载 *Provider*，而不是核心模块。
+6.  **崩溃**：`__getattr__` 无法在 Provider 注册表中找到名为 `adapters` 的条目，因此抛出最终的 `AttributeError`。本例中，对`NativeSolver`的查找也走了同样失败的路径。
 
 ### 用户需求
-1.  修复 `Node` 及其子类在用作集合（`set`）元素或字典键时出现的 `TypeError: unhashable type`。
-2.  更新 `LispTranspiler`，使其与 `ParamNode` 的统一执行模型保持一致，并正确处理参数节点的命名。
-3.  确保 `LispTranspiler` 在处理 `cs.Param` 和 `Router` 等复杂场景时行为正确。
+修复启动时的 `AttributeError`，确保应用的内部组件能够正确加载。
 
 ### 评论
-这次修复解决了由于 Python `dataclass` 默认行为在继承链上覆盖 `__hash__` 方法导致的核心对象模型问题。同时，`LispTranspiler` 也被重构，使其不再依赖于过时的 `ParamNode` 类型检查，而是通过更稳健的任务名称来识别参数节点，并正确处理其 Lisp 风格的命名转换。现在，Cascade 的关键工具链与运行时架构保持了高度一致性。
+这是一个经典的 Python 架构问题。将实现细节（`CascadeApp`）的导入推迟到函数调用时，是一种有效的解耦策略，可以避免复杂的模块级依赖问题，使包的初始化过程更加健壮和可预测。
 
 ### 目标
-1.  **Node 可哈希性修复**：通过在所有 `Node` 子类的 `@dataclass` 装饰器中显式设置 `eq=False`，确保它们继承基类 `Node` 中定义的基于 `structural_id` 的 `__eq__` 和 `__hash__` 方法，使其可以安全地用于集合和字典。
-2.  **Lisp 转译器适配**：修改 `LispTranspiler._render_expr` 方法，使其根据 `node.name == "_get_param_value"` 来识别参数节点，并从 `node.input_bindings["name"]` 获取实际参数名，以符合 `ParamNode` 的统一执行模型。
-3.  **Lisp 命名规范统一**：修正 `_get_param_value` 在 Lisp 转换后带有前导破折号的预期值，使其与 `_sanitize_name` 的实际逻辑匹配。
-4.  **增加测试覆盖**：为 `LispTranspiler` 编写了全面的单元测试，覆盖了 `cs.Param` 的独立、作依赖、共享和作路由选择器等多种复杂使用场景，确保其正确性。
+修改 `packages/cascade-sdk/src/cascade/__init__.py`，将 `CascadeApp` 的导入从模块顶层移至 `run`, `visualize`, 和 `dry_run` 函数内部。
 
 ### 基本原理
-`@dataclass` 的默认行为会导致子类覆盖基类的相等和哈希方法，除非显式禁用。通过 `eq=False`，我们强制所有节点子类都使用 `Node` 基类中基于 `structural_id` 的统一身份标识。这为图遍历算法提供了稳定的哈希行为。同时，`LispTranspiler` 的逻辑也已调整，它现在通过检查任务的“可调用对象名称”来识别参数加载任务，这与运行时引擎的处理方式保持一致，从而消除了工具链与核心引擎之间的架构差异。
+通过延迟导入，我们打破了模块加载时的循环依赖。当用户调用 `cs.run()` 时，`cascade` 命名空间已经由 Python 的命名空间包机制完全构建好了，此时再在函数内部执行 `from cascade.app import CascadeApp`，解释器就能够成功地找到 `cascade.app` 及其所有下游依赖（如 `cascade.adapters`），从而避免触发 `__getattr__` 陷阱。
 
 ### 标签
-#intent/fix #intent/tooling #flow/done #priority/critical #comp/graph #comp/sdk #concept/node #concept/parser #scope/dx #ai/delegate #task/domain/tooling #task/object/lisp-transpiler #task/action/fix-consistency #task/state/end
+#intent/fix #intent/refine #flow/ready #priority/critical #comp/sdk #concept/dependency #scope/core #ai/brainstorm #task/domain/core #task/object/import-cycle #task/action/decouple #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 添加所有更改到暂存区
+#### Acts 1: 延迟 CascadeApp 的导入以解耦
+
+我们将重写 `packages/cascade-sdk/src/cascade/__init__.py`，将 `CascadeApp` 的导入推迟到需要使用它的函数内部。
 
 ~~~~~act
-git_add
-packages/cascade-graph/src/cascade/graph/model.py
-packages/cascade-sdk/src/cascade/tools/lisp.py
-packages/cascade-sdk/tests/tools/test_lisp.py
+write_file
+packages/cascade-sdk/src/cascade/__init__.py
 ~~~~~
+~~~~~python
+# This must be the very first line to allow this package to coexist with other
+# namespace packages (like cascade-interfaces) in editable installs.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
-#### Acts 2: 提交更改
+from typing import Any, Dict, Optional, Union, Callable, List
 
-~~~~~act
-git_commit
-~~~~~
-~~~~~text
-fix(graph, sdk): Resolve Node unhashable + Lisp transpiler consistency
+# --- Core Specs & Legacy Components ---
+from cascade.spec.task import task
+from cascade.spec.lazy_types import LazyResult
+from cascade.spec.routing import Router
+from cascade.spec.resource import resource, inject
+from cascade.spec.constraint import with_constraints
+from .context import get_current_context
+from cascade.spec.input import ParamSpec, EnvSpec
+from .internal.inputs import _get_param_value, _get_env_var
+from .control_flow import select_jump, bind
+from cascade.spec.jump import Jump
 
-This commit addresses several critical architectural and functional issues, including fixing the `TypeError: unhashable type: 'TaskNode'` and ensuring the `LispTranspiler` correctly handles `cs.Param` nodes.
+# --- Runtime (for type hints and exceptions) ---
+from cascade.runtime.engine import Engine
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.events import Event
+from cascade.runtime.exceptions import DependencyMissingError
+from cascade.spec.protocols import Connector, StateBackend
+from cascade.flow import sequence, pipeline
 
-**Key Fixes and Improvements:**
+# --- Tools ---
+from .testing import override_resource, ControllerTestApp
+from .tools.cli import create_cli
+from cascade.graph.serialize import to_json, from_json
 
-1.  **Node Hashability (Structural Fix):**
-    *   **Problem:** Python's `@dataclass` decorator, by default (`eq=True`), overrides `__eq__` (and implicitly sets `__hash__` to `None`) in subclasses, even if `__eq__` and `__hash__` are explicitly defined in the parent class. This made `TaskNode`, `MapNode`, and `ParamNode` instances unhashable, breaking any logic that placed them in sets or used them as dictionary keys (e.g., in graph traversal algorithms).
-    *   **Solution:** Explicitly set `eq=False` in the `@dataclass` decorator for `TaskNode`, `MapNode`, and `ParamNode` in `packages/cascade-graph/src/cascade/graph/model.py`. This forces these subclasses to inherit the `__eq__` and `__hash__` methods defined in the `Node` base class, which are correctly based on `structural_id`.
 
-2.  **Lisp Transpiler (Feature Consistency):**
-    *   **Problem:** The `LispTranspiler` (`packages/cascade-sdk/src/cascade/tools/lisp.py`) had an outdated understanding of `ParamNode`s. It relied on `isinstance(node, ParamNode)` and `node.param_spec.name` to identify and name parameter nodes. This was inconsistent with the unified runtime where `ParamNode` is now a subtype of `TaskNode`, executing the `_get_param_value` function, and its parameter name is reliably stored in `node.input_bindings["name"]`.
-    *   **Solution:** Updated the transpiler's `_render_expr` method to identify parameter nodes by checking `node.name == "_get_param_value"` and to retrieve the parameter name from `node.input_bindings.get("name")`. This aligns the transpiler's logic with the new runtime architecture.
+# --- V1.4 Factory Functions (Unchanged) ---
 
-3.  **Lisp Transpiler Test Coverage:**
-    *   **Problem:** `LispTranspiler` lacked dedicated unit tests, especially for `cs.Param` and complex routing scenarios.
-    *   **Solution:** Added `packages/cascade-sdk/tests/tools/test_lisp.py` with comprehensive tests for standalone `cs.Param` nodes, `cs.Param` as dependencies, shared `cs.Param` nodes (hoisted into `let*` blocks), and `cs.Param` as a selector in `cs.Router`. The expected Lisp output for `_get_param_value` (which renders as `-get-param-value` due to name sanitization) was also corrected in the test assertions.
 
-These changes collectively ensure the robustness of the graph model and the functional correctness of the Lisp transpiler across various `cs.Param` usage patterns.
+def Param(
+    name: str, default: Any = None, type: Any = str, description: str = ""
+) -> LazyResult:
+    spec = ParamSpec(name=name, default=default, type=type, description=description)
+    get_current_context().register(spec)
+    return _get_param_value(name=name)
+
+
+def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
+    spec = EnvSpec(name=name, default=default, description=description)
+    get_current_context().register(spec)
+    return _get_env_var(name=name)
+
+
+# --- V1.4 Refactored Global Functions (Wrappers with deferred import) ---
+
+
+def run(
+    target: Union[LazyResult, List[Any], tuple[Any, ...]],
+    params: Optional[Dict[str, Any]] = None,
+    system_resources: Optional[Dict[str, Any]] = None,
+    log_level: str = "INFO",
+    log_format: str = "human",
+    connector: Optional[Connector] = None,
+    state_backend: Union[str, Callable[[str], StateBackend], None] = None,
+) -> Any:
+    from cascade.app import CascadeApp
+
+    app = CascadeApp(
+        target=target,
+        params=params,
+        system_resources=system_resources,
+        log_level=log_level,
+        log_format=log_format,
+        connector=connector,
+        state_backend=state_backend,
+    )
+    return app.run()
+
+
+def visualize(target: Any) -> str:
+    from cascade.app import CascadeApp
+
+    app = CascadeApp(target=target)
+    return app.visualize()
+
+
+def dry_run(target: Any) -> None:
+    from cascade.app import CascadeApp
+
+    app = CascadeApp(target=target)
+    app.dry_run()
+
+
+# --- Dynamic Provider Loading (Unchanged) ---
+
+
+def __getattr__(name: str) -> Any:
+    from .providers.registry import registry
+
+    try:
+        return registry.get(name)
+    except AttributeError:
+        # This is the original error that was being hit incorrectly.
+        # It's correct for its intended purpose (provider loading).
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+
+# --- Public API Export ---
+
+__all__ = [
+    # Core API
+    "task",
+    "Param",
+    "Env",
+    "run",
+    "dry_run",
+    "visualize",
+    # Advanced Flow Control
+    "sequence",
+    "pipeline",
+    "Router",
+    "Jump",
+    "select_jump",
+    "bind",
+    # Policies & Resources
+    "with_constraints",
+    "resource",
+    "inject",
+    # Types & Classes
+    "LazyResult",
+    "Engine",
+    "Event",
+    "MessageBus",  # Added MessageBus
+    # Tools & Utilities
+    "to_json",
+    "from_json",
+    "override_resource",
+    "ControllerTestApp",
+    "create_cli",
+    # Exceptions
+    "DependencyMissingError",
+    # Context (for advanced usage)
+    "get_current_context",
+]
 ~~~~~
 
 ### 下一步建议
-1.  **广泛回归测试**: 在生产环境中执行更广泛的回归测试，以确保这些核心架构变更没有引入预期之外的副作用。
-2.  **代码清理**: 由于 `ParamNode` 现在继承自 `TaskNode`，可以审查代码库中是否有任何地方仍然假设 `ParamNode` 是一个完全独立的节点类型，并进行相应的清理或优化。
-3.  **Lisp 规范文档**: 撰写或更新 Lisp 转译器的官方规范文档，详细说明其转译规则，包括参数节点的处理方式。
+这次重构应该已经解决了启动崩溃的问题。请重新运行应用或相关测试。如果问题解决，我们可以将这个任务标记为完成并提交。

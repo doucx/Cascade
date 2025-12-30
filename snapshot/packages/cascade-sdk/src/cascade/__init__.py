@@ -4,9 +4,6 @@ __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 from typing import Any, Dict, Optional, Union, Callable, List
 
-# --- New Application Layer ---
-from cascade.app import CascadeApp
-
 # --- Core Specs & Legacy Components ---
 from cascade.spec.task import task
 from cascade.spec.lazy_types import LazyResult
@@ -50,7 +47,7 @@ def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
     return _get_env_var(name=name)
 
 
-# --- V1.4 Refactored Global Functions (Wrappers) ---
+# --- V1.4 Refactored Global Functions (Wrappers with deferred import) ---
 
 
 def run(
@@ -62,6 +59,8 @@ def run(
     connector: Optional[Connector] = None,
     state_backend: Union[str, Callable[[str], StateBackend], None] = None,
 ) -> Any:
+    from cascade.app import CascadeApp
+
     app = CascadeApp(
         target=target,
         params=params,
@@ -75,11 +74,15 @@ def run(
 
 
 def visualize(target: Any) -> str:
+    from cascade.app import CascadeApp
+
     app = CascadeApp(target=target)
     return app.visualize()
 
 
 def dry_run(target: Any) -> None:
+    from cascade.app import CascadeApp
+
     app = CascadeApp(target=target)
     app.dry_run()
 
@@ -93,6 +96,8 @@ def __getattr__(name: str) -> Any:
     try:
         return registry.get(name)
     except AttributeError:
+        # This is the original error that was being hit incorrectly.
+        # It's correct for its intended purpose (provider loading).
         raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 

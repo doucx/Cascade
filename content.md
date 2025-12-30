@@ -1,217 +1,127 @@
-好的，我们现在进入 GREEN 阶段，实现 `Backend` 的逻辑以通过测试。
-
-## [WIP] feat(compiler): 实现 Backend 代码生成器
-
-### 摘要头
-## [WIP] feat(compiler): 实现 Backend 代码生成器
+## [WIP] test(vm): 为虚拟机创建 RED 状态测试
 
 ### 用户需求
-根据 TDD 流程，实现 `cascade.compiler.Backend` 类。该类需要接收 `GraphIR` 和 `ExecutionPlan` 作为输入，并生成一个 `Blueprint` 对象，其中包含一个线性的、可由 VM 执行的指令序列。
+根据 TDD 重构路线图的 "Phase 4: VM Runtime"，我们需要创建 `VirtualMachine` 的测试用例。虚拟机是执行编译器生成的 `Blueprint` 的运行时组件。它不依赖任何图构建逻辑，只负责执行线性的指令集。
+用户强调“绝对严谨的测试”，这意味着测试必须基于纯粹的指令集操作，不依赖编译器的输出，而是手动构造 `Blueprint` 进行测试，从而实现 VM 的独立验证。
 
 ### 评论
-这是编译器管线的最后一步：代码生成 (Codegen)。我们将实现一个内部的 `_BlueprintBuilder` 来处理状态，包括最关键的**寄存器分配**。通过遍历 `ExecutionPlan`，我们可以保证在处理一个节点时，其所有上游依赖节点的输出寄存器都已经分配好了，从而正确地将数据流连接起来。
+VM 的核心职责是：加载指令、管理寄存器帧（Frame）、分发指令（Dispatch）并执行。
+我们的测试策略将包括：
+1.  **CPU 测试 (The CPU Test)**: 不使用任何编译器，手动构造包含 `Literal` 和 `Register` 操作数的 `Call` 指令，验证 VM 能否正确加载字面量、传递寄存器值，并将结果写回寄存器。这将验证 "Fetch-Decode-Execute" 循环的基本功能。
+2.  **异步支持测试**: 验证 VM 能否正确处理 `async` 函数的 `await` 操作。
 
 ### 目标
-1.  创建 `packages/cascade-compiler/src/cascade/compiler/backend.py` 文件并实现 `Backend` 类。
-2.  更新 `packages/cascade-compiler/src/cascade/compiler/__init__.py` 以导出 `Backend`。
-3.  更新 `packages/cascade-compiler/tests/test_backend.py`，移除 `xfail` 标记，使测试能够运行并通过。
+1.  创建 `packages/cascade-compiler/tests/test_vm.py`。
+2.  实现 `test_vm_instruction_execution`：手动编排包含 `add` 操作的指令序列，验证数据在寄存器间的流动。
+3.  实现 `test_vm_async_execution`：验证 VM 对异步 `Call` 的支持。
 
 ### 基本原理
-`Backend` 的核心是一个状态机，它将图的拓扑结构（通过 `ExecutionPlan`）和节点信息（通过 `GraphIR`）转换为一个线性指令序列。
--   **寄存器分配**: 我们维护一个 `node_output_registers` 字典，作为从节点 ID 到其输出寄存器的符号表。
--   **操作数解析**: 当为一个节点生成 `Call` 指令时，它的输入参数（`Operands`）会根据来源被解析：
-    -   如果输入来自上游节点（通过 `EdgeIR`），操作数就是上游节点在符号表中的 `Register`。
-    -   如果输入是节点自带的字面量（`NodeIR.inputs`），操作数就是 `Literal`。
-这个过程确保了计算图中的数据流被正确地翻译为 VM 中的寄存器间数据流动。
+通过手动构造 `Blueprint`，我们将 VM 的测试与编译器的正确性解耦。如果 VM 测试失败，那是 VM 的问题；如果 VM 测试通过但端到端失败，那是编译器的问题。这种隔离对于复杂系统的调试至关重要。
+此外，我们将在测试中显式定义一个简单的加法函数，以确保测试环境是完全受控的。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/compiler #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/compiler-backend #task/action/implement #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/runtime #concept/vm #scope/core #ai/instruct #task/domain/refactor #task/object/vm #task/action/define #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 实现 Backend 类
+#### Acts 1: 创建 VM 的 RED 测试文件
 
-创建 `backend.py` 并实现代码生成逻辑。
+此文件定义了 VM 作为纯指令执行器的行为契约。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/src/cascade/compiler/backend.py
+packages/cascade-compiler/tests/test_vm.py
 ~~~~~
 ~~~~~python
-from typing import List, Dict, Tuple, Any
+import pytest
+import asyncio
+from cascade.spec.blueprint import Blueprint, Call, Register, Literal
 
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Operand
-from .optimizer import ExecutionPlan
-
-
-class Backend:
-    """
-    Compiler Backend (Codegen): Transforms a scheduled IR into a linear Blueprint.
-    """
-
-    @staticmethod
-    def compile(graph: GraphIR, plan: ExecutionPlan) -> Blueprint:
-        builder = _BlueprintBuilder(graph, plan)
-        return builder.build()
-
-
-class _BlueprintBuilder:
-    def __init__(self, graph: GraphIR, plan: ExecutionPlan):
-        self._graph = graph
-        self._plan = plan
-        self._instructions: List[Call] = []
-        self._register_counter = 0
-
-        # The "Symbol Table" for register allocation
-        self._node_output_registers: Dict[str, Register] = {}
-        
-        # Fast lookups
-        self._nodes_map: Dict[str, NodeIR] = {n.id: n for n in graph.nodes}
-        self._incoming_edges_map: Dict[str, List[EdgeIR]] = {}
-        for edge in graph.edges:
-            if edge.target_id not in self._incoming_edges_map:
-                self._incoming_edges_map[edge.target_id] = []
-            self._incoming_edges_map[edge.target_id].append(edge)
-
-    def _allocate_register(self) -> Register:
-        reg = Register(self._register_counter)
-        self._register_counter += 1
-        return reg
-
-    def build(self) -> Blueprint:
-        for stage in self._plan:
-            for node_id in stage:
-                self._process_node(node_id)
-        
-        return Blueprint(
-            instructions=self._instructions,
-            register_count=self._register_counter
-        )
-
-    def _process_node(self, node_id: str):
-        node = self._nodes_map[node_id]
-
-        # 1. Resolve Input Operands
-        args: List[Operand] = []  # Positional args not yet fully supported by this IR
-        kwargs: Dict[str, Operand] = {}
-
-        # 1a. From Literals
-        for key, value in node.inputs.items():
-            kwargs[key] = Literal(value)
-
-        # 1b. From Edges (Dependencies)
-        incoming_edges = self._incoming_edges_map.get(node_id, [])
-        for edge in incoming_edges:
-            # The source node must have been processed in a previous stage,
-            # so its output register must be in our map.
-            source_register = self._node_output_registers.get(edge.source_id)
-            if source_register is None:
-                # This indicates a flaw in the ExecutionPlan or this compiler's logic
-                raise RuntimeError(
-                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
-                    "was not assigned a register before being used."
-                )
-            kwargs[edge.target_arg] = source_register
-
-        # 2. Allocate Output Register for this node
-        output_register = self._allocate_register()
-        self._node_output_registers[node_id] = output_register
-
-        # 3. Create Instruction
-        # For now, we assume the IR definition's callable is magically available.
-        # A real implementation would need a way to resolve/load the actual function.
-        # For testing, the function itself isn't invoked, so we can use a placeholder.
-        
-        # We also pass task name for better observability in the VM
-        instr = Call(
-            func=None,  # The VM will need to resolve this later
-            output=output_register,
-            args=args,
-            kwargs=kwargs,
-            task_name=node.definition.name
-        )
-        self._instructions.append(instr)
-~~~~~
-
-#### Acts 2: 导出 Backend
-
-更新 `__init__.py`。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/__init__.py
-~~~~~
-~~~~~python.old
-from .frontend import Frontend
-from .optimizer import Optimizer, ExecutionPlan
-from .exceptions import CompilerError, CycleDetectedError
-
-__all__ = [
-    "Frontend",
-    "Optimizer",
-    "ExecutionPlan",
-    "CompilerError",
-    "CycleDetectedError",
-]
-~~~~~
-~~~~~python.new
-from .frontend import Frontend
-from .optimizer import Optimizer, ExecutionPlan
-from .backend import Backend
-from .exceptions import CompilerError, CycleDetectedError
-
-__all__ = [
-    "Frontend",
-    "Optimizer",
-    "ExecutionPlan",
-    "Backend",
-    "CompilerError",
-    "CycleDetectedError",
-]
-~~~~~
-
-#### Acts 3: 更新测试用例 (GREEN)
-
-移除 `xfail` 标记并启用测试。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_backend.py
-~~~~~
-~~~~~python.old
-# RED State: Backend not implemented
+# RED State: VM not yet implemented in the new package location
 try:
-    from cascade.compiler.backend import Backend
+    from cascade.compiler.vm import VirtualMachine
 except ImportError:
     pass
-~~~~~
-~~~~~python.new
-from cascade.compiler.backend import Backend
-~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_backend.py
-~~~~~
-~~~~~python.old
-@pytest.mark.xfail(reason="Backend not implemented", raises=(ImportError, NameError))
-def test_compile_single_node_literals():
-~~~~~
-~~~~~python.new
-def test_compile_single_node_literals():
-~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/test_backend.py
-~~~~~
-~~~~~python.old
-@pytest.mark.xfail(reason="Backend not implemented", raises=(ImportError, NameError))
-def test_compile_dependency_registers():
-~~~~~
-~~~~~python.new
-def test_compile_dependency_registers():
+def _add(a: int, b: int) -> int:
+    """Helper function for testing synchronous execution."""
+    return a + b
+
+
+async def _async_add(a: int, b: int) -> int:
+    """Helper function for testing asynchronous execution."""
+    await asyncio.sleep(0.01)
+    return a + b
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(reason="VM not implemented", raises=(ImportError, NameError))
+async def test_vm_instruction_execution():
+    """
+    Case 1: The CPU Test (Synchronous).
+    Manually construct a program:
+      r0 = add(1, 2)
+      r1 = add(r0, 3)
+    Verify that r1 contains 6.
+    """
+    # Program:
+    # 1. r0 = _add(1, 2)
+    instr1 = Call(
+        func=_add,
+        output=Register(0),
+        args=[Literal(1), Literal(2)],
+        kwargs={},
+        task_name="add_1"
+    )
+    
+    # 2. r1 = _add(r0, 3)
+    instr2 = Call(
+        func=_add,
+        output=Register(1),
+        args=[Register(0), Literal(3)],
+        kwargs={},
+        task_name="add_2"
+    )
+    
+    blueprint = Blueprint(
+        instructions=[instr1, instr2],
+        register_count=2
+    )
+
+    vm = VirtualMachine()
+    result = await vm.execute(blueprint)
+
+    # The result of the last instruction should be returned
+    assert result == 6
+
+
+@pytest.mark.asyncio
+@pytest.mark.xfail(reason="VM not implemented", raises=(ImportError, NameError))
+async def test_vm_async_execution():
+    """
+    Case 2: Async Execution.
+    Manually construct a program:
+      r0 = async_add(10, 20)
+    Verify that VM awaits the result correctly.
+    """
+    instr = Call(
+        func=_async_add,
+        output=Register(0),
+        args=[Literal(10), Literal(20)],
+        kwargs={},
+        task_name="async_add"
+    )
+    
+    blueprint = Blueprint(
+        instructions=[instr],
+        register_count=1
+    )
+
+    vm = VirtualMachine()
+    result = await vm.execute(blueprint)
+
+    assert result == 30
 ~~~~~

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import inspect
-from cascade.graph.model import Graph, Node, Edge, EdgeType
+from cascade.graph.model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.spec.jump import JumpSelector

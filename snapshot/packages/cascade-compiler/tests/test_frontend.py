@@ -1,16 +1,9 @@
 import pytest
-
-# NOTE: The 'cascade.compiler.frontend' module does not exist yet.
-# This is the expected RED state for Phase 1.
-try:
-    from cascade.compiler.frontend import Frontend
-    from cascade.spec.task import task
-    from cascade.spec.ir.models import GraphIR
-except ImportError:
-    pass
+from cascade.compiler.frontend import Frontend
+from cascade.spec.task import task
+from cascade.spec.ir.models import GraphIR
 
 
-@pytest.mark.xfail(reason="Frontend not implemented", raises=(ImportError, NameError))
 def test_compile_single_task_structure():
     """
     Case 1: Single Task
@@ -46,7 +39,6 @@ def test_compile_single_task_structure():
     assert "structure_hash" not in fp
 
 
-@pytest.mark.xfail(reason="Frontend not implemented", raises=(ImportError, NameError))
 def test_compile_linear_dependency():
     """
     Case 2: Linear Dependency (t2 -> t1)

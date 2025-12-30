@@ -3,28 +3,20 @@ from dataclasses import asdict
 
 import pytest
 
-# NOTE: These classes are not yet defined. We expect an ImportError here.
-# This is the normal "RED" state of the TDD process.
-try:
-    from cascade.spec.ir.models import (
-        GraphIR,
-        NodeIR,
-        EdgeIR,
-        TaskDef,
-        ArgumentDef,
-        ArgumentKind,
-        Instruction,
-        Call,
-        Return,
-    )
-    from cascade.spec.fingerprint import Fingerprint
-except ImportError:
-    # We allow the import to fail so that the test file itself is syntactically valid,
-    # but the tests below will fail at runtime if the classes do not exist.
-    pass
+from cascade.spec.ir.models import (
+    GraphIR,
+    NodeIR,
+    EdgeIR,
+    TaskDef,
+    ArgumentDef,
+    ArgumentKind,
+    Instruction,
+    Call,
+    Return,
+)
+from cascade.spec.fingerprint import Fingerprint
 
 
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
 def test_ir_structures_exist():
     """Verify that GraphIR, NodeIR, and EdgeIR can be instantiated."""
     # This test will fail until the models are created.
@@ -44,7 +36,6 @@ def test_ir_structures_exist():
     assert graph.meta["version"] == "1.0"
 
 
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
 def test_ir_serialization_roundtrip():
     """Verify that IR structures can be serialized to and from JSON."""
     fp = Fingerprint()
@@ -73,7 +64,6 @@ def test_ir_serialization_roundtrip():
     assert loaded["nodes"][0]["id"] == "n1"
 
 
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
 def test_instruction_serialization():
     """Verify that Instruction dataclasses can be instantiated and serialized."""
     # This test covers the second part of Phase 0's implementation goal.

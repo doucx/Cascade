@@ -1,44 +1,171 @@
-Of course. The roadmap is clear, and your provided test case is an excellent starting point for the TDD process. We will begin Phase 0 by creating the initial, failing test file. This action establishes the "RED" state, defining the contract that our new IR model implementation must fulfill.
-
-I will now generate the plan to create this test file.
-
-## [WIP] test: Create failing tests for IR data models
+## [WIP] feat(spec): 实现 IR 核心数据模型
 
 ### 用户需求
-As per the TDD refactoring roadmap (`01KDQNYD1QYXC9V1HH6AVS8WKJ`), we need to start Phase 0 by creating the initial (and currently failing) test file for the new Intermediate Representation (IR) data models. This file, `test_ir_models.py`, will serve as the "RED" state in our TDD cycle.
+在 `cascade-spec` 包中实现 Intermediate Representation (IR) 的核心数据模型。这些模型包括图结构的定义 (`GraphIR`, `NodeIR`, `EdgeIR`) 以及虚拟机指令集的初步定义 (`Instruction`, `Call`, `Return`)。这是 TDD 流程的 "Green" 阶段，旨在通过之前创建的 `test_ir_models.py` 测试。
 
 ### 评论
-This is a crucial first step. Following a strict TDD process ensures that every piece of the new architecture is built on a solid, verifiable foundation. Creating the failing test first defines the contract that the implementation must fulfill, validating the design before any production code is written.
+当前 `packages/cascade-spec/src/cascade/spec/ir/models.py` 仅包含 `TaskDef` 等基础定义。为了支持编译器和 VM 的解耦架构，我们需要引入更完整的图描述结构和线性指令集结构。这些类被设计为纯数据类 (`dataclass`)，以确保易于序列化和在组件间传递。
 
 ### 目标
-1.  Create a new test file at `packages/cascade-spec/tests/spec/test_ir_models.py`.
-2.  Populate this file with tests that will fail because the `cascade.spec.ir` module and its classes (`GraphIR`, `NodeIR`, `EdgeIR`, `Instruction`, etc.) do not yet exist.
-3.  The tests will cover both the instantiation and the JSON serialization capabilities of the future IR models.
+1.  修改 `packages/cascade-spec/src/cascade/spec/ir/models.py`，添加 `GraphIR`, `NodeIR`, `EdgeIR`, `Instruction`, `Call`, `Return` 等类定义。
+2.  修改 `packages/cascade-spec/src/cascade/spec/ir/__init__.py`，导出上述新类。
+3.  更新 `packages/cascade-spec/tests/spec/test_ir_models.py`，移除 `xfail` 标记，正式启用测试断言。
 
 ### 基本原理
-Following the "Scorched Earth Policy" roadmap, we are building the new architecture from the ground up, driven by tests. This `write_file` action establishes the first test, putting us in the "RED" state of the TDD cycle. The test content is based on your provided example and the roadmap's requirements, ensuring we define a clear target for the subsequent implementation step.
+根据 "焦土政策" 路线图的阶段 0，我们需要建立 "真理" 数据结构。通过使用 `dataclass`，我们获得免费的 `__init__`, `__repr__` 和易于转换为字典的能力（这对 `asdict` 测试至关重要）。将图结构 (IR) 与指令集 (VM Instructions) 定义在规范层，有助于后续实现编译器前端和后端时的依赖解耦。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/spec #comp/tests #scope/dx #ai/instruct #task/domain/refactor #task/object/ir-models #task/action/define #task/state/begin
+#intent/build #flow/ready #priority/high #comp/spec #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/ir-models #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Create the test file for IR models
+#### Acts 1: 定义 IR 数据模型
 
-This action creates the new test file. It will fail when run with `pytest` because the necessary `cascade.spec.ir` models have not been defined yet, which is the desired outcome for this step.
+我们将向 `models.py` 添加缺少的类定义。注意我们需要导入 `field` 和 `Any`, `Dict` 等类型提示。
 
 ~~~~~act
-write_file
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
+~~~~~
+~~~~~python.old
+from dataclasses import dataclass
+from enum import Enum
+from typing import List, Optional
+
+from cascade.spec.fingerprint import Fingerprint
+~~~~~
+~~~~~python.new
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import List, Optional, Dict, Any
+
+from cascade.spec.fingerprint import Fingerprint
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
+~~~~~
+~~~~~python.old
+@dataclass(frozen=True)
+class TaskDef:
+    name: str
+    args: List[ArgumentDef]
+    # The stable semantic identity of this task definition.
+    # Must contain keys like 'current_code_structure_hash'.
+    fingerprint: Fingerprint
+    return_annotation: Optional[str] = None
+    docstring: Optional[str] = None
+    is_async: bool = False
+    # Execution mode (e.g. "blocking", "compute") derived from the task definition
+    mode: str = "blocking"
+~~~~~
+~~~~~python.new
+@dataclass(frozen=True)
+class TaskDef:
+    name: str
+    args: List[ArgumentDef]
+    # The stable semantic identity of this task definition.
+    # Must contain keys like 'current_code_structure_hash'.
+    fingerprint: Fingerprint
+    return_annotation: Optional[str] = None
+    docstring: Optional[str] = None
+    is_async: bool = False
+    # Execution mode (e.g. "blocking", "compute") derived from the task definition
+    mode: str = "blocking"
+
+
+@dataclass
+class NodeIR:
+    id: str
+    definition: TaskDef
+    inputs: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EdgeIR:
+    source_id: str
+    target_id: str
+    target_arg: str
+
+
+@dataclass
+class GraphIR:
+    nodes: List[NodeIR]
+    edges: List[EdgeIR]
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+# --- VM Instruction Set ---
+
+
+@dataclass
+class Instruction:
+    id: str
+
+
+@dataclass
+class Call(Instruction):
+    task_name: str
+    args: List[Any]
+    output_register: str
+
+
+@dataclass
+class Return(Instruction):
+    source_register: str
+~~~~~
+
+#### Acts 2: 导出新模型
+
+更新 `__init__.py` 以公开新添加的类，使其可以被外部模块（如测试）导入。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/__init__.py
+~~~~~
+~~~~~python.old
+from .models import ArgumentKind, ArgumentDef, TaskDef
+
+__all__ = ["ArgumentKind", "ArgumentDef", "TaskDef"]
+~~~~~
+~~~~~python.new
+from .models import (
+    ArgumentKind,
+    ArgumentDef,
+    TaskDef,
+    GraphIR,
+    NodeIR,
+    EdgeIR,
+    Instruction,
+    Call,
+    Return,
+)
+
+__all__ = [
+    "ArgumentKind",
+    "ArgumentDef",
+    "TaskDef",
+    "GraphIR",
+    "NodeIR",
+    "EdgeIR",
+    "Instruction",
+    "Call",
+    "Return",
+]
+~~~~~
+
+#### Acts 3: 启用测试
+
+现在代码已实现，我们需要移除测试文件中的 `xfail` 标记，并删除为了兼容 `ImportError` 而写的 try-except 块，让测试能够正常运行并验证代码。
+
+~~~~~act
+patch_file
 packages/cascade-spec/tests/spec/test_ir_models.py
 ~~~~~
-~~~~~python
-import json
-from dataclasses import asdict
-
-import pytest
-
+~~~~~python.old
 # NOTE: These classes are not yet defined. We expect an ImportError here.
 # This is the normal "RED" state of the TDD process.
 try:
@@ -62,81 +189,45 @@ except ImportError:
 
 @pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
 def test_ir_structures_exist():
-    """Verify that GraphIR, NodeIR, and EdgeIR can be instantiated."""
-    # This test will fail until the models are created.
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
-
-    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
-
-    node = NodeIR(id="node_1", definition=task_def, inputs={"x": 1, "y": "hello"})
-
-    edge = EdgeIR(source_id="node_1", target_id="node_2", target_arg="data")
-
-    graph = GraphIR(nodes=[node], edges=[edge], meta={"version": "1.0"})
-
-    assert graph.nodes[0].id == "node_1"
-    assert graph.edges[0].source_id == "node_1"
-    assert graph.meta["version"] == "1.0"
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.models import (
+    GraphIR,
+    NodeIR,
+    EdgeIR,
+    TaskDef,
+    ArgumentDef,
+    ArgumentKind,
+    Instruction,
+    Call,
+    Return,
+)
+from cascade.spec.fingerprint import Fingerprint
 
 
+def test_ir_structures_exist():
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-spec/tests/spec/test_ir_models.py
+~~~~~
+~~~~~python.old
 @pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
 def test_ir_serialization_roundtrip():
-    """Verify that IR structures can be serialized to and from JSON."""
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
+~~~~~
+~~~~~python.new
+def test_ir_serialization_roundtrip():
+~~~~~
 
-    arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
-    task_def = TaskDef(name="test_task", args=[arg_def], fingerprint=fp)
-
-    node = NodeIR(id="n1", definition=task_def, inputs={"val": 42})
-
-    graph = GraphIR(nodes=[node], edges=[])
-
-    # Convert to dictionary using dataclasses.asdict
-    data = asdict(graph)
-
-    # Verify key fields
-    assert data["nodes"][0]["id"] == "n1"
-    assert data["nodes"][0]["inputs"]["val"] == 42
-    assert data["nodes"][0]["definition"]["name"] == "test_task"
-    assert data["nodes"][0]["definition"]["args"][0]["kind"] == "POSITIONAL_OR_KEYWORD"
-
-    # Verify JSON serialization compatibility
-    json_str = json.dumps(data)
-    loaded = json.loads(json_str)
-
-    assert loaded["nodes"][0]["id"] == "n1"
-
-
+~~~~~act
+patch_file
+packages/cascade-spec/tests/spec/test_ir_models.py
+~~~~~
+~~~~~python.old
 @pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
 def test_instruction_serialization():
-    """Verify that Instruction dataclasses can be instantiated and serialized."""
-    # This test covers the second part of Phase 0's implementation goal.
-    call_instruction = Call(
-        id="instr_1",
-        task_name="my_task",
-        args=[1, "hello"],
-        output_register="r0",
-    )
-    return_instruction = Return(id="instr_2", source_register="r0")
-
-    program: list[Instruction] = [call_instruction, return_instruction]
-
-    # This crude serialization check is enough to drive the implementation.
-    # We are not using asdict because Instruction is a base class.
-    # A real implementation would need a polymorphic serializer.
-    serialized = [
-        {"type": "Call", "id": i.id, "task": i.task_name}
-        if isinstance(i, Call)
-        else {"type": "Return", "id": i.id, "source": i.source_register}
-        for i in program
-    ]
-
-    json_str = json.dumps(serialized)
-    loaded = json.loads(json_str)
-
-    assert len(loaded) == 2
-    assert loaded[0]["type"] == "Call"
-    assert loaded[1]["source"] == "r0"
+~~~~~
+~~~~~python.new
+def test_instruction_serialization():
 ~~~~~

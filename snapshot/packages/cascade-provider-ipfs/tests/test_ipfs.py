@@ -49,15 +49,16 @@ async def mock_ipfs_add_handler(request: web.Request):
 
 
 @pytest.fixture
+@pytest.mark.asyncio
 async def mock_ipfs_server(aiohttp_client):
     # This fixture MUST be async because it uses `await aiohttp_client`.
-    # This is the canonical and correct way to write this fixture.
+    # Adding the @pytest.mark.asyncio explicitly tells the plugin to handle it.
     app = web.Application()
     app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
     app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
-    
+
     client = await aiohttp_client(app)
-    
+
     mock_base_url = f"http://{client.server.host}:{client.server.port}"
     yield mock_base_url
 

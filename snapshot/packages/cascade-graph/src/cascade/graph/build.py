@@ -146,7 +146,8 @@ class GraphBuilder:
                     cache_policy=result._cache_policy,
                     constraints=result._constraints,
                     input_bindings=input_bindings,
-                    param_spec=param_spec
+                    param_spec=param_spec,
+                    has_complex_inputs=True,
                 )
             else:
                 node = TaskNode(

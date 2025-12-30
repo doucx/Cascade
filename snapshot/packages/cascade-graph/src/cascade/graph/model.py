@@ -85,10 +85,14 @@ class MapNode(Node):
 @dataclass
 class ParamNode(Node):
     """Represents an external parameter injection."""
-    
+
     # We store the ParamSpec here explicitly for type safety
     from cascade.spec.input import ParamSpec
+
     param_spec: Optional[ParamSpec] = None
+
+    # Optimization flag, required for consistent interface
+    has_complex_inputs: bool = False
 
     @property
     def callable_obj(self) -> Optional[Callable]:

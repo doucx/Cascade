@@ -3,7 +3,7 @@ import importlib
 from typing import Any, Dict, Optional, List
 from dataclasses import dataclass
 
-from .model import Graph, Node, Edge, EdgeType
+from .model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
 from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -93,8 +93,6 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
 
 
 def _node_to_dict(node: Node) -> Dict[str, Any]:
-    from .model import TaskNode, MapNode, ParamNode
-
     data = {
         "structural_id": node.structural_id,
         "name": node.name,
@@ -249,7 +247,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             node_type="map",
             mapping_factory=_load_func_from_path(data.get("mapping_factory")),
             retry_policy=retry_policy,
-            cache_policy=result._cache_policy if False else None, # Serialization of cache policy not implemented yet
+            cache_policy=None, # Serialization of cache policy not implemented yet
             constraints=constraints,
             input_bindings=input_bindings,
         )
@@ -266,6 +264,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             cache_policy=None,
             constraints=constraints,
             input_bindings=input_bindings,
+            has_complex_inputs=True, # ParamNode always needs the complex path
         )
     else:
         # Default to TaskNode

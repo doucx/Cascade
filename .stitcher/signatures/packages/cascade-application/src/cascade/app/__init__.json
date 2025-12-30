@@ -6,21 +6,34 @@
     "baseline_code_signature_text": "def __init__(self, target: Union[LazyResult, List[Any], Tuple[Any, ...]], params: Optional[Dict[str, Any]] = None, system_resources: Optional[Dict[str, Any]] = None, log_level: str = 'INFO', log_format: str = 'human', connector: Optional[Connector] = None, state_backend: Union[str, Callable[[str], StateBackend], None] = None):",
     "baseline_code_structure_hash": "71469f926459e79318e4ebb6b09d7b22e7d15767595ca2bd41b1e9e042059110"
   },
+  "CascadeApp.connector": {},
   "CascadeApp.dry_run": {
     "baseline_code_signature_text": "def dry_run(self) -> None:",
     "baseline_code_structure_hash": "491bc3afe244751cf7a0504e2074c1e63f625da8700807dc3e2e08c103813ddc",
     "baseline_yaml_content_hash": "9fa676fe1392b880d2e60c169e03aa3800c8101e8106142bc67d3d994bf2ae33"
   },
+  "CascadeApp.engine": {},
+  "CascadeApp.event_bus": {},
+  "CascadeApp.executor": {},
+  "CascadeApp.log_subscriber": {},
+  "CascadeApp.params": {},
+  "CascadeApp.raw_target": {},
+  "CascadeApp.renderer": {},
   "CascadeApp.run": {
     "baseline_code_signature_text": "def run(self) -> Any:",
     "baseline_code_structure_hash": "8f1710dd2fa4060b644ec50de7354d0fcbab022690385dc05530f9098cce2bce",
     "baseline_yaml_content_hash": "d306b5a0657bf726f3379f5dec9e54bcdc1fd36e9be33d9fe334f401ef51bc37"
   },
+  "CascadeApp.sb_factory": {},
+  "CascadeApp.solver": {},
+  "CascadeApp.system_resources": {},
+  "CascadeApp.telemetry_subscriber": {},
   "CascadeApp.visualize": {
     "baseline_code_signature_text": "def visualize(self) -> str:",
     "baseline_code_structure_hash": "1f0b0ca039b1719081729287e03d3f990b817d0186b2494c3dbba1aa3dcb2bc1",
     "baseline_yaml_content_hash": "85fc40663a40146ea4d44c8e009a751f65cfb1b79d763d69b432f963ab0aca84"
   },
+  "CascadeApp.workflow_target": {},
   "DryRunConsoleSubscriber": {
     "baseline_yaml_content_hash": "92b2b5d2a5642e20775d1bbe90bcbef117575bf9f7b5029bdea0f5fa5ee039e9"
   },

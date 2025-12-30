@@ -6,6 +6,7 @@
     "baseline_code_signature_text": "def __init__(self, bus: MessageBus):",
     "baseline_code_structure_hash": "a1efdcdf83398161dcb0fa10a726ccece737051e0692e435d96e134300becd61"
   },
+  "ResourceContainer._resource_providers": {},
   "ResourceContainer._scan_item": {
     "baseline_code_signature_text": "def _scan_item(self, item: Any, required: Set[str]):",
     "baseline_code_structure_hash": "a935ed1baca29981a8bf41bf5b49196144fd570df3136887bcdcaa966e2ed7dc",
@@ -15,6 +16,7 @@
     "baseline_code_signature_text": "def _teardown_resource(self, gen: Generator, run_id: str, resource_name: str):",
     "baseline_code_structure_hash": "64d8236b5c6076f88595a88fe2113dd8410e34ffbe13519f5a35a7f0f46f9d75"
   },
+  "ResourceContainer.bus": {},
   "ResourceContainer.get_provider": {
     "baseline_code_signature_text": "def get_provider(self, name: str) -> Callable:",
     "baseline_code_structure_hash": "3589f3683ae4c6beefd4b8616b8435c0540cbec9bf0c55fd3081b08a15237ed3",

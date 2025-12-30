@@ -10,6 +10,7 @@
     "baseline_code_signature_text": "def load(self, operand: Operand) -> Any:",
     "baseline_code_structure_hash": "d94de0fbb0d9d9d538d36877c1dfae61b3d492cf5fa6e3156161557083c1afdf"
   },
+  "Frame.registers": {},
   "Frame.store": {
     "baseline_code_signature_text": "def store(self, register: Register, value: Any):",
     "baseline_code_structure_hash": "5acf636f6e13c05a09c97602d4007358d93b39c72e8cc75ac2e058d1c2eea6ac"
@@ -21,6 +22,7 @@
     "baseline_code_signature_text": "def __init__(self, resource_manager: Optional[ResourceManager] = None, constraint_manager: Optional[ConstraintManager] = None, wakeup_event: Optional[asyncio.Event] = None):",
     "baseline_code_structure_hash": "f25e1b040c131ee591030d85172d84201f190eb8afa84534154a0abd54903ee6"
   },
+  "VirtualMachine._blueprints": {},
   "VirtualMachine._dispatch": {
     "baseline_code_signature_text": "async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:",
     "baseline_code_structure_hash": "0ef672f462143bb339693ee18d3b762ca4aa1453f42622551109ca1dd822c110"
@@ -34,6 +36,7 @@
     "baseline_code_structure_hash": "664ac52d0cc65fb36e567d6ab0fa6b918f889e90bb18b72d3ac227e29dbd480c",
     "baseline_yaml_content_hash": "703ad4e553948518986b40e7bda731f48941cb08c60d3f318db23bdaebd164d8"
   },
+  "VirtualMachine.constraint_manager": {},
   "VirtualMachine.execute": {
     "baseline_code_signature_text": "async def execute(self, blueprint: Blueprint, initial_args: Optional[List[Any]] = None, initial_kwargs: Optional[Dict[str, Any]] = None) -> Any:",
     "baseline_code_structure_hash": "dd0dd65ac8f93a38e478b751217ff2def11bd637335cf2988acea99a13ffca73",
@@ -42,5 +45,7 @@
   "VirtualMachine.register_blueprint": {
     "baseline_code_signature_text": "def register_blueprint(self, bp_id: str, blueprint: Blueprint):",
     "baseline_code_structure_hash": "f71c236f13a8c6087905e967e833a5e2ae7664b334f90fb7934f8571b9b988a6"
-  }
+  },
+  "VirtualMachine.resource_manager": {},
+  "VirtualMachine.wakeup_event": {}
 }

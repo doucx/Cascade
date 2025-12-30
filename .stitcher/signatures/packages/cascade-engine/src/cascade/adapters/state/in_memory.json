@@ -6,6 +6,9 @@
     "baseline_code_signature_text": "def __init__(self, run_id: str):",
     "baseline_code_structure_hash": "8ee5d58d74c8d1d55b6e68bd8c849ecc35c6e3cebc8337c747b3b13e8e6cf1b4"
   },
+  "InMemoryStateBackend._results": {},
+  "InMemoryStateBackend._run_id": {},
+  "InMemoryStateBackend._skipped": {},
   "InMemoryStateBackend.clear": {
     "baseline_code_signature_text": "async def clear(self) -> None:",
     "baseline_code_structure_hash": "1e1d110f0d48734e2552a9d1d1561437c16def8309d251c39c34e0312fdb6011",

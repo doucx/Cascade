@@ -1,11 +1,25 @@
 {
+  "IpfsAddProvider": {},
   "IpfsAddProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "IpfsAddProvider.name": {},
+  "IpfsCatProvider": {},
   "IpfsCatProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
+  },
+  "IpfsCatProvider.name": {},
+  "_ipfs_add_task": {
+    "baseline_code_signature_text": "async def _ipfs_add_task(path: str, api_base_url: str = 'http://127.0.0.1:5001') -> str:",
+    "baseline_code_structure_hash": "d7fcf84e21be78d58e40970bd90ffeab5b44ad74a66853515d5e301d45038a1b",
+    "baseline_yaml_content_hash": "65c19c40ebc4c61bd69953c836f69f7d8882f89f357c50c8151dd709d494cc7f"
+  },
+  "_ipfs_cat_task": {
+    "baseline_code_signature_text": "async def _ipfs_cat_task(cid: str, api_base_url: str = 'http://127.0.0.1:5001') -> bytes:",
+    "baseline_code_structure_hash": "ba1ea09e6168b88501f80a5ef1f5d7be538f6c5864ea4f84b1c97307decd38ce",
+    "baseline_yaml_content_hash": "041f8faa1b6fd421554410cd8f831d2f0bd74f9a7ec685dd6dc841b7c988c745"
   },
   "_parse_add_response": {
     "baseline_code_signature_text": "def _parse_add_response(response: HttpResponse) -> str:",

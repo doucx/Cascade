@@ -1,4 +1,5 @@
 {
+  "GraphBuilder": {},
   "GraphBuilder.__init__": {
     "baseline_code_signature_text": "def __init__(self, registry: NodeRegistry | None = None):",
     "baseline_code_structure_hash": "1b29c62d544d5df0b3398e2c7f929e11089d04e1ddef98e8cbde7a544874a3db"
@@ -26,10 +27,15 @@
     "baseline_code_signature_text": "def _visit_mapped_result(self, result: MappedLazyResult) -> Node:",
     "baseline_code_structure_hash": "549b54d96d759b08b43c13b774e5576bbbc03e673c33c7d430f81176c8e31cbd"
   },
+  "GraphBuilder._visited_instances": {},
+  "GraphBuilder.analyzer": {},
   "GraphBuilder.build": {
     "baseline_code_signature_text": "def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:",
     "baseline_code_structure_hash": "27f0af28cbe7b5f2d1c99f771700fc31efb6afc2ae55145881d6c00087f93be2"
   },
+  "GraphBuilder.graph": {},
+  "GraphBuilder.hashing_service": {},
+  "GraphBuilder.registry": {},
   "build_graph": {
     "baseline_code_signature_text": "def build_graph(target: Any, registry: NodeRegistry | None = None) -> Tuple[Graph, Dict[str, Node]]:",
     "baseline_code_structure_hash": "05216073462e0fd129677552c65d1d71622dac247ad2c058fdee5ea685238e9c"

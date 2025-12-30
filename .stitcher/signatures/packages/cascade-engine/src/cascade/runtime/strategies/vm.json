@@ -6,8 +6,11 @@
     "baseline_code_signature_text": "def __init__(self, resource_manager: ResourceManager, constraint_manager: ConstraintManager, wakeup_event: asyncio.Event):",
     "baseline_code_structure_hash": "310054f4d901f390559faf83eda0be9c656e9e98035d0cb62121a4c608b1ab8b"
   },
+  "VMExecutionStrategy.constraint_manager": {},
   "VMExecutionStrategy.execute": {
     "baseline_code_signature_text": "async def execute(self, target: Any, run_id: str, params: Dict[str, Any], state_backend: StateBackend, run_stack: ExitStack, active_resources: Dict[str, Any]) -> Any:",
     "baseline_code_structure_hash": "bc85b62d5769841ab7d658588b85b86c20b5ec8d61f0e2759e0468b00c48357e"
-  }
+  },
+  "VMExecutionStrategy.resource_manager": {},
+  "VMExecutionStrategy.wakeup_event": {}
 }

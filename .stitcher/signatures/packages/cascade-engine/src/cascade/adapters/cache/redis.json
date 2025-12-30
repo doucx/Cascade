@@ -6,6 +6,8 @@
     "baseline_code_signature_text": "def __init__(self, client: Any, prefix: str = 'cascade:cache:'):",
     "baseline_code_structure_hash": "67ca96c9f7910af793858aec82c1e85d22988b4183ecf23ba935910354aa1264"
   },
+  "RedisCacheBackend._client": {},
+  "RedisCacheBackend._prefix": {},
   "RedisCacheBackend.get": {
     "baseline_code_signature_text": "async def get(self, key: str) -> Optional[Any]:",
     "baseline_code_structure_hash": "0263c0801dbd274812febe322c51e71f4302e88c2beffb3eb7b90cd0b14d1b81"

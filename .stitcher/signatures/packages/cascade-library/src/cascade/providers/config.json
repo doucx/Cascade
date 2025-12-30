@@ -1,12 +1,16 @@
 {
+  "LookupProvider": {},
   "LookupProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "LookupProvider.name": {},
+  "YamlLoaderProvider": {},
   "YamlLoaderProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "YamlLoaderProvider.name": {},
   "_lookup_task": {
     "baseline_code_signature_text": "def _lookup_task(source: Dict[str, Any], key: str) -> Any:",
     "baseline_code_structure_hash": "c874d93609ed1219a37eecaf89d13c26b892795b521da9792f2aa6f02de8760a",

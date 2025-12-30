@@ -2,10 +2,26 @@
   "ArgumentDef": {
     "baseline_yaml_content_hash": "321cc5d0bd9882a03dee23a84a1336c02451dae1aa4564abe1bba618b958e717"
   },
+  "ArgumentDef.annotation": {},
+  "ArgumentDef.default_value_repr": {},
+  "ArgumentDef.kind": {},
+  "ArgumentDef.name": {},
   "ArgumentKind": {
     "baseline_yaml_content_hash": "cd50430c79d2551b12b908b9a298c85dedd472e257a267edcdbf17cc3842b307"
   },
+  "ArgumentKind.KEYWORD_ONLY": {},
+  "ArgumentKind.POSITIONAL_ONLY": {},
+  "ArgumentKind.POSITIONAL_OR_KEYWORD": {},
+  "ArgumentKind.VAR_KEYWORD": {},
+  "ArgumentKind.VAR_POSITIONAL": {},
   "TaskDef": {
     "baseline_yaml_content_hash": "fd4f7e4eafcb22ebb5e9077a8d0bdbef3e7a09859ce27d39d13761a8d78e31cd"
-  }
+  },
+  "TaskDef.args": {},
+  "TaskDef.docstring": {},
+  "TaskDef.fingerprint": {},
+  "TaskDef.is_async": {},
+  "TaskDef.mode": {},
+  "TaskDef.name": {},
+  "TaskDef.return_annotation": {}
 }

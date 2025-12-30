@@ -53,10 +53,13 @@
     "baseline_code_signature_text": "def __init__(self, event_bus: MessageBus, connector: Connector):",
     "baseline_code_structure_hash": "ba23842190ff7f8e3b082bd6762646a300af1e1f3759191cc55a3daa9d6697f6"
   },
+  "TelemetrySubscriber._connector": {},
   "TelemetrySubscriber._create_header": {
     "baseline_code_signature_text": "def _create_header(self, run_id: str) -> dict:",
     "baseline_code_structure_hash": "ebd815eaeabc67f62e30efbffc68bbeba8850dbef64e5ec662f28814715534f2"
   },
+  "TelemetrySubscriber._pending_tasks": {},
+  "TelemetrySubscriber._source_id": {},
   "TelemetrySubscriber.on_event": {
     "baseline_code_signature_text": "def on_event(self, event: Event):",
     "baseline_code_structure_hash": "08af49bf34e78b9cb1fd49e117d0101be5ab4347b3bc8b8af96f77e1a30c0d30",

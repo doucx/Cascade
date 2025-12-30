@@ -14,5 +14,6 @@
   "CSPSolver.resolve": {
     "baseline_code_signature_text": "def resolve(self, graph: Graph) -> ExecutionPlan:",
     "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
-  }
+  },
+  "CSPSolver.system_resources": {}
 }

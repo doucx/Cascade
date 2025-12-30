@@ -18,5 +18,6 @@
   "FileExistenceCache.save": {
     "baseline_code_signature_text": "async def save(self, task_id: str, inputs: Dict[str, Any], output: Any) -> None:",
     "baseline_code_structure_hash": "f546c4844285c0c1ba655ce7a64d193904a664a659480b6558ac6944127771f2"
-  }
+  },
+  "FileExistenceCache.target_path": {}
 }

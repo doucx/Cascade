@@ -1,12 +1,16 @@
 {
+  "DictProvider": {},
   "DictProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "DictProvider.name": {},
+  "FormatProvider": {},
   "FormatProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "FormatProvider.name": {},
   "_dict_task": {
     "baseline_code_signature_text": "def _dict_task(**kwargs = {}) -> Dict[str, Any]:",
     "baseline_code_structure_hash": "a3aafa317258aa2f557bee0a496b3d005a4e987ccebc0e06aa1850efa67447d5",

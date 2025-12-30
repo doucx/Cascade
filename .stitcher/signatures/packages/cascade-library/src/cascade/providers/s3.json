@@ -6,22 +6,30 @@
     "baseline_code_signature_text": "def _check_dependency(self):",
     "baseline_code_structure_hash": "29726e52ffcd0fd34cc93ef08cbab0886ca6aa31b77b2a69b35e2fdcacf1c6be"
   },
+  "S3ReadBytesProvider": {},
   "S3ReadBytesProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "S3ReadBytesProvider.name": {},
+  "S3ReadTextProvider": {},
   "S3ReadTextProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "S3ReadTextProvider.name": {},
+  "S3WriteBytesProvider": {},
   "S3WriteBytesProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "S3WriteBytesProvider.name": {},
+  "S3WriteTextProvider": {},
   "S3WriteTextProvider.create_factory": {
     "baseline_code_signature_text": "def create_factory(self) -> LazyFactory:",
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
+  "S3WriteTextProvider.name": {},
   "_s3_read_bytes": {
     "baseline_code_signature_text": "async def _s3_read_bytes(bucket: str, key: str) -> bytes:",
     "baseline_code_structure_hash": "9ddbb708d402ee40d1cce6658b0ec5f004cc40021ba4345383a61d65666fc0df"

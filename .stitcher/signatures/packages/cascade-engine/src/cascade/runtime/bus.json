@@ -1,4 +1,5 @@
 {
+  "Handler": {},
   "MessageBus": {
     "baseline_yaml_content_hash": "46d41ed34d0699603ecb124c4893a1979e0cd172c0d88d9efc26999d249098f2"
   },
@@ -6,6 +7,8 @@
     "baseline_code_signature_text": "def __init__(self):",
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
   },
+  "MessageBus._subscribers": {},
+  "MessageBus._wildcard_subscribers": {},
   "MessageBus.publish": {
     "baseline_code_signature_text": "def publish(self, event: Event):",
     "baseline_code_structure_hash": "8af1449f40bb54d7c3cb3e911e803addabc3e4083a5af32083200df7b936dd74",

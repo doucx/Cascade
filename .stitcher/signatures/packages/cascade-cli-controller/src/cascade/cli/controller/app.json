@@ -18,6 +18,7 @@
     "baseline_code_structure_hash": "2bb2e88ac4f0b1feaec65cd63ed7838c615e8404b5d36e72c70c42cdf9b90700",
     "baseline_yaml_content_hash": "c315d933c65945d42cd361c8b1942dc26d7c60d2f1678d6dcc08d58765179866"
   },
+  "app": {},
   "main": {
     "baseline_code_signature_text": "def main():",
     "baseline_code_structure_hash": "ec3ee86290baaf2be43d796e40266959fcd8b2d57b6599f49808563639b00d28"

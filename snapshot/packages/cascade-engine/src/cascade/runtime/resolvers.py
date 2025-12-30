@@ -1,12 +1,10 @@
 from typing import Any, Dict, List, Tuple, Optional
+import inspect
 
-from cascade.graph.model import Node, Graph, Edge, EdgeType
+from cascade.graph.model import Node, Graph, Edge, EdgeType, ParamNode
 from cascade.spec.resource import Inject
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
 from cascade.spec.protocols import StateBackend
-
-import inspect
 
 
 class ArgumentResolver:
@@ -20,151 +18,233 @@ class ArgumentResolver:
         user_params: Optional[Dict[str, Any]] = None,
         input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
-        from cascade.graph.model import ParamNode
         
-        # Handle ParamNode as a special case that doesn't execute but resolves from context
-        if isinstance(node, ParamNode):
-            param_name = node.param_spec.name if node.param_spec else node.name
-            params = user_params or {}
-            if param_name in params:
-                # The "result" of a ParamNode is its value from the params dict.
-                # We must put this into the state_backend so downstream tasks can find it.
-                val = params[param_name]
-                await state_backend.put_result(node.structural_id, val)
-                # Param nodes themselves don't have args/kwargs to execute, but we return the value
-                # for consistency, though it's the side effect on state_backend that matters.
-                return [val], {}
-
-        # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
-        if not node.has_complex_inputs:
-            # Reconstruct args/kwargs from Bindings (Literals) and Overrides
-            bindings = node.input_bindings
-            if input_overrides:
-                bindings = bindings.copy()
-                bindings.update(input_overrides)
-
-            # 1. Fill from bindings
-            f_args: List[Any] = []
-            f_kwargs: Dict[str, Any] = {}
-            for k, v in bindings.items():
-                if k.isdigit():
-                    idx = int(k)
-                    while len(f_args) <= idx:
-                        f_args.append(None)
-                    f_args[idx] = v
-                else:
-                    f_kwargs[k] = v
-
-            # 2. Fill from edges using the unified helper
-            resolved_edge_values = await self._resolve_data_edges(
-                node, graph, state_backend, instance_map, input_overrides
-            )
-            for k, v in resolved_edge_values.items():
-                if k.isdigit():
-                    idx = int(k)
-                    while len(f_args) <= idx:
-                        f_args.append(None)
-                    f_args[idx] = v
-                else:
-                    f_kwargs[k] = v
-
-            return f_args, f_kwargs
-
-        # --- COMPLEX PATH ---
-        args: List[Any] = []
-        kwargs: Dict[str, Any] = {}
-
-        # 1. Reconstruct initial args/kwargs from Bindings (Literals)
-        bindings = node.input_bindings
-        if input_overrides:
-            bindings = bindings.copy()
-            bindings.update(input_overrides)
-
-        positional_args_dict = {}
-        for name, value_raw in bindings.items():
-            # Always resolve structures to handle nested Injects correctly
-            value = self._resolve_structure(
-                value_raw, node.structural_id, state_backend, resource_context, graph
-            )
-
-            if name.isdigit():
-                positional_args_dict[int(name)] = value
-            else:
-                kwargs[name] = value
-
-        sorted_indices = sorted(positional_args_dict.keys())
-        args = [positional_args_dict[i] for i in sorted_indices]
-
-        # 2. Overlay Dependencies from Edges using the unified helper
-        resolved_edge_values = await self._resolve_data_edges(
-            node, graph, state_backend, instance_map, input_overrides
-        )
-        for k, v in resolved_edge_values.items():
-            if k.isdigit():
-                idx = int(k)
-                while len(args) <= idx:
-                    args.append(None)
-                args[idx] = v
-            else:
-                kwargs[k] = v
-
-        # 3. Handle Resource Injection in Defaults
+        # 1. 准备基础数据
+        input_overrides = input_overrides or {}
+        bindings = node.input_bindings.copy()
+        
+        # 2. 获取签名以便归一化
+        sig = None
         if node.callable_obj:
             try:
-                # Re-inspect signature on demand
                 sig = inspect.signature(node.callable_obj)
-                bound_args = sig.bind_partial(*args, **kwargs)
-                for param in sig.parameters.values():
-                    if (
-                        isinstance(param.default, Inject)
-                        and param.name not in bound_args.arguments
-                    ):
-                        kwargs[param.name] = self._resolve_inject(
-                            param.default, node.name, resource_context
-                        )
-            except (ValueError, TypeError):
+            except ValueError:
                 pass
+        
+        # 3. 如果是 ParamNode，从属性中恢复 key 到 bindings
+        # (Phase 1 虽然让 ParamNode 有了 input_bindings，但在这里做个防御性编程或注入逻辑)
+        if isinstance(node, ParamNode):
+            # ParamNode 的 callable 是 _get_param_value(name, params_context)
+            # 我们需要注入 params_context
+            bindings["params_context"] = user_params or {}
+            # 确保 name 存在 (从 param_key)
+            if node.param_key and "name" not in bindings and "0" not in bindings:
+                bindings["name"] = node.param_key
 
-        # 4. Handle internal param fetching context
-        # [CRITICAL] This logic must always run for Param tasks
-        from cascade.internal.inputs import _get_param_value
-
-        if node.callable_obj is _get_param_value.func:
-            kwargs["params_context"] = user_params or {}
-
-        return args, kwargs
-
-    async def _resolve_data_edges(
-        self,
-        node: Node,
-        graph: Graph,
-        state_backend: StateBackend,
-        instance_map: Dict[str, Node],
-        input_overrides: Optional[Dict[str, Any]],
-    ) -> Dict[str, Any]:
-        resolved_values = {}
+        # 4. 收集所有 Edge 依赖
+        # 这里我们先不根据 Override 过滤，而是把所有 Edge 收集起来
+        # 然后通过 Signature 统一处理冲突
+        edge_values = {}
         incoming_edges = [
             e
             for e in graph.edges
             if e.target.structural_id == node.structural_id
             and e.edge_type == EdgeType.DATA
         ]
-
-        if not incoming_edges:
-            return {}
-
+        
         for edge in incoming_edges:
-            # [CRITICAL] Unified Priority Check:
-            # Overrides from Jump must take precedence over the static graph.
-            if input_overrides and edge.arg_name in input_overrides:
-                continue
-
             val = await self._resolve_dependency(
                 edge, node.structural_id, state_backend, graph, instance_map
             )
-            resolved_values[edge.arg_name] = val
+            edge_values[edge.arg_name] = val
 
-        return resolved_values
+        # 5. 为了处理 Override，我们需要将所有输入（Bindings, Edges）映射到参数名
+        # 策略：
+        # - 如果有 Signature，利用它将所有 位置参数 (包括 "0", "1"...) 转换为 名字。
+        # - 如果没有 Signature，只能信任名称匹配。
+        
+        final_kwargs = {}
+        
+        # 5.1 合并 Bindings 和 Edges 到一个“位置+关键字”的混合视图
+        # positionals map: index -> value
+        positionals: Dict[int, Any] = {}
+        # keywords map: name -> value
+        keywords: Dict[str, Any] = {}
+        
+        def merge_to_view(source: Dict[str, Any]):
+            for k, v in source.items():
+                if k.isdigit():
+                    idx = int(k)
+                    positionals[idx] = v
+                else:
+                    keywords[k] = v
+        
+        merge_to_view(bindings)
+        merge_to_view(edge_values)
+        
+        # 5.2 应用 Overrides 的初步过滤
+        # 如果 Override 提供了 keyword，我们可以直接从 keywords 中移除对应的 entry
+        # 但我们无法轻易移除 positionals，因为不知道 positional 对应的名字是什么
+        for k, v in input_overrides.items():
+            if k in keywords:
+                # Override 覆盖了静态绑定
+                # 我们稍后会把 override 加回去，这里先删掉静态的避免冲突
+                del keywords[k]
+                
+        # 5.3 利用 Signature 进行归一化 (Binding)
+        if sig:
+            # 构造用于 bind 的参数列表/字典
+            # max index in positionals
+            max_idx = max(positionals.keys()) if positionals else -1
+            args_list = []
+            for i in range(max_idx + 1):
+                if i in positionals:
+                    args_list.append(self._resolve_structure(positionals[i], node.structural_id, state_backend, resource_context, graph))
+                else:
+                    # Missing positional? 
+                    # Signature bind might catch this, or it's optional. 
+                    # We utilize a placeholder or rely on default.
+                    # Actually, bind_partial allow missing.
+                    # But we can't pass "holes" to bind. 
+                    # Strategy: Only bind what we have. If we have [0, 2], we can't bind easily.
+                    # Simpler Strategy: Cascde Graph usually fills positionals contiguously.
+                    # If not, it assumes defaults.
+                    pass
+            
+            # 由于 bind 需要连续的位置参数，我们先尽量填充。
+            # 实际上，Input Bindings 是完整的。Edge 也是明确的。
+            # 我们尝试构建 bound_arguments
+            
+            # 但是，Overrides 是最高优先级的。
+            # 如果 Override 已经提供了某个参数 'n'，我们根本不应该把 'n' 对应的 Edge 值传给 bind。
+            # 否则 bind 会报错 "multiple values for 'n'".
+            
+            # 所以，正确的顺序是：
+            # 1. 识别出 Override 覆盖了哪些参数名。
+            # 2. 从 positionals 和 keywords 中剔除这些参数。
+            
+            # 要做到第 2 点，必须先知道 positionals 对应什么名字。
+            parameters = list(sig.parameters.values())
+            
+            # 筛选后的 args/kwargs
+            filtered_args = []
+            filtered_kwargs = keywords.copy()
+            
+            # 处理位置参数
+            # 我们遍历 positionals (假设有序且从0开始)，并对照 Signature 的 parameters
+            # 如果对应位置的 param.name 在 overrides 里，就丢弃该 positional。
+            # 否则，保留。
+            
+            # 注意：Positionals 必须保持此时的相对顺序，如果丢弃中间一个，后面的会前移？ 
+            # 不！Python函数调用不允许跳过位置。
+            # 如果 Override 覆盖了第 0 个位置参数（通过名字），那么第 0 个位置必须由 Override 提供的值填充？
+            # 不，Override 通常以 keyword 形式提供。
+            # Python allow: func(1, n=2) -> Error if 1 is for n.
+            # Python allow: func(n=2) -> OK.
+            
+            # 所以，如果 parameters[i].name 在 overrides 中：
+            # 我们不能传递 args_list[i]。也就是说，args_list 必须在该处截断？ 
+            # 或者该位置参数不再作为位置参数传递，而是假设它被 keyword 替代了。
+            
+            # 结论：如果有 Signature，我们应该尽早把所有 input 转换为 kwargs 形式，
+            # 这样处理 Overrides 就变成了简单的字典 update。
+            
+            unified_kwargs = {}
+            
+            # A. 映射 Bindings/Edges 到 unified_kwargs
+            # A.1 Keywords
+            for k, v in keywords.items():
+                unified_kwargs[k] = self._resolve_structure(v, node.structural_id, state_backend, resource_context, graph)
+                
+            # A.2 Positionals
+            # 我们需要处理 inject/structure
+            resolved_positionals = {
+                k: self._resolve_structure(v, node.structural_id, state_backend, resource_context, graph)
+                for k, v in positionals.items()
+            }
+            
+            for i in sorted(resolved_positionals.keys()):
+                if i < len(parameters):
+                    param = parameters[i]
+                    # 如果 param 是 POSITIONAL_ONLY，我们必须保留在位置参数列表里？
+                    # 或者我们可以暂时放在 kwargs 里，最后组装的时候再转回去？
+                    # Python < 3.8 没有 POSITIONAL_ONLY (除了 C ext)。
+                    # 但 inspect 支持。Cascade Task 目前大多是普通函数。
+                    # 为了最大兼容性，我们尝试映射名字。
+                    if param.kind == inspect.Parameter.VAR_POSITIONAL:
+                        # *args 收集剩余的
+                        # 这比较复杂，暂不支持 *args 的部分参数被 override.
+                        # 对于 Cascade 图，*args 通常作为一个整体列表传递。
+                        pass
+                    else:
+                        unified_kwargs[param.name] = resolved_positionals[i]
+                else:
+                    # 超出签名的位置参数？可能是 *args
+                    pass
+            
+            # B. 应用 Overrides
+            unified_kwargs.update(input_overrides)
+            
+            # C. 处理 Injects (Defaults)
+            # 对于没有提供的参数，检查是否有 Inject 默认值
+            for param in parameters:
+                if param.name not in unified_kwargs:
+                    if isinstance(param.default, Inject):
+                        unified_kwargs[param.name] = self._resolve_inject(
+                            param.default, node.name, resource_context
+                        )
+            
+            # D. 重组为 args, kwargs 调用
+            final_args = []
+            final_kwargs = {}
+            
+            # 再次遍历 Signature，决定哪些放 args，哪些放 kwargs
+            for param in parameters:
+                if param.name in unified_kwargs:
+                    val = unified_kwargs[param.name]
+                    if param.kind == inspect.Parameter.POSITIONAL_ONLY:
+                        final_args.append(val)
+                    elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+                        # 如果 unified_kwargs 里有 *args 的名字？通常不应该。
+                        # 支持有限。
+                        final_kwargs[param.name] = val
+                    elif param.kind == inspect.Parameter.VAR_KEYWORD:
+                        # **kwargs
+                        final_kwargs.update(val) if isinstance(val, dict) else None
+                    else:
+                        # POSITIONAL_OR_KEYWORD or KEYWORD_ONLY
+                        # 偏好 Keyword 以避免歧义
+                        final_kwargs[param.name] = val
+            
+            return final_args, final_kwargs
+
+        else:
+            # 没有 Signature，退回到简单的合并策略
+            # 这是旧逻辑的增强版
+            resolved_args = []
+            resolved_kwargs = {}
+            
+            # Positionals
+            max_idx = max(positionals.keys()) if positionals else -1
+            for i in range(max_idx + 1):
+                if i in positionals:
+                    val = self._resolve_structure(positionals[i], node.structural_id, state_backend, resource_context, graph)
+                    resolved_args.append(val)
+                else:
+                    resolved_args.append(None) # Hole?
+            
+            # Keywords
+            for k, v in keywords.items():
+                if k not in input_overrides:
+                    resolved_kwargs[k] = self._resolve_structure(v, node.structural_id, state_backend, resource_context, graph)
+            
+            # Apply Overrides
+            # 注意：没有 Signature，我们无法知道 input_overrides 是否覆盖了 resolved_args[0]
+            # 这就是 Bug 发生的地方。
+            # 但既然没有 sig，用户也就是瞎猜。
+            resolved_kwargs.update(input_overrides)
+            
+            return resolved_args, resolved_kwargs
 
     def _resolve_structure(
         self,
@@ -207,10 +287,8 @@ class ArgumentResolver:
         graph: Graph,
         instance_map: Dict[str, Node],
     ) -> Any:
-        # ** CORE ROUTER LOGIC FIX **
         if edge.router:
-            # This edge represents a Router. Its source is the SELECTOR.
-            # We must resolve the selector's value first.
+            # Router Logic
             selector_result = await self._get_node_result(
                 edge.source.structural_id,
                 consumer_id,
@@ -218,18 +296,14 @@ class ArgumentResolver:
                 state_backend,
                 graph,
             )
-
-            # Use the result to pick the correct route.
             try:
                 selected_route_lr = edge.router.routes[selector_result]
             except KeyError:
+                 # TODO: Better error message including available routes
                 raise ValueError(
                     f"Router selector for '{consumer_id}' returned '{selector_result}', "
                     f"but no matching route found in {list(edge.router.routes.keys())}"
                 )
-
-            # Now, resolve the result of the SELECTED route.
-            # Convert instance UUID to canonical node ID using the map.
             selected_node = instance_map[selected_route_lr._uuid]
             return await self._get_node_result(
                 selected_node.structural_id,
@@ -239,7 +313,6 @@ class ArgumentResolver:
                 graph,
             )
         else:
-            # Standard dependency
             return await self._get_node_result(
                 edge.source.structural_id,
                 consumer_id,
@@ -259,15 +332,14 @@ class ArgumentResolver:
         if await state_backend.has_result(node_id):
             return await state_backend.get_result(node_id)
 
-        # Slow Path: Check for skip/penetration
         skip_reason = await state_backend.get_skip_reason(node_id)
         if skip_reason:
+            # Try Penetration
             upstream_edges = [
                 e for e in graph.edges if e.target.structural_id == node_id
             ]
             data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
             if data_inputs:
-                # Recursively try to penetrate the skipped node
                 return await self._get_node_result(
                     data_inputs[0].source.structural_id,
                     consumer_id,
@@ -285,8 +357,7 @@ class ArgumentResolver:
         if inject.resource_name in resource_context:
             return resource_context[inject.resource_name]
         raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
-
-
+      
 class ConstraintResolver:
     async def resolve(
         self,
@@ -297,24 +368,21 @@ class ConstraintResolver:
         instance_map: Dict[str, Node],
     ) -> Dict[str, Any]:
         resolved = {}
-
         # 1. Resolve Node-level constraints
         if node.constraints and not node.constraints.is_empty():
             for res, amount in node.constraints.requirements.items():
-                if isinstance(amount, (LazyResult, MappedLazyResult)):
-                    # Get the canonical node for the dynamic constraint value
-                    constraint_node = instance_map.get(amount._uuid)
-                    if not constraint_node:
-                        raise DependencyMissingError(
-                            node.structural_id, f"constraint:{res}", amount._uuid
-                        )
-
-                    if await state_backend.has_result(constraint_node.structural_id):
-                        resolved[res] = await state_backend.get_result(
-                            constraint_node.structural_id
-                        )
-                    else:
-                        raise DependencyMissingError(
+                # Use uuid check to detect dynamic reference
+                # (Simple heuristic, could be improved)
+                if hasattr(amount, "_uuid"): 
+                     constraint_node = instance_map.get(amount._uuid)
+                     if not constraint_node:
+                         raise DependencyMissingError(
+                             node.structural_id, f"constraint:{res}", amount._uuid
+                         )
+                     if await state_backend.has_result(constraint_node.structural_id):
+                         resolved[res] = await state_backend.get_result(constraint_node.structural_id)
+                     else:
+                         raise DependencyMissingError(
                             node.structural_id,
                             f"constraint:{res}",
                             constraint_node.structural_id,

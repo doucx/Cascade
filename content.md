@@ -1,46 +1,35 @@
-非常好。这些测试失败是**完全符合预期的**，它们精确地验证了我们上一步进行的 API 变更已经生效。测试用例现在就像一个“锁”，防止了旧的、不一致的 API 被意外使用，这正是测试驱动开发（TDD）的价值所在。
+现在，我将生成一个计划来同时修复这两个问题。
 
-现在，我们的任务就是更新这些测试，使其与新的、更健壮的 API 契约保持一致。
+## [WIP] fix: 修正测试用例中的 API 假设和异步 Fixture 问题
 
----
-1.  **`test_sql.py` 失败 (x3)**:
-    *   **错误**: `TypeError: _sql_task() got an unexpected keyword argument 'db'`
-    *   **原因**: 我们已经将 `cs.sql` 的 API 从 `cs.sql(..., db="resource_name")` 修改为了 `cs.sql(..., conn=cs.inject("resource_name"))`。测试代码仍在传递旧的 `db` 关键字参数，而新的底层任务 `_sql_task` 并不接受它，因此抛出 `TypeError`。
-
-2.  **`test_ipfs.py` 失败 (x2)**:
-    *   **错误**: `AttributeError: ... has no attribute 'IPFS_API_BASE_URL'`
-    *   **原因**: 我们将 `ipfs` 提供者重构为了原子化的任务，并移除了模块级的全局常量 `IPFS_API_BASE_URL`，转而使用一个带有默认值的、可配置的任务参数 `api_base_url`。测试夹具 `mock_ipfs_server` 仍然试图通过 `monkeypatch` 修改那个已不存在的全局常量，因此引发 `AttributeError`。
-
----
-## [WIP] fix: 更新测试用例以适应重构后的提供者 API
+### 错误分析
+1.  **`test_sql.py`**：测试用例错误地假设 `.with_retry` 方法存在于 `Task` 对象上。根据 `cascade` 的设计，策略方法（如 `with_retry`）应应用于调用 `Task` 后返回的 `LazyResult` 实例上。
+2.  **`test_ipfs.py`**：测试环境无法正确处理 `async def` 类型的 fixture，导致 `pytest-asyncio` 报错。需要将 `mock_ipfs_server` fixture 改为同步定义，并在其内部使用事件循环来执行异步的服务器设置。
 
 ### 用户需求
-修复因 `sql` 和 `ipfs` 提供者 API 变更而导致的单元测试失败。
+修复所有失败的单元测试，使测试代码正确反映 `cascade` 的 API 设计，并适应当前的 `pytest` 测试环境。
 
 ### 评论
-这是一次非常有价值的测试重构。对于 `sql` 测试，我们将使其明确地测试新的依赖注入模式。对于 `ipfs` 测试，我们将移除对全局状态的猴子补丁（monkeypatching），转而通过向任务传递参数来注入 mock URL。这使得测试更加健壮、隔离性更好，并且清晰地记录了任务的依赖关系，是测试实践的一次重要改进。
+这次修复非常有价值。对于 SQL 测试，它纠正了我们对 Cascade 核心 DSL 设计的理解，并使测试能够准确地验证其真实行为。对于 IPFS 测试，它展示了如何在可能存在配置问题的 `pytest-asyncio` 环境中，通过一种更兼容的模式来编写 fixture，从而解决环境问题而不是逻辑问题，这增强了测试的健壮性。
 
 ### 目标
-1.  修改 `packages/cascade-library/tests/test_sql.py`，更新所有对 `cs.sql` 的调用，使用新的 `conn=cs.inject("resource_name")` API。
-2.  增加一个新的测试用例，明确验证 `cs.sql` 对象本身是一个 `Task`（即拥有 `.map` 方法），以防止未来发生回归。
-3.  修改 `packages/cascade-provider-ipfs/tests/test_ipfs.py`，调整 `mock_ipfs_server` 夹具，使其不再使用 `monkeypatch`，而是将 mock 服务器的 URL 作为参数传递给 `cs.ipfs.cat` 和 `cs.ipfs.add` 任务。
+1.  修改 `packages/cascade-library/tests/test_sql.py`，纠正对 `Task` API 的错误断言，并添加一个新测试来验证正确的策略链式调用模式 (`cs.sql(...).with_retry(...)`)。
+2.  修改 `packages/cascade-provider-ipfs/tests/test_ipfs.py`，将 `mock_ipfs_server` fixture 从 `async def` 改为 `def`，并使用 `event_loop` fixture 在内部同步地完成异步设置，以解决 `pytest` 的 fixture 兼容性问题。
 
 ### 基本原理
-我们将直接修改测试文件以匹配新的 API 签名。
-
-*   对于 SQL 测试，这意味着将 `db="sqlite_db"` 替换为 `conn=cs.inject("sqlite_db")`。此外，由于 `_sql_factory` 被移除，我们需要确保 `sqlite_db` 资源 fixture 中使用的 `text` 函数来自 `sqlalchemy` 本身。
-*   对于 IPFS 测试，这意味着 `mock_ipfs_server` 夹具将 `yield` 出 mock URL，测试函数接收这个 URL，并将其作为 `api_base_url` 参数传递给 `cs.ipfs.cat` 和 `cs.ipfs.add`。这是一种更清晰、更符合依赖注入原则的测试方式。
+*   **SQL 测试**：我们将移除失败的 `assert hasattr(cs.sql, "with_retry")` 断言。`assert hasattr(cs.sql, "map")` 是正确的，将予以保留。然后，我们将添加一个新的测试用例，它调用 `cs.sql(...)` 得到一个 `LazyResult`，然后在这个 `LazyResult` 上调用 `.with_retry()`，并断言 `_retry_policy` 属性被正确设置。
+*   **IPFS 测试**：我们将 `mock_ipfs_server` fixture 的签名改为 `def mock_ipfs_server(aiohttp_client, event_loop):`。在函数体内，我们使用 `event_loop.run_until_complete(aiohttp_client(app))` 来启动服务器，然后 `return` 或 `yield` mock URL。这样，fixture 本身对 `pytest` 来说是同步的，问题得以解决。测试函数本身保持 `async def` 不变。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/architecture #task/object/provider-contract #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/brainstorm #task/domain/architecture #task/object/provider-contract #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `test_sql.py`
+#### Acts 1: 修复 `test_sql.py` 的错误断言
 
-我们将重写 `test_sql.py` 以使用新的 `conn=cs.inject(...)` 语法，并添加一个新测试来验证 `cs.sql` 现在是一个 `Task` 对象。
+我们将修正测试用例，使其正确反映 `Task` 和 `LazyResult` 的 API 职责。
 
 ~~~~~act
 write_file
@@ -139,14 +128,34 @@ def test_sql_factory_returns_task_object():
     """
     Verify that cs.sql is now a Task object that supports composition.
     """
+    # .map() is a method on the Task object itself
     assert hasattr(cs.sql, "map")
-    assert hasattr(cs.sql, "with_retry")
     assert callable(cs.sql.map)
+
+    # .with_retry() is NOT on the Task, but on the LazyResult.
+    assert not hasattr(cs.sql, "with_retry")
+
+
+def test_sql_lazy_result_supports_policies():
+    """
+    Verify that the result of calling cs.sql(...) is a LazyResult
+    that supports policy chaining.
+    """
+    # We don't need to run this, just check the type and methods.
+    # A dummy connection is needed to satisfy the signature.
+    lazy_result = cs.sql("SELECT 1", conn=cs.inject("dummy_db"))
+
+    # Chain a policy method
+    lazy_result_with_retry = lazy_result.with_retry(max_attempts=5)
+
+    # Assert that the policy was attached
+    assert lazy_result_with_retry._retry_policy is not None
+    assert lazy_result_with_retry._retry_policy.max_attempts == 5
 ~~~~~
 
-#### Acts 2: 修复 `test_ipfs.py`
+#### Acts 2: 修复 `test_ipfs.py` 的异步 Fixture 问题
 
-我们将重写 `test_ipfs.py`，移除 `monkeypatch`，并显式地将 mock URL 传递给 `cs.ipfs` 任务。
+我们将 `mock_ipfs_server` 改为同步 fixture，以适应测试环境。
 
 ~~~~~act
 write_file
@@ -204,14 +213,17 @@ async def mock_ipfs_add_handler(request: web.Request):
 
 
 @pytest.fixture
-async def mock_ipfs_server(aiohttp_client):
+def mock_ipfs_server(aiohttp_client, event_loop):
     app = web.Application()
     app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
     app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
-    client = await aiohttp_client(app)
+
+    # Use the event_loop fixture from pytest-asyncio to run the async setup
+    # inside our synchronous fixture.
+    client = event_loop.run_until_complete(aiohttp_client(app))
 
     mock_base_url = f"http://{client.server.host}:{client.server.port}"
-    yield mock_base_url
+    return mock_base_url
 
 
 @pytest.mark.asyncio

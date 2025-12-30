@@ -90,6 +90,26 @@ def test_sql_factory_returns_task_object():
     """
     Verify that cs.sql is now a Task object that supports composition.
     """
+    # .map() is a method on the Task object itself
     assert hasattr(cs.sql, "map")
-    assert hasattr(cs.sql, "with_retry")
     assert callable(cs.sql.map)
+
+    # .with_retry() is NOT on the Task, but on the LazyResult.
+    assert not hasattr(cs.sql, "with_retry")
+
+
+def test_sql_lazy_result_supports_policies():
+    """
+    Verify that the result of calling cs.sql(...) is a LazyResult
+    that supports policy chaining.
+    """
+    # We don't need to run this, just check the type and methods.
+    # A dummy connection is needed to satisfy the signature.
+    lazy_result = cs.sql("SELECT 1", conn=cs.inject("dummy_db"))
+
+    # Chain a policy method
+    lazy_result_with_retry = lazy_result.with_retry(max_attempts=5)
+
+    # Assert that the policy was attached
+    assert lazy_result_with_retry._retry_policy is not None
+    assert lazy_result_with_retry._retry_policy.max_attempts == 5

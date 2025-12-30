@@ -49,14 +49,17 @@ async def mock_ipfs_add_handler(request: web.Request):
 
 
 @pytest.fixture
-async def mock_ipfs_server(aiohttp_client):
+def mock_ipfs_server(aiohttp_client, event_loop):
     app = web.Application()
     app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
     app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
-    client = await aiohttp_client(app)
+
+    # Use the event_loop fixture from pytest-asyncio to run the async setup
+    # inside our synchronous fixture.
+    client = event_loop.run_until_complete(aiohttp_client(app))
 
     mock_base_url = f"http://{client.server.host}:{client.server.port}"
-    yield mock_base_url
+    return mock_base_url
 
 
 @pytest.mark.asyncio

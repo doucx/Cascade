@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 import cascade as cs
 from aiohttp import web
 from cascade.runtime.engine import Engine
@@ -50,20 +49,17 @@ async def mock_ipfs_add_handler(request: web.Request):
 
 
 @pytest.fixture
-def mock_ipfs_server(aiohttp_client):
-    # This fixture is synchronous from pytest's perspective.
-    # We get the running loop managed by pytest-asyncio to set up our async server.
-    loop = asyncio.get_running_loop()
-
-    async def setup():
-        app = web.Application()
-        app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
-        app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
-        client = await aiohttp_client(app)
-        return f"http://{client.server.host}:{client.server.port}"
-
-    # Run the async setup on the current event loop and return the result.
-    return loop.run_until_complete(setup())
+async def mock_ipfs_server(aiohttp_client):
+    # This fixture MUST be async because it uses `await aiohttp_client`.
+    # This is the canonical and correct way to write this fixture.
+    app = web.Application()
+    app.router.add_post("/api/v0/cat", mock_ipfs_cat_handler)
+    app.router.add_post("/api/v0/add", mock_ipfs_add_handler)
+    
+    client = await aiohttp_client(app)
+    
+    mock_base_url = f"http://{client.server.host}:{client.server.port}"
+    yield mock_base_url
 
 
 @pytest.mark.asyncio

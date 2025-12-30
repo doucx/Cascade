@@ -236,9 +236,6 @@ class GraphExecutionStrategy:
                 deferred_this_pass: List[Node] = []
 
                 for node in pending_nodes_in_stage:
-                    if node.node_type == "param":
-                        continue
-
                     # ASYNC CHECK
                     skip_reason = await flow_manager.should_skip(node, state_backend)
                     if skip_reason:

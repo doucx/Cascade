@@ -4,6 +4,7 @@ from uuid import uuid4
 
 if TYPE_CHECKING:
     from cascade.spec.protocols import CachePolicy
+    from cascade.spec.input import ParamSpec
 
 # Forward reference for ResourceConstraint
 T = TypeVar("T")
@@ -30,6 +31,7 @@ class LazyResult(Generic[T]):
         default_factory=list
     )  # Explicit sequencing
     _jump_selector: Optional[Any] = None  # Explicit Control Flow (JumpSelector)
+    _param_spec: Optional["ParamSpec"] = None  # For Param nodes
 
     def __hash__(self):
         return hash(self._uuid)

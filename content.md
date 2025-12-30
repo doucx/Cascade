@@ -1,56 +1,62 @@
-You are absolutely right to question the previous solution, and I apologize for its incompleteness. Your feedback and the new traceback are crucial. My initial diagnosis was correct—an async testing plugin was needed—but simply installing `pytest-asyncio` was not enough to solve the root cause.
+好的，我们已经成功重构了 `sql` 和 `ipfs` 提供者的核心逻辑，并修正了受影响的单元测试，使其完全符合 Cascade 的核心架构契约。现在，我将生成一个 `[COMMIT]` 计划来永久化这些变更。
 
-Your analysis is spot on. The traceback originating from *within* the `pytest-asyncio` plugin, combined with the fact that the error still occurs, points to a configuration issue, not a missing dependency.
-
-I will now generate a more precise and correct plan to resolve this.
-
-## [WIP] fix: Explicitly configure pytest-asyncio mode to fix fixture handling
-
-### 错误分析
-你提供的详细追踪信息是关键。它显示 `pytest-asyncio` 插件**已经激活**，但它选择**不处理** `mock_ipfs_server` 这个异步 fixture，而是将其交还给 `pytest` 核心，从而导致了 `PytestRemovedIn9Warning` 警告。
-
-深入分析追踪日志中的代码路径，问题根源在于 `pytest-asyncio` 的运行模式。它有多种模式，例如 `auto` 和 `strict`。虽然 `auto` 是推荐的默认模式（它会自动处理所有 `async` 函数），但某些环境或配置可能会无意中触发 `strict` 模式。在 `strict` 模式下，不仅测试函数需要 `@pytest.mark.asyncio` 标记，连异步 fixture 可能也需要特殊处理，这与插件的常规文档相悖，并导致了这种行为。
-
-因此，最根本的解决方案不是修改测试代码（该代码是符合 `pytest-aiohttp` 和 `pytest-asyncio` 最佳实践的），而是**在项目配置中明确声明我们期望的运行模式**。
+## [COMMIT] refactor(providers): unify LazyFactory to return Task objects
 
 ### 用户需求
-用户希望彻底解决在 `cascade-provider-ipfs` 包中由于异步 fixture 未被正确处理而导致的 `pytest` 错误。
+统一 `LazyFactory` 协议的实现，确保所有内置提供者（如 `cs.sql` 和 `cs.ipfs`）都返回功能完备的 `Task` 对象，从而满足类型检查要求并提供一致的 DSL 组合能力。
 
 ### 评论
-这是一个很好的例子，说明了在大型项目中“显式优于隐式”的原则。仅仅依赖默认配置可能会在不同环境或插件交互中导致意外行为。将 `asyncio_mode = "auto"` 显式地写入 `pyproject.toml`，可以消除所有歧义，确保测试环境的一致性和可预测性。
+这是一个关键的架构对齐步骤。它不仅消除了 `pyright` 报告的类型错误，更重要的是消除了系统中的“二等公民”任务。现在，内置提供者与用户自定义任务在行为上完全一致，都支持 `.map()` 等高级组合操作。
 
 ### 目标
-1.  修改项目根目录的 `pyproject.toml` 文件。
-2.  在 `[tool.pytest.ini_options]` 部分，显式地将 `asyncio_mode` 设置为 `"auto"`。
-3.  确保测试能够成功识别并运行异步 fixture 和测试用例。
+1.  提交 `sql.py` 和 `ipfs/provider.py` 的重构代码。
+2.  提交 `test_sql.py` 和 `test_ipfs.py` 的修正测试。
+3.  确保所有变更已作为一个逻辑单元被 Git 跟踪。
 
 ### 基本原理
-我们将通过 `patch_file` 操作，在根 `pyproject.toml` 的 `pytest` 配置中添加一行 `asyncio_mode = "auto"`。这将强制 `pytest-asyncio` 插件以其最兼容、最自动化的模式运行，正确地发现并管理事件循环，从而解决 `async` fixture 的处理问题。
+我们通过以下行动达成了目标：
+*   **提供者重构**：移除了中间工厂函数，直接返回被 `@task` 装饰的任务对象。
+*   **API 显式化**：将 SQL 资源的注入从魔术字符串改为显式的 `cs.inject()`，提高了代码的透明度。
+*   **测试适配**：修正了测试中对 `Task` API 的错误假设，并解决了异步测试环境下的 fixture 兼容性问题。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/async-support #task/action/configuration #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/engine #comp/tests #scope/api #scope/dx #ai/refine #task/domain/architecture #task/object/provider-contract #task/action/refactor #task/state/end #task/status/completed
 
 ---
+
 ### Script
 
-#### Acts 1: 显式配置 Pytest 的 asyncio 模式
+#### Acts 1: 提交变更
 
-我们将修改根目录的 `pyproject.toml` 文件，为 `pytest` 添加明确的 `asyncio` 模式配置。
+我们将把重构后的提供者源码和修正后的测试文件添加到 Git 暂存区，并创建一个详细的提交。
 
 ~~~~~act
-patch_file
-pyproject.toml
+git_add
+packages/cascade-library/src/cascade/providers/sql.py
+packages/cascade-provider-ipfs/src/cascade/providers/ipfs/provider.py
+packages/cascade-library/tests/test_sql.py
+packages/cascade-provider-ipfs/tests/test_ipfs.py
 ~~~~~
-~~~~~toml.old
-[tool.pytest.ini_options]
-addopts = "-ra --cov=cascade --cov-report=term-missing"
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~toml.new
-[tool.pytest.ini_options]
-addopts = "-ra --cov=cascade --cov-report=term-missing"
-asyncio_mode = "auto"
+~~~~~text
+refactor(providers): unify LazyFactory to return Task objects
+
+This commit resolves a core architectural inconsistency where some providers (SQL, IPFS) returned plain functions instead of 'Task' objects, violating the 'LazyFactory' protocol and breaking DSL consistency.
+
+Key Changes:
+- Refactored 'sql.py' to return the '@task' decorated '_sql_task' directly.
+- Updated 'cs.sql' API to require explicit connection injection via 'cs.inject()'.
+- Rewrote IPFS provider to use atomic, self-contained tasks for 'cat' and 'add' operations.
+- Updated 'test_sql.py' to reflect the correct separation of responsibilities between 'Task' (template) and 'LazyResult' (instance).
+- Fixed 'test_ipfs.py' by correctly implementing async fixtures as 'async def'.
+
+These changes ensure that all built-in providers now support the full range of Task features, including '.map()' and policy chaining, providing a unified and predictable experience for developers.
 ~~~~~
 
 ### 下一步建议
+我们已经完成了“提供者契约”这一裂痕的修复。接下来，我建议处理：
 
-这次的修改只涉及配置文件，你**不需要**重新安装依赖。请直接重新运行你的测试命令。这个问题现在应该已经彻底解决了。
+- **### 2. `ResourceDefinition` 类型的职责混乱**：这涉及 `cascade/spec/resource.py` 的重构，以及 `Engine` 和 `ResourceContainer` 如何处理资源提供者的逻辑，这将进一步稳固系统的资源管理基石。

@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-compiler"
+version = "0.1.0"
+description = "Compiler frontend and backend for Cascade."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec",
+  "cascade-graph", # Temporarily depend on graph for reflection analysis logic
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-graph = { workspace = true }

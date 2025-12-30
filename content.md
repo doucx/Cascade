@@ -1,233 +1,220 @@
-## [WIP] feat(spec): 实现 IR 核心数据模型
+## [WIP] feat(compiler): 初始化编译器前端包并建立 TDD RED 状态
 
 ### 用户需求
-在 `cascade-spec` 包中实现 Intermediate Representation (IR) 的核心数据模型。这些模型包括图结构的定义 (`GraphIR`, `NodeIR`, `EdgeIR`) 以及虚拟机指令集的初步定义 (`Instruction`, `Call`, `Return`)。这是 TDD 流程的 "Green" 阶段，旨在通过之前创建的 `test_ir_models.py` 测试。
+根据 TDD 重构路线图的 "Phase 1: Compiler Frontend"，我们需要创建一个新的包 `cascade-compiler`。此阶段的目标是实现一个能将 `LazyResult` 转换为 `GraphIR` 的前端。当前的具体的任务是初始化包结构，并创建处于 RED 状态（失败状态）的测试用例。
 
 ### 评论
-当前 `packages/cascade-spec/src/cascade/spec/ir/models.py` 仅包含 `TaskDef` 等基础定义。为了支持编译器和 VM 的解耦架构，我们需要引入更完整的图描述结构和线性指令集结构。这些类被设计为纯数据类 (`dataclass`)，以确保易于序列化和在组件间传递。
+这将是 Cascade 从即时执行模式转向编译运行模式的第一步。我们将严格遵循 TDD 流程，先写测试。测试用例将覆盖单一任务编译、线性依赖解析，并强制检查架构公理中规定的长命名哈希规范。
 
 ### 目标
-1.  修改 `packages/cascade-spec/src/cascade/spec/ir/models.py`，添加 `GraphIR`, `NodeIR`, `EdgeIR`, `Instruction`, `Call`, `Return` 等类定义。
-2.  修改 `packages/cascade-spec/src/cascade/spec/ir/__init__.py`，导出上述新类。
-3.  更新 `packages/cascade-spec/tests/spec/test_ir_models.py`，移除 `xfail` 标记，正式启用测试断言。
+1.  创建 `packages/cascade-compiler` 的基础包结构（符合 uv/hatch 规范）。
+2.  在根目录 `pyproject.toml` 中注册新包。
+3.  创建 `packages/cascade-compiler/tests/test_frontend.py`，包含针对 `Frontend.compile()` 的测试用例。这些测试目前会因为 `ImportError` 而失败（RED 状态）。
 
 ### 基本原理
-根据 "焦土政策" 路线图的阶段 0，我们需要建立 "真理" 数据结构。通过使用 `dataclass`，我们获得免费的 `__init__`, `__repr__` 和易于转换为字典的能力（这对 `asdict` 测试至关重要）。将图结构 (IR) 与指令集 (VM Instructions) 定义在规范层，有助于后续实现编译器前端和后端时的依赖解耦。
+1.  **包隔离**: `cascade-compiler` 被设计为一个独立的包，以实现构建逻辑与运行时逻辑的物理解耦。
+2.  **TDD 启动**: 通过编写 `test_compile_single_task_structure` 和 `test_compile_linear_dependency`，我们定义了编译器的输入（`LazyResult`）和输出（`GraphIR`）契约。
+3.  **公理强制**: 测试中显式断言了 `current_code_structure_hash` 的存在，确保从第一行代码开始就遵守哈希命名公理。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/spec #concept/ir #scope/core #ai/instruct #task/domain/refactor #task/object/ir-models #task/action/implement #task/state/continue
+#intent/tooling #flow/draft #priority/high #comp/build #concept/ir #task/domain/refactor #task/object/compiler-frontend #task/action/init #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 定义 IR 数据模型
+#### Acts 1: 创建 `cascade-compiler` 包结构
 
-我们将向 `models.py` 添加缺少的类定义。注意我们需要导入 `field` 和 `Any`, `Dict` 等类型提示。
+首先创建包的元数据文件和命名空间入口。
+
+~~~~~act
+write_file
+packages/cascade-compiler/pyproject.toml
+~~~~~
+~~~~~toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-compiler"
+version = "0.1.0"
+description = "Compiler frontend and backend for Cascade."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec",
+  "cascade-graph", # Temporarily depend on graph for reflection analysis logic
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-graph = { workspace = true }
+~~~~~
+
+~~~~~act
+write_file
+packages/cascade-compiler/src/cascade/compiler/__init__.py
+~~~~~
+~~~~~python
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+~~~~~
+
+#### Acts 2: 注册新包到 Workspace
+
+更新根目录的配置，使新包成为工作区的一部分。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/ir/models.py
+pyproject.toml
 ~~~~~
-~~~~~python.old
-from dataclasses import dataclass
-from enum import Enum
-from typing import List, Optional
+~~~~~toml.old
+cascade-connector-local = { workspace = true }
 
-from cascade.spec.fingerprint import Fingerprint
+[tool.hatch.workspaces]
 ~~~~~
-~~~~~python.new
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import List, Optional, Dict, Any
+~~~~~toml.new
+cascade-connector-local = { workspace = true }
+cascade-compiler = { workspace = true }
 
-from cascade.spec.fingerprint import Fingerprint
+[tool.hatch.workspaces]
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/ir/models.py
+pyproject.toml
 ~~~~~
-~~~~~python.old
-@dataclass(frozen=True)
-class TaskDef:
-    name: str
-    args: List[ArgumentDef]
-    # The stable semantic identity of this task definition.
-    # Must contain keys like 'current_code_structure_hash'.
-    fingerprint: Fingerprint
-    return_annotation: Optional[str] = None
-    docstring: Optional[str] = None
-    is_async: bool = False
-    # Execution mode (e.g. "blocking", "compute") derived from the task definition
-    mode: str = "blocking"
+~~~~~toml.old
+    "packages/cascade-library",
+    "packages/cascade-connector-local",
+]
+
+[tool.hatch.build.targets.wheel]
 ~~~~~
-~~~~~python.new
-@dataclass(frozen=True)
-class TaskDef:
-    name: str
-    args: List[ArgumentDef]
-    # The stable semantic identity of this task definition.
-    # Must contain keys like 'current_code_structure_hash'.
-    fingerprint: Fingerprint
-    return_annotation: Optional[str] = None
-    docstring: Optional[str] = None
-    is_async: bool = False
-    # Execution mode (e.g. "blocking", "compute") derived from the task definition
-    mode: str = "blocking"
+~~~~~toml.new
+    "packages/cascade-library",
+    "packages/cascade-connector-local",
+    "packages/cascade-compiler",
+]
 
-
-@dataclass
-class NodeIR:
-    id: str
-    definition: TaskDef
-    inputs: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class EdgeIR:
-    source_id: str
-    target_id: str
-    target_arg: str
-
-
-@dataclass
-class GraphIR:
-    nodes: List[NodeIR]
-    edges: List[EdgeIR]
-    meta: Dict[str, Any] = field(default_factory=dict)
-
-
-# --- VM Instruction Set ---
-
-
-@dataclass
-class Instruction:
-    id: str
-
-
-@dataclass
-class Call(Instruction):
-    task_name: str
-    args: List[Any]
-    output_register: str
-
-
-@dataclass
-class Return(Instruction):
-    source_register: str
+[tool.hatch.build.targets.wheel]
 ~~~~~
-
-#### Acts 2: 导出新模型
-
-更新 `__init__.py` 以公开新添加的类，使其可以被外部模块（如测试）导入。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/ir/__init__.py
+pyproject.toml
 ~~~~~
-~~~~~python.old
-from .models import ArgumentKind, ArgumentDef, TaskDef
-
-__all__ = ["ArgumentKind", "ArgumentDef", "TaskDef"]
+~~~~~toml.old
+  "cascade-cli-observer",
+  "cascade-connector-mqtt",
+  "cascade-connector-local",
+  "ruff",
+]
 ~~~~~
-~~~~~python.new
-from .models import (
-    ArgumentKind,
-    ArgumentDef,
-    TaskDef,
-    GraphIR,
-    NodeIR,
-    EdgeIR,
-    Instruction,
-    Call,
-    Return,
-)
-
-__all__ = [
-    "ArgumentKind",
-    "ArgumentDef",
-    "TaskDef",
-    "GraphIR",
-    "NodeIR",
-    "EdgeIR",
-    "Instruction",
-    "Call",
-    "Return",
+~~~~~toml.new
+  "cascade-cli-observer",
+  "cascade-connector-mqtt",
+  "cascade-connector-local",
+  "cascade-compiler",
+  "ruff",
 ]
 ~~~~~
 
-#### Acts 3: 启用测试
+#### Acts 3: 创建 RED 状态的测试文件
 
-现在代码已实现，我们需要移除测试文件中的 `xfail` 标记，并删除为了兼容 `ImportError` 而写的 try-except 块，让测试能够正常运行并验证代码。
+创建测试文件。注意我们使用了 `xfail` 标记，并预期 `ImportError` 或 `NameError`，因为 `Frontend` 类尚未实现。这标志着 TDD 的 RED 阶段。
 
 ~~~~~act
-patch_file
-packages/cascade-spec/tests/spec/test_ir_models.py
+write_file
+packages/cascade-compiler/tests/test_frontend.py
 ~~~~~
-~~~~~python.old
-# NOTE: These classes are not yet defined. We expect an ImportError here.
-# This is the normal "RED" state of the TDD process.
+~~~~~python
+import pytest
+
+# NOTE: The 'cascade.compiler.frontend' module does not exist yet.
+# This is the expected RED state for Phase 1.
 try:
-    from cascade.spec.ir.models import (
-        GraphIR,
-        NodeIR,
-        EdgeIR,
-        TaskDef,
-        ArgumentDef,
-        ArgumentKind,
-        Instruction,
-        Call,
-        Return,
-    )
-    from cascade.spec.fingerprint import Fingerprint
+    from cascade.compiler.frontend import Frontend
+    from cascade.spec.task import task
+    from cascade.spec.ir.models import GraphIR
 except ImportError:
-    # We allow the import to fail so that the test file itself is syntactically valid,
-    # but the tests below will fail at runtime if the classes do not exist.
     pass
 
 
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
-def test_ir_structures_exist():
-~~~~~
-~~~~~python.new
-from cascade.spec.ir.models import (
-    GraphIR,
-    NodeIR,
-    EdgeIR,
-    TaskDef,
-    ArgumentDef,
-    ArgumentKind,
-    Instruction,
-    Call,
-    Return,
-)
-from cascade.spec.fingerprint import Fingerprint
+@pytest.mark.xfail(reason="Frontend not implemented", raises=(ImportError, NameError))
+def test_compile_single_task_structure():
+    """
+    Case 1: Single Task
+    Verify that Frontend.compile transforms a single LazyResult into a GraphIR.
+    Also verifies the 'Hash Naming Axiom' by checking fingerprint keys.
+    """
+    @task
+    def simple_task(x: int) -> int:
+        return x + 1
+
+    # 1. Prepare Input
+    lazy = simple_task(x=10)
+
+    # 2. Execute Compilation (Will fail here)
+    ir = Frontend.compile(lazy)
+
+    # 3. Verify Graph Structure
+    assert isinstance(ir, GraphIR)
+    assert len(ir.nodes) == 1
+    assert len(ir.edges) == 0
+    
+    node = ir.nodes[0]
+    assert node.definition.name == "simple_task"
+    assert node.inputs["x"] == 10
+    
+    # 4. Axiom Check: Enforce Long Hash Naming
+    # We don't check the value, but the KEY must be the long form.
+    fp = node.definition.fingerprint
+    assert "current_code_structure_hash" in fp
+    # Ensure no short names are present
+    assert "hash" not in fp
+    assert "id" not in fp
+    assert "structure_hash" not in fp
 
 
-def test_ir_structures_exist():
+@pytest.mark.xfail(reason="Frontend not implemented", raises=(ImportError, NameError))
+def test_compile_linear_dependency():
+    """
+    Case 2: Linear Dependency (t2 -> t1)
+    Verify that EdgeIR is correctly generated for dependencies.
+    """
+    @task
+    def producer(): return 1
+    
+    @task
+    def consumer(val): return val + 1
+
+    # t2 depends on t1
+    t1 = producer()
+    t2 = consumer(val=t1)
+
+    ir = Frontend.compile(t2)
+
+    assert len(ir.nodes) == 2
+    assert len(ir.edges) == 1
+    
+    edge = ir.edges[0]
+    
+    # Verify edge connectivity
+    target_node = next(n for n in ir.nodes if n.definition.name == "consumer")
+    source_node = next(n for n in ir.nodes if n.definition.name == "producer")
+    
+    assert edge.source_id == source_node.id
+    assert edge.target_id == target_node.id
+    assert edge.target_arg == "val"
 ~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-spec/tests/spec/test_ir_models.py
-~~~~~
-~~~~~python.old
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
-def test_ir_serialization_roundtrip():
-~~~~~
-~~~~~python.new
-def test_ir_serialization_roundtrip():
-~~~~~
+### 下一步建议
+我们已经建立了 TDD 的 RED 状态。下一步是实现 `cascade.compiler.frontend.Frontend` 类，使其通过上述测试。
 
-~~~~~act
-patch_file
-packages/cascade-spec/tests/spec/test_ir_models.py
-~~~~~
-~~~~~python.old
-@pytest.mark.xfail(raises=NameError, reason="IR models not yet implemented")
-def test_instruction_serialization():
-~~~~~
-~~~~~python.new
-def test_instruction_serialization():
-~~~~~
+在实现过程中，我们需要：
+1.  创建一个 `Frontend` 类，提供静态方法 `compile`。
+2.  移植（并净化）原 `GraphBuilder` 的遍历逻辑。
+3.  确保在生成 `NodeIR` 时，正确调用哈希计算逻辑，并填充 `fingerprint` 中的 `current_code_structure_hash`。

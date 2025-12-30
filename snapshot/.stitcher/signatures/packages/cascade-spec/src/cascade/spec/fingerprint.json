@@ -24,7 +24,7 @@
     "baseline_code_structure_hash": "1254c78fd04ab928ca923d87f70922f7de1b181c67c4281ceb4cb5c2e61ea71a"
   },
   "Fingerprint.from_dict": {
-    "baseline_code_signature_text": "def from_dict(cls, data: Dict[str, Any]) -> \"Fingerprint\":",
+    "baseline_code_signature_text": "def from_dict(cls, data: Dict[str, Any]) -> Fingerprint:",
     "baseline_code_structure_hash": "8afd39a438fba5106e45074741439571a25fda296967e04cdc1d62e61922afe5"
   },
   "Fingerprint.get": {

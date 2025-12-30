@@ -34,6 +34,5 @@
     "baseline_code_signature_text": "def compute_node_instance_hash(self, definition: TaskDef, result: Any, dep_nodes: Dict[str, Node]) -> str:",
     "baseline_code_structure_hash": "4ee3787af6af821e52472560e97e38e5d72f48d62d9683ad59bdd55f58791ede",
     "baseline_yaml_content_hash": "9c0d41ae62605989baa6c9f2d4b6e089dbc5bd2938ecdd78176441d803728554"
-  },
-  "HashingService.compute_structural_hash": {}
+  }
 }

@@ -34,12 +34,12 @@
     "baseline_yaml_content_hash": "0a8e33713abcdf22c122348df6927dc5b403708f3dbf0677c682b59dead39c41"
   },
   "status": {
-    "baseline_code_signature_text": "def status(backend: str = typer.Option(\n        \"mqtt\", \"--backend\", help=\"Control plane backend ('mqtt' or 'local').\"\n   ), hostname: str = typer.Option(\"localhost\", help=\"MQTT broker hostname.\"), port: int = typer.Option(1883, help=\"MQTT broker port.\")):",
+    "baseline_code_signature_text": "def status(backend: str = typer.Option('mqtt', '--backend', help=\"Control plane backend ('mqtt' or 'local').\"), hostname: str = typer.Option('localhost', help='MQTT broker hostname.'), port: int = typer.Option(1883, help='MQTT broker port.')):",
     "baseline_code_structure_hash": "cb8eaff76dbd13e615174a8f8878d6ae707ef6881b8121434e10f6866aef1963",
     "baseline_yaml_content_hash": "d4917a89993c9dce61015471caea72331216ff5bf26efb38f8bbc17426ba5e63"
   },
   "watch": {
-    "baseline_code_signature_text": "def watch(backend: str = typer.Option(\n        \"mqtt\", \"--backend\", help=\"Telemetry backend ('mqtt' or 'local').\"\n   ), project: str = typer.Option(\n        \"default\", \"--project\", help=\"The project ID to watch (MQTT only).\"\n   ), hostname: str = typer.Option(\n        \"localhost\", \"--host\", help=\"MQTT broker hostname (MQTT only).\"\n   ), port: int = typer.Option(1883, \"--port\", help=\"MQTT broker port (MQTT only).\")):",
+    "baseline_code_signature_text": "def watch(backend: str = typer.Option('mqtt', '--backend', help=\"Telemetry backend ('mqtt' or 'local').\"), project: str = typer.Option('default', '--project', help='The project ID to watch (MQTT only).'), hostname: str = typer.Option('localhost', '--host', help='MQTT broker hostname (MQTT only).'), port: int = typer.Option(1883, '--port', help='MQTT broker port (MQTT only).')):",
     "baseline_code_structure_hash": "321fd4e357fc04df945109d1e6d784e794e812b5a1b830394726ab86a3901aa9",
     "baseline_yaml_content_hash": "c28b5dbc1740d9325f140ac0731b506cf0ca97e4ea4d9a806e4d9dced636e073"
   }

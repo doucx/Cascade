@@ -28,7 +28,7 @@
     "baseline_code_structure_hash": "5bc308728d46f1b27e6696b62d586c8ca659234339e728a0bf837fb37ee8982e"
   },
   "_read_text_task": {
-    "baseline_code_signature_text": "async def _read_text_task(path: str, encoding: str = \"utf-8\") -> str:",
+    "baseline_code_signature_text": "async def _read_text_task(path: str, encoding: str = 'utf-8') -> str:",
     "baseline_code_structure_hash": "69b862af4123ec187ff1370f584a41c71638ac3b9b9f38d08f6ddb95744552e9"
   },
   "_write_bytes_task": {
@@ -36,7 +36,7 @@
     "baseline_code_structure_hash": "d27b969a1cf1e51e5dbdfd37fe890003d157ccbae59f23170d8d02520094a214"
   },
   "_write_text_task": {
-    "baseline_code_signature_text": "async def _write_text_task(path: str, content: str, encoding: str = \"utf-8\") -> None:",
+    "baseline_code_signature_text": "async def _write_text_task(path: str, content: str, encoding: str = 'utf-8') -> None:",
     "baseline_code_structure_hash": "fc6968cbfb8cef8ad9c3b21d017c53e9bb08ebe036ffcbb9e299047624048638"
   }
 }

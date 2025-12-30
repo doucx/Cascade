@@ -11,11 +11,11 @@
     "baseline_code_structure_hash": "c18f62b7fd20bc8f164d85b0fc9e1815aac490926607dfc9edf8cf0bfa6b4437"
   },
   "ControllerTestApp.pause": {
-    "baseline_code_signature_text": "async def pause(self, scope: str = \"global\"):",
+    "baseline_code_signature_text": "async def pause(self, scope: str = 'global'):",
     "baseline_code_structure_hash": "24286f0cac8e1bb0962d8dc0de62c8e488c9dcfb1d548e666fadcc14a8dd0bb2"
   },
   "ControllerTestApp.resume": {
-    "baseline_code_signature_text": "async def resume(self, scope: str = \"global\"):",
+    "baseline_code_signature_text": "async def resume(self, scope: str = 'global'):",
     "baseline_code_structure_hash": "39dec974c06daf7654911984b59f5df0226c2ffedb1fd6219e7f073542f475b7"
   },
   "MockConnector": {
@@ -60,7 +60,7 @@
     "baseline_yaml_content_hash": "57ef73fe14a2dc9ed6b4c3c257b4a0fd0296ac84cce6daa1d9bf1cc193aadd9d"
   },
   "MockExecutor.__init__": {
-    "baseline_code_signature_text": "def __init__(self, delay: float = 0, return_value: Any = \"result\"):",
+    "baseline_code_signature_text": "def __init__(self, delay: float = 0, return_value: Any = 'result'):",
     "baseline_code_structure_hash": "16511409a3efcd874093dc26849daab50fd1c8b62c53756c0a57970774eaa540"
   },
   "MockExecutor.execute": {
@@ -79,7 +79,7 @@
     "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
   },
   "MockSubscriptionHandle.__init__": {
-    "baseline_code_signature_text": "def __init__(self, parent: \"MockConnector\", topic: str):",
+    "baseline_code_signature_text": "def __init__(self, parent: MockConnector, topic: str):",
     "baseline_code_structure_hash": "eb1347152c253fd68e8051fb6718bf8056157e78d316629a707f85bb5bb5eac5"
   },
   "MockSubscriptionHandle.unsubscribe": {
@@ -125,7 +125,7 @@
     "baseline_yaml_content_hash": "d208020df868688d8fffced12fb29fe9e6908d08f026b4da5eec304fdb757a99"
   },
   "override_resource": {
-    "baseline_code_signature_text": "def override_resource(engine: \"Engine\", name: str, new_resource_func: Callable[[], Any]):",
+    "baseline_code_signature_text": "def override_resource(engine: Engine, name: str, new_resource_func: Callable[[], Any]):",
     "baseline_code_structure_hash": "8ea5effc00233918706c1f47ca08a5994e229e50505d8abaab84129f15c7613a",
     "baseline_yaml_content_hash": "932b22888c00cdf70b11aef13d71f64faa42b8626587592469a9e8b0dea3fad0"
   }

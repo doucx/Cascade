@@ -46,7 +46,7 @@
     "baseline_yaml_content_hash": "dfce1195a894b39135e28d794ca1ef75ffe29c2a02adf40d07a65fab71c38436"
   },
   "_LocalSubscriptionHandle.__init__": {
-    "baseline_code_signature_text": "def __init__(self, parent: \"LocalBusConnector\", topic: str, queue: asyncio.Queue, listener_task: asyncio.Task):",
+    "baseline_code_signature_text": "def __init__(self, parent: LocalBusConnector, topic: str, queue: asyncio.Queue, listener_task: asyncio.Task):",
     "baseline_code_structure_hash": "c2c01fb0d334e08e521f0d55878693f56fc32add841525ef06c90fd2345466f7"
   },
   "_LocalSubscriptionHandle.unsubscribe": {

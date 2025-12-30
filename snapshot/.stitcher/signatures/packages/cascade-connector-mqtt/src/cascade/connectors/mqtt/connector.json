@@ -3,7 +3,7 @@
     "baseline_yaml_content_hash": "193bf19c4d9f5c64ffbdfa72d2d8f90f9dc63959ff8651864002c4b13a341c3c"
   },
   "MqttConnector.__init__": {
-    "baseline_code_signature_text": "def __init__(self, hostname: str, port: int = 1883, **kwargs):",
+    "baseline_code_signature_text": "def __init__(self, hostname: str, port: int = 1883, **kwargs = {}):",
     "baseline_code_structure_hash": "839278ebc6693142d79a618e63fe473fac2e1e8823d11265b0582544d638eb18"
   },
   "MqttConnector._message_loop": {
@@ -37,7 +37,7 @@
     "baseline_yaml_content_hash": "0084f24434d3d9f76c211fdfc62185dd61e834460fa14f3814e26e92554aa249"
   },
   "_MqttSubscriptionHandle.__init__": {
-    "baseline_code_signature_text": "def __init__(self, parent: \"MqttConnector\", topic: str):",
+    "baseline_code_signature_text": "def __init__(self, parent: MqttConnector, topic: str):",
     "baseline_code_structure_hash": "fc2b8e15453045b1f749478bc7e40aefe502b19592c8812d8554210ebb35725e"
   },
   "_MqttSubscriptionHandle.unsubscribe": {

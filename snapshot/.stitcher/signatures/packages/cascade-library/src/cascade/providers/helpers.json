@@ -8,12 +8,12 @@
     "baseline_code_structure_hash": "a0028d2823c84440562be2dd0072e2f8477aee19106d744be2dd3a1fd6967387"
   },
   "_dict_task": {
-    "baseline_code_signature_text": "def _dict_task(**kwargs) -> Dict[str, Any]:",
+    "baseline_code_signature_text": "def _dict_task(**kwargs = {}) -> Dict[str, Any]:",
     "baseline_code_structure_hash": "a3aafa317258aa2f557bee0a496b3d005a4e987ccebc0e06aa1850efa67447d5",
     "baseline_yaml_content_hash": "6cac4d45c386a480e6a7e7dc6a21b1099f1b162ec85d9752bdcec2cfb9d9789c"
   },
   "_format_task": {
-    "baseline_code_signature_text": "def _format_task(template: str, *args, **kwargs) -> str:",
+    "baseline_code_signature_text": "def _format_task(template: str, *args = (), **kwargs = {}) -> str:",
     "baseline_code_structure_hash": "b096ea7f44c5d893d9585ee511f62f5f9c1d7c1cfc7fe6349d750f2231115f3b",
     "baseline_yaml_content_hash": "db0e0c1cb89326f66cd30c2a2c1bca23ae2199f5c605cdfa6dfd825a39a67673"
   }

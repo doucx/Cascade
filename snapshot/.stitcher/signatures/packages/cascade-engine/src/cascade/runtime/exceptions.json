@@ -13,7 +13,7 @@
     "baseline_yaml_content_hash": "a709a43fd47740090d927e29e4a3c053653083861fc1b69d15505d7fe894c225"
   },
   "ResourceNotFoundError.__init__": {
-    "baseline_code_signature_text": "def __init__(self, resource_name: str, consumer_name: str = \"unknown\"):",
+    "baseline_code_signature_text": "def __init__(self, resource_name: str, consumer_name: str = 'unknown'):",
     "baseline_code_structure_hash": "6e66376e9771956af71edee866a83deab170ac84d8d10bdd7e92ecb2014d27c3"
   }
 }

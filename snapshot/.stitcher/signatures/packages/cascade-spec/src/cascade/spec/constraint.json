@@ -14,7 +14,7 @@
     "baseline_code_structure_hash": "ddcb445ea400195dedebc032c4acf2e1c9a4a49b257bebd1781593be3fd89ab6"
   },
   "with_constraints": {
-    "baseline_code_signature_text": "def with_constraints(**kwargs) -> ResourceConstraint:",
+    "baseline_code_signature_text": "def with_constraints(**kwargs = {}) -> ResourceConstraint:",
     "baseline_code_structure_hash": "ec3dc20a1bb3918f90d8c2e79b7358456d6c8410e1a2ab8c8e38110dfda1f9eb",
     "baseline_yaml_content_hash": "197ce8134335759cc9c24292cae5e315aeb98789e9ddd0fc112f78eee4c9bccc"
   }

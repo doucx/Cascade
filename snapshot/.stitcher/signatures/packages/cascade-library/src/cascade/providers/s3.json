@@ -27,7 +27,7 @@
     "baseline_code_structure_hash": "9ddbb708d402ee40d1cce6658b0ec5f004cc40021ba4345383a61d65666fc0df"
   },
   "_s3_read_text": {
-    "baseline_code_signature_text": "async def _s3_read_text(bucket: str, key: str, encoding: str = \"utf-8\") -> str:",
+    "baseline_code_signature_text": "async def _s3_read_text(bucket: str, key: str, encoding: str = 'utf-8') -> str:",
     "baseline_code_structure_hash": "504a2b74fef5564c9c74530e7ef2d17ac16508661af24435f21d1ff98628f5c5"
   },
   "_s3_write_bytes": {
@@ -35,7 +35,7 @@
     "baseline_code_structure_hash": "216614c7012b04a24dcebac74279a7f71519137f75478f9db652c0c173df49e2"
   },
   "_s3_write_text": {
-    "baseline_code_signature_text": "async def _s3_write_text(bucket: str, key: str, content: str, encoding: str = \"utf-8\") -> None:",
+    "baseline_code_signature_text": "async def _s3_write_text(bucket: str, key: str, content: str, encoding: str = 'utf-8') -> None:",
     "baseline_code_structure_hash": "9db59d0b7dff4c57e0a023646c957c2569df8e17ca5b99d5d4d9f565da2d7646"
   }
 }

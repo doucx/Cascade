@@ -8,7 +8,7 @@
     "baseline_code_structure_hash": "2dd71c82df30a6441d972ad6ba7d02e2ef89982e8841cea8f58c22f0c9f5409a"
   },
   "LocalConnector.__init__": {
-    "baseline_code_signature_text": "def __init__(self, db_path: str = \"~/.cascade/control.db\", uds_path: str = DEFAULT_UDS_PATH, telemetry_uds_path: str = DEFAULT_TELEMETRY_UDS_PATH):",
+    "baseline_code_signature_text": "def __init__(self, db_path: str = '~/.cascade/control.db', uds_path: str = DEFAULT_UDS_PATH, telemetry_uds_path: str = DEFAULT_TELEMETRY_UDS_PATH):",
     "baseline_code_structure_hash": "1e91026c9d11e0df5e3559f86e2a4fc46a3b7a7119ad82d10d78f8e2219e0a2e"
   },
   "LocalConnector._poll_for_changes": {
@@ -63,7 +63,7 @@
     "baseline_code_structure_hash": "1cbad080b9cf1693ea26029ca6ce316cfe17fb62b8240ae707f797f686bfe986"
   },
   "_LocalSubscriptionHandle.__init__": {
-    "baseline_code_signature_text": "def __init__(self, parent: \"LocalConnector\", task: asyncio.Task):",
+    "baseline_code_signature_text": "def __init__(self, parent: LocalConnector, task: asyncio.Task):",
     "baseline_code_structure_hash": "05dbafb52dd2af0fb9d38de1cb244bd00dacfc9d8f57781e2fc04faf8aa42fd8"
   },
   "_LocalSubscriptionHandle.unsubscribe": {

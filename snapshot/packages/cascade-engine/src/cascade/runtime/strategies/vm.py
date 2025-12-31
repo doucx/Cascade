@@ -47,26 +47,13 @@ class VMExecutionStrategy:
         # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
         blueprint = Backend.compile(graph_ir, execution_plan)
 
-        # 4. Linking Phase: Resolve function pointers
-        for instr in blueprint.instructions:
-            if isinstance(instr, (Call, MapCall)):
-                if instr.structure_hash not in symbol_table:
-                    raise RuntimeError(
-                        f"Linking failed: structure_hash '{instr.structure_hash}' "
-                        f"for task '{instr.task_name}' not found in symbol table."
-                    )
-                instr.func = symbol_table[instr.structure_hash]
+        # 4. Runtime: Execute Blueprint on VM
+        vm = VirtualMachine(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self.wakeup_event,
+        )
 
-        # 5. Runtime: Execute Blueprint on VM
-        # Note: The new VM doesn't yet support ResourceManager/ConstraintManager injection
-        # directly in the same way. For Phase 5 initial integration, we instantiate the
-        # pure VM. Future tasks will reintegrate resource management.
-        vm = VirtualMachine()
-        
-        # Prepare initial arguments
-        # The new VM expects 'initial_kwargs' mapping directly to registers if needed,
-        # or it relies on the blueprint's structure.
-        
         if isinstance(target, MappedLazyResult):
             initial_args = []
             initial_kwargs = dict(target.mapping_kwargs)
@@ -74,4 +61,9 @@ class VMExecutionStrategy:
             initial_args = list(target.args)
             initial_kwargs = dict(target.kwargs)
         
-        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+        return await vm.execute(
+            blueprint,
+            symbol_table=symbol_table,
+            initial_args=initial_args,
+            initial_kwargs=initial_kwargs,
+        )

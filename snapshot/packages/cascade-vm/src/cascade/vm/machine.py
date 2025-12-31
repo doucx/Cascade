@@ -1,6 +1,6 @@
 import inspect
 import asyncio
-from typing import Any, List, Dict, Optional
+from typing import Any, List, Dict, Optional, Callable
 from uuid import uuid4
 
 from cascade.spec.blueprint import (
@@ -17,20 +17,10 @@ from cascade.spec.blueprint import (
 )
 from cascade.spec.ir.models import TaskDef
 from cascade.spec.fingerprint import Fingerprint
+from cascade.graph.model import Node
 
 # Use local protocols to avoid circular dependency with engine
 from .protocols import ResourceManager, ConstraintManager
-
-# We need a Node-like object for ConstraintManager interaction.
-# Since we can't import Node from cascade-graph (it might depend on engine or be heavy),
-# we define a minimal StubNode that satisfies the contract expected by ConstraintManager.
-# However, usually Node is just a data class from cascade-graph. 
-# To stay strictly decoupled, we can assume the ConstraintManager accepts any object 
-# with the necessary attributes (duck typing), or we import Node if cascade-graph is a safe dependency.
-# For this refactor, let's try to import Node from cascade-graph as it should be a low-level definition.
-# If cascade-graph is not safe, we'll use a local stub.
-# Looking at the dependency graph: cascade-graph depends on cascade-spec. Safe.
-from cascade.graph.model import Node
 
 
 class Frame:
@@ -75,20 +65,18 @@ class VirtualMachine:
     async def execute(
         self,
         blueprint: Blueprint,
+        symbol_table: Dict[str, Callable],
         initial_args: Optional[List[Any]] = None,
         initial_kwargs: Optional[Dict[str, Any]] = None,
     ) -> Any:
         current_blueprint = blueprint
+        current_symbol_table = symbol_table
 
-        # 1. Allocate Frame
         frame = Frame(current_blueprint.register_count)
-
-        # 2. Load Initial Inputs
         self._load_inputs(
             frame, current_blueprint, initial_args or [], initial_kwargs or {}
         )
 
-        # 3. Main Execution Loop
         while True:
             pc = 0
             instructions = current_blueprint.instructions
@@ -97,7 +85,6 @@ class VirtualMachine:
             while pc < len(instructions):
                 instr = instructions[pc]
 
-                # Handle Control Flow
                 if isinstance(instr, Jump):
                     pc += instr.offset
                     continue
@@ -110,11 +97,9 @@ class VirtualMachine:
                         pc += 1
                     continue
 
-                # Handle Standard Instructions
-                last_result = await self._dispatch(instr, frame)
+                last_result = await self._dispatch(instr, frame, current_symbol_table)
                 pc += 1
 
-            # TCO Logic
             if isinstance(last_result, TailCall):
                 if last_result.target_blueprint_id:
                     if last_result.target_blueprint_id not in self._blueprints:
@@ -124,8 +109,10 @@ class VirtualMachine:
                     current_blueprint = self._blueprints[
                         last_result.target_blueprint_id
                     ]
+                    # NOTE: In a multi-blueprint world, we'd need a way to get the
+                    # symbol table for the new blueprint. For now, we assume self-recursion.
                     frame = Frame(current_blueprint.register_count)
-                
+
                 self._load_inputs(
                     frame, current_blueprint, last_result.args, last_result.kwargs
                 )
@@ -151,19 +138,28 @@ class VirtualMachine:
                 reg_index = blueprint.input_kwargs[k]
                 frame.registers[reg_index] = val
 
-    async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
+    async def _dispatch(
+        self, instr: Instruction, frame: Frame, symbol_table: Dict[str, Callable]
+    ) -> Any:
         if isinstance(instr, Call):
-            return await self._execute_call(instr, frame)
+            return await self._execute_call(instr, frame, symbol_table)
         elif isinstance(instr, MapCall):
-            return await self._execute_map_call(instr, frame)
+            return await self._execute_map_call(instr, frame, symbol_table)
         else:
             raise NotImplementedError(f"Unknown instruction: {type(instr)}")
 
-    async def _execute_map_call(self, instr: MapCall, frame: Frame) -> Any:
-        # 1. Load all arguments from frame
+    async def _execute_map_call(
+        self, instr: MapCall, frame: Frame, symbol_table: Dict[str, Callable]
+    ) -> Any:
+        func = symbol_table.get(instr.structure_hash)
+        if func is None:
+            raise RuntimeError(
+                f"Linking failed: structure_hash '{instr.structure_hash}' "
+                f"for task '{instr.task_name}' not found in symbol table."
+            )
+            
         loaded_kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
         
-        # 2. Separate iterables from constants
         iterables = {}
         constants = {}
         iterable_len = -1
@@ -178,35 +174,40 @@ class VirtualMachine:
             else:
                 constants[key] = value
 
-        if iterable_len == -1: # No iterables found, treat as empty map
+        if iterable_len == -1:
             iterable_len = 0
 
-        # 3. Prepare individual calls
         calls_to_make = []
         for i in range(iterable_len):
             call_kwargs = constants.copy()
             for key, values_list in iterables.items():
                 call_kwargs[key] = values_list[i]
             
-            calls_to_make.append(instr.func(**call_kwargs))
+            calls_to_make.append(func(**call_kwargs))
 
-        # 4. Execute calls concurrently if async, sequentially otherwise
         if not calls_to_make:
             results = []
-        elif inspect.iscoroutinefunction(instr.func):
+        elif inspect.iscoroutinefunction(func):
             results = await asyncio.gather(*calls_to_make)
         else:
             results = [res for res in calls_to_make]
             
-        # 5. Store result and return
         frame.store(instr.output, results)
         return results
 
-    async def _execute_call(self, instr: Call, frame: Frame) -> Any:
+    async def _execute_call(
+        self, instr: Call, frame: Frame, symbol_table: Dict[str, Callable]
+    ) -> Any:
+        func = symbol_table.get(instr.structure_hash)
+        if func is None:
+            raise RuntimeError(
+                f"Linking failed: structure_hash '{instr.structure_hash}' "
+                f"for task '{instr.task_name}' not found in symbol table."
+            )
+
         requirements: Dict[str, Any] = {}
         temp_node = None
 
-        # Build requirement set and temp node for validation
         if self.constraint_manager or (
             instr.constraints and not instr.constraints.is_empty()
         ):
@@ -222,7 +223,6 @@ class VirtualMachine:
                 constraints=instr.constraints,
             )
 
-        # 1. Check Permissions
         if self.constraint_manager and temp_node:
             while not self.constraint_manager.check_permission(temp_node):
                 if self.wakeup_event:
@@ -231,32 +231,25 @@ class VirtualMachine:
                 else:
                     await asyncio.sleep(0.1)
 
-        # 2. Resolve Resources
         if temp_node:
             if instr.constraints:
                 requirements.update(instr.constraints.requirements)
             if self.constraint_manager:
                 requirements.update(self.constraint_manager.get_extra_requirements(temp_node))
 
-        # 3. Acquire
         if self.resource_manager and requirements:
             await self.resource_manager.acquire(requirements)
 
         try:
-            # 4. Execute
             args = [frame.load(op) for op in instr.args]
             kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
             
-            if instr.func is None:
-                raise ValueError(f"Instruction for task '{instr.task_name}' has no function to call.")
-            
-            result = instr.func(*args, **kwargs)
+            result = func(*args, **kwargs)
             if inspect.isawaitable(result):
                 result = await result
 
             frame.store(instr.output, result)
             return result
         finally:
-            # 5. Release
             if self.resource_manager and requirements:
                 await self.resource_manager.release(requirements)

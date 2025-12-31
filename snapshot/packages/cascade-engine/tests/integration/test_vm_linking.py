@@ -6,17 +6,13 @@ from cascade.runtime.bus import MessageBus
 import cascade as cs
 
 @pytest.mark.asyncio
-async def test_vm_strategy_performs_linking_and_execution():
+async def test_vm_strategy_delegates_linking_to_vm_and_executes():
     """
-    端到端集成测试：
-    1. 定义任务
-    2. Engine (use_vm=True) 调用 Frontend 编译 -> 得到 Symbol Table
-    3. Engine 调用 Backend 编译 -> 得到带 Hash 的 Blueprint (func=None)
-    4. Engine 执行 Link 过程 -> 填充 Blueprint 的 func
-    5. VM 执行成功
-    
-    RED 阶段预期：
-    由于 Link 逻辑未实现，VM 尝试执行 func=None 的指令，抛出 TypeError。
+    End-to-end integration test for the new purified architecture:
+    1. Frontend compiles workflow -> CompilationResult(ir, symbol_table).
+    2. Backend compiles ir -> Blueprint (with structure_hash, func is gone).
+    3. VMExecutionStrategy passes Blueprint + symbol_table to the VM.
+    4. VM executes, looking up functions via structure_hash in real-time.
     """
     @cs.task
     def echo(x):
@@ -26,20 +22,13 @@ async def test_vm_strategy_performs_linking_and_execution():
     
     engine = Engine(
         solver=NativeSolver(),
-        executor=LocalExecutor(),
+        executor=LocalExecutor(),  # Still needed for GraphStrategy, though not used by VMStrategy
         bus=MessageBus(),
     )
     
-    # 使用 VM 执行
-    try:
-        result = await engine.run(workflow, use_vm=True)
-    except TypeError as e:
-        if "'NoneType' object is not callable" in str(e):
-            # 这是我们预期的失败，证明 Link 没发生
-            pytest.fail("VM crashed because function was not linked (func is None)")
-        raise e
-    except AttributeError as e:
-        # 可能是 CompilationResult 还没实现导致的属性错误
-        pytest.fail(f"Execution failed likely due to missing linking infrastructure: {e}")
+    # Run with VM enabled.
+    # If linking fails inside the VM, it will raise a RuntimeError.
+    # If the `func` field was expected anywhere, it would raise an AttributeError or TypeError.
+    result = await engine.run(workflow, use_vm=True)
     
     assert result == "hello_world"

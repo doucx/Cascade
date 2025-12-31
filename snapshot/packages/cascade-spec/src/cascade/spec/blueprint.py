@@ -25,7 +25,6 @@ class Instruction:
 
 @dataclass
 class Call(Instruction):
-    func: Any
     output: Register
     args: List[Operand] = field(default_factory=list)
     kwargs: Dict[str, Operand] = field(default_factory=dict)
@@ -55,7 +54,6 @@ class JumpIfFalse(Instruction):
 class MapCall(Instruction):
     """Represents a map operation over iterable inputs."""
 
-    func: Any
     output: Register
     args: List[Operand] = field(default_factory=list)
     kwargs: Dict[str, Operand] = field(default_factory=dict)

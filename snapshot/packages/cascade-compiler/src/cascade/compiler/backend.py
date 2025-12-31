@@ -102,7 +102,6 @@ class _BlueprintBuilder:
 
         if node.meta.get("is_map"):
             instr = MapCall(
-                func=None,
                 output=output_register,
                 args=args,
                 kwargs=kwargs,
@@ -112,7 +111,6 @@ class _BlueprintBuilder:
             )
         else:
             instr = Call(
-                func=None,  # The VM will need to resolve this later
                 output=output_register,
                 args=args,
                 kwargs=kwargs,

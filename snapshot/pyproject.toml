@@ -34,6 +34,7 @@ cascade-connector-mqtt = { workspace = true }
 cascade-connector-local = { workspace = true }
 cascade-compiler = { workspace = true }
 cascade-vm = { workspace = true }
+cascade = { path = "packages/cascade-python", editable = true }
 
 [tool.hatch.workspaces]
 packages = [
@@ -46,10 +47,11 @@ packages = [
     "packages/cascade-connector-local",
     "packages/cascade-compiler",
     "packages/cascade-vm",
+    "packages/cascade-python",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/cascade-sdk/src/cascade"]
+packages = ["packages/cascade-python/src/cascade"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov=cascade --cov-report=term-missing"
@@ -84,6 +86,8 @@ dev = [
   "cascade-connector-mqtt",
   "cascade-connector-local",
   "cascade-compiler",
+  "cascade-vm",
+  "cascade", # The python sdk
   "ruff",
 ]
 

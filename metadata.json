@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M pyproject.toml", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767148658.4025788, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] architect: 创建 cascade-python 聚合包并实施 PEP 420 命名空间", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767148703.4399195, "duration_ms": 0}}

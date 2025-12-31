@@ -1,5 +1,6 @@
-# This must be the very first line to allow this package to coexist with other
-# namespace packages (like cascade-interfaces) in editable installs.
+# This __init__.py makes 'cascade-python' a regular package that claims the 'cascade' namespace.
+# It uses pkgutil to extend the path, allowing other implicit namespace packages (PEP 420)
+# to be discovered in the same namespace.
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
 from typing import Any, Dict, Optional, Union, Callable, List
@@ -10,10 +11,10 @@ from cascade.spec.lazy_types import LazyResult
 from cascade.spec.routing import Router
 from cascade.spec.resource import resource, inject
 from cascade.spec.constraint import with_constraints
-from .context import get_current_context
+from cascade.spec.context import get_current_context
 from cascade.spec.input import ParamSpec, EnvSpec
-from .internal.inputs import _get_param_value, _get_env_var
-from .control_flow import select_jump, bind
+from cascade.spec.internal.inputs import _get_param_value, _get_env_var
+from cascade.spec.control_flow import select_jump, bind
 from cascade.spec.jump import Jump
 
 # --- Runtime (for type hints and exceptions) ---
@@ -26,15 +27,15 @@ from cascade.spec.protocols import Connector, StateBackend
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
-from cascade.flow import sequence, pipeline
+from cascade.runtime.flow import sequence, pipeline
 
 # --- Tools ---
-from .testing import override_resource, ControllerTestApp
-from .tools.cli import create_cli
+from cascade.testing import override_resource, ControllerTestApp
+from cascade.sdk.tools.cli import create_cli
 from cascade.graph.serialize import to_json, from_json
 
 
-# --- V1.4 Factory Functions (Unchanged) ---
+# --- V1.4 Factory Functions ---
 
 
 def Param(
@@ -51,7 +52,7 @@ def Env(name: str, default: Any = None, description: str = "") -> LazyResult:
     return _get_env_var(name=name)
 
 
-# --- V1.4 Refactored Global Functions (Wrappers with deferred import) ---
+# --- Global Functions ---
 
 
 def run(
@@ -91,7 +92,7 @@ def dry_run(target: Any) -> None:
     app.dry_run()
 
 
-# --- Dynamic Provider Loading (Unchanged) ---
+# --- Dynamic Provider Loading ---
 
 
 def __getattr__(name: str) -> Any:
@@ -99,7 +100,7 @@ def __getattr__(name: str) -> Any:
     Dynamically loads providers from the registry when they are accessed as attributes
     on the `cascade` module (e.g., `cs.read.text`).
     """
-    from .providers.registry import registry
+    from cascade.sdk.providers.registry import registry
 
     try:
         # Attempt to resolve the name as a provider.

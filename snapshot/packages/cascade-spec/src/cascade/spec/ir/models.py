@@ -49,7 +49,7 @@ class TaskDef:
 
 @dataclass
 class NodeIR:
-    id: str
+    current_node_instance_hash: str
     definition: TaskDef
     args: List[Any] = field(default_factory=list)
     kwargs: Dict[str, Any] = field(default_factory=dict)
@@ -59,8 +59,8 @@ class NodeIR:
 
 @dataclass
 class EdgeIR:
-    source_id: str
-    target_id: str
+    source_node_instance_hash: str
+    target_node_instance_hash: str
     target_arg: str
     kind: EdgeKind = EdgeKind.DATA
 
@@ -77,7 +77,7 @@ class GraphIR:
 
 @dataclass
 class Instruction:
-    id: str
+    current_node_instance_hash: str
 
 
 @dataclass

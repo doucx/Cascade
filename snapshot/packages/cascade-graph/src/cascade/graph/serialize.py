@@ -15,7 +15,7 @@ from cascade.spec.task import Task
 
 @dataclass
 class _StubLazyResult:
-    _uuid: str
+    _uucurrent_node_instance_hash: str
 
 
 def _get_func_path(func: Any) -> Optional[Dict[str, str]]:
@@ -94,7 +94,7 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
 
 def _node_to_dict(node: Node) -> Dict[str, Any]:
     data = {
-        "structural_id": node.structural_id,
+        "current_node_instance_hash": node.current_node_instance_hash,
         "name": node.name,
         "node_type": node.node_type,
         # input_bindings now contains JSON-serializable literals directly.
@@ -138,8 +138,8 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
 
 def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
     data = {
-        "source_id": edge.source.structural_id,
-        "target_id": edge.target.structural_id,
+        "source_node_instance_hash": edge.source.current_node_instance_hash,
+        "target_node_instance_hash": edge.target.current_node_instance_hash,
         "arg_name": edge.arg_name,
         "edge_type": edge.edge_type.name,
     }
@@ -164,7 +164,7 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
     # 1. Reconstruct Nodes
     for nd in nodes_data:
         node = _dict_to_node(nd)
-        node_map[node.structural_id] = node
+        node_map[node.current_node_instance_hash] = node
         graph.add_node(node)
 
     # 2. Reconstruct Routers
@@ -179,8 +179,8 @@ def graph_from_dict(data: Dict[str, Any]) -> Graph:
 
     # 3. Reconstruct Edges
     for ed in edges_data:
-        source = node_map.get(ed["source_id"])
-        target = node_map.get(ed["target_id"])
+        source = node_map.get(ed["source_node_instance_hash"])
+        target = node_map.get(ed["target_node_instance_hash"])
         if source and target:
             edge_type_name = ed.get("edge_type", "DATA")
             edge_type = EdgeType[edge_type_name]
@@ -242,7 +242,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     
     if node_type == "map":
         node = MapNode(
-            structural_id=data["structural_id"],
+            current_node_instance_hash=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="map",
             mapping_factory=_load_func_from_path(data.get("mapping_factory")),
@@ -257,7 +257,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
         # This is acceptable for simple visualization/analysis, 
         # but execution of restored ParamNodes might need the spec context.
         node = ParamNode(
-            structural_id=data["structural_id"],
+            current_node_instance_hash=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="param",
             _callable=_load_func_from_path(data.get("callable")),
@@ -270,7 +270,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     else:
         # Default to TaskNode
         node = TaskNode(
-            structural_id=data["structural_id"],
+            current_node_instance_hash=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="task",
             _callable=_load_func_from_path(data.get("callable")),

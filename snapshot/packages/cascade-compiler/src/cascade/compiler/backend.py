@@ -32,9 +32,9 @@ class _BlueprintBuilder:
         self._nodes_map: Dict[str, NodeIR] = {n.id: n for n in graph.nodes}
         self._incoming_edges_map: Dict[str, List[EdgeIR]] = {}
         for edge in graph.edges:
-            if edge.target_id not in self._incoming_edges_map:
-                self._incoming_edges_map[edge.target_id] = []
-            self._incoming_edges_map[edge.target_id].append(edge)
+            if edge.target_node_instance_hash not in self._incoming_edges_map:
+                self._incoming_edges_map[edge.target_node_instance_hash] = []
+            self._incoming_edges_map[edge.target_node_instance_hash].append(edge)
 
     def _allocate_register(self) -> Register:
         reg = Register(self._register_counter)
@@ -56,7 +56,7 @@ class _BlueprintBuilder:
             return ResourceOperand(name=val.resource_name)
         return Literal(val)
 
-    def _process_node(self, node_id: str):
+    def _process_node(self, node_current_node_instance_hash: str):
         node = self._nodes_map[node_id]
 
         # 1. Resolve Input Operands & Control Dependencies
@@ -67,10 +67,10 @@ class _BlueprintBuilder:
         # 1a. Overlay dependencies from Edges
         incoming_edges = self._incoming_edges_map.get(node_id, [])
         for edge in incoming_edges:
-            source_register = self._node_output_registers.get(edge.source_id)
+            source_register = self._node_output_registers.get(edge.source_node_instance_hash)
             if source_register is None:
                 raise RuntimeError(
-                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
+                    f"Compiler Error: Dependency '{edge.source_node_instance_hash}' for node '{node_id}' "
                     "was not assigned a register before being used."
                 )
 

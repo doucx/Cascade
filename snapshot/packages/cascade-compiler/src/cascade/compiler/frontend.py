@@ -16,9 +16,9 @@ from .hashing import HashingService
 
 @dataclass
 class NodeIDShim:
-    """Helper to satisfy HashingService's expectation of objects with structural_id."""
+    """Helper to satisfy HashingService's expectation of objects with current_node_instance_hash."""
 
-    structural_id: str
+    structural_current_node_instance_hash: str
 
 
 class Frontend:
@@ -34,10 +34,10 @@ class Frontend:
 
 class _GraphBuilder:
     def __init__(self):
-        self.nodes: Dict[str, NodeIR] = {}  # Map structural_id -> NodeIR
+        self.nodes: Dict[str, NodeIR] = {}  # Map current_node_instance_hash -> NodeIR
         self.edges: List[EdgeIR] = []
         self.symbol_table: Dict[str, Callable] = {}
-        self._visited_lazy_uuids: Dict[str, str] = {}  # Map LazyResult.uuid -> structural_id
+        self._visited_lazy_uuids: Dict[str, str] = {}  # Map LazyResult.uuid -> current_node_instance_hash
 
         # Services from cascade-graph (reused for stability)
         self.analyzer = ReflectionAnalyzer()
@@ -51,7 +51,7 @@ class _GraphBuilder:
     def _visit(self, obj: Any) -> str:
         """
         Visits a LazyResult type, creating NodeIRs and EdgeIRs.
-        Returns the structural_id of the visited object.
+        Returns the current_node_instance_hash of the visited object.
         """
         if isinstance(obj, MappedLazyResult):
             return self._visit_mapped_result(obj)
@@ -101,17 +101,17 @@ class _GraphBuilder:
         for arg in obj.args:
             if isinstance(arg, (LazyResult, MappedLazyResult)):
                 dep_id = self._visit(arg)
-                dep_shims[arg._uuid] = NodeIDShim(structural_id=dep_id)
+                dep_shims[arg._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
 
         for val in obj.kwargs.values():
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 dep_id = self._visit(val)
-                dep_shims[val._uuid] = NodeIDShim(structural_id=dep_id)
+                dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
         
         if obj._condition:
             if isinstance(obj._condition, LazyResult):
                 dep_id = self._visit(obj._condition)
-                dep_shims[obj._condition._uuid] = NodeIDShim(structural_id=dep_id)
+                dep_shims[obj._condition._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
 
         task_def = self.analyzer.analyze(obj.task)
         
@@ -162,23 +162,23 @@ class _GraphBuilder:
         for i, arg in enumerate(obj.args):
             if isinstance(arg, (LazyResult, MappedLazyResult)):
                 self.edges.append(EdgeIR(
-                    source_id=dep_shims[arg._uuid].structural_id,
-                    target_id=node_id,
+                    source_node_instance_hash=dep_shims[arg._uuid].current_node_instance_hash,
+                    target_node_instance_hash=node_id,
                     target_arg=str(i)
                 ))
 
         for k, val in obj.kwargs.items():
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 self.edges.append(EdgeIR(
-                    source_id=dep_shims[val._uuid].structural_id,
-                    target_id=node_id,
+                    source_node_instance_hash=dep_shims[val._uuid].current_node_instance_hash,
+                    target_node_instance_hash=node_id,
                     target_arg=k
                 ))
         
         if obj._condition:
             self.edges.append(EdgeIR(
-                source_id=dep_shims[obj._condition._uuid].structural_id,
-                target_id=node_id,
+                source_node_instance_hash=dep_shims[obj._condition._uuid].current_node_instance_hash,
+                target_node_instance_hash=node_id,
                 target_arg="_condition",
                 kind=EdgeKind.CONTROL
             ))
@@ -194,7 +194,7 @@ class _GraphBuilder:
         for val in obj.mapping_kwargs.values():
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 dep_id = self._visit(val)
-                dep_shims[val._uuid] = NodeIDShim(structural_id=dep_id)
+                dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
 
         task_def = self.analyzer.analyze(obj.factory)
 
@@ -228,8 +228,8 @@ class _GraphBuilder:
         for k, val in obj.mapping_kwargs.items():
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 self.edges.append(EdgeIR(
-                    source_id=dep_shims[val._uuid].structural_id,
-                    target_id=node_id,
+                    source_node_instance_hash=dep_shims[val._uuid].current_node_instance_hash,
+                    target_node_instance_hash=node_id,
                     target_arg=k
                 ))
 

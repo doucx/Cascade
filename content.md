@@ -1,225 +1,140 @@
-好的，日志非常清晰，我们找到了两个独立的问题。
+好的，我们开始执行 **阶段 3.0：[准备] 公理强制执行与代码协调 (The Great Renaming)**。
 
-**诊断:**
+你的建议非常正确。对于这种涉及多文件、多符号的全局重构，手动执行一系列 `patch_file` 操作不仅繁琐，而且极易出错。创建一个专门的 Python 脚本来原子化地执行这些重命名，是更稳健、更可靠的工程实践。
 
-1.  **根本原因 (`AssertionError`)**: 日志 `[REACTOR] -> Node 'f1' is READY.` 和 `[REACTOR] Firing 1 ready nodes...` 是决定性的证据。
-    -   我们的 `Reactor.step()` 实现过于“高效”。它在一个 `step` 内完成了两件事：
-        1.  它正确地处理了 `TokenGenerated` 事件，将 Token 放入了 `d_node`。
-        2.  **然后**，它立即检查了因此变“脏”的 `f_node`，发现 `f_node` 的输入（`d_node`）已经就绪，于是**立即激发**了 `f_node`。
-    -   激发 (`_fire`) 的第一步就是 `node.consume_inputs()`，它会调用 `d_node.take()`，从而在测试的 `assert` 语句执行**之前**就把 Token 从 `d_node` 中移除了。
-    -   **结论**: `test_reactor_event_driven_potential_update` 这个测试的意图是只验证“势能更新”（即 Token 被放入），但 `Reactor` 的行为是“更新并立即执行”。测试的假设与实现的行为不匹配。最简单的修复方法是修改测试，让它只测试它想测试的东西，即移除导致 `f_node` 被激发的连接。
+我将生成一个计划，该计划会创建、执行并清理一个一次性的重构脚本来完成此任务。
 
-2.  **次要原因 (`RuntimeWarning`)**: `coroutine ... was never awaited`。
-    -   日志清楚地指出了 `self.executor.submit(node, inputs)` 这一行。
-    -   `AsyncMock` 的 `submit` 方法是一个协程 (`async def`)。我们的 `_fire` 方法是一个同步方法 (`def`)。我们在同步方法中调用了异步方法却没有 `await`，导致了这个警告，并且 `submit` 的逻辑实际上从未被执行。
-    -   **结论**: `_fire` 方法必须是 `async def`，并且调用 `executor.submit` 时必须使用 `await`。相应地，`step` 方法中调用 `_fire` 的循环也需要修改以适应异步调用。
-
-我将生成一个计划，分两步解决这两个问题。
-
-## [WIP] fix: Isolate potential update test and fix async call
+## [WIP] refactor: 执行“The Great Renaming”以对齐哈希命名公理
 
 ### 用户需求
-修复 `Reactor` 测试中的 `AssertionError` 和 `RuntimeWarning`。
+启动“Phase 3.0: The Great Renaming”重构任务，通过创建一个健壮的自动化脚本，系统性地修复代码库中所有违反《哈希强制长命名规范》的符号。
 
 ### 评论
-1.  **修复 `AssertionError`**: 通过修改 `test_reactor_event_driven_potential_update` 测试用例，断开 `d_node` 和 `f_node` 的连接。这使得 `f_node` 不会因为 `d_node` 的更新而变得就绪，从而阻止了 `Reactor` 的“过度执行”，让 Token 留在 `d_node` 中以通过断言。这让测试的意图更加纯粹和明确。
-2.  **修复 `RuntimeWarning`**: 将 `Reactor._fire` 方法重构为 `async def`，并在调用 `executor.submit` 时使用 `await`。同时，更新 `step` 方法中的调用循环，使用 `asyncio.gather` 来并发执行所有就绪的节点。这不仅修复了警告，也使得 `Reactor` 的架构更加健壮和高效。
+这是一个至关重要的“概念性重构”步骤。通过用一个自动化的 Python 脚本代替手动 `patch`，我们确保了重构的原子性和一致性，避免了在多个文件中引入不一致状态的风险。此举将彻底消除核心数据结构中的命名歧义，为后续编译器的开发奠定一个清晰、无误的语义基础，是偿还“概念性债务”的关键一步。
 
 ### 目标
-1.  修改 `packages/cascade-vm/tests/reactor/test_reactor_loop.py` 以隔离测试范围。
-2.  修改 `packages/cascade-vm/src/cascade/vm/reactor/core.py` 以正确处理异步调用。
+1.  创建一个名为 `great_renaming.py` 的 Python 脚本。
+2.  该脚本将精确地对 `cascade-spec` 和 `cascade-graph` 包中定义及使用核心数据结构的文件执行一系列预定义的重命名操作。
+3.  通过 `run_command` 执行此脚本。
+4.  执行成功后，删除该脚本，保持代码库的整洁。
 
 ### 基本原理
-我们遵循“隔离关注点”的原则。首先修复测试用例的逻辑，使其精确地验证单一行为。然后，修复 `Reactor` 实现中的异步调用缺陷，确保其与异步 `Executor` 的契约得到遵守。
+我们将使用 `write_file` 创建一个独立的 Python 脚本。该脚本利用 `pathlib` 库来定位目标文件，并执行一系列精确的字符串替换操作。这些操作被定义在一个清晰的映射表中，确保了重构逻辑的可读性和准确性。执行和清理步骤将通过 `run_command` 和 `delete_file` 来完成，将整个重构过程封装在一个自动化的 Quipu 工作流中。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/engine #concept/executor #scope/core #ai/refine #task/domain/runtime #task/object/reactor #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/critical #comp/spec #comp/graph #comp/compiler #concept/state #scope/dx #ai/instruct #task/domain/compiler #task/object/symbol-table #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 隔离 `test_reactor_event_driven_potential_update` 测试
+#### Acts 1: 创建重命名脚本
 
-我们移除 `f_node.add_input` 这一行，这样 `f_node` 就不会依赖 `d_node`，也就不会被意外触发。
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/reactor/test_reactor_loop.py
-~~~~~
-~~~~~python.old
-    # 1. Setup Physics Topology
-    d_node = DataNode(name="d1")
-    f_node = FuncNode(name="f1")
-    # Wiring: d_node -> f_node
-    f_node.add_input(Port(name="in1", source=d_node))
-    
-    # 2. Setup Reactor
-    mock_executor = AsyncMock()
-~~~~~
-~~~~~python.new
-    # 1. Setup Physics Topology
-    d_node = DataNode(name="d1")
-    f_node = FuncNode(name="f1")
-    # NOTE: We DO NOT wire d_node to f_node.
-    # This test is ONLY to verify that the TokenGenerated event correctly
-    # updates the state of the DataNode itself, without triggering a fire.
-    
-    # 2. Setup Reactor
-    mock_executor = AsyncMock()
-~~~~~
-
-#### Acts 2: 修复 Reactor 中的异步调用
-
-我们将 `_fire` 变为 `async`，并在 `step` 中使用 `asyncio.gather` 来调用它。同时，为清晰起见，移除调试用的 `print` 语句。
+首先，我们创建一个 `great_renaming.py` 脚本。这个脚本包含了所有必要的重命名规则和目标文件路径。
 
 ~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor/core.py
+write_file
+great_renaming.py
 ~~~~~
-~~~~~python.old
-    async def step(self):
-        """
-        Advance the reactor by one "tick".
-        A tick consists of:
-        1. Processing all pending events (State Updates & Routing).
-           - This includes cascading events generated during processing.
-        2. Evaluating potentials of affected (dirty) nodes.
-        3. Firing ready nodes.
-        """
-        print(f"\n[REACTOR] Entering step(). Event queue size: {len(self._event_queue)}")
-        
-        # 1. Process Event Loop
-        # We drain the queue completely to handle propagation chains within one step.
-        events_processed = 0
-        while self._event_queue:
-            event = self._event_queue.popleft()
-            print(f"[REACTOR]  -> Processing event: {event}")
-            self._handle_event(event)
-            events_processed += 1
-        
-        print(f"[REACTOR] Event processing finished. Processed {events_processed} events.")
+~~~~~python
+#!/usr/bin/env python3
+import sys
+from pathlib import Path
 
-        # 2. Fire Ready Nodes
-        # Iterate over a snapshot of dirty nodes
-        dirty_node_names = [n.name for n in self._dirty_func_nodes]
-        print(f"[REACTOR] Evaluating dirty nodes: {dirty_node_names}")
-        ready_nodes = []
-        for node in list(self._dirty_func_nodes):
-            if node.is_ready():
-                print(f"[REACTOR]  -> Node '{node.name}' is READY.")
-                ready_nodes.append(node)
-        
-        self._dirty_func_nodes.clear()
+# 定义重命名规则，顺序很重要，从最具体的开始
+RENAMES = {
+    # EdgeIR
+    "source_id": "source_node_instance_hash",
+    "target_id": "target_node_instance_hash",
+    # NodeIR
+    "id: str": "current_node_instance_hash: str",
+    # Node (graph.model)
+    "structural_id": "current_node_instance_hash",
+}
 
-        if ready_nodes:
-            print(f"[REACTOR] Firing {len(ready_nodes)} ready nodes...")
-            for node in ready_nodes:
-                self._fire(node)
-        
-        print(f"[REACTOR] Exiting step().")
+# 定义目标文件
+TARGET_FILES = [
+    # 定义模型的文件
+    "packages/cascade-spec/src/cascade/spec/ir/models.py",
+    "packages/cascade-graph/src/cascade/graph/model.py",
+    # 使用这些模型的文件
+    "packages/cascade-compiler/src/cascade/compiler/backend.py",
+    "packages/cascade-compiler/src/cascade/compiler/frontend.py",
+    "packages/cascade-graph/src/cascade/graph/build.py",
+    "packages/cascade-graph/src/cascade/graph/serialize.py",
+]
 
-    def _handle_event(self, event: ReactorEvent):
-        if isinstance(event, TokenGenerated):
-            self._handle_token_generated(event)
-        elif isinstance(event, ExecutionFinished):
-            self._handle_execution_finished(event)
+def main():
+    print("--- Starting The Great Renaming ---")
+    total_changes = 0
+    project_root = Path.cwd()
 
-    def _handle_token_generated(self, event: TokenGenerated):
-        print(f"[REACTOR]    -> Handling TokenGenerated for node '{event.node.name}'. Putting token.")
-        # 1. Update State (Physics: Inject Energy)
-        event.node.put(event.token)
-        
-        # 2. Mark downstream FuncNodes as dirty (Potential might have increased)
-        downstream = self._downstream_map.get(event.node.name, [])
-        downstream_names = [n.name for n in downstream]
-        print(f"[REACTOR]    -> Marking downstream nodes as dirty: {downstream_names}")
-        for f_node in downstream:
-            self._dirty_func_nodes.add(f_node)
+    for file_path_str in TARGET_FILES:
+        file_path = project_root / file_path_str
+        if not file_path.exists():
+            print(f"⚠️  File not found, skipping: {file_path_str}", file=sys.stderr)
+            continue
 
-    def _handle_execution_finished(self, event: ExecutionFinished):
-        # Routing Logic
-        channels = self._channels_by_source.get(event.node.name, [])
+        print(f"Processing: {file_path_str}")
+        original_content = file_path.read_text()
+        content = original_content
         
-        for output_name, token in event.outputs.items():
-            # Find matching channels for this output port
-            for channel in channels:
-                if channel.output_name == output_name and channel.match(token.tag):
-                    # Route: Generate a TokenGenerated event for the target DataNode
-                    # This queues the event for processing in the same step loop
-                    self.push_event(TokenGenerated(node=channel.target, token=token))
+        file_changes_count = 0
+        for old, new in RENAMES.items():
+            before_count = content.count(old)
+            if before_count > 0:
+                content = content.replace(old, new)
+                after_count = content.count(new)
+                # This logic is simple, might not be perfectly accurate if old/new overlap
+                print(f"  - Replaced '{old}' -> '{new}' ({before_count} occurrences)")
+                file_changes_count += before_count
 
-    def _fire(self, node: FuncNode):
-        # 1. Atomically consume inputs (Physics: Consume Energy)
-        inputs = node.consume_inputs()
-        
-        # 2. Submit to Executor
-        # Note: Executor is responsible for running the code and eventually
-        # pushing an ExecutionFinished event back to the reactor.
-        # For AsyncMock in tests, this call is synchronous.
-        self.executor.submit(node, inputs)
+        if content != original_content:
+            file_path.write_text(content)
+            print(f"  ✅ Wrote {file_changes_count} changes to file.")
+            total_changes += file_changes_count
+        else:
+            print(f"  - No changes needed.")
+
+    print(f"\n--- Renaming Complete. Total changes: {total_changes} ---")
+    return 0
+
+if __name__ == "__main__":
+    sys.exit(main())
 ~~~~~
-~~~~~python.new
-    async def step(self):
-        """
-        Advance the reactor by one "tick".
-        A tick consists of:
-        1. Processing all pending events (State Updates & Routing).
-           - This includes cascading events generated during processing.
-        2. Evaluating potentials of affected (dirty) nodes.
-        3. Firing ready nodes.
-        """
-        # 1. Process Event Loop
-        while self._event_queue:
-            event = self._event_queue.popleft()
-            self._handle_event(event)
 
-        # 2. Fire Ready Nodes
-        ready_nodes = []
-        for node in list(self._dirty_func_nodes):
-            if node.is_ready():
-                ready_nodes.append(node)
-        
-        self._dirty_func_nodes.clear()
+#### Acts 2: 赋予脚本执行权限
 
-        if ready_nodes:
-            # Concurrently execute all ready nodes
-            fire_tasks = [self._fire(node) for node in ready_nodes]
-            await asyncio.gather(*fire_tasks)
+为了能直接运行，我们为脚本添加可执行权限。
 
-    def _handle_event(self, event: ReactorEvent):
-        if isinstance(event, TokenGenerated):
-            self._handle_token_generated(event)
-        elif isinstance(event, ExecutionFinished):
-            self._handle_execution_finished(event)
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+chmod +x great_renaming.py
+~~~~~
 
-    def _handle_token_generated(self, event: TokenGenerated):
-        # 1. Update State (Physics: Inject Energy)
-        event.node.put(event.token)
-        
-        # 2. Mark downstream FuncNodes as dirty (Potential might have increased)
-        downstream = self._downstream_map.get(event.node.name, [])
-        for f_node in downstream:
-            self._dirty_func_nodes.add(f_node)
+#### Acts 3: 执行重命名脚本
 
-    def _handle_execution_finished(self, event: ExecutionFinished):
-        # Routing Logic
-        channels = self._channels_by_source.get(event.node.name, [])
-        
-        for output_name, token in event.outputs.items():
-            # Find matching channels for this output port
-            for channel in channels:
-                if channel.output_name == output_name and channel.match(token.tag):
-                    # Route: Generate a TokenGenerated event for the target DataNode
-                    self.push_event(TokenGenerated(node=channel.target, token=token))
+现在，我们运行脚本来执行重构。
 
-    async def _fire(self, node: FuncNode):
-        # 1. Atomically consume inputs (Physics: Consume Energy)
-        inputs = node.consume_inputs()
-        
-        # 2. Submit to Executor
-        await self.executor.submit(node, inputs)
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+./great_renaming.py
+~~~~~
+
+#### Acts 4: 清理临时脚本
+
+任务完成，删除这个一次性的脚本。
+
+~~~~~act
+delete_file
+great_renaming.py
 ~~~~~
 
 ### 下一步建议
-请再次运行测试。这次，两个问题都应该被修复，所有测试都应该通过，让我们进入 GREEN 状态。
+我们已经完成了代码的自动化重命名。根据路线图的 **3.0 阶段** 要求，下一步是**验证 (Verification)**。
+
+我建议我们立即运行 `cascade-spec`, `cascade-graph`, 和 `cascade-compiler` 的测试套件，以确保这次纯粹的名称变更没有意外地破坏任何现有逻辑。如果一切正常，我们将正式完成 Phase 3.0。

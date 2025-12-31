@@ -15,12 +15,18 @@ class ExecutionContext:
     """
     Carries the state of a single instruction execution through the middleware pipeline.
     """
-    instruction: "Instruction"  # The generic instruction (Call or MapCall)
+    vm: "VirtualMachine"
+    instruction: "Instruction"
     frame: "Frame"
     symbol_table: Dict[str, Callable]
     
+    # Execution-scoped context (e.g., user params)
+    context_data: Dict[str, Any] = field(default_factory=dict)
+    
+    # Engine-scoped active resources
+    active_resources: Dict[str, Any] = field(default_factory=dict)
+    
     # Resolvable inputs. Middleware can modify these in-place.
-    # Initialized with raw Operands (or partially resolved values).
     resolved_args: List[Any] = field(default_factory=list)
     resolved_kwargs: Dict[str, Any] = field(default_factory=dict)
 

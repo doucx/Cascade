@@ -7,6 +7,7 @@ from cascade.spec.blueprint import (
     Blueprint,
     Instruction,
     Call,
+    MapCall,
     Literal,
     Register,
     Operand,
@@ -153,8 +154,53 @@ class VirtualMachine:
     async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
         if isinstance(instr, Call):
             return await self._execute_call(instr, frame)
+        elif isinstance(instr, MapCall):
+            return await self._execute_map_call(instr, frame)
         else:
             raise NotImplementedError(f"Unknown instruction: {type(instr)}")
+
+    async def _execute_map_call(self, instr: MapCall, frame: Frame) -> Any:
+        # 1. Load all arguments from frame
+        loaded_kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
+        
+        # 2. Separate iterables from constants
+        iterables = {}
+        constants = {}
+        iterable_len = -1
+
+        for key, value in loaded_kwargs.items():
+            if isinstance(value, list):
+                iterables[key] = value
+                if iterable_len == -1:
+                    iterable_len = len(value)
+                elif len(value) != iterable_len:
+                    raise ValueError(f"Mismatched lengths in MapCall iterables for task '{instr.task_name}'")
+            else:
+                constants[key] = value
+
+        if iterable_len == -1: # No iterables found, treat as empty map
+            iterable_len = 0
+
+        # 3. Prepare individual calls
+        calls_to_make = []
+        for i in range(iterable_len):
+            call_kwargs = constants.copy()
+            for key, values_list in iterables.items():
+                call_kwargs[key] = values_list[i]
+            
+            calls_to_make.append(instr.func(**call_kwargs))
+
+        # 4. Execute calls concurrently if async, sequentially otherwise
+        if not calls_to_make:
+            results = []
+        elif inspect.iscoroutinefunction(instr.func):
+            results = await asyncio.gather(*calls_to_make)
+        else:
+            results = [res for res in calls_to_make]
+            
+        # 5. Store result and return
+        frame.store(instr.output, results)
+        return results
 
     async def _execute_call(self, instr: Call, frame: Frame) -> Any:
         requirements: Dict[str, Any] = {}

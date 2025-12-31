@@ -51,6 +51,20 @@ class JumpIfFalse(Instruction):
 
 
 @dataclass
+class MapCall(Instruction):
+    """Represents a map operation over iterable inputs."""
+
+    func: Any
+    output: Register
+    args: List[Operand] = field(default_factory=list)
+    kwargs: Dict[str, Operand] = field(default_factory=dict)
+
+    # Metadata for observability and constraints
+    task_name: str = "unknown"
+    constraints: Optional[ResourceConstraint] = None
+
+
+@dataclass
 class TailCall:
     args: List[Any] = field(default_factory=list)
     kwargs: Dict[str, Any] = field(default_factory=dict)

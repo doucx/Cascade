@@ -1,7 +1,7 @@
 from typing import List, Dict, Tuple, Any
 
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Operand, JumpIfFalse
+from cascade.spec.blueprint import Blueprint, Call, MapCall, Register, Literal, Operand, JumpIfFalse
 from .optimizer import ExecutionPlan
 
 
@@ -99,11 +99,21 @@ class _BlueprintBuilder:
         # For testing, the function itself isn't invoked, so we can use a placeholder.
         
         # We also pass task name for better observability in the VM
-        instr = Call(
-            func=None,  # The VM will need to resolve this later
-            output=output_register,
-            args=args,
-            kwargs=kwargs,
-            task_name=node.definition.name
-        )
+        if node.meta.get("is_map"):
+            instr = MapCall(
+                func=None,
+                output=output_register,
+                args=args,
+                kwargs=kwargs,
+                task_name=node.definition.name,
+                # Note: Constraints on Map nodes are not yet propagated to MapCall.
+            )
+        else:
+            instr = Call(
+                func=None,  # The VM will need to resolve this later
+                output=output_register,
+                args=args,
+                kwargs=kwargs,
+                task_name=node.definition.name
+            )
         self._instructions.append(instr)

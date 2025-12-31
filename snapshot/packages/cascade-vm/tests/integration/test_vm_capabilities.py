@@ -1,38 +1,3 @@
-## [WIP] feat(arch): 架构硬化 - 阶段3：重建功能对齐 (TDD)
-
-### 用户需求
-进入架构硬化流程的第三阶段。当前 VM 虽然有了 Middleware 架构，但没有任何默认 Middleware。我们需要创建集成测试来暴露这一点（RED 阶段），即验证 VM 目前 **无法** 处理资源注入、参数上下文和重试策略。
-
-### 评论
-我们之前的测试 `test_middleware_pipeline.py` 使用了 mock middleware，所以它是通过的。
-但是，端到端的 `test_vm_strategy` 或者新写的集成测试，如果依赖 `cs.inject` 或 `.with_retry`，在当前“裸奔”的 VM 上必将失败。
-我们需要一组高保真的集成测试，强制我们把标准的 `ResourceMiddleware`, `RetryMiddleware` 实现出来并装配到 VM 上。
-
-### 目标
-创建一组**针对 VM (VirtualMachine)** 的集成测试，验证其是否具备以下能力：
-1.  **Context Loading**: 能否正确解析 `ContextOperand` (来自 `cs.Param`)？
-2.  **Resource Loading**: 能否正确解析 `ResourceOperand` (来自 `cs.inject`)？
-3.  **Policy Enforcing**: 能否正确执行 Retry 策略？
-
-### 基本原理
-通过这组测试失败，我们将明确 VM 缺失的标准组件，从而驱动下一阶段的 `cascade.vm.middlewares` 标准库的实现。
-
-### 标签
-#intent/architect #flow/ready #priority/high #comp/vm #scope/integration #task/domain/core #task/object/hardening-standard-libs #task/action/tdd-scaffold #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建暴露功能缺失的集成测试
-
-这个测试文件将完全绕过 Mock，直接对 `VirtualMachine` 进行集成测试。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_vm_capabilities.py
-~~~~~
-~~~~~python
 import pytest
 import asyncio
 from unittest.mock import MagicMock
@@ -168,15 +133,3 @@ async def test_vm_enforces_retry_policy():
     
     assert result == "Success"
     assert func_mock.call_count == 2
-~~~~~
-
-### 下一步建议
-通过这三个测试，我们暴露了 VM 目前的三个缺陷：
-1.  **接口不足**: `vm.execute` 无法接受环境上下文 (`params`)。
-2.  **功能缺失**: 没有任何逻辑去处理 `ResourceOperand`。
-3.  **策略无效**: `policy` 字段被完全忽略。
-
-接下来的 GREEN 阶段，我们将：
-1.  修改 `VirtualMachine.execute` 签名，允许传递 `context_data`。
-2.  实现标准 Middlewares: `ContextMiddleware`, `ResourceMiddleware`, `RetryMiddleware`。
-3.  在 VM 默认配置或测试配置中装配这些 Middlewares。

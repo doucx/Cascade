@@ -25,7 +25,7 @@ def test_ir_structures_exist():
 
     task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
 
-    node = NodeIR(id="node_1", definition=task_def, inputs={"x": 1, "y": "hello"})
+    node = NodeIR(id="node_1", definition=task_def, kwargs={"x": 1, "y": "hello"})
 
     edge = EdgeIR(source_id="node_1", target_id="node_2", target_arg="data")
 
@@ -44,7 +44,7 @@ def test_ir_serialization_roundtrip():
     arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
     task_def = TaskDef(name="test_task", args=[arg_def], fingerprint=fp)
 
-    node = NodeIR(id="n1", definition=task_def, inputs={"val": 42})
+    node = NodeIR(id="n1", definition=task_def, kwargs={"val": 42})
 
     graph = GraphIR(nodes=[node], edges=[])
 
@@ -53,7 +53,7 @@ def test_ir_serialization_roundtrip():
 
     # Verify key fields
     assert data["nodes"][0]["id"] == "n1"
-    assert data["nodes"][0]["inputs"]["val"] == 42
+    assert data["nodes"][0]["kwargs"]["val"] == 42
     assert data["nodes"][0]["definition"]["name"] == "test_task"
     assert data["nodes"][0]["definition"]["args"][0]["kind"] == "POSITIONAL_OR_KEYWORD"
 

@@ -1,410 +1,211 @@
-好的，我们立即开始第二阶段。
+好的，我来处理这些 `spec` 相关的测试失败。
 
-这是对 `cascade-vm` 单元测试进行范式迁移的计划。我们将系统性地重构这些测试，使其完全符合新的、解耦的“哈希 + 符号表”架构，从而将测试套件从红色状态恢复为绿色。
+你的分析很到位，这些是上次架构变更后残留的最后一批规范层面的测试。它们是验证我们核心数据结构正确性的最后一道防线，修复它们至关重要。
 
-## [WIP] test: 对齐 VM 单元测试以使用基于哈希的链接
+## [WIP] test(spec): 对齐 spec 测试以使用纯化的 Blueprint 和 IR 模型
 
 ### 用户需求
-更新 `packages/cascade-vm/tests/unit/` 目录中所有失败的单元测试，使其遵循新的架构范式。在该范式中，`Blueprint` 指令是纯粹的数据，而函数链接的责任已下放到 `VirtualMachine`，通过 `symbol_table` 在运行时完成。
+修复 `cascade-spec` 包中所有因移除 `Call.func` 和 `NodeIR.inputs` 字段而导致的测试失败。
 
 ### 评论
-这是巩固“净化 `Blueprint`”架构重构成果的关键一步。通过重构这些核心单元测试，我们不仅修复了构建，更重要的是，我们正在创建与新 VM 交互的权威范例，有效地“吃自己的狗粮”。这确保了 VM 的新接口不仅在理论上是正确的，在实践中也是健壮、可用且可测试的。
+这是对我们“净化 `Blueprint`”重构的收尾工作。通过修复这些规范层面的测试，我们不仅能让CI重新变绿，更重要的是，我们确保了系统的核心数据契约（IR 和 `Blueprint`）在代码层面得到了精确的、可验证的定义。这是架构变更成功的最终证明。
 
 ### 目标
-1.  修改 `test_vm_basic.py`、`test_vm_control_flow.py` 和 `test_vm_map.py` 文件。
-2.  在每个测试用例中，从 `Call` 和 `MapCall` 的实例化中移除已废弃的 `func=` 关键字参数。
-3.  用 `structure_hash="some_hash_key"` 参数替换它。
-4.  为每个测试用例创建一个 `symbol_table` 字典，将哈希键映射到实际的测试辅助函数（如 `_add`, `append_val` 等）。
-5.  更新对 `vm.execute(...)` 的调用，将 `symbol_table` 作为新参数传递。
-6.  确保所有被修改的测试用例都能成功通过。
+1.  修改 `packages/cascade-spec/tests/spec/test_linking_data_structures.py`，在 `Call` 和 `MapCall` 的实例化中移除已废弃的 `func=` 参数。
+2.  修改 `packages/cascade-spec/tests/unit/test_ir_models.py`，在 `NodeIR` 的实例化和断言中，将 `inputs=` 替换为新的 `kwargs=` 字段。
+3.  确保 `cascade-spec` 包下的所有测试全部通过。
 
 ### 基本原理
-旧的测试直接将运行时函数对象 (`func`) 嵌入到 `Call` 指令中，这与我们将 `Blueprint` 净化为纯粹、可序列化数据结构的核心目标相违背。新的架构将编译产物 (`Blueprint`) 与运行时环境 (`symbol_table`) 彻底解耦。因此，测试必须更新以反映这种架构上的分离。修改后的测试将明确验证 VM 的新契约：它是一个接收指令集和链接清单 (`symbol_table`) 的纯粹执行器。
+这些测试的失败是预料之中的，它们忠实地反映了我们对核心数据模型的战略性改进。旧的测试代码仍然依赖于已被废除的 `func` 和 `inputs` 字段。为了让测试重新生效，我们必须更新它们，使其断言新的、正确的模型结构。这不仅是修复测试，更是在巩固和验证我们新的架构契约。
 
 ### 标签
-#intent/refine #intent/tooling #flow/ready #priority/high #comp/tests #concept/executor #scope/dx #ai/instruct #task/domain/architecture #task/object/legacy-vm #task/action/removal #task/state/continue
+#intent/fix #intent/tooling #flow/ready #priority/high #comp/spec #comp/tests #concept/parser #scope/api #ai/instruct #task/domain/architecture #task/object/legacy-vm #task/action/removal #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 `test_vm_basic.py`
+#### Acts 1: 修复 `Blueprint` 指令相关的测试
 
-我们将重写此文件，引入 `symbol_table` 并使用 `structure_hash` 替代 `func`。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/unit/test_vm_basic.py
-~~~~~
-~~~~~python
-import pytest
-import asyncio
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal
-from cascade.vm import VirtualMachine
-
-
-def _add(a: int, b: int) -> int:
-    """Helper function for testing synchronous execution."""
-    return a + b
-
-
-async def _async_add(a: int, b: int) -> int:
-    """Helper function for testing asynchronous execution."""
-    await asyncio.sleep(0.01)
-    return a + b
-
-
-@pytest.mark.asyncio
-async def test_vm_instruction_execution():
-    """
-    Case 1: The CPU Test (Synchronous).
-    Manually construct a program:
-      r0 = add(1, 2)
-      r1 = add(r0, 3)
-    Verify that r1 contains 6.
-    """
-    symbol_table = {
-        "hash_for_add": _add,
-    }
-
-    # Program:
-    # 1. r0 = _add(1, 2)
-    instr1 = Call(
-        structure_hash="hash_for_add",
-        output=Register(0),
-        args=[Literal(1), Literal(2)],
-        kwargs={},
-        task_name="add_1",
-    )
-
-    # 2. r1 = _add(r0, 3)
-    instr2 = Call(
-        structure_hash="hash_for_add",
-        output=Register(1),
-        args=[Register(0), Literal(3)],
-        kwargs={},
-        task_name="add_2",
-    )
-
-    blueprint = Blueprint(
-        instructions=[instr1, instr2],
-        register_count=2,
-        input_args=[],
-        input_kwargs={},
-    )
-
-    vm = VirtualMachine()
-    result = await vm.execute(blueprint, symbol_table)
-
-    # The result of the last instruction should be returned
-    assert result == 6
-
-
-@pytest.mark.asyncio
-async def test_vm_async_execution():
-    """
-    Case 2: Async Execution.
-    Manually construct a program:
-      r0 = async_add(10, 20)
-    Verify that VM awaits the result correctly.
-    """
-    symbol_table = {
-        "hash_for_async_add": _async_add,
-    }
-
-    instr = Call(
-        structure_hash="hash_for_async_add",
-        output=Register(0),
-        args=[Literal(10), Literal(20)],
-        kwargs={},
-        task_name="async_add",
-    )
-
-    blueprint = Blueprint(
-        instructions=[instr],
-        register_count=1,
-        input_args=[],
-        input_kwargs={},
-    )
-
-    vm = VirtualMachine()
-    result = await vm.execute(blueprint, symbol_table)
-
-    assert result == 30
-~~~~~
-
-#### Acts 2: 更新 `test_vm_control_flow.py`
-
-同样，我们将重构此文件中的所有测试用例以适应新架构。
+我们将移除 `test_linking_data_structures.py` 中对 `func` 字段的非法引用。
 
 ~~~~~act
 write_file
-packages/cascade-vm/tests/unit/test_vm_control_flow.py
+packages/cascade-spec/tests/spec/test_linking_data_structures.py
 ~~~~~
 ~~~~~python
 import pytest
-from typing import List
+from dataclasses import is_dataclass
+from typing import Dict, Callable
 
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Jump, JumpIfFalse
-from cascade.vm import VirtualMachine
-
-# --- Helpers ---
-
-
-def append_val(log: List[int], val: int):
-    log.append(val)
+# 这些导入在 RED 阶段可能会失败，或者在实例化时报错
+from cascade.spec.blueprint import Call, MapCall, Register
 
 
-def decrement(x: int) -> int:
-    return x - 1
-
-
-def is_positive(x: int) -> bool:
-    return x > 0
-
-
-# --- Symbol Table for all tests in this module ---
-
-SYMBOL_TABLE = {
-    "hash_append": append_val,
-    "hash_decrement": decrement,
-    "hash_is_positive": is_positive,
-}
-
-
-# --- Tests ---
-
-
-@pytest.mark.asyncio
-async def test_vm_jump_skips_instruction():
+def test_call_instruction_has_structure_hash():
     """
-    Verify Jump(offset) skips intermediate instructions.
-
-    Program:
-    0: Jump(2)   -> Goto 2
-    1: Call(append, 1)  (Should be skipped)
-    2: Call(append, 2)  (Should be executed)
+    验证 Call 指令包含 structure_hash 字段。
+    这是链接阶段查找函数实现的键。
     """
-    log = []
-
-    instrs = [
-        # 0: Jump to index 2 (0 + 2 = 2)
-        Jump(offset=2),
-        # 1:
+    try:
+        # 尝试用 kwargs 实例化，如果字段不存在会报错
+        # output 使用 dummy Register
         Call(
-            structure_hash="hash_append",
-            output=Register(0),  # Dummy output
-            args=[Literal(log), Literal(1)],
-            task_name="log_1",
-        ),
-        # 2:
-        Call(
-            structure_hash="hash_append",
             output=Register(0),
-            args=[Literal(log), Literal(2)],
-            task_name="log_2",
-        ),
-    ]
-
-    bp = Blueprint(instructions=instrs, register_count=1)
-    vm = VirtualMachine()
-    await vm.execute(bp, SYMBOL_TABLE)
-
-    assert log == [2]
+            task_name="t",
+            structure_hash="hash_123",
+        )
+    except TypeError as e:
+        if "unexpected keyword argument 'structure_hash'" in str(e):
+            pytest.fail("Call instruction missing 'structure_hash' field")
+        raise e
 
 
-@pytest.mark.asyncio
-async def test_vm_jump_if_false_branching():
+def test_map_call_instruction_has_structure_hash():
     """
-    Verify JumpIfFalse branches correctly based on register value.
-
-    Program:
-    0: R0 = input (cond)
-    1: JumpIfFalse(R0, 2) -> Goto 3 if False
-    2: Call(append, 1)    (Skipped if False)
-    3: Call(append, 2)    (Executed)
+    验证 MapCall 指令也包含 structure_hash 字段。
     """
-    log = []
-
-    instrs = [
-        JumpIfFalse(condition=Register(0), offset=2),
-        Call(
-            structure_hash="hash_append",
-            output=Register(1),
-            args=[Literal(log), Literal(1)],
-            task_name="log_1",
-        ),
-        Call(
-            structure_hash="hash_append",
-            output=Register(1),
-            args=[Literal(log), Literal(2)],
-            task_name="log_2",
-        ),
-    ]
-
-    bp = Blueprint(instructions=instrs, register_count=2, input_kwargs={"cond": 0})
-    vm = VirtualMachine()
-
-    # Case 1: Condition is False (Should Jump to 2, skipping 1)
-    log.clear()
-    await vm.execute(bp, SYMBOL_TABLE, initial_kwargs={"cond": False})
-    assert log == [2]
-
-    # Case 2: Condition is True (Should NOT Jump, executing 1 then 2)
-    log.clear()
-    await vm.execute(bp, SYMBOL_TABLE, initial_kwargs={"cond": True})
-    assert log == [1, 2]
-
-
-@pytest.mark.asyncio
-async def test_vm_loop_backward_jump():
-    """
-    Verify backward jump creates a working loop.
-    """
-    log = []
-
-    instrs = [
-        # 0: R1 = R0 > 0
-        Call(
-            structure_hash="hash_is_positive",
-            output=Register(1),
-            args=[Register(0)],
-            task_name="check_pos",
-        ),
-        # 1: if not R1 goto 5
-        JumpIfFalse(condition=Register(1), offset=4),
-        # 2: log.append(R0)
-        Call(
-            structure_hash="hash_append",
-            output=Register(2),
-            args=[Literal(log), Register(0)],
-            task_name="log",
-        ),
-        # 3: R0 = R0 - 1
-        Call(
-            structure_hash="hash_decrement",
+    try:
+        MapCall(
             output=Register(0),
-            args=[Register(0)],
-            task_name="decr",
-        ),
-        # 4: Goto 0
-        Jump(offset=-4),
-    ]
+            task_name="t",
+            structure_hash="hash_123",
+        )
+    except TypeError as e:
+        if "unexpected keyword argument 'structure_hash'" in str(e):
+            pytest.fail("MapCall instruction missing 'structure_hash' field")
+        raise e
 
-    bp = Blueprint(instructions=instrs, register_count=3, input_kwargs={"count": 0})
-    vm = VirtualMachine()
 
-    # Loop 3 times: 3, 2, 1
-    await vm.execute(bp, SYMBOL_TABLE, initial_kwargs={"count": 3})
-    assert log == [3, 2, 1]
+def test_compilation_result_structure():
+    """
+    验证 CompilationResult 类的存在及其结构。
+    它负责在 Frontend 和 Runtime 之间传递 IR 和 Symbol Table。
+    """
+    # 尝试导入 CompilationResult (目前不存在)
+    try:
+        from cascade.spec.compiler_result import CompilationResult
+    except ImportError:
+        pytest.fail("Could not import cascade.spec.compiler_result.CompilationResult")
+
+    # 验证字段 (运行时检查)
+    # 我们传入 None 作为占位符，仅检查字段是否存在
+    try:
+        res = CompilationResult(ir=None, symbol_table={})
+    except TypeError as e:
+        pytest.fail(f"CompilationResult instantiation failed: {e}")
+
+    assert hasattr(res, "ir")
+    assert hasattr(res, "symbol_table")
 ~~~~~
 
-#### Acts 3: 更新 `test_vm_map.py`
+#### Acts 2: 修复 `NodeIR` 模型相关的测试
 
-最后，我们重构 `MapCall` 相关的测试。
+我们将 `test_ir_models.py` 中对 `inputs` 字段的引用更新为 `args` 和 `kwargs`。
 
 ~~~~~act
 write_file
-packages/cascade-vm/tests/unit/test_vm_map.py
+packages/cascade-spec/tests/unit/test_ir_models.py
 ~~~~~
 ~~~~~python
+import json
+from dataclasses import asdict
+
 import pytest
-import asyncio
-from cascade.spec.blueprint import Blueprint, Call, MapCall, Register, Literal
-from cascade.vm import VirtualMachine
 
-# --- Helpers ---
-
-
-def double(x):
-    return x * 2
-
-
-async def async_double(x):
-    await asyncio.sleep(0.01)
-    return x * 2
-
-
-def add(a, b):
-    return a + b
+from cascade.spec.ir.models import (
+    GraphIR,
+    NodeIR,
+    EdgeIR,
+    TaskDef,
+    ArgumentDef,
+    ArgumentKind,
+    Instruction,
+    Call,
+    Return,
+)
+from cascade.spec.fingerprint import Fingerprint
 
 
-# --- Symbol Table ---
+def test_ir_structures_exist():
+    """Verify that GraphIR, NodeIR, and EdgeIR can be instantiated."""
+    # This test will fail until the models are created.
+    fp = Fingerprint()
+    fp["current_code_structure_hash"] = "test_hash"
 
-SYMBOL_TABLE = {
-    "hash_double": double,
-    "hash_async_double": async_double,
-    "hash_add": add,
-}
+    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
 
-# --- Tests ---
+    node = NodeIR(id="node_1", definition=task_def, kwargs={"x": 1, "y": "hello"})
+
+    edge = EdgeIR(source_id="node_1", target_id="node_2", target_arg="data")
+
+    graph = GraphIR(nodes=[node], edges=[edge], meta={"version": "1.0"})
+
+    assert graph.nodes[0].id == "node_1"
+    assert graph.edges[0].source_id == "node_1"
+    assert graph.meta["version"] == "1.0"
 
 
-@pytest.mark.asyncio
-async def test_vm_map_execution_sync():
-    """
-    Case 1: Sync MapCall.
-    Verify VM iterates over list input and collects results.
-    """
-    # Instruction: results = map(double, x=[1, 2, 3])
-    instr = MapCall(
-        structure_hash="hash_double",
-        output=Register(0),
-        args=[],
-        kwargs={"x": Literal([1, 2, 3])},
-        task_name="map_double",
+def test_ir_serialization_roundtrip():
+    """Verify that IR structures can be serialized to and from JSON."""
+    fp = Fingerprint()
+    fp["current_code_structure_hash"] = "test_hash"
+
+    arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
+    task_def = TaskDef(name="test_task", args=[arg_def], fingerprint=fp)
+
+    node = NodeIR(id="n1", definition=task_def, kwargs={"val": 42})
+
+    graph = GraphIR(nodes=[node], edges=[])
+
+    # Convert to dictionary using dataclasses.asdict
+    data = asdict(graph)
+
+    # Verify key fields
+    assert data["nodes"][0]["id"] == "n1"
+    assert data["nodes"][0]["kwargs"]["val"] == 42
+    assert data["nodes"][0]["definition"]["name"] == "test_task"
+    assert data["nodes"][0]["definition"]["args"][0]["kind"] == "POSITIONAL_OR_KEYWORD"
+
+    # Verify JSON serialization compatibility
+    json_str = json.dumps(data)
+    loaded = json.loads(json_str)
+
+    assert loaded["nodes"][0]["id"] == "n1"
+
+
+def test_instruction_serialization():
+    """Verify that Instruction dataclasses can be instantiated and serialized."""
+    # This test covers the second part of Phase 0's implementation goal.
+    call_instruction = Call(
+        id="instr_1",
+        task_name="my_task",
+        args=[1, "hello"],
+        output_register="r0",
     )
+    return_instruction = Return(id="instr_2", source_register="r0")
 
-    bp = Blueprint(instructions=[instr], register_count=1)
-    vm = VirtualMachine()
+    program: list[Instruction] = [call_instruction, return_instruction]
 
-    results = await vm.execute(bp, SYMBOL_TABLE)
-    assert results == [2, 4, 6]
+    # This crude serialization check is enough to drive the implementation.
+    # We are not using asdict because Instruction is a base class.
+    # A real implementation would need a polymorphic serializer.
+    serialized = [
+        {"type": "Call", "id": i.id, "task": i.task_name}
+        if isinstance(i, Call)
+        else {"type": "Return", "id": i.id, "source": i.source_register}
+        for i in program
+    ]
 
+    json_str = json.dumps(serialized)
+    loaded = json.loads(json_str)
 
-@pytest.mark.asyncio
-async def test_vm_map_execution_async():
-    """
-    Case 2: Async MapCall.
-    Verify VM awaits all coroutines.
-    """
-    instr = MapCall(
-        structure_hash="hash_async_double",
-        output=Register(0),
-        kwargs={"x": Literal([10, 20])},
-        task_name="map_async",
-    )
-
-    bp = Blueprint(instructions=[instr], register_count=1)
-    vm = VirtualMachine()
-
-    results = await vm.execute(bp, SYMBOL_TABLE)
-    assert results == [20, 40]
-
-
-@pytest.mark.asyncio
-async def test_vm_map_multiple_iterables():
-    """
-    Case 3: Map with multiple iterables (zip behavior).
-    map(add, a=[1, 2], b=[10, 20]) -> [11, 22]
-    """
-    instr = MapCall(
-        structure_hash="hash_add",
-        output=Register(0),
-        kwargs={"a": Literal([1, 2]), "b": Literal([10, 20])},
-        task_name="map_add",
-    )
-
-    bp = Blueprint(instructions=[instr], register_count=1)
-    vm = VirtualMachine()
-
-    results = await vm.execute(bp, SYMBOL_TABLE)
-    assert results == [11, 22]
+    assert len(loaded) == 2
+    assert loaded[0]["type"] == "Call"
+    assert loaded[1]["source"] == "r0"
 ~~~~~
 
 ### 下一步建议
-我们已经完成了对 `cascade-vm` 单元测试的现代化改造。现在，我建议你运行测试套件。
+我们已经修复了所有与核心数据结构定义相关的单元测试。现在，整个 `cascade-spec` 和 `cascade-vm` 包的测试应该都已通过。
 
-我们预期 `cascade-vm` 相关的测试现在应该全部通过。余下的失败将集中在更高层次的集成测试中，例如 `packages/cascade-engine/tests/integration/test_integration_map_control.py`。这些测试目前仍然试图使用旧的 `GraphExecutionStrategy` 并且没有为新的 VM 管道正确设置 `symbol_table`。
-
-我们的下一个目标将是修复这些更高层次的集成测试，让它们正确地使用新的 `Compiler -> VM` 完整执行流程。
+现在是时候回到 `packages/cascade-engine/tests/integration/test_integration_map_control.py` 这个文件了。这是我们第一个真正的端到端集成测试，它将验证从 `Frontend` 编译到 `VM` 执行的完整新流程。修复它，我们将正式打通新架构的“任督二脉”。

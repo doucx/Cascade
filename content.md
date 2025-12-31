@@ -1,149 +1,278 @@
-我们现在进入 **Phase 3.3：[TDD] 编译字面量与扇出依赖**。
+好的，我们进入 **Phase 3.3 GREEN** 阶段。
 
-这是一个 **RED** 步骤。
+正如预期，测试失败了，因为 `Backend` 还没有处理字面量。
 
-我将更新 `packages/cascade-compiler/tests/unit/test_backend_topology.py`。
-我将添加两个新的测试用例：
-1.  `test_compile_literal_values_to_data_nodes`: 验证字面量输入是否被正确编译为预填充的 `PhysicsDataNode`。
-2.  `test_compile_diamond_dependency_fan_out`: 验证扇出依赖（菱形图）是否正确复用了上游的 `PhysicsDataNode`，而不是创建重复的节点。
+我将执行以下操作：
+1.  **Spec Update**: 在 `BipartiteGraph` 中添加 `initial_values: Dict[str, Any]` 字段。
+2.  **Backend Implementation**: 在 `_TopologyBuilder` 中添加逻辑，扫描 `NodeIR` 的 `args` 和 `kwargs`。如果发现不是边（即不是来自其他节点的依赖），则将其视为字面量，创建常量 `DataNode`，并将其值存入 `initial_values`。
 
-API 定义：
-*   **预填充 DataNode**: 我们将在 `PhysicsDataNode` 的元数据或状态中查找字面量值。在当前的 `spec.topology` 中，我们可能需要引入一种机制来表示“初始值”。目前的 `PhysicsDataNode` 是静态定义，并不包含运行时值。这是一个重要的设计决策点。
-    *   *决策*: 既然 `BipartiteGraph` 是静态蓝图，字面量值应该被视为该蓝图的一部分。我们可以在 `PhysicsDataNode` 中添加一个 `initial_value` 字段，或者更明确地，引入一种 `LiteralDef`。
-    *   *简化*: 为了保持 `spec` 纯粹，我们可以暂时约定：如果一个 `DataNode` 的 `producer_node_instance_hash` 为空（或特定标记），它就是一个常量节点，其值在编译时确定。或者，更直接地，在 `BipartiteGraph` 中添加一个 `literals: Dict[str, Any]` 字段，映射 `data_node_hash -> value`。后者更符合“数据与结构分离”的原则，但在“静态图即程序”的视角下，常量就是图的一部分。
-    *   *最终选择*: 我将在测试中假设 `Backend` 会为字面量生成特殊的 `PhysicsDataNode`，并在 `BipartiteGraph` 上增加一个 `initial_values` 字典来存储这些常量。这比修改 `PhysicsDataNode` 更灵活。
-
-## [WIP] test: 定义字面量和扇出依赖的编译行为
+## [WIP] feat: 实现字面量编译和 BipartiteGraph.initial_values
 
 ### 用户需求
-定义编译器如何处理字面量输入和扇出依赖。
+使 `Backend` 能够正确编译字面量参数，并将它们存储在 `BipartiteGraph` 的 `initial_values` 中，同时确保扇出依赖正确共享数据节点。
 
 ### 评论
-通过这个测试，我们强制要求编译器不仅处理函数间的连接，还要处理静态数据的注入。同时，扇出测试确保了图的拓扑结构是高效的（复用节点）而不是树状展开的。
+通过在 `BipartiteGraph` 中引入 `initial_values`，我们有效地将图的“静态结构”与“初始状态”结合在了一起。这非常符合物理引擎的隐喻：我们在构建反应堆的同时，也装载了初始燃料（常量）。
 
 ### 目标
-更新 `packages/cascade-compiler/tests/unit/test_backend_topology.py`。
+1.  更新 `packages/cascade-spec/src/cascade/spec/topology.py`。
+2.  更新 `packages/cascade-compiler/src/cascade/compiler/backend.py`。
 
 ### 基本原理
-1.  **字面量**: `compile` 的结果应该包含字面量值。我们将在 `BipartiteGraph` 上断言一个新的属性 `initial_values` 的存在。
-2.  **扇出**: 构造 A -> (B, C) -> D。断言 B 和 C 的输入都指向 A 的同一个输出 `DataNode` 哈希。
+**字面量处理逻辑**:
+对于每个 `NodeIR`，遍历其 `args` 和 `kwargs`。如果某个参数没有对应的 `EdgeIR` 指向它，那么它就是一个字面量。
+1.  生成一个唯一的哈希（基于值的哈希）。
+2.  创建一个 `PhysicsDataNode`，标记为 `producer="const"`。
+3.  将该 `DataNode` 的哈希作为输入连接到 `PhysicsFuncNode`。
+4.  将字面量值存入 `initial_values[data_hash]`。
 
 ### 标签
-#intent/architect #flow/ready #priority/high #comp/compiler #concept/topology #scope/core #ai/instruct #task/domain/compiler #task/object/backend #task/action/test #task/state/continue
+#intent/build #flow/ready #priority/high #comp/compiler #concept/state #scope/core #ai/instruct #task/domain/compiler #task/object/backend #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新测试文件以包含字面量和扇出测试
+#### Acts 1: 更新 Spec 添加 initial_values
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_backend_topology.py
+packages/cascade-spec/src/cascade/spec/topology.py
 ~~~~~
 ~~~~~python.old
-    
-    data_node = topology.data_nodes[data_slot_id]
-    assert data_node.producer_node_instance_hash == "A"
+@dataclass(frozen=True)
+class BipartiteGraph:
+    """
+    The static, physical blueprint of the computation network, output by the compiler.
+    """
+    func_nodes: Dict[str, PhysicsFuncNode]
+    data_nodes: Dict[str, PhysicsDataNode]
+    channels: List[ChannelDef]
 ~~~~~
 ~~~~~python.new
-    
-    data_node = topology.data_nodes[data_slot_id]
-    assert data_node.producer_node_instance_hash == "A"
+from typing import Any
 
-
-def test_compile_literal_values_to_data_nodes():
+@dataclass(frozen=True)
+class BipartiteGraph:
     """
-    Test Case: A(x=1, y="hello")
-    
-    Verifies that literal arguments in GraphIR are compiled into:
-    1. Pre-created PhysicsDataNodes (Constant Slots).
-    2. Channels connecting these Constant Slots to Node A.
-    3. The literal values are stored in the BipartiteGraph's initial_values.
+    The static, physical blueprint of the computation network, output by the compiler.
     """
-    # 1. Setup IR
-    node_a = _create_dummy_node_ir("A")
-    # A has two literal inputs in kwargs
-    node_a.kwargs = {"x": 1, "y": "hello"}
-    
-    graph_ir = GraphIR(nodes=[node_a], edges=[])
+    func_nodes: Dict[str, PhysicsFuncNode]
+    data_nodes: Dict[str, PhysicsDataNode]
+    channels: List[ChannelDef]
+    # Map data_slot_hash -> literal value for constant inputs
+    initial_values: Dict[str, Any] = field(default_factory=dict)
+~~~~~
 
-    # 2. Execute Backend
-    topology = Backend.compile(graph_ir)
+#### Acts 2: 更新 Backend 实现字面量处理
 
-    # 3. Assertions
-    # A should have 2 input channels (for x and y)
-    channels_to_a = [c for c in topology.channels if c.target_data_slot_hash is None] # Wait, channel is Source -> Target
-    # Input wiring is stored in PhysicsFuncNode.inputs map (DataNodeHash -> PortName relation is implicit?)
-    # Re-reading our spec impl: PhysicsFuncNode.inputs: Dict[str, str] (ArgName -> DataHash)
-    
-    func_node_a = topology.func_nodes["A"]
-    assert "x" in func_node_a.inputs
-    assert "y" in func_node_a.inputs
-    
-    data_hash_x = func_node_a.inputs["x"]
-    data_hash_y = func_node_a.inputs["y"]
-    
-    # Verify DataNodes exist
-    assert data_hash_x in topology.data_nodes
-    assert data_hash_y in topology.data_nodes
-    
-    # Verify they are marked as Constants (no producer)
-    # The convention for constants is producer_node_instance_hash being empty or special
-    assert topology.data_nodes[data_hash_x].producer_node_instance_hash == "const"
-    assert topology.data_nodes[data_hash_y].producer_node_instance_hash == "const"
-    
-    # Verify Values are captured
-    # We expect BipartiteGraph to have an 'initial_values' map
-    assert hasattr(topology, "initial_values"), "BipartiteGraph must hold initial values for constants"
-    assert topology.initial_values[data_hash_x] == 1
-    assert topology.initial_values[data_hash_y] == "hello"
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
+~~~~~
+~~~~~python.old
+    def build(self) -> BipartiteGraph:
+        # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
+        for node_ir in self._graph.nodes:
+            self._process_node(node_ir)
 
+        # Pass 2: Wire Inputs based on Edges
+        self._process_edges()
 
-def test_compile_diamond_dependency_fan_out():
-    """
-    Test Case: Diamond (Fan-Out)
-      A
-     / \
-    B   C
-    
-    Verifies that B and C consume the SAME DataNode produced by A.
-    """
-    # 1. Setup IR
-    node_a = _create_dummy_node_ir("A")
-    node_b = _create_dummy_node_ir("B")
-    node_c = _create_dummy_node_ir("C")
-    
-    # Edges: A->B, A->C
-    edge_ab = EdgeIR(source_node_instance_hash="A", target_node_instance_hash="B", target_arg="dep_b")
-    edge_ac = EdgeIR(source_node_instance_hash="A", target_node_instance_hash="C", target_arg="dep_c")
-    
-    graph_ir = GraphIR(nodes=[node_a, node_b, node_c], edges=[edge_ab, edge_ac])
+        return BipartiteGraph(
+            func_nodes=self._func_nodes,
+            data_nodes=self._data_nodes,
+            channels=self._channels,
+        )
 
-    # 2. Execute Backend
-    topology = Backend.compile(graph_ir)
+    def _process_node(self, node_ir):
+        func_hash = node_ir.current_node_instance_hash
+        
+        # 1. Create PhysicsFuncNode
+        # Inputs will be populated in Pass 2
+        f_node = PhysicsFuncNode(
+            current_node_instance_hash=func_hash,
+            name=node_ir.definition.name,
+            inputs={} 
+        )
+        self._func_nodes[func_hash] = f_node
 
-    # 3. Assertions
-    func_b = topology.func_nodes["B"]
-    func_c = topology.func_nodes["C"]
-    
-    # Get the input DataNode hash for both
-    input_hash_b = func_b.inputs["dep_b"]
-    input_hash_c = func_c.inputs["dep_c"]
-    
-    # Critical: They MUST be the same DataNode (Structural Sharing)
-    assert input_hash_b == input_hash_c, "Fan-out should reuse the same source DataNode"
-    
-    # Verify that DataNode is produced by A
-    data_node = topology.data_nodes[input_hash_b]
-    assert data_node.producer_node_instance_hash == "A"
+        # 2. Create Default Output DataNode (Slot)
+        # We assume a single output port named "result" for now.
+        # The data slot hash is deterministically derived from the producer + port.
+        data_slot_hash = self._compute_data_slot_hash(func_hash, "result")
+        self._func_output_map[func_hash] = data_slot_hash
+
+        d_node = PhysicsDataNode(
+            current_data_slot_hash=data_slot_hash,
+            name=f"{node_ir.definition.name}.output",
+            producer_node_instance_hash=func_hash
+        )
+        self._data_nodes[data_slot_hash] = d_node
+
+        # 3. Create Output Channel (Func -> Data)
+        channel = ChannelDef(
+            source_node_instance_hash=func_hash,
+            target_data_slot_hash=data_slot_hash,
+            port_name="result",
+            tag_filter="default" # Default filter
+        )
+        self._channels.append(channel)
+
+    def _process_edges(self):
+        for edge in self._graph.edges:
+            # Source of the edge is a FuncNode (in IR)
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+
+            # Find the DataNode produced by the source FuncNode
+            # In IR, edges are direct Func->Func. 
+            # In Topology, we must route through the DataNode.
+            source_data_hash = self._func_output_map.get(source_func_hash)
+            
+            if not source_data_hash:
+                # Should not happen in valid IR
+                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
+
+            # Link: Target FuncNode input 'arg_name' <- Source DataNode
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if target_func_node:
+                # Note: PhysicsFuncNode is frozen, but we are in construction phase.
+                # Since dataclasses are frozen=True, we technically cannot mutate 'inputs'.
+                # However, 'inputs' is a mutable dict (default_factory), so we CAN mutate its content
+                # unless we made it immutable/frozen too. Standard dataclass behavior allows 
+                # mutating the mutable content of a frozen field.
+                target_func_node.inputs[arg_name] = source_data_hash
+
+    def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
+~~~~~
+~~~~~python.new
+    def build(self) -> BipartiteGraph:
+        self._initial_values = {}
+        
+        # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
+        # Also process literal inputs in this pass
+        for node_ir in self._graph.nodes:
+            self._process_node(node_ir)
+
+        # Pass 2: Wire Inputs based on Edges (Dependencies)
+        # This will OVERWRITE any literal inputs if an edge exists for the same arg
+        # (Though IR shouldn't have both literal and edge for same arg)
+        self._process_edges()
+
+        return BipartiteGraph(
+            func_nodes=self._func_nodes,
+            data_nodes=self._data_nodes,
+            channels=self._channels,
+            initial_values=self._initial_values,
+        )
+
+    def _process_node(self, node_ir):
+        func_hash = node_ir.current_node_instance_hash
+        
+        # 1. Create PhysicsFuncNode
+        f_node = PhysicsFuncNode(
+            current_node_instance_hash=func_hash,
+            name=node_ir.definition.name,
+            inputs={} 
+        )
+        self._func_nodes[func_hash] = f_node
+
+        # 1.5 Process Literals (args/kwargs)
+        # Convert args to position-based names ("0", "1", ...)
+        for i, val in enumerate(node_ir.args):
+            self._process_literal(f_node, str(i), val)
+        
+        for k, val in node_ir.kwargs.items():
+            self._process_literal(f_node, k, val)
+
+        # 2. Create Default Output DataNode (Slot)
+        data_slot_hash = self._compute_data_slot_hash(func_hash, "result")
+        self._func_output_map[func_hash] = data_slot_hash
+
+        d_node = PhysicsDataNode(
+            current_data_slot_hash=data_slot_hash,
+            name=f"{node_ir.definition.name}.output",
+            producer_node_instance_hash=func_hash
+        )
+        self._data_nodes[data_slot_hash] = d_node
+
+        # 3. Create Output Channel (Func -> Data)
+        channel = ChannelDef(
+            source_node_instance_hash=func_hash,
+            target_data_slot_hash=data_slot_hash,
+            port_name="result",
+            tag_filter="default" 
+        )
+        self._channels.append(channel)
+
+    def _process_literal(self, f_node, arg_name, value):
+        # Create a Constant DataNode for this value
+        # Hash based on value repr to allow deduplication of same constants
+        const_hash = self._compute_const_hash(value)
+        
+        if const_hash not in self._data_nodes:
+            d_node = PhysicsDataNode(
+                current_data_slot_hash=const_hash,
+                name=f"const_{const_hash[:8]}",
+                producer_node_instance_hash="const"
+            )
+            self._data_nodes[const_hash] = d_node
+            self._initial_values[const_hash] = value
+            
+        # Wire it up
+        f_node.inputs[arg_name] = const_hash
+
+    def _process_edges(self):
+        for edge in self._graph.edges:
+            # Source of the edge is a FuncNode (in IR)
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+
+            # Find the DataNode produced by the source FuncNode
+            source_data_hash = self._func_output_map.get(source_func_hash)
+            
+            if not source_data_hash:
+                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
+
+            # Link: Target FuncNode input 'arg_name' <- Source DataNode
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if target_func_node:
+                target_func_node.inputs[arg_name] = source_data_hash
+
+    def _compute_const_hash(self, value: Any) -> str:
+        # Simple content hashing for literals
+        # Warning: repr() isn't stable for all types, but good enough for primitives
+        # In production, use a better serializer
+        raw = f"const:{repr(value)}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
+~~~~~
+~~~~~python.old
+import hashlib
+from typing import List, Dict
+
+from cascade.spec.ir.models import GraphIR
+~~~~~
+~~~~~python.new
+import hashlib
+from typing import List, Dict, Any
+
+from cascade.spec.ir.models import GraphIR
 ~~~~~
 
 ### 下一步建议
-测试现在会失败（RED），原因主要有：
-1.  `BipartiteGraph` 缺少 `initial_values` 字段。
-2.  `Backend` 尚未实现字面量提取和常量 `DataNode` 的生成逻辑。
+我们已经完成了 **Phase 3.3**。
+Backend 现在支持基本的线性拓扑、扇出拓扑以及字面量注入。
 
-接下来，我们将进入 **GREEN** 阶段。我将：
-1.  更新 `cascade.spec.topology.BipartiteGraph`，添加 `initial_values` 字段。
-2.  更新 `cascade.compiler.backend.Backend`，实现字面量处理逻辑。
+接下来的步骤是 **阶段 3.4：[TDD] 编译 TCO (Tail-Call Optimization) 循环**。
+这将是本系列重构中最具挑战性也最激动人心的一步。我们将实现“物理层面的循环”，即通过反馈通道（Feedback Channel）来实现零开销 TCO。
+
+我将创建一个新的测试文件 `packages/cascade-compiler/tests/unit/test_backend_tco.py`，专门用于驱动这一特性的实现。

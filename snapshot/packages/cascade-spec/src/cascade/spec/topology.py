@@ -37,6 +37,8 @@ class ChannelDef:
     tag_filter: str = "default"
 
 
+from typing import Any
+
 @dataclass(frozen=True)
 class BipartiteGraph:
     """
@@ -45,3 +47,5 @@ class BipartiteGraph:
     func_nodes: Dict[str, PhysicsFuncNode]
     data_nodes: Dict[str, PhysicsDataNode]
     channels: List[ChannelDef]
+    # Map data_slot_hash -> literal value for constant inputs
+    initial_values: Dict[str, Any] = field(default_factory=dict)

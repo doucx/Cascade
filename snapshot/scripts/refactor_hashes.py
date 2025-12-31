@@ -1,33 +1,3 @@
-## [WIP] refactor: Apply Phase 3 naming axioms via automated script
-
-### 用户需求
-执行 Phase 3.0 的核心任务：将代码库中所有违反“哈希强制长命名规范”的标识符替换为规范的四段式命名。这是为了消除概念歧义，为编译器重构打下坚实基础。
-
-### 评论
-这是一个涉及全库的破坏性变更。手动修改极易出错且耗时。使用专门编写的 Python 脚本可以确保一致性，并允许我们在提交前审查变更。
-
-### 目标
-1.  创建 `scripts/refactor_hashes.py`。
-2.  执行脚本，完成重命名。
-3.  验证代码库的一致性。
-
-### 基本原理
-通过脚本自动化重构，我们可以定义精确的正则表达式规则，覆盖字段定义、构造函数调用和属性访问，从而最大程度地减少人为错误。
-
-### 标签
-#intent/refine #flow/ready #priority/critical #comp/core #scope/core #task/domain/compiler #task/object/symbol-table #task/action/refactor #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建重构脚本
-
-~~~~~act
-write_file
-scripts/refactor_hashes.py
-~~~~~
-~~~~~python
 import os
 import re
 import sys
@@ -137,4 +107,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~

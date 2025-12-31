@@ -15,6 +15,7 @@ dependencies = [
     "cascade-engine",
     "cascade-application",
     "cascade-library",
+    "cascade-sdk",
     # Tools included by default
     "cascade-cli-controller",
     "cascade-cli-observer",
@@ -33,5 +34,6 @@ cascade-graph = { workspace = true }
 cascade-engine = { workspace = true }
 cascade-application = { workspace = true }
 cascade-library = { workspace = true }
+cascade-sdk = { workspace = true }
 cascade-cli-controller = { workspace = true }
 cascade-cli-observer = { workspace = true }

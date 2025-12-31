@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade"
+name = "cascade-monorepo"
 version = "0.1.0"
 description = "A modern, declarative automation library for Python."
 readme = "README.md"
@@ -34,7 +34,7 @@ cascade-connector-mqtt = { workspace = true }
 cascade-connector-local = { workspace = true }
 cascade-compiler = { workspace = true }
 cascade-vm = { workspace = true }
-cascade = { path = "packages/cascade-python", editable = true }
+cascade = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
@@ -51,7 +51,7 @@ packages = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/cascade-python/src/cascade"]
+packages = []
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov=cascade --cov-report=term-missing"

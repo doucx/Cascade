@@ -94,6 +94,7 @@ class Engine:
             constraint_manager=self.constraint_manager,
             wakeup_event=self._wakeup_event,
             bus=self.bus,
+            executor=self.executor,
         )
 
         self._managed_subscribers = []

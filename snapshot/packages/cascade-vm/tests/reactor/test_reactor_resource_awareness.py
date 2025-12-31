@@ -1,35 +1,3 @@
-这是第四阶段的测试文件。根据 TDD 原则，我将断言**期望的正确行为**（即 Reactor 应该遵守资源限制）。因此，在当前的贪婪实现下，这些测试将**失败 (RED)**。
-
-## [WIP] test(vm): add reactor resource awareness tests for phase 4
-
-### 用户需求
-编写第四阶段（Phase 4）所需的测试用例，涵盖资源过载保护和等待唤醒机制。
-
-### 评论
-这些测试定义了 `Reactor` 与 `ResourceManager` 集成的行为契约。目前 `Reactor` 尚未感知资源，因此这些测试在执行时将因 `TypeError` (构造函数不支持 resource_manager) 或 `AssertionError` (提交了过多任务) 而失败。
-
-### 目标
-创建 `packages/cascade-vm/tests/reactor/test_reactor_resource_awareness.py`。
-
-### 基本原理
-按照 "Phase 4: The Physics Engine" 路线图，我们需要两个核心测试：
-1.  验证 Reactor 在资源不足时能暂停调度（背压）。
-2.  验证 Reactor 在资源释放后能唤醒并调度后续任务。
-
-### 标签
-#intent/tooling #flow/draft #priority/high #comp/tests #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/reactor #task/action/test
-
----
-
-### Script
-
-#### Acts 1: 创建资源感知测试文件
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/reactor/test_reactor_resource_awareness.py
-~~~~~
-~~~~~python
 import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock
@@ -165,11 +133,3 @@ async def test_reactor_waits_for_resources_and_wakes_up():
     # Verify the second call was for the remaining node
     last_submitted = mock_executor.submit.call_args[0][0]
     assert last_submitted == remaining_node
-~~~~~
-
-### 下一步建议
-我们已经建立了 TDD 的基础。现在的状态是 **RED**。
-接下来的步骤是实现 Phase 4.1：
-1.  修改 `Reactor.__init__` 以接收 `ResourceManager`。
-2.  修改 `Reactor.step` 和内部逻辑，在 `_fire` 之前检查并获取资源。
-3.  确保测试 `test_reactor_respects_resource_concurrency_limit` 通过。

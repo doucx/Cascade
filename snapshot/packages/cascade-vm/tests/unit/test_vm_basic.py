@@ -24,34 +24,38 @@ async def test_vm_instruction_execution():
       r1 = add(r0, 3)
     Verify that r1 contains 6.
     """
+    symbol_table = {
+        "hash_for_add": _add,
+    }
+
     # Program:
     # 1. r0 = _add(1, 2)
     instr1 = Call(
-        func=_add,
+        structure_hash="hash_for_add",
         output=Register(0),
         args=[Literal(1), Literal(2)],
         kwargs={},
-        task_name="add_1"
+        task_name="add_1",
     )
-    
+
     # 2. r1 = _add(r0, 3)
     instr2 = Call(
-        func=_add,
+        structure_hash="hash_for_add",
         output=Register(1),
         args=[Register(0), Literal(3)],
         kwargs={},
-        task_name="add_2"
+        task_name="add_2",
     )
-    
+
     blueprint = Blueprint(
         instructions=[instr1, instr2],
         register_count=2,
         input_args=[],
-        input_kwargs={}
+        input_kwargs={},
     )
 
     vm = VirtualMachine()
-    result = await vm.execute(blueprint)
+    result = await vm.execute(blueprint, symbol_table)
 
     # The result of the last instruction should be returned
     assert result == 6
@@ -65,22 +69,26 @@ async def test_vm_async_execution():
       r0 = async_add(10, 20)
     Verify that VM awaits the result correctly.
     """
+    symbol_table = {
+        "hash_for_async_add": _async_add,
+    }
+
     instr = Call(
-        func=_async_add,
+        structure_hash="hash_for_async_add",
         output=Register(0),
         args=[Literal(10), Literal(20)],
         kwargs={},
-        task_name="async_add"
+        task_name="async_add",
     )
-    
+
     blueprint = Blueprint(
         instructions=[instr],
         register_count=1,
         input_args=[],
-        input_kwargs={}
+        input_kwargs={},
     )
 
     vm = VirtualMachine()
-    result = await vm.execute(blueprint)
+    result = await vm.execute(blueprint, symbol_table)
 
     assert result == 30

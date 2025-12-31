@@ -1,41 +1,34 @@
-好的，我们现在开始处理 `cascade-engine` 包。
+好的，我们来处理 `cascade-graph` 包。这个包的测试主要集中在图的构建、哈希、序列化和编译逻辑上。
 
-`cascade-engine` 是核心运行时的所在地，其测试非常丰富，涵盖了从底层的事件总线、虚拟机，到中间层的适配器（缓存、状态、求解器、执行器），再到最高层的引擎调度逻辑。
+经过分析，绝大多数测试（如 `test_build.py`, `test_hashing.py`, `test_serialize.py`）只依赖于 `build_graph` 或序列化工具，验证的是纯粹的图变换逻辑，属于**单元测试**。而 `test_static_integrity.py` 启动了完整的 `Engine` 并在 `asyncio` 环境下运行，验证的是运行时的约束检查，属于**集成测试**。
 
-## [WIP] refactor(tests): 为 cascade-engine 分离单元与集成测试
+## [WIP] refactor(tests): 为 cascade-graph 分离单元测试与集成测试
 
 ### 用户需求
 
-对 `cascade-engine` 包进行测试结构重构，将测试文件按照 **Unit (单元测试)** 和 **Integration (集成测试)** 进行归类整合。
+在 `cascade-graph` 包内，将现有的测试文件按照“单元测试”和“集成测试”的逻辑进行重新组织。
 
 ### 评论
 
-`cascade-engine` 的测试量较大。目前它们分散在 `adapters/` 和 `runtime/` 等功能目录下。
-在重构过程中，我将遵循以下原则：
-1.  **单元测试**: 验证组件的孤立逻辑。例如，`InMemoryCacheBackend` 的存取逻辑、`NativeSolver` 的静态求解逻辑、`VirtualMachine` 的指令执行逻辑等。这些测试不启动 `Engine.run()`。
-2.  **集成测试**: 验证组件间的协作。任何依赖 `Engine.run()` 或 `cs.run()`，通过端到端流程来验证功能的测试（如重试策略、并发限制、控制流跳转）都归为集成测试。
-
-为了保持目录整洁，我将扁平化原本嵌套在 `adapters/` 下的测试。
+`cascade-graph` 是系统的核心逻辑组件。将其复杂的图构建和编译器测试归类为单元测试，可以确保在不启动重量级运行时（如消息总线、执行器）的情况下，依然能快速验证图结构的正确性。
 
 ### 目标
 
-1.  在 `packages/cascade-engine/tests/` 下创建 `unit/` 和 `integration/` 目录。
-2.  **归类为 Unit (单元测试)**:
-    *   缓存/状态适配器：`test_in_memory.py`, `test_redis_cache.py`, `test_in_memory_state.py`, `test_redis_state.py`。
-    *   求解器/执行器：`test_native.py`, `test_csp.py`, `test_local.py`。
-    *   运行时核心组件：`test_bus.py`, `test_flow_manager.py`, `test_vm.py`, `test_vm_integration.py`, `test_vm_mutual.py`。
-3.  **归类为 Integration (集成测试)**:
-    *   基于文件系统的缓存：`test_file_existence.py` (使用 `cs.run`)。
-    *   引擎调度逻辑：`test_engine_core.py`, `test_control_flow.py`, `test_engine_concurrency.py`, `test_engine_constraints.py`, `test_explicit_control_flow.py`, `test_flow_primitives.py`, `test_input_execution.py`, `test_map.py`, `test_map_policies.py`, `test_map_reduce_integration.py`, `test_retry.py`, `test_router_pruning.py`。
-    *   原有的 `integration/` 目录内容。
-4.  保留 `conftest.py` 在 `tests/` 根目录，以便两个子目录共享 fixture。
-5.  清理旧的 `adapters/` 和 `runtime/` 目录。
+1.  在 `packages/cascade-graph/tests/` 目录下创建 `unit/` 和 `integration/` 目录。
+2.  **迁移至 Integration**:
+    *   `test_static_integrity.py`: 因为它使用了 `Engine.run()` 来验证运行时对非法图结构的拦截。
+3.  **迁移至 Unit**:
+    *   `test_build.py`: 验证 `build_graph` 的拓扑结构生成。
+    *   `test_compiler.py`: 验证从图到蓝图（Blueprint）的编译转换。
+    *   `test_execution_mode.py`: 验证节点元数据的提取。
+    *   `test_hashing.py`: 验证图结构的哈希指纹逻辑。
+    *   `test_purity_model.py`: 验证纯函数任务的去重逻辑。
+    *   `test_serialize.py`: 验证图的 JSON 序列化与反序列化。
 
 ### 基本原理
 
-通过分析测试代码：
-*   如果测试直接操作类实例（如 `backend.set()`, `solver.resolve()`, `vm.execute()`）并使用简单的 `asyncio.run`，则为单元测试。
-*   如果测试构建了一个完整的 `Engine` 实例或调用 `cs.run(workflow)`，则为集成测试。
+*   **单元测试分类准则**: 凡是仅通过输入 `LazyResult` 并断言生成的 `Graph` 或 `Blueprint` 对象的测试，均视为单元测试。
+*   **集成测试分类准则**: 凡是需要实例化 `Engine`、`Solver` 或涉及 `await engine.run()` 的测试，均视为集成测试。
 
 ### 标签
 
@@ -45,281 +38,97 @@
 
 ### Script
 
-#### Acts 1: 创建目录结构
+#### Acts 1: 创建测试子目录
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-engine/tests/unit packages/cascade-engine/tests/integration
+mkdir -p packages/cascade-graph/tests/unit packages/cascade-graph/tests/integration
 ~~~~~
 
-#### Acts 2: 迁移单元测试 (Unit Tests)
+#### Acts 2: 迁移集成测试
 
-我们将适配器测试扁平化并重命名，以保持目录结构清晰。
-
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/cache/test_in_memory.py
-packages/cascade-engine/tests/unit/test_cache_in_memory.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/cache/test_in_memory.stitcher.yaml
-packages/cascade-engine/tests/unit/test_cache_in_memory.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/cache/test_redis_cache.py
-packages/cascade-engine/tests/unit/test_cache_redis.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/cache/test_redis_cache.stitcher.yaml
-packages/cascade-engine/tests/unit/test_cache_redis.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/executors/test_local.py
-packages/cascade-engine/tests/unit/test_executor_local.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/executors/test_local.stitcher.yaml
-packages/cascade-engine/tests/unit/test_executor_local.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/solvers/test_csp.py
-packages/cascade-engine/tests/unit/test_solver_csp.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/solvers/test_csp.stitcher.yaml
-packages/cascade-engine/tests/unit/test_solver_csp.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/solvers/test_native.py
-packages/cascade-engine/tests/unit/test_solver_native.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/state/test_in_memory_state.py
-packages/cascade-engine/tests/unit/test_state_in_memory.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/state/test_in_memory_state.stitcher.yaml
-packages/cascade-engine/tests/unit/test_state_in_memory.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/state/test_redis_state.py
-packages/cascade-engine/tests/unit/test_state_redis.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/adapters/state/test_redis_state.stitcher.yaml
-packages/cascade-engine/tests/unit/test_state_redis.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_bus.py
-packages/cascade-engine/tests/unit/test_bus.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_bus.stitcher.yaml
-packages/cascade-engine/tests/unit/test_bus.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_flow_manager.py
-packages/cascade-engine/tests/unit/test_flow_manager.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_flow_manager.stitcher.yaml
-packages/cascade-engine/tests/unit/test_flow_manager.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_vm.py
-packages/cascade-engine/tests/unit/test_vm.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_vm.stitcher.yaml
-packages/cascade-engine/tests/unit/test_vm.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_vm_integration.py
-packages/cascade-engine/tests/unit/test_vm_builder.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_vm_integration.stitcher.yaml
-packages/cascade-engine/tests/unit/test_vm_builder.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_vm_mutual.py
-packages/cascade-engine/tests/unit/test_vm_mutual.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_vm_mutual.stitcher.yaml
-packages/cascade-engine/tests/unit/test_vm_mutual.stitcher.yaml
-~~~~~
-
-#### Acts 3: 迁移集成测试 (Integration Tests)
-
-我们将所有涉及 `Engine` 运行的测试移动到 `integration` 目录，并统一前缀。
+将涉及运行时行为的测试移动到 `integration`。
 
 ~~~~~act
 move_file
-packages/cascade-engine/tests/adapters/caching/test_file_existence.py
-packages/cascade-engine/tests/integration/test_file_existence_cache.py
+packages/cascade-graph/tests/test_static_integrity.py
+packages/cascade-graph/tests/integration/test_static_integrity.py
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-engine/tests/adapters/caching/test_file_existence.stitcher.yaml
-packages/cascade-engine/tests/integration/test_file_existence_cache.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/integration/test_compiler_integration.py
-packages/cascade-engine/tests/integration/test_compiler.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_control_flow.py
-packages/cascade-engine/tests/integration/test_engine_control_flow.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_control_flow.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_control_flow.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_engine_concurrency.py
-packages/cascade-engine/tests/integration/test_engine_concurrency.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_engine_concurrency.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_concurrency.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_engine_constraints.py
-packages/cascade-engine/tests/integration/test_engine_constraints.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_engine_constraints.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_constraints.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_engine_core.py
-packages/cascade-engine/tests/integration/test_engine_core.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_engine_core.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_core.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_explicit_control_flow.py
-packages/cascade-engine/tests/integration/test_engine_explicit_control_flow.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_explicit_control_flow.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_explicit_control_flow.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_flow_primitives.py
-packages/cascade-engine/tests/integration/test_engine_flow_primitives.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_input_execution.py
-packages/cascade-engine/tests/integration/test_engine_inputs.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_input_execution.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_inputs.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_map.py
-packages/cascade-engine/tests/integration/test_engine_map.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_map.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_map.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_map_policies.py
-packages/cascade-engine/tests/integration/test_engine_map_policies.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_map_policies.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_map_policies.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_map_reduce_integration.py
-packages/cascade-engine/tests/integration/test_engine_map_reduce.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_map_reduce_integration.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_map_reduce.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_retry.py
-packages/cascade-engine/tests/integration/test_engine_retry.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_retry.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_retry.stitcher.yaml
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_router_pruning.py
-packages/cascade-engine/tests/integration/test_engine_router_pruning.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-engine/tests/runtime/test_router_pruning.stitcher.yaml
-packages/cascade-engine/tests/integration/test_engine_router_pruning.stitcher.yaml
+packages/cascade-graph/tests/test_static_integrity.stitcher.yaml
+packages/cascade-graph/tests/integration/test_static_integrity.stitcher.yaml
 ~~~~~
 
-#### Acts 4: 清理旧目录
+#### Acts 3: 迁移单元测试
+
+将所有纯逻辑验证的测试移动到 `unit`。
 
 ~~~~~act
-run_command
+move_file
+packages/cascade-graph/tests/test_build.py
+packages/cascade-graph/tests/unit/test_build.py
 ~~~~~
-~~~~~bash
-rm -rf packages/cascade-engine/tests/adapters packages/cascade-engine/tests/runtime
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_build.stitcher.yaml
+packages/cascade-graph/tests/unit/test_build.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_compiler.py
+packages/cascade-graph/tests/unit/test_compiler.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_compiler.stitcher.yaml
+packages/cascade-graph/tests/unit/test_compiler.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_execution_mode.py
+packages/cascade-graph/tests/unit/test_execution_mode.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_execution_mode.stitcher.yaml
+packages/cascade-graph/tests/unit/test_execution_mode.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_hashing.py
+packages/cascade-graph/tests/unit/test_hashing.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_hashing.stitcher.yaml
+packages/cascade-graph/tests/unit/test_hashing.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_purity_model.py
+packages/cascade-graph/tests/unit/test_purity_model.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_purity_model.stitcher.yaml
+packages/cascade-graph/tests/unit/test_purity_model.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_serialize.py
+packages/cascade-graph/tests/unit/test_serialize.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-graph/tests/test_serialize.stitcher.yaml
+packages/cascade-graph/tests/unit/test_serialize.stitcher.yaml
 ~~~~~
 
 ### 下一步建议
 
-`cascade-engine` 的测试迁移非常成功，现在测试结构已经非常清晰：`unit` 验证原子逻辑，`integration` 验证引擎调度逻辑。
+`cascade-graph` 的测试已经整理完毕。
 
-下一个包是 `cascade-graph`。我注意到这个包目前的测试都在 `packages/cascade-graph/tests/` 根目录下。我将对其进行分析并继续执行迁移。
+现在我们只剩下最后一个包含复杂测试的包了：`cascade-engine`。该包的测试非常多且重要，因为它包含了各种适配器（Cache, State）、执行策略和并发控制的验证。我将接着为您分析并整理 `cascade-engine`。

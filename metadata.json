@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 定义 BipartiteGraph 物理拓扑契约", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767182281.5131533, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实现 BipartiteGraph 物理拓扑契约", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767182351.5834208, "duration_ms": 0}}

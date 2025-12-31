@@ -1,119 +1,87 @@
-好的，我们正式开启 **Phase 3.1**。
+好的，我们现在进入 **GREEN** 阶段。
 
-为了定义物理拓扑层（Physics Topology Layer）的契约，我将创建一个测试文件 `packages/cascade-spec/tests/topology/test_bipartite_graph_schema.py`。这个测试将强制要求 `cascade.spec.topology` 模块的存在，并且其中的数据结构（`BipartiteGraph`, `ChannelDef` 等）必须严格遵循我们在**符号表**中定义的“哈希强制长命名规范”。
+我将创建 `packages/cascade-spec/src/cascade/spec/topology.py` 文件，并精确实现 `test_bipartite_graph_schema.py` 中定义的 `PhysicsFuncNode`, `PhysicsDataNode`, `ChannelDef`, 和 `BipartiteGraph` 数据类。这将使我们的测试套件从 RED 变为 GREEN。
 
-这是 TDD 的 **RED** 步骤。
-
-## [WIP] test: 定义 BipartiteGraph 物理拓扑契约
+## [WIP] feat: 实现 BipartiteGraph 物理拓扑契约
 
 ### 用户需求
-定义编译器后端输出的静态数据结构契约。这包括二分图（Bipartite Graph）及其组成部分：物理函数节点（PhysicsFuncNode）、物理数据节点（PhysicsDataNode）和通道定义（ChannelDef）。
+根据 TDD 流程，实现 `packages/cascade-spec/tests/topology/test_bipartite_graph_schema.py` 中定义的物理拓扑数据结构，以使测试通过。
 
 ### 评论
-该测试不仅是一个 Schema 检查，它是对架构公理的强制执行。特别是 `ChannelDef`，它必须使用 `source_node_instance_hash` 和 `target_data_slot_hash` 这样精确的命名，彻底消除旧架构中 `source_id`/`target_id` 带来的语义模糊。
+这是架构演进的关键一步。通过创建这些严格命名的 `dataclass`，我们正在为编译器后端建立一个坚实且无歧义的“物理层”基础。这是将“势能驱动的数据流网络”白皮书中的概念转化为具体代码的第一个实际步骤。
 
 ### 目标
-创建 `packages/cascade-spec/tests/topology/test_bipartite_graph_schema.py`，尝试导入并实例化尚不存在的拓扑类，从而使测试变红。
+1.  创建 `packages/cascade-spec/src/cascade/spec/topology.py` 文件。
+2.  在文件中定义 `PhysicsFuncNode`, `PhysicsDataNode`, `ChannelDef`, 和 `BipartiteGraph` 四个 `dataclass`。
+3.  确保所有字段名称和类型与测试契约完全匹配，使测试套件通过。
 
 ### 基本原理
-通过编写使用预期 API 的测试代码，我们在实现之前就冻结了设计。这确保了实现者（随后的我）必须准确地满足这些命名和结构要求，没有偏差的余地。
+我们遵循 TDD (Test-Driven Development) 的核心循环。上一步我们编写了一个失败的测试（RED），现在我们编写最少的代码来让它通过（GREEN）。这些 `dataclass` 是纯粹的数据容器，完全符合测试中定义的 API 契约，没有额外的逻辑。
 
 ### 标签
-#intent/architect #flow/ready #priority/high #comp/interfaces #concept/state #scope/core #ai/instruct #task/domain/compiler #task/object/topology #task/action/definition #task/state/begin
+#intent/build #flow/ready #priority/high #comp/interfaces #concept/state #scope/core #ai/instruct #task/domain/compiler #task/object/topology #task/action/definition #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建拓扑契约测试
+#### Acts 1: 创建拓扑数据类实现
 
-我们将创建一个测试文件，该文件通过尝试导入和实例化 `BipartiteGraph` 及其相关组件来断言其 Schema。
+我们将在 `cascade.spec` 包中创建新的 `topology.py` 文件，并定义所有必需的数据结构。
 
 ~~~~~act
 write_file
-packages/cascade-spec/tests/topology/test_bipartite_graph_schema.py
+packages/cascade-spec/src/cascade/spec/topology.py
 ~~~~~
 ~~~~~python
-import pytest
-from dataclasses import is_dataclass
-
-# This import is expected to fail initially (RED state)
-# We are defining the contract for the new topology module.
-from cascade.spec.topology import (
-    BipartiteGraph,
-    ChannelDef,
-    PhysicsFuncNode,
-    PhysicsDataNode
-)
+from dataclasses import dataclass
+from typing import Dict, List
 
 
-def test_channel_def_schema_adheres_to_symbol_table():
+@dataclass(frozen=True)
+class PhysicsFuncNode:
     """
-    Validates that ChannelDef adheres to the 'Hash Naming Axiom' and 'Phase 3 Symbol Table'.
-    
-    A ChannelDef represents a directed edge in the bipartite graph, connecting
-    a specific output port of a Function Node to a Data Node (slot).
-    
-    It must NOT use vague names like 'source_id' or 'target_id'.
+    Represents a computational instance in the physical bipartite graph.
+    This is the "Verb" or the transformer.
     """
-    channel = ChannelDef(
-        source_node_instance_hash="func_inst_123",
-        target_data_slot_hash="data_slot_456",
-        port_name="result",
-        tag_filter="default"
-    )
-    
-    assert is_dataclass(channel)
-    assert channel.source_node_instance_hash == "func_inst_123"
-    assert channel.target_data_slot_hash == "data_slot_456"
-    assert channel.port_name == "result"
-    assert channel.tag_filter == "default"
+    current_node_instance_hash: str
+    name: str
 
 
-def test_physics_nodes_schema():
+@dataclass(frozen=True)
+class PhysicsDataNode:
     """
-    Validates the schema for the nodes in the bipartite graph.
+    Represents a data storage slot in the physical bipartite graph.
+    This is the "Noun" or the container. It tracks its origin.
     """
-    # PhysicsFuncNode: Represents a computation instance (The "Verb")
-    f_node = PhysicsFuncNode(
-        current_node_instance_hash="func_inst_abc",
-        name="calculate_metrics"
-    )
-    assert is_dataclass(f_node)
-    assert f_node.current_node_instance_hash == "func_inst_abc"
-    assert f_node.name == "calculate_metrics"
-
-    # PhysicsDataNode: Represents a storage slot (The "Noun")
-    # It must track who produced it for lineage.
-    d_node = PhysicsDataNode(
-        current_data_slot_hash="slot_xyz",
-        name="metrics_output",
-        producer_node_instance_hash="func_inst_abc"
-    )
-    assert is_dataclass(d_node)
-    assert d_node.current_data_slot_hash == "slot_xyz"
-    assert d_node.producer_node_instance_hash == "func_inst_abc"
+    current_data_slot_hash: str
+    name: str
+    producer_node_instance_hash: str
 
 
-def test_bipartite_graph_container_structure():
+@dataclass(frozen=True)
+class ChannelDef:
     """
-    Validates the top-level container structure.
-    It should provide indexed access to nodes and a list of channels.
+    Defines a static, directed connection from a FuncNode's output port
+    to a DataNode's input slot, with routing logic.
     """
-    graph = BipartiteGraph(
-        func_nodes={},
-        data_nodes={},
-        channels=[]
-    )
-    
-    assert is_dataclass(graph)
-    # Must be typed as Dict[str, PhysicsFuncNode]
-    assert isinstance(graph.func_nodes, dict)
-    # Must be typed as Dict[str, PhysicsDataNode]
-    assert isinstance(graph.data_nodes, dict)
-    # Must be typed as List[ChannelDef]
-    assert isinstance(graph.channels, list)
+    source_node_instance_hash: str
+    target_data_slot_hash: str
+    port_name: str
+    tag_filter: str = "default"
+
+
+@dataclass(frozen=True)
+class BipartiteGraph:
+    """
+    The static, physical blueprint of the computation network, output by the compiler.
+    """
+    func_nodes: Dict[str, PhysicsFuncNode]
+    data_nodes: Dict[str, PhysicsDataNode]
+    channels: List[ChannelDef]
 ~~~~~
 
 ### 下一步建议
-一旦测试文件创建（测试失败），我们将进入 **GREEN** 阶段：在 `packages/cascade-spec/src/cascade/spec/topology.py` 中实现这些数据类，使其完全匹配测试中定义的契约。
+我们已经成功定义了物理层的契约。根据路线图，下一步是 **阶段 3.2：[TDD] 编译线性图到拓扑**。
+
+我将创建一个新的测试文件 `packages/cascade-compiler/tests/unit/test_backend_topology.py`。这个测试会驱动我们重构 `Backend`，使其停止生成旧的 `Blueprint`，转而生成我们刚刚定义的 `BipartiteGraph`。这将是编译器重构的核心。

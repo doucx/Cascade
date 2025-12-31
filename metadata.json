@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: Create Phase 2 Reactor and Routing tests", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767176464.9314876, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: Implement Reactor Core", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767176554.2410355, "duration_ms": 0}}

@@ -1,31 +1,24 @@
-好的，接下来处理 `cascade-compiler` 包的测试。
+好的，继续重构 `cascade-common` 包的测试。根据分析，这些测试都是对核心消息组件和渲染器的纯粹单元测试。
 
-这个包的所有测试 (`test_backend.py`, `test_frontend.py`, `test_optimizer.py`) 都属于**单元测试**范畴：
-1.  **`test_frontend.py`**: 验证 `Frontend` 将 `LazyResult` 结构转换为 `GraphIR` 的静态逻辑。它不运行任何任务。
-2.  **`test_optimizer.py`**: 验证 `Optimizer` 在给定 `GraphIR` 结构下执行拓扑排序和周期检测的纯算法逻辑。它不涉及运行时。
-3.  **`test_backend.py`**: 验证 `Backend` 将 `GraphIR` 结构转换为 `Blueprint` (VM 指令集) 的逻辑。它只涉及数据结构转换。
-
-因此，所有文件都将被移动到 `unit/` 目录中。
-
-## [WIP] refactor(tests): 为 cascade-compiler 分离单元测试
+## [WIP] refactor(tests): 为 cascade-common 移动所有测试到 unit 目录
 
 ### 用户需求
 
-将 `cascade-compiler` 包下的所有测试文件迁移到新创建的 `unit/` 目录中，因为这些测试都是针对编译器组件的静态逻辑验证，不依赖于完整的 Cascade 运行时。
+对 `cascade-common` 包进行测试结构重构。在 `packages/cascade-common/tests/` 目录下创建 `unit/` 和 `integration/` 目录，并将现有的测试文件移动到 `unit/` 目录中。
 
 ### 评论
 
-`cascade-compiler` 的核心职责是处理静态数据结构 (`LazyResult` -> `GraphIR` -> `ExecutionPlan` -> `Blueprint`)。其测试应严格隔离在单元测试层。由于目前没有集成测试，我们将仅创建 `unit` 目录。
+`cascade-common` 包含了消息总线、消息存储和渲染器等核心实用工具。这些组件被设计为可独立测试的。将它们归类为单元测试是正确的，这确保了它们不依赖于完整的 Cascade 运行时，提高了测试的执行速度和可靠性。
 
 ### 目标
 
-1.  在 `packages/cascade-compiler/tests/` 目录下创建 `unit/` 目录。
-2.  将所有现有的测试文件 (`test_backend.py`, `test_frontend.py`, `test_optimizer.py`) 移动到 `unit/` 目录中。
-3.  删除空的 `packages/cascade-compiler/tests/` 目录下的旧文件。
+1.  在 `packages/cascade-common/tests/` 目录下创建 `unit/` 和 `integration/` 目录。
+2.  将 `test_messaging.py`, `test_messaging.stitcher.yaml` 和 `test_renderers.py` 移动到 `unit/` 目录。
+3.  清理旧的测试文件和目录（如果适用）。
 
 ### 基本原理
 
-如前所述，所有测试都属于对编译器前端、优化器和后端逻辑的隔离验证，符合单元测试的定义。
+`test_messaging.py` 仅测试 `MessageBus` 和 `MessageStore` 的内部逻辑和渲染器委托；`test_renderers.py` 仅测试 `CliRenderer` 和 `JsonRenderer` 的格式化输出和过滤功能。两者都不需要启动 `Engine` 或依赖复杂的外部组件，因此全部归类为单元测试。
 
 ### 标签
 
@@ -35,37 +28,37 @@
 
 ### Script
 
-#### Acts 1: 创建 Unit 目录
+#### Acts 1: 创建新的测试目录结构
 
-为 `cascade-compiler` 包创建 `unit` 测试目录。
+为 `cascade-common` 包创建 `unit` 和 `integration` 测试目录。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-compiler/tests/unit
+mkdir -p packages/cascade-common/tests/unit packages/cascade-common/tests/integration
 ~~~~~
 
-#### Acts 2: 迁移所有测试文件到 Unit 目录
+#### Acts 2: 迁移单元测试
+
+将所有现有测试文件及其 YAML 配置移动到 `unit` 目录。
 
 ~~~~~act
 move_file
-packages/cascade-compiler/tests/test_backend.py
-packages/cascade-compiler/tests/unit/test_backend.py
+packages/cascade-common/tests/test_messaging.py
+packages/cascade-common/tests/unit/test_messaging.py
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-compiler/tests/test_frontend.py
-packages/cascade-compiler/tests/unit/test_frontend.py
+packages/cascade-common/tests/test_messaging.stitcher.yaml
+packages/cascade-common/tests/unit/test_messaging.stitcher.yaml
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-compiler/tests/test_optimizer.py
-packages/cascade-compiler/tests/unit/test_optimizer.py
+packages/cascade-common/tests/test_renderers.py
+packages/cascade-common/tests/unit/test_renderers.py
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了 `cascade-compiler` 的测试结构重构。
-
-接下来我将继续检查其他包的测试结构，下一个目标是 `cascade-graph`。
+`cascade-common` 的测试结构已重构。下一个待处理的包是 `cascade-graph`。我将分析该包的测试文件，并为您生成相应的迁移计划。

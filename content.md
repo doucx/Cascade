@@ -1,99 +1,70 @@
-好的，测试通过。我们现在进入“架构硬化”任务的第二阶段。
+你完全正确，我的上一个计划不完整。我移动了文件，但未能更新所有引用了这些旧路径的导入语句，特别是 `reflection.py` 文件内部的自引用，导致了你看到的 `ModuleNotFoundError`。
 
-你的问题非常关键，它触及了这次重构的核心战略：“我们应该如何处理旧的 `cascade-graph` 包？”
+这是一个典型的重构错误，感谢你提供的详细 traceback 和 `grep` 结果，这让我可以精确地定位并修复所有遗漏之处。
 
-**答案是：我们不应该让 `cascade-graph` 反向依赖 `cascade-compiler`。**
+我将生成一个 `fix` 计划来纠正这些悬空的导入。
 
-这会违反我们的“焦土政策”。`cascade-graph` 是一个注定要被废弃的遗留包。让它依赖一个全新的、代表未来的包，会创造一个混乱的、循环的依赖关系，并拖延我们最终将其彻底删除的目标。
+## [WIP] fix(compiler): Correct broken imports after component migration
 
-正确的策略是：
-1.  **物理迁移**：将 `cascade-graph` 中有价值的、可重用的核心组件（`ReflectionAnalyzer`, `HashingService`）物理地移动到 `cascade-compiler` 中，使 `compiler` 包自包含。
-2.  **暂时修复**：`cascade-graph` 中的 `build.py` 会因此损坏。为了在过渡期间保持旧的 `GraphExecutionStrategy` 仍然可用（以便通过现有测试），我们将**临时**地修改 `build.py`，让它从 `cascade.compiler` 中导入这些组件。
-3.  **最终废弃**：一旦 `VMExecutionStrategy` 实现了功能对等并成为默认策略，我们就可以安全地删除整个 `cascade-graph` 包，这个临时的依赖关系也会随之消失。
-
-我将生成一个计划来执行第一步和第二步。
-
-## [WIP] refactor(compiler): Decouple compiler from cascade-graph
+### 错误分析
+上一个计划中，我将 `cascade-graph` 的 `analysis` 和 `hashing` 模块物理迁移到了 `cascade-compiler`。然而，我遗漏了两个关键的更新：
+1.  **内部依赖**: `cascade-compiler/src/cascade/compiler/analysis/reflection.py` 文件本身还在尝试从旧路径 `cascade.graph.analysis.protocols` 导入 `TaskAnalyzer`。在文件移动后，这应该是一个相对导入 (`.protocols`)。这是导致测试启动失败的直接原因。
+2.  **外部依赖**: `grep` 结果显示，`cascade-engine/src/cascade/runtime/strategies/graph.py` 仍然在从 `cascade.graph.hashing` 导入 `BlueprintHasher`。这个导入也必须更新到 `cascade.compiler.hashing`。
 
 ### 用户需求
-1.  将核心分析和哈希组件（`ReflectionAnalyzer`, `HashingService`）从 `cascade-graph` 迁移到 `cascade-compiler`。
-2.  使 `cascade-compiler` 包完全独立，不再依赖于 `cascade-graph`。
-3.  确保旧的 `cascade-graph` 在过渡期内仍然可以工作。
+修复因 `analysis` 和 `hashing` 模块迁移而导致的 `ModuleNotFoundError`，使测试套件能够正常运行。
 
 ### 评论
-这是一个决定性的步骤，旨在实现 `cascade-compiler` 的完全解耦和自包含。通过物理迁移代码而非仅仅改变依赖关系，我们明确了 `cascade-compiler` 作为新架构核心的地位，并为最终移除 `cascade-graph` 铺平了道路。临时修复 `cascade-graph` 的导入是一个务实的妥协，它保证了在过渡阶段我们现有的测试套件和旧的执行路径依然能够运行，从而降低了重构的风险。
+这是一个必要的修正步骤，用于完成上一阶段的重构。确保所有相关的导入都指向新的、正确的位置，是保证代码库一致性和可维护性的基础。
 
 ### 目标
-1.  将 `cascade-graph/src/cascade/graph/analysis/` 目录移动到 `cascade-compiler/src/cascade/compiler/analysis/`。
-2.  将 `cascade-graph/src/cascade/graph/hashing.py` 文件移动到 `cascade-compiler/src/cascade/compiler/hashing.py`。
-3.  更新 `cascade-compiler/src/cascade/compiler/frontend.py` 中的导入语句，使其使用内部的、新移动过来的组件。
-4.  更新 `cascade-graph/src/cascade/graph/build.py` 中的导入语句，使其临时从 `cascade.compiler` 导入所需的组件，以保持旧图构建逻辑的兼容性。
+1.  修正 `reflection.py` 中的内部导入，使其使用相对路径。
+2.  修正 `graph.py` (GraphExecutionStrategy) 中的导入，使其从 `cascade.compiler` 导入 `BlueprintHasher`。
 
 ### 基本原理
-根据“焦土政策”，`cascade-compiler` 必须成为一个完全独立的单元，不能依赖于任何将被废弃的包。本次迁移将 `ReflectionAnalyzer` 和 `HashingService` 这两个纯逻辑组件的所有权正式移交给 `compiler`。修改 `frontend.py` 使用相对导入可以确保 `compiler` 的内部一致性。同时，为了避免在重构过程中完全破坏旧的 `GraphExecutionStrategy`，我们通过修改 `cascade-graph` 的 `build.py` 来创建一个临时的、从新包到旧包的依赖桥梁。这个桥梁将在未来的清理阶段被拆除。
+`move_file` 操作只是完成了物理层面的代码迁移，但逻辑层面的引用关系必须手动更新。通过修复这些 `import` 语句，我们才能真正完成 `ReflectionAnalyzer` 和 `HashingService` 等组件向 `cascade-compiler` 的所有权转移，并恢复系统的可测试状态。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/compiler #comp/graph #concept/dependency-management #scope/core #ai/instruct #task/domain/architecture #task/object/decoupling #task/action/refactor #task/state/continue #task/status/active
+#intent/fix #flow/ready #priority/critical #comp/compiler #comp/graph #comp/engine #scope/core #ai/instruct #task/domain/architecture #task/object/decoupling #task/action/refactor #task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 物理迁移核心组件
+#### Acts 1: 修正 `reflection.py` 的内部导入
 
-我们将 `analysis` 目录和 `hashing.py` 文件从 `cascade-graph` 移动到 `cascade-compiler`。
-
-~~~~~act
-move_file
-packages/cascade-graph/src/cascade/graph/analysis
-packages/cascade-compiler/src/cascade/compiler/analysis
-~~~~~
-
-~~~~~act
-move_file
-packages/cascade-graph/src/cascade/graph/hashing.py
-packages/cascade-compiler/src/cascade/compiler/hashing.py
-~~~~~
-
-#### Acts 2: 更新 `cascade-compiler` 的内部导入
-
-现在 `compiler` 包已经自包含，我们更新 `frontend.py` 以使用相对导入来引用这些新移入的组件。
+这是导致 `ModuleNotFoundError` 的直接原因。我们将 `cascade.graph.analysis.protocols` 修正为相对导入。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/frontend.py
+packages/cascade-compiler/src/cascade/compiler/analysis/reflection.py
 ~~~~~
 ~~~~~python.old
-from cascade.graph.analysis.reflection import ReflectionAnalyzer
-from cascade.graph.hashing import HashingService
+from cascade.graph.analysis.protocols import TaskAnalyzer
 ~~~~~
 ~~~~~python.new
-from .analysis.reflection import ReflectionAnalyzer
-from .hashing import HashingService
+from .protocols import TaskAnalyzer
 ~~~~~
 
-#### Acts 3: 临时修复 `cascade-graph` 的依赖关系
+#### Acts 2: 修正 `GraphExecutionStrategy` 的 `BlueprintHasher` 导入
 
-为了让旧的 `GraphExecutionStrategy` 在过渡期内继续工作，我们修改 `cascade-graph` 的 `build.py`，让它从 `cascade.compiler` 中导入所需的组件。
+根据 `grep` 结果，修复 `GraphExecutionStrategy` 中对 `BlueprintHasher` 的引用。
 
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
 ~~~~~
 ~~~~~python.old
-from .hashing import HashingService
-from .analysis.reflection import ReflectionAnalyzer
+from cascade.graph.hashing import BlueprintHasher
 ~~~~~
 ~~~~~python.new
-from cascade.compiler.hashing import HashingService
-from cascade.compiler.analysis.reflection import ReflectionAnalyzer
+from cascade.compiler.hashing import BlueprintHasher
 ~~~~~
 
 ### 下一步建议
-我们已经完成了代码的物理迁移和依赖关系的初步调整。现在，我们需要验证这次重构的正确性。
+我们已经修正了所有已知的、因文件迁移导致的导入错误。现在，请重新运行测试，以验证这些修复是否解决了问题。
 
-我建议依次运行以下两个测试套件：
-1.  `pytest packages/cascade-compiler/`：验证 `cascade-compiler` 在解耦后是否能独立、正确地工作。
-2.  `pytest packages/cascade-graph/`：验证我们为 `cascade-graph` 建立的临时依赖桥梁是否有效，确保旧的图构建逻辑没有被完全破坏。
-
-如果两组测试都通过，我们就可以确认本次迁移是成功的。
+我建议再次执行：
+1.  `pytest packages/cascade-compiler/`
+2.  `pytest packages/cascade-graph/`
+3.  `pytest packages/cascade-engine/` (由于我们修改了 `strategies/graph.py`，也需要验证 `engine` 包)

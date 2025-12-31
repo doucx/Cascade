@@ -4,7 +4,7 @@ from typing import Any, List, Optional
 
 from cascade.spec.ir.models import TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
-from cascade.graph.analysis.protocols import TaskAnalyzer
+from .protocols import TaskAnalyzer
 
 # Type hint for the Cascade Task wrapper
 # We use Any here to avoid circular imports, but conceptually it is cascade.spec.task.Task

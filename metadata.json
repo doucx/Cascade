@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(spec): 创建物理层测试套件 (TDD RED Phase)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767176090.8128426, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(spec): 实现物理层核心实体 (TDD GREEN Phase)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767176182.6714063, "duration_ms": 0}}

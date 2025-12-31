@@ -1,37 +1,3 @@
-简要回答：
-好的，我将实现物理层核心模块 `physics.py`，定义 `Token`, `DataNode`, `FuncNode` 等类，以通过刚刚创建的测试用例。
-
-## [WIP] feat(spec): 实现物理层核心实体 (TDD GREEN Phase)
-
-### 用户需求
-用户需要实现 `cascade.spec.physics` 模块，以满足第一阶段重构的测试要求。这包括定义令牌结构、数据节点的存储策略以及函数节点的激发机制。
-
-### 评论
-这是“物理层”的基石实现。我们将采用 `dataclass` 来定义 `Token` 和 `Port` 以保持简洁。对于 `DataNode`，我们将实现基于 `deque` 或 `list` 的缓冲区，并支持 `OVERWRITE` 和 `REJECT` 两种策略，这直接对应于白皮书中的“寄存器模式”和“阻塞模式”。`FuncNode` 将实现势能检查逻辑 (`is_ready`)，这是势能驱动架构的核心。
-
-### 目标
-1.  创建 `packages/cascade-spec/src/cascade/spec/physics.py`。
-2.  实现 `Token`, `AccessPolicy`, `DataNode`, `Port`, `FuncNode`。
-
-### 基本原理
--   **Token**: 设计为不可变的数据载体。
--   **DataNode**: 实现了白皮书中描述的“有状态容器”。`OVERWRITE` 策略对于流处理和 TCO 循环至关重要（丢弃旧帧，保留新帧）。
--   **FuncNode**: 实现了“无状态转换器”。`consume_inputs` 和 `produce_outputs` 的分离使得原子化操作（如在 Reactor 循环中）成为可能。
-
-### 标签
-#intent/build #flow/ready #priority/high #comp/spec #concept/state #scope/core #ai/instruct #task/domain/core #task/object/physics-layer #task/action/implementation #task/state/continue #task/status/active
-
----
-
-### Script
-
-#### Acts 1: 实现 `cascade.spec.physics`
-
-~~~~~act
-write_file
-packages/cascade-spec/src/cascade/spec/physics.py
-~~~~~
-~~~~~python
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional
@@ -160,9 +126,3 @@ class FuncNode:
                 port = self.outputs[name]
                 if port.target:
                     port.target.put(token)
-~~~~~
-
-### 下一步建议
-实现完成后，我们应该运行测试以确认这一阶段的任务完成。
-建议执行：`pytest packages/cascade-spec/tests/physics/`。
-确认变绿后，我们将进入第二阶段：动力层实现 (Reactor Core)。

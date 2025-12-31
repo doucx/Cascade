@@ -1,204 +1,171 @@
-这是一个 **GREEN** 步骤。
+你的分析完全正确。这是一个典型的循环导入（circular import）错误，它揭示了一个架构上的深层问题：
 
-为了实现编译器的重构，我需要执行以下操作：
+1.  **`cascade.graph.build`** (在 `cascade-graph` 包中) 依赖 `cascade.compiler.hashing`。
+2.  **`cascade.compiler.hashing`** (在 `cascade-compiler` 包中) 又反过来依赖 `cascade.graph.model`。
 
-1.  **增强 Spec**: 修改 `cascade.spec.topology.PhysicsFuncNode`，为其添加 `inputs` 字段。这是表达数据流依赖（即二分图中的 D -> F 连接）所必需的。为了不破坏现有测试，我们将提供一个默认值。
-2.  **重写 Backend**: 完全重写 `cascade.compiler.backend`。移除旧的指令生成逻辑，替换为拓扑构建逻辑。
+这创建了一个不可解析的包间依赖环，导致 Python 解释器在加载模块时失败。`graph` 包作为更底层的模型定义，绝对不能依赖于更高层的 `compiler` 包。
 
-## [WIP] feat: 实现 Backend 拓扑生成器
+**解决方案**：我们将通过修改 `cascade.compiler.hashing` 来打破这个循环。它对 `cascade.graph.model.Node` 的依赖仅仅是为了一个类型提示和访问 `.current_node_instance_hash` 属性。我们可以通过使用 `typing.Any` (鸭子类型) 来移除这个硬性的导入依赖，从而切断循环。
 
-### 用户需求
-将 `Backend` 从指令集生成器重构为物理拓扑生成器。
+这是一个纠正性的修复步骤，然后我们就可以继续我们的 TDD 流程。
+
+## [WIP] fix: 解除 graph 和 compiler 包之间的循环导入
+
+### 错误分析
+`pytest` 在收集测试时失败，报告了一个 `ImportError`，指出 `cascade.compiler.hashing` 和 `cascade.graph` 之间存在循环导入。`GraphBuilder` (在 `graph` 包中) 需要 `HashingService` (在 `compiler` 包中) 来计算哈希，而 `HashingService` 需要 `Node` 的类型定义 (在 `graph` 包中) 来进行类型提示，从而形成了依赖环。
 
 ### 评论
-我在 `PhysicsFuncNode` 中添加了一个 `inputs` 字段。虽然目前的测试用例没有显式断言这一点，但这对于构建一个连通的图是逻辑上必须的。通过使用 `default_factory=dict`，我们保持了向后兼容性，不会破坏 Phase 3.1 的 Schema 测试。
+这是一个重要的架构健康度修复。包之间必须保持单向依赖的层次结构。这个修复通过在编译器层使用“鸭子类型”来解耦对具体图模型的依赖，从而恢复了正确的依赖方向。
 
 ### 目标
-1.  修改 `packages/cascade-spec/src/cascade/spec/topology.py`。
-2.  重写 `packages/cascade-compiler/src/cascade/compiler/backend.py`。
+1.  修改 `packages/cascade-compiler/src/cascade/compiler/hashing.py`。
+2.  移除对 `cascade.graph.model` 的直接导入。
+3.  使用 `typing.Any` 替代 `Node` 和 `Graph` 的类型提示，以打破循环。
+4.  确保测试收集能够成功。
 
 ### 基本原理
-**Backend 逻辑**:
-1.  **节点映射**: 遍历 `GraphIR` 的节点。对于每个节点，生成一个对应的 `PhysicsFuncNode` 和一个默认的输出 `PhysicsDataNode`。
-2.  **通道创建**: 为每个节点创建一条从 `FuncNode` 到其输出 `DataNode` 的 `ChannelDef`。
-3.  **输入连线**: 遍历 `GraphIR` 的边。对于每条边 `A -> B (arg)`，找到 A 对应的输出 `DataNode`，并将其哈希记录在 B 的 `inputs` 字典中。
+Python 的动态特性允许我们移除编译时的类型依赖，只要在运行时对象具有预期的属性即可。通过将类型提示从 `Node` 改为 `Any`，我们告诉静态分析器“相信我，这个对象在运行时会有我需要的属性”，从而在不改变运行时行为的情况下解决了导入问题。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/compiler #concept/topology #scope/core #ai/instruct #task/domain/compiler #task/object/backend #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/compiler #comp/graph #scope/dx #ai/instruct #task/domain/architecture #task/object/dependency-graph #task/action/refactor #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 增强 Spec 以支持输入连线
+#### Acts 1: 修改 `hashing.py` 以打破循环
+
+我们将修改 `hashing.py`，移除对 `cascade.graph.model` 的导入，并相应地调整类型提示。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/topology.py
+packages/cascade-compiler/src/cascade/compiler/hashing.py
 ~~~~~
 ~~~~~python.old
-from dataclasses import dataclass
-from typing import Dict, List
+import hashlib
+from typing import Any, List, Dict
+from cascade.graph.model import Graph, Node
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.resource import Inject
 
 
-@dataclass(frozen=True)
-class PhysicsFuncNode:
-    """
-    Represents a computational instance in the physical bipartite graph.
-    This is the "Verb" or the transformer.
-    """
-    current_node_instance_hash: str
-    name: str
-
-
-@dataclass(frozen=True)
-class PhysicsDataNode:
+class HashingService:
+    def compute_node_instance_hash(
+        self,
+        definition: TaskDef,
+        result: Any,  # LazyResult or MappedLazyResult
+        dep_nodes: Dict[str, Node],
+    ) -> str:
+        # 1. Start with the Stable Code Fingerprint
+        code_hash = definition.fingerprint["current_code_structure_hash"]
+        components = [f"CodeHash:{code_hash}"]
 ~~~~~
 ~~~~~python.new
-from dataclasses import dataclass, field
-from typing import Dict, List
+import hashlib
+from typing import Any, List, Dict
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.resource import Inject
 
 
-@dataclass(frozen=True)
-class PhysicsFuncNode:
-    """
-    Represents a computational instance in the physical bipartite graph.
-    This is the "Verb" or the transformer.
-    """
-    current_node_instance_hash: str
-    name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class PhysicsDataNode:
+class HashingService:
+    def compute_node_instance_hash(
+        self,
+        definition: TaskDef,
+        result: Any,  # LazyResult or MappedLazyResult
+        dep_nodes: Dict[str, Any],  # Changed from Node to Any to break import cycle
+    ) -> str:
+        # 1. Start with the Stable Code Fingerprint
+        code_hash = definition.fingerprint["current_code_structure_hash"]
+        components = [f"CodeHash:{code_hash}"]
 ~~~~~
-
-#### Acts 2: 重写 Backend 实现拓扑构建
 
 ~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/backend.py
+patch_file
+packages/cascade-compiler/src/cascade/compiler/hashing.py
 ~~~~~
-~~~~~python
-import hashlib
-from typing import List, Dict
+~~~~~python.old
+    def _get_merkle_hash(self, components: List[str]) -> str:
+        fingerprint = "|".join(components)
+        return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
-from cascade.spec.ir.models import GraphIR
-from cascade.spec.topology import (
-    BipartiteGraph,
-    PhysicsFuncNode,
-    PhysicsDataNode,
-    ChannelDef,
-)
+    def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Node]) -> List[str]:
+        # This recursive helper remains largely similar, just updated type hints if needed
+        components = []
 
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            node = dep_nodes[obj._uuid]
+            components.append(f"LAZY({node.current_node_instance_hash})")
 
-class Backend:
-    """
-    Compiler Backend: Transforms GraphIR into a static BipartiteGraph topology.
-    """
+        elif isinstance(obj, Router):
+            components.append("Router{")
+~~~~~
+~~~~~python.new
+    def _get_merkle_hash(self, components: List[str]) -> str:
+        fingerprint = "|".join(components)
+        return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
-    @staticmethod
-    def compile(graph: GraphIR) -> BipartiteGraph:
-        builder = _TopologyBuilder(graph)
-        return builder.build()
+    def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Any]) -> List[str]:
+        # This recursive helper remains largely similar, just updated type hints if needed
+        components = []
 
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            node = dep_nodes[obj._uuid]
+            components.append(f"LAZY({node.current_node_instance_hash})")
 
-class _TopologyBuilder:
-    def __init__(self, graph: GraphIR):
-        self._graph = graph
-        self._func_nodes: Dict[str, PhysicsFuncNode] = {}
-        self._data_nodes: Dict[str, PhysicsDataNode] = {}
-        self._channels: List[ChannelDef] = []
-        
-        # Helper map: FuncNode Hash -> Default Output DataNode Hash
-        self._func_output_map: Dict[str, str] = {}
+        elif isinstance(obj, Router):
+            components.append("Router{")
+~~~~~
 
-    def build(self) -> BipartiteGraph:
-        # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
-        for node_ir in self._graph.nodes:
-            self._process_node(node_ir)
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/hashing.py
+~~~~~
+~~~~~python.old
+class BlueprintHasher:
+    # Existing logic for Blueprint hashing (can be updated later if needed)
+    def compute_hash(self, graph: Graph) -> str:
+        all_components = []
+        sorted_nodes = sorted(graph.nodes, key=lambda n: n.current_node_instance_hash)
+        for node in sorted_nodes:
+            all_components.extend(self._get_node_components(node, graph))
+        return self._get_merkle_hash(all_components)
 
-        # Pass 2: Wire Inputs based on Edges
-        self._process_edges()
+    def _get_merkle_hash(self, components: List[str]) -> str:
+        fingerprint = "|".join(components)
+        return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
-        return BipartiteGraph(
-            func_nodes=self._func_nodes,
-            data_nodes=self._data_nodes,
-            channels=self._channels,
+    def _get_node_components(self, node: Node, graph: Graph) -> List[str]:
+        # Updated to use node.definition
+        components = [f"Node({node.definition.name}, type={node.node_type})"]
+        components.append(
+            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
         )
+~~~~~
+~~~~~python.new
+class BlueprintHasher:
+    # Existing logic for Blueprint hashing (can be updated later if needed)
+    def compute_hash(self, graph: Any) -> str:
+        all_components = []
+        sorted_nodes = sorted(graph.nodes, key=lambda n: n.current_node_instance_hash)
+        for node in sorted_nodes:
+            all_components.extend(self._get_node_components(node, graph))
+        return self._get_merkle_hash(all_components)
 
-    def _process_node(self, node_ir):
-        func_hash = node_ir.current_node_instance_hash
-        
-        # 1. Create PhysicsFuncNode
-        # Inputs will be populated in Pass 2
-        f_node = PhysicsFuncNode(
-            current_node_instance_hash=func_hash,
-            name=node_ir.definition.name,
-            inputs={} 
+    def _get_merkle_hash(self, components: List[str]) -> str:
+        fingerprint = "|".join(components)
+        return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
+
+    def _get_node_components(self, node: Any, graph: Any) -> List[str]:
+        # Updated to use node.definition
+        components = [f"Node({node.definition.name}, type={node.node_type})"]
+        components.append(
+            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
         )
-        self._func_nodes[func_hash] = f_node
-
-        # 2. Create Default Output DataNode (Slot)
-        # We assume a single output port named "result" for now.
-        # The data slot hash is deterministically derived from the producer + port.
-        data_slot_hash = self._compute_data_slot_hash(func_hash, "result")
-        self._func_output_map[func_hash] = data_slot_hash
-
-        d_node = PhysicsDataNode(
-            current_data_slot_hash=data_slot_hash,
-            name=f"{node_ir.definition.name}.output",
-            producer_node_instance_hash=func_hash
-        )
-        self._data_nodes[data_slot_hash] = d_node
-
-        # 3. Create Output Channel (Func -> Data)
-        channel = ChannelDef(
-            source_node_instance_hash=func_hash,
-            target_data_slot_hash=data_slot_hash,
-            port_name="result",
-            tag_filter="default" # Default filter
-        )
-        self._channels.append(channel)
-
-    def _process_edges(self):
-        for edge in self._graph.edges:
-            # Source of the edge is a FuncNode (in IR)
-            source_func_hash = edge.source_node_instance_hash
-            target_func_hash = edge.target_node_instance_hash
-            arg_name = edge.target_arg
-
-            # Find the DataNode produced by the source FuncNode
-            # In IR, edges are direct Func->Func. 
-            # In Topology, we must route through the DataNode.
-            source_data_hash = self._func_output_map.get(source_func_hash)
-            
-            if not source_data_hash:
-                # Should not happen in valid IR
-                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
-
-            # Link: Target FuncNode input 'arg_name' <- Source DataNode
-            target_func_node = self._func_nodes.get(target_func_hash)
-            if target_func_node:
-                # Note: PhysicsFuncNode is frozen, but we are in construction phase.
-                # Since dataclasses are frozen=True, we technically cannot mutate 'inputs'.
-                # However, 'inputs' is a mutable dict (default_factory), so we CAN mutate its content
-                # unless we made it immutable/frozen too. Standard dataclass behavior allows 
-                # mutating the mutable content of a frozen field.
-                target_func_node.inputs[arg_name] = source_data_hash
-
-    def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
-        raw = f"{producer_hash}:{port}"
-        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 ~~~~~
 
 ### 下一步建议
-我们已经完成了后端的基础重构。现在它能够生成二分图结构。
-
-接下来的步骤是 **阶段 3.3：[TDD] 编译字面量与扇出依赖**。
-我们需要处理一种特殊情况：字面量输入（Literal Inputs）。
-在二分图模型中，字面量也必须存在于 `DataNode` 中才能被 `FuncNode` 消费。这意味着编译器必须为字面量“预创建”并“预填充”数据节点。
-
-我将修改测试 `test_backend_topology.py`，添加关于字面量处理的用例，这将再次使测试变红。
+我们已经解决了阻断性的导入错误。现在，我将重新运行测试，以确认之前的重构 (`feat: 实现 Backend 拓扑生成器`) 是否能按预期通过。如果通过，我们将继续进行 **Phase 3.3**。

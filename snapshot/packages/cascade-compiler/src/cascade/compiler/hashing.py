@@ -1,6 +1,5 @@
 import hashlib
 from typing import Any, List, Dict
-from cascade.graph.model import Graph, Node
 from cascade.spec.ir.models import TaskDef
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -12,7 +11,7 @@ class HashingService:
         self,
         definition: TaskDef,
         result: Any,  # LazyResult or MappedLazyResult
-        dep_nodes: Dict[str, Node],
+        dep_nodes: Dict[str, Any],  # Changed from Node to Any to break import cycle
     ) -> str:
         # 1. Start with the Stable Code Fingerprint
         code_hash = definition.fingerprint["current_code_structure_hash"]
@@ -63,7 +62,7 @@ class HashingService:
         fingerprint = "|".join(components)
         return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
-    def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Node]) -> List[str]:
+    def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Any]) -> List[str]:
         # This recursive helper remains largely similar, just updated type hints if needed
         components = []
 
@@ -108,7 +107,7 @@ class HashingService:
 
 class BlueprintHasher:
     # Existing logic for Blueprint hashing (can be updated later if needed)
-    def compute_hash(self, graph: Graph) -> str:
+    def compute_hash(self, graph: Any) -> str:
         all_components = []
         sorted_nodes = sorted(graph.nodes, key=lambda n: n.current_node_instance_hash)
         for node in sorted_nodes:
@@ -119,7 +118,7 @@ class BlueprintHasher:
         fingerprint = "|".join(components)
         return hashlib.sha256(fingerprint.encode("utf-8")).hexdigest()
 
-    def _get_node_components(self, node: Node, graph: Graph) -> List[str]:
+    def _get_node_components(self, node: Any, graph: Any) -> List[str]:
         # Updated to use node.definition
         components = [f"Node({node.definition.name}, type={node.node_type})"]
         components.append(

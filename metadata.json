@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(vm): add proactive reactor wakeup test", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767184645.2889335, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(vm): implement atomic tick in reactor step", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767184950.7115078, "duration_ms": 0}}

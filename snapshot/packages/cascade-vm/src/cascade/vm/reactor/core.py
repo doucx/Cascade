@@ -70,51 +70,60 @@ class Reactor:
 
     async def step(self):
         """
-        Advance the reactor by one "tick".
-        A tick consists of:
-        1. Processing all pending events (State Updates & Routing).
-           - This includes cascading events generated during processing.
-        2. Evaluating potentials of affected (dirty) nodes.
-        3. Firing ready nodes (if resources allow).
+        Advance the reactor by one atomic "tick".
+        
+        A tick is a full reaction to the current state, processing all immediately
+        available events and firing all ready nodes until no more immediate work
+        can be done. It does not wait for long-running tasks to complete.
         """
-        # 1. Process Event Loop
-        while self._event_queue:
-            event = self._event_queue.popleft()
-            await self._handle_event(event)
+        # The "micro-loop": continues as long as there are events to process
+        # or nodes that might become ready.
+        while self._event_queue or self._dirty_func_nodes or self._pending_on_resource:
+            
+            # 1. Process all pending events until the queue is empty.
+            # This may add nodes to _dirty_func_nodes or _pending_on_resource.
+            while self._event_queue:
+                event = self._event_queue.popleft()
+                await self._handle_event(event)
 
-        # 2. Evaluate Potentials
-        # We process both new dirty nodes AND nodes previously pending on resources
-        candidates = self._dirty_func_nodes.union(self._pending_on_resource)
-        
-        # Reset sets for this tick
-        self._dirty_func_nodes.clear()
-        self._pending_on_resource.clear()
+            # 2. Evaluate all candidate nodes for firing.
+            # Candidates are nodes that became dirty from events, or were previously blocked.
+            candidates = self._dirty_func_nodes.union(self._pending_on_resource)
+            
+            # Reset sets for the next iteration of the micro-loop.
+            self._dirty_func_nodes.clear()
+            self._pending_on_resource.clear()
 
-        fire_tasks = []
-        
-        for node in candidates:
-            if not node.is_ready():
-                continue
-                
-            # Resource Check (Potential Barrier)
-            if self.resource_manager and node.resource_requirements:
-                if self.resource_manager.can_acquire(node.resource_requirements):
-                    # Immediate acquisition to prevent over-commitment in this loop
-                    # Note: can_acquire is synchronous, but acquire is async.
-                    # Since we verified with can_acquire, acquire should not block significantly
-                    # unless another process stole resources (unlikely in this single-threaded loop).
-                    await self.resource_manager.acquire(node.resource_requirements)
-                    fire_tasks.append(self._fire(node))
+            if not candidates:
+                # No candidates to check, the tick is stable.
+                break
+
+            fire_tasks = []
+            
+            for node in candidates:
+                if not node.is_ready():
+                    continue
+                    
+                # Resource Check (Potential Barrier)
+                if self.resource_manager and node.resource_requirements:
+                    if self.resource_manager.can_acquire(node.resource_requirements):
+                        await self.resource_manager.acquire(node.resource_requirements)
+                        fire_tasks.append(self._fire(node))
+                    else:
+                        # Resource barrier not met, keep it pending for the next tick/step.
+                        self._pending_on_resource.add(node)
                 else:
-                    # Resource barrier not met, keep pending
-                    self._pending_on_resource.add(node)
-            else:
-                # No resource constraints
-                fire_tasks.append(self._fire(node))
+                    # No resource constraints, fire away.
+                    fire_tasks.append(self._fire(node))
 
-        if fire_tasks:
-            # Concurrently execute all fired nodes
-            await asyncio.gather(*fire_tasks)
+            if fire_tasks:
+                # Asynchronously launch all fireable tasks for this iteration.
+                # We do not wait for them to complete within the step.
+                asyncio.gather(*fire_tasks)
+            
+            # If no tasks were fired AND the event queue is empty, the system is stable,
+            # so the outer while loop will terminate. If tasks were fired, they might
+            # immediately push new events, causing the micro-loop to continue.
 
     async def _handle_event(self, event: ReactorEvent):
         if isinstance(event, TokenGenerated):

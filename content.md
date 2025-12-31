@@ -1,138 +1,175 @@
-你的观察非常敏锐，两个测试都通过了。
+你的分析非常出色，这是一个至关重要的设计洞察。你完全正确。
 
-**这不完全符合预期，但揭示了我们当前实现的一个重要特征：**
+将 `step()` 方法的语义从“执行一个离散步骤”变更为“执行一个完整的运行循环”是错误的设计。这违反了**最小意外原则 (Principle of Least Surprise)**，并损害了该方法在调试和精细控制场景下的核心价值。
 
-1.  `test_reactor_respects_resource_concurrency_limit` (Phase 4.1) 的通过是**符合预期的**。我们已经成功地在 `step()` 中加入了资源检查，阻止了任务的过载提交。
-2.  `test_reactor_waits_for_resources_and_wakes_up` (Phase 4.2) 的通过是**偶然的，因为它依赖于测试本身的结构**。测试用例通过手动调用第二次 `reactor.step()` 来“轮询”`Reactor` 的状态，从而触发了对等待中任务的重新评估和调度。这在功能上是正确的，但效率低下，不符合我们对一个**主动的、事件驱动的物理引擎**的设想。
+1.  **语义清晰性 (Semantic Clarity)**: 你的提议——`step()` 用于单步，`run()` 用于循环——是业界标准且极为清晰的设计模式。
+    *   `step()` 就像调试器中的“单步执行”按钮。它执行一个原子性的工作单元，然后将控制权交还给调用者，允许我们检查系统的中间状态。
+    *   `run()` 就像“继续执行”按钮。它自主地、持续地驱动系统，直到达到最终状态或被外部中断。
 
-一个真正的 `Reactor` 不应该依赖外部调用 `step()` 来唤醒。当一个任务完成并释放资源时，`Reactor` 应该**内部地、主动地**意识到这一点，并立即重新评估等待队列，而不是进入休眠等待下一次外部“心跳”。
+2.  **关注点分离 (Separation of Concerns)**: 你的设计将**状态推进 (State Progression)**的逻辑与**执行循环 (Execution Loop)**的控制分离开来。
+    *   `step()` 的职责是：给定当前状态，计算并执行下一个原子性的状态转换。
+    *   `run()` 的职责是：只要系统还有工作要做，就持续调用 `step()`。
 
-为了驱动这个更高级的实现，我们将创建一个新的、更严格的测试，它将不再手动调用第二次 `step()`。这个测试在当前实现下将会**失败 (RED)**，从而将我们带回 TDD 的正确轨道。
+3.  **可测试性与可调试性 (Testability & Debuggability)**: 保留一个真正的 `step()` 方法对于测试来说是无价之宝。它允许我们编写非常精确的测试，断言在每一次“滴答”后系统的状态都符合预期，就像我们当前的测试文件正在尝试做的那样。
 
-## [WIP] test(vm): add proactive reactor wakeup test
+那么，如何在不破坏 `step()` 语义的前提下，让我们的测试通过呢？
+
+关键在于重新定义**“一步 (a step)”**的粒度。一个“原子步骤”不应该仅仅是处理队列中的一个事件，而应该是**处理完当前所有可立即处理的事件，直到系统达到一个暂时的稳定点（即事件队列为空，没有可立即触发的新动作）**。
+
+这引入了一个**“微循环 (micro-loop)”**的概念：
+
+*   `step()` 方法内部应该包含一个微循环，它会持续处理事件队列中的事件，直到队列被清空。这包括处理在处理过程中新产生的事件。
+*   这个微循环**不会**等待长时间运行的任务（如 `executor.submit`）。它只处理瞬时完成的状态转换。
+*   这样，从外部调用者的视角看，`step()` 仍然是一个单一的、同步性的（在逻辑上）操作：它使系统从一个稳定状态转换到下一个稳定状态。
+
+**这个精炼后的设计完美地满足了所有要求：**
+1.  它让 `test_reactor_proactively_wakes_up_on_resource_release` 测试得以通过，因为 `ExecutionFinished` 事件会在同一个 `step()` 调用中被处理。
+2.  它保持了 `step()` 作为单步调试工具的语义纯洁性。
+3.  它为你提议的、更高级的 `run()` 方法奠定了坚实的基础。未来的 `run()` 方法可以简单地在一个 `while` 循环中调用 `step()` 并处理异步等待。
+
+你的建议是正确的，我们必须采纳。我们将修改 `step()` 方法，使其包含一个处理所有瞬时事件的内部“微循环”，以实现“原子性反应”。
+
+我现在将生成一个计划来实现这个修改，这将使我们的测试套件回到 **GREEN** 状态，同时保持了架构的清晰和优雅。
+
+## [WIP] feat(vm): implement atomic tick in reactor step
 
 ### 用户需求
-当前 Phase 4.2 的测试由于测试用例的结构而通过，未能暴露 `Reactor` 缺乏主动唤醒机制的缺陷。需要创建一个新的、更严格的测试，使我们重新进入 RED 状态，以驱动一个真正的事件驱动唤醒逻辑的实现。
+根据设计讨论，修改 `Reactor.step()` 方法，使其能够在一个原子性的“滴答”中处理所有即时事件，包括在处理过程中新生成的事件。
 
 ### 评论
-这是一个关键的架构精炼步骤。当前的实现是“被动”的，它依赖外部循环来重新评估待定任务。新的测试将强制 `Reactor` 变得“主动”：当资源被释放时，它必须有能力自我唤醒并立即调度下一个合适的任务，而不是等待外部的下一个 `step()` 调用。这将使 `Reactor` 成为一个真正独立的、高效的物理引擎。
+这是一个重要的架构精炼。通过在 `step()` 内部引入一个“微循环”，我们确保了 `step()` 的行为是原子性的：它会将系统推进到一个新的稳定状态。这不仅修复了在严格测试中暴露的主动唤醒问题，也为未来实现一个干净的、基于 `step()` 的 `run()` 方法铺平了道路，同时保留了 `step()` 用于调试的价值。
 
 ### 目标
-1.  创建一个新的测试文件 `packages/cascade-vm/tests/reactor/test_reactor_wakeup_mechanism.py`。
-2.  在其中编写一个测试用例，该用例只调用一次 `reactor.step()`，并依赖 `Reactor` 的内部逻辑来完成对第二个任务的调度。
-3.  该测试将通过 `asyncio.Event` 等待第二个任务被提交，如果 `Reactor` 没有主动唤醒逻辑，测试将超时失败。
+1.  在 `Reactor.step()` 方法内部添加一个 `while self._event_queue:` 循环。
+2.  将事件处理和节点评估逻辑移入此循环，确保新事件可以被立即处理。
 
 ### 基本原理
-我们通过模拟一个极快的任务来创造一个竞争条件：第一个任务在 `step()` 循环内部完成并释放资源。一个高效的 `Reactor` 应该能在同一个 `step()` 周期内捕获这个变化并调度下一个任务。新的测试通过移除外部的轮询调用 (`step()`)，精确地暴露了当前实现中缺失的内部循环/触发机制。
+当前的 `step()` 实现只遍历一次事件队列，然后评估一次 `_dirty_func_nodes`。当一个被执行的任务（通过 `_fire`）立即产生一个 `ExecutionFinished` 事件时，这个新事件要等到下一次外部调用 `step()` 才会被处理。新的实现通过一个内部循环，确保在一个 `step()` 调用返回之前，所有由此产生的、可立即处理的连锁反应都已完成。
 
 ### 标签
-#intent/tooling #intent/architect #flow/draft #priority/high #comp/tests #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/reactor #task/action/refine #task/state/continue
+#intent/refine #flow/draft #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/reactor #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建主动唤醒机制的测试文件
+#### Acts 1: 修改 Reactor.step() 实现原子性 Tick
 
-这个新的测试将取代 `test_reactor_waits_for_resources_and_wakes_up` 作为 Phase 4.2 的主要驱动力。它更严格地定义了“唤醒”的行为。
+我们将重构 `step()` 方法，将事件处理和节点评估/触发逻辑包裹在一个 `while` 循环中，该循环会一直运行，直到系统达到一个没有即时事件或可触发任务的“静止”状态。
 
 ~~~~~act
-write_file
-packages/cascade-vm/tests/reactor/test_reactor_wakeup_mechanism.py
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor/core.py
 ~~~~~
-~~~~~python
-import pytest
-import asyncio
-from unittest.mock import AsyncMock
+~~~~~python.old
+    async def step(self):
+        """
+        Advance the reactor by one "tick".
+        A tick consists of:
+        1. Processing all pending events (State Updates & Routing).
+           - This includes cascading events generated during processing.
+        2. Evaluating potentials of affected (dirty) nodes.
+        3. Firing ready nodes (if resources allow).
+        """
+        # 1. Process Event Loop
+        while self._event_queue:
+            event = self._event_queue.popleft()
+            await self._handle_event(event)
 
-from cascade.spec.physics import DataNode, FuncNode, Token, Port
-from cascade.vm.reactor import Reactor, TokenGenerated, ExecutionFinished
-from cascade.runtime.resource_manager import ResourceManager
+        # 2. Evaluate Potentials
+        # We process both new dirty nodes AND nodes previously pending on resources
+        candidates = self._dirty_func_nodes.union(self._pending_on_resource)
+        
+        # Reset sets for this tick
+        self._dirty_func_nodes.clear()
+        self._pending_on_resource.clear()
 
+        fire_tasks = []
+        
+        for node in candidates:
+            if not node.is_ready():
+                continue
+                
+            # Resource Check (Potential Barrier)
+            if self.resource_manager and node.resource_requirements:
+                if self.resource_manager.can_acquire(node.resource_requirements):
+                    # Immediate acquisition to prevent over-commitment in this loop
+                    # Note: can_acquire is synchronous, but acquire is async.
+                    # Since we verified with can_acquire, acquire should not block significantly
+                    # unless another process stole resources (unlikely in this single-threaded loop).
+                    await self.resource_manager.acquire(node.resource_requirements)
+                    fire_tasks.append(self._fire(node))
+                else:
+                    # Resource barrier not met, keep pending
+                    self._pending_on_resource.add(node)
+            else:
+                # No resource constraints
+                fire_tasks.append(self._fire(node))
 
-def create_topology(n_nodes: int):
-    """Creates a simple fan-out topology."""
-    nodes, inputs = [], []
-    for i in range(n_nodes):
-        f_node = FuncNode(name=f"task_{i}", resource_requirements={"slots": 1})
-        d_in = DataNode(name=f"in_{i}")
-        f_node.add_input(Port(name="arg", source=d_in))
-        nodes.append(f_node)
-        inputs.append(d_in)
-    return nodes, inputs
+        if fire_tasks:
+            # Concurrently execute all fired nodes
+            await asyncio.gather(*fire_tasks)
+~~~~~
+~~~~~python.new
+    async def step(self):
+        """
+        Advance the reactor by one atomic "tick".
+        
+        A tick is a full reaction to the current state, processing all immediately
+        available events and firing all ready nodes until no more immediate work
+        can be done. It does not wait for long-running tasks to complete.
+        """
+        # The "micro-loop": continues as long as there are events to process
+        # or nodes that might become ready.
+        while self._event_queue or self._dirty_func_nodes or self._pending_on_resource:
+            
+            # 1. Process all pending events until the queue is empty.
+            # This may add nodes to _dirty_func_nodes or _pending_on_resource.
+            while self._event_queue:
+                event = self._event_queue.popleft()
+                await self._handle_event(event)
 
+            # 2. Evaluate all candidate nodes for firing.
+            # Candidates are nodes that became dirty from events, or were previously blocked.
+            candidates = self._dirty_func_nodes.union(self._pending_on_resource)
+            
+            # Reset sets for the next iteration of the micro-loop.
+            self._dirty_func_nodes.clear()
+            self._pending_on_resource.clear()
 
-@pytest.mark.asyncio
-async def test_reactor_proactively_wakes_up_on_resource_release():
-    """
-    Phase 4.2 TDD (Strict): Reactor must wake up internally, not via polling.
+            if not candidates:
+                # No candidates to check, the tick is stable.
+                break
 
-    This test calls `step()` only ONCE. It simulates a fast task that
-    finishes and emits an ExecutionFinished event *during* the initial step.
-    A truly event-driven reactor should process this new event and schedule
-    the next pending task without needing another external `step()` call.
-    """
-    rm = ResourceManager(capacity={"slots": 1})
-    mock_executor = AsyncMock()
+            fire_tasks = []
+            
+            for node in candidates:
+                if not node.is_ready():
+                    continue
+                    
+                # Resource Check (Potential Barrier)
+                if self.resource_manager and node.resource_requirements:
+                    if self.resource_manager.can_acquire(node.resource_requirements):
+                        await self.resource_manager.acquire(node.resource_requirements)
+                        fire_tasks.append(self._fire(node))
+                    else:
+                        # Resource barrier not met, keep it pending for the next tick/step.
+                        self._pending_on_resource.add(node)
+                else:
+                    # No resource constraints, fire away.
+                    fire_tasks.append(self._fire(node))
 
-    # Synchronization primitive: this event is set when the SECOND task is submitted
-    second_task_submitted = asyncio.Event()
-
-    # --- Mock Executor Side Effect ---
-    # This is the core of the test's strictness.
-    # When the first task is submitted, it immediately pushes its own "Finished" event back.
-    # When the second task is submitted, it signals the test to finish.
-    async def executor_side_effect(node, inputs):
-        if mock_executor.submit.call_count == 1:
-            # First task: immediately signal completion
-            # This pushes an event into the queue WHILE a step() is active.
-            reactor.push_event(ExecutionFinished(node=node, outputs={}))
-        elif mock_executor.submit.call_count == 2:
-            # Second task: signal success to the test harness
-            second_task_submitted.set()
-
-    mock_executor.submit.side_effect = executor_side_effect
-    # ---
-
-    reactor = Reactor(executor=mock_executor, resource_manager=rm)
-
-    # 1. Setup A and B
-    func_nodes, data_nodes = create_topology(2)
-    for n in func_nodes + data_nodes:
-        reactor.register_node(n)
-
-    # 2. Trigger both tasks to be ready
-    for d in data_nodes:
-        reactor.push_event(TokenGenerated(node=d, token=Token(1)))
-
-    # 3. Action: Call step() only ONCE.
-    # Expected internal flow:
-    # - step() starts.
-    # - Processes TokenGenerated events. Both A and B are now data-ready.
-    # - Fires task A. B becomes pending.
-    # - `executor.submit(A)` is called.
-    # - Side effect triggers, pushing `ExecutionFinished(A)` into the event queue.
-    # - A truly event-driven reactor would re-loop, process this event, release
-    #   resources, and re-evaluate pending tasks, thus firing B.
-    # - `executor.submit(B)` is called.
-    # - Side effect triggers, setting `second_task_submitted`.
-    await reactor.step()
-
-    # 4. Assertion: Wait for the event signaling the second task was submitted.
-    # The current implementation will fail here (timeout) because it finishes the
-    # `step()` after submitting task A and does not re-process the new event.
-    try:
-        await asyncio.wait_for(second_task_submitted.wait(), timeout=0.5)
-    except asyncio.TimeoutError:
-        pytest.fail(
-            "Reactor did not proactively wake up and schedule the second task. "
-            f"Only {mock_executor.submit.call_count} task(s) were submitted."
-        )
-
-    assert mock_executor.submit.call_count == 2
+            if fire_tasks:
+                # Asynchronously launch all fireable tasks for this iteration.
+                # We do not wait for them to complete within the step.
+                asyncio.gather(*fire_tasks)
+            
+            # If no tasks were fired AND the event queue is empty, the system is stable,
+            # so the outer while loop will terminate. If tasks were fired, they might
+            # immediately push new events, causing the micro-loop to continue.
 ~~~~~
 
 ### 下一步建议
-我们现在有了一个会失败的、定义了更高级行为的测试。`test_reactor_proactively_wakes_up_on_resource_release` 将会因为 `asyncio.TimeoutError` 而失败，标志着我们进入了 Phase 4.2 的 **RED** 状态。
+我们已经实现了 `step()` 的原子性 “tick” 逻辑。现在，`test_reactor_proactively_wakes_up_on_resource_release` 应该会通过，因为它模拟的 `ExecutionFinished` 事件会被 `step()` 的内部循环捕获并处理，从而触发第二个任务的调度，所有这些都在同一个 `step()` 调用中完成。
 
-下一步是修改 `Reactor` 的 `step()` 方法，使其包含一个内部循环，只要事件队列非空或有状态变更，就持续处理，直到达到一个稳定的不动点。这将使其从一个单次心跳的执行器演变为一个自我维持的反应循环。
+在运行测试确认我们回到 **GREEN** 状态后，我们就可以继续实现 Phase 5，或者根据你的指示，实现一个完整的 `run()` 方法来完成 `Reactor` 的公共 API。

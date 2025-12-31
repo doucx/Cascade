@@ -26,7 +26,7 @@ def test_call_instruction_has_policy_field():
     instr = Call(
         output=Register(0),
         task_name="t",
-        structure_hash="h",
+        current_code_structure_hash="h",
         policy=policy # 这里应该由于字段不存在而失败
     )
     

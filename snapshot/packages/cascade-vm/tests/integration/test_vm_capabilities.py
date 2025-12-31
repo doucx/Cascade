@@ -51,7 +51,7 @@ async def test_vm_resolves_context_operands():
     instr = Call(
         output=Register(0),
         task_name="read_env",
-        structure_hash="hash_task",
+        current_code_structure_hash="hash_task",
         args=[ContextOperand(scope="params", key="env")],
         kwargs={}
     )
@@ -86,7 +86,7 @@ async def test_vm_resolves_resource_operands():
     instr = Call(
         output=Register(0),
         task_name="use_db",
-        structure_hash="hash_db",
+        current_code_structure_hash="hash_db",
         args=[ResourceOperand(name="db")],
         kwargs={}
     )
@@ -113,7 +113,7 @@ async def test_vm_enforces_retry_policy():
     instr = Call(
         output=Register(0),
         task_name="flaky",
-        structure_hash="hash_flaky",
+        current_code_structure_hash="hash_flaky",
         policy=policy,
         args=[], kwargs={}
     )

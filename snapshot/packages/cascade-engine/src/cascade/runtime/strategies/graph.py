@@ -50,10 +50,10 @@ class GraphExecutionStrategy:
         self._node_registry = NodeRegistry()
 
     def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
-        id_to_idx = {node.structural_id: i for i, node in enumerate(graph.nodes)}
+        id_to_idx = {node.current_node_instance_hash: i for i, node in enumerate(graph.nodes)}
         indexed_plan = []
         for stage in plan:
-            indexed_stage = [id_to_idx[node.structural_id] for node in stage]
+            indexed_stage = [id_to_idx[node.current_node_instance_hash] for node in stage]
             indexed_plan.append(indexed_stage)
         return indexed_plan
 
@@ -173,7 +173,7 @@ class GraphExecutionStrategy:
                     (
                         e
                         for e in graph.edges
-                        if e.source.structural_id == source_node_id
+                        if e.source.current_node_instance_hash == source_node_id
                         and e.edge_type == EdgeType.ITERATIVE_JUMP
                     ),
                     None,
@@ -225,7 +225,7 @@ class GraphExecutionStrategy:
 
         target_node = instance_map[target._uuid]
 
-        flow_manager = FlowManager(graph, target_node.structural_id, instance_map)
+        flow_manager = FlowManager(graph, target_node.current_node_instance_hash, instance_map)
         blocked_nodes = set()
 
         for stage in plan:
@@ -240,12 +240,12 @@ class GraphExecutionStrategy:
                     skip_reason = await flow_manager.should_skip(node, state_backend)
                     if skip_reason:
                         await state_backend.mark_skipped(
-                            node.structural_id, skip_reason
+                            node.current_node_instance_hash, skip_reason
                         )
                         self.bus.publish(
                             TaskSkipped(
                                 run_id=run_id,
-                                task_id=node.structural_id,
+                                task_id=node.current_node_instance_hash,
                                 task_name=node.name,
                                 reason=skip_reason,
                             )
@@ -254,20 +254,20 @@ class GraphExecutionStrategy:
 
                     if self.constraint_manager.check_permission(node):
                         executable_this_pass.append(node)
-                        if node.structural_id in blocked_nodes:
-                            blocked_nodes.remove(node.structural_id)
+                        if node.current_node_instance_hash in blocked_nodes:
+                            blocked_nodes.remove(node.current_node_instance_hash)
                     else:
                         deferred_this_pass.append(node)
-                        if node.structural_id not in blocked_nodes:
+                        if node.current_node_instance_hash not in blocked_nodes:
                             self.bus.publish(
                                 TaskBlocked(
                                     run_id=run_id,
-                                    task_id=node.structural_id,
+                                    task_id=node.current_node_instance_hash,
                                     task_name=node.name,
                                     reason="ConstraintViolation",
                                 )
                             )
-                            blocked_nodes.add(node.structural_id)
+                            blocked_nodes.add(node.current_node_instance_hash)
 
                 if executable_this_pass:
                     # Callback for map nodes
@@ -292,7 +292,7 @@ class GraphExecutionStrategy:
                     for node in executable_this_pass:
                         overrides = (
                             root_input_overrides
-                            if node.structural_id == target_node.structural_id
+                            if node.current_node_instance_hash == target_node.current_node_instance_hash
                             else None
                         )
                         tasks_to_run.append(
@@ -316,10 +316,10 @@ class GraphExecutionStrategy:
                         # FAST PATH: Single task in stage, avoid gather
                         node, coro = tasks_to_run[0]
                         res = await coro
-                        await state_backend.put_result(node.structural_id, res)
+                        await state_backend.put_result(node.current_node_instance_hash, res)
                         if flow_manager:
                             await flow_manager.register_result(
-                                node.structural_id, res, state_backend
+                                node.current_node_instance_hash, res, state_backend
                             )
                     else:
                         # Standard parallel execution
@@ -328,10 +328,10 @@ class GraphExecutionStrategy:
                         pass_results = await asyncio.gather(*coros)
 
                         for node, res in zip(nodes_in_pass, pass_results):
-                            await state_backend.put_result(node.structural_id, res)
+                            await state_backend.put_result(node.current_node_instance_hash, res)
                             if flow_manager:
                                 await flow_manager.register_result(
-                                    node.structural_id, res, state_backend
+                                    node.current_node_instance_hash, res, state_backend
                                 )
 
                 pending_nodes_in_stage = deferred_this_pass
@@ -342,14 +342,14 @@ class GraphExecutionStrategy:
                     self.constraint_manager.cleanup_expired_constraints()
 
         # Use the mapped canonical node ID to check for the final result
-        if not await state_backend.has_result(target_node.structural_id):
+        if not await state_backend.has_result(target_node.current_node_instance_hash):
             # For debugging, check if the instance was skipped
             if skip_reason := await state_backend.get_skip_reason(
-                target_node.structural_id
+                target_node.current_node_instance_hash
             ):
                 if skip_reason == "UpstreamSkipped_Sequence":
                     return GraphExecutionResult(
-                        value=None, source_node_id=target_node.structural_id
+                        value=None, source_node_id=target_node.current_node_instance_hash
                     )
                 raise DependencyMissingError(
                     task_id=target.task.name or "unknown",
@@ -361,7 +361,7 @@ class GraphExecutionStrategy:
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )
 
-        final_value = await state_backend.get_result(target_node.structural_id)
+        final_value = await state_backend.get_result(target_node.current_node_instance_hash)
         return GraphExecutionResult(
-            value=final_value, source_node_id=target_node.structural_id
+            value=final_value, source_node_id=target_node.current_node_instance_hash
         )

@@ -38,7 +38,7 @@ async def test_vm_map_execution_sync():
     """
     # Instruction: results = map(double, x=[1, 2, 3])
     instr = MapCall(
-        structure_hash="hash_double",
+        current_code_structure_hash="hash_double",
         output=Register(0),
         args=[],
         kwargs={"x": Literal([1, 2, 3])},
@@ -59,7 +59,7 @@ async def test_vm_map_execution_async():
     Verify VM awaits all coroutines.
     """
     instr = MapCall(
-        structure_hash="hash_async_double",
+        current_code_structure_hash="hash_async_double",
         output=Register(0),
         kwargs={"x": Literal([10, 20])},
         task_name="map_async",
@@ -79,7 +79,7 @@ async def test_vm_map_multiple_iterables():
     map(add, a=[1, 2], b=[10, 20]) -> [11, 22]
     """
     instr = MapCall(
-        structure_hash="hash_add",
+        current_code_structure_hash="hash_add",
         output=Register(0),
         kwargs={"a": Literal([1, 2]), "b": Literal([10, 20])},
         task_name="map_add",

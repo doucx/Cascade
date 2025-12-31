@@ -44,7 +44,7 @@ def test_call_instruction_accepts_polymorphic_operands():
             ContextOperand("params", "timeout")
         ],
         kwargs={},
-        structure_hash="hash_abc"
+        current_code_structure_hash="hash_abc"
     )
     
     assert isinstance(instr.args[1], ResourceOperand)

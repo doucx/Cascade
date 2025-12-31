@@ -69,7 +69,7 @@ class HashingService:
 
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             node = dep_nodes[obj._uuid]
-            components.append(f"LAZY({node.structural_id})")
+            components.append(f"LAZY({node.current_node_instance_hash})")
 
         elif isinstance(obj, Router):
             components.append("Router{")
@@ -110,7 +110,7 @@ class BlueprintHasher:
     # Existing logic for Blueprint hashing (can be updated later if needed)
     def compute_hash(self, graph: Graph) -> str:
         all_components = []
-        sorted_nodes = sorted(graph.nodes, key=lambda n: n.structural_id)
+        sorted_nodes = sorted(graph.nodes, key=lambda n: n.current_node_instance_hash)
         for node in sorted_nodes:
             all_components.extend(self._get_node_components(node, graph))
         return self._get_merkle_hash(all_components)
@@ -132,11 +132,11 @@ class BlueprintHasher:
 
         # ... Edge logic remains same
         incoming_edges = sorted(
-            [e for e in graph.edges if e.target.structural_id == node.structural_id],
-            key=lambda e: e.source.structural_id,
+            [e for e in graph.edges if e.target.current_node_instance_hash == node.current_node_instance_hash],
+            key=lambda e: e.source.current_node_instance_hash,
         )
         for edge in incoming_edges:
             components.append(
-                f"Edge(from={edge.source.structural_id}, to={node.structural_id}, type={edge.edge_type.name})"
+                f"Edge(from={edge.source.current_node_instance_hash}, to={node.current_node_instance_hash}, type={edge.edge_type.name})"
             )
         return components

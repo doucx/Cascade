@@ -48,14 +48,14 @@ async def test_vm_jump_skips_instruction():
         Jump(offset=2),
         # 1:
         Call(
-            structure_hash="hash_append",
+            current_code_structure_hash="hash_append",
             output=Register(0),  # Dummy output
             args=[Literal(log), Literal(1)],
             task_name="log_1",
         ),
         # 2:
         Call(
-            structure_hash="hash_append",
+            current_code_structure_hash="hash_append",
             output=Register(0),
             args=[Literal(log), Literal(2)],
             task_name="log_2",
@@ -85,13 +85,13 @@ async def test_vm_jump_if_false_branching():
     instrs = [
         JumpIfFalse(condition=Register(0), offset=2),
         Call(
-            structure_hash="hash_append",
+            current_code_structure_hash="hash_append",
             output=Register(1),
             args=[Literal(log), Literal(1)],
             task_name="log_1",
         ),
         Call(
-            structure_hash="hash_append",
+            current_code_structure_hash="hash_append",
             output=Register(1),
             args=[Literal(log), Literal(2)],
             task_name="log_2",
@@ -122,7 +122,7 @@ async def test_vm_loop_backward_jump():
     instrs = [
         # 0: R1 = R0 > 0
         Call(
-            structure_hash="hash_is_positive",
+            current_code_structure_hash="hash_is_positive",
             output=Register(1),
             args=[Register(0)],
             task_name="check_pos",
@@ -131,14 +131,14 @@ async def test_vm_loop_backward_jump():
         JumpIfFalse(condition=Register(1), offset=4),
         # 2: log.append(R0)
         Call(
-            structure_hash="hash_append",
+            current_code_structure_hash="hash_append",
             output=Register(2),
             args=[Literal(log), Register(0)],
             task_name="log",
         ),
         # 3: R0 = R0 - 1
         Call(
-            structure_hash="hash_decrement",
+            current_code_structure_hash="hash_decrement",
             output=Register(0),
             args=[Register(0)],
             task_name="decr",

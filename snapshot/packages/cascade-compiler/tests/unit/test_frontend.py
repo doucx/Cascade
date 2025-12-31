@@ -68,8 +68,8 @@ def test_compile_linear_dependency():
     target_node = next(n for n in ir.nodes if n.definition.name == "consumer")
     source_node = next(n for n in ir.nodes if n.definition.name == "producer")
     
-    assert edge.source_id == source_node.id
-    assert edge.target_id == target_node.id
+    assert edge.source_node_instance_hash == source_node.id
+    assert edge.target_node_instance_hash == target_node.id
     assert edge.target_arg == "val"
 
 

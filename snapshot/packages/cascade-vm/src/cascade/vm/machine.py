@@ -206,11 +206,11 @@ class VirtualMachine:
 
     async def _core_call_invoker(self, ctx: ExecutionContext) -> Any:
         instr: Call = ctx.instruction
-        func = ctx.symbol_table.get(instr.structure_hash)
+        func = ctx.symbol_table.get(instr.current_code_structure_hash)
         
         if func is None:
              raise RuntimeError(
-                f"Linking failed: structure_hash '{instr.structure_hash}' "
+                f"Linking failed: structure_hash '{instr.current_code_structure_hash}' "
                 f"for task '{instr.task_name}' not found in symbol table."
             )
             
@@ -223,7 +223,7 @@ class VirtualMachine:
 
     async def _core_map_invoker(self, ctx: ExecutionContext) -> Any:
         instr: MapCall = ctx.instruction
-        func = ctx.symbol_table.get(instr.structure_hash)
+        func = ctx.symbol_table.get(instr.current_code_structure_hash)
         if func is None:
              raise RuntimeError(f"Linking failed for map task '{instr.task_name}'")
 

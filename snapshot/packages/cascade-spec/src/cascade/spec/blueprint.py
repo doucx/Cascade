@@ -46,7 +46,7 @@ class Call(Instruction):
     # Metadata for observability and constraints
     task_name: str = "unknown"
     constraints: Optional[ResourceConstraint] = None  # Deprecated: prefer policy.resources
-    structure_hash: Optional[str] = None
+    current_code_structure_hash: Optional[str] = None
     policy: Optional[ExecutionPolicy] = None
 
 
@@ -76,7 +76,7 @@ class MapCall(Instruction):
     # Metadata for observability and constraints
     task_name: str = "unknown"
     constraints: Optional[ResourceConstraint] = None
-    structure_hash: Optional[str] = None
+    current_code_structure_hash: Optional[str] = None
     policy: Optional[ExecutionPolicy] = None
 
 

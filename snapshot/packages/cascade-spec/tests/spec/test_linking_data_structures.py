@@ -17,7 +17,7 @@ def test_call_instruction_has_structure_hash():
         Call(
             output=Register(0),
             task_name="t",
-            structure_hash="hash_123",
+            current_code_structure_hash="hash_123",
         )
     except TypeError as e:
         if "unexpected keyword argument 'structure_hash'" in str(e):
@@ -33,7 +33,7 @@ def test_map_call_instruction_has_structure_hash():
         MapCall(
             output=Register(0),
             task_name="t",
-            structure_hash="hash_123",
+            current_code_structure_hash="hash_123",
         )
     except TypeError as e:
         if "unexpected keyword argument 'structure_hash'" in str(e):

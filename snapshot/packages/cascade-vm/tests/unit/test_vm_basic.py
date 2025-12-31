@@ -31,7 +31,7 @@ async def test_vm_instruction_execution():
     # Program:
     # 1. r0 = _add(1, 2)
     instr1 = Call(
-        structure_hash="hash_for_add",
+        current_code_structure_hash="hash_for_add",
         output=Register(0),
         args=[Literal(1), Literal(2)],
         kwargs={},
@@ -40,7 +40,7 @@ async def test_vm_instruction_execution():
 
     # 2. r1 = _add(r0, 3)
     instr2 = Call(
-        structure_hash="hash_for_add",
+        current_code_structure_hash="hash_for_add",
         output=Register(1),
         args=[Register(0), Literal(3)],
         kwargs={},
@@ -74,7 +74,7 @@ async def test_vm_async_execution():
     }
 
     instr = Call(
-        structure_hash="hash_for_async_add",
+        current_code_structure_hash="hash_for_async_add",
         output=Register(0),
         args=[Literal(10), Literal(20)],
         kwargs={},

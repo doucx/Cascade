@@ -1,167 +1,39 @@
-## [WIP] fix: Enhance refactor script to handle dataclass definitions and multiline calls
+# 📸 Snapshot Capture
 
-### 用户需求
-修复 `scripts/refactor_hashes.py` 脚本的正则缺陷，使其能够正确处理 Dataclass 的字段定义（`field: type`）和多行构造函数调用，从而解决当前的 `TypeError` 问题，完成 Phase 3.0 的重命名工作。
+检测到工作区发生变更。
 
-### 评论
-上次执行的脚本导致代码库处于不一致状态：部分定义被修改而调用未修改，部分调用被修改而定义未修改。必须立即修复脚本并重新运行以统一代码库。
-
-### 目标
-1.  更新 `scripts/refactor_hashes.py`。
-2.  增加对 `field: type` 模式的支持。
-3.  优化对 `NodeIR` 多行构造函数的匹配。
-4.  重新执行脚本并验证。
-
-### 基本原理
-Python 的 Dataclass 定义使用类型注解语法 `var: type`，这在之前的脚本中被遗漏了。同时，正则表达式处理多行文本时需要特别注意空白字符的匹配。
-
-### 标签
-#intent/fix #flow/ready #priority/critical #comp/core #task/domain/compiler #task/object/refactor-script #task/action/fix #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 更新重构脚本
-
-~~~~~act
-write_file
-scripts/refactor_hashes.py
-~~~~~
-~~~~~python
-import os
-import re
-
-# Color codes for output
-GREEN = "\033[92m"
-YELLOW = "\033[93m"
-RESET = "\033[0m"
-
-TARGET_DIRS = ["packages", "tests"]
-SKIP_DIRS = [".git", "__pycache__", ".pytest_cache", "venv", "env", "node_modules", "dist", "build"]
-
-# Replacements are processed in order.
-REPLACEMENTS = [
-    # --- 1. structural_id (Graph Node) -> current_node_instance_hash ---
-    # Definition: structural_id: str
-    (r"\bstructural_id\s*:\s*str", "current_node_instance_hash: str"),
-    # Attribute access: .structural_id
-    (r"\.structural_id\b", ".current_node_instance_hash"),
-    # Keyword arg: structural_id=
-    (r"\bstructural_id\s*=", "current_node_instance_hash="),
-    
-    # --- 2. source_id (EdgeIR) -> source_node_instance_hash ---
-    # Definition
-    (r"\bsource_id\s*:\s*str", "source_node_instance_hash: str"),
-    # Attribute
-    (r"(?<!_)\.source_id\b", ".source_node_instance_hash"),
-    # Kwarg
-    (r"\bsource_id\s*=", "source_node_instance_hash="),
-
-    # --- 3. target_id (EdgeIR) -> target_node_instance_hash ---
-    # Definition
-    (r"\btarget_id\s*:\s*str", "target_node_instance_hash: str"),
-    # Attribute
-    (r"\.target_id\b", ".target_node_instance_hash"),
-    # Kwarg
-    (r"\btarget_id\s*=", "target_node_instance_hash="),
-
-    # --- 4. structure_hash (Blueprint) -> current_code_structure_hash ---
-    # Definition (often Optional[str])
-    (r"\bstructure_hash\s*:\s*", "current_code_structure_hash: "),
-    # Attribute
-    (r"\.structure_hash\b", ".current_code_structure_hash"),
-    # Kwarg
-    (r"\bstructure_hash\s*=", "current_code_structure_hash="),
-    
-    # --- 5. NodeIR.id -> current_node_instance_hash ---
-    # WARNING: 'id' is very common. We must be context-specific.
-    
-    # 5a. Definition in models.py (handled by specific pattern)
-    (r"class NodeIR:.*?id:\s*str", "class NodeIR:\n    current_node_instance_hash: str"),
-    
-    # 5b. Construction: NodeIR(..., id=..., ...)
-    # We match 'NodeIR' followed by any characters (non-greedy) until 'id='
-    # This covers multiline calls.
-    (r"(NodeIR\s*\([^)]*?)\bid\s*=", r"\1current_node_instance_hash="),
-    
-    # 5c. Usage (Attribute access) - Context aware
-    (r"\bnode\.id\b", "node.current_node_instance_hash"),
-    (r"\bn\.id\b", "n.current_node_instance_hash"),
-    (r"\bnode_ir\.id\b", "node_ir.current_node_instance_hash"),
-    (r"\binput_node\.id\b", "input_node.current_node_instance_hash"),
-    (r"in_degree\[node\.id\]", "in_degree[node.current_node_instance_hash]"),
-    (r"graph\.nodes\[0\]\.id", "graph.nodes[0].current_node_instance_hash"),
-    (r"restored_node\.id\b", "restored_node.current_node_instance_hash"),
-    
-    # 5d. Test assertions and assignments
-    (r"assert node\.id ==", "assert node.current_node_instance_hash =="),
-    (r"assert graph\.nodes\[\d+\]\.id ==", "assert graph.nodes[0].current_node_instance_hash =="),
-    
-    # --- 6. EdgeIR Construction in Tests ---
-    # EdgeIR(source_id="A", ...)
-    # Handled by generic source_id replacement above? Yes.
-]
-
-def process_file(file_path):
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-    except UnicodeDecodeError:
-        return
-
-    original_content = content
-    modified = False
-
-    # Pre-compiled NodeIR multiline fix for re.DOTALL support
-    # This is specifically to fix: NodeIR(\n    id=...
-    # We repeat this until no changes to catch multiple args if necessary, 
-    # though usually id is just one arg.
-    # Note: Regex in loop is simple string replace, this one needs special flags.
-    
-    node_ir_pattern = re.compile(r"(NodeIR\s*\([^)]*?)\bid\s*=", re.DOTALL)
-    if node_ir_pattern.search(content):
-        new_content = node_ir_pattern.sub(r"\1current_node_instance_hash=", content)
-        if new_content != content:
-            content = new_content
-            modified = True
-
-    # Run standard replacements
-    for pattern, replacement in REPLACEMENTS:
-        # We assume most patterns don't need DOTALL, except the manual one above.
-        # But `class NodeIR:.*?id:` might need DOTALL if it spans lines (unlikely for definition).
-        flags = 0
-        if "class NodeIR" in pattern:
-            flags = re.DOTALL
-            
-        if re.search(pattern, content, flags=flags):
-            new_content = re.sub(pattern, replacement, content, flags=flags)
-            if new_content != content:
-                content = new_content
-                modified = True
-
-    if modified:
-        print(f"{GREEN}Patching: {file_path}{RESET}")
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(content)
-
-def main():
-    root_dir = os.getcwd()
-    print(f"Starting Great Renaming Fix in {root_dir}...")
-    
-    for target in TARGET_DIRS:
-        base_path = os.path.join(root_dir, target)
-        if not os.path.exists(base_path):
-            continue
-            
-        for root, dirs, files in os.walk(base_path):
-            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-            for file in files:
-                if file.endswith(".py"):
-                    process_file(os.path.join(root, file))
-
-    print(f"{GREEN}Refactoring complete.{RESET}")
-
-if __name__ == "__main__":
-    main()
-~~~~~
+### 📝 变更文件摘要:
+```
+.../src/cascade/app/__init__.py                    |  6 +--
+ .../src/cascade/compiler/analysis/reflection.py    |  2 +-
+ .../src/cascade/compiler/backend.py                | 18 ++++----
+ .../src/cascade/compiler/frontend.py               | 30 ++++++-------
+ .../src/cascade/compiler/hashing.py                | 10 ++---
+ .../src/cascade/compiler/optimizer.py              |  8 ++--
+ .../cascade-compiler/tests/unit/test_backend.py    | 20 ++++-----
+ .../tests/unit/test_backend_enrichment.py          |  4 +-
+ .../tests/unit/test_compiler_linking.py            |  4 +-
+ .../cascade-compiler/tests/unit/test_frontend.py   |  4 +-
+ .../cascade-compiler/tests/unit/test_optimizer.py  | 14 +++---
+ .../src/cascade/adapters/solvers/csp.py            |  8 ++--
+ .../src/cascade/adapters/solvers/native.py         | 24 +++++------
+ .../cascade-engine/src/cascade/runtime/flow.py     | 46 ++++++++++----------
+ .../src/cascade/runtime/processor.py               | 22 +++++-----
+ .../src/cascade/runtime/resolvers.py               | 26 +++++------
+ .../src/cascade/runtime/strategies/graph.py        | 42 +++++++++---------
+ .../tests/unit/test_executor_local.py              |  4 +-
+ .../cascade-engine/tests/unit/test_flow_manager.py |  4 +-
+ packages/cascade-graph/src/cascade/graph/build.py  |  6 +--
+ packages/cascade-graph/src/cascade/graph/model.py  | 10 ++---
+ .../cascade-graph/src/cascade/graph/serialize.py   | 14 +++---
+ packages/cascade-graph/tests/unit/test_hashing.py  |  2 +-
+ .../cascade-graph/tests/unit/test_purity_model.py  |  4 +-
+ packages/cascade-sdk/src/cascade/tools/lisp.py     | 50 +++++++++++-----------
+ .../tests/integration/test_state_backends.py       |  2 +-
+ packages/cascade-sdk/tests/unit/test_visualize.py  | 20 ++++-----
+ .../cascade-spec/src/cascade/spec/blueprint.py     |  4 +-
+ .../cascade-spec/src/cascade/spec/ir/models.py     |  6 +--
+ .../tests/blueprint/test_instruction_policy.py     |  2 +-
+ ...
+ 40 files changed, 239 insertions(+), 239 deletions(-)
+```

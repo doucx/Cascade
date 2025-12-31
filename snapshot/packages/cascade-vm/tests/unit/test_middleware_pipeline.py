@@ -40,7 +40,7 @@ async def test_pipeline_execution_order():
     instr = Call(
         output=Register(0),
         task_name="test_task",
-        structure_hash="hash_func", 
+        current_code_structure_hash="hash_func", 
         args=[], 
         kwargs={}
     )
@@ -81,7 +81,7 @@ async def test_resource_operand_pass_through_frame():
     instr = Call(
         output=Register(0),
         task_name="db_task",
-        structure_hash="hash_db",
+        current_code_structure_hash="hash_db",
         args=[ResourceOperand("db")], 
         kwargs={}
     )
@@ -126,7 +126,7 @@ async def test_policy_handling_via_middleware():
     instr = Call(
         output=Register(0),
         task_name="flaky",
-        structure_hash="hash_flaky",
+        current_code_structure_hash="hash_flaky",
         policy=policy,
         args=[], kwargs={}
     )

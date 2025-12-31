@@ -41,16 +41,16 @@ def test_visualize_diamond_graph():
     assert 'rankdir="TB"' in dot_string
 
     # Check node definitions with new simplified style
-    assert f'"{node_a.structural_id}" [label="t_a\\n(task)", shape=box];' in dot_string
-    assert f'"{node_b.structural_id}" [label="t_b\\n(task)", shape=box];' in dot_string
+    assert f'"{node_a.current_node_instance_hash}" [label="t_a\\n(task)", shape=box];' in dot_string
+    assert f'"{node_b.current_node_instance_hash}" [label="t_b\\n(task)", shape=box];' in dot_string
 
     # Check data edge definitions
     assert (
-        f'"{node_a.structural_id}" -> "{node_b.structural_id}" [label="0"];'
+        f'"{node_a.current_node_instance_hash}" -> "{node_b.current_node_instance_hash}" [label="0"];'
         in dot_string
     )
     assert (
-        f'"{node_c.structural_id}" -> "{node_d.structural_id}" [label="z"];'
+        f'"{node_c.current_node_instance_hash}" -> "{node_d.current_node_instance_hash}" [label="z"];'
         in dot_string
     )
 
@@ -91,16 +91,16 @@ def test_visualize_special_edge_types():
 
     # 1. Assert Data Edge (standard style)
     assert (
-        f'"{node_ds.structural_id}" -> "{node_target.structural_id}" [label="data_in"];'
+        f'"{node_ds.current_node_instance_hash}" -> "{node_target.current_node_instance_hash}" [label="data_in"];'
         in dot_string
     )
 
     # 2. Assert Condition Edge (dashed, gray)
-    expected_cond_edge = f'"{node_cond.structural_id}" -> "{node_target.structural_id}" [style=dashed, color=gray, label="run_if"]'
+    expected_cond_edge = f'"{node_cond.current_node_instance_hash}" -> "{node_target.current_node_instance_hash}" [style=dashed, color=gray, label="run_if"]'
     assert expected_cond_edge in dot_string
 
     # 3. Assert Constraint Edge (dotted, purple)
-    expected_constraint_edge = f'"{node_constraint.structural_id}" -> "{node_target.structural_id}" [style=dotted, color=purple, label="constraint: cpu"]'
+    expected_constraint_edge = f'"{node_constraint.current_node_instance_hash}" -> "{node_target.current_node_instance_hash}" [style=dotted, color=purple, label="constraint: cpu"]'
     assert expected_constraint_edge in dot_string
 
 
@@ -138,7 +138,7 @@ def test_visualize_iterative_jump_edge():
     from cascade.graph.build import build_graph
 
     _, instance_map = build_graph(start_node)
-    node_id = instance_map[start_node._uuid].structural_id
+    node_id = instance_map[start_node._uuid].current_node_instance_hash
 
     dot_string = cs.visualize(start_node)
 
@@ -180,8 +180,8 @@ def test_visualize_multi_node_jump_edge():
     from cascade.graph.build import build_graph
 
     _, instance_map = build_graph(node_c)
-    source_id = instance_map[node_c._uuid].structural_id
-    target_id = instance_map[node_a._uuid].structural_id
+    source_node_instance_hash= instance_map[node_c._uuid].current_node_instance_hash
+    target_node_instance_hash= instance_map[node_a._uuid].current_node_instance_hash
 
     dot_string = cs.visualize(node_c)
 

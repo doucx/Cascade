@@ -32,7 +32,7 @@ async def test_engine_activates_new_compiler_pipeline():
     with patch("cascade.compiler.frontend.Frontend.compile") as mock_front, \
          patch("cascade.compiler.optimizer.Optimizer.optimize") as mock_opt, \
          patch("cascade.compiler.backend.Backend.compile") as mock_back, \
-         patch("cascade.compiler.vm.VirtualMachine.execute") as mock_vm_exec:
+         patch("cascade.vm.VirtualMachine.execute") as mock_vm_exec:
 
         # Setup Mocks
         mock_ir = MagicMock(spec=GraphIR)

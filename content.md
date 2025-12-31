@@ -1,192 +1,117 @@
 简要回答
-我们正在编写一个严格的测试套件，用于验证 VM 的指令指针（PC）能否正确处理无条件跳转、条件分支和循环（向后跳转）。这将作为 RED 阶段的测试，驱动我们将 VM 从简单的迭代器重构为基于 PC 的状态机。
+我们正在执行 TDD 的绿色阶段。我们将 `VirtualMachine.execute` 重构为基于程序计数器 (PC) 的状态机，以支持 `Jump` 和 `JumpIfFalse` 指令。这使 VM 具备了执行分支和循环的能力。
 
-## [WIP] test(vm): 添加控制流指令的单元测试
+## [WIP] feat(vm): 实现基于 PC 的控制流逻辑
 
 ### 用户需求
-编写 `packages/cascade-vm/tests/unit/test_vm_control_flow.py`，通过手动构造包含 `Jump` 和 `JumpIfFalse` 的 Blueprint，验证 VM 的跳转逻辑。
+修改 `packages/cascade-vm/src/cascade/vm/machine.py`，实现对 `Jump` 和 `JumpIfFalse` 指令的支持，使 `test_vm_control_flow.py` 通过。
 
 ### 评论
-目前的 VM 实现只是简单的 `for instruction in blueprint` 循环，完全无法通过此测试。这个测试将强制我们把 VM 重构为 `while pc < len(instructions)` 模式，并正确处理指令指针的更新。这是实现 `run_if` 和循环逻辑的基础。
+这是 VM 架构的一次重大升级。我们将简单的迭代器循环替换为明确的 Fetch-Decode-Execute 循环（虽然目前 Fetch 和 Decode 还是简化的）。这为后续支持更复杂的控制流（如异常处理块）奠定了基础。
 
 ### 目标
-1.  创建 `test_vm_control_flow.py`。
-2.  测试无条件跳转 `Jump` 是否能跳过指令。
-3.  测试条件跳转 `JumpIfFalse` 是否能根据寄存器值正确分支。
-4.  测试向后跳转是否能实现循环逻辑。
+1.  在 `machine.py` 中导入 `Jump` 和 `JumpIfFalse`。
+2.  重写 `execute` 方法，使用 `pc` (程序计数器) 和 `while` 循环遍历指令。
+3.  在循环内部处理跳转指令修改 `pc` 的逻辑。
 
 ### 基本原理
-通过构造包含副作用（如向列表追加值）的指令序列，我们可以精确地断言哪些指令被执行了，哪些被跳过了，以及执行的顺序。这是验证控制流最可靠的方法。
+控制流指令的核心作用是修改执行顺序，这在 `for instr in instructions` 的迭代模式下是无法实现的。显式的 PC 管理是实现图灵完备虚拟机的标准做法。
 
 ### 标签
-#intent/test #flow/ready #priority/high #comp/tests #concept/vm #task/domain/core #task/object/vm-loop #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/vm #concept/control-flow #task/domain/core #task/object/vm-loop #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 VM 控制流测试文件
+#### Acts 1: 更新 VM 执行循环
+
+我们将导入新的指令类型，并重构 `execute` 方法以支持跳转。
 
 ~~~~~act
-write_file
-packages/cascade-vm/tests/unit/test_vm_control_flow.py
+patch_file
+packages/cascade-vm/src/cascade/vm/machine.py
 ~~~~~
-~~~~~python
-import pytest
-from typing import List
+~~~~~python.old
+from cascade.spec.blueprint import (
+    Blueprint,
+    Instruction,
+    Call,
+    Literal,
+    Register,
+    Operand,
+    TailCall,
+)
+from cascade.spec.ir.models import TaskDef
+~~~~~
+~~~~~python.new
+from cascade.spec.blueprint import (
+    Blueprint,
+    Instruction,
+    Call,
+    Literal,
+    Register,
+    Operand,
+    TailCall,
+    Jump,
+    JumpIfFalse,
+)
+from cascade.spec.ir.models import TaskDef
+~~~~~
 
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Jump, JumpIfFalse
-from cascade.vm import VirtualMachine
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/machine.py
+~~~~~
+~~~~~python.old
+        # 3. Main Execution Loop
+        while True:
+            last_result = None
 
-# --- Helpers ---
+            for instr in current_blueprint.instructions:
+                last_result = await self._dispatch(instr, frame)
 
-def append_val(log: List[int], val: int):
-    log.append(val)
+            # TCO Logic
+            if isinstance(last_result, TailCall):
+                if last_result.target_blueprint_id:
+~~~~~
+~~~~~python.new
+        # 3. Main Execution Loop
+        while True:
+            pc = 0
+            instructions = current_blueprint.instructions
+            last_result = None
 
-def decrement(x: int) -> int:
-    return x - 1
+            while pc < len(instructions):
+                instr = instructions[pc]
 
-def is_positive(x: int) -> bool:
-    return x > 0
+                # Handle Control Flow
+                if isinstance(instr, Jump):
+                    pc += instr.offset
+                    continue
 
-# --- Tests ---
+                if isinstance(instr, JumpIfFalse):
+                    val = frame.load(instr.condition)
+                    if not val:
+                        pc += instr.offset
+                    else:
+                        pc += 1
+                    continue
 
-@pytest.mark.asyncio
-async def test_vm_jump_skips_instruction():
-    """
-    Verify Jump(offset) skips intermediate instructions.
-    
-    Program:
-    0: Jump(2)   -> Goto 2
-    1: Call(append, 1)  (Should be skipped)
-    2: Call(append, 2)  (Should be executed)
-    """
-    log = []
-    
-    instrs = [
-        # 0: Jump to index 2 (0 + 2 = 2)
-        Jump(offset=2),
-        # 1:
-        Call(
-            func=append_val, 
-            output=Register(0), # Dummy output
-            args=[Literal(log), Literal(1)],
-            task_name="log_1"
-        ),
-        # 2:
-        Call(
-            func=append_val, 
-            output=Register(0), 
-            args=[Literal(log), Literal(2)],
-            task_name="log_2"
-        ),
-    ]
-    
-    bp = Blueprint(instructions=instrs, register_count=1)
-    vm = VirtualMachine()
-    await vm.execute(bp)
-    
-    assert log == [2]
+                # Handle Standard Instructions
+                last_result = await self._dispatch(instr, frame)
+                pc += 1
 
-
-@pytest.mark.asyncio
-async def test_vm_jump_if_false_branching():
-    """
-    Verify JumpIfFalse branches correctly based on register value.
-    
-    Program:
-    0: R0 = input (cond)
-    1: JumpIfFalse(R0, 2) -> Goto 3 if False
-    2: Call(append, 1)    (Skipped if False)
-    3: Call(append, 2)    (Executed)
-    """
-    log = []
-    
-    # Instructions:
-    # R0 is loaded via initial_kwargs["cond"]
-    instrs = [
-        # 0: Jump to 0 + 2 = 2? No, offset is relative to current PC.
-        # If PC=0, Jump(2) -> PC=2. 
-        # Wait, if we are at index 0, and we want to skip index 1 and land on index 2.
-        # Target = 0 + 2 = 2. Yes.
-        
-        # 0: JumpIfFalse(R0, 2) -> Goto 2
-        JumpIfFalse(condition=Register(0), offset=2),
-        
-        # 1:
-        Call(func=append_val, output=Register(1), args=[Literal(log), Literal(1)], task_name="log_1"),
-        
-        # 2:
-        Call(func=append_val, output=Register(1), args=[Literal(log), Literal(2)], task_name="log_2"),
-    ]
-    
-    bp = Blueprint(instructions=instrs, register_count=2, input_kwargs={"cond": 0})
-    vm = VirtualMachine()
-    
-    # Case 1: Condition is False (Should Jump to 2, skipping 1)
-    log.clear()
-    await vm.execute(bp, initial_kwargs={"cond": False})
-    assert log == [2]
-    
-    # Case 2: Condition is True (Should NOT Jump, executing 1 then 2)
-    log.clear()
-    await vm.execute(bp, initial_kwargs={"cond": True})
-    assert log == [1, 2]
-
-
-@pytest.mark.asyncio
-async def test_vm_loop_backward_jump():
-    """
-    Verify backward jump creates a working loop.
-    
-    Logic:
-    count = input
-    loop:
-      is_pos = count > 0
-      if not is_pos goto end
-      log.append(count)
-      count = count - 1
-      goto loop
-    end:
-    
-    Instructions:
-    R0 (count) initialized via input
-    
-    0: Call(is_positive, R0) -> R1
-    1: JumpIfFalse(R1, 4)    -> Goto 5 (End) (1 + 4 = 5)
-    2: Call(append, R0)
-    3: Call(decrement, R0) -> R0
-    4: Jump(-4)              -> Goto 0 (4 - 4 = 0)
-    5: Return (implicit)
-    """
-    log = []
-    
-    instrs = [
-        # 0: R1 = R0 > 0
-        Call(func=is_positive, output=Register(1), args=[Register(0)], task_name="check_pos"),
-        
-        # 1: if not R1 goto 5
-        JumpIfFalse(condition=Register(1), offset=4),
-        
-        # 2: log.append(R0)
-        Call(func=append_val, output=Register(2), args=[Literal(log), Register(0)], task_name="log"),
-        
-        # 3: R0 = R0 - 1
-        Call(func=decrement, output=Register(0), args=[Register(0)], task_name="decr"),
-        
-        # 4: Goto 0
-        Jump(offset=-4)
-    ]
-    
-    bp = Blueprint(instructions=instrs, register_count=3, input_kwargs={"count": 0})
-    vm = VirtualMachine()
-    
-    # Loop 3 times: 3, 2, 1
-    await vm.execute(bp, initial_kwargs={"count": 3})
-    assert log == [3, 2, 1]
+            # TCO Logic
+            if isinstance(last_result, TailCall):
+                if last_result.target_blueprint_id:
 ~~~~~
 
 ### 下一步建议
-测试现在会失败（RED）。我们需要重写 `packages/cascade-vm/src/cascade/vm/machine.py` 中的 `VirtualMachine.execute` 方法。
+现在所有的 VM 单元测试（包括控制流测试）都应该通过了。
 
-必须将当前的 `for instr in instructions` 循环替换为基于 `program_counter` 的 `while` 循环，并实现 `Jump` 和 `JumpIfFalse` 的分发逻辑。
+接下来的挑战是**功能对齐**（阶段 6）。我们需要让 `Compiler` 能够利用这些新指令。具体来说，我们需要支持将 `LazyResult.run_if(condition)` 编译为 `JumpIfFalse` 指令序列。
+
+建议的下一步是：
+1.  在 `packages/cascade-compiler/tests/unit/test_backend.py` 中添加一个新的测试用例，验证 Backend 能否将带有条件分支的 IR 编译为包含 `JumpIfFalse` 的 Blueprint。
+2.  修改 Backend 实现该逻辑。

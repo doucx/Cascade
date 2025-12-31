@@ -11,6 +11,8 @@ from cascade.spec.blueprint import (
     Register,
     Operand,
     TailCall,
+    Jump,
+    JumpIfFalse,
 )
 from cascade.spec.ir.models import TaskDef
 from cascade.spec.fingerprint import Fingerprint
@@ -87,10 +89,29 @@ class VirtualMachine:
 
         # 3. Main Execution Loop
         while True:
+            pc = 0
+            instructions = current_blueprint.instructions
             last_result = None
 
-            for instr in current_blueprint.instructions:
+            while pc < len(instructions):
+                instr = instructions[pc]
+
+                # Handle Control Flow
+                if isinstance(instr, Jump):
+                    pc += instr.offset
+                    continue
+
+                if isinstance(instr, JumpIfFalse):
+                    val = frame.load(instr.condition)
+                    if not val:
+                        pc += instr.offset
+                    else:
+                        pc += 1
+                    continue
+
+                # Handle Standard Instructions
                 last_result = await self._dispatch(instr, frame)
+                pc += 1
 
             # TCO Logic
             if isinstance(last_result, TailCall):

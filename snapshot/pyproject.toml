@@ -5,16 +5,19 @@ build-backend = "hatchling.build"
 [project]
 name = "cascade"
 version = "0.1.0"
-description = "A modern, declarative automation library for Python."
+description = "The official Python SDK for Cascade."
 readme = "README.md"
 requires-python = ">=3.8"
 license = "Apache-2.0"
 dependencies = [
     "cascade-spec",
-    "cascade-engine",
-    "cascade-sdk",
+    "cascade-common",
     "cascade-graph",
+    "cascade-engine",
+    "cascade-application",
     "cascade-library",
+    "cascade-cli-controller",
+    "cascade-cli-observer",
 ]
 
 [tool.uv.workspace]
@@ -34,7 +37,7 @@ cascade-connector-mqtt = { workspace = true }
 cascade-connector-local = { workspace = true }
 cascade-compiler = { workspace = true }
 cascade-vm = { workspace = true }
-cascade = { path = "packages/cascade-python", editable = true }
+cascade-python = { path = "packages/cascade-python", editable = true }
 
 [tool.hatch.workspaces]
 packages = [

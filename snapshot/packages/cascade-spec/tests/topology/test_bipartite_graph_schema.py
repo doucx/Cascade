@@ -1,39 +1,3 @@
-好的，我们正式开启 **Phase 3.1**。
-
-为了定义物理拓扑层（Physics Topology Layer）的契约，我将创建一个测试文件 `packages/cascade-spec/tests/topology/test_bipartite_graph_schema.py`。这个测试将强制要求 `cascade.spec.topology` 模块的存在，并且其中的数据结构（`BipartiteGraph`, `ChannelDef` 等）必须严格遵循我们在**符号表**中定义的“哈希强制长命名规范”。
-
-这是 TDD 的 **RED** 步骤。
-
-## [WIP] test: 定义 BipartiteGraph 物理拓扑契约
-
-### 用户需求
-定义编译器后端输出的静态数据结构契约。这包括二分图（Bipartite Graph）及其组成部分：物理函数节点（PhysicsFuncNode）、物理数据节点（PhysicsDataNode）和通道定义（ChannelDef）。
-
-### 评论
-该测试不仅是一个 Schema 检查，它是对架构公理的强制执行。特别是 `ChannelDef`，它必须使用 `source_node_instance_hash` 和 `target_data_slot_hash` 这样精确的命名，彻底消除旧架构中 `source_id`/`target_id` 带来的语义模糊。
-
-### 目标
-创建 `packages/cascade-spec/tests/topology/test_bipartite_graph_schema.py`，尝试导入并实例化尚不存在的拓扑类，从而使测试变红。
-
-### 基本原理
-通过编写使用预期 API 的测试代码，我们在实现之前就冻结了设计。这确保了实现者（随后的我）必须准确地满足这些命名和结构要求，没有偏差的余地。
-
-### 标签
-#intent/architect #flow/ready #priority/high #comp/interfaces #concept/state #scope/core #ai/instruct #task/domain/compiler #task/object/topology #task/action/definition #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建拓扑契约测试
-
-我们将创建一个测试文件，该文件通过尝试导入和实例化 `BipartiteGraph` 及其相关组件来断言其 Schema。
-
-~~~~~act
-write_file
-packages/cascade-spec/tests/topology/test_bipartite_graph_schema.py
-~~~~~
-~~~~~python
 import pytest
 from dataclasses import is_dataclass
 
@@ -113,7 +77,3 @@ def test_bipartite_graph_container_structure():
     assert isinstance(graph.data_nodes, dict)
     # Must be typed as List[ChannelDef]
     assert isinstance(graph.channels, list)
-~~~~~
-
-### 下一步建议
-一旦测试文件创建（测试失败），我们将进入 **GREEN** 阶段：在 `packages/cascade-spec/src/cascade/spec/topology.py` 中实现这些数据类，使其完全匹配测试中定义的契约。

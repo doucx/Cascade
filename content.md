@@ -1,168 +1,270 @@
 简要回答：
-好的，我将实现物理层核心模块 `physics.py`，定义 `Token`, `DataNode`, `FuncNode` 等类，以通过刚刚创建的测试用例。
+好的，我将为第二阶段“动力层实现”创建测试文件。这包括 `test_reactor_loop.py` 和 `test_routing.py`，旨在定义反应堆循环、事件处理及路由逻辑的行为。
 
-## [WIP] feat(spec): 实现物理层核心实体 (TDD GREEN Phase)
+## [WIP] test: Create Phase 2 Reactor and Routing tests
 
 ### 用户需求
-用户需要实现 `cascade.spec.physics` 模块，以满足第一阶段重构的测试要求。这包括定义令牌结构、数据节点的存储策略以及函数节点的激发机制。
+根据 TDD 重构计划（Phase 2），创建 `cascade-vm` 包中关于 `Reactor` 核心循环和路由逻辑的测试文件。
 
 ### 评论
-这是“物理层”的基石实现。我们将采用 `dataclass` 来定义 `Token` 和 `Port` 以保持简洁。对于 `DataNode`，我们将实现基于 `deque` 或 `list` 的缓冲区，并支持 `OVERWRITE` 和 `REJECT` 两种策略，这直接对应于白皮书中的“寄存器模式”和“阻塞模式”。`FuncNode` 将实现势能检查逻辑 (`is_ready`)，这是势能驱动架构的核心。
+这些测试将定义 Cascade 新运行时的核心物理引擎行为。
+1.  `test_reactor_loop.py`: 验证事件驱动的势能更新、任务分发和状态传播。
+2.  `test_routing.py`: 验证基于 Token Tag 的动态路由（Switch/Jump）逻辑。
+
+目前这些测试将处于 **RED** 状态（ImportError 或 AttributeError），因为对应的实现代码尚未编写。这符合 TDD 流程。
 
 ### 目标
-1.  创建 `packages/cascade-spec/src/cascade/spec/physics.py`。
-2.  实现 `Token`, `AccessPolicy`, `DataNode`, `Port`, `FuncNode`。
+1.  创建 `packages/cascade-vm/tests/reactor` 目录。
+2.  创建 `packages/cascade-vm/tests/reactor/test_reactor_loop.py`。
+3.  创建 `packages/cascade-vm/tests/reactor/test_routing.py`。
 
 ### 基本原理
--   **Token**: 设计为不可变的数据载体。
--   **DataNode**: 实现了白皮书中描述的“有状态容器”。`OVERWRITE` 策略对于流处理和 TCO 循环至关重要（丢弃旧帧，保留新帧）。
--   **FuncNode**: 实现了“无状态转换器”。`consume_inputs` 和 `produce_outputs` 的分离使得原子化操作（如在 Reactor 循环中）成为可能。
+我们正在实施“焦土式”重构，直接定义新架构的预期行为。通过先写测试，我们确立了 `Reactor` 作为“物理引擎”的契约：它必须响应事件，计算势能，并根据物理规则（如标签匹配）移动数据。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/spec #concept/state #scope/core #ai/instruct #task/domain/core #task/object/physics-layer #task/action/implementation #task/state/continue #task/status/active
+#intent/build #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/reactor #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 实现 `cascade.spec.physics`
+#### Acts 1: 创建测试目录
+首先确保 `reactor` 测试目录存在。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+mkdir -p packages/cascade-vm/tests/reactor
+~~~~~
+
+#### Acts 2: 创建 `test_reactor_loop.py`
+定义反应堆核心循环的测试用例：事件驱动、执行分发、状态传播。
 
 ~~~~~act
 write_file
-packages/cascade-spec/src/cascade/spec/physics.py
+packages/cascade-vm/tests/reactor/test_reactor_loop.py
 ~~~~~
 ~~~~~python
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Any, Dict, List, Optional
+import pytest
+import asyncio
+from unittest.mock import MagicMock, AsyncMock
 
+# These imports will fail initially, which is expected for TDD RED state
+from cascade.spec.physics import DataNode, FuncNode, Token, Port
+from cascade.vm.reactor import Reactor, TokenGenerated, ExecutionFinished
 
-@dataclass
-class Token:
+@pytest.mark.asyncio
+async def test_reactor_event_driven_potential_update():
     """
-    The atomic carrier of information in the network.
+    Case 1 (Event Driven): 
+    验证 Reactor 能够处理 TokenGenerated 事件并更新下游节点的势能。
     """
-    payload: Any
-    tag: str = "default"
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    # 1. Setup Physics Topology
+    d_node = DataNode(name="d1")
+    f_node = FuncNode(name="f1")
+    # Wiring: d_node -> f_node
+    f_node.add_input(Port(name="in1", source=d_node))
+    
+    # 2. Setup Reactor
+    mock_executor = AsyncMock()
+    reactor = Reactor(executor=mock_executor)
+    
+    # Register nodes so Reactor tracks them
+    reactor.register_node(d_node)
+    reactor.register_node(f_node)
+    
+    # 3. Action: Simulate a token generation event
+    token = Token(payload=42)
+    event = TokenGenerated(node=d_node, token=token)
+    
+    # Push event (Reactor buffers it)
+    reactor.push_event(event)
+    
+    # 4. Process one step of the reactor loop
+    await reactor.step()
+    
+    # 5. Assertions
+    # The data node should now hold the token
+    assert d_node.peek() == token
+    # The function node should be ready because its input is excited
+    assert f_node.is_ready()
+    # At this stage, we haven't triggered firing logic, just potential update verification
+    # (Or if step() includes firing, verify executor calls in next test)
 
 
-class AccessPolicy(Enum):
+@pytest.mark.asyncio
+async def test_reactor_execution_dispatch():
     """
-    Defines behavior when writing to a full DataNode.
+    Case 2 (Execution Dispatch):
+    构造 D_in -> F -> D_out 网络。
+    验证当 D_in 激发时，Reactor 自动将 F 提交给 Executor。
     """
-    REJECT = auto()     # Raise an error (Blocking/Safety)
-    OVERWRITE = auto()  # Overwrite old data (Register/Streaming)
+    # 1. Topology
+    d_in = DataNode(name="in")
+    d_out = DataNode(name="out")
+    f_node = FuncNode(name="process")
+    
+    f_node.add_input(Port(name="arg", source=d_in))
+    f_node.add_output(Port(name="res", target=d_out))
+    
+    # 2. Reactor
+    mock_executor = AsyncMock()
+    reactor = Reactor(executor=mock_executor)
+    reactor.register_node(d_in)
+    reactor.register_node(d_out)
+    reactor.register_node(f_node)
+    
+    # 3. Inject Initial State via Event
+    initial_token = Token(10)
+    reactor.push_event(TokenGenerated(node=d_in, token=initial_token))
+    
+    # 4. Run Loop
+    # Step should:
+    # a. Process TokenGenerated -> Update D_in -> Update F potential
+    # b. Detect F is ready -> Fire F -> Submit to Executor
+    await reactor.step()
+    
+    # 5. Assertions
+    assert mock_executor.submit.called
+    
+    call_args = mock_executor.submit.call_args
+    # submit(node, inputs)
+    submitted_node = call_args[0][0]
+    submitted_inputs = call_args[0][1]
+    
+    assert submitted_node == f_node
+    assert submitted_inputs["arg"].payload == 10
+    
+    # Verify atomicity: tokens should be consumed from input
+    assert d_in.is_empty()
 
 
-class DataNode:
+@pytest.mark.asyncio
+async def test_reactor_propagation():
     """
-    Stateful container for Tokens. Represents the 'Noun' in the physics model.
+    Case 3 (Propagation):
+    验证 Executor 完成任务后，Reactor 能处理结果并将新 Token 放入下游节点。
     """
-    def __init__(
-        self, 
-        name: str, 
-        capacity: int = 1, 
-        policy: AccessPolicy = AccessPolicy.OVERWRITE
-    ):
-        self.name = name
-        self.capacity = capacity
-        self.policy = policy
-        self._buffer: List[Token] = []
+    # 1. Topology
+    d_out = DataNode(name="out")
+    f_node = FuncNode(name="process")
+    f_node.add_output(Port(name="res", target=d_out))
+    
+    reactor = Reactor(executor=AsyncMock())
+    reactor.register_node(f_node)
+    reactor.register_node(d_out)
+    
+    # 2. Simulate Executor finishing a task (callback or event)
+    output_tokens = {"res": Token(20)}
+    event = ExecutionFinished(node=f_node, outputs=output_tokens)
+    
+    reactor.push_event(event)
+    
+    # 3. Process
+    await reactor.step()
+    
+    # 4. Assertions
+    assert d_out.is_excited()
+    assert d_out.peek().payload == 20
+~~~~~
 
-    def is_empty(self) -> bool:
-        return len(self._buffer) == 0
+#### Acts 3: 创建 `test_routing.py`
+定义路由逻辑测试：基于 Tag 的通道过滤。
 
-    def is_excited(self) -> bool:
-        return len(self._buffer) > 0
+~~~~~act
+write_file
+packages/cascade-vm/tests/reactor/test_routing.py
+~~~~~
+~~~~~python
+import pytest
+from unittest.mock import AsyncMock
+from cascade.spec.physics import DataNode, FuncNode, Token, Port
+from cascade.vm.reactor import Reactor, ExecutionFinished, Channel
 
-    def peek(self) -> Optional[Token]:
-        if not self._buffer:
-            return None
-        return self._buffer[0]
-
-    def put(self, token: Token) -> None:
-        """
-        Inject a token into the node. 
-        Respects capacity and access policy.
-        """
-        if len(self._buffer) >= self.capacity:
-            if self.policy == AccessPolicy.REJECT:
-                raise BufferError(f"DataNode '{self.name}' is full (capacity={self.capacity})")
-            elif self.policy == AccessPolicy.OVERWRITE:
-                # Make room by dropping oldest elements
-                while len(self._buffer) >= self.capacity:
-                    self._buffer.pop(0)
-        
-        self._buffer.append(token)
-
-    def take(self) -> Optional[Token]:
-        """
-        Consume and return the oldest token.
-        """
-        if not self._buffer:
-            return None
-        return self._buffer.pop(0)
-
-
-@dataclass
-class Port:
+@pytest.mark.asyncio
+async def test_routing_tag_matching():
     """
-    Connection point on a FuncNode.
+    Case 1: Tag Matching & Routing
+    验证 Reactor 根据 Token 的 tag 正确选择 Channel。
+    
+    拓扑: F -> (Tag='default') -> D_next
+         F -> (Tag='continue') -> D_loop
     """
-    name: str
-    source: Optional[DataNode] = None
-    target: Optional[DataNode] = None
+    # 1. Topology
+    f_node = FuncNode(name="decision")
+    d_next = DataNode(name="next")
+    d_loop = DataNode(name="loop")
+    
+    # 2. Define Channels (The edges of the Bipartite Graph)
+    # Channel connects a specific output port of a FuncNode to a DataNode, with a filter.
+    c_default = Channel(
+        source=f_node, 
+        target=d_next, 
+        output_name="result", 
+        tag_filter="default"
+    )
+    
+    c_loop = Channel(
+        source=f_node, 
+        target=d_loop, 
+        output_name="result", 
+        tag_filter="continue"
+    )
+    
+    # 3. Setup Reactor
+    reactor = Reactor(executor=AsyncMock())
+    # We assume Reactor manages topology (channels)
+    reactor.register_channel(c_default)
+    reactor.register_channel(c_loop)
+    
+    # 4. Simulate F producing a 'continue' token
+    token = Token(payload=1, tag="continue")
+    
+    # The Executor would emit this event
+    event = ExecutionFinished(node=f_node, outputs={"result": token})
+    reactor.push_event(event)
+    
+    # 5. Step
+    await reactor.step()
+    
+    # 6. Assertions
+    # D_loop should receive the token because tags match
+    assert d_loop.is_excited()
+    assert d_loop.peek() == token
+    
+    # D_next should remain empty because 'continue' != 'default'
+    assert d_next.is_empty()
 
 
-class FuncNode:
+@pytest.mark.asyncio
+async def test_routing_fan_out_same_tag():
     """
-    Stateless transformer. Represents the 'Verb' in the physics model.
+    Case 2: Broadcasting
+    验证同一个 Tag 可以被多个 Channel 接收 (Fan-out)。
     """
-    def __init__(self, name: str):
-        self.name = name
-        self.inputs: Dict[str, Port] = {}
-        self.outputs: Dict[str, Port] = {}
-
-    def add_input(self, port: Port):
-        self.inputs[port.name] = port
-
-    def add_output(self, port: Port):
-        self.outputs[port.name] = port
-
-    def is_ready(self) -> bool:
-        """
-        Potential Barrier Check: Are all connected inputs excited?
-        """
-        for port in self.inputs.values():
-            if port.source and not port.source.is_excited():
-                return False
-        return True
-
-    def consume_inputs(self) -> Dict[str, Token]:
-        """
-        Atomically consume tokens from all input sources.
-        """
-        result = {}
-        for name, port in self.inputs.items():
-            if port.source:
-                token = port.source.take()
-                if token:
-                    result[name] = token
-        return result
-
-    def produce_outputs(self, tokens: Dict[str, Token]):
-        """
-        Push result tokens to output targets.
-        """
-        for name, token in tokens.items():
-            if name in self.outputs:
-                port = self.outputs[name]
-                if port.target:
-                    port.target.put(token)
+    f_node = FuncNode(name="broadcast")
+    d_1 = DataNode(name="d1")
+    d_2 = DataNode(name="d2")
+    
+    # Both channels accept 'default'
+    c1 = Channel(source=f_node, target=d_1, output_name="out", tag_filter="default")
+    c2 = Channel(source=f_node, target=d_2, output_name="out", tag_filter="default")
+    
+    reactor = Reactor(executor=AsyncMock())
+    reactor.register_channel(c1)
+    reactor.register_channel(c2)
+    
+    token = Token(payload="msg", tag="default")
+    event = ExecutionFinished(node=f_node, outputs={"out": token})
+    reactor.push_event(event)
+    
+    await reactor.step()
+    
+    # Both should receive the token (Copy semantics for broadcast)
+    assert d_1.peek().payload == "msg"
+    assert d_2.peek().payload == "msg"
 ~~~~~
 
 ### 下一步建议
-实现完成后，我们应该运行测试以确认这一阶段的任务完成。
-建议执行：`pytest packages/cascade-spec/tests/physics/`。
-确认变绿后，我们将进入第二阶段：动力层实现 (Reactor Core)。
+测试文件创建完毕。下一步是执行这些测试，确认它们因为缺少 `cascade.vm.reactor` 模块而失败（RED），然后开始实现 `Reactor` 类及其辅助结构（如 `Channel`）。

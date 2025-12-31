@@ -1,43 +1,3 @@
-我们在 **Phase 3.2** 的目标是重构 `Backend`，使其生成 `BipartiteGraph`。
-
-这是一个 **RED** 步骤。
-
-这个测试将定义编译器后端的新行为：输入 `GraphIR`，输出 `BipartiteGraph`。这将打破现有的 `Backend.compile` 契约（目前返回 `Blueprint`），这是预期的。
-
-## [WIP] test: 定义 Backend 生成 BipartiteGraph 的行为
-
-### 用户需求
-驱动编译器后端的重构。`Backend` 不应再生成线性的指令列表（Blueprint），而应将 `GraphIR` 翻译为静态的物理网络（BipartiteGraph）。
-
-### 评论
-这个测试标志着我们从“基于指令的虚拟机”向“基于拓扑的反应堆”的正式转变。我们不再需要 `ExecutionPlan` 来生成后端输出，因为拓扑本身包含了所有的依赖关系。
-
-### 目标
-创建 `packages/cascade-compiler/tests/unit/test_backend_topology.py`。
-
-### 基本原理
-1.  **输入**: 构造一个简单的线性 `GraphIR` (A -> B).
-2.  **动作**: 调用 `Backend.compile(ir)`。注意：我们有意省略了 `plan` 参数，因为静态拓扑不需要预先确定的线性计划。
-3.  **断言**:
-    *   返回类型必须是 `BipartiteGraph`。
-    *   图中包含 2 个 `PhysicsFuncNode` (A, B)。
-    *   图中包含 2 个 `PhysicsDataNode` (A 的输出槽位, B 的输出槽位)。
-    *   存在一个 `ChannelDef` 连接 A 的输出和 B 的输入。
-
-### 标签
-#intent/architect #flow/ready #priority/high #comp/compiler #concept/topology #scope/core #ai/instruct #task/domain/compiler #task/object/backend #task/action/test #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 Backend 拓扑测试
-
-~~~~~act
-write_file
-packages/cascade-compiler/tests/unit/test_backend_topology.py
-~~~~~
-~~~~~python
 import pytest
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef
 from cascade.spec.fingerprint import Fingerprint
@@ -126,13 +86,3 @@ def test_compile_linear_graph_to_topology():
     
     data_node = topology.data_nodes[data_slot_id]
     assert data_node.producer_node_instance_hash == "A"
-~~~~~
-
-### 下一步建议
-测试现在已经就绪（并且会失败，因为 `Backend.compile` 仍然返回 `Blueprint` 且签名不匹配）。
-
-我们将进入 **GREEN** 阶段。我将重构 `packages/cascade-compiler/src/cascade/compiler/backend.py`。
-这一步将涉及：
-1.  修改 `compile` 方法签名，移除 `plan` 参数。
-2.  删除旧的 `_BlueprintBuilder`。
-3.  实现新的 `_TopologyBuilder`，负责遍历 `GraphIR` 并构建 `BipartiteGraph`。

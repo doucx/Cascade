@@ -22,7 +22,7 @@ def test_compile_single_node_literals():
     # 1. Setup IR
     # Node A(x=1, y="hello")
     task_def = _create_dummy_task_def("task_A")
-    node = NodeIR(id="A", definition=task_def, inputs={"x": 1, "y": "hello"})
+    node = NodeIR(id="A", definition=task_def, kwargs={"x": 1, "y": "hello"})
     
     ir = GraphIR(nodes=[node], edges=[])
     plan = [["A"]] # Single stage
@@ -163,7 +163,7 @@ def test_compile_map_node_generates_map_call():
     node_b = NodeIR(
         id="B", 
         definition=_create_dummy_task_def("process"),
-        inputs={"scale": 2}, # Constant input
+        kwargs={"scale": 2}, # Constant input
         meta={"is_map": True}
     )
     

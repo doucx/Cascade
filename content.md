@@ -1,66 +1,209 @@
-简要回答：
-分析表明我们处于一个典型的**集成阵痛期**。核心问题有三类：
-1.  **测试过时**: 单元测试未跟随 `Frontend` 返回类型的变更（`GraphIR` -> `CompilationResult`）。
-2.  **语义不匹配**: `Backend` 将位置参数误编译为带数字键的 `kwargs`，导致 VM 调用函数时参数错位；`Frontend` 错误地将 `Task` 包装器而非原始函数放入符号表，导致 VM 执行结果变成 `LazyResult`。
-3.  **Spec 定义模糊**: VM 的返回值策略未明确定义（当前返回最后一条指令结果），导致跳过执行时的断言失败。
+好的，我理解。我们开始执行“架构硬化”任务的第一步：**重构 IR 模型**。
 
-我们将执行战术修复：更新过时的测试，修正 Backend 的参数编译逻辑，并确保符号表中存储的是原始函数。
+你的分析完全正确。当前的 `NodeIR.inputs` 是一个“贫血”模型，它将本应在编译前端（Frontend）完成的参数解析工作推迟到了后端（Backend），违反了“聪明的 Frontend, 简单的 Backend”这一核心编译原则。
 
-## [WIP] fix: 修复 Compiler 参数映射与 Frontend 符号表生成 (GREEN 阶段)
+我将生成一个计划，该计划会执行以下操作：
+1.  修改 `cascade.spec.ir.models.NodeIR`，废弃 `inputs` 字段，引入 `args: List[Any]` 和 `kwargs: Dict[str, Any]`。
+2.  更新 `Frontend`，使其在构建 `NodeIR` 时就负责解析 `LazyResult` 的参数，并填充到新的 `args` 和 `kwargs` 字段中。
+3.  简化 `Backend`，使其不再进行参数解析，而是直接消费 `NodeIR` 中清晰的 `args` 和 `kwargs`。
+4.  同步更新所有受此变更影响的单元测试。
+
+这将使我们的 IR 结构更加清晰、自文档化，并简化后端逻辑，为未来的优化奠定坚实的基础。
+
+## [WIP] refactor(ir): Refactor NodeIR to separate args and kwargs
 
 ### 用户需求
-修复导致 CI 变红的集成问题。核心是确保 Compiler 正确处理位置参数，Frontend 正确解包 Task 对象，以及更新所有受影响的测试以匹配新的 `CompilationResult` 契约。
+根据“偿还MVP技术债”的规划，重构 IR 模型（`NodeIR`），以明确分离位置参数（`args`）和关键字参数（`kwargs`），并将参数解析逻辑从 Backend 前移至 Frontend。
 
 ### 评论
-本次修复针对分析出的三个关键阻断点：
-1.  **Compiler**: `Backend` 现在会智能识别数字键参数，将其转换为 `Call` 指令的 `args` 列表，解决 `unexpected keyword argument '0'`。
-2.  **Frontend**: 修正 `_visit_mapped_result`，确保存入 `symbol_table` 的是 `obj.factory.func`（如果是 Task），防止 VM 运行时获得 `LazyResult`。
-3.  **Tests**: 全面更新 `cascade-compiler` 的单元测试和 `cascade-engine` 的集成测试，以适配 `CompilationResult` 结构。
+这是一个关键的架构重构。将 `args` 和 `kwargs` 在 IR层面明确分离，可以极大地提高 IR 的可读性和自文档化能力。更重要的是，它将参数解析的复杂性正确地归于 Frontend 的职责范围，使得 Backend 的实现可以显著简化，更专注于代码生成，这完全符合“聪明的 Frontend，简单的 Backend”的设计哲学。
 
 ### 目标
-1.  修复 `cascade-compiler/src/cascade/compiler/backend.py` 中的参数处理逻辑。
-2.  修复 `cascade-compiler/src/cascade/compiler/frontend.py` 中的符号表填充逻辑。
-3.  更新 `packages/cascade-compiler/tests/unit/test_frontend.py`。
-4.  更新 `packages/cascade-engine/tests/integration/test_compiler.py`。
-5.  更新 `packages/cascade-engine/tests/integration/test_integration_map_control.py` 的断言逻辑。
+1.  修改 `cascade.spec.ir.models.NodeIR` 的数据结构，用 `args: List[Any]` 和 `kwargs: Dict[str, Any]` 替换 `inputs: Dict[str, Any]`。
+2.  更新 `cascade.compiler.frontend._GraphBuilder`，使其在访问 `LazyResult` 时，直接将 `LazyResult.args` 和 `LazyResult.kwargs` 解析并填充到 `NodeIR` 的新字段中。
+3.  简化 `cascade.compiler.backend._BlueprintBuilder`，移除其内部对数字键的解析逻辑，改为直接消费 `NodeIR.args` 和 `NodeIR.kwargs`。
+4.  更新所有因 `NodeIR` 结构变更而失败的单元测试。
 
 ### 基本原理
-**参数归位**：Python 函数调用严格区分位置参数和关键字参数。中间表示（IR）为了简化使用了统一字典，但编译器后端必须负责将“语义上的位置参数”（数字键）还原为“实现上的位置参数”（列表）。
-**去包装化**：VM 是底层执行器，它应该直接操作用户定义的原始逻辑。Task 包装器是 DSL 层的概念，不应泄漏到 VM 运行时。
+当前 `NodeIR.inputs` 字段是一个混合了位置参数（以数字字符串为键）和关键字参数的 `Dict[str, Any]`。这种“贫血”模型迫使 Backend 在代码生成阶段去反向解析参数的意图，这既职责错位又效率低下。
+
+本次重构通过在 `NodeIR` 中创建 `args` 和 `kwargs` 两个专用字段，将参数的语义在 IR 层面固定下来。`Frontend` 在编译时拥有最完整的上下文信息（`LazyResult` 对象），因此是执行“参数分类”逻辑的唯一正确位置。完成此重构后，IR 成为一个更纯粹、更明确的数据契约，Backend 的逻辑也将因此变得更加健壮和简单。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/compiler #comp/tests #scope/core #task/domain/core #task/object/linking #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/compiler #comp/spec #concept/ir #scope/core #ai/instruct #task/domain/architecture #task/object/ir-model #task/action/refactor #task/state/begin #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 Backend 参数编译逻辑
+#### Acts 1: Refactor `NodeIR` in `cascade-spec`
 
-解决 `TypeError: ...echo() got an unexpected keyword argument '0'`。
+首先，我们修改核心 IR 数据模型 `NodeIR`。
+
+~~~~~act
+write_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
+~~~~~
+~~~~~python
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import List, Optional, Dict, Any
+
+from cascade.spec.fingerprint import Fingerprint
+
+
+class EdgeKind(str, Enum):
+    DATA = "DATA"  # Standard data dependency
+    CONTROL = "CONTROL"  # Conditional execution (run_if)
+
+
+class ArgumentKind(str, Enum):
+    POSITIONAL_ONLY = "POSITIONAL_ONLY"
+    POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
+    VAR_POSITIONAL = "VAR_POSITIONAL"  # *args
+    KEYWORD_ONLY = "KEYWORD_ONLY"
+    VAR_KEYWORD = "VAR_KEYWORD"  # **kwargs
+
+
+@dataclass(frozen=True)
+class ArgumentDef:
+    name: str
+    kind: ArgumentKind
+    annotation: Optional[str] = None
+    default_value_repr: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class TaskDef:
+    name: str
+    args: List[ArgumentDef]
+    # The stable semantic identity of this task definition.
+    # Must contain keys like 'current_code_structure_hash'.
+    fingerprint: Fingerprint
+    return_annotation: Optional[str] = None
+    docstring: Optional[str] = None
+    is_async: bool = False
+    # Execution mode (e.g. "blocking", "compute") derived from the task definition
+    mode: str = "blocking"
+
+
+@dataclass
+class NodeIR:
+    id: str
+    definition: TaskDef
+    args: List[Any] = field(default_factory=list)
+    kwargs: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EdgeIR:
+    source_id: str
+    target_id: str
+    target_arg: str
+    kind: EdgeKind = EdgeKind.DATA
+
+
+@dataclass
+class GraphIR:
+    nodes: List[NodeIR]
+    edges: List[EdgeIR]
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+# --- VM Instruction Set ---
+
+
+@dataclass
+class Instruction:
+    id: str
+
+
+@dataclass
+class Call(Instruction):
+    task_name: str
+    args: List[Any]
+    output_register: str
+
+
+@dataclass
+class Return(Instruction):
+    source_register: str
+~~~~~
+
+#### Acts 2: Update `Frontend` to Populate New IR Fields
+
+接下来，修改 `Frontend` 以填充新的 `args` 和 `kwargs` 字段。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        if node_id not in self.nodes:
+            literal_inputs = {
+                str(i): arg for i, arg in enumerate(obj.args) if not isinstance(arg, (LazyResult, MappedLazyResult))
+            }
+            literal_inputs.update(
+                {k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))}
+            )
+
+            node = NodeIR(id=node_id, definition=task_def, inputs=literal_inputs)
+            self.nodes[node_id] = node
+~~~~~
+~~~~~python.new
+        if node_id not in self.nodes:
+            literal_args = [
+                arg for arg in obj.args if not isinstance(arg, (LazyResult, MappedLazyResult))
+            ]
+            literal_kwargs = {
+                k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
+            }
+
+            node = NodeIR(id=node_id, definition=task_def, args=literal_args, kwargs=literal_kwargs)
+            self.nodes[node_id] = node
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        if node_id not in self.nodes:
+            literal_inputs = {
+                k: val for k, val in obj.mapping_kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
+            }
+            node = NodeIR(
+                id=node_id,
+                definition=task_def,
+                inputs=literal_inputs,
+                meta={"is_map": True}
+            )
+            self.nodes[node_id] = node
+~~~~~
+~~~~~python.new
+        if node_id not in self.nodes:
+            literal_kwargs = {
+                k: val for k, val in obj.mapping_kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
+            }
+            node = NodeIR(
+                id=node_id,
+                definition=task_def,
+                kwargs=literal_kwargs,
+                meta={"is_map": True}
+            )
+            self.nodes[node_id] = node
+~~~~~
+
+#### Acts 3: Simplify `Backend` to Consume New IR Fields
+
+现在，简化 `Backend` 的实现，使其直接使用 `node.args` 和 `node.kwargs`。
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/src/cascade/compiler/backend.py
 ~~~~~
 ~~~~~python.old
-    def _process_node(self, node_id: str):
-        node = self._nodes_map[node_id]
-
-        # 1. Resolve Input Operands & Control Dependencies
-        args: List[Operand] = []  # Positional args not yet fully supported by this IR
-        kwargs: Dict[str, Operand] = {}
-        control_dependency_reg: Any = None
-
-        # 1a. From Literals
-        for key, value in node.inputs.items():
-            kwargs[key] = Literal(value)
-
-        # 1b. From Edges (Dependencies)
-        incoming_edges = self._incoming_edges_map.get(node_id, [])
-        for edge in incoming_edges:
-~~~~~
-~~~~~python.new
     def _process_node(self, node_id: str):
         node = self._nodes_map[node_id]
 
@@ -77,24 +220,16 @@ packages/cascade-compiler/src/cascade/compiler/backend.py
         # 1b. From Edges (Dependencies)
         incoming_edges = self._incoming_edges_map.get(node_id, [])
         for edge in incoming_edges:
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend.py
-~~~~~
-~~~~~python.old
-            if edge.kind == EdgeKind.CONTROL:
-                # We currently support only one control dependency per node for simplicity.
-                # If multiple exist, they should ideally be combined (AND logic) in the graph structure.
-                control_dependency_reg = source_register
-            else:
-                kwargs[edge.target_arg] = source_register
-
-        # 2. Emit Control Flow Guard (if needed)
-        if control_dependency_reg:
-~~~~~
-~~~~~python.new
+            # The source node must have been processed in a previous stage,
+            # so its output register must be in our map.
+            source_register = self._node_output_registers.get(edge.source_id)
+            if source_register is None:
+                # This indicates a flaw in the ExecutionPlan or this compiler's logic
+                raise RuntimeError(
+                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
+                    "was not assigned a register before being used."
+                )
+            
             if edge.kind == EdgeKind.CONTROL:
                 # We currently support only one control dependency per node for simplicity.
                 # If multiple exist, they should ideally be combined (AND logic) in the graph structure.
@@ -129,80 +264,57 @@ packages/cascade-compiler/src/cascade/compiler/backend.py
              # For now, we assume the IR is well-formed or the function has defaults.
              # But Literal(None) would be safer than actual None.
              pass
-
-        # 2. Emit Control Flow Guard (if needed)
-        if control_dependency_reg:
-~~~~~
-
-#### Acts 2: 修复 Frontend 符号表生成
-
-解决 `MapCall` 返回 `LazyResult` 的问题。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/frontend.py
-~~~~~
-~~~~~python.old
-        task_def = self.analyzer.analyze(obj.factory)
-
-        # Populate Symbol Table
-        code_hash = task_def.fingerprint["current_code_structure_hash"]
-        self.symbol_table[code_hash] = obj.factory
-
-        node_id = self.hashing_service.compute_node_instance_hash(
-            task_def, obj, cast(Dict[str, Any], dep_shims)
-        )
 ~~~~~
 ~~~~~python.new
-        task_def = self.analyzer.analyze(obj.factory)
+    def _process_node(self, node_id: str):
+        node = self._nodes_map[node_id]
 
-        # Populate Symbol Table
-        code_hash = task_def.fingerprint["current_code_structure_hash"]
-        
-        # Ensure we store the raw function, not the Task wrapper
-        # The analyzer usually handles extraction, but we need the raw callable for VM
-        func = obj.factory
-        if hasattr(func, "func"): # Unwrap Task objects
-            func = func.func
-            
-        self.symbol_table[code_hash] = func
+        # 1. Resolve Input Operands & Control Dependencies
+        args: List[Operand] = [Literal(val) for val in node.args]
+        kwargs: Dict[str, Operand] = {k: Literal(v) for k, v in node.kwargs.items()}
+        control_dependency_reg: Any = None
 
-        node_id = self.hashing_service.compute_node_instance_hash(
-            task_def, obj, cast(Dict[str, Any], dep_shims)
-        )
+        # 1a. Overlay dependencies from Edges
+        incoming_edges = self._incoming_edges_map.get(node_id, [])
+        for edge in incoming_edges:
+            source_register = self._node_output_registers.get(edge.source_id)
+            if source_register is None:
+                raise RuntimeError(
+                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
+                    "was not assigned a register before being used."
+                )
+
+            if edge.kind == EdgeKind.CONTROL:
+                control_dependency_reg = source_register
+            else:
+                # Dependency can be positional or keyword
+                if edge.target_arg.isdigit():
+                    idx = int(edge.target_arg)
+                    # Grow args list if necessary
+                    while len(args) <= idx:
+                        args.append(None) # type: ignore
+                    args[idx] = source_register
+                else:
+                    kwargs[edge.target_arg] = source_register
 ~~~~~
 
-#### Acts 3: 修复 Compiler 单元测试
+#### Acts 4: Update Affected Tests
 
-更新 `test_frontend.py` 以适配 `CompilationResult`。
+最后，更新因 `NodeIR` 结构变化而受影响的单元测试。
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/tests/unit/test_frontend.py
 ~~~~~
 ~~~~~python.old
-    # 2. Execute Compilation (Will fail here)
-    ir = Frontend.compile(lazy)
-
-    # 3. Verify Graph Structure
-    assert isinstance(ir, GraphIR)
-    assert len(ir.nodes) == 1
-    assert len(ir.edges) == 0
-    
     node = ir.nodes[0]
+    assert node.definition.name == "simple_task"
+    assert node.inputs["x"] == 10
 ~~~~~
 ~~~~~python.new
-    # 2. Execute Compilation (Will fail here)
-    result = Frontend.compile(lazy)
-    ir = result.ir
-
-    # 3. Verify Graph Structure
-    from cascade.spec.ir.models import GraphIR
-    assert isinstance(ir, GraphIR)
-    assert len(ir.nodes) == 1
-    assert len(ir.edges) == 0
-    
     node = ir.nodes[0]
+    assert node.definition.name == "simple_task"
+    assert node.kwargs["x"] == 10
 ~~~~~
 
 ~~~~~act
@@ -210,27 +322,12 @@ patch_file
 packages/cascade-compiler/tests/unit/test_frontend.py
 ~~~~~
 ~~~~~python.old
-    t1 = producer()
-    t2 = consumer(val=t1)
-
-    ir = Frontend.compile(t2)
-
-    assert len(ir.nodes) == 2
-    assert len(ir.edges) == 1
-    
-    edge = ir.edges[0]
+    # The Param LazyResult stores the param name in its args/kwargs
+    assert param_node.inputs.get("name") == "my_param" or param_node.inputs.get("0") == "my_param"
 ~~~~~
 ~~~~~python.new
-    t1 = producer()
-    t2 = consumer(val=t1)
-
-    result = Frontend.compile(t2)
-    ir = result.ir
-
-    assert len(ir.nodes) == 2
-    assert len(ir.edges) == 1
-    
-    edge = ir.edges[0]
+    # The Param LazyResult stores the param name in its args/kwargs
+    assert param_node.kwargs.get("name") == "my_param" or (len(param_node.args) > 0 and param_node.args[0] == "my_param")
 ~~~~~
 
 ~~~~~act
@@ -238,130 +335,64 @@ patch_file
 packages/cascade-compiler/tests/unit/test_frontend.py
 ~~~~~
 ~~~~~python.old
-    t_cond = condition()
-    t_action = action().run_if(t_cond)
-
-    ir = Frontend.compile(t_action)
-
-    assert len(ir.edges) == 1
-    edge = ir.edges[0]
+    # For now, let's assert that inputs contain the list.
+    assert node.inputs["x"] == [1, 2, 3]
 ~~~~~
 ~~~~~python.new
-    t_cond = condition()
-    t_action = action().run_if(t_cond)
-
-    result = Frontend.compile(t_action)
-    ir = result.ir
-
-    assert len(ir.edges) == 1
-    edge = ir.edges[0]
+    # For now, let's assert that kwargs contain the list.
+    assert node.kwargs["x"] == [1, 2, 3]
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
+packages/cascade-compiler/tests/unit/test_backend.py
 ~~~~~
 ~~~~~python.old
-    workflow = consume(x=p)
-    
-    ir = Frontend.compile(workflow)
-    
-    # Should have 2 nodes: Param node and Consume node
-    assert len(ir.nodes) == 2
+    # Node A(x=1, y="hello")
+    task_def = _create_dummy_task_def("task_A")
+    node = NodeIR(id="A", definition=task_def, inputs={"x": 1, "y": "hello"})
 ~~~~~
 ~~~~~python.new
-    workflow = consume(x=p)
-    
-    result = Frontend.compile(workflow)
-    ir = result.ir
-    
-    # Should have 2 nodes: Param node and Consume node
-    assert len(ir.nodes) == 2
+    # Node A(x=1, y="hello")
+    task_def = _create_dummy_task_def("task_A")
+    node = NodeIR(id="A", definition=task_def, kwargs={"x": 1, "y": "hello"})
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
+packages/cascade-compiler/tests/unit/test_backend.py
 ~~~~~
 ~~~~~python.old
-    # Map over a list literal
-    workflow = double.map(x=[1, 2, 3])
-    
-    ir = Frontend.compile(workflow)
-    
-    assert len(ir.nodes) == 1
-    node = ir.nodes[0]
+    node_b = NodeIR(
+        id="B", 
+        definition=_create_dummy_task_def("process"),
+        inputs={"scale": 2}, # Constant input
+        meta={"is_map": True}
+    )
 ~~~~~
 ~~~~~python.new
-    # Map over a list literal
-    workflow = double.map(x=[1, 2, 3])
-    
-    result = Frontend.compile(workflow)
-    ir = result.ir
-    
-    assert len(ir.nodes) == 1
-    node = ir.nodes[0]
+    node_b = NodeIR(
+        id="B", 
+        definition=_create_dummy_task_def("process"),
+        kwargs={"scale": 2}, # Constant input
+        meta={"is_map": True}
+    )
 ~~~~~
-
-#### Acts 4: 修复 Engine 集成测试 Mock
-
-修复 `test_compiler.py` 中的 Mock 配置。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/tests/integration/test_compiler.py
+packages/cascade-compiler/tests/unit/test_compiler_linking.py
 ~~~~~
 ~~~~~python.old
-         patch("cascade.vm.VirtualMachine.execute") as mock_vm_exec:
-
-        # Setup Mocks
-        mock_ir = MagicMock(spec=GraphIR)
-        mock_front.return_value = mock_ir
-        
-        mock_plan = [["node_1"]]
-        mock_opt.return_value = mock_plan
+    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
+    node = NodeIR(id="n1", definition=task_def, inputs={})
 ~~~~~
 ~~~~~python.new
-         patch("cascade.vm.VirtualMachine.execute") as mock_vm_exec:
-
-        # Setup Mocks
-        mock_ir = MagicMock(spec=GraphIR)
-        # Mock CompilationResult
-        mock_comp_result = MagicMock()
-        mock_comp_result.ir = mock_ir
-        mock_comp_result.symbol_table = {}
-        
-        mock_front.return_value = mock_comp_result
-        
-        mock_plan = [["node_1"]]
-        mock_opt.return_value = mock_plan
+    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
+    node = NodeIR(id="n1", definition=task_def, kwargs={})
 ~~~~~
 
-#### Acts 5: 调整控制流测试断言
+### 下一步建议
+我们已经对 IR 模型和相关的编译器组件进行了核心重构。下一步是运行 `cascade-compiler` 包的测试套件，以确保我们的修改是正确且没有引入回归问题的。
 
-更新 `test_integration_map_control.py`，接受 VM 在跳过最后一步时返回 `False` (Condition 结果) 的行为。
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/integration/test_integration_map_control.py
-~~~~~
-~~~~~python.old
-    # Or we need a specific return mechanism.
-    # For now, let's assume it might raise or return None.
-    # Given our VM implementation, if it jumps over the call, last_result is None.
-    
-    result = await engine.run(workflow, use_vm=True)
-    assert result is None
-~~~~~
-~~~~~python.new
-    # Or we need a specific return mechanism.
-    # For now, let's assume it might raise or return None.
-    # Given our VM implementation, if it jumps over the call, last_result is None.
-    
-    result = await engine.run(workflow, use_vm=True)
-    
-    # When the last step is skipped, the VM currently returns the result of the previous instruction.
-    # In this case, it's the result of 'is_disabled' (False) used by JumpIfFalse.
-    # This behavior is acceptable for now.
-    assert result is False
-~~~~~
+我建议执行： `pytest packages/cascade-compiler/`

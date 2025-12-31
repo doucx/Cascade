@@ -44,7 +44,7 @@ def test_backend_populates_structure_hash_in_blueprint():
     expected_hash = "test_hash_123"
     fp = Fingerprint.from_dict({"current_code_structure_hash": expected_hash})
     task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
-    node = NodeIR(id="n1", definition=task_def, inputs={})
+    node = NodeIR(id="n1", definition=task_def, kwargs={})
     
     graph = GraphIR(nodes=[node], edges=[])
     plan = [["n1"]]

@@ -11,9 +11,10 @@ from cascade.runtime.bus import MessageBus
 from cascade.compiler.frontend import Frontend
 from cascade.compiler.backend import Backend
 from cascade.spec.ir.models import TaskDef
-from cascade.spec.physics import Token
+from cascade.spec.physics import Token, DataNode, FuncNode, Port
 from cascade.spec.topology import BipartiteGraph
 from cascade.vm.reactor import Reactor, ExecutionFinished
+from cascade.vm.reactor.model import Channel
 from cascade.graph.model import TaskNode  # Used as shim for LocalExecutor
 
 
@@ -44,15 +45,18 @@ class _ReactorAdapter:
         self.reactor = reactor
         self.metadata_map = metadata_map
 
-    async def submit(self, node: Any, inputs: Dict[str, Token]) -> None:
+    async def submit(self, node: FuncNode, inputs: Dict[str, Token]) -> None:
         """
         Callback called by Reactor when a node fires.
+        The 'node' here is the runtime FuncNode instance.
+        We used the hash as the node's name during hydration.
         """
-        # 1. Retrieve Metadata
-        meta = self.metadata_map.get(node.current_node_instance_hash)
+        # 1. Retrieve Metadata using node.name (which stores the instance hash)
+        instance_hash = node.name
+        meta = self.metadata_map.get(instance_hash)
         if not meta:
             raise RuntimeError(
-                f"Linking failed: No metadata found for node {node.current_node_instance_hash} ({node.name})"
+                f"Linking failed: No metadata found for node {instance_hash}"
             )
 
         # 2. Unpack Inputs (Tokens -> Args/Kwargs)
@@ -77,9 +81,8 @@ class _ReactorAdapter:
 
         # 3. Construct Shim Node for LocalExecutor
         # LocalExecutor expects a Node object with .definition and .callable_obj
-        # We create a lightweight wrapper.
         shim_node = TaskNode(
-            current_node_instance_hash=node.current_node_instance_hash,
+            current_node_instance_hash=instance_hash,
             definition=meta.definition,
             _callable=meta.func,
             # Policies could be injected here if we parsed them from IR
@@ -101,7 +104,7 @@ class _ReactorAdapter:
                 ExecutionFinished(node=physics_node, outputs=outputs)
             )
         except Exception as e:
-            # Handle failure (Propagate error token or fail run)
+            # Handle failure
             self.reactor.push_event(
                 ExecutionFinished(node=physics_node, error=e)
             )
@@ -140,30 +143,10 @@ class VMExecutionStrategy:
         topology: BipartiteGraph = Backend.compile(graph_ir)
 
         # 3. Build Runtime Metadata Map (Instance Hash -> Metadata)
-        # We need to correlate NodeIR (from GraphIR) with PhysicsFuncNode to enable execution.
+        # And identify root node for result extraction
         metadata_map: Dict[str, _RuntimeMetadata] = {}
-        target_output_slot_hash: Optional[str] = None
         
-        # We also need to identify the DataNode that holds the final result.
-        # Heuristic: The target (LazyResult) corresponds to the last visited NodeIR in Frontend?
-        # Better: Frontend could return the ID of the root node.
-        # Current Frontend impl: `Frontend.compile` returns `CompilationResult`. 
-        # We can find the NodeIR corresponding to `target._uuid`.
-        # Frontend ensures `_visited_lazy_uuids` maps uuid -> structure_id.
-        # But `compilation_result` doesn't expose that map directly.
-        # Workaround: Re-scan graph_ir to find the root? Or trust that the last node added is root?
-        # GraphIR nodes are a list.
-        # Let's assume for now we can scan for the node that has no outgoing data edges? No, that's brittle.
-        # Let's use the `target` object itself. Frontend uses `hashing_service` to compute ID.
-        # We can re-compute the ID of the target to find it in the graph.
-        
-        # Re-computing ID is safe because it is deterministic.
-        from cascade.compiler.hashing import HashingService
-        from cascade.compiler.analysis.reflection import ReflectionAnalyzer
-        
-        # We need to replicate what Frontend did to get the ID.
-        # This suggests Frontend should return the root ID.
-        # For now, let's assume the LAST node in `graph_ir.nodes` is the root (post-order traversal usually ensures this).
+        # Heuristic: The last node added to IR is usually the root
         root_node_ir = graph_ir.nodes[-1] if graph_ir.nodes else None
         
         for node_ir in graph_ir.nodes:
@@ -177,58 +160,97 @@ class VMExecutionStrategy:
                 func=func
             )
 
-        # 4. Setup Reactor
-        # We create a dummy reactor first to pass to adapter, then inject adapter back
-        # Circular dependency: Reactor needs Executor, Adapter needs Reactor
-        # Solution: Reactor accepts executor, Adapter wraps executor logic.
-        # We can make Adapter implement the 'submit' method expected by Reactor.
-        
-        # Reactor expects an object with .submit(node, inputs) method.
-        # Adapter implements this.
-        
+        # 4. Initialize Reactor
         reactor = Reactor(executor=None, resource_manager=self.resource_manager)
         adapter = _ReactorAdapter(self.executor, reactor, metadata_map)
-        reactor.executor = adapter # Patching the executor
+        reactor.executor = adapter
 
-        # 5. Load Topology
-        for node in topology.func_nodes.values():
-            reactor.register_node(node)
-        for node in topology.data_nodes.values():
-            reactor.register_node(node)
-        for channel in topology.channels:
-            reactor.register_channel(channel)
+        # 5. Hydrate Topology: Static -> Dynamic
+        # We need to map static hashes to dynamic instances to wire them up
+        dynamic_data_nodes: Dict[str, DataNode] = {}
+        dynamic_func_nodes: Dict[str, FuncNode] = {}
+
+        # 5.1 Hydrate DataNodes
+        for d_hash, p_node in topology.data_nodes.items():
+            # Create dynamic DataNode
+            # Name isn't strictly used for logic, but helpful for debugging
+            d_instance = DataNode(name=p_node.name)
+            dynamic_data_nodes[d_hash] = d_instance
+            reactor.register_node(d_instance)
+
+        # 5.2 Hydrate FuncNodes and wire Inputs
+        for f_hash, p_node in topology.func_nodes.items():
+            # Create dynamic FuncNode
+            # CRITICAL: We use the instance hash as the name for metadata lookup
+            f_instance = FuncNode(name=f_hash) 
+            dynamic_func_nodes[f_hash] = f_instance
+            reactor.register_node(f_instance)
+            
+            # Wire Inputs
+            for arg_name, source_data_hash in p_node.inputs.items():
+                if source_data_hash in dynamic_data_nodes:
+                    source_d = dynamic_data_nodes[source_data_hash]
+                    # Create Input Port: DataNode -> FuncNode
+                    # Note: physics.FuncNode.add_input expects a Port with a 'source'
+                    port = Port(name=arg_name, source=source_d)
+                    f_instance.add_input(port)
+
+        # 5.3 Wire Outputs (Channels)
+        for ch_def in topology.channels:
+            source_f = dynamic_func_nodes.get(ch_def.source_node_instance_hash)
+            target_d = dynamic_data_nodes.get(ch_def.target_data_slot_hash)
+            
+            if source_f and target_d:
+                # Create Reactor Channel
+                channel = Channel(
+                    source=source_f,
+                    target=target_d,
+                    output_name=ch_def.port_name,
+                    tag_filter=ch_def.tag_filter
+                )
+                reactor.register_channel(channel)
+                
+                # Also need to add Output Port to FuncNode so it knows where to push?
+                # physics.FuncNode.produce_outputs uses 'self.outputs' map.
+                # But Reactor's '_handle_execution_finished' uses 'channels_by_source'.
+                # So FuncNode only needs to define the existence of the port for validation/reflection?
+                # Currently FuncNode.produce_outputs is used by Reactor logic if we were simulating locally?
+                # Actually, `Reactor._handle_execution_finished` uses `self._channels_by_source`.
+                # So adding output ports to `f_instance` is optional for Reactor logic, 
+                # BUT good for consistency.
+                
+                # We can add a dummy port to f_instance to reflect structure
+                if ch_def.port_name not in source_f.outputs:
+                    source_f.add_output(Port(name=ch_def.port_name))
 
         # 6. Inject Initial Values
         from cascade.vm.reactor import TokenGenerated
         for data_hash, value in topology.initial_values.items():
-            if data_hash in topology.data_nodes:
-                d_node = topology.data_nodes[data_hash]
+            if data_hash in dynamic_data_nodes:
+                d_node = dynamic_data_nodes[data_hash]
                 reactor.push_event(TokenGenerated(node=d_node, token=Token(value)))
 
         # 7. Identify Result DataNode
-        # Find the output channel of the root FuncNode
-        # The Backend guarantees default output channel is named "result"
+        target_output_d_node = None
         if root_node_ir:
             root_func_hash = root_node_ir.current_node_instance_hash
-            # Find channel: Source=Root, Port="result", Tag="default"
-            result_channel = next((
+            # Look for the channel outputting from root
+            # Note: We can look at topology channels again
+            result_channel_def = next((
                 c for c in topology.channels 
                 if c.source_node_instance_hash == root_func_hash 
                 and c.port_name == "result" 
                 and c.match("default")
             ), None)
             
-            if result_channel:
-                target_output_slot_hash = result_channel.target_data_slot_hash
+            if result_channel_def:
+                target_output_d_node = dynamic_data_nodes.get(result_channel_def.target_data_slot_hash)
 
         # 8. Run
         await reactor.run()
 
         # 9. Extract Result
-        if target_output_slot_hash and target_output_slot_hash in topology.data_nodes:
-            d_node = topology.data_nodes[target_output_slot_hash]
-            if d_node.is_excited():
-                return d_node.peek().payload
+        if target_output_d_node and target_output_d_node.is_excited():
+            return target_output_d_node.peek().payload
         
-        # Handle void return or failure to find output
         return None

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(spec): 在 IR 中引入 EdgeKind 以支持控制流", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767153388.2867649, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): Backend 实现控制流指令生成", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767153480.9059322, "duration_ms": 0}}

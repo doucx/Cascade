@@ -1,7 +1,7 @@
 from typing import List, Dict, Tuple, Any
 
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Operand
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
+from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Operand, JumpIfFalse
 from .optimizer import ExecutionPlan
 
 
@@ -52,9 +52,10 @@ class _BlueprintBuilder:
     def _process_node(self, node_id: str):
         node = self._nodes_map[node_id]
 
-        # 1. Resolve Input Operands
+        # 1. Resolve Input Operands & Control Dependencies
         args: List[Operand] = []  # Positional args not yet fully supported by this IR
         kwargs: Dict[str, Operand] = {}
+        control_dependency_reg: Any = None
 
         # 1a. From Literals
         for key, value in node.inputs.items():
@@ -72,9 +73,23 @@ class _BlueprintBuilder:
                     f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
                     "was not assigned a register before being used."
                 )
-            kwargs[edge.target_arg] = source_register
+            
+            if edge.kind == EdgeKind.CONTROL:
+                # We currently support only one control dependency per node for simplicity.
+                # If multiple exist, they should ideally be combined (AND logic) in the graph structure.
+                control_dependency_reg = source_register
+            else:
+                kwargs[edge.target_arg] = source_register
 
-        # 2. Allocate Output Register for this node
+        # 2. Emit Control Flow Guard (if needed)
+        if control_dependency_reg:
+            # JumpIfFalse offset=2 means skip the next instruction (which is length 1)
+            # Layout: [JumpIfFalse, Call]
+            # If false, PC += 2. From index i, lands on i+2 (after Call).
+            jump = JumpIfFalse(condition=control_dependency_reg, offset=2)
+            self._instructions.append(jump)
+
+        # 3. Allocate Output Register for this node
         output_register = self._allocate_register()
         self._node_output_registers[node_id] = output_register
 

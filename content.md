@@ -1,24 +1,30 @@
-好的，继续重构 `cascade-common` 包的测试。根据分析，这些测试都是对核心消息组件和渲染器的纯粹单元测试。
+好的，我将同时处理 `cascade-connector-local` 和 `cascade-connector-mqtt` 两个连接器包的测试结构，根据它们的测试性质进行分类。
 
-## [WIP] refactor(tests): 为 cascade-common 移动所有测试到 unit 目录
+## [WIP] refactor(tests): 分离连接器包的测试 (MQTT: Unit, Local: Integration)
 
 ### 用户需求
 
-对 `cascade-common` 包进行测试结构重构。在 `packages/cascade-common/tests/` 目录下创建 `unit/` 和 `integration/` 目录，并将现有的测试文件移动到 `unit/` 目录中。
+继续对 `cascade-connector-local` 和 `cascade-connector-mqtt` 包进行测试结构重构，将测试文件分离到 `unit/` 和 `integration/` 目录中。
 
 ### 评论
 
-`cascade-common` 包含了消息总线、消息存储和渲染器等核心实用工具。这些组件被设计为可独立测试的。将它们归类为单元测试是正确的，这确保了它们不依赖于完整的 Cascade 运行时，提高了测试的执行速度和可靠性。
+这次重构的分类结果很好地体现了测试原则：
+*   **`cascade-connector-local`**: 测试的是它内部的、自洽的消息传递机制，这是该组件的完整功能合约，因此属于**集成测试**（Component-Internal Integration）。
+*   **`cascade-connector-mqtt`**: 通过对外部网络库 `aiomqtt` 的全面 Mock，它的测试专注于验证 `MqttConnector` 自身的逻辑、参数传递和生命周期管理，使其成为纯粹的**单元测试**。
+
+这种明确的分离将极大地增强测试套件的清晰度和维护性。
 
 ### 目标
 
-1.  在 `packages/cascade-common/tests/` 目录下创建 `unit/` 和 `integration/` 目录。
-2.  将 `test_messaging.py`, `test_messaging.stitcher.yaml` 和 `test_renderers.py` 移动到 `unit/` 目录。
-3.  清理旧的测试文件和目录（如果适用）。
+1.  在 `packages/cascade-connector-local/tests/` 下创建 `integration/` 目录，并将所有文件移入。
+2.  在 `packages/cascade-connector-mqtt/tests/` 下创建 `unit/` 目录，并将所有文件移入。
+3.  清理旧的、不再需要的顶级测试文件。
 
 ### 基本原理
 
-`test_messaging.py` 仅测试 `MessageBus` 和 `MessageStore` 的内部逻辑和渲染器委托；`test_renderers.py` 仅测试 `CliRenderer` 和 `JsonRenderer` 的格式化输出和过滤功能。两者都不需要启动 `Engine` 或依赖复杂的外部组件，因此全部归类为单元测试。
+如评论所述，我们严格遵循测试边界原则：
+*   **Local Connector**: 专注于测试组件的完整行为，即使没有外部依赖，也属于集成测试。
+*   **MQTT Connector**: 彻底 Mock 外部依赖，专注于测试 `MqttConnector` 类的实例化、方法调用顺序和参数转换（例如，将 Python Dict 转换为 JSON 字符串），是典型的单元测试。
 
 ### 标签
 
@@ -28,37 +34,60 @@
 
 ### Script
 
-#### Acts 1: 创建新的测试目录结构
+#### Acts 1: 处理 `cascade-connector-local` (Integration)
 
-为 `cascade-common` 包创建 `unit` 和 `integration` 测试目录。
+创建 `integration` 目录并迁移文件。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-common/tests/unit packages/cascade-common/tests/integration
+mkdir -p packages/cascade-connector-local/tests/integration
 ~~~~~
-
-#### Acts 2: 迁移单元测试
-
-将所有现有测试文件及其 YAML 配置移动到 `unit` 目录。
 
 ~~~~~act
 move_file
-packages/cascade-common/tests/test_messaging.py
-packages/cascade-common/tests/unit/test_messaging.py
+packages/cascade-connector-local/tests/test_local_connector.py
+packages/cascade-connector-local/tests/integration/test_local_connector.py
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-common/tests/test_messaging.stitcher.yaml
-packages/cascade-common/tests/unit/test_messaging.stitcher.yaml
+packages/cascade-connector-local/tests/test_local_connector.stitcher.yaml
+packages/cascade-connector-local/tests/integration/test_local_connector.stitcher.yaml
+~~~~~
+
+#### Acts 2: 处理 `cascade-connector-mqtt` (Unit)
+
+创建 `unit` 目录并迁移文件。由于 MQTT Connector 测试使用了 Mock，它们属于单元测试。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+mkdir -p packages/cascade-connector-mqtt/tests/unit
+~~~~~
+
+~~~~~act
+move_file
+packages/cascade-connector-mqtt/tests/conftest.py
+packages/cascade-connector-mqtt/tests/unit/conftest.py
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-common/tests/test_renderers.py
-packages/cascade-common/tests/unit/test_renderers.py
+packages/cascade-connector-mqtt/tests/conftest.stitcher.yaml
+packages/cascade-connector-mqtt/tests/unit/conftest.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-connector-mqtt/tests/test_connector.py
+packages/cascade-connector-mqtt/tests/unit/test_connector.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-connector-mqtt/tests/test_connector.stitcher.yaml
+packages/cascade-connector-mqtt/tests/unit/test_connector.stitcher.yaml
 ~~~~~
 
 ### 下一步建议
 
-`cascade-common` 的测试结构已重构。下一个待处理的包是 `cascade-graph`。我将分析该包的测试文件，并为您生成相应的迁移计划。
+接下来，我们将继续处理 `cascade-graph` 包。我将分析该包的测试文件，并生成相应的迁移计划。

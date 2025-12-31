@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(tests): 为 cascade-common 移动所有测试到 unit 目录", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767151645.0288405, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(tests): 分离连接器包的测试 (MQTT: Unit, Local: Integration)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767151749.0235481, "duration_ms": 0}}

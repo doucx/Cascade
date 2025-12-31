@@ -140,7 +140,7 @@ class Engine:
         self,
         target: Any,
         params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = True,
+        use_vm: bool = False,
     ) -> Any:
         # Handle Auto-Gathering
         from cascade.internal.inputs import _internal_gather

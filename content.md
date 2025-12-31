@@ -1,166 +1,179 @@
-## [WIP] fix(vm): correct reactor step loop and async handling
+好的，我们现在进入 Phase 4.2 的 GREEN 阶段。我们将实现 `run()` 方法，并引入 `asyncio.Event` 作为核心的等待/唤醒机制。
+
+## [WIP] feat(vm): implement reactor run loop with wait/wake mechanism
 
 ### 用户需求
-1.  修复 `test_reactor_resource_awareness.py` 中的死循环。原因是 `step()` 中的 `while` 循环条件过于宽泛，导致在资源不足时无限轮询待处理任务。
-2.  修复 `test_reactor_loop.py` 中的断言失败。原因是 `step()` 中移除了 `await asyncio.gather(...)`，导致任务提交变成“发后不理”，测试在任务实际提交前就执行了断言。
+实现 `Reactor` 的 `run()` 方法，使其能够持续运行，并在没有任务时通过 `asyncio.Event` 挂起，直到新事件到达时被唤醒。
 
 ### 评论
-这是对 `Reactor` 核心微循环逻辑的纠正。`step()` 必须是**有界**的：它应该处理当前的状态变更直到稳定，但不应在无法取得进展（例如资源阻塞）时空转。同时，`_fire` 操作必须被 `await` 以保证确定性，这对于测试和因果一致性至关重要。
+这是将 `Reactor` 转化为一个真正独立的、自驱动的物理引擎的关键一步。`run()` 循环封装了 `step-wait-wake` 的核心逻辑，使 `Reactor` 能够在空闲时几乎不消耗 CPU，同时又能对新事件（如任务完成、资源释放）做出即时响应。`stop()` 方法则提供了优雅退出的能力。
 
 ### 目标
-修改 `packages/cascade-vm/src/cascade/vm/reactor/core.py`：
-1.  恢复 `await asyncio.gather`。
-2.  优化 `step` 的微循环终止条件：只有在发生了实质性进展（处理了事件 或 激发了任务）时才继续循环，否则退出以避免忙等待。
+1.  向 `Reactor` 添加 `_is_running` 标志和 `_activity_signal` (`asyncio.Event`)。
+2.  实现 `run()` 方法，包含主循环、调用 `step()` 和等待 `_activity_signal` 的逻辑。
+3.  实现 `stop()` 方法，用于终止 `run()` 循环。
+4.  修改 `push_event()`，使其在接收到新事件时设置 `_activity_signal` 以唤醒 `run()` 循环。
 
 ### 基本原理
-微循环 (`micro-loop`) 的定义是：在一个逻辑时间步内，处理所有的因果连锁反应。
--   **终止条件**: 当一轮循环既没有处理任何事件，也没有激发任何新任务时，说明系统已达到当前时间步的稳定态（Stable State），或者是被资源/数据阻塞。此时应立即返回。
--   **同步性**: `step()` 是一个原子操作，它承诺在返回时，所有由当前状态触发的直接副作用（如提交给 Executor）都已经发生。因此必须 `await` 提交动作。
+`run()` 方法的核心是一个 `while self._is_running` 循环。在每次循环中，它首先调用 `await self.step()` 来处理所有当前可用的工作。如果处理完后系统没有更多立即可做的工作（事件队列为空，没有待处理节点），`run()` 循环就会 `await self._activity_signal.wait()`，从而将控制权交还给 `asyncio` 事件循环并进入休眠。当任何组件（包括 `Reactor` 自身）调用 `push_event()` 时，`_activity_signal` 会被设置，立即唤醒 `run()` 循环开始新一轮的 `step()`。
 
 ### 标签
-#intent/fix #flow/draft #priority/critical #comp/runtime #concept/executor #scope/core #ai/refine #task/domain/runtime #task/object/reactor #task/action/fix
+#intent/build #flow/draft #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/reactor #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 Reactor.step
+#### Acts 1: 在 Reactor 中实现 run/stop 循环
+
+我们将对 `core.py` 进行一次集中的修改，添加 `run` 循环所需的所有组件。
 
 ~~~~~act
 patch_file
 packages/cascade-vm/src/cascade/vm/reactor/core.py
 ~~~~~
 ~~~~~python.old
-    async def step(self):
-        """
-        Advance the reactor by one atomic "tick".
+class Reactor:
+    def __init__(self, executor: Any, resource_manager: Optional[ResourceManager] = None):
+        self.executor = executor
+        self.resource_manager = resource_manager
+        self._event_queue: Deque[ReactorEvent] = deque()
         
-        A tick is a full reaction to the current state, processing all immediately
-        available events and firing all ready nodes until no more immediate work
-        can be done. It does not wait for long-running tasks to complete.
-        """
-        # The "micro-loop": continues as long as there are events to process
-        # or nodes that might become ready.
-        while self._event_queue or self._dirty_func_nodes or self._pending_on_resource:
-            
-            # 1. Process all pending events until the queue is empty.
-            # This may add nodes to _dirty_func_nodes or _pending_on_resource.
-            while self._event_queue:
-                event = self._event_queue.popleft()
-                await self._handle_event(event)
+        # Topology Indexes
+        self._nodes: Set[Any] = set() # Track all known nodes
+        self._channels_by_source: Dict[str, List[Channel]] = defaultdict(list)
+        
+        # Optimization: Map DataNode -> List[FuncNode] (Reverse dependency)
+        # Used to quickly find which FuncNodes to check when a DataNode updates.
+        self._downstream_map: Dict[str, List[FuncNode]] = defaultdict(list)
+        
+        # Dirty set for potential evaluation
+        self._dirty_func_nodes: Set[FuncNode] = set()
+        
+        # Pending set for nodes blocked by resources (Phase 4.2 foundation)
+        self._pending_on_resource: Set[FuncNode] = set()
 
-            # 2. Evaluate all candidate nodes for firing.
-            # Candidates are nodes that became dirty from events, or were previously blocked.
-            candidates = self._dirty_func_nodes.union(self._pending_on_resource)
+    def register_node(self, node: Any):
+        if node in self._nodes:
+            return
+        self._nodes.add(node)
+        
+        # Build reverse index for FuncNodes and Auto-discover Channels
+        if isinstance(node, FuncNode):
+            # 1. Reverse dependency map (DataNode -> Downstream FuncNodes)
+            for port in node.inputs.values():
+                if port.source:
+                    self._downstream_map[port.source.name].append(node)
             
-            # Reset sets for the next iteration of the micro-loop.
-            self._dirty_func_nodes.clear()
-            self._pending_on_resource.clear()
+            # 2. Auto-discover Output Channels (Physics -> Routing)
+            # If a port is connected to a DataNode physically, implies a default channel.
+            for port_name, port in node.outputs.items():
+                if port.target:
+                    # Check if a channel already exists for this path to avoid duplicates
+                    # or overriding explicit custom channels.
+                    existing = any(
+                        c.output_name == port_name and c.match("default")
+                        for c in self._channels_by_source.get(node.name, [])
+                    )
+                    if not existing:
+                        # Create implicit default channel
+                        default_channel = Channel(
+                            source=node,
+                            target=port.target,
+                            output_name=port_name,
+                            tag_filter="default"
+                        )
+                        self.register_channel(default_channel)
 
-            if not candidates:
-                # No candidates to check, the tick is stable.
-                break
+    def register_channel(self, channel: Channel):
+        self._channels_by_source[channel.source.name].append(channel)
+        # Ensure nodes are registered
+        self.register_node(channel.source)
+        self.register_node(channel.target)
 
-            fire_tasks = []
-            
-            for node in candidates:
-                if not node.is_ready():
-                    continue
-                    
-                # Resource Check (Potential Barrier)
-                if self.resource_manager and node.resource_requirements:
-                    if self.resource_manager.can_acquire(node.resource_requirements):
-                        await self.resource_manager.acquire(node.resource_requirements)
-                        fire_tasks.append(self._fire(node))
-                    else:
-                        # Resource barrier not met, keep it pending for the next tick/step.
-                        self._pending_on_resource.add(node)
-                else:
-                    # No resource constraints, fire away.
-                    fire_tasks.append(self._fire(node))
-
-            if fire_tasks:
-                # Asynchronously launch all fireable tasks for this iteration.
-                # We do not wait for them to complete within the step.
-                asyncio.gather(*fire_tasks)
-            
-            # If no tasks were fired AND the event queue is empty, the system is stable,
-            # so the outer while loop will terminate. If tasks were fired, they might
-            # immediately push new events, causing the micro-loop to continue.
+    def push_event(self, event: ReactorEvent):
+        self._event_queue.append(event)
 ~~~~~
 ~~~~~python.new
-    async def step(self):
-        """
-        Advance the reactor by one atomic "tick".
+class Reactor:
+    def __init__(self, executor: Any, resource_manager: Optional[ResourceManager] = None):
+        self.executor = executor
+        self.resource_manager = resource_manager
+        self._event_queue: Deque[ReactorEvent] = deque()
         
-        A tick is a full reaction to the current state, processing all immediately
-        available events and firing all ready nodes until no more immediate work
-        can be done. It does not wait for long-running tasks to complete.
-        """
-        while True:
-            progress_made = False
-            
-            # 1. Process all pending events
-            if self._event_queue:
-                while self._event_queue:
-                    event = self._event_queue.popleft()
-                    await self._handle_event(event)
-                progress_made = True
+        # Topology Indexes
+        self._nodes: Set[Any] = set()
+        self._channels_by_source: Dict[str, List[Channel]] = defaultdict(list)
+        self._downstream_map: Dict[str, List[FuncNode]] = defaultdict(list)
+        
+        # State Sets
+        self._dirty_func_nodes: Set[FuncNode] = set()
+        self._pending_on_resource: Set[FuncNode] = set()
+        
+        # Run Control
+        self._is_running = False
+        self._activity_signal = asyncio.Event()
 
-            # 2. Evaluate Candidates
-            # Candidates are newly dirty nodes + any previously pending nodes
-            # We include pending nodes because an event (e.g. resource release) might have unblocked them.
-            candidates = self._dirty_func_nodes.union(self._pending_on_resource)
+    def register_node(self, node: Any):
+        if node in self._nodes:
+            return
+        self._nodes.add(node)
+        
+        if isinstance(node, FuncNode):
+            for port in node.inputs.values():
+                if port.source:
+                    self._downstream_map[port.source.name].append(node)
             
-            # Reset sets for this iteration. 
-            # Nodes that fail to fire will be added back to _pending_on_resource.
-            self._dirty_func_nodes.clear()
-            self._pending_on_resource.clear()
+            for port_name, port in node.outputs.items():
+                if port.target:
+                    existing = any(
+                        c.output_name == port_name and c.match("default")
+                        for c in self._channels_by_source.get(node.name, [])
+                    )
+                    if not existing:
+                        default_channel = Channel(
+                            source=node,
+                            target=port.target,
+                            output_name=port_name,
+                            tag_filter="default"
+                        )
+                        self.register_channel(default_channel)
 
-            if not candidates:
-                if not progress_made:
-                    # Stable state reached: No events processed, no candidates to check.
-                    break
-                else:
-                    # Events were processed, loop again to check if they triggered anything new
-                    continue
+    def register_channel(self, channel: Channel):
+        self._channels_by_source[channel.source.name].append(channel)
+        self.register_node(channel.source)
+        self.register_node(channel.target)
 
-            fire_tasks = []
+    def push_event(self, event: ReactorEvent):
+        """Pushes an event to the queue and wakes up the run loop if it's waiting."""
+        self._event_queue.append(event)
+        self._activity_signal.set()
+
+    def _has_pending_work(self) -> bool:
+        """Checks if there's any immediate work to be done."""
+        return bool(self._event_queue or self._dirty_func_nodes or self._pending_on_resource)
+
+    async def run(self):
+        """Continuously runs the reactor loop until stop() is called."""
+        self._is_running = True
+        while self._is_running:
+            await self.step()
             
-            for node in candidates:
-                if not node.is_ready():
-                    continue
-                    
-                # Resource Check (Potential Barrier)
-                can_fire = True
-                if self.resource_manager and node.resource_requirements:
-                    if self.resource_manager.can_acquire(node.resource_requirements):
-                        await self.resource_manager.acquire(node.resource_requirements)
-                    else:
-                        can_fire = False
-                        # Resource barrier not met, keep it pending.
-                        self._pending_on_resource.add(node)
-                
-                if can_fire:
-                    fire_tasks.append(self._fire(node))
-
-            if fire_tasks:
-                # Await submission to ensure deterministic behavior (e.g. for testing mocks).
-                # This does NOT wait for the task itself to finish, just for the submission to the executor.
-                await asyncio.gather(*fire_tasks)
-                progress_made = True
+            # If step() resulted in more immediate work, loop again without waiting.
+            if self._has_pending_work():
+                continue
             
-            # Termination Condition:
-            # If we processed candidates but fired nothing (all blocked), and processed no events,
-            # we are in a resource-constrained block or stable state. Stop stepping to avoid busy loop.
-            if not progress_made:
-                break
+            # If no more work, wait for a new event to arrive.
+            await self._activity_signal.wait()
+            self._activity_signal.clear()
+
+    def stop(self):
+        """Stops the reactor's run loop gracefully."""
+        self._is_running = False
+        self._activity_signal.set()
 ~~~~~
 
 ### 下一步建议
-修复已经应用。
-1.  **运行测试**: 重新运行所有 reactor 相关的测试，特别是 `test_reactor_resource_awareness.py` 和 `test_reactor_loop.py`。
-2.  **验证**:
-    *   死循环应该消失，`test_reactor_resource_awareness` 应该 PASS。
-    *   断言失败应该消失，`test_reactor_loop` 应该 PASS。
-3.  **继续**: 如果一切变绿，我们可以继续实现 `run()` 方法来修复处于 RED 状态的 `test_reactor_wakeup_mechanism.py`。
+我们已经完成了 `run()` 循环的实现。现在，所有 `Reactor` 相关的测试都应该通过，包括 `test_run_loop_proactively_schedules_tasks`。
+
+下一步，你可以运行整个 `cascade-vm` 的测试套件来确认所有功能都已恢复 GREEN 状态。如果全部通过，Phase 4 就完成了，我们可以准备进入 Phase 5。

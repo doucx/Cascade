@@ -1,253 +1,141 @@
-好的，我们来完成 **Phase 6** 的核心实现，让测试恢复绿色状态。
+简要回答
+我们正在编写一个端到端的集成测试 `test_integration_map_control.py`，用于验证新架构下的 `VMExecutionStrategy` 能否正确处理包含 `run_if` 和 `map` 的复合工作流。
 
-我们将分三步走：
-1.  **Spec**: 在 `blueprint.py` 中正式定义 `MapCall` 指令。
-2.  **Compiler**: 修改 `backend.py`，使其在遇到 `is_map` 标记时生成 `MapCall` 指令。
-3.  **VM**: 修改 `machine.py`，实现 `MapCall` 的执行逻辑，包括处理并行异步任务。
+这将暴露出我们当前的缺失：`VMExecutionStrategy` 只是简单地运行了 VM，但没有解决 `Blueprint` 中 `func` 为 `None` 的问题，也没有正确处理 `Backend` 生成的控制流。
 
-## [WIP] feat(compiler+vm): Implement MapCall instruction and execution
+## [WIP] test(integration): 全流程验证 Map 与 Control Flow
 
 ### 用户需求
-1.  在 Spec 中定义 `MapCall` 指令。
-2.  更新 Compiler Backend 以生成 `MapCall` 指令。
-3.  更新 Virtual Machine 以执行 `MapCall` 指令。
+1.  创建一个集成测试，定义包含 `run_if` 和 `map` 的工作流。
+2.  使用 `Engine(use_vm=True)` 运行该工作流。
+3.  验证结果正确，且中间过程符合预期。
 
 ### 评论
-这是功能对齐的关键一步。`MapCall` 将 `map` 操作从一个普通的图节点，提升为 VM 的一等公民指令。这使得 VM 能够对数据并行工作流进行专门的优化和调度（例如，使用 `asyncio.gather` 并发执行），从而释放了 Cascade 的核心性能优势。
+目前的 `VMExecutionStrategy.execute` 还是个空壳，只实现了最基本的编译和运行，忽略了关键的“链接”步骤。如果没有这个步骤，VM 在执行指令时会因为 `func` 为 `None` 而崩溃。
 
 ### 目标
-让 `test_backend.py` 和 `test_vm_map.py` 中的所有测试通过，使 `compiler` 和 `vm` 包的测试套件恢复 GREEN 状态。
+1.  创建一个真实的、复杂的测试场景。
+2.  通过测试失败（RED）来驱动我们完善 `VMExecutionStrategy`。
 
 ### 基本原理
-我们通过扩展指令集（Spec），让 Compiler (`Backend`) 能够向 VM 传达更高层次的意图（“这是一个 map 操作”）。VM 接收到这个 `MapCall` 指令后，执行一个内置的、优化的循环来处理迭代、并发和结果收集，而不是让用户在图层面手动展开循环。
+集成测试是验证组件间契约的最终手段。只有当所有组件（Spec, Compiler, VM, Strategy）都正确协作时，这个测试才能通过。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/spec #comp/compiler #comp/vm #concept/codegen #concept/vm #task/domain/core #task/object/map-execution #task/action/implementation #task/state/continue
+#intent/test #flow/ready #priority/high #comp/tests #comp/integration #task/domain/core #task/object/integration #task/action/test #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 在 Spec 中定义 `MapCall` 指令
-
-我们在 `blueprint.py` 中添加 `MapCall`，使其与 `Call` 具有相似的结构，因为它同样代表一个可执行的操作。
+#### Acts 1: 创建集成测试文件
 
 ~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/blueprint.py
+write_file
+packages/cascade-engine/tests/integration/test_integration_map_control.py
 ~~~~~
-~~~~~python.old
-@dataclass
-class JumpIfFalse(Instruction):
-    """Jumps execution by a relative offset if the condition register is False."""
+~~~~~python
+import pytest
+import cascade as cs
+from cascade.runtime.engine import Engine
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.bus import MessageBus
 
-    condition: Register
-    offset: int
+# --- Tasks ---
+
+@cs.task
+def get_numbers():
+    return [1, 2, 3]
+
+@cs.task
+def double(x):
+    return x * 2
+
+@cs.task
+def is_enabled():
+    return True
+
+@cs.task
+def is_disabled():
+    return False
+
+@cs.task
+def conditional_step(val):
+    return f"Processed {val}"
+
+# --- Tests ---
+
+@pytest.mark.asyncio
+async def test_vm_integration_map_flow():
+    """
+    Integration Test: Map
+    Flow: get_numbers -> map(double)
+    """
+    workflow = double.map(x=get_numbers())
+    
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),
+    )
+    
+    # Run with VM enabled
+    results = await engine.run(workflow, use_vm=True)
+    
+    assert results == [2, 4, 6]
 
 
-@dataclass
-class TailCall:
-~~~~~
-~~~~~python.new
-@dataclass
-class JumpIfFalse(Instruction):
-    """Jumps execution by a relative offset if the condition register is False."""
-
-    condition: Register
-    offset: int
-
-
-@dataclass
-class MapCall(Instruction):
-    """Represents a map operation over iterable inputs."""
-
-    func: Any
-    output: Register
-    args: List[Operand] = field(default_factory=list)
-    kwargs: Dict[str, Operand] = field(default_factory=dict)
-
-    # Metadata for observability and constraints
-    task_name: str = "unknown"
-    constraints: Optional[ResourceConstraint] = None
+@pytest.mark.asyncio
+async def test_vm_integration_control_flow_true():
+    """
+    Integration Test: Control Flow (True)
+    Flow: is_enabled -> run_if(conditional_step)
+    """
+    workflow = conditional_step("A").run_if(is_enabled())
+    
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),
+    )
+    
+    result = await engine.run(workflow, use_vm=True)
+    assert result == "Processed A"
 
 
-@dataclass
-class TailCall:
-~~~~~
-
-#### Acts 2: 更新 Compiler Backend 以生成 `MapCall`
-
-我们修改 `_process_node` 方法，使其根据 `node.meta` 的 `is_map` 标志来决定是生成 `Call` 还是 `MapCall` 指令。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend.py
-~~~~~
-~~~~~python.old
-from typing import List, Dict, Tuple, Any
-
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal, Operand, JumpIfFalse
-from .optimizer import ExecutionPlan
-~~~~~
-~~~~~python.new
-from typing import List, Dict, Tuple, Any
-
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
-from cascade.spec.blueprint import Blueprint, Call, MapCall, Register, Literal, Operand, JumpIfFalse
-from .optimizer import ExecutionPlan
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend.py
-~~~~~
-~~~~~python.old
-        # We also pass task name for better observability in the VM
-        instr = Call(
-            func=None,  # The VM will need to resolve this later
-            output=output_register,
-            args=args,
-            kwargs=kwargs,
-            task_name=node.definition.name
-        )
-        self._instructions.append(instr)
-~~~~~
-~~~~~python.new
-        # We also pass task name for better observability in the VM
-        if node.meta.get("is_map"):
-            instr = MapCall(
-                func=None,
-                output=output_register,
-                args=args,
-                kwargs=kwargs,
-                task_name=node.definition.name,
-                # Note: Constraints on Map nodes are not yet propagated to MapCall.
-            )
-        else:
-            instr = Call(
-                func=None,  # The VM will need to resolve this later
-                output=output_register,
-                args=args,
-                kwargs=kwargs,
-                task_name=node.definition.name
-            )
-        self._instructions.append(instr)
-~~~~~
-
-#### Acts 3: 更新 VM 以执行 `MapCall`
-
-这是核心实现。我们在 `machine.py` 中添加 `MapCall` 的处理逻辑，包括并发执行异步任务。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/machine.py
-~~~~~
-~~~~~python.old
-from cascade.spec.blueprint import (
-    Blueprint,
-    Instruction,
-    Call,
-    Literal,
-    Register,
-    Operand,
-    TailCall,
-    Jump,
-    JumpIfFalse,
-)
-from cascade.spec.ir.models import TaskDef
-~~~~~
-~~~~~python.new
-from cascade.spec.blueprint import (
-    Blueprint,
-    Instruction,
-    Call,
-    MapCall,
-    Literal,
-    Register,
-    Operand,
-    TailCall,
-    Jump,
-    JumpIfFalse,
-)
-from cascade.spec.ir.models import TaskDef
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/machine.py
-~~~~~
-~~~~~python.old
-    async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
-        if isinstance(instr, Call):
-            return await self._execute_call(instr, frame)
-        else:
-            raise NotImplementedError(f"Unknown instruction: {type(instr)}")
-
-    async def _execute_call(self, instr: Call, frame: Frame) -> Any:
-        requirements: Dict[str, Any] = {}
-        temp_node = None
-~~~~~
-~~~~~python.new
-    async def _dispatch(self, instr: Instruction, frame: Frame) -> Any:
-        if isinstance(instr, Call):
-            return await self._execute_call(instr, frame)
-        elif isinstance(instr, MapCall):
-            return await self._execute_map_call(instr, frame)
-        else:
-            raise NotImplementedError(f"Unknown instruction: {type(instr)}")
-
-    async def _execute_map_call(self, instr: MapCall, frame: Frame) -> Any:
-        # 1. Load all arguments from frame
-        loaded_kwargs = {k: frame.load(op) for k, op in instr.kwargs.items()}
-        
-        # 2. Separate iterables from constants
-        iterables = {}
-        constants = {}
-        iterable_len = -1
-
-        for key, value in loaded_kwargs.items():
-            if isinstance(value, list):
-                iterables[key] = value
-                if iterable_len == -1:
-                    iterable_len = len(value)
-                elif len(value) != iterable_len:
-                    raise ValueError(f"Mismatched lengths in MapCall iterables for task '{instr.task_name}'")
-            else:
-                constants[key] = value
-
-        if iterable_len == -1: # No iterables found, treat as empty map
-            iterable_len = 0
-
-        # 3. Prepare individual calls
-        calls_to_make = []
-        for i in range(iterable_len):
-            call_kwargs = constants.copy()
-            for key, values_list in iterables.items():
-                call_kwargs[key] = values_list[i]
-            
-            calls_to_make.append(instr.func(**call_kwargs))
-
-        # 4. Execute calls concurrently if async, sequentially otherwise
-        if not calls_to_make:
-            results = []
-        elif inspect.iscoroutinefunction(instr.func):
-            results = await asyncio.gather(*calls_to_make)
-        else:
-            results = [res for res in calls_to_make]
-            
-        # 5. Store result and return
-        frame.store(instr.output, results)
-        return results
-
-    async def _execute_call(self, instr: Call, frame: Frame) -> Any:
-        requirements: Dict[str, Any] = {}
-        temp_node = None
+@pytest.mark.asyncio
+async def test_vm_integration_control_flow_false():
+    """
+    Integration Test: Control Flow (False)
+    Flow: is_disabled -> run_if(conditional_step)
+    """
+    workflow = conditional_step("B").run_if(is_disabled())
+    
+    engine = Engine(
+        solver=NativeSolver(),
+        executor=LocalExecutor(),
+        bus=MessageBus(),
+    )
+    
+    # Current behavior for skipping root node is raising DependencyMissingError or similar,
+    # or returning None depending on implementation.
+    # In VM execution, if the final instruction is skipped, what happens?
+    # The VM returns the result of the last executed instruction?
+    # Or we need a specific return mechanism.
+    # For now, let's assume it might raise or return None.
+    # Given our VM implementation, if it jumps over the call, last_result is None.
+    
+    result = await engine.run(workflow, use_vm=True)
+    assert result is None
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 `map` 和 `run_if` 在新架构中的核心实现和单元测试。现在最大的缺口是 `VMExecutionStrategy` 和 VM 之间的**函数解析**。
+测试将会失败（RED），报错 `ValueError: Instruction for task '...' has no function to call`。
 
-`Backend` 生成的 `Blueprint` 中的 `func` 字段是 `None`，而 VM 依赖它。我们需要在 `VMExecutionStrategy` 中实现一个“链接 (Linking)”阶段：在从 `Backend` 拿到 `Blueprint` 之后，遍历 `LazyResult` 图，构建一个 `(task_name -> callable)` 的映射表，然后用它来填充 `Blueprint` 中所有指令的 `func` 字段。
+我们需要修改 `packages/cascade-engine/src/cascade/runtime/strategies/vm.py`。
+1.  **链接器 (Linker)**: 实现一个逻辑，遍历 `GraphIR` 中的 `TaskDef`，或者是直接遍历原始 `LazyResult` 图，来构建 `task_name -> callable` 的映射表。
+2.  **注入**: 将这些 callable 注入到 `Blueprint` 的指令中。
 
-这需要我们修改 `VMExecutionStrategy`，并编写一个新的**集成测试**来验证整个流程。
+鉴于 `GraphIR` 已经丢失了原始 callable（只保留了元数据），我们需要在 `VMExecutionStrategy` 中利用 `Frontend` 构建过程中可能产生的副作用，或者重新遍历一次 `LazyResult` 来获取 callable。更优雅的方式是让 `Frontend` 返回一个包含 callable 引用的辅助结构。
+
+我们可以修改 `Frontend.compile` 返回一个 `CompilationResult`，包含 `GraphIR` 和一个 `SymbolTable`。请确认是否采用此方案。

@@ -1,34 +1,3 @@
-## [WIP] fix: Enhance refactor script to handle dataclass definitions and multiline calls
-
-### 用户需求
-修复 `scripts/refactor_hashes.py` 脚本的正则缺陷，使其能够正确处理 Dataclass 的字段定义（`field: type`）和多行构造函数调用，从而解决当前的 `TypeError` 问题，完成 Phase 3.0 的重命名工作。
-
-### 评论
-上次执行的脚本导致代码库处于不一致状态：部分定义被修改而调用未修改，部分调用被修改而定义未修改。必须立即修复脚本并重新运行以统一代码库。
-
-### 目标
-1.  更新 `scripts/refactor_hashes.py`。
-2.  增加对 `field: type` 模式的支持。
-3.  优化对 `NodeIR` 多行构造函数的匹配。
-4.  重新执行脚本并验证。
-
-### 基本原理
-Python 的 Dataclass 定义使用类型注解语法 `var: type`，这在之前的脚本中被遗漏了。同时，正则表达式处理多行文本时需要特别注意空白字符的匹配。
-
-### 标签
-#intent/fix #flow/ready #priority/critical #comp/core #task/domain/compiler #task/object/refactor-script #task/action/fix #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 更新重构脚本
-
-~~~~~act
-write_file
-scripts/refactor_hashes.py
-~~~~~
-~~~~~python
 import os
 import re
 
@@ -164,4 +133,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~

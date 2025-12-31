@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, List, Dict, Protocol, Callable, Awaitable, TYPE_CHECKING, Optional
+from typing import Any, List, Dict, Protocol, Callable, Awaitable, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from cascade.spec.blueprint import Instruction

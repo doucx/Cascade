@@ -1,7 +1,7 @@
 import asyncio
 from typing import Any, Dict, Optional
 from cascade.spec.blueprint import ResourceOperand, ContextOperand
-from cascade.vm.middleware import Middleware, ExecutionContext, NextHandler
+from cascade.vm.middleware.base import Middleware, ExecutionContext, NextHandler
 from cascade.vm.protocols import ResourceManager, ConstraintManager
 
 class ArgumentResolutionMiddleware(Middleware):

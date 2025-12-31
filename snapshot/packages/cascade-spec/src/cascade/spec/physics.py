@@ -85,8 +85,13 @@ class FuncNode:
     """
     Stateless transformer. Represents the 'Verb' in the physics model.
     """
-    def __init__(self, name: str):
+    def __init__(
+        self, 
+        name: str, 
+        resource_requirements: Optional[Dict[str, Any]] = None
+    ):
         self.name = name
+        self.resource_requirements = resource_requirements or {}
         self.inputs: Dict[str, Port] = {}
         self.outputs: Dict[str, Port] = {}
 

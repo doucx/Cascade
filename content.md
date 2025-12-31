@@ -1,175 +1,230 @@
-这是第四阶段的测试文件。根据 TDD 原则，我将断言**期望的正确行为**（即 Reactor 应该遵守资源限制）。因此，在当前的贪婪实现下，这些测试将**失败 (RED)**。
-
-## [WIP] test(vm): add reactor resource awareness tests for phase 4
+## [WIP] feat(vm): implement resource awareness in reactor
 
 ### 用户需求
-编写第四阶段（Phase 4）所需的测试用例，涵盖资源过载保护和等待唤醒机制。
+实现 Phase 4.1 的目标：让 `Reactor` 感知并遵守 `ResourceManager` 的限制，防止任务过载。
 
 ### 评论
-这些测试定义了 `Reactor` 与 `ResourceManager` 集成的行为契约。目前 `Reactor` 尚未感知资源，因此这些测试在执行时将因 `TypeError` (构造函数不支持 resource_manager) 或 `AssertionError` (提交了过多任务) 而失败。
+这是对物理引擎的核心增强。通过在调度循环中引入资源检查 (`can_acquire`) 和获取 (`acquire`) 逻辑，我们将 Reactor 从一个贪婪的调度器转变为一个受约束的物理引擎。
 
 ### 目标
-创建 `packages/cascade-vm/tests/reactor/test_reactor_resource_awareness.py`。
+1.  修改 `FuncNode` 以支持 `resource_requirements`。
+2.  修改 `Reactor` 以注入 `ResourceManager`。
+3.  在 `Reactor.step` 中实现资源门控逻辑。
+4.  在 `Reactor` 事件处理中实现资源释放。
 
 ### 基本原理
-按照 "Phase 4: The Physics Engine" 路线图，我们需要两个核心测试：
-1.  验证 Reactor 在资源不足时能暂停调度（背压）。
-2.  验证 Reactor 在资源释放后能唤醒并调度后续任务。
+我们采取“先检查再执行”的策略。在 `step` 循环中，对于每一个数据就绪 (`is_ready`) 的节点，我们首先检查系统资源是否充足。只有在资源充足时，我们才立即获取资源并提交任务。如果资源不足，该节点将被保留在待处理集合中（为 Phase 4.2 的等待唤醒机制做准备），从而避免了资源过载。
 
 ### 标签
-#intent/tooling #flow/draft #priority/high #comp/tests #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/reactor #task/action/test
+#intent/build #flow/draft #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/runtime #task/object/reactor #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建资源感知测试文件
+#### Acts 1: 更新 FuncNode 定义
+
+首先，我们需要在物理层的 `FuncNode` 中添加资源需求的定义。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/physics.py
+~~~~~
+~~~~~python.old
+    def __init__(self, name: str):
+        self.name = name
+        self.inputs: Dict[str, Port] = {}
+        self.outputs: Dict[str, Port] = {}
+
+    def add_input(self, port: Port):
+~~~~~
+~~~~~python.new
+    def __init__(
+        self, 
+        name: str, 
+        resource_requirements: Optional[Dict[str, Any]] = None
+    ):
+        self.name = name
+        self.resource_requirements = resource_requirements or {}
+        self.inputs: Dict[str, Port] = {}
+        self.outputs: Dict[str, Port] = {}
+
+    def add_input(self, port: Port):
+~~~~~
+
+#### Acts 2: 更新 Reactor 实现
+
+接下来，我们重构 `Reactor` 核心。这包括：
+1.  在 `__init__` 中接受 `ResourceManager`。
+2.  在 `step` 中增加资源检查和获取逻辑。
+3.  在 `ExecutionFinished` 处理中增加资源释放逻辑。
 
 ~~~~~act
 write_file
-packages/cascade-vm/tests/reactor/test_reactor_resource_awareness.py
+packages/cascade-vm/src/cascade/vm/reactor/core.py
 ~~~~~
 ~~~~~python
-import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock
+from typing import Optional
+from cascade.spec.physics import DataNode, FuncNode
+from .events import ReactorEvent, TokenGenerated, ExecutionFinished
+from .model import Channel
+from cascade.vm.protocols import ResourceManager
 
-# Component imports
-from cascade.spec.physics import DataNode, FuncNode, Token, Port
-from cascade.vm.reactor import Reactor, TokenGenerated, ExecutionFinished
-from cascade.runtime.resource_manager import ResourceManager
 
-# --- Helpers ---
-
-def create_topology(n_nodes: int):
-    """
-    Creates a simple fan-out topology: 
-    n independent FuncNodes, each fed by a dedicated DataNode.
-    """
-    nodes = []
-    inputs = []
-    
-    for i in range(n_nodes):
-        f_node = FuncNode(name=f"task_{i}")
-        # Dynamically attach resource requirements (Phase 4 requirement)
-        # We assume the task needs 1 "slot"
-        f_node.resource_requirements = {"slots": 1}
+class Reactor:
+    def __init__(self, executor: Any, resource_manager: Optional[ResourceManager] = None):
+        self.executor = executor
+        self.resource_manager = resource_manager
+        self._event_queue: Deque[ReactorEvent] = deque()
         
-        d_in = DataNode(name=f"in_{i}")
-        f_node.add_input(Port(name="arg", source=d_in))
+        # Topology Indexes
+        self._nodes: Set[Any] = set() # Track all known nodes
+        self._channels_by_source: Dict[str, List[Channel]] = defaultdict(list)
         
-        nodes.append(f_node)
-        inputs.append(d_in)
+        # Optimization: Map DataNode -> List[FuncNode] (Reverse dependency)
+        # Used to quickly find which FuncNodes to check when a DataNode updates.
+        self._downstream_map: Dict[str, List[FuncNode]] = defaultdict(list)
         
-    return nodes, inputs
+        # Dirty set for potential evaluation
+        self._dirty_func_nodes: Set[FuncNode] = set()
+        
+        # Pending set for nodes blocked by resources (Phase 4.2 foundation)
+        self._pending_on_resource: Set[FuncNode] = set()
 
-# --- Tests ---
-
-@pytest.mark.asyncio
-async def test_reactor_respects_resource_concurrency_limit():
-    """
-    Phase 4.1 TDD: Ensure Reactor respects global resource constraints.
-    
-    Scenario:
-    - System has 'slots': 1.
-    - 4 tasks are ready to run, each requiring 'slots': 1.
-    - Current Reactor (Greedy) would submit all 4.
-    - Expected Reactor (Physics-Aware) should submit only 1.
-    """
-    # 1. Setup Resource Manager
-    # We use a real ResourceManager to integration test the interaction
-    rm = ResourceManager(capacity={"slots": 1})
-    
-    # 2. Setup Reactor with Resource Manager
-    mock_executor = AsyncMock()
-    # NOTE: This API (resource_manager arg) does not exist yet. 
-    # This will cause a TypeError, marking the start of TDD.
-    reactor = Reactor(executor=mock_executor, resource_manager=rm)
-    
-    # 3. Setup Topology
-    func_nodes, data_nodes = create_topology(4)
-    for f in func_nodes:
-        reactor.register_node(f)
-    for d in data_nodes:
-        reactor.register_node(d)
+    def register_node(self, node: Any):
+        if node in self._nodes:
+            return
+        self._nodes.add(node)
         
-    # 4. Trigger: All inputs become excited simultaneously
-    for d in data_nodes:
-        reactor.push_event(TokenGenerated(node=d, token=Token(1)))
-        
-    # 5. Action: Step the reactor
-    await reactor.step()
-    
-    # 6. Assertion
-    # If greedy (current), call_count will be 4.
-    # If resource-aware (target), call_count should be 1.
-    assert mock_executor.submit.call_count == 1, (
-        f"Reactor violated resource limits! Expected 1 submission, "
-        f"got {mock_executor.submit.call_count}."
-    )
+        # Build reverse index for FuncNodes and Auto-discover Channels
+        if isinstance(node, FuncNode):
+            # 1. Reverse dependency map (DataNode -> Downstream FuncNodes)
+            for port in node.inputs.values():
+                if port.source:
+                    self._downstream_map[port.source.name].append(node)
+            
+            # 2. Auto-discover Output Channels (Physics -> Routing)
+            # If a port is connected to a DataNode physically, implies a default channel.
+            for port_name, port in node.outputs.items():
+                if port.target:
+                    # Check if a channel already exists for this path to avoid duplicates
+                    # or overriding explicit custom channels.
+                    existing = any(
+                        c.output_name == port_name and c.match("default")
+                        for c in self._channels_by_source.get(node.name, [])
+                    )
+                    if not existing:
+                        # Create implicit default channel
+                        default_channel = Channel(
+                            source=node,
+                            target=port.target,
+                            output_name=port_name,
+                            tag_filter="default"
+                        )
+                        self.register_channel(default_channel)
 
+    def register_channel(self, channel: Channel):
+        self._channels_by_source[channel.source.name].append(channel)
+        # Ensure nodes are registered
+        self.register_node(channel.source)
+        self.register_node(channel.target)
 
-@pytest.mark.asyncio
-async def test_reactor_waits_for_resources_and_wakes_up():
-    """
-    Phase 4.2 TDD: Ensure Reactor wakes up pending tasks when resources are released.
-    
-    Scenario:
-    - System has 'slots': 1.
-    - Task A runs (consuming 1 slot). Task B is pending.
-    - Task A finishes -> releases slot.
-    - Reactor should detect this and schedule Task B.
-    """
-    rm = ResourceManager(capacity={"slots": 1})
-    mock_executor = AsyncMock()
-    reactor = Reactor(executor=mock_executor, resource_manager=rm)
-    
-    # 1. Setup A and B
-    func_nodes, data_nodes = create_topology(2)
-    node_a, node_b = func_nodes
-    in_a, in_b = data_nodes
-    
-    for n in func_nodes + data_nodes:
-        reactor.register_node(n)
+    def push_event(self, event: ReactorEvent):
+        self._event_queue.append(event)
+
+    async def step(self):
+        """
+        Advance the reactor by one "tick".
+        A tick consists of:
+        1. Processing all pending events (State Updates & Routing).
+           - This includes cascading events generated during processing.
+        2. Evaluating potentials of affected (dirty) nodes.
+        3. Firing ready nodes (if resources allow).
+        """
+        # 1. Process Event Loop
+        while self._event_queue:
+            event = self._event_queue.popleft()
+            await self._handle_event(event)
+
+        # 2. Evaluate Potentials
+        # We process both new dirty nodes AND nodes previously pending on resources
+        candidates = self._dirty_func_nodes.union(self._pending_on_resource)
         
-    # 2. Trigger both
-    reactor.push_event(TokenGenerated(node=in_a, token=Token(1)))
-    reactor.push_event(TokenGenerated(node=in_b, token=Token(1)))
-    
-    # 3. Step 1: Should fire Node A (arbitrary order, but only 1)
-    await reactor.step()
-    assert mock_executor.submit.call_count == 1
-    
-    # Identify which one ran
-    submitted_node = mock_executor.submit.call_args[0][0]
-    remaining_node = node_b if submitted_node == node_a else node_a
-    
-    # 4. Simulate Completion of the running task
-    # This logic assumes Reactor will hook into ExecutionFinished to release resources
-    # OR that we need to manually release resources in this test if Reactor isn't doing it yet.
-    # The 'ExecutionFinished' event is the standard signal.
-    # However, ResourceManager release usually happens via `await rm.release()` inside the reactor loop 
-    # or callback.
-    
-    # We push the completion event.
-    # IMPORTANT: For this test to pass in the future, Reactor._handle_execution_finished
-    # must trigger resource release.
-    reactor.push_event(ExecutionFinished(node=submitted_node, outputs={}))
-    
-    # 5. Step 2: Should process completion, release resource, and fire Node B
-    await reactor.step()
-    
-    # 6. Assertion
-    assert mock_executor.submit.call_count == 2, "Reactor failed to schedule pending task after resource release."
-    
-    # Verify the second call was for the remaining node
-    last_submitted = mock_executor.submit.call_args[0][0]
-    assert last_submitted == remaining_node
+        # Reset sets for this tick
+        self._dirty_func_nodes.clear()
+        self._pending_on_resource.clear()
+
+        fire_tasks = []
+        
+        for node in candidates:
+            if not node.is_ready():
+                continue
+                
+            # Resource Check (Potential Barrier)
+            if self.resource_manager and node.resource_requirements:
+                if self.resource_manager.can_acquire(node.resource_requirements):
+                    # Immediate acquisition to prevent over-commitment in this loop
+                    # Note: can_acquire is synchronous, but acquire is async.
+                    # Since we verified with can_acquire, acquire should not block significantly
+                    # unless another process stole resources (unlikely in this single-threaded loop).
+                    await self.resource_manager.acquire(node.resource_requirements)
+                    fire_tasks.append(self._fire(node))
+                else:
+                    # Resource barrier not met, keep pending
+                    self._pending_on_resource.add(node)
+            else:
+                # No resource constraints
+                fire_tasks.append(self._fire(node))
+
+        if fire_tasks:
+            # Concurrently execute all fired nodes
+            await asyncio.gather(*fire_tasks)
+
+    async def _handle_event(self, event: ReactorEvent):
+        if isinstance(event, TokenGenerated):
+            self._handle_token_generated(event)
+        elif isinstance(event, ExecutionFinished):
+            await self._handle_execution_finished(event)
+
+    def _handle_token_generated(self, event: TokenGenerated):
+        # 1. Update State (Physics: Inject Energy)
+        event.node.put(event.token)
+        
+        # 2. Mark downstream FuncNodes as dirty (Potential might have increased)
+        downstream = self._downstream_map.get(event.node.name, [])
+        for f_node in downstream:
+            self._dirty_func_nodes.add(f_node)
+
+    async def _handle_execution_finished(self, event: ExecutionFinished):
+        # 1. Release Resources
+        if self.resource_manager and event.node.resource_requirements:
+            await self.resource_manager.release(event.node.resource_requirements)
+            # Optimization hint: Releasing resources might wake up pending nodes.
+            # In Phase 4.2, we might explicitly trigger a wake-up here.
+            # For now, the next step() call will re-evaluate _pending_on_resource.
+
+        # 2. Routing Logic
+        channels = self._channels_by_source.get(event.node.name, [])
+        
+        for output_name, token in event.outputs.items():
+            # Find matching channels for this output port
+            for channel in channels:
+                if channel.output_name == output_name and channel.match(token.tag):
+                    # Route: Generate a TokenGenerated event for the target DataNode
+                    self.push_event(TokenGenerated(node=channel.target, token=token))
+
+    async def _fire(self, node: FuncNode):
+        # 1. Atomically consume inputs (Physics: Consume Energy)
+        inputs = node.consume_inputs()
+        
+        # 2. Submit to Executor
+        await self.executor.submit(node, inputs)
 ~~~~~
 
 ### 下一步建议
-我们已经建立了 TDD 的基础。现在的状态是 **RED**。
-接下来的步骤是实现 Phase 4.1：
-1.  修改 `Reactor.__init__` 以接收 `ResourceManager`。
-2.  修改 `Reactor.step` 和内部逻辑，在 `_fire` 之前检查并获取资源。
-3.  确保测试 `test_reactor_respects_resource_concurrency_limit` 通过。
+我们已经实现了 Phase 4.1 的逻辑：`Reactor` 现在会检查资源并管理待处理节点。
+这应该足以让 `test_reactor_respects_resource_concurrency_limit` 通过。
+接下来的步骤：
+1.  运行测试以验证 4.1 是否通过。
+2.  如果不通过，进行调试和修复。
+3.  如果 4.1 通过，`test_reactor_waits_for_resources_and_wakes_up` (Phase 4.2) 可能会失败，因为目前的实现依赖于外部再次调用 `step()` 来发现资源已释放。在 4.2 中，我们将实现更智能的唤醒机制。

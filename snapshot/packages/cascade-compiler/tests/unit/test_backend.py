@@ -3,7 +3,7 @@ from typing import List
 
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal, JumpIfFalse
+from cascade.spec.blueprint import Blueprint, Call, Register, Literal, JumpIfFalse, MapCall
 
 from cascade.compiler.backend import Backend
 
@@ -152,3 +152,37 @@ def test_compile_conditional_execution():
     # Check 2: Action
     assert isinstance(instr_2, Call)
     assert instr_2.task_name == "action"
+
+
+def test_compile_map_node_generates_map_call():
+    """
+    Case 4: Map Node (A -> Map(B)).
+    Verify that Backend generates a MapCall instruction when NodeIR has meta['is_map'].
+    """
+    # Node B is a map over task "process"
+    node_b = NodeIR(
+        id="B", 
+        definition=_create_dummy_task_def("process"),
+        inputs={"scale": 2}, # Constant input
+        meta={"is_map": True}
+    )
+    
+    # Dynamic input from A (a list)
+    node_a = NodeIR(id="A", definition=_create_dummy_task_def("list_gen"))
+    edge = EdgeIR(source_id="A", target_id="B", target_arg="items")
+    
+    ir = GraphIR(nodes=[node_a, node_b], edges=[edge])
+    plan = [["A"], ["B"]]
+    
+    blueprint = Backend.compile(ir, plan)
+    
+    # Should have 2 instructions: Call(list_gen) -> MapCall(process)
+    assert len(blueprint.instructions) == 2
+    instr_map = blueprint.instructions[1]
+    
+    assert isinstance(instr_map, MapCall)
+    assert instr_map.task_name == "process"
+    
+    # Verify inputs: 'items' comes from Register, 'scale' is Literal
+    assert isinstance(instr_map.kwargs["items"], Register)
+    assert isinstance(instr_map.kwargs["scale"], Literal)

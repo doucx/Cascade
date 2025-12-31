@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(compiler): Implement frontend support for map and control flow", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767154177.572472, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(compiler+vm): 全面覆盖 Map 与 Params 的执行逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767154288.1089625, "duration_ms": 0}}

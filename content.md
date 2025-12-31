@@ -1,398 +1,99 @@
-好的，我理解。我们开始执行“架构硬化”任务的第一步：**重构 IR 模型**。
+好的，测试通过。我们现在进入“架构硬化”任务的第二阶段。
 
-你的分析完全正确。当前的 `NodeIR.inputs` 是一个“贫血”模型，它将本应在编译前端（Frontend）完成的参数解析工作推迟到了后端（Backend），违反了“聪明的 Frontend, 简单的 Backend”这一核心编译原则。
+你的问题非常关键，它触及了这次重构的核心战略：“我们应该如何处理旧的 `cascade-graph` 包？”
 
-我将生成一个计划，该计划会执行以下操作：
-1.  修改 `cascade.spec.ir.models.NodeIR`，废弃 `inputs` 字段，引入 `args: List[Any]` 和 `kwargs: Dict[str, Any]`。
-2.  更新 `Frontend`，使其在构建 `NodeIR` 时就负责解析 `LazyResult` 的参数，并填充到新的 `args` 和 `kwargs` 字段中。
-3.  简化 `Backend`，使其不再进行参数解析，而是直接消费 `NodeIR` 中清晰的 `args` 和 `kwargs`。
-4.  同步更新所有受此变更影响的单元测试。
+**答案是：我们不应该让 `cascade-graph` 反向依赖 `cascade-compiler`。**
 
-这将使我们的 IR 结构更加清晰、自文档化，并简化后端逻辑，为未来的优化奠定坚实的基础。
+这会违反我们的“焦土政策”。`cascade-graph` 是一个注定要被废弃的遗留包。让它依赖一个全新的、代表未来的包，会创造一个混乱的、循环的依赖关系，并拖延我们最终将其彻底删除的目标。
 
-## [WIP] refactor(ir): Refactor NodeIR to separate args and kwargs
+正确的策略是：
+1.  **物理迁移**：将 `cascade-graph` 中有价值的、可重用的核心组件（`ReflectionAnalyzer`, `HashingService`）物理地移动到 `cascade-compiler` 中，使 `compiler` 包自包含。
+2.  **暂时修复**：`cascade-graph` 中的 `build.py` 会因此损坏。为了在过渡期间保持旧的 `GraphExecutionStrategy` 仍然可用（以便通过现有测试），我们将**临时**地修改 `build.py`，让它从 `cascade.compiler` 中导入这些组件。
+3.  **最终废弃**：一旦 `VMExecutionStrategy` 实现了功能对等并成为默认策略，我们就可以安全地删除整个 `cascade-graph` 包，这个临时的依赖关系也会随之消失。
+
+我将生成一个计划来执行第一步和第二步。
+
+## [WIP] refactor(compiler): Decouple compiler from cascade-graph
 
 ### 用户需求
-根据“偿还MVP技术债”的规划，重构 IR 模型（`NodeIR`），以明确分离位置参数（`args`）和关键字参数（`kwargs`），并将参数解析逻辑从 Backend 前移至 Frontend。
+1.  将核心分析和哈希组件（`ReflectionAnalyzer`, `HashingService`）从 `cascade-graph` 迁移到 `cascade-compiler`。
+2.  使 `cascade-compiler` 包完全独立，不再依赖于 `cascade-graph`。
+3.  确保旧的 `cascade-graph` 在过渡期内仍然可以工作。
 
 ### 评论
-这是一个关键的架构重构。将 `args` 和 `kwargs` 在 IR层面明确分离，可以极大地提高 IR 的可读性和自文档化能力。更重要的是，它将参数解析的复杂性正确地归于 Frontend 的职责范围，使得 Backend 的实现可以显著简化，更专注于代码生成，这完全符合“聪明的 Frontend，简单的 Backend”的设计哲学。
+这是一个决定性的步骤，旨在实现 `cascade-compiler` 的完全解耦和自包含。通过物理迁移代码而非仅仅改变依赖关系，我们明确了 `cascade-compiler` 作为新架构核心的地位，并为最终移除 `cascade-graph` 铺平了道路。临时修复 `cascade-graph` 的导入是一个务实的妥协，它保证了在过渡阶段我们现有的测试套件和旧的执行路径依然能够运行，从而降低了重构的风险。
 
 ### 目标
-1.  修改 `cascade.spec.ir.models.NodeIR` 的数据结构，用 `args: List[Any]` 和 `kwargs: Dict[str, Any]` 替换 `inputs: Dict[str, Any]`。
-2.  更新 `cascade.compiler.frontend._GraphBuilder`，使其在访问 `LazyResult` 时，直接将 `LazyResult.args` 和 `LazyResult.kwargs` 解析并填充到 `NodeIR` 的新字段中。
-3.  简化 `cascade.compiler.backend._BlueprintBuilder`，移除其内部对数字键的解析逻辑，改为直接消费 `NodeIR.args` 和 `NodeIR.kwargs`。
-4.  更新所有因 `NodeIR` 结构变更而失败的单元测试。
+1.  将 `cascade-graph/src/cascade/graph/analysis/` 目录移动到 `cascade-compiler/src/cascade/compiler/analysis/`。
+2.  将 `cascade-graph/src/cascade/graph/hashing.py` 文件移动到 `cascade-compiler/src/cascade/compiler/hashing.py`。
+3.  更新 `cascade-compiler/src/cascade/compiler/frontend.py` 中的导入语句，使其使用内部的、新移动过来的组件。
+4.  更新 `cascade-graph/src/cascade/graph/build.py` 中的导入语句，使其临时从 `cascade.compiler` 导入所需的组件，以保持旧图构建逻辑的兼容性。
 
 ### 基本原理
-当前 `NodeIR.inputs` 字段是一个混合了位置参数（以数字字符串为键）和关键字参数的 `Dict[str, Any]`。这种“贫血”模型迫使 Backend 在代码生成阶段去反向解析参数的意图，这既职责错位又效率低下。
-
-本次重构通过在 `NodeIR` 中创建 `args` 和 `kwargs` 两个专用字段，将参数的语义在 IR 层面固定下来。`Frontend` 在编译时拥有最完整的上下文信息（`LazyResult` 对象），因此是执行“参数分类”逻辑的唯一正确位置。完成此重构后，IR 成为一个更纯粹、更明确的数据契约，Backend 的逻辑也将因此变得更加健壮和简单。
+根据“焦土政策”，`cascade-compiler` 必须成为一个完全独立的单元，不能依赖于任何将被废弃的包。本次迁移将 `ReflectionAnalyzer` 和 `HashingService` 这两个纯逻辑组件的所有权正式移交给 `compiler`。修改 `frontend.py` 使用相对导入可以确保 `compiler` 的内部一致性。同时，为了避免在重构过程中完全破坏旧的 `GraphExecutionStrategy`，我们通过修改 `cascade-graph` 的 `build.py` 来创建一个临时的、从新包到旧包的依赖桥梁。这个桥梁将在未来的清理阶段被拆除。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/compiler #comp/spec #concept/ir #scope/core #ai/instruct #task/domain/architecture #task/object/ir-model #task/action/refactor #task/state/begin #task/status/active
+#intent/refine #flow/ready #priority/high #comp/compiler #comp/graph #concept/dependency-management #scope/core #ai/instruct #task/domain/architecture #task/object/decoupling #task/action/refactor #task/state/continue #task/status/active
 
 ---
 
 ### Script
 
-#### Acts 1: Refactor `NodeIR` in `cascade-spec`
+#### Acts 1: 物理迁移核心组件
 
-首先，我们修改核心 IR 数据模型 `NodeIR`。
+我们将 `analysis` 目录和 `hashing.py` 文件从 `cascade-graph` 移动到 `cascade-compiler`。
 
 ~~~~~act
-write_file
-packages/cascade-spec/src/cascade/spec/ir/models.py
-~~~~~
-~~~~~python
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import List, Optional, Dict, Any
-
-from cascade.spec.fingerprint import Fingerprint
-
-
-class EdgeKind(str, Enum):
-    DATA = "DATA"  # Standard data dependency
-    CONTROL = "CONTROL"  # Conditional execution (run_if)
-
-
-class ArgumentKind(str, Enum):
-    POSITIONAL_ONLY = "POSITIONAL_ONLY"
-    POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
-    VAR_POSITIONAL = "VAR_POSITIONAL"  # *args
-    KEYWORD_ONLY = "KEYWORD_ONLY"
-    VAR_KEYWORD = "VAR_KEYWORD"  # **kwargs
-
-
-@dataclass(frozen=True)
-class ArgumentDef:
-    name: str
-    kind: ArgumentKind
-    annotation: Optional[str] = None
-    default_value_repr: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class TaskDef:
-    name: str
-    args: List[ArgumentDef]
-    # The stable semantic identity of this task definition.
-    # Must contain keys like 'current_code_structure_hash'.
-    fingerprint: Fingerprint
-    return_annotation: Optional[str] = None
-    docstring: Optional[str] = None
-    is_async: bool = False
-    # Execution mode (e.g. "blocking", "compute") derived from the task definition
-    mode: str = "blocking"
-
-
-@dataclass
-class NodeIR:
-    id: str
-    definition: TaskDef
-    args: List[Any] = field(default_factory=list)
-    kwargs: Dict[str, Any] = field(default_factory=dict)
-    meta: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class EdgeIR:
-    source_id: str
-    target_id: str
-    target_arg: str
-    kind: EdgeKind = EdgeKind.DATA
-
-
-@dataclass
-class GraphIR:
-    nodes: List[NodeIR]
-    edges: List[EdgeIR]
-    meta: Dict[str, Any] = field(default_factory=dict)
-
-
-# --- VM Instruction Set ---
-
-
-@dataclass
-class Instruction:
-    id: str
-
-
-@dataclass
-class Call(Instruction):
-    task_name: str
-    args: List[Any]
-    output_register: str
-
-
-@dataclass
-class Return(Instruction):
-    source_register: str
+move_file
+packages/cascade-graph/src/cascade/graph/analysis
+packages/cascade-compiler/src/cascade/compiler/analysis
 ~~~~~
 
-#### Acts 2: Update `Frontend` to Populate New IR Fields
+~~~~~act
+move_file
+packages/cascade-graph/src/cascade/graph/hashing.py
+packages/cascade-compiler/src/cascade/compiler/hashing.py
+~~~~~
 
-接下来，修改 `Frontend` 以填充新的 `args` 和 `kwargs` 字段。
+#### Acts 2: 更新 `cascade-compiler` 的内部导入
+
+现在 `compiler` 包已经自包含，我们更新 `frontend.py` 以使用相对导入来引用这些新移入的组件。
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/src/cascade/compiler/frontend.py
 ~~~~~
 ~~~~~python.old
-        if node_id not in self.nodes:
-            literal_inputs = {
-                str(i): arg for i, arg in enumerate(obj.args) if not isinstance(arg, (LazyResult, MappedLazyResult))
-            }
-            literal_inputs.update(
-                {k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))}
-            )
-
-            node = NodeIR(id=node_id, definition=task_def, inputs=literal_inputs)
-            self.nodes[node_id] = node
+from cascade.graph.analysis.reflection import ReflectionAnalyzer
+from cascade.graph.hashing import HashingService
 ~~~~~
 ~~~~~python.new
-        if node_id not in self.nodes:
-            literal_args = [
-                arg for arg in obj.args if not isinstance(arg, (LazyResult, MappedLazyResult))
-            ]
-            literal_kwargs = {
-                k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
-            }
-
-            node = NodeIR(id=node_id, definition=task_def, args=literal_args, kwargs=literal_kwargs)
-            self.nodes[node_id] = node
+from .analysis.reflection import ReflectionAnalyzer
+from .hashing import HashingService
 ~~~~~
+
+#### Acts 3: 临时修复 `cascade-graph` 的依赖关系
+
+为了让旧的 `GraphExecutionStrategy` 在过渡期内继续工作，我们修改 `cascade-graph` 的 `build.py`，让它从 `cascade.compiler` 中导入所需的组件。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/frontend.py
+packages/cascade-graph/src/cascade/graph/build.py
 ~~~~~
 ~~~~~python.old
-        if node_id not in self.nodes:
-            literal_inputs = {
-                k: val for k, val in obj.mapping_kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
-            }
-            node = NodeIR(
-                id=node_id,
-                definition=task_def,
-                inputs=literal_inputs,
-                meta={"is_map": True}
-            )
-            self.nodes[node_id] = node
+from .hashing import HashingService
+from .analysis.reflection import ReflectionAnalyzer
 ~~~~~
 ~~~~~python.new
-        if node_id not in self.nodes:
-            literal_kwargs = {
-                k: val for k, val in obj.mapping_kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
-            }
-            node = NodeIR(
-                id=node_id,
-                definition=task_def,
-                kwargs=literal_kwargs,
-                meta={"is_map": True}
-            )
-            self.nodes[node_id] = node
-~~~~~
-
-#### Acts 3: Simplify `Backend` to Consume New IR Fields
-
-现在，简化 `Backend` 的实现，使其直接使用 `node.args` 和 `node.kwargs`。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend.py
-~~~~~
-~~~~~python.old
-    def _process_node(self, node_id: str):
-        node = self._nodes_map[node_id]
-
-        # 1. Resolve Input Operands & Control Dependencies
-        # We use a temporary dictionary to collect all inputs (args and kwargs)
-        # and then split them based on keys (digit keys -> args, others -> kwargs)
-        all_inputs: Dict[str, Operand] = {}
-        control_dependency_reg: Any = None
-
-        # 1a. From Literals
-        for key, value in node.inputs.items():
-            all_inputs[key] = Literal(value)
-
-        # 1b. From Edges (Dependencies)
-        incoming_edges = self._incoming_edges_map.get(node_id, [])
-        for edge in incoming_edges:
-            # The source node must have been processed in a previous stage,
-            # so its output register must be in our map.
-            source_register = self._node_output_registers.get(edge.source_id)
-            if source_register is None:
-                # This indicates a flaw in the ExecutionPlan or this compiler's logic
-                raise RuntimeError(
-                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
-                    "was not assigned a register before being used."
-                )
-            
-            if edge.kind == EdgeKind.CONTROL:
-                # We currently support only one control dependency per node for simplicity.
-                # If multiple exist, they should ideally be combined (AND logic) in the graph structure.
-                control_dependency_reg = source_register
-            else:
-                all_inputs[edge.target_arg] = source_register
-
-        # 1c. Split into args and kwargs
-        # We find keys that are digits "0", "1", ... and map them to the positional list
-        args: List[Operand] = []
-        kwargs: Dict[str, Operand] = {}
-        
-        # Determine max positional index
-        max_arg_idx = -1
-        for k in all_inputs.keys():
-            if k.isdigit():
-                max_arg_idx = max(max_arg_idx, int(k))
-        
-        # Pre-fill args list with None (or check for gaps)
-        if max_arg_idx >= 0:
-            args = [None] * (max_arg_idx + 1) # type: ignore
-
-        for k, v in all_inputs.items():
-            if k.isdigit():
-                args[int(k)] = v
-            else:
-                kwargs[k] = v
-        
-        # Check for gaps in positional args
-        if any(a is None for a in args):
-             # This might happen if '0' and '2' are provided but '1' is missing.
-             # For now, we assume the IR is well-formed or the function has defaults.
-             # But Literal(None) would be safer than actual None.
-             pass
-~~~~~
-~~~~~python.new
-    def _process_node(self, node_id: str):
-        node = self._nodes_map[node_id]
-
-        # 1. Resolve Input Operands & Control Dependencies
-        args: List[Operand] = [Literal(val) for val in node.args]
-        kwargs: Dict[str, Operand] = {k: Literal(v) for k, v in node.kwargs.items()}
-        control_dependency_reg: Any = None
-
-        # 1a. Overlay dependencies from Edges
-        incoming_edges = self._incoming_edges_map.get(node_id, [])
-        for edge in incoming_edges:
-            source_register = self._node_output_registers.get(edge.source_id)
-            if source_register is None:
-                raise RuntimeError(
-                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
-                    "was not assigned a register before being used."
-                )
-
-            if edge.kind == EdgeKind.CONTROL:
-                control_dependency_reg = source_register
-            else:
-                # Dependency can be positional or keyword
-                if edge.target_arg.isdigit():
-                    idx = int(edge.target_arg)
-                    # Grow args list if necessary
-                    while len(args) <= idx:
-                        args.append(None) # type: ignore
-                    args[idx] = source_register
-                else:
-                    kwargs[edge.target_arg] = source_register
-~~~~~
-
-#### Acts 4: Update Affected Tests
-
-最后，更新因 `NodeIR` 结构变化而受影响的单元测试。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
-~~~~~
-~~~~~python.old
-    node = ir.nodes[0]
-    assert node.definition.name == "simple_task"
-    assert node.inputs["x"] == 10
-~~~~~
-~~~~~python.new
-    node = ir.nodes[0]
-    assert node.definition.name == "simple_task"
-    assert node.kwargs["x"] == 10
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
-~~~~~
-~~~~~python.old
-    # The Param LazyResult stores the param name in its args/kwargs
-    assert param_node.inputs.get("name") == "my_param" or param_node.inputs.get("0") == "my_param"
-~~~~~
-~~~~~python.new
-    # The Param LazyResult stores the param name in its args/kwargs
-    assert param_node.kwargs.get("name") == "my_param" or (len(param_node.args) > 0 and param_node.args[0] == "my_param")
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
-~~~~~
-~~~~~python.old
-    # For now, let's assert that inputs contain the list.
-    assert node.inputs["x"] == [1, 2, 3]
-~~~~~
-~~~~~python.new
-    # For now, let's assert that kwargs contain the list.
-    assert node.kwargs["x"] == [1, 2, 3]
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_backend.py
-~~~~~
-~~~~~python.old
-    # Node A(x=1, y="hello")
-    task_def = _create_dummy_task_def("task_A")
-    node = NodeIR(id="A", definition=task_def, inputs={"x": 1, "y": "hello"})
-~~~~~
-~~~~~python.new
-    # Node A(x=1, y="hello")
-    task_def = _create_dummy_task_def("task_A")
-    node = NodeIR(id="A", definition=task_def, kwargs={"x": 1, "y": "hello"})
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_backend.py
-~~~~~
-~~~~~python.old
-    node_b = NodeIR(
-        id="B", 
-        definition=_create_dummy_task_def("process"),
-        inputs={"scale": 2}, # Constant input
-        meta={"is_map": True}
-    )
-~~~~~
-~~~~~python.new
-    node_b = NodeIR(
-        id="B", 
-        definition=_create_dummy_task_def("process"),
-        kwargs={"scale": 2}, # Constant input
-        meta={"is_map": True}
-    )
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_compiler_linking.py
-~~~~~
-~~~~~python.old
-    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
-    node = NodeIR(id="n1", definition=task_def, inputs={})
-~~~~~
-~~~~~python.new
-    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
-    node = NodeIR(id="n1", definition=task_def, kwargs={})
+from cascade.compiler.hashing import HashingService
+from cascade.compiler.analysis.reflection import ReflectionAnalyzer
 ~~~~~
 
 ### 下一步建议
-我们已经对 IR 模型和相关的编译器组件进行了核心重构。下一步是运行 `cascade-compiler` 包的测试套件，以确保我们的修改是正确且没有引入回归问题的。
+我们已经完成了代码的物理迁移和依赖关系的初步调整。现在，我们需要验证这次重构的正确性。
 
-我建议执行： `pytest packages/cascade-compiler/`
+我建议依次运行以下两个测试套件：
+1.  `pytest packages/cascade-compiler/`：验证 `cascade-compiler` 在解耦后是否能独立、正确地工作。
+2.  `pytest packages/cascade-graph/`：验证我们为 `cascade-graph` 建立的临时依赖桥梁是否有效，确保旧的图构建逻辑没有被完全破坏。
+
+如果两组测试都通过，我们就可以确认本次迁移是成功的。

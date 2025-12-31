@@ -7,8 +7,8 @@ from dataclasses import dataclass
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
 from cascade.spec.compiler_result import CompilationResult
-from cascade.graph.analysis.reflection import ReflectionAnalyzer
-from cascade.graph.hashing import HashingService
+from .analysis.reflection import ReflectionAnalyzer
+from .hashing import HashingService
 
 
 @dataclass

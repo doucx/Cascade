@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(spec): 对齐 spec 测试以使用纯化的 Blueprint 和 IR 模型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767157392.1247027, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(e2e): 修复过时的 VM 集成测试以对齐新架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767157612.641061, "duration_ms": 0}}

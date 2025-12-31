@@ -1,8 +1,8 @@
 import pytest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, AsyncMock
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.spec.blueprint import TailCall
+from cascade.spec.blueprint import TailCall, Blueprint
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.bus import MessageBus
@@ -17,7 +17,8 @@ def vm_task(x: int):
 @pytest.mark.asyncio
 async def test_engine_dispatches_to_vm():
     """
-    Verifies that Engine.run(..., use_vm=True) compiles and runs the task via VM.
+    Verifies that Engine.run(..., use_vm=True) correctly dispatches to the
+    new compiler pipeline (Backend) and VirtualMachine.
     """
     # Setup Engine
     bus = MessageBus()
@@ -26,64 +27,37 @@ async def test_engine_dispatches_to_vm():
     # Target task
     target = vm_task(x=10)
 
-    # Mock BlueprintBuilder and VirtualMachine to verify interaction
-    # Note: BlueprintBuilder is internal to Backend now, but the test might need adjustment if it patches internals.
-    # The strategy imports: from cascade.compiler.backend import Backend
-    # And Backend uses _BlueprintBuilder internally.
-    # But wait, VMExecutionStrategy uses: Frontend, Optimizer, Backend.
-    # It does NOT use BlueprintBuilder directly. 
-    # The test seems to be mocking implementation details that might have changed or moved.
-    # Let's check VMExecutionStrategy code:
-    # blueprint = Backend.compile(...)
-    # vm = VirtualMachine()
-    
-    # We should patch where they are IMPORTED in the strategy file.
+    # We patch Backend and VirtualMachine where they are imported by VMExecutionStrategy.
     with patch("cascade.runtime.strategies.vm.Backend") as MockBackend, patch(
         "cascade.runtime.strategies.vm.VirtualMachine"
     ) as MockVM:
-        # MockBackend.compile() is static/class method usually
-        
-        mock_vm_instance = MockVM.return_value
-
-        # Mock build result
-        mock_bp = MagicMock()
+        # 1. Setup mocks
+        mock_bp = MagicMock(spec=Blueprint)
         MockBackend.compile.return_value = mock_bp
+
         mock_vm_instance = MockVM.return_value
+        # The execute method is async, so we use AsyncMock for proper awaiting.
+        mock_vm_instance.execute = AsyncMock(return_value=11)
 
-        # Mock build result
-        mock_bp = MagicMock()
-        mock_builder_instance.build.return_value = mock_bp
-
-        # Mock execute result
-        mock_vm_instance.execute = MagicMock(return_value=11)
-
-        # async mock is tricky, let's use a real async function or specific mock config
-        # Simpler: just ensure the call happens. The execute needs to be awaitable.
-        async def async_return(*args, **kwargs):
-            return 11
-
-        mock_vm_instance.execute.side_effect = async_return
-
-        # Run with VM flag
+        # 2. Run with VM flag
         result = await engine.run(target, use_vm=True)
 
-        # Assertions
+        # 3. Assertions
         assert result == 11
 
-        # Verify Backend compiled the IR
-        # Note: The test logic above changed from BlueprintBuilder to Backend.
-        # We need to verify Backend.compile was called. 
-        # But wait, Strategy calls Frontend -> Optimizer -> Backend.
-        # This test attempts to verify the flow.
-        # Let's just verify Backend.compile was called.
+        # Verify Backend.compile was called (it's a static method, so called on the class)
         MockBackend.compile.assert_called_once()
 
-        # Verify VM was executed with the blueprint and initial kwargs
-        # Note: The engine should extract initial kwargs from the target
-        mock_vm_instance.execute.assert_called_once()
-        call_args = mock_vm_instance.execute.call_args
-        assert call_args[0][0] == mock_bp  # First arg is blueprint
-        assert call_args[1]["initial_kwargs"] == {"x": 10}
+        # Verify a VM instance was created
+        MockVM.assert_called_once()
+
+        # Verify VM.execute was called with the correct blueprint and initial state
+        mock_vm_instance.execute.assert_awaited_once()
+        call_args, call_kwargs = mock_vm_instance.execute.call_args
+
+        assert call_args[0] == mock_bp  # First positional arg is the blueprint
+        assert "symbol_table" in call_kwargs  # Symbol table is passed
+        assert call_kwargs["initial_kwargs"] == {"x": 10}
 
 
 @pytest.mark.asyncio
@@ -105,6 +79,9 @@ async def test_engine_vm_recursive_execution():
     target = countdown(n=5)
 
     # Run with VM
+    # NOTE: This test will fail until the old BlueprintBuilder and VM in cascade-graph/engine are removed
+    # and the new VM supports TailCall. The old ones do, but the new one might not yet.
+    # Let's check cascade.vm.machine.py... it does handle TailCall. So this should pass.
     result = await engine.run(target, use_vm=True)
 
     assert result == "Liftoff"

@@ -1,211 +1,121 @@
-好的，我来处理这些 `spec` 相关的测试失败。
-
-你的分析很到位，这些是上次架构变更后残留的最后一批规范层面的测试。它们是验证我们核心数据结构正确性的最后一道防线，修复它们至关重要。
-
-## [WIP] test(spec): 对齐 spec 测试以使用纯化的 Blueprint 和 IR 模型
+## [WIP] test(e2e): 修复过时的 VM 集成测试以对齐新架构
 
 ### 用户需求
-修复 `cascade-spec` 包中所有因移除 `Call.func` 和 `NodeIR.inputs` 字段而导致的测试失败。
+修复位于 `tests/e2e/integration/test_engine_vm_integration.py` 中的 `test_engine_dispatches_to_vm` 测试用例。该测试因 `NameError` 和对已废弃组件的错误 Mock 而失败。
 
 ### 评论
-这是对我们“净化 `Blueprint`”重构的收尾工作。通过修复这些规范层面的测试，我们不仅能让CI重新变绿，更重要的是，我们确保了系统的核心数据契约（IR 和 `Blueprint`）在代码层面得到了精确的、可验证的定义。这是架构变更成功的最终证明。
+这个 E2E 测试是验证 `Engine` 到 `VMExecutionStrategy` 调度逻辑的关键哨兵。修复它意味着我们不仅拥有了能通过的端到端功能测试，还拥有了能验证新架构内部组件交互的白盒测试。这对于确保未来对策略层的修改不破坏核心流程至关重要。
 
 ### 目标
-1.  修改 `packages/cascade-spec/tests/spec/test_linking_data_structures.py`，在 `Call` 和 `MapCall` 的实例化中移除已废弃的 `func=` 参数。
-2.  修改 `packages/cascade-spec/tests/unit/test_ir_models.py`，在 `NodeIR` 的实例化和断言中，将 `inputs=` 替换为新的 `kwargs=` 字段。
-3.  确保 `cascade-spec` 包下的所有测试全部通过。
+1.  重写 `test_engine_dispatches_to_vm` 测试用例。
+2.  移除对不存在的 `mock_builder_instance` 的引用，解决 `NameError`。
+3.  清理重复和混乱的 Mock 定义。
+4.  确保测试正确地 Mock 了 `Backend.compile` 和 `VirtualMachine.execute`，并验证它们被以正确的参数调用。
 
 ### 基本原理
-这些测试的失败是预料之中的，它们忠实地反映了我们对核心数据模型的战略性改进。旧的测试代码仍然依赖于已被废除的 `func` 和 `inputs` 字段。为了让测试重新生效，我们必须更新它们，使其断言新的、正确的模型结构。这不仅是修复测试，更是在巩固和验证我们新的架构契约。
+旧的测试是为前一个架构版本编写的，它假设 `VMExecutionStrategy` 直接与一个名为 `BlueprintBuilder` 的组件交互。随着我们将编译器栈（`Frontend`, `Optimizer`, `Backend`）完全分离，这个假设已经失效。新的 `VMExecutionStrategy` 现在调用 `Backend.compile` 来生成 `Blueprint`。因此，测试必须更新其 Mock 目标，以准确反映这一新的、更清晰的内部实现。
 
 ### 标签
-#intent/fix #intent/tooling #flow/ready #priority/high #comp/spec #comp/tests #concept/parser #scope/api #ai/instruct #task/domain/architecture #task/object/legacy-vm #task/action/removal #task/state/continue
+#intent/fix #intent/tooling #flow/ready #priority/high #comp/engine #comp/tests #concept/executor #scope/core #ai/instruct #task/domain/architecture #task/object/e2e-test #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `Blueprint` 指令相关的测试
+#### Acts 1: 重写 `test_engine_vm_integration.py`
 
-我们将移除 `test_linking_data_structures.py` 中对 `func` 字段的非法引用。
-
-~~~~~act
-write_file
-packages/cascade-spec/tests/spec/test_linking_data_structures.py
-~~~~~
-~~~~~python
-import pytest
-from dataclasses import is_dataclass
-from typing import Dict, Callable
-
-# 这些导入在 RED 阶段可能会失败，或者在实例化时报错
-from cascade.spec.blueprint import Call, MapCall, Register
-
-
-def test_call_instruction_has_structure_hash():
-    """
-    验证 Call 指令包含 structure_hash 字段。
-    这是链接阶段查找函数实现的键。
-    """
-    try:
-        # 尝试用 kwargs 实例化，如果字段不存在会报错
-        # output 使用 dummy Register
-        Call(
-            output=Register(0),
-            task_name="t",
-            structure_hash="hash_123",
-        )
-    except TypeError as e:
-        if "unexpected keyword argument 'structure_hash'" in str(e):
-            pytest.fail("Call instruction missing 'structure_hash' field")
-        raise e
-
-
-def test_map_call_instruction_has_structure_hash():
-    """
-    验证 MapCall 指令也包含 structure_hash 字段。
-    """
-    try:
-        MapCall(
-            output=Register(0),
-            task_name="t",
-            structure_hash="hash_123",
-        )
-    except TypeError as e:
-        if "unexpected keyword argument 'structure_hash'" in str(e):
-            pytest.fail("MapCall instruction missing 'structure_hash' field")
-        raise e
-
-
-def test_compilation_result_structure():
-    """
-    验证 CompilationResult 类的存在及其结构。
-    它负责在 Frontend 和 Runtime 之间传递 IR 和 Symbol Table。
-    """
-    # 尝试导入 CompilationResult (目前不存在)
-    try:
-        from cascade.spec.compiler_result import CompilationResult
-    except ImportError:
-        pytest.fail("Could not import cascade.spec.compiler_result.CompilationResult")
-
-    # 验证字段 (运行时检查)
-    # 我们传入 None 作为占位符，仅检查字段是否存在
-    try:
-        res = CompilationResult(ir=None, symbol_table={})
-    except TypeError as e:
-        pytest.fail(f"CompilationResult instantiation failed: {e}")
-
-    assert hasattr(res, "ir")
-    assert hasattr(res, "symbol_table")
-~~~~~
-
-#### Acts 2: 修复 `NodeIR` 模型相关的测试
-
-我们将 `test_ir_models.py` 中对 `inputs` 字段的引用更新为 `args` 和 `kwargs`。
+我们将用一个干净、正确且与新架构对齐的版本覆盖整个文件。
 
 ~~~~~act
 write_file
-packages/cascade-spec/tests/unit/test_ir_models.py
+tests/e2e/integration/test_engine_vm_integration.py
 ~~~~~
 ~~~~~python
-import json
-from dataclasses import asdict
-
 import pytest
-
-from cascade.spec.ir.models import (
-    GraphIR,
-    NodeIR,
-    EdgeIR,
-    TaskDef,
-    ArgumentDef,
-    ArgumentKind,
-    Instruction,
-    Call,
-    Return,
-)
-from cascade.spec.fingerprint import Fingerprint
+from unittest.mock import MagicMock, patch, AsyncMock
+import cascade as cs
+from cascade.runtime.engine import Engine
+from cascade.spec.blueprint import TailCall, Blueprint
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.bus import MessageBus
 
 
-def test_ir_structures_exist():
-    """Verify that GraphIR, NodeIR, and EdgeIR can be instantiated."""
-    # This test will fail until the models are created.
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
-
-    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
-
-    node = NodeIR(id="node_1", definition=task_def, kwargs={"x": 1, "y": "hello"})
-
-    edge = EdgeIR(source_id="node_1", target_id="node_2", target_arg="data")
-
-    graph = GraphIR(nodes=[node], edges=[edge], meta={"version": "1.0"})
-
-    assert graph.nodes[0].id == "node_1"
-    assert graph.edges[0].source_id == "node_1"
-    assert graph.meta["version"] == "1.0"
+# --- Helper ---
+@cs.task
+def vm_task(x: int):
+    return x + 1
 
 
-def test_ir_serialization_roundtrip():
-    """Verify that IR structures can be serialized to and from JSON."""
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
+@pytest.mark.asyncio
+async def test_engine_dispatches_to_vm():
+    """
+    Verifies that Engine.run(..., use_vm=True) correctly dispatches to the
+    new compiler pipeline (Backend) and VirtualMachine.
+    """
+    # Setup Engine
+    bus = MessageBus()
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
-    arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
-    task_def = TaskDef(name="test_task", args=[arg_def], fingerprint=fp)
+    # Target task
+    target = vm_task(x=10)
 
-    node = NodeIR(id="n1", definition=task_def, kwargs={"val": 42})
+    # We patch Backend and VirtualMachine where they are imported by VMExecutionStrategy.
+    with patch("cascade.runtime.strategies.vm.Backend") as MockBackend, patch(
+        "cascade.runtime.strategies.vm.VirtualMachine"
+    ) as MockVM:
+        # 1. Setup mocks
+        mock_bp = MagicMock(spec=Blueprint)
+        MockBackend.compile.return_value = mock_bp
 
-    graph = GraphIR(nodes=[node], edges=[])
+        mock_vm_instance = MockVM.return_value
+        # The execute method is async, so we use AsyncMock for proper awaiting.
+        mock_vm_instance.execute = AsyncMock(return_value=11)
 
-    # Convert to dictionary using dataclasses.asdict
-    data = asdict(graph)
+        # 2. Run with VM flag
+        result = await engine.run(target, use_vm=True)
 
-    # Verify key fields
-    assert data["nodes"][0]["id"] == "n1"
-    assert data["nodes"][0]["kwargs"]["val"] == 42
-    assert data["nodes"][0]["definition"]["name"] == "test_task"
-    assert data["nodes"][0]["definition"]["args"][0]["kind"] == "POSITIONAL_OR_KEYWORD"
+        # 3. Assertions
+        assert result == 11
 
-    # Verify JSON serialization compatibility
-    json_str = json.dumps(data)
-    loaded = json.loads(json_str)
+        # Verify Backend.compile was called (it's a static method, so called on the class)
+        MockBackend.compile.assert_called_once()
 
-    assert loaded["nodes"][0]["id"] == "n1"
+        # Verify a VM instance was created
+        MockVM.assert_called_once()
+
+        # Verify VM.execute was called with the correct blueprint and initial state
+        mock_vm_instance.execute.assert_awaited_once()
+        call_args, call_kwargs = mock_vm_instance.execute.call_args
+
+        assert call_args[0] == mock_bp  # First positional arg is the blueprint
+        assert "symbol_table" in call_kwargs  # Symbol table is passed
+        assert call_kwargs["initial_kwargs"] == {"x": 10}
 
 
-def test_instruction_serialization():
-    """Verify that Instruction dataclasses can be instantiated and serialized."""
-    # This test covers the second part of Phase 0's implementation goal.
-    call_instruction = Call(
-        id="instr_1",
-        task_name="my_task",
-        args=[1, "hello"],
-        output_register="r0",
-    )
-    return_instruction = Return(id="instr_2", source_register="r0")
+@pytest.mark.asyncio
+async def test_engine_vm_recursive_execution():
+    """
+    Integration test with a real recursive task (no mocks), verifying TCO.
+    """
 
-    program: list[Instruction] = [call_instruction, return_instruction]
+    # A real recursive task
+    @cs.task
+    def countdown(n: int):
+        if n > 0:
+            return TailCall(kwargs={"n": n - 1})
+        return "Liftoff"
 
-    # This crude serialization check is enough to drive the implementation.
-    # We are not using asdict because Instruction is a base class.
-    # A real implementation would need a polymorphic serializer.
-    serialized = [
-        {"type": "Call", "id": i.id, "task": i.task_name}
-        if isinstance(i, Call)
-        else {"type": "Return", "id": i.id, "source": i.source_register}
-        for i in program
-    ]
+    bus = MessageBus()
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
-    json_str = json.dumps(serialized)
-    loaded = json.loads(json_str)
+    target = countdown(n=5)
 
-    assert len(loaded) == 2
-    assert loaded[0]["type"] == "Call"
-    assert loaded[1]["source"] == "r0"
+    # Run with VM
+    # NOTE: This test will fail until the old BlueprintBuilder and VM in cascade-graph/engine are removed
+    # and the new VM supports TailCall. The old ones do, but the new one might not yet.
+    # Let's check cascade.vm.machine.py... it does handle TailCall. So this should pass.
+    result = await engine.run(target, use_vm=True)
+
+    assert result == "Liftoff"
 ~~~~~
-
-### 下一步建议
-我们已经修复了所有与核心数据结构定义相关的单元测试。现在，整个 `cascade-spec` 和 `cascade-vm` 包的测试应该都已通过。
-
-现在是时候回到 `packages/cascade-engine/tests/integration/test_integration_map_control.py` 这个文件了。这是我们第一个真正的端到端集成测试，它将验证从 `Frontend` 编译到 `VM` 执行的完整新流程。修复它，我们将正式打通新架构的“任督二脉”。

@@ -1,221 +1,237 @@
-## [WIP] test: 定义 TCO 编译器的行为契约
+## [WIP] feat: 实现 TCO 编译逻辑
 
 ### 用户需求
-在 `cascade-compiler` 中实现对 TCO（尾调用优化）的支持。具体的第一步是编写一个测试，该测试断言编译器后端（Backend）能够将包含 `JUMP` 类型边和 `case_key` 的 GraphIR 正确编译为带有 `tag_filter` 的物理通道（ChannelDef）。
+使 `cascade-compiler` 能够通过测试 `test_backend_tco.py`，即正确地将 `JUMP` 类型的边编译为物理图中的反馈通道。
 
 ### 评论
-这是基于“势能驱动网络”架构实现 TCO 的核心验证逻辑。我们不再依赖运行时的动态递归，而是将递归静态编译为图中的环。这个测试实际上定义了新架构下 TCO 的物理形态。
+这是实现静态循环的关键逻辑。我们需要在 IR 模型中引入表达“跳转”和“分支”的词汇，并在后端将其翻译为“路由通道”。
 
 ### 目标
-创建 `packages/cascade-compiler/tests/unit/test_backend_tco.py`，其中包含：
-1.  **自递归测试**: 验证自引用跳转被编译为回环通道。
-2.  **分支路由测试**: 验证不同的 `case_key` 产生不同的过滤通道。
-3.  **互递归测试**: 验证跨节点的循环依赖被正确连接。
+1.  修改 `cascade.spec.ir.models`，添加 `EdgeKind.JUMP` 和 `EdgeIR.case_key`。
+2.  修改 `cascade.compiler.backend`，在构建过程中识别 JUMP 边，并生成对应的、带有 `tag_filter` 的 `ChannelDef`。
 
 ### 基本原理
-通过在测试中引入尚未实现的 IR 结构（`EdgeKind.JUMP`, `EdgeIR.case_key`），我们明确定义了 IR 层的契约，并强制 Backend 必须适配这种结构来生成正确的物理拓扑。这遵循了严格的 TDD 流程。
+为了支持数据流网络中的循环，我们不能仅依赖简单的 `Consumer <- Producer` 依赖关系。我们需要显式建模 `Producer -> Consumer` 的反馈路径。在 IR 层，这通过 `JUMP` 边表示。在物理层，这通过一个从 Producer 输出指向 Consumer **输入槽位** 的 Channel 表示，且该 Channel 通常带有非默认的 Tag 过滤器。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct
-#task/domain/compiler #task/object/tco-backend #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/compiler #comp/spec #scope/core #ai/instruct
+#task/domain/compiler #task/object/tco-backend #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 TCO 后端测试
+#### Acts 1: 更新 IR 模型 (Spec)
 
-我们创建一个包含完整 TCO 场景的测试文件。请注意，这个测试使用了目前 IR 模型中尚未存在的字段（如 `case_key` 和 `EdgeKind.JUMP`），这将导致测试在现阶段无法通过（甚至无法运行），从而正确地建立 **RED** 状态。
+首先，我们扩展 IR 模型以支持 TCO 所需的元数据。
 
 ~~~~~act
-write_file
-packages/cascade-compiler/tests/unit/test_backend_tco.py
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
 ~~~~~
-~~~~~python
-import pytest
-from typing import List, Optional
-
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind, TaskDef, ArgumentDef, ArgumentKind
-from cascade.spec.fingerprint import Fingerprint
-from cascade.compiler.backend import Backend
-from cascade.spec.topology import BipartiteGraph
+~~~~~python.old
+class EdgeKind(str, Enum):
+    DATA = "DATA"  # Standard data dependency
+    CONTROL = "CONTROL"  # Conditional execution (run_if)
 
 
-def _create_dummy_node(node_id: str, arg_names: List[str] = None) -> NodeIR:
-    """Helper to create a minimal NodeIR for TCO tests."""
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
-    
-    args = []
-    if arg_names:
-        for name in arg_names:
-            args.append(ArgumentDef(name=name, kind=ArgumentKind.POSITIONAL_OR_KEYWORD))
+class ArgumentKind(str, Enum):
+~~~~~
+~~~~~python.new
+class EdgeKind(str, Enum):
+    DATA = "DATA"  # Standard data dependency
+    CONTROL = "CONTROL"  # Conditional execution (run_if)
+    JUMP = "JUMP"  # Control flow jump (recursion/loop)
+
+
+class ArgumentKind(str, Enum):
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
+~~~~~
+~~~~~python.old
+@dataclass
+class EdgeIR:
+    source_node_instance_hash: str
+    target_node_instance_hash: str
+    target_arg: str
+    kind: EdgeKind = EdgeKind.DATA
+
+
+@dataclass
+~~~~~
+~~~~~python.new
+@dataclass
+class EdgeIR:
+    source_node_instance_hash: str
+    target_node_instance_hash: str
+    target_arg: str
+    kind: EdgeKind = EdgeKind.DATA
+    case_key: Optional[str] = None
+
+
+@dataclass
+~~~~~
+
+#### Acts 2: 更新编译器后端 (Backend)
+
+现在我们修改 `_TopologyBuilder`。我们需要增加一个处理 JUMP 边的过程。对于每一个 JUMP 边，我们需要确保目标参数有一个对应的 DataNode（如果没有则创建），然后建立一个从源到该 DataNode 的 Channel。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
+~~~~~
+~~~~~python.old
+from cascade.spec.ir.models import GraphIR
+from cascade.spec.topology import (
+    BipartiteGraph,
+    PhysicsFuncNode,
+    PhysicsDataNode,
+    ChannelDef,
+)
+~~~~~
+~~~~~python.new
+from cascade.spec.ir.models import GraphIR, EdgeKind
+from cascade.spec.topology import (
+    BipartiteGraph,
+    PhysicsFuncNode,
+    PhysicsDataNode,
+    ChannelDef,
+)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
+~~~~~
+~~~~~python.old
+        # Pass 2: Wire Inputs based on Edges (Dependencies)
+        # This will OVERWRITE any literal inputs if an edge exists for the same arg
+        # (Though IR shouldn't have both literal and edge for same arg)
+        self._process_edges()
+
+        return BipartiteGraph(
+            func_nodes=self._func_nodes,
+~~~~~
+~~~~~python.new
+        # Pass 2: Wire Inputs based on Edges (Dependencies)
+        # This will OVERWRITE any literal inputs if an edge exists for the same arg
+        # (Though IR shouldn't have both literal and edge for same arg)
+        self._process_edges()
+
+        # Pass 3: Wire Jumps (Feedback Loops)
+        self._process_jumps()
+
+        return BipartiteGraph(
+            func_nodes=self._func_nodes,
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
+~~~~~
+~~~~~python.old
+    def _process_edges(self):
+        for edge in self._graph.edges:
+            # Source of the edge is a FuncNode (in IR)
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+
+            # Find the DataNode produced by the source FuncNode
+            source_data_hash = self._func_output_map.get(source_func_hash)
             
-    task_def = TaskDef(name=node_id, args=args, fingerprint=fp)
-    # We use the node_id as the instance hash for clarity in tests
-    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
+            if not source_data_hash:
+                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
 
+            # Link: Target FuncNode input 'arg_name' <- Source DataNode
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if target_func_node:
+                target_func_node.inputs[arg_name] = source_data_hash
 
-def test_compile_self_recursive_loop_to_feedback_channel():
-    """
-    Test Case: Self-Recursion (The basic TCO loop)
-    
-    IR Structure:
-      Node: counter(n)
-      Edge: counter -> counter (arg='n') [Kind=JUMP, Case='loop']
-      
-    Expected Topology:
-      FuncNode(counter)
-      Channel: 
-        Source: FuncNode(counter)
-        Target: DataNode(counter.n)  <-- The input slot of the SAME node
-        TagFilter: "loop"
-    """
-    # 1. Setup IR
-    # Node 'counter' takes one argument 'n'
-    node = _create_dummy_node("counter", arg_names=["n"])
-    
-    # Edge representing the recursive jump: counter -> counter
-    # This edge carries the 'loop' case key
-    # NOTE: This assumes EdgeKind.JUMP and case_key exist (TDD RED)
-    edge = EdgeIR(
-        source_node_instance_hash="counter",
-        target_node_instance_hash="counter",
-        target_arg="n",
-        kind=EdgeKind.JUMP,
-        case_key="loop"
-    )
-    
-    graph_ir = GraphIR(nodes=[node], edges=[edge])
+    def _compute_const_hash(self, value: Any) -> str:
+~~~~~
+~~~~~python.new
+    def _process_edges(self):
+        for edge in self._graph.edges:
+            if edge.kind != EdgeKind.DATA:
+                continue
 
-    # 2. Execute Backend
-    topology = Backend.compile(graph_ir)
+            # Source of the edge is a FuncNode (in IR)
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
 
-    # 3. Assertions
-    assert isinstance(topology, BipartiteGraph)
-    
-    # Verify FuncNode exists
-    assert "counter" in topology.func_nodes
-    func_node = topology.func_nodes["counter"]
-    
-    # Verify Input Slot (DataNode) for 'n' exists
-    # The compiler should have created a DataNode for the input 'n'
-    assert "n" in func_node.inputs
-    input_data_hash = func_node.inputs["n"]
-    assert input_data_hash in topology.data_nodes
-    
-    # Verify Feedback Channel
-    # We look for a channel that:
-    # - originates from 'counter'
-    # - targets the input slot of 'counter' (input_data_hash)
-    # - has tag_filter="loop"
-    
-    feedback_channel = next((
-        c for c in topology.channels 
-        if c.source_node_instance_hash == "counter" 
-        and c.target_data_slot_hash == input_data_hash
-        and c.tag_filter == "loop"
-    ), None)
-    
-    assert feedback_channel is not None, "Feedback channel for self-recursion not found"
+            # Find the DataNode produced by the source FuncNode
+            source_data_hash = self._func_output_map.get(source_func_hash)
+            
+            if not source_data_hash:
+                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
 
+            # Link: Target FuncNode input 'arg_name' <- Source DataNode
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if target_func_node:
+                target_func_node.inputs[arg_name] = source_data_hash
 
-def test_compile_conditional_routing():
-    """
-    Test Case: Branching (Router logic)
-    
-    IR Structure:
-      Node A (The Decision Maker)
-      Node B (Branch 1)
-      Node C (Branch 2)
-      
-      Edge 1: A -> B [Kind=JUMP, Case='case_b']
-      Edge 2: A -> C [Kind=JUMP, Case='case_c']
-      
-    Expected Topology:
-      FuncNode A has TWO output channels.
-      Channel 1: A -> DataNode(B.input), Filter='case_b'
-      Channel 2: A -> DataNode(C.input), Filter='case_c'
-    """
-    node_a = _create_dummy_node("A")
-    node_b = _create_dummy_node("B", arg_names=["val"])
-    node_c = _create_dummy_node("C", arg_names=["val"])
-    
-    edge_b = EdgeIR(
-        source_node_instance_hash="A", target_node_instance_hash="B", target_arg="val",
-        kind=EdgeKind.JUMP, case_key="case_b"
-    )
-    edge_c = EdgeIR(
-        source_node_instance_hash="A", target_node_instance_hash="C", target_arg="val",
-        kind=EdgeKind.JUMP, case_key="case_c"
-    )
-    
-    graph_ir = GraphIR(nodes=[node_a, node_b, node_c], edges=[edge_b, edge_c])
-    
-    topology = Backend.compile(graph_ir)
-    
-    # Verify Channels
-    # Helper to find channel by filter
-    def find_channel(tag):
-        return next((c for c in topology.channels if c.source_node_instance_hash == "A" and c.tag_filter == tag), None)
-    
-    chan_b = find_channel("case_b")
-    chan_c = find_channel("case_c")
-    
-    assert chan_b is not None
-    assert chan_c is not None
-    
-    # Verify targets
-    # chan_b should point to B's input
-    b_input_hash = topology.func_nodes["B"].inputs["val"]
-    assert chan_b.target_data_slot_hash == b_input_hash
-    
-    # chan_c should point to C's input
-    c_input_hash = topology.func_nodes["C"].inputs["val"]
-    assert chan_c.target_data_slot_hash == c_input_hash
+    def _process_jumps(self):
+        for edge in self._graph.edges:
+            if edge.kind != EdgeKind.JUMP:
+                continue
 
+            # 1. Identify Source and Target
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+            
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if not target_func_node:
+                raise RuntimeError(f"Target node {target_func_hash} for jump not found")
 
-def test_compile_mutual_recursion():
-    """
-    Test Case: Mutual Recursion (Ping-Pong)
-    
-    IR Structure:
-      Ping -> Pong [Kind=JUMP, Case='ping']
-      Pong -> Ping [Kind=JUMP, Case='pong']
-      
-    Expected Topology:
-      Two crossed channels forming a figure-8 loop.
-    """
-    ping = _create_dummy_node("Ping", arg_names=["x"])
-    pong = _create_dummy_node("Pong", arg_names=["y"])
-    
-    edge_to_pong = EdgeIR(
-        source_node_instance_hash="Ping", target_node_instance_hash="Pong", target_arg="y",
-        kind=EdgeKind.JUMP, case_key="ping"
-    )
-    edge_to_ping = EdgeIR(
-        source_node_instance_hash="Pong", target_node_instance_hash="Ping", target_arg="x",
-        kind=EdgeKind.JUMP, case_key="pong"
-    )
-    
-    graph_ir = GraphIR(nodes=[ping, pong], edges=[edge_to_pong, edge_to_ping])
-    
-    topology = Backend.compile(graph_ir)
-    
-    # Verify Channel Ping -> Pong
-    c1 = next((c for c in topology.channels if c.source_node_instance_hash == "Ping"), None)
-    assert c1 is not None
-    assert c1.tag_filter == "ping"
-    assert c1.target_data_slot_hash == topology.func_nodes["Pong"].inputs["y"]
-    
-    # Verify Channel Pong -> Ping
-    c2 = next((c for c in topology.channels if c.source_node_instance_hash == "Pong"), None)
-    assert c2 is not None
-    assert c2.tag_filter == "pong"
-    assert c2.target_data_slot_hash == topology.func_nodes["Ping"].inputs["x"]
+            # 2. Identify or Create the Target DataNode (Input Slot)
+            # The target function needs a place to receive the jump data.
+            # If it already has an input DataNode for this arg (from literals or data edges), we use it.
+            # If not, we must create a new, dedicated input slot.
+            
+            if arg_name in target_func_node.inputs:
+                target_data_hash = target_func_node.inputs[arg_name]
+            else:
+                # Create a new Input Slot DataNode
+                # Naming convention: target_node_hash:input:arg_name
+                target_data_hash = self._compute_data_slot_hash(target_func_hash, f"input_{arg_name}")
+                
+                # Check if it already exists (e.g. created by another Jump to same arg)
+                if target_data_hash not in self._data_nodes:
+                    d_node = PhysicsDataNode(
+                        current_data_slot_hash=target_data_hash,
+                        name=f"{target_func_node.name}.in.{arg_name}",
+                        producer_node_instance_hash="external" # Marked as external/input
+                    )
+                    self._data_nodes[target_data_hash] = d_node
+                
+                # Wire it to the function input
+                target_func_node.inputs[arg_name] = target_data_hash
+
+            # 3. Create the Jump Channel
+            # Source (Func Output) -> Channel (Filter) -> Target (Data Input)
+            
+            # Use the default "result" output of the source function
+            # Future: IR might specify which output port to use
+            
+            tag = edge.case_key or "default"
+            
+            channel = ChannelDef(
+                source_node_instance_hash=source_func_hash,
+                target_data_slot_hash=target_data_hash,
+                port_name="result",
+                tag_filter=tag
+            )
+            self._channels.append(channel)
+
+    def _compute_const_hash(self, value: Any) -> str:
 ~~~~~
 
 ### 下一步建议
-我们已经创建了测试，现在的状态是 **RED**（甚至更像是“编译错误”状态）。
-下一步，我们需要通过以下步骤来实现这个测试的预期：
-1.  **修改 IR 模型**: 在 `cascade-spec` 中更新 `EdgeIR` 和 `EdgeKind`，添加 `case_key` 和 `JUMP`。
-2.  **更新 Backend**: 修改 `_TopologyBuilder`，使其在处理 `EdgeKind.JUMP` 时生成带有正确 `tag_filter` 的 `ChannelDef`。
+我们已经完成了 Spec 和 Backend 的修改。现在 `test_backend_tco.py` 应该可以通过了。
+建议运行测试以验证实现。如果通过，我们将完成阶段 3.4，并可以进入 **第四阶段 (Phase 4: Strategy Alignment)**，开始改造 `Engine` 和 `VMExecutionStrategy` 以驱动这个新的物理网络。

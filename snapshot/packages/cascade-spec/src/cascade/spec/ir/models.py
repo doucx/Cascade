@@ -9,6 +9,7 @@ from cascade.spec.policy import ExecutionPolicy
 class EdgeKind(str, Enum):
     DATA = "DATA"  # Standard data dependency
     CONTROL = "CONTROL"  # Conditional execution (run_if)
+    JUMP = "JUMP"  # Control flow jump (recursion/loop)
 
 
 class ArgumentKind(str, Enum):
@@ -63,6 +64,7 @@ class EdgeIR:
     target_node_instance_hash: str
     target_arg: str
     kind: EdgeKind = EdgeKind.DATA
+    case_key: Optional[str] = None
 
 
 @dataclass

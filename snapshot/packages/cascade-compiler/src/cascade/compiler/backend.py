@@ -1,7 +1,7 @@
 import hashlib
 from typing import List, Dict, Any
 
-from cascade.spec.ir.models import GraphIR
+from cascade.spec.ir.models import GraphIR, EdgeKind
 from cascade.spec.topology import (
     BipartiteGraph,
     PhysicsFuncNode,
@@ -43,6 +43,9 @@ class _TopologyBuilder:
         # This will OVERWRITE any literal inputs if an edge exists for the same arg
         # (Though IR shouldn't have both literal and edge for same arg)
         self._process_edges()
+
+        # Pass 3: Wire Jumps (Feedback Loops)
+        self._process_jumps()
 
         return BipartiteGraph(
             func_nodes=self._func_nodes,
@@ -109,6 +112,9 @@ class _TopologyBuilder:
 
     def _process_edges(self):
         for edge in self._graph.edges:
+            if edge.kind != EdgeKind.DATA:
+                continue
+
             # Source of the edge is a FuncNode (in IR)
             source_func_hash = edge.source_node_instance_hash
             target_func_hash = edge.target_node_instance_hash
@@ -124,6 +130,60 @@ class _TopologyBuilder:
             target_func_node = self._func_nodes.get(target_func_hash)
             if target_func_node:
                 target_func_node.inputs[arg_name] = source_data_hash
+
+    def _process_jumps(self):
+        for edge in self._graph.edges:
+            if edge.kind != EdgeKind.JUMP:
+                continue
+
+            # 1. Identify Source and Target
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+            
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if not target_func_node:
+                raise RuntimeError(f"Target node {target_func_hash} for jump not found")
+
+            # 2. Identify or Create the Target DataNode (Input Slot)
+            # The target function needs a place to receive the jump data.
+            # If it already has an input DataNode for this arg (from literals or data edges), we use it.
+            # If not, we must create a new, dedicated input slot.
+            
+            if arg_name in target_func_node.inputs:
+                target_data_hash = target_func_node.inputs[arg_name]
+            else:
+                # Create a new Input Slot DataNode
+                # Naming convention: target_node_hash:input:arg_name
+                target_data_hash = self._compute_data_slot_hash(target_func_hash, f"input_{arg_name}")
+                
+                # Check if it already exists (e.g. created by another Jump to same arg)
+                if target_data_hash not in self._data_nodes:
+                    d_node = PhysicsDataNode(
+                        current_data_slot_hash=target_data_hash,
+                        name=f"{target_func_node.name}.in.{arg_name}",
+                        producer_node_instance_hash="external" # Marked as external/input
+                    )
+                    self._data_nodes[target_data_hash] = d_node
+                
+                # Wire it to the function input
+                target_func_node.inputs[arg_name] = target_data_hash
+
+            # 3. Create the Jump Channel
+            # Source (Func Output) -> Channel (Filter) -> Target (Data Input)
+            
+            # Use the default "result" output of the source function
+            # Future: IR might specify which output port to use
+            
+            tag = edge.case_key or "default"
+            
+            channel = ChannelDef(
+                source_node_instance_hash=source_func_hash,
+                target_data_slot_hash=target_data_hash,
+                port_name="result",
+                tag_filter=tag
+            )
+            self._channels.append(channel)
 
     def _compute_const_hash(self, value: Any) -> str:
         # Simple content hashing for literals

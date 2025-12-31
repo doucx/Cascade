@@ -1,37 +1,3 @@
-## [WIP] feat(arch): 架构硬化 - 阶段2：VM 管道化改造 (Tests)
-
-### 用户需求
-进入架构硬化流程的第二阶段，目标是将 `VirtualMachine` 重构为基于中间件管道（Middleware Pipeline）的架构。本计划将创建验证此架构所需的 TDD 测试套件，建立 **RED** 状态。
-
-### 评论
-目前的 `VirtualMachine` 是一个单体式的函数调用器，逻辑（重试、资源检查、执行）紧密耦合。
-新的测试将定义一个基于“洋葱模型”的执行管道。VM 的核心指责将转变为：**指令分发** -> **上下文组装** -> **管道执行**。
-这将允许我们在不修改 VM 核心循环的情况下，插入资源解析、重试策略、分布式锁等逻辑。
-
-### 目标
-1.  **定义管道契约**: 验证 VM 能够注册和按序执行 Middleware。
-2.  **验证操作数解析**: 验证 `ResourceOperand` 等复杂操作数可以通过 Middleware 在运行时被解析，而不是硬编码在 VM 里。
-3.  **验证策略拦截**: 验证 Middleware 能够读取并响应指令上的 `ExecutionPolicy`。
-
-### 基本原理
-通过 TDD 先行，我们确立了 `Middleware` 和 `ExecutionContext` 的接口规范，强制 VM 从“实现逻辑”转向“编排逻辑”。
-
-### 标签
-#intent/architect #flow/ready #priority/critical #comp/vm #scope/core #task/domain/core #task/object/hardening-pipeline #task/action/tdd-scaffold #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 VM Middleware TDD 测试
-
-该测试文件定义了三个关键的架构能力：链式调用、动态参数解析、策略感知。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/unit/test_middleware_pipeline.py
-~~~~~
-~~~~~python
 import pytest
 from unittest.mock import MagicMock, call
 import asyncio
@@ -203,11 +169,3 @@ async def test_policy_handling_via_middleware():
 
     assert result == "Success"
     assert func_mock.call_count == 3
-~~~~~
-
-### 下一步建议
-通过创建这些测试，我们定义了 VM 重构的“完成标准”。
-接下来的计划（GREEN 阶段）将是：
-1.  创建 `cascade.vm.middleware` 模块，定义接口和基础实现（Empty Context, Base Resolvers）。
-2.  重构 `VirtualMachine` 类，引入 `set_middlewares` 接口，并将 `_execute_call` 的逻辑委托给管道。
-3.  实现内置的 Standard Middleware (Resource, Policy 等)。

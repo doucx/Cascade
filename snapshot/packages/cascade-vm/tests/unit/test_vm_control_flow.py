@@ -1,37 +1,3 @@
-简要回答
-我们正在编写一个严格的测试套件，用于验证 VM 的指令指针（PC）能否正确处理无条件跳转、条件分支和循环（向后跳转）。这将作为 RED 阶段的测试，驱动我们将 VM 从简单的迭代器重构为基于 PC 的状态机。
-
-## [WIP] test(vm): 添加控制流指令的单元测试
-
-### 用户需求
-编写 `packages/cascade-vm/tests/unit/test_vm_control_flow.py`，通过手动构造包含 `Jump` 和 `JumpIfFalse` 的 Blueprint，验证 VM 的跳转逻辑。
-
-### 评论
-目前的 VM 实现只是简单的 `for instruction in blueprint` 循环，完全无法通过此测试。这个测试将强制我们把 VM 重构为 `while pc < len(instructions)` 模式，并正确处理指令指针的更新。这是实现 `run_if` 和循环逻辑的基础。
-
-### 目标
-1.  创建 `test_vm_control_flow.py`。
-2.  测试无条件跳转 `Jump` 是否能跳过指令。
-3.  测试条件跳转 `JumpIfFalse` 是否能根据寄存器值正确分支。
-4.  测试向后跳转是否能实现循环逻辑。
-
-### 基本原理
-通过构造包含副作用（如向列表追加值）的指令序列，我们可以精确地断言哪些指令被执行了，哪些被跳过了，以及执行的顺序。这是验证控制流最可靠的方法。
-
-### 标签
-#intent/test #flow/ready #priority/high #comp/tests #concept/vm #task/domain/core #task/object/vm-loop #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 VM 控制流测试文件
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/unit/test_vm_control_flow.py
-~~~~~
-~~~~~python
 import pytest
 from typing import List
 
@@ -184,9 +150,3 @@ async def test_vm_loop_backward_jump():
     # Loop 3 times: 3, 2, 1
     await vm.execute(bp, initial_kwargs={"count": 3})
     assert log == [3, 2, 1]
-~~~~~
-
-### 下一步建议
-测试现在会失败（RED）。我们需要重写 `packages/cascade-vm/src/cascade/vm/machine.py` 中的 `VirtualMachine.execute` 方法。
-
-必须将当前的 `for instr in instructions` 循环替换为基于 `program_counter` 的 `while` 循环，并实现 `Jump` 和 `JumpIfFalse` 的分发逻辑。

@@ -1,37 +1,3 @@
-## [WIP] test: 定义 TCO 编译器的行为契约
-
-### 用户需求
-在 `cascade-compiler` 中实现对 TCO（尾调用优化）的支持。具体的第一步是编写一个测试，该测试断言编译器后端（Backend）能够将包含 `JUMP` 类型边和 `case_key` 的 GraphIR 正确编译为带有 `tag_filter` 的物理通道（ChannelDef）。
-
-### 评论
-这是基于“势能驱动网络”架构实现 TCO 的核心验证逻辑。我们不再依赖运行时的动态递归，而是将递归静态编译为图中的环。这个测试实际上定义了新架构下 TCO 的物理形态。
-
-### 目标
-创建 `packages/cascade-compiler/tests/unit/test_backend_tco.py`，其中包含：
-1.  **自递归测试**: 验证自引用跳转被编译为回环通道。
-2.  **分支路由测试**: 验证不同的 `case_key` 产生不同的过滤通道。
-3.  **互递归测试**: 验证跨节点的循环依赖被正确连接。
-
-### 基本原理
-通过在测试中引入尚未实现的 IR 结构（`EdgeKind.JUMP`, `EdgeIR.case_key`），我们明确定义了 IR 层的契约，并强制 Backend 必须适配这种结构来生成正确的物理拓扑。这遵循了严格的 TDD 流程。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct
-#task/domain/compiler #task/object/tco-backend #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 TCO 后端测试
-
-我们创建一个包含完整 TCO 场景的测试文件。请注意，这个测试使用了目前 IR 模型中尚未存在的字段（如 `case_key` 和 `EdgeKind.JUMP`），这将导致测试在现阶段无法通过（甚至无法运行），从而正确地建立 **RED** 状态。
-
-~~~~~act
-write_file
-packages/cascade-compiler/tests/unit/test_backend_tco.py
-~~~~~
-~~~~~python
 import pytest
 from typing import List, Optional
 
@@ -212,10 +178,3 @@ def test_compile_mutual_recursion():
     assert c2 is not None
     assert c2.tag_filter == "pong"
     assert c2.target_data_slot_hash == topology.func_nodes["Ping"].inputs["x"]
-~~~~~
-
-### 下一步建议
-我们已经创建了测试，现在的状态是 **RED**（甚至更像是“编译错误”状态）。
-下一步，我们需要通过以下步骤来实现这个测试的预期：
-1.  **修改 IR 模型**: 在 `cascade-spec` 中更新 `EdgeIR` 和 `EdgeKind`，添加 `case_key` 和 `JUMP`。
-2.  **更新 Backend**: 修改 `_TopologyBuilder`，使其在处理 `EdgeKind.JUMP` 时生成带有正确 `tag_filter` 的 `ChannelDef`。

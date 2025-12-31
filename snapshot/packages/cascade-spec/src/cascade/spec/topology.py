@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List
 
 
@@ -10,6 +10,8 @@ class PhysicsFuncNode:
     """
     current_node_instance_hash: str
     name: str
+    # Map input argument names to the source DataNode hash
+    inputs: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -1,128 +1,110 @@
-from typing import List, Dict, Tuple, Any
+import hashlib
+from typing import List, Dict
 
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind, InjectionIR
-from cascade.spec.blueprint import (
-    Blueprint, Call, MapCall, Register, Literal, Operand, JumpIfFalse, ResourceOperand
+from cascade.spec.ir.models import GraphIR
+from cascade.spec.topology import (
+    BipartiteGraph,
+    PhysicsFuncNode,
+    PhysicsDataNode,
+    ChannelDef,
 )
-from .optimizer import ExecutionPlan
 
 
 class Backend:
     """
-    Compiler Backend (Codegen): Transforms a scheduled IR into a linear Blueprint.
+    Compiler Backend: Transforms GraphIR into a static BipartiteGraph topology.
     """
 
     @staticmethod
-    def compile(graph: GraphIR, plan: ExecutionPlan) -> Blueprint:
-        builder = _BlueprintBuilder(graph, plan)
+    def compile(graph: GraphIR) -> BipartiteGraph:
+        builder = _TopologyBuilder(graph)
         return builder.build()
 
 
-class _BlueprintBuilder:
-    def __init__(self, graph: GraphIR, plan: ExecutionPlan):
+class _TopologyBuilder:
+    def __init__(self, graph: GraphIR):
         self._graph = graph
-        self._plan = plan
-        self._instructions: List[Call] = []
-        self._register_counter = 0
-
-        # The "Symbol Table" for register allocation
-        self._node_output_registers: Dict[str, Register] = {}
+        self._func_nodes: Dict[str, PhysicsFuncNode] = {}
+        self._data_nodes: Dict[str, PhysicsDataNode] = {}
+        self._channels: List[ChannelDef] = []
         
-        # Fast lookups
-        self._nodes_map: Dict[str, NodeIR] = {n.current_node_instance_hash: n for n in graph.nodes}
-        self._incoming_edges_map: Dict[str, List[EdgeIR]] = {}
-        for edge in graph.edges:
-            if edge.target_node_instance_hash not in self._incoming_edges_map:
-                self._incoming_edges_map[edge.target_node_instance_hash] = []
-            self._incoming_edges_map[edge.target_node_instance_hash].append(edge)
+        # Helper map: FuncNode Hash -> Default Output DataNode Hash
+        self._func_output_map: Dict[str, str] = {}
 
-    def _allocate_register(self) -> Register:
-        reg = Register(self._register_counter)
-        self._register_counter += 1
-        return reg
+    def build(self) -> BipartiteGraph:
+        # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
+        for node_ir in self._graph.nodes:
+            self._process_node(node_ir)
 
-    def build(self) -> Blueprint:
-        for stage in self._plan:
-            for node_id in stage:
-                self._process_node(node_id)
-        
-        return Blueprint(
-            instructions=self._instructions,
-            register_count=self._register_counter
+        # Pass 2: Wire Inputs based on Edges
+        self._process_edges()
+
+        return BipartiteGraph(
+            func_nodes=self._func_nodes,
+            data_nodes=self._data_nodes,
+            channels=self._channels,
         )
 
-    def _convert_to_operand(self, val: Any) -> Operand:
-        if isinstance(val, InjectionIR):
-            return ResourceOperand(name=val.resource_name)
-        return Literal(val)
-
-    def _process_node(self, node_id: str):
-        node = self._nodes_map[node_id]
-
-        # 1. Resolve Input Operands & Control Dependencies
-        args: List[Operand] = [self._convert_to_operand(val) for val in node.args]
-        kwargs: Dict[str, Operand] = {k: self._convert_to_operand(v) for k, v in node.kwargs.items()}
-        control_dependency_reg: Any = None
-
-        # 1a. Overlay dependencies from Edges
-        incoming_edges = self._incoming_edges_map.get(node_id, [])
-        for edge in incoming_edges:
-            source_register = self._node_output_registers.get(edge.source_node_instance_hash)
-            if source_register is None:
-                raise RuntimeError(
-                    f"Compiler Error: Dependency '{edge.source_node_instance_hash}' for node '{node_id}' "
-                    "was not assigned a register before being used."
-                )
-
-            if edge.kind == EdgeKind.CONTROL:
-                control_dependency_reg = source_register
-            else:
-                # Dependency can be positional or keyword
-                if edge.target_arg.isdigit():
-                    idx = int(edge.target_arg)
-                    # Grow args list if necessary
-                    while len(args) <= idx:
-                        args.append(None) # type: ignore
-                    args[idx] = source_register
-                else:
-                    kwargs[edge.target_arg] = source_register
-
-        # 2. Emit Control Flow Guard (if needed)
-        if control_dependency_reg:
-            # JumpIfFalse offset=2 means skip the next instruction (which is length 1)
-            # Layout: [JumpIfFalse, Call]
-            # If false, PC += 2. From index i, lands on i+2 (after Call).
-            jump = JumpIfFalse(condition=control_dependency_reg, offset=2)
-            self._instructions.append(jump)
-
-        # 3. Allocate Output Register for this node
-        output_register = self._allocate_register()
-        self._node_output_registers[node_id] = output_register
-
-        # 3. Create Instruction
-        # For now, we assume the IR definition's callable is magically available.
-        # A real implementation would need a way to resolve/load the actual function.
-        # For testing, the function itself isn't invoked, so we can use a placeholder.
+    def _process_node(self, node_ir):
+        func_hash = node_ir.current_node_instance_hash
         
-        # We also pass task name for better observability in the VM
-        structure_hash = node.definition.fingerprint["current_code_structure_hash"]
+        # 1. Create PhysicsFuncNode
+        # Inputs will be populated in Pass 2
+        f_node = PhysicsFuncNode(
+            current_node_instance_hash=func_hash,
+            name=node_ir.definition.name,
+            inputs={} 
+        )
+        self._func_nodes[func_hash] = f_node
 
-        if node.meta.get("is_map"):
-            instr = MapCall(
-                output=output_register,
-                args=args,
-                kwargs=kwargs,
-                task_name=node.definition.name,
-                structure_hash=structure_hash,
-                policy=node.policy, 
-            )
-        else:
-            instr = Call(
-                output=output_register,
-                args=args,
-                kwargs=kwargs,
-                task_name=node.definition.name,
-                structure_hash=structure_hash,
-                policy=node.policy,
-            )
-        self._instructions.append(instr)
+        # 2. Create Default Output DataNode (Slot)
+        # We assume a single output port named "result" for now.
+        # The data slot hash is deterministically derived from the producer + port.
+        data_slot_hash = self._compute_data_slot_hash(func_hash, "result")
+        self._func_output_map[func_hash] = data_slot_hash
+
+        d_node = PhysicsDataNode(
+            current_data_slot_hash=data_slot_hash,
+            name=f"{node_ir.definition.name}.output",
+            producer_node_instance_hash=func_hash
+        )
+        self._data_nodes[data_slot_hash] = d_node
+
+        # 3. Create Output Channel (Func -> Data)
+        channel = ChannelDef(
+            source_node_instance_hash=func_hash,
+            target_data_slot_hash=data_slot_hash,
+            port_name="result",
+            tag_filter="default" # Default filter
+        )
+        self._channels.append(channel)
+
+    def _process_edges(self):
+        for edge in self._graph.edges:
+            # Source of the edge is a FuncNode (in IR)
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+
+            # Find the DataNode produced by the source FuncNode
+            # In IR, edges are direct Func->Func. 
+            # In Topology, we must route through the DataNode.
+            source_data_hash = self._func_output_map.get(source_func_hash)
+            
+            if not source_data_hash:
+                # Should not happen in valid IR
+                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
+
+            # Link: Target FuncNode input 'arg_name' <- Source DataNode
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if target_func_node:
+                # Note: PhysicsFuncNode is frozen, but we are in construction phase.
+                # Since dataclasses are frozen=True, we technically cannot mutate 'inputs'.
+                # However, 'inputs' is a mutable dict (default_factory), so we CAN mutate its content
+                # unless we made it immutable/frozen too. Standard dataclass behavior allows 
+                # mutating the mutable content of a frozen field.
+                target_func_node.inputs[arg_name] = source_data_hash
+
+    def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
+        raw = f"{producer_hash}:{port}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()

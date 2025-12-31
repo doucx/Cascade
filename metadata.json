@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 定义 Backend 生成 BipartiteGraph 的行为", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767182454.5500119, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实现 Backend 拓扑生成器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767182530.54017, "duration_ms": 0}}

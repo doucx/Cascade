@@ -1,138 +1,204 @@
-我们在 **Phase 3.2** 的目标是重构 `Backend`，使其生成 `BipartiteGraph`。
+这是一个 **GREEN** 步骤。
 
-这是一个 **RED** 步骤。
+为了实现编译器的重构，我需要执行以下操作：
 
-这个测试将定义编译器后端的新行为：输入 `GraphIR`，输出 `BipartiteGraph`。这将打破现有的 `Backend.compile` 契约（目前返回 `Blueprint`），这是预期的。
+1.  **增强 Spec**: 修改 `cascade.spec.topology.PhysicsFuncNode`，为其添加 `inputs` 字段。这是表达数据流依赖（即二分图中的 D -> F 连接）所必需的。为了不破坏现有测试，我们将提供一个默认值。
+2.  **重写 Backend**: 完全重写 `cascade.compiler.backend`。移除旧的指令生成逻辑，替换为拓扑构建逻辑。
 
-## [WIP] test: 定义 Backend 生成 BipartiteGraph 的行为
+## [WIP] feat: 实现 Backend 拓扑生成器
 
 ### 用户需求
-驱动编译器后端的重构。`Backend` 不应再生成线性的指令列表（Blueprint），而应将 `GraphIR` 翻译为静态的物理网络（BipartiteGraph）。
+将 `Backend` 从指令集生成器重构为物理拓扑生成器。
 
 ### 评论
-这个测试标志着我们从“基于指令的虚拟机”向“基于拓扑的反应堆”的正式转变。我们不再需要 `ExecutionPlan` 来生成后端输出，因为拓扑本身包含了所有的依赖关系。
+我在 `PhysicsFuncNode` 中添加了一个 `inputs` 字段。虽然目前的测试用例没有显式断言这一点，但这对于构建一个连通的图是逻辑上必须的。通过使用 `default_factory=dict`，我们保持了向后兼容性，不会破坏 Phase 3.1 的 Schema 测试。
 
 ### 目标
-创建 `packages/cascade-compiler/tests/unit/test_backend_topology.py`。
+1.  修改 `packages/cascade-spec/src/cascade/spec/topology.py`。
+2.  重写 `packages/cascade-compiler/src/cascade/compiler/backend.py`。
 
 ### 基本原理
-1.  **输入**: 构造一个简单的线性 `GraphIR` (A -> B).
-2.  **动作**: 调用 `Backend.compile(ir)`。注意：我们有意省略了 `plan` 参数，因为静态拓扑不需要预先确定的线性计划。
-3.  **断言**:
-    *   返回类型必须是 `BipartiteGraph`。
-    *   图中包含 2 个 `PhysicsFuncNode` (A, B)。
-    *   图中包含 2 个 `PhysicsDataNode` (A 的输出槽位, B 的输出槽位)。
-    *   存在一个 `ChannelDef` 连接 A 的输出和 B 的输入。
+**Backend 逻辑**:
+1.  **节点映射**: 遍历 `GraphIR` 的节点。对于每个节点，生成一个对应的 `PhysicsFuncNode` 和一个默认的输出 `PhysicsDataNode`。
+2.  **通道创建**: 为每个节点创建一条从 `FuncNode` 到其输出 `DataNode` 的 `ChannelDef`。
+3.  **输入连线**: 遍历 `GraphIR` 的边。对于每条边 `A -> B (arg)`，找到 A 对应的输出 `DataNode`，并将其哈希记录在 B 的 `inputs` 字典中。
 
 ### 标签
-#intent/architect #flow/ready #priority/high #comp/compiler #concept/topology #scope/core #ai/instruct #task/domain/compiler #task/object/backend #task/action/test #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/compiler #concept/topology #scope/core #ai/instruct #task/domain/compiler #task/object/backend #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Backend 拓扑测试
+#### Acts 1: 增强 Spec 以支持输入连线
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/topology.py
+~~~~~
+~~~~~python.old
+from dataclasses import dataclass
+from typing import Dict, List
+
+
+@dataclass(frozen=True)
+class PhysicsFuncNode:
+    """
+    Represents a computational instance in the physical bipartite graph.
+    This is the "Verb" or the transformer.
+    """
+    current_node_instance_hash: str
+    name: str
+
+
+@dataclass(frozen=True)
+class PhysicsDataNode:
+~~~~~
+~~~~~python.new
+from dataclasses import dataclass, field
+from typing import Dict, List
+
+
+@dataclass(frozen=True)
+class PhysicsFuncNode:
+    """
+    Represents a computational instance in the physical bipartite graph.
+    This is the "Verb" or the transformer.
+    """
+    current_node_instance_hash: str
+    name: str
+    # Map input argument names to the source DataNode hash
+    inputs: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PhysicsDataNode:
+~~~~~
+
+#### Acts 2: 重写 Backend 实现拓扑构建
 
 ~~~~~act
 write_file
-packages/cascade-compiler/tests/unit/test_backend_topology.py
+packages/cascade-compiler/src/cascade/compiler/backend.py
 ~~~~~
 ~~~~~python
-import pytest
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef
-from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.topology import BipartiteGraph, ChannelDef
+import hashlib
+from typing import List, Dict
 
-from cascade.compiler.backend import Backend
-
-
-def _create_dummy_node_ir(node_id: str) -> NodeIR:
-    """Helper to create a minimal NodeIR for testing."""
-    # We use the node_id as the structure hash for simplicity in tests
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
-    task_def = TaskDef(name=node_id, args=[], fingerprint=fp)
-    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
+from cascade.spec.ir.models import GraphIR
+from cascade.spec.topology import (
+    BipartiteGraph,
+    PhysicsFuncNode,
+    PhysicsDataNode,
+    ChannelDef,
+)
 
 
-def test_compile_linear_graph_to_topology():
+class Backend:
     """
-    Test Case: A -> B
-    
-    Verifies that the Backend compiles a simple linear dependency into a 
-    BipartiteGraph with correct FuncNodes, DataNodes, and Channels.
+    Compiler Backend: Transforms GraphIR into a static BipartiteGraph topology.
     """
-    # 1. Setup IR
-    node_a = _create_dummy_node_ir("A")
-    node_b = _create_dummy_node_ir("B")
-    
-    # Edge: Output of A maps to input 'arg_val' of B
-    edge = EdgeIR(
-        source_node_instance_hash="A", 
-        target_node_instance_hash="B", 
-        target_arg="arg_val"
-    )
-    
-    graph_ir = GraphIR(nodes=[node_a, node_b], edges=[edge])
 
-    # 2. Execute Backend
-    # Note: We intentionally drop the 'plan' argument. 
-    # The BipartiteGraph is a static structure; it doesn't need a linear schedule.
-    topology = Backend.compile(graph_ir)
+    @staticmethod
+    def compile(graph: GraphIR) -> BipartiteGraph:
+        builder = _TopologyBuilder(graph)
+        return builder.build()
 
-    # 3. Assertions on Structure
-    assert isinstance(topology, BipartiteGraph), "Backend must return a BipartiteGraph"
-    
-    # 3.1 FuncNodes
-    assert len(topology.func_nodes) == 2
-    assert "A" in topology.func_nodes
-    assert "B" in topology.func_nodes
-    assert topology.func_nodes["A"].name == "A"
-    
-    # 3.2 DataNodes
-    # In this model, every FuncNode output becomes a DataNode (slot).
-    # A produces an output (let's assume default port "result" or similar).
-    # B produces an output.
-    # The edge A->B implies A writes to a DataNode that B reads from.
-    
-    # We expect at least one DataNode for A's output
-    # The naming convention for data slots is implementation detail of the backend,
-    # but we can look it up via the channels.
-    
-    # 3.3 Channels
-    # There should be a channel from A -> DataNode -> B (input side wiring is implicit in FuncNode inputs? 
-    # Or explicitly modeled? 
-    # In 'spec.topology', ChannelDef is Output Port -> DataNode.
-    # Input wiring is defined where? 
-    # Re-reading spec: "ChannelDef: source_node_instance_hash, target_data_slot_hash"
-    # This defines F -> D.
-    # The D -> F connection is implicit in the FuncNode's input configuration?
-    # Wait, PhysicsFuncNode needs to know its inputs.
-    # But PhysicsFuncNode dataclass currently only has (hash, name).
-    # We might need to expand PhysicsFuncNode to include input/output port definitions 
-    # to fully describe the graph, OR the BipartiteGraph object should hold the edges D->F too.
-    
-    # For this phase (Backend Output), let's focus on the Output Channels (F->D) 
-    # and ensure the DataNodes exist.
-    
-    assert len(topology.channels) > 0
-    
-    # Find channel originating from A
-    channel_from_a = next((c for c in topology.channels if c.source_node_instance_hash == "A"), None)
-    assert channel_from_a is not None, "Node A must have an output channel"
-    
-    # Verify it targets a valid DataNode
-    data_slot_id = channel_from_a.target_data_slot_hash
-    assert data_slot_id in topology.data_nodes
-    
-    data_node = topology.data_nodes[data_slot_id]
-    assert data_node.producer_node_instance_hash == "A"
+
+class _TopologyBuilder:
+    def __init__(self, graph: GraphIR):
+        self._graph = graph
+        self._func_nodes: Dict[str, PhysicsFuncNode] = {}
+        self._data_nodes: Dict[str, PhysicsDataNode] = {}
+        self._channels: List[ChannelDef] = []
+        
+        # Helper map: FuncNode Hash -> Default Output DataNode Hash
+        self._func_output_map: Dict[str, str] = {}
+
+    def build(self) -> BipartiteGraph:
+        # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
+        for node_ir in self._graph.nodes:
+            self._process_node(node_ir)
+
+        # Pass 2: Wire Inputs based on Edges
+        self._process_edges()
+
+        return BipartiteGraph(
+            func_nodes=self._func_nodes,
+            data_nodes=self._data_nodes,
+            channels=self._channels,
+        )
+
+    def _process_node(self, node_ir):
+        func_hash = node_ir.current_node_instance_hash
+        
+        # 1. Create PhysicsFuncNode
+        # Inputs will be populated in Pass 2
+        f_node = PhysicsFuncNode(
+            current_node_instance_hash=func_hash,
+            name=node_ir.definition.name,
+            inputs={} 
+        )
+        self._func_nodes[func_hash] = f_node
+
+        # 2. Create Default Output DataNode (Slot)
+        # We assume a single output port named "result" for now.
+        # The data slot hash is deterministically derived from the producer + port.
+        data_slot_hash = self._compute_data_slot_hash(func_hash, "result")
+        self._func_output_map[func_hash] = data_slot_hash
+
+        d_node = PhysicsDataNode(
+            current_data_slot_hash=data_slot_hash,
+            name=f"{node_ir.definition.name}.output",
+            producer_node_instance_hash=func_hash
+        )
+        self._data_nodes[data_slot_hash] = d_node
+
+        # 3. Create Output Channel (Func -> Data)
+        channel = ChannelDef(
+            source_node_instance_hash=func_hash,
+            target_data_slot_hash=data_slot_hash,
+            port_name="result",
+            tag_filter="default" # Default filter
+        )
+        self._channels.append(channel)
+
+    def _process_edges(self):
+        for edge in self._graph.edges:
+            # Source of the edge is a FuncNode (in IR)
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+
+            # Find the DataNode produced by the source FuncNode
+            # In IR, edges are direct Func->Func. 
+            # In Topology, we must route through the DataNode.
+            source_data_hash = self._func_output_map.get(source_func_hash)
+            
+            if not source_data_hash:
+                # Should not happen in valid IR
+                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
+
+            # Link: Target FuncNode input 'arg_name' <- Source DataNode
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if target_func_node:
+                # Note: PhysicsFuncNode is frozen, but we are in construction phase.
+                # Since dataclasses are frozen=True, we technically cannot mutate 'inputs'.
+                # However, 'inputs' is a mutable dict (default_factory), so we CAN mutate its content
+                # unless we made it immutable/frozen too. Standard dataclass behavior allows 
+                # mutating the mutable content of a frozen field.
+                target_func_node.inputs[arg_name] = source_data_hash
+
+    def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
+        raw = f"{producer_hash}:{port}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 ~~~~~
 
 ### 下一步建议
-测试现在已经就绪（并且会失败，因为 `Backend.compile` 仍然返回 `Blueprint` 且签名不匹配）。
+我们已经完成了后端的基础重构。现在它能够生成二分图结构。
 
-我们将进入 **GREEN** 阶段。我将重构 `packages/cascade-compiler/src/cascade/compiler/backend.py`。
-这一步将涉及：
-1.  修改 `compile` 方法签名，移除 `plan` 参数。
-2.  删除旧的 `_BlueprintBuilder`。
-3.  实现新的 `_TopologyBuilder`，负责遍历 `GraphIR` 并构建 `BipartiteGraph`。
+接下来的步骤是 **阶段 3.3：[TDD] 编译字面量与扇出依赖**。
+我们需要处理一种特殊情况：字面量输入（Literal Inputs）。
+在二分图模型中，字面量也必须存在于 `DataNode` 中才能被 `FuncNode` 消费。这意味着编译器必须为字面量“预创建”并“预填充”数据节点。
+
+我将修改测试 `test_backend_topology.py`，添加关于字面量处理的用例，这将再次使测试变红。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(arch): 实施 Phase 3.0 符号大重命名脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767179340.4764006, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M backend.py, M frontend.py, M hashing.py ... and 13 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767179838.304578, "duration_ms": 0}}

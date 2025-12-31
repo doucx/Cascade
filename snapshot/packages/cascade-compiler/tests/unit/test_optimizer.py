@@ -13,7 +13,7 @@ def _create_dummy_node_ir(node_id: str) -> NodeIR:
     """Helper to create a minimal NodeIR for topology tests."""
     fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
     task_def = TaskDef(name=node_id, args=[], fingerprint=fp)
-    return NodeIR(id=node_id, definition=task_def)
+    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
 
 
 def test_optimizer_detects_cycle():
@@ -28,8 +28,8 @@ def test_optimizer_detects_cycle():
     cyclic_ir = GraphIR(
         nodes=[node_a, node_b],
         edges=[
-            EdgeIR(source_id="A", target_id="B", target_arg="data"),
-            EdgeIR(source_id="B", target_id="A", target_arg="data"),
+            EdgeIR(source_node_instance_hash="A", target_node_instance_hash="B", target_arg="data"),
+            EdgeIR(source_node_instance_hash="B", target_node_instance_hash="A", target_arg="data"),
         ],
     )
 
@@ -50,10 +50,10 @@ def test_optimizer_schedules_diamond_graph():
     diamond_ir = GraphIR(
         nodes=[node_a, node_b, node_c, node_d],
         edges=[
-            EdgeIR(source_id="A", target_id="B", target_arg="a_val"),
-            EdgeIR(source_id="A", target_id="C", target_arg="a_val"),
-            EdgeIR(source_id="B", target_id="D", target_arg="b_val"),
-            EdgeIR(source_id="C", target_id="D", target_arg="c_val"),
+            EdgeIR(source_node_instance_hash="A", target_node_instance_hash="B", target_arg="a_val"),
+            EdgeIR(source_node_instance_hash="A", target_node_instance_hash="C", target_arg="a_val"),
+            EdgeIR(source_node_instance_hash="B", target_node_instance_hash="D", target_arg="b_val"),
+            EdgeIR(source_node_instance_hash="C", target_node_instance_hash="D", target_arg="c_val"),
         ],
     )
 

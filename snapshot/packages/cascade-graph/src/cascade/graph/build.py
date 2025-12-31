@@ -139,7 +139,7 @@ class GraphBuilder:
                             break
 
                 node = ParamNode(
-                    structural_id=node_hash,
+                    current_node_instance_hash=node_hash,
                     definition=task_def,
                     node_type="param",
                     _callable=result.task.func,
@@ -152,7 +152,7 @@ class GraphBuilder:
                 )
             else:
                 node = TaskNode(
-                    structural_id=node_hash,
+                    current_node_instance_hash=node_hash,
                     definition=task_def,
                     _callable=result.task.func,
                     node_type="task",
@@ -256,7 +256,7 @@ class GraphBuilder:
                     input_bindings[k] = val
 
             node = MapNode(
-                structural_id=node_hash,
+                current_node_instance_hash=node_hash,
                 definition=task_def,
                 node_type="map",
                 mapping_factory=result.factory,

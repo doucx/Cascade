@@ -32,16 +32,16 @@ class Optimizer:
         # Adjacency list: source_id -> list of target_ids
         adj: Dict[str, List[str]] = defaultdict(list)
         # In-degree: node_id -> count
-        in_degree: Dict[str, int] = {node.id: 0 for node in graph.nodes}
+        in_degree: Dict[str, int] = {node.current_node_instance_hash: 0 for node in graph.nodes}
         
         # 2. Build graph topology from IR edges
         for edge in graph.edges:
             # Check if nodes exist (sanity check, though IR should be valid)
-            if edge.source_id not in in_degree or edge.target_id not in in_degree:
+            if edge.source_node_instance_hash not in in_degree or edge.target_node_instance_hash not in in_degree:
                 continue
                 
-            adj[edge.source_id].append(edge.target_id)
-            in_degree[edge.target_id] += 1
+            adj[edge.source_node_instance_hash].append(edge.target_node_instance_hash)
+            in_degree[edge.target_node_instance_hash] += 1
             
         # 3. Kahn's Algorithm
         # Initial queue: nodes with in-degree 0

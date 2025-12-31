@@ -20,7 +20,7 @@ def test_backend_compiles_injection_to_resource_operand():
     # 1. 手动构造包含 InjectionIR 的 GraphIR
     task_def = _create_dummy_task_def("db_task")
     node = NodeIR(
-        id="n1", 
+        current_node_instance_hash="n1", 
         definition=task_def,
         kwargs={
             "conn": InjectionIR(resource_name="postgres_prod") # Expectation
@@ -49,7 +49,7 @@ def test_backend_transfers_policy_to_instruction():
     
     # 模拟 IR 携带的策略
     policy_data = MockPolicy(resources={"cpu": 4})
-    node = NodeIR(id="n1", definition=task_def, policy=policy_data) # Expectation: policy field on NodeIR
+    node = NodeIR(current_node_instance_hash="n1", definition=task_def, policy=policy_data) # Expectation: policy field on NodeIR
     
     graph = GraphIR(nodes=[node], edges=[])
     plan = [["n1"]]

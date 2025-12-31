@@ -20,7 +20,7 @@ def test_impure_tasks_have_unique_identities():
 
     # Assert: For side-effecting tasks, even if the function and arguments are
     # identical, they are distinct entities.
-    assert node_a.structural_id != node_b.structural_id, (
+    assert node_a.current_node_instance_hash != node_b.current_node_instance_hash, (
         "Impure tasks (default) must have unique structural IDs to avoid incorrect deduplication."
     )
 
@@ -40,6 +40,6 @@ def test_pure_tasks_are_deduplicated():
     node_b = instance_map_b[b._uuid]
 
     # Assert: Pure tasks should be content-addressable.
-    assert node_a.structural_id == node_b.structural_id, (
+    assert node_a.current_node_instance_hash == node_b.current_node_instance_hash, (
         "Pure tasks must be deduplicated based on their content (function + args)."
     )

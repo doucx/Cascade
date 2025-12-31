@@ -102,7 +102,6 @@ class BlueprintBuilder:
             constraints = target._constraints
 
         instr = Call(
-            func=callable_obj,
             output=output_reg,
             args=args_operands,
             kwargs=kwargs_operands,

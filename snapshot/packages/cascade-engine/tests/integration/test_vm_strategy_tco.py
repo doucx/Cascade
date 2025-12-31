@@ -1,36 +1,3 @@
-简要回答：
-好的，我们将采用 **方案 A (Runtime Wrapper)**。我将创建一个“严谨的、正规军式”的集成测试文件 `test_vm_strategy_tco.py`，通过模拟一个基于 `cs.Jump` 的循环工作流，来暴露当前 `VMExecutionStrategy` 缺乏控制流循环处理逻辑的缺陷，从而使系统进入 **RED** 状态。
-
-## [WIP] test: 添加 VM 策略的 TCO 集成测试以暴露能力缺口
-
-### 用户需求
-我们需要在 `VMExecutionStrategy` 中支持基于 `cs.Jump` 的尾调用优化（TCO）和控制流循环。目前的实现是线性的，无法处理任务返回的跳转信号。我们需要先创建一个测试来证明这一点。
-
-### 评论
-这是一个经典的 TDD 步骤。目前的 `VMExecutionStrategy.execute` 只是简单地运行并返回。当任务返回 `Jump` 对象时，它会错误地将该对象作为最终结果返回给用户，而不是执行跳转。新建的测试将模拟一个计数器循环，如果引擎正确处理了 TCO，它应该返回最终的计数值；如果失败，它将返回中间的 `Jump` 对象。
-
-### 目标
-创建一个位于 `packages/cascade-engine/tests/integration/test_vm_strategy_tco.py` 的测试文件，包含一个基于 `cs.Jump` 的自递归计数器测试用例。
-
-### 基本原理
-通过使用 `Engine(..., use_vm=True)` 运行一个包含显式跳转的工作流，我们可以端到端地验证 VM 路径的控制流能力。这个测试不仅验证了跳转机制，也隐式验证了参数传递和状态重置。
-
-### 标签
-#intent/tooling #flow/draft #priority/high #comp/engine #concept/control-flow #scope/core #ai/instruct #task/domain/core #task/object/vm-strategy #task/action/test #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 TCO 集成测试文件
-
-我们将创建一个测试文件，其中定义了一个标准的递归计数器模式。这将作为我们后续实现 `VMExecutionStrategy` 循环逻辑的验收标准。
-
-~~~~~act
-write_file
-packages/cascade-engine/tests/integration/test_vm_strategy_tco.py
-~~~~~
-~~~~~python
 import pytest
 import cascade as cs
 from cascade.runtime.engine import Engine
@@ -122,7 +89,3 @@ async def test_vm_strategy_handles_jump_with_data_passing():
     result = await engine.run(node, use_vm=True)
     
     assert result == 3
-~~~~~
-
-### 下一步建议
-运行测试。由于 `VMExecutionStrategy` 目前缺乏循环处理逻辑，这两个测试预期都会失败（返回 `Jump` 对象而不是最终结果）。确认失败后，我们将着手修改 `cascade-engine/src/cascade/runtime/strategies/vm.py` 来实现该循环。

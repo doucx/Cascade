@@ -3,10 +3,13 @@ from dataclasses import dataclass
 
 from typing import Any, Dict, List, cast, Callable
 from dataclasses import dataclass
+import inspect
 
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind, InjectionIR
 from cascade.spec.compiler_result import CompilationResult
+from cascade.spec.policy import ExecutionPolicy, RetryPolicySpec
+from cascade.spec.resource import Inject
 from .analysis.reflection import ReflectionAnalyzer
 from .hashing import HashingService
 
@@ -57,6 +60,38 @@ class _GraphBuilder:
         else:
             raise TypeError(f"Frontend currently only supports LazyResult types, got {type(obj)}")
 
+    def _extract_policy(self, obj: LazyResult | MappedLazyResult) -> ExecutionPolicy:
+        policy = ExecutionPolicy()
+        
+        # 1. Retry
+        if obj._retry_policy:
+            policy.retry = RetryPolicySpec(
+                max_attempts=obj._retry_policy.max_attempts,
+                delay=obj._retry_policy.delay,
+                backoff=obj._retry_policy.backoff
+            )
+            
+        # 2. Constraints -> Resources
+        if obj._constraints and obj._constraints.requirements:
+            policy.resources.update(obj._constraints.requirements)
+            
+        return policy
+
+    def _resolve_injections(self, func: Callable, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """Looks for Inject markers in defaults and promotes them to explicit kwargs."""
+        new_kwargs = kwargs.copy()
+        try:
+            # We must inspect the raw function to get default values which might be Inject objects
+            sig = inspect.signature(func)
+            for name, param in sig.parameters.items():
+                if isinstance(param.default, Inject) and name not in new_kwargs:
+                    new_kwargs[name] = InjectionIR(resource_name=param.default.resource_name)
+        except (ValueError, TypeError):
+            # Signature inspection failed, possibly not a python function (e.g. C extension)
+            pass
+            
+        return new_kwargs
+
     def _visit_lazy_result(self, obj: LazyResult) -> str:
         if obj._uuid in self._visited_lazy_uuids:
             return self._visited_lazy_uuids[obj._uuid]
@@ -92,11 +127,36 @@ class _GraphBuilder:
             literal_args = [
                 arg for arg in obj.args if not isinstance(arg, (LazyResult, MappedLazyResult))
             ]
-            literal_kwargs = {
-                k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
-            }
+            
+            # Use raw task mapping, but we might check for Injection objects in args too?
+            # cascade usually supports injection in kwargs/defaults.
+            # We need to scan obj.kwargs AND merge with signature defaults for Injections.
+            
+            # 1. Start with explicit kwargs
+            raw_kwargs = obj.kwargs.copy()
+            
+            # 2. Resolve defaults from signature (promote defaults to explicit InjectionIR)
+            full_kwargs = self._resolve_injections(obj.task.func, raw_kwargs)
+            
+            literal_kwargs = {}
+            for k, val in full_kwargs.items():
+                if isinstance(val, (LazyResult, MappedLazyResult)):
+                    continue
+                # If it's a raw Inject object (explicitly passed), convert to IR
+                if isinstance(val, Inject):
+                    literal_kwargs[k] = InjectionIR(resource_name=val.resource_name)
+                else:
+                    literal_kwargs[k] = val
 
-            node = NodeIR(id=node_id, definition=task_def, args=literal_args, kwargs=literal_kwargs)
+            policy = self._extract_policy(obj)
+
+            node = NodeIR(
+                id=node_id, 
+                definition=task_def, 
+                args=literal_args, 
+                kwargs=literal_kwargs,
+                policy=policy
+            )
             self.nodes[node_id] = node
 
         for i, arg in enumerate(obj.args):

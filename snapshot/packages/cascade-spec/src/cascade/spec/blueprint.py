@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, List, Dict, Optional
 from cascade.spec.constraint import ResourceConstraint
+from cascade.spec.policy import ExecutionPolicy, RetryPolicySpec
 
 
 @dataclass
@@ -19,6 +20,19 @@ class Register(Operand):
 
 
 @dataclass
+class ContextOperand(Operand):
+    """Loads a value from the execution context (e.g. user params)."""
+    scope: str  # e.g., 'params', 'env'
+    key: str
+
+
+@dataclass
+class ResourceOperand(Operand):
+    """Loads a resource instance from the resource container."""
+    name: str
+
+
+@dataclass
 class Instruction:
     pass
 
@@ -31,8 +45,9 @@ class Call(Instruction):
 
     # Metadata for observability and constraints
     task_name: str = "unknown"
-    constraints: Optional[ResourceConstraint] = None
+    constraints: Optional[ResourceConstraint] = None  # Deprecated: prefer policy.resources
     structure_hash: Optional[str] = None
+    policy: Optional[ExecutionPolicy] = None
 
 
 @dataclass
@@ -62,6 +77,7 @@ class MapCall(Instruction):
     task_name: str = "unknown"
     constraints: Optional[ResourceConstraint] = None
     structure_hash: Optional[str] = None
+    policy: Optional[ExecutionPolicy] = None
 
 
 @dataclass

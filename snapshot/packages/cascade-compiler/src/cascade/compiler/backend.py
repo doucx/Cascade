@@ -1,7 +1,9 @@
 from typing import List, Dict, Tuple, Any
 
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
-from cascade.spec.blueprint import Blueprint, Call, MapCall, Register, Literal, Operand, JumpIfFalse
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind, InjectionIR
+from cascade.spec.blueprint import (
+    Blueprint, Call, MapCall, Register, Literal, Operand, JumpIfFalse, ResourceOperand
+)
 from .optimizer import ExecutionPlan
 
 
@@ -49,12 +51,17 @@ class _BlueprintBuilder:
             register_count=self._register_counter
         )
 
+    def _convert_to_operand(self, val: Any) -> Operand:
+        if isinstance(val, InjectionIR):
+            return ResourceOperand(name=val.resource_name)
+        return Literal(val)
+
     def _process_node(self, node_id: str):
         node = self._nodes_map[node_id]
 
         # 1. Resolve Input Operands & Control Dependencies
-        args: List[Operand] = [Literal(val) for val in node.args]
-        kwargs: Dict[str, Operand] = {k: Literal(v) for k, v in node.kwargs.items()}
+        args: List[Operand] = [self._convert_to_operand(val) for val in node.args]
+        kwargs: Dict[str, Operand] = {k: self._convert_to_operand(v) for k, v in node.kwargs.items()}
         control_dependency_reg: Any = None
 
         # 1a. Overlay dependencies from Edges
@@ -107,7 +114,7 @@ class _BlueprintBuilder:
                 kwargs=kwargs,
                 task_name=node.definition.name,
                 structure_hash=structure_hash,
-                # Note: Constraints on Map nodes are not yet propagated to MapCall.
+                policy=node.policy, 
             )
         else:
             instr = Call(
@@ -116,5 +123,6 @@ class _BlueprintBuilder:
                 kwargs=kwargs,
                 task_name=node.definition.name,
                 structure_hash=structure_hash,
+                policy=node.policy,
             )
         self._instructions.append(instr)

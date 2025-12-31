@@ -3,6 +3,7 @@ from enum import Enum
 from typing import List, Optional, Dict, Any
 
 from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.policy import ExecutionPolicy
 
 
 class EdgeKind(str, Enum):
@@ -26,6 +27,12 @@ class ArgumentDef:
     default_value_repr: Optional[str] = None
 
 
+@dataclass
+class InjectionIR:
+    """Represents a dependency injection request in the IR."""
+    resource_name: str
+
+
 @dataclass(frozen=True)
 class TaskDef:
     name: str
@@ -47,6 +54,7 @@ class NodeIR:
     args: List[Any] = field(default_factory=list)
     kwargs: Dict[str, Any] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
+    policy: Optional[ExecutionPolicy] = None
 
 
 @dataclass

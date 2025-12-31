@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(engine): 修复 VM 策略的 TCO 循环逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767164234.9862454, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(engine): 正确处理 TCO 循环中的状态传递", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767164385.3160539, "duration_ms": 0}}

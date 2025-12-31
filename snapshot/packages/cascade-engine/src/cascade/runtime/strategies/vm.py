@@ -45,14 +45,22 @@ class VMExecutionStrategy:
         run_stack: ExitStack,
         active_resources: Dict[str, Any],
     ) -> Any:
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
         from cascade.spec.jump import Jump
+        from cascade.spec.lazy_types import LazyResult
 
         current_target = target
-        next_args_override: Optional[List[Any]] = None
-        next_kwargs_override: Optional[Dict[str, Any]] = None
 
         while True:
-            # 1. Compile (every loop, as target object might change)
+            # 1. Compile the current target for this iteration
             compilation_result = Frontend.compile(current_target)
             graph_ir = compilation_result.ir
             symbol_table = compilation_result.symbol_table
@@ -73,21 +81,11 @@ class VMExecutionStrategy:
                 ArgumentResolutionMiddleware(active_resources, params),
             ])
 
-            # 3. Prepare Inputs for this iteration
-            # Start with the original args/kwargs from the LazyResult
+            # 3. Execute with current arguments
+            # The VM needs to know the initial arguments for this specific run
             initial_args = list(getattr(current_target, 'args', []))
             initial_kwargs = getattr(current_target, 'kwargs', {}).copy()
 
-            # Apply overrides from the previous Jump
-            if next_args_override is not None:
-                initial_args = next_args_override
-            if next_kwargs_override is not None:
-                initial_kwargs.update(next_kwargs_override)
-            
-            # Clear overrides for the next potential loop
-            next_args_override, next_kwargs_override = None, None
-
-            # 4. Execute
             result = await vm.execute(
                 blueprint,
                 symbol_table=symbol_table,
@@ -95,11 +93,11 @@ class VMExecutionStrategy:
                 initial_kwargs=initial_kwargs,
             )
 
-            # 5. Check for Control Flow Signal
+            # 4. Check for Control Flow Signal
             if not isinstance(result, Jump):
                 return result  # Normal termination
 
-            # 6. Handle Explicit Jump
+            # 5. Handle Explicit Jump
             selector = getattr(current_target, '_jump_selector', None)
             if not selector:
                 raise RuntimeError(
@@ -107,15 +105,30 @@ class VMExecutionStrategy:
                     "but has no bound jump selector. Use cs.bind() to link a selector."
                 )
 
-            next_lazy_result = selector.routes.get(result.target_key)
+            next_lr_template = selector.routes.get(result.target_key)
 
-            if next_lazy_result is None:
+            if next_lr_template is None:
                 return result.data  # Loop exit condition
 
-            # 7. Prepare for next iteration
-            current_target = next_lazy_result
+            # 6. CRITICAL: Create a NEW LazyResult for the next iteration
+            # Start with the original arguments of the next target template
+            next_args = list(getattr(next_lr_template, 'args', []))
+            next_kwargs = getattr(next_lr_template, 'kwargs', {}).copy()
+
+            # Apply overrides from the Jump data
             if isinstance(result.data, dict):
-                next_kwargs_override = result.data
+                next_kwargs.update(result.data)
             elif result.data is not None:
                 # Assume single value maps to the first positional argument
-                next_args_override = [result.data]
+                if next_args:
+                    next_args[0] = result.data
+                else:
+                    next_args = [result.data]
+            
+            # Construct the new target, preserving the original jump selector binding
+            current_target = LazyResult(
+                task=next_lr_template.task,
+                args=tuple(next_args),
+                kwargs=next_kwargs,
+                _jump_selector=getattr(next_lr_template, '_jump_selector', None)
+            )

@@ -1,6 +1,6 @@
 import asyncio
 from collections import deque, defaultdict
-from typing import Deque, Set, List, Dict, Any
+from typing import Deque, Set, List, Dict, Any, Optional
 
 from cascade.spec.physics import DataNode, FuncNode
 from .events import ReactorEvent, TokenGenerated, ExecutionFinished
@@ -8,45 +8,38 @@ from .model import Channel
 
 
 class Reactor:
-    def __init__(self, executor: Any):
+    def __init__(self, executor: Any, resource_manager: Optional[Any] = None):
         self.executor = executor
+        self.resource_manager = resource_manager
         self._event_queue: Deque[ReactorEvent] = deque()
         
         # Topology Indexes
-        self._nodes: Set[Any] = set() # Track all known nodes
+        self._nodes: Set[Any] = set()
         self._channels_by_source: Dict[str, List[Channel]] = defaultdict(list)
-        
-        # Optimization: Map DataNode -> List[FuncNode] (Reverse dependency)
-        # Used to quickly find which FuncNodes to check when a DataNode updates.
         self._downstream_map: Dict[str, List[FuncNode]] = defaultdict(list)
         
-        # Dirty set for potential evaluation
+        # State Sets
         self._dirty_func_nodes: Set[FuncNode] = set()
+        self._pending_on_resource: Set[FuncNode] = set()
+        self._in_flight_reqs: Dict[FuncNode, Dict[str, Any]] = {}
 
     def register_node(self, node: Any):
         if node in self._nodes:
             return
         self._nodes.add(node)
         
-        # Build reverse index for FuncNodes and Auto-discover Channels
         if isinstance(node, FuncNode):
-            # 1. Reverse dependency map (DataNode -> Downstream FuncNodes)
             for port in node.inputs.values():
                 if port.source:
                     self._downstream_map[port.source.name].append(node)
             
-            # 2. Auto-discover Output Channels (Physics -> Routing)
-            # If a port is connected to a DataNode physically, implies a default channel.
             for port_name, port in node.outputs.items():
                 if port.target:
-                    # Check if a channel already exists for this path to avoid duplicates
-                    # or overriding explicit custom channels.
                     existing = any(
                         c.output_name == port_name and c.match("default")
                         for c in self._channels_by_source.get(node.name, [])
                     )
                     if not existing:
-                        # Create implicit default channel
                         default_channel = Channel(
                             source=node,
                             target=port.target,
@@ -57,7 +50,6 @@ class Reactor:
 
     def register_channel(self, channel: Channel):
         self._channels_by_source[channel.source.name].append(channel)
-        # Ensure nodes are registered
         self.register_node(channel.source)
         self.register_node(channel.target)
 
@@ -65,61 +57,71 @@ class Reactor:
         self._event_queue.append(event)
 
     async def step(self):
-        """
-        Advance the reactor by one "tick".
-        A tick consists of:
-        1. Processing all pending events (State Updates & Routing).
-           - This includes cascading events generated during processing.
-        2. Evaluating potentials of affected (dirty) nodes.
-        3. Firing ready nodes.
-        """
         # 1. Process Event Loop
         while self._event_queue:
             event = self._event_queue.popleft()
-            self._handle_event(event)
+            await self._handle_event(event)
 
-        # 2. Fire Ready Nodes
-        ready_nodes = []
-        for node in list(self._dirty_func_nodes):
-            if node.is_ready():
-                ready_nodes.append(node)
+        # 2. Evaluate Potentials
+        # Move pending nodes back to dirty set for re-evaluation (Wake-up)
+        self._dirty_func_nodes.update(self._pending_on_resource)
+        self._pending_on_resource.clear()
+
+        ready_to_fire = []
+        still_dirty = set()
+
+        for node in self._dirty_func_nodes:
+            if not node.is_ready():
+                still_dirty.add(node)
+                continue
+
+            # Resource Check
+            requirements = getattr(node, 'resource_requirements', {})
+            if self.resource_manager and not self.resource_manager.can_acquire(requirements):
+                self._pending_on_resource.add(node)
+            else:
+                ready_to_fire.append((node, requirements))
         
-        self._dirty_func_nodes.clear()
-
-        if ready_nodes:
-            # Concurrently execute all ready nodes
-            fire_tasks = [self._fire(node) for node in ready_nodes]
+        self._dirty_func_nodes = still_dirty
+        
+        # 3. Fire Ready Nodes
+        if ready_to_fire:
+            fire_tasks = [self._fire(node, reqs) for node, reqs in ready_to_fire]
             await asyncio.gather(*fire_tasks)
 
-    def _handle_event(self, event: ReactorEvent):
+    async def _handle_event(self, event: ReactorEvent):
         if isinstance(event, TokenGenerated):
             self._handle_token_generated(event)
         elif isinstance(event, ExecutionFinished):
-            self._handle_execution_finished(event)
+            await self._handle_execution_finished(event)
 
     def _handle_token_generated(self, event: TokenGenerated):
-        # 1. Update State (Physics: Inject Energy)
         event.node.put(event.token)
-        
-        # 2. Mark downstream FuncNodes as dirty (Potential might have increased)
         downstream = self._downstream_map.get(event.node.name, [])
         for f_node in downstream:
             self._dirty_func_nodes.add(f_node)
 
-    def _handle_execution_finished(self, event: ExecutionFinished):
-        # Routing Logic
+    async def _handle_execution_finished(self, event: ExecutionFinished):
+        # 1. Release Resources, which implicitly triggers wake-up on next step
+        if self.resource_manager and event.node in self._in_flight_reqs:
+            requirements = self._in_flight_reqs.pop(event.node)
+            await self.resource_manager.release(requirements)
+
+        # 2. Routing Logic
         channels = self._channels_by_source.get(event.node.name, [])
-        
         for output_name, token in event.outputs.items():
-            # Find matching channels for this output port
             for channel in channels:
                 if channel.output_name == output_name and channel.match(token.tag):
-                    # Route: Generate a TokenGenerated event for the target DataNode
                     self.push_event(TokenGenerated(node=channel.target, token=token))
 
-    async def _fire(self, node: FuncNode):
-        # 1. Atomically consume inputs (Physics: Consume Energy)
+    async def _fire(self, node: FuncNode, requirements: Dict[str, Any]):
+        # 1. Acquire Resources
+        if self.resource_manager and requirements:
+            await self.resource_manager.acquire(requirements)
+            self._in_flight_reqs[node] = requirements
+
+        # 2. Atomically consume inputs
         inputs = node.consume_inputs()
         
-        # 2. Submit to Executor
+        # 3. Submit to Executor
         await self.executor.submit(node, inputs)

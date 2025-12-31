@@ -5,6 +5,11 @@ from typing import List, Optional, Dict, Any
 from cascade.spec.fingerprint import Fingerprint
 
 
+class EdgeKind(str, Enum):
+    DATA = "DATA"  # Standard data dependency
+    CONTROL = "CONTROL"  # Conditional execution (run_if)
+
+
 class ArgumentKind(str, Enum):
     POSITIONAL_ONLY = "POSITIONAL_ONLY"
     POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
@@ -47,6 +52,7 @@ class EdgeIR:
     source_id: str
     target_id: str
     target_arg: str
+    kind: EdgeKind = EdgeKind.DATA
 
 
 @dataclass

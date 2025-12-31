@@ -1,9 +1,9 @@
 import pytest
 from typing import List
 
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef, ArgumentDef, ArgumentKind
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal
+from cascade.spec.blueprint import Blueprint, Call, Register, Literal, JumpIfFalse
 
 from cascade.compiler.backend import Backend
 
@@ -95,3 +95,60 @@ def test_compile_dependency_registers():
     
     assert isinstance(operand_in_b, Register)
     assert operand_in_b.index == reg_out_a.index
+
+
+def test_compile_conditional_execution():
+    """
+    Case 3: Conditional Execution (A -[CONTROL]-> B).
+    Verify that Backend generates a JumpIfFalse instruction before B.
+    """
+    # 1. Setup IR
+    # A produces a boolean. B executes only if A is True.
+    node_a = NodeIR(id="A", definition=_create_dummy_task_def("condition"))
+    node_b = NodeIR(id="B", definition=_create_dummy_task_def("action"))
+    
+    # Control edge: A -> B
+    # target_arg is typically ignored or used for metadata in control edges
+    edge = EdgeIR(source_id="A", target_id="B", target_arg="_condition", kind=EdgeKind.CONTROL)
+    
+    ir = GraphIR(
+        nodes=[node_a, node_b],
+        edges=[edge]
+    )
+    plan = [["A"], ["B"]] # Two stages
+
+    # 2. Execute Backend
+    blueprint = Backend.compile(ir, plan)
+
+    # 3. Assertions
+    # Expected sequence:
+    # 0: Call(condition) -> R_a
+    # 1: JumpIfFalse(R_a, offset=2) -> Skip next instruction
+    # 2: Call(action)
+    
+    assert len(blueprint.instructions) == 3
+    
+    instr_0 = blueprint.instructions[0]
+    instr_1 = blueprint.instructions[1]
+    instr_2 = blueprint.instructions[2]
+    
+    # Check 0: Condition
+    assert isinstance(instr_0, Call)
+    assert instr_0.task_name == "condition"
+    reg_cond = instr_0.output
+    
+    # Check 1: Jump
+    assert isinstance(instr_1, JumpIfFalse)
+    assert instr_1.condition.index == reg_cond.index
+    # Offset should skip exactly one instruction (instr_2)
+    # The jump is relative to the jump instruction itself? 
+    # Or usually relative to PC+1.
+    # In our VM implementation:
+    # if not val: pc += offset
+    # So if we are at PC=1, and we want to go to PC=3 (after action),
+    # 1 + offset = 3 => offset = 2.
+    assert instr_1.offset == 2
+    
+    # Check 2: Action
+    assert isinstance(instr_2, Call)
+    assert instr_2.task_name == "action"

@@ -1,4 +1,5 @@
 from .models import (
+    EdgeKind,
     ArgumentKind,
     ArgumentDef,
     TaskDef,
@@ -11,6 +12,7 @@ from .models import (
 )
 
 __all__ = [
+    "EdgeKind",
     "ArgumentKind",
     "ArgumentDef",
     "TaskDef",

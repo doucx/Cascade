@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] chore: 删除与旧 Blueprint 后端相关的过时测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767182844.5971007, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 定义字面量和扇出依赖的编译行为", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767182920.862515, "duration_ms": 0}}

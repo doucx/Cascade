@@ -1,3 +1,4 @@
+import warnings
 from typing import Dict, Any, Tuple
 import inspect
 from cascade.graph.model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
@@ -346,4 +347,9 @@ class GraphBuilder:
 def build_graph(
     target: Any, registry: NodeRegistry | None = None
 ) -> Tuple[Graph, Dict[str, Node]]:
+    warnings.warn(
+        "'build_graph' is deprecated. The new 'cascade.compiler.Frontend' should be used instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     return GraphBuilder(registry=registry).build(target)

@@ -1,4 +1,5 @@
 import asyncio
+import warnings
 from contextlib import ExitStack
 from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
@@ -34,6 +35,12 @@ class GraphExecutionStrategy:
         bus: MessageBus,
         wakeup_event: asyncio.Event,
     ):
+        warnings.warn(
+            "GraphExecutionStrategy is deprecated and will be removed in a future version. "
+            "The default engine now uses VMExecutionStrategy.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self.solver = solver
         self.node_processor = node_processor
         self.resource_container = resource_container

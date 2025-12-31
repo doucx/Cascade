@@ -1,3 +1,4 @@
+import warnings
 from dataclasses import dataclass, field
 from typing import List, Callable, Optional, Any, Dict
 from enum import Enum, auto
@@ -23,6 +24,14 @@ class Node:
 
     # Stable identifier for the node instance in the graph.
     structural_id: str
+
+    def __post_init__(self):
+        warnings.warn(
+            "The 'cascade.graph.Node' model is deprecated and will be removed. "
+            "Use 'cascade.spec.ir.NodeIR' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     # The static definition of the task.
     definition: TaskDef
@@ -117,6 +126,14 @@ class Graph:
     nodes: List[Node] = field(default_factory=list)
     edges: List[Edge] = field(default_factory=list)
     _node_index: Dict[str, Node] = field(default_factory=dict, init=False, repr=False)
+
+    def __post_init__(self):
+        warnings.warn(
+            "The 'cascade.graph.Graph' model is deprecated and will be removed. "
+            "Use 'cascade.spec.ir.GraphIR' instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
     def add_node(self, node: Node):
         if node.structural_id not in self._node_index:

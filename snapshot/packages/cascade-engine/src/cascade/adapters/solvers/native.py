@@ -1,3 +1,4 @@
+import warnings
 from collections import deque
 from typing import Dict, List
 
@@ -7,6 +8,12 @@ from cascade.spec.protocols import Solver, ExecutionPlan
 
 class NativeSolver(Solver):
     def resolve(self, graph: Graph) -> ExecutionPlan:
+        warnings.warn(
+            "NativeSolver is deprecated and will be removed in a future version. "
+            "The new compiler includes an Optimizer for scheduling.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         executable_nodes = graph.nodes
 
         adj: Dict[str, List[Node]] = {

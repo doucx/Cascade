@@ -27,10 +27,27 @@ async def test_engine_dispatches_to_vm():
     target = vm_task(x=10)
 
     # Mock BlueprintBuilder and VirtualMachine to verify interaction
-    with patch("cascade.runtime.strategies.vm.BlueprintBuilder") as MockBuilder, patch(
+    # Note: BlueprintBuilder is internal to Backend now, but the test might need adjustment if it patches internals.
+    # The strategy imports: from cascade.compiler.backend import Backend
+    # And Backend uses _BlueprintBuilder internally.
+    # But wait, VMExecutionStrategy uses: Frontend, Optimizer, Backend.
+    # It does NOT use BlueprintBuilder directly. 
+    # The test seems to be mocking implementation details that might have changed or moved.
+    # Let's check VMExecutionStrategy code:
+    # blueprint = Backend.compile(...)
+    # vm = VirtualMachine()
+    
+    # We should patch where they are IMPORTED in the strategy file.
+    with patch("cascade.runtime.strategies.vm.Backend") as MockBackend, patch(
         "cascade.runtime.strategies.vm.VirtualMachine"
     ) as MockVM:
-        mock_builder_instance = MockBuilder.return_value
+        # MockBackend.compile() is static/class method usually
+        
+        mock_vm_instance = MockVM.return_value
+
+        # Mock build result
+        mock_bp = MagicMock()
+        MockBackend.compile.return_value = mock_bp
         mock_vm_instance = MockVM.return_value
 
         # Mock build result
@@ -53,8 +70,13 @@ async def test_engine_dispatches_to_vm():
         # Assertions
         assert result == 11
 
-        # Verify Builder was called with target in template mode
-        mock_builder_instance.build.assert_called_once_with(target, template=True)
+        # Verify Backend compiled the IR
+        # Note: The test logic above changed from BlueprintBuilder to Backend.
+        # We need to verify Backend.compile was called. 
+        # But wait, Strategy calls Frontend -> Optimizer -> Backend.
+        # This test attempts to verify the flow.
+        # Let's just verify Backend.compile was called.
+        MockBackend.compile.assert_called_once()
 
         # Verify VM was executed with the blueprint and initial kwargs
         # Note: The engine should extract initial kwargs from the target

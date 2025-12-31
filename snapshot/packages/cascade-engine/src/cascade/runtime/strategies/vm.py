@@ -10,7 +10,7 @@ from cascade.runtime.constraints.manager import ConstraintManager
 from cascade.compiler.frontend import Frontend
 from cascade.compiler.optimizer import Optimizer
 from cascade.compiler.backend import Backend
-from cascade.compiler.vm import VirtualMachine
+from cascade.vm import VirtualMachine
 
 
 class VMExecutionStrategy:

@@ -1,8 +1,7 @@
 import pytest
 import asyncio
 from cascade.spec.blueprint import Blueprint, Call, Register, Literal
-
-from cascade.compiler.vm import VirtualMachine
+from cascade.vm import VirtualMachine
 
 
 def _add(a: int, b: int) -> int:
@@ -46,7 +45,9 @@ async def test_vm_instruction_execution():
     
     blueprint = Blueprint(
         instructions=[instr1, instr2],
-        register_count=2
+        register_count=2,
+        input_args=[],
+        input_kwargs={}
     )
 
     vm = VirtualMachine()
@@ -74,7 +75,9 @@ async def test_vm_async_execution():
     
     blueprint = Blueprint(
         instructions=[instr],
-        register_count=1
+        register_count=1,
+        input_args=[],
+        input_kwargs={}
     )
 
     vm = VirtualMachine()

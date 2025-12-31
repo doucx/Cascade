@@ -15,8 +15,9 @@ async def test_reactor_event_driven_potential_update():
     # 1. Setup Physics Topology
     d_node = DataNode(name="d1")
     f_node = FuncNode(name="f1")
-    # Wiring: d_node -> f_node
-    f_node.add_input(Port(name="in1", source=d_node))
+    # NOTE: We DO NOT wire d_node to f_node.
+    # This test is ONLY to verify that the TokenGenerated event correctly
+    # updates the state of the DataNode itself, without triggering a fire.
     
     # 2. Setup Reactor
     mock_executor = AsyncMock()

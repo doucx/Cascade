@@ -21,6 +21,10 @@ class ArgumentResolutionMiddleware(Middleware):
         for k, v in ctx.resolved_kwargs.items():
             ctx.resolved_kwargs[k] = self._resolve(v)
 
+        # Special handling for internal _get_param_value task
+        if ctx.instruction.task_name == "_get_param_value":
+            ctx.resolved_kwargs['params_context'] = self.global_context
+
         return await next_handler()
 
     def _resolve(self, val: Any) -> Any:

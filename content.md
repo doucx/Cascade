@@ -1,159 +1,47 @@
-简要回答：
-非常好的战略判断。直接切换引擎（Flip the Switch）作为“并行测试”是验证新架构成熟度的最直接方式。
+好的，我们正面临一个典型的“架构切换后遗症”。新的 VM 架构虽然已经打通，但许多旧引擎中隐式处理的高级功能（如 TCO 循环、上下文注入）在新架构中尚未对齐，导致一系列可预测的集成测试失败。
 
-为了避免因显而易见的功能缺失导致测试全军覆没，我将在切换前补齐最后一块关键拼图：**可观测性 (Observability)**。旧引擎通过 `NodeProcessor` 发出丰富的生命周期事件（Started, Finished, Retry），目前的 VM 还是“哑巴”。如果不补齐这一点，所有依赖日志和事件断言的测试都会失败。
+根据你的指示和 **《VM 架构切换测试失败分析报告》**，我将首先执行 **阶段 A**，修复最紧急的崩溃类错误：`VMExecutionStrategy` 的 TCO 循环和 `cs.Param` 的参数注入问题。
 
-本计划将：
-1.  实现 `ObservabilityMiddleware`，将事件发射逻辑下沉到 VM 管道中。
-2.  在 `VMExecutionStrategy` 中装配此中间件。
-3.  将 `Engine.run` 的默认策略切换为 `VM`。
+我将分两步解决问题：
+1.  为 `VMExecutionStrategy` 实现一个“弹床循环 (Trampoline Loop)”，使其能够正确处理尾调用优化 (`cs.Jump`) 信号，而不是直接返回 `Jump` 对象。这将修复循环工作流。
+2.  在 VM 的 `ArgumentResolutionMiddleware` 中添加一个特殊规则，在调用内部任务 `_get_param_value` 时，自动注入 `params` 上下文。这将修复所有使用 `cs.Param` 的测试。
 
-这是“阶段三”真正的开始：让 VM 接管原本由 Engine 胶水代码负责的核心职责。
-
-## [WIP] feat: Implement ObservabilityMiddleware and Flip the Switch
+### 摘要
+## [WIP] fix(engine): 实现 VM 策略的 TCO 循环和参数注入
 
 ### 用户需求
-1.  将 `cascade-engine` 的默认执行路径切换到基于 VM 的新架构。
-2.  确保新架构能够发出与旧架构对齐的生命周期事件 (`TaskStarted`, `TaskFinished` 等)，以通过现有的集成测试。
+根据 **《VM 架构切换测试失败分析报告》**，执行 **阶段 A** 修复计划：
+1.  **修复 TCO 循环**: `test_explicit_jump_loop` 失败，因为 `VMExecutionStrategy` 没有实现循环逻辑来处理 `cs.Jump` 信号。
+2.  **修复参数注入**: `test_engine_executes_param_task` 失败，因为 `_get_param_value` 任务在 VM 中执行时，没有接收到必要的 `params_context` 参数。
 
 ### 评论
-这是我们走向“新政权”的决定性时刻。如果不通过中间件实现可观测性，VM 就是一个无法调试的黑盒。通过 `ObservabilityMiddleware`，我们证明了管道架构不仅能处理计算，也能处理副作用和元数据，这是架构完备性的重要标志。
+这些是新 VM 架构中最严重的两类“能力鸿沟”导致的崩溃。修复它们是让测试套件恢复基本可运行状态的关键第一步。
+- **TCO 循环**的实现将使 `VMExecutionStrategy` 从一个“一次性执行器”演变为一个能够处理有状态、循环工作流的“协调器”。
+- **参数注入**的修复将验证 VM 的中间件管道模型是处理此类横切关注点的正确位置，为未来解决更多上下文注入问题（如资源）奠定了基础。
 
 ### 目标
-1.  **实现 `ObservabilityMiddleware`**: 负责在指令执行前后发出标准的 Cascade 事件。
-2.  **装配策略**: 在 `VMExecutionStrategy` 中注入 `MessageBus` 和 `run_id`，并配置新的中间件。
-3.  **切换默认值**: 修改 `Engine.run`，默认启用 `use_vm=True`。
+1.  修改 `packages/cascade-engine/src/cascade/runtime/strategies/vm.py`，在 `execute` 方法中实现一个 `while` 循环，用于处理 `cs.Jump` 信号并重新调度 VM 执行。
+2.  修改 `packages/cascade-vm/src/cascade/vm/middleware/standard.py`，在 `ArgumentResolutionMiddleware` 中添加逻辑，为名为 `_get_param_value` 的任务自动注入 `params_context`。
 
 ### 基本原理
-*   **洋葱模型**: 可观测性中间件应置于管道的最外层（或接近最外层），以捕获包括重试、资源获取在内的完整耗时。
-*   **上下文注入**: `run_id` 是运行时动态生成的，必须在每次 `execute` 调用时传递给中间件。
+1.  **TCO (Trampoline)**: 尾调用优化是一种高级控制流。将其实现为 `VMExecutionStrategy` 中的外部循环（Trampoline），可以保持 `VirtualMachine` 本身的无状态和纯粹性。策略层负责“编译 -> 执行 -> 检查信号 -> 重新编译”的宏观循环，而 VM 专注于执行单个 `Blueprint` 的微观循环。
+2.  **上下文注入**: `cs.Param` 是库的一个内部实现细节。将其注入逻辑放在专门负责参数解析的 `ArgumentResolutionMiddleware` 中，是职责最明确、侵入性最小的方案。它避免了污染 `Frontend` 或 `VM` 核心来处理这个特例。
 
 ### 标签
-#intent/build #flow/ready #priority/critical #comp/runtime #comp/vm #concept/middleware #scope/core #ai/instruct #task/domain/observability #task/object/middleware #task/action/switch
+#intent/fix #flow/ready #priority/critical #comp/engine #comp/vm #concept/control-flow #concept/context #ai/instruct #task/domain/runtime #task/object/vm-strategy #task/action/bug-fix #task/state/begin
 
 ---
-
 ### Script
 
-#### Acts 1: 实现 `ObservabilityMiddleware`
+#### Acts 1: 在 `VMExecutionStrategy` 中实现 TCO 循环
 
-我们在 `cascade.vm.middleware.observability` 中实现此中间件。它需要依赖 `cascade.runtime.events` 中的事件定义。注意这里有一个跨包依赖（vm 依赖 runtime definition），这在 Monorepo 架构中通过接口解耦通常是可以接受的，或者我们使用 Protocol。鉴于 Event dataclass 是单纯的数据结构，直接引用是可以的。
-
-~~~~~act
-write_file
-packages/cascade-vm/src/cascade/vm/middleware/observability.py
-~~~~~
-~~~~~python
-import time
-from typing import Any
-from cascade.vm.middleware import Middleware, ExecutionContext, NextHandler
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-)
-
-class ObservabilityMiddleware(Middleware):
-    def __init__(self, bus: MessageBus, run_id: str):
-        self.bus = bus
-        self.run_id = run_id
-
-    async def handle(self, ctx: ExecutionContext, next_handler: NextHandler) -> Any:
-        instr = ctx.instruction
-        # Only observe Call/MapCall instructions that represent tasks
-        # Jumps are handled by VM loop and are invisible to users
-        # Currently Middleware only wraps Call/MapCall dispatch
-        
-        task_id = getattr(instr, "structure_hash", "unknown")
-        task_name = getattr(instr, "task_name", "unknown")
-
-        self.bus.publish(
-            TaskExecutionStarted(
-                run_id=self.run_id,
-                task_id=task_id,
-                task_name=task_name
-            )
-        )
-
-        start_time = time.time()
-        status = "Succeeded"
-        error_msg = None
-        
-        try:
-            result = await next_handler()
-            return result
-        except Exception as e:
-            status = "Failed"
-            error_msg = str(e)
-            raise e
-        finally:
-            duration = time.time() - start_time
-            self.bus.publish(
-                TaskExecutionFinished(
-                    run_id=self.run_id,
-                    task_id=task_id,
-                    task_name=task_name,
-                    status=status,
-                    duration=duration,
-                    error=error_msg
-                )
-            )
-~~~~~
-
-#### Acts 2: 更新 `VMExecutionStrategy` 进行装配
-
-我们需要更新策略类，使其接收 `bus` 对象（之前不需要），并在构建管道时加入 `ObservabilityMiddleware`。
+我们将重构 `vm.py` 中的 `execute` 方法，将其包裹在一个 `while` 循环中，使其能够响应 `cs.Jump` 信号并启动下一次迭代。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 ~~~~~
 ~~~~~python.old
-from cascade.runtime.constraints.manager import ConstraintManager
-
-# New Compiler Stack
-from cascade.compiler.frontend import Frontend
-from cascade.compiler.optimizer import Optimizer
-from cascade.compiler.backend import Backend
-from cascade.vm import VirtualMachine
-from cascade.vm.middleware.standard import (
-    ArgumentResolutionMiddleware, 
-    ConstraintMiddleware, 
-    ResourceLifecycleMiddleware, 
-    RetryMiddleware
-)
-from cascade.spec.lazy_types import MappedLazyResult
-from cascade.spec.blueprint import Call, MapCall
-
-
-class VMExecutionStrategy:
-    def __init__(
-        self,
-        resource_manager: ResourceManager,
-        constraint_manager: ConstraintManager,
-        wakeup_event: asyncio.Event,
-    ):
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.wakeup_event = wakeup_event
-
-    async def execute(
-~~~~~
-~~~~~python.new
-from cascade.runtime.constraints.manager import ConstraintManager
-from cascade.runtime.bus import MessageBus
-
-# New Compiler Stack
-from cascade.compiler.frontend import Frontend
-from cascade.compiler.optimizer import Optimizer
-from cascade.compiler.backend import Backend
-from cascade.vm import VirtualMachine
-from cascade.vm.middleware.standard import (
-    ArgumentResolutionMiddleware, 
-    ConstraintMiddleware, 
-    ResourceLifecycleMiddleware, 
-    RetryMiddleware
-)
 from cascade.vm.middleware.observability import ObservabilityMiddleware
 from cascade.spec.lazy_types import MappedLazyResult
 from cascade.spec.blueprint import Call, MapCall
@@ -173,23 +61,33 @@ class VMExecutionStrategy:
         self.bus = bus
 
     async def execute(
-~~~~~
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        # 1. Frontend: Compile LazyResult to GraphIR
+        # Returns CompilationResult(ir, symbol_table)
+        compilation_result = Frontend.compile(target)
+        graph_ir = compilation_result.ir
+        symbol_table = compilation_result.symbol_table
 
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/vm.py
-~~~~~
-~~~~~python.old
-        # Configure Middleware Pipeline (Order matters!)
-        # Order: Retry (Outer) -> Constraints -> Resources -> Resolution -> Core execution (Inner)
-        vm.set_middlewares([
-            RetryMiddleware(),
-            ConstraintMiddleware(self.constraint_manager),
-            ResourceLifecycleMiddleware(self.resource_manager),
-            ArgumentResolutionMiddleware(active_resources, params),
-        ])
-~~~~~
-~~~~~python.new
+        # 2. Optimizer: Schedule GraphIR to ExecutionPlan
+        execution_plan = Optimizer.optimize(graph_ir)
+
+        # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
+        blueprint = Backend.compile(graph_ir, execution_plan)
+
+        # 4. Runtime: Execute Blueprint on VM
+        vm = VirtualMachine(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self.wakeup_event,
+        )
+        
         # Configure Middleware Pipeline (Order matters!)
         # Onion Layer:
         # 1. Observability (Outermost): Logs everything including retries? 
@@ -208,69 +106,175 @@ packages/cascade-engine/src/cascade/runtime/strategies/vm.py
             ResourceLifecycleMiddleware(self.resource_manager),
             ArgumentResolutionMiddleware(active_resources, params),
         ])
+
+        if isinstance(target, MappedLazyResult):
+            initial_args = []
+            initial_kwargs = dict(target.mapping_kwargs)
+        else:
+            initial_args = list(target.args)
+            initial_kwargs = dict(target.kwargs)
+        
+        return await vm.execute(
+            blueprint,
+            symbol_table=symbol_table,
+            initial_args=initial_args,
+            initial_kwargs=initial_kwargs,
+        )
+~~~~~
+~~~~~python.new
+from cascade.vm.middleware.observability import ObservabilityMiddleware
+from cascade.spec.lazy_types import MappedLazyResult
+from cascade.spec.blueprint import Call, MapCall
+from cascade.spec.jump import Jump
+
+
+class VMExecutionStrategy:
+    def __init__(
+        self,
+        resource_manager: ResourceManager,
+        constraint_manager: ConstraintManager,
+        wakeup_event: asyncio.Event,
+        bus: MessageBus,
+    ):
+        self.resource_manager = resource_manager
+        self.constraint_manager = constraint_manager
+        self.wakeup_event = wakeup_event
+        self.bus = bus
+
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        current_target = target
+
+        if isinstance(current_target, MappedLazyResult):
+            next_initial_args = []
+            next_initial_kwargs = dict(current_target.mapping_kwargs)
+        else:
+            next_initial_args = list(current_target.args)
+            next_initial_kwargs = dict(current_target.kwargs)
+
+        # Trampoline loop for Tail Call Optimization (TCO) via Jump signals
+        while True:
+            # 1. Frontend: Compile LazyResult to GraphIR
+            # Returns CompilationResult(ir, symbol_table)
+            compilation_result = Frontend.compile(current_target)
+            graph_ir = compilation_result.ir
+            symbol_table = compilation_result.symbol_table
+
+            # 2. Optimizer: Schedule GraphIR to ExecutionPlan
+            execution_plan = Optimizer.optimize(graph_ir)
+
+            # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
+            blueprint = Backend.compile(graph_ir, execution_plan)
+
+            # 4. Runtime: Execute Blueprint on VM
+            vm = VirtualMachine(
+                resource_manager=self.resource_manager,
+                constraint_manager=self.constraint_manager,
+                wakeup_event=self.wakeup_event,
+            )
+
+            # Configure Middleware Pipeline (Order matters!)
+            vm.set_middlewares(
+                [
+                    ObservabilityMiddleware(self.bus, run_id),
+                    RetryMiddleware(),
+                    ConstraintMiddleware(self.constraint_manager),
+                    ResourceLifecycleMiddleware(self.resource_manager),
+                    ArgumentResolutionMiddleware(active_resources, params or {}),
+                ]
+            )
+
+            vm_result = await vm.execute(
+                blueprint,
+                symbol_table=symbol_table,
+                initial_args=next_initial_args,
+                initial_kwargs=next_initial_kwargs,
+            )
+
+            # 6. Check for Jump signal
+            if not isinstance(vm_result, Jump):
+                return vm_result  # Normal termination
+
+            # --- Handle Jump ---
+            # This logic is ported from the old GraphExecutionStrategy
+            jump_selector = getattr(current_target, '_jump_selector', None)
+            if not jump_selector:
+                raise RuntimeError(
+                    "Task returned a Jump signal but no jump selector was bound."
+                )
+
+            next_target = jump_selector.routes.get(vm_result.target_key)
+            if next_target is None:
+                # Loop exit condition
+                return vm_result.data
+
+            # Prepare for next iteration
+            current_target = next_target
+
+            # Convert jump data to args/kwargs for the next VM execution
+            data = vm_result.data
+            if isinstance(data, dict):
+                next_initial_args = []
+                next_initial_kwargs = data
+            elif isinstance(data, (list, tuple)):
+                next_initial_args = list(data)
+                next_initial_kwargs = {}
+            else:
+                next_initial_args = [data] if data is not None else []
+                next_initial_kwargs = {}
 ~~~~~
 
-#### Acts 3: 更新 `Engine` 初始化以传递 `bus`
+#### Acts 2: 注入 `params_context`
 
-由于修改了 `VMExecutionStrategy` 的 `__init__` 签名，我们需要更新 `Engine` 对其的实例化调用。
+现在，我们将修改 `ArgumentResolutionMiddleware`，让它能识别 `_get_param_value` 任务并为其注入 `global_context`（即 `params` 字典）。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
+packages/cascade-vm/src/cascade/vm/middleware/standard.py
 ~~~~~
 ~~~~~python.old
-        self.vm_strategy = VMExecutionStrategy(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event,
-        )
+    async def handle(self, ctx: ExecutionContext, next_handler: NextHandler) -> Any:
+        # Resolve Args
+        new_args = []
+        for arg in ctx.resolved_args:
+            resolved = self._resolve(arg)
+            new_args.append(resolved)
+        ctx.resolved_args = new_args
 
-        self._managed_subscribers = []
+        # Resolve Kwargs
+        for k, v in ctx.resolved_kwargs.items():
+            ctx.resolved_kwargs[k] = self._resolve(v)
+
+        return await next_handler()
 ~~~~~
 ~~~~~python.new
-        self.vm_strategy = VMExecutionStrategy(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event,
-            bus=self.bus,
-        )
+    async def handle(self, ctx: ExecutionContext, next_handler: NextHandler) -> Any:
+        # Resolve Args
+        new_args = []
+        for arg in ctx.resolved_args:
+            resolved = self._resolve(arg)
+            new_args.append(resolved)
+        ctx.resolved_args = new_args
 
-        self._managed_subscribers = []
-~~~~~
+        # Resolve Kwargs
+        for k, v in ctx.resolved_kwargs.items():
+            ctx.resolved_kwargs[k] = self._resolve(v)
 
-#### Acts 4: Flip the Switch (默认启用 VM)
+        # Special handling for internal _get_param_value task
+        if ctx.instruction.task_name == "_get_param_value":
+            ctx.resolved_kwargs['params_context'] = self.global_context
 
-这是最后一步。我们将 `use_vm` 的默认值改为 `True`。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python.old
-    async def run(
-        self,
-        target: Any,
-        params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = False,
-    ) -> Any:
-~~~~~
-~~~~~python.new
-    async def run(
-        self,
-        target: Any,
-        params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = True,
-    ) -> Any:
+        return await next_handler()
 ~~~~~
 
 ### 下一步建议
-现在，你可以运行整个测试套件了：
-`pytest packages/cascade-engine/tests`
+在执行此计划后，`test_explicit_jump_loop` 和 `test_engine_executes_param_task` 应该会通过。但是，其他与策略（如重试、并发）和控制流（`run_if`）相关的测试仍然会失败。
 
-预期结果：
-大部分基础功能测试应该通过。但可能会有一些失败，例如：
-1.  **缓存 (Caching)**：我们还没有实现 CacheMiddleware，关于缓存命中的测试会失败。
-2.  **重试事件 (Retry Events)**：目前的 RetryMiddleware 还没有发出 `TaskRetrying` 事件，相关测试会失败。
-3.  **复杂流控制**：如果 Jump 指令处理有细微差异，可能会有边缘情况失败。
-
-这些失败将直接指导我们下一步的中间件开发工作。
+下一步，我们将根据 **《VM 架构切换测试失败分析报告》** 中的 **阶段 B**，修复 `Compiler Frontend` 的信息丢失问题，确保 `.with_retry()`, `.with_constraints()` 等策略信息能被正确编译到 `Blueprint` 中。

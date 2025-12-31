@@ -31,7 +31,7 @@ def test_ir_structures_exist():
 
     graph = GraphIR(nodes=[node], edges=[edge], meta={"version": "1.0"})
 
-    assert graph.nodes[0].id == "node_1"
+    assert graph.nodes[0].current_node_instance_hash == "node_1"
     assert graph.edges[0].source_node_instance_hash == "node_1"
     assert graph.meta["version"] == "1.0"
 
@@ -52,7 +52,7 @@ def test_ir_serialization_roundtrip():
     data = asdict(graph)
 
     # Verify key fields
-    assert data["nodes"][0]["id"] == "n1"
+    assert data["nodes"][0]["current_node_instance_hash"] == "n1"
     assert data["nodes"][0]["kwargs"]["val"] == 42
     assert data["nodes"][0]["definition"]["name"] == "test_task"
     assert data["nodes"][0]["definition"]["args"][0]["kind"] == "POSITIONAL_OR_KEYWORD"
@@ -61,7 +61,7 @@ def test_ir_serialization_roundtrip():
     json_str = json.dumps(data)
     loaded = json.loads(json_str)
 
-    assert loaded["nodes"][0]["id"] == "n1"
+    assert loaded["nodes"][0]["current_node_instance_hash"] == "n1"
 
 
 def test_instruction_serialization():

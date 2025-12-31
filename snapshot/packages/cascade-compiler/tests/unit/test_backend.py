@@ -22,7 +22,7 @@ def test_compile_single_node_literals():
     # 1. Setup IR
     # Node A(x=1, y="hello")
     task_def = _create_dummy_task_def("task_A")
-    node = NodeIR(id="A", definition=task_def, kwargs={"x": 1, "y": "hello"})
+    node = NodeIR(current_node_instance_hash="A", definition=task_def, kwargs={"x": 1, "y": "hello"})
     
     ir = GraphIR(nodes=[node], edges=[])
     plan = [["A"]] # Single stage
@@ -61,10 +61,10 @@ def test_compile_dependency_registers():
     """
     # 1. Setup IR
     # A produces result. B consumes result as 'val'.
-    node_a = NodeIR(id="A", definition=_create_dummy_task_def("producer"))
-    node_b = NodeIR(id="B", definition=_create_dummy_task_def("consumer"))
+    node_a = NodeIR(current_node_instance_hash="A", definition=_create_dummy_task_def("producer"))
+    node_b = NodeIR(current_node_instance_hash="B", definition=_create_dummy_task_def("consumer"))
     
-    edge = EdgeIR(source_id="A", target_id="B", target_arg="val")
+    edge = EdgeIR(source_node_instance_hash="A", target_node_instance_hash="B", target_arg="val")
     
     ir = GraphIR(
         nodes=[node_a, node_b],
@@ -104,12 +104,12 @@ def test_compile_conditional_execution():
     """
     # 1. Setup IR
     # A produces a boolean. B executes only if A is True.
-    node_a = NodeIR(id="A", definition=_create_dummy_task_def("condition"))
-    node_b = NodeIR(id="B", definition=_create_dummy_task_def("action"))
+    node_a = NodeIR(current_node_instance_hash="A", definition=_create_dummy_task_def("condition"))
+    node_b = NodeIR(current_node_instance_hash="B", definition=_create_dummy_task_def("action"))
     
     # Control edge: A -> B
     # target_arg is typically ignored or used for metadata in control edges
-    edge = EdgeIR(source_id="A", target_id="B", target_arg="_condition", kind=EdgeKind.CONTROL)
+    edge = EdgeIR(source_node_instance_hash="A", target_node_instance_hash="B", target_arg="_condition", kind=EdgeKind.CONTROL)
     
     ir = GraphIR(
         nodes=[node_a, node_b],
@@ -161,15 +161,15 @@ def test_compile_map_node_generates_map_call():
     """
     # Node B is a map over task "process"
     node_b = NodeIR(
-        id="B", 
+        current_node_instance_hash="B", 
         definition=_create_dummy_task_def("process"),
         kwargs={"scale": 2}, # Constant input
         meta={"is_map": True}
     )
     
     # Dynamic input from A (a list)
-    node_a = NodeIR(id="A", definition=_create_dummy_task_def("list_gen"))
-    edge = EdgeIR(source_id="A", target_id="B", target_arg="items")
+    node_a = NodeIR(current_node_instance_hash="A", definition=_create_dummy_task_def("list_gen"))
+    edge = EdgeIR(source_node_instance_hash="A", target_node_instance_hash="B", target_arg="items")
     
     ir = GraphIR(nodes=[node_a, node_b], edges=[edge])
     plan = [["A"], ["B"]]

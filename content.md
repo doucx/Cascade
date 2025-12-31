@@ -1,233 +1,37 @@
-## [WIP] refactor: 执行“大重命名” (The Great Renaming) - 阶段 1
+# 📸 Snapshot Capture
 
-### 用户需求
-根据《架构公理：哈希强制长命名规范》，将系统中的核心标识符（`id`, `structural_id`, `source_id`, `target_id`）重命名为具有明确语义的长名称（如 `current_node_instance_hash`）。
+检测到工作区发生变更。
 
-### 评论
-这是一个高风险、高收益的基础设施重构。使用 LibCST 编写的“工业级”脚本能最大程度减少人为疏漏，并通过 AST 分析提供比正则替换高得多的安全性。即使脚本覆盖了 80-90% 的情况，剩下的也会通过测试失败暴露出来，完全符合我们的“静态修改 + 动态验证”策略。
-
-### 目标
-1.  创建 `scripts/refactor_identifiers.py`，包含针对 `ClassDef`, `Call`, `Attribute`, `AnnAssign` 等节点的转换逻辑。
-2.  对 `packages/` 目录下的所有 Python 文件执行该脚本。
-3.  实现以下核心映射：
-    *   `Node.structural_id` / `NodeIR.id` -> `current_node_instance_hash`
-    *   `EdgeIR.source_id` -> `source_node_instance_hash`
-    *   `EdgeIR.target_id` -> `target_node_instance_hash`
-
-### 基本原理
--   **AST 转换**: 使用 `libcst` 可以精确区分变量名、属性名和字符串字面量，避免误伤（例如不替换 `uuid.uuid4()` 中的 `uuid`，也不替换非 Node 对象的 `id`）。
--   **上下文感知**: 脚本将通过跟踪 `in_class_def` 状态来决定是否修改字段定义。
--   **启发式匹配**: 对于属性访问（如 `obj.id`），脚本将使用变量名白名单（如 `node`, `n`）来降低误报率。
-
-### 标签
-#intent/refine #flow/ready #priority/critical #comp/build #concept/parser #scope/core #ai/instruct #task/domain/core #task/object/identifier-refactor #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 LibCST 重构脚本
-
-我们将编写一个功能完备的 CST Transformer。
-
-~~~~~act
-write_file
-scripts/refactor_identifiers.py
-~~~~~
-~~~~~python
-import libcst as cst
-from libcst import matchers as m
-import sys
-import os
-import glob
-
-# Configuration: Target mappings
-# Key: Old Name
-# Value: (Target Classes/Contexts, New Name, Attribute Variable Whitelist)
-RENAME_MAP = {
-    "structural_id": (
-        {"Node", "TaskNode", "MapNode", "ParamNode"},
-        "current_node_instance_hash",
-        None,  # None means replace all occurrences globally (safe)
-    ),
-    "source_id": (
-        {"EdgeIR"},
-        "source_node_instance_hash",
-        None,
-    ),
-    "target_id": (
-        {"EdgeIR"},
-        "target_node_instance_hash",
-        None,
-    ),
-    "id": (
-        {"NodeIR", "Instruction", "Call", "Return"}, # Be careful with 'id'
-        "current_node_instance_hash", # Only for NodeIR effectively
-        ["node", "n", "node_ir", "ir_node"], # Whitelist for attribute access (e.g. node.id)
-    ),
-}
-
-# Explicitly exclude certain calls or contexts if necessary
-EXCLUDED_CALLS = {"uuid4", "id"}
-
-class IdentifierRefactorTransformer(cst.CSTTransformer):
-    def __init__(self):
-        self.class_stack = []
-
-    def visit_ClassDef(self, node: cst.ClassDef) -> None:
-        self.class_stack.append(node.name.value)
-
-    def leave_ClassDef(self, original_node: cst.ClassDef, updated_node: cst.ClassDef) -> cst.ClassDef:
-        self.class_stack.pop()
-        return updated_node
-
-    def leave_AnnAssign(self, original_node: cst.AnnAssign, updated_node: cst.AnnAssign) -> cst.AnnAssign:
-        """
-        Handles class field definitions:
-        class NodeIR:
-            id: str  -> current_node_instance_hash: str
-        """
-        if not self.class_stack:
-            return updated_node
-            
-        current_class = self.class_stack[-1]
-        
-        if isinstance(original_node.target, cst.Name):
-            old_name = original_node.target.value
-            if old_name in RENAME_MAP:
-                target_classes, new_name, _ = RENAME_MAP[old_name]
-                
-                # Special handling for 'id': Only rename in NodeIR context, not Instruction/Call/Return which use 'id' differently potentially
-                # Actually, Instruction.id is likely different (an instruction ID), not a node hash.
-                # Let's be strict: Only NodeIR.id maps to current_node_instance_hash.
-                if old_name == "id" and current_class != "NodeIR":
-                    return updated_node
-
-                if current_class in target_classes:
-                    return updated_node.with_changes(target=cst.Name(new_name))
-        
-        return updated_node
-
-    def leave_Call(self, original_node: cst.Call, updated_node: cst.Call) -> cst.Call:
-        """
-        Handles constructor calls:
-        NodeIR(id=...) -> NodeIR(current_node_instance_hash=...)
-        """
-        func_name = None
-        if isinstance(original_node.func, cst.Name):
-            func_name = original_node.func.value
-        
-        if not func_name:
-            return updated_node
-
-        new_args = []
-        modified = False
-        
-        for arg in updated_node.args:
-            if arg.keyword and isinstance(arg.keyword, cst.Name):
-                kwd = arg.keyword.value
-                if kwd in RENAME_MAP:
-                    target_classes, new_name, _ = RENAME_MAP[kwd]
-                    
-                    # Logic for matching class constructors
-                    if func_name in target_classes:
-                        # Special check for 'id' again
-                        if kwd == "id" and func_name != "NodeIR":
-                            new_args.append(arg)
-                            continue
-
-                        new_args.append(arg.with_changes(keyword=cst.Name(new_name)))
-                        modified = True
-                        continue
-            
-            new_args.append(arg)
-        
-        if modified:
-            return updated_node.with_changes(args=new_args)
-        return updated_node
-
-    def leave_Attribute(self, original_node: cst.Attribute, updated_node: cst.Attribute) -> cst.Attribute:
-        """
-        Handles attribute access:
-        node.structural_id -> node.current_node_instance_hash
-        node.id -> node.current_node_instance_hash (heuristically)
-        """
-        attr_name = original_node.attr.value
-        
-        if attr_name in RENAME_MAP:
-            _, new_name, whitelist = RENAME_MAP[attr_name]
-            
-            should_rename = False
-            
-            if whitelist is None:
-                # Safe to replace globally (e.g. structural_id)
-                should_rename = True
-            else:
-                # Heuristic check on the object being accessed
-                if isinstance(original_node.value, cst.Name):
-                    obj_name = original_node.value.value
-                    # Check if obj_name contains any hint from whitelist
-                    # Matches "node", "n" (exact), "node_ir"
-                    if obj_name in whitelist or any(hint in obj_name for hint in ["node", "ir_"]):
-                         should_rename = True
-            
-            if should_rename:
-                return updated_node.with_changes(attr=cst.Name(new_name))
-
-        return updated_node
-
-    def leave_SimpleString(self, original_node: cst.SimpleString, updated_node: cst.SimpleString) -> cst.SimpleString:
-        """
-        Handles string literals, primarily for serialization keys and dict access.
-        "structural_id" -> "current_node_instance_hash"
-        """
-        # Strip quotes
-        raw_val = original_node.value
-        quote = raw_val[0]
-        content = raw_val[1:-1]
-        
-        if content in RENAME_MAP:
-            # We NEVER automatically rename "id" string literals, too dangerous.
-            if content == "id":
-                return updated_node
-                
-            _, new_name, _ = RENAME_MAP[content]
-            return updated_node.with_changes(value=f"{quote}{new_name}{quote}")
-            
-        return updated_node
-
-def process_file(file_path):
-    with open(file_path, "r", encoding="utf-8") as f:
-        source_code = f.read()
-
-    try:
-        source_tree = cst.parse_module(source_code)
-        transformer = IdentifierRefactorTransformer()
-        modified_tree = source_tree.visit(transformer)
-        
-        new_code = modified_tree.code
-        
-        if new_code != source_code:
-            print(f"Refactoring {file_path}...")
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(new_code)
-    except Exception as e:
-        print(f"Error processing {file_path}: {e}")
-
-def main():
-    if len(sys.argv) < 2:
-        print("Usage: python refactor_identifiers.py <directory>")
-        sys.exit(1)
-        
-    target_dir = sys.argv[1]
-    for root, dirs, files in os.walk(target_dir):
-        for file in files:
-            if file.endswith(".py"):
-                process_file(os.path.join(root, file))
-
-if __name__ == "__main__":
-    main()
-~~~~~
-
-### 下一步建议
-脚本执行完毕后，代码库将处于“重构中”的状态。我们必须立即运行测试套件 (`pytest packages/`)。测试**必然**会失败，但失败信息将精确指导我们完成剩余的手动修复工作（例如：未被脚本覆盖的变量名、特殊的字典键访问等）。我们将把修复过程分为几个小的计划来执行。
+### 📝 变更文件摘要:
+```
+.../src/cascade/app/__init__.py                    |  6 +--
+ .../src/cascade/compiler/backend.py                | 12 +++---
+ .../src/cascade/compiler/frontend.py               | 20 ++++-----
+ .../src/cascade/compiler/hashing.py                | 10 ++---
+ .../src/cascade/compiler/optimizer.py              |  8 ++--
+ .../cascade-compiler/tests/unit/test_backend.py    | 20 ++++-----
+ .../tests/unit/test_backend_enrichment.py          |  4 +-
+ .../tests/unit/test_compiler_linking.py            |  2 +-
+ .../cascade-compiler/tests/unit/test_frontend.py   |  4 +-
+ .../cascade-compiler/tests/unit/test_optimizer.py  | 14 +++---
+ .../src/cascade/adapters/solvers/csp.py            |  8 ++--
+ .../src/cascade/adapters/solvers/native.py         | 24 +++++------
+ .../cascade-engine/src/cascade/runtime/flow.py     | 46 ++++++++++----------
+ .../src/cascade/runtime/processor.py               | 22 +++++-----
+ .../src/cascade/runtime/resolvers.py               | 26 +++++------
+ .../src/cascade/runtime/strategies/graph.py        | 42 +++++++++---------
+ .../tests/unit/test_executor_local.py              |  4 +-
+ .../cascade-engine/tests/unit/test_flow_manager.py |  4 +-
+ packages/cascade-graph/src/cascade/graph/build.py  |  6 +--
+ packages/cascade-graph/src/cascade/graph/model.py  | 10 ++---
+ .../cascade-graph/src/cascade/graph/serialize.py   | 18 ++++----
+ packages/cascade-graph/tests/unit/test_hashing.py  |  2 +-
+ .../cascade-graph/tests/unit/test_purity_model.py  |  4 +-
+ packages/cascade-sdk/src/cascade/tools/lisp.py     | 50 +++++++++++-----------
+ .../tests/integration/test_state_backends.py       |  2 +-
+ packages/cascade-sdk/tests/unit/test_visualize.py  | 20 ++++-----
+ .../cascade-spec/src/cascade/spec/ir/models.py     |  6 +--
+ packages/cascade-spec/tests/unit/test_ir_models.py |  8 ++--
+ .../src/cascade/vm/middleware/standard.py          |  2 +-
+ 29 files changed, 202 insertions(+), 202 deletions(-)
+```

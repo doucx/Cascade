@@ -20,17 +20,17 @@ class LispTranspiler:
     def _analyze(self):
         # 1. Initialize counts
         for node in self.graph.nodes:
-            self.ref_counts[node.structural_id] = 0
+            self.ref_counts[node.current_node_instance_hash] = 0
 
         # 2. Count references (Source is dependency, Target is consumer)
         for edge in self.graph.edges:
             if edge.edge_type not in (EdgeType.IMPLICIT, EdgeType.POTENTIAL):
-                self.ref_counts[edge.source.structural_id] += 1
+                self.ref_counts[edge.source.current_node_instance_hash] += 1
 
         # 3. Identify shared nodes and assign names
         name_counts = {}
         # Sort nodes by ID for deterministic naming
-        sorted_nodes = sorted(self.graph.nodes, key=lambda n: n.structural_id)
+        sorted_nodes = sorted(self.graph.nodes, key=lambda n: n.current_node_instance_hash)
 
         for node in sorted_nodes:
             # Nodes referenced more than once OR nodes that are used as Router selectors
@@ -38,21 +38,21 @@ class LispTranspiler:
             is_router_selector = any(
                 e.router
                 and e.router.selector._uuid in self.instance_map
-                and self.instance_map[e.router.selector._uuid].structural_id
-                == node.structural_id
+                and self.instance_map[e.router.selector._uuid].current_node_instance_hash
+                == node.current_node_instance_hash
                 for e in self.graph.edges
             )
 
-            if self.ref_counts[node.structural_id] > 1 or is_router_selector:
-                self.shared_nodes.add(node.structural_id)
+            if self.ref_counts[node.current_node_instance_hash] > 1 or is_router_selector:
+                self.shared_nodes.add(node.current_node_instance_hash)
                 base_name = self._sanitize_name(node.name)
                 count = name_counts.get(base_name, 0) + 1
                 name_counts[base_name] = count
 
                 if count == 1:
-                    self.node_var_names[node.structural_id] = base_name
+                    self.node_var_names[node.current_node_instance_hash] = base_name
                 else:
-                    self.node_var_names[node.structural_id] = f"{base_name}-{count}"
+                    self.node_var_names[node.current_node_instance_hash] = f"{base_name}-{count}"
 
     def _sanitize_name(self, name: str) -> str:
         if not name:
@@ -62,7 +62,7 @@ class LispTranspiler:
     def transpile(self, target_node: Node) -> str:
         # 1. Identify relevant shared nodes (transitive dependencies of target)
         deps = self._get_transitive_deps(target_node)
-        shared_in_scope = [n for n in deps if n.structural_id in self.shared_nodes]
+        shared_in_scope = [n for n in deps if n.current_node_instance_hash in self.shared_nodes]
 
         # 2. Topological Sort for let* order
         sorted_shared = self._topo_sort(shared_in_scope)
@@ -73,9 +73,9 @@ class LispTranspiler:
         # 3. Generate let* block
         lines = ["(let* ("]
         for node in sorted_shared:
-            var_name = self.node_var_names[node.structural_id]
+            var_name = self.node_var_names[node.current_node_instance_hash]
             # Mark as generated so subsequent references use the var name
-            self.generated_bindings.add(node.structural_id)
+            self.generated_bindings.add(node.current_node_instance_hash)
             expr = self._render_expr(node)
             lines.append(f"  ({var_name} {expr})")
 
@@ -117,7 +117,7 @@ class LispTranspiler:
         incoming_edges = [
             e
             for e in self.graph.edges
-            if e.target.structural_id == node.structural_id
+            if e.target.current_node_instance_hash == node.current_node_instance_hash
             and e.edge_type == EdgeType.DATA
         ]
         edge_map = {e.arg_name: e for e in incoming_edges}
@@ -157,7 +157,7 @@ class LispTranspiler:
         cond_edges = [
             e
             for e in self.graph.edges
-            if e.target.structural_id == node.structural_id
+            if e.target.current_node_instance_hash == node.current_node_instance_hash
             and e.edge_type == EdgeType.CONDITION
         ]
         if cond_edges:
@@ -197,8 +197,8 @@ class LispTranspiler:
     def _resolve_node_ref(self, node: Node) -> str:
         # If this node is shared AND we have already generated a binding for it
         # (or are about to in the let* block), use the variable name.
-        if node.structural_id in self.shared_nodes:
-            return self.node_var_names[node.structural_id]
+        if node.current_node_instance_hash in self.shared_nodes:
+            return self.node_var_names[node.current_node_instance_hash]
         else:
             # Inline it
             return self._render_expr(node)
@@ -239,7 +239,7 @@ class LispTranspiler:
             incoming = [
                 e.source
                 for e in self.graph.edges
-                if e.target.structural_id == n.structural_id
+                if e.target.current_node_instance_hash == n.current_node_instance_hash
             ]
             for source in incoming:
                 if source not in visited:
@@ -249,17 +249,17 @@ class LispTranspiler:
         return relevant_nodes
 
     def _topo_sort(self, nodes: List[Node]) -> List[Node]:
-        node_set = {n.structural_id for n in nodes}
-        adj = {n.structural_id: set() for n in nodes}
+        node_set = {n.current_node_instance_hash for n in nodes}
+        adj = {n.current_node_instance_hash: set() for n in nodes}
 
         # Build graph restricted to 'nodes'
         for edge in self.graph.edges:
             if (
-                edge.target.structural_id in node_set
-                and edge.source.structural_id in node_set
+                edge.target.current_node_instance_hash in node_set
+                and edge.source.current_node_instance_hash in node_set
             ):
                 # Target depends on Source
-                adj[edge.target.structural_id].add(edge.source.structural_id)
+                adj[edge.target.current_node_instance_hash].add(edge.source.current_node_instance_hash)
 
         result = []
         visited = set()
@@ -279,11 +279,11 @@ class LispTranspiler:
             result.append(n_id)
 
         # Sort input nodes for deterministic start order
-        for n in sorted(nodes, key=lambda x: x.structural_id):
-            visit(n.structural_id)
+        for n in sorted(nodes, key=lambda x: x.current_node_instance_hash):
+            visit(n.current_node_instance_hash)
 
         # result is [Deepest Dep, ..., Root]
-        id_map = {n.structural_id: n for n in nodes}
+        id_map = {n.current_node_instance_hash: n for n in nodes}
         return [id_map[nid] for nid in result]
 
 

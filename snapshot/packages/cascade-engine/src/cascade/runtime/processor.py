@@ -59,7 +59,7 @@ class NodeProcessor:
             self.bus.publish(
                 TaskBlocked(
                     run_id=run_id,
-                    task_id=node.structural_id,
+                    task_id=node.current_node_instance_hash,
                     task_name=node.name,
                     reason="ResourceContention",
                 )
@@ -127,13 +127,13 @@ class NodeProcessor:
                 node, graph, state_backend
             )
             cached_value = await node.cache_policy.check(
-                node.structural_id, inputs_for_cache
+                node.current_node_instance_hash, inputs_for_cache
             )
             if cached_value is not None:
                 self.bus.publish(
                     TaskSkipped(
                         run_id=run_id,
-                        task_id=node.structural_id,
+                        task_id=node.current_node_instance_hash,
                         task_name=node.name,
                         reason="CacheHit",
                     )
@@ -142,7 +142,7 @@ class NodeProcessor:
 
         self.bus.publish(
             TaskExecutionStarted(
-                run_id=run_id, task_id=node.structural_id, task_name=node.name
+                run_id=run_id, task_id=node.current_node_instance_hash, task_name=node.name
             )
         )
 
@@ -177,7 +177,7 @@ class NodeProcessor:
                 self.bus.publish(
                     TaskExecutionFinished(
                         run_id=run_id,
-                        task_id=node.structural_id,
+                        task_id=node.current_node_instance_hash,
                         task_name=node.name,
                         status="Succeeded",
                         duration=duration,
@@ -191,7 +191,7 @@ class NodeProcessor:
                         node, graph, state_backend
                     )
                     await node.cache_policy.save(
-                        node.structural_id, inputs_for_save, result
+                        node.current_node_instance_hash, inputs_for_save, result
                     )
                 return result
             except Exception as e:
@@ -200,7 +200,7 @@ class NodeProcessor:
                     self.bus.publish(
                         TaskRetrying(
                             run_id=run_id,
-                            task_id=node.structural_id,
+                            task_id=node.current_node_instance_hash,
                             task_name=node.name,
                             attempt=attempt,
                             max_attempts=max_attempts,
@@ -215,7 +215,7 @@ class NodeProcessor:
                     self.bus.publish(
                         TaskExecutionFinished(
                             run_id=run_id,
-                            task_id=node.structural_id,
+                            task_id=node.current_node_instance_hash,
                             task_name=node.name,
                             status="Failed",
                             duration=duration,
@@ -235,14 +235,14 @@ class NodeProcessor:
         incoming_edges = [
             edge
             for edge in graph.edges
-            if edge.target.structural_id == node.structural_id
+            if edge.target.current_node_instance_hash == node.current_node_instance_hash
         ]
         for edge in incoming_edges:
             if edge.arg_name.startswith("_"):
                 continue
-            if await state_backend.has_result(edge.source.structural_id):
+            if await state_backend.has_result(edge.source.current_node_instance_hash):
                 inputs[edge.arg_name] = await state_backend.get_result(
-                    edge.source.structural_id
+                    edge.source.current_node_instance_hash
                 )
         return inputs
 

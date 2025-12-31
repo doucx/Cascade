@@ -12,7 +12,7 @@ from cascade.spec.fingerprint import Fingerprint
 
 def create_mock_node(name: str) -> Node:
     stub_def = TaskDef(name=name, args=[], fingerprint=Fingerprint())
-    return Node(structural_id=name, definition=stub_def)
+    return Node(current_node_instance_hash=name, definition=stub_def)
 
 
 def create_mock_lazy_result(node_id: str) -> LazyResult:
@@ -25,7 +25,7 @@ def create_mock_lazy_result(node_id: str) -> LazyResult:
 async def test_flow_manager_pruning_logic():
     # 1. Setup Nodes
     nodes = [create_mock_node(n) for n in ["S", "A", "B", "B_UP", "C"]]
-    n_map = {n.structural_id: n for n in nodes}
+    n_map = {n.current_node_instance_hash: n for n in nodes}
 
     # 2. Setup Router Objects
     lr_s = create_mock_lazy_result("S")

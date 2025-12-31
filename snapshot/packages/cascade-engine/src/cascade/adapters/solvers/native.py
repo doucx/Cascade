@@ -10,11 +10,11 @@ class NativeSolver(Solver):
         executable_nodes = graph.nodes
 
         adj: Dict[str, List[Node]] = {
-            node.structural_id: [] for node in executable_nodes
+            node.current_node_instance_hash: [] for node in executable_nodes
         }
-        in_degree: Dict[str, int] = {node.structural_id: 0 for node in executable_nodes}
+        in_degree: Dict[str, int] = {node.current_node_instance_hash: 0 for node in executable_nodes}
         node_map: Dict[str, Node] = {
-            node.structural_id: node for node in executable_nodes
+            node.current_node_instance_hash: node for node in executable_nodes
         }
 
         # Whitelist of edge types that represent actual execution dependencies.
@@ -34,20 +34,20 @@ class NativeSolver(Solver):
 
             # Ensure edge connects executable nodes
             if (
-                edge.source.structural_id not in node_map
-                or edge.target.structural_id not in node_map
+                edge.source.current_node_instance_hash not in node_map
+                or edge.target.current_node_instance_hash not in node_map
             ):
                 continue
 
-            adj[edge.source.structural_id].append(edge.target)
-            in_degree[edge.target.structural_id] += 1
+            adj[edge.source.current_node_instance_hash].append(edge.target)
+            in_degree[edge.target.current_node_instance_hash] += 1
 
         # Kahn's algorithm for topological sorting
         queue = deque(
             [
-                node.structural_id
+                node.current_node_instance_hash
                 for node in executable_nodes
-                if in_degree[node.structural_id] == 0
+                if in_degree[node.current_node_instance_hash] == 0
             ]
         )
         plan: ExecutionPlan = []
@@ -64,9 +64,9 @@ class NativeSolver(Solver):
 
             for node_id in stage_ids:
                 for neighbor_node in adj[node_id]:
-                    in_degree[neighbor_node.structural_id] -= 1
-                    if in_degree[neighbor_node.structural_id] == 0:
-                        queue.append(neighbor_node.structural_id)
+                    in_degree[neighbor_node.current_node_instance_hash] -= 1
+                    if in_degree[neighbor_node.current_node_instance_hash] == 0:
+                        queue.append(neighbor_node.current_node_instance_hash)
 
         # If not all nodes were processed, a cycle must exist.
         if processed_count != len(executable_nodes):

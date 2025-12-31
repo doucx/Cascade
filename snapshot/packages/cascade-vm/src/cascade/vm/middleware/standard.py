@@ -59,7 +59,7 @@ class ConstraintMiddleware(Middleware):
         
         # Shim construction
         shim_node = Node(
-            structural_id=str(uuid4()), 
+            current_node_instance_hash=str(uuid4()), 
             definition=TaskDef(name=instr.task_name, args=[], fingerprint=Fingerprint()),
             constraints=instr.constraints # Legacy support
         )

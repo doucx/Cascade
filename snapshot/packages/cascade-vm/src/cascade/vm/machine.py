@@ -1,6 +1,6 @@
 import inspect
 import asyncio
-from typing import Any, List, Dict, Optional, Callable
+from typing import Any, List, Dict, Optional, Callable, Awaitable
 from uuid import uuid4
 
 from cascade.spec.blueprint import (

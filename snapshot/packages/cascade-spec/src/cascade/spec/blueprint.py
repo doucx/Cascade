@@ -36,6 +36,21 @@ class Call(Instruction):
 
 
 @dataclass
+class Jump(Instruction):
+    """Unconditionally jumps execution by a relative offset."""
+
+    offset: int
+
+
+@dataclass
+class JumpIfFalse(Instruction):
+    """Jumps execution by a relative offset if the condition register is False."""
+
+    condition: Register
+    offset: int
+
+
+@dataclass
 class TailCall:
     args: List[Any] = field(default_factory=list)
     kwargs: Dict[str, Any] = field(default_factory=dict)

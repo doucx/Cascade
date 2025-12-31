@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修复集成测试并扩充 VM 指令集规范", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767152708.2446074, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(spec): Implement Jump and JumpIfFalse control flow instructions", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767152825.3283303, "duration_ms": 0}}

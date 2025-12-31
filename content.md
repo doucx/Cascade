@@ -1,276 +1,185 @@
-简要回答：
-非常好的战略判断。直接切换引擎（Flip the Switch）作为“并行测试”是验证新架构成熟度的最直接方式。
+好的，既然我们已经明确了架构硬化的路线图，现在立刻开始执行**阶段 1：定义富语义契约 (Spec & Data)**。
 
-为了避免因显而易见的功能缺失导致测试全军覆没，我将在切换前补齐最后一块关键拼图：**可观测性 (Observability)**。旧引擎通过 `NodeProcessor` 发出丰富的生命周期事件（Started, Finished, Retry），目前的 VM 还是“哑巴”。如果不补齐这一点，所有依赖日志和事件断言的测试都会失败。
+根据“焦土政策”和 TDD 流程，我们将通过编写测试用例来强制定义 `cascade-spec` 中所需的新的数据结构和协议。即使部分代码结构可能已存在，我们也将通过这些严格的测试来锁定其行为契约。
 
-本计划将：
-1.  实现 `ObservabilityMiddleware`，将事件发射逻辑下沉到 VM 管道中。
-2.  在 `VMExecutionStrategy` 中装配此中间件。
-3.  将 `Engine.run` 的默认策略切换为 `VM`。
+以下是阶段 1 的测试编写计划。
 
-这是“阶段三”真正的开始：让 VM 接管原本由 Engine 胶水代码负责的核心职责。
-
-## [WIP] feat: Implement ObservabilityMiddleware and Flip the Switch
+## [WIP] test: 定义富语义契约 (Spec & Data) 的 TDD 测试用例
 
 ### 用户需求
-1.  将 `cascade-engine` 的默认执行路径切换到基于 VM 的新架构。
-2.  确保新架构能够发出与旧架构对齐的生命周期事件 (`TaskStarted`, `TaskFinished` 等)，以通过现有的集成测试。
+编写“架构硬化”阶段 1 的所有测试文件，以定义 `Blueprint` 指令集中的策略元数据 (`policy`) 和多态操作数 (`ResourceOperand`, `ContextOperand`)。
 
 ### 评论
-这是我们走向“新政权”的决定性时刻。如果不通过中间件实现可观测性，VM 就是一个无法调试的黑盒。通过 `ObservabilityMiddleware`，我们证明了管道架构不仅能处理计算，也能处理副作用和元数据，这是架构完备性的重要标志。
+这是 TDD 的第一步 (RED)。我们将创建针对 `cascade-spec` 包的单元测试。这些测试将定义 `Call` 和 `MapCall` 指令如何携带重试和资源策略，以及指令参数如何支持除字面量和寄存器之外的引用类型（如依赖注入和上下文参数）。
 
 ### 目标
-1.  **实现 `ObservabilityMiddleware`**: 负责在指令执行前后发出标准的 Cascade 事件。
-2.  **装配策略**: 在 `VMExecutionStrategy` 中注入 `MessageBus` 和 `run_id`，并配置新的中间件。
-3.  **切换默认值**: 修改 `Engine.run`，默认启用 `use_vm=True`。
+1.  创建 `packages/cascade-spec/tests/blueprint/test_instruction_policy.py`：验证指令携带 `ExecutionPolicy`。
+2.  创建 `packages/cascade-spec/tests/blueprint/test_rich_operands.py`：验证多态操作数的结构和兼容性。
 
 ### 基本原理
-*   **洋葱模型**: 可观测性中间件应置于管道的最外层（或接近最外层），以捕获包括重试、资源获取在内的完整耗时。
-*   **上下文注入**: `run_id` 是运行时动态生成的，必须在每次 `execute` 调用时传递给中间件。
+通过在 Spec 层定义清晰的数据契约，我们确保编译器后端生成的指令集包含足够的信息供 VM 运行时执行高级调度（如重试、资源申请），从而解决“大过滤器效应”。
 
 ### 标签
-#intent/build #flow/ready #priority/critical #comp/runtime #comp/vm #concept/middleware #scope/core #ai/instruct #task/domain/observability #task/object/middleware #task/action/switch
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/interfaces #scope/core #ai/instruct #task/domain/spec #task/object/ir #task/action/define #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 实现 `ObservabilityMiddleware`
+#### Acts 1: 编写指令策略测试 (Policy Specs)
 
-我们在 `cascade.vm.middleware.observability` 中实现此中间件。它需要依赖 `cascade.runtime.events` 中的事件定义。注意这里有一个跨包依赖（vm 依赖 runtime definition），这在 Monorepo 架构中通过接口解耦通常是可以接受的，或者我们使用 Protocol。鉴于 Event dataclass 是单纯的数据结构，直接引用是可以的。
+我们将定义 `test_instruction_policy.py`，它强制要求 `Call` 和 `MapCall` 指令拥有一个结构化的 `policy` 字段。
 
 ~~~~~act
 write_file
-packages/cascade-vm/src/cascade/vm/middleware/observability.py
+packages/cascade-spec/tests/blueprint/test_instruction_policy.py
 ~~~~~
 ~~~~~python
-import time
-from typing import Any
-from cascade.vm.middleware import Middleware, ExecutionContext, NextHandler
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-)
+import pytest
+from dataclasses import is_dataclass
+from cascade.spec.blueprint import Call, MapCall, Register, ExecutionPolicy, RetryPolicySpec
 
-class ObservabilityMiddleware(Middleware):
-    def __init__(self, bus: MessageBus, run_id: str):
-        self.bus = bus
-        self.run_id = run_id
-
-    async def handle(self, ctx: ExecutionContext, next_handler: NextHandler) -> Any:
-        instr = ctx.instruction
-        # Only observe Call/MapCall instructions that represent tasks
-        # Jumps are handled by VM loop and are invisible to users
-        # Currently Middleware only wraps Call/MapCall dispatch
+def test_execution_policy_structure():
+    """
+    验证 ExecutionPolicy 及其子组件的结构定义。
+    Policy 对象负责携带运行时所需的非功能性约束（如重试、资源）。
+    """
+    try:
+        # 验证 RetryPolicySpec 的存在和字段
+        retry = RetryPolicySpec(max_attempts=3, delay=1.0, backoff=2.0)
+        assert retry.max_attempts == 3
+        assert retry.delay == 1.0
         
-        task_id = getattr(instr, "structure_hash", "unknown")
-        task_name = getattr(instr, "task_name", "unknown")
-
-        self.bus.publish(
-            TaskExecutionStarted(
-                run_id=self.run_id,
-                task_id=task_id,
-                task_name=task_name
-            )
+        # 验证 ExecutionPolicy 的聚合能力
+        policy = ExecutionPolicy(
+            retry=retry,
+            resources={"gpu": 1, "memory": "2Gi"},
+            timeouts={"execution": 60.0}
         )
+    except NameError:
+        pytest.fail("Critical Strategy classes (RetryPolicySpec, ExecutionPolicy) are missing in cascade.spec.blueprint")
+    except TypeError as e:
+        pytest.fail(f"Strategy classes have incorrect signature: {e}")
 
-        start_time = time.time()
-        status = "Succeeded"
-        error_msg = None
+    assert policy.retry == retry
+    assert policy.resources["gpu"] == 1
+    assert policy.timeouts["execution"] == 60.0
+
+def test_call_instruction_has_policy_field():
+    """
+    验证 Call 指令包含 'policy' 字段，用于传递单任务策略。
+    """
+    policy = ExecutionPolicy(resources={"cpu": 1})
+    
+    try:
+        instr = Call(
+            output=Register(0),
+            task_name="t",
+            structure_hash="h",
+            policy=policy
+        )
+    except TypeError:
+        pytest.fail("Call instruction does not accept 'policy' argument")
+    
+    assert instr.policy == policy
+    assert instr.policy.resources["cpu"] == 1
+
+def test_map_call_instruction_has_policy_field():
+    """
+    验证 MapCall 指令包含 'policy' 字段。
+    Map 操作的策略通常应用于生成的每一个子任务。
+    """
+    policy = ExecutionPolicy(retry=RetryPolicySpec(max_attempts=5))
+    
+    try:
+        instr = MapCall(
+            output=Register(0),
+            task_name="map_t",
+            structure_hash="h",
+            policy=policy
+        )
+    except TypeError:
+        pytest.fail("MapCall instruction does not accept 'policy' argument")
         
-        try:
-            result = await next_handler()
-            return result
-        except Exception as e:
-            status = "Failed"
-            error_msg = str(e)
-            raise e
-        finally:
-            duration = time.time() - start_time
-            self.bus.publish(
-                TaskExecutionFinished(
-                    run_id=self.run_id,
-                    task_id=task_id,
-                    task_name=task_name,
-                    status=status,
-                    duration=duration,
-                    error=error_msg
-                )
-            )
+    assert instr.policy == policy
+    assert instr.policy.retry.max_attempts == 5
 ~~~~~
 
-#### Acts 2: 更新 `VMExecutionStrategy` 进行装配
+#### Acts 2: 编写多态操作数测试 (Rich Operands Specs)
 
-我们需要更新策略类，使其接收 `bus` 对象（之前不需要），并在构建管道时加入 `ObservabilityMiddleware`。
+我们将定义 `test_rich_operands.py`，它强制要求 `Operand` 体系支持资源引用和上下文引用，并且这些新类型可以被用于 `Call` 指令的参数列表中。
 
 ~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/vm.py
+write_file
+packages/cascade-spec/tests/blueprint/test_rich_operands.py
 ~~~~~
-~~~~~python.old
-from cascade.runtime.constraints.manager import ConstraintManager
+~~~~~python
+import pytest
+from dataclasses import is_dataclass
+from cascade.spec.blueprint import Call, Register, Literal, ContextOperand, ResourceOperand, Operand
 
-# New Compiler Stack
-from cascade.compiler.frontend import Frontend
-from cascade.compiler.optimizer import Optimizer
-from cascade.compiler.backend import Backend
-from cascade.vm import VirtualMachine
-from cascade.vm.middleware.standard import (
-    ArgumentResolutionMiddleware, 
-    ConstraintMiddleware, 
-    ResourceLifecycleMiddleware, 
-    RetryMiddleware
-)
-from cascade.spec.lazy_types import MappedLazyResult
-from cascade.spec.blueprint import Call, MapCall
+def test_resource_operand_structure():
+    """
+    验证 ResourceOperand 的存在和结构。
+    它用于在指令层面表示 'cs.inject("db")'，推迟解析到运行时。
+    """
+    try:
+        # 对应 code: cs.inject("db_connection")
+        op = ResourceOperand(name="db_connection")
+    except NameError:
+        pytest.fail("ResourceOperand class is not defined in cascade.spec.blueprint")
 
+    assert is_dataclass(op)
+    assert isinstance(op, Operand)
+    assert op.name == "db_connection"
 
-class VMExecutionStrategy:
-    def __init__(
-        self,
-        resource_manager: ResourceManager,
-        constraint_manager: ConstraintManager,
-        wakeup_event: asyncio.Event,
-    ):
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.wakeup_event = wakeup_event
+def test_context_operand_structure():
+    """
+    验证 ContextOperand 的存在和结构。
+    它用于直接从运行时上下文（如 params, env）中加载数据，
+    这对应 'cs.Param("env_name")' 的编译结果。
+    """
+    try:
+        # 对应 code: cs.Param("env_name")
+        op = ContextOperand(scope="params", key="env_name")
+    except NameError:
+        pytest.fail("ContextOperand class is not defined in cascade.spec.blueprint")
 
-    async def execute(
-~~~~~
-~~~~~python.new
-from cascade.runtime.constraints.manager import ConstraintManager
-from cascade.runtime.bus import MessageBus
+    assert is_dataclass(op)
+    assert isinstance(op, Operand)
+    assert op.scope == "params"
+    assert op.key == "env_name"
 
-# New Compiler Stack
-from cascade.compiler.frontend import Frontend
-from cascade.compiler.optimizer import Optimizer
-from cascade.compiler.backend import Backend
-from cascade.vm import VirtualMachine
-from cascade.vm.middleware.standard import (
-    ArgumentResolutionMiddleware, 
-    ConstraintMiddleware, 
-    ResourceLifecycleMiddleware, 
-    RetryMiddleware
-)
-from cascade.vm.middleware.observability import ObservabilityMiddleware
-from cascade.spec.lazy_types import MappedLazyResult
-from cascade.spec.blueprint import Call, MapCall
-
-
-class VMExecutionStrategy:
-    def __init__(
-        self,
-        resource_manager: ResourceManager,
-        constraint_manager: ConstraintManager,
-        wakeup_event: asyncio.Event,
-        bus: MessageBus,
-    ):
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.wakeup_event = wakeup_event
-        self.bus = bus
-
-    async def execute(
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/vm.py
-~~~~~
-~~~~~python.old
-        # Configure Middleware Pipeline (Order matters!)
-        # Order: Retry (Outer) -> Constraints -> Resources -> Resolution -> Core execution (Inner)
-        vm.set_middlewares([
-            RetryMiddleware(),
-            ConstraintMiddleware(self.constraint_manager),
-            ResourceLifecycleMiddleware(self.resource_manager),
-            ArgumentResolutionMiddleware(active_resources, params),
-        ])
-~~~~~
-~~~~~python.new
-        # Configure Middleware Pipeline (Order matters!)
-        # Onion Layer:
-        # 1. Observability (Outermost): Logs everything including retries? 
-        #    Note: Does Observability log individual attempts? 
-        #    If Retry is inner, Observability sees one "Task" execution which might take long.
-        #    If Retry is outer, Observability sees each attempt as a "Task"? No, that's not right.
-        #    Correct nesting:
-        #    [Observability] -> [Retry] -> [Constraints] -> [Resources] -> [Resolve] -> [Core]
-        #    This way, Observability records the *Total* time for the task (including retries).
-        #    The RetryMiddleware itself should emit TaskRetrying events (TODO).
-        
-        vm.set_middlewares([
-            ObservabilityMiddleware(self.bus, run_id),
-            RetryMiddleware(),
-            ConstraintMiddleware(self.constraint_manager),
-            ResourceLifecycleMiddleware(self.resource_manager),
-            ArgumentResolutionMiddleware(active_resources, params),
-        ])
-~~~~~
-
-#### Acts 3: 更新 `Engine` 初始化以传递 `bus`
-
-由于修改了 `VMExecutionStrategy` 的 `__init__` 签名，我们需要更新 `Engine` 对其的实例化调用。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python.old
-        self.vm_strategy = VMExecutionStrategy(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event,
+def test_call_instruction_accepts_polymorphic_operands():
+    """
+    验证 Call 指令的 args/kwargs 可以混合接受 Literal, Register 以及新的 Operand 类型。
+    """
+    # 构造混合参数列表
+    mixed_args = [
+        Literal(1),                      # 常量
+        Register(0),                     # 运行时中间结果
+        ResourceOperand("db"),           # 依赖注入
+        ContextOperand("params", "key")  # 全局参数
+    ]
+    
+    try:
+        instr = Call(
+            output=Register(1),
+            task_name="test_task",
+            args=mixed_args,
+            kwargs={"ctx": ContextOperand("env", "HOME")},
+            structure_hash="hash_abc"
         )
-
-        self._managed_subscribers = []
-~~~~~
-~~~~~python.new
-        self.vm_strategy = VMExecutionStrategy(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event,
-            bus=self.bus,
-        )
-
-        self._managed_subscribers = []
-~~~~~
-
-#### Acts 4: Flip the Switch (默认启用 VM)
-
-这是最后一步。我们将 `use_vm` 的默认值改为 `True`。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python.old
-    async def run(
-        self,
-        target: Any,
-        params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = False,
-    ) -> Any:
-~~~~~
-~~~~~python.new
-    async def run(
-        self,
-        target: Any,
-        params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = True,
-    ) -> Any:
+    except TypeError as e:
+        pytest.fail(f"Call instruction failed to accept polymorphic operands: {e}")
+    
+    # 验证类型保持
+    assert isinstance(instr.args[2], ResourceOperand)
+    assert isinstance(instr.args[3], ContextOperand)
+    assert isinstance(instr.kwargs["ctx"], ContextOperand)
 ~~~~~
 
 ### 下一步建议
-现在，你可以运行整个测试套件了：
-`pytest packages/cascade-engine/tests`
-
-预期结果：
-大部分基础功能测试应该通过。但可能会有一些失败，例如：
-1.  **缓存 (Caching)**：我们还没有实现 CacheMiddleware，关于缓存命中的测试会失败。
-2.  **重试事件 (Retry Events)**：目前的 RetryMiddleware 还没有发出 `TaskRetrying` 事件，相关测试会失败。
-3.  **复杂流控制**：如果 Jump 指令处理有细微差异，可能会有边缘情况失败。
-
-这些失败将直接指导我们下一步的中间件开发工作。
+执行测试（`pytest packages/cascade-spec`）。
+如果测试失败（RED），则修改 `cascade-spec` 中的代码以实现这些数据结构。
+如果测试通过（GREEN，如果代码已存在），则确认契约已锁定，并继续进行 **阶段 2：编译器升级 (The Compiler)**。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: Implement ObservabilityMiddleware and Flip the Switch", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767161956.0090435, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 定义富语义契约 (Spec & Data) 的 TDD 测试用例", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767163300.3904326, "duration_ms": 0}}

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(python): 实施 Lazy Import 并修复路径错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767149802.910394, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: D test_vm.py, A test_vm_basic.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767150336.5541759, "duration_ms": 0}}

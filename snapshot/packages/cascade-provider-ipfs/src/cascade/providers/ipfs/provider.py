@@ -1,6 +1,6 @@
 import json
 import cascade as cs
-from cascade.providers import Provider, LazyFactory
+from cascade.spec.protocols import Provider, LazyFactory
 
 try:
     import aiohttp

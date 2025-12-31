@@ -1,7 +1,7 @@
 import asyncio
 import os
 from cascade.spec.task import task
-from cascade.providers import LazyFactory, Provider
+from cascade.spec.protocols import LazyFactory, Provider
 
 # --- Async IO Tasks ---
 

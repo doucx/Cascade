@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from cascade.spec.task import task
-from cascade.providers import LazyFactory, Provider
+from cascade.spec.protocols import LazyFactory, Provider
 from cascade.runtime.engine import Engine
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor

@@ -73,23 +73,37 @@ class Reactor:
         2. Evaluating potentials of affected (dirty) nodes.
         3. Firing ready nodes.
         """
+        print(f"\n[REACTOR] Entering step(). Event queue size: {len(self._event_queue)}")
+        
         # 1. Process Event Loop
         # We drain the queue completely to handle propagation chains within one step.
+        events_processed = 0
         while self._event_queue:
             event = self._event_queue.popleft()
+            print(f"[REACTOR]  -> Processing event: {event}")
             self._handle_event(event)
+            events_processed += 1
+        
+        print(f"[REACTOR] Event processing finished. Processed {events_processed} events.")
 
         # 2. Fire Ready Nodes
         # Iterate over a snapshot of dirty nodes
+        dirty_node_names = [n.name for n in self._dirty_func_nodes]
+        print(f"[REACTOR] Evaluating dirty nodes: {dirty_node_names}")
         ready_nodes = []
         for node in list(self._dirty_func_nodes):
             if node.is_ready():
+                print(f"[REACTOR]  -> Node '{node.name}' is READY.")
                 ready_nodes.append(node)
         
         self._dirty_func_nodes.clear()
 
-        for node in ready_nodes:
-            self._fire(node)
+        if ready_nodes:
+            print(f"[REACTOR] Firing {len(ready_nodes)} ready nodes...")
+            for node in ready_nodes:
+                self._fire(node)
+        
+        print(f"[REACTOR] Exiting step().")
 
     def _handle_event(self, event: ReactorEvent):
         if isinstance(event, TokenGenerated):
@@ -98,11 +112,14 @@ class Reactor:
             self._handle_execution_finished(event)
 
     def _handle_token_generated(self, event: TokenGenerated):
+        print(f"[REACTOR]    -> Handling TokenGenerated for node '{event.node.name}'. Putting token.")
         # 1. Update State (Physics: Inject Energy)
         event.node.put(event.token)
         
         # 2. Mark downstream FuncNodes as dirty (Potential might have increased)
         downstream = self._downstream_map.get(event.node.name, [])
+        downstream_names = [n.name for n in downstream]
+        print(f"[REACTOR]    -> Marking downstream nodes as dirty: {downstream_names}")
         for f_node in downstream:
             self._dirty_func_nodes.add(f_node)
 

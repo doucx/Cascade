@@ -44,7 +44,10 @@ class TaskDef:
 class NodeIR:
     id: str
     definition: TaskDef
-    inputs: Dict[str, Any] = field(default_factory=dict)
+    # Literal positional arguments passed to the task
+    args: List[Any] = field(default_factory=list)
+    # Literal keyword arguments passed to the task
+    kwargs: Dict[str, Any] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
 
 

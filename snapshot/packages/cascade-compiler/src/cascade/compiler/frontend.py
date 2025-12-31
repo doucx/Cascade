@@ -89,14 +89,19 @@ class _GraphBuilder:
         )
 
         if node_id not in self.nodes:
-            literal_inputs = {
-                str(i): arg for i, arg in enumerate(obj.args) if not isinstance(arg, (LazyResult, MappedLazyResult))
+            literal_args = [
+                arg for arg in obj.args if not isinstance(arg, (LazyResult, MappedLazyResult))
+            ]
+            literal_kwargs = {
+                k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
             }
-            literal_inputs.update(
-                {k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))}
-            )
 
-            node = NodeIR(id=node_id, definition=task_def, inputs=literal_inputs)
+            node = NodeIR(
+                id=node_id,
+                definition=task_def,
+                args=literal_args,
+                kwargs=literal_kwargs,
+            )
             self.nodes[node_id] = node
 
         for i, arg in enumerate(obj.args):
@@ -154,13 +159,15 @@ class _GraphBuilder:
         )
 
         if node_id not in self.nodes:
-            literal_inputs = {
+            literal_kwargs = {
                 k: val for k, val in obj.mapping_kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
             }
             node = NodeIR(
                 id=node_id,
                 definition=task_def,
-                inputs=literal_inputs,
+                # Mapped nodes only have keyword-based mapping
+                args=[],
+                kwargs=literal_kwargs,
                 meta={"is_map": True}
             )
             self.nodes[node_id] = node

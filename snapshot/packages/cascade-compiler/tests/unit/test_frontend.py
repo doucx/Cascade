@@ -29,7 +29,7 @@ def test_compile_single_task_structure():
     
     node = ir.nodes[0]
     assert node.definition.name == "simple_task"
-    assert node.inputs["x"] == 10
+    assert node.kwargs["x"] == 10
     
     # 4. Axiom Check: Enforce Long Hash Naming
     # We don't check the value, but the KEY must be the long form.
@@ -125,7 +125,7 @@ def test_compile_param_input():
     
     # Check inputs
     # The Param LazyResult stores the param name in its args/kwargs
-    assert param_node.inputs.get("name") == "my_param" or param_node.inputs.get("0") == "my_param"
+    assert param_node.kwargs.get("name") == "my_param" or param_node.args[0] == "my_param"
 
 
 def test_compile_map_node():
@@ -154,6 +154,10 @@ def test_compile_map_node():
     # Driving the requirement: NodeIR should have an 'execution_strategy' or similar.
     # For now, let's assert that inputs contain the list.
     assert node.inputs["x"] == [1, 2, 3]
+    
+    # Spec Requirement: We need to know this is a MAP, not a single call with a list arg.
+    # The Frontend must populate a field. Let's assume 'meta' in NodeIR for now.
+    assert node.kwargs["x"] == [1, 2, 3]
     
     # Spec Requirement: We need to know this is a MAP, not a single call with a list arg.
     # The Frontend must populate a field. Let's assume 'meta' in NodeIR for now.

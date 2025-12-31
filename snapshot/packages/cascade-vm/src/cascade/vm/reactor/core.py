@@ -12,6 +12,7 @@ class Reactor:
         self.executor = executor
         self.resource_manager = resource_manager
         self._event_queue: Deque[ReactorEvent] = deque()
+        self._listeners: List[Any] = []
         
         # Topology Indexes
         self._nodes: Set[Any] = set()
@@ -55,6 +56,9 @@ class Reactor:
         self._channels_by_source[channel.source.name].append(channel)
         self.register_node(channel.source)
         self.register_node(channel.target)
+
+    def add_listener(self, callback):
+        self._listeners.append(callback)
 
     def push_event(self, event: ReactorEvent):
         """Pushes an event to the queue and wakes up the run loop if it's waiting."""
@@ -152,6 +156,14 @@ class Reactor:
                 break
 
     async def _handle_event(self, event: ReactorEvent):
+        # Notify listeners
+        for listener in self._listeners:
+            try:
+                listener(event)
+            except Exception:
+                # Listeners should not break the reactor loop
+                pass
+
         if isinstance(event, TokenGenerated):
             self._handle_token_generated(event)
         elif isinstance(event, ExecutionFinished):

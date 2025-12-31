@@ -251,11 +251,37 @@ class VMExecutionStrategy:
             if result_channel_def:
                 target_output_d_node = dynamic_data_nodes.get(result_channel_def.target_data_slot_hash)
 
-        # 8. Run
-        await reactor.run()
-
-        # 9. Extract Result
-        if target_output_d_node and target_output_d_node.is_excited():
-            return target_output_d_node.peek().payload
+        # 8. Run & Observe
+        # We need to run the reactor in the background and wait for the result token
+        # to appear in the target output node.
         
-        return None
+        result_future = asyncio.Future()
+
+        def on_event(event):
+            # Check if this event is the generation of our target result
+            if isinstance(event, TokenGenerated) and event.node is target_output_d_node:
+                if not result_future.done():
+                    result_future.set_result(event.token.payload)
+
+        reactor.add_listener(on_event)
+        
+        # Start Reactor in background
+        reactor_task = asyncio.create_task(reactor.run())
+        
+        try:
+            # Wait for the result (or exception propagation)
+            # If target_output_d_node is None (e.g. void workflow), this logic needs refinement,
+            # but for now we assume all valid workflows produce a result.
+            if target_output_d_node:
+                return await result_future
+            else:
+                # If no output is expected, we might just wait for reactor to idle?
+                # But reactor.run() is infinite. 
+                # For now, we assume value-returning tasks.
+                # If we really need void support, we'd need an "Idle" event from Reactor.
+                return None
+        finally:
+            # Cleanup: Stop reactor and await its shutdown
+            reactor.stop()
+            # We cancel/await to ensure no dangling tasks
+            await reactor_task

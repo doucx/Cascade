@@ -1,26 +1,30 @@
-好的，我们已经进入 **RED** 状态。测试失败的原因正如我们所料：`VMExecutionStrategy` 只是线性地执行了一次编译-运行流程，当 `counter(3)` 返回 `Jump(target_key='continue', data=2)` 时，它将这个 `Jump` 对象直接作为最终结果返回，而不是用它来驱动下一次循环。
+好的，分析完毕。两个失败点都非常清晰，并且暴露了我上一个补丁中的逻辑缺陷。
 
-现在，我们将修复这个问题。我将为 `VMExecutionStrategy` 实现一个“蹦床”（Trampoline）循环，使其能够解释 `cs.Jump` 信号并重新执行，直到遇到终止条件。
+1.  **`TypeError`**: 第一个测试失败是因为我的代码过于严格，强制要求 `cs.Jump` 的 `data` 负载必须是字典。`counter` 任务返回的是一个整数，这是一种完全合法的使用方式，我的代码没有正确处理。
+2.  **无限循环**: 第二个测试进入死循环，是因为在准备下一次循环时，我只传递了 `Jump` 信号中的**增量**参数（如 `{'acc': 1}`），而完全**丢弃**了任务原始的其他参数（如 `limit=3`）。这导致 `accumulator` 任务在第二次调用时缺少 `limit` 参数，使得 `acc < limit` 的判断逻辑失效，从而无限循环。
 
-## [WIP] fix(engine): 在 VMExecutionStrategy 中实现 TCO 循环
+我将生成一个修复计划，同时解决这两个问题。
+
+## [WIP] fix(engine): 修复 VM 策略的 TCO 循环逻辑
 
 ### 错误分析
-`VMExecutionStrategy` 目前是一个线性的“一次性执行器”。它编译、执行并返回 `VirtualMachine` 的结果。当 VM 返回一个 `cs.Jump` 对象时，Strategy 并没有相应的处理逻辑，而是直接将其作为最终结果返回，导致测试断言失败。
+1.  **类型错误**: `VMExecutionStrategy` 中的 TCO 循环逻辑在处理 `cs.Jump` 信号时，错误地假设其 `data` 负载永远是字典，当接收到单个值（如整数）时会抛出 `TypeError`。
+2.  **状态丢失**: 在准备 TCO 循环的下一次迭代时，策略未能将 `Jump` 信号中的覆盖参数与任务原始的参数进行合并。这导致了状态丢失（例如，`limit` 参数丢失），引发了无限循环。
 
 ### 用户需求
-修改 `cascade-engine/src/cascade/runtime/strategies/vm.py`，为其 `execute` 方法添加一个 `while` 循环，使其能够处理 `cs.Jump` 信号，实现尾调用优化（TCO）和状态机循环，从而使 `test_vm_strategy_tco.py` 中的测试通过。
+修复 `cascade-engine/src/cascade/runtime/strategies/vm.py`，使其 TCO 循环能够：
+1.  正确处理非字典类型的 `Jump` 数据负载。
+2.  在循环迭代之间正确地合并和传递所有任务参数。
 
 ### 评论
-这是实现新旧引擎功能对齐（Feature Parity）的关键一步。通过在 Strategy 层添加循环，我们保持了 `VirtualMachine` 作为一个纯粹指令执行器的“纯洁性”，同时赋予了上层编排器处理复杂控制流的能力。这种分层设计非常清晰和健壮。
+这次修复至关重要，它使 `VMExecutionStrategy` 的 TCO 实现更加健壮，并与旧的、经过验证的 `GraphExecutionStrategy` 的行为对齐。通过正确地合并状态，我们确保了有状态的循环（如 `accumulator`）能够按预期收敛并终止。
 
 ### 目标
-1.  将 `VMExecutionStrategy.execute` 方法重构为一个 `while True` 循环。
-2.  在循环内部，编译并执行当前的 `LazyResult` 目标。
-3.  检查执行结果。如果不是 `Jump` 对象，则终止循环并返回结果。
-4.  如果是 `Jump` 对象，则根据其内容确定下一个 `LazyResult` 目标和输入参数，并继续下一次循环。
+1.  修改 `VMExecutionStrategy.execute` 的循环体，在准备下一次迭代时，将 `current_target` 的原始参数与 `Jump` 信号中的覆盖参数正确合并。
+2.  增加对非字典 `Jump.data` 的处理逻辑，将其视为对任务第一个位置参数的覆盖。
 
 ### 基本原理
-我们将借鉴旧的 `GraphExecutionStrategy` 中经过验证的循环逻辑。核心思想是维护一个 `current_target` (当前的 `LazyResult`) 和 `next_input_overrides` (来自上一个 `Jump` 的数据)。在每次循环中，我们重新编译 `current_target`，并将 `next_input_overrides` 作为 VM 的初始参数。执行后，我们检查 `current_target._jump_selector` 来解析 `Jump` 信号，并更新 `current_target` 和 `next_input_overrides` 以准备下一次迭代。
+我们将修改 `while` 循环的逻辑。在每次迭代开始时，我们会从 `current_target` 加载完整的 `args` 和 `kwargs`。然后，我们会应用上一次 `Jump` 提供的覆盖值。在处理 `Jump` 返回值时，我们会区分 `dict` 和非 `dict` 类型的数据，并相应地设置下一次迭代的 `args` 或 `kwargs` 覆盖。
 
 ### 标签
 #intent/fix #flow/draft #priority/critical #comp/engine #concept/control-flow #scope/core #ai/instruct #task/domain/core #task/object/vm-strategy #task/action/implementation #task/state/continue
@@ -29,77 +33,15 @@
 
 ### Script
 
-#### Acts 1: 为 VMExecutionStrategy 实现 TCO 循环
+#### Acts 1: 修复 VMExecutionStrategy 中的循环和参数传递逻辑
 
-我们将重写 `execute` 方法，引入一个 `while` 循环来处理 `Jump` 信号，使其能够正确执行 TCO 工作流。
+我们将应用一个补丁来修正 `execute` 方法，使其能够正确处理 TCO 循环中的状态传递。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 ~~~~~
 ~~~~~python.old
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        # 1. Frontend: Compile LazyResult to GraphIR
-        # Returns CompilationResult(ir, symbol_table)
-        compilation_result = Frontend.compile(target)
-        graph_ir = compilation_result.ir
-        symbol_table = compilation_result.symbol_table
-
-        # 2. Optimizer: Schedule GraphIR to ExecutionPlan
-        execution_plan = Optimizer.optimize(graph_ir)
-
-        # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
-        blueprint = Backend.compile(graph_ir, execution_plan)
-
-        # 4. Runtime: Execute Blueprint on VM
-        vm = VirtualMachine(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self.wakeup_event,
-        )
-        
-        # Configure Middleware Pipeline (Order matters!)
-        # Onion Layer:
-        # 1. Observability (Outermost): Logs everything including retries? 
-        #    Note: Does Observability log individual attempts? 
-        #    If Retry is inner, Observability sees one "Task" execution which might take long.
-        #    If Retry is outer, Observability sees each attempt as a "Task"? No, that's not right.
-        #    Correct nesting:
-        #    [Observability] -> [Retry] -> [Constraints] -> [Resources] -> [Resolve] -> [Core]
-        #    This way, Observability records the *Total* time for the task (including retries).
-        #    The RetryMiddleware itself should emit TaskRetrying events (TODO).
-        
-        vm.set_middlewares([
-            ObservabilityMiddleware(self.bus, run_id),
-            RetryMiddleware(),
-            ConstraintMiddleware(self.constraint_manager),
-            ResourceLifecycleMiddleware(self.resource_manager),
-            ArgumentResolutionMiddleware(active_resources, params),
-        ])
-
-        if isinstance(target, MappedLazyResult):
-            initial_args = []
-            initial_kwargs = dict(target.mapping_kwargs)
-        else:
-            initial_args = list(target.args)
-            initial_kwargs = dict(target.kwargs)
-        
-        return await vm.execute(
-            blueprint,
-            symbol_table=symbol_table,
-            initial_args=initial_args,
-            initial_kwargs=initial_kwargs,
-        )
-~~~~~
-~~~~~python.new
     async def execute(
         self,
         target: Any,
@@ -189,6 +131,91 @@ packages/cascade-engine/src/cascade/runtime/strategies/vm.py
             else:
                 next_input_overrides = {}
 ~~~~~
+~~~~~python.new
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        from cascade.spec.jump import Jump
+
+        current_target = target
+        next_args_override: Optional[List[Any]] = None
+        next_kwargs_override: Optional[Dict[str, Any]] = None
+
+        while True:
+            # 1. Compile (every loop, as target object might change)
+            compilation_result = Frontend.compile(current_target)
+            graph_ir = compilation_result.ir
+            symbol_table = compilation_result.symbol_table
+            execution_plan = Optimizer.optimize(graph_ir)
+            blueprint = Backend.compile(graph_ir, execution_plan)
+
+            # 2. Prepare VM and Middleware
+            vm = VirtualMachine(
+                resource_manager=self.resource_manager,
+                constraint_manager=self.constraint_manager,
+                wakeup_event=self.wakeup_event,
+            )
+            vm.set_middlewares([
+                ObservabilityMiddleware(self.bus, run_id),
+                RetryMiddleware(),
+                ConstraintMiddleware(self.constraint_manager),
+                ResourceLifecycleMiddleware(self.resource_manager),
+                ArgumentResolutionMiddleware(active_resources, params),
+            ])
+
+            # 3. Prepare Inputs for this iteration
+            # Start with the original args/kwargs from the LazyResult
+            initial_args = list(getattr(current_target, 'args', []))
+            initial_kwargs = getattr(current_target, 'kwargs', {}).copy()
+
+            # Apply overrides from the previous Jump
+            if next_args_override is not None:
+                initial_args = next_args_override
+            if next_kwargs_override is not None:
+                initial_kwargs.update(next_kwargs_override)
+            
+            # Clear overrides for the next potential loop
+            next_args_override, next_kwargs_override = None, None
+
+            # 4. Execute
+            result = await vm.execute(
+                blueprint,
+                symbol_table=symbol_table,
+                initial_args=initial_args,
+                initial_kwargs=initial_kwargs,
+            )
+
+            # 5. Check for Control Flow Signal
+            if not isinstance(result, Jump):
+                return result  # Normal termination
+
+            # 6. Handle Explicit Jump
+            selector = getattr(current_target, '_jump_selector', None)
+            if not selector:
+                raise RuntimeError(
+                    f"Task '{current_target.task.name}' returned a Jump signal "
+                    "but has no bound jump selector. Use cs.bind() to link a selector."
+                )
+
+            next_lazy_result = selector.routes.get(result.target_key)
+
+            if next_lazy_result is None:
+                return result.data  # Loop exit condition
+
+            # 7. Prepare for next iteration
+            current_target = next_lazy_result
+            if isinstance(result.data, dict):
+                next_kwargs_override = result.data
+            elif result.data is not None:
+                # Assume single value maps to the first positional argument
+                next_args_override = [result.data]
+~~~~~
 
 ### 下一步建议
-请再次运行测试。这次，`VMExecutionStrategy` 应该能正确处理 `Jump` 信号，使 `test_vm_strategy_tco.py` 中的两个测试用例都通过。如果通过，我们将进入 GREEN 状态，并可以继续解决下一个集成缺口：资源和约束的端到端验证。
+请重新运行测试套件。这次的逻辑更加完善，应该能够正确处理两种 TCO 场景，使测试全部通过。

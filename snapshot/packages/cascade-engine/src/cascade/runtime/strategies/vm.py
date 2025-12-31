@@ -48,27 +48,23 @@ class VMExecutionStrategy:
         from cascade.spec.jump import Jump
 
         current_target = target
-        next_input_overrides: Optional[Dict[str, Any]] = None
+        next_args_override: Optional[List[Any]] = None
+        next_kwargs_override: Optional[Dict[str, Any]] = None
 
         while True:
-            # 1. Frontend: Compile LazyResult to GraphIR
+            # 1. Compile (every loop, as target object might change)
             compilation_result = Frontend.compile(current_target)
             graph_ir = compilation_result.ir
             symbol_table = compilation_result.symbol_table
-
-            # 2. Optimizer: Schedule GraphIR to ExecutionPlan
             execution_plan = Optimizer.optimize(graph_ir)
-
-            # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
             blueprint = Backend.compile(graph_ir, execution_plan)
 
-            # 4. Runtime: Execute Blueprint on VM
+            # 2. Prepare VM and Middleware
             vm = VirtualMachine(
                 resource_manager=self.resource_manager,
                 constraint_manager=self.constraint_manager,
                 wakeup_event=self.wakeup_event,
             )
-            
             vm.set_middlewares([
                 ObservabilityMiddleware(self.bus, run_id),
                 RetryMiddleware(),
@@ -76,15 +72,26 @@ class VMExecutionStrategy:
                 ResourceLifecycleMiddleware(self.resource_manager),
                 ArgumentResolutionMiddleware(active_resources, params),
             ])
-            
-            # Use overrides from previous Jump if available
-            initial_kwargs = next_input_overrides or {}
-            next_input_overrides = None
 
+            # 3. Prepare Inputs for this iteration
+            # Start with the original args/kwargs from the LazyResult
+            initial_args = list(getattr(current_target, 'args', []))
+            initial_kwargs = getattr(current_target, 'kwargs', {}).copy()
+
+            # Apply overrides from the previous Jump
+            if next_args_override is not None:
+                initial_args = next_args_override
+            if next_kwargs_override is not None:
+                initial_kwargs.update(next_kwargs_override)
+            
+            # Clear overrides for the next potential loop
+            next_args_override, next_kwargs_override = None, None
+
+            # 4. Execute
             result = await vm.execute(
                 blueprint,
                 symbol_table=symbol_table,
-                initial_args=[],  # Jumps primarily work with kwargs for clarity
+                initial_args=initial_args,
                 initial_kwargs=initial_kwargs,
             )
 
@@ -103,24 +110,12 @@ class VMExecutionStrategy:
             next_lazy_result = selector.routes.get(result.target_key)
 
             if next_lazy_result is None:
-                # Loop exit condition
-                return result.data
+                return result.data  # Loop exit condition
 
             # 7. Prepare for next iteration
             current_target = next_lazy_result
-            
-            # Prepare input overrides for the next loop
             if isinstance(result.data, dict):
-                next_input_overrides = result.data
+                next_kwargs_override = result.data
             elif result.data is not None:
-                # Non-dict data is passed as the first positional argument
-                # In the VM, this means we need to know which register to populate
-                # For simplicity, we will pass it as a special kwarg and let
-                # the VM/middleware handle it. Or, for TCO, it's often a dict.
-                # The old strategy passed it as {"0": ...}, but VM doesn't use that.
-                # The test case `accumulator` passes a dict. Let's stick to dicts.
-                # This might require adjusting the `counter` test if it relies on positional.
-                # Let's assume for now Jump data is a dict of kwargs.
-                raise TypeError("Jump data for VM-based TCO must be a dictionary.")
-            else:
-                next_input_overrides = {}
+                # Assume single value maps to the first positional argument
+                next_args_override = [result.data]

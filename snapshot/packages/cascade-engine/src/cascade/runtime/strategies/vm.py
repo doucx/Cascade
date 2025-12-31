@@ -11,6 +11,12 @@ from cascade.compiler.frontend import Frontend
 from cascade.compiler.optimizer import Optimizer
 from cascade.compiler.backend import Backend
 from cascade.vm import VirtualMachine
+from cascade.vm.middleware.standard import (
+    ArgumentResolutionMiddleware, 
+    ConstraintMiddleware, 
+    ResourceLifecycleMiddleware, 
+    RetryMiddleware
+)
 from cascade.spec.lazy_types import MappedLazyResult
 from cascade.spec.blueprint import Call, MapCall
 
@@ -53,6 +59,23 @@ class VMExecutionStrategy:
             constraint_manager=self.constraint_manager,
             wakeup_event=self.wakeup_event,
         )
+        
+        # Configure Middleware Pipeline (Order matters!)
+        # Outer -> Inner
+        vm.set_middlewares([
+            # 1. Arguments must be resolved first so others see values (e.g. dynamic constraints?)
+            # Actually, standard is: Retry -> Resource -> Execute.
+            # Argument Resolution usually happens right before Core execution?
+            # Or at the very beginning so Retry sees resolved args? 
+            # Args might contain resources which need to be acquired? 
+            # No, ResourceOperand just looks up an ALREADY active resource.
+            # Resource acquisition (Lifecycle) is for compute resources (CPU/GPU) claimed by the task metadata.
+            
+            RetryMiddleware(),
+            ResourceLifecycleMiddleware(self.resource_manager),
+            ConstraintMiddleware(self.constraint_manager),
+            ArgumentResolutionMiddleware(active_resources, params),
+        ])
 
         if isinstance(target, MappedLazyResult):
             initial_args = []

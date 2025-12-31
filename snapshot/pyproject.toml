@@ -33,6 +33,7 @@ cascade-cli-observer = { workspace = true }
 cascade-connector-mqtt = { workspace = true }
 cascade-connector-local = { workspace = true }
 cascade-compiler = { workspace = true }
+cascade-vm = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [

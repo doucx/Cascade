@@ -1,18 +1,13 @@
 import asyncio
-import inspect
-from typing import Any, List, Dict, Optional, TYPE_CHECKING
+from typing import Any, Dict, Optional
 from cascade.spec.blueprint import ResourceOperand, ContextOperand
-from cascade.spec.constraint import ResourceConstraint
 from cascade.vm.middleware import Middleware, ExecutionContext, NextHandler
 from cascade.vm.protocols import ResourceManager, ConstraintManager
-
-if TYPE_CHECKING:
-    from cascade.spec.policy import RetryPolicySpec
 
 class ArgumentResolutionMiddleware(Middleware):
     def __init__(self, resource_context: Dict[str, Any], global_context: Dict[str, Any]):
         self.resource_context = resource_context
-        self.global_context = global_context # params, envs
+        self.global_context = global_context 
 
     async def handle(self, ctx: ExecutionContext, next_handler: NextHandler) -> Any:
         # Resolve Args
@@ -35,14 +30,9 @@ class ArgumentResolutionMiddleware(Middleware):
             return self.resource_context[val.name]
         
         if isinstance(val, ContextOperand):
-            # Assumes global_context has {scope: {key: value}} structure, 
-            # OR simple flat dict for 'params'? 
-            # Spec says: scope='params', key='x'.
-            # Engine passes 'params' separately.
-            # Simplified: global_context IS the params dict for scope='params'
+            # Currently only 'params' scope makes sense for simple context
             if val.scope == 'params':
                 return self.global_context.get(val.key)
-            # Future: env scope
             return None
             
         return val
@@ -57,44 +47,31 @@ class ConstraintMiddleware(Middleware):
             return await next_handler()
 
         instr = ctx.instruction
-        # Check permissions (e.g. rate limits)
-        # Note: Optimization possibility - construct a temporary 'Node' like object
-        # or update ConstraintManager to accept Instruction/Metadata directly.
-        # Current Manager expects 'Node'. We create a flyweight wrapper.
         
-        from cascade.graph.model import Node # Shim
+        # In a real implementation with a strongly typed ConstraintManager, 
+        # we would pass the instruction metadata directly.
+        # However, the current ConstraintManager expects a 'Node' object.
+        # We construct a minimal shim to satisfy the protocol.
+        from cascade.graph.model import Node
         from cascade.spec.ir.models import TaskDef
         from cascade.spec.fingerprint import Fingerprint
         from uuid import uuid4
         
-        # We need a stable ID for Rate Limiter to track this task instance?
-        # Does instruction have an instance ID? Call instruction does not have a UUID.
-        # But for 'rate_limit', scope is usually task name dependent.
-        # For 'concurrency', we need to hold tokens.
-        # This Shim creation is expensive. 
-        # TODO: Refactor ConstraintManager to use pure data (Policy/Metadata).
-        
+        # Shim construction
         shim_node = Node(
-            structural_id=str(uuid4()), # Temp ID
+            structural_id=str(uuid4()), 
             definition=TaskDef(name=instr.task_name, args=[], fingerprint=Fingerprint()),
-            constraints=instr.constraints # Legacy constraints
+            constraints=instr.constraints # Legacy support
         )
         
-        # Poll for permission
+        # Poll for permission (e.g. Rate Limits)
         while not self.manager.check_permission(shim_node):
             await asyncio.sleep(0.1) 
             
-        # Append extra requirements from global constraints (e.g. concurrency slots)
+        # Get extra requirements (e.g. Concurrency Slots) to be acquired by ResourceMiddleware
         extras = self.manager.get_extra_requirements(shim_node)
-        
-        # We must pass these extras to the ResourceMiddleware.
-        # How? Context doesn't have a 'requirements' field.
-        # We can attach to ctx as a dynamic attribute or use a dedicated Policy object on context?
-        # Convention: ctx.requirements dict.
-        
-        if not hasattr(ctx, "dynamic_requirements"):
-            ctx.dynamic_requirements = {}
-        ctx.dynamic_requirements.update(extras)
+        if extras:
+            ctx.metadata["dynamic_requirements"] = extras
         
         return await next_handler()
 
@@ -110,20 +87,20 @@ class ResourceLifecycleMiddleware(Middleware):
         instr = ctx.instruction
         reqs = {}
         
-        # 1. Static constraints from instruction (Policy logic preferred, backward compat)
+        # 1. Static constraints from instruction policy
         if instr.policy and instr.policy.resources:
             reqs.update(instr.policy.resources)
-        elif instr.constraints: # Legacy
+        elif instr.constraints: # Legacy fallback
             reqs.update(instr.constraints.requirements)
             
-        # 2. Dynamic requirements from ConstraintMiddleware
-        if hasattr(ctx, "dynamic_requirements"):
-            reqs.update(ctx.dynamic_requirements)
+        # 2. Dynamic requirements from upstream middleware (e.g. ConstraintMiddleware)
+        if "dynamic_requirements" in ctx.metadata:
+            reqs.update(ctx.metadata["dynamic_requirements"])
 
         if not reqs:
             return await next_handler()
 
-        # Acquire
+        # Acquire-Execute-Release Pattern
         await self.manager.acquire(reqs)
         try:
             return await next_handler()
@@ -138,24 +115,24 @@ class RetryMiddleware(Middleware):
             return await next_handler()
 
         spec = policy.retry
-        attempts = 0
-        max_attempts = spec.max_attempts
+        # attempts is current retry count (0 means initial run)
+        # max_attempts is allowed retries
+        current_attempt = 0
+        max_retries = spec.max_attempts
         delay = spec.delay
         
         last_error = None
         
         # Loop: Initial execution (attempt 0) + Retries
-        # Example: max_attempts=2 means 3 total runs allowed.
-        while attempts <= max_attempts:
+        while True:
             try:
                 return await next_handler()
             except Exception as e:
-                attempts += 1
-                last_error = e
-                if attempts <= max_attempts:
-                    # Log or emit event? VM currently is silent.
-                    # Events should be emitted by an ObservabilityMiddleware!
+                if current_attempt < max_retries:
+                    current_attempt += 1
+                    last_error = e
+                    # TODO: Integrate with ObservabilityMiddleware for events
                     await asyncio.sleep(delay)
                     delay *= spec.backoff
                 else:
-                    raise last_error
+                    raise e

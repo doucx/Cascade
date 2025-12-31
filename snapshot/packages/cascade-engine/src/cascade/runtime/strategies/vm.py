@@ -21,6 +21,8 @@ from cascade.vm.middleware.standard import (
 from cascade.vm.middleware.observability import ObservabilityMiddleware
 from cascade.spec.lazy_types import MappedLazyResult
 from cascade.spec.blueprint import Call, MapCall
+from cascade.spec.jump import Jump
+from typing import List, Optional
 
 
 class VMExecutionStrategy:
@@ -45,54 +47,90 @@ class VMExecutionStrategy:
         run_stack: ExitStack,
         active_resources: Dict[str, Any],
     ) -> Any:
-        # 1. Frontend: Compile LazyResult to GraphIR
-        # Returns CompilationResult(ir, symbol_table)
-        compilation_result = Frontend.compile(target)
-        graph_ir = compilation_result.ir
-        symbol_table = compilation_result.symbol_table
+        current_target = target
+        next_input_overrides: Optional[Dict[str, Any]] = None
+        local_compilation_cache: Dict[str, Any] = {}
 
-        # 2. Optimizer: Schedule GraphIR to ExecutionPlan
-        execution_plan = Optimizer.optimize(graph_ir)
+        while True:
+            # 1. Compilation Stage (with caching)
+            if current_target._uuid in local_compilation_cache:
+                compilation_result, blueprint = local_compilation_cache[current_target._uuid]
+            else:
+                compilation_result = Frontend.compile(current_target)
+                graph_ir = compilation_result.ir
+                execution_plan = Optimizer.optimize(graph_ir)
+                blueprint = Backend.compile(graph_ir, execution_plan)
+                local_compilation_cache[current_target._uuid] = (compilation_result, blueprint)
 
-        # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
-        blueprint = Backend.compile(graph_ir, execution_plan)
+            # 2. Prepare Inputs for this Iteration
+            # Start with static bindings from the LazyResult
+            if isinstance(current_target, MappedLazyResult):
+                initial_args: List[Any] = []
+                initial_kwargs: Dict[str, Any] = dict(current_target.mapping_kwargs)
+            else:
+                initial_args = list(current_target.args)
+                initial_kwargs = dict(current_target.kwargs)
 
-        # 4. Runtime: Execute Blueprint on VM
-        vm = VirtualMachine(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self.wakeup_event,
-        )
-        
-        # Configure Middleware Pipeline (Order matters!)
-        # Onion Layer:
-        # 1. Observability (Outermost): Logs everything including retries? 
-        #    Note: Does Observability log individual attempts? 
-        #    If Retry is inner, Observability sees one "Task" execution which might take long.
-        #    If Retry is outer, Observability sees each attempt as a "Task"? No, that's not right.
-        #    Correct nesting:
-        #    [Observability] -> [Retry] -> [Constraints] -> [Resources] -> [Resolve] -> [Core]
-        #    This way, Observability records the *Total* time for the task (including retries).
-        #    The RetryMiddleware itself should emit TaskRetrying events (TODO).
-        
-        vm.set_middlewares([
-            ObservabilityMiddleware(self.bus, run_id),
-            RetryMiddleware(),
-            ConstraintMiddleware(self.constraint_manager),
-            ResourceLifecycleMiddleware(self.resource_manager),
-            ArgumentResolutionMiddleware(active_resources, params),
-        ])
+            # Apply overrides from the previous Jump signal
+            if next_input_overrides:
+                for key, value in next_input_overrides.items():
+                    if key.isdigit():
+                        idx = int(key)
+                        while len(initial_args) <= idx:
+                            initial_args.append(None)
+                        initial_args[idx] = value
+                    else:
+                        initial_kwargs[key] = value
+                next_input_overrides = None  # Consume overrides
 
-        if isinstance(target, MappedLazyResult):
-            initial_args = []
-            initial_kwargs = dict(target.mapping_kwargs)
-        else:
-            initial_args = list(target.args)
-            initial_kwargs = dict(target.kwargs)
-        
-        return await vm.execute(
-            blueprint,
-            symbol_table=symbol_table,
-            initial_args=initial_args,
-            initial_kwargs=initial_kwargs,
-        )
+            # 3. VM Execution
+            vm = VirtualMachine(
+                resource_manager=self.resource_manager,
+                constraint_manager=self.constraint_manager,
+                wakeup_event=self.wakeup_event,
+            )
+            
+            vm.set_middlewares([
+                ObservabilityMiddleware(self.bus, run_id),
+                RetryMiddleware(),
+                ConstraintMiddleware(self.constraint_manager),
+                ResourceLifecycleMiddleware(self.resource_manager),
+                ArgumentResolutionMiddleware(active_resources, params),
+            ])
+
+            result = await vm.execute(
+                blueprint,
+                symbol_table=compilation_result.symbol_table,
+                initial_args=initial_args,
+                initial_kwargs=initial_kwargs,
+            )
+
+            # 4. Result Interpretation (The Trampoline Logic)
+            if isinstance(result, Jump):
+                selector = getattr(current_target, '_jump_selector', None)
+                if not selector:
+                    raise RuntimeError(
+                        f"Task '{current_target.task.name}' returned a Jump signal but has no bound 'select_jump'."
+                    )
+                
+                next_target = selector.routes.get(result.target_key)
+                
+                if next_target is None:
+                    # Loop exit condition (e.g., jump_selector has {'exit': None})
+                    return result.data
+                
+                # Prepare for the next iteration
+                current_target = next_target
+                if isinstance(result.data, dict):
+                    next_input_overrides = result.data
+                elif result.data is not None:
+                    # Positional override for single return value
+                    next_input_overrides = {"0": result.data}
+                else:
+                    next_input_overrides = {}
+                
+                # Continue to the next loop iteration
+                continue
+            else:
+                # Normal termination, not a Jump signal
+                return result

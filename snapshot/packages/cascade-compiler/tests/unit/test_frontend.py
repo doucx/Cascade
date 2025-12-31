@@ -68,9 +68,11 @@ def test_compile_linear_dependency():
     target_node = next(n for n in ir.nodes if n.definition.name == "consumer")
     source_node = next(n for n in ir.nodes if n.definition.name == "producer")
     
+    from cascade.spec.ir.models import InputKind
     assert edge.source_id == source_node.id
     assert edge.target_id == target_node.id
-    assert edge.target_arg == "val"
+    assert edge.target_arg_kind == InputKind.KEYWORD
+    assert edge.target_arg_name == "val"
 
 
 def test_compile_conditional_task():
@@ -96,7 +98,8 @@ def test_compile_conditional_task():
     # We check for the new EdgeKind
     from cascade.spec.ir.models import EdgeKind
     assert edge.kind == EdgeKind.CONTROL
-    assert edge.target_arg == "_condition"  # Internal convention, or explicit field
+    assert edge.target_arg_name is None
+    assert edge.target_arg_index is None
 
 
 def test_compile_param_input():

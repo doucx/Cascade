@@ -1,66 +1,273 @@
-简要回答：
-分析表明我们处于一个典型的**集成阵痛期**。核心问题有三类：
-1.  **测试过时**: 单元测试未跟随 `Frontend` 返回类型的变更（`GraphIR` -> `CompilationResult`）。
-2.  **语义不匹配**: `Backend` 将位置参数误编译为带数字键的 `kwargs`，导致 VM 调用函数时参数错位；`Frontend` 错误地将 `Task` 包装器而非原始函数放入符号表，导致 VM 执行结果变成 `LazyResult`。
-3.  **Spec 定义模糊**: VM 的返回值策略未明确定义（当前返回最后一条指令结果），导致跳过执行时的断言失败。
+Excellent strategic insight. You are absolutely correct.
 
-我们将执行战术修复：更新过时的测试，修正 Backend 的参数编译逻辑，并确保符号表中存储的是原始函数。
+The current IR design, where `NodeIR.inputs` is a single dictionary and `EdgeIR.target_arg` is a simple string, is a remnant of the MVP phase. It forces the `Backend` to perform "magic" by guessing the argument type based on `key.isdigit()`. This is a weak contract and a form of technical debt.
 
-## [WIP] fix: 修复 Compiler 参数映射与 Frontend 符号表生成 (GREEN 阶段)
+Enriching the IR to be more explicit is the right architectural decision. It shifts the complexity to the `Frontend`—the component that has the most context about the original `LazyResult`—and allows the `Backend` to become a simpler, more robust, and less "clever" consumer of a well-defined structure.
+
+I will now generate a plan to implement this refactoring.
+
+## [WIP] refactor: Enrich IR to simplify Backend argument compilation
 
 ### 用户需求
-修复导致 CI 变红的集成问题。核心是确保 Compiler 正确处理位置参数，Frontend 正确解包 Task 对象，以及更新所有受影响的测试以匹配新的 `CompilationResult` 契约。
+Refactor the Intermediate Representation (`GraphIR`) to explicitly distinguish between positional and keyword arguments for both literals and dependencies. This will simplify the `Backend`'s logic by removing the need for string-based guesswork.
 
 ### 评论
-本次修复针对分析出的三个关键阻断点：
-1.  **Compiler**: `Backend` 现在会智能识别数字键参数，将其转换为 `Call` 指令的 `args` 列表，解决 `unexpected keyword argument '0'`。
-2.  **Frontend**: 修正 `_visit_mapped_result`，确保存入 `symbol_table` 的是 `obj.factory.func`（如果是 Task），防止 VM 运行时获得 `LazyResult`。
-3.  **Tests**: 全面更新 `cascade-compiler` 的单元测试和 `cascade-engine` 的集成测试，以适配 `CompilationResult` 结构。
+This is a significant architectural improvement that strengthens the contract between the compiler's `Frontend` and `Backend`. By making the IR more expressive, we eliminate a "code smell" (`key.isdigit()`) and make the entire compilation pipeline more robust and easier to maintain.
 
 ### 目标
-1.  修复 `cascade-compiler/src/cascade/compiler/backend.py` 中的参数处理逻辑。
-2.  修复 `cascade-compiler/src/cascade/compiler/frontend.py` 中的符号表填充逻辑。
-3.  更新 `packages/cascade-compiler/tests/unit/test_frontend.py`。
-4.  更新 `packages/cascade-engine/tests/integration/test_compiler.py`。
-5.  更新 `packages/cascade-engine/tests/integration/test_integration_map_control.py` 的断言逻辑。
+1.  **Spec**: Modify `NodeIR` to have separate `literal_args` and `literal_kwargs`.
+2.  **Spec**: Modify `EdgeIR` to explicitly state whether a dependency is `POSITIONAL` (with an index) or `KEYWORD` (with a name).
+3.  **Compiler**: Update the `Frontend` to generate this new, richer IR structure from `LazyResult`.
+4.  **Compiler**: Simplify the `Backend` to consume the new IR without ambiguity.
+5.  **Tests**: Update all affected tests to reflect the new IR structure.
 
 ### 基本原理
-**参数归位**：Python 函数调用严格区分位置参数和关键字参数。中间表示（IR）为了简化使用了统一字典，但编译器后端必须负责将“语义上的位置参数”（数字键）还原为“实现上的位置参数”（列表）。
-**去包装化**：VM 是底层执行器，它应该直接操作用户定义的原始逻辑。Task 包装器是 DSL 层的概念，不应泄漏到 VM 运行时。
+The component responsible for parsing the user-facing API (`Frontend`) should bear the complexity of understanding its structure. The resulting IR should be an unambiguous, machine-readable contract. The component that consumes this IR (`Backend`) should then be as simple as possible, merely translating this explicit structure into another form (`Blueprint`) without needing to infer intent.
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/compiler #comp/tests #scope/core #task/domain/core #task/object/linking #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/spec #comp/compiler #scope/core #task/domain/core #task/object/ir-contract #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 Backend 参数编译逻辑
+#### Acts 1: Refactor Spec - Enrich `NodeIR` and `EdgeIR`
 
-解决 `TypeError: ...echo() got an unexpected keyword argument '0'`。
+First, we'll update the data structures in `cascade.spec.ir.models`.
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
+~~~~~
+~~~~~python.old
+class EdgeKind(str, Enum):
+    DATA = "DATA"  # Standard data dependency
+    CONTROL = "CONTROL"  # Conditional execution (run_if)
+
+
+class ArgumentKind(str, Enum):
+~~~~~
+~~~~~python.new
+class EdgeKind(str, Enum):
+    DATA = "DATA"  # Standard data dependency
+    CONTROL = "CONTROL"  # Conditional execution (run_if)
+
+
+class InputKind(str, Enum):
+    """Specifies the kind of input an edge provides to a target node."""
+    POSITIONAL = "POSITIONAL"
+    KEYWORD = "KEYWORD"
+
+
+class ArgumentKind(str, Enum):
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
+~~~~~
+~~~~~python.old
+@dataclass
+class NodeIR:
+    id: str
+    definition: TaskDef
+    inputs: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EdgeIR:
+    source_id: str
+    target_id: str
+    target_arg: str
+    kind: EdgeKind = EdgeKind.DATA
+~~~~~
+~~~~~python.new
+@dataclass
+class NodeIR:
+    id: str
+    definition: TaskDef
+    # Static literal inputs are now separated
+    literal_args: List[Any] = field(default_factory=list)
+    literal_kwargs: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class EdgeIR:
+    source_id: str
+    target_id: str
+    kind: EdgeKind = EdgeKind.DATA
+    
+    # The target argument is now explicitly defined
+    target_arg_kind: Optional[InputKind] = None
+    target_arg_name: Optional[str] = None
+    target_arg_index: Optional[int] = None
+~~~~~
+
+#### Acts 2: Update Compiler `Frontend` to Produce the New IR
+
+Now, we modify the `Frontend` to correctly populate these new, structured fields.
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        if node_id not in self.nodes:
+            literal_inputs = {
+                str(i): arg for i, arg in enumerate(obj.args) if not isinstance(arg, (LazyResult, MappedLazyResult))
+            }
+            literal_inputs.update(
+                {k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))}
+            )
+
+            node = NodeIR(id=node_id, definition=task_def, inputs=literal_inputs)
+            self.nodes[node_id] = node
+
+        for i, arg in enumerate(obj.args):
+            if isinstance(arg, (LazyResult, MappedLazyResult)):
+                self.edges.append(EdgeIR(
+                    source_id=dep_shims[arg._uuid].structural_id,
+                    target_id=node_id,
+                    target_arg=str(i)
+                ))
+
+        for k, val in obj.kwargs.items():
+            if isinstance(val, (LazyResult, MappedLazyResult)):
+                self.edges.append(EdgeIR(
+                    source_id=dep_shims[val._uuid].structural_id,
+                    target_id=node_id,
+                    target_arg=k
+                ))
+~~~~~
+~~~~~python.new
+        if node_id not in self.nodes:
+            literal_args = [
+                arg for arg in obj.args if not isinstance(arg, (LazyResult, MappedLazyResult))
+            ]
+            literal_kwargs = {
+                k: val for k, val in obj.kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
+            }
+
+            node = NodeIR(
+                id=node_id,
+                definition=task_def,
+                literal_args=literal_args,
+                literal_kwargs=literal_kwargs
+            )
+            self.nodes[node_id] = node
+
+        for i, arg in enumerate(obj.args):
+            if isinstance(arg, (LazyResult, MappedLazyResult)):
+                self.edges.append(EdgeIR(
+                    source_id=dep_shims[arg._uuid].structural_id,
+                    target_id=node_id,
+                    target_arg_kind=EdgeKind.DATA,
+                    target_arg_index=i,
+                ))
+
+        for k, val in obj.kwargs.items():
+            if isinstance(val, (LazyResult, MappedLazyResult)):
+                self.edges.append(EdgeIR(
+                    source_id=dep_shims[val._uuid].structural_id,
+                    target_id=node_id,
+                    target_arg_kind=EdgeKind.DATA,
+                    target_arg_name=k,
+                ))
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        if obj._condition:
+            self.edges.append(EdgeIR(
+                source_id=dep_shims[obj._condition._uuid].structural_id,
+                target_id=node_id,
+                target_arg="_condition",
+                kind=EdgeKind.CONTROL
+            ))
+~~~~~
+~~~~~python.new
+        if obj._condition:
+            self.edges.append(EdgeIR(
+                source_id=dep_shims[obj._condition._uuid].structural_id,
+                target_id=node_id,
+                kind=EdgeKind.CONTROL
+            ))
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        if node_id not in self.nodes:
+            literal_inputs = {
+                k: val for k, val in obj.mapping_kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
+            }
+            node = NodeIR(
+                id=node_id,
+                definition=task_def,
+                inputs=literal_inputs,
+                meta={"is_map": True}
+            )
+            self.nodes[node_id] = node
+
+        for k, val in obj.mapping_kwargs.items():
+            if isinstance(val, (LazyResult, MappedLazyResult)):
+                self.edges.append(EdgeIR(
+                    source_id=dep_shims[val._uuid].structural_id,
+                    target_id=node_id,
+                    target_arg=k
+                ))
+~~~~~
+~~~~~python.new
+        if node_id not in self.nodes:
+            # Map nodes only have kwargs
+            literal_kwargs = {
+                k: val for k, val in obj.mapping_kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
+            }
+            node = NodeIR(
+                id=node_id,
+                definition=task_def,
+                literal_kwargs=literal_kwargs,
+                meta={"is_map": True}
+            )
+            self.nodes[node_id] = node
+
+        for k, val in obj.mapping_kwargs.items():
+            if isinstance(val, (LazyResult, MappedLazyResult)):
+                self.edges.append(EdgeIR(
+                    source_id=dep_shims[val._uuid].structural_id,
+                    target_id=node_id,
+                    target_arg_kind=EdgeKind.DATA,
+                    target_arg_name=k,
+                ))
+~~~~~
+
+#### Acts 3: Simplify Compiler `Backend` to Consume the New IR
+
+This is the payoff. The `Backend` logic becomes much cleaner and more robust.
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/src/cascade/compiler/backend.py
 ~~~~~
 ~~~~~python.old
-    def _process_node(self, node_id: str):
-        node = self._nodes_map[node_id]
-
-        # 1. Resolve Input Operands & Control Dependencies
-        args: List[Operand] = []  # Positional args not yet fully supported by this IR
-        kwargs: Dict[str, Operand] = {}
-        control_dependency_reg: Any = None
-
-        # 1a. From Literals
-        for key, value in node.inputs.items():
-            kwargs[key] = Literal(value)
-
-        # 1b. From Edges (Dependencies)
-        incoming_edges = self._incoming_edges_map.get(node_id, [])
-        for edge in incoming_edges:
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
 ~~~~~
 ~~~~~python.new
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind, InputKind
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
+~~~~~
+~~~~~python.old
     def _process_node(self, node_id: str):
         node = self._nodes_map[node_id]
 
@@ -77,24 +284,16 @@ packages/cascade-compiler/src/cascade/compiler/backend.py
         # 1b. From Edges (Dependencies)
         incoming_edges = self._incoming_edges_map.get(node_id, [])
         for edge in incoming_edges:
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend.py
-~~~~~
-~~~~~python.old
-            if edge.kind == EdgeKind.CONTROL:
-                # We currently support only one control dependency per node for simplicity.
-                # If multiple exist, they should ideally be combined (AND logic) in the graph structure.
-                control_dependency_reg = source_register
-            else:
-                kwargs[edge.target_arg] = source_register
-
-        # 2. Emit Control Flow Guard (if needed)
-        if control_dependency_reg:
-~~~~~
-~~~~~python.new
+            # The source node must have been processed in a previous stage,
+            # so its output register must be in our map.
+            source_register = self._node_output_registers.get(edge.source_id)
+            if source_register is None:
+                # This indicates a flaw in the ExecutionPlan or this compiler's logic
+                raise RuntimeError(
+                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
+                    "was not assigned a register before being used."
+                )
+            
             if edge.kind == EdgeKind.CONTROL:
                 # We currently support only one control dependency per node for simplicity.
                 # If multiple exist, they should ideally be combined (AND logic) in the graph structure.
@@ -129,108 +328,72 @@ packages/cascade-compiler/src/cascade/compiler/backend.py
              # For now, we assume the IR is well-formed or the function has defaults.
              # But Literal(None) would be safer than actual None.
              pass
-
-        # 2. Emit Control Flow Guard (if needed)
-        if control_dependency_reg:
-~~~~~
-
-#### Acts 2: 修复 Frontend 符号表生成
-
-解决 `MapCall` 返回 `LazyResult` 的问题。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/frontend.py
-~~~~~
-~~~~~python.old
-        task_def = self.analyzer.analyze(obj.factory)
-
-        # Populate Symbol Table
-        code_hash = task_def.fingerprint["current_code_structure_hash"]
-        self.symbol_table[code_hash] = obj.factory
-
-        node_id = self.hashing_service.compute_node_instance_hash(
-            task_def, obj, cast(Dict[str, Any], dep_shims)
-        )
 ~~~~~
 ~~~~~python.new
-        task_def = self.analyzer.analyze(obj.factory)
+    def _process_node(self, node_id: str):
+        node = self._nodes_map[node_id]
 
-        # Populate Symbol Table
-        code_hash = task_def.fingerprint["current_code_structure_hash"]
-        
-        # Ensure we store the raw function, not the Task wrapper
-        # The analyzer usually handles extraction, but we need the raw callable for VM
-        func = obj.factory
-        if hasattr(func, "func"): # Unwrap Task objects
-            func = func.func
+        # 1. Resolve Input Operands & Control Dependencies
+        args: List[Optional[Operand]] = [Literal(val) for val in node.literal_args]
+        kwargs: Dict[str, Operand] = {k: Literal(v) for k, v in node.literal_kwargs.items()}
+        control_dependency_reg: Any = None
+
+        # Process Edges (Dependencies)
+        incoming_edges = self._incoming_edges_map.get(node_id, [])
+        for edge in incoming_edges:
+            source_register = self._node_output_registers.get(edge.source_id)
+            if source_register is None:
+                raise RuntimeError(
+                    f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
+                    "was not assigned a register before being used."
+                )
             
-        self.symbol_table[code_hash] = func
+            if edge.kind == EdgeKind.CONTROL:
+                control_dependency_reg = source_register
+            elif edge.target_arg_kind == InputKind.POSITIONAL and edge.target_arg_index is not None:
+                idx = edge.target_arg_index
+                # Ensure args list is long enough
+                while len(args) <= idx:
+                    args.append(None)
+                args[idx] = source_register
+            elif edge.target_arg_kind == InputKind.KEYWORD and edge.target_arg_name is not None:
+                kwargs[edge.target_arg_name] = source_register
 
-        node_id = self.hashing_service.compute_node_instance_hash(
-            task_def, obj, cast(Dict[str, Any], dep_shims)
-        )
+        # Final cleanup for args list in case of gaps (should be rare)
+        final_args: List[Operand] = [op for op in args if op is not None]
 ~~~~~
 
-#### Acts 3: 修复 Compiler 单元测试
+#### Acts 4: Update Tests
 
-更新 `test_frontend.py` 以适配 `CompilationResult`。
+Finally, we update the tests to assert against the new, richer IR structure.
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/tests/unit/test_frontend.py
 ~~~~~
 ~~~~~python.old
-    # 2. Execute Compilation (Will fail here)
-    ir = Frontend.compile(lazy)
-
-    # 3. Verify Graph Structure
-    assert isinstance(ir, GraphIR)
-    assert len(ir.nodes) == 1
-    assert len(ir.edges) == 0
-    
-    node = ir.nodes[0]
-~~~~~
-~~~~~python.new
-    # 2. Execute Compilation (Will fail here)
-    result = Frontend.compile(lazy)
-    ir = result.ir
-
-    # 3. Verify Graph Structure
-    from cascade.spec.ir.models import GraphIR
-    assert isinstance(ir, GraphIR)
-    assert len(ir.nodes) == 1
-    assert len(ir.edges) == 0
-    
-    node = ir.nodes[0]
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
-~~~~~
-~~~~~python.old
-    t1 = producer()
-    t2 = consumer(val=t1)
-
-    ir = Frontend.compile(t2)
-
-    assert len(ir.nodes) == 2
-    assert len(ir.edges) == 1
-    
     edge = ir.edges[0]
+    
+    # Verify edge connectivity
+    target_node = next(n for n in ir.nodes if n.definition.name == "consumer")
+    source_node = next(n for n in ir.nodes if n.definition.name == "producer")
+    
+    assert edge.source_id == source_node.id
+    assert edge.target_id == target_node.id
+    assert edge.target_arg == "val"
 ~~~~~
 ~~~~~python.new
-    t1 = producer()
-    t2 = consumer(val=t1)
-
-    result = Frontend.compile(t2)
-    ir = result.ir
-
-    assert len(ir.nodes) == 2
-    assert len(ir.edges) == 1
-    
     edge = ir.edges[0]
+    
+    # Verify edge connectivity
+    target_node = next(n for n in ir.nodes if n.definition.name == "consumer")
+    source_node = next(n for n in ir.nodes if n.definition.name == "producer")
+    
+    from cascade.spec.ir.models import InputKind
+    assert edge.source_id == source_node.id
+    assert edge.target_id == target_node.id
+    assert edge.target_arg_kind == InputKind.KEYWORD
+    assert edge.target_arg_name == "val"
 ~~~~~
 
 ~~~~~act
@@ -238,130 +401,15 @@ patch_file
 packages/cascade-compiler/tests/unit/test_frontend.py
 ~~~~~
 ~~~~~python.old
-    t_cond = condition()
-    t_action = action().run_if(t_cond)
-
-    ir = Frontend.compile(t_action)
-
-    assert len(ir.edges) == 1
-    edge = ir.edges[0]
+    # We check for the new EdgeKind
+    from cascade.spec.ir.models import EdgeKind
+    assert edge.kind == EdgeKind.CONTROL
+    assert edge.target_arg == "_condition"  # Internal convention, or explicit field
 ~~~~~
 ~~~~~python.new
-    t_cond = condition()
-    t_action = action().run_if(t_cond)
-
-    result = Frontend.compile(t_action)
-    ir = result.ir
-
-    assert len(ir.edges) == 1
-    edge = ir.edges[0]
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
-~~~~~
-~~~~~python.old
-    workflow = consume(x=p)
-    
-    ir = Frontend.compile(workflow)
-    
-    # Should have 2 nodes: Param node and Consume node
-    assert len(ir.nodes) == 2
-~~~~~
-~~~~~python.new
-    workflow = consume(x=p)
-    
-    result = Frontend.compile(workflow)
-    ir = result.ir
-    
-    # Should have 2 nodes: Param node and Consume node
-    assert len(ir.nodes) == 2
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
-~~~~~
-~~~~~python.old
-    # Map over a list literal
-    workflow = double.map(x=[1, 2, 3])
-    
-    ir = Frontend.compile(workflow)
-    
-    assert len(ir.nodes) == 1
-    node = ir.nodes[0]
-~~~~~
-~~~~~python.new
-    # Map over a list literal
-    workflow = double.map(x=[1, 2, 3])
-    
-    result = Frontend.compile(workflow)
-    ir = result.ir
-    
-    assert len(ir.nodes) == 1
-    node = ir.nodes[0]
-~~~~~
-
-#### Acts 4: 修复 Engine 集成测试 Mock
-
-修复 `test_compiler.py` 中的 Mock 配置。
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/integration/test_compiler.py
-~~~~~
-~~~~~python.old
-         patch("cascade.vm.VirtualMachine.execute") as mock_vm_exec:
-
-        # Setup Mocks
-        mock_ir = MagicMock(spec=GraphIR)
-        mock_front.return_value = mock_ir
-        
-        mock_plan = [["node_1"]]
-        mock_opt.return_value = mock_plan
-~~~~~
-~~~~~python.new
-         patch("cascade.vm.VirtualMachine.execute") as mock_vm_exec:
-
-        # Setup Mocks
-        mock_ir = MagicMock(spec=GraphIR)
-        # Mock CompilationResult
-        mock_comp_result = MagicMock()
-        mock_comp_result.ir = mock_ir
-        mock_comp_result.symbol_table = {}
-        
-        mock_front.return_value = mock_comp_result
-        
-        mock_plan = [["node_1"]]
-        mock_opt.return_value = mock_plan
-~~~~~
-
-#### Acts 5: 调整控制流测试断言
-
-更新 `test_integration_map_control.py`，接受 VM 在跳过最后一步时返回 `False` (Condition 结果) 的行为。
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/integration/test_integration_map_control.py
-~~~~~
-~~~~~python.old
-    # Or we need a specific return mechanism.
-    # For now, let's assume it might raise or return None.
-    # Given our VM implementation, if it jumps over the call, last_result is None.
-    
-    result = await engine.run(workflow, use_vm=True)
-    assert result is None
-~~~~~
-~~~~~python.new
-    # Or we need a specific return mechanism.
-    # For now, let's assume it might raise or return None.
-    # Given our VM implementation, if it jumps over the call, last_result is None.
-    
-    result = await engine.run(workflow, use_vm=True)
-    
-    # When the last step is skipped, the VM currently returns the result of the previous instruction.
-    # In this case, it's the result of 'is_disabled' (False) used by JumpIfFalse.
-    # This behavior is acceptable for now.
-    assert result is False
+    # We check for the new EdgeKind
+    from cascade.spec.ir.models import EdgeKind
+    assert edge.kind == EdgeKind.CONTROL
+    assert edge.target_arg_name is None
+    assert edge.target_arg_index is None
 ~~~~~

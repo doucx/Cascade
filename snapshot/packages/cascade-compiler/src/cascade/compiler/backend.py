@@ -1,6 +1,6 @@
 from typing import List, Dict, Tuple, Any
 
-from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind, InputKind
 from cascade.spec.blueprint import Blueprint, Call, MapCall, Register, Literal, Operand, JumpIfFalse
 from .optimizer import ExecutionPlan
 
@@ -53,62 +53,33 @@ class _BlueprintBuilder:
         node = self._nodes_map[node_id]
 
         # 1. Resolve Input Operands & Control Dependencies
-        # We use a temporary dictionary to collect all inputs (args and kwargs)
-        # and then split them based on keys (digit keys -> args, others -> kwargs)
-        all_inputs: Dict[str, Operand] = {}
+        args: List[Optional[Operand]] = [Literal(val) for val in node.literal_args]
+        kwargs: Dict[str, Operand] = {k: Literal(v) for k, v in node.literal_kwargs.items()}
         control_dependency_reg: Any = None
 
-        # 1a. From Literals
-        for key, value in node.inputs.items():
-            all_inputs[key] = Literal(value)
-
-        # 1b. From Edges (Dependencies)
+        # Process Edges (Dependencies)
         incoming_edges = self._incoming_edges_map.get(node_id, [])
         for edge in incoming_edges:
-            # The source node must have been processed in a previous stage,
-            # so its output register must be in our map.
             source_register = self._node_output_registers.get(edge.source_id)
             if source_register is None:
-                # This indicates a flaw in the ExecutionPlan or this compiler's logic
                 raise RuntimeError(
                     f"Compiler Error: Dependency '{edge.source_id}' for node '{node_id}' "
                     "was not assigned a register before being used."
                 )
             
             if edge.kind == EdgeKind.CONTROL:
-                # We currently support only one control dependency per node for simplicity.
-                # If multiple exist, they should ideally be combined (AND logic) in the graph structure.
                 control_dependency_reg = source_register
-            else:
-                all_inputs[edge.target_arg] = source_register
+            elif edge.target_arg_kind == InputKind.POSITIONAL and edge.target_arg_index is not None:
+                idx = edge.target_arg_index
+                # Ensure args list is long enough
+                while len(args) <= idx:
+                    args.append(None)
+                args[idx] = source_register
+            elif edge.target_arg_kind == InputKind.KEYWORD and edge.target_arg_name is not None:
+                kwargs[edge.target_arg_name] = source_register
 
-        # 1c. Split into args and kwargs
-        # We find keys that are digits "0", "1", ... and map them to the positional list
-        args: List[Operand] = []
-        kwargs: Dict[str, Operand] = {}
-        
-        # Determine max positional index
-        max_arg_idx = -1
-        for k in all_inputs.keys():
-            if k.isdigit():
-                max_arg_idx = max(max_arg_idx, int(k))
-        
-        # Pre-fill args list with None (or check for gaps)
-        if max_arg_idx >= 0:
-            args = [None] * (max_arg_idx + 1) # type: ignore
-
-        for k, v in all_inputs.items():
-            if k.isdigit():
-                args[int(k)] = v
-            else:
-                kwargs[k] = v
-        
-        # Check for gaps in positional args
-        if any(a is None for a in args):
-             # This might happen if '0' and '2' are provided but '1' is missing.
-             # For now, we assume the IR is well-formed or the function has defaults.
-             # But Literal(None) would be safer than actual None.
-             pass
+        # Final cleanup for args list in case of gaps (should be rare)
+        final_args: List[Operand] = [op for op in args if op is not None]
 
         # 2. Emit Control Flow Guard (if needed)
         if control_dependency_reg:

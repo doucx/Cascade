@@ -10,6 +10,12 @@ class EdgeKind(str, Enum):
     CONTROL = "CONTROL"  # Conditional execution (run_if)
 
 
+class InputKind(str, Enum):
+    """Specifies the kind of input an edge provides to a target node."""
+    POSITIONAL = "POSITIONAL"
+    KEYWORD = "KEYWORD"
+
+
 class ArgumentKind(str, Enum):
     POSITIONAL_ONLY = "POSITIONAL_ONLY"
     POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
@@ -44,7 +50,9 @@ class TaskDef:
 class NodeIR:
     id: str
     definition: TaskDef
-    inputs: Dict[str, Any] = field(default_factory=dict)
+    # Static literal inputs are now separated
+    literal_args: List[Any] = field(default_factory=list)
+    literal_kwargs: Dict[str, Any] = field(default_factory=dict)
     meta: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -52,8 +60,12 @@ class NodeIR:
 class EdgeIR:
     source_id: str
     target_id: str
-    target_arg: str
     kind: EdgeKind = EdgeKind.DATA
+    
+    # The target argument is now explicitly defined
+    target_arg_kind: Optional[InputKind] = None
+    target_arg_name: Optional[str] = None
+    target_arg_index: Optional[int] = None
 
 
 @dataclass

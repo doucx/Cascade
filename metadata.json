@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修复 Compiler 参数映射与 Frontend 符号表生成 (GREEN 阶段)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767155696.8575513, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: Enrich IR to simplify Backend argument compilation", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767155845.625179, "duration_ms": 0}}

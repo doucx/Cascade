@@ -1,234 +1,474 @@
 简要回答：
-好的，我将严格遵循“正规军”方案，一次性编写涵盖 `Spec`, `Compiler`, `Engine` 三个层面的测试用例，以验证基于 `structure_hash` 的安全链接机制。这些测试在当前代码库中必然失败，从而将系统置于明确的 **RED** 状态。
+根据错误日志分析，我们正处于预期的 **RED** 状态。主要问题集中在 Spec 缺失字段、Compiler 未生成符号表以及 Engine 缺少链接逻辑。
 
-## [WIP] test: 添加基于 structure_hash 的安全链接的完整测试套件 (RED 阶段)
+我将按照路线图分阶段修复这些问题，使测试变绿。
+
+## [WIP] feat: 实现基于 structure_hash 的安全链接机制 (GREEN 阶段)
 
 ### 用户需求
-实现基于 `structure_hash` 的安全链接机制的测试层。这是“焦土政策”重构中 Compiler-Runtime 架构的关键一环，旨在确保编译期生成的指令（骨架）能在运行期通过哈希指纹正确链接到内存中的函数对象（血肉）。
+完成 Compiler-Runtime 架构中的“安全链接”环节。确保编译器生成的指令包含结构哈希，并且运行时能利用此哈希将指令正确链接到内存中的函数对象。
 
 ### 评论
-当前系统 `Backend` 生成的 `Blueprint` 中 `func` 为 `None`，且 `VMExecutionStrategy` 尚未实现链接逻辑。本次提交的测试用例将暴露这些缺失，具体表现为：
-1.  **Spec 层**: `Call`/`MapCall` 指令缺少 `structure_hash` 字段；`CompilationResult` 类不存在。
-2.  **Compiler 层**: `Frontend` 不返回 `symbol_table`；`Backend` 不填充 `structure_hash`。
-3.  **Engine 层**: VM 执行时因 `func` 为 `None` 而崩溃。
+本次修改涉及三个核心包的协同变更：
+1.  **Spec**: 扩展 `Blueprint` 指令集以携带哈希，并定义 `CompilationResult` 契约。
+2.  **Compiler**: 前端负责提取符号表（Symbol Table），后端负责将哈希嵌入指令。
+3.  **Engine**: 运行时策略负责“链接”过程，即用符号表填充指令中的 `func` 指针。
 
 ### 目标
-1.  创建 `packages/cascade-spec/tests/spec/test_linking_data_structures.py` 以验证数据结构契约。
-2.  创建 `packages/cascade-compiler/tests/unit/test_compiler_linking.py` 以验证编译器层面的元数据传递。
-3.  创建 `packages/cascade-engine/tests/integration/test_vm_linking.py` 以验证运行时的链接与执行。
+1.  修复 `cascade-spec`，增加 `structure_hash` 字段和 `CompilationResult` 类。
+2.  修复 `cascade-compiler`，使其产出符合新契约的编译结果。
+3.  修复 `cascade-engine`，实现链接逻辑并修复 `MappedLazyResult` 的初始化参数问题。
+4.  通过所有相关测试。
 
 ### 基本原理
-遵循 TDD 原则，先编写断言“正确行为”的测试。由于相关数据结构和逻辑尚未实现，这些测试的失败将明确指导后续的实现工作。我们采用长命名规范（`current_code_structure_hash`）来消除概念歧义。
+我们通过将“函数引用”从编译期解耦（仅保留哈希），推迟到运行期绑定（链接），实现了可序列化、可缓存的中间表示（IR）和字节码（Blueprint）。这是实现跨进程/跨语言执行和高级缓存的基础。
 
 ### 标签
-#intent/tooling #flow/draft #priority/high #comp/spec #comp/compiler #comp/runtime #task/domain/core #task/object/linking #task/action/test-creation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/spec #comp/compiler #comp/runtime #task/domain/core #task/object/linking #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Spec 层测试 (验证数据结构)
+#### Acts 1: Spec 增强 - 定义数据契约
 
-我们将验证 `Blueprint` 指令集是否包含链接所需的哈希字段，以及是否存在承载链接信息的 `CompilationResult` 结构。
+首先，我们需要修改 `Blueprint` 指令以包含 `structure_hash`，并定义用于传递编译结果的新结构。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/blueprint.py
+~~~~~
+~~~~~python.old
+@dataclass
+class Call(Instruction):
+    func: Any
+    output: Register
+    args: List[Operand] = field(default_factory=list)
+    kwargs: Dict[str, Operand] = field(default_factory=dict)
+
+    # Metadata for observability and constraints
+    task_name: str = "unknown"
+    constraints: Optional[ResourceConstraint] = None
+
+
+@dataclass
+class Jump(Instruction):
+~~~~~
+~~~~~python.new
+@dataclass
+class Call(Instruction):
+    func: Any
+    output: Register
+    args: List[Operand] = field(default_factory=list)
+    kwargs: Dict[str, Operand] = field(default_factory=dict)
+
+    # Metadata for observability and constraints
+    task_name: str = "unknown"
+    constraints: Optional[ResourceConstraint] = None
+    structure_hash: Optional[str] = None
+
+
+@dataclass
+class Jump(Instruction):
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/blueprint.py
+~~~~~
+~~~~~python.old
+@dataclass
+class MapCall(Instruction):
+    """Represents a map operation over iterable inputs."""
+
+    func: Any
+    output: Register
+    args: List[Operand] = field(default_factory=list)
+    kwargs: Dict[str, Operand] = field(default_factory=dict)
+
+    # Metadata for observability and constraints
+    task_name: str = "unknown"
+    constraints: Optional[ResourceConstraint] = None
+
+
+@dataclass
+class TailCall:
+~~~~~
+~~~~~python.new
+@dataclass
+class MapCall(Instruction):
+    """Represents a map operation over iterable inputs."""
+
+    func: Any
+    output: Register
+    args: List[Operand] = field(default_factory=list)
+    kwargs: Dict[str, Operand] = field(default_factory=dict)
+
+    # Metadata for observability and constraints
+    task_name: str = "unknown"
+    constraints: Optional[ResourceConstraint] = None
+    structure_hash: Optional[str] = None
+
+
+@dataclass
+class TailCall:
+~~~~~
 
 ~~~~~act
 write_file
-packages/cascade-spec/tests/spec/test_linking_data_structures.py
+packages/cascade-spec/src/cascade/spec/compiler_result.py
 ~~~~~
 ~~~~~python
-import pytest
-from dataclasses import is_dataclass
-from typing import Dict, Callable
+from dataclasses import dataclass
+from typing import Dict, Callable, Any
+from cascade.spec.ir.models import GraphIR
 
-# 这些导入在 RED 阶段可能会失败，或者在实例化时报错
-from cascade.spec.blueprint import Call, MapCall, Register
 
-def test_call_instruction_has_structure_hash():
+@dataclass
+class CompilationResult:
     """
-    验证 Call 指令包含 structure_hash 字段。
-    这是链接阶段查找函数实现的键。
-    """
-    try:
-        # 尝试用 kwargs 实例化，如果字段不存在会报错
-        # output 使用 dummy Register
-        Call(
-            func=None, 
-            output=Register(0), 
-            task_name="t", 
-            structure_hash="hash_123"
-        )
-    except TypeError as e:
-        if "unexpected keyword argument 'structure_hash'" in str(e):
-            pytest.fail("Call instruction missing 'structure_hash' field")
-        raise e
-
-def test_map_call_instruction_has_structure_hash():
-    """
-    验证 MapCall 指令也包含 structure_hash 字段。
-    """
-    try:
-        MapCall(
-            func=None, 
-            output=Register(0), 
-            task_name="t", 
-            structure_hash="hash_123"
-        )
-    except TypeError as e:
-        if "unexpected keyword argument 'structure_hash'" in str(e):
-            pytest.fail("MapCall instruction missing 'structure_hash' field")
-        raise e
-
-def test_compilation_result_structure():
-    """
-    验证 CompilationResult 类的存在及其结构。
-    它负责在 Frontend 和 Runtime 之间传递 IR 和 Symbol Table。
-    """
-    # 尝试导入 CompilationResult (目前不存在)
-    try:
-        from cascade.spec.compiler_result import CompilationResult
-    except ImportError:
-        pytest.fail("Could not import cascade.spec.compiler_result.CompilationResult")
+    Container for the output of the Compiler Frontend.
     
-    # 验证字段 (运行时检查)
-    # 我们传入 None 作为占位符，仅检查字段是否存在
-    try:
-        res = CompilationResult(ir=None, symbol_table={})
-    except TypeError as e:
-         pytest.fail(f"CompilationResult instantiation failed: {e}")
-
-    assert hasattr(res, "ir")
-    assert hasattr(res, "symbol_table")
+    Attributes:
+        ir: The Intermediate Representation of the compute graph.
+        symbol_table: A mapping from structure_hash to the actual callable object.
+                      This is used by the runtime to link instructions to code.
+    """
+    ir: GraphIR
+    symbol_table: Dict[str, Callable[..., Any]]
 ~~~~~
 
-#### Acts 2: 创建 Compiler 层测试 (验证元数据流转)
+#### Acts 2: Compiler 实现 - 生成链接信息
 
-我们将验证 `Frontend` 是否正确生成符号表（Symbol Table），以及 `Backend` 是否将哈希值正确写入指令。
+修改前端以收集符号表，修改后端以填充哈希。
 
 ~~~~~act
-write_file
-packages/cascade-compiler/tests/unit/test_compiler_linking.py
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
 ~~~~~
-~~~~~python
-import pytest
-from unittest.mock import MagicMock
-from cascade.spec.task import task
-from cascade.compiler.frontend import Frontend
-from cascade.compiler.backend import Backend
-from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef
-from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.blueprint import Call
+~~~~~python.old
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
+from cascade.graph.analysis.reflection import ReflectionAnalyzer
+from cascade.graph.hashing import HashingService
+~~~~~
+~~~~~python.new
+from typing import Any, Dict, List, cast, Callable
+from dataclasses import dataclass
 
-def test_frontend_returns_compilation_result_with_symbol_table():
-    """
-    验证 Frontend.compile 返回的是 CompilationResult 对象，
-    并且包含正确的 symbol_table。
-    """
-    @task
-    def my_func(): pass
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
+from cascade.spec.compiler_result import CompilationResult
+from cascade.graph.analysis.reflection import ReflectionAnalyzer
+from cascade.graph.hashing import HashingService
+~~~~~
 
-    # RED 阶段：Frontend.compile 目前返回 GraphIR，没有 symbol_table 属性
-    result = Frontend.compile(my_func())
-    
-    # 检查类型 (不直接 import 类以避免 ImportError 阻断测试运行，依靠鸭子类型或类名检查)
-    assert type(result).__name__ == "CompilationResult", \
-        f"Expected CompilationResult, got {type(result).__name__}"
-
-    assert hasattr(result, "symbol_table"), "Result missing symbol_table"
-    assert hasattr(result, "ir"), "Result missing ir"
-    
-    # 验证 Symbol Table 内容
-    symbol_table = result.symbol_table
-    assert len(symbol_table) == 1
-    
-    # 获取唯一的 key (structure_hash)
-    hash_key = list(symbol_table.keys())[0]
-    
-    # 验证 value 是原始函数
-    assert symbol_table[hash_key] == my_func.func
-
-def test_backend_populates_structure_hash_in_blueprint():
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+class Frontend:
     """
-    验证 Backend 在生成 Blueprint 时，从 NodeIR 的 definition 中读取
-    current_code_structure_hash 并写入指令。
+    Compiler Frontend: Transforms user-facing LazyResults into Intermediate Representation (GraphIR).
     """
-    # 构造一个带有 structure_hash 的 NodeIR
-    expected_hash = "test_hash_123"
-    fp = Fingerprint.from_dict({"current_code_structure_hash": expected_hash})
-    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
-    node = NodeIR(id="n1", definition=task_def, inputs={})
-    
-    graph = GraphIR(nodes=[node], edges=[])
-    plan = [["n1"]]
-    
-    # Backend.compile 应该读取这个 hash 并放入 Blueprint
-    blueprint = Backend.compile(graph, plan)
-    
-    assert len(blueprint.instructions) == 1
-    instr = blueprint.instructions[0]
-    assert isinstance(instr, Call)
-    
-    # RED 阶段失败点：instr 没有 structure_hash 属性
-    if not hasattr(instr, "structure_hash"):
-        pytest.fail("Instruction generated by Backend missing 'structure_hash' attribute")
+
+    @staticmethod
+    def compile(target: Any) -> GraphIR:
+        builder = _GraphBuilder()
+        return builder.build(target)
+
+
+class _GraphBuilder:
+    def __init__(self):
+        self.nodes: Dict[str, NodeIR] = {}  # Map structural_id -> NodeIR
+        self.edges: List[EdgeIR] = []
+        self._visited_lazy_uuids: Dict[str, str] = {}  # Map LazyResult.uuid -> structural_id
+
+        # Services from cascade-graph (reused for stability)
+        self.analyzer = ReflectionAnalyzer()
+        self.hashing_service = HashingService()
+
+    def build(self, target: Any) -> GraphIR:
+        self._visit(target)
+        return GraphIR(nodes=list(self.nodes.values()), edges=self.edges)
+
+    def _visit(self, obj: Any) -> str:
+        """
+        Visits a LazyResult type, creating NodeIRs and EdgeIRs.
+~~~~~
+~~~~~python.new
+class Frontend:
+    """
+    Compiler Frontend: Transforms user-facing LazyResults into Intermediate Representation (GraphIR).
+    """
+
+    @staticmethod
+    def compile(target: Any) -> CompilationResult:
+        builder = _GraphBuilder()
+        return builder.build(target)
+
+
+class _GraphBuilder:
+    def __init__(self):
+        self.nodes: Dict[str, NodeIR] = {}  # Map structural_id -> NodeIR
+        self.edges: List[EdgeIR] = []
+        self.symbol_table: Dict[str, Callable] = {}
+        self._visited_lazy_uuids: Dict[str, str] = {}  # Map LazyResult.uuid -> structural_id
+
+        # Services from cascade-graph (reused for stability)
+        self.analyzer = ReflectionAnalyzer()
+        self.hashing_service = HashingService()
+
+    def build(self, target: Any) -> CompilationResult:
+        self._visit(target)
+        graph = GraphIR(nodes=list(self.nodes.values()), edges=self.edges)
+        return CompilationResult(ir=graph, symbol_table=self.symbol_table)
+
+    def _visit(self, obj: Any) -> str:
+        """
+        Visits a LazyResult type, creating NodeIRs and EdgeIRs.
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        task_def = self.analyzer.analyze(obj.task)
+        node_id = self.hashing_service.compute_node_instance_hash(
+            task_def, obj, cast(Dict[str, Any], dep_shims)
+        )
+
+        if node_id not in self.nodes:
+~~~~~
+~~~~~python.new
+        task_def = self.analyzer.analyze(obj.task)
         
-    assert instr.structure_hash == expected_hash
+        # Populate Symbol Table
+        code_hash = task_def.fingerprint["current_code_structure_hash"]
+        self.symbol_table[code_hash] = obj.task.func
+
+        node_id = self.hashing_service.compute_node_instance_hash(
+            task_def, obj, cast(Dict[str, Any], dep_shims)
+        )
+
+        if node_id not in self.nodes:
 ~~~~~
-
-#### Acts 3: 创建 Engine 层测试 (验证运行时链接)
-
-我们将创建一个端到端的集成测试，验证 `VMExecutionStrategy` 是否利用编译器提供的信息成功完成了链接并执行任务。
 
 ~~~~~act
-write_file
-packages/cascade-engine/tests/integration/test_vm_linking.py
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
 ~~~~~
-~~~~~python
-import pytest
-from cascade.runtime.engine import Engine
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.bus import MessageBus
-import cascade as cs
+~~~~~python.old
+        task_def = self.analyzer.analyze(obj.factory)
+        node_id = self.hashing_service.compute_node_instance_hash(
+            task_def, obj, cast(Dict[str, Any], dep_shims)
+        )
 
-@pytest.mark.asyncio
-async def test_vm_strategy_performs_linking_and_execution():
-    """
-    端到端集成测试：
-    1. 定义任务
-    2. Engine (use_vm=True) 调用 Frontend 编译 -> 得到 Symbol Table
-    3. Engine 调用 Backend 编译 -> 得到带 Hash 的 Blueprint (func=None)
-    4. Engine 执行 Link 过程 -> 填充 Blueprint 的 func
-    5. VM 执行成功
-    
-    RED 阶段预期：
-    由于 Link 逻辑未实现，VM 尝试执行 func=None 的指令，抛出 TypeError。
-    """
-    @cs.task
-    def echo(x):
-        return x
+        if node_id not in self.nodes:
+~~~~~
+~~~~~python.new
+        task_def = self.analyzer.analyze(obj.factory)
 
-    workflow = echo("hello_world")
-    
-    engine = Engine(
-        solver=NativeSolver(),
-        executor=LocalExecutor(),
-        bus=MessageBus(),
-    )
-    
-    # 使用 VM 执行
-    try:
-        result = await engine.run(workflow, use_vm=True)
-    except TypeError as e:
-        if "'NoneType' object is not callable" in str(e):
-            # 这是我们预期的失败，证明 Link 没发生
-            pytest.fail("VM crashed because function was not linked (func is None)")
-        raise e
-    except AttributeError as e:
-        # 可能是 CompilationResult 还没实现导致的属性错误
-        pytest.fail(f"Execution failed likely due to missing linking infrastructure: {e}")
-    
-    assert result == "hello_world"
+        # Populate Symbol Table
+        code_hash = task_def.fingerprint["current_code_structure_hash"]
+        self.symbol_table[code_hash] = obj.factory
+
+        node_id = self.hashing_service.compute_node_instance_hash(
+            task_def, obj, cast(Dict[str, Any], dep_shims)
+        )
+
+        if node_id not in self.nodes:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
+~~~~~
+~~~~~python.old
+        # We also pass task name for better observability in the VM
+        if node.meta.get("is_map"):
+            instr = MapCall(
+                func=None,
+                output=output_register,
+                args=args,
+                kwargs=kwargs,
+                task_name=node.definition.name,
+                # Note: Constraints on Map nodes are not yet propagated to MapCall.
+            )
+        else:
+            instr = Call(
+                func=None,  # The VM will need to resolve this later
+                output=output_register,
+                args=args,
+                kwargs=kwargs,
+                task_name=node.definition.name
+            )
+        self._instructions.append(instr)
+~~~~~
+~~~~~python.new
+        # We also pass task name for better observability in the VM
+        structure_hash = node.definition.fingerprint["current_code_structure_hash"]
+
+        if node.meta.get("is_map"):
+            instr = MapCall(
+                func=None,
+                output=output_register,
+                args=args,
+                kwargs=kwargs,
+                task_name=node.definition.name,
+                structure_hash=structure_hash,
+                # Note: Constraints on Map nodes are not yet propagated to MapCall.
+            )
+        else:
+            instr = Call(
+                func=None,  # The VM will need to resolve this later
+                output=output_register,
+                args=args,
+                kwargs=kwargs,
+                task_name=node.definition.name,
+                structure_hash=structure_hash,
+            )
+        self._instructions.append(instr)
+~~~~~
+
+#### Acts 3: Engine 实现 - 执行链接
+
+修改 `VMExecutionStrategy` 以使用新的 `CompilationResult` 并执行链接。同时修复 `MappedLazyResult` 在初始化时的参数提取问题。
+
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/vm.py
+~~~~~
+~~~~~python.old
+# New Compiler Stack
+from cascade.compiler.frontend import Frontend
+from cascade.compiler.optimizer import Optimizer
+from cascade.compiler.backend import Backend
+from cascade.vm import VirtualMachine
+
+
+class VMExecutionStrategy:
+    def __init__(
+        self,
+        resource_manager: ResourceManager,
+        constraint_manager: ConstraintManager,
+        wakeup_event: asyncio.Event,
+    ):
+        self.resource_manager = resource_manager
+        self.constraint_manager = constraint_manager
+        self.wakeup_event = wakeup_event
+
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        # 1. Frontend: Compile LazyResult to GraphIR
+        graph_ir = Frontend.compile(target)
+
+        # 2. Optimizer: Schedule GraphIR to ExecutionPlan
+        execution_plan = Optimizer.optimize(graph_ir)
+
+        # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
+        blueprint = Backend.compile(graph_ir, execution_plan)
+
+        # 4. Runtime: Execute Blueprint on VM
+        # Note: The new VM doesn't yet support ResourceManager/ConstraintManager injection
+        # directly in the same way. For Phase 5 initial integration, we instantiate the
+        # pure VM. Future tasks will reintegrate resource management.
+        vm = VirtualMachine()
+        
+        # Prepare initial arguments
+        # The new VM expects 'initial_kwargs' mapping directly to registers if needed,
+        # or it relies on the blueprint's structure.
+        # For now, we assume the Blueprint structure handles defaults, but we need to pass
+        # the runtime parameters if any.
+        
+        # Extract args/kwargs from target LazyResult for the root call
+        initial_args = list(target.args)
+        initial_kwargs = dict(target.kwargs)
+        
+        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+~~~~~
+~~~~~python.new
+# New Compiler Stack
+from cascade.compiler.frontend import Frontend
+from cascade.compiler.optimizer import Optimizer
+from cascade.compiler.backend import Backend
+from cascade.vm import VirtualMachine
+from cascade.spec.lazy_types import MappedLazyResult
+from cascade.spec.blueprint import Call, MapCall
+
+
+class VMExecutionStrategy:
+    def __init__(
+        self,
+        resource_manager: ResourceManager,
+        constraint_manager: ConstraintManager,
+        wakeup_event: asyncio.Event,
+    ):
+        self.resource_manager = resource_manager
+        self.constraint_manager = constraint_manager
+        self.wakeup_event = wakeup_event
+
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        # 1. Frontend: Compile LazyResult to GraphIR
+        # Returns CompilationResult(ir, symbol_table)
+        compilation_result = Frontend.compile(target)
+        graph_ir = compilation_result.ir
+        symbol_table = compilation_result.symbol_table
+
+        # 2. Optimizer: Schedule GraphIR to ExecutionPlan
+        execution_plan = Optimizer.optimize(graph_ir)
+
+        # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
+        blueprint = Backend.compile(graph_ir, execution_plan)
+
+        # 4. Linking Phase: Resolve function pointers
+        for instr in blueprint.instructions:
+            if isinstance(instr, (Call, MapCall)):
+                if instr.structure_hash not in symbol_table:
+                    raise RuntimeError(
+                        f"Linking failed: structure_hash '{instr.structure_hash}' "
+                        f"for task '{instr.task_name}' not found in symbol table."
+                    )
+                instr.func = symbol_table[instr.structure_hash]
+
+        # 5. Runtime: Execute Blueprint on VM
+        # Note: The new VM doesn't yet support ResourceManager/ConstraintManager injection
+        # directly in the same way. For Phase 5 initial integration, we instantiate the
+        # pure VM. Future tasks will reintegrate resource management.
+        vm = VirtualMachine()
+        
+        # Prepare initial arguments
+        # The new VM expects 'initial_kwargs' mapping directly to registers if needed,
+        # or it relies on the blueprint's structure.
+        
+        if isinstance(target, MappedLazyResult):
+            initial_args = []
+            initial_kwargs = dict(target.mapping_kwargs)
+        else:
+            initial_args = list(target.args)
+            initial_kwargs = dict(target.kwargs)
+        
+        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
 ~~~~~
 
 ### 下一步建议
-一旦测试文件创建完成，我们将运行这些测试确认它们全部失败（RED）。随后，我们将按照路线图逐一实现 Spec、Compiler 和 Engine 的相关逻辑，直到测试全部变绿（GREEN）。
+现在 Spec、Compiler 和 Engine 已经协同工作，支持基于 `structure_hash` 的链接。`VMExecutionStrategy` 会在执行前进行链接检查，确保所有指令都有可调用的函数实现。
+
+接下来，我们将运行测试以验证修复。如果测试通过，我们将进行后续的“Map/Reduce 对齐”和“控制流对齐”工作。

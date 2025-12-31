@@ -1,8 +1,12 @@
 from typing import Any, Dict, List, cast
 from dataclasses import dataclass
 
+from typing import Any, Dict, List, cast, Callable
+from dataclasses import dataclass
+
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, EdgeKind
+from cascade.spec.compiler_result import CompilationResult
 from cascade.graph.analysis.reflection import ReflectionAnalyzer
 from cascade.graph.hashing import HashingService
 
@@ -20,7 +24,7 @@ class Frontend:
     """
 
     @staticmethod
-    def compile(target: Any) -> GraphIR:
+    def compile(target: Any) -> CompilationResult:
         builder = _GraphBuilder()
         return builder.build(target)
 
@@ -29,15 +33,17 @@ class _GraphBuilder:
     def __init__(self):
         self.nodes: Dict[str, NodeIR] = {}  # Map structural_id -> NodeIR
         self.edges: List[EdgeIR] = []
+        self.symbol_table: Dict[str, Callable] = {}
         self._visited_lazy_uuids: Dict[str, str] = {}  # Map LazyResult.uuid -> structural_id
 
         # Services from cascade-graph (reused for stability)
         self.analyzer = ReflectionAnalyzer()
         self.hashing_service = HashingService()
 
-    def build(self, target: Any) -> GraphIR:
+    def build(self, target: Any) -> CompilationResult:
         self._visit(target)
-        return GraphIR(nodes=list(self.nodes.values()), edges=self.edges)
+        graph = GraphIR(nodes=list(self.nodes.values()), edges=self.edges)
+        return CompilationResult(ir=graph, symbol_table=self.symbol_table)
 
     def _visit(self, obj: Any) -> str:
         """
@@ -73,6 +79,11 @@ class _GraphBuilder:
                 dep_shims[obj._condition._uuid] = NodeIDShim(structural_id=dep_id)
 
         task_def = self.analyzer.analyze(obj.task)
+        
+        # Populate Symbol Table
+        code_hash = task_def.fingerprint["current_code_structure_hash"]
+        self.symbol_table[code_hash] = obj.task.func
+
         node_id = self.hashing_service.compute_node_instance_hash(
             task_def, obj, cast(Dict[str, Any], dep_shims)
         )
@@ -126,6 +137,11 @@ class _GraphBuilder:
                 dep_shims[val._uuid] = NodeIDShim(structural_id=dep_id)
 
         task_def = self.analyzer.analyze(obj.factory)
+
+        # Populate Symbol Table
+        code_hash = task_def.fingerprint["current_code_structure_hash"]
+        self.symbol_table[code_hash] = obj.factory
+
         node_id = self.hashing_service.compute_node_instance_hash(
             task_def, obj, cast(Dict[str, Any], dep_shims)
         )

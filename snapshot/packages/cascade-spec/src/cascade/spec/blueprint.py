@@ -33,6 +33,7 @@ class Call(Instruction):
     # Metadata for observability and constraints
     task_name: str = "unknown"
     constraints: Optional[ResourceConstraint] = None
+    structure_hash: Optional[str] = None
 
 
 @dataclass
@@ -62,6 +63,7 @@ class MapCall(Instruction):
     # Metadata for observability and constraints
     task_name: str = "unknown"
     constraints: Optional[ResourceConstraint] = None
+    structure_hash: Optional[str] = None
 
 
 @dataclass

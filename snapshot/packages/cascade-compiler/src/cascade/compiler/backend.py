@@ -99,6 +99,8 @@ class _BlueprintBuilder:
         # For testing, the function itself isn't invoked, so we can use a placeholder.
         
         # We also pass task name for better observability in the VM
+        structure_hash = node.definition.fingerprint["current_code_structure_hash"]
+
         if node.meta.get("is_map"):
             instr = MapCall(
                 func=None,
@@ -106,6 +108,7 @@ class _BlueprintBuilder:
                 args=args,
                 kwargs=kwargs,
                 task_name=node.definition.name,
+                structure_hash=structure_hash,
                 # Note: Constraints on Map nodes are not yet propagated to MapCall.
             )
         else:
@@ -114,6 +117,7 @@ class _BlueprintBuilder:
                 output=output_register,
                 args=args,
                 kwargs=kwargs,
-                task_name=node.definition.name
+                task_name=node.definition.name,
+                structure_hash=structure_hash,
             )
         self._instructions.append(instr)

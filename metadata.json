@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(integration): 全流程验证 Map 与 Control Flow", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767154548.9318347, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 添加基于 structure_hash 的安全链接的完整测试套件 (RED 阶段)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767155349.0794826, "duration_ms": 0}}

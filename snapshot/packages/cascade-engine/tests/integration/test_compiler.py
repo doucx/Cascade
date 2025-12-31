@@ -36,7 +36,12 @@ async def test_engine_activates_new_compiler_pipeline():
 
         # Setup Mocks
         mock_ir = MagicMock(spec=GraphIR)
-        mock_front.return_value = mock_ir
+        # Mock CompilationResult
+        mock_comp_result = MagicMock()
+        mock_comp_result.ir = mock_ir
+        mock_comp_result.symbol_table = {}
+        
+        mock_front.return_value = mock_comp_result
         
         mock_plan = [["node_1"]]
         mock_opt.return_value = mock_plan

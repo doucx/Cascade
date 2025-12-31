@@ -140,7 +140,14 @@ class _GraphBuilder:
 
         # Populate Symbol Table
         code_hash = task_def.fingerprint["current_code_structure_hash"]
-        self.symbol_table[code_hash] = obj.factory
+        
+        # Ensure we store the raw function, not the Task wrapper
+        # The analyzer usually handles extraction, but we need the raw callable for VM
+        func = obj.factory
+        if hasattr(func, "func"): # Unwrap Task objects
+            func = func.func
+            
+        self.symbol_table[code_hash] = func
 
         node_id = self.hashing_service.compute_node_instance_hash(
             task_def, obj, cast(Dict[str, Any], dep_shims)

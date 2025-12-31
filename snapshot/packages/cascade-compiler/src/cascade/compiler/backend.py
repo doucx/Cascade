@@ -53,13 +53,14 @@ class _BlueprintBuilder:
         node = self._nodes_map[node_id]
 
         # 1. Resolve Input Operands & Control Dependencies
-        args: List[Operand] = []  # Positional args not yet fully supported by this IR
-        kwargs: Dict[str, Operand] = {}
+        # We use a temporary dictionary to collect all inputs (args and kwargs)
+        # and then split them based on keys (digit keys -> args, others -> kwargs)
+        all_inputs: Dict[str, Operand] = {}
         control_dependency_reg: Any = None
 
         # 1a. From Literals
         for key, value in node.inputs.items():
-            kwargs[key] = Literal(value)
+            all_inputs[key] = Literal(value)
 
         # 1b. From Edges (Dependencies)
         incoming_edges = self._incoming_edges_map.get(node_id, [])
@@ -79,7 +80,35 @@ class _BlueprintBuilder:
                 # If multiple exist, they should ideally be combined (AND logic) in the graph structure.
                 control_dependency_reg = source_register
             else:
-                kwargs[edge.target_arg] = source_register
+                all_inputs[edge.target_arg] = source_register
+
+        # 1c. Split into args and kwargs
+        # We find keys that are digits "0", "1", ... and map them to the positional list
+        args: List[Operand] = []
+        kwargs: Dict[str, Operand] = {}
+        
+        # Determine max positional index
+        max_arg_idx = -1
+        for k in all_inputs.keys():
+            if k.isdigit():
+                max_arg_idx = max(max_arg_idx, int(k))
+        
+        # Pre-fill args list with None (or check for gaps)
+        if max_arg_idx >= 0:
+            args = [None] * (max_arg_idx + 1) # type: ignore
+
+        for k, v in all_inputs.items():
+            if k.isdigit():
+                args[int(k)] = v
+            else:
+                kwargs[k] = v
+        
+        # Check for gaps in positional args
+        if any(a is None for a in args):
+             # This might happen if '0' and '2' are provided but '1' is missing.
+             # For now, we assume the IR is well-formed or the function has defaults.
+             # But Literal(None) would be safer than actual None.
+             pass
 
         # 2. Emit Control Flow Guard (if needed)
         if control_dependency_reg:

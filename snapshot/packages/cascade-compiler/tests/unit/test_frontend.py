@@ -18,9 +18,11 @@ def test_compile_single_task_structure():
     lazy = simple_task(x=10)
 
     # 2. Execute Compilation (Will fail here)
-    ir = Frontend.compile(lazy)
+    result = Frontend.compile(lazy)
+    ir = result.ir
 
     # 3. Verify Graph Structure
+    from cascade.spec.ir.models import GraphIR
     assert isinstance(ir, GraphIR)
     assert len(ir.nodes) == 1
     assert len(ir.edges) == 0
@@ -54,7 +56,8 @@ def test_compile_linear_dependency():
     t1 = producer()
     t2 = consumer(val=t1)
 
-    ir = Frontend.compile(t2)
+    result = Frontend.compile(t2)
+    ir = result.ir
 
     assert len(ir.nodes) == 2
     assert len(ir.edges) == 1
@@ -84,7 +87,8 @@ def test_compile_conditional_task():
     t_cond = condition()
     t_action = action().run_if(t_cond)
 
-    ir = Frontend.compile(t_action)
+    result = Frontend.compile(t_action)
+    ir = result.ir
 
     assert len(ir.edges) == 1
     edge = ir.edges[0]
@@ -110,7 +114,8 @@ def test_compile_param_input():
 
     workflow = consume(x=p)
     
-    ir = Frontend.compile(workflow)
+    result = Frontend.compile(workflow)
+    ir = result.ir
     
     # Should have 2 nodes: Param node and Consume node
     assert len(ir.nodes) == 2
@@ -134,7 +139,8 @@ def test_compile_map_node():
     # Map over a list literal
     workflow = double.map(x=[1, 2, 3])
     
-    ir = Frontend.compile(workflow)
+    result = Frontend.compile(workflow)
+    ir = result.ir
     
     assert len(ir.nodes) == 1
     node = ir.nodes[0]

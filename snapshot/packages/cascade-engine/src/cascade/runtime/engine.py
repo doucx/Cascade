@@ -93,6 +93,7 @@ class Engine:
             resource_manager=self.resource_manager,
             constraint_manager=self.constraint_manager,
             wakeup_event=self._wakeup_event,
+            bus=self.bus,
         )
 
         self._managed_subscribers = []
@@ -139,7 +140,7 @@ class Engine:
         self,
         target: Any,
         params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = False,
+        use_vm: bool = True,
     ) -> Any:
         # Handle Auto-Gathering
         from cascade.internal.inputs import _internal_gather

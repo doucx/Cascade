@@ -5,6 +5,7 @@ from typing import Any, Dict
 from cascade.spec.protocols import StateBackend
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.constraints.manager import ConstraintManager
+from cascade.runtime.bus import MessageBus
 
 # New Compiler Stack
 from cascade.compiler.frontend import Frontend
@@ -17,6 +18,7 @@ from cascade.vm.middleware.standard import (
     ResourceLifecycleMiddleware, 
     RetryMiddleware
 )
+from cascade.vm.middleware.observability import ObservabilityMiddleware
 from cascade.spec.lazy_types import MappedLazyResult
 from cascade.spec.blueprint import Call, MapCall
 
@@ -27,10 +29,12 @@ class VMExecutionStrategy:
         resource_manager: ResourceManager,
         constraint_manager: ConstraintManager,
         wakeup_event: asyncio.Event,
+        bus: MessageBus,
     ):
         self.resource_manager = resource_manager
         self.constraint_manager = constraint_manager
         self.wakeup_event = wakeup_event
+        self.bus = bus
 
     async def execute(
         self,
@@ -61,8 +65,18 @@ class VMExecutionStrategy:
         )
         
         # Configure Middleware Pipeline (Order matters!)
-        # Order: Retry (Outer) -> Constraints -> Resources -> Resolution -> Core execution (Inner)
+        # Onion Layer:
+        # 1. Observability (Outermost): Logs everything including retries? 
+        #    Note: Does Observability log individual attempts? 
+        #    If Retry is inner, Observability sees one "Task" execution which might take long.
+        #    If Retry is outer, Observability sees each attempt as a "Task"? No, that's not right.
+        #    Correct nesting:
+        #    [Observability] -> [Retry] -> [Constraints] -> [Resources] -> [Resolve] -> [Core]
+        #    This way, Observability records the *Total* time for the task (including retries).
+        #    The RetryMiddleware itself should emit TaskRetrying events (TODO).
+        
         vm.set_middlewares([
+            ObservabilityMiddleware(self.bus, run_id),
             RetryMiddleware(),
             ConstraintMiddleware(self.constraint_manager),
             ResourceLifecycleMiddleware(self.resource_manager),

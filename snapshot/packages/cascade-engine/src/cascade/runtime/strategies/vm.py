@@ -237,10 +237,10 @@ class VMExecutionStrategy:
             # Look for the channel outputting from root
             # Note: We can look at topology channels again
             result_channel_def = next((
-                c for c in topology.channels 
-                if c.source_node_instance_hash == root_func_hash 
-                and c.port_name == "result" 
-                and c.match("default")
+                c for c in topology.channels
+                if c.source_node_instance_hash == root_func_hash
+                and c.port_name == "result"
+                and c.tag_filter == "default"
             ), None)
             
             if result_channel_def:

@@ -1,287 +1,56 @@
-## [WIP] fix(engine): 实现物理拓扑的水合 (Hydration) 逻辑
+好的，执行战术修复。
+
+我将生成一个计划，直接修正 `VMExecutionStrategy` 中对 `ChannelDef` 对象的错误方法调用，使其与静态数据模型的定义保持一致。
+
+## [WIP] fix(engine): 修正 VMExecutionStrategy 中对静态 ChannelDef 的访问方式
 
 ### 错误分析
-测试失败 `TypeError: unhashable type: 'dict'` 是因为 `VMExecutionStrategy` 试图直接将编译器生成的静态描述对象 `PhysicsFuncNode`（包含字典字段）注册到 `Reactor` 中。`Reactor` 期望的是运行时物理对象 (`cascade.spec.physics.FuncNode`)，并将其放入集合中进行去重，导致哈希计算失败。
+在 `VMExecutionStrategy` 中，代码尝试对 `cascade.spec.topology.ChannelDef` 对象调用 `.match()` 方法。这是一个概念性错误，因为 `match()` 方法定义在 `cascade.vm.reactor.model.Channel`（动态物理对象）上，而 `ChannelDef` 仅仅是一个静态的数据传输对象（DTO），它包含一个名为 `tag_filter` 的字符串字段。正确的做法是直接比较该字段的值。
 
-这揭示了一个概念错误：策略层缺少了从“静态蓝图”到“动态物理实例”的转换过程（Hydration）。
+### 用户需求
+修复 `AttributeError: 'ChannelDef' object has no attribute 'match'` 错误，使 `VMExecutionStrategy` 能够正确识别 TCO 测试中的输出通道。
 
-### 解决方案
-在 `VMExecutionStrategy` 中实现一个完整的水合过程：
-1.  遍历 `BipartiteGraph` 的静态节点。
-2.  为每个静态节点实例化对应的动态物理对象 (`FuncNode`, `DataNode`)。
-3.  根据静态连接关系 (`inputs` 和 `channels`)，建立动态对象之间的端口连接 (`Port`) 和通道 (`Channel`)。
-4.  将实例化后的动态对象注册到 `Reactor`。
+### 评论
+这是一个典型的静态/动态模型混淆错误。通过将方法调用改为直接的属性比较，我们能快速打通测试，验证 `Reactor` 和 `Compiler` 在 TCO 场景下的核心集成逻辑是否正确。
+
+### 目标
+1.  定位到 `packages/cascade-engine/src/cascade/runtime/strategies/vm.py` 文件中的错误行。
+2.  将 `c.match("default")` 替换为 `c.tag_filter == "default"`。
+
+### 基本原理
+`BipartiteGraph` 及其包含的 `ChannelDef` 是由编译器生成的静态蓝图。在分析这个蓝图时，我们应该直接访问其数据字段，而不是期望它拥有动态行为。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/hydration #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 VMExecutionStrategy 实现水合逻辑
+#### Acts 1: 修正对 ChannelDef 的属性访问
 
-我们将重写 `packages/cascade-engine/src/cascade/runtime/strategies/vm.py`，引入 `DataNode`, `FuncNode`, `Port`, `Channel` 等物理实体，并实现转换逻辑。
+我们将修改 `vm.py`，确保对 `ChannelDef` 的访问符合其数据类定义。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 ~~~~~
-~~~~~python
-import asyncio
-from contextlib import ExitStack
-from typing import Any, Dict, List, Optional, Callable
-from dataclasses import dataclass
-
-from cascade.spec.protocols import StateBackend, Executor
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.constraints.manager import ConstraintManager
-from cascade.runtime.bus import MessageBus
-
-from cascade.compiler.frontend import Frontend
-from cascade.compiler.backend import Backend
-from cascade.spec.ir.models import TaskDef
-from cascade.spec.physics import Token, DataNode, FuncNode, Port
-from cascade.spec.topology import BipartiteGraph
-from cascade.vm.reactor import Reactor, ExecutionFinished
-from cascade.vm.reactor.model import Channel
-from cascade.graph.model import TaskNode  # Used as shim for LocalExecutor
-
-
-@dataclass
-class _RuntimeMetadata:
-    """Helper to store metadata needed for execution but not present in Physics nodes."""
-    definition: TaskDef
-    func: Callable
-
-
-class _ReactorAdapter:
-    """
-    Bridges the gap between the abstract Physics Reactor and the concrete Python Executor.
-    Responsible for:
-    1. Linking PhysicsNode -> TaskDef -> Callable
-    2. Unpacking Token payloads into args/kwargs
-    3. Constructing shims for LocalExecutor
-    4. Feeding results back into the Reactor as events
-    """
-
-    def __init__(
-        self,
-        executor: Executor,
-        reactor: Reactor,
-        metadata_map: Dict[str, _RuntimeMetadata],
-    ):
-        self.executor = executor
-        self.reactor = reactor
-        self.metadata_map = metadata_map
-
-    async def submit(self, node: FuncNode, inputs: Dict[str, Token]) -> None:
-        """
-        Callback called by Reactor when a node fires.
-        The 'node' here is the runtime FuncNode instance.
-        We used the hash as the node's name during hydration.
-        """
-        # 1. Retrieve Metadata using node.name (which stores the instance hash)
-        instance_hash = node.name
-        meta = self.metadata_map.get(instance_hash)
-        if not meta:
-            raise RuntimeError(
-                f"Linking failed: No metadata found for node {instance_hash}"
-            )
-
-        # 2. Unpack Inputs (Tokens -> Args/Kwargs)
-        args: List[Any] = []
-        kwargs: Dict[str, Any] = {}
-        
-        # Determine max positional index from inputs keys like "0", "1", ...
-        max_idx = -1
-        for k in inputs.keys():
-            if k.isdigit():
-                max_idx = max(max_idx, int(k))
-        
-        # Pre-fill args list
-        if max_idx >= 0:
-            args = [None] * (max_idx + 1)
-
-        for k, token in inputs.items():
-            if k.isdigit():
-                args[int(k)] = token.payload
-            else:
-                kwargs[k] = token.payload
-
-        # 3. Construct Shim Node for LocalExecutor
-        # LocalExecutor expects a Node object with .definition and .callable_obj
-        shim_node = TaskNode(
-            current_node_instance_hash=instance_hash,
-            definition=meta.definition,
-            _callable=meta.func,
-            # Policies could be injected here if we parsed them from IR
-        )
-
-        # 4. Schedule Execution (Non-blocking from Reactor's perspective)
-        # We fire-and-forget a task that will push the result back to Reactor event queue.
-        asyncio.create_task(self._run_job(shim_node, args, kwargs, node))
-
-    async def _run_job(self, shim_node, args, kwargs, physics_node):
-        try:
-            result = await self.executor.execute(shim_node, args, kwargs)
-            
-            # 5. Pack Result (Default output port "result")
-            # In the future, we might support multi-port output based on result type
-            outputs = {"result": Token(payload=result)}
-            
-            self.reactor.push_event(
-                ExecutionFinished(node=physics_node, outputs=outputs)
-            )
-        except Exception as e:
-            # Handle failure
-            self.reactor.push_event(
-                ExecutionFinished(node=physics_node, error=e)
-            )
-
-
-class VMExecutionStrategy:
-    def __init__(
-        self,
-        resource_manager: ResourceManager,
-        constraint_manager: ConstraintManager,
-        wakeup_event: asyncio.Event,
-        bus: MessageBus,
-        executor: Executor,
-    ):
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.wakeup_event = wakeup_event
-        self.bus = bus
-        self.executor = executor
-
-    async def execute(
-        self,
-        target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
-    ) -> Any:
-        # 1. Compile
-        compilation_result = Frontend.compile(target)
-        graph_ir = compilation_result.ir
-        symbol_table = compilation_result.symbol_table
-
-        # 2. Topology Generation
-        topology: BipartiteGraph = Backend.compile(graph_ir)
-
-        # 3. Build Runtime Metadata Map (Instance Hash -> Metadata)
-        # And identify root node for result extraction
-        metadata_map: Dict[str, _RuntimeMetadata] = {}
-        
-        # Heuristic: The last node added to IR is usually the root
-        root_node_ir = graph_ir.nodes[-1] if graph_ir.nodes else None
-        
-        for node_ir in graph_ir.nodes:
-            code_hash = node_ir.definition.fingerprint["current_code_structure_hash"]
-            func = symbol_table.get(code_hash)
-            if not func:
-                raise RuntimeError(f"Missing symbol for code hash {code_hash}")
-                
-            metadata_map[node_ir.current_node_instance_hash] = _RuntimeMetadata(
-                definition=node_ir.definition,
-                func=func
-            )
-
-        # 4. Initialize Reactor
-        reactor = Reactor(executor=None, resource_manager=self.resource_manager)
-        adapter = _ReactorAdapter(self.executor, reactor, metadata_map)
-        reactor.executor = adapter
-
-        # 5. Hydrate Topology: Static -> Dynamic
-        # We need to map static hashes to dynamic instances to wire them up
-        dynamic_data_nodes: Dict[str, DataNode] = {}
-        dynamic_func_nodes: Dict[str, FuncNode] = {}
-
-        # 5.1 Hydrate DataNodes
-        for d_hash, p_node in topology.data_nodes.items():
-            # Create dynamic DataNode
-            # Name isn't strictly used for logic, but helpful for debugging
-            d_instance = DataNode(name=p_node.name)
-            dynamic_data_nodes[d_hash] = d_instance
-            reactor.register_node(d_instance)
-
-        # 5.2 Hydrate FuncNodes and wire Inputs
-        for f_hash, p_node in topology.func_nodes.items():
-            # Create dynamic FuncNode
-            # CRITICAL: We use the instance hash as the name for metadata lookup
-            f_instance = FuncNode(name=f_hash) 
-            dynamic_func_nodes[f_hash] = f_instance
-            reactor.register_node(f_instance)
-            
-            # Wire Inputs
-            for arg_name, source_data_hash in p_node.inputs.items():
-                if source_data_hash in dynamic_data_nodes:
-                    source_d = dynamic_data_nodes[source_data_hash]
-                    # Create Input Port: DataNode -> FuncNode
-                    # Note: physics.FuncNode.add_input expects a Port with a 'source'
-                    port = Port(name=arg_name, source=source_d)
-                    f_instance.add_input(port)
-
-        # 5.3 Wire Outputs (Channels)
-        for ch_def in topology.channels:
-            source_f = dynamic_func_nodes.get(ch_def.source_node_instance_hash)
-            target_d = dynamic_data_nodes.get(ch_def.target_data_slot_hash)
-            
-            if source_f and target_d:
-                # Create Reactor Channel
-                channel = Channel(
-                    source=source_f,
-                    target=target_d,
-                    output_name=ch_def.port_name,
-                    tag_filter=ch_def.tag_filter
-                )
-                reactor.register_channel(channel)
-                
-                # Also need to add Output Port to FuncNode so it knows where to push?
-                # physics.FuncNode.produce_outputs uses 'self.outputs' map.
-                # But Reactor's '_handle_execution_finished' uses 'channels_by_source'.
-                # So FuncNode only needs to define the existence of the port for validation/reflection?
-                # Currently FuncNode.produce_outputs is used by Reactor logic if we were simulating locally?
-                # Actually, `Reactor._handle_execution_finished` uses `self._channels_by_source`.
-                # So adding output ports to `f_instance` is optional for Reactor logic, 
-                # BUT good for consistency.
-                
-                # We can add a dummy port to f_instance to reflect structure
-                if ch_def.port_name not in source_f.outputs:
-                    source_f.add_output(Port(name=ch_def.port_name))
-
-        # 6. Inject Initial Values
-        from cascade.vm.reactor import TokenGenerated
-        for data_hash, value in topology.initial_values.items():
-            if data_hash in dynamic_data_nodes:
-                d_node = dynamic_data_nodes[data_hash]
-                reactor.push_event(TokenGenerated(node=d_node, token=Token(value)))
-
-        # 7. Identify Result DataNode
-        target_output_d_node = None
-        if root_node_ir:
-            root_func_hash = root_node_ir.current_node_instance_hash
-            # Look for the channel outputting from root
-            # Note: We can look at topology channels again
+~~~~~python.old
             result_channel_def = next((
                 c for c in topology.channels 
                 if c.source_node_instance_hash == root_func_hash 
                 and c.port_name == "result" 
                 and c.match("default")
             ), None)
-            
-            if result_channel_def:
-                target_output_d_node = dynamic_data_nodes.get(result_channel_def.target_data_slot_hash)
-
-        # 8. Run
-        await reactor.run()
-
-        # 9. Extract Result
-        if target_output_d_node and target_output_d_node.is_excited():
-            return target_output_d_node.peek().payload
-        
-        return None
 ~~~~~
+~~~~~python.new
+            result_channel_def = next((
+                c for c in topology.channels
+                if c.source_node_instance_hash == root_func_hash
+                and c.port_name == "result"
+                and c.tag_filter == "default"
+            ), None)
+~~~~~
+
+### 下一步建议
+现在我们已经修复了阻塞性的 `AttributeError`。请重新运行测试，特别是 `test_vm_strategy_tco.py`。这次，`VMExecutionStrategy` 应该能够完整地执行，我们将会看到 TCO 逻辑在新的 Reactor 架构下的真实表现。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(vm): implement reactor run loop with wait/wake mechanism", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767185761.0166867, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 取消跳过 VMStrategy TCO 集成测试以进入 RED 状态", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767186410.4452257, "duration_ms": 0}}

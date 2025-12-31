@@ -1,51 +1,3 @@
-简要回答
-我将创建一个基于 `LibCST` 的重构脚本，精确地将代码库中所有违规的短命名（`id`, `structural_id`, `source_id`, `target_id`）替换为符合 Phase 3 架构公理的长命名哈希标识符，并执行测试以验证修改的安全性。
-
-## [WIP] feat(arch): 实施 Phase 3.0 符号大重命名脚本
-
-### 用户需求
-用户启动了 **Phase 3.0：代码协调 (The Great Renaming)** 阶段。核心需求是消除 `cascade-spec`, `cascade-compiler`, `cascade-graph` 中违反“哈希强制长命名规范”的标识符。
-具体要求：
-1.  **自动化**：编写脚本处理，而非手动 Patch。
-2.  **精确性**：使用 `libcst` 等 AST/CST 工具，避免正则表达式带来的误伤。
-3.  **目标符号**：`id` (在 NodeIR 上下文), `structural_id`, `source_id`, `target_id`。
-
-### 评论
-这是一个高风险、高收益的架构“大扫除”。使用 `LibCST` 是极其正确的选择，因为它能保留代码的格式（如注释和空白），同时提供语法树级别的精确操作，能够区分变量名、属性名和参数名，这在处理 `id` 这样常见的单词时至关重要。
-
-### 目标
-1.  安装 `libcst` 依赖。
-2.  创建 `scripts/refactor_3_0_renaming.py` 脚本，实现针对性的 CST 转换逻辑。
-3.  执行脚本，对 `packages/` 下的代码进行原地修改。
-4.  运行测试，验证重构未破坏现有逻辑。
-
-### 基本原理
-我们采用“上下文感知”的重命名策略：
--   **全局安全替换**：`structural_id`, `source_id`, `target_id` 这些词汇在项目中具有独特的语义，可以进行全局性的属性、参数和变量名替换。
--   **上下文敏感替换**：对于 `id`，我们仅在特定的上下文（如 `NodeIR` 类定义、`NodeIR()` 构造函数调用、以及特定变量名如 `node.id` 的属性访问）中将其替换为 `current_node_instance_hash`，以防止误伤 Python 内置的 `id()` 函数或其他无关字段。
-
-### 标签
-#intent/refine #flow/ready #priority/high #comp/compiler #comp/spec #comp/graph #scope/core #ai/instruct
-#task/domain/architecture
-#task/object/identifier-naming
-#task/action/enforce-axiom
-#task/state/begin
-
----
-
-### Script
-
-#### Acts 2: 创建重构脚本
-
-我们将创建一个智能的重构脚本。它包含两个核心的 Transformer：
-1.  `UnambiguousRenamer`: 处理那些没有歧义的字段（`structural_id`, `source_id`, `target_id`）。
-2.  `NodeIdRenamer`: 专门处理棘手的 `NodeIR.id`。它会跟踪类定义上下文，并检查函数调用的名称，以确保只修改 `NodeIR` 相关的 `id`。
-
-~~~~~act
-write_file
-scripts/refactor_3_0_renaming.py
-~~~~~
-~~~~~python
 import libcst as cst
 from libcst import matchers as m
 import os
@@ -217,7 +169,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~
-
-### 下一步建议
-如果测试报错，我们将根据错误信息进行针对性的修复（可能是手动修正脚本未能覆盖的边缘情况）。一旦测试全部通过，我们将提交这次重构，标志着 Phase 3.0 的准备工作完成。

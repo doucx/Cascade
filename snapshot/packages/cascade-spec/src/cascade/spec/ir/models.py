@@ -45,6 +45,7 @@ class NodeIR:
     id: str
     definition: TaskDef
     inputs: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

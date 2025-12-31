@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(compiler): 全面覆盖 Phase 6 功能对齐需求", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767154041.3995793, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): Implement frontend support for map and control flow", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767154177.572472, "duration_ms": 0}}

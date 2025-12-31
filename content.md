@@ -1,30 +1,31 @@
-好的，我们继续处理 `cascade-library` 包。
+好的，接下来处理 `cascade-compiler` 包的测试。
 
-分析 `cascade-library` 中的测试文件：
-*   所有这些文件（`test_config.py`, `test_file.py`, `test_http.py` 等）都执行了 `cs.run()` 或显式创建了 `cs.Engine` 实例来运行 Provider 逻辑。
-*   Provider 的本质是与外部系统（文件系统、网络、数据库、Shell）交互，因此验证它们的测试天然属于**集成测试**。
-*   虽然 `test_io.py` 和 `test_sql.py` 中包含少量验证注册表逻辑或对象属性的单元测试，但其主体仍然是集成测试。
+这个包的所有测试 (`test_backend.py`, `test_frontend.py`, `test_optimizer.py`) 都属于**单元测试**范畴：
+1.  **`test_frontend.py`**: 验证 `Frontend` 将 `LazyResult` 结构转换为 `GraphIR` 的静态逻辑。它不运行任何任务。
+2.  **`test_optimizer.py`**: 验证 `Optimizer` 在给定 `GraphIR` 结构下执行拓扑排序和周期检测的纯算法逻辑。它不涉及运行时。
+3.  **`test_backend.py`**: 验证 `Backend` 将 `GraphIR` 结构转换为 `Blueprint` (VM 指令集) 的逻辑。它只涉及数据结构转换。
 
-我将把它们统一迁移到 `integration/` 目录下，并创建空的 `unit/` 目录以备后用。
+因此，所有文件都将被移动到 `unit/` 目录中。
 
-## [WIP] refactor(tests): 为 cascade-library 分离测试
+## [WIP] refactor(tests): 为 cascade-compiler 分离单元测试
 
 ### 用户需求
 
-在 `cascade-library` 包内，将现有的 Provider 测试迁移到 `integration/` 目录，并建立标准的测试目录结构。
+将 `cascade-compiler` 包下的所有测试文件迁移到新创建的 `unit/` 目录中，因为这些测试都是针对编译器组件的静态逻辑验证，不依赖于完整的 Cascade 运行时。
 
 ### 评论
 
-`cascade-library` 包含了 Cascade 的标准库（Providers）。由于 Provider 的核心职责是执行实际的 I/O 操作或调用运行时引擎进行计算，这些测试几乎全部依赖于 `cascade-engine` 的完整流程。将它们归类为集成测试是非常准确的。
+`cascade-compiler` 的核心职责是处理静态数据结构 (`LazyResult` -> `GraphIR` -> `ExecutionPlan` -> `Blueprint`)。其测试应严格隔离在单元测试层。由于目前没有集成测试，我们将仅创建 `unit` 目录。
 
 ### 目标
 
-1.  在 `packages/cascade-library/tests/` 目录下创建 `unit/` 和 `integration/` 目录。
-2.  将所有现有的测试文件及其 `.stitcher.yaml` 配置文件移动到 `integration/` 目录。
+1.  在 `packages/cascade-compiler/tests/` 目录下创建 `unit/` 目录。
+2.  将所有现有的测试文件 (`test_backend.py`, `test_frontend.py`, `test_optimizer.py`) 移动到 `unit/` 目录中。
+3.  删除空的 `packages/cascade-compiler/tests/` 目录下的旧文件。
 
 ### 基本原理
 
-Provider 测试验证的是“任务定义”与“引擎执行器”之间的协作，以及与真实或模拟的外部资源（如 SQLite 内存库、Moto S3 模拟、aiohttp 模拟服务器）的交互。这种跨组件、跨边界的验证符合集成测试的定义。
+如前所述，所有测试都属于对编译器前端、优化器和后端逻辑的隔离验证，符合单元测试的定义。
 
 ### 标签
 
@@ -34,35 +35,37 @@ Provider 测试验证的是“任务定义”与“引擎执行器”之间的�
 
 ### Script
 
-#### Acts 1: 创建新的测试目录结构
+#### Acts 1: 创建 Unit 目录
+
+为 `cascade-compiler` 包创建 `unit` 测试目录。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-library/tests/unit packages/cascade-library/tests/integration
+mkdir -p packages/cascade-compiler/tests/unit
 ~~~~~
 
-#### Acts 2: 迁移所有测试文件到 Integration
-
-我们将批量移动现有的测试文件。
+#### Acts 2: 迁移所有测试文件到 Unit 目录
 
 ~~~~~act
-run_command
+move_file
+packages/cascade-compiler/tests/test_backend.py
+packages/cascade-compiler/tests/unit/test_backend.py
 ~~~~~
-~~~~~bash
-mv packages/cascade-library/tests/*.py packages/cascade-library/tests/integration/
-mv packages/cascade-library/tests/*.stitcher.yaml packages/cascade-library/tests/integration/
+~~~~~act
+move_file
+packages/cascade-compiler/tests/test_frontend.py
+packages/cascade-compiler/tests/unit/test_frontend.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-compiler/tests/test_optimizer.py
+packages/cascade-compiler/tests/unit/test_optimizer.py
 ~~~~~
 
 ### 下一步建议
 
-`cascade-library` 的测试迁移已完成。
+我们已经完成了 `cascade-compiler` 的测试结构重构。
 
-目前已重构的包包括：
-- `cascade-spec`
-- `cascade-application`
-- `cascade-sdk`
-- `cascade-library`
-
-接下来的包是 **`cascade-engine`**。由于这个包是核心引擎，其测试可能包含大量的单元测试（验证求解器算法、事件总线逻辑等）和集成测试。我将对其进行深度分析。如果您准备好了，请指示我开始。
+接下来我将继续检查其他包的测试结构，下一个目标是 `cascade-graph`。

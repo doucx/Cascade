@@ -1,30 +1,31 @@
-好的，我将同时处理 `cascade-connector-local` 和 `cascade-connector-mqtt` 两个连接器包的测试结构，根据它们的测试性质进行分类。
+这是一个包含两个子任务的重构计划：分离 `cascade-cli-controller` 和 `cascade-cli-observer` 两个包的测试。
 
-## [WIP] refactor(tests): 分离连接器包的测试 (MQTT: Unit, Local: Integration)
+## [WIP] refactor(tests): 分离 cascade-cli-controller 和 observer 的测试
 
 ### 用户需求
 
-继续对 `cascade-connector-local` 和 `cascade-connector-mqtt` 包进行测试结构重构，将测试文件分离到 `unit/` 和 `integration/` 目录中。
+继续测试分离任务。将 `cascade-cli-controller` 和 `cascade-cli-observer` 包中的现有测试文件迁移到新创建的 `unit/` 或 `integration/` 目录中。
 
 ### 评论
 
-这次重构的分类结果很好地体现了测试原则：
-*   **`cascade-connector-local`**: 测试的是它内部的、自洽的消息传递机制，这是该组件的完整功能合约，因此属于**集成测试**（Component-Internal Integration）。
-*   **`cascade-connector-mqtt`**: 通过对外部网络库 `aiomqtt` 的全面 Mock，它的测试专注于验证 `MqttConnector` 自身的逻辑、参数传递和生命周期管理，使其成为纯粹的**单元测试**。
-
-这种明确的分离将极大地增强测试套件的清晰度和维护性。
+这两个包是 CLI 工具，其测试主要围绕 `Typer` CLI 运行器和 `MqttConnector` 的交互展开。
+*   `controller` 的两个测试都涉及 CLI 调用或网络发布逻辑，被归类为集成测试。
+*   `observer` 的测试中，事件处理逻辑可以被视为单元测试，而验证整个发布-订阅契约的测试则被视为集成测试。
 
 ### 目标
 
-1.  在 `packages/cascade-connector-local/tests/` 下创建 `integration/` 目录，并将所有文件移入。
-2.  在 `packages/cascade-connector-mqtt/tests/` 下创建 `unit/` 目录，并将所有文件移入。
-3.  清理旧的、不再需要的顶级测试文件。
+1.  重构 `packages/cascade-cli-controller/tests`：创建 `integration/` 目录，并将所有现有测试文件移动到其中。
+2.  重构 `packages/cascade-cli-observer/tests`：创建 `unit/` 和 `integration/` 目录，并按以下分类移动文件：
+    *   `test_observer_app.py` -> `unit/` (验证独立的事件回调逻辑)。
+    *   `test_telemetry_contract.py` -> `integration/` (验证跨模块的数据流契约)。
 
 ### 基本原理
 
-如评论所述，我们严格遵循测试边界原则：
-*   **Local Connector**: 专注于测试组件的完整行为，即使没有外部依赖，也属于集成测试。
-*   **MQTT Connector**: 彻底 Mock 外部依赖，专注于测试 `MqttConnector` 类的实例化、方法调用顺序和参数转换（例如，将 Python Dict 转换为 JSON 字符串），是典型的单元测试。
+对于 CLI 相关的测试，我们遵循以下原则：
+1.  **Controller Tests**: 它们测试的是“通过 CLI 触发 MQTT 发布”的流程，这涉及到 CLI/HTTP/MQTT 三个组件的集成，因此是集成测试。
+2.  **Observer Tests**:
+    *   `test_observer_app.py` 仅测试 `on_message` 这个核心回调函数，隔离了网络连接，是验证业务逻辑的单元测试。
+    *   `test_telemetry_contract.py` 模拟了整个发布-订阅生命周期，是标准的集成测试。
 
 ### 标签
 
@@ -34,60 +35,79 @@
 
 ### Script
 
-#### Acts 1: 处理 `cascade-connector-local` (Integration)
+#### Acts 1: 重构 packages/cascade-cli-controller/tests
 
-创建 `integration` 目录并迁移文件。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p packages/cascade-connector-local/tests/integration
-~~~~~
-
-~~~~~act
-move_file
-packages/cascade-connector-local/tests/test_local_connector.py
-packages/cascade-connector-local/tests/integration/test_local_connector.py
-~~~~~
-~~~~~act
-move_file
-packages/cascade-connector-local/tests/test_local_connector.stitcher.yaml
-packages/cascade-connector-local/tests/integration/test_local_connector.stitcher.yaml
-~~~~~
-
-#### Acts 2: 处理 `cascade-connector-mqtt` (Unit)
-
-创建 `unit` 目录并迁移文件。由于 MQTT Connector 测试使用了 Mock，它们属于单元测试。
+创建 `integration` 目录并迁移所有测试文件。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-connector-mqtt/tests/unit
+mkdir -p packages/cascade-cli-controller/tests/integration
 ~~~~~
 
 ~~~~~act
 move_file
-packages/cascade-connector-mqtt/tests/conftest.py
-packages/cascade-connector-mqtt/tests/unit/conftest.py
+packages/cascade-cli-controller/tests/test_controller_app.py
+packages/cascade-cli-controller/tests/integration/test_controller_app.py
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-connector-mqtt/tests/conftest.stitcher.yaml
-packages/cascade-connector-mqtt/tests/unit/conftest.stitcher.yaml
+packages/cascade-cli-controller/tests/test_controller_app.stitcher.yaml
+packages/cascade-cli-controller/tests/integration/test_controller_app.stitcher.yaml
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-connector-mqtt/tests/test_connector.py
-packages/cascade-connector-mqtt/tests/unit/test_connector.py
+packages/cascade-cli-controller/tests/test_controller_cli.py
+packages/cascade-cli-controller/tests/integration/test_controller_cli.py
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-connector-mqtt/tests/test_connector.stitcher.yaml
-packages/cascade-connector-mqtt/tests/unit/test_connector.stitcher.yaml
+packages/cascade-cli-controller/tests/test_controller_cli.stitcher.yaml
+packages/cascade-cli-controller/tests/integration/test_controller_cli.stitcher.yaml
+~~~~~
+
+#### Acts 2: 重构 packages/cascade-cli-observer/tests
+
+创建 `unit` 和 `integration` 目录。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+mkdir -p packages/cascade-cli-observer/tests/unit packages/cascade-cli-observer/tests/integration
+~~~~~
+
+#### Acts 3: 迁移 Observer 单元测试
+
+将验证 `on_message` 事件处理逻辑的文件移动到 `unit`。
+
+~~~~~act
+move_file
+packages/cascade-cli-observer/tests/test_observer_app.py
+packages/cascade-cli-observer/tests/unit/test_observer_app.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-cli-observer/tests/test_observer_app.stitcher.yaml
+packages/cascade-cli-observer/tests/unit/test_observer_app.stitcher.yaml
+~~~~~
+
+#### Acts 4: 迁移 Observer 集成测试
+
+将验证生产者-消费者契约的文件移动到 `integration`。
+
+~~~~~act
+move_file
+packages/cascade-cli-observer/tests/test_telemetry_contract.py
+packages/cascade-cli-observer/tests/integration/test_telemetry_contract.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-cli-observer/tests/test_telemetry_contract.stitcher.yaml
+packages/cascade-cli-observer/tests/integration/test_telemetry_contract.stitcher.yaml
 ~~~~~
 
 ### 下一步建议
 
-接下来，我们将继续处理 `cascade-graph` 包。我将分析该包的测试文件，并生成相应的迁移计划。
+我们已经完成了对 CLI 工具测试的重构。接下来可以继续处理其余的包，如 `pyneedle-pointer` 和 `pyneedle-runtime`，以实现整个代码库的测试结构统一。

@@ -168,13 +168,12 @@ def test_compile_mutual_recursion():
     topology = Backend.compile(graph_ir)
     
     # Verify Channel Ping -> Pong
-    c1 = next((c for c in topology.channels if c.source_node_instance_hash == "Ping"), None)
-    assert c1 is not None
-    assert c1.tag_filter == "ping"
+    # Note: We must filter by tag because there is also a default output channel
+    c1 = next((c for c in topology.channels if c.source_node_instance_hash == "Ping" and c.tag_filter == "ping"), None)
+    assert c1 is not None, "Channel Ping->Pong with tag 'ping' not found"
     assert c1.target_data_slot_hash == topology.func_nodes["Pong"].inputs["y"]
     
     # Verify Channel Pong -> Ping
-    c2 = next((c for c in topology.channels if c.source_node_instance_hash == "Pong"), None)
-    assert c2 is not None
-    assert c2.tag_filter == "pong"
+    c2 = next((c for c in topology.channels if c.source_node_instance_hash == "Pong" and c.tag_filter == "pong"), None)
+    assert c2 is not None, "Channel Pong->Ping with tag 'pong' not found"
     assert c2.target_data_slot_hash == topology.func_nodes["Ping"].inputs["x"]

@@ -177,12 +177,21 @@ class Reactor:
         # 2. Routing Logic
         channels = self._channels_by_source.get(event.node.name, [])
         
+        print(f"[DEBUG][Reactor] Handling ExecutionFinished for '{event.node.name}'. Found {len(channels)} outbound channels.")
+
         for output_name, token in event.outputs.items():
+            print(f"[DEBUG][Reactor]  - Processing output '{output_name}' with token: {token!r}")
+            routed = False
             # Find matching channels for this output port
             for channel in channels:
+                print(f"[DEBUG][Reactor]    - Checking channel to '{channel.target.name}' with filter '{channel.tag_filter}'...")
                 if channel.output_name == output_name and channel.match(token.tag):
+                    print(f"[DEBUG][Reactor]      ✅ MATCH! Routing token.")
                     # Route: Generate a TokenGenerated event for the target DataNode
                     self.push_event(TokenGenerated(node=channel.target, token=token))
+                    routed = True
+            if not routed:
+                print(f"[DEBUG][Reactor]    - ❌ NO MATCH found for token tag '{token.tag}' on port '{output_name}'. Token dropped.")
 
     async def _fire(self, node: FuncNode):
         # 1. Atomically consume inputs (Physics: Consume Energy)

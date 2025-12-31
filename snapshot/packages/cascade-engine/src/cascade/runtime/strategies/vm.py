@@ -96,15 +96,20 @@ class _ReactorAdapter:
         try:
             result = await self.executor.execute(shim_node, args, kwargs)
             
+            print(f"[DEBUG][Adapter] Task '{shim_node.name}' executed with result: {result!r}")
+
             # 5. Pack Result (Default output port "result")
             # In the future, we might support multi-port output based on result type
             outputs = {"result": Token(payload=result)}
+            
+            print(f"[DEBUG][Adapter] Pushing ExecutionFinished with outputs: {outputs!r}")
             
             self.reactor.push_event(
                 ExecutionFinished(node=physics_node, outputs=outputs)
             )
         except Exception as e:
             # Handle failure
+            print(f"[DEBUG][Adapter] Task '{shim_node.name}' failed with error: {e}")
             self.reactor.push_event(
                 ExecutionFinished(node=physics_node, error=e)
             )

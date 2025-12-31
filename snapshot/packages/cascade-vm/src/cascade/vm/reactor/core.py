@@ -28,11 +28,32 @@ class Reactor:
             return
         self._nodes.add(node)
         
-        # Build reverse index for FuncNodes
+        # Build reverse index for FuncNodes and Auto-discover Channels
         if isinstance(node, FuncNode):
+            # 1. Reverse dependency map (DataNode -> Downstream FuncNodes)
             for port in node.inputs.values():
                 if port.source:
                     self._downstream_map[port.source.name].append(node)
+            
+            # 2. Auto-discover Output Channels (Physics -> Routing)
+            # If a port is connected to a DataNode physically, implies a default channel.
+            for port_name, port in node.outputs.items():
+                if port.target:
+                    # Check if a channel already exists for this path to avoid duplicates
+                    # or overriding explicit custom channels.
+                    existing = any(
+                        c.output_name == port_name and c.match("default")
+                        for c in self._channels_by_source.get(node.name, [])
+                    )
+                    if not existing:
+                        # Create implicit default channel
+                        default_channel = Channel(
+                            source=node,
+                            target=port.target,
+                            output_name=port_name,
+                            tag_filter="default"
+                        )
+                        self.register_channel(default_channel)
 
     def register_channel(self, channel: Channel):
         self._channels_by_source[channel.source.name].append(channel)

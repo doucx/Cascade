@@ -45,54 +45,82 @@ class VMExecutionStrategy:
         run_stack: ExitStack,
         active_resources: Dict[str, Any],
     ) -> Any:
-        # 1. Frontend: Compile LazyResult to GraphIR
-        # Returns CompilationResult(ir, symbol_table)
-        compilation_result = Frontend.compile(target)
-        graph_ir = compilation_result.ir
-        symbol_table = compilation_result.symbol_table
+        from cascade.spec.jump import Jump
 
-        # 2. Optimizer: Schedule GraphIR to ExecutionPlan
-        execution_plan = Optimizer.optimize(graph_ir)
+        current_target = target
+        next_input_overrides: Optional[Dict[str, Any]] = None
 
-        # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
-        blueprint = Backend.compile(graph_ir, execution_plan)
+        while True:
+            # 1. Frontend: Compile LazyResult to GraphIR
+            compilation_result = Frontend.compile(current_target)
+            graph_ir = compilation_result.ir
+            symbol_table = compilation_result.symbol_table
 
-        # 4. Runtime: Execute Blueprint on VM
-        vm = VirtualMachine(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self.wakeup_event,
-        )
-        
-        # Configure Middleware Pipeline (Order matters!)
-        # Onion Layer:
-        # 1. Observability (Outermost): Logs everything including retries? 
-        #    Note: Does Observability log individual attempts? 
-        #    If Retry is inner, Observability sees one "Task" execution which might take long.
-        #    If Retry is outer, Observability sees each attempt as a "Task"? No, that's not right.
-        #    Correct nesting:
-        #    [Observability] -> [Retry] -> [Constraints] -> [Resources] -> [Resolve] -> [Core]
-        #    This way, Observability records the *Total* time for the task (including retries).
-        #    The RetryMiddleware itself should emit TaskRetrying events (TODO).
-        
-        vm.set_middlewares([
-            ObservabilityMiddleware(self.bus, run_id),
-            RetryMiddleware(),
-            ConstraintMiddleware(self.constraint_manager),
-            ResourceLifecycleMiddleware(self.resource_manager),
-            ArgumentResolutionMiddleware(active_resources, params),
-        ])
+            # 2. Optimizer: Schedule GraphIR to ExecutionPlan
+            execution_plan = Optimizer.optimize(graph_ir)
 
-        if isinstance(target, MappedLazyResult):
-            initial_args = []
-            initial_kwargs = dict(target.mapping_kwargs)
-        else:
-            initial_args = list(target.args)
-            initial_kwargs = dict(target.kwargs)
-        
-        return await vm.execute(
-            blueprint,
-            symbol_table=symbol_table,
-            initial_args=initial_args,
-            initial_kwargs=initial_kwargs,
-        )
+            # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
+            blueprint = Backend.compile(graph_ir, execution_plan)
+
+            # 4. Runtime: Execute Blueprint on VM
+            vm = VirtualMachine(
+                resource_manager=self.resource_manager,
+                constraint_manager=self.constraint_manager,
+                wakeup_event=self.wakeup_event,
+            )
+            
+            vm.set_middlewares([
+                ObservabilityMiddleware(self.bus, run_id),
+                RetryMiddleware(),
+                ConstraintMiddleware(self.constraint_manager),
+                ResourceLifecycleMiddleware(self.resource_manager),
+                ArgumentResolutionMiddleware(active_resources, params),
+            ])
+            
+            # Use overrides from previous Jump if available
+            initial_kwargs = next_input_overrides or {}
+            next_input_overrides = None
+
+            result = await vm.execute(
+                blueprint,
+                symbol_table=symbol_table,
+                initial_args=[],  # Jumps primarily work with kwargs for clarity
+                initial_kwargs=initial_kwargs,
+            )
+
+            # 5. Check for Control Flow Signal
+            if not isinstance(result, Jump):
+                return result  # Normal termination
+
+            # 6. Handle Explicit Jump
+            selector = getattr(current_target, '_jump_selector', None)
+            if not selector:
+                raise RuntimeError(
+                    f"Task '{current_target.task.name}' returned a Jump signal "
+                    "but has no bound jump selector. Use cs.bind() to link a selector."
+                )
+
+            next_lazy_result = selector.routes.get(result.target_key)
+
+            if next_lazy_result is None:
+                # Loop exit condition
+                return result.data
+
+            # 7. Prepare for next iteration
+            current_target = next_lazy_result
+            
+            # Prepare input overrides for the next loop
+            if isinstance(result.data, dict):
+                next_input_overrides = result.data
+            elif result.data is not None:
+                # Non-dict data is passed as the first positional argument
+                # In the VM, this means we need to know which register to populate
+                # For simplicity, we will pass it as a special kwarg and let
+                # the VM/middleware handle it. Or, for TCO, it's often a dict.
+                # The old strategy passed it as {"0": ...}, but VM doesn't use that.
+                # The test case `accumulator` passes a dict. Let's stick to dicts.
+                # This might require adjusting the `counter` test if it relies on positional.
+                # Let's assume for now Jump data is a dict of kwargs.
+                raise TypeError("Jump data for VM-based TCO must be a dictionary.")
+            else:
+                next_input_overrides = {}

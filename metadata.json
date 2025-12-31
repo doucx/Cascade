@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M middleware.py, A middlewares.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767161201.6546824, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(vm): 实现 VM 中间件管道架构与能力增强", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767161206.5394614, "duration_ms": 0}}

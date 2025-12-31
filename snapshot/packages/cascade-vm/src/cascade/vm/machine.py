@@ -73,9 +73,12 @@ class VirtualMachine:
         symbol_table: Dict[str, Callable],
         initial_args: Optional[List[Any]] = None,
         initial_kwargs: Optional[Dict[str, Any]] = None,
+        context_data: Optional[Dict[str, Any]] = None,
     ) -> Any:
         current_blueprint = blueprint
         current_symbol_table = symbol_table
+        # Store context data for this execution run
+        self._current_context_data = context_data or {}
 
         frame = Frame(current_blueprint.register_count)
         self._load_inputs(
@@ -195,11 +198,13 @@ class VirtualMachine:
                 kwargs[k] = op
 
         ctx = ExecutionContext(
+            vm=self,
             instruction=instr,
             frame=frame,
             symbol_table=symbol_table,
             resolved_args=args,
-            resolved_kwargs=kwargs
+            resolved_kwargs=kwargs,
+            context_data=getattr(self, "_current_context_data", {}),
         )
 
         # 2. Build Onion

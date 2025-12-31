@@ -51,7 +51,7 @@ packages = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = []
+packages = ["src/cascade_monorepo"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov=cascade --cov-report=term-missing"

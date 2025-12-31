@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(tests): 为 cascade-application 分离测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767150767.6910326, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(tests): 为 cascade-sdk 分离测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767150854.7829118, "duration_ms": 0}}

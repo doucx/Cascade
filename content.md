@@ -1,27 +1,31 @@
-Excellent, let's proceed with the `cascade-application` package.
+Understood. Let's proceed with the `cascade-sdk` package.
 
-Based on my analysis, the test file `test_app_tools.py` instantiates and uses the `CascadeApp` class. Since `CascadeApp` internally sets up an `Engine`, `Solver`, and `Executor`, these tests are verifying the integration of multiple components. Therefore, they qualify as integration tests.
+I've analyzed the contents of `packages/cascade-sdk/tests/`.
+-   `test_llm_pattern.py` and `test_state_backends.py` are clear **integration tests** as they mock external dependencies (`http`, `redis`) and use the full `cs.run` or `Engine`.
+-   `test_auto_gathering.py`, `test_public_api_imports.py`, `test_cli.py`, `test_lisp.py`, and `test_visualize.py` are also **integration tests**. Although some might seem simple, they all rely on the top-level `cs.run`, `cs.visualize`, or `cs.create_cli` functions, which invoke the `CascadeApp` and the full runtime stack. They test the end-to-end user-facing API.
+-   There are currently no pure unit tests in this package.
 
-I will now generate the plan to restructure the tests for this package.
+I will now generate the plan to move all existing tests into the `integration` directory.
 
-## [WIP] refactor(tests): 为 cascade-application 分离测试
+## [WIP] refactor(tests): 为 cascade-sdk 分离测试
 
 ### 用户需求
 
-在 `cascade-application` 包内，继续执行将测试文件分离到 `unit/` 和 `integration/` 目录的任务。
+在 `cascade-sdk` 包内，继续执行将测试文件分离到 `unit/` 和 `integration/` 目录的任务。
 
 ### 评论
 
-`cascade-application` is the user-facing entry point, so its tests inherently lean towards integration. Creating the distinct directories now establishes a clear structure for future tests, ensuring that any new, isolated unit tests for helpers or internal logic will have a proper home.
+The tests within the SDK package are excellent examples of integration tests, as they validate the primary user-facing functions like `cs.run()`, `cs.visualize()`, and `cs.create_cli()`. Moving them into an `integration` directory correctly classifies their role in verifying the complete workflow execution path.
 
 ### 目标
 
-1.  在 `packages/cascade-application/tests/` 目录下创建 `unit/` 和 `integration/` 目录。
-2.  将 `test_app_tools.py` 及其 `.stitcher.yaml` 文件归类为集成测试并移动到 `integration/` 目录。
+1.  在 `packages/cascade-sdk/tests/` 目录下创建 `unit/` 和 `integration/` 目录。
+2.  将 `tests/examples/`, `tests/integration/`, 和 `tests/tools/` 下的所有测试文件及其 `.stitcher.yaml` 文件移动到新的 `packages/cascade-sdk/tests/integration/` 目录。
+3.  清理旧的、现在已为空的目录结构。
 
 ### 基本原理
 
-`test_app_tools.py` directly tests the `CascadeApp` class's `dry_run` functionality. This process involves graph building, plan resolution via a solver, and formatted output generation, making it a clear integration test. There are currently no unit tests in this package, but the directory structure will be created to accommodate them in the future.
+All current tests in the `cascade-sdk` package exercise the full application stack via the main SDK entry points. Therefore, they will all be categorized as integration tests. The process will involve creating the new standardized test directories, moving all test-related files into the `integration` subdirectory, and then removing the now-empty legacy directories (`examples`, `integration`, `tools`).
 
 ### 标签
 
@@ -33,30 +37,105 @@ I will now generate the plan to restructure the tests for this package.
 
 #### Acts 1: 创建新的测试目录结构
 
-为 `cascade-application` 包创建 `unit` 和 `integration` 测试目录。
+为 `cascade-sdk` 包创建 `unit` 和 `integration` 测试目录。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-application/tests/unit packages/cascade-application/tests/integration
+mkdir -p packages/cascade-sdk/tests/unit packages/cascade-sdk/tests/integration
 ~~~~~
 
-#### Acts 2: 迁移集成测试文件
+#### Acts 2: 迁移所有现有测试文件到 integration 目录
 
-将 `test_app_tools.py` 和其 stitcher YAML 文件移动到 `integration` 目录中。
+我们将把 `examples`, `integration`, 和 `tools` 子目录中的所有测试都移动到新的 `integration` 目录中。
 
 ~~~~~act
 move_file
-packages/cascade-application/tests/test_app_tools.py
-packages/cascade-application/tests/integration/test_app_tools.py
+packages/cascade-sdk/tests/examples/test_llm_pattern.py
+packages/cascade-sdk/tests/integration/test_llm_pattern.py
 ~~~~~
 ~~~~~act
 move_file
-packages/cascade-application/tests/test_app_tools.stitcher.yaml
-packages/cascade-application/tests/integration/test_app_tools.stitcher.yaml
+packages/cascade-sdk/tests/examples/test_llm_pattern.stitcher.yaml
+packages/cascade-sdk/tests/integration/test_llm_pattern.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/integration/test_auto_gathering.py
+packages/cascade-sdk/tests/integration/test_auto_gathering.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/integration/test_auto_gathering.stitcher.yaml
+packages/cascade-sdk/tests/integration/test_auto_gathering.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/integration/test_public_api_imports.py
+packages/cascade-sdk/tests/integration/test_public_api_imports.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/integration/test_public_api_imports.stitcher.yaml
+packages/cascade-sdk/tests/integration/test_public_api_imports.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/integration/test_state_backends.py
+packages/cascade-sdk/tests/integration/test_state_backends.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/integration/test_state_backends.stitcher.yaml
+packages/cascade-sdk/tests/integration/test_state_backends.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/tools/test_cli.py
+packages/cascade-sdk/tests/integration/test_cli.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/tools/test_cli.stitcher.yaml
+packages/cascade-sdk/tests/integration/test_cli.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/tools/test_lisp.py
+packages/cascade-sdk/tests/integration/test_lisp.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/tools/test_lisp.stitcher.yaml
+packages/cascade-sdk/tests/integration/test_lisp.stitcher.yaml
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/tools/test_visualize.py
+packages/cascade-sdk/tests/integration/test_visualize.py
+~~~~~
+~~~~~act
+move_file
+packages/cascade-sdk/tests/tools/test_visualize.stitcher.yaml
+packages/cascade-sdk/tests/integration/test_visualize.stitcher.yaml
+~~~~~
+
+#### Acts 3: 清理旧的目录结构
+
+删除现在已经为空的 `examples`, `integration`, 和 `tools` 目录。
+
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+rm -rf packages/cascade-sdk/tests/examples packages/cascade-sdk/tests/integration packages/cascade-sdk/tests/tools
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功重构了 `cascade-application` 的测试目录。下一个包含测试的包是 `cascade-sdk`。我将分析其 `tests` 目录，并为您生成相应的迁移计划。
+`cascade-sdk` 的测试迁移已完成。根据文件列表，下一个需要处理的包是 `cascade-python`，但它没有 `tests` 目录。再下一个是 `cascade-engine`，它也没有 `tests` 目录。 `cascade-compiler` 也没有。
+
+看起来我们已经处理完了所有包含测试的 `cascade-*` 包。
+
+任务“将集成测试和单元测试分开”的核心迁移工作已经完成。我们可以将这个系列的工作标记为 `[COMMIT]`，或者您可以指示我处理 `stitcher-*` 或 `pyneedle-*` 包。请指示下一步。

@@ -68,3 +68,87 @@ def test_compile_linear_dependency():
     assert edge.source_id == source_node.id
     assert edge.target_id == target_node.id
     assert edge.target_arg == "val"
+
+
+def test_compile_conditional_task():
+    """
+    Case 3: Conditional Execution (run_if).
+    Verify that Frontend generates an EdgeKind.CONTROL edge.
+    """
+    @task
+    def condition(): return True
+    
+    @task
+    def action(): return "done"
+
+    t_cond = condition()
+    t_action = action().run_if(t_cond)
+
+    ir = Frontend.compile(t_action)
+
+    assert len(ir.edges) == 1
+    edge = ir.edges[0]
+    
+    # We check for the new EdgeKind
+    from cascade.spec.ir.models import EdgeKind
+    assert edge.kind == EdgeKind.CONTROL
+    assert edge.target_arg == "_condition"  # Internal convention, or explicit field
+
+
+def test_compile_param_input():
+    """
+    Case 4: Param Input.
+    Verify that cs.Param is compiled into a NodeIR with correct metadata.
+    """
+    import cascade as cs
+    
+    # cs.Param returns a LazyResult that wraps a special internal task
+    p = cs.Param("my_param", default=42)
+    
+    @task
+    def consume(x): return x
+
+    workflow = consume(x=p)
+    
+    ir = Frontend.compile(workflow)
+    
+    # Should have 2 nodes: Param node and Consume node
+    assert len(ir.nodes) == 2
+    
+    # Find param node
+    param_node = next(n for n in ir.nodes if n.definition.name == "_get_param_value")
+    
+    # Check inputs
+    # The Param LazyResult stores the param name in its args/kwargs
+    assert param_node.inputs.get("name") == "my_param" or param_node.inputs.get("0") == "my_param"
+
+
+def test_compile_map_node():
+    """
+    Case 5: Map Node.
+    Verify that task.map() creates a node marked as a map operation.
+    """
+    @task
+    def double(x): return x * 2
+    
+    # Map over a list literal
+    workflow = double.map(x=[1, 2, 3])
+    
+    ir = Frontend.compile(workflow)
+    
+    assert len(ir.nodes) == 1
+    node = ir.nodes[0]
+    
+    # The definition should point to the underlying 'double' task
+    assert node.definition.name == "double"
+    
+    # But the NodeIR needs a way to distinguish itself as a Map.
+    # We expect a 'type' or 'mode' field in NodeIR or TaskDef.
+    # Currently NodeIR doesn't have it explicitly, let's assume we add it to inputs or separate field.
+    # Driving the requirement: NodeIR should have an 'execution_strategy' or similar.
+    # For now, let's assert that inputs contain the list.
+    assert node.inputs["x"] == [1, 2, 3]
+    
+    # Spec Requirement: We need to know this is a MAP, not a single call with a list arg.
+    # The Frontend must populate a field. Let's assume 'meta' in NodeIR for now.
+    assert node.meta.get("is_map") is True

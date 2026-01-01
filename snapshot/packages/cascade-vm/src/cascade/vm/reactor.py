@@ -5,6 +5,7 @@ from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 
+
 class Reactor:
     """
     The heart of the physics engine.
@@ -22,7 +23,7 @@ class Reactor:
         self.memory = memory
         self.executor = executor
         self.function_map = function_map
-        
+
         # Pre-compute the input/output data nodes for each function node
         self._func_inputs: Dict[str, List[str]] = {}
         self._func_outputs: Dict[str, List[str]] = {}
@@ -37,13 +38,17 @@ class Reactor:
         for channel in self.graph.channels:
             target_node = self.graph.nodes.get(channel.target_node_id)
             source_node = self.graph.nodes.get(channel.source_node_id)
-            
+
             # D -> F connections define inputs
-            if isinstance(target_node, PhysicsFuncNode) and isinstance(source_node, PhysicsDataNode):
+            if isinstance(target_node, PhysicsFuncNode) and isinstance(
+                source_node, PhysicsDataNode
+            ):
                 self._func_inputs[target_node.id].append(source_node.id)
-            
+
             # F -> D connections define outputs
-            elif isinstance(source_node, PhysicsFuncNode) and isinstance(target_node, PhysicsDataNode):
+            elif isinstance(source_node, PhysicsFuncNode) and isinstance(
+                target_node, PhysicsDataNode
+            ):
                 self._func_outputs[source_node.id].append(target_node.id)
 
     async def step(self) -> int:

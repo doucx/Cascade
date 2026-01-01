@@ -1,7 +1,7 @@
 import sys
 import time
 import asyncio
-from typing import Any, Dict, Optional, Callable
+from typing import Any, Dict, Optional, Callable, cast
 from uuid import uuid4
 from contextlib import ExitStack
 
@@ -187,7 +187,7 @@ class Engine:
                     def _connector_provider():
                         yield self.connector
 
-                    self.register(_connector_provider)
+                    self.register(cast(ResourceDefinition, _connector_provider))
 
                 active_resources: Dict[str, Any] = {}
 

@@ -124,7 +124,7 @@ class FlowManager:
         router_edge = next(
             (e for e in self.in_edges[node.structural_id] if e.router), None
         )
-        if router_edge:
+        if router_edge and router_edge.router:
             selector_node = self._get_node_from_instance(router_edge.router.selector)
             if selector_node:
                 selector_id = selector_node.structural_id

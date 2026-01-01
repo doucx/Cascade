@@ -3,6 +3,11 @@ from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
+from cascade.vm.executor import PhysicsExecutor
+
+# Dummy function for testing
+def noop(*args):
+    return "result"
 
 @pytest.fixture
 def simple_topology():
@@ -21,53 +26,50 @@ def simple_topology():
     
     # Connect D1 -> F1
     channel = Channel(source_node_id=d1.id, source_port="out", target_node_id=f1.id)
-    # Note: In Spec, channel is Source->Target. 
-    # But wait, Topology definition says:
-    # "if Source is Func, Target MUST be Data".
-    # So for D -> F connection, do we have a Channel?
-    # Let's check spec/topology.py.
-    # Channel: source_node_id, source_port, target_node_id.
-    # It seems Channel is generic.
-    # But usually data flows D -> F -> D.
-    # Let's assume Channel represents any directed edge in the bipartite graph.
-    
     graph.channels.append(channel)
     
     return graph, d1, f1
 
-def test_reactor_step_idle(simple_topology):
+@pytest.mark.asyncio
+async def test_reactor_step_idle(simple_topology):
     """
     If no tokens are present, step() should do nothing.
     """
     graph, d1, f1 = simple_topology
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
+    executor = PhysicsExecutor()
+    function_map = {f1.id: noop}
+    reactor = Reactor(graph, memory, executor, function_map)
     
-    fired_count = reactor.step()
+    fired_count = await reactor.step()
     
     assert fired_count == 0
 
-def test_reactor_step_fire(simple_topology):
+@pytest.mark.asyncio
+async def test_reactor_step_fire(simple_topology):
     """
     If input has token, F1 should fire and consume the token.
     """
     graph, d1, f1 = simple_topology
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
+    executor = PhysicsExecutor()
+    function_map = {f1.id: noop}
+    reactor = Reactor(graph, memory, executor, function_map)
     
     # 1. Put token
     memory.put(d1, Token(payload="energy"))
     assert memory.get_count(d1.id) == 1
     
     # 2. Step
-    fired_count = reactor.step()
+    fired_count = await reactor.step()
     
     # 3. Assertions
     assert fired_count == 1
     # Token must be consumed (Atomic Consumption)
     assert memory.get_count(d1.id) == 0
 
-def test_reactor_partial_inputs():
+@pytest.mark.asyncio
+async def test_reactor_partial_inputs():
     """
     F1 needs D1 and D2. Only D1 has token. F1 should NOT fire.
     """
@@ -84,18 +86,21 @@ def test_reactor_partial_inputs():
     graph.channels.append(Channel(d2.id, "out", f1.id))
     
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
+    executor = PhysicsExecutor()
+    function_map = {f1.id: noop}
+    reactor = Reactor(graph, memory, executor, function_map)
     
     # Only fill D1
     memory.put(d1, Token(payload="A"))
     
-    fired_count = reactor.step()
+    fired_count = await reactor.step()
     
     assert fired_count == 0
     # Token in D1 should remain untouched
     assert memory.get_count(d1.id) == 1
 
-def test_reactor_independent_nodes():
+@pytest.mark.asyncio
+async def test_reactor_independent_nodes():
     """
     Two independent nodes F1, F2. Both ready. Both should fire in one step.
     """
@@ -111,12 +116,14 @@ def test_reactor_independent_nodes():
     graph.channels.append(Channel(d2.id, "out", f2.id))
     
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
+    executor = PhysicsExecutor()
+    function_map = {f1.id: noop, f2.id: noop}
+    reactor = Reactor(graph, memory, executor, function_map)
     
     memory.put(d1, Token("A"))
     memory.put(d2, Token("B"))
     
-    fired_count = reactor.step()
+    fired_count = await reactor.step()
     
     assert fired_count == 2
     assert memory.get_count(d1.id) == 0

@@ -49,8 +49,10 @@ async def test_dual_barrier_activation_waits_for_all_inputs():
     submitted_inputs = call_args[1]
 
     assert submitted_node == f_node
+    # Assert that DATA token was passed correctly
     assert submitted_inputs["data_arg"].payload == "some_data"
-    assert submitted_inputs["signal_arg"].payload is None
+    # Assert that SIGNAL token was consumed but NOT passed to executor
+    assert "signal_arg" not in submitted_inputs
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 import asyncio
 from collections import deque, defaultdict
-from typing import Deque, Set, List, Dict, Any, Optional
-from cascade.spec.physics import DataNode, FuncNode, TerminatorNode
+from typing import Deque, Set, List, Dict, Any, Optional, Callable
+from cascade.spec.physics import DataNode, FuncNode, TerminatorNode, EmitterNode
 from .events import ReactorEvent, TokenGenerated, ExecutionFinished
 from .model import Channel
 from cascade.vm.protocols import ResourceManager
@@ -12,6 +12,7 @@ class Reactor:
         self.executor = executor
         self.resource_manager = resource_manager
         self._event_queue: Deque[ReactorEvent] = deque()
+        self._sinks: Dict[str, Callable] = {}
         
         # Topology Indexes
         self._nodes: Set[Any] = set()
@@ -25,6 +26,9 @@ class Reactor:
         # Run Control
         self._is_running = False
         self._activity_signal = asyncio.Event()
+
+    def register_sink(self, sink_id: str, callback: Callable):
+        self._sinks[sink_id] = callback
 
     def register_node(self, node: Any):
         if node in self._nodes:
@@ -188,9 +192,19 @@ class Reactor:
         # 1. Atomically consume inputs (Physics: Consume Energy)
         inputs = node.consume_inputs()
         
-        # 2. Special Case: Terminator
+        # 2. Handle special intrinsic nodes
         if isinstance(node, TerminatorNode):
             self.stop()
+            return
+
+        if isinstance(node, EmitterNode):
+            sink = self._sinks.get(node.sink_id)
+            if sink and inputs:
+                # Assume the first input token's payload is the data to emit.
+                # A more complex Emitter could have routing logic based on port names.
+                token_to_emit = next(iter(inputs.values()), None)
+                if token_to_emit:
+                    sink(token_to_emit.payload)
             return
 
         # 3. Submit to Executor

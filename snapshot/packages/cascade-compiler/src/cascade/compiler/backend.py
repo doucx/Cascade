@@ -10,15 +10,20 @@ from cascade.spec.topology import (
 )
 
 
+from cascade.spec.topology import PhysicsEmitterNode, PhysicsTerminatorNode
+
 class Backend:
     """
     Compiler Backend: Transforms GraphIR into a static BipartiteGraph topology.
     """
 
     @staticmethod
-    def compile(graph: GraphIR) -> BipartiteGraph:
-        builder = _TopologyBuilder(graph)
-        return builder.build()
+    def compile(graph_ir: GraphIR, target_node_instance_hash: str) -> BipartiteGraph:
+        builder = _TopologyBuilder(graph_ir)
+        topology = builder.build()
+        
+        # Phase 5.3: Auto-inject lifecycle nodes
+        return _LifecycleInjector.inject(topology, target_node_instance_hash)
 
 
 class _TopologyBuilder:
@@ -195,3 +200,63 @@ class _TopologyBuilder:
     def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
         raw = f"{producer_hash}:{port}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+class _LifecycleInjector:
+    @staticmethod
+    def inject(topology: BipartiteGraph, target_node_hash: str) -> BipartiteGraph:
+        """
+        Injects Emitter and Terminator nodes to make the graph autonomous.
+        """
+        if target_node_hash not in topology.func_nodes:
+            # This can happen for graphs that resolve to a literal. No injection needed.
+            return topology
+
+        # 1. Find the output data slot of the target node
+        target_output_channel = next((
+            c for c in topology.channels
+            if c.source_node_instance_hash == target_node_hash and c.tag_filter == "default"
+        ), None)
+        if not target_output_channel:
+            # Target node has no default output, cannot inject.
+            return topology
+        
+        result_data_hash = target_output_channel.target_data_slot_hash
+
+        # 2. Create Emitter
+        emitter_hash = f"emitter_for_{target_node_hash}"
+        emitter = PhysicsEmitterNode(
+            current_node_instance_hash=emitter_hash,
+            name=f"emit_{topology.func_nodes[target_node_hash].name}",
+            sink_id="main_output",
+            inputs={"data": result_data_hash}
+        )
+        topology.emitter_nodes[emitter_hash] = emitter
+        
+        # 3. Create Signal Slot and Terminator
+        signal_slot_hash = f"signal_for_{emitter_hash}"
+        signal_slot = PhysicsDataNode(
+            current_data_slot_hash=signal_slot_hash,
+            name="term_signal",
+            producer_node_instance_hash=emitter_hash
+        )
+        topology.data_nodes[signal_slot_hash] = signal_slot
+
+        terminator_hash = f"terminator_for_{target_node_hash}"
+        terminator = PhysicsTerminatorNode(
+            current_node_instance_hash=terminator_hash,
+            name="terminate",
+            inputs={"signal": signal_slot_hash}
+        )
+        topology.terminator_nodes[terminator_hash] = terminator
+        
+        # 4. Wire Emitter -> Signal -> Terminator with a channel
+        signal_channel = ChannelDef(
+            source_node_instance_hash=emitter_hash,
+            target_data_slot_hash=signal_slot_hash,
+            port_name="result", # Emitter's conventional signal output
+            tag_filter="default"
+        )
+        topology.channels.append(signal_channel)
+        
+        return topology

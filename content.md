@@ -1,147 +1,103 @@
-好的，我们继续执行路线图，进入 **阶段 5.B.2**。
+Understood. Based on our strategic analysis, we will now adapt the existing `EmitterNode` test to align with our new, decoupled lifecycle architecture. This is the re-defined goal for **Phase 5.B.3**.
 
-这一步的目标是实现架构的纯粹性：我们将彻底移除 `TerminatorNode` 这一特殊概念。`Reactor` 将不再需要知道任何关于“生命周期”的特殊规则，它将演变成一个更加通用的物理引擎。
+This plan modifies `test_result_emission.py` to act as the "external strategy," validating that the `Reactor` correctly emits results and can then be gracefully shut down.
 
-## [WIP] refactor(vm, spec): 废除 TerminatorNode 及其在 Reactor 中的特殊逻辑
+## [WIP] test(vm): Adapt result emission test to decoupled lifecycle
 
 ### 用户需求
-根据 [路线图：全对称物理引擎与编译器重构](深度重构/路线图：全对称物理引擎与编译器重构.md)，执行阶段 5.B.2，即从 `cascade-spec` 和 `cascade-vm` 中彻底移除 `TerminatorNode` 及其相关的特殊处理逻辑。
+执行修订后的阶段 5.B.3 计划：使 `EmitterNode` 的测试 (`test_result_emission.py`) 适应我们刚刚建立的、没有 `TerminatorNode` 的新架构。
 
 ### 评论
-这是一个至关重要的架构简化步骤。`TerminatorNode` 的存在迫使 `Reactor` 内部需要一个特殊的 `if/else` 分支，这破坏了物理引擎的通用性。移除它，我们将强制实现“控制反转”——`Reactor` 只负责执行，而“停止”这个决策将由外部策略通过监听一个普通的 `EmitterNode` 来实现。这使得 `Reactor` 更加纯粹、可复用，并与生命周期管理完全解耦。
+这是一个关键的验证步骤。通过修复这个测试，我们不仅能使其重新通过，更重要的是，我们能以代码的形式**证明**我们新架构的正确性。修改后的测试将完美地模拟 `VMExecutionStrategy` 的未来行为：它启动 `Reactor`，通过 `Emitter` 的回调接收结果（或完成信号），然后从外部明确地决定停止 `Reactor`。这证实了我们的“生命周期控制反转”策略是成功且可测试的。
 
 ### 目标
-1.  从 `cascade.spec.physics` 中删除 `TerminatorNode` 的定义。
-2.  从 `cascade.spec.topology` 中删除 `PhysicsTerminatorNode` 的定义及其在 `BipartiteGraph` 中的引用。
-3.  从 `Reactor._fire` 方法中移除处理 `TerminatorNode` 的硬编码逻辑。
-4.  删除专门测试 `TerminatorNode` 行为的 `test_autonomous_lifecycle.py` 文件，因为它现在已经过时。
+1.  重构 `packages/cascade-vm/tests/reactor/test_result_emission.py`。
+2.  从测试拓扑中移除 `TerminatorNode` 和用于级联的 `d_signal` 数据节点。
+3.  使用 `asyncio.Future` 在 Sink 回调中捕获结果并发出完成信号。
+4.  将测试的控制流改为：等待 `Future` 完成，然后由测试本身显式调用 `reactor.stop()` 来终止 `Reactor` 循环。
 
 ### 基本原理
-我们遵循“代码即物理”的原则。一个物理引擎不应该为某个特定的粒子（节点）设置特殊的宇宙法则。通过移除 `TerminatorNode`，我们消除了这种特殊性。`Reactor` 将对所有 `FuncNode` 一视同仁，只负责根据输入激发它们并提交给执行器。图的“终结”将不再是 `Reactor` 的内部职责，而是计算图拓扑本身通过 `EmitterNode` 与外部世界通信所产生的自然结果。
+在移除了 `TerminatorNode` 之后，旧的测试会因为 `reactor.run()` 永远不会自行结束而超时。新的实现通过将测试逻辑本身转变为一个微型的“执行策略”来解决这个问题。测试不再被动地等待 `Reactor` 自我终止，而是主动地监听 `Emitter` 发出的信号。一旦接收到关键信号（即 `Future` 被设置），测试就认为 `Reactor` 的核心任务已经完成，并主动、确定地关闭它。这是一种更健壮、更清晰的异步测试模式，它用确定的状态（`Future` 完成）取代了不确定的行为（`Reactor` 内部停止）。
 
 ### 标签
-#intent/refine #flow/ready #priority/high
-#comp/engine #concept/state #scope/core #dx
+#intent/tooling #intent/refine #flow/ready #priority/high
+#comp/engine #comp/tests #concept/state #scope/core
 #ai/instruct
-#task/domain/vm #task/object/terminator-node #task/action/removal
+#task/domain/testing #task/object/reactor-lifecycle #task/action/test-adaptation
 #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 从 `spec.physics` 中移除 `TerminatorNode`
+#### Acts 1: 重构 `test_result_emission.py`
 
-我们首先从底层的物理模型定义中删除 `TerminatorNode` 类。
+我们将完全重写此测试文件。新的实现将移除对 `TerminatorNode` 的依赖，并采用一个 `asyncio.Future` 来同步 `Reactor` 的核心工作与测试的生命周期控制逻辑，从而验证新的解耦架构。
 
 ~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/physics.py
+write_file
+packages/cascade-vm/tests/reactor/test_result_emission.py
 ~~~~~
-~~~~~python.old
-class TerminatorNode(FuncNode):
+~~~~~python
+import pytest
+import asyncio
+from unittest.mock import AsyncMock
+
+from cascade.spec.physics import DataNode, Token, Port, EmitterNode
+from cascade.vm.reactor import Reactor, TokenGenerated
+
+@pytest.mark.asyncio
+async def test_reactor_emits_result_to_sink(event_loop):
     """
-    Runtime representation of a termination point.
-    When fired, it signals the Reactor to stop.
+    Verifies that an EmitterNode correctly pushes data to an external sink,
+    and that the Reactor can be gracefully stopped by an external controller
+    after the emission occurs.
+    
+    This test validates the decoupled lifecycle model.
     """
-    pass
+    # 1. Setup simplified topology: D_in -> Emitter
+    d_in = DataNode(name="result_slot")
+    emitter = EmitterNode(name="emit", sink_id="main_output")
+    emitter.add_input(Port(name="data", source=d_in))
+    
+    # 2. Setup Reactor and Mock Executor
+    mock_executor = AsyncMock()
+    reactor = Reactor(executor=mock_executor)
+    reactor.register_node(d_in)
+    reactor.register_node(emitter)
+    
+    # 3. Register Sink with a Future for synchronization
+    # The Future acts as the signal from the Reactor to the external world
+    result_future = event_loop.create_future()
+    reactor.register_sink("main_output", result_future.set_result)
 
+    # 4. Start Reactor in a background task
+    run_task = asyncio.create_task(reactor.run())
+    
+    # 5. Inject Initial Data to trigger the Emitter
+    reactor.push_event(TokenGenerated(node=d_in, token=Token("Hello World")))
+    
+    # 6. Wait for the core work to be done (result emitted)
+    # This is the key synchronization point.
+    try:
+        emitted_result = await asyncio.wait_for(result_future, timeout=1.0)
+    except asyncio.TimeoutError:
+        # If timeout, it means the Emitter never fired.
+        reactor.stop()
+        await run_task
+        pytest.fail("Sink was never called. EmitterNode logic is likely broken.")
+    
+    # 7. Assert the emitted result
+    assert emitted_result == "Hello World"
 
-class EmitterNode(FuncNode):
-~~~~~
-~~~~~python.new
-class EmitterNode(FuncNode):
-~~~~~
-
-#### Acts 2: 从 `spec.topology` 中移除 `PhysicsTerminatorNode`
-
-接着，我们从静态拓扑定义中移除 `PhysicsTerminatorNode` 以及它在 `BipartiteGraph` 中的字段。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/topology.py
-~~~~~
-~~~~~python.old
-@dataclass(frozen=True)
-class PhysicsTerminatorNode:
-    """
-    A special Functional Node that, when fired, triggers the shutdown of the Reactor.
-    It represents the "End of Time" for a run.
-    """
-    current_node_instance_hash: str
-    name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class PhysicsEmitterNode:
-~~~~~
-~~~~~python.new
-@dataclass(frozen=True)
-class PhysicsEmitterNode:
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/topology.py
-~~~~~
-~~~~~python.old
-    # Map data_slot_hash -> literal value for constant inputs
-    initial_values: Dict[str, Any] = field(default_factory=dict)
-    # Special lifecycle nodes
-    terminator_nodes: Dict[str, PhysicsTerminatorNode] = field(default_factory=dict)
-    emitter_nodes: Dict[str, PhysicsEmitterNode] = field(default_factory=dict)
-~~~~~
-~~~~~python.new
-    # Map data_slot_hash -> literal value for constant inputs
-    initial_values: Dict[str, Any] = field(default_factory=dict)
-    # Special lifecycle nodes
-    emitter_nodes: Dict[str, PhysicsEmitterNode] = field(default_factory=dict)
-~~~~~
-
-#### Acts 3: 从 `Reactor` 中移除特殊处理逻辑
-
-现在，我们移除 `Reactor` 核心循环中对 `TerminatorNode` 的特殊判断，使其成为一个纯粹的执行循环。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor/core.py
-~~~~~
-~~~~~python.old
-from cascade.spec.physics import DataNode, FuncNode, TerminatorNode, EmitterNode, Token
-~~~~~
-~~~~~python.new
-from cascade.spec.physics import DataNode, FuncNode, EmitterNode, Token
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor/core.py
-~~~~~
-~~~~~python.old
-        # 2. Handle Intrinsic Nodes (not submitted to executor)
-        if isinstance(node, TerminatorNode):
-            self.stop()
-            # A terminator can also signal, e.g., to confirm shutdown.
-            # For now, we assume it's the absolute end.
-            return
-        
-        if isinstance(node, EmitterNode):
-~~~~~
-~~~~~python.new
-        # 2. Handle Intrinsic Nodes (not submitted to executor)
-        if isinstance(node, EmitterNode):
-~~~~~
-
-#### Acts 4: 删除过时的生命周期测试
-
-`test_autonomous_lifecycle.py` 测试文件是专门为验证 `TerminatorNode` 的行为而设计的。既然该功能已被移除，此测试也必须被删除。
-
-~~~~~act
-delete_file
-packages/cascade-vm/tests/reactor/test_autonomous_lifecycle.py
+    # 8. Explicitly stop the reactor (External Lifecycle Control)
+    reactor.stop()
+    
+    # 9. Await the run task to ensure it shut down cleanly
+    await run_task
 ~~~~~
 
 ### 下一步建议
-我们已经成功地将 `Reactor` 从生命周期管理的职责中解放出来。现在，我们需要提供替代的机制来与外部世界通信和控制执行流程。
+我们已经成功地验证了 `EmitterNode` 在新的解耦架构下的行为。`Reactor` 现在是一个纯粹的、由外部控制的物理引擎。
 
-根据路线图，下一步是 **阶段 5.B.3：[VM] 实现 `EmitterNode`**。我将准备一个计划来实现 `EmitterNode` 的功能，包括在 `Reactor` 中注册 `sink` 回调，并在 `EmitterNode` 被激发时调用它们。这将是重建生命周期控制的第一步。
+根据路线图，我们现在准备好进入 **阶段 5.C：编译器与策略层的最终集成**。第一步将是 **阶段 5.C.1：[Compiler] 编译器后端支持信令与生命周期注入**。我将准备一个计划，修改编译器后端，使其能够自动生成我们刚才手动测试的这种包含 `EmitterNode` 的图拓扑。

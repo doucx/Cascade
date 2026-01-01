@@ -7,6 +7,7 @@ from cascade.spec.topology import (
     PhysicsFuncNode,
     PhysicsDataNode,
     ChannelDef,
+    ChannelKind,
 )
 
 
@@ -89,7 +90,8 @@ class _TopologyBuilder:
             source_node_instance_hash=func_hash,
             target_data_slot_hash=data_slot_hash,
             port_name="result",
-            tag_filter="default" 
+            tag_filter="default",
+            kind=ChannelKind.DATA
         )
         self._channels.append(channel)
 
@@ -181,7 +183,8 @@ class _TopologyBuilder:
                 source_node_instance_hash=source_func_hash,
                 target_data_slot_hash=target_data_hash,
                 port_name="result",
-                tag_filter=tag
+                tag_filter=tag,
+                kind=ChannelKind.DATA # TCO Jumps carry data; pure signals are a future feature
             )
             self._channels.append(channel)
 

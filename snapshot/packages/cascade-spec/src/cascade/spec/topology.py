@@ -1,5 +1,14 @@
 from dataclasses import dataclass, field
 from typing import Dict, List
+from enum import Enum, auto
+
+
+class ChannelKind(Enum):
+    """
+    Defines the physical nature of a channel, distinguishing data transfer from pure signaling.
+    """
+    DATA = auto()    # The channel carries a payload from the source.
+    SIGNAL = auto()  # The channel carries only an activation signal, payload is ignored.
 
 
 @dataclass(frozen=True)
@@ -59,6 +68,7 @@ class ChannelDef:
     target_data_slot_hash: str
     port_name: str
     tag_filter: str = "default"
+    kind: ChannelKind = ChannelKind.DATA
 
 
 from typing import Any

@@ -1,218 +1,103 @@
-我们已经处于 **RED** 状态，现在是时候实现代码，让测试套件回到 **GREEN** 状态。
+好的，我遗漏了 `cascade-vm` 包中的集成测试。感谢指出。
 
-此计划将重构 `Builder` 以接受 `EnvironmentDef`，从而将资源管理的责任从编译器转移到环境定义中，这更符合物理场的客观性原则。
+这个 `TypeError` 是预料之中的，它证明了我们的 `Builder` API 变更确实影响了系统的其他部分。现在我们将修复这个集成测试，使其与新的、更符合物理学原理的 `EnvironmentDef` 接口对齐。
 
-## [WIP] feat(compiler): 重构 Builder 以消费 `EnvironmentDef`
+这个修复不仅能解决 `TypeError`，还能让测试本身变得更健壮、更具声明性。
+
+## [WIP] fix(tests): 更新资源背压测试以使用 `EnvironmentDef`
 
 ### 用户需求
 
-修改 `Builder` 的实现，使其：
-1.  接受一个新的 `environment: EnvironmentDef` 参数。
-2.  根据 `EnvironmentDef` 中定义的资源来创建物理 `D_res` 节点。
-3.  在编译时验证任务请求的资源是否存在于环境中，如果不存在则抛出 `ValueError`。
-4.  修复因 `Builder.build` 方法签名变更而损坏的现有测试。
+修复 `packages/cascade-vm/tests/integration/test_resource_backpressure.py` 中因 `Builder.build()` 方法签名变更而导致的 `TypeError`。
 
 ### 评论
 
-这是对 `Builder` 的一次关键重构，它将系统的架构向“全对称计算物理场”白皮书的哲学拉近了一大步。通过强制 `Builder` 尊重一个客观的、外部定义的环境，我们从根本上解决了之前“需求创造供给”的逻辑谬误。这使得我们的物理模型更加真实、健壮，并为未来实现更复杂的资源调度策略（如多环境部署）铺平了道路。
+这是一个必要的修复，以使我们的测试套件与核心 API 的演进保持同步。通过这次修复，我们将改进 `test_concurrency_limit` 测试用例，使其不再手动修改 `D_res` 节点的内部状态（`initial_tokens = 1`），而是通过声明式的 `EnvironmentDef` 来定义测试所需的资源边界条件。这使得测试的意图更加清晰，行为也更加可靠。
 
 ### 目标
 
-1.  重构 `cascade.compiler.backend.builder.Builder`，实现新的资源创建和验证逻辑。
-2.  更新 `tests.unit.backend.test_builder` 测试用例，使其适应新的 `build` 方法签名。
-3.  使 `tests.unit.backend.test_builder_environment` 中的所有测试通过。
+1.  在 `test_resource_backpressure.py` 中导入 `EnvironmentDef` 和 `ResourceDef`。
+2.  在 `test_concurrency_limit` 测试中，实例化一个包含 `gpu` 资源（容量为1）的 `EnvironmentDef`。
+3.  更新对 `builder.build()` 的调用，将此 `EnvironmentDef` 实例作为参数传入。
+4.  移除旧的、命令式的 `d_res.initial_tokens = 1` 代码行，因为 `Builder` 现在会根据环境自动处理。
 
 ### 基本原理
 
-我们将采用 `write_file` 彻底重写 `builder.py`，因为其核心逻辑（特别是资源处理部分）发生了根本性变化。
-1.  **环境优先**: 新的 `Builder` 首先会根据 `EnvironmentDef` 创建所有客观存在的资源节点。
-2.  **验证先行**: 在展开任何 `NodeIR` 之前，会检查其 `constraints` 是否能在已定义的环境资源中得到满足。这实现了“快速失败”原则。
-3.  **解耦**: 资源的定义（`EnvironmentDef`）与资源的使用（`NodeIR.constraints`）被清晰地分离开来。`Builder` 成为连接这两者的桥梁，而不是其中任何一方的创造者。
-4.  **测试修复**: 对旧测试的修复是微创的，只需提供一个空的 `EnvironmentDef` 即可满足新的方法签名，因为原测试不涉及资源约束。
+核心 API (`Builder.build`) 的签名变更要求所有调用点都必须更新。对于 `test_resource_backpressure.py`，我们不仅要满足新的签名要求，还要借此机会提升测试质量。通过使用 `EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])`，我们将测试的设置（Setup）部分从对结果的命令式修改（imperative modification）转变为对原因的声明式定义（declarative definition），这是一种更健壮的测试实践。
 
 ### 标签
 
-#intent/refine #flow/ready #priority/high #comp/compiler #concept/resources #scope/core #ai/instruct #task/domain/refactoring #task/object/environment #task/action/implement #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/vm #comp/tests #concept/resources #scope/dx #ai/instruct #task/domain/refactoring #task/object/environment #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `Builder` 以处理 `EnvironmentDef`
+#### Acts 1: 修复 `test_resource_backpressure.py`
 
-我们将用新的实现覆盖 `builder.py`，该实现遵循环境优先的原则。
-
-~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python
-from typing import Dict
-
-from cascade.spec.ir.models import GraphIR
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.spec.physics import PhysicsDataNode
-from cascade.spec.environment import EnvironmentDef
-from .expander import Expander, SubGraph
-
-
-class Builder:
-    def __init__(self):
-        self._expander = Expander()
-
-    def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> BipartiteGraph:
-        physical_graph = BipartiteGraph()
-        env_resources = {res.name: res for res in environment.resources}
-
-        # 1. Create Objective Environment (D_res nodes)
-        for res_def in environment.resources:
-            res_node_id = f"global_res_{res_def.name}"
-            d_res = PhysicsDataNode(
-                id=res_node_id,
-                name=f"Resource({res_def.name})",
-                capacity=res_def.capacity,
-                initial_tokens=res_def.capacity,
-            )
-            physical_graph.nodes[res_node_id] = d_res
-
-        # 2. Create the global observability sidecar node (D_life)
-        d_life = PhysicsDataNode(id="global_d_life", name="LifecycleBus")
-        physical_graph.nodes[d_life.id] = d_life
-
-        # 3. Expand all logical nodes into physical subgraphs
-        subgraphs: Dict[str, SubGraph] = {}
-        for node_ir in graph_ir.nodes:
-            # 3.1 Validate resource constraints against the environment
-            for res_name in node_ir.constraints:
-                if res_name not in env_resources:
-                    raise ValueError(
-                        f"Resource '{res_name}' required by node '{node_ir.id}' is not defined"
-                    )
-
-            # 3.2 Expand
-            subgraph = self._expander.expand_node(node_ir)
-            if subgraph.bleacher is None or subgraph.stainer is None:
-                # This should not happen with the current expander implementation
-                raise RuntimeError(f"Subgraph for {node_ir.id} is incomplete.")
-
-            subgraphs[node_ir.id] = subgraph
-            physical_graph.nodes.update(subgraph.nodes)
-            physical_graph.channels.extend(subgraph.channels)
-
-            # 3.3 Wire observability sidecars
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.bleacher.id,
-                    source_port="obs_output",
-                    target_node_id=d_life.id,
-                    target_port="event_token",
-                )
-            )
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.stainer.id,
-                    source_port="obs_output",
-                    target_node_id=d_life.id,
-                    target_port="event_token",
-                )
-            )
-
-        # 4. Wire data dependencies between subgraphs
-        for node_ir in graph_ir.nodes:
-            target_subgraph = subgraphs[node_ir.id]
-            for arg_name, source_ref in node_ir.inputs.items():
-                if isinstance(source_ref, str) and source_ref in subgraphs:
-                    source_subgraph = subgraphs[source_ref]
-                    physical_graph.channels.append(
-                        Channel(
-                            source_node_id=source_subgraph.stainer.id,
-                            source_port="output",
-                            target_node_id=target_subgraph.bleacher.id,
-                            target_port=arg_name,
-                        )
-                    )
-
-        # 5. Wire Global Resources (The Loop)
-        for node_ir in graph_ir.nodes:
-            subgraph = subgraphs[node_ir.id]
-            for res_name in node_ir.constraints:
-                res_node_id = f"global_res_{res_name}"
-                port_name = f"res_{res_name}"
-
-                # Acquire: D_res -> F_bleach
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=res_node_id,
-                        source_port="out",
-                        target_node_id=subgraph.bleacher.id,
-                        target_port=port_name,
-                    )
-                )
-
-                # Release: F_stain -> D_res
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=subgraph.stainer.id,
-                        source_port=port_name,
-                        target_node_id=res_node_id,
-                        target_port="in",
-                    )
-                )
-
-        return physical_graph
-~~~~~
-
-#### Acts 2: 修复旧的 `test_builder.py` 测试
-
-现在，我们将修复因 `build` 方法签名改变而失败的旧测试用例。
+我们将更新此集成测试，使其正确调用 `Builder` 并以声明方式定义所需的环境。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/backend/test_builder.py
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
 ~~~~~
 ~~~~~python.old
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.physics import Token, PhysicsDataNode
 from cascade.compiler.backend.builder import Builder
-
-
-@pytest.fixture
-def sample_graph_ir():
-    fp = Fingerprint.from_dict({"canonical_code_structure_hash": "abc"})
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.executor import PhysicsExecutor
 ~~~~~
 ~~~~~python.new
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.physics import Token, PhysicsDataNode
+from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
-from cascade.spec.environment import EnvironmentDef
-
-
-@pytest.fixture
-def sample_graph_ir():
-    fp = Fingerprint.from_dict({"canonical_code_structure_hash": "abc"})
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.executor import PhysicsExecutor
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/backend/test_builder.py
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
 ~~~~~
 ~~~~~python.old
-def test_builder_expands_and_wires_nodes(sample_graph_ir):
-    builder = Builder()
-    graph = builder.build(sample_graph_ir)
+    graph_ir = GraphIR(nodes=[node_1, node_2])
 
-    # Assert nodes: 2 triads (6 nodes each) + 1 global D_life = 13 nodes
-    assert len(graph.nodes) == 13
+    # 2. Build Physical Graph
+    builder = Builder()
+    physical_graph = builder.build(graph_ir)
+
+    # Verify D_res exists
+    assert "global_res_gpu" in physical_graph.nodes
+    d_res = physical_graph.nodes["global_res_gpu"]
+    # Force capacity to 1 for this test (Builder currently defaults to 1)
+    d_res.initial_tokens = 1
+
+    # 3. Setup VM
+    memory = VolatileMemory()
 ~~~~~
 ~~~~~python.new
-def test_builder_expands_and_wires_nodes(sample_graph_ir):
-    builder = Builder()
-    graph = builder.build(sample_graph_ir, environment=EnvironmentDef())
+    graph_ir = GraphIR(nodes=[node_1, node_2])
 
-    # Assert nodes: 2 triads (6 nodes each) + 1 global D_life = 13 nodes
-    assert len(graph.nodes) == 13
+    # 2. Define Environment and Build Physical Graph
+    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
+    builder = Builder()
+    physical_graph = builder.build(graph_ir, environment=env)
+
+    # Verify D_res exists and was configured by the environment
+    assert "global_res_gpu" in physical_graph.nodes
+    d_res = physical_graph.nodes["global_res_gpu"]
+    assert d_res.initial_tokens == 1
+
+    # 3. Setup VM
+    memory = VolatileMemory()
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功地将 `EnvironmentDef` 集成到了 `Builder` 中，测试套件现在应该是 **GREEN** 状态。
+现在所有的测试都应该通过了，测试套件已恢复到 **GREEN** 状态。我们已经成功完成了 **Phase 4.5 Step 2**。
 
-这完成了 **Phase 4.5 Step 2** 的核心工作。下一步，我们应该继续偿还技术债务，执行 **Phase 4.5 Step 3: 补全观测环路 (Complete the Loop)**。这将确保我们的物理场不仅行为正确，而且是完全可观测的。
-
-如果你同意，我将开始制定该计划。
+我建议我们立即推进到 **Phase 4.5 Step 3: 补全观测环路 (Complete the Loop)**。这将确保我们物理场的“全息可观测性”不再是断裂的，而是形成一个完整的、从事件产生到外部接收的闭环。如果你同意，我将开始制定该计划。

@@ -88,9 +88,11 @@ class FuncNode:
     def __init__(
         self, 
         name: str, 
+        code_structure_hash: str, # Added for linking
         resource_requirements: Optional[Dict[str, Any]] = None
     ):
         self.name = name
+        self.code_structure_hash = code_structure_hash
         self.resource_requirements = resource_requirements or {}
         self.inputs: Dict[str, Port] = {}
         self.outputs: Dict[str, Port] = {}

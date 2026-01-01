@@ -1,6 +1,6 @@
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict
+from typing import Any, Dict, Callable
 
 from cascade.spec.protocols import StateBackend, Executor
 from cascade.runtime.resource_manager import ResourceManager
@@ -11,7 +11,57 @@ from cascade.runtime.bus import MessageBus
 from cascade.compiler import Frontend, Backend
 from cascade.spec.topology import BipartiteGraph
 from cascade.spec.physics import DataNode, FuncNode, TerminatorNode, EmitterNode, Port, Token
-from cascade.vm.reactor import Reactor, Channel, TokenGenerated
+from cascade.vm.reactor import Reactor, Channel, TokenGenerated, ExecutionFinished
+
+# Shim for LocalExecutor
+from cascade.graph.model import Node as OldNode
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.fingerprint import Fingerprint
+
+class _ReactorExecutorAdapter:
+    """Bridges the Reactor's simple executor protocol with the legacy LocalExecutor."""
+    def __init__(self, local_executor: Executor, reactor: Reactor, symbol_table: Dict[str, Callable]):
+        self.local_executor = local_executor
+        self.reactor = reactor
+        self.symbol_table = symbol_table
+
+    async def submit(self, node: FuncNode, inputs: Dict[str, Token]):
+        """The interface expected by the Reactor."""
+        # This runs in a background task so it doesn't block the reactor loop.
+        asyncio.create_task(self._execute_and_report(node, inputs))
+
+    async def _execute_and_report(self, node: FuncNode, inputs: Dict[str, Token]):
+        try:
+            # 1. Link to find the callable
+            func = self.symbol_table[node.code_structure_hash]
+
+            # 2. Unpack payloads
+            # Emitter/Terminator don't have inputs in this path
+            kwargs = {name: token.payload for name, token in inputs.items()}
+            
+            # 3. Create a shim Node for LocalExecutor
+            # TODO: Propagate is_async and mode properly
+            is_async = asyncio.iscoroutinefunction(func)
+            shim_def = TaskDef(name=node.name, args=[], fingerprint=Fingerprint(), is_async=is_async)
+            shim_node = OldNode(
+                current_node_instance_hash=node.name, # Approximation
+                definition=shim_def,
+                _callable=func
+            )
+            
+            # 4. Execute
+            result = await self.local_executor.execute(shim_node, [], kwargs)
+            
+            # 5. Report back with ExecutionFinished event
+            # For now, assume single 'result' output
+            output_token = Token(payload=result)
+            event = ExecutionFinished(node=node, outputs={"result": output_token})
+
+        except Exception as e:
+            event = ExecutionFinished(node=node, error=e)
+            
+        self.reactor.push_event(event)
+
 
 class VMExecutionStrategy:
     def __init__(
@@ -54,8 +104,14 @@ class VMExecutionStrategy:
         # 2. Backend: Generate autonomous BipartiteGraph
         topology = Backend.compile(graph_ir, target_node_hash)
 
-        # 3. Setup Reactor
-        reactor = Reactor(executor=self.executor, resource_manager=self.resource_manager)
+        # 3. Setup Reactor and its Executor Adapter
+        reactor = Reactor(executor=None, resource_manager=self.resource_manager)
+        adapter = _ReactorExecutorAdapter(
+            local_executor=self.executor,
+            reactor=reactor,
+            symbol_table=compilation_result.symbol_table
+        )
+        reactor.executor = adapter # Set the adapter as the executor
         
         # 4. Load Topology into Reactor
         self._load_topology(reactor, topology)
@@ -89,11 +145,21 @@ class VMExecutionStrategy:
 
         f_nodes: Dict[str, FuncNode] = {}
         for fn_hash, fn_spec in topology.func_nodes.items():
-            f_nodes[fn_hash] = FuncNode(name=fn_spec.name) # TODO: resource reqs
+            f_nodes[fn_hash] = FuncNode(
+                name=fn_spec.name,
+                code_structure_hash=fn_spec.code_structure_hash
+            ) # TODO: resource reqs
         for en_hash, en_spec in topology.emitter_nodes.items():
-            f_nodes[en_hash] = EmitterNode(name=en_spec.name, sink_id=en_spec.sink_id)
+            f_nodes[en_hash] = EmitterNode(
+                name=en_spec.name,
+                sink_id=en_spec.sink_id,
+                code_structure_hash="" # Emitters don't have user code
+            )
         for tn_hash, tn_spec in topology.terminator_nodes.items():
-            f_nodes[tn_hash] = TerminatorNode(name=tn_spec.name)
+            f_nodes[tn_hash] = TerminatorNode(
+                name=tn_spec.name,
+                code_structure_hash="" # Terminators don't have user code
+            )
 
         # 2. Wire inputs (D -> F)
         all_f_nodes = {**topology.func_nodes, **topology.emitter_nodes, **topology.terminator_nodes}

@@ -66,6 +66,7 @@ class _TopologyBuilder:
         f_node = PhysicsFuncNode(
             current_node_instance_hash=func_hash,
             name=node_ir.definition.name,
+            code_structure_hash=node_ir.definition.fingerprint["current_code_structure_hash"],
             inputs={} 
         )
         self._func_nodes[func_hash] = f_node

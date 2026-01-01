@@ -10,6 +10,7 @@ class PhysicsFuncNode:
     """
     current_node_instance_hash: str
     name: str
+    code_structure_hash: str # Added for linking
     # Map input argument names to the source DataNode hash
     inputs: Dict[str, str] = field(default_factory=dict)
 

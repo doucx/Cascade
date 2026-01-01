@@ -7,8 +7,9 @@ from cascade.vm.executor import PhysicsExecutor
 
 
 # Dummy function for testing
-def noop(*args):
-    return "result"
+def noop(inputs):
+    # Echos back a generic result token on 'out' port
+    return {"out": Token(payload="result")}
 
 
 @pytest.fixture
@@ -24,7 +25,7 @@ def simple_topology():
     graph.nodes[f1.id] = f1
 
     # Connect D1 -> F1
-    channel = Channel(source_node_id=d1.id, source_port="out", target_node_id=f1.id)
+    channel = Channel(source_node_id=d1.id, source_port="out", target_node_id=f1.id, target_port="in")
     graph.channels.append(channel)
 
     return graph, d1, f1
@@ -74,9 +75,9 @@ async def test_reactor_partial_inputs():
     graph.nodes = {n.id: n for n in [d1, d2, f1]}
 
     # D1 -> F1
-    graph.channels.append(Channel(d1.id, "out", f1.id))
+    graph.channels.append(Channel(d1.id, "out", f1.id, target_port="in1"))
     # D2 -> F1
-    graph.channels.append(Channel(d2.id, "out", f1.id))
+    graph.channels.append(Channel(d2.id, "out", f1.id, target_port="in2"))
 
     memory = VolatileMemory()
     executor = PhysicsExecutor()
@@ -103,8 +104,8 @@ async def test_reactor_independent_nodes():
 
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d1, f1, d2, f2]}
-    graph.channels.append(Channel(d1.id, "out", f1.id))
-    graph.channels.append(Channel(d2.id, "out", f2.id))
+    graph.channels.append(Channel(d1.id, "out", f1.id, target_port="in"))
+    graph.channels.append(Channel(d2.id, "out", f2.id, target_port="in"))
 
     memory = VolatileMemory()
     executor = PhysicsExecutor()

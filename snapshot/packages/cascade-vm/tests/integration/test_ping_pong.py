@@ -8,8 +8,16 @@ from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
 
 
-def simple_increment(val: int) -> int:
-    return val + 1
+def simple_increment(inputs: Dict[str, Token]) -> Dict[str, Token]:
+    # Extract
+    in_token = inputs["value"]
+    val = in_token.payload
+    
+    # Process
+    res = val + 1
+    
+    # Wrap
+    return {"result": Token(payload=res)}
 
 
 @pytest.fixture
@@ -21,13 +29,23 @@ def ping_pong_topology():
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d1, f1, d2]}
 
-    # D1 -> F1
+    # D1 -> F1 (Explicit target port 'value')
     graph.channels.append(
-        Channel(source_node_id=d1.id, source_port="value", target_node_id=f1.id)
+        Channel(
+            source_node_id=d1.id, 
+            source_port="out", 
+            target_node_id=f1.id, 
+            target_port="value"
+        )
     )
     # F1 -> D2
     graph.channels.append(
-        Channel(source_node_id=f1.id, source_port="result", target_node_id=d2.id)
+        Channel(
+            source_node_id=f1.id, 
+            source_port="result", 
+            target_node_id=d2.id,
+            target_port="in"
+        )
     )
 
     # The runtime binding between the abstract physics node and the concrete function

@@ -17,6 +17,12 @@ class Channel:
     Note: In a bipartite graph, if Source is Func, Target MUST be Data.
     """
 
+    target_port: str = "in"
+    """
+    The name of the input port on the target node.
+    For DataNodes, this is typically 'in'. For FuncNodes, it matches the argument name.
+    """
+
     tag_filter: Optional[str] = None
     """
     If set, this channel only accepts Tokens with a matching tag.

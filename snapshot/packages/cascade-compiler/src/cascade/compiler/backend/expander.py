@@ -91,21 +91,61 @@ class Expander:
 
         # Path 1: Execution Flow
         # F_pre -> D_worker_in
-        channels.append(Channel(f_pre_id, "worker_input", d_worker_in_id))
+        channels.append(
+            Channel(
+                source_node_id=f_pre_id,
+                source_port="worker_input",
+                target_node_id=d_worker_in_id,
+                target_port="in",
+            )
+        )
         # D_worker_in -> F_worker
         channels.append(
-            Channel(d_worker_in_id, "out", f_worker_id)
-        )  # Implicit 'out' for DataNode source
+            Channel(
+                source_node_id=d_worker_in_id,
+                source_port="out",
+                target_node_id=f_worker_id,
+                target_port="worker_input",
+            )
+        )
         # F_worker -> D_worker_out
-        channels.append(Channel(f_worker_id, "worker_result", d_worker_out_id))
+        channels.append(
+            Channel(
+                source_node_id=f_worker_id,
+                source_port="worker_result",
+                target_node_id=d_worker_out_id,
+                target_port="in",
+            )
+        )
         # D_worker_out -> F_post
-        channels.append(Channel(d_worker_out_id, "out", f_post_id))
+        channels.append(
+            Channel(
+                source_node_id=d_worker_out_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port="worker_result",
+            )
+        )
 
         # Path 2: Trace Bypass
         # F_pre -> D_trace
-        channels.append(Channel(f_pre_id, "trace_output", d_trace_id))
+        channels.append(
+            Channel(
+                source_node_id=f_pre_id,
+                source_port="trace_output",
+                target_node_id=d_trace_id,
+                target_port="in",
+            )
+        )
         # D_trace -> F_post
-        channels.append(Channel(d_trace_id, "out", f_post_id))
+        channels.append(
+            Channel(
+                source_node_id=d_trace_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port="trace_input",
+            )
+        )
 
         subgraph.channels = channels
 

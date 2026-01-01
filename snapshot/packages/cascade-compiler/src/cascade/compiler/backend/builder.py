@@ -35,6 +35,7 @@ class Builder:
                     source_node_id=subgraph.bleacher.id,
                     source_port="obs_output",
                     target_node_id=d_life.id,
+                    target_port="event_token",
                 )
             )
             # F_post (end) -> D_life
@@ -43,6 +44,7 @@ class Builder:
                     source_node_id=subgraph.stainer.id,
                     source_port="obs_output",
                     target_node_id=d_life.id,
+                    target_port="event_token",
                 )
             )
 
@@ -60,8 +62,7 @@ class Builder:
                             source_node_id=source_subgraph.stainer.id,
                             source_port="output",
                             target_node_id=target_subgraph.bleacher.id,
-                            # Note: The target port is implicitly the 'arg_name',
-                            # which the Bleacher is designed to handle.
+                            target_port=arg_name,
                         )
                     )
 

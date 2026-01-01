@@ -19,8 +19,13 @@ from cascade.spec.topology import BipartiteGraph, Channel
 # --- Mocks ---
 
 def mock_worker(inputs: Dict[str, Token]) -> Dict[str, Token]:
-    # Simulate work
-    val = inputs["x"].payload
+    # The WorkerNode receives a single token on its 'worker_input' port.
+    # The payload of this token is the dictionary of actual arguments.
+    worker_input_token = inputs["worker_input"]
+    worker_payload = worker_input_token.payload
+
+    # Simulate work based on the unpacked payload
+    val = worker_payload["x"]  # The payload is the raw value, not another Token
     return {"worker_result": Token(payload=val + 1)}
 
 # --- Test ---

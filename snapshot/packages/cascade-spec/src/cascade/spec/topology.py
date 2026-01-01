@@ -13,6 +13,8 @@ class PhysicsFuncNode:
     name: str
     # Map input argument names to the source DataNode hash
     inputs: Dict[str, str] = field(default_factory=dict)
+    # If not None, this node acts as an Emitter, pushing its result to the specified sink.
+    sink_id: Optional[str] = field(default=None)
 
 
 @dataclass(frozen=True)
@@ -24,18 +26,6 @@ class PhysicsDataNode:
     current_data_slot_hash: str
     name: str
     producer_node_instance_hash: str
-
-
-@dataclass(frozen=True)
-class PhysicsEmitterNode:
-    """
-    A specialized node that projects internal tokens to the external world.
-    It acts as a boundary bridge.
-    """
-    current_node_instance_hash: str
-    name: str
-    sink_id: str  # Identifier for the external sink (e.g. "client_response")
-    inputs: Dict[str, str] = field(default_factory=dict)
 
 
 class ChannelKind(str, Enum):
@@ -59,7 +49,7 @@ class ChannelDef:
     kind: ChannelKind = ChannelKind.DATA
 
 
-from typing import Any
+from typing import Any, Optional
 
 @dataclass(frozen=True)
 class BipartiteGraph:
@@ -71,5 +61,3 @@ class BipartiteGraph:
     channels: List[ChannelDef]
     # Map data_slot_hash -> literal value for constant inputs
     initial_values: Dict[str, Any] = field(default_factory=dict)
-    # Special lifecycle nodes
-    emitter_nodes: Dict[str, PhysicsEmitterNode] = field(default_factory=dict)

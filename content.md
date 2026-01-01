@@ -1,144 +1,281 @@
-你说得对，我完全同意。让测试无限期挂起是不可接受的，它掩盖了问题并且浪费了宝贵的调试时间。添加超时判断是绝对正确的下一步。
+好的，您分析得非常准确。
 
-同时，关于“没有任何日志”的现象，这很可能是因为 `pytest` 默认会捕获 `stdout` 和 `stderr`。为了在测试运行时实时看到 `print` 语句的输出，我们需要使用 `-s` 标志。
+`packages/cascade-compiler/src/cascade/compiler/backend.py` 文件中确实存在 `_inject_lifecycle_emitters` 和 `_compute_synthetic_hash` 方法的重复定义。这是一个明显的复制粘贴错误，需要修正以提高代码质量和可维护性。
 
-我将生成一个计划来解决这两个问题：
-1.  为我们的诊断测试添加一个显式的超时。
-2.  在下一步建议中，明确要求使用 `pytest -s` 来运行测试。
+我将生成一个计划，使用 `write_file` 来完整地更新该文件，移除这些重复的代码块。
 
-## [WIP] test(engine): 为 VMStrategy 集成测试添加显式超时
-
-### 错误分析
-当前的诊断测试 `test_vm_strategy_executes_simplest_workflow` 在遇到死锁时会无限期挂起，直到被手动中断 (`^C`)。这使得自动化测试和快速反馈变得不可能。此外，由于 `pytest` 的输出捕获机制，我们之前添加的诊断日志在默认运行模式下是不可见的。
+## [WIP] fix: 移除编译器后端中的重复方法定义
 
 ### 用户需求
-修改测试用例，使其在预定时间内没有完成时能够主动失败并抛出超时错误，而不是无限期挂起。
+用户要求分析代码，找到并移除 `packages/cascade-compiler/src/cascade/compiler/backend.py` 文件中重复定义的方法，特别是 `_inject_lifecycle_emitters` 和 `_compute_synthetic_hash`。
 
 ### 评论
-这是一个至关重要的改进，它将一个不确定的、需要人工干预的测试失败，转变为一个快速、明确、可编程的失败。通过引入 `asyncio.wait_for`，我们为测试建立了一个确定的时间边界，这极大地提高了调试效率和 CI/CD 流程的可靠性。
+这是一个重要的代码健康度修复。重复的代码不仅增加了维护成本和文件体积，还可能在未来的修改中导致逻辑不一致，引入难以察觉的 bug。移除重复是保证代码库质量的良好工程实践。
 
 ### 目标
-1.  修改 `packages/cascade-engine/tests/integration/test_vm_strategy_integration.py`。
-2.  导入 `asyncio` 模块。
-3.  使用 `asyncio.wait_for` 包装对 `strategy.execute()` 的调用，并设置一个合理的超时（例如 2 秒）。
+1.  定位 `packages/cascade-compiler/src/cascade/compiler/backend.py` 文件。
+2.  移除该文件中 `_TopologyBuilder` 类内重复的 `_inject_lifecycle_emitters` 方法定义。
+3.  移除该文件中 `_TopologyBuilder` 类内重复的 `_compute_synthetic_hash` 方法定义。
+4.  使用 `write_file` 操作，以清理后的完整内容覆盖原文件。
 
 ### 基本原理
-`asyncio.wait_for` 是 `asyncio` 框架中用于控制异步操作执行时间的标准工具。当被包装的协程在指定时间内没有完成时，它会取消该协程并引发一个 `asyncio.TimeoutError`。这正是我们所需要的机制，它可以将一个隐性的“挂起”状态，转变为一个显性的、可被测试框架捕获的 `TimeoutError` 异常，从而使失败变得清晰和自动化。
+由于本次修改属于结构性的代码清理，涉及到删除整个方法块而非修改行内文本，因此使用 `write_file` 并提供完整的、正确的文件内容是最安全、最明确的操作方式。这可以确保文件的最终状态完全符合预期，避免了 `patch_file` 可能因上下文匹配歧义而导致的失败风险。
 
 ### 标签
-#intent/tooling #flow/ready #priority/critical #comp/engine #comp/tests #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/bug-fix #task/state/continue
+#intent/refine #flow/ready #priority/medium #comp/compiler #concept/code-quality #scope/core #ai/instruct #task/domain/compiler #task/object/backend #task/action/refactor #task/state/begin
 
 ---
+
 ### Script
 
-#### Acts 1: 为测试用例添加超时逻辑
+#### Acts 1: 清理 backend.py 中的重复代码
 
-我们将修改测试文件，为核心的 `await` 调用包裹上 `asyncio.wait_for`。
+我将使用 `write_file` 命令，提供 `backend.py` 的完整、无重复内容的版本来更新文件。
 
 ~~~~~act
-patch_file
-packages/cascade-engine/tests/integration/test_vm_strategy_integration.py
+write_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
 ~~~~~
-~~~~~python.old
-import pytest
-from contextlib import ExitStack
+~~~~~python
+import hashlib
+from typing import List, Dict, Any
 
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.strategies.vm import VMExecutionStrategy
-from cascade.adapters.state import InMemoryStateBackend
+from cascade.spec.ir.models import GraphIR, EdgeKind, NodeIR
+from cascade.spec.topology import (
+    BipartiteGraph,
+    PhysicsFuncNode,
+    PhysicsDataNode,
+    ChannelDef,
+    ChannelKind,
+)
 
 
-@pytest.mark.asyncio
-async def test_vm_strategy_executes_simplest_workflow():
+class Backend:
     """
-    A minimal, isolated integration test for VMExecutionStrategy.
-
-    This test is designed to reproduce the deadlock scenario by directly invoking
-    the strategy without the complexity of the full Engine.
-    """
-
-    # 1. Define the simplest possible workflow
-    @cs.task
-    def get_value():
-        return 42
-
-    workflow = get_value()
-
-    # 2. Instantiate the strategy and its minimal dependencies
-    strategy = VMExecutionStrategy(bus=MessageBus())
-    state_backend = InMemoryStateBackend("test-run-vm-strategy")
-
-    # 3. Execute the strategy
-    # If a deadlock exists, the test will hang here indefinitely.
-    result = await strategy.execute(
-        target=workflow,
-        run_id="test-run-vm-strategy",
-        params={},
-        state_backend=state_backend,
-        run_stack=ExitStack(),
-        active_resources={},
-    )
-
-    # 4. Assert the result
-    assert result == 42
-~~~~~
-~~~~~python.new
-import pytest
-import asyncio
-from contextlib import ExitStack
-
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.strategies.vm import VMExecutionStrategy
-from cascade.adapters.state import InMemoryStateBackend
-
-
-@pytest.mark.asyncio
-async def test_vm_strategy_executes_simplest_workflow():
-    """
-    A minimal, isolated integration test for VMExecutionStrategy.
-
-    This test is designed to reproduce the deadlock scenario by directly invoking
-    the strategy without the complexity of the full Engine.
+    Compiler Backend: Transforms GraphIR into a static BipartiteGraph topology.
     """
 
-    # 1. Define the simplest possible workflow
-    @cs.task
-    def get_value():
-        return 42
+    @staticmethod
+    def compile(graph: GraphIR) -> BipartiteGraph:
+        builder = _TopologyBuilder(graph)
+        return builder.build()
 
-    workflow = get_value()
 
-    # 2. Instantiate the strategy and its minimal dependencies
-    strategy = VMExecutionStrategy(bus=MessageBus())
-    state_backend = InMemoryStateBackend("test-run-vm-strategy")
+class _TopologyBuilder:
+    def __init__(self, graph: GraphIR):
+        self._graph = graph
+        self._func_nodes: Dict[str, PhysicsFuncNode] = {}
+        self._data_nodes: Dict[str, PhysicsDataNode] = {}
+        self._channels: List[ChannelDef] = []
+        self._initial_values: Dict[str, Any] = {}
 
-    # 3. Execute the strategy with a timeout
-    try:
-        result = await asyncio.wait_for(
-            strategy.execute(
-                target=workflow,
-                run_id="test-run-vm-strategy",
-                params={},
-                state_backend=state_backend,
-                run_stack=ExitStack(),
-                active_resources={},
-            ),
-            timeout=2.0,
+        # Helper map: FuncNode Hash -> Default Output DataNode Hash
+        self._func_output_map: Dict[str, str] = {}
+
+    def build(self) -> BipartiteGraph:
+        # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
+        for node_ir in self._graph.nodes:
+            self._process_node(node_ir)
+
+        # Pass 2: Wire Inputs based on standard data Edges
+        self._process_data_edges()
+
+        # Pass 3: Wire Control Edges (e.g., from .run_if) as SIGNAL channels
+        self._process_control_edges()
+
+        # Pass 4: Wire Jumps (Feedback Loops) as DATA channels
+        self._process_jumps()
+
+        # Pass 5: Inject Lifecycle Emitters
+        self._inject_lifecycle_emitters()
+
+        return BipartiteGraph(
+            func_nodes=self._func_nodes,
+            data_nodes=self._data_nodes,
+            channels=self._channels,
+            initial_values=self._initial_values,
         )
-    except asyncio.TimeoutError:
-        pytest.fail("The VMStrategy execution timed out, indicating a deadlock.")
 
-    # 4. Assert the result
-    assert result == 42
+    def _process_node(self, node_ir: NodeIR):
+        func_hash = node_ir.current_node_instance_hash
+
+        f_node = PhysicsFuncNode(
+            current_node_instance_hash=func_hash,
+            name=node_ir.definition.name,
+            inputs={},
+            sink_id=None,  # Explicitly set sink_id to None for regular nodes
+        )
+        self._func_nodes[func_hash] = f_node
+
+        for i, val in enumerate(node_ir.args):
+            self._process_literal(f_node, str(i), val)
+
+        for k, val in node_ir.kwargs.items():
+            self._process_literal(f_node, k, val)
+
+        data_slot_hash = self._compute_data_slot_hash(func_hash, "result")
+        self._func_output_map[func_hash] = data_slot_hash
+
+        d_node = PhysicsDataNode(
+            current_data_slot_hash=data_slot_hash,
+            name=f"{node_ir.definition.name}.output",
+            producer_node_instance_hash=func_hash,
+        )
+        self._data_nodes[data_slot_hash] = d_node
+
+        channel = ChannelDef(
+            source_node_instance_hash=func_hash,
+            target_data_slot_hash=data_slot_hash,
+            port_name="result",
+            tag_filter="default",
+            kind=ChannelKind.DATA,  # Explicitly a DATA channel
+        )
+        self._channels.append(channel)
+
+    def _process_literal(self, f_node: PhysicsFuncNode, arg_name: str, value: Any):
+        const_hash = self._compute_const_hash(value)
+
+        if const_hash not in self._data_nodes:
+            d_node = PhysicsDataNode(
+                current_data_slot_hash=const_hash,
+                name=f"const_{const_hash[:8]}",
+                producer_node_instance_hash="const",
+            )
+            self._data_nodes[const_hash] = d_node
+            self._initial_values[const_hash] = value
+
+        f_node.inputs[arg_name] = const_hash
+
+    def _process_data_edges(self):
+        for edge in self._graph.edges:
+            if edge.kind != EdgeKind.DATA:
+                continue
+
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+
+            source_data_hash = self._func_output_map.get(source_func_hash)
+
+            if not source_data_hash:
+                raise RuntimeError(
+                    f"Source node {source_func_hash} not found in output map"
+                )
+
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if target_func_node:
+                target_func_node.inputs[arg_name] = source_data_hash
+
+    def _process_control_edges(self):
+        self._create_signal_channels(EdgeKind.CONTROL, ChannelKind.SIGNAL)
+
+    def _process_jumps(self):
+        # Jumps are data-carrying control flow, so they use DATA channels.
+        self._create_signal_channels(EdgeKind.JUMP, ChannelKind.DATA)
+
+    def _create_signal_channels(self, edge_kind: EdgeKind, channel_kind: ChannelKind):
+        for edge in self._graph.edges:
+            if edge.kind != edge_kind:
+                continue
+
+            source_func_hash = edge.source_node_instance_hash
+            target_func_hash = edge.target_node_instance_hash
+            arg_name = edge.target_arg
+
+            target_func_node = self._func_nodes.get(target_func_hash)
+            if not target_func_node:
+                raise RuntimeError(
+                    f"Target node {target_func_hash} for {edge_kind.name} edge not found"
+                )
+
+            # A control/jump edge needs a dedicated input slot on the target.
+            # If one already exists (from a literal or other edge), we reuse it.
+            # Otherwise, we create one.
+            if arg_name in target_func_node.inputs:
+                target_data_hash = target_func_node.inputs[arg_name]
+            else:
+                target_data_hash = self._compute_data_slot_hash(
+                    target_func_hash, f"input_{arg_name}"
+                )
+                if target_data_hash not in self._data_nodes:
+                    d_node = PhysicsDataNode(
+                        current_data_slot_hash=target_data_hash,
+                        name=f"{target_func_node.name}.in.{arg_name}",
+                        producer_node_instance_hash="external",
+                    )
+                    self._data_nodes[target_data_hash] = d_node
+                target_func_node.inputs[arg_name] = target_data_hash
+
+            # Create the Channel
+            tag = edge.case_key or "default"
+            channel = ChannelDef(
+                source_node_instance_hash=source_func_hash,
+                target_data_slot_hash=target_data_hash,
+                port_name="result",  # Signals/Jumps use the default output port
+                tag_filter=tag,
+                kind=channel_kind,
+            )
+            self._channels.append(channel)
+
+    def _inject_lifecycle_emitters(self):
+        if not self._graph.nodes:
+            return  # Empty graph, nothing to do
+
+        # Assumption: The last node processed by the Frontend is the target.
+        root_node_ir = self._graph.nodes[-1]
+        root_node_hash = root_node_ir.current_node_instance_hash
+        root_output_hash = self._func_output_map[root_node_hash]
+
+        # 1. Create Result Emitter Node
+        result_emitter_hash = self._compute_synthetic_hash("result_emitter")
+        result_emitter_node = PhysicsFuncNode(
+            current_node_instance_hash=result_emitter_hash,
+            name="result_emitter",
+            inputs={"result": root_output_hash},
+            sink_id="main_output",
+        )
+        self._func_nodes[result_emitter_hash] = result_emitter_node
+
+        # 2. Create Termination Emitter Node and its input DataNode
+        term_emitter_hash = self._compute_synthetic_hash("term_emitter")
+        # The signal comes FROM the result emitter
+        signal_data_hash = self._compute_data_slot_hash(result_emitter_hash, "signal")
+
+        signal_data_node = PhysicsDataNode(
+            current_data_slot_hash=signal_data_hash,
+            name="term_emitter.signal",
+            producer_node_instance_hash=result_emitter_hash,
+        )
+        self._data_nodes[signal_data_hash] = signal_data_node
+
+        term_emitter_node = PhysicsFuncNode(
+            current_node_instance_hash=term_emitter_hash,
+            name="term_emitter",
+            inputs={"signal": signal_data_hash},
+            sink_id="__system_lifecycle_signal",
+        )
+        self._func_nodes[term_emitter_hash] = term_emitter_node
+
+        # 3. Create SIGNAL Channel connecting the two emitters
+        signal_channel = ChannelDef(
+            source_node_instance_hash=result_emitter_hash,
+            target_data_slot_hash=signal_data_hash,
+            port_name="result",  # Emitters also have a default output for signaling
+            tag_filter="default",
+            kind=ChannelKind.SIGNAL,
+        )
+        self._channels.append(signal_channel)
+
+    def _compute_const_hash(self, value: Any) -> str:
+        raw = f"const:{repr(value)}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
+        raw = f"{producer_hash}:{port}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _compute_synthetic_hash(self, name: str) -> str:
+        raw = f"synthetic:{name}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 ~~~~~
 
-### 下一步建议
-我们已经为测试装备了“保险丝”。现在，请使用以下命令再次运行测试：
-
-`pytest -s packages/cascade-engine/tests/integration/test_vm_strategy_integration.py`
-
-**关键在于 `-s` 标志**，它会禁用 `pytest` 的输出捕获，让我们能实时看到所有 `print` 日志。
-
-这次，测试应该会在 2 秒后失败，并抛出一个 `pytest.fail` 异常。**请将这次运行产生的、包含日志和最终错误信息的完整终端输出提供给我**。这些信息将是解开死锁之谜的决定性证据。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] chore: 创建一个脚本来诊断 provider 入口点的发现问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270240.2732992, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] chore: 增强诊断脚本以模拟 Provider 加载过程", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270336.9977198, "duration_ms": 0}}

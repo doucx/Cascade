@@ -1,155 +1,161 @@
-好的，遵照您的指示，我们进入 **GREEN** 阶段。我将分步实现 `Reactor` 的逻辑，并遵循您的建议，对每个函数进行独立的 `patch_file` 操作，以保持变更的原子性。
+好的，我们正式开始 **任务 1.3：实现物理执行接口**。
 
-## [WIP] feat(vm): 实现 Reactor 核心循环与激发逻辑
+按照 TDD 流程，我们首先进入 **RED** 状态，通过编写测试来精确定义 `PhysicsExecutor` 的 API 和核心行为契约。
+
+## [WIP] test(vm): 为 PhysicsExecutor 创建 TDD 单元测试
 
 ### 用户需求
-实现 `Reactor` 类的 `__init__`、`step` 和 `_fire` 方法，以满足 `test_reactor.py` 中定义的 TDD 测试用例，使其从 RED 状态转为 GREEN 状态。
+为 `cascade-vm` 中的 `PhysicsExecutor` 创建单元测试，定义其 API 并验证其核心能力：异步地、非阻塞地将函数提交到线程池执行。
 
 ### 评论
-这是物理引擎的核心脉冲。通过在 `__init__` 中预处理拓扑，`step` 方法可以高效地扫描所有可能被激发的节点。`_fire` 方法则忠实地执行了“能量守恒”定律——激发必须伴随着能量（令牌）的消耗。这个实现将使我们的静态物理场第一次“动”起来。
+`PhysicsExecutor` 是 `Reactor` 的“肌肉”。它的职责是将 `Reactor` 决定的计算任务（纯 Python 函数）安全地在后台线程中执行，并将结果或异常返回给 `Reactor`。本测试的核心是验证其 **非阻塞** 的契约：`submit` 调用必须立即返回，允许 `Reactor` 的主事件循环继续处理其他任务，这对于构建一个高并发的物理引擎至关重要。
 
 ### 目标
-1.  在 `__init__` 中预编译图，构建一个从函数节点到其输入数据节点的反向索引，以优化性能。
-2.  实现 `step` 方法，该方法扫描所有函数节点，并根据“全准入激发”原则确定哪些节点已就绪。
-3.  实现 `_fire` 方法，该方法负责“原子性地”从所有输入槽中消耗一个令牌。
-4.  确保所有单元测试通过。
+1.  创建 `test_executor.py` 文件。
+2.  定义 `PhysicsExecutor` 的核心 API `submit(func, args)`。
+3.  编写测试用例，验证：
+    *   基本函数可以被正确执行并返回结果。
+    *   耗时的阻塞函数 (`time.sleep`) 在后台执行，`submit` 调用本身不会阻塞事件循环。
+    *   在工作线程中抛出的异常能被正确地传播回主调用方。
+4.  创建一个空的 `PhysicsExecutor` 类，使测试失败 (RED)。
 
 ### 基本原理
-我们将 `Reactor` 设计为一个无状态的扫描器。
-*   **预编译**: 在初始化时，我们遍历图的 `channels` 一次，构建一个 `_func_inputs` 字典，它映射了 `FuncNode ID -> List[Input DataNode IDs]`。这避免了在每个 `step()` 中重复昂贵的图遍历。
-*   **扫描与激发**: `step()` 方法利用这个预编译的映射，对每个函数节点，它可以立即找到其所有输入依赖。然后，它查询 `VolatileMemory` 来检查这些输入是否都处于激发态 (`is_excited`)。
-*   **能量守恒**: 对于所有就绪的节点，`_fire()` 方法被调用，它精确地从内存中 `take` 走每个输入槽的一个令牌，完成一次状态转换。
+我们将使用 `pytest.mark.asyncio` 来测试异步代码。对于非阻塞行为的验证，我们将提交一个带有 `time.sleep` 的函数，并测量 `submit` 调用本身消耗的时间（应接近于零）和任务完成的总时间（应接近于 `sleep` 的时长），以此来证明其异步性。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/vm #concept/reactor #scope/core #ai/instruct #task/domain/vm #task/object/reactor #task/action/implement #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/vm #concept/executor #scope/core #ai/instruct #task/domain/vm #task/object/physics-executor #task/action/tdd #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 实现 `__init__` 以预编译图拓扑
+#### Acts 1: 编写 PhysicsExecutor 单元测试
 
-我们首先在 `__init__` 方法中添加图的预处理逻辑，为高效扫描做准备。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
-~~~~~
-~~~~~python.old
-from typing import List, Set, Dict
-from cascade.spec.topology import BipartiteGraph
-from cascade.spec.physics import PhysicsFuncNode
-from cascade.vm.memory import VolatileMemory
-
-class Reactor:
-    """
-    The heart of the physics engine.
-    Scans the topology for excited states and fires transitions.
-    """
-
-    def __init__(self, graph: BipartiteGraph, memory: VolatileMemory):
-        self.graph = graph
-        self.memory = memory
-~~~~~
-~~~~~python.new
-from typing import List, Set, Dict
-from cascade.spec.topology import BipartiteGraph
-from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode
-from cascade.vm.memory import VolatileMemory
-
-class Reactor:
-    """
-    The heart of the physics engine.
-    Scans the topology for excited states and fires transitions.
-    """
-
-    def __init__(self, graph: BipartiteGraph, memory: VolatileMemory):
-        self.graph = graph
-        self.memory = memory
-        # Pre-compute the input data nodes for each function node for fast lookups
-        self._func_inputs: Dict[str, List[str]] = {}
-        self._func_nodes: List[PhysicsFuncNode] = []
-
-        for node in self.graph.nodes.values():
-            if isinstance(node, PhysicsFuncNode):
-                self._func_nodes.append(node)
-                self._func_inputs[node.id] = []
-
-        for channel in self.graph.channels:
-            target_node = self.graph.nodes.get(channel.target_node_id)
-            source_node = self.graph.nodes.get(channel.source_node_id)
-            
-            # We are interested in D -> F connections
-            if isinstance(target_node, PhysicsFuncNode) and isinstance(source_node, PhysicsDataNode):
-                self._func_inputs[target_node.id].append(source_node.id)
-~~~~~
-
-#### Acts 2: 实现 `step` 和 `_fire` 逻辑
-
-现在，我们实现 `step` 的扫描逻辑和 `_fire` 的令牌消耗逻辑。
+我们创建测试文件，定义 `PhysicsExecutor` 的行为契约。
 
 ~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
+write_file
+packages/cascade-vm/tests/unit/test_executor.py
 ~~~~~
-~~~~~python.old
-    def step(self) -> int:
+~~~~~python
+import pytest
+import asyncio
+import time
+from typing import Callable, Any
+
+from cascade.vm.executor import PhysicsExecutor
+
+# --- Helper functions for testing ---
+
+def add(x: int, y: int) -> int:
+    """A simple, pure computation function."""
+    return x + y
+
+def blocking_io_simulation(duration: float) -> float:
+    """Simulates a blocking I/O call like a network request or disk read."""
+    time.sleep(duration)
+    return duration
+
+def raises_error():
+    """A function that always fails."""
+    raise ValueError("Task failed successfully")
+
+# --- Tests ---
+
+@pytest.mark.asyncio
+async def test_executor_submit_simple_computation():
+    """Verify that a simple function can be executed and its result returned."""
+    executor = PhysicsExecutor()
+    result = await executor.submit(add, (2, 3))
+    assert result == 5
+
+@pytest.mark.asyncio
+async def test_executor_is_non_blocking():
+    """
+    Verify that submitting a blocking task does not block the main asyncio event loop.
+    The `submit` call should return immediately.
+    """
+    executor = PhysicsExecutor()
+    sleep_duration = 0.1
+
+    start_time = time.monotonic()
+    
+    # Create a task for the long-running job
+    exec_task = asyncio.create_task(
+        executor.submit(blocking_io_simulation, (sleep_duration,))
+    )
+    
+    # This point should be reached almost instantly
+    time_after_submit = time.monotonic()
+    
+    # Yield control to allow the task to start
+    await asyncio.sleep(0) 
+    
+    # Assert that the submit call itself was non-blocking
+    assert (time_after_submit - start_time) < (sleep_duration / 2)
+    
+    # Now, await the actual result
+    result = await exec_task
+    end_time = time.monotonic()
+    
+    # Assert the task ran for the expected duration
+    assert result == sleep_duration
+    assert (end_time - start_time) >= sleep_duration
+
+@pytest.mark.asyncio
+async def test_executor_propagates_exceptions():
+    """Verify that exceptions raised in the worker thread are re-raised in the caller."""
+    executor = PhysicsExecutor()
+    
+    with pytest.raises(ValueError, match="Task failed successfully"):
+        await executor.submit(raises_error, ())
+~~~~~
+
+#### Acts 2: 创建 API 桩文件 (Entering RED)
+
+创建 `executor.py` 并定义 `PhysicsExecutor` 的空实现，以使测试失败。
+
+~~~~~act
+write_file
+packages/cascade-vm/src/cascade/vm/executor.py
+~~~~~
+~~~~~python
+from typing import Callable, Any, Tuple
+from concurrent.futures import ThreadPoolExecutor
+
+
+class PhysicsExecutor:
+    """
+    Manages a thread pool to execute blocking or CPU-bound functions
+    off the main asyncio event loop.
+    """
+
+    def __init__(self):
+        # The executor will be created here, but the submit logic is missing.
+        pass
+
+    async def submit(self, func: Callable, args: Tuple) -> Any:
         """
-        Performs a single scan cycle of the entire graph.
+        Submits a function to be run in a background thread.
+
+        Args:
+            func: The function to execute.
+            args: A tuple of positional arguments for the function.
+
+        Returns:
+            The result of the function call.
         
-        Returns:
-            int: The number of nodes that fired during this step.
+        Raises:
+            Exception: Any exception raised by the target function.
         """
         raise NotImplementedError
-
-    def _fire(self, node: PhysicsFuncNode) -> None:
-        """
-        Internal method to execute a node transition.
-        1. Atomically consumes tokens from all input slots.
-        2. (Future) Submits the actual payload to an Executor.
-        """
-        raise NotImplementedError
-~~~~~
-~~~~~python.new
-    def step(self) -> int:
-        """
-        Performs a single scan cycle of the entire graph.
-
-        Returns:
-            int: The number of nodes that fired during this step.
-        """
-        ready_nodes: List[PhysicsFuncNode] = []
-        for f_node in self._func_nodes:
-            input_ids = self._func_inputs.get(f_node.id, [])
-            
-            # A node with no inputs is not considered ready unless explicitly defined so.
-            # Our "Full-Input Firing" model means a node with inputs must have them all excited.
-            if not input_ids:
-                continue
-
-            is_ready = all(self.memory.is_excited(d_node_id) for d_node_id in input_ids)
-
-            if is_ready:
-                ready_nodes.append(f_node)
-
-        for node_to_fire in ready_nodes:
-            self._fire(node_to_fire)
-
-        return len(ready_nodes)
-
-    def _fire(self, node: PhysicsFuncNode) -> None:
-        """
-        Internal method to execute a node transition.
-        1. Atomically consumes tokens from all input slots.
-        2. (Future) Submits the actual payload to an Executor.
-        """
-        input_ids = self._func_inputs.get(node.id, [])
-        for d_node_id in input_ids:
-            self.memory.take(d_node_id)
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了 `Reactor` 核心调度逻辑的实现。请运行 `pytest packages/cascade-vm/tests/unit/test_reactor.py` 以确认所有测试都已通过。
+现在，运行 `pytest packages/cascade-vm/tests/unit/test_executor.py` 将会因为 `NotImplementedError` 而失败。
 
-一旦确认 GREEN，我们就可以继续路线图的下一项任务：**任务 1.3：实现物理执行接口**。我们将创建 `PhysicsExecutor` 并引入 `ThreadPoolExecutor`，为真正执行业务逻辑做好准备。
+接下来的 **GREEN** 阶段任务是：
+1.  在 `PhysicsExecutor.__init__` 中初始化一个 `concurrent.futures.ThreadPoolExecutor`。
+2.  实现 `submit` 方法，使用 `asyncio.get_running_loop().run_in_executor()` 将函数和参数委托给线程池。
+3.  确保测试通过。

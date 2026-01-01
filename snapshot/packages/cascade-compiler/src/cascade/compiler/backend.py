@@ -65,12 +65,15 @@ class _TopologyBuilder:
             canonical_code_structure_hash=node_ir.definition.canonical_code_structure_hash,
             name=node_ir.definition.name,
             inputs={},
-            sink_id=None,  # Explicitly set sink_id to None for regular nodes
+            sink_id=None,
+            is_map=node_ir.meta.get("is_map", False),
         )
         self._func_nodes[current_node_instance_hash] = f_node
 
+        # Map positional arguments to their real names from TaskDef
         for i, val in enumerate(node_ir.args):
-            self._process_literal(f_node, str(i), val)
+            arg_name = node_ir.definition.args[i].name
+            self._process_literal(f_node, arg_name, val)
 
         for k, val in node_ir.kwargs.items():
             self._process_literal(f_node, k, val)

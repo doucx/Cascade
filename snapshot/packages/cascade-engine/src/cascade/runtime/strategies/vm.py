@@ -145,6 +145,7 @@ class VMExecutionStrategy:
                 f_node = FuncNode(
                     name=spec_f_node.current_node_instance_hash,
                     canonical_code_structure_hash=spec_f_node.canonical_code_structure_hash,
+                    is_map=spec_f_node.is_map,
                 )
 
             runtime_func_nodes[spec_f_node.current_node_instance_hash] = f_node

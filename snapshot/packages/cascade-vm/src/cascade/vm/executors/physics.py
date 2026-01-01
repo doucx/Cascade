@@ -41,9 +41,36 @@ class PhysicsExecutor:
             kwargs = {name: token.payload for name, token in inputs.items()}
 
             # 3. Execution
-            result = func(**kwargs)
-            if inspect.isawaitable(result):
-                result = await result
+            if node.is_map:
+                # Vectorized Execution (Map)
+                # 1. Determine lengths and extract iterables
+                iterables = {k: v for k, v in kwargs.items() if isinstance(v, list)}
+                constants = {k: v for k, v in kwargs.items() if not isinstance(v, list)}
+                
+                if not iterables:
+                    # If nothing is a list, map behaves like a regular call returning a list
+                    result = [func(**kwargs)]
+                else:
+                    first_len = len(next(iter(iterables.values())))
+                    results = []
+                    for i in range(first_len):
+                        call_kwargs = constants.copy()
+                        for k, v_list in iterables.items():
+                            call_kwargs[k] = v_list[i]
+                        
+                        r = func(**call_kwargs)
+                        results.append(r)
+                    
+                    # Handle async items in results if necessary
+                    if inspect.iscoroutinefunction(func):
+                        result = await asyncio.gather(*results)
+                    else:
+                        result = results
+            else:
+                # Scalar Execution
+                result = func(**kwargs)
+                if inspect.isawaitable(result):
+                    result = await result
 
             # 4. Wrap Result: Convert the raw result back into a Token.
             # For now, we assume a single 'result' output port with 'default' tag.

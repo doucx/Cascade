@@ -101,10 +101,12 @@ class FuncNode:
         name: str,
         canonical_code_structure_hash: str,
         resource_requirements: Optional[Dict[str, Any]] = None,
+        is_map: bool = False,
     ):
         self.name = name
         self.canonical_code_structure_hash = canonical_code_structure_hash
         self.resource_requirements = resource_requirements or {}
+        self.is_map = is_map
         self.inputs: Dict[str, Port] = {}
         self.outputs: Dict[str, Port] = {}
 

@@ -2,6 +2,7 @@ import pytest
 from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
 from cascade.compiler.backend.builder import Builder
+from cascade.spec.environment import EnvironmentDef
 
 
 @pytest.fixture
@@ -27,7 +28,7 @@ def sample_graph_ir():
 
 def test_builder_expands_and_wires_nodes(sample_graph_ir):
     builder = Builder()
-    graph = builder.build(sample_graph_ir)
+    graph = builder.build(sample_graph_ir, environment=EnvironmentDef())
 
     # Assert nodes: 2 triads (6 nodes each) + 1 global D_life = 13 nodes
     assert len(graph.nodes) == 13

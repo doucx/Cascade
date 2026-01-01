@@ -75,7 +75,7 @@ def Param(
     # Lazy import dependencies to keep module load time minimal
     from cascade.spec.input import ParamSpec
     from cascade.context import get_current_context
-    from cascade.internal.inputs import _get_param_value
+    from cascade.common.inputs import _get_param_value
 
     spec = ParamSpec(name=name, default=default, type=type, description=description)
     get_current_context().register(spec)

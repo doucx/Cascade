@@ -1,66 +1,93 @@
-Excellent, this test output is exactly what we needed. It's the classic "red wave" that occurs after a significant API change, and it gives us a crystal-clear signal about what to fix next.
+你做的非常好。通过删除导致死锁的测试文件来隔离问题，我们现在可以聚焦于问题的根源。你的观察完全正确——这些测试都陷入了死锁。
 
-The test output is overwhelmingly consistent: `TypeError: VMExecutionStrategy.__init__() got an unexpected keyword argument 'resource_manager'`.
+这是一个非常深刻的、典型的异步系统设计缺陷。
 
-This is the smoking gun. Here's what happened:
+**核心诊断：物理引擎的“冷启动”死锁 (The "Cold Start" Deadlock)**
 
-1.  **Our Refactor**: In our previous steps, we correctly refactored `VMExecutionStrategy`'s constructor. We deliberately simplified it to only accept `bus`, because under the new "macro-orchestrator" model, the strategy itself is responsible for creating the `Reactor` and `PhysicsExecutor`, which internally manage resources. It no longer needs `resource_manager` or `constraint_manager` injected into it. The new signature is `__init__(self, bus: MessageBus)`.
+我们当前的 `VMExecutionStrategy` 存在一个致命的逻辑缺陷：
 
-2.  **The Oversight**: We forgot to update the class that *creates* `VMExecutionStrategy`. The traceback points directly to `cascade.runtime.engine.py`. The `Engine` class is still trying to instantiate `VMExecutionStrategy` using the old, now-invalid constructor, passing `resource_manager`, `constraint_manager`, and other arguments that are no longer expected.
+1.  **`execute` 方法的行为**：它创建了 `Reactor`，在后台任务中启动了 `reactor.run()`，然后**立即** `await asyncio.wait(...)`，等待 `result_future` 和 `termination_future` 被设置。
 
-This is not a failure of our new `VMExecutionStrategy` logic, but a simple yet critical misalignment at the point of its creation.
+2.  **`Reactor.run()` 的行为**：它的主循环 `while self._is_running:` 在开始时会检查是否有待处理的工作（事件队列或脏节点集）。如果没有，它就会 `await self._activity_signal.wait()`，**进入睡眠状态**，等待外部信号来唤醒它。
 
-We must update the `Engine.__init__` method to instantiate `VMExecutionStrategy` using its new, simplified constructor.
+3.  **`_load_topology` 的缺陷**：我们刚刚实现的 `_load_topology` 方法非常出色地完成了“世界构建”——它将静态蓝图转换成了 `Reactor` 内部的物理对象。但是，它只是**静态地**构建了拓扑，就像组装了一台引擎的所有零件，但**从未按下点火按钮**。它没有向 `Reactor` 发出任何“有工作要做了”的初始信号。
 
-## [WIP] fix(engine): 更新 Engine 以匹配新的 VMExecutionStrategy 构造函数
+**死锁循环由此形成：**
+
+*   `VMExecutionStrategy.execute` **正在等待** `Reactor` 完成工作并设置 `Future`。
+*   `Reactor` 在启动后，发现没有任何初始事件或脏节点，于是**立即进入睡眠**，等待一个永远不会到来的外部信号。
+
+`execute` 在等待 `Reactor`，而 `Reactor` 在等待一个启动信号。这就是死锁的本质。所有失败的测试，其共同点都是它们的工作流需要 `Reactor` 主动开始执行，但 `Reactor` 从未被“激活”。
+
+解决方案是在“世界构建”完成之后，但在“运行”开始之前，给予 `Reactor` 一个初始的“推动力”。
+
+我们需要在 `_load_topology` 方法的末尾，告诉 `Reactor`：“拓扑已经加载完毕，请检查所有函数节点，看看哪些现在就可以开始运行。”
+
+`Reactor` 的内部设计已经为此提供了一个完美的机制：`_dirty_func_nodes` 集合。只要这个集合不为空，`Reactor` 的 `run()` 循环就不会立即睡眠，而是会开始处理这些“脏”节点，检查它们是否就绪，从而启动整个计算的连锁反应。
+
+因此，修复方案是：在 `_load_topology` 的最后，将所有加载的 `FuncNode` 添加到 `Reactor` 的 `_dirty_func_nodes` 集合中。
+
+## [WIP] fix(vm): 解决 Reactor 冷启动死锁问题
 
 ### 错误分析
-在大规模重构 `VMExecutionStrategy` 以适应物理模型后，其构造函数 `__init__` 被简化为仅接收 `bus` 参数。然而，`Engine` 类的 `__init__` 方法没有同步更新，仍在尝试使用已废弃的参数（如 `resource_manager`, `constraint_manager`, `wakeup_event`）来实例化 `VMExecutionStrategy`。这导致了遍布整个测试套件的 `TypeError`，因为 `Engine` 的初始化失败了。
+`VMExecutionStrategy` 在后台启动 `Reactor.run()` 后立即等待结果，但 `_load_topology` 方法在加载完拓扑后并未向 `Reactor` 发出任何初始工作信号。这导致 `Reactor` 在启动后因无事可做而立即进入睡眠状态，而 `VMExecutionStrategy` 则在主任务中无限期地等待一个永远不会被设置的 `Future`，从而造成了死锁。
 
 ### 用户需求
-修正 `Engine` 在初始化 `VMExecutionStrategy` 时传递了不期望的关键字参数的问题，使其与新的构造函数签名保持一致。
+修复 `Reactor` 在启动时因缺少初始激活信号而导致的死锁问题，使测试能够继续进行。
 
 ### 评论
-这是一个典型的、在重构过程中因 API 变更而产生的连锁反应。修复此问题是让我们的测试套件重新进入可评估状态的关键一步。此修复将使 `Engine` 与 `VMExecutionStrategy` 之间解耦的架构意图在代码层面得到最终落实：`Engine` 只需知道策略的存在，而无需关心策略内部复杂的依赖关系。
+这是一个关键的架构修复，它解决了异步执行引擎中最核心的“冷启动”问题。通过在拓扑加载后主动将所有节点标记为“脏”，我们为 `Reactor` 提供了开始其事件循环所需的初始“势能”，打破了死锁循环。这是确保我们新的物理模型能够从静态状态正确过渡到动态执行的关键一步。
 
 ### 目标
-1.  定位 `packages/cascade-engine/src/cascade/runtime/engine.py` 中 `Engine.__init__` 方法内错误的 `VMExecutionStrategy` 实例化代码。
-2.  使用 `patch_file` 将其修改为仅传递 `bus` 参数的正确形式。
+1.  修改 `_load_topology` 方法。
+2.  在该方法的末尾，添加逻辑以遍历所有已创建的运行时 `FuncNode`。
+3.  将这些 `FuncNode` 添加到 `Reactor` 内部的 `_dirty_func_nodes` 集合中，以“激活”引擎。
 
 ### 基本原理
-`VMExecutionStrategy` 的新设计哲学是自包含的：它在 `execute` 方法内部按需创建和配置其运行时依赖（如 `Reactor`）。因此，其构造函数变得极为简单。`Engine` 作为其创建者，必须遵循这个新的、简化的契约。通过本次修复，我们将使 `Engine` 的代码与此架构设计保持同步，消除启动时的 `TypeError`。
+`Reactor` 的事件循环是被动和事件驱动的。如果没有初始事件或“脏”状态，它将无限期等待。`_load_topology` 的职责不仅是构建拓扑，还必须提供一个“第一推动力”。通过将所有节点标记为脏，我们强制 `Reactor` 在其第一个“tick”中对整个图的状态进行一次评估，找出所有没有依赖或依赖已满足的入口节点并开始执行它们，从而启动整个计算的雪崩效应。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 修正 Engine 中 VMExecutionStrategy 的实例化
+#### Acts 1: 在拓扑加载后激活 Reactor
 
-我们将精确地修改 `engine.py` 中 `VMExecutionStrategy` 的实例化调用，使其符合新的构造函数签名。
+我们将修改 `_load_topology` 方法，在所有节点和通道都注册完毕后，将所有函数节点标记为脏，以 kickstart `Reactor`。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
+packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 ~~~~~
 ~~~~~python.old
-        self.vm_strategy = VMExecutionStrategy(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event,
-            bus=self.bus,
-        )
+                channel = ReactorChannel(
+                    source=source_f_node,
+                    target=target_d_node,
+                    output_name=spec_channel.port_name,
+                    tag_filter=spec_channel.tag_filter,
+                    kind=spec_channel.kind,
+                )
+                reactor.register_channel(channel)
 ~~~~~
 ~~~~~python.new
-        self.vm_strategy = VMExecutionStrategy(
-            bus=self.bus,
-        )
+                channel = ReactorChannel(
+                    source=source_f_node,
+                    target=target_d_node,
+                    output_name=spec_channel.port_name,
+                    tag_filter=spec_channel.tag_filter,
+                    kind=spec_channel.kind,
+                )
+                reactor.register_channel(channel)
+        
+        # Pass 4: Kickstart the reactor by marking all function nodes as dirty.
+        # This gives the reactor an initial set of nodes to check for readiness,
+        # breaking the cold start deadlock.
+        for f_node in runtime_func_nodes.values():
+            reactor._dirty_func_nodes.add(f_node)
 ~~~~~
 
 ### 下一步建议
-我们已经解决了 `Engine` 初始化失败的阻断性问题。现在，当测试再次运行时，`Engine` 应该能够成功创建 `VMExecutionStrategy` 实例，并且 `engine.run(..., use_vm=True)` 将会实际调用到我们新实现的 `execute` 和 `_load_topology` 方法。
+我们已经解决了导致死锁的根本原因。现在，`Reactor` 应该能够正确启动并执行计算图了。
 
-这很可能会暴露下一层的问题——即我们新实现的逻辑中的实际 bug 或与测试用例预期的行为不匹配之处。这正是 TDD 流程所期望的。
-
-我建议我们再次运行测试，以获取新的、更深入的反馈。
+我建议你**恢复之前删除的测试文件**，然后我们再次运行完整的测试套件。这次，我们应该会看到 `TypeError` 或死锁消失，取而代之的可能是更具体的 `AssertionError` 或其他与执行逻辑相关的失败。这将为我们提供下一阶段调试的宝贵线索。

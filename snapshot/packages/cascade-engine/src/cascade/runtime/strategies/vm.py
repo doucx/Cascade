@@ -171,3 +171,9 @@ class VMExecutionStrategy:
                     kind=spec_channel.kind,
                 )
                 reactor.register_channel(channel)
+        
+        # Pass 4: Kickstart the reactor by marking all function nodes as dirty.
+        # This gives the reactor an initial set of nodes to check for readiness,
+        # breaking the cold start deadlock.
+        for f_node in runtime_func_nodes.values():
+            reactor._dirty_func_nodes.add(f_node)

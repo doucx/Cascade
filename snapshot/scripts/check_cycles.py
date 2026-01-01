@@ -1,44 +1,3 @@
-好的，我将为你创建一个专门用于检测循环引用的静态分析脚本。
-
-## [WIP] feat: 添加循环引用检测脚本
-
-### 用户需求
-在 `scripts` 目录下添加一个工具，用于静态检测 `cascade` 生态系统中的循环导入问题，以防止类似最近发生的初始化故障再次出现。
-
-### 评论
-对于像 Cascade 这样使用 PEP 420 命名空间包且具有动态属性加载机制的架构，循环引用是潜在的重大风险。静态检测可以在代码进入 CI 阶段之前识别出不健康的模块依赖拓扑。
-
-### 目标
-1.  在 `scripts/check_cycles.py` 创建一个基于 `pylint` 的检测工具。
-2.  该工具能够扫描所有 `packages/*/src/cascade` 目录。
-3.  配置该工具专门关注 `cyclic-import` 错误。
-
-### 基本原理
-虽然 Python 允许一定程度的循环导入，但在复杂的命名空间结构中，这往往会导致模块属性在初始化完成前就被访问（如我们刚才遇到的情况）。`pylint` 拥有成熟的依赖图分析引擎，可以识别出逻辑上的闭环。
-
-### 标签
-#intent/tooling #flow/ready #priority/medium #comp/build #scope/dx #ai/delegate #task/domain/testing #task/object/import-cycle-linter #task/action/build #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建循环引用检测脚本
-
-我将创建一个名为 `scripts/check_cycles.py` 的脚本。它将查找工作区中所有的 `cascade` 源码包并运行循环引用分析。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p scripts
-~~~~~
-
-~~~~~act
-write_file
-scripts/check_cycles.py
-~~~~~
-~~~~~python
 #!/usr/bin/env python3
 import sys
 import subprocess
@@ -112,18 +71,3 @@ def check_cycles():
 
 if __name__ == "__main__":
     check_cycles()
-~~~~~
-
-#### Acts 2: 赋予脚本执行权限
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-chmod +x scripts/check_cycles.py
-~~~~~
-
-### 下一步建议
-- **安装依赖**：确保你的环境中安装了 `pylint`：`pip install pylint`。
-- **运行检测**：执行 `./scripts/check_cycles.py` 检查当前项目是否存在其他潜在的循环引用。
-- **CI 集成**：你可以将此脚本添加到 GitHub Actions 或其他 CI 流程中，作为门禁检查的一环。

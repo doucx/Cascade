@@ -1,6 +1,6 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 
 from cascade.spec.fingerprint import Fingerprint
 
@@ -33,44 +33,3 @@ class TaskDef:
     is_async: bool = False
     # Execution mode (e.g. "blocking", "compute") derived from the task definition
     mode: str = "blocking"
-
-
-@dataclass
-class NodeIR:
-    id: str
-    definition: TaskDef
-    inputs: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class EdgeIR:
-    source_id: str
-    target_id: str
-    target_arg: str
-
-
-@dataclass
-class GraphIR:
-    nodes: List[NodeIR]
-    edges: List[EdgeIR]
-    meta: Dict[str, Any] = field(default_factory=dict)
-
-
-# --- VM Instruction Set ---
-
-
-@dataclass
-class Instruction:
-    id: str
-
-
-@dataclass
-class Call(Instruction):
-    task_name: str
-    args: List[Any]
-    output_register: str
-
-
-@dataclass
-class Return(Instruction):
-    source_register: str

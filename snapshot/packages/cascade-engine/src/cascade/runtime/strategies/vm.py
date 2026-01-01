@@ -2,15 +2,11 @@ import asyncio
 from contextlib import ExitStack
 from typing import Any, Dict
 
-from cascade.spec.protocols import StateBackend
+from cascade.graph.compiler import BlueprintBuilder
+from cascade.runtime.vm import VirtualMachine
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.constraints.manager import ConstraintManager
-
-# New Compiler Stack
-from cascade.compiler.frontend import Frontend
-from cascade.compiler.optimizer import Optimizer
-from cascade.compiler.backend import Backend
-from cascade.vm import VirtualMachine
+from cascade.spec.protocols import StateBackend
 
 
 class VMExecutionStrategy:
@@ -33,29 +29,20 @@ class VMExecutionStrategy:
         run_stack: ExitStack,
         active_resources: Dict[str, Any],
     ) -> Any:
-        # 1. Frontend: Compile LazyResult to GraphIR
-        graph_ir = Frontend.compile(target)
+        # 1. Compile in template mode
+        builder = BlueprintBuilder()
+        blueprint = builder.build(target, template=True)
 
-        # 2. Optimizer: Schedule GraphIR to ExecutionPlan
-        execution_plan = Optimizer.optimize(graph_ir)
-
-        # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
-        blueprint = Backend.compile(graph_ir, execution_plan)
-
-        # 4. Runtime: Execute Blueprint on VM
-        # Note: The new VM doesn't yet support ResourceManager/ConstraintManager injection
-        # directly in the same way. For Phase 5 initial integration, we instantiate the
-        # pure VM. Future tasks will reintegrate resource management.
-        vm = VirtualMachine()
-        
-        # Prepare initial arguments
-        # The new VM expects 'initial_kwargs' mapping directly to registers if needed,
-        # or it relies on the blueprint's structure.
-        # For now, we assume the Blueprint structure handles defaults, but we need to pass
-        # the runtime parameters if any.
-        
-        # Extract args/kwargs from target LazyResult for the root call
+        # 2. Extract Initial Arguments
         initial_args = list(target.args)
         initial_kwargs = dict(target.kwargs)
-        
-        return await vm.execute(blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs)
+
+        # 3. Execute
+        vm = VirtualMachine(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self.wakeup_event,
+        )
+        return await vm.execute(
+            blueprint, initial_args=initial_args, initial_kwargs=initial_kwargs
+        )

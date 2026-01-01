@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from contextlib import ExitStack
 
 import cascade as cs
@@ -27,16 +28,21 @@ async def test_vm_strategy_executes_simplest_workflow():
     strategy = VMExecutionStrategy(bus=MessageBus())
     state_backend = InMemoryStateBackend("test-run-vm-strategy")
 
-    # 3. Execute the strategy
-    # If a deadlock exists, the test will hang here indefinitely.
-    result = await strategy.execute(
-        target=workflow,
-        run_id="test-run-vm-strategy",
-        params={},
-        state_backend=state_backend,
-        run_stack=ExitStack(),
-        active_resources={},
-    )
+    # 3. Execute the strategy with a timeout
+    try:
+        result = await asyncio.wait_for(
+            strategy.execute(
+                target=workflow,
+                run_id="test-run-vm-strategy",
+                params={},
+                state_backend=state_backend,
+                run_stack=ExitStack(),
+                active_resources={},
+            ),
+            timeout=2.0,
+        )
+    except asyncio.TimeoutError:
+        pytest.fail("The VMStrategy execution timed out, indicating a deadlock.")
 
     # 4. Assert the result
     assert result == 42

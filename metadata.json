@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 解决剩余 Pyright 错误并重构 context 模块", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767264066.178389, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 更新 `cascade` 主入口点的 `context` 模块导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767264259.4580946, "duration_ms": 0}}

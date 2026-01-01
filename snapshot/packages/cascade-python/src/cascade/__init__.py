@@ -16,7 +16,7 @@ _IMPORT_MAP = {
     "resource": ("cascade.spec.resource", "resource"),
     "inject": ("cascade.spec.resource", "inject"),
     "with_constraints": ("cascade.spec.constraint", "with_constraints"),
-    "get_current_context": ("cascade.context", "get_current_context"),
+    "get_current_context": ("cascade.common.context", "get_current_context"),
     # Advanced Flow Control (Corrected paths: cascade.spec.* -> cascade.*)
     "select_jump": ("cascade.control_flow", "select_jump"),
     "bind": ("cascade.control_flow", "bind"),
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from cascade.spec.jump import Jump
     from cascade.spec.resource import resource, inject
     from cascade.spec.constraint import with_constraints
-    from cascade.context import get_current_context
+    from cascade.common.context import get_current_context
 
     from cascade.control_flow import select_jump, bind
 
@@ -74,7 +74,7 @@ def Param(
 ) -> "LazyResult":
     # Lazy import dependencies to keep module load time minimal
     from cascade.spec.input import ParamSpec
-    from cascade.context import get_current_context
+    from cascade.common.context import get_current_context
     from cascade.common.inputs import _get_param_value
 
     spec = ParamSpec(name=name, default=default, type=type, description=description)
@@ -84,7 +84,7 @@ def Param(
 
 def Env(name: str, default: Any = None, description: str = "") -> "LazyResult":
     from cascade.spec.input import EnvSpec
-    from cascade.context import get_current_context
+    from cascade.common.context import get_current_context
     from cascade.common.inputs import _get_env_var
 
     spec = EnvSpec(name=name, default=default, description=description)

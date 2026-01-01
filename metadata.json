@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 执行“大重命名” (The Great Renaming) - 阶段 1", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767257227.096221, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: A lint_hash_names.py, M refactor_identifiers.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767257568.5472825, "duration_ms": 0}}

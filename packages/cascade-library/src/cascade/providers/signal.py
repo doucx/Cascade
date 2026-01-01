@@ -3,7 +3,7 @@ from typing import Optional, Any
 
 from cascade.spec.task import task
 from cascade.spec.resource import inject
-from cascade.providers import LazyFactory, Provider
+from cascade.spec.protocols import LazyFactory, Provider
 from cascade.spec.protocols import Connector
 
 

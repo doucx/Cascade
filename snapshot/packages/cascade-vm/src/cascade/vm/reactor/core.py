@@ -1,7 +1,7 @@
 import asyncio
 from collections import deque, defaultdict
-from typing import Deque, Set, List, Dict, Any, Optional
-from cascade.spec.physics import DataNode, FuncNode, TerminatorNode
+from typing import Deque, Set, List, Dict, Any, Optional, Callable
+from cascade.spec.physics import DataNode, FuncNode, TerminatorNode, EmitterNode
 from .events import ReactorEvent, TokenGenerated, ExecutionFinished
 from .model import Channel
 from cascade.vm.protocols import ResourceManager
@@ -13,6 +13,9 @@ class Reactor:
         self.resource_manager = resource_manager
         self._event_queue: Deque[ReactorEvent] = deque()
         
+        # External world interfaces
+        self._sinks: Dict[str, Callable] = {}
+
         # Topology Indexes
         self._nodes: Set[Any] = set()
         self._channels_by_source: Dict[str, List[Channel]] = defaultdict(list)
@@ -25,6 +28,10 @@ class Reactor:
         # Run Control
         self._is_running = False
         self._activity_signal = asyncio.Event()
+
+    def register_sink(self, sink_id: str, callback: Callable):
+        """Registers an external sink (callback) for EmitterNodes."""
+        self._sinks[sink_id] = callback
 
     def register_node(self, node: Any):
         if node in self._nodes:
@@ -188,9 +195,19 @@ class Reactor:
         # 1. Atomically consume inputs (Physics: Consume Energy)
         inputs = node.consume_inputs()
         
-        # 2. Special Case: Terminator
+        # 2. Handle Intrinsic Nodes (not submitted to executor)
         if isinstance(node, TerminatorNode):
             self.stop()
+            return
+        
+        if isinstance(node, EmitterNode):
+            sink = self._sinks.get(node.sink_id)
+            if sink:
+                # Emitter assumes a single input token for simplicity
+                # We find the first token from the consumed inputs
+                input_token = next(iter(inputs.values()), None)
+                if input_token:
+                    sink(input_token.payload)
             return
 
         # 3. Submit to Executor

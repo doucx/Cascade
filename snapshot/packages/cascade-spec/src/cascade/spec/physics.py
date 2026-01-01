@@ -110,20 +110,13 @@ class FuncNode:
         Dual-Barrier Potential Check:
         Returns True if and only if ALL connected input ports have an excited source DataNode.
         """
-        print(f"\n[is_ready CHECK for {self.name}]")
         if not self.inputs:
-            print(" -> No inputs, node is ready.")
             return True  # A node with no inputs is always ready.
 
-        all_ready = True
         for port in self.inputs.values():
-            is_excited = port.source and port.source.is_excited()
-            print(f" -> Port '{port.name}' ({port.kind.name}) source excited: {is_excited}")
-            if not is_excited:
-                all_ready = False
-        
-        print(f" -> Final is_ready result: {all_ready}")
-        return all_ready
+            if not port.source or not port.source.is_excited():
+                return False
+        return True
 
     def consume_inputs(self) -> Dict[str, Token]:
         """

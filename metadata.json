@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M __init__.py, M __init__.py, M __init__.py ... and 14 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270926.8677378, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] style: 修复 SDK Shim 的 Ruff 检查警告", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270932.1334016, "duration_ms": 0}}

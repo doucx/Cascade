@@ -142,7 +142,7 @@ class Engine:
         use_vm: bool = False,
     ) -> Any:
         # Handle Auto-Gathering
-        from cascade.internal.inputs import _internal_gather
+        from cascade.common.inputs import _internal_gather
 
         if isinstance(target, (list, tuple)):
             if not target:

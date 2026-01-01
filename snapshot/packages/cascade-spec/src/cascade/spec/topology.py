@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Dict, List
 
 
@@ -49,6 +50,14 @@ class PhysicsEmitterNode:
     inputs: Dict[str, str] = field(default_factory=dict)
 
 
+class ChannelKind(str, Enum):
+    """
+    Defines the physical nature of a channel, separating data flow from control flow.
+    """
+    DATA = "DATA"      # Transports a payload. Contributes to 'data potential'.
+    SIGNAL = "SIGNAL"  # Transports only an activation signal. Contributes to 'control potential'.
+
+
 @dataclass(frozen=True)
 class ChannelDef:
     """
@@ -59,6 +68,7 @@ class ChannelDef:
     target_data_slot_hash: str
     port_name: str
     tag_filter: str = "default"
+    kind: ChannelKind = ChannelKind.DATA
 
 
 from typing import Any

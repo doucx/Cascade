@@ -9,7 +9,8 @@
   },
   "test_provider_registry_namespace_resolution": {
     "baseline_code_signature_text": "def test_provider_registry_namespace_resolution():",
-    "baseline_code_structure_hash": "b1b1e6703a6ab8d0e29165f163484ad65ec2d76037d192e1f6fab092633aee99"
+    "baseline_code_structure_hash": "b1b1e6703a6ab8d0e29165f163484ad65ec2d76037d192e1f6fab092633aee99",
+    "baseline_yaml_content_hash": "2f9ea61e48bf4d0cadf761bd7b862f814b6db03ebaa4b2c4c8a3856cb0c46e4f"
   },
   "test_read_text_provider": {
     "baseline_code_signature_text": "async def test_read_text_provider(test_file):",

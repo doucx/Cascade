@@ -1,7 +1,8 @@
 {
   "db_engine": {
     "baseline_code_signature_text": "def db_engine():",
-    "baseline_code_structure_hash": "1436fd363ff298f50f58a231d057a617275f75af6bef185c6f03f0ac723e3192"
+    "baseline_code_structure_hash": "1436fd363ff298f50f58a231d057a617275f75af6bef185c6f03f0ac723e3192",
+    "baseline_yaml_content_hash": "2bd78f692b88823326bd31d5e79d621cb075b24b47d3bf87df86f5e49edebf8d"
   },
   "sqlite_db": {
     "baseline_code_signature_text": "def sqlite_db():",
@@ -19,14 +20,17 @@
   },
   "test_sql_missing_resource": {
     "baseline_code_signature_text": "async def test_sql_missing_resource():",
-    "baseline_code_structure_hash": "2f5478d7e4730b148971259d59f89c38be01988742efe40f5592a9a6ded7beb5"
+    "baseline_code_structure_hash": "2f5478d7e4730b148971259d59f89c38be01988742efe40f5592a9a6ded7beb5",
+    "baseline_yaml_content_hash": "ed4cad01463c37300ad31c7e4017000d8020eb76d691e8c27a549e0376664c9d"
   },
   "test_sql_query_success": {
     "baseline_code_signature_text": "async def test_sql_query_success(db_engine):",
-    "baseline_code_structure_hash": "0643a535c2063e8f33701e1f5fafcf8f7a0b3918c22fe40bbdc768dad0d567de"
+    "baseline_code_structure_hash": "0643a535c2063e8f33701e1f5fafcf8f7a0b3918c22fe40bbdc768dad0d567de",
+    "baseline_yaml_content_hash": "30a653bdc2858893027e6ecd7834126a3d94d230ef694eb76fe4d7224893b1fe"
   },
   "test_sql_with_params": {
     "baseline_code_signature_text": "async def test_sql_with_params(db_engine):",
-    "baseline_code_structure_hash": "fae9b396d4cd459bb603b64aecd038e6cb77bc697d0c7e054885bab931d9f5bc"
+    "baseline_code_structure_hash": "fae9b396d4cd459bb603b64aecd038e6cb77bc697d0c7e054885bab931d9f5bc",
+    "baseline_yaml_content_hash": "82e34ba567f7c881ff77573709a64ae1320c32acc02641a1d8cbb3f87b9b0830"
   }
 }

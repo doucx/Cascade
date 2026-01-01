@@ -18,8 +18,8 @@
     "baseline_code_structure_hash": "3d8c34aef1ba2da58f427a54fa1a159724ea44dfaa985c2061ca88309021d960"
   },
   "Fingerprint.__setitem__": {
-    "baseline_code_signature_text": "def __setitem__(self, key: str, value: str) -> None:",
-    "baseline_code_structure_hash": "05dd46af0ad71013a0c5de0940c77355776011cb8e4b5afedcc291c1f39494c7"
+    "baseline_code_signature_text": "def __setitem__(self, key: str, value: Any) -> None:",
+    "baseline_code_structure_hash": "fb55dde5f950ec0587c52b696e7e30898e4ad93c715d2e00b13bcf66f870948c"
   },
   "Fingerprint._hashes": {},
   "Fingerprint._validate_key": {

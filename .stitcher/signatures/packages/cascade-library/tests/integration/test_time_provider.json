@@ -1,14 +1,17 @@
 {
   "engine": {
     "baseline_code_signature_text": "def engine():",
-    "baseline_code_structure_hash": "1bc9c740293b1ea624b0860c9d25bafe4442836c7a21fae66953397d3b9195b3"
+    "baseline_code_structure_hash": "1bc9c740293b1ea624b0860c9d25bafe4442836c7a21fae66953397d3b9195b3",
+    "baseline_yaml_content_hash": "181a8304e6b03c5b75d56fb3b65c4c36e8393bcd76d691e5c4fc9359d022958e"
   },
   "test_wait_accepts_lazy_result": {
     "baseline_code_signature_text": "async def test_wait_accepts_lazy_result(engine):",
-    "baseline_code_structure_hash": "0ad40700a7ef3f0dbb25d3aa1c721bfcc4700952a5700fb56d233b692993efec"
+    "baseline_code_structure_hash": "0ad40700a7ef3f0dbb25d3aa1c721bfcc4700952a5700fb56d233b692993efec",
+    "baseline_yaml_content_hash": "9c416a5aaf7afbc38c3e346c58d6e48b5d013a5dfaaf9c63ecd3adc3da8b4ff7"
   },
   "test_wait_is_non_blocking": {
     "baseline_code_signature_text": "async def test_wait_is_non_blocking(engine):",
-    "baseline_code_structure_hash": "81c859cd5017a318f7106cdbf731d4b0c958d02f90cf12d6178c9fcd83974f2c"
+    "baseline_code_structure_hash": "81c859cd5017a318f7106cdbf731d4b0c958d02f90cf12d6178c9fcd83974f2c",
+    "baseline_yaml_content_hash": "03f32aab690b85edf5983437276cc15ac48219a8a332ea9ca898fc299067a073"
   }
 }

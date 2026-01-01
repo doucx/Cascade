@@ -1,6 +1,7 @@
 {
   "test_telemetry_subscriber_to_observer_contract": {
     "baseline_code_signature_text": "async def test_telemetry_subscriber_to_observer_contract():",
-    "baseline_code_structure_hash": "1f3e23f4180d1202ed7825aa766dcf132d93db5f3c107a2ed24bd133bfdf8e7f"
+    "baseline_code_structure_hash": "1f3e23f4180d1202ed7825aa766dcf132d93db5f3c107a2ed24bd133bfdf8e7f",
+    "baseline_yaml_content_hash": "68ed89ee6178216e63cde4728db6f8a79c795d84d29bee56fcbc756b49d00935"
   }
 }

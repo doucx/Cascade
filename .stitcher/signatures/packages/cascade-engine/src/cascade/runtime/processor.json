@@ -11,8 +11,8 @@
     "baseline_code_structure_hash": "3ba95935a4866cd84d7a89cce6cbd515e497bdec7c3a611b29fe36e004d386cf"
   },
   "NodeProcessor._execute_map_node": {
-    "baseline_code_signature_text": "async def _execute_map_node(self, node: Node, kwargs: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], parent_state_backend: StateBackend, sub_graph_runner: Callable) -> List[Any]:",
-    "baseline_code_structure_hash": "e321e430b85fee5c0a31589e2f9c016aca5c45c0d8127ecd7c7909325a720f77"
+    "baseline_code_signature_text": "async def _execute_map_node(self, node: MapNode, kwargs: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], parent_state_backend: StateBackend, sub_graph_runner: Callable) -> List[Any]:",
+    "baseline_code_structure_hash": "043bbc9f0459c3c8d4fdacc05f1d7644109a9917a2927d533da682c22ba8d7dc"
   },
   "NodeProcessor._resolve_inputs_for_cache": {
     "baseline_code_signature_text": "async def _resolve_inputs_for_cache(self, node: Node, graph: Graph, state_backend: StateBackend) -> Dict[str, Any]:",

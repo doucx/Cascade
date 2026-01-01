@@ -1,18 +1,22 @@
 {
   "mock_redis_client": {
     "baseline_code_signature_text": "def mock_redis_client():",
-    "baseline_code_structure_hash": "6c0a81370209cac02085d04ca5d6f997fa89541eaa6901d38d45064a05b46f10"
+    "baseline_code_structure_hash": "6c0a81370209cac02085d04ca5d6f997fa89541eaa6901d38d45064a05b46f10",
+    "baseline_yaml_content_hash": "c504055d227bb53fe0f9f9d8beadcb1e938801c2454339136ee912f70e3f05cd"
   },
   "test_get_result": {
     "baseline_code_signature_text": "async def test_get_result(mock_redis_client):",
-    "baseline_code_structure_hash": "950b3f97eddc8900464fd543301947f62e1c8954b6c6874df129169e7e2a9f5e"
+    "baseline_code_structure_hash": "950b3f97eddc8900464fd543301947f62e1c8954b6c6874df129169e7e2a9f5e",
+    "baseline_yaml_content_hash": "211025e314707ec0f7cede8f1155a76808f6b18c648a26aa0ace4b18cd9dcf1d"
   },
   "test_put_result": {
     "baseline_code_signature_text": "async def test_put_result(mock_redis_client):",
-    "baseline_code_structure_hash": "ae8a8351f0000778bf4af1cebb849113e6e67a9c17dfc5859912b201a2348de0"
+    "baseline_code_structure_hash": "ae8a8351f0000778bf4af1cebb849113e6e67a9c17dfc5859912b201a2348de0",
+    "baseline_yaml_content_hash": "fdb7d1f3fa8cffcba5aa40fed0c368bf8e171fc44f1a3a52f74c32a715b9eea2"
   },
   "test_redis_state_backend_dependency_check": {
     "baseline_code_signature_text": "def test_redis_state_backend_dependency_check(monkeypatch):",
-    "baseline_code_structure_hash": "ebd6982366cdffc8da55b69244536c7ca5c6a15c09d7e1eed624614c53b4a490"
+    "baseline_code_structure_hash": "ebd6982366cdffc8da55b69244536c7ca5c6a15c09d7e1eed624614c53b4a490",
+    "baseline_yaml_content_hash": "19f7c56e160b4d91a64d339a7ca6ddbddfa49b42fd08f7f40da41ff1b106a98d"
   }
 }

@@ -17,6 +17,7 @@
   },
   "test_execution_mode_is_passed_to_node": {
     "baseline_code_signature_text": "def test_execution_mode_is_passed_to_node():",
-    "baseline_code_structure_hash": "65c741d6e0c1db63f8e6c7e4cb3169de19cf03d9e09e22306c4ce38582f424ea"
+    "baseline_code_structure_hash": "65c741d6e0c1db63f8e6c7e4cb3169de19cf03d9e09e22306c4ce38582f424ea",
+    "baseline_yaml_content_hash": "ea99a889d25e547809001f98da305c64e24e3ad24a6179325ce0db06dd0d3d37"
   }
 }

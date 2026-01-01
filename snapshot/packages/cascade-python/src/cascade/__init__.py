@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from cascade.spec.constraint import with_constraints
     from cascade.common.context import get_current_context
 
-    from cascade.control_flow import select_jump, bind
+    from cascade.control_flow import select_jump, bind  # type: ignore [reportMissingImports]
 
     from cascade.runtime.engine import Engine
     from cascade.runtime.bus import MessageBus
@@ -63,8 +63,8 @@ if TYPE_CHECKING:
     from cascade.spec.protocols import Connector, StateBackend
 
     from cascade.graph.serialize import to_json, from_json
-    from cascade.testing import override_resource, ControllerTestApp
-    from cascade.tools.cli import create_cli
+    from cascade.testing import override_resource, ControllerTestApp  # type: ignore [reportMissingImports]
+    from cascade.tools.cli import create_cli  # type: ignore [reportMissingImports]
 
 # --- V1.4 Factory Functions ---
 
@@ -145,7 +145,7 @@ def __getattr__(name: str) -> Any:
     # 2. Check if it's a dynamic provider (e.g., cs.read.text)
     # This maintains the v1.3 behavior of dynamic provider loading
     try:
-        from cascade.providers.registry import registry
+        from cascade.providers.registry import registry  # type: ignore [reportMissingImports]
 
         return registry.get(name)
     except (ImportError, AttributeError):

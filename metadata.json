@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(compiler): 补全观测环路 - TDD (RED)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767275397.3338144, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): 实现完整的观测环路 (F_obs)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767275461.5349228, "duration_ms": 0}}

@@ -30,18 +30,20 @@ def test_builder_expands_and_wires_nodes(sample_graph_ir):
     builder = Builder()
     graph = builder.build(sample_graph_ir, environment=EnvironmentDef())
 
-    # Assert nodes: 2 triads (6 nodes each) + 1 global D_life = 13 nodes
-    assert len(graph.nodes) == 13
+    # Assert nodes: 2 triads (6 nodes each) + 1 D_life + 1 F_obs = 14 nodes
+    assert len(graph.nodes) == 14
     assert "global_d_life" in graph.nodes
+    assert "global_f_obs" in graph.nodes
     assert "node_a_stain" in graph.nodes
     assert "node_b_bleach" in graph.nodes
 
     # Assert channels
-    # 2 triads (6 channels each) = 12
-    # 1 data dependency channel = 1
-    # 2 triads * 2 obs channels each = 4
-    # Total = 12 + 1 + 4 = 17
-    assert len(graph.channels) == 17
+    # 2 triads (6 internal) = 12
+    # 1 data dependency = 1
+    # 2 triads * 2 obs channels to D_life = 4
+    # 1 D_life -> F_obs channel = 1
+    # Total = 12 + 1 + 4 + 1 = 18
+    assert len(graph.channels) == 18
 
     # 1. Test data dependency wiring
     data_channel = next(

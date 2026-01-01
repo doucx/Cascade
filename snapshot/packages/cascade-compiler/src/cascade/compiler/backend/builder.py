@@ -3,6 +3,7 @@ from typing import Dict
 from cascade.spec.ir.models import GraphIR
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsDataNode
+from cascade.spec.triad import ObservabilityNode
 from cascade.spec.environment import EnvironmentDef
 from .expander import Expander, SubGraph
 
@@ -26,9 +27,28 @@ class Builder:
             )
             physical_graph.nodes[res_node_id] = d_res
 
-        # 2. Create the global observability sidecar node (D_life)
-        d_life = PhysicsDataNode(id="global_d_life", name="LifecycleBus")
-        physical_graph.nodes[d_life.id] = d_life
+        # 2. Create and wire the global observability sidecar infrastructure
+        d_life_id = "global_d_life"
+        f_obs_id = "global_f_obs"
+
+        d_life = PhysicsDataNode(id=d_life_id, name="LifecycleBus")
+        f_obs = ObservabilityNode(
+            id=f_obs_id,
+            name="LifecycleObserver",
+            input_ports={"event_token": "Event"},
+            output_ports={},  # Observer emits to the outside world, not back into the graph
+        )
+        physical_graph.nodes[d_life_id] = d_life
+        physical_graph.nodes[f_obs_id] = f_obs
+
+        physical_graph.channels.append(
+            Channel(
+                source_node_id=d_life_id,
+                source_port="out",
+                target_node_id=f_obs_id,
+                target_port="event_token",
+            )
+        )
 
         # 3. Expand all logical nodes into physical subgraphs
         subgraphs: Dict[str, SubGraph] = {}
@@ -43,19 +63,18 @@ class Builder:
             # 3.2 Expand
             subgraph = self._expander.expand_node(node_ir)
             if subgraph.bleacher is None or subgraph.stainer is None:
-                # This should not happen with the current expander implementation
                 raise RuntimeError(f"Subgraph for {node_ir.id} is incomplete.")
 
             subgraphs[node_ir.id] = subgraph
             physical_graph.nodes.update(subgraph.nodes)
             physical_graph.channels.extend(subgraph.channels)
 
-            # 3.3 Wire observability sidecars
+            # 3.3 Wire task observability TO the sidecar bus
             physical_graph.channels.append(
                 Channel(
                     source_node_id=subgraph.bleacher.id,
                     source_port="obs_output",
-                    target_node_id=d_life.id,
+                    target_node_id=d_life_id,
                     target_port="event_token",
                 )
             )
@@ -63,7 +82,7 @@ class Builder:
                 Channel(
                     source_node_id=subgraph.stainer.id,
                     source_port="obs_output",
-                    target_node_id=d_life.id,
+                    target_node_id=d_life_id,
                     target_port="event_token",
                 )
             )

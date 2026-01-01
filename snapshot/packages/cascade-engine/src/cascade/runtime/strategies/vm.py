@@ -2,38 +2,34 @@ import asyncio
 from contextlib import ExitStack
 from typing import Any, Dict
 
-from cascade.spec.protocols import StateBackend
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.constraints.manager import ConstraintManager
-from cascade.runtime.bus import MessageBus
+# --- 核心 VM 和编译器组件 ---
+from cascade.compiler import Frontend, Backend
+from cascade.vm import Reactor, PhysicsExecutor
+from cascade.spec.topology import BipartiteGraph, ChannelKind
+from cascade.spec.physics import FuncNode, DataNode, EmitterNode, Token, Port
+from cascade.vm.reactor.model import Channel as ReactorChannel
 
-# New Compiler Stack
-from cascade.compiler.frontend import Frontend
-from cascade.compiler.optimizer import Optimizer
-from cascade.compiler.backend import Backend
-from cascade.vm import VirtualMachine
-from cascade.vm.middleware.standard import (
-    ArgumentResolutionMiddleware,
-    ConstraintMiddleware,
-    ResourceLifecycleMiddleware,
-    RetryMiddleware,
-)
-from cascade.vm.middleware.observability import ObservabilityMiddleware
-from cascade.spec.lazy_types import MappedLazyResult
+
+# --- 运行时和规格 ---
+from cascade.runtime.bus import MessageBus
+from cascade.spec.protocols import StateBackend
 
 
 class VMExecutionStrategy:
+    """
+    Orchestrates the new physics-based VM execution by acting as a
+    macro-orchestrator for the compiler and the Reactor.
+    """
+
     def __init__(
         self,
-        resource_manager: ResourceManager,
-        constraint_manager: ConstraintManager,
-        wakeup_event: asyncio.Event,
         bus: MessageBus,
+        # Note: ResourceManager and ConstraintManager are now owned by the Reactor/VM,
+        # so this strategy no longer needs to manage them directly.
     ):
-        self.resource_manager = resource_manager
-        self.constraint_manager = constraint_manager
-        self.wakeup_event = wakeup_event
         self.bus = bus
+        self.frontend = Frontend()
+        self.backend = Backend()
 
     async def execute(
         self,
@@ -44,56 +40,20 @@ class VMExecutionStrategy:
         run_stack: ExitStack,
         active_resources: Dict[str, Any],
     ) -> Any:
-        # 1. Frontend: Compile LazyResult to GraphIR
-        # Returns CompilationResult(ir, symbol_table)
-        compilation_result = Frontend.compile(target)
-        graph_ir = compilation_result.ir
-        symbol_table = compilation_result.symbol_table
+        """
+        The main entry point for the VM execution strategy.
+        This method will be implemented in the next phase.
+        """
+        # Placeholder for the orchestration logic.
+        raise NotImplementedError("VMExecutionStrategy.execute is not yet implemented.")
 
-        # 2. Optimizer: Schedule GraphIR to ExecutionPlan
-        execution_plan = Optimizer.optimize(graph_ir)
-
-        # 3. Backend: Generate Blueprint from GraphIR + ExecutionPlan
-        blueprint = Backend.compile(graph_ir, execution_plan)
-
-        # 4. Runtime: Execute Blueprint on VM
-        vm = VirtualMachine(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self.wakeup_event,
-        )
-
-        # Configure Middleware Pipeline (Order matters!)
-        # Onion Layer:
-        # 1. Observability (Outermost): Logs everything including retries?
-        #    Note: Does Observability log individual attempts?
-        #    If Retry is inner, Observability sees one "Task" execution which might take long.
-        #    If Retry is outer, Observability sees each attempt as a "Task"? No, that's not right.
-        #    Correct nesting:
-        #    [Observability] -> [Retry] -> [Constraints] -> [Resources] -> [Resolve] -> [Core]
-        #    This way, Observability records the *Total* time for the task (including retries).
-        #    The RetryMiddleware itself should emit TaskRetrying events (TODO).
-
-        vm.set_middlewares(
-            [
-                ObservabilityMiddleware(self.bus, run_id),
-                RetryMiddleware(),
-                ConstraintMiddleware(self.constraint_manager),
-                ResourceLifecycleMiddleware(self.resource_manager),
-                ArgumentResolutionMiddleware(active_resources, params),
-            ]
-        )
-
-        if isinstance(target, MappedLazyResult):
-            initial_args = []
-            initial_kwargs = dict(target.mapping_kwargs)
-        else:
-            initial_args = list(target.args)
-            initial_kwargs = dict(target.kwargs)
-
-        return await vm.execute(
-            blueprint,
-            symbol_table=symbol_table,
-            initial_args=initial_args,
-            initial_kwargs=initial_kwargs,
+    def _load_topology(self, reactor: Reactor, topology: BipartiteGraph):
+        """
+        Translates the static BipartiteGraph spec into live, interconnected
+        physics objects within the Reactor.
+        This method will be implemented in the next phase.
+        """
+        # Placeholder for the topology loading logic.
+        raise NotImplementedError(
+            "VMExecutionStrategy._load_topology is not yet implemented."
         )

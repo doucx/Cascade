@@ -8,6 +8,7 @@ pytest.importorskip("typer")
 
 # --- Test Cases ---
 
+
 def test_lisp_transpile_simple_param():
     """Tests that a standalone Param is correctly transpiled."""
     target = cs.Param("my_param", description="A test parameter")
@@ -26,7 +27,7 @@ def test_lisp_transpile_param_as_dependency():
     lisp_code = to_lisp(target)
 
     # Note: Param is not shared, so it's inlined.
-    expected = "(process-data (param \"user_input\") :scale 10)"
+    expected = '(process-data (param "user_input") :scale 10)'
     assert lisp_code == expected
 
 
@@ -56,7 +57,7 @@ def test_lisp_transpile_shared_param_in_let():
     # The name is sanitized from the node name (_get_param_value)
     expected_lines = [
         "(let* (",
-        "  (-get-param-value (param \"user_input\"))",
+        '  (-get-param-value (param "user_input"))',
         ")",
         "  (gather (task-a -get-param-value) (task-b -get-param-value)))",
     ]
@@ -85,11 +86,11 @@ def test_lisp_transpile_router_with_param_selector():
     target = consumer(router)
     lisp_code = to_lisp(target)
     print(lisp_code)
-    
+
     # The param is shared (as a selector), so it's hoisted.
     expected_lines = [
         "(let* (",
-        "  (-get-param-value (param \"mode\"))",
+        '  (-get-param-value (param "mode"))',
         ")",
         '  (consumer (case -get-param-value (("a") (branch-a)) (("b") (branch-b)))))',
     ]

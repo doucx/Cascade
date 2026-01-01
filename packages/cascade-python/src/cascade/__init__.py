@@ -3,7 +3,6 @@
 # to be discovered in the same namespace.
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
-import sys
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, Callable
 
 # --- Lazy Import Mapping ---
@@ -18,11 +17,9 @@ _IMPORT_MAP = {
     "inject": ("cascade.spec.resource", "inject"),
     "with_constraints": ("cascade.spec.constraint", "with_constraints"),
     "get_current_context": ("cascade.context", "get_current_context"),
-    
     # Advanced Flow Control (Corrected paths: cascade.spec.* -> cascade.*)
     "select_jump": ("cascade.control_flow", "select_jump"),
     "bind": ("cascade.control_flow", "bind"),
-    
     # Runtime
     "Engine": ("cascade.runtime.engine", "Engine"),
     "MessageBus": ("cascade.runtime.bus", "MessageBus"),
@@ -30,13 +27,11 @@ _IMPORT_MAP = {
     "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
     "sequence": ("cascade.runtime.flow", "sequence"),
     "pipeline": ("cascade.runtime.flow", "pipeline"),
-    
     # Adapters & Protocols
     "NativeSolver": ("cascade.adapters.solvers.native", "NativeSolver"),
     "LocalExecutor": ("cascade.adapters.executors.local", "LocalExecutor"),
     "Connector": ("cascade.spec.protocols", "Connector"),
     "StateBackend": ("cascade.spec.protocols", "StateBackend"),
-    
     # Tools & Utilities
     "to_json": ("cascade.graph.serialize", "to_json"),
     "from_json": ("cascade.graph.serialize", "from_json"),
@@ -54,24 +49,25 @@ if TYPE_CHECKING:
     from cascade.spec.resource import resource, inject
     from cascade.spec.constraint import with_constraints
     from cascade.context import get_current_context
-    
+
     from cascade.control_flow import select_jump, bind
-    
+
     from cascade.runtime.engine import Engine
     from cascade.runtime.bus import MessageBus
     from cascade.runtime.events import Event
     from cascade.runtime.exceptions import DependencyMissingError
     from cascade.runtime.flow import sequence, pipeline
-    
+
     from cascade.adapters.solvers.native import NativeSolver
     from cascade.adapters.executors.local import LocalExecutor
     from cascade.spec.protocols import Connector, StateBackend
-    
+
     from cascade.graph.serialize import to_json, from_json
     from cascade.testing import override_resource, ControllerTestApp
     from cascade.tools.cli import create_cli
 
 # --- V1.4 Factory Functions ---
+
 
 def Param(
     name: str, default: Any = None, type: Any = str, description: str = ""
@@ -97,6 +93,7 @@ def Env(name: str, default: Any = None, description: str = "") -> "LazyResult":
 
 
 # --- Global Functions ---
+
 
 def run(
     target: Union["LazyResult", List[Any], tuple[Any, ...]],
@@ -137,6 +134,7 @@ def dry_run(target: Any) -> None:
 
 # --- Dynamic Import & Provider Loading ---
 
+
 def __getattr__(name: str) -> Any:
     # 1. Check if it's a known API member in our lazy map
     if name in _IMPORT_MAP:
@@ -148,11 +146,12 @@ def __getattr__(name: str) -> Any:
     # This maintains the v1.3 behavior of dynamic provider loading
     try:
         from cascade.providers.registry import registry
+
         return registry.get(name)
     except (ImportError, AttributeError):
         # Fallthrough to raise the standard AttributeError below
         pass
-    
+
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
 
 

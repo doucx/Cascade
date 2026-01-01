@@ -1,4 +1,4 @@
-from typing import List, Dict, Set
+from typing import List, Dict
 from collections import deque, defaultdict
 
 from cascade.spec.ir.models import GraphIR

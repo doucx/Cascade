@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock
 
 from cascade.spec.physics import DataNode, FuncNode, Token, Port

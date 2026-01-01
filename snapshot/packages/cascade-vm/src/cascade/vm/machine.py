@@ -1,7 +1,6 @@
 import inspect
 import asyncio
 from typing import Any, List, Dict, Optional, Callable, Awaitable
-from uuid import uuid4
 
 from cascade.spec.blueprint import (
     Blueprint,
@@ -15,13 +14,10 @@ from cascade.spec.blueprint import (
     Jump,
     JumpIfFalse,
 )
-from cascade.spec.ir.models import TaskDef
-from cascade.spec.fingerprint import Fingerprint
-from cascade.graph.model import Node
 
 # Use local protocols to avoid circular dependency with engine
 from .protocols import ResourceManager, ConstraintManager
-from .middleware import Middleware, ExecutionContext, NextHandler
+from .middleware import Middleware, ExecutionContext
 
 
 class Frame:

@@ -1,5 +1,4 @@
 import pytest
-from typing import List
 
 # These are defined in Phase 1, so they should import correctly.
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef

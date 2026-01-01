@@ -1,6 +1,5 @@
 import pytest
-import asyncio
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import AsyncMock
 
 # These imports will fail initially, which is expected for TDD RED state
 from cascade.spec.physics import DataNode, FuncNode, Token, Port

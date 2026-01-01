@@ -1,5 +1,4 @@
-import pytest
-from typing import List, Optional
+from typing import List
 
 from cascade.spec.ir.models import (
     GraphIR,

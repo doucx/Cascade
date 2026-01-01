@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import AsyncMock
-from cascade.spec.physics import DataNode, FuncNode, Token, Port
+from cascade.spec.physics import DataNode, FuncNode, Token
 from cascade.vm.reactor import Reactor, ExecutionFinished, Channel
 
 

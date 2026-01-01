@@ -1,19 +1,16 @@
 import pytest
 from unittest.mock import MagicMock
-import asyncio
-from typing import Any
 
 from cascade.spec.blueprint import (
     Blueprint,
     Call,
     Register,
-    Literal,
     ResourceOperand,
     ExecutionPolicy,
     RetryPolicySpec,
 )
 from cascade.vm import VirtualMachine
-from cascade.vm.middleware import Middleware, ExecutionContext, NextHandler
+from cascade.vm.middleware import ExecutionContext, NextHandler
 
 
 @pytest.mark.asyncio

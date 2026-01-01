@@ -1,4 +1,3 @@
-import pytest
 from cascade.compiler.frontend import Frontend
 from cascade.spec.task import task
 from cascade.spec.ir.models import GraphIR
@@ -23,7 +22,6 @@ def test_compile_single_task_structure():
     ir = result.ir
 
     # 3. Verify Graph Structure
-    from cascade.spec.ir.models import GraphIR
 
     assert isinstance(ir, GraphIR)
     assert len(ir.nodes) == 1

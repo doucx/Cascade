@@ -1,7 +1,7 @@
 import asyncio
 from collections import deque, defaultdict
 from typing import Deque, Set, List, Dict, Any, Optional, Callable
-from cascade.spec.physics import DataNode, FuncNode, EmitterNode, Token
+from cascade.spec.physics import FuncNode, EmitterNode, Token
 from .events import ReactorEvent, TokenGenerated, ExecutionFinished
 from .model import Channel
 from cascade.vm.protocols import ResourceManager

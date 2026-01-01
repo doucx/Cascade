@@ -1,8 +1,7 @@
 from typing import Any, Dict, List, cast
 from dataclasses import dataclass
 
-from typing import Any, Dict, List, cast, Callable
-from dataclasses import dataclass
+from typing import Callable
 import inspect
 
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult

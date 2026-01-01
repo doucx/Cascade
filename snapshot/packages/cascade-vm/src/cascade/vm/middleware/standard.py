@@ -128,7 +128,7 @@ class RetryMiddleware(Middleware):
         max_retries = spec.max_attempts
         delay = spec.delay
 
-        last_error = None
+        # last_error = None
 
         # Loop: Initial execution (attempt 0) + Retries
         while True:
@@ -137,7 +137,7 @@ class RetryMiddleware(Middleware):
             except Exception as e:
                 if current_attempt < max_retries:
                     current_attempt += 1
-                    last_error = e
+                    # last_error = e
                     # TODO: Integrate with ObservabilityMiddleware for events
                     await asyncio.sleep(delay)
                     delay *= spec.backoff

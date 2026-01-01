@@ -136,6 +136,10 @@ def dry_run(target: Any) -> None:
 
 
 def __getattr__(name: str) -> Any:
+    # 0. Ignore internal dunder attributes to prevent recursion/side-effects
+    if name.startswith("__"):
+        raise AttributeError(f"module 'cascade' has no attribute '{name}'")
+
     # 1. Check if it's a known API member in our lazy map
     if name in _IMPORT_MAP:
         module_path, obj_name = _IMPORT_MAP[name]

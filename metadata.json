@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M topology.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767239291.7145767, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(spec): 统一拓扑规范中的发射器节点定义", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767239292.4955525, "duration_ms": 0}}

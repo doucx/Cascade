@@ -26,7 +26,7 @@ from cascade.runtime.constraints.handlers import (
 from cascade.adapters.state import InMemoryStateBackend
 from cascade.runtime.processor import NodeProcessor
 from cascade.runtime.resource_container import ResourceContainer
-from cascade.runtime.strategies import GraphExecutionStrategy, VMExecutionStrategy
+from cascade.runtime.strategies import GraphExecutionStrategy
 
 
 class Engine:
@@ -89,12 +89,6 @@ class Engine:
             wakeup_event=self._wakeup_event,
         )
 
-        self.vm_strategy = VMExecutionStrategy(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event,
-        )
-
         self._managed_subscribers = []
 
     def add_subscriber(self, subscriber: Any):
@@ -139,7 +133,6 @@ class Engine:
         self,
         target: Any,
         params: Optional[Dict[str, Any]] = None,
-        use_vm: bool = False,
     ) -> Any:
         # Handle Auto-Gathering
         from cascade.common.inputs import _internal_gather
@@ -181,7 +174,7 @@ class Engine:
             )
 
             # 3. Select Strategy
-            strategy = self.vm_strategy if use_vm else self.graph_strategy
+            strategy = self.graph_strategy
 
             # 4. Execute
             # The global stack holds "run" scoped resources

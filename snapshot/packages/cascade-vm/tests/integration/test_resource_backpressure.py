@@ -5,7 +5,7 @@ from functools import partial
 
 from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.physics import Token
+from cascade.spec.physics import Token, PhysicsDataNode
 from cascade.compiler.backend.builder import Builder
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
@@ -13,6 +13,7 @@ from cascade.vm.reactor import Reactor
 from cascade.vm.instructions.bleacher import standard_bleacher
 from cascade.vm.instructions.stainer import standard_stainer
 from cascade.vm.instructions.observer import standard_observer
+from cascade.spec.topology import BipartiteGraph, Channel
 
 
 # --- Mocks ---

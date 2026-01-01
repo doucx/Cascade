@@ -5,10 +5,6 @@ from cascade.vm.instructions.bleacher import standard_bleacher
 
 
 def test_standard_bleacher_extracts_payloads():
-    """
-    Tests that the bleacher correctly extracts payloads from input tokens
-    and assembles them into a kwargs dictionary for the worker.
-    """
     inputs = {
         "arg1": Token(payload="hello"),
         "arg2": Token(payload=123),
@@ -23,10 +19,6 @@ def test_standard_bleacher_extracts_payloads():
 
 
 def test_standard_bleacher_generates_trace_with_timestamp():
-    """
-    Tests that the bleacher captures a start timestamp and places it in a
-    separate trace token.
-    """
     MOCK_TIMESTAMP = 12345.6789
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):
         outputs = standard_bleacher({"data": Token(payload=1)})
@@ -39,10 +31,6 @@ def test_standard_bleacher_generates_trace_with_timestamp():
 
 
 def test_standard_bleacher_with_empty_inputs():
-    """
-    Even with no inputs, the bleacher should produce a valid trace token
-    and an empty kwargs payload for the worker.
-    """
     MOCK_TIMESTAMP = 100.0
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):
         outputs = standard_bleacher({})
@@ -55,10 +43,6 @@ def test_standard_bleacher_with_empty_inputs():
 
 
 def test_standard_bleacher_merges_traces():
-    """
-    Tests that the bleacher merges trace information from all input tokens
-    before adding its own timestamp. The last-seen key should win on conflict.
-    """
     inputs = {
         "token_a": Token(payload=1, trace={"id": "A", "source": "X"}),
         "token_b": Token(payload=2, trace={"id": "B", "retry": 1}),

@@ -6,10 +6,6 @@ from cascade.vm.instructions.stainer import standard_stainer
 
 
 def test_stainer_success_case():
-    """
-    Tests the standard success path: result is processed, tag is 'default',
-    and trace is correctly updated with duration.
-    """
     start_ts = 1000.0
     end_ts = 1002.5
 
@@ -33,10 +29,6 @@ def test_stainer_success_case():
 
 
 def test_stainer_error_case():
-    """
-    Tests the failure path: result is an exception, tag is 'error',
-    and trace is still correctly updated.
-    """
     start_ts = 2000.0
     end_ts = 2000.1
     error = ValueError("Something went wrong")
@@ -59,9 +51,6 @@ def test_stainer_error_case():
 
 
 def test_stainer_handles_missing_start_ts_gracefully():
-    """
-    If start_ts is missing from the trace for some reason, duration should be 0.
-    """
     end_ts = 3000.0
     inputs = {
         "worker_result": Token(payload="data"),

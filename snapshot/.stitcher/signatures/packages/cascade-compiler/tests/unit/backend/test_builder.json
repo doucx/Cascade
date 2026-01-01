@@ -1,0 +1,11 @@
+{
+  "sample_graph_ir": {
+    "baseline_code_signature_text": "def sample_graph_ir():",
+    "baseline_code_structure_hash": "29e546ab4e74066a28b950ca903e20d0363b11377a065f2bccf12e42da5888f6",
+    "baseline_yaml_content_hash": "7f016edb97101be0cfc211a2eaefcdbc30a77600466593292fe84f68e7bbd867"
+  },
+  "test_builder_expands_and_wires_nodes": {
+    "baseline_code_signature_text": "def test_builder_expands_and_wires_nodes(sample_graph_ir):",
+    "baseline_code_structure_hash": "90c6b0dc91a9a0a1fec71db2e5c9122c83151ccbbb386b222eff020fcb97e53a"
+  }
+}

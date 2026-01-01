@@ -1,0 +1,4 @@
+"Builder": |-
+  The master assembler for the physical graph.
+  It takes a logical GraphIR, expands each node into a Triad,
+  and then wires them together along with observability sidecars.

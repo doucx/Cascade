@@ -1,0 +1,11 @@
+"ping_pong_topology": |-
+  Creates a D1 -> F1 -> D2 topology.
+"simple_increment": |-
+  The business logic for our F1 node.
+"test_ping_pong_flow": |-
+  Tests the full end-to-end flow:
+  1. A token is placed in D1.
+  2. Reactor.step() is called.
+  3. F1 should fire, consuming the token from D1.
+  4. PhysicsExecutor runs the increment function.
+  5. A new token with the result is placed in D2.

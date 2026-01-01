@@ -5,10 +5,6 @@ from cascade.vm.instructions.observer import standard_observer, ObservedEvent
 
 
 def test_observer_processes_start_event():
-    """
-    Tests that a token containing only start information (from a Bleacher)
-    is correctly processed as a 'start' event.
-    """
     # 1. Setup
     queue = Queue()
     start_trace = {"id": "task_A", "start_ts": 100.0}
@@ -28,10 +24,6 @@ def test_observer_processes_start_event():
 
 
 def test_observer_processes_end_event():
-    """
-    Tests that a token containing end information (from a Stainer)
-    is correctly processed as an 'end' event.
-    """
     # 1. Setup
     queue = Queue()
     end_trace = {
@@ -56,9 +48,6 @@ def test_observer_processes_end_event():
 
 
 def test_observer_with_empty_trace():
-    """
-    An empty trace should be treated as a 'start' event by default.
-    """
     # 1. Setup
     queue = Queue()
     event_token = Token(payload=None, trace={})

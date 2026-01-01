@@ -13,9 +13,6 @@ def noop(*args):
 
 @pytest.fixture
 def simple_topology():
-    """
-    Creates a simple D1 -> F1 topology.
-    """
     d1 = PhysicsDataNode(id="D1", name="Input")
     f1 = PhysicsFuncNode(id="F1", name="Processor")
 
@@ -35,9 +32,6 @@ def simple_topology():
 
 @pytest.mark.asyncio
 async def test_reactor_step_idle(simple_topology):
-    """
-    If no tokens are present, step() should do nothing.
-    """
     graph, d1, f1 = simple_topology
     memory = VolatileMemory()
     executor = PhysicsExecutor()
@@ -51,9 +45,6 @@ async def test_reactor_step_idle(simple_topology):
 
 @pytest.mark.asyncio
 async def test_reactor_step_fire(simple_topology):
-    """
-    If input has token, F1 should fire and consume the token.
-    """
     graph, d1, f1 = simple_topology
     memory = VolatileMemory()
     executor = PhysicsExecutor()
@@ -75,9 +66,6 @@ async def test_reactor_step_fire(simple_topology):
 
 @pytest.mark.asyncio
 async def test_reactor_partial_inputs():
-    """
-    F1 needs D1 and D2. Only D1 has token. F1 should NOT fire.
-    """
     d1 = PhysicsDataNode(id="D1", name="Input1")
     d2 = PhysicsDataNode(id="D2", name="Input2")
     f1 = PhysicsFuncNode(id="F1", name="Processor")
@@ -107,9 +95,6 @@ async def test_reactor_partial_inputs():
 
 @pytest.mark.asyncio
 async def test_reactor_independent_nodes():
-    """
-    Two independent nodes F1, F2. Both ready. Both should fire in one step.
-    """
     d1 = PhysicsDataNode(id="D1", name="In1")
     f1 = PhysicsFuncNode(id="F1", name="Proc1")
 

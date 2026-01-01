@@ -4,7 +4,6 @@ from cascade.vm.memory import VolatileMemory, MemoryFullError, MemoryEmptyError
 
 
 def test_basic_put_and_take():
-    """Test standard token storage and retrieval."""
     mem = VolatileMemory()
     node = PhysicsDataNode(id="D1", name="InputSlot", capacity=1)
     token = Token(payload="hello")
@@ -18,7 +17,6 @@ def test_basic_put_and_take():
 
 
 def test_fifo_behavior():
-    """Tokens must be retrieved in the order they were put (FIFO)."""
     mem = VolatileMemory()
     node = PhysicsDataNode(id="D1", name="Buffer", capacity=10)
 
@@ -30,7 +28,6 @@ def test_fifo_behavior():
 
 
 def test_capacity_overflow():
-    """Putting more tokens than capacity must raise MemoryFullError."""
     mem = VolatileMemory()
     node = PhysicsDataNode(id="D1", name="SmallSlot", capacity=1)
 
@@ -40,17 +37,12 @@ def test_capacity_overflow():
 
 
 def test_empty_take():
-    """Taking from an empty node must raise MemoryEmptyError."""
     mem = VolatileMemory()
     with pytest.raises(MemoryEmptyError):
         mem.take("non-existent")
 
 
 def test_excitement_check():
-    """
-    A node is 'excited' if it has at least one token (or a specific threshold).
-    This is the core signal for the Reactor.
-    """
     mem = VolatileMemory()
     node = PhysicsDataNode(id="D1", name="Trigger", capacity=5)
 

@@ -1,0 +1,13 @@
+"add": |-
+  A simple, pure computation function.
+"blocking_io_simulation": |-
+  Simulates a blocking I/O call like a network request or disk read.
+"raises_error": |-
+  A function that always fails.
+"test_executor_is_non_blocking": |-
+  Verify that submitting a blocking task does not block the main asyncio event loop.
+  The `submit` call should return immediately.
+"test_executor_propagates_exceptions": |-
+  Verify that exceptions raised in the worker thread are re-raised in the caller.
+"test_executor_submit_simple_computation": |-
+  Verify that a simple function can be executed and its result returned.

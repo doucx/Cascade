@@ -1,0 +1,14 @@
+{
+  "Builder": {
+    "baseline_yaml_content_hash": "54020a2f57465ab2260693d2e000d9dee0c2c3a82f528fd4d68e8cf68b8026ae"
+  },
+  "Builder.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "Builder._expander": {},
+  "Builder.build": {
+    "baseline_code_signature_text": "def build(self, graph_ir: GraphIR) -> BipartiteGraph:",
+    "baseline_code_structure_hash": "3c2f16f032bf53728c7190d6c49acba875d898d9a2340557d96d44d445b102dd"
+  }
+}

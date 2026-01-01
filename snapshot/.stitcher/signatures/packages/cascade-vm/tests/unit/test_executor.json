@@ -1,0 +1,32 @@
+{
+  "add": {
+    "baseline_code_signature_text": "def add(x: int, y: int) -> int:",
+    "baseline_code_structure_hash": "8276b45e2127ff4424a3739f0f576d946dc119f7a84c24ad2492d5a13bbc2f3b",
+    "baseline_yaml_content_hash": "3620f18ae98b09d7dd4117d2b122afcf9a2c6f40f307374dcd88071813cfd3aa"
+  },
+  "blocking_io_simulation": {
+    "baseline_code_signature_text": "def blocking_io_simulation(duration: float) -> float:",
+    "baseline_code_structure_hash": "a0cfb60475218e93184ca24c72b2d9010c4ce3e0784752b45d8ee6bdf40858de",
+    "baseline_yaml_content_hash": "e2d5841395bef0353e86c2785d95dd827828d706052601d4bebfc1c38c158158"
+  },
+  "raises_error": {
+    "baseline_code_signature_text": "def raises_error():",
+    "baseline_code_structure_hash": "e8deffeb97e460559f8b7eb6a5ea82bf0a0e528072bed30ceaf7ab9adbbda817",
+    "baseline_yaml_content_hash": "bfcde344481cdc57fb5fc4ed49ae5a8afd77fa09ff34a3125b2978d3d145a54f"
+  },
+  "test_executor_is_non_blocking": {
+    "baseline_code_signature_text": "async def test_executor_is_non_blocking():",
+    "baseline_code_structure_hash": "1d52b16c3e7e98aac43e21e3e73346e830f9afe3c7e6e12625ae112ee736a2f4",
+    "baseline_yaml_content_hash": "005d3ccc59f478e2c1681724c7ba163802ac677e68b73731bb0a89eb752f4dd1"
+  },
+  "test_executor_propagates_exceptions": {
+    "baseline_code_signature_text": "async def test_executor_propagates_exceptions():",
+    "baseline_code_structure_hash": "ec71ed18d60f09a38a70f44b45389bafe113391ae4d77cf216e50b893c80c71b",
+    "baseline_yaml_content_hash": "4c3f1aceb994391c7c7ff4ddc1230496bfb93ac8ea0274f9fba9bc07f6b051b9"
+  },
+  "test_executor_submit_simple_computation": {
+    "baseline_code_signature_text": "async def test_executor_submit_simple_computation():",
+    "baseline_code_structure_hash": "f5c966f8460976a7b88b7cea119cab95dc0bd8650f545b8dbb260d193e9256ff",
+    "baseline_yaml_content_hash": "088ac8a452cadc990d373f7f205ac066174b6786bdeb499d3ece5169bd6fa5f3"
+  }
+}

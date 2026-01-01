@@ -5,23 +5,6 @@ from cascade.spec.physics import Token
 
 
 def standard_stainer(inputs: Dict[str, Token]) -> Dict[str, Token]:
-    """
-    The standard implementation for a Post-process Node (F_post).
-
-    It "stains" a pure result from a worker by wrapping it in a new Token
-    with appropriate tags and updated trace information (like duration).
-
-    Args:
-        inputs: A dictionary mapping input port names to their corresponding Tokens.
-                Expected ports:
-                - 'worker_result': Token containing the pure result from F_exec.
-                - 'trace_input': Token from F_pre containing 'start_ts' and other
-                                 initial trace data.
-
-    Returns:
-        A dictionary mapping the output port name ('output') to the final
-        stained Token.
-    """
     end_ts = time.monotonic()
 
     # 1. Extract inputs

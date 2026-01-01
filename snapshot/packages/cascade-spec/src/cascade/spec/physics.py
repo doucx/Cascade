@@ -4,10 +4,6 @@ from typing import Any, Dict
 
 @dataclass
 class Token:
-    """
-    The fundamental unit of energy and information flow in the physics field.
-    """
-
     payload: Any
     """The actual data being transferred (Business Value)."""
 
@@ -23,10 +19,6 @@ class Token:
 
 @dataclass
 class PhysicsNode:
-    """
-    Base class for all static entities in the bipartite graph.
-    """
-
     id: str
     """
     The canonical structural identifier.
@@ -39,22 +31,12 @@ class PhysicsNode:
 
 @dataclass
 class PhysicsDataNode(PhysicsNode):
-    """
-    Represents a storage location (Place) in the Petri net.
-    It holds Tokens.
-    """
-
     capacity: int = 1
     """Maximum number of tokens this node can hold simultaneously."""
 
 
 @dataclass
 class PhysicsFuncNode(PhysicsNode):
-    """
-    Represents a transformation unit (Transition) in the Petri net.
-    It consumes Tokens from inputs and produces Tokens to outputs.
-    """
-
     input_ports: Dict[str, str] = field(default_factory=dict)
     """Map of port_name -> description/type."""
 

@@ -5,10 +5,6 @@ from .physics import PhysicsNode
 
 @dataclass
 class Channel:
-    """
-    A directed connection between a Function Node and a Data Node.
-    """
-
     source_node_id: str
     """The ID of the upstream node."""
 
@@ -30,10 +26,6 @@ class Channel:
 
 @dataclass
 class BipartiteGraph:
-    """
-    The static, physical representation of the computational field.
-    """
-
     nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
     """All physical nodes indexed by their ID."""
 

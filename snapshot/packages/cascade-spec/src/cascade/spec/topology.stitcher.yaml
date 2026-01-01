@@ -1,0 +1,18 @@
+"BipartiteGraph": |-
+  The static, physical representation of the computational field.
+"BipartiteGraph.channels": |-
+  All connections between nodes.
+"BipartiteGraph.nodes": |-
+  All physical nodes indexed by their ID.
+"Channel": |-
+  A directed connection between a Function Node and a Data Node.
+"Channel.source_node_id": |-
+  The ID of the upstream node.
+"Channel.source_port": |-
+  The name of the output port on the source node.
+"Channel.tag_filter": |-
+  If set, this channel only accepts Tokens with a matching tag.
+  This acts as a spectral filter for control flow.
+"Channel.target_node_id": |-
+  The ID of the downstream node.
+  Note: In a bipartite graph, if Source is Func, Target MUST be Data.

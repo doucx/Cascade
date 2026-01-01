@@ -5,22 +5,6 @@ from cascade.spec.physics import Token
 
 
 def standard_bleacher(inputs: Dict[str, Token]) -> Dict[str, Token]:
-    """
-    The standard implementation for a Pre-process Node (F_pre).
-
-    It "bleaches" input tokens by stripping metadata to create a pure payload
-    for the worker, and it prepares trace information for the post-processor.
-
-    Args:
-        inputs: A dictionary mapping input port names to their corresponding Tokens.
-
-    Returns:
-        A dictionary mapping output port names to newly created Tokens.
-        Expected ports:
-        - 'worker_input': A Token whose payload is a kwargs dict for F_exec.
-        - 'trace_output': A Token whose payload contains merged trace info
-                          and a new 'start_ts'.
-    """
     worker_payload: Dict[str, any] = {}
     trace_payload: Dict[str, any] = {}
 

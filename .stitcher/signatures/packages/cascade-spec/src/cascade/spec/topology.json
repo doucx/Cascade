@@ -22,5 +22,8 @@
   },
   "Channel.target_node_id": {
     "baseline_yaml_content_hash": "237058277572a0b5ce963fd2af3a3723c4e39ae50ad135f09ca73d8091f1cb8b"
+  },
+  "Channel.target_port": {
+    "baseline_yaml_content_hash": "a9c20e52d48e75213c55998446370339527297fc313f2d7f0cee7b77b6094e9e"
   }
 }

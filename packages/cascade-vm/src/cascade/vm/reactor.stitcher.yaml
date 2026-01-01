@@ -6,6 +6,9 @@
   1. Atomically consumes tokens from all input slots.
   2. Submits the actual payload to an Executor.
   3. Puts the resulting token into the output slots.
+"Reactor.prime": |-
+  Injects initial potential energy (tokens) into the system
+  based on PhysicsDataNode.initial_tokens.
 "Reactor.step": |-
   Performs a single scan cycle of the entire graph.
 

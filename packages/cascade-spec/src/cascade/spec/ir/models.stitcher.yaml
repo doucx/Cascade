@@ -9,6 +9,8 @@
 "NodeIR": |-
   Intermediate Representation of a Task instantiation in the logical graph.
   This is the input to the Compiler Backend.
+"NodeIR.constraints": |-
+  Resource constraints for this node (e.g. {'gpu': 1}).
 "NodeIR.id": |-
   Unique identifier for this node instance (e.g. current_instance_hash).
 "NodeIR.inputs": "Mapping of argument names to values. \nValues can be literals or\

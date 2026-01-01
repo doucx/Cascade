@@ -9,11 +9,6 @@ from cascade.vm.reactor import Reactor
 
 
 def switch_logic(inputs: Dict[str, Token]) -> Dict[str, Token]:
-    """
-    A logical switch.
-    Input payload 'path_a' -> Tag 'A'
-    Input payload 'path_b' -> Tag 'B'
-    """
     in_token = inputs["in"]
     direction = in_token.payload
 

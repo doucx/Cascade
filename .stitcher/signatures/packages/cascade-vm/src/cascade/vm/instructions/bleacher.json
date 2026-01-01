@@ -1,7 +1,7 @@
 {
   "standard_bleacher": {
-    "baseline_code_signature_text": "def standard_bleacher(inputs: Dict[str, Token]) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "373724aa23e04bc14e4c9fe5b535ae1e5d3c0260c6030ca92c0ea532cd13aa1b",
-    "baseline_yaml_content_hash": "ed72d0852fe3ce55b0f174402cb55b6cff3904e62160d5b028c980806e9582b7"
+    "baseline_code_signature_text": "def standard_bleacher(inputs: Dict[str, Token], expected_args: Optional[List[str]] = None) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "aeb6f0060ff56c46cfc83fd4f5d3201f1a74553048931c8eeb0feb86615339e0",
+    "baseline_yaml_content_hash": "a24ef18e43194bc110ce315325463e8cf5b4689c521bd37037300d687f26ae2e"
   }
 }

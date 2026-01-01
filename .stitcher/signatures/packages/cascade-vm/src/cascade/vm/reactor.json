@@ -7,17 +7,23 @@
     "baseline_code_structure_hash": "0677bda3a0064d517566c03835d8240a41cd10b0db83af6de7b6f96a219d0fe0"
   },
   "Reactor._fire": {
-    "baseline_code_signature_text": "async def _fire(self, node: PhysicsFuncNode) -> None:",
-    "baseline_code_structure_hash": "62be7b0309c6ec02fdcd05178e1a765cef16feb0d2980002808ce354e0cd28f9",
+    "baseline_code_signature_text": "async def _fire(self, node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:",
+    "baseline_code_structure_hash": "edaeeeb191a0e5ab3c2c5a966c63b435479999110e6d6b260b39918937efc683",
     "baseline_yaml_content_hash": "3c177294ca57671e5c253b873d98c671d18ceafd07cb157b61a16bd2e859e035"
   },
   "Reactor._func_inputs": {},
   "Reactor._func_nodes": {},
   "Reactor._func_outputs": {},
+  "Reactor._outbound_channels": {},
   "Reactor.executor": {},
   "Reactor.function_map": {},
   "Reactor.graph": {},
   "Reactor.memory": {},
+  "Reactor.prime": {
+    "baseline_code_signature_text": "def prime(self) -> None:",
+    "baseline_code_structure_hash": "ec73b8ca76e1f98e8d8a878be2ad2d18bb2975154a4f48b43ccd1e9f12a436bd",
+    "baseline_yaml_content_hash": "69b0517bce2e4616aec74a482166b7e31e2faab77910dfa8acd08ff3543133fb"
+  },
   "Reactor.step": {
     "baseline_code_signature_text": "async def step(self) -> int:",
     "baseline_code_structure_hash": "5917d1593782fc58a1dd6c4ae986c38c33e7a8f32330503f356d963f3ea4cb2a",

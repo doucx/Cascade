@@ -1,7 +1,7 @@
 {
   "noop": {
-    "baseline_code_signature_text": "def noop(*args = ()):",
-    "baseline_code_structure_hash": "5b71073e1c930fc2b6c55b64d3ce1dc7ec2bbd3273274e1d8f78114370025f7a"
+    "baseline_code_signature_text": "def noop(inputs):",
+    "baseline_code_structure_hash": "b21bceb4fa2c0d8a7056f5b021666f1e18b121f3f6f4726d7370c8ddadc9d734"
   },
   "simple_topology": {
     "baseline_code_signature_text": "def simple_topology():",

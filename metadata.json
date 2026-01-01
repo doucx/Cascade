@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M tco_performance.py, M engine.py, M processor.py ... and 4 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767264830.9863544, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] chore: 为 monorepo 配置 Pyright 以解决导入问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767265648.2750711, "duration_ms": 0}}

@@ -198,6 +198,8 @@ class Reactor:
         # 2. Handle Intrinsic Nodes (not submitted to executor)
         if isinstance(node, TerminatorNode):
             self.stop()
+            # A terminator can also signal, e.g., to confirm shutdown.
+            # For now, we assume it's the absolute end.
             return
         
         if isinstance(node, EmitterNode):
@@ -208,6 +210,12 @@ class Reactor:
                 input_token = next(iter(inputs.values()), None)
                 if input_token:
                     sink(input_token.payload)
+            
+            # CRITICAL: After emitting, fire a completion event to trigger downstream
+            # nodes (like a chained terminator). We use the default 'result' output
+            # as a signal port.
+            signal_token = Token(payload=True, tag="default")
+            self.push_event(ExecutionFinished(node=node, outputs={"result": signal_token}))
             return
 
         # 3. Submit to Executor

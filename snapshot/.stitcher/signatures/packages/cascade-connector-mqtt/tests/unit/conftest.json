@@ -1,0 +1,6 @@
+{
+  "mock_aiomqtt_module": {
+    "baseline_code_signature_text": "def mock_aiomqtt_module(mocker):",
+    "baseline_code_structure_hash": "91050b17f763959db5a3a292ee3e86db7299d4037a67afb5e324864c437b29df"
+  }
+}

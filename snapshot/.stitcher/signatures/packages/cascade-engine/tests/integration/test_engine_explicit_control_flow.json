@@ -1,0 +1,6 @@
+{
+  "test_explicit_jump_loop": {
+    "baseline_code_signature_text": "async def test_explicit_jump_loop():",
+    "baseline_code_structure_hash": "ac823e99c7cbef6c9ac20708c4eb3d22ae9e6a26555ce6bb3affcc73fe19712b"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "test_build_graph_with_env_factory": {
+    "baseline_code_signature_text": "def test_build_graph_with_env_factory():",
+    "baseline_code_structure_hash": "71a9d2f4e4fbe9612b4b2c9de22b70a7765fddbd5beab4269a40da5c050cb477"
+  },
+  "test_build_graph_with_nested_dependencies": {
+    "baseline_code_signature_text": "def test_build_graph_with_nested_dependencies():",
+    "baseline_code_structure_hash": "9bf1925db9a5f1b7242f0141d3ada40fc90603a49953773bb7eaa07db9cadc6f"
+  },
+  "test_build_graph_with_param_factory": {
+    "baseline_code_signature_text": "def test_build_graph_with_param_factory():",
+    "baseline_code_structure_hash": "ad68a45d88eaa2acf0c1fb688874faf2a10db0dfbdfdf7f475c0c86f20ee3156"
+  },
+  "test_build_linear_graph": {
+    "baseline_code_signature_text": "def test_build_linear_graph():",
+    "baseline_code_structure_hash": "c7a415c6d5efa27bbf0355f0a6b7209b41acb4e192d5b7e1210b57c7dde0e1da"
+  }
+}

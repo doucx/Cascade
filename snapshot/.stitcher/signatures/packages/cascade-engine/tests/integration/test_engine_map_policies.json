@@ -1,0 +1,10 @@
+{
+  "test_map_with_constraints_policy": {
+    "baseline_code_signature_text": "async def test_map_with_constraints_policy():",
+    "baseline_code_structure_hash": "c2b38ea778eab4bcfb7b509da4ee3a14c30cf1f277f6a98a82a010ff2364d2ae"
+  },
+  "test_map_with_retry_policy": {
+    "baseline_code_signature_text": "async def test_map_with_retry_policy():",
+    "baseline_code_structure_hash": "5ed3dadceb39c87bc51afe6bb6c720c858529c3d50e40dfdf39b9ba6999a45c9"
+  }
+}

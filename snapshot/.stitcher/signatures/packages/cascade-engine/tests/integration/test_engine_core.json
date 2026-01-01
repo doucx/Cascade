@@ -1,0 +1,6 @@
+{
+  "test_engine_follows_solver_plan": {
+    "baseline_code_signature_text": "async def test_engine_follows_solver_plan():",
+    "baseline_code_structure_hash": "939050c0b5425dbe4ed3c33555a81d0baf4b49441db68fc17078c505742a1111"
+  }
+}

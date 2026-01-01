@@ -1,0 +1,18 @@
+{
+  "engine": {
+    "baseline_code_signature_text": "def engine():",
+    "baseline_code_structure_hash": "1bc9c740293b1ea624b0860c9d25bafe4442836c7a21fae66953397d3b9195b3"
+  },
+  "test_prompt_composition": {
+    "baseline_code_signature_text": "async def test_prompt_composition(engine, capsys, monkeypatch):",
+    "baseline_code_structure_hash": "7d38d8be60b25f773fe02aefe6407fc30c6ba41fc51d12bd375f2ccf156990c3"
+  },
+  "test_stdin_read_line": {
+    "baseline_code_signature_text": "async def test_stdin_read_line(engine, monkeypatch):",
+    "baseline_code_structure_hash": "d3a02c58c6b222d7266a57365511bb9be82cdb12997a709f2b266a0522e32536"
+  },
+  "test_stdout_write": {
+    "baseline_code_signature_text": "async def test_stdout_write(engine, capsys):",
+    "baseline_code_structure_hash": "ee577e8dc24a2109631f4e3bc8b2f9a06be62cf05dee0e8100fade255d7aed6b"
+  }
+}

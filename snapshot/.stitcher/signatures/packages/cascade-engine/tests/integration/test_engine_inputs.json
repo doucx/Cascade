@@ -1,0 +1,10 @@
+{
+  "test_engine_executes_env_task": {
+    "baseline_code_signature_text": "async def test_engine_executes_env_task(monkeypatch):",
+    "baseline_code_structure_hash": "58e8d7d306a3753277e0d57334089f530962d88667c88c1870113a9aa7a390e2"
+  },
+  "test_engine_executes_param_task": {
+    "baseline_code_signature_text": "async def test_engine_executes_param_task():",
+    "baseline_code_structure_hash": "e254860e2999f4693dcaad2c6646b498ea1b52192b01822fad1e0e893780626b"
+  }
+}

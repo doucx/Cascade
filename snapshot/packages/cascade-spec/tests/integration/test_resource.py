@@ -128,10 +128,6 @@ def test_resource_must_be_generator():
 
 
 def test_unregistered_resource_raises_error():
-    """
-    Verifies that asking for an unregistered resource raises a NameError.
-    This covers the missing line 98 in resource_container.py.
-    """
     engine = cs.Engine(
         solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
     )
@@ -150,10 +146,6 @@ def test_unregistered_resource_raises_error():
 
 
 def test_resource_scan_finds_inject_in_dict():
-    """
-    Verifies that resource scanning correctly finds Inject objects
-    nested inside dictionaries. This covers missing line 84.
-    """
     from cascade.runtime.resource_container import ResourceContainer
     from cascade.graph.build import build_graph
 

@@ -1,0 +1,10 @@
+{
+  "test_retry_exhausted_failure": {
+    "baseline_code_signature_text": "async def test_retry_exhausted_failure():",
+    "baseline_code_structure_hash": "91287cd098abd480db16db81610a6eeec8bcec3371cd368b9a6db10d8826d32c"
+  },
+  "test_retry_success_after_failure": {
+    "baseline_code_signature_text": "async def test_retry_success_after_failure():",
+    "baseline_code_structure_hash": "7835cecdbfeff2c769b2d5b2cd2b4794ca86a7b940cdaa544b890ccc064348e8"
+  }
+}

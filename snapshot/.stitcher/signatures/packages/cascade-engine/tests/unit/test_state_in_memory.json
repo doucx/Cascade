@@ -1,0 +1,6 @@
+{
+  "test_in_memory_functional": {
+    "baseline_code_signature_text": "async def test_in_memory_functional():",
+    "baseline_code_structure_hash": "e6c380880772dfb9579cf47d0f7a0322edf0846ae9cc52c1ae19fe586a279ba1"
+  }
+}

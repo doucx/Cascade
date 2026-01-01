@@ -1,0 +1,10 @@
+{
+  "test_message_bus_renderer_delegation": {
+    "baseline_code_signature_text": "def test_message_bus_renderer_delegation():",
+    "baseline_code_structure_hash": "6bcdb946869eb7ef676f7b645ecfcb40afa187dc972dead2c38bcd78773eb2a1"
+  },
+  "test_message_store_loads_defaults": {
+    "baseline_code_signature_text": "def test_message_store_loads_defaults():",
+    "baseline_code_structure_hash": "5c7d690761bfff23a5b0ac8b8c507fcdf99082313b93f908ced71c76693ca192"
+  }
+}

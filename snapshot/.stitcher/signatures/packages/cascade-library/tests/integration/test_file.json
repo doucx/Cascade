@@ -1,0 +1,34 @@
+{
+  "binary_file": {
+    "baseline_code_signature_text": "def binary_file(tmp_path):",
+    "baseline_code_structure_hash": "96427bb4a357f9e761e8f4fd18ea8b4894ddca53c1fd92539b3916bed2524094"
+  },
+  "dummy_file": {
+    "baseline_code_signature_text": "def dummy_file(tmp_path):",
+    "baseline_code_structure_hash": "b339f984ff8f3aa4eae37ed1c4fbbd6a6989d64936fd95560383f58240e2e1e4"
+  },
+  "test_file_dynamic_path_dependency": {
+    "baseline_code_signature_text": "async def test_file_dynamic_path_dependency(tmp_path):",
+    "baseline_code_structure_hash": "b45f55673e6d1b521f5aa208d5a327c65e6328b811b52a14335e35d3b5d4d194"
+  },
+  "test_file_exists_false": {
+    "baseline_code_signature_text": "async def test_file_exists_false(tmp_path):",
+    "baseline_code_structure_hash": "f1163a6ba149ae1c3ab0181053f9d32971551afc8cc913928c2f8e0a187bbc84"
+  },
+  "test_file_exists_true": {
+    "baseline_code_signature_text": "async def test_file_exists_true(dummy_file):",
+    "baseline_code_structure_hash": "65be63ea704c4aa387a21bdaa6b867e5f5744e9d47c9556af0b77625c375abab"
+  },
+  "test_file_json_parsing_composition": {
+    "baseline_code_signature_text": "async def test_file_json_parsing_composition(dummy_file):",
+    "baseline_code_structure_hash": "60d3a414ff338f23640bfa138b0b37ba0620e787ae87992b0dfaeac94227b6dc"
+  },
+  "test_file_read_bytes_success": {
+    "baseline_code_signature_text": "async def test_file_read_bytes_success(binary_file):",
+    "baseline_code_structure_hash": "d772a41f01bd9f977d0f020a1c50d3490c015777503cd84fe0a73e6773718aa4"
+  },
+  "test_file_read_text_success": {
+    "baseline_code_signature_text": "async def test_file_read_text_success(dummy_file):",
+    "baseline_code_structure_hash": "b77a2907097467a558df562de23c9b612eb27ec9daac7cdd164f7ff76825ae0c"
+  }
+}

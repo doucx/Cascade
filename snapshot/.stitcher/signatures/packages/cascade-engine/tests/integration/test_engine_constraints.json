@@ -1,0 +1,38 @@
+{
+  "engine_with_connector": {
+    "baseline_code_signature_text": "def engine_with_connector(mock_connector):",
+    "baseline_code_structure_hash": "7c719ce51c5b208e708e8a64978b48049694400354462143dffd00c6a58f2231"
+  },
+  "mock_connector": {
+    "baseline_code_signature_text": "def mock_connector():",
+    "baseline_code_structure_hash": "1d8d2feddb4bdd3b8dd1bb1ed1d4cd4cd008ea52473309cc67285b17d2f658b1"
+  },
+  "test_engine_handles_malformed_constraint_payload": {
+    "baseline_code_signature_text": "async def test_engine_handles_malformed_constraint_payload(engine_with_connector, mock_connector, capsys):",
+    "baseline_code_structure_hash": "cf6cf32facdb16b92956386920aa77fbdbbbc128391c0664ceaddeea645772e1"
+  },
+  "test_engine_pauses_and_resumes_specific_task": {
+    "baseline_code_signature_text": "async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):",
+    "baseline_code_structure_hash": "a8ce74d3226e8f2d88146d59edf5e98abce01123a378a90e001c25beb3e26aa7"
+  },
+  "test_engine_pauses_on_global_pause_constraint": {
+    "baseline_code_signature_text": "async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):",
+    "baseline_code_structure_hash": "e88c88a39c2ff142093b8dd8e5322198dee98fdaf523705f5d878b90de9a3376"
+  },
+  "test_engine_subscribes_to_constraints": {
+    "baseline_code_signature_text": "async def test_engine_subscribes_to_constraints(engine_with_connector, mock_connector):",
+    "baseline_code_structure_hash": "2cfe33f62911cd685c67c3130c24f67f841905ebebe31043dd1ee70416697fa5"
+  },
+  "test_engine_updates_constraints_on_message": {
+    "baseline_code_signature_text": "async def test_engine_updates_constraints_on_message(engine_with_connector, mock_connector):",
+    "baseline_code_structure_hash": "07226b21e209b3ef19d3e71021b7f1b211e370640be1d2538e95dbc573100f81"
+  },
+  "wait_for_task_finish": {
+    "baseline_code_signature_text": "async def wait_for_task_finish(spy, task_name: str, timeout: float = 2.0):",
+    "baseline_code_structure_hash": "c47f915411d3a5ca59af2451a61c6c18a8ca3b400513fe3e5a91b9c3524d037f"
+  },
+  "wait_for_task_start": {
+    "baseline_code_signature_text": "async def wait_for_task_start(spy, task_name: str, timeout: float = 2.0):",
+    "baseline_code_structure_hash": "4f388eed168742ee18cd4ebacbbcc10488816f21765f4a6ca0587d282d4250b7"
+  }
+}

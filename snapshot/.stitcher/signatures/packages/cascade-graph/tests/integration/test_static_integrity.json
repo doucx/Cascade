@@ -1,0 +1,6 @@
+{
+  "test_task_returning_lazy_result_is_forbidden_at_runtime": {
+    "baseline_code_signature_text": "async def test_task_returning_lazy_result_is_forbidden_at_runtime():",
+    "baseline_code_structure_hash": "196758461b2bcd7a30c90a3132b7d90440a62377fdd691e36e27b54fb0ae5e89"
+  }
+}

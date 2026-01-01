@@ -1,0 +1,10 @@
+{
+  "test_file_existence_cache_hit": {
+    "baseline_code_signature_text": "def test_file_existence_cache_hit(tmp_path):",
+    "baseline_code_structure_hash": "36b1c035517902eabbeaebfd1a560820a2ab9ffcac4f9133b91e630bca0df6e7"
+  },
+  "test_file_existence_cache_miss": {
+    "baseline_code_signature_text": "def test_file_existence_cache_miss(tmp_path):",
+    "baseline_code_structure_hash": "368e5b3418535c9ac77b2bd2653213120c0d4c132fbf205cae91a8886833fc81"
+  }
+}

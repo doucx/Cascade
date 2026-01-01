@@ -1,0 +1,18 @@
+{
+  "test_shell_map": {
+    "baseline_code_signature_text": "def test_shell_map():",
+    "baseline_code_structure_hash": "4e5db3d67cf748746b09bd3e9b236a234a067aa7fbf2ec23c4fb11d546a9ea30"
+  },
+  "test_shell_task_failure_with_check": {
+    "baseline_code_signature_text": "def test_shell_task_failure_with_check():",
+    "baseline_code_structure_hash": "8500580dfed7253525e44ad633d13ec032abbfd77b77fad299240da5cc745815"
+  },
+  "test_shell_task_integration": {
+    "baseline_code_signature_text": "def test_shell_task_integration():",
+    "baseline_code_structure_hash": "2b749431fe0d79c9a0a6c48fa45b90b4a9c335fdc5ca0af48bb077ef5c0be2a4"
+  },
+  "test_shell_task_success": {
+    "baseline_code_signature_text": "def test_shell_task_success():",
+    "baseline_code_structure_hash": "9c447857b06859cea65cb6affc45b2bde0db98e664d851b27551b45f368bc33a"
+  }
+}

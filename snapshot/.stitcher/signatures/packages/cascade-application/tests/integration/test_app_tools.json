@@ -1,0 +1,14 @@
+{
+  "test_app_dry_run_diamond_workflow": {
+    "baseline_code_signature_text": "def test_app_dry_run_diamond_workflow(capsys):",
+    "baseline_code_structure_hash": "ab7569b4f78f0855ce306a006cca8260b7ec60ffd545b03acad468cc1e202273"
+  },
+  "test_app_dry_run_linear_workflow": {
+    "baseline_code_signature_text": "def test_app_dry_run_linear_workflow(capsys):",
+    "baseline_code_structure_hash": "e2cdd492d70398dcec3c80708aa05f9d9715b8f53048a8dcd000840a9a5bce20"
+  },
+  "test_app_dry_run_with_list_input": {
+    "baseline_code_signature_text": "def test_app_dry_run_with_list_input(capsys):",
+    "baseline_code_structure_hash": "a6694a937f6b0e8cf2acf4f327fb94a0ec6a19c09ed09ed22cbb9905d0cdb997"
+  }
+}

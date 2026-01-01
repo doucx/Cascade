@@ -1,0 +1,18 @@
+{
+  "mock_connector": {
+    "baseline_code_signature_text": "def mock_connector(monkeypatch) -> AsyncMock:",
+    "baseline_code_structure_hash": "8a69db59845d2abb40939e3901c84473f2cc86bb36481ad3429288433d998bd3"
+  },
+  "mock_messaging_bus": {
+    "baseline_code_signature_text": "def mock_messaging_bus(monkeypatch) -> MagicMock:",
+    "baseline_code_structure_hash": "9db3dc61a7a432d2593b52a966c163ffc2a02b9ef3c70de08a3d4d01169455ce"
+  },
+  "test_publish_pause_global_scope": {
+    "baseline_code_signature_text": "async def test_publish_pause_global_scope(mock_messaging_bus, mock_connector):",
+    "baseline_code_structure_hash": "a36a0a44c2a7fc493a170a5164cbc1416e366c26100eedec551e5460ba1d3535"
+  },
+  "test_publish_pause_specific_scope": {
+    "baseline_code_signature_text": "async def test_publish_pause_specific_scope(mock_messaging_bus, mock_connector):",
+    "baseline_code_structure_hash": "1ace69f97872aa57e0f84bfd62640c72b0e8f81ee775e5c0525ebb0813129d2e"
+  }
+}

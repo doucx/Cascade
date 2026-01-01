@@ -29,13 +29,6 @@ def _sql_task(
     conn: Any,  # The connection object is now an explicit, injectable argument
     params: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
-    """
-    Executes a SQL query using the provided connection.
-
-    Note on API Change:
-    The user-facing API is now more explicit. Instead of cs.sql(db="my_db"),
-    the call should be cs.sql(conn=cs.inject("my_db"), ...).
-    """
     if sqlalchemy is None:
         # This check is redundant if create_factory is called, but good for safety
         raise ImportError("SQLAlchemy is not installed.")

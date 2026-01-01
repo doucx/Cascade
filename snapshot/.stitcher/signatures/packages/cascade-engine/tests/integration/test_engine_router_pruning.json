@@ -1,0 +1,10 @@
+{
+  "test_pruning_exclusive_branches": {
+    "baseline_code_signature_text": "async def test_pruning_exclusive_branches():",
+    "baseline_code_structure_hash": "c1c26b1da9312ca9cb25ec1995d0e37870a746b11ee710e1e6cac05c1152393c"
+  },
+  "test_pruning_shared_dependency": {
+    "baseline_code_signature_text": "async def test_pruning_shared_dependency():",
+    "baseline_code_structure_hash": "2416342126ab5269884955f810ed2baeaeb9bc1cc15da320fd9530f93d2e0ea7"
+  }
+}

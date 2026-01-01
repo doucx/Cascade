@@ -1,16 +1,7 @@
-"""
-Tests that core components are correctly exposed through the top-level `cascade` package.
-This is a regression test for issues related to the package's __init__.py structure.
-"""
-
 import pytest
 
 
 def test_core_components_are_accessible_from_top_level():
-    """
-    Verifies that essential classes from cascade-engine and other core packages
-    are importable from the `cascade` namespace directly.
-    """
     try:
         from cascade import (
             Engine,
@@ -31,10 +22,6 @@ def test_core_components_are_accessible_from_top_level():
 
 
 def test_accessing_non_existent_attribute_raises_attribute_error():
-    """
-    Ensures that accessing a truly non-existent attribute on the cascade module
-    raises a standard AttributeError, not an error from the provider system.
-    """
     import cascade as cs
 
     with pytest.raises(

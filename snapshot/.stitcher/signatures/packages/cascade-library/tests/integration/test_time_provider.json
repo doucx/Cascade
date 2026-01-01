@@ -1,0 +1,14 @@
+{
+  "engine": {
+    "baseline_code_signature_text": "def engine():",
+    "baseline_code_structure_hash": "1bc9c740293b1ea624b0860c9d25bafe4442836c7a21fae66953397d3b9195b3"
+  },
+  "test_wait_accepts_lazy_result": {
+    "baseline_code_signature_text": "async def test_wait_accepts_lazy_result(engine):",
+    "baseline_code_structure_hash": "0ad40700a7ef3f0dbb25d3aa1c721bfcc4700952a5700fb56d233b692993efec"
+  },
+  "test_wait_is_non_blocking": {
+    "baseline_code_signature_text": "async def test_wait_is_non_blocking(engine):",
+    "baseline_code_structure_hash": "81c859cd5017a318f7106cdbf731d4b0c958d02f90cf12d6178c9fcd83974f2c"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "test_context_isolation": {
+    "baseline_code_signature_text": "def test_context_isolation():",
+    "baseline_code_structure_hash": "5465612eb510f703de9a0b64e4c5c14862f174fd2b7e309f2a8bc120e884c9a2"
+  },
+  "test_env_factory_registration": {
+    "baseline_code_signature_text": "def test_env_factory_registration():",
+    "baseline_code_structure_hash": "f280d7195c2bed3ed614a54320bb957a13c1c18aac6f96a5e96b6bc58390fd22"
+  },
+  "test_param_factory_registration": {
+    "baseline_code_signature_text": "def test_param_factory_registration():",
+    "baseline_code_structure_hash": "c45fbd69172a9bf383ad7713f57cb165f6124e8371f6332489a6222f15a48f21"
+  }
+}

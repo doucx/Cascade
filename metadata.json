@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M backend.py, M test_backend_topology.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767239997.9233866, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] 在编译图的末端自动注入用于生命周期管理的“发射器”节点 (Emitter Nodes)。", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767240126.005135, "duration_ms": 0}}

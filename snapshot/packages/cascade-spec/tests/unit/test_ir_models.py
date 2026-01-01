@@ -20,10 +20,11 @@ from cascade.spec.fingerprint import Fingerprint
 def test_ir_structures_exist():
     """Verify that GraphIR, NodeIR, and EdgeIR can be instantiated."""
     # This test will fail until the models are created.
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
-
-    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
+    task_def = TaskDef(
+        name="test_task",
+        args=[],
+        canonical_code_structure_hash="canonical_code_structure_hash_test",
+    )
 
     node = NodeIR(
         current_node_instance_hash="node_1",
@@ -46,11 +47,12 @@ def test_ir_structures_exist():
 
 def test_ir_serialization_roundtrip():
     """Verify that IR structures can be serialized to and from JSON."""
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
-
     arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
-    task_def = TaskDef(name="test_task", args=[arg_def], fingerprint=fp)
+    task_def = TaskDef(
+        name="test_task",
+        args=[arg_def],
+        canonical_code_structure_hash="canonical_code_structure_hash_test",
+    )
 
     node = NodeIR(
         current_node_instance_hash="n1", definition=task_def, kwargs={"val": 42}

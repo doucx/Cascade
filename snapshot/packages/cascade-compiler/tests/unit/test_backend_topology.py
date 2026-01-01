@@ -8,8 +8,11 @@ from cascade.compiler.backend import Backend
 def _create_dummy_node_ir(node_id: str) -> NodeIR:
     """Helper to create a minimal NodeIR for testing."""
     # We use the node_id as the structure hash for simplicity in tests
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
-    task_def = TaskDef(name=node_id, args=[], fingerprint=fp)
+    task_def = TaskDef(
+        name=node_id,
+        args=[],
+        canonical_code_structure_hash=f"canonical_code_structure_hash_{node_id}",
+    )
     return NodeIR(current_node_instance_hash=node_id, definition=task_def)
 
 
@@ -118,25 +121,31 @@ def test_compile_literal_values_to_data_nodes():
     assert "x" in func_node_a.inputs
     assert "y" in func_node_a.inputs
 
-    data_hash_x = func_node_a.inputs["x"]
-    data_hash_y = func_node_a.inputs["y"]
+    current_x_data_slot_hash = func_node_a.inputs["x"]
+    current_y_data_slot_hash = func_node_a.inputs["y"]
 
     # Verify DataNodes exist
-    assert data_hash_x in topology.data_nodes
-    assert data_hash_y in topology.data_nodes
+    assert current_x_data_slot_hash in topology.data_nodes
+    assert current_y_data_slot_hash in topology.data_nodes
 
     # Verify they are marked as Constants (no producer)
     # The convention for constants is producer_node_instance_hash being empty or special
-    assert topology.data_nodes[data_hash_x].producer_node_instance_hash == "const"
-    assert topology.data_nodes[data_hash_y].producer_node_instance_hash == "const"
+    assert (
+        topology.data_nodes[current_x_data_slot_hash].producer_node_instance_hash
+        == "const"
+    )
+    assert (
+        topology.data_nodes[current_y_data_slot_hash].producer_node_instance_hash
+        == "const"
+    )
 
     # Verify Values are captured
     # We expect BipartiteGraph to have an 'initial_values' map
     assert hasattr(topology, "initial_values"), (
         "BipartiteGraph must hold initial values for constants"
     )
-    assert topology.initial_values[data_hash_x] == 1
-    assert topology.initial_values[data_hash_y] == "hello"
+    assert topology.initial_values[current_x_data_slot_hash] == 1
+    assert topology.initial_values[current_y_data_slot_hash] == "hello"
 
 
 def test_compile_diamond_dependency_fan_out():
@@ -173,14 +182,16 @@ def test_compile_diamond_dependency_fan_out():
     func_c = topology.func_nodes["C"]
 
     # Get the input DataNode hash for both
-    input_hash_b = func_b.inputs["dep_b"]
-    input_hash_c = func_c.inputs["dep_c"]
+    current_b_input_slot_hash = func_b.inputs["dep_b"]
+    current_c_input_slot_hash = func_c.inputs["dep_c"]
 
     # Critical: They MUST be the same DataNode (Structural Sharing)
-    assert input_hash_b == input_hash_c, "Fan-out should reuse the same source DataNode"
+    assert (
+        current_b_input_slot_hash == current_c_input_slot_hash
+    ), "Fan-out should reuse the same source DataNode"
 
     # Verify that DataNode is produced by A
-    data_node = topology.data_nodes[input_hash_b]
+    data_node = topology.data_nodes[current_b_input_slot_hash]
     assert data_node.producer_node_instance_hash == "A"
 
 
@@ -217,7 +228,7 @@ def test_compile_injects_lifecycle_emitters():
 
     # 5. Assert that Result Emitter is connected to the graph's output
     # Find the output data slot of the original root node 'A'
-    output_of_a_hash = next(
+    current_a_output_slot_hash = next(
         c.target_data_slot_hash
         for c in topology.channels
         if c.source_node_instance_hash == "A" and c.kind == ChannelKind.DATA
@@ -225,7 +236,7 @@ def test_compile_injects_lifecycle_emitters():
     assert "result" in result_emitter.inputs, (
         "Result emitter must have a 'result' input"
     )
-    assert result_emitter.inputs["result"] == output_of_a_hash
+    assert result_emitter.inputs["result"] == current_a_output_slot_hash
 
     # 6. Assert that a SIGNAL channel connects the two emitters
     signal_channel = next(

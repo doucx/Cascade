@@ -40,7 +40,9 @@ def test_physics_nodes_schema():
     """
     # PhysicsFuncNode: Represents a computation instance (The "Verb")
     f_node = PhysicsFuncNode(
-        current_node_instance_hash="func_inst_abc", name="calculate_metrics"
+        current_node_instance_hash="func_inst_abc",
+        canonical_code_structure_hash="canonical_code_structure_hash_metrics",
+        name="calculate_metrics",
     )
     assert is_dataclass(f_node)
     assert f_node.current_node_instance_hash == "func_inst_abc"

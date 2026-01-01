@@ -31,14 +31,11 @@ def test_compile_single_task_structure():
     assert node.definition.name == "simple_task"
     assert node.kwargs["x"] == 10
 
-    # 4. Axiom Check: Enforce Long Hash Naming
-    # We don't check the value, but the KEY must be the long form.
-    fp = node.definition.fingerprint
-    assert "current_code_structure_hash" in fp
-    # Ensure no short names are present
-    assert "hash" not in fp
-    assert "id" not in fp
-    assert "structure_hash" not in fp
+    # 4. Axiom Check: Enforce Long Hash Naming for Identity
+    # Check that canonical hash is present and looks like a hash
+    assert node.definition.canonical_code_structure_hash
+    # We can also verify it's not a short name or empty
+    assert len(node.definition.canonical_code_structure_hash) >= 8
 
 
 def test_compile_linear_dependency():

@@ -10,8 +10,11 @@ from cascade.compiler.exceptions import CycleDetectedError
 
 def _create_dummy_node_ir(node_id: str) -> NodeIR:
     """Helper to create a minimal NodeIR for topology tests."""
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
-    task_def = TaskDef(name=node_id, args=[], fingerprint=fp)
+    task_def = TaskDef(
+        name=node_id,
+        args=[],
+        canonical_code_structure_hash=f"canonical_code_structure_hash_{node_id}",
+    )
     return NodeIR(current_node_instance_hash=node_id, definition=task_def)
 
 

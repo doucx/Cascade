@@ -16,14 +16,16 @@ from cascade.spec.topology import BipartiteGraph
 
 def _create_dummy_node(node_id: str, arg_names: List[str] = None) -> NodeIR:
     """Helper to create a minimal NodeIR for TCO tests."""
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
-
     args = []
     if arg_names:
         for name in arg_names:
             args.append(ArgumentDef(name=name, kind=ArgumentKind.POSITIONAL_OR_KEYWORD))
 
-    task_def = TaskDef(name=node_id, args=args, fingerprint=fp)
+    task_def = TaskDef(
+        name=node_id,
+        args=args,
+        canonical_code_structure_hash=f"canonical_code_structure_hash_{node_id}",
+    )
     # We use the node_id as the instance hash for clarity in tests
     return NodeIR(current_node_instance_hash=node_id, definition=task_def)
 
@@ -73,13 +75,13 @@ def test_compile_self_recursive_loop_to_feedback_channel():
     # Verify Input Slot (DataNode) for 'n' exists
     # The compiler should have created a DataNode for the input 'n'
     assert "n" in func_node.inputs
-    input_data_hash = func_node.inputs["n"]
-    assert input_data_hash in topology.data_nodes
+    current_input_slot_hash = func_node.inputs["n"]
+    assert current_input_slot_hash in topology.data_nodes
 
     # Verify Feedback Channel
     # We look for a channel that:
     # - originates from 'counter'
-    # - targets the input slot of 'counter' (input_data_hash)
+    # - targets the input slot of 'counter' (current_input_slot_hash)
     # - has tag_filter="loop"
 
     feedback_channel = next(
@@ -87,7 +89,7 @@ def test_compile_self_recursive_loop_to_feedback_channel():
             c
             for c in topology.channels
             if c.source_node_instance_hash == "counter"
-            and c.target_data_slot_hash == input_data_hash
+            and c.target_data_slot_hash == current_input_slot_hash
             and c.tag_filter == "loop"
         ),
         None,
@@ -156,12 +158,12 @@ def test_compile_conditional_routing():
 
     # Verify targets
     # chan_b should point to B's input
-    b_input_hash = topology.func_nodes["B"].inputs["val"]
-    assert chan_b.target_data_slot_hash == b_input_hash
+    current_b_input_slot_hash = topology.func_nodes["B"].inputs["val"]
+    assert chan_b.target_data_slot_hash == current_b_input_slot_hash
 
     # chan_c should point to C's input
-    c_input_hash = topology.func_nodes["C"].inputs["val"]
-    assert chan_c.target_data_slot_hash == c_input_hash
+    current_c_input_slot_hash = topology.func_nodes["C"].inputs["val"]
+    assert chan_c.target_data_slot_hash == current_c_input_slot_hash
 
 
 def test_compile_mutual_recursion():

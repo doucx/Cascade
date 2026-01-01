@@ -95,27 +95,23 @@ scan_paths = ["packages"]
 [tool.pyright]
 include = ["packages"]
 exclude = ["**/node_modules", "**/__pycache__", "**/tests"]
-
 reportMissingImports = true
 reportMissingTypeStubs = false
 
-executionEnvironments = [
-  {
-    root = ".",
-    extraPaths = [
-      "packages/cascade-application/src",
-      "packages/cascade-cli-controller/src",
-      "packages/cascade-cli-observer/src",
-      "packages/cascade-common/src",
-      "packages/cascade-connector-local/src",
-      "packages/cascade-connector-mqtt/src",
-      "packages/cascade-engine/src",
-      "packages/cascade-graph/src",
-      "packages/cascade-library/src",
-      "packages/cascade-provider-ipfs/src",
-      "packages/cascade-python/src",
-      "packages/cascade-sdk/src",
-      "packages/cascade-spec/src",
-    ],
-  },
+[[tool.pyright.executionEnvironments]]
+root = "."
+extraPaths = [
+  "packages/cascade-application/src",
+  "packages/cascade-cli-controller/src",
+  "packages/cascade-cli-observer/src",
+  "packages/cascade-common/src",
+  "packages/cascade-connector-local/src",
+  "packages/cascade-connector-mqtt/src",
+  "packages/cascade-engine/src",
+  "packages/cascade-graph/src",
+  "packages/cascade-library/src",
+  "packages/cascade-provider-ipfs/src",
+  "packages/cascade-python/src",
+  "packages/cascade-sdk/src",
+  "packages/cascade-spec/src",
 ]

@@ -1,71 +1,45 @@
-您说得对，我的上一个计划没能解决问题，非常抱歉。
+You are absolutely correct. My apologies, the previous attempt introduced a TOML syntax error. The error message `Config file ... could not be parsed` is the key clue.
 
-在深入分析了您提供的 `pyright` 文档和项目结构后，我找到了问题的关键所在。虽然 `extraPaths` 是正确的配置项，但在复杂的 monorepo 结构中，`pyright` 需要更明确的上下文来应用这些路径。简单地在顶层设置 `extraPaths` 可能不足以让 `pyright` 在分析树的每个分支时都能正确地关联它们。
+I have analyzed the error and the TOML specification. The format I generated for the `executionEnvironments` array, while sometimes permissible for inline tables, is clearly not what the parser used by `pyright` expects. The standard and most robust way to define an "array of tables" in TOML is using the `[[table.key]]` syntax.
 
-根据文档，解决这个问题的最健壮的方法是使用 `executionEnvironments`。这个配置可以为项目的特定部分（或整个项目）定义一个包含自定义 `extraPaths` 的“执行环境”。通过为整个项目根目录 `.` 创建一个执行环境，我们可以强制 `pyright` 在分析任何文件时都使用我们提供的完整模块搜索路径列表。
+I will now generate a plan that corrects this specific syntax error. The underlying logic of using an execution environment with `extraPaths` remains correct; this is purely a formatting fix.
 
-这次我将生成一个计划，使用 `executionEnvironments` 来进行更精确、更可靠的配置。
-
-## [WIP] fix: 使用 executionEnvironments 精确配置 Pyright 导入路径
+## [WIP] fix: Correct TOML syntax for executionEnvironments in pyright config
 
 ### 错误分析
-上一个计划虽然将 `pyright` 配置移至了 `pyproject.toml` 并提供了正确的 `extraPaths`，但仍然失败。根本原因在于，对于一个复杂的、包含多个命名空间包的 monorepo，顶层的 `extraPaths` 配置可能没有被 `pyright` 在所有分析上下文中一致地应用。
+上一个计划的失败是由于 `pyproject.toml` 文件中存在语法错误，导致 `pyright` 无法解析其配置。错误日志明确指出，在 `executionEnvironments` 数组中的 `{` 字符处解析失败。
 
-根据 `pyright` 的官方文档，`executionEnvironments` 是专门为处理这种情况而设计的。它允许我们将一组特定的配置（如 `extraPaths`）与项目的特定子目录（`root`）绑定。通过创建一个覆盖整个项目 (`root = "."`) 的执行环境，我们可以确保无论 `pyright` 从哪个文件开始分析，它都会加载并使用我们为整个 monorepo 定义的、完整的模块搜索路径集。这是一种比全局 `extraPaths` 更明确、更强大的配置方式。
+我错误地使用了 `key = [ { table-content } ]` 的内联表格式。虽然这在某些 TOML 解析器中可能有效，但更通用、更标准的 TOML 语法是使用双括号 `[[...]]` 来定义“表数组”中的每个元素。本次修复将采用这种更健壮、兼容性更好的语法。
 
 ### 用户需求
-用户需要彻底解决 `pyright` 在 monorepo 环境下无法解析 `cascade` 命名空间内模块的问题，消除所有的 `reportMissingImports` 和 `reportAttributeAccessIssue` 错误。
+用户需要修复 `pyproject.toml` 文件中的 TOML 语法错误，以便 `pyright` 能够成功加载配置并最终解决代码中的模块导入问题。
 
 ### 评论
-这次的修改是基于对工具文档更深入的理解，直接命中了 monorepo 静态分析的核心痛点。采用 `executionEnvironments` 不仅能解决当前问题，也为未来项目结构可能变得更复杂的情况（例如，部分代码需要用不同 Python 版本进行分析）打下了坚实的基础。
+这是一个细节决定成败的典型例子。工具链的配置文件必须严格遵守其预期的语法规范。转向使用 TOML 中“表数组”的标准语法 `[[tool.pyright.executionEnvironments]]` 将直接解决解析器的问题，并使配置更加清晰和健壮。
 
 ### 目标
-1.  修改 `pyproject.toml` 中的 `[tool.pyright]` 配置。
-2.  将 `extraPaths` 列表移入一个 `executionEnvironments` 块中。
-3.  将该执行环境的 `root` 设置为 `.`，以确保它能应用于项目中的所有文件。
+1.  修改 `pyproject.toml` 中的 `[tool.pyright]` 部分。
+2.  将 `executionEnvironments` 的定义从内联表格式 `key = [{...}]` 更改为标准的表数组格式 `[[tool.pyright.executionEnvironments]]`。
+3.  确保 `pyproject.toml` 文件能够被 `pyright` 成功解析。
 
 ### 基本原理
-我们将利用 `pyright` 的 `executionEnvironments` 功能。通过定义一个 `root` 为 `.` 的环境，我们创建了一个适用于整个项目的全局执行上下文。然后，我们将之前定义的 `extraPaths` 列表放置在这个上下文中。这样，`pyright` 在处理任何文件时，都会查询其所属的执行环境，找到这个全局上下文，并使用其中定义的 `extraPaths` 来解析导入，从而正确地将所有 `packages/*/src` 目录识别为 `cascade` 命名空间的一部分。
+我们将直接替换掉导致解析失败的 `[tool.pyright]` 配置块。新的配置块将 `executionEnvironments` 的定义更改为 `[[tool.pyright.executionEnvironments]]`，后面直接跟上该环境的键值对（`root` 和 `extraPaths`）。这是 TOML 规范中定义表数组的标准方法，应该能被 `pyright` 的解析器正确识别。配置的逻辑内容（即包含的路径）保持不变。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/refine #task/domain/testing #task/object/pyright-config #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/fix #task/domain/testing #task/object/pyright-config #task/action/bug-fix #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 使用 `executionEnvironments` 重构 Pyright 配置
+#### Acts 1: 修正 `pyproject.toml` 中的 `executionEnvironments` 语法
 
-我们将修改 `pyproject.toml`，将 `extraPaths` 包装在 `executionEnvironments` 中，以提供更明确的配置上下文。
+我们将使用 `patch_file` 来替换整个 `[tool.pyright]` 部分，以确保使用正确的 TOML 语法。
 
 ~~~~~act
 patch_file
 pyproject.toml
 ~~~~~
 ~~~~~toml.old
-[tool.pyright]
-include = ["packages"]
-exclude = ["**/node_modules", "**/__pycache__", "**/tests"]
-
-extraPaths = [
-  "packages/cascade-application/src",
-  "packages/cascade-cli-controller/src",
-  "packages/cascade-cli-observer/src",
-  "packages/cascade-common/src",
-  "packages/cascade-connector-local/src",
-  "packages/cascade-connector-mqtt/src",
-  "packages/cascade-engine/src",
-  "packages/cascade-graph/src",
-  "packages/cascade-library/src",
-  "packages/cascade-provider-ipfs/src",
-  "packages/cascade-python/src",
-  "packages/cascade-sdk/src",
-  "packages/cascade-spec/src",
-]
-
-reportMissingImports = true
-reportMissingTypeStubs = false
-~~~~~
-~~~~~toml.new
 [tool.pyright]
 include = ["packages"]
 exclude = ["**/node_modules", "**/__pycache__", "**/tests"]
@@ -92,5 +66,30 @@ executionEnvironments = [
       "packages/cascade-spec/src",
     ],
   },
+]
+~~~~~
+~~~~~toml.new
+[tool.pyright]
+include = ["packages"]
+exclude = ["**/node_modules", "**/__pycache__", "**/tests"]
+reportMissingImports = true
+reportMissingTypeStubs = false
+
+[[tool.pyright.executionEnvironments]]
+root = "."
+extraPaths = [
+  "packages/cascade-application/src",
+  "packages/cascade-cli-controller/src",
+  "packages/cascade-cli-observer/src",
+  "packages/cascade-common/src",
+  "packages/cascade-connector-local/src",
+  "packages/cascade-connector-mqtt/src",
+  "packages/cascade-engine/src",
+  "packages/cascade-graph/src",
+  "packages/cascade-library/src",
+  "packages/cascade-provider-ipfs/src",
+  "packages/cascade-python/src",
+  "packages/cascade-sdk/src",
+  "packages/cascade-spec/src",
 ]
 ~~~~~

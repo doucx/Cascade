@@ -1,123 +1,39 @@
-好的，我们将开始 **阶段 1：反应堆点火 (Reactor Ignition)** 的第一个任务。根据 TDD 流程，我们首先进入 **RED** 状态。
+好的，我们现在从 RED 阶段进入 GREEN 阶段。我将使用 `collections.deque` 来实现 `VolatileMemory` 的功能，以通过我们刚才创建的所有单元测试。
 
-我将为 `VolatileMemory` 设计一套符合计算物理场哲学的 API。它将负责管理数据节点（DataNode）中的令牌（Token）流转。
-
-## [WIP] test: 为 VolatileMemory 实现 TDD 单元测试
+## [WIP] feat(vm): 实现 VolatileMemory 以管理令牌状态
 
 ### 用户需求
-为 `cascade-vm` 中的 `VolatileMemory` 创建单元测试，定义其作为内存模型的核心 API，并确保测试处于失败状态（RED）。
+使用 `collections.deque` 实现 `VolatileMemory` 类的逻辑，使其能够通过 `test_memory.py` 中定义的所有单元测试，从 TDD 的 RED 阶段转换到 GREEN 阶段。
 
 ### 评论
-`VolatileMemory` 是物理引擎的“寄存器”。它不仅需要存储令牌，更重要的是它必须严格遵守物理定律：FIFO（先进先出）和 Capacity（容量限制）。通过 TDD，我们可以确保这些基础行为在任何复杂的拓扑结构下都是稳固的。
+这是为物理引擎注入“生命”的第一步。通过 `collections.deque` 实现一个高效、健壮的内存模型，我们为后续 Reactor 的核心循环提供了稳定可靠的状态管理基础。这个实现是后续所有物理模拟正确性的保障。
 
 ### 目标
-1.  在 `cascade-vm` 中建立测试目录结构。
-2.  创建 `test_memory.py`，涵盖以下场景：
-    *   基本的令牌存取（`put`/`take`）。
-    *   FIFO 顺序验证。
-    *   容量限制抛出异常。
-    *   激发态（Excitement）检查逻辑。
-3.  创建一个空的 `VolatileMemory` 类，使得测试因未实现逻辑而失败。
+1.  在 `VolatileMemory` 中使用 `dict` 存储每个数据节点的 `deque` 队列和容量。
+2.  实现 `put` 方法，包括容量检查逻辑。
+3.  实现 `take` 方法，确保 FIFO 行为和空队列处理。
+4.  实现 `get_count` 和 `is_excited` 以提供状态查询能力。
+5.  确保所有逻辑都已实现，以便测试能够通过。
 
 ### 基本原理
-我们采用“外部视角”设计 API。`VolatileMemory` 不应持有图的拓扑，它只持有状态。因此，我们在存取时需要传入节点定义（`PhysicsDataNode`）来告知内存相关的物理约束（如容量）。
+我们将使用 `collections.defaultdict(deque)` 作为令牌的主要存储结构，这可以优雅地处理新节点的初始化。另一个字典将用于存储每个节点的容量，该容量在第一次 `put` 操作时从 `PhysicsDataNode` 中获取并缓存。这种设计将状态 (`_buffers`) 与物理约束 (`_capacities`) 分离，保持了实现的清晰性。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/vm #concept/state #scope/core #ai/instruct #task/domain/vm #task/object/volatile-memory #task/action/tdd #task/state/begin
+#intent/build #flow/ready #priority/high #comp/vm #concept/state #scope/core #ai/instruct #task/domain/vm #task/object/volatile-memory #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 准备测试目录
+#### Acts 1: 实现 VolatileMemory 逻辑
 
-创建单元测试目录。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p packages/cascade-vm/tests/unit
-touch packages/cascade-vm/tests/unit/__init__.py
-~~~~~
-
-#### Acts 2: 编写 VolatileMemory 单元测试
-
-这些测试定义了 `VolatileMemory` 的 API 契约。
+我们现在用完整的、基于 `deque` 的实现来替换 `memory.py` 中的桩代码。
 
 ~~~~~act
-write_file
-packages/cascade-vm/tests/unit/test_memory.py
-~~~~~
-~~~~~python
-import pytest
-from cascade.spec.physics import Token, PhysicsDataNode
-from cascade.vm.memory import VolatileMemory, MemoryFullError, MemoryEmptyError
-
-def test_basic_put_and_take():
-    """Test standard token storage and retrieval."""
-    mem = VolatileMemory()
-    node = PhysicsDataNode(id="D1", name="InputSlot", capacity=1)
-    token = Token(payload="hello")
-    
-    mem.put(node, token)
-    assert mem.get_count(node.id) == 1
-    
-    retrieved = mem.take(node.id)
-    assert retrieved.payload == "hello"
-    assert mem.get_count(node.id) == 0
-
-def test_fifo_behavior():
-    """Tokens must be retrieved in the order they were put (FIFO)."""
-    mem = VolatileMemory()
-    node = PhysicsDataNode(id="D1", name="Buffer", capacity=10)
-    
-    mem.put(node, Token(payload="first"))
-    mem.put(node, Token(payload="second"))
-    
-    assert mem.take(node.id).payload == "first"
-    assert mem.take(node.id).payload == "second"
-
-def test_capacity_overflow():
-    """Putting more tokens than capacity must raise MemoryFullError."""
-    mem = VolatileMemory()
-    node = PhysicsDataNode(id="D1", name="SmallSlot", capacity=1)
-    
-    mem.put(node, Token(payload="one"))
-    with pytest.raises(MemoryFullError):
-        mem.put(node, Token(payload="two"))
-
-def test_empty_take():
-    """Taking from an empty node must raise MemoryEmptyError."""
-    mem = VolatileMemory()
-    with pytest.raises(MemoryEmptyError):
-        mem.take("non-existent")
-
-def test_excitement_check():
-    """
-    A node is 'excited' if it has at least one token (or a specific threshold).
-    This is the core signal for the Reactor.
-    """
-    mem = VolatileMemory()
-    node = PhysicsDataNode(id="D1", name="Trigger", capacity=5)
-    
-    assert not mem.is_excited(node.id)
-    
-    mem.put(node, Token(payload="pulse"))
-    assert mem.is_excited(node.id)
-    assert mem.is_excited(node.id, threshold=1)
-    assert not mem.is_excited(node.id, threshold=2)
-~~~~~
-
-#### Acts 3: 创建 API 桩文件 (Entering RED)
-
-创建 `memory.py`，仅包含 API 签名但不实现逻辑，确保测试失败。
-
-~~~~~act
-write_file
+patch_file
 packages/cascade-vm/src/cascade/vm/memory.py
 ~~~~~
-~~~~~python
+~~~~~python.old
 from typing import Dict, List, Any
 from cascade.spec.physics import Token, PhysicsDataNode
 
@@ -158,12 +74,77 @@ class VolatileMemory:
         """Returns True if the token count meets or exceeds the threshold."""
         return False
 ~~~~~
+~~~~~python.new
+from typing import Dict
+from collections import deque
+from cascade.spec.physics import Token, PhysicsDataNode
+
+
+class MemoryError(Exception):
+    """Base class for memory-related errors."""
+
+    pass
+
+
+class MemoryFullError(MemoryError):
+    """Raised when a DataNode exceeds its capacity."""
+
+    pass
+
+
+class MemoryEmptyError(MemoryError):
+    """Raised when attempting to take from an empty DataNode."""
+
+    pass
+
+
+class VolatileMemory:
+    """
+    In-memory state manager for PhysicsDataNodes.
+    Implements FIFO queues and capacity enforcement.
+    """
+
+    def __init__(self):
+        # Maps node_id -> deque of Tokens
+        self._buffers: Dict[str, deque[Token]] = {}
+        # Maps node_id -> capacity
+        self._capacities: Dict[str, int] = {}
+
+    def put(self, node: PhysicsDataNode, token: Token) -> None:
+        """Adds a token to the specified data node."""
+        node_id = node.id
+        if node_id not in self._buffers:
+            self._buffers[node_id] = deque()
+            self._capacities[node_id] = node.capacity
+
+        buffer = self._buffers[node_id]
+        capacity = self._capacities[node_id]
+
+        if len(buffer) >= capacity:
+            raise MemoryFullError(
+                f"Node '{node.name}' ({node_id}) with capacity {capacity} is full."
+            )
+
+        buffer.append(token)
+
+    def take(self, node_id: str) -> Token:
+        """Consumes and returns the oldest token from the node."""
+        if node_id not in self._buffers or not self._buffers[node_id]:
+            raise MemoryEmptyError(f"Node '{node_id}' is empty.")
+
+        return self._buffers[node_id].popleft()
+
+    def get_count(self, node_id: str) -> int:
+        """Returns the current token count in the node."""
+        return len(self._buffers.get(node_id, []))
+
+    def is_excited(self, node_id: str, threshold: int = 1) -> bool:
+        """Returns True if the token count meets or exceeds the threshold."""
+        return self.get_count(node_id) >= threshold
+~~~~~
 
 ### 下一步建议
 
-现在测试已经就绪，运行 `pytest packages/cascade-vm/tests/unit/test_memory.py` 应该会产生一堆 `NotImplementedError`。
+我们已经完成了 `VolatileMemory` 的实现。请运行 `pytest packages/cascade-vm/tests/unit/test_memory.py` 来确认所有测试都已通过，我们已成功进入 GREEN 状态。
 
-接下来我们将进入 **GREEN** 阶段：
-1.  实现 `VolatileMemory` 的内部存储（推荐使用 `collections.deque`）。
-2.  实现 `put` 和 `take` 的逻辑。
-3.  确保所有单元测试通过。
+确认无误后，我们就可以继续路线图的下一个任务：**任务 1.2：反应堆核心循环 (The Step)**。这将是构建 `Reactor` 类的第一步，它会使用我们刚刚创建的 `VolatileMemory` 来检查节点是否准备好被激发。

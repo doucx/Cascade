@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] 修复 Pyright 无法解析 `cascade.*` 跨包导入的问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767258584.0796905, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(arch): 统一命名空间声明并补全核心工具模块", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767258773.9295108, "duration_ms": 0}}

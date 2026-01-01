@@ -21,6 +21,8 @@ class S3ProviderBase(Provider):
 
 @task(name="s3_read_text")
 async def _s3_read_text(bucket: str, key: str, encoding: str = "utf-8") -> str:
+    if aiobotocore is None:
+        raise ImportError("aiobotocore is required for S3 tasks.")
     session = aiobotocore.session.get_session()  # type: ignore
     async with session.create_client("s3") as client:  # type: ignore
         response = await client.get_object(Bucket=bucket, Key=key)

@@ -39,6 +39,12 @@ class Node:
     # Structural Bindings (Literals)
     input_bindings: Dict[str, Any] = field(default_factory=dict)
 
+    # --- Type Checker Hints ---
+    # These properties are defined in subclasses but accessed via Node references
+    # in runtime components. We define them here as defaults to satisfy Pyright.
+    has_complex_inputs: bool = False
+    mapping_factory: Optional[Callable] = None
+
     def __eq__(self, other):
         if not isinstance(other, Node):
             return NotImplemented

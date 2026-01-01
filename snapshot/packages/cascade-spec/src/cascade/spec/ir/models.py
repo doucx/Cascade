@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional, Dict, Any
 
-from cascade.spec.fingerprint import Fingerprint
 from cascade.spec.policy import ExecutionPolicy
 
 
@@ -39,9 +38,10 @@ class InjectionIR:
 class TaskDef:
     name: str
     args: List[ArgumentDef]
-    # The stable semantic identity of this task definition.
-    # Must contain keys like 'current_code_structure_hash'.
-    fingerprint: Fingerprint
+    # The stable, linkable identity of this task definition.
+    # This hash is computed from the static code structure and serves as
+    # the key for the symbol_table.
+    canonical_code_structure_hash: str
     return_annotation: Optional[str] = None
     docstring: Optional[str] = None
     is_async: bool = False

@@ -124,9 +124,8 @@ class _GraphBuilder:
 
         task_def = self.analyzer.analyze(obj.task)
 
-        # Populate Symbol Table
-        code_hash = task_def.fingerprint["current_code_structure_hash"]
-        self.symbol_table[code_hash] = obj.task.func
+        # Populate Symbol Table using the canonical hash as the link key
+        self.symbol_table[task_def.canonical_code_structure_hash] = obj.task.func
 
         node_id = self.hashing_service.compute_node_instance_hash(
             task_def, obj, cast(Dict[str, Any], dep_shims)
@@ -222,7 +221,7 @@ class _GraphBuilder:
         task_def = self.analyzer.analyze(obj.factory)
 
         # Populate Symbol Table
-        code_hash = task_def.fingerprint["current_code_structure_hash"]
+        self.symbol_table[task_def.canonical_code_structure_hash] = func
 
         # Ensure we store the raw function, not the Task wrapper
         # The analyzer usually handles extraction, but we need the raw callable for VM

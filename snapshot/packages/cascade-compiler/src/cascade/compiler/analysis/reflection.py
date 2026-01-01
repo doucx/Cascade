@@ -3,7 +3,6 @@ import hashlib
 from typing import Any, List, Optional
 
 from cascade.spec.ir.models import TaskDef, ArgumentDef, ArgumentKind
-from cascade.spec.fingerprint import Fingerprint
 from .protocols import TaskAnalyzer
 
 # Type hint for the Cascade Task wrapper
@@ -42,19 +41,16 @@ class ReflectionAnalyzer(TaskAnalyzer):
         # 2. Analyze Arguments
         args = self._analyze_arguments(sig)
 
-        # 3. Compute Fingerprint
-        # We compute a structural hash based on the definition's content.
-        structure_hash = self._compute_structure_hash(
+        # 3. Compute canonical hash for linking
+        # This hash represents the stable, structural identity of the code.
+        canonical_code_structure_hash = self._compute_canonical_code_structure_hash(
             name, args, return_annotation, docstring, is_async, mode
         )
-
-        fingerprint = Fingerprint()
-        fingerprint["current_code_structure_hash"] = structure_hash
 
         return TaskDef(
             name=name,
             args=args,
-            fingerprint=fingerprint,
+            canonical_code_structure_hash=canonical_code_structure_hash,
             return_annotation=return_annotation,
             docstring=docstring,
             is_async=is_async,
@@ -90,7 +86,7 @@ class ReflectionAnalyzer(TaskAnalyzer):
             )
         return args
 
-    def _compute_structure_hash(
+    def _compute_canonical_code_structure_hash(
         self,
         name: str,
         args: List[ArgumentDef],

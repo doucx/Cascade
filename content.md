@@ -1,223 +1,284 @@
-好的，开始执行。
+好的，我们已经有了明确的诊断和经过批准的战略。现在开始执行修复计划的第一步：**重构编译器 IR (`TaskDef`)**，使其携带明确的、符合新公理的链接身份。
 
-这是一个将自动化和纪律注入我们开发流程的关键步骤。使用 AST (Abstract Syntax Tree) 而不是简单的正则表达式，可以确保我们的 linter 足够智能，能够区分代码、字符串和注释，从而实现高精度的检测，避免误报。
+这将从根本上解决信息丢失的问题，为后续所有修复工作奠定坚实的基础。
 
-我将生成一个计划来创建这个脚本。
-
----
-
-我将创建一个名为 `scripts/lint_hash_names.py` 的新 linter 脚本。该脚本将使用 `typer` 构建一个用户友好的命令行界面，并利用 Python 内置的 `ast` 模块来安全、准确地解析源代码。
-
-该脚本的核心逻辑将是：
-1.  递归地扫描指定目录下的所有 `.py` 文件。
-2.  对每个文件，构建一个 AST。
-3.  创建一个 `ast.NodeVisitor`，它会遍历语法树，专门检查变量赋值 (`ast.Assign`) 和函数参数 (`ast.FunctionDef`) 中的名称。
-4.  对于每一个找到的变量名，它会应用一个启发式规则：如果名称包含 "hash" 但不符合 v3.0 公理定义的正则表达式，就将其标记为违规。
-5.  在扫描完成后，脚本将以清晰、带上下文的格式报告所有违规行为，并以非零状态码退出，以便 CI/CD 流程可以捕获到失败。
-
-这个计划将首先创建脚本文件并赋予其执行权限。
-
-## [WIP] feat(tooling): Create AST-based linter for hash naming conventions
+## [WIP] refactor(compiler): Refactor TaskDef IR to use explicit canonical hash
 
 ### 用户需求
-创建一个健壮的 linter 脚本，用于在 CI/CD 流程中自动检测和报告所有不符合 v3.0 哈希命名规范的变量名。
+根据新的 v3.0 哈希公理，重构编译器的核心中间表示（IR）`TaskDef`。必须移除模糊的 `fingerprint` 字段，并引入一个明确的、用于链接的 `canonical_code_structure_hash` 字段。
 
 ### 评论
-这是一个至关重要的开发者体验 (DX) 和代码质量工具。将架构公理的执行自动化，可以从根本上杜绝概念性债务的积累。选择 AST 解析而不是正则表达式，可以确保 linter 的高精度和低误报率，使其成为一个值得信赖的 CI 守卫者。
+这是解决“身份危机”的根本性举措。通过将链接身份（`canonical_code_structure_hash`）提升为 IR 的一等公民，我们为编译器链（Frontend -> Backend -> Executor）建立了清晰、无歧义的契约。此举将 `Fingerprint` 的职责严格限定在“状态管理”领域，使编译器 IR 更加纯粹和健壮，彻底杜绝了因身份混淆导致的链接失败。
 
 ### 目标
-1.  创建一个名为 `scripts/lint_hash_names.py` 的新 Python 脚本。
-2.  该脚本应能递归扫描代码库，并使用 AST 识别命名不规范的哈希变量。
-3.  以 `grep -C` 的格式，清晰地输出违规位置及其上下文。
-4.  在发现违规时以非零状态码退出，以便 CI 集成。
+1.  **修改 `cascade.spec.ir.models.TaskDef`**: 移除 `fingerprint` 字段，添加 `canonical_code_structure_hash` 字段。
+2.  **更新 `cascade.compiler.analysis.reflection.ReflectionAnalyzer`**: 修改其逻辑，使其计算并填充新的 `canonical_code_structure_hash` 字段，而不是创建 `Fingerprint` 对象。
+3.  **更新 IR 消费者**: 修改 `Frontend` 和 `HashingService` 中所有访问 `TaskDef.fingerprint` 的代码，使其改为访问新的 `TaskDef.canonical_code_structure_hash` 字段。
 
 ### 基本原理
-通过将架构规范转化为可执行的、自动化的 linter，我们把抽象的原则落地为具体的工程实践。`ast` 模块是 Python 官方提供的代码解析工具，使用它可以让我们安全地分析代码结构，而无需担心字符串、注释等会干扰判断，这是比正则表达式更高级、更可靠的方法。
+我们正在执行“重铸公理，定义哈希系统”战略的第二步。`TaskDef` 是连接静态分析（Frontend）和拓扑构建（Backend）的关键数据结构。通过在这个结构中强制实施明确的身份契约，我们确保了链接所需的 `canonical` 哈希信息能够无损地在编译器各阶段之间传递，从而从源头上解决了 `PhysicsExecutor` 的链接失败问题。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/testing #task/object/linter #task/action/implementation #task/state/begin
+#intent/refine #flow/ready #priority/critical #comp/compiler #comp/spec #scope/core #ai/instruct #task/domain/testing #task/object/compiler-ir #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 linter 脚本并赋予执行权限
+#### Acts 1: 重构 `TaskDef` IR 规范
 
-我们将创建 linter 脚本 `scripts/lint_hash_names.py`，并使用 `run_command` 来确保它具有可执行权限。
+首先，我们修改核心 IR 定义 `TaskDef`，使其符合新的架构公理。
 
 ~~~~~act
-write_file
-scripts/lint_hash_names.py
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
 ~~~~~
-~~~~~python
-#!/usr/bin/env python3
-import ast
-import re
-from pathlib import Path
-from typing import List, Optional
-
-import typer
-from rich.console import Console
-
-# 公理 v3.0 定义的规范哈希命名模式
-# `[State]_[Source]_[Object]_hash`
-# State: canonical, current, baseline
-# Source: code, blueprint, stored, etc. (用 [a-z]+ 匹配)
-# Object: structure, instance, content, etc. (用 [a-z]+ 匹配)
-HASH_NAME_PATTERN = re.compile(r"^(canonical|current|baseline)_[a-z]+_[a-z]+_hash$")
-
-console = Console()
+~~~~~python.old
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.policy import ExecutionPolicy
 
 
-class Violation:
-    """用于存储违规信息的简单数据类。"""
-    def __init__(self, path: Path, lineno: int, var_name: str):
-        self.path = path
-        self.lineno = lineno
-        self.var_name = var_name
-
-    def __repr__(self) -> str:
-        return f"Violation(path={self.path}, lineno={self.lineno}, var_name='{self.var_name}')"
+class EdgeKind(str, Enum):
+~~~~~
+~~~~~python.new
+from cascade.spec.policy import ExecutionPolicy
 
 
-def is_compliant(variable_name: str) -> bool:
-    """检查变量名是否符合哈希命名规范。"""
-    return bool(HASH_NAME_PATTERN.match(variable_name))
+class EdgeKind(str, Enum):
+~~~~~
 
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/ir/models.py
+~~~~~
+~~~~~python.old
+@dataclass(frozen=True)
+class TaskDef:
+    name: str
+    args: List[ArgumentDef]
+    # The stable semantic identity of this task definition.
+    # Must contain keys like 'current_code_structure_hash'.
+    fingerprint: Fingerprint
+    return_annotation: Optional[str] = None
+    docstring: Optional[str] = None
+    is_async: bool = False
+    # Execution mode (e.g. "blocking", "compute") derived from the task definition
+    mode: str = "blocking"
+~~~~~
+~~~~~python.new
+@dataclass(frozen=True)
+class TaskDef:
+    name: str
+    args: List[ArgumentDef]
+    # The stable, linkable identity of this task definition.
+    # This hash is computed from the static code structure and serves as
+    # the key for the symbol_table.
+    canonical_code_structure_hash: str
+    return_annotation: Optional[str] = None
+    docstring: Optional[str] = None
+    is_async: bool = False
+    # Execution mode (e.g. "blocking", "compute") derived from the task definition
+    mode: str = "blocking"
+~~~~~
 
-class HashNameVisitor(ast.NodeVisitor):
-    """
-    一个 AST 访问者，用于查找命名不规范的哈希变量。
-    """
-    def __init__(self, file_path: Path):
-        self.file_path = file_path
-        self.violations: List[Violation] = []
+#### Acts 2: 更新 `ReflectionAnalyzer` 以生成新的 IR
 
-    def _check_name(self, name: str, lineno: int):
-        """核心检查逻辑：如果名称像哈希但又不合规，则记录违规。"""
-        # 启发式规则：名称包含 "hash" 就应该被检查
-        if "hash" in name.lower() and not is_compliant(name):
-            self.violations.append(Violation(self.file_path, lineno, name))
+接下来，修改 `ReflectionAnalyzer` 以计算并填充新的 `canonical_code_structure_hash` 字段。
 
-    def visit_Assign(self, node: ast.Assign):
-        """检查赋值语句：`my_hash = ...`"""
-        for target in node.targets:
-            if isinstance(target, ast.Name):
-                self._check_name(target.id, node.lineno)
-        self.generic_visit(node)
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/analysis/reflection.py
+~~~~~
+~~~~~python.old
+import inspect
+import hashlib
+from typing import Any, List, Optional
 
-    def visit_FunctionDef(self, node: ast.FunctionDef):
-        """检查函数参数：`def my_func(bad_hash):`"""
-        for arg in node.args.args:
-            self._check_name(arg.arg, arg.lineno)
-        self.generic_visit(node)
+from cascade.spec.ir.models import TaskDef, ArgumentDef, ArgumentKind
+from cascade.spec.fingerprint import Fingerprint
+from .protocols import TaskAnalyzer
 
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef):
-        """检查异步函数参数。"""
-        self.visit_FunctionDef(node)
+# Type hint for the Cascade Task wrapper
+~~~~~
+~~~~~python.new
+import inspect
+import hashlib
+from typing import Any, List, Optional
 
+from cascade.spec.ir.models import TaskDef, ArgumentDef, ArgumentKind
+from .protocols import TaskAnalyzer
 
-def main(
-    scan_path: Path = typer.Argument(
-        ...,
-        exists=True,
-        file_okay=False,
-        dir_okay=True,
-        writable=False,
-        readable=True,
-        resolve_path=True,
-        help="要扫描的根目录。",
-    ),
-    context_lines: int = typer.Option(
-        3, "--context", "-C", help="显示违规行的前后文行数。"
-    ),
-    exclude_dirs: Optional[List[str]] = typer.Option(
-        [".venv", ".git", "__pycache__", "build", "dist"],
-        "--exclude",
-        "-e",
-        help="要排除的目录名。",
-    ),
-):
-    """
-    扫描 Python 代码库，查找并报告不符合哈希命名规范 v3.0 的变量。
-    """
-    all_violations: List[Violation] = []
-    
-    files_to_scan = [
-        p for p in scan_path.rglob("*.py")
-        if not any(excluded in p.parts for excluded in exclude_dirs)
-    ]
+# Type hint for the Cascade Task wrapper
+~~~~~
 
-    with typer.progressbar(files_to_scan, label="Scanning files") as progress:
-        for file_path in progress:
-            try:
-                content = file_path.read_text(encoding="utf-8")
-                tree = ast.parse(content, filename=str(file_path))
-                visitor = HashNameVisitor(file_path)
-                visitor.visit(tree)
-                all_violations.extend(visitor.violations)
-            except SyntaxError as e:
-                console.print(f"\n[bold red]Error parsing {file_path}: {e}[/bold red]")
-            except Exception as e:
-                console.print(f"\n[bold red]Unexpected error with {file_path}: {e}[/bold red]")
-
-    if not all_violations:
-        console.print("\n[bold green]✅ Success! No hash naming violations found.[/bold green]")
-        raise typer.Exit(code=0)
-
-    console.print(
-        f"\n[bold red]❌ Found {len(all_violations)} hash naming violations:[/bold red]"
-    )
-
-    # 按文件路径对违规进行分组
-    all_violations.sort(key=lambda v: (v.path, v.lineno))
-    
-    last_path = None
-    for violation in all_violations:
-        if violation.path != last_path:
-            console.print(f"\n[cyan]File: {violation.path}[/cyan]")
-            last_path = violation.path
-            try:
-                lines = violation.path.read_text(encoding="utf-8").splitlines()
-            except Exception:
-                lines = []
-
-        if not lines:
-            console.print(f"  [red]L{violation.lineno}: Could not read file content.[/red]")
-            continue
-
-        console.print(
-            f"  [yellow]L{violation.lineno}[/yellow] "
-            f"Found non-compliant hash variable: [bold magenta]{violation.var_name}[/bold magenta]"
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/analysis/reflection.py
+~~~~~
+~~~~~python.old
+        # 3. Compute Fingerprint
+        # We compute a structural hash based on the definition's content.
+        structure_hash = self._compute_structure_hash(
+            name, args, return_annotation, docstring, is_async, mode
         )
 
-        start = max(0, violation.lineno - 1 - context_lines)
-        end = min(len(lines), violation.lineno + context_lines)
+        fingerprint = Fingerprint()
+        fingerprint["current_code_structure_hash"] = structure_hash
 
-        for i in range(start, end):
-            line_num = i + 1
-            line_content = lines[i]
-            if line_num == violation.lineno:
-                console.print(f"[bold red]>{line_num:5d} | {line_content}[/bold red]")
-            else:
-                console.print(f" {line_num:5d} | {line_content}")
+        return TaskDef(
+            name=name,
+            args=args,
+            fingerprint=fingerprint,
+            return_annotation=return_annotation,
+            docstring=docstring,
+            is_async=is_async,
+            mode=mode,
+        )
+~~~~~
+~~~~~python.new
+        # 3. Compute canonical hash for linking
+        # This hash represents the stable, structural identity of the code.
+        canonical_code_structure_hash = self._compute_canonical_code_structure_hash(
+            name, args, return_annotation, docstring, is_async, mode
+        )
 
-    raise typer.Exit(code=1)
-
-
-if __name__ == "__main__":
-    typer.run(main)
+        return TaskDef(
+            name=name,
+            args=args,
+            canonical_code_structure_hash=canonical_code_structure_hash,
+            return_annotation=return_annotation,
+            docstring=docstring,
+            is_async=is_async,
+            mode=mode,
+        )
 ~~~~~
 
 ~~~~~act
-run_command
+patch_file
+packages/cascade-compiler/src/cascade/compiler/analysis/reflection.py
 ~~~~~
-~~~~~bash
-mkdir -p scripts
-chmod +x scripts/lint_hash_names.py
+~~~~~python.old
+        return args
+
+    def _compute_structure_hash(
+        self,
+        name: str,
+        args: List[ArgumentDef],
+~~~~~
+~~~~~python.new
+        return args
+
+    def _compute_canonical_code_structure_hash(
+        self,
+        name: str,
+        args: List[ArgumentDef],
+~~~~~
+
+#### Acts 3: 更新 `Frontend` 和 `HashingService` 的 IR 消费逻辑
+
+最后，更新所有消费 `TaskDef` 的地方，使其使用新的字段。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        task_def = self.analyzer.analyze(obj.task)
+
+        # Populate Symbol Table
+        code_hash = task_def.fingerprint["current_code_structure_hash"]
+        self.symbol_table[code_hash] = obj.task.func
+
+        node_id = self.hashing_service.compute_node_instance_hash(
+            task_def, obj, cast(Dict[str, Any], dep_shims)
+~~~~~
+~~~~~python.new
+        task_def = self.analyzer.analyze(obj.task)
+
+        # Populate Symbol Table using the canonical hash as the link key
+        self.symbol_table[task_def.canonical_code_structure_hash] = obj.task.func
+
+        node_id = self.hashing_service.compute_node_instance_hash(
+            task_def, obj, cast(Dict[str, Any], dep_shims)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        task_def = self.analyzer.analyze(obj.factory)
+
+        # Populate Symbol Table
+        code_hash = task_def.fingerprint["current_code_structure_hash"]
+
+        # Ensure we store the raw function, not the Task wrapper
+        # The analyzer usually handles extraction, but we need the raw callable for VM
+~~~~~
+~~~~~python.new
+        task_def = self.analyzer.analyze(obj.factory)
+
+        # Populate Symbol Table
+        self.symbol_table[task_def.canonical_code_structure_hash] = func
+
+        # Ensure we store the raw function, not the Task wrapper
+        # The analyzer usually handles extraction, but we need the raw callable for VM
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/hashing.py
+~~~~~
+~~~~~python.old
+    ) -> str:
+        # 1. Start with the Stable Code Fingerprint
+        code_hash = definition.fingerprint["current_code_structure_hash"]
+        components = [f"CodeHash:{code_hash}"]
+
+        # 2. Purity Salt
+        # Get purity from the Task wrapper if available, else assume False (Impure) for safety
+~~~~~
+~~~~~python.new
+    ) -> str:
+        # 1. Start with the stable, canonical hash of the code structure
+        canonical_code_structure_hash = definition.canonical_code_structure_hash
+        components = [f"CanonicalCodeStructureHash:{canonical_code_structure_hash}"]
+
+        # 2. Purity Salt
+        # Get purity from the Task wrapper if available, else assume False (Impure) for safety
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/hashing.py
+~~~~~
+~~~~~python.old
+        # Updated to use node.definition
+        components = [f"Node({node.definition.name}, type={node.node_type})"]
+        components.append(
+            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
+        )
+
+        if node.retry_policy:
+            rp = node.retry_policy
+~~~~~
+~~~~~python.new
+        # Updated to use node.definition
+        components = [f"Node({node.definition.name}, type={node.node_type})"]
+        components.append(
+            f"CanonicalCodeStructureHash({node.definition.canonical_code_structure_hash})"
+        )
+
+        if node.retry_policy:
+            rp = node.retry_policy
 ~~~~~
 
 ### 下一步建议
-我们已经创建了 linter 脚本。下一步是将其集成到我们的 CI 流程中。
+我们已经成功地将“链接身份”注入了编译器的前端和中间表示。
 
-我建议在 `pyproject.toml` 的 `[tool.poetry.scripts]` 或 `Makefile` 中添加一个快捷命令（例如 `lint:hash`），然后在 GitHub Actions 的 `lint` 工作流中调用这个命令。这样，每次提交代码时，命名规范都会被自动强制执行。
+下一步是**第三步：修正编译器链的后端**。我们需要：
+1.  **修改 `cascade.spec.topology.PhysicsFuncNode`**: 为其添加 `canonical_code_structure_hash` 字段。
+2.  **修改 `cascade.compiler.backend`**: 确保它在将 `NodeIR` 转换为 `PhysicsFuncNode` 时，无损地传递这个新的哈希字段。
+3.  **修改 `cascade.vm.executors.physics.PhysicsExecutor`**: 让它使用这个新字段进行正确的 `symbol_table` 查找。
+
+这将完成整个编译器链的身份传递闭环。

@@ -13,9 +13,9 @@ class HashingService:
         result: Any,  # LazyResult or MappedLazyResult
         dep_nodes: Dict[str, Any],  # Changed from Node to Any to break import cycle
     ) -> str:
-        # 1. Start with the Stable Code Fingerprint
-        code_hash = definition.fingerprint["current_code_structure_hash"]
-        components = [f"CodeHash:{code_hash}"]
+        # 1. Start with the stable, canonical hash of the code structure
+        canonical_code_structure_hash = definition.canonical_code_structure_hash
+        components = [f"CanonicalCodeStructureHash:{canonical_code_structure_hash}"]
 
         # 2. Purity Salt
         # Get purity from the Task wrapper if available, else assume False (Impure) for safety
@@ -122,7 +122,7 @@ class BlueprintHasher:
         # Updated to use node.definition
         components = [f"Node({node.definition.name}, type={node.node_type})"]
         components.append(
-            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
+            f"CanonicalCodeStructureHash({node.definition.canonical_code_structure_hash})"
         )
 
         if node.retry_policy:

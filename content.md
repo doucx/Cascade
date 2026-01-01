@@ -1,52 +1,47 @@
-好的，我理解了问题。`pyright` 无法正确解析项目中的模块，导致了大量的 `reportMissingImports` 和 `reportAttributeAccessIssue` 错误。
+您说得对，我的上一个计划没能解决问题，非常抱歉。
 
-问题的根源在于，`cascade` 是一个跨越多个 `packages/*` 目录的命名空间包 (namespace package)，而 `pyright` 需要被明确告知去哪里寻找这些包的源代码。您提供的 `pyrightconfig.json` 文件已经尝试通过 `extraPaths` 来解决这个问题，但为了与现代 Python 项目管理工具链保持一致并确保配置的唯一来源，最佳实践是将此配置迁移到项目根目录的 `pyproject.toml` 文件中。
+在深入分析了您提供的 `pyright` 文档和项目结构后，我找到了问题的关键所在。虽然 `extraPaths` 是正确的配置项，但在复杂的 monorepo 结构中，`pyright` 需要更明确的上下文来应用这些路径。简单地在顶层设置 `extraPaths` 可能不足以让 `pyright` 在分析树的每个分支时都能正确地关联它们。
 
-我将生成一个计划来执行以下操作：
-1.  在根 `pyproject.toml` 文件中添加一个 `[tool.pyright]` 部分。
-2.  将 `pyrightconfig.json` 中的配置（特别是 `extraPaths`）迁移到新的 `[tool.pyright]` 部分。
-3.  删除旧的、多余的 `pyrightconfig.json` 文件，以避免配置冲突。
+根据文档，解决这个问题的最健壮的方法是使用 `executionEnvironments`。这个配置可以为项目的特定部分（或整个项目）定义一个包含自定义 `extraPaths` 的“执行环境”。通过为整个项目根目录 `.` 创建一个执行环境，我们可以强制 `pyright` 在分析任何文件时都使用我们提供的完整模块搜索路径列表。
 
-这将为 `pyright` 提供一个清晰、统一的配置，使其能够正确地理解 monorepo 的结构并解析所有模块。
+这次我将生成一个计划，使用 `executionEnvironments` 来进行更精确、更可靠的配置。
 
-## [WIP] chore: 为 monorepo 配置 Pyright 以解决导入问题
+## [WIP] fix: 使用 executionEnvironments 精确配置 Pyright 导入路径
+
+### 错误分析
+上一个计划虽然将 `pyright` 配置移至了 `pyproject.toml` 并提供了正确的 `extraPaths`，但仍然失败。根本原因在于，对于一个复杂的、包含多个命名空间包的 monorepo，顶层的 `extraPaths` 配置可能没有被 `pyright` 在所有分析上下文中一致地应用。
+
+根据 `pyright` 的官方文档，`executionEnvironments` 是专门为处理这种情况而设计的。它允许我们将一组特定的配置（如 `extraPaths`）与项目的特定子目录（`root`）绑定。通过创建一个覆盖整个项目 (`root = "."`) 的执行环境，我们可以确保无论 `pyright` 从哪个文件开始分析，它都会加载并使用我们为整个 monorepo 定义的、完整的模块搜索路径集。这是一种比全局 `extraPaths` 更明确、更强大的配置方式。
 
 ### 用户需求
-用户需要解决 `pyright` 静态分析工具报告的 13 个导入和属性访问错误。这些错误表明 `pyright` 无法理解项目的 monorepo 结构和分散的命名空间包。
+用户需要彻底解决 `pyright` 在 monorepo 环境下无法解析 `cascade` 命名空间内模块的问题，消除所有的 `reportMissingImports` 和 `reportAttributeAccessIssue` 错误。
 
 ### 评论
-这是一个典型的 Python monorepo 会遇到的问题。静态分析工具需要明确的指导才能正确地将分散在多个目录中的源代码（如 `packages/*/src`）组合成一个统一的命名空间（如此处的 `cascade`）。通过在 `pyproject.toml` 中集中配置 `extraPaths`，我们可以为所有开发者和 CI/CD 工具提供一个统一、可靠的解决方案，显著改善开发者体验 (DX)。
+这次的修改是基于对工具文档更深入的理解，直接命中了 monorepo 静态分析的核心痛点。采用 `executionEnvironments` 不仅能解决当前问题，也为未来项目结构可能变得更复杂的情况（例如，部分代码需要用不同 Python 版本进行分析）打下了坚实的基础。
 
 ### 目标
-1.  在项目根目录的 `pyproject.toml` 文件中创建一个 `[tool.pyright]` 配置节。
-2.  将所有 `cascade-*` 包的 `src` 目录添加到 `extraPaths` 列表中，使 `pyright` 能够正确解析 `cascade` 命名空间。
-3.  删除已有的 `pyrightconfig.json` 文件，以消除配置冗余和潜在冲突。
+1.  修改 `pyproject.toml` 中的 `[tool.pyright]` 配置。
+2.  将 `extraPaths` 列表移入一个 `executionEnvironments` 块中。
+3.  将该执行环境的 `root` 设置为 `.`，以确保它能应用于项目中的所有文件。
 
 ### 基本原理
-`pyright` 无法自动发现构成 `cascade` 命名空间的所有源目录。`pyrightconfig.json` 或 `pyproject.toml` 中的 `extraPaths` 设置正是为了解决这个问题，它明确告诉 `pyright` 额外的模块搜索路径。我们将此配置整合到根 `pyproject.toml` 中，因为这是现代 Python 项目管理的事实标准，可以集中管理所有工具链的配置。删除旧的 `.json` 文件可确保 `pyproject.toml` 是唯一的配置来源，避免混淆。
+我们将利用 `pyright` 的 `executionEnvironments` 功能。通过定义一个 `root` 为 `.` 的环境，我们创建了一个适用于整个项目的全局执行上下文。然后，我们将之前定义的 `extraPaths` 列表放置在这个上下文中。这样，`pyright` 在处理任何文件时，都会查询其所属的执行环境，找到这个全局上下文，并使用其中定义的 `extraPaths` 来解析导入，从而正确地将所有 `packages/*/src` 目录识别为 `cascade` 命名空间的一部分。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/testing #task/object/pyright-config #task/action/bug-fix #task/state/begin
+#intent/fix #flow/ready #priority/critical #comp/build #scope/dx #ai/refine #task/domain/testing #task/object/pyright-config #task/action/bug-fix #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 更新 `pyproject.toml` 以包含 Pyright 配置
+#### Acts 1: 使用 `executionEnvironments` 重构 Pyright 配置
 
-我们将把 `pyright` 的配置直接添加到项目根目录的 `pyproject.toml` 文件中。
+我们将修改 `pyproject.toml`，将 `extraPaths` 包装在 `executionEnvironments` 中，以提供更明确的配置上下文。
 
 ~~~~~act
 patch_file
 pyproject.toml
 ~~~~~
 ~~~~~toml.old
-[tool.stitcher]
-scan_paths = ["packages"]
-~~~~~
-~~~~~toml.new
-[tool.stitcher]
-scan_paths = ["packages"]
-
 [tool.pyright]
 include = ["packages"]
 exclude = ["**/node_modules", "**/__pycache__", "**/tests"]
@@ -70,12 +65,32 @@ extraPaths = [
 reportMissingImports = true
 reportMissingTypeStubs = false
 ~~~~~
+~~~~~toml.new
+[tool.pyright]
+include = ["packages"]
+exclude = ["**/node_modules", "**/__pycache__", "**/tests"]
 
-#### Acts 2: 删除旧的配置文件
+reportMissingImports = true
+reportMissingTypeStubs = false
 
-为了避免冲突和混淆，现在删除旧的 `pyrightconfig.json` 文件。
-
-~~~~~act
-delete_file
-pyrightconfig.json
+executionEnvironments = [
+  {
+    root = ".",
+    extraPaths = [
+      "packages/cascade-application/src",
+      "packages/cascade-cli-controller/src",
+      "packages/cascade-cli-observer/src",
+      "packages/cascade-common/src",
+      "packages/cascade-connector-local/src",
+      "packages/cascade-connector-mqtt/src",
+      "packages/cascade-engine/src",
+      "packages/cascade-graph/src",
+      "packages/cascade-library/src",
+      "packages/cascade-provider-ipfs/src",
+      "packages/cascade-python/src",
+      "packages/cascade-sdk/src",
+      "packages/cascade-spec/src",
+    ],
+  },
+]
 ~~~~~

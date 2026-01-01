@@ -43,7 +43,8 @@ def test_compile_linear_graph_to_topology():
     assert isinstance(topology, BipartiteGraph), "Backend must return a BipartiteGraph"
 
     # 3.1 FuncNodes
-    assert len(topology.func_nodes) == 2
+    # We expect 2 nodes from the IR + 2 injected lifecycle emitters
+    assert len(topology.func_nodes) == 4
     assert "A" in topology.func_nodes
     assert "B" in topology.func_nodes
     assert topology.func_nodes["A"].name == "A"
@@ -110,12 +111,9 @@ def test_compile_literal_values_to_data_nodes():
     topology = Backend.compile(graph_ir)
 
     # 3. Assertions
-    # A should have 2 input channels (for x and y)
-    channels_to_a = [
-        c for c in topology.channels if c.target_data_slot_hash is None
-    ]  # Wait, channel is Source -> Target
-    # Input wiring is stored in PhysicsFuncNode.inputs map (DataNodeHash -> PortName relation is implicit?)
-    # Re-reading our spec impl: PhysicsFuncNode.inputs: Dict[str, str] (ArgName -> DataHash)
+    # We expect 1 node from the IR + 2 injected lifecycle emitters
+    assert len(topology.func_nodes) == 3
+    assert "A" in topology.func_nodes
 
     func_node_a = topology.func_nodes["A"]
     assert "x" in func_node_a.inputs
@@ -170,6 +168,8 @@ def test_compile_diamond_dependency_fan_out():
     topology = Backend.compile(graph_ir)
 
     # 3. Assertions
+    # We expect 3 nodes from the IR + 2 injected lifecycle emitters
+    assert len(topology.func_nodes) == 5
     func_b = topology.func_nodes["B"]
     func_c = topology.func_nodes["C"]
 

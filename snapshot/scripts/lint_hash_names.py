@@ -1,55 +1,3 @@
-好的，开始执行。
-
-这是一个将自动化和纪律注入我们开发流程的关键步骤。使用 AST (Abstract Syntax Tree) 而不是简单的正则表达式，可以确保我们的 linter 足够智能，能够区分代码、字符串和注释，从而实现高精度的检测，避免误报。
-
-我将生成一个计划来创建这个脚本。
-
----
-
-我将创建一个名为 `scripts/lint_hash_names.py` 的新 linter 脚本。该脚本将使用 `typer` 构建一个用户友好的命令行界面，并利用 Python 内置的 `ast` 模块来安全、准确地解析源代码。
-
-该脚本的核心逻辑将是：
-1.  递归地扫描指定目录下的所有 `.py` 文件。
-2.  对每个文件，构建一个 AST。
-3.  创建一个 `ast.NodeVisitor`，它会遍历语法树，专门检查变量赋值 (`ast.Assign`) 和函数参数 (`ast.FunctionDef`) 中的名称。
-4.  对于每一个找到的变量名，它会应用一个启发式规则：如果名称包含 "hash" 但不符合 v3.0 公理定义的正则表达式，就将其标记为违规。
-5.  在扫描完成后，脚本将以清晰、带上下文的格式报告所有违规行为，并以非零状态码退出，以便 CI/CD 流程可以捕获到失败。
-
-这个计划将首先创建脚本文件并赋予其执行权限。
-
-## [WIP] feat(tooling): Create AST-based linter for hash naming conventions
-
-### 用户需求
-创建一个健壮的 linter 脚本，用于在 CI/CD 流程中自动检测和报告所有不符合 v3.0 哈希命名规范的变量名。
-
-### 评论
-这是一个至关重要的开发者体验 (DX) 和代码质量工具。将架构公理的执行自动化，可以从根本上杜绝概念性债务的积累。选择 AST 解析而不是正则表达式，可以确保 linter 的高精度和低误报率，使其成为一个值得信赖的 CI 守卫者。
-
-### 目标
-1.  创建一个名为 `scripts/lint_hash_names.py` 的新 Python 脚本。
-2.  该脚本应能递归扫描代码库，并使用 AST 识别命名不规范的哈希变量。
-3.  以 `grep -C` 的格式，清晰地输出违规位置及其上下文。
-4.  在发现违规时以非零状态码退出，以便 CI 集成。
-
-### 基本原理
-通过将架构规范转化为可执行的、自动化的 linter，我们把抽象的原则落地为具体的工程实践。`ast` 模块是 Python 官方提供的代码解析工具，使用它可以让我们安全地分析代码结构，而无需担心字符串、注释等会干扰判断，这是比正则表达式更高级、更可靠的方法。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/testing #task/object/linter #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 linter 脚本并赋予执行权限
-
-我们将创建 linter 脚本 `scripts/lint_hash_names.py`，并使用 `run_command` 来确保它具有可执行权限。
-
-~~~~~act
-write_file
-scripts/lint_hash_names.py
-~~~~~
-~~~~~python
 #!/usr/bin/env python3
 import ast
 import re
@@ -207,17 +155,3 @@ def main(
 
 if __name__ == "__main__":
     typer.run(main)
-~~~~~
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p scripts
-chmod +x scripts/lint_hash_names.py
-~~~~~
-
-### 下一步建议
-我们已经创建了 linter 脚本。下一步是将其集成到我们的 CI 流程中。
-
-我建议在 `pyproject.toml` 的 `[tool.poetry.scripts]` 或 `Makefile` 中添加一个快捷命令（例如 `lint:hash`），然后在 GitHub Actions 的 `lint` 工作流中调用这个命令。这样，每次提交代码时，命名规范都会被自动强制执行。

@@ -41,15 +41,18 @@ class VMExecutionStrategy:
         run_stack: ExitStack,
         active_resources: Dict[str, Any],
     ) -> Any:
+        print("[VMStrategy] execute started.")
         # 1. 编译 (Compilation)
         compilation_result = self.frontend.compile(target)
         topology = self.backend.compile(compilation_result.ir)
         symbol_table = compilation_result.symbol_table
+        print("[VMStrategy] Compilation finished.")
 
         # 2. 组装 (Assembly)
         reactor = Reactor(executor=None)  # Executor will be injected right after
         physics_executor = PhysicsExecutor(reactor=reactor, symbol_table=symbol_table)
         reactor.executor = physics_executor
+        print("[VMStrategy] Reactor and Executor assembled.")
 
         # 3. 配置 (Configuration)
         loop = asyncio.get_running_loop()
@@ -57,29 +60,32 @@ class VMExecutionStrategy:
         termination_future = loop.create_future()
 
         def on_main_output(payload: Any):
+            print(f"[VMStrategy] Sink 'main_output' called with: {payload}")
             if not result_future.done():
                 result_future.set_result(payload)
 
         def on_termination_signal(payload: Any):
+            print("[VMStrategy] Sink '__system_lifecycle_signal' called.")
             if not termination_future.done():
                 termination_future.set_result(True)
 
         reactor.register_sink("main_output", on_main_output)
         reactor.register_sink("__system_lifecycle_signal", on_termination_signal)
 
-        # This call will fail until the next phase is implemented
         self._load_topology(reactor, topology)
+        print("[VMStrategy] Topology loaded and reactor kickstarted.")
 
         # 4. 运行与等待 (Execution & Observation)
+        print("[VMStrategy] Starting reactor.run() in background task...")
         run_task = asyncio.create_task(reactor.run())
 
         try:
-            # Wait for both the result and the termination signal to ensure
-            # the graph has fully completed its lifecycle.
+            print("[VMStrategy] Awaiting futures...")
             await asyncio.wait(
                 [result_future, termination_future],
                 return_when=asyncio.ALL_COMPLETED,
             )
+            print("[VMStrategy] Futures completed.")
 
             if result_future.exception():
                 raise result_future.exception()
@@ -93,6 +99,7 @@ class VMExecutionStrategy:
 
         finally:
             # 5. 清理 (Teardown)
+            print("[VMStrategy] Entering finally block for cleanup.")
             if not run_task.done():
                 reactor.stop()
                 # Yield control briefly to allow the reactor loop to process the stop signal
@@ -101,6 +108,7 @@ class VMExecutionStrategy:
                 try:
                     await run_task
                 except asyncio.CancelledError:
+                    print("[VMStrategy] Reactor task successfully cancelled.")
                     pass  # Cancellation is the expected outcome here.
 
     def _load_topology(self, reactor: Reactor, topology: BipartiteGraph):

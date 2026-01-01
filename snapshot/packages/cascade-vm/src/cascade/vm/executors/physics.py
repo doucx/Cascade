@@ -23,6 +23,7 @@ class PhysicsExecutor:
         Executes the logic for a given FuncNode and reports the result back
         to the reactor.
         """
+        print(f"[Executor] Submitting node '{node.name}' for execution.")
         outputs = {}
         error = None
 
@@ -48,9 +49,11 @@ class PhysicsExecutor:
             # 4. Wrap Result: Convert the raw result back into a Token.
             # For now, we assume a single 'result' output port with 'default' tag.
             outputs["result"] = Token(payload=result, tag="default")
+            print(f"[Executor] Node '{node.name}' execution finished successfully.")
 
         except Exception as e:
             error = e
+            print(f"[Executor] Node '{node.name}' execution FAILED with error: {e}")
 
         # 5. Report: Push an ExecutionFinished event to the reactor.
         event = ExecutionFinished(node=node, outputs=outputs, error=error)

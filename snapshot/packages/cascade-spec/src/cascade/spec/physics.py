@@ -161,8 +161,9 @@ class EmitterNode(FuncNode):
     def __init__(
         self,
         name: str,
+        canonical_code_structure_hash: str,
         sink_id: str,
         resource_requirements: Optional[Dict[str, Any]] = None,
     ):
-        super().__init__(name, resource_requirements)
+        super().__init__(name, canonical_code_structure_hash, resource_requirements)
         self.sink_id = sink_id

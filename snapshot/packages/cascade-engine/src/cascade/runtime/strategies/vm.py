@@ -138,10 +138,14 @@ class VMExecutionStrategy:
             if spec_f_node.sink_id:
                 f_node = EmitterNode(
                     name=spec_f_node.current_node_instance_hash,
+                    canonical_code_structure_hash=spec_f_node.canonical_code_structure_hash,
                     sink_id=spec_f_node.sink_id,
                 )
             else:
-                f_node = FuncNode(name=spec_f_node.current_node_instance_hash)
+                f_node = FuncNode(
+                    name=spec_f_node.current_node_instance_hash,
+                    canonical_code_structure_hash=spec_f_node.canonical_code_structure_hash,
+                )
 
             runtime_func_nodes[spec_f_node.current_node_instance_hash] = f_node
 

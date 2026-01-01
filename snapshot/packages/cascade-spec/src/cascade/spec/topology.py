@@ -18,8 +18,6 @@ class PhysicsFuncNode:
     inputs: Dict[str, str] = field(default_factory=dict)
     # If not None, this node acts as an Emitter, pushing its result to the specified sink.
     sink_id: Optional[str] = field(default=None)
-    # If not None, this node acts as an Emitter, pushing its result to the specified sink.
-    sink_id: Optional[str] = field(default=None)
 
 
 @dataclass(frozen=True)

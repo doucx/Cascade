@@ -4,20 +4,12 @@ import time
 from cascade.spec.physics import Token
 
 
-from typing import Dict, List, Optional
-import time
-
-from cascade.spec.physics import Token
+from typing import List, Optional
 
 
 def standard_bleacher(
     inputs: Dict[str, Token], expected_args: Optional[List[str]] = None
 ) -> Dict[str, Token]:
-    """
-    Args:
-        expected_args: List of argument names that the Worker expects.
-                       Any input NOT in this list is treated as a Resource or Signal.
-    """
     worker_payload: Dict[str, any] = {}
     trace_payload: Dict[str, any] = {}
     held_resources: List[str] = []

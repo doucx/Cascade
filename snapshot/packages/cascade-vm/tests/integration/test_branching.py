@@ -1,5 +1,5 @@
 import pytest
-from typing import Dict, Any
+from typing import Dict
 
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.topology import BipartiteGraph, Channel
@@ -9,14 +9,9 @@ from cascade.vm.reactor import Reactor
 
 
 def switch_logic(inputs: Dict[str, Token]) -> Dict[str, Token]:
-    """
-    A logical switch.
-    Input payload 'path_a' -> Tag 'A'
-    Input payload 'path_b' -> Tag 'B'
-    """
     in_token = inputs["in"]
     direction = in_token.payload
-    
+
     if direction == "path_a":
         return {"out": Token(payload="Data A", tag="A")}
     else:
@@ -36,29 +31,27 @@ def branching_topology():
 
     # Wiring
     # D_in -> Switch
-    graph.channels.append(
-        Channel(d_in.id, "out", f_sw.id, target_port="in")
-    )
-    
+    graph.channels.append(Channel(d_in.id, "out", f_sw.id, target_port="in"))
+
     # Switch -> D_A (Only allows Tag 'A')
     graph.channels.append(
         Channel(f_sw.id, "out", d_a.id, target_port="in", tag_filter="A")
     )
-    
+
     # Switch -> D_B (Only allows Tag 'B')
     graph.channels.append(
         Channel(f_sw.id, "out", d_b.id, target_port="in", tag_filter="B")
     )
 
     func_map = {f_sw.id: switch_logic}
-    
+
     return graph, d_in, d_a, d_b, func_map
 
 
 @pytest.mark.asyncio
 async def test_branching_path_a(branching_topology):
     graph, d_in, d_a, d_b, func_map = branching_topology
-    
+
     memory = VolatileMemory()
     reactor = Reactor(graph, memory, PhysicsExecutor(), func_map)
 
@@ -72,7 +65,7 @@ async def test_branching_path_a(branching_topology):
     # D_A should receive token
     assert memory.get_count(d_a.id) == 1
     assert memory.take(d_a.id).payload == "Data A"
-    
+
     # D_B should be empty (physically blocked)
     assert memory.get_count(d_b.id) == 0
 
@@ -80,7 +73,7 @@ async def test_branching_path_a(branching_topology):
 @pytest.mark.asyncio
 async def test_branching_path_b(branching_topology):
     graph, d_in, d_a, d_b, func_map = branching_topology
-    
+
     memory = VolatileMemory()
     reactor = Reactor(graph, memory, PhysicsExecutor(), func_map)
 
@@ -94,6 +87,6 @@ async def test_branching_path_b(branching_topology):
     # D_B should receive token
     assert memory.get_count(d_b.id) == 1
     assert memory.take(d_b.id).payload == "Data B"
-    
+
     # D_A should be empty
     assert memory.get_count(d_a.id) == 0

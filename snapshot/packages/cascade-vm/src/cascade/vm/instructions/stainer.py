@@ -26,7 +26,7 @@ def standard_stainer(inputs: Dict[str, Token]) -> Dict[str, Token]:
 
     # 4. Create output tokens
     outputs = {}
-    
+
     # 4.1 The main result
     outputs["output"] = Token(payload=result_payload, tag=tag, trace=trace_payload)
 

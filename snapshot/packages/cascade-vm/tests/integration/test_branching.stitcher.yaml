@@ -1,0 +1,4 @@
+"switch_logic": |-
+  A logical switch.
+  Input payload 'path_a' -> Tag 'A'
+  Input payload 'path_b' -> Tag 'B'

@@ -25,7 +25,9 @@ def simple_topology():
     graph.nodes[f1.id] = f1
 
     # Connect D1 -> F1
-    channel = Channel(source_node_id=d1.id, source_port="out", target_node_id=f1.id, target_port="in")
+    channel = Channel(
+        source_node_id=d1.id, source_port="out", target_node_id=f1.id, target_port="in"
+    )
     graph.channels.append(channel)
 
     return graph, d1, f1

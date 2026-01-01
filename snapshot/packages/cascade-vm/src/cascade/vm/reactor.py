@@ -2,7 +2,7 @@ import asyncio
 from typing import List, Callable, Dict, Tuple
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
-from cascade.vm.memory import VolatileMemory, MemoryEmptyError
+from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 
 
@@ -94,10 +94,7 @@ class Reactor:
 
         # Now, fire all nodes that successfully reserved their inputs in parallel.
         await asyncio.gather(
-            *(
-                self._fire(node, inputs_for_fire[node.id])
-                for node in nodes_to_fire
-            )
+            *(self._fire(node, inputs_for_fire[node.id]) for node in nodes_to_fire)
         )
 
         return len(nodes_to_fire)

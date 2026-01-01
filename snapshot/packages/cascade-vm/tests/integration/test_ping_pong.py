@@ -12,10 +12,10 @@ def simple_increment(inputs: Dict[str, Token]) -> Dict[str, Token]:
     # Extract
     in_token = inputs["value"]
     val = in_token.payload
-    
+
     # Process
     res = val + 1
-    
+
     # Wrap
     return {"result": Token(payload=res)}
 
@@ -32,19 +32,19 @@ def ping_pong_topology():
     # D1 -> F1 (Explicit target port 'value')
     graph.channels.append(
         Channel(
-            source_node_id=d1.id, 
-            source_port="out", 
-            target_node_id=f1.id, 
-            target_port="value"
+            source_node_id=d1.id,
+            source_port="out",
+            target_node_id=f1.id,
+            target_port="value",
         )
     )
     # F1 -> D2
     graph.channels.append(
         Channel(
-            source_node_id=f1.id, 
-            source_port="result", 
+            source_node_id=f1.id,
+            source_port="result",
             target_node_id=d2.id,
-            target_port="in"
+            target_port="in",
         )
     )
 

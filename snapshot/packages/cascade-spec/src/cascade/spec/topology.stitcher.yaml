@@ -16,3 +16,6 @@
 "Channel.target_node_id": |-
   The ID of the downstream node.
   Note: In a bipartite graph, if Source is Func, Target MUST be Data.
+"Channel.target_port": |-
+  The name of the input port on the target node.
+  For DataNodes, this is typically 'in'. For FuncNodes, it matches the argument name.

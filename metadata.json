@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat(vm/compiler): 实现基于拓扑的控制流分支与资源背压", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767274437.3682475, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M models.json, M physics.json, M topology.json ... and 20 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767275024.4919875, "duration_ms": 0}}

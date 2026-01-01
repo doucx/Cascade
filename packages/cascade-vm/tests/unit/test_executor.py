@@ -8,18 +8,15 @@ from cascade.vm.executor import PhysicsExecutor
 
 
 def add(x: int, y: int) -> int:
-    """A simple, pure computation function."""
     return x + y
 
 
 def blocking_io_simulation(duration: float) -> float:
-    """Simulates a blocking I/O call like a network request or disk read."""
     time.sleep(duration)
     return duration
 
 
 def raises_error():
-    """A function that always fails."""
     raise ValueError("Task failed successfully")
 
 
@@ -28,7 +25,6 @@ def raises_error():
 
 @pytest.mark.asyncio
 async def test_executor_submit_simple_computation():
-    """Verify that a simple function can be executed and its result returned."""
     executor = PhysicsExecutor()
     result = await executor.submit(add, (2, 3))
     assert result == 5
@@ -36,10 +32,6 @@ async def test_executor_submit_simple_computation():
 
 @pytest.mark.asyncio
 async def test_executor_is_non_blocking():
-    """
-    Verify that submitting a blocking task does not block the main asyncio event loop.
-    The `submit` call should return immediately.
-    """
     executor = PhysicsExecutor()
     sleep_duration = 0.1
 
@@ -70,7 +62,6 @@ async def test_executor_is_non_blocking():
 
 @pytest.mark.asyncio
 async def test_executor_propagates_exceptions():
-    """Verify that exceptions raised in the worker thread are re-raised in the caller."""
     executor = PhysicsExecutor()
 
     with pytest.raises(ValueError, match="Task failed successfully"):

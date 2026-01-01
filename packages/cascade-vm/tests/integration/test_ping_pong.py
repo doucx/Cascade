@@ -9,15 +9,11 @@ from cascade.vm.reactor import Reactor
 
 
 def simple_increment(val: int) -> int:
-    """The business logic for our F1 node."""
     return val + 1
 
 
 @pytest.fixture
 def ping_pong_topology():
-    """
-    Creates a D1 -> F1 -> D2 topology.
-    """
     d1 = PhysicsDataNode(id="D1", name="Input")
     f1 = PhysicsFuncNode(id="F1", name="Increment")
     d2 = PhysicsDataNode(id="D2", name="Output")
@@ -42,14 +38,6 @@ def ping_pong_topology():
 
 @pytest.mark.asyncio
 async def test_ping_pong_flow(ping_pong_topology):
-    """
-    Tests the full end-to-end flow:
-    1. A token is placed in D1.
-    2. Reactor.step() is called.
-    3. F1 should fire, consuming the token from D1.
-    4. PhysicsExecutor runs the increment function.
-    5. A new token with the result is placed in D2.
-    """
     graph, d1, f1, d2, function_map = ping_pong_topology
 
     memory = VolatileMemory()

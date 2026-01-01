@@ -1,0 +1,10 @@
+"simple_topology": |-
+  Creates a simple D1 -> F1 topology.
+"test_reactor_independent_nodes": |-
+  Two independent nodes F1, F2. Both ready. Both should fire in one step.
+"test_reactor_partial_inputs": |-
+  F1 needs D1 and D2. Only D1 has token. F1 should NOT fire.
+"test_reactor_step_fire": |-
+  If input has token, F1 should fire and consume the token.
+"test_reactor_step_idle": |-
+  If no tokens are present, step() should do nothing.

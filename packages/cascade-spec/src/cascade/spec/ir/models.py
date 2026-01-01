@@ -37,28 +37,22 @@ class TaskDef:
 
 @dataclass(frozen=True)
 class NodeIR:
-    """
-    Intermediate Representation of a Task instantiation in the logical graph.
-    This is the input to the Compiler Backend.
-    """
     id: str
     """Unique identifier for this node instance (e.g. current_instance_hash)."""
-    
+
     name: str
     """Human-readable name."""
-    
+
     task: TaskDef
     """The definition of the task being invoked."""
-    
+
     inputs: Dict[str, Any] = field(default_factory=dict)
     """
     Mapping of argument names to values. 
     Values can be literals or references to other NodeIR IDs.
     """
 
+
 @dataclass(frozen=True)
 class GraphIR:
-    """
-    A collection of NodeIRs representing the full logical workflow.
-    """
     nodes: List[NodeIR] = field(default_factory=list)

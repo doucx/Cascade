@@ -1,0 +1,11 @@
+"test_basic_put_and_take": |-
+  Test standard token storage and retrieval.
+"test_capacity_overflow": |-
+  Putting more tokens than capacity must raise MemoryFullError.
+"test_empty_take": |-
+  Taking from an empty node must raise MemoryEmptyError.
+"test_excitement_check": |-
+  A node is 'excited' if it has at least one token (or a specific threshold).
+  This is the core signal for the Reactor.
+"test_fifo_behavior": |-
+  Tokens must be retrieved in the order they were put (FIFO).

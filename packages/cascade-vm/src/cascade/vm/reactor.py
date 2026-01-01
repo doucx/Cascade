@@ -7,11 +7,6 @@ from cascade.vm.executor import PhysicsExecutor
 
 
 class Reactor:
-    """
-    The heart of the physics engine.
-    Scans the topology for excited states and fires transitions.
-    """
-
     def __init__(
         self,
         graph: BipartiteGraph,
@@ -52,12 +47,6 @@ class Reactor:
                 self._func_outputs[source_node.id].append(target_node.id)
 
     async def step(self) -> int:
-        """
-        Performs a single scan cycle of the entire graph.
-
-        Returns:
-            int: The number of nodes that fired during this step.
-        """
         ready_nodes: List[PhysicsFuncNode] = []
         for f_node in self._func_nodes:
             input_ids = self._func_inputs.get(f_node.id, [])
@@ -81,12 +70,6 @@ class Reactor:
         return len(ready_nodes)
 
     async def _fire(self, node: PhysicsFuncNode) -> None:
-        """
-        Internal method to execute a node transition.
-        1. Atomically consumes tokens from all input slots.
-        2. Submits the actual payload to an Executor.
-        3. Puts the resulting token into the output slots.
-        """
         # 1. Consume inputs
         input_ids = self._func_inputs.get(node.id, [])
         input_tokens = [self.memory.take(d_node_id) for d_node_id in input_ids]

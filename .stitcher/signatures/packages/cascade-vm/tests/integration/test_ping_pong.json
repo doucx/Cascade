@@ -1,0 +1,17 @@
+{
+  "ping_pong_topology": {
+    "baseline_code_signature_text": "def ping_pong_topology():",
+    "baseline_code_structure_hash": "c5e01446a0943a640548a7ecd16c1ea146c89618ce268ce7b6c38e1a8dcabc69",
+    "baseline_yaml_content_hash": "7cb9c5c4732c679c1a61af4ef55fd8adb4532a2c3ce7b23efa7c0e8772907df8"
+  },
+  "simple_increment": {
+    "baseline_code_signature_text": "def simple_increment(val: int) -> int:",
+    "baseline_code_structure_hash": "7867e93b429aa05e8e0649afbdadf1a09033584b8a502a0757181ae6de2a8b0b",
+    "baseline_yaml_content_hash": "4420f85315706715973b284f3d2bf3527738a14648460a0f4bf0126d942ec178"
+  },
+  "test_ping_pong_flow": {
+    "baseline_code_signature_text": "async def test_ping_pong_flow(ping_pong_topology):",
+    "baseline_code_structure_hash": "067c298f05f1c5cc7a563dad8b63ed4678b779e870cd7283655952c782a730e0",
+    "baseline_yaml_content_hash": "491777e1e2faddb2159807c1f79878fb87727e65505cd77a5b2de62c751a2243"
+  }
+}

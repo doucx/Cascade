@@ -1,0 +1,7 @@
+{
+  "standard_stainer": {
+    "baseline_code_signature_text": "def standard_stainer(inputs: Dict[str, Token]) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "c7c2b08d7f8cb03533a3aea6650f583583b9c5686fbad824c9e2d734f9d88c82",
+    "baseline_yaml_content_hash": "6c89eab3d824337b54127c53aefa3052d3e810773de2d04ed1d74ce3c2bb1c0a"
+  }
+}

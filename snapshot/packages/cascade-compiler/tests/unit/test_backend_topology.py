@@ -223,9 +223,9 @@ def test_compile_injects_lifecycle_emitters():
         for c in topology.channels
         if c.source_node_instance_hash == "A" and c.kind == ChannelKind.DATA
     )
-    assert (
-        "result" in result_emitter.inputs
-    ), "Result emitter must have a 'result' input"
+    assert "result" in result_emitter.inputs, (
+        "Result emitter must have a 'result' input"
+    )
     assert result_emitter.inputs["result"] == output_of_a_hash
 
     # 6. Assert that a SIGNAL channel connects the two emitters
@@ -241,14 +241,14 @@ def test_compile_injects_lifecycle_emitters():
 
     assert signal_channel is not None, "SIGNAL channel between emitters not found"
     assert signal_channel.kind == ChannelKind.SIGNAL
-    assert (
-        signal_channel.port_name == "result"
-    ), "Emitters should signal from their default 'result' output port"
+    assert signal_channel.port_name == "result", (
+        "Emitters should signal from their default 'result' output port"
+    )
 
     # 7. Assert that the Termination Emitter receives the signal
-    assert (
-        "signal" in term_emitter.inputs
-    ), "Termination emitter must have a 'signal' input"
+    assert "signal" in term_emitter.inputs, (
+        "Termination emitter must have a 'signal' input"
+    )
     assert signal_channel.target_data_slot_hash == term_emitter.inputs["signal"]
 
     # 8. Verify the signal's DataNode exists and is correctly produced

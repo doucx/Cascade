@@ -107,19 +107,19 @@ class _GraphBuilder:
 
         for arg in obj.args:
             if isinstance(arg, (LazyResult, MappedLazyResult)):
-                dep_id = self._visit(arg)
-                dep_shims[arg._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
+                current_dep_instance_hash = self._visit(arg)
+                dep_shims[arg._uuid] = NodeIDShim(current_node_instance_hash=current_dep_instance_hash)
 
         for val in obj.kwargs.values():
             if isinstance(val, (LazyResult, MappedLazyResult)):
-                dep_id = self._visit(val)
-                dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
+                current_dep_instance_hash = self._visit(val)
+                dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=current_dep_instance_hash)
 
         if obj._condition:
             if isinstance(obj._condition, LazyResult):
-                dep_id = self._visit(obj._condition)
+                current_dep_instance_hash = self._visit(obj._condition)
                 dep_shims[obj._condition._uuid] = NodeIDShim(
-                    current_node_instance_hash=dep_id
+                    current_node_instance_hash=current_dep_instance_hash
                 )
 
         task_def = self.analyzer.analyze(obj.task)
@@ -127,11 +127,11 @@ class _GraphBuilder:
         # Populate Symbol Table using the canonical hash as the link key
         self.symbol_table[task_def.canonical_code_structure_hash] = obj.task.func
 
-        node_id = self.hashing_service.compute_node_instance_hash(
+        current_node_instance_hash = self.hashing_service.compute_node_instance_hash(
             task_def, obj, cast(Dict[str, Any], dep_shims)
         )
 
-        if node_id not in self.nodes:
+        if current_node_instance_hash not in self.nodes:
             literal_args = [
                 arg
                 for arg in obj.args
@@ -161,13 +161,13 @@ class _GraphBuilder:
             policy = self._extract_policy(obj)
 
             node = NodeIR(
-                current_node_instance_hash=node_id,
+                current_node_instance_hash=current_node_instance_hash,
                 definition=task_def,
                 args=literal_args,
                 kwargs=literal_kwargs,
                 policy=policy,
             )
-            self.nodes[node_id] = node
+            self.nodes[current_node_instance_hash] = node
 
         for i, arg in enumerate(obj.args):
             if isinstance(arg, (LazyResult, MappedLazyResult)):
@@ -176,7 +176,7 @@ class _GraphBuilder:
                         source_node_instance_hash=dep_shims[
                             arg._uuid
                         ].current_node_instance_hash,
-                        target_node_instance_hash=node_id,
+                        target_node_instance_hash=current_node_instance_hash,
                         target_arg=str(i),
                     )
                 )
@@ -188,7 +188,7 @@ class _GraphBuilder:
                         source_node_instance_hash=dep_shims[
                             val._uuid
                         ].current_node_instance_hash,
-                        target_node_instance_hash=node_id,
+                        target_node_instance_hash=current_node_instance_hash,
                         target_arg=k,
                     )
                 )
@@ -199,14 +199,14 @@ class _GraphBuilder:
                     source_node_instance_hash=dep_shims[
                         obj._condition._uuid
                     ].current_node_instance_hash,
-                    target_node_instance_hash=node_id,
+                    target_node_instance_hash=current_node_instance_hash,
                     target_arg="_condition",
                     kind=EdgeKind.CONTROL,
                 )
             )
 
-        self._visited_lazy_uuids[obj._uuid] = node_id
-        return node_id
+        self._visited_lazy_uuids[obj._uuid] = current_node_instance_hash
+        return current_node_instance_hash
 
     def _visit_mapped_result(self, obj: MappedLazyResult) -> str:
         if obj._uuid in self._visited_lazy_uuids:
@@ -215,39 +215,36 @@ class _GraphBuilder:
         dep_shims: Dict[str, NodeIDShim] = {}
         for val in obj.mapping_kwargs.values():
             if isinstance(val, (LazyResult, MappedLazyResult)):
-                dep_id = self._visit(val)
-                dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
+                current_dep_instance_hash = self._visit(val)
+                dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=current_dep_instance_hash)
 
         task_def = self.analyzer.analyze(obj.factory)
 
-        # Populate Symbol Table
-        self.symbol_table[task_def.canonical_code_structure_hash] = func
-
         # Ensure we store the raw function, not the Task wrapper
-        # The analyzer usually handles extraction, but we need the raw callable for VM
         func = obj.factory
         if hasattr(func, "func"):  # Unwrap Task objects
             func = func.func
 
-        self.symbol_table[code_hash] = func
+        # Populate Symbol Table
+        self.symbol_table[task_def.canonical_code_structure_hash] = func
 
-        node_id = self.hashing_service.compute_node_instance_hash(
+        current_node_instance_hash = self.hashing_service.compute_node_instance_hash(
             task_def, obj, cast(Dict[str, Any], dep_shims)
         )
 
-        if node_id not in self.nodes:
+        if current_node_instance_hash not in self.nodes:
             literal_kwargs = {
                 k: val
                 for k, val in obj.mapping_kwargs.items()
                 if not isinstance(val, (LazyResult, MappedLazyResult))
             }
             node = NodeIR(
-                current_node_instance_hash=node_id,
+                current_node_instance_hash=current_node_instance_hash,
                 definition=task_def,
                 kwargs=literal_kwargs,
                 meta={"is_map": True},
             )
-            self.nodes[node_id] = node
+            self.nodes[current_node_instance_hash] = node
 
         for k, val in obj.mapping_kwargs.items():
             if isinstance(val, (LazyResult, MappedLazyResult)):
@@ -256,10 +253,10 @@ class _GraphBuilder:
                         source_node_instance_hash=dep_shims[
                             val._uuid
                         ].current_node_instance_hash,
-                        target_node_instance_hash=node_id,
+                        target_node_instance_hash=current_node_instance_hash,
                         target_arg=k,
                     )
                 )
 
-        self._visited_lazy_uuids[obj._uuid] = node_id
-        return node_id
+        self._visited_lazy_uuids[obj._uuid] = current_node_instance_hash
+        return current_node_instance_hash

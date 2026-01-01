@@ -86,8 +86,8 @@ class _TopologyBuilder:
         self._data_nodes[current_data_slot_hash] = d_node
 
         channel = ChannelDef(
-            source_node_instance_hash=func_hash,
-            target_data_slot_hash=data_slot_hash,
+            source_node_instance_hash=current_node_instance_hash,
+            target_data_slot_hash=current_data_slot_hash,
             port_name="result",
             tag_filter="default",
             kind=ChannelKind.DATA,  # Explicitly a DATA channel
@@ -95,38 +95,38 @@ class _TopologyBuilder:
         self._channels.append(channel)
 
     def _process_literal(self, f_node: PhysicsFuncNode, arg_name: str, value: Any):
-        const_hash = self._compute_const_hash(value)
+        current_literal_content_hash = self._compute_const_hash(value)
 
-        if const_hash not in self._data_nodes:
+        if current_literal_content_hash not in self._data_nodes:
             d_node = PhysicsDataNode(
-                current_data_slot_hash=const_hash,
-                name=f"const_{const_hash[:8]}",
+                current_data_slot_hash=current_literal_content_hash,
+                name=f"const_{current_literal_content_hash[:8]}",
                 producer_node_instance_hash="const",
             )
-            self._data_nodes[const_hash] = d_node
-            self._initial_values[const_hash] = value
+            self._data_nodes[current_literal_content_hash] = d_node
+            self._initial_values[current_literal_content_hash] = value
 
-        f_node.inputs[arg_name] = const_hash
+        f_node.inputs[arg_name] = current_literal_content_hash
 
     def _process_data_edges(self):
         for edge in self._graph.edges:
             if edge.kind != EdgeKind.DATA:
                 continue
 
-            current_source_node_instance_hash = edge.source_node_instance_hash
-            current_target_node_instance_hash = edge.target_node_instance_hash
+            current_source_instance_hash = edge.source_node_instance_hash
+            current_target_instance_hash = edge.target_node_instance_hash
             arg_name = edge.target_arg
 
-            current_source_data_slot_hash = self._func_output_map.get(current_source_node_instance_hash)
+            current_source_slot_hash = self._func_output_map.get(current_source_instance_hash)
 
-            if not current_source_data_slot_hash:
+            if not current_source_slot_hash:
                 raise RuntimeError(
-                    f"Source node {current_source_node_instance_hash} not found in output map"
+                    f"Source node {current_source_instance_hash} not found in output map"
                 )
 
-            target_func_node = self._func_nodes.get(current_target_node_instance_hash)
+            target_func_node = self._func_nodes.get(current_target_instance_hash)
             if target_func_node:
-                target_func_node.inputs[arg_name] = current_source_data_slot_hash
+                target_func_node.inputs[arg_name] = current_source_slot_hash
 
     def _process_control_edges(self):
         self._create_signal_channels(EdgeKind.CONTROL, ChannelKind.SIGNAL)
@@ -140,39 +140,39 @@ class _TopologyBuilder:
             if edge.kind != edge_kind:
                 continue
 
-            source_func_hash = edge.source_node_instance_hash
-            target_func_hash = edge.target_node_instance_hash
+            current_source_instance_hash = edge.source_node_instance_hash
+            current_target_instance_hash = edge.target_node_instance_hash
             arg_name = edge.target_arg
 
-            target_func_node = self._func_nodes.get(target_func_hash)
+            target_func_node = self._func_nodes.get(current_target_instance_hash)
             if not target_func_node:
                 raise RuntimeError(
-                    f"Target node {target_func_hash} for {edge_kind.name} edge not found"
+                    f"Target node {current_target_instance_hash} for {edge_kind.name} edge not found"
                 )
 
             # A control/jump edge needs a dedicated input slot on the target.
             # If one already exists (from a literal or other edge), we reuse it.
             # Otherwise, we create one.
             if arg_name in target_func_node.inputs:
-                target_data_hash = target_func_node.inputs[arg_name]
+                current_target_slot_hash = target_func_node.inputs[arg_name]
             else:
-                target_data_hash = self._compute_data_slot_hash(
-                    target_func_hash, f"input_{arg_name}"
+                current_target_slot_hash = self._compute_data_slot_hash(
+                    current_target_instance_hash, f"input_{arg_name}"
                 )
-                if target_data_hash not in self._data_nodes:
+                if current_target_slot_hash not in self._data_nodes:
                     d_node = PhysicsDataNode(
-                        current_data_slot_hash=target_data_hash,
+                        current_data_slot_hash=current_target_slot_hash,
                         name=f"{target_func_node.name}.in.{arg_name}",
                         producer_node_instance_hash="external",
                     )
-                    self._data_nodes[target_data_hash] = d_node
-                target_func_node.inputs[arg_name] = target_data_hash
+                    self._data_nodes[current_target_slot_hash] = d_node
+                target_func_node.inputs[arg_name] = current_target_slot_hash
 
             # Create the Channel
             tag = edge.case_key or "default"
             channel = ChannelDef(
-                source_node_instance_hash=source_func_hash,
-                target_data_slot_hash=target_data_hash,
+                source_node_instance_hash=current_source_instance_hash,
+                target_data_slot_hash=current_target_slot_hash,
                 port_name="result",  # Signals/Jumps use the default output port
                 tag_filter=tag,
                 kind=channel_kind,
@@ -185,43 +185,43 @@ class _TopologyBuilder:
 
         # Assumption: The last node processed by the Frontend is the target.
         root_node_ir = self._graph.nodes[-1]
-        root_node_hash = root_node_ir.current_node_instance_hash
-        root_output_hash = self._func_output_map[root_node_hash]
+        current_root_instance_hash = root_node_ir.current_node_instance_hash
+        current_root_output_hash = self._func_output_map[current_root_instance_hash]
 
         # 1. Create Result Emitter Node
-        result_emitter_hash = self._compute_synthetic_hash("result_emitter")
+        current_result_emitter_hash = self._compute_synthetic_hash("result_emitter")
         result_emitter_node = PhysicsFuncNode(
-            current_node_instance_hash=result_emitter_hash,
+            current_node_instance_hash=current_result_emitter_hash,
             name="result_emitter",
-            inputs={"result": root_output_hash},
+            inputs={"result": current_root_output_hash},
             sink_id="main_output",
         )
-        self._func_nodes[result_emitter_hash] = result_emitter_node
+        self._func_nodes[current_result_emitter_hash] = result_emitter_node
 
         # 2. Create Termination Emitter Node and its input DataNode
-        term_emitter_hash = self._compute_synthetic_hash("term_emitter")
+        current_term_emitter_hash = self._compute_synthetic_hash("term_emitter")
         # The signal comes FROM the result emitter
-        signal_data_hash = self._compute_data_slot_hash(result_emitter_hash, "signal")
+        current_signal_slot_hash = self._compute_data_slot_hash(current_result_emitter_hash, "signal")
 
         signal_data_node = PhysicsDataNode(
-            current_data_slot_hash=signal_data_hash,
+            current_data_slot_hash=current_signal_slot_hash,
             name="term_emitter.signal",
-            producer_node_instance_hash=result_emitter_hash,
+            producer_node_instance_hash=current_result_emitter_hash,
         )
-        self._data_nodes[signal_data_hash] = signal_data_node
+        self._data_nodes[current_signal_slot_hash] = signal_data_node
 
         term_emitter_node = PhysicsFuncNode(
-            current_node_instance_hash=term_emitter_hash,
+            current_node_instance_hash=current_term_emitter_hash,
             name="term_emitter",
-            inputs={"signal": signal_data_hash},
+            inputs={"signal": current_signal_slot_hash},
             sink_id="__system_lifecycle_signal",
         )
-        self._func_nodes[term_emitter_hash] = term_emitter_node
+        self._func_nodes[current_term_emitter_hash] = term_emitter_node
 
         # 3. Create SIGNAL Channel connecting the two emitters
         signal_channel = ChannelDef(
-            source_node_instance_hash=result_emitter_hash,
-            target_data_slot_hash=signal_data_hash,
+            source_node_instance_hash=current_result_emitter_hash,
+            target_data_slot_hash=current_signal_slot_hash,
             port_name="result",  # Emitters also have a default output for signaling
             tag_filter="default",
             kind=ChannelKind.SIGNAL,
@@ -232,8 +232,8 @@ class _TopologyBuilder:
         raw = f"const:{repr(value)}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
-        raw = f"{producer_hash}:{port}"
+    def _compute_data_slot_hash(self, current_producer_instance_hash: str, port: str) -> str:
+        raw = f"{current_producer_instance_hash}:{port}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def _compute_synthetic_hash(self, name: str) -> str:

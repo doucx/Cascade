@@ -131,3 +131,11 @@ class FuncNode:
                 port = self.outputs[name]
                 if port.target:
                     port.target.put(token)
+
+
+class TerminatorNode(FuncNode):
+    """
+    Runtime representation of a termination point.
+    When fired, it signals the Reactor to stop.
+    """
+    pass

@@ -1,7 +1,7 @@
 import asyncio
 from collections import deque, defaultdict
 from typing import Deque, Set, List, Dict, Any, Optional
-from cascade.spec.physics import DataNode, FuncNode
+from cascade.spec.physics import DataNode, FuncNode, TerminatorNode
 from .events import ReactorEvent, TokenGenerated, ExecutionFinished
 from .model import Channel
 from cascade.vm.protocols import ResourceManager
@@ -188,5 +188,10 @@ class Reactor:
         # 1. Atomically consume inputs (Physics: Consume Energy)
         inputs = node.consume_inputs()
         
-        # 2. Submit to Executor
+        # 2. Special Case: Terminator
+        if isinstance(node, TerminatorNode):
+            self.stop()
+            return
+
+        # 3. Submit to Executor
         await self.executor.submit(node, inputs)

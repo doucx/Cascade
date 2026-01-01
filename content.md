@@ -1,118 +1,124 @@
 简要回答：
-好的，我们将开始阶段 5.1。我将在 `cascade-spec` 中定义物理层面的 `PhysicsTerminatorNode` 契约，并在 `cascade-vm` 中创建验证 Reactor 自治生命周期的测试套件。
+好的，进入阶段 5.1.2。我将实现 `TerminatorNode` 的运行时表示及其在 Reactor 中的逻辑。
 
-## [WIP] test(vm): Create Phase 5.1 Suicide Pact tests and spec
+## [WIP] feat(vm): Implement TerminatorNode logic
 
 ### 用户需求
-实施“阶段 5.1：自杀契约”的测试基础设施。
-1.  定义 `PhysicsTerminatorNode` 数据结构，作为 Reactor 识别终止信号的契约。
-2.  创建测试用例验证 Reactor 在默认情况下是“永恒”的（不会自动停止）。
-3.  创建测试用例验证当 `PhysicsTerminatorNode` 被激发时，Reactor 能够自动终止。
+1.  在 `cascade.spec.physics` 中定义运行时的 `TerminatorNode`。
+2.  在 `Reactor._fire` 中实现对 `TerminatorNode` 的处理，使其触发 `stop()`。
+3.  修复并启用 `test_autonomous_lifecycle.py` 中的测试。
 
 ### 评论
-这是全对称架构转型的第一步。通过引入 `TerminatorNode`，我们将 Reactor 的生命周期控制权从外部（Python 脚本调用者）转移到了图的内部（拓扑结构）。这是实现“自治计算”的关键。
+通过在物理层（`physics`）引入 `TerminatorNode`，我们将“停止”动作变成了图中的一个物理事件。这消除了 Reactor 对外部控制信号的依赖，使其成为一个闭环系统。
 
 ### 目标
-1.  在 `cascade.spec.topology` 中添加 `PhysicsTerminatorNode`。
-2.  创建 `packages/cascade-vm/tests/reactor/test_autonomous_lifecycle.py`，包含预期失败（RED）的测试。
+1.  修改 `packages/cascade-spec/src/cascade/spec/physics.py`。
+2.  修改 `packages/cascade-vm/src/cascade/vm/reactor/core.py`。
+3.  更新 `packages/cascade-vm/tests/reactor/test_autonomous_lifecycle.py`。
 
 ### 基本原理
-我们遵循 TDD 流程。首先定义 API 契约（Spec）和期望行为（Test）。
-目前 Reactor 的 `run()` 方法是一个无限循环，只有调用 `stop()` 才会退出。测试将验证：
-1.  如果没有触发停止机制，`run()` 会一直阻塞（超时）。
-2.  如果存在 `TerminatorNode` 且被激发，`run()` 应该自动返回。
-由于 Reactor 尚未实现对 `TerminatorNode` 的处理逻辑，第二个测试预期会失败（超时）。
+-   **物理定义**: `TerminatorNode` 继承自 `FuncNode`，但在语义上它是能量的终点。
+-   **Reactor 逻辑**: 当 Reactor 准备激发一个节点时，如果该节点是 `TerminatorNode`，则立即停止主循环。这比将其提交给 Executor 再等待结果更高效且符合直觉（“一旦接触终结者，时间停止”）。
+-   **测试修复**: 之前的测试因 `asyncio.wait_for` 的取消机制引发了未捕获的 `CancelledError`。我们将完善测试的异常处理逻辑。
 
 ### 标签
-#intent/tooling #flow/draft #priority/high #comp/tests #comp/spec #concept/lifecycle #task/domain/runtime #task/object/reactor #task/action/test #task/state/begin
+#intent/build #flow/ready #priority/high #comp/runtime #comp/spec #concept/lifecycle #task/domain/runtime #task/object/terminator #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 定义物理层终止节点 Spec
+#### Acts 1: 定义运行时 TerminatorNode
 
-首先在 Spec 包中定义 `PhysicsTerminatorNode`，这是 VM 和 Compiler 之间的契约。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/topology.py
-~~~~~
-~~~~~python.old
-@dataclass(frozen=True)
-class PhysicsDataNode:
-    """
-    Represents a data storage slot in the physical bipartite graph.
-    This is the "Noun" or the container. It tracks its origin.
-    """
-    current_data_slot_hash: str
-    name: str
-    producer_node_instance_hash: str
-
-
-@dataclass(frozen=True)
-class ChannelDef:
-~~~~~
-~~~~~python.new
-@dataclass(frozen=True)
-class PhysicsDataNode:
-    """
-    Represents a data storage slot in the physical bipartite graph.
-    This is the "Noun" or the container. It tracks its origin.
-    """
-    current_data_slot_hash: str
-    name: str
-    producer_node_instance_hash: str
-
-
-@dataclass(frozen=True)
-class PhysicsTerminatorNode:
-    """
-    A special Functional Node that, when fired, triggers the shutdown of the Reactor.
-    It represents the "End of Time" for a run.
-    """
-    current_node_instance_hash: str
-    name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class ChannelDef:
-~~~~~
+在 `cascade.spec.physics` 中添加 `TerminatorNode` 类。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/topology.py
+packages/cascade-spec/src/cascade/spec/physics.py
 ~~~~~
 ~~~~~python.old
-class BipartiteGraph:
-    """
-    The static, physical blueprint of the computation network, output by the compiler.
-    """
-    func_nodes: Dict[str, PhysicsFuncNode]
-    data_nodes: Dict[str, PhysicsDataNode]
-    channels: List[ChannelDef]
-    # Map data_slot_hash -> literal value for constant inputs
-    initial_values: Dict[str, Any] = field(default_factory=dict)
+    def produce_outputs(self, tokens: Dict[str, Token]):
+        """
+        Push result tokens to output targets.
+        """
+        for name, token in tokens.items():
+            if name in self.outputs:
+                port = self.outputs[name]
+                if port.target:
+                    port.target.put(token)
 ~~~~~
 ~~~~~python.new
-class BipartiteGraph:
+    def produce_outputs(self, tokens: Dict[str, Token]):
+        """
+        Push result tokens to output targets.
+        """
+        for name, token in tokens.items():
+            if name in self.outputs:
+                port = self.outputs[name]
+                if port.target:
+                    port.target.put(token)
+
+
+class TerminatorNode(FuncNode):
     """
-    The static, physical blueprint of the computation network, output by the compiler.
+    Runtime representation of a termination point.
+    When fired, it signals the Reactor to stop.
     """
-    func_nodes: Dict[str, PhysicsFuncNode]
-    data_nodes: Dict[str, PhysicsDataNode]
-    channels: List[ChannelDef]
-    # Map data_slot_hash -> literal value for constant inputs
-    initial_values: Dict[str, Any] = field(default_factory=dict)
-    # Special lifecycle nodes
-    terminator_nodes: Dict[str, PhysicsTerminatorNode] = field(default_factory=dict)
+    pass
 ~~~~~
 
-#### Acts 2: 创建自主生命周期测试
+#### Acts 2: 实现 Reactor 的自杀逻辑
 
-创建测试文件。这些测试目前处于 RED 状态（特别是第二个测试），因为 Reactor 还没有实现对 `PhysicsTerminatorNode` 的识别逻辑。
+修改 `Reactor._fire` 方法，检测 `TerminatorNode` 并触发停止。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor/core.py
+~~~~~
+~~~~~python.old
+from typing import Deque, Set, List, Dict, Any, Optional
+from cascade.spec.physics import DataNode, FuncNode
+from .events import ReactorEvent, TokenGenerated, ExecutionFinished
+from .model import Channel
+from cascade.vm.protocols import ResourceManager
+~~~~~
+~~~~~python.new
+from typing import Deque, Set, List, Dict, Any, Optional
+from cascade.spec.physics import DataNode, FuncNode, TerminatorNode
+from .events import ReactorEvent, TokenGenerated, ExecutionFinished
+from .model import Channel
+from cascade.vm.protocols import ResourceManager
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor/core.py
+~~~~~
+~~~~~python.old
+    async def _fire(self, node: FuncNode):
+        # 1. Atomically consume inputs (Physics: Consume Energy)
+        inputs = node.consume_inputs()
+        
+        # 2. Submit to Executor
+        await self.executor.submit(node, inputs)
+~~~~~
+~~~~~python.new
+    async def _fire(self, node: FuncNode):
+        # 1. Atomically consume inputs (Physics: Consume Energy)
+        inputs = node.consume_inputs()
+        
+        # 2. Special Case: Terminator
+        if isinstance(node, TerminatorNode):
+            self.stop()
+            return
+
+        # 3. Submit to Executor
+        await self.executor.submit(node, inputs)
+~~~~~
+
+#### Acts 3: 修复并完善测试
+
+更新测试用例以使用新的 `TerminatorNode` 类，并修复 `CancelledError` 问题。
 
 ~~~~~act
 write_file
@@ -123,8 +129,7 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock
 
-from cascade.spec.physics import DataNode, FuncNode, Token, Port
-from cascade.spec.topology import PhysicsTerminatorNode
+from cascade.spec.physics import DataNode, FuncNode, Token, Port, TerminatorNode
 from cascade.vm.reactor import Reactor, TokenGenerated, ExecutionFinished
 from cascade.runtime.resource_manager import ResourceManager
 
@@ -164,84 +169,38 @@ async def test_reactor_runs_forever_without_terminator():
     # 3. Inject work
     reactor.push_event(TokenGenerated(node=data_nodes[0], token=Token(1)))
     
-    # 4. Mock executor completion to allow the task to 'finish'
+    # 4. Mock executor completion
     async def side_effect(node, inputs):
         reactor.push_event(ExecutionFinished(node=node, outputs={}))
     mock_executor.submit.side_effect = side_effect
     
     # 5. Wait and Expect Timeout
-    # Even after the task finishes, the reactor should stay alive waiting for more.
+    # wait_for will cancel run_task on timeout
     with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(run_task, timeout=0.5)
+        await asyncio.wait_for(run_task, timeout=0.2)
         
-    # Cleanup
+    # Cleanup: Ensure task is cancelled/stopped properly
     reactor.stop()
-    await run_task
+    try:
+        await run_task
+    except asyncio.CancelledError:
+        pass
 
 
 @pytest.mark.asyncio
 async def test_reactor_terminates_via_terminator_node():
     """
     Verifies the "Suicide Pact":
-    When a PhysicsTerminatorNode is fired, the Reactor should call stop() on itself
+    When a TerminatorNode is fired, the Reactor should call stop() on itself
     and the run() loop should return.
-    
-    NOTE: This test is expected to FAIL (Timeout) until Reactor implements Terminator handling.
     """
     rm = ResourceManager(capacity={"slots": 1})
     mock_executor = AsyncMock()
     reactor = Reactor(executor=mock_executor, resource_manager=rm)
     
     # 1. Setup Topology: DataNode -> Terminator
-    # We need to manually register the TerminatorNode because it's not a FuncNode
-    # and might not be supported by register_node yet (depending on implementation).
-    # Ideally, Reactor should treat TerminatorNode as a special FuncNode or similar.
-    
     d_in = DataNode(name="trigger")
-    
-    # Note: PhysicsTerminatorNode is a Spec object (static). 
-    # The Reactor needs a runtime representation (Physics object) for it.
-    # For now, let's assume we reuse the Spec object as the runtime object identifier
-    # or wrap it.
-    # But wait, Reactor operates on `cascade.spec.physics.FuncNode`. 
-    # PhysicsTerminatorNode is from `cascade.spec.topology` (Backend output).
-    # We need a runtime equivalent in `cascade.spec.physics` or just use FuncNode 
-    # with a special flag/type?
-    
-    # Architecture alignment:
-    # `cascade.spec.topology` defines the Static Blueprint.
-    # `cascade.spec.physics` defines the Runtime Objects.
-    # We need a runtime representation for Terminator.
-    
-    # Strategy:
-    # For this test, we can use a standard FuncNode but give it a special property 
-    # or register it specially in the Reactor to mimic what the VM would do when 
-    # loading a PhysicsTerminatorNode.
-    
-    # However, to properly test the Reactor's logic, we should probably add a 
-    # TerminatorNode class to `cascade.spec.physics` as well?
-    # Or, Reactor should recognize a specific type of node.
-    
-    # Let's define a runtime Terminator in the test for now, or use a duck-typed object.
-    # The clean way is to add TerminatorNode to `cascade.spec.physics`.
-    pass 
-    # Deferring implementation details to the next step when we actually implement the logic.
-    # For now, let's try to use a standard FuncNode but we expect the Reactor 
-    # to treat it differently based on registration.
-    
-    # Wait, the user requirement is to use PhysicsTerminatorNode.
-    # But PhysicsTerminatorNode is a dataclass for the static graph.
-    # The VM (Machine.py) translates Static -> Dynamic.
-    # The Reactor (Core.py) runs Dynamic nodes.
-    
-    # So we need a Dynamic Terminator Node.
-    from cascade.spec.physics import FuncNode
-    
-    class RuntimeTerminator(FuncNode):
-        """Runtime representation of a terminator."""
-        pass
-
-    terminator = RuntimeTerminator(name="term")
+    terminator = TerminatorNode(name="term", resource_requirements={"slots": 1})
     terminator.add_input(Port(name="signal", source=d_in))
     
     reactor.register_node(d_in)
@@ -253,18 +212,22 @@ async def test_reactor_terminates_via_terminator_node():
     # 3. Trigger the terminator
     reactor.push_event(TokenGenerated(node=d_in, token=Token("DIE")))
     
-    # 4. Expectation: The run loop should exit gracefully
+    # 4. Expectation: The run loop should exit gracefully WITHOUT timeout
+    # If it times out, the logic is broken.
     try:
         await asyncio.wait_for(run_task, timeout=1.0)
     except asyncio.TimeoutError:
         reactor.stop()
-        await run_task
+        try:
+            await run_task
+        except asyncio.CancelledError:
+            pass
         pytest.fail("Reactor failed to terminate automatically upon triggering TerminatorNode")
+    
+    # Assert stop was called (run loop exited)
+    assert run_task.done()
+    assert not run_task.cancelled()
 ~~~~~
 
 ### 下一步建议
-我们已经定义了 `PhysicsTerminatorNode` 的静态结构，并编写了验证 Reactor 自治生命周期的测试。
-下一步（阶段 5.1.2）我们将：
-1.  在 `cascade.spec.physics` 中添加 `TerminatorNode` 的运行时表示。
-2.  修改 `Reactor.step` 方法，识别 `TerminatorNode` 的激发，并调用 `self.stop()`。
-3.  确保测试变绿。
+如果测试通过（GREEN），我们将进入阶段 5.2，处理数据的“发射”问题，因为单纯的终止还不够，我们还需要能从这个闭环系统中拿出结果。我们将实现 `EmitterNode`。

@@ -41,12 +41,67 @@ class VMExecutionStrategy:
         run_stack: ExitStack,
         active_resources: Dict[str, Any],
     ) -> Any:
-        """
-        The main entry point for the VM execution strategy.
-        This method will be implemented in the next phase.
-        """
-        # Placeholder for the orchestration logic.
-        raise NotImplementedError("VMExecutionStrategy.execute is not yet implemented.")
+        # 1. 编译 (Compilation)
+        compilation_result = self.frontend.compile(target)
+        topology = self.backend.compile(compilation_result.ir)
+        symbol_table = compilation_result.symbol_table
+
+        # 2. 组装 (Assembly)
+        reactor = Reactor(executor=None)  # Executor will be injected right after
+        physics_executor = PhysicsExecutor(reactor=reactor, symbol_table=symbol_table)
+        reactor.executor = physics_executor
+
+        # 3. 配置 (Configuration)
+        loop = asyncio.get_running_loop()
+        result_future = loop.create_future()
+        termination_future = loop.create_future()
+
+        def on_main_output(payload: Any):
+            if not result_future.done():
+                result_future.set_result(payload)
+
+        def on_termination_signal(payload: Any):
+            if not termination_future.done():
+                termination_future.set_result(True)
+
+        reactor.register_sink("main_output", on_main_output)
+        reactor.register_sink("__system_lifecycle_signal", on_termination_signal)
+
+        # This call will fail until the next phase is implemented
+        self._load_topology(reactor, topology)
+
+        # 4. 运行与等待 (Execution & Observation)
+        run_task = asyncio.create_task(reactor.run())
+
+        try:
+            # Wait for both the result and the termination signal to ensure
+            # the graph has fully completed its lifecycle.
+            await asyncio.wait(
+                [result_future, termination_future],
+                return_when=asyncio.ALL_COMPLETED,
+            )
+
+            if result_future.exception():
+                raise result_future.exception()
+            if termination_future.exception():
+                raise termination_future.exception()
+
+            if not result_future.done():
+                raise RuntimeError("Workflow terminated without producing a result.")
+
+            return result_future.result()
+
+        finally:
+            # 5. 清理 (Teardown)
+            if not run_task.done():
+                reactor.stop()
+                # Yield control briefly to allow the reactor loop to process the stop signal
+                await asyncio.sleep(0)
+                run_task.cancel()
+                try:
+                    await run_task
+                except asyncio.CancelledError:
+                    pass  # Cancellation is the expected outcome here.
 
     def _load_topology(self, reactor: Reactor, topology: BipartiteGraph):
         """

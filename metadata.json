@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(engine): 纠正 VMExecutionStrategy 中的模块导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767241069.698915, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(engine): 在 VMExecutionStrategy 中实现核心编排逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767241181.3687053, "duration_ms": 0}}

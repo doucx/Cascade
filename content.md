@@ -1,66 +1,132 @@
-好的，分析完毕。你提供的 traceback 非常清晰，直接指出了我上一份计划引入的 `ImportError`。
+好的，我们继续执行方案的第二阶段：实现 `execute` 方法的编排逻辑。
 
-你说得对，这是一个典型的依赖注入和模块暴露问题。我的失误在于使用了过于宽泛的导入路径，而没有遵循 `cascade-vm` 包内部更精细的模块划分。
+我将生成一个计划，用完整的“宏观流程编排器”逻辑替换 `VMExecutionStrategy` 中 `execute` 方法的占位符。这个实现将串联起从编译到运行的全过程。
 
-1.  **根本原因**: `ImportError: cannot import name 'Reactor' from 'cascade.vm'`. 这条错误表明 `packages/cascade-vm/src/cascade/vm/__init__.py` 这个顶层包初始化文件，并没有将 `Reactor` 类导出到 `cascade.vm` 命名空间下。
-2.  **正确路径**: 根据项目结构，`Reactor` 定义在 `cascade.vm.reactor.core` 模块中，并通过 `cascade.vm.reactor.__init__.py` 导出。因此，正确的导入路径是 `from cascade.vm.reactor import Reactor`。
-3.  **连锁问题**: 同样的逻辑也适用于 `PhysicsExecutor`，它定义在 `cascade.vm.executors` 子模块中，需要通过 `from cascade.vm.executors import PhysicsExecutor` 来导入。
-
-我的上一个计划直接使用了 `from cascade.vm import Reactor, PhysicsExecutor`，这违反了 `cascade-vm` 包的封装性，导致了构建失败。
-
-我将生成一个计划来修正这个导入错误。这是一个精确的、外科手术式的修复，它将使我们的代码库恢复到可运行状态，以便我们继续进行下一阶段的重构。
-
-## [WIP] fix(engine): 纠正 VMExecutionStrategy 中的模块导入路径
-
-### 错误分析
-上一个计划在重写 `VMExecutionStrategy` 时，使用了不正确的顶层导入语句 `from cascade.vm import Reactor, PhysicsExecutor`。根据 `cascade-vm` 包的内部结构，`Reactor` 和 `PhysicsExecutor` 并非在 `cascade.vm` 的 `__init__.py` 中直接导出。它们分别位于各自的子模块 `reactor` 和 `executors` 中。这个错误的导入路径导致了 `ImportError`，中断了我们的重构流程。
+## [WIP] feat(engine): 在 VMExecutionStrategy 中实现核心编排逻辑
 
 ### 用户需求
-修复因导入路径错误导致的 `ImportError`，使项目恢复可运行状态。
+根据我们制定的详细重构方案，实现 `VMExecutionStrategy.execute` 方法的核心编排逻辑。
 
 ### 评论
-这是一个关键且必要的修复。它纠正了对 `cascade-vm` 包 API 的错误使用，并强调了遵循模块化导入规范的重要性。解决这个问题后，我们才能继续专注于 `VMExecutionStrategy` 核心功能的实现。
+这是本次重构中最关键的一步。通过实现 `execute` 方法，我们将 `VMExecutionStrategy` 的角色从一个空壳彻底转变为一个功能性的“宏观流程编排器”。此实现将首次把编译器链 (`Frontend`, `Backend`) 与新的物理运行时 (`Reactor`, `PhysicsExecutor`) 真正连接起来，形成一个完整的、端到端的执行流程。它完美体现了“控制反转”的架构思想，即 `Strategy` 负责组装和观测，而 `Reactor` 负责自治执行。
 
 ### 目标
-1.  定位 `packages/cascade-engine/src/cascade/runtime/strategies/vm.py` 中错误的导入语句。
-2.  使用 `patch_file` 将其替换为两个独立的、指向正确子模块的导入语句。
+1.  在 `execute` 方法中，实现完整的“编译 -> 组装 -> 配置 -> 运行 -> 清理”的生命周期。
+2.  调用 `Frontend` 和 `Backend` 将用户 `LazyResult` 编译为 `BipartiteGraph` 和 `symbol_table`。
+3.  实例化 `Reactor` 和 `PhysicsExecutor` 并将它们正确连接。
+4.  使用 `asyncio.Future` 和 `Reactor` 的 `Sink` 机制建立一个健壮的异步协调模型，以等待最终结果和终止信号。
+5.  在一个 `try...finally` 块中安全地启动和停止 `Reactor`，确保资源的优雅释放。
 
 ### 基本原理
-为了保持模块间的清晰解耦，子包不应该假设其依赖项会将所有内容都暴露在顶层命名空间。通过使用更具体、更精确的导入路径（`from cascade.vm.reactor import Reactor`），我们不仅能修复当前的 `ImportError`，还能使代码对未来 `cascade-vm` 包内部结构的调整更具鲁棒性。
+`execute` 方法是连接静态世界（代码和编译）与动态世界（运行时物理模拟）的桥梁。我们采用 `patch_file` 来原子化地替换整个方法体。其内部逻辑严格遵循我们预先设计的方案：通过 `asyncio.Future` 实现被动等待，使得 `Strategy` 成为一个非侵入式的观察者，而不是一个主动的微观管理者。`try...finally` 结构则保证了即使在执行失败的情况下，后台运行的 `Reactor` 任务也能被确定性地清理，避免了悬挂的异步任务。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #scope/dx #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
+#intent/build #flow/ready #priority/high #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 修正 `vm.py` 中的导入路径
+#### Acts 1: 实现 `execute` 方法
 
-我们将精确地替换掉错误的导入行，换上指向正确子模块的导入语句。
+我们将用完整的编排逻辑替换 `execute` 方法的占位符。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 ~~~~~
 ~~~~~python.old
-# --- 核心 VM 和编译器组件 ---
-from cascade.compiler import Frontend, Backend
-from cascade.vm import Reactor, PhysicsExecutor
-from cascade.spec.topology import BipartiteGraph, ChannelKind
-from cascade.spec.physics import FuncNode, DataNode, EmitterNode, Token, Port
-from cascade.vm.reactor.model import Channel as ReactorChannel
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        """
+        The main entry point for the VM execution strategy.
+        This method will be implemented in the next phase.
+        """
+        # Placeholder for the orchestration logic.
+        raise NotImplementedError("VMExecutionStrategy.execute is not yet implemented.")
 ~~~~~
 ~~~~~python.new
-# --- 核心 VM 和编译器组件 ---
-from cascade.compiler import Frontend, Backend
-from cascade.vm.reactor import Reactor
-from cascade.vm.executors import PhysicsExecutor
-from cascade.spec.topology import BipartiteGraph, ChannelKind
-from cascade.spec.physics import FuncNode, DataNode, EmitterNode, Token, Port
-from cascade.vm.reactor.model import Channel as ReactorChannel
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        # 1. 编译 (Compilation)
+        compilation_result = self.frontend.compile(target)
+        topology = self.backend.compile(compilation_result.ir)
+        symbol_table = compilation_result.symbol_table
+
+        # 2. 组装 (Assembly)
+        reactor = Reactor(executor=None)  # Executor will be injected right after
+        physics_executor = PhysicsExecutor(reactor=reactor, symbol_table=symbol_table)
+        reactor.executor = physics_executor
+
+        # 3. 配置 (Configuration)
+        loop = asyncio.get_running_loop()
+        result_future = loop.create_future()
+        termination_future = loop.create_future()
+
+        def on_main_output(payload: Any):
+            if not result_future.done():
+                result_future.set_result(payload)
+
+        def on_termination_signal(payload: Any):
+            if not termination_future.done():
+                termination_future.set_result(True)
+
+        reactor.register_sink("main_output", on_main_output)
+        reactor.register_sink("__system_lifecycle_signal", on_termination_signal)
+
+        # This call will fail until the next phase is implemented
+        self._load_topology(reactor, topology)
+
+        # 4. 运行与等待 (Execution & Observation)
+        run_task = asyncio.create_task(reactor.run())
+
+        try:
+            # Wait for both the result and the termination signal to ensure
+            # the graph has fully completed its lifecycle.
+            await asyncio.wait(
+                [result_future, termination_future],
+                return_when=asyncio.ALL_COMPLETED,
+            )
+
+            if result_future.exception():
+                raise result_future.exception()
+            if termination_future.exception():
+                raise termination_future.exception()
+
+            if not result_future.done():
+                raise RuntimeError("Workflow terminated without producing a result.")
+
+            return result_future.result()
+
+        finally:
+            # 5. 清理 (Teardown)
+            if not run_task.done():
+                reactor.stop()
+                # Yield control briefly to allow the reactor loop to process the stop signal
+                await asyncio.sleep(0)
+                run_task.cancel()
+                try:
+                    await run_task
+                except asyncio.CancelledError:
+                    pass  # Cancellation is the expected outcome here.
 ~~~~~
 
 ### 下一步建议
-导入问题已解决。现在环境已经准备就绪，我们可以安全地继续执行重构方案的**阶段 2 和 3**：实现 `execute` 方法中的核心编排逻辑，以及 `_load_topology` 的拓扑加载逻辑。
+我们已经成功实现了 `execute` 方法的核心编排逻辑。然而，目前 `_load_topology` 方法仍然是一个占位符，会导致程序在运行时因 `NotImplementedError` 而失败。
+
+因此，下一个至关重要的步骤是执行我们方案的**阶段 3：实现 `_load_topology` 辅助方法**。这将完成 `BipartiteGraph` (规格) 和 `Reactor` 内部物理模型之间的转换，使整个执行流程完全贯通。
 
 请指示我继续。

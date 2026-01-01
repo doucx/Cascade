@@ -5,7 +5,9 @@ from typing import Dict, Any, Optional
 # Axiom: [State]_[Source]_[Object]_[Type]
 # Example: baseline_code_structure_hash, baseline_code_signature_text
 # We enforce 4 segments, starting with state, ending with type (hash or text).
-FINGERPRINT_KEY_PATTERN = re.compile(r"^(baseline|current)_[a-z]+_[a-z]+_(hash|text)$")
+FINGERPRINT_KEY_PATTERN = re.compile(
+    r"^(canonical|baseline|current)_[a-z]+_[a-z]+_(hash|text)$"
+)
 
 
 class InvalidFingerprintKeyError(KeyError):

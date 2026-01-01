@@ -1,6 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from cascade.spec.fingerprint import Fingerprint
 
@@ -26,10 +26,39 @@ class TaskDef:
     name: str
     args: List[ArgumentDef]
     # The stable semantic identity of this task definition.
-    # Must contain keys like 'current_code_structure_hash'.
+    # Must contain keys like 'canonical_code_structure_hash'.
     fingerprint: Fingerprint
     return_annotation: Optional[str] = None
     docstring: Optional[str] = None
     is_async: bool = False
     # Execution mode (e.g. "blocking", "compute") derived from the task definition
     mode: str = "blocking"
+
+
+@dataclass(frozen=True)
+class NodeIR:
+    """
+    Intermediate Representation of a Task instantiation in the logical graph.
+    This is the input to the Compiler Backend.
+    """
+    id: str
+    """Unique identifier for this node instance (e.g. current_instance_hash)."""
+    
+    name: str
+    """Human-readable name."""
+    
+    task: TaskDef
+    """The definition of the task being invoked."""
+    
+    inputs: Dict[str, Any] = field(default_factory=dict)
+    """
+    Mapping of argument names to values. 
+    Values can be literals or references to other NodeIR IDs.
+    """
+
+@dataclass(frozen=True)
+class GraphIR:
+    """
+    A collection of NodeIRs representing the full logical workflow.
+    """
+    nodes: List[NodeIR] = field(default_factory=list)

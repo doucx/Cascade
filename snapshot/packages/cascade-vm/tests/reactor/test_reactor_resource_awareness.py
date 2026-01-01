@@ -12,7 +12,11 @@ def create_topology(n_nodes: int):
     nodes = []
     inputs = []
     for i in range(n_nodes):
-        f_node = FuncNode(name=f"task_{i}", resource_requirements={"slots": 1})
+        f_node = FuncNode(
+            name=f"task_{i}",
+            canonical_code_structure_hash=f"hash_task_{i}",
+            resource_requirements={"slots": 1},
+        )
         d_in = DataNode(name=f"in_{i}")
         f_node.add_input(Port(name="arg", source=d_in))
         nodes.append(f_node)

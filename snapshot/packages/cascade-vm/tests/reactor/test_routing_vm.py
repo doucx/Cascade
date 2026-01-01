@@ -14,7 +14,7 @@ async def test_routing_tag_matching():
          F -> (Tag='continue') -> D_loop
     """
     # 1. Topology
-    f_node = FuncNode(name="decision")
+    f_node = FuncNode(name="decision", canonical_code_structure_hash="hash_decision")
     d_next = DataNode(name="next")
     d_loop = DataNode(name="loop")
 
@@ -56,10 +56,10 @@ async def test_routing_tag_matching():
 @pytest.mark.asyncio
 async def test_routing_fan_out_same_tag():
     """
-    Case 2: Broadcasting
+    Test Case: Broadcasting
     验证同一个 Tag 可以被多个 Channel 接收 (Fan-out)。
     """
-    f_node = FuncNode(name="broadcast")
+    f_node = FuncNode(name="broadcast", canonical_code_structure_hash="hash_broadcast")
     d_1 = DataNode(name="d1")
     d_2 = DataNode(name="d2")
 

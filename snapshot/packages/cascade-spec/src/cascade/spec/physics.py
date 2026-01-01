@@ -99,7 +99,7 @@ class FuncNode:
     def __init__(
         self,
         name: str,
-        canonical_code_structure_hash: str = "",
+        canonical_code_structure_hash: str,
         resource_requirements: Optional[Dict[str, Any]] = None,
     ):
         self.name = name

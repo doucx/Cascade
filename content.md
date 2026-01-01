@@ -1,51 +1,53 @@
 简要回答
-我将生成一个修复计划，重点是更新测试代码以符合哈希命名公理，并修正因 schema 变更导致的测试失败。
+是的，你的分析非常精准。我们正面临一个由于“强制身份标识”这一正确架构决策而暴露出的系统性一致性问题。我将执行一个 D2 计划，通过在编译器后端、运行时规范和测试套件中显式传递 `canonical_code_structure_hash`，并在前端消除潜在的变量作用域风险，来从根本上解决这些链接和类型错误。
 
-## [WIP] fix: 对齐测试代码与哈希命名公理及 Schema 变更
+## [WIP] fix: 强制传递 canonical_hash 以修复编译器与VM的链接断裂
+
+### 错误分析
+当前测试失败的核心原因是 **身份丢失**。
+
+1.  **编译器后端 (Backend)**: 在生成合成节点（Lifecycle Emitters）时，未符合 `PhysicsFuncNode` 的新契约，遗漏了 `canonical_code_structure_hash`。这导致了 `TypeError`，阻塞了 TCO 和拓扑构建的测试。
+2.  **VM 运行时 (Executor)**: `PhysicsExecutor` 依赖 `canonical_code_structure_hash` 在符号表中查找函数。由于测试用例构造的 `FuncNode` 默认为空哈希，导致查找 `_symbol_table.get("")` 失败 (RuntimeError)，进而导致无法产生 Output Token (KeyError)。
+3.  **VM 测试套件**: `test_physics.py` 和 `test_funcnode.py` 中的 Mock 对象构造落后于架构变更，使用了旧的签名。
 
 ### 用户需求
-修复因实施 "Hash Naming Axiom" (d3-axiom-arch-stable-identifiers) 而导致的 `cascade-compiler`、`cascade-spec` 和 `cascade-vm` 中的测试失败和 Linter 违规。这包括：
-1. 更新仅在测试中使用的辅助函数，使其通过新的 `TaskDef` 和 `PhysicsFuncNode` 构造参数。
-2. 将测试中使用的哈希变量名重构为符合四段式命名规范的格式。
-3. 确保运行时物理模型 (`FuncNode`) 携带必要的身份哈希。
+1.  **修复 Backend**: 确保所有 `PhysicsFuncNode`（包括合成的）都拥有合法的 `canonical_code_structure_hash`。
+2.  **强化 Spec**: 修改 `cascade.spec.physics.FuncNode`，移除 `canonical_code_structure_hash` 的默认值，强制使用者提供。
+3.  **修复 Tests**: 更新 VM 相关测试，提供明确的哈希值，确保链接成功。
+4.  **防御性修复 Frontend**: 确保 `frontend.py` 中 `MappedLazyResult` 处理逻辑的变量作用域安全。
 
 ### 评论
-当前的破坏是实施严格命名规范后的常见阵痛。测试代码作为系统的第一次使用者，必须严格遵守新的公理。将 `fingerprint` 替换为 `canonical_code_structure_hash` 是从“内容完整性”向“身份链接”转变的关键一步。
+这是一个架构一致性修复。虽然看似只是为了让测试通过，但实际上是在“编译器 IR”和“运行时 Physics”之间建立了一条不可断裂的身份由于链。这对于系统的确定性和可调试性至关重要。
 
 ### 目标
-1.  **Linter通过**: 消除 `test_backend_tco.py` 和 `test_backend_topology.py` 中的所有哈希命名违规。
-2.  **Schema对齐**: 更新所有测试辅助函数以使用 `TaskDef(canonical_code_structure_hash=...)` 而非 `fingerprint`。
-3.  **运行时修复**: 更新 `PhysicsFuncNode` (Spec) 和 `FuncNode` (Runtime) 的定义与实例化，确保身份哈希在整个系统中流动。
+1.  消除所有 `TypeError: PhysicsFuncNode.__init__`。
+2.  消除所有 `RuntimeError: Linking failed`。
+3.  确保 `cascade-compiler` 和 `cascade-vm` 的所有单元测试通过。
 
 ### 基本原理
-1.  **测试辅助函数**: 测试中的 Mock 数据结构必须反映真实的 IR 结构。`TaskDef` 现在要求明确的规范哈希，而不是通用的指纹对象。
-2.  **变量重命名**: 为了通过 `lint_hash_names.py`，测试变量必须遵循 `[State]_[Source]_[Object]_hash` 格式。
-3.  **物理节点更新**: 错误日志显示 `FuncNode` 缺少 `canonical_code_structure_hash` 属性，这表明运行时执行器试图根据此哈希进行链接，但基础物理对象尚未更新以承载此信息。
+我们将遵循“显式优于隐式”的原则：
+*   **Synthetic Nodes**: 为编译器生成的内部节点分配符合命名公理的不仅是实例哈希，还有固定的规范哈希（如 `canonical_system_resultemitter_hash`）。
+*   **Spec**: 通过移除 `__init__` 中的默认值，利用 Python 的 Type Checker 和 Runtime Failure 来强制所有下游代码（包括未被发现的测试）遵守新契约。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #comp/spec #scope/core #ai/instruct #task/domain/testing #task/object/hash-naming #task/action/compliance #task/state/begin
+#intent/fix #flow/ready #priority/high
+#comp/runtime #comp/compiler #comp/tests #concept/state
+#task/domain/architecture #task/object/identity-hash #task/action/enforce
+#task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 Spec 模型与测试
-更新 `cascade-spec` 中的物理节点定义和相关测试，以支持新的哈希字段。
+#### Acts 1: 强化 Physics 规范 (Spec)
+
+首先，修改 `cascade.spec.physics.FuncNode`，移除 `canonical_code_structure_hash` 的默认值。这将显式地通过 `TypeError` 捕获所有未更新的调用点。
 
 ~~~~~act
 patch_file
 packages/cascade-spec/src/cascade/spec/physics.py
 ~~~~~
 ~~~~~python.old
-    def __init__(
-        self, name: str, resource_requirements: Optional[Dict[str, Any]] = None
-    ):
-        self.name = name
-        self.resource_requirements = resource_requirements or {}
-        self.inputs: Dict[str, Port] = {}
-        self.outputs: Dict[str, Port] = {}
-~~~~~
-~~~~~python.new
     def __init__(
         self,
         name: str,
@@ -55,411 +57,564 @@ packages/cascade-spec/src/cascade/spec/physics.py
         self.name = name
         self.canonical_code_structure_hash = canonical_code_structure_hash
         self.resource_requirements = resource_requirements or {}
-        self.inputs: Dict[str, Port] = {}
-        self.outputs: Dict[str, Port] = {}
+~~~~~
+~~~~~python.new
+    def __init__(
+        self,
+        name: str,
+        canonical_code_structure_hash: str,
+        resource_requirements: Optional[Dict[str, Any]] = None,
+    ):
+        self.name = name
+        self.canonical_code_structure_hash = canonical_code_structure_hash
+        self.resource_requirements = resource_requirements or {}
+~~~~~
+
+#### Acts 2: 修复编译器后端 (Backend)
+
+在生成 `result_emitter` 和 `term_emitter` 时，显式赋予它们符合公理的规范哈希。即便它们不是用户代码，它们在系统中也需要一个稳定的身份。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend.py
+~~~~~
+~~~~~python.old
+        # 1. Create Result Emitter Node
+        current_result_emitter_hash = self._compute_synthetic_hash("result_emitter")
+        result_emitter_node = PhysicsFuncNode(
+            current_node_instance_hash=current_result_emitter_hash,
+            name="result_emitter",
+            inputs={"result": current_root_output_hash},
+            sink_id="main_output",
+        )
+        self._func_nodes[current_result_emitter_hash] = result_emitter_node
+
+        # 2. Create Termination Emitter Node and its input DataNode
+        current_term_emitter_hash = self._compute_synthetic_hash("term_emitter")
+        # The signal comes FROM the result emitter
+        current_signal_slot_hash = self._compute_data_slot_hash(current_result_emitter_hash, "signal")
+
+        signal_data_node = PhysicsDataNode(
+            current_data_slot_hash=current_signal_slot_hash,
+            name="term_emitter.signal",
+            producer_node_instance_hash=current_result_emitter_hash,
+        )
+        self._data_nodes[current_signal_slot_hash] = signal_data_node
+
+        term_emitter_node = PhysicsFuncNode(
+            current_node_instance_hash=current_term_emitter_hash,
+            name="term_emitter",
+            inputs={"signal": current_signal_slot_hash},
+            sink_id="__system_lifecycle_signal",
+        )
+~~~~~
+~~~~~python.new
+        # 1. Create Result Emitter Node
+        current_result_emitter_hash = self._compute_synthetic_hash("result_emitter")
+        result_emitter_node = PhysicsFuncNode(
+            current_node_instance_hash=current_result_emitter_hash,
+            canonical_code_structure_hash="canonical_system_resultemitter_hash",
+            name="result_emitter",
+            inputs={"result": current_root_output_hash},
+            sink_id="main_output",
+        )
+        self._func_nodes[current_result_emitter_hash] = result_emitter_node
+
+        # 2. Create Termination Emitter Node and its input DataNode
+        current_term_emitter_hash = self._compute_synthetic_hash("term_emitter")
+        # The signal comes FROM the result emitter
+        current_signal_slot_hash = self._compute_data_slot_hash(current_result_emitter_hash, "signal")
+
+        signal_data_node = PhysicsDataNode(
+            current_data_slot_hash=current_signal_slot_hash,
+            name="term_emitter.signal",
+            producer_node_instance_hash=current_result_emitter_hash,
+        )
+        self._data_nodes[current_signal_slot_hash] = signal_data_node
+
+        term_emitter_node = PhysicsFuncNode(
+            current_node_instance_hash=current_term_emitter_hash,
+            canonical_code_structure_hash="canonical_system_termemitter_hash",
+            name="term_emitter",
+            inputs={"signal": current_signal_slot_hash},
+            sink_id="__system_lifecycle_signal",
+        )
+~~~~~
+
+#### Acts 3: 修复 VM 执行器测试 (Test Physics Executor)
+
+更新 `test_physics.py`，在构造 `FuncNode` 时必须传入与 Symbol Table 匹配的哈希键。这是修复 Link Error 的关键。
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/unit/executors/test_physics.py
+~~~~~
+~~~~~python.old
+@pytest.mark.asyncio
+async def test_physics_executor_submit_sync_task(mock_reactor, mock_symbol_table):
+    """
+    Tests that the executor can correctly find and execute a synchronous task,
+    unpacking token payloads and pushing a successful ExecutionFinished event.
+    """
+    # 1. Setup
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
+
+    node = FuncNode(name="sync_add_hash")  # Using name as hash for simplicity in test
+    inputs = {"a": Token(payload=10), "b": Token(payload=20)}
+
+    # 2. Action
+~~~~~
+~~~~~python.new
+@pytest.mark.asyncio
+async def test_physics_executor_submit_sync_task(mock_reactor, mock_symbol_table):
+    """
+    Tests that the executor can correctly find and execute a synchronous task,
+    unpacking token payloads and pushing a successful ExecutionFinished event.
+    """
+    # 1. Setup
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
+
+    node = FuncNode(
+        name="sync_add", canonical_code_structure_hash="sync_add_hash"
+    )  # Explicit linkage
+    inputs = {"a": Token(payload=10), "b": Token(payload=20)}
+
+    # 2. Action
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-spec/tests/unit/test_ir_models.py
+packages/cascade-vm/tests/unit/executors/test_physics.py
 ~~~~~
 ~~~~~python.old
-    # This test will fail until the models are created.
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
+@pytest.mark.asyncio
+async def test_physics_executor_submit_async_task(mock_reactor, mock_symbol_table):
+    """
+    Tests that the executor can correctly execute an asynchronous task.
+    """
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
+    node = FuncNode(name="async_add_hash")
+    inputs = {"a": Token(5), "b": Token(5)}
 
-    node = NodeIR(
+    await executor.submit(node, inputs)
 ~~~~~
 ~~~~~python.new
-    # This test will fail until the models are created.
-    task_def = TaskDef(
-        name="test_task",
-        args=[],
-        canonical_code_structure_hash="canonical_code_structure_hash_test",
-    )
+@pytest.mark.asyncio
+async def test_physics_executor_submit_async_task(mock_reactor, mock_symbol_table):
+    """
+    Tests that the executor can correctly execute an asynchronous task.
+    """
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    node = NodeIR(
+    node = FuncNode(name="async_add", canonical_code_structure_hash="async_add_hash")
+    inputs = {"a": Token(5), "b": Token(5)}
+
+    await executor.submit(node, inputs)
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-spec/tests/unit/test_ir_models.py
+packages/cascade-vm/tests/unit/executors/test_physics.py
 ~~~~~
 ~~~~~python.old
-def test_ir_serialization_roundtrip():
-    """Verify that IR structures can be serialized to and from JSON."""
-    fp = Fingerprint()
-    fp["current_code_structure_hash"] = "test_hash"
+@pytest.mark.asyncio
+async def test_physics_executor_handles_sync_failure(mock_reactor, mock_symbol_table):
+    """
+    Tests that if a synchronous task fails, an ExecutionFinished event with an
+    error is pushed to the reactor.
+    """
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
-    task_def = TaskDef(name="test_task", args=[arg_def], fingerprint=fp)
+    node = FuncNode(name="sync_fail_hash")
+    inputs = {"a": Token(1), "b": Token(1)}
 
-    node = NodeIR(
+    await executor.submit(node, inputs)
 ~~~~~
 ~~~~~python.new
-def test_ir_serialization_roundtrip():
-    """Verify that IR structures can be serialized to and from JSON."""
-    arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
-    task_def = TaskDef(
-        name="test_task",
-        args=[arg_def],
-        canonical_code_structure_hash="canonical_code_structure_hash_test",
-    )
+@pytest.mark.asyncio
+async def test_physics_executor_handles_sync_failure(mock_reactor, mock_symbol_table):
+    """
+    Tests that if a synchronous task fails, an ExecutionFinished event with an
+    error is pushed to the reactor.
+    """
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    node = NodeIR(
+    node = FuncNode(name="sync_fail", canonical_code_structure_hash="sync_fail_hash")
+    inputs = {"a": Token(1), "b": Token(1)}
+
+    await executor.submit(node, inputs)
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-spec/tests/topology/test_bipartite_graph_schema.py
+packages/cascade-vm/tests/unit/executors/test_physics.py
 ~~~~~
 ~~~~~python.old
-    # PhysicsFuncNode: Represents a computation instance (The "Verb")
-    f_node = PhysicsFuncNode(
-        current_node_instance_hash="func_inst_abc", name="calculate_metrics"
-    )
-    assert is_dataclass(f_node)
-    assert f_node.current_node_instance_hash == "func_inst_abc"
+@pytest.mark.asyncio
+async def test_physics_executor_handles_async_failure(mock_reactor, mock_symbol_table):
+    """
+    Tests failure handling for asynchronous tasks.
+    """
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
+
+    node = FuncNode(name="async_fail_hash")
+    inputs = {"a": Token(1), "b": Token(1)}
+
+    await executor.submit(node, inputs)
 ~~~~~
 ~~~~~python.new
-    # PhysicsFuncNode: Represents a computation instance (The "Verb")
-    f_node = PhysicsFuncNode(
-        current_node_instance_hash="func_inst_abc",
-        canonical_code_structure_hash="canonical_code_structure_hash_metrics",
-        name="calculate_metrics",
-    )
-    assert is_dataclass(f_node)
-    assert f_node.current_node_instance_hash == "func_inst_abc"
-~~~~~
+@pytest.mark.asyncio
+async def test_physics_executor_handles_async_failure(mock_reactor, mock_symbol_table):
+    """
+    Tests failure handling for asynchronous tasks.
+    """
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-#### Acts 2: 修复 Compiler 测试辅助函数
-更新 `cascade-compiler` 中用于创建模拟节点的辅助函数，并同时修复哈希变量命名违规。
+    node = FuncNode(name="async_fail", canonical_code_structure_hash="async_fail_hash")
+    inputs = {"a": Token(1), "b": Token(1)}
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/test_backend_tco.py
-~~~~~
-~~~~~python.old
-def _create_dummy_node(node_id: str, arg_names: List[str] = None) -> NodeIR:
-    """Helper to create a minimal NodeIR for TCO tests."""
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
-
-    args = []
-    if arg_names:
-        for name in arg_names:
-            args.append(ArgumentDef(name=name, kind=ArgumentKind.POSITIONAL_OR_KEYWORD))
-
-    task_def = TaskDef(name=node_id, args=args, fingerprint=fp)
-    # We use the node_id as the instance hash for clarity in tests
-    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
-~~~~~
-~~~~~python.new
-def _create_dummy_node(node_id: str, arg_names: List[str] = None) -> NodeIR:
-    """Helper to create a minimal NodeIR for TCO tests."""
-    args = []
-    if arg_names:
-        for name in arg_names:
-            args.append(ArgumentDef(name=name, kind=ArgumentKind.POSITIONAL_OR_KEYWORD))
-
-    task_def = TaskDef(
-        name=node_id,
-        args=args,
-        canonical_code_structure_hash=f"canonical_code_structure_hash_{node_id}",
-    )
-    # We use the node_id as the instance hash for clarity in tests
-    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
+    await executor.submit(node, inputs)
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_backend_tco.py
+packages/cascade-vm/tests/unit/executors/test_physics.py
 ~~~~~
 ~~~~~python.old
-    # Verify Input Slot (DataNode) for 'n' exists
-    # The compiler should have created a DataNode for the input 'n'
-    assert "n" in func_node.inputs
-    input_data_hash = func_node.inputs["n"]
-    assert input_data_hash in topology.data_nodes
+@pytest.mark.asyncio
+async def test_physics_executor_handles_missing_function(
+    mock_reactor, mock_symbol_table
+):
+    """
+    Tests that a linking error (function not in symbol table) is reported.
+    """
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    # Verify Feedback Channel
+    node = FuncNode(name="missing_hash")
+    inputs = {}
+
+    await executor.submit(node, inputs)
 ~~~~~
 ~~~~~python.new
-    # Verify Input Slot (DataNode) for 'n' exists
-    # The compiler should have created a DataNode for the input 'n'
-    assert "n" in func_node.inputs
-    current_input_slot_hash = func_node.inputs["n"]
-    assert current_input_slot_hash in topology.data_nodes
+@pytest.mark.asyncio
+async def test_physics_executor_handles_missing_function(
+    mock_reactor, mock_symbol_table
+):
+    """
+    Tests that a linking error (function not in symbol table) is reported.
+    """
+    executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    # Verify Feedback Channel
+    node = FuncNode(
+        name="missing", canonical_code_structure_hash="missing_hash"
+    )  # This hash is NOT in symbol table
+    inputs = {}
+
+    await executor.submit(node, inputs)
+~~~~~
+
+#### Acts 4: 修复 VM 物理节点测试 (Test Logic Nodes)
+
+更新 `test_funcnode.py` 以适应新的构造函数签名。
+
+~~~~~act
+patch_file
+packages/cascade-spec/tests/physics/test_funcnode.py
+~~~~~
+~~~~~python.old
+def test_funcnode_wiring():
+    """验证 FuncNode 可以正确注册输入和输出端口"""
+    f_node = FuncNode(name="f1")
+    d_in = DataNode(name="in")
+    d_out = DataNode(name="out")
+~~~~~
+~~~~~python.new
+def test_funcnode_wiring():
+    """验证 FuncNode 可以正确注册输入和输出端口"""
+    f_node = FuncNode(name="f1", canonical_code_structure_hash="hash_f1")
+    d_in = DataNode(name="in")
+    d_out = DataNode(name="out")
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_backend_tco.py
+packages/cascade-spec/tests/physics/test_funcnode.py
 ~~~~~
 ~~~~~python.old
-    # Verify Feedback Channel
-    # We look for a channel that:
-    # - originates from 'counter'
-    # - targets the input slot of 'counter' (input_data_hash)
-    # - has tag_filter="loop"
-
-    feedback_channel = next(
-        (
-            c
-            for c in topology.channels
-            if c.source_node_instance_hash == "counter"
-            and c.target_data_slot_hash == input_data_hash
-            and c.tag_filter == "loop"
-        ),
-        None,
-    )
+def test_funcnode_activation_logic():
+    """验证 FuncNode 的势能检查逻辑 (is_ready)"""
+    f_node = FuncNode(name="f2")
+    d_in = DataNode(name="in")
+    f_node.add_input(Port(name="arg1", source=d_in))
 ~~~~~
 ~~~~~python.new
-    # Verify Feedback Channel
-    # We look for a channel that:
-    # - originates from 'counter'
-    # - targets the input slot of 'counter' (current_input_slot_hash)
-    # - has tag_filter="loop"
-
-    feedback_channel = next(
-        (
-            c
-            for c in topology.channels
-            if c.source_node_instance_hash == "counter"
-            and c.target_data_slot_hash == current_input_slot_hash
-            and c.tag_filter == "loop"
-        ),
-        None,
-    )
+def test_funcnode_activation_logic():
+    """验证 FuncNode 的势能检查逻辑 (is_ready)"""
+    f_node = FuncNode(name="f2", canonical_code_structure_hash="hash_f2")
+    d_in = DataNode(name="in")
+    f_node.add_input(Port(name="arg1", source=d_in))
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_backend_tco.py
+packages/cascade-spec/tests/physics/test_funcnode.py
 ~~~~~
 ~~~~~python.old
-    # Verify targets
-    # chan_b should point to B's input
-    b_input_hash = topology.func_nodes["B"].inputs["val"]
-    assert chan_b.target_data_slot_hash == b_input_hash
+def test_funcnode_firing_dynamics():
+    """验证激发过程：消耗输入，产生输出"""
+    f_node = FuncNode(name="f3")
+    d_in = DataNode(name="in")
+    d_out = DataNode(name="out")
 
-    # chan_c should point to C's input
-    c_input_hash = topology.func_nodes["C"].inputs["val"]
-    assert chan_c.target_data_slot_hash == c_input_hash
+    f_node.add_input(Port(name="arg1", source=d_in))
 ~~~~~
 ~~~~~python.new
-    # Verify targets
-    # chan_b should point to B's input
-    current_b_input_slot_hash = topology.func_nodes["B"].inputs["val"]
-    assert chan_b.target_data_slot_hash == current_b_input_slot_hash
+def test_funcnode_firing_dynamics():
+    """验证激发过程：消耗输入，产生输出"""
+    f_node = FuncNode(name="f3", canonical_code_structure_hash="hash_f3")
+    d_in = DataNode(name="in")
+    d_out = DataNode(name="out")
 
-    # chan_c should point to C's input
-    current_c_input_slot_hash = topology.func_nodes["C"].inputs["val"]
-    assert chan_c.target_data_slot_hash == current_c_input_slot_hash
+    f_node.add_input(Port(name="arg1", source=d_in))
+~~~~~
+
+#### Acts 5: 修复 Reactor 资源测试 (Test Reactor Resource Awareness)
+
+更新 `test_reactor_resource_awareness.py` 中的 helper 函数。
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/reactor/test_reactor_resource_awareness.py
+~~~~~
+~~~~~python.old
+def create_topology(n_nodes: int):
+    nodes = []
+    inputs = []
+    for i in range(n_nodes):
+        f_node = FuncNode(name=f"task_{i}", resource_requirements={"slots": 1})
+        d_in = DataNode(name=f"in_{i}")
+        f_node.add_input(Port(name="arg", source=d_in))
+        nodes.append(f_node)
+        inputs.append(d_in)
+    return nodes, inputs
+~~~~~
+~~~~~python.new
+def create_topology(n_nodes: int):
+    nodes = []
+    inputs = []
+    for i in range(n_nodes):
+        f_node = FuncNode(
+            name=f"task_{i}",
+            canonical_code_structure_hash=f"hash_task_{i}",
+            resource_requirements={"slots": 1},
+        )
+        d_in = DataNode(name=f"in_{i}")
+        f_node.add_input(Port(name="arg", source=d_in))
+        nodes.append(f_node)
+        inputs.append(d_in)
+    return nodes, inputs
+~~~~~
+
+#### Acts 6: 修复 Reactor Wakeup 测试 (Test Reactor Wakeup)
+
+更新 `test_reactor_wakeup_mechanism.py` 中的 helper 函数。
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/reactor/test_reactor_wakeup_mechanism.py
+~~~~~
+~~~~~python.old
+def create_topology(n_nodes: int):
+    nodes, inputs = [], []
+    for i in range(n_nodes):
+        f_node = FuncNode(name=f"task_{i}", resource_requirements={"slots": 1})
+        d_in = DataNode(name=f"in_{i}")
+        f_node.add_input(Port(name="arg", source=d_in))
+        nodes.append(f_node)
+        inputs.append(d_in)
+    return nodes, inputs
+~~~~~
+~~~~~python.new
+def create_topology(n_nodes: int):
+    nodes, inputs = [], []
+    for i in range(n_nodes):
+        f_node = FuncNode(
+            name=f"task_{i}",
+            canonical_code_structure_hash=f"hash_task_{i}",
+            resource_requirements={"slots": 1},
+        )
+        d_in = DataNode(name=f"in_{i}")
+        f_node.add_input(Port(name="arg", source=d_in))
+        nodes.append(f_node)
+        inputs.append(d_in)
+    return nodes, inputs
+~~~~~
+
+#### Acts 7: 修复其他 Reactor 测试
+
+修正散落在其他 Reactor 测试文件中的 `FuncNode` 构造。
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/reactor/test_polarized_channels.py
+~~~~~
+~~~~~python.old
+    # 1. Setup Topology
+    f_node = FuncNode(name="process")
+    d_data = DataNode(name="data_in")
+    d_signal = DataNode(name="signal_in")
+~~~~~
+~~~~~python.new
+    # 1. Setup Topology
+    f_node = FuncNode(name="process", canonical_code_structure_hash="hash_process")
+    d_data = DataNode(name="data_in")
+    d_signal = DataNode(name="signal_in")
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_backend_topology.py
+packages/cascade-vm/tests/reactor/test_polarized_channels.py
 ~~~~~
 ~~~~~python.old
-def _create_dummy_node_ir(node_id: str) -> NodeIR:
-    """Helper to create a minimal NodeIR for testing."""
-    # We use the node_id as the structure hash for simplicity in tests
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
-    task_def = TaskDef(name=node_id, args=[], fingerprint=fp)
-    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
+    # 1. Setup Topology
+    f_source = FuncNode(name="source")
+    d_target_data = DataNode(name="data_dest")
+    d_target_signal = DataNode(name="signal_dest")
 ~~~~~
 ~~~~~python.new
-def _create_dummy_node_ir(node_id: str) -> NodeIR:
-    """Helper to create a minimal NodeIR for testing."""
-    # We use the node_id as the structure hash for simplicity in tests
-    task_def = TaskDef(
-        name=node_id,
-        args=[],
-        canonical_code_structure_hash=f"canonical_code_structure_hash_{node_id}",
-    )
-    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
+    # 1. Setup Topology
+    f_source = FuncNode(name="source", canonical_code_structure_hash="hash_source")
+    d_target_data = DataNode(name="data_dest")
+    d_target_signal = DataNode(name="signal_dest")
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_backend_topology.py
+packages/cascade-vm/tests/reactor/test_reactor_loop.py
 ~~~~~
 ~~~~~python.old
-    func_node_a = topology.func_nodes["A"]
-    assert "x" in func_node_a.inputs
-    assert "y" in func_node_a.inputs
-
-    data_hash_x = func_node_a.inputs["x"]
-    data_hash_y = func_node_a.inputs["y"]
-
-    # Verify DataNodes exist
-    assert data_hash_x in topology.data_nodes
-    assert data_hash_y in topology.data_nodes
-
-    # Verify they are marked as Constants (no producer)
-    # The convention for constants is producer_node_instance_hash being empty or special
-    assert topology.data_nodes[data_hash_x].producer_node_instance_hash == "const"
-    assert topology.data_nodes[data_hash_y].producer_node_instance_hash == "const"
-
-    # Verify Values are captured
-    # We expect BipartiteGraph to have an 'initial_values' map
-    assert hasattr(topology, "initial_values"), (
-        "BipartiteGraph must hold initial values for constants"
-    )
-    assert topology.initial_values[data_hash_x] == 1
-    assert topology.initial_values[data_hash_y] == "hello"
+    # 1. Setup Physics Topology
+    d_node = DataNode(name="d1")
+    f_node = FuncNode(name="f1")
+    # NOTE: We DO NOT wire d_node to f_node.
 ~~~~~
 ~~~~~python.new
-    func_node_a = topology.func_nodes["A"]
-    assert "x" in func_node_a.inputs
-    assert "y" in func_node_a.inputs
-
-    current_x_data_slot_hash = func_node_a.inputs["x"]
-    current_y_data_slot_hash = func_node_a.inputs["y"]
-
-    # Verify DataNodes exist
-    assert current_x_data_slot_hash in topology.data_nodes
-    assert current_y_data_slot_hash in topology.data_nodes
-
-    # Verify they are marked as Constants (no producer)
-    # The convention for constants is producer_node_instance_hash being empty or special
-    assert (
-        topology.data_nodes[current_x_data_slot_hash].producer_node_instance_hash
-        == "const"
-    )
-    assert (
-        topology.data_nodes[current_y_data_slot_hash].producer_node_instance_hash
-        == "const"
-    )
-
-    # Verify Values are captured
-    # We expect BipartiteGraph to have an 'initial_values' map
-    assert hasattr(topology, "initial_values"), (
-        "BipartiteGraph must hold initial values for constants"
-    )
-    assert topology.initial_values[current_x_data_slot_hash] == 1
-    assert topology.initial_values[current_y_data_slot_hash] == "hello"
+    # 1. Setup Physics Topology
+    d_node = DataNode(name="d1")
+    f_node = FuncNode(name="f1", canonical_code_structure_hash="hash_f1")
+    # NOTE: We DO NOT wire d_node to f_node.
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_backend_topology.py
+packages/cascade-vm/tests/reactor/test_reactor_loop.py
 ~~~~~
 ~~~~~python.old
-    # Get the input DataNode hash for both
-    input_hash_b = func_b.inputs["dep_b"]
-    input_hash_c = func_c.inputs["dep_c"]
+    # 1. Topology
+    d_in = DataNode(name="in")
+    d_out = DataNode(name="out")
+    f_node = FuncNode(name="process")
 
-    # Critical: They MUST be the same DataNode (Structural Sharing)
-    assert input_hash_b == input_hash_c, "Fan-out should reuse the same source DataNode"
-
-    # Verify that DataNode is produced by A
-    data_node = topology.data_nodes[input_hash_b]
+    f_node.add_input(Port(name="arg", source=d_in))
 ~~~~~
 ~~~~~python.new
-    # Get the input DataNode hash for both
-    current_b_input_slot_hash = func_b.inputs["dep_b"]
-    current_c_input_slot_hash = func_c.inputs["dep_c"]
+    # 1. Topology
+    d_in = DataNode(name="in")
+    d_out = DataNode(name="out")
+    f_node = FuncNode(name="process", canonical_code_structure_hash="hash_process")
 
-    # Critical: They MUST be the same DataNode (Structural Sharing)
-    assert (
-        current_b_input_slot_hash == current_c_input_slot_hash
-    ), "Fan-out should reuse the same source DataNode"
-
-    # Verify that DataNode is produced by A
-    data_node = topology.data_nodes[current_b_input_slot_hash]
+    f_node.add_input(Port(name="arg", source=d_in))
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_backend_topology.py
+packages/cascade-vm/tests/reactor/test_reactor_loop.py
 ~~~~~
 ~~~~~python.old
-    # 5. Assert that Result Emitter is connected to the graph's output
-    # Find the output data slot of the original root node 'A'
-    output_of_a_hash = next(
-        c.target_data_slot_hash
-        for c in topology.channels
-        if c.source_node_instance_hash == "A" and c.kind == ChannelKind.DATA
-    )
-    assert "result" in result_emitter.inputs, (
-        "Result emitter must have a 'result' input"
-    )
-    assert result_emitter.inputs["result"] == output_of_a_hash
+    # 1. Topology
+    d_out = DataNode(name="out")
+    f_node = FuncNode(name="process")
+    f_node.add_output(Port(name="res", target=d_out))
+
+    reactor = Reactor(executor=AsyncMock())
 ~~~~~
 ~~~~~python.new
-    # 5. Assert that Result Emitter is connected to the graph's output
-    # Find the output data slot of the original root node 'A'
-    current_a_output_slot_hash = next(
-        c.target_data_slot_hash
-        for c in topology.channels
-        if c.source_node_instance_hash == "A" and c.kind == ChannelKind.DATA
-    )
-    assert "result" in result_emitter.inputs, (
-        "Result emitter must have a 'result' input"
-    )
-    assert result_emitter.inputs["result"] == current_a_output_slot_hash
+    # 1. Topology
+    d_out = DataNode(name="out")
+    f_node = FuncNode(name="process", canonical_code_structure_hash="hash_process")
+    f_node.add_output(Port(name="res", target=d_out))
+
+    reactor = Reactor(executor=AsyncMock())
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_optimizer.py
+packages/cascade-vm/tests/reactor/test_routing_vm.py
 ~~~~~
 ~~~~~python.old
-def _create_dummy_node_ir(node_id: str) -> NodeIR:
-    """Helper to create a minimal NodeIR for topology tests."""
-    fp = Fingerprint.from_dict({"current_code_structure_hash": f"hash_for_{node_id}"})
-    task_def = TaskDef(name=node_id, args=[], fingerprint=fp)
-    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
+    # 1. Topology
+    f_node = FuncNode(name="decision")
+    d_next = DataNode(name="next")
+    d_loop = DataNode(name="loop")
 ~~~~~
 ~~~~~python.new
-def _create_dummy_node_ir(node_id: str) -> NodeIR:
-    """Helper to create a minimal NodeIR for topology tests."""
-    task_def = TaskDef(
-        name=node_id,
-        args=[],
-        canonical_code_structure_hash=f"canonical_code_structure_hash_{node_id}",
-    )
-    return NodeIR(current_node_instance_hash=node_id, definition=task_def)
+    # 1. Topology
+    f_node = FuncNode(name="decision", canonical_code_structure_hash="hash_decision")
+    d_next = DataNode(name="next")
+    d_loop = DataNode(name="loop")
 ~~~~~
-
-#### Acts 3: 修复 Frontend 测试
-更新 `test_frontend.py` 以移除对 `fingerprint` 的访问，并使用新的 `canonical_code_structure_hash` 验证。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/unit/test_frontend.py
+packages/cascade-vm/tests/reactor/test_routing_vm.py
 ~~~~~
 ~~~~~python.old
-    node = ir.nodes[0]
-    assert node.definition.name == "simple_task"
-    assert node.kwargs["x"] == 10
-
-    # 4. Axiom Check: Enforce Long Hash Naming
-    # We don't check the value, but the KEY must be the long form.
-    fp = node.definition.fingerprint
-    assert "current_code_structure_hash" in fp
-    # Ensure no short names are present
-    assert "hash" not in fp
-    assert "id" not in fp
-    assert "structure_hash" not in fp
+    Case 2: Broadcasting
+    验证同一个 Tag 可以被多个 Channel 接收 (Fan-out)。
+    """
+    f_node = FuncNode(name="broadcast")
+    d_1 = DataNode(name="d1")
+    d_2 = DataNode(name="d2")
 ~~~~~
 ~~~~~python.new
-    node = ir.nodes[0]
-    assert node.definition.name == "simple_task"
-    assert node.kwargs["x"] == 10
+    Test Case: Broadcasting
+    验证同一个 Tag 可以被多个 Channel 接收 (Fan-out)。
+    """
+    f_node = FuncNode(name="broadcast", canonical_code_structure_hash="hash_broadcast")
+    d_1 = DataNode(name="d1")
+    d_2 = DataNode(name="d2")
+~~~~~
 
-    # 4. Axiom Check: Enforce Long Hash Naming for Identity
-    # Check that canonical hash is present and looks like a hash
-    assert node.definition.canonical_code_structure_hash
-    # We can also verify it's not a short name or empty
-    assert len(node.definition.canonical_code_structure_hash) >= 8
+#### Acts 8: 防御性修复 Compiler Frontend
+
+确保 `MappedLazyResult` 处理中的 `func` 变量定义万无一失。我们将显式地将 unwrapping 逻辑放在赋值之后。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend.py
+~~~~~
+~~~~~python.old
+        task_def = self.analyzer.analyze(obj.factory)
+
+        # Ensure we store the raw function, not the Task wrapper
+        func = obj.factory
+        if hasattr(func, "func"):  # Unwrap Task objects
+            func = func.func
+
+        # Populate Symbol Table
+~~~~~
+~~~~~python.new
+        task_def = self.analyzer.analyze(obj.factory)
+
+        # Ensure we store the raw function, not the Task wrapper
+        raw_func = obj.factory
+        if hasattr(raw_func, "func"):  # Unwrap Task objects
+            raw_func = raw_func.func
+
+        # Populate Symbol Table
+        self.symbol_table[task_def.canonical_code_structure_hash] = raw_func
 ~~~~~
 
 ### 下一步建议
-实施完此计划后，重新运行 `pytest` 和 `lint_hash_names.py`。所有的 Linter 错误和提及的 19 个测试失败都应该得到解决。如果 `cascade-vm` 的测试仍然失败，请重点检查 Executor 与新 `FuncNode` 定义的兼容性。
+实施完此计划后，所有的单元测试（包括 VM 和 Compiler 层的）都应该能通过。下一步可以开始集成测试，验证这种通过哈希链接的运行时是否在真实的 `LazyResult` -> `GraphIR` -> `BipartiteGraph` -> `Execution` 流程中工作正常。

@@ -192,6 +192,7 @@ class _TopologyBuilder:
         current_result_emitter_hash = self._compute_synthetic_hash("result_emitter")
         result_emitter_node = PhysicsFuncNode(
             current_node_instance_hash=current_result_emitter_hash,
+            canonical_code_structure_hash="canonical_system_resultemitter_hash",
             name="result_emitter",
             inputs={"result": current_root_output_hash},
             sink_id="main_output",
@@ -212,6 +213,7 @@ class _TopologyBuilder:
 
         term_emitter_node = PhysicsFuncNode(
             current_node_instance_hash=current_term_emitter_hash,
+            canonical_code_structure_hash="canonical_system_termemitter_hash",
             name="term_emitter",
             inputs={"signal": current_signal_slot_hash},
             sink_id="__system_lifecycle_signal",

@@ -55,7 +55,9 @@ async def test_physics_executor_submit_sync_task(mock_reactor, mock_symbol_table
     # 1. Setup
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    node = FuncNode(name="sync_add_hash")  # Using name as hash for simplicity in test
+    node = FuncNode(
+        name="sync_add", canonical_code_structure_hash="sync_add_hash"
+    )  # Explicit linkage
     inputs = {"a": Token(payload=10), "b": Token(payload=20)}
 
     # 2. Action
@@ -84,7 +86,7 @@ async def test_physics_executor_submit_async_task(mock_reactor, mock_symbol_tabl
     """
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    node = FuncNode(name="async_add_hash")
+    node = FuncNode(name="async_add", canonical_code_structure_hash="async_add_hash")
     inputs = {"a": Token(5), "b": Token(5)}
 
     await executor.submit(node, inputs)
@@ -103,7 +105,7 @@ async def test_physics_executor_handles_sync_failure(mock_reactor, mock_symbol_t
     """
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    node = FuncNode(name="sync_fail_hash")
+    node = FuncNode(name="sync_fail", canonical_code_structure_hash="sync_fail_hash")
     inputs = {"a": Token(1), "b": Token(1)}
 
     await executor.submit(node, inputs)
@@ -125,7 +127,7 @@ async def test_physics_executor_handles_async_failure(mock_reactor, mock_symbol_
     """
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    node = FuncNode(name="async_fail_hash")
+    node = FuncNode(name="async_fail", canonical_code_structure_hash="async_fail_hash")
     inputs = {"a": Token(1), "b": Token(1)}
 
     await executor.submit(node, inputs)
@@ -146,7 +148,9 @@ async def test_physics_executor_handles_missing_function(
     """
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
 
-    node = FuncNode(name="missing_hash")
+    node = FuncNode(
+        name="missing", canonical_code_structure_hash="missing_hash"
+    )  # This hash is NOT in symbol table
     inputs = {}
 
     await executor.submit(node, inputs)

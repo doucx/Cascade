@@ -13,7 +13,7 @@ async def test_dual_barrier_activation_waits_for_all_inputs():
     inputs are excited. This is the core test for the dual-barrier logic.
     """
     # 1. Setup Topology
-    f_node = FuncNode(name="process")
+    f_node = FuncNode(name="process", canonical_code_structure_hash="hash_process")
     d_data = DataNode(name="data_in")
     d_signal = DataNode(name="signal_in")
 
@@ -64,7 +64,7 @@ async def test_signal_channel_strips_payload():
     token when routing through a SIGNAL channel.
     """
     # 1. Setup Topology
-    f_source = FuncNode(name="source")
+    f_source = FuncNode(name="source", canonical_code_structure_hash="hash_source")
     d_target_data = DataNode(name="data_dest")
     d_target_signal = DataNode(name="signal_dest")
 

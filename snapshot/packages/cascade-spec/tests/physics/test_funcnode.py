@@ -4,7 +4,7 @@ from cascade.spec.physics import FuncNode, DataNode, Token, Port
 
 def test_funcnode_wiring():
     """验证 FuncNode 可以正确注册输入和输出端口"""
-    f_node = FuncNode(name="f1")
+    f_node = FuncNode(name="f1", canonical_code_structure_hash="hash_f1")
     d_in = DataNode(name="in")
     d_out = DataNode(name="out")
 
@@ -20,7 +20,7 @@ def test_funcnode_wiring():
 
 def test_funcnode_activation_logic():
     """验证 FuncNode 的势能检查逻辑 (is_ready)"""
-    f_node = FuncNode(name="f2")
+    f_node = FuncNode(name="f2", canonical_code_structure_hash="hash_f2")
     d_in = DataNode(name="in")
     f_node.add_input(Port(name="arg1", source=d_in))
 
@@ -36,7 +36,7 @@ def test_funcnode_activation_logic():
 
 def test_funcnode_firing_dynamics():
     """验证激发过程：消耗输入，产生输出"""
-    f_node = FuncNode(name="f3")
+    f_node = FuncNode(name="f3", canonical_code_structure_hash="hash_f3")
     d_in = DataNode(name="in")
     d_out = DataNode(name="out")
 

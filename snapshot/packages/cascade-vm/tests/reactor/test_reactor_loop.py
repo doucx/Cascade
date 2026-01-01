@@ -14,7 +14,7 @@ async def test_reactor_event_driven_potential_update():
     """
     # 1. Setup Physics Topology
     d_node = DataNode(name="d1")
-    f_node = FuncNode(name="f1")
+    f_node = FuncNode(name="f1", canonical_code_structure_hash="hash_f1")
     # NOTE: We DO NOT wire d_node to f_node.
     # This test is ONLY to verify that the TokenGenerated event correctly
     # updates the state of the DataNode itself, without triggering a fire.
@@ -56,7 +56,7 @@ async def test_reactor_execution_dispatch():
     # 1. Topology
     d_in = DataNode(name="in")
     d_out = DataNode(name="out")
-    f_node = FuncNode(name="process")
+    f_node = FuncNode(name="process", canonical_code_structure_hash="hash_process")
 
     f_node.add_input(Port(name="arg", source=d_in))
     f_node.add_output(Port(name="res", target=d_out))
@@ -101,7 +101,7 @@ async def test_reactor_propagation():
     """
     # 1. Topology
     d_out = DataNode(name="out")
-    f_node = FuncNode(name="process")
+    f_node = FuncNode(name="process", canonical_code_structure_hash="hash_process")
     f_node.add_output(Port(name="res", target=d_out))
 
     reactor = Reactor(executor=AsyncMock())

@@ -95,32 +95,8 @@ async def test_concurrency_limit():
     # It just wires output ports TO d_life.
     # This means d_life will fill up with events. This is fine for this test.
     
-    reactor = Reactor(physical_graph, memory, executor, func_map)
-    
-    # 4. Prime the reactor (Fill D_res)
-    reactor.prime()
-    assert memory.get_count("global_res_gpu") == 1
-    
-    # 5. Inject Inputs
-    # We need to manually inject inputs for the tasks because Builder doesn't handle Literals yet
-    # (Comment in Builder: "We only handle inter-node references here. Literals are handled later.")
-    # So we manually put tokens in D_worker_in? No, D_worker_in is internal.
-    # Bleacher needs inputs.
-    # Bleacher inputs are usually wired from upstream. Here we have literals.
-    # In a full system, literals are handled by Constant Nodes or injected at start.
-    # For this test, we manually identify the input slots for Bleacher and fill them.
-    
-    # Builder doesn't create DataNodes for inputs unless they come from upstream.
-    # Wait, Expander creates input ports for Bleacher.
-    # But who connects to them?
-    # If it's a literal, currently NO ONE connects to them in the physical graph.
-    # This is a gap in the current Builder implementation for Literals.
-    # For this test, we will assume we need to manually put tokens into the Bleacher's input memory.
-    # But Reactor consumes from DataNodes. The Bleacher's input ports need to be connected to SOMETHING.
-    # If Builder didn't create a DataNode for the literal 'x', Reactor won't find an input source 
-    # and thus won't fire.
-    
-    # FIX for Test: We need to patch the graph to add input DataNodes for 'x'.
+    # 4. FIX for Test: Manually create DataNodes for literal inputs 'x'.
+    # This is a temporary measure because the Builder doesn't yet support literals.
     for node_prefix, val in [("node_1", 10), ("node_2", 20)]:
         d_literal = PhysicsDataNode(id=f"{node_prefix}_in_x", name="Literal X")
         physical_graph.nodes[d_literal.id] = d_literal
@@ -128,15 +104,17 @@ async def test_concurrency_limit():
             Channel(d_literal.id, "out", f"{node_prefix}_bleach", target_port="x")
         )
         memory.put(d_literal, Token(payload=val))
-        
-        # We also need to re-initialize Reactor because we modified the graph
-    
-    reactor = Reactor(physical_graph, memory, executor, func_map)
-    reactor.prime()
 
-    # 6. Step Execution
+    # 5. Re-initialize Reactor AFTER all graph modifications are complete.
+    reactor = Reactor(physical_graph, memory, executor, func_map)
+    
+    # 6. Prime the reactor ONCE to fill D_res.
+    reactor.prime()
+    assert memory.get_count("global_res_gpu") == 1
+
+    # 7. Step Execution
     # Step 1: Both Bleachers are ready on 'x', but contend for 'res_gpu'.
-    # Only ONE should fire.
+    # With the new atomic Reactor, only ONE should fire.
     fired = await reactor.step()
     # What fires?
     # 1. Bleacher (consumes 1 GPU, 1 X) -> fires.

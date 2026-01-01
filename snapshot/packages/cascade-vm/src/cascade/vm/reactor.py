@@ -2,7 +2,7 @@ import asyncio
 from typing import List, Callable, Dict, Tuple
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
-from cascade.vm.memory import VolatileMemory
+from cascade.vm.memory import VolatileMemory, MemoryEmptyError
 from cascade.vm.executor import PhysicsExecutor
 
 
@@ -67,70 +67,70 @@ class Reactor:
                     self.memory.put(node, Token(payload=None))
 
     async def step(self) -> int:
-        ready_nodes: List[PhysicsFuncNode] = []
+        nodes_to_fire: List[PhysicsFuncNode] = []
+        inputs_for_fire: Dict[str, Dict[str, Token]] = {}
 
+        # --- ATOMIC SCAN & CONSUME ---
+        # This loop is single-threaded and sequential. The state of `memory`
+        # changes within the loop, ensuring that a resource token consumed by an
+        # early node is unavailable for a later node in the same step.
         for f_node in self._func_nodes:
-            inputs = self._func_inputs.get(f_node.id, [])
-
-            # Full-Input Firing Rule: All connected input slots must be excited.
-            if not inputs:
+            inputs_def = self._func_inputs.get(f_node.id, [])
+            if not inputs_def:
                 continue
 
-            # Check if all source DataNodes have tokens
-            is_ready = all(
-                self.memory.is_excited(src_id) for src_id, _ in inputs
-            )
+            # Check if this node CAN fire based on the CURRENT memory state
+            if all(self.memory.is_excited(src_id) for src_id, _ in inputs_def):
+                # It can. Atomically consume its inputs NOW.
+                # This action affects subsequent nodes in this same loop.
+                consumed_inputs = {
+                    port: self.memory.take(src_id) for src_id, port in inputs_def
+                }
+                nodes_to_fire.append(f_node)
+                inputs_for_fire[f_node.id] = consumed_inputs
 
-            if is_ready:
-                ready_nodes.append(f_node)
-
-        if not ready_nodes:
+        if not nodes_to_fire:
             return 0
 
-        # Fire all ready nodes in parallel
-        await asyncio.gather(*(self._fire(node) for node in ready_nodes))
+        # Now, fire all nodes that successfully reserved their inputs in parallel.
+        await asyncio.gather(
+            *(
+                self._fire(node, inputs_for_fire[node.id])
+                for node in nodes_to_fire
+            )
+        )
 
-        return len(ready_nodes)
+        return len(nodes_to_fire)
 
-    async def _fire(self, node: PhysicsFuncNode) -> None:
-        # 1. Atomic Consumption (Hydration)
-        # We must pull tokens from memory and map them to the function's expected argument names (ports).
-        input_data: Dict[str, Token] = {}
-        inputs = self._func_inputs.get(node.id, [])
-        
-        for src_id, target_port in inputs:
-            token = self.memory.take(src_id)
-            input_data[target_port] = token
+    async def _fire(self, node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:
+        # 1. Consumption is already done. `input_data` is given.
 
         # 2. Execution
         func = self.function_map.get(node.id)
         if not func:
             raise ValueError(f"No function mapped for node {node.id}")
 
-        # The contract is now strict: FuncNodes must accept Dict[str, Token] and return Dict[str, Token]
-        result_tokens: Dict[str, Token] = await self.executor.submit(func, (input_data,))
+        result_tokens: Dict[str, Token] = await self.executor.submit(
+            func, (input_data,)
+        )
 
         if not isinstance(result_tokens, dict):
-             raise ValueError(f"Function for node {node.id} must return a Dict[str, Token], got {type(result_tokens)}")
+            raise ValueError(
+                f"Function for node {node.id} must return a Dict[str, Token], "
+                f"got {type(result_tokens)}"
+            )
 
         # 3. Emission & Spectrum Filtering
         outbound = self._outbound_channels.get(node.id, [])
-        
+
         for channel in outbound:
-            # Locate the token produced for this specific source port
             token = result_tokens.get(channel.source_port)
-            
             if token is None:
-                # It is legal for a node NOT to emit on a declared port (e.g. conditional output)
                 continue
 
-            # --- THE PRISM: Spectrum Filtering ---
             if channel.tag_filter and channel.tag_filter != token.tag:
-                # Physics Block: The token's color (tag) does not match the channel's filter.
                 continue
-            # -------------------------------------
 
-            # Transport to target DataNode
             target_node = self.graph.nodes[channel.target_node_id]
             if isinstance(target_node, PhysicsDataNode):
                 self.memory.put(target_node, token)

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(vm): 为 Reactor 的极化通道和双势垒逻辑添加测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767237469.7736523, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(spec): 修正 FuncNode 的 is_ready 和 consume_inputs 逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767237567.0122616, "duration_ms": 0}}

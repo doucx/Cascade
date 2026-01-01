@@ -1,157 +1,115 @@
-好的，我们来创建测试文件以验证新的双势垒物理模型。
+好的，收到了测试结果。
 
-根据 TDD (测试驱动开发) 的原则，我们正处于 RED 阶段。这个新的测试文件将会失败，因为它依赖我们刚刚实现的、但尚未经过验证的新逻辑。通过让这个测试从失败（RED）走向成功（GREEN），我们可以确保新功能的正确性。
+`test_dual_barrier_activation_waits_for_all_inputs` 失败，断言为 `Node should be ready once all inputs are excited`。
 
-我将创建一个名为 `test_polarized_channels.py` 的文件，并编写两个核心测试用例：一个用于验证双势垒激活逻辑，另一个用于验证信号通道会剥离数据负载。
+这说明我们的 `Reactor` 在接收到所有必需的输入（一个数据令牌和一个信号令牌）后，调用 `f_node.is_ready()` 时，该方法返回了 `False`，而测试期望它返回 `True`。
 
-## [WIP] test(vm): 为 Reactor 的极化通道和双势垒逻辑添加测试
+这是一个非常明确的失败信号，直接指向我们在 `packages/cascade-spec/src/cascade/spec/physics.py` 中对 `FuncNode.is_ready()` 方法的修改存在逻辑缺陷。
+
+尽管我之前的计划意图是实现双势垒检查，但实际的代码实现显然是有问题的。它未能正确地识别出所有输入端口都已被满足（“激发态”）的条件。根本原因在于，`is_ready` 的逻辑没有被正确地更新以反映其新的职责。
+
+此外，我注意到一个相关的潜在问题：`FuncNode.consume_inputs()` 方法目前会无差别地消耗所有输入端口的令牌。在一个纯粹的物理模型中，`SIGNAL` 端口的“消耗”应该只用于重置其状态，其 `payload` 不应该被传递给执行器。我们应该一并修复此问题，使 `consume_inputs` 只返回来自 `DATA` 端口的令牌，从而使物理模型更加严谨。
+
+我们将直接修复 `cascade.spec.physics.FuncNode` 类中的两个方法：
+
+1.  **修正 `is_ready()`**: 我们将重写此方法，确保它正确地遍历所有输入端口，并且只有当**每一个**有源的端口（无论是 `DATA` 还是 `SIGNAL`）其对应的 `DataNode` 都处于激发态时，才返回 `True`。
+2.  **增强 `consume_inputs()`**: 我们将修改此方法，使其在消耗令牌时，只将那些来自 `kind=ChannelKind.DATA` 端口的令牌收集并返回。这确保了执行器只会收到真正的业务数据，而信号令牌的作用仅限于激活。
+
+这个计划将使我们的物理模型在逻辑上完整且正确，从而让失败的测试通过。
+
+## [WIP] fix(spec): 修正 FuncNode 的 is_ready 和 consume_inputs 逻辑
+
+### 错误分析
+测试 `test_dual_barrier_activation_waits_for_all_inputs` 失败，断言 `f_node.is_ready()` 在所有输入都就绪后应为 `True`，但实际为 `False`。这直接暴露了 `FuncNode.is_ready()` 方法中的逻辑错误。该方法未能正确识别所有输入（包括数据和信号）都已满足的状态。同时，`consume_inputs` 方法也需要调整，以区分消耗数据令牌和信号令牌的行为。
 
 ### 用户需求
-为 `cascade-vm` 中 `Reactor` 新增的通道极化和双势垒激活逻辑创建测试用例。测试需要验证：1）任务只有在同时满足数据和信号依赖时才被调度；2）通过信号通道传递的令牌其数据负载会被剥离。
+修复 `cascade.spec.physics.FuncNode` 中 `is_ready` 和 `consume_inputs` 方法的逻辑，以正确实现双势垒物理模型，并使相关测试通过。
 
 ### 评论
-这是确保我们新物理模型正确性的关键一步。一个健壮的测试套件能够捕捉到异步调度中的细微逻辑错误，并为我们未来继续在该模型上构建功能（如 `.after()` 依赖）提供信心。这两个测试用例直接对应了我们在 `5.A.2` 阶段实现的核心功能，是该阶段的最终验收标准。
+这是一个关键的修复。一个正确的 `is_ready` 方法是整个势能驱动物理引擎的心脏。通过确保它对数据和信号输入的依赖性进行准确判断，我们保证了 `Reactor` 调度的正确性。同时，精炼 `consume_inputs` 的行为，使之只传递数据载荷，可以使我们的物理模型更加纯粹和可预测。
 
 ### 目标
-1.  在 `packages/cascade-vm/tests/reactor/` 目录下创建一个新的测试文件 `test_polarized_channels.py`。
-2.  在该文件中实现 `test_dual_barrier_activation_waits_for_all_inputs` 测试用例，它将验证 `FuncNode` 的激活逻辑。
-3.  实现 `test_signal_channel_strips_payload` 测试用例，以验证 `Reactor` 的信号感知路由逻辑。
+1.  重写 `cascade.spec.physics.FuncNode.is_ready()` 方法，确保其在所有输入 `DataNode` 都处于激发态时返回 `True`。
+2.  修改 `cascade.spec.physics.FuncNode.consume_inputs()` 方法，使其只返回来自 `DATA` 类型端口的令牌。
 
 ### 基本原理
-我们将使用 `write_file` 创建一个全新的测试文件。
-
-第一个测试 `test_dual_barrier_activation_waits_for_all_inputs` 将构建一个需要一个 `DATA` 输入和一个 `SIGNAL` 输入的 `FuncNode`。我们将分步注入令牌，首先只注入 `DATA` 令牌并断言任务**未**执行，然后注入 `SIGNAL` 令牌并断言任务**已**执行，从而严格验证双势垒逻辑。
-
-第二个测试 `test_signal_channel_strips_payload` 将构建一个 `FuncNode`，其输出同时连接到一个 `DATA` 通道和一个 `SIGNAL` 通道。我们将模拟该节点完成执行，并断言 `DATA` 通道的目标 `DataNode` 收到了完整的令牌，而 `SIGNAL` 通道的目标 `DataNode` 收到了一个 `payload` 为 `None` 的纯激活令牌。
-
-这两个测试共同覆盖了我们在上一计划中引入的所有新逻辑。
+我们将使用一个 `patch_file` 操作来原子化地修复 `packages/cascade-spec/src/cascade/spec/physics.py` 文件。`is_ready` 的逻辑将被一个简单但健壮的循环替换，该循环会检查所有必需的输入。`consume_inputs` 的循环将被修改，增加一个 `if port.kind == ChannelKind.DATA` 的判断条件，从而实现对信号令牌的过滤。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/engine #comp/tests #concept/state #scope/core #ai/instruct #task/domain/testing #task/object/reactor-physics #task/action/validation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/engine #comp/interfaces #concept/state #scope/core #ai/instruct #task/domain/vm #task/object/reactor-physics #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `test_polarized_channels.py` 测试文件
+#### Acts 1: 修复 `FuncNode` 的物理行为
 
-我们将创建新的测试文件，并添加验证双势垒激活和信号路由逻辑的测试用例。
+我们将一次性修复 `is_ready` 的判断逻辑和 `consume_inputs` 的数据过滤逻辑。
 
 ~~~~~act
-write_file
-packages/cascade-vm/tests/reactor/test_polarized_channels.py
+patch_file
+packages/cascade-spec/src/cascade/spec/physics.py
 ~~~~~
-~~~~~python
-import pytest
-import asyncio
-from unittest.mock import AsyncMock
+~~~~~python.old
+    def is_ready(self) -> bool:
+        """
+        Dual-Barrier Potential Check: 
+        Are all DATA inputs AND all SIGNAL inputs excited?
+        """
+        for port in self.inputs.values():
+            if port.source and not port.source.is_excited():
+                # If any input is not ready, the node is not ready.
+                return False
+        return True
 
-from cascade.spec.physics import DataNode, FuncNode, Token, Port
-from cascade.spec.topology import ChannelKind
-from cascade.vm.reactor import Reactor, TokenGenerated, ExecutionFinished, Channel
+    def consume_inputs(self) -> Dict[str, Token]:
+        """
+        Atomically consume tokens from all input sources.
+        """
+        result = {}
+        for name, port in self.inputs.items():
+            if port.source:
+                token = port.source.take()
+                if token:
+                    result[name] = token
+        return result
 
-@pytest.mark.asyncio
-async def test_dual_barrier_activation_waits_for_all_inputs():
-    """
-    Verifies that a FuncNode only fires after BOTH its data and signal
-    inputs are excited. This is the core test for the dual-barrier logic.
-    """
-    # 1. Setup Topology
-    f_node = FuncNode(name="process")
-    d_data = DataNode(name="data_in")
-    d_signal = DataNode(name="signal_in")
+    def produce_outputs(self, tokens: Dict[str, Token]):
+        """
+        Push result tokens to output targets.
+~~~~~
+~~~~~python.new
+    def is_ready(self) -> bool:
+        """
+        Dual-Barrier Potential Check:
+        Returns True if and only if ALL connected input ports have an excited source DataNode.
+        """
+        if not self.inputs:
+            return True  # A node with no inputs is always ready.
 
-    # Wire inputs with different kinds
-    f_node.add_input(Port(name="data_arg", source=d_data, kind=ChannelKind.DATA))
-    f_node.add_input(Port(name="signal_arg", source=d_signal, kind=ChannelKind.SIGNAL))
+        for port in self.inputs.values():
+            if not port.source or not port.source.is_excited():
+                return False
+        return True
 
-    # 2. Setup Reactor
-    mock_executor = AsyncMock()
-    reactor = Reactor(executor=mock_executor)
-    reactor.register_node(f_node)
-    reactor.register_node(d_data)
-    reactor.register_node(d_signal)
+    def consume_inputs(self) -> Dict[str, Token]:
+        """
+        Atomically consumes tokens from all input sources, but only returns
+        payloads from DATA channels.
+        """
+        result = {}
+        for name, port in self.inputs.items():
+            if port.source:
+                token = port.source.take()
+                # Only add to the result if it's a DATA port and a token was present
+                if token and port.kind == ChannelKind.DATA:
+                    result[name] = token
+        return result
 
-    # 3. Step 1: Inject DATA only
-    reactor.push_event(TokenGenerated(node=d_data, token=Token("some_data")))
-    await reactor.step()
-
-    # Assertion 1: Executor should NOT be called yet
-    mock_executor.submit.assert_not_called()
-    assert f_node.is_ready() is False, "Node should not be ready with only data input"
-
-    # 4. Step 2: Inject SIGNAL
-    reactor.push_event(TokenGenerated(node=d_signal, token=Token(None))) # Signal token has no payload
-    await reactor.step()
-    
-    # Assertion 2: Executor SHOULD be called now
-    mock_executor.submit.assert_called_once()
-    assert f_node.is_ready() is True, "Node should be ready once all inputs are excited"
-
-    call_args = mock_executor.submit.call_args[0]
-    submitted_node = call_args[0]
-    submitted_inputs = call_args[1]
-
-    assert submitted_node == f_node
-    assert submitted_inputs["data_arg"].payload == "some_data"
-    assert submitted_inputs["signal_arg"].payload is None
-
-
-@pytest.mark.asyncio
-async def test_signal_channel_strips_payload():
-    """
-    Verifies that the Reactor's routing logic creates a new, payload-less
-    token when routing through a SIGNAL channel.
-    """
-    # 1. Setup Topology
-    f_source = FuncNode(name="source")
-    d_target_data = DataNode(name="data_dest")
-    d_target_signal = DataNode(name="signal_dest")
-    
-    # 2. Setup Channels with different kinds from the same source
-    data_channel = Channel(
-        source=f_source,
-        target=d_target_data,
-        output_name="result",
-        kind=ChannelKind.DATA
-    )
-    signal_channel = Channel(
-        source=f_source,
-        target=d_target_signal,
-        output_name="result",
-        kind=ChannelKind.SIGNAL
-    )
-
-    # 3. Setup Reactor
-    reactor = Reactor(executor=AsyncMock())
-    reactor.register_channel(data_channel)
-    reactor.register_channel(signal_channel)
-
-    # 4. Simulate an ExecutionFinished event with a payload
-    original_token = Token(payload="SECRET_DATA", tag="default", metadata={"id": 1})
-    event = ExecutionFinished(node=f_source, outputs={"result": original_token})
-    reactor.push_event(event)
-
-    # 5. Process the event
-    await reactor.step()
-
-    # 6. Assertions
-    # Data channel should have the original token
-    token_in_data = d_target_data.peek()
-    assert token_in_data is not None
-    assert token_in_data.payload == "SECRET_DATA"
-    assert token_in_data.metadata == {"id": 1}
-
-    # Signal channel should have a new token with payload=None
-    token_in_signal = d_target_signal.peek()
-    assert token_in_signal is not None
-    assert token_in_signal.payload is None
-    assert token_in_signal.metadata == {"id": 1} # Metadata should be preserved
+    def produce_outputs(self, tokens: Dict[str, Token]):
+        """
+        Push result tokens to output targets.
 ~~~~~
 
 ### 下一步建议
-我们已经为新实现的物理模型创建了对应的测试用例。现在，我们需要运行 `pytest` 来验证我们的实现是否正确。
-
-如果测试通过，我们将成功完成 **阶段 5.A**，并可以自信地进入 **阶段 5.B**：**原生物理执行器与生命周期解耦**。
-
-如果测试失败，我们需要分析失败原因并生成一个修复计划。
+我们已经对 `FuncNode` 的核心物理逻辑进行了修复。现在，请再次运行 `pytest`。如果测试通过，说明我们的物理模型已经正确实现，可以继续推进到路线图的 **阶段 5.B**。

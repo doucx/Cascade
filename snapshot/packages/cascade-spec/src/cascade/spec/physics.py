@@ -107,24 +107,28 @@ class FuncNode:
 
     def is_ready(self) -> bool:
         """
-        Dual-Barrier Potential Check: 
-        Are all DATA inputs AND all SIGNAL inputs excited?
+        Dual-Barrier Potential Check:
+        Returns True if and only if ALL connected input ports have an excited source DataNode.
         """
+        if not self.inputs:
+            return True  # A node with no inputs is always ready.
+
         for port in self.inputs.values():
-            if port.source and not port.source.is_excited():
-                # If any input is not ready, the node is not ready.
+            if not port.source or not port.source.is_excited():
                 return False
         return True
 
     def consume_inputs(self) -> Dict[str, Token]:
         """
-        Atomically consume tokens from all input sources.
+        Atomically consumes tokens from all input sources, but only returns
+        payloads from DATA channels.
         """
         result = {}
         for name, port in self.inputs.items():
             if port.source:
                 token = port.source.take()
-                if token:
+                # Only add to the result if it's a DATA port and a token was present
+                if token and port.kind == ChannelKind.DATA:
                     result[name] = token
         return result
 

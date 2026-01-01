@@ -1,5 +1,5 @@
 import pytest
-from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef
 from cascade.spec.fingerprint import Fingerprint
 from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
@@ -9,23 +9,20 @@ from cascade.compiler.backend.builder import Builder
 def simple_graph_ir():
     fp = Fingerprint({"canonical_code_structure_hash": "abc"})
     task_def = TaskDef(name="task_a", args=[], fingerprint=fp)
-    
+
     # Node requesting a 'gpu' resource
-    node = NodeIR(
-        id="node_a", 
-        name="NodeA", 
-        task=task_def,
-        constraints={"gpu": 1}
-    )
+    node = NodeIR(id="node_a", name="NodeA", task=task_def, constraints={"gpu": 1})
     return GraphIR(nodes=[node])
 
 
 def test_builder_creates_resources_from_env(simple_graph_ir):
     # 1. Define Environment with 'gpu'
-    env = EnvironmentDef(resources=[
-        ResourceDef(name="gpu", capacity=4),
-        ResourceDef(name="cpu", capacity=8) # Unused resource
-    ])
+    env = EnvironmentDef(
+        resources=[
+            ResourceDef(name="gpu", capacity=4),
+            ResourceDef(name="cpu", capacity=8),  # Unused resource
+        ]
+    )
 
     # 2. Build (Expect this to fail currently due to signature mismatch)
     builder = Builder()
@@ -50,7 +47,9 @@ def test_builder_raises_on_missing_resource(simple_graph_ir):
     env = EnvironmentDef(resources=[])
 
     builder = Builder()
-    
+
     # 2. Build should fail because Graph requests 'gpu' but Env has none
-    with pytest.raises(ValueError, match="Resource 'gpu' required by node 'node_a' is not defined"):
+    with pytest.raises(
+        ValueError, match="Resource 'gpu' required by node 'node_a' is not defined"
+    ):
         builder.build(simple_graph_ir, environment=env)

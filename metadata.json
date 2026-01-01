@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 实现物理引擎的 Map 执行逻辑与参数名称对齐", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767246314.3014953, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修正 EmitterNode 测试用例中的构造函数调用", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767246518.5441499, "duration_ms": 0}}

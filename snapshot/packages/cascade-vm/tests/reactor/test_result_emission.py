@@ -17,7 +17,11 @@ async def test_reactor_emits_result_to_sink():
     """
     # 1. Setup simplified topology: D_in -> Emitter
     d_in = DataNode(name="result_slot")
-    emitter = EmitterNode(name="emit", sink_id="main_output")
+    emitter = EmitterNode(
+        name="emit",
+        canonical_code_structure_hash="canonical_system_emitter_hash",
+        sink_id="main_output",
+    )
     emitter.add_input(Port(name="data", source=d_in))
 
     # 2. Setup Reactor and Mock Executor

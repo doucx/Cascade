@@ -44,7 +44,6 @@ packages = [
     "packages/cascade-graph",
     "packages/cascade-library",
     "packages/cascade-connector-local",
-    "packages/cascade-python",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -82,7 +81,7 @@ dev = [
   "cascade-cli-observer",
   "cascade-connector-mqtt",
   "cascade-connector-local",
-  "cascade", # The python sdk
+  # "cascade", # The python sdk
   "ruff",
 ]
 
@@ -100,5 +99,5 @@ reportMissingImports = true
 reportMissingTypeStubs = false
 
 executionEnvironments = [
-  { root = "packages", extraPaths = [ "packages/cascade-application/src", "packages/cascade-cli-controller/src", "packages/cascade-cli-observer/src", "packages/cascade-common/src", "packages/cascade-connector-local/src", "packages/cascade-connector-mqtt/src", "packages/cascade-engine/src", "packages/cascade-graph/src", "packages/cascade-library/src", "packages/cascade-provider-ipfs/src", "packages/cascade-python/src", "packages/cascade-sdk/src", "packages/cascade-spec/src" ] }
+  { root = "packages", extraPaths = [ "packages/cascade-application/src", "packages/cascade-cli-controller/src", "packages/cascade-cli-observer/src", "packages/cascade-common/src", "packages/cascade-connector-local/src", "packages/cascade-connector-mqtt/src", "packages/cascade-engine/src", "packages/cascade-graph/src", "packages/cascade-library/src", "packages/cascade-provider-ipfs/src", "packages/cascade-sdk/src", "packages/cascade-spec/src" ] }
 ]

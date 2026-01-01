@@ -2,9 +2,9 @@ import time
 import asyncio
 from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING
 
-from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING, cast
 
 from cascade.graph.model import Node, Graph
+
 if TYPE_CHECKING:
     from cascade.graph.model import MapNode
 from cascade.spec.protocols import Executor, StateBackend, Solver
@@ -152,6 +152,7 @@ class NodeProcessor:
 
         # 5. Handle Map Nodes
         from cascade.graph.model import MapNode
+
         if isinstance(node, MapNode):
             return await self._execute_map_node(
                 node,
@@ -262,7 +263,7 @@ class NodeProcessor:
         sub_graph_runner: Callable,
     ) -> List[Any]:
         if not node.mapping_factory:
-            return [] # Should not happen if graph is well-formed
+            return []  # Should not happen if graph is well-formed
 
         factory = node.mapping_factory
         if not kwargs:

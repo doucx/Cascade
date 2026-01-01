@@ -7,7 +7,7 @@ except ImportError:
     typer = None
 
 from cascade.spec.lazy_types import LazyResult
-from cascade.context import get_current_context
+from cascade.common.context import get_current_context
 from cascade.spec.input import ParamSpec
 
 

@@ -2,7 +2,6 @@ import asyncio
 import time
 import cascade as cs
 from cascade.runtime import Engine, MessageBus
-from cascade.spec.blueprint import TailCall
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
@@ -47,14 +46,6 @@ def create_heavy_explicit_loop(n: int, complexity: int = 20):
     selector = cs.select_jump({"loop": step, "exit": None})
     cs.bind(step, selector)
     return step
-
-
-# 3. VM Countdown (TailCall)
-@cs.task
-async def vm_countdown(n: int):
-    if n <= 0:
-        return "done"
-    return TailCall(kwargs={"n": n - 1})
 
 
 async def imperative_countdown(n: int):
@@ -112,13 +103,6 @@ async def main():
         f"  Throughput Gain vs Simple: {efficiency_gain:+.1f}% (Batching Efficiency)\n"
     )
 
-    # VM Path
-    print(" Running VM Path (TailCall)...")
-    target_3 = vm_countdown(n=iterations)
-    time_3 = await run_benchmark(engine, target_3, use_vm=True)
-    tps_3 = iterations / time_3
-    print(f"  TPS: {tps_3:,.2f} iter/sec\n")
-
     # Imperative Ground Truth
     print(" Running Imperative Ground Truth...")
     start_imp = time.perf_counter()
@@ -129,11 +113,9 @@ async def main():
 
     print("--- Conclusion ---")
     print(f"Engine processes {nps_2:,.0f} nodes/sec under load (Heavy Explicit Loop).")
-    print(f"VM path is {nps_1 / tps_3:.2f}x faster than Simple Explicit Jump.")
     print(
         f"Explicit Control Flow adds {(time_1 - time_imp) / iterations * 1e6:.1f} microseconds overhead per step vs raw Python loop."
     )
-    print(f"Heavy Explicit Loop overhead vs VM: {((time_3 / time_2) - 1) * 100:.1f}%")
 
 
 if __name__ == "__main__":

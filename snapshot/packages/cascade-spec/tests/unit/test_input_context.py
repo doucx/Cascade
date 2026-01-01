@@ -1,4 +1,4 @@
-from cascade.context import get_current_context, WorkflowContext
+from cascade.common.context import get_current_context, WorkflowContext
 from cascade.spec.input import ParamSpec, EnvSpec
 
 

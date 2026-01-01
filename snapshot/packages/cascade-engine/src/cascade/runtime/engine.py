@@ -132,6 +132,7 @@ class Engine:
     async def run(
         self,
         target: Any,
+        use_vm: bool = False,
         params: Optional[Dict[str, Any]] = None,
     ) -> Any:
         # Handle Auto-Gathering
@@ -181,7 +182,7 @@ class Engine:
             with ExitStack() as run_stack:
                 # Register the engine's connector as a special internal resource
                 if self.connector:
-                    from cascade.spec.resource import resource, ResourceDefinition
+                    from cascade.spec.resource import ResourceDefinition
 
                     # We define the provider and then explicitly wrap it in a ResourceDefinition
                     # because the @resource decorator doesn't work as expected on closures
@@ -190,7 +191,9 @@ class Engine:
                         yield self.connector
 
                     connector_res_def = ResourceDefinition(
-                        func=_connector_provider, name="_internal_connector", scope="run"
+                        func=_connector_provider,
+                        name="_internal_connector",
+                        scope="run",
                     )
                     self.register(connector_res_def)
 

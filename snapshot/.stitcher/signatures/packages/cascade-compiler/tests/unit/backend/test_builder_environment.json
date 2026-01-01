@@ -1,0 +1,14 @@
+{
+  "simple_graph_ir": {
+    "baseline_code_signature_text": "def simple_graph_ir():",
+    "baseline_code_structure_hash": "1d76c2a58d904f575a7e052bb50444dec452ba0525c5be8e68fbc1d513ab9e19"
+  },
+  "test_builder_creates_resources_from_env": {
+    "baseline_code_signature_text": "def test_builder_creates_resources_from_env(simple_graph_ir):",
+    "baseline_code_structure_hash": "42c9cc4bb2f4fbf55d5fafa1e94b91f1508a50771636e92eea6eb931d2d30e6c"
+  },
+  "test_builder_raises_on_missing_resource": {
+    "baseline_code_signature_text": "def test_builder_raises_on_missing_resource(simple_graph_ir):",
+    "baseline_code_structure_hash": "2968fe3a9c2d634829230917751c4d732fbfba6d8a543052a01480401a14cc72"
+  }
+}

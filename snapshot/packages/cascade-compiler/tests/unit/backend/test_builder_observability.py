@@ -1,6 +1,5 @@
 import pytest
-from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef
-from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.ir.models import GraphIR
 from cascade.spec.environment import EnvironmentDef
 from cascade.spec.triad import ObservabilityNode
 from cascade.compiler.backend.builder import Builder
@@ -28,12 +27,13 @@ def test_builder_creates_observer_sidecar(empty_graph_ir):
 
     # 3. Assert Connection: D_life -> F_obs
     obs_channels = [
-        c for c in graph.channels 
+        c
+        for c in graph.channels
         if c.source_node_id == "global_d_life" and c.target_node_id == f_obs_id
     ]
     assert len(obs_channels) == 1
     channel = obs_channels[0]
-    
+
     # 4. Assert Port Mapping
     # D_life is a DataNode, source_port is typically "out"
     assert channel.source_port == "out"

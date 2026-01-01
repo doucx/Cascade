@@ -37,6 +37,9 @@ class PhysicsDataNode(PhysicsNode):
     initial_tokens: int = 0
     """Number of tokens to pre-fill at reactor startup (Potential Energy)."""
 
+    initial_payload: Any = None
+    """The payload to use for pre-filled tokens."""
+
 
 @dataclass
 class PhysicsFuncNode(PhysicsNode):

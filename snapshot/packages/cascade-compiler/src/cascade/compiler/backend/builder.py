@@ -103,6 +103,7 @@ class Builder:
             assert target_subgraph.bleacher is not None
 
             for arg_name, source_ref in node_ir.inputs.items():
+                # Case A: Reference to another node (Dependency)
                 if isinstance(source_ref, str) and source_ref in subgraphs:
                     source_subgraph = subgraphs[source_ref]
                     
@@ -113,6 +114,29 @@ class Builder:
                         Channel(
                             source_node_id=source_subgraph.stainer.id,
                             source_port="output",
+                            target_node_id=target_subgraph.bleacher.id,
+                            target_port=arg_name,
+                        )
+                    )
+                # Case B: Literal Value (Constant)
+                else:
+                    # Create a dedicated DataNode for this constant
+                    # Naming convention: const_[target_node]_[arg_name]
+                    const_node_id = f"const_{node_ir.id}_{arg_name}"
+                    const_node = PhysicsDataNode(
+                        id=const_node_id,
+                        name=f"Const({arg_name})",
+                        capacity=1,
+                        initial_tokens=1,
+                        initial_payload=source_ref,
+                    )
+                    physical_graph.nodes[const_node_id] = const_node
+
+                    # Wire Const -> Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=const_node_id,
+                            source_port="out",
                             target_node_id=target_subgraph.bleacher.id,
                             target_port=arg_name,
                         )

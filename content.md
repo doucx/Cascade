@@ -1,308 +1,107 @@
-好的，我将执行方案 A：将观测总线 (`global_d_life`) 的容量提升至无限（`sys.maxsize`），以彻底消除观测系统对业务逻辑产生背压的风险。同时，我将顺手修复 `builder.py` 中的类型安全问题。
-
-## [WIP] fix(compiler): 解除观测系统容量限制并修复类型检查错误
+## [WIP] feat(compiler): 实现构建器字面量支持与 Reactor 预加载机制
 
 ### 用户需求
-1.  **解决死锁风险**: 将全局观测节点 `global_d_life` 的容量设置为无限大，防止因观测事件积压导致 `MemoryFullError`，进而阻塞甚至崩溃业务流程。
-2.  **修复类型错误**: 解决 `builder.py` 中因 `SubGraph` 字段为 `Optional` 导致的 `reportOptionalMemberAccess` 静态分析错误。
+1.  **构建器支持字面量**: 编译器后端需要能够识别 `NodeIR.inputs` 中的字面量值，并自动在物理图中创建对应的常量节点 (`DataNode`) 和连线，而不是忽略它们。
+2.  **Reactor 支持初始载荷**: 物理引擎的 `prime()` 方法需要升级，以支持将具体的 Payload 注入到初始 Token 中，而不仅仅是空的占位符。这对于常量和配置注入至关重要。
+3.  **移除测试 Hack**: 清理 `test_resource_backpressure.py` 中为了绕过构建器缺陷而编写的手动构图代码。
 
 ### 评论
-将观测通道设为无限容量是符合“全对称计算物理场”白皮书中“零干扰原则”的关键举措。虽然在物理上没有真正的“无限”，但在内存模型中，`deque` 的扩展能力加上 `sys.maxsize` 的限制足以模拟这一特性，确保 $F_{obs}$ 的处理延迟永远不会反压到 $F_{exec}$。
+这是迈向“全功能编译器”的重要一步。目前 `Builder` 只能处理节点间的依赖，无法处理静态参数，这导致生成的图在逻辑上是不完整的。通过引入 `initial_payload` 概念，我们将“常量”这一概念物理化为“预填充了信息的存储槽”，完美契合全对称物理场的哲学。
 
 ### 目标
-1.  创建一个集成测试，证明有限容量的汇聚节点在并发写入下会导致崩溃，而无限容量则不会。
-2.  修改 `builder.py`，将 `global_d_life` 的容量设为 `sys.maxsize`。
-3.  在 `builder.py` 中添加显式的 `assert` 语句，帮助 Pyright 进行类型收缩。
+1.  修改 `PhysicsDataNode` 定义，增加 `initial_payload` 字段。
+2.  更新 `Reactor.prime` 逻辑，使其在生成初始 Token 时携带 `initial_payload`。
+3.  升级 `Builder.build` 逻辑，为每个字面量输入创建一个专属的 `DataNode` 并连接到对应的 `Bleacher`。
+4.  重构 `test_resource_backpressure.py`，验证端到端的字面量传递能力。
 
 ### 基本原理
-*   **物理定律修正**: 观测系统应被视为一个理想的“黑洞”，只吸收信息而不产生反作用力。在二分图模型中，这体现为 $D_{life}$ 拥有无限的势能容纳空间。
-*   **防御性编程**: 尽管 `if ... is None: raise` 在运行时提供了保障，但显式的 `assert` 能让静态分析工具更确信类型的安全性，消除误报。
+在 Cascade 的物理场中，常量不是代码中的魔法值，而是**持久存在的、带有特定信息的势能**。
+*   **Spec 变更**: `PhysicsDataNode` 需要知道它持有的初始能量的“质” (`initial_payload`)，而不仅仅是“量” (`initial_tokens`)。
+*   **Compiler 变更**: 对于每一个静态输入 `x=10`，编译器会在物理空间中实体化一个名为 `const_..._x` 的存储槽，放入一个值为 `10` 的令牌，并将其管道连接到任务的预处理器。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/compiler #concept/observability #scope/core #ai/instruct #task/domain/compiler #task/object/observability-bus #task/action/fix-congestion #task/state/begin
+#intent/build #flow/ready #priority/high #comp/compiler #comp/vm #concept/data-flow #scope/core #ai/instruct #task/domain/compiler #task/object/literal-values #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建并发拥堵测试
+#### Acts 1: 修改 Spec 定义
 
-我们将创建一个测试，模拟多个节点向同一个 DataNode 并发写入的场景。
+在 `PhysicsDataNode` 中添加 `initial_payload` 字段。
 
 ~~~~~act
-write_file
-packages/cascade-compiler/tests/integration/test_observability_congestion.py
+patch_file
+packages/cascade-spec/src/cascade/spec/physics.py
 ~~~~~
-~~~~~python
-import pytest
-import asyncio
-import sys
-from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory, MemoryFullError
-from cascade.vm.reactor import Reactor
-from cascade.vm.executor import PhysicsExecutor
+~~~~~python.old
+@dataclass
+class PhysicsDataNode(PhysicsNode):
+    capacity: int = 1
+    """Maximum number of tokens this node can hold simultaneously."""
 
+    initial_tokens: int = 0
+    """Number of tokens to pre-fill at reactor startup (Potential Energy)."""
+~~~~~
+~~~~~python.new
+@dataclass
+class PhysicsDataNode(PhysicsNode):
+    capacity: int = 1
+    """Maximum number of tokens this node can hold simultaneously."""
 
-def noop_producer(inputs):
-    return {"out": Token(payload="event")}
+    initial_tokens: int = 0
+    """Number of tokens to pre-fill at reactor startup (Potential Energy)."""
 
-
-@pytest.mark.asyncio
-async def test_limited_capacity_causes_crash():
-    """
-    证明：如果汇聚节点容量有限（例如 1），并发写入会导致 MemoryFullError。
-    """
-    # 1. Setup: 2 Producers -> 1 Limited Consumer
-    d_life = PhysicsDataNode(id="D_life", name="Bus", capacity=1)
-    
-    # Producer 1
-    d_in1 = PhysicsDataNode(id="D_in1", name="In1", initial_tokens=1)
-    f_p1 = PhysicsFuncNode(id="F_p1", name="P1")
-    
-    # Producer 2
-    d_in2 = PhysicsDataNode(id="D_in2", name="In2", initial_tokens=1)
-    f_p2 = PhysicsFuncNode(id="F_p2", name="P2")
-
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d_life, d_in1, f_p1, d_in2, f_p2]}
-    
-    # Wiring
-    # D_in1 -> F_p1 -> D_life
-    graph.channels.append(Channel(d_in1.id, "out", f_p1.id, "in"))
-    graph.channels.append(Channel(f_p1.id, "out", d_life.id, "in"))
-    
-    # D_in2 -> F_p2 -> D_life
-    graph.channels.append(Channel(d_in2.id, "out", f_p2.id, "in"))
-    graph.channels.append(Channel(f_p2.id, "out", d_life.id, "in"))
-
-    memory = VolatileMemory()
-    reactor = Reactor(
-        graph, 
-        memory, 
-        PhysicsExecutor(), 
-        {f_p1.id: noop_producer, f_p2.id: noop_producer}
-    )
-    reactor.prime()
-
-    # 2. Execution
-    # Both F_p1 and F_p2 are ready. They will try to fire in the same step.
-    # D_life has capacity 1. 
-    # One will succeed, the other SHOULD fail with MemoryFullError.
-    
-    try:
-        await reactor.step()
-    except Exception as e:
-        # We expect a crash here due to atomic consumption but separate emission
-        # Actually, Reactor.step() gathers exceptions.
-        assert isinstance(e, MemoryFullError) or isinstance(e.__cause__, MemoryFullError)
-        return
-
-    # If by chance they ran sequentially enough or memory logic allowed it (unlikely with cap=1),
-    # we assert the state. But with asyncio.gather, it's highly likely to crash.
-    # If it didn't crash, we need to check if one was skipped?
-    # No, Reactor logic says: check inputs -> fire. It doesn't check output capacity pre-fire.
-    
-    # If we are here, it means no exception was raised, which is unexpected for capacity 1 
-    # unless the implementation changed.
-    # Let's ensure we filled it.
-    assert memory.get_count(d_life.id) <= 1
-
-
-@pytest.mark.asyncio
-async def test_infinite_capacity_handles_concurrency():
-    """
-    证明：如果汇聚节点容量为 sys.maxsize，并发写入安全。
-    """
-    # 1. Setup: 2 Producers -> 1 Infinite Consumer
-    d_life = PhysicsDataNode(id="D_life", name="Bus", capacity=sys.maxsize)
-    
-    d_in1 = PhysicsDataNode(id="D_in1", name="In1", initial_tokens=1)
-    f_p1 = PhysicsFuncNode(id="F_p1", name="P1")
-    
-    d_in2 = PhysicsDataNode(id="D_in2", name="In2", initial_tokens=1)
-    f_p2 = PhysicsFuncNode(id="F_p2", name="P2")
-
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d_life, d_in1, f_p1, d_in2, f_p2]}
-    
-    graph.channels.append(Channel(d_in1.id, "out", f_p1.id, "in"))
-    graph.channels.append(Channel(f_p1.id, "out", d_life.id, "in"))
-    
-    graph.channels.append(Channel(d_in2.id, "out", f_p2.id, "in"))
-    graph.channels.append(Channel(f_p2.id, "out", d_life.id, "in"))
-
-    memory = VolatileMemory()
-    reactor = Reactor(
-        graph, 
-        memory, 
-        PhysicsExecutor(), 
-        {f_p1.id: noop_producer, f_p2.id: noop_producer}
-    )
-    reactor.prime()
-
-    # 2. Execution
-    # Both should fire successfully.
-    fired = await reactor.step()
-    
-    assert fired == 2
-    assert memory.get_count(d_life.id) == 2
+    initial_payload: Any = None
+    """The payload to use for pre-filled tokens."""
 ~~~~~
 
-#### Acts 2: 修正 Builder
+#### Acts 2: 升级 Reactor 启动逻辑
 
-修改 `builder.py`，引入 `sys` 模块，将 `d_life` 容量设为最大值，并添加类型断言。
+修改 `Reactor.prime()`，使其使用 `initial_payload` 创建 Token。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor.py
+~~~~~
+~~~~~python.old
+    def prime(self) -> None:
+        """
+        Injects initial potential energy (tokens) into the system
+        based on PhysicsDataNode.initial_tokens.
+        """
+        for node in self.graph.nodes.values():
+            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
+                for _ in range(node.initial_tokens):
+                    # Initial tokens are pure potential; no payload, no trace.
+                    self.memory.put(node, Token(payload=None))
+
+    async def step(self) -> int:
+~~~~~
+~~~~~python.new
+    def prime(self) -> None:
+        """
+        Injects initial potential energy (tokens) into the system
+        based on PhysicsDataNode.initial_tokens.
+        """
+        for node in self.graph.nodes.values():
+            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
+                for _ in range(node.initial_tokens):
+                    # Initial tokens use the node's defined payload (for constants) or None.
+                    self.memory.put(node, Token(payload=node.initial_payload))
+
+    async def step(self) -> int:
+~~~~~
+
+#### Acts 3: 实现 Builder 的字面量支持
+
+修改 `builder.py`，在构建数据依赖时处理字面量。
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/src/cascade/compiler/backend/builder.py
 ~~~~~
 ~~~~~python.old
-from typing import Dict
-
-from cascade.spec.ir.models import GraphIR
-~~~~~
-~~~~~python.new
-import sys
-from typing import Dict
-
-from cascade.spec.ir.models import GraphIR
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-        # 2. Create and wire the global observability sidecar infrastructure
-        d_life_id = "global_d_life"
-        f_obs_id = "global_f_obs"
-
-        d_life = PhysicsDataNode(id=d_life_id, name="LifecycleBus")
-        f_obs = ObservabilityNode(
-            id=f_obs_id,
-            name="LifecycleObserver",
-~~~~~
-~~~~~python.new
-        # 2. Create and wire the global observability sidecar infrastructure
-        d_life_id = "global_d_life"
-        f_obs_id = "global_f_obs"
-
-        # Capacity set to maxsize to prevent backpressure from observability
-        d_life = PhysicsDataNode(
-            id=d_life_id, name="LifecycleBus", capacity=sys.maxsize
-        )
-        f_obs = ObservabilityNode(
-            id=f_obs_id,
-            name="LifecycleObserver",
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-            # 3.2 Expand
-            subgraph = self._expander.expand_node(node_ir)
-            if subgraph.bleacher is None or subgraph.stainer is None:
-                raise RuntimeError(f"Subgraph for {node_ir.id} is incomplete.")
-
-            subgraphs[node_ir.id] = subgraph
-            physical_graph.nodes.update(subgraph.nodes)
-            physical_graph.channels.extend(subgraph.channels)
-
-            # 3.3 Wire task observability TO the sidecar bus
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.bleacher.id,
-                    source_port="obs_output",
-                    target_node_id=d_life_id,
-                    target_port="event_token",
-                )
-            )
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.stainer.id,
-                    source_port="obs_output",
-                    target_node_id=d_life_id,
-                    target_port="event_token",
-                )
-            )
-
-        # 4. Wire data dependencies between subgraphs
-        for node_ir in graph_ir.nodes:
-            target_subgraph = subgraphs[node_ir.id]
-            for arg_name, source_ref in node_ir.inputs.items():
-                if isinstance(source_ref, str) and source_ref in subgraphs:
-                    source_subgraph = subgraphs[source_ref]
-                    physical_graph.channels.append(
-                        Channel(
-                            source_node_id=source_subgraph.stainer.id,
-                            source_port="output",
-                            target_node_id=target_subgraph.bleacher.id,
-                            target_port=arg_name,
-                        )
-                    )
-
-        # 5. Wire Global Resources (The Loop)
-        for node_ir in graph_ir.nodes:
-            subgraph = subgraphs[node_ir.id]
-            for res_name in node_ir.constraints:
-                res_node_id = f"global_res_{res_name}"
-                port_name = f"res_{res_name}"
-
-                # Acquire: D_res -> F_bleach
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=res_node_id,
-                        source_port="out",
-                        target_node_id=subgraph.bleacher.id,
-                        target_port=port_name,
-                    )
-                )
-
-                # Release: F_stain -> D_res
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=subgraph.stainer.id,
-                        source_port=port_name,
-                        target_node_id=res_node_id,
-                        target_port="in",
-                    )
-                )
-~~~~~
-~~~~~python.new
-            # 3.2 Expand
-            subgraph = self._expander.expand_node(node_ir)
-            if subgraph.bleacher is None or subgraph.stainer is None:
-                raise RuntimeError(f"Subgraph for {node_ir.id} is incomplete.")
-
-            # Help static analysis verify these are not None
-            assert subgraph.bleacher is not None
-            assert subgraph.stainer is not None
-
-            subgraphs[node_ir.id] = subgraph
-            physical_graph.nodes.update(subgraph.nodes)
-            physical_graph.channels.extend(subgraph.channels)
-
-            # 3.3 Wire task observability TO the sidecar bus
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.bleacher.id,
-                    source_port="obs_output",
-                    target_node_id=d_life_id,
-                    target_port="event_token",
-                )
-            )
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.stainer.id,
-                    source_port="obs_output",
-                    target_node_id=d_life_id,
-                    target_port="event_token",
-                )
-            )
-
         # 4. Wire data dependencies between subgraphs
         for node_ir in graph_ir.nodes:
             target_subgraph = subgraphs[node_ir.id]
@@ -327,37 +126,123 @@ packages/cascade-compiler/src/cascade/compiler/backend/builder.py
                     )
 
         # 5. Wire Global Resources (The Loop)
+~~~~~
+~~~~~python.new
+        # 4. Wire data dependencies between subgraphs
         for node_ir in graph_ir.nodes:
-            subgraph = subgraphs[node_ir.id]
+            target_subgraph = subgraphs[node_ir.id]
             
             # Help static analysis
-            assert subgraph.bleacher is not None
-            assert subgraph.stainer is not None
+            assert target_subgraph.bleacher is not None
 
-            for res_name in node_ir.constraints:
-                res_node_id = f"global_res_{res_name}"
-                port_name = f"res_{res_name}"
+            for arg_name, source_ref in node_ir.inputs.items():
+                # Case A: Reference to another node (Dependency)
+                if isinstance(source_ref, str) and source_ref in subgraphs:
+                    source_subgraph = subgraphs[source_ref]
+                    
+                    # Help static analysis
+                    assert source_subgraph.stainer is not None
 
-                # Acquire: D_res -> F_bleach
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=res_node_id,
-                        source_port="out",
-                        target_node_id=subgraph.bleacher.id,
-                        target_port=port_name,
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=source_subgraph.stainer.id,
+                            source_port="output",
+                            target_node_id=target_subgraph.bleacher.id,
+                            target_port=arg_name,
+                        )
                     )
-                )
-
-                # Release: F_stain -> D_res
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=subgraph.stainer.id,
-                        source_port=port_name,
-                        target_node_id=res_node_id,
-                        target_port="in",
+                # Case B: Literal Value (Constant)
+                else:
+                    # Create a dedicated DataNode for this constant
+                    # Naming convention: const_[target_node]_[arg_name]
+                    const_node_id = f"const_{node_ir.id}_{arg_name}"
+                    const_node = PhysicsDataNode(
+                        id=const_node_id,
+                        name=f"Const({arg_name})",
+                        capacity=1,
+                        initial_tokens=1,
+                        initial_payload=source_ref,
                     )
-                )
+                    physical_graph.nodes[const_node_id] = const_node
+
+                    # Wire Const -> Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=const_node_id,
+                            source_port="out",
+                            target_node_id=target_subgraph.bleacher.id,
+                            target_port=arg_name,
+                        )
+                    )
+
+        # 5. Wire Global Resources (The Loop)
+~~~~~
+
+#### Acts 4: 重构测试用例
+
+重构 `test_resource_backpressure.py`，移除手动的节点注入，使用 `inputs` 传递参数。
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
+~~~~~
+~~~~~python.old
+    # We need to handle the global D_life observability sidecar if we want full correctness.
+    # Builder created 'global_d_life'.
+    # But Builder did NOT create an F_obs node attached to it in the current implementation?
+    # Let's check builder.py...
+    # Builder creates 'd_life' DataNode. But it does NOT seem to create the F_obs node consuming it.
+    # It just wires output ports TO d_life.
+    # This means d_life will fill up with events. This is fine for this test.
+
+    # 4. FIX for Test: Manually create DataNodes for literal inputs 'x'.
+    # This is a temporary measure because the Builder doesn't yet support literals.
+    for node_prefix, val in [("node_1", 10), ("node_2", 20)]:
+        d_literal = PhysicsDataNode(id=f"{node_prefix}_in_x", name="Literal X")
+        physical_graph.nodes[d_literal.id] = d_literal
+        physical_graph.channels.append(
+            Channel(d_literal.id, "out", f"{node_prefix}_bleach", target_port="x")
+        )
+        memory.put(d_literal, Token(payload=val))
+
+    # 5. Re-initialize Reactor AFTER all graph modifications are complete.
+    reactor = Reactor(physical_graph, memory, executor, func_map)
+
+    # 6. Prime the reactor ONCE to fill D_res.
+    reactor.prime()
+    assert memory.get_count("global_res_gpu") == 1
+~~~~~
+~~~~~python.new
+    # We need to handle the global D_life observability sidecar if we want full correctness.
+    # Builder created 'global_d_life'.
+    
+    # 4. (Deleted) Manual DataNode creation is no longer needed.
+    # The Builder now automatically creates 'const_node_1_x' and 'const_node_2_x'
+    # based on the literals in NodeIR.inputs.
+    
+    # 5. Initialize Reactor
+    reactor = Reactor(physical_graph, memory, executor, func_map)
+
+    # 6. Prime the reactor.
+    # This should fill:
+    # - global_res_gpu (1 token, payload=None)
+    # - const_node_1_x (1 token, payload=10)
+    # - const_node_2_x (1 token, payload=20)
+    reactor.prime()
+    
+    assert memory.get_count("global_res_gpu") == 1
+    assert memory.get_count("const_node_1_x") == 1
+    assert memory.get_count("const_node_2_x") == 1
+    
+    # Verify payloads
+    t1 = memory.take("const_node_1_x")
+    assert t1.payload == 10
+    memory.put(physical_graph.nodes["const_node_1_x"], t1) # Put it back for execution
+
+    t2 = memory.take("const_node_2_x")
+    assert t2.payload == 20
+    memory.put(physical_graph.nodes["const_node_2_x"], t2) # Put it back
 ~~~~~
 
 ### 下一步建议
-我们已经修复了严重的死锁风险和类型错误。接下来，我们应继续推进重构计划，重点是**增强构建器对字面量的支持**，这是消除“功能债务”和移除测试中 Hack 代码的关键一步。
+我们已经完成了构建器的字面量支持。现在我们应该关注之前战略分析中提到的“命名规范”问题，特别是资源节点的命名 (`global_res_gpu`) 和内部节点 (`_bleach`, `_stain`) 的命名。这些硬编码字符串是技术债务。建议下一步进行 **规范化命名 (Canonical Naming)** 的重构。

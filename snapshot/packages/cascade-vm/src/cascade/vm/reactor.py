@@ -63,8 +63,8 @@ class Reactor:
         for node in self.graph.nodes.values():
             if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
                 for _ in range(node.initial_tokens):
-                    # Initial tokens are pure potential; no payload, no trace.
-                    self.memory.put(node, Token(payload=None))
+                    # Initial tokens use the node's defined payload (for constants) or None.
+                    self.memory.put(node, Token(payload=node.initial_payload))
 
     async def step(self) -> int:
         nodes_to_fire: List[PhysicsFuncNode] = []

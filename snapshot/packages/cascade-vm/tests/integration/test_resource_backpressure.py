@@ -98,28 +98,33 @@ async def test_concurrency_limit():
 
     # We need to handle the global D_life observability sidecar if we want full correctness.
     # Builder created 'global_d_life'.
-    # But Builder did NOT create an F_obs node attached to it in the current implementation?
-    # Let's check builder.py...
-    # Builder creates 'd_life' DataNode. But it does NOT seem to create the F_obs node consuming it.
-    # It just wires output ports TO d_life.
-    # This means d_life will fill up with events. This is fine for this test.
-
-    # 4. FIX for Test: Manually create DataNodes for literal inputs 'x'.
-    # This is a temporary measure because the Builder doesn't yet support literals.
-    for node_prefix, val in [("node_1", 10), ("node_2", 20)]:
-        d_literal = PhysicsDataNode(id=f"{node_prefix}_in_x", name="Literal X")
-        physical_graph.nodes[d_literal.id] = d_literal
-        physical_graph.channels.append(
-            Channel(d_literal.id, "out", f"{node_prefix}_bleach", target_port="x")
-        )
-        memory.put(d_literal, Token(payload=val))
-
-    # 5. Re-initialize Reactor AFTER all graph modifications are complete.
+    
+    # 4. (Deleted) Manual DataNode creation is no longer needed.
+    # The Builder now automatically creates 'const_node_1_x' and 'const_node_2_x'
+    # based on the literals in NodeIR.inputs.
+    
+    # 5. Initialize Reactor
     reactor = Reactor(physical_graph, memory, executor, func_map)
 
-    # 6. Prime the reactor ONCE to fill D_res.
+    # 6. Prime the reactor.
+    # This should fill:
+    # - global_res_gpu (1 token, payload=None)
+    # - const_node_1_x (1 token, payload=10)
+    # - const_node_2_x (1 token, payload=20)
     reactor.prime()
+    
     assert memory.get_count("global_res_gpu") == 1
+    assert memory.get_count("const_node_1_x") == 1
+    assert memory.get_count("const_node_2_x") == 1
+    
+    # Verify payloads
+    t1 = memory.take("const_node_1_x")
+    assert t1.payload == 10
+    memory.put(physical_graph.nodes["const_node_1_x"], t1) # Put it back for execution
+
+    t2 = memory.take("const_node_2_x")
+    assert t2.payload == 20
+    memory.put(physical_graph.nodes["const_node_2_x"], t2) # Put it back
 
     # 7. Step Execution
     # Step 1: Both Bleachers are ready on 'x', but contend for 'res_gpu'.

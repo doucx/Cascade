@@ -35,8 +35,12 @@ class Expander:
         # 2. Create Nodes
 
         # F_pre: The Bleacher
-        # It needs input ports matching the Task definition args.
+        # Inputs = Task Args + Resource Constraints
         bleacher_inputs = {arg.name: "Any" for arg in node_ir.task.args}
+        # Add ports for resources
+        for res_name in node_ir.constraints.keys():
+            bleacher_inputs[f"res_{res_name}"] = "ResourceSlot"
+
         f_pre = BleachNode(
             id=f_pre_id,
             name=f"Bleach({node_ir.name})",
@@ -67,14 +71,19 @@ class Expander:
         d_trace = PhysicsDataNode(id=d_trace_id, name=f"Trace({node_ir.name})")
 
         # F_post: The Stainer
+        # Outputs = Result + Resource Returns
+        stainer_outputs = {
+            "output": "Token",
+            "obs_output": "Event",
+        }
+        for res_name in node_ir.constraints.keys():
+            stainer_outputs[f"res_{res_name}"] = "ResourceSlot"
+
         f_post = StainNode(
             id=f_post_id,
             name=f"Stain({node_ir.name})",
             input_ports={"worker_result": "Any", "trace_input": "TraceCtx"},
-            output_ports={
-                "output": "Token",
-                "obs_output": "Event",  # Port for end event
-            },
+            output_ports=stainer_outputs,
         )
 
         # Register nodes
@@ -91,21 +100,61 @@ class Expander:
 
         # Path 1: Execution Flow
         # F_pre -> D_worker_in
-        channels.append(Channel(f_pre_id, "worker_input", d_worker_in_id))
+        channels.append(
+            Channel(
+                source_node_id=f_pre_id,
+                source_port="worker_input",
+                target_node_id=d_worker_in_id,
+                target_port="in",
+            )
+        )
         # D_worker_in -> F_worker
         channels.append(
-            Channel(d_worker_in_id, "out", f_worker_id)
-        )  # Implicit 'out' for DataNode source
+            Channel(
+                source_node_id=d_worker_in_id,
+                source_port="out",
+                target_node_id=f_worker_id,
+                target_port="worker_input",
+            )
+        )
         # F_worker -> D_worker_out
-        channels.append(Channel(f_worker_id, "worker_result", d_worker_out_id))
+        channels.append(
+            Channel(
+                source_node_id=f_worker_id,
+                source_port="worker_result",
+                target_node_id=d_worker_out_id,
+                target_port="in",
+            )
+        )
         # D_worker_out -> F_post
-        channels.append(Channel(d_worker_out_id, "out", f_post_id))
+        channels.append(
+            Channel(
+                source_node_id=d_worker_out_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port="worker_result",
+            )
+        )
 
         # Path 2: Trace Bypass
         # F_pre -> D_trace
-        channels.append(Channel(f_pre_id, "trace_output", d_trace_id))
+        channels.append(
+            Channel(
+                source_node_id=f_pre_id,
+                source_port="trace_output",
+                target_node_id=d_trace_id,
+                target_port="in",
+            )
+        )
         # D_trace -> F_post
-        channels.append(Channel(d_trace_id, "out", f_post_id))
+        channels.append(
+            Channel(
+                source_node_id=d_trace_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port="trace_input",
+            )
+        )
 
         subgraph.channels = channels
 

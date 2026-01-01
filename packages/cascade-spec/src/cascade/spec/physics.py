@@ -34,6 +34,9 @@ class PhysicsDataNode(PhysicsNode):
     capacity: int = 1
     """Maximum number of tokens this node can hold simultaneously."""
 
+    initial_tokens: int = 0
+    """Number of tokens to pre-fill at reactor startup (Potential Energy)."""
+
 
 @dataclass
 class PhysicsFuncNode(PhysicsNode):

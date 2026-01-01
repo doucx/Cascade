@@ -1,4 +1,3 @@
-import pytest
 from queue import Queue
 
 from cascade.spec.physics import Token

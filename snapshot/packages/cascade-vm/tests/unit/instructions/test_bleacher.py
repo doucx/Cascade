@@ -1,5 +1,3 @@
-import pytest
-import time
 from unittest.mock import patch
 
 from cascade.spec.physics import Token

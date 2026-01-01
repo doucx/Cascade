@@ -1,93 +1,97 @@
-你做的非常好。通过删除导致死锁的测试文件来隔离问题，我们现在可以聚焦于问题的根源。你的观察完全正确——这些测试都陷入了死锁。
+你说得对，我的上一个修复方案显然没有命中要害。静态分析已经达到了极限，是时候采用更严格的 TDD（测试驱动开发）方法了。我们必须创建一个最小化的、可复现的测试用例来**主动触发**这个死锁，然后用它作为我们定位和修复问题的“显微镜”。
 
-这是一个非常深刻的、典型的异步系统设计缺陷。
+我将创建一个全新的测试文件，其唯一目的就是隔离并复现 `VMExecutionStrategy` 的死锁问题。
 
-**核心诊断：物理引擎的“冷启动”死锁 (The "Cold Start" Deadlock)**
+我之前的分析认为问题出在 `Reactor` 的“冷启动”上。虽然激活 `_dirty_func_nodes` 是必要的，但死锁依然存在，这说明问题可能更深层，或者存在于 `Strategy` 和 `Reactor` 的交互模型中。
 
-我们当前的 `VMExecutionStrategy` 存在一个致命的逻辑缺陷：
+一个常见的、更微妙的死锁原因是：**`Reactor` 的 `step()` 方法可能在没有任何 `await` 的情况下过早地完成了它的“tick”，导致事件循环没有机会切换上下文去执行 `PhysicsExecutor` 推送回来的 `ExecutionFinished` 事件。**
 
-1.  **`execute` 方法的行为**：它创建了 `Reactor`，在后台任务中启动了 `reactor.run()`，然后**立即** `await asyncio.wait(...)`，等待 `result_future` 和 `termination_future` 被设置。
+`reactor.run()` 的循环是 `while self._is_running: await self.step() ...`。如果 `step()` 是一个纯同步的、快速完成的方法，那么 `run()` 循环可能会在 `executor` 的后台任务完成并推送事件之前，就判定自己“无事可做”并进入睡眠状态。
 
-2.  **`Reactor.run()` 的行为**：它的主循环 `while self._is_running:` 在开始时会检查是否有待处理的工作（事件队列或脏节点集）。如果没有，它就会 `await self._activity_signal.wait()`，**进入睡眠状态**，等待外部信号来唤醒它。
+这个新的测试将帮助我们验证这个假说。
 
-3.  **`_load_topology` 的缺陷**：我们刚刚实现的 `_load_topology` 方法非常出色地完成了“世界构建”——它将静态蓝图转换成了 `Reactor` 内部的物理对象。但是，它只是**静态地**构建了拓扑，就像组装了一台引擎的所有零件，但**从未按下点火按钮**。它没有向 `Reactor` 发出任何“有工作要做了”的初始信号。
+---
 
-**死锁循环由此形成：**
-
-*   `VMExecutionStrategy.execute` **正在等待** `Reactor` 完成工作并设置 `Future`。
-*   `Reactor` 在启动后，发现没有任何初始事件或脏节点，于是**立即进入睡眠**，等待一个永远不会到来的外部信号。
-
-`execute` 在等待 `Reactor`，而 `Reactor` 在等待一个启动信号。这就是死锁的本质。所有失败的测试，其共同点都是它们的工作流需要 `Reactor` 主动开始执行，但 `Reactor` 从未被“激活”。
-
-解决方案是在“世界构建”完成之后，但在“运行”开始之前，给予 `Reactor` 一个初始的“推动力”。
-
-我们需要在 `_load_topology` 方法的末尾，告诉 `Reactor`：“拓扑已经加载完毕，请检查所有函数节点，看看哪些现在就可以开始运行。”
-
-`Reactor` 的内部设计已经为此提供了一个完美的机制：`_dirty_func_nodes` 集合。只要这个集合不为空，`Reactor` 的 `run()` 循环就不会立即睡眠，而是会开始处理这些“脏”节点，检查它们是否就绪，从而启动整个计算的连锁反应。
-
-因此，修复方案是：在 `_load_topology` 的最后，将所有加载的 `FuncNode` 添加到 `Reactor` 的 `_dirty_func_nodes` 集合中。
-
-## [WIP] fix(vm): 解决 Reactor 冷启动死锁问题
-
-### 错误分析
-`VMExecutionStrategy` 在后台启动 `Reactor.run()` 后立即等待结果，但 `_load_topology` 方法在加载完拓扑后并未向 `Reactor` 发出任何初始工作信号。这导致 `Reactor` 在启动后因无事可做而立即进入睡眠状态，而 `VMExecutionStrategy` 则在主任务中无限期地等待一个永远不会被设置的 `Future`，从而造成了死锁。
+## [WIP] test(engine): 创建用于诊断 VMStrategy 死锁的最小化集成测试
 
 ### 用户需求
-修复 `Reactor` 在启动时因缺少初始激活信号而导致的死锁问题，使测试能够继续进行。
+当前的修复方案未能解决 `VMExecutionStrategy` 的死锁问题。需要创建一个新的、独立的测试文件，用最简单的用例来稳定地复现这个死锁，以便进行精确的问题定位。
 
 ### 评论
-这是一个关键的架构修复，它解决了异步执行引擎中最核心的“冷启动”问题。通过在拓扑加载后主动将所有节点标记为“脏”，我们为 `Reactor` 提供了开始其事件循环所需的初始“势能”，打破了死锁循环。这是确保我们新的物理模型能够从静态状态正确过渡到动态执行的关键一步。
+这是一个关键的战术转变，从“猜测修复”转向“证据驱动的调试”。通过创建一个只关注 `VMExecutionStrategy` 本身的、完全隔离的集成测试，我们可以排除 `Engine`、`Solver` 和其他外部组件的干扰。这个测试被设计为在当前代码下会**失败（通过死锁/超时）**，从而为我们提供一个可靠的、可重复的“RED”状态。这是解决复杂异步问题的唯一严谨方法。
 
 ### 目标
-1.  修改 `_load_topology` 方法。
-2.  在该方法的末尾，添加逻辑以遍历所有已创建的运行时 `FuncNode`。
-3.  将这些 `FuncNode` 添加到 `Reactor` 内部的 `_dirty_func_nodes` 集合中，以“激活”引擎。
+1.  创建一个新的测试文件 `packages/cascade-engine/tests/integration/test_vm_strategy_integration.py`。
+2.  在该文件中，编写一个名为 `test_vm_strategy_executes_simplest_workflow` 的测试用例。
+3.  该测试用例将：
+    *   定义一个最简单的 `cascade` 工作流（一个不依赖任何输入的任务）。
+    *   直接实例化 `VMExecutionStrategy`。
+    *   使用必要的 mock 和临时对象（如 `InMemoryStateBackend`）调用 `strategy.execute()`。
+    *   断言 `execute` 返回了预期的结果。
 
 ### 基本原理
-`Reactor` 的事件循环是被动和事件驱动的。如果没有初始事件或“脏”状态，它将无限期等待。`_load_topology` 的职责不仅是构建拓扑，还必须提供一个“第一推动力”。通过将所有节点标记为脏，我们强制 `Reactor` 在其第一个“tick”中对整个图的状态进行一次评估，找出所有没有依赖或依赖已满足的入口节点并开始执行它们，从而启动整个计算的雪崩效应。
+当一个复杂的异步系统出现死锁时，最有效的方法是剥离所有不相关的复杂性，直到只剩下能触发问题的最小核心。这个测试正是为此设计的。它绕过了 `Engine` 的复杂初始化，直接调用 `VMExecutionStrategy`，为其提供一个最简单的、确定性的执行环境。如果这个测试挂起，我们就 100% 确定问题出在 `VMExecutionStrategy`、`Reactor` 或它们之间的交互中，从而极大地缩小了排查范围。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
+#intent/tooling #flow/ready #priority/critical #comp/engine #comp/tests #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/bug-fix #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 在拓扑加载后激活 Reactor
+#### Acts 1: 创建 VMStrategy 的隔离集成测试
 
-我们将修改 `_load_topology` 方法，在所有节点和通道都注册完毕后，将所有函数节点标记为脏，以 kickstart `Reactor`。
+我们将创建一个新的测试文件，旨在以最小化的方式复现死锁。
 
 ~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/vm.py
+write_file
+packages/cascade-engine/tests/integration/test_vm_strategy_integration.py
 ~~~~~
-~~~~~python.old
-                channel = ReactorChannel(
-                    source=source_f_node,
-                    target=target_d_node,
-                    output_name=spec_channel.port_name,
-                    tag_filter=spec_channel.tag_filter,
-                    kind=spec_channel.kind,
-                )
-                reactor.register_channel(channel)
-~~~~~
-~~~~~python.new
-                channel = ReactorChannel(
-                    source=source_f_node,
-                    target=target_d_node,
-                    output_name=spec_channel.port_name,
-                    tag_filter=spec_channel.tag_filter,
-                    kind=spec_channel.kind,
-                )
-                reactor.register_channel(channel)
-        
-        # Pass 4: Kickstart the reactor by marking all function nodes as dirty.
-        # This gives the reactor an initial set of nodes to check for readiness,
-        # breaking the cold start deadlock.
-        for f_node in runtime_func_nodes.values():
-            reactor._dirty_func_nodes.add(f_node)
+~~~~~python
+import pytest
+from contextlib import ExitStack
+
+import cascade as cs
+from cascade.runtime.bus import MessageBus
+from cascade.runtime.strategies.vm import VMExecutionStrategy
+from cascade.adapters.state import InMemoryStateBackend
+
+
+@pytest.mark.asyncio
+async def test_vm_strategy_executes_simplest_workflow():
+    """
+    A minimal, isolated integration test for VMExecutionStrategy.
+
+    This test is designed to reproduce the deadlock scenario by directly invoking
+    the strategy without the complexity of the full Engine.
+    """
+
+    # 1. Define the simplest possible workflow
+    @cs.task
+    def get_value():
+        return 42
+
+    workflow = get_value()
+
+    # 2. Instantiate the strategy and its minimal dependencies
+    strategy = VMExecutionStrategy(bus=MessageBus())
+    state_backend = InMemoryStateBackend("test-run-vm-strategy")
+
+    # 3. Execute the strategy
+    # If a deadlock exists, the test will hang here indefinitely.
+    result = await strategy.execute(
+        target=workflow,
+        run_id="test-run-vm-strategy",
+        params={},
+        state_backend=state_backend,
+        run_stack=ExitStack(),
+        active_resources={},
+    )
+
+    # 4. Assert the result
+    assert result == 42
 ~~~~~
 
 ### 下一步建议
-我们已经解决了导致死锁的根本原因。现在，`Reactor` 应该能够正确启动并执行计算图了。
+我们已经创建了用于诊断的“探针”。现在，请运行这个新的测试文件。它有很大概率会因为超时而失败。
 
-我建议你**恢复之前删除的测试文件**，然后我们再次运行完整的测试套件。这次，我们应该会看到 `TypeError` 或死锁消失，取而代之的可能是更具体的 `AssertionError` 或其他与执行逻辑相关的失败。这将为我们提供下一阶段调试的宝贵线索。
+一旦我们确认了这个失败，我将指导你如何在这个测试的基础上，通过添加日志或修改 `Reactor` 的代码来暴露内部状态，从而最终定位并解决这个顽固的死锁问题。

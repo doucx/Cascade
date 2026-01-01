@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(vm): 解决 Reactor 冷启动死锁问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767241587.0886526, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(engine): 创建用于诊断 VMStrategy 死锁的最小化集成测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767241696.4617157, "duration_ms": 0}}

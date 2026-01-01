@@ -3,7 +3,6 @@
 # to be discovered in the same namespace.
 __path__ = __import__("pkgutil").extend_path(__path__, __name__)
 
-import sys
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, Callable
 
 # --- Lazy Import Mapping ---

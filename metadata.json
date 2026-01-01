@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] 修改 `cascade/sdk.py` 的 `__getattr__` 方法，使其明确忽略所有以 `__` 开头的属性访问。这将切断上述循环的触发源。", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270627.8255498, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: D diagnose_providers.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270716.2722657, "duration_ms": 0}}

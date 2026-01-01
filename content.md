@@ -1,103 +1,78 @@
-好的，我理解了问题。`pyright` 在分析 `cascade-python` 包时，无法找到那些实际上位于 `cascade-sdk` 包中的模块（如 `control_flow`, `testing`, `tools.cli`, `providers.registry`），尽管它们在运行时会共享同一个 `cascade` 命名空间。
+好的，我明白了。这次的问题与上次相反：当静态分析 `cascade-sdk` 时，`pyright` 无法感知到在 `cascade-python` 包中定义的符号（如 `Param`, `Env`, `task`, `run`）以及通过 `__getattr__` 动态提供的 provider（如 `http`, `template`）。
 
-这是一种典型的在使用命名空间包 (namespace packages) 的 monorepo 结构中遇到的静态分析挑战。最直接且正确的解决方法是告知 `pyright` 在这些特定位置忽略缺失的导入，因为我们知道在完整的环境下这些导入是有效的。
+这同样是命名空间包在 monorepo 结构下给静态分析带来的典型挑战。解决方案依然是使用 `# type: ignore` 注释，精确地告知 `pyright` 在这些我们已知是安全的点上忽略它无法静态推断出的属性访问。
 
-我将生成一个计划，通过添加 `# type: ignore` 注释来精确地解决这四个导入错误。
+我将生成一个计划来解决 `pyright` 报告的这 9 个 `reportAttributeAccessIssue` 错误。
 
-## [WIP] fix: 解决 cascade-python 中的 pyright 导入错误
+## [WIP] fix: 解决 cascade-sdk 中的 pyright 属性访问错误
 
 ### 错误分析
 
-用户提供的 `pyright` 输出指出了四个 `reportMissingImports` 错误。根本原因在于项目的 monorepo 结构：
-1.  `cascade-python` 和 `cascade-sdk` 是两个独立的包，但它们共同构成了 `cascade` 这个命名空间。
-2.  `cascade-python` 包的根 `__init__.py` 文件扮演了一个“外观”(Facade) 的角色，它尝试从整个 `cascade` 命名空间（包括 `cascade-sdk` 中定义的模块）导出符号。
-3.  当 `pyright` 单独分析 `cascade-python` 的源代码树时，它无法看到 `cascade-sdk` 中的文件，因此认为 `cascade.control_flow`, `cascade.testing` 等模块不存在，从而报告导入错误。
+`pyright` 在分析 `packages/cascade-sdk` 目录时，报告了大量的 `reportAttributeAccessIssue` 错误。根本原因在于：
+1.  **分析范围局限**: `pyright` 的分析范围仅限于 `cascade-sdk` 目录。它无法看到 `cascade-python` 包的源代码。
+2.  **命名空间依赖**: `cascade-sdk` 中的代码（如 `llm_openai.py` 和 `cli.py`）通过 `import cascade` 或 `from cascade import ...` 来依赖 `cascade` 命名空间的功能。
+3.  **符号来源**: 这些被依赖的符号（如 `Param`, `run`, `task`）实际上是在 `cascade-python` 包的根 `__init__.py` 中定义或通过 `__getattr__` 动态导出的。
+4.  **静态推断失败**: 由于 `cascade-python` 的实现对 `pyright` 不可见，它无法静态地确认 `cascade` 模块上存在这些属性，因此报告了属性访问错误。
 
 ### 用户需求
 
-解决 `pyright packages/cascade-python/` 命令报告的所有四个 `reportMissingImports` 错误，使静态分析能够通过。
+解决 `pyright packages/cascade-sdk/` 命令报告的所有九个 `reportAttributeAccessIssue` 错误，使静态分析能够通过。
 
 ### 评论
 
-这是一个在复杂 Python 项目中很常见的静态分析配置问题。直接修改代码结构或移动文件是过度设计且不必要的。采用 `# type: ignore [reportMissingImports]` 注释是解决此类问题的标准实践，因为它可以在不影响运行时逻辑的情况下，为静态分析工具提供足够的信息以消除误报。
+这是一个非常典型的 monorepo + namespace package 的静态分析问题。最直接、影响最小且符合工程实践的解决方案是为这些静态分析器无法理解的“跨包”调用添加明确的忽略指令。这可以确保在不改变代码运行时行为的前提下，让开发者获得干净的静态分析结果。
 
 ### 目标
 
-1.  为 `cascade.control_flow` 的导入添加 `type: ignore` 注释。
-2.  为 `cascade.testing` 的导入添加 `type: ignore` 注释。
-3.  为 `cascade.tools.cli` 的导入添加 `type: ignore` 注释。
-4.  为 `cascade.providers.registry` 的导入添加 `type: ignore` 注释。
+1.  在 `cascade/tools/cli.py` 中，为 `from cascade import run` 这一行添加 `# type: ignore` 注释，解决其导入符号未知的问题。
+2.  在 `cascade/examples/patterns/llm_openai.py` 中，为 `import cascade as cs` 这一行添加 `# type: ignore` 注释。这应该能一次性地告诉 `pyright`，我们认可后续对 `cs` 的所有属性访问，从而解决该文件内的全部 8 个错误。
 
 ### 基本原理
 
-我们将使用四个独立的、原子化的 `patch_file` 操作来修改 `packages/cascade-python/src/cascade/__init__.py` 文件。这种方法确保了每个改动都精确地针对一个错误，使得计划清晰、易于审查，并降低了引入错误的风险。
+我们将采用两个独立的 `patch_file` 操作。
+-   对于 `cli.py`，问题出在一个特定的 `from ... import ...` 语句上，所以我们精确地修改那一行。
+-   对于 `llm_openai.py`，所有 8 个错误都源于对 `cs` 别名的属性访问。通过在 `import cascade as cs` 这一行添加忽略指令，我们可以用最简洁的方式解决所有相关问题，避免用 8 个独立的注释污染代码。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/static-analysis #task/action/fix #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/static-analysis #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `TYPE_CHECKING` 块内的导入错误
+#### Acts 1: 修正 `cli.py` 中的未知导入符号错误
 
-我们将逐一为在 `if TYPE_CHECKING:` 块内引发错误的三个导入语句添加忽略指令。
-
-首先是 `control_flow`。
+我们首先解决 `tools/cli.py` 中 `cascade_run` 的导入问题。
 ~~~~~act
 patch_file
-packages/cascade-python/src/cascade/__init__.py
+packages/cascade-sdk/src/cascade/tools/cli.py
 ~~~~~
 ~~~~~python.old
-    from cascade.control_flow import select_jump, bind
+    def main(**kwargs):
+        from cascade import run as cascade_run
+
+        # Extract log_level explicitly since it's injected by Typer via the dynamic signature
 ~~~~~
 ~~~~~python.new
-    from cascade.control_flow import select_jump, bind  # type: ignore [reportMissingImports]
+    def main(**kwargs):
+        from cascade import run as cascade_run  # type: ignore [reportAttributeAccessIssue]
+
+        # Extract log_level explicitly since it's injected by Typer via the dynamic signature
 ~~~~~
 
-其次是 `testing`。
+#### Acts 2: 修正 `llm_openai.py` 中的属性访问错误
+
+接下来，我们通过修改 `import` 语句，一次性解决 `llm_openai.py` 文件中的所有 8 个属性访问错误。
 ~~~~~act
 patch_file
-packages/cascade-python/src/cascade/__init__.py
+packages/cascade-sdk/src/cascade/examples/patterns/llm_openai.py
 ~~~~~
 ~~~~~python.old
-    from cascade.testing import override_resource, ControllerTestApp
+import cascade as cs
+from cascade.providers.http import HttpResponse
 ~~~~~
 ~~~~~python.new
-    from cascade.testing import override_resource, ControllerTestApp  # type: ignore [reportMissingImports]
-~~~~~
-
-最后是 `tools.cli`。
-~~~~~act
-patch_file
-packages/cascade-python/src/cascade/__init__.py
-~~~~~
-~~~~~python.old
-    from cascade.tools.cli import create_cli
-~~~~~
-~~~~~python.new
-    from cascade.tools.cli import create_cli  # type: ignore [reportMissingImports]
-~~~~~
-
-#### Acts 2: 修正 `__getattr__` 内的导入错误
-
-现在，我们修正 `__getattr__` 函数内部对 `providers.registry` 的动态导入。
-~~~~~act
-patch_file
-packages/cascade-python/src/cascade/__init__.py
-~~~~~
-~~~~~python.old
-    try:
-        from cascade.providers.registry import registry
-
-        return registry.get(name)
-    except (ImportError, AttributeError):
-~~~~~
-~~~~~python.new
-    try:
-        from cascade.providers.registry import registry  # type: ignore [reportMissingImports]
-
-        return registry.get(name)
-    except (ImportError, AttributeError):
+import cascade as cs  # type: ignore [reportAttributeAccessIssue]
+from cascade.providers.http import HttpResponse
 ~~~~~

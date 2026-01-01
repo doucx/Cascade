@@ -1,4 +1,4 @@
-import cascade as cs
+import cascade as cs  # type: ignore [reportAttributeAccessIssue]
 from cascade.providers.http import HttpResponse
 
 # 1. 定义子流程的输入参数

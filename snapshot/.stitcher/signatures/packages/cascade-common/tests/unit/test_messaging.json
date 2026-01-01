@@ -1,10 +1,12 @@
 {
   "test_message_bus_renderer_delegation": {
     "baseline_code_signature_text": "def test_message_bus_renderer_delegation():",
-    "baseline_code_structure_hash": "6bcdb946869eb7ef676f7b645ecfcb40afa187dc972dead2c38bcd78773eb2a1"
+    "baseline_code_structure_hash": "6bcdb946869eb7ef676f7b645ecfcb40afa187dc972dead2c38bcd78773eb2a1",
+    "baseline_yaml_content_hash": "4ee60a82d2366cf8d75dba322985f76aced71ad73f9fcf32cb9605f72af89d44"
   },
   "test_message_store_loads_defaults": {
     "baseline_code_signature_text": "def test_message_store_loads_defaults():",
-    "baseline_code_structure_hash": "5c7d690761bfff23a5b0ac8b8c507fcdf99082313b93f908ced71c76693ca192"
+    "baseline_code_structure_hash": "5c7d690761bfff23a5b0ac8b8c507fcdf99082313b93f908ced71c76693ca192",
+    "baseline_yaml_content_hash": "5490d67132512631f088df5684f784b4972e7843b77ca6b086da83ec05222058"
   }
 }

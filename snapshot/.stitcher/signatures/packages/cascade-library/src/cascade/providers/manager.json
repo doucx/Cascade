@@ -1,0 +1,32 @@
+{
+  "ProviderNamespace": {},
+  "ProviderNamespace.__getattr__": {
+    "baseline_code_signature_text": "def __getattr__(self, name: str) -> Any:",
+    "baseline_code_structure_hash": "cfaa0d20b1f7ec834a295b0cfbdbbc55353e201952fcc10a53a830612bc56408"
+  },
+  "ProviderNamespace.__init__": {
+    "baseline_code_signature_text": "def __init__(self, registry: ProviderRegistry, prefix: str):",
+    "baseline_code_structure_hash": "a8f232c8be26720d4b17e7ce3e62b5fd83fd975e0b2a825e98fc72027556a6ec"
+  },
+  "ProviderNamespace._prefix": {},
+  "ProviderNamespace._registry": {},
+  "ProviderRegistry": {},
+  "ProviderRegistry.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "ProviderRegistry._discover_entry_points": {
+    "baseline_code_signature_text": "def _discover_entry_points(self):",
+    "baseline_code_structure_hash": "feae498188d5710e59ce2c37009299db9a718d916f2c78e033daa39e553d10f9"
+  },
+  "ProviderRegistry._loaded": {},
+  "ProviderRegistry._providers": {},
+  "ProviderRegistry.get": {
+    "baseline_code_signature_text": "def get(self, name: str) -> Any:",
+    "baseline_code_structure_hash": "20149c8db212ebe10ebdef3a06b61bc0f0025fcbd15c1d03512ea6603e670d82"
+  },
+  "ProviderRegistry.register": {
+    "baseline_code_signature_text": "def register(self, name: str, factory: LazyFactory):",
+    "baseline_code_structure_hash": "7d0606566b3a8d20b4b89c0b9589195fbe5ecc82a98d903802f57daa36a60823"
+  }
+}

@@ -1,22 +1,27 @@
 {
   "test_connect_and_disconnect_lifecycle": {
     "baseline_code_signature_text": "async def test_connect_and_disconnect_lifecycle(mock_aiomqtt_module, mocker):",
-    "baseline_code_structure_hash": "21e19c7864c72ccc39c09d8193afaa7589b36b78bee79fa51f2e7426c1b84478"
+    "baseline_code_structure_hash": "21e19c7864c72ccc39c09d8193afaa7589b36b78bee79fa51f2e7426c1b84478",
+    "baseline_yaml_content_hash": "22327db9f5c9bac24ebfb54039ec952aafca8d9a8ef85054a89dc25db91251af"
   },
   "test_mqtt_connector_instantiation": {
     "baseline_code_signature_text": "def test_mqtt_connector_instantiation():",
-    "baseline_code_structure_hash": "078efa98fbd3d10ecd9ca8f48d5fb5dfce1c93de1d98b053dab8e9a183c4d31c"
+    "baseline_code_structure_hash": "078efa98fbd3d10ecd9ca8f48d5fb5dfce1c93de1d98b053dab8e9a183c4d31c",
+    "baseline_yaml_content_hash": "f0f868fc0f1fd5dadeca58b2f7c93b6c70e3b10af73e4229df0d5044d85e89b1"
   },
   "test_publish_sends_json_and_is_fire_and_forget": {
     "baseline_code_signature_text": "async def test_publish_sends_json_and_is_fire_and_forget(mock_aiomqtt_module):",
-    "baseline_code_structure_hash": "2023c05a234940cc0e8b82ce41cacd105959495b4fcc6f721cb73b475748a562"
+    "baseline_code_structure_hash": "2023c05a234940cc0e8b82ce41cacd105959495b4fcc6f721cb73b475748a562",
+    "baseline_yaml_content_hash": "a1348c0416a05f5c576ef50fe49c9231ce1a1c231d1d21d296641d3c44390b60"
   },
   "test_publish_without_connect_does_nothing": {
     "baseline_code_signature_text": "async def test_publish_without_connect_does_nothing(mock_aiomqtt_module):",
-    "baseline_code_structure_hash": "42ccdb50a4aac52890405744b9ae2416a268c912019c00e823fe1e02aafec15a"
+    "baseline_code_structure_hash": "42ccdb50a4aac52890405744b9ae2416a268c912019c00e823fe1e02aafec15a",
+    "baseline_yaml_content_hash": "f175943de27037809e398c9941c3a6516b5d7688b27e1397e415d4113383e546"
   },
   "test_subscribe_receives_messages": {
     "baseline_code_signature_text": "async def test_subscribe_receives_messages(mock_aiomqtt_module):",
-    "baseline_code_structure_hash": "ef0eb8137ae0ffa43c4ad243641e397fc2bb3513c2b9b468c1a1d6696114eb10"
+    "baseline_code_structure_hash": "ef0eb8137ae0ffa43c4ad243641e397fc2bb3513c2b9b468c1a1d6696114eb10",
+    "baseline_yaml_content_hash": "784362ce5fd725ad44105da9100f3c6aa633cbcfdae726887d704d99c9169669"
   }
 }

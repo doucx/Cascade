@@ -1,10 +1,12 @@
 {
   "test_retry_exhausted_failure": {
     "baseline_code_signature_text": "async def test_retry_exhausted_failure():",
-    "baseline_code_structure_hash": "91287cd098abd480db16db81610a6eeec8bcec3371cd368b9a6db10d8826d32c"
+    "baseline_code_structure_hash": "91287cd098abd480db16db81610a6eeec8bcec3371cd368b9a6db10d8826d32c",
+    "baseline_yaml_content_hash": "4465833a17dcc7869270dda09627f05af6dd3af2fcc43a6e04f80014ffc8af68"
   },
   "test_retry_success_after_failure": {
     "baseline_code_signature_text": "async def test_retry_success_after_failure():",
-    "baseline_code_structure_hash": "7835cecdbfeff2c769b2d5b2cd2b4794ca86a7b940cdaa544b890ccc064348e8"
+    "baseline_code_structure_hash": "7835cecdbfeff2c769b2d5b2cd2b4794ca86a7b940cdaa544b890ccc064348e8",
+    "baseline_yaml_content_hash": "f1230c40f3a2769b22fbfb53397a1b4485adca811f21ad7d962abef64511f9b6"
   }
 }

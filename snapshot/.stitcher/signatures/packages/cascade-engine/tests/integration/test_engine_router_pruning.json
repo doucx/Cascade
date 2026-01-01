@@ -1,10 +1,12 @@
 {
   "test_pruning_exclusive_branches": {
     "baseline_code_signature_text": "async def test_pruning_exclusive_branches():",
-    "baseline_code_structure_hash": "c1c26b1da9312ca9cb25ec1995d0e37870a746b11ee710e1e6cac05c1152393c"
+    "baseline_code_structure_hash": "c1c26b1da9312ca9cb25ec1995d0e37870a746b11ee710e1e6cac05c1152393c",
+    "baseline_yaml_content_hash": "44ecb6f9d9950631cc056d185959de6a9232f54f6bc8ed48c08677b42aa7dfc1"
   },
   "test_pruning_shared_dependency": {
     "baseline_code_signature_text": "async def test_pruning_shared_dependency():",
-    "baseline_code_structure_hash": "2416342126ab5269884955f810ed2baeaeb9bc1cc15da320fd9530f93d2e0ea7"
+    "baseline_code_structure_hash": "2416342126ab5269884955f810ed2baeaeb9bc1cc15da320fd9530f93d2e0ea7",
+    "baseline_yaml_content_hash": "a359fdf2544d9a8f902bfff9e0bd1421eec9a9190bd6da419d0f549dd3b5bb6f"
   }
 }

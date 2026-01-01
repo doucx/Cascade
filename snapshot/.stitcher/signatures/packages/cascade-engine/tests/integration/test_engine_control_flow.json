@@ -1,7 +1,8 @@
 {
   "test_cascade_skip": {
     "baseline_code_signature_text": "async def test_cascade_skip():",
-    "baseline_code_structure_hash": "6eadd9d4d07371a8dfaf316541a282634ec0946fb7c09e8048cd7668f64ed9a3"
+    "baseline_code_structure_hash": "6eadd9d4d07371a8dfaf316541a282634ec0946fb7c09e8048cd7668f64ed9a3",
+    "baseline_yaml_content_hash": "7121048450b1d7286e045f4f8036cf536d05c40177129c206d5a6ec6aea01bbf"
   },
   "test_run_if_false": {
     "baseline_code_signature_text": "async def test_run_if_false():",

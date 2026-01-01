@@ -1,22 +1,27 @@
 {
   "test_cache_get_non_existent_key": {
     "baseline_code_signature_text": "async def test_cache_get_non_existent_key():",
-    "baseline_code_structure_hash": "e25070151f896adc642ee8dd557c28c1605f590d1a19d67e844574b05887be14"
+    "baseline_code_structure_hash": "e25070151f896adc642ee8dd557c28c1605f590d1a19d67e844574b05887be14",
+    "baseline_yaml_content_hash": "d91fac634d4c94f12fbfa1f7e8986bc588b08a4c13b6ebf71fc45fce5e477dd0"
   },
   "test_cache_set_and_get": {
     "baseline_code_signature_text": "async def test_cache_set_and_get():",
-    "baseline_code_structure_hash": "92d9a5f6d44f4ead9f730228d3b657d14136485240da6e3226996241dabcf514"
+    "baseline_code_structure_hash": "92d9a5f6d44f4ead9f730228d3b657d14136485240da6e3226996241dabcf514",
+    "baseline_yaml_content_hash": "9648257acbe51fe3b7b9ef0806830ace5c8673b908700b7f18324bb162d9f481"
   },
   "test_cache_set_overwrite": {
     "baseline_code_signature_text": "async def test_cache_set_overwrite():",
-    "baseline_code_structure_hash": "e4ac08f8d143e7aadcf3334fcfef7763a09d2f7225eb4bc696650a0200bf8f0e"
+    "baseline_code_structure_hash": "e4ac08f8d143e7aadcf3334fcfef7763a09d2f7225eb4bc696650a0200bf8f0e",
+    "baseline_yaml_content_hash": "232885df47d6815ba26ac6d2ada6b03ac45463151b67bceb80307884c34f0cd7"
   },
   "test_cache_ttl_expired": {
     "baseline_code_signature_text": "async def test_cache_ttl_expired():",
-    "baseline_code_structure_hash": "4f33fd1e34818593b667ed3b201efb19e1a55d15d1e4ae8d4f1eac0fe2395db3"
+    "baseline_code_structure_hash": "4f33fd1e34818593b667ed3b201efb19e1a55d15d1e4ae8d4f1eac0fe2395db3",
+    "baseline_yaml_content_hash": "439cf0473800c3cfdcd6710fd47b4bae75fa83cc0f047f4c6f7176f1029aadcd"
   },
   "test_cache_ttl_not_expired": {
     "baseline_code_signature_text": "async def test_cache_ttl_not_expired():",
-    "baseline_code_structure_hash": "3c734f1991f20573ce02972067477e575ec8337c33b17043f174fcd6c237bcce"
+    "baseline_code_structure_hash": "3c734f1991f20573ce02972067477e575ec8337c33b17043f174fcd6c237bcce",
+    "baseline_yaml_content_hash": "2a709a18fe3e448cd5fb2033b3baaac20e4a6f46f6f822f5702c254647abfba4"
   }
 }

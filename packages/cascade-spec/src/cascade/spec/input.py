@@ -7,8 +7,9 @@ class InputSpec:
     name: str
     default: Any = None
     description: str = ""
-    # 注意: 'required' 属性被移除，其逻辑由 'default' 是否存在来隐式定义。
-    # 运行时若无 default 且未提供值，则会失败。
+    # NOTE: The 'required' attribute is removed; its logic is implicitly defined
+    # by whether 'default' is present. A runtime error will occur if no default
+    # is set and no value is provided.
 
 
 @dataclass(frozen=True)

@@ -5,6 +5,7 @@ from functools import partial
 from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
 from cascade.spec.fingerprint import Fingerprint
 from cascade.spec.physics import Token, PhysicsDataNode
+from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
@@ -59,15 +60,15 @@ async def test_concurrency_limit():
 
     graph_ir = GraphIR(nodes=[node_1, node_2])
 
-    # 2. Build Physical Graph
+    # 2. Define Environment and Build Physical Graph
+    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
     builder = Builder()
-    physical_graph = builder.build(graph_ir)
+    physical_graph = builder.build(graph_ir, environment=env)
 
-    # Verify D_res exists
+    # Verify D_res exists and was configured by the environment
     assert "global_res_gpu" in physical_graph.nodes
     d_res = physical_graph.nodes["global_res_gpu"]
-    # Force capacity to 1 for this test (Builder currently defaults to 1)
-    d_res.initial_tokens = 1
+    assert d_res.initial_tokens == 1
 
     # 3. Setup VM
     memory = VolatileMemory()

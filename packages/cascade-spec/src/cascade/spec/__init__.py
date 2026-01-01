@@ -3,6 +3,7 @@ from .physics import Token, PhysicsNode, PhysicsDataNode, PhysicsFuncNode
 from .triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
 from .topology import Channel, BipartiteGraph
 from .resources import ResourceSlot
+from .environment import EnvironmentDef, ResourceDef
 
 __all__ = [
     "Fingerprint",
@@ -18,4 +19,6 @@ __all__ = [
     "Channel",
     "BipartiteGraph",
     "ResourceSlot",
+    "EnvironmentDef",
+    "ResourceDef",
 ]

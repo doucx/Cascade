@@ -1,177 +1,41 @@
-好的，我们开始 **任务 1.2：反应堆核心循环 (The Step)**。
+好的，遵照您的指示，我们进入 **GREEN** 阶段。我将分步实现 `Reactor` 的逻辑，并遵循您的建议，对每个函数进行独立的 `patch_file` 操作，以保持变更的原子性。
 
-我们将进入 **RED** 状态。这个阶段的目标是定义 `Reactor` 的 API，并通过测试用例规定其“全准入激发”和“令牌吞噬”的核心行为。
-
-## [WIP] test(vm): 为 Reactor.step 实现 TDD 单元测试
+## [WIP] feat(vm): 实现 Reactor 核心循环与激发逻辑
 
 ### 用户需求
-为 `cascade-vm` 中的 `Reactor` 创建单元测试。定义 `Reactor` 如何与 `BipartiteGraph` 和 `VolatileMemory` 交互，并验证其核心循环 `step()` 的行为。
+实现 `Reactor` 类的 `__init__`、`step` 和 `_fire` 方法，以满足 `test_reactor.py` 中定义的 TDD 测试用例，使其从 RED 状态转为 GREEN 状态。
 
 ### 评论
-`Reactor` 是物理场的引擎。在这一步，我们只关注它的调度逻辑，而不关注具体的代码执行。
-核心测试点有三个：
-1.  **全准入原则 (Full-Input Firing)**：只有当所有输入端口连接的数据节点都有令牌时，函数节点才会被激发。
-2.  **原子吞噬 (Atomic Consumption)**：激发发生时，输入槽的令牌必须被瞬间消耗（从内存中移除）。
-3.  **静默 (Silence)**：如果不满足条件，反应堆应保持静默，不消耗任何资源。
+这是物理引擎的核心脉冲。通过在 `__init__` 中预处理拓扑，`step` 方法可以高效地扫描所有可能被激发的节点。`_fire` 方法则忠实地执行了“能量守恒”定律——激发必须伴随着能量（令牌）的消耗。这个实现将使我们的静态物理场第一次“动”起来。
 
 ### 目标
-1.  创建 `test_reactor.py`。
-2.  定义 `Reactor` 的初始化 API：接收 `BipartiteGraph` 和 `VolatileMemory`。
-3.  定义 `step()` API：执行一次扫描，返回激发的节点数量。
-4.  编写测试用例覆盖：静止态、部分就绪态、完全激发态。
-5.  创建一个空的 `Reactor` 类，使测试失败 (RED)。
+1.  在 `__init__` 中预编译图，构建一个从函数节点到其输入数据节点的反向索引，以优化性能。
+2.  实现 `step` 方法，该方法扫描所有函数节点，并根据“全准入激发”原则确定哪些节点已就绪。
+3.  实现 `_fire` 方法，该方法负责“原子性地”从所有输入槽中消耗一个令牌。
+4.  确保所有单元测试通过。
 
 ### 基本原理
-我们在测试中构建一个最小的 `D1 -> F1 -> D2` 拓扑。通过向 `D1` 放入或不放入令牌，来验证 `F1` 是否被 `Reactor` 正确地识别为 `Ready` 状态并触发 `_fire`（此时 `_fire` 负责吞噬令牌）。
+我们将 `Reactor` 设计为一个无状态的扫描器。
+*   **预编译**: 在初始化时，我们遍历图的 `channels` 一次，构建一个 `_func_inputs` 字典，它映射了 `FuncNode ID -> List[Input DataNode IDs]`。这避免了在每个 `step()` 中重复昂贵的图遍历。
+*   **扫描与激发**: `step()` 方法利用这个预编译的映射，对每个函数节点，它可以立即找到其所有输入依赖。然后，它查询 `VolatileMemory` 来检查这些输入是否都处于激发态 (`is_excited`)。
+*   **能量守恒**: 对于所有就绪的节点，`_fire()` 方法被调用，它精确地从内存中 `take` 走每个输入槽的一个令牌，完成一次状态转换。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/vm #concept/reactor #scope/core #ai/instruct #task/domain/vm #task/object/reactor #task/action/tdd #task/state/continue
+#intent/build #flow/ready #priority/high #comp/vm #concept/reactor #scope/core #ai/instruct #task/domain/vm #task/object/reactor #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 编写 Reactor 单元测试
+#### Acts 1: 实现 `__init__` 以预编译图拓扑
+
+我们首先在 `__init__` 方法中添加图的预处理逻辑，为高效扫描做准备。
 
 ~~~~~act
-write_file
-packages/cascade-vm/tests/unit/test_reactor.py
-~~~~~
-~~~~~python
-import pytest
-from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-
-@pytest.fixture
-def simple_topology():
-    """
-    Creates a simple D1 -> F1 topology.
-    """
-    d1 = PhysicsDataNode(id="D1", name="Input")
-    f1 = PhysicsFuncNode(id="F1", name="Processor")
-    
-    # Define ports (optional for logic, but good for completeness)
-    f1.input_ports["in"] = "D1"
-    
-    graph = BipartiteGraph()
-    graph.nodes[d1.id] = d1
-    graph.nodes[f1.id] = f1
-    
-    # Connect D1 -> F1
-    channel = Channel(source_node_id=d1.id, source_port="out", target_node_id=f1.id)
-    # Note: In Spec, channel is Source->Target. 
-    # But wait, Topology definition says:
-    # "if Source is Func, Target MUST be Data".
-    # So for D -> F connection, do we have a Channel?
-    # Let's check spec/topology.py.
-    # Channel: source_node_id, source_port, target_node_id.
-    # It seems Channel is generic.
-    # But usually data flows D -> F -> D.
-    # Let's assume Channel represents any directed edge in the bipartite graph.
-    
-    graph.channels.append(channel)
-    
-    return graph, d1, f1
-
-def test_reactor_step_idle(simple_topology):
-    """
-    If no tokens are present, step() should do nothing.
-    """
-    graph, d1, f1 = simple_topology
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
-    
-    fired_count = reactor.step()
-    
-    assert fired_count == 0
-
-def test_reactor_step_fire(simple_topology):
-    """
-    If input has token, F1 should fire and consume the token.
-    """
-    graph, d1, f1 = simple_topology
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
-    
-    # 1. Put token
-    memory.put(d1, Token(payload="energy"))
-    assert memory.get_count(d1.id) == 1
-    
-    # 2. Step
-    fired_count = reactor.step()
-    
-    # 3. Assertions
-    assert fired_count == 1
-    # Token must be consumed (Atomic Consumption)
-    assert memory.get_count(d1.id) == 0
-
-def test_reactor_partial_inputs():
-    """
-    F1 needs D1 and D2. Only D1 has token. F1 should NOT fire.
-    """
-    d1 = PhysicsDataNode(id="D1", name="Input1")
-    d2 = PhysicsDataNode(id="D2", name="Input2")
-    f1 = PhysicsFuncNode(id="F1", name="Processor")
-    
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d1, d2, f1]}
-    
-    # D1 -> F1
-    graph.channels.append(Channel(d1.id, "out", f1.id))
-    # D2 -> F1
-    graph.channels.append(Channel(d2.id, "out", f1.id))
-    
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
-    
-    # Only fill D1
-    memory.put(d1, Token(payload="A"))
-    
-    fired_count = reactor.step()
-    
-    assert fired_count == 0
-    # Token in D1 should remain untouched
-    assert memory.get_count(d1.id) == 1
-
-def test_reactor_independent_nodes():
-    """
-    Two independent nodes F1, F2. Both ready. Both should fire in one step.
-    """
-    d1 = PhysicsDataNode(id="D1", name="In1")
-    f1 = PhysicsFuncNode(id="F1", name="Proc1")
-    
-    d2 = PhysicsDataNode(id="D2", name="In2")
-    f2 = PhysicsFuncNode(id="F2", name="Proc2")
-    
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d1, f1, d2, f2]}
-    graph.channels.append(Channel(d1.id, "out", f1.id))
-    graph.channels.append(Channel(d2.id, "out", f2.id))
-    
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
-    
-    memory.put(d1, Token("A"))
-    memory.put(d2, Token("B"))
-    
-    fired_count = reactor.step()
-    
-    assert fired_count == 2
-    assert memory.get_count(d1.id) == 0
-    assert memory.get_count(d2.id) == 0
-~~~~~
-
-#### Acts 2: 创建 Reactor API 桩 (Entering RED)
-
-创建 `reactor.py`，定义接口，抛出 `NotImplementedError`。
-
-~~~~~act
-write_file
+patch_file
 packages/cascade-vm/src/cascade/vm/reactor.py
 ~~~~~
-~~~~~python
+~~~~~python.old
 from typing import List, Set, Dict
 from cascade.spec.topology import BipartiteGraph
 from cascade.spec.physics import PhysicsFuncNode
@@ -186,7 +50,49 @@ class Reactor:
     def __init__(self, graph: BipartiteGraph, memory: VolatileMemory):
         self.graph = graph
         self.memory = memory
+~~~~~
+~~~~~python.new
+from typing import List, Set, Dict
+from cascade.spec.topology import BipartiteGraph
+from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode
+from cascade.vm.memory import VolatileMemory
 
+class Reactor:
+    """
+    The heart of the physics engine.
+    Scans the topology for excited states and fires transitions.
+    """
+
+    def __init__(self, graph: BipartiteGraph, memory: VolatileMemory):
+        self.graph = graph
+        self.memory = memory
+        # Pre-compute the input data nodes for each function node for fast lookups
+        self._func_inputs: Dict[str, List[str]] = {}
+        self._func_nodes: List[PhysicsFuncNode] = []
+
+        for node in self.graph.nodes.values():
+            if isinstance(node, PhysicsFuncNode):
+                self._func_nodes.append(node)
+                self._func_inputs[node.id] = []
+
+        for channel in self.graph.channels:
+            target_node = self.graph.nodes.get(channel.target_node_id)
+            source_node = self.graph.nodes.get(channel.source_node_id)
+            
+            # We are interested in D -> F connections
+            if isinstance(target_node, PhysicsFuncNode) and isinstance(source_node, PhysicsDataNode):
+                self._func_inputs[target_node.id].append(source_node.id)
+~~~~~
+
+#### Acts 2: 实现 `step` 和 `_fire` 逻辑
+
+现在，我们实现 `step` 的扫描逻辑和 `_fire` 的令牌消耗逻辑。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor.py
+~~~~~
+~~~~~python.old
     def step(self) -> int:
         """
         Performs a single scan cycle of the entire graph.
@@ -204,13 +110,46 @@ class Reactor:
         """
         raise NotImplementedError
 ~~~~~
+~~~~~python.new
+    def step(self) -> int:
+        """
+        Performs a single scan cycle of the entire graph.
+
+        Returns:
+            int: The number of nodes that fired during this step.
+        """
+        ready_nodes: List[PhysicsFuncNode] = []
+        for f_node in self._func_nodes:
+            input_ids = self._func_inputs.get(f_node.id, [])
+            
+            # A node with no inputs is not considered ready unless explicitly defined so.
+            # Our "Full-Input Firing" model means a node with inputs must have them all excited.
+            if not input_ids:
+                continue
+
+            is_ready = all(self.memory.is_excited(d_node_id) for d_node_id in input_ids)
+
+            if is_ready:
+                ready_nodes.append(f_node)
+
+        for node_to_fire in ready_nodes:
+            self._fire(node_to_fire)
+
+        return len(ready_nodes)
+
+    def _fire(self, node: PhysicsFuncNode) -> None:
+        """
+        Internal method to execute a node transition.
+        1. Atomically consumes tokens from all input slots.
+        2. (Future) Submits the actual payload to an Executor.
+        """
+        input_ids = self._func_inputs.get(node.id, [])
+        for d_node_id in input_ids:
+            self.memory.take(d_node_id)
+~~~~~
 
 ### 下一步建议
 
-现在运行 `pytest packages/cascade-vm/tests/unit/test_reactor.py` 应该会失败。
+我们已经完成了 `Reactor` 核心调度逻辑的实现。请运行 `pytest packages/cascade-vm/tests/unit/test_reactor.py` 以确认所有测试都已通过。
 
-接下来的 **GREEN** 阶段任务：
-1.  在 `Reactor.__init__` 中预处理图结构，建立反向索引（Inverse Index），即 `FunctionNode_ID -> List[Input_DataNode_ID]`。这是为了快速检查 `is_ready`，避免每次 `step` 都遍历 `channels` 列表。
-2.  实现 `step()` 方法：遍历所有 `PhysicsFuncNode`，检查其所有输入 `DataNode` 是否 `is_excited`。
-3.  实现 `_fire()` 方法：遍历输入节点，调用 `memory.take()` 吞噬令牌，并简单打印日志。
-4.  确保测试通过。
+一旦确认 GREEN，我们就可以继续路线图的下一项任务：**任务 1.3：实现物理执行接口**。我们将创建 `PhysicsExecutor` 并引入 `ThreadPoolExecutor`，为真正执行业务逻辑做好准备。

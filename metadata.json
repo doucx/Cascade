@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] chore(config): 添加 Pyright 配置文件以修复 Monorepo 导入解析", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767259102.492197, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(config): 移除子包中的 `__init__.py` 以修复 Pyright 命名空间合并", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767259304.8991222, "duration_ms": 0}}

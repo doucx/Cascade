@@ -1,70 +1,98 @@
-我们已经通过测试验证了运行时逻辑的正确性（193 passed），这确认了 `pkgutil` 的命名空间扩展在 Python 解释器层面工作正常。
+## [WIP] fix(config): 移除子包中的 `__init__.py` 以修复 Pyright 命名空间合并
 
-当前 Pyright 报错的核心原因是：**静态分析器默认不会像 Python 运行时那样去扫描 `packages/*/src` 目录**。它看不到这个 Monorepo 的全貌，因此认为这些跨包导入都是无效的。
+### 错误分析
+Pyright 和其他静态分析工具在处理 Monorepo 源码视图（Source View）时，遵循严格的包发现规则：
+1.  如果在 `extraPaths` 中发现了多个包含 `cascade/__init__.py` 的目录，它会将它们视为**多个冲突的常规包 (Regular Packages)**，通常只选取第一个加载，而忽略其他的。这导致了“找不到模块”的错误，因为 Pyright 认为它已经找到了 `cascade` 包的全部内容。
+2.  Python 3.3+ 支持**隐式命名空间包 (Implicit Namespace Packages)**，即没有 `__init__.py` 的目录。Pyright 能够完美地自动合并多个隐式命名空间包。
+3.  之前为了“运行时统一性”添加的 `__init__.py` 文件，无意中破坏了 Pyright 的合并逻辑。
 
-只要我们在根目录添加一个 `pyrightconfig.json` 并显式配置 `extraPaths`，告诉 Pyright 去哪里寻找源码，绝大多数 `reportMissingImports` 和由此衍生的类型推断错误就会消失。
-
-是的，这是典型的 Monorepo 静态分析配置缺失问题。虽然运行时 `sys.path` 正常，但 Pyright 需要显式的 `extraPaths` 配置才能“看穿”项目结构。我将创建一个统一的配置文件来解决此问题。
-
-## [WIP] chore(config): 添加 Pyright 配置文件以修复 Monorepo 导入解析
+虽然 `pkgutil` 可以在**运行时**通过 `sys.path` 扫描修复这个问题，但静态分析器不执行代码，因此无法利用 `extend_path` 的动态特性（除非使用 Editable Install，这在当前环境中不适用）。
 
 ### 用户需求
-消除 Pyright 产生的误报，使其能够正确解析 Cascade Monorepo 中分散在各个 `packages/*/src` 目录下的子包。
+修复 48 个 Pyright 导入错误，使开发环境能正确识别跨包引用。
 
 ### 评论
-这是一个纯开发环境配置的任务，不影响任何运行时代码。配置完成后，IDE 的智能提示和跳转功能将显著改善。
+我们必须回滚之前的操作。对于 Monorepo 源码开发，**除了**定义了顶层 API 的 `cascade-python` 外，其他所有包的 `cascade/` 根目录都必须保持为“隐式命名空间”（即不包含 `__init__.py`）。
 
 ### 目标
-1.  在项目根目录创建 `pyrightconfig.json`。
-2.  将所有 13 个子包的 `src` 目录添加到 `extraPaths` 中。
+1.  删除除 `cascade-python` 外所有子包中 `src/cascade/__init__.py` 文件。
+2.  保留 `cascade-python` 中的 `__init__.py`，因为它包含核心 API 逻辑和 `extend_path`（这足以保证运行时兼容性）。
 
 ### 基本原理
-通过 `extraPaths`，我们将所有源码目录提升为 Pyright 的“一级搜索路径”。这模拟了它们都被安装到 `site-packages` 后的状态，使 Pyright 能够正确地将 `cascade.engine`、`cascade.spec` 等识别为同一个 `cascade` 命名空间下的不同部分。
+通过移除 `__init__.py`，我们告诉 Pyright：“这些目录只是 `cascade` 命名空间的一部分片段，请将它们合并。”
 
 ### 标签
-#intent/tooling #flow/ready #priority/medium #comp/build #concept/config #scope/dx #ai/instruct #task/domain/build-system #task/object/pyright-config #task/action/configure #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/build #concept/config #scope/dx #ai/instruct #task/domain/build-system #task/object/namespace-packages #task/action/revert #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Pyright 配置文件
+#### Acts 1: 移除阻碍 Pyright 合并的 `__init__.py` 文件
+
+注意：我们保留 `packages/cascade-python/src/cascade/__init__.py`，因为那是唯一的 Facade 包。
 
 ~~~~~act
-write_file
-pyrightconfig.json
+delete_file
+packages/cascade-application/src/cascade/__init__.py
 ~~~~~
-~~~~~json
-{
-  "include": [
-    "packages"
-  ],
-  "exclude": [
-    "**/node_modules",
-    "**/__pycache__",
-    "**/tests"
-  ],
-  "extraPaths": [
-    "packages/cascade-application/src",
-    "packages/cascade-cli-controller/src",
-    "packages/cascade-cli-observer/src",
-    "packages/cascade-common/src",
-    "packages/cascade-connector-local/src",
-    "packages/cascade-connector-mqtt/src",
-    "packages/cascade-engine/src",
-    "packages/cascade-graph/src",
-    "packages/cascade-library/src",
-    "packages/cascade-provider-ipfs/src",
-    "packages/cascade-python/src",
-    "packages/cascade-sdk/src",
-    "packages/cascade-spec/src"
-  ],
-  "reportMissingImports": true,
-  "reportMissingTypeStubs": false
-}
+
+~~~~~act
+delete_file
+packages/cascade-cli-controller/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-cli-observer/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-common/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-connector-local/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-connector-mqtt/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-engine/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-graph/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-library/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-provider-ipfs/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-sdk/src/cascade/__init__.py
+~~~~~
+
+~~~~~act
+delete_file
+packages/cascade-spec/src/cascade/__init__.py
 ~~~~~
 
 ### 下一步建议
-配置生效通常需要重启 Pyright 服务器（VSCode 命令: `Pyright: Restart Server`）。重启后，请再次运行 `pyright **/src/**.py`，预期的结果是：
-1.  所有 `reportMissingImports` 错误消失。
-2.  剩余的错误将是真实的类型不匹配或 API 使用错误（例如 `ResourceDefinition` 的调用问题），我们可以基于那个更干净的列表进行针对性修复。
+操作完成后，Pyright 应该能够通过 `pyrightconfig.json` 中的 `extraPaths` 自动将这些目录下的 `cascade` 文件夹合并为一个逻辑命名空间。请再次运行 `pyright **/src/**.py` 进行验证。
+
+此时剩下的错误应该只与 `cascade-python` 相关（因为它有一个显式的 `__init__.py`，可能会与合并后的隐式命名空间产生一点摩擦，但在 Pyright 的最新版本中通常能处理），或者是一些真实的类型错误。

@@ -1,7 +1,7 @@
 import hashlib
 from typing import List, Dict, Any
 
-from cascade.spec.ir.models import GraphIR, EdgeKind
+from cascade.spec.ir.models import GraphIR, EdgeKind, NodeIR
 from cascade.spec.topology import (
     BipartiteGraph,
     PhysicsFuncNode,
@@ -28,13 +28,12 @@ class _TopologyBuilder:
         self._func_nodes: Dict[str, PhysicsFuncNode] = {}
         self._data_nodes: Dict[str, PhysicsDataNode] = {}
         self._channels: List[ChannelDef] = []
+        self._initial_values: Dict[str, Any] = {}
 
         # Helper map: FuncNode Hash -> Default Output DataNode Hash
         self._func_output_map: Dict[str, str] = {}
 
     def build(self) -> BipartiteGraph:
-        self._initial_values = {}
-
         # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
         for node_ir in self._graph.nodes:
             self._process_node(node_ir)
@@ -48,6 +47,9 @@ class _TopologyBuilder:
         # Pass 4: Wire Jumps (Feedback Loops) as DATA channels
         self._process_jumps()
 
+        # Pass 5: Inject Lifecycle Emitters
+        self._inject_lifecycle_emitters()
+
         return BipartiteGraph(
             func_nodes=self._func_nodes,
             data_nodes=self._data_nodes,
@@ -55,7 +57,7 @@ class _TopologyBuilder:
             initial_values=self._initial_values,
         )
 
-    def _process_node(self, node_ir):
+    def _process_node(self, node_ir: NodeIR):
         func_hash = node_ir.current_node_instance_hash
 
         f_node = PhysicsFuncNode(
@@ -90,7 +92,7 @@ class _TopologyBuilder:
         )
         self._channels.append(channel)
 
-    def _process_literal(self, f_node, arg_name, value):
+    def _process_literal(self, f_node: PhysicsFuncNode, arg_name: str, value: Any):
         const_hash = self._compute_const_hash(value)
 
         if const_hash not in self._data_nodes:
@@ -175,10 +177,63 @@ class _TopologyBuilder:
             )
             self._channels.append(channel)
 
+    def _inject_lifecycle_emitters(self):
+        if not self._graph.nodes:
+            return  # Empty graph, nothing to do
+
+        # Assumption: The last node processed by the Frontend is the target.
+        root_node_ir = self._graph.nodes[-1]
+        root_node_hash = root_node_ir.current_node_instance_hash
+        root_output_hash = self._func_output_map[root_node_hash]
+
+        # 1. Create Result Emitter Node
+        result_emitter_hash = self._compute_synthetic_hash("result_emitter")
+        result_emitter_node = PhysicsFuncNode(
+            current_node_instance_hash=result_emitter_hash,
+            name="result_emitter",
+            inputs={"result": root_output_hash},
+            sink_id="main_output",
+        )
+        self._func_nodes[result_emitter_hash] = result_emitter_node
+
+        # 2. Create Termination Emitter Node and its input DataNode
+        term_emitter_hash = self._compute_synthetic_hash("term_emitter")
+        # The signal comes FROM the result emitter
+        signal_data_hash = self._compute_data_slot_hash(result_emitter_hash, "signal")
+
+        signal_data_node = PhysicsDataNode(
+            current_data_slot_hash=signal_data_hash,
+            name="term_emitter.signal",
+            producer_node_instance_hash=result_emitter_hash,
+        )
+        self._data_nodes[signal_data_hash] = signal_data_node
+
+        term_emitter_node = PhysicsFuncNode(
+            current_node_instance_hash=term_emitter_hash,
+            name="term_emitter",
+            inputs={"signal": signal_data_hash},
+            sink_id="__system_lifecycle_signal",
+        )
+        self._func_nodes[term_emitter_hash] = term_emitter_node
+
+        # 3. Create SIGNAL Channel connecting the two emitters
+        signal_channel = ChannelDef(
+            source_node_instance_hash=result_emitter_hash,
+            target_data_slot_hash=signal_data_hash,
+            port_name="result",  # Emitters also have a default output for signaling
+            tag_filter="default",
+            kind=ChannelKind.SIGNAL,
+        )
+        self._channels.append(signal_channel)
+
     def _compute_const_hash(self, value: Any) -> str:
         raw = f"const:{repr(value)}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
     def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
         raw = f"{producer_hash}:{port}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _compute_synthetic_hash(self, name: str) -> str:
+        raw = f"synthetic:{name}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()

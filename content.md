@@ -1,81 +1,169 @@
-好的，已经完成了 Cascade 3.0 创世纪阶段（Stage 0）的所有物理原语定义，并搭建好了 `cascade-vm` 和 `cascade-compiler` 的包结构。现在我们将这些变更作为一个完整的逻辑单元进行提交。
+好的，我们将开始 **阶段 1：反应堆点火 (Reactor Ignition)** 的第一个任务。根据 TDD 流程，我们首先进入 **RED** 状态。
 
-## [COMMIT] feat(core): 实现 Cascade 3.0 物理原语与 Monorepo 包结构
+我将为 `VolatileMemory` 设计一套符合计算物理场哲学的 API。它将负责管理数据节点（DataNode）中的令牌（Token）流转。
+
+## [WIP] test: 为 VolatileMemory 实现 TDD 单元测试
 
 ### 用户需求
-根据 Cascade 3.0 重构路线图，完成创世纪阶段（Stage 0）的实施，包括确立物理世界基本粒子的 Spec 定义，以及在 Monorepo 中创建并集成 `cascade-vm` 和 `cascade-compiler` 包。
+为 `cascade-vm` 中的 `VolatileMemory` 创建单元测试，定义其作为内存模型的核心 API，并确保测试处于失败状态（RED）。
 
 ### 评论
-这是一个具有里程碑意义的提交。它标志着 Cascade 3.0 从理论设计正式进入代码实现阶段。通过在 `cascade-spec` 中确立的“令牌物理学”原语，我们为后续的编译器和物理引擎建立了一套统一、全对称的通信契约。
+`VolatileMemory` 是物理引擎的“寄存器”。它不仅需要存储令牌，更重要的是它必须严格遵守物理定律：FIFO（先进先出）和 Capacity（容量限制）。通过 TDD，我们可以确保这些基础行为在任何复杂的拓扑结构下都是稳固的。
 
 ### 目标
-1.  提交 `cascade-vm` 和 `cascade-compiler` 的包结构与配置文件。
-2.  提交根目录 `pyproject.toml` 的集成配置。
-3.  提交 `cascade-spec` 中关于物理节点、令牌、三连体、拓扑和资源的规范定义。
+1.  在 `cascade-vm` 中建立测试目录结构。
+2.  创建 `test_memory.py`，涵盖以下场景：
+    *   基本的令牌存取（`put`/`take`）。
+    *   FIFO 顺序验证。
+    *   容量限制抛出异常。
+    *   激发态（Excitement）检查逻辑。
+3.  创建一个空的 `VolatileMemory` 类，使得测试因未实现逻辑而失败。
 
 ### 基本原理
-我们严格遵循路线图中的“真理之源”原则。所有的物理原语都是纯粹的数据类，确保了系统底层定义的稳定性。包结构的建立遵循 PEP 561 规范，确保了在 Monorepo 环境下的类型安全和开发效率。
+我们采用“外部视角”设计 API。`VolatileMemory` 不应持有图的拓扑，它只持有状态。因此，我们在存取时需要传入节点定义（`PhysicsDataNode`）来告知内存相关的物理约束（如容量）。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/spec #comp/vm #comp/compiler #concept/physics #scope/core #ai/instruct #task/domain/core #task/object/genesis #task/action/implementation #task/state/end
+#intent/tooling #flow/ready #priority/high #comp/vm #concept/state #scope/core #ai/instruct #task/domain/vm #task/object/volatile-memory #task/action/tdd #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交创世纪阶段的全部变更
+#### Acts 1: 准备测试目录
 
-我们将所有涉及到的新包文件、Spec 定义以及根目录配置添加到暂存区并执行提交。
-
-~~~~~act
-git_add
-pyproject.toml
-packages/cascade-vm/pyproject.toml
-packages/cascade-vm/src/cascade/__init__.py
-packages/cascade-vm/src/cascade/py.typed
-packages/cascade-vm/src/cascade/vm/__init__.py
-packages/cascade-compiler/pyproject.toml
-packages/cascade-compiler/src/cascade/__init__.py
-packages/cascade-compiler/src/cascade/py.typed
-packages/cascade-compiler/src/cascade/compiler/__init__.py
-packages/cascade-spec/src/cascade/spec/physics.py
-packages/cascade-spec/src/cascade/spec/triad.py
-packages/cascade-spec/src/cascade/spec/topology.py
-packages/cascade-spec/src/cascade/spec/resources.py
-packages/cascade-spec/src/cascade/spec/__init__.py
-~~~~~
+创建单元测试目录。
 
 ~~~~~act
-git_commit
+run_command
 ~~~~~
-~~~~~text
-feat(core): implement Cascade 3.0 physics primitives and package structure
+~~~~~bash
+mkdir -p packages/cascade-vm/tests/unit
+touch packages/cascade-vm/tests/unit/__init__.py
+~~~~~
 
-This commit establishes the foundation for the Cascade 3.0 "Fully Symmetric
-Computational Physics Field" as outlined in the roadmap.
+#### Acts 2: 编写 VolatileMemory 单元测试
 
-Core Changes:
-1.  **Monorepo Integration**: Created `cascade-vm` (physics engine) and
-    `cascade-compiler` (graph expander) packages, integrating them into the
-    root workspace (uv, hatch, pyright).
-2.  **Physics Primitives**: Defined the fundamental entities in `cascade-spec`:
-    - `Token`: Added payload, tagging, and trace metadata for observability.
-    - `Nodes`: Implemented `PhysicsDataNode` and `PhysicsFuncNode` as base types.
-    - `Triad Structure`: Defined `BleachNode`, `WorkerNode`, and `StainNode`
-      to decouple business logic from context.
-    - `Topology`: Implemented `Channel` with spectral tag filtering and the
-      `BipartiteGraph` container.
-    - `Resources`: Added `ResourceSlot` for topological back-pressure.
+这些测试定义了 `VolatileMemory` 的 API 契约。
 
-This marks the successful completion of Stage 0 (Genesis).
+~~~~~act
+write_file
+packages/cascade-vm/tests/unit/test_memory.py
+~~~~~
+~~~~~python
+import pytest
+from cascade.spec.physics import Token, PhysicsDataNode
+from cascade.vm.memory import VolatileMemory, MemoryFullError, MemoryEmptyError
+
+def test_basic_put_and_take():
+    """Test standard token storage and retrieval."""
+    mem = VolatileMemory()
+    node = PhysicsDataNode(id="D1", name="InputSlot", capacity=1)
+    token = Token(payload="hello")
+    
+    mem.put(node, token)
+    assert mem.get_count(node.id) == 1
+    
+    retrieved = mem.take(node.id)
+    assert retrieved.payload == "hello"
+    assert mem.get_count(node.id) == 0
+
+def test_fifo_behavior():
+    """Tokens must be retrieved in the order they were put (FIFO)."""
+    mem = VolatileMemory()
+    node = PhysicsDataNode(id="D1", name="Buffer", capacity=10)
+    
+    mem.put(node, Token(payload="first"))
+    mem.put(node, Token(payload="second"))
+    
+    assert mem.take(node.id).payload == "first"
+    assert mem.take(node.id).payload == "second"
+
+def test_capacity_overflow():
+    """Putting more tokens than capacity must raise MemoryFullError."""
+    mem = VolatileMemory()
+    node = PhysicsDataNode(id="D1", name="SmallSlot", capacity=1)
+    
+    mem.put(node, Token(payload="one"))
+    with pytest.raises(MemoryFullError):
+        mem.put(node, Token(payload="two"))
+
+def test_empty_take():
+    """Taking from an empty node must raise MemoryEmptyError."""
+    mem = VolatileMemory()
+    with pytest.raises(MemoryEmptyError):
+        mem.take("non-existent")
+
+def test_excitement_check():
+    """
+    A node is 'excited' if it has at least one token (or a specific threshold).
+    This is the core signal for the Reactor.
+    """
+    mem = VolatileMemory()
+    node = PhysicsDataNode(id="D1", name="Trigger", capacity=5)
+    
+    assert not mem.is_excited(node.id)
+    
+    mem.put(node, Token(payload="pulse"))
+    assert mem.is_excited(node.id)
+    assert mem.is_excited(node.id, threshold=1)
+    assert not mem.is_excited(node.id, threshold=2)
+~~~~~
+
+#### Acts 3: 创建 API 桩文件 (Entering RED)
+
+创建 `memory.py`，仅包含 API 签名但不实现逻辑，确保测试失败。
+
+~~~~~act
+write_file
+packages/cascade-vm/src/cascade/vm/memory.py
+~~~~~
+~~~~~python
+from typing import Dict, List, Any
+from cascade.spec.physics import Token, PhysicsDataNode
+
+class MemoryError(Exception):
+    """Base class for memory-related errors."""
+    pass
+
+class MemoryFullError(MemoryError):
+    """Raised when a DataNode exceeds its capacity."""
+    pass
+
+class MemoryEmptyError(MemoryError):
+    """Raised when attempting to take from an empty DataNode."""
+    pass
+
+class VolatileMemory:
+    """
+    In-memory state manager for PhysicsDataNodes.
+    Implements FIFO queues and capacity enforcement.
+    """
+
+    def __init__(self):
+        pass
+
+    def put(self, node: PhysicsDataNode, token: Token) -> None:
+        """Adds a token to the specified data node."""
+        raise NotImplementedError
+
+    def take(self, node_id: str) -> Token:
+        """Consumes and returns the oldest token from the node."""
+        raise NotImplementedError
+
+    def get_count(self, node_id: str) -> int:
+        """Returns the current token count in the node."""
+        return 0
+
+    def is_excited(self, node_id: str, threshold: int = 1) -> bool:
+        """Returns True if the token count meets or exceeds the threshold."""
+        return False
 ~~~~~
 
 ### 下一步建议
 
-我们已经确立了物理世界的“宪法”。接下来的重点是赋予这个世界以动力。
+现在测试已经就绪，运行 `pytest packages/cascade-vm/tests/unit/test_memory.py` 应该会产生一堆 `NotImplementedError`。
 
-我建议我们进入 **阶段 1：反应堆点火 (Reactor Ignition)**：
-1.  **任务 1.1：内存模型实现**：在 `cascade-vm` 中实现 `VolatileMemory`，负责管理 `DataNode` 中令牌的 `put/take` 行为。
-2.  **任务 1.2：反应堆核心循环**：实现 `Reactor.step()`，让物理引擎能够根据“全准入激发”定律自动运转。
-
-如果您准备好了，我们可以开始任务 1.1 的 TDD 过程。
+接下来我们将进入 **GREEN** 阶段：
+1.  实现 `VolatileMemory` 的内部存储（推荐使用 `collections.deque`）。
+2.  实现 `put` 和 `take` 的逻辑。
+3.  确保所有单元测试通过。

@@ -143,14 +143,6 @@ class FuncNode:
                     port.target.put(token)
 
 
-class TerminatorNode(FuncNode):
-    """
-    Runtime representation of a termination point.
-    When fired, it signals the Reactor to stop.
-    """
-    pass
-
-
 class EmitterNode(FuncNode):
     """
     Runtime representation of an emission point.

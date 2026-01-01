@@ -27,18 +27,6 @@ class PhysicsDataNode:
 
 
 @dataclass(frozen=True)
-class PhysicsTerminatorNode:
-    """
-    A special Functional Node that, when fired, triggers the shutdown of the Reactor.
-    It represents the "End of Time" for a run.
-    """
-    current_node_instance_hash: str
-    name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
 class PhysicsEmitterNode:
     """
     A specialized node that projects internal tokens to the external world.
@@ -84,5 +72,4 @@ class BipartiteGraph:
     # Map data_slot_hash -> literal value for constant inputs
     initial_values: Dict[str, Any] = field(default_factory=dict)
     # Special lifecycle nodes
-    terminator_nodes: Dict[str, PhysicsTerminatorNode] = field(default_factory=dict)
     emitter_nodes: Dict[str, PhysicsEmitterNode] = field(default_factory=dict)

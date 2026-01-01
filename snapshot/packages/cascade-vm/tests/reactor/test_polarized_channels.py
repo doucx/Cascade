@@ -1,47 +1,3 @@
-好的，我们来创建测试文件以验证新的双势垒物理模型。
-
-根据 TDD (测试驱动开发) 的原则，我们正处于 RED 阶段。这个新的测试文件将会失败，因为它依赖我们刚刚实现的、但尚未经过验证的新逻辑。通过让这个测试从失败（RED）走向成功（GREEN），我们可以确保新功能的正确性。
-
-我将创建一个名为 `test_polarized_channels.py` 的文件，并编写两个核心测试用例：一个用于验证双势垒激活逻辑，另一个用于验证信号通道会剥离数据负载。
-
-## [WIP] test(vm): 为 Reactor 的极化通道和双势垒逻辑添加测试
-
-### 用户需求
-为 `cascade-vm` 中 `Reactor` 新增的通道极化和双势垒激活逻辑创建测试用例。测试需要验证：1）任务只有在同时满足数据和信号依赖时才被调度；2）通过信号通道传递的令牌其数据负载会被剥离。
-
-### 评论
-这是确保我们新物理模型正确性的关键一步。一个健壮的测试套件能够捕捉到异步调度中的细微逻辑错误，并为我们未来继续在该模型上构建功能（如 `.after()` 依赖）提供信心。这两个测试用例直接对应了我们在 `5.A.2` 阶段实现的核心功能，是该阶段的最终验收标准。
-
-### 目标
-1.  在 `packages/cascade-vm/tests/reactor/` 目录下创建一个新的测试文件 `test_polarized_channels.py`。
-2.  在该文件中实现 `test_dual_barrier_activation_waits_for_all_inputs` 测试用例，它将验证 `FuncNode` 的激活逻辑。
-3.  实现 `test_signal_channel_strips_payload` 测试用例，以验证 `Reactor` 的信号感知路由逻辑。
-
-### 基本原理
-我们将使用 `write_file` 创建一个全新的测试文件。
-
-第一个测试 `test_dual_barrier_activation_waits_for_all_inputs` 将构建一个需要一个 `DATA` 输入和一个 `SIGNAL` 输入的 `FuncNode`。我们将分步注入令牌，首先只注入 `DATA` 令牌并断言任务**未**执行，然后注入 `SIGNAL` 令牌并断言任务**已**执行，从而严格验证双势垒逻辑。
-
-第二个测试 `test_signal_channel_strips_payload` 将构建一个 `FuncNode`，其输出同时连接到一个 `DATA` 通道和一个 `SIGNAL` 通道。我们将模拟该节点完成执行，并断言 `DATA` 通道的目标 `DataNode` 收到了完整的令牌，而 `SIGNAL` 通道的目标 `DataNode` 收到了一个 `payload` 为 `None` 的纯激活令牌。
-
-这两个测试共同覆盖了我们在上一计划中引入的所有新逻辑。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/engine #comp/tests #concept/state #scope/core #ai/instruct #task/domain/testing #task/object/reactor-physics #task/action/validation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 `test_polarized_channels.py` 测试文件
-
-我们将创建新的测试文件，并添加验证双势垒激活和信号路由逻辑的测试用例。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/reactor/test_polarized_channels.py
-~~~~~
-~~~~~python
 import pytest
 import asyncio
 from unittest.mock import AsyncMock
@@ -147,11 +103,3 @@ async def test_signal_channel_strips_payload():
     assert token_in_signal is not None
     assert token_in_signal.payload is None
     assert token_in_signal.metadata == {"id": 1} # Metadata should be preserved
-~~~~~
-
-### 下一步建议
-我们已经为新实现的物理模型创建了对应的测试用例。现在，我们需要运行 `pytest` 来验证我们的实现是否正确。
-
-如果测试通过，我们将成功完成 **阶段 5.A**，并可以自信地进入 **阶段 5.B**：**原生物理执行器与生命周期解耦**。
-
-如果测试失败，我们需要分析失败原因并生成一个修复计划。

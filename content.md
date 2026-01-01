@@ -4,6 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-packages/cascade-engine/tests/integration/test_vm_strategy_tco.py | 2 --
- 1 file changed, 2 deletions(-)
+packages/cascade-engine/src/cascade/runtime/strategies/vm.py | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
 ```

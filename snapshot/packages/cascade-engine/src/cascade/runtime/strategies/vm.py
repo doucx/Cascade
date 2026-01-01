@@ -10,7 +10,7 @@ from cascade.runtime.bus import MessageBus
 # New Compiler Stack & Physics
 from cascade.compiler import Frontend, Backend
 from cascade.spec.topology import BipartiteGraph
-from cascade.spec.physics import DataNode, FuncNode, TerminatorNode, EmitterNode, Port
+from cascade.spec.physics import DataNode, FuncNode, TerminatorNode, EmitterNode, Port, Token
 from cascade.vm.reactor import Reactor, Channel, TokenGenerated
 
 class VMExecutionStrategy:

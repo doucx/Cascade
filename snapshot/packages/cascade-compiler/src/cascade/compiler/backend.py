@@ -58,15 +58,16 @@ class _TopologyBuilder:
         )
 
     def _process_node(self, node_ir: NodeIR):
-        func_hash = node_ir.current_node_instance_hash
+        current_node_instance_hash = node_ir.current_node_instance_hash
 
         f_node = PhysicsFuncNode(
-            current_node_instance_hash=func_hash,
+            current_node_instance_hash=current_node_instance_hash,
+            canonical_code_structure_hash=node_ir.definition.canonical_code_structure_hash,
             name=node_ir.definition.name,
             inputs={},
             sink_id=None,  # Explicitly set sink_id to None for regular nodes
         )
-        self._func_nodes[func_hash] = f_node
+        self._func_nodes[current_node_instance_hash] = f_node
 
         for i, val in enumerate(node_ir.args):
             self._process_literal(f_node, str(i), val)
@@ -74,15 +75,15 @@ class _TopologyBuilder:
         for k, val in node_ir.kwargs.items():
             self._process_literal(f_node, k, val)
 
-        data_slot_hash = self._compute_data_slot_hash(func_hash, "result")
-        self._func_output_map[func_hash] = data_slot_hash
+        current_data_slot_hash = self._compute_data_slot_hash(current_node_instance_hash, "result")
+        self._func_output_map[current_node_instance_hash] = current_data_slot_hash
 
         d_node = PhysicsDataNode(
-            current_data_slot_hash=data_slot_hash,
+            current_data_slot_hash=current_data_slot_hash,
             name=f"{node_ir.definition.name}.output",
-            producer_node_instance_hash=func_hash,
+            producer_node_instance_hash=current_node_instance_hash,
         )
-        self._data_nodes[data_slot_hash] = d_node
+        self._data_nodes[current_data_slot_hash] = d_node
 
         channel = ChannelDef(
             source_node_instance_hash=func_hash,
@@ -112,20 +113,20 @@ class _TopologyBuilder:
             if edge.kind != EdgeKind.DATA:
                 continue
 
-            source_func_hash = edge.source_node_instance_hash
-            target_func_hash = edge.target_node_instance_hash
+            current_source_node_instance_hash = edge.source_node_instance_hash
+            current_target_node_instance_hash = edge.target_node_instance_hash
             arg_name = edge.target_arg
 
-            source_data_hash = self._func_output_map.get(source_func_hash)
+            current_source_data_slot_hash = self._func_output_map.get(current_source_node_instance_hash)
 
-            if not source_data_hash:
+            if not current_source_data_slot_hash:
                 raise RuntimeError(
-                    f"Source node {source_func_hash} not found in output map"
+                    f"Source node {current_source_node_instance_hash} not found in output map"
                 )
 
-            target_func_node = self._func_nodes.get(target_func_hash)
+            target_func_node = self._func_nodes.get(current_target_node_instance_hash)
             if target_func_node:
-                target_func_node.inputs[arg_name] = source_data_hash
+                target_func_node.inputs[arg_name] = current_source_data_slot_hash
 
     def _process_control_edges(self):
         self._create_signal_channels(EdgeKind.CONTROL, ChannelKind.SIGNAL)

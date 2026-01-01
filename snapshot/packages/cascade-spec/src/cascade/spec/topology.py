@@ -11,6 +11,8 @@ class PhysicsFuncNode:
     """
 
     current_node_instance_hash: str
+    # The stable, linkable identity used to look up the executable code in the symbol table.
+    canonical_code_structure_hash: str
     name: str
     # Map input argument names to the source DataNode hash
     inputs: Dict[str, str] = field(default_factory=dict)

@@ -1,7 +1,7 @@
 import sys
 import time
 import asyncio
-from typing import Any, Dict, Optional, Callable, cast
+from typing import Any, Dict, Optional, Callable
 from uuid import uuid4
 from contextlib import ExitStack
 
@@ -181,13 +181,18 @@ class Engine:
             with ExitStack() as run_stack:
                 # Register the engine's connector as a special internal resource
                 if self.connector:
-                    from cascade.spec.resource import resource
+                    from cascade.spec.resource import resource, ResourceDefinition
 
-                    @resource(name="_internal_connector", scope="run")
+                    # We define the provider and then explicitly wrap it in a ResourceDefinition
+                    # because the @resource decorator doesn't work as expected on closures
+                    # defined inside another function for some type checkers.
                     def _connector_provider():
                         yield self.connector
 
-                    self.register(cast(ResourceDefinition, _connector_provider))
+                    connector_res_def = ResourceDefinition(
+                        func=_connector_provider, name="_internal_connector", scope="run"
+                    )
+                    self.register(connector_res_def)
 
                 active_resources: Dict[str, Any] = {}
 

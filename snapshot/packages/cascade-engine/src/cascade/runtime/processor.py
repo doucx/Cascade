@@ -2,6 +2,8 @@ import time
 import asyncio
 from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING
 
+from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING, cast
+
 from cascade.graph.model import Node, Graph
 if TYPE_CHECKING:
     from cascade.graph.model import MapNode
@@ -149,7 +151,8 @@ class NodeProcessor:
         )
 
         # 5. Handle Map Nodes
-        if node.node_type == "map":
+        from cascade.graph.model import MapNode
+        if isinstance(node, MapNode):
             return await self._execute_map_node(
                 node,
                 kwargs,

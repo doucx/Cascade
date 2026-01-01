@@ -1,207 +1,159 @@
-好的，我已接收并内化了 ACA v1.0 协议。我将开始分析你提供的 Pyright 静态分析错误，并生成一个修复计划。
+好的，感谢提供更新的 `pyright` 输出和关于 `cascade.context` 位置的详细信息。你的分析是正确的：`cascade.context` 模块被 `cascade-graph` 和 `cascade-sdk` 等多个包依赖，但它却存在于 `cascade-sdk` 中，这造成了潜在的循环依赖和不合理的代码组织。将其移动到更基础的 `cascade-common` 包中是解决此问题的正确架构决策。
 
-这些错误可以归纳为四个主要类别：
+我已经更新了我的计划，将把 `context.py` 的迁移作为首要任务，并解决剩余的 4 个静态分析错误。
 
-1.  **对基类的属性访问不当**: 这发生在代码尝试访问基类 `Node` 上的属性时，而这些属性实际上只存在于其子类（如 `MapNode`, `TaskNode`）中。这通常是由于类型提示不够精确或类设计需要调整。
-2.  **类型不匹配或类型推断问题**: 这类问题包括将错误类型的数据（例如 `int`）赋给只接受特定类型（例如 `str`）的变量，以及由于复杂的装饰器模式导致类型检查器无法正确推断类型。
-3.  **潜在的 None 值访问**: 当代码访问一个可选类型（`Optional[...]`）的变量的属性，但没有进行充分的 `None` 检查时，类型检查器会发出警告。
-4.  **模块导入失败**: 代码尝试导入一个在当前项目结构中不存在的模块，这是一个直接的路径或依赖问题。
-
-我将生成一个计划来系统地解决这四个类别中的所有七个错误。
-
-## [WIP] fix: 解决 Pyright 报告的静态分析错误
+## [WIP] fix: 解决剩余 Pyright 错误并重构 context 模块
 
 ### 错误分析
 
-Pyright 在 `cascade-engine`、`cascade-graph` 和 `cascade-spec` 包中检测到了 7 个静态类型错误。这些错误可以归纳为四个核心问题：
+根据最新的 `pyright` 报告和你的分析，当前存在 4 个核心错误：
 
-1.  **对基类的属性访问不当 (2处)**: 在 `processor.py` 和 `resolvers.py` 中，代码试图访问基类 `Node` 上不存在的属性（`mapping_factory`, `has_complex_inputs`），而这些属性仅在其子类中定义。
-2.  **类型不匹配或推断问题 (3处)**:
-    *   在 `engine.py` 中，由于 `@resource` 装饰器的复杂性，Pyright 错误地推断了被装饰函数的类型，导致了类型冲突。
-    *   在 `serialize.py` 中，一个 `int` 类型的值被赋给了一个期望 `str` 类型的变量，这很可能是 `Fingerprint` 类的严格类型限制导致的。我们将通过修改 `Fingerprint` 类来使其更健壮。
-3.  **潜在的 None 值访问 (1处)**: 在 `flow.py` 中，对一个可选属性的访问没有被 Pyright 的类型窄化逻辑正确识别，需要添加一个防御性的检查来消除歧义。
-4.  **模块导入失败 (1处)**: 在 `build.py` 中，代码尝试导入一个不存在的模块 `cascade.context`，这似乎是遗留代码，需要被安全地移除或禁用。
+1.  **循环依赖与模块位置不当 (1处)**: `packages/cascade-graph/src/cascade/graph/build.py` 无法导入 `cascade.context`，因为该模块位于 `cascade-sdk` 包中，而 `cascade-graph` 作为更底层的包，不应该依赖 `cascade-sdk`。
+2.  **不精确的类型窄化 (1处)**: 在 `packages/cascade-engine/src/cascade/runtime/processor.py` 中，代码使用 `node.node_type == "map"` 字符串来判断节点类型。`pyright` 无法根据这个字符串比较来将 `Node` 类型缩小为其子类 `MapNode`，导致在访问 `MapNode` 的特定属性时报告类型错误。
+3.  **类型不匹配 (1处)**: 在 `packages/cascade-graph/src/cascade/graph/serialize.py` 中，一个 `int` 类型的值被传递给了 `Fingerprint.__setitem__` 方法，而该方法严格要求一个 `str` 类型的值。
+4.  **类型推断错误 (1处)**: 在 `packages/cascade-engine/src/cascade/runtime/engine.py` 中，一个内部定义的函数被直接传递给 `self.register` 方法。由于这个函数没有被 `@resource` 装饰器包裹，`pyright` 无法正确推断其类型，导致了与 `ResourceDefinition` 类型的冲突。
 
 ### 用户需求
 
-修复所有由 `pyright` 命令报告的 7 个静态分析错误，以确保代码的类型安全性和健壮性。
+1.  将 `cascade.context` 模块从 `cascade-sdk` 移动到 `cascade-common` 以解决循环依赖问题。
+2.  修复所有剩余的 4 个 `pyright` 静态分析错误。
 
 ### 评论
 
-这是一个必要的代码健康度维护任务。解决这些静态分析错误可以预防潜在的运行时 Bug，提高代码的可读性，并改善开发者体验（DX）。
+这是一个非常重要的重构和修复任务。将 `context.py` 移动到 `cascade-common` 不仅能解决当前的导入错误，还能从根本上改善项目的模块化和依赖关系，是一项出色的架构改进。解决剩余的类型错误将进一步增强代码的健壮性和可维护性。
 
 ### 目标
 
-1.  修改 `cascade.graph.model.Node` 的类定义，以统一其子类中的属性。
-2.  调整 `cascade.runtime.processor` 中方法签名，使其类型提示更精确。
-3.  在 `cascade.runtime.engine` 中使用类型转换来解决装饰器导致的类型推断问题。
-4.  增强 `cascade.spec.fingerprint.Fingerprint` 类的类型灵活性，以解决类型不匹配问题。
-5.  在 `cascade.runtime.flow` 中添加防御性代码，以满足类型检查器的要求。
-6.  注释掉 `cascade.graph.build` 中缺失的模块导入及其相关代码。
-7.  最终目标是让 `pyright` 命令在所有包上运行时不再报告任何错误。
+1.  执行文件移动操作，将 `context.py` 迁移到 `cascade-common` 包中。
+2.  更新 `cascade-common` 和 `cascade-graph` 的 `pyproject.toml` 文件，以正确声明它们之间的依赖关系。
+3.  修改 `processor.py` 中的类型检查逻辑，使用 `isinstance()` 来替代字符串比较，以便 `pyright` 能够正确进行类型窄化。
+4.  增强 `Fingerprint` 类的 `__setitem__` 方法，使其能够自动处理非字符串输入。
+5.  修改 `engine.py`，使用显式的 `ResourceDefinition` 实例化来替代隐式的类型转换，消除类型推断错误。
 
 ### 基本原理
 
-我们将采用一系列精确的、最小化的修改来解决这些问题：
+我们将采用以下策略来解决问题：
 
-*   对于**属性访问问题**，我们将把缺失的属性添加到基类 `Node` 中，并为子类 `ParamNode` 设置特定的默认值，这是解决 dataclass 继承中属性问题的标准模式。同时，我们将收紧一个方法签名的类型提示，从 `Node` 改为更具体的 `MapNode`。
-*   对于**类型问题**，我们将对 `Fingerprint` 类的 `__setitem__` 方法进行加固，使其能自动处理非字符串输入，从根本上解决问题。对于装饰器问题，我们将使用 `cast` 来明确告知类型检查器正确的类型。
-*   对于**None 值访问**和**导入错误**，我们将分别通过添加防御性检查和注释掉无效代码来解决，确保代码在逻辑上是安全的，并且可以通过静态分析。
+*   **依赖倒置**: 通过将 `context.py` 移动到一个更基础、更通用的包 (`cascade-common`)，我们打破了底层包 (`cascade-graph`) 对高层包 (`cascade-sdk`) 的依赖，遵循了依赖倒置原则。
+*   **类型安全的类型检查**: 使用 `isinstance(obj, Type)` 是 Python 中进行类型检查和窄化的标准、最安全的方式，我们将用它来取代脆弱的字符串比较。
+*   **防御性编程**: 在 `Fingerprint` 类中，我们将主动将传入的值转换为字符串。这使得该类的接口更加健壮，能够优雅地处理不完全符合预期的输入类型。
+*   **显式优于隐式**: 在 `engine.py` 中，我们将明确地创建 `ResourceDefinition` 对象。这消除了对类型检查器推断能力的依赖，使代码的意图更加清晰，类型也更加安全。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/engine #comp/graph #comp/spec #scope/dx #ai/instruct #task/domain/testing #task/object/static-analysis #task/action/bug-fix #task/state/begin
+#intent/fix #intent/refine #flow/ready #priority/high #comp/engine #comp/graph #comp/spec #comp/common #concept/dependency-management #scope/dx #ai/instruct #task/domain/testing #task/object/static-analysis #task/action/bug-fix #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 修正对基类的属性访问问题
+#### Acts 1: 重构 `context.py` 模块以解决循环依赖
 
-首先，我们解决 `has_complex_inputs` 属性在基类 `Node` 中缺失的问题。我们将其添加到基类，并在 `ParamNode` 子类中覆盖其默认值。同时，我们移除子类中冗余的定义。
+我们将 `context.py` 移动到 `cascade-common` 包，并更新相关包的依赖配置，从根本上解决模块导入问题。
+
+~~~~~act
+move_file
+packages/cascade-sdk/src/cascade/context.py
+packages/cascade-common/src/cascade/common/context.py
+~~~~~
+
+为了让 `context.py` 能正常工作，`cascade-common` 需要依赖 `cascade-spec`。同时，为了让 `cascade-graph` 能导入 `cascade.common.context`，它需要依赖 `cascade-common`。
 
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-common/pyproject.toml
 ~~~~~
-~~~~~python.old
-    # Structural Bindings (Literals)
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
+~~~~~toml.old
+[project]
+name = "cascade-common"
+version = "0.1.0"
+description = "Common utilities, protocols, and components for the Cascade ecosystem."
+requires-python = ">=3.8"
 
-    def __eq__(self, other):
-        if not isinstance(other, Node):
+[tool.hatch.build.targets.wheel]
 ~~~~~
-~~~~~python.new
-    # Structural Bindings (Literals)
-    has_complex_inputs: bool = False
-    input_bindings: Dict[str, Any] = field(default_factory=dict)
+~~~~~toml.new
+[project]
+name = "cascade-common"
+version = "0.1.0"
+description = "Common utilities, protocols, and components for the Cascade ecosystem."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec"
+]
 
-    def __eq__(self, other):
-        if not isinstance(other, Node):
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-graph/src/cascade/graph/model.py
-~~~~~
-~~~~~python.old
-@dataclass(eq=False)
-class TaskNode(Node):
-    # The actual python executable object.
-    _callable: Optional[Callable] = None
-
-    # Optimization flag
-    has_complex_inputs: bool = False
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-~~~~~
-~~~~~python.new
-@dataclass(eq=False)
-class TaskNode(Node):
-    # The actual python executable object.
-    _callable: Optional[Callable] = None
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
+[tool.hatch.build.targets.wheel]
 ~~~~~
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-graph/pyproject.toml
 ~~~~~
-~~~~~python.old
-@dataclass(eq=False)
-class MapNode(Node):
-    mapping_factory: Optional[Callable] = None
+~~~~~toml.old
+[project]
+name = "cascade-graph"
+version = "0.1.0"
+description = "Graph building, compilation, and serialization logic for the Cascade ecosystem."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec"
+]
 
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
+[tool.hatch.build.targets.wheel]
 ~~~~~
-~~~~~python.new
-@dataclass(eq=False)
-class MapNode(Node):
-    mapping_factory: Optional[Callable] = None
+~~~~~toml.new
+[project]
+name = "cascade-graph"
+version = "0.1.0"
+description = "Graph building, compilation, and serialization logic for the Cascade ecosystem."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec",
+  "cascade-common"
+]
 
-    @property
-    def callable_obj(self) -> Optional[Callable]:
+[tool.hatch.build.targets.wheel]
 ~~~~~
+
+现在，我们修复 `build.py` 中的导入路径。
+
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-graph/src/cascade/graph/build.py
 ~~~~~
 ~~~~~python.old
-@dataclass(eq=False)
-class ParamNode(TaskNode):
-    param_spec: Optional[ParamSpec] = None
+            # Note: execution_mode is now part of task_def (definition.mode)
+            if result.task.func is _get_param_value.func:
+                # Retrieve the ParamSpec from the global context to attach to the node
+                from cascade.context import get_current_context
 
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
-
-    # Inherits callable_obj property from TaskNode
+                # The arg at index 0 is the param name
+                param_name = input_bindings.get("0") or input_bindings.get("name")
 ~~~~~
 ~~~~~python.new
-@dataclass(eq=False)
-class ParamNode(TaskNode):
-    param_spec: Optional[ParamSpec] = None
-    has_complex_inputs: bool = True
+            # Note: execution_mode is now part of task_def (definition.mode)
+            if result.task.func is _get_param_value.func:
+                # Retrieve the ParamSpec from the global context to attach to the node
+                from cascade.common.context import get_current_context
 
-    # Inherits callable_obj property from TaskNode
+                # The arg at index 0 is the param name
+                param_name = input_bindings.get("0") or input_bindings.get("name")
 ~~~~~
 
-接下来，我们将 `_execute_map_node` 方法的 `node` 参数类型提示收紧为 `MapNode`，以允许安全地访问 `mapping_factory` 属性。
+#### Acts 2: 修正类型窄化和类型推断错误
+
+在 `processor.py` 中，使用 `isinstance` 进行类型检查，以帮助 `pyright` 正确地窄化类型。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/processor.py
 ~~~~~
 ~~~~~python.old
-    async def _execute_map_node(
-        self,
-        node: Node,
-        kwargs: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        parent_state_backend: StateBackend,
-        sub_graph_runner: Callable,
-    ) -> List[Any]:
-        factory = node.mapping_factory
-        if not kwargs:
-            return []
-        lengths = {k: len(v) for k, v in kwargs.items()}
-~~~~~
-~~~~~python.new
-    async def _execute_map_node(
-        self,
-        node: "MapNode",
-        kwargs: Dict[str, Any],
-        active_resources: Dict[str, Any],
-        run_id: str,
-        params: Dict[str, Any],
-        parent_state_backend: StateBackend,
-        sub_graph_runner: Callable,
-    ) -> List[Any]:
-        if not node.mapping_factory:
-            return [] # Should not happen if graph is well-formed
-
-        factory = node.mapping_factory
-        if not kwargs:
-            return []
-        lengths = {k: len(v) for k, v in kwargs.items()}
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/processor.py
-~~~~~
-~~~~~python.old
-from typing import Any, Dict, List, Callable, Awaitable, Optional
-
 from cascade.graph.model import Node, Graph
+if TYPE_CHECKING:
+    from cascade.graph.model import MapNode
 from cascade.spec.protocols import Executor, StateBackend, Solver
 from cascade.runtime.bus import MessageBus
 ~~~~~
 ~~~~~python.new
-from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING, cast
 
 from cascade.graph.model import Node, Graph
 if TYPE_CHECKING:
@@ -209,67 +161,48 @@ if TYPE_CHECKING:
 from cascade.spec.protocols import Executor, StateBackend, Solver
 from cascade.runtime.bus import MessageBus
 ~~~~~
-
-#### Acts 2: 解决类型不匹配和推断问题
-
-我们加固 `Fingerprint` 类，使其在接收非字符串值时能自动转换，从而解决 `serialize.py` 中的 `int` to `str` 错误。
-
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/fingerprint.py
+packages/cascade-engine/src/cascade/runtime/processor.py
 ~~~~~
 ~~~~~python.old
-    def __setitem__(self, key: str, value: str) -> None:
-        self._validate_key(key)
-        self._hashes[key] = value
+        self.bus.publish(
+            TaskExecutionStarted(
+                run_id=run_id, task_id=node.structural_id, task_name=node.name
+            )
+        )
+
+        # 5. Handle Map Nodes
+        if node.node_type == "map":
+            return await self._execute_map_node(
+                node,
+                kwargs,
+                active_resources,
 ~~~~~
 ~~~~~python.new
-    def __setitem__(self, key: str, value: Any) -> None:
-        self._validate_key(key)
-        self._hashes[key] = str(value)
+        self.bus.publish(
+            TaskExecutionStarted(
+                run_id=run_id, task_id=node.structural_id, task_name=node.name
+            )
+        )
+
+        # 5. Handle Map Nodes
+        from cascade.graph.model import MapNode
+        if isinstance(node, MapNode):
+            return await self._execute_map_node(
+                node,
+                kwargs,
+                active_resources,
 ~~~~~
 
-然后，我们在 `engine.py` 中使用 `cast` 来解决由 `@resource` 装饰器引起的类型推断错误。
+在 `engine.py` 中，我们显式地创建 `ResourceDefinition` 对象，而不是依赖类型转换，这更加类型安全。
 
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python.old
-import sys
-import time
-import asyncio
-from typing import Any, Dict, Optional, Callable
-from uuid import uuid4
-from contextlib import ExitStack
-
-from cascade.spec.resource import ResourceDefinition
-from cascade.spec.constraint import GlobalConstraint
-~~~~~
-~~~~~python.new
-import sys
-import time
-import asyncio
-from typing import Any, Dict, Optional, Callable, cast
-from uuid import uuid4
-from contextlib import ExitStack
-
-from cascade.spec.resource import ResourceDefinition
-from cascade.spec.constraint import GlobalConstraint
-~~~~~
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python.old
-                    def _connector_provider():
-                        yield self.connector
-
-                    self.register(_connector_provider)
-
-                active_resources: Dict[str, Any] = {}
-~~~~~
-~~~~~python.new
+                    @resource(name="_internal_connector", scope="run")
                     def _connector_provider():
                         yield self.connector
 
@@ -277,28 +210,94 @@ packages/cascade-engine/src/cascade/runtime/engine.py
 
                 active_resources: Dict[str, Any] = {}
 ~~~~~
+~~~~~python.new
+                    @resource(name="_internal_connector", scope="run")
+                    def _connector_provider():
+                        yield self.connector
 
-#### Acts 3: 修复潜在的 None 值访问
+                    self.register(_connector_provider)
 
-在 `flow.py` 中，我们在访问 `router_edge.router.selector` 之前添加一个额外的 `if router_edge.router:` 防御性检查。虽然从逻辑上看这似乎是多余的，但它能明确地帮助 Pyright 完成类型窄化。
+                active_resources: Dict[str, Any] = {}
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python.old
+import sys
+import time
+import asyncio
+from typing import Any, Dict, Optional, Callable, cast
+from uuid import uuid4
+from contextlib import ExitStack
+~~~~~
+~~~~~python.new
+import sys
+import time
+import asyncio
+from typing import Any, Dict, Optional, Callable
+from uuid import uuid4
+from contextlib import ExitStack
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-engine/src/cascade/runtime/engine.py
+~~~~~
+~~~~~python.old
+            # The global stack holds "run" scoped resources
+            with ExitStack() as run_stack:
+                # Register the engine's connector as a special internal resource
+                if self.connector:
+                    from cascade.spec.resource import resource
+
+                    @resource(name="_internal_connector", scope="run")
+                    def _connector_provider():
+                        yield self.connector
+
+                    self.register(_connector_provider)
+
+                active_resources: Dict[str, Any] = {}
+
+                final_result = await strategy.execute(
+~~~~~
+~~~~~python.new
+            # The global stack holds "run" scoped resources
+            with ExitStack() as run_stack:
+                # Register the engine's connector as a special internal resource
+                if self.connector:
+                    from cascade.spec.resource import resource, ResourceDefinition
+
+                    # We define the provider and then explicitly wrap it in a ResourceDefinition
+                    # because the @resource decorator doesn't work as expected on closures
+                    # defined inside another function for some type checkers.
+                    def _connector_provider():
+                        yield self.connector
+
+                    connector_res_def = ResourceDefinition(
+                        func=_connector_provider, name="_internal_connector", scope="run"
+                    )
+                    self.register(connector_res_def)
+
+                active_resources: Dict[str, Any] = {}
+
+                final_result = await strategy.execute(
+~~~~~
+
+#### Acts 3: 修复 `Fingerprint` 的类型不匹配问题
+
+最后，我们加固 `Fingerprint` 类，使其能自动处理传入的非字符串值。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/flow.py
+packages/cascade-spec/src/cascade/spec/fingerprint.py
 ~~~~~
 ~~~~~python.old
-        if router_edge:
-            selector_node = self._get_node_from_instance(router_edge.router.selector)
-            if selector_node:
-                selector_id = selector_node.structural_id
-                if await state_backend.has_result(selector_id):
-                    active_route_key = await state_backend.get_result(selector_id)
+    def __setitem__(self, key: str, value: Any) -> None:
+        self._validate_key(key)
+        self._hashes[key] = str(value)
 ~~~~~
 ~~~~~python.new
-        if router_edge and router_edge.router:
-            selector_node = self._get_node_from_instance(router_edge.router.selector)
-            if selector_node:
-                selector_id = selector_node.structural_id
-                if await state_backend.has_result(selector_id):
-                    active_route_key = await state_backend.get_result(selector_id)
+    def __setitem__(self, key: str, value: Any) -> None:
+        self._validate_key(key)
+        self._hashes[key] = str(value)
 ~~~~~

@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade"
+name = "cascade-monorepo"
 version = "0.1.0"
 description = "A modern, declarative automation library for Python."
 readme = "README.md"
@@ -32,6 +32,7 @@ cascade-cli-controller = { workspace = true }
 cascade-cli-observer = { workspace = true }
 cascade-connector-mqtt = { workspace = true }
 cascade-connector-local = { workspace = true }
+cascade = { workspace = true }
 
 [tool.hatch.workspaces]
 packages = [
@@ -42,10 +43,11 @@ packages = [
     "packages/cascade-graph",
     "packages/cascade-library",
     "packages/cascade-connector-local",
+    "packages/cascade-python",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["packages/cascade-sdk/src/cascade"]
+packages = ["src/cascade_monorepo"]
 
 [tool.pytest.ini_options]
 addopts = "-ra --cov=cascade --cov-report=term-missing"
@@ -79,6 +81,7 @@ dev = [
   "cascade-cli-observer",
   "cascade-connector-mqtt",
   "cascade-connector-local",
+  "cascade", # The python sdk
   "ruff",
 ]
 

@@ -1,7 +1,7 @@
 import pytest
 from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef
 from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.topology import BipartiteGraph, ChannelDef
+from cascade.spec.topology import BipartiteGraph, ChannelDef, ChannelKind
 
 from cascade.compiler.backend import Backend
 

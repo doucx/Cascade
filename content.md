@@ -1,131 +1,107 @@
-Of course. As per the TDD workflow, we will now create the test to verify the changes made in the previous step. This ensures the `Backend` correctly implements the contract for lifecycle injection before we proceed to build the `VMExecutionStrategy` that relies on it.
+You are absolutely right. The test failed, and the traceback clearly shows that the `result_emitter` node was not found in the compiled graph. My apologies.
 
-I will add a new test case to `test_backend_topology.py` that specifically validates the injection of the `result_emitter` and `term_emitter`, and the `SIGNAL` channel that connects them.
+The error `AssertionError: Result emitter node was not injected` on the line `assert result_emitter is not None` indicates that when the test inspected the `topology.func_nodes`, none of the `PhysicsFuncNode` objects had a `sink_id` attribute equal to `"main_output"`.
 
-## [WIP] test(compiler): verify lifecycle emitter injection in Backend
+My previous implementation in `backend.py` correctly attempted to instantiate `PhysicsFuncNode` with the `sink_id` keyword argument. The test failure, despite this, points to a fundamental mismatch: the `PhysicsFuncNode` data class itself must be missing the `sink_id` field. The roadmap item "unify emitter definition in topology" implies this change was necessary, and it appears I proceeded without ensuring the underlying data structure was updated first.
+
+Additionally, as I reviewed the test code I wrote, I noticed a latent bug: I used `ChannelKind` without importing it, which would have caused the next test run to fail with a `NameError`.
+
+I will now correct both issues.
+
+1.  **Update `cascade.spec.topology.PhysicsFuncNode`**: I will patch the `PhysicsFuncNode` class to include the `sink_id: Optional[str]` field. This will make the data structure consistent with the `Backend`'s logic.
+2.  **Fix Test Imports**: I will patch `test_backend_topology.py` to import `ChannelKind`, resolving the latent bug.
+
+This two-part fix will align the specification, implementation, and verification, allowing the test to pass correctly.
+
+## [WIP] fix(compiler): Add sink_id to spec and fix test imports
+
+### 用户需求
+The previously written test failed because the `result_emitter` node could not be found, indicating a problem with the `sink_id` property. The test code also had a missing import. Both issues need to be fixed.
+
+### 错误分析
+The core error is that `PhysicsFuncNode` was being instantiated with a `sink_id` that it didn't have as a defined field, causing the value to be discarded and the test assertion to fail. A secondary error was a missing `ChannelKind` import in the test file.
 
 ### 评论
-This is a crucial validation step. By writing this test, we codify the contract that the `Backend` must fulfill for the `VMExecutionStrategy`. It ensures that the compiler produces a `BipartiteGraph` with the precise, predictable structure needed for decoupled lifecycle management, preventing potential integration errors as we move to the next phase.
+This is a classic TDD cycle: the test revealed a flaw not just in the implementation but in the underlying data specification. By fixing the `spec` and the test simultaneously, we ensure the compiler's components have a solid, consistent contract to work against.
 
 ### 目标
-1.  Add a new unit test named `test_compile_injects_lifecycle_emitters` to the `packages/cascade-compiler/tests/unit/test_backend_topology.py` file.
-2.  The test will compile a minimal `GraphIR` (a single node).
-3.  It will assert that the resulting `BipartiteGraph` contains the `result_emitter` and `term_emitter` `FuncNode`s with their correct `sink_id`s.
-4.  It will assert that a `ChannelDef` of `kind=SIGNAL` correctly connects the output of the result emitter to the input of the termination emitter.
+1.  Add the `sink_id: Optional[str]` field to the `PhysicsFuncNode` dataclass in `cascade.spec.topology.py`.
+2.  Add the `ChannelKind` import to `test_backend_topology.py`.
+3.  Ensure the previously written test now passes, confirming the lifecycle injection logic is correct.
 
 ### 基本原理
-Following the Test-Driven Development (TDD) process, we are now in the "write a test" phase for our new feature. The previous plan implemented the logic, and this plan validates it in isolation.
-
-I will use a `patch_file` operation to append the new test case to the existing test module. The test will perform a "find-then-assert" strategy: since the hashes of the injected nodes are generated internally, the test will locate them in the compiled graph by their unique `sink_id` and then verify their connections and properties.
+I will apply two precise `patch_file` operations. The first will add the missing field to the `PhysicsFuncNode` dataclass. The second will add the missing import to the top of the test file. These targeted changes will resolve the `AssertionError` and the latent `NameError`.
 
 ### 标签
-#intent/tooling #flow/ready #priority/high
-#comp/compiler #comp/tests #concept/executor
+#intent/fix #flow/ready #priority/critical
+#comp/compiler #comp/spec #comp/tests
 #scope/core
 #ai/instruct
-#task/domain/compiler #task/object/backend #task/action/test
+#task/domain/compiler #task/object/backend #task/action/bug-fix
 #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Add Unit Test for Lifecycle Emitter Injection
+#### Acts 1: Add `sink_id` field to `PhysicsFuncNode`
 
-I will now patch `test_backend_topology.py` to include the new validation test.
+First, I will correct the data class definition in `topology.py`.
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/topology.py
+~~~~~
+~~~~~python.old
+@dataclass(frozen=True)
+class PhysicsFuncNode:
+    """
+    Represents a computational instance in the physical bipartite graph.
+    This is the "Verb" or the transformer.
+    """
+
+    current_node_instance_hash: str
+    name: str
+    # Map input argument names to the source DataNode hash
+    inputs: Dict[str, str] = field(default_factory=dict)
+~~~~~
+~~~~~python.new
+@dataclass(frozen=True)
+class PhysicsFuncNode:
+    """
+    Represents a computational instance in the physical bipartite graph.
+    This is the "Verb" or the transformer.
+    """
+
+    current_node_instance_hash: str
+    name: str
+    # Map input argument names to the source DataNode hash
+    inputs: Dict[str, str] = field(default_factory=dict)
+    # If not None, this node acts as an Emitter, pushing its result to the specified sink.
+    sink_id: Optional[str] = field(default=None)
+~~~~~
+
+#### Acts 2: Fix missing import in `test_backend_topology.py`
+
+Next, I will add the `ChannelKind` import to the test file to prevent the subsequent `NameError`.
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/tests/unit/test_backend_topology.py
 ~~~~~
 ~~~~~python.old
-    # Critical: They MUST be the same DataNode (Structural Sharing)
-    assert input_hash_b == input_hash_c, "Fan-out should reuse the same source DataNode"
+import pytest
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.topology import BipartiteGraph, ChannelDef
 
-    # Verify that DataNode is produced by A
-    data_node = topology.data_nodes[input_hash_b]
-    assert data_node.producer_node_instance_hash == "A"
+from cascade.compiler.backend import Backend
 ~~~~~
 ~~~~~python.new
-    # Critical: They MUST be the same DataNode (Structural Sharing)
-    assert input_hash_b == input_hash_c, "Fan-out should reuse the same source DataNode"
+import pytest
+from cascade.spec.ir.models import GraphIR, NodeIR, EdgeIR, TaskDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.topology import BipartiteGraph, ChannelDef, ChannelKind
 
-    # Verify that DataNode is produced by A
-    data_node = topology.data_nodes[input_hash_b]
-    assert data_node.producer_node_instance_hash == "A"
-
-
-def test_compile_injects_lifecycle_emitters():
-    """
-    Verifies that the Backend correctly injects the result and termination
-    emitters, and connects them with a SIGNAL channel.
-    """
-    # 1. Setup minimal IR with a single root node
-    node_a = _create_dummy_node_ir("A")
-    graph_ir = GraphIR(nodes=[node_a], edges=[])
-
-    # 2. Compile
-    topology = Backend.compile(graph_ir)
-
-    # 3. Find Emitter Nodes by their unique sink_id
-    result_emitter = next(
-        (n for n in topology.func_nodes.values() if n.sink_id == "main_output"), None
-    )
-    term_emitter = next(
-        (
-            n
-            for n in topology.func_nodes.values()
-            if n.sink_id == "__system_lifecycle_signal"
-        ),
-        None,
-    )
-
-    # 4. Assertions for Emitter Nodes existence and properties
-    assert result_emitter is not None, "Result emitter node was not injected"
-    assert term_emitter is not None, "Termination emitter node was not injected"
-    assert result_emitter.name == "result_emitter"
-    assert term_emitter.name == "term_emitter"
-
-    # 5. Assert that Result Emitter is connected to the graph's output
-    # Find the output data slot of the original root node 'A'
-    output_of_a_hash = next(
-        c.target_data_slot_hash
-        for c in topology.channels
-        if c.source_node_instance_hash == "A" and c.kind == ChannelKind.DATA
-    )
-    assert (
-        "result" in result_emitter.inputs
-    ), "Result emitter must have a 'result' input"
-    assert result_emitter.inputs["result"] == output_of_a_hash
-
-    # 6. Assert that a SIGNAL channel connects the two emitters
-    signal_channel = next(
-        (
-            c
-            for c in topology.channels
-            if c.source_node_instance_hash == result_emitter.current_node_instance_hash
-            and c.kind == ChannelKind.SIGNAL
-        ),
-        None,
-    )
-
-    assert signal_channel is not None, "SIGNAL channel between emitters not found"
-    assert signal_channel.kind == ChannelKind.SIGNAL
-    assert (
-        signal_channel.port_name == "result"
-    ), "Emitters should signal from their default 'result' output port"
-
-    # 7. Assert that the Termination Emitter receives the signal
-    assert (
-        "signal" in term_emitter.inputs
-    ), "Termination emitter must have a 'signal' input"
-    assert signal_channel.target_data_slot_hash == term_emitter.inputs["signal"]
-
-    # 8. Verify the signal's DataNode exists and is correctly produced
-    signal_data_node = topology.data_nodes.get(signal_channel.target_data_slot_hash)
-    assert signal_data_node is not None, "DataNode for signal channel is missing"
-    assert (
-        signal_data_node.producer_node_instance_hash
-        == result_emitter.current_node_instance_hash
-    )
+from cascade.compiler.backend import Backend
 ~~~~~

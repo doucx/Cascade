@@ -1,191 +1,41 @@
-简要回答
-我们将首先在 `cascade-spec` 中定义 `NodeIR`，然后在 `cascade-compiler` 中实现 `Expander`，它负责将单个逻辑节点展开为物理三连体（Bleacher -> Worker -> Stainer）及其内部连接。
+好的，我们继续执行路线图。现在，我们将构建 `Builder`，它负责将 `Expander` 生成的多个三连体子图，根据逻辑依赖关系，组装成一个完整、可执行的物理二分图，并为每个子图注入标准的观测旁路。
 
-## [WIP] feat(compiler): 实现 Expander 及三连体展开逻辑
+## [WIP] feat(compiler): 实现 Builder 用于连接三连体与观测旁路
 
 ### 用户需求
-实现编译器后端的 `Expander` 组件，负责将高层的逻辑节点 (`NodeIR`) 展开为底层的物理节点三连体 ($F_{pre}, F_{worker}, F_{post}$) 及其内部的拓扑结构。
+根据路线图 **任务 3.2** 和 **任务 3.3**，实现一个 `Builder` 类，负责：
+1.  将 `GraphIR` 中定义的逻辑依赖关系，转换为物理 `Channel`，连接相应的 `Stainer` 和 `Bleacher` 节点。
+2.  为每个任务三连体自动创建到全局生命周期数据节点 (`D_life`) 的旁路连接，以实现可观测性。
 
 ### 评论
-这是 "Cascade 3.0" 编译器的核心转换步骤。通过将逻辑节点“炸开”为微观的三连体，我们为实现细粒度的控制（如漂白、染色）和可观测性（旁路）奠定了物理基础。这也遵循了“全对称计算物理场”的理念，即控制逻辑被物化为拓扑结构。
+这是将“微观物理”与“宏观逻辑”连接起来的关键一步。`Expander` 创造了独立的“粒子”（三连体），而 `Builder` 则根据蓝图将这些粒子编织成宇宙的“力场”（最终的拓扑图）。旁路插桩的自动化是 “Cascade 3.0” 全息可观测性承诺的核心，确保了观测行为的零侵入性和一致性。
 
 ### 目标
-1.  在 `cascade-spec` 中补充 `NodeIR` 的定义。
-2.  在 `cascade-compiler` 中实现 `SubGraph` 和 `Expander` 类。
-3.  实现三连体的生成逻辑，包括：
-    *   生成 `BleachNode` ($F_{pre}$)
-    *   生成 `PhysicsDataNode` ($D_{worker\_in}$)
-    *   生成 `WorkerNode` ($F_{worker}$)
-    *   生成 `PhysicsDataNode` ($D_{worker\_out}$)
-    *   生成 `PhysicsDataNode` ($D_{trace}$) —— 用于传递上下文
-    *   生成 `StainNode` ($F_{post}$)
-    *   生成上述节点之间的内部 `Channel`。
+1.  **修改 `Expander`**: 为 `BleachNode` 和 `StainNode` 增加专门的 `obs_output` 端口，用于发射生命周期事件。
+2.  **创建 `Builder` 类**: 在 `cascade-compiler/src/cascade/compiler/backend/builder.py` 中实现。
+3.  **实现数据流布线**: `Builder` 必须能解析 `NodeIR.inputs` 中的节点间引用，并创建从源节点 `Stainer` 到目标节点 `Bleacher` 的 `Channel`。
+4.  **实现观测旁路布线**: `Builder` 必须创建一个全局的 `D_life` 节点，并将每个三连体的 `Bleacher` 和 `Stainer` 的 `obs_output` 端口连接到它。
+5.  **编写集成测试**: 验证一个包含两个依赖节点的 `GraphIR` 能被正确地编译和连接。
 
 ### 基本原理
-*   **IR 定义**: 编译器需要一个明确的输入契约。
-*   **物理展开**: 根据白皮书，任务执行不仅仅是调用函数，还涉及上下文提取（Bleach）和结果封装（Stain）。这些步骤必须被物化为独立的物理节点，以便运行时引擎（Reactor）可以像处理其他节点一样调度它们，而无需特殊逻辑。
-*   **内部连线**: 三连体内部是紧密耦合的，Expander 负责建立这些固定的内部连接，对外暴露 Bleacher 的输入端口和 Stainer 的输出端口。
+`Builder` 是编译器后端的总指挥。它首先委托 `Expander` 将所有逻辑节点物化为物理子图。然后，它作为一个“布线工程师”，遍历 `GraphIR` 中的依赖关系，在这些独立的子图之间架设桥梁（`Channel`）。同时，它还扮演着“仪表工程师”的角色，为每个子图强制安装标准化的监控探针，将它们的生命周期信号汇集到统一的 `D_life` 总线上。
 
 ### 标签
-#intent/build #flow/draft #priority/high #comp/compiler #concept/topology #scope/core #task/domain/compiler #task/object/expander #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/compiler #concept/topology #concept/observability #scope/core #task/domain/compiler #task/object/builder #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 定义 IR 模型
+#### Acts 1: 为三连体节点添加观测端口
 
-首先，我们需要定义编译器后端的输入：`NodeIR`。
-
-~~~~~act
-write_file
-packages/cascade-spec/src/cascade/spec/ir/models.py
-~~~~~
-~~~~~python
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import List, Optional, Dict, Any
-
-from cascade.spec.fingerprint import Fingerprint
-
-
-class ArgumentKind(str, Enum):
-    POSITIONAL_ONLY = "POSITIONAL_ONLY"
-    POSITIONAL_OR_KEYWORD = "POSITIONAL_OR_KEYWORD"
-    VAR_POSITIONAL = "VAR_POSITIONAL"  # *args
-    KEYWORD_ONLY = "KEYWORD_ONLY"
-    VAR_KEYWORD = "VAR_KEYWORD"  # **kwargs
-
-
-@dataclass(frozen=True)
-class ArgumentDef:
-    name: str
-    kind: ArgumentKind
-    annotation: Optional[str] = None
-    default_value_repr: Optional[str] = None
-
-
-@dataclass(frozen=True)
-class TaskDef:
-    name: str
-    args: List[ArgumentDef]
-    # The stable semantic identity of this task definition.
-    # Must contain keys like 'canonical_code_structure_hash'.
-    fingerprint: Fingerprint
-    return_annotation: Optional[str] = None
-    docstring: Optional[str] = None
-    is_async: bool = False
-    # Execution mode (e.g. "blocking", "compute") derived from the task definition
-    mode: str = "blocking"
-
-
-@dataclass(frozen=True)
-class NodeIR:
-    """
-    Intermediate Representation of a Task instantiation in the logical graph.
-    This is the input to the Compiler Backend.
-    """
-    id: str
-    """Unique identifier for this node instance (e.g. current_instance_hash)."""
-    
-    name: str
-    """Human-readable name."""
-    
-    task: TaskDef
-    """The definition of the task being invoked."""
-    
-    inputs: Dict[str, Any] = field(default_factory=dict)
-    """
-    Mapping of argument names to values. 
-    Values can be literals or references to other NodeIR IDs.
-    """
-
-@dataclass(frozen=True)
-class GraphIR:
-    """
-    A collection of NodeIRs representing the full logical workflow.
-    """
-    nodes: List[NodeIR] = field(default_factory=list)
-~~~~~
-
-#### Acts 2: 初始化 Backend 包
-
-创建 `cascade-compiler` 的 backend 包结构。
+我们首先修改 `Expander`，为 `BleachNode` 和 `StainNode` 添加 `obs_output` 端口。
 
 ~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/backend/__init__.py
-~~~~~
-~~~~~python
-# Backend package for Cascade Compiler
-# Responsible for converting IR into Physical Bipartite Graphs.
-~~~~~
-
-#### Acts 3: 实现 Expander
-
-实现核心的 `Expander` 类，它负责生成 `SubGraph`。我们将严格遵循白皮书中的三连体结构，并加入 $D_{trace}$ 用于元数据传递。
-
-~~~~~act
-write_file
+patch_file
 packages/cascade-compiler/src/cascade/compiler/backend/expander.py
 ~~~~~
-~~~~~python
-from dataclasses import dataclass, field
-from typing import List, Dict
-
-from cascade.spec.ir.models import NodeIR
-from cascade.spec.physics import PhysicsNode, PhysicsDataNode
-from cascade.spec.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.topology import Channel
-
-
-@dataclass
-class SubGraph:
-    """
-    A collection of physical nodes and channels that represent a single logical unit
-    (e.g., a Triad).
-    """
-    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
-    channels: List[Channel] = field(default_factory=list)
-    
-    # Interface pointers
-    bleacher: BleachNode = None
-    stainer: StainNode = None
-
-
-class Expander:
-    """
-    The 'Big Bang' engine. 
-    It expands a single logical NodeIR into a physical Triad SubGraph.
-    
-    Triad Structure:
-        F_pre (Bleacher) --> D_worker_in --> F_worker --> D_worker_out --> F_post (Stainer)
-               |                                                              ^
-               +---------------------> D_trace -------------------------------+
-    """
-    
-    def expand_node(self, node_ir: NodeIR) -> SubGraph:
-        """
-        Expands a NodeIR into a physical Triad.
-        """
-        subgraph = SubGraph()
-        
-        # 1. Generate IDs for all physical entities
-        # We use the logical node ID as a prefix to ensure uniqueness.
-        base_id = node_ir.id
-        
-        f_pre_id = f"{base_id}_bleach"
-        d_worker_in_id = f"{base_id}_worker_in"
-        f_worker_id = f"{base_id}_worker"
-        d_worker_out_id = f"{base_id}_worker_out"
-        d_trace_id = f"{base_id}_trace"
-        f_post_id = f"{base_id}_stain"
-        
-        # 2. Create Nodes
-        
-        # F_pre: The Bleacher
-        # It needs input ports matching the Task definition args.
-        bleacher_inputs = {arg.name: "Any" for arg in node_ir.task.args}
+~~~~~python.old
         f_pre = BleachNode(
             id=f_pre_id,
             name=f"Bleach({node_ir.name})",
@@ -195,35 +45,25 @@ class Expander:
                 "trace_output": "TraceCtx"
             }
         )
-        
-        # D_worker_in: Holds the pure kwargs for the worker
-        d_worker_in = PhysicsDataNode(
-            id=d_worker_in_id,
-            name=f"In({node_ir.name})"
+~~~~~
+~~~~~python.new
+        f_pre = BleachNode(
+            id=f_pre_id,
+            name=f"Bleach({node_ir.name})",
+            input_ports=bleacher_inputs,
+            output_ports={
+                "worker_input": "Dict",
+                "trace_output": "TraceCtx",
+                "obs_output": "Event",  # Port for start event
+            },
         )
-        
-        # F_worker: The actual execution logic
-        # It conceptually takes *args/**kwargs, but physically takes one 'worker_input' dict
-        f_worker = WorkerNode(
-            id=f_worker_id,
-            name=f"Exec({node_ir.name})",
-            input_ports={"worker_input": "Dict"},
-            output_ports={"worker_result": "Any"}
-        )
-        
-        # D_worker_out: Holds the raw result
-        d_worker_out = PhysicsDataNode(
-            id=d_worker_out_id,
-            name=f"Out({node_ir.name})"
-        )
-        
-        # D_trace: The wormhole for metadata (start_ts, trace_id)
-        d_trace = PhysicsDataNode(
-            id=d_trace_id,
-            name=f"Trace({node_ir.name})"
-        )
-        
-        # F_post: The Stainer
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+~~~~~
+~~~~~python.old
         f_post = StainNode(
             id=f_post_id,
             name=f"Stain({node_ir.name})",
@@ -235,107 +75,200 @@ class Expander:
                 "output": "Token"
             }
         )
-        
-        # Register nodes
-        subgraph.nodes = {
-            n.id: n for n in [
-                f_pre, d_worker_in, f_worker, d_worker_out, d_trace, f_post
-            ]
-        }
-        subgraph.bleacher = f_pre
-        subgraph.stainer = f_post
-        
-        # 3. Create Internal Wiring (Channels)
-        
-        channels = []
-        
-        # Path 1: Execution Flow
-        # F_pre -> D_worker_in
-        channels.append(Channel(f_pre_id, "worker_input", d_worker_in_id))
-        # D_worker_in -> F_worker
-        channels.append(Channel(d_worker_in_id, "out", f_worker_id)) # Implicit 'out' for DataNode source
-        # F_worker -> D_worker_out
-        channels.append(Channel(f_worker_id, "worker_result", d_worker_out_id))
-        # D_worker_out -> F_post
-        channels.append(Channel(d_worker_out_id, "out", f_post_id))
-        
-        # Path 2: Trace Bypass
-        # F_pre -> D_trace
-        channels.append(Channel(f_pre_id, "trace_output", d_trace_id))
-        # D_trace -> F_post
-        channels.append(Channel(d_trace_id, "out", f_post_id))
-        
-        subgraph.channels = channels
-        
-        return subgraph
+~~~~~
+~~~~~python.new
+        f_post = StainNode(
+            id=f_post_id,
+            name=f"Stain({node_ir.name})",
+            input_ports={"worker_result": "Any", "trace_input": "TraceCtx"},
+            output_ports={
+                "output": "Token",
+                "obs_output": "Event",  # Port for end event
+            },
+        )
 ~~~~~
 
-#### Acts 4: 单元测试
+#### Acts 2: 实现 Builder
 
-编写测试用例验证 `Expander` 是否正确生成了包含 6 个节点和 6 条边的子图。
+现在，我们创建 `Builder` 类，它将负责整个图的构建和布线过程。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/tests/unit/backend/test_expander.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python
+from typing import Dict
+
+from cascade.spec.ir.models import GraphIR
+from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.spec.physics import PhysicsDataNode
+from .expander import Expander, SubGraph
+
+
+class Builder:
+    """
+    The master assembler for the physical graph.
+    It takes a logical GraphIR, expands each node into a Triad,
+    and then wires them together along with observability sidecars.
+    """
+
+    def __init__(self):
+        self._expander = Expander()
+
+    def build(self, graph_ir: GraphIR) -> BipartiteGraph:
+        physical_graph = BipartiteGraph()
+        
+        # 1. Create the global observability sidecar node (D_life)
+        d_life = PhysicsDataNode(id="global_d_life", name="LifecycleBus")
+        physical_graph.nodes[d_life.id] = d_life
+        
+        # 2. Expand all logical nodes into physical subgraphs
+        subgraphs: Dict[str, SubGraph] = {}
+        for node_ir in graph_ir.nodes:
+            subgraph = self._expander.expand_node(node_ir)
+            subgraphs[node_ir.id] = subgraph
+            
+            # Add all nodes from the subgraph to the main graph
+            physical_graph.nodes.update(subgraph.nodes)
+            # Add all internal channels from the subgraph
+            physical_graph.channels.extend(subgraph.channels)
+            
+            # 3. Wire observability sidecars for each subgraph
+            # F_pre (start) -> D_life
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=subgraph.bleacher.id,
+                    source_port="obs_output",
+                    target_node_id=d_life.id,
+                )
+            )
+            # F_post (end) -> D_life
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=subgraph.stainer.id,
+                    source_port="obs_output",
+                    target_node_id=d_life.id,
+                )
+            )
+            
+        # 4. Wire data dependencies between subgraphs
+        for node_ir in graph_ir.nodes:
+            target_subgraph = subgraphs[node_ir.id]
+            for arg_name, source_ref in node_ir.inputs.items():
+                # We only handle inter-node references here. Literals are handled later.
+                if isinstance(source_ref, str) and source_ref in subgraphs:
+                    source_subgraph = subgraphs[source_ref]
+                    
+                    # Connect: Source.Stainer -> Target.Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=source_subgraph.stainer.id,
+                            source_port="output",
+                            target_node_id=target_subgraph.bleacher.id,
+                            # Note: The target port is implicitly the 'arg_name',
+                            # which the Bleacher is designed to handle.
+                        )
+                    )
+
+        return physical_graph
+~~~~~
+
+#### Acts 3: 导出 Builder
+
+将 `Builder` 添加到包的 `__init__.py` 中。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/__init__.py
+~~~~~
+~~~~~python.old
+# Backend package for Cascade Compiler
+# Responsible for converting IR into Physical Bipartite Graphs.
+~~~~~
+~~~~~python.new
+from .builder import Builder
+
+__all__ = ["Builder"]
+~~~~~
+
+#### Acts 4: 编写 Builder 的单元测试
+
+最后，我们创建一个测试来验证 `Builder` 的布线逻辑是否正确。
+
+~~~~~act
+write_file
+packages/cascade-compiler/tests/unit/backend/test_builder.py
 ~~~~~
 ~~~~~python
 import pytest
-from cascade.spec.ir.models import NodeIR, TaskDef, ArgumentDef, ArgumentKind
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
-from cascade.compiler.backend.expander import Expander
-from cascade.spec.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.physics import PhysicsDataNode
+from cascade.compiler.backend.builder import Builder
 
-def test_expander_creates_triad_structure():
-    # 1. Setup IR
-    fp = Fingerprint({"canonical_code_structure_hash": "abc"})
-    task_def = TaskDef(
-        name="my_task",
-        args=[ArgumentDef("x", ArgumentKind.POSITIONAL_OR_KEYWORD)],
+@pytest.fixture
+def sample_graph_ir():
+    """
+    Creates a GraphIR for a two-node workflow:
+    task_a -> task_b
+    """
+    fp = Fingerprint.from_dict({"canonical_code_structure_hash": "abc"})
+    task_a_def = TaskDef(name="task_a", args=[], fingerprint=fp)
+    task_b_def = TaskDef(
+        name="task_b",
+        args=[ArgumentDef("data", ArgumentKind.POSITIONAL_OR_KEYWORD)],
         fingerprint=fp
     )
-    node_ir = NodeIR(
-        id="node_1",
-        name="MyNode",
-        task=task_def
+    
+    node_a = NodeIR(id="node_a", name="NodeA", task=task_a_def)
+    node_b = NodeIR(
+        id="node_b",
+        name="NodeB",
+        task=task_b_def,
+        inputs={"data": "node_a"} # task_b.data comes from node_a
     )
     
-    # 2. Expand
-    expander = Expander()
-    subgraph = expander.expand_node(node_ir)
-    
-    # 3. Assert Nodes
-    # We expect 6 nodes: Bleach, Worker, Stain, D_in, D_out, D_trace
-    assert len(subgraph.nodes) == 6
-    
-    bleacher = subgraph.bleacher
-    stainer = subgraph.stainer
-    
-    assert isinstance(bleacher, BleachNode)
-    assert isinstance(stainer, StainNode)
-    assert bleacher.id == "node_1_bleach"
-    assert stainer.id == "node_1_stain"
-    
-    # Check intermediate nodes
-    worker = subgraph.nodes["node_1_worker"]
-    assert isinstance(worker, WorkerNode)
-    
-    d_trace = subgraph.nodes["node_1_trace"]
-    assert isinstance(d_trace, PhysicsDataNode)
+    return GraphIR(nodes=[node_a, node_b])
 
-    # 4. Assert Channels
-    # We expect 6 internal channels
-    assert len(subgraph.channels) == 6
+
+def test_builder_expands_and_wires_nodes(sample_graph_ir):
+    builder = Builder()
+    graph = builder.build(sample_graph_ir)
     
-    # Verify connections
-    # Bleach -> Trace
-    trace_channel = next(c for c in subgraph.channels if c.source_node_id == bleacher.id and c.target_node_id == d_trace.id)
-    assert trace_channel.source_port == "trace_output"
+    # Assert nodes: 2 triads (6 nodes each) + 1 global D_life = 13 nodes
+    assert len(graph.nodes) == 13
+    assert "global_d_life" in graph.nodes
+    assert "node_a_stain" in graph.nodes
+    assert "node_b_bleach" in graph.nodes
     
-    # Trace -> Stain
-    trace_in_channel = next(c for c in subgraph.channels if c.source_node_id == d_trace.id and c.target_node_id == stainer.id)
-    assert trace_in_channel.source_port == "out" # implicit port for data node
+    # Assert channels
+    # 2 triads (6 channels each) = 12
+    # 1 data dependency channel = 1
+    # 2 triads * 2 obs channels each = 4
+    # Total = 12 + 1 + 4 = 17
+    assert len(graph.channels) == 17
+    
+    # 1. Test data dependency wiring
+    data_channel = next(
+        c for c in graph.channels 
+        if c.source_node_id == "node_a_stain" and c.target_node_id == "node_b_bleach"
+    )
+    assert data_channel is not None
+    assert data_channel.source_port == "output"
+    
+    # 2. Test observability wiring
+    d_life_id = "global_d_life"
+    obs_channels = [c for c in graph.channels if c.target_node_id == d_life_id]
+    
+    assert len(obs_channels) == 4 # 2 starts, 2 ends
+    
+    source_ids = {c.source_node_id for c in obs_channels}
+    assert "node_a_bleach" in source_ids
+    assert "node_a_stain" in source_ids
+    assert "node_b_bleach" in source_ids
+    assert "node_b_stain" in source_ids
 ~~~~~
 
 ### 下一步建议
-我们已经完成了单个节点的物理展开。根据路线图，下一步是 **任务 3.2：实现连线逻辑 (Wiring)**。这需要实现 `builder.py` 或 `wiring.py`，负责处理 `GraphIR`，调用 `Expander` 生成多个子图，并根据 IR 中的依赖关系，将上一个三连体的 `Stainer` 连接到下一个三连体的 `Bleacher`。此外，还需要实现旁路观测 ($D_{life}$) 的连接。
+我们已经成功地将一个高级的、逻辑上的 `GraphIR` 编译成了一个完整的、包含数据流和观测流的物理二分图。
+
+根据路线图，下一步是 **阶段 4：控制流与资源 (Advanced Topology)**。我们将首先从 **任务 4.1：实现资源背压 ($D_{res}$)** 开始，修改 `Builder` 以支持自动连接到全局资源槽位，从而在拓扑层面实现并发控制。

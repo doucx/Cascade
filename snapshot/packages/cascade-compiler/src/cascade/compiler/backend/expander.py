@@ -59,9 +59,10 @@ class Expander:
             name=f"Bleach({node_ir.name})",
             input_ports=bleacher_inputs,
             output_ports={
-                "worker_input": "Dict", 
-                "trace_output": "TraceCtx"
-            }
+                "worker_input": "Dict",
+                "trace_output": "TraceCtx",
+                "obs_output": "Event",  # Port for start event
+            },
         )
         
         # D_worker_in: Holds the pure kwargs for the worker
@@ -95,13 +96,11 @@ class Expander:
         f_post = StainNode(
             id=f_post_id,
             name=f"Stain({node_ir.name})",
-            input_ports={
-                "worker_result": "Any",
-                "trace_input": "TraceCtx"
-            },
+            input_ports={"worker_result": "Any", "trace_input": "TraceCtx"},
             output_ports={
-                "output": "Token"
-            }
+                "output": "Token",
+                "obs_output": "Event",  # Port for end event
+            },
         )
         
         # Register nodes

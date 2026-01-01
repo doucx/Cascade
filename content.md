@@ -1,251 +1,39 @@
-简要回答
-我们遇到了典型的“命名空间包（Namespace Package）冲突”问题。由于 `cascade-application` 和 `cascade-sdk` 都定义了 `cascade/__init__.py`，并且 `cascade-application` 的版本（仅包含 `pkgutil` 声明）在 `sys.path` 中优先被加载，导致 `cascade-sdk` 试图在 `__init__.py` 中暴露的 API（如 `task`, `run`）被屏蔽，从而引发 `AttributeError: module 'cascade' has no attribute 'task'`。
-
-解决策略是将 `cascade-sdk` 的 API 定义逻辑移动到一个独立的子模块 `cascade.sdk` 中，并在所有相关包的 `cascade/__init__.py` 中添加一段“垫片（Shim）”代码，尝试加载并导出该 SDK 的内容。
-
-## [WIP] fix: 解决命名空间包冲突导致的 API 丢失问题
+## [WIP] fix: 修复 cascade-provider-ipfs 缺失的命名空间声明
 
 ### 错误分析
-在 Python 的 `pkgutil` 风格命名空间包中，解释器会执行它在 `sys.path` 中找到的第一个 `__init__.py`。
-- **现状**: `cascade-application` 的 `__init__.py` 排在 `cascade-sdk` 之前被加载。它只包含 `pkgutil` 路径扩展代码，因此 `import cascade` 得到的是一个空模块。
-- **问题**: 测试代码依赖 `import cascade as cs; cs.task`，这要求 `cascade` 模块必须包含 API。但由于加载了错误的（空的）`__init__.py`，导致属性错误。
-- **修复**: 
-    1. 将 API 实现从 `cascade-sdk` 的 `__init__.py` 迁移到 `sdk.py`，确保逻辑独立。
-    2. 修改所有相关包（特别是 `cascade-application` 和 `cascade-sdk`）的 `__init__.py`，使其在执行 `pkgutil` 扩展路径后，尝试导入 `cascade.sdk` 并将其内容注入到当前命名空间。
+`AttributeError: module 'cascade' has no attribute 'ipfs'` 表明 `cascade.sdk` 已经成功加载（因为错误信息来自 `sdk.py` 的 `__getattr__`），但无法通过 `registry.get("ipfs")` 找到 IPFS 提供者。
+
+这通常是因为 `cascade-provider-ipfs` 包未能正确注册其 Entry Points，或者其代码无法被加载。
+检查文件结构发现，`packages/cascade-provider-ipfs/src/cascade/` 目录下缺失 `__init__.py` 文件。
+在 Python 的 `pkgutil` 风格命名空间包中，所有参与该命名空间的发行版（Distribution）都必须在对应目录包含一个执行 `pkgutil.extend_path` 的 `__init__.py`。缺失此文件导致 `cascade-provider-ipfs` 无法将其 `src/cascade` 目录合并到 `cascade` 命名空间中，进而导致 `cascade.providers.ipfs` 无法被导入，Entry Point 加载失败。
 
 ### 用户需求
-修复测试中的 `AttributeError` 和 `ImportError`，确保 `import cascade` 能正确暴露 SDK API。
+修复 IPFS 提供者无法加载的问题，确保 `import cascade` 后能通过 `cs.ipfs` 访问相关功能。
 
 ### 评论
-这是一个涉及多包单体仓库（Monorepo）架构的底层修复。通过这种“垫片”模式，我们可以确保无论哪个包的 `__init__.py` 率先被加载，只要 `cascade-sdk` 存在于环境中，其 API 就会被正确挂载。
+除了修复缺失的文件，我也会将“垫片（Shim）”代码应用到 `cascade-library` 和 `cascade-common`，以增强系统在不同安装顺序下的健壮性。
 
 ### 目标
-1. 创建 `packages/cascade-sdk/src/cascade/sdk.py`，承载原 `__init__.py` 的 API 逻辑。
-2. 重写 `packages/cascade-sdk/src/cascade/__init__.py` 为通用的垫片模式。
-3. 更新 `packages/cascade-application/src/cascade/__init__.py` 为通用的垫片模式。
+1. 创建 `packages/cascade-provider-ipfs/src/cascade/__init__.py`。
+2. 确保 `packages/cascade-provider-ipfs/src/cascade/providers/__init__.py` 正确配置。
+3. 为 `cascade-library` 和 `cascade-common` 添加 API 垫片。
 
 ### 基本原理
-我们无法轻易控制 `pip` 安装顺序或 `sys.path` 顺序，因此必须让所有参与 `cascade` 命名空间的 `__init__.py` 都具备“自我修补”的能力。
+命名空间包的每一层级目录（如果是跨包共享的）都必须包含 `pkgutil` 声明。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/build #concept/api #scope/core #ai/instruct #task/domain/build #task/object/namespace-package #task/action/fix #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/build #concept/namespace-package #scope/core #ai/instruct #task/domain/build #task/object/namespace-package #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 SDK 实现文件
-我们将原 `packages/cascade-sdk/src/cascade/__init__.py` 的内容（除去 `pkgutil` 部分）移动到新文件 `packages/cascade-sdk/src/cascade/sdk.py`。
+#### Acts 1: 为 cascade-provider-ipfs 创建顶层 __init__.py
+这是修复当前错误的关键步骤。
 
 ~~~~~act
 write_file
-packages/cascade-sdk/src/cascade/sdk.py
-~~~~~
-~~~~~python
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, Callable
-
-# --- Lazy Import Mapping ---
-# Maps exported names to (module_path, object_name)
-_IMPORT_MAP = {
-    # Core Specs
-    "task": ("cascade.spec.task", "task"),
-    "LazyResult": ("cascade.spec.lazy_types", "LazyResult"),
-    "Router": ("cascade.spec.routing", "Router"),
-    "Jump": ("cascade.spec.jump", "Jump"),
-    "resource": ("cascade.spec.resource", "resource"),
-    "inject": ("cascade.spec.resource", "inject"),
-    "with_constraints": ("cascade.spec.constraint", "with_constraints"),
-    "get_current_context": ("cascade.common.context", "get_current_context"),
-    # Advanced Flow Control
-    "select_jump": ("cascade.control_flow", "select_jump"),
-    "bind": ("cascade.control_flow", "bind"),
-    # Runtime
-    "Engine": ("cascade.runtime.engine", "Engine"),
-    "MessageBus": ("cascade.runtime.bus", "MessageBus"),
-    "Event": ("cascade.runtime.events", "Event"),
-    "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
-    "sequence": ("cascade.flow", "sequence"),
-    "pipeline": ("cascade.flow", "pipeline"),
-    # Adapters & Protocols
-    "NativeSolver": ("cascade.adapters.solvers.native", "NativeSolver"),
-    "LocalExecutor": ("cascade.adapters.executors.local", "LocalExecutor"),
-    "Connector": ("cascade.spec.protocols", "Connector"),
-    "StateBackend": ("cascade.spec.protocols", "StateBackend"),
-    # Tools & Utilities
-    "to_json": ("cascade.graph.serialize", "to_json"),
-    "from_json": ("cascade.graph.serialize", "from_json"),
-    "override_resource": ("cascade.testing", "override_resource"),
-    "ControllerTestApp": ("cascade.testing", "ControllerTestApp"),
-    "create_cli": ("cascade.tools.cli", "create_cli"),
-}
-
-# --- Type Checking Imports ---
-if TYPE_CHECKING:
-    from cascade.spec.task import task
-    from cascade.spec.lazy_types import LazyResult
-    from cascade.spec.routing import Router
-    from cascade.spec.jump import Jump
-    from cascade.spec.resource import resource, inject
-    from cascade.spec.constraint import with_constraints
-    from cascade.common.context import get_current_context
-
-    from cascade.control_flow import select_jump, bind
-
-    from cascade.runtime.engine import Engine
-    from cascade.runtime.bus import MessageBus
-    from cascade.runtime.events import Event
-    from cascade.runtime.exceptions import DependencyMissingError
-    from cascade.flow import sequence, pipeline
-
-    from cascade.adapters.solvers.native import NativeSolver
-    from cascade.adapters.executors.local import LocalExecutor
-    from cascade.spec.protocols import Connector, StateBackend
-
-    from cascade.graph.serialize import to_json, from_json
-    from cascade.testing import override_resource, ControllerTestApp
-    from cascade.tools.cli import create_cli
-    
-    # Dynamic Providers Stubs (for static analysis)
-    # These are populated at runtime via __getattr__ delegation to the registry
-    http: Any
-    template: Any
-
-# --- V1.4 Factory Functions ---
-
-
-def Param(
-    name: str, default: Any = None, type: Any = str, description: str = ""
-) -> "LazyResult":
-    # Lazy import dependencies to keep module load time minimal
-    from cascade.spec.input import ParamSpec
-    from cascade.common.context import get_current_context
-    from cascade.common.inputs import _get_param_value
-
-    spec = ParamSpec(name=name, default=default, type=type, description=description)
-    get_current_context().register(spec)
-    return _get_param_value(name=name)
-
-
-def Env(name: str, default: Any = None, description: str = "") -> "LazyResult":
-    from cascade.spec.input import EnvSpec
-    from cascade.common.context import get_current_context
-    from cascade.common.inputs import _get_env_var
-
-    spec = EnvSpec(name=name, default=default, description=description)
-    get_current_context().register(spec)
-    return _get_env_var(name=name)
-
-
-# --- Global Functions ---
-
-
-def run(
-    target: Union["LazyResult", List[Any], tuple[Any, ...]],
-    params: Optional[Dict[str, Any]] = None,
-    system_resources: Optional[Dict[str, Any]] = None,
-    log_level: str = "INFO",
-    log_format: str = "human",
-    connector: Optional["Connector"] = None,
-    state_backend: Union[str, Callable[[str], "StateBackend"], None] = None,
-) -> Any:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(
-        target=target,
-        params=params,
-        system_resources=system_resources,
-        log_level=log_level,
-        log_format=log_format,
-        connector=connector,
-        state_backend=state_backend,
-    )
-    return app.run()
-
-
-def visualize(target: Any) -> str:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(target=target)
-    return app.visualize()
-
-
-def dry_run(target: Any) -> None:
-    from cascade.app import CascadeApp
-
-    app = CascadeApp(target=target)
-    app.dry_run()
-
-
-# --- Dynamic Import & Provider Loading ---
-
-
-def __getattr__(name: str) -> Any:
-    # 1. Check if it's a known API member in our lazy map
-    if name in _IMPORT_MAP:
-        module_path, obj_name = _IMPORT_MAP[name]
-        module = __import__(module_path, fromlist=[obj_name])
-        return getattr(module, obj_name)
-
-    # 2. Check if it's a dynamic provider (e.g., cs.read.text)
-    # This maintains the v1.3 behavior of dynamic provider loading
-    try:
-        from cascade.providers.registry import registry
-
-        return registry.get(name)
-    except (ImportError, AttributeError):
-        # Fallthrough to raise the standard AttributeError below
-        pass
-
-    raise AttributeError(f"module 'cascade' has no attribute '{name}'")
-
-
-# --- Public API Export ---
-
-__all__ = [
-    # Core API
-    "task",
-    "Param",
-    "Env",
-    "run",
-    "dry_run",
-    "visualize",
-    # Advanced Flow Control
-    "sequence",
-    "pipeline",
-    "Router",
-    "Jump",
-    "select_jump",
-    "bind",
-    # Policies & Resources
-    "with_constraints",
-    "resource",
-    "inject",
-    # Types & Classes
-    "LazyResult",
-    "Engine",
-    "Event",
-    "MessageBus",
-    "NativeSolver",
-    "LocalExecutor",
-    # Tools & Utilities
-    "to_json",
-    "from_json",
-    "override_resource",
-    "ControllerTestApp",
-    "create_cli",
-    # Exceptions
-    "DependencyMissingError",
-    # Context (for advanced usage)
-    "get_current_context",
-]
-~~~~~
-
-#### Acts 2: 更新 cascade-sdk 的 __init__.py
-将 `cascade-sdk` 的 `__init__.py` 简化为带有自动注入逻辑的命名空间包声明。
-
-~~~~~act
-write_file
-packages/cascade-sdk/src/cascade/__init__.py
+packages/cascade-provider-ipfs/src/cascade/__init__.py
 ~~~~~
 ~~~~~python
 # This allows this package to coexist with other distribution packages
@@ -260,12 +48,25 @@ except ImportError:
     pass
 ~~~~~
 
-#### Acts 3: 更新 cascade-application 的 __init__.py
-将同样的逻辑应用到 `cascade-application`，因为它是导致本次崩溃的“获胜者”。
+#### Acts 2: 确保 cascade-provider-ipfs 的 providers 子包也是命名空间
+为了安全起见，重写 `providers/__init__.py` 以确保它也使用了 `pkgutil`，因为 `cascade.providers` 也是一个跨包共享的命名空间。
 
 ~~~~~act
 write_file
-packages/cascade-application/src/cascade/__init__.py
+packages/cascade-provider-ipfs/src/cascade/providers/__init__.py
+~~~~~
+~~~~~python
+# This allows 'cascade.providers' to be a namespace package,
+# extended by other installed packages.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+~~~~~
+
+#### Acts 3: 为 cascade-library 添加 Shim
+`cascade-library` 是核心依赖，很容易被第一个加载。
+
+~~~~~act
+write_file
+packages/cascade-library/src/cascade/__init__.py
 ~~~~~
 ~~~~~python
 # This allows this package to coexist with other distribution packages
@@ -280,5 +81,42 @@ except ImportError:
     pass
 ~~~~~
 
-### 下一步建议
-如果后续发现其他包（如 `cascade-engine`）在某些环境中也成为了 `__init__.py` 的获胜者导致类似问题，也需要对其进行相同的“垫片”处理。目前修复这两个最核心的包应该能解决当前报告的所有测试错误。
+#### Acts 4: 为 cascade-common 添加 Shim
+同理，增强 `cascade-common` 的健壮性。
+
+~~~~~act
+write_file
+packages/cascade-common/src/cascade/__init__.py
+~~~~~
+~~~~~python
+# This allows this package to coexist with other distribution packages
+# that contribute to the 'cascade' namespace.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+
+# Shim to expose the SDK API if available in the environment
+try:
+    from cascade.sdk import *
+    from cascade.sdk import __all__, __getattr__
+except ImportError:
+    pass
+~~~~~
+
+#### Acts 5: 为 cascade-engine 添加 Shim
+`cascade-engine` 也是一个可能的入口点。
+
+~~~~~act
+write_file
+packages/cascade-engine/src/cascade/__init__.py
+~~~~~
+~~~~~python
+# This allows this package to coexist with other distribution packages
+# that contribute to the 'cascade' namespace.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+
+# Shim to expose the SDK API if available in the environment
+try:
+    from cascade.sdk import *
+    from cascade.sdk import __all__, __getattr__
+except ImportError:
+    pass
+~~~~~

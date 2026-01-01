@@ -1,38 +1,34 @@
-Understood. Based on our strategic analysis, we will now adapt the existing `EmitterNode` test to align with our new, decoupled lifecycle architecture. This is the re-defined goal for **Phase 5.B.3**.
+好的，我已收到你的指示。问题明确，解决方案清晰。我将使用 `write_file` 指令来修正 `test_reactor_emits_result_to_sink` 函数，使其不再依赖 `event_loop` fixture。
 
-This plan modifies `test_result_emission.py` to act as the "external strategy," validating that the `Reactor` correctly emits results and can then be gracefully shut down.
-
-## [WIP] test(vm): Adapt result emission test to decoupled lifecycle
+## [WIP] fix(vm): 修复 `test_result_emission.py` 的 `event_loop` fixture 依赖
 
 ### 用户需求
-执行修订后的阶段 5.B.3 计划：使 `EmitterNode` 的测试 (`test_result_emission.py`) 适应我们刚刚建立的、没有 `TerminatorNode` 的新架构。
+根据提供的错误信息和修正方案，修改 `packages/cascade-vm/tests/reactor/test_result_emission.py` 文件中的 `test_reactor_emits_result_to_sink` 函数，移除对 `event_loop` fixture 的依赖。
 
 ### 评论
-这是一个关键的验证步骤。通过修复这个测试，我们不仅能使其重新通过，更重要的是，我们能以代码的形式**证明**我们新架构的正确性。修改后的测试将完美地模拟 `VMExecutionStrategy` 的未来行为：它启动 `Reactor`，通过 `Emitter` 的回调接收结果（或完成信号），然后从外部明确地决定停止 `Reactor`。这证实了我们的“生命周期控制反转”策略是成功且可测试的。
+这个修复是必要的，因为测试环境可能未提供 `event_loop` fixture。通过使用 `asyncio.get_running_loop().create_future()`，我们能直接获取当前正在运行的事件循环并创建 future，从而使测试在更广泛的 `pytest-asyncio` 配置下（或不依赖特定 fixture 的情况下）运行。这增加了测试的健壮性和可移植性。
 
 ### 目标
-1.  重构 `packages/cascade-vm/tests/reactor/test_result_emission.py`。
-2.  从测试拓扑中移除 `TerminatorNode` 和用于级联的 `d_signal` 数据节点。
-3.  使用 `asyncio.Future` 在 Sink 回调中捕获结果并发出完成信号。
-4.  将测试的控制流改为：等待 `Future` 完成，然后由测试本身显式调用 `reactor.stop()` 来终止 `Reactor` 循环。
+1.  从 `test_reactor_emits_result_to_sink` 函数签名中移除 `event_loop` 参数。
+2.  将 `event_loop.create_future()` 的调用修改为 `asyncio.get_running_loop().create_future()`。
 
 ### 基本原理
-在移除了 `TerminatorNode` 之后，旧的测试会因为 `reactor.run()` 永远不会自行结束而超时。新的实现通过将测试逻辑本身转变为一个微型的“执行策略”来解决这个问题。测试不再被动地等待 `Reactor` 自我终止，而是主动地监听 `Emitter` 发出的信号。一旦接收到关键信号（即 `Future` 被设置），测试就认为 `Reactor` 的核心任务已经完成，并主动、确定地关闭它。这是一种更健壮、更清晰的异步测试模式，它用确定的状态（`Future` 完成）取代了不确定的行为（`Reactor` 内部停止）。
+`pytest-asyncio` 插件在执行 `async` 测试函数时，会自动设置一个事件循环。因此，直接从 `asyncio.get_running_loop()` 获取循环是可靠且标准的做法，避免了对 `event_loop` fixture 的显式依赖。
 
 ### 标签
-#intent/tooling #intent/refine #flow/ready #priority/high
-#comp/engine #comp/tests #concept/state #scope/core
+#intent/fix #flow/ready #priority/high
+#comp/tests #scope/dx
 #ai/instruct
-#task/domain/testing #task/object/reactor-lifecycle #task/action/test-adaptation
+#task/domain/testing #task/object/asyncio-test-fix #task/action/test-adaptation
 #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `test_result_emission.py`
+#### Acts 1: 修正 `test_result_emission.py` 文件
 
-我们将完全重写此测试文件。新的实现将移除对 `TerminatorNode` 的依赖，并采用一个 `asyncio.Future` 来同步 `Reactor` 的核心工作与测试的生命周期控制逻辑，从而验证新的解耦架构。
+我们将修改 `test_reactor_emits_result_to_sink` 函数的签名和内部对 `event_loop` 的引用。
 
 ~~~~~act
 write_file
@@ -47,7 +43,7 @@ from cascade.spec.physics import DataNode, Token, Port, EmitterNode
 from cascade.vm.reactor import Reactor, TokenGenerated
 
 @pytest.mark.asyncio
-async def test_reactor_emits_result_to_sink(event_loop):
+async def test_reactor_emits_result_to_sink():
     """
     Verifies that an EmitterNode correctly pushes data to an external sink,
     and that the Reactor can be gracefully stopped by an external controller
@@ -68,7 +64,7 @@ async def test_reactor_emits_result_to_sink(event_loop):
     
     # 3. Register Sink with a Future for synchronization
     # The Future acts as the signal from the Reactor to the external world
-    result_future = event_loop.create_future()
+    result_future = asyncio.get_running_loop().create_future()
     reactor.register_sink("main_output", result_future.set_result)
 
     # 4. Start Reactor in a background task
@@ -98,6 +94,6 @@ async def test_reactor_emits_result_to_sink(event_loop):
 ~~~~~
 
 ### 下一步建议
-我们已经成功地验证了 `EmitterNode` 在新的解耦架构下的行为。`Reactor` 现在是一个纯粹的、由外部控制的物理引擎。
+此修复解决了 `event_loop` fixture 的依赖问题。现在，我们应该能够通过所有测试，再次验证 `EmitterNode` 在新的解耦架构下的行为。
 
-根据路线图，我们现在准备好进入 **阶段 5.C：编译器与策略层的最终集成**。第一步将是 **阶段 5.C.1：[Compiler] 编译器后端支持信令与生命周期注入**。我将准备一个计划，修改编译器后端，使其能够自动生成我们刚才手动测试的这种包含 `EmitterNode` 的图拓扑。
+根据路线图，我们现在准备好进入 **阶段 5.C：编译器与策略层的最终集成**。第一步将是 **阶段 5.C.1：[Compiler] 编译器后端支持信令与生命周期注入**。我将准备一个计划，修改编译器后端，使其能够自动生成包含结果发射器 (`EmitterNode`) 和终止信号发射器 (`EmitterNode` 链式连接，模拟旧的终止行为) 的自治计算图。

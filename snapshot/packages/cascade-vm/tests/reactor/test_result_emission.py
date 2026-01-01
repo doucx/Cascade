@@ -6,7 +6,7 @@ from cascade.spec.physics import DataNode, Token, Port, EmitterNode
 from cascade.vm.reactor import Reactor, TokenGenerated
 
 @pytest.mark.asyncio
-async def test_reactor_emits_result_to_sink(event_loop):
+async def test_reactor_emits_result_to_sink():
     """
     Verifies that an EmitterNode correctly pushes data to an external sink,
     and that the Reactor can be gracefully stopped by an external controller
@@ -27,7 +27,7 @@ async def test_reactor_emits_result_to_sink(event_loop):
     
     # 3. Register Sink with a Future for synchronization
     # The Future acts as the signal from the Reactor to the external world
-    result_future = event_loop.create_future()
+    result_future = asyncio.get_running_loop().create_future()
     reactor.register_sink("main_output", result_future.set_result)
 
     # 4. Start Reactor in a background task

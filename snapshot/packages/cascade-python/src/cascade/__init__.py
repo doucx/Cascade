@@ -89,7 +89,7 @@ def Env(name: str, default: Any = None, description: str = "") -> "LazyResult":
 
     spec = EnvSpec(name=name, default=default, description=description)
     get_current_context().register(spec)
-    return _get_env_var(name)
+    return _get_env_var(name=name)
 
 
 # --- Global Functions ---

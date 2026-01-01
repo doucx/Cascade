@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M resolvers.py, M __init__.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767260037.731152, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: Use keyword argument in Env factory to ensure correct graph binding", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767260061.5671277, "duration_ms": 0}}

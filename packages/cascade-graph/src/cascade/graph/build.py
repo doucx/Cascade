@@ -91,7 +91,7 @@ class GraphBuilder:
 
             # Complexity check
             from cascade.spec.resource import Inject as InjectMarker
-            from cascade.internal.inputs import _get_param_value
+            from cascade.common.inputs import _get_param_value
 
             has_complex = False
             if result.task.func is _get_param_value.func:

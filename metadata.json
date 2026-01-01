@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 解决 IPFS 提供者中的循环导入问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767269477.6962507, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 cascade-library 和 cascade-sdk 之间的包级循环依赖", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270007.1912267, "duration_ms": 0}}

@@ -90,9 +90,6 @@ class Engine:
         )
 
         self.vm_strategy = VMExecutionStrategy(
-            resource_manager=self.resource_manager,
-            constraint_manager=self.constraint_manager,
-            wakeup_event=self._wakeup_event,
             bus=self.bus,
         )
 

@@ -1,125 +1,66 @@
-好的，我们立即开始执行方案的第三阶段，也是打通整个执行流程的最后一步：实现 `_load_topology` 辅助方法。
+Excellent, this test output is exactly what we needed. It's the classic "red wave" that occurs after a significant API change, and it gives us a crystal-clear signal about what to fix next.
 
-我将生成一个计划，用完整的拓扑加载逻辑替换 `_load_topology` 方法的占位符。这个实现将把编译器输出的静态 `BipartiteGraph` 蓝图，转换为 `Reactor` 能够理解和执行的、动态的物理对象网络。
+The test output is overwhelmingly consistent: `TypeError: VMExecutionStrategy.__init__() got an unexpected keyword argument 'resource_manager'`.
 
-## [WIP] feat(engine): 实现 _load_topology 以连接编译器与物理引擎
+This is the smoking gun. Here's what happened:
+
+1.  **Our Refactor**: In our previous steps, we correctly refactored `VMExecutionStrategy`'s constructor. We deliberately simplified it to only accept `bus`, because under the new "macro-orchestrator" model, the strategy itself is responsible for creating the `Reactor` and `PhysicsExecutor`, which internally manage resources. It no longer needs `resource_manager` or `constraint_manager` injected into it. The new signature is `__init__(self, bus: MessageBus)`.
+
+2.  **The Oversight**: We forgot to update the class that *creates* `VMExecutionStrategy`. The traceback points directly to `cascade.runtime.engine.py`. The `Engine` class is still trying to instantiate `VMExecutionStrategy` using the old, now-invalid constructor, passing `resource_manager`, `constraint_manager`, and other arguments that are no longer expected.
+
+This is not a failure of our new `VMExecutionStrategy` logic, but a simple yet critical misalignment at the point of its creation.
+
+We must update the `Engine.__init__` method to instantiate `VMExecutionStrategy` using its new, simplified constructor.
+
+## [WIP] fix(engine): 更新 Engine 以匹配新的 VMExecutionStrategy 构造函数
+
+### 错误分析
+在大规模重构 `VMExecutionStrategy` 以适应物理模型后，其构造函数 `__init__` 被简化为仅接收 `bus` 参数。然而，`Engine` 类的 `__init__` 方法没有同步更新，仍在尝试使用已废弃的参数（如 `resource_manager`, `constraint_manager`, `wakeup_event`）来实例化 `VMExecutionStrategy`。这导致了遍布整个测试套件的 `TypeError`，因为 `Engine` 的初始化失败了。
 
 ### 用户需求
-根据我们制定的详细重构方案，实现 `_load_topology` 辅助方法，完成 `BipartiteGraph` 到 `Reactor` 内部物理模型的转换。
+修正 `Engine` 在初始化 `VMExecutionStrategy` 时传递了不期望的关键字参数的问题，使其与新的构造函数签名保持一致。
 
 ### 评论
-这是使新 `VMExecutionStrategy` 得以完整运行的最后一块拼图。`_load_topology` 方法扮演着“世界构建者”的角色，它将编译器的静态蓝图实例化为 `Reactor` 中的一个可执行的“计算宇宙”。此功能的完成，标志着从用户代码到物理执行的端到端流程被首次完整贯通，是本次重构的一个决定性里程碑。
+这是一个典型的、在重构过程中因 API 变更而产生的连锁反应。修复此问题是让我们的测试套件重新进入可评估状态的关键一步。此修复将使 `Engine` 与 `VMExecutionStrategy` 之间解耦的架构意图在代码层面得到最终落实：`Engine` 只需知道策略的存在，而无需关心策略内部复杂的依赖关系。
 
 ### 目标
-1.  在 `_load_topology` 方法中，实现一个三阶段加载过程：
-    *   第一阶段：实例化所有 `DataNode` 并注入常量初始值。
-    *   第二阶段：实例化所有 `FuncNode` 和 `EmitterNode`，并根据 `BipartiteGraph` 连接它们的输入端口。
-    *   第三阶段：实例化所有 `Channel`，建立 `FuncNode` 输出到 `DataNode` 的连接。
-2.  使用 `patch_file` 将完整的实现替换掉 `NotImplementedError` 占位符。
+1.  定位 `packages/cascade-engine/src/cascade/runtime/engine.py` 中 `Engine.__init__` 方法内错误的 `VMExecutionStrategy` 实例化代码。
+2.  使用 `patch_file` 将其修改为仅传递 `bus` 参数的正确形式。
 
 ### 基本原理
-`Reactor` 和编译器分别工作在两个不同的抽象层：`Reactor` 理解的是 `cascade.spec.physics` 中定义的动态物理对象，而编译器输出的是 `cascade.spec.topology` 中定义的静态规格。`_load_topology` 方法正是这两个世界之间的“翻译官”和“装配线”。它通过一个有序的、结构化的转换流程，确保静态图中定义的所有节点、连接和初始状态都被准确无误地映射到动态的运行时环境中，从而使 `Reactor` 能够正确地开始其物理模拟。
+`VMExecutionStrategy` 的新设计哲学是自包含的：它在 `execute` 方法内部按需创建和配置其运行时依赖（如 `Reactor`）。因此，其构造函数变得极为简单。`Engine` 作为其创建者，必须遵循这个新的、简化的契约。通过本次修复，我们将使 `Engine` 的代码与此架构设计保持同步，消除启动时的 `TypeError`。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/engine #concept/executor #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/engine #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 实现 `_load_topology` 方法
+#### Acts 1: 修正 Engine 中 VMExecutionStrategy 的实例化
 
-我们将用完整的拓扑加载和转换逻辑替换 `_load_topology` 方法的占位符。
+我们将精确地修改 `engine.py` 中 `VMExecutionStrategy` 的实例化调用，使其符合新的构造函数签名。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/vm.py
+packages/cascade-engine/src/cascade/runtime/engine.py
 ~~~~~
 ~~~~~python.old
-    def _load_topology(self, reactor: Reactor, topology: BipartiteGraph):
-        """
-        Translates the static BipartiteGraph spec into live, interconnected
-        physics objects within the Reactor.
-        This method will be implemented in the next phase.
-        """
-        # Placeholder for the topology loading logic.
-        raise NotImplementedError(
-            "VMExecutionStrategy._load_topology is not yet implemented."
+        self.vm_strategy = VMExecutionStrategy(
+            resource_manager=self.resource_manager,
+            constraint_manager=self.constraint_manager,
+            wakeup_event=self._wakeup_event,
+            bus=self.bus,
         )
 ~~~~~
 ~~~~~python.new
-    def _load_topology(self, reactor: Reactor, topology: BipartiteGraph):
-        """
-        Translates the static BipartiteGraph spec into live, interconnected
-        physics objects within the Reactor.
-        """
-        # Caches to map from spec hash to runtime object
-        runtime_data_nodes: Dict[str, DataNode] = {}
-        runtime_func_nodes: Dict[str, FuncNode] = {}
-
-        # Pass 1: Instantiate all DataNodes and set initial constant values
-        for spec_d_node in topology.data_nodes.values():
-            d_node = DataNode(name=spec_d_node.current_data_slot_hash)
-            runtime_data_nodes[spec_d_node.current_data_slot_hash] = d_node
-            reactor.register_node(d_node)
-
-            if spec_d_node.current_data_slot_hash in topology.initial_values:
-                initial_val = topology.initial_values[
-                    spec_d_node.current_data_slot_hash
-                ]
-                initial_token = Token(payload=initial_val)
-                d_node.put(initial_token)
-
-        # Pass 2: Instantiate all FuncNodes and wire their inputs
-        for spec_f_node in topology.func_nodes.values():
-            if spec_f_node.sink_id:
-                f_node = EmitterNode(
-                    name=spec_f_node.current_node_instance_hash,
-                    sink_id=spec_f_node.sink_id,
-                )
-            else:
-                f_node = FuncNode(name=spec_f_node.current_node_instance_hash)
-
-            runtime_func_nodes[spec_f_node.current_node_instance_hash] = f_node
-
-            for port_name, source_data_hash in spec_f_node.inputs.items():
-                if source_data_hash in runtime_data_nodes:
-                    source_d_node = runtime_data_nodes[source_data_hash]
-                    port = Port(name=port_name, source=source_d_node)
-                    f_node.add_input(port)
-
-            reactor.register_node(f_node)
-
-        # Pass 3: Instantiate all Channels to wire FuncNode outputs
-        for spec_channel in topology.channels:
-            source_f_node = runtime_func_nodes.get(
-                spec_channel.source_node_instance_hash
-            )
-            target_d_node = runtime_data_nodes.get(spec_channel.target_data_slot_hash)
-
-            if source_f_node and target_d_node:
-                # Update the kind on the corresponding input port for dual-barrier check
-                # Note: This assumes input port names match output port names for signals,
-                # which is a convention we need to enforce or make more robust.
-                # For now, we find the port connected to the target DataNode.
-                for port in source_f_node.inputs.values():
-                    # This logic is complex. A simpler way is to connect the port
-                    # to the channel later. Let's rely on the ChannelDef for kind.
-                    pass
-
-                # This runtime channel connects an output port to a data node
-                channel = ReactorChannel(
-                    source=source_f_node,
-                    target=target_d_node,
-                    output_name=spec_channel.port_name,
-                    tag_filter=spec_channel.tag_filter,
-                    kind=spec_channel.kind,
-                )
-                reactor.register_channel(channel)
+        self.vm_strategy = VMExecutionStrategy(
+            bus=self.bus,
+        )
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 `VMExecutionStrategy` 的全部核心实现。现在，从 `LazyResult` 到 `BipartiteGraph`，再到 `Reactor` 的执行，整个流程在代码层面已经完全打通。
+我们已经解决了 `Engine` 初始化失败的阻断性问题。现在，当测试再次运行时，`Engine` 应该能够成功创建 `VMExecutionStrategy` 实例，并且 `engine.run(..., use_vm=True)` 将会实际调用到我们新实现的 `execute` 和 `_load_topology` 方法。
 
-下一步最关键的工作是**验证**。我建议我们恢复并运行所有相关的集成测试，特别是 TCO (尾调用优化) 和基本控制流的测试。这些测试现在应该能够通过新的 `VMExecutionStrategy` 路径成功执行。
+这很可能会暴露下一层的问题——即我们新实现的逻辑中的实际 bug 或与测试用例预期的行为不匹配之处。这正是 TDD 流程所期望的。
 
-如果你同意，请告诉我，我将为你准备一个运行测试的计划。
+我建议我们再次运行测试，以获取新的、更深入的反馈。

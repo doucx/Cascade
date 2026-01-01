@@ -183,3 +183,78 @@ def test_compile_diamond_dependency_fan_out():
     # Verify that DataNode is produced by A
     data_node = topology.data_nodes[input_hash_b]
     assert data_node.producer_node_instance_hash == "A"
+
+
+def test_compile_injects_lifecycle_emitters():
+    """
+    Verifies that the Backend correctly injects the result and termination
+    emitters, and connects them with a SIGNAL channel.
+    """
+    # 1. Setup minimal IR with a single root node
+    node_a = _create_dummy_node_ir("A")
+    graph_ir = GraphIR(nodes=[node_a], edges=[])
+
+    # 2. Compile
+    topology = Backend.compile(graph_ir)
+
+    # 3. Find Emitter Nodes by their unique sink_id
+    result_emitter = next(
+        (n for n in topology.func_nodes.values() if n.sink_id == "main_output"), None
+    )
+    term_emitter = next(
+        (
+            n
+            for n in topology.func_nodes.values()
+            if n.sink_id == "__system_lifecycle_signal"
+        ),
+        None,
+    )
+
+    # 4. Assertions for Emitter Nodes existence and properties
+    assert result_emitter is not None, "Result emitter node was not injected"
+    assert term_emitter is not None, "Termination emitter node was not injected"
+    assert result_emitter.name == "result_emitter"
+    assert term_emitter.name == "term_emitter"
+
+    # 5. Assert that Result Emitter is connected to the graph's output
+    # Find the output data slot of the original root node 'A'
+    output_of_a_hash = next(
+        c.target_data_slot_hash
+        for c in topology.channels
+        if c.source_node_instance_hash == "A" and c.kind == ChannelKind.DATA
+    )
+    assert (
+        "result" in result_emitter.inputs
+    ), "Result emitter must have a 'result' input"
+    assert result_emitter.inputs["result"] == output_of_a_hash
+
+    # 6. Assert that a SIGNAL channel connects the two emitters
+    signal_channel = next(
+        (
+            c
+            for c in topology.channels
+            if c.source_node_instance_hash == result_emitter.current_node_instance_hash
+            and c.kind == ChannelKind.SIGNAL
+        ),
+        None,
+    )
+
+    assert signal_channel is not None, "SIGNAL channel between emitters not found"
+    assert signal_channel.kind == ChannelKind.SIGNAL
+    assert (
+        signal_channel.port_name == "result"
+    ), "Emitters should signal from their default 'result' output port"
+
+    # 7. Assert that the Termination Emitter receives the signal
+    assert (
+        "signal" in term_emitter.inputs
+    ), "Termination emitter must have a 'signal' input"
+    assert signal_channel.target_data_slot_hash == term_emitter.inputs["signal"]
+
+    # 8. Verify the signal's DataNode exists and is correctly produced
+    signal_data_node = topology.data_nodes.get(signal_channel.target_data_slot_hash)
+    assert signal_data_node is not None, "DataNode for signal channel is missing"
+    assert (
+        signal_data_node.producer_node_instance_hash
+        == result_emitter.current_node_instance_hash
+    )

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 添加循环引用检测脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270766.373342, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M __init__.py, M __init__.py, M __init__.py ... and 14 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767270926.8677378, "duration_ms": 0}}

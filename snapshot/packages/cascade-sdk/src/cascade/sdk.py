@@ -60,7 +60,7 @@ if TYPE_CHECKING:
     from cascade.graph.serialize import to_json, from_json
     from cascade.testing import override_resource, ControllerTestApp
     from cascade.tools.cli import create_cli
-    
+
     # Dynamic Providers Stubs (for static analysis)
     # These are populated at runtime via __getattr__ delegation to the registry
     http: Any

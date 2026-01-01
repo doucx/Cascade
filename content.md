@@ -1,129 +1,25 @@
-好的，我将为你创建一个专门用于检测循环引用的静态分析脚本。
+# 📸 Snapshot Capture
 
-## [WIP] feat: 添加循环引用检测脚本
+检测到工作区发生变更。
 
-### 用户需求
-在 `scripts` 目录下添加一个工具，用于静态检测 `cascade` 生态系统中的循环导入问题，以防止类似最近发生的初始化故障再次出现。
-
-### 评论
-对于像 Cascade 这样使用 PEP 420 命名空间包且具有动态属性加载机制的架构，循环引用是潜在的重大风险。静态检测可以在代码进入 CI 阶段之前识别出不健康的模块依赖拓扑。
-
-### 目标
-1.  在 `scripts/check_cycles.py` 创建一个基于 `pylint` 的检测工具。
-2.  该工具能够扫描所有 `packages/*/src/cascade` 目录。
-3.  配置该工具专门关注 `cyclic-import` 错误。
-
-### 基本原理
-虽然 Python 允许一定程度的循环导入，但在复杂的命名空间结构中，这往往会导致模块属性在初始化完成前就被访问（如我们刚才遇到的情况）。`pylint` 拥有成熟的依赖图分析引擎，可以识别出逻辑上的闭环。
-
-### 标签
-#intent/tooling #flow/ready #priority/medium #comp/build #scope/dx #ai/delegate #task/domain/testing #task/object/import-cycle-linter #task/action/build #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建循环引用检测脚本
-
-我将创建一个名为 `scripts/check_cycles.py` 的脚本。它将查找工作区中所有的 `cascade` 源码包并运行循环引用分析。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p scripts
-~~~~~
-
-~~~~~act
-write_file
-scripts/check_cycles.py
-~~~~~
-~~~~~python
-#!/usr/bin/env python3
-import sys
-import subprocess
-from pathlib import Path
-
-def check_cycles():
-    """
-    Scans the workspace for import cycles using pylint.
-    """
-    print("--- Cascade Import Cycle Detector ---")
-    
-    root_dir = Path(__file__).parent.parent.resolve()
-    packages_dir = root_dir / "packages"
-    
-    # 1. Collect all cascade source directories
-    # We look for packages/*/src/cascade
-    src_dirs = []
-    for pkg in packages_dir.iterdir():
-        if pkg.is_dir():
-            src_path = pkg / "src"
-            if src_path.exists():
-                src_dirs.append(str(src_path))
-
-    if not src_dirs:
-        print("[FAIL] No source directories found in 'packages/'.")
-        sys.exit(1)
-
-    print(f"Scanning {len(src_dirs)} source paths for cycles...")
-
-    # 2. Prepare pylint command
-    # We disable everything except 'cyclic-import'
-    cmd = [
-        sys.executable, "-m", "pylint",
-        "--disable=all",
-        "--enable=cyclic-import",
-        "--rcfile=/dev/null", # Ignore local .pylintrc to ensure strict cycle check
-        "--reports=n",
-        "--score=n"
-    ] + src_dirs
-
-    print(f"Running: {' '.join(cmd)}\n")
-
-    try:
-        # We allow a non-zero exit code from pylint as it returns bits
-        # indicating types of errors found.
-        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        
-        if result.returncode == 0:
-            print("[SUCCESS] No import cycles detected.")
-            sys.exit(0)
-        else:
-            # Pylint output usually goes to stdout for messages
-            output = result.stdout.strip()
-            if "Cyclic import" in output:
-                print("[FAIL] Import cycles detected!")
-                print("-" * 40)
-                print(output)
-                print("-" * 40)
-                sys.exit(1)
-            else:
-                # If pylint failed for other reasons (e.g. pylint not installed)
-                if result.stderr:
-                    print(f"[ERROR] pylint execution failed:\n{result.stderr}")
-                else:
-                    print(f"[SUCCESS] pylint finished with no cycles found (code {result.returncode}).")
-                    sys.exit(0)
-
-    except FileNotFoundError:
-        print("[ERROR] 'pylint' is not installed. Please install it with 'pip install pylint'.")
-        sys.exit(1)
-
-if __name__ == "__main__":
-    check_cycles()
-~~~~~
-
-#### Acts 2: 赋予脚本执行权限
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-chmod +x scripts/check_cycles.py
-~~~~~
-
-### 下一步建议
-- **安装依赖**：确保你的环境中安装了 `pylint`：`pip install pylint`。
-- **运行检测**：执行 `./scripts/check_cycles.py` 检查当前项目是否存在其他潜在的循环引用。
-- **CI 集成**：你可以将此脚本添加到 GitHub Actions 或其他 CI 流程中，作为门禁检查的一环。
+### 📝 变更文件摘要:
+```
+.../cascade-application/src/cascade/__init__.py    |  2 +-
+ .../cascade-cli-controller/src/cascade/__init__.py |  2 +-
+ .../cascade-cli-observer/src/cascade/__init__.py   |  2 +-
+ packages/cascade-common/src/cascade/__init__.py    |  2 +-
+ .../src/cascade/__init__.py                        |  2 +-
+ .../cascade-connector-mqtt/src/cascade/__init__.py |  2 +-
+ packages/cascade-engine/src/cascade/__init__.py    |  2 +-
+ packages/cascade-graph/src/cascade/__init__.py     |  2 +-
+ packages/cascade-library/src/cascade/__init__.py   |  2 +-
+ .../src/cascade/providers/__init__.py              |  2 +-
+ .../src/cascade/providers/manager.py               |  2 +-
+ .../src/cascade/providers/registry.py              |  2 +-
+ .../cascade-provider-ipfs/src/cascade/__init__.py  |  2 +-
+ .../src/cascade/providers/__init__.py              |  2 +-
+ packages/cascade-sdk/src/cascade/__init__.py       |  2 +-
+ packages/cascade-sdk/src/cascade/sdk.py            |  4 ++--
+ scripts/check_cycles.py                            | 26 ++++++++++++++--------
+ 17 files changed, 34 insertions(+), 26 deletions(-)
+```

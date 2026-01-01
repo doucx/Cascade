@@ -3,15 +3,16 @@ import sys
 import subprocess
 from pathlib import Path
 
+
 def check_cycles():
     """
     Scans the workspace for import cycles using pylint.
     """
     print("--- Cascade Import Cycle Detector ---")
-    
+
     root_dir = Path(__file__).parent.parent.resolve()
     packages_dir = root_dir / "packages"
-    
+
     # 1. Collect all cascade source directories
     # We look for packages/*/src/cascade
     src_dirs = []
@@ -30,12 +31,14 @@ def check_cycles():
     # 2. Prepare pylint command
     # We disable everything except 'cyclic-import'
     cmd = [
-        sys.executable, "-m", "pylint",
+        sys.executable,
+        "-m",
+        "pylint",
         "--disable=all",
         "--enable=cyclic-import",
-        "--rcfile=/dev/null", # Ignore local .pylintrc to ensure strict cycle check
+        "--rcfile=/dev/null",  # Ignore local .pylintrc to ensure strict cycle check
         "--reports=n",
-        "--score=n"
+        "--score=n",
     ] + src_dirs
 
     print(f"Running: {' '.join(cmd)}\n")
@@ -44,7 +47,7 @@ def check_cycles():
         # We allow a non-zero exit code from pylint as it returns bits
         # indicating types of errors found.
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
-        
+
         if result.returncode == 0:
             print("[SUCCESS] No import cycles detected.")
             sys.exit(0)
@@ -62,12 +65,17 @@ def check_cycles():
                 if result.stderr:
                     print(f"[ERROR] pylint execution failed:\n{result.stderr}")
                 else:
-                    print(f"[SUCCESS] pylint finished with no cycles found (code {result.returncode}).")
+                    print(
+                        f"[SUCCESS] pylint finished with no cycles found (code {result.returncode})."
+                    )
                     sys.exit(0)
 
     except FileNotFoundError:
-        print("[ERROR] 'pylint' is not installed. Please install it with 'pip install pylint'.")
+        print(
+            "[ERROR] 'pylint' is not installed. Please install it with 'pip install pylint'."
+        )
         sys.exit(1)
+
 
 if __name__ == "__main__":
     check_cycles()

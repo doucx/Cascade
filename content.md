@@ -1,103 +1,96 @@
-好的，我遗漏了 `cascade-vm` 包中的集成测试。感谢指出。
+这是 **Phase 4.5** 的第三步，也是最后一步。我们将再次遵循 TDD 流程。
 
-这个 `TypeError` 是预料之中的，它证明了我们的 `Builder` API 变更确实影响了系统的其他部分。现在我们将修复这个集成测试，使其与新的、更符合物理学原理的 `EnvironmentDef` 接口对齐。
-
-这个修复不仅能解决 `TypeError`，还能让测试本身变得更健壮、更具声明性。
-
-## [WIP] fix(tests): 更新资源背压测试以使用 `EnvironmentDef`
+## [WIP] feat(compiler): 补全观测环路 - TDD (RED)
 
 ### 用户需求
 
-修复 `packages/cascade-vm/tests/integration/test_resource_backpressure.py` 中因 `Builder.build()` 方法签名变更而导致的 `TypeError`。
+1.  **需求描述**: 在 `Builder` 构建的物理图中，为全局的 `D_life` 节点挂载一个标准的 `F_obs` (ObservabilityNode) 节点。
+2.  **核心原因**: 目前的 `D_life` 节点是一个只进不出的黑洞。所有任务产生的生命周期事件（Start/End/Trace）都汇入其中，但没有出口将其发送到外部世界（Message Bus）。这不仅导致观测数据丢失，还会造成潜在的内存无限增长。
+3.  **验证标准**: `test_builder.py` 必须能够断言物理图中存在一个 `F_obs` 节点，并且该节点正确连接到了 `D_life` 的输出端。
 
 ### 评论
 
-这是一个必要的修复，以使我们的测试套件与核心 API 的演进保持同步。通过这次修复，我们将改进 `test_concurrency_limit` 测试用例，使其不再手动修改 `D_res` 节点的内部状态（`initial_tokens = 1`），而是通过声明式的 `EnvironmentDef` 来定义测试所需的资源边界条件。这使得测试的意图更加清晰，行为也更加可靠。
+这是“全息可观测性”拼图的最后一块。通过引入 `F_obs`，我们构建了一个完整的物理闭环：
+`Task(F) -> Trace(D_trace) -> Stainer(F_stain) -> LifecycleBus(D_life) -> Observer(F_obs) -> External World`
+这保证了物理场的运行状态能够被外部世界（UI、Logger、Metrics）实时感知，且不会对核心业务逻辑造成任何干扰。
 
 ### 目标
 
-1.  在 `test_resource_backpressure.py` 中导入 `EnvironmentDef` 和 `ResourceDef`。
-2.  在 `test_concurrency_limit` 测试中，实例化一个包含 `gpu` 资源（容量为1）的 `EnvironmentDef`。
-3.  更新对 `builder.build()` 的调用，将此 `EnvironmentDef` 实例作为参数传入。
-4.  移除旧的、命令式的 `d_res.initial_tokens = 1` 代码行，因为 `Builder` 现在会根据环境自动处理。
+1.  在 `tests/unit/backend/test_builder_observability.py` 中创建新的测试用例，断言 `F_obs` 的存在及其连接关系。
+2.  运行测试，确认其失败（RED）。
 
 ### 基本原理
 
-核心 API (`Builder.build`) 的签名变更要求所有调用点都必须更新。对于 `test_resource_backpressure.py`，我们不仅要满足新的签名要求，还要借此机会提升测试质量。通过使用 `EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])`，我们将测试的设置（Setup）部分从对结果的命令式修改（imperative modification）转变为对原因的声明式定义（declarative definition），这是一种更健壮的测试实践。
+我们创建一个全新的测试文件 `test_builder_observability.py`，专门用于验证观测系统的拓扑结构。这保持了测试的专注性和清晰度。
+
+预期的拓扑结构：
+*   存在一个 ID 为 `global_f_obs` 的 `ObservabilityNode`。
+*   存在一条从 `global_d_life` 到 `global_f_obs` 的 Channel。
+*   该 Channel 的目标端口应为 `event_token`（这是 `standard_observer` 预期的输入端口）。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/vm #comp/tests #concept/resources #scope/dx #ai/instruct #task/domain/refactoring #task/object/environment #task/action/implement #task/state/continue
+#intent/architect #flow/draft #priority/high #comp/compiler #comp/vm #concept/observability #scope/core #ai/instruct #task/domain/refactoring #task/object/observability #task/action/test #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `test_resource_backpressure.py`
+#### Acts 1: 创建观测性拓扑测试 (RED)
 
-我们将更新此集成测试，使其正确调用 `Builder` 并以声明方式定义所需的环境。
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_resource_backpressure.py
-~~~~~
-~~~~~python.old
-from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
-from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.physics import Token, PhysicsDataNode
-from cascade.compiler.backend.builder import Builder
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-~~~~~
-~~~~~python.new
-from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
-from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.physics import Token, PhysicsDataNode
-from cascade.spec.environment import EnvironmentDef, ResourceDef
-from cascade.compiler.backend.builder import Builder
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-~~~~~
+编写测试用例，断言 `F_obs` 节点的存在及其正确连接。
 
 ~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_resource_backpressure.py
+write_file
+packages/cascade-compiler/tests/unit/backend/test_builder_observability.py
 ~~~~~
-~~~~~python.old
-    graph_ir = GraphIR(nodes=[node_1, node_2])
+~~~~~python
+import pytest
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.environment import EnvironmentDef
+from cascade.spec.triad import ObservabilityNode
+from cascade.compiler.backend.builder import Builder
 
-    # 2. Build Physical Graph
+
+@pytest.fixture
+def empty_graph_ir():
+    # Even with no user tasks, the observability infrastructure should be present
+    # (D_life and F_obs are global singletons)
+    return GraphIR(nodes=[])
+
+
+def test_builder_creates_observer_sidecar(empty_graph_ir):
     builder = Builder()
-    physical_graph = builder.build(graph_ir)
+    graph = builder.build(empty_graph_ir, environment=EnvironmentDef())
 
-    # Verify D_res exists
-    assert "global_res_gpu" in physical_graph.nodes
-    d_res = physical_graph.nodes["global_res_gpu"]
-    # Force capacity to 1 for this test (Builder currently defaults to 1)
-    d_res.initial_tokens = 1
+    # 1. Assert D_life exists (Baseline check)
+    assert "global_d_life" in graph.nodes
 
-    # 3. Setup VM
-    memory = VolatileMemory()
-~~~~~
-~~~~~python.new
-    graph_ir = GraphIR(nodes=[node_1, node_2])
+    # 2. Assert F_obs exists (New Requirement)
+    f_obs_id = "global_f_obs"
+    assert f_obs_id in graph.nodes
+    f_obs = graph.nodes[f_obs_id]
+    assert isinstance(f_obs, ObservabilityNode)
 
-    # 2. Define Environment and Build Physical Graph
-    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
-    builder = Builder()
-    physical_graph = builder.build(graph_ir, environment=env)
-
-    # Verify D_res exists and was configured by the environment
-    assert "global_res_gpu" in physical_graph.nodes
-    d_res = physical_graph.nodes["global_res_gpu"]
-    assert d_res.initial_tokens == 1
-
-    # 3. Setup VM
-    memory = VolatileMemory()
+    # 3. Assert Connection: D_life -> F_obs
+    obs_channels = [
+        c for c in graph.channels 
+        if c.source_node_id == "global_d_life" and c.target_node_id == f_obs_id
+    ]
+    assert len(obs_channels) == 1
+    channel = obs_channels[0]
+    
+    # 4. Assert Port Mapping
+    # D_life is a DataNode, source_port is typically "out"
+    assert channel.source_port == "out"
+    # F_obs expects input on "event_token" port (per standard_observer signature)
+    assert channel.target_port == "event_token"
 ~~~~~
 
 ### 下一步建议
 
-现在所有的测试都应该通过了，测试套件已恢复到 **GREEN** 状态。我们已经成功完成了 **Phase 4.5 Step 2**。
+当前状态为 **RED**。
+`test_builder_creates_observer_sidecar` 将会失败，因为当前的 `Builder` 只创建了 `D_life`，并没有创建 `F_obs` 及其连接。
 
-我建议我们立即推进到 **Phase 4.5 Step 3: 补全观测环路 (Complete the Loop)**。这将确保我们物理场的“全息可观测性”不再是断裂的，而是形成一个完整的、从事件产生到外部接收的闭环。如果你同意，我将开始制定该计划。
+下一步，我们将修改 `Builder` 的实现，补全这个缺口，使系统进入 **GREEN** 状态。这将标志着 **Phase 4.5** 的圆满完成。

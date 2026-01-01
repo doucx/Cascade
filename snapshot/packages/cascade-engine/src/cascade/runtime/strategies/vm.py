@@ -4,7 +4,8 @@ from typing import Any, Dict
 
 # --- 核心 VM 和编译器组件 ---
 from cascade.compiler import Frontend, Backend
-from cascade.vm import Reactor, PhysicsExecutor
+from cascade.vm.reactor import Reactor
+from cascade.vm.executors import PhysicsExecutor
 from cascade.spec.topology import BipartiteGraph, ChannelKind
 from cascade.spec.physics import FuncNode, DataNode, EmitterNode, Token, Port
 from cascade.vm.reactor.model import Channel as ReactorChannel

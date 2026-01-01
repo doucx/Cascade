@@ -227,7 +227,6 @@ class _GraphBuilder:
 
         # Populate Symbol Table
         self.symbol_table[task_def.canonical_code_structure_hash] = raw_func
-        self.symbol_table[task_def.canonical_code_structure_hash] = func
 
         current_node_instance_hash = self.hashing_service.compute_node_instance_hash(
             task_def, obj, cast(Dict[str, Any], dep_shims)

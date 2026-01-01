@@ -19,6 +19,7 @@ console = Console()
 
 class Violation:
     """用于存储违规信息的简单数据类。"""
+
     def __init__(self, path: Path, lineno: int, var_name: str):
         self.path = path
         self.lineno = lineno
@@ -37,6 +38,7 @@ class HashNameVisitor(ast.NodeVisitor):
     """
     一个 AST 访问者，用于查找命名不规范的哈希变量。
     """
+
     def __init__(self, file_path: Path):
         self.file_path = file_path
         self.violations: List[Violation] = []
@@ -90,9 +92,10 @@ def main(
     扫描 Python 代码库，查找并报告不符合哈希命名规范 v3.0 的变量。
     """
     all_violations: List[Violation] = []
-    
+
     files_to_scan = [
-        p for p in scan_path.rglob("*.py")
+        p
+        for p in scan_path.rglob("*.py")
         if not any(excluded in p.parts for excluded in exclude_dirs)
     ]
 
@@ -107,10 +110,14 @@ def main(
             except SyntaxError as e:
                 console.print(f"\n[bold red]Error parsing {file_path}: {e}[/bold red]")
             except Exception as e:
-                console.print(f"\n[bold red]Unexpected error with {file_path}: {e}[/bold red]")
+                console.print(
+                    f"\n[bold red]Unexpected error with {file_path}: {e}[/bold red]"
+                )
 
     if not all_violations:
-        console.print("\n[bold green]✅ Success! No hash naming violations found.[/bold green]")
+        console.print(
+            "\n[bold green]✅ Success! No hash naming violations found.[/bold green]"
+        )
         raise typer.Exit(code=0)
 
     console.print(
@@ -119,7 +126,7 @@ def main(
 
     # 按文件路径对违规进行分组
     all_violations.sort(key=lambda v: (v.path, v.lineno))
-    
+
     last_path = None
     for violation in all_violations:
         if violation.path != last_path:
@@ -131,7 +138,9 @@ def main(
                 lines = []
 
         if not lines:
-            console.print(f"  [red]L{violation.lineno}: Could not read file content.[/red]")
+            console.print(
+                f"  [red]L{violation.lineno}: Could not read file content.[/red]"
+            )
             continue
 
         console.print(

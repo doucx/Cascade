@@ -75,7 +75,9 @@ class _TopologyBuilder:
         for k, val in node_ir.kwargs.items():
             self._process_literal(f_node, k, val)
 
-        current_data_slot_hash = self._compute_data_slot_hash(current_node_instance_hash, "result")
+        current_data_slot_hash = self._compute_data_slot_hash(
+            current_node_instance_hash, "result"
+        )
         self._func_output_map[current_node_instance_hash] = current_data_slot_hash
 
         d_node = PhysicsDataNode(
@@ -117,7 +119,9 @@ class _TopologyBuilder:
             current_target_instance_hash = edge.target_node_instance_hash
             arg_name = edge.target_arg
 
-            current_source_slot_hash = self._func_output_map.get(current_source_instance_hash)
+            current_source_slot_hash = self._func_output_map.get(
+                current_source_instance_hash
+            )
 
             if not current_source_slot_hash:
                 raise RuntimeError(
@@ -202,7 +206,9 @@ class _TopologyBuilder:
         # 2. Create Termination Emitter Node and its input DataNode
         current_term_emitter_hash = self._compute_synthetic_hash("term_emitter")
         # The signal comes FROM the result emitter
-        current_signal_slot_hash = self._compute_data_slot_hash(current_result_emitter_hash, "signal")
+        current_signal_slot_hash = self._compute_data_slot_hash(
+            current_result_emitter_hash, "signal"
+        )
 
         signal_data_node = PhysicsDataNode(
             current_data_slot_hash=current_signal_slot_hash,
@@ -234,7 +240,9 @@ class _TopologyBuilder:
         raw = f"const:{repr(value)}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def _compute_data_slot_hash(self, current_producer_instance_hash: str, port: str) -> str:
+    def _compute_data_slot_hash(
+        self, current_producer_instance_hash: str, port: str
+    ) -> str:
         raw = f"{current_producer_instance_hash}:{port}"
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 

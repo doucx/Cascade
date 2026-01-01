@@ -95,7 +95,7 @@ class Reactor:
             await self._activity_signal.wait()
             self._activity_signal.clear()
             print("[Reactor.run] Woke up from activity signal.")
-        
+
         print("[Reactor.run] Run loop stopped.")
 
     def stop(self):

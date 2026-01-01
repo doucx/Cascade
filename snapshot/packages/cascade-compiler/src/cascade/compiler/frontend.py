@@ -108,12 +108,16 @@ class _GraphBuilder:
         for arg in obj.args:
             if isinstance(arg, (LazyResult, MappedLazyResult)):
                 current_dep_instance_hash = self._visit(arg)
-                dep_shims[arg._uuid] = NodeIDShim(current_node_instance_hash=current_dep_instance_hash)
+                dep_shims[arg._uuid] = NodeIDShim(
+                    current_node_instance_hash=current_dep_instance_hash
+                )
 
         for val in obj.kwargs.values():
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 current_dep_instance_hash = self._visit(val)
-                dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=current_dep_instance_hash)
+                dep_shims[val._uuid] = NodeIDShim(
+                    current_node_instance_hash=current_dep_instance_hash
+                )
 
         if obj._condition:
             if isinstance(obj._condition, LazyResult):
@@ -216,7 +220,9 @@ class _GraphBuilder:
         for val in obj.mapping_kwargs.values():
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 current_dep_instance_hash = self._visit(val)
-                dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=current_dep_instance_hash)
+                dep_shims[val._uuid] = NodeIDShim(
+                    current_node_instance_hash=current_dep_instance_hash
+                )
 
         task_def = self.analyzer.analyze(obj.factory)
 

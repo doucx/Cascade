@@ -186,9 +186,9 @@ def test_compile_diamond_dependency_fan_out():
     current_c_input_slot_hash = func_c.inputs["dep_c"]
 
     # Critical: They MUST be the same DataNode (Structural Sharing)
-    assert (
-        current_b_input_slot_hash == current_c_input_slot_hash
-    ), "Fan-out should reuse the same source DataNode"
+    assert current_b_input_slot_hash == current_c_input_slot_hash, (
+        "Fan-out should reuse the same source DataNode"
+    )
 
     # Verify that DataNode is produced by A
     data_node = topology.data_nodes[current_b_input_slot_hash]

@@ -1,99 +1,69 @@
-好的，我已收到你的指示。问题明确，解决方案清晰。我将使用 `write_file` 指令来修正 `test_reactor_emits_result_to_sink` 函数，使其不再依赖 `event_loop` fixture。
+好的，我们已经完成了 `PhysicsExecutor` 的实现、`TerminatorNode` 的废除以及测试的适配。现在我们将这些变更作为一个逻辑完备的单元提交。
 
-## [WIP] fix(vm): 修复 `test_result_emission.py` 的 `event_loop` fixture 依赖
+## [COMMIT] feat(vm): Implement PhysicsExecutor and decouple lifecycle from Reactor
 
 ### 用户需求
-根据提供的错误信息和修正方案，修改 `packages/cascade-vm/tests/reactor/test_result_emission.py` 文件中的 `test_reactor_emits_result_to_sink` 函数，移除对 `event_loop` fixture 的依赖。
+完成路线图阶段 5.B，包括创建原生物理执行器、废除硬编码的终止节点，并验证基于外部控制的生命周期模型。
 
 ### 评论
-这个修复是必要的，因为测试环境可能未提供 `event_loop` fixture。通过使用 `asyncio.get_running_loop().create_future()`，我们能直接获取当前正在运行的事件循环并创建 future，从而使测试在更广泛的 `pytest-asyncio` 配置下（或不依赖特定 fixture 的情况下）运行。这增加了测试的健壮性和可移植性。
+这是 Cascade 架构演进中的一个里程碑。通过这一系列修改，我们成功地将 `Reactor` 从一个受限的任务执行器转变为一个通用的、纯粹的物理引擎。`PhysicsExecutor` 的引入实现了执行逻辑的解耦，而 `TerminatorNode` 的废除则实现了生命周期策略的控制反转。这为后续 5.C 阶段的编译器集成和 `VMExecutionStrategy` 的重构铺平了道路，使系统更具扩展性和鲁棒性。
 
 ### 目标
-1.  从 `test_reactor_emits_result_to_sink` 函数签名中移除 `event_loop` 参数。
-2.  将 `event_loop.create_future()` 的调用修改为 `asyncio.get_running_loop().create_future()`。
+1.  提交 `PhysicsExecutor` 及其测试用例。
+2.  提交对 `TerminatorNode` 的移除（包括 Spec 和 Reactor 逻辑）。
+3.  提交适配后的 `EmitterNode` 生命周期测试。
 
 ### 基本原理
-`pytest-asyncio` 插件在执行 `async` 测试函数时，会自动设置一个事件循环。因此，直接从 `asyncio.get_running_loop()` 获取循环是可靠且标准的做法，避免了对 `event_loop` fixture 的显式依赖。
+我们遵循“高保真、低耦合”的设计原则。将执行器和生命周期控制从引擎核心中剥离，不仅简化了核心逻辑，还使得引擎可以支持更多样化的执行场景（如分布式执行、无限循环流等）。在 Git 提交中，这些相关的修改应作为一个整体被记录，以保持项目历史的逻辑完整性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high
-#comp/tests #scope/dx
-#ai/instruct
-#task/domain/testing #task/object/asyncio-test-fix #task/action/test-adaptation
-#task/state/continue
+#intent/build #intent/refine #intent/tooling #flow/ready #priority/high 
+#comp/engine #comp/spec #comp/tests #concept/executor #concept/state #scope/core 
+#ai/instruct 
+#task/domain/vm #task/object/physics-executor #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `test_result_emission.py` 文件
+#### Acts 1: 提交变更
 
-我们将修改 `test_reactor_emits_result_to_sink` 函数的签名和内部对 `event_loop` 的引用。
+我们将所有涉及物理模型简化、执行器实现以及测试适配的文件添加到暂存区，并执行提交。
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-spec/src/cascade/spec/physics.py
+packages/cascade-spec/src/cascade/spec/topology.py
+packages/cascade-vm/src/cascade/vm/__init__.py
+packages/cascade-vm/src/cascade/vm/executors/__init__.py
+packages/cascade-vm/src/cascade/vm/executors/physics.py
+packages/cascade-vm/src/cascade/vm/reactor/core.py
 packages/cascade-vm/tests/reactor/test_result_emission.py
+packages/cascade-vm/tests/unit/executors/test_physics.py
 ~~~~~
-~~~~~python
-import pytest
-import asyncio
-from unittest.mock import AsyncMock
 
-from cascade.spec.physics import DataNode, Token, Port, EmitterNode
-from cascade.vm.reactor import Reactor, TokenGenerated
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(vm): Implement PhysicsExecutor and decouple lifecycle from Reactor
 
-@pytest.mark.asyncio
-async def test_reactor_emits_result_to_sink():
-    """
-    Verifies that an EmitterNode correctly pushes data to an external sink,
-    and that the Reactor can be gracefully stopped by an external controller
-    after the emission occurs.
-    
-    This test validates the decoupled lifecycle model.
-    """
-    # 1. Setup simplified topology: D_in -> Emitter
-    d_in = DataNode(name="result_slot")
-    emitter = EmitterNode(name="emit", sink_id="main_output")
-    emitter.add_input(Port(name="data", source=d_in))
-    
-    # 2. Setup Reactor and Mock Executor
-    mock_executor = AsyncMock()
-    reactor = Reactor(executor=mock_executor)
-    reactor.register_node(d_in)
-    reactor.register_node(emitter)
-    
-    # 3. Register Sink with a Future for synchronization
-    # The Future acts as the signal from the Reactor to the external world
-    result_future = asyncio.get_running_loop().create_future()
-    reactor.register_sink("main_output", result_future.set_result)
+This commit completes Phase 5.B of the engine refactoring roadmap.
 
-    # 4. Start Reactor in a background task
-    run_task = asyncio.create_task(reactor.run())
-    
-    # 5. Inject Initial Data to trigger the Emitter
-    reactor.push_event(TokenGenerated(node=d_in, token=Token("Hello World")))
-    
-    # 6. Wait for the core work to be done (result emitted)
-    # This is the key synchronization point.
-    try:
-        emitted_result = await asyncio.wait_for(result_future, timeout=1.0)
-    except asyncio.TimeoutError:
-        # If timeout, it means the Emitter never fired.
-        reactor.stop()
-        await run_task
-        pytest.fail("Sink was never called. EmitterNode logic is likely broken.")
-    
-    # 7. Assert the emitted result
-    assert emitted_result == "Hello World"
+Key changes:
+1.  **PhysicsExecutor:** Introduced a native executor for the physics-based VM. It bridges the Reactor and the symbol table, handling both sync and async function execution and error reporting.
+2.  **Lifecycle Decoupling:** Abolished 'TerminatorNode' and 'PhysicsTerminatorNode' from the core specifications and Reactor logic. The Reactor no longer has internal knowledge of "termination".
+3.  **Inversion of Control:** Lifecycle management is now an external strategy. The Reactor only emits results via EmitterNodes, and external controllers (like VMExecutionStrategy or tests) are responsible for stopping the reactor loop.
+4.  **Test Adaptation:** Updated existing tests to reflect the new decoupled model, using explicit external control signals (asyncio.Future and reactor.stop()).
 
-    # 8. Explicitly stop the reactor (External Lifecycle Control)
-    reactor.stop()
-    
-    # 9. Await the run task to ensure it shut down cleanly
-    await run_task
+This transition moves Cascade towards a purer bipartite graph execution model, where control flow is strictly a byproduct of topology and token routing.
 ~~~~~
 
 ### 下一步建议
-此修复解决了 `event_loop` fixture 的依赖问题。现在，我们应该能够通过所有测试，再次验证 `EmitterNode` 在新的解耦架构下的行为。
+我们已经完成了底层物理执行器和生命周期模型的清理。接下来的核心任务是 **阶段 5.C：编译器与策略层的最终集成**。
 
-根据路线图，我们现在准备好进入 **阶段 5.C：编译器与策略层的最终集成**。第一步将是 **阶段 5.C.1：[Compiler] 编译器后端支持信令与生命周期注入**。我将准备一个计划，修改编译器后端，使其能够自动生成包含结果发射器 (`EmitterNode`) 和终止信号发射器 (`EmitterNode` 链式连接，模拟旧的终止行为) 的自治计算图。
+具体步骤如下：
+1.  **阶段 5.C.1**: 修改 `cascade-compiler`。更新 `Backend` 以支持生成符合新规范的 `EmitterNode` 拓扑。
+2.  **阶段 5.C.2**: 重写 `VMExecutionStrategy`。将其从旧的 `VirtualMachine` 切换到新的 `Reactor` + `PhysicsExecutor` 组合。
+
+我建议立即开始 **阶段 5.C.1** 的编译器适配工作。如果你准备好了，请告知。

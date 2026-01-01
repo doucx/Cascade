@@ -4,24 +4,24 @@ from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
-from cascade.spec.jump import Jump
 
 pytestmark = pytest.mark.skip("Primitives not yet aligned with scorched earth refactor")
+
 
 @pytest.mark.asyncio
 async def test_vm_strategy_handles_explicit_jump_loop():
     """
     Integration Test: VM Strategy TCO Support
-    
-    Verifies that VMExecutionStrategy correctly interprets cs.Jump signals returned 
+
+    Verifies that VMExecutionStrategy correctly interprets cs.Jump signals returned
     by tasks, implementing a "Trampoline" or Loop at the strategy level.
-    
+
     Scenario:
     - A 'counter' task decrements a value.
     - If val > 0: Returns Jump("continue", val-1)
     - If val <= 0: Returns "done"
     """
-    
+
     # 1. Define the Task
     @cs.task
     def counter(val: int):
@@ -33,13 +33,15 @@ async def test_vm_strategy_handles_explicit_jump_loop():
     # Initial state: val = 3
     # Logic: 3 -> Jump(2) -> 2 -> Jump(1) -> 1 -> Jump(0) -> "done"
     start_node = counter(3)
-    
+
     # 3. Define Routing Logic
     # We map the "continue" key back to the counter task itself (recursion)
     # Note: In standard Cascade, we bind the selector to the node.
-    jump_selector = cs.select_jump({
-        "continue": start_node, 
-    })
+    jump_selector = cs.select_jump(
+        {
+            "continue": start_node,
+        }
+    )
     cs.bind(start_node, jump_selector)
 
     # 4. Setup Engine
@@ -59,14 +61,16 @@ async def test_vm_strategy_handles_explicit_jump_loop():
     # If TCO is missing (Current State), we likely get the first Jump object returned by counter(3).
     assert result == "done", f"Expected 'done', got {result}"
 
+
 @pytest.mark.asyncio
 async def test_vm_strategy_handles_jump_with_data_passing():
     """
     Integration Test: Data Passing in Jumps
-    
-    Verifies that data payload in Jump(target, data) is correctly applied 
+
+    Verifies that data payload in Jump(target, data) is correctly applied
     as input overrides for the next iteration.
     """
+
     @cs.task
     def accumulator(acc: int, limit: int):
         if acc < limit:
@@ -75,10 +79,8 @@ async def test_vm_strategy_handles_jump_with_data_passing():
         return acc
 
     node = accumulator(acc=0, limit=3)
-    
-    selector = cs.select_jump({
-        "next": node
-    })
+
+    selector = cs.select_jump({"next": node})
     cs.bind(node, selector)
 
     engine = Engine(
@@ -89,5 +91,5 @@ async def test_vm_strategy_handles_jump_with_data_passing():
 
     # Should loop: 0 -> 1 -> 2 -> 3 (stop)
     result = await engine.run(node, use_vm=True)
-    
+
     assert result == 3

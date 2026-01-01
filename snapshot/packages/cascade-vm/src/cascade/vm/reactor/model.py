@@ -9,6 +9,7 @@ class Channel:
     Represents a directed connection from a FuncNode output port to a DataNode.
     Includes routing logic (tag filtering) and physical kind.
     """
+
     source: FuncNode
     target: DataNode
     output_name: str

@@ -1,6 +1,4 @@
 import pytest
-from dataclasses import is_dataclass
-from typing import Dict, Callable
 
 # 这些导入在 RED 阶段可能会失败，或者在实例化时报错
 from cascade.spec.blueprint import Call, MapCall, Register

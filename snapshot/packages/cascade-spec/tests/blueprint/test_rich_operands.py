@@ -1,6 +1,13 @@
 import pytest
 from dataclasses import is_dataclass
-from cascade.spec.blueprint import Call, Register, Literal, ContextOperand, ResourceOperand
+from cascade.spec.blueprint import (
+    Call,
+    Register,
+    Literal,
+    ContextOperand,
+    ResourceOperand,
+)
+
 
 def test_resource_operand_structure():
     """
@@ -15,6 +22,7 @@ def test_resource_operand_structure():
 
     assert is_dataclass(op)
     assert op.name == "db_connection"
+
 
 def test_context_operand_structure():
     """
@@ -31,6 +39,7 @@ def test_context_operand_structure():
     assert op.scope == "params"
     assert op.key == "env_name"
 
+
 def test_call_instruction_accepts_polymorphic_operands():
     """
     验证 Call 指令的 args/kwargs 可以接受新的 Operand 类型。
@@ -38,14 +47,10 @@ def test_call_instruction_accepts_polymorphic_operands():
     instr = Call(
         output=Register(0),
         task_name="test_task",
-        args=[
-            Literal(1), 
-            ResourceOperand("db"), 
-            ContextOperand("params", "timeout")
-        ],
+        args=[Literal(1), ResourceOperand("db"), ContextOperand("params", "timeout")],
         kwargs={},
-        structure_hash="hash_abc"
+        structure_hash="hash_abc",
     )
-    
+
     assert isinstance(instr.args[1], ResourceOperand)
     assert isinstance(instr.args[2], ContextOperand)

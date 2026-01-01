@@ -141,8 +141,11 @@ def test_unregistered_resource_raises_error():
     def task_needs_unregistered(conn=cs.inject("non_existent_db")):
         pass
 
-    with pytest.raises(NameError, match="Resource 'non_existent_db' is required but not registered"):
+    with pytest.raises(
+        NameError, match="Resource 'non_existent_db' is required but not registered"
+    ):
         import asyncio
+
         asyncio.run(engine.run(task_needs_unregistered()))
 
 

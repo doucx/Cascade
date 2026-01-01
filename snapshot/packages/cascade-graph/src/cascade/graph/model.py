@@ -63,7 +63,7 @@ class TaskNode(Node):
 
     # The actual python executable object.
     _callable: Optional[Callable] = None
-    
+
     # Optimization flag
     has_complex_inputs: bool = False
 
@@ -98,7 +98,7 @@ class ParamNode(TaskNode):
 
     # Optimization flag, required for consistent interface
     has_complex_inputs: bool = False
-    
+
     # Inherits callable_obj property from TaskNode
 
 

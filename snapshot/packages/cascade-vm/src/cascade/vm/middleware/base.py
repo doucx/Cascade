@@ -14,19 +14,19 @@ class ExecutionContext:
     """
     Carries the state of a single instruction execution through the middleware pipeline.
     """
+
     instruction: "Instruction"
     frame: "Frame"
     symbol_table: Dict[str, Callable]
-    
+
     # Resolvable inputs. Middleware can modify these in-place.
     # The pipeline starts with these populated from the instruction's operands.
     resolved_args: List[Any] = field(default_factory=list)
     resolved_kwargs: Dict[str, Any] = field(default_factory=dict)
-    
+
     # Shared storage for middlewares to pass data down the line (e.g. dynamic constraints)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 class Middleware(Protocol):
-    async def handle(self, ctx: ExecutionContext, next_handler: NextHandler) -> Any:
-        ...
+    async def handle(self, ctx: ExecutionContext, next_handler: NextHandler) -> Any: ...

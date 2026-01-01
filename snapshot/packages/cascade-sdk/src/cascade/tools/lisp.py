@@ -30,7 +30,9 @@ class LispTranspiler:
         # 3. Identify shared nodes and assign names
         name_counts = {}
         # Sort nodes by ID for deterministic naming
-        sorted_nodes = sorted(self.graph.nodes, key=lambda n: n.current_node_instance_hash)
+        sorted_nodes = sorted(
+            self.graph.nodes, key=lambda n: n.current_node_instance_hash
+        )
 
         for node in sorted_nodes:
             # Nodes referenced more than once OR nodes that are used as Router selectors
@@ -38,12 +40,17 @@ class LispTranspiler:
             is_router_selector = any(
                 e.router
                 and e.router.selector._uuid in self.instance_map
-                and self.instance_map[e.router.selector._uuid].current_node_instance_hash
+                and self.instance_map[
+                    e.router.selector._uuid
+                ].current_node_instance_hash
                 == node.current_node_instance_hash
                 for e in self.graph.edges
             )
 
-            if self.ref_counts[node.current_node_instance_hash] > 1 or is_router_selector:
+            if (
+                self.ref_counts[node.current_node_instance_hash] > 1
+                or is_router_selector
+            ):
                 self.shared_nodes.add(node.current_node_instance_hash)
                 base_name = self._sanitize_name(node.name)
                 count = name_counts.get(base_name, 0) + 1
@@ -52,7 +59,9 @@ class LispTranspiler:
                 if count == 1:
                     self.node_var_names[node.current_node_instance_hash] = base_name
                 else:
-                    self.node_var_names[node.current_node_instance_hash] = f"{base_name}-{count}"
+                    self.node_var_names[node.current_node_instance_hash] = (
+                        f"{base_name}-{count}"
+                    )
 
     def _sanitize_name(self, name: str) -> str:
         if not name:
@@ -62,7 +71,9 @@ class LispTranspiler:
     def transpile(self, target_node: Node) -> str:
         # 1. Identify relevant shared nodes (transitive dependencies of target)
         deps = self._get_transitive_deps(target_node)
-        shared_in_scope = [n for n in deps if n.current_node_instance_hash in self.shared_nodes]
+        shared_in_scope = [
+            n for n in deps if n.current_node_instance_hash in self.shared_nodes
+        ]
 
         # 2. Topological Sort for let* order
         sorted_shared = self._topo_sort(shared_in_scope)
@@ -90,16 +101,16 @@ class LispTranspiler:
         from cascade.graph.model import MapNode
 
         # Function Name
-        if isinstance(node, MapNode): 
-            func_name = self._sanitize_name(node.definition.name) 
-            parts.append(f"map {func_name}") 
+        if isinstance(node, MapNode):
+            func_name = self._sanitize_name(node.definition.name)
+            parts.append(f"map {func_name}")
         elif node.name == "_get_param_value":
             # Correctly identify Param nodes by their callable's name, not their class.
             # The parameter name is reliably stored in input_bindings.
             p_name = node.input_bindings.get("name", "unknown")
             return f'(param "{p_name}")'
-        else: 
-            func_name = self._sanitize_name(node.name) 
+        else:
+            func_name = self._sanitize_name(node.name)
             parts.append(func_name)
 
         # Merge Bindings and Edges
@@ -259,7 +270,9 @@ class LispTranspiler:
                 and edge.source.current_node_instance_hash in node_set
             ):
                 # Target depends on Source
-                adj[edge.target.current_node_instance_hash].add(edge.source.current_node_instance_hash)
+                adj[edge.target.current_node_instance_hash].add(
+                    edge.source.current_node_instance_hash
+                )
 
         result = []
         visited = set()

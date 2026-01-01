@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from cascade.spec.blueprint import Blueprint, Call, MapCall, Register, Literal
+from cascade.spec.blueprint import Blueprint, MapCall, Register, Literal
 from cascade.vm import VirtualMachine
 
 # --- Helpers ---

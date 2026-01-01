@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Dict, List, Optional
+from cascade.spec.topology import ChannelKind
 
 
 @dataclass
@@ -8,6 +9,7 @@ class Token:
     """
     The atomic carrier of information in the network.
     """
+
     payload: Any
     tag: str = "default"
     metadata: Dict[str, Any] = field(default_factory=dict)
@@ -17,7 +19,8 @@ class AccessPolicy(Enum):
     """
     Defines behavior when writing to a full DataNode.
     """
-    REJECT = auto()     # Raise an error (Blocking/Safety)
+
+    REJECT = auto()  # Raise an error (Blocking/Safety)
     OVERWRITE = auto()  # Overwrite old data (Register/Streaming)
 
 
@@ -25,11 +28,12 @@ class DataNode:
     """
     Stateful container for Tokens. Represents the 'Noun' in the physics model.
     """
+
     def __init__(
-        self, 
-        name: str, 
-        capacity: int = 1, 
-        policy: AccessPolicy = AccessPolicy.OVERWRITE
+        self,
+        name: str,
+        capacity: int = 1,
+        policy: AccessPolicy = AccessPolicy.OVERWRITE,
     ):
         self.name = name
         self.capacity = capacity
@@ -49,17 +53,19 @@ class DataNode:
 
     def put(self, token: Token) -> None:
         """
-        Inject a token into the node. 
+        Inject a token into the node.
         Respects capacity and access policy.
         """
         if len(self._buffer) >= self.capacity:
             if self.policy == AccessPolicy.REJECT:
-                raise BufferError(f"DataNode '{self.name}' is full (capacity={self.capacity})")
+                raise BufferError(
+                    f"DataNode '{self.name}' is full (capacity={self.capacity})"
+                )
             elif self.policy == AccessPolicy.OVERWRITE:
                 # Make room by dropping oldest elements
                 while len(self._buffer) >= self.capacity:
                     self._buffer.pop(0)
-        
+
         self._buffer.append(token)
 
     def take(self) -> Optional[Token]:
@@ -71,14 +77,12 @@ class DataNode:
         return self._buffer.pop(0)
 
 
-from cascade.spec.topology import ChannelKind
-
-
 @dataclass
 class Port:
     """
     Connection point on a FuncNode, representing a dependency.
     """
+
     name: str
     kind: ChannelKind = ChannelKind.DATA
     source: Optional[DataNode] = None
@@ -89,10 +93,9 @@ class FuncNode:
     """
     Stateless transformer. Represents the 'Verb' in the physics model.
     """
+
     def __init__(
-        self, 
-        name: str, 
-        resource_requirements: Optional[Dict[str, Any]] = None
+        self, name: str, resource_requirements: Optional[Dict[str, Any]] = None
     ):
         self.name = name
         self.resource_requirements = resource_requirements or {}
@@ -148,11 +151,12 @@ class EmitterNode(FuncNode):
     Runtime representation of an emission point.
     When fired, it pushes the payload of its input token to a registered Sink.
     """
+
     def __init__(
-        self, 
-        name: str, 
+        self,
+        name: str,
         sink_id: str,
-        resource_requirements: Optional[Dict[str, Any]] = None
+        resource_requirements: Optional[Dict[str, Any]] = None,
     ):
         super().__init__(name, resource_requirements)
         self.sink_id = sink_id

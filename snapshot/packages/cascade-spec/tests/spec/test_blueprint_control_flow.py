@@ -1,6 +1,6 @@
-import pytest
 from dataclasses import is_dataclass
 from cascade.spec.blueprint import Instruction, Jump, JumpIfFalse, Register
+
 
 def test_control_flow_instructions_structure():
     """

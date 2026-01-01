@@ -9,6 +9,7 @@ from cascade.vm.reactor.events import ExecutionFinished
 
 # --- Mocks and Fixtures ---
 
+
 @pytest.fixture
 def mock_reactor():
     """A mock reactor with a push_event method."""
@@ -16,19 +17,21 @@ def mock_reactor():
     reactor.push_event = MagicMock()
     return reactor
 
+
 @pytest.fixture
 def mock_symbol_table():
     """A mock symbol table mapping node names to callables."""
+
     def sync_add(a, b):
         return a + b
-    
+
     async def async_add(a, b):
         await asyncio.sleep(0)
         return a + b
-        
+
     def sync_fail(a, b):
         raise ValueError("Sync failure")
-        
+
     async def async_fail(a, b):
         raise ValueError("Async failure")
 
@@ -39,7 +42,9 @@ def mock_symbol_table():
         "async_fail_hash": async_fail,
     }
 
+
 # --- Test Cases ---
+
 
 @pytest.mark.asyncio
 async def test_physics_executor_submit_sync_task(mock_reactor, mock_symbol_table):
@@ -49,12 +54,9 @@ async def test_physics_executor_submit_sync_task(mock_reactor, mock_symbol_table
     """
     # 1. Setup
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
-    
-    node = FuncNode(name="sync_add_hash") # Using name as hash for simplicity in test
-    inputs = {
-        "a": Token(payload=10),
-        "b": Token(payload=20)
-    }
+
+    node = FuncNode(name="sync_add_hash")  # Using name as hash for simplicity in test
+    inputs = {"a": Token(payload=10), "b": Token(payload=20)}
 
     # 2. Action
     await executor.submit(node, inputs)
@@ -67,7 +69,7 @@ async def test_physics_executor_submit_sync_task(mock_reactor, mock_symbol_table
     assert isinstance(event, ExecutionFinished)
     assert event.node == node
     assert event.error is None
-    
+
     # The result should be a new Token
     result_token = event.outputs.get("result")
     assert isinstance(result_token, Token)
@@ -81,7 +83,7 @@ async def test_physics_executor_submit_async_task(mock_reactor, mock_symbol_tabl
     Tests that the executor can correctly execute an asynchronous task.
     """
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
-    
+
     node = FuncNode(name="async_add_hash")
     inputs = {"a": Token(5), "b": Token(5)}
 
@@ -89,8 +91,9 @@ async def test_physics_executor_submit_async_task(mock_reactor, mock_symbol_tabl
 
     mock_reactor.push_event.assert_called_once()
     event = mock_reactor.push_event.call_args[0][0]
-    
+
     assert event.outputs["result"].payload == 10
+
 
 @pytest.mark.asyncio
 async def test_physics_executor_handles_sync_failure(mock_reactor, mock_symbol_table):
@@ -99,7 +102,7 @@ async def test_physics_executor_handles_sync_failure(mock_reactor, mock_symbol_t
     error is pushed to the reactor.
     """
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
-    
+
     node = FuncNode(name="sync_fail_hash")
     inputs = {"a": Token(1), "b": Token(1)}
 
@@ -112,7 +115,8 @@ async def test_physics_executor_handles_sync_failure(mock_reactor, mock_symbol_t
     assert event.node == node
     assert isinstance(event.error, ValueError)
     assert str(event.error) == "Sync failure"
-    assert not event.outputs # No output on failure
+    assert not event.outputs  # No output on failure
+
 
 @pytest.mark.asyncio
 async def test_physics_executor_handles_async_failure(mock_reactor, mock_symbol_table):
@@ -120,7 +124,7 @@ async def test_physics_executor_handles_async_failure(mock_reactor, mock_symbol_
     Tests failure handling for asynchronous tasks.
     """
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
-    
+
     node = FuncNode(name="async_fail_hash")
     inputs = {"a": Token(1), "b": Token(1)}
 
@@ -132,20 +136,23 @@ async def test_physics_executor_handles_async_failure(mock_reactor, mock_symbol_
     assert isinstance(event.error, ValueError)
     assert str(event.error) == "Async failure"
 
+
 @pytest.mark.asyncio
-async def test_physics_executor_handles_missing_function(mock_reactor, mock_symbol_table):
+async def test_physics_executor_handles_missing_function(
+    mock_reactor, mock_symbol_table
+):
     """
     Tests that a linking error (function not in symbol table) is reported.
     """
     executor = PhysicsExecutor(reactor=mock_reactor, symbol_table=mock_symbol_table)
-    
+
     node = FuncNode(name="missing_hash")
     inputs = {}
 
     await executor.submit(node, inputs)
-    
+
     mock_reactor.push_event.assert_called_once()
     event = mock_reactor.push_event.call_args[0][0]
-    
+
     assert isinstance(event.error, RuntimeError)
     assert "Linking failed" in str(event.error)

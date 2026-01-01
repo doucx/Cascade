@@ -1,11 +1,16 @@
 import pytest
 from unittest.mock import MagicMock
-import asyncio
-from typing import Any
 
-from cascade.spec.blueprint import Blueprint, Call, Register, Literal, ResourceOperand, ExecutionPolicy, RetryPolicySpec
+from cascade.spec.blueprint import (
+    Blueprint,
+    Call,
+    Register,
+    ResourceOperand,
+    ExecutionPolicy,
+    RetryPolicySpec,
+)
 from cascade.vm import VirtualMachine
-from cascade.vm.middleware import Middleware, ExecutionContext, NextHandler
+from cascade.vm.middleware import ExecutionContext, NextHandler
 
 
 @pytest.mark.asyncio
@@ -28,21 +33,18 @@ async def test_pipeline_execution_order():
 
     # 1. Setup VM with Middlewares
     vm = VirtualMachine()
-    vm.set_middlewares([
-        LoggingMiddleware("A"),
-        LoggingMiddleware("B")
-    ])
+    vm.set_middlewares([LoggingMiddleware("A"), LoggingMiddleware("B")])
 
     # 2. Execute a simple instruction
     func_mock = MagicMock(return_value="core_result")
     symbol_table = {"hash_func": func_mock}
-    
+
     instr = Call(
         output=Register(0),
         task_name="test_task",
-        structure_hash="hash_func", 
-        args=[], 
-        kwargs={}
+        structure_hash="hash_func",
+        args=[],
+        kwargs={},
     )
     bp = Blueprint(instructions=[instr], register_count=1)
 
@@ -59,6 +61,7 @@ async def test_resource_operand_pass_through_frame():
     验证 VM 和 Frame 能够传递原始的 ResourceOperand 给 Middleware，而不是报错。
     核心逻辑不在 Frame 中解析，而是留给 Middleware。
     """
+
     class MockResolverMiddleware:
         async def handle(self, ctx: ExecutionContext, next_handler: NextHandler):
             # 模拟解析：将 ResourceOperand 替换为字符串
@@ -76,14 +79,14 @@ async def test_resource_operand_pass_through_frame():
     vm.set_middlewares([MockResolverMiddleware()])
 
     func_mock = MagicMock(return_value=True)
-    
+
     # Instruction uses ResourceOperand
     instr = Call(
         output=Register(0),
         task_name="db_task",
         structure_hash="hash_db",
-        args=[ResourceOperand("db")], 
-        kwargs={}
+        args=[ResourceOperand("db")],
+        kwargs={},
     )
     bp = Blueprint(instructions=[instr], register_count=1)
 
@@ -98,12 +101,13 @@ async def test_policy_handling_via_middleware():
     """
     验证 Middleware 能够读取 Instruction 上的 Policy 并改变执行流（例如重试）。
     """
+
     class RetryMiddleware:
         async def handle(self, ctx: ExecutionContext, next_handler: NextHandler):
             policy = ctx.instruction.policy
             if not policy or not policy.retry:
                 return await next_handler()
-            
+
             # Simple retry simulation
             attempts = policy.retry.max_attempts
             last_err = None
@@ -120,15 +124,18 @@ async def test_policy_handling_via_middleware():
     vm.set_middlewares([RetryMiddleware()])
 
     # Mock function that fails twice then succeeds
-    func_mock = MagicMock(side_effect=[ValueError("Fail 1"), ValueError("Fail 2"), "Success"])
-    
+    func_mock = MagicMock(
+        side_effect=[ValueError("Fail 1"), ValueError("Fail 2"), "Success"]
+    )
+
     policy = ExecutionPolicy(retry=RetryPolicySpec(max_attempts=3))
     instr = Call(
         output=Register(0),
         task_name="flaky",
         structure_hash="hash_flaky",
         policy=policy,
-        args=[], kwargs={}
+        args=[],
+        kwargs={},
     )
     bp = Blueprint(instructions=[instr], register_count=1)
 

@@ -1,10 +1,10 @@
 import pytest
-import asyncio
 from unittest.mock import AsyncMock
 
 from cascade.spec.physics import DataNode, FuncNode, Token, Port
 from cascade.spec.topology import ChannelKind
 from cascade.vm.reactor import Reactor, TokenGenerated, ExecutionFinished, Channel
+
 
 @pytest.mark.asyncio
 async def test_dual_barrier_activation_waits_for_all_inputs():
@@ -37,9 +37,11 @@ async def test_dual_barrier_activation_waits_for_all_inputs():
     assert f_node.is_ready() is False, "Node should not be ready with only data input"
 
     # 4. Step 2: Inject SIGNAL
-    reactor.push_event(TokenGenerated(node=d_signal, token=Token(None))) # Signal token has no payload
+    reactor.push_event(
+        TokenGenerated(node=d_signal, token=Token(None))
+    )  # Signal token has no payload
     await reactor.step()
-    
+
     # Assertion 2: Executor SHOULD be called now. This is the ultimate proof
     # that is_ready() returned True inside the reactor.step() call.
     mock_executor.submit.assert_called_once()
@@ -65,19 +67,19 @@ async def test_signal_channel_strips_payload():
     f_source = FuncNode(name="source")
     d_target_data = DataNode(name="data_dest")
     d_target_signal = DataNode(name="signal_dest")
-    
+
     # 2. Setup Channels with different kinds from the same source
     data_channel = Channel(
         source=f_source,
         target=d_target_data,
         output_name="result",
-        kind=ChannelKind.DATA
+        kind=ChannelKind.DATA,
     )
     signal_channel = Channel(
         source=f_source,
         target=d_target_signal,
         output_name="result",
-        kind=ChannelKind.SIGNAL
+        kind=ChannelKind.SIGNAL,
     )
 
     # 3. Setup Reactor
@@ -104,4 +106,4 @@ async def test_signal_channel_strips_payload():
     token_in_signal = d_target_signal.peek()
     assert token_in_signal is not None
     assert token_in_signal.payload is None
-    assert token_in_signal.metadata == {"id": 1} # Metadata should be preserved
+    assert token_in_signal.metadata == {"id": 1}  # Metadata should be preserved

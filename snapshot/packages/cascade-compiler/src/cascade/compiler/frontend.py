@@ -1,8 +1,7 @@
 from typing import Any, Dict, List, cast
 from dataclasses import dataclass
 
-from typing import Any, Dict, List, cast, Callable
-from dataclasses import dataclass
+from typing import Callable
 import inspect
 
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -37,7 +36,9 @@ class _GraphBuilder:
         self.nodes: Dict[str, NodeIR] = {}  # Map structural_id -> NodeIR
         self.edges: List[EdgeIR] = []
         self.symbol_table: Dict[str, Callable] = {}
-        self._visited_lazy_uuids: Dict[str, str] = {}  # Map LazyResult.uuid -> structural_id
+        self._visited_lazy_uuids: Dict[
+            str, str
+        ] = {}  # Map LazyResult.uuid -> structural_id
 
         # Services from cascade-graph (reused for stability)
         self.analyzer = ReflectionAnalyzer()
@@ -58,26 +59,30 @@ class _GraphBuilder:
         elif isinstance(obj, LazyResult):
             return self._visit_lazy_result(obj)
         else:
-            raise TypeError(f"Frontend currently only supports LazyResult types, got {type(obj)}")
+            raise TypeError(
+                f"Frontend currently only supports LazyResult types, got {type(obj)}"
+            )
 
     def _extract_policy(self, obj: LazyResult | MappedLazyResult) -> ExecutionPolicy:
         policy = ExecutionPolicy()
-        
+
         # 1. Retry
         if obj._retry_policy:
             policy.retry = RetryPolicySpec(
                 max_attempts=obj._retry_policy.max_attempts,
                 delay=obj._retry_policy.delay,
-                backoff=obj._retry_policy.backoff
+                backoff=obj._retry_policy.backoff,
             )
-            
+
         # 2. Constraints -> Resources
         if obj._constraints and obj._constraints.requirements:
             policy.resources.update(obj._constraints.requirements)
-            
+
         return policy
 
-    def _resolve_injections(self, func: Callable, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+    def _resolve_injections(
+        self, func: Callable, kwargs: Dict[str, Any]
+    ) -> Dict[str, Any]:
         """Looks for Inject markers in defaults and promotes them to explicit kwargs."""
         new_kwargs = kwargs.copy()
         try:
@@ -85,11 +90,13 @@ class _GraphBuilder:
             sig = inspect.signature(func)
             for name, param in sig.parameters.items():
                 if isinstance(param.default, Inject) and name not in new_kwargs:
-                    new_kwargs[name] = InjectionIR(resource_name=param.default.resource_name)
+                    new_kwargs[name] = InjectionIR(
+                        resource_name=param.default.resource_name
+                    )
         except (ValueError, TypeError):
             # Signature inspection failed, possibly not a python function (e.g. C extension)
             pass
-            
+
         return new_kwargs
 
     def _visit_lazy_result(self, obj: LazyResult) -> str:
@@ -107,14 +114,16 @@ class _GraphBuilder:
             if isinstance(val, (LazyResult, MappedLazyResult)):
                 dep_id = self._visit(val)
                 dep_shims[val._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
-        
+
         if obj._condition:
             if isinstance(obj._condition, LazyResult):
                 dep_id = self._visit(obj._condition)
-                dep_shims[obj._condition._uuid] = NodeIDShim(current_node_instance_hash=dep_id)
+                dep_shims[obj._condition._uuid] = NodeIDShim(
+                    current_node_instance_hash=dep_id
+                )
 
         task_def = self.analyzer.analyze(obj.task)
-        
+
         # Populate Symbol Table
         code_hash = task_def.fingerprint["current_code_structure_hash"]
         self.symbol_table[code_hash] = obj.task.func
@@ -125,19 +134,21 @@ class _GraphBuilder:
 
         if node_id not in self.nodes:
             literal_args = [
-                arg for arg in obj.args if not isinstance(arg, (LazyResult, MappedLazyResult))
+                arg
+                for arg in obj.args
+                if not isinstance(arg, (LazyResult, MappedLazyResult))
             ]
-            
+
             # Use raw task mapping, but we might check for Injection objects in args too?
             # cascade usually supports injection in kwargs/defaults.
             # We need to scan obj.kwargs AND merge with signature defaults for Injections.
-            
+
             # 1. Start with explicit kwargs
             raw_kwargs = obj.kwargs.copy()
-            
+
             # 2. Resolve defaults from signature (promote defaults to explicit InjectionIR)
             full_kwargs = self._resolve_injections(obj.task.func, raw_kwargs)
-            
+
             literal_kwargs = {}
             for k, val in full_kwargs.items():
                 if isinstance(val, (LazyResult, MappedLazyResult)):
@@ -151,37 +162,49 @@ class _GraphBuilder:
             policy = self._extract_policy(obj)
 
             node = NodeIR(
-                current_node_instance_hash=node_id, 
-                definition=task_def, 
-                args=literal_args, 
+                current_node_instance_hash=node_id,
+                definition=task_def,
+                args=literal_args,
                 kwargs=literal_kwargs,
-                policy=policy
+                policy=policy,
             )
             self.nodes[node_id] = node
 
         for i, arg in enumerate(obj.args):
             if isinstance(arg, (LazyResult, MappedLazyResult)):
-                self.edges.append(EdgeIR(
-                    source_node_instance_hash=dep_shims[arg._uuid].current_node_instance_hash,
-                    target_node_instance_hash=node_id,
-                    target_arg=str(i)
-                ))
+                self.edges.append(
+                    EdgeIR(
+                        source_node_instance_hash=dep_shims[
+                            arg._uuid
+                        ].current_node_instance_hash,
+                        target_node_instance_hash=node_id,
+                        target_arg=str(i),
+                    )
+                )
 
         for k, val in obj.kwargs.items():
             if isinstance(val, (LazyResult, MappedLazyResult)):
-                self.edges.append(EdgeIR(
-                    source_node_instance_hash=dep_shims[val._uuid].current_node_instance_hash,
-                    target_node_instance_hash=node_id,
-                    target_arg=k
-                ))
-        
+                self.edges.append(
+                    EdgeIR(
+                        source_node_instance_hash=dep_shims[
+                            val._uuid
+                        ].current_node_instance_hash,
+                        target_node_instance_hash=node_id,
+                        target_arg=k,
+                    )
+                )
+
         if obj._condition:
-            self.edges.append(EdgeIR(
-                source_node_instance_hash=dep_shims[obj._condition._uuid].current_node_instance_hash,
-                target_node_instance_hash=node_id,
-                target_arg="_condition",
-                kind=EdgeKind.CONTROL
-            ))
+            self.edges.append(
+                EdgeIR(
+                    source_node_instance_hash=dep_shims[
+                        obj._condition._uuid
+                    ].current_node_instance_hash,
+                    target_node_instance_hash=node_id,
+                    target_arg="_condition",
+                    kind=EdgeKind.CONTROL,
+                )
+            )
 
         self._visited_lazy_uuids[obj._uuid] = node_id
         return node_id
@@ -200,13 +223,13 @@ class _GraphBuilder:
 
         # Populate Symbol Table
         code_hash = task_def.fingerprint["current_code_structure_hash"]
-        
+
         # Ensure we store the raw function, not the Task wrapper
         # The analyzer usually handles extraction, but we need the raw callable for VM
         func = obj.factory
-        if hasattr(func, "func"): # Unwrap Task objects
+        if hasattr(func, "func"):  # Unwrap Task objects
             func = func.func
-            
+
         self.symbol_table[code_hash] = func
 
         node_id = self.hashing_service.compute_node_instance_hash(
@@ -215,23 +238,29 @@ class _GraphBuilder:
 
         if node_id not in self.nodes:
             literal_kwargs = {
-                k: val for k, val in obj.mapping_kwargs.items() if not isinstance(val, (LazyResult, MappedLazyResult))
+                k: val
+                for k, val in obj.mapping_kwargs.items()
+                if not isinstance(val, (LazyResult, MappedLazyResult))
             }
             node = NodeIR(
                 current_node_instance_hash=node_id,
                 definition=task_def,
                 kwargs=literal_kwargs,
-                meta={"is_map": True}
+                meta={"is_map": True},
             )
             self.nodes[node_id] = node
 
         for k, val in obj.mapping_kwargs.items():
             if isinstance(val, (LazyResult, MappedLazyResult)):
-                self.edges.append(EdgeIR(
-                    source_node_instance_hash=dep_shims[val._uuid].current_node_instance_hash,
-                    target_node_instance_hash=node_id,
-                    target_arg=k
-                ))
+                self.edges.append(
+                    EdgeIR(
+                        source_node_instance_hash=dep_shims[
+                            val._uuid
+                        ].current_node_instance_hash,
+                        target_node_instance_hash=node_id,
+                        target_arg=k,
+                    )
+                )
 
         self._visited_lazy_uuids[obj._uuid] = node_id
         return node_id

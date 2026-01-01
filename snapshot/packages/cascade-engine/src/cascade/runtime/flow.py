@@ -28,7 +28,9 @@ class FlowManager:
             if edge.router:
                 selector_node = self._get_node_from_instance(edge.router.selector)
                 if selector_node:
-                    self.routers_by_selector[selector_node.current_node_instance_hash].append(edge)
+                    self.routers_by_selector[
+                        selector_node.current_node_instance_hash
+                    ].append(edge)
 
                 for key, route_result in edge.router.routes.items():
                     route_node = self._get_node_from_instance(route_result)
@@ -97,14 +99,20 @@ class FlowManager:
         self, node: Node, state_backend: StateBackend
     ) -> Optional[str]:
         # 1. Check if already skipped (e.g., by router pruning)
-        if reason := await state_backend.get_skip_reason(node.current_node_instance_hash):
+        if reason := await state_backend.get_skip_reason(
+            node.current_node_instance_hash
+        ):
             return reason
 
         # 2. Condition Check (run_if)
         for edge in self.in_edges[node.current_node_instance_hash]:
             if edge.edge_type == EdgeType.CONDITION:
-                if not await state_backend.has_result(edge.source.current_node_instance_hash):
-                    if await state_backend.get_skip_reason(edge.source.current_node_instance_hash):
+                if not await state_backend.has_result(
+                    edge.source.current_node_instance_hash
+                ):
+                    if await state_backend.get_skip_reason(
+                        edge.source.current_node_instance_hash
+                    ):
                         return "UpstreamSkipped_Condition"
                     return "ConditionMissing"
 
@@ -116,13 +124,16 @@ class FlowManager:
 
             # New explicit check for sequence abortion
             elif edge.edge_type == EdgeType.SEQUENCE:
-                if await state_backend.get_skip_reason(edge.source.current_node_instance_hash):
+                if await state_backend.get_skip_reason(
+                    edge.source.current_node_instance_hash
+                ):
                     return "UpstreamSkipped_Sequence"
 
         # 3. Upstream Skip Propagation
         active_route_key = None
         router_edge = next(
-            (e for e in self.in_edges[node.current_node_instance_hash] if e.router), None
+            (e for e in self.in_edges[node.current_node_instance_hash] if e.router),
+            None,
         )
         if router_edge:
             selector_node = self._get_node_from_instance(router_edge.router.selector)
@@ -134,21 +145,27 @@ class FlowManager:
         for edge in self.in_edges[node.current_node_instance_hash]:
             if edge.edge_type == EdgeType.ROUTER_ROUTE:
                 if active_route_key is not None:
-                    edge_key = self.route_source_map[node.current_node_instance_hash].get(
-                        edge.source.current_node_instance_hash
-                    )
+                    edge_key = self.route_source_map[
+                        node.current_node_instance_hash
+                    ].get(edge.source.current_node_instance_hash)
                     if edge_key != active_route_key:
                         continue
 
-                if await state_backend.get_skip_reason(edge.source.current_node_instance_hash):
+                if await state_backend.get_skip_reason(
+                    edge.source.current_node_instance_hash
+                ):
                     return "UpstreamSkipped_Route"
 
             elif edge.edge_type in (EdgeType.DATA, EdgeType.IMPLICIT):
-                if await state_backend.get_skip_reason(edge.source.current_node_instance_hash):
+                if await state_backend.get_skip_reason(
+                    edge.source.current_node_instance_hash
+                ):
                     # Check for data penetration possibility (for pipelines)
                     can_penetrate = False
                     # Look for inputs to the skipped node (edge.source)
-                    for upstream_edge in self.in_edges[edge.source.current_node_instance_hash]:
+                    for upstream_edge in self.in_edges[
+                        edge.source.current_node_instance_hash
+                    ]:
                         # If the skipped node has a DATA input, and that input has a result...
                         if (
                             upstream_edge.edge_type == EdgeType.DATA
@@ -165,7 +182,9 @@ class FlowManager:
                     # We let the node proceed to execution, where ArgumentResolver will handle it.
 
             elif edge.edge_type == EdgeType.SEQUENCE:
-                if await state_backend.get_skip_reason(edge.source.current_node_instance_hash):
+                if await state_backend.get_skip_reason(
+                    edge.source.current_node_instance_hash
+                ):
                     return "UpstreamSkipped_Sequence"
 
         return None

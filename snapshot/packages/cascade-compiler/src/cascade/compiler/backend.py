@@ -28,20 +28,20 @@ class _TopologyBuilder:
         self._func_nodes: Dict[str, PhysicsFuncNode] = {}
         self._data_nodes: Dict[str, PhysicsDataNode] = {}
         self._channels: List[ChannelDef] = []
-        
+
         # Helper map: FuncNode Hash -> Default Output DataNode Hash
         self._func_output_map: Dict[str, str] = {}
 
     def build(self) -> BipartiteGraph:
         self._initial_values = {}
-        
+
         # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
         for node_ir in self._graph.nodes:
             self._process_node(node_ir)
 
         # Pass 2: Wire Inputs based on standard data Edges
         self._process_data_edges()
-        
+
         # Pass 3: Wire Control Edges (e.g., from .run_if) as SIGNAL channels
         self._process_control_edges()
 
@@ -57,17 +57,17 @@ class _TopologyBuilder:
 
     def _process_node(self, node_ir):
         func_hash = node_ir.current_node_instance_hash
-        
+
         f_node = PhysicsFuncNode(
             current_node_instance_hash=func_hash,
             name=node_ir.definition.name,
-            inputs={} 
+            inputs={},
         )
         self._func_nodes[func_hash] = f_node
 
         for i, val in enumerate(node_ir.args):
             self._process_literal(f_node, str(i), val)
-        
+
         for k, val in node_ir.kwargs.items():
             self._process_literal(f_node, k, val)
 
@@ -77,7 +77,7 @@ class _TopologyBuilder:
         d_node = PhysicsDataNode(
             current_data_slot_hash=data_slot_hash,
             name=f"{node_ir.definition.name}.output",
-            producer_node_instance_hash=func_hash
+            producer_node_instance_hash=func_hash,
         )
         self._data_nodes[data_slot_hash] = d_node
 
@@ -86,22 +86,22 @@ class _TopologyBuilder:
             target_data_slot_hash=data_slot_hash,
             port_name="result",
             tag_filter="default",
-            kind=ChannelKind.DATA  # Explicitly a DATA channel
+            kind=ChannelKind.DATA,  # Explicitly a DATA channel
         )
         self._channels.append(channel)
 
     def _process_literal(self, f_node, arg_name, value):
         const_hash = self._compute_const_hash(value)
-        
+
         if const_hash not in self._data_nodes:
             d_node = PhysicsDataNode(
                 current_data_slot_hash=const_hash,
                 name=f"const_{const_hash[:8]}",
-                producer_node_instance_hash="const"
+                producer_node_instance_hash="const",
             )
             self._data_nodes[const_hash] = d_node
             self._initial_values[const_hash] = value
-            
+
         f_node.inputs[arg_name] = const_hash
 
     def _process_data_edges(self):
@@ -114,9 +114,11 @@ class _TopologyBuilder:
             arg_name = edge.target_arg
 
             source_data_hash = self._func_output_map.get(source_func_hash)
-            
+
             if not source_data_hash:
-                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
+                raise RuntimeError(
+                    f"Source node {source_func_hash} not found in output map"
+                )
 
             target_func_node = self._func_nodes.get(target_func_hash)
             if target_func_node:
@@ -137,10 +139,12 @@ class _TopologyBuilder:
             source_func_hash = edge.source_node_instance_hash
             target_func_hash = edge.target_node_instance_hash
             arg_name = edge.target_arg
-            
+
             target_func_node = self._func_nodes.get(target_func_hash)
             if not target_func_node:
-                raise RuntimeError(f"Target node {target_func_hash} for {edge_kind.name} edge not found")
+                raise RuntimeError(
+                    f"Target node {target_func_hash} for {edge_kind.name} edge not found"
+                )
 
             # A control/jump edge needs a dedicated input slot on the target.
             # If one already exists (from a literal or other edge), we reuse it.
@@ -148,12 +152,14 @@ class _TopologyBuilder:
             if arg_name in target_func_node.inputs:
                 target_data_hash = target_func_node.inputs[arg_name]
             else:
-                target_data_hash = self._compute_data_slot_hash(target_func_hash, f"input_{arg_name}")
+                target_data_hash = self._compute_data_slot_hash(
+                    target_func_hash, f"input_{arg_name}"
+                )
                 if target_data_hash not in self._data_nodes:
                     d_node = PhysicsDataNode(
                         current_data_slot_hash=target_data_hash,
                         name=f"{target_func_node.name}.in.{arg_name}",
-                        producer_node_instance_hash="external"
+                        producer_node_instance_hash="external",
                     )
                     self._data_nodes[target_data_hash] = d_node
                 target_func_node.inputs[arg_name] = target_data_hash
@@ -163,9 +169,9 @@ class _TopologyBuilder:
             channel = ChannelDef(
                 source_node_instance_hash=source_func_hash,
                 target_data_slot_hash=target_data_hash,
-                port_name="result", # Signals/Jumps use the default output port
+                port_name="result",  # Signals/Jumps use the default output port
                 tag_filter=tag,
-                kind=channel_kind
+                kind=channel_kind,
             )
             self._channels.append(channel)
 

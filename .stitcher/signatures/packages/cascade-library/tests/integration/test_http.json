@@ -1,0 +1,14 @@
+{
+  "test_http_get_success": {
+    "baseline_code_signature_text": "async def test_http_get_success(aiohttp_client):",
+    "baseline_code_structure_hash": "59d0f81bde62eac9cb5713c137b0a9cc72b4b5029cd552d09b660c0e5004a711"
+  },
+  "test_http_post_success": {
+    "baseline_code_signature_text": "async def test_http_post_success(aiohttp_client):",
+    "baseline_code_structure_hash": "076526238a206886183ff32e7307b68d4ddadd6066ddd035d468feac5e125c6f"
+  },
+  "test_http_with_template": {
+    "baseline_code_signature_text": "async def test_http_with_template(aiohttp_client):",
+    "baseline_code_structure_hash": "0a07f22c82c0c668ab0036f86ac9138108dcd5dd067ff6719568aa765d6edb91"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "test_template_missing_dependency_install": {
+    "baseline_code_signature_text": "def test_template_missing_dependency_install():",
+    "baseline_code_structure_hash": "d5a7518d8c46b38de00258cf9c2fadc783b780465cf858ff2fae6e9acc43ba50"
+  },
+  "test_template_with_lazy_result": {
+    "baseline_code_signature_text": "def test_template_with_lazy_result():",
+    "baseline_code_structure_hash": "83222db0c7a94839e5c116dc1cb63f124897f7c9f73d17154aba1058a3ba0616"
+  },
+  "test_template_with_literals": {
+    "baseline_code_signature_text": "def test_template_with_literals():",
+    "baseline_code_structure_hash": "f6e9ba5bd3552cc019719878896784be7b39e2573dca5b9a128bdd4a8d72e68a"
+  }
+}

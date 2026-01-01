@@ -1,0 +1,10 @@
+{
+  "test_local_executor_async_execution": {
+    "baseline_code_signature_text": "def test_local_executor_async_execution():",
+    "baseline_code_structure_hash": "0a13f40189fed768fd1f5753831a70d1cb37828e76ad84a64c153c5e0b4f9a99"
+  },
+  "test_local_executor_sync_execution": {
+    "baseline_code_signature_text": "def test_local_executor_sync_execution():",
+    "baseline_code_structure_hash": "311ac654725279629592b059ce73a15d40a7f2104a1249962b41d3d03a7fdc4b"
+  }
+}

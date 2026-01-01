@@ -1,0 +1,6 @@
+{
+  "test_hashing_distinguishes_nested_lazy_results": {
+    "baseline_code_signature_text": "def test_hashing_distinguishes_nested_lazy_results():",
+    "baseline_code_structure_hash": "65a48469415989d7487f6e00f3b9bbeec4432fe1b19d7398d7b64156d19e3926"
+  }
+}

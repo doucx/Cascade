@@ -10,15 +10,12 @@ pytest.importorskip("typer")
 
 
 def test_lisp_transpile_simple_param():
-    """Tests that a standalone Param is correctly transpiled."""
     target = cs.Param("my_param", description="A test parameter")
     lisp_code = to_lisp(target)
     assert lisp_code == '(param "my_param")'
 
 
 def test_lisp_transpile_param_as_dependency():
-    """Tests transpilation when a Param is an input to another task."""
-
     @cs.task
     def process_data(data, scale: int = 1):
         pass
@@ -32,8 +29,6 @@ def test_lisp_transpile_param_as_dependency():
 
 
 def test_lisp_transpile_shared_param_in_let():
-    """Tests that a Param used multiple times is hoisted to a let* block."""
-
     @cs.task
     def task_a(dep):
         pass
@@ -65,8 +60,6 @@ def test_lisp_transpile_shared_param_in_let():
 
 
 def test_lisp_transpile_router_with_param_selector():
-    """Tests a complex case where a Param acts as a router selector."""
-
     @cs.task
     def branch_a():
         pass

@@ -1,0 +1,26 @@
+{
+  "dummy_config_file": {
+    "baseline_code_signature_text": "def dummy_config_file(tmp_path):",
+    "baseline_code_structure_hash": "d6065d9417a9f19bc517fce1cda735b07a26b5ff84f530da4cd972c75e18926e"
+  },
+  "test_load_yaml_provider": {
+    "baseline_code_signature_text": "async def test_load_yaml_provider(dummy_config_file):",
+    "baseline_code_structure_hash": "f4e4260c93debba8cee74c017f419cd335043ac94397738f9735e2156486e0b6"
+  },
+  "test_lookup_invalid_path_raises_type_error": {
+    "baseline_code_signature_text": "async def test_lookup_invalid_path_raises_type_error():",
+    "baseline_code_structure_hash": "d8db89abba4cdd5f057c58b5099175ba80bd0e27b276bc643ca3de4ca3fd19c7"
+  },
+  "test_lookup_missing_key_raises_error": {
+    "baseline_code_signature_text": "async def test_lookup_missing_key_raises_error():",
+    "baseline_code_structure_hash": "3418221b4ecf26bcfdb99ea447a03b912e493b103968a5dcaec2f5952ac1dd4e"
+  },
+  "test_lookup_on_static_dict": {
+    "baseline_code_signature_text": "async def test_lookup_on_static_dict():",
+    "baseline_code_structure_hash": "5793c9403b9cb8783a1522e736ef688a6298f70b1ae6a1e74b9a0e0092b518ef"
+  },
+  "test_lookup_provider_basic": {
+    "baseline_code_signature_text": "async def test_lookup_provider_basic(dummy_config_file):",
+    "baseline_code_structure_hash": "5f014d8f21a3dae5380daabb418c7e99c4d145b0d29c942004e5ce1d4628ffd6"
+  }
+}

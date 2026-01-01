@@ -1,0 +1,18 @@
+{
+  "subflow_file": {
+    "baseline_code_signature_text": "def subflow_file(tmp_path):",
+    "baseline_code_structure_hash": "5a09ce34e61ac13f281ee2ee2cc1ef442e5525c42f87690853cadfffcbe93c69"
+  },
+  "test_subflow_execution": {
+    "baseline_code_signature_text": "async def test_subflow_execution(subflow_file):",
+    "baseline_code_structure_hash": "f46208151014b1c3a54603ca7c568b5372d1c04f3f8b4f420214f70dd24321a4"
+  },
+  "test_subflow_file_not_found": {
+    "baseline_code_signature_text": "async def test_subflow_file_not_found():",
+    "baseline_code_structure_hash": "832b7db59677678078b6a946b3f54a72d0a5d14f85fa54b6fc624274fd7ee702"
+  },
+  "test_subflow_target_not_found": {
+    "baseline_code_signature_text": "async def test_subflow_target_not_found(subflow_file):",
+    "baseline_code_structure_hash": "cea00d0533c647673eae5c84936c183e38eccc2cc5e77e65feb3c18d228d4869"
+  }
+}

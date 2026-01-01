@@ -1,0 +1,22 @@
+{
+  "test_visualize_diamond_graph": {
+    "baseline_code_signature_text": "def test_visualize_diamond_graph():",
+    "baseline_code_structure_hash": "0da329460611582960077538823f64f7cc306c2e26125a97b038784ffd3d2aef"
+  },
+  "test_visualize_iterative_jump_edge": {
+    "baseline_code_signature_text": "def test_visualize_iterative_jump_edge():",
+    "baseline_code_structure_hash": "fa6524d371a4d42b41779f9442f62d94ef33028a685aebed0e105db3518dc875"
+  },
+  "test_visualize_multi_node_jump_edge": {
+    "baseline_code_signature_text": "def test_visualize_multi_node_jump_edge():",
+    "baseline_code_structure_hash": "6d49a32506f9fe9df9d7b4a94833abc21be060c00c6f46588ac103340a468631"
+  },
+  "test_visualize_special_edge_types": {
+    "baseline_code_signature_text": "def test_visualize_special_edge_types():",
+    "baseline_code_structure_hash": "594bcdb0f1fbd04b35992ccc2f76333d60d6431ef968befe92eb50246df87aea"
+  },
+  "test_visualize_with_list_of_lazy_results": {
+    "baseline_code_signature_text": "def test_visualize_with_list_of_lazy_results():",
+    "baseline_code_structure_hash": "0db8794733ad35d82b4f94c7804c0d95054e502d7d8200177cdad27d6554ee11"
+  }
+}

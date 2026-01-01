@@ -1,0 +1,25 @@
+{
+  "FAKE_ADD_RESPONSE": {},
+  "FAKE_CONTENT": {},
+  "TEST_CID": {},
+  "mock_ipfs_add_handler": {
+    "baseline_code_signature_text": "async def mock_ipfs_add_handler(request: web.Request):",
+    "baseline_code_structure_hash": "1b0c9ed284aeae714a94e2dea0b48bac1c6b4885aa2997706109f70ebc1a0536"
+  },
+  "mock_ipfs_cat_handler": {
+    "baseline_code_signature_text": "async def mock_ipfs_cat_handler(request: web.Request):",
+    "baseline_code_structure_hash": "b315f5b9c06529c74ddbe064f4d53eb4ab9e93b121f9bd9c779296fffdda3202"
+  },
+  "mock_ipfs_server": {
+    "baseline_code_signature_text": "async def mock_ipfs_server(aiohttp_client):",
+    "baseline_code_structure_hash": "7046736b7f35cfecb63137b14e05e97f2c2c14614d0cd6adebf2fdfc59436a34"
+  },
+  "test_ipfs_add_provider": {
+    "baseline_code_signature_text": "async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):",
+    "baseline_code_structure_hash": "ee96cab7c1bcd2954c5d079c235c90e3ea4b6a5f75132c5cf39d9f444e1fece6"
+  },
+  "test_ipfs_cat_provider": {
+    "baseline_code_signature_text": "async def test_ipfs_cat_provider(mock_ipfs_server):",
+    "baseline_code_structure_hash": "3cc95ee0a39b71f36713fc871e33fad8d530ddd96612f530aceb91643f046547"
+  }
+}

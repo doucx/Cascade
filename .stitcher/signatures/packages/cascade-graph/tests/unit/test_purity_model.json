@@ -1,0 +1,10 @@
+{
+  "test_impure_tasks_have_unique_identities": {
+    "baseline_code_signature_text": "def test_impure_tasks_have_unique_identities():",
+    "baseline_code_structure_hash": "b97033a089b3b75111b3ddcd17ac8f3db5c949b7e47cd7d35ccbbf095c50a9e9"
+  },
+  "test_pure_tasks_are_deduplicated": {
+    "baseline_code_signature_text": "def test_pure_tasks_are_deduplicated():",
+    "baseline_code_structure_hash": "6050b13cab5ca8125fa6d1d1b804d5ab22de7ab056a29fa97aa5905db0d1c833"
+  }
+}

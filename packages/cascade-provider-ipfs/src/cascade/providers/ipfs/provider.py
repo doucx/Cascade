@@ -40,9 +40,6 @@ class IpfsAddProvider(Provider):
 async def _ipfs_cat_task(
     cid: str, api_base_url: str = "http://127.0.0.1:5001"
 ) -> bytes:
-    """
-    Fetches content from IPFS for a given CID.
-    """
     async with aiohttp.ClientSession() as session:
         url = f"{api_base_url}/api/v0/cat"
         async with session.post(url, params={"arg": cid}) as resp:
@@ -54,9 +51,6 @@ async def _ipfs_cat_task(
 
 @cs.task(name="ipfs_add")
 async def _ipfs_add_task(path: str, api_base_url: str = "http://127.0.0.1:5001") -> str:
-    """
-    Adds a local file to IPFS and returns its CID.
-    """
     form = aiohttp.FormData()
     # Note: This reads the whole file into memory. For large files, a streaming
     # approach would be better, but this simplifies the task implementation.

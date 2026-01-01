@@ -1,0 +1,18 @@
+{
+  "engine": {
+    "baseline_code_signature_text": "def engine(mock_connector):",
+    "baseline_code_structure_hash": "ad0c600ca900f2c05a5ff8373ec2a89904e415a86290498f520a6f120b439b26"
+  },
+  "mock_connector": {
+    "baseline_code_signature_text": "def mock_connector():",
+    "baseline_code_structure_hash": "1d8d2feddb4bdd3b8dd1bb1ed1d4cd4cd008ea52473309cc67285b17d2f658b1"
+  },
+  "test_concurrency_constraint_on_map": {
+    "baseline_code_signature_text": "async def test_concurrency_constraint_on_map(engine, mock_connector):",
+    "baseline_code_structure_hash": "f3c231c3d4fda3aa8001e0aa2b693bc004606e2aeef22130e0e190a987dabb5d"
+  },
+  "test_global_concurrency_limit": {
+    "baseline_code_signature_text": "async def test_global_concurrency_limit(engine, mock_connector):",
+    "baseline_code_structure_hash": "8377c1dd48dabcd69cf42b38f4ad5232155ec77aa6f50cd73557ce0f89f9ee44"
+  }
+}

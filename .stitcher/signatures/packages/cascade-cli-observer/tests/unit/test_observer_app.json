@@ -1,0 +1,26 @@
+{
+  "mock_connector": {
+    "baseline_code_signature_text": "def mock_connector(monkeypatch) -> AsyncMock:",
+    "baseline_code_structure_hash": "8a69db59845d2abb40939e3901c84473f2cc86bb36481ad3429288433d998bd3"
+  },
+  "mock_messaging_bus": {
+    "baseline_code_signature_text": "def mock_messaging_bus(monkeypatch) -> MagicMock:",
+    "baseline_code_structure_hash": "9db3dc61a7a432d2593b52a966c163ffc2a02b9ef3c70de08a3d4d01169455ce"
+  },
+  "test_on_message_handles_task_completed_event": {
+    "baseline_code_signature_text": "async def test_on_message_handles_task_completed_event(mock_messaging_bus):",
+    "baseline_code_structure_hash": "da9156b169f9ae55c1cf3dce01c216b984faddf6f664d0c7f995d52779f08963"
+  },
+  "test_on_message_handles_task_failed_event": {
+    "baseline_code_signature_text": "async def test_on_message_handles_task_failed_event(mock_messaging_bus):",
+    "baseline_code_structure_hash": "bb2f775f251934c961acfc135796b4781698882a9e289ac0ce6b37507c8676ac"
+  },
+  "test_on_message_handles_task_running_event": {
+    "baseline_code_signature_text": "async def test_on_message_handles_task_running_event(mock_messaging_bus):",
+    "baseline_code_structure_hash": "effb8344170757a48b7a38128afc74671bd5edf32556cc2f05bd5368178f004b"
+  },
+  "test_on_message_prints_run_header_only_once": {
+    "baseline_code_signature_text": "async def test_on_message_prints_run_header_only_once(mock_messaging_bus):",
+    "baseline_code_structure_hash": "8c124838874997170082e569cd298fde89dbbbd11969438f37ff3121a3f5ec20"
+  }
+}

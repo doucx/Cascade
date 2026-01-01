@@ -1,0 +1,18 @@
+{
+  "local_bus": {
+    "baseline_code_signature_text": "def local_bus():",
+    "baseline_code_structure_hash": "5386049f6b7a41cce8f0c909ac54e96ee0c99fac3b9af3c67b1319a7064558aa"
+  },
+  "test_bus_connectivity_between_instances": {
+    "baseline_code_signature_text": "async def test_bus_connectivity_between_instances(local_bus):",
+    "baseline_code_structure_hash": "f5797f77a2c9198794d552580884c450d48c9fe6d9171cb4baf0c50d9114d529"
+  },
+  "test_retained_messages": {
+    "baseline_code_signature_text": "async def test_retained_messages(local_bus):",
+    "baseline_code_structure_hash": "655c02da6edef891d46ae2f47619e408e0bbe2134b01d6448195d72ee4806369"
+  },
+  "test_wildcards_and_clearing_retain": {
+    "baseline_code_signature_text": "async def test_wildcards_and_clearing_retain(local_bus):",
+    "baseline_code_structure_hash": "341d3f6a8abdb7dad3255950f468c8ee896e72f3baf727f598d1a3c551c89930"
+  }
+}

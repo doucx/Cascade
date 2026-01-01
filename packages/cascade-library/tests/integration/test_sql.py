@@ -85,9 +85,6 @@ async def test_sql_missing_resource():
 
 
 def test_sql_factory_returns_task_object():
-    """
-    Verify that cs.sql is now a Task object that supports composition.
-    """
     # .map() is a method on the Task object itself
     assert hasattr(cs.sql, "map")
     assert callable(cs.sql.map)
@@ -97,10 +94,6 @@ def test_sql_factory_returns_task_object():
 
 
 def test_sql_lazy_result_supports_policies():
-    """
-    Verify that the result of calling cs.sql(...) is a LazyResult
-    that supports policy chaining.
-    """
     # We don't need to run this, just check the type and methods.
     # A dummy connection is needed to satisfy the signature.
     lazy_result = cs.sql("SELECT 1", conn=cs.inject("dummy_db"))

@@ -5,6 +5,9 @@ from enum import Enum, auto
 from cascade.spec.constraint import ResourceConstraint
 from cascade.spec.ir.models import TaskDef
 
+# We store the ParamSpec here explicitly for type safety
+from cascade.spec.input import ParamSpec
+
 
 class EdgeType(Enum):
     DATA = auto()
@@ -19,8 +22,6 @@ class EdgeType(Enum):
 
 @dataclass
 class Node:
-    """Base class for all nodes in the Cascade graph."""
-
     # Stable identifier for the node instance in the graph.
     structural_id: str
 
@@ -53,14 +54,11 @@ class Node:
 
     @property
     def callable_obj(self) -> Optional[Callable]:
-        """Polymorphic accessor for the executable object."""
         return None
 
 
 @dataclass(eq=False)
 class TaskNode(Node):
-    """Represents a standard executable task."""
-
     # The actual python executable object.
     _callable: Optional[Callable] = None
 
@@ -74,8 +72,6 @@ class TaskNode(Node):
 
 @dataclass(eq=False)
 class MapNode(Node):
-    """Represents a mapped task execution."""
-
     mapping_factory: Optional[Callable] = None
 
     # Optimization flag, required for consistent interface
@@ -89,11 +85,6 @@ class MapNode(Node):
 
 @dataclass(eq=False)
 class ParamNode(TaskNode):
-    """Represents an external parameter injection."""
-
-    # We store the ParamSpec here explicitly for type safety
-    from cascade.spec.input import ParamSpec
-
     param_spec: Optional[ParamSpec] = None
 
     # Optimization flag, required for consistent interface

@@ -1,0 +1,7 @@
+{
+  "runner": {},
+  "test_cli_generator_from_context": {
+    "baseline_code_signature_text": "def test_cli_generator_from_context():",
+    "baseline_code_structure_hash": "55a5dccba20b78f64f1ac183121abce4eab4f82272cf5cb1fd7bf7cd6143d546"
+  }
+}

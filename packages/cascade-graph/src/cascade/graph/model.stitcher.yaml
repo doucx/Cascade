@@ -4,8 +4,13 @@
   Defines the semantic type of a dependency edge.
 "Graph": |-
   A container for nodes and edges representing the workflow topology.
+"MapNode": |-
+  Represents a mapped task execution.
 "Node": |-
-  Represents a node in the computation graph template.
-
-  A Node defines 'what' to execute (the callable) and 'how' to get its arguments
-  (bindings or edges), but it DOES NOT contain the runtime data itself.
+  Base class for all nodes in the Cascade graph.
+"Node.callable_obj": |-
+  Polymorphic accessor for the executable object.
+"ParamNode": |-
+  Represents an external parameter injection.
+"TaskNode": |-
+  Represents a standard executable task.

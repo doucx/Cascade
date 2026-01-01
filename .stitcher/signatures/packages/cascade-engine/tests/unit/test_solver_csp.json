@@ -1,0 +1,18 @@
+{
+  "test_csp_solver_init": {
+    "baseline_code_signature_text": "def test_csp_solver_init():",
+    "baseline_code_structure_hash": "c36e90f56b4a04fb08102ca3612079b27fffff9aa9b79b759fd1c55742065aae"
+  },
+  "test_csp_solver_missing_dependency": {
+    "baseline_code_signature_text": "def test_csp_solver_missing_dependency(monkeypatch):",
+    "baseline_code_structure_hash": "60e49252664c84f97382d83dcaa3418e72e6f4efd59a0228776847997b460d0e"
+  },
+  "test_csp_solver_parallel_when_resources_sufficient": {
+    "baseline_code_signature_text": "def test_csp_solver_parallel_when_resources_sufficient():",
+    "baseline_code_structure_hash": "83d1f68fcd28b9c94b86168b8a2a0b5f5fdb184164425ba354b816d8b4cd4d5a"
+  },
+  "test_csp_solver_serial_when_resources_insufficient": {
+    "baseline_code_signature_text": "def test_csp_solver_serial_when_resources_insufficient():",
+    "baseline_code_structure_hash": "f5ba43e5fa453067090552e41eaf767c2e19161669e3c913e21ce68e01437bcd"
+  }
+}

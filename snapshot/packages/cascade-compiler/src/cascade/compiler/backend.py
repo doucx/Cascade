@@ -54,7 +54,7 @@ class _TopologyBuilder:
         f_node = PhysicsFuncNode(
             current_node_instance_hash=func_hash,
             name=node_ir.definition.name,
-            code_structure_hash=code_hash,  # Populate the new field
+            code_structure_hash=code_hash,
             inputs={},
             sink_id=None,
         )
@@ -187,7 +187,7 @@ class _TopologyBuilder:
             tag_filter="default",
             kind=ChannelKind.SIGNAL,
         )
-        self._channels.append(signal_channel)
+        self._channels.append(channel)
 
     def _compute_const_hash(self, value: Any) -> str:
         raw = f"const:{repr(value)}"

@@ -1,60 +1,59 @@
-你做的非常好。我们终于看到了问题的本质。日志清晰地表明，我们遇到的不是一个神秘的异步死锁，而是一个具体、致命的运行时错误，这个错误中断了执行流程，从而**导致了死锁的现象**。
+> FAILED packages/cascade-engine/tests/integration/test_vm_strategy_integration.py::test_vm_strategy_executes_simplest_workflow - TypeError: PhysicsFuncNode.__init__() missing 1 required positional argument: 'code_structure_hash'
 
-你对根本原因的分析完全正确：我们正在用“实例哈希”作为钥匙，去开一把需要“结构哈希”才能打开的锁。
+Excellent. This is progress. We have moved from a mysterious deadlock to a clear, specific `TypeError`. This error tells us exactly what is wrong.
 
-这是一个典型的编译器与运行时之间的契约断裂问题。我们必须修复数据在整个编译链条中的传递路径，确保正确的“密钥”被交到 `PhysicsExecutor` 手中。
+The error `TypeError: PhysicsFuncNode.__init__() missing 1 required positional argument: 'code_structure_hash'` is the smoking gun. It means that somewhere in the code, `PhysicsFuncNode` is being instantiated without the `code_structure_hash` that we just added to its definition.
 
-我将生成一个三步走的计划来彻底解决这个问题。
+Your previous intuition was also correct: `packages/cascade-compiler/src/cascade/compiler/backend.py` had internal inconsistencies.
 
-## [WIP] fix(vm): 修复因哈希密钥不匹配导致的链接失败问题
+Let's trace the failure:
+
+1.  **Schema Change**: In the last step, I correctly identified that we needed to add `code_structure_hash` to the `PhysicsFuncNode` dataclass in `topology.py`.
+2.  **Implementation Mismatch**: However, it seems my previous plan to patch `topology.py` was insufficient or didn't get applied correctly, while the changes to `backend.py` which *use* that new field were. The `backend.py` file is now trying to call a constructor (`PhysicsFuncNode(...)`) with a `code_structure_hash` argument, but the actual class definition in `topology.py` doesn't have that field yet. This creates the `TypeError`.
+3.  **File Integrity**: Additionally, you were right to suggest using `write_file` for `backend.py`. My analysis of the context files shows it currently has duplicated method definitions, which is a sign of a previous partial patch. We need to clean that up.
+
+The root cause is a desynchronization between the `spec` (the definition) and the `compiler` (the implementation). We need to fix the spec file (`topology.py`) definitively, and ensure the compiler (`backend.py`) is clean and correct.
+
+I will generate a plan that uses the more robust `write_file` command to fix both `topology.py` and `backend.py`, ensuring they are perfectly synchronized and internally consistent.
+
+## [WIP] fix(spec,compiler): 同步 PhysicsFuncNode 定义与实现
 
 ### 错误分析
-日志明确指出 `PhysicsExecutor` 在执行 `symbol_table.get(node.name)` 时失败，因为 `node.name` (实际上是节点的*实例哈希*) 在 `symbol_table` 中不存在。`symbol_table` 的键是任务的*代码结构哈希*，该哈希由 `Frontend` 生成，但在 `Backend` 将 `NodeIR` 编译为 `PhysicsFuncNode` 的过程中，这个关键信息被丢失了。`Executor` 因此使用了错误的标识符进行函数查找，导致链接失败和后续的执行链中断，最终表现为测试超时（死锁）。
+`TypeError: PhysicsFuncNode.__init__() missing ... 'code_structure_hash'` 表明，尽管编译器 (`backend.py`) 已被更新以传递 `code_structure_hash` 参数，但 `PhysicsFuncNode` 的实际类定义 (`topology.py`) 并未成功更新以接收此参数。这是一个典型的、由于接口（spec）与其实现（compiler）之间不同步而导致的错误。此外，`backend.py` 文件本身也存在重复定义，需要清理。
 
 ### 用户需求
-解决 `Linking failed` 运行时错误，通过确保正确的哈希（代码结构哈希）从编译器一路传递到运行时执行器，并被用于函数查找。
+修复因 `PhysicsFuncNode` 定义与其实例化代码不匹配而导致的 `TypeError`，并清理 `backend.py` 文件。
 
 ### 评论
-这个修复是本次重构的核心。它将巩固编译器和运行时之间最重要的契约：如何通过一个稳定、可预测的标识符来链接静态代码定义和动态执行。通过在我们的物理拓扑结构中为“代码身份”创建一个专属字段，我们使整个系统在概念上更加清晰和健壮，彻底根除了此类链接错误的发生。
+这次修复将通过强制性的 `write_file` 操作来确保 `spec` 和 `compiler` 之间契约的一致性。这是解决 `TypeError` 的根本方法。通过修正 `PhysicsFuncNode` 的 schema 并清理其实现，我们确保了数据在编译链中能够被正确地传递和使用，为打通端到端测试铺平了道路。
 
 ### 目标
-1.  **Schema 修正**: 修改 `cascade.spec.topology.PhysicsFuncNode` 的定义，添加一个 `code_structure_hash: str` 字段，用于携带任务的代码身份。
-2.  **编译器修正**: 重写 `cascade.compiler.backend.Backend`，确保在创建 `PhysicsFuncNode` 时，将 `NodeIR.definition.fingerprint["current_code_structure_hash"]` 的值填充到新的 `code_structure_hash` 字段中。
-3.  **运行时修正**: 修改 `cascade.vm.executors.physics.PhysicsExecutor`，使其在查找函数时使用 `node.code_structure_hash` 而不是 `node.name`。
+1.  **Schema 修复**: 使用 `write_file` 彻底重写 `packages/cascade-spec/src/cascade/spec/topology.py`，确保 `PhysicsFuncNode` 包含 `code_structure_hash` 字段且没有重复字段。
+2.  **编译器清理**: 再次使用 `write_file` 重写 `packages/cascade-compiler/src/cascade/compiler/backend.py`，确保其代码干净、无重复，并正确地为 `PhysicsFuncNode` 填充 `code_structure_hash`。
 
 ### 基本原理
-计算图中的节点具有双重身份：它的“结构身份”（它是什么代码，即 `code_structure_hash`）和它的“实例身份”（它在这次运行中的具体形态，包含参数，即 `current_node_instance_hash`）。`symbol_table` 关心的是前者，而图的拓扑关系关心的是后者。当前的 bug 是因为我们混淆了这两者。本计划通过在数据结构中明确区分并传递这两种身份，使系统的实现与其核心架构原则保持一致。
+`TypeError` 是一个清晰的信号，表明函数调用的签名不匹配。问题的根源在于 `PhysicsFuncNode` 的定义文件 (`topology.py`) 状态不正确。通过 `write_file` 覆盖该文件，我们可以保证其定义与我们的预期完全一致。同时，再次覆盖 `backend.py` 可以确保它不仅使用了正确的实例化调用，而且其自身的文件结构也是健康的。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/compiler #comp/vm #comp/spec #concept/executor #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/spec #comp/compiler #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/refactor #task/state/continue
 
 ---
 ### Script
 
-#### Acts 1: 在 PhysicsFuncNode 中添加 code_structure_hash
+#### Acts 1: 强制修正 `topology.py` 的 Schema
 
-首先，我们修正 `spec`，为 `PhysicsFuncNode` 添加一个字段来携带其“结构身份”。
+我们将使用 `write_file` 来确保 `PhysicsFuncNode` 的定义是正确且唯一的。
 
 ~~~~~act
-patch_file
+write_file
 packages/cascade-spec/src/cascade/spec/topology.py
 ~~~~~
-~~~~~python.old
-@dataclass(frozen=True)
-class PhysicsFuncNode:
-    """
-    Represents a computational instance in the physical bipartite graph.
-    This is the "Verb" or the transformer.
-    """
+~~~~~python
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
-    current_node_instance_hash: str
-    name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
-    # If not None, this node acts as an Emitter, pushing its result to the specified sink.
-    sink_id: Optional[str] = field(default=None)
-~~~~~
-~~~~~python.new
+
 @dataclass(frozen=True)
 class PhysicsFuncNode:
     """
@@ -69,11 +68,59 @@ class PhysicsFuncNode:
     inputs: Dict[str, str] = field(default_factory=dict)
     # If not None, this node acts as an Emitter, pushing its result to the specified sink.
     sink_id: Optional[str] = field(default=None)
+
+
+@dataclass(frozen=True)
+class PhysicsDataNode:
+    """
+    Represents a data storage slot in the physical bipartite graph.
+    This is the "Noun" or the container. It tracks its origin.
+    """
+
+    current_data_slot_hash: str
+    name: str
+    producer_node_instance_hash: str
+
+
+class ChannelKind(str, Enum):
+    """
+    Defines the physical nature of a channel, separating data flow from control flow.
+    """
+
+    DATA = "DATA"  # Transports a payload. Contributes to 'data potential'.
+    SIGNAL = "SIGNAL"  # Transports only an activation signal. Contributes to 'control potential'.
+
+
+@dataclass(frozen=True)
+class ChannelDef:
+    """
+    Defines a static, directed connection from a FuncNode's output port
+    to a DataNode's input slot, with routing logic.
+    """
+
+    source_node_instance_hash: str
+    target_data_slot_hash: str
+    port_name: str
+    tag_filter: str = "default"
+    kind: ChannelKind = ChannelKind.DATA
+
+
+@dataclass(frozen=True)
+class BipartiteGraph:
+    """
+    The static, physical blueprint of the computation network, output by the compiler.
+    """
+
+    func_nodes: Dict[str, PhysicsFuncNode]
+    data_nodes: Dict[str, PhysicsDataNode]
+    channels: List[ChannelDef]
+    # Map data_slot_hash -> literal value for constant inputs
+    initial_values: Dict[str, Any] = field(default_factory=dict)
 ~~~~~
 
-#### Acts 2: 更新 Backend 以填充 code_structure_hash
+#### Acts 2: 清理并同步 `backend.py`
 
-遵照你的指示，我们使用 `write_file` 彻底重写 `backend.py`，确保它正确地填充新字段，并清除可能存在的重复定义。
+我们再次使用 `write_file` 来确保 `backend.py` 的内容是干净的，并且与新的 `PhysicsFuncNode` 定义同步。
 
 ~~~~~act
 write_file
@@ -136,7 +183,7 @@ class _TopologyBuilder:
         f_node = PhysicsFuncNode(
             current_node_instance_hash=func_hash,
             name=node_ir.definition.name,
-            code_structure_hash=code_hash,  # Populate the new field
+            code_structure_hash=code_hash,
             inputs={},
             sink_id=None,
         )
@@ -269,7 +316,7 @@ class _TopologyBuilder:
             tag_filter="default",
             kind=ChannelKind.SIGNAL,
         )
-        self._channels.append(signal_channel)
+        self._channels.append(channel)
 
     def _compute_const_hash(self, value: Any) -> str:
         raw = f"const:{repr(value)}"
@@ -284,36 +331,10 @@ class _TopologyBuilder:
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 ~~~~~
 
-#### Acts 3: 更新 PhysicsExecutor 以使用正确的哈希
-
-最后，我们指示 `PhysicsExecutor` 使用新的 `code_structure_hash` 字段来查找函数。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/executors/physics.py
-~~~~~
-~~~~~python.old
-            # 1. Linking: Find the function in the symbol table.
-            # We use node.name as the hash key, which is a test convention.
-            # In a real system, a dedicated hash field would be used.
-            func = self._symbol_table.get(node.name)
-            if not func:
-                raise RuntimeError(
-                    f"Linking failed: function for node '{node.name}' "
-                    "not found in symbol table."
-                )
-~~~~~
-~~~~~python.new
-            # 1. Linking: Find the function using its stable code structure hash.
-            func = self._symbol_table.get(node.code_structure_hash)
-            if not func:
-                raise RuntimeError(
-                    f"Linking failed: function for node '{node.name}' "
-                    f"(hash: {node.code_structure_hash}) not found in symbol table."
-                )
-~~~~~
-
 ### 下一步建议
-我们已经完成了对编译器-运行时链接机制的根本性修复。现在，`PhysicsExecutor` 应该能够成功找到并执行任务了。
+我们已经完成了对 `spec` 和 `compiler` 的同步修复，从根本上解决了 `TypeError`。现在，`Backend` 在创建 `PhysicsFuncNode` 时，应该不会再遇到构造函数不匹配的问题了。
 
-我建议我们再次运行 `test_vm_strategy_integration.py` 测试。这一次，它**应该会通过**。如果通过，就证明我们的核心执行流程已经正确无误。然后，我们就可以恢复所有之前删除或跳过的测试文件，看看系统中还存在哪些其他问题。
+我强烈建议再次运行我们的诊断测试：
+`pytest -s packages/cascade-engine/tests/integration/test_vm_strategy_integration.py`
+
+这一次，我们期望 `TypeError` 会消失。测试可能会通过，或者暴露出下一个层级的逻辑问题。无论结果如何，我们都离最终的成功更近了一步。

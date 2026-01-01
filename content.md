@@ -1,136 +1,160 @@
-诊断脚本的输出非常清晰，它精确定位了问题所在：
-- **`Step 3` 成功了**: `importlib.metadata` 能够找到并加载所有的 provider *实现类*。这意味着 `pyproject.toml` 的 `entry_points` 配置是正确的，并且我们之前添加的 `__init__.py` 文件使得 Python 能够找到这些模块。
-- **`Step 4` 失败了**: `ModuleNotFoundError: No module named 'cascade.providers.registry'`。这是根本原因。`cascade.sdk` 中的 `__getattr__` 依赖于 `cascade.providers.registry` 模块来动态发现和加载 provider。但这个模块现在不存在了。
+你的诊断脚本非常出色，它成功地将问题范围缩小到了一个非常具体的地方。
 
-在之前的计划中，我为了消除重复，从 `cascade-sdk` 中删除了 `manager.py` 和 `registry.py`，并错误地假设它们存在于 `cascade-library` 中。`git status` 的输出确认了它们被删除了，而不是被移动。
+诊断脚本的输出告诉我们：
+1.  **Registry 机制是好的**: `ProviderRegistry` 能够被实例化，并且能够发现所有的 `entry_points`。
+2.  **大部分 Provider 是好的**: `cs.http.get` 和 `cs.shell` 都可以被成功访问，证明了 `__getattr__ -> registry.get()` 的核心路径是通的。
+3.  **IPFS Provider 是坏的**: `pytest` 仍然失败，且专门针对 `cs.ipfs`。诊断脚本在第 3 步也打印了错误 `partially initialized module 'cascade' ... has no attribute 'task' (most likely due to a circular import)`，这正是问题的关键。
 
-**解决方案**：将 `manager.py` 和 `registry.py` 恢复到它们正确的、唯一的家——`cascade-library` 包中。
-
-## [WIP] fix: 恢复 Provider 注册表并提交命名空间修复
+## [WIP] fix: 解决 IPFS 提供者中的循环导入问题
 
 ### 错误分析
-诊断脚本明确指出，虽然底层的 `entry_points` 机制可以发现和加载独立的 Provider 类，但负责将它们组织成 `cs.http` 这种可用 API 的核心组件——`ProviderRegistry`——却丢失了。
+我们遇到了一个经典的**循环导入**问题，它特定于 `cascade-provider-ipfs` 包。
 
-在之前的重构中，`packages/cascade-sdk/src/cascade/providers/registry.py` 和 `manager.py` 被错误地删除，而不是移动到 `packages/cascade-library` 这个公共基础包中。这导致 `cascade.sdk` 在尝试 `from cascade.providers.registry import registry` 时失败，从而无法初始化 Provider 系统，最终导致了 `AttributeError`。
+循环路径如下：
+1.  测试代码执行 `import cascade as cs`，开始加载 `cascade.sdk` 模块。
+2.  测试代码尝试访问 `cs.ipfs.cat`。
+3.  这触发了 `cascade.sdk` 中的 `__getattr__('ipfs')`，进而调用 `registry.get('ipfs')` 和 `registry.get('ipfs.cat')`.
+4.  `ProviderRegistry` 找到 `ipfs.cat` 的入口点并尝试加载它，即执行 `import cascade.providers.ipfs.provider`。
+5.  `provider.py` 文件在模块顶部执行了 `import cascade as cs`。
+6.  **冲突点**: 此时，第 1 步中的 `import cascade as cs` 还没有完成，`cascade` 模块处于“部分初始化”状态。当 `provider.py` 接着尝试使用 `@cs.task` 装饰器时，`cascade` 模块上还没有 `task` 属性，于是抛出 `AttributeError: module 'cascade' has no attribute 'task'`。
+
+**解决方案**：Provider 作为低层组件，不应该导入顶层的 `cascade` SDK 包。它应该只从 `cascade.spec` 中导入它真正需要的组件，比如 `@task` 装饰器。
 
 ### 用户需求
-恢复被意外删除的 `ProviderRegistry` 模块，并将其放置在 `cascade-library` 包中，以完成整个 Provider 加载机制的修复。
+修复 `cascade-provider-ipfs` 测试中的 `AttributeError`，使其能够被 `cascade` SDK 正确加载和使用。
 
 ### 评论
-这次修复是基于诊断脚本提供的确凿证据，纠正了之前计划中的一个致命疏忽。将 Provider 注册表这个核心基础设施放在 `cascade-library` 中，符合单一事实来源（SSOT）原则，因为所有其他包都依赖它。这也标志着这次复杂的命名空间重构任务的完成。
+这是一个插件化架构中常见的陷阱。通过强制低层组件（Provider）只依赖于规格（Spec）包，我们打破了循环依赖，确保了系统的可加载性和稳定性。
 
 ### 目标
-1.  在 `packages/cascade-library/src/cascade/providers/` 目录下恢复 `registry.py` 和 `manager.py`。
-2.  将本次和之前所有相关的命名空间修复作为一个原子单元提交到 Git。
+1.  修改 `packages/cascade-provider-ipfs/src/cascade/providers/ipfs/provider.py` 文件。
+2.  将 `import cascade as cs` 替换为 `from cascade.spec.task import task`。
+3.  将 `@cs.task` 装饰器替换为 `@task`。
+4.  删除不再需要的诊断脚本。
 
 ### 基本原理
-共享的基础设施代码（如 Provider 注册表）必须位于一个被其他组件所依赖的公共包中（在这里是 `cascade-library`）。
+通过将 Provider 对 SDK 的依赖转变为对 Spec 的依赖，我们打破了 `SDK -> Registry -> Provider -> SDK` 的导入循环，解决了模块部分初始化的问题。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/build #concept/provider-registry #scope/core #ai/instruct #task/domain/build #task/object/provider-loading #task/action/fix #task/state/end
+#intent/fix #flow/ready #priority/critical #comp/build #concept/dependency-graph #scope/core #ai/instruct #task/domain/build #task/object/provider-loading #task/action/fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 恢复 Provider Registry 模块
-我们将 `registry.py` 的内容写回 `packages/cascade-library/src/cascade/providers/`。
+#### Acts 1: 修复 IPFS Provider 的导入
+我们将对 `provider.py` 文件进行两次精确的 `patch` 操作，分别修复 `cat` 和 `add` 任务的装饰器用法。
 
 ~~~~~act
-write_file
-packages/cascade-library/src/cascade/providers/registry.py
+patch_file
+packages/cascade-provider-ipfs/src/cascade/providers/ipfs/provider.py
 ~~~~~
-~~~~~python
-from cascade.spec.protocols import LazyFactory, Provider
-from .manager import ProviderRegistry, ProviderNamespace
+~~~~~python.old
+import json
+import cascade as cs
+from cascade.spec.protocols import Provider, LazyFactory
 
-__all__ = [
-    "LazyFactory",
-    "Provider",
-    "registry",
-    "ProviderRegistry",
-    "ProviderNamespace",
-]
-
-# Global registry accessor
-# Instantiated here to maintain singleton behavior for the module
-registry = ProviderRegistry()
-~~~~~
-
-#### Acts 2: 恢复 Provider Manager 模块
-我们将 `manager.py` 的内容写回 `packages/cascade-library/src/cascade/providers/`。
-
-~~~~~act
-write_file
-packages/cascade-library/src/cascade/providers/manager.py
-~~~~~
-~~~~~python
-import sys
-import importlib.metadata
-from typing import Any, Dict
-from cascade.spec.protocols import LazyFactory
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
 
 
-class ProviderNamespace:
-    def __init__(self, registry: "ProviderRegistry", prefix: str):
-        self._registry = registry
-        self._prefix = prefix
-
-    def __getattr__(self, name: str) -> Any:
-        full_name = f"{self._prefix}.{name}"
-        return self._registry.get(full_name)
+# --- Provider Implementations ---
 
 
-class ProviderRegistry:
-    def __init__(self):
-        self._providers: Dict[str, LazyFactory] = {}
-        self._loaded = False
+class IpfsCatProvider(Provider):
+    name = "ipfs.cat"
 
-    def get(self, name: str) -> Any:
-        if not self._loaded:
-            self._discover_entry_points()
-            self._loaded = True
-
-        if name in self._providers:
-            return self._providers[name]
-
-        # Check for namespace match (e.g. asking for 'read' when 'read.text' exists)
-        prefix = name + "."
-        if any(key.startswith(prefix) for key in self._providers):
-            return ProviderNamespace(self, name)
-
-        raise AttributeError(f"Cascade provider '{name}' not found.")
-
-    def register(self, name: str, factory: LazyFactory):
-        self._providers[name] = factory
-
-    def _discover_entry_points(self):
-        if sys.version_info >= (3, 10):
-            entry_points = importlib.metadata.entry_points(group="cascade.providers")
-        else:
-            entry_points = importlib.metadata.entry_points().get(
-                "cascade.providers", []
+    def create_factory(self) -> LazyFactory:
+        if aiohttp is None:
+            raise ImportError(
+                "The 'aiohttp' library is required. Please install it with: pip install aiohttp"
             )
+        return _ipfs_cat_task
 
-        for ep in entry_points:
-            try:
-                # Load the provider class
-                provider_cls = ep.load()
-                # Instantiate it
-                provider_instance = provider_cls()
-                # Validate interface (Duck typing check for robustness)
-                if not hasattr(provider_instance, "create_factory") or not hasattr(
-                    provider_instance, "name"
-                ):
-                    print(
-                        f"Warning: Plugin {ep.name} does not implement Provider protocol. Skipping."
-                    )
-                    continue
 
-                # Register
-                self._providers[provider_instance.name] = (
-                    provider_instance.create_factory()
-                )
-            except Exception as e:
-                print(f"Error loading plugin {ep.name}: {e}")
+class IpfsAddProvider(Provider):
+    name = "ipfs.add"
+
+    def create_factory(self) -> LazyFactory:
+        if aiohttp is None:
+            raise ImportError(
+                "The 'aiohttp' library is required. Please install it with: pip install aiohttp"
+            )
+        return _ipfs_add_task
+
+
+# --- Atomic Tasks ---
+
+
+@cs.task(name="ipfs_cat")
+async def _ipfs_cat_task(
+    cid: str, api_base_url: str = "http://127.0.0.1:5001"
+) -> bytes:
+~~~~~
+~~~~~python.new
+import json
+from cascade.spec.task import task
+from cascade.spec.protocols import Provider, LazyFactory
+
+try:
+    import aiohttp
+except ImportError:
+    aiohttp = None
+
+
+# --- Provider Implementations ---
+
+
+class IpfsCatProvider(Provider):
+    name = "ipfs.cat"
+
+    def create_factory(self) -> LazyFactory:
+        if aiohttp is None:
+            raise ImportError(
+                "The 'aiohttp' library is required. Please install it with: pip install aiohttp"
+            )
+        return _ipfs_cat_task
+
+
+class IpfsAddProvider(Provider):
+    name = "ipfs.add"
+
+    def create_factory(self) -> LazyFactory:
+        if aiohttp is None:
+            raise ImportError(
+                "The 'aiohttp' library is required. Please install it with: pip install aiohttp"
+            )
+        return _ipfs_add_task
+
+
+# --- Atomic Tasks ---
+
+
+@task(name="ipfs_cat")
+async def _ipfs_cat_task(
+    cid: str, api_base_url: str = "http://127.0.0.1:5001"
+) -> bytes:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-provider-ipfs/src/cascade/providers/ipfs/provider.py
+~~~~~
+~~~~~python.old
+@cs.task(name="ipfs_add")
+async def _ipfs_add_task(path: str, api_base_url: str = "http://127.0.0.1:5001") -> str:
+~~~~~
+~~~~~python.new
+@task(name="ipfs_add")
+async def _ipfs_add_task(path: str, api_base_url: str = "http://127.0.0.1:5001") -> str:
+~~~~~
+
+#### Acts 2: 删除诊断脚本
+现在问题已经解决，我们可以移除这个临时工具。
+
+~~~~~act
+delete_file
+scripts/diagnose_providers.py
 ~~~~~

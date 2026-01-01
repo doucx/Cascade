@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 
 @dataclass(frozen=True)
@@ -48,10 +48,8 @@ class ChannelDef:
     tag_filter: str = "default"
     kind: ChannelKind = ChannelKind.DATA
 
-
-from typing import Any, Optional
-
 @dataclass(frozen=True)
+
 class BipartiteGraph:
     """
     The static, physical blueprint of the computation network, output by the compiler.

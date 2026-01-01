@@ -77,15 +77,18 @@ async def test_reactor_emits_result_to_sink():
         # Wait for reactor to stop (triggered by Terminator)
         await asyncio.wait_for(run_task, timeout=1.0)
     except asyncio.TimeoutError:
+        # The test failed because the reactor didn't stop in time.
+        # The run_task is already cancelled by wait_for.
         reactor.stop()
-        await run_task
-        # If it timed out, it means Terminator didn't fire, which is a separate issue 
-        # (or resource contention). But here we assume Terminator works (Phase 5.1).
+        try:
+            # Awaiting a cancelled task raises CancelledError, we absorb it.
+            await run_task
+        except asyncio.CancelledError:
+            pass
+        pytest.fail("Reactor failed to terminate automatically")
     
     # 6. Verify Result
-    # This is the core assertion. Did the sink receive the data?
-    try:
-        result = result_future.result()
-        assert result == "Hello World"
-    except asyncio.InvalidStateError:
-        pytest.fail("Sink was never called with the result")
+    # This logic now correctly executes for both success and failure paths,
+    # but the fail path is handled by pytest.fail above.
+    assert result_future.done(), "Future was not resolved"
+    assert result_future.result() == "Hello World"

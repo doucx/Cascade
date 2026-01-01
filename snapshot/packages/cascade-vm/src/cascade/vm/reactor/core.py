@@ -132,18 +132,39 @@ class Reactor:
             for node in candidates:
                 if not node.is_ready():
                     continue
+                
+                # Intrinsic nodes have a synchronous resource lifecycle
+                if isinstance(node, (TerminatorNode, EmitterNode)):
+                    can_fire_intrinsic = True
+                    if self.resource_manager and node.resource_requirements:
+                        if not self.resource_manager.can_acquire(node.resource_requirements):
+                            can_fire_intrinsic = False
+                            self._pending_on_resource.add(node)
                     
-                # Resource Check (Potential Barrier)
-                can_fire = True
+                    if can_fire_intrinsic:
+                        # Synchronous Acquire-Fire-Release
+                        try:
+                            if self.resource_manager and node.resource_requirements:
+                                await self.resource_manager.acquire(node.resource_requirements)
+                            # _fire for intrinsics is sync and fast
+                            await self._fire(node)
+                            progress_made = True
+                        finally:
+                            if self.resource_manager and node.resource_requirements:
+                                await self.resource_manager.release(node.resource_requirements)
+                    continue
+
+                # Standard async nodes
+                can_fire_async = True
                 if self.resource_manager and node.resource_requirements:
                     if self.resource_manager.can_acquire(node.resource_requirements):
                         await self.resource_manager.acquire(node.resource_requirements)
                     else:
-                        can_fire = False
+                        can_fire_async = False
                         # Resource barrier not met, keep it pending.
                         self._pending_on_resource.add(node)
                 
-                if can_fire:
+                if can_fire_async:
                     fire_tasks.append(self._fire(node))
 
             if fire_tasks:

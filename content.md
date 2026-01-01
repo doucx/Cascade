@@ -1,69 +1,76 @@
-You've correctly identified a subtle but crucial bug in our test's mock function. Your analysis is spot on: the `mock_worker` function's signature does not match the actual physical protocol enforced by the `Reactor` and `Bleacher`.
+太棒了！测试通过标志着 Cascade 3.0 的物理引擎内核已经完全具备了处理复杂控制流和资源竞争的能力。我们已经成功从一个简单的顺序执行器演进为了一个真正的“全对称计算物理场”。
 
-The `KeyError: 'x'` occurs because our `mock_worker` function makes a wrong assumption about the data it receives. Let's trace the flow of energy (Tokens):
+现在，我将生成一个 `[COMMIT]` 计划，将这些里程碑式的改动永久固化到代码库中。
 
-1.  **Bleacher's Job**: The `standard_bleacher` receives multiple input tokens (e.g., one for argument `x`, one for resource `gpu`). It "bleaches" them, meaning it gathers all the *data* arguments' payloads into a single dictionary: `{'x': 10}`.
-2.  **Encapsulation**: It then wraps this dictionary into a *single* `Token` and emits it on its `worker_input` output port. The token looks like this: `Token(payload={'x': 10})`.
-3.  **Transport**: This single token flows through `D_worker_in` and arrives at the `WorkerNode`'s `worker_input` port.
-4.  **Reactor's Delivery**: The `Reactor` delivers a dictionary of all tokens that arrived at the `WorkerNode`. Since the `WorkerNode` only has one input port named `worker_input`, the dictionary it passes to the callable (`mock_worker`) is:
-    ```python
-    {'worker_input': Token(payload={'x': 10})}
-    ```
-5.  **The Bug**: Our `mock_worker` was written to expect the unpacked arguments directly, i.e., `{'x': Token(...) }`. It tried to access `inputs['x']`, but the only key available is `'worker_input'`.
+## [COMMIT] feat(vm/compiler): 实现基于拓扑的控制流分支与资源背压
 
-The `Bleacher` acts as a mail sorter: it gathers all the letters (arguments) and puts them into a single envelope (`worker_input` Token). Our `mock_worker` was trying to read the letter 'x' directly from the mailbox, when it should have opened the envelope first.
+### 用户需求
+在物理执行层实现白皮书定义的“全对称”控制逻辑：
+1.  **条件分支**: 通过通道的光谱过滤（Tag Filtering）实现。
+2.  **并发控制**: 通过物理拓扑中的资源令牌闭环（Resource Back-pressure）实现。
 
-### [WIP] fix(test): 修正 mock_worker 以遵循物理协议
+### 评论
+这是 Cascade 3.0 重构路线图中最重要的架构里程碑。我们不仅实现了一个高性能的计算引擎，更实现了一种“逻辑即拓扑”的哲学转变。通过将复杂的并发和条件逻辑解构为简单的令牌流动和光谱过滤，我们极大地降低了引擎的复杂性，同时获得了近乎无限的可观测性和可扩展性。
 
-#### 用户需求
-`test_resource_backpressure.py` 中的 `mock_worker` 函数必须被修正，以正确地从 `worker_input` 端口的 Token 中解包其参数，从而遵循 VM 的物理执行协议。
+### 目标
+创建一个完整的 Git 提交，包含物理层、编译器层和微指令层的协同升级，以及所有验证这些核心物理特性的测试用例。
 
-#### 评论
-这是一个非常有价值的 Bug。它强制我们确保测试代码（尤其是 Mock）与系统的真实行为（物理协议）保持 100% 一致。一个不遵循协议的 Mock 会产生误导性的结果，并隐藏真实的集成问题。这次修复将使我们的背压测试更加健壮和准确。
+### 基本原理
+此提交将 Phase 4 的所有成果整合为一个逻辑单元。它确立了物理节点间交互的具名端口协议，实现了 `Reactor` 的原子化扫描机制，并为编译器注入了自动化资源编排的能力。这些改动共同构成了 Cascade 3.0 的“物理定律”。
 
-#### 目标
-1.  修改 `mock_worker` 函数。
-2.  使其首先从 `inputs` 字典中获取 `'worker_input'` Token。
-3.  然后从该 Token 的 `payload` 中提取真正的参数 `'x'`。
-4.  确保测试 `test_resource_backpressure` 通过。
-
-#### 基本原理
-物理执行三连体（Triad）中的 `WorkerNode` (`F_exec`) 与外界的交互协议是固定的：它总是通过一个名为 `worker_input` 的端口接收一个包含了所有业务参数的字典。我们的 Mock 必须遵守这个硬性接口，才能正确地模拟一个真实的 Worker。
-
-#### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #comp/vm #concept/protocol #scope/dx #ai/instruct #task/domain/core #task/object/reactor-atomicity #task/action/bug-fix #task/state/continue
+### 标签
+#intent/build #flow/ready #priority/high #comp/vm #comp/compiler #comp/spec #concept/control-flow #concept/resources #scope/core #ai/instruct #task/domain/core #task/object/physics-field #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `mock_worker` 的实现
+#### Acts 1: 提交全对称物理场核心实现
 
-我们将更新 `test_resource_backpressure.py` 中的 `mock_worker`，使其正确解包。
+我们将所有涉及 Spec、VM、Compiler 以及新测试用例的文件添加到暂存区并提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/topology.py
+packages/cascade-spec/src/cascade/spec/physics.py
+packages/cascade-spec/src/cascade/spec/ir/models.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-vm/src/cascade/vm/instructions/bleacher.py
+packages/cascade-vm/src/cascade/vm/instructions/stainer.py
+packages/cascade-vm/tests/integration/test_ping_pong.py
+packages/cascade-vm/tests/integration/test_branching.py
 packages/cascade-vm/tests/integration/test_resource_backpressure.py
+packages/cascade-vm/tests/unit/test_reactor.py
 ~~~~~
-~~~~~python.old
-def mock_worker(inputs: Dict[str, Token]) -> Dict[str, Token]:
-    # Simulate work
-    val = inputs["x"].payload
-    return {"worker_result": Token(payload=val + 1)}
-~~~~~
-~~~~~python.new
-def mock_worker(inputs: Dict[str, Token]) -> Dict[str, Token]:
-    # The WorkerNode receives a single token on its 'worker_input' port.
-    # The payload of this token is the dictionary of actual arguments.
-    worker_input_token = inputs["worker_input"]
-    worker_payload = worker_input_token.payload
 
-    # Simulate work based on the unpacked payload
-    val = worker_payload["x"]  # The payload is the raw value, not another Token
-    return {"worker_result": Token(payload=val + 1)}
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(vm/compiler): Implement topological control flow and resource back-pressure
+
+This commit implements the "Fully Symmetric Computational Physics Field" as defined in the 3.0 Whitepaper. 
+
+Key architectural changes:
+1.  **Channel Tag Filtering (The Prism)**: Upgraded the Reactor to support spectrum filtering. Channels now act as physical barriers that only allow tokens with matching tags to pass, enabling topological branching (run_if, switch) without centralized logic.
+2.  **Resource Back-pressure (The Loop)**: Implemented topological resource management. Bleacher nodes now "acquire" resource tokens from global ResourceSlots (D_res), and Stainer nodes "release" them back upon completion. This enables decentralized concurrency control via the graph's geometry.
+3.  **Atomic Reactor Scanning**: Refactored the Reactor's step logic to use an "Atomic Scan & Consume" model. This eliminates TOCTOU race conditions when multiple nodes compete for shared resources, ensuring deterministic execution.
+4.  **Named Port Protocol**: Standardized physical node I/O to use named ports and Token dictionaries. This removes positional ambiguity and enables complex multi-port emission (e.g., results + resource returns + observability signals).
+
+Verified via:
+- test_branching.py: Confirmed tokens are physically blocked by mismatched tag filters.
+- test_resource_backpressure.py: Confirmed sequential execution when shared resource tokens are limited.
+- test_ping_pong.py: Updated to comply with the new multi-port protocol.
 ~~~~~
 
 ### 下一步建议
-这个 `KeyError` 是 `Phase 4.2` 中最后一个已知的障碍。在应用此补丁后，`test_resource_backpressure` 应该会成功，标志着我们已经完整地实现了基于拓扑的资源背压。
+随着 **Phase 4** 的圆满完成，Cascade 3.0 的核心“发动机”已经打造完毕。
 
-我建议立即执行此计划，然后运行整个 `cascade-vm` 的测试套件，以确保我们的修改没有引入任何回归问题。之后，我们就可以正式结束 `Phase 4`。
+下一步，我们将进入 **Phase 5: 全系统集成 (System Integration)**。在这个阶段，我们将：
+1.  **完善编译器**: 让 `Builder` 能够处理字面量输入（Literals），从而无需手动注入测试 Token。
+2.  **前端对接**: 将 `LazyResult` 的 DSL 逻辑与 `Compiler` 后端正式打通。
+3.  **端到端闭环**: 实现一个统一的 `cs.run()` 接口，让用户在完全感知不到底层物理场的情况下，享受其带来的高性能和高可靠性。
+
+如果你准备好了，我们可以先从 `Builder` 的字面量支持开始。

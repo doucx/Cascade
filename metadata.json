@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M __init__.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767268834.8259003, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 通过诊断脚本修复 Provider 加载机制", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767268836.7195582, "duration_ms": 0}}

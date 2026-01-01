@@ -1,189 +1,183 @@
-Got it. Per your instruction to accelerate, I will combine the creation of tests and the implementation into a single plan. This will deliver a fully functional and tested `standard_stainer` micro-instruction in one step.
+Of course. Let's begin **Task 2.3** and complete the micro-instruction set by implementing the standard Observer. As requested, I will create the implementation and its tests in a single, efficient step.
 
-## [WIP] feat(vm): Implement standard_stainer instruction and tests
+## [WIP] feat(vm): Implement standard_observer instruction and tests
 
 ### 用户需求
 
-根据 [Cascade 3.0 重构路线图](Cascade%203.0%20重构路线图：迈向全对称计算物理场.md) 加速完成 **任务 2.2**，在同一步骤中实现标准的 Stainer ($F_{post}$) 微指令及其单元测试。
+根据 [Cascade 3.0 重构路线图](Cascade%203.0%20重构路线图：迈向全对称计算物理场.md)，完成 **任务 2.3**，实现标准的 Observer ($F_{obs}$) 微指令及其单元测试。这个指令负责将内部的物理令牌转换为外部可观测的事件。
 
 ### 评论
 
-这是对 TDD 流程的合理加速。Stainer 作为执行三连体的最后一环，其职责至关重要：它接收来自 Worker ($F_{exec}$) 的纯净结果和来自 Bleacher ($F_{pre}$) 的追踪元数据，然后“染色”——即将结果包装成一个新的、带有完整上下文（如执行耗时、成功/失败标签）的物理令牌，并将其路由到下游。
+这是微指令集构建的最后一步，也是实现“全息可观测性”的关键。Observer 节点是物理世界与外部世界的桥梁。它的核心职责不是在计算图中传递数据，而是产生一个**副作用**：将一个包含丰富追踪元数据的物理令牌（`Token`）转换成一个结构化的事件（`ObservedEvent`），并将其放入一个外部队列中，以供日志记录、监控或调试工具消费。
+
+这种设计确保了观测逻辑与核心业务逻辑的完全解耦和物理隔离。
 
 ### 目标
 
-1.  在 `cascade.vm.instructions` 中创建 `stainer.py` 并包含 `standard_stainer` 的完整实现。
-2.  创建 `tests/unit/instructions/test_stainer.py` 并包含覆盖成功、失败和元数据处理场景的测试用例。
-3.  确保新编写的实现能够通过所有新编写的测试。
+1.  在 `cascade.vm.instructions` 中创建 `observer.py` 并包含 `standard_observer` 的完整实现。
+2.  定义一个 `ObservedEvent` 数据类作为观测器输出的标准化格式。
+3.  创建 `tests/unit/instructions/test_observer.py`，覆盖对启动（start）和结束（end）事件的正确转换。
+4.  确保实现能够通过所有测试。
 
 ### 基本原理
 
-我们将同时创建 `stainer.py` 和 `test_stainer.py` 两个文件。`standard_stainer` 函数的 API 将接收一个包含两个关键令牌的字典：
--   `worker_result`: 来自 $F_{exec}$ 的执行结果。
--   `trace_input`: 来自 $F_{pre}$ 的、包含 `start_ts` 的追踪信息。
+我们将创建 `observer.py` 和 `test_observer.py` 文件。`standard_observer` 函数的 API 将接收两个参数：
+-   `inputs`: 一个字典，包含待观测的生命周期令牌（`lifecycle_token`）。
+-   `queue`: 一个标准的 `queue.Queue` 对象，用于将生成的事件发送到外部。
 
-函数将根据 `worker_result` 的类型（是否为 `Exception`）来决定输出令牌的 `tag`，计算执行耗时，并更新追踪信息，最终返回一个包含了完整上下文的输出令牌。
+通过依赖注入 `queue`，我们使得测试变得非常简单和可靠，无需 Mock 全局对象。函数逻辑会检查令牌的 `trace` 字典中是否存在 `end_ts` 字段，以此来判断这是一个“结束”事件还是“开始”事件，然后创建相应的 `ObservedEvent` 并放入队列。
 
 ### 标签
 
-#intent/build #flow/ready #priority/high #comp/vm #comp/tests #concept/executor #scope/core #ai/instruct #task/domain/vm #task/object/stainer-instruction #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/vm #comp/tests #concept/executor #scope/core #ai/instruct #task/domain/vm #task/object/observer-instruction #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Stainer 实现
+#### Acts 1: 创建 Observer 实现
 
-我们创建 `stainer.py` 文件并直接写入其完整实现。
+我们创建 `observer.py` 文件，其中包含 `ObservedEvent` 数据类和 `standard_observer` 函数的完整实现。
 
 ~~~~~act
 write_file
-packages/cascade-vm/src/cascade/vm/instructions/stainer.py
+packages/cascade-vm/src/cascade/vm/instructions/observer.py
 ~~~~~
 ~~~~~python
-from typing import Dict
-import time
+from typing import Dict, Any, Literal
+from dataclasses import dataclass, field
+from queue import Queue
 
 from cascade.spec.physics import Token
 
 
-def standard_stainer(inputs: Dict[str, Token]) -> Dict[str, Token]:
-    """
-    The standard implementation for a Post-process Node (F_post).
+@dataclass
+class ObservedEvent:
+    """A structured event produced by an Observer node for external consumption."""
 
-    It "stains" a pure result from a worker by wrapping it in a new Token
-    with appropriate tags and updated trace information (like duration).
+    event_type: Literal["start", "end"]
+    trace_data: Dict[str, Any] = field(default_factory=dict)
+
+
+def standard_observer(inputs: Dict[str, Token], queue: Queue) -> None:
+    """
+    The standard implementation for an Observability Node (F_obs).
+
+    It consumes a Token from a lifecycle data node (D_life), converts its
+    trace information into a structured ObservedEvent, and puts it onto an
+    external queue for telemetry systems.
+
+    This function does not return anything; its purpose is to create a side-effect.
 
     Args:
         inputs: A dictionary mapping input port names to their corresponding Tokens.
-                Expected ports:
-                - 'worker_result': Token containing the pure result from F_exec.
-                - 'trace_input': Token from F_pre containing 'start_ts' and other
-                                 initial trace data.
-
-    Returns:
-        A dictionary mapping the output port name ('output') to the final
-        stained Token.
+                Expected port: 'event_token'.
+        queue: The external queue to which the ObservedEvent will be sent.
     """
-    end_ts = time.monotonic()
+    event_token = inputs["event_token"]
+    trace = event_token.trace
 
-    # 1. Extract inputs
-    worker_result_token = inputs["worker_result"]
-    trace_input_token = inputs["trace_input"]
+    # Determine event type based on the presence of 'end_ts', which is only
+    # added by the Stainer node at the end of a lifecycle.
+    event_type = "end" if "end_ts" in trace else "start"
 
-    result_payload = worker_result_token.payload
-    # Use a copy to avoid mutating the original trace dict
-    trace_payload = trace_input_token.payload.copy()
-
-    # 2. Determine tag based on result (error or success)
-    tag = "error" if isinstance(result_payload, Exception) else "default"
-
-    # 3. Calculate duration and update trace
-    start_ts = trace_payload.get("start_ts", end_ts)  # Default to end_ts for duration=0
-    duration = end_ts - start_ts
-    trace_payload["duration"] = duration
-    trace_payload["end_ts"] = end_ts
-
-    # 4. Create the final "stained" token
-    output_token = Token(payload=result_payload, tag=tag, trace=trace_payload)
-
-    return {"output": output_token}
+    event = ObservedEvent(event_type=event_type, trace_data=trace)
+    queue.put(event)
 
 ~~~~~
 
-#### Acts 2: 编写 Stainer 的单元测试
+#### Acts 2: 编写 Observer 的单元测试
 
-现在，我们创建 `test_stainer.py` 文件，其中包含验证上述实现的测试用例。
+现在，我们创建 `test_observer.py` 文件来验证 `standard_observer` 的行为。
 
 ~~~~~act
 write_file
-packages/cascade-vm/tests/unit/instructions/test_stainer.py
+packages/cascade-vm/tests/unit/instructions/test_observer.py
 ~~~~~
 ~~~~~python
 import pytest
-import time
-from unittest.mock import patch
+from queue import Queue
 
 from cascade.spec.physics import Token
-from cascade.vm.instructions.stainer import standard_stainer
+from cascade.vm.instructions.observer import standard_observer, ObservedEvent
 
 
-def test_stainer_success_case():
+def test_observer_processes_start_event():
     """
-    Tests the standard success path: result is processed, tag is 'default',
-    and trace is correctly updated with duration.
+    Tests that a token containing only start information (from a Bleacher)
+    is correctly processed as a 'start' event.
     """
-    start_ts = 1000.0
-    end_ts = 1002.5
+    # 1. Setup
+    queue = Queue()
+    start_trace = {"id": "task_A", "start_ts": 100.0}
+    event_token = Token(payload=None, trace=start_trace)
+    inputs = {"event_token": event_token}
 
-    inputs = {
-        "worker_result": Token(payload="SuccessData"),
-        "trace_input": Token(payload={"start_ts": start_ts, "id": "task_A"}),
+    # 2. Execute
+    standard_observer(inputs, queue)
+
+    # 3. Assert
+    assert queue.qsize() == 1
+    observed = queue.get()
+
+    assert isinstance(observed, ObservedEvent)
+    assert observed.event_type == "start"
+    assert observed.trace_data == start_trace
+
+
+def test_observer_processes_end_event():
+    """
+    Tests that a token containing end information (from a Stainer)
+    is correctly processed as an 'end' event.
+    """
+    # 1. Setup
+    queue = Queue()
+    end_trace = {
+        "id": "task_A",
+        "start_ts": 100.0,
+        "end_ts": 102.5,
+        "duration": 2.5,
     }
+    event_token = Token(payload="result", tag="default", trace=end_trace)
+    inputs = {"event_token": event_token}
 
-    with patch("time.monotonic", return_value=end_ts):
-        outputs = standard_stainer(inputs)
+    # 2. Execute
+    standard_observer(inputs, queue)
 
-    assert "output" in outputs
-    output_token = outputs["output"]
+    # 3. Assert
+    assert queue.qsize() == 1
+    observed = queue.get()
 
-    assert output_token.payload == "SuccessData"
-    assert output_token.tag == "default"
-    assert output_token.trace["id"] == "task_A"
-    assert output_token.trace["start_ts"] == start_ts
-    assert output_token.trace["end_ts"] == end_ts
-    assert output_token.trace["duration"] == 2.5
+    assert isinstance(observed, ObservedEvent)
+    assert observed.event_type == "end"
+    assert observed.trace_data == end_trace
 
 
-def test_stainer_error_case():
+def test_observer_with_empty_trace():
     """
-    Tests the failure path: result is an exception, tag is 'error',
-    and trace is still correctly updated.
+    An empty trace should be treated as a 'start' event by default.
     """
-    start_ts = 2000.0
-    end_ts = 2000.1
-    error = ValueError("Something went wrong")
+    # 1. Setup
+    queue = Queue()
+    event_token = Token(payload=None, trace={})
+    inputs = {"event_token": event_token}
 
-    inputs = {
-        "worker_result": Token(payload=error),
-        "trace_input": Token(payload={"start_ts": start_ts}),
-    }
+    # 2. Execute
+    standard_observer(inputs, queue)
 
-    with patch("time.monotonic", return_value=end_ts):
-        outputs = standard_stainer(inputs)
+    # 3. Assert
+    assert queue.qsize() == 1
+    observed = queue.get()
 
-    assert "output" in outputs
-    output_token = outputs["output"]
-
-    assert output_token.payload is error  # Should be the same exception instance
-    assert output_token.tag == "error"
-    assert output_token.trace["end_ts"] == end_ts
-    assert pytest.approx(output_token.trace["duration"]) == 0.1
-
-
-def test_stainer_handles_missing_start_ts_gracefully():
-    """
-    If start_ts is missing from the trace for some reason, duration should be 0.
-    """
-    end_ts = 3000.0
-    inputs = {
-        "worker_result": Token(payload="data"),
-        "trace_input": Token(payload={}),  # No start_ts
-    }
-
-    with patch("time.monotonic", return_value=end_ts):
-        outputs = standard_stainer(inputs)
-
-    output_token = outputs["output"]
-    assert output_token.trace["duration"] == 0.0
-    assert output_token.trace["end_ts"] == end_ts
+    assert observed.event_type == "start"
+    assert observed.trace_data == {}
 
 ~~~~~
 
 ### 下一步建议
 
-我们已经同时完成了 `standard_stainer` 的实现和测试。
+我们已经成功完成了 **阶段 2：微指令集构建** 的所有任务。`Bleacher`、`Stainer` 和 `Observer` 这三个核心微指令现在都有了经过测试的健壮实现。
 
-根据路线图，**阶段 2** 的最后一项任务是 **任务 2.3：实现标准 Observer ($F_{obs}$)**。这个微指令负责将内部的物理令牌转换为外部可见的、标准化的遥测事件。
+我们已经为物理引擎准备好了“弹药”，现在是时候构建能够自动使用这些弹药的“工厂”了。
 
-我建议我们立即开始为 `standard_observer` 创建实现和测试。
+我建议我们正式开始 **阶段 3：编译器后端重构 (Backend: The Expander)**。这将是整个重构中最复杂也最有价值的部分。第一步是 **任务 3.1：设计扩展器 (Expander)**，我们将创建 `expander.py` 的文件结构和 TDD 测试，用于将一个高级的逻辑节点（`IRNode`）“炸开”为一个包含三连体和旁路的精密物理子图。

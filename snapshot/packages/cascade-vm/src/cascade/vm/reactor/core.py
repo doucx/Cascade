@@ -5,6 +5,7 @@ from cascade.spec.physics import DataNode, FuncNode, TerminatorNode, EmitterNode
 from .events import ReactorEvent, TokenGenerated, ExecutionFinished
 from .model import Channel
 from cascade.vm.protocols import ResourceManager
+from cascade.spec.topology import ChannelKind
 
 
 class Reactor:
@@ -172,9 +173,6 @@ class Reactor:
         downstream = self._downstream_map.get(event.node.name, [])
         for f_node in downstream:
             self._dirty_func_nodes.add(f_node)
-
-from cascade.spec.physics import Token
-from cascade.spec.topology import ChannelKind
 
     async def _handle_execution_finished(self, event: ExecutionFinished):
         # 1. Release Resources

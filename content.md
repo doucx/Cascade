@@ -1,421 +1,78 @@
-## [WIP] feat(vm): 实现 Reactor 并行激发与执行逻辑
+好的，**阶段 1：反应堆点火 (Reactor Ignition)** 已成功完成。我们已经构建了一个能够根据物理定律自动流转、并行执行并正确处理数据的最小物理引擎。
+
+现在，我将为这些成果创建一个完整的逻辑提交。
+
+## [COMMIT] feat(vm): 实现物理引擎核心：Reactor, Memory 与 Executor
 
 ### 用户需求
-1. 修复 `packages/cascade-vm/tests/unit/test_reactor.py` 中的单元测试，使其适配 `Reactor` 类的新 API 签名（需要 `executor` 和 `function_map`），并支持异步调用。
-2. 实现 `Reactor.step` 和 `Reactor._fire` 方法，支持基于 `asyncio` 的并行激发，以及通过 `PhysicsExecutor` 执行实际业务逻辑，从而通过集成测试 `test_ping_pong.py`。
+完成 Cascade 3.0 路线图中的阶段 1。实现物理引擎的三大支柱：`VolatileMemory`（状态管理）、`PhysicsExecutor`（异步执行）和 `Reactor`（核心调度循环），并验证其在 `D1 -> F1 -> D2` 拓扑下的端到端流转。
 
 ### 评论
-我们正处于“点火”的关键时刻。
-首先，必须偿还因 API 变更（引入 `PhysicsExecutor` 和异步化）导致的技术债务，修复单元测试。
-其次，在 `Reactor` 的实现中，我们将把静态的拓扑结构与动态的执行能力结合起来。`step` 方法将从单线程顺序扫描进化为基于 `asyncio.gather` 的并行激发，这直接体现了物理场的并发特性。`_fire` 方法将完成“物质-能量-物质”的转化循环：消耗输入 Token -> 释放能量（执行函数） -> 产生新 Token。
+这个提交标志着 Cascade 3.0 从静态定义的 Spec 走向了动态运行的 VM。
+我们建立了一个基于“全准入激发”的异步扫描引擎，它能够无缝集成同步阻塞的 Python 函数。`VolatileMemory` 确保了状态的 FIFO 顺序和容量约束。这是 Cascade 3.0 迈向高性能数据流处理的第一步。
 
 ### 目标
-1.  更新 `test_reactor.py`，引入 `PhysicsExecutor` 和 Dummy 函数，将测试用例转换为 `async` 模式。
-2.  在 `reactor.py` 中引入 `asyncio`。
-3.  实现 `Reactor.step`：识别就绪节点，使用 `asyncio.gather` 并行触发 `_fire`。
-4.  实现 `Reactor._fire`：消耗输入令牌，从 `function_map` 查找函数，提交给 `executor`，并将结果封装为新令牌推送到输出节点。
+1.  提交 `VolatileMemory` 的实现，支持基于 `deque` 的令牌存取。
+2.  提交 `PhysicsExecutor` 的实现，支持线程池异步委托。
+3.  提交 `Reactor` 的实现，支持拓扑扫描、并行激发和令牌吞噬。
+4.  提交涵盖上述组件的完整单元测试和 Ping-Pong 集成测试。
 
 ### 基本原理
-*   **并行性**: 利用 `asyncio.gather`，物理引擎可以在同一时间步内激发所有就绪的节点，最大化吞吐量。
-*   **数据流**: 输入参数通过列表收集 (`[t.payload for t in tokens]`) 传递给函数。这是一个简单的位置参数映射，足以满足目前的 Ping-Pong 需求。
-*   **输出广播**: 函数的返回值被封装为 Token 后，会被复制并分发到所有连接的输出节点，模拟了信号的广播特性。
+我们严格执行了 TDD 流程。首先通过单元测试确立了组件间的边界和 API 契约，然后通过集成测试验证了它们的协同工作能力。整个设计遵循全对称物理场架构：逻辑即拓扑，控制即令牌。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/vm #concept/reactor #scope/core #ai/instruct #task/domain/vm #task/object/reactor #task/action/implement #task/state/continue
+#intent/build #flow/ready #priority/high #comp/vm #concept/reactor #concept/state #concept/executor #scope/core #ai/instruct #task/domain/vm #task/object/physics-engine #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 Reactor 单元测试
+#### Acts 1: 提交阶段 1 的核心成果
 
-我们将更新 `test_reactor.py` 以匹配新的 `Reactor` 构造函数签名，并将测试用例改为异步。
+我们将物理引擎的实现文件和对应的测试文件添加到暂存区。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-vm/src/cascade/vm/memory.py
+packages/cascade-vm/src/cascade/vm/executor.py
+packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-vm/tests/unit/test_memory.py
+packages/cascade-vm/tests/unit/test_executor.py
 packages/cascade-vm/tests/unit/test_reactor.py
-~~~~~
-~~~~~python.old
-import pytest
-from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-
-@pytest.fixture
-def simple_topology():
-    """
-    Creates a simple D1 -> F1 topology.
-    """
-    d1 = PhysicsDataNode(id="D1", name="Input")
-    f1 = PhysicsFuncNode(id="F1", name="Processor")
-    
-    # Define ports (optional for logic, but good for completeness)
-    f1.input_ports["in"] = "D1"
-    
-    graph = BipartiteGraph()
-    graph.nodes[d1.id] = d1
-    graph.nodes[f1.id] = f1
-    
-    # Connect D1 -> F1
-    channel = Channel(source_node_id=d1.id, source_port="out", target_node_id=f1.id)
-    # Note: In Spec, channel is Source->Target. 
-    # But wait, Topology definition says:
-    # "if Source is Func, Target MUST be Data".
-    # So for D -> F connection, do we have a Channel?
-    # Let's check spec/topology.py.
-    # Channel: source_node_id, source_port, target_node_id.
-    # It seems Channel is generic.
-    # But usually data flows D -> F -> D.
-    # Let's assume Channel represents any directed edge in the bipartite graph.
-    
-    graph.channels.append(channel)
-    
-    return graph, d1, f1
-
-def test_reactor_step_idle(simple_topology):
-    """
-    If no tokens are present, step() should do nothing.
-    """
-    graph, d1, f1 = simple_topology
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
-    
-    fired_count = reactor.step()
-    
-    assert fired_count == 0
-
-def test_reactor_step_fire(simple_topology):
-    """
-    If input has token, F1 should fire and consume the token.
-    """
-    graph, d1, f1 = simple_topology
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
-    
-    # 1. Put token
-    memory.put(d1, Token(payload="energy"))
-    assert memory.get_count(d1.id) == 1
-    
-    # 2. Step
-    fired_count = reactor.step()
-    
-    # 3. Assertions
-    assert fired_count == 1
-    # Token must be consumed (Atomic Consumption)
-    assert memory.get_count(d1.id) == 0
-
-def test_reactor_partial_inputs():
-    """
-    F1 needs D1 and D2. Only D1 has token. F1 should NOT fire.
-    """
-    d1 = PhysicsDataNode(id="D1", name="Input1")
-    d2 = PhysicsDataNode(id="D2", name="Input2")
-    f1 = PhysicsFuncNode(id="F1", name="Processor")
-    
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d1, d2, f1]}
-    
-    # D1 -> F1
-    graph.channels.append(Channel(d1.id, "out", f1.id))
-    # D2 -> F1
-    graph.channels.append(Channel(d2.id, "out", f1.id))
-    
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
-    
-    # Only fill D1
-    memory.put(d1, Token(payload="A"))
-    
-    fired_count = reactor.step()
-    
-    assert fired_count == 0
-    # Token in D1 should remain untouched
-    assert memory.get_count(d1.id) == 1
-
-def test_reactor_independent_nodes():
-    """
-    Two independent nodes F1, F2. Both ready. Both should fire in one step.
-    """
-    d1 = PhysicsDataNode(id="D1", name="In1")
-    f1 = PhysicsFuncNode(id="F1", name="Proc1")
-    
-    d2 = PhysicsDataNode(id="D2", name="In2")
-    f2 = PhysicsFuncNode(id="F2", name="Proc2")
-    
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d1, f1, d2, f2]}
-    graph.channels.append(Channel(d1.id, "out", f1.id))
-    graph.channels.append(Channel(d2.id, "out", f2.id))
-    
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory)
-    
-    memory.put(d1, Token("A"))
-    memory.put(d2, Token("B"))
-    
-    fired_count = reactor.step()
-    
-    assert fired_count == 2
-    assert memory.get_count(d1.id) == 0
-    assert memory.get_count(d2.id) == 0
-~~~~~
-~~~~~python.new
-import pytest
-from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-from cascade.vm.executor import PhysicsExecutor
-
-# Dummy function for testing
-def noop(*args):
-    return "result"
-
-@pytest.fixture
-def simple_topology():
-    """
-    Creates a simple D1 -> F1 topology.
-    """
-    d1 = PhysicsDataNode(id="D1", name="Input")
-    f1 = PhysicsFuncNode(id="F1", name="Processor")
-    
-    # Define ports (optional for logic, but good for completeness)
-    f1.input_ports["in"] = "D1"
-    
-    graph = BipartiteGraph()
-    graph.nodes[d1.id] = d1
-    graph.nodes[f1.id] = f1
-    
-    # Connect D1 -> F1
-    channel = Channel(source_node_id=d1.id, source_port="out", target_node_id=f1.id)
-    graph.channels.append(channel)
-    
-    return graph, d1, f1
-
-@pytest.mark.asyncio
-async def test_reactor_step_idle(simple_topology):
-    """
-    If no tokens are present, step() should do nothing.
-    """
-    graph, d1, f1 = simple_topology
-    memory = VolatileMemory()
-    executor = PhysicsExecutor()
-    function_map = {f1.id: noop}
-    reactor = Reactor(graph, memory, executor, function_map)
-    
-    fired_count = await reactor.step()
-    
-    assert fired_count == 0
-
-@pytest.mark.asyncio
-async def test_reactor_step_fire(simple_topology):
-    """
-    If input has token, F1 should fire and consume the token.
-    """
-    graph, d1, f1 = simple_topology
-    memory = VolatileMemory()
-    executor = PhysicsExecutor()
-    function_map = {f1.id: noop}
-    reactor = Reactor(graph, memory, executor, function_map)
-    
-    # 1. Put token
-    memory.put(d1, Token(payload="energy"))
-    assert memory.get_count(d1.id) == 1
-    
-    # 2. Step
-    fired_count = await reactor.step()
-    
-    # 3. Assertions
-    assert fired_count == 1
-    # Token must be consumed (Atomic Consumption)
-    assert memory.get_count(d1.id) == 0
-
-@pytest.mark.asyncio
-async def test_reactor_partial_inputs():
-    """
-    F1 needs D1 and D2. Only D1 has token. F1 should NOT fire.
-    """
-    d1 = PhysicsDataNode(id="D1", name="Input1")
-    d2 = PhysicsDataNode(id="D2", name="Input2")
-    f1 = PhysicsFuncNode(id="F1", name="Processor")
-    
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d1, d2, f1]}
-    
-    # D1 -> F1
-    graph.channels.append(Channel(d1.id, "out", f1.id))
-    # D2 -> F1
-    graph.channels.append(Channel(d2.id, "out", f1.id))
-    
-    memory = VolatileMemory()
-    executor = PhysicsExecutor()
-    function_map = {f1.id: noop}
-    reactor = Reactor(graph, memory, executor, function_map)
-    
-    # Only fill D1
-    memory.put(d1, Token(payload="A"))
-    
-    fired_count = await reactor.step()
-    
-    assert fired_count == 0
-    # Token in D1 should remain untouched
-    assert memory.get_count(d1.id) == 1
-
-@pytest.mark.asyncio
-async def test_reactor_independent_nodes():
-    """
-    Two independent nodes F1, F2. Both ready. Both should fire in one step.
-    """
-    d1 = PhysicsDataNode(id="D1", name="In1")
-    f1 = PhysicsFuncNode(id="F1", name="Proc1")
-    
-    d2 = PhysicsDataNode(id="D2", name="In2")
-    f2 = PhysicsFuncNode(id="F2", name="Proc2")
-    
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d1, f1, d2, f2]}
-    graph.channels.append(Channel(d1.id, "out", f1.id))
-    graph.channels.append(Channel(d2.id, "out", f2.id))
-    
-    memory = VolatileMemory()
-    executor = PhysicsExecutor()
-    function_map = {f1.id: noop, f2.id: noop}
-    reactor = Reactor(graph, memory, executor, function_map)
-    
-    memory.put(d1, Token("A"))
-    memory.put(d2, Token("B"))
-    
-    fired_count = await reactor.step()
-    
-    assert fired_count == 2
-    assert memory.get_count(d1.id) == 0
-    assert memory.get_count(d2.id) == 0
-~~~~~
-
-#### Acts 2: 实现 Reactor 逻辑
-
-实现 `Reactor` 的 `step` 和 `_fire` 方法，引入 `asyncio`。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
-~~~~~
-~~~~~python.old
-from typing import List, Callable, Dict
-from cascade.spec.topology import BipartiteGraph
-from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-
-class Reactor:
-~~~~~
-~~~~~python.new
-import asyncio
-from typing import List, Callable, Dict
-from cascade.spec.topology import BipartiteGraph
-from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-
-class Reactor:
+packages/cascade-vm/tests/integration/test_ping_pong.py
 ~~~~~
 
 ~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
+git_commit
 ~~~~~
-~~~~~python.old
-    async def step(self) -> int:
-        """
-        Performs a single scan cycle of the entire graph.
-        
-        Returns:
-            int: The number of nodes that fired during this step.
-        """
-        raise NotImplementedError
+~~~~~text
+feat(vm): implement core physics engine (Reactor, Memory, Executor)
 
-    async def _fire(self, node: PhysicsFuncNode) -> None:
-        """
-        Internal method to execute a node transition.
-        1. Atomically consumes tokens from all input slots.
-        2. Submits the actual payload to an Executor.
-        3. Puts the resulting token into the output slots.
-        """
-        raise NotImplementedError
-~~~~~
-~~~~~python.new
-    async def step(self) -> int:
-        """
-        Performs a single scan cycle of the entire graph.
+Successfully completed Stage 1 of the Cascade 3.0 roadmap. This commit
+introduces the runtime foundations for the physical field.
 
-        Returns:
-            int: The number of nodes that fired during this step.
-        """
-        ready_nodes: List[PhysicsFuncNode] = []
-        for f_node in self._func_nodes:
-            input_ids = self._func_inputs.get(f_node.id, [])
+Key Implementations:
+1.  **VolatileMemory**: A high-performance state manager using deques to
+    handle token FIFO buffers with strict capacity enforcement.
+2.  **PhysicsExecutor**: A non-blocking execution interface that bridges
+    the asyncio event loop with a dedicated ThreadPoolExecutor, allowing
+    pure Python functions to run without stalling the engine.
+3.  **Reactor**: The central scheduling heart that implements "Full-Input
+    Firing" logic. It performs parallel scans and fires ready nodes using
+    atomic token consumption.
 
-            # A node with no inputs is not considered ready unless explicitly defined so.
-            # Our "Full-Input Firing" model means a node with inputs must have them all excited.
-            if not input_ids:
-                continue
-
-            is_ready = all(self.memory.is_excited(d_node_id) for d_node_id in input_ids)
-
-            if is_ready:
-                ready_nodes.append(f_node)
-
-        if not ready_nodes:
-            return 0
-
-        # Fire all ready nodes in parallel
-        await asyncio.gather(*(self._fire(node) for node in ready_nodes))
-
-        return len(ready_nodes)
-
-    async def _fire(self, node: PhysicsFuncNode) -> None:
-        """
-        Internal method to execute a node transition.
-        1. Atomically consumes tokens from all input slots.
-        2. Submits the actual payload to an Executor.
-        3. Puts the resulting token into the output slots.
-        """
-        # 1. Consume inputs
-        input_ids = self._func_inputs.get(node.id, [])
-        input_tokens = [self.memory.take(d_node_id) for d_node_id in input_ids]
-        args = [t.payload for t in input_tokens]
-
-        # 2. Execute
-        func = self.function_map.get(node.id)
-        if not func:
-            # In a robust system, this might log an error or emit an error token.
-            # For now, we raise to fail fast during testing.
-            raise ValueError(f"No function mapped for node {node.id}")
-
-        result_payload = await self.executor.submit(func, tuple(args))
-
-        # 3. Produce outputs
-        output_ids = self._func_outputs.get(node.id, [])
-        # In a real Triad, StainNode would handle wrapping.
-        # Here we create a simple token.
-        output_token = Token(payload=result_payload)
-
-        for out_id in output_ids:
-            # We need the PhysicsDataNode object to call put.
-            # Since we pre-validated topology in __init__, we can safely access nodes.
-            out_node = self.graph.nodes[out_id]
-            # Ensure it is a DataNode to satisfy type checker (though logic guarantees it)
-            if isinstance(out_node, PhysicsDataNode):
-                self.memory.put(out_node, output_token)
+Verification:
+- Passed unit tests for all core components.
+- Verified end-to-end "Ping-Pong" (D1 -> F1 -> D2) flow in integration tests,
+  confirming correct data transformation and token routing.
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了 `Reactor` 的实现和单元测试的修复。
-请运行 `pytest packages/cascade-vm/tests`，验证：
-1.  单元测试 `test_executor.py`, `test_memory.py`, `test_reactor.py` 全部通过。
-2.  集成测试 `test_ping_pong.py` 通过。
+点火成功！现在我们可以开始构建物理世界更精细的控制逻辑了。
 
-如果一切顺利，说明 **阶段 1：反应堆点火** 已圆满完成。
-接下来的 **阶段 2：微指令集构建 (Instruction Set Architecture)** 将引导我们深入实现三连体中的 `Bleacher`（漂白器）和 `Stainer`（染色器），这将涉及到对 `Token` 的元数据处理和更复杂的参数解析逻辑。
+下一步是 **阶段 2：微指令集构建 (Instruction Set Architecture)**：
+1.  **任务 2.1：实现标准 Bleacher ($F_{pre}$)**：我们需要一个能从 Token 集合中提取参数并生成 `kwargs` 的标准节点逻辑，它还负责初始化 `trace` 元数据。
+2.  **任务 2.2：实现标准 Stainer ($F_{post}$)**：负责将执行结果进行“染色”，计算耗时并根据结果状态设置 `tag`。
+
+我建议从 **任务 2.1** 开始。如果您同意，我将为您准备好 TDD 测试计划。

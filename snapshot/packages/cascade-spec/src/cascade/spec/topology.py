@@ -12,6 +12,7 @@ class PhysicsFuncNode:
 
     current_node_instance_hash: str
     name: str
+    code_structure_hash: str  # The stable hash of the function's code definition
     # Map input argument names to the source DataNode hash
     inputs: Dict[str, str] = field(default_factory=dict)
     # If not None, this node acts as an Emitter, pushing its result to the specified sink.

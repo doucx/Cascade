@@ -28,14 +28,12 @@ class PhysicsExecutor:
         error = None
 
         try:
-            # 1. Linking: Find the function in the symbol table.
-            # We use node.name as the hash key, which is a test convention.
-            # In a real system, a dedicated hash field would be used.
-            func = self._symbol_table.get(node.name)
+            # 1. Linking: Find the function using its stable code structure hash.
+            func = self._symbol_table.get(node.code_structure_hash)
             if not func:
                 raise RuntimeError(
                     f"Linking failed: function for node '{node.name}' "
-                    "not found in symbol table."
+                    f"(hash: {node.code_structure_hash}) not found in symbol table."
                 )
 
             # 2. Unpack Payloads: Convert Dict[str, Token] to Dict[str, Any]

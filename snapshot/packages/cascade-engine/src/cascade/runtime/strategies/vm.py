@@ -20,7 +20,6 @@ from cascade.vm.middleware.standard import (
 )
 from cascade.vm.middleware.observability import ObservabilityMiddleware
 from cascade.spec.lazy_types import MappedLazyResult
-from cascade.spec.blueprint import Call, MapCall
 
 
 class VMExecutionStrategy:

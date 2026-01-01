@@ -4,7 +4,6 @@ from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
-from cascade.spec.jump import Jump
 
 pytestmark = pytest.mark.skip("Primitives not yet aligned with scorched earth refactor")
 

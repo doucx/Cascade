@@ -139,3 +139,18 @@ class TerminatorNode(FuncNode):
     When fired, it signals the Reactor to stop.
     """
     pass
+
+
+class EmitterNode(FuncNode):
+    """
+    Runtime representation of an emission point.
+    When fired, it pushes the payload of its input token to a registered Sink.
+    """
+    def __init__(
+        self, 
+        name: str, 
+        sink_id: str,
+        resource_requirements: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(name, resource_requirements)
+        self.sink_id = sink_id

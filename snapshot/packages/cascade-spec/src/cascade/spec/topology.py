@@ -38,6 +38,18 @@ class PhysicsTerminatorNode:
 
 
 @dataclass(frozen=True)
+class PhysicsEmitterNode:
+    """
+    A specialized node that projects internal tokens to the external world.
+    It acts as a boundary bridge.
+    """
+    current_node_instance_hash: str
+    name: str
+    sink_id: str  # Identifier for the external sink (e.g. "client_response")
+    inputs: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class ChannelDef:
     """
     Defines a static, directed connection from a FuncNode's output port
@@ -63,3 +75,4 @@ class BipartiteGraph:
     initial_values: Dict[str, Any] = field(default_factory=dict)
     # Special lifecycle nodes
     terminator_nodes: Dict[str, PhysicsTerminatorNode] = field(default_factory=dict)
+    emitter_nodes: Dict[str, PhysicsEmitterNode] = field(default_factory=dict)

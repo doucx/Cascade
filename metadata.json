@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(vm): Implement TerminatorNode logic", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767233158.2016819, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(vm): Create Phase 5.2 Emission tests and spec", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767233254.4571483, "duration_ms": 0}}

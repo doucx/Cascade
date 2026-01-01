@@ -1,64 +1,108 @@
 简要回答：
-好的，进入阶段 5.1.2。我将实现 `TerminatorNode` 的运行时表示及其在 Reactor 中的逻辑。
+好的，进入阶段 5.2。我们将定义 `EmitterNode` 的 Spec，并创建一个“黑洞测试”——验证在当前没有实现发射逻辑的情况下，即使图运行结束，我们也无法从外部获取结果。
 
-## [WIP] feat(vm): Implement TerminatorNode logic
+## [WIP] test(vm): Create Phase 5.2 Emission tests and spec
 
 ### 用户需求
-1.  在 `cascade.spec.physics` 中定义运行时的 `TerminatorNode`。
-2.  在 `Reactor._fire` 中实现对 `TerminatorNode` 的处理，使其触发 `stop()`。
-3.  修复并启用 `test_autonomous_lifecycle.py` 中的测试。
+1.  在 `cascade-spec` 中定义 `PhysicsEmitterNode` (静态拓扑) 和 `EmitterNode` (运行时物理)。
+2.  创建 `tests/reactor/test_result_emission.py`，测试 Reactor 的数据发射能力。
+3.  测试应展示如何注册外部 Sink，以及 EmitterNode 如何引用该 Sink。
 
 ### 评论
-通过在物理层（`physics`）引入 `TerminatorNode`，我们将“停止”动作变成了图中的一个物理事件。这消除了 Reactor 对外部控制信号的依赖，使其成为一个闭环系统。
+这是全对称架构的输出端。`EmitterNode` 是连接“图内物理世界”与“图外宿主环境”的桥梁。API 设计上，我们采用 `sink_id` 引用机制，保持图的可序列化性，将副作用（回调/Future）留在 Reactor 的运行时注册表中。
 
 ### 目标
-1.  修改 `packages/cascade-spec/src/cascade/spec/physics.py`。
-2.  修改 `packages/cascade-vm/src/cascade/vm/reactor/core.py`。
-3.  更新 `packages/cascade-vm/tests/reactor/test_autonomous_lifecycle.py`。
+1.  修改 `packages/cascade-spec/src/cascade/spec/topology.py`。
+2.  修改 `packages/cascade-spec/src/cascade/spec/physics.py`。
+3.  创建 `packages/cascade-vm/tests/reactor/test_result_emission.py` (RED)。
 
 ### 基本原理
--   **物理定义**: `TerminatorNode` 继承自 `FuncNode`，但在语义上它是能量的终点。
--   **Reactor 逻辑**: 当 Reactor 准备激发一个节点时，如果该节点是 `TerminatorNode`，则立即停止主循环。这比将其提交给 Executor 再等待结果更高效且符合直觉（“一旦接触终结者，时间停止”）。
--   **测试修复**: 之前的测试因 `asyncio.wait_for` 的取消机制引发了未捕获的 `CancelledError`。我们将完善测试的异常处理逻辑。
+-   **API 设计**: `EmitterNode` 携带一个 `sink_id` 字符串。Reactor 提供 `register_sink(sink_id, callback)` 方法。
+-   **测试预期**: 测试将构建一个包含 `EmitterNode` 的图，注册一个 `asyncio.Future` 作为 Sink，并运行 Reactor。在 RED 阶段，由于 Reactor 忽略 `EmitterNode`，Future 将永远不会被设置，导致测试超时失败。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #comp/spec #concept/lifecycle #task/domain/runtime #task/object/terminator #task/action/implementation #task/state/continue
+#intent/tooling #flow/draft #priority/high #comp/spec #comp/tests #concept/io #task/domain/runtime #task/object/emitter #task/action/test #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 定义运行时 TerminatorNode
+#### Acts 1: 定义 Emitter Spec
 
-在 `cascade.spec.physics` 中添加 `TerminatorNode` 类。
+在静态拓扑和运行时物理层中定义 Emitter 节点。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/topology.py
+~~~~~
+~~~~~python.old
+@dataclass(frozen=True)
+class PhysicsTerminatorNode:
+    """
+    A special Functional Node that, when fired, triggers the shutdown of the Reactor.
+    It represents the "End of Time" for a run.
+    """
+    current_node_instance_hash: str
+    name: str
+    # Map input argument names to the source DataNode hash
+    inputs: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ChannelDef:
+~~~~~
+~~~~~python.new
+@dataclass(frozen=True)
+class PhysicsTerminatorNode:
+    """
+    A special Functional Node that, when fired, triggers the shutdown of the Reactor.
+    It represents the "End of Time" for a run.
+    """
+    current_node_instance_hash: str
+    name: str
+    # Map input argument names to the source DataNode hash
+    inputs: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PhysicsEmitterNode:
+    """
+    A specialized node that projects internal tokens to the external world.
+    It acts as a boundary bridge.
+    """
+    current_node_instance_hash: str
+    name: str
+    sink_id: str  # Identifier for the external sink (e.g. "client_response")
+    inputs: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ChannelDef:
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/topology.py
+~~~~~
+~~~~~python.old
+    # Map data_slot_hash -> literal value for constant inputs
+    initial_values: Dict[str, Any] = field(default_factory=dict)
+    # Special lifecycle nodes
+    terminator_nodes: Dict[str, PhysicsTerminatorNode] = field(default_factory=dict)
+~~~~~
+~~~~~python.new
+    # Map data_slot_hash -> literal value for constant inputs
+    initial_values: Dict[str, Any] = field(default_factory=dict)
+    # Special lifecycle nodes
+    terminator_nodes: Dict[str, PhysicsTerminatorNode] = field(default_factory=dict)
+    emitter_nodes: Dict[str, PhysicsEmitterNode] = field(default_factory=dict)
+~~~~~
 
 ~~~~~act
 patch_file
 packages/cascade-spec/src/cascade/spec/physics.py
 ~~~~~
 ~~~~~python.old
-    def produce_outputs(self, tokens: Dict[str, Token]):
-        """
-        Push result tokens to output targets.
-        """
-        for name, token in tokens.items():
-            if name in self.outputs:
-                port = self.outputs[name]
-                if port.target:
-                    port.target.put(token)
-~~~~~
-~~~~~python.new
-    def produce_outputs(self, tokens: Dict[str, Token]):
-        """
-        Push result tokens to output targets.
-        """
-        for name, token in tokens.items():
-            if name in self.outputs:
-                port = self.outputs[name]
-                if port.target:
-                    port.target.put(token)
-
-
 class TerminatorNode(FuncNode):
     """
     Runtime representation of a termination point.
@@ -66,168 +110,135 @@ class TerminatorNode(FuncNode):
     """
     pass
 ~~~~~
-
-#### Acts 2: 实现 Reactor 的自杀逻辑
-
-修改 `Reactor._fire` 方法，检测 `TerminatorNode` 并触发停止。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor/core.py
-~~~~~
-~~~~~python.old
-from typing import Deque, Set, List, Dict, Any, Optional
-from cascade.spec.physics import DataNode, FuncNode
-from .events import ReactorEvent, TokenGenerated, ExecutionFinished
-from .model import Channel
-from cascade.vm.protocols import ResourceManager
-~~~~~
 ~~~~~python.new
-from typing import Deque, Set, List, Dict, Any, Optional
-from cascade.spec.physics import DataNode, FuncNode, TerminatorNode
-from .events import ReactorEvent, TokenGenerated, ExecutionFinished
-from .model import Channel
-from cascade.vm.protocols import ResourceManager
+class TerminatorNode(FuncNode):
+    """
+    Runtime representation of a termination point.
+    When fired, it signals the Reactor to stop.
+    """
+    pass
+
+
+class EmitterNode(FuncNode):
+    """
+    Runtime representation of an emission point.
+    When fired, it pushes the payload of its input token to a registered Sink.
+    """
+    def __init__(
+        self, 
+        name: str, 
+        sink_id: str,
+        resource_requirements: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(name, resource_requirements)
+        self.sink_id = sink_id
 ~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor/core.py
-~~~~~
-~~~~~python.old
-    async def _fire(self, node: FuncNode):
-        # 1. Atomically consume inputs (Physics: Consume Energy)
-        inputs = node.consume_inputs()
-        
-        # 2. Submit to Executor
-        await self.executor.submit(node, inputs)
-~~~~~
-~~~~~python.new
-    async def _fire(self, node: FuncNode):
-        # 1. Atomically consume inputs (Physics: Consume Energy)
-        inputs = node.consume_inputs()
-        
-        # 2. Special Case: Terminator
-        if isinstance(node, TerminatorNode):
-            self.stop()
-            return
+#### Acts 2: 创建黑洞测试
 
-        # 3. Submit to Executor
-        await self.executor.submit(node, inputs)
-~~~~~
-
-#### Acts 3: 修复并完善测试
-
-更新测试用例以使用新的 `TerminatorNode` 类，并修复 `CancelledError` 问题。
+创建一个测试，验证在没有实现 Emitter 逻辑时，数据无法传出。
 
 ~~~~~act
 write_file
-packages/cascade-vm/tests/reactor/test_autonomous_lifecycle.py
+packages/cascade-vm/tests/reactor/test_result_emission.py
 ~~~~~
 ~~~~~python
 import pytest
 import asyncio
 from unittest.mock import AsyncMock
 
-from cascade.spec.physics import DataNode, FuncNode, Token, Port, TerminatorNode
-from cascade.vm.reactor import Reactor, TokenGenerated, ExecutionFinished
+from cascade.spec.physics import DataNode, Token, Port, EmitterNode, TerminatorNode
+from cascade.vm.reactor import Reactor, TokenGenerated
 from cascade.runtime.resource_manager import ResourceManager
 
-# --- Helpers ---
-
-def create_simple_chain():
-    """Creates a simple D -> F -> D chain."""
-    d_in = DataNode(name="in")
-    d_out = DataNode(name="out")
-    f_node = FuncNode(name="process", resource_requirements={"slots": 1})
-    
-    f_node.add_input(Port(name="arg", source=d_in))
-    f_node.add_output(Port(name="res", target=d_out))
-    
-    return [f_node], [d_in, d_out]
-
-# --- Tests ---
-
 @pytest.mark.asyncio
-async def test_reactor_runs_forever_without_terminator():
+async def test_reactor_emits_result_to_sink():
     """
-    Verifies the default behavior: The Reactor run loop does NOT exit automatically
-    when the graph becomes idle. It waits indefinitely for new events.
+    Verifies that an EmitterNode correctly pushes data to a registered external sink.
+    
+    Topology: DataNode -> EmitterNode -> TerminatorNode
+    
+    Flow:
+    1. Inject token "Hello World" into DataNode.
+    2. EmitterNode picks it up and (should) push to sink.
+    3. TerminatorNode picks it up (via shared input or sequence) and stops reactor.
+    
+    For simplicity in this unit test, we wire:
+    DataNode -> EmitterNode
+             -> TerminatorNode (Parallel consumption or just separate trigger)
+             
+    Actually, to ensure we capture the emission BEFORE termination, 
+    we should probably chain them if possible, or just rely on the Reactor processing 
+    events in order. 
+    
+    Let's use a shared DataNode for simplicity. Both Emitter and Terminator listen to it.
     """
     rm = ResourceManager(capacity={"slots": 1})
     mock_executor = AsyncMock()
     reactor = Reactor(executor=mock_executor, resource_manager=rm)
     
-    # 1. Setup minimal topology
-    func_nodes, data_nodes = create_simple_chain()
-    for n in func_nodes + data_nodes:
-        reactor.register_node(n)
-        
-    # 2. Start Reactor
-    run_task = asyncio.create_task(reactor.run())
+    # 1. Setup Topology
+    d_in = DataNode(name="result_slot")
     
-    # 3. Inject work
-    reactor.push_event(TokenGenerated(node=data_nodes[0], token=Token(1)))
+    # Emitter: Sends data to "main_output"
+    emitter = EmitterNode(name="emit", sink_id="main_output", resource_requirements={"slots": 1})
+    emitter.add_input(Port(name="data", source=d_in))
     
-    # 4. Mock executor completion
-    async def side_effect(node, inputs):
-        reactor.push_event(ExecutionFinished(node=node, outputs={}))
-    mock_executor.submit.side_effect = side_effect
-    
-    # 5. Wait and Expect Timeout
-    # wait_for will cancel run_task on timeout
-    with pytest.raises(asyncio.TimeoutError):
-        await asyncio.wait_for(run_task, timeout=0.2)
-        
-    # Cleanup: Ensure task is cancelled/stopped properly
-    reactor.stop()
-    try:
-        await run_task
-    except asyncio.CancelledError:
-        pass
-
-
-@pytest.mark.asyncio
-async def test_reactor_terminates_via_terminator_node():
-    """
-    Verifies the "Suicide Pact":
-    When a TerminatorNode is fired, the Reactor should call stop() on itself
-    and the run() loop should return.
-    """
-    rm = ResourceManager(capacity={"slots": 1})
-    mock_executor = AsyncMock()
-    reactor = Reactor(executor=mock_executor, resource_manager=rm)
-    
-    # 1. Setup Topology: DataNode -> Terminator
-    d_in = DataNode(name="trigger")
+    # Terminator: Stops the reactor
     terminator = TerminatorNode(name="term", resource_requirements={"slots": 1})
     terminator.add_input(Port(name="signal", source=d_in))
     
     reactor.register_node(d_in)
+    reactor.register_node(emitter)
     reactor.register_node(terminator)
     
-    # 2. Start Reactor
+    # 2. Register Sink
+    # API Requirement: Reactor must support sink registration
+    result_future = asyncio.Future()
+    
+    # NOTE: This method does not exist yet (RED)
+    if hasattr(reactor, "register_sink"):
+        reactor.register_sink("main_output", result_future.set_result)
+    else:
+        # If API is missing, we fail fast, but for TDD strictness we might want to 
+        # allow the code to run and fail on the result not being set.
+        # But we need to call the API to define it.
+        # Let's assume we implement it in the next step.
+        # For now, we simulate the API call failure or just skip if we want "RuntimeError".
+        # But to be clean, let's call it and expect AttributeError if not implemented.
+        try:
+            reactor.register_sink("main_output", result_future.set_result)
+        except AttributeError:
+            pytest.fail("Reactor.register_sink API is missing")
+
+    # 3. Start Reactor
     run_task = asyncio.create_task(reactor.run())
     
-    # 3. Trigger the terminator
-    reactor.push_event(TokenGenerated(node=d_in, token=Token("DIE")))
+    # 4. Inject Result
+    reactor.push_event(TokenGenerated(node=d_in, token=Token("Hello World")))
     
-    # 4. Expectation: The run loop should exit gracefully WITHOUT timeout
-    # If it times out, the logic is broken.
+    # 5. Wait for completion
     try:
+        # Wait for reactor to stop (triggered by Terminator)
         await asyncio.wait_for(run_task, timeout=1.0)
     except asyncio.TimeoutError:
         reactor.stop()
-        try:
-            await run_task
-        except asyncio.CancelledError:
-            pass
-        pytest.fail("Reactor failed to terminate automatically upon triggering TerminatorNode")
+        await run_task
+        # If it timed out, it means Terminator didn't fire, which is a separate issue 
+        # (or resource contention). But here we assume Terminator works (Phase 5.1).
     
-    # Assert stop was called (run loop exited)
-    assert run_task.done()
-    assert not run_task.cancelled()
+    # 6. Verify Result
+    # This is the core assertion. Did the sink receive the data?
+    try:
+        result = result_future.result()
+        assert result == "Hello World"
+    except asyncio.InvalidStateError:
+        pytest.fail("Sink was never called with the result")
 ~~~~~
 
 ### 下一步建议
-如果测试通过（GREEN），我们将进入阶段 5.2，处理数据的“发射”问题，因为单纯的终止还不够，我们还需要能从这个闭环系统中拿出结果。我们将实现 `EmitterNode`。
+测试现在会失败（`AttributeError: 'Reactor' object has no attribute 'register_sink'` 或 Sink 未被调用）。
+下一步（阶段 5.2.2）我们将：
+1.  在 `Reactor` 中实现 `register_sink` 方法。
+2.  在 `Reactor._fire` 中添加对 `EmitterNode` 的处理逻辑。
+3.  确保测试变绿。

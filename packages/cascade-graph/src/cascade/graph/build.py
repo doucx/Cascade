@@ -129,7 +129,7 @@ class GraphBuilder:
             # Note: execution_mode is now part of task_def (definition.mode)
             if result.task.func is _get_param_value.func:
                 # Retrieve the ParamSpec from the global context to attach to the node
-                from cascade.context import get_current_context
+                from cascade.common.context import get_current_context
 
                 # The arg at index 0 is the param name
                 param_name = input_bindings.get("0") or input_bindings.get("name")

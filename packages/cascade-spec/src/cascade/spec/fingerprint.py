@@ -46,9 +46,9 @@ class Fingerprint:
         self._validate_key(key)
         return self._hashes[key]
 
-    def __setitem__(self, key: str, value: str) -> None:
+    def __setitem__(self, key: str, value: Any) -> None:
         self._validate_key(key)
-        self._hashes[key] = value
+        self._hashes[key] = str(value)
 
     def __delitem__(self, key: str) -> None:
         self._validate_key(key)

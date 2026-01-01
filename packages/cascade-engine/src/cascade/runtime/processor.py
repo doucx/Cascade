@@ -1,8 +1,12 @@
 import time
 import asyncio
-from typing import Any, Dict, List, Callable, Awaitable, Optional
+from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING
+
 
 from cascade.graph.model import Node, Graph
+
+if TYPE_CHECKING:
+    from cascade.graph.model import MapNode
 from cascade.spec.protocols import Executor, StateBackend, Solver
 from cascade.runtime.bus import MessageBus
 from cascade.runtime.resource_manager import ResourceManager
@@ -147,7 +151,9 @@ class NodeProcessor:
         )
 
         # 5. Handle Map Nodes
-        if node.node_type == "map":
+        from cascade.graph.model import MapNode
+
+        if isinstance(node, MapNode):
             return await self._execute_map_node(
                 node,
                 kwargs,
@@ -248,7 +254,7 @@ class NodeProcessor:
 
     async def _execute_map_node(
         self,
-        node: Node,
+        node: "MapNode",
         kwargs: Dict[str, Any],
         active_resources: Dict[str, Any],
         run_id: str,
@@ -256,6 +262,9 @@ class NodeProcessor:
         parent_state_backend: StateBackend,
         sub_graph_runner: Callable,
     ) -> List[Any]:
+        if not node.mapping_factory:
+            return []  # Should not happen if graph is well-formed
+
         factory = node.mapping_factory
         if not kwargs:
             return []

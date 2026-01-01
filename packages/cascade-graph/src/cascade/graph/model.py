@@ -38,6 +38,7 @@ class Node:
     constraints: Optional[ResourceConstraint] = None
 
     # Structural Bindings (Literals)
+    has_complex_inputs: bool = False
     input_bindings: Dict[str, Any] = field(default_factory=dict)
 
     def __eq__(self, other):
@@ -62,9 +63,6 @@ class TaskNode(Node):
     # The actual python executable object.
     _callable: Optional[Callable] = None
 
-    # Optimization flag
-    has_complex_inputs: bool = False
-
     @property
     def callable_obj(self) -> Optional[Callable]:
         return self._callable
@@ -73,9 +71,6 @@ class TaskNode(Node):
 @dataclass(eq=False)
 class MapNode(Node):
     mapping_factory: Optional[Callable] = None
-
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
 
     @property
     def callable_obj(self) -> Optional[Callable]:
@@ -86,9 +81,7 @@ class MapNode(Node):
 @dataclass(eq=False)
 class ParamNode(TaskNode):
     param_spec: Optional[ParamSpec] = None
-
-    # Optimization flag, required for consistent interface
-    has_complex_inputs: bool = False
+    has_complex_inputs: bool = True
 
     # Inherits callable_obj property from TaskNode
 

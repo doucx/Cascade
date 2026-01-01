@@ -7,6 +7,9 @@ name = "cascade-common"
 version = "0.1.0"
 description = "Common utilities, protocols, and components for the Cascade ecosystem."
 requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec"
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cascade"]

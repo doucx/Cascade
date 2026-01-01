@@ -1,7 +1,7 @@
 import pytest
 from typer.testing import CliRunner
 import cascade as cs
-from cascade.context import get_current_context
+from cascade.common.context import get_current_context
 
 # Skip if typer is not installed
 pytest.importorskip("typer")

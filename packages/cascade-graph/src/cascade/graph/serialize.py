@@ -146,7 +146,7 @@ def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
     if edge.router:
         # Store the index to the routers list
         if id(edge.router) in router_map:
-            data["router_index"] = router_map[id(edge.router)]
+            data["router_index"] = str(router_map[id(edge.router)])
     return data
 
 

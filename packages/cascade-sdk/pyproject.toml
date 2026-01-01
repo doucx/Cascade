@@ -12,7 +12,8 @@ dependencies = [
   "cascade-engine",
   "cascade-common",
   "cascade-graph",
-  "cascade-application"
+  "cascade-application",
+  "cascade-library"
 ]
 
 [project.optional-dependencies]

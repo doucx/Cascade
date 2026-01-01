@@ -1,5 +1,5 @@
 import json
-import cascade as cs
+from cascade.spec.task import task
 from cascade.spec.protocols import Provider, LazyFactory
 
 try:
@@ -36,7 +36,7 @@ class IpfsAddProvider(Provider):
 # --- Atomic Tasks ---
 
 
-@cs.task(name="ipfs_cat")
+@task(name="ipfs_cat")
 async def _ipfs_cat_task(
     cid: str, api_base_url: str = "http://127.0.0.1:5001"
 ) -> bytes:
@@ -49,7 +49,7 @@ async def _ipfs_cat_task(
             return await resp.read()
 
 
-@cs.task(name="ipfs_add")
+@task(name="ipfs_add")
 async def _ipfs_add_task(path: str, api_base_url: str = "http://127.0.0.1:5001") -> str:
     form = aiohttp.FormData()
     # Note: This reads the whole file into memory. For large files, a streaming

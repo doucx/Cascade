@@ -1,8 +1,3 @@
-# This __init__.py makes 'cascade-python' a regular package that claims the 'cascade' namespace.
-# It uses pkgutil to extend the path, allowing other implicit namespace packages (PEP 420)
-# to be discovered in the same namespace.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
-
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, Callable
 
 # --- Lazy Import Mapping ---
@@ -17,7 +12,7 @@ _IMPORT_MAP = {
     "inject": ("cascade.spec.resource", "inject"),
     "with_constraints": ("cascade.spec.constraint", "with_constraints"),
     "get_current_context": ("cascade.common.context", "get_current_context"),
-    # Advanced Flow Control (Corrected paths: cascade.spec.* -> cascade.*)
+    # Advanced Flow Control
     "select_jump": ("cascade.control_flow", "select_jump"),
     "bind": ("cascade.control_flow", "bind"),
     # Runtime
@@ -65,6 +60,11 @@ if TYPE_CHECKING:
     from cascade.graph.serialize import to_json, from_json
     from cascade.testing import override_resource, ControllerTestApp
     from cascade.tools.cli import create_cli
+    
+    # Dynamic Providers Stubs (for static analysis)
+    # These are populated at runtime via __getattr__ delegation to the registry
+    http: Any
+    template: Any
 
 # --- V1.4 Factory Functions ---
 
@@ -136,6 +136,10 @@ def dry_run(target: Any) -> None:
 
 
 def __getattr__(name: str) -> Any:
+    # 0. Ignore internal dunder attributes to prevent recursion/side-effects
+    if name.startswith("__"):
+        raise AttributeError(f"module 'cascade' has no attribute '{name}'")
+
     # 1. Check if it's a known API member in our lazy map
     if name in _IMPORT_MAP:
         module_path, obj_name = _IMPORT_MAP[name]
@@ -152,7 +156,7 @@ def __getattr__(name: str) -> Any:
         # Fallthrough to raise the standard AttributeError below
         pass
 
-    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+    raise AttributeError(f"module 'cascade' has no attribute '{name}'")
 
 
 # --- Public API Export ---

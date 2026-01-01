@@ -85,11 +85,11 @@ def Param(
 def Env(name: str, default: Any = None, description: str = "") -> "LazyResult":
     from cascade.spec.input import EnvSpec
     from cascade.context import get_current_context
-    from cascade.internal.inputs import _get_env_var
+    from cascade.common.inputs import _get_env_var
 
     spec = EnvSpec(name=name, default=default, description=description)
     get_current_context().register(spec)
-    return _get_env_var(name=name)
+    return _get_env_var(name)
 
 
 # --- Global Functions ---

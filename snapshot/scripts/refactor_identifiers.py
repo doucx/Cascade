@@ -1,40 +1,3 @@
-## [WIP] refactor: 执行“大重命名” (The Great Renaming) - 阶段 1
-
-### 用户需求
-根据《架构公理：哈希强制长命名规范》，将系统中的核心标识符（`id`, `structural_id`, `source_id`, `target_id`）重命名为具有明确语义的长名称（如 `current_node_instance_hash`）。
-
-### 评论
-这是一个高风险、高收益的基础设施重构。使用 LibCST 编写的“工业级”脚本能最大程度减少人为疏漏，并通过 AST 分析提供比正则替换高得多的安全性。即使脚本覆盖了 80-90% 的情况，剩下的也会通过测试失败暴露出来，完全符合我们的“静态修改 + 动态验证”策略。
-
-### 目标
-1.  创建 `scripts/refactor_identifiers.py`，包含针对 `ClassDef`, `Call`, `Attribute`, `AnnAssign` 等节点的转换逻辑。
-2.  对 `packages/` 目录下的所有 Python 文件执行该脚本。
-3.  实现以下核心映射：
-    *   `Node.structural_id` / `NodeIR.id` -> `current_node_instance_hash`
-    *   `EdgeIR.source_id` -> `source_node_instance_hash`
-    *   `EdgeIR.target_id` -> `target_node_instance_hash`
-
-### 基本原理
--   **AST 转换**: 使用 `libcst` 可以精确区分变量名、属性名和字符串字面量，避免误伤（例如不替换 `uuid.uuid4()` 中的 `uuid`，也不替换非 Node 对象的 `id`）。
--   **上下文感知**: 脚本将通过跟踪 `in_class_def` 状态来决定是否修改字段定义。
--   **启发式匹配**: 对于属性访问（如 `obj.id`），脚本将使用变量名白名单（如 `node`, `n`）来降低误报率。
-
-### 标签
-#intent/refine #flow/ready #priority/critical #comp/build #concept/parser #scope/core #ai/instruct #task/domain/core #task/object/identifier-refactor #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建 LibCST 重构脚本
-
-我们将编写一个功能完备的 CST Transformer。
-
-~~~~~act
-write_file
-scripts/refactor_identifiers.py
-~~~~~
-~~~~~python
 import libcst as cst
 from libcst import matchers as m
 import sys
@@ -227,8 +190,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~
-
-### 下一步建议
-脚本执行完毕后，代码库将处于“重构中”的状态。我们必须立即运行测试套件 (`pytest packages/`)。测试**必然**会失败，但失败信息将精确指导我们完成剩余的手动修复工作（例如：未被脚本覆盖的变量名、特殊的字典键访问等）。我们将把修复过程分为几个小的计划来执行。
-

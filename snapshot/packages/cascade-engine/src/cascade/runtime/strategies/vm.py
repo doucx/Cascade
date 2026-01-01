@@ -107,9 +107,67 @@ class VMExecutionStrategy:
         """
         Translates the static BipartiteGraph spec into live, interconnected
         physics objects within the Reactor.
-        This method will be implemented in the next phase.
         """
-        # Placeholder for the topology loading logic.
-        raise NotImplementedError(
-            "VMExecutionStrategy._load_topology is not yet implemented."
-        )
+        # Caches to map from spec hash to runtime object
+        runtime_data_nodes: Dict[str, DataNode] = {}
+        runtime_func_nodes: Dict[str, FuncNode] = {}
+
+        # Pass 1: Instantiate all DataNodes and set initial constant values
+        for spec_d_node in topology.data_nodes.values():
+            d_node = DataNode(name=spec_d_node.current_data_slot_hash)
+            runtime_data_nodes[spec_d_node.current_data_slot_hash] = d_node
+            reactor.register_node(d_node)
+
+            if spec_d_node.current_data_slot_hash in topology.initial_values:
+                initial_val = topology.initial_values[
+                    spec_d_node.current_data_slot_hash
+                ]
+                initial_token = Token(payload=initial_val)
+                d_node.put(initial_token)
+
+        # Pass 2: Instantiate all FuncNodes and wire their inputs
+        for spec_f_node in topology.func_nodes.values():
+            if spec_f_node.sink_id:
+                f_node = EmitterNode(
+                    name=spec_f_node.current_node_instance_hash,
+                    sink_id=spec_f_node.sink_id,
+                )
+            else:
+                f_node = FuncNode(name=spec_f_node.current_node_instance_hash)
+
+            runtime_func_nodes[spec_f_node.current_node_instance_hash] = f_node
+
+            for port_name, source_data_hash in spec_f_node.inputs.items():
+                if source_data_hash in runtime_data_nodes:
+                    source_d_node = runtime_data_nodes[source_data_hash]
+                    port = Port(name=port_name, source=source_d_node)
+                    f_node.add_input(port)
+
+            reactor.register_node(f_node)
+
+        # Pass 3: Instantiate all Channels to wire FuncNode outputs
+        for spec_channel in topology.channels:
+            source_f_node = runtime_func_nodes.get(
+                spec_channel.source_node_instance_hash
+            )
+            target_d_node = runtime_data_nodes.get(spec_channel.target_data_slot_hash)
+
+            if source_f_node and target_d_node:
+                # Update the kind on the corresponding input port for dual-barrier check
+                # Note: This assumes input port names match output port names for signals,
+                # which is a convention we need to enforce or make more robust.
+                # For now, we find the port connected to the target DataNode.
+                for port in source_f_node.inputs.values():
+                    # This logic is complex. A simpler way is to connect the port
+                    # to the channel later. Let's rely on the ChannelDef for kind.
+                    pass
+
+                # This runtime channel connects an output port to a data node
+                channel = ReactorChannel(
+                    source=source_f_node,
+                    target=target_d_node,
+                    output_name=spec_channel.port_name,
+                    tag_filter=spec_channel.tag_filter,
+                    kind=spec_channel.kind,
+                )
+                reactor.register_channel(channel)

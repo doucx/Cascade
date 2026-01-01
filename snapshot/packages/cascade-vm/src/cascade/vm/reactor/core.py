@@ -68,6 +68,7 @@ class Reactor:
 
     def push_event(self, event: ReactorEvent):
         """Pushes an event to the queue and wakes up the run loop if it's waiting."""
+        print(f"[Reactor.push] Pushing event: {type(event).__name__}")
         self._event_queue.append(event)
         self._activity_signal.set()
 
@@ -79,8 +80,10 @@ class Reactor:
 
     async def run(self):
         """Continuously runs the reactor loop until stop() is called."""
+        print("[Reactor.run] Starting run loop.")
         self._is_running = True
         while self._is_running:
+            print(f"[Reactor.run] Loop iteration. Has work: {self._has_pending_work()}")
             await self.step()
 
             # If step() resulted in more immediate work, loop again without waiting.
@@ -88,15 +91,21 @@ class Reactor:
                 continue
 
             # If no more work, wait for a new event to arrive.
+            print("[Reactor.run] No immediate work. Awaiting activity signal...")
             await self._activity_signal.wait()
             self._activity_signal.clear()
+            print("[Reactor.run] Woke up from activity signal.")
+        
+        print("[Reactor.run] Run loop stopped.")
 
     def stop(self):
         """Stops the reactor's run loop gracefully."""
+        print("[Reactor.run] Stop signal received.")
         self._is_running = False
         self._activity_signal.set()
 
     async def step(self):
+        print("[Reactor.step] Step started.")
         """
         Advance the reactor by one atomic "tick".
 
@@ -127,6 +136,7 @@ class Reactor:
             if not candidates:
                 if not progress_made:
                     # Stable state reached: No events processed, no candidates to check.
+                    print("[Reactor.step] Step reached stable state.")
                     break
                 else:
                     # Events were processed, loop again to check if they triggered anything new

@@ -1,36 +1,26 @@
-你说得对，我的上一个修复方案显然没有命中要害。静态分析已经达到了极限，是时候采用更严格的 TDD（测试驱动开发）方法了。我们必须创建一个最小化的、可复现的测试用例来**主动触发**这个死锁，然后用它作为我们定位和修复问题的“显微镜”。
+好的，我们已经确认了死锁的存在。现在，我们将执行调试的标准操作：在系统的关键路径上植入诊断日志，以“照亮”代码的执行流程，看看它到底卡在了哪里。
 
-我将创建一个全新的测试文件，其唯一目的就是隔离并复现 `VMExecutionStrategy` 的死锁问题。
+我将生成一个计划，通过 `patch_file` 在 `VMExecutionStrategy`、`Reactor` 和 `PhysicsExecutor` 的关键位置添加临时的 `print` 语句。
 
-我之前的分析认为问题出在 `Reactor` 的“冷启动”上。虽然激活 `_dirty_func_nodes` 是必要的，但死锁依然存在，这说明问题可能更深层，或者存在于 `Strategy` 和 `Reactor` 的交互模型中。
-
-一个常见的、更微妙的死锁原因是：**`Reactor` 的 `step()` 方法可能在没有任何 `await` 的情况下过早地完成了它的“tick”，导致事件循环没有机会切换上下文去执行 `PhysicsExecutor` 推送回来的 `ExecutionFinished` 事件。**
-
-`reactor.run()` 的循环是 `while self._is_running: await self.step() ...`。如果 `step()` 是一个纯同步的、快速完成的方法，那么 `run()` 循环可能会在 `executor` 的后台任务完成并推送事件之前，就判定自己“无事可做”并进入睡眠状态。
-
-这个新的测试将帮助我们验证这个假说。
-
----
-
-## [WIP] test(engine): 创建用于诊断 VMStrategy 死锁的最小化集成测试
+## [WIP] test(vm): 为 VMStrategy 死锁问题添加诊断日志
 
 ### 用户需求
-当前的修复方案未能解决 `VMExecutionStrategy` 的死锁问题。需要创建一个新的、独立的测试文件，用最简单的用例来稳定地复现这个死锁，以便进行精确的问题定位。
+最小化集成测试 `test_vm_strategy_executes_simplest_workflow` 出现死锁。需要通过添加日志来追踪 `VMExecutionStrategy`, `Reactor`, 和 `PhysicsExecutor` 之间的详细交互流程，以定位死锁的根本原因。
 
 ### 评论
-这是一个关键的战术转变，从“猜测修复”转向“证据驱动的调试”。通过创建一个只关注 `VMExecutionStrategy` 本身的、完全隔离的集成测试，我们可以排除 `Engine`、`Solver` 和其他外部组件的干扰。这个测试被设计为在当前代码下会**失败（通过死锁/超时）**，从而为我们提供一个可靠的、可重复的“RED”状态。这是解决复杂异步问题的唯一严谨方法。
+这是解决复杂异步死锁问题的经典且必要的一步。通过在系统的关键“关节”——策略层、反应堆循环和执行器——中插入日志，我们可以清晰地观察到控制流是否按预期传递。日志输出将揭示是 `Reactor` 从未启动工作，还是 `Executor` 的完成信号从未被 `Reactor` 接收，从而为我们提供解决问题的直接证据。
 
 ### 目标
-1.  创建一个新的测试文件 `packages/cascade-engine/tests/integration/test_vm_strategy_integration.py`。
-2.  在该文件中，编写一个名为 `test_vm_strategy_executes_simplest_workflow` 的测试用例。
-3.  该测试用例将：
-    *   定义一个最简单的 `cascade` 工作流（一个不依赖任何输入的任务）。
-    *   直接实例化 `VMExecutionStrategy`。
-    *   使用必要的 mock 和临时对象（如 `InMemoryStateBackend`）调用 `strategy.execute()`。
-    *   断言 `execute` 返回了预期的结果。
+1.  **策略层 (`VMExecutionStrategy`)**: 记录 `execute` 方法的启动、等待和清理阶段。
+2.  **反应堆层 (`Reactor`)**: 记录 `run` 循环的启动、休眠和唤醒，`step` 方法的执行，以及 `push_event` 的调用。
+3.  **执行器层 (`PhysicsExecutor`)**: 记录 `submit` 方法的调用和完成（即推送 `ExecutionFinished` 事件之前）。
 
 ### 基本原理
-当一个复杂的异步系统出现死锁时，最有效的方法是剥离所有不相关的复杂性，直到只剩下能触发问题的最小核心。这个测试正是为此设计的。它绕过了 `Engine` 的复杂初始化，直接调用 `VMExecutionStrategy`，为其提供一个最简单的、确定性的执行环境。如果这个测试挂起，我们就 100% 确定问题出在 `VMExecutionStrategy`、`Reactor` 或它们之间的交互中，从而极大地缩小了排查范围。
+死锁的本质是一个等待循环：A 等待 B，而 B 正在等待 A。我们的日志植入点被设计用来打破这个信息黑盒。
+- `VMExecutionStrategy` 的日志将告诉我们“A 正在等待”。
+- `Reactor` 的日志将告诉我们“B 正在等待”或“B 正在做什么”。
+- `PhysicsExecutor` 的日志将告诉我们 `Reactor` 是否成功将工作委托给了 `Executor`，以及 `Executor` 是否成功将结果报告回 `Reactor`。
+通过分析这三者日志的时间线，我们就能精确地定位到哪个环节的通信中断了。
 
 ### 标签
 #intent/tooling #flow/ready #priority/critical #comp/engine #comp/tests #scope/core #ai/instruct #task/domain/engine #task/object/vm-strategy #task/action/bug-fix #task/state/continue
@@ -38,60 +28,371 @@
 ---
 ### Script
 
-#### Acts 1: 创建 VMStrategy 的隔离集成测试
-
-我们将创建一个新的测试文件，旨在以最小化的方式复现死锁。
+#### Acts 1: 为 VMExecutionStrategy 添加日志
 
 ~~~~~act
-write_file
-packages/cascade-engine/tests/integration/test_vm_strategy_integration.py
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 ~~~~~
-~~~~~python
-import pytest
-from contextlib import ExitStack
+~~~~~python.old
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        # 1. 编译 (Compilation)
+        compilation_result = self.frontend.compile(target)
+        topology = self.backend.compile(compilation_result.ir)
+        symbol_table = compilation_result.symbol_table
 
-import cascade as cs
-from cascade.runtime.bus import MessageBus
-from cascade.runtime.strategies.vm import VMExecutionStrategy
-from cascade.adapters.state import InMemoryStateBackend
+        # 2. 组装 (Assembly)
+        reactor = Reactor(executor=None)  # Executor will be injected right after
+        physics_executor = PhysicsExecutor(reactor=reactor, symbol_table=symbol_table)
+        reactor.executor = physics_executor
 
+        # 3. 配置 (Configuration)
+        loop = asyncio.get_running_loop()
+        result_future = loop.create_future()
+        termination_future = loop.create_future()
 
-@pytest.mark.asyncio
-async def test_vm_strategy_executes_simplest_workflow():
-    """
-    A minimal, isolated integration test for VMExecutionStrategy.
+        def on_main_output(payload: Any):
+            if not result_future.done():
+                result_future.set_result(payload)
 
-    This test is designed to reproduce the deadlock scenario by directly invoking
-    the strategy without the complexity of the full Engine.
-    """
+        def on_termination_signal(payload: Any):
+            if not termination_future.done():
+                termination_future.set_result(True)
 
-    # 1. Define the simplest possible workflow
-    @cs.task
-    def get_value():
-        return 42
+        reactor.register_sink("main_output", on_main_output)
+        reactor.register_sink("__system_lifecycle_signal", on_termination_signal)
 
-    workflow = get_value()
+        # This call will fail until the next phase is implemented
+        self._load_topology(reactor, topology)
 
-    # 2. Instantiate the strategy and its minimal dependencies
-    strategy = VMExecutionStrategy(bus=MessageBus())
-    state_backend = InMemoryStateBackend("test-run-vm-strategy")
+        # 4. 运行与等待 (Execution & Observation)
+        run_task = asyncio.create_task(reactor.run())
 
-    # 3. Execute the strategy
-    # If a deadlock exists, the test will hang here indefinitely.
-    result = await strategy.execute(
-        target=workflow,
-        run_id="test-run-vm-strategy",
-        params={},
-        state_backend=state_backend,
-        run_stack=ExitStack(),
-        active_resources={},
-    )
+        try:
+            # Wait for both the result and the termination signal to ensure
+            # the graph has fully completed its lifecycle.
+            await asyncio.wait(
+                [result_future, termination_future],
+                return_when=asyncio.ALL_COMPLETED,
+            )
 
-    # 4. Assert the result
-    assert result == 42
+            if result_future.exception():
+                raise result_future.exception()
+            if termination_future.exception():
+                raise termination_future.exception()
+
+            if not result_future.done():
+                raise RuntimeError("Workflow terminated without producing a result.")
+
+            return result_future.result()
+
+        finally:
+            # 5. 清理 (Teardown)
+            if not run_task.done():
+                reactor.stop()
+                # Yield control briefly to allow the reactor loop to process the stop signal
+                await asyncio.sleep(0)
+                run_task.cancel()
+                try:
+                    await run_task
+                except asyncio.CancelledError:
+                    pass  # Cancellation is the expected outcome here.
+~~~~~
+~~~~~python.new
+    async def execute(
+        self,
+        target: Any,
+        run_id: str,
+        params: Dict[str, Any],
+        state_backend: StateBackend,
+        run_stack: ExitStack,
+        active_resources: Dict[str, Any],
+    ) -> Any:
+        print("[VMStrategy] execute started.")
+        # 1. 编译 (Compilation)
+        compilation_result = self.frontend.compile(target)
+        topology = self.backend.compile(compilation_result.ir)
+        symbol_table = compilation_result.symbol_table
+        print("[VMStrategy] Compilation finished.")
+
+        # 2. 组装 (Assembly)
+        reactor = Reactor(executor=None)  # Executor will be injected right after
+        physics_executor = PhysicsExecutor(reactor=reactor, symbol_table=symbol_table)
+        reactor.executor = physics_executor
+        print("[VMStrategy] Reactor and Executor assembled.")
+
+        # 3. 配置 (Configuration)
+        loop = asyncio.get_running_loop()
+        result_future = loop.create_future()
+        termination_future = loop.create_future()
+
+        def on_main_output(payload: Any):
+            print(f"[VMStrategy] Sink 'main_output' called with: {payload}")
+            if not result_future.done():
+                result_future.set_result(payload)
+
+        def on_termination_signal(payload: Any):
+            print("[VMStrategy] Sink '__system_lifecycle_signal' called.")
+            if not termination_future.done():
+                termination_future.set_result(True)
+
+        reactor.register_sink("main_output", on_main_output)
+        reactor.register_sink("__system_lifecycle_signal", on_termination_signal)
+
+        self._load_topology(reactor, topology)
+        print("[VMStrategy] Topology loaded and reactor kickstarted.")
+
+        # 4. 运行与等待 (Execution & Observation)
+        print("[VMStrategy] Starting reactor.run() in background task...")
+        run_task = asyncio.create_task(reactor.run())
+
+        try:
+            print("[VMStrategy] Awaiting futures...")
+            await asyncio.wait(
+                [result_future, termination_future],
+                return_when=asyncio.ALL_COMPLETED,
+            )
+            print("[VMStrategy] Futures completed.")
+
+            if result_future.exception():
+                raise result_future.exception()
+            if termination_future.exception():
+                raise termination_future.exception()
+
+            if not result_future.done():
+                raise RuntimeError("Workflow terminated without producing a result.")
+
+            return result_future.result()
+
+        finally:
+            # 5. 清理 (Teardown)
+            print("[VMStrategy] Entering finally block for cleanup.")
+            if not run_task.done():
+                reactor.stop()
+                # Yield control briefly to allow the reactor loop to process the stop signal
+                await asyncio.sleep(0)
+                run_task.cancel()
+                try:
+                    await run_task
+                except asyncio.CancelledError:
+                    print("[VMStrategy] Reactor task successfully cancelled.")
+                    pass  # Cancellation is the expected outcome here.
+~~~~~
+
+#### Acts 2: 为 Reactor 添加日志
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor/core.py
+~~~~~
+~~~~~python.old
+    def push_event(self, event: ReactorEvent):
+        """Pushes an event to the queue and wakes up the run loop if it's waiting."""
+        self._event_queue.append(event)
+        self._activity_signal.set()
+
+    def _has_pending_work(self) -> bool:
+        """Checks if there's any immediate work to be done."""
+        return bool(
+            self._event_queue or self._dirty_func_nodes or self._pending_on_resource
+        )
+
+    async def run(self):
+        """Continuously runs the reactor loop until stop() is called."""
+        self._is_running = True
+        while self._is_running:
+            await self.step()
+
+            # If step() resulted in more immediate work, loop again without waiting.
+            if self._has_pending_work():
+                continue
+
+            # If no more work, wait for a new event to arrive.
+            await self._activity_signal.wait()
+            self._activity_signal.clear()
+
+    def stop(self):
+        """Stops the reactor's run loop gracefully."""
+        self._is_running = False
+        self._activity_signal.set()
+~~~~~
+~~~~~python.new
+    def push_event(self, event: ReactorEvent):
+        """Pushes an event to the queue and wakes up the run loop if it's waiting."""
+        print(f"[Reactor.push] Pushing event: {type(event).__name__}")
+        self._event_queue.append(event)
+        self._activity_signal.set()
+
+    def _has_pending_work(self) -> bool:
+        """Checks if there's any immediate work to be done."""
+        return bool(
+            self._event_queue or self._dirty_func_nodes or self._pending_on_resource
+        )
+
+    async def run(self):
+        """Continuously runs the reactor loop until stop() is called."""
+        print("[Reactor.run] Starting run loop.")
+        self._is_running = True
+        while self._is_running:
+            print(f"[Reactor.run] Loop iteration. Has work: {self._has_pending_work()}")
+            await self.step()
+
+            # If step() resulted in more immediate work, loop again without waiting.
+            if self._has_pending_work():
+                continue
+
+            # If no more work, wait for a new event to arrive.
+            print("[Reactor.run] No immediate work. Awaiting activity signal...")
+            await self._activity_signal.wait()
+            self._activity_signal.clear()
+            print("[Reactor.run] Woke up from activity signal.")
+        
+        print("[Reactor.run] Run loop stopped.")
+
+    def stop(self):
+        """Stops the reactor's run loop gracefully."""
+        print("[Reactor.run] Stop signal received.")
+        self._is_running = False
+        self._activity_signal.set()
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor/core.py
+~~~~~
+~~~~~python.old
+    async def step(self):
+        """
+        Advance the reactor by one atomic "tick".
+~~~~~
+~~~~~python.new
+    async def step(self):
+        print("[Reactor.step] Step started.")
+        """
+        Advance the reactor by one atomic "tick".
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor/core.py
+~~~~~
+~~~~~python.old
+                if not progress_made:
+                    # Stable state reached: No events processed, no candidates to check.
+                    break
+                else:
+                    # Events were processed, loop again to check if they triggered anything new
+                    continue
+
+            fire_tasks = []
+~~~~~
+~~~~~python.new
+                if not progress_made:
+                    # Stable state reached: No events processed, no candidates to check.
+                    print("[Reactor.step] Step reached stable state.")
+                    break
+                else:
+                    # Events were processed, loop again to check if they triggered anything new
+                    continue
+
+            fire_tasks = []
+~~~~~
+
+#### Acts 3: 为 PhysicsExecutor 添加日志
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/executors/physics.py
+~~~~~
+~~~~~python.old
+    async def submit(self, node: FuncNode, inputs: Dict[str, Token]):
+        """
+        Executes the logic for a given FuncNode and reports the result back
+        to the reactor.
+        """
+        outputs = {}
+        error = None
+
+        try:
+            # 1. Linking: Find the function in the symbol table.
+            # We use node.name as the hash key, which is a test convention.
+            # In a real system, a dedicated hash field would be used.
+            func = self._symbol_table.get(node.name)
+            if not func:
+                raise RuntimeError(
+                    f"Linking failed: function for node '{node.name}' "
+                    "not found in symbol table."
+                )
+
+            # 2. Unpack Payloads: Convert Dict[str, Token] to Dict[str, Any]
+            kwargs = {name: token.payload for name, token in inputs.items()}
+
+            # 3. Execution
+            result = func(**kwargs)
+            if inspect.isawaitable(result):
+                result = await result
+
+            # 4. Wrap Result: Convert the raw result back into a Token.
+            # For now, we assume a single 'result' output port with 'default' tag.
+            outputs["result"] = Token(payload=result, tag="default")
+
+        except Exception as e:
+            error = e
+
+        # 5. Report: Push an ExecutionFinished event to the reactor.
+        event = ExecutionFinished(node=node, outputs=outputs, error=error)
+        self._reactor.push_event(event)
+~~~~~
+~~~~~python.new
+    async def submit(self, node: FuncNode, inputs: Dict[str, Token]):
+        """
+        Executes the logic for a given FuncNode and reports the result back
+        to the reactor.
+        """
+        print(f"[Executor] Submitting node '{node.name}' for execution.")
+        outputs = {}
+        error = None
+
+        try:
+            # 1. Linking: Find the function in the symbol table.
+            # We use node.name as the hash key, which is a test convention.
+            # In a real system, a dedicated hash field would be used.
+            func = self._symbol_table.get(node.name)
+            if not func:
+                raise RuntimeError(
+                    f"Linking failed: function for node '{node.name}' "
+                    "not found in symbol table."
+                )
+
+            # 2. Unpack Payloads: Convert Dict[str, Token] to Dict[str, Any]
+            kwargs = {name: token.payload for name, token in inputs.items()}
+
+            # 3. Execution
+            result = func(**kwargs)
+            if inspect.isawaitable(result):
+                result = await result
+
+            # 4. Wrap Result: Convert the raw result back into a Token.
+            # For now, we assume a single 'result' output port with 'default' tag.
+            outputs["result"] = Token(payload=result, tag="default")
+            print(f"[Executor] Node '{node.name}' execution finished successfully.")
+
+        except Exception as e:
+            error = e
+            print(f"[Executor] Node '{node.name}' execution FAILED with error: {e}")
+
+        # 5. Report: Push an ExecutionFinished event to the reactor.
+        event = ExecutionFinished(node=node, outputs=outputs, error=error)
+        self._reactor.push_event(event)
 ~~~~~
 
 ### 下一步建议
-我们已经创建了用于诊断的“探针”。现在，请运行这个新的测试文件。它有很大概率会因为超时而失败。
+我们已经为系统的所有关键部分都安装了“监视器”。现在，请再次运行 `pytest packages/cascade-engine/tests/integration/test_vm_strategy_integration.py`。
 
-一旦我们确认了这个失败，我将指导你如何在这个测试的基础上，通过添加日志或修改 `Reactor` 的代码来暴露内部状态，从而最终定位并解决这个顽固的死锁问题。
+这一次，测试应该仍然会挂起，但终端会打印出详细的执行日志。**请将完整的、未经删减的日志输出提供给我**。通过分析这些日志的时间顺序，我们就能准确定位到死锁发生的环节。

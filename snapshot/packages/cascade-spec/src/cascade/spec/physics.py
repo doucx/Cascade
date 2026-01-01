@@ -71,12 +71,16 @@ class DataNode:
         return self._buffer.pop(0)
 
 
+from cascade.spec.topology import ChannelKind
+
+
 @dataclass
 class Port:
     """
-    Connection point on a FuncNode.
+    Connection point on a FuncNode, representing a dependency.
     """
     name: str
+    kind: ChannelKind = ChannelKind.DATA
     source: Optional[DataNode] = None
     target: Optional[DataNode] = None
 
@@ -103,10 +107,12 @@ class FuncNode:
 
     def is_ready(self) -> bool:
         """
-        Potential Barrier Check: Are all connected inputs excited?
+        Dual-Barrier Potential Check: 
+        Are all DATA inputs AND all SIGNAL inputs excited?
         """
         for port in self.inputs.values():
             if port.source and not port.source.is_excited():
+                # If any input is not ready, the node is not ready.
                 return False
         return True
 

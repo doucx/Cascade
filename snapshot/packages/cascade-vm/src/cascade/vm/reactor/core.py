@@ -173,6 +173,9 @@ class Reactor:
         for f_node in downstream:
             self._dirty_func_nodes.add(f_node)
 
+from cascade.spec.physics import Token
+from cascade.spec.topology import ChannelKind
+
     async def _handle_execution_finished(self, event: ExecutionFinished):
         # 1. Release Resources
         if self.resource_manager and event.node.resource_requirements:
@@ -189,7 +192,13 @@ class Reactor:
             for channel in channels:
                 if channel.output_name == output_name and channel.match(token.tag):
                     # Route: Generate a TokenGenerated event for the target DataNode
-                    self.push_event(TokenGenerated(node=channel.target, token=token))
+                    if channel.kind == ChannelKind.SIGNAL:
+                        # For signal channels, create a new, payload-less token
+                        signal_token = Token(payload=None, tag=token.tag, metadata=token.metadata)
+                        self.push_event(TokenGenerated(node=channel.target, token=signal_token))
+                    else:
+                        # For data channels, pass the original token
+                        self.push_event(TokenGenerated(node=channel.target, token=token))
 
     async def _fire(self, node: FuncNode):
         # 1. Atomically consume inputs (Physics: Consume Energy)

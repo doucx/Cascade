@@ -1,382 +1,254 @@
-好的，我们已采纳新战略。
+好的，我们正式进入 **阶段 5.A.2**。
 
-现在开始执行修正后的 **阶段 5.A.1：在 IR 和拓扑中建立信令原语**。
+此阶段的核心任务是让我们的 `Reactor` 物理引擎“学会”新的物理定律。我们将对其进行升级，使其能够理解和执行基于“通道极化”的“双势垒”激活模型。这意味着，一个函数节点必须同时满足其所有的数据依赖和信号依赖，才能被激发。
 
-此计划将为我们的静态拓扑引入“通道极化”的概念，在 `cascade-spec` 中定义 `DATA` 和 `SIGNAL` 两种通道类型，并更新 `cascade-compiler` 后端，使其能够根据前端 IR 生成带有正确极化属性的物理通道。
+我将生成一个计划来实现这一目标。
 
-## [WIP] feat(spec): 引入 DATA 和 SIGNAL 通道极化
+## [WIP] feat(vm): 在 Reactor 中实现双势垒激活逻辑
 
 ### 用户需求
-根据我们刚刚确定的新战略，执行“路线图：全对称物理引擎与编译器重构”中修正后的阶段 5.A.1。核心任务是在静态拓扑规范中引入通道极化（`ChannelKind`），并使编译器后端能够生成带有正确极化类型的通道。
+执行“路线图：全对称物理引擎与编译器重构”中修正后的阶段 5.A.2。我们需要修改 `cascade-vm`，使 `Reactor` 能够处理极化通道，并根据数据和信号的双重依赖关系来调度任务。
 
 ### 评论
-这是实现“全对称架构”一个至关重要的基础步骤。通过在静态拓扑层（`ChannelDef`）就明确区分“物质传递”（DATA）和“时序触发”（SIGNAL），我们为后续物理引擎（`Reactor`）实现更精确、更解耦的“双势垒”激活模型提供了不可或缺的静态信息。这从根本上避免了语义耦合，为构建一个真正健壮的物理模拟器奠定了基础。
+这是将我们上一阶段定义的静态规范（`ChannelKind`）转化为动态运行时行为的关键一步。通过实现双势垒逻辑，我们正在将 `Reactor` 从一个简单的调度器，转变为一个真正的、能够模拟不同“物理力”（数据流与控制信号）的物理引擎。这个修改将极大地增强我们计算模型的表达能力和健壮性，是实现全对称架构的核心所在。
 
 ### 目标
-1.  在 `cascade-spec` 中，更新 `ChannelDef` 数据类，增加一个 `kind: ChannelKind` 字段，用于区分 `DATA` 和 `SIGNAL` 通道。
-2.  重构 `cascade-compiler` 的 `Backend`，使其在将 `GraphIR` 编译为 `BipartiteGraph` 时：
-    *   将 `EdgeKind.DATA` 和 `EdgeKind.JUMP` 的边所对应的通道，其 `ChannelDef.kind` 设为 `ChannelKind.DATA`。
-    *   **新增逻辑**来处理 `EdgeKind.CONTROL` 的边，并将其对应的通道 `ChannelDef.kind` 设为 `ChannelKind.SIGNAL`。
+1.  **增强物理模型 (`cascade-spec`)**: 更新 `Port` 定义，使其包含 `kind` 属性，从而让 `FuncNode` 能够区分其输入是来自数据通道还是信号通道。
+2.  **更新 `FuncNode` 激活逻辑**: 重写 `FuncNode.is_ready()` 方法，实现双势垒检查：必须所有 `DATA` 端口和所有 `SIGNAL` 端口的输入源 `DataNode` 都处于“激发态”，该节点才算就绪。
+3.  **更新 `Reactor` 内部模型**: 使 `Reactor` 内部的 `Channel` 表现形式与 `spec` 中的 `ChannelDef` 保持一致，也包含 `kind` 属性。
+4.  **实现信号感知路由**: 修改 `Reactor` 的路由逻辑，当一个 `Token` 通过 `SIGNAL` 类型的通道进行路由时，其 `payload` 必须被丢弃，只传递一个纯粹的“激活信号”。
 
 ### 基本原理
-我们首先修改 `cascade-spec` 中的 `topology.py`，因为它是定义静态数据结构的“纲”。通过在这里引入 `ChannelKind`，我们确立了整个系统都必须遵守的契约。
+我们将遵循“契约优先”的原则，首先修改 `cascade-spec` 中的 `physics.py`。通过将 `kind` 属性添加到 `Port`，我们为 `FuncNode` 提供了执行双势垒检查所需的所有本地信息，这是一种清晰且解耦的设计。
 
-随后，我们使用 `write_file` 更新 `cascade-compiler` 的 `backend.py`。选用 `write_file` 是因为修改点分散在文件的多个位置（新增 `import`、修改两个现有方法、增加一个新方法并更新 `build` 调用流程），一次性写入能更清晰、更原子化地完成重构。这个重构将使编译器后端完全适配新的通道极化规范，确保生成的物理蓝图是完备和正确的。
+随后，我们同步更新 `cascade-vm` 中的 `reactor/model.py`，确保其内部数据结构的一致性。
+
+最后，我们修改 `Reactor` 的核心逻辑 (`reactor/core.py`)。在这里，我们将实现信号感知的路由，确保 `SIGNAL` 通道只传递激活，不传递数据。这些修改将共同完成 `Reactor` 的物理模型升级。所有操作都使用 `patch_file`，因为它们都是对现有文件的精确、集中的增强。
 
 ### 标签
-#intent/architect #intent/build #flow/ready #priority/high #comp/compiler #comp/interfaces #concept/state #scope/api #ai/instruct #task/domain/compiler #task/object/channel-polarity #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/engine #concept/state #scope/core #ai/instruct #task/domain/vm #task/object/reactor-physics #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: [Spec] 在 ChannelDef 中定义通道类型
+#### Acts 1: [Spec] 增强物理模型以支持极化端口
 
-首先，我们修改 `cascade-spec` 包，为 `ChannelDef` 引入 `ChannelKind` 枚举和 `kind` 字段，这是所有后续工作的基础。
+我们首先修改 `spec`，将通道的 `kind` 属性内化到 `FuncNode` 的 `Port` 中，并重写 `is_ready()` 以实现双势垒检查。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/topology.py
+packages/cascade-spec/src/cascade/spec/physics.py
 ~~~~~
 ~~~~~python.old
-from dataclasses import dataclass, field
-from typing import Dict, List
-
-
-@dataclass(frozen=True)
-class PhysicsFuncNode:
+@dataclass
+class Port:
     """
-    Represents a computational instance in the physical bipartite graph.
-    This is the "Verb" or the transformer.
+    Connection point on a FuncNode.
     """
-    current_node_instance_hash: str
     name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
+    source: Optional[DataNode] = None
+    target: Optional[DataNode] = None
 
 
-@dataclass(frozen=True)
-class PhysicsDataNode:
+class FuncNode:
     """
-    Represents a data storage slot in the physical bipartite graph.
-    This is the "Noun" or the container. It tracks its origin.
+    Stateless transformer. Represents the 'Verb' in the physics model.
     """
-    current_data_slot_hash: str
-    name: str
-    producer_node_instance_hash: str
+    def __init__(
+        self, 
+        name: str, 
+        resource_requirements: Optional[Dict[str, Any]] = None
+    ):
+        self.name = name
+        self.resource_requirements = resource_requirements or {}
+        self.inputs: Dict[str, Port] = {}
+        self.outputs: Dict[str, Port] = {}
 
+    def add_input(self, port: Port):
+        self.inputs[port.name] = port
 
-@dataclass(frozen=True)
-class PhysicsTerminatorNode:
-    """
-    A special Functional Node that, when fired, triggers the shutdown of the Reactor.
-    It represents the "End of Time" for a run.
-    """
-    current_node_instance_hash: str
-    name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
+    def add_output(self, port: Port):
+        self.outputs[port.name] = port
 
+    def is_ready(self) -> bool:
+        """
+        Potential Barrier Check: Are all connected inputs excited?
+        """
+        for port in self.inputs.values():
+            if port.source and not port.source.is_excited():
+                return False
+        return True
 
-@dataclass(frozen=True)
-class PhysicsEmitterNode:
-    """
-    A specialized node that projects internal tokens to the external world.
-    It acts as a boundary bridge.
-    """
-    current_node_instance_hash: str
-    name: str
-    sink_id: str  # Identifier for the external sink (e.g. "client_response")
-    inputs: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class ChannelDef:
-    """
-    Defines a static, directed connection from a FuncNode's output port
-    to a DataNode's input slot, with routing logic.
-    """
-    source_node_instance_hash: str
-    target_data_slot_hash: str
-    port_name: str
-    tag_filter: str = "default"
-
-
-from typing import Any
-
-@dataclass(frozen=True)
-class BipartiteGraph:
+    def consume_inputs(self) -> Dict[str, Token]:
+        """
+        Atomically consume tokens from all input sources.
 ~~~~~
 ~~~~~python.new
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Dict, List
+from cascade.spec.topology import ChannelKind
 
 
-@dataclass(frozen=True)
-class PhysicsFuncNode:
+@dataclass
+class Port:
     """
-    Represents a computational instance in the physical bipartite graph.
-    This is the "Verb" or the transformer.
+    Connection point on a FuncNode, representing a dependency.
     """
-    current_node_instance_hash: str
     name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
+    kind: ChannelKind = ChannelKind.DATA
+    source: Optional[DataNode] = None
+    target: Optional[DataNode] = None
 
 
-@dataclass(frozen=True)
-class PhysicsDataNode:
+class FuncNode:
     """
-    Represents a data storage slot in the physical bipartite graph.
-    This is the "Noun" or the container. It tracks its origin.
+    Stateless transformer. Represents the 'Verb' in the physics model.
     """
-    current_data_slot_hash: str
-    name: str
-    producer_node_instance_hash: str
+    def __init__(
+        self, 
+        name: str, 
+        resource_requirements: Optional[Dict[str, Any]] = None
+    ):
+        self.name = name
+        self.resource_requirements = resource_requirements or {}
+        self.inputs: Dict[str, Port] = {}
+        self.outputs: Dict[str, Port] = {}
+
+    def add_input(self, port: Port):
+        self.inputs[port.name] = port
+
+    def add_output(self, port: Port):
+        self.outputs[port.name] = port
+
+    def is_ready(self) -> bool:
+        """
+        Dual-Barrier Potential Check: 
+        Are all DATA inputs AND all SIGNAL inputs excited?
+        """
+        for port in self.inputs.values():
+            if port.source and not port.source.is_excited():
+                # If any input is not ready, the node is not ready.
+                return False
+        return True
+
+    def consume_inputs(self) -> Dict[str, Token]:
+        """
+        Atomically consume tokens from all input sources.
+~~~~~
+
+#### Acts 2: [VM] 更新 Reactor 的内部通道模型
+
+接下来，我们让 `Reactor` 内部使用的 `Channel` 对象也拥有 `kind` 属性，与 `spec` 保持一致。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor/model.py
+~~~~~
+~~~~~python.old
+from dataclasses import dataclass
+from cascade.spec.physics import FuncNode, DataNode
 
 
-@dataclass(frozen=True)
-class PhysicsTerminatorNode:
+@dataclass
+class Channel:
     """
-    A special Functional Node that, when fired, triggers the shutdown of the Reactor.
-    It represents the "End of Time" for a run.
+    Represents a directed connection from a FuncNode output port to a DataNode.
+    Includes routing logic (tag filtering).
     """
-    current_node_instance_hash: str
-    name: str
-    # Map input argument names to the source DataNode hash
-    inputs: Dict[str, str] = field(default_factory=dict)
+    source: FuncNode
+    target: DataNode
+    output_name: str
+    tag_filter: str = "default"
+
+    def match(self, tag: str) -> bool:
+        """
+        Check if the token tag matches this channel's filter.
+        """
+        return self.tag_filter == tag
+~~~~~
+~~~~~python.new
+from dataclasses import dataclass
+from cascade.spec.physics import FuncNode, DataNode
+from cascade.spec.topology import ChannelKind
 
 
-@dataclass(frozen=True)
-class PhysicsEmitterNode:
+@dataclass
+class Channel:
     """
-    A specialized node that projects internal tokens to the external world.
-    It acts as a boundary bridge.
+    Represents a directed connection from a FuncNode output port to a DataNode.
+    Includes routing logic (tag filtering) and physical kind.
     """
-    current_node_instance_hash: str
-    name: str
-    sink_id: str  # Identifier for the external sink (e.g. "client_response")
-    inputs: Dict[str, str] = field(default_factory=dict)
-
-
-class ChannelKind(str, Enum):
-    """
-    Defines the physical nature of a channel, separating data flow from control flow.
-    """
-    DATA = "DATA"      # Transports a payload. Contributes to 'data potential'.
-    SIGNAL = "SIGNAL"  # Transports only an activation signal. Contributes to 'control potential'.
-
-
-@dataclass(frozen=True)
-class ChannelDef:
-    """
-    Defines a static, directed connection from a FuncNode's output port
-    to a DataNode's input slot, with routing logic.
-    """
-    source_node_instance_hash: str
-    target_data_slot_hash: str
-    port_name: str
+    source: FuncNode
+    target: DataNode
+    output_name: str
     tag_filter: str = "default"
     kind: ChannelKind = ChannelKind.DATA
 
-
-from typing import Any
-
-@dataclass(frozen=True)
-class BipartiteGraph:
+    def match(self, tag: str) -> bool:
+        """
+        Check if the token tag matches this channel's filter.
+        """
+        return self.tag_filter == tag
 ~~~~~
 
-#### Acts 2: [Compiler] 使后端支持生成极化通道
+#### Acts 3: [VM] 在 Reactor 中实现信号感知路由
 
-现在，我们重构编译器后端，使其能够根据 IR 中边的类型（`EdgeKind`）生成具有正确极化（`ChannelKind`）的 `ChannelDef`。
+最后，我们修改 `Reactor` 的核心路由逻辑，使其在处理 `SIGNAL` 通道时，生成一个不含业务数据的纯激活令牌。
 
 ~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/backend.py
+patch_file
+packages/cascade-vm/src/cascade/vm/reactor/core.py
 ~~~~~
-~~~~~python
-import hashlib
-from typing import List, Dict, Any
+~~~~~python.old
+    async def _handle_execution_finished(self, event: ExecutionFinished):
+        # 1. Release Resources
+        if self.resource_manager and event.node.resource_requirements:
+            await self.resource_manager.release(event.node.resource_requirements)
+            # Optimization hint: Releasing resources might wake up pending nodes.
+            # In Phase 4.2, we might explicitly trigger a wake-up here.
+            # For now, the next step() call will re-evaluate _pending_on_resource.
 
-from cascade.spec.ir.models import GraphIR, EdgeKind
-from cascade.spec.topology import (
-    BipartiteGraph,
-    PhysicsFuncNode,
-    PhysicsDataNode,
-    ChannelDef,
-    ChannelKind,
-)
-
-
-class Backend:
-    """
-    Compiler Backend: Transforms GraphIR into a static BipartiteGraph topology.
-    """
-
-    @staticmethod
-    def compile(graph: GraphIR) -> BipartiteGraph:
-        builder = _TopologyBuilder(graph)
-        return builder.build()
-
-
-class _TopologyBuilder:
-    def __init__(self, graph: GraphIR):
-        self._graph = graph
-        self._func_nodes: Dict[str, PhysicsFuncNode] = {}
-        self._data_nodes: Dict[str, PhysicsDataNode] = {}
-        self._channels: List[ChannelDef] = []
+        # 2. Routing Logic
+        channels = self._channels_by_source.get(event.node.name, [])
         
-        # Helper map: FuncNode Hash -> Default Output DataNode Hash
-        self._func_output_map: Dict[str, str] = {}
+        for output_name, token in event.outputs.items():
+            # Find matching channels for this output port
+            for channel in channels:
+                if channel.output_name == output_name and channel.match(token.tag):
+                    # Route: Generate a TokenGenerated event for the target DataNode
+                    self.push_event(TokenGenerated(node=channel.target, token=token))
+~~~~~
+~~~~~python.new
+from cascade.spec.physics import Token
+from cascade.spec.topology import ChannelKind
 
-    def build(self) -> BipartiteGraph:
-        self._initial_values = {}
+    async def _handle_execution_finished(self, event: ExecutionFinished):
+        # 1. Release Resources
+        if self.resource_manager and event.node.resource_requirements:
+            await self.resource_manager.release(event.node.resource_requirements)
+            # Optimization hint: Releasing resources might wake up pending nodes.
+            # In Phase 4.2, we might explicitly trigger a wake-up here.
+            # For now, the next step() call will re-evaluate _pending_on_resource.
+
+        # 2. Routing Logic
+        channels = self._channels_by_source.get(event.node.name, [])
         
-        # Pass 1: Instantiate Nodes (Func & Data) and Output Channels
-        for node_ir in self._graph.nodes:
-            self._process_node(node_ir)
-
-        # Pass 2: Wire Inputs based on standard data Edges
-        self._process_data_edges()
-        
-        # Pass 3: Wire Control Edges (e.g., from .run_if) as SIGNAL channels
-        self._process_control_edges()
-
-        # Pass 4: Wire Jumps (Feedback Loops) as DATA channels
-        self._process_jumps()
-
-        return BipartiteGraph(
-            func_nodes=self._func_nodes,
-            data_nodes=self._data_nodes,
-            channels=self._channels,
-            initial_values=self._initial_values,
-        )
-
-    def _process_node(self, node_ir):
-        func_hash = node_ir.current_node_instance_hash
-        
-        f_node = PhysicsFuncNode(
-            current_node_instance_hash=func_hash,
-            name=node_ir.definition.name,
-            inputs={} 
-        )
-        self._func_nodes[func_hash] = f_node
-
-        for i, val in enumerate(node_ir.args):
-            self._process_literal(f_node, str(i), val)
-        
-        for k, val in node_ir.kwargs.items():
-            self._process_literal(f_node, k, val)
-
-        data_slot_hash = self._compute_data_slot_hash(func_hash, "result")
-        self._func_output_map[func_hash] = data_slot_hash
-
-        d_node = PhysicsDataNode(
-            current_data_slot_hash=data_slot_hash,
-            name=f"{node_ir.definition.name}.output",
-            producer_node_instance_hash=func_hash
-        )
-        self._data_nodes[data_slot_hash] = d_node
-
-        channel = ChannelDef(
-            source_node_instance_hash=func_hash,
-            target_data_slot_hash=data_slot_hash,
-            port_name="result",
-            tag_filter="default",
-            kind=ChannelKind.DATA  # Explicitly a DATA channel
-        )
-        self._channels.append(channel)
-
-    def _process_literal(self, f_node, arg_name, value):
-        const_hash = self._compute_const_hash(value)
-        
-        if const_hash not in self._data_nodes:
-            d_node = PhysicsDataNode(
-                current_data_slot_hash=const_hash,
-                name=f"const_{const_hash[:8]}",
-                producer_node_instance_hash="const"
-            )
-            self._data_nodes[const_hash] = d_node
-            self._initial_values[const_hash] = value
-            
-        f_node.inputs[arg_name] = const_hash
-
-    def _process_data_edges(self):
-        for edge in self._graph.edges:
-            if edge.kind != EdgeKind.DATA:
-                continue
-
-            source_func_hash = edge.source_node_instance_hash
-            target_func_hash = edge.target_node_instance_hash
-            arg_name = edge.target_arg
-
-            source_data_hash = self._func_output_map.get(source_func_hash)
-            
-            if not source_data_hash:
-                raise RuntimeError(f"Source node {source_func_hash} not found in output map")
-
-            target_func_node = self._func_nodes.get(target_func_hash)
-            if target_func_node:
-                target_func_node.inputs[arg_name] = source_data_hash
-
-    def _process_control_edges(self):
-        self._create_signal_channels(EdgeKind.CONTROL, ChannelKind.SIGNAL)
-
-    def _process_jumps(self):
-        # Jumps are data-carrying control flow, so they use DATA channels.
-        self._create_signal_channels(EdgeKind.JUMP, ChannelKind.DATA)
-
-    def _create_signal_channels(self, edge_kind: EdgeKind, channel_kind: ChannelKind):
-        for edge in self._graph.edges:
-            if edge.kind != edge_kind:
-                continue
-
-            source_func_hash = edge.source_node_instance_hash
-            target_func_hash = edge.target_node_instance_hash
-            arg_name = edge.target_arg
-            
-            target_func_node = self._func_nodes.get(target_func_hash)
-            if not target_func_node:
-                raise RuntimeError(f"Target node {target_func_hash} for {edge_kind.name} edge not found")
-
-            # A control/jump edge needs a dedicated input slot on the target.
-            # If one already exists (from a literal or other edge), we reuse it.
-            # Otherwise, we create one.
-            if arg_name in target_func_node.inputs:
-                target_data_hash = target_func_node.inputs[arg_name]
-            else:
-                target_data_hash = self._compute_data_slot_hash(target_func_hash, f"input_{arg_name}")
-                if target_data_hash not in self._data_nodes:
-                    d_node = PhysicsDataNode(
-                        current_data_slot_hash=target_data_hash,
-                        name=f"{target_func_node.name}.in.{arg_name}",
-                        producer_node_instance_hash="external"
-                    )
-                    self._data_nodes[target_data_hash] = d_node
-                target_func_node.inputs[arg_name] = target_data_hash
-
-            # Create the Channel
-            tag = edge.case_key or "default"
-            channel = ChannelDef(
-                source_node_instance_hash=source_func_hash,
-                target_data_slot_hash=target_data_hash,
-                port_name="result", # Signals/Jumps use the default output port
-                tag_filter=tag,
-                kind=channel_kind
-            )
-            self._channels.append(channel)
-
-    def _compute_const_hash(self, value: Any) -> str:
-        raw = f"const:{repr(value)}"
-        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-    def _compute_data_slot_hash(self, producer_hash: str, port: str) -> str:
-        raw = f"{producer_hash}:{port}"
-        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        for output_name, token in event.outputs.items():
+            # Find matching channels for this output port
+            for channel in channels:
+                if channel.output_name == output_name and channel.match(token.tag):
+                    # Route: Generate a TokenGenerated event for the target DataNode
+                    if channel.kind == ChannelKind.SIGNAL:
+                        # For signal channels, create a new, payload-less token
+                        signal_token = Token(payload=None, tag=token.tag, metadata=token.metadata)
+                        self.push_event(TokenGenerated(node=channel.target, token=signal_token))
+                    else:
+                        # For data channels, pass the original token
+                        self.push_event(TokenGenerated(node=channel.target, token=token))
 ~~~~~
 
 ### 下一步建议
-我们已经成功地在静态拓扑层面引入了通道极化的概念。这是实现我们宏大物理模型的第一块基石。
+我们已经成功地将双势垒物理模型和信号感知路由的逻辑实现到了 `Reactor` 中。理论上，我们的物理引擎现在已经具备了处理复杂依赖的能力。
 
-下一步，我们将进入 **阶段 5.A.2**：**在 `cascade-vm` 中使 `Reactor` 能够理解并执行新的双势垒物理规则**。这将是让我们的物理引擎“活”起来的关键一步。
+然而，代码的正确性需要通过测试来验证。我建议下一步是创建一个新的测试文件 `tests/vm/reactor/test_polarized_channels.py`，专门用于验证以下场景：
+1.  一个 `FuncNode` 只有在它的 `DATA` 输入和 `SIGNAL` 输入都到达后，才会被激发。
+2.  通过 `SIGNAL` 通道路由的 `Token`，其 `payload` 会被正确地剥离。

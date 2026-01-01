@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from cascade.spec.ir.models import NodeIR
 from cascade.spec.physics import PhysicsNode, PhysicsDataNode
@@ -13,8 +13,8 @@ class SubGraph:
     channels: List[Channel] = field(default_factory=list)
 
     # Interface pointers
-    bleacher: BleachNode = None
-    stainer: StainNode = None
+    bleacher: Optional[BleachNode] = None
+    stainer: Optional[StainNode] = None
 
 
 class Expander:

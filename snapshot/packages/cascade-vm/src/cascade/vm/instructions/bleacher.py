@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 import time
 
 from cascade.spec.physics import Token
@@ -10,8 +10,8 @@ from typing import List, Optional
 def standard_bleacher(
     inputs: Dict[str, Token], expected_args: Optional[List[str]] = None
 ) -> Dict[str, Token]:
-    worker_payload: Dict[str, any] = {}
-    trace_payload: Dict[str, any] = {}
+    worker_payload: Dict[str, Any] = {}
+    trace_payload: Dict[str, Any] = {}
     held_resources: List[str] = []
 
     # 1. Extract payloads and merge traces from all inputs

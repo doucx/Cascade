@@ -25,8 +25,8 @@ _IMPORT_MAP = {
     "MessageBus": ("cascade.runtime.bus", "MessageBus"),
     "Event": ("cascade.runtime.events", "Event"),
     "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
-    "sequence": ("cascade.runtime.flow", "sequence"),
-    "pipeline": ("cascade.runtime.flow", "pipeline"),
+    "sequence": ("cascade.flow", "sequence"),
+    "pipeline": ("cascade.flow", "pipeline"),
     # Adapters & Protocols
     "NativeSolver": ("cascade.adapters.solvers.native", "NativeSolver"),
     "LocalExecutor": ("cascade.adapters.executors.local", "LocalExecutor"),
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
     from cascade.runtime.bus import MessageBus
     from cascade.runtime.events import Event
     from cascade.runtime.exceptions import DependencyMissingError
-    from cascade.runtime.flow import sequence, pipeline
+    from cascade.flow import sequence, pipeline
 
     from cascade.adapters.solvers.native import NativeSolver
     from cascade.adapters.executors.local import LocalExecutor

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 修正物理模型构造函数不一致及策略加载逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767246102.4910047, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(engine): 修复 test_compiler.py 中的死锁并对齐新策略", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767246212.2800868, "duration_ms": 0}}

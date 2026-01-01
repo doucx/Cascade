@@ -1,135 +1,104 @@
-你的分析非常准确。这是一个典型的模型演进导致的不一致：我们在 `Physics` 模型中引入了 `canonical_code_structure_hash` 作为核心身份标识，但 `VMExecutionStrategy` 在实例化这些运行时对象时仍然沿用了旧的参数签名。此外，`EmitterNode` 的构造函数实现也存在逻辑错误。
+你的观察非常敏锐。`test_compiler.py` 出现死锁的原因在于它是一个**过度 Mock 的“ वायरिंग”（布线）测试**，但在架构重构后，Mock 的边界与实际执行的代码脱节了：
 
-我将生成一个计划来修正这些模型不一致问题。
+1.  **Mock 路径过时**: 该测试试图 patch `cascade.vm.VirtualMachine.execute`。然而，在新的 `VMExecutionStrategy` 中，我们已经废弃了 `VirtualMachine` 类，转而使用 `Reactor`。
+2.  **静默 Reactor 死锁**: 由于 `VirtualMachine.execute` 没被用到，`VMExecutionStrategy.execute` 会运行**真实**的逻辑。它调用了被 Mock 的 `Frontend` 和 `Backend`。由于 `Backend.compile` 被 Mock 返回了一个空的、无节点的拓扑，实体的 `Reactor` 启动后发现没有任何 `dirty_nodes` 可供执行，于是进入了无限期的 `await self._activity_signal.wait()` 状态。
+3.  **Future 永不完成**: 由于 `Reactor` 没有任何节点可以触发 `Emitter` 逻辑，`VMExecutionStrategy` 中等待结果的 `result_future` 永远不会被 `set_result`，从而导致了外部的 `await asyncio.wait_for` 超时（在测试中由于没有设置整体超时，表现为死锁）。
 
-## [WIP] fix: 修正物理模型构造函数不一致及策略加载逻辑
+我们将遵循 `d3-principle-python-testing-mock-intent` 原则，将 `test_compiler.py` 的职责定位为验证 `Engine` 是否正确地将任务委派给了新的 `VMExecutionStrategy`。既然 `VMExecutionStrategy` 本身的集成测试已经通过，我们在这里只需确保“布线”正确。
 
-### 错误分析
-测试失败的直接原因是 `TypeError`，根源在于：
-1.  **构造函数不匹配**: `cascade.spec.physics.FuncNode` 现在要求 `canonical_code_structure_hash` 作为必须的构造参数，但 `VMExecutionStrategy` 在加载拓扑时并未提供它。
-2.  **继承链错误**: `EmitterNode` 在调用 `super().__init__` 时，参数顺序和数量与基类 `FuncNode` 严重脱节，且同样缺失了规范哈希。
-3.  **模型冗余**: `PhysicsFuncNode` 规格类中存在重复的 `sink_id` 字段定义。
+## [WIP] test(engine): 修复 test_compiler.py 中的死锁并对齐新策略
 
 ### 用户需求
-修复物理引擎模型（Reactor/Physics）与其构造者（Compiler/Strategy）之间的契约，确保 `VMExecutionStrategy` 能够正确实例化物理节点并启动反应堆。
+修复 `test_compiler.py` 因过时的 Mock 路径导致的死锁问题。
 
 ### 评论
-这次修复是确保“全对称物理引擎”能够跑通最简单流程的关键。它不仅修正了代码错误，还通过强制要求 `canonical_code_structure_hash` 增强了运行时节点与其代码定义之间的链接稳定性。
+该测试的目的是验证 `Engine` 在 `use_vm=True` 时的集成逻辑。通过将 Mock 点上移到 `VMExecutionStrategy.execute`，我们可以清晰地验证 `Engine` 的路由决策，而不会陷入底层物理引擎的异步细节中。
 
 ### 目标
-1.  修正 `FuncNode` 和 `EmitterNode` 的构造函数。
-2.  更新 `VMExecutionStrategy._load_topology` 以传递必要的哈希值。
-3.  清理 `PhysicsFuncNode` 中的冗余字段。
+1.  更新 `test_compiler.py`，使用 `VMExecutionStrategy.execute` 作为 Mock 目标。
+2.  移除不再使用的 `Optimizer` 相关的 Mock 逻辑（因为 `VMExecutionStrategy` 已经将其内化或简化）。
+3.  验证 `Engine` 能够正确地将目标 workflow 传递给策略对象。
 
 ### 基本原理
-我们必须保证静态规格（Spec）和动态实例（Physics）在属性上是对齐的。由于 `Backend` 已经确保了 `PhysicsFuncNode` 包含 `canonical_code_structure_hash`，策略层只需要将其透传给运行时构造函数即可。
+当一个组件（`Engine`）将复杂的子任务委派给另一个策略对象（`VMExecutionStrategy`）时，集成测试应侧重于验证委派行为本身。底层的全链路逻辑应由策略对象的专用集成测试负责。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/vm #comp/engine #concept/physics #scope/api #ai/refine #task/domain/vm #task/object/physics-models #task/action/fix #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/engine #comp/tests #scope/dx #ai/refine #task/domain/testing #task/object/compiler-test #task/action/fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `physics.py` 中的节点构造函数
+#### Acts 1: 重构 `test_compiler.py` 以对齐新架构
 
-我们需要更新 `EmitterNode` 的 `__init__` 签名，使其包含 `canonical_code_structure_hash`，并正确传递给 `super()`。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/physics.py
-~~~~~
-~~~~~python.old
-class EmitterNode(FuncNode):
-    """
-    Runtime representation of an emission point.
-    When fired, it pushes the payload of its input token to a registered Sink.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        sink_id: str,
-        resource_requirements: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(name, resource_requirements)
-        self.sink_id = sink_id
-~~~~~
-~~~~~python.new
-class EmitterNode(FuncNode):
-    """
-    Runtime representation of an emission point.
-    When fired, it pushes the payload of its input token to a registered Sink.
-    """
-
-    def __init__(
-        self,
-        name: str,
-        canonical_code_structure_hash: str,
-        sink_id: str,
-        resource_requirements: Optional[Dict[str, Any]] = None,
-    ):
-        super().__init__(name, canonical_code_structure_hash, resource_requirements)
-        self.sink_id = sink_id
-~~~~~
-
-#### Acts 2: 更新 `VMExecutionStrategy` 的拓扑加载逻辑
-
-现在我们需要在 `vm.py` 中将规格中的哈希值透传给运行时对象。
+我们将移除过时的 `VirtualMachine` 引用，改为对 `VMExecutionStrategy` 进行断言。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/strategies/vm.py
+packages/cascade-engine/tests/integration/test_compiler.py
 ~~~~~
 ~~~~~python.old
-        # Pass 2: Instantiate all FuncNodes and wire their inputs
-        for spec_f_node in topology.func_nodes.values():
-            if spec_f_node.sink_id:
-                f_node = EmitterNode(
-                    name=spec_f_node.current_node_instance_hash,
-                    sink_id=spec_f_node.sink_id,
-                )
-            else:
-                f_node = FuncNode(name=spec_f_node.current_node_instance_hash)
+    # 3. Patch the entire pipeline to verify wiring without running real logic
+    # We want to ensure data flows: Frontend -> Optimizer -> Backend -> VM
+    with patch("cascade.compiler.frontend.Frontend.compile") as mock_front, patch(
+        "cascade.compiler.optimizer.Optimizer.optimize"
+    ) as mock_opt, patch(
+        "cascade.compiler.backend.Backend.compile"
+    ) as mock_back, patch("cascade.vm.VirtualMachine.execute") as mock_vm_exec:
+        # Setup Mocks
+        mock_ir = MagicMock(spec=GraphIR)
+        # Mock CompilationResult
+        mock_comp_result = MagicMock()
+        mock_comp_result.ir = mock_ir
+        mock_comp_result.symbol_table = {}
 
-            runtime_func_nodes[spec_f_node.current_node_instance_hash] = f_node
+        mock_front.return_value = mock_comp_result
+
+        mock_plan = [["node_1"]]
+        mock_opt.return_value = mock_plan
+
+        mock_bp = MagicMock()
+        mock_back.return_value = mock_bp
+
+        mock_vm_exec.return_value = 11
+
+        # 4. Act
+        result = await engine.run(workflow, use_vm=True)
+
+        # 5. Assert
+        assert result == 11
+
+        mock_front.assert_called_once_with(workflow)
+        mock_opt.assert_called_once_with(mock_ir)
+        mock_back.assert_called_once_with(mock_ir, mock_plan)
+        mock_vm_exec.assert_called_once()
+        # Verify VM received the blueprint
+        assert mock_vm_exec.call_args[0][0] == mock_bp
 ~~~~~
 ~~~~~python.new
-        # Pass 2: Instantiate all FuncNodes and wire their inputs
-        for spec_f_node in topology.func_nodes.values():
-            if spec_f_node.sink_id:
-                f_node = EmitterNode(
-                    name=spec_f_node.current_node_instance_hash,
-                    canonical_code_structure_hash=spec_f_node.canonical_code_structure_hash,
-                    sink_id=spec_f_node.sink_id,
-                )
-            else:
-                f_node = FuncNode(
-                    name=spec_f_node.current_node_instance_hash,
-                    canonical_code_structure_hash=spec_f_node.canonical_code_structure_hash,
-                )
+    # 3. Patch the VM Strategy to verify the Engine delegates correctly
+    with patch(
+        "cascade.runtime.strategies.vm.VMExecutionStrategy.execute"
+    ) as mock_vm_exec:
+        # Setup Mock behavior
+        mock_vm_exec.return_value = 11
 
-            runtime_func_nodes[spec_f_node.current_node_instance_hash] = f_node
-~~~~~
+        # 4. Act
+        result = await engine.run(workflow, use_vm=True)
 
-#### Acts 3: 清理 `topology.py` 中的冗余字段
+        # 5. Assert: Verify the Engine routed the request to the VM strategy
+        assert result == 11
 
-移除 `PhysicsFuncNode` 中重复定义的 `sink_id`。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/topology.py
-~~~~~
-~~~~~python.old
-    # If not None, this node acts as an Emitter, pushing its result to the specified sink.
-    sink_id: Optional[str] = field(default=None)
-    # If not None, this node acts as an Emitter, pushing its result to the specified sink.
-    sink_id: Optional[str] = field(default=None)
-~~~~~
-~~~~~python.new
-    # If not None, this node acts as an Emitter, pushing its result to the specified sink.
-    sink_id: Optional[str] = field(default=None)
+        mock_vm_exec.assert_called_once()
+        
+        # Verify arguments passed to the strategy
+        _, kwargs = mock_vm_exec.call_args
+        assert kwargs["target"] == workflow
+        assert kwargs["run_id"] is not None
+        assert kwargs["params"] == {}
 ~~~~~
 
 ### 下一步建议
-在应用这些修复后，再次运行 `test_vm_strategy_integration.py`。如果构造函数报错消失，我们可能会遇到反应堆内部的异步协调逻辑（如 Sinks 触发顺序）或 Executor 链接 symbol_table 的问题。我将根据下一步的测试反馈进行针对性调试。
+现在你可以安全地运行所有测试。这次修改确保了测试套件的健壮性，并且不再依赖已经消失的 `VirtualMachine` 类或内部的 `Optimizer` 逻辑。建议运行：
+`pytest packages/cascade-engine/tests/integration/`
+来验证整个 `Engine` 适配层是否工作正常。

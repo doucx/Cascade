@@ -1,0 +1,6 @@
+"EnvironmentDef": |-
+  Defines the boundary conditions and objective reality of the physical field.
+  It lists all available resources and their capacities.
+  The Compiler uses this to instantiate D_res nodes.
+"ResourceDef": |-
+  Defines a single resource type available in the environment.

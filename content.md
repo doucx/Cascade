@@ -1,173 +1,184 @@
-好的，我们将立即开始执行 **Phase 4.5** 的第一步：清理静态错误和注释。
+这是 **Phase 4.5** 的第二步。我们将遵循 TDD 流程：首先定义 Spec 并创建测试用例，使系统进入 **RED** 状态。
 
-这是一个 `[WIP]` 计划，专注于代码质量修复，为后续的架构对齐工作奠定一个干净的基础。
-
-## [WIP] fix(typing): 解决 pyright 静态分析错误并修正注释
+## [WIP] feat(spec): 定义 `EnvironmentDef` 并添加 Builder 资源管理测试
 
 ### 用户需求
-
-根据代码审查报告，需要修复 `pyright` 发现的所有类型错误，并将代码库中不符合规范（例如，使用中文）的注释进行修正。
+1.  **定义 `EnvironmentDef`**: 在 Spec 层形式化“环境”的概念，使其包含资源定义（`ResourceDef`），从而剥离 Compiler 凭空创造资源的能力。
+2.  **创建测试**: 编写针对 `Builder` 的新测试，验证其能够接受 `EnvironmentDef`，根据环境创建资源节点，并正确处理资源缺失的情况（抛出异常）。
 
 ### 评论
+此计划引入了 `EnvironmentDef`，这是物理场中的“边界条件”。这标志着我们从“按需分配”的乌托邦模型转向了“资源受限”的现实物理模型。
 
-这是偿还技术债务的第一步，也是最基础的一步。解决这些静态分析错误和规范性问题，可以确保我们的代码基线是健康的，从而让后续更大规模的重构能够在一个稳定、可靠的基础上进行。这些是提升开发者体验（DX）和代码可维护性的关键小改进。
+由于这是一个 TDD 的 **RED** 阶段，新创建的测试 `test_builder_environment.py` 将会失败，因为 `Builder.build` 方法尚未更新以接受 `environment` 参数。这是预期的行为。
 
 ### 目标
-
-1.  **修复 `expander.py`**: 在 `SubGraph` dataclass 中为 `bleacher` 和 `stainer` 字段添加 `Optional` 类型提示，使其与 `None` 的默认值匹配。
-2.  **修复 `bleacher.py`**: 将函数签名中错误的 `any` 类型提示更正为从 `typing` 导入的 `Any`。
-3.  **修正 `input.py`**: 将 `InputSpec` 类中的中文注释翻译为符合项目规范的英文。
+1.  创建 `cascade.spec.environment` 模块。
+2.  创建 `tests/unit/backend/test_builder_environment.py`，定义预期的 Builder 行为。
 
 ### 基本原理
-
-我们将通过三个独立的 `patch_file` 操作，精确地对三个文件中的问题进行原子化修复。这确保了每个修改的意图都清晰明确，便于审查。
-
-1.  对于 `expander.py`，问题在于类型声明与实际默认值不符，`Optional` 是解决此问题的标准方法。
-2.  对于 `bleacher.py`，问题是误用了 Python 的内置函数 `any` 作为类型注解，应使用 `typing.Any`。
-3.  对于 `input.py`，问题是注释语言不统一，违反了项目全英文的规范。
+我们必须先定义数据结构（Spec），然后定义行为契约（Test），最后才实现逻辑。
+*   `EnvironmentDef` 是一个纯数据类，定义了物理场中存在的客观资源。
+*   新的测试用例将强制 `Builder` 实现逻辑：仅当资源在环境中定义时才创建物理节点，否则报错。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/high #comp/compiler #comp/vm #comp/spec #scope/dx #ai/instruct #task/domain/refactoring #task/object/static-analysis #task/action/fix #task/state/begin
+#intent/architect #flow/draft #priority/high #comp/spec #comp/compiler #concept/resources #scope/core #ai/instruct #task/domain/refactoring #task/object/environment #task/action/define #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `expander.py` 的类型注解
-
-我们将为 `SubGraph` 中的 `bleacher` 和 `stainer` 字段添加 `Optional` 类型，以解决类型不匹配的错误。
+#### Acts 1: 定义 `EnvironmentDef` Spec
+创建新的 Spec 文件，定义 `ResourceDef` 和 `EnvironmentDef`。
 
 ~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+write_file
+packages/cascade-spec/src/cascade/spec/environment.py
 ~~~~~
-~~~~~python.old
+~~~~~python
 from dataclasses import dataclass, field
-from typing import List, Dict
-
-from cascade.spec.ir.models import NodeIR
-from cascade.spec.physics import PhysicsNode, PhysicsDataNode
-from cascade.spec.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.topology import Channel
+from typing import List
 
 
-@dataclass
-class SubGraph:
-    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
-    channels: List[Channel] = field(default_factory=list)
-
-    # Interface pointers
-    bleacher: BleachNode = None
-    stainer: StainNode = None
-~~~~~
-~~~~~python.new
-from dataclasses import dataclass, field
-from typing import List, Dict, Optional
-
-from cascade.spec.ir.models import NodeIR
-from cascade.spec.physics import PhysicsNode, PhysicsDataNode
-from cascade.spec.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.topology import Channel
+@dataclass(frozen=True)
+class ResourceDef:
+    name: str
+    capacity: int = 1
+    """The total available units of this resource in the environment."""
 
 
-@dataclass
-class SubGraph:
-    nodes: Dict[str, PhysicsNode] = field(default_factory=dict)
-    channels: List[Channel] = field(default_factory=list)
-
-    # Interface pointers
-    bleacher: Optional[BleachNode] = None
-    stainer: Optional[StainNode] = None
+@dataclass(frozen=True)
+class EnvironmentDef:
+    resources: List[ResourceDef] = field(default_factory=list)
+    """The set of all resources objectively available in this physical field."""
 ~~~~~
 
-#### Acts 2: 修复 `bleacher.py` 的类型注解
+~~~~~act
+write_file
+packages/cascade-spec/src/cascade/spec/environment.stitcher.yaml
+~~~~~
+~~~~~yaml
+"EnvironmentDef": |-
+  Defines the boundary conditions and objective reality of the physical field.
+  It lists all available resources and their capacities.
+  The Compiler uses this to instantiate D_res nodes.
+"ResourceDef": |-
+  Defines a single resource type available in the environment.
+~~~~~
 
-这里我们将 `any` 修正为 `Any`，并更新 `worker_payload` 和 `trace_payload` 的类型提示。
+#### Acts 2: 导出新 Spec
+更新 `__init__.py` 以暴露新类。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/instructions/bleacher.py
+packages/cascade-spec/src/cascade/spec/__init__.py
 ~~~~~
 ~~~~~python.old
-from typing import Dict
-import time
+from .triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
+from .topology import Channel, BipartiteGraph
+from .resources import ResourceSlot
 
-from cascade.spec.physics import Token
-
-
-from typing import List, Optional
-
-
-def standard_bleacher(
-    inputs: Dict[str, Token], expected_args: Optional[List[str]] = None
-) -> Dict[str, Token]:
-    worker_payload: Dict[str, any] = {}
-    trace_payload: Dict[str, any] = {}
-    held_resources: List[str] = []
-
-    # 1. Extract payloads and merge traces from all inputs
-    for port_name, input_token in inputs.items():
-        # Only pass expected data args to the worker
-        if expected_args is None or port_name in expected_args:
-            worker_payload[port_name] = input_token.payload
-        else:
+__all__ = [
+    "Fingerprint",
+    "InvalidFingerprintKeyError",
 ~~~~~
 ~~~~~python.new
-from typing import Dict, Any
-import time
+from .triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
+from .topology import Channel, BipartiteGraph
+from .resources import ResourceSlot
+from .environment import EnvironmentDef, ResourceDef
 
-from cascade.spec.physics import Token
-
-
-from typing import List, Optional
-
-
-def standard_bleacher(
-    inputs: Dict[str, Token], expected_args: Optional[List[str]] = None
-) -> Dict[str, Token]:
-    worker_payload: Dict[str, Any] = {}
-    trace_payload: Dict[str, Any] = {}
-    held_resources: List[str] = []
-
-    # 1. Extract payloads and merge traces from all inputs
-    for port_name, input_token in inputs.items():
-        # Only pass expected data args to the worker
-        if expected_args is None or port_name in expected_args:
-            worker_payload[port_name] = input_token.payload
-        else:
+__all__ = [
+    "Fingerprint",
+    "InvalidFingerprintKeyError",
 ~~~~~
-
-#### Acts 3: 修正 `input.py` 中的注释
-
-我们将 `InputSpec` 中的中文注释翻译为英文。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/input.py
+packages/cascade-spec/src/cascade/spec/__init__.py
 ~~~~~
 ~~~~~python.old
-@dataclass(frozen=True)
-class InputSpec:
-    name: str
-    default: Any = None
-    description: str = ""
-    # 注意: 'required' 属性被移除，其逻辑由 'default' 是否存在来隐式定义。
-    # 运行时若无 default 且未提供值，则会失败。
+    "Channel",
+    "BipartiteGraph",
+    "ResourceSlot",
+]
 ~~~~~
 ~~~~~python.new
-@dataclass(frozen=True)
-class InputSpec:
-    name: str
-    default: Any = None
-    description: str = ""
-    # NOTE: The 'required' attribute is removed; its logic is implicitly defined
-    # by whether 'default' is present. A runtime error will occur if no default
-    # is set and no value is provided.
+    "Channel",
+    "BipartiteGraph",
+    "ResourceSlot",
+    "EnvironmentDef",
+    "ResourceDef",
+]
+~~~~~
+
+#### Acts 3: 创建 Builder 环境测试 (RED)
+编写测试用例，预期 `Builder.build` 将接受 `environment` 参数，并据此创建资源。
+
+~~~~~act
+write_file
+packages/cascade-compiler/tests/unit/backend/test_builder_environment.py
+~~~~~
+~~~~~python
+import pytest
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.environment import EnvironmentDef, ResourceDef
+from cascade.compiler.backend.builder import Builder
+
+
+@pytest.fixture
+def simple_graph_ir():
+    fp = Fingerprint({"canonical_code_structure_hash": "abc"})
+    task_def = TaskDef(name="task_a", args=[], fingerprint=fp)
+    
+    # Node requesting a 'gpu' resource
+    node = NodeIR(
+        id="node_a", 
+        name="NodeA", 
+        task=task_def,
+        constraints={"gpu": 1}
+    )
+    return GraphIR(nodes=[node])
+
+
+def test_builder_creates_resources_from_env(simple_graph_ir):
+    # 1. Define Environment with 'gpu'
+    env = EnvironmentDef(resources=[
+        ResourceDef(name="gpu", capacity=4),
+        ResourceDef(name="cpu", capacity=8) # Unused resource
+    ])
+
+    # 2. Build (Expect this to fail currently due to signature mismatch)
+    builder = Builder()
+    graph = builder.build(simple_graph_ir, environment=env)
+
+    # 3. Assert D_res creation
+    # Used resource should exist
+    assert "global_res_gpu" in graph.nodes
+    gpu_node = graph.nodes["global_res_gpu"]
+    assert gpu_node.capacity == 4
+    # Initial tokens should match capacity (potential energy)
+    assert gpu_node.initial_tokens == 4
+
+    # Unused resource should ALSO exist (Physics is objective)
+    assert "global_res_cpu" in graph.nodes
+    cpu_node = graph.nodes["global_res_cpu"]
+    assert cpu_node.capacity == 8
+
+
+def test_builder_raises_on_missing_resource(simple_graph_ir):
+    # 1. Empty Environment (No GPU)
+    env = EnvironmentDef(resources=[])
+
+    builder = Builder()
+    
+    # 2. Build should fail because Graph requests 'gpu' but Env has none
+    with pytest.raises(ValueError, match="Resource 'gpu' required by node 'node_a' is not defined"):
+        builder.build(simple_graph_ir, environment=env)
 ~~~~~
 
 ### 下一步建议
+当前状态为 **RED**。
+`test_builder_environment.py` 将会失败，因为 `Builder.build` 还不接受 `environment` 参数，也不会进行资源校验。
 
-我们已经完成了代码清理。现在代码库处于一个更健康的状态，我建议我们继续执行 **Phase 4.5** 的第二步：**形式化环境定义 (Formalize Environment)**。
-
-这将涉及从 `Builder` 中剥离其凭空创造资源的权力，并引入一个 `EnvironmentDef` 结构，使资源管理更符合物理场的客观现实。如果你同意，我将开始制定该计划。
+下一步，我们将修改 `Builder` 的实现（**Phase 4.5 Step 2**），使其通过这些测试，并修复因 API 变更而破坏的旧测试。

@@ -140,7 +140,13 @@ class TerminatorNode(FuncNode):
     Runtime representation of a termination point.
     When fired, it signals the Reactor to stop.
     """
-    pass
+    def __init__(
+        self, 
+        name: str, 
+        code_structure_hash: str = "",
+        resource_requirements: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__(name, code_structure_hash, resource_requirements)
 
 
 class EmitterNode(FuncNode):
@@ -152,7 +158,8 @@ class EmitterNode(FuncNode):
         self, 
         name: str, 
         sink_id: str,
+        code_structure_hash: str = "",
         resource_requirements: Optional[Dict[str, Any]] = None
     ):
-        super().__init__(name, resource_requirements)
+        super().__init__(name, code_structure_hash, resource_requirements)
         self.sink_id = sink_id

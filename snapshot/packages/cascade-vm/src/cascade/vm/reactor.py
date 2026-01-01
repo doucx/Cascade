@@ -55,6 +55,17 @@ class Reactor:
                 # Record the full channel to support filtering logic later
                 self._outbound_channels[source.id].append(channel)
 
+    def prime(self) -> None:
+        """
+        Injects initial potential energy (tokens) into the system
+        based on PhysicsDataNode.initial_tokens.
+        """
+        for node in self.graph.nodes.values():
+            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
+                for _ in range(node.initial_tokens):
+                    # Initial tokens are pure potential; no payload, no trace.
+                    self.memory.put(node, Token(payload=None))
+
     async def step(self) -> int:
         ready_nodes: List[PhysicsFuncNode] = []
 

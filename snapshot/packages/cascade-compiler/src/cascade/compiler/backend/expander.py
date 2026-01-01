@@ -35,8 +35,12 @@ class Expander:
         # 2. Create Nodes
 
         # F_pre: The Bleacher
-        # It needs input ports matching the Task definition args.
+        # Inputs = Task Args + Resource Constraints
         bleacher_inputs = {arg.name: "Any" for arg in node_ir.task.args}
+        # Add ports for resources
+        for res_name in node_ir.constraints.keys():
+            bleacher_inputs[f"res_{res_name}"] = "ResourceSlot"
+
         f_pre = BleachNode(
             id=f_pre_id,
             name=f"Bleach({node_ir.name})",
@@ -67,14 +71,19 @@ class Expander:
         d_trace = PhysicsDataNode(id=d_trace_id, name=f"Trace({node_ir.name})")
 
         # F_post: The Stainer
+        # Outputs = Result + Resource Returns
+        stainer_outputs = {
+            "output": "Token",
+            "obs_output": "Event",
+        }
+        for res_name in node_ir.constraints.keys():
+            stainer_outputs[f"res_{res_name}"] = "ResourceSlot"
+
         f_post = StainNode(
             id=f_post_id,
             name=f"Stain({node_ir.name})",
             input_ports={"worker_result": "Any", "trace_input": "TraceCtx"},
-            output_ports={
-                "output": "Token",
-                "obs_output": "Event",  # Port for end event
-            },
+            output_ports=stainer_outputs,
         )
 
         # Register nodes

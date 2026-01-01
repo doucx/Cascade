@@ -24,7 +24,17 @@ def standard_stainer(inputs: Dict[str, Token]) -> Dict[str, Token]:
     trace_payload["duration"] = duration
     trace_payload["end_ts"] = end_ts
 
-    # 4. Create the final "stained" token
-    output_token = Token(payload=result_payload, tag=tag, trace=trace_payload)
+    # 4. Create output tokens
+    outputs = {}
+    
+    # 4.1 The main result
+    outputs["output"] = Token(payload=result_payload, tag=tag, trace=trace_payload)
 
-    return {"output": output_token}
+    # 4.2 Resource Return (The Loop)
+    # Check if we are holding any resources that need to be returned
+    held_resources = trace_payload.get("held_resources", [])
+    for resource_port in held_resources:
+        # Emit a generic token to the resource port to "refill" the slot
+        outputs[resource_port] = Token(payload=None)
+
+    return outputs

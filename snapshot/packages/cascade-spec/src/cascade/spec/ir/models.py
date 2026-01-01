@@ -52,6 +52,11 @@ class NodeIR:
     Values can be literals or references to other NodeIR IDs.
     """
 
+    constraints: Dict[str, Any] = field(default_factory=dict)
+    """
+    Resource constraints for this node (e.g. {'gpu': 1}).
+    """
+
 
 @dataclass(frozen=True)
 class GraphIR:

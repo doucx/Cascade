@@ -1,3 +1,4 @@
+import sys
 from typing import Dict
 
 from cascade.spec.ir.models import GraphIR
@@ -31,7 +32,10 @@ class Builder:
         d_life_id = "global_d_life"
         f_obs_id = "global_f_obs"
 
-        d_life = PhysicsDataNode(id=d_life_id, name="LifecycleBus")
+        # Capacity set to maxsize to prevent backpressure from observability
+        d_life = PhysicsDataNode(
+            id=d_life_id, name="LifecycleBus", capacity=sys.maxsize
+        )
         f_obs = ObservabilityNode(
             id=f_obs_id,
             name="LifecycleObserver",
@@ -65,6 +69,10 @@ class Builder:
             if subgraph.bleacher is None or subgraph.stainer is None:
                 raise RuntimeError(f"Subgraph for {node_ir.id} is incomplete.")
 
+            # Help static analysis verify these are not None
+            assert subgraph.bleacher is not None
+            assert subgraph.stainer is not None
+
             subgraphs[node_ir.id] = subgraph
             physical_graph.nodes.update(subgraph.nodes)
             physical_graph.channels.extend(subgraph.channels)
@@ -90,9 +98,17 @@ class Builder:
         # 4. Wire data dependencies between subgraphs
         for node_ir in graph_ir.nodes:
             target_subgraph = subgraphs[node_ir.id]
+            
+            # Help static analysis
+            assert target_subgraph.bleacher is not None
+
             for arg_name, source_ref in node_ir.inputs.items():
                 if isinstance(source_ref, str) and source_ref in subgraphs:
                     source_subgraph = subgraphs[source_ref]
+                    
+                    # Help static analysis
+                    assert source_subgraph.stainer is not None
+
                     physical_graph.channels.append(
                         Channel(
                             source_node_id=source_subgraph.stainer.id,
@@ -105,6 +121,11 @@ class Builder:
         # 5. Wire Global Resources (The Loop)
         for node_ir in graph_ir.nodes:
             subgraph = subgraphs[node_ir.id]
+            
+            # Help static analysis
+            assert subgraph.bleacher is not None
+            assert subgraph.stainer is not None
+
             for res_name in node_ir.constraints:
                 res_node_id = f"global_res_{res_name}"
                 port_name = f"res_{res_name}"

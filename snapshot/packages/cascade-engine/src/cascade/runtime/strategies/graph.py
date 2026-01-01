@@ -50,10 +50,14 @@ class GraphExecutionStrategy:
         self._node_registry = NodeRegistry()
 
     def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
-        id_to_idx = {node.current_node_instance_hash: i for i, node in enumerate(graph.nodes)}
+        id_to_idx = {
+            node.current_node_instance_hash: i for i, node in enumerate(graph.nodes)
+        }
         indexed_plan = []
         for stage in plan:
-            indexed_stage = [id_to_idx[node.current_node_instance_hash] for node in stage]
+            indexed_stage = [
+                id_to_idx[node.current_node_instance_hash] for node in stage
+            ]
             indexed_plan.append(indexed_stage)
         return indexed_plan
 
@@ -225,7 +229,9 @@ class GraphExecutionStrategy:
 
         target_node = instance_map[target._uuid]
 
-        flow_manager = FlowManager(graph, target_node.current_node_instance_hash, instance_map)
+        flow_manager = FlowManager(
+            graph, target_node.current_node_instance_hash, instance_map
+        )
         blocked_nodes = set()
 
         for stage in plan:
@@ -292,7 +298,8 @@ class GraphExecutionStrategy:
                     for node in executable_this_pass:
                         overrides = (
                             root_input_overrides
-                            if node.current_node_instance_hash == target_node.current_node_instance_hash
+                            if node.current_node_instance_hash
+                            == target_node.current_node_instance_hash
                             else None
                         )
                         tasks_to_run.append(
@@ -316,7 +323,9 @@ class GraphExecutionStrategy:
                         # FAST PATH: Single task in stage, avoid gather
                         node, coro = tasks_to_run[0]
                         res = await coro
-                        await state_backend.put_result(node.current_node_instance_hash, res)
+                        await state_backend.put_result(
+                            node.current_node_instance_hash, res
+                        )
                         if flow_manager:
                             await flow_manager.register_result(
                                 node.current_node_instance_hash, res, state_backend
@@ -328,7 +337,9 @@ class GraphExecutionStrategy:
                         pass_results = await asyncio.gather(*coros)
 
                         for node, res in zip(nodes_in_pass, pass_results):
-                            await state_backend.put_result(node.current_node_instance_hash, res)
+                            await state_backend.put_result(
+                                node.current_node_instance_hash, res
+                            )
                             if flow_manager:
                                 await flow_manager.register_result(
                                     node.current_node_instance_hash, res, state_backend
@@ -349,7 +360,8 @@ class GraphExecutionStrategy:
             ):
                 if skip_reason == "UpstreamSkipped_Sequence":
                     return GraphExecutionResult(
-                        value=None, source_node_id=target_node.current_node_instance_hash
+                        value=None,
+                        source_node_id=target_node.current_node_instance_hash,
                     )
                 raise DependencyMissingError(
                     task_id=target.task.name or "unknown",
@@ -361,7 +373,9 @@ class GraphExecutionStrategy:
                 f"Target task '{target.task.name if hasattr(target.task, 'name') else 'unknown'}' did not produce a result."
             )
 
-        final_value = await state_backend.get_result(target_node.current_node_instance_hash)
+        final_value = await state_backend.get_result(
+            target_node.current_node_instance_hash
+        )
         return GraphExecutionResult(
             value=final_value, source_node_id=target_node.current_node_instance_hash
         )

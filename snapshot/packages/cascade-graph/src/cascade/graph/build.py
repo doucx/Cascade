@@ -1,6 +1,14 @@
 from typing import Dict, Any, Tuple
 import inspect
-from cascade.graph.model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
+from cascade.graph.model import (
+    Graph,
+    Node,
+    Edge,
+    EdgeType,
+    TaskNode,
+    MapNode,
+    ParamNode,
+)
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.spec.jump import JumpSelector
@@ -122,7 +130,7 @@ class GraphBuilder:
             if result.task.func is _get_param_value.func:
                 # Retrieve the ParamSpec from the global context to attach to the node
                 from cascade.context import get_current_context
-                
+
                 # The arg at index 0 is the param name
                 param_name = input_bindings.get("0") or input_bindings.get("name")
                 param_spec = None
@@ -131,9 +139,10 @@ class GraphBuilder:
                     # Linear scan is okay for build time, or we could optimize context lookup
                     for spec in ctx.get_all_specs():
                         if spec.name == param_name:
-                            # We import inside to avoid top-level circular imports if possible, 
+                            # We import inside to avoid top-level circular imports if possible,
                             # though ParamSpec is imported in ParamNode definition
                             from cascade.spec.input import ParamSpec
+
                             if isinstance(spec, ParamSpec):
                                 param_spec = spec
                             break

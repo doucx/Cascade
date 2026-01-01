@@ -170,7 +170,7 @@ class VirtualMachine:
             else:
                 # ContextOperand, ResourceOperand pass through raw for Middleware
                 args.append(op)
-                
+
         kwargs = {}
         for k, op in instr.kwargs.items():
             if isinstance(op, Register):
@@ -185,7 +185,7 @@ class VirtualMachine:
             frame=frame,
             symbol_table=symbol_table,
             resolved_args=args,
-            resolved_kwargs=kwargs
+            resolved_kwargs=kwargs,
         )
 
         # 2. Build Onion
@@ -207,17 +207,17 @@ class VirtualMachine:
     async def _core_call_invoker(self, ctx: ExecutionContext) -> Any:
         instr: Call = ctx.instruction
         func = ctx.symbol_table.get(instr.structure_hash)
-        
+
         if func is None:
-             raise RuntimeError(
+            raise RuntimeError(
                 f"Linking failed: structure_hash '{instr.structure_hash}' "
                 f"for task '{instr.task_name}' not found in symbol table."
             )
-            
+
         result = func(*ctx.resolved_args, **ctx.resolved_kwargs)
         if inspect.isawaitable(result):
             result = await result
-            
+
         ctx.frame.store(instr.output, result)
         return result
 
@@ -225,23 +225,26 @@ class VirtualMachine:
         instr: MapCall = ctx.instruction
         func = ctx.symbol_table.get(instr.structure_hash)
         if func is None:
-             raise RuntimeError(f"Linking failed for map task '{instr.task_name}'")
+            raise RuntimeError(f"Linking failed for map task '{instr.task_name}'")
 
         iterables = {}
         constants = {}
         iterable_len = -1
-        
+
         # Simplified heuristic: lists are iterables, others are constants
         for key, value in ctx.resolved_kwargs.items():
             if isinstance(value, list):
-                 iterables[key] = value
-                 if iterable_len == -1: iterable_len = len(value)
-                 elif len(value) != iterable_len: raise ValueError("Mismatched lengths")
+                iterables[key] = value
+                if iterable_len == -1:
+                    iterable_len = len(value)
+                elif len(value) != iterable_len:
+                    raise ValueError("Mismatched lengths")
             else:
                 constants[key] = value
-        
-        if iterable_len == -1: iterable_len = 0
-        
+
+        if iterable_len == -1:
+            iterable_len = 0
+
         calls = []
         for i in range(iterable_len):
             ikwargs = constants.copy()
@@ -249,14 +252,14 @@ class VirtualMachine:
                 ikwargs[k] = vals[i]
             # Use static positional args
             calls.append(func(*ctx.resolved_args, **ikwargs))
-            
+
         results = []
         if calls:
             if inspect.iscoroutinefunction(func):
                 results = await asyncio.gather(*calls)
             else:
                 results = [c for c in calls]
-        
+
         ctx.frame.store(instr.output, results)
         return results
 

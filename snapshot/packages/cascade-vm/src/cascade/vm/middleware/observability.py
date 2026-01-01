@@ -7,6 +7,7 @@ from cascade.runtime.events import (
     TaskExecutionFinished,
 )
 
+
 class ObservabilityMiddleware(Middleware):
     def __init__(self, bus: MessageBus, run_id: str):
         self.bus = bus
@@ -17,22 +18,20 @@ class ObservabilityMiddleware(Middleware):
         # Only observe Call/MapCall instructions that represent tasks
         # Jumps are handled by VM loop and are invisible to users
         # Currently Middleware only wraps Call/MapCall dispatch
-        
+
         task_id = getattr(instr, "structure_hash", "unknown")
         task_name = getattr(instr, "task_name", "unknown")
 
         self.bus.publish(
             TaskExecutionStarted(
-                run_id=self.run_id,
-                task_id=task_id,
-                task_name=task_name
+                run_id=self.run_id, task_id=task_id, task_name=task_name
             )
         )
 
         start_time = time.time()
         status = "Succeeded"
         error_msg = None
-        
+
         try:
             result = await next_handler()
             return result
@@ -49,6 +48,6 @@ class ObservabilityMiddleware(Middleware):
                     task_name=task_name,
                     status=status,
                     duration=duration,
-                    error=error_msg
+                    error=error_msg,
                 )
             )

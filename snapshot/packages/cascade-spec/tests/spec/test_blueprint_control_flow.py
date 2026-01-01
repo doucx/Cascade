@@ -2,6 +2,7 @@ import pytest
 from dataclasses import is_dataclass
 from cascade.spec.blueprint import Instruction, Jump, JumpIfFalse, Register
 
+
 def test_control_flow_instructions_structure():
     """
     Verify that control flow instructions are defined and follow the Instruction protocol.

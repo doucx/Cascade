@@ -22,6 +22,7 @@ class Register(Operand):
 @dataclass
 class ContextOperand(Operand):
     """Loads a value from the execution context (e.g. user params)."""
+
     scope: str  # e.g., 'params', 'env'
     key: str
 
@@ -29,6 +30,7 @@ class ContextOperand(Operand):
 @dataclass
 class ResourceOperand(Operand):
     """Loads a resource instance from the resource container."""
+
     name: str
 
 
@@ -45,7 +47,9 @@ class Call(Instruction):
 
     # Metadata for observability and constraints
     task_name: str = "unknown"
-    constraints: Optional[ResourceConstraint] = None  # Deprecated: prefer policy.resources
+    constraints: Optional[ResourceConstraint] = (
+        None  # Deprecated: prefer policy.resources
+    )
     structure_hash: Optional[str] = None
     policy: Optional[ExecutionPolicy] = None
 

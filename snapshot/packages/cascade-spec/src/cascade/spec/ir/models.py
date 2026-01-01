@@ -31,6 +31,7 @@ class ArgumentDef:
 @dataclass
 class InjectionIR:
     """Represents a dependency injection request in the IR."""
+
     resource_name: str
 
 

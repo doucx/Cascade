@@ -7,26 +7,26 @@ from cascade.spec.topology import (
     BipartiteGraph,
     ChannelDef,
     PhysicsFuncNode,
-    PhysicsDataNode
+    PhysicsDataNode,
 )
 
 
 def test_channel_def_schema_adheres_to_symbol_table():
     """
     Validates that ChannelDef adheres to the 'Hash Naming Axiom' and 'Phase 3 Symbol Table'.
-    
+
     A ChannelDef represents a directed edge in the bipartite graph, connecting
     a specific output port of a Function Node to a Data Node (slot).
-    
+
     It must NOT use vague names like 'source_id' or 'target_id'.
     """
     channel = ChannelDef(
         source_node_instance_hash="func_inst_123",
         target_data_slot_hash="data_slot_456",
         port_name="result",
-        tag_filter="default"
+        tag_filter="default",
     )
-    
+
     assert is_dataclass(channel)
     assert channel.source_node_instance_hash == "func_inst_123"
     assert channel.target_data_slot_hash == "data_slot_456"
@@ -40,8 +40,7 @@ def test_physics_nodes_schema():
     """
     # PhysicsFuncNode: Represents a computation instance (The "Verb")
     f_node = PhysicsFuncNode(
-        current_node_instance_hash="func_inst_abc",
-        name="calculate_metrics"
+        current_node_instance_hash="func_inst_abc", name="calculate_metrics"
     )
     assert is_dataclass(f_node)
     assert f_node.current_node_instance_hash == "func_inst_abc"
@@ -52,7 +51,7 @@ def test_physics_nodes_schema():
     d_node = PhysicsDataNode(
         current_data_slot_hash="slot_xyz",
         name="metrics_output",
-        producer_node_instance_hash="func_inst_abc"
+        producer_node_instance_hash="func_inst_abc",
     )
     assert is_dataclass(d_node)
     assert d_node.current_data_slot_hash == "slot_xyz"
@@ -64,12 +63,8 @@ def test_bipartite_graph_container_structure():
     Validates the top-level container structure.
     It should provide indexed access to nodes and a list of channels.
     """
-    graph = BipartiteGraph(
-        func_nodes={},
-        data_nodes={},
-        channels=[]
-    )
-    
+    graph = BipartiteGraph(func_nodes={}, data_nodes={}, channels=[])
+
     assert is_dataclass(graph)
     # Must be typed as Dict[str, PhysicsFuncNode]
     assert isinstance(graph.func_nodes, dict)

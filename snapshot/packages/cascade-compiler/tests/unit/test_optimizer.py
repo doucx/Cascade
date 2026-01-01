@@ -28,8 +28,16 @@ def test_optimizer_detects_cycle():
     cyclic_ir = GraphIR(
         nodes=[node_a, node_b],
         edges=[
-            EdgeIR(source_node_instance_hash="A", target_node_instance_hash="B", target_arg="data"),
-            EdgeIR(source_node_instance_hash="B", target_node_instance_hash="A", target_arg="data"),
+            EdgeIR(
+                source_node_instance_hash="A",
+                target_node_instance_hash="B",
+                target_arg="data",
+            ),
+            EdgeIR(
+                source_node_instance_hash="B",
+                target_node_instance_hash="A",
+                target_arg="data",
+            ),
         ],
     )
 
@@ -50,10 +58,26 @@ def test_optimizer_schedules_diamond_graph():
     diamond_ir = GraphIR(
         nodes=[node_a, node_b, node_c, node_d],
         edges=[
-            EdgeIR(source_node_instance_hash="A", target_node_instance_hash="B", target_arg="a_val"),
-            EdgeIR(source_node_instance_hash="A", target_node_instance_hash="C", target_arg="a_val"),
-            EdgeIR(source_node_instance_hash="B", target_node_instance_hash="D", target_arg="b_val"),
-            EdgeIR(source_node_instance_hash="C", target_node_instance_hash="D", target_arg="c_val"),
+            EdgeIR(
+                source_node_instance_hash="A",
+                target_node_instance_hash="B",
+                target_arg="a_val",
+            ),
+            EdgeIR(
+                source_node_instance_hash="A",
+                target_node_instance_hash="C",
+                target_arg="a_val",
+            ),
+            EdgeIR(
+                source_node_instance_hash="B",
+                target_node_instance_hash="D",
+                target_arg="b_val",
+            ),
+            EdgeIR(
+                source_node_instance_hash="C",
+                target_node_instance_hash="D",
+                target_arg="c_val",
+            ),
         ],
     )
 

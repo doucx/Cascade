@@ -4,10 +4,13 @@ from cascade.spec.blueprint import ResourceOperand, ContextOperand
 from cascade.vm.middleware.base import Middleware, ExecutionContext, NextHandler
 from cascade.vm.protocols import ResourceManager, ConstraintManager
 
+
 class ArgumentResolutionMiddleware(Middleware):
-    def __init__(self, resource_context: Dict[str, Any], global_context: Dict[str, Any]):
+    def __init__(
+        self, resource_context: Dict[str, Any], global_context: Dict[str, Any]
+    ):
         self.resource_context = resource_context
-        self.global_context = global_context 
+        self.global_context = global_context
 
     async def handle(self, ctx: ExecutionContext, next_handler: NextHandler) -> Any:
         # Resolve Args
@@ -26,15 +29,17 @@ class ArgumentResolutionMiddleware(Middleware):
     def _resolve(self, val: Any) -> Any:
         if isinstance(val, ResourceOperand):
             if val.name not in self.resource_context:
-                raise ValueError(f"Resource '{val.name}' not found in active resources.")
+                raise ValueError(
+                    f"Resource '{val.name}' not found in active resources."
+                )
             return self.resource_context[val.name]
-        
+
         if isinstance(val, ContextOperand):
             # Currently only 'params' scope makes sense for simple context
-            if val.scope == 'params':
+            if val.scope == "params":
                 return self.global_context.get(val.key)
             return None
-            
+
         return val
 
 
@@ -47,8 +52,8 @@ class ConstraintMiddleware(Middleware):
             return await next_handler()
 
         instr = ctx.instruction
-        
-        # In a real implementation with a strongly typed ConstraintManager, 
+
+        # In a real implementation with a strongly typed ConstraintManager,
         # we would pass the instruction metadata directly.
         # However, the current ConstraintManager expects a 'Node' object.
         # We construct a minimal shim to satisfy the protocol.
@@ -56,23 +61,25 @@ class ConstraintMiddleware(Middleware):
         from cascade.spec.ir.models import TaskDef
         from cascade.spec.fingerprint import Fingerprint
         from uuid import uuid4
-        
+
         # Shim construction
         shim_node = Node(
-            current_node_instance_hash=str(uuid4()), 
-            definition=TaskDef(name=instr.task_name, args=[], fingerprint=Fingerprint()),
-            constraints=instr.constraints # Legacy support
+            current_node_instance_hash=str(uuid4()),
+            definition=TaskDef(
+                name=instr.task_name, args=[], fingerprint=Fingerprint()
+            ),
+            constraints=instr.constraints,  # Legacy support
         )
-        
+
         # Poll for permission (e.g. Rate Limits)
         while not self.manager.check_permission(shim_node):
-            await asyncio.sleep(0.1) 
-            
+            await asyncio.sleep(0.1)
+
         # Get extra requirements (e.g. Concurrency Slots) to be acquired by ResourceMiddleware
         extras = self.manager.get_extra_requirements(shim_node)
         if extras:
             ctx.metadata["dynamic_requirements"] = extras
-        
+
         return await next_handler()
 
 
@@ -86,13 +93,13 @@ class ResourceLifecycleMiddleware(Middleware):
 
         instr = ctx.instruction
         reqs = {}
-        
+
         # 1. Static constraints from instruction policy
         if instr.policy and instr.policy.resources:
             reqs.update(instr.policy.resources)
-        elif instr.constraints: # Legacy fallback
+        elif instr.constraints:  # Legacy fallback
             reqs.update(instr.constraints.requirements)
-            
+
         # 2. Dynamic requirements from upstream middleware (e.g. ConstraintMiddleware)
         if "dynamic_requirements" in ctx.metadata:
             reqs.update(ctx.metadata["dynamic_requirements"])
@@ -120,9 +127,9 @@ class RetryMiddleware(Middleware):
         current_attempt = 0
         max_retries = spec.max_attempts
         delay = spec.delay
-        
+
         last_error = None
-        
+
         # Loop: Initial execution (attempt 0) + Retries
         while True:
             try:

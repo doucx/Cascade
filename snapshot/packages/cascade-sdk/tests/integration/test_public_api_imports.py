@@ -37,5 +37,8 @@ def test_accessing_non_existent_attribute_raises_attribute_error():
     """
     import cascade as cs
 
-    with pytest.raises(AttributeError, match="module 'cascade' has no attribute 'ThisClassShouldNotExist'"):
+    with pytest.raises(
+        AttributeError,
+        match="module 'cascade' has no attribute 'ThisClassShouldNotExist'",
+    ):
         _ = cs.ThisClassShouldNotExist

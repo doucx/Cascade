@@ -1,8 +1,10 @@
 from typing import Protocol, Dict, Union, Any
 
+
 class ResourceManager(Protocol):
     async def acquire(self, requirements: Dict[str, Union[int, float]]) -> None: ...
     async def release(self, requirements: Dict[str, Union[int, float]]) -> None: ...
+
 
 class ConstraintManager(Protocol):
     def check_permission(self, task: Any) -> bool: ...

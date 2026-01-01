@@ -13,10 +13,10 @@ from cascade.compiler.optimizer import Optimizer
 from cascade.compiler.backend import Backend
 from cascade.vm import VirtualMachine
 from cascade.vm.middleware.standard import (
-    ArgumentResolutionMiddleware, 
-    ConstraintMiddleware, 
-    ResourceLifecycleMiddleware, 
-    RetryMiddleware
+    ArgumentResolutionMiddleware,
+    ConstraintMiddleware,
+    ResourceLifecycleMiddleware,
+    RetryMiddleware,
 )
 from cascade.vm.middleware.observability import ObservabilityMiddleware
 from cascade.spec.lazy_types import MappedLazyResult
@@ -63,25 +63,27 @@ class VMExecutionStrategy:
             constraint_manager=self.constraint_manager,
             wakeup_event=self.wakeup_event,
         )
-        
+
         # Configure Middleware Pipeline (Order matters!)
         # Onion Layer:
-        # 1. Observability (Outermost): Logs everything including retries? 
-        #    Note: Does Observability log individual attempts? 
+        # 1. Observability (Outermost): Logs everything including retries?
+        #    Note: Does Observability log individual attempts?
         #    If Retry is inner, Observability sees one "Task" execution which might take long.
         #    If Retry is outer, Observability sees each attempt as a "Task"? No, that's not right.
         #    Correct nesting:
         #    [Observability] -> [Retry] -> [Constraints] -> [Resources] -> [Resolve] -> [Core]
         #    This way, Observability records the *Total* time for the task (including retries).
         #    The RetryMiddleware itself should emit TaskRetrying events (TODO).
-        
-        vm.set_middlewares([
-            ObservabilityMiddleware(self.bus, run_id),
-            RetryMiddleware(),
-            ConstraintMiddleware(self.constraint_manager),
-            ResourceLifecycleMiddleware(self.resource_manager),
-            ArgumentResolutionMiddleware(active_resources, params),
-        ])
+
+        vm.set_middlewares(
+            [
+                ObservabilityMiddleware(self.bus, run_id),
+                RetryMiddleware(),
+                ConstraintMiddleware(self.constraint_manager),
+                ResourceLifecycleMiddleware(self.resource_manager),
+                ArgumentResolutionMiddleware(active_resources, params),
+            ]
+        )
 
         if isinstance(target, MappedLazyResult):
             initial_args = []
@@ -89,7 +91,7 @@ class VMExecutionStrategy:
         else:
             initial_args = list(target.args)
             initial_kwargs = dict(target.kwargs)
-        
+
         return await vm.execute(
             blueprint,
             symbol_table=symbol_table,

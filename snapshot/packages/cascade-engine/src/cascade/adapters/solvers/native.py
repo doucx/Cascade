@@ -12,7 +12,9 @@ class NativeSolver(Solver):
         adj: Dict[str, List[Node]] = {
             node.current_node_instance_hash: [] for node in executable_nodes
         }
-        in_degree: Dict[str, int] = {node.current_node_instance_hash: 0 for node in executable_nodes}
+        in_degree: Dict[str, int] = {
+            node.current_node_instance_hash: 0 for node in executable_nodes
+        }
         node_map: Dict[str, Node] = {
             node.current_node_instance_hash: node for node in executable_nodes
         }

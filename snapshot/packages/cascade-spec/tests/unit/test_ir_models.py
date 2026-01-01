@@ -25,9 +25,17 @@ def test_ir_structures_exist():
 
     task_def = TaskDef(name="test_task", args=[], fingerprint=fp)
 
-    node = NodeIR(current_node_instance_hash="node_1", definition=task_def, kwargs={"x": 1, "y": "hello"})
+    node = NodeIR(
+        current_node_instance_hash="node_1",
+        definition=task_def,
+        kwargs={"x": 1, "y": "hello"},
+    )
 
-    edge = EdgeIR(source_node_instance_hash="node_1", target_node_instance_hash="node_2", target_arg="data")
+    edge = EdgeIR(
+        source_node_instance_hash="node_1",
+        target_node_instance_hash="node_2",
+        target_arg="data",
+    )
 
     graph = GraphIR(nodes=[node], edges=[edge], meta={"version": "1.0"})
 
@@ -44,7 +52,9 @@ def test_ir_serialization_roundtrip():
     arg_def = ArgumentDef(name="arg1", kind=ArgumentKind.POSITIONAL_OR_KEYWORD)
     task_def = TaskDef(name="test_task", args=[arg_def], fingerprint=fp)
 
-    node = NodeIR(current_node_instance_hash="n1", definition=task_def, kwargs={"val": 42})
+    node = NodeIR(
+        current_node_instance_hash="n1", definition=task_def, kwargs={"val": 42}
+    )
 
     graph = GraphIR(nodes=[node], edges=[])
 

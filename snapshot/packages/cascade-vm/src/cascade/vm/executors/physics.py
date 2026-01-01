@@ -5,7 +5,8 @@ from cascade.spec.physics import FuncNode, Token
 from cascade.vm.reactor.events import ExecutionFinished
 
 # A stand-in for the Reactor protocol for type hinting
-ReactorProtocol = Any 
+ReactorProtocol = Any
+
 
 class PhysicsExecutor:
     """
@@ -43,14 +44,14 @@ class PhysicsExecutor:
             result = func(**kwargs)
             if inspect.isawaitable(result):
                 result = await result
-            
+
             # 4. Wrap Result: Convert the raw result back into a Token.
             # For now, we assume a single 'result' output port with 'default' tag.
             outputs["result"] = Token(payload=result, tag="default")
 
         except Exception as e:
             error = e
-        
+
         # 5. Report: Push an ExecutionFinished event to the reactor.
         event = ExecutionFinished(node=node, outputs=outputs, error=error)
         self._reactor.push_event(event)

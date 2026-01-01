@@ -113,7 +113,10 @@ class CSPSolver:
             # Note: We use a lambda that captures nothing, args are passed by value in addConstraint
             problem.addConstraint(
                 lambda s_src, s_tgt: s_src < s_tgt,
-                (edge.source.current_node_instance_hash, edge.target.current_node_instance_hash),
+                (
+                    edge.source.current_node_instance_hash,
+                    edge.target.current_node_instance_hash,
+                ),
             )
 
         # Constraint 2: Resources

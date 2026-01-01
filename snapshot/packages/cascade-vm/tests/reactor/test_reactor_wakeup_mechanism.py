@@ -6,6 +6,7 @@ from cascade.spec.physics import DataNode, FuncNode, Token, Port
 from cascade.vm.reactor import Reactor, TokenGenerated, ExecutionFinished
 from cascade.runtime.resource_manager import ResourceManager
 
+
 def create_topology(n_nodes: int):
     nodes, inputs = [], []
     for i in range(n_nodes):
@@ -15,6 +16,7 @@ def create_topology(n_nodes: int):
         nodes.append(f_node)
         inputs.append(d_in)
     return nodes, inputs
+
 
 @pytest.mark.asyncio
 async def test_run_loop_proactively_schedules_tasks():
@@ -26,10 +28,10 @@ async def test_run_loop_proactively_schedules_tasks():
     """
     rm = ResourceManager(capacity={"slots": 1})
     mock_executor = AsyncMock()
-    
+
     # We need a reactor that supports run() and stop()
     reactor = Reactor(executor=mock_executor, resource_manager=rm)
-    
+
     # Synchronization: Wait for 2 tasks to complete
     completion_event = asyncio.Event()
     completed_count = 0
@@ -39,7 +41,7 @@ async def test_run_loop_proactively_schedules_tasks():
         # Simulate task finishing immediately by pushing event back to reactor
         # This tests if reactor.run() picks up the new event automatically
         reactor.push_event(ExecutionFinished(node=node, outputs={}))
-        
+
         nonlocal completed_count
         completed_count += 1
         if completed_count == 2:
@@ -73,5 +75,5 @@ async def test_run_loop_proactively_schedules_tasks():
     # Verify we can stop the reactor cleanly
     reactor.stop()
     await run_task
-    
+
     assert mock_executor.submit.call_count == 2

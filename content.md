@@ -1,92 +1,110 @@
-好的，我理解你的挫败感。盲目猜测是低效的。创建一个可重复的诊断工具是正确的工程方法。
+诊断脚本的输出非常清晰，它精确定位了问题所在：
+- **`Step 3` 成功了**: `importlib.metadata` 能够找到并加载所有的 provider *实现类*。这意味着 `pyproject.toml` 的 `entry_points` 配置是正确的，并且我们之前添加的 `__init__.py` 文件使得 Python 能够找到这些模块。
+- **`Step 4` 失败了**: `ModuleNotFoundError: No module named 'cascade.providers.registry'`。这是根本原因。`cascade.sdk` 中的 `__getattr__` 依赖于 `cascade.providers.registry` 模块来动态发现和加载 provider。但这个模块现在不存在了。
 
-我将生成一个计划，该计划分为两部分：
-1.  **创建诊断脚本**: 我们将首先创建一个 Python 脚本，用于精确地模拟和报告插件的发现与加载过程。
-2.  **应用修复**: 根据脚本的输出（我已经可以预见问题所在），我们将应用一个精确的修复。
+在之前的计划中，我为了消除重复，从 `cascade-sdk` 中删除了 `manager.py` 和 `registry.py`，并错误地假设它们存在于 `cascade-library` 中。`git status` 的输出确认了它们被删除了，而不是被移动。
 
-## [WIP] fix: 通过诊断脚本修复 Provider 加载机制
+**解决方案**：将 `manager.py` 和 `registry.py` 恢复到它们正确的、唯一的家——`cascade-library` 包中。
+
+## [WIP] fix: 恢复 Provider 注册表并提交命名空间修复
 
 ### 错误分析
-之前的修复解决了顶层 `cascade` 命名空间的冲突，但问题显然更深。`cs.http` 无法访问意味着 `cascade.providers` 这个子命名空间也存在问题。`cascade-library` 包负责定义 `http` 提供者，并通过 `entry_points` 注册。`__getattr__` 依赖 `importlib.metadata` 来发现这些入口点。
+诊断脚本明确指出，虽然底层的 `entry_points` 机制可以发现和加载独立的 Provider 类，但负责将它们组织成 `cs.http` 这种可用 API 的核心组件——`ProviderRegistry`——却丢失了。
 
-加载失败的根本原因几乎可以肯定是：`cascade-library` 包本身没有将 `src/cascade/providers` 目录声明为一个合法的、可被发现的 Python 包。通过检查文件树，我确认 `packages/cascade-library/src/cascade/providers/__init__.py` 文件缺失。没有这个文件，Python 无法导入 `cascade.providers.http`，导致 `entry_point` 加载失败，最终 `registry.get('http')` 也失败。
-
-诊断脚本将通过以下步骤来验证这一猜想：
-1.  直接查询 `importlib.metadata`，看它是否能 *看到* `cascade.providers` 的入口点。
-2.  尝试 `ep.load()` 这些入口点，观察是否触发 `ImportError`。
-3.  模拟 `cascade.sdk` 的 `__getattr__` 行为。
+在之前的重构中，`packages/cascade-sdk/src/cascade/providers/registry.py` 和 `manager.py` 被错误地删除，而不是移动到 `packages/cascade-library` 这个公共基础包中。这导致 `cascade.sdk` 在尝试 `from cascade.providers.registry import registry` 时失败，从而无法初始化 Provider 系统，最终导致了 `AttributeError`。
 
 ### 用户需求
-1.  创建一个名为 `scripts/diagnose_providers.py` 的诊断脚本，以编程方式定位插件加载失败的根本原因。
-2.  修复由该脚本揭示的问题。
+恢复被意外删除的 `ProviderRegistry` 模块，并将其放置在 `cascade-library` 包中，以完成整个 Provider 加载机制的修复。
 
 ### 评论
-这是一个非常微妙的 Python 打包问题，特别是在涉及命名空间包和 `entry_points` 时。诊断脚本不仅能解决当前问题，也将成为未来维护项目结构健康状况的宝贵工具。
+这次修复是基于诊断脚本提供的确凿证据，纠正了之前计划中的一个致命疏忽。将 Provider 注册表这个核心基础设施放在 `cascade-library` 中，符合单一事实来源（SSOT）原则，因为所有其他包都依赖它。这也标志着这次复杂的命名空间重构任务的完成。
 
 ### 目标
-1.  在 `scripts/` 目录下创建一个新的 `diagnose_providers.py` 脚本。
-2.  创建缺失的 `packages/cascade-library/src/cascade/providers/__init__.py` 文件，使其成为一个合法的命名空间子包。
+1.  在 `packages/cascade-library/src/cascade/providers/` 目录下恢复 `registry.py` 和 `manager.py`。
+2.  将本次和之前所有相关的命名空间修复作为一个原子单元提交到 Git。
 
 ### 基本原理
-为了让 `importlib.metadata` 能够加载一个 `entry_point`，例如 `"http.get" = "cascade.providers.http:HttpGetProvider"`，`cascade.providers.http` 必须是一个可导入的模块。这要求从 `cascade` 到 `providers` 再到 `http` 的整个路径链都是有效的 Python 包或模块。缺失的 `providers/__init__.py` 打破了这条链。
+共享的基础设施代码（如 Provider 注册表）必须位于一个被其他组件所依赖的公共包中（在这里是 `cascade-library`）。
 
 ### 标签
-#intent/fix #intent/tooling #flow/ready #priority/critical #comp/build #concept/namespace-package #scope/core #ai/instruct #task/domain/build #task/object/provider-loading #task/action/debug #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/build #concept/provider-registry #scope/core #ai/instruct #task/domain/build #task/object/provider-loading #task/action/fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建诊断脚本
-这个脚本将为我们提供确凿的证据，并能验证最终的修复是否有效。
+#### Acts 1: 恢复 Provider Registry 模块
+我们将 `registry.py` 的内容写回 `packages/cascade-library/src/cascade/providers/`。
 
 ~~~~~act
 write_file
-scripts/diagnose_providers.py
+packages/cascade-library/src/cascade/providers/registry.py
+~~~~~
+~~~~~python
+from cascade.spec.protocols import LazyFactory, Provider
+from .manager import ProviderRegistry, ProviderNamespace
+
+__all__ = [
+    "LazyFactory",
+    "Provider",
+    "registry",
+    "ProviderRegistry",
+    "ProviderNamespace",
+]
+
+# Global registry accessor
+# Instantiated here to maintain singleton behavior for the module
+registry = ProviderRegistry()
+~~~~~
+
+#### Acts 2: 恢复 Provider Manager 模块
+我们将 `manager.py` 的内容写回 `packages/cascade-library/src/cascade/providers/`。
+
+~~~~~act
+write_file
+packages/cascade-library/src/cascade/providers/manager.py
 ~~~~~
 ~~~~~python
 import sys
 import importlib.metadata
-from pathlib import Path
-
-# ANSI color codes
-GREEN = "\033[92m"
-RED = "\033[91m"
-YELLOW = "\033[93m"
-RESET = "\033[0m"
+from typing import Any, Dict
+from cascade.spec.protocols import LazyFactory
 
 
-def print_header(title):
-    print(f"\n--- {YELLOW}{title}{RESET} ---")
+class ProviderNamespace:
+    def __init__(self, registry: "ProviderRegistry", prefix: str):
+        self._registry = registry
+        self._prefix = prefix
+
+    def __getattr__(self, name: str) -> Any:
+        full_name = f"{self._prefix}.{name}"
+        return self._registry.get(full_name)
 
 
-def check(condition, success_msg, failure_msg):
-    if condition:
-        print(f"  {GREEN}✅ {success_msg}{RESET}")
-        return True
-    else:
-        print(f"  {RED}❌ {failure_msg}{RESET}")
-        return False
+class ProviderRegistry:
+    def __init__(self):
+        self._providers: Dict[str, LazyFactory] = {}
+        self._loaded = False
 
+    def get(self, name: str) -> Any:
+        if not self._loaded:
+            self._discover_entry_points()
+            self._loaded = True
 
-def main():
-    print_header("Step 1: Environment Sanity Check")
-    py_executable = sys.executable
-    print(f"  - Python Executable: {py_executable}")
-    check(
-        ".venv" in py_executable or "pyvenv" in py_executable,
-        "Running in a virtual environment.",
-        "Warning: Not running in a .venv or pyvenv. Results may be unpredictable.",
-    )
-    print("  - sys.path entries:")
-    # Filter to show only workspace paths for clarity
-    workspace_root = Path(__file__).parent.parent
-    for p in sys.path:
-        if str(workspace_root) in p:
-            print(f"    - {p}")
+        if name in self._providers:
+            return self._providers[name]
 
-    print_header("Step 2: Discovering Entry Points via importlib.metadata")
-    try:
+        # Check for namespace match (e.g. asking for 'read' when 'read.text' exists)
+        prefix = name + "."
+        if any(key.startswith(prefix) for key in self._providers):
+            return ProviderNamespace(self, name)
+
+        raise AttributeError(f"Cascade provider '{name}' not found.")
+
+    def register(self, name: str, factory: LazyFactory):
+        self._providers[name] = factory
+
+    def _discover_entry_points(self):
         if sys.version_info >= (3, 10):
             entry_points = importlib.metadata.entry_points(group="cascade.providers")
         else:
@@ -94,87 +112,25 @@ def main():
                 "cascade.providers", []
             )
 
-        if check(entry_points, f"Found {len(entry_points)} entry points.", "No entry points found for 'cascade.providers'."):
-            for ep in sorted(entry_points, key=lambda x: x.name):
-                print(f"    - Found: '{ep.name}' -> '{ep.value}'")
-    except Exception as e:
-        print(f"  {RED}❌ Failed to query entry points: {e}{RESET}")
-        entry_points = []
-
-
-    print_header("Step 3: Attempting to Load Entry Points")
-    all_loaded = True
-    loaded_providers = {}
-    if not entry_points:
-        print(f"  {YELLOW}Skipping, no entry points found in Step 2.{RESET}")
-    else:
         for ep in entry_points:
             try:
+                # Load the provider class
                 provider_cls = ep.load()
-                loaded_providers[ep.name] = provider_cls
-                print(f"  {GREEN}✅ Successfully loaded '{ep.name}'{RESET}")
+                # Instantiate it
+                provider_instance = provider_cls()
+                # Validate interface (Duck typing check for robustness)
+                if not hasattr(provider_instance, "create_factory") or not hasattr(
+                    provider_instance, "name"
+                ):
+                    print(
+                        f"Warning: Plugin {ep.name} does not implement Provider protocol. Skipping."
+                    )
+                    continue
+
+                # Register
+                self._providers[provider_instance.name] = (
+                    provider_instance.create_factory()
+                )
             except Exception as e:
-                print(f"  {RED}❌ FAILED to load '{ep.name}': {type(e).__name__}: {e}{RESET}")
-                all_loaded = False
-        check(all_loaded, "All discovered providers loaded successfully.", "One or more providers failed to load.")
-
-
-    print_header("Step 4: Simulating Registry Initialization")
-    registry_instance = None
-    try:
-        from cascade.providers.registry import ProviderRegistry
-        registry_instance = ProviderRegistry()
-        # Directly call the discovery method to bypass caching
-        registry_instance._discover_entry_points()
-        check(True, "Instantiated and ran discovery on ProviderRegistry.", "")
-        
-        provider_names = sorted(registry_instance._providers.keys())
-        if check(provider_names, f"Registry found {len(provider_names)} providers.", "Registry is empty after discovery."):
-             for name in provider_names:
-                 print(f"    - Registered: '{name}'")
-
-    except Exception as e:
-        check(False, "", f"Failed to initialize or run registry: {type(e).__name__}: {e}")
-
-    print_header("Step 5: Simulating `cs.http.get` Access")
-    try:
-        import cascade as cs
-        check(True, "Successfully imported `cascade as cs`", "Failed to import cascade.")
-        
-        # Test a nested provider
-        http_provider = cs.http
-        check(http_provider is not None, "cs.http resolved to an object.", "cs.http is None or raised AttributeError.")
-        
-        http_get_task = cs.http.get
-        check(http_get_task is not None, "cs.http.get resolved to an object.", "cs.http.get is None or raised AttributeError.")
-
-        # Test a direct provider
-        shell_task = cs.shell
-        check(shell_task is not None, "cs.shell resolved to an object.", "cs.shell is None or raised AttributeError.")
-        
-    except Exception as e:
-        check(False, "", f"Accessing providers failed: {type(e).__name__}: {e}")
-
-    print_header("Conclusion")
-    if all_loaded and registry_instance and 'http.get' in registry_instance._providers:
-        print(f"{GREEN}Diagnosis: Provider loading mechanism appears to be working correctly.{RESET}")
-    else:
-        print(f"{RED}Diagnosis: Provider loading is broken. Check for missing `__init__.py` files in namespace packages (especially `cascade/providers/`), or installation issues.{RESET}")
-
-
-if __name__ == "__main__":
-    main()
-~~~~~
-
-#### Acts 2: 创建缺失的 providers/__init__.py
-这是针对我们诊断出的根本原因的直接修复。
-
-~~~~~act
-write_file
-packages/cascade-library/src/cascade/providers/__init__.py
-~~~~~
-~~~~~python
-# This allows 'cascade.providers' to be a namespace package,
-# extended by other installed packages (like cascade-provider-ipfs).
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
+                print(f"Error loading plugin {ep.name}: {e}")
 ~~~~~

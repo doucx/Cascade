@@ -1,7 +1,7 @@
 {
   "noop_producer": {
-    "baseline_code_signature_text": "def noop_producer(inputs):",
-    "baseline_code_structure_hash": "41c8940a94a1dc435f6a5b6c9efd42d3707a6a9dd0b5ec55fee347fb6d3ef767"
+    "baseline_code_signature_text": "def noop_producer(inputs, node):",
+    "baseline_code_structure_hash": "ebaed5ea63a8be540f7f3c74633921316bed7d30c29ff2e39a149fe0a494a693"
   },
   "test_infinite_capacity_handles_concurrency": {
     "baseline_code_signature_text": "async def test_infinite_capacity_handles_concurrency():",

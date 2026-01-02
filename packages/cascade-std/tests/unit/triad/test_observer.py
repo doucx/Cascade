@@ -1,7 +1,7 @@
 from queue import Queue
 
 from cascade.spec.physics import Token
-from cascade.vm.instructions.observer import standard_observer, ObservedEvent
+from cascade.std.triad.observer import standard_observer, ObservedEvent
 
 
 def test_observer_processes_start_event():

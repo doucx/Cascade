@@ -4,7 +4,7 @@ from unittest.mock import patch, MagicMock
 from cascade.spec.physics import Token
 from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.triad import StainNode
-from cascade.vm.instructions.stainer import standard_stainer
+from cascade.std.triad.stainer import standard_stainer
 
 
 def create_mock_stain_node(output_ports_config):

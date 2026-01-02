@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 from cascade.spec.physics import Token
 from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.triad import BleachNode
-from cascade.vm.instructions.bleacher import standard_bleacher
+from cascade.std.triad.bleacher import standard_bleacher
 
 
 def create_mock_bleach_node(input_ports_config):

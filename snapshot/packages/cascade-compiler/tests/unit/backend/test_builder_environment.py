@@ -30,15 +30,15 @@ def test_builder_creates_resources_from_env(simple_graph_ir):
 
     # 3. Assert D_res creation
     # Used resource should exist
-    assert "global_res_gpu" in graph.nodes
-    gpu_node = graph.nodes["global_res_gpu"]
+    assert "canonical.resource.gpu" in graph.nodes
+    gpu_node = graph.nodes["canonical.resource.gpu"]
     assert gpu_node.capacity == 4
     # Initial tokens should match capacity (potential energy)
     assert gpu_node.initial_tokens == 4
 
     # Unused resource should ALSO exist (Physics is objective)
-    assert "global_res_cpu" in graph.nodes
-    cpu_node = graph.nodes["global_res_cpu"]
+    assert "canonical.resource.cpu" in graph.nodes
+    cpu_node = graph.nodes["canonical.resource.cpu"]
     assert cpu_node.capacity == 8
 
 

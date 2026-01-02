@@ -32,10 +32,10 @@ def test_builder_expands_and_wires_nodes(sample_graph_ir):
 
     # Assert nodes: 2 triads (6 nodes each) + 1 D_life + 1 F_obs = 14 nodes
     assert len(graph.nodes) == 14
-    assert "global_d_life" in graph.nodes
-    assert "global_f_obs" in graph.nodes
-    assert "node_a_stain" in graph.nodes
-    assert "node_b_bleach" in graph.nodes
+    assert "global.observability.bus" in graph.nodes
+    assert "global.observability.observer" in graph.nodes
+    assert "node_a.stain" in graph.nodes
+    assert "node_b.bleach" in graph.nodes
 
     # Assert channels
     # 2 triads (6 internal) = 12
@@ -49,19 +49,19 @@ def test_builder_expands_and_wires_nodes(sample_graph_ir):
     data_channel = next(
         c
         for c in graph.channels
-        if c.source_node_id == "node_a_stain" and c.target_node_id == "node_b_bleach"
+        if c.source_node_id == "node_a.stain" and c.target_node_id == "node_b.bleach"
     )
     assert data_channel is not None
     assert data_channel.source_port == "output"
 
     # 2. Test observability wiring
-    d_life_id = "global_d_life"
+    d_life_id = "global.observability.bus"
     obs_channels = [c for c in graph.channels if c.target_node_id == d_life_id]
 
     assert len(obs_channels) == 4  # 2 starts, 2 ends
 
     source_ids = {c.source_node_id for c in obs_channels}
-    assert "node_a_bleach" in source_ids
-    assert "node_a_stain" in source_ids
-    assert "node_b_bleach" in source_ids
-    assert "node_b_stain" in source_ids
+    assert "node_a.bleach" in source_ids
+    assert "node_a.stain" in source_ids
+    assert "node_b.bleach" in source_ids
+    assert "node_b.stain" in source_ids

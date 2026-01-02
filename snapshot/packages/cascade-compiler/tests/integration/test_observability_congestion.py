@@ -3,7 +3,7 @@ import sys
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory
+from cascade.vm.memory import VolatileMemory, MemoryFullError
 from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor
 

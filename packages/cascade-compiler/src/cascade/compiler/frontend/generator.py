@@ -1,0 +1,130 @@
+from typing import Any, Dict, List, Union, Optional
+
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.ir.models import GraphIR, NodeIR
+from cascade.compiler.utils.reflection import ReflectionAnalyzer
+from cascade.compiler.utils.hashing import HashingService
+
+
+class IRGenerator:
+    """
+    Compiler Frontend: Converts user-facing LazyResult structures into
+    the Intermediate Representation (GraphIR) used by the backend.
+    """
+
+    def __init__(self):
+        self.analyzer = ReflectionAnalyzer()
+        self.hashing_service = HashingService()
+        # id -> NodeIR
+        self.nodes: Dict[str, NodeIR] = {}
+        # Tracks visited LazyResult UUIDs to their generated Node IDs to handle DAGs
+        self._visited: Dict[str, str] = {}
+
+    def generate(self, target: Any) -> GraphIR:
+        """
+        Main entry point. Generates a GraphIR from a target (usually a LazyResult).
+        """
+        self._visit(target)
+        # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
+        # which corresponds to the post-order traversal (dependencies first),
+        # providing a natural topological sort.
+        return GraphIR(nodes=list(self.nodes.values()))
+
+    def _visit(self, obj: Any) -> Any:
+        """
+        Recursive visitor that transforms LazyResults into Node IDs.
+        Returns the transformed value (e.g., Node ID string for LazyResult,
+        or the literal value for others).
+        """
+        if isinstance(obj, LazyResult):
+            return self._visit_lazy_result(obj)
+        elif isinstance(obj, (MappedLazyResult, Router)):
+            raise NotImplementedError(
+                f"Compiler Frontend currently does not support {type(obj).__name__}."
+            )
+        elif isinstance(obj, (list, tuple)):
+            return type(obj)(self._visit(item) for item in obj)
+        elif isinstance(obj, dict):
+            return {k: self._visit(v) for k, v in obj.items()}
+        else:
+            # Literal value
+            return obj
+
+    def _visit_lazy_result(self, lr: LazyResult) -> str:
+        # If already visited, return the cached Node ID
+        if lr._uuid in self._visited:
+            return self._visited[lr._uuid]
+
+        # 1. Resolve Dependencies (Post-order)
+        # We visit args and kwargs first to ensure dependencies are registered.
+        # This gives us the "transformed" inputs where LazyResults are replaced by Node IDs.
+        transformed_args = [self._visit(arg) for arg in lr.args]
+        transformed_kwargs = {k: self._visit(v) for k, v in lr.kwargs.items()}
+
+        # Note: We currently don't handle _dependencies (implicit sequence) or _condition
+        # in the NodeIR inputs structure explicitly yet.
+        # TODO: Add support for sequence dependencies and run_if conditions.
+
+        # 2. Analyze Task Definition
+        task_def = self.analyzer.analyze(lr.task)
+
+        # 3. Compute Instance Hash (Node ID)
+        # We need a dictionary of dependency nodes for the hasher.
+        # Since we visited children first, their NodeIRs are already in self.nodes.
+        # We map UUIDs of dependencies to their NodeIR objects.
+        # HashingService expects `dep_nodes` to map UUID -> Node object.
+        # Here we map UUID -> NodeIR. HashingService should be compatible or adapted.
+        # Let's verify HashingService adaptation:
+        # It uses `getattr(node, "id", ...)` so NodeIR is compatible.
+        dep_map = {}
+
+        def collect_deps(raw_obj):
+            if isinstance(raw_obj, LazyResult):
+                if raw_obj._uuid in self._visited:
+                    node_id = self._visited[raw_obj._uuid]
+                    dep_map[raw_obj._uuid] = self.nodes[node_id]
+            elif isinstance(raw_obj, (list, tuple)):
+                for x in raw_obj:
+                    collect_deps(x)
+            elif isinstance(raw_obj, dict):
+                for x in raw_obj.values():
+                    collect_deps(x)
+
+        for arg in lr.args:
+            collect_deps(arg)
+        for val in lr.kwargs.values():
+            collect_deps(val)
+
+        node_id = self.hashing_service.compute_node_instance_hash(
+            task_def, lr, dep_map
+        )
+
+        # 4. Construct NodeIR
+        # Flatten args and kwargs into a single 'inputs' dictionary
+        inputs = {}
+        for i, val in enumerate(transformed_args):
+            inputs[str(i)] = val
+        for k, val in transformed_kwargs.items():
+            inputs[k] = val
+
+        # Handle Constraints
+        constraints = {}
+        if lr._constraints:
+            # We currently assume constraint values are literals.
+            # TODO: Handle dynamic constraints (LazyResult in constraints)
+            constraints = lr._constraints.requirements.copy()
+
+        node_ir = NodeIR(
+            id=node_id,
+            name=task_def.name,
+            task=task_def,
+            inputs=inputs,
+            constraints=constraints,
+        )
+
+        # 5. Register
+        self.nodes[node_id] = node_ir
+        self._visited[lr._uuid] = node_id
+
+        return node_id

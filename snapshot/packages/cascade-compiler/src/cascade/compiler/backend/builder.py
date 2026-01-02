@@ -99,7 +99,7 @@ class Builder:
         # 4. Wire data dependencies between subgraphs
         for node_ir in graph_ir.nodes:
             target_subgraph = subgraphs[node_ir.id]
-            
+
             # Help static analysis
             assert target_subgraph.bleacher is not None
 
@@ -107,7 +107,7 @@ class Builder:
                 # Case A: Reference to another node (Dependency)
                 if isinstance(source_ref, str) and source_ref in subgraphs:
                     source_subgraph = subgraphs[source_ref]
-                    
+
                     # Help static analysis
                     assert source_subgraph.stainer is not None
 
@@ -122,9 +122,7 @@ class Builder:
                 # Case B: Literal Value (Constant)
                 else:
                     # Create a dedicated DataNode for this constant
-                    const_node_id = PhysicalIdGenerator.constant(
-                        node_ir.id, arg_name
-                    )
+                    const_node_id = PhysicalIdGenerator.constant(node_ir.id, arg_name)
                     const_node = PhysicsDataNode(
                         id=const_node_id,
                         name=f"Const({arg_name})",
@@ -147,7 +145,7 @@ class Builder:
         # 5. Wire Global Resources (The Loop)
         for node_ir in graph_ir.nodes:
             subgraph = subgraphs[node_ir.id]
-            
+
             # Help static analysis
             assert subgraph.bleacher is not None
             assert subgraph.stainer is not None

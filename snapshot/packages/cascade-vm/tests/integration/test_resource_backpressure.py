@@ -4,7 +4,7 @@ from functools import partial
 
 from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
 from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.physics import Token, PhysicsDataNode
+from cascade.spec.physics import Token
 from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
 from cascade.vm.memory import VolatileMemory
@@ -12,7 +12,6 @@ from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
 from cascade.vm.instructions.bleacher import standard_bleacher
 from cascade.vm.instructions.stainer import standard_stainer
-from cascade.spec.topology import Channel
 
 
 # --- Mocks ---
@@ -98,11 +97,11 @@ async def test_concurrency_limit():
 
     # We need to handle the global D_life observability sidecar if we want full correctness.
     # Builder created 'global_d_life'.
-    
+
     # 4. (Deleted) Manual DataNode creation is no longer needed.
     # The Builder now automatically creates 'const_node_1_x' and 'const_node_2_x'
     # based on the literals in NodeIR.inputs.
-    
+
     # 5. Initialize Reactor
     reactor = Reactor(physical_graph, memory, executor, func_map)
 
@@ -112,20 +111,20 @@ async def test_concurrency_limit():
     # - const_node_1_x (1 token, payload=10)
     # - const_node_2_x (1 token, payload=20)
     reactor.prime()
-    
+
     assert memory.get_count("canonical.resource.gpu") == 1
     assert memory.get_count("const.node_1.x") == 1
     assert memory.get_count("const.node_2.x") == 1
-    
+
     # Verify payloads
     t1 = memory.take("const.node_1.x")
     assert t1.payload == 10
-    memory.put(physical_graph.nodes["const.node_1.x"], t1) # Put it back for execution
+    memory.put(physical_graph.nodes["const.node_1.x"], t1)  # Put it back for execution
 
     t2 = memory.take("const.node_2.x")
     assert t2.payload == 20
-    memory.put(physical_graph.nodes["const.node_2.x"], t2) # Put it back
-    
+    memory.put(physical_graph.nodes["const.node_2.x"], t2)  # Put it back
+
     # 7. Step Execution
     # Step 1: Both Bleachers are ready on 'x', but contend for 'res_gpu'.
     # With the new atomic Reactor, only ONE should fire.

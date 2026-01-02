@@ -29,7 +29,8 @@ def test_builder_creates_observer_sidecar(empty_graph_ir):
     obs_channels = [
         c
         for c in graph.channels
-        if c.source_node_id == "global.observability.bus" and c.target_node_id == f_obs_id
+        if c.source_node_id == "global.observability.bus"
+        and c.target_node_id == f_obs_id
     ]
     assert len(obs_channels) == 1
     channel = obs_channels[0]

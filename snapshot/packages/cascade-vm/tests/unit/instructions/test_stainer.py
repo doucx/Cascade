@@ -1,8 +1,18 @@
 import pytest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 from cascade.spec.physics import Token
+from cascade.spec.ports import PortDef, PortRole
+from cascade.spec.triad import StainNode
 from cascade.vm.instructions.stainer import standard_stainer
+
+
+def create_mock_stain_node(output_ports_config):
+    node = MagicMock(spec=StainNode)
+    node.output_ports = {
+        name: PortDef(name, role) for name, role in output_ports_config.items()
+    }
+    return node
 
 
 def test_stainer_success_case():
@@ -13,9 +23,10 @@ def test_stainer_success_case():
         "worker_result": Token(payload="SuccessData"),
         "trace_input": Token(payload={"start_ts": start_ts, "id": "task_A"}),
     }
+    node = create_mock_stain_node({"output": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = standard_stainer(inputs)
+        outputs = standard_stainer(inputs, node)
 
     assert "output" in outputs
     output_token = outputs["output"]
@@ -37,9 +48,10 @@ def test_stainer_error_case():
         "worker_result": Token(payload=error),
         "trace_input": Token(payload={"start_ts": start_ts}),
     }
+    node = create_mock_stain_node({"output": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = standard_stainer(inputs)
+        outputs = standard_stainer(inputs, node)
 
     assert "output" in outputs
     output_token = outputs["output"]
@@ -56,9 +68,10 @@ def test_stainer_handles_missing_start_ts_gracefully():
         "worker_result": Token(payload="data"),
         "trace_input": Token(payload={}),  # No start_ts
     }
+    node = create_mock_stain_node({"output": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = standard_stainer(inputs)
+        outputs = standard_stainer(inputs, node)
 
     output_token = outputs["output"]
     assert output_token.trace["duration"] == 0.0

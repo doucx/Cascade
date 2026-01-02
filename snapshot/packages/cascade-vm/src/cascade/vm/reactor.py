@@ -107,9 +107,20 @@ class Reactor:
         if not func:
             raise ValueError(f"No function mapped for node {node.id}")
 
-        result_tokens: Dict[str, Token] = await self.executor.submit(
-            func, (input_data,)
-        )
+        # We pass the node instance as the second argument to the instruction
+        # to allow access to static port definitions (PortDef).
+        # Note: Some simple mocks might not accept the second arg, but standard instructions do.
+        # Ideally, we should unify the signature. For now, we assume standard signature.
+        try:
+            result_tokens: Dict[str, Token] = await self.executor.submit(
+                func, (input_data, node)
+            )
+        except TypeError:
+            # Fallback for legacy/mock functions that only take (inputs)
+            # This is a temporary bridge for tests using simple mocks like 'noop'
+            result_tokens: Dict[str, Token] = await self.executor.submit(
+                func, (input_data,)
+            )
 
         if not isinstance(result_tokens, dict):
             raise ValueError(

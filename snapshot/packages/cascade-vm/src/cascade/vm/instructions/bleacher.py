@@ -1,14 +1,13 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 import time
 
 from cascade.spec.physics import Token
-
-
-from typing import List, Optional
+from cascade.spec.triad import BleachNode
+from cascade.spec.ports import PortRole
 
 
 def standard_bleacher(
-    inputs: Dict[str, Token], expected_args: Optional[List[str]] = None
+    inputs: Dict[str, Token], node: BleachNode
 ) -> Dict[str, Token]:
     worker_payload: Dict[str, Any] = {}
     trace_payload: Dict[str, Any] = {}
@@ -16,13 +15,14 @@ def standard_bleacher(
 
     # 1. Extract payloads and merge traces from all inputs
     for port_name, input_token in inputs.items():
-        # Only pass expected data args to the worker
-        if expected_args is None or port_name in expected_args:
+        port_def = node.input_ports[port_name]
+
+        if port_def.role == PortRole.DATA:
             worker_payload[port_name] = input_token.payload
-        else:
-            # It's a resource or signal. We record it to trace.
-            # We assume the port_name matches the resource name (e.g. 'resource_gpu')
+        elif port_def.role == PortRole.RESOURCE:
+            # It's a resource. We record it to trace.
             held_resources.append(port_name)
+        # Observability and Signals are processed for trace but not passed to worker
 
         trace_payload.update(input_token.trace)
 

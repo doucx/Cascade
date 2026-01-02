@@ -1,8 +1,9 @@
 import pytest
 import sys
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory, MemoryFullError
+from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor
 
@@ -21,11 +22,21 @@ async def test_limited_capacity_causes_crash():
 
     # Producer 1
     d_in1 = PhysicsDataNode(id="D_in1", name="In1", initial_tokens=1)
-    f_p1 = PhysicsFuncNode(id="F_p1", name="P1")
+    f_p1 = PhysicsFuncNode(
+        id="F_p1",
+        name="P1",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     # Producer 2
     d_in2 = PhysicsDataNode(id="D_in2", name="In2", initial_tokens=1)
-    f_p2 = PhysicsFuncNode(id="F_p2", name="P2")
+    f_p2 = PhysicsFuncNode(
+        id="F_p2",
+        name="P2",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d_life, d_in1, f_p1, d_in2, f_p2]}
@@ -83,10 +94,20 @@ async def test_infinite_capacity_handles_concurrency():
     d_life = PhysicsDataNode(id="D_life", name="Bus", capacity=sys.maxsize)
 
     d_in1 = PhysicsDataNode(id="D_in1", name="In1", initial_tokens=1)
-    f_p1 = PhysicsFuncNode(id="F_p1", name="P1")
+    f_p1 = PhysicsFuncNode(
+        id="F_p1",
+        name="P1",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     d_in2 = PhysicsDataNode(id="D_in2", name="In2", initial_tokens=1)
-    f_p2 = PhysicsFuncNode(id="F_p2", name="P2")
+    f_p2 = PhysicsFuncNode(
+        id="F_p2",
+        name="P2",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d_life, d_in1, f_p1, d_in2, f_p2]}

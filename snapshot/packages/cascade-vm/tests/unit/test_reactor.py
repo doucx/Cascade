@@ -1,5 +1,6 @@
 import pytest
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
@@ -15,10 +16,12 @@ def noop(inputs):
 @pytest.fixture
 def simple_topology():
     d1 = PhysicsDataNode(id="D1", name="Input")
-    f1 = PhysicsFuncNode(id="F1", name="Processor")
-
-    # Define ports (optional for logic, but good for completeness)
-    f1.input_ports["in"] = "D1"
+    f1 = PhysicsFuncNode(
+        id="F1",
+        name="Processor",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     graph = BipartiteGraph()
     graph.nodes[d1.id] = d1
@@ -71,7 +74,15 @@ async def test_reactor_step_fire(simple_topology):
 async def test_reactor_partial_inputs():
     d1 = PhysicsDataNode(id="D1", name="Input1")
     d2 = PhysicsDataNode(id="D2", name="Input2")
-    f1 = PhysicsFuncNode(id="F1", name="Processor")
+    f1 = PhysicsFuncNode(
+        id="F1",
+        name="Processor",
+        input_ports={
+            "in1": PortDef("in1", PortRole.DATA),
+            "in2": PortDef("in2", PortRole.DATA),
+        },
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d1, d2, f1]}
@@ -99,10 +110,20 @@ async def test_reactor_partial_inputs():
 @pytest.mark.asyncio
 async def test_reactor_independent_nodes():
     d1 = PhysicsDataNode(id="D1", name="In1")
-    f1 = PhysicsFuncNode(id="F1", name="Proc1")
+    f1 = PhysicsFuncNode(
+        id="F1",
+        name="Proc1",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     d2 = PhysicsDataNode(id="D2", name="In2")
-    f2 = PhysicsFuncNode(id="F2", name="Proc2")
+    f2 = PhysicsFuncNode(
+        id="F2",
+        name="Proc2",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d1, f1, d2, f2]}

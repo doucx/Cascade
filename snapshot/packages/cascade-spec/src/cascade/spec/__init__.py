@@ -4,6 +4,7 @@ from .triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
 from .topology import Channel, BipartiteGraph
 from .resources import ResourceSlot
 from .environment import EnvironmentDef, ResourceDef
+from .ports import PortRole, PortDef
 
 __all__ = [
     "Fingerprint",
@@ -21,4 +22,6 @@ __all__ = [
     "ResourceSlot",
     "EnvironmentDef",
     "ResourceDef",
+    "PortRole",
+    "PortDef",
 ]

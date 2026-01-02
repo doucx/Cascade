@@ -2,6 +2,7 @@ import pytest
 from typing import Dict, Callable
 
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
@@ -23,7 +24,12 @@ def simple_increment(inputs: Dict[str, Token]) -> Dict[str, Token]:
 @pytest.fixture
 def ping_pong_topology():
     d1 = PhysicsDataNode(id="D1", name="Input")
-    f1 = PhysicsFuncNode(id="F1", name="Increment")
+    f1 = PhysicsFuncNode(
+        id="F1",
+        name="Increment",
+        input_ports={"value": PortDef("value", PortRole.DATA)},
+        output_ports={"result": PortDef("result", PortRole.DATA)},
+    )
     d2 = PhysicsDataNode(id="D2", name="Output")
 
     graph = BipartiteGraph()

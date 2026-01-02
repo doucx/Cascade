@@ -2,6 +2,7 @@ import pytest
 from typing import Dict
 
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
@@ -22,7 +23,12 @@ def switch_logic(inputs: Dict[str, Token]) -> Dict[str, Token]:
 def branching_topology():
     # D_in -> Switch -> (D_A, D_B)
     d_in = PhysicsDataNode(id="D_in", name="Input")
-    f_sw = PhysicsFuncNode(id="Switch", name="SwitchNode")
+    f_sw = PhysicsFuncNode(
+        id="Switch",
+        name="SwitchNode",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
     d_a = PhysicsDataNode(id="D_A", name="Branch A")
     d_b = PhysicsDataNode(id="D_B", name="Branch B")
 

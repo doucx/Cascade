@@ -5,6 +5,7 @@ from cascade.spec.ir.models import NodeIR
 from cascade.spec.physics import PhysicsNode, PhysicsDataNode
 from cascade.spec.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.topology import Channel
+from cascade.spec.ports import PortDef, PortRole
 from cascade.compiler.utils.naming import PhysicalIdGenerator
 
 
@@ -37,19 +38,25 @@ class Expander:
 
         # F_pre: The Bleacher
         # Inputs = Task Args + Resource Constraints
-        bleacher_inputs = {arg.name: "Any" for arg in node_ir.task.args}
+        bleacher_inputs = {
+            arg.name: PortDef(arg.name, PortRole.DATA, "Any")
+            for arg in node_ir.task.args
+        }
         # Add ports for resources
         for res_name in node_ir.constraints.keys():
-            bleacher_inputs[f"res_{res_name}"] = "ResourceSlot"
+            port_name = f"res_{res_name}"
+            bleacher_inputs[port_name] = PortDef(
+                port_name, PortRole.RESOURCE, "ResourceSlot"
+            )
 
         f_pre = BleachNode(
             id=f_pre_id,
             name=f"Bleach({node_ir.name})",
             input_ports=bleacher_inputs,
             output_ports={
-                "worker_input": "Dict",
-                "trace_output": "TraceCtx",
-                "obs_output": "Event",  # Port for start event
+                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict"),
+                "trace_output": PortDef("trace_output", PortRole.DATA, "TraceCtx"),
+                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
             },
         )
 
@@ -61,8 +68,12 @@ class Expander:
         f_worker = WorkerNode(
             id=f_worker_id,
             name=f"Exec({node_ir.name})",
-            input_ports={"worker_input": "Dict"},
-            output_ports={"worker_result": "Any"},
+            input_ports={
+                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict")
+            },
+            output_ports={
+                "worker_result": PortDef("worker_result", PortRole.DATA, "Any")
+            },
         )
 
         # D_worker_out: Holds the raw result
@@ -74,16 +85,22 @@ class Expander:
         # F_post: The Stainer
         # Outputs = Result + Resource Returns
         stainer_outputs = {
-            "output": "Token",
-            "obs_output": "Event",
+            "output": PortDef("output", PortRole.DATA, "Token"),
+            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
         }
         for res_name in node_ir.constraints.keys():
-            stainer_outputs[f"res_{res_name}"] = "ResourceSlot"
+            port_name = f"res_{res_name}"
+            stainer_outputs[port_name] = PortDef(
+                port_name, PortRole.RESOURCE, "ResourceSlot"
+            )
 
         f_post = StainNode(
             id=f_post_id,
             name=f"Stain({node_ir.name})",
-            input_ports={"worker_result": "Any", "trace_input": "TraceCtx"},
+            input_ports={
+                "worker_result": PortDef("worker_result", PortRole.DATA, "Any"),
+                "trace_input": PortDef("trace_input", PortRole.DATA, "TraceCtx"),
+            },
             output_ports=stainer_outputs,
         )
 

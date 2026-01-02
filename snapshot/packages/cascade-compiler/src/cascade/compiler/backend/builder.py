@@ -6,6 +6,7 @@ from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsDataNode
 from cascade.spec.triad import ObservabilityNode
 from cascade.spec.environment import EnvironmentDef
+from cascade.spec.ports import PortDef, PortRole
 from .expander import Expander, SubGraph
 from cascade.compiler.utils.naming import PhysicalIdGenerator
 
@@ -40,7 +41,9 @@ class Builder:
         f_obs = ObservabilityNode(
             id=f_obs_id,
             name="LifecycleObserver",
-            input_ports={"event_token": "Event"},
+            input_ports={
+                "event_token": PortDef("event_token", PortRole.OBSERVABILITY, "Event")
+            },
             output_ports={},  # Observer emits to the outside world, not back into the graph
         )
         physical_graph.nodes[d_life_id] = d_life

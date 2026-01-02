@@ -9,8 +9,8 @@ from cascade.compiler.backend.builder import Builder
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
-from cascade.vm.instructions.bleacher import standard_bleacher
-from cascade.vm.instructions.stainer import standard_stainer
+from cascade.std.triad.bleacher import standard_bleacher
+from cascade.std.triad.stainer import standard_stainer
 
 
 # --- Mocks ---

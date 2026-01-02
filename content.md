@@ -1,164 +1,152 @@
-好的，我们开始执行 Act 0.5.1 的第一部分：初始化 `cascade-std` 包。
+好的，我们来执行任务 T2：指令集大迁徙。
 
-我将创建一个计划，该计划会建立 `cascade-std` 的目录结构，配置其 `pyproject.toml` 以声明对 `cascade-spec` 的依赖，并建立符合我们 Monorepo 规范的 `pkgutil` 命名空间。
+这个计划的核心是将 VM 的核心逻辑（`bleacher`, `stainer`, `observer`）从 `cascade-vm` 包中剥离出来，迁移到我们新创建的 `cascade-std` 包中。这标志着 VM 向一个纯粹的、无业务逻辑的物理反应堆演进的关键一步。
 
-## [WIP] feat: 初始化 cascade-std 包结构
+## [WIP] feat: 迁移标准指令集到 cascade-std
 
 ### 用户需求
 
-根据 `Act 0.5` 路线图，执行任务 T1：项目初始化。这包括创建 `cascade-std` 包，配置其依赖，并设置命名空间。
+根据 `Act 0.5` 路线图，执行任务 T2：将 `cascade-vm` 中的 `instructions` 目录内容迁移到 `cascade-std`，并更新相关依赖和导入。
 
 ### 评论
 
-这是建立 Cascade “标准物理库”的第一步，也是至关重要的一步。一个干净、合规的包结构是后续功能迁移和开发的基础，能确保我们的 Monorepo 工具链和类型检查器正确识别新包，从而提供良好的开发者体验。
+这是一个关键的架构重构。它强制性地将“物理定律的执行机制”（VM）与“具体的物理定律本身”（标准指令集）分离开来。这不仅净化了 VM 的职责，也为未来扩展更多标准库（`std`）函数奠定了基础。此举会引入一个新的依赖关系 (`cascade-vm` -> `cascade-std`)，我们需要在 `pyproject.toml` 中明确声明它。
 
 ### 目标
 
-1.  创建 `packages/cascade-std` 的完整目录结构。
-2.  为 `cascade-std` 创建一个 `pyproject.toml` 文件，声明其元数据和对 `cascade-spec` 的依赖。
-3.  创建符合 PEP 561 规范的 `py.typed` 文件和符合 `pkgutil` 规范的命名空间 `__init__.py` 文件。
-4.  将新包注册到根 `pyproject.toml` 的 workspace 中，使其成为 Monorepo 的一部分。
+1.  在 `cascade-std` 中创建 `triad` 子目录。
+2.  将 `bleacher.py`, `stainer.py`, 和 `observer.py` 从 `cascade-vm` 移动到 `cascade-std/triad`。
+3.  更新 `cascade-vm` 的 `pyproject.toml`，添加对 `cascade-std` 的依赖。
+4.  修正 `cascade-vm` 测试文件中对这些指令的导入路径。
+5.  删除 `cascade-vm` 中遗留的、现已为空的 `instructions` 目录。
 
 ### 基本原理
 
-我们将使用一系列原子化的文件系统操作来完成初始化：
-1.  `run_command` 与 `mkdir -p` 结合可以一次性、幂等地创建所有必需的目录。
-2.  `write_file` 用于创建新文件，包括 `pyproject.toml` 和 `__init__.py`。新包的 `pyproject.toml` 会被配置为 workspace 成员，并使用 `uv.sources` 链接到本地的 `cascade-spec`。
-3.  `patch_file` 用于向根 `pyproject.toml` 中添加新成员，这比重写整个文件更安全、更精确。
+我们将分步执行此次重构：
+1.  首先使用 `mkdir` 和 `write_file` 准备好目标目录结构。
+2.  然后使用 `move_file` 原子化地迁移文件，确保文件历史的完整性。
+3.  接着，通过 `patch_file` 修改 `cascade-vm` 的构建配置和源代码，使其适应新的文件位置。这是确保系统在迁移后仍能正确构建和测试的关键。
+4.  最后，使用 `run_command` 和 `rm -rf` 清理源目录，完成迁移。
 
 ### 标签
 
-#intent/build #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/architecture #task/object/cascade-std #task/action/initialization #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/vm #comp/build #scope/core #ai/instruct #task/domain/architecture #task/object/cascade-std #task/action/migration #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `cascade-std` 目录结构
+#### Acts 1: 在 `cascade-std` 中创建目标目录
 
-首先，我们创建新包所需的所有目录。
+我们首先在 `cascade-std` 包中创建用于存放三连体（Triad）逻辑的 `triad` 目录。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-std/src/cascade/std
+mkdir -p packages/cascade-std/src/cascade/std/triad
 ~~~~~
-
-#### Acts 2: 创建 `cascade-std` 的包配置文件
-
-接下来，创建 `pyproject.toml` 文件，定义包的元数据和依赖项。
 
 ~~~~~act
 write_file
-packages/cascade-std/pyproject.toml
+packages/cascade-std/src/cascade/std/triad/__init__.py
 ~~~~~
-~~~~~toml
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+~~~~~python
+# Standard Triad logic (Execution Units) for the Cascade VM.
+~~~~~
 
-[project]
-name = "cascade-std"
-version = "0.1.0"
-description = "Standard library of physical primitives (ICs) for the Cascade VM."
-requires-python = ">=3.8"
+#### Acts 2: 迁移指令集文件
+
+现在，我们将三个核心指令文件从 `cascade-vm` 移动到 `cascade-std`。
+
+~~~~~act
+move_file
+packages/cascade-vm/src/cascade/vm/instructions/bleacher.py
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+~~~~~
+
+~~~~~act
+move_file
+packages/cascade-vm/src/cascade/vm/instructions/stainer.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
+~~~~~
+
+~~~~~act
+move_file
+packages/cascade-vm/src/cascade/vm/instructions/observer.py
+packages/cascade-std/src/cascade/std/triad/observer.py
+~~~~~
+
+#### Acts 3: 更新 `cascade-vm` 的依赖
+
+由于 `cascade-vm` 的测试代码需要用到这些已移走的指令，我们必须为其添加对 `cascade-std` 的依赖。
+
+~~~~~act
+patch_file
+packages/cascade-vm/pyproject.toml
+~~~~~
+~~~~~toml.old
 dependencies = [
   "cascade-spec",
+  "cascade-common",
 ]
+~~~~~
+~~~~~toml.new
+dependencies = [
+  "cascade-spec",
+  "cascade-common",
+  "cascade-std",
+]
+~~~~~
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/cascade"]
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
+~~~~~act
+patch_file
+packages/cascade-vm/pyproject.toml
+~~~~~
+~~~~~toml.old
 [tool.uv.sources]
 cascade-spec = { workspace = true }
-~~~~~
-
-#### Acts 3: 建立命名空间和类型支持
-
-现在，我们创建 `__init__.py` 文件以建立 `pkgutil` 命名空间，并添加 `py.typed` 文件以确保类型提示被正确识别。
-
-~~~~~act
-write_file
-packages/cascade-std/src/cascade/__init__.py
-~~~~~
-~~~~~python
-# This allows this package to coexist with other distribution packages
-# that contribute to the 'cascade' namespace.
-__path__ = __import__("pkgutil").extend_path(__path__, __name__)
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-std/src/cascade/std/__init__.py
-~~~~~
-~~~~~python
-# Standard library of physical primitives (ICs) for the Cascade VM.
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-std/src/cascade/py.typed
-~~~~~
-~~~~~
-~~~~~
-
-#### Acts 4: 将新包注册到 Monorepo workspace
-
-最后，我们将 `cascade-std` 添加到根 `pyproject.toml` 的 `uv.sources` 和 `hatch.workspaces` 中，以便 Monorepo 工具可以识别它。
-
-~~~~~act
-patch_file
-pyproject.toml
-~~~~~
-~~~~~toml.old
-cascade-compiler = { workspace = true }
-cascade = { workspace = true }
+cascade-common = { workspace = true }
 ~~~~~
 ~~~~~toml.new
-cascade-compiler = { workspace = true }
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-common = { workspace = true }
 cascade-std = { workspace = true }
-cascade = { workspace = true }
 ~~~~~
+
+#### Acts 4: 更新 `cascade-vm` 测试中的导入路径
+
+迁移完成后，我们需要修复 `cascade-vm` 测试代码中的导入路径，使其指向 `cascade.std`。
 
 ~~~~~act
 patch_file
-pyproject.toml
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
 ~~~~~
-~~~~~toml.old
-    "packages/cascade-vm",
-    "packages/cascade-compiler",
-]
+~~~~~python.old
+from cascade.vm.instructions.bleacher import standard_bleacher
+from cascade.vm.instructions.stainer import standard_stainer
 ~~~~~
-~~~~~toml.new
-    "packages/cascade-vm",
-    "packages/cascade-compiler",
-    "packages/cascade-std",
-]
+~~~~~python.new
+from cascade.std.triad.bleacher import standard_bleacher
+from cascade.std.triad.stainer import standard_stainer
 ~~~~~
 
+#### Acts 5: 清理 `cascade-vm` 中的旧目录
+
+最后，我们删除 `cascade-vm` 中现在已经为空的 `instructions` 目录。
+
 ~~~~~act
-patch_file
-pyproject.toml
+run_command
 ~~~~~
-~~~~~toml.old
-executionEnvironments = [
-  { root = "packages", extraPaths = [ "packages/cascade-application/src", "packages/cascade-cli-controller/src", "packages/cascade-cli-observer/src", "packages/cascade-common/src", "packages/cascade-connector-local/src", "packages/cascade-connector-mqtt/src", "packages/cascade-engine/src", "packages/cascade-graph/src", "packages/cascade-library/src", "packages/cascade-provider-ipfs/src", "packages/cascade-sdk/src", "packages/cascade-spec/src", "packages/cascade-vm/src", "packages/cascade-compiler/src" ] }
-]
-~~~~~
-~~~~~toml.new
-executionEnvironments = [
-  { root = "packages", extraPaths = [ "packages/cascade-application/src", "packages/cascade-cli-controller/src", "packages/cascade-cli-observer/src", "packages/cascade-common/src", "packages/cascade-connector-local/src", "packages/cascade-connector-mqtt/src", "packages/cascade-engine/src", "packages/cascade-graph/src", "packages/cascade-library/src", "packages/cascade-provider-ipfs/src", "packages/cascade-sdk/src", "packages/cascade-spec/src", "packages/cascade-vm/src", "packages/cascade-compiler/src", "packages/cascade-std/src" ] }
-]
+~~~~~bash
+rm -rf packages/cascade-vm/src/cascade/vm/instructions
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功地创建了 `cascade-std` 包的骨架。
+我们已经成功地将核心指令集迁移到了 `cascade-std`，并修复了 `cascade-vm` 的依赖和测试。`cascade-vm` 现在是一个更纯粹的执行引擎了。
 
-根据路线图，下一步是**任务 T2: 指令集迁出 (The Great Migration)**。这涉及到将 `cascade-vm` 中的 `bleacher.py`, `stainer.py` 和 `observer.py` 移动到新的 `cascade-std` 包中，并清理 `cascade-vm`。
+根据路线图，下一步是**任务 T3: 实现采样芯片 (Probe ICs)**。这包括实现 `ParamProbe`, `EnvProbe`, 和 `Pulse` 等用于从环境中获取输入的标准库函数。
 
-如果你准备好了，请指示我开始 `cascade-vm` 的文件迁移工作。
+如果你同意，我将开始为这些新的“采样芯片”创建文件和基本框架。

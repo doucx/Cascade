@@ -38,24 +38,14 @@ class TaskDef:
 @dataclass(frozen=True)
 class NodeIR:
     id: str
-    """Unique identifier for this node instance (e.g. current_instance_hash)."""
 
     name: str
-    """Human-readable name."""
 
     task: TaskDef
-    """The definition of the task being invoked."""
 
     inputs: Dict[str, Any] = field(default_factory=dict)
-    """
-    Mapping of argument names to values. 
-    Values can be literals or references to other NodeIR IDs.
-    """
 
     constraints: Dict[str, Any] = field(default_factory=dict)
-    """
-    Resource constraints for this node (e.g. {'gpu': 1}).
-    """
 
 
 @dataclass(frozen=True)

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(vm): 迁移标准三连体逻辑至 cascade-std 包", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767362045.8814983, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实现标准采样芯片 (Probe ICs) 及其测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767362123.6290784, "duration_ms": 0}}

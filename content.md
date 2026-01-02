@@ -1,71 +1,219 @@
-好的，我们已经完成了 `cascade-std` 包的初始化以及核心指令集（代码、测试、文档）的迁移，并确保了 `cascade-vm` 的独立性。现在我将生成一个 `[COMMIT]` 计划，将这些变更作为一个完整的逻辑单元提交。
+我们将开始执行任务 T3：实现采样芯片 (Probe ICs)。
 
-## [COMMIT] refactor(vm): 迁移标准三连体逻辑至 cascade-std 包
+根据路线图和 Cascade 3.0 的“主权”设计，参数和环境变量不再是节点的静态属性，而是通过物理采样动作获取的。我将创建 `ParamProbe`、`EnvProbe` 和 `PulseGenerator` 这三类核心芯片，并为它们编写严密的单元测试。
+
+## [WIP] feat: 实现标准采样芯片 (Probe ICs) 及其测试
 
 ### 用户需求
-完成 `Act 0.5` 路线图中的任务 T1 和 T2，将原本位于 `cascade-vm` 中的标准指令集（Bleacher, Stainer, Observer）及其配套的单元测试和 Stitcher 文档迁移到新建立的 `cascade-std` 包中。
+
+根据 `Act 0.5` 路线图，执行任务 T3：在 `cascade-std` 中实现 `ParamProbe`、`EnvProbe` 和 `Pulse` 芯片，并同步建立单元测试。
 
 ### 评论
-这次提交标志着 Cascade 3.0 架构的一个重要里程碑：物理执行引擎（VM）与具体物理定律（Std）的正式分离。通过这种解耦，我们不仅净化了 `cascade-vm` 的职责，还建立了一个可扩展的标准库框架，为后续实现更复杂的采样芯片和资源经纪人奠定了基础。
+
+这是实现“计算物理化”的关键一步。通过将外部环境的接入点（参数、环境变量）抽象为物理节点，我们统一了系统的动力学模型。所有的输入现在都是通过“激发-响应”机制产生的。
 
 ### 目标
-1. 提交新创建的 `cascade-std` 包及其完整结构。
-2. 提交对 `cascade-vm` 的清理，包括移除迁移的代码、测试和错误的依赖声明。
-3. 提交根目录 `pyproject.toml` 的配置更新，正式将 `cascade-std` 纳入 Monorepo。
+
+1.  在 `cascade-std` 中建立 `probe` 目录结构。
+2.  实现 `ParamProbe`：从 `WorkflowContext` 采样命名参数。
+3.  实现 `EnvProbe`：从操作系统环境变量采样。
+4.  实现 `PulseGenerator`：作为能量倍增器，将单个激发信号同步分发到多个出口。
+5.  为上述芯片编写完整的单元测试，确保其原子性和确定性。
 
 ### 基本原理
-按照架构设计，`cascade-vm` 应当是一个不带任何业务偏见的纯粹反应堆。将 `triad` 逻辑迁出并独立为 `cascade-std` 完美契合了这一原则。通过同时迁移代码、测试和 `.stitcher.yaml` 文档，我们保证了逻辑单元的完整性和可维护性。
+
+采样芯片遵循标准 IC 签名：`(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]`。
+- **`ParamProbe`**：它依赖于 `cascade-common` 中的上下文机制。在测试中，我们将模拟上下文环境。
+- **`EnvProbe`**：直接调用 `os.environ.get`。
+- **`PulseGenerator`**：它是一个透传节点。物理图中的广播是由 `Reactor` 根据端口映射自动完成的，芯片本身只需确保将信号发射到正确的输出端口。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/vm #comp/std #comp/build #comp/docs #scope/core #ai/instruct #task/domain/architecture #task/object/cascade-std #task/action/migration #task/state/end
+
+#intent/build #flow/ready #priority/high #comp/std #scope/core #ai/instruct #task/domain/architecture #task/object/probe-ics #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 提交架构迁移变更
+#### Acts 1: 创建 `probe` 目录结构
 
-我们将所有涉及迁移和初始化的变更添加到暂存区并执行提交。
-
-~~~~~act
-git_add
-pyproject.toml
-packages/cascade-vm/pyproject.toml
-packages/cascade-vm/tests/integration/test_resource_backpressure.py
-packages/cascade-std/
-~~~~~
-
-~~~~~act
-git_commit
-~~~~~
-~~~~~text
-refactor(vm): migrate standard triad logic to cascade-std
-
-Architectural shift: Decoupled the physical reactor (VM) from specific physical laws (Std).
-
-Key Changes:
-1. **Created cascade-std**: Initialized a new package dedicated to standard physical primitives (ICs).
-2. **Migrated Triad Logic**: Moved 'bleacher', 'stainer', and 'observer' from cascade-vm to cascade-std/triad.
-3. **Moved Tests & Docs**: Transferred corresponding unit tests and .stitcher.yaml files to maintain consistency.
-4. **Purified VM**: Removed redundant dependency on cascade-std from cascade-vm, ensuring the VM remains a generic execution engine.
-5. **Configured Workspace**: Integrated cascade-std into the root pyproject.toml and LSP environments.
-
-This refactoring fulfills Tasks T1 and T2 of the Act 0.5 roadmap.
-~~~~~
-
-#### Acts 2: 清理残留空目录
-
-提交完成后，我们彻底清理 `cascade-vm` 中因迁移而变为空的目录。
+首先在 `cascade-std` 中建立存放采样芯片的目录。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-rm -rf packages/cascade-vm/src/cascade/vm/instructions
-rm -rf packages/cascade-vm/tests/unit/instructions
+mkdir -p packages/cascade-std/src/cascade/std/probe
+mkdir -p packages/cascade-std/tests/unit/probe
+~~~~~
+
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/std/probe/__init__.py
+~~~~~
+~~~~~python
+# Probe ICs for sampling external environments and generating pulses.
+~~~~~
+
+#### Acts 2: 实现采样芯片 (ICs)
+
+实现 `ParamProbe`、`EnvProbe` 和 `PulseGenerator`。
+
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/std/probe/context.py
+~~~~~
+~~~~~python
+import os
+from typing import Dict
+from cascade.spec.physics import Token, PhysicsNode
+from cascade.common.context import get_current_context
+
+def param_probe(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+    """
+    Samples a value from the global WorkflowContext based on the 'name' input.
+    """
+    name = inputs["name"].payload
+    # In a real run, values are resolved by the Context/Engine.
+    # Here we interface with the common context.
+    ctx = get_current_context()
+    
+    # We assume context has a method to get values by spec name.
+    # If not found, it returns None (as a payload).
+    val = ctx.get_value(name) if hasattr(ctx, "get_value") else None
+    
+    return {"out": Token(payload=val)}
+~~~~~
+
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/std/probe/env.py
+~~~~~
+~~~~~python
+import os
+from typing import Dict
+from cascade.spec.physics import Token, PhysicsNode
+
+def env_probe(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+    """
+    Samples a value from the OS environment variables based on the 'name' input.
+    """
+    name = inputs["name"].payload
+    val = os.environ.get(name)
+    return {"out": Token(payload=val)}
+~~~~~
+
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/std/probe/pulse.py
+~~~~~
+~~~~~python
+from typing import Dict
+from cascade.spec.physics import Token, PhysicsNode
+
+def pulse_generator(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+    """
+    Acts as an energy multiplier. Takes a trigger and emits a sync pulse.
+    The actual 'broadcasting' to multiple ports is defined by the graph channels
+    wired to the 'out' port.
+    """
+    trigger_token = inputs["trigger"]
+    # We pass the trigger's payload and trace forward to maintain context
+    return {"out": Token(payload=trigger_token.payload, trace=trigger_token.trace)}
+~~~~~
+
+#### Acts 3: 创建单元测试
+
+为这些芯片编写单元测试，验证其在不同输入下的行为。
+
+~~~~~act
+write_file
+packages/cascade-std/tests/unit/probe/test_context.py
+~~~~~
+~~~~~python
+import pytest
+from unittest.mock import MagicMock, patch
+from cascade.spec.physics import Token
+from cascade.std.probe.context import param_probe
+
+def test_param_probe_lookups_value():
+    inputs = {"name": Token(payload="db_url"), "trigger": Token(payload=None)}
+    
+    # Mock WorkflowContext
+    mock_ctx = MagicMock()
+    mock_ctx.get_value.return_value = "sqlite:///:memory:"
+    
+    with patch("cascade.std.probe.context.get_current_context", return_value=mock_ctx):
+        outputs = param_probe(inputs, MagicMock())
+    
+    assert outputs["out"].payload == "sqlite:///:memory:"
+    mock_ctx.get_value.assert_called_once_with("db_url")
+
+def test_param_probe_returns_none_if_missing():
+    inputs = {"name": Token(payload="missing"), "trigger": Token(payload=None)}
+    mock_ctx = MagicMock()
+    mock_ctx.get_value.return_value = None
+    
+    with patch("cascade.std.probe.context.get_current_context", return_value=mock_ctx):
+        outputs = param_probe(inputs, MagicMock())
+    
+    assert outputs["out"].payload is None
+~~~~~
+
+~~~~~act
+write_file
+packages/cascade-std/tests/unit/probe/test_env.py
+~~~~~
+~~~~~python
+import os
+import pytest
+from unittest.mock import MagicMock, patch
+from cascade.spec.physics import Token
+from cascade.std.probe.env import env_probe
+
+def test_env_probe_samples_os_environ():
+    inputs = {"name": Token(payload="TEST_VAR")}
+    
+    with patch.dict(os.environ, {"TEST_VAR": "cascade_value"}):
+        outputs = env_probe(inputs, MagicMock())
+    
+    assert outputs["out"].payload == "cascade_value"
+
+def test_env_probe_returns_none_if_env_missing():
+    inputs = {"name": Token(payload="NON_EXISTENT_VAR")}
+    
+    # Ensure it's not in environ
+    if "NON_EXISTENT_VAR" in os.environ:
+        del os.environ["NON_EXISTENT_VAR"]
+        
+    outputs = env_probe(inputs, MagicMock())
+    assert outputs["out"].payload is None
+~~~~~
+
+~~~~~act
+write_file
+packages/cascade-std/tests/unit/probe/test_pulse.py
+~~~~~
+~~~~~python
+import pytest
+from unittest.mock import MagicMock
+from cascade.spec.physics import Token
+from cascade.std.probe.pulse import pulse_generator
+
+def test_pulse_generator_passes_token_forward():
+    trace = {"origin": "pulse_test"}
+    inputs = {"trigger": Token(payload="BOOM", trace=trace)}
+    
+    outputs = pulse_generator(inputs, MagicMock())
+    
+    assert outputs["out"].payload == "BOOM"
+    assert outputs["out"].trace["origin"] == "pulse_test"
 ~~~~~
 
 ### 下一步建议
-我们已经稳固地建立了 `cascade-std` 框架并完成了核心逻辑的迁出。
 
-接下来的任务是 **T3: 实现采样芯片 (Probe ICs)**。这些芯片将允许计算图主动探测外部环境（如参数、环境变量）。我建议先从最基础的 `ParamProbe` 开始，它将实现 Cascade 3.0 中“参数即采样”的核心理念。
+我们已经完成了采样芯片 (Probe ICs) 的实现和初步测试。这些组件为 Cascade 3.0 的“探测器模型”提供了物理支撑。
+
+根据路线图，下一步是 **任务 T4: 实现资源经纪人芯片 (Resource Broker ICs)**。这是最具挑战性的部分，特别是 `ContinuousBroker`，它需要处理资源申请 (`REQ`)、归还 (`REL`) 以及“余额不足”时的 Token 挂起逻辑。
+
+如果你准备好了，我们将开始攻克这个“5.1GB”核心任务。

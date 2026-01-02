@@ -1,3 +1,4 @@
+import sys
 from typing import Dict
 
 from cascade.spec.ir.models import GraphIR
@@ -6,6 +7,7 @@ from cascade.spec.physics import PhysicsDataNode
 from cascade.spec.triad import ObservabilityNode
 from cascade.spec.environment import EnvironmentDef
 from .expander import Expander, SubGraph
+from cascade.compiler.utils.naming import PhysicalIdGenerator
 
 
 class Builder:
@@ -18,7 +20,7 @@ class Builder:
 
         # 1. Create Objective Environment (D_res nodes)
         for res_def in environment.resources:
-            res_node_id = f"global_res_{res_def.name}"
+            res_node_id = PhysicalIdGenerator.global_resource(res_def.name)
             d_res = PhysicsDataNode(
                 id=res_node_id,
                 name=f"Resource({res_def.name})",
@@ -28,10 +30,13 @@ class Builder:
             physical_graph.nodes[res_node_id] = d_res
 
         # 2. Create and wire the global observability sidecar infrastructure
-        d_life_id = "global_d_life"
-        f_obs_id = "global_f_obs"
+        d_life_id = PhysicalIdGenerator.observability_bus()
+        f_obs_id = PhysicalIdGenerator.observability_observer()
 
-        d_life = PhysicsDataNode(id=d_life_id, name="LifecycleBus")
+        # Capacity set to maxsize to prevent backpressure from observability
+        d_life = PhysicsDataNode(
+            id=d_life_id, name="LifecycleBus", capacity=sys.maxsize
+        )
         f_obs = ObservabilityNode(
             id=f_obs_id,
             name="LifecycleObserver",
@@ -65,6 +70,10 @@ class Builder:
             if subgraph.bleacher is None or subgraph.stainer is None:
                 raise RuntimeError(f"Subgraph for {node_ir.id} is incomplete.")
 
+            # Help static analysis verify these are not None
+            assert subgraph.bleacher is not None
+            assert subgraph.stainer is not None
+
             subgraphs[node_ir.id] = subgraph
             physical_graph.nodes.update(subgraph.nodes)
             physical_graph.channels.extend(subgraph.channels)
@@ -90,9 +99,18 @@ class Builder:
         # 4. Wire data dependencies between subgraphs
         for node_ir in graph_ir.nodes:
             target_subgraph = subgraphs[node_ir.id]
+
+            # Help static analysis
+            assert target_subgraph.bleacher is not None
+
             for arg_name, source_ref in node_ir.inputs.items():
+                # Case A: Reference to another node (Dependency)
                 if isinstance(source_ref, str) and source_ref in subgraphs:
                     source_subgraph = subgraphs[source_ref]
+
+                    # Help static analysis
+                    assert source_subgraph.stainer is not None
+
                     physical_graph.channels.append(
                         Channel(
                             source_node_id=source_subgraph.stainer.id,
@@ -101,12 +119,39 @@ class Builder:
                             target_port=arg_name,
                         )
                     )
+                # Case B: Literal Value (Constant)
+                else:
+                    # Create a dedicated DataNode for this constant
+                    const_node_id = PhysicalIdGenerator.constant(node_ir.id, arg_name)
+                    const_node = PhysicsDataNode(
+                        id=const_node_id,
+                        name=f"Const({arg_name})",
+                        capacity=1,
+                        initial_tokens=1,
+                        initial_payload=source_ref,
+                    )
+                    physical_graph.nodes[const_node_id] = const_node
+
+                    # Wire Const -> Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=const_node_id,
+                            source_port="out",
+                            target_node_id=target_subgraph.bleacher.id,
+                            target_port=arg_name,
+                        )
+                    )
 
         # 5. Wire Global Resources (The Loop)
         for node_ir in graph_ir.nodes:
             subgraph = subgraphs[node_ir.id]
+
+            # Help static analysis
+            assert subgraph.bleacher is not None
+            assert subgraph.stainer is not None
+
             for res_name in node_ir.constraints:
-                res_node_id = f"global_res_{res_name}"
+                res_node_id = PhysicalIdGenerator.global_resource(res_name)
                 port_name = f"res_{res_name}"
 
                 # Acquire: D_res -> F_bleach

@@ -5,6 +5,7 @@ from cascade.spec.ir.models import NodeIR
 from cascade.spec.physics import PhysicsNode, PhysicsDataNode
 from cascade.spec.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.topology import Channel
+from cascade.compiler.utils.naming import PhysicalIdGenerator
 
 
 @dataclass
@@ -25,12 +26,12 @@ class Expander:
         # We use the logical node ID as a prefix to ensure uniqueness.
         base_id = node_ir.id
 
-        f_pre_id = f"{base_id}_bleach"
-        d_worker_in_id = f"{base_id}_worker_in"
-        f_worker_id = f"{base_id}_worker"
-        d_worker_out_id = f"{base_id}_worker_out"
-        d_trace_id = f"{base_id}_trace"
-        f_post_id = f"{base_id}_stain"
+        f_pre_id = PhysicalIdGenerator.bleach_node(base_id)
+        d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
+        f_worker_id = PhysicalIdGenerator.worker_node(base_id)
+        d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
+        d_trace_id = PhysicalIdGenerator.trace_data(base_id)
+        f_post_id = PhysicalIdGenerator.stain_node(base_id)
 
         # 2. Create Nodes
 

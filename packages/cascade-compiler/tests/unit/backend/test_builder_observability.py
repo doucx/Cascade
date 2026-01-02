@@ -17,10 +17,10 @@ def test_builder_creates_observer_sidecar(empty_graph_ir):
     graph = builder.build(empty_graph_ir, environment=EnvironmentDef())
 
     # 1. Assert D_life exists (Baseline check)
-    assert "global_d_life" in graph.nodes
+    assert "global.observability.bus" in graph.nodes
 
     # 2. Assert F_obs exists (New Requirement)
-    f_obs_id = "global_f_obs"
+    f_obs_id = "global.observability.observer"
     assert f_obs_id in graph.nodes
     f_obs = graph.nodes[f_obs_id]
     assert isinstance(f_obs, ObservabilityNode)
@@ -29,7 +29,8 @@ def test_builder_creates_observer_sidecar(empty_graph_ir):
     obs_channels = [
         c
         for c in graph.channels
-        if c.source_node_id == "global_d_life" and c.target_node_id == f_obs_id
+        if c.source_node_id == "global.observability.bus"
+        and c.target_node_id == f_obs_id
     ]
     assert len(obs_channels) == 1
     channel = obs_channels[0]

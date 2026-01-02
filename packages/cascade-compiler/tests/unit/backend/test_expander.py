@@ -28,14 +28,14 @@ def test_expander_creates_triad_structure():
 
     assert isinstance(bleacher, BleachNode)
     assert isinstance(stainer, StainNode)
-    assert bleacher.id == "node_1_bleach"
-    assert stainer.id == "node_1_stain"
+    assert bleacher.id == "node_1.bleach"
+    assert stainer.id == "node_1.stain"
 
     # Check intermediate nodes
-    worker = subgraph.nodes["node_1_worker"]
+    worker = subgraph.nodes["node_1.worker"]
     assert isinstance(worker, WorkerNode)
 
-    d_trace = subgraph.nodes["node_1_trace"]
+    d_trace = subgraph.nodes["node_1.data.trace"]
     assert isinstance(d_trace, PhysicsDataNode)
 
     # 4. Assert Channels

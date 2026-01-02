@@ -56,10 +56,6 @@ class Reactor:
                 self._outbound_channels[source.id].append(channel)
 
     def prime(self) -> None:
-        """
-        Injects initial potential energy (tokens) into the system
-        based on PhysicsDataNode.initial_tokens.
-        """
         for node in self.graph.nodes.values():
             if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
                 for _ in range(node.initial_tokens):
@@ -109,18 +105,9 @@ class Reactor:
 
         # We pass the node instance as the second argument to the instruction
         # to allow access to static port definitions (PortDef).
-        # Note: Some simple mocks might not accept the second arg, but standard instructions do.
-        # Ideally, we should unify the signature. For now, we assume standard signature.
-        try:
-            result_tokens: Dict[str, Token] = await self.executor.submit(
-                func, (input_data, node)
-            )
-        except TypeError:
-            # Fallback for legacy/mock functions that only take (inputs)
-            # This is a temporary bridge for tests using simple mocks like 'noop'
-            result_tokens: Dict[str, Token] = await self.executor.submit(
-                func, (input_data,)
-            )
+        result_tokens: Dict[str, Token] = await self.executor.submit(
+            func, (input_data, node)
+        )
 
         if not isinstance(result_tokens, dict):
             raise ValueError(

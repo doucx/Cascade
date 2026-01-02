@@ -1,5 +1,4 @@
 class PhysicalIdGenerator:
-
     @staticmethod
     def bleach_node(logical_node_id: str) -> str:
         return f"{logical_node_id}.bleach"

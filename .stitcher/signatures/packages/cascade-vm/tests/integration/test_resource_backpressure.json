@@ -1,7 +1,7 @@
 {
   "mock_worker": {
-    "baseline_code_signature_text": "def mock_worker(inputs: Dict[str, Token]) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "73d1a3b35d1040b0b4f6a10c111085bee1296440bd46037e6dc8a689b762e271"
+    "baseline_code_signature_text": "def mock_worker(inputs: Dict[str, Token], node) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "f0d185675080e81c280b42835a7274305d67cd7e98e263cf76278530ee734629"
   },
   "test_concurrency_limit": {
     "baseline_code_signature_text": "async def test_concurrency_limit():",

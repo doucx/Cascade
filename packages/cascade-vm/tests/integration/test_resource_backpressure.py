@@ -16,7 +16,7 @@ from cascade.vm.instructions.stainer import standard_stainer
 # --- Mocks ---
 
 
-def mock_worker(inputs: Dict[str, Token]) -> Dict[str, Token]:
+def mock_worker(inputs: Dict[str, Token], node) -> Dict[str, Token]:
     # The WorkerNode receives a single token on its 'worker_input' port.
     # The payload of this token is the dictionary of actual arguments.
     worker_input_token = inputs["worker_input"]

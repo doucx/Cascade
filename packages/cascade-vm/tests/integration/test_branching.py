@@ -9,7 +9,7 @@ from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
 
 
-def switch_logic(inputs: Dict[str, Token]) -> Dict[str, Token]:
+def switch_logic(inputs: Dict[str, Token], node) -> Dict[str, Token]:
     in_token = inputs["in"]
     direction = in_token.payload
 

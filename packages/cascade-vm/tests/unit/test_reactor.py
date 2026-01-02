@@ -8,7 +8,7 @@ from cascade.vm.executor import PhysicsExecutor
 
 
 # Dummy function for testing
-def noop(inputs):
+def noop(inputs, node):
     # Echos back a generic result token on 'out' port
     return {"out": Token(payload="result")}
 

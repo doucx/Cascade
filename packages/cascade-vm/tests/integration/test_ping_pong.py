@@ -9,7 +9,7 @@ from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
 
 
-def simple_increment(inputs: Dict[str, Token]) -> Dict[str, Token]:
+def simple_increment(inputs: Dict[str, Token], node) -> Dict[str, Token]:
     # Extract
     in_token = inputs["value"]
     val = in_token.payload

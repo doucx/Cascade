@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M test_observability_congestion.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767333761.2058535, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): implement Precision Ports (Phase 1)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767333763.9913478, "duration_ms": 0}}

@@ -1,8 +1,0 @@
-"test_stainer_error_case": |-
-  Tests the failure path: result is an exception, tag is 'error',
-  and trace is still correctly updated.
-"test_stainer_handles_missing_start_ts_gracefully": |-
-  If start_ts is missing from the trace for some reason, duration should be 0.
-"test_stainer_success_case": |-
-  Tests the standard success path: result is processed, tag is 'default',
-  and trace is correctly updated with duration.

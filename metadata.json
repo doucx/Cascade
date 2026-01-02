@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 迁移标准指令集到 cascade-std", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767361721.3484657, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 迁移指令集单元测试并移除 vm 对 std 的依赖", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767361814.8964856, "duration_ms": 0}}

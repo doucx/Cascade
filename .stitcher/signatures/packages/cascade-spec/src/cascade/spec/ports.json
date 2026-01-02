@@ -1,0 +1,11 @@
+{
+  "PortDef": {},
+  "PortDef.name": {},
+  "PortDef.role": {},
+  "PortDef.type_hint": {},
+  "PortRole": {},
+  "PortRole.DATA": {},
+  "PortRole.OBSERVABILITY": {},
+  "PortRole.RESOURCE": {},
+  "PortRole.SIGNAL": {}
+}

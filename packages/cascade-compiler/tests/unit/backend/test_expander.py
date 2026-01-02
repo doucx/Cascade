@@ -1,5 +1,6 @@
 from cascade.spec.ir.models import NodeIR, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.ports import PortRole
 from cascade.compiler.backend.expander import Expander
 from cascade.spec.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.physics import PhysicsDataNode
@@ -50,6 +51,15 @@ def test_expander_creates_triad_structure():
         if c.source_node_id == bleacher.id and c.target_node_id == d_trace.id
     )
     assert trace_channel.source_port == "trace_output"
+
+    # Verify Port Definitions
+    assert "x" in bleacher.input_ports
+    assert bleacher.input_ports["x"].role == PortRole.DATA
+    assert bleacher.output_ports["trace_output"].role == PortRole.DATA
+    assert bleacher.output_ports["obs_output"].role == PortRole.OBSERVABILITY
+
+    assert stainer.input_ports["worker_result"].role == PortRole.DATA
+    assert stainer.output_ports["output"].role == PortRole.DATA
 
     # Trace -> Stain
     trace_in_channel = next(

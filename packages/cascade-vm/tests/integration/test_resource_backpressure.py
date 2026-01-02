@@ -1,6 +1,5 @@
 import pytest
 from typing import Dict
-from functools import partial
 
 from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
 from cascade.spec.fingerprint import Fingerprint
@@ -74,13 +73,13 @@ async def test_concurrency_limit():
     executor = PhysicsExecutor()
 
     # Map functions
-    # Note: We must bind expected_args for bleacher so it knows 'x' is data, 'res_gpu' is resource
-    bleacher_fn = partial(standard_bleacher, expected_args=["x"])
+    # No more partial binding or expected_args needed!
+    # The instructions now inspect the Node's port definitions directly.
 
     func_map = {}
     for node_id in physical_graph.nodes:
         if node_id.endswith(".bleach"):
-            func_map[node_id] = bleacher_fn
+            func_map[node_id] = standard_bleacher
         elif node_id.endswith(".stain"):
             func_map[node_id] = standard_stainer
         elif node_id.endswith(".worker"):

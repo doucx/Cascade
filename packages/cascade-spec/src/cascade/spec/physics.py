@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
+from cascade.spec.ports import PortDef
 
 
 @dataclass
@@ -43,8 +44,8 @@ class PhysicsDataNode(PhysicsNode):
 
 @dataclass
 class PhysicsFuncNode(PhysicsNode):
-    input_ports: Dict[str, str] = field(default_factory=dict)
-    """Map of port_name -> description/type."""
+    input_ports: Dict[str, PortDef] = field(default_factory=dict)
+    """Map of port_name -> PortDef."""
 
-    output_ports: Dict[str, str] = field(default_factory=dict)
-    """Map of port_name -> description/type."""
+    output_ports: Dict[str, PortDef] = field(default_factory=dict)
+    """Map of port_name -> PortDef."""

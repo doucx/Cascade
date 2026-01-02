@@ -5,6 +5,9 @@
   "PhysicsDataNode.capacity": {
     "baseline_yaml_content_hash": "50ce7c55c9caf589e28e03ac8b3c85987c53677c00f6acdc1cbd418d4cf73b00"
   },
+  "PhysicsDataNode.initial_payload": {
+    "baseline_yaml_content_hash": "ba5aefb6ba96528caa10d9d86dd20737b8ea75aac5548def2f245801cdf9a684"
+  },
   "PhysicsDataNode.initial_tokens": {
     "baseline_yaml_content_hash": "3c893a2990525154b8f3185424dc5d23939486779f3cdd52e758beea162aa655"
   },
@@ -12,10 +15,10 @@
     "baseline_yaml_content_hash": "ec673a140eca5341c546a8332d9e3cecd5a7fee772f5f93ade1968ff0160d909"
   },
   "PhysicsFuncNode.input_ports": {
-    "baseline_yaml_content_hash": "5578c38b747a80b9dd665b216375a3e499c7c8cbebc7cf179c1aee70011135fd"
+    "baseline_yaml_content_hash": "2f0d48622c1fa3fc818d22f9d92e32e8c2e2dd5067c15281d350a4f19de9c421"
   },
   "PhysicsFuncNode.output_ports": {
-    "baseline_yaml_content_hash": "5578c38b747a80b9dd665b216375a3e499c7c8cbebc7cf179c1aee70011135fd"
+    "baseline_yaml_content_hash": "2f0d48622c1fa3fc818d22f9d92e32e8c2e2dd5067c15281d350a4f19de9c421"
   },
   "PhysicsNode": {
     "baseline_yaml_content_hash": "84b98f21cf229fee01813f137743f26bdae7ef606d507b69f75539c91944a753"

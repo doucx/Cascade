@@ -2,9 +2,11 @@ from typing import Dict
 import time
 
 from cascade.spec.physics import Token
+from cascade.spec.triad import StainNode
+from cascade.spec.ports import PortRole
 
 
-def standard_stainer(inputs: Dict[str, Token]) -> Dict[str, Token]:
+def standard_stainer(inputs: Dict[str, Token], node: StainNode) -> Dict[str, Token]:
     end_ts = time.monotonic()
 
     # 1. Extract inputs
@@ -31,10 +33,11 @@ def standard_stainer(inputs: Dict[str, Token]) -> Dict[str, Token]:
     outputs["output"] = Token(payload=result_payload, tag=tag, trace=trace_payload)
 
     # 4.2 Resource Return (The Loop)
-    # Check if we are holding any resources that need to be returned
-    held_resources = trace_payload.get("held_resources", [])
-    for resource_port in held_resources:
-        # Emit a generic token to the resource port to "refill" the slot
-        outputs[resource_port] = Token(payload=None)
+    # We iterate over the node's output ports to find all RESOURCE ports.
+    # This is a static guarantee: if the node has a resource output port, we MUST emit to it.
+    for port_name, port_def in node.output_ports.items():
+        if port_def.role == PortRole.RESOURCE:
+            # Emit a generic token to the resource port to "refill" the slot
+            outputs[port_name] = Token(payload=None)
 
     return outputs

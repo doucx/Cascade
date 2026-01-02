@@ -1,6 +1,7 @@
 import pytest
 import sys
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory, MemoryFullError
 from cascade.vm.reactor import Reactor
@@ -13,19 +14,26 @@ def noop_producer(inputs):
 
 @pytest.mark.asyncio
 async def test_limited_capacity_causes_crash():
-    """
-    证明：如果汇聚节点容量有限（例如 1），并发写入会导致 MemoryFullError。
-    """
     # 1. Setup: 2 Producers -> 1 Limited Consumer
     d_life = PhysicsDataNode(id="D_life", name="Bus", capacity=1)
 
     # Producer 1
     d_in1 = PhysicsDataNode(id="D_in1", name="In1", initial_tokens=1)
-    f_p1 = PhysicsFuncNode(id="F_p1", name="P1")
+    f_p1 = PhysicsFuncNode(
+        id="F_p1",
+        name="P1",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     # Producer 2
     d_in2 = PhysicsDataNode(id="D_in2", name="In2", initial_tokens=1)
-    f_p2 = PhysicsFuncNode(id="F_p2", name="P2")
+    f_p2 = PhysicsFuncNode(
+        id="F_p2",
+        name="P2",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d_life, d_in1, f_p1, d_in2, f_p2]}
@@ -76,17 +84,24 @@ async def test_limited_capacity_causes_crash():
 
 @pytest.mark.asyncio
 async def test_infinite_capacity_handles_concurrency():
-    """
-    证明：如果汇聚节点容量为 sys.maxsize，并发写入安全。
-    """
     # 1. Setup: 2 Producers -> 1 Infinite Consumer
     d_life = PhysicsDataNode(id="D_life", name="Bus", capacity=sys.maxsize)
 
     d_in1 = PhysicsDataNode(id="D_in1", name="In1", initial_tokens=1)
-    f_p1 = PhysicsFuncNode(id="F_p1", name="P1")
+    f_p1 = PhysicsFuncNode(
+        id="F_p1",
+        name="P1",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     d_in2 = PhysicsDataNode(id="D_in2", name="In2", initial_tokens=1)
-    f_p2 = PhysicsFuncNode(id="F_p2", name="P2")
+    f_p2 = PhysicsFuncNode(
+        id="F_p2",
+        name="P2",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
 
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d_life, d_in1, f_p1, d_in2, f_p2]}

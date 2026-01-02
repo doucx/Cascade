@@ -1,70 +1,164 @@
-好的，我们已经成功搭建了编译器前端的基础设施并验证了其核心逻辑。现在，我们将这些成果作为一个完整的逻辑单元提交到代码库中。
+好的，我们开始执行 Act 0.5.1 的第一部分：初始化 `cascade-std` 包。
 
-## [COMMIT] feat(compiler): 迁移核心分析工具并实现 IRGenerator (Frontend)
+我将创建一个计划，该计划会建立 `cascade-std` 的目录结构，配置其 `pyproject.toml` 以声明对 `cascade-spec` 的依赖，并建立符合我们 Monorepo 规范的 `pkgutil` 命名空间。
+
+## [WIP] feat: 初始化 cascade-std 包结构
 
 ### 用户需求
-将 `ReflectionAnalyzer` 和 `HashingService` 从 `cascade-graph` 迁移到 `cascade-compiler`，并实现 `IRGenerator` 以支持从 `LazyResult` 到 `GraphIR` 的转换，同时包含完整的单元测试。
+
+根据 `Act 0.5` 路线图，执行任务 T1：项目初始化。这包括创建 `cascade-std` 包，配置其依赖，并设置命名空间。
 
 ### 评论
-这是 Cascade 3.0 全系统集成的第一个里程碑。通过将静态分析能力和 IR 生成逻辑收纳进 `cascade-compiler`，我们正式确立了编译器在系统架构中的中心地位，并为彻底废弃 v2.0 的 `cascade-graph` 扫清了障碍。`IRGenerator` 的实现非常纯粹，它通过后序遍历保证了生成的 IR 具有天然的拓扑顺序，极大地简化了后端的处理压力。
+
+这是建立 Cascade “标准物理库”的第一步，也是至关重要的一步。一个干净、合规的包结构是后续功能迁移和开发的基础，能确保我们的 Monorepo 工具链和类型检查器正确识别新包，从而提供良好的开发者体验。
 
 ### 目标
-1.  提交迁移后的 `ReflectionAnalyzer` 和适配后的 `HashingService`。
-2.  提交 `IRGenerator` 的核心实现。
-3.  提交 `IRGenerator` 的单元测试套件。
+
+1.  创建 `packages/cascade-std` 的完整目录结构。
+2.  为 `cascade-std` 创建一个 `pyproject.toml` 文件，声明其元数据和对 `cascade-spec` 的依赖。
+3.  创建符合 PEP 561 规范的 `py.typed` 文件和符合 `pkgutil` 规范的命名空间 `__init__.py` 文件。
+4.  将新包注册到根 `pyproject.toml` 的 workspace 中，使其成为 Monorepo 的一部分。
 
 ### 基本原理
-按照“寄生重构法”的战略，我们首先建立稳固的、与旧架构解耦的新工具链。这组提交确保了编译器具备了独立处理用户定义（`LazyResult`）的能力。通过 TDD 验证的 `IRGenerator` 为即将开始的 `Engine` 重写手术提供了可靠的数据来源。
+
+我们将使用一系列原子化的文件系统操作来完成初始化：
+1.  `run_command` 与 `mkdir -p` 结合可以一次性、幂等地创建所有必需的目录。
+2.  `write_file` 用于创建新文件，包括 `pyproject.toml` 和 `__init__.py`。新包的 `pyproject.toml` 会被配置为 workspace 成员，并使用 `uv.sources` 链接到本地的 `cascade-spec`。
+3.  `patch_file` 用于向根 `pyproject.toml` 中添加新成员，这比重写整个文件更安全、更精确。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/frontend #task/action/implementation #task/state/continue
+
+#intent/build #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/architecture #task/object/cascade-std #task/action/initialization #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交编译器前端相关变更
+#### Acts 1: 创建 `cascade-std` 目录结构
 
-我们将新创建的工具类、Generator 实现及其测试文件添加到暂存区，并创建一个详细的提交。
+首先，我们创建新包所需的所有目录。
 
 ~~~~~act
-git_add
-packages/cascade-compiler/src/cascade/compiler/utils/reflection.py
-packages/cascade-compiler/src/cascade/compiler/utils/hashing.py
-packages/cascade-compiler/src/cascade/compiler/utils/__init__.py
-packages/cascade-compiler/src/cascade/compiler/frontend/__init__.py
-packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
-packages/cascade-compiler/tests/unit/frontend/test_generator.py
+run_command
+~~~~~
+~~~~~bash
+mkdir -p packages/cascade-std/src/cascade/std
+~~~~~
+
+#### Acts 2: 创建 `cascade-std` 的包配置文件
+
+接下来，创建 `pyproject.toml` 文件，定义包的元数据和依赖项。
+
+~~~~~act
+write_file
+packages/cascade-std/pyproject.toml
+~~~~~
+~~~~~toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-std"
+version = "0.1.0"
+description = "Standard library of physical primitives (ICs) for the Cascade VM."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+~~~~~
+
+#### Acts 3: 建立命名空间和类型支持
+
+现在，我们创建 `__init__.py` 文件以建立 `pkgutil` 命名空间，并添加 `py.typed` 文件以确保类型提示被正确识别。
+
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/__init__.py
+~~~~~
+~~~~~python
+# This allows this package to coexist with other distribution packages
+# that contribute to the 'cascade' namespace.
+__path__ = __import__("pkgutil").extend_path(__path__, __name__)
 ~~~~~
 
 ~~~~~act
-git_commit
+write_file
+packages/cascade-std/src/cascade/std/__init__.py
 ~~~~~
-~~~~~text
-feat(compiler): migrate core analysis tools and implement IRGenerator
+~~~~~python
+# Standard library of physical primitives (ICs) for the Cascade VM.
+~~~~~
 
-Migrated and adapted the static analysis infrastructure from cascade-graph
-to cascade-compiler to decouple the compilation process from v2.0 models.
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/py.typed
+~~~~~
+~~~~~
+~~~~~
 
-Key changes:
-1.  **ReflectionAnalyzer**: Moved to compiler utils to handle TaskDef extraction.
-2.  **HashingService**: Migrated and updated to use duck-typing for ID access,
-    ensuring compatibility with both v2.0 Nodes and v3.0 NodeIRs.
-3.  **IRGenerator**: Implemented the compiler frontend which performs post-order
-    traversal of LazyResult trees to produce a topologically-sorted GraphIR.
-4.  **Unit Tests**: Added coverage for IRGenerator, verifying correct mapping of
-    literal arguments and proper resolution of task-to-task dependencies.
+#### Acts 4: 将新包注册到 Monorepo workspace
 
-This provides the necessary foundation for the upcoming Engine rewrite.
+最后，我们将 `cascade-std` 添加到根 `pyproject.toml` 的 `uv.sources` 和 `hatch.workspaces` 中，以便 Monorepo 工具可以识别它。
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~toml.old
+cascade-compiler = { workspace = true }
+cascade = { workspace = true }
+~~~~~
+~~~~~toml.new
+cascade-compiler = { workspace = true }
+cascade-std = { workspace = true }
+cascade = { workspace = true }
+~~~~~
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~toml.old
+    "packages/cascade-vm",
+    "packages/cascade-compiler",
+]
+~~~~~
+~~~~~toml.new
+    "packages/cascade-vm",
+    "packages/cascade-compiler",
+    "packages/cascade-std",
+]
+~~~~~
+
+~~~~~act
+patch_file
+pyproject.toml
+~~~~~
+~~~~~toml.old
+executionEnvironments = [
+  { root = "packages", extraPaths = [ "packages/cascade-application/src", "packages/cascade-cli-controller/src", "packages/cascade-cli-observer/src", "packages/cascade-common/src", "packages/cascade-connector-local/src", "packages/cascade-connector-mqtt/src", "packages/cascade-engine/src", "packages/cascade-graph/src", "packages/cascade-library/src", "packages/cascade-provider-ipfs/src", "packages/cascade-sdk/src", "packages/cascade-spec/src", "packages/cascade-vm/src", "packages/cascade-compiler/src" ] }
+]
+~~~~~
+~~~~~toml.new
+executionEnvironments = [
+  { root = "packages", extraPaths = [ "packages/cascade-application/src", "packages/cascade-cli-controller/src", "packages/cascade-cli-observer/src", "packages/cascade-common/src", "packages/cascade-connector-local/src", "packages/cascade-connector-mqtt/src", "packages/cascade-engine/src", "packages/cascade-graph/src", "packages/cascade-library/src", "packages/cascade-provider-ipfs/src", "packages/cascade-sdk/src", "packages/cascade-spec/src", "packages/cascade-vm/src", "packages/cascade-compiler/src", "packages/cascade-std/src" ] }
+]
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了“桥梁”的建设。接下来的任务是 **Act 3: 移植引擎 (Lobotomizing the Engine)**。
+我们已经成功地创建了 `cascade-std` 包的骨架。
 
-我们将执行以下操作：
-1.  **清理旧引擎**: 清理 `cascade-engine` 中与 v2.0 调度逻辑相关的代码。
-2.  **注入新核心**: 修改 `Engine.run` 方法，使其调用 `IRGenerator` 生成 IR，随后调用 `Builder` 编译物理图，并最终在 `Reactor` 上运行。
-3.  **打通执行流**: 确保 `PhysicsExecutor` 能通过 `Bleacher` 正确执行用户的 Python 函数并处理结果。
+根据路线图，下一步是**任务 T2: 指令集迁出 (The Great Migration)**。这涉及到将 `cascade-vm` 中的 `bleacher.py`, `stainer.py` 和 `observer.py` 移动到新的 `cascade-std` 包中，并清理 `cascade-vm`。
 
-如果你准备好了，我们将开始对 `cascade-engine` 进行核心集成。
+如果你准备好了，请指示我开始 `cascade-vm` 的文件迁移工作。

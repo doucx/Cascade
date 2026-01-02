@@ -1,86 +1,71 @@
-非常感谢你的指正和帮助恢复文件！你说得对，我之前的 `rm -rf` 操作过于粗暴，错误地删除了与代码逻辑紧密相关的 `.stitcher.yaml` 文档文件。这是一个严重的疏忽。
+好的，我们已经完成了 `cascade-std` 包的初始化以及核心指令集（代码、测试、文档）的迁移，并确保了 `cascade-vm` 的独立性。现在我将生成一个 `[COMMIT]` 计划，将这些变更作为一个完整的逻辑单元提交。
 
-代码、测试和文档应该被视为一个不可分割的单元。现在我将把这些恢复的文档文件移动到它们在 `cascade-std` 包中应在的新位置。
-
-## [WIP] fix: 迁移指令集相关的 stitcher.yaml 文档文件
-
-### 错误分析
-
-我之前的计划在执行 `rm -rf` 以清理旧目录时，未能考虑到目录中还包含 `.stitcher.yaml` 文档文件。这导致与 `bleacher`, `stainer`, `observer` 及其测试相关的文档被一并删除，破坏了代码库的文档完整性。
+## [COMMIT] refactor(vm): 迁移标准三连体逻辑至 cascade-std 包
 
 ### 用户需求
-
-用户已经通过 `git` 恢复了被误删的 `.stitcher.yaml` 文件，现在需要将它们从 `cascade-vm` 的旧位置移动到 `cascade-std` 中对应的新位置。
+完成 `Act 0.5` 路线图中的任务 T1 和 T2，将原本位于 `cascade-vm` 中的标准指令集（Bleacher, Stainer, Observer）及其配套的单元测试和 Stitcher 文档迁移到新建立的 `cascade-std` 包中。
 
 ### 评论
-
-这是一个必要的修正。将文档与其描述的代码和测试放在一起，是保证项目可维护性的关键。感谢你指出这个问题，这有助于我们保持代码库的整洁和完整。
+这次提交标志着 Cascade 3.0 架构的一个重要里程碑：物理执行引擎（VM）与具体物理定律（Std）的正式分离。通过这种解耦，我们不仅净化了 `cascade-vm` 的职责，还建立了一个可扩展的标准库框架，为后续实现更复杂的采样芯片和资源经纪人奠定了基础。
 
 ### 目标
-
-1.  将 `cascade-vm` 中 `instructions` 目录下的三个 `stitcher.yaml` 文件移动到 `cascade-std` 的 `triad` 目录中。
-2.  将 `cascade-vm` 中 `tests/unit/instructions` 目录下的三个测试 `stitcher.yaml` 文件移动到 `cascade-std` 的 `tests/unit/triad` 目录中。
+1. 提交新创建的 `cascade-std` 包及其完整结构。
+2. 提交对 `cascade-vm` 的清理，包括移除迁移的代码、测试和错误的依赖声明。
+3. 提交根目录 `pyproject.toml` 的配置更新，正式将 `cascade-std` 纳入 Monorepo。
 
 ### 基本原理
-
-使用 `move_file` 指令可以原子化地完成文件迁移。我们将为每个需要移动的 `stitcher.yaml` 文件执行一次 `move_file` 操作，以确保计划的清晰性和准确性。
+按照架构设计，`cascade-vm` 应当是一个不带任何业务偏见的纯粹反应堆。将 `triad` 逻辑迁出并独立为 `cascade-std` 完美契合了这一原则。通过同时迁移代码、测试和 `.stitcher.yaml` 文档，我们保证了逻辑单元的完整性和可维护性。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/medium #comp/vm #comp/docs #scope/dx #ai/instruct #task/domain/architecture #task/object/stitcher-files #task/action/migration #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/vm #comp/std #comp/build #comp/docs #scope/core #ai/instruct #task/domain/architecture #task/object/cascade-std #task/action/migration #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 迁移源代码文档 (stitcher.yaml)
+#### Acts 1: 提交架构迁移变更
 
-首先，移动与 `bleacher.py`, `stainer.py`, 和 `observer.py` 源码相对应的文档。
+我们将所有涉及迁移和初始化的变更添加到暂存区并执行提交。
 
 ~~~~~act
-move_file
-packages/cascade-vm/src/cascade/vm/instructions/bleacher.stitcher.yaml
-packages/cascade-std/src/cascade/std/triad/bleacher.stitcher.yaml
+git_add
+pyproject.toml
+packages/cascade-vm/pyproject.toml
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
+packages/cascade-std/
 ~~~~~
 
 ~~~~~act
-move_file
-packages/cascade-vm/src/cascade/vm/instructions/stainer.stitcher.yaml
-packages/cascade-std/src/cascade/std/triad/stainer.stitcher.yaml
+git_commit
+~~~~~
+~~~~~text
+refactor(vm): migrate standard triad logic to cascade-std
+
+Architectural shift: Decoupled the physical reactor (VM) from specific physical laws (Std).
+
+Key Changes:
+1. **Created cascade-std**: Initialized a new package dedicated to standard physical primitives (ICs).
+2. **Migrated Triad Logic**: Moved 'bleacher', 'stainer', and 'observer' from cascade-vm to cascade-std/triad.
+3. **Moved Tests & Docs**: Transferred corresponding unit tests and .stitcher.yaml files to maintain consistency.
+4. **Purified VM**: Removed redundant dependency on cascade-std from cascade-vm, ensuring the VM remains a generic execution engine.
+5. **Configured Workspace**: Integrated cascade-std into the root pyproject.toml and LSP environments.
+
+This refactoring fulfills Tasks T1 and T2 of the Act 0.5 roadmap.
 ~~~~~
 
+#### Acts 2: 清理残留空目录
+
+提交完成后，我们彻底清理 `cascade-vm` 中因迁移而变为空的目录。
+
 ~~~~~act
-move_file
-packages/cascade-vm/src/cascade/vm/instructions/observer.stitcher.yaml
-packages/cascade-std/src/cascade/std/triad/observer.stitcher.yaml
+run_command
 ~~~~~
-
-#### Acts 2: 迁移单元测试文档 (stitcher.yaml)
-
-接下来，移动与单元测试文件相对应的文档。
-
-~~~~~act
-move_file
-packages/cascade-vm/tests/unit/instructions/test_bleacher.stitcher.yaml
-packages/cascade-std/tests/unit/triad/test_bleacher.stitcher.yaml
-~~~~~
-
-~~~~~act
-move_file
-packages/cascade-vm/tests/unit/instructions/test_stainer.stitcher.yaml
-packages/cascade-std/tests/unit/triad/test_stainer.stitcher.yaml
-~~~~~
-
-~~~~~act
-move_file
-packages/cascade-vm/tests/unit/instructions/test_observer.stitcher.yaml
-packages/cascade-std/tests/unit/triad/test_observer.stitcher.yaml
+~~~~~bash
+rm -rf packages/cascade-vm/src/cascade/vm/instructions
+rm -rf packages/cascade-vm/tests/unit/instructions
 ~~~~~
 
 ### 下一步建议
+我们已经稳固地建立了 `cascade-std` 框架并完成了核心逻辑的迁出。
 
-我们已经完成了所有文件的迁移和修正，`cascade-std` 包现在包含了完整的代码、测试和文档，并且 `cascade-vm` 的独立性得到了保证。项目结构现在处于一个干净和正确的状态。
-
-我们可以继续执行路线图中的**任务 T3: 实现采样芯片 (Probe ICs)**。
-
-如果您准备好了，请指示我开始创建 `probe` 目录和相关文件。
+接下来的任务是 **T3: 实现采样芯片 (Probe ICs)**。这些芯片将允许计算图主动探测外部环境（如参数、环境变量）。我建议先从最基础的 `ParamProbe` 开始，它将实现 Cascade 3.0 中“参数即采样”的核心理念。

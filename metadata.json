@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 迁移指令集相关的 stitcher.yaml 文档文件", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767361925.130993, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(vm): 迁移标准三连体逻辑至 cascade-std 包", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767362045.8814983, "duration_ms": 0}}

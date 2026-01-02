@@ -1,219 +1,179 @@
-我们将开始执行任务 T3：实现采样芯片 (Probe ICs)。
+好的，这是一个明智的决定。任务 T4 确实是整个 Act 0.5 中最复杂的部分，我们可以先完成其他外围任务，最后再集中精力攻克它。
 
-根据路线图和 Cascade 3.0 的“主权”设计，参数和环境变量不再是节点的静态属性，而是通过物理采样动作获取的。我将创建 `ParamProbe`、`EnvProbe` 和 `PulseGenerator` 这三类核心芯片，并为它们编写严密的单元测试。
+我们现在开始执行 **任务 T5: 实现系统主权芯片**。
 
-## [WIP] feat: 实现标准采样芯片 (Probe ICs) 及其测试
+这个计划将创建 `terminator` 和 `drainer` 这两个核心的系统控制芯片。它们是计算图实现“自我主权”的物理基础，允许图本身向运行时（VM）发出 `HALT` (停机) 和 `DRAIN` (耗尽) 的信号。
+
+## [WIP] feat: 实现系统主权芯片 (System ICs)
 
 ### 用户需求
 
-根据 `Act 0.5` 路线图，执行任务 T3：在 `cascade-std` 中实现 `ParamProbe`、`EnvProbe` 和 `Pulse` 芯片，并同步建立单元测试。
+根据 `Act 0.5` 路线图，执行任务 T5：在 `cascade-std` 中实现 `terminator` 和 `drainer` 系统控制芯片，并为它们创建单元测试。
 
 ### 评论
 
-这是实现“计算物理化”的关键一步。通过将外部环境的接入点（参数、环境变量）抽象为物理节点，我们统一了系统的动力学模型。所有的输入现在都是通过“激发-响应”机制产生的。
+这是 Cascade 3.0 "图的主权" 哲学的直接体现。通过将 `HALT` 和 `DRAIN` 等生命周期控制信号物化为图内部节点产生的特殊 Token，我们将控制权从外部的“上帝”调度器交还给了计算图本身。这使得图能够自洽地决定其生命周期的终结，是迈向真正自主演化物理场的关键一步。
 
 ### 目标
 
-1.  在 `cascade-std` 中建立 `probe` 目录结构。
-2.  实现 `ParamProbe`：从 `WorkflowContext` 采样命名参数。
-3.  实现 `EnvProbe`：从操作系统环境变量采样。
-4.  实现 `PulseGenerator`：作为能量倍增器，将单个激发信号同步分发到多个出口。
-5.  为上述芯片编写完整的单元测试，确保其原子性和确定性。
+1.  在 `cascade-std` 中创建 `system` 目录结构。
+2.  在 `cascade-spec` 中定义一个新的 `SystemControlToken` 类型，作为系统信号的标准化载体。
+3.  实现 `terminator.py`，它能生成一个 `SystemControlToken(command='HALT')`。
+4.  实现 `drainer.py`，它能生成一个 `SystemControlToken(command='DRAIN')`。
+5.  为这两个芯片编写单元测试，验证它们能正确生成预期的控制信号。
 
 ### 基本原理
 
-采样芯片遵循标准 IC 签名：`(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]`。
-- **`ParamProbe`**：它依赖于 `cascade-common` 中的上下文机制。在测试中，我们将模拟上下文环境。
-- **`EnvProbe`**：直接调用 `os.environ.get`。
-- **`PulseGenerator`**：它是一个透传节点。物理图中的广播是由 `Reactor` 根据端口映射自动完成的，芯片本身只需确保将信号发射到正确的输出端口。
+我们将首先在 `cascade-spec` 中定义 `SystemControlToken`，因为它是一个跨越 VM 和标准库边界的核心数据结构。然后，在 `cascade-std` 中实现的两个芯片函数将非常简单：它们接收任意输入 Token 作为触发器，然后构造并返回一个特定命令的 `SystemControlToken`。测试将断言返回的 Token 类型和 `command` 字段是否正确。
 
 ### 标签
 
-#intent/build #flow/ready #priority/high #comp/std #scope/core #ai/instruct #task/domain/architecture #task/object/probe-ics #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/std #comp/spec #scope/api #ai/instruct #task/domain/architecture #task/object/system-ics #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `probe` 目录结构
+#### Acts 1: 创建 `system` 目录结构
 
-首先在 `cascade-std` 中建立存放采样芯片的目录。
+我们在 `cascade-std` 中为系统控制芯片建立存放目录。
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-std/src/cascade/std/probe
-mkdir -p packages/cascade-std/tests/unit/probe
+mkdir -p packages/cascade-std/src/cascade/std/system
+mkdir -p packages/cascade-std/tests/unit/system
 ~~~~~
 
 ~~~~~act
 write_file
-packages/cascade-std/src/cascade/std/probe/__init__.py
+packages/cascade-std/src/cascade/std/system/__init__.py
 ~~~~~
 ~~~~~python
-# Probe ICs for sampling external environments and generating pulses.
+# System Control ICs for graph lifecycle management (Sovereignty).
 ~~~~~
 
-#### Acts 2: 实现采样芯片 (ICs)
+#### Acts 2: 在 `cascade-spec` 中定义 `SystemControlToken`
 
-实现 `ParamProbe`、`EnvProbe` 和 `PulseGenerator`。
+为了让 VM 能够识别这些特殊信号，我们首先在规范包中定义 `SystemControlToken`。
 
 ~~~~~act
 write_file
-packages/cascade-std/src/cascade/std/probe/context.py
+packages/cascade-spec/src/cascade/spec/system.py
 ~~~~~
 ~~~~~python
-import os
-from typing import Dict
-from cascade.spec.physics import Token, PhysicsNode
-from cascade.common.context import get_current_context
+from dataclasses import dataclass
+from typing import Any
 
-def param_probe(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+@dataclass(frozen=True)
+class SystemControlToken:
     """
-    Samples a value from the global WorkflowContext based on the 'name' input.
+    A special token that signals a lifecycle control command to the VM/Reactor.
+    It is NOT a data token and should be handled by a special system bus.
     """
-    name = inputs["name"].payload
-    # In a real run, values are resolved by the Context/Engine.
-    # Here we interface with the common context.
-    ctx = get_current_context()
-    
-    # We assume context has a method to get values by spec name.
-    # If not found, it returns None (as a payload).
-    val = ctx.get_value(name) if hasattr(ctx, "get_value") else None
-    
-    return {"out": Token(payload=val)}
+    command: str
+    payload: Any = None
 ~~~~~
+
+#### Acts 3: 实现系统主权芯片 (ICs)
+
+现在，我们实现 `terminator` 和 `drainer`。
 
 ~~~~~act
 write_file
-packages/cascade-std/src/cascade/std/probe/env.py
-~~~~~
-~~~~~python
-import os
-from typing import Dict
-from cascade.spec.physics import Token, PhysicsNode
-
-def env_probe(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
-    """
-    Samples a value from the OS environment variables based on the 'name' input.
-    """
-    name = inputs["name"].payload
-    val = os.environ.get(name)
-    return {"out": Token(payload=val)}
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-std/src/cascade/std/probe/pulse.py
+packages/cascade-std/src/cascade/std/system/terminator.py
 ~~~~~
 ~~~~~python
 from typing import Dict
 from cascade.spec.physics import Token, PhysicsNode
+from cascade.spec.system import SystemControlToken
 
-def pulse_generator(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+def halt_signal(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
     """
-    Acts as an energy multiplier. Takes a trigger and emits a sync pulse.
-    The actual 'broadcasting' to multiple ports is defined by the graph channels
-    wired to the 'out' port.
+    Receives a trigger token and emits a SIG_HALT system control token.
+    This requests an immediate, hard shutdown of the Reactor.
     """
-    trigger_token = inputs["trigger"]
-    # We pass the trigger's payload and trace forward to maintain context
-    return {"out": Token(payload=trigger_token.payload, trace=trigger_token.trace)}
+    # The output token is a special system type, not a standard data Token.
+    # The VM will need to have a special port/handler for these.
+    # We wrap it in a standard token for transport through a standard channel.
+    control_token = SystemControlToken(command="HALT")
+    return {"out": Token(payload=control_token)}
 ~~~~~
-
-#### Acts 3: 创建单元测试
-
-为这些芯片编写单元测试，验证其在不同输入下的行为。
 
 ~~~~~act
 write_file
-packages/cascade-std/tests/unit/probe/test_context.py
+packages/cascade-std/src/cascade/std/system/drainer.py
 ~~~~~
 ~~~~~python
-import pytest
-from unittest.mock import MagicMock, patch
-from cascade.spec.physics import Token
-from cascade.std.probe.context import param_probe
+from typing import Dict
+from cascade.spec.physics import Token, PhysicsNode
+from cascade.spec.system import SystemControlToken
 
-def test_param_probe_lookups_value():
-    inputs = {"name": Token(payload="db_url"), "trigger": Token(payload=None)}
-    
-    # Mock WorkflowContext
-    mock_ctx = MagicMock()
-    mock_ctx.get_value.return_value = "sqlite:///:memory:"
-    
-    with patch("cascade.std.probe.context.get_current_context", return_value=mock_ctx):
-        outputs = param_probe(inputs, MagicMock())
-    
-    assert outputs["out"].payload == "sqlite:///:memory:"
-    mock_ctx.get_value.assert_called_once_with("db_url")
-
-def test_param_probe_returns_none_if_missing():
-    inputs = {"name": Token(payload="missing"), "trigger": Token(payload=None)}
-    mock_ctx = MagicMock()
-    mock_ctx.get_value.return_value = None
-    
-    with patch("cascade.std.probe.context.get_current_context", return_value=mock_ctx):
-        outputs = param_probe(inputs, MagicMock())
-    
-    assert outputs["out"].payload is None
+def drain_signal(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+    """
+    Receives a trigger and emits a SIG_DRAIN system control token.
+    This signals that a branch of the graph will produce no new data,
+    aiding in graceful shutdown detection.
+    """
+    control_token = SystemControlToken(command="DRAIN")
+    return {"out": Token(payload=control_token)}
 ~~~~~
+
+#### Acts 4: 创建单元测试
+
+最后，为这两个芯片编写单元测试。
 
 ~~~~~act
 write_file
-packages/cascade-std/tests/unit/probe/test_env.py
-~~~~~
-~~~~~python
-import os
-import pytest
-from unittest.mock import MagicMock, patch
-from cascade.spec.physics import Token
-from cascade.std.probe.env import env_probe
-
-def test_env_probe_samples_os_environ():
-    inputs = {"name": Token(payload="TEST_VAR")}
-    
-    with patch.dict(os.environ, {"TEST_VAR": "cascade_value"}):
-        outputs = env_probe(inputs, MagicMock())
-    
-    assert outputs["out"].payload == "cascade_value"
-
-def test_env_probe_returns_none_if_env_missing():
-    inputs = {"name": Token(payload="NON_EXISTENT_VAR")}
-    
-    # Ensure it's not in environ
-    if "NON_EXISTENT_VAR" in os.environ:
-        del os.environ["NON_EXISTENT_VAR"]
-        
-    outputs = env_probe(inputs, MagicMock())
-    assert outputs["out"].payload is None
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-std/tests/unit/probe/test_pulse.py
+packages/cascade-std/tests/unit/system/test_terminator.py
 ~~~~~
 ~~~~~python
 import pytest
 from unittest.mock import MagicMock
 from cascade.spec.physics import Token
-from cascade.std.probe.pulse import pulse_generator
+from cascade.spec.system import SystemControlToken
+from cascade.std.system.terminator import halt_signal
 
-def test_pulse_generator_passes_token_forward():
-    trace = {"origin": "pulse_test"}
-    inputs = {"trigger": Token(payload="BOOM", trace=trace)}
+def test_halt_signal_produces_correct_token():
+    inputs = {"trigger": Token(payload=None)}
     
-    outputs = pulse_generator(inputs, MagicMock())
+    outputs = halt_signal(inputs, MagicMock())
     
-    assert outputs["out"].payload == "BOOM"
-    assert outputs["out"].trace["origin"] == "pulse_test"
+    assert "out" in outputs
+    output_payload = outputs["out"].payload
+    
+    assert isinstance(output_payload, SystemControlToken)
+    assert output_payload.command == "HALT"
+~~~~~
+
+~~~~~act
+write_file
+packages/cascade-std/tests/unit/system/test_drainer.py
+~~~~~
+~~~~~python
+import pytest
+from unittest.mock import MagicMock
+from cascade.spec.physics import Token
+from cascade.spec.system import SystemControlToken
+from cascade.std.system.drainer import drain_signal
+
+def test_drain_signal_produces_correct_token():
+    inputs = {"trigger": Token(payload=None)}
+    
+    outputs = drain_signal(inputs, MagicMock())
+    
+    assert "out" in outputs
+    output_payload = outputs["out"].payload
+    
+    assert isinstance(output_payload, SystemControlToken)
+    assert output_payload.command == "DRAIN"
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了采样芯片 (Probe ICs) 的实现和初步测试。这些组件为 Cascade 3.0 的“探测器模型”提供了物理支撑。
+我们已经成功地实现了系统主权芯片，完成了 `Act 0.5` 路线图中的大部分任务（T1, T2, T3, T5）。
 
-根据路线图，下一步是 **任务 T4: 实现资源经纪人芯片 (Resource Broker ICs)**。这是最具挑战性的部分，特别是 `ContinuousBroker`，它需要处理资源申请 (`REQ`)、归还 (`REL`) 以及“余额不足”时的 Token 挂起逻辑。
+现在只剩下最后一个，也是最具挑战性的任务：**T4: 实现资源经纪人芯片 (Resource Broker ICs)**。这个任务对于实现物理层面的资源管理和背压至关重要。
 
-如果你准备好了，我们将开始攻克这个“5.1GB”核心任务。
+我建议我们现在开始着手这项任务。如果你准备好了，我将开始创建 `resource` 目录并实现 `DiscreteBroker`。

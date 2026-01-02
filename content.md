@@ -1,108 +1,70 @@
-简要回答
+好的，我们已经成功搭建了编译器前端的基础设施并验证了其核心逻辑。现在，我们将这些成果作为一个完整的逻辑单元提交到代码库中。
 
-好的，我们继续遵循 TDD 流程，为 `IRGenerator` 添加一个更复杂的测试用例，以验证其处理任务间依赖关系的能力。
-
-## [WIP] test(compiler): 为 IRGenerator 添加依赖解析测试
+## [COMMIT] feat(compiler): 迁移核心分析工具并实现 IRGenerator (Frontend)
 
 ### 用户需求
-为 `IRGenerator` 添加一个新的单元测试，`test_generate_task_with_dependency`。该测试需要验证当一个 `LazyResult` (下游) 依赖于另一个 `LazyResult` (上游) 时，`IRGenerator` 能够：
-1.  正确生成代表两个任务的 `NodeIR`。
-2.  在 `GraphIR` 中保持正确的拓扑顺序（上游节点在前）。
-3.  在下游节点的 `inputs` 中，使用上游节点的 ID 字符串作为引用。
+将 `ReflectionAnalyzer` 和 `HashingService` 从 `cascade-graph` 迁移到 `cascade-compiler`，并实现 `IRGenerator` 以支持从 `LazyResult` 到 `GraphIR` 的转换，同时包含完整的单元测试。
 
 ### 评论
-这是对 `IRGenerator` 核心能力的第二次关键验证。第一个测试验证了它能处理“点”，这个测试将验证它能处理“线”。通过断言 ID 引用，我们确保了 `LazyResult` 对象图被正确地“扁平化”为 `GraphIR`，为 Backend 的处理做好了准备。
+这是 Cascade 3.0 全系统集成的第一个里程碑。通过将静态分析能力和 IR 生成逻辑收纳进 `cascade-compiler`，我们正式确立了编译器在系统架构中的中心地位，并为彻底废弃 v2.0 的 `cascade-graph` 扫清了障碍。`IRGenerator` 的实现非常纯粹，它通过后序遍历保证了生成的 IR 具有天然的拓扑顺序，极大地简化了后端的处理压力。
 
 ### 目标
-1.  在 `packages/cascade-compiler/tests/unit/frontend/test_generator.py` 文件中追加一个新的测试用例。
-2.  构造一个依赖场景，例如 `add(add(1, 2), 3)`。
-3.  断言生成的 `GraphIR` 包含两个节点，并且下游节点的输入正确引用了上游节点的 ID。
+1.  提交迁移后的 `ReflectionAnalyzer` 和适配后的 `HashingService`。
+2.  提交 `IRGenerator` 的核心实现。
+3.  提交 `IRGenerator` 的单元测试套件。
 
 ### 基本原理
-一个健壮的编译器前端必须能够正确解析依赖关系，这是构建任何非平凡工作流的基础。通过在 TDD 流程的早期阶段就锁定此行为，我们可以确保在后续添加更复杂功能（如 Map/Router）时，不会破坏这一核心逻辑。
+按照“寄生重构法”的战略，我们首先建立稳固的、与旧架构解耦的新工具链。这组提交确保了编译器具备了独立处理用户定义（`LazyResult`）的能力。通过 TDD 验证的 `IRGenerator` 为即将开始的 `Engine` 重写手术提供了可靠的数据来源。
 
 ### 标签
-#intent/tooling #flow/draft #priority/high #comp/compiler #comp/tests #scope/dx #ai/instruct #task/domain/compiler #task/object/frontend #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/frontend #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 添加依赖解析测试用例
+#### Acts 1: 提交编译器前端相关变更
 
-我们将通过 `patch_file` 向现有的测试文件追加新的测试用例。
+我们将新创建的工具类、Generator 实现及其测试文件添加到暂存区，并创建一个详细的提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-compiler/src/cascade/compiler/utils/reflection.py
+packages/cascade-compiler/src/cascade/compiler/utils/hashing.py
+packages/cascade-compiler/src/cascade/compiler/utils/__init__.py
+packages/cascade-compiler/src/cascade/compiler/frontend/__init__.py
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
 packages/cascade-compiler/tests/unit/frontend/test_generator.py
 ~~~~~
-~~~~~python.old
-def test_generate_task_with_kwargs():
-    """
-    Tests that a single LazyResult with literal keyword arguments is
-    correctly converted.
-    """
-    # Arrange
-    generator = IRGenerator()
-    target = process_data(data={"key": "value"})
 
-    # Act
-    graph_ir = generator.generate(target)
-
-    # Assert
-    assert len(graph_ir.nodes) == 1
-    node_ir = graph_ir.nodes[0]
-    assert node_ir.name == "process_data"
-    assert node_ir.inputs == {"data": {"key": "value"}}
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-def test_generate_task_with_kwargs():
-    """
-    Tests that a single LazyResult with literal keyword arguments is
-    correctly converted.
-    """
-    # Arrange
-    generator = IRGenerator()
-    target = process_data(data={"key": "value"})
+~~~~~text
+feat(compiler): migrate core analysis tools and implement IRGenerator
 
-    # Act
-    graph_ir = generator.generate(target)
+Migrated and adapted the static analysis infrastructure from cascade-graph
+to cascade-compiler to decouple the compilation process from v2.0 models.
 
-    # Assert
-    assert len(graph_ir.nodes) == 1
-    node_ir = graph_ir.nodes[0]
-    assert node_ir.name == "process_data"
-    assert node_ir.inputs == {"data": {"key": "value"}}
+Key changes:
+1.  **ReflectionAnalyzer**: Moved to compiler utils to handle TaskDef extraction.
+2.  **HashingService**: Migrated and updated to use duck-typing for ID access,
+    ensuring compatibility with both v2.0 Nodes and v3.0 NodeIRs.
+3.  **IRGenerator**: Implemented the compiler frontend which performs post-order
+    traversal of LazyResult trees to produce a topologically-sorted GraphIR.
+4.  **Unit Tests**: Added coverage for IRGenerator, verifying correct mapping of
+    literal arguments and proper resolution of task-to-task dependencies.
 
-
-def test_generate_task_with_dependency():
-    """
-    Tests that a LazyResult depending on another is converted into two
-    NodeIRs with a correct ID reference.
-    """
-    # Arrange
-    generator = IRGenerator()
-    upstream_lr = add(1, 2)
-    downstream_lr = add(upstream_lr, 3)
-
-    # Act
-    graph_ir = generator.generate(downstream_lr)
-
-    # Assert
-    assert len(graph_ir.nodes) == 2
-
-    # The generator produces a topologically sorted list due to post-order traversal
-    upstream_node = graph_ir.nodes[0]
-    downstream_node = graph_ir.nodes[1]
-
-    # Verify upstream node is correct
-    assert upstream_node.name == "add"
-    assert upstream_node.inputs == {"0": 1, "1": 2}
-
-    # Verify downstream node correctly references the upstream node's ID
-    assert downstream_node.name == "add"
-    assert downstream_node.inputs == {"0": upstream_node.id, "1": 3}
+This provides the necessary foundation for the upcoming Engine rewrite.
 ~~~~~
 
 ### 下一步建议
-我们已经成功验证了 Frontend 的基础和依赖解析能力。现在可以安全地进入 **Act 3: 移植引擎 (Lobotomizing the Engine)**。我们将开始对 `cascade-engine` 进行核心替换手术，使其调用我们新构建的、经过测试的 `IRGenerator`。
+
+我们已经完成了“桥梁”的建设。接下来的任务是 **Act 3: 移植引擎 (Lobotomizing the Engine)**。
+
+我们将执行以下操作：
+1.  **清理旧引擎**: 清理 `cascade-engine` 中与 v2.0 调度逻辑相关的代码。
+2.  **注入新核心**: 修改 `Engine.run` 方法，使其调用 `IRGenerator` 生成 IR，随后调用 `Builder` 编译物理图，并最终在 `Reactor` 上运行。
+3.  **打通执行流**: 确保 `PhysicsExecutor` 能通过 `Bleacher` 正确执行用户的 Python 函数并处理结果。
+
+如果你准备好了，我们将开始对 `cascade-engine` 进行核心集成。

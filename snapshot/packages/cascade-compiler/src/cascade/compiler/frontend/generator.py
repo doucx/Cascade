@@ -1,62 +1,3 @@
-简要回答
-
-好的，我们进入 Act 2。我们将构建 **Compiler Frontend** 的核心脚手架，实现 `IRGenerator`。这个组件将负责把用户定义的 `LazyResult` 对象树转化为编译器可理解的 `GraphIR`。
-
-## [WIP] feat(compiler): 建立 Frontend 脚手架与 IRGenerator
-
-### 用户需求
-实现一个 `IRGenerator` 类，它能够：
-1.  接受一个 `LazyResult` 对象作为输入。
-2.  通过后序遍历（Post-order traversal）解析其所有依赖。
-3.  利用 `ReflectionAnalyzer` 提取任务定义的元数据。
-4.  利用 `HashingService` 为每个任务实例计算唯一的、稳定的 ID。
-5.  将 `LazyResult` 的参数（args/kwargs）转换为 `NodeIR` 的输入（inputs），并将对其他 `LazyResult` 的引用替换为对应的节点 ID。
-6.  最终输出一个包含所有相关节点的 `GraphIR` 对象。
-
-### 评论
-这是连接用户侧 API (`cascade-sdk`) 和系统侧运行时 (`cascade-vm`) 的关键桥梁。
-在此阶段，我们将采取以下简化策略以确保快速迭代：
-1.  **暂不支持 Map 和 Router**: 遇到这些高级特性时暂抛出异常。
-2.  **参数扁平化**: 将位置参数 (`args`) 转换为字符串键（"0", "1"...）存入 `inputs` 字典，与 Backend 的预期保持一致。
-3.  **隐式引用**: 在 `inputs` 字典中，如果值是一个字符串且该字符串是另一个节点的 ID，Backend 会自动将其识别为依赖关系。我们在 Generator 中通过替换 `LazyResult` 为 ID 字符串来实现这一点。
-
-### 目标
-1.  创建 `packages/cascade-compiler/src/cascade/compiler/frontend/__init__.py`。
-2.  创建 `packages/cascade-compiler/src/cascade/compiler/frontend/generator.py` 并实现核心逻辑。
-
-### 基本原理
-通过将 `LazyResult` 对象图转换为平坦的、数据类驱动的 `GraphIR`，我们彻底解耦了用户的定义（可以是递归的、动态的 Python 对象）与编译器的处理逻辑（静态的、结构化的数据）。`HashingService` 的引入确保了即使在分布式环境中，相同的任务配置也能生成相同的物理节点 ID，这是实现幂等性和缓存的基础。
-
-### 标签
-#intent/build #flow/draft #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/frontend #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 初始化 Frontend 包
-
-创建包的入口文件。
-
-~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/frontend/__init__.py
-~~~~~
-~~~~~python
-from .generator import IRGenerator
-
-__all__ = ["IRGenerator"]
-~~~~~
-
-#### Acts 2: 实现 IRGenerator
-
-这是核心逻辑。它实现了从 `LazyResult` 到 `GraphIR` 的转换算法。
-
-~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
-~~~~~
-~~~~~python
 from typing import Any, Dict, List, Union, Optional
 
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
@@ -187,7 +128,3 @@ class IRGenerator:
         self._visited[lr._uuid] = node_id
 
         return node_id
-~~~~~
-
-### 下一步建议
-我们已经完成了 Frontend 的核心逻辑。下一步是 **Act 3: 移植引擎 (Lobotomizing the Engine)**。我们将重写 `cascade-engine`，使其不再依赖旧的 `GraphBuilder` 和 `Processor`，而是使用我们刚刚构建的 `Frontend` 生成 IR，并调用 `Backend` 和 `VM` 来执行任务。这将是 "Hello World" 能否跑通的关键时刻。

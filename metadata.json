@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(compiler): 迁移静态分析与哈希工具至编译器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767340889.9307833, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): 建立 Frontend 脚手架与 IRGenerator", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767341015.2365425, "duration_ms": 0}}

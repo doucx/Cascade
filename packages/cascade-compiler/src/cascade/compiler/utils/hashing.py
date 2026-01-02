@@ -8,12 +8,6 @@ from cascade.spec.resource import Inject
 
 
 class HashingService:
-    """
-    Service responsible for computing a stable Merkle hash for a node instance.
-    This is the `Instance Hash`, which uniquely identifies a specific, fully-parameterized
-    node instance.
-    """
-
     def compute_node_instance_hash(
         self,
         definition: TaskDef,

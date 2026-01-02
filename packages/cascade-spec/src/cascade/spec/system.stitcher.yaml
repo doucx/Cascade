@@ -1,0 +1,3 @@
+"SystemControlToken": |-
+  A special token that signals a lifecycle control command to the VM/Reactor.
+  It is NOT a data token and should be handled by a special system bus.

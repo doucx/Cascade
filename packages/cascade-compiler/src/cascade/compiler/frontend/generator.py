@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Union, Optional
+from typing import Any, Dict
 
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
@@ -8,11 +8,6 @@ from cascade.compiler.utils.hashing import HashingService
 
 
 class IRGenerator:
-    """
-    Compiler Frontend: Converts user-facing LazyResult structures into
-    the Intermediate Representation (GraphIR) used by the backend.
-    """
-
     def __init__(self):
         self.analyzer = ReflectionAnalyzer()
         self.hashing_service = HashingService()
@@ -22,9 +17,6 @@ class IRGenerator:
         self._visited: Dict[str, str] = {}
 
     def generate(self, target: Any) -> GraphIR:
-        """
-        Main entry point. Generates a GraphIR from a target (usually a LazyResult).
-        """
         self._visit(target)
         # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
         # which corresponds to the post-order traversal (dependencies first),
@@ -32,11 +24,6 @@ class IRGenerator:
         return GraphIR(nodes=list(self.nodes.values()))
 
     def _visit(self, obj: Any) -> Any:
-        """
-        Recursive visitor that transforms LazyResults into Node IDs.
-        Returns the transformed value (e.g., Node ID string for LazyResult,
-        or the literal value for others).
-        """
         if isinstance(obj, LazyResult):
             return self._visit_lazy_result(obj)
         elif isinstance(obj, (MappedLazyResult, Router)):
@@ -96,9 +83,7 @@ class IRGenerator:
         for val in lr.kwargs.values():
             collect_deps(val)
 
-        node_id = self.hashing_service.compute_node_instance_hash(
-            task_def, lr, dep_map
-        )
+        node_id = self.hashing_service.compute_node_instance_hash(task_def, lr, dep_map)
 
         # 4. Construct NodeIR
         # Flatten args and kwargs into a single 'inputs' dictionary

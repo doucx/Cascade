@@ -1,0 +1,4 @@
+"pulse_generator": |-
+  Acts as an energy multiplier. Takes a trigger and emits a sync pulse.
+  The actual 'broadcasting' to multiple ports is defined by the graph channels
+  wired to the 'out' port.

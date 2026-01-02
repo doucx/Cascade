@@ -1,0 +1,7 @@
+{
+  "pulse_generator": {
+    "baseline_code_signature_text": "def pulse_generator(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "8874ac15f31a5bb54730839f01349b0fa64c347f7b32271bcb767930953a16c1",
+    "baseline_yaml_content_hash": "8481dc64ea92962661d2e46bb7a1b160704e60cd6f9a95aff64d0aed17a53df6"
+  }
+}

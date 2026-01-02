@@ -1,0 +1,7 @@
+{
+  "halt_signal": {
+    "baseline_code_signature_text": "def halt_signal(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "dcc9e3d228d9faaf309c70c2aaac3804336815fab2b10c9716d35b86e19a52f5",
+    "baseline_yaml_content_hash": "5270ac9ff236cf988e6c9df95c27c77a1094575588c733cb5d016e01e20a40e0"
+  }
+}

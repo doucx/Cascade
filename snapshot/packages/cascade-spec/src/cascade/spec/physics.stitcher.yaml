@@ -3,15 +3,17 @@
   It holds Tokens.
 "PhysicsDataNode.capacity": |-
   Maximum number of tokens this node can hold simultaneously.
+"PhysicsDataNode.initial_payload": |-
+  The payload to use for pre-filled tokens.
 "PhysicsDataNode.initial_tokens": |-
   Number of tokens to pre-fill at reactor startup (Potential Energy).
 "PhysicsFuncNode": |-
   Represents a transformation unit (Transition) in the Petri net.
   It consumes Tokens from inputs and produces Tokens to outputs.
 "PhysicsFuncNode.input_ports": |-
-  Map of port_name -> description/type.
+  Map of port_name -> PortDef.
 "PhysicsFuncNode.output_ports": |-
-  Map of port_name -> description/type.
+  Map of port_name -> PortDef.
 "PhysicsNode": |-
   Base class for all static entities in the bipartite graph.
 "PhysicsNode.id": |-

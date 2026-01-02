@@ -1,6 +1,5 @@
 import pytest
 from typing import Dict
-from functools import partial
 
 from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
 from cascade.spec.fingerprint import Fingerprint

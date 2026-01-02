@@ -19,9 +19,7 @@ def test_standard_bleacher_extracts_payloads():
         "arg1": Token(payload="hello"),
         "arg2": Token(payload=123),
     }
-    node = create_mock_bleach_node(
-        {"arg1": PortRole.DATA, "arg2": PortRole.DATA}
-    )
+    node = create_mock_bleach_node({"arg1": PortRole.DATA, "arg2": PortRole.DATA})
 
     outputs = standard_bleacher(inputs, node)
 
@@ -64,9 +62,7 @@ def test_standard_bleacher_merges_traces():
         "token_a": Token(payload=1, trace={"id": "A", "source": "X"}),
         "token_b": Token(payload=2, trace={"id": "B", "retry": 1}),
     }
-    node = create_mock_bleach_node(
-        {"token_a": PortRole.DATA, "token_b": PortRole.DATA}
-    )
+    node = create_mock_bleach_node({"token_a": PortRole.DATA, "token_b": PortRole.DATA})
 
     MOCK_TIMESTAMP = 200.0
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):

@@ -1,4 +1,8 @@
 {
+  "create_mock_bleach_node": {
+    "baseline_code_signature_text": "def create_mock_bleach_node(input_ports_config):",
+    "baseline_code_structure_hash": "7445fe856448bc475450c151a1a5898537659d9236e5b53a401e8fb26fe172e9"
+  },
   "test_standard_bleacher_extracts_payloads": {
     "baseline_code_signature_text": "def test_standard_bleacher_extracts_payloads():",
     "baseline_code_structure_hash": "790daba61eafb56df468bee30d3ac7fea9e828935e5c0629feda08e60ba06064",

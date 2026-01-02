@@ -6,9 +6,7 @@ from cascade.spec.triad import StainNode
 from cascade.spec.ports import PortRole
 
 
-def standard_stainer(
-    inputs: Dict[str, Token], node: StainNode
-) -> Dict[str, Token]:
+def standard_stainer(inputs: Dict[str, Token], node: StainNode) -> Dict[str, Token]:
     end_ts = time.monotonic()
 
     # 1. Extract inputs

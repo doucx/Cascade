@@ -14,9 +14,6 @@ def noop_producer(inputs):
 
 @pytest.mark.asyncio
 async def test_limited_capacity_causes_crash():
-    """
-    证明：如果汇聚节点容量有限（例如 1），并发写入会导致 MemoryFullError。
-    """
     # 1. Setup: 2 Producers -> 1 Limited Consumer
     d_life = PhysicsDataNode(id="D_life", name="Bus", capacity=1)
 
@@ -87,9 +84,6 @@ async def test_limited_capacity_causes_crash():
 
 @pytest.mark.asyncio
 async def test_infinite_capacity_handles_concurrency():
-    """
-    证明：如果汇聚节点容量为 sys.maxsize，并发写入安全。
-    """
     # 1. Setup: 2 Producers -> 1 Infinite Consumer
     d_life = PhysicsDataNode(id="D_life", name="Bus", capacity=sys.maxsize)
 

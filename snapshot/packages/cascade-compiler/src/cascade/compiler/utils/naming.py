@@ -1,8 +1,4 @@
 class PhysicalIdGenerator:
-    """
-    The central authority for generating canonical IDs for physical nodes.
-    Ensures consistency and adherence to naming axioms across the compiler.
-    """
 
     @staticmethod
     def bleach_node(logical_node_id: str) -> str:

@@ -1,193 +1,116 @@
 简要回答
 
-好的，我们进入 Act 2。我们将构建 **Compiler Frontend** 的核心脚手架，实现 `IRGenerator`。这个组件将负责把用户定义的 `LazyResult` 对象树转化为编译器可理解的 `GraphIR`。
+好的，我们立即为刚刚创建的 `IRGenerator` 编写单元测试。这将遵循 TDD 的最佳实践，确保我们的 Frontend 在一开始就具有坚实的质量基础，并能验证其最核心的功能。
 
-## [WIP] feat(compiler): 建立 Frontend 脚手架与 IRGenerator
+## [WIP] test(compiler): 为 IRGenerator 添加单元测试
 
 ### 用户需求
-实现一个 `IRGenerator` 类，它能够：
-1.  接受一个 `LazyResult` 对象作为输入。
-2.  通过后序遍历（Post-order traversal）解析其所有依赖。
-3.  利用 `ReflectionAnalyzer` 提取任务定义的元数据。
-4.  利用 `HashingService` 为每个任务实例计算唯一的、稳定的 ID。
-5.  将 `LazyResult` 的参数（args/kwargs）转换为 `NodeIR` 的输入（inputs），并将对其他 `LazyResult` 的引用替换为对应的节点 ID。
-6.  最终输出一个包含所有相关节点的 `GraphIR` 对象。
+为 `IRGenerator` 创建一个单元测试，验证它能正确地将一个简单的、带有字面量参数的 `LazyResult` (如 `add(1, 2)`) 转换为一个结构正确的 `GraphIR`。
 
 ### 评论
-这是连接用户侧 API (`cascade-sdk`) 和系统侧运行时 (`cascade-vm`) 的关键桥梁。
-在此阶段，我们将采取以下简化策略以确保快速迭代：
-1.  **暂不支持 Map 和 Router**: 遇到这些高级特性时暂抛出异常。
-2.  **参数扁平化**: 将位置参数 (`args`) 转换为字符串键（"0", "1"...）存入 `inputs` 字典，与 Backend 的预期保持一致。
-3.  **隐式引用**: 在 `inputs` 字典中，如果值是一个字符串且该字符串是另一个节点的 ID，Backend 会自动将其识别为依赖关系。我们在 Generator 中通过替换 `LazyResult` 为 ID 字符串来实现这一点。
+这是我们新编译器 Frontend 的第一个质量门。通过这个测试，我们将锁定 `IRGenerator` 的基础行为：
+1.  **单节点图生成**: 验证对于单个任务，确实只生成一个 `NodeIR`。
+2.  **任务定义分析**: 确保 `ReflectionAnalyzer` 被正确调用，并将 `TaskDef` 附加到 `NodeIR` 上。
+3.  **参数扁平化**: 验证位置参数 `(1, 2)` 被正确地转换为了 `inputs` 字典 `{"0": 1, "1": 2}`。
+
+这个测试的通过将为后续更复杂的测试（如依赖关系解析）提供信心。
 
 ### 目标
-1.  创建 `packages/cascade-compiler/src/cascade/compiler/frontend/__init__.py`。
-2.  创建 `packages/cascade-compiler/src/cascade/compiler/frontend/generator.py` 并实现核心逻辑。
+1.  创建测试文件 `packages/cascade-compiler/tests/unit/frontend/test_generator.py`。
+2.  在文件中定义一个简单的 `@task` 函数 `add` 作为测试素材。
+3.  编写一个测试用例 `test_generate_simple_task`，调用 `IRGenerator` 处理 `add(1, 2)`。
+4.  断言生成的 `GraphIR` 结构和内容符合预期。
 
 ### 基本原理
-通过将 `LazyResult` 对象图转换为平坦的、数据类驱动的 `GraphIR`，我们彻底解耦了用户的定义（可以是递归的、动态的 Python 对象）与编译器的处理逻辑（静态的、结构化的数据）。`HashingService` 的引入确保了即使在分布式环境中，相同的任务配置也能生成相同的物理节点 ID，这是实现幂等性和缓存的基础。
+我们遵循测试驱动开发（TDD）的原则。在实现了 `IRGenerator` 的核心功能后，我们必须立即编写测试来验证和保护这些功能。这不仅可以防止未来的代码修改破坏现有行为（回归），还能为其他开发者提供一个清晰的、可执行的 `IRGenerator` 使用示例。
 
 ### 标签
-#intent/build #flow/draft #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/frontend #task/action/implementation #task/state/continue
+#intent/tooling #flow/draft #priority/high #comp/compiler #comp/tests #scope/dx #ai/instruct #task/domain/compiler #task/object/frontend #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 初始化 Frontend 包
+#### Acts 1: 创建 Frontend 单元测试
 
-创建包的入口文件。
-
-~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/frontend/__init__.py
-~~~~~
-~~~~~python
-from .generator import IRGenerator
-
-__all__ = ["IRGenerator"]
-~~~~~
-
-#### Acts 2: 实现 IRGenerator
-
-这是核心逻辑。它实现了从 `LazyResult` 到 `GraphIR` 的转换算法。
+我们将创建一个新的测试文件，并添加一个测试用例来验证 `IRGenerator` 的基本功能。
 
 ~~~~~act
 write_file
-packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
+packages/cascade-compiler/tests/unit/frontend/test_generator.py
 ~~~~~
 ~~~~~python
-from typing import Any, Dict, List, Union, Optional
+import pytest
 
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.spec.routing import Router
-from cascade.spec.ir.models import GraphIR, NodeIR
-from cascade.compiler.utils.reflection import ReflectionAnalyzer
-from cascade.compiler.utils.hashing import HashingService
+from cascade.spec.task import task
+from cascade.spec.ir.models import GraphIR
+from cascade.compiler.frontend.generator import IRGenerator
 
 
-class IRGenerator:
+# --- Test Fixtures ---
+
+@task
+def add(a: int, b: int) -> int:
+    """A simple task for testing."""
+    return a + b
+
+
+@task
+def process_data(data: dict) -> str:
+    """A task with more complex literal arguments."""
+    return str(data.get("key"))
+
+
+# --- Test Cases ---
+
+
+def test_generate_simple_task():
     """
-    Compiler Frontend: Converts user-facing LazyResult structures into
-    the Intermediate Representation (GraphIR) used by the backend.
+    Tests that a single LazyResult with literal arguments is converted
+    into a valid GraphIR with a single NodeIR.
     """
+    # Arrange
+    generator = IRGenerator()
+    target = add(1, 2)
 
-    def __init__(self):
-        self.analyzer = ReflectionAnalyzer()
-        self.hashing_service = HashingService()
-        # id -> NodeIR
-        self.nodes: Dict[str, NodeIR] = {}
-        # Tracks visited LazyResult UUIDs to their generated Node IDs to handle DAGs
-        self._visited: Dict[str, str] = {}
+    # Act
+    graph_ir = generator.generate(target)
 
-    def generate(self, target: Any) -> GraphIR:
-        """
-        Main entry point. Generates a GraphIR from a target (usually a LazyResult).
-        """
-        self._visit(target)
-        # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
-        # which corresponds to the post-order traversal (dependencies first),
-        # providing a natural topological sort.
-        return GraphIR(nodes=list(self.nodes.values()))
+    # Assert
+    assert isinstance(graph_ir, GraphIR)
+    assert len(graph_ir.nodes) == 1
 
-    def _visit(self, obj: Any) -> Any:
-        """
-        Recursive visitor that transforms LazyResults into Node IDs.
-        Returns the transformed value (e.g., Node ID string for LazyResult,
-        or the literal value for others).
-        """
-        if isinstance(obj, LazyResult):
-            return self._visit_lazy_result(obj)
-        elif isinstance(obj, (MappedLazyResult, Router)):
-            raise NotImplementedError(
-                f"Compiler Frontend currently does not support {type(obj).__name__}."
-            )
-        elif isinstance(obj, (list, tuple)):
-            return type(obj)(self._visit(item) for item in obj)
-        elif isinstance(obj, dict):
-            return {k: self._visit(v) for k, v in obj.items()}
-        else:
-            # Literal value
-            return obj
+    node_ir = graph_ir.nodes[0]
+    assert node_ir.name == "add"
+    assert node_ir.task.name == "add"
+    assert "current_code_structure_hash" in node_ir.task.fingerprint
 
-    def _visit_lazy_result(self, lr: LazyResult) -> str:
-        # If already visited, return the cached Node ID
-        if lr._uuid in self._visited:
-            return self._visited[lr._uuid]
+    # Verify that positional arguments are correctly mapped to string keys
+    assert node_ir.inputs == {"0": 1, "1": 2}
+    assert node_ir.constraints == {}
 
-        # 1. Resolve Dependencies (Post-order)
-        # We visit args and kwargs first to ensure dependencies are registered.
-        # This gives us the "transformed" inputs where LazyResults are replaced by Node IDs.
-        transformed_args = [self._visit(arg) for arg in lr.args]
-        transformed_kwargs = {k: self._visit(v) for k, v in lr.kwargs.items()}
 
-        # Note: We currently don't handle _dependencies (implicit sequence) or _condition
-        # in the NodeIR inputs structure explicitly yet.
-        # TODO: Add support for sequence dependencies and run_if conditions.
+def test_generate_task_with_kwargs():
+    """
+    Tests that a single LazyResult with literal keyword arguments is
+    correctly converted.
+    """
+    # Arrange
+    generator = IRGenerator()
+    target = process_data(data={"key": "value"})
 
-        # 2. Analyze Task Definition
-        task_def = self.analyzer.analyze(lr.task)
+    # Act
+    graph_ir = generator.generate(target)
 
-        # 3. Compute Instance Hash (Node ID)
-        # We need a dictionary of dependency nodes for the hasher.
-        # Since we visited children first, their NodeIRs are already in self.nodes.
-        # We map UUIDs of dependencies to their NodeIR objects.
-        # HashingService expects `dep_nodes` to map UUID -> Node object.
-        # Here we map UUID -> NodeIR. HashingService should be compatible or adapted.
-        # Let's verify HashingService adaptation:
-        # It uses `getattr(node, "id", ...)` so NodeIR is compatible.
-        dep_map = {}
-
-        def collect_deps(raw_obj):
-            if isinstance(raw_obj, LazyResult):
-                if raw_obj._uuid in self._visited:
-                    node_id = self._visited[raw_obj._uuid]
-                    dep_map[raw_obj._uuid] = self.nodes[node_id]
-            elif isinstance(raw_obj, (list, tuple)):
-                for x in raw_obj:
-                    collect_deps(x)
-            elif isinstance(raw_obj, dict):
-                for x in raw_obj.values():
-                    collect_deps(x)
-
-        for arg in lr.args:
-            collect_deps(arg)
-        for val in lr.kwargs.values():
-            collect_deps(val)
-
-        node_id = self.hashing_service.compute_node_instance_hash(
-            task_def, lr, dep_map
-        )
-
-        # 4. Construct NodeIR
-        # Flatten args and kwargs into a single 'inputs' dictionary
-        inputs = {}
-        for i, val in enumerate(transformed_args):
-            inputs[str(i)] = val
-        for k, val in transformed_kwargs.items():
-            inputs[k] = val
-
-        # Handle Constraints
-        constraints = {}
-        if lr._constraints:
-            # We currently assume constraint values are literals.
-            # TODO: Handle dynamic constraints (LazyResult in constraints)
-            constraints = lr._constraints.requirements.copy()
-
-        node_ir = NodeIR(
-            id=node_id,
-            name=task_def.name,
-            task=task_def,
-            inputs=inputs,
-            constraints=constraints,
-        )
-
-        # 5. Register
-        self.nodes[node_id] = node_ir
-        self._visited[lr._uuid] = node_id
-
-        return node_id
+    # Assert
+    assert len(graph_ir.nodes) == 1
+    node_ir = graph_ir.nodes[0]
+    assert node_ir.name == "process_data"
+    assert node_ir.inputs == {"data": {"key": "value"}}
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 Frontend 的核心逻辑。下一步是 **Act 3: 移植引擎 (Lobotomizing the Engine)**。我们将重写 `cascade-engine`，使其不再依赖旧的 `GraphBuilder` 和 `Processor`，而是使用我们刚刚构建的 `Frontend` 生成 IR，并调用 `Backend` 和 `VM` 来执行任务。这将是 "Hello World" 能否跑通的关键时刻。
+我们已经验证了最简单的场景。下一步是测试 `IRGenerator` 的核心职责之一：**依赖解析**。我建议编写一个新的测试用例，`test_generate_task_with_dependency`，它将使用类似 `add(add(1, 2), 3)` 的结构，并断言：
+1.  生成了两个 `NodeIR`。
+2.  `GraphIR` 中的节点顺序是正确的（依赖项在前）。
+3.  上游节点的 `inputs` 是下游节点的 ID 引用。

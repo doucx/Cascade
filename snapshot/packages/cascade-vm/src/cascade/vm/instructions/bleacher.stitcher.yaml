@@ -1,0 +1,4 @@
+"standard_bleacher": |-
+  Args:
+      expected_args: List of argument names that the Worker expects.
+                     Any input NOT in this list is treated as a Resource or Signal.

@@ -1,0 +1,8 @@
+"test_observer_processes_end_event": |-
+  Tests that a token containing end information (from a Stainer)
+  is correctly processed as an 'end' event.
+"test_observer_processes_start_event": |-
+  Tests that a token containing only start information (from a Bleacher)
+  is correctly processed as a 'start' event.
+"test_observer_with_empty_trace": |-
+  An empty trace should be treated as a 'start' event by default.

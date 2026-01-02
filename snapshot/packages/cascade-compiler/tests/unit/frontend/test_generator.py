@@ -65,3 +65,32 @@ def test_generate_task_with_kwargs():
     node_ir = graph_ir.nodes[0]
     assert node_ir.name == "process_data"
     assert node_ir.inputs == {"data": {"key": "value"}}
+
+
+def test_generate_task_with_dependency():
+    """
+    Tests that a LazyResult depending on another is converted into two
+    NodeIRs with a correct ID reference.
+    """
+    # Arrange
+    generator = IRGenerator()
+    upstream_lr = add(1, 2)
+    downstream_lr = add(upstream_lr, 3)
+
+    # Act
+    graph_ir = generator.generate(downstream_lr)
+
+    # Assert
+    assert len(graph_ir.nodes) == 2
+
+    # The generator produces a topologically sorted list due to post-order traversal
+    upstream_node = graph_ir.nodes[0]
+    downstream_node = graph_ir.nodes[1]
+
+    # Verify upstream node is correct
+    assert upstream_node.name == "add"
+    assert upstream_node.inputs == {"0": 1, "1": 2}
+
+    # Verify downstream node correctly references the upstream node's ID
+    assert downstream_node.name == "add"
+    assert downstream_node.inputs == {"0": upstream_node.id, "1": 3}

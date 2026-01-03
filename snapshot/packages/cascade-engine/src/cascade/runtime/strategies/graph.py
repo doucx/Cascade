@@ -302,19 +302,45 @@ class GraphExecutionStrategy:
                             == target_node.current_node_instance_hash
                             else None
                         )
+
+                        # Resolve everything in Strategy layer
+                        requirements = (
+                            await self.node_processor.constraint_resolver.resolve(
+                                node,
+                                graph,
+                                state_backend,
+                                self.constraint_manager,
+                                instance_map,
+                            )
+                        )
+
+                        inputs = await self.node_processor.arg_resolver.resolve(
+                            node,
+                            graph,
+                            state_backend,
+                            active_resources,
+                            instance_map=instance_map,
+                            user_params=params,
+                            input_overrides=overrides,
+                        )
+
+                        cache_inputs = await self.node_processor.arg_resolver.resolve_cache_inputs(
+                            node, graph, state_backend
+                        )
+
                         tasks_to_run.append(
                             (
                                 node,
                                 self.node_processor.process(
                                     node,
-                                    graph,
+                                    inputs,
+                                    requirements,
+                                    cache_inputs,
                                     state_backend,
                                     active_resources,
                                     run_id,
                                     params,
                                     sub_graph_runner,
-                                    instance_map,
-                                    input_overrides=overrides,
                                 ),
                             )
                         )

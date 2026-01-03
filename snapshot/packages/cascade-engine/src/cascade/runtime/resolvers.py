@@ -10,6 +10,27 @@ import inspect
 
 
 class ArgumentResolver:
+    async def resolve_cache_inputs(
+        self, node: Node, graph: Graph, state_backend: StateBackend
+    ) -> Dict[str, Any]:
+        # TODO: This needs to be smarter for caching.
+        # It should probably include data from input_bindings too?
+        # For now, keeping legacy behavior (edge results only).
+        inputs = {}
+        incoming_edges = [
+            edge
+            for edge in graph.edges
+            if edge.target.current_node_instance_hash == node.current_node_instance_hash
+        ]
+        for edge in incoming_edges:
+            if edge.arg_name.startswith("_"):
+                continue
+            if await state_backend.has_result(edge.source.current_node_instance_hash):
+                inputs[edge.arg_name] = await state_backend.get_result(
+                    edge.source.current_node_instance_hash
+                )
+        return inputs
+
     async def resolve(
         self,
         node: Node,

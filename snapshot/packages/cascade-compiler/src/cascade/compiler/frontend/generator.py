@@ -100,7 +100,14 @@ class IRGenerator:
         # Flatten args and kwargs into a single 'inputs' dictionary
         inputs = {}
         for i, val in enumerate(transformed_args):
-            inputs[str(i)] = val
+            # Map positional args to their names defined in TaskDef
+            if i < len(task_def.args):
+                arg_name = task_def.args[i].name
+                inputs[arg_name] = val
+            else:
+                # Fallback for varargs or mismatches
+                inputs[str(i)] = val
+
         for k, val in transformed_kwargs.items():
             inputs[k] = val
 

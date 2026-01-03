@@ -70,6 +70,23 @@ async def test_e2e_vm_run_with_all_features():
     executor = PhysicsExecutor()
     
     # Create the function map: map physical node IDs to actual callables
+    from cascade.spec.physics import Token
+    
+    # Helper to adapt user functions to Physics Protocol
+    def create_worker_adapter(user_func):
+        async def adapter(inputs: Dict[str, Token], node):
+            # Unpack kwargs from the worker_input token
+            kwargs = inputs["worker_input"].payload
+            
+            # Call user function
+            if asyncio.iscoroutinefunction(user_func):
+                result = await user_func(**kwargs)
+            else:
+                result = user_func(**kwargs)
+                
+            return {"worker_result": Token(payload=result)}
+        return adapter
+
     user_tasks = {
         "setup_task": setup_task.func,
         "should_run_task": should_run_task.func,
@@ -80,9 +97,10 @@ async def test_e2e_vm_run_with_all_features():
     function_map: Dict[str, Callable] = {}
     for node_ir in graph_ir.nodes:
         if node_ir.name in user_tasks:
-            # Map the worker node to the user's Python function
+            # Map the worker node to the ADAPTED user function
             worker_id = f"{node_ir.id}.worker"
-            function_map[worker_id] = user_tasks[node_ir.name]
+            user_func = user_tasks[node_ir.name]
+            function_map[worker_id] = create_worker_adapter(user_func)
 
     for node_id in physical_graph.nodes:
         if node_id.endswith(".bleach"):

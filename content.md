@@ -1,55 +1,131 @@
-您完全正确，非常感谢您指出这个错误。我的疏忽导致了测试文件的导入失败。
+简要回答
 
-`ImportError` 的根本原因在于 `cascade-std` 包的结构。`standard_bleacher` 和 `standard_stainer` 函数分别定义在 `cascade/std/triad/bleacher.py` 和 `cascade/std/triad/stainer.py` 模块中。
+收到。分析显示测试失败有两个原因：一是 `IRGenerator` 生成的位置参数键 `"0"` 与 `Bleacher` 期望的参数名 `"x"` 不匹配；二是测试代码直接将用户函数映射给 `Reactor`，导致签名不匹配。我将生成计划修复这两个问题。
 
-然而，`cascade/std/triad/__init__.py` 文件是空的，它没有将这些函数导入到 `cascade.std.triad` 这个包的命名空间中。因此，`from cascade.std.triad import ...` 这样的语句无法找到这些名称。
+## [WIP] fix(compiler & test): 修复 IR 参数映射及 E2E 测试适配器
 
-我将修改 `cascade/std/triad/__init__.py` 文件，明确地从其内部模块中导出公共函数，从而为 `cascade.std.triad` 包创建一个清晰的公共 API。
-
-## [WIP] fix(std): 在 `__init__.py` 中暴露 triad 公共函数
+### 错误分析
+1.  **Bleacher KeyError**: `IRGenerator` 将位置参数转换为字符串索引（如 `"0"`），而 `Expander` 基于 `TaskDef` 创建的端口使用参数名（如 `"x"`）。导致 `Bleacher` 在运行时无法根据键 `"0"` 找到端口定义。
+2.  **Worker Signature Mismatch**: E2E 测试直接将用户定义的 Python 函数（如 `def main(x):`) 注册到 `Reactor`。但 `Reactor` 期望的是物理层协议签名的函数 (`func(inputs, node)`)。
 
 ### 用户需求
-修复由于 `cascade.std.triad` 包未正确导出其成员而导致的 `ImportError`，使 `test_e2e_vm_run.py` 测试能够成功导入 `standard_bleacher` 和 `standard_stainer`。
+1.  修改 `IRGenerator`，使其将位置参数正确映射为 `TaskDef` 中定义的参数名。
+2.  修改 `test_e2e_vm_run.py`，引入一个 `GenericWorkerAdapter`，负责将物理层的 Token 输入解包传递给用户函数，并将结果打包回 Token。
 
 ### 评论
-这是一个典型的 Python 包结构问题。通过在 `__init__.py` 中定义 `__all__` 并导入关键函数，我们不仅修复了当前的 Bug，还为 `cascade-std` 库的 `triad` 模块建立了一个更稳定、更明确的公共接口，改善了开发者体验 (DX)。
+这次修复涉及编译器前端的核心逻辑修正和测试代码的完善。参数名映射的修正将确保 `NodeIR` 与物理层端口定义的一致性。测试适配器的引入则是模拟未来 `Executor` 或 `WorkerWrapper` 的职责，对于通过 E2E 测试至关重要。
 
 ### 目标
-1.  修改 `packages/cascade-std/src/cascade/std/triad/__init__.py`。
-2.  从 `bleacher.py` 和 `stainer.py` 导入核心函数。
-3.  定义 `__all__` 以明确 `cascade.std.triad` 的公共 API。
+1.  更新 `cascade-compiler/frontend/generator.py`，实现位置参数到参数名的映射。
+2.  更新 `cascade-vm/tests/integration/test_e2e_vm_run.py`，实现并使用函数适配器。
 
 ### 基本原理
-根据 Python 的模块导入机制，一个包的 `__init__.py` 文件定义了该包的命名空间。为了让子模块中的对象能够在该包级别被直接访问，必须在 `__init__.py` 中进行导入。
+*   **一致性**: 逻辑层 (`NodeIR.inputs`) 的键必须与物理层 (`BleachNode.input_ports`) 的键保持一致。
+*   **协议适配**: 物理引擎 (`Reactor`) 不应直接感知用户函数的签名，中间必须有一层适配器（在真实系统中是 `Executor` 的职责，测试中需手动模拟）来处理 `Token` <-> `kwargs` 的转换。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/std #scope/dx #ai/instruct #task/domain/testing #task/object/e2e-vm-test #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/compiler #comp/tests #scope/core #ai/instruct #task/domain/compiler #task/object/ir-generator #task/action/bug-fix
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `cascade.std.triad` 的包接口
+#### Acts 1: 修复 IRGenerator 的参数映射逻辑
 
-我们将覆写 `__init__.py` 文件，使其能够正确地导出所需的函数。
+我们将修改 `IRGenerator`，使其利用 `TaskDef` 中的参数定义，将位置参数列表映射为键值对字典。
 
 ~~~~~act
-write_file
-packages/cascade-std/src/cascade/std/triad/__init__.py
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
 ~~~~~
-~~~~~python
-# Standard Triad logic (Execution Units) for the Cascade VM.
-from .bleacher import standard_bleacher
-from .stainer import standard_stainer
-from .observer import standard_observer, ObservedEvent
+~~~~~python.old
+        # 4. Construct NodeIR
+        # Flatten args and kwargs into a single 'inputs' dictionary
+        inputs = {}
+        for i, val in enumerate(transformed_args):
+            inputs[str(i)] = val
+        for k, val in transformed_kwargs.items():
+            inputs[k] = val
+~~~~~
+~~~~~python.new
+        # 4. Construct NodeIR
+        # Flatten args and kwargs into a single 'inputs' dictionary
+        inputs = {}
+        for i, val in enumerate(transformed_args):
+            # Map positional args to their names defined in TaskDef
+            if i < len(task_def.args):
+                arg_name = task_def.args[i].name
+                inputs[arg_name] = val
+            else:
+                # Fallback for varargs or mismatches
+                inputs[str(i)] = val
 
-__all__ = [
-    "standard_bleacher",
-    "standard_stainer",
-    "standard_observer",
-    "ObservedEvent",
-]
+        for k, val in transformed_kwargs.items():
+            inputs[k] = val
+~~~~~
+
+#### Acts 2: 修复 E2E 测试中的 Worker 适配器
+
+我们需要在测试中定义一个适配器，并使用它来包装用户函数。
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_e2e_vm_run.py
+~~~~~
+~~~~~python.old
+    # Create the function map: map physical node IDs to actual callables
+    user_tasks = {
+        "setup_task": setup_task.func,
+        "should_run_task": should_run_task.func,
+        "main_task": main_task.func,
+        "final_task": final_task.func,
+    }
+    
+    function_map: Dict[str, Callable] = {}
+    for node_ir in graph_ir.nodes:
+        if node_ir.name in user_tasks:
+            # Map the worker node to the user's Python function
+            worker_id = f"{node_ir.id}.worker"
+            function_map[worker_id] = user_tasks[node_ir.name]
+
+    for node_id in physical_graph.nodes:
+~~~~~
+~~~~~python.new
+    # Create the function map: map physical node IDs to actual callables
+    from cascade.spec.physics import Token
+    
+    # Helper to adapt user functions to Physics Protocol
+    def create_worker_adapter(user_func):
+        async def adapter(inputs: Dict[str, Token], node):
+            # Unpack kwargs from the worker_input token
+            kwargs = inputs["worker_input"].payload
+            
+            # Call user function
+            if asyncio.iscoroutinefunction(user_func):
+                result = await user_func(**kwargs)
+            else:
+                result = user_func(**kwargs)
+                
+            return {"worker_result": Token(payload=result)}
+        return adapter
+
+    user_tasks = {
+        "setup_task": setup_task.func,
+        "should_run_task": should_run_task.func,
+        "main_task": main_task.func,
+        "final_task": final_task.func,
+    }
+    
+    function_map: Dict[str, Callable] = {}
+    for node_ir in graph_ir.nodes:
+        if node_ir.name in user_tasks:
+            # Map the worker node to the ADAPTED user function
+            worker_id = f"{node_ir.id}.worker"
+            user_func = user_tasks[node_ir.name]
+            function_map[worker_id] = create_worker_adapter(user_func)
+
+    for node_id in physical_graph.nodes:
 ~~~~~
 
 ### 下一步建议
-这个补丁应该能解决导入错误。应用此修复后，请再次运行 `pytest`。`test_e2e_vm_run.py` 测试现在应该能够成功收集并执行。如果测试在执行阶段失败，那将暴露出我们核心逻辑中的新问题，我们可以接着解决。
+应用这些修复后，请再次运行 `test_e2e_vm_run.py`。我有信心这两个修改能够解决当前的 `TimeoutError` 和 `KeyError`，使我们的全链路测试通过。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(std): 在 `__init__.py` 中暴露 triad 公共函数", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767412207.969451, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(compiler & test): 修复 IR 参数映射及 E2E 测试适配器", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767412312.7895792, "duration_ms": 0}}

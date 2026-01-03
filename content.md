@@ -1,208 +1,96 @@
-简要回答
+好的，我理解了。这个测试本身就是一种审计工具，用于强制执行架构原则，并且它应该位于测试目录中。
 
-好的，我将开始执行“接口硬化”阶段的任务。本计划将定义核心的 `ReactorProtocol` 并重构 `EventDrivenRunner` 以支持依赖注入，从而解耦具体的 Python Reactor 实现。
+我将创建一个新的测试文件，它会构建一个具有代表性的计算图，然后尝试使用 `pickle` 对其进行序列化。如果图中存在任何不可序列化的 Python 对象（如函数闭包），测试将会失败，从而为我们提供一个强大的架构守护。
 
-## [WIP] refactor(vm): 定义 ReactorProtocol 并实现 EventDrivenRunner 的依赖注入
+## [WIP] test(compiler): 添加图纯度测试以确保可序列化性
 
 ### 用户需求
-执行 Cascade 3.3 架构演进路线图的第一阶段：接口硬化。具体包括：
-1.  定义 `ReactorProtocol` 协议，抽象 `Reactor` 的行为。
-2.  重构 `EventDrivenRunner`，移除对 `Reactor` 具体类的硬编码依赖，转而使用 `reactor_factory` 进行依赖注入。
+根据路线图“任务 2.1”，创建一个工具测试，用于审计和验证由 `Builder` 生成的 `BipartiteGraph` 是纯粹的、可序列化的数据结构。
 
 ### 评论
-这是迈向“双引擎共生”的关键一步。通过引入协议和工厂模式，我们为后续无缝接入 Rust 实现的 Reactor (`cascade-vm-rs`) 扫清了障碍，同时保持了现有 Python 测试套件的兼容性。
+这是一个至关重要的健全性检查。通过在测试套件中强制执行图的可序列化性，我们可以从根本上杜绝“环境走私”（例如通过 `functools.partial` 注入运行时对象）等反模式。这确保了我们编译出的图是可移植、可缓存的，为未来的 Rust VM 集成奠定了坚实的基础。
 
 ### 目标
-1.  创建 `packages/cascade-vm/src/cascade/vm/protocols.py`。
-2.  在 `packages/cascade-vm/src/cascade/vm/__init__.py` 中导出新协议。
-3.  修改 `packages/cascade-vm/src/cascade/vm/harness.py`，使 `EventDrivenRunner` 支持 `reactor_factory` 参数。
+1.  在 `packages/cascade-compiler/tests/integration/` 目录下创建一个新的测试文件 `test_graph_purity.py`。
+2.  在该文件中，定义一个测试，该测试构建一个包含典型特征（任务依赖、常量参数）的 `BipartiteGraph`。
+3.  断言该图对象可以被 `pickle` 模块成功序列化，没有任何错误。
 
 ### 基本原理
--   **协议定义**: 使用 Python 的 `typing.Protocol` 定义 `Reactor` 的鸭子类型接口，确保静态类型检查的正确性。
--   **依赖注入**: 在 `EventDrivenRunner.__init__` 中增加 `reactor_factory` 参数（默认值为现有的 `Reactor` 类），使得测试代码可以通过注入不同的工厂来切换底层引擎，而无需修改测试逻辑。
+`pickle` 是 Python 的标准序列化库，它无法处理许多复杂的运行时对象，如闭包、套接字或线程锁。因此，`pickle.dumps()` 操作能否成功，是检验一个对象是否为“纯数据”的有效试金石。将此检查集成到我们的 CI 流程中，可以确保图的纯粹性原则不会被未来的代码修改无意中破坏。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/runtime #concept/interfaces #scope/core #ai/instruct #task/domain/vm #task/object/reactor-interface #task/action/hardening #task/state/begin
+#intent/tooling #flow/ready #priority/high #comp/compiler #comp/tests #scope/dx #ai/instruct #task/domain/vm #task/object/graph-purity #task/action/testing #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 定义 ReactorProtocol
+#### Acts 1: 创建图纯度审计测试
 
-新建协议文件，定义 `Reactor` 必须暴露的公共接口。
+我们将创建 `test_graph_purity.py` 文件。此测试将作为守护，确保所有由编译器生成的图都是可序列化的纯数据结构。
 
 ~~~~~act
 write_file
-packages/cascade-vm/src/cascade/vm/protocols.py
+packages/cascade-compiler/tests/integration/test_graph_purity.py
 ~~~~~
 ~~~~~python
-from typing import Protocol, Callable, Awaitable, Any, Dict
-from cascade.spec.physics import Token
+import pickle
+import pytest
 
-class ReactorProtocol(Protocol):
+from cascade.spec.task import task
+from cascade.spec.environment import EnvironmentDef
+from cascade.compiler.frontend import IRGenerator
+from cascade.compiler.backend import Builder
+
+
+@task
+def add(a: int, b: int) -> int:
+    return a + b
+
+
+@task
+def square(n: int) -> int:
+    return n * n
+
+
+def test_graph_is_serializable_and_pure():
     """
-    Protocol defining the interface for a Cascade Reactor.
-    This allows swapping the Python implementation with a Rust-based one.
+    This test acts as an architectural guardrail. It ensures that the BipartiteGraph
+    produced by the compiler is a pure, serializable data structure, free from
+    any runtime objects like closures or un-pickleable state.
     """
-    active_task_count: int
+    # 1. Define a representative workflow
+    workflow = square(add(1, 2))
 
-    def prime(self) -> None:
-        """Inject initial potential energy into the system."""
-        ...
+    # 2. Compile the workflow into a physical graph
+    generator = IRGenerator()
+    builder = Builder()
+    environment = EnvironmentDef(resources=[])
 
-    async def step(self) -> int:
-        """
-        Perform one reaction step.
-        Returns the number of tasks fired.
-        """
-        ...
+    graph_ir = generator.generate(workflow)
+    physical_graph = builder.build(graph_ir, environment)
 
-    def add_sink(
-        self,
-        node_id: str,
-        port_name: str,
-        callback: Callable[[Token], Awaitable[None]],
-    ) -> None:
-        """Register a callback to receive tokens emitted by a specific port."""
-        ...
-~~~~~
-
-#### Acts 2: 导出协议
-
-更新 `__init__.py` 以公开新定义的协议。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/__init__.py
-~~~~~
-~~~~~python.old
-from .resource_registry import ResourceRegistry
-
-__all__ = ["ResourceRegistry"]
-~~~~~
-~~~~~python.new
-from .resource_registry import ResourceRegistry
-from .protocols import ReactorProtocol
-
-__all__ = ["ResourceRegistry", "ReactorProtocol"]
-~~~~~
-
-#### Acts 3: 重构 EventDrivenRunner
-
-修改 `EventDrivenRunner` 以支持注入 `Reactor` 工厂。这将解除 Runner 与具体 `Reactor` 类的强耦合。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/harness.py
-~~~~~
-~~~~~python.old
-from cascade.spec.topology import BipartiteGraph
-from cascade.spec.physics import Token, PhysicsDataNode
-from cascade.vm.reactor import Reactor
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.std.triad.observer import ObservedEvent
-
-logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
-
-
-class EventTimeoutError(TimeoutError):
-    pass
-
-
-class EventDrivenRunner:
-    def __init__(
-        self,
-        graph: BipartiteGraph,
-        function_map: Dict[str, Callable],
-    ):
-        self.graph = graph
-        self.memory = VolatileMemory()
-        self.executor = PhysicsExecutor()
-
-        # 1. Setup Resource Registry and Observability Queue
-        self.event_queue: asyncio.Queue[ObservedEvent] = asyncio.Queue()
-        self._captured_events: List[ObservedEvent] = []
-        self.resource_registry = ResourceRegistry()
-        self.resource_registry.register("system.observer.queue", self.event_queue)
-
-        # 2. The function map is now used directly
-        self.function_map = function_map
-
-        # 3. Inject the registry into the Reactor
-        self.reactor = Reactor(
-            self.graph,
-            self.memory,
-            self.executor,
-            self.function_map,
-            self.resource_registry,
+    # 3. The Purity Test: Attempt to serialize the graph
+    try:
+        serialized_graph = pickle.dumps(physical_graph)
+        # Optional: check that it can be deserialized correctly
+        deserialized_graph = pickle.loads(serialized_graph)
+    except Exception as e:
+        pytest.fail(
+            "Graph purity test failed. The BipartiteGraph is not serializable. "
+            f"This likely means a runtime object (like a function closure) has been "
+            f"leaked into the graph structure. Error: {e}"
         )
-        self._loop_task: Optional[asyncio.Task] = None
-        self._stop_event = asyncio.Event()
-~~~~~
-~~~~~python.new
-from cascade.spec.topology import BipartiteGraph
-from cascade.spec.physics import Token, PhysicsDataNode
-from cascade.vm.reactor import Reactor
-from cascade.vm.protocols import ReactorProtocol
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.std.triad.observer import ObservedEvent
 
-logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
-
-
-class EventTimeoutError(TimeoutError):
-    pass
-
-
-class EventDrivenRunner:
-    def __init__(
-        self,
-        graph: BipartiteGraph,
-        function_map: Dict[str, Callable],
-        reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
-    ):
-        self.graph = graph
-        self.memory = VolatileMemory()
-        self.executor = PhysicsExecutor()
-
-        # 1. Setup Resource Registry and Observability Queue
-        self.event_queue: asyncio.Queue[ObservedEvent] = asyncio.Queue()
-        self._captured_events: List[ObservedEvent] = []
-        self.resource_registry = ResourceRegistry()
-        self.resource_registry.register("system.observer.queue", self.event_queue)
-
-        # 2. The function map is now used directly
-        self.function_map = function_map
-
-        # 3. Inject the registry into the Reactor
-        # Use provided factory or default to the Python Reactor
-        factory = reactor_factory or Reactor
-        self.reactor = factory(
-            self.graph,
-            self.memory,
-            self.executor,
-            self.function_map,
-            self.resource_registry,
-        )
-        self._loop_task: Optional[asyncio.Task] = None
-        self._stop_event = asyncio.Event()
+    # 4. Verify basic integrity after deserialization
+    assert len(physical_graph.nodes) == len(deserialized_graph.nodes)
+    assert len(physical_graph.channels) == len(deserialized_graph.channels)
+    assert "const.t_1.0" in deserialized_graph.nodes
+    assert deserialized_graph.nodes["const.t_1.0"].initial_payload == 1
 ~~~~~
 
 ### 下一步建议
 
-我们已经完成了“接口硬化”阶段的核心工作。
+我们已经成功建立了一个架构守护测试来保证图的纯粹性。
 
-下一步，我们应该进入“第二阶段：数据纯化 (Data Purification)”。这包括：
-1.  创建一个测试工具 `test_graph_purity.py`，用于验证生成的 `BipartiteGraph` 是否包含不可序列化的对象。
-2.  审计并统一所有物理层函数的签名，确保它们符合 `async def (inputs, node, resources) -> dict` 的标准。
-
-我建议先从 **任务 2.1: 图数据审计与序列化测试** 开始，因为这将揭示我们目前有多少“不纯”的数据混入了图中。
+根据路线图，下一步是**任务 2.2: 统一函数签名 (Signature Standardization)**。我们将审计 `cascade-std` 和测试用例中的所有 Worker 函数，确保它们的签名严格统一为 `async def (inputs, node, resources) -> dict`。这将为 Rust FFI 桥接提供一个稳定、单一的适配目标。

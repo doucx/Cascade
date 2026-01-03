@@ -25,7 +25,6 @@ class VolatileMemory:
         self._mutation_event = asyncio.Event()
 
     async def wait_for_mutation(self) -> None:
-        """Wait until a new token is put into memory."""
         await self._mutation_event.wait()
         self._mutation_event.clear()
 

@@ -145,7 +145,7 @@ class Builder:
                             target_port=arg_name,
                         )
                     )
-            
+
             # 4.2 Sequence Dependencies (.after())
             for dep_id in node_ir.dependencies:
                 if dep_id in subgraphs:
@@ -162,7 +162,7 @@ class Builder:
                             target_port=port_name,
                         )
                     )
-            
+
             # 4.3 Condition (.run_if())
             if node_ir.condition and node_ir.condition in subgraphs:
                 source_subgraph = subgraphs[node_ir.condition]

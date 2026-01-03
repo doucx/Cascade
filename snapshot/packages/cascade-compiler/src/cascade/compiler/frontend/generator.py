@@ -87,7 +87,7 @@ class IRGenerator:
             collect_deps(arg)
         for val in lr.kwargs.values():
             collect_deps(val)
-        
+
         # Also collect deps for condition and dependencies for hashing
         if lr._condition:
             collect_deps(lr._condition)

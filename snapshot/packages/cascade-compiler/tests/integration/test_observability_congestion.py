@@ -126,6 +126,7 @@ async def test_infinite_capacity_handles_concurrency():
     fired = await reactor.step()
 
     import asyncio
+
     while reactor.active_task_count > 0:
         await asyncio.sleep(0.001)
 

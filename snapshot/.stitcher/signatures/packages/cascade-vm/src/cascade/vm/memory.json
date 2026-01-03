@@ -17,6 +17,7 @@
   },
   "VolatileMemory._buffers": {},
   "VolatileMemory._capacities": {},
+  "VolatileMemory._mutation_event": {},
   "VolatileMemory.get_count": {
     "baseline_code_signature_text": "def get_count(self, node_id: str) -> int:",
     "baseline_code_structure_hash": "71c771343fd17c773354896144d11ef794339be911b810ac036044d34bbb46a6",
@@ -36,5 +37,10 @@
     "baseline_code_signature_text": "def take(self, node_id: str) -> Token:",
     "baseline_code_structure_hash": "b9199770a311e29c955cb45ccfbc7d6db48e7d80b145ae85bc860dfc891dd91b",
     "baseline_yaml_content_hash": "a53495276962b764cd33cedc0aa3ccf12eae43dc7f1ab36f84e2f5bd4270c3be"
+  },
+  "VolatileMemory.wait_for_mutation": {
+    "baseline_code_signature_text": "async def wait_for_mutation(self) -> None:",
+    "baseline_code_structure_hash": "bc66fed682b00a0f481d8ef1a74eea227e529777e0d4df076f4a95772bb97495",
+    "baseline_yaml_content_hash": "af80781f00ca941d3e283380b43ad8e864923e78233e1669a376be1c5be02a2e"
   }
 }

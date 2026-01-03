@@ -15,3 +15,5 @@
   Adds a token to the specified data node.
 "VolatileMemory.take": |-
   Consumes and returns the oldest token from the node.
+"VolatileMemory.wait_for_mutation": |-
+  Wait until a new token is put into memory.

@@ -69,7 +69,9 @@ class HashingService:
                 for dep in sorted_deps:
                     if dep._uuid in dep_nodes:
                         node = dep_nodes[dep._uuid]
-                        node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
+                        node_id = getattr(
+                            node, "id", getattr(node, "structural_id", str(node))
+                        )
                         components.append(f"DepID:{node_id}")
                     else:
                         components.append("DepID:UNKNOWN")

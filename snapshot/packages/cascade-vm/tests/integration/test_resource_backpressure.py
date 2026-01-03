@@ -127,6 +127,7 @@ async def test_concurrency_limit():
     # 7. Step Execution
     async def wait_idle():
         import asyncio
+
         while reactor.active_task_count > 0:
             await asyncio.sleep(0.001)
 

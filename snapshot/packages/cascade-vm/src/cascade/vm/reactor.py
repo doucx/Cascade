@@ -70,7 +70,6 @@ class Reactor:
         port_name: str,
         callback: Callable[[Token], Awaitable[None]],
     ) -> None:
-        """Register a callback to receive tokens emitted by a specific port."""
         if node_id not in self.sinks:
             self.sinks[node_id] = {}
         if port_name not in self.sinks[node_id]:
@@ -85,11 +84,6 @@ class Reactor:
                     self.memory.put(node, Token(payload=node.initial_payload))
 
     async def step(self) -> int:
-        """
-        Scans the graph for excited nodes and schedules them for execution.
-        Returns the number of tasks scheduled (fired) in this step.
-        This method is NON-BLOCKING regarding task execution.
-        """
         nodes_to_fire: List[PhysicsFuncNode] = []
         inputs_for_fire: Dict[str, Dict[str, Token]] = {}
 
@@ -159,14 +153,14 @@ class Reactor:
                         try:
                             await cb(token)
                         except Exception as e:
-                            logger.exception(f"Sink callback failed for {node.id}:{port_name}: {e}")
+                            logger.exception(
+                                f"Sink callback failed for {node.id}:{port_name}: {e}"
+                            )
 
                 # B. Handle Outbound Channels (Topological Flow)
                 # Find channels connected to this source port
-                matching_channels = [
-                    c for c in outbound if c.source_port == port_name
-                ]
-                
+                matching_channels = [c for c in outbound if c.source_port == port_name]
+
                 for channel in matching_channels:
                     # Spectrum Filtering
                     if channel.tag_filter and channel.tag_filter != token.tag:

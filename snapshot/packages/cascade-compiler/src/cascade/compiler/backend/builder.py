@@ -127,10 +127,30 @@ class Builder:
                     # Help static analysis
                     assert source_subgraph.stainer is not None
 
+                    # Create intermediate DataNode for data transfer
+                    data_node_id = f"data.{source_ref}.to.{node_ir.id}.{arg_name}"
+                    data_node = PhysicsDataNode(
+                        id=data_node_id,
+                        name=f"Data({source_ref}->{node_ir.name}.{arg_name})",
+                        capacity=1
+                    )
+                    physical_graph.nodes[data_node_id] = data_node
+
+                    # Wire Stainer -> DataNode
                     physical_graph.channels.append(
                         Channel(
                             source_node_id=source_subgraph.stainer.id,
                             source_port="output",
+                            target_node_id=data_node_id,
+                            target_port="in",
+                        )
+                    )
+
+                    # Wire DataNode -> Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=data_node_id,
+                            source_port="out",
                             target_node_id=target_subgraph.bleacher.id,
                             target_port=arg_name,
                         )
@@ -166,25 +186,66 @@ class Builder:
                     assert source_subgraph.stainer is not None
 
                     port_name = f"wait_for_{dep_id}"
+                    
+                    # Create intermediate DataNode for the signal
+                    signal_node_id = f"signal.{dep_id}.to.{node_ir.id}"
+                    signal_node = PhysicsDataNode(
+                        id=signal_node_id,
+                        name=f"Signal({dep_id}->{node_ir.name})",
+                        capacity=1
+                    )
+                    physical_graph.nodes[signal_node_id] = signal_node
+
+                    # Wire Stainer -> Signal
                     physical_graph.channels.append(
                         Channel(
                             source_node_id=source_subgraph.stainer.id,
                             source_port="output",
+                            target_node_id=signal_node_id,
+                            target_port="in",
+                        )
+                    )
+                    
+                    # Wire Signal -> Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=signal_node_id,
+                            source_port="out",
                             target_node_id=target_subgraph.bleacher.id,
                             target_port=port_name,
                         )
                     )
-
+            
             # 4.3 Condition (.run_if())
             if node_ir.condition and node_ir.condition in subgraphs:
                 source_subgraph = subgraphs[node_ir.condition]
                 # Help static analysis
                 assert source_subgraph.stainer is not None
 
+                # Create intermediate DataNode for the condition signal
+                cond_node_id = f"cond.{node_ir.condition}.to.{node_ir.id}"
+                cond_node = PhysicsDataNode(
+                    id=cond_node_id,
+                    name=f"Cond({node_ir.condition}->{node_ir.name})",
+                    capacity=1
+                )
+                physical_graph.nodes[cond_node_id] = cond_node
+
+                # Wire Stainer -> CondNode
                 physical_graph.channels.append(
                     Channel(
                         source_node_id=source_subgraph.stainer.id,
                         source_port="output",
+                        target_node_id=cond_node_id,
+                        target_port="in",
+                    )
+                )
+
+                # Wire CondNode -> Bleacher
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=cond_node_id,
+                        source_port="out",
                         target_node_id=target_subgraph.bleacher.id,
                         target_port="condition",
                     )

@@ -32,8 +32,8 @@ def test_sovereign_wiring_flow():
 
     # Get nodes
     nodes = {n.name: n for n in graph_ir.nodes}
-    t1_id = nodes["producer"].id
-    t2_id = nodes["consumer"].id
+    t1_id = nodes["producer"].current_node_instance_hash
+    t2_id = nodes["consumer"].current_node_instance_hash
 
     t1_stainer_id = f"{t1_id}.stain"
 

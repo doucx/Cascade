@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M __init__.py, M builder.py, M expander.py ... and 31 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767445963.0578163, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修正因 id 重构不完全导致的属性访问错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767445965.6071901, "duration_ms": 0}}

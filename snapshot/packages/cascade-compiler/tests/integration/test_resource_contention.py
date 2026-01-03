@@ -103,7 +103,9 @@ async def test_resource_scarcity_topology_and_execution():
     # Path: Allocator -> D_gnt -> Bleacher
     # We need to find the specific grant port for this task.
     # It requires the ID of the Requestor node.
-    req_id = PhysicalIdGenerator.requestor(sample_node_ir.id, RESOURCE_NAME)
+    req_id = PhysicalIdGenerator.requestor(
+        sample_node_ir.current_node_instance_hash, RESOURCE_NAME
+    )
     expected_port = f"gnt_for_{req_id}"
 
     inspector.assert_port_exists(allocator_id, expected_port)
@@ -117,7 +119,9 @@ async def test_resource_scarcity_topology_and_execution():
     inspector.get_data_node(d_gnt_id)  # Should be a data node
 
     # Verify D_gnt -> Bleacher
-    bleacher_id = PhysicalIdGenerator.bleach_node(sample_node_ir.id)
+    bleacher_id = PhysicalIdGenerator.bleach_node(
+        sample_node_ir.current_node_instance_hash
+    )
     inspector.assert_connection(
         d_gnt_id, bleacher_id, target_port=f"res_{RESOURCE_NAME}"
     )
@@ -175,7 +179,7 @@ async def test_resource_scarcity_topology_and_execution():
         # But we log EVERY physical event to diagnose the deadlock.
         def collection_predicate(e: ObservedEvent):
             # Log ALL physical events for debugging
-            node_id = e.trace_data.get("id", "unknown")
+            node_id = e.trace_data.get("current_node_instance_hash", "unknown")
             print(
                 f"[OBS-START] {node_id}"
                 if e.event_type == "start"
@@ -277,7 +281,7 @@ async def test_mixed_resource_wiring():
     # t_gpu's bleacher should NOT be connected to CPU allocator
     # We need to find t_gpu's node ID. Since it's list input, IDs are generated.
     # IR generator uses hashing.
-    node_ids = [n.id for n in graph_ir.nodes]
+    node_ids = [n.current_node_instance_hash for n in graph_ir.nodes]
     # Let's assume index 0 is gpu, 1 is cpu (list order preserved)
     gpu_node_id = node_ids[0]
 

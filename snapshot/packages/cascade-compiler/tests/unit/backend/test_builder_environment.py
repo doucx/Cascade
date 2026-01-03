@@ -24,22 +24,32 @@ def test_builder_creates_resources_from_env(simple_graph_ir):
         ]
     )
 
-    # 2. Build (Expect this to fail currently due to signature mismatch)
+    # 2. Build
     builder = Builder()
     graph = builder.build(simple_graph_ir, environment=env)
 
-    # 3. Assert D_res creation
-    # Used resource should exist
-    assert "canonical.resource.gpu" in graph.nodes
-    gpu_node = graph.nodes["canonical.resource.gpu"]
-    assert gpu_node.capacity == 4
-    # Initial tokens should match capacity (potential energy)
-    assert gpu_node.initial_tokens == 4
+    # 3. Assert Broker/Ledger creation
+    # Used resource
+    ledger_id = "canonical.resource.ledger.gpu"
+    broker_id = "canonical.resource.broker.gpu"
+    
+    assert ledger_id in graph.nodes
+    assert broker_id in graph.nodes
+    
+    ledger_node = graph.nodes[ledger_id]
+    # The Ledger Node holds the DiscreteLedger object, capacity is just 1 (slot for the object)
+    assert ledger_node.capacity == 1 
+    assert ledger_node.initial_tokens == 1
+    # Check the payload of the initial token
+    initial_ledger = ledger_node.initial_payload
+    assert initial_ledger.total == 4
+    assert initial_ledger.available == 4
 
-    # Unused resource should ALSO exist (Physics is objective)
-    assert "canonical.resource.cpu" in graph.nodes
-    cpu_node = graph.nodes["canonical.resource.cpu"]
-    assert cpu_node.capacity == 8
+    # Unused resource
+    cpu_ledger_id = "canonical.resource.ledger.cpu"
+    assert cpu_ledger_id in graph.nodes
+    cpu_ledger = graph.nodes[cpu_ledger_id].initial_payload
+    assert cpu_ledger.total == 8
 
 
 def test_builder_raises_on_missing_resource(simple_graph_ir):

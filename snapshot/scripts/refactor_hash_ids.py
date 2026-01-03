@@ -1,55 +1,3 @@
-好的，我理解了任务。手动替换这些标识符风险极高，很容易引入错误。您提供的 `lint` 结果和思路是正确的，我们必须使用一个能理解代码结构的工具来执行这次重构。
-
-我将基于您提供的参考脚本进行增强和固化，创建一个新的、更健壮的 `libcst` 脚本。这个脚本将精确地执行以下两个核心任务：
-
-1.  **全局重命名**: 将所有 `structural_id` 的使用（作为类属性、对象属性、字典键等）安全地重命名为 `current_node_instance_hash`。
-2.  **上下文感知重命名**: 仅在非常明确的上下文中（例如，作为 `NodeIR` 类的属性或构造函数参数），将 `id` 重命名为 `current_node_instance_hash`，以避免错误地修改其他地方的 `id` 变量。
-
-这是实现此目标的计划。
-
-## [WIP] feat(tooling): 创建用于精确重构哈希标识符的 libcst 脚本
-
-### 用户需求
-
-根据最新的哈希命名规范公理，需要将历史代码中模糊的标识符进行统一重构。具体来说：
-1.  将 `structural_id` 全局重命名为 `current_node_instance_hash`。
-2.  将逻辑层IR（`NodeIR`）中的 `id` 字段也重命名为 `current_node_instance_hash`，同时确保物理层或其他不相关对象的 `id` 字段不受影响。
-这个过程必须是自动化的、安全的，并且能保留所有代码格式和注释。
-
-### 评论
-
-这是一次至关重要的“技术债”清理工作，它将极大地提升代码库的概念完整性和可读性，强制所有开发者遵循统一的命名规范。使用 `libcst` 是执行此类结构化代码重构的黄金标准，它能避免简单文本替换带来的所有风险，确保重构的精确性和安全性。
-
-### 目标
-
-1.  创建一个名为 `scripts/refactor_hash_ids.py` 的新脚本。
-2.  在该脚本中，实现一个基于 `libcst.CSTTransformer` 的转换器。
-3.  转换器逻辑将严格遵循重构规则，特别是对 `id` 的重命名进行严格的上下文限制。
-4.  最终脚本将能够遍历指定目录并自动应用这些重构。
-
-### 基本原理
-
-`lint` 脚本的输出已经为我们提供了清晰的“地图”，指明了问题所在。现在我们需要一把“手术刀”来精确修复它们。`libcst` 就是这把手术刀。通过构建一个具体的语法树（CST），我们可以编写规则来精确匹配和替换我们感兴趣的节点（如属性、参数、类定义），而不会触及其他无关代码。
-
-我将设计的 `RENAME_MAP` 配置将作为重构的核心规则引擎，`structural_id` 的规则会设为全局生效，而 `id` 的规则会严格限定在 `NodeIR` 这个类上，确保物理层的 `PhysicsNode.id` 等标识符安然无恙。
-
-### 标签
-
-#intent/tooling #intent/refine #flow/ready #priority/high #comp/build #scope/dx #ai/instruct #task/domain/tooling #task/object/refactor-script #task/action/implementation #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建重构脚本
-
-我将创建一个新的脚本 `scripts/refactor_hash_ids.py`。它包含了所有必要的逻辑，可以安全地对代码库执行指定的标识符重命名。
-
-~~~~~act
-write_file
-scripts/refactor_hash_ids.py
-~~~~~
-~~~~~python
 import libcst as cst
 import sys
 import os
@@ -260,19 +208,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~
-
-### 下一步建议
-
-我们已经创建了重构脚本。下一步就是运行它来真正修改代码。我建议分两步走：
-
-1.  **空跑检查 (Dry Run)**: 首先在 `packages/` 目录下以 `--dry-run` 模式运行此脚本，检查它计划修改的文件列表是否符合预期。
-    ```bash
-    python scripts/refactor_hash_ids.py packages/ --dry-run
-    ```
-2.  **执行重构**: 如果空跑结果看起来正确，就移除 `--dry-run` 标志，正式执行重构。
-    ```bash
-    python scripts/refactor_hash_ids.py packages/
-    ```
-
-在您确认后，我将为您生成执行这些命令的计划。

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(compiler): 引入 WiringHarness 以实现构建时连接验证", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767420079.7095993, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(vm): 实现基于事件驱动的测试框架 EventDrivenRunner", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767420267.2769685, "duration_ms": 0}}

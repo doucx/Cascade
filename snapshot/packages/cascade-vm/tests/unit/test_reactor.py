@@ -143,3 +143,81 @@ async def test_reactor_independent_nodes():
     assert fired_count == 2
     assert memory.get_count(d1.id) == 0
     assert memory.get_count(d2.id) == 0
+
+
+# --- New Test demonstrating EventDrivenRunner ---
+
+from cascade.vm.test_harness import EventDrivenRunner
+from cascade.spec.triad import ObservabilityNode
+from cascade.std.triad.observer import standard_observer
+import sys
+
+@pytest.mark.asyncio
+async def test_event_driven_ping_pong():
+    # 1. Topology with Observability
+    d1 = PhysicsDataNode(id="D1", name="Input")
+    f1 = PhysicsFuncNode(
+        id="F1",
+        name="Increment",
+        input_ports={"value": PortDef("value", PortRole.DATA)},
+        output_ports={
+            "result": PortDef("result", PortRole.DATA),
+            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY) # Added Obs port
+        },
+    )
+    d2 = PhysicsDataNode(id="D2", name="Output")
+    
+    # Obs Infra
+    d_life = PhysicsDataNode(id="global.observability.bus", name="Bus", capacity=sys.maxsize)
+    f_obs = ObservabilityNode(
+        id="global.observability.observer",
+        name="Observer",
+        input_ports={"event_token": PortDef("event_token", PortRole.OBSERVABILITY)}
+    )
+
+    graph = BipartiteGraph()
+    graph.nodes = {n.id: n for n in [d1, f1, d2, d_life, f_obs]}
+    
+    # Logic Wiring
+    graph.channels.append(Channel(d1.id, "out", f1.id, "value"))
+    graph.channels.append(Channel(f1.id, "result", d2.id, "in"))
+    
+    # Obs Wiring
+    # F1 emits directly to Bus (Simulating a Bleacher/Stainer behavior roughly)
+    graph.channels.append(Channel(f1.id, "obs_output", d_life.id, "in"))
+    graph.channels.append(Channel(d_life.id, "out", f_obs.id, "event_token"))
+
+    # Function Map
+    def obs_enabled_logic(inputs, node):
+        val = inputs["value"].payload
+        # Emit Result AND Observation
+        return {
+            "result": Token(payload=val + 1),
+            "obs_output": Token(payload=None, trace={"id": "F1", "status": "done"})
+        }
+
+    func_map = {
+        "F1": obs_enabled_logic,
+        "global.observability.observer": standard_observer # Runner will auto-inject queue
+    }
+
+    # 2. Use Runner
+    runner = EventDrivenRunner(graph, func_map)
+    runner.inject_input("D1", 10)
+
+    # 3. Start & Wait
+    await runner.start_loop()
+    
+    try:
+        # We wait for the specific event proving F1 finished
+        event = await runner.wait_for_event(
+            lambda e: e.trace_data.get("id") == "F1" and e.trace_data.get("status") == "done"
+        )
+        assert event is not None
+        
+        # Verify physical side effect (Memory)
+        assert runner.memory.get_count("D2") == 1
+        assert runner.memory.take("D2").payload == 11
+        
+    finally:
+        await runner.stop_loop()

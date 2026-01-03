@@ -1,57 +1,3 @@
-好的，这是一个非常有价值的想法。性能基准测试可以帮助我们量化 Cascade VM 反应堆循环的开销，并为未来的优化（如 JIT 算子融合）提供一个明确的基线。
-
-我将为你创建一个脚本，它将精确地执行你所描述的两种循环模式的对比测试，并输出一个清晰的性能比较报告。
-
-## [WIP] tool: 创建 VM 循环与原生循环的性能基准测试脚本
-
-### 用户需求
-
-在 `./scripts` 目录下创建一个新的 Python 脚本，用于对比以下两种循环结构的性能：
-1.  一个在 Cascade VM 中实现的、通过令牌自环迭代 10000 次的物理拓扑。
-2.  一个标准的、在 Python 中实现的、迭代 10000 次的 `while` 循环。
-
-脚本最终需要计算并打印出两者的总耗时和每秒迭代次数。
-
-### 评论
-
-这是一个出色的工程实践。我们并不期望 VM 的循环能快过原生 `while` 循环——这在物理上是不可能的，因为 VM 的每一步都包含了状态检查、函数分发、内存操作等额外开销。这个测试的真正价值在于**量化这个开销**。
-
-通过建立这个基准，我们可以：
-1.  了解 Cascade 物理模型的“固定成本”。
-2.  为未来的性能优化（如 JIT 算子融合）提供一个可衡量的目标。
-3.  确保后续的架构变更不会引入意料之外的性能衰退。
-
-### 目标
-
-1.  创建脚本文件 `./scripts/benchmark_loop_performance.py`。
-2.  在脚本中实现 `run_cascade_benchmark` 函数，该函数将构建一个 `D1 -> F1 -> D1` 的自环拓扑，并运行反应堆直到循环结束。
-3.  在脚本中实现 `run_python_benchmark` 函数，该函数将执行一个简单的 `while` 循环。
-4.  在 `main` 函数中依次执行这两个基准测试，并以表格形式打印出对比结果。
-
-### 基本原理
-
-*   **Cascade 自环拓扑**：我们将创建一个数据节点 `D_loop` 和一个函数节点 `F_loop`。`D_loop` 的输出连接到 `F_loop` 的输入，而 `F_loop` 的输出再连接回 `D_loop` 的输入。
-*   **迭代计数**：迭代次数将作为 `Token` 的 `payload` 在图中流动。`F_loop` 的逻辑是读取 `payload`，加一，然后生成一个新的 `Token`。
-*   **循环终止**：当 `payload` 中的计数值达到 10000 时，`F_loop` 将不再产生任何输出 `Token`。这会导致物理场中不再有可激发的节点，`reactor.step()` 将返回 0，循环自然终止。
-*   **性能测量**：我们将使用 `time.monotonic()` 来精确测量两个函数的核心循环部分的执行时间。
-
-### 标签
-
-#intent/tooling #flow/ready #priority/medium #comp/vm #concept/performance #scope/dx #ai/instruct #task/domain/performance #task/object/reactor-loop #task/action/benchmark
-
----
-
-### Script
-
-#### Acts 1: 创建性能基准测试脚本
-
-我们将一次性创建完整的脚本文件。
-
-~~~~~act
-write_file
-scripts/benchmark_loop_performance.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 from typing import Dict
@@ -159,14 +105,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-~~~~~
-
-### 下一步建议
-
-我们已经创建了基准测试脚本。现在你可以直接在你的环境中运行它：
-```bash
-python scripts/benchmark_loop_performance.py
-```
-运行结果将为我们提供关于 `Reactor` 性能的第一手数据。根据结果，我们可以决定下一步的行动：
-- **如果开销在可接受范围内**：我们可以继续进行功能开发或更高层次的架构工作。
-- **如果开销过大**：我们可以将注意力转移到性能分析（Profiling）上，找出 `Reactor.step()` 中的热点，并开始规划 **Act 0.7: 算子融合与 JIT 优化**。

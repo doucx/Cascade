@@ -376,8 +376,3 @@ class Builder:
         self._validator.validate(physical_graph, graph_ir)
 
         return physical_graph
-
-        # Final Validation Step
-        self._validator.validate(physical_graph, graph_ir)
-
-        return physical_graph

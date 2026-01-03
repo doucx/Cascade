@@ -1,36 +1,3 @@
-## [WIP] test(integration): 添加 Broker 饿死诊断测试
-
-### 用户需求
-用户遇到 `test_resource_backpressure.py` 失败，怀疑是 Broker 拆分后导致的死锁或饿死问题。
-需要一组专门的测试来定位 Allocator 和 Reclaimer 在竞争 Ledger 时的行为。
-
-### 评论
-我怀疑这是经典的 **资源饿死 (Resource Starvation)** 问题。
-由于 `Reactor` 是按顺序扫描节点的，如果 `Allocator` 在节点列表中排在 `Reclaimer` 前面，并且一直有积压的请求，它可能会在每一步都抢占 `D_ledger`，导致 `Reclaimer` 永远无法获取 Ledger 来归还资源，从而形成活锁。
-我们将通过两个对比测试来验证这一假设：一个 Allocator 优先，一个 Reclaimer 优先。
-
-### 目标
-1.  创建 `packages/cascade-vm/tests/integration/test_broker_starvation.py`。
-2.  实现 `test_allocator_starves_reclaimer` (预期失败或展示饿死)。
-3.  实现 `test_reclaimer_priority_fixes_starvation` (预期成功)。
-
-### 基本原理
-通过手动控制 `Reactor` 中节点列表的顺序，模拟物理布局对调度公平性的影响。
-
-### 标签
-#intent/test #flow/ready #priority/high #comp/tests #comp/vm #scope/core #ai/instruct #task/domain/testing #task/object/starvation-test #task/action/create #task/state/begin
-
----
-
-### Script
-
-#### Acts 1: 创建饿死诊断测试
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_broker_starvation.py
-~~~~~
-~~~~~python
 import pytest
 import asyncio
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
@@ -217,9 +184,3 @@ async def test_reclaimer_priority_fixes_starvation():
     
     # Request consumed (or recirculated if we count that, but here it succeeds so GNT emitted)
     # Check GNT output? We didn't wire GNT to a buffer in this test helper, but we can infer from Ledger.
-~~~~~
-
-### 下一步建议
-运行这两个测试。
-如果 `test_allocator_starves_reclaimer` 确实展示了饿死行为，而 `test_reclaimer_priority_fixes_starvation` 通过，那么我们的诊断就成立了。
-解决方案将是在 Builder 中确保 Reclaimer 总是先于 Allocator 被添加。这是一种简单的拓扑修复。

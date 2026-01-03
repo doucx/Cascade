@@ -1,869 +1,327 @@
-## [WIP] refactor(core): 拆分 Broker 为 Allocator 和 Reclaimer 以解决死锁
+你的分析很及时。这是典型的重构副作用：当我们拆分并重命名了核心函数时，旧的单元测试因为引用了不存在的名称而导致加载失败。
+
+我将更新 `cascade-std` 的单元测试，使其适配新的 `allocator` / `reclaimer` 模式。
+
+## [WIP] test(std): 更新资源 IC 单元测试以适配 Allocator/Reclaimer 拆分
+
+### 错误分析
+
+在之前的步骤中，我们将 `discrete_broker` 和 `continuous_broker` 拆分为了独立的 `allocator`（处理申请）和 `reclaimer`（处理释放）函数。
+由于 `cascade-std` 目录下的单元测试仍然试图从这些模块中导入已不存在的 `broker` 函数，导致 `pytest` 在收集测试用例阶段抛出 `ImportError`。
 
 ### 用户需求
-解决 `test_resource_backpressure.py` 中的测试失败。
-根本原因是 Reactor 遵循“全输入激发 (Full-Input Firing)”原则，而原本的 broker 设计试图在一个节点上处理可选输入（Request 或 Release）。这导致 Broker 在没有 Release 输入时永远无法激发，从而死锁。
-我们需要将 Broker 拆分为两个独立的物理实体：
-1.  **Allocator**: 负责处理 Request，消耗 Ledger，产出 Grant。
-2.  **Reclaimer**: 负责处理 Release，消耗 Ledger，归还资源。
-二者通过竞争 `D_ledger` 中的唯一 Token 来实现序列化和状态共享。
+更新 `cascade-std` 的单元测试，使其能够正确导入并验证拆分后的资源协商 IC 组件。
 
 ### 评论
-这是一个符合物理定律的架构修正。它消除了“可选输入”这一非物理概念，将其转化为对共享资源（Ledger）的竞争。
+单元测试的更新不仅是为了通过 CI，更是为了验证拆分后的逻辑是否依然符合物理预期。拆分后的 Allocator 和 Reclaimer 职责更加明确，测试也应相应地分为“申请逻辑”和“回收逻辑”两个维度。
 
 ### 目标
-1.  修改 `cascade-std` 中的 `discrete.py` 和 `continuous.py`，将 broker 函数拆分为 allocator 和 reclaimer。
-2.  更新 `cascade-compiler` 的 `naming.py` 和 `builder.py` 以适配新结构。
-3.  更新集成测试以使用新的函数映射。
+1.  修改 `test_continuous.py`：更新导入，拆分测试用例。
+2.  修改 `test_discrete.py`：更新导入，拆分测试用例。
+3.  确保所有测试逻辑反映了新的函数签名（输入和输出端口名保持不变，但职责已分离）。
 
 ### 基本原理
-*   **Allocator**: Inputs: `{ledger_in, req_in}`, Outputs: `{ledger_out, gnt_out, req_out}`
-*   **Reclaimer**: Inputs: `{ledger_in, rel_in}`, Outputs: `{ledger_out}`
-*   **竞争模型**: `D_ledger` 充当互斥锁。Reactor 的顺序扫描保证了原子性。
+由于物理端口名（`ledger_in`, `req_in`, `gnt_out` 等）在拆分时被保留了，大部分测试逻辑只需调整导入和函数名即可工作。对于原本测试“同时进行申请和释放”的用例，现在应改为顺序调用 Allocator 和 Reclaimer，以模拟它们在物理场中对 Ledger 的竞争。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/std #comp/compiler #comp/vm #concept/resource #scope/core #ai/instruct #task/domain/core #task/object/broker #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/std #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/unit-test #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 拆分 Discrete Broker IC
+#### Acts 1: 更新 Continuous Broker 单元测试
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/resource/discrete.py
+packages/cascade-std/tests/unit/resource/test_continuous.py
 ~~~~~
 ~~~~~python.old
-async def discrete_broker(
-    inputs: Dict[str, Token], node: PhysicsNode
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
-    # Reconstruct ledger object from payload (assuming it's a dict or dataclass)
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = DiscreteLedger(**ledger_data)
-    else:
-        ledger = ledger_data
+import pytest
+from unittest.mock import MagicMock
+from cascade.spec.physics import Token
+from cascade.std.resource.continuous import continuous_broker, ContinuousLedger
 
-    outputs: Dict[str, Token] = {}
 
-    # 1. Process Release (Replenish first)
-    if "rel_in" in inputs:
-        release_amount = inputs["rel_in"].payload
-        # Cap at total to prevent overflow logic errors, though in a closed system this shouldn't happen
-        ledger.available = min(ledger.total, ledger.available + release_amount)
+async def test_continuous_broker_grants_memory():
+    # Ledger: Total 16.0GB, Available 4.5GB
+    ledger = ContinuousLedger(total=16.0, available=4.5)
 
-    # 2. Process Request
-    if "req_in" in inputs:
-        req_token = inputs["req_in"]
-        req_amount = req_token.payload
+    inputs = {
+        "ledger_in": Token(payload=ledger),
+        "req_in": Token(payload=2.1),  # Request 2.1GB
+    }
 
-        if ledger.available >= req_amount:
-            # Grant
-            ledger.available -= req_amount
-            # Emit Grant Token (Payload can be the amount granted)
-            # CRITICAL: Propagate the tag from the request to the grant
-            # so the distributor can route it back to the correct worker.
-            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
-        else:
-            # Reject & Recirculate
-            # We emit the original request token back to a recirculation loop
-            outputs["req_out"] = req_token
+    outputs = await continuous_broker(inputs, MagicMock())
 
-    # 3. Emit Updated Ledger
-    # We pass the object back. In a real persistence scenario, this would be serialized.
-    outputs["ledger_out"] = Token(payload=ledger)
+    assert "gnt_out" in outputs
+    assert outputs["gnt_out"].payload == 2.1
 
-    return outputs
+    updated = outputs["ledger_out"].payload
+    # 4.5 - 2.1 = 2.4
+    assert updated.available == pytest.approx(2.4)
+
+
+async def test_continuous_broker_recirculates_large_request():
+    # Ledger: Available 1.0GB
+    ledger = ContinuousLedger(total=16.0, available=1.0)
+
+    req_token = Token(payload=1.1)
+    inputs = {"ledger_in": Token(payload=ledger), "req_in": req_token}
+
+    outputs = await continuous_broker(inputs, MagicMock())
+
+    assert "gnt_out" not in outputs
+    assert outputs["req_out"] is req_token
+
+    assert outputs["ledger_out"].payload.available == 1.0
+
+
+async def test_continuous_broker_replenish_and_grant():
+    # Ledger: Available 0.5. Request 1.5. Release 1.2.
+    # Logic: 0.5 + 1.2 = 1.7. 1.7 >= 1.5. Grant.
+    ledger = ContinuousLedger(total=16.0, available=0.5)
+
+    inputs = {
+        "ledger_in": Token(payload=ledger),
+        "req_in": Token(payload=1.5),
+        "rel_in": Token(payload=1.2),
+    }
+
+    outputs = await continuous_broker(inputs, MagicMock())
+
+    assert "gnt_out" in outputs
+    updated = outputs["ledger_out"].payload
+    # 0.5 + 1.2 - 1.5 = 0.2
+    assert updated.available == pytest.approx(0.2)
 ~~~~~
 ~~~~~python.new
-async def discrete_allocator(
-    inputs: Dict[str, Token], node: PhysicsNode
-) -> Dict[str, Token]:
-    """
-    Handles Resource Requests.
-    Inputs: ledger_in, req_in
-    Outputs: ledger_out, gnt_out (if success), req_out (if failed)
-    """
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-    # Ideally we should clone or re-instantiate if immutable, but for now we mutate in place for perf
-    if isinstance(ledger_data, dict):
-        ledger = DiscreteLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    req_token = inputs["req_in"]
-    req_amount = req_token.payload
-
-    outputs: Dict[str, Token] = {}
-
-    if ledger.available >= req_amount:
-        # Grant
-        ledger.available -= req_amount
-        outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
-    else:
-        # Reject & Recirculate
-        outputs["req_out"] = req_token
-
-    outputs["ledger_out"] = Token(payload=ledger)
-    return outputs
+import pytest
+from unittest.mock import MagicMock
+from cascade.spec.physics import Token
+from cascade.std.resource.continuous import (
+    continuous_allocator,
+    continuous_reclaimer,
+    ContinuousLedger,
+)
 
 
-async def discrete_reclaimer(
-    inputs: Dict[str, Token], node: PhysicsNode
-) -> Dict[str, Token]:
-    """
-    Handles Resource Releases.
-    Inputs: ledger_in, rel_in
-    Outputs: ledger_out
-    """
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = DiscreteLedger(**ledger_data)
-    else:
-        ledger = ledger_data
+async def test_continuous_allocator_grants_memory():
+    # Ledger: Total 16.0GB, Available 4.5GB
+    ledger = ContinuousLedger(total=16.0, available=4.5)
 
-    rel_token = inputs["rel_in"]
-    release_amount = rel_token.payload
+    inputs = {
+        "ledger_in": Token(payload=ledger),
+        "req_in": Token(payload=2.1),  # Request 2.1GB
+    }
 
-    # Replenish
-    ledger.available = min(ledger.total, ledger.available + release_amount)
+    outputs = await continuous_allocator(inputs, MagicMock())
 
-    return {"ledger_out": Token(payload=ledger)}
+    assert "gnt_out" in outputs
+    assert outputs["gnt_out"].payload == 2.1
+
+    updated = outputs["ledger_out"].payload
+    # 4.5 - 2.1 = 2.4
+    assert updated.available == pytest.approx(2.4)
+
+
+async def test_continuous_allocator_recirculates_large_request():
+    # Ledger: Available 1.0GB
+    ledger = ContinuousLedger(total=16.0, available=1.0)
+
+    req_token = Token(payload=1.1)
+    inputs = {"ledger_in": Token(payload=ledger), "req_in": req_token}
+
+    outputs = await continuous_allocator(inputs, MagicMock())
+
+    assert "gnt_out" not in outputs
+    assert outputs["req_out"] is req_token
+
+    assert outputs["ledger_out"].payload.available == 1.0
+
+
+async def test_continuous_reclaimer_replenish():
+    # Ledger: Available 0.5. Release 1.2.
+    ledger = ContinuousLedger(total=16.0, available=0.5)
+
+    inputs = {
+        "ledger_in": Token(payload=ledger),
+        "rel_in": Token(payload=1.2),
+    }
+
+    outputs = await continuous_reclaimer(inputs, MagicMock())
+
+    updated = outputs["ledger_out"].payload
+    assert updated.available == pytest.approx(1.7)
 ~~~~~
+
+#### Acts 2: 更新 Discrete Broker 单元测试
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/resource/discrete.stitcher.yaml
-~~~~~
-~~~~~yaml.old
-"discrete_broker": |-
-  A Discrete Resource Broker using the Self-Loop Ledger pattern.
-
-  Inputs:
-      ledger_in: Token containing DiscreteLedger(total, available)
-      req_in: (Optional) Token requesting N units. Payload: int
-      rel_in: (Optional) Token releasing N units. Payload: int
-
-  Outputs:
-      ledger_out: Updated ledger
-      gnt_out: (Conditional) Grant token if request succeeded
-      req_out: (Conditional) Original request token if failed (Recirculation)
-~~~~~
-~~~~~yaml.new
-"discrete_allocator": |-
-  Handles allocation requests for discrete resources.
-  Inputs: ledger_in, req_in
-  Outputs: ledger_out, gnt_out (if granted), req_out (if rejected)
-
-"discrete_reclaimer": |-
-  Handles release (return) of discrete resources.
-  Inputs: ledger_in, rel_in
-  Outputs: ledger_out
-~~~~~
-
-#### Acts 2: 拆分 Continuous Broker IC
-
-~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/resource/continuous.py
+packages/cascade-std/tests/unit/resource/test_discrete.py
 ~~~~~
 ~~~~~python.old
-async def continuous_broker(
-    inputs: Dict[str, Token], node: PhysicsNode
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = ContinuousLedger(**ledger_data)
-    else:
-        ledger = ledger_data
+from unittest.mock import MagicMock
+from cascade.spec.physics import Token
+from cascade.std.resource.discrete import discrete_broker, DiscreteLedger
 
-    outputs: Dict[str, Token] = {}
 
-    # 1. Process Release
-    if "rel_in" in inputs:
-        release_amount = float(inputs["rel_in"].payload)
-        # Simple clamp to avoid floating point drift exceeding total
-        ledger.available = min(ledger.total, ledger.available + release_amount)
+async def test_discrete_broker_grants_when_available():
+    # Ledger: Total 10, Available 5
+    ledger = DiscreteLedger(total=10, available=5)
 
-    # 2. Process Request
-    if "req_in" in inputs:
-        req_token = inputs["req_in"]
-        req_amount = float(req_token.payload)
+    inputs = {"ledger_in": Token(payload=ledger), "req_in": Token(payload=2)}
 
-        # Use a small epsilon for float comparison if needed, but >= usually suffices
-        if ledger.available >= req_amount:
-            ledger.available -= req_amount
-            # CRITICAL: Propagate the tag from the request to the grant
-            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
-        else:
-            # Recirculate
-            outputs["req_out"] = req_token
+    outputs = await discrete_broker(inputs, MagicMock())
 
-    # 3. Emit Updated Ledger
-    outputs["ledger_out"] = Token(payload=ledger)
+    # Check Grant
+    assert "gnt_out" in outputs
+    assert outputs["gnt_out"].payload == 2
 
-    return outputs
+    # Check Ledger Update
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 3
+    assert "req_out" not in outputs
+
+
+async def test_discrete_broker_recirculates_when_starved():
+    # Ledger: Total 10, Available 1
+    ledger = DiscreteLedger(total=10, available=1)
+
+    req_token = Token(payload=5)
+    inputs = {"ledger_in": Token(payload=ledger), "req_in": req_token}
+
+    outputs = await discrete_broker(inputs, MagicMock())
+
+    # Check No Grant
+    assert "gnt_out" not in outputs
+
+    # Check Recirculation
+    assert "req_out" in outputs
+    assert outputs["req_out"] is req_token  # Identity check
+
+    # Check Ledger Unchanged
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 1
+
+
+async def test_discrete_broker_releases_resource():
+    # Ledger: Total 10, Available 5
+    ledger = DiscreteLedger(total=10, available=5)
+
+    inputs = {"ledger_in": Token(payload=ledger), "rel_in": Token(payload=3)}
+
+    outputs = await discrete_broker(inputs, MagicMock())
+
+    # Check Ledger Update
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 8
+
+
+async def test_discrete_broker_simultaneous_rel_and_req():
+    # Ledger: Available 2. Request 4. Release 3.
+    # Logic: Release happens first, so Available becomes 2+3=5. Then Request 4 succeeds.
+    ledger = DiscreteLedger(total=10, available=2)
+
+    inputs = {
+        "ledger_in": Token(payload=ledger),
+        "req_in": Token(payload=4),
+        "rel_in": Token(payload=3),
+    }
+
+    outputs = await discrete_broker(inputs, MagicMock())
+
+    # Check Grant
+    assert "gnt_out" in outputs
+
+    # Check Ledger: 2 + 3 - 4 = 1
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 1
 ~~~~~
 ~~~~~python.new
-async def continuous_allocator(
-    inputs: Dict[str, Token], node: PhysicsNode
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = ContinuousLedger(**ledger_data)
-    else:
-        ledger = ledger_data
-
-    req_token = inputs["req_in"]
-    req_amount = float(req_token.payload)
-
-    outputs: Dict[str, Token] = {}
-
-    if ledger.available >= req_amount:
-        ledger.available -= req_amount
-        outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
-    else:
-        outputs["req_out"] = req_token
-
-    outputs["ledger_out"] = Token(payload=ledger)
-    return outputs
+from unittest.mock import MagicMock
+from cascade.spec.physics import Token
+from cascade.std.resource.discrete import (
+    discrete_allocator,
+    discrete_reclaimer,
+    DiscreteLedger,
+)
 
 
-async def continuous_reclaimer(
-    inputs: Dict[str, Token], node: PhysicsNode
-) -> Dict[str, Token]:
-    ledger_token = inputs["ledger_in"]
-    ledger_data = ledger_token.payload
-    if isinstance(ledger_data, dict):
-        ledger = ContinuousLedger(**ledger_data)
-    else:
-        ledger = ledger_data
+async def test_discrete_allocator_grants_when_available():
+    # Ledger: Total 10, Available 5
+    ledger = DiscreteLedger(total=10, available=5)
 
-    release_amount = float(inputs["rel_in"].payload)
-    ledger.available = min(ledger.total, ledger.available + release_amount)
+    inputs = {"ledger_in": Token(payload=ledger), "req_in": Token(payload=2)}
 
-    return {"ledger_out": Token(payload=ledger)}
-~~~~~
+    outputs = await discrete_allocator(inputs, MagicMock())
 
-#### Acts 3: 更新 Compiler Naming
+    # Check Grant
+    assert "gnt_out" in outputs
+    assert outputs["gnt_out"].payload == 2
 
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/utils/naming.py
-~~~~~
-~~~~~python.old
-    @staticmethod
-    def global_broker(resource_name: str) -> str:
-        return f"canonical.resource.broker.{resource_name}"
-~~~~~
-~~~~~python.new
-    @staticmethod
-    def global_allocator(resource_name: str) -> str:
-        return f"canonical.resource.allocator.{resource_name}"
+    # Check Ledger Update
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 3
+    assert "req_out" not in outputs
 
-    @staticmethod
-    def global_reclaimer(resource_name: str) -> str:
-        return f"canonical.resource.reclaimer.{resource_name}"
-~~~~~
 
-#### Acts 4: 更新 Compiler Builder
+async def test_discrete_allocator_recirculates_when_starved():
+    # Ledger: Total 10, Available 1
+    ledger = DiscreteLedger(total=10, available=1)
 
-重构 Builder 以生成两个独立的节点，共享同一个 Ledger。
+    req_token = Token(payload=5)
+    inputs = {"ledger_in": Token(payload=ledger), "req_in": req_token}
 
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-        # 1. Create Resource Brokers (F_broker + internal Ledger loop)
-        for res_def in environment.resources:
-            broker_id = PhysicalIdGenerator.global_broker(res_def.name)
-            ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
+    outputs = await discrete_allocator(inputs, MagicMock())
 
-            # D_ledger: Holds the state of the resource
-            # We initialize it with a DiscreteLedger object.
-            # Currently we assume all resources are Discrete.
-            # TODO: Support Continuous resources based on definition.
-            initial_ledger = DiscreteLedger(
-                total=res_def.capacity, available=res_def.capacity
-            )
+    # Check No Grant
+    assert "gnt_out" not in outputs
 
-            d_ledger = PhysicsDataNode(
-                id=ledger_id,
-                name=f"Ledger({res_def.name})",
-                capacity=1,
-                initial_tokens=1,
-                initial_payload=initial_ledger,
-            )
+    # Check Recirculation
+    assert "req_out" in outputs
+    assert outputs["req_out"] is req_token  # Identity check
 
-            # F_broker: The logic unit
-            f_broker = PhysicsFuncNode(
-                id=broker_id,
-                name=f"Broker({res_def.name})",
-                input_ports={
-                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                    PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
-                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
-                },
-                output_ports={
-                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                    PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
-                    PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
-                },
-            )
+    # Check Ledger Unchanged
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 1
 
-            physical_graph.nodes[ledger_id] = d_ledger
-            physical_graph.nodes[broker_id] = f_broker
 
-            # Wire the Ledger Loop
-            # D_ledger -> F_broker
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=ledger_id,
-                    source_port="out",
-                    target_node_id=broker_id,
-                    target_port=PortName.LEDGER_IN,
-                )
-            )
-            # F_broker -> D_ledger
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=broker_id,
-                    source_port=PortName.LEDGER_OUT,
-                    target_node_id=ledger_id,
-                    target_port="in",
-                )
-            )
+async def test_discrete_reclaimer_releases_resource():
+    # Ledger: Total 10, Available 5
+    ledger = DiscreteLedger(total=10, available=5)
 
-            # Self-Loop for Recirculation of rejected requests
-            # If a request is rejected, it comes out of REQ_OUT and goes back to REQ_IN.
-            # We need a buffer D_retry for this?
-            # Or can we wire REQ_OUT -> D_req (which feeds REQ_IN)?
-            # Yes, we will create a shared D_req_buffer for the broker later or handle it per request.
-            # Actually, standard pattern is:
-            # Inputs -> [D_req_buffer] -> F_broker
-            # F_broker -> REQ_OUT -> [D_req_buffer]
-            # Let's create a shared Request Buffer for this broker.
-            d_req_buffer_id = f"buffer.req.{res_def.name}"
-            d_req_buffer = PhysicsDataNode(
-                id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
-            )  # High capacity
-            physical_graph.nodes[d_req_buffer_id] = d_req_buffer
+    inputs = {"ledger_in": Token(payload=ledger), "rel_in": Token(payload=3)}
 
-            # Connect Buffer -> Broker
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=d_req_buffer_id,
-                    source_port="out",
-                    target_node_id=broker_id,
-                    target_port=PortName.REQ,
-                )
-            )
+    outputs = await discrete_reclaimer(inputs, MagicMock())
 
-            # Connect Recirculation: Broker -> Buffer
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=broker_id,
-                    source_port=PortName.REQ_OUT,
-                    target_node_id=d_req_buffer_id,
-                    target_port="in",
-                )
-            )
-~~~~~
-~~~~~python.new
-        # 1. Create Resource Brokers (Allocators + Reclaimers)
-        for res_def in environment.resources:
-            allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
-            reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
-            ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
+    # Check Ledger Update
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 8
 
-            # D_ledger
-            initial_ledger = DiscreteLedger(
-                total=res_def.capacity, available=res_def.capacity
-            )
-            d_ledger = PhysicsDataNode(
-                id=ledger_id,
-                name=f"Ledger({res_def.name})",
-                capacity=1,
-                initial_tokens=1,
-                initial_payload=initial_ledger,
-            )
-            physical_graph.nodes[ledger_id] = d_ledger
 
-            # F_allocator
-            f_allocator = PhysicsFuncNode(
-                id=allocator_id,
-                name=f"Allocator({res_def.name})",
-                input_ports={
-                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                    PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
-                },
-                output_ports={
-                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                    PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
-                    PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
-                },
-            )
-            physical_graph.nodes[allocator_id] = f_allocator
+async def test_sequential_rel_and_req():
+    # 模拟物理场中的顺序执行
+    ledger = DiscreteLedger(total=10, available=2)
+    mock_node = MagicMock()
 
-            # F_reclaimer
-            f_reclaimer = PhysicsFuncNode(
-                id=reclaimer_id,
-                name=f"Reclaimer({res_def.name})",
-                input_ports={
-                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
-                },
-                output_ports={
-                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                },
-            )
-            physical_graph.nodes[reclaimer_id] = f_reclaimer
+    # 1. Reclaimer fires first
+    rel_outputs = await discrete_reclaimer(
+        {"ledger_in": Token(payload=ledger), "rel_in": Token(payload=3)}, mock_node
+    )
+    new_ledger = rel_outputs["ledger_out"].payload
 
-            # Wiring: Ledger <-> Allocator
-            physical_graph.channels.append(
-                Channel(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
-            )
-            physical_graph.channels.append(
-                Channel(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
-            )
+    # 2. Allocator fires second using the new ledger
+    alloc_outputs = await discrete_allocator(
+        {"ledger_in": Token(payload=new_ledger), "req_in": Token(payload=4)}, mock_node
+    )
 
-            # Wiring: Ledger <-> Reclaimer
-            physical_graph.channels.append(
-                Channel(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
-            )
-            physical_graph.channels.append(
-                Channel(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
-            )
-
-            # Request Buffer
-            d_req_buffer_id = f"buffer.req.{res_def.name}"
-            d_req_buffer = PhysicsDataNode(
-                id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
-            )
-            physical_graph.nodes[d_req_buffer_id] = d_req_buffer
-
-            # Buffer -> Allocator
-            physical_graph.channels.append(
-                Channel(d_req_buffer_id, "out", allocator_id, PortName.REQ)
-            )
-            # Recirculation: Allocator -> Buffer
-            physical_graph.channels.append(
-                Channel(allocator_id, PortName.REQ_OUT, d_req_buffer_id, "in")
-            )
-
-            # Release Buffer
-            # Created here instead of implicitly later to ensure consistent ID
-            rel_buffer_id = f"buffer.rel.{res_def.name}"
-            d_rel_buffer = PhysicsDataNode(
-                id=rel_buffer_id, name=f"RelBuffer({res_def.name})", capacity=1000
-            )
-            physical_graph.nodes[rel_buffer_id] = d_rel_buffer
-            
-            # Buffer -> Reclaimer
-            physical_graph.channels.append(
-                Channel(rel_buffer_id, "out", reclaimer_id, PortName.REL)
-            )
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-            for res_name, amount in node_ir.constraints.items():
-                broker_id = PhysicalIdGenerator.global_broker(res_name)
-                req_buffer_id = f"buffer.req.{res_name}"
-
-                # --- A. Request Chain ---
-                # 1. D_const (Amount)
-                d_amt_id = PhysicalIdGenerator.constant(node_ir.id, f"req_amt_{res_name}")
-                d_amt = PhysicsDataNode(
-                    id=d_amt_id,
-                    name=f"Amt({res_name})",
-                    capacity=1,
-                    initial_tokens=1,
-                    initial_payload=amount,
-                )
-                physical_graph.nodes[d_amt_id] = d_amt
-
-                # 2. F_probe (ConstProbe)
-                f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, res_name)
-                f_probe = PhysicsFuncNode(
-                    id=f_probe_id,
-                    name=f"Probe({res_name})",
-                    input_ports={"value": PortDef("value", PortRole.DATA)},
-                    output_ports={"out": PortDef("out", PortRole.DATA)},
-                )
-                physical_graph.nodes[f_probe_id] = f_probe
-
-                # 3. F_req (Requestor)
-                f_req_id = PhysicalIdGenerator.requestor(node_ir.id, res_name)
-                f_req = PhysicsFuncNode(
-                    id=f_req_id,
-                    name=f"Req({res_name})",
-                    input_ports={"amount": PortDef("amount", PortRole.DATA)},
-                    output_ports={PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)},
-                )
-                physical_graph.nodes[f_req_id] = f_req
-
-                # 4. Wiring: D_amt -> F_probe -> D_temp -> F_req -> D_req_buffer
-                # We need intermediate data nodes because of Bipartite rule (F->D->F)
-                
-                # D_amt -> F_probe
-                physical_graph.channels.append(
-                    Channel(d_amt_id, "out", f_probe_id, "value")
-                )
-
-                # F_probe -> D_probed
-                d_probed_id = f"{f_probe_id}.out"
-                d_probed = PhysicsDataNode(id=d_probed_id, name="ProbedVal")
-                physical_graph.nodes[d_probed_id] = d_probed
-
-                physical_graph.channels.append(
-                    Channel(f_probe_id, "out", d_probed_id, "in")
-                )
-                
-                # D_probed -> F_req
-                physical_graph.channels.append(
-                    Channel(d_probed_id, "out", f_req_id, "amount")
-                )
-
-                # F_req -> D_req_buffer (Global Buffer for the Broker)
-                physical_graph.channels.append(
-                    Channel(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
-                )
-
-                # --- B. Grant Wiring ---
-                # Broker (GNT) -> Bleacher (res_{name})
-                # FILTER: Must match the Requestor's tag.
-                # The Requestor sets tag = f_req.id (based on std implementation).
-                # Wait, Requestor code: "tag=node.id". So tag is f_req_id.
-                target_tag = f_req_id
-                
-                port_name = f"res_{res_name}"
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=broker_id,
-                        source_port=PortName.GNT,
-                        target_node_id=subgraph.bleacher.id,
-                        target_port=port_name,
-                        tag_filter=target_tag,
-                    )
-                )
-
-                # --- C. Release Wiring ---
-                # Stainer (res_{name}) -> Broker (REL)
-                # We need a D_rel_buffer or connect directly to a D_rel?
-                # The broker needs a REL input buffer.
-                # Let's create a shared REL buffer for the broker too.
-                rel_buffer_id = f"buffer.rel.{res_name}"
-                if rel_buffer_id not in physical_graph.nodes:
-                    d_rel_buffer = PhysicsDataNode(
-                        id=rel_buffer_id, name=f"RelBuffer({res_name})", capacity=1000
-                    )
-                    physical_graph.nodes[rel_buffer_id] = d_rel_buffer
-                    
-                    # Buffer -> Broker
-                    physical_graph.channels.append(
-                        Channel(rel_buffer_id, "out", broker_id, PortName.REL)
-                    )
-
-                # Stainer -> RelBuffer
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=subgraph.stainer.id,
-                        source_port=port_name,
-                        target_node_id=rel_buffer_id,
-                        target_port="in",
-                    )
-                )
-~~~~~
-~~~~~python.new
-            for res_name, amount in node_ir.constraints.items():
-                allocator_id = PhysicalIdGenerator.global_allocator(res_name)
-                req_buffer_id = f"buffer.req.{res_name}"
-                rel_buffer_id = f"buffer.rel.{res_name}"
-
-                # --- A. Request Chain ---
-                # 1. D_const (Amount)
-                d_amt_id = PhysicalIdGenerator.constant(node_ir.id, f"req_amt_{res_name}")
-                d_amt = PhysicsDataNode(
-                    id=d_amt_id,
-                    name=f"Amt({res_name})",
-                    capacity=1,
-                    initial_tokens=1,
-                    initial_payload=amount,
-                )
-                physical_graph.nodes[d_amt_id] = d_amt
-
-                # 2. F_probe (ConstProbe)
-                f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, res_name)
-                f_probe = PhysicsFuncNode(
-                    id=f_probe_id,
-                    name=f"Probe({res_name})",
-                    input_ports={"value": PortDef("value", PortRole.DATA)},
-                    output_ports={"out": PortDef("out", PortRole.DATA)},
-                )
-                physical_graph.nodes[f_probe_id] = f_probe
-
-                # 3. F_req (Requestor)
-                f_req_id = PhysicalIdGenerator.requestor(node_ir.id, res_name)
-                f_req = PhysicsFuncNode(
-                    id=f_req_id,
-                    name=f"Req({res_name})",
-                    input_ports={"amount": PortDef("amount", PortRole.DATA)},
-                    output_ports={PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)},
-                )
-                physical_graph.nodes[f_req_id] = f_req
-
-                # 4. Wiring: D_amt -> F_probe -> D_temp -> F_req -> D_req_buffer
-                # We need intermediate data nodes because of Bipartite rule (F->D->F)
-                
-                # D_amt -> F_probe
-                physical_graph.channels.append(
-                    Channel(d_amt_id, "out", f_probe_id, "value")
-                )
-
-                # F_probe -> D_probed
-                d_probed_id = f"{f_probe_id}.out"
-                d_probed = PhysicsDataNode(id=d_probed_id, name="ProbedVal")
-                physical_graph.nodes[d_probed_id] = d_probed
-
-                physical_graph.channels.append(
-                    Channel(f_probe_id, "out", d_probed_id, "in")
-                )
-                
-                # D_probed -> F_req
-                physical_graph.channels.append(
-                    Channel(d_probed_id, "out", f_req_id, "amount")
-                )
-
-                # F_req -> D_req_buffer (Global Buffer for the Allocator)
-                physical_graph.channels.append(
-                    Channel(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
-                )
-
-                # --- B. Grant Wiring ---
-                # Allocator (GNT) -> Bleacher (res_{name})
-                target_tag = f_req_id
-                
-                port_name = f"res_{res_name}"
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=allocator_id,
-                        source_port=PortName.GNT,
-                        target_node_id=subgraph.bleacher.id,
-                        target_port=port_name,
-                        tag_filter=target_tag,
-                    )
-                )
-
-                # --- C. Release Wiring ---
-                # Stainer -> RelBuffer
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=subgraph.stainer.id,
-                        source_port=port_name,
-                        target_node_id=rel_buffer_id,
-                        target_port="in",
-                    )
-                )
-~~~~~
-
-#### Acts 5: 更新 Builder 测试
-
-Builder 测试中关于 Broker 的断言需要更新。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/backend/test_builder_environment.py
-~~~~~
-~~~~~python.old
-    # 3. Assert Broker/Ledger creation
-    # Used resource
-    ledger_id = "canonical.resource.ledger.gpu"
-    broker_id = "canonical.resource.broker.gpu"
-    
-    assert ledger_id in graph.nodes
-    assert broker_id in graph.nodes
-~~~~~
-~~~~~python.new
-    # 3. Assert Broker/Ledger creation
-    # Used resource
-    ledger_id = "canonical.resource.ledger.gpu"
-    allocator_id = "canonical.resource.allocator.gpu"
-    reclaimer_id = "canonical.resource.reclaimer.gpu"
-    
-    assert ledger_id in graph.nodes
-    assert allocator_id in graph.nodes
-    assert reclaimer_id in graph.nodes
-~~~~~
-
-#### Acts 6: 更新集成测试
-
-更新 `func_map` 和断言逻辑。
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_resource_backpressure.py
-~~~~~
-~~~~~python.old
-# Import new ICs
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.resource.discrete import discrete_broker
-from cascade.std.resource.requestor import resource_requestor
-from cascade.std.probe.const import const_probe
-~~~~~
-~~~~~python.new
-# Import new ICs
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
-from cascade.std.resource.requestor import resource_requestor
-from cascade.std.probe.const import const_probe
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_resource_backpressure.py
-~~~~~
-~~~~~python.old
-        elif node_id.endswith(".worker"):
-            func_map[node_id] = mock_worker
-        elif "broker" in node_id:
-            func_map[node_id] = discrete_broker
-        elif node_id.startswith("req."):
-            func_map[node_id] = resource_requestor
-~~~~~
-~~~~~python.new
-        elif node_id.endswith(".worker"):
-            func_map[node_id] = mock_worker
-        elif "allocator" in node_id:
-            func_map[node_id] = discrete_allocator
-        elif "reclaimer" in node_id:
-            func_map[node_id] = discrete_reclaimer
-        elif node_id.startswith("req."):
-            func_map[node_id] = resource_requestor
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_resource_backpressure.py
-~~~~~
-~~~~~python.old
-    # Round 3: Broker fires.
-    # It consumes Ledger + ONE request from Buffer.
-    # Since capacity is 1, it Grants.
-    await reactor.step()
-    await wait_idle()
-    
-    # Ledger should now have 0 available
-    ledger = memory.take(ledger_node_id).payload
-    assert ledger.available == 0
-    memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
-    
-    # Buffer should have 1 request remaining
-    assert memory.get_count(req_buffer_id) == 1
-
-    # Round 4: 
-    # - The lucky Bleacher (who got GNT) fires.
-    # - The Broker attempts to fire again for the second request?
-    #   Yes, it reads Ledger(0) and Request(1). 
-    #   Logic: 0 < 1. Reject & Recirculate.
-    
-    fired = await reactor.step()
-    await wait_idle()
-    
-    # If Broker fired, it recirculated the request back to Buffer.
-    # If Bleacher fired, it started the triad.
-    
-    # Let's run until one Task completes (Stainer fires)
-    # This involves: Worker -> Stainer
-    
-    # We loop until resource is released (Ledger becomes 1)
-    max_steps = 20
-    for _ in range(max_steps):
-        await reactor.step()
-        await wait_idle()
-        
-        # Check if resource returned
-        ledger = memory.take(ledger_node_id).payload
-        memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
-        if ledger.available == 1:
-            break
-            
-    assert ledger.available == 1
-    
-    # Now the second task can proceed.
-    # Broker fires -> Grants -> Bleacher -> Worker -> Stainer
-    for _ in range(10):
-        if memory.get_count(req_buffer_id) == 0 and memory.get_count("buffer.rel.gpu") == 0:
-             # If buffers are empty and tasks done, we are good.
-             pass
-        await reactor.step()
-        await wait_idle()
-~~~~~
-~~~~~python.new
-    # Round 3: Allocator fires.
-    # It consumes Ledger + ONE request from Buffer.
-    # Since capacity is 1, it Grants.
-    await reactor.step()
-    await wait_idle()
-    
-    # Ledger should now have 0 available
-    ledger = memory.take(ledger_node_id).payload
-    assert ledger.available == 0
-    memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
-    
-    # Buffer should have 1 request remaining
-    assert memory.get_count(req_buffer_id) == 1
-
-    # Round 4: 
-    # - The lucky Bleacher (who got GNT) fires.
-    # - The Allocator attempts to fire again for the second request?
-    #   Yes, it reads Ledger(0) and Request(1). 
-    #   Logic: 0 < 1. Reject & Recirculate.
-    
-    fired = await reactor.step()
-    await wait_idle()
-    
-    # If Allocator fired, it recirculated the request back to Buffer.
-    # If Bleacher fired, it started the triad.
-    
-    # Let's run until one Task completes (Stainer fires)
-    # This involves: Worker -> Stainer -> RelBuffer -> Reclaimer -> Ledger
-    
-    # We loop until resource is released (Ledger becomes 1)
-    max_steps = 30
-    for _ in range(max_steps):
-        await reactor.step()
-        await wait_idle()
-        
-        # Check if resource returned
-        ledger = memory.take(ledger_node_id).payload
-        memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
-        if ledger.available == 1:
-            break
-            
-    assert ledger.available == 1
-    
-    # Now the second task can proceed.
-    # Allocator fires -> Grants -> Bleacher -> Worker -> Stainer -> Reclaimer
-    for _ in range(20):
-        if memory.get_count(req_buffer_id) == 0 and memory.get_count("buffer.rel.gpu") == 0:
-             # If buffers are empty and tasks done, we are good.
-             pass
-        await reactor.step()
-        await wait_idle()
+    # Check Grant
+    assert "gnt_out" in alloc_outputs
+    assert alloc_outputs["ledger_out"].payload.available == 1
 ~~~~~
 
 ### 下一步建议
-我们已经将 broker 拆分为 allocator 和 reclaimer。现在应该重新运行测试，确认死锁问题已解决。
+现在单元测试应该可以正常加载并运行了。
+请重新运行所有测试（包括单元测试和集成测试），验证 Broker 的逻辑拆分是否不仅解决了死锁，而且保持了原有的功能正确性。

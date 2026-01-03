@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(core): 拆分 Broker 为 Allocator 和 Reclaimer 以解决死锁", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767416805.052033, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(std): 更新资源 IC 单元测试以适配 Allocator/Reclaimer 拆分", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767416902.1793065, "duration_ms": 0}}

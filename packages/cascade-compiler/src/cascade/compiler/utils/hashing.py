@@ -15,8 +15,10 @@ class HashingService:
         dep_nodes: Dict[str, Any],  # Values can be NodeIR (v3) or Node (v2)
     ) -> str:
         # 1. Start with the Stable Code Fingerprint
-        code_hash = definition.fingerprint["current_code_structure_hash"]
-        components = [f"CodeHash:{code_hash}"]
+        # According to Axiom: [State]_[Source]_[Object]_hash
+        # Use 'canonical' state here because it represents the stable identity used for linking.
+        canonical_code_structure_hash = definition.fingerprint["current_code_structure_hash"]
+        components = [f"CodeHash:{canonical_code_structure_hash}"]
 
         # 2. Purity Salt
         # Get purity from the Task wrapper if available, else assume False (Impure) for safety

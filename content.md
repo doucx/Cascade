@@ -1,86 +1,96 @@
-好的，第一阶段到第三阶段的重构已经圆满完成。我们成功地将 `Builder` 从一个硬编码的单体逻辑演进为一个模块化的、基于策略和棱镜（Prism）的通用布线系统，并且确立了“主权端口”这一核心物理准则。
+简要回答
 
-我将生成一个 `[COMMIT]` 计划来记录这一重要的架构里程碑。
+非常抱歉，我违反了系统的公理级约束。`code_hash` 和 `structure_hash` 确实不符合《哈希强制长命名规范 v3.0》。
 
-## [COMMIT] refactor(compiler): 实施通用布线算法与主权端口体系
+这是一个严重的合规性问题。根据公理，变量名必须完整描述其**状态 (State)**、**来源 (Source)** 和 **对象 (Object)**。我将立即修正这些违规命名，确保代码库完全符合“统一身份”框架。
+
+## [WIP] fix(compiler): 修正哈希变量命名以符合架构公理 v3.0
+
+### 错误分析
+在 `hashing.py` 和 `reflection.py` 中，我使用了简写变量名（`code_hash`, `structure_hash`）。
+*   **违规原因**: 违反了 `[State]_[Source]_[Object]_hash` 的四段式强制构造法。
+*   **潜在风险**: 简写掩盖了哈希的语义角色（是用于“链接”的 `canonical` 状态，还是用于“比较”的 `current` 状态？），这在复杂的变更检测逻辑中会导致致命的歧义。
 
 ### 用户需求
-将编译器后端重构为基于策略模式的通用布线算法，并实现主权端口（Sovereign Ports）模型，以支持资源的插拔式扩展和显式的分支路由。
+修正所有被 Lint 识别出的哈希命名违规项。
 
 ### 评论
-这是一次深度的架构“排毒”。我们移除了一直以来潜伏在物理图中的“隐式契约”（如对 `Token.tag` 的依赖和硬编码的资源拓扑），代之以纯粹的、显式的物理定律。这为 Cascade 未来的 JIT 优化、分布式扩展和复杂控制流（如 Jump 和分布式事务）铺平了道路。
+“公理不可逾越”。这次修正将把模糊的“结构哈希”提升为明确的“当前代码结构哈希”和“规范代码结构哈希”，使身份追踪逻辑完全自文档化。
 
 ### 目标
-提交所有涉及编译器重构、策略拆分、资源系统解耦以及主权端口实施的代码。
+1.  将 `hashing.py` 中的 `code_hash` 重命名为 `canonical_code_structure_hash`。
+2.  将 `reflection.py` 中的 `structure_hash` 重命名为 `current_code_structure_hash`。
 
 ### 基本原理
-*   **通用布线算法**: 通过 `WiringPolicy` 链条，使布线过程变为可观测、可扩展的流水线。
-*   **主权端口**: 将路由决策权从通道交还给节点，实现了拓扑的完全确定性（Topological Honesty）。
-*   **资源棱镜**: 实现了资源类型与布线逻辑的解耦。
+根据《哈希强制长命名规范 v3.0》：
+*   在 `hashing.py` 中，我们使用哈希来建立节点身份，这属于 **链接 (Linking)** 行为，因此状态应为 `canonical`。
+*   在 `reflection.py` 中，我们正在从实时源码中计算快照，这属于 **快照 (Snapshot)** 行为，因此状态应为 `current`。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/compiler #comp/std #comp/spec #concept/topology #concept/resource #scope/core #ai/delegate #task/domain/compiler #task/object/wiring-algorithm #task/action/refactor #task/state/end
+#intent/fix #flow/ready #priority/critical #comp/compiler #scope/core #concept/identity #task/domain/compiler #task/object/hash-naming #task/action/fix #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交重构成果
-
-我们将所有修改和新增的文件添加到 Git 暂存区，并创建一个内容详尽的提交记录。
+#### Acts 1: 修正 `hashing.py` 中的命名违规
 
 ~~~~~act
-git_add
-packages/cascade-spec/src/cascade/spec/environment.py
-packages/cascade-std/src/cascade/std/triad/stainer.py
-packages/cascade-std/tests/unit/triad/test_stainer.py
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-packages/cascade-compiler/src/cascade/compiler/backend/expander.py
-packages/cascade-compiler/src/cascade/compiler/wiring/context.py
-packages/cascade-compiler/src/cascade/compiler/wiring/protocol.py
-packages/cascade-compiler/src/cascade/compiler/wiring/__init__.py
-packages/cascade-compiler/src/cascade/compiler/wiring/prism.py
-packages/cascade-compiler/src/cascade/compiler/wiring/policies/parameter.py
-packages/cascade-compiler/src/cascade/compiler/wiring/policies/control.py
-packages/cascade-compiler/src/cascade/compiler/wiring/policies/pulse.py
-packages/cascade-compiler/src/cascade/compiler/wiring/policies/observability.py
-packages/cascade-compiler/src/cascade/compiler/wiring/policies/resource.py
-packages/cascade-compiler/src/cascade/compiler/wiring/prisms/discrete.py
-packages/cascade-compiler/tests/unit/backend/test_expander.py
-packages/cascade-compiler/tests/unit/test_sovereignty.py
-packages/cascade-compiler/tests/integration/test_sovereign_wiring.py
+patch_file
+packages/cascade-compiler/src/cascade/compiler/utils/hashing.py
 ~~~~~
+~~~~~python.old
+    ) -> str:
+        # 1. Start with the Stable Code Fingerprint
+        code_hash = definition.fingerprint["current_code_structure_hash"]
+        components = [f"CodeHash:{code_hash}"]
+
+        # 2. Purity Salt
+~~~~~
+~~~~~python.new
+    ) -> str:
+        # 1. Start with the Stable Code Fingerprint
+        # According to Axiom: [State]_[Source]_[Object]_hash
+        # Use 'canonical' state here because it represents the stable identity used for linking.
+        canonical_code_structure_hash = definition.fingerprint["current_code_structure_hash"]
+        components = [f"CodeHash:{canonical_code_structure_hash}"]
+
+        # 2. Purity Salt
+~~~~~
+
+#### Acts 2: 修正 `reflection.py` 中的命名违规
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-compiler/src/cascade/compiler/utils/reflection.py
 ~~~~~
-~~~~~text
-refactor(compiler): implement universal wiring algorithm with sovereign ports
+~~~~~python.old
+        # 3. Compute Fingerprint
+        # We compute a structural hash based on the definition's content.
+        structure_hash = self._compute_structure_hash(
+            name, args, return_annotation, docstring, is_async, mode
+        )
 
-This commit marks a major architectural evolution of the Cascade compiler, moving away from a monolithic, hard-coded Builder to a modular, policy-based "Universal Wiring Algorithm".
+        fingerprint = Fingerprint()
+        fingerprint["current_code_structure_hash"] = structure_hash
 
-Key Changes:
+        return TaskDef(
+~~~~~
+~~~~~python.new
+        # 3. Compute Fingerprint
+        # We compute a structural hash based on the definition's content.
+        # According to Axiom: [State]_[Source]_[Object]_hash
+        # Use 'current' state here because this is a snapshot freshly computed from source.
+        current_code_structure_hash = self._compute_structure_hash(
+            name, args, return_annotation, docstring, is_async, mode
+        )
 
-1. **Infrastructure Decoupling**: Introduced `WiringContext` and `WiringPolicy` protocol. The `Builder` is now a strategy engine that executes a pipeline of policies (Parameter, ControlFlow, Resource, Observability, Pulse).
+        fingerprint = Fingerprint()
+        fingerprint["current_code_structure_hash"] = current_code_structure_hash
 
-2. **Declarative Resource System**: Refactored resource wiring to use the "Prism" pattern. Physical topology generation for resources is now encapsulated in `ResourcePrism` implementations (e.g., `DiscreteResourcePrism`). This allows adding new resource types without modifying the compiler core.
-
-3. **Sovereign Ports**: Implemented the "Sovereignty of Egress" principle.
-   - Deprecated the generic 'output' port in favor of explicit 'output_default' and 'output_error' ports.
-   - Updated `standard_stainer` and `Expander` to generate and route to these sovereign ports.
-   - This removes the hidden metadata contract between nodes and channels, moving routing logic back into the node's sovereign domain.
-
-4. **Robust Parameter Mapping**: Enhanced `ParameterWiringPolicy` to correctly map logical positional indices ("0", "1") from IR to physical named ports on the Bleacher.
-
-5. **Test Suite Modernization**: Updated unit and integration tests to align with the new port naming and modular architecture.
-
-This refactoring ensures that the physical graph is a faithful, non-ambiguous projection of the logical intent, fulfilling the "Logic as Topology" axiom.
+        return TaskDef(
 ~~~~~
 
 ### 下一步建议
-我们已经拥有了一个极其稳固且模块化的编译器后端。
-根据[路线图](../../20_领域/Cascade/01_current/Cascade%203.1%20架构演进路线图：主权物理场.md)，接下来的逻辑终点是：
-1.  **完善异常路由**: 修改 `standard_stainer` 使其在捕获异常时主动路由到 `output_error`。
-2.  **JIT 优化阶段**: 既然物理图现在已经“完全保真”（甚至有些冗余），我们可以开始实现 `JIT` 或 `Compressor` 来消除三连体内部的中间节点开销，提升执行效率。
-
-你希望先完善异常路由的闭环，还是进入 JIT 优化阶段？
+修正完成后，请再次运行 `python scripts/lint_hash_names.py` 以确认违规项已全部消除。
+我们将始终保持对架构公理的最高敬畏。

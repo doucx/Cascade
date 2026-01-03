@@ -1,16 +1,3 @@
-## [WIP] scripts/benchmark_vm_tco.py
-
-这是一个非常棒的主意。我们要测量的是 **“物理层原生开销”**。
-
-在 Cascade 3.0 的模型中，TCO（尾调用优化）不再是堆栈技巧，而是 **“能量回流”**：一个函数节点将输出连回自己的输入库所。
-
-我为你准备了一个脚本 `scripts/benchmark_vm_tco.py`。它跳过了所有复杂的 `Builder` 逻辑，直接通过 `BipartiteGraph` 手工搭建了一个最简物理场，并与 Python 原生的 `while` 循环进行对比。
-
-~~~~~act
-write_file
-scripts/benchmark_vm_tco.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 import sys
@@ -131,29 +118,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-~~~~~
-
-### 如何运行
-
-你可以直接使用 `python` 运行（假设你已经安装了相关依赖）：
-
-```bash
-python scripts/benchmark_vm_tco.py
-```
-
-### 分析与预期
-
-这个脚本测量的实际上是 `Reactor` 核心循环的 **“最小摩擦力”**。
-
-1.  **为什么会有抽象税？**
-    *   **内存操作**: 每次迭代都要进行 `memory.take` 和 `memory.put`（涉及 `deque` 和 `asyncio.Event` 的设置）。
-    *   **调度开销**: `Reactor.step` 涉及一次全图扫描（虽然已优化为 O(1) 端口查找）。
-    *   **Task 创建**: `asyncio.create_task` 是最重的开销，它涉及协程对象的分配和事件循环的调度。
-    *   **上下文切换**: `await asyncio.sleep(0)` 强迫事件循环切换一次上下文。
-
-2.  **JIT 的必要性**:
-    如果测速结果显示抽象税在 100x ~ 1000x 之间，这非常正常。这就是为什么白皮书中提到 **“运行时压缩/算子融合”** 至关重要。
-    当 JIT 发现 `D_state -> F_inc -> D_state` 这个死循环时，它应该将其“坍缩”为一个原生的 `while` 循环，从而将 1000x 的抽象税降为 1x。
-
-3.  **单节点 TCO 的本质**:
-    在物理层，TCO 就是 **“不让 Reactor 停下来”**。如果 `active_task_count` 始终保持在 1 以上，且 `memory` 始终有 Token，物理引擎就会像永动机一样转下去。

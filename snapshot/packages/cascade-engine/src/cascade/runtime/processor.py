@@ -183,7 +183,6 @@ class NodeProcessor:
     async def _execute_core(
         self, node: Node, executable: Callable, args: List[Any], kwargs: Dict[str, Any]
     ) -> Any:
-        """Purely executes the callable via the configured executor."""
         return await self.executor.execute(node, executable, args, kwargs)
 
     async def _handle_successful_outcome(
@@ -194,7 +193,6 @@ class NodeProcessor:
         start_time: float,
         result: Any,
     ) -> Any:
-        """Handles caching and event publishing for a successful execution."""
         duration = time.time() - start_time
         self.bus.publish(
             TaskExecutionFinished(
@@ -222,10 +220,6 @@ class NodeProcessor:
         delay: float,
         start_time: float,
     ) -> bool:
-        """
-        Handles retry logic and event publishing for a failed execution.
-        Returns True if a retry should be attempted, False otherwise.
-        """
         if attempt < max_attempts:
             self.bus.publish(
                 TaskRetrying(

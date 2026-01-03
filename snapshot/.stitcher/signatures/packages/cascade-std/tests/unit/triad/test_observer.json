@@ -1,14 +1,14 @@
 {
   "test_observer_processes_end_event": {
-    "baseline_code_signature_text": "def test_observer_processes_end_event():",
-    "baseline_code_structure_hash": "1b7eeaa405b8e47349e272b8d96d491e6e63b864c0cde2443be3fbf08e9d12a7"
+    "baseline_code_signature_text": "async def test_observer_processes_end_event():",
+    "baseline_code_structure_hash": "3549a2386204fc5999cd176b3f8564e3aa120057f3261a35c9c2896f8fe11310"
   },
   "test_observer_processes_start_event": {
-    "baseline_code_signature_text": "def test_observer_processes_start_event():",
-    "baseline_code_structure_hash": "6b5e0ba17fc0e539879cfeab1890a3cb57bb540d1f184ba65d7f140f6129e357"
+    "baseline_code_signature_text": "async def test_observer_processes_start_event():",
+    "baseline_code_structure_hash": "7d3451f256745990204ce472a0c4482caa66a155180cb45690e7c346bfa55cf0"
   },
   "test_observer_with_empty_trace": {
-    "baseline_code_signature_text": "def test_observer_with_empty_trace():",
-    "baseline_code_structure_hash": "9d84a03613b6728587b1478381c3557cf937659c35770cd141819102ee2dd7c7"
+    "baseline_code_signature_text": "async def test_observer_with_empty_trace():",
+    "baseline_code_structure_hash": "a3919d0318d86292a3bd9467ef04e28b82cfaca1c79f287402a92b1a5e066854"
   }
 }

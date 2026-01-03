@@ -1,0 +1,14 @@
+{
+  "test_continuous_broker_grants_memory": {
+    "baseline_code_signature_text": "async def test_continuous_broker_grants_memory():",
+    "baseline_code_structure_hash": "41d24e96d0059f797344c90af4123b63c50d1908787084a92962b8e5b6e43652"
+  },
+  "test_continuous_broker_recirculates_large_request": {
+    "baseline_code_signature_text": "async def test_continuous_broker_recirculates_large_request():",
+    "baseline_code_structure_hash": "a24eceffe1df2ec2bd20ac1320b37585381efa7bee9fed4ab21daa83f1701946"
+  },
+  "test_continuous_broker_replenish_and_grant": {
+    "baseline_code_signature_text": "async def test_continuous_broker_replenish_and_grant():",
+    "baseline_code_structure_hash": "cefd1f3832a00de5c186a5176a88c89736841da43a60e5259b6f206d5fb4fab9"
+  }
+}

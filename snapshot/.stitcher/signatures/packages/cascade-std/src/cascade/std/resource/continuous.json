@@ -1,0 +1,10 @@
+{
+  "ContinuousLedger": {},
+  "ContinuousLedger.available": {},
+  "ContinuousLedger.total": {},
+  "continuous_broker": {
+    "baseline_code_signature_text": "async def continuous_broker(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "0e917572b622f0957357ed8a8141befa91949c0406ccd2d1dc28465e2a2c54c4",
+    "baseline_yaml_content_hash": "e4ac243e4c6fe28e53e3ed025d099bddc1cb9e68d621e13d3f1fd99a8a283012"
+  }
+}

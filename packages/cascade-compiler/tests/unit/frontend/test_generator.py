@@ -78,4 +78,7 @@ def test_generate_task_with_dependency():
 
     # Verify downstream node correctly references the upstream node's ID
     assert downstream_node.name == "add"
-    assert downstream_node.inputs == {"0": upstream_node.current_node_instance_hash, "1": 3}
+    assert downstream_node.inputs == {
+        "0": upstream_node.current_node_instance_hash,
+        "1": 3,
+    }

@@ -41,8 +41,14 @@ def test_visualize_diamond_graph():
     assert 'rankdir="TB"' in dot_string
 
     # Check node definitions with new simplified style
-    assert f'"{node_a.current_node_instance_hash}" [label="t_a\\n(task)", shape=box];' in dot_string
-    assert f'"{node_b.current_node_instance_hash}" [label="t_b\\n(task)", shape=box];' in dot_string
+    assert (
+        f'"{node_a.current_node_instance_hash}" [label="t_a\\n(task)", shape=box];'
+        in dot_string
+    )
+    assert (
+        f'"{node_b.current_node_instance_hash}" [label="t_b\\n(task)", shape=box];'
+        in dot_string
+    )
 
     # Check data edge definitions
     assert (

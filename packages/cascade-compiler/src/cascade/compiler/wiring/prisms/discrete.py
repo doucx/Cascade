@@ -104,7 +104,9 @@ class DiscreteResourcePrism(ResourcePrism):
 
         # --- A. Request Chain ---
         # 1. D_const (Amount)
-        d_amt_id = PhysicalIdGenerator.constant(node_ir.current_node_instance_hash, f"req_amt_{res_name}")
+        d_amt_id = PhysicalIdGenerator.constant(
+            node_ir.current_node_instance_hash, f"req_amt_{res_name}"
+        )
         d_amt = PhysicsDataNode(
             id=d_amt_id,
             name=f"Amt({res_name})",
@@ -115,7 +117,9 @@ class DiscreteResourcePrism(ResourcePrism):
         ctx.wire.add_node(d_amt)
 
         # 2. F_probe (ConstProbe)
-        f_probe_id = PhysicalIdGenerator.probe_const(node_ir.current_node_instance_hash, res_name)
+        f_probe_id = PhysicalIdGenerator.probe_const(
+            node_ir.current_node_instance_hash, res_name
+        )
         f_probe = PhysicsFuncNode(
             id=f_probe_id,
             name=f"Probe({res_name})",
@@ -125,7 +129,9 @@ class DiscreteResourcePrism(ResourcePrism):
         ctx.wire.add_node(f_probe)
 
         # 3. F_req (Requestor)
-        f_req_id = PhysicalIdGenerator.requestor(node_ir.current_node_instance_hash, res_name)
+        f_req_id = PhysicalIdGenerator.requestor(
+            node_ir.current_node_instance_hash, res_name
+        )
         f_req = PhysicsFuncNode(
             id=f_req_id,
             name=f"Req({res_name})",

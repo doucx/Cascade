@@ -33,7 +33,9 @@ def sample_graph_ir():
 def source_only_graph_ir():
     fp = Fingerprint.from_dict({"canonical_code_structure_hash": "xyz"})
     task_def = TaskDef(name="source_task", args=[], fingerprint=fp)
-    node = NodeIR(current_node_instance_hash="source_node", name="Source", task=task_def)
+    node = NodeIR(
+        current_node_instance_hash="source_node", name="Source", task=task_def
+    )
     return GraphIR(nodes=[node])
 
 

@@ -1,11 +1,6 @@
 "Reactor": |-
   The heart of the physics engine.
   Scans the topology for excited states and fires transitions.
-"Reactor._fire": |-
-  Internal method to execute a node transition.
-  1. Atomically consumes tokens from all input slots.
-  2. Submits the actual payload to an Executor.
-  3. Puts the resulting token into the output slots.
 "Reactor.add_sink": |-
   Register a callback to receive tokens emitted by a specific port.
 "Reactor.prime": |-

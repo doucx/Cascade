@@ -26,8 +26,6 @@
   The fundamental unit of energy and information flow in the physics field.
 "Token.payload": |-
   The actual data being transferred (Business Value).
-"Token.tag": |-
-  Routing tag used by Channels to filter tokens (Control Signal).
 "Token.trace": |-
   Metadata accumulator for observability and context propagation.
   Contains timestamp, source_id, retry_counts, etc.

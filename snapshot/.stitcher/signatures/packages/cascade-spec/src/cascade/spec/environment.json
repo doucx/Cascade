@@ -1,9 +1,13 @@
 {
-  "EnvironmentDef": {},
+  "EnvironmentDef": {
+    "baseline_yaml_content_hash": "bf8da37008c51eb503d180a8279ddedfa9f8421e166ea04cf0988710900a8841"
+  },
   "EnvironmentDef.resources": {
     "baseline_yaml_content_hash": "6683e9c86935680d5614ef73f3d460c37567bc03197ab046261e4100d58cc8bc"
   },
-  "ResourceDef": {},
+  "ResourceDef": {
+    "baseline_yaml_content_hash": "906014fadb90b4317c66ce7811374622d9cfea5cc9cba0e5a47457ab780be726"
+  },
   "ResourceDef.capacity": {
     "baseline_yaml_content_hash": "67c13787a889d0cde2f85907aa4f522038f958eee6848e487d90653fc15e349a"
   },

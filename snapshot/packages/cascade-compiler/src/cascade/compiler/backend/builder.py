@@ -201,10 +201,26 @@ class Builder:
                     # Help static analysis
                     assert source_subgraph.stainer is not None
 
+                    # Violation Fix: Insert D_dep (Intermediate Data Node)
+                    d_dep_id = f"dep.{source_ref}.to.{node_ir.id}.{arg_name}"
+                    d_dep = PhysicsDataNode(id=d_dep_id, name=f"Dep({arg_name})")
+                    physical_graph.nodes[d_dep_id] = d_dep
+
+                    # Source Stainer -> D_dep
                     physical_graph.channels.append(
                         Channel(
                             source_node_id=source_subgraph.stainer.id,
                             source_port="output",
+                            target_node_id=d_dep_id,
+                            target_port="in",
+                        )
+                    )
+
+                    # D_dep -> Target Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=d_dep_id,
+                            source_port="out",
                             target_node_id=target_subgraph.bleacher.id,
                             target_port=arg_name,
                         )
@@ -236,32 +252,37 @@ class Builder:
             for dep_id in node_ir.dependencies:
                 if dep_id in subgraphs:
                     source_subgraph = subgraphs[dep_id]
-                    # Help static analysis
                     assert source_subgraph.stainer is not None
 
                     port_name = f"wait_for_{dep_id}"
+                    
+                    # Violation Fix: Insert D_seq
+                    d_seq_id = f"seq.{dep_id}.to.{node_ir.id}"
+                    d_seq = PhysicsDataNode(id=d_seq_id, name=f"Seq({dep_id})")
+                    physical_graph.nodes[d_seq_id] = d_seq
+
                     physical_graph.channels.append(
-                        Channel(
-                            source_node_id=source_subgraph.stainer.id,
-                            source_port="output",
-                            target_node_id=target_subgraph.bleacher.id,
-                            target_port=port_name,
-                        )
+                        Channel(source_subgraph.stainer.id, "output", d_seq_id, "in")
+                    )
+                    physical_graph.channels.append(
+                        Channel(d_seq_id, "out", target_subgraph.bleacher.id, port_name)
                     )
 
             # 4.3 Condition (.run_if())
             if node_ir.condition and node_ir.condition in subgraphs:
                 source_subgraph = subgraphs[node_ir.condition]
-                # Help static analysis
                 assert source_subgraph.stainer is not None
+                
+                # Violation Fix: Insert D_cond
+                d_cond_id = f"cond.{node_ir.condition}.to.{node_ir.id}"
+                d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
+                physical_graph.nodes[d_cond_id] = d_cond
 
                 physical_graph.channels.append(
-                    Channel(
-                        source_node_id=source_subgraph.stainer.id,
-                        source_port="output",
-                        target_node_id=target_subgraph.bleacher.id,
-                        target_port="condition",
-                    )
+                    Channel(source_subgraph.stainer.id, "output", d_cond_id, "in")
+                )
+                physical_graph.channels.append(
+                    Channel(d_cond_id, "out", target_subgraph.bleacher.id, "condition")
                 )
 
         # 5. Wire Global Resources (The Loop)
@@ -337,14 +358,32 @@ class Builder:
                 )
 
                 # --- B. Grant Wiring ---
-                # Allocator (GNT) -> Bleacher (res_{name})
-                target_tag = f_req_id
+                # Allocator (GNT) -> D_grant_buffer -> Bleacher (res_{name})
                 
+                # We need a shared Grant Buffer for the Allocator, OR per-task buffers?
+                # If we use a shared buffer, all grants go there, and Bleachers pick based on Tag.
+                # This fits the "Bus" model.
+                
+                gnt_buffer_id = f"buffer.gnt.{res_name}"
+                if gnt_buffer_id not in physical_graph.nodes:
+                    d_gnt_buffer = PhysicsDataNode(
+                        id=gnt_buffer_id, name=f"GntBuffer({res_name})", capacity=1000
+                    )
+                    physical_graph.nodes[gnt_buffer_id] = d_gnt_buffer
+                    
+                    # Allocator -> Grant Buffer (Only once per resource)
+                    physical_graph.channels.append(
+                        Channel(allocator_id, PortName.GNT, gnt_buffer_id, "in")
+                    )
+
+                target_tag = f_req_id
                 port_name = f"res_{res_name}"
+                
+                # Grant Buffer -> Bleacher (Filtered by Tag)
                 physical_graph.channels.append(
                     Channel(
-                        source_node_id=allocator_id,
-                        source_port=PortName.GNT,
+                        source_node_id=gnt_buffer_id,
+                        source_port="out",
                         target_node_id=subgraph.bleacher.id,
                         target_port=port_name,
                         tag_filter=target_tag,

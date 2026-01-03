@@ -1,36 +1,3 @@
-好的，这个测速脚本非常重要。它将揭示我们目前的“物理层抽象税”到底有多重。
-
-由于当前的 `Reactor` 在 `_execute_task` 中使用了 `asyncio.create_task`，这意味着每一次“物理跳跃”（Token 从 Data 到 Func 再回到 Data）都会经过一次 asyncio 事件循环的调度。这在物理上模拟了“分布式/并发”环境，但对于单机纯循环来说，这正是我们要通过未来的“算子融合”和“JIT 压缩”来消除的开销。
-
-我们将创建一个最简单的闭环物理场：`D_loop -> F_logic -> D_loop`。
-
-### 计划
-
-1.  在 `./scripts` 下创建 `bench_physical_tco.py`。
-2.  构建一个不包含三连体的裸物理图。
-3.  定义一个简单的加法逻辑节点。
-4.  运行 $N$ 次迭代，测量总耗时。
-5.  对比原生 Python `while` 循环。
-
----
-
-### Script
-
-#### Acts 1: 创建测速脚本
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p scripts
-touch scripts/bench_physical_tco.py
-~~~~~
-
-~~~~~act
-write_file
-scripts/bench_physical_tco.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 import sys
@@ -126,17 +93,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-~~~~~
-
-### 下一步建议
-
-你可以直接运行这个脚本：
-`python scripts/bench_physical_tco.py`
-
-**预期结果预测：**
-你会看到一个巨大的性能鸿沟（可能在 $1000$ 倍到 $10000$ 倍之间）。这是因为：
-1.  **原生循环**: 纯 CPU 寄存器操作。
-2.  **物理层**: 涉及字典查找、Token 对象创建/销毁、`asyncio` 任务创建、线程池切换（尽管是同步函数，Reactor 目前仍会提交给执行器）。
-
-**这个脚本的意义：**
-它为我们建立了一个**性能基线**。在未来的开发中，当我们引入 `JIT` 或 `MacroNode` 时，我们的目标是让这个 `ratio` 从几千倍降低到 10 倍以内。这就是所谓“零成本抽象”的工程实现过程。

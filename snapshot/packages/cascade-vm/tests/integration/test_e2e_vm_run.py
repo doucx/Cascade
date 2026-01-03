@@ -77,13 +77,15 @@ async def test_e2e_vm_run_with_all_features():
         async def adapter(inputs: Dict[str, Token], node):
             # Unpack kwargs from the worker_input token
             kwargs = inputs["worker_input"].payload
+            print(f"DEBUG: Executing {user_func.__name__} with {kwargs}")
             
             # Call user function
             if asyncio.iscoroutinefunction(user_func):
                 result = await user_func(**kwargs)
             else:
                 result = user_func(**kwargs)
-                
+            
+            print(f"DEBUG: Finished {user_func.__name__} -> {result}")
             return {"worker_result": Token(payload=result)}
         return adapter
 

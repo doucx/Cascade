@@ -22,7 +22,10 @@ async def standard_bleacher(
         elif port_def.role == PortRole.RESOURCE:
             # It's a resource. We record it to trace.
             held_resources.append(port_name)
-        # Observability and Signals are processed for trace but not passed to worker
+        elif port_def.role == PortRole.SIGNAL:
+            # Signal (Condition or Wait). We record it to trace but don't pass payload to worker
+            # TODO: Implement Condition logic (Skip if False)
+            pass
 
         trace_payload.update(input_token.trace)
 

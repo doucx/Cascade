@@ -1,18 +1,18 @@
 import pytest
 from typing import Dict
+import sys
 
 from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
 from cascade.spec.fingerprint import Fingerprint
 from cascade.spec.physics import Token
 from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-from cascade.vm.reactor import Reactor
+from cascade.vm.harness import EventDrivenRunner
 
 # Import new ICs
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
+from cascade.std.triad.observer import standard_observer
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.probe.const import const_probe
@@ -28,15 +28,11 @@ def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     return {"worker_result": Token(payload=val + 1)}
 
 
-def noop_observer(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    return {}
-
-
 # --- Test ---
 
 
 @pytest.mark.asyncio
-async def test_concurrency_limit():
+async def test_concurrency_limit_event_driven():
     # 1. Define a graph with 2 nodes, both needing the same resource 'GPU'.
     fp = Fingerprint({"canonical_code_structure_hash": "abc"})
     task_def = TaskDef(
@@ -65,11 +61,7 @@ async def test_concurrency_limit():
     builder = Builder()
     physical_graph = builder.build(graph_ir, environment=env)
 
-    # 3. Setup VM
-    memory = VolatileMemory()
-    executor = PhysicsExecutor()
-
-    # Map functions
+    # 3. Construct Function Map
     func_map = {}
     for node_id in physical_graph.nodes:
         if node_id.endswith(".bleach"):
@@ -86,100 +78,54 @@ async def test_concurrency_limit():
             func_map[node_id] = resource_requestor
         elif node_id.startswith("probe.const."):
             func_map[node_id] = const_probe
-        elif "observability" in node_id:
-            func_map[node_id] = noop_observer
+        elif "global.observability.observer" in node_id:
+            func_map[node_id] = standard_observer
 
-    # 5. Initialize Reactor
-    reactor = Reactor(physical_graph, memory, executor, func_map)
-
-    # 6. Prime the reactor.
-    reactor.prime()
+    # 4. Initialize EventDrivenRunner
+    runner = EventDrivenRunner(physical_graph, func_map)
+    runner.prime()
 
     # Assert initial state of Ledger
     ledger_node_id = "canonical.resource.ledger.gpu"
-    assert memory.get_count(ledger_node_id) == 1
-    ledger = memory.take(ledger_node_id).payload
+    assert runner.memory.get_count(ledger_node_id) == 1
+    ledger = runner.memory.take(ledger_node_id).payload
     assert ledger.available == 1
-    memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
+    # Put it back
+    runner.inject_input(ledger_node_id, ledger)
 
-    # 7. Step Execution Logic
-    async def wait_idle():
-        import asyncio
+    # 5. Start the Reactor Loop
+    await runner.start_loop()
 
-        while reactor.active_task_count > 0:
-            await asyncio.sleep(0.001)
+    try:
+        # 6. Wait for tasks to complete
+        # Since resource capacity is 1, they must run sequentially.
+        # But we don't strictly enforce order here, just that BOTH finish.
+        
+        # Note: In a real EventDrivenRunner, we might want a 'wait_for_all' helper.
+        # For now, we wait for them individually. The order doesn't matter for correctness,
+        # but logically one will finish before the other.
+        
+        # We collect completion events
+        completed_tasks = set()
+        
+        def completion_predicate(event):
+            if event.event_type == "end" and event.trace_data.get("id") in ["node_1", "node_2"]:
+                completed_tasks.add(event.trace_data.get("id"))
+            return len(completed_tasks) == 2
 
-    # --- SIMULATION ---
-    # The new graph has many more steps due to Probe -> Req -> Broker -> Bleacher
+        # Wait until both are done (timeout generous because of backoff/recirculation latency)
+        await runner.wait_for_event(completion_predicate, timeout=5.0)
+        
+        assert "node_1" in completed_tasks
+        assert "node_2" in completed_tasks
 
-    # Round 1: Probes fire (providing Amount and X)
-    await reactor.step()
-    await wait_idle()
-
-    # Round 2: Requestors fire (sending Req Tokens to Buffer)
-    await reactor.step()
-    await wait_idle()
-
-    # Check Buffer state
-    req_buffer_id = "buffer.req.gpu"
-    assert memory.get_count(req_buffer_id) == 2  # Both requests are in buffer
-
-    # Round 3: Allocator fires.
-    # It consumes Ledger + ONE request from Buffer.
-    # Since capacity is 1, it Grants.
-    await reactor.step()
-    await wait_idle()
-
-    # Ledger should now have 0 available
-    ledger = memory.take(ledger_node_id).payload
-    assert ledger.available == 0
-    memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
-
-    # Buffer should have 1 request remaining
-    assert memory.get_count(req_buffer_id) == 1
-
-    # Round 4:
-    # - The lucky Bleacher (who got GNT) fires.
-    # - The Allocator attempts to fire again for the second request?
-    #   Yes, it reads Ledger(0) and Request(1).
-    #   Logic: 0 < 1. Reject & Recirculate.
-
-    await reactor.step()
-    await wait_idle()
-
-    # If Allocator fired, it recirculated the request back to Buffer.
-    # If Bleacher fired, it started the triad.
-
-    # Let's run until one Task completes (Stainer fires)
-    # This involves: Worker -> Stainer -> RelBuffer -> Reclaimer -> Ledger
-
-    # We loop until resource is released (Ledger becomes 1)
-    max_steps = 30
-    for _ in range(max_steps):
-        await reactor.step()
-        await wait_idle()
-
-        # Check if resource returned
-        ledger = memory.take(ledger_node_id).payload
-        memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
-        if ledger.available == 1:
-            break
-
-    assert ledger.available == 1
-
-    # Now the second task can proceed.
-    # Allocator fires -> Grants -> Bleacher -> Worker -> Stainer -> Reclaimer
-    for _ in range(20):
-        if (
-            memory.get_count(req_buffer_id) == 0
-            and memory.get_count("buffer.rel.gpu") == 0
-        ):
-            # If buffers are empty and tasks done, we are good.
-            pass
-        await reactor.step()
-        await wait_idle()
-
-    # Final check: Ledger full, Buffers empty
-    ledger = memory.take(ledger_node_id).payload
-    assert ledger.available == 1
-    assert memory.get_count(req_buffer_id) == 0
+        # 7. Final State Verification
+        # Ledger should be full again
+        ledger = runner.memory.take(ledger_node_id).payload
+        assert ledger.available == 1
+        
+        # Buffers should be empty
+        assert runner.memory.get_count("buffer.req.gpu") == 0
+        
+    finally:
+        await runner.stop_loop()

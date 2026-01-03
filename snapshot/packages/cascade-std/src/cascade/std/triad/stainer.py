@@ -37,7 +37,11 @@ async def standard_stainer(
     # 4.1 The main result
     outputs["output"] = Token(payload=result_payload, tag=tag, trace=trace_payload)
 
-    # 4.2 Resource Return (The Loop)
+    # 4.2 Observability Emission
+    # Emit end event (with duration) to observability bus
+    outputs["obs_output"] = Token(payload=None, tag=tag, trace=trace_payload)
+
+    # 4.3 Resource Return (The Loop)
     # We iterate over the node's output ports to find all RESOURCE ports.
     for port_name, port_def in node.output_ports.items():
         if port_def.role == PortRole.RESOURCE:

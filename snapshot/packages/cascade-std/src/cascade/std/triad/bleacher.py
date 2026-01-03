@@ -40,8 +40,12 @@ async def standard_bleacher(
     # 3. Create the output tokens
     worker_token = Token(payload=worker_payload)
     trace_token = Token(payload=trace_payload)
+    # Emit start event to observability bus
+    # The payload is None because the value is the event itself (represented by the trace)
+    obs_token = Token(payload=None, trace=trace_payload)
 
     return {
         "worker_input": worker_token,
         "trace_output": trace_token,
+        "obs_output": obs_token,
     }

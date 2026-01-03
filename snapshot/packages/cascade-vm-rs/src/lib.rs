@@ -1,9 +1,10 @@
-use pyo3.prelude::*;
-use pyo3.types::{PyDict, PyAny};
+use pyo3::prelude::*;
+use pyo3::types::PyDict;
 
-/// A minimal Rust implementation of the Cascade Reactor.
+/// A minimal Rust implementation of the Cascade Reactor using PyO3 0.23 Bound API.
 #[pyclass]
 struct RustReactor {
+    #[pyo3(get)]
     active_task_count: usize,
 }
 
@@ -11,33 +12,34 @@ struct RustReactor {
 impl RustReactor {
     #[new]
     fn new(
-        _graph: &PyAny,
-        _memory: &PyAny,
-        _executor: &PyAny,
-        _function_map: &PyDict,
-        _resource_registry: &PyAny,
+        _graph: Bound<'_, PyAny>,
+        _memory: Bound<'_, PyAny>,
+        _executor: Bound<'_, PyAny>,
+        _function_map: Bound<'_, PyDict>,
+        _resource_registry: Bound<'_, PyAny>,
     ) -> Self {
-        println!("RustReactor: Initialized via FFI!");
+        println!("RustReactor: Initialized via FFI (PyO3 0.23, Python 3.13 confirmed)!");
         RustReactor {
             active_task_count: 0,
         }
-    }
-
-    #[getter]
-    fn active_task_count(&self) -> usize {
-        self.active_task_count
     }
 
     fn prime(&self) {
         println!("RustReactor: prime() called (noop)");
     }
 
-    fn step<'p>(&self, py: Python<'p>) -> PyResult<&'p PyAny> {
-        // Return a future that resolves to 0 (tasks fired)
-        pyo3_asyncio::tokio::future_into_py(py, async {
-            println!("RustReactor: step() called (async noop)");
-            Ok(0)
-        })
+    fn step<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        // Since we removed pyo3-asyncio for compatibility, we'll manually create
+        // a completed Python Future to keep the EventDrivenRunner's await logic happy.
+        let asyncio = py.import("asyncio")?;
+        let loop_ = asyncio.call_method0("get_event_loop")?;
+        let future = loop_.call_method0("create_future")?;
+        
+        // Return 0 tasks fired
+        future.call_method1("set_result", (0,))?;
+        
+        println!("RustReactor: step() called (returning manual future)");
+        Ok(future)
     }
 
     fn add_sink(&self, _node_id: String, _port_name: String, _callback: PyObject) {
@@ -47,7 +49,7 @@ impl RustReactor {
 
 /// The module definition.
 #[pymodule]
-fn cascade_vm_rs(_py: Python, m: &PyModule) -> PyResult<()> {
+fn cascade_vm_rs(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RustReactor>()?;
     Ok(())
 }

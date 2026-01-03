@@ -21,14 +21,24 @@ async def discrete_allocator(
         ledger = ledger_data
 
     req_token = inputs["req_in"]
-    req_amount = req_token.payload
+    
+    # --- Deadlock Prevention ---
+    # If there are no resources available AT ALL, immediately fail and recirculate both
+    # the request and the ledger. This minimizes the time the Ledger token is held,
+    # giving the Reclaimer a chance to run and break the deadlock.
+    if ledger.available == 0:
+        return {
+            "req_out": req_token,
+            "ledger_out": ledger_token,
+        }
 
+    req_amount = req_token.payload
     outputs: Dict[str, Token] = {}
 
     if ledger.available >= req_amount:
         # Grant
         ledger.available -= req_amount
-
+        
         # Sovereignty Routing: Determine output port based on requestor_id in trace
         requestor_id = req_token.trace.get("requestor_id")
         if requestor_id:

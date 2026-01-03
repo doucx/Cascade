@@ -1,0 +1,3 @@
+"const_probe": |-
+  Identity probe for constant values.
+  Connects a pre-filled D_const node to the rest of the graph.

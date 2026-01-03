@@ -25,10 +25,28 @@ class PhysicalIdGenerator:
 
     @staticmethod
     def global_resource(resource_name: str) -> str:
+        # Legacy: Keeping it for D_res if needed, but we are moving to brokers
         return f"canonical.resource.{resource_name}"
 
     @staticmethod
+    def global_broker(resource_name: str) -> str:
+        return f"canonical.resource.broker.{resource_name}"
+
+    @staticmethod
+    def global_ledger(resource_name: str) -> str:
+        return f"canonical.resource.ledger.{resource_name}"
+
+    @staticmethod
+    def requestor(target_node_id: str, resource_name: str) -> str:
+        return f"req.{target_node_id}.{resource_name}"
+
+    @staticmethod
+    def probe_const(target_node_id: str, arg_name: str) -> str:
+        return f"probe.const.{target_node_id}.{arg_name}"
+
+    @staticmethod
     def constant(target_node_id: str, arg_name: str) -> str:
+        # The DataNode holding the constant value
         return f"const.{target_node_id}.{arg_name}"
 
     @staticmethod

@@ -1,235 +1,420 @@
-## [WIP] refactor(std): 完成资源协商 IC 组件 (Requestor, Bleacher, Stainer)
+## [WIP] refactor(compiler): 在 Builder 中组装资源协商闭环
 
 ### 用户需求
-继续执行“Broker 归位”战略。
-修正上一阶段设计中的逻辑缺陷（即“让 Bleacher 主动发起请求”导致的循环依赖问题）。
-我们需要一组功能完备的 IC 组件，以便后续在 Builder 中组装出 $F_{req} \to F_{broker} \to F_{bleach}$ 的物理拓扑。
+基于“物理层纯粹性”原则，彻底重构编译器的资源处理逻辑。不再生成简单的 `D_res` 节点，而是组装完整的物理协商回路：
+1.  实例化 **Broker IC** (Discrete/Continuous) 来管理每种全局资源。
+2.  为每个任务的资源约束生成 **Requestor IC** 和 **Const Probe IC**。
+3.  通过精确的布线和 Tag 过滤，实现 `Req -> Broker -> Gnt -> Task -> Rel -> Broker` 的闭环。
 
 ### 评论
-在深入分析白皮书 5.2 节后，我们发现之前的设计（Bleacher 既是申请者也是等待者）在物理层是不可行的。
-正确的物理模型应当是：
-1.  **独立申请者 ($F_{req}$)**: 由 `Pulse` 激发，读取常量需求，打上 Tag (Task ID)，向 Broker 发起申请。
-2.  **独立等待者 ($F_{bleach}$)**: 等待 Broker 发回的 GNT Token。
-3.  **独立释放者 ($F_{stain}$)**: 任务结束后，根据申请量归还资源。
+这是 Cascade 3.0 物理模型的关键里程碑。我们正在移除编译器中的“上帝视角”（直接操作资源槽），转而构建一个完全由局部物理定律驱动的自治系统。
+在这个系统中，资源不再是静态的“库存”，而是流动的“许可”。Broker 节点充当了物理场中的“银行”，通过严格的记账（Ledger Loop）保证了守恒定律。
 
 ### 目标
-1.  **新建** `cascade.std.resource.requestor`: 一个新的 IC，充当 Tag 注入器，将无状态的常量数值转换为带有路由 Tag 的 Request Token。
-2.  **修正** `standard_bleacher`: 移除错误的 `RESOURCE_REQUEST` 逻辑。增加逻辑以记录 GNT Token 中的 payload (资源量) 到 Trace 中，供后续释放使用。
-3.  **修正** `standard_stainer`: 增加逻辑，从 Trace 中读取资源量，并发射带有正确 Payload 的 Release Token。
+1.  在 `cascade-std` 中添加 `const_probe`。
+2.  更新 `PhysicalIdGenerator` 以支持 Broker, Ledger, Requestor 等新组件。
+3.  重写 `Builder.build`：
+    *   用 `F_broker` + `D_ledger` 替换简单的 `D_res`。
+    *   为每个任务资源约束生成完整的请求链路 ($F_{probe} \to F_{req} \to F_{broker}$)。
+    *   配置 Channel Filter 以实现 GNT 的正确路由。
 
 ### 基本原理
-物理层的纯粹性要求每个节点职责单一。
-*   `Requestor` 负责“身份注入” (Tagging)。
-*   `Bleacher` 负责“状态同步” (Waiting & Tracing)。
-*   `Stainer` 负责“状态清理” (Releasing)。
-通过 Trace 通道 (`D_trace`) 传递资源数量，保证了 `Stainer` 能够正确归还借用的资源，实现了闭环的守恒。
+*   **Broker Loop**: Broker 必须有一个自环的 `D_ledger` 来维持状态，因为函数节点是无状态的。
+*   **Tag Routing**: 多路复用的 Broker 通过 Tag 区分不同的申请者。Channel Filter 充当物理层的“地址解码器”。
+*   **Purity**: 常量不应直接出现在 `F_req` 的输入中，而应由 `F_probe` 从 `D_const` 中读取。虽然看似冗余，但这统一了“参数获取”的物理模型。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/std #concept/resource #scope/core #ai/instruct #task/domain/core #task/object/resource-ic #task/action/implementation #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/compiler #comp/std #concept/resource #scope/core #ai/instruct #task/domain/compiler #task/object/builder #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Requestor IC
-
-这是一个简单的转换器：Input(Amount) -> Output(Token with Tag)。
+#### Acts 1: 添加 Const Probe
 
 ~~~~~act
 write_file
-packages/cascade-std/src/cascade/std/resource/requestor.py
+packages/cascade-std/src/cascade/std/probe/const.py
 ~~~~~
 ~~~~~python
 from typing import Dict
 from cascade.spec.physics import Token, PhysicsNode
 
 
-async def resource_requestor(
-    inputs: Dict[str, Token], node: PhysicsNode
-) -> Dict[str, Token]:
+async def const_probe(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
     """
-    Acts as a Tag Injector.
-    Takes a raw amount (from a Const Probe) and wraps it in a Token
-    tagged with this node's ID (or a configured tag).
-
-    In the Builder, we will map this node's ID to something that correlates
-    with the Task ID, so the Broker can route the Grant back.
+    A simple Identity Probe.
+    It takes a value from a DataNode (which holds a constant payload)
+    and passes it forward.
+    In a more complex setup, this could wait for a Trigger.
     """
-    amount_token = inputs["amount"]
-    
-    # We use the node's own ID as the routing tag.
-    # The Builder is responsible for ensuring the Distributor downstream
-    # knows how to route 'node.id' back to the correct Bleacher.
-    return {"req_out": Token(payload=amount_token.payload, tag=node.id)}
+    # Assuming the input port is named 'value'
+    val_token = inputs["value"]
+    return {"out": Token(payload=val_token.payload, trace=val_token.trace)}
 ~~~~~
 
 ~~~~~act
 write_file
-packages/cascade-std/src/cascade/std/resource/requestor.stitcher.yaml
+packages/cascade-std/src/cascade/std/probe/const.stitcher.yaml
 ~~~~~
 ~~~~~yaml
-"resource_requestor": |-
-  Takes an input amount and emits a Request Token tagged with the node's ID.
-  Used to initiate a resource transaction with a Broker.
+"const_probe": |-
+  Identity probe for constant values.
+  Connects a pre-filled D_const node to the rest of the graph.
 ~~~~~
 
-#### Acts 2: 修正 Bleacher 逻辑
-
-移除上一步添加的 `RESOURCE_REQUEST` 逻辑，改为记录资源数量。
+#### Acts 2: 更新命名生成器
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-compiler/src/cascade/compiler/utils/naming.py
 ~~~~~
 ~~~~~python.old
-        if port_def.role == PortRole.DATA:
-            worker_payload[port_name] = input_token.payload
-        elif port_def.role == PortRole.RESOURCE_REQUEST:
-            # New logic: This input defines a resource requirement amount.
-            # We don't pass it to the worker, but we use it to emit a request token.
-            # The 'port_name' here is expected to be something like 'req_amount_gpu'.
-            # We need to map it to an output port.
-            pass
-        elif port_def.role == PortRole.RESOURCE:
-            # Legacy/Fallback
-            held_resources.append(port_name)
+    @staticmethod
+    def global_resource(resource_name: str) -> str:
+        return f"canonical.resource.{resource_name}"
 
-        trace_payload.update(input_token.trace)
-
-    # 2. Capture metadata
-    trace_payload["start_ts"] = time.monotonic()
-    if held_resources:
-        trace_payload["held_resources"] = held_resources
-
-    # 3. Create the output tokens
-    outputs = {
-        "worker_input": Token(payload=worker_payload),
-        "trace_output": Token(payload=trace_payload),
-    }
-
-    # 4. Handle Active Resource Requests
-    # We iterate over INPUT ports to find request amounts.
-    # Convention: Input port 'req_amount_{res}' corresponds to Output port 'req_{res}'
-    for port_name, input_token in inputs.items():
-        port_def = node.input_ports[port_name]
-        if port_def.role == PortRole.RESOURCE_REQUEST:
-            # Identify the resource name.
-            # Assuming port name format: "req_amount_<resource_name>"
-            if port_name.startswith("req_amount_"):
-                res_name = port_name[11:]
-                out_port_name = f"req_{res_name}"
-
-                # Check if this output port exists
-                if out_port_name in node.output_ports:
-                    amount = input_token.payload
-                    # Emit request token with tag = node.id (The Bleacher's ID)
-                    # This allows the Grant to be routed back to the worker associated with this Bleacher.
-                    # Note: We use the Bleacher's ID as the routing tag. The Distributor
-                    # must route to the Worker based on this tag (or a derived one).
-                    # Actually, let's use the Logical Node ID if possible.
-                    # But node.id is physical (e.g. "node_1.bleach").
-                    # Using "node_1.bleach" as tag is fine, as long as Builder knows this.
-                    outputs[out_port_name] = Token(payload=amount, tag=node.id)
-
-    return outputs
+    @staticmethod
+    def constant(target_node_id: str, arg_name: str) -> str:
+        return f"const.{target_node_id}.{arg_name}"
 ~~~~~
 ~~~~~python.new
-        if port_def.role == PortRole.DATA:
-            worker_payload[port_name] = input_token.payload
-        elif port_def.role == PortRole.RESOURCE:
-            # It's a GNT token.
-            # We record the port name as a held resource.
-            held_resources.append(port_name)
-            # CRITICAL: Record the granted amount (payload) to trace.
-            # This allows the Stainer to know how much to release later.
-            if "resource_amounts" not in trace_payload:
-                trace_payload["resource_amounts"] = {}
-            trace_payload["resource_amounts"][port_name] = input_token.payload
-        # Observability and Signals are processed for trace but not passed to worker
+    @staticmethod
+    def global_resource(resource_name: str) -> str:
+        # Legacy: Keeping it for D_res if needed, but we are moving to brokers
+        return f"canonical.resource.{resource_name}"
 
-        trace_payload.update(input_token.trace)
+    @staticmethod
+    def global_broker(resource_name: str) -> str:
+        return f"canonical.resource.broker.{resource_name}"
 
-    # 2. Capture metadata
-    trace_payload["start_ts"] = time.monotonic()
-    if held_resources:
-        trace_payload["held_resources"] = held_resources
+    @staticmethod
+    def global_ledger(resource_name: str) -> str:
+        return f"canonical.resource.ledger.{resource_name}"
 
-    # 3. Create the output tokens
-    worker_token = Token(payload=worker_payload)
-    trace_token = Token(payload=trace_payload)
+    @staticmethod
+    def requestor(target_node_id: str, resource_name: str) -> str:
+        return f"req.{target_node_id}.{resource_name}"
 
-    return {
-        "worker_input": worker_token,
-        "trace_output": trace_token,
-    }
+    @staticmethod
+    def probe_const(target_node_id: str, arg_name: str) -> str:
+        return f"probe.const.{target_node_id}.{arg_name}"
+
+    @staticmethod
+    def constant(target_node_id: str, arg_name: str) -> str:
+        # The DataNode holding the constant value
+        return f"const.{target_node_id}.{arg_name}"
 ~~~~~
 
-#### Acts 3: 修正 Stainer 逻辑
+#### Acts 3: 重构 Builder
 
-使其能够从 Trace 读取数量并释放。
+这是核心修改。我们将替换原有的资源布线逻辑。
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
 ~~~~~
 ~~~~~python.old
-    # 4.2 Resource Return (The Loop)
-    # We iterate over the node's output ports to find all RESOURCE ports.
-    # This is a static guarantee: if the node has a resource output port, we MUST emit to it.
-    for port_name, port_def in node.output_ports.items():
-        if port_def.role == PortRole.RESOURCE:
-            # Emit a generic token to the resource port to "refill" the slot
-            outputs[port_name] = Token(payload=None)
+from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.spec.physics import PhysicsDataNode
+from cascade.spec.triad import ObservabilityNode
+from cascade.spec.environment import EnvironmentDef
+from cascade.spec.ports import PortDef, PortRole
+from .expander import Expander, SubGraph
+from cascade.compiler.utils.naming import PhysicalIdGenerator
 
-    return outputs
+
+class Builder:
+    def __init__(self):
+        self._expander = Expander()
+
+    def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> BipartiteGraph:
+        physical_graph = BipartiteGraph()
+        env_resources = {res.name: res for res in environment.resources}
+
+        # 1. Create Objective Environment (D_res nodes)
+        for res_def in environment.resources:
+            res_node_id = PhysicalIdGenerator.global_resource(res_def.name)
+            d_res = PhysicsDataNode(
+                id=res_node_id,
+                name=f"Resource({res_def.name})",
+                capacity=res_def.capacity,
+                initial_tokens=res_def.capacity,
+            )
+            physical_graph.nodes[res_node_id] = d_res
 ~~~~~
 ~~~~~python.new
-    # 4.2 Resource Return (The Loop)
-    # We iterate over the node's output ports to find all RESOURCE ports.
-    for port_name, port_def in node.output_ports.items():
-        if port_def.role == PortRole.RESOURCE:
-            # Look up the amount to release from trace data
-            # The Bleacher stored it under 'resource_amounts' -> 'res_{name}'
-            # But the Stainer's output port might be named differently (e.g. 'rel_{name}' or just 'res_{name}')
-            # Convention: If Stainer output is 'res_gpu', Bleacher input was 'res_gpu'.
-            amount = 1  # Default fallback
-            
-            # Try to find the specific amount
-            resource_amounts = trace_payload.get("resource_amounts", {})
-            if port_name in resource_amounts:
-                amount = resource_amounts[port_name]
-            
-            # Emit token with the correct amount to replenish the broker
-            outputs[port_name] = Token(payload=amount)
+from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.triad import ObservabilityNode
+from cascade.spec.environment import EnvironmentDef
+from cascade.spec.ports import PortDef, PortRole, PortName
+from cascade.std.resource.discrete import DiscreteLedger
+from .expander import Expander, SubGraph
+from cascade.compiler.utils.naming import PhysicalIdGenerator
 
-    return outputs
+
+class Builder:
+    def __init__(self):
+        self._expander = Expander()
+
+    def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> BipartiteGraph:
+        physical_graph = BipartiteGraph()
+        env_resources = {res.name: res for res in environment.resources}
+
+        # 1. Create Resource Brokers (F_broker + internal Ledger loop)
+        for res_def in environment.resources:
+            broker_id = PhysicalIdGenerator.global_broker(res_def.name)
+            ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
+
+            # D_ledger: Holds the state of the resource
+            # We initialize it with a DiscreteLedger object.
+            # Currently we assume all resources are Discrete.
+            # TODO: Support Continuous resources based on definition.
+            initial_ledger = DiscreteLedger(
+                total=res_def.capacity, available=res_def.capacity
+            )
+
+            d_ledger = PhysicsDataNode(
+                id=ledger_id,
+                name=f"Ledger({res_def.name})",
+                capacity=1,
+                initial_tokens=1,
+                initial_payload=initial_ledger,
+            )
+
+            # F_broker: The logic unit
+            f_broker = PhysicsFuncNode(
+                id=broker_id,
+                name=f"Broker({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                    PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
+                    PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
+                },
+            )
+
+            physical_graph.nodes[ledger_id] = d_ledger
+            physical_graph.nodes[broker_id] = f_broker
+
+            # Wire the Ledger Loop
+            # D_ledger -> F_broker
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=ledger_id,
+                    source_port="out",
+                    target_node_id=broker_id,
+                    target_port=PortName.LEDGER_IN,
+                )
+            )
+            # F_broker -> D_ledger
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=broker_id,
+                    source_port=PortName.LEDGER_OUT,
+                    target_node_id=ledger_id,
+                    target_port="in",
+                )
+            )
+
+            # Self-Loop for Recirculation of rejected requests
+            # If a request is rejected, it comes out of REQ_OUT and goes back to REQ_IN.
+            # We need a buffer D_retry for this?
+            # Or can we wire REQ_OUT -> D_req (which feeds REQ_IN)?
+            # Yes, we will create a shared D_req_buffer for the broker later or handle it per request.
+            # Actually, standard pattern is:
+            # Inputs -> [D_req_buffer] -> F_broker
+            # F_broker -> REQ_OUT -> [D_req_buffer]
+            # Let's create a shared Request Buffer for this broker.
+            d_req_buffer_id = f"buffer.req.{res_def.name}"
+            d_req_buffer = PhysicsDataNode(
+                id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
+            )  # High capacity
+            physical_graph.nodes[d_req_buffer_id] = d_req_buffer
+
+            # Connect Buffer -> Broker
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=d_req_buffer_id,
+                    source_port="out",
+                    target_node_id=broker_id,
+                    target_port=PortName.REQ,
+                )
+            )
+
+            # Connect Recirculation: Broker -> Buffer
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=broker_id,
+                    source_port=PortName.REQ_OUT,
+                    target_node_id=d_req_buffer_id,
+                    target_port="in",
+                )
+            )
 ~~~~~
-
-#### Acts 4: 注册 Requestor 到 Init
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/resource/__init__.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
 ~~~~~
 ~~~~~python.old
-# Resource Broker ICs for managing physical resource constraints.
+        # 5. Wire Global Resources (The Loop)
+        for node_ir in graph_ir.nodes:
+            subgraph = subgraphs[node_ir.id]
+
+            # Help static analysis
+            assert subgraph.bleacher is not None
+            assert subgraph.stainer is not None
+
+            for res_name in node_ir.constraints:
+                res_node_id = PhysicalIdGenerator.global_resource(res_name)
+                port_name = f"res_{res_name}"
+
+                # Acquire: D_res -> F_bleach
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=res_node_id,
+                        source_port="out",
+                        target_node_id=subgraph.bleacher.id,
+                        target_port=port_name,
+                    )
+                )
+
+                # Release: F_stain -> D_res
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=subgraph.stainer.id,
+                        source_port=port_name,
+                        target_node_id=res_node_id,
+                        target_port="in",
+                    )
+                )
 ~~~~~
 ~~~~~python.new
-# Resource Broker ICs for managing physical resource constraints.
-from .requestor import resource_requestor
+        # 5. Wire Global Resources (The Loop)
+        for node_ir in graph_ir.nodes:
+            subgraph = subgraphs[node_ir.id]
 
-__all__ = ["resource_requestor"]
+            # Help static analysis
+            assert subgraph.bleacher is not None
+            assert subgraph.stainer is not None
+
+            for res_name, amount in node_ir.constraints.items():
+                broker_id = PhysicalIdGenerator.global_broker(res_name)
+                req_buffer_id = f"buffer.req.{res_name}"
+
+                # --- A. Request Chain ---
+                # 1. D_const (Amount)
+                d_amt_id = PhysicalIdGenerator.constant(node_ir.id, f"req_amt_{res_name}")
+                d_amt = PhysicsDataNode(
+                    id=d_amt_id,
+                    name=f"Amt({res_name})",
+                    capacity=1,
+                    initial_tokens=1,
+                    initial_payload=amount,
+                )
+                physical_graph.nodes[d_amt_id] = d_amt
+
+                # 2. F_probe (ConstProbe)
+                f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, res_name)
+                f_probe = PhysicsFuncNode(
+                    id=f_probe_id,
+                    name=f"Probe({res_name})",
+                    input_ports={"value": PortDef("value", PortRole.DATA)},
+                    output_ports={"out": PortDef("out", PortRole.DATA)},
+                )
+                physical_graph.nodes[f_probe_id] = f_probe
+
+                # 3. F_req (Requestor)
+                f_req_id = PhysicalIdGenerator.requestor(node_ir.id, res_name)
+                f_req = PhysicsFuncNode(
+                    id=f_req_id,
+                    name=f"Req({res_name})",
+                    input_ports={"amount": PortDef("amount", PortRole.DATA)},
+                    output_ports={PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)},
+                )
+                physical_graph.nodes[f_req_id] = f_req
+
+                # 4. Wiring: D_amt -> F_probe -> D_temp -> F_req -> D_req_buffer
+                # We need intermediate data nodes because of Bipartite rule (F->D->F)
+                
+                # D_amt -> F_probe
+                physical_graph.channels.append(
+                    Channel(d_amt_id, "out", f_probe_id, "value")
+                )
+
+                # F_probe -> D_probed
+                d_probed_id = f"{f_probe_id}.out"
+                d_probed = PhysicsDataNode(id=d_probed_id, name="ProbedVal")
+                physical_graph.nodes[d_probed_id] = d_probed
+
+                physical_graph.channels.append(
+                    Channel(f_probe_id, "out", d_probed_id, "in")
+                )
+                
+                # D_probed -> F_req
+                physical_graph.channels.append(
+                    Channel(d_probed_id, "out", f_req_id, "amount")
+                )
+
+                # F_req -> D_req_buffer (Global Buffer for the Broker)
+                physical_graph.channels.append(
+                    Channel(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
+                )
+
+                # --- B. Grant Wiring ---
+                # Broker (GNT) -> Bleacher (res_{name})
+                # FILTER: Must match the Requestor's tag.
+                # The Requestor sets tag = f_req.id (based on std implementation).
+                # Wait, Requestor code: "tag=node.id". So tag is f_req_id.
+                target_tag = f_req_id
+                
+                port_name = f"res_{res_name}"
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=broker_id,
+                        source_port=PortName.GNT,
+                        target_node_id=subgraph.bleacher.id,
+                        target_port=port_name,
+                        tag_filter=target_tag,
+                    )
+                )
+
+                # --- C. Release Wiring ---
+                # Stainer (res_{name}) -> Broker (REL)
+                # We need a D_rel_buffer or connect directly to a D_rel?
+                # The broker needs a REL input buffer.
+                # Let's create a shared REL buffer for the broker too.
+                rel_buffer_id = f"buffer.rel.{res_name}"
+                if rel_buffer_id not in physical_graph.nodes:
+                    d_rel_buffer = PhysicsDataNode(
+                        id=rel_buffer_id, name=f"RelBuffer({res_name})", capacity=1000
+                    )
+                    physical_graph.nodes[rel_buffer_id] = d_rel_buffer
+                    
+                    # Buffer -> Broker
+                    physical_graph.channels.append(
+                        Channel(rel_buffer_id, "out", broker_id, PortName.REL)
+                    )
+
+                # Stainer -> RelBuffer
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=subgraph.stainer.id,
+                        source_port=port_name,
+                        target_node_id=rel_buffer_id,
+                        target_port="in",
+                    )
+                )
 ~~~~~
 
 ### 下一步建议
-IC 层准备就绪。
-下一步是 **Builder 改造 (The Grand Assembly)**：
-1.  修改 `cascade-compiler/backend/builder.py`。
-2.  实例化全局 `Broker` 节点 (Discrete/Continuous)。
-3.  对于每个 Task 的每个资源约束：
-    *   生成 $F_{probe}$ (Const) 提供数量。
-    *   生成 $F_{req}$ (Requestor) 打 Tag。
-    *   连接：$F_{probe} \to F_{req} \to F_{broker}$。
-    *   连接：$F_{broker} \to F_{bleach}$ (通过 Channel Filter)。
-    *   连接：$F_{stain} \to F_{broker}$。
-这将彻底完成“Broker 归位”战略。
+我们已经完成了编译器的重构。现在的图结构中包含了大量的 `F_broker`, `F_req`, `F_probe` 节点。
+为了验证这一切是否工作正常，我们需要更新集成测试 `test_resource_backpressure.py`。
+因为图结构变了，我们需要手动为这些新节点配置 `function_map`，否则 Reactor 会因为找不到函数而报错。
+我们需要在测试中导入 `discrete_broker`, `resource_requestor`, `const_probe` 并映射它们。

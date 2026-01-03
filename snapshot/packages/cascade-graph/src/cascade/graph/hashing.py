@@ -134,11 +134,11 @@ class BlueprintHasher:
 
         # ... Edge logic remains same
         incoming_edges = sorted(
-            [e for e in graph.edges if e.target.structural_id == node.structural_id],
-            key=lambda e: e.source.structural_id,
+            [e for e in graph.edges if e.target.current_node_instance_hash == node.current_node_instance_hash],
+            key=lambda e: e.source.current_node_instance_hash,
         )
         for edge in incoming_edges:
             components.append(
-                f"Edge(from={edge.source.structural_id}, to={node.structural_id}, type={edge.edge_type.name})"
+                f"Edge(from={edge.source.current_node_instance_hash}, to={node.current_node_instance_hash}, type={edge.edge_type.name})"
             )
         return components

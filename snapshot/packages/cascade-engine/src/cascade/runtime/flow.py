@@ -7,10 +7,10 @@ from cascade.spec.protocols import StateBackend
 
 class FlowManager:
     def __init__(
-        self, graph: Graph, target_node_id: str, instance_map: Dict[str, Node]
+        self, graph: Graph, target_node_instance_hash: str, instance_map: Dict[str, Node]
     ):
         self.graph = graph
-        self.target_node_id = target_node_id
+        self.target_node_instance_hash = target_node_instance_hash
         self.instance_map = instance_map
 
         self.in_edges: Dict[str, List[Edge]] = defaultdict(list)
@@ -22,23 +22,23 @@ class FlowManager:
         self.downstream_demand: Dict[str, int] = defaultdict(int)
 
         for edge in self.graph.edges:
-            self.in_edges[edge.target.structural_id].append(edge)
-            self.downstream_demand[edge.source.structural_id] += 1
+            self.in_edges[edge.target.current_node_instance_hash].append(edge)
+            self.downstream_demand[edge.source.current_node_instance_hash] += 1
 
             if edge.router:
                 selector_node = self._get_node_from_instance(edge.router.selector)
                 if selector_node:
-                    self.routers_by_selector[selector_node.structural_id].append(edge)
+                    self.routers_by_selector[selector_node.current_node_instance_hash].append(edge)
 
                 for key, route_result in edge.router.routes.items():
                     route_node = self._get_node_from_instance(route_result)
                     if route_node:
-                        self.route_source_map[edge.target.structural_id][
-                            route_node.structural_id
+                        self.route_source_map[edge.target.current_node_instance_hash][
+                            route_node.current_node_instance_hash
                         ] = key
 
         # The final target always has at least 1 implicit demand (the user wants it)
-        self.downstream_demand[target_node_id] += 1
+        self.downstream_demand[target_node_instance_hash] += 1
 
     def _get_node_from_instance(self, instance: Any) -> Optional[Node]:
         if isinstance(instance, (LazyResult, MappedLazyResult)):

@@ -29,12 +29,12 @@ class Fingerprint:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "Fingerprint":
-        internal_hashes = {}
+        current_fingerprint_hashes = {}
         for key, value in data.items():
             cls._validate_key(key)
             if value is not None:
-                internal_hashes[key] = str(value)
-        return cls(_hashes=internal_hashes)
+                current_fingerprint_hashes[key] = str(value)
+        return cls(_hashes=current_fingerprint_hashes)
 
     def to_dict(self) -> Dict[str, str]:
         return self._hashes.copy()

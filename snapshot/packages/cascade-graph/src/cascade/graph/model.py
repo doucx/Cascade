@@ -22,8 +22,8 @@ class EdgeType(Enum):
 
 @dataclass
 class Node:
-    # Stable identifier for the node instance in the graph.
-    structural_id: str
+    # Stable identifier for the node instance in the graph (Current Instance Hash).
+    current_node_instance_hash: str
 
     # The static definition of the task.
     definition: TaskDef
@@ -44,10 +44,10 @@ class Node:
     def __eq__(self, other):
         if not isinstance(other, Node):
             return NotImplemented
-        return self.structural_id == other.structural_id
+        return self.current_node_instance_hash == other.current_node_instance_hash
 
     def __hash__(self):
-        return hash(self.structural_id)
+        return hash(self.current_node_instance_hash)
 
     @property
     def name(self) -> str:
@@ -103,12 +103,12 @@ class Graph:
     _node_index: Dict[str, Node] = field(default_factory=dict, init=False, repr=False)
 
     def add_node(self, node: Node):
-        if node.structural_id not in self._node_index:
+        if node.current_node_instance_hash not in self._node_index:
             self.nodes.append(node)
-            self._node_index[node.structural_id] = node
+            self._node_index[node.current_node_instance_hash] = node
 
-    def get_node(self, node_id: str) -> Optional[Node]:
-        return self._node_index.get(node_id)
+    def get_node(self, current_node_instance_hash: str) -> Optional[Node]:
+        return self._node_index.get(current_node_instance_hash)
 
     def add_edge(self, edge: Edge):
         self.edges.append(edge)

@@ -161,7 +161,7 @@ class CascadeApp:
         if isinstance(self.raw_target, (list, tuple)) and not self.raw_target:
             return "\n".join(["digraph CascadeWorkflow {", '  rankdir="TB";', "}"])
 
-        graph, _ = build_graph(self.workflow_target)
+        graph, _, _ = build_graph(self.workflow_target)
 
         dot_parts = [
             "digraph CascadeWorkflow {",
@@ -222,7 +222,7 @@ class CascadeApp:
             return
 
         # 1. Build Graph
-        graph, _ = build_graph(self.workflow_target)
+        graph, _, _ = build_graph(self.workflow_target)
 
         # 2. Resolve Plan using the app's solver
         plan = self.solver.resolve(graph)

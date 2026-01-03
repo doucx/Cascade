@@ -74,6 +74,7 @@ class SpyExecutor(Executor):
     async def execute(
         self,
         node: Node,
+        callable_obj: Callable,
         args: List[Any],
         kwargs: Dict[str, Any],
     ) -> Any:
@@ -86,7 +87,13 @@ class MockExecutor(Executor):
         self.delay = delay
         self.return_value = return_value
 
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
+    async def execute(
+        self,
+        node: Node,
+        callable_obj: Callable,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ):
         if self.delay > 0:
             await asyncio.sleep(self.delay)
 

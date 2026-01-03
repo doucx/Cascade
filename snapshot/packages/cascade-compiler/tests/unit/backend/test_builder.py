@@ -30,29 +30,39 @@ def test_builder_expands_and_wires_nodes(sample_graph_ir):
     builder = Builder()
     graph = builder.build(sample_graph_ir, environment=EnvironmentDef())
 
-    # Assert nodes: 2 triads (6 nodes each) + 1 D_life + 1 F_obs = 14 nodes
-    assert len(graph.nodes) == 14
+    # Assert nodes: 2 triads (6 nodes each) + 1 D_life + 1 F_obs + 1 D_dep = 15 nodes
+    assert len(graph.nodes) == 15
     assert "global.observability.bus" in graph.nodes
     assert "global.observability.observer" in graph.nodes
     assert "node_a.stain" in graph.nodes
     assert "node_b.bleach" in graph.nodes
+    assert "dep.node_a.to.node_b.data" in graph.nodes
 
     # Assert channels
     # 2 triads (6 internal) = 12
-    # 1 data dependency = 1
+    # 1 data dependency = 2 (F->D, D->F)
     # 2 triads * 2 obs channels to D_life = 4
     # 1 D_life -> F_obs channel = 1
-    # Total = 12 + 1 + 4 + 1 = 18
-    assert len(graph.channels) == 18
+    # Total = 12 + 2 + 4 + 1 = 19
+    assert len(graph.channels) == 19
 
-    # 1. Test data dependency wiring
-    data_channel = next(
+    # 1. Test data dependency wiring (F -> D -> F)
+    stain_to_dep = next(
         c
         for c in graph.channels
-        if c.source_node_id == "node_a.stain" and c.target_node_id == "node_b.bleach"
+        if c.source_node_id == "node_a.stain"
+        and c.target_node_id == "dep.node_a.to.node_b.data"
     )
-    assert data_channel is not None
-    assert data_channel.source_port == "output"
+    assert stain_to_dep is not None
+
+    dep_to_bleach = next(
+        c
+        for c in graph.channels
+        if c.source_node_id == "dep.node_a.to.node_b.data"
+        and c.target_node_id == "node_b.bleach"
+    )
+    assert dep_to_bleach is not None
+    assert dep_to_bleach.target_port == "data"
 
     # 2. Test observability wiring
     d_life_id = "global.observability.bus"

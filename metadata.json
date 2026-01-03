@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 修复 Validator 发现的端口名称违规", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767417796.828525, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(compiler): 更新因二分图修复引入的节点/通道数量断言", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767417869.4203107, "duration_ms": 0}}

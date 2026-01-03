@@ -1,77 +1,105 @@
-## [WIP] fix(compiler): 修复 Validator 发现的端口名称违规
+非常好的发现！这是一个“好”的错误。
+
+它证明我们上一轮的修复是成功的：为了遵守二分图定律，Builder 确实在 `node_a.stain -> node_b.bleach` 之间插入了一个额外的数据节点。
+现在，测试因为其过时的断言而失败。我们需要更新测试，使其与新的、物理上正确的图结构保持一致。
+
+## [WIP] test(compiler): 更新因二分图修复引入的节点/通道数量断言
 
 ### 错误分析
-Validator 继续立功！这次是 `_check_port_connectivity` 捕获到了一个端口名称不匹配的错误：
-`GraphValidationError: Channel #14: DataNode 'global.observability.bus' expects input on port 'in', got 'event_token'.`
-
-在 `cascade-compiler/backend/builder.py` 中，我们连接到 `D_life` (DataNode) 时，错误地将目标端口命名为了 `event_token`，而 DataNode 的标准输入端口是 `in`。
-`event_token` 应该是 `F_obs` (FuncNode) 的输入端口名，而不是 `D_life` 的。
+`test_builder_expands_and_wires_nodes` 测试用例断言生成的图中包含 14 个节点。然而，在我们为了修复“F -> F”连接而引入了中间数据节点（`D_dep`）后，`node_a` 和 `node_b` 之间的依赖关系现在需要一个额外的 `PhysicsDataNode`。
+这使得总节点数增加到 15，导致断言失败。
+同时，原本的一条 F->F 通道被替换为了两条 F->D->F 通道，通道总数也需要更新。
 
 ### 用户需求
-修复 `Builder` 中关于观测系统的连线逻辑，确保连接到 `D_life` 的通道使用目标端口 `'in'`。
+更新 `test_builder.py` 中的断言，以反映新的、物理上正确的节点和通道数量。
 
 ### 评论
-这是一个经典的“复制粘贴”错误。我们把连接到 Observer 的端口名用到了连接到 Bus 的通道上。Validator 成功地在这些错误造成运行时混淆之前拦截了它们。
+这是一个积极的信号，表明我们的测试套件足够敏感，能够捕捉到架构的结构性变化。使测试与实现同步是完成此次重构的最后一步。
 
 ### 目标
-1.  修改 `cascade-compiler/backend/builder.py`。
-2.  将所有指向 `d_life_id` 的通道的 `target_port` 从 `event_token` 改为 `in`。
+1.  修改 `test_builder.py`。
+2.  将节点数量断言从 `14` 更新为 `15`。
+3.  将通道数量断言从 `18` 更新为 `19`。
+4.  更新注释以解释新的计算方式。
 
 ### 基本原理
-**DataNode 接口**: 所有 DataNode 默认通过端口 `'in'` 接收 Token，通过端口 `'out'` 输出 Token。
+*   **节点数**: 2 Triads (12) + 1 D_life + 1 F_obs + **1 D_dep** = 15
+*   **通道数**: 2 Triads (12) + **2 Data Dep** + 4 Obs + 1 D_life->F_obs = 19
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/compiler #concept/observability #scope/core #ai/instruct #task/domain/compiler #task/object/builder #task/action/rewire #task/state/end
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/compiler #scope/core #ai/instruct #task/domain/testing #task/object/unit-test #task/action/update #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复观测系统连线
+#### Acts 1: 更新测试断言
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-compiler/tests/unit/backend/test_builder.py
 ~~~~~
 ~~~~~python.old
-            # 3.3 Wire task observability TO the sidecar bus
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.bleacher.id,
-                    source_port="obs_output",
-                    target_node_id=d_life_id,
-                    target_port="event_token",
-                )
-            )
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.stainer.id,
-                    source_port="obs_output",
-                    target_node_id=d_life_id,
-                    target_port="event_token",
-                )
-            )
+    # Assert nodes: 2 triads (6 nodes each) + 1 D_life + 1 F_obs = 14 nodes
+    assert len(graph.nodes) == 14
+    assert "global.observability.bus" in graph.nodes
+    assert "global.observability.observer" in graph.nodes
+    assert "node_a.stain" in graph.nodes
+    assert "node_b.bleach" in graph.nodes
+
+    # Assert channels
+    # 2 triads (6 internal) = 12
+    # 1 data dependency = 1
+    # 2 triads * 2 obs channels to D_life = 4
+    # 1 D_life -> F_obs channel = 1
+    # Total = 12 + 1 + 4 + 1 = 18
+    assert len(graph.channels) == 18
+
+    # 1. Test data dependency wiring
+    data_channel = next(
+        c
+        for c in graph.channels
+        if c.source_node_id == "node_a.stain" and c.target_node_id == "node_b.bleach"
+    )
+    assert data_channel is not None
+    assert data_channel.source_port == "output"
 ~~~~~
 ~~~~~python.new
-            # 3.3 Wire task observability TO the sidecar bus
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.bleacher.id,
-                    source_port="obs_output",
-                    target_node_id=d_life_id,
-                    target_port="in",
-                )
-            )
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=subgraph.stainer.id,
-                    source_port="obs_output",
-                    target_node_id=d_life_id,
-                    target_port="in",
-                )
-            )
+    # Assert nodes: 2 triads (6 nodes each) + 1 D_life + 1 F_obs + 1 D_dep = 15 nodes
+    assert len(graph.nodes) == 15
+    assert "global.observability.bus" in graph.nodes
+    assert "global.observability.observer" in graph.nodes
+    assert "node_a.stain" in graph.nodes
+    assert "node_b.bleach" in graph.nodes
+    assert "dep.node_a.to.node_b.data" in graph.nodes
+
+    # Assert channels
+    # 2 triads (6 internal) = 12
+    # 1 data dependency = 2 (F->D, D->F)
+    # 2 triads * 2 obs channels to D_life = 4
+    # 1 D_life -> F_obs channel = 1
+    # Total = 12 + 2 + 4 + 1 = 19
+    assert len(graph.channels) == 19
+
+    # 1. Test data dependency wiring (F -> D -> F)
+    stain_to_dep = next(
+        c
+        for c in graph.channels
+        if c.source_node_id == "node_a.stain"
+        and c.target_node_id == "dep.node_a.to.node_b.data"
+    )
+    assert stain_to_dep is not None
+
+    dep_to_bleach = next(
+        c
+        for c in graph.channels
+        if c.source_node_id == "dep.node_a.to.node_b.data"
+        and c.target_node_id == "node_b.bleach"
+    )
+    assert dep_to_bleach is not None
+    assert dep_to_bleach.target_port == "data"
 ~~~~~
 
 ### 下一步建议
-重新运行所有测试。Validator 应该不再报错，且集成测试应该通过。
-我们正在逐步清除系统中的熵，使物理场变得纯净、有序且可验证。
+现在所有的单元测试都应该通过了。
+请重新运行完整的测试套件。如果一切顺利，`test_resource_backpressure.py` 也应该能成功通过，因为我们已经修复了其底层的物理模型错误。

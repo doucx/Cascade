@@ -1,48 +1,3 @@
-是的，绝对可以，而且这样做是**极佳的测试策略**。
-
-我们可以在 `cascade-vm` 包内创建一个新的集成测试，这个测试将完全绕过 `cascade-engine`，直接模拟 `VMExecutionStrategy` 未来会执行的核心步骤。这相当于在物理层面对我们的编译器和虚拟机进行一次“全链路冒烟测试”。
-
-这样做的好处是：
-1.  **隔离验证**：我们能确保 Compiler -> VM 这条核心链路是健壮的，而无需担心 `Engine` 层的任何遗留逻辑或未来的实现细节。
-2.  **TDD 驱动**：这个测试将成为我们后续开发 `VMExecutionStrategy` 的“黄金标准”和参照实现。
-
-我将生成一个计划来创建这个端到端的集成测试。
-
-## [WIP] test(vm): 创建端到端集成测试以验证 Compiler-VM 全链路
-
-### 用户需求
-在不依赖 `cascade-engine` 的情况下，编写一个集成测试，用于验证 `cascade-compiler` 生成的、包含 `run_if`, `after`, 和 `with_constraints` 的物理图，能够在 `cascade-vm` 中被正确执行。
-
-### 评论
-这是一个关键的、高价值的测试。它将成为连接 Phase 2 (Compiler) 和 Phase 3 (Engine) 的桥梁。通过手动编排从 `LazyResult` 到 `Reactor` 循环的全过程，我们可以精确地验证新架构的每个组件是否都按预期协同工作，尤其是在处理复杂的控制流和资源约束时。
-
-### 目标
-1.  创建一个新的测试文件 `tests/integration/test_e2e_vm_run.py`。
-2.  在该文件中，定义一个使用了 `.run_if()`, `.after()`, 和 `.with_constraints()` 的复杂 Cascade 工作流。
-3.  手动执行编译流程：`IRGenerator.generate()` -> `Builder.build()`。
-4.  手动设置并运行 VM：实例化 `Reactor`, `Memory`, `Executor`，并构建 `function_map`。
-5.  通过 `Reactor.add_sink()` 捕获最终结果。
-6.  运行 `Reactor` 的 `step` 循环直到计算完成，并断言最终结果和资源状态的正确性。
-
-### 基本原理
-我们将扮演 `VMExecutionStrategy` 的角色。测试代码将显式地调用编译器前端和后端，将用户级的 `LazyResult` 编译成物理图。然后，我们将这个图、一个内存实例和一个执行器实例提供给 `Reactor`。通过`prime()`注入初始能量（常量和资源），并运行 `step()` 循环来驱动物理场演化。这种方式能最直接、最纯粹地测试我们新构建的核心物理引擎的能力。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/vm #comp/compiler #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/e2e-vm-test #task/action/implementation
-
----
-
-### Script
-
-#### Acts 1: 创建端到端 VM 集成测试文件
-
-我们将创建一个全新的测试文件，其中包含完整的设置、编译、执行和断言逻辑。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_e2e_vm_run.py
-~~~~~
-~~~~~python
 import pytest
 import asyncio
 from typing import Dict, Any, Callable
@@ -181,14 +136,3 @@ async def test_e2e_vm_run_with_all_features():
     # Assert the resource state
     gpu_resource_id = "canonical.resource.gpu"
     assert memory.get_count(gpu_resource_id) == 1, "GPU resource was not released"
-~~~~~
-
-### 下一步建议
-这个测试现在是 `cascade-vm` 包中最有价值的资产之一。它证明了我们的核心架构是可行的。
-
-下一步的行动非常明确：
-1.  **代码重用**: 将 `test_e2e_vm_run.py` 中的手动编排逻辑（第 2、3、5 步）提取出来。
-2.  **封装实现**: 在 `cascade-engine` 包中，创建一个新的 `VMExecutionStrategy` 类，并将上述提取的逻辑封装到它的 `execute` 方法中。
-3.  **引擎替换**: 重构 `cascade.Engine`，使其内部使用这个新的 `VMExecutionStrategy`。
-
-这样，我们就正式完成了 Phase 3 的核心任务。

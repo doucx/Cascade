@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M models.json, M ports.json, M memory.json ... and 12 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767412136.0565712, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(vm): 创建端到端集成测试以验证 Compiler-VM 全链路", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767412136.6262896, "duration_ms": 0}}

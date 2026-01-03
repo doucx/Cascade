@@ -1,156 +1,35 @@
-## [WIP] test(integration): 添加 Broker 饿死诊断测试
+好，这是一个简单的调用错误。我忘记在 `wait_idle()` 调用中传递 `reactor` 实例。
+
+我将立即修复它，以便我们能看到真正的测试结果。
+
+## [WIP] fix(test): 修正饿死诊断测试中的调用错误
+
+### 错误分析
+`test_broker_starvation.py` 中的 `wait_idle()` 辅助函数需要一个 `reactor` 参数，但在测试用例中被错误地以无参数方式调用，导致 `TypeError`。
 
 ### 用户需求
-用户遇到 `test_resource_backpressure.py` 失败，怀疑是 Broker 拆分后导致的死锁或饿死问题。
-需要一组专门的测试来定位 Allocator 和 Reclaimer 在竞争 Ledger 时的行为。
-
-### 评论
-我怀疑这是经典的 **资源饿死 (Resource Starvation)** 问题。
-由于 `Reactor` 是按顺序扫描节点的，如果 `Allocator` 在节点列表中排在 `Reclaimer` 前面，并且一直有积压的请求，它可能会在每一步都抢占 `D_ledger`，导致 `Reclaimer` 永远无法获取 Ledger 来归还资源，从而形成活锁。
-我们将通过两个对比测试来验证这一假设：一个 Allocator 优先，一个 Reclaimer 优先。
+修复 `wait_idle` 函数的调用，使其能正确接收 `reactor` 实例。
 
 ### 目标
-1.  创建 `packages/cascade-vm/tests/integration/test_broker_starvation.py`。
-2.  实现 `test_allocator_starves_reclaimer` (预期失败或展示饿死)。
-3.  实现 `test_reclaimer_priority_fixes_starvation` (预期成功)。
+1.  在 `test_broker_starvation.py` 中，将所有 `await wait_idle()` 调用修改为 `await wait_idle(reactor)`。
 
 ### 基本原理
-通过手动控制 `Reactor` 中节点列表的顺序，模拟物理布局对调度公平性的影响。
+这是一个简单的编码疏忽，修正调用签名即可。
 
 ### 标签
-#intent/test #flow/ready #priority/high #comp/tests #comp/vm #scope/core #ai/instruct #task/domain/testing #task/object/starvation-test #task/action/create #task/state/begin
+#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/test-harness #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建饿死诊断测试
+#### Acts 1: 修复 `wait_idle` 调用
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-vm/tests/integration/test_broker_starvation.py
 ~~~~~
-~~~~~python
-import pytest
-import asyncio
-from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.ports import PortDef, PortRole, PortName
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-from cascade.vm.reactor import Reactor
-from cascade.std.resource.discrete import (
-    discrete_allocator,
-    discrete_reclaimer,
-    DiscreteLedger,
-)
-
-
-async def wait_idle(reactor):
-    while reactor.active_task_count > 0:
-        await asyncio.sleep(0.001)
-
-
-def create_starvation_topology(allocator_first: bool):
-    # Setup:
-    # Ledger: Total=1, Available=0 (Starved)
-    # Req: 1 (Blocked)
-    # Rel: 1 (Pending)
-
-    ledger_id = "D_ledger"
-    ledger = DiscreteLedger(total=1, available=0)
-    d_ledger = PhysicsDataNode(
-        id=ledger_id,
-        name="Ledger",
-        capacity=1,
-        initial_tokens=1,
-        initial_payload=ledger,
-    )
-
-    # Allocator
-    alloc_id = "F_alloc"
-    f_alloc = PhysicsFuncNode(
-        id=alloc_id,
-        name="Allocator",
-        input_ports={
-            PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-            PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
-        },
-        output_ports={
-            PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-            PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
-            PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
-        },
-    )
-
-    # Reclaimer
-    reclaim_id = "F_reclaim"
-    f_reclaim = PhysicsFuncNode(
-        id=reclaim_id,
-        name="Reclaimer",
-        input_ports={
-            PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-            PortName.REL: PortDef(PortName.REL, PortRole.DATA),
-        },
-        output_ports={
-            PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-        },
-    )
-
-    # Buffers
-    d_req = PhysicsDataNode(id="D_req", name="ReqBuf", capacity=10, initial_tokens=1, initial_payload=1)
-    d_rel = PhysicsDataNode(id="D_rel", name="RelBuf", capacity=10, initial_tokens=1, initial_payload=1)
-
-    graph = BipartiteGraph()
-    
-    # CONTROL THE ORDER HERE
-    # Reactor iterates over graph.nodes values or internally constructed list.
-    # Currently Reactor iterates over self._func_nodes which is built from graph.nodes.values()
-    # Python 3.7+ dicts preserve insertion order.
-    
-    nodes_list = [d_ledger, d_req, d_rel]
-    if allocator_first:
-        nodes_list.extend([f_alloc, f_reclaim])
-    else:
-        nodes_list.extend([f_reclaim, f_alloc])
-        
-    for n in nodes_list:
-        graph.nodes[n.id] = n
-
-    # Wiring
-    # Ledger Loop Allocator
-    graph.channels.append(Channel(ledger_id, "out", alloc_id, PortName.LEDGER_IN))
-    graph.channels.append(Channel(alloc_id, PortName.LEDGER_OUT, ledger_id, "in"))
-    
-    # Ledger Loop Reclaimer
-    graph.channels.append(Channel(ledger_id, "out", reclaim_id, PortName.LEDGER_IN))
-    graph.channels.append(Channel(reclaim_id, PortName.LEDGER_OUT, ledger_id, "in"))
-    
-    # Inputs
-    graph.channels.append(Channel(d_req.id, "out", alloc_id, PortName.REQ))
-    graph.channels.append(Channel(d_rel.id, "out", reclaim_id, PortName.REL))
-    
-    # Recirculation
-    graph.channels.append(Channel(alloc_id, PortName.REQ_OUT, d_req.id, "in"))
-
-    func_map = {alloc_id: discrete_allocator, reclaim_id: discrete_reclaimer}
-    
-    return graph, d_ledger, d_req, d_rel, func_map
-
-
-@pytest.mark.asyncio
-async def test_allocator_starves_reclaimer():
-    """
-    Scenario: Allocator is registered BEFORE Reclaimer.
-    We expect Reclaimer to starve because Allocator keeps grabbing the Ledger token,
-    failing the request, and putting it back, ad infinitum.
-    """
-    graph, d_ledger, d_req, d_rel, func_map = create_starvation_topology(allocator_first=True)
-    
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory, PhysicsExecutor(), func_map)
-    reactor.prime()
-    
+~~~~~python.old
     # Step 1
     # Allocator should fire (it sees Ledger and Req).
     # Reclaimer sees Ledger and Rel, BUT Ledger is consumed by Allocator first.
@@ -158,68 +37,79 @@ async def test_allocator_starves_reclaimer():
     await wait_idle()
     
     assert fired == 1
+~~~~~
+~~~~~python.new
+    # Step 1
+    # Allocator should fire (it sees Ledger and Req).
+    # Reclaimer sees Ledger and Rel, BUT Ledger is consumed by Allocator first.
+    fired = await reactor.step()
+    await wait_idle(reactor)
     
-    # Check Ledger State: Should still be 0 available (Allocator failed and returned it)
-    ledger = memory.take(d_ledger.id).payload
-    memory.put(d_ledger, Token(payload=ledger))
-    assert ledger.available == 0
-    
-    # Check D_rel: Should still be 1 (Reclaimer didn't run)
-    assert memory.get_count(d_rel.id) == 1
-    
+    assert fired == 1
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_broker_starvation.py
+~~~~~
+~~~~~python.old
     # Step 2
     # Allocator fires AGAIN.
     fired = await reactor.step()
     await wait_idle()
     
     assert fired == 1
-    assert memory.get_count(d_rel.id) == 1 # Reclaimer STILL hasn't ran
-
-
-@pytest.mark.asyncio
-async def test_reclaimer_priority_fixes_starvation():
-    """
-    Scenario: Reclaimer is registered BEFORE Allocator.
-    We expect Reclaimer to run first, free the resource, and THEN Allocator succeeds.
-    """
-    graph, d_ledger, d_req, d_rel, func_map = create_starvation_topology(allocator_first=False)
+~~~~~
+~~~~~python.new
+    # Step 2
+    # Allocator fires AGAIN.
+    fired = await reactor.step()
+    await wait_idle(reactor)
     
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory, PhysicsExecutor(), func_map)
-    reactor.prime()
-    
+    assert fired == 1
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_broker_starvation.py
+~~~~~
+~~~~~python.old
     # Step 1
     # Reclaimer should fire first.
     fired = await reactor.step()
     await wait_idle()
     
     assert fired >= 1 # Could be 1 (Reclaim) or 2 (Reclaim then Alloc in same step?)
-    # Wait, in one step, if Reclaim consumes Ledger, Allocator CANNOT fire in that same step.
-    # So fired should be 1.
+~~~~~
+~~~~~python.new
+    # Step 1
+    # Reclaimer should fire first.
+    fired = await reactor.step()
+    await wait_idle(reactor)
     
-    # Check Ledger State: Should be 1 available (Reclaimed)
-    ledger = memory.take(d_ledger.id).payload
-    memory.put(d_ledger, Token(payload=ledger))
-    assert ledger.available == 1
-    
-    # Check D_rel: Should be 0 (Consumed)
-    assert memory.get_count(d_rel.id) == 0
-    
+    assert fired >= 1 # Could be 1 (Reclaim) or 2 (Reclaim then Alloc in same step?)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_broker_starvation.py
+~~~~~
+~~~~~python.old
     # Step 2
     # Now Allocator should fire and SUCCEED
     fired = await reactor.step()
     await wait_idle()
     
     # Ledger should be 0 again (Granted)
-    ledger = memory.take(d_ledger.id).payload
-    memory.put(d_ledger, Token(payload=ledger))
-    assert ledger.available == 0
+~~~~~
+~~~~~python.new
+    # Step 2
+    # Now Allocator should fire and SUCCEED
+    fired = await reactor.step()
+    await wait_idle(reactor)
     
-    # Request consumed (or recirculated if we count that, but here it succeeds so GNT emitted)
-    # Check GNT output? We didn't wire GNT to a buffer in this test helper, but we can infer from Ledger.
+    # Ledger should be 0 again (Granted)
 ~~~~~
 
 ### 下一步建议
-运行这两个测试。
-如果 `test_allocator_starves_reclaimer` 确实展示了饿死行为，而 `test_reclaimer_priority_fixes_starvation` 通过，那么我们的诊断就成立了。
-解决方案将是在 Builder 中确保 Reclaimer 总是先于 Allocator 被添加。这是一种简单的拓扑修复。
+现在测试文件语法正确，请重新运行测试。这将揭示我们关于资源饿死问题的假设是否成立。

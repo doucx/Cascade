@@ -122,7 +122,7 @@ async def test_allocator_starves_reclaimer():
     # Allocator should fire (it sees Ledger and Req).
     # Reclaimer sees Ledger and Rel, BUT Ledger is consumed by Allocator first.
     fired = await reactor.step()
-    await wait_idle()
+    await wait_idle(reactor)
     
     assert fired == 1
     
@@ -137,7 +137,7 @@ async def test_allocator_starves_reclaimer():
     # Step 2
     # Allocator fires AGAIN.
     fired = await reactor.step()
-    await wait_idle()
+    await wait_idle(reactor)
     
     assert fired == 1
     assert memory.get_count(d_rel.id) == 1 # Reclaimer STILL hasn't ran
@@ -158,7 +158,7 @@ async def test_reclaimer_priority_fixes_starvation():
     # Step 1
     # Reclaimer should fire first.
     fired = await reactor.step()
-    await wait_idle()
+    await wait_idle(reactor)
     
     assert fired >= 1 # Could be 1 (Reclaim) or 2 (Reclaim then Alloc in same step?)
     # Wait, in one step, if Reclaim consumes Ledger, Allocator CANNOT fire in that same step.
@@ -175,7 +175,7 @@ async def test_reclaimer_priority_fixes_starvation():
     # Step 2
     # Now Allocator should fire and SUCCEED
     fired = await reactor.step()
-    await wait_idle()
+    await wait_idle(reactor)
     
     # Ledger should be 0 again (Granted)
     ledger = memory.take(d_ledger.id).payload

@@ -1,0 +1,18 @@
+{
+  "WiringContext": {
+    "baseline_yaml_content_hash": "a88b0443269946609d3b9f0b9634537002cffb8e7b25dd84db2e04e954aa487a"
+  },
+  "WiringContext.environment": {},
+  "WiringContext.get_subgraph": {
+    "baseline_code_signature_text": "def get_subgraph(self, node_id: str) -> SubGraph:",
+    "baseline_code_structure_hash": "04c76c38d47c1c37d51bcaac9388d81b583fe806068976c3e6007a527a87cacb"
+  },
+  "WiringContext.graph_ir": {},
+  "WiringContext.physical_graph": {},
+  "WiringContext.register_subgraph": {
+    "baseline_code_signature_text": "def register_subgraph(self, node_id: str, subgraph: SubGraph) -> None:",
+    "baseline_code_structure_hash": "14397e0976ad4d8a4993aff213a0da3442684cb390b587693b00300ac3714702"
+  },
+  "WiringContext.subgraphs": {},
+  "WiringContext.wire": {}
+}

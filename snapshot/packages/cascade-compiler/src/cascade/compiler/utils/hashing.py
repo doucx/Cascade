@@ -17,7 +17,9 @@ class HashingService:
         # 1. Start with the Stable Code Fingerprint
         # According to Axiom: [State]_[Source]_[Object]_hash
         # Use 'canonical' state here because it represents the stable identity used for linking.
-        canonical_code_structure_hash = definition.fingerprint["current_code_structure_hash"]
+        canonical_code_structure_hash = definition.fingerprint[
+            "current_code_structure_hash"
+        ]
         components = [f"CodeHash:{canonical_code_structure_hash}"]
 
         # 2. Purity Salt

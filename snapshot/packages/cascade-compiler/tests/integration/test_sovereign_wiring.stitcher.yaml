@@ -1,0 +1,3 @@
+"test_sovereign_wiring_flow": |-
+  Verifies that the new 'output_default' based wiring actually works
+  and connects the producer's Stainer to the consumer's Bleacher.

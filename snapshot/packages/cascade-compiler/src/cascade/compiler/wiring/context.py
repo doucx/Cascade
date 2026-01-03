@@ -3,18 +3,14 @@ from typing import Dict
 
 from cascade.spec.topology import BipartiteGraph
 from cascade.spec.environment import EnvironmentDef
+from cascade.spec.ir.models import GraphIR
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.backend.wiring import WiringHarness
 
 
 @dataclass
 class WiringContext:
-    """
-    A shared context object passed through the wiring pipeline.
-    It holds the state of the physical graph being built.
-    """
-
-    graph_ir: "GraphIR"  # Forward ref to avoid circular import if possible, or use Any
+    graph_ir: GraphIR
     environment: EnvironmentDef
     physical_graph: BipartiteGraph
     wire: WiringHarness

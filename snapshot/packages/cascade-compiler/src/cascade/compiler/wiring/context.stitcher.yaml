@@ -1,0 +1,3 @@
+"WiringContext": |-
+  A shared context object passed through the wiring pipeline.
+  It holds the state of the physical graph being built.

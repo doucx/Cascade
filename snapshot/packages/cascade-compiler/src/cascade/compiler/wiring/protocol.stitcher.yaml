@@ -1,0 +1,11 @@
+"WiringPolicy": |-
+  Protocol for a wiring strategy.
+  Each policy is responsible for a specific aspect of the physical graph construction.
+"WiringPolicy.apply": |-
+  Phase 1: Wire a specific node.
+  Called for each node in the logical graph.
+  Used for connecting the node's triad to inputs, outputs, resources, etc.
+"WiringPolicy.setup_globals": |-
+  Phase 0: Setup global infrastructure.
+  Called once before processing any nodes.
+  Used for creating global resource brokers, observability buses, etc.

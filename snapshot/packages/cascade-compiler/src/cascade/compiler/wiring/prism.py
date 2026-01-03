@@ -6,17 +6,7 @@ from cascade.compiler.wiring.context import WiringContext
 
 
 class ResourcePrism(Protocol):
-    """
-    A Prism refracts a high-level Resource Definition into a complex physical topology.
-    It encapsulates the knowledge of how to wire a specific type of resource.
-    """
-
-    def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None:
-        """
-        Create the global infrastructure for this resource (e.g., Allocator, Ledger).
-        This may be called multiple times for different resources of the same type.
-        """
-        ...
+    def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None: ...
 
     def connect_task(
         self,
@@ -25,8 +15,4 @@ class ResourcePrism(Protocol):
         subgraph: SubGraph,
         res_name: str,
         amount: Any,
-    ) -> None:
-        """
-        Wire a specific task to request/release this resource.
-        """
-        ...
+    ) -> None: ...

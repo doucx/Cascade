@@ -1,0 +1,11 @@
+{
+  "DiscreteResourcePrism": {},
+  "DiscreteResourcePrism.connect_task": {
+    "baseline_code_signature_text": "def connect_task(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph, res_name: str, amount: Any) -> None:",
+    "baseline_code_structure_hash": "32d7f90a8ed12a9e847282331fd5f281afd8f132f2f4afaceed58b0308d64316"
+  },
+  "DiscreteResourcePrism.ensure_globals": {
+    "baseline_code_signature_text": "def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None:",
+    "baseline_code_structure_hash": "549c282d25d6e9fbd39bcf4d04d3777826aff1f6767dc4a732ea9cb01018e814"
+  }
+}

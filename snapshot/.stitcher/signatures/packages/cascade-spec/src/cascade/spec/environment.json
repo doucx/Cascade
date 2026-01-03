@@ -7,5 +7,6 @@
   "ResourceDef.capacity": {
     "baseline_yaml_content_hash": "67c13787a889d0cde2f85907aa4f522038f958eee6848e487d90653fc15e349a"
   },
-  "ResourceDef.name": {}
+  "ResourceDef.name": {},
+  "ResourceDef.type": {}
 }

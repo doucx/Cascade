@@ -4,8 +4,12 @@ import sys
 import os
 
 # 确保可以导入本地 package
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "packages", "cascade-spec", "src"))
-sys.path.append(os.path.join(os.path.dirname(__file__), "..", "packages", "cascade-vm", "src"))
+sys.path.append(
+    os.path.join(os.path.dirname(__file__), "..", "packages", "cascade-spec", "src")
+)
+sys.path.append(
+    os.path.join(os.path.dirname(__file__), "..", "packages", "cascade-vm", "src")
+)
 
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode, Token
@@ -16,6 +20,7 @@ from cascade.vm.executor import PhysicsExecutor
 
 # --- 基准测试目标 ---
 
+
 def sync_while_baseline(iterations: int):
     count = 0
     start_time = time.perf_counter()
@@ -23,6 +28,7 @@ def sync_while_baseline(iterations: int):
         count += 1
     duration = time.perf_counter() - start_time
     return duration
+
 
 async def async_while_no_yield(iterations: int):
     count = 0
@@ -32,18 +38,21 @@ async def async_while_no_yield(iterations: int):
     duration = time.perf_counter() - start_time
     return duration
 
+
 async def async_while_yielding(iterations: int):
     count = 0
     start_time = time.perf_counter()
     while count < iterations:
         count += 1
-        await asyncio.sleep(0) # 强制让出控制权，模拟一次完整的事件循环调度
+        await asyncio.sleep(0)  # 强制让出控制权，模拟一次完整的事件循环调度
     duration = time.perf_counter() - start_time
     return duration
+
 
 async def async_increment(inputs, node, resources):
     val = inputs["in"].payload
     return {"out": Token(payload=val + 1)}
+
 
 async def run_physical_tco(iterations: int):
     d_state = PhysicsDataNode(id="D_state", name="StateSlot", capacity=1)
@@ -51,20 +60,20 @@ async def run_physical_tco(iterations: int):
         id="F_inc",
         name="Incremetor",
         input_ports={"in": PortDef("in", PortRole.DATA)},
-        output_ports={"out": PortDef("out", PortRole.DATA)}
+        output_ports={"out": PortDef("out", PortRole.DATA)},
     )
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d_state, f_inc]}
     graph.channels.append(Channel("D_state", "out", "F_inc", "in"))
     graph.channels.append(Channel("F_inc", "out", "D_state", "in"))
-    
+
     memory = VolatileMemory()
     executor = PhysicsExecutor()
     func_map = {"F_inc": async_increment}
     reactor = Reactor(graph, memory, executor, func_map)
-    
+
     memory.put(d_state, Token(payload=0))
-    
+
     start_time = time.perf_counter()
     for _ in range(iterations):
         await reactor.step()
@@ -72,42 +81,53 @@ async def run_physical_tco(iterations: int):
         # 物理场中这是必须的，因为 Reactor 使用 create_task 异步发射
         while reactor.active_task_count > 0:
             await asyncio.sleep(0)
-            
+
     duration = time.perf_counter() - start_time
-    
+
     # 结果校验
     final_val = memory.take("D_state").payload
     assert final_val == iterations
     return duration
 
+
 # --- 报告生成 ---
+
 
 async def main():
     ITERATIONS = 10_000
-    
+
     print(f"--- Cascade 性能多维基准测试 (迭代: {ITERATIONS:,.0f}) ---")
     print(f"Python 版本: {sys.version.split()[0]}")
     print("-" * 60)
 
     # 1. Sync
     d_sync = sync_while_baseline(ITERATIONS)
-    print(f"1. Sync While         : {d_sync:.6f}s | {ITERATIONS/d_sync:12,.0f} ops/s (基准)")
+    print(
+        f"1. Sync While         : {d_sync:.6f}s | {ITERATIONS / d_sync:12,.0f} ops/s (基准)"
+    )
 
     # 2. Async (No Yield)
     d_asy_ny = await async_while_no_yield(ITERATIONS)
-    print(f"2. Async (No Yield)   : {d_asy_ny:.6f}s | {ITERATIONS/d_asy_ny:12,.0f} ops/s (开销: {d_asy_ny/d_sync:.1f}x)")
+    print(
+        f"2. Async (No Yield)   : {d_asy_ny:.6f}s | {ITERATIONS / d_asy_ny:12,.0f} ops/s (开销: {d_asy_ny / d_sync:.1f}x)"
+    )
 
     # 3. Async (Yielding)
     d_asy_y = await async_while_yielding(ITERATIONS)
-    print(f"3. Async (Yielding)   : {d_asy_y:.6f}s | {ITERATIONS/d_asy_y:12,.0f} ops/s (开销: {d_asy_y/d_sync:.1f}x)")
+    print(
+        f"3. Async (Yielding)   : {d_asy_y:.6f}s | {ITERATIONS / d_asy_y:12,.0f} ops/s (开销: {d_asy_y / d_sync:.1f}x)"
+    )
 
     # 4. Physical Field
     d_phys = await run_physical_tco(ITERATIONS)
-    print(f"4. Physical TCO       : {d_phys:.6f}s | {ITERATIONS/d_phys:12,.0f} ops/s (开销: {d_phys/d_sync:.1f}x)")
+    print(
+        f"4. Physical TCO       : {d_phys:.6f}s | {ITERATIONS / d_phys:12,.0f} ops/s (开销: {d_phys / d_sync:.1f}x)"
+    )
 
     print("-" * 60)
-    print(f"结论: 物理引擎相对于纯 Async(Yielding) 的净税收为: {d_phys/d_asy_y:.2f}x")
-    print(f"物理层单步延迟 (Step Latency): {(d_phys/ITERATIONS)*1_000_000:.2f} μs")
+    print(f"结论: 物理引擎相对于纯 Async(Yielding) 的净税收为: {d_phys / d_asy_y:.2f}x")
+    print(f"物理层单步延迟 (Step Latency): {(d_phys / ITERATIONS) * 1_000_000:.2f} μs")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

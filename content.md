@@ -1,41 +1,47 @@
-## [WIP] debug(vm): 使用关键字参数调用 final_task 以隔离问题
+## [WIP] debug(vm): 打印 function_map 以验证运行时映射
 
 ### 用户需求
-修改 `test_e2e_vm_run.py`，将对 `final_task` 的调用从位置参数改为关键字参数，以验证问题是否出在 `IRGenerator` 的位置参数到命名参数的映射逻辑中。
+在 E2E 测试中打印 `function_map` 的内容，以验证所有物理函数节点（Bleacher, Worker, Stainer）是否都已正确映射到其 Python 实现。
 
 ### 评论
-这是一个经典的调试技术。通过切换到另一种代码路径（关键字参数），我们可以隔离或确认 Bug 的位置。如果测试通过，就证明 `IRGenerator` 中处理 `*args` 的逻辑存在缺陷；如果测试仍然失败，问题就出在更深层次的、与参数传递无关的地方。
+我们已经确认了物理图的静态结构是正确的。现在，我们将矛头指向运行时。`function_map` 是连接物理节点 ID 和可执行代码的唯一桥梁。如果这里存在映射缺失，将直接导致节点无法执行，这与我们观察到的“幽灵节点”现象高度吻合。
 
 ### 目标
-修改 `final_result_lr = final_task(main_result, setup_result)` 为 `final_result_lr = final_task(res=main_result, setup_status=setup_result)`。
+在 `test_e2e_vm_run.py` 中，`Reactor` 初始化之前，完整打印 `function_map` 的键。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #task/domain/testing #task/action/bug-fix #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/runtime-mapping #task/action/debug
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 E2E 测试中的函数调用
+#### Acts 1: 在测试中增加 function_map 打印逻辑
 
 ~~~~~act
 patch_file
 packages/cascade-vm/tests/integration/test_e2e_vm_run.py
 ~~~~~
 ~~~~~python.old
-    main_result = main_task(10).with_constraints(gpu=1).run_if(condition_result).after(setup_result)
-    
-    final_result_lr = final_task(main_result, setup_result)
+        elif node_id.endswith(".stain"):
+            function_map[node_id] = standard_stainer
+        # We don't need to map the observer for this test to keep it simple
 
-    # 2. Manually compile the workflow
+    reactor = Reactor(physical_graph, memory, executor, function_map)
+    reactor.prime()
 ~~~~~
 ~~~~~python.new
-    main_result = main_task(10).with_constraints(gpu=1).run_if(condition_result).after(setup_result)
-    
-    final_result_lr = final_task(res=main_result, setup_status=setup_result)
+        elif node_id.endswith(".stain"):
+            function_map[node_id] = standard_stainer
+        # We don't need to map the observer for this test to keep it simple
 
-    # 2. Manually compile the workflow
+    # --- DEBUG: Print Function Map ---
+    print("\n--- [DEBUG] Function Map Keys ---")
+    for key in sorted(function_map.keys()):
+        print(f"  - Mapped: {key}")
+    print("---------------------------------\n")
+    # --- END DEBUG ---
+
+    reactor = Reactor(physical_graph, memory, executor, function_map)
+    reactor.prime()
 ~~~~~
-
-### 下一步建议
-请运行测试。这将是我们定位此问题的决定性一步。

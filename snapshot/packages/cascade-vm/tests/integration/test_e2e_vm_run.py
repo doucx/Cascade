@@ -123,6 +123,13 @@ async def test_e2e_vm_run_with_all_features():
             function_map[node_id] = standard_stainer
         # We don't need to map the observer for this test to keep it simple
 
+    # --- DEBUG: Print Function Map ---
+    print("\n--- [DEBUG] Function Map Keys ---")
+    for key in sorted(function_map.keys()):
+        print(f"  - Mapped: {key}")
+    print("---------------------------------\n")
+    # --- END DEBUG ---
+
     reactor = Reactor(physical_graph, memory, executor, function_map)
     reactor.prime()
 

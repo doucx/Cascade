@@ -1,6 +1,5 @@
 from typing import Dict, Any, Literal
 from dataclasses import dataclass, field
-from asyncio import Queue
 
 from cascade.spec.physics import Token, PhysicsNode
 

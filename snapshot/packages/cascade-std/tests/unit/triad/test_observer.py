@@ -13,7 +13,6 @@ def event_queue() -> Queue:
 
 @pytest.fixture
 def mock_resources(event_queue: Queue) -> MagicMock:
-    """Creates a mock resource registry that provides the event queue."""
     registry = MagicMock()
     registry.get.return_value = event_queue
     return registry

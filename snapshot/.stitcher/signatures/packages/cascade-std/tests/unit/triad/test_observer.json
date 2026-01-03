@@ -3,16 +3,21 @@
     "baseline_code_signature_text": "def event_queue() -> Queue:",
     "baseline_code_structure_hash": "ec323a67bf3b9ecc563fa66bc176c2b9f4484f5cb0d555a8520bafecdb75cf2b"
   },
+  "mock_resources": {
+    "baseline_code_signature_text": "def mock_resources(event_queue: Queue) -> MagicMock:",
+    "baseline_code_structure_hash": "580c9e08beb9025d59bb747c2d0b01d15fe599656f903b1f07c4ef589180a0a9",
+    "baseline_yaml_content_hash": "786e6418efe5cf4e34f5ebf2e5fc25964c891d089485289d36c38e5318cac049"
+  },
   "test_observer_processes_end_event": {
-    "baseline_code_signature_text": "async def test_observer_processes_end_event(event_queue: Queue):",
-    "baseline_code_structure_hash": "2a68c322773ac3318fc5babea98a887595e3a05950451231795839b3136fe7da"
+    "baseline_code_signature_text": "async def test_observer_processes_end_event(event_queue: Queue, mock_resources: MagicMock):",
+    "baseline_code_structure_hash": "f32ce964777261661fe350803779f63ac4494784bd2b969356bd878a030fe1fe"
   },
   "test_observer_processes_start_event": {
-    "baseline_code_signature_text": "async def test_observer_processes_start_event(event_queue: Queue):",
-    "baseline_code_structure_hash": "e39cc070f3cb8972e0f29c4c722edd5de4b8e000ef71fea7b8440500fb7cdb89"
+    "baseline_code_signature_text": "async def test_observer_processes_start_event(event_queue: Queue, mock_resources: MagicMock):",
+    "baseline_code_structure_hash": "a5dc7d83288a5910b03f636df9c0c06d60821a2d2824a401606e307c2ee83fd5"
   },
   "test_observer_with_empty_trace": {
-    "baseline_code_signature_text": "async def test_observer_with_empty_trace(event_queue: Queue):",
-    "baseline_code_structure_hash": "1fb4443c69774599f3669fc761e5830c97a3dcc5e337f50ee923092bfd476027"
+    "baseline_code_signature_text": "async def test_observer_with_empty_trace(event_queue: Queue, mock_resources: MagicMock):",
+    "baseline_code_structure_hash": "e04f5c733337ea7594e5481ed02e2a2876efd02d5a93b1972a728e0458280e30"
   }
 }

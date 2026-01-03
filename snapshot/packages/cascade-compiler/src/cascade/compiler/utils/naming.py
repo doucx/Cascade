@@ -29,8 +29,12 @@ class PhysicalIdGenerator:
         return f"canonical.resource.{resource_name}"
 
     @staticmethod
-    def global_broker(resource_name: str) -> str:
-        return f"canonical.resource.broker.{resource_name}"
+    def global_broker_req(resource_name: str) -> str:
+        return f"canonical.resource.broker.req.{resource_name}"
+
+    @staticmethod
+    def global_broker_rel(resource_name: str) -> str:
+        return f"canonical.resource.broker.rel.{resource_name}"
 
     @staticmethod
     def global_ledger(resource_name: str) -> str:

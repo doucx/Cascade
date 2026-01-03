@@ -76,7 +76,7 @@ async def test_concurrency_limit():
             func_map[node_id] = standard_stainer
         elif node_id.endswith(".worker"):
             func_map[node_id] = mock_worker
-        elif "broker" in node_id:
+        elif node_id.startswith("canonical.resource.broker."):
             func_map[node_id] = discrete_broker
         elif node_id.startswith("req."):
             func_map[node_id] = resource_requestor

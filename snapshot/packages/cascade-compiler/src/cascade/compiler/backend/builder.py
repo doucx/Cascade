@@ -22,17 +22,13 @@ class Builder:
 
         # 1. Create Resource Brokers (F_broker + internal Ledger loop)
         for res_def in environment.resources:
-            broker_id = PhysicalIdGenerator.global_broker(res_def.name)
+            req_broker_id = PhysicalIdGenerator.global_broker_req(res_def.name)
+            rel_broker_id = PhysicalIdGenerator.global_broker_rel(res_def.name)
             ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
 
-            # D_ledger: Holds the state of the resource
-            # We initialize it with a DiscreteLedger object.
-            # Currently we assume all resources are Discrete.
-            # TODO: Support Continuous resources based on definition.
             initial_ledger = DiscreteLedger(
                 total=res_def.capacity, available=res_def.capacity
             )
-
             d_ledger = PhysicsDataNode(
                 id=ledger_id,
                 name=f"Ledger({res_def.name})",
@@ -40,15 +36,15 @@ class Builder:
                 initial_tokens=1,
                 initial_payload=initial_ledger,
             )
+            physical_graph.nodes[ledger_id] = d_ledger
 
-            # F_broker: The logic unit
-            f_broker = PhysicsFuncNode(
-                id=broker_id,
-                name=f"Broker({res_def.name})",
+            # F_broker_req: Handles requests
+            f_broker_req = PhysicsFuncNode(
+                id=req_broker_id,
+                name=f"Broker.Req({res_def.name})",
                 input_ports={
                     PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
                     PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
-                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
                 },
                 output_ports={
                     PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
@@ -56,29 +52,32 @@ class Builder:
                     PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
                 },
             )
+            physical_graph.nodes[req_broker_id] = f_broker_req
 
-            physical_graph.nodes[ledger_id] = d_ledger
-            physical_graph.nodes[broker_id] = f_broker
+            # F_broker_rel: Handles releases
+            f_broker_rel = PhysicsFuncNode(
+                id=rel_broker_id,
+                name=f"Broker.Rel({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                },
+            )
+            physical_graph.nodes[rel_broker_id] = f_broker_rel
 
-            # Wire the Ledger Loop
-            # D_ledger -> F_broker
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=ledger_id,
-                    source_port="out",
-                    target_node_id=broker_id,
-                    target_port=PortName.LEDGER_IN,
+            # Wire the Ledger Loop for BOTH brokers
+            for broker_id in [req_broker_id, rel_broker_id]:
+                # D_ledger -> F_broker
+                physical_graph.channels.append(
+                    Channel(ledger_id, "out", broker_id, PortName.LEDGER_IN)
                 )
-            )
-            # F_broker -> D_ledger
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=broker_id,
-                    source_port=PortName.LEDGER_OUT,
-                    target_node_id=ledger_id,
-                    target_port="in",
+                # F_broker -> D_ledger
+                physical_graph.channels.append(
+                    Channel(broker_id, PortName.LEDGER_OUT, ledger_id, "in")
                 )
-            )
 
             # Self-Loop for Recirculation of rejected requests
             # If a request is rejected, it comes out of REQ_OUT and goes back to REQ_IN.
@@ -98,9 +97,9 @@ class Builder:
             # Connect Buffer -> Broker
             physical_graph.channels.append(
                 Channel(
-                    source_node_id=d_req_buffer_id,
+                    source_node_id=req_buffer_id,
                     source_port="out",
-                    target_node_id=broker_id,
+                    target_node_id=req_broker_id,
                     target_port=PortName.REQ,
                 )
             )
@@ -108,9 +107,9 @@ class Builder:
             # Connect Recirculation: Broker -> Buffer
             physical_graph.channels.append(
                 Channel(
-                    source_node_id=broker_id,
+                    source_node_id=req_broker_id,
                     source_port=PortName.REQ_OUT,
-                    target_node_id=d_req_buffer_id,
+                    target_node_id=req_buffer_id,
                     target_port="in",
                 )
             )
@@ -272,7 +271,8 @@ class Builder:
             assert subgraph.stainer is not None
 
             for res_name, amount in node_ir.constraints.items():
-                broker_id = PhysicalIdGenerator.global_broker(res_name)
+                req_broker_id = PhysicalIdGenerator.global_broker_req(res_name)
+                rel_broker_id = PhysicalIdGenerator.global_broker_rel(res_name)
                 req_buffer_id = f"buffer.req.{res_name}"
 
                 # --- A. Request Chain ---
@@ -344,7 +344,7 @@ class Builder:
                 port_name = f"res_{res_name}"
                 physical_graph.channels.append(
                     Channel(
-                        source_node_id=broker_id,
+                        source_node_id=req_broker_id,
                         source_port=PortName.GNT,
                         target_node_id=subgraph.bleacher.id,
                         target_port=port_name,
@@ -353,10 +353,6 @@ class Builder:
                 )
 
                 # --- C. Release Wiring ---
-                # Stainer (res_{name}) -> Broker (REL)
-                # We need a D_rel_buffer or connect directly to a D_rel?
-                # The broker needs a REL input buffer.
-                # Let's create a shared REL buffer for the broker too.
                 rel_buffer_id = f"buffer.rel.{res_name}"
                 if rel_buffer_id not in physical_graph.nodes:
                     d_rel_buffer = PhysicsDataNode(
@@ -364,9 +360,9 @@ class Builder:
                     )
                     physical_graph.nodes[rel_buffer_id] = d_rel_buffer
                     
-                    # Buffer -> Broker
+                    # Buffer -> RelBroker
                     physical_graph.channels.append(
-                        Channel(rel_buffer_id, "out", broker_id, PortName.REL)
+                        Channel(rel_buffer_id, "out", rel_broker_id, PortName.REL)
                     )
 
                 # Stainer -> RelBuffer

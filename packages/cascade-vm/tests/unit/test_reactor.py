@@ -152,7 +152,6 @@ async def test_reactor_independent_nodes():
 # --- New Test demonstrating EventDrivenRunner ---
 
 
-
 @pytest.mark.asyncio
 async def test_event_driven_ping_pong():
     # 1. Topology with Observability

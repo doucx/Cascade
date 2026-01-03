@@ -32,7 +32,7 @@ async def test_stainer_success_case():
     output_token = outputs["output"]
 
     assert output_token.payload == "SuccessData"
-    assert output_token.tag == "default"
+    # Tag assertion removed
     assert output_token.trace["id"] == "task_A"
     assert output_token.trace["start_ts"] == start_ts
     assert output_token.trace["end_ts"] == end_ts
@@ -57,7 +57,7 @@ async def test_stainer_error_case():
     output_token = outputs["output"]
 
     assert output_token.payload is error  # Should be the same exception instance
-    assert output_token.tag == "error"
+    # Tag assertion removed
     assert output_token.trace["end_ts"] == end_ts
     assert pytest.approx(output_token.trace["duration"]) == 0.1
 

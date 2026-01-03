@@ -118,7 +118,6 @@ class EventDrivenRunner:
     async def run_until_complete(
         self, task_id: str, timeout: float = 2.0
     ) -> ObservedEvent:
-
         def is_completion(e: ObservedEvent):
             # The Bleacher sets the 'id' in the trace.
             return e.event_type == "end" and e.trace_data.get("id") == task_id

@@ -10,8 +10,6 @@ class ObservedEvent:
     trace_data: Dict[str, Any] = field(default_factory=dict)
 
 
-
-
 async def standard_observer(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:

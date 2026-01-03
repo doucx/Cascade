@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List
 from .physics import PhysicsNode
 
 
@@ -12,8 +12,6 @@ class Channel:
     target_node_id: str
 
     target_port: str = "in"
-
-    tag_filter: Optional[str] = None
 
 
 @dataclass

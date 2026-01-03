@@ -14,10 +14,11 @@ def switch_logic(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     in_token = inputs["in"]
     direction = in_token.payload
 
+    # Sovereign routing: explicitly choose output port
     if direction == "path_a":
-        return {"out": Token(payload="Data A", tag="A")}
+        return {"out_a": Token(payload="Data A")}
     else:
-        return {"out": Token(payload="Data B", tag="B")}
+        return {"out_b": Token(payload="Data B")}
 
 
 @pytest.fixture
@@ -28,7 +29,11 @@ def branching_topology():
         id="Switch",
         name="SwitchNode",
         input_ports={"in": PortDef("in", PortRole.DATA)},
-        output_ports={"out": PortDef("out", PortRole.DATA)},
+        # Define multiple sovereign output ports
+        output_ports={
+            "out_a": PortDef("out_a", PortRole.DATA),
+            "out_b": PortDef("out_b", PortRole.DATA),
+        },
     )
     d_a = PhysicsDataNode(id="D_A", name="Branch A")
     d_b = PhysicsDataNode(id="D_B", name="Branch B")
@@ -40,15 +45,11 @@ def branching_topology():
     # D_in -> Switch
     graph.channels.append(Channel(d_in.id, "out", f_sw.id, target_port="in"))
 
-    # Switch -> D_A (Only allows Tag 'A')
-    graph.channels.append(
-        Channel(f_sw.id, "out", d_a.id, target_port="in", tag_filter="A")
-    )
+    # Switch -> D_A (Connect to out_a)
+    graph.channels.append(Channel(f_sw.id, "out_a", d_a.id, target_port="in"))
 
-    # Switch -> D_B (Only allows Tag 'B')
-    graph.channels.append(
-        Channel(f_sw.id, "out", d_b.id, target_port="in", tag_filter="B")
-    )
+    # Switch -> D_B (Connect to out_b)
+    graph.channels.append(Channel(f_sw.id, "out_b", d_b.id, target_port="in"))
 
     func_map = {f_sw.id: switch_logic}
 

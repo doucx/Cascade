@@ -58,6 +58,7 @@ class Builder:
             wire.add_node(f_reclaimer)
 
             # F_allocator (Priority Low)
+            # NOTE: Dynamic grant ports (gnt_for_...) will be added during wiring phase
             f_allocator = PhysicsFuncNode(
                 id=allocator_id,
                 name=f"Allocator({res_def.name})",
@@ -67,6 +68,7 @@ class Builder:
                 },
                 output_ports={
                     PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                    # PortName.GNT is deprecated in favor of dynamic ports, but kept for fallback
                     PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
                     PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
                 },
@@ -327,34 +329,45 @@ class Builder:
                 # F_req -> D_req_buffer (Global Buffer for the Allocator)
                 wire.connect(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
 
-                # --- B. Grant Wiring ---
-                gnt_buffer_id = f"buffer.gnt.{res_name}"
-                if gnt_buffer_id not in physical_graph.nodes:
-                    d_gnt_buffer = PhysicsDataNode(
-                        id=gnt_buffer_id, name=f"GntBuffer({res_name})", capacity=1000
-                    )
-                    wire.add_node(d_gnt_buffer)
+                # --- B. Grant Wiring (Sovereign Ports) ---
+                # We no longer use a shared Grant Buffer with tag filtering.
+                # Instead, we create a dedicated channel from a dynamic port on the Allocator
+                # to the specific Bleacher.
 
-                    # Allocator -> Grant Buffer (Only once per resource)
-                    wire.connect(allocator_id, PortName.GNT, gnt_buffer_id, "in")
+                # 1. Define the dynamic port name on Allocator
+                # Must match logic in discrete_allocator (requestor_id is f_req_id)
+                gnt_port_name = f"gnt_for_{f_req_id}"
 
-                target_tag = f_req_id
-                port_name = f"res_{res_name}"
-
-                # Grant Buffer -> Bleacher (Filtered by Tag)
-                wire.connect(
-                    gnt_buffer_id,
-                    "out",
-                    subgraph.bleacher.id,
-                    port_name,
-                    tag_filter=target_tag,
+                # 2. Add this port to the Allocator definition
+                allocator_node = physical_graph.nodes[allocator_id]
+                assert isinstance(allocator_node, PhysicsFuncNode)
+                allocator_node.output_ports[gnt_port_name] = PortDef(
+                    gnt_port_name, PortRole.RESOURCE
                 )
+
+                # 3. Create a dedicated intermediate DataNode for this grant
+                # (To satisfy Bipartite rule: Func -> Data -> Func)
+                d_gnt_id = f"gnt.to.{node_ir.id}.{res_name}"
+                d_gnt = PhysicsDataNode(
+                    id=d_gnt_id, name=f"Gnt({res_name}->{node_ir.name})"
+                )
+                wire.add_node(d_gnt)
+
+                # 4. Allocator -> Dedicated DataNode
+                wire.connect(allocator_id, gnt_port_name, d_gnt_id, "in")
+
+                # 5. Dedicated DataNode -> Bleacher
+                bleacher_port_name = f"res_{res_name}"
+                wire.connect(d_gnt_id, "out", subgraph.bleacher.id, bleacher_port_name)
 
                 # --- C. Release Wiring ---
                 # Stainer -> RelBuffer
+                # The stainer output port for releasing a resource is named symmetrically
+                # to the bleacher input port for acquiring it.
+                release_port_name = f"res_{res_name}"
                 wire.connect(
                     subgraph.stainer.id,
-                    port_name,
+                    release_port_name,
                     rel_buffer_id,
                     "in",
                 )

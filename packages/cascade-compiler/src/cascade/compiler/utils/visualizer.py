@@ -24,8 +24,6 @@ class GraphDumper:
             tgt = channel.target_node_id
 
             label = f"{channel.source_port} -> {channel.target_port}"
-            if channel.tag_filter:
-                label += f"\\n[{channel.tag_filter}]"
 
             # Check for Observability edges to style them differently (dashed)
             style = "solid"

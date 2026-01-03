@@ -8,6 +8,7 @@ from cascade.std.triad.bleacher import standard_bleacher
 
 def create_mock_bleach_node(input_ports_config):
     node = MagicMock(spec=BleachNode)
+    node.id = "test_node.bleach"  # Required for ID extraction logic
     node.input_ports = {
         name: PortDef(name, role) for name, role in input_ports_config.items()
     }
@@ -54,7 +55,10 @@ async def test_standard_bleacher_with_empty_inputs():
     assert outputs["worker_input"].payload == {}
 
     assert "trace_output" in outputs
-    assert outputs["trace_output"].payload == {"start_ts": MOCK_TIMESTAMP}
+    assert outputs["trace_output"].payload == {
+        "id": "test_node",
+        "start_ts": MOCK_TIMESTAMP,
+    }
 
 
 async def test_standard_bleacher_merges_traces():
@@ -72,7 +76,8 @@ async def test_standard_bleacher_merges_traces():
     trace_payload = outputs["trace_output"].payload
 
     # Check for merged data
-    assert trace_payload.get("id") == "B"  # Last write wins on conflict
+    # The 'id' is ALWAYS overwritten by the bleacher for canonical identity.
+    assert trace_payload.get("id") == "test_node"
     assert trace_payload.get("source") == "X"
     assert trace_payload.get("retry") == 1
 

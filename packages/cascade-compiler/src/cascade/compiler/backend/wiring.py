@@ -1,16 +1,13 @@
-from typing import Optional
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsNode, PhysicsFuncNode, PhysicsDataNode
 from .expander import SubGraph
 
 
 class WiringError(ValueError):
-
     pass
 
 
 class WiringHarness:
-
     def __init__(self, graph: BipartiteGraph):
         self.graph = graph
 
@@ -38,7 +35,6 @@ class WiringHarness:
         source_port: str,
         target_id: str,
         target_port: str,
-        tag_filter: Optional[str] = None,
     ) -> None:
         # 1. Existence Check
         if source_id not in self.graph.nodes:
@@ -78,6 +74,5 @@ class WiringHarness:
             source_port=source_port,
             target_node_id=target_id,
             target_port=target_port,
-            tag_filter=tag_filter,
         )
         self.graph.channels.append(channel)

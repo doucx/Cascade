@@ -1,0 +1,42 @@
+{
+  "GraphInspector": {},
+  "GraphInspector.__init__": {
+    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph):",
+    "baseline_code_structure_hash": "9e2ed3a8078baff441a4fc10e9fb372d16867e2c940ba1c7945117b2955f25dd"
+  },
+  "GraphInspector.assert_connection": {
+    "baseline_code_signature_text": "def assert_connection(self, source_id: str, target_id: str, source_port: Optional[str] = None, target_port: Optional[str] = None) -> Channel:",
+    "baseline_code_structure_hash": "c4201f27a0c0eb2e9de1570dd01e90efe191f05c98668b0706eadd09f682a3ce"
+  },
+  "GraphInspector.assert_node_exists": {
+    "baseline_code_signature_text": "def assert_node_exists(self, node_id: str) -> None:",
+    "baseline_code_structure_hash": "be50f9e7ed4a7d460cd03ec81baf732a6a89d116d722167108cfc46195db6942"
+  },
+  "GraphInspector.assert_port_count": {
+    "baseline_code_signature_text": "def assert_port_count(self, node_id: str, count: int, direction: str = 'output', role: Optional[PortRole] = None) -> None:",
+    "baseline_code_structure_hash": "1b177e4d815a1a76ad8dfa5f8ae6f2250470a835a5997dc6771d1e0f3c6dc90a"
+  },
+  "GraphInspector.assert_port_exists": {
+    "baseline_code_signature_text": "def assert_port_exists(self, node_id: str, port_name: str, direction: str = 'output') -> None:",
+    "baseline_code_structure_hash": "950110f58d0b6f564f91f06d9f787ca77cb05c44835b8ec6bf4dd0ea379b3809",
+    "baseline_yaml_content_hash": "a2526fe784710b7117dac37955aebb51eac07128fc7dbe33ba27ec6f510c94dc"
+  },
+  "GraphInspector.find_channels_from": {
+    "baseline_code_signature_text": "def find_channels_from(self, source_id: str, source_port: Optional[str] = None) -> List[Channel]:",
+    "baseline_code_structure_hash": "9856be7c6999e2fc67dad79054a68ff5fd4f36b5088a5fb79752e16d397f1ef0"
+  },
+  "GraphInspector.get_data_node": {
+    "baseline_code_signature_text": "def get_data_node(self, node_id: str) -> PhysicsDataNode:",
+    "baseline_code_structure_hash": "b3012aba78fed00e3447917ef53f76e16b7c48a17a3e60d6f450a81dd0e3f716"
+  },
+  "GraphInspector.get_func_node": {
+    "baseline_code_signature_text": "def get_func_node(self, node_id: str) -> PhysicsFuncNode:",
+    "baseline_code_structure_hash": "19803cd111c0a28ad89966fcf9a0978181bab2e90acd1769c2cc8ff0358189e8"
+  },
+  "GraphInspector.get_node": {
+    "baseline_code_signature_text": "def get_node(self, node_id: str) -> PhysicsNode:",
+    "baseline_code_structure_hash": "32b6082729f22912710b45eac6cf8b00d6789fd8d739c8587fbf7c4dddbf6b36"
+  },
+  "GraphInspector.graph": {},
+  "InspectionError": {}
+}

@@ -37,3 +37,6 @@ class PortName:
     # Observability
     OBS_OUTPUT = "obs_output"
     EVENT_TOKEN = "event_token"
+
+    # System
+    PULSE = "__pulse__"

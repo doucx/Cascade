@@ -9,6 +9,7 @@ from cascade.spec.environment import EnvironmentDef
 from cascade.spec.ports import PortDef, PortRole, PortName
 from cascade.std.resource.discrete import DiscreteLedger
 from .expander import Expander, SubGraph
+from cascade.spec.ports import PortName
 from .validator import GraphValidator
 from .wiring import WiringHarness
 from cascade.compiler.utils.naming import PhysicalIdGenerator
@@ -149,6 +150,24 @@ class Builder:
             # 3.3 Wire task observability TO the sidecar bus
             wire.connect(subgraph.bleacher.id, "obs_output", d_life_id, "in")
             wire.connect(subgraph.stainer.id, "obs_output", d_life_id, "in")
+
+            # 3.4 Wire pulse for source nodes
+            is_true_source = (
+                not node_ir.inputs
+                and not node_ir.dependencies
+                and not node_ir.condition
+                and not node_ir.constraints
+            )
+            if is_true_source:
+                d_pulse_id = PhysicalIdGenerator.pulse_source(node_ir.id)
+                d_pulse = PhysicsDataNode(
+                    id=d_pulse_id,
+                    name=f"Pulse({node_ir.id})",
+                    capacity=1,
+                    initial_tokens=1,
+                )
+                wire.add_node(d_pulse)
+                wire.connect(d_pulse_id, "out", subgraph.bleacher.id, PortName.PULSE)
 
         # 4. Wire dependencies between subgraphs
         for node_ir in graph_ir.nodes:

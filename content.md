@@ -1,111 +1,200 @@
-好的，我们来实施“Probe 归位”这一重构任务。
+好的，我们采纳方案 A：**分布式脉冲模型**。
 
-你的分析完全正确。当前的 `cascade-compiler` 为了“优化”，直接将常量（Literal）作为带 `initial_payload` 的 `PhysicsDataNode` 连接到任务上，这严重违反了 **“物理层纯粹性优于编译时性能”** 的原则，并破坏了 **“探测器模型 (Probe Model)”** 的统一性。
+这是一个遵循“物理层纯粹性优于编译时性能”核心原则的正确决策。它确保了我们的编译器生成一个逻辑上完整且无歧义的物理图，将优化的复杂性正确地推迟到 JIT 阶段。
 
-我将生成一个计划，修改 `Builder` 的行为。对于所有常量输入，我们将严格遵循白皮书定义的物理定律，生成一个完整的 `D_const -> F_probe -> D_probed -> F_bleacher` 链条。这会消除编译器中的一个“特殊情况”处理逻辑，使物理图的生成更加统一和可预测，并将优化的责任正确地推迟到 JIT 阶段。
+现在，我将生成一个计划来实现这个模型，专注于解决当前架构中最大的问题：“隐式启动”，特别是那些没有任何输入的“源任务”无法启动的问题。
 
-## [WIP] refactor: 为常量输入实现标准的探测器模型
+我们将为每一个零输入的源任务创建一个专属的、自启动的脉冲节点，并将其连接到任务的预处理节点（Bleacher）上。这使得图的启动机制变得明确、健壮且符合物理定律。
+
+## [WIP] refactor: 为源任务引入分布式脉冲以实现显式启动
 
 ### 用户需求
-修改 `Builder`，对于常量输入，不再直接生成带 Payload 的 `D_const` 数据节点，而是生成 `F_probe` (指向 `const_probe` 实现) + `D_val` 的标准物理结构，以符合架构白皮书的“探测器模型”。
+根据“分布式脉冲模型”策略，修改编译器为所有没有数据输入的源任务自动生成一个启动脉冲节点，以解决“隐式启动”和“僵尸节点”问题。
 
 ### 评论
-这是对 `cascade-compiler` 的一次至关重要的架构对齐。通过消除对常量的特殊处理，我们强制所有输入（无论是来自上游任务还是字面量）都遵循统一的物理路径。这不仅极大地简化了编译器的逻辑，还使得物理图成为逻辑图的全息投影，为未来的 JIT 优化（如常量折叠）和全链路可观测性奠定了坚实的基础。
+这是实现“图的主权”的关键一步。通过将启动机制物化为图中的物理实体（脉冲节点），我们消除了对 `Reactor` 隐式行为的依赖。每个源任务现在都拥有自己明确的“点火器”，这使得整个计算物理场的演化完全由其内部拓扑和初始能量决定，变得更加自洽和可预测。
 
 ### 目标
-1.  定位 `cascade-compiler/src/cascade/compiler/backend/builder.py` 中处理字面量输入的逻辑块。
-2.  移除创建带 `initial_payload` 的 `PhysicsDataNode` 并直接连接到 `Bleacher` 的过早优化代码。
-3.  替换为创建 `D_const -> F_probe -> D_probed` 物理链条的标准逻辑。
-4.  将这个链条的末端（`D_probed`）正确连接到目标任务的 `Bleacher` 节点上。
+1.  在 `cascade-spec` 中为脉冲端口定义一个标准的、稳定的名称 (`__pulse__`)。
+2.  在 `cascade-compiler` 的命名工具中添加一个用于生成脉冲源 ID 的方法。
+3.  修改 `Expander`，使其能识别零输入任务，并为其 `BleachNode` 添加一个 `__pulse__` 输入端口。
+4.  修改 `Builder`，使其能识别零输入任务，为每个任务实例化一个带初始能量的 `PhysicsDataNode` 作为脉冲源，并将其连接到对应 `BleachNode` 的 `__pulse__` 端口。
 
 ### 基本原理
-根据 **Cascade 3.0 架构白皮书**，所有参数都应被视为“动态采样动作”。当前的实现破坏了这一点，它让编译器扮演了 JIT 的角色，提前进行了“常量折叠”。
+根据白皮书，“系统启动时，自动向所有无依赖的...发射一颗 Token”。当前架构的缺陷是，一个没有任何参数、依赖或约束的任务（例如，`@cs.task def source()`），其展开的 `BleachNode` 没有任何输入端口，因此永远无法满足“全准入激发”条件，成为一个“僵尸节点”。
 
-本次重构将恢复物理层的纯粹性。新的拓扑结构将是：
-1.  `D_const`: 一个持有字面量值的、带 `initial_payload` 的 `PhysicsDataNode`。
-2.  `F_probe`: 一个 `PhysicsFuncNode`，它接收 `D_const` 的令牌，执行 `const_probe` 逻辑（本质上是一个身份函数），然后输出结果。
-3.  `D_probed`: 一个标准的中间 `PhysicsDataNode`，用于接收 `F_probe` 的结果，并遵守二分图规则。
-4.  `F_bleacher`: `D_probed` 的输出最终连接到目标任务的 `Bleacher` 节点，完成输入。
+本次重构通过以下方式解决此问题：
+1.  **识别**: 编译器将识别出这些“零输入源节点”。
+2.  **植入端口**: `Expander` 会为这些节点的 `BleachNode` 自动添加一个名为 `__pulse__` 的信号输入端口。
+3.  **注入能量**: `Builder` 会为每个此类节点创建一个对应的 `Pulse` 数据节点，并预置 `initial_tokens=1`。
+4.  **连接**: `Builder` 将 `Pulse` 节点连接到 `BleachNode` 的 `__pulse__` 端口。
 
-这个看似“冗余”的结构是正确的，因为它在物理层保留了完整的逻辑语义，将优化的权力完全交给了运行时。
+这样，在系统启动时，`Reactor` 的 `prime()` 阶段会为所有脉冲节点注入能量，这些能量会通过物理连接流向并激活所有源任务，从而实现一个确定性的、并行的、物理上正确的启动流程。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/probe-model #task/action/implementation #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/pulse-model #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 Builder 以实现探测器模型
+#### Acts 1: 在 Spec 中定义脉冲端口
 
-我们将修改 `builder.py`，将处理常量输入的逻辑替换为创建和连接探测器节点的标准流程。
+首先，我们在 `ports.py` 中为脉冲信号定义一个标准名称，确保整个系统的引用一致性。
+
+~~~~~act
+patch_file
+packages/cascade-spec/src/cascade/spec/ports.py
+~~~~~
+~~~~~python.old
+    # Observability
+    OBS_OUTPUT = "obs_output"
+    EVENT_TOKEN = "event_token"
+~~~~~
+~~~~~python.new
+    # Observability
+    OBS_OUTPUT = "obs_output"
+    EVENT_TOKEN = "event_token"
+
+    # System
+    PULSE = "__pulse__"
+~~~~~
+
+#### Acts 2: 更新编译器命名工具
+
+然后，我们为 `PhysicalIdGenerator` 添加一个方法来创建脉冲源节点的唯一 ID。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/utils/naming.py
+~~~~~
+~~~~~python.old
+    @staticmethod
+    def observability_observer() -> str:
+        return "global.observability.observer"
+~~~~~
+~~~~~python.new
+    @staticmethod
+    def observability_observer() -> str:
+        return "global.observability.observer"
+
+    @staticmethod
+    def pulse_source(logical_node_id: str) -> str:
+        return f"pulse.source.{logical_node_id}"
+~~~~~
+
+#### Acts 3: 修改 Expander 以添加脉冲端口
+
+现在，我们让 `Expander` 能够识别零输入任务，并为其 `BleachNode` 动态添加 `__pulse__` 端口。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+~~~~~
+~~~~~python.old
+from cascade.spec.triad import BleachNode, WorkerNode, StainNode
+from cascade.spec.topology import Channel
+from cascade.spec.ports import PortDef, PortRole
+from cascade.compiler.utils.naming import PhysicalIdGenerator
+~~~~~
+~~~~~python.new
+from cascade.spec.triad import BleachNode, WorkerNode, StainNode
+from cascade.spec.topology import Channel
+from cascade.spec.ports import PortDef, PortRole, PortName
+from cascade.compiler.utils.naming import PhysicalIdGenerator
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+~~~~~
+~~~~~python.old
+        # Add port for condition (SIGNAL/DATA)
+        if node_ir.condition:
+            port_name = "condition"
+            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
+
+        f_pre = BleachNode(
+            id=f_pre_id,
+            name=f"Bleach({node_ir.name})",
+~~~~~
+~~~~~python.new
+        # Add port for condition (SIGNAL/DATA)
+        if node_ir.condition:
+            port_name = "condition"
+            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
+
+        # If after all that, there are no inputs, it's a source node that needs a pulse.
+        if not bleacher_inputs:
+            bleacher_inputs[PortName.PULSE] = PortDef(PortName.PULSE, PortRole.SIGNAL)
+
+        f_pre = BleachNode(
+            id=f_pre_id,
+            name=f"Bleach({node_ir.name})",
+~~~~~
+
+#### Acts 4: 修改 Builder 以创建和连接脉冲源
+
+最后，我们修改 `Builder` 来完成脉冲机制的物理布线。
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/src/cascade/compiler/backend/builder.py
 ~~~~~
 ~~~~~python.old
-                # Case B: Literal Value (Constant)
-                else:
-                    # Create a dedicated DataNode for this constant
-                    const_node_id = PhysicalIdGenerator.constant(node_ir.id, arg_name)
-                    const_node = PhysicsDataNode(
-                        id=const_node_id,
-                        name=f"Const({arg_name})",
-                        capacity=1,
-                        initial_tokens=1,
-                        initial_payload=source_ref,
-                    )
-                    wire.add_node(const_node)
-
-                    # Wire Const -> Bleacher
-                    wire.connect(
-                        const_node_id, "out", target_subgraph.bleacher.id, arg_name
-                    )
+from cascade.spec.ports import PortDef, PortRole, PortName
+from cascade.std.resource.discrete import DiscreteLedger
+from .expander import Expander, SubGraph
 ~~~~~
 ~~~~~python.new
-                # Case B: Literal Value (Constant) - Use Probe Model
-                else:
-                    # 1. D_const (DataNode holding the literal value)
-                    d_const_id = PhysicalIdGenerator.constant(node_ir.id, arg_name)
-                    d_const = PhysicsDataNode(
-                        id=d_const_id,
-                        name=f"Const({arg_name})",
-                        capacity=1,
-                        initial_tokens=1,
-                        initial_payload=source_ref,
-                    )
-                    wire.add_node(d_const)
+from cascade.spec.ports import PortDef, PortRole, PortName
+from cascade.std.resource.discrete import DiscreteLedger
+from .expander import Expander, SubGraph
+from cascade.spec.ports import PortName
+~~~~~
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python.old
+            # 3.3 Wire task observability TO the sidecar bus
+            wire.connect(subgraph.bleacher.id, "obs_output", d_life_id, "in")
+            wire.connect(subgraph.stainer.id, "obs_output", d_life_id, "in")
 
-                    # 2. F_probe (The probe node for constants)
-                    f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, arg_name)
-                    f_probe = PhysicsFuncNode(
-                        id=f_probe_id,
-                        name=f"Probe({arg_name})",
-                        input_ports={"value": PortDef("value", PortRole.DATA)},
-                        output_ports={"out": PortDef("out", PortRole.DATA)},
-                    )
-                    wire.add_node(f_probe)
+        # 4. Wire dependencies between subgraphs
+        for node_ir in graph_ir.nodes:
+            target_subgraph = subgraphs[node_ir.id]
+~~~~~
+~~~~~python.new
+            # 3.3 Wire task observability TO the sidecar bus
+            wire.connect(subgraph.bleacher.id, "obs_output", d_life_id, "in")
+            wire.connect(subgraph.stainer.id, "obs_output", d_life_id, "in")
 
-                    # 3. D_probed (Intermediate data node to connect to Bleacher)
-                    d_probed_id = f"{f_probe_id}.out"
-                    d_probed = PhysicsDataNode(
-                        id=d_probed_id, name=f"Probed({arg_name})"
-                    )
-                    wire.add_node(d_probed)
+            # 3.4 Wire pulse for source nodes
+            is_true_source = (
+                not node_ir.inputs
+                and not node_ir.dependencies
+                and not node_ir.condition
+                and not node_ir.constraints
+            )
+            if is_true_source:
+                d_pulse_id = PhysicalIdGenerator.pulse_source(node_ir.id)
+                d_pulse = PhysicsDataNode(
+                    id=d_pulse_id,
+                    name=f"Pulse({node_ir.id})",
+                    capacity=1,
+                    initial_tokens=1,
+                )
+                wire.add_node(d_pulse)
+                wire.connect(d_pulse_id, "out", subgraph.bleacher.id, PortName.PULSE)
 
-                    # 4. Wiring
-                    # D_const -> F_probe
-                    wire.connect(d_const_id, "out", f_probe_id, "value")
-                    # F_probe -> D_probed
-                    wire.connect(f_probe_id, "out", d_probed_id, "in")
-                    # D_probed -> Target Bleacher
-                    wire.connect(
-                        d_probed_id, "out", target_subgraph.bleacher.id, arg_name
-                    )
+        # 4. Wire dependencies between subgraphs
+        for node_ir in graph_ir.nodes:
+            target_subgraph = subgraphs[node_ir.id]
 ~~~~~
 
 ### 下一步建议
-我们已经完成了“Probe 归位”的重构。根据 `识别出的过早优化和架构违规.md` 中定义的计划，下一步是解决“隐式启动”问题。
+我们已经成功地将“分布式脉冲”模型集成到了编译器中，解决了“隐式启动”这一核心架构违规。
 
-我建议我们立即开始实施**“Pulse 引入”**：在图中引入一个全局的 `Pulse` 信号流，并修改编译器，使其能够识别所有源探测器（Source Probes）并自动将它们连接到这个全局启动脉冲上。这将为系统提供一个清晰、统一的“控制平面”，彻底解决僵尸节点问题。如果你同意，我将生成相应的计划。
+根据我们的重构路线图，所有已识别的架构违规都已修正。我建议我们现在转向**验证**阶段。我们可以编写一个新的集成测试，该测试定义一个没有任何输入的源任务，并验证在 `Builder` 构建的物理图中，它被正确地连接到了一个自启动的 `Pulse` 节点，并且可以在 `Reactor` 中被成功激发。
+
+这将确保我们的重构是正确且健壮的。如果你同意，我将为你生成这个测试计划。

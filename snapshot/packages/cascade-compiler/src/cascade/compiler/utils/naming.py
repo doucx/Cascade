@@ -60,3 +60,7 @@ class PhysicalIdGenerator:
     @staticmethod
     def observability_observer() -> str:
         return "global.observability.observer"
+
+    @staticmethod
+    def pulse_source(logical_node_id: str) -> str:
+        return f"pulse.source.{logical_node_id}"

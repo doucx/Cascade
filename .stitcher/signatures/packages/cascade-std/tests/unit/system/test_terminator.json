@@ -1,6 +1,6 @@
 {
   "test_halt_signal_produces_correct_token": {
-    "baseline_code_signature_text": "def test_halt_signal_produces_correct_token():",
-    "baseline_code_structure_hash": "e16e8d1f7d86145a88d6b859effa3f0efdd1795b1d51257bcb77ee674c4e4ba3"
+    "baseline_code_signature_text": "async def test_halt_signal_produces_correct_token():",
+    "baseline_code_structure_hash": "d901dcd38ac4e04fda5b1077c41695899162c36650fa0222b57225acadcc83c7"
   }
 }

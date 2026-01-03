@@ -1,0 +1,10 @@
+{
+  "DiscreteLedger": {},
+  "DiscreteLedger.available": {},
+  "DiscreteLedger.total": {},
+  "discrete_broker": {
+    "baseline_code_signature_text": "async def discrete_broker(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "496e92efc6ab80c3e3663024b49e65ac000cff82f3032be3a0afc151c540b71c",
+    "baseline_yaml_content_hash": "6ca9cbd960a65463d32ef9255a399857711c8a3133580df65d5b16daed921c2b"
+  }
+}

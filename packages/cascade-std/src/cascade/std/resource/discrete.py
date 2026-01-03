@@ -12,19 +12,6 @@ class DiscreteLedger:
 async def discrete_broker(
     inputs: Dict[str, Token], node: PhysicsNode
 ) -> Dict[str, Token]:
-    """
-    A Discrete Resource Broker using the Self-Loop Ledger pattern.
-
-    Inputs:
-        ledger_in: Token containing DiscreteLedger(total, available)
-        req_in: (Optional) Token requesting N units. Payload: int
-        rel_in: (Optional) Token releasing N units. Payload: int
-
-    Outputs:
-        ledger_out: Updated ledger
-        gnt_out: (Conditional) Grant token if request succeeded
-        req_out: (Conditional) Original request token if failed (Recirculation)
-    """
     ledger_token = inputs["ledger_in"]
     # Reconstruct ledger object from payload (assuming it's a dict or dataclass)
     ledger_data = ledger_token.payload

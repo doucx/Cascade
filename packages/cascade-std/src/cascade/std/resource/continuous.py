@@ -12,20 +12,6 @@ class ContinuousLedger:
 async def continuous_broker(
     inputs: Dict[str, Token], node: PhysicsNode
 ) -> Dict[str, Token]:
-    """
-    A Continuous Resource Broker using the Self-Loop Ledger pattern.
-    Handles floating-point resources (e.g., memory, disk space).
-
-    Inputs:
-        ledger_in: Token containing ContinuousLedger
-        req_in: (Optional) Token requesting N units. Payload: float
-        rel_in: (Optional) Token releasing N units. Payload: float
-
-    Outputs:
-        ledger_out: Updated ledger
-        gnt_out: (Conditional) Grant token
-        req_out: (Conditional) Recirculated request token
-    """
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload
     if isinstance(ledger_data, dict):

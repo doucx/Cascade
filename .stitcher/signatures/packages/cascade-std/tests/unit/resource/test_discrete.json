@@ -1,0 +1,18 @@
+{
+  "test_discrete_broker_grants_when_available": {
+    "baseline_code_signature_text": "async def test_discrete_broker_grants_when_available():",
+    "baseline_code_structure_hash": "90f60c3a67542e30f426f005f4ab451de3caa095403067aadd36210dfd2a4808"
+  },
+  "test_discrete_broker_recirculates_when_starved": {
+    "baseline_code_signature_text": "async def test_discrete_broker_recirculates_when_starved():",
+    "baseline_code_structure_hash": "4d11a58b38b8a8112eb6efdbb22ab55e86966611a09c7de5a98a1024692dc45e"
+  },
+  "test_discrete_broker_releases_resource": {
+    "baseline_code_signature_text": "async def test_discrete_broker_releases_resource():",
+    "baseline_code_structure_hash": "31d1a2156e519790ad607e5d4acbeb3ad48105010ebcf0e9fb137989d102a7e8"
+  },
+  "test_discrete_broker_simultaneous_rel_and_req": {
+    "baseline_code_signature_text": "async def test_discrete_broker_simultaneous_rel_and_req():",
+    "baseline_code_structure_hash": "f2768363d65597a68025b6d6e609de70b995b81178bb16f674c938d8003eb451"
+  }
+}

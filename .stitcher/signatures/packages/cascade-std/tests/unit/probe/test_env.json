@@ -1,10 +1,10 @@
 {
   "test_env_probe_returns_none_if_env_missing": {
-    "baseline_code_signature_text": "def test_env_probe_returns_none_if_env_missing():",
-    "baseline_code_structure_hash": "33c3c8ac5775ddb56140d9fe59b7bcf1526456c1f7199adbec13576c3d8fbf31"
+    "baseline_code_signature_text": "async def test_env_probe_returns_none_if_env_missing():",
+    "baseline_code_structure_hash": "e31609435db50653473a0629387b6e2d76b8653fe5a75357ee1e2e3eeacc0d90"
   },
   "test_env_probe_samples_os_environ": {
-    "baseline_code_signature_text": "def test_env_probe_samples_os_environ():",
-    "baseline_code_structure_hash": "8f0f4ad3670a634bd73eb94cac3cbd4cb17af99636e9a94fc62d4b359050dacb"
+    "baseline_code_signature_text": "async def test_env_probe_samples_os_environ():",
+    "baseline_code_structure_hash": "3418228bc6dc4b2e601e5771788b2425a28f0bd887d5fd7d9049b1812725799b"
   }
 }

@@ -120,7 +120,9 @@ class GraphExecutionStrategy:
                         executable_registry,
                     )
 
-                required_resources = self.resource_container.scan(graph)
+                required_resources = self.resource_container.scan(
+                    graph, executable_registry
+                )
                 self.resource_container.setup(
                     required_resources,
                     active_resources,

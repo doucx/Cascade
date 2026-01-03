@@ -36,9 +36,10 @@ async def standard_stainer(
     outputs = {}
 
     # 3.1 The main result
-    # In the future (Phase 2), we will route to 'output_error' if exception.
-    # For now, we emit to 'output' regardless, but without a tag.
-    outputs["output"] = Token(payload=result_payload, trace=trace_payload)
+    # Sovereign Routing: We explicitly choose the 'output_default' port for success.
+    # In the future, if result_payload is an Exception or Jump, we would route to
+    # 'output_error' or other dynamic ports.
+    outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
 
     # 4.2 Observability Event
     outputs["obs_output"] = Token(payload=None, trace=trace_payload)

@@ -1,361 +1,310 @@
 简要回答
 
-好的，我们进入第二阶段。这一阶段的核心任务是将资源布线逻辑从单一的策略类中提取出来，转变为可插拔的“棱镜 (Prism)”架构。这将允许我们轻松支持不同类型的资源（如离散、连续、甚至虚拟资源），而无需修改编译器的核心循环。
+好的，我们进入第三阶段。我们将实施“主权端口”原则，首先将所有节点的默认输出端口从含糊的 `output` 迁移到明确的 `output_default`，并引入 `output_error` 端口，从而确立多路输出的物理基础。
 
-## [WIP] refactor(compiler): 实施通用布线算法第二阶段 - 资源系统的声明式重构
+## [WIP] refactor(compiler): 实施通用布线算法第三阶段 - 主权端口与复杂路由
 
 ### 用户需求
-将 `cascade-compiler` 中的资源布线逻辑重构为基于 `ResourcePrism` 的插件式架构。
+1.  重构 `Stainer` 和 `Expander` 以支持主权端口（Sovereign Ports）模型。
+2.  废弃单一的 `output` 端口，替换为语义明确的 `output_default` 和 `output_error`。
+3.  更新所有布线策略以适配新的端口命名。
+4.  添加测试用例验证多端口路由的基础设施。
 
 ### 评论
-目前的 `ResourceWiringPolicy` 硬编码了离散资源（Discrete Resource）的拓扑结构（Allocator, Reclaimer, Requestor）。为了支持更多样化的资源模型，我们需要将“如何构建特定资源的物理图”这一知识封装在独立的 `Prism` 类中。
+这是迈向“逻辑即拓扑”的关键一步。通过区分 `default` 和 `error` 输出，我们消除了对 `Token.tag` 进行光谱过滤的需求。虽然目前的逻辑图（NodeIR）尚未完全利用多分支能力，但物理层必须先行一步，提供支持多路流形（Manifold）的基础设施。
 
 ### 目标
-1.  修改 `ResourceDef` 以支持 `type` 字段。
-2.  定义 `ResourcePrism` 抽象基类。
-3.  实现 `DiscreteResourcePrism`，承接原有的离散资源布线逻辑。
-4.  重构 `ResourceWiringPolicy`，使其成为一个调度器，根据资源类型调用相应的 Prism。
+1.  修改 `cascade-std` 中的 `standard_stainer`，使其默认向 `output_default` 发射数据。
+2.  修改 `cascade-compiler` 中的 `Expander`，为每个节点生成 `output_default` 和 `output_error` 端口。
+3.  修改 `ParameterWiringPolicy` 和 `ControlFlowWiringPolicy`，使其连接上游的 `output_default` 端口。
+4.  添加单元测试验证 Expander 的端口生成，以及集成测试验证端到端的流转。
 
 ### 基本原理
-*   **Prism 模式**: 棱镜将单一的“资源定义”折射为复杂的“物理拓扑”。
-*   **开闭原则**: 新增资源类型只需添加新的 Prism 实现并注册，无需修改现有代码。
+*   **主权原则**: 节点（Stainer）决定数据去向，而不是通道。
+*   **显式优于隐式**: `output_default` 明确表示这是成功路径的输出。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/compiler #scope/core #task/domain/compiler #task/object/resource-system #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/compiler #comp/std #scope/core #task/domain/compiler #task/object/sovereign-ports #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新环境定义
+#### Acts 1: 更新标准 Stainer 实现
 
-首先，我们需要让资源定义能够携带类型信息。
+首先，我们修改 `standard_stainer`，使其符合主权端口规范。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/environment.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
 ~~~~~
 ~~~~~python.old
-@dataclass(frozen=True)
-class ResourceDef:
-    name: str
-    capacity: int = 1
+    # 3. Create output tokens
+    outputs = {}
 
+    # 3.1 The main result
+    # In the future (Phase 2), we will route to 'output_error' if exception.
+    # For now, we emit to 'output' regardless, but without a tag.
+    outputs["output"] = Token(payload=result_payload, trace=trace_payload)
 
-@dataclass(frozen=True)
-class EnvironmentDef:
+    # 4.2 Observability Event
 ~~~~~
 ~~~~~python.new
-@dataclass(frozen=True)
-class ResourceDef:
-    name: str
-    capacity: int = 1
-    type: str = "discrete"
+    # 3. Create output tokens
+    outputs = {}
 
+    # 3.1 The main result
+    # Sovereign Routing: We explicitly choose the 'output_default' port for success.
+    # In the future, if result_payload is an Exception or Jump, we would route to
+    # 'output_error' or other dynamic ports.
+    outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
 
-@dataclass(frozen=True)
-class EnvironmentDef:
+    # 4.2 Observability Event
 ~~~~~
 
-#### Acts 2: 定义资源棱镜协议
+#### Acts 2: 更新 Expander 生成逻辑
 
-接下来，定义 `ResourcePrism` 接口。它包含两个核心方法：一个用于建立全局基础设施，一个用于建立任务级的连接。
+接着，更新编译器后端，使其生成新的端口定义。
 
 ~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/wiring/prism.py
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
 ~~~~~
-~~~~~python
-from typing import Protocol, Any
-from cascade.spec.environment import ResourceDef
-from cascade.spec.ir.models import NodeIR
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.wiring.context import WiringContext
-
-
-class ResourcePrism(Protocol):
-    """
-    A Prism refracts a high-level Resource Definition into a complex physical topology.
-    It encapsulates the knowledge of how to wire a specific type of resource.
-    """
-
-    def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None:
-        """
-        Create the global infrastructure for this resource (e.g., Allocator, Ledger).
-        This may be called multiple times for different resources of the same type.
-        """
-        ...
-
-    def connect_task(
-        self,
-        ctx: WiringContext,
-        node_ir: NodeIR,
-        subgraph: SubGraph,
-        res_name: str,
-        amount: Any,
-    ) -> None:
-        """
-        Wire a specific task to request/release this resource.
-        """
-        ...
-~~~~~
-
-#### Acts 3: 实现离散资源棱镜
-
-我们将原 `ResourceWiringPolicy` 中的逻辑迁移到 `DiscreteResourcePrism` 中。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p packages/cascade-compiler/src/cascade/compiler/wiring/prisms
-touch packages/cascade-compiler/src/cascade/compiler/wiring/prisms/__init__.py
-~~~~~
-
-~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/wiring/prisms/discrete.py
-~~~~~
-~~~~~python
-from typing import Any
-
-from cascade.spec.environment import ResourceDef
-from cascade.spec.ir.models import NodeIR
-from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.ports import PortDef, PortRole, PortName
-from cascade.std.resource.discrete import DiscreteLedger
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.utils.naming import PhysicalIdGenerator
-from cascade.compiler.wiring.context import WiringContext
-from cascade.compiler.wiring.prism import ResourcePrism
-
-
-class DiscreteResourcePrism(ResourcePrism):
-    def ensure_globals(self, ctx: WiringContext, res_def: ResourceDef) -> None:
-        allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
-        reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
-        ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
-
-        # D_ledger
-        initial_ledger = DiscreteLedger(
-            total=res_def.capacity, available=res_def.capacity
-        )
-        d_ledger = PhysicsDataNode(
-            id=ledger_id,
-            name=f"Ledger({res_def.name})",
-            capacity=1,
-            initial_tokens=1,
-            initial_payload=initial_ledger,
-        )
-        ctx.wire.add_node(d_ledger)
-
-        # F_reclaimer
-        f_reclaimer = PhysicsFuncNode(
-            id=reclaimer_id,
-            name=f"Reclaimer({res_def.name})",
-            input_ports={
-                PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                PortName.REL: PortDef(PortName.REL, PortRole.DATA),
-            },
-            output_ports={
-                PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-            },
-        )
-        ctx.wire.add_node(f_reclaimer)
-
-        # F_allocator
-        f_allocator = PhysicsFuncNode(
-            id=allocator_id,
-            name=f"Allocator({res_def.name})",
-            input_ports={
-                PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
-            },
-            output_ports={
-                PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
-                PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
-            },
-        )
-        ctx.wire.add_node(f_allocator)
-
-        # Wiring: Ledger <-> Allocator
-        ctx.wire.connect(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
-        ctx.wire.connect(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
-
-        # Wiring: Ledger <-> Reclaimer
-        ctx.wire.connect(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
-        ctx.wire.connect(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
-
-        # Request Buffer
-        d_req_buffer_id = f"buffer.req.{res_def.name}"
-        d_req_buffer = PhysicsDataNode(
-            id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
-        )
-        ctx.wire.add_node(d_req_buffer)
-
-        # Buffer -> Allocator
-        ctx.wire.connect(d_req_buffer_id, "out", allocator_id, PortName.REQ)
-        # Recirculation: Allocator -> Buffer
-        ctx.wire.connect(allocator_id, PortName.REQ_OUT, d_req_buffer_id, "in")
-
-        # Release Buffer
-        rel_buffer_id = f"buffer.rel.{res_def.name}"
-        d_rel_buffer = PhysicsDataNode(
-            id=rel_buffer_id, name=f"RelBuffer({res_def.name})", capacity=1000
-        )
-        ctx.wire.add_node(d_rel_buffer)
-
-        # Buffer -> Reclaimer
-        ctx.wire.connect(rel_buffer_id, "out", reclaimer_id, PortName.REL)
-
-    def connect_task(
-        self,
-        ctx: WiringContext,
-        node_ir: NodeIR,
-        subgraph: SubGraph,
-        res_name: str,
-        amount: Any,
-    ) -> None:
-        allocator_id = PhysicalIdGenerator.global_allocator(res_name)
-        req_buffer_id = f"buffer.req.{res_name}"
-        rel_buffer_id = f"buffer.rel.{res_name}"
-
-        # --- A. Request Chain ---
-        # 1. D_const (Amount)
-        d_amt_id = PhysicalIdGenerator.constant(node_ir.id, f"req_amt_{res_name}")
-        d_amt = PhysicsDataNode(
-            id=d_amt_id,
-            name=f"Amt({res_name})",
-            capacity=1,
-            initial_tokens=1,
-            initial_payload=amount,
-        )
-        ctx.wire.add_node(d_amt)
-
-        # 2. F_probe (ConstProbe)
-        f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, res_name)
-        f_probe = PhysicsFuncNode(
-            id=f_probe_id,
-            name=f"Probe({res_name})",
-            input_ports={"value": PortDef("value", PortRole.DATA)},
-            output_ports={"out": PortDef("out", PortRole.DATA)},
-        )
-        ctx.wire.add_node(f_probe)
-
-        # 3. F_req (Requestor)
-        f_req_id = PhysicalIdGenerator.requestor(node_ir.id, res_name)
-        f_req = PhysicsFuncNode(
-            id=f_req_id,
-            name=f"Req({res_name})",
-            input_ports={"amount": PortDef("amount", PortRole.DATA)},
-            output_ports={PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)},
-        )
-        ctx.wire.add_node(f_req)
-
-        # 4. Wiring
-        # D_amt -> F_probe
-        ctx.wire.connect(d_amt_id, "out", f_probe_id, "value")
-
-        # F_probe -> D_probed
-        d_probed_id = f"{f_probe_id}.out"
-        d_probed = PhysicsDataNode(id=d_probed_id, name="ProbedVal")
-        ctx.wire.add_node(d_probed)
-
-        ctx.wire.connect(f_probe_id, "out", d_probed_id, "in")
-
-        # D_probed -> F_req
-        ctx.wire.connect(d_probed_id, "out", f_req_id, "amount")
-
-        # F_req -> D_req_buffer
-        ctx.wire.connect(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
-
-        # --- B. Grant Wiring (Sovereign Ports) ---
-        gnt_port_name = f"gnt_for_{f_req_id}"
-
-        # Add this port to the Allocator definition
-        allocator_node = ctx.physical_graph.nodes[allocator_id]
-        assert isinstance(allocator_node, PhysicsFuncNode)
-        allocator_node.output_ports[gnt_port_name] = PortDef(
-            gnt_port_name, PortRole.RESOURCE
-        )
-
-        # Create a dedicated intermediate DataNode for this grant
-        d_gnt_id = f"gnt.to.{node_ir.id}.{res_name}"
-        d_gnt = PhysicsDataNode(id=d_gnt_id, name=f"Gnt({res_name}->{node_ir.name})")
-        ctx.wire.add_node(d_gnt)
-
-        # Allocator -> Dedicated DataNode
-        ctx.wire.connect(allocator_id, gnt_port_name, d_gnt_id, "in")
-
-        # Dedicated DataNode -> Bleacher
-        assert subgraph.bleacher is not None
-        bleacher_port_name = f"res_{res_name}"
-        ctx.wire.connect(d_gnt_id, "out", subgraph.bleacher.id, bleacher_port_name)
-
-        # --- C. Release Wiring ---
-        # Stainer -> RelBuffer
-        assert subgraph.stainer is not None
-        release_port_name = f"res_{res_name}"
-        ctx.wire.connect(
-            subgraph.stainer.id,
-            release_port_name,
-            rel_buffer_id,
-            "in",
-        )
-~~~~~
-
-#### Acts 4: 重构 ResourceWiringPolicy
-
-现在我们将 `ResourceWiringPolicy` 简化为一个分发器。
-
-~~~~~act
-write_file
-packages/cascade-compiler/src/cascade/compiler/wiring/policies/resource.py
-~~~~~
-~~~~~python
-from typing import Dict, Type
-
-from cascade.spec.ir.models import NodeIR
-from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.wiring.context import WiringContext
-from cascade.compiler.wiring.protocol import WiringPolicy
-from cascade.compiler.wiring.prism import ResourcePrism
-from cascade.compiler.wiring.prisms.discrete import DiscreteResourcePrism
-
-
-class ResourceWiringPolicy(WiringPolicy):
-    def __init__(self):
-        self._prisms: Dict[str, ResourcePrism] = {
-            "discrete": DiscreteResourcePrism(),
+~~~~~python.old
+        # F_post: The Stainer
+        # Outputs = Result + Resource Returns
+        stainer_outputs = {
+            "output": PortDef("output", PortRole.DATA, "Token"),
+            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
         }
+        for res_name in node_ir.constraints.keys():
+~~~~~
+~~~~~python.new
+        # F_post: The Stainer
+        # Outputs = Result + Resource Returns
+        # Sovereign Ports: Explicitly define default and error paths
+        stainer_outputs = {
+            "output_default": PortDef("output_default", PortRole.DATA, "Token"),
+            "output_error": PortDef("output_error", PortRole.DATA, "Token"),
+            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
+        }
+        for res_name in node_ir.constraints.keys():
+~~~~~
 
-    def setup_globals(self, ctx: WiringContext) -> None:
-        # Create Global Brokers for each resource based on its type
-        for res_def in ctx.environment.resources:
-            prism = self._get_prism(res_def.type)
-            prism.ensure_globals(ctx, res_def)
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+~~~~~
+~~~~~python.old
+        # D_worker_out -> F_post
+        channels.append(
+            Channel(
+                source_node_id=d_worker_out_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port="worker_result",
+            )
+        )
+~~~~~
+~~~~~python.new
+        # D_worker_out -> F_post
+        channels.append(
+            Channel(
+                source_node_id=d_worker_out_id,
+                source_port="out",
+                target_node_id=f_post_id,
+                target_port="worker_result",
+            )
+        )
+~~~~~
 
-    def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:
-        # Validate and Wire constraints
-        env_resources = {r.name: r for r in ctx.environment.resources}
-        for res_name in node_ir.constraints:
-            if res_name not in env_resources:
-                raise ValueError(
-                    f"Resource '{res_name}' required by node '{node_ir.id}' is not defined"
-                )
+#### Acts 3: 更新布线策略
 
-        for res_name, amount in node_ir.constraints.items():
-            res_def = env_resources[res_name]
-            prism = self._get_prism(res_def.type)
-            prism.connect_task(ctx, node_ir, subgraph, res_name, amount)
+现在必须更新所有引用了旧 `output` 端口的布线策略。
 
-    def _get_prism(self, type_name: str) -> ResourcePrism:
-        if type_name not in self._prisms:
-            raise ValueError(f"Unknown resource type: '{type_name}'")
-        return self._prisms[type_name]
+**3.1 ParameterWiringPolicy**
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/wiring/policies/parameter.py
+~~~~~
+~~~~~python.old
+                d_dep = PhysicsDataNode(id=d_dep_id, name=f"Dep({arg_name})")
+                ctx.wire.add_node(d_dep)
+
+                # Source Stainer -> D_dep
+                ctx.wire.connect(source_subgraph.stainer.id, "output", d_dep_id, "in")
+
+                # D_dep -> Target Bleacher
+                ctx.wire.connect(d_dep_id, "out", subgraph.bleacher.id, arg_name)
+~~~~~
+~~~~~python.new
+                d_dep = PhysicsDataNode(id=d_dep_id, name=f"Dep({arg_name})")
+                ctx.wire.add_node(d_dep)
+
+                # Source Stainer -> D_dep (Connect from output_default)
+                ctx.wire.connect(source_subgraph.stainer.id, "output_default", d_dep_id, "in")
+
+                # D_dep -> Target Bleacher
+                ctx.wire.connect(d_dep_id, "out", subgraph.bleacher.id, arg_name)
+~~~~~
+
+**3.2 ControlFlowWiringPolicy**
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/wiring/policies/control.py
+~~~~~
+~~~~~python.old
+                d_seq = PhysicsDataNode(id=d_seq_id, name=f"Seq({dep_id})")
+                ctx.wire.add_node(d_seq)
+
+                ctx.wire.connect(source_subgraph.stainer.id, "output", d_seq_id, "in")
+                ctx.wire.connect(d_seq_id, "out", subgraph.bleacher.id, port_name)
+
+        # 4.3 Condition (.run_if())
+        if node_ir.condition and node_ir.condition in ctx.subgraphs:
+            source_subgraph = ctx.get_subgraph(node_ir.condition)
+            assert source_subgraph.stainer is not None
+
+            # Violation Fix: Insert D_cond
+            d_cond_id = f"cond.{node_ir.condition}.to.{node_ir.id}"
+            d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
+            ctx.wire.add_node(d_cond)
+
+            ctx.wire.connect(source_subgraph.stainer.id, "output", d_cond_id, "in")
+            ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")
+~~~~~
+~~~~~python.new
+                d_seq = PhysicsDataNode(id=d_seq_id, name=f"Seq({dep_id})")
+                ctx.wire.add_node(d_seq)
+
+                ctx.wire.connect(source_subgraph.stainer.id, "output_default", d_seq_id, "in")
+                ctx.wire.connect(d_seq_id, "out", subgraph.bleacher.id, port_name)
+
+        # 4.3 Condition (.run_if())
+        if node_ir.condition and node_ir.condition in ctx.subgraphs:
+            source_subgraph = ctx.get_subgraph(node_ir.condition)
+            assert source_subgraph.stainer is not None
+
+            # Violation Fix: Insert D_cond
+            d_cond_id = f"cond.{node_ir.condition}.to.{node_ir.id}"
+            d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
+            ctx.wire.add_node(d_cond)
+
+            ctx.wire.connect(source_subgraph.stainer.id, "output_default", d_cond_id, "in")
+            ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")
+~~~~~
+
+#### Acts 4: 添加验证测试
+
+我们添加两个测试：
+1.  **单元测试**: 验证 Expander 是否生成了正确的端口。
+2.  **集成测试**: 验证数据能否通过 `output_default` 正确流转。
+
+~~~~~act
+write_file
+packages/cascade-compiler/src/cascade/compiler/backend/test_sovereignty.py
+~~~~~
+~~~~~python
+from cascade.spec.ir.models import NodeIR, TaskDef, ArgumentDef, ArgumentKind
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.ports import PortRole
+from cascade.compiler.backend.expander import Expander
+
+
+def test_expander_generates_sovereign_ports():
+    # 1. Setup IR
+    fp = Fingerprint({"canonical_code_structure_hash": "abc"})
+    task_def = TaskDef(name="my_task", args=[], fingerprint=fp)
+    node_ir = NodeIR(id="node_sov", name="SovereignNode", task=task_def)
+
+    # 2. Expand
+    expander = Expander()
+    subgraph = expander.expand_node(node_ir)
+    stainer = subgraph.stainer
+
+    # 3. Assert Ports
+    assert "output_default" in stainer.output_ports
+    assert "output_error" in stainer.output_ports
+    
+    # Check roles
+    assert stainer.output_ports["output_default"].role == PortRole.DATA
+    assert stainer.output_ports["output_error"].role == PortRole.DATA
+
+    # Ensure legacy 'output' is gone
+    assert "output" not in stainer.output_ports
+~~~~~
+
+~~~~~act
+write_file
+packages/cascade-compiler/tests/integration/test_sovereign_wiring.py
+~~~~~
+~~~~~python
+import pytest
+from cascade.spec.task import task
+from cascade.compiler.frontend.generator import IRGenerator
+from cascade.compiler.backend.builder import Builder
+from cascade.spec.environment import EnvironmentDef
+from cascade.compiler.utils.inspector import GraphInspector
+
+
+@task
+def producer():
+    return "Hello"
+
+
+@task
+def consumer(msg):
+    return f"Received: {msg}"
+
+
+def test_sovereign_wiring_flow():
+    """
+    Verifies that the new 'output_default' based wiring actually works
+    and connects the producer's Stainer to the consumer's Bleacher.
+    """
+    # 1. Generate Logical Graph
+    t1 = producer()
+    t2 = consumer(t1)
+    
+    ir_generator = IRGenerator()
+    graph_ir = ir_generator.generate(t2)
+
+    # 2. Build Physical Graph
+    builder = Builder()
+    physical_graph = builder.build(graph_ir, EnvironmentDef())
+
+    # 3. Inspect Topology
+    inspector = GraphInspector(physical_graph)
+    
+    # Get nodes
+    nodes = {n.name: n for n in graph_ir.nodes}
+    t1_id = nodes["producer"].id
+    t2_id = nodes["consumer"].id
+
+    t1_stainer_id = f"{t1_id}.stain"
+    
+    # Check that t1.stain has the sovereign port
+    inspector.assert_port_exists(t1_stainer_id, "output_default")
+
+    # Find channels from t1.stain
+    channels = inspector.find_channels_from(t1_stainer_id, "output_default")
+    assert len(channels) == 1
+    
+    # It should go to a dependency buffer (D_dep)
+    d_dep_id = channels[0].target_node_id
+    assert "dep." in d_dep_id
+    
+    # That buffer should go to t2.bleach
+    t2_bleacher_id = f"{t2_id}.bleach"
+    inspector.assert_connection(d_dep_id, t2_bleacher_id, target_port="msg")
 ~~~~~
 
 ### 下一步建议
-我们已经完成了资源系统的声明式重构。现在，要添加新的资源类型，只需实现一个 `Prism` 并注册即可。
-建议接下来按照计划进入**第三阶段：主权端口与复杂路由**，解决 `Stainer` 的输出逻辑，进一步清理物理层的隐式契约。
+第三阶段完成。我们已经成功建立了主权端口的基础设施。
+目前的实现只涵盖了 `output_default`。对于 `output_error`，目前它作为一个预留端口存在，但在 `standard_stainer` 中尚未激活异常路由逻辑。
+
+接下来的建议方向：
+1.  **完善异常处理**: 修改 `standard_stainer`，使其捕获 `worker_result` 中的异常对象，并将其路由到 `output_error`。
+2.  **通用性验证**: 执行第四阶段的通用性验证，尝试引入一个连续资源（如 `Memory`），验证我们的 Prism 架构是否真能处理非标准的资源拓扑。

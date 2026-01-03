@@ -99,8 +99,10 @@ class Expander:
 
         # F_post: The Stainer
         # Outputs = Result + Resource Returns
+        # Sovereign Ports: Explicitly define default and error paths
         stainer_outputs = {
-            "output": PortDef("output", PortRole.DATA, "Token"),
+            "output_default": PortDef("output_default", PortRole.DATA, "Token"),
+            "output_error": PortDef("output_error", PortRole.DATA, "Token"),
             "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
         }
         for res_name in node_ir.constraints.keys():

@@ -25,8 +25,8 @@ class ParameterWiringPolicy(WiringPolicy):
                 d_dep = PhysicsDataNode(id=d_dep_id, name=f"Dep({arg_name})")
                 ctx.wire.add_node(d_dep)
 
-                # Source Stainer -> D_dep
-                ctx.wire.connect(source_subgraph.stainer.id, "output", d_dep_id, "in")
+                # Source Stainer -> D_dep (Connect from output_default)
+                ctx.wire.connect(source_subgraph.stainer.id, "output_default", d_dep_id, "in")
 
                 # D_dep -> Target Bleacher
                 ctx.wire.connect(d_dep_id, "out", subgraph.bleacher.id, arg_name)

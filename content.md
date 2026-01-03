@@ -1,105 +1,99 @@
-非常好的发现！这是一个“好”的错误。
+太棒了。通过引入 `GraphValidator` 和拆分 `Broker` 逻辑，我们不仅解决了死锁和饿死问题，更重要的是，我们将 `Builder` 生成的物理图从“大概正确”提升到了“绝对保真”的高度。
 
-它证明我们上一轮的修复是成功的：为了遵守二分图定律，Builder 确实在 `node_a.stain -> node_b.bleach` 之间插入了一个额外的数据节点。
-现在，测试因为其过时的断言而失败。我们需要更新测试，使其与新的、物理上正确的图结构保持一致。
+我将生成最终的提交计划。
 
-## [WIP] test(compiler): 更新因二分图修复引入的节点/通道数量断言
+## [COMMIT] refactor(core): 修复二分图违规并实现基于 IC 的资源协商闭环
 
 ### 错误分析
-`test_builder_expands_and_wires_nodes` 测试用例断言生成的图中包含 14 个节点。然而，在我们为了修复“F -> F”连接而引入了中间数据节点（`D_dep`）后，`node_a` 和 `node_b` 之间的依赖关系现在需要一个额外的 `PhysicsDataNode`。
-这使得总节点数增加到 15，导致断言失败。
-同时，原本的一条 F->F 通道被替换为了两条 F->D->F 通道，通道总数也需要更新。
+
+在之前的实现中，系统存在三个核心物理缺陷：
+1.  **二分图违规 (Bipartite Violation)**: 编译器在处理任务依赖和资源授权时，直接连接了两个函数节点（如 `Stainer -> Bleacher` 或 `Allocator -> Bleacher`），导致物理场拓扑畸形。
+2.  **全输入死锁 (Firing Deadlock)**: 旧的 `Broker IC` 试图在一个节点内处理可选的申请和释放，违反了“全输入激发”原则，导致在没有释放信号时申请操作被无限期阻塞。
+3.  **资源饿死 (Resource Starvation)**: 由于 `Reactor` 的线性扫描特性，当 `Allocator` 排在 `Reclaimer` 之前时，持续的请求会抢占 Ledger，导致资源无法归还。
 
 ### 用户需求
-更新 `test_builder.py` 中的断言，以反映新的、物理上正确的节点和通道数量。
+修复上述物理模型缺陷，确保系统符合 Cascade 3.0 白皮书定义的物理定律，并能正确处理资源竞争。
 
 ### 评论
-这是一个积极的信号，表明我们的测试套件足够敏感，能够捕捉到架构的结构性变化。使测试与实现同步是完成此次重构的最后一步。
+这次重构是“物理层纯粹性优于编译时性能”原则的胜利。我们通过引入静态验证器（Validator）强制实施了物理定律，通过拆分 Allocator/Reclaimer 消除了逻辑歧义，并通过调整拓扑顺序解决了公平性问题。这为后续的 JIT 优化打下了坚实的基础。
 
 ### 目标
-1.  修改 `test_builder.py`。
-2.  将节点数量断言从 `14` 更新为 `15`。
-3.  将通道数量断言从 `18` 更新为 `19`。
-4.  更新注释以解释新的计算方式。
+1.  **建立防线**: 引入 `GraphValidator`，在编译阶段拦截所有违反物理公理的行为。
+2.  **重构资源 IC**: 将 Broker 拆分为独立的 `Allocator` 和 `Reclaimer`，实现基于 Ledger 竞争的协商模型。
+3.  **修复布线**: 在所有 Func -> Func 的连接处插入中间数据节点，确保严格遵守 F -> D -> F 定律。
+4.  **优化调度**: 实施“回收优先”策略，消除活锁风险。
 
 ### 基本原理
-*   **节点数**: 2 Triads (12) + 1 D_life + 1 F_obs + **1 D_dep** = 15
-*   **通道数**: 2 Triads (12) + **2 Data Dep** + 4 Obs + 1 D_life->F_obs = 19
+*   **物理公理化**: 能量（Token）只能存在于库所（Data），转换只能发生在变迁（Func）。
+*   **职责分离**: 申请、授权、执行、回收、释放，每一个环节都对应独立的物理实体。
+*   **拓扑主权**: 通过图的几何构型（顺序、连接）决定系统的动态行为，而非依赖中心化的调度逻辑。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/compiler #scope/core #ai/instruct #task/domain/testing #task/object/unit-test #task/action/update #task/state/end
+#intent/refine #flow/ready #priority/high #comp/compiler #comp/std #comp/vm #concept/topology #concept/resource #scope/core #ai/instruct #task/domain/core #task/object/resource-negotiation #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 更新测试断言
+#### Acts 1: 提交核心架构重构
+
+我们将把编译器、标准库以及相关的测试修复作为一个完整的逻辑单元提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/ports.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-compiler/src/cascade/compiler/backend/validator.py
+packages/cascade-compiler/src/cascade/compiler/backend/validator.stitcher.yaml
+packages/cascade-compiler/src/cascade/compiler/utils/naming.py
 packages/cascade-compiler/tests/unit/backend/test_builder.py
+packages/cascade-compiler/tests/unit/backend/test_builder_environment.py
+packages/cascade-std/src/cascade/std/probe/const.py
+packages/cascade-std/src/cascade/std/probe/const.stitcher.yaml
+packages/cascade-std/src/cascade/std/resource/discrete.py
+packages/cascade-std/src/cascade/std/resource/continuous.py
+packages/cascade-std/src/cascade/std/resource/requestor.py
+packages/cascade-std/src/cascade/std/resource/requestor.stitcher.yaml
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-std/tests/unit/resource/test_discrete.py
+packages/cascade-std/tests/unit/resource/test_continuous.py
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
+packages/cascade-vm/tests/integration/test_broker_starvation.py
 ~~~~~
-~~~~~python.old
-    # Assert nodes: 2 triads (6 nodes each) + 1 D_life + 1 F_obs = 14 nodes
-    assert len(graph.nodes) == 14
-    assert "global.observability.bus" in graph.nodes
-    assert "global.observability.observer" in graph.nodes
-    assert "node_a.stain" in graph.nodes
-    assert "node_b.bleach" in graph.nodes
 
-    # Assert channels
-    # 2 triads (6 internal) = 12
-    # 1 data dependency = 1
-    # 2 triads * 2 obs channels to D_life = 4
-    # 1 D_life -> F_obs channel = 1
-    # Total = 12 + 1 + 4 + 1 = 18
-    assert len(graph.channels) == 18
-
-    # 1. Test data dependency wiring
-    data_channel = next(
-        c
-        for c in graph.channels
-        if c.source_node_id == "node_a.stain" and c.target_node_id == "node_b.bleach"
-    )
-    assert data_channel is not None
-    assert data_channel.source_port == "output"
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-    # Assert nodes: 2 triads (6 nodes each) + 1 D_life + 1 F_obs + 1 D_dep = 15 nodes
-    assert len(graph.nodes) == 15
-    assert "global.observability.bus" in graph.nodes
-    assert "global.observability.observer" in graph.nodes
-    assert "node_a.stain" in graph.nodes
-    assert "node_b.bleach" in graph.nodes
-    assert "dep.node_a.to.node_b.data" in graph.nodes
+~~~~~text
+refactor(core): fix bipartite violations and implement IC-based resource negotiation
 
-    # Assert channels
-    # 2 triads (6 internal) = 12
-    # 1 data dependency = 2 (F->D, D->F)
-    # 2 triads * 2 obs channels to D_life = 4
-    # 1 D_life -> F_obs channel = 1
-    # Total = 12 + 2 + 4 + 1 = 19
-    assert len(graph.channels) == 19
+This is a major architectural correction to align the implementation with the
+Cascade 3.0 "Fully Symmetric Computational Physics Field" specification.
 
-    # 1. Test data dependency wiring (F -> D -> F)
-    stain_to_dep = next(
-        c
-        for c in graph.channels
-        if c.source_node_id == "node_a.stain"
-        and c.target_node_id == "dep.node_a.to.node_b.data"
-    )
-    assert stain_to_dep is not None
+Key Changes:
+1.  **GraphValidator**: Introduced a static verification phase in the Builder
+    to enforce fundamental physical laws, including the Bipartite Rule (F<->D only)
+    and Port Connectivity.
+2.  **Bipartite Compliance**: Fixed multiple instances where FuncNodes were
+    directly connected (e.g., Stainer to Bleacher). Inserted intermediate 
+    DataNodes (D_dep, D_seq, D_gnt) to ensure energy conservation laws.
+3.  **Broker Decomposition**: Split the monolithic Resource Broker into 
+    separate 'Allocator' and 'Reclaimer' ICs. This eliminates 'Optional Input' 
+    ambiguity and solves firing deadlocks by transforming resource negotiation 
+    into explicit ledger competition.
+4.  **Starvation Prevention**: Implemented 'Reclaimer Priority' in the Builder 
+    to ensure resources are always returned before new ones are granted, 
+    fixing livelock scenarios identified in integration tests.
+5.  **Standard Library Enhancements**: Added ConstProbe and Requestor ICs to 
+    unify the physical model for parameter sampling and resource tagging.
 
-    dep_to_bleach = next(
-        c
-        for c in graph.channels
-        if c.source_node_id == "dep.node_a.to.node_b.data"
-        and c.target_node_id == "node_b.bleach"
-    )
-    assert dep_to_bleach is not None
-    assert dep_to_bleach.target_port == "data"
+These changes provide a robust, self-verifying foundation for physical execution 
+and full-spectrum observability.
 ~~~~~
 
 ### 下一步建议
-现在所有的单元测试都应该通过了。
-请重新运行完整的测试套件。如果一切顺利，`test_resource_backpressure.py` 也应该能成功通过，因为我们已经修复了其底层的物理模型错误。
+
+1.  **物理启动脉冲 (Pulse Model)**: 虽然现在的任务由输入数据激发，但根据白皮书 4.2 节，我们需要实现全局的启动脉冲机制，以统一驱动所有的探测器节点。
+2.  **JIT 优化器启动**: 随着物理图节点数的增加，现在的运行效率已经有所下降。我们可以开始设计 Phase 2 的 JIT Pass，特别是“常量折叠”和“三连体融合”，以抹除这些为了保真而付出的性能抽象税。
+3.  **可视化升级**: 强烈建议升级 `cascade-cli` 以支持展示这种复杂的物理图，这对于未来的调试至关重要。

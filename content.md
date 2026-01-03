@@ -1,200 +1,167 @@
-好的，我们采纳方案 A：**分布式脉冲模型**。
+好的，收到指令。
 
-这是一个遵循“物理层纯粹性优于编译时性能”核心原则的正确决策。它确保了我们的编译器生成一个逻辑上完整且无歧义的物理图，将优化的复杂性正确地推迟到 JIT 阶段。
+你发现的问题非常敏锐，这正是我们期望在 TDD 流程中看到的。测试 `test_builder_expands_and_wires_nodes` 的失败并非回归，而是**我们成功的标志**——它证明了我们上一轮的“脉冲引入”重构确实改变了 `Builder` 的行为，为源节点 `node_a` 增加了一个额外的 `Pulse` 节点。
 
-现在，我将生成一个计划来实现这个模型，专注于解决当前架构中最大的问题：“隐式启动”，特别是那些没有任何输入的“源任务”无法启动的问题。
+现在，我们将遵循 TDD 的下一步：进入 “GREEN” 状态。我将生成一个计划，该计划不仅会修复这个因我们的改进而过时的测试，还会添加一个全新的、专门的测试用例来明确验证“分布式脉冲模型”是否按预期工作。
 
-我们将为每一个零输入的源任务创建一个专属的、自启动的脉冲节点，并将其连接到任务的预处理节点（Bleacher）上。这使得图的启动机制变得明确、健壮且符合物理定律。
-
-## [WIP] refactor: 为源任务引入分布式脉冲以实现显式启动
+## [WIP] test: 验证脉冲模型并修复过时测试
 
 ### 用户需求
-根据“分布式脉冲模型”策略，修改编译器为所有没有数据输入的源任务自动生成一个启动脉冲节点，以解决“隐式启动”和“僵尸节点”问题。
+1.  修复 `packages/cascade-compiler/tests/unit/backend/test_builder.py` 中因“脉冲模型”重构而导致的断言失败。
+2.  为“分布式脉冲模型”编写一个新的单元测试，确保编译器能为源节点正确生成和连接脉冲节点。
 
 ### 评论
-这是实现“图的主权”的关键一步。通过将启动机制物化为图中的物理实体（脉冲节点），我们消除了对 `Reactor` 隐式行为的依赖。每个源任务现在都拥有自己明确的“点火器”，这使得整个计算物理场的演化完全由其内部拓扑和初始能量决定，变得更加自洽和可预测。
+这是一个标准的、健康的 TDD 流程。在重构（Refactor）之后，更新测试套件以反映新的、正确的行为是至关重要的一步。修复过时的测试可以确保我们的安全网依然有效，而为新功能（脉冲模型）添加专门的测试则可以明确地将新架构的行为契约固定下来，防止未来的回归。
 
 ### 目标
-1.  在 `cascade-spec` 中为脉冲端口定义一个标准的、稳定的名称 (`__pulse__`)。
-2.  在 `cascade-compiler` 的命名工具中添加一个用于生成脉冲源 ID 的方法。
-3.  修改 `Expander`，使其能识别零输入任务，并为其 `BleachNode` 添加一个 `__pulse__` 输入端口。
-4.  修改 `Builder`，使其能识别零输入任务，为每个任务实例化一个带初始能量的 `PhysicsDataNode` 作为脉冲源，并将其连接到对应 `BleachNode` 的 `__pulse__` 端口。
+1.  **修复**：在 `test_builder.py` 中，将 `test_builder_expands_and_wires_nodes` 的节点数断言从 `15` 更新为 `16`，通道数断言从 `19` 更新为 `20`，并更新注释以解释新增的 `Pulse` 节点。
+2.  **新增**：在 `test_builder.py` 中，添加一个新的测试用例 `test_builder_creates_pulse_for_source_node`。
+3.  **验证**：新测试将断言对于一个真正的源节点（无任何输入），`Builder` 会：
+    *   创建一个 ID 正确的 `Pulse` 数据节点。
+    *   为该 `Pulse` 节点设置 `initial_tokens=1`。
+    *   将该 `Pulse` 节点正确连接到源任务 `BleachNode` 的 `__pulse__` 端口。
 
 ### 基本原理
-根据白皮书，“系统启动时，自动向所有无依赖的...发射一颗 Token”。当前架构的缺陷是，一个没有任何参数、依赖或约束的任务（例如，`@cs.task def source()`），其展开的 `BleachNode` 没有任何输入端口，因此永远无法满足“全准入激发”条件，成为一个“僵尸节点”。
+旧测试的失败是因为 `sample_graph_ir` 中的 `node_a` 是一个真正的源节点，我们的重构为其自动添加了一个 `Pulse` 节点，导致总节点数从 15 增加到 16，总通道数从 19 增加到 20。修复断言即可。
 
-本次重构通过以下方式解决此问题：
-1.  **识别**: 编译器将识别出这些“零输入源节点”。
-2.  **植入端口**: `Expander` 会为这些节点的 `BleachNode` 自动添加一个名为 `__pulse__` 的信号输入端口。
-3.  **注入能量**: `Builder` 会为每个此类节点创建一个对应的 `Pulse` 数据节点，并预置 `initial_tokens=1`。
-4.  **连接**: `Builder` 将 `Pulse` 节点连接到 `BleachNode` 的 `__pulse__` 端口。
-
-这样，在系统启动时，`Reactor` 的 `prime()` 阶段会为所有脉冲节点注入能量，这些能量会通过物理连接流向并激活所有源任务，从而实现一个确定性的、并行的、物理上正确的启动流程。
+新测试则直接聚焦于脉冲模型的正确性。通过构造一个最纯粹的源节点场景，我们可以精确验证 `Builder` 是否遵循了我们在上一步中实现的脉冲生成和布线逻辑，从而为这一核心架构特性提供坚实的测试保障。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/pulse-model #task/action/implementation #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/compiler #comp/tests #task/domain/testing #task/object/pulse-model #task/action/verification #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 在 Spec 中定义脉冲端口
+#### Acts 1: 更新测试文件以验证脉冲模型
 
-首先，我们在 `ports.py` 中为脉冲信号定义一个标准名称，确保整个系统的引用一致性。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/ports.py
-~~~~~
-~~~~~python.old
-    # Observability
-    OBS_OUTPUT = "obs_output"
-    EVENT_TOKEN = "event_token"
-~~~~~
-~~~~~python.new
-    # Observability
-    OBS_OUTPUT = "obs_output"
-    EVENT_TOKEN = "event_token"
-
-    # System
-    PULSE = "__pulse__"
-~~~~~
-
-#### Acts 2: 更新编译器命名工具
-
-然后，我们为 `PhysicalIdGenerator` 添加一个方法来创建脉冲源节点的唯一 ID。
+我们将使用 `write_file` 一次性完成对 `test_builder.py` 的修复和增强。
 
 ~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/utils/naming.py
+write_file
+packages/cascade-compiler/tests/unit/backend/test_builder.py
 ~~~~~
-~~~~~python.old
-    @staticmethod
-    def observability_observer() -> str:
-        return "global.observability.observer"
-~~~~~
-~~~~~python.new
-    @staticmethod
-    def observability_observer() -> str:
-        return "global.observability.observer"
-
-    @staticmethod
-    def pulse_source(logical_node_id: str) -> str:
-        return f"pulse.source.{logical_node_id}"
-~~~~~
-
-#### Acts 3: 修改 Expander 以添加脉冲端口
-
-现在，我们让 `Expander` 能够识别零输入任务，并为其 `BleachNode` 动态添加 `__pulse__` 端口。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/expander.py
-~~~~~
-~~~~~python.old
-from cascade.spec.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.topology import Channel
-from cascade.spec.ports import PortDef, PortRole
+~~~~~python
+import pytest
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef, ArgumentKind
+from cascade.spec.fingerprint import Fingerprint
+from cascade.compiler.backend.builder import Builder
+from cascade.spec.environment import EnvironmentDef
 from cascade.compiler.utils.naming import PhysicalIdGenerator
-~~~~~
-~~~~~python.new
-from cascade.spec.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.topology import Channel
-from cascade.spec.ports import PortDef, PortRole, PortName
-from cascade.compiler.utils.naming import PhysicalIdGenerator
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/expander.py
-~~~~~
-~~~~~python.old
-        # Add port for condition (SIGNAL/DATA)
-        if node_ir.condition:
-            port_name = "condition"
-            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
-
-        f_pre = BleachNode(
-            id=f_pre_id,
-            name=f"Bleach({node_ir.name})",
-~~~~~
-~~~~~python.new
-        # Add port for condition (SIGNAL/DATA)
-        if node_ir.condition:
-            port_name = "condition"
-            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
-
-        # If after all that, there are no inputs, it's a source node that needs a pulse.
-        if not bleacher_inputs:
-            bleacher_inputs[PortName.PULSE] = PortDef(PortName.PULSE, PortRole.SIGNAL)
-
-        f_pre = BleachNode(
-            id=f_pre_id,
-            name=f"Bleach({node_ir.name})",
-~~~~~
-
-#### Acts 4: 修改 Builder 以创建和连接脉冲源
-
-最后，我们修改 `Builder` 来完成脉冲机制的物理布线。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-from cascade.spec.ports import PortDef, PortRole, PortName
-from cascade.std.resource.discrete import DiscreteLedger
-from .expander import Expander, SubGraph
-~~~~~
-~~~~~python.new
-from cascade.spec.ports import PortDef, PortRole, PortName
-from cascade.std.resource.discrete import DiscreteLedger
-from .expander import Expander, SubGraph
+from cascade.spec.physics import PhysicsDataNode
 from cascade.spec.ports import PortName
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-            # 3.3 Wire task observability TO the sidecar bus
-            wire.connect(subgraph.bleacher.id, "obs_output", d_life_id, "in")
-            wire.connect(subgraph.stainer.id, "obs_output", d_life_id, "in")
 
-        # 4. Wire dependencies between subgraphs
-        for node_ir in graph_ir.nodes:
-            target_subgraph = subgraphs[node_ir.id]
-~~~~~
-~~~~~python.new
-            # 3.3 Wire task observability TO the sidecar bus
-            wire.connect(subgraph.bleacher.id, "obs_output", d_life_id, "in")
-            wire.connect(subgraph.stainer.id, "obs_output", d_life_id, "in")
 
-            # 3.4 Wire pulse for source nodes
-            is_true_source = (
-                not node_ir.inputs
-                and not node_ir.dependencies
-                and not node_ir.condition
-                and not node_ir.constraints
-            )
-            if is_true_source:
-                d_pulse_id = PhysicalIdGenerator.pulse_source(node_ir.id)
-                d_pulse = PhysicsDataNode(
-                    id=d_pulse_id,
-                    name=f"Pulse({node_ir.id})",
-                    capacity=1,
-                    initial_tokens=1,
-                )
-                wire.add_node(d_pulse)
-                wire.connect(d_pulse_id, "out", subgraph.bleacher.id, PortName.PULSE)
+@pytest.fixture
+def sample_graph_ir():
+    fp = Fingerprint.from_dict({"canonical_code_structure_hash": "abc"})
+    task_a_def = TaskDef(name="task_a", args=[], fingerprint=fp)
+    task_b_def = TaskDef(
+        name="task_b",
+        args=[ArgumentDef("data", ArgumentKind.POSITIONAL_OR_KEYWORD)],
+        fingerprint=fp,
+    )
 
-        # 4. Wire dependencies between subgraphs
-        for node_ir in graph_ir.nodes:
-            target_subgraph = subgraphs[node_ir.id]
+    node_a = NodeIR(id="node_a", name="NodeA", task=task_a_def)
+    node_b = NodeIR(
+        id="node_b",
+        name="NodeB",
+        task=task_b_def,
+        inputs={"data": "node_a"},  # task_b.data comes from node_a
+    )
+
+    return GraphIR(nodes=[node_a, node_b])
+
+
+@pytest.fixture
+def source_only_graph_ir():
+    fp = Fingerprint.from_dict({"canonical_code_structure_hash": "xyz"})
+    task_def = TaskDef(name="source_task", args=[], fingerprint=fp)
+    node = NodeIR(id="source_node", name="Source", task=task_def)
+    return GraphIR(nodes=[node])
+
+
+def test_builder_expands_and_wires_nodes(sample_graph_ir):
+    builder = Builder()
+    graph = builder.build(sample_graph_ir, environment=EnvironmentDef())
+
+    # Assert nodes: 2 triads (6*2=12) + 1 D_life + 1 F_obs + 1 D_dep + 1 D_pulse = 16 nodes
+    assert len(graph.nodes) == 16
+    assert "global.observability.bus" in graph.nodes
+    assert "global.observability.observer" in graph.nodes
+    assert "node_a.stain" in graph.nodes
+    assert "node_b.bleach" in graph.nodes
+    assert "dep.node_a.to.node_b.data" in graph.nodes
+    assert "pulse.source.node_a" in graph.nodes  # The new pulse node
+
+    # Assert channels
+    # 2 triads (6 internal * 2) = 12
+    # 1 data dependency = 2 (F->D, D->F)
+    # 2 triads * 2 obs channels to D_life = 4
+    # 1 D_life -> F_obs channel = 1
+    # 1 D_pulse -> F_bleach channel = 1
+    # Total = 12 + 2 + 4 + 1 + 1 = 20
+    assert len(graph.channels) == 20
+
+    # 1. Test data dependency wiring (F -> D -> F)
+    stain_to_dep = next(
+        c
+        for c in graph.channels
+        if c.source_node_id == "node_a.stain"
+        and c.target_node_id == "dep.node_a.to.node_b.data"
+    )
+    assert stain_to_dep is not None
+
+    dep_to_bleach = next(
+        c
+        for c in graph.channels
+        if c.source_node_id == "dep.node_a.to.node_b.data"
+        and c.target_node_id == "node_b.bleach"
+    )
+    assert dep_to_bleach is not None
+    assert dep_to_bleach.target_port == "data"
+
+    # 2. Test observability wiring
+    d_life_id = "global.observability.bus"
+    obs_channels = [c for c in graph.channels if c.target_node_id == d_life_id]
+
+    assert len(obs_channels) == 4  # 2 starts, 2 ends
+
+    source_ids = {c.source_node_id for c in obs_channels}
+    assert "node_a.bleach" in source_ids
+    assert "node_a.stain" in source_ids
+    assert "node_b.bleach" in source_ids
+    assert "node_b.stain" in source_ids
+
+
+def test_builder_creates_pulse_for_source_node(source_only_graph_ir):
+    builder = Builder()
+    graph = builder.build(source_only_graph_ir, environment=EnvironmentDef())
+
+    # 1. Assert Pulse node creation
+    pulse_id = PhysicalIdGenerator.pulse_source("source_node")
+    assert pulse_id in graph.nodes
+
+    pulse_node = graph.nodes[pulse_id]
+    assert isinstance(pulse_node, PhysicsDataNode)
+    assert pulse_node.initial_tokens == 1
+
+    # 2. Assert Bleacher port definition
+    bleacher_id = "source_node.bleach"
+    bleacher_node = graph.nodes[bleacher_id]
+    assert PortName.PULSE in bleacher_node.input_ports
+
+    # 3. Assert Connection: D_pulse -> F_bleach
+    pulse_channel = next(
+        c
+        for c in graph.channels
+        if c.source_node_id == pulse_id and c.target_node_id == bleacher_id
+    )
+    assert pulse_channel is not None
+    assert pulse_channel.target_port == PortName.PULSE
 ~~~~~
 
 ### 下一步建议
-我们已经成功地将“分布式脉冲”模型集成到了编译器中，解决了“隐式启动”这一核心架构违规。
+我们已经完成了对编译器核心逻辑的重构，并为这些变更添加了单元测试保障。现在，整个物理图的生成机制（包括资源、探测器和脉冲）已经达到了一个稳定且符合架构原则的状态。
 
-根据我们的重构路线图，所有已识别的架构违规都已修正。我建议我们现在转向**验证**阶段。我们可以编写一个新的集成测试，该测试定义一个没有任何输入的源任务，并验证在 `Builder` 构建的物理图中，它被正确地连接到了一个自启动的 `Pulse` 节点，并且可以在 `Reactor` 中被成功激发。
-
-这将确保我们的重构是正确且健壮的。如果你同意，我将为你生成这个测试计划。
+下一步，我建议我们进行一次端到端的集成测试，使用 `EventDrivenRunner` 来实际运行一个由新版 `Builder` 编译出的、包含源任务的物理图，并断言该任务确实被成功执行。这将验证从编译到执行的整个链路是通畅的。

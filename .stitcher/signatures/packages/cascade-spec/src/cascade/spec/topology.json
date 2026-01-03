@@ -17,9 +17,7 @@
   "Channel.source_port": {
     "baseline_yaml_content_hash": "1e7f1c7b30c5dae4397d36bb5f96dfbd9d072cb221cb31f295f195f3a72464cb"
   },
-  "Channel.tag_filter": {
-    "baseline_yaml_content_hash": "914643081a061b40e3d2a4ab71c087e5ab20c4ea6a76fa2c8231f4decf2a2732"
-  },
+  "Channel.tag_filter": {},
   "Channel.target_node_id": {
     "baseline_yaml_content_hash": "237058277572a0b5ce963fd2af3a3723c4e39ae50ad135f09ca73d8091f1cb8b"
   },

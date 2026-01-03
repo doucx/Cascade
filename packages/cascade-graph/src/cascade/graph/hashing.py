@@ -15,8 +15,8 @@ class HashingService:
         dep_nodes: Dict[str, Node],
     ) -> str:
         # 1. Start with the Stable Code Fingerprint
-        code_hash = definition.fingerprint["current_code_structure_hash"]
-        components = [f"CodeHash:{code_hash}"]
+        current_code_structure_hash = definition.fingerprint["current_code_structure_hash"]
+        components = [f"CodeHash:{current_code_structure_hash}"]
 
         # 2. Purity Salt
         # Get purity from the Task wrapper if available, else assume False (Impure) for safety

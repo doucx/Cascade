@@ -35,9 +35,7 @@
   "Token.payload": {
     "baseline_yaml_content_hash": "323fcf4f186b1552dcac8907764eb61a087238b3b432491b4057d8d253876fba"
   },
-  "Token.tag": {
-    "baseline_yaml_content_hash": "80c4f86c97841203eb8623cf7bd753d9c4ce15fa1fcdfd1ee6086d2d25ca1803"
-  },
+  "Token.tag": {},
   "Token.trace": {
     "baseline_yaml_content_hash": "b0b2f19af3e5d47fb55b174cec91c791d17f227bd1977795ed66310d63acdbe2"
   }

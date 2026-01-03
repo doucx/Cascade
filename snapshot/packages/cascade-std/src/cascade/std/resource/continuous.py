@@ -35,7 +35,8 @@ async def continuous_broker(
         # Use a small epsilon for float comparison if needed, but >= usually suffices
         if ledger.available >= req_amount:
             ledger.available -= req_amount
-            outputs["gnt_out"] = Token(payload=req_amount)
+            # CRITICAL: Propagate the tag from the request to the grant
+            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
         else:
             # Recirculate
             outputs["req_out"] = req_token

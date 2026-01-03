@@ -37,7 +37,9 @@ async def discrete_broker(
             # Grant
             ledger.available -= req_amount
             # Emit Grant Token (Payload can be the amount granted)
-            outputs["gnt_out"] = Token(payload=req_amount)
+            # CRITICAL: Propagate the tag from the request to the grant
+            # so the distributor can route it back to the correct worker.
+            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
         else:
             # Reject & Recirculate
             # We emit the original request token back to a recirculation loop

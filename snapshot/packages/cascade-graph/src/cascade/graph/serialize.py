@@ -1,6 +1,6 @@
 import json
 import importlib
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass
 
 from .model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode

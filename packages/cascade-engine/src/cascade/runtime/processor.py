@@ -108,12 +108,10 @@ class NodeProcessor:
         params: Dict[str, Any],
         sub_graph_runner: Callable,
     ) -> Any:
-        # 3. Use Resolved Arguments
         args, kwargs = inputs
-
         start_time = time.time()
 
-        # 4. Cache Check
+        # 4. Cache Check (Part of "Bleacher" logic)
         if node.cache_policy:
             cached_value = await node.cache_policy.check(
                 node.current_node_instance_hash, cache_inputs
@@ -137,7 +135,7 @@ class NodeProcessor:
             )
         )
 
-        # 5. Handle Map Nodes
+        # 5. Handle Map Nodes (special execution logic)
         from cascade.graph.model import MapNode
 
         if isinstance(node, MapNode):
@@ -152,7 +150,7 @@ class NodeProcessor:
                 sub_graph_runner,
             )
 
-        # 6. Retry Loop & Execution
+        # 6. Retry Loop & Execution (Part of "Stainer" logic)
         retry_policy = node.retry_policy
         max_attempts = 1 + (retry_policy.max_attempts if retry_policy else 0)
         delay = retry_policy.delay if retry_policy else 0.0
@@ -163,53 +161,97 @@ class NodeProcessor:
         while attempt < max_attempts:
             attempt += 1
             try:
-                result = await self.executor.execute(node, executable, args, kwargs)
-                duration = time.time() - start_time
-                self.bus.publish(
-                    TaskExecutionFinished(
-                        run_id=run_id,
-                        task_id=node.current_node_instance_hash,
-                        task_name=node.name,
-                        status="Succeeded",
-                        duration=duration,
-                        result_preview=None,
-                    )
+                # "Worker" logic
+                result = await self._execute_core(node, executable, args, kwargs)
+                # "Stainer" success logic
+                return await self._handle_successful_outcome(
+                    node, run_id, cache_inputs, start_time, result
                 )
-                if node.cache_policy:
-                    await node.cache_policy.save(
-                        node.current_node_instance_hash, cache_inputs, result
-                    )
-                return result
             except Exception as e:
                 last_exception = e
-                if attempt < max_attempts:
-                    self.bus.publish(
-                        TaskRetrying(
-                            run_id=run_id,
-                            task_id=node.current_node_instance_hash,
-                            task_name=node.name,
-                            attempt=attempt,
-                            max_attempts=max_attempts,
-                            delay=delay,
-                            error=str(e),
-                        )
-                    )
+                # "Stainer" failure logic
+                should_retry = await self._handle_failed_outcome(
+                    e, node, run_id, attempt, max_attempts, delay, start_time
+                )
+                if should_retry:
                     await asyncio.sleep(delay)
                     delay *= backoff
                 else:
-                    duration = time.time() - start_time
-                    self.bus.publish(
-                        TaskExecutionFinished(
-                            run_id=run_id,
-                            task_id=node.current_node_instance_hash,
-                            task_name=node.name,
-                            status="Failed",
-                            duration=duration,
-                            error=f"{type(e).__name__}: {e}",
-                        )
-                    )
                     raise last_exception
         raise RuntimeError("Unexpected execution state")
+
+    async def _execute_core(
+        self, node: Node, executable: Callable, args: List[Any], kwargs: Dict[str, Any]
+    ) -> Any:
+        """Purely executes the callable via the configured executor."""
+        return await self.executor.execute(node, executable, args, kwargs)
+
+    async def _handle_successful_outcome(
+        self,
+        node: Node,
+        run_id: str,
+        cache_inputs: Dict[str, Any],
+        start_time: float,
+        result: Any,
+    ) -> Any:
+        """Handles caching and event publishing for a successful execution."""
+        duration = time.time() - start_time
+        self.bus.publish(
+            TaskExecutionFinished(
+                run_id=run_id,
+                task_id=node.current_node_instance_hash,
+                task_name=node.name,
+                status="Succeeded",
+                duration=duration,
+                result_preview=None,
+            )
+        )
+        if node.cache_policy:
+            await node.cache_policy.save(
+                node.current_node_instance_hash, cache_inputs, result
+            )
+        return result
+
+    async def _handle_failed_outcome(
+        self,
+        exception: Exception,
+        node: Node,
+        run_id: str,
+        attempt: int,
+        max_attempts: int,
+        delay: float,
+        start_time: float,
+    ) -> bool:
+        """
+        Handles retry logic and event publishing for a failed execution.
+        Returns True if a retry should be attempted, False otherwise.
+        """
+        if attempt < max_attempts:
+            self.bus.publish(
+                TaskRetrying(
+                    run_id=run_id,
+                    task_id=node.current_node_instance_hash,
+                    task_name=node.name,
+                    attempt=attempt,
+                    max_attempts=max_attempts,
+                    delay=delay,
+                    error=str(exception),
+                )
+            )
+            return True
+        else:
+            duration = time.time() - start_time
+            self.bus.publish(
+                TaskExecutionFinished(
+                    run_id=run_id,
+                    task_id=node.current_node_instance_hash,
+                    task_name=node.name,
+                    status="Failed",
+                    duration=duration,
+                    error=f"{type(exception).__name__}: {exception}",
+                )
+            )
+            return False
 
     async def _execute_map_node(
         self,

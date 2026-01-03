@@ -1,0 +1,10 @@
+"ReactorProtocol": |-
+  Protocol defining the interface for a Cascade Reactor.
+  This allows swapping the Python implementation with a Rust-based one.
+"ReactorProtocol.add_sink": |-
+  Register a callback to receive tokens emitted by a specific port.
+"ReactorProtocol.prime": |-
+  Inject initial potential energy into the system.
+"ReactorProtocol.step": |-
+  Perform one reaction step.
+  Returns the number of tasks fired.

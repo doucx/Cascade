@@ -98,9 +98,7 @@ def _report_issues(
                 lines = []
 
         if not lines:
-            console.print(
-                f"  [red]L{issue.lineno}: Could not read file content.[/red]"
-            )
+            console.print(f"  [red]L{issue.lineno}: Could not read file content.[/red]")
             continue
 
         console.print(
@@ -178,9 +176,7 @@ def main(
     has_warnings = bool(all_warnings)
 
     if not has_errors and not has_warnings:
-        console.print(
-            "\n[bold green]✅ Success! No naming issues found.[/bold green]"
-        )
+        console.print("\n[bold green]✅ Success! No naming issues found.[/bold green]")
         raise typer.Exit(code=0)
 
     if has_errors:

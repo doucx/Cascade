@@ -9,8 +9,8 @@
     "baseline_yaml_content_hash": "80e1241ec5388b6e65c4736e5045da9cd603bee0cfb37dc76d7e3fdccfc9ed10"
   },
   "test_event_driven_ping_pong": {
-    "baseline_code_signature_text": "async def test_event_driven_ping_pong():",
-    "baseline_code_structure_hash": "1921e97c0e3ff072765884cad4ebf1187c4d2bc4197013bef0fa3645b73ed929"
+    "baseline_code_signature_text": "async def test_event_driven_ping_pong(reactor_backend_factory):",
+    "baseline_code_structure_hash": "202b4392d45127f78bbac694e8baff271e336111928223e12238331e6db35470"
   },
   "test_reactor_independent_nodes": {
     "baseline_code_signature_text": "async def test_reactor_independent_nodes():",

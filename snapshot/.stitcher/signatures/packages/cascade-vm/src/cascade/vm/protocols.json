@@ -1,0 +1,21 @@
+{
+  "ReactorProtocol": {
+    "baseline_yaml_content_hash": "e1840c9d54fb3c11d8a7122066c7d824407cb2a159c90aa4defd100e10a5fa2b"
+  },
+  "ReactorProtocol.active_task_count": {},
+  "ReactorProtocol.add_sink": {
+    "baseline_code_signature_text": "def add_sink(self, node_id: str, port_name: str, callback: Callable[[Token], Awaitable[None]]) -> None:",
+    "baseline_code_structure_hash": "2f74aec3166e2e9750b28295848e2465e03a0a0c89911aff5243c2dca3cda785",
+    "baseline_yaml_content_hash": "6044f02f16fb28ae4bf4aee4cf2f064b2cf0a043a55f11efef6a26b81d0ae878"
+  },
+  "ReactorProtocol.prime": {
+    "baseline_code_signature_text": "def prime(self) -> None:",
+    "baseline_code_structure_hash": "ec73b8ca76e1f98e8d8a878be2ad2d18bb2975154a4f48b43ccd1e9f12a436bd",
+    "baseline_yaml_content_hash": "6d57c44407439cf284674b68fd40eed3f3b163bfe7370922bf9a61a4bd09d664"
+  },
+  "ReactorProtocol.step": {
+    "baseline_code_signature_text": "async def step(self) -> int:",
+    "baseline_code_structure_hash": "5917d1593782fc58a1dd6c4ae986c38c33e7a8f32330503f356d963f3ea4cb2a",
+    "baseline_yaml_content_hash": "e03c7707252d0f4f927e8fc1fba7b13ce52790aad38cdb346f0e0cac3041398e"
+  }
+}

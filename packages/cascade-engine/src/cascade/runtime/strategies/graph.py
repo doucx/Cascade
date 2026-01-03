@@ -15,6 +15,7 @@ from cascade.runtime.flow import FlowManager
 from cascade.runtime.exceptions import DependencyMissingError
 from cascade.runtime.events import TaskSkipped, TaskBlocked
 from cascade.runtime.constraints.manager import ConstraintManager
+from cascade.runtime.strategies.base import ExecutionContext
 
 
 class GraphExecutionResult:
@@ -66,12 +67,15 @@ class GraphExecutionStrategy:
     async def execute(
         self,
         target: Any,
-        run_id: str,
-        params: Dict[str, Any],
-        state_backend: StateBackend,
-        run_stack: ExitStack,
-        active_resources: Dict[str, Any],
+        context: "ExecutionContext",  # Use string forward ref or import if needed, assuming import logic handled
     ) -> Any:
+        # Unpack context for convenience
+        run_id = context.run_id
+        state_backend = context.state_backend
+        active_resources = context.active_resources
+        params = context.params
+        run_stack = context.run_stack
+
         current_target = target
         next_input_overrides = None
         local_context_cache = {}

@@ -1,7 +1,7 @@
 import libcst as cst
 import sys
 import os
-from typing import Dict, Set, Optional, Tuple, List, Any
+from typing import Dict, Set, Optional, Tuple, List
 
 # ==============================================================================
 # Refactoring Configuration
@@ -179,7 +179,9 @@ def process_file(file_path: str, dry_run: bool = False):
     except cst.ParserSyntaxError as e:
         print(f"Error parsing {file_path}: {e}", file=sys.stderr)
     except Exception as e:
-        print(f"An unexpected error occurred processing {file_path}: {e}", file=sys.stderr)
+        print(
+            f"An unexpected error occurred processing {file_path}: {e}", file=sys.stderr
+        )
 
 
 def main():
@@ -202,7 +204,7 @@ def main():
         for file in files:
             if file.endswith(".py"):
                 process_file(os.path.join(root, file), dry_run=dry_run)
-    
+
     print("Refactoring scan complete.")
 
 

@@ -59,6 +59,7 @@
     "baseline_yaml_content_hash": "b095571b1d27c62676bcf8eb64d42d2d2179105048709fc110896b3c1e3f9c35"
   },
   "Node.constraints": {},
+  "Node.current_node_instance_hash": {},
   "Node.definition": {},
   "Node.has_complex_inputs": {},
   "Node.input_bindings": {},

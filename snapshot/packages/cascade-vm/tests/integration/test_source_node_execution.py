@@ -77,7 +77,9 @@ async def test_source_node_is_triggered_by_pulse():
     try:
         # 5. Assert the result by waiting for the completion event
         # This is the robust way to test completion, not by checking transient memory.
-        completion_event = await runner.run_until_complete(task_id=node_ir.current_node_instance_hash)
+        completion_event = await runner.run_until_complete(
+            task_id=node_ir.current_node_instance_hash
+        )
 
         assert isinstance(completion_event, ObservedEvent)
         assert completion_event.event_type == "end"

@@ -69,7 +69,11 @@ class ArgumentResolver:
         for name, value_raw in bindings.items():
             # Always resolve structures to handle nested Injects correctly
             value = self._resolve_structure(
-                value_raw, node.current_node_instance_hash, state_backend, resource_context, graph
+                value_raw,
+                node.current_node_instance_hash,
+                state_backend,
+                resource_context,
+                graph,
             )
 
             if name.isdigit():
@@ -145,7 +149,11 @@ class ArgumentResolver:
                 continue
 
             val = await self._resolve_dependency(
-                edge, node.current_node_instance_hash, state_backend, graph, instance_map
+                edge,
+                node.current_node_instance_hash,
+                state_backend,
+                graph,
+                instance_map,
             )
             resolved_values[edge.arg_name] = val
 
@@ -291,10 +299,14 @@ class ConstraintResolver:
                     constraint_node = instance_map.get(amount._uuid)
                     if not constraint_node:
                         raise DependencyMissingError(
-                            node.current_node_instance_hash, f"constraint:{res}", amount._uuid
+                            node.current_node_instance_hash,
+                            f"constraint:{res}",
+                            amount._uuid,
                         )
 
-                    if await state_backend.has_result(constraint_node.current_node_instance_hash):
+                    if await state_backend.has_result(
+                        constraint_node.current_node_instance_hash
+                    ):
                         resolved[res] = await state_backend.get_result(
                             constraint_node.current_node_instance_hash
                         )

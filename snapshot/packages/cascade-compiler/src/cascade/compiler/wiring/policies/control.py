@@ -36,7 +36,9 @@ class ControlFlowWiringPolicy(WiringPolicy):
             assert source_subgraph.stainer is not None
 
             # Violation Fix: Insert D_cond
-            d_cond_id = f"cond.{node_ir.condition}.to.{node_ir.current_node_instance_hash}"
+            d_cond_id = (
+                f"cond.{node_ir.condition}.to.{node_ir.current_node_instance_hash}"
+            )
             d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
             ctx.wire.add_node(d_cond)
 

@@ -146,7 +146,9 @@ class NodeProcessor:
 
         self.bus.publish(
             TaskExecutionStarted(
-                run_id=run_id, task_id=node.current_node_instance_hash, task_name=node.name
+                run_id=run_id,
+                task_id=node.current_node_instance_hash,
+                task_name=node.name,
             )
         )
 

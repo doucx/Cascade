@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(compiler): 增加图结构断言工具与资源竞争压力测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767429602.867173, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(test): Mitigate request storm in resource contention test", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767429739.3828623, "duration_ms": 0}}

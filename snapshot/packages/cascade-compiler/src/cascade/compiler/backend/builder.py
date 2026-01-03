@@ -360,9 +360,12 @@ class Builder:
 
                 # --- C. Release Wiring ---
                 # Stainer -> RelBuffer
+                # The stainer output port for releasing a resource is named symmetrically
+                # to the bleacher input port for acquiring it.
+                release_port_name = f"res_{res_name}"
                 wire.connect(
                     subgraph.stainer.id,
-                    port_name,
+                    release_port_name,
                     rel_buffer_id,
                     "in",
                 )

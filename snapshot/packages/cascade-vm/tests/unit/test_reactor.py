@@ -203,7 +203,7 @@ async def test_event_driven_ping_pong():
 
     func_map = {
         "F1": obs_enabled_logic,
-        "global.observability.observer": standard_observer,  # Runner will auto-inject queue
+        "global.observability.observer": standard_observer,
     }
 
     # 2. Use Runner

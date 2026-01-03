@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] tool: 优化基准测试以原生执行异步任务", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767408910.021696, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(std): 将所有 IC 函数转换为原生异步", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767409427.1491756, "duration_ms": 0}}

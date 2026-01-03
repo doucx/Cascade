@@ -7,7 +7,7 @@ class DiscreteLedger:
     total: int
     available: int
 
-def discrete_broker(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+async def discrete_broker(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
     """
     A Discrete Resource Broker using the Self-Loop Ledger pattern.
     

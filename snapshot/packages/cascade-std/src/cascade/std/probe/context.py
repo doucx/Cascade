@@ -3,7 +3,7 @@ from cascade.spec.physics import Token, PhysicsNode
 from cascade.common.context import get_current_context
 
 
-def param_probe(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+async def param_probe(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
     name = inputs["name"].payload
     # In a real run, values are resolved by the Context/Engine.
     # Here we interface with the common context.

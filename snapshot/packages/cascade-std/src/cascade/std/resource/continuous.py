@@ -7,7 +7,7 @@ class ContinuousLedger:
     total: float
     available: float
 
-def continuous_broker(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
+async def continuous_broker(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:
     """
     A Continuous Resource Broker using the Self-Loop Ledger pattern.
     Handles floating-point resources (e.g., memory, disk space).

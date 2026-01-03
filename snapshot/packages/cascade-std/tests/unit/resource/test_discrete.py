@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 from cascade.spec.physics import Token
 from cascade.std.resource.discrete import discrete_broker, DiscreteLedger
 
-def test_discrete_broker_grants_when_available():
+async def test_discrete_broker_grants_when_available():
     # Ledger: Total 10, Available 5
     ledger = DiscreteLedger(total=10, available=5)
     
@@ -12,7 +12,7 @@ def test_discrete_broker_grants_when_available():
         "req_in": Token(payload=2)
     }
     
-    outputs = discrete_broker(inputs, MagicMock())
+    outputs = await discrete_broker(inputs, MagicMock())
     
     # Check Grant
     assert "gnt_out" in outputs
@@ -23,7 +23,7 @@ def test_discrete_broker_grants_when_available():
     assert updated_ledger.available == 3
     assert "req_out" not in outputs
 
-def test_discrete_broker_recirculates_when_starved():
+async def test_discrete_broker_recirculates_when_starved():
     # Ledger: Total 10, Available 1
     ledger = DiscreteLedger(total=10, available=1)
     
@@ -33,7 +33,7 @@ def test_discrete_broker_recirculates_when_starved():
         "req_in": req_token
     }
     
-    outputs = discrete_broker(inputs, MagicMock())
+    outputs = await discrete_broker(inputs, MagicMock())
     
     # Check No Grant
     assert "gnt_out" not in outputs
@@ -46,7 +46,7 @@ def test_discrete_broker_recirculates_when_starved():
     updated_ledger = outputs["ledger_out"].payload
     assert updated_ledger.available == 1
 
-def test_discrete_broker_releases_resource():
+async def test_discrete_broker_releases_resource():
     # Ledger: Total 10, Available 5
     ledger = DiscreteLedger(total=10, available=5)
     
@@ -55,13 +55,13 @@ def test_discrete_broker_releases_resource():
         "rel_in": Token(payload=3)
     }
     
-    outputs = discrete_broker(inputs, MagicMock())
+    outputs = await discrete_broker(inputs, MagicMock())
     
     # Check Ledger Update
     updated_ledger = outputs["ledger_out"].payload
     assert updated_ledger.available == 8
 
-def test_discrete_broker_simultaneous_rel_and_req():
+async def test_discrete_broker_simultaneous_rel_and_req():
     # Ledger: Available 2. Request 4. Release 3.
     # Logic: Release happens first, so Available becomes 2+3=5. Then Request 4 succeeds.
     ledger = DiscreteLedger(total=10, available=2)
@@ -72,7 +72,7 @@ def test_discrete_broker_simultaneous_rel_and_req():
         "rel_in": Token(payload=3)
     }
     
-    outputs = discrete_broker(inputs, MagicMock())
+    outputs = await discrete_broker(inputs, MagicMock())
     
     # Check Grant
     assert "gnt_out" in outputs

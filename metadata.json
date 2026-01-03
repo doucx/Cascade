@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 验证脉冲模型并修复过时测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767425564.6844308, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test: 添加集成测试验证脉冲驱动的源任务执行", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767425637.0743513, "duration_ms": 0}}

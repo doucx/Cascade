@@ -1,108 +1,81 @@
-好的，你提供的这个 Traceback 非常清晰，它精确地指出了我们预料到的下一个必然会发生的问题。
+好的，既然测试已经全面通过，我们已经成功地将 Cascade 3.0 的核心逻辑——从标准元器件（IC）到执行引擎（Reactor）——完成了向原生异步模型的跨越。
 
-## [WIP] fix(vm): 实现智能分发以支持异步 IC
+这是一个里程碑式的改进，它奠定了我们性能领先的物理基础。我现在将生成 `[COMMIT]` 计划，将这些成果固化到代码库中。
 
-### 错误分析
-你的分析完全正确。错误 `ValueError: ... got <class 'coroutine'>` 的根本原因在于：
-
-1.  **成功的异步化**：在我们上一个计划中，我们成功地将 `standard_bleacher` 等 IC 函数转换为了 `async def`。
-2.  **执行器的不匹配**：`PhysicsExecutor` 被设计用来在**线程池**中运行**同步阻塞**函数。当你给它一个 `async def` 函数时，它仅仅是“调用”它，而调用一个协程函数会立即返回一个**协程对象 (coroutine object)**，并不会执行其内部代码。
-3.  **错误的返回值**：因此，`executor.submit` 正确地返回了这个协程对象。`Reactor` 的 `_fire` 方法接收到这个对象，发现它不是预期的 `Dict[str, Token]`，于是抛出了类型错误。
-
-我们成功地升级了“标准元器件 (`cascade-std`)”，但现在必须升级使用这些元器件的“底层物理定律 (`Reactor`)”来适配它们。
+## [COMMIT] refactor(std,vm): 实现原生异步 IC 与 Reactor 智能分发
 
 ### 用户需求
-修改 `Reactor` 的执行逻辑，使其能够“智能地”识别一个 IC 函数是同步的还是异步的，并采用正确的执行方式。
+完成 `cascade-std` 库的全面异步化重构，并同步更新 `cascade-vm` 以支持对同步/异步函数的智能分发执行。
 
 ### 评论
-这是一个关键的修复，它将我们上一个重构计划的理论优势转化为实际的性能收益。通过实现智能分发，我们创建了一个混合执行模型，它既能以零开销的方式在事件循环上运行原生异步任务，又能安全地将旧的或CPU密集型的同步任务卸载到线程池，实现了两全其美。
+这是一个逻辑高度统一的重构工作。我们将“元器件的升级”与“物理定律的适配”打包在一起提交，因为它们在功能上是互补的。通过这次提交，Cascade 3.0 彻底告别了“凡事皆线程池”的粗放模式，转而采用精确的、基于协程的原生异步执行。
 
 ### 目标
-1.  在 `packages/cascade-vm/src/cascade/vm/reactor.py` 文件中导入 `inspect` 模块。
-2.  修改 `Reactor._fire` 方法。
-3.  在调用函数前，使用 `inspect.iscoroutinefunction()` 检查其类型。
-4.  如果函数是异步的 (`async def`)，则直接 `await func(...)`。
-5.  如果函数是同步的 (`def`)，则继续使用现有的 `await self.executor.submit(...)` 路径。
+1.  提交 `cascade-std` 中所有已异步化的 IC 函数（Triad, Probe, System, Resource）。
+2.  提交 `cascade-vm` 中支持智能分发的 `Reactor` 核心。
+3.  提交所有已更新为异步模式的单元测试。
 
 ### 基本原理
-我们将采用“智能分发”（Smart Dispatch）模式。`Reactor` 作为调用方，有责任检查它要调用的函数（来自 `function_map`）的性质。Python 的 `inspect` 模块提供了 `iscoroutinefunction`，这是一个完美的、零成本的工具，可以在运行时进行这种反射检查。通过在 `_fire` 方法中加入一个简单的 `if/else` 分支，我们就可以无缝地桥接 `asyncio` 事件循环和 `ThreadPoolExecutor`，使 `Reactor` 能够正确处理任何类型的可调用对象。
+我们将相关的 21 个受影响文件一次性添加到 Git 暂存区，并创建一个详细描述此技术跃迁的提交消息。这确保了版本历史的连贯性和可追溯性。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical
-#comp/vm #concept/executor #scope/core
+#intent/refine #flow/ready #priority/medium
+#comp/std #comp/vm #concept/executor #scope/core
 #ai/instruct
-#task/state/continue
+#task/domain/core-logic #task/object/async-transition #task/action/refactor
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 在 Reactor 中实现智能分发
+#### Acts 1: 提交异步化重构成果
 
-我们将修改 `Reactor._fire` 方法，使其能够根据 IC 函数是 `def`还是 `async def` 来选择正确的执行策略。
+我们将所有涉及异步化转换的源代码和对应的单元测试文件添加到暂存区。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-std/src/cascade/std/triad/observer.py
+packages/cascade-std/src/cascade/std/probe/context.py
+packages/cascade-std/src/cascade/std/probe/env.py
+packages/cascade-std/src/cascade/std/probe/pulse.py
+packages/cascade-std/src/cascade/std/system/drainer.py
+packages/cascade-std/src/cascade/std/system/terminator.py
+packages/cascade-std/src/cascade/std/resource/continuous.py
+packages/cascade-std/src/cascade/std/resource/discrete.py
+packages/cascade-std/tests/unit/triad/test_bleacher.py
+packages/cascade-std/tests/unit/triad/test_stainer.py
+packages/cascade-std/tests/unit/triad/test_observer.py
+packages/cascade-std/tests/unit/probe/test_context.py
+packages/cascade-std/tests/unit/probe/test_env.py
+packages/cascade-std/tests/unit/probe/test_pulse.py
+packages/cascade-std/tests/unit/system/test_drainer.py
+packages/cascade-std/tests/unit/system/test_terminator.py
+packages/cascade-std/tests/unit/resource/test_continuous.py
+packages/cascade-std/tests/unit/resource/test_discrete.py
 packages/cascade-vm/src/cascade/vm/reactor.py
 ~~~~~
-~~~~~python.old
-import asyncio
-from typing import List, Callable, Dict, Tuple
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
 
-
-class Reactor:
-~~~~~
-~~~~~python.new
-import asyncio
-import inspect
-from typing import List, Callable, Dict, Tuple
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-
-
-class Reactor:
-~~~~~
 ~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
+git_commit
 ~~~~~
-~~~~~python.old
-        # We pass the node instance as the second argument to the instruction
-        # to allow access to static port definitions (PortDef).
-        result_tokens: Dict[str, Token] = await self.executor.submit(
-            func, (input_data, node)
-        )
+~~~~~text
+refactor(std,vm): Implement native async ICs and Smart Dispatch
 
-        if not isinstance(result_tokens, dict):
-            raise ValueError(
-                f"Function for node {node.id} must return a Dict[str, Token], "
-                f"got {type(result_tokens)}"
-            )
-~~~~~
-~~~~~python.new
-        # We pass the node instance as the second argument to the instruction
-        # to allow access to static port definitions (PortDef).
-        if inspect.iscoroutinefunction(func):
-            # Natively await async functions
-            result_tokens = await func(input_data, node)
-        else:
-            # Offload sync functions to the thread pool
-            result_tokens = await self.executor.submit(func, (input_data, node))
+This commit completes the transition of the standard library (cascade-std) to a natively asynchronous execution model, aligned with the Cascade 3.0 VM architecture.
 
-        if not isinstance(result_tokens, dict):
-            raise ValueError(
-                f"Function for node {node.id} must return a Dict[str, Token], "
-                f"got {type(result_tokens)}"
-            )
+Key changes:
+1.  **Async ICs**: All functions in the 'cascade-std' package (including Triads, Probes, System Signals, and Resource Brokers) have been refactored to use 'async def'.
+2.  **Observer Adaption**: The standard_observer now correctly utilizes 'asyncio.Queue' and 'await queue.put()' for non-blocking telemetry emission.
+3.  **Smart Dispatch in Reactor**: The VM Reactor's '_fire' method is enhanced with an inspection-based dispatch logic. It natively awaits coroutine functions on the event loop while preserving the ability to offload legacy synchronous functions to the thread pool via PhysicsExecutor.
+4.  **Full Test Coverage**: All unit tests for the standard library have been upgraded to asynchronous tests, ensuring the robustness of the new execution path.
+
+This optimization eliminates unnecessary thread pool scheduling for the vast majority of graph operations, significantly reducing context-switch overhead and improving overall reactor throughput.
 ~~~~~
 
 ### 下一步建议
-我们已经修复了 `Reactor` 的核心逻辑。现在，请重新运行 `test_resource_backpressure.py` 和整个测试套件。我预期所有测试都应该通过，我们的系统将达到一个功能正确且性能优化的“绿色”状态。
-
-一旦所有测试通过，我们就可以将这两个 `[WIP]` 计划合并成一个逻辑上的提交。我建议下一步是创建一个 `[COMMIT]` 计划来固化我们的成果。
+- **性能基准测试**：建议针对新的异步模型运行一次压力测试，特别是在高并发和多层级递归的场景下，量化性能提升情况。
+- **编译器优化**：随着物理层异步化的完成，我们可以考虑在 `cascade-compiler` 中引入更多的静态分析，例如提前识别纯计算节点并在编译阶段标记其分发策略。
+- **扩展标准库**：利用现有的异步 IC 模板，我们可以开始开发更多原生支持异步 I/O 的标准件，例如 `cs.http` 或 `cs.db` 的物理原语实现。

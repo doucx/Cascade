@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(compiler): 修复因资源协商重构导致的测试失败", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767415912.4823008, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(std): 将 Broker 拆分为 Allocator 和 Reclaimer", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767416521.7611778, "duration_ms": 0}}

@@ -12,7 +12,7 @@ from cascade.vm.reactor import Reactor
 # Import new ICs
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
-from cascade.std.resource.discrete import discrete_broker
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.probe.const import const_probe
 
@@ -76,8 +76,10 @@ async def test_concurrency_limit():
             func_map[node_id] = standard_stainer
         elif node_id.endswith(".worker"):
             func_map[node_id] = mock_worker
-        elif "broker" in node_id:
-            func_map[node_id] = discrete_broker
+        elif "allocator" in node_id:
+            func_map[node_id] = discrete_allocator
+        elif "reclaimer" in node_id:
+            func_map[node_id] = discrete_reclaimer
         elif node_id.startswith("req."):
             func_map[node_id] = resource_requestor
         elif node_id.startswith("probe.const."):
@@ -119,11 +121,12 @@ async def test_concurrency_limit():
     req_buffer_id = "buffer.req.gpu"
     assert memory.get_count(req_buffer_id) == 2  # Both requests are in buffer
 
-    # Round 3: Broker fires.
+    # Round 3: Allocator fires.
     # It consumes Ledger + ONE request from Buffer.
     # Since capacity is 1, it Grants.
-    await reactor.step()
+    fired = await reactor.step()
     await wait_idle()
+    assert fired == 1
     
     # Ledger should now have 0 available
     ledger = memory.take(ledger_node_id).payload
@@ -135,14 +138,14 @@ async def test_concurrency_limit():
 
     # Round 4: 
     # - The lucky Bleacher (who got GNT) fires.
-    # - The Broker attempts to fire again for the second request?
+    # - The Allocator attempts to fire again for the second request?
     #   Yes, it reads Ledger(0) and Request(1). 
     #   Logic: 0 < 1. Reject & Recirculate.
     
     fired = await reactor.step()
     await wait_idle()
     
-    # If Broker fired, it recirculated the request back to Buffer.
+    # If Allocator fired, it recirculated the request back to Buffer.
     # If Bleacher fired, it started the triad.
     
     # Let's run until one Task completes (Stainer fires)

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(std): 将所有 IC 函数转换为原生异步", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767409427.1491756, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(vm): 实现智能分发以支持异步 IC", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767409494.1495094, "duration_ms": 0}}

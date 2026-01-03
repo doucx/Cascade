@@ -114,7 +114,14 @@ async def test_concurrency_limit_event_driven():
             return len(completed_tasks) == 2
 
         # Wait until both are done (timeout generous because of backoff/recirculation latency)
-        await runner.wait_for_event(completion_predicate, timeout=5.0)
+        try:
+            await runner.wait_for_event(completion_predicate, timeout=5.0)
+        except Exception:
+            print("\n!!! TIMEOUT DIAGNOSTICS !!!")
+            print(f"Captured Events ({len(runner._captured_events)}):")
+            for i, evt in enumerate(runner._captured_events):
+                print(f"  [{i}] Type: {evt.event_type}, Trace: {evt.trace_data}")
+            raise
         
         assert "node_1" in completed_tasks
         assert "node_2" in completed_tasks

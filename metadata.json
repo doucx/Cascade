@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(tests): 迁移 `test_resource_backpressure` 至事件驱动模式", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767424499.4244912, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 增强资源背压测试的调试信息以诊断超时", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767424605.350334, "duration_ms": 0}}

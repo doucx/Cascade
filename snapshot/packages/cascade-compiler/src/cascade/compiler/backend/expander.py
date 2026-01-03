@@ -25,7 +25,7 @@ class Expander:
 
         # 1. Generate IDs for all physical entities
         # We use the logical node ID as a prefix to ensure uniqueness.
-        base_id = node_ir.id
+        base_id = node_ir.current_node_instance_hash
 
         f_pre_id = PhysicalIdGenerator.bleach_node(base_id)
         d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)

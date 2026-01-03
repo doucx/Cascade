@@ -59,7 +59,7 @@ class HashingService:
             # For now assuming LazyResult or similar which is in dep_nodes
             if hasattr(cond, "_uuid") and cond._uuid in dep_nodes:
                 node = dep_nodes[cond._uuid]
-                node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
+                node_id = getattr(node, "id", getattr(node, "current_node_instance_hash", str(node)))
                 components.append(f"ConditionID:{node_id}")
             else:
                 components.append("Condition:UNKNOWN")
@@ -73,7 +73,7 @@ class HashingService:
                 if hasattr(dep, "_uuid") and dep._uuid in dep_nodes:
                     node = dep_nodes[dep._uuid]
                     node_id = getattr(
-                        node, "id", getattr(node, "structural_id", str(node))
+                        node, "id", getattr(node, "current_node_instance_hash", str(node))
                     )
                     components.append(f"DepID:{node_id}")
                 else:
@@ -100,7 +100,7 @@ class HashingService:
         if isinstance(obj, (LazyResult, MappedLazyResult)):
             node = dep_nodes[obj._uuid]
             # Duck-typing: Support both v3 NodeIR (id) and v2 Node (structural_id)
-            node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
+            node_id = getattr(node, "id", getattr(node, "current_node_instance_hash", str(node)))
             components.append(f"LAZY({node_id})")
 
         elif isinstance(obj, Router):

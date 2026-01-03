@@ -173,7 +173,7 @@ class CascadeApp:
             shape = _get_node_shape(node)
             label = f"{node.name}\\n({node.node_type})"
             dot_parts.append(
-                f'  "{node.structural_id}" [label="{label}", shape={shape}];'
+                f'  "{node.current_node_instance_hash}" [label="{label}", shape={shape}];'
             )
 
         for edge in graph.edges:
@@ -200,7 +200,7 @@ class CascadeApp:
                 style = f' [label="{edge.arg_name}"]'
 
             dot_parts.append(
-                f'  "{edge.source.structural_id}" -> "{edge.target.structural_id}"{style};'
+                f'  "{edge.source.current_node_instance_hash}" -> "{edge.target.current_node_instance_hash}"{style};'
             )
 
         dot_parts.append("}")
@@ -239,7 +239,7 @@ class CascadeApp:
                         run_id=run_id,
                         index=current_index,
                         total_nodes=total_steps,
-                        node_id=node.structural_id,
+                        node_id=node.current_node_instance_hash,
                         node_name=node.name,
                         input_bindings=node.input_bindings,
                     )

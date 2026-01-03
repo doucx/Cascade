@@ -11,7 +11,7 @@ def simple_graph_ir():
     task_def = TaskDef(name="task_a", args=[], fingerprint=fp)
 
     # Node requesting a 'gpu' resource
-    node = NodeIR(id="node_a", name="NodeA", task=task_def, constraints={"gpu": 1})
+    node = NodeIR(current_node_instance_hash="node_a", name="NodeA", task=task_def, constraints={"gpu": 1})
     return GraphIR(nodes=[node])
 
 

@@ -24,10 +24,10 @@ class PulseWiringPolicy(WiringPolicy):
         )
 
         if is_true_source:
-            d_pulse_id = PhysicalIdGenerator.pulse_source(node_ir.id)
+            d_pulse_id = PhysicalIdGenerator.pulse_source(node_ir.current_node_instance_hash)
             d_pulse = PhysicsDataNode(
                 id=d_pulse_id,
-                name=f"Pulse({node_ir.id})",
+                name=f"Pulse({node_ir.current_node_instance_hash})",
                 capacity=1,
                 initial_tokens=1,
             )

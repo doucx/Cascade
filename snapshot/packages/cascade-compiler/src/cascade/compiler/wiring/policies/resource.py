@@ -26,7 +26,7 @@ class ResourceWiringPolicy(WiringPolicy):
         for res_name in node_ir.constraints:
             if res_name not in env_resources:
                 raise ValueError(
-                    f"Resource '{res_name}' required by node '{node_ir.id}' is not defined"
+                    f"Resource '{res_name}' required by node '{node_ir.current_node_instance_hash}' is not defined"
                 )
 
         for res_name, amount in node_ir.constraints.items():

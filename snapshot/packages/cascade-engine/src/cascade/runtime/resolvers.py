@@ -69,7 +69,7 @@ class ArgumentResolver:
         for name, value_raw in bindings.items():
             # Always resolve structures to handle nested Injects correctly
             value = self._resolve_structure(
-                value_raw, node.structural_id, state_backend, resource_context, graph
+                value_raw, node.current_node_instance_hash, state_backend, resource_context, graph
             )
 
             if name.isdigit():
@@ -131,7 +131,7 @@ class ArgumentResolver:
         incoming_edges = [
             e
             for e in graph.edges
-            if e.target.structural_id == node.structural_id
+            if e.target.current_node_instance_hash == node.current_node_instance_hash
             and e.edge_type == EdgeType.DATA
         ]
 
@@ -145,7 +145,7 @@ class ArgumentResolver:
                 continue
 
             val = await self._resolve_dependency(
-                edge, node.structural_id, state_backend, graph, instance_map
+                edge, node.current_node_instance_hash, state_backend, graph, instance_map
             )
             resolved_values[edge.arg_name] = val
 
@@ -197,7 +197,7 @@ class ArgumentResolver:
             # This edge represents a Router. Its source is the SELECTOR.
             # We must resolve the selector's value first.
             selector_result = await self._get_node_result(
-                edge.source.structural_id,
+                edge.source.current_node_instance_hash,
                 consumer_id,
                 "router_selector",
                 state_backend,
@@ -217,7 +217,7 @@ class ArgumentResolver:
             # Convert instance UUID to canonical node ID using the map.
             selected_node = instance_map[selected_route_lr._uuid]
             return await self._get_node_result(
-                selected_node.structural_id,
+                selected_node.current_node_instance_hash,
                 consumer_id,
                 edge.arg_name,
                 state_backend,
@@ -226,7 +226,7 @@ class ArgumentResolver:
         else:
             # Standard dependency
             return await self._get_node_result(
-                edge.source.structural_id,
+                edge.source.current_node_instance_hash,
                 consumer_id,
                 edge.arg_name,
                 state_backend,
@@ -248,13 +248,13 @@ class ArgumentResolver:
         skip_reason = await state_backend.get_skip_reason(node_id)
         if skip_reason:
             upstream_edges = [
-                e for e in graph.edges if e.target.structural_id == node_id
+                e for e in graph.edges if e.target.current_node_instance_hash == node_id
             ]
             data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
             if data_inputs:
                 # Recursively try to penetrate the skipped node
                 return await self._get_node_result(
-                    data_inputs[0].source.structural_id,
+                    data_inputs[0].source.current_node_instance_hash,
                     consumer_id,
                     arg_name,
                     state_backend,
@@ -291,18 +291,18 @@ class ConstraintResolver:
                     constraint_node = instance_map.get(amount._uuid)
                     if not constraint_node:
                         raise DependencyMissingError(
-                            node.structural_id, f"constraint:{res}", amount._uuid
+                            node.current_node_instance_hash, f"constraint:{res}", amount._uuid
                         )
 
-                    if await state_backend.has_result(constraint_node.structural_id):
+                    if await state_backend.has_result(constraint_node.current_node_instance_hash):
                         resolved[res] = await state_backend.get_result(
-                            constraint_node.structural_id
+                            constraint_node.current_node_instance_hash
                         )
                     else:
                         raise DependencyMissingError(
-                            node.structural_id,
+                            node.current_node_instance_hash,
                             f"constraint:{res}",
-                            constraint_node.structural_id,
+                            constraint_node.current_node_instance_hash,
                         )
                 else:
                     resolved[res] = amount

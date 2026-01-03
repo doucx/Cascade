@@ -112,7 +112,7 @@ class IRGenerator:
             constraints = lr._constraints.requirements.copy()
 
         node_ir = NodeIR(
-            id=node_id,
+            current_node_instance_hash=node_id,
             name=task_def.name,
             task=task_def,
             inputs=inputs,

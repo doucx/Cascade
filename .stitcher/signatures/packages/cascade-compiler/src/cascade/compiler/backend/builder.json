@@ -7,6 +7,7 @@
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
   },
   "Builder._expander": {},
+  "Builder._validator": {},
   "Builder.build": {
     "baseline_code_signature_text": "def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> BipartiteGraph:",
     "baseline_code_structure_hash": "b091352c9fe3db9c053d872ae3f11e8849e5d79e641ed4ca29e77de0fb25fc9f"

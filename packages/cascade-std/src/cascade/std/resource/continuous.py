@@ -9,7 +9,7 @@ class ContinuousLedger:
     available: float
 
 
-async def continuous_broker(
+async def continuous_allocator(
     inputs: Dict[str, Token], node: PhysicsNode
 ) -> Dict[str, Token]:
     ledger_token = inputs["ledger_in"]
@@ -19,28 +19,32 @@ async def continuous_broker(
     else:
         ledger = ledger_data
 
+    req_token = inputs["req_in"]
+    req_amount = float(req_token.payload)
+
     outputs: Dict[str, Token] = {}
 
-    # 1. Process Release
-    if "rel_in" in inputs:
-        release_amount = float(inputs["rel_in"].payload)
-        # Simple clamp to avoid floating point drift exceeding total
-        ledger.available = min(ledger.total, ledger.available + release_amount)
+    if ledger.available >= req_amount:
+        ledger.available -= req_amount
+        outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
+    else:
+        outputs["req_out"] = req_token
 
-    # 2. Process Request
-    if "req_in" in inputs:
-        req_token = inputs["req_in"]
-        req_amount = float(req_token.payload)
-
-        # Use a small epsilon for float comparison if needed, but >= usually suffices
-        if ledger.available >= req_amount:
-            ledger.available -= req_amount
-            outputs["gnt_out"] = Token(payload=req_amount)
-        else:
-            # Recirculate
-            outputs["req_out"] = req_token
-
-    # 3. Emit Updated Ledger
     outputs["ledger_out"] = Token(payload=ledger)
-
     return outputs
+
+
+async def continuous_reclaimer(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    ledger_token = inputs["ledger_in"]
+    ledger_data = ledger_token.payload
+    if isinstance(ledger_data, dict):
+        ledger = ContinuousLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    release_amount = float(inputs["rel_in"].payload)
+    ledger.available = min(ledger.total, ledger.available + release_amount)
+
+    return {"ledger_out": Token(payload=ledger)}

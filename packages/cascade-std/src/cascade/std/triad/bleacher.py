@@ -20,8 +20,14 @@ async def standard_bleacher(
         if port_def.role == PortRole.DATA:
             worker_payload[port_name] = input_token.payload
         elif port_def.role == PortRole.RESOURCE:
-            # It's a resource. We record it to trace.
+            # It's a GNT token.
+            # We record the port name as a held resource.
             held_resources.append(port_name)
+            # CRITICAL: Record the granted amount (payload) to trace.
+            # This allows the Stainer to know how much to release later.
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
         # Observability and Signals are processed for trace but not passed to worker
 
         trace_payload.update(input_token.trace)

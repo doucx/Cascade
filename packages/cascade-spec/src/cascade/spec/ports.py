@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 class PortRole(str, Enum):
     DATA = "DATA"
-    RESOURCE = "RESOURCE"
+    RESOURCE = "RESOURCE"  # Legacy: Used for Stainer release
+    RESOURCE_REQUEST = "RESOURCE_REQUEST"  # New: Used for Bleacher input (amount)
     SIGNAL = "SIGNAL"
     OBSERVABILITY = "OBSERVABILITY"
 
@@ -21,6 +22,7 @@ class PortName:
     REQ = "req_in"
     REL = "rel_in"
     GNT = "gnt_out"
+    REQ_OUT = "req_out"  # For recirculation
     LEDGER_IN = "ledger_in"
     LEDGER_OUT = "ledger_out"
 

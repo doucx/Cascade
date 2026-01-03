@@ -1,0 +1,15 @@
+"GraphValidationError": |-
+  Raised when the graph violates physical laws or structural rules.
+"GraphValidator": |-
+  Validates the physical integrity of a generated BipartiteGraph.
+  Ensures compliance with physical laws (Bipartite Rule) and structural correctness (Port Connectivity).
+"GraphValidator._check_bipartite_rule": |-
+  Enforce the Bipartite Graph Rule:
+  Channels must only connect DataNode <-> FuncNode.
+  DataNode -> DataNode and FuncNode -> FuncNode are FORBIDDEN.
+"GraphValidator._check_node_integrity": |-
+  Ensure all nodes referenced in channels actually exist.
+"GraphValidator._check_port_connectivity": |-
+  Ensure all channels connect to valid ports defined on the nodes.
+"GraphValidator.validate": |-
+  Runs all registered checks. Raises GraphValidationError on failure.

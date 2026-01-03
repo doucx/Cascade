@@ -1,0 +1,7 @@
+"test_allocator_starves_reclaimer": |-
+  Scenario: Allocator is registered BEFORE Reclaimer.
+  We expect Reclaimer to starve because Allocator keeps grabbing the Ledger token,
+  failing the request, and putting it back, ad infinitum.
+"test_reclaimer_priority_fixes_starvation": |-
+  Scenario: Reclaimer is registered BEFORE Allocator.
+  We expect Reclaimer to run first, free the resource, and THEN Allocator succeeds.

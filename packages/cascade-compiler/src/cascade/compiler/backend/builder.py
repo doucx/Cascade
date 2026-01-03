@@ -3,32 +3,118 @@ from typing import Dict
 
 from cascade.spec.ir.models import GraphIR
 from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.spec.physics import PhysicsDataNode
+from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.triad import ObservabilityNode
 from cascade.spec.environment import EnvironmentDef
-from cascade.spec.ports import PortDef, PortRole
+from cascade.spec.ports import PortDef, PortRole, PortName
+from cascade.std.resource.discrete import DiscreteLedger
 from .expander import Expander, SubGraph
+from .validator import GraphValidator
 from cascade.compiler.utils.naming import PhysicalIdGenerator
 
 
 class Builder:
     def __init__(self):
         self._expander = Expander()
+        self._validator = GraphValidator()
 
     def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> BipartiteGraph:
         physical_graph = BipartiteGraph()
         env_resources = {res.name: res for res in environment.resources}
 
-        # 1. Create Objective Environment (D_res nodes)
+        # 1. Create Resource Brokers (Allocators + Reclaimers)
         for res_def in environment.resources:
-            res_node_id = PhysicalIdGenerator.global_resource(res_def.name)
-            d_res = PhysicsDataNode(
-                id=res_node_id,
-                name=f"Resource({res_def.name})",
-                capacity=res_def.capacity,
-                initial_tokens=res_def.capacity,
+            allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
+            reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
+            ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
+
+            # D_ledger
+            initial_ledger = DiscreteLedger(
+                total=res_def.capacity, available=res_def.capacity
             )
-            physical_graph.nodes[res_node_id] = d_res
+            d_ledger = PhysicsDataNode(
+                id=ledger_id,
+                name=f"Ledger({res_def.name})",
+                capacity=1,
+                initial_tokens=1,
+                initial_payload=initial_ledger,
+            )
+            physical_graph.nodes[ledger_id] = d_ledger
+
+            # F_reclaimer (Priority High: Must release before allocate to avoid starvation)
+            f_reclaimer = PhysicsFuncNode(
+                id=reclaimer_id,
+                name=f"Reclaimer({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                },
+            )
+            physical_graph.nodes[reclaimer_id] = f_reclaimer
+
+            # F_allocator (Priority Low)
+            f_allocator = PhysicsFuncNode(
+                id=allocator_id,
+                name=f"Allocator({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                    PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
+                    PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
+                },
+            )
+            physical_graph.nodes[allocator_id] = f_allocator
+
+            # Wiring: Ledger <-> Allocator
+            physical_graph.channels.append(
+                Channel(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
+            )
+            physical_graph.channels.append(
+                Channel(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
+            )
+
+            # Wiring: Ledger <-> Reclaimer
+            physical_graph.channels.append(
+                Channel(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
+            )
+            physical_graph.channels.append(
+                Channel(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
+            )
+
+            # Request Buffer
+            d_req_buffer_id = f"buffer.req.{res_def.name}"
+            d_req_buffer = PhysicsDataNode(
+                id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
+            )
+            physical_graph.nodes[d_req_buffer_id] = d_req_buffer
+
+            # Buffer -> Allocator
+            physical_graph.channels.append(
+                Channel(d_req_buffer_id, "out", allocator_id, PortName.REQ)
+            )
+            # Recirculation: Allocator -> Buffer
+            physical_graph.channels.append(
+                Channel(allocator_id, PortName.REQ_OUT, d_req_buffer_id, "in")
+            )
+
+            # Release Buffer
+            # Created here instead of implicitly later to ensure consistent ID
+            rel_buffer_id = f"buffer.rel.{res_def.name}"
+            d_rel_buffer = PhysicsDataNode(
+                id=rel_buffer_id, name=f"RelBuffer({res_def.name})", capacity=1000
+            )
+            physical_graph.nodes[rel_buffer_id] = d_rel_buffer
+
+            # Buffer -> Reclaimer
+            physical_graph.channels.append(
+                Channel(rel_buffer_id, "out", reclaimer_id, PortName.REL)
+            )
 
         # 2. Create and wire the global observability sidecar infrastructure
         d_life_id = PhysicalIdGenerator.observability_bus()
@@ -87,7 +173,7 @@ class Builder:
                     source_node_id=subgraph.bleacher.id,
                     source_port="obs_output",
                     target_node_id=d_life_id,
-                    target_port="event_token",
+                    target_port="in",
                 )
             )
             physical_graph.channels.append(
@@ -95,7 +181,7 @@ class Builder:
                     source_node_id=subgraph.stainer.id,
                     source_port="obs_output",
                     target_node_id=d_life_id,
-                    target_port="event_token",
+                    target_port="in",
                 )
             )
 
@@ -115,10 +201,26 @@ class Builder:
                     # Help static analysis
                     assert source_subgraph.stainer is not None
 
+                    # Violation Fix: Insert D_dep (Intermediate Data Node)
+                    d_dep_id = f"dep.{source_ref}.to.{node_ir.id}.{arg_name}"
+                    d_dep = PhysicsDataNode(id=d_dep_id, name=f"Dep({arg_name})")
+                    physical_graph.nodes[d_dep_id] = d_dep
+
+                    # Source Stainer -> D_dep
                     physical_graph.channels.append(
                         Channel(
                             source_node_id=source_subgraph.stainer.id,
                             source_port="output",
+                            target_node_id=d_dep_id,
+                            target_port="in",
+                        )
+                    )
+
+                    # D_dep -> Target Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=d_dep_id,
+                            source_port="out",
                             target_node_id=target_subgraph.bleacher.id,
                             target_port=arg_name,
                         )
@@ -150,32 +252,39 @@ class Builder:
             for dep_id in node_ir.dependencies:
                 if dep_id in subgraphs:
                     source_subgraph = subgraphs[dep_id]
-                    # Help static analysis
                     assert source_subgraph.stainer is not None
 
                     port_name = f"wait_for_{dep_id}"
+
+                    # Violation Fix: Insert D_seq
+                    d_seq_id = f"seq.{dep_id}.to.{node_ir.id}"
+                    d_seq = PhysicsDataNode(id=d_seq_id, name=f"Seq({dep_id})")
+                    physical_graph.nodes[d_seq_id] = d_seq
+
                     physical_graph.channels.append(
-                        Channel(
-                            source_node_id=source_subgraph.stainer.id,
-                            source_port="output",
-                            target_node_id=target_subgraph.bleacher.id,
-                            target_port=port_name,
-                        )
+                        Channel(source_subgraph.stainer.id, "output", d_seq_id, "in")
+                    )
+                    physical_graph.channels.append(
+                        Channel(d_seq_id, "out", target_subgraph.bleacher.id, port_name)
                     )
 
             # 4.3 Condition (.run_if())
             if node_ir.condition and node_ir.condition in subgraphs:
                 source_subgraph = subgraphs[node_ir.condition]
-                # Help static analysis
                 assert source_subgraph.stainer is not None
 
+                # Violation Fix: Insert D_cond
+                d_cond_id = f"cond.{node_ir.condition}.to.{node_ir.id}"
+                d_cond = PhysicsDataNode(
+                    id=d_cond_id, name=f"Cond({node_ir.condition})"
+                )
+                physical_graph.nodes[d_cond_id] = d_cond
+
                 physical_graph.channels.append(
-                    Channel(
-                        source_node_id=source_subgraph.stainer.id,
-                        source_port="output",
-                        target_node_id=target_subgraph.bleacher.id,
-                        target_port="condition",
-                    )
+                    Channel(source_subgraph.stainer.id, "output", d_cond_id, "in")
+                )
+                physical_graph.channels.append(
+                    Channel(d_cond_id, "out", target_subgraph.bleacher.id, "condition")
                 )
 
         # 5. Wire Global Resources (The Loop)
@@ -186,28 +295,119 @@ class Builder:
             assert subgraph.bleacher is not None
             assert subgraph.stainer is not None
 
-            for res_name in node_ir.constraints:
-                res_node_id = PhysicalIdGenerator.global_resource(res_name)
+            for res_name, amount in node_ir.constraints.items():
+                allocator_id = PhysicalIdGenerator.global_allocator(res_name)
+                req_buffer_id = f"buffer.req.{res_name}"
+                rel_buffer_id = f"buffer.rel.{res_name}"
+
+                # --- A. Request Chain ---
+                # 1. D_const (Amount)
+                d_amt_id = PhysicalIdGenerator.constant(
+                    node_ir.id, f"req_amt_{res_name}"
+                )
+                d_amt = PhysicsDataNode(
+                    id=d_amt_id,
+                    name=f"Amt({res_name})",
+                    capacity=1,
+                    initial_tokens=1,
+                    initial_payload=amount,
+                )
+                physical_graph.nodes[d_amt_id] = d_amt
+
+                # 2. F_probe (ConstProbe)
+                f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, res_name)
+                f_probe = PhysicsFuncNode(
+                    id=f_probe_id,
+                    name=f"Probe({res_name})",
+                    input_ports={"value": PortDef("value", PortRole.DATA)},
+                    output_ports={"out": PortDef("out", PortRole.DATA)},
+                )
+                physical_graph.nodes[f_probe_id] = f_probe
+
+                # 3. F_req (Requestor)
+                f_req_id = PhysicalIdGenerator.requestor(node_ir.id, res_name)
+                f_req = PhysicsFuncNode(
+                    id=f_req_id,
+                    name=f"Req({res_name})",
+                    input_ports={"amount": PortDef("amount", PortRole.DATA)},
+                    output_ports={
+                        PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)
+                    },
+                )
+                physical_graph.nodes[f_req_id] = f_req
+
+                # 4. Wiring: D_amt -> F_probe -> D_temp -> F_req -> D_req_buffer
+                # We need intermediate data nodes because of Bipartite rule (F->D->F)
+
+                # D_amt -> F_probe
+                physical_graph.channels.append(
+                    Channel(d_amt_id, "out", f_probe_id, "value")
+                )
+
+                # F_probe -> D_probed
+                d_probed_id = f"{f_probe_id}.out"
+                d_probed = PhysicsDataNode(id=d_probed_id, name="ProbedVal")
+                physical_graph.nodes[d_probed_id] = d_probed
+
+                physical_graph.channels.append(
+                    Channel(f_probe_id, "out", d_probed_id, "in")
+                )
+
+                # D_probed -> F_req
+                physical_graph.channels.append(
+                    Channel(d_probed_id, "out", f_req_id, "amount")
+                )
+
+                # F_req -> D_req_buffer (Global Buffer for the Allocator)
+                physical_graph.channels.append(
+                    Channel(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
+                )
+
+                # --- B. Grant Wiring ---
+                # Allocator (GNT) -> D_grant_buffer -> Bleacher (res_{name})
+
+                # We need a shared Grant Buffer for the Allocator, OR per-task buffers?
+                # If we use a shared buffer, all grants go there, and Bleachers pick based on Tag.
+                # This fits the "Bus" model.
+
+                gnt_buffer_id = f"buffer.gnt.{res_name}"
+                if gnt_buffer_id not in physical_graph.nodes:
+                    d_gnt_buffer = PhysicsDataNode(
+                        id=gnt_buffer_id, name=f"GntBuffer({res_name})", capacity=1000
+                    )
+                    physical_graph.nodes[gnt_buffer_id] = d_gnt_buffer
+
+                    # Allocator -> Grant Buffer (Only once per resource)
+                    physical_graph.channels.append(
+                        Channel(allocator_id, PortName.GNT, gnt_buffer_id, "in")
+                    )
+
+                target_tag = f_req_id
                 port_name = f"res_{res_name}"
 
-                # Acquire: D_res -> F_bleach
+                # Grant Buffer -> Bleacher (Filtered by Tag)
                 physical_graph.channels.append(
                     Channel(
-                        source_node_id=res_node_id,
+                        source_node_id=gnt_buffer_id,
                         source_port="out",
                         target_node_id=subgraph.bleacher.id,
                         target_port=port_name,
+                        tag_filter=target_tag,
                     )
                 )
 
-                # Release: F_stain -> D_res
+                # --- C. Release Wiring ---
+                # Stainer -> RelBuffer
                 physical_graph.channels.append(
                     Channel(
                         source_node_id=subgraph.stainer.id,
                         source_port=port_name,
-                        target_node_id=res_node_id,
+                        target_node_id=rel_buffer_id,
                         target_port="in",
                     )
                 )
+
+        # Final Validation Step
+        self._validator.validate(physical_graph, graph_ir)
 
         return physical_graph

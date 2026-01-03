@@ -38,3 +38,7 @@ class PhysicalIdGenerator:
     @staticmethod
     def observability_observer() -> str:
         return "global.observability.observer"
+
+    @staticmethod
+    def start_pulse() -> str:
+        return "global.start.pulse"

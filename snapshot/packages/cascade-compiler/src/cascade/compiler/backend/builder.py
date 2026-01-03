@@ -19,7 +19,8 @@ class Builder:
         physical_graph = BipartiteGraph()
         env_resources = {res.name: res for res in environment.resources}
 
-        # 1. Create Objective Environment (D_res nodes)
+        # 1. Create Global Infrastructure
+        # 1.1 Objective Environment (D_res nodes)
         for res_def in environment.resources:
             res_node_id = PhysicalIdGenerator.global_resource(res_def.name)
             d_res = PhysicsDataNode(
@@ -29,6 +30,17 @@ class Builder:
                 initial_tokens=res_def.capacity,
             )
             physical_graph.nodes[res_node_id] = d_res
+
+        # 1.2 Global Start Pulse
+        start_pulse_id = PhysicalIdGenerator.start_pulse()
+        d_start = PhysicsDataNode(
+            id=start_pulse_id,
+            name="GlobalStartPulse",
+            capacity=sys.maxsize, # Can trigger infinite source nodes
+            initial_tokens=1,
+        )
+        physical_graph.nodes[start_pulse_id] = d_start
+
 
         # 2. Create and wire the global observability sidecar infrastructure
         d_life_id = PhysicalIdGenerator.observability_bus()
@@ -209,5 +221,25 @@ class Builder:
                         target_port="in",
                     )
                 )
+
+        # 6. Wire Global Start Pulse to all Source Nodes
+        # A source node is a bleacher that has no incoming data, condition, or dependency channels.
+        all_target_bleacher_ids = {
+            c.target_node_id for c in physical_graph.channels if c.target_node_id.endswith(".bleach")
+        }
+
+        for subgraph in subgraphs.values():
+            bleacher = subgraph.bleacher
+            if bleacher and bleacher.id not in all_target_bleacher_ids:
+                # This bleacher is a source node, connect it to the start pulse
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=start_pulse_id,
+                        source_port="out",
+                        target_node_id=bleacher.id,
+                        target_port="__start__",
+                    )
+                )
+
 
         return physical_graph

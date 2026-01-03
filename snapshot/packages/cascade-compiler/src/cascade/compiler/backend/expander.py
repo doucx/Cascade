@@ -39,8 +39,12 @@ class Expander:
         # F_pre: The Bleacher
         # Inputs = Task Args + Resource Constraints
         bleacher_inputs = {
-            arg.name: PortDef(arg.name, PortRole.DATA, "Any")
-            for arg in node_ir.task.args
+            # Add a standardized port for the global start pulse
+            "__start__": PortDef("__start__", PortRole.SIGNAL, "Pulse"),
+            **{
+                arg.name: PortDef(arg.name, PortRole.DATA, "Any")
+                for arg in node_ir.task.args
+            }
         }
         # Add ports for resources
         for res_name in node_ir.constraints.keys():

@@ -28,11 +28,9 @@ def reactor_backend_factory(
         # Return the Python implementation
         return Reactor
     elif backend == "rust":
-        # When the Rust implementation is ready, it will be imported and returned here.
-        # For now, we skip any tests that request it.
-        pytest.skip(
-            "Rust reactor backend is not yet implemented. Skipping test."
-        )
+        # Import the high-performance Rust implementation
+        from cascade_vm_rs import RustReactor
+        return RustReactor
     else:
         pytest.fail(
             f"Invalid reactor backend specified: '{backend}'. "

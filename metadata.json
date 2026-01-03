@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] debug(vm): 打印 function_map 以验证运行时映射", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767413390.467947, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] debug(vm): 深度追踪 Reactor 调度与执行", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767413535.230565, "duration_ms": 0}}

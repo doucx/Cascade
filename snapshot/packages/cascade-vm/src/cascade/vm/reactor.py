@@ -122,6 +122,7 @@ class Reactor:
         self, node: PhysicsFuncNode, input_data: Dict[str, Token]
     ) -> None:
         try:
+            print(f"[Reactor] Executing {node.id} ({node.name})")
             # 1. Execution
             func = self.function_map.get(node.id)
             if not func:

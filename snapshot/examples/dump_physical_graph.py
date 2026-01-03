@@ -1,40 +1,3 @@
-简要回答
-好的，我将创建一个示例脚本 `examples/dump_physical_graph.py`，复用资源背压测试中的拓扑构建逻辑，演示如何使用 `GraphDumper` 生成 DOT 可视化数据。
-
-## [WIP] docs: 添加物理图可视化示例脚本
-
-### 用户需求
-验证新开发的 `GraphDumper` 工具。用户希望在 `examples/` 目录下创建一个脚本，该脚本基于已知的 `test_resource_backpressure.py` 逻辑构建一个包含资源竞争的物理图，并将其 DOT 描述输出到控制台。
-
-### 评论
-这个示例脚本不仅验证了 `GraphDumper` 的功能，还为开发者提供了一个直观的工具来理解编译器生成的复杂物理拓扑（特别是 Broker、Requestor 和 Bleacher 之间的资源闭环）。
-
-### 目标
-1.  确保 `examples` 目录存在。
-2.  创建 `examples/dump_physical_graph.py`。
-3.  在脚本中手动构建 `GraphIR` 和 `EnvironmentDef`。
-4.  调用 `Builder` 生成 `BipartiteGraph`。
-5.  调用 `GraphDumper` 输出 DOT。
-
-### 基本原理
-直接复用现有的集成测试逻辑是构建有效示例的最快路径。这个特定的图包含了所有的关键元素：三连体、资源约束、全局 Broker 和旁路观测，是展示 `GraphDumper` 能力的绝佳案例。
-
-### 标签
-#intent/document #flow/ready #priority/low #comp/docs #task/domain/compiler #task/object/example-script #task/action/create #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建可视化示例脚本
-
-我们将创建一个脚本，构建一个包含两个竞争 GPU 资源的节点的图，并打印其物理结构的 DOT 表示。
-
-~~~~~act
-write_file
-examples/dump_physical_graph.py
-~~~~~
-~~~~~python
 #!/usr/bin/env python3
 """
 Dump Physical Graph Example
@@ -119,9 +82,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-~~~~~
-
-### 下一步建议
-脚本已创建。你可以运行 `python examples/dump_physical_graph.py` 并查看输出，或者将其重定向到文件并使用 `graphviz` 进行渲染，以验证 `GraphDumper` 的效果。
-
-如果一切正常，这将标志着我们有了第一个能够直观洞察 Cascade 3.0 物理层的工具。接下来可以继续执行 **阶段 1：物理层的完备化** 中的其他任务，或者使用此工具来辅助调试。

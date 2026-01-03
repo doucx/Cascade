@@ -1,0 +1,14 @@
+{
+  "noop_producer": {
+    "baseline_code_signature_text": "def noop_producer(inputs, node, resources):",
+    "baseline_code_structure_hash": "9229aaab85e09da0cdf523f4eccaa8a77280fb4c265a9ce52e165476b97c93f1"
+  },
+  "test_infinite_capacity_handles_concurrency": {
+    "baseline_code_signature_text": "async def test_infinite_capacity_handles_concurrency():",
+    "baseline_code_structure_hash": "55300d13300e1e50697a0a78fa28e65ca33c6ee0e61b2c25dea7f156c290ea1a"
+  },
+  "test_limited_capacity_causes_crash": {
+    "baseline_code_signature_text": "async def test_limited_capacity_causes_crash():",
+    "baseline_code_structure_hash": "30169ed0233e8155ba4ef16beaf08f4069ed11f67cdef8127cf1d9a3e0d63d00"
+  }
+}

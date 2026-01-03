@@ -1,6 +1,6 @@
 {
   "standard_stainer": {
-    "baseline_code_signature_text": "async def standard_stainer(inputs: Dict[str, Token], node: StainNode) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "32a4227e4eed1bb8e448733363962239ed7553b677f7c00970b7e8cf670acfc8"
+    "baseline_code_signature_text": "async def standard_stainer(inputs: Dict[str, Token], node: StainNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "ab7ba3eea4b38a4fcdaa68156e519d3c7fbf2021aedba19d71728564b471f778"
   }
 }

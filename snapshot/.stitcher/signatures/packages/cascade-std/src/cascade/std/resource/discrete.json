@@ -3,8 +3,8 @@
   "DiscreteLedger.available": {},
   "DiscreteLedger.total": {},
   "discrete_allocator": {
-    "baseline_code_signature_text": "async def discrete_allocator(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "38f56db74a8a012e6c45ca34301f4e01c71bf119fa7275c3f05cd46bf9f9ca5f",
+    "baseline_code_signature_text": "async def discrete_allocator(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "4178d82c7e426214cf1ae32466ac660e9d576be294c52747c58d64264e77e1e4",
     "baseline_yaml_content_hash": "64ef08ebc64eab90939cb2ea428ccf853058de613da7a51ae6527caa9b386be5"
   },
   "discrete_broker": {
@@ -13,8 +13,8 @@
     "baseline_yaml_content_hash": "6ca9cbd960a65463d32ef9255a399857711c8a3133580df65d5b16daed921c2b"
   },
   "discrete_reclaimer": {
-    "baseline_code_signature_text": "async def discrete_reclaimer(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "f1d82b13e217fb1e6c0c7276b5cace202c427f5abadce5e76bb8b71304454052",
+    "baseline_code_signature_text": "async def discrete_reclaimer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "8417e19269eb46b958b8172f137a88d7e3d21182620ba7cb3334ea8989b5e2b2",
     "baseline_yaml_content_hash": "2f791ca9f57d21b446c2289f831ced253cb3dd98ebf45d06265652e7bbb650fa"
   }
 }

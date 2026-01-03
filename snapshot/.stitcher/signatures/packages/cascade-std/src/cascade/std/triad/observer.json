@@ -3,7 +3,7 @@
   "ObservedEvent.event_type": {},
   "ObservedEvent.trace_data": {},
   "standard_observer": {
-    "baseline_code_signature_text": "async def standard_observer(inputs: Dict[str, Token], queue: Queue) -> None:",
-    "baseline_code_structure_hash": "62eec017fc11d8af8717e2b0ad8e0e942a088f85b78be9b1fb18b3f221aebdf2"
+    "baseline_code_signature_text": "async def standard_observer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any, queue: Queue) -> None:",
+    "baseline_code_structure_hash": "2ae4edabc231bf9a92f0a4d142fea4732d0cf4d8b4cc0a34a52862d69aac9790"
   }
 }

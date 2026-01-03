@@ -10,13 +10,11 @@ from cascade.std.resource.continuous import (
 
 @pytest.fixture
 def partial_ledger() -> ContinuousLedger:
-    """Ledger with 16.0 total, 4.5 available."""
     return ContinuousLedger(total=16.0, available=4.5)
 
 
 @pytest.fixture
 def starved_ledger() -> ContinuousLedger:
-    """Ledger with 16.0 total, 1.0 available."""
     return ContinuousLedger(total=16.0, available=1.0)
 
 

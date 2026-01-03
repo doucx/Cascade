@@ -5,8 +5,8 @@
     "baseline_yaml_content_hash": "7cb9c5c4732c679c1a61af4ef55fd8adb4532a2c3ce7b23efa7c0e8772907df8"
   },
   "simple_increment": {
-    "baseline_code_signature_text": "def simple_increment(inputs: Dict[str, Token], node) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "4196eebc20b8a199d87536cbacba43e270050f51e351e9cc600529310734f001",
+    "baseline_code_signature_text": "def simple_increment(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "2c4538f52cf79eebf911266a20fb4e08ef5a8268b9fb051ffeb0acf0ee4fd5e0",
     "baseline_yaml_content_hash": "4420f85315706715973b284f3d2bf3527738a14648460a0f4bf0126d942ec178"
   },
   "test_ping_pong_flow": {

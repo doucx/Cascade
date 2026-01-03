@@ -4,8 +4,8 @@
     "baseline_code_structure_hash": "8962de49f4899f6c4b082f862017876b103f543eee3bca80d1bf07f658fd9bbb"
   },
   "switch_logic": {
-    "baseline_code_signature_text": "def switch_logic(inputs: Dict[str, Token], node) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "9a60090338e41240ddc5bdc19ca7cc8a46205b9ad8a1f749749436cae66780e9",
+    "baseline_code_signature_text": "def switch_logic(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "771ffb822a81c29fcf928624faea0b6208d4dfa9e02e0fe68f20ccda7b887a02",
     "baseline_yaml_content_hash": "95b32ca564f4814d7217265e96cd5be6aae8d64005c2a072d9b8e5050813be43"
   },
   "test_branching_path_a": {

@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "c3ed326a1d94e8e8a7256dd9e3ce92cedbfb0d9843171a24b0d4cd48969a3f19"
   },
   "Reactor.__init__": {
-    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, memory: VolatileMemory, executor: PhysicsExecutor, function_map: Dict[str, Callable]):",
-    "baseline_code_structure_hash": "0677bda3a0064d517566c03835d8240a41cd10b0db83af6de7b6f96a219d0fe0"
+    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, memory: VolatileMemory, executor: PhysicsExecutor, function_map: Dict[str, Callable], resource_registry: Optional[ResourceRegistry] = None):",
+    "baseline_code_structure_hash": "770aad0153487fca9566bd1b6f6ae34e33e428f5cd8dbd38312d2d037a83652e"
   },
   "Reactor._execute_task": {
     "baseline_code_signature_text": "async def _execute_task(self, node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:",
@@ -38,6 +38,7 @@
     "baseline_code_structure_hash": "ec73b8ca76e1f98e8d8a878be2ad2d18bb2975154a4f48b43ccd1e9f12a436bd",
     "baseline_yaml_content_hash": "69b0517bce2e4616aec74a482166b7e31e2faab77910dfa8acd08ff3543133fb"
   },
+  "Reactor.resource_registry": {},
   "Reactor.sinks": {},
   "Reactor.step": {
     "baseline_code_signature_text": "async def step(self) -> int:",

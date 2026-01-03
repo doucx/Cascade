@@ -1,7 +1,7 @@
 {
   "drain_signal": {
-    "baseline_code_signature_text": "async def drain_signal(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "bef038ac05468d9f73434f8b73e6ae165c4f3853bbe02e474d51f6fcca6838e4",
+    "baseline_code_signature_text": "async def drain_signal(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "6c8b4f1ad77449d68c394077d7fffa5255494e45be0ae637992bc043a86f9ee6",
     "baseline_yaml_content_hash": "854d8a7e0f61c92bc564479bbe87a1f729c48a51b103579765adbee4123358d7"
   }
 }

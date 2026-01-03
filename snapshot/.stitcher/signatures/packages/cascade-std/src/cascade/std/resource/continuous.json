@@ -3,8 +3,8 @@
   "ContinuousLedger.available": {},
   "ContinuousLedger.total": {},
   "continuous_allocator": {
-    "baseline_code_signature_text": "async def continuous_allocator(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "0a382a625321ab210fbb855372943fc09562241e559c5c54a3de7415dd7e9c64"
+    "baseline_code_signature_text": "async def continuous_allocator(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "2a51668de6662aafd5b69cd429daa54171b18ddcab67413a4cea55e2f49417e7"
   },
   "continuous_broker": {
     "baseline_code_signature_text": "async def continuous_broker(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
@@ -12,7 +12,7 @@
     "baseline_yaml_content_hash": "e4ac243e4c6fe28e53e3ed025d099bddc1cb9e68d621e13d3f1fd99a8a283012"
   },
   "continuous_reclaimer": {
-    "baseline_code_signature_text": "async def continuous_reclaimer(inputs: Dict[str, Token], node: PhysicsNode) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "8debf0ee9102c00bfec8f4e438129068cbae1930f91310dae9f4c59c61618b0c"
+    "baseline_code_signature_text": "async def continuous_reclaimer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "446c7a2fef1d11f69fa7c7be98f6908f4524b7798e4939d1e26a9ab736d75e96"
   }
 }

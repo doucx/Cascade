@@ -28,23 +28,25 @@ class EventDrivenRunner:
         self.graph = graph
         self.memory = VolatileMemory()
         self.executor = PhysicsExecutor()
-        
+
         # 1. Setup Observability Queue
         self.event_queue: asyncio.Queue[ObservedEvent] = asyncio.Queue()
         self._captured_events: List[ObservedEvent] = []
-        
+
         # 2. Inject standard_observer with our queue
         # We look for the observer node in the graph (by convention ID)
         # or we rely on the user passing the map.
         # Here, we wrap the provided function_map to inject the queue into the observer.
         self.function_map = function_map.copy()
-        
+
         # Auto-detect and bind observer if present in map
         obs_id = "global.observability.observer"
         if obs_id in self.function_map:
             # We assume the user passed the standard_observer function
             # We replace it with a partial that has 'queue' bound
-            self.function_map[obs_id] = partial(standard_observer, queue=self.event_queue)
+            self.function_map[obs_id] = partial(
+                standard_observer, queue=self.event_queue
+            )
 
         self.reactor = Reactor(
             self.graph, self.memory, self.executor, self.function_map
@@ -56,7 +58,6 @@ class EventDrivenRunner:
         self.reactor.prime()
 
     async def start_loop(self):
-        """Starts the reactor loop in the background."""
         if self._loop_task:
             return
         self._stop_event.clear()
@@ -87,7 +88,6 @@ class EventDrivenRunner:
             self._loop_task = None
 
     def inject_input(self, node_id: str, payload: Any):
-        """Helper to inject data into a node."""
         node = self.graph.nodes[node_id]
         if not isinstance(node, PhysicsDataNode):
             raise ValueError(f"Node {node_id} is not a DataNode")
@@ -98,38 +98,33 @@ class EventDrivenRunner:
         predicate: Callable[[ObservedEvent], bool],
         timeout: float = 1.0,
     ) -> ObservedEvent:
-        """
-        Waits until an event matching the predicate arrives.
-        Captures all intermediate events.
-        """
         start_time = asyncio.get_event_loop().time()
-        
+
         while True:
             # Check timeout
             now = asyncio.get_event_loop().time()
             if now - start_time > timeout:
                 raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
-            
+
             # Wait for next event
             try:
                 # Calculate remaining time
                 remaining = timeout - (now - start_time)
-                event = await asyncio.wait_for(self.event_queue.get(), timeout=remaining)
+                event = await asyncio.wait_for(
+                    self.event_queue.get(), timeout=remaining
+                )
                 self._captured_events.append(event)
-                
+
                 if predicate(event):
                     return event
             except asyncio.TimeoutError:
-                 raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
+                raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
 
-    async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> ObservedEvent:
-        """
-        Convenience method to wait for a specific task to complete (End event).
-        """
+    async def run_until_complete(
+        self, task_id: str, timeout: float = 2.0
+    ) -> ObservedEvent:
+
         def is_completion(e: ObservedEvent):
-            return (
-                e.event_type == "end" 
-                and e.trace_data.get("id") == task_id
-            )
-        
+            return e.event_type == "end" and e.trace_data.get("id") == task_id
+
         return await self.wait_for_event(is_completion, timeout=timeout)

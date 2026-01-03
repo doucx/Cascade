@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 from dataclasses import dataclass
 from cascade.spec.physics import Token, PhysicsNode
 
@@ -9,7 +9,7 @@ class ContinuousLedger:
     available: float
 
 
-from typing import Any
+
 
 async def continuous_allocator(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any

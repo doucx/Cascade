@@ -1,0 +1,20 @@
+{
+  "ResourceRegistry": {},
+  "ResourceRegistry.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "ResourceRegistry._resources": {},
+  "ResourceRegistry.get": {
+    "baseline_code_signature_text": "def get(self, resource_id: str) -> Any:",
+    "baseline_code_structure_hash": "fddda3289fadc728f6875a9a307cc196958f002579c6329143eea5b5eb3a0a28"
+  },
+  "ResourceRegistry.has": {
+    "baseline_code_signature_text": "def has(self, resource_id: str) -> bool:",
+    "baseline_code_structure_hash": "b746e70e2dce554d9e2fe9a991d60a97f86a4c449a894d95ac423a31762a22de"
+  },
+  "ResourceRegistry.register": {
+    "baseline_code_signature_text": "def register(self, resource_id: str, resource: Any) -> None:",
+    "baseline_code_structure_hash": "59981a8b56b74e2ea4d3c21df4af4def300bb742099d9ecd0d27f211d36d7231"
+  }
+}

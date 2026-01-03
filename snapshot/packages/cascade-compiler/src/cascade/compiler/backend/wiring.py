@@ -1,4 +1,3 @@
-from typing import Optional
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsNode, PhysicsFuncNode, PhysicsDataNode
 from .expander import SubGraph

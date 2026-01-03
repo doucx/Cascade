@@ -20,8 +20,8 @@
     "baseline_yaml_content_hash": "eb655121247ef2b32cb741c50425ff364fc2580eab8123579bb16e4f0d6387ad"
   },
   "WiringHarness.connect": {
-    "baseline_code_signature_text": "def connect(self, source_id: str, source_port: str, target_id: str, target_port: str, tag_filter: Optional[str] = None) -> None:",
-    "baseline_code_structure_hash": "f01043f1a2b032b69ebf86122c8b787324b13372f31cb2adcd713b3d2cff202d",
+    "baseline_code_signature_text": "def connect(self, source_id: str, source_port: str, target_id: str, target_port: str) -> None:",
+    "baseline_code_structure_hash": "3e982a76dd0bf5d5e8a3047cc15674deea00746c24920e0a678077346368d3c6",
     "baseline_yaml_content_hash": "14a3550b91fd1bb514f62e05697a2369c55d497709d812c07dc309044573857d"
   },
   "WiringHarness.graph": {}

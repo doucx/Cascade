@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 import asyncio
 import uuid
 from dataclasses import asdict
+from cascade.adapters.executors.local import LocalExecutor
 
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
@@ -114,9 +115,6 @@ class MockSubscriptionHandle(SubscriptionHandle):
     async def unsubscribe(self) -> None:
         if self._topic in self._parent.subscriptions:
             del self._parent.subscriptions[self._topic]
-
-
-from cascade.adapters.executors.local import LocalExecutor
 
 
 class TimedMockExecutor(LocalExecutor):

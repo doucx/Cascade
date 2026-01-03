@@ -38,8 +38,8 @@
     "baseline_yaml_content_hash": "58a348b975c4be29924e2d07a0cd3449cd33caddbb685f300ef4febf965020c2"
   },
   "ResourceContainer.scan": {
-    "baseline_code_signature_text": "def scan(self, graph: Graph) -> Set[str]:",
-    "baseline_code_structure_hash": "c1eee6b528ffba8dcd0f8bbe73199ff7ea72f8a5df1cb2f8c90885f495402763",
+    "baseline_code_signature_text": "def scan(self, graph: Graph, executable_registry: Dict[str, Callable]) -> Set[str]:",
+    "baseline_code_structure_hash": "211aecb941eea8488c97d15d0553fe4cc08578838be0d9560c7096722eb2c10d",
     "baseline_yaml_content_hash": "bac446617294ece3c0048802499956bcdbf947cd4a8b6e2a532245a5c4e18330"
   },
   "ResourceContainer.setup": {

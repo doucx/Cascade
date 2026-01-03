@@ -2,6 +2,10 @@
   "GraphExecutionResult": {
     "baseline_yaml_content_hash": "e01c47c954ac173636dae7ec566f136769b19188a67ebeae7cff6c91324a6e09"
   },
+  "GraphExecutionResult.__init__": {
+    "baseline_code_signature_text": "def __init__(self, value: Any, source_node_id: str):",
+    "baseline_code_structure_hash": "1914fa40805e7b23be73e62b0d2236c3638b8f355092a623699cbe3128eee786"
+  },
   "GraphExecutionResult.source_node_id": {},
   "GraphExecutionResult.value": {},
   "GraphExecutionStrategy": {
@@ -12,8 +16,8 @@
     "baseline_code_structure_hash": "89e5fde89c513b836bd9df72b73716c1174d9f0c7543aadf52bad85d0286a223"
   },
   "GraphExecutionStrategy._execute_graph": {
-    "baseline_code_signature_text": "async def _execute_graph(self, target: Any, params: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, state_backend: StateBackend, graph: Graph, plan: Any, instance_map: Dict[str, Node], root_input_overrides: Optional[Dict[str, Any]] = None) -> GraphExecutionResult:",
-    "baseline_code_structure_hash": "167acd88abb76475acd118b97c0e9c30c8e589e02de4650acc29ec9ae189ce95"
+    "baseline_code_signature_text": "async def _execute_graph(self, target: Any, params: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, state_backend: StateBackend, graph: Graph, plan: Any, instance_map: Dict[str, Node], executable_registry: Dict[str, Callable], root_input_overrides: Optional[Dict[str, Any]] = None) -> GraphExecutionResult:",
+    "baseline_code_structure_hash": "cfad88de843b085da55b90d86cec419856907a4c91ca73e6a842171dc16ef73c"
   },
   "GraphExecutionStrategy._index_plan": {
     "baseline_code_signature_text": "def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:",

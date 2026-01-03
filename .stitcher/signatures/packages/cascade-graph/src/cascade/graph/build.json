@@ -30,14 +30,15 @@
   "GraphBuilder._visited_instances": {},
   "GraphBuilder.analyzer": {},
   "GraphBuilder.build": {
-    "baseline_code_signature_text": "def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:",
-    "baseline_code_structure_hash": "27f0af28cbe7b5f2d1c99f771700fc31efb6afc2ae55145881d6c00087f93be2"
+    "baseline_code_signature_text": "def build(self, target: Any) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:",
+    "baseline_code_structure_hash": "0dd882bc53543a37dc292d07428b3f09699cffe04d8ca64a5ff31df4649355dc"
   },
+  "GraphBuilder.executable_registry": {},
   "GraphBuilder.graph": {},
   "GraphBuilder.hashing_service": {},
   "GraphBuilder.registry": {},
   "build_graph": {
-    "baseline_code_signature_text": "def build_graph(target: Any, registry: NodeRegistry | None = None) -> Tuple[Graph, Dict[str, Node]]:",
-    "baseline_code_structure_hash": "05216073462e0fd129677552c65d1d71622dac247ad2c058fdee5ea685238e9c"
+    "baseline_code_signature_text": "def build_graph(target: Any, registry: NodeRegistry | None = None) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:",
+    "baseline_code_structure_hash": "58834a798c6b2fea2af0e4d11c962f83dbc0621ab7f204aa851e7757e4a54b78"
   }
 }

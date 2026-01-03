@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Callable, Optional, Any, Dict
+from typing import List, Optional, Any, Dict
 from enum import Enum, auto
 
 from cascade.spec.constraint import ResourceConstraint

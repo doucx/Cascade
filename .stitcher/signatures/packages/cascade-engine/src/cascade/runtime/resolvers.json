@@ -25,8 +25,12 @@
     "baseline_code_structure_hash": "f1a0b0f1f2f084102eeaa28256d3799bc48d835b1c51a28899bf2d8834a2f8b5"
   },
   "ArgumentResolver.resolve": {
-    "baseline_code_signature_text": "async def resolve(self, node: Node, graph: Graph, state_backend: StateBackend, resource_context: Dict[str, Any], instance_map: Dict[str, Node], user_params: Optional[Dict[str, Any]] = None, input_overrides: Optional[Dict[str, Any]] = None) -> Tuple[List[Any], Dict[str, Any]]:",
-    "baseline_code_structure_hash": "a96d7028c5f1104341589c5d53436c28e785bd634deb6e962b030dcb5e10df42"
+    "baseline_code_signature_text": "async def resolve(self, node: Node, graph: Graph, state_backend: StateBackend, resource_context: Dict[str, Any], instance_map: Dict[str, Node], callable_obj: Optional[Callable], user_params: Optional[Dict[str, Any]] = None, input_overrides: Optional[Dict[str, Any]] = None) -> Tuple[List[Any], Dict[str, Any]]:",
+    "baseline_code_structure_hash": "549ec97319178803285736d569b53309036e9a7659b59d80d51df0a1c9086b2f"
+  },
+  "ArgumentResolver.resolve_cache_inputs": {
+    "baseline_code_signature_text": "async def resolve_cache_inputs(self, node: Node, graph: Graph, state_backend: StateBackend) -> Dict[str, Any]:",
+    "baseline_code_structure_hash": "428c3f677add4ae0fb978ce44563e58cf1c4d47d0aaf95700d7fe18d4c05ad8f"
   },
   "ConstraintResolver": {
     "baseline_yaml_content_hash": "50008426f8b26531fce85d5ccf58075a1ddd35ff45099c8cb29af33bc0e715f7"

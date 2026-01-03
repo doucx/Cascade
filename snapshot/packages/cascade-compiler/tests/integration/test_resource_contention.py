@@ -137,12 +137,19 @@ async def test_resource_scarcity_topology_and_execution():
         # Collect all 'start' and 'end' events
         events: List[ObservedEvent] = []
         
-        # We wait until we have 2 * TASK_COUNT events (start + end for each)
-        # We need a robust condition.
+        print("\n--- Physical Field Event Log ---")
+        
+        # We wait until we have 2 * TASK_COUNT logical task completions.
+        # But we log EVERY physical event to diagnose the deadlock.
         def collection_predicate(e: ObservedEvent):
-            if e.event_type in ("start", "end") and e.trace_data.get("id", "").startswith("node_"):
+            # Log ALL physical events for debugging
+            node_id = e.trace_data.get("id", "unknown")
+            print(f"[{e.event_type.upper():<5}] {node_id}")
+
+            # Only count logical task events for completion condition
+            if e.trace_data.get("id", "").startswith("node_"):
                 events.append(e)
-            # Stop when we have all completion events
+                
             completed = sum(1 for x in events if x.event_type == "end")
             return completed == TASK_COUNT
 

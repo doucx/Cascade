@@ -1,83 +1,97 @@
-`test_resource_scarcity_topology_and_execution` 因超时失败。这揭示了一个严重的性能问题。
+分析正确。连续两次超时，即使在负载降低后，也强烈表明问题不是性能瓶颈（活锁），而是**死锁**。系统根本没有在取得进展。
 
-50 个任务，并发度为 3，执行时间被设为 5 秒。虽然理论执行时间很短，但物理图的规模很大（50 个任务 * 每个任务约 10 个物理节点 = 500+ 个节点），而且 `Reactor` 需要在这个庞大的图中进行循环扫描。最关键的是，`discrete_allocator` 在资源不足时会**拒绝并重新循环**请求令牌。
+你提出的观测需求是解决这个问题的关键。我们当前的测试断言就像只盯着工厂的“成品出口”，而完全忽略了内部所有“传送带”和“机床”的运转情况。当成品不再出来时，我们不知道是哪个环节卡住了。
 
-**诊断：请求风暴 (Request Storm)**
-当只有 3 个资源可用而有 50 个请求时，剩下的 47 个请求会被拒绝，从 `Allocator` 回到 `ReqBuffer`，然后在下一个 `step` 再次被 `Allocator` 读取、拒绝、回流。这就形成了一个巨大的、无意义的循环（Busy Loop），消耗了大量的 CPU 周期和 `Reactor.step` 次数，导致虽然系统在“动”，但有效工作进展缓慢，最终导致 5 秒内无法完成所有任务。
+为了诊断问题，我们必须连接一根“观测总线”，监听**物理场中每一个节点**的生命周期事件，而不仅仅是我们定义的逻辑任务。这将为我们提供一份详细的“物理模拟日志”，揭示死锁的确切位置。
 
-这是一个典型的**资源匮乏下的活锁 (Livelock under Starvation)** 现象。在真实场景中，这会烧毁 CPU。在测试中，它导致超时。
+`EventDrivenRunner` 和 `standard_observer` 已经具备了这个能力，我们只需要修改测试用例，让它捕获并打印所有事件。
 
-**解决方案：指数退避 (Exponential Backoff) 的物理模拟**
-为了解决这个问题，我们不能让被拒绝的请求立即回到 `ReqBuffer`。我们需要在 `ReqBuffer` 前引入一个“冷却池”或延迟机制。但在目前的物理层中，最简单的修复是**增加超时时间**，因为我们的核心目标是验证正确性（死锁/饿死），而不是性能。
-
-然而，更深层的修复是优化 `Allocator` 的行为。但在当前的测试语境下，我建议先**大幅增加测试超时时间**并**减少任务数量**，以确认逻辑正确性。如果逻辑是正确的，仅仅是因为仿真器跑得慢，我们可以接受。如果减少数量后仍然超时，那可能是死锁。
-
-我建议将任务数从 50 减少到 20，并增加超时时间到 10 秒。这将保持足够的并发压力（20 vs 3），同时显著降低“请求风暴”的规模。
-
-## [WIP] fix(test): Mitigate request storm in resource contention test
+## [WIP] debug(test): 为资源竞争测试增加全物理场事件观测
 
 ### 错误分析
-`test_resource_contention.py` 超时失败。原因是资源匮乏导致大量请求被拒绝并立即重试，形成了高频的“请求风暴”，严重拖慢了有效任务的执行进度。当前的 Reactor 调度策略（简单的轮询）加剧了这个问题。
+`test_resource_scarcity_topology_and_execution` 持续超时，表明存在死锁。根本原因未知，因为测试的观测范围被限定在逻辑任务上 (`startswith("node_")`)，导致所有关键的资源管理节点（Allocator, Reclaimer, Requestor 等）的活动对我们来说都是一个黑箱。我们无法判断是资源没有被正确释放，还是 Ledger 令牌在某个循环中被卡住。
 
 ### 用户需求
-修复测试超时问题，以便验证资源竞争逻辑的正确性。
+为失败的测试添加一根“观测线”，捕获并打印出物理场中**所有**节点的 `start` 和 `end` 事件，以便诊断死锁的根源。
 
 ### 评论
-在不引入复杂的“物理退避”机制之前，减少负载规模是验证逻辑正确性的务实之选。20 个任务竞争 3 个资源位，依然能充分测试动态布线、Trace 路由和并发控制，但计算开销会降低一个数量级。
+这是将 Cascade 的“全息可观测性”理念用于自身调试的绝佳实践。通过移除事件过滤器并增加日志记录，我们将把 `EventDrivenRunner` 从一个简单的“测试器”升级为一个强大的“物理场分析仪”。日志输出将清晰地展示出哪个节点被频繁调用（可能的活锁），或者哪个节点在等待一个永远不会到来的输入（死锁）。
 
 ### 目标
-- 修改 `test_resource_contention.py`，将 `TASK_COUNT` 降至 20，超时增至 10 秒。
+-   修改 `test_resource_scarcity_topology_and_execution` 测试用例。
+-   移除 `collection_predicate` 中的 `id` 过滤器，使其捕获所有节点的生命周期事件。
+-   在谓词函数中加入 `print` 语句，实时打印捕获到的事件，生成一份详细的执行日志。
 
 ### 基本原理
-**测试金字塔原则**：集成测试应关注覆盖场景，而非极端压力。只要能触发排队和并发限制，20 个任务与 50 个任务在逻辑验证上是等效的。
+**诊断优于猜测**：在复杂的并发系统中，盲目地修改代码来“修复”一个未知的死锁是低效且危险的。正确的做法是首先提升系统的可观测性，让问题自我暴露。
 
 ### 标签
-#intent/fix #flow/ready #priority/medium #comp/tests #concept/performance #scope/test #task/domain/testing #task/object/tests #task/action/tune #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/tests #concept/observability #scope/test #task/domain/testing #task/object/debugging #task/action/instrument #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 调整测试参数
+#### Acts 1: 为资源竞争测试安装“观测总线”
+
+我们将修改 `test_resource_scarcity_topology_and_execution`，移除事件过滤器并添加日志记录。这将把失败的测试用例变成一个强大的诊断工具。
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/tests/integration/test_resource_contention.py
 ~~~~~
 ~~~~~python.old
-@pytest.mark.asyncio
-async def test_resource_scarcity_topology_and_execution():
-    # Configuration
-    TASK_COUNT = 50
-    RESOURCE_CAPACITY = 3
-    RESOURCE_NAME = "gpu"
-~~~~~
-~~~~~python.new
-@pytest.mark.asyncio
-async def test_resource_scarcity_topology_and_execution():
-    # Configuration
-    # Reduced from 50 to 20 to avoid "request storm" livelock in the simple reactor simulation.
-    # When 47 requests are rejected and recirculated instantly, it consumes massive CPU cycles.
-    TASK_COUNT = 20
-    RESOURCE_CAPACITY = 3
-    RESOURCE_NAME = "gpu"
-~~~~~
+    try:
+        # Collect all 'start' and 'end' events
+        events: List[ObservedEvent] = []
+        
+        # We wait until we have 2 * TASK_COUNT events (start + end for each)
+        # We need a robust condition.
+        def collection_predicate(e: ObservedEvent):
+            if e.event_type in ("start", "end") and e.trace_data.get("id", "").startswith("node_"):
+                events.append(e)
+            # Stop when we have all completion events
+            completed = sum(1 for x in events if x.event_type == "end")
+            return completed == TASK_COUNT
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_resource_contention.py
-~~~~~
-~~~~~python.old
-        # Timeout needs to be generous for 50 tasks with concurrency 3
-        # 50 tasks / 3 concurrent * 0.005s per task ~= 0.08s (theoretical minimum)
-        # But overhead is high. Let's give it 5 seconds.
-        await runner.wait_for_event(collection_predicate, timeout=5.0)
+        # Timeout needs to be generous.
+        # With request recirculation, the reactor steps many times per useful work.
+        await runner.wait_for_event(collection_predicate, timeout=10.0)
 ~~~~~
 ~~~~~python.new
+    try:
+        # Collect all 'start' and 'end' events
+        events: List[ObservedEvent] = []
+        
+        print("\n--- Physical Field Event Log ---")
+        
+        # We wait until we have 2 * TASK_COUNT logical task completions.
+        # But we log EVERY physical event to diagnose the deadlock.
+        def collection_predicate(e: ObservedEvent):
+            # Log ALL physical events for debugging
+            node_id = e.trace_data.get("id", "unknown")
+            print(f"[{e.event_type.upper():<5}] {node_id}")
+
+            # Only count logical task events for completion condition
+            if e.trace_data.get("id", "").startswith("node_"):
+                events.append(e)
+                
+            completed = sum(1 for x in events if x.event_type == "end")
+            return completed == TASK_COUNT
+
         # Timeout needs to be generous.
         # With request recirculation, the reactor steps many times per useful work.
         await runner.wait_for_event(collection_predicate, timeout=10.0)
 ~~~~~
 
 ### 下一步建议
-重新运行调整后的测试。如果通过，我们将获得对新资源模型正确性的有力背书。这将是 Phase 1 的完美句号，我们就可以立即开始 Phase 2：Control Flow 的实现。
+现在，请重新运行测试。我们**期望测试仍然会因超时而失败**，但这没关系。
+
+关键是，这次失败会附带一份详细的**物理场事件日志**。请将完整的失败输出（包括 `--- Physical Field Event Log ---` 部分）提供给我。
+
+通过分析这份日志，我们可以精确地看到：
+-   `Allocator` 和 `Reclaimer` 是否在交替执行？
+-   `Ledger` 令牌是否在它们之间正常流动？
+-   `RelBuffer` 是否接收到了来自 `Stainer` 的释放信号？
+
+这份日志将是解开死锁之谜的“罗塞塔石碑”。

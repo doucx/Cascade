@@ -92,6 +92,7 @@ dev = [
   "cascade-connector-mqtt",
   "cascade-connector-local",
   "cascade-vm",
+  "cascade-vm-rs",
   "cascade-compiler",
   "cascade-std",
   # "cascade", # The python sdk

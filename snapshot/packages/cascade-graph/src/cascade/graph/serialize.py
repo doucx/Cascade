@@ -268,9 +268,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             current_node_instance_hash=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="param",
-            _callable=_load_func_from_path(data.get("callable")),
             retry_policy=retry_policy,
-            cache_policy=None,
+            cache_policy=None,  # Serialization of cache policy not implemented yet
             constraints=constraints,
             input_bindings=input_bindings,
             has_complex_inputs=True,  # ParamNode always needs the complex path
@@ -281,9 +280,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             current_node_instance_hash=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="task",
-            _callable=_load_func_from_path(data.get("callable")),
             retry_policy=retry_policy,
-            cache_policy=None,
+            cache_policy=None,  # Serialization of cache policy not implemented yet
             constraints=constraints,
             input_bindings=input_bindings,
             # has_complex_inputs is an optimization flag, safe to default False on restore

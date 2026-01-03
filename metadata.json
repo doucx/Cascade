@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M serialize.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767448186.197094, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复并发测试执行器及图序列化反序列化逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767448226.5794058, "duration_ms": 0}}

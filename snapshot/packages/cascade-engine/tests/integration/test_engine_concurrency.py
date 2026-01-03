@@ -3,12 +3,13 @@ import asyncio
 import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.testing import MockConnector, SpyExecutor
+from cascade.testing import MockConnector
 
 
-class TimedMockExecutor(SpyExecutor):
+class TimedMockExecutor(LocalExecutor):
     def __init__(self, delay: float = 0.0):
         super().__init__()
         self.delay = delay

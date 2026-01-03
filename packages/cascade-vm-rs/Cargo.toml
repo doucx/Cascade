@@ -1,0 +1,13 @@
+[package]
+name = "cascade-vm-rs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "cascade_vm_rs"
+crate-type = ["cdylib"]
+
+[dependencies]
+# 升级到 0.23.3 以支持 Python 3.13
+pyo3 = { version = "0.23.3", features = ["extension-module"] }
+tokio = { version = "1.0", features = ["full"] }

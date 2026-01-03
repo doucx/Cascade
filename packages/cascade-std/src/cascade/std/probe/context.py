@@ -13,6 +13,6 @@ async def param_probe(
 
     # We assume context has a method to get values by spec name.
     # If not found, it returns None (as a payload).
-    val = ctx.get_value(name) if hasattr(ctx, "get_value") else None
+    val = ctx.get_value(name)
 
     return {"out": Token(payload=val)}

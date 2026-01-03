@@ -153,7 +153,7 @@ async def test_reactor_independent_nodes():
 
 
 @pytest.mark.asyncio
-async def test_event_driven_ping_pong():
+async def test_event_driven_ping_pong(reactor_backend_factory):
     # 1. Topology with Observability
     d1 = PhysicsDataNode(id="D1", name="Input")
     f1 = PhysicsFuncNode(
@@ -205,8 +205,8 @@ async def test_event_driven_ping_pong():
         "global.observability.observer": standard_observer,
     }
 
-    # 2. Use Runner
-    runner = EventDrivenRunner(graph, func_map)
+    # 2. Use Runner, injecting the backend factory
+    runner = EventDrivenRunner(graph, func_map, reactor_factory=reactor_backend_factory)
     runner.inject_input("D1", 10)
 
     # 3. Start & Wait

@@ -65,6 +65,18 @@ async def test_e2e_vm_run_with_all_features():
     builder = Builder()
     physical_graph = builder.build(graph_ir, environment)
 
+    # --- DEBUG: Print Physical Graph ---
+    print("\n--- [DEBUG] Physical Graph ---")
+    print("Nodes:")
+    for node_id, node in sorted(physical_graph.nodes.items()):
+        print(f"  - {node_id} ({node.name})")
+    print("\nChannels:")
+    for channel in sorted(physical_graph.channels, key=lambda c: (c.source_node_id, c.target_node_id)):
+        print(f"  - {channel.source_node_id}:{channel.source_port} -> {channel.target_node_id}:{channel.target_port}")
+    print("----------------------------\n")
+    # --- END DEBUG ---
+
+
     # 3. Manually set up the VM
     memory = VolatileMemory()
     executor = PhysicsExecutor()

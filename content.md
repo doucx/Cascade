@@ -1,74 +1,66 @@
-## [WIP] fix(compiler): 优化 Builder 的源节点识别逻辑
+好的，我们采纳调试驱动的开发策略。我将生成一个计划，在 E2E 测试中打印出编译后的物理图，以便我们能直观地诊断连接问题。
+
+## [WIP] debug(vm): 在 E2E 测试中打印物理图以进行诊断
 
 ### 用户需求
-修复 `Builder` 中识别源节点的逻辑缺陷。当前逻辑将由常量数据节点 (`D_const`) 驱动的任务错误地排除在源节点之外，导致它们无法接收到全局启动脉冲。
+修改 `test_e2e_vm_run.py` 测试，在 `Builder` 生成 `physical_graph` 后，将其结构（节点和通道）打印到 `stdout`。这将为我们提供诊断依赖关系是否正确建立的直接证据。
 
 ### 评论
-通过将源节点的定义精确化为“不依赖于任何其他任务（`.stain` 节点）输出的节点”，我们解决了 `setup_task` 未被执行的根本原因。这个修复将确保所有真正的源节点，无论它们是否有常量输入，都能被正确地连接到全局启动脉冲，从而保证了整个计算图的正确启动。
+这是一个关键的调试步骤，遵循“可观测性优先”的原则。通过将内存中的图结构物化为可读的文本，我们可以将一个复杂的运行时问题转换为一个静态的结构分析问题，从而能够精确地定位 `Builder` 中可能存在的布线错误。
 
 ### 目标
-修改 `packages/cascade-compiler/src/cascade/compiler/backend/builder.py` 中的启动脉冲连接逻辑，使其只排除那些被其他任务的 `Stainer` 节点连接的 `Bleacher` 节点。
+1.  修改 `packages/cascade-vm/tests/integration/test_e2e_vm_run.py`。
+2.  在 `builder.build()` 调用之后，添加代码来遍历 `physical_graph.nodes` 和 `physical_graph.channels`。
+3.  以清晰的格式打印出每个节点 ID 和名称，以及每个通道的 `source -> target` 连接关系。
 
 ### 基本原理
-一个任务是否是“源头”，取决于它是否需要等待其他任务完成，而不是它是否有输入。常量输入是编译时就绪的初始条件，不构成任务间的时序依赖。因此，在决定是否连接启动脉冲时，我们必须只考虑来自其他任务 (`.stain` 节点) 的连接。
+我们将利用 `pytest` 的 `stdout` 捕获功能。在测试执行期间，所有 `print` 语句的输出都会被捕获。当测试失败时，`pytest` 会将这些输出显示在失败报告中，从而为我们提供调试所需的上下文信息。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/source-node-activation #task/action/bug-fix #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #comp/compiler #scope/dx #ai/instruct #task/domain/testing #task/object/graph-visualization #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 Builder 中的源节点识别逻辑
+#### Acts 1: 在测试中增加物理图打印逻辑
 
-我们将用更精确的逻辑替换 `Builder` 中最后一段的源节点识别和连接代码。
+我们将 `patch` 测试文件，在编译后立即插入图的打印逻辑。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-vm/tests/integration/test_e2e_vm_run.py
 ~~~~~
 ~~~~~python.old
-        # 6. Wire Global Start Pulse to all Source Nodes
-        # A source node is a bleacher that has no incoming data, condition, or dependency channels.
-        all_target_bleacher_ids = {
-            c.target_node_id for c in physical_graph.channels if c.target_node_id.endswith(".bleach")
-        }
+    # Backend
+    environment = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
+    builder = Builder()
+    physical_graph = builder.build(graph_ir, environment)
 
-        for subgraph in subgraphs.values():
-            bleacher = subgraph.bleacher
-            if bleacher and bleacher.id not in all_target_bleacher_ids:
-                # This bleacher is a source node, connect it to the start pulse
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=start_pulse_id,
-                        source_port="out",
-                        target_node_id=bleacher.id,
-                        target_port="__start__",
-                    )
-                )
+    # 3. Manually set up the VM
+    memory = VolatileMemory()
 ~~~~~
 ~~~~~python.new
-        # 6. Wire Global Start Pulse to all Source Nodes
-        # A source node's bleacher is one that does not depend on any other task's stainer.
-        task_fed_bleacher_ids = {
-            c.target_node_id
-            for c in physical_graph.channels
-            if c.source_node_id.endswith(".stain")
-        }
+    # Backend
+    environment = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
+    builder = Builder()
+    physical_graph = builder.build(graph_ir, environment)
 
-        for subgraph in subgraphs.values():
-            bleacher = subgraph.bleacher
-            if bleacher and bleacher.id not in task_fed_bleacher_ids:
-                # This bleacher is a source node, connect it to the start pulse
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=start_pulse_id,
-                        source_port="out",
-                        target_node_id=bleacher.id,
-                        target_port="__start__",
-                    )
-                )
+    # --- DEBUG: Print Physical Graph ---
+    print("\n--- [DEBUG] Physical Graph ---")
+    print("Nodes:")
+    for node_id, node in sorted(physical_graph.nodes.items()):
+        print(f"  - {node_id} ({node.name})")
+    print("\nChannels:")
+    for channel in sorted(physical_graph.channels, key=lambda c: (c.source_node_id, c.target_node_id)):
+        print(f"  - {channel.source_node_id}:{channel.source_port} -> {channel.target_node_id}:{channel.target_port}")
+    print("----------------------------\n")
+    # --- END DEBUG ---
+
+
+    # 3. Manually set up the VM
+    memory = VolatileMemory()
 ~~~~~
 
 ### 下一步建议
-这次的修复逻辑非常精确，应该能够解决 `setup_task` 不运行的问题。请再次运行测试。如果 `main_task` 在 `setup_task` 之后运行，并且 `final_task` 也成功运行，那么我们的 Compiler-VM 链路就基本验证通过了。
+请运行 `pytest`。测试预计仍会因 `TimeoutError` 而失败，但这次的失败报告中将包含完整的物理图结构。请将包含 `--- [DEBUG] Physical Graph ---` 部分的 `stdout` 结果提供给我，我将基于这些确凿的证据进行最终的问题定位和修复。

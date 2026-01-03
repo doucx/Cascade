@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 优化 Builder 的源节点识别逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767412942.133842, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] debug(vm): 在 E2E 测试中打印物理图以进行诊断", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767413170.0536442, "duration_ms": 0}}

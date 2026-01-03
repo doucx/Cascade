@@ -37,8 +37,10 @@ class PhysicalIdGenerator:
         return f"canonical.resource.reclaimer.{resource_name}"
 
     @staticmethod
-    def global_ledger(resource_name: str) -> str:
-        return f"canonical.resource.ledger.{resource_name}"
+    def global_ledger(resource_name: str, purpose: str = "main") -> str:
+        if purpose == "main": # Keep backward compatibility for simple lookups
+             return f"canonical.resource.ledger.{resource_name}"
+        return f"canonical.resource.ledger.{resource_name}.{purpose}"
 
     @staticmethod
     def requestor(target_node_id: str, resource_name: str) -> str:

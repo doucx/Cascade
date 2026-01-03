@@ -28,22 +28,38 @@ class Builder:
         for res_def in environment.resources:
             allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
             reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
-            ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
+            
+            # --- Conveyor Belt Topology for Deadlock Prevention ---
+            # We create two ledger data nodes to enforce a one-way flow.
+            # D_ledger_alloc_in: High-priority, only Reclaimer writes here.
+            # D_ledger_reclaim_in: Low-priority, only Allocator writes here.
+            
+            alloc_in_id = PhysicalIdGenerator.global_ledger(res_def.name, "alloc_in")
+            reclaim_in_id = PhysicalIdGenerator.global_ledger(res_def.name, "reclaim_in")
 
-            # D_ledger
             initial_ledger = DiscreteLedger(
                 total=res_def.capacity, available=res_def.capacity
             )
-            d_ledger = PhysicsDataNode(
-                id=ledger_id,
-                name=f"Ledger({res_def.name})",
+            
+            # This is the starting point of the loop, pre-filled with the ledger token.
+            d_ledger_alloc_in = PhysicsDataNode(
+                id=alloc_in_id,
+                name=f"LedgerAllocIn({res_def.name})",
                 capacity=1,
                 initial_tokens=1,
                 initial_payload=initial_ledger,
             )
-            wire.add_node(d_ledger)
+            wire.add_node(d_ledger_alloc_in)
+            
+            # This is the intermediate point. It starts empty.
+            d_ledger_reclaim_in = PhysicsDataNode(
+                id=reclaim_in_id,
+                name=f"LedgerReclaimIn({res_def.name})",
+                capacity=1,
+            )
+            wire.add_node(d_ledger_reclaim_in)
 
-            # F_reclaimer (Priority High: Must release before allocate to avoid starvation)
+            # F_reclaimer
             f_reclaimer = PhysicsFuncNode(
                 id=reclaimer_id,
                 name=f"Reclaimer({res_def.name})",
@@ -57,8 +73,7 @@ class Builder:
             )
             wire.add_node(f_reclaimer)
 
-            # F_allocator (Priority Low)
-            # NOTE: Dynamic grant ports (gnt_for_...) will be added during wiring phase
+            # F_allocator
             f_allocator = PhysicsFuncNode(
                 id=allocator_id,
                 name=f"Allocator({res_def.name})",
@@ -68,20 +83,22 @@ class Builder:
                 },
                 output_ports={
                     PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                    # PortName.GNT is deprecated in favor of dynamic ports, but kept for fallback
                     PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
                     PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
                 },
             )
             wire.add_node(f_allocator)
 
-            # Wiring: Ledger <-> Allocator
-            wire.connect(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
-            wire.connect(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
-
-            # Wiring: Ledger <-> Reclaimer
-            wire.connect(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
-            wire.connect(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
+            # Wiring the Conveyor Belt:
+            # 1. Allocator consumes from high-priority buffer
+            wire.connect(alloc_in_id, "out", allocator_id, PortName.LEDGER_IN)
+            # 2. Allocator places used ledger in low-priority buffer
+            wire.connect(allocator_id, PortName.LEDGER_OUT, reclaim_in_id, "in")
+            
+            # 3. Reclaimer consumes from low-priority buffer
+            wire.connect(reclaim_in_id, "out", reclaimer_id, PortName.LEDGER_IN)
+            # 4. Reclaimer places refreshed ledger in high-priority buffer
+            wire.connect(reclaimer_id, PortName.LEDGER_OUT, alloc_in_id, "in")
 
             # Request Buffer
             d_req_buffer_id = f"buffer.req.{res_def.name}"

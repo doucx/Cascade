@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "in builder.py", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767430243.8769546, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 引入资源循环拓扑以根除 Allocator/Reclaimer 死锁", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767431612.174551, "duration_ms": 0}}

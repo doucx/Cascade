@@ -1,164 +1,215 @@
-**诊断完成。**
+**最终拓扑方案 (The Conveyor Belt Priority Loop):**
+我们将创建一个单向的、强制的循环，`Ledger` 令牌必须按顺序流过 `Allocator` 和 `Reclaimer`。
 
-感谢你提供日志。这份日志虽然充满了无法直接阅读的哈希值，但它本身就暴露了致命的问题所在：**我们的观测存在巨大的盲点**。
+```mermaid
+graph TD
+    D_Req_Buffer --> F_Allocator
+    
+    subgraph "Priority Loop"
+        D_Ledger_For_Allocator --> F_Allocator
+        F_Allocator -- ledger_out --> D_Ledger_For_Reclaimer
+        
+        D_Rel_Buffer --> F_Reclaimer
+        D_Ledger_For_Reclaimer --> F_Reclaimer
+        F_Reclaimer -- ledger_out --> D_Ledger_For_Allocator
+    end
+```
+**工作流程:**
+1.  `F_Allocator` **只能**从 `D_Ledger_For_Allocator` 获取 `Ledger` 令牌。
+2.  执行后（无论成功授予还是失败拒绝），`F_Allocator` **必须**将 `Ledger` 令牌放入 `D_Ledger_For_Reclaimer`。此时，`F_Allocator` 物理上被阻塞，因为它唯一的输入源是空的。
+3.  `F_Reclaimer` 现在可以从 `D_Ledger_For_Reclaimer` 获取 `Ledger` 令牌（如果 `D_Rel_Buffer` 也有令牌）。
+4.  `F_Reclaimer` 执行后，将更新后的、更“富裕”的 `Ledger` 令牌放回 `D_Ledger_For_Allocator`。
+5.  `F_Allocator` 现在可以再次尝试分配。
 
-1.  **日志揭示的问题**：日志中只包含了逻辑任务（`resource_heavy_task`）的 `START` 和 `END` 事件。我们完全看不到任何与资源管理相关的物理节点的活动，例如 `allocator`, `reclaimer`, `requestor`。系统在这些关键组件上是“瞎”的。
+这个设计从物理上保证了每一次分配尝试之后，都必然会给 `Reclaimer` 一个执行的机会。**它用拓扑结构根除了死锁。**
 
-2.  **代码层面的原因**：回顾 `Builder` 的代码，我们只为通过 `Expander` 创建的“三连体”子图（即用户定义的逻辑任务）连接了观测线：
-    ```python
-    # in builder.py
-    # 3.3 Wire task observability TO the sidecar bus
-    wire.connect(subgraph.bleacher.id, "obs_output", d_life_id, "in")
-    wire.connect(subgraph.stainer.id, "obs_output", d_life_id, "in")
-    ```
-    所有全局的、手写的物理节点（`Allocator`, `Reclaimer` 等）都没有被连接到 `global.observability.bus`。因此，`standard_observer` 永远不会收到它们的生命周期事件，我们的日志自然就是一片空白。
-
-3.  **推断出的死锁**：
-    - 日志显示前三批任务（共 3 * 3 = 9 个）成功启动并完成。这意味着 `Allocator` 至少成功分配了 3 次，并且 `Reclaimer` 也成功回收了资源，使得后续批次得以运行。
-    - 在第 9 个任务结束后，日志停止了。这表明第 3 批任务完成了，它们的 `Stainer` 向 `RelBuffer` 发送了释放信号。
-    - 此时，`Reclaimer` 应该被激活以回收资源，但它没有。同时，等待队列中的 `Allocator` 也没有被激活来分配新的资源。
-    - **结论**：系统进入了死锁。最可能的情况是 `Reclaimer` 和 `Allocator` 都在等待同一个永远不会到来的 `Ledger` 令牌。某个组件（很可能是 `Reclaimer`）在执行过程中未能正确地将 `Ledger` 令牌归还到 `d_ledger` 节点，导致整个资源循环被饿死。
-
-为了验证这个推断并找到确切的“罪魁祸首”，我们必须让这些黑箱节点“开口说话”。
-
-我将创建一个 `debug_wrapper`，这是一个临时的、用于测试的工具，它可以在不修改核心 IC 代码的情况下，为任何物理函数（如 `discrete_allocator`）包裹上 `START`/`END` 日志。
-
-## [WIP] debug(test): Wrap resource ICs with logging to diagnose deadlock
+## [WIP] fix(compiler): 引入资源循环拓扑以根除 Allocator/Reclaimer 死锁
 
 ### 错误分析
-资源竞争测试因死锁而超时。根本原因是 `Builder` 没有为资源管理相关的物理节点（Allocator, Reclaimer 等）连接观测线，导致我们无法观察到死锁发生的确切环节。
+`Allocator` 和 `Reclaimer` 对共享的 `Ledger` 节点的对称访问模式，在高负载和资源匮乏时会产生“请求风暴”活锁，最终导致 `Reclaimer` 被饿死，系统死锁。逻辑层面的修复不足以在异步调度中完全避免此竞争。
 
 ### 用户需求
-为 `test_resource_contention.py` 中所有资源相关的 IC 函数（`allocator`, `reclaimer` 等）包裹一层日志记录，使其在执行前后打印 `START` 和 `END` 日志，从而暴露死锁的源头。
+通过修改 `Builder` 生成的物理拓扑，为 `Ledger` 令牌创建一个单向循环，从物理上保证 `Reclaimer` 的执行优先级高于 `Allocator` 的重试，从而根除死锁。
 
 ### 评论
-这是一个精准的外科手术式调试。我们不去修改编译器，而是通过一个轻量级的测试工具来增强可观测性。这个 `debug_wrapper` 将把所有物理节点的活动都暴露出来，让死锁问题无处遁形。
+这是一个从架构层面解决并发问题的绝佳范例。我们没有去修改 `Reactor` 的核心调度逻辑，也没有让 IC 变得更“聪明”，而是通过净化物理连接的拓扑结构，让正确的行为“自然涌现”。“传送带”模型将 `Ledger` 令牌的流转从混乱的竞争状态，变成了可预测的、确定性的状态迁移，这是 Cascade 物理化思想的完美体现。
 
 ### 目标
-1.  在 `test_resource_contention.py` 中实现一个 `debug_wrapper` 辅助函数。
-2.  使用该 wrapper 包装 `func_map` 中所有的资源管理函数。
-3.  保持测试的其他部分不变，重新运行以捕获一份完整的、包含所有物理节点活动的日志。
+1.  修改 `packages/cascade-compiler/src/cascade/compiler/backend/builder.py`。
+2.  将单一的 `D_ledger` 节点拆分为两个：`d_ledger_alloc_in` 和 `d_ledger_reclaim_in`。
+3.  重分布线，构建 `Allocator -> d_ledger_reclaim_in -> Reclaimer -> d_ledger_alloc_in -> Allocator` 的单向循环。
 
 ### 标签
-#intent/fix #flow/ready #priority/critical #comp/tests #concept/observability #scope/test #task/domain/testing #task/object/debugging #task/action/instrument #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/compiler #concept/topology #concept/concurrency #scope/core #task/domain/core #task/object/compiler #task/action/deadlock-fix #task.state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 在测试中实现并应用 `debug_wrapper`
+#### Acts 1: 在 `builder.py` 中实现“传送带”拓扑
 
-我们将修改测试文件，加入 `debug_wrapper` 并将其应用到 `func_map` 的构建过程中。这将点亮我们所有的观测盲区。
+我们将对 `Builder` 的资源创建部分进行一次外科手术，重构 `Ledger` 相关的布线。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/integration/test_resource_contention.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
 ~~~~~
 ~~~~~python.old
-    # Function Map
-    func_map = {}
-    for node_id in physical_graph.nodes:
-        if node_id.endswith(".bleach"): func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"): func_map[node_id] = standard_stainer
-        elif node_id.endswith(".worker"): func_map[node_id] = mock_worker
-        elif "allocator" in node_id: func_map[node_id] = discrete_allocator
-        elif "reclaimer" in node_id: func_map[node_id] = discrete_reclaimer
-        elif node_id.startswith("req."): func_map[node_id] = resource_requestor
-        elif node_id.startswith("probe.const."): func_map[node_id] = const_probe
-        elif "observability" in node_id: func_map[node_id] = standard_observer
-            
-    runner = EventDrivenRunner(physical_graph, func_map)
-    runner.prime()
-    
-    await runner.start_loop()
-    
-    try:
-        # Collect all 'start' and 'end' events
-        events: List[ObservedEvent] = []
-        
-        print("\n--- Physical Field Event Log ---")
-        
-        # We wait until we have 2 * TASK_COUNT logical task completions.
-        # But we log EVERY physical event to diagnose the deadlock.
-        def collection_predicate(e: ObservedEvent):
-            # Log ALL physical events for debugging
-            node_id = e.trace_data.get("id", "unknown")
-            print(f"[{e.event_type.upper():<5}] {node_id}")
+        # 1. Create Resource Brokers (Allocators + Reclaimers)
+        for res_def in environment.resources:
+            allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
+            reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
+            ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
 
-            # Only count logical task events for completion condition
-            if e.trace_data.get("id", "").startswith("node_"):
-                events.append(e)
-                
-            completed = sum(1 for x in events if x.event_type == "end")
-            return completed == TASK_COUNT
+            # D_ledger
+            initial_ledger = DiscreteLedger(
+                total=res_def.capacity, available=res_def.capacity
+            )
+            d_ledger = PhysicsDataNode(
+                id=ledger_id,
+                name=f"Ledger({res_def.name})",
+                capacity=1,
+                initial_tokens=1,
+                initial_payload=initial_ledger,
+            )
+            wire.add_node(d_ledger)
 
-        # Timeout needs to be generous.
-        # With request recirculation, the reactor steps many times per useful work.
-        await runner.wait_for_event(collection_predicate, timeout=10.0)
+            # F_reclaimer (Priority High: Must release before allocate to avoid starvation)
+            f_reclaimer = PhysicsFuncNode(
+                id=reclaimer_id,
+                name=f"Reclaimer({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                },
+            )
+            wire.add_node(f_reclaimer)
+
+            # F_allocator (Priority Low)
+            # NOTE: Dynamic grant ports (gnt_for_...) will be added during wiring phase
+            f_allocator = PhysicsFuncNode(
+                id=allocator_id,
+                name=f"Allocator({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                    # PortName.GNT is deprecated in favor of dynamic ports, but kept for fallback
+                    PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
+                    PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
+                },
+            )
+            wire.add_node(f_allocator)
+
+            # Wiring: Ledger <-> Allocator
+            wire.connect(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
+            wire.connect(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
+
+            # Wiring: Ledger <-> Reclaimer
+            wire.connect(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
+            wire.connect(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
 ~~~~~
 ~~~~~python.new
-    # Function Map and Debug Wrapper
-    import functools
-
-    print("\n--- Physical Field Event Log (Manual + Observed) ---")
-    
-    def debug_wrapper(func, name):
-        @functools.wraps(func)
-        async def wrapped(*args, **kwargs):
-            print(f"[MAN-START] {name}")
-            try:
-                result = await func(*args, **kwargs)
-                print(f"[MAN-END  ] {name}")
-                return result
-            except Exception as e:
-                print(f"[MAN-ERROR] {name}: {e}")
-                raise
-        return wrapped
-
-    func_map = {}
-    for node_id, node in physical_graph.nodes.items():
-        if node_id.endswith(".bleach"): func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"): func_map[node_id] = standard_stainer
-        elif node_id.endswith(".worker"): func_map[node_id] = mock_worker
-        elif "allocator" in node_id: func_map[node_id] = debug_wrapper(discrete_allocator, node.name)
-        elif "reclaimer" in node_id: func_map[node_id] = debug_wrapper(discrete_reclaimer, node.name)
-        elif node_id.startswith("req."): func_map[node_id] = debug_wrapper(resource_requestor, node.name)
-        elif node_id.startswith("probe.const."): func_map[node_id] = debug_wrapper(const_probe, node.name)
-        elif "observability" in node_id: func_map[node_id] = standard_observer
+        # 1. Create Resource Brokers (Allocators + Reclaimers)
+        for res_def in environment.resources:
+            allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
+            reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
             
-    runner = EventDrivenRunner(physical_graph, func_map)
-    runner.prime()
-    
-    await runner.start_loop()
-    
-    try:
-        # Collect all 'start' and 'end' events
-        events: List[ObservedEvent] = []
-        
-        # We wait until we have 2 * TASK_COUNT logical task completions.
-        # But we log EVERY physical event to diagnose the deadlock.
-        def collection_predicate(e: ObservedEvent):
-            # Log ALL physical events for debugging
-            node_id = e.trace_data.get("id", "unknown")
-            print(f"[OBS-START] {node_id}" if e.event_type == "start" else f"[OBS-END  ] {node_id}")
+            # --- Conveyor Belt Topology for Deadlock Prevention ---
+            # We create two ledger data nodes to enforce a one-way flow.
+            # D_ledger_alloc_in: High-priority, only Reclaimer writes here.
+            # D_ledger_reclaim_in: Low-priority, only Allocator writes here.
+            
+            alloc_in_id = PhysicalIdGenerator.global_ledger(res_def.name, "alloc_in")
+            reclaim_in_id = PhysicalIdGenerator.global_ledger(res_def.name, "reclaim_in")
 
-            # Only count logical task events for completion condition
-            if e.trace_data.get("id", "").startswith("node_"):
-                events.append(e)
-                
-            completed = sum(1 for x in events if x.event_type == "end")
-            return completed == TASK_COUNT
+            initial_ledger = DiscreteLedger(
+                total=res_def.capacity, available=res_def.capacity
+            )
+            
+            # This is the starting point of the loop, pre-filled with the ledger token.
+            d_ledger_alloc_in = PhysicsDataNode(
+                id=alloc_in_id,
+                name=f"LedgerAllocIn({res_def.name})",
+                capacity=1,
+                initial_tokens=1,
+                initial_payload=initial_ledger,
+            )
+            wire.add_node(d_ledger_alloc_in)
+            
+            # This is the intermediate point. It starts empty.
+            d_ledger_reclaim_in = PhysicsDataNode(
+                id=reclaim_in_id,
+                name=f"LedgerReclaimIn({res_def.name})",
+                capacity=1,
+            )
+            wire.add_node(d_ledger_reclaim_in)
 
-        # Timeout needs to be generous.
-        # With request recirculation, the reactor steps many times per useful work.
-        await runner.wait_for_event(collection_predicate, timeout=10.0)
+            # F_reclaimer
+            f_reclaimer = PhysicsFuncNode(
+                id=reclaimer_id,
+                name=f"Reclaimer({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                },
+            )
+            wire.add_node(f_reclaimer)
+
+            # F_allocator
+            f_allocator = PhysicsFuncNode(
+                id=allocator_id,
+                name=f"Allocator({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                    PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
+                    PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
+                },
+            )
+            wire.add_node(f_allocator)
+
+            # Wiring the Conveyor Belt:
+            # 1. Allocator consumes from high-priority buffer
+            wire.connect(alloc_in_id, "out", allocator_id, PortName.LEDGER_IN)
+            # 2. Allocator places used ledger in low-priority buffer
+            wire.connect(allocator_id, PortName.LEDGER_OUT, reclaim_in_id, "in")
+            
+            # 3. Reclaimer consumes from low-priority buffer
+            wire.connect(reclaim_in_id, "out", reclaimer_id, PortName.LEDGER_IN)
+            # 4. Reclaimer places refreshed ledger in high-priority buffer
+            wire.connect(reclaimer_id, PortName.LEDGER_OUT, alloc_in_id, "in")
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/utils/naming.py
+~~~~~
+~~~~~python.old
+    @staticmethod
+    def global_ledger(resource_name: str) -> str:
+        return f"canonical.resource.ledger.{resource_name}"
+~~~~~
+~~~~~python.new
+    @staticmethod
+    def global_ledger(resource_name: str, purpose: str = "main") -> str:
+        if purpose == "main": # Keep backward compatibility for simple lookups
+             return f"canonical.resource.ledger.{resource_name}"
+        return f"canonical.resource.ledger.{resource_name}.{purpose}"
 ~~~~~
 
 ### 下一步建议
-请再次运行这个经过“插桩”的测试。
+这是对 `Builder` 核心逻辑的一次重大且根本性的改进。请重新运行 `test_resource_contention.py`（可以恢复 `TASK_COUNT=50` 和 `timeout=5.0`，看看新架构的效率如何）。
 
-这次，我们依然期望它会超时失败，但 stdout 中会打印出两种日志：
--   `[OBS-...]`: 来自 `standard_observer` 的、我们已经看到的逻辑任务日志。
--   `[MAN-...]`: 来自我们的 `debug_wrapper` 的、关键的资源节点手动日志。
-
-请将包含这两种日志的完整输出提供给我。通过对比和分析这份混合日志，我们一定能定位到死锁的确切位置和原因。
+如果测试通过，我们将一劳永逸地解决了资源系统的死锁问题，并可以充满信心地完成 Phase 1 和 3 的收尾工作，然后进入 Phase 2。

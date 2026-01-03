@@ -1,11 +1,21 @@
 {
+  "available_ledger": {
+    "baseline_code_signature_text": "def available_ledger() -> DiscreteLedger:",
+    "baseline_code_structure_hash": "7495ea3a4feeb8999be299ce6d522e724bda137c05588cd23ee2e1a1fd3e975a",
+    "baseline_yaml_content_hash": "f8f3bb433f4e7daf04dde4eca8570219e42ec80c693b3dfdb10f9594d766ff47"
+  },
+  "starved_ledger": {
+    "baseline_code_signature_text": "def starved_ledger() -> DiscreteLedger:",
+    "baseline_code_structure_hash": "f28692ddc4880dd1322ee5d768be5534f53a599ec69461ca49fcd1ed65b5221a",
+    "baseline_yaml_content_hash": "1030541f9fb9effe49220be645a8d56745f067d01e367a4fbd7039a3e68b0c0b"
+  },
   "test_discrete_allocator_grants_when_available": {
-    "baseline_code_signature_text": "async def test_discrete_allocator_grants_when_available():",
-    "baseline_code_structure_hash": "6e7a86dddfdba9cdc233e209cda7002fd0f26a8ee17cd1ac340e2b8aa4822bbc"
+    "baseline_code_signature_text": "async def test_discrete_allocator_grants_when_available(available_ledger):",
+    "baseline_code_structure_hash": "415b2e8fc34ea64d4ef4edf4157741e2d76c5f5fea3b9806a1262c3683237050"
   },
   "test_discrete_allocator_recirculates_when_starved": {
-    "baseline_code_signature_text": "async def test_discrete_allocator_recirculates_when_starved():",
-    "baseline_code_structure_hash": "41cfa6a3a7c540db45ae23c6d0c75b98950bbe1e70f97c157c554da6959d3836"
+    "baseline_code_signature_text": "async def test_discrete_allocator_recirculates_when_starved(starved_ledger):",
+    "baseline_code_structure_hash": "69f4cb4f12d759f8ae5b6da4f3ced2c88607793d1c0fc79f302dcd15ba6c1f89"
   },
   "test_discrete_broker_grants_when_available": {
     "baseline_code_signature_text": "async def test_discrete_broker_grants_when_available():",
@@ -24,8 +34,8 @@
     "baseline_code_structure_hash": "f2768363d65597a68025b6d6e609de70b995b81178bb16f674c938d8003eb451"
   },
   "test_discrete_reclaimer_releases_resource": {
-    "baseline_code_signature_text": "async def test_discrete_reclaimer_releases_resource():",
-    "baseline_code_structure_hash": "f2aa129c3b459097863e1eb8c4201499ac4ae003559c5666a628b99d3f6538e6"
+    "baseline_code_signature_text": "async def test_discrete_reclaimer_releases_resource(available_ledger):",
+    "baseline_code_structure_hash": "e4c36e7f609679138ce5d50499dfc77ecd6a276b56af6cfb3b713b598226d57e"
   },
   "test_sequential_rel_and_req": {
     "baseline_code_signature_text": "async def test_sequential_rel_and_req():",

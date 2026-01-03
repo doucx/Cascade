@@ -1,11 +1,11 @@
 {
   "mock_worker": {
-    "baseline_code_signature_text": "def mock_worker(inputs: Dict[str, Token], node) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "f0d185675080e81c280b42835a7274305d67cd7e98e263cf76278530ee734629"
+    "baseline_code_signature_text": "def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "4c76656290a372a8c20a03926bc9909cd1a823e8d5f2d9d7ce0ef4f7214ef5a9"
   },
   "noop_observer": {
-    "baseline_code_signature_text": "def noop_observer(inputs: Dict[str, Token], node) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "9fa52e5223442c24a348dc2ab3348ece317cbc9b2d5445a74f8201a578db3521"
+    "baseline_code_signature_text": "def noop_observer(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "8abb5d2223170738156ff4f3d381f46398720633be070088946872239f98a08b"
   },
   "test_concurrency_limit": {
     "baseline_code_signature_text": "async def test_concurrency_limit():",

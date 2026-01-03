@@ -1,12 +1,16 @@
 {
   "noop": {
-    "baseline_code_signature_text": "def noop(inputs, node):",
-    "baseline_code_structure_hash": "96300a4736cfb516af9ac92496f9920c02b888df5e2e47ab4620a3c185709a67"
+    "baseline_code_signature_text": "def noop(inputs, node, resources):",
+    "baseline_code_structure_hash": "09110434687231a30b4ec626300cd0babcff06261ae51830016d0749dafc15a4"
   },
   "simple_topology": {
     "baseline_code_signature_text": "def simple_topology():",
     "baseline_code_structure_hash": "8f7e2716a8715c366ea291b63e5f1b7c930a695772c72474fd422238b032ff8f",
     "baseline_yaml_content_hash": "80e1241ec5388b6e65c4736e5045da9cd603bee0cfb37dc76d7e3fdccfc9ed10"
+  },
+  "test_event_driven_ping_pong": {
+    "baseline_code_signature_text": "async def test_event_driven_ping_pong():",
+    "baseline_code_structure_hash": "1921e97c0e3ff072765884cad4ebf1187c4d2bc4197013bef0fa3645b73ed929"
   },
   "test_reactor_independent_nodes": {
     "baseline_code_signature_text": "async def test_reactor_independent_nodes():",

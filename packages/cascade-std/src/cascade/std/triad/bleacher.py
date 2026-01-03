@@ -6,8 +6,6 @@ from cascade.spec.triad import BleachNode
 from cascade.spec.ports import PortRole
 
 
-from typing import Any
-
 async def standard_bleacher(
     inputs: Dict[str, Token], node: BleachNode, resources: Any
 ) -> Dict[str, Token]:

@@ -1,0 +1,51 @@
+{
+  "EventDrivenRunner": {},
+  "EventDrivenRunner.__init__": {
+    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, function_map: Dict[str, Callable]):",
+    "baseline_code_structure_hash": "b0c6862fe89082c521578284bc1a2927fd39e518f2f5e1a6b6e63789763ba8ce"
+  },
+  "EventDrivenRunner._captured_events": {},
+  "EventDrivenRunner._loop_task": {},
+  "EventDrivenRunner._run_loop": {
+    "baseline_code_signature_text": "async def _run_loop(self):",
+    "baseline_code_structure_hash": "659b1b2495e88c9978eb8fd4ce26945a7e1de37c83a01905813c1ca7b55dc755"
+  },
+  "EventDrivenRunner._stop_event": {},
+  "EventDrivenRunner.event_queue": {},
+  "EventDrivenRunner.executor": {},
+  "EventDrivenRunner.function_map": {},
+  "EventDrivenRunner.graph": {},
+  "EventDrivenRunner.inject_input": {
+    "baseline_code_signature_text": "def inject_input(self, node_id: str, payload: Any):",
+    "baseline_code_structure_hash": "b4c8592a4f6d7131ac26d6660e215d738511328e22c85bc2302c5a0520ec87ac",
+    "baseline_yaml_content_hash": "5d6ef6466693bd009e2abe405207369c523220f6bc04375523993361901d9c63"
+  },
+  "EventDrivenRunner.memory": {},
+  "EventDrivenRunner.prime": {
+    "baseline_code_signature_text": "def prime(self):",
+    "baseline_code_structure_hash": "c85e226f7edbe780ce9d34162baaead081e49167cf70dc028ba02606ee0d7206"
+  },
+  "EventDrivenRunner.reactor": {},
+  "EventDrivenRunner.run_until_complete": {
+    "baseline_code_signature_text": "async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> ObservedEvent:",
+    "baseline_code_structure_hash": "6fc3208ea35666d5161e2f5b07779aa5f3cfda62fc59800d7a4f8148dd2de4cd",
+    "baseline_yaml_content_hash": "cca7aee4e5e0808f3db9c83a63b5c6b7589f95913b281b5f2b0e27a4fd1f838c"
+  },
+  "EventDrivenRunner.start_loop": {
+    "baseline_code_signature_text": "async def start_loop(self):",
+    "baseline_code_structure_hash": "0a9520fc821a4ef232e4e7303bc3a34b44af5d7f26ea6779ab01d161c54c3084",
+    "baseline_yaml_content_hash": "f2ce5836b198c642690e9ab844c85eae3eaa78db7edb7c8eb1312c66ab69382c"
+  },
+  "EventDrivenRunner.stop_loop": {
+    "baseline_code_signature_text": "async def stop_loop(self):",
+    "baseline_code_structure_hash": "d0a34527de60218a303489365f5ed74ca757d6def91589edc22d065198fc6e82"
+  },
+  "EventDrivenRunner.wait_for_event": {
+    "baseline_code_signature_text": "async def wait_for_event(self, predicate: Callable[[ObservedEvent], bool], timeout: float = 1.0) -> ObservedEvent:",
+    "baseline_code_structure_hash": "8014288e2411ea392550b35b1c99bd76f91a3c7daa81c0e4feff5cf4d5985e58",
+    "baseline_yaml_content_hash": "2b41810e400fd791a22f34f117c27114e117a76295ac48762f19e87ede33936f"
+  },
+  "EventTimeoutError": {},
+  "T": {},
+  "logger": {}
+}

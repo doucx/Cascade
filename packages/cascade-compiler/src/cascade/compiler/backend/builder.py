@@ -147,12 +147,8 @@ class Builder:
             wire.add_subgraph(subgraph)
 
             # 3.3 Wire task observability TO the sidecar bus
-            wire.connect(
-                subgraph.bleacher.id, "obs_output", d_life_id, "in"
-            )
-            wire.connect(
-                subgraph.stainer.id, "obs_output", d_life_id, "in"
-            )
+            wire.connect(subgraph.bleacher.id, "obs_output", d_life_id, "in")
+            wire.connect(subgraph.stainer.id, "obs_output", d_life_id, "in")
 
         # 4. Wire dependencies between subgraphs
         for node_ir in graph_ir.nodes:
@@ -172,14 +168,10 @@ class Builder:
                     wire.add_node(d_dep)
 
                     # Source Stainer -> D_dep
-                    wire.connect(
-                        source_subgraph.stainer.id, "output", d_dep_id, "in"
-                    )
+                    wire.connect(source_subgraph.stainer.id, "output", d_dep_id, "in")
 
                     # D_dep -> Target Bleacher
-                    wire.connect(
-                        d_dep_id, "out", target_subgraph.bleacher.id, arg_name
-                    )
+                    wire.connect(d_dep_id, "out", target_subgraph.bleacher.id, arg_name)
                 # Case B: Literal Value (Constant)
                 else:
                     # Create a dedicated DataNode for this constant
@@ -211,9 +203,7 @@ class Builder:
                     d_seq = PhysicsDataNode(id=d_seq_id, name=f"Seq({dep_id})")
                     wire.add_node(d_seq)
 
-                    wire.connect(
-                        source_subgraph.stainer.id, "output", d_seq_id, "in"
-                    )
+                    wire.connect(source_subgraph.stainer.id, "output", d_seq_id, "in")
                     wire.connect(
                         d_seq_id, "out", target_subgraph.bleacher.id, port_name
                     )
@@ -230,12 +220,8 @@ class Builder:
                 )
                 wire.add_node(d_cond)
 
-                wire.connect(
-                    source_subgraph.stainer.id, "output", d_cond_id, "in"
-                )
-                wire.connect(
-                    d_cond_id, "out", target_subgraph.bleacher.id, "condition"
-                )
+                wire.connect(source_subgraph.stainer.id, "output", d_cond_id, "in")
+                wire.connect(d_cond_id, "out", target_subgraph.bleacher.id, "condition")
 
         # 5. Wire Global Resources (The Loop)
         for node_ir in graph_ir.nodes:

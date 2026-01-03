@@ -144,7 +144,7 @@ async def test_concurrency_limit():
     #   Yes, it reads Ledger(0) and Request(1).
     #   Logic: 0 < 1. Reject & Recirculate.
 
-    fired = await reactor.step()
+    await reactor.step()
     await wait_idle()
 
     # If Allocator fired, it recirculated the request back to Buffer.

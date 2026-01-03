@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, Any
 from dataclasses import dataclass
 from cascade.spec.physics import Token, PhysicsNode
 
@@ -9,7 +9,7 @@ class DiscreteLedger:
     available: int
 
 
-from typing import Any
+
 
 async def discrete_allocator(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any

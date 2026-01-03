@@ -2,7 +2,7 @@ from typing import Dict, Any, Literal
 from dataclasses import dataclass, field
 from asyncio import Queue
 
-from cascade.spec.physics import Token
+from cascade.spec.physics import Token, PhysicsNode
 
 
 @dataclass
@@ -11,7 +11,6 @@ class ObservedEvent:
     trace_data: Dict[str, Any] = field(default_factory=dict)
 
 
-from cascade.spec.physics import Token, PhysicsNode
 
 
 async def standard_observer(

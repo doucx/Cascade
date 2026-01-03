@@ -8,6 +8,7 @@ from cascade.spec.ports import PortRole
 
 from typing import Any
 
+
 async def standard_stainer(
     inputs: Dict[str, Token], node: StainNode, resources: Any
 ) -> Dict[str, Token]:

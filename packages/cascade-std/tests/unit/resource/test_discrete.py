@@ -10,13 +10,11 @@ from cascade.std.resource.discrete import (
 
 @pytest.fixture
 def available_ledger() -> DiscreteLedger:
-    """A ledger with total 10, available 5."""
     return DiscreteLedger(total=10, available=5)
 
 
 @pytest.fixture
 def starved_ledger() -> DiscreteLedger:
-    """A ledger with total 10, available 1."""
     return DiscreteLedger(total=10, available=1)
 
 

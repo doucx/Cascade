@@ -97,7 +97,7 @@ class Builder:
             # Connect Buffer -> Broker
             physical_graph.channels.append(
                 Channel(
-                    source_node_id=req_buffer_id,
+                    source_node_id=d_req_buffer_id,
                     source_port="out",
                     target_node_id=req_broker_id,
                     target_port=PortName.REQ,

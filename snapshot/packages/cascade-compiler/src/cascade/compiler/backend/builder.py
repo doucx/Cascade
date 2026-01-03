@@ -9,12 +9,14 @@ from cascade.spec.environment import EnvironmentDef
 from cascade.spec.ports import PortDef, PortRole, PortName
 from cascade.std.resource.discrete import DiscreteLedger
 from .expander import Expander, SubGraph
+from .validator import GraphValidator
 from cascade.compiler.utils.naming import PhysicalIdGenerator
 
 
 class Builder:
     def __init__(self):
         self._expander = Expander()
+        self._validator = GraphValidator()
 
     def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> BipartiteGraph:
         physical_graph = BipartiteGraph()
@@ -359,5 +361,8 @@ class Builder:
                         target_port="in",
                     )
                 )
+
+        # Final Validation Step
+        self._validator.validate(physical_graph, graph_ir)
 
         return physical_graph

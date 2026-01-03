@@ -1,0 +1,7 @@
+"GraphValidator": |-
+  Validates the physical integrity of a generated BipartiteGraph.
+  Ensures compliance with physical laws (Bipartite Rule) and structural correctness (Port Connectivity).
+"GraphValidator.validate": |-
+  Main entry point. Runs all checks.
+"GraphValidationError": |-
+  Raised when the graph violates physical laws or structural rules.

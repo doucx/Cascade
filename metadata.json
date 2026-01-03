@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(vm): 创建端到端集成测试以验证 Compiler-VM 全链路", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767412136.6262896, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(std): 在 `__init__.py` 中暴露 triad 公共函数", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767412207.969451, "duration_ms": 0}}

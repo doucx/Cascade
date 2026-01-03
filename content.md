@@ -1,194 +1,55 @@
-是的，绝对可以，而且这样做是**极佳的测试策略**。
+您完全正确，非常感谢您指出这个错误。我的疏忽导致了测试文件的导入失败。
 
-我们可以在 `cascade-vm` 包内创建一个新的集成测试，这个测试将完全绕过 `cascade-engine`，直接模拟 `VMExecutionStrategy` 未来会执行的核心步骤。这相当于在物理层面对我们的编译器和虚拟机进行一次“全链路冒烟测试”。
+`ImportError` 的根本原因在于 `cascade-std` 包的结构。`standard_bleacher` 和 `standard_stainer` 函数分别定义在 `cascade/std/triad/bleacher.py` 和 `cascade/std/triad/stainer.py` 模块中。
 
-这样做的好处是：
-1.  **隔离验证**：我们能确保 Compiler -> VM 这条核心链路是健壮的，而无需担心 `Engine` 层的任何遗留逻辑或未来的实现细节。
-2.  **TDD 驱动**：这个测试将成为我们后续开发 `VMExecutionStrategy` 的“黄金标准”和参照实现。
+然而，`cascade/std/triad/__init__.py` 文件是空的，它没有将这些函数导入到 `cascade.std.triad` 这个包的命名空间中。因此，`from cascade.std.triad import ...` 这样的语句无法找到这些名称。
 
-我将生成一个计划来创建这个端到端的集成测试。
+我将修改 `cascade/std/triad/__init__.py` 文件，明确地从其内部模块中导出公共函数，从而为 `cascade.std.triad` 包创建一个清晰的公共 API。
 
-## [WIP] test(vm): 创建端到端集成测试以验证 Compiler-VM 全链路
+## [WIP] fix(std): 在 `__init__.py` 中暴露 triad 公共函数
 
 ### 用户需求
-在不依赖 `cascade-engine` 的情况下，编写一个集成测试，用于验证 `cascade-compiler` 生成的、包含 `run_if`, `after`, 和 `with_constraints` 的物理图，能够在 `cascade-vm` 中被正确执行。
+修复由于 `cascade.std.triad` 包未正确导出其成员而导致的 `ImportError`，使 `test_e2e_vm_run.py` 测试能够成功导入 `standard_bleacher` 和 `standard_stainer`。
 
 ### 评论
-这是一个关键的、高价值的测试。它将成为连接 Phase 2 (Compiler) 和 Phase 3 (Engine) 的桥梁。通过手动编排从 `LazyResult` 到 `Reactor` 循环的全过程，我们可以精确地验证新架构的每个组件是否都按预期协同工作，尤其是在处理复杂的控制流和资源约束时。
+这是一个典型的 Python 包结构问题。通过在 `__init__.py` 中定义 `__all__` 并导入关键函数，我们不仅修复了当前的 Bug，还为 `cascade-std` 库的 `triad` 模块建立了一个更稳定、更明确的公共接口，改善了开发者体验 (DX)。
 
 ### 目标
-1.  创建一个新的测试文件 `tests/integration/test_e2e_vm_run.py`。
-2.  在该文件中，定义一个使用了 `.run_if()`, `.after()`, 和 `.with_constraints()` 的复杂 Cascade 工作流。
-3.  手动执行编译流程：`IRGenerator.generate()` -> `Builder.build()`。
-4.  手动设置并运行 VM：实例化 `Reactor`, `Memory`, `Executor`，并构建 `function_map`。
-5.  通过 `Reactor.add_sink()` 捕获最终结果。
-6.  运行 `Reactor` 的 `step` 循环直到计算完成，并断言最终结果和资源状态的正确性。
+1.  修改 `packages/cascade-std/src/cascade/std/triad/__init__.py`。
+2.  从 `bleacher.py` 和 `stainer.py` 导入核心函数。
+3.  定义 `__all__` 以明确 `cascade.std.triad` 的公共 API。
 
 ### 基本原理
-我们将扮演 `VMExecutionStrategy` 的角色。测试代码将显式地调用编译器前端和后端，将用户级的 `LazyResult` 编译成物理图。然后，我们将这个图、一个内存实例和一个执行器实例提供给 `Reactor`。通过`prime()`注入初始能量（常量和资源），并运行 `step()` 循环来驱动物理场演化。这种方式能最直接、最纯粹地测试我们新构建的核心物理引擎的能力。
+根据 Python 的模块导入机制，一个包的 `__init__.py` 文件定义了该包的命名空间。为了让子模块中的对象能够在该包级别被直接访问，必须在 `__init__.py` 中进行导入。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/vm #comp/compiler #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/e2e-vm-test #task/action/implementation
+#intent/fix #flow/ready #priority/critical #comp/std #scope/dx #ai/instruct #task/domain/testing #task/object/e2e-vm-test #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建端到端 VM 集成测试文件
+#### Acts 1: 修正 `cascade.std.triad` 的包接口
 
-我们将创建一个全新的测试文件，其中包含完整的设置、编译、执行和断言逻辑。
+我们将覆写 `__init__.py` 文件，使其能够正确地导出所需的函数。
 
 ~~~~~act
 write_file
-packages/cascade-vm/tests/integration/test_e2e_vm_run.py
+packages/cascade-std/src/cascade/std/triad/__init__.py
 ~~~~~
 ~~~~~python
-import pytest
-import asyncio
-from typing import Dict, Any, Callable
+# Standard Triad logic (Execution Units) for the Cascade VM.
+from .bleacher import standard_bleacher
+from .stainer import standard_stainer
+from .observer import standard_observer, ObservedEvent
 
-# SDK constructs
-from cascade.spec.task import task
-from cascade.spec.environment import EnvironmentDef, ResourceDef
-
-# Compiler
-from cascade.compiler.frontend import IRGenerator
-from cascade.compiler.backend import Builder
-
-# VM
-from cascade.vm.reactor import Reactor
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-
-# Standard Library
-from cascade.std.triad import standard_bleacher, standard_stainer
-
-# --- Test Workflow Definition ---
-
-@task
-def setup_task():
-    print("Running setup...")
-    return "setup_complete"
-
-@task
-def should_run_task():
-    print("Deciding to run...")
-    return True
-
-@task
-def main_task(x: int):
-    print(f"Running main task with {x}...")
-    return x * 2
-
-@task
-def final_task(res: int, setup_status: str):
-    print(f"Final task processing {res} with status {setup_status}")
-    return f"Result: {res}, Status: {setup_status}"
-
-# --- Test Case ---
-
-@pytest.mark.asyncio
-async def test_e2e_vm_run_with_all_features():
-    """
-    Simulates the future VMExecutionStrategy to test the full Compiler -> VM pipeline.
-    """
-    # 1. Define the complex workflow using the SDK
-    setup_result = setup_task()
-    condition_result = should_run_task()
-    
-    main_result = main_task(10).with_constraints(gpu=1).run_if(condition_result).after(setup_result)
-    
-    final_result_lr = final_task(main_result, setup_result)
-
-    # 2. Manually compile the workflow
-    # Frontend
-    generator = IRGenerator()
-    graph_ir = generator.generate(final_result_lr)
-    
-    # Backend
-    environment = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
-    builder = Builder()
-    physical_graph = builder.build(graph_ir, environment)
-
-    # 3. Manually set up the VM
-    memory = VolatileMemory()
-    executor = PhysicsExecutor()
-    
-    # Create the function map: map physical node IDs to actual callables
-    user_tasks = {
-        "setup_task": setup_task.func,
-        "should_run_task": should_run_task.func,
-        "main_task": main_task.func,
-        "final_task": final_task.func,
-    }
-    
-    function_map: Dict[str, Callable] = {}
-    for node_ir in graph_ir.nodes:
-        if node_ir.name in user_tasks:
-            # Map the worker node to the user's Python function
-            worker_id = f"{node_ir.id}.worker"
-            function_map[worker_id] = user_tasks[node_ir.name]
-
-    for node_id in physical_graph.nodes:
-        if node_id.endswith(".bleach"):
-            function_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            function_map[node_id] = standard_stainer
-        # We don't need to map the observer for this test to keep it simple
-
-    reactor = Reactor(physical_graph, memory, executor, function_map)
-    reactor.prime()
-
-    # 4. Set up a sink to capture the final result
-    final_result = None
-    result_event = asyncio.Event()
-
-    async def result_sink(token):
-        nonlocal final_result
-        final_result = token.payload
-        result_event.set()
-
-    final_node_id = next(n.id for n in graph_ir.nodes if n.name == "final_task")
-    final_stainer_id = f"{final_node_id}.stain"
-    reactor.add_sink(final_stainer_id, "output", result_sink)
-
-    # 5. Run the VM until idle
-    step = 0
-    max_steps = 20  # Safety break
-    while step < max_steps:
-        fired_count = await reactor.step()
-        
-        # Wait for any scheduled tasks to complete
-        while reactor.active_task_count > 0:
-            await asyncio.sleep(0.001)
-
-        if fired_count == 0 and reactor.active_task_count == 0:
-            print(f"VM is idle after {step + 1} steps.")
-            break
-        
-        step += 1
-    else:
-        pytest.fail(f"VM did not become idle within {max_steps} steps.")
-
-
-    # 6. Assertions
-    # Wait for the result to be captured by the sink
-    await asyncio.wait_for(result_event.wait(), timeout=1.0)
-    
-    # Assert the final computed value
-    assert final_result == "Result: 20, Status: setup_complete"
-    
-    # Assert the resource state
-    gpu_resource_id = "canonical.resource.gpu"
-    assert memory.get_count(gpu_resource_id) == 1, "GPU resource was not released"
+__all__ = [
+    "standard_bleacher",
+    "standard_stainer",
+    "standard_observer",
+    "ObservedEvent",
+]
 ~~~~~
 
 ### 下一步建议
-这个测试现在是 `cascade-vm` 包中最有价值的资产之一。它证明了我们的核心架构是可行的。
-
-下一步的行动非常明确：
-1.  **代码重用**: 将 `test_e2e_vm_run.py` 中的手动编排逻辑（第 2、3、5 步）提取出来。
-2.  **封装实现**: 在 `cascade-engine` 包中，创建一个新的 `VMExecutionStrategy` 类，并将上述提取的逻辑封装到它的 `execute` 方法中。
-3.  **引擎替换**: 重构 `cascade.Engine`，使其内部使用这个新的 `VMExecutionStrategy`。
-
-这样，我们就正式完成了 Phase 3 的核心任务。
+这个补丁应该能解决导入错误。应用此修复后，请再次运行 `pytest`。`test_e2e_vm_run.py` 测试现在应该能够成功收集并执行。如果测试在执行阶段失败，那将暴露出我们核心逻辑中的新问题，我们可以接着解决。

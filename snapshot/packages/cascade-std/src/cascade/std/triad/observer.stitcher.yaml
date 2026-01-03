@@ -12,4 +12,6 @@
   Args:
       inputs: A dictionary mapping input port names to their corresponding Tokens.
               Expected port: 'event_token'.
-      queue: The external queue to which the ObservedEvent will be sent.
+      node: The PhysicsNode instance being executed.
+      queue: (Keyword-only) The external queue to which the ObservedEvent will be sent.
+             This is typically injected by a test harness like EventDrivenRunner.

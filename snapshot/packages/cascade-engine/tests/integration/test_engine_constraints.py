@@ -6,7 +6,7 @@ from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.spec.constraint import GlobalConstraint
-from cascade.testing import MockConnector, SpyExecutor
+from cascade.testing import MockConnector, SpyExecutor, MockExecutor
 
 
 class TimedMockExecutor(SpyExecutor):

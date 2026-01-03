@@ -69,6 +69,21 @@ async def test_reactor_step_fire(simple_topology):
     # Token must be consumed (Atomic Consumption)
     assert memory.get_count(d1.id) == 0
 
+    # 4. Wait for execution to finish (async reactor)
+    # The output token should eventually appear in a downstream node if there was one.
+    # In this topology (D1->F1), F1 has an output port 'out' but no downstream channel in simple_topology fixture?
+    # Let's check the fixture.
+    # Ah, simple_topology only has D1->F1. F1 outputs to 'out' but it goes nowhere.
+    # So we can't check memory for result.
+    # But we can check active_task_count.
+    import asyncio
+
+    # Wait until task finishes
+    while reactor.active_task_count > 0:
+        await asyncio.sleep(0.001)
+
+    # Success if we reached here without hanging
+
 
 @pytest.mark.asyncio
 async def test_reactor_partial_inputs():
@@ -143,3 +158,9 @@ async def test_reactor_independent_nodes():
     assert fired_count == 2
     assert memory.get_count(d1.id) == 0
     assert memory.get_count(d2.id) == 0
+
+    # Wait for completion
+    import asyncio
+
+    while reactor.active_task_count > 0:
+        await asyncio.sleep(0.001)

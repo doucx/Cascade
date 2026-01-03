@@ -81,6 +81,9 @@ async def test_ping_pong_flow(ping_pong_topology):
     # Input token should be consumed
     assert memory.get_count(d1.id) == 0
 
+    # Wait for result to appear in memory
+    await memory.wait_for_mutation()
+
     # Output node should receive the result
     assert memory.get_count(d2.id) == 1
 

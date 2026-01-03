@@ -137,11 +137,15 @@ async def test_concurrency_limit():
 
     # Step 2: The fired Triad proceeds.
     # Worker fires.
-    await reactor.step()
+    await memory.wait_for_mutation() # Wait for Bleacher output
+    await reactor.step() # Fire Worker
 
     # Step 3: Stainer fires.
+    await memory.wait_for_mutation() # Wait for Worker output
+    await reactor.step() # Fire Stainer
+
     # This should return the resource.
-    await reactor.step()
+    await memory.wait_for_mutation() # Wait for Stainer output (release resource)
 
     assert memory.get_count("canonical.resource.gpu") == 1  # Resource returned!
 
@@ -151,7 +155,10 @@ async def test_concurrency_limit():
     assert memory.get_count("canonical.resource.gpu") == 0
 
     # Step 5 & 6: Finish second task
+    await memory.wait_for_mutation() # Bleacher 2 done
     await reactor.step()  # Worker
+    await memory.wait_for_mutation() # Worker 2 done
     await reactor.step()  # Stainer
+    await memory.wait_for_mutation() # Stainer 2 done
 
     assert memory.get_count("canonical.resource.gpu") == 1

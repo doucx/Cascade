@@ -67,6 +67,9 @@ async def test_branching_path_a(branching_topology):
     # 2. Run
     await reactor.step()
 
+    # Wait for async execution
+    await memory.wait_for_mutation()
+
     # 3. Assert
     # D_A should receive token
     assert memory.get_count(d_a.id) == 1
@@ -88,6 +91,9 @@ async def test_branching_path_b(branching_topology):
 
     # 2. Run
     await reactor.step()
+
+    # Wait for async execution
+    await memory.wait_for_mutation()
 
     # 3. Assert
     # D_B should receive token

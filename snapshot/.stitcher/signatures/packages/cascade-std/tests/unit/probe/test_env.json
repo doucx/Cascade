@@ -1,0 +1,10 @@
+{
+  "test_env_probe_returns_none_if_env_missing": {
+    "baseline_code_signature_text": "def test_env_probe_returns_none_if_env_missing():",
+    "baseline_code_structure_hash": "33c3c8ac5775ddb56140d9fe59b7bcf1526456c1f7199adbec13576c3d8fbf31"
+  },
+  "test_env_probe_samples_os_environ": {
+    "baseline_code_signature_text": "def test_env_probe_samples_os_environ():",
+    "baseline_code_structure_hash": "8f0f4ad3670a634bd73eb94cac3cbd4cb17af99636e9a94fc62d4b359050dacb"
+  }
+}

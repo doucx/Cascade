@@ -1,0 +1,27 @@
+{
+  "IRGenerator": {
+    "baseline_yaml_content_hash": "b6e6160e835701817185578205b61947fe8da611396c9d4e982d2f8d00598360"
+  },
+  "IRGenerator.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "IRGenerator._visit": {
+    "baseline_code_signature_text": "def _visit(self, obj: Any) -> Any:",
+    "baseline_code_structure_hash": "07198286dfb3008b7b43e29b034e88b1fe3e7ffa523e78cd87488b853120d998",
+    "baseline_yaml_content_hash": "fcca4b9f1d793cc7f7ad56d325e8f68693a54e61f2168e021acad864a624857a"
+  },
+  "IRGenerator._visit_lazy_result": {
+    "baseline_code_signature_text": "def _visit_lazy_result(self, lr: LazyResult) -> str:",
+    "baseline_code_structure_hash": "d5b56625b97c3ff4a3d85533c8d44d23ca32070ade206362c966db52384eefb1"
+  },
+  "IRGenerator._visited": {},
+  "IRGenerator.analyzer": {},
+  "IRGenerator.generate": {
+    "baseline_code_signature_text": "def generate(self, target: Any) -> GraphIR:",
+    "baseline_code_structure_hash": "b418de1036b8d061ce85bdf7d4fba6a7be08e55d40158e7d53269f84a1f44698",
+    "baseline_yaml_content_hash": "778e27b1ef9507d95012db476354a960c1b0af82e1543a2b0e7044fce81a6fba"
+  },
+  "IRGenerator.hashing_service": {},
+  "IRGenerator.nodes": {}
+}

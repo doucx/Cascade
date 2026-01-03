@@ -1,0 +1,10 @@
+{
+  "test_param_probe_lookups_value": {
+    "baseline_code_signature_text": "def test_param_probe_lookups_value():",
+    "baseline_code_structure_hash": "0bc39c99aaf2d0d14d36aea0e90aa308faea7e76e56967cda0d25a8213070f9e"
+  },
+  "test_param_probe_returns_none_if_missing": {
+    "baseline_code_signature_text": "def test_param_probe_returns_none_if_missing():",
+    "baseline_code_structure_hash": "869916d04f671243d99a0fe98cb545b8c7fc34ec52c715f82fca366d2f4765c1"
+  }
+}

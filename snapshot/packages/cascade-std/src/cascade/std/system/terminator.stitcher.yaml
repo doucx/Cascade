@@ -1,0 +1,3 @@
+"halt_signal": |-
+  Receives a trigger token and emits a SIG_HALT system control token.
+  This requests an immediate, hard shutdown of the Reactor.

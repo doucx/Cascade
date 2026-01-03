@@ -1,0 +1,4 @@
+"drain_signal": |-
+  Receives a trigger and emits a SIG_DRAIN system control token.
+  This signals that a branch of the graph will produce no new data,
+  aiding in graceful shutdown detection.

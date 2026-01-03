@@ -1,5 +1,3 @@
-import pytest
-
 from cascade.spec.task import task
 from cascade.spec.ir.models import GraphIR
 from cascade.compiler.frontend.generator import IRGenerator
@@ -7,15 +5,14 @@ from cascade.compiler.frontend.generator import IRGenerator
 
 # --- Test Fixtures ---
 
+
 @task
 def add(a: int, b: int) -> int:
-    """A simple task for testing."""
     return a + b
 
 
 @task
 def process_data(data: dict) -> str:
-    """A task with more complex literal arguments."""
     return str(data.get("key"))
 
 
@@ -23,10 +20,6 @@ def process_data(data: dict) -> str:
 
 
 def test_generate_simple_task():
-    """
-    Tests that a single LazyResult with literal arguments is converted
-    into a valid GraphIR with a single NodeIR.
-    """
     # Arrange
     generator = IRGenerator()
     target = add(1, 2)
@@ -49,10 +42,6 @@ def test_generate_simple_task():
 
 
 def test_generate_task_with_kwargs():
-    """
-    Tests that a single LazyResult with literal keyword arguments is
-    correctly converted.
-    """
     # Arrange
     generator = IRGenerator()
     target = process_data(data={"key": "value"})
@@ -68,10 +57,6 @@ def test_generate_task_with_kwargs():
 
 
 def test_generate_task_with_dependency():
-    """
-    Tests that a LazyResult depending on another is converted into two
-    NodeIRs with a correct ID reference.
-    """
     # Arrange
     generator = IRGenerator()
     upstream_lr = add(1, 2)

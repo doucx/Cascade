@@ -1,0 +1,13 @@
+"add": |-
+  A simple task for testing.
+"process_data": |-
+  A task with more complex literal arguments.
+"test_generate_simple_task": |-
+  Tests that a single LazyResult with literal arguments is converted
+  into a valid GraphIR with a single NodeIR.
+"test_generate_task_with_dependency": |-
+  Tests that a LazyResult depending on another is converted into two
+  NodeIRs with a correct ID reference.
+"test_generate_task_with_kwargs": |-
+  Tests that a single LazyResult with literal keyword arguments is
+  correctly converted.

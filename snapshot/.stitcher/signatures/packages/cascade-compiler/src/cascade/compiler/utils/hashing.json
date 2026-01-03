@@ -1,0 +1,17 @@
+{
+  "HashingService": {
+    "baseline_yaml_content_hash": "a37d7d6f823f6f6f67e6f4cd46dd4caeb8c30de5f5ea9bd067f0af86d79eeec1"
+  },
+  "HashingService._build_hash_components": {
+    "baseline_code_signature_text": "def _build_hash_components(self, obj: Any, dep_nodes: Dict[str, Any]) -> List[str]:",
+    "baseline_code_structure_hash": "b0979f2e431bbbbf16c9f6348332596f62a63a4d394951a18893c28c51bc54fd"
+  },
+  "HashingService._get_merkle_hash": {
+    "baseline_code_signature_text": "def _get_merkle_hash(self, components: List[str]) -> str:",
+    "baseline_code_structure_hash": "f6f4c15396ae743d076c4bcd2e7abf1e927b864e3fb94a364c3089b1320a006b"
+  },
+  "HashingService.compute_node_instance_hash": {
+    "baseline_code_signature_text": "def compute_node_instance_hash(self, definition: TaskDef, result: Any, dep_nodes: Dict[str, Any]) -> str:",
+    "baseline_code_structure_hash": "fc7202201d398bf6f0f15c941cc7bc9b67149b04df654757297c6562efe45260"
+  }
+}

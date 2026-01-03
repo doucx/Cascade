@@ -1,0 +1,14 @@
+{
+  "test_observer_processes_end_event": {
+    "baseline_code_signature_text": "def test_observer_processes_end_event():",
+    "baseline_code_structure_hash": "1b7eeaa405b8e47349e272b8d96d491e6e63b864c0cde2443be3fbf08e9d12a7"
+  },
+  "test_observer_processes_start_event": {
+    "baseline_code_signature_text": "def test_observer_processes_start_event():",
+    "baseline_code_structure_hash": "6b5e0ba17fc0e539879cfeab1890a3cb57bb540d1f184ba65d7f140f6129e357"
+  },
+  "test_observer_with_empty_trace": {
+    "baseline_code_signature_text": "def test_observer_with_empty_trace():",
+    "baseline_code_structure_hash": "9d84a03613b6728587b1478381c3557cf937659c35770cd141819102ee2dd7c7"
+  }
+}

@@ -7,20 +7,10 @@ from cascade.spec.fingerprint import Fingerprint
 
 
 class TaskAnalyzer(Protocol):
-    """
-    Protocol for components capable of analyzing a raw target object (e.g. a function)
-    and producing a static Task Definition (TaskDef).
-    """
-
     def analyze(self, target: Any) -> TaskDef: ...
 
 
 class ReflectionAnalyzer(TaskAnalyzer):
-    """
-    A TaskAnalyzer implementation that uses Python's built-in `inspect` module
-    to analyze callable objects (or Task wrappers) at runtime.
-    """
-
     def analyze(self, target: Any) -> TaskDef:
         # Determine the underlying function and metadata source
         func = target

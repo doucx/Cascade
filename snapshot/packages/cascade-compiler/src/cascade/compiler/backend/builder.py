@@ -223,14 +223,16 @@ class Builder:
                 )
 
         # 6. Wire Global Start Pulse to all Source Nodes
-        # A source node is a bleacher that has no incoming data, condition, or dependency channels.
-        all_target_bleacher_ids = {
-            c.target_node_id for c in physical_graph.channels if c.target_node_id.endswith(".bleach")
+        # A source node's bleacher is one that does not depend on any other task's stainer.
+        task_fed_bleacher_ids = {
+            c.target_node_id
+            for c in physical_graph.channels
+            if c.source_node_id.endswith(".stain")
         }
 
         for subgraph in subgraphs.values():
             bleacher = subgraph.bleacher
-            if bleacher and bleacher.id not in all_target_bleacher_ids:
+            if bleacher and bleacher.id not in task_fed_bleacher_ids:
                 # This bleacher is a source node, connect it to the start pulse
                 physical_graph.channels.append(
                     Channel(

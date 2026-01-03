@@ -31,18 +31,15 @@ def controller_connector(unique_paths):
 @pytest.fixture
 def engine(unique_paths, bus_and_spy):
     """Provides a fully configured Engine using the LocalConnector."""
+    from cascade.testing import TimedMockExecutor
+
     db_path, uds_path = unique_paths
     bus, _ = bus_and_spy
     connector = LocalConnector(db_path=db_path, uds_path=uds_path)
 
-    class TimedMockExecutor(LocalExecutor):
-        async def execute(self, node, args, kwargs):
-            await asyncio.sleep(0.05)
-            return await super().execute(node, args, kwargs)
-
     return Engine(
         solver=NativeSolver(),
-        executor=TimedMockExecutor(),
+        executor=TimedMockExecutor(delay=0.05),
         bus=bus,
         connector=connector,
     )

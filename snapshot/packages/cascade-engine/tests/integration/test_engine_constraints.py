@@ -6,17 +6,7 @@ from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
 from cascade.spec.constraint import GlobalConstraint
-from cascade.testing import MockConnector, SpyExecutor, MockExecutor
-
-
-class TimedMockExecutor(SpyExecutor):
-    def __init__(self, delay: float = 0.0):
-        super().__init__()
-        self.delay = delay
-
-    async def execute(self, node, callable_obj, args, kwargs):
-        await asyncio.sleep(self.delay)
-        return await super().execute(node, callable_obj, args, kwargs)
+from cascade.testing import MockConnector, MockExecutor, TimedMockExecutor
 
 
 # --- Test Fixtures and Mocks ---

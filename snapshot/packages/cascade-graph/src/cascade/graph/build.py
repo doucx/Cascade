@@ -73,12 +73,12 @@ class GraphBuilder:
         task_def = self.analyzer.analyze(result.task)
 
         # 3. Compute Node Instance Hash
-        node_hash = self.hashing_service.compute_node_instance_hash(
+        current_node_instance_hash = self.hashing_service.compute_node_instance_hash(
             task_def, result, dep_nodes
         )
 
         # 4. Hash-consing / Create Node
-        node = self.registry.get(node_hash)
+        node = self.registry.get(current_node_instance_hash)
         if not node:
             # Extract bindings (Literals)
             input_bindings = {}
@@ -148,7 +148,7 @@ class GraphBuilder:
                             break
 
                 node = ParamNode(
-                    structural_id=node_hash,
+                    structural_id=current_node_instance_hash,
                     definition=task_def,
                     node_type="param",
                     _callable=result.task.func,
@@ -161,7 +161,7 @@ class GraphBuilder:
                 )
             else:
                 node = TaskNode(
-                    structural_id=node_hash,
+                    structural_id=current_node_instance_hash,
                     definition=task_def,
                     _callable=result.task.func,
                     node_type="task",
@@ -171,7 +171,7 @@ class GraphBuilder:
                     input_bindings=input_bindings,
                     has_complex_inputs=has_complex,
                 )
-            self.registry._registry[node_hash] = node
+            self.registry._registry[current_node_instance_hash] = node
 
         self._visited_instances[result._uuid] = node
         self.graph.add_node(node)
@@ -253,11 +253,11 @@ class GraphBuilder:
         task_def = self.analyzer.analyze(result.factory)
 
         # Compute Hash
-        node_hash = self.hashing_service.compute_node_instance_hash(
+        current_node_instance_hash = self.hashing_service.compute_node_instance_hash(
             task_def, result, dep_nodes
         )
 
-        node = self.registry.get(node_hash)
+        node = self.registry.get(current_node_instance_hash)
         if not node:
             input_bindings = {}
             for k, val in result.mapping_kwargs.items():
@@ -265,7 +265,7 @@ class GraphBuilder:
                     input_bindings[k] = val
 
             node = MapNode(
-                structural_id=node_hash,
+                structural_id=current_node_instance_hash,
                 definition=task_def,
                 node_type="map",
                 mapping_factory=result.factory,
@@ -274,7 +274,7 @@ class GraphBuilder:
                 constraints=result._constraints,
                 input_bindings=input_bindings,
             )
-            self.registry._registry[node_hash] = node
+            self.registry._registry[current_node_instance_hash] = node
 
         self._visited_instances[result._uuid] = node
         self.graph.add_node(node)

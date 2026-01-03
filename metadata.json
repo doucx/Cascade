@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M observer.json, M test_observer.json, M harness.json ... and 3 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767424488.9616866, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 为常量输入实现标准的探测器模型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767424990.918903, "duration_ms": 0}}

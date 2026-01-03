@@ -172,22 +172,44 @@ class Builder:
 
                     # D_dep -> Target Bleacher
                     wire.connect(d_dep_id, "out", target_subgraph.bleacher.id, arg_name)
-                # Case B: Literal Value (Constant)
+                # Case B: Literal Value (Constant) - Use Probe Model
                 else:
-                    # Create a dedicated DataNode for this constant
-                    const_node_id = PhysicalIdGenerator.constant(node_ir.id, arg_name)
-                    const_node = PhysicsDataNode(
-                        id=const_node_id,
+                    # 1. D_const (DataNode holding the literal value)
+                    d_const_id = PhysicalIdGenerator.constant(node_ir.id, arg_name)
+                    d_const = PhysicsDataNode(
+                        id=d_const_id,
                         name=f"Const({arg_name})",
                         capacity=1,
                         initial_tokens=1,
                         initial_payload=source_ref,
                     )
-                    wire.add_node(const_node)
+                    wire.add_node(d_const)
 
-                    # Wire Const -> Bleacher
+                    # 2. F_probe (The probe node for constants)
+                    f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, arg_name)
+                    f_probe = PhysicsFuncNode(
+                        id=f_probe_id,
+                        name=f"Probe({arg_name})",
+                        input_ports={"value": PortDef("value", PortRole.DATA)},
+                        output_ports={"out": PortDef("out", PortRole.DATA)},
+                    )
+                    wire.add_node(f_probe)
+
+                    # 3. D_probed (Intermediate data node to connect to Bleacher)
+                    d_probed_id = f"{f_probe_id}.out"
+                    d_probed = PhysicsDataNode(
+                        id=d_probed_id, name=f"Probed({arg_name})"
+                    )
+                    wire.add_node(d_probed)
+
+                    # 4. Wiring
+                    # D_const -> F_probe
+                    wire.connect(d_const_id, "out", f_probe_id, "value")
+                    # F_probe -> D_probed
+                    wire.connect(f_probe_id, "out", d_probed_id, "in")
+                    # D_probed -> Target Bleacher
                     wire.connect(
-                        const_node_id, "out", target_subgraph.bleacher.id, arg_name
+                        d_probed_id, "out", target_subgraph.bleacher.id, arg_name
                     )
 
             # 4.2 Sequence Dependencies (.after())

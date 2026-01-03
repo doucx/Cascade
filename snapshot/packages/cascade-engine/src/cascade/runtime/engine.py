@@ -27,6 +27,7 @@ from cascade.adapters.state import InMemoryStateBackend
 from cascade.runtime.processor import NodeProcessor
 from cascade.runtime.resource_container import ResourceContainer
 from cascade.runtime.strategies import GraphExecutionStrategy
+from cascade.runtime.strategies.base import ExecutionContext
 
 
 class Engine:
@@ -199,14 +200,15 @@ class Engine:
 
                 active_resources: Dict[str, Any] = {}
 
-                final_result = await strategy.execute(
-                    target=workflow_target,
+                context = ExecutionContext(
                     run_id=run_id,
-                    params=params or {},
                     state_backend=state_backend,
                     run_stack=run_stack,
                     active_resources=active_resources,
+                    params=params or {},
                 )
+
+                final_result = await strategy.execute(target=workflow_target, context=context)
 
             duration = time.time() - start_time
             self.bus.publish(

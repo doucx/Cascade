@@ -20,19 +20,16 @@ class Builder:
         physical_graph = BipartiteGraph()
         env_resources = {res.name: res for res in environment.resources}
 
-        # 1. Create Resource Brokers (F_broker + internal Ledger loop)
+        # 1. Create Resource Brokers (Allocators + Reclaimers)
         for res_def in environment.resources:
-            broker_id = PhysicalIdGenerator.global_broker(res_def.name)
+            allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
+            reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
             ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
 
-            # D_ledger: Holds the state of the resource
-            # We initialize it with a DiscreteLedger object.
-            # Currently we assume all resources are Discrete.
-            # TODO: Support Continuous resources based on definition.
+            # D_ledger
             initial_ledger = DiscreteLedger(
                 total=res_def.capacity, available=res_def.capacity
             )
-
             d_ledger = PhysicsDataNode(
                 id=ledger_id,
                 name=f"Ledger({res_def.name})",
@@ -40,15 +37,15 @@ class Builder:
                 initial_tokens=1,
                 initial_payload=initial_ledger,
             )
+            physical_graph.nodes[ledger_id] = d_ledger
 
-            # F_broker: The logic unit
-            f_broker = PhysicsFuncNode(
-                id=broker_id,
-                name=f"Broker({res_def.name})",
+            # F_allocator
+            f_allocator = PhysicsFuncNode(
+                id=allocator_id,
+                name=f"Allocator({res_def.name})",
                 input_ports={
                     PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
                     PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
-                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
                 },
                 output_ports={
                     PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
@@ -56,63 +53,65 @@ class Builder:
                     PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
                 },
             )
+            physical_graph.nodes[allocator_id] = f_allocator
 
-            physical_graph.nodes[ledger_id] = d_ledger
-            physical_graph.nodes[broker_id] = f_broker
-
-            # Wire the Ledger Loop
-            # D_ledger -> F_broker
-            physical_graph.channels.append(
-                Channel(
-                    source_node_id=ledger_id,
-                    source_port="out",
-                    target_node_id=broker_id,
-                    target_port=PortName.LEDGER_IN,
-                )
+            # F_reclaimer
+            f_reclaimer = PhysicsFuncNode(
+                id=reclaimer_id,
+                name=f"Reclaimer({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                },
             )
-            # F_broker -> D_ledger
+            physical_graph.nodes[reclaimer_id] = f_reclaimer
+
+            # Wiring: Ledger <-> Allocator
             physical_graph.channels.append(
-                Channel(
-                    source_node_id=broker_id,
-                    source_port=PortName.LEDGER_OUT,
-                    target_node_id=ledger_id,
-                    target_port="in",
-                )
+                Channel(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
+            )
+            physical_graph.channels.append(
+                Channel(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
             )
 
-            # Self-Loop for Recirculation of rejected requests
-            # If a request is rejected, it comes out of REQ_OUT and goes back to REQ_IN.
-            # We need a buffer D_retry for this?
-            # Or can we wire REQ_OUT -> D_req (which feeds REQ_IN)?
-            # Yes, we will create a shared D_req_buffer for the broker later or handle it per request.
-            # Actually, standard pattern is:
-            # Inputs -> [D_req_buffer] -> F_broker
-            # F_broker -> REQ_OUT -> [D_req_buffer]
-            # Let's create a shared Request Buffer for this broker.
+            # Wiring: Ledger <-> Reclaimer
+            physical_graph.channels.append(
+                Channel(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
+            )
+            physical_graph.channels.append(
+                Channel(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
+            )
+
+            # Request Buffer
             d_req_buffer_id = f"buffer.req.{res_def.name}"
             d_req_buffer = PhysicsDataNode(
                 id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
-            )  # High capacity
+            )
             physical_graph.nodes[d_req_buffer_id] = d_req_buffer
 
-            # Connect Buffer -> Broker
+            # Buffer -> Allocator
             physical_graph.channels.append(
-                Channel(
-                    source_node_id=d_req_buffer_id,
-                    source_port="out",
-                    target_node_id=broker_id,
-                    target_port=PortName.REQ,
-                )
+                Channel(d_req_buffer_id, "out", allocator_id, PortName.REQ)
+            )
+            # Recirculation: Allocator -> Buffer
+            physical_graph.channels.append(
+                Channel(allocator_id, PortName.REQ_OUT, d_req_buffer_id, "in")
             )
 
-            # Connect Recirculation: Broker -> Buffer
+            # Release Buffer
+            # Created here instead of implicitly later to ensure consistent ID
+            rel_buffer_id = f"buffer.rel.{res_def.name}"
+            d_rel_buffer = PhysicsDataNode(
+                id=rel_buffer_id, name=f"RelBuffer({res_def.name})", capacity=1000
+            )
+            physical_graph.nodes[rel_buffer_id] = d_rel_buffer
+            
+            # Buffer -> Reclaimer
             physical_graph.channels.append(
-                Channel(
-                    source_node_id=broker_id,
-                    source_port=PortName.REQ_OUT,
-                    target_node_id=d_req_buffer_id,
-                    target_port="in",
-                )
+                Channel(rel_buffer_id, "out", reclaimer_id, PortName.REL)
             )
 
         # 2. Create and wire the global observability sidecar infrastructure
@@ -272,8 +271,9 @@ class Builder:
             assert subgraph.stainer is not None
 
             for res_name, amount in node_ir.constraints.items():
-                broker_id = PhysicalIdGenerator.global_broker(res_name)
+                allocator_id = PhysicalIdGenerator.global_allocator(res_name)
                 req_buffer_id = f"buffer.req.{res_name}"
+                rel_buffer_id = f"buffer.rel.{res_name}"
 
                 # --- A. Request Chain ---
                 # 1. D_const (Amount)
@@ -329,22 +329,19 @@ class Builder:
                     Channel(d_probed_id, "out", f_req_id, "amount")
                 )
 
-                # F_req -> D_req_buffer (Global Buffer for the Broker)
+                # F_req -> D_req_buffer (Global Buffer for the Allocator)
                 physical_graph.channels.append(
                     Channel(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
                 )
 
                 # --- B. Grant Wiring ---
-                # Broker (GNT) -> Bleacher (res_{name})
-                # FILTER: Must match the Requestor's tag.
-                # The Requestor sets tag = f_req.id (based on std implementation).
-                # Wait, Requestor code: "tag=node.id". So tag is f_req_id.
+                # Allocator (GNT) -> Bleacher (res_{name})
                 target_tag = f_req_id
                 
                 port_name = f"res_{res_name}"
                 physical_graph.channels.append(
                     Channel(
-                        source_node_id=broker_id,
+                        source_node_id=allocator_id,
                         source_port=PortName.GNT,
                         target_node_id=subgraph.bleacher.id,
                         target_port=port_name,
@@ -353,22 +350,6 @@ class Builder:
                 )
 
                 # --- C. Release Wiring ---
-                # Stainer (res_{name}) -> Broker (REL)
-                # We need a D_rel_buffer or connect directly to a D_rel?
-                # The broker needs a REL input buffer.
-                # Let's create a shared REL buffer for the broker too.
-                rel_buffer_id = f"buffer.rel.{res_name}"
-                if rel_buffer_id not in physical_graph.nodes:
-                    d_rel_buffer = PhysicsDataNode(
-                        id=rel_buffer_id, name=f"RelBuffer({res_name})", capacity=1000
-                    )
-                    physical_graph.nodes[rel_buffer_id] = d_rel_buffer
-                    
-                    # Buffer -> Broker
-                    physical_graph.channels.append(
-                        Channel(rel_buffer_id, "out", broker_id, PortName.REL)
-                    )
-
                 # Stainer -> RelBuffer
                 physical_graph.channels.append(
                     Channel(

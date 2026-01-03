@@ -12,7 +12,7 @@ from cascade.vm.reactor import Reactor
 # Import new ICs
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
-from cascade.std.resource.discrete import discrete_broker
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.probe.const import const_probe
 
@@ -76,8 +76,10 @@ async def test_concurrency_limit():
             func_map[node_id] = standard_stainer
         elif node_id.endswith(".worker"):
             func_map[node_id] = mock_worker
-        elif "broker" in node_id:
-            func_map[node_id] = discrete_broker
+        elif "allocator" in node_id:
+            func_map[node_id] = discrete_allocator
+        elif "reclaimer" in node_id:
+            func_map[node_id] = discrete_reclaimer
         elif node_id.startswith("req."):
             func_map[node_id] = resource_requestor
         elif node_id.startswith("probe.const."):
@@ -119,7 +121,7 @@ async def test_concurrency_limit():
     req_buffer_id = "buffer.req.gpu"
     assert memory.get_count(req_buffer_id) == 2  # Both requests are in buffer
 
-    # Round 3: Broker fires.
+    # Round 3: Allocator fires.
     # It consumes Ledger + ONE request from Buffer.
     # Since capacity is 1, it Grants.
     await reactor.step()
@@ -135,21 +137,21 @@ async def test_concurrency_limit():
 
     # Round 4: 
     # - The lucky Bleacher (who got GNT) fires.
-    # - The Broker attempts to fire again for the second request?
+    # - The Allocator attempts to fire again for the second request?
     #   Yes, it reads Ledger(0) and Request(1). 
     #   Logic: 0 < 1. Reject & Recirculate.
     
     fired = await reactor.step()
     await wait_idle()
     
-    # If Broker fired, it recirculated the request back to Buffer.
+    # If Allocator fired, it recirculated the request back to Buffer.
     # If Bleacher fired, it started the triad.
     
     # Let's run until one Task completes (Stainer fires)
-    # This involves: Worker -> Stainer
+    # This involves: Worker -> Stainer -> RelBuffer -> Reclaimer -> Ledger
     
     # We loop until resource is released (Ledger becomes 1)
-    max_steps = 20
+    max_steps = 30
     for _ in range(max_steps):
         await reactor.step()
         await wait_idle()
@@ -163,8 +165,8 @@ async def test_concurrency_limit():
     assert ledger.available == 1
     
     # Now the second task can proceed.
-    # Broker fires -> Grants -> Bleacher -> Worker -> Stainer
-    for _ in range(10):
+    # Allocator fires -> Grants -> Bleacher -> Worker -> Stainer -> Reclaimer
+    for _ in range(20):
         if memory.get_count(req_buffer_id) == 0 and memory.get_count("buffer.rel.gpu") == 0:
              # If buffers are empty and tasks done, we are good.
              pass

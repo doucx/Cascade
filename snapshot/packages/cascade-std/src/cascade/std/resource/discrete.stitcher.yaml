@@ -1,12 +1,9 @@
-"discrete_broker": |-
-  A Discrete Resource Broker using the Self-Loop Ledger pattern.
+"discrete_allocator": |-
+  Handles allocation requests for discrete resources.
+  Inputs: ledger_in, req_in
+  Outputs: ledger_out, gnt_out (if granted), req_out (if rejected)
 
-  Inputs:
-      ledger_in: Token containing DiscreteLedger(total, available)
-      req_in: (Optional) Token requesting N units. Payload: int
-      rel_in: (Optional) Token releasing N units. Payload: int
-
-  Outputs:
-      ledger_out: Updated ledger
-      gnt_out: (Conditional) Grant token if request succeeded
-      req_out: (Conditional) Original request token if failed (Recirculation)
+"discrete_reclaimer": |-
+  Handles release (return) of discrete resources.
+  Inputs: ledger_in, rel_in
+  Outputs: ledger_out

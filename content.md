@@ -1,79 +1,691 @@
-## [WIP] test(compiler): 修复因资源协商重构导致的测试失败
+## [WIP] refactor(core): 拆分 Broker 为 Allocator 和 Reclaimer 以解决死锁
 
 ### 用户需求
-修复 `test_builder_environment.py` 和 `test_resource_backpressure.py` 中的断言错误。
+解决 `test_resource_backpressure.py` 中的测试失败。
+根本原因是 Reactor 遵循“全输入激发 (Full-Input Firing)”原则，而原本的 broker 设计试图在一个节点上处理可选输入（Request 或 Release）。这导致 Broker 在没有 Release 输入时永远无法激发，从而死锁。
+我们需要将 Broker 拆分为两个独立的物理实体：
+1.  **Allocator**: 负责处理 Request，消耗 Ledger，产出 Grant。
+2.  **Reclaimer**: 负责处理 Release，消耗 Ledger，归还资源。
+二者通过竞争 `D_ledger` 中的唯一 Token 来实现序列化和状态共享。
 
 ### 评论
-**错误分析**:
-1.  **`test_builder_environment` 失败**: 之前的测试假设 Builder 会生成 `canonical.resource.gpu` (D_res) 节点。但现在 Builder 生成的是 `canonical.resource.broker.gpu` (F_broker) 和 `canonical.resource.ledger.gpu` (D_ledger) 以及相关的 Buffer。旧的断言已经过时。
-2.  **`test_resource_backpressure` 失败**: 同样是因为节点 ID 和图结构的改变。测试试图查找旧的 D_res，而且由于图结构变得更加复杂（引入了 IC），我们需要更新 `function_map` 的映射逻辑，将新生成的物理节点 ID 映射到对应的 Python 函数实现。
+这是一个符合物理定律的架构修正。它消除了“可选输入”这一非物理概念，将其转化为对共享资源（Ledger）的竞争。
 
 ### 目标
-1.  更新 `test_builder_environment.py`：断言新的 Broker 和 Ledger 节点结构。
-2.  更新 `test_resource_backpressure.py`：
-    *   适应新的物理图结构（Broker, Requestor, Probe）。
-    *   正确配置 `function_map`，导入并映射 `discrete_broker`, `resource_requestor`, `const_probe`。
-    *   调整对“资源占用”状态的断言方式（检查 Ledger 而不是 D_res）。
+1.  修改 `cascade-std` 中的 `discrete.py` 和 `continuous.py`，将 broker 函数拆分为 allocator 和 reclaimer。
+2.  更新 `cascade-compiler` 的 `naming.py` 和 `builder.py` 以适配新结构。
+3.  更新集成测试以使用新的函数映射。
 
 ### 基本原理
-测试必须反映架构的演进。既然我们已经将物理层升级为 IC 化的协商网络，测试用例就必须验证这个新网络的正确性。
+*   **Allocator**: Inputs: `{ledger_in, req_in}`, Outputs: `{ledger_out, gnt_out, req_out}`
+*   **Reclaimer**: Inputs: `{ledger_in, rel_in}`, Outputs: `{ledger_out}`
+*   **竞争模型**: `D_ledger` 充当互斥锁。Reactor 的顺序扫描保证了原子性。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #comp/compiler #scope/core #ai/instruct #task/domain/testing #task/object/integration-test #task/action/fix #task/state/end
+#intent/refine #flow/ready #priority/high #comp/std #comp/compiler #comp/vm #concept/resource #scope/core #ai/instruct #task/domain/core #task/object/broker #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 Builder 单元测试
+#### Acts 1: 拆分 Discrete Broker IC
 
-更新断言以匹配 Broker/Ledger 结构。
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/resource/discrete.py
+~~~~~
+~~~~~python.old
+async def discrete_broker(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    ledger_token = inputs["ledger_in"]
+    # Reconstruct ledger object from payload (assuming it's a dict or dataclass)
+    ledger_data = ledger_token.payload
+    if isinstance(ledger_data, dict):
+        ledger = DiscreteLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    outputs: Dict[str, Token] = {}
+
+    # 1. Process Release (Replenish first)
+    if "rel_in" in inputs:
+        release_amount = inputs["rel_in"].payload
+        # Cap at total to prevent overflow logic errors, though in a closed system this shouldn't happen
+        ledger.available = min(ledger.total, ledger.available + release_amount)
+
+    # 2. Process Request
+    if "req_in" in inputs:
+        req_token = inputs["req_in"]
+        req_amount = req_token.payload
+
+        if ledger.available >= req_amount:
+            # Grant
+            ledger.available -= req_amount
+            # Emit Grant Token (Payload can be the amount granted)
+            # CRITICAL: Propagate the tag from the request to the grant
+            # so the distributor can route it back to the correct worker.
+            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
+        else:
+            # Reject & Recirculate
+            # We emit the original request token back to a recirculation loop
+            outputs["req_out"] = req_token
+
+    # 3. Emit Updated Ledger
+    # We pass the object back. In a real persistence scenario, this would be serialized.
+    outputs["ledger_out"] = Token(payload=ledger)
+
+    return outputs
+~~~~~
+~~~~~python.new
+async def discrete_allocator(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    """
+    Handles Resource Requests.
+    Inputs: ledger_in, req_in
+    Outputs: ledger_out, gnt_out (if success), req_out (if failed)
+    """
+    ledger_token = inputs["ledger_in"]
+    ledger_data = ledger_token.payload
+    # Ideally we should clone or re-instantiate if immutable, but for now we mutate in place for perf
+    if isinstance(ledger_data, dict):
+        ledger = DiscreteLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    req_token = inputs["req_in"]
+    req_amount = req_token.payload
+
+    outputs: Dict[str, Token] = {}
+
+    if ledger.available >= req_amount:
+        # Grant
+        ledger.available -= req_amount
+        outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
+    else:
+        # Reject & Recirculate
+        outputs["req_out"] = req_token
+
+    outputs["ledger_out"] = Token(payload=ledger)
+    return outputs
+
+
+async def discrete_reclaimer(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    """
+    Handles Resource Releases.
+    Inputs: ledger_in, rel_in
+    Outputs: ledger_out
+    """
+    ledger_token = inputs["ledger_in"]
+    ledger_data = ledger_token.payload
+    if isinstance(ledger_data, dict):
+        ledger = DiscreteLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    rel_token = inputs["rel_in"]
+    release_amount = rel_token.payload
+
+    # Replenish
+    ledger.available = min(ledger.total, ledger.available + release_amount)
+
+    return {"ledger_out": Token(payload=ledger)}
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/resource/discrete.stitcher.yaml
+~~~~~
+~~~~~yaml.old
+"discrete_broker": |-
+  A Discrete Resource Broker using the Self-Loop Ledger pattern.
+
+  Inputs:
+      ledger_in: Token containing DiscreteLedger(total, available)
+      req_in: (Optional) Token requesting N units. Payload: int
+      rel_in: (Optional) Token releasing N units. Payload: int
+
+  Outputs:
+      ledger_out: Updated ledger
+      gnt_out: (Conditional) Grant token if request succeeded
+      req_out: (Conditional) Original request token if failed (Recirculation)
+~~~~~
+~~~~~yaml.new
+"discrete_allocator": |-
+  Handles allocation requests for discrete resources.
+  Inputs: ledger_in, req_in
+  Outputs: ledger_out, gnt_out (if granted), req_out (if rejected)
+
+"discrete_reclaimer": |-
+  Handles release (return) of discrete resources.
+  Inputs: ledger_in, rel_in
+  Outputs: ledger_out
+~~~~~
+
+#### Acts 2: 拆分 Continuous Broker IC
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/resource/continuous.py
+~~~~~
+~~~~~python.old
+async def continuous_broker(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    ledger_token = inputs["ledger_in"]
+    ledger_data = ledger_token.payload
+    if isinstance(ledger_data, dict):
+        ledger = ContinuousLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    outputs: Dict[str, Token] = {}
+
+    # 1. Process Release
+    if "rel_in" in inputs:
+        release_amount = float(inputs["rel_in"].payload)
+        # Simple clamp to avoid floating point drift exceeding total
+        ledger.available = min(ledger.total, ledger.available + release_amount)
+
+    # 2. Process Request
+    if "req_in" in inputs:
+        req_token = inputs["req_in"]
+        req_amount = float(req_token.payload)
+
+        # Use a small epsilon for float comparison if needed, but >= usually suffices
+        if ledger.available >= req_amount:
+            ledger.available -= req_amount
+            # CRITICAL: Propagate the tag from the request to the grant
+            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
+        else:
+            # Recirculate
+            outputs["req_out"] = req_token
+
+    # 3. Emit Updated Ledger
+    outputs["ledger_out"] = Token(payload=ledger)
+
+    return outputs
+~~~~~
+~~~~~python.new
+async def continuous_allocator(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    ledger_token = inputs["ledger_in"]
+    ledger_data = ledger_token.payload
+    if isinstance(ledger_data, dict):
+        ledger = ContinuousLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    req_token = inputs["req_in"]
+    req_amount = float(req_token.payload)
+
+    outputs: Dict[str, Token] = {}
+
+    if ledger.available >= req_amount:
+        ledger.available -= req_amount
+        outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
+    else:
+        outputs["req_out"] = req_token
+
+    outputs["ledger_out"] = Token(payload=ledger)
+    return outputs
+
+
+async def continuous_reclaimer(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    ledger_token = inputs["ledger_in"]
+    ledger_data = ledger_token.payload
+    if isinstance(ledger_data, dict):
+        ledger = ContinuousLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    release_amount = float(inputs["rel_in"].payload)
+    ledger.available = min(ledger.total, ledger.available + release_amount)
+
+    return {"ledger_out": Token(payload=ledger)}
+~~~~~
+
+#### Acts 3: 更新 Compiler Naming
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/utils/naming.py
+~~~~~
+~~~~~python.old
+    @staticmethod
+    def global_broker(resource_name: str) -> str:
+        return f"canonical.resource.broker.{resource_name}"
+~~~~~
+~~~~~python.new
+    @staticmethod
+    def global_allocator(resource_name: str) -> str:
+        return f"canonical.resource.allocator.{resource_name}"
+
+    @staticmethod
+    def global_reclaimer(resource_name: str) -> str:
+        return f"canonical.resource.reclaimer.{resource_name}"
+~~~~~
+
+#### Acts 4: 更新 Compiler Builder
+
+重构 Builder 以生成两个独立的节点，共享同一个 Ledger。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python.old
+        # 1. Create Resource Brokers (F_broker + internal Ledger loop)
+        for res_def in environment.resources:
+            broker_id = PhysicalIdGenerator.global_broker(res_def.name)
+            ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
+
+            # D_ledger: Holds the state of the resource
+            # We initialize it with a DiscreteLedger object.
+            # Currently we assume all resources are Discrete.
+            # TODO: Support Continuous resources based on definition.
+            initial_ledger = DiscreteLedger(
+                total=res_def.capacity, available=res_def.capacity
+            )
+
+            d_ledger = PhysicsDataNode(
+                id=ledger_id,
+                name=f"Ledger({res_def.name})",
+                capacity=1,
+                initial_tokens=1,
+                initial_payload=initial_ledger,
+            )
+
+            # F_broker: The logic unit
+            f_broker = PhysicsFuncNode(
+                id=broker_id,
+                name=f"Broker({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                    PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
+                    PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
+                },
+            )
+
+            physical_graph.nodes[ledger_id] = d_ledger
+            physical_graph.nodes[broker_id] = f_broker
+
+            # Wire the Ledger Loop
+            # D_ledger -> F_broker
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=ledger_id,
+                    source_port="out",
+                    target_node_id=broker_id,
+                    target_port=PortName.LEDGER_IN,
+                )
+            )
+            # F_broker -> D_ledger
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=broker_id,
+                    source_port=PortName.LEDGER_OUT,
+                    target_node_id=ledger_id,
+                    target_port="in",
+                )
+            )
+
+            # Self-Loop for Recirculation of rejected requests
+            # If a request is rejected, it comes out of REQ_OUT and goes back to REQ_IN.
+            # We need a buffer D_retry for this?
+            # Or can we wire REQ_OUT -> D_req (which feeds REQ_IN)?
+            # Yes, we will create a shared D_req_buffer for the broker later or handle it per request.
+            # Actually, standard pattern is:
+            # Inputs -> [D_req_buffer] -> F_broker
+            # F_broker -> REQ_OUT -> [D_req_buffer]
+            # Let's create a shared Request Buffer for this broker.
+            d_req_buffer_id = f"buffer.req.{res_def.name}"
+            d_req_buffer = PhysicsDataNode(
+                id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
+            )  # High capacity
+            physical_graph.nodes[d_req_buffer_id] = d_req_buffer
+
+            # Connect Buffer -> Broker
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=d_req_buffer_id,
+                    source_port="out",
+                    target_node_id=broker_id,
+                    target_port=PortName.REQ,
+                )
+            )
+
+            # Connect Recirculation: Broker -> Buffer
+            physical_graph.channels.append(
+                Channel(
+                    source_node_id=broker_id,
+                    source_port=PortName.REQ_OUT,
+                    target_node_id=d_req_buffer_id,
+                    target_port="in",
+                )
+            )
+~~~~~
+~~~~~python.new
+        # 1. Create Resource Brokers (Allocators + Reclaimers)
+        for res_def in environment.resources:
+            allocator_id = PhysicalIdGenerator.global_allocator(res_def.name)
+            reclaimer_id = PhysicalIdGenerator.global_reclaimer(res_def.name)
+            ledger_id = PhysicalIdGenerator.global_ledger(res_def.name)
+
+            # D_ledger
+            initial_ledger = DiscreteLedger(
+                total=res_def.capacity, available=res_def.capacity
+            )
+            d_ledger = PhysicsDataNode(
+                id=ledger_id,
+                name=f"Ledger({res_def.name})",
+                capacity=1,
+                initial_tokens=1,
+                initial_payload=initial_ledger,
+            )
+            physical_graph.nodes[ledger_id] = d_ledger
+
+            # F_allocator
+            f_allocator = PhysicsFuncNode(
+                id=allocator_id,
+                name=f"Allocator({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REQ: PortDef(PortName.REQ, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                    PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
+                    PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
+                },
+            )
+            physical_graph.nodes[allocator_id] = f_allocator
+
+            # F_reclaimer
+            f_reclaimer = PhysicsFuncNode(
+                id=reclaimer_id,
+                name=f"Reclaimer({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                },
+            )
+            physical_graph.nodes[reclaimer_id] = f_reclaimer
+
+            # Wiring: Ledger <-> Allocator
+            physical_graph.channels.append(
+                Channel(ledger_id, "out", allocator_id, PortName.LEDGER_IN)
+            )
+            physical_graph.channels.append(
+                Channel(allocator_id, PortName.LEDGER_OUT, ledger_id, "in")
+            )
+
+            # Wiring: Ledger <-> Reclaimer
+            physical_graph.channels.append(
+                Channel(ledger_id, "out", reclaimer_id, PortName.LEDGER_IN)
+            )
+            physical_graph.channels.append(
+                Channel(reclaimer_id, PortName.LEDGER_OUT, ledger_id, "in")
+            )
+
+            # Request Buffer
+            d_req_buffer_id = f"buffer.req.{res_def.name}"
+            d_req_buffer = PhysicsDataNode(
+                id=d_req_buffer_id, name=f"ReqBuffer({res_def.name})", capacity=1000
+            )
+            physical_graph.nodes[d_req_buffer_id] = d_req_buffer
+
+            # Buffer -> Allocator
+            physical_graph.channels.append(
+                Channel(d_req_buffer_id, "out", allocator_id, PortName.REQ)
+            )
+            # Recirculation: Allocator -> Buffer
+            physical_graph.channels.append(
+                Channel(allocator_id, PortName.REQ_OUT, d_req_buffer_id, "in")
+            )
+
+            # Release Buffer
+            # Created here instead of implicitly later to ensure consistent ID
+            rel_buffer_id = f"buffer.rel.{res_def.name}"
+            d_rel_buffer = PhysicsDataNode(
+                id=rel_buffer_id, name=f"RelBuffer({res_def.name})", capacity=1000
+            )
+            physical_graph.nodes[rel_buffer_id] = d_rel_buffer
+            
+            # Buffer -> Reclaimer
+            physical_graph.channels.append(
+                Channel(rel_buffer_id, "out", reclaimer_id, PortName.REL)
+            )
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python.old
+            for res_name, amount in node_ir.constraints.items():
+                broker_id = PhysicalIdGenerator.global_broker(res_name)
+                req_buffer_id = f"buffer.req.{res_name}"
+
+                # --- A. Request Chain ---
+                # 1. D_const (Amount)
+                d_amt_id = PhysicalIdGenerator.constant(node_ir.id, f"req_amt_{res_name}")
+                d_amt = PhysicsDataNode(
+                    id=d_amt_id,
+                    name=f"Amt({res_name})",
+                    capacity=1,
+                    initial_tokens=1,
+                    initial_payload=amount,
+                )
+                physical_graph.nodes[d_amt_id] = d_amt
+
+                # 2. F_probe (ConstProbe)
+                f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, res_name)
+                f_probe = PhysicsFuncNode(
+                    id=f_probe_id,
+                    name=f"Probe({res_name})",
+                    input_ports={"value": PortDef("value", PortRole.DATA)},
+                    output_ports={"out": PortDef("out", PortRole.DATA)},
+                )
+                physical_graph.nodes[f_probe_id] = f_probe
+
+                # 3. F_req (Requestor)
+                f_req_id = PhysicalIdGenerator.requestor(node_ir.id, res_name)
+                f_req = PhysicsFuncNode(
+                    id=f_req_id,
+                    name=f"Req({res_name})",
+                    input_ports={"amount": PortDef("amount", PortRole.DATA)},
+                    output_ports={PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)},
+                )
+                physical_graph.nodes[f_req_id] = f_req
+
+                # 4. Wiring: D_amt -> F_probe -> D_temp -> F_req -> D_req_buffer
+                # We need intermediate data nodes because of Bipartite rule (F->D->F)
+                
+                # D_amt -> F_probe
+                physical_graph.channels.append(
+                    Channel(d_amt_id, "out", f_probe_id, "value")
+                )
+
+                # F_probe -> D_probed
+                d_probed_id = f"{f_probe_id}.out"
+                d_probed = PhysicsDataNode(id=d_probed_id, name="ProbedVal")
+                physical_graph.nodes[d_probed_id] = d_probed
+
+                physical_graph.channels.append(
+                    Channel(f_probe_id, "out", d_probed_id, "in")
+                )
+                
+                # D_probed -> F_req
+                physical_graph.channels.append(
+                    Channel(d_probed_id, "out", f_req_id, "amount")
+                )
+
+                # F_req -> D_req_buffer (Global Buffer for the Broker)
+                physical_graph.channels.append(
+                    Channel(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
+                )
+
+                # --- B. Grant Wiring ---
+                # Broker (GNT) -> Bleacher (res_{name})
+                # FILTER: Must match the Requestor's tag.
+                # The Requestor sets tag = f_req.id (based on std implementation).
+                # Wait, Requestor code: "tag=node.id". So tag is f_req_id.
+                target_tag = f_req_id
+                
+                port_name = f"res_{res_name}"
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=broker_id,
+                        source_port=PortName.GNT,
+                        target_node_id=subgraph.bleacher.id,
+                        target_port=port_name,
+                        tag_filter=target_tag,
+                    )
+                )
+
+                # --- C. Release Wiring ---
+                # Stainer (res_{name}) -> Broker (REL)
+                # We need a D_rel_buffer or connect directly to a D_rel?
+                # The broker needs a REL input buffer.
+                # Let's create a shared REL buffer for the broker too.
+                rel_buffer_id = f"buffer.rel.{res_name}"
+                if rel_buffer_id not in physical_graph.nodes:
+                    d_rel_buffer = PhysicsDataNode(
+                        id=rel_buffer_id, name=f"RelBuffer({res_name})", capacity=1000
+                    )
+                    physical_graph.nodes[rel_buffer_id] = d_rel_buffer
+                    
+                    # Buffer -> Broker
+                    physical_graph.channels.append(
+                        Channel(rel_buffer_id, "out", broker_id, PortName.REL)
+                    )
+
+                # Stainer -> RelBuffer
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=subgraph.stainer.id,
+                        source_port=port_name,
+                        target_node_id=rel_buffer_id,
+                        target_port="in",
+                    )
+                )
+~~~~~
+~~~~~python.new
+            for res_name, amount in node_ir.constraints.items():
+                allocator_id = PhysicalIdGenerator.global_allocator(res_name)
+                req_buffer_id = f"buffer.req.{res_name}"
+                rel_buffer_id = f"buffer.rel.{res_name}"
+
+                # --- A. Request Chain ---
+                # 1. D_const (Amount)
+                d_amt_id = PhysicalIdGenerator.constant(node_ir.id, f"req_amt_{res_name}")
+                d_amt = PhysicsDataNode(
+                    id=d_amt_id,
+                    name=f"Amt({res_name})",
+                    capacity=1,
+                    initial_tokens=1,
+                    initial_payload=amount,
+                )
+                physical_graph.nodes[d_amt_id] = d_amt
+
+                # 2. F_probe (ConstProbe)
+                f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, res_name)
+                f_probe = PhysicsFuncNode(
+                    id=f_probe_id,
+                    name=f"Probe({res_name})",
+                    input_ports={"value": PortDef("value", PortRole.DATA)},
+                    output_ports={"out": PortDef("out", PortRole.DATA)},
+                )
+                physical_graph.nodes[f_probe_id] = f_probe
+
+                # 3. F_req (Requestor)
+                f_req_id = PhysicalIdGenerator.requestor(node_ir.id, res_name)
+                f_req = PhysicsFuncNode(
+                    id=f_req_id,
+                    name=f"Req({res_name})",
+                    input_ports={"amount": PortDef("amount", PortRole.DATA)},
+                    output_ports={PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)},
+                )
+                physical_graph.nodes[f_req_id] = f_req
+
+                # 4. Wiring: D_amt -> F_probe -> D_temp -> F_req -> D_req_buffer
+                # We need intermediate data nodes because of Bipartite rule (F->D->F)
+                
+                # D_amt -> F_probe
+                physical_graph.channels.append(
+                    Channel(d_amt_id, "out", f_probe_id, "value")
+                )
+
+                # F_probe -> D_probed
+                d_probed_id = f"{f_probe_id}.out"
+                d_probed = PhysicsDataNode(id=d_probed_id, name="ProbedVal")
+                physical_graph.nodes[d_probed_id] = d_probed
+
+                physical_graph.channels.append(
+                    Channel(f_probe_id, "out", d_probed_id, "in")
+                )
+                
+                # D_probed -> F_req
+                physical_graph.channels.append(
+                    Channel(d_probed_id, "out", f_req_id, "amount")
+                )
+
+                # F_req -> D_req_buffer (Global Buffer for the Allocator)
+                physical_graph.channels.append(
+                    Channel(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")
+                )
+
+                # --- B. Grant Wiring ---
+                # Allocator (GNT) -> Bleacher (res_{name})
+                target_tag = f_req_id
+                
+                port_name = f"res_{res_name}"
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=allocator_id,
+                        source_port=PortName.GNT,
+                        target_node_id=subgraph.bleacher.id,
+                        target_port=port_name,
+                        tag_filter=target_tag,
+                    )
+                )
+
+                # --- C. Release Wiring ---
+                # Stainer -> RelBuffer
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=subgraph.stainer.id,
+                        source_port=port_name,
+                        target_node_id=rel_buffer_id,
+                        target_port="in",
+                    )
+                )
+~~~~~
+
+#### Acts 5: 更新 Builder 测试
+
+Builder 测试中关于 Broker 的断言需要更新。
 
 ~~~~~act
 patch_file
 packages/cascade-compiler/tests/unit/backend/test_builder_environment.py
 ~~~~~
 ~~~~~python.old
-def test_builder_creates_resources_from_env(simple_graph_ir):
-    # 1. Define Environment with 'gpu'
-    env = EnvironmentDef(
-        resources=[
-            ResourceDef(name="gpu", capacity=4),
-            ResourceDef(name="cpu", capacity=8),  # Unused resource
-        ]
-    )
-
-    # 2. Build (Expect this to fail currently due to signature mismatch)
-    builder = Builder()
-    graph = builder.build(simple_graph_ir, environment=env)
-
-    # 3. Assert D_res creation
-    # Used resource should exist
-    assert "canonical.resource.gpu" in graph.nodes
-    gpu_node = graph.nodes["canonical.resource.gpu"]
-    assert gpu_node.capacity == 4
-    # Initial tokens should match capacity (potential energy)
-    assert gpu_node.initial_tokens == 4
-
-    # Unused resource should ALSO exist (Physics is objective)
-    assert "canonical.resource.cpu" in graph.nodes
-    cpu_node = graph.nodes["canonical.resource.cpu"]
-    assert cpu_node.capacity == 8
-~~~~~
-~~~~~python.new
-def test_builder_creates_resources_from_env(simple_graph_ir):
-    # 1. Define Environment with 'gpu'
-    env = EnvironmentDef(
-        resources=[
-            ResourceDef(name="gpu", capacity=4),
-            ResourceDef(name="cpu", capacity=8),  # Unused resource
-        ]
-    )
-
-    # 2. Build
-    builder = Builder()
-    graph = builder.build(simple_graph_ir, environment=env)
-
     # 3. Assert Broker/Ledger creation
     # Used resource
     ledger_id = "canonical.resource.ledger.gpu"
@@ -81,327 +693,72 @@ def test_builder_creates_resources_from_env(simple_graph_ir):
     
     assert ledger_id in graph.nodes
     assert broker_id in graph.nodes
+~~~~~
+~~~~~python.new
+    # 3. Assert Broker/Ledger creation
+    # Used resource
+    ledger_id = "canonical.resource.ledger.gpu"
+    allocator_id = "canonical.resource.allocator.gpu"
+    reclaimer_id = "canonical.resource.reclaimer.gpu"
     
-    ledger_node = graph.nodes[ledger_id]
-    # The Ledger Node holds the DiscreteLedger object, capacity is just 1 (slot for the object)
-    assert ledger_node.capacity == 1 
-    assert ledger_node.initial_tokens == 1
-    # Check the payload of the initial token
-    initial_ledger = ledger_node.initial_payload
-    assert initial_ledger.total == 4
-    assert initial_ledger.available == 4
-
-    # Unused resource
-    cpu_ledger_id = "canonical.resource.ledger.cpu"
-    assert cpu_ledger_id in graph.nodes
-    cpu_ledger = graph.nodes[cpu_ledger_id].initial_payload
-    assert cpu_ledger.total == 8
+    assert ledger_id in graph.nodes
+    assert allocator_id in graph.nodes
+    assert reclaimer_id in graph.nodes
 ~~~~~
 
-#### Acts 2: 修复集成测试
+#### Acts 6: 更新集成测试
 
-这是大手术。我们需要引入所有的 IC 函数并映射它们。
+更新 `func_map` 和断言逻辑。
 
 ~~~~~act
 patch_file
 packages/cascade-vm/tests/integration/test_resource_backpressure.py
 ~~~~~
 ~~~~~python.old
-import pytest
-from typing import Dict
-
-from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
-from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.physics import Token
-from cascade.spec.environment import EnvironmentDef, ResourceDef
-from cascade.compiler.backend.builder import Builder
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-from cascade.vm.reactor import Reactor
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-
-
-# --- Mocks ---
-
-
-def mock_worker(inputs: Dict[str, Token], node) -> Dict[str, Token]:
-    # The WorkerNode receives a single token on its 'worker_input' port.
-    # The payload of this token is the dictionary of actual arguments.
-    worker_input_token = inputs["worker_input"]
-    worker_payload = worker_input_token.payload
-
-    # Simulate work based on the unpacked payload
-    val = worker_payload["x"]  # The payload is the raw value, not another Token
-    return {"worker_result": Token(payload=val + 1)}
-
-
-# --- Test ---
-
-
-@pytest.mark.asyncio
-async def test_concurrency_limit():
-    # 1. Define a graph with 2 nodes, both needing the same resource 'GPU'.
-    # We will set the global GPU resource to have initial_tokens = 1.
-    # This should force them to run sequentially.
-
-    fp = Fingerprint({"canonical_code_structure_hash": "abc"})
-    task_def = TaskDef(
-        name="task", args=[ArgumentDef("x", "POSITIONAL")], fingerprint=fp
-    )
-
-    node_1 = NodeIR(
-        id="node_1",
-        name="Task1",
-        task=task_def,
-        inputs={"x": 10},
-        constraints={"gpu": 1},
-    )
-    node_2 = NodeIR(
-        id="node_2",
-        name="Task2",
-        task=task_def,
-        inputs={"x": 20},
-        constraints={"gpu": 1},
-    )
-
-    graph_ir = GraphIR(nodes=[node_1, node_2])
-
-    # 2. Define Environment and Build Physical Graph
-    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
-    builder = Builder()
-    physical_graph = builder.build(graph_ir, environment=env)
-
-    # Verify D_res exists and was configured by the environment
-    assert "canonical.resource.gpu" in physical_graph.nodes
-    d_res = physical_graph.nodes["canonical.resource.gpu"]
-    assert d_res.initial_tokens == 1
-
-    # 3. Setup VM
-    memory = VolatileMemory()
-    executor = PhysicsExecutor()
-
-    # Map functions
-    # No more partial binding or expected_args needed!
-    # The instructions now inspect the Node's port definitions directly.
-
-    func_map = {}
-    for node_id in physical_graph.nodes:
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
-        elif node_id.endswith(".worker"):
-            func_map[node_id] = mock_worker
-        # We don't map observers here to keep it simple,
-        # but in real code we would need to or Reactor will fail if it tries to fire them.
-        # Actually, Reactor only fires nodes that are ready.
-        # Observers need D_life input. We haven't wired D_life inputs in this test setup manually,
-        # but Builder did. D_life starts empty. So Observers won't fire unless D_life gets tokens.
-        # Wait, D_life gets tokens from Bleacher/Stainer. So Observers WILL become ready.
-        # We must map them to a no-op or mock.
-        elif "observability" in node_id:  # Not a func node
-            pass
-
-    # We need to handle the global D_life observability sidecar if we want full correctness.
-    # Builder created 'global_d_life'.
-
-    # 4. (Deleted) Manual DataNode creation is no longer needed.
-    # The Builder now automatically creates 'const_node_1_x' and 'const_node_2_x'
-    # based on the literals in NodeIR.inputs.
-
-    # 5. Initialize Reactor
-    reactor = Reactor(physical_graph, memory, executor, func_map)
-
-    # 6. Prime the reactor.
-    # This should fill:
-    # - global_res_gpu (1 token, payload=None)
-    # - const_node_1_x (1 token, payload=10)
-    # - const_node_2_x (1 token, payload=20)
-    reactor.prime()
-
-    assert memory.get_count("canonical.resource.gpu") == 1
-    assert memory.get_count("const.node_1.x") == 1
-    assert memory.get_count("const.node_2.x") == 1
-
-    # Verify payloads
-    t1 = memory.take("const.node_1.x")
-    assert t1.payload == 10
-    memory.put(physical_graph.nodes["const.node_1.x"], t1)  # Put it back for execution
-
-    t2 = memory.take("const.node_2.x")
-    assert t2.payload == 20
-    memory.put(physical_graph.nodes["const.node_2.x"], t2)  # Put it back
-
-    # 7. Step Execution
-    async def wait_idle():
-        import asyncio
-
-        while reactor.active_task_count > 0:
-            await asyncio.sleep(0.001)
-
-    # Step 1: Both Bleachers are ready on 'x', but contend for 'res_gpu'.
-    # With the new atomic Reactor, only ONE should fire.
-    fired = await reactor.step()
-    await wait_idle()
-
-    # What fires?
-    # 1. Bleacher (consumes 1 GPU, 1 X) -> fires.
-    # The other Bleacher cannot fire because D_res is empty.
-
-    assert fired == 1
-    assert memory.get_count("canonical.resource.gpu") == 0  # Resource taken
-
-    # Step 2: The fired Triad proceeds.
-    # Worker fires.
-    await reactor.step()
-    await wait_idle()
-
-    # Step 3: Stainer fires.
-    # This should return the resource.
-    await reactor.step()
-    await wait_idle()
-
-    assert memory.get_count("canonical.resource.gpu") == 1  # Resource returned!
-
-    # Step 4: Now the second Bleacher can fire.
-    fired_2 = await reactor.step()
-    await wait_idle()
-
-    assert fired_2 == 1
-    assert memory.get_count("canonical.resource.gpu") == 0
-
-    # Step 5 & 6: Finish second task
-    await reactor.step()  # Worker
-    await wait_idle()
-
-    await reactor.step()  # Stainer
-    await wait_idle()
-
-    assert memory.get_count("canonical.resource.gpu") == 1
-~~~~~
-~~~~~python.new
-import pytest
-from typing import Dict
-
-from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
-from cascade.spec.fingerprint import Fingerprint
-from cascade.spec.physics import Token
-from cascade.spec.environment import EnvironmentDef, ResourceDef
-from cascade.compiler.backend.builder import Builder
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-from cascade.vm.reactor import Reactor
 # Import new ICs
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.resource.discrete import discrete_broker
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.probe.const import const_probe
+~~~~~
+~~~~~python.new
+# Import new ICs
+from cascade.std.triad.bleacher import standard_bleacher
+from cascade.std.triad.stainer import standard_stainer
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
+from cascade.std.resource.requestor import resource_requestor
+from cascade.std.probe.const import const_probe
+~~~~~
 
-
-# --- Mocks ---
-
-
-def mock_worker(inputs: Dict[str, Token], node) -> Dict[str, Token]:
-    worker_input_token = inputs["worker_input"]
-    worker_payload = worker_input_token.payload
-    val = worker_payload["x"]
-    return {"worker_result": Token(payload=val + 1)}
-
-def noop_observer(inputs: Dict[str, Token], node) -> Dict[str, Token]:
-    return {}
-
-
-# --- Test ---
-
-
-@pytest.mark.asyncio
-async def test_concurrency_limit():
-    # 1. Define a graph with 2 nodes, both needing the same resource 'GPU'.
-    fp = Fingerprint({"canonical_code_structure_hash": "abc"})
-    task_def = TaskDef(
-        name="task", args=[ArgumentDef("x", "POSITIONAL")], fingerprint=fp
-    )
-
-    node_1 = NodeIR(
-        id="node_1",
-        name="Task1",
-        task=task_def,
-        inputs={"x": 10},
-        constraints={"gpu": 1},
-    )
-    node_2 = NodeIR(
-        id="node_2",
-        name="Task2",
-        task=task_def,
-        inputs={"x": 20},
-        constraints={"gpu": 1},
-    )
-
-    graph_ir = GraphIR(nodes=[node_1, node_2])
-
-    # 2. Define Environment and Build Physical Graph
-    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
-    builder = Builder()
-    physical_graph = builder.build(graph_ir, environment=env)
-
-    # 3. Setup VM
-    memory = VolatileMemory()
-    executor = PhysicsExecutor()
-
-    # Map functions
-    func_map = {}
-    for node_id in physical_graph.nodes:
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
+~~~~~
+~~~~~python.old
         elif node_id.endswith(".worker"):
             func_map[node_id] = mock_worker
         elif "broker" in node_id:
             func_map[node_id] = discrete_broker
         elif node_id.startswith("req."):
             func_map[node_id] = resource_requestor
-        elif node_id.startswith("probe.const."):
-            func_map[node_id] = const_probe
-        elif "observability" in node_id:
-            func_map[node_id] = noop_observer
+~~~~~
+~~~~~python.new
+        elif node_id.endswith(".worker"):
+            func_map[node_id] = mock_worker
+        elif "allocator" in node_id:
+            func_map[node_id] = discrete_allocator
+        elif "reclaimer" in node_id:
+            func_map[node_id] = discrete_reclaimer
+        elif node_id.startswith("req."):
+            func_map[node_id] = resource_requestor
+~~~~~
 
-    # 5. Initialize Reactor
-    reactor = Reactor(physical_graph, memory, executor, func_map)
-
-    # 6. Prime the reactor.
-    reactor.prime()
-    
-    # Assert initial state of Ledger
-    ledger_node_id = "canonical.resource.ledger.gpu"
-    assert memory.get_count(ledger_node_id) == 1
-    ledger = memory.take(ledger_node_id).payload
-    assert ledger.available == 1
-    memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
-
-    # 7. Step Execution Logic
-    async def wait_idle():
-        import asyncio
-        while reactor.active_task_count > 0:
-            await asyncio.sleep(0.001)
-
-    # --- SIMULATION ---
-    # The new graph has many more steps due to Probe -> Req -> Broker -> Bleacher
-    
-    # Round 1: Probes fire (providing Amount and X)
-    await reactor.step() 
-    await wait_idle()
-    
-    # Round 2: Requestors fire (sending Req Tokens to Buffer)
-    await reactor.step()
-    await wait_idle()
-    
-    # Check Buffer state
-    req_buffer_id = "buffer.req.gpu"
-    assert memory.get_count(req_buffer_id) == 2  # Both requests are in buffer
-
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
+~~~~~
+~~~~~python.old
     # Round 3: Broker fires.
     # It consumes Ledger + ONE request from Buffer.
     # Since capacity is 1, it Grants.
@@ -453,14 +810,60 @@ async def test_concurrency_limit():
              pass
         await reactor.step()
         await wait_idle()
-
-    # Final check: Ledger full, Buffers empty
+~~~~~
+~~~~~python.new
+    # Round 3: Allocator fires.
+    # It consumes Ledger + ONE request from Buffer.
+    # Since capacity is 1, it Grants.
+    await reactor.step()
+    await wait_idle()
+    
+    # Ledger should now have 0 available
     ledger = memory.take(ledger_node_id).payload
+    assert ledger.available == 0
+    memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
+    
+    # Buffer should have 1 request remaining
+    assert memory.get_count(req_buffer_id) == 1
+
+    # Round 4: 
+    # - The lucky Bleacher (who got GNT) fires.
+    # - The Allocator attempts to fire again for the second request?
+    #   Yes, it reads Ledger(0) and Request(1). 
+    #   Logic: 0 < 1. Reject & Recirculate.
+    
+    fired = await reactor.step()
+    await wait_idle()
+    
+    # If Allocator fired, it recirculated the request back to Buffer.
+    # If Bleacher fired, it started the triad.
+    
+    # Let's run until one Task completes (Stainer fires)
+    # This involves: Worker -> Stainer -> RelBuffer -> Reclaimer -> Ledger
+    
+    # We loop until resource is released (Ledger becomes 1)
+    max_steps = 30
+    for _ in range(max_steps):
+        await reactor.step()
+        await wait_idle()
+        
+        # Check if resource returned
+        ledger = memory.take(ledger_node_id).payload
+        memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
+        if ledger.available == 1:
+            break
+            
     assert ledger.available == 1
-    assert memory.get_count(req_buffer_id) == 0
+    
+    # Now the second task can proceed.
+    # Allocator fires -> Grants -> Bleacher -> Worker -> Stainer -> Reclaimer
+    for _ in range(20):
+        if memory.get_count(req_buffer_id) == 0 and memory.get_count("buffer.rel.gpu") == 0:
+             # If buffers are empty and tasks done, we are good.
+             pass
+        await reactor.step()
+        await wait_idle()
 ~~~~~
 
 ### 下一步建议
-测试通过后，我们的物理层就真正具备了“智能”的资源管理能力。
-接下来的步骤可能是优化 Reactor 的调度效率，或者增强 Broker 的公平性（目前 FIFO 取决于 Python Dict 顺序和 Buffer 实现）。
-但首先，我们需要确认本次重构没有引入回归。
+我们已经将 broker 拆分为 allocator 和 reclaimer。现在应该重新运行测试，确认死锁问题已解决。

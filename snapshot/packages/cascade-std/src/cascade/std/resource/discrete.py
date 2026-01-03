@@ -9,44 +9,58 @@ class DiscreteLedger:
     available: int
 
 
-async def discrete_broker(
+async def discrete_allocator(
     inputs: Dict[str, Token], node: PhysicsNode
 ) -> Dict[str, Token]:
+    """
+    Handles Resource Requests.
+    Inputs: ledger_in, req_in
+    Outputs: ledger_out, gnt_out (if success), req_out (if failed)
+    """
     ledger_token = inputs["ledger_in"]
-    # Reconstruct ledger object from payload (assuming it's a dict or dataclass)
+    ledger_data = ledger_token.payload
+    # Ideally we should clone or re-instantiate if immutable, but for now we mutate in place for perf
+    if isinstance(ledger_data, dict):
+        ledger = DiscreteLedger(**ledger_data)
+    else:
+        ledger = ledger_data
+
+    req_token = inputs["req_in"]
+    req_amount = req_token.payload
+
+    outputs: Dict[str, Token] = {}
+
+    if ledger.available >= req_amount:
+        # Grant
+        ledger.available -= req_amount
+        outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
+    else:
+        # Reject & Recirculate
+        outputs["req_out"] = req_token
+
+    outputs["ledger_out"] = Token(payload=ledger)
+    return outputs
+
+
+async def discrete_reclaimer(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    """
+    Handles Resource Releases.
+    Inputs: ledger_in, rel_in
+    Outputs: ledger_out
+    """
+    ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload
     if isinstance(ledger_data, dict):
         ledger = DiscreteLedger(**ledger_data)
     else:
         ledger = ledger_data
 
-    outputs: Dict[str, Token] = {}
+    rel_token = inputs["rel_in"]
+    release_amount = rel_token.payload
 
-    # 1. Process Release (Replenish first)
-    if "rel_in" in inputs:
-        release_amount = inputs["rel_in"].payload
-        # Cap at total to prevent overflow logic errors, though in a closed system this shouldn't happen
-        ledger.available = min(ledger.total, ledger.available + release_amount)
+    # Replenish
+    ledger.available = min(ledger.total, ledger.available + release_amount)
 
-    # 2. Process Request
-    if "req_in" in inputs:
-        req_token = inputs["req_in"]
-        req_amount = req_token.payload
-
-        if ledger.available >= req_amount:
-            # Grant
-            ledger.available -= req_amount
-            # Emit Grant Token (Payload can be the amount granted)
-            # CRITICAL: Propagate the tag from the request to the grant
-            # so the distributor can route it back to the correct worker.
-            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
-        else:
-            # Reject & Recirculate
-            # We emit the original request token back to a recirculation loop
-            outputs["req_out"] = req_token
-
-    # 3. Emit Updated Ledger
-    # We pass the object back. In a real persistence scenario, this would be serialized.
-    outputs["ledger_out"] = Token(payload=ledger)
-
-    return outputs
+    return {"ledger_out": Token(payload=ledger)}

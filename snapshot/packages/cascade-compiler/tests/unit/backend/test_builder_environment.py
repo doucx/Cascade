@@ -31,10 +31,12 @@ def test_builder_creates_resources_from_env(simple_graph_ir):
     # 3. Assert Broker/Ledger creation
     # Used resource
     ledger_id = "canonical.resource.ledger.gpu"
-    broker_id = "canonical.resource.broker.gpu"
+    allocator_id = "canonical.resource.allocator.gpu"
+    reclaimer_id = "canonical.resource.reclaimer.gpu"
     
     assert ledger_id in graph.nodes
-    assert broker_id in graph.nodes
+    assert allocator_id in graph.nodes
+    assert reclaimer_id in graph.nodes
     
     ledger_node = graph.nodes[ledger_id]
     # The Ledger Node holds the DiscreteLedger object, capacity is just 1 (slot for the object)

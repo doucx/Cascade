@@ -53,29 +53,19 @@ class Node:
     def name(self) -> str:
         return self.definition.name
 
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        return None
-
 
 @dataclass(eq=False)
 class TaskNode(Node):
-    # The actual python executable object.
-    _callable: Optional[Callable] = None
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        return self._callable
+    # The actual python executable object is no longer stored here.
+    # It is retrieved from an ExecutableRegistry at runtime.
+    pass
 
 
 @dataclass(eq=False)
 class MapNode(Node):
-    mapping_factory: Optional[Callable] = None
-
-    @property
-    def callable_obj(self) -> Optional[Callable]:
-        # For map nodes, the factory is the closest thing to a callable
-        return self.mapping_factory
+    # The factory is no longer stored here.
+    # It is retrieved from an ExecutableRegistry at runtime.
+    pass
 
 
 @dataclass(eq=False)

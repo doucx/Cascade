@@ -1,7 +1,6 @@
 import asyncio
 from contextlib import ExitStack
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Callable
 
 from cascade.graph.model import Graph, Node, EdgeType
 from cascade.graph.build import build_graph
@@ -18,10 +17,10 @@ from cascade.runtime.events import TaskSkipped, TaskBlocked
 from cascade.runtime.constraints.manager import ConstraintManager
 
 
-@dataclass
 class GraphExecutionResult:
-    value: Any
-    source_node_id: str
+    def __init__(self, value: Any, source_node_id: str):
+        self.value = value
+        self.source_node_id = source_node_id
 
 
 class GraphExecutionStrategy:
@@ -42,11 +41,7 @@ class GraphExecutionStrategy:
         self.wakeup_event = wakeup_event
         self.blueprint_hasher = BlueprintHasher()
 
-        # JIT Compilation Cache
-        # Maps a graph's blueprint hash to an IndexedExecutionPlan (List[List[int]])
         self._template_plan_cache: Dict[str, List[List[int]]] = {}
-
-        # Persistent registry for node interning
         self._node_registry = NodeRegistry()
 
     def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
@@ -79,30 +74,22 @@ class GraphExecutionStrategy:
     ) -> Any:
         current_target = target
         next_input_overrides = None
-
-        # Optimization: Local Graph Cache for the duration of this run
-        # Maps LazyResult._uuid -> (Graph, InstanceMap, Plan)
         local_context_cache = {}
 
         while True:
-            # The step stack holds "task" (step) scoped resources
             with ExitStack() as step_stack:
                 input_overrides = None
-
-                # 1. State GC (Crucial for TCO stability)
-                # We skip the explicit inspect check here as state_backends are expected
-                # to be async in v1.4.
                 await state_backend.clear()
 
-                # 2. Check Local Context Cache (FAST PATH)
                 if current_target._uuid in local_context_cache:
-                    graph, instance_map, plan = local_context_cache[
-                        current_target._uuid
-                    ]
+                    (
+                        graph,
+                        instance_map,
+                        plan,
+                        executable_registry,
+                    ) = local_context_cache[current_target._uuid]
                 else:
-                    # SLOW PATH: First time building this structure in this run
-                    # 2.1 Build Graph
-                    graph, instance_map = build_graph(
+                    graph, instance_map, executable_registry = build_graph(
                         current_target, registry=self._node_registry
                     )
 
@@ -111,7 +98,6 @@ class GraphExecutionStrategy:
                             f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
                         )
 
-                    # 2.2 Resolve Plan (with caching based on blueprint hash)
                     current_graph_structure_hash = self.blueprint_hasher.compute_hash(
                         graph
                     )
@@ -127,14 +113,13 @@ class GraphExecutionStrategy:
                             indexed_plan
                         )
 
-                    # Update local cache
                     local_context_cache[current_target._uuid] = (
                         graph,
                         instance_map,
                         plan,
+                        executable_registry,
                     )
 
-                # 3. Setup Resources
                 required_resources = self.resource_container.scan(graph)
                 self.resource_container.setup(
                     required_resources,
@@ -144,12 +129,10 @@ class GraphExecutionStrategy:
                     run_id,
                 )
 
-                # 4. Prepare Input Overrides (from previous Jump)
                 if next_input_overrides:
                     input_overrides = next_input_overrides
                     next_input_overrides = None
 
-                # 5. Execute Graph
                 graph_result = await self._execute_graph(
                     current_target,
                     params,
@@ -159,20 +142,14 @@ class GraphExecutionStrategy:
                     graph,
                     plan,
                     instance_map,
+                    executable_registry,
                     root_input_overrides=input_overrides,
                 )
 
-            # 6. Check for Explicit Control Flow (Jump)
             result = graph_result.value
 
-            # If the result is a LazyResult, we are seeing the "Implicit TCO" anti-pattern
-            # which is now forbidden by LocalExecutor and will raise StaticGraphError there.
-            # So we don't need to handle it here.
-
             if isinstance(result, Jump):
-                # Handle Explicit Jump
                 source_node_id = graph_result.source_node_id
-
                 jump_edge = next(
                     (
                         e
@@ -192,10 +169,8 @@ class GraphExecutionStrategy:
                 next_target = selector.routes.get(result.target_key)
 
                 if next_target is None:
-                    # Loop exit
                     return result.data
 
-                # Prepare for next iteration
                 current_target = next_target
 
                 if isinstance(result.data, dict):
@@ -204,9 +179,7 @@ class GraphExecutionStrategy:
                     next_input_overrides = {"0": result.data}
                 else:
                     next_input_overrides = {}
-
             else:
-                # Normal termination
                 return result
 
     async def _execute_graph(
@@ -219,16 +192,15 @@ class GraphExecutionStrategy:
         graph: Graph,
         plan: Any,
         instance_map: Dict[str, Node],
+        executable_registry: Dict[str, Callable],
         root_input_overrides: Optional[Dict[str, Any]] = None,
     ) -> GraphExecutionResult:
-        # Locate the canonical node for the current target instance
         if target._uuid not in instance_map:
             raise RuntimeError(
                 f"Critical: Target instance {target._uuid} not found in InstanceMap."
             )
 
         target_node = instance_map[target._uuid]
-
         flow_manager = FlowManager(
             graph, target_node.current_node_instance_hash, instance_map
         )
@@ -242,7 +214,6 @@ class GraphExecutionStrategy:
                 deferred_this_pass: List[Node] = []
 
                 for node in pending_nodes_in_stage:
-                    # ASYNC CHECK
                     skip_reason = await flow_manager.should_skip(node, state_backend)
                     if skip_reason:
                         await state_backend.mark_skipped(
@@ -276,12 +247,14 @@ class GraphExecutionStrategy:
                             blocked_nodes.add(node.current_node_instance_hash)
 
                 if executable_this_pass:
-                    # Callback for map nodes
+
                     async def sub_graph_runner(target, sub_params, parent_state):
-                        # Recursive call: must build new graph
-                        sub_graph, sub_instance_map = build_graph(target)
+                        (
+                            sub_graph,
+                            sub_instance_map,
+                            sub_executable_registry,
+                        ) = build_graph(target)
                         sub_plan = self.solver.resolve(sub_graph)
-                        # The map node expects the raw value, not the result object
                         result_obj = await self._execute_graph(
                             target,
                             sub_params,
@@ -291,6 +264,7 @@ class GraphExecutionStrategy:
                             graph=sub_graph,
                             plan=sub_plan,
                             instance_map=sub_instance_map,
+                            executable_registry=sub_executable_registry,
                         )
                         return result_obj.value
 
@@ -303,7 +277,6 @@ class GraphExecutionStrategy:
                             else None
                         )
 
-                        # Resolve everything in Strategy layer
                         requirements = (
                             await self.node_processor.constraint_resolver.resolve(
                                 node,
@@ -324,15 +297,20 @@ class GraphExecutionStrategy:
                             input_overrides=overrides,
                         )
 
-                        cache_inputs = await self.node_processor.arg_resolver.resolve_cache_inputs(
-                            node, graph, state_backend
+                        cache_inputs = (
+                            await self.node_processor.arg_resolver.resolve_cache_inputs(
+                                node, graph, state_backend
+                            )
                         )
+
+                        executable = executable_registry[node.current_node_instance_hash]
 
                         tasks_to_run.append(
                             (
                                 node,
                                 self.node_processor.process(
                                     node,
+                                    executable,
                                     inputs,
                                     requirements,
                                     cache_inputs,
@@ -346,7 +324,6 @@ class GraphExecutionStrategy:
                         )
 
                     if len(tasks_to_run) == 1:
-                        # FAST PATH: Single task in stage, avoid gather
                         node, coro = tasks_to_run[0]
                         res = await coro
                         await state_backend.put_result(
@@ -357,7 +334,6 @@ class GraphExecutionStrategy:
                                 node.current_node_instance_hash, res, state_backend
                             )
                     else:
-                        # Standard parallel execution
                         nodes_in_pass = [t[0] for t in tasks_to_run]
                         coros = [t[1] for t in tasks_to_run]
                         pass_results = await asyncio.gather(*coros)
@@ -378,9 +354,7 @@ class GraphExecutionStrategy:
                     self.wakeup_event.clear()
                     self.constraint_manager.cleanup_expired_constraints()
 
-        # Use the mapped canonical node ID to check for the final result
         if not await state_backend.has_result(target_node.current_node_instance_hash):
-            # For debugging, check if the instance was skipped
             if skip_reason := await state_backend.get_skip_reason(
                 target_node.current_node_instance_hash
             ):

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(engine): 将图遍历与依赖解析逻辑从 NodeProcessor 上浮至 Strategy", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767446376.4449978, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(core): 解耦 Node 对象与 Python callables", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767446560.027126, "duration_ms": 0}}

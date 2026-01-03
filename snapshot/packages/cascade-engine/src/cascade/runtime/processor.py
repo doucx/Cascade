@@ -44,6 +44,7 @@ class NodeProcessor:
     async def process(
         self,
         node: Node,
+        executable: Callable,
         inputs: Tuple[List[Any], Dict[str, Any]],
         requirements: Dict[str, Any],
         cache_inputs: Dict[str, Any],
@@ -70,6 +71,7 @@ class NodeProcessor:
             try:
                 return await self._execute_internal(
                     node,
+                    executable,
                     inputs,
                     cache_inputs,
                     state_backend,
@@ -84,6 +86,7 @@ class NodeProcessor:
             # FAST PATH: No resources required
             return await self._execute_internal(
                 node,
+                executable,
                 inputs,
                 cache_inputs,
                 state_backend,
@@ -96,6 +99,7 @@ class NodeProcessor:
     async def _execute_internal(
         self,
         node: Node,
+        executable: Callable,
         inputs: Tuple[List[Any], Dict[str, Any]],
         cache_inputs: Dict[str, Any],
         state_backend: StateBackend,
@@ -139,6 +143,7 @@ class NodeProcessor:
         if isinstance(node, MapNode):
             return await self._execute_map_node(
                 node,
+                executable,  # The factory is passed here
                 kwargs,
                 active_resources,
                 run_id,
@@ -158,9 +163,8 @@ class NodeProcessor:
         while attempt < max_attempts:
             attempt += 1
             try:
-                result = await self.executor.execute(node, args, kwargs)
+                result = await self.executor.execute(node, executable, args, kwargs)
                 duration = time.time() - start_time
-                # Optimization: Only compute result_preview if necessary or make it cheap
                 self.bus.publish(
                     TaskExecutionFinished(
                         run_id=run_id,
@@ -171,7 +175,6 @@ class NodeProcessor:
                         result_preview=None,
                     )
                 )
-                # Cache Save
                 if node.cache_policy:
                     await node.cache_policy.save(
                         node.current_node_instance_hash, cache_inputs, result
@@ -211,6 +214,7 @@ class NodeProcessor:
     async def _execute_map_node(
         self,
         node: "MapNode",
+        factory: Callable,
         kwargs: Dict[str, Any],
         active_resources: Dict[str, Any],
         run_id: str,
@@ -218,10 +222,9 @@ class NodeProcessor:
         parent_state_backend: StateBackend,
         sub_graph_runner: Callable,
     ) -> List[Any]:
-        if not node.mapping_factory:
-            return []  # Should not happen if graph is well-formed
+        if not factory:
+            return []
 
-        factory = node.mapping_factory
         if not kwargs:
             return []
         lengths = {k: len(v) for k, v in kwargs.items()}
@@ -242,7 +245,6 @@ class NodeProcessor:
                 sub_target._constraints = node.constraints
             sub_targets.append(sub_target)
 
-        # Execute sub-targets in parallel using the provided runner
         coros = [
             sub_graph_runner(target, params, parent_state_backend)
             for target in sub_targets

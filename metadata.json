@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 修正哈希变量命名以符合架构公理 v3.0", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767437371.6106086, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] fix(naming): Adhere to Hash Naming Axiom v3.0 in compiler utils", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767437436.7770476, "duration_ms": 0}}

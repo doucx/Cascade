@@ -147,7 +147,7 @@ async def test_reactor_independent_nodes():
 
 # --- New Test demonstrating EventDrivenRunner ---
 
-from cascade.vm.test_harness import EventDrivenRunner
+from cascade.vm.harness import EventDrivenRunner
 from cascade.spec.triad import ObservabilityNode
 from cascade.std.triad.observer import standard_observer
 import sys

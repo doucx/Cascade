@@ -1,5 +1,5 @@
 import pytest
-from typing import Callable, Type
+from typing import Type
 from cascade.vm.reactor import Reactor
 from cascade.vm.protocols import ReactorProtocol
 
@@ -30,6 +30,7 @@ def reactor_backend_factory(
     elif backend == "rust":
         # Import the high-performance Rust implementation
         from cascade_vm_rs import RustReactor
+
         return RustReactor
     else:
         pytest.fail(

@@ -1,11 +1,13 @@
-from typing import Protocol, Callable, Awaitable, Any, Dict
+from typing import Protocol, Callable, Awaitable
 from cascade.spec.physics import Token
+
 
 class ReactorProtocol(Protocol):
     """
     Protocol defining the interface for a Cascade Reactor.
     This allows swapping the Python implementation with a Rust-based one.
     """
+
     active_task_count: int
 
     def prime(self) -> None:

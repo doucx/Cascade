@@ -53,7 +53,7 @@ def test_graph_is_serializable_and_pure():
     # Instead of asserting a brittle, hash-based ID, we assert that nodes
     # with the expected stable properties exist in the graph.
     nodes_collection = deserialized_graph.nodes.values()
-    
+
     # Check for the constant node for argument 'a' with value 1
     assert any(
         node.name == "Const(a)" and node.initial_payload == 1

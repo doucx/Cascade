@@ -46,7 +46,7 @@ async def test_observer_processes_end_event(
         "end_ts": 102.5,
         "duration": 2.5,
     }
-    event_token = Token(payload="result", tag="default", trace=end_trace)
+    event_token = Token(payload="result", trace=end_trace)
     inputs = {"event_token": event_token}
 
     await standard_observer(inputs, MagicMock(), mock_resources)

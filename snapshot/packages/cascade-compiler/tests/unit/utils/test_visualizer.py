@@ -14,7 +14,7 @@ def test_dumper_generates_valid_dot():
 
     graph.channels.append(Channel("d1", "out", "task.bleach", "in"))
     graph.channels.append(
-        Channel("task.bleach", "worker_input", "task.worker", "in", tag_filter="XYZ")
+        Channel("task.bleach", "worker_input", "task.worker", "in")
     )
     # Observability channel
     graph.channels.append(Channel("task.bleach", "obs_output", "bus", "in"))
@@ -36,7 +36,7 @@ def test_dumper_generates_valid_dot():
     # Check Edges
     assert '"d1" -> "task.bleach" [label="out -> in"' in dot_output
     assert '"task.bleach" -> "task.worker"' in dot_output
-    assert 'label="worker_input -> in\\n[XYZ]"' in dot_output
+    assert 'label="worker_input -> in"' in dot_output
 
     # Check Obs Edge Styling
     assert 'style="dashed"' in dot_output

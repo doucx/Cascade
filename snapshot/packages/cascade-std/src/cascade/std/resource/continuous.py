@@ -28,7 +28,9 @@ async def continuous_allocator(
 
     if ledger.available >= req_amount:
         ledger.available -= req_amount
-        outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
+        # Sovereignty: In the future, we should use trace-based routing here like discrete.py
+        # For now, just remove the tag to fix the crash.
+        outputs["gnt_out"] = Token(payload=req_amount, trace=req_token.trace)
     else:
         outputs["req_out"] = req_token
 

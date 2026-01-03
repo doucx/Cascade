@@ -8,6 +8,7 @@ from cascade.std.triad.bleacher import standard_bleacher
 
 def create_mock_bleach_node(input_ports_config):
     node = MagicMock(spec=BleachNode)
+    node.id = "test_node.bleach"  # Required for ID extraction logic
     node.input_ports = {
         name: PortDef(name, role) for name, role in input_ports_config.items()
     }

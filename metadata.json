@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(compiler): Correct port name variable in resource release wiring", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767428551.4519312, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修复移除 Tag 后的测试和残留代码", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767428712.2736118, "duration_ms": 0}}

@@ -1,3 +1,5 @@
+"mock_resources": |-
+  Creates a mock resource registry that provides the event queue.
 "test_observer_processes_end_event": |-
   Tests that a token containing end information (from a Stainer)
   is correctly processed as an 'end' event.

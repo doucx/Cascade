@@ -26,6 +26,7 @@
     "baseline_code_structure_hash": "c85e226f7edbe780ce9d34162baaead081e49167cf70dc028ba02606ee0d7206"
   },
   "EventDrivenRunner.reactor": {},
+  "EventDrivenRunner.resource_registry": {},
   "EventDrivenRunner.run_until_complete": {
     "baseline_code_signature_text": "async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> ObservedEvent:",
     "baseline_code_structure_hash": "6fc3208ea35666d5161e2f5b07779aa5f3cfda62fc59800d7a4f8148dd2de4cd",

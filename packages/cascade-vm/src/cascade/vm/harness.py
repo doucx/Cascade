@@ -1,14 +1,14 @@
 import asyncio
 import logging
 from typing import Dict, Any, Callable, TypeVar, Optional, List
-from functools import partial
 
 from cascade.spec.topology import BipartiteGraph
 from cascade.spec.physics import Token, PhysicsDataNode
 from cascade.vm.reactor import Reactor
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
-from cascade.std.triad.observer import standard_observer, ObservedEvent
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.std.triad.observer import ObservedEvent
 
 logger = logging.getLogger(__name__)
 
@@ -29,27 +29,22 @@ class EventDrivenRunner:
         self.memory = VolatileMemory()
         self.executor = PhysicsExecutor()
 
-        # 1. Setup Observability Queue
+        # 1. Setup Resource Registry and Observability Queue
         self.event_queue: asyncio.Queue[ObservedEvent] = asyncio.Queue()
         self._captured_events: List[ObservedEvent] = []
+        self.resource_registry = ResourceRegistry()
+        self.resource_registry.register("system.observer.queue", self.event_queue)
 
-        # 2. Inject standard_observer with our queue
-        # We look for the observer node in the graph (by convention ID)
-        # or we rely on the user passing the map.
-        # Here, we wrap the provided function_map to inject the queue into the observer.
-        self.function_map = function_map.copy()
+        # 2. The function map is now used directly
+        self.function_map = function_map
 
-        # Auto-detect and bind observer if present in map
-        obs_id = "global.observability.observer"
-        if obs_id in self.function_map:
-            # We assume the user passed the standard_observer function
-            # We replace it with a partial that has 'queue' bound
-            self.function_map[obs_id] = partial(
-                standard_observer, queue=self.event_queue
-            )
-
+        # 3. Inject the registry into the Reactor
         self.reactor = Reactor(
-            self.graph, self.memory, self.executor, self.function_map
+            self.graph,
+            self.memory,
+            self.executor,
+            self.function_map,
+            self.resource_registry,
         )
         self._loop_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()

@@ -130,6 +130,7 @@ class Reactor:
             if not func:
                 raise ValueError(f"No function mapped for node {node.id}")
 
+            # The new standard signature for all physical functions is (inputs, node, resources)
             if inspect.iscoroutinefunction(func):
                 result_tokens = await func(input_data, node, self.resource_registry)
             else:

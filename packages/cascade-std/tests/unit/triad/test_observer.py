@@ -11,13 +11,24 @@ def event_queue() -> Queue:
     return Queue()
 
 
-async def test_observer_processes_start_event(event_queue: Queue):
+@pytest.fixture
+def mock_resources(event_queue: Queue) -> MagicMock:
+    registry = MagicMock()
+    registry.get.return_value = event_queue
+    return registry
+
+
+async def test_observer_processes_start_event(
+    event_queue: Queue, mock_resources: MagicMock
+):
     start_trace = {"id": "task_A", "start_ts": 100.0}
     event_token = Token(payload=None, trace=start_trace)
     inputs = {"event_token": event_token}
 
-    await standard_observer(inputs, MagicMock(), MagicMock(), queue=event_queue)
+    await standard_observer(inputs, MagicMock(), mock_resources)
 
+    # Assertions
+    mock_resources.get.assert_called_once_with("system.observer.queue")
     assert event_queue.qsize() == 1
     observed = await event_queue.get()
 
@@ -26,7 +37,9 @@ async def test_observer_processes_start_event(event_queue: Queue):
     assert observed.trace_data == start_trace
 
 
-async def test_observer_processes_end_event(event_queue: Queue):
+async def test_observer_processes_end_event(
+    event_queue: Queue, mock_resources: MagicMock
+):
     end_trace = {
         "id": "task_A",
         "start_ts": 100.0,
@@ -36,8 +49,10 @@ async def test_observer_processes_end_event(event_queue: Queue):
     event_token = Token(payload="result", tag="default", trace=end_trace)
     inputs = {"event_token": event_token}
 
-    await standard_observer(inputs, MagicMock(), MagicMock(), queue=event_queue)
+    await standard_observer(inputs, MagicMock(), mock_resources)
 
+    # Assertions
+    mock_resources.get.assert_called_once_with("system.observer.queue")
     assert event_queue.qsize() == 1
     observed = await event_queue.get()
 
@@ -46,12 +61,14 @@ async def test_observer_processes_end_event(event_queue: Queue):
     assert observed.trace_data == end_trace
 
 
-async def test_observer_with_empty_trace(event_queue: Queue):
+async def test_observer_with_empty_trace(event_queue: Queue, mock_resources: MagicMock):
     event_token = Token(payload=None, trace={})
     inputs = {"event_token": event_token}
 
-    await standard_observer(inputs, MagicMock(), MagicMock(), queue=event_queue)
+    await standard_observer(inputs, MagicMock(), mock_resources)
 
+    # Assertions
+    mock_resources.get.assert_called_once_with("system.observer.queue")
     assert event_queue.qsize() == 1
     observed = await event_queue.get()
 

@@ -1,103 +1,81 @@
 简要回答
 
-太棒了！构建成功意味着我们已经跨越了最难的 FFI 门槛。现在，我将执行最后一个补丁，正式激活测试系统中的 Rust 后端切换开关。
+好的，我们已经成功完成了 Cascade 3.3 架构演进路线图的第一阶段目标。现在我们将创建一个正式的提交，记录这一具有里程碑意义的架构演进。
 
-## [WIP] feat(test): 激活 Rust Reactor 后端测试链路
+## [COMMIT] feat(vm): establish foundation for Dual-Engine Symbiosis with Rust
 
 ### 用户需求
-更新根目录的 `conftest.py`，取消对 `rust` 后端的跳过逻辑，实现真正的后端注入。
+完成路线图定义的“接口硬化”、“数据纯化”、“测试基建改造”和“Rust 桥头堡建立”任务，并提交代码。
 
 ### 评论
-这个提交标志着 Cascade 3.3 演进路线图“双引擎共生”愿景的正式合龙。现在，我们的测试套件已经具备了在 Python 引擎和 Rust 引擎之间自由切换的能力。虽然目前的 `RustReactor` 还是一个空壳，但“基础设施先行”的策略让我们拥有了一个完全由 TDD 驱动的 Rust 开发环境。
+这是一个重大的架构升级。我们不仅引入了 Rust 作为未来的高性能引擎，更重要的是，我们通过“接口硬化”和“参数化测试夹具”建立了一套可扩展、可验证的体系。这使得 Cascade 具备了“一套测试，双重验证”的能力，为后续的性能突击提供了坚实的安全网。
 
 ### 目标
-1.  修改项目根目录的 `conftest.py`。
-2.  导入 `cascade_vm_rs.RustReactor`。
-3.  在 `reactor_backend_factory` 中，当 `backend == "rust"` 时返回 `RustReactor` 类。
+创建一个 Git 提交，包含所有涉及接口协议、Runner 重构、根目录测试配置以及 Rust `cascade-vm-rs` 项目初始化和类型安全修复的代码。
 
 ### 基本原理
-通过在 Fixture 中动态导入并返回 Rust 类，我们利用了 Python 的鸭子类型特性。由于 `RustReactor` 实现了协议要求的 `prime`, `step`, `add_sink` 和 `active_task_count` 接口，它对于 `EventDrivenRunner` 来说是完全透明且兼容的。
+按照“先上锁，再加速”的战略，本次提交锁定了核心接口契约和测试基础设施。虽然 Rust 引擎目前仅是占位，但它标志着 FFI 链路的完全打通。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/tests #comp/vm-rs #concept/ffi #ai/instruct #task/domain/testing #task/object/reactor-bridge #task/action/activation #task/state/end
+#intent/architect #intent/build #flow/ready #priority/high #comp/vm #comp/vm-rs #comp/compiler #comp/tests #concept/ffi #concept/interface #scope/core #ai/instruct #task/domain/vm #task/object/dual-engine-symbiosis #task/action/architecture-evolution #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 正式打通 Rust 后端注入链路
+#### Acts 1: 提交 Dual-Engine 演进的基础代码
 
-我们将 `conftest.py` 修改为真正的“双后端”分发器。
+我们将所有相关的修改添加到暂存区并执行提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-vm/src/cascade/vm/protocols.py
+packages/cascade-vm/src/cascade/vm/__init__.py
+packages/cascade-vm/src/cascade/vm/harness.py
+packages/cascade-vm/tests/unit/test_reactor.py
+packages/cascade-compiler/tests/integration/test_graph_purity.py
+packages/cascade-compiler/src/cascade/compiler/utils/hashing.py
+packages/cascade-common/src/cascade/common/context.py
+packages/cascade-std/src/cascade/std/probe/context.py
 conftest.py
-~~~~~
-~~~~~python.old
-@pytest.fixture(scope="session")
-def reactor_backend_factory(
-    request,
-) -> Type[ReactorProtocol]:
-    """
-    A session-scoped fixture that provides the Reactor class
-    based on the --reactor-backend command-line option.
-    """
-    backend = request.config.getoption("--reactor-backend")
-
-    if backend == "python":
-        # Return the Python implementation
-        return Reactor
-    elif backend == "rust":
-        # When the Rust implementation is ready, it will be imported and returned here.
-        # For now, we skip any tests that request it.
-        pytest.skip(
-            "Rust reactor backend is not yet implemented. Skipping test."
-        )
-    else:
-~~~~~
-~~~~~python.new
-@pytest.fixture(scope="session")
-def reactor_backend_factory(
-    request,
-) -> Type[ReactorProtocol]:
-    """
-    A session-scoped fixture that provides the Reactor class
-    based on the --reactor-backend command-line option.
-    """
-    backend = request.config.getoption("--reactor-backend")
-
-    if backend == "python":
-        # Return the Python implementation
-        return Reactor
-    elif backend == "rust":
-        # Import the high-performance Rust implementation
-        from cascade_vm_rs import RustReactor
-        return RustReactor
-    else:
+packages/cascade-vm-rs/
+pyproject.toml
 ~~~~~
 
----
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(vm): establish foundation for Dual-Engine Symbiosis with Rust
 
-### 任务完成总结
+This commit completes the initial phase of the Cascade 3.3 'Symbiosis' roadmap, 
+establishing the architectural and infrastructure requirements for a high-performance 
+Rust-based Reactor.
 
-我们已经完美地完成了 Cascade 3.3 路线图的第一阶段到第四阶段：
+Key changes:
+1. **Interface Hardening**: Defined `ReactorProtocol` in `cascade-vm` to decouple
+   `EventDrivenRunner` from specific implementations, enabling dependency injection.
+2. **Data Purification**: Introduced an automated graph purity audit in the 
+   compiler tests to ensure `BipartiteGraph` remains a pure, serializable data 
+   structure compatible with Rust FFI.
+3. **Test Infra Upgrade**: Created a root-level `conftest.py` with a session-scoped 
+   `reactor_backend_factory` fixture, allowing full test suite execution across 
+   different backends via `--reactor-backend=[python|rust]`.
+4. **Rust Bridgehead**: Initialized `cascade-vm-rs` using PyO3 0.23 (Python 3.13 
+   compatible). Implemented a minimal `RustReactor` that satisfies the 
+   protocol and successfully handles asynchronous FFI calls.
+5. **Type Safety**: Resolved several potential null-access and attribute errors 
+   identified by static analysis in hashing and context services.
 
-1.  **接口硬化**: 定义了 `ReactorProtocol`，使 Runner 能够通过依赖注入切换引擎。
-2.  **数据纯化**: 建立了图纯度测试，确保 Rust 能够安全消费 Python 生成的图。
-3.  **测试基建改造**: 创建了全局 `conftest.py` 和参数化夹具。
-4.  **Rust 桥头堡**: 在 Python 3.13 + PyO3 0.23 环境下成功构建并激活了 `RustReactor`。
+This sets the stage for TDD-driven development of the Rust Reactor logic.
+~~~~~
 
-### 最终验证建议
+### 下一步建议
 
-现在你可以运行以下命令，亲眼见证 Rust 引擎被注入测试的过程：
+我们已经建立了完美的“脚手架”。接下来的核心挑战是**数据对齐**。
 
-```bash
-uv run pytest packages/cascade-vm/tests/unit/test_reactor.py::test_event_driven_ping_pong --reactor-backend=rust -s
-```
+虽然我们已经确认了图是可序列化的，但 Rust 目前还无法真正“读取”它。我建议下一步的任务是：
+1.  **定义 Rust 侧的数据模型**：在 `cascade-vm-rs` 中使用 `serde` 定义与 Python `BipartiteGraph` 对应的结构。
+2.  **实现图转换器**：在 `RustReactor::new` 中，实现将传入的 PyObject（图）转换为 Rust 原生数据结构的逻辑。
 
-**你应当看到输出中包含：**
-- `RustReactor: Initialized via FFI (PyO3 0.23, Python 3.13 confirmed)!`
-- `RustReactor: step() called (returning manual future)`
-- 测试结果会是 **FAILED** (由于 Rust 目前是空操作，无法像 Python 那样产生结果)，但这正是我们想要的——**一个可以失败、可以观察、可以由 TDD 驱动的 Rust 开发起点。**
-
-恭喜，Cascade 正式迈入了“双发引擎”时代！下一步的任务将是在 Rust 中逐步复刻 Python Reactor 的物理逻辑。
+这将让 Rust 引擎真正“看到”物理场的拓扑结构。

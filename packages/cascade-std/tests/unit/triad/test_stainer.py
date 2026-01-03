@@ -23,13 +23,13 @@ async def test_stainer_success_case():
         "worker_result": Token(payload="SuccessData"),
         "trace_input": Token(payload={"start_ts": start_ts, "id": "task_A"}),
     }
-    node = create_mock_stain_node({"output": PortRole.DATA})
+    node = create_mock_stain_node({"output_default": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
         outputs = await standard_stainer(inputs, node, MagicMock())
 
-    assert "output" in outputs
-    output_token = outputs["output"]
+    assert "output_default" in outputs
+    output_token = outputs["output_default"]
 
     assert output_token.payload == "SuccessData"
     # Tag assertion removed
@@ -48,13 +48,13 @@ async def test_stainer_error_case():
         "worker_result": Token(payload=error),
         "trace_input": Token(payload={"start_ts": start_ts}),
     }
-    node = create_mock_stain_node({"output": PortRole.DATA})
+    node = create_mock_stain_node({"output_default": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
         outputs = await standard_stainer(inputs, node, MagicMock())
 
-    assert "output" in outputs
-    output_token = outputs["output"]
+    assert "output_default" in outputs
+    output_token = outputs["output_default"]
 
     assert output_token.payload is error  # Should be the same exception instance
     # Tag assertion removed
@@ -68,11 +68,11 @@ async def test_stainer_handles_missing_start_ts_gracefully():
         "worker_result": Token(payload="data"),
         "trace_input": Token(payload={}),  # No start_ts
     }
-    node = create_mock_stain_node({"output": PortRole.DATA})
+    node = create_mock_stain_node({"output_default": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
         outputs = await standard_stainer(inputs, node, MagicMock())
 
-    output_token = outputs["output"]
+    output_token = outputs["output_default"]
     assert output_token.trace["duration"] == 0.0
     assert output_token.trace["end_ts"] == end_ts

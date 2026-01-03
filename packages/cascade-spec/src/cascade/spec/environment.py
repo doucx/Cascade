@@ -6,6 +6,7 @@ from typing import List
 class ResourceDef:
     name: str
     capacity: int = 1
+    type: str = "discrete"
 
 
 @dataclass(frozen=True)

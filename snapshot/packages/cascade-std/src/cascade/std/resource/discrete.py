@@ -9,8 +9,6 @@ class DiscreteLedger:
     available: int
 
 
-
-
 async def discrete_allocator(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
@@ -30,7 +28,7 @@ async def discrete_allocator(
     if ledger.available >= req_amount:
         # Grant
         ledger.available -= req_amount
-        
+
         # Sovereignty Routing: Determine output port based on requestor_id in trace
         requestor_id = req_token.trace.get("requestor_id")
         if requestor_id:

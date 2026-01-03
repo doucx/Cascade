@@ -337,11 +337,13 @@ class Builder:
                 # 1. Define the dynamic port name on Allocator
                 # Must match logic in discrete_allocator (requestor_id is f_req_id)
                 gnt_port_name = f"gnt_for_{f_req_id}"
-                
+
                 # 2. Add this port to the Allocator definition
                 allocator_node = physical_graph.nodes[allocator_id]
                 assert isinstance(allocator_node, PhysicsFuncNode)
-                allocator_node.output_ports[gnt_port_name] = PortDef(gnt_port_name, PortRole.RESOURCE)
+                allocator_node.output_ports[gnt_port_name] = PortDef(
+                    gnt_port_name, PortRole.RESOURCE
+                )
 
                 # 3. Create a dedicated intermediate DataNode for this grant
                 # (To satisfy Bipartite rule: Func -> Data -> Func)

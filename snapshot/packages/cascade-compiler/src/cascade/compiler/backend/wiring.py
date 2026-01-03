@@ -4,12 +4,10 @@ from .expander import SubGraph
 
 
 class WiringError(ValueError):
-
     pass
 
 
 class WiringHarness:
-
     def __init__(self, graph: BipartiteGraph):
         self.graph = graph
 

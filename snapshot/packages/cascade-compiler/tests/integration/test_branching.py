@@ -32,7 +32,7 @@ def branching_topology():
         # Define multiple sovereign output ports
         output_ports={
             "out_a": PortDef("out_a", PortRole.DATA),
-            "out_b": PortDef("out_b", PortRole.DATA)
+            "out_b": PortDef("out_b", PortRole.DATA),
         },
     )
     d_a = PhysicsDataNode(id="D_A", name="Branch A")
@@ -46,14 +46,10 @@ def branching_topology():
     graph.channels.append(Channel(d_in.id, "out", f_sw.id, target_port="in"))
 
     # Switch -> D_A (Connect to out_a)
-    graph.channels.append(
-        Channel(f_sw.id, "out_a", d_a.id, target_port="in")
-    )
+    graph.channels.append(Channel(f_sw.id, "out_a", d_a.id, target_port="in"))
 
     # Switch -> D_B (Connect to out_b)
-    graph.channels.append(
-        Channel(f_sw.id, "out_b", d_b.id, target_port="in")
-    )
+    graph.channels.append(Channel(f_sw.id, "out_b", d_b.id, target_port="in"))
 
     func_map = {f_sw.id: switch_logic}
 

@@ -9,8 +9,6 @@ class ContinuousLedger:
     available: float
 
 
-
-
 async def continuous_allocator(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:

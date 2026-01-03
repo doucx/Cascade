@@ -13,9 +13,7 @@ def test_dumper_generates_valid_dot():
     graph.nodes = {"d1": d1, "task.bleach": f1, "task.worker": f2}
 
     graph.channels.append(Channel("d1", "out", "task.bleach", "in"))
-    graph.channels.append(
-        Channel("task.bleach", "worker_input", "task.worker", "in")
-    )
+    graph.channels.append(Channel("task.bleach", "worker_input", "task.worker", "in"))
     # Observability channel
     graph.channels.append(Channel("task.bleach", "obs_output", "bus", "in"))
 

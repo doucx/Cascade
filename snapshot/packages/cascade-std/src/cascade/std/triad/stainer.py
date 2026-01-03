@@ -36,10 +36,20 @@ async def standard_stainer(
 
     # 4.2 Resource Return (The Loop)
     # We iterate over the node's output ports to find all RESOURCE ports.
-    # This is a static guarantee: if the node has a resource output port, we MUST emit to it.
     for port_name, port_def in node.output_ports.items():
         if port_def.role == PortRole.RESOURCE:
-            # Emit a generic token to the resource port to "refill" the slot
-            outputs[port_name] = Token(payload=None)
+            # Look up the amount to release from trace data
+            # The Bleacher stored it under 'resource_amounts' -> 'res_{name}'
+            # But the Stainer's output port might be named differently (e.g. 'rel_{name}' or just 'res_{name}')
+            # Convention: If Stainer output is 'res_gpu', Bleacher input was 'res_gpu'.
+            amount = 1  # Default fallback
+            
+            # Try to find the specific amount
+            resource_amounts = trace_payload.get("resource_amounts", {})
+            if port_name in resource_amounts:
+                amount = resource_amounts[port_name]
+            
+            # Emit token with the correct amount to replenish the broker
+            outputs[port_name] = Token(payload=amount)
 
     return outputs

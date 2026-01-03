@@ -1,171 +1,87 @@
-## [WIP] refactor(std): 增强 Broker 和 Bleacher 以支持物理资源协商
+## [WIP] refactor(std): 完成资源协商 IC 组件 (Requestor, Bleacher, Stainer)
 
 ### 用户需求
-为了实现符合白皮书 5.2 节定义的“物理资源协商闭环”，我们需要升级标准库中的集成电路 (IC) 实现：
-1.  **Broker IC**: 必须支持基于 Tag 的路由，以便将资源授权 (Grant) 精确送回给发起请求的任务。
-2.  **Bleacher IC**: 必须支持“主动请求”模式，即从输入端口读取“需求量”，并向输出端口发射携带身份 Tag 的“请求信标”。
+继续执行“Broker 归位”战略。
+修正上一阶段设计中的逻辑缺陷（即“让 Bleacher 主动发起请求”导致的循环依赖问题）。
+我们需要一组功能完备的 IC 组件，以便后续在 Builder 中组装出 $F_{req} \to F_{broker} \to F_{bleach}$ 的物理拓扑。
 
 ### 评论
-这是“Broker 归位”战略的第一步。我们首先确保底层的“物理器件”具备了必要的引脚和逻辑，然后才会在 Compiler 层重新组装它们。这种分层推进能降低风险。
+在深入分析白皮书 5.2 节后，我们发现之前的设计（Bleacher 既是申请者也是等待者）在物理层是不可行的。
+正确的物理模型应当是：
+1.  **独立申请者 ($F_{req}$)**: 由 `Pulse` 激发，读取常量需求，打上 Tag (Task ID)，向 Broker 发起申请。
+2.  **独立等待者 ($F_{bleach}$)**: 等待 Broker 发回的 GNT Token。
+3.  **独立释放者 ($F_{stain}$)**: 任务结束后，根据申请量归还资源。
 
 ### 目标
-1.  修改 `discrete_broker` 和 `continuous_broker`，使其将 Request Token 的 `tag` 透传给 Grant Token。
-2.  修改 `standard_bleacher`，使其能识别 `RESOURCE_REQUEST` 角色的输入，并自动向对应的输出端口发射携带 `tag=node.id` 的请求 Token。
-3.  在 `PortName` 中添加必要的常量。
+1.  **新建** `cascade.std.resource.requestor`: 一个新的 IC，充当 Tag 注入器，将无状态的常量数值转换为带有路由 Tag 的 Request Token。
+2.  **修正** `standard_bleacher`: 移除错误的 `RESOURCE_REQUEST` 逻辑。增加逻辑以记录 GNT Token 中的 payload (资源量) 到 Trace 中，供后续释放使用。
+3.  **修正** `standard_stainer`: 增加逻辑，从 Trace 中读取资源量，并发射带有正确 Payload 的 Release Token。
 
 ### 基本原理
-*   **Tag 透传**: 在物理场中，Broker 是一个共享资源。为了支持多路复用，它必须像交换机一样工作，保留“源地址” (Tag)，以便下游的分配器 (Distributor) 能正确路由。
-*   **Bleacher 的主动性**: 以前的 Bleacher 是被动的（等待资源）。现在的 Bleacher 是主动的（发起请求）。它需要读取一个常量输入（需求量），转化为一个动作（请求）。
+物理层的纯粹性要求每个节点职责单一。
+*   `Requestor` 负责“身份注入” (Tagging)。
+*   `Bleacher` 负责“状态同步” (Waiting & Tracing)。
+*   `Stainer` 负责“状态清理” (Releasing)。
+通过 Trace 通道 (`D_trace`) 传递资源数量，保证了 `Stainer` 能够正确归还借用的资源，实现了闭环的守恒。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/std #comp/spec #concept/resource #scope/core #ai/instruct #task/domain/core #task/object/resource-broker #task/action/refactor #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/std #concept/resource #scope/core #ai/instruct #task/domain/core #task/object/resource-ic #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 Port 定义
+#### Acts 1: 创建 Requestor IC
 
-我们需要明确定义用于资源请求量的端口角色。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/ports.py
-~~~~~
-~~~~~python.old
-class PortRole(str, Enum):
-    DATA = "DATA"
-    RESOURCE = "RESOURCE"
-    SIGNAL = "SIGNAL"
-    OBSERVABILITY = "OBSERVABILITY"
-~~~~~
-~~~~~python.new
-class PortRole(str, Enum):
-    DATA = "DATA"
-    RESOURCE = "RESOURCE"  # Legacy: Used for Stainer release
-    RESOURCE_REQUEST = "RESOURCE_REQUEST"  # New: Used for Bleacher input (amount)
-    SIGNAL = "SIGNAL"
-    OBSERVABILITY = "OBSERVABILITY"
-~~~~~
+这是一个简单的转换器：Input(Amount) -> Output(Token with Tag)。
 
 ~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/ports.py
+write_file
+packages/cascade-std/src/cascade/std/resource/requestor.py
 ~~~~~
-~~~~~python.old
-class PortName:
-    # Resources
-    REQ = "req_in"
-    REL = "rel_in"
-    GNT = "gnt_out"
-    LEDGER_IN = "ledger_in"
-    LEDGER_OUT = "ledger_out"
-~~~~~
-~~~~~python.new
-class PortName:
-    # Resources
-    REQ = "req_in"
-    REL = "rel_in"
-    GNT = "gnt_out"
-    REQ_OUT = "req_out"  # For recirculation
-    LEDGER_IN = "ledger_in"
-    LEDGER_OUT = "ledger_out"
-~~~~~
+~~~~~python
+from typing import Dict
+from cascade.spec.physics import Token, PhysicsNode
 
-#### Acts 2: 增强 Discrete Broker
 
-使其透传 Tag。
+async def resource_requestor(
+    inputs: Dict[str, Token], node: PhysicsNode
+) -> Dict[str, Token]:
+    """
+    Acts as a Tag Injector.
+    Takes a raw amount (from a Const Probe) and wraps it in a Token
+    tagged with this node's ID (or a configured tag).
 
-~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/resource/discrete.py
+    In the Builder, we will map this node's ID to something that correlates
+    with the Task ID, so the Broker can route the Grant back.
+    """
+    amount_token = inputs["amount"]
+    
+    # We use the node's own ID as the routing tag.
+    # The Builder is responsible for ensuring the Distributor downstream
+    # knows how to route 'node.id' back to the correct Bleacher.
+    return {"req_out": Token(payload=amount_token.payload, tag=node.id)}
 ~~~~~
-~~~~~python.old
-        if ledger.available >= req_amount:
-            # Grant
-            ledger.available -= req_amount
-            # Emit Grant Token (Payload can be the amount granted)
-            outputs["gnt_out"] = Token(payload=req_amount)
-        else:
-            # Reject & Recirculate
-            # We emit the original request token back to a recirculation loop
-            outputs["req_out"] = req_token
-~~~~~
-~~~~~python.new
-        if ledger.available >= req_amount:
-            # Grant
-            ledger.available -= req_amount
-            # Emit Grant Token (Payload can be the amount granted)
-            # CRITICAL: Propagate the tag from the request to the grant
-            # so the distributor can route it back to the correct worker.
-            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
-        else:
-            # Reject & Recirculate
-            # We emit the original request token back to a recirculation loop
-            outputs["req_out"] = req_token
-~~~~~
-
-#### Acts 3: 增强 Continuous Broker
-
-同样使其透传 Tag。
 
 ~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/resource/continuous.py
+write_file
+packages/cascade-std/src/cascade/std/resource/requestor.stitcher.yaml
 ~~~~~
-~~~~~python.old
-        # Use a small epsilon for float comparison if needed, but >= usually suffices
-        if ledger.available >= req_amount:
-            ledger.available -= req_amount
-            outputs["gnt_out"] = Token(payload=req_amount)
-        else:
-            # Recirculate
-            outputs["req_out"] = req_token
-~~~~~
-~~~~~python.new
-        # Use a small epsilon for float comparison if needed, but >= usually suffices
-        if ledger.available >= req_amount:
-            ledger.available -= req_amount
-            # CRITICAL: Propagate the tag from the request to the grant
-            outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
-        else:
-            # Recirculate
-            outputs["req_out"] = req_token
+~~~~~yaml
+"resource_requestor": |-
+  Takes an input amount and emits a Request Token tagged with the node's ID.
+  Used to initiate a resource transaction with a Broker.
 ~~~~~
 
-#### Acts 4: 改造 Standard Bleacher
+#### Acts 2: 修正 Bleacher 逻辑
 
-实现“读需求 -> 发请求”的转换逻辑。
+移除上一步添加的 `RESOURCE_REQUEST` 逻辑，改为记录资源数量。
 
 ~~~~~act
 patch_file
 packages/cascade-std/src/cascade/std/triad/bleacher.py
 ~~~~~
 ~~~~~python.old
-        if port_def.role == PortRole.DATA:
-            worker_payload[port_name] = input_token.payload
-        elif port_def.role == PortRole.RESOURCE:
-            # It's a resource. We record it to trace.
-            held_resources.append(port_name)
-        # Observability and Signals are processed for trace but not passed to worker
-
-        trace_payload.update(input_token.trace)
-
-    # 2. Capture metadata
-    trace_payload["start_ts"] = time.monotonic()
-    if held_resources:
-        trace_payload["held_resources"] = held_resources
-
-    # 3. Create the output tokens
-    worker_token = Token(payload=worker_payload)
-    trace_token = Token(payload=trace_payload)
-
-    return {
-        "worker_input": worker_token,
-        "trace_output": trace_token,
-    }
-~~~~~
-~~~~~python.new
         if port_def.role == PortRole.DATA:
             worker_payload[port_name] = input_token.payload
         elif port_def.role == PortRole.RESOURCE_REQUEST:
@@ -217,10 +133,103 @@ packages/cascade-std/src/cascade/std/triad/bleacher.py
 
     return outputs
 ~~~~~
+~~~~~python.new
+        if port_def.role == PortRole.DATA:
+            worker_payload[port_name] = input_token.payload
+        elif port_def.role == PortRole.RESOURCE:
+            # It's a GNT token.
+            # We record the port name as a held resource.
+            held_resources.append(port_name)
+            # CRITICAL: Record the granted amount (payload) to trace.
+            # This allows the Stainer to know how much to release later.
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
+        # Observability and Signals are processed for trace but not passed to worker
+
+        trace_payload.update(input_token.trace)
+
+    # 2. Capture metadata
+    trace_payload["start_ts"] = time.monotonic()
+    if held_resources:
+        trace_payload["held_resources"] = held_resources
+
+    # 3. Create the output tokens
+    worker_token = Token(payload=worker_payload)
+    trace_token = Token(payload=trace_payload)
+
+    return {
+        "worker_input": worker_token,
+        "trace_output": trace_token,
+    }
+~~~~~
+
+#### Acts 3: 修正 Stainer 逻辑
+
+使其能够从 Trace 读取数量并释放。
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/triad/stainer.py
+~~~~~
+~~~~~python.old
+    # 4.2 Resource Return (The Loop)
+    # We iterate over the node's output ports to find all RESOURCE ports.
+    # This is a static guarantee: if the node has a resource output port, we MUST emit to it.
+    for port_name, port_def in node.output_ports.items():
+        if port_def.role == PortRole.RESOURCE:
+            # Emit a generic token to the resource port to "refill" the slot
+            outputs[port_name] = Token(payload=None)
+
+    return outputs
+~~~~~
+~~~~~python.new
+    # 4.2 Resource Return (The Loop)
+    # We iterate over the node's output ports to find all RESOURCE ports.
+    for port_name, port_def in node.output_ports.items():
+        if port_def.role == PortRole.RESOURCE:
+            # Look up the amount to release from trace data
+            # The Bleacher stored it under 'resource_amounts' -> 'res_{name}'
+            # But the Stainer's output port might be named differently (e.g. 'rel_{name}' or just 'res_{name}')
+            # Convention: If Stainer output is 'res_gpu', Bleacher input was 'res_gpu'.
+            amount = 1  # Default fallback
+            
+            # Try to find the specific amount
+            resource_amounts = trace_payload.get("resource_amounts", {})
+            if port_name in resource_amounts:
+                amount = resource_amounts[port_name]
+            
+            # Emit token with the correct amount to replenish the broker
+            outputs[port_name] = Token(payload=amount)
+
+    return outputs
+~~~~~
+
+#### Acts 4: 注册 Requestor 到 Init
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/resource/__init__.py
+~~~~~
+~~~~~python.old
+# Resource Broker ICs for managing physical resource constraints.
+~~~~~
+~~~~~python.new
+# Resource Broker ICs for managing physical resource constraints.
+from .requestor import resource_requestor
+
+__all__ = ["resource_requestor"]
+~~~~~
 
 ### 下一步建议
-我们已经完成了底层 IC 的改造。
-下一步，我们需要修改 `cascade-compiler/backend/expander.py`，更新它生成 Triad 的逻辑：
-1.  Bleacher 不再有 `PortRole.RESOURCE` 输入，而是 `PortRole.RESOURCE_REQUEST` 输入（连接常量）和 `req_{name}` 输出。
-2.  Worker 增加 `gnt_{name}` 输入（PortRole.RESOURCE）。
-3.  Stainer 保持 `rel_{name}` 输出。
+IC 层准备就绪。
+下一步是 **Builder 改造 (The Grand Assembly)**：
+1.  修改 `cascade-compiler/backend/builder.py`。
+2.  实例化全局 `Broker` 节点 (Discrete/Continuous)。
+3.  对于每个 Task 的每个资源约束：
+    *   生成 $F_{probe}$ (Const) 提供数量。
+    *   生成 $F_{req}$ (Requestor) 打 Tag。
+    *   连接：$F_{probe} \to F_{req} \to F_{broker}$。
+    *   连接：$F_{broker} \to F_{bleach}$ (通过 Channel Filter)。
+    *   连接：$F_{stain} \to F_{broker}$。
+这将彻底完成“Broker 归位”战略。

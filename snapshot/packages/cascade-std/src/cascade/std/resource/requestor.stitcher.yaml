@@ -1,0 +1,3 @@
+"resource_requestor": |-
+  Takes an input amount and emits a Request Token tagged with the node's ID.
+  Used to initiate a resource transaction with a Broker.

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(std): 增强 Broker 和 Bleacher 以支持物理资源协商", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767415411.7099783, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor(std): 完成资源协商 IC 组件 (Requestor, Bleacher, Stainer)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767415573.8440216, "duration_ms": 0}}

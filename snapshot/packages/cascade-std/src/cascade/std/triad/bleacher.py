@@ -19,15 +19,16 @@ async def standard_bleacher(
 
         if port_def.role == PortRole.DATA:
             worker_payload[port_name] = input_token.payload
-        elif port_def.role == PortRole.RESOURCE_REQUEST:
-            # New logic: This input defines a resource requirement amount.
-            # We don't pass it to the worker, but we use it to emit a request token.
-            # The 'port_name' here is expected to be something like 'req_amount_gpu'.
-            # We need to map it to an output port.
-            pass
         elif port_def.role == PortRole.RESOURCE:
-            # Legacy/Fallback
+            # It's a GNT token.
+            # We record the port name as a held resource.
             held_resources.append(port_name)
+            # CRITICAL: Record the granted amount (payload) to trace.
+            # This allows the Stainer to know how much to release later.
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
+        # Observability and Signals are processed for trace but not passed to worker
 
         trace_payload.update(input_token.trace)
 
@@ -37,33 +38,10 @@ async def standard_bleacher(
         trace_payload["held_resources"] = held_resources
 
     # 3. Create the output tokens
-    outputs = {
-        "worker_input": Token(payload=worker_payload),
-        "trace_output": Token(payload=trace_payload),
+    worker_token = Token(payload=worker_payload)
+    trace_token = Token(payload=trace_payload)
+
+    return {
+        "worker_input": worker_token,
+        "trace_output": trace_token,
     }
-
-    # 4. Handle Active Resource Requests
-    # We iterate over INPUT ports to find request amounts.
-    # Convention: Input port 'req_amount_{res}' corresponds to Output port 'req_{res}'
-    for port_name, input_token in inputs.items():
-        port_def = node.input_ports[port_name]
-        if port_def.role == PortRole.RESOURCE_REQUEST:
-            # Identify the resource name.
-            # Assuming port name format: "req_amount_<resource_name>"
-            if port_name.startswith("req_amount_"):
-                res_name = port_name[11:]
-                out_port_name = f"req_{res_name}"
-
-                # Check if this output port exists
-                if out_port_name in node.output_ports:
-                    amount = input_token.payload
-                    # Emit request token with tag = node.id (The Bleacher's ID)
-                    # This allows the Grant to be routed back to the worker associated with this Bleacher.
-                    # Note: We use the Bleacher's ID as the routing tag. The Distributor
-                    # must route to the Worker based on this tag (or a derived one).
-                    # Actually, let's use the Logical Node ID if possible.
-                    # But node.id is physical (e.g. "node_1.bleach").
-                    # Using "node_1.bleach" as tag is fine, as long as Builder knows this.
-                    outputs[out_port_name] = Token(payload=amount, tag=node.id)
-
-    return outputs

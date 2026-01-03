@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(typing): Resolve pyright errors for type safety", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767439875.5199172, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(test): 添加全局参数化夹具以支持多后端 Reactor 测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767440184.370739, "duration_ms": 0}}

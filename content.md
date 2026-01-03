@@ -1,215 +1,88 @@
-Excellent, the audit is complete. Your static analysis has correctly identified several type safety issues. These are precisely the kinds of subtle bugs that a strong type system helps us prevent.
+好的，已切换回 Quipu 模式。
 
-I will now generate a plan to resolve all four `pyright` errors. The fixes involve adding null-safety checks in the hashing service and completing the implementation of the `WorkflowContext` to fulfill its contract.
+根据我们的分析，我将生成一个计划，在项目根目录创建 `conftest.py` 文件，并实现支持后端切换的参数化 Fixture。
 
-## [WIP] fix(typing): Resolve pyright errors for type safety
-
-### 错误分析
-1.  **`cascade-compiler` (`hashing.py`)**: The errors indicate that we are attempting to access attributes (`_uuid`, `requirements`) on variables that could be `None`. This happens when `getattr` is used with a default of `None`. The fix is to add explicit `if var is not None:` checks before accessing attributes.
-2.  **`cascade-std` (`context.py`)**: The error `Attribute "get_value" is unknown` is correct. The `WorkflowContext` class in `cascade-common` defines a contract for registering input specifications but lacks the implementation for storing and retrieving the actual runtime values. The `param_probe` function correctly anticipates this capability, but the type definition is incomplete. The fix is to extend `WorkflowContext` to manage runtime values.
+## [WIP] feat(test): 添加全局参数化夹具以支持多后端 Reactor 测试
 
 ### 用户需求
-Resolve all identified `pyright` errors to improve the type safety and correctness of the codebase.
+根据路线图“任务 3.1”，创建一个全局共享的、参数化的 Pytest Fixture，以便未来的测试可以针对不同的 Reactor 后端（Python/Rust）运行。
 
 ### 评论
-This is a high-value refinement. By addressing these type errors, we are not just silencing a linter; we are making the system more robust and predictable. Fixing the `WorkflowContext` in particular is a crucial step in solidifying the contract between the runtime environment and the physical functions that need to sample it.
+这是为“双引擎共生”架构建立测试基石的关键一步。通过在根目录创建 `conftest.py`，我们建立了一个统一的测试基础设施入口。这个参数化的 `reactor_backend_factory` 夹具将使我们能够用同一套测试来验证 Python 和未来 Rust 实现的行为一致性，完美践行了“一套测试，双重验证”的核心目标。
 
 ### 目标
-1.  Patch `packages/cascade-compiler/src/cascade/compiler/utils/hashing.py` to safely handle optional `_condition` and `_constraints` attributes.
-2.  Patch `packages/cascade-common/src/cascade/common/context.py` to add value management (`set_value`, `get_value`) to `WorkflowContext`.
-3.  Patch `packages/cascade-std/src/cascade/std/probe/context.py` to remove the defensive `hasattr` check, relying on the newly corrected `WorkflowContext` type.
+1.  在项目根目录 `/home/doucx/Documents/Projects/Cascade/` 创建一个新的 `conftest.py` 文件。
+2.  实现 `pytest_addoption` 钩子，添加一个 `--reactor-backend` 命令行选项，默认为 `python`。
+3.  创建一个 `reactor_backend_factory` 会话级 Fixture。
+4.  该 Fixture 将根据命令行选项返回 `cascade.vm.reactor.Reactor` 类。
+5.  当请求 `rust` 后端时，该 Fixture 将使用 `pytest.skip` 跳过测试，因为 Rust 实现尚不可用。
 
 ### 基本原理
--   **Null Safety**: For the hashing errors, we will assign the result of `getattr` to a variable first, then check if that variable is not `None` before proceeding. This pattern is robust and clearly communicates the handling of optional attributes to the type checker.
--   **Complete the Contract**: For the context error, we will complete the implementation of `WorkflowContext` to match its intended use. This makes the system's architecture more explicit and allows static analysis tools to validate interactions correctly.
+将 `conftest.py` 放置在项目根目录，可以确保 Pytest 在运行时能发现它，并将其中的 Fixture 应用于 `packages/` 目录下的所有测试文件。这是一种标准的、符合 Pytest 惯例的共享测试基础设施的方式。使用 `scope="session"` 可以确保 Fixture 在整个测试会话中只被创建一次，提高了效率。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/compiler #comp/runtime #scope/dx #ai/instruct #task/domain/typing #task/object/pyright-errors #task/action/fix #task/state/continue
+#intent/tooling #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/parameterized-fixture #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Make Hashing Service Null-Safe
+#### Acts 1: 创建全局共享的 conftest.py
 
-First, we'll fix the potential `None` access errors in `hashing.py`.
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/utils/hashing.py
-~~~~~
-~~~~~python.old
-        # 5. Metadata
-        if getattr(result, "_condition", None):
-            # We need the ID of the condition node
-            cond = result._condition
-            # Handle potential MappedLazyResult or other types in condition if necessary
-            # For now assuming LazyResult or similar which is in dep_nodes
-            if hasattr(cond, "_uuid") and cond._uuid in dep_nodes:
-                node = dep_nodes[cond._uuid]
-                node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
-                components.append(f"ConditionID:{node_id}")
-            else:
-                components.append("Condition:UNKNOWN")
-
-        if getattr(result, "_dependencies", None):
-            deps = result._dependencies
-            if deps:
-                components.append("Dependencies:[")
-                # Sort by UUID to ensure stable hash
-                sorted_deps = sorted(deps, key=lambda x: x._uuid)
-                for dep in sorted_deps:
-                    if dep._uuid in dep_nodes:
-                        node = dep_nodes[dep._uuid]
-                        node_id = getattr(
-                            node, "id", getattr(node, "structural_id", str(node))
-                        )
-                        components.append(f"DepID:{node_id}")
-                    else:
-                        components.append("DepID:UNKNOWN")
-                components.append("]")
-
-        # 6. Constraints
-        if getattr(result, "_constraints", None):
-            reqs = result._constraints.requirements
-            keys = sorted(reqs.keys())
-            s_vals = [f"{k}={reqs[k]}" for k in keys]
-            components.append(f"Constraints({','.join(s_vals)})")
-~~~~~
-~~~~~python.new
-        # 5. Metadata
-        cond = getattr(result, "_condition", None)
-        if cond:
-            # We need the ID of the condition node
-            # Handle potential MappedLazyResult or other types in condition if necessary
-            # For now assuming LazyResult or similar which is in dep_nodes
-            if hasattr(cond, "_uuid") and cond._uuid in dep_nodes:
-                node = dep_nodes[cond._uuid]
-                node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
-                components.append(f"ConditionID:{node_id}")
-            else:
-                components.append("Condition:UNKNOWN")
-
-        deps = getattr(result, "_dependencies", None)
-        if deps:
-            components.append("Dependencies:[")
-            # Sort by UUID to ensure stable hash
-            sorted_deps = sorted(deps, key=lambda x: x._uuid)
-            for dep in sorted_deps:
-                if hasattr(dep, "_uuid") and dep._uuid in dep_nodes:
-                    node = dep_nodes[dep._uuid]
-                    node_id = getattr(
-                        node, "id", getattr(node, "structural_id", str(node))
-                    )
-                    components.append(f"DepID:{node_id}")
-                else:
-                    components.append("DepID:UNKNOWN")
-            components.append("]")
-
-        # 6. Constraints
-        constraints = getattr(result, "_constraints", None)
-        if constraints:
-            reqs = constraints.requirements
-            keys = sorted(reqs.keys())
-            s_vals = [f"{k}={reqs[k]}" for k in keys]
-            components.append(f"Constraints({','.join(s_vals)})")
-~~~~~
-
-#### Acts 2: Implement Value Management in WorkflowContext
-
-Next, we'll add the missing value storage to `WorkflowContext` in the common package.
+我们将在项目根目录创建 `conftest.py`，并定义命令行选项和参数化的 Fixture。
 
 ~~~~~act
-patch_file
-packages/cascade-common/src/cascade/common/context.py
+write_file
+conftest.py
 ~~~~~
-~~~~~python.old
-from contextvars import ContextVar
-from typing import Dict, List
-from cascade.spec.input import InputSpec
+~~~~~python
+import pytest
+from typing import Callable, Type
+from cascade.vm.reactor import Reactor
+from cascade.vm.protocols import ReactorProtocol
 
 
-class WorkflowContext:
-    def __init__(self):
-        self.input_specs: Dict[str, InputSpec] = {}
-
-    def register(self, spec: InputSpec):
-        if spec.name in self.input_specs:
-            # 在未来可以实现更复杂的合并或警告逻辑
-            return
-        self.input_specs[spec.name] = spec
-
-    def get_all_specs(self) -> List[InputSpec]:
-        return list(self.input_specs.values())
-~~~~~
-~~~~~python.new
-from contextvars import ContextVar
-from typing import Dict, List, Any, Optional
-from cascade.spec.input import InputSpec
+def pytest_addoption(parser):
+    """Adds a command-line option to select the reactor backend."""
+    parser.addoption(
+        "--reactor-backend",
+        action="store",
+        default="python",
+        help="Select reactor backend to test: python or rust",
+    )
 
 
-class WorkflowContext:
-    def __init__(self):
-        self.input_specs: Dict[str, InputSpec] = {}
-        self.values: Dict[str, Any] = {}
+@pytest.fixture(scope="session")
+def reactor_backend_factory(
+    request,
+) -> Type[ReactorProtocol]:
+    """
+    A session-scoped fixture that provides the Reactor class
+    based on the --reactor-backend command-line option.
+    """
+    backend = request.config.getoption("--reactor-backend")
 
-    def register(self, spec: InputSpec):
-        if spec.name in self.input_specs:
-            # 在未来可以实现更复杂的合并或警告逻辑
-            return
-        self.input_specs[spec.name] = spec
+    if backend == "python":
+        # Return the Python implementation
+        return Reactor
+    elif backend == "rust":
+        # When the Rust implementation is ready, it will be imported and returned here.
+        # For now, we skip any tests that request it.
+        pytest.skip(
+            "Rust reactor backend is not yet implemented. Skipping test."
+        )
+    else:
+        pytest.fail(
+            f"Invalid reactor backend specified: '{backend}'. "
+            "Choose from 'python' or 'rust'."
+        )
 
-    def get_all_specs(self) -> List[InputSpec]:
-        return list(self.input_specs.values())
-
-    def set_value(self, name: str, value: Any) -> None:
-        self.values[name] = value
-
-    def get_value(self, name: str) -> Optional[Any]:
-        return self.values.get(name)
-~~~~~
-
-#### Acts 3: Clean up `param_probe`
-
-Finally, with `WorkflowContext` fixed, we can simplify the `param_probe` implementation and remove the runtime `hasattr` check.
-
-~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/probe/context.py
-~~~~~
-~~~~~python.old
-async def param_probe(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    name = inputs["name"].payload
-    # In a real run, values are resolved by the Context/Engine.
-    # Here we interface with the common context.
-    ctx = get_current_context()
-
-    # We assume context has a method to get values by spec name.
-    # If not found, it returns None (as a payload).
-    val = ctx.get_value(name) if hasattr(ctx, "get_value") else None
-
-    return {"out": Token(payload=val)}
-~~~~~
-~~~~~python.new
-async def param_probe(
-    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
-) -> Dict[str, Token]:
-    name = inputs["name"].payload
-    # In a real run, values are resolved by the Context/Engine.
-    # Here we interface with the common context.
-    ctx = get_current_context()
-
-    # We assume context has a method to get values by spec name.
-    # If not found, it returns None (as a payload).
-    val = ctx.get_value(name)
-
-    return {"out": Token(payload=val)}
 ~~~~~
 
 ### 下一步建议
 
-我们已经解决了所有的 `pyright` 报错，代码库的类型安全性得到了提升。
+我们已经成功地创建了全局共享的测试 Fixture。为了验证它是否按预期工作，并为后续的测试提供一个参考示例，我建议修改一个现有的测试用例来使用这个新的 `reactor_backend_factory`。
 
-现在我们可以继续路线图的**任务 2.2: 统一函数签名 (Signature Standardization)**。我将开始审计 `cascade-std` 包中的物理函数，以确保它们的签名都符合 `async def (inputs, node, resources) -> dict` 规范。这将是为 FFI 做准备的重要一步。
+`packages/cascade-vm/tests/unit/test_reactor.py` 中的 `test_event_driven_ping_pong` 测试是一个很好的候选者，因为它使用了 `EventDrivenRunner`，而我们之前已经重构了 `EventDrivenRunner` 来接受一个 `reactor_factory`。
+
+我将生成一个计划来应用这个修改。

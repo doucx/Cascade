@@ -168,10 +168,6 @@ class Reactor:
                 matching_channels = [c for c in outbound if c.source_port == port_name]
 
                 for channel in matching_channels:
-                    # Spectrum Filtering
-                    if channel.tag_filter and channel.tag_filter != token.tag:
-                        continue
-
                     target_node = self.graph.nodes[channel.target_node_id]
                     if isinstance(target_node, PhysicsDataNode):
                         self.memory.put(target_node, token)

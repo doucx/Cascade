@@ -26,20 +26,19 @@ async def standard_stainer(
     trace_payload = worker_result_token.trace.copy()
     trace_payload.update(trace_input_token.payload)
 
-    # 2. Determine tag based on result (error or success)
-    tag = "error" if isinstance(result_payload, Exception) else "default"
-
-    # 3. Calculate duration and update trace
+    # 2. Calculate duration and update trace
     start_ts = trace_payload.get("start_ts", end_ts)  # Default to end_ts for duration=0
     duration = end_ts - start_ts
     trace_payload["duration"] = duration
     trace_payload["end_ts"] = end_ts
 
-    # 4. Create output tokens
+    # 3. Create output tokens
     outputs = {}
 
-    # 4.1 The main result
-    outputs["output"] = Token(payload=result_payload, tag=tag, trace=trace_payload)
+    # 3.1 The main result
+    # In the future (Phase 2), we will route to 'output_error' if exception.
+    # For now, we emit to 'output' regardless, but without a tag.
+    outputs["output"] = Token(payload=result_payload, trace=trace_payload)
 
     # 4.2 Observability Event
     outputs["obs_output"] = Token(payload=None, trace=trace_payload)

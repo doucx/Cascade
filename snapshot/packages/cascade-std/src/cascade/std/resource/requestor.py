@@ -7,7 +7,9 @@ async def resource_requestor(
 ) -> Dict[str, Token]:
     amount_token = inputs["amount"]
 
-    # We use the node's own ID as the routing tag.
-    # The Builder is responsible for ensuring the Distributor downstream
-    # knows how to route 'node.id' back to the correct Bleacher.
-    return {"req_out": Token(payload=amount_token.payload, tag=node.id)}
+    # Sovereignty Update: We inject the requestor's ID into the trace.
+    # The Allocator will use this to route the Grant to the correct dedicated port.
+    trace = amount_token.trace.copy()
+    trace["requestor_id"] = node.id
+
+    return {"req_out": Token(payload=amount_token.payload, trace=trace)}

@@ -38,7 +38,6 @@ class WiringHarness:
         source_port: str,
         target_id: str,
         target_port: str,
-        tag_filter: Optional[str] = None,
     ) -> None:
         # 1. Existence Check
         if source_id not in self.graph.nodes:
@@ -78,6 +77,5 @@ class WiringHarness:
             source_port=source_port,
             target_node_id=target_id,
             target_port=target_port,
-            tag_filter=tag_filter,
         )
         self.graph.channels.append(channel)

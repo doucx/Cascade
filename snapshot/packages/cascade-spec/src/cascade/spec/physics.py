@@ -7,8 +7,6 @@ from cascade.spec.ports import PortDef
 class Token:
     payload: Any
 
-    tag: str = "default"
-
     trace: Dict[str, Any] = field(default_factory=dict)
 
 

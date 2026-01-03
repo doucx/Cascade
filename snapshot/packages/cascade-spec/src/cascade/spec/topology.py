@@ -13,8 +13,6 @@ class Channel:
 
     target_port: str = "in"
 
-    tag_filter: Optional[str] = None
-
 
 @dataclass
 class BipartiteGraph:

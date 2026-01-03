@@ -30,7 +30,16 @@ async def discrete_allocator(
     if ledger.available >= req_amount:
         # Grant
         ledger.available -= req_amount
-        outputs["gnt_out"] = Token(payload=req_amount, tag=req_token.tag)
+        
+        # Sovereignty Routing: Determine output port based on requestor_id in trace
+        requestor_id = req_token.trace.get("requestor_id")
+        if requestor_id:
+            # The Builder constructs the port name as f"gnt_for_{requestor_id}"
+            out_port = f"gnt_for_{requestor_id}"
+            outputs[out_port] = Token(payload=req_amount, trace=req_token.trace)
+        else:
+            # Fallback for legacy/testing (should generally not happen in valid graph)
+            outputs["gnt_out"] = Token(payload=req_amount, trace=req_token.trace)
     else:
         # Reject & Recirculate
         outputs["req_out"] = req_token

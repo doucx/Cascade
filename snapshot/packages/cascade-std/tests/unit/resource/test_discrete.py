@@ -13,7 +13,7 @@ async def test_discrete_allocator_grants_when_available():
 
     inputs = {"ledger_in": Token(payload=ledger), "req_in": Token(payload=2)}
 
-    outputs = await discrete_allocator(inputs, MagicMock())
+    outputs = await discrete_allocator(inputs, MagicMock(), MagicMock())
 
     # Check Grant
     assert "gnt_out" in outputs
@@ -32,7 +32,7 @@ async def test_discrete_allocator_recirculates_when_starved():
     req_token = Token(payload=5)
     inputs = {"ledger_in": Token(payload=ledger), "req_in": req_token}
 
-    outputs = await discrete_allocator(inputs, MagicMock())
+    outputs = await discrete_allocator(inputs, MagicMock(), MagicMock())
 
     # Check No Grant
     assert "gnt_out" not in outputs
@@ -52,7 +52,7 @@ async def test_discrete_reclaimer_releases_resource():
 
     inputs = {"ledger_in": Token(payload=ledger), "rel_in": Token(payload=3)}
 
-    outputs = await discrete_reclaimer(inputs, MagicMock())
+    outputs = await discrete_reclaimer(inputs, MagicMock(), MagicMock())
 
     # Check Ledger Update
     updated_ledger = outputs["ledger_out"].payload

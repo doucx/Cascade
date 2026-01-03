@@ -1,4 +1,5 @@
 from asyncio import Queue
+from unittest.mock import MagicMock
 
 from cascade.spec.physics import Token
 from cascade.std.triad.observer import standard_observer, ObservedEvent

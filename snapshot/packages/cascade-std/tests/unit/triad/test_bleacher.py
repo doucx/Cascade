@@ -21,7 +21,7 @@ async def test_standard_bleacher_extracts_payloads():
     }
     node = create_mock_bleach_node({"arg1": PortRole.DATA, "arg2": PortRole.DATA})
 
-    outputs = await standard_bleacher(inputs, node)
+    outputs = await standard_bleacher(inputs, node, MagicMock())
 
     assert "worker_input" in outputs
     worker_token = outputs["worker_input"]
@@ -34,7 +34,7 @@ async def test_standard_bleacher_generates_trace_with_timestamp():
     node = create_mock_bleach_node({"data": PortRole.DATA})
 
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):
-        outputs = await standard_bleacher({"data": Token(payload=1)}, node)
+        outputs = await standard_bleacher({"data": Token(payload=1)}, node, MagicMock())
 
     assert "trace_output" in outputs
     trace_token = outputs["trace_output"]
@@ -48,7 +48,7 @@ async def test_standard_bleacher_with_empty_inputs():
     node = create_mock_bleach_node({})
 
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):
-        outputs = await standard_bleacher({}, node)
+        outputs = await standard_bleacher({}, node, MagicMock())
 
     assert "worker_input" in outputs
     assert outputs["worker_input"].payload == {}
@@ -66,7 +66,7 @@ async def test_standard_bleacher_merges_traces():
 
     MOCK_TIMESTAMP = 200.0
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):
-        outputs = await standard_bleacher(inputs, node)
+        outputs = await standard_bleacher(inputs, node, MagicMock())
 
     assert "trace_output" in outputs
     trace_payload = outputs["trace_output"].payload

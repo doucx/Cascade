@@ -11,7 +11,7 @@ async def test_param_probe_lookups_value():
     mock_ctx.get_value.return_value = "sqlite:///:memory:"
 
     with patch("cascade.std.probe.context.get_current_context", return_value=mock_ctx):
-        outputs = await param_probe(inputs, MagicMock())
+        outputs = await param_probe(inputs, MagicMock(), MagicMock())
 
     assert outputs["out"].payload == "sqlite:///:memory:"
     mock_ctx.get_value.assert_called_once_with("db_url")
@@ -23,6 +23,6 @@ async def test_param_probe_returns_none_if_missing():
     mock_ctx.get_value.return_value = None
 
     with patch("cascade.std.probe.context.get_current_context", return_value=mock_ctx):
-        outputs = await param_probe(inputs, MagicMock())
+        outputs = await param_probe(inputs, MagicMock(), MagicMock())
 
     assert outputs["out"].payload is None

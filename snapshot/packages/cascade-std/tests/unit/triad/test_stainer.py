@@ -26,7 +26,7 @@ async def test_stainer_success_case():
     node = create_mock_stain_node({"output": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = await standard_stainer(inputs, node)
+        outputs = await standard_stainer(inputs, node, MagicMock())
 
     assert "output" in outputs
     output_token = outputs["output"]
@@ -51,7 +51,7 @@ async def test_stainer_error_case():
     node = create_mock_stain_node({"output": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = await standard_stainer(inputs, node)
+        outputs = await standard_stainer(inputs, node, MagicMock())
 
     assert "output" in outputs
     output_token = outputs["output"]
@@ -71,7 +71,7 @@ async def test_stainer_handles_missing_start_ts_gracefully():
     node = create_mock_stain_node({"output": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = await standard_stainer(inputs, node)
+        outputs = await standard_stainer(inputs, node, MagicMock())
 
     output_token = outputs["output"]
     assert output_token.trace["duration"] == 0.0

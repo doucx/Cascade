@@ -17,7 +17,7 @@ async def test_continuous_allocator_grants_memory():
         "req_in": Token(payload=2.1),  # Request 2.1GB
     }
 
-    outputs = await continuous_allocator(inputs, MagicMock())
+    outputs = await continuous_allocator(inputs, MagicMock(), MagicMock())
 
     assert "gnt_out" in outputs
     assert outputs["gnt_out"].payload == 2.1
@@ -34,7 +34,7 @@ async def test_continuous_allocator_recirculates_large_request():
     req_token = Token(payload=1.1)
     inputs = {"ledger_in": Token(payload=ledger), "req_in": req_token}
 
-    outputs = await continuous_allocator(inputs, MagicMock())
+    outputs = await continuous_allocator(inputs, MagicMock(), MagicMock())
 
     assert "gnt_out" not in outputs
     assert outputs["req_out"] is req_token
@@ -51,7 +51,7 @@ async def test_continuous_reclaimer_replenish():
         "rel_in": Token(payload=1.2),
     }
 
-    outputs = await continuous_reclaimer(inputs, MagicMock())
+    outputs = await continuous_reclaimer(inputs, MagicMock(), MagicMock())
 
     updated = outputs["ledger_out"].payload
     assert updated.available == pytest.approx(1.7)

@@ -1,8 +1,8 @@
 {
   "EventDrivenRunner": {},
   "EventDrivenRunner.__init__": {
-    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, function_map: Dict[str, Callable]):",
-    "baseline_code_structure_hash": "b0c6862fe89082c521578284bc1a2927fd39e518f2f5e1a6b6e63789763ba8ce"
+    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, function_map: Dict[str, Callable], reactor_factory: Optional[Callable[..., ReactorProtocol]] = None):",
+    "baseline_code_structure_hash": "ba8ca8faf6819279917fcca14937f458d196e5d59805b0b1f38a5c88a4c8ea2a"
   },
   "EventDrivenRunner._captured_events": {},
   "EventDrivenRunner._loop_task": {},

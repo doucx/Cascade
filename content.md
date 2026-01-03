@@ -1,79 +1,215 @@
-你完全正确，我的分析存在疏漏。非常感谢你提供了详细的错误日志。
+Excellent, the audit is complete. Your static analysis has correctly identified several type safety issues. These are precisely the kinds of subtle bugs that a strong type system helps us prevent.
 
-测试断言失败的根本原因是，我对编译器生成的节点 ID 做了错误的假设。我错误地预测了一个基于简单计数器（如 `t_1`）的、人类可读的 ID `const.t_1.0`。
+I will now generate a plan to resolve all four `pyright` errors. The fixes involve adding null-safety checks in the hashing service and completing the implementation of the `WorkflowContext` to fulfill its contract.
 
-然而，实际的编译器实现 (`IRGenerator` + `HashingService`) 为每个逻辑节点生成一个基于其内容（代码定义、参数、依赖关系等）的**内容寻址哈希**作为其唯一 ID。`PhysicalIdGenerator` 再以此哈希为基础，生成物理节点的 ID（例如 `...hash....bleach`）。
+## [WIP] fix(typing): Resolve pyright errors for type safety
 
-这种基于哈希的 ID 是动态的，但却是确定性的。直接在测试中硬编码这个哈希值是极其脆弱的，任何微小的改动都会使其失效。
-
-正确的测试方法不应该依赖于不稳定的 ID，而应该断言节点的**稳定属性**，例如它的 `name` 和 `initial_payload`。
-
-我将立即修正这个测试，使其更加健壮。
-
-## [WIP] fix(test): 修正图纯度测试以验证稳定属性而非动态ID
+### 错误分析
+1.  **`cascade-compiler` (`hashing.py`)**: The errors indicate that we are attempting to access attributes (`_uuid`, `requirements`) on variables that could be `None`. This happens when `getattr` is used with a default of `None`. The fix is to add explicit `if var is not None:` checks before accessing attributes.
+2.  **`cascade-std` (`context.py`)**: The error `Attribute "get_value" is unknown` is correct. The `WorkflowContext` class in `cascade-common` defines a contract for registering input specifications but lacks the implementation for storing and retrieving the actual runtime values. The `param_probe` function correctly anticipates this capability, but the type definition is incomplete. The fix is to extend `WorkflowContext` to manage runtime values.
 
 ### 用户需求
-修复 `test_graph_purity.py` 中失败的断言，使其能够正确验证反序列化后图的完整性。
+Resolve all identified `pyright` errors to improve the type safety and correctness of the codebase.
 
 ### 评论
-这次修复体现了一个核心的测试原则：**测试应该验证行为和意图，而不是不稳定的实现细节。** 节点的哈希 ID 是一个实现细节，而节点“作为一个值为 1 的常量”是它的核心意图。通过断言 `name` 和 `initial_payload`，我们使测试与哈希算法的实现解耦，从而变得更加健壮。
+This is a high-value refinement. By addressing these type errors, we are not just silencing a linter; we are making the system more robust and predictable. Fixing the `WorkflowContext` in particular is a crucial step in solidifying the contract between the runtime environment and the physical functions that need to sample it.
 
 ### 目标
-1.  修改 `packages/cascade-compiler/tests/integration/test_graph_purity.py`。
-2.  移除对硬编码节点 ID 的断言。
-3.  添加新的断言，通过遍历所有节点，来验证图中确实存在 `name` 为 `Const(a)` 且 `initial_payload` 为 `1` 的常量节点，以及 `name` 为 `Const(b)` 且 `initial_payload` 为 `2` 的节点。
+1.  Patch `packages/cascade-compiler/src/cascade/compiler/utils/hashing.py` to safely handle optional `_condition` and `_constraints` attributes.
+2.  Patch `packages/cascade-common/src/cascade/common/context.py` to add value management (`set_value`, `get_value`) to `WorkflowContext`.
+3.  Patch `packages/cascade-std/src/cascade/std/probe/context.py` to remove the defensive `hasattr` check, relying on the newly corrected `WorkflowContext` type.
 
 ### 基本原理
-通过遍历反序列化后的 `deserialized_graph.nodes.values()`，我们可以检查每个节点的属性。通过组合对 `isinstance`, `node.name`, 和 `node.initial_payload` 的检查，我们可以唯一地、可靠地识别出我们关心的常量节点，而无需知道它们那由哈希算法生成的、不稳定的 ID。
+-   **Null Safety**: For the hashing errors, we will assign the result of `getattr` to a variable first, then check if that variable is not `None` before proceeding. This pattern is robust and clearly communicates the handling of optional attributes to the type checker.
+-   **Complete the Contract**: For the context error, we will complete the implementation of `WorkflowContext` to match its intended use. This makes the system's architecture more explicit and allows static analysis tools to validate interactions correctly.
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/compiler #comp/tests #scope/dx #ai/instruct #task/domain/vm #task/object/graph-purity #task/action/testing #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/compiler #comp/runtime #scope/dx #ai/instruct #task/domain/typing #task/object/pyright-errors #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修正图纯度测试的断言逻辑
+#### Acts 1: Make Hashing Service Null-Safe
 
-我们将修补 `test_graph_purity.py` 文件，用更健壮的属性检查替换脆弱的 ID 检查。
+First, we'll fix the potential `None` access errors in `hashing.py`.
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/tests/integration/test_graph_purity.py
+packages/cascade-compiler/src/cascade/compiler/utils/hashing.py
 ~~~~~
 ~~~~~python.old
-    # 4. Verify basic integrity after deserialization
-    assert len(physical_graph.nodes) == len(deserialized_graph.nodes)
-    assert len(physical_graph.channels) == len(deserialized_graph.channels)
-    assert "const.t_1.0" in deserialized_graph.nodes
-    assert deserialized_graph.nodes["const.t_1.0"].initial_payload == 1
+        # 5. Metadata
+        if getattr(result, "_condition", None):
+            # We need the ID of the condition node
+            cond = result._condition
+            # Handle potential MappedLazyResult or other types in condition if necessary
+            # For now assuming LazyResult or similar which is in dep_nodes
+            if hasattr(cond, "_uuid") and cond._uuid in dep_nodes:
+                node = dep_nodes[cond._uuid]
+                node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
+                components.append(f"ConditionID:{node_id}")
+            else:
+                components.append("Condition:UNKNOWN")
+
+        if getattr(result, "_dependencies", None):
+            deps = result._dependencies
+            if deps:
+                components.append("Dependencies:[")
+                # Sort by UUID to ensure stable hash
+                sorted_deps = sorted(deps, key=lambda x: x._uuid)
+                for dep in sorted_deps:
+                    if dep._uuid in dep_nodes:
+                        node = dep_nodes[dep._uuid]
+                        node_id = getattr(
+                            node, "id", getattr(node, "structural_id", str(node))
+                        )
+                        components.append(f"DepID:{node_id}")
+                    else:
+                        components.append("DepID:UNKNOWN")
+                components.append("]")
+
+        # 6. Constraints
+        if getattr(result, "_constraints", None):
+            reqs = result._constraints.requirements
+            keys = sorted(reqs.keys())
+            s_vals = [f"{k}={reqs[k]}" for k in keys]
+            components.append(f"Constraints({','.join(s_vals)})")
 ~~~~~
 ~~~~~python.new
-    # 4. Verify basic integrity after deserialization
-    assert len(physical_graph.nodes) == len(deserialized_graph.nodes)
-    assert len(physical_graph.channels) == len(deserialized_graph.channels)
+        # 5. Metadata
+        cond = getattr(result, "_condition", None)
+        if cond:
+            # We need the ID of the condition node
+            # Handle potential MappedLazyResult or other types in condition if necessary
+            # For now assuming LazyResult or similar which is in dep_nodes
+            if hasattr(cond, "_uuid") and cond._uuid in dep_nodes:
+                node = dep_nodes[cond._uuid]
+                node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
+                components.append(f"ConditionID:{node_id}")
+            else:
+                components.append("Condition:UNKNOWN")
 
-    # Instead of asserting a brittle, hash-based ID, we assert that nodes
-    # with the expected stable properties exist in the graph.
-    nodes_collection = deserialized_graph.nodes.values()
-    
-    # Check for the constant node for argument 'a' with value 1
-    assert any(
-        node.name == "Const(a)" and node.initial_payload == 1
-        for node in nodes_collection
-    ), "Constant node for value 1 not found after deserialization"
+        deps = getattr(result, "_dependencies", None)
+        if deps:
+            components.append("Dependencies:[")
+            # Sort by UUID to ensure stable hash
+            sorted_deps = sorted(deps, key=lambda x: x._uuid)
+            for dep in sorted_deps:
+                if hasattr(dep, "_uuid") and dep._uuid in dep_nodes:
+                    node = dep_nodes[dep._uuid]
+                    node_id = getattr(
+                        node, "id", getattr(node, "structural_id", str(node))
+                    )
+                    components.append(f"DepID:{node_id}")
+                else:
+                    components.append("DepID:UNKNOWN")
+            components.append("]")
 
-    # Check for the constant node for argument 'b' with value 2
-    assert any(
-        node.name == "Const(b)" and node.initial_payload == 2
-        for node in nodes_collection
-    ), "Constant node for value 2 not found after deserialization"
+        # 6. Constraints
+        constraints = getattr(result, "_constraints", None)
+        if constraints:
+            reqs = constraints.requirements
+            keys = sorted(reqs.keys())
+            s_vals = [f"{k}={reqs[k]}" for k in keys]
+            components.append(f"Constraints({','.join(s_vals)})")
+~~~~~
+
+#### Acts 2: Implement Value Management in WorkflowContext
+
+Next, we'll add the missing value storage to `WorkflowContext` in the common package.
+
+~~~~~act
+patch_file
+packages/cascade-common/src/cascade/common/context.py
+~~~~~
+~~~~~python.old
+from contextvars import ContextVar
+from typing import Dict, List
+from cascade.spec.input import InputSpec
+
+
+class WorkflowContext:
+    def __init__(self):
+        self.input_specs: Dict[str, InputSpec] = {}
+
+    def register(self, spec: InputSpec):
+        if spec.name in self.input_specs:
+            # 在未来可以实现更复杂的合并或警告逻辑
+            return
+        self.input_specs[spec.name] = spec
+
+    def get_all_specs(self) -> List[InputSpec]:
+        return list(self.input_specs.values())
+~~~~~
+~~~~~python.new
+from contextvars import ContextVar
+from typing import Dict, List, Any, Optional
+from cascade.spec.input import InputSpec
+
+
+class WorkflowContext:
+    def __init__(self):
+        self.input_specs: Dict[str, InputSpec] = {}
+        self.values: Dict[str, Any] = {}
+
+    def register(self, spec: InputSpec):
+        if spec.name in self.input_specs:
+            # 在未来可以实现更复杂的合并或警告逻辑
+            return
+        self.input_specs[spec.name] = spec
+
+    def get_all_specs(self) -> List[InputSpec]:
+        return list(self.input_specs.values())
+
+    def set_value(self, name: str, value: Any) -> None:
+        self.values[name] = value
+
+    def get_value(self, name: str) -> Optional[Any]:
+        return self.values.get(name)
+~~~~~
+
+#### Acts 3: Clean up `param_probe`
+
+Finally, with `WorkflowContext` fixed, we can simplify the `param_probe` implementation and remove the runtime `hasattr` check.
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/probe/context.py
+~~~~~
+~~~~~python.old
+async def param_probe(
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
+) -> Dict[str, Token]:
+    name = inputs["name"].payload
+    # In a real run, values are resolved by the Context/Engine.
+    # Here we interface with the common context.
+    ctx = get_current_context()
+
+    # We assume context has a method to get values by spec name.
+    # If not found, it returns None (as a payload).
+    val = ctx.get_value(name) if hasattr(ctx, "get_value") else None
+
+    return {"out": Token(payload=val)}
+~~~~~
+~~~~~python.new
+async def param_probe(
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
+) -> Dict[str, Token]:
+    name = inputs["name"].payload
+    # In a real run, values are resolved by the Context/Engine.
+    # Here we interface with the common context.
+    ctx = get_current_context()
+
+    # We assume context has a method to get values by spec name.
+    # If not found, it returns None (as a payload).
+    val = ctx.get_value(name)
+
+    return {"out": Token(payload=val)}
 ~~~~~
 
 ### 下一步建议
 
-我们已经修正了图纯度测试，使其变得健壮。现在我们可以继续执行路线图的下一步。
+我们已经解决了所有的 `pyright` 报错，代码库的类型安全性得到了提升。
 
-下一步是**任务 2.2: 统一函数签名 (Signature Standardization)**。我们将审计 `cascade-std` 和测试用例中的所有 Worker 函数，确保它们的签名严格统一为 `async def (inputs, node, resources) -> dict`。这将为 Rust FFI 桥接提供一个稳定、单一的适配目标。
-
-如果你同意，我将开始对 `cascade-std` 包中的物理函数进行盘点和必要的重构。
+现在我们可以继续路线图的**任务 2.2: 统一函数签名 (Signature Standardization)**。我将开始审计 `cascade-std` 包中的物理函数，以确保它们的签名都符合 `async def (inputs, node, resources) -> dict` 规范。这将是为 FFI 做准备的重要一步。

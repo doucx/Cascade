@@ -5,6 +5,7 @@ from typing import Dict, Any, Callable, TypeVar, Optional, List
 from cascade.spec.topology import BipartiteGraph
 from cascade.spec.physics import Token, PhysicsDataNode
 from cascade.vm.reactor import Reactor
+from cascade.vm.protocols import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry
@@ -24,6 +25,7 @@ class EventDrivenRunner:
         self,
         graph: BipartiteGraph,
         function_map: Dict[str, Callable],
+        reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
     ):
         self.graph = graph
         self.memory = VolatileMemory()
@@ -39,7 +41,9 @@ class EventDrivenRunner:
         self.function_map = function_map
 
         # 3. Inject the registry into the Reactor
-        self.reactor = Reactor(
+        # Use provided factory or default to the Python Reactor
+        factory = reactor_factory or Reactor
+        self.reactor = factory(
             self.graph,
             self.memory,
             self.executor,

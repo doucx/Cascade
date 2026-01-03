@@ -49,5 +49,19 @@ def test_graph_is_serializable_and_pure():
     # 4. Verify basic integrity after deserialization
     assert len(physical_graph.nodes) == len(deserialized_graph.nodes)
     assert len(physical_graph.channels) == len(deserialized_graph.channels)
-    assert "const.t_1.0" in deserialized_graph.nodes
-    assert deserialized_graph.nodes["const.t_1.0"].initial_payload == 1
+
+    # Instead of asserting a brittle, hash-based ID, we assert that nodes
+    # with the expected stable properties exist in the graph.
+    nodes_collection = deserialized_graph.nodes.values()
+    
+    # Check for the constant node for argument 'a' with value 1
+    assert any(
+        node.name == "Const(a)" and node.initial_payload == 1
+        for node in nodes_collection
+    ), "Constant node for value 1 not found after deserialization"
+
+    # Check for the constant node for argument 'b' with value 2
+    assert any(
+        node.name == "Const(b)" and node.initial_payload == 2
+        for node in nodes_collection
+    ), "Constant node for value 2 not found after deserialization"

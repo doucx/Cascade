@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(compiler): 添加图纯度测试以确保可序列化性", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767439549.908481, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(test): 修正图纯度测试以验证稳定属性而非动态ID", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767439610.6132035, "duration_ms": 0}}

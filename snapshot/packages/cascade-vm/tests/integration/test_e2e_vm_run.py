@@ -53,7 +53,7 @@ async def test_e2e_vm_run_with_all_features():
     
     main_result = main_task(10).with_constraints(gpu=1).run_if(condition_result).after(setup_result)
     
-    final_result_lr = final_task(main_result, setup_result)
+    final_result_lr = final_task(res=main_result, setup_status=setup_result)
 
     # 2. Manually compile the workflow
     # Frontend

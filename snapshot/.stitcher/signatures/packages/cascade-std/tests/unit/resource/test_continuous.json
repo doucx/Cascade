@@ -1,4 +1,12 @@
 {
+  "test_continuous_allocator_grants_memory": {
+    "baseline_code_signature_text": "async def test_continuous_allocator_grants_memory():",
+    "baseline_code_structure_hash": "32a3cfe41fbaa111baa820bcbafc60977f7a6825277e3009dbd732d2ed10efe3"
+  },
+  "test_continuous_allocator_recirculates_large_request": {
+    "baseline_code_signature_text": "async def test_continuous_allocator_recirculates_large_request():",
+    "baseline_code_structure_hash": "3f86b38bf756e13fed14b8d3ba47f510f6bbb5288830fe180d65f9b66d528256"
+  },
   "test_continuous_broker_grants_memory": {
     "baseline_code_signature_text": "async def test_continuous_broker_grants_memory():",
     "baseline_code_structure_hash": "41d24e96d0059f797344c90af4123b63c50d1908787084a92962b8e5b6e43652"
@@ -10,5 +18,9 @@
   "test_continuous_broker_replenish_and_grant": {
     "baseline_code_signature_text": "async def test_continuous_broker_replenish_and_grant():",
     "baseline_code_structure_hash": "cefd1f3832a00de5c186a5176a88c89736841da43a60e5259b6f206d5fb4fab9"
+  },
+  "test_continuous_reclaimer_replenish": {
+    "baseline_code_signature_text": "async def test_continuous_reclaimer_replenish():",
+    "baseline_code_structure_hash": "7e6200c3480eb2596a896e6c946ccdd13cdba9d7883c840aca36af9184bbdf0e"
   }
 }

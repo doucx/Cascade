@@ -1,3 +1,5 @@
 "const_probe": |-
-  Identity probe for constant values.
-  Connects a pre-filled D_const node to the rest of the graph.
+  A simple Identity Probe.
+  It takes a value from a DataNode (which holds a constant payload)
+  and passes it forward.
+  In a more complex setup, this could wait for a Trigger.

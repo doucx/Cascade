@@ -43,12 +43,12 @@ async def standard_stainer(
             # But the Stainer's output port might be named differently (e.g. 'rel_{name}' or just 'res_{name}')
             # Convention: If Stainer output is 'res_gpu', Bleacher input was 'res_gpu'.
             amount = 1  # Default fallback
-            
+
             # Try to find the specific amount
             resource_amounts = trace_payload.get("resource_amounts", {})
             if port_name in resource_amounts:
                 amount = resource_amounts[port_name]
-            
+
             # Emit token with the correct amount to replenish the broker
             outputs[port_name] = Token(payload=amount)
 

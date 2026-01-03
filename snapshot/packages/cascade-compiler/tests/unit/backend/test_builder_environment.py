@@ -33,14 +33,14 @@ def test_builder_creates_resources_from_env(simple_graph_ir):
     ledger_id = "canonical.resource.ledger.gpu"
     allocator_id = "canonical.resource.allocator.gpu"
     reclaimer_id = "canonical.resource.reclaimer.gpu"
-    
+
     assert ledger_id in graph.nodes
     assert allocator_id in graph.nodes
     assert reclaimer_id in graph.nodes
-    
+
     ledger_node = graph.nodes[ledger_id]
     # The Ledger Node holds the DiscreteLedger object, capacity is just 1 (slot for the object)
-    assert ledger_node.capacity == 1 
+    assert ledger_node.capacity == 1
     assert ledger_node.initial_tokens == 1
     # Check the payload of the initial token
     initial_ledger = ledger_node.initial_payload

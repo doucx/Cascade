@@ -110,7 +110,7 @@ class Builder:
                 id=rel_buffer_id, name=f"RelBuffer({res_def.name})", capacity=1000
             )
             physical_graph.nodes[rel_buffer_id] = d_rel_buffer
-            
+
             # Buffer -> Reclaimer
             physical_graph.channels.append(
                 Channel(rel_buffer_id, "out", reclaimer_id, PortName.REL)
@@ -255,7 +255,7 @@ class Builder:
                     assert source_subgraph.stainer is not None
 
                     port_name = f"wait_for_{dep_id}"
-                    
+
                     # Violation Fix: Insert D_seq
                     d_seq_id = f"seq.{dep_id}.to.{node_ir.id}"
                     d_seq = PhysicsDataNode(id=d_seq_id, name=f"Seq({dep_id})")
@@ -272,10 +272,12 @@ class Builder:
             if node_ir.condition and node_ir.condition in subgraphs:
                 source_subgraph = subgraphs[node_ir.condition]
                 assert source_subgraph.stainer is not None
-                
+
                 # Violation Fix: Insert D_cond
                 d_cond_id = f"cond.{node_ir.condition}.to.{node_ir.id}"
-                d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
+                d_cond = PhysicsDataNode(
+                    id=d_cond_id, name=f"Cond({node_ir.condition})"
+                )
                 physical_graph.nodes[d_cond_id] = d_cond
 
                 physical_graph.channels.append(
@@ -300,7 +302,9 @@ class Builder:
 
                 # --- A. Request Chain ---
                 # 1. D_const (Amount)
-                d_amt_id = PhysicalIdGenerator.constant(node_ir.id, f"req_amt_{res_name}")
+                d_amt_id = PhysicalIdGenerator.constant(
+                    node_ir.id, f"req_amt_{res_name}"
+                )
                 d_amt = PhysicsDataNode(
                     id=d_amt_id,
                     name=f"Amt({res_name})",
@@ -326,13 +330,15 @@ class Builder:
                     id=f_req_id,
                     name=f"Req({res_name})",
                     input_ports={"amount": PortDef("amount", PortRole.DATA)},
-                    output_ports={PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)},
+                    output_ports={
+                        PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA)
+                    },
                 )
                 physical_graph.nodes[f_req_id] = f_req
 
                 # 4. Wiring: D_amt -> F_probe -> D_temp -> F_req -> D_req_buffer
                 # We need intermediate data nodes because of Bipartite rule (F->D->F)
-                
+
                 # D_amt -> F_probe
                 physical_graph.channels.append(
                     Channel(d_amt_id, "out", f_probe_id, "value")
@@ -346,7 +352,7 @@ class Builder:
                 physical_graph.channels.append(
                     Channel(f_probe_id, "out", d_probed_id, "in")
                 )
-                
+
                 # D_probed -> F_req
                 physical_graph.channels.append(
                     Channel(d_probed_id, "out", f_req_id, "amount")
@@ -359,18 +365,18 @@ class Builder:
 
                 # --- B. Grant Wiring ---
                 # Allocator (GNT) -> D_grant_buffer -> Bleacher (res_{name})
-                
+
                 # We need a shared Grant Buffer for the Allocator, OR per-task buffers?
                 # If we use a shared buffer, all grants go there, and Bleachers pick based on Tag.
                 # This fits the "Bus" model.
-                
+
                 gnt_buffer_id = f"buffer.gnt.{res_name}"
                 if gnt_buffer_id not in physical_graph.nodes:
                     d_gnt_buffer = PhysicsDataNode(
                         id=gnt_buffer_id, name=f"GntBuffer({res_name})", capacity=1000
                     )
                     physical_graph.nodes[gnt_buffer_id] = d_gnt_buffer
-                    
+
                     # Allocator -> Grant Buffer (Only once per resource)
                     physical_graph.channels.append(
                         Channel(allocator_id, PortName.GNT, gnt_buffer_id, "in")
@@ -378,7 +384,7 @@ class Builder:
 
                 target_tag = f_req_id
                 port_name = f"res_{res_name}"
-                
+
                 # Grant Buffer -> Bleacher (Filtered by Tag)
                 physical_graph.channels.append(
                     Channel(

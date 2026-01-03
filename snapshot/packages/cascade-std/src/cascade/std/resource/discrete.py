@@ -12,11 +12,6 @@ class DiscreteLedger:
 async def discrete_allocator(
     inputs: Dict[str, Token], node: PhysicsNode
 ) -> Dict[str, Token]:
-    """
-    Handles Resource Requests.
-    Inputs: ledger_in, req_in
-    Outputs: ledger_out, gnt_out (if success), req_out (if failed)
-    """
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload
     # Ideally we should clone or re-instantiate if immutable, but for now we mutate in place for perf
@@ -45,11 +40,6 @@ async def discrete_allocator(
 async def discrete_reclaimer(
     inputs: Dict[str, Token], node: PhysicsNode
 ) -> Dict[str, Token]:
-    """
-    Handles Resource Releases.
-    Inputs: ledger_in, rel_in
-    Outputs: ledger_out
-    """
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload
     if isinstance(ledger_data, dict):

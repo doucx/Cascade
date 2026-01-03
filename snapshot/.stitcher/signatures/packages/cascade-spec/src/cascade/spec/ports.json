@@ -11,6 +11,7 @@
   "PortName.OBS_OUTPUT": {},
   "PortName.REL": {},
   "PortName.REQ": {},
+  "PortName.REQ_OUT": {},
   "PortName.TRACE_INPUT": {},
   "PortName.TRACE_OUTPUT": {},
   "PortName.WORKER_INPUT": {},
@@ -19,5 +20,6 @@
   "PortRole.DATA": {},
   "PortRole.OBSERVABILITY": {},
   "PortRole.RESOURCE": {},
+  "PortRole.RESOURCE_REQUEST": {},
   "PortRole.SIGNAL": {}
 }

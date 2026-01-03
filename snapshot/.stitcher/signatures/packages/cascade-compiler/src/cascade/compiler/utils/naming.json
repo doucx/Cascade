@@ -10,6 +10,18 @@
     "baseline_code_signature_text": "def constant(target_node_id: str, arg_name: str) -> str:",
     "baseline_code_structure_hash": "32acb59bd9ab40b15e3e09d4907761387a199aeccc85898acf2a610ca0286be1"
   },
+  "PhysicalIdGenerator.global_allocator": {
+    "baseline_code_signature_text": "def global_allocator(resource_name: str) -> str:",
+    "baseline_code_structure_hash": "7079010bb755169e380868cc975f88b85a82dfa8358e2447b796f0b52da482db"
+  },
+  "PhysicalIdGenerator.global_ledger": {
+    "baseline_code_signature_text": "def global_ledger(resource_name: str) -> str:",
+    "baseline_code_structure_hash": "26b43a240211c145ddb63ef76afa2092a70d60b0db0b148ea666c8a410bd67f7"
+  },
+  "PhysicalIdGenerator.global_reclaimer": {
+    "baseline_code_signature_text": "def global_reclaimer(resource_name: str) -> str:",
+    "baseline_code_structure_hash": "f821699724d22e56c872ff39e0c529867d9fcc2d8715388634f41152b70ff3c9"
+  },
   "PhysicalIdGenerator.global_resource": {
     "baseline_code_signature_text": "def global_resource(resource_name: str) -> str:",
     "baseline_code_structure_hash": "dc428514da57a65d56f05022b9f88dc2aaf050bf668e9f9d98c55a907c8ae23d"
@@ -21,6 +33,14 @@
   "PhysicalIdGenerator.observability_observer": {
     "baseline_code_signature_text": "def observability_observer() -> str:",
     "baseline_code_structure_hash": "c29b7166c5e7317e0af71cac92dca47fec14b13c353d44f453e5b786ea7ab224"
+  },
+  "PhysicalIdGenerator.probe_const": {
+    "baseline_code_signature_text": "def probe_const(target_node_id: str, arg_name: str) -> str:",
+    "baseline_code_structure_hash": "f0a21530710523ce8564a46234247ce444fb6582fd38a2d4edaaa8314215ab53"
+  },
+  "PhysicalIdGenerator.requestor": {
+    "baseline_code_signature_text": "def requestor(target_node_id: str, resource_name: str) -> str:",
+    "baseline_code_structure_hash": "03a61c8cdee8ae9025d161ceeb366df01da900e7115bdb84548808afd581d154"
   },
   "PhysicalIdGenerator.stain_node": {
     "baseline_code_signature_text": "def stain_node(logical_node_id: str) -> str:",

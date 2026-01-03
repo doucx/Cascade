@@ -1,3 +1,7 @@
 "resource_requestor": |-
-  Takes an input amount and emits a Request Token tagged with the node's ID.
-  Used to initiate a resource transaction with a Broker.
+  Acts as a Tag Injector.
+  Takes a raw amount (from a Const Probe) and wraps it in a Token
+  tagged with this node's ID (or a configured tag).
+
+  In the Builder, we will map this node's ID to something that correlates
+  with the Task ID, so the Broker can route the Grant back.

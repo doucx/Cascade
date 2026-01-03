@@ -94,7 +94,7 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
 
 def _node_to_dict(node: Node) -> Dict[str, Any]:
     data = {
-        "structural_id": node.structural_id,
+        "current_node_instance_hash": node.current_node_instance_hash,
         "name": node.name,
         "node_type": node.node_type,
         # input_bindings now contains JSON-serializable literals directly.
@@ -138,8 +138,8 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
 
 def _edge_to_dict(edge: Edge, router_map: Dict[int, int]) -> Dict[str, Any]:
     data = {
-        "source_id": edge.source.structural_id,
-        "target_id": edge.target.structural_id,
+        "source_node_instance_hash": edge.source.current_node_instance_hash,
+        "target_node_instance_hash": edge.target.current_node_instance_hash,
         "arg_name": edge.arg_name,
         "edge_type": edge.edge_type.name,
     }

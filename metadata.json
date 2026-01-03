@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(std,vm): 实现原生异步 IC 与 Reactor 智能分发", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767409547.2276304, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: D benchmark_loop_performance.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767409560.612335, "duration_ms": 0}}

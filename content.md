@@ -1,10 +1,10 @@
-## [WIP] scripts/benchmark_vm_tco.py
+好的，这个分析更有意义。我们需要区分 **“语言开销”**、**“异步运行时开销”** 和 **“物理引擎抽象开销”**。
 
-这是一个非常棒的主意。我们要测量的是 **“物理层原生开销”**。
-
-在 Cascade 3.0 的模型中，TCO（尾调用优化）不再是堆栈技巧，而是 **“能量回流”**：一个函数节点将输出连回自己的输入库所。
-
-我为你准备了一个脚本 `scripts/benchmark_vm_tco.py`。它跳过了所有复杂的 `Builder` 逻辑，直接通过 `BipartiteGraph` 手工搭建了一个最简物理场，并与 Python 原生的 `while` 循环进行对比。
+## [WIP] 我已经更新了 `scripts/benchmark_vm_tco.py`，现在包含四个维度的对比：
+1.  **Sync While**: 纯 Python 速度。
+2.  **Async While (No Yield)**: 在 `async` 函数里跑循环但不挂起（测量 async 函数调用的极微小开销）。
+3.  **Async While (Yielding)**: 每次循环执行 `await asyncio.sleep(0)`（测量 **asyncio 事件循环单次调度**的基准开销）。
+4.  **Physical TCO**: Cascade Reactor 驱动的物理场循环（测量 **Cascade 引擎逻辑**在 asyncio 之上的净开销）。
 
 ~~~~~act
 write_file
@@ -27,36 +27,38 @@ from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor
 
-# --- 被测物理函数 ---
+# --- 基准测试目标 ---
 
-async def async_increment(inputs, node, resources):
-    """
-    极简异步函数：读取 payload，加 1，回传。
-    """
-    val = inputs["in"].payload
-    return {"out": Token(payload=val + 1)}
-
-# --- 基准测试工具 ---
-
-async def run_while_baseline(iterations: int):
-    """
-    原生 Python while 循环基准。
-    """
+def sync_while_baseline(iterations: int):
     count = 0
     start_time = time.perf_counter()
     while count < iterations:
         count += 1
-    end_time = time.perf_counter()
-    
-    duration = end_time - start_time
-    ops_per_sec = iterations / duration
-    return duration, ops_per_sec
+    duration = time.perf_counter() - start_time
+    return duration
 
-async def run_physical_tco_benchmark(iterations: int):
-    """
-    物理场 TCO 基准：D_state -> F_inc -> D_state
-    """
-    # 1. 手工搭建物理场
+async def async_while_no_yield(iterations: int):
+    count = 0
+    start_time = time.perf_counter()
+    while count < iterations:
+        count += 1
+    duration = time.perf_counter() - start_time
+    return duration
+
+async def async_while_yielding(iterations: int):
+    count = 0
+    start_time = time.perf_counter()
+    while count < iterations:
+        count += 1
+        await asyncio.sleep(0) # 强制让出控制权，模拟一次完整的事件循环调度
+    duration = time.perf_counter() - start_time
+    return duration
+
+async def async_increment(inputs, node, resources):
+    val = inputs["in"].payload
+    return {"out": Token(payload=val + 1)}
+
+async def run_physical_tco(iterations: int):
     d_state = PhysicsDataNode(id="D_state", name="StateSlot", capacity=1)
     f_inc = PhysicsFuncNode(
         id="F_inc",
@@ -64,96 +66,77 @@ async def run_physical_tco_benchmark(iterations: int):
         input_ports={"in": PortDef("in", PortRole.DATA)},
         output_ports={"out": PortDef("out", PortRole.DATA)}
     )
-    
     graph = BipartiteGraph()
     graph.nodes = {n.id: n for n in [d_state, f_inc]}
-    
-    # 闭环布线 (TCO)
     graph.channels.append(Channel("D_state", "out", "F_inc", "in"))
     graph.channels.append(Channel("F_inc", "out", "D_state", "in"))
     
     memory = VolatileMemory()
-    executor = PhysicsExecutor() # 虽然我们用异步函数，但 Reactor 仍需要 executor 实例
+    executor = PhysicsExecutor()
     func_map = {"F_inc": async_increment}
-    
     reactor = Reactor(graph, memory, executor, func_map)
     
-    # 2. 注入初始能量
     memory.put(d_state, Token(payload=0))
     
-    # 3. 运行循环
     start_time = time.perf_counter()
-    
-    # 物理层迭代：每次 step 会触发一次 F_inc
     for _ in range(iterations):
-        # 触发扫描与调度
         await reactor.step()
-        
-        # 由于 Reactor.step() 内部使用 create_task，我们需要等待任务完成
-        # 这种等待模拟了物理场中“能量坍缩-激发”的真实时延
+        # 等待任务在后台执行完成并回流 Token
+        # 物理场中这是必须的，因为 Reactor 使用 create_task 异步发射
         while reactor.active_task_count > 0:
-            await asyncio.sleep(0) # 让出控制权给调度后的任务
+            await asyncio.sleep(0)
             
-    end_time = time.perf_counter()
+    duration = time.perf_counter() - start_time
     
-    # 验证结果
+    # 结果校验
     final_val = memory.take("D_state").payload
-    assert final_val == iterations, f"Expected {iterations}, got {final_val}"
-    
-    duration = end_time - start_time
-    ops_per_sec = iterations / duration
-    return duration, ops_per_sec
+    assert final_val == iterations
+    return duration
+
+# --- 报告生成 ---
 
 async def main():
-    ITERATIONS = 10_000 # 物理场开销较大，先测 1万次
+    ITERATIONS = 10_000
     
-    print(f"--- Cascade VM 物理层 TCO 测速 (迭代次数: {ITERATIONS}) ---")
-    print("环境: 纯异步函数 (无线程池切换)")
-    print("-" * 50)
-    
-    # Baseline
-    print("正在执行 Python While 循环基准...")
-    b_dur, b_ops = await run_while_baseline(ITERATIONS)
-    print(f"While 结果: {b_dur:.4f}s | 吞吐量: {b_ops:,.0f} ops/sec")
-    
-    print("-" * 50)
-    
-    # Physical
-    print("正在执行 Physical Field TCO 基准...")
-    p_dur, p_ops = await run_physical_tco_benchmark(ITERATIONS)
-    print(f"Physical 结果: {p_dur:.4f}s | 吞吐量: {p_ops:,.0f} ops/sec")
-    
-    print("-" * 50)
-    
-    ratio = p_dur / b_dur
-    print(f"物理层抽象税 (Overhead Ratio): {ratio:.1f}x")
-    print(f"单次激发平均耗时: {(p_dur/ITERATIONS)*1_000_000:.2f} μs")
+    print(f"--- Cascade 性能多维基准测试 (迭代: {ITERATIONS:,.0f}) ---")
+    print(f"Python 版本: {sys.version.split()[0]}")
+    print("-" * 60)
+
+    # 1. Sync
+    d_sync = sync_while_baseline(ITERATIONS)
+    print(f"1. Sync While         : {d_sync:.6f}s | {ITERATIONS/d_sync:12,.0f} ops/s (基准)")
+
+    # 2. Async (No Yield)
+    d_asy_ny = await async_while_no_yield(ITERATIONS)
+    print(f"2. Async (No Yield)   : {d_asy_ny:.6f}s | {ITERATIONS/d_asy_ny:12,.0f} ops/s (开销: {d_asy_ny/d_sync:.1f}x)")
+
+    # 3. Async (Yielding)
+    d_asy_y = await async_while_yielding(ITERATIONS)
+    print(f"3. Async (Yielding)   : {d_asy_y:.6f}s | {ITERATIONS/d_asy_y:12,.0f} ops/s (开销: {d_asy_y/d_sync:.1f}x)")
+
+    # 4. Physical Field
+    d_phys = await run_physical_tco(ITERATIONS)
+    print(f"4. Physical TCO       : {d_phys:.6f}s | {ITERATIONS/d_phys:12,.0f} ops/s (开销: {d_phys/d_sync:.1f}x)")
+
+    print("-" * 60)
+    print(f"结论: 物理引擎相对于纯 Async(Yielding) 的净税收为: {d_phys/d_asy_y:.2f}x")
+    print(f"物理层单步延迟 (Step Latency): {(d_phys/ITERATIONS)*1_000_000:.2f} μs")
 
 if __name__ == "__main__":
     asyncio.run(main())
 ~~~~~
 
-### 如何运行
+### 如何分析结果
 
-你可以直接使用 `python` 运行（假设你已经安装了相关依赖）：
+当你运行这个脚本时，你会看到一个非常清晰的层次感：
 
-```bash
-python scripts/benchmark_vm_tco.py
-```
+1.  **Sync vs Async (No Yield)**: 差距通常微乎其微。这说明 Python 执行 async 函数体本身很快。
+2.  **Async (No Yield) vs Async (Yielding)**: 这是一个巨大的断层（通常几十倍到上百倍）。这测量的就是 **asyncio 事件循环的“往返时延”**。每当你 `await` 一个已经就绪的任务（如 `sleep(0)`），事件循环都要进行一次完整的调度。
+3.  **Async (Yielding) vs Physical TCO**: 这是我们 **Cascade 物理引擎的真实抽象税**。
+    *   如果这个比值在 **2x ~ 5x** 之间：说明我们的引擎逻辑（扫描、取数、放数）已经非常精简了。
+    *   如果比值 **> 10x**: 说明 `Reactor` 和 `VolatileMemory` 的逻辑还有很大的优化空间（比如过多的 `asyncio.Event` 设置或 `O(n)` 的扫描）。
 
-### 分析与预期
+**单节点 TCO 的“天花板”**:
+在不进行算子融合（JIT）的情况下，物理场 TCO 的理论最高速度永远无法超过 `Async (Yielding)`。
 
-这个脚本测量的实际上是 `Reactor` 核心循环的 **“最小摩擦力”**。
-
-1.  **为什么会有抽象税？**
-    *   **内存操作**: 每次迭代都要进行 `memory.take` 和 `memory.put`（涉及 `deque` 和 `asyncio.Event` 的设置）。
-    *   **调度开销**: `Reactor.step` 涉及一次全图扫描（虽然已优化为 O(1) 端口查找）。
-    *   **Task 创建**: `asyncio.create_task` 是最重的开销，它涉及协程对象的分配和事件循环的调度。
-    *   **上下文切换**: `await asyncio.sleep(0)` 强迫事件循环切换一次上下文。
-
-2.  **JIT 的必要性**:
-    如果测速结果显示抽象税在 100x ~ 1000x 之间，这非常正常。这就是为什么白皮书中提到 **“运行时压缩/算子融合”** 至关重要。
-    当 JIT 发现 `D_state -> F_inc -> D_state` 这个死循环时，它应该将其“坍缩”为一个原生的 `while` 循环，从而将 1000x 的抽象税降为 1x。
-
-3.  **单节点 TCO 的本质**:
-    在物理层，TCO 就是 **“不让 Reactor 停下来”**。如果 `active_task_count` 始终保持在 1 以上，且 `memory` 始终有 Token，物理引擎就会像永动机一样转下去。
+你可以运行一下，看看在你的机器上这个“净税收”是多少。这将是我们未来决定是否需要引入 Rust 核心或 C 扩展的重要参考数据。

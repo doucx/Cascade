@@ -289,12 +289,15 @@ class GraphExecutionStrategy:
                             )
                         )
 
+                        executable = executable_registry[node.current_node_instance_hash]
+
                         inputs = await self.node_processor.arg_resolver.resolve(
                             node,
                             graph,
                             state_backend,
                             active_resources,
                             instance_map=instance_map,
+                            callable_obj=executable,
                             user_params=params,
                             input_overrides=overrides,
                         )
@@ -304,8 +307,6 @@ class GraphExecutionStrategy:
                                 node, graph, state_backend
                             )
                         )
-
-                        executable = executable_registry[node.current_node_instance_hash]
 
                         tasks_to_run.append(
                             (

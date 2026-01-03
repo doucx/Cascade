@@ -38,6 +38,7 @@ class ArgumentResolver:
         state_backend: StateBackend,
         resource_context: Dict[str, Any],
         instance_map: Dict[str, Node],
+        callable_obj: Optional[Callable],
         user_params: Optional[Dict[str, Any]] = None,
         input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
@@ -119,10 +120,10 @@ class ArgumentResolver:
                 kwargs[k] = v
 
         # 3. Handle Resource Injection in Defaults
-        if node.callable_obj:
+        if callable_obj:
             try:
                 # Re-inspect signature on demand
-                sig = inspect.signature(node.callable_obj)
+                sig = inspect.signature(callable_obj)
                 bound_args = sig.bind_partial(*args, **kwargs)
                 for param in sig.parameters.values():
                     if (
@@ -139,7 +140,7 @@ class ArgumentResolver:
         # [CRITICAL] This logic must always run for Param tasks
         from cascade.common.inputs import _get_param_value
 
-        if node.callable_obj is _get_param_value.func:
+        if callable_obj is _get_param_value.func:
             kwargs["params_context"] = user_params or {}
 
         return args, kwargs

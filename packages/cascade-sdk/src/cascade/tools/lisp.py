@@ -304,7 +304,7 @@ def to_lisp(target: Any) -> str:
     if not isinstance(target, LazyResult):
         raise TypeError(f"Target must be a LazyResult, got {type(target)}")
 
-    graph, instance_map = build_graph(target)
+    graph, instance_map, _ = build_graph(target)
     transpiler = LispTranspiler(graph, instance_map)
 
     # Locate the root node corresponding to the target instance

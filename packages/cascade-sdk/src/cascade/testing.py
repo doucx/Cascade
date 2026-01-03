@@ -74,6 +74,7 @@ class SpyExecutor(Executor):
     async def execute(
         self,
         node: Node,
+        callable_obj: Callable,
         args: List[Any],
         kwargs: Dict[str, Any],
     ) -> Any:
@@ -86,7 +87,13 @@ class MockExecutor(Executor):
         self.delay = delay
         self.return_value = return_value
 
-    async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):
+    async def execute(
+        self,
+        node: Node,
+        callable_obj: Callable,
+        args: List[Any],
+        kwargs: Dict[str, Any],
+    ):
         if self.delay > 0:
             await asyncio.sleep(self.delay)
 
@@ -107,6 +114,19 @@ class MockSubscriptionHandle(SubscriptionHandle):
     async def unsubscribe(self) -> None:
         if self._topic in self._parent.subscriptions:
             del self._parent.subscriptions[self._topic]
+
+
+from cascade.adapters.executors.local import LocalExecutor
+
+
+class TimedMockExecutor(LocalExecutor):
+    def __init__(self, delay: float = 0.0):
+        super().__init__()
+        self.delay = delay
+
+    async def execute(self, node, callable_obj, args, kwargs):
+        await asyncio.sleep(self.delay)
+        return await super().execute(node, callable_obj, args, kwargs)
 
 
 class MockConnector(Connector):
@@ -199,3 +219,17 @@ class ControllerTestApp:
         payload = asdict(constraint)
         topic = f"cascade/constraints/{scope.replace(':', '/')}"
         await self.connector.publish(topic, payload, retain=True)
+
+
+__all__ = [
+    "override_resource",
+    "SpySubscriber",
+    "SpySolver",
+    "MockSolver",
+    "SpyExecutor",
+    "MockExecutor",
+    "MockSubscriptionHandle",
+    "MockConnector",
+    "ControllerTestApp",
+    "TimedMockExecutor",
+]

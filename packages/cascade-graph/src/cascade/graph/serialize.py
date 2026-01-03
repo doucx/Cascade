@@ -1,6 +1,6 @@
 import json
 import importlib
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass
 
 from .model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
@@ -58,7 +58,9 @@ def _load_func_from_path(data: Optional[Dict[str, str]]) -> Optional[Any]:
 # --- Graph to Dict ---
 
 
-def graph_to_dict(graph: Graph) -> Dict[str, Any]:
+def graph_to_dict(
+    graph: Graph, registry: Optional[Dict[str, Callable]] = None
+) -> Dict[str, Any]:
     # 1. Collect and Deduplicate Routers
     # Map id(router_obj) -> index_in_list
     router_map: Dict[int, int] = {}
@@ -79,7 +81,7 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
             )
 
     # 2. Serialize Nodes
-    nodes_data = [_node_to_dict(n) for n in graph.nodes]
+    nodes_data = [_node_to_dict(n, registry) for n in graph.nodes]
 
     # 3. Serialize Edges (referencing routers by index)
     edges_data = [_edge_to_dict(e, router_map) for e in graph.edges]
@@ -92,7 +94,9 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
     }
 
 
-def _node_to_dict(node: Node) -> Dict[str, Any]:
+def _node_to_dict(
+    node: Node, registry: Optional[Dict[str, Callable]] = None
+) -> Dict[str, Any]:
     data = {
         "current_node_instance_hash": node.current_node_instance_hash,
         "name": node.name,
@@ -101,12 +105,16 @@ def _node_to_dict(node: Node) -> Dict[str, Any]:
         "input_bindings": node.input_bindings,
     }
 
+    func = None
+    if registry and node.current_node_instance_hash in registry:
+        func = registry[node.current_node_instance_hash]
+
     if isinstance(node, TaskNode):
-        if node.callable_obj:
-            data["callable"] = _get_func_path(node.callable_obj)
+        if func:
+            data["callable"] = _get_func_path(func)
     elif isinstance(node, MapNode):
-        if node.mapping_factory:
-            data["mapping_factory"] = _get_func_path(node.mapping_factory)
+        if func:
+            data["mapping_factory"] = _get_func_path(func)
     elif isinstance(node, ParamNode):
         # We don't serialize the spec for now, but could in the future
         pass
@@ -260,9 +268,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             current_node_instance_hash=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="param",
-            _callable=_load_func_from_path(data.get("callable")),
             retry_policy=retry_policy,
-            cache_policy=None,
+            cache_policy=None,  # Serialization of cache policy not implemented yet
             constraints=constraints,
             input_bindings=input_bindings,
             has_complex_inputs=True,  # ParamNode always needs the complex path
@@ -273,9 +280,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
             current_node_instance_hash=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="task",
-            _callable=_load_func_from_path(data.get("callable")),
             retry_policy=retry_policy,
-            cache_policy=None,
+            cache_policy=None,  # Serialization of cache policy not implemented yet
             constraints=constraints,
             input_bindings=input_bindings,
             # has_complex_inputs is an optimization flag, safe to default False on restore
@@ -287,8 +293,10 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
 # --- Main API ---
 
 
-def to_json(graph: Graph, indent: int = 2) -> str:
-    return json.dumps(graph_to_dict(graph), indent=indent)
+def to_json(
+    graph: Graph, registry: Optional[Dict[str, Callable]] = None, indent: int = 2
+) -> str:
+    return json.dumps(graph_to_dict(graph, registry), indent=indent)
 
 
 def from_json(json_str: str) -> Graph:

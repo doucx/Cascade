@@ -1,7 +1,7 @@
 import asyncio
 import functools
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Callable
 from cascade.graph.model import Node
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.graph.exceptions import StaticGraphError
@@ -22,16 +22,17 @@ class LocalExecutor:
     async def execute(
         self,
         node: Node,
+        callable_obj: Callable,
         args: List[Any],
         kwargs: Dict[str, Any],
     ) -> Any:
-        if node.callable_obj is None:
+        if callable_obj is None:
             raise TypeError(
                 f"Node '{node.name}' of type '{node.node_type}' is not executable (no callable)."
             )
 
         if node.definition.is_async:
-            result = await node.callable_obj(*args, **kwargs)
+            result = await callable_obj(*args, **kwargs)
         else:
             loop = asyncio.get_running_loop()
 
@@ -43,7 +44,7 @@ class LocalExecutor:
 
             # Use functools.partial to handle keyword arguments, as
             # run_in_executor only accepts positional arguments for the target function.
-            func_to_run = functools.partial(node.callable_obj, *args, **kwargs)
+            func_to_run = functools.partial(callable_obj, *args, **kwargs)
             result = await loop.run_in_executor(executor, func_to_run)
 
         # Runtime guard against the "task returns LazyResult" anti-pattern.

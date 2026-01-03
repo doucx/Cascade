@@ -1,9 +1,9 @@
 import time
 import asyncio
-from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING
+from typing import Any, Dict, List, Callable, Awaitable, Optional, TYPE_CHECKING, Tuple
 
 
-from cascade.graph.model import Node, Graph
+from cascade.graph.model import Node
 
 if TYPE_CHECKING:
     from cascade.graph.model import MapNode
@@ -36,7 +36,7 @@ class NodeProcessor:
         self.constraint_manager = constraint_manager
         self.solver = solver
 
-        # Resolvers are owned by the processor
+        # Resolvers are owned by the processor, but now invoked by the Strategy
         self.arg_resolver = ArgumentResolver()
         # ConstraintResolver now needs the instance map to resolve dynamic values
         self.constraint_resolver = ConstraintResolver()
@@ -44,21 +44,17 @@ class NodeProcessor:
     async def process(
         self,
         node: Node,
-        graph: Graph,
+        executable: Callable,
+        inputs: Tuple[List[Any], Dict[str, Any]],
+        requirements: Dict[str, Any],
+        cache_inputs: Dict[str, Any],
         state_backend: StateBackend,
         active_resources: Dict[str, Any],
         run_id: str,
         params: Dict[str, Any],
         sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]],
-        instance_map: Dict[str, Node],
-        input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        # 1. Resolve Constraints & Resources
-        requirements = await self.constraint_resolver.resolve(
-            node, graph, state_backend, self.constraint_manager, instance_map
-        )
-
-        # Pre-check for blocking to improve observability
+        # 1. Pre-check for blocking to improve observability
         if not self.resource_manager.can_acquire(requirements):
             self.bus.publish(
                 TaskBlocked(
@@ -75,14 +71,14 @@ class NodeProcessor:
             try:
                 return await self._execute_internal(
                     node,
-                    graph,
+                    executable,
+                    inputs,
+                    cache_inputs,
                     state_backend,
                     active_resources,
                     run_id,
                     params,
                     sub_graph_runner,
-                    instance_map,
-                    input_overrides,
                 )
             finally:
                 await self.resource_manager.release(requirements)
@@ -90,48 +86,37 @@ class NodeProcessor:
             # FAST PATH: No resources required
             return await self._execute_internal(
                 node,
-                graph,
+                executable,
+                inputs,
+                cache_inputs,
                 state_backend,
                 active_resources,
                 run_id,
                 params,
                 sub_graph_runner,
-                instance_map,
-                input_overrides,
             )
 
     async def _execute_internal(
         self,
         node: Node,
-        graph: Graph,
+        executable: Callable,
+        inputs: Tuple[List[Any], Dict[str, Any]],
+        cache_inputs: Dict[str, Any],
         state_backend: StateBackend,
         active_resources: Dict[str, Any],
         run_id: str,
         params: Dict[str, Any],
         sub_graph_runner: Callable,
-        instance_map: Dict[str, Node],
-        input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Any:
-        # 3. Resolve Arguments
-        args, kwargs = await self.arg_resolver.resolve(
-            node,
-            graph,
-            state_backend,
-            active_resources,
-            instance_map=instance_map,
-            user_params=params,
-            input_overrides=input_overrides,
-        )
+        # 3. Use Resolved Arguments
+        args, kwargs = inputs
 
         start_time = time.time()
 
         # 4. Cache Check
         if node.cache_policy:
-            inputs_for_cache = await self._resolve_inputs_for_cache(
-                node, graph, state_backend
-            )
             cached_value = await node.cache_policy.check(
-                node.current_node_instance_hash, inputs_for_cache
+                node.current_node_instance_hash, cache_inputs
             )
             if cached_value is not None:
                 self.bus.publish(
@@ -158,6 +143,7 @@ class NodeProcessor:
         if isinstance(node, MapNode):
             return await self._execute_map_node(
                 node,
+                executable,  # The factory is passed here
                 kwargs,
                 active_resources,
                 run_id,
@@ -177,11 +163,8 @@ class NodeProcessor:
         while attempt < max_attempts:
             attempt += 1
             try:
-                result = await self.executor.execute(node, args, kwargs)
+                result = await self.executor.execute(node, executable, args, kwargs)
                 duration = time.time() - start_time
-                # Optimization: Only compute result_preview if necessary or make it cheap
-                # For heavy loops, repr() on large objects is expensive.
-                # We skip preview for simple types or rely on renderer to do it if needed.
                 self.bus.publish(
                     TaskExecutionFinished(
                         run_id=run_id,
@@ -189,17 +172,12 @@ class NodeProcessor:
                         task_name=node.name,
                         status="Succeeded",
                         duration=duration,
-                        # result_preview=repr(result)[:100], # Too expensive for tight loops
                         result_preview=None,
                     )
                 )
-                # Cache Save
                 if node.cache_policy:
-                    inputs_for_save = await self._resolve_inputs_for_cache(
-                        node, graph, state_backend
-                    )
                     await node.cache_policy.save(
-                        node.current_node_instance_hash, inputs_for_save, result
+                        node.current_node_instance_hash, cache_inputs, result
                     )
                 return result
             except Exception as e:
@@ -233,30 +211,10 @@ class NodeProcessor:
                     raise last_exception
         raise RuntimeError("Unexpected execution state")
 
-    async def _resolve_inputs_for_cache(
-        self, node: Node, graph: Graph, state_backend: StateBackend
-    ) -> Dict[str, Any]:
-        # TODO: This needs to be smarter for caching.
-        # It should probably include data from input_bindings too?
-        # For now, keeping legacy behavior (edge results only).
-        inputs = {}
-        incoming_edges = [
-            edge
-            for edge in graph.edges
-            if edge.target.current_node_instance_hash == node.current_node_instance_hash
-        ]
-        for edge in incoming_edges:
-            if edge.arg_name.startswith("_"):
-                continue
-            if await state_backend.has_result(edge.source.current_node_instance_hash):
-                inputs[edge.arg_name] = await state_backend.get_result(
-                    edge.source.current_node_instance_hash
-                )
-        return inputs
-
     async def _execute_map_node(
         self,
         node: "MapNode",
+        factory: Callable,
         kwargs: Dict[str, Any],
         active_resources: Dict[str, Any],
         run_id: str,
@@ -264,10 +222,9 @@ class NodeProcessor:
         parent_state_backend: StateBackend,
         sub_graph_runner: Callable,
     ) -> List[Any]:
-        if not node.mapping_factory:
-            return []  # Should not happen if graph is well-formed
+        if not factory:
+            return []
 
-        factory = node.mapping_factory
         if not kwargs:
             return []
         lengths = {k: len(v) for k, v in kwargs.items()}
@@ -288,7 +245,6 @@ class NodeProcessor:
                 sub_target._constraints = node.constraints
             sub_targets.append(sub_target)
 
-        # Execute sub-targets in parallel using the provided runner
         coros = [
             sub_graph_runner(target, params, parent_state_backend)
             for target in sub_targets

@@ -20,8 +20,8 @@ def test_hashing_distinguishes_nested_lazy_results():
     target2 = task_a(task_c())
 
     # Build graphs for both to get the canonical nodes
-    _, instance_map1 = build_graph(target1)
-    _, instance_map2 = build_graph(target2)
+    _, instance_map1, _ = build_graph(target1)
+    _, instance_map2, _ = build_graph(target2)
 
     # Get the canonical node for the root of each graph
     node1 = instance_map1[target1._uuid]

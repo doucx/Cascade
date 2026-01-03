@@ -1,4 +1,4 @@
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Callable
 import inspect
 from cascade.graph.model import (
     Graph,
@@ -25,10 +25,11 @@ class GraphBuilder:
         self.registry = registry if registry is not None else NodeRegistry()
         self.hashing_service = HashingService()
         self.analyzer = ReflectionAnalyzer()
+        self.executable_registry: Dict[str, Callable] = {}
 
-    def build(self, target: Any) -> Tuple[Graph, Dict[str, Node]]:
+    def build(self, target: Any) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:
         self._visit(target)
-        return self.graph, self._visited_instances
+        return self.graph, self._visited_instances, self.executable_registry
 
     def _visit(self, value: Any) -> Node:
         if isinstance(value, LazyResult):
@@ -97,12 +98,6 @@ class GraphBuilder:
             if result.task.func is _get_param_value.func:
                 has_complex = True
 
-            # Note: Signature check is now implicit in TaskDef/Analyzer?
-            # We still need to check for Inject markers in defaults, but ReflectionAnalyzer
-            # serialized defaults to strings. We might need raw access here or rely on runtime.
-            # For now, let's keep the simplistic check if possible, or assume analyzer handled it?
-            # Actually, we need to inspect the raw function again for runtime injection logic.
-            # This is a runtime concern, so inspecting result.task.func is fine.
             if not has_complex:
                 try:
                     sig = inspect.signature(result.task.func)
@@ -126,21 +121,15 @@ class GraphBuilder:
 
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
-            # Note: execution_mode is now part of task_def (definition.mode)
             if result.task.func is _get_param_value.func:
-                # Retrieve the ParamSpec from the global context to attach to the node
                 from cascade.common.context import get_current_context
 
-                # The arg at index 0 is the param name
                 param_name = input_bindings.get("0") or input_bindings.get("name")
                 param_spec = None
                 if param_name:
                     ctx = get_current_context()
-                    # Linear scan is okay for build time, or we could optimize context lookup
                     for spec in ctx.get_all_specs():
                         if spec.name == param_name:
-                            # We import inside to avoid top-level circular imports if possible,
-                            # though ParamSpec is imported in ParamNode definition
                             from cascade.spec.input import ParamSpec
 
                             if isinstance(spec, ParamSpec):
@@ -151,7 +140,6 @@ class GraphBuilder:
                     current_node_instance_hash=current_node_instance_hash,
                     definition=task_def,
                     node_type="param",
-                    _callable=result.task.func,
                     retry_policy=result._retry_policy,
                     cache_policy=result._cache_policy,
                     constraints=result._constraints,
@@ -163,7 +151,6 @@ class GraphBuilder:
                 node = TaskNode(
                     current_node_instance_hash=current_node_instance_hash,
                     definition=task_def,
-                    _callable=result.task.func,
                     node_type="task",
                     retry_policy=result._retry_policy,
                     cache_policy=result._cache_policy,
@@ -172,6 +159,7 @@ class GraphBuilder:
                     has_complex_inputs=has_complex,
                 )
             self.registry._registry[current_node_instance_hash] = node
+            self.executable_registry[current_node_instance_hash] = result.task.func
 
         self._visited_instances[result._uuid] = node
         self.graph.add_node(node)
@@ -180,7 +168,6 @@ class GraphBuilder:
         self._scan_and_add_edges(node, result.args)
         self._scan_and_add_edges(node, result.kwargs)
 
-        # ... Jump Selector logic ...
         if result._jump_selector:
             selector = result._jump_selector
             if isinstance(selector, JumpSelector):
@@ -268,13 +255,13 @@ class GraphBuilder:
                 current_node_instance_hash=current_node_instance_hash,
                 definition=task_def,
                 node_type="map",
-                mapping_factory=result.factory,
                 retry_policy=result._retry_policy,
                 cache_policy=result._cache_policy,
                 constraints=result._constraints,
                 input_bindings=input_bindings,
             )
             self.registry._registry[current_node_instance_hash] = node
+            self.executable_registry[current_node_instance_hash] = result.factory
 
         self._visited_instances[result._uuid] = node
         self.graph.add_node(node)
@@ -354,5 +341,5 @@ class GraphBuilder:
 
 def build_graph(
     target: Any, registry: NodeRegistry | None = None
-) -> Tuple[Graph, Dict[str, Node]]:
+) -> Tuple[Graph, Dict[str, Node], Dict[str, Callable]]:
     return GraphBuilder(registry=registry).build(target)

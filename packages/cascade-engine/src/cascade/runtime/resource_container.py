@@ -39,7 +39,7 @@ class ResourceContainer:
             else:
                 self._resource_providers.pop(name, None)
 
-    def scan(self, graph: Graph) -> Set[str]:
+    def scan(self, graph: Graph, executable_registry: Dict[str, Callable]) -> Set[str]:
         required = set()
 
         # 1. Scan Node Input Bindings for explicit Inject objects
@@ -49,10 +49,11 @@ class ResourceContainer:
 
         # 2. Scan Node Signatures for Inject defaults
         for node in graph.nodes:
-            if node.callable_obj:
+            callable_obj = executable_registry.get(node.current_node_instance_hash)
+            if callable_obj:
                 try:
-                    # Inspect the callable object directly since Node no longer caches the signature
-                    obj_to_inspect: Any = node.callable_obj
+                    # Inspect the callable object directly
+                    obj_to_inspect: Any = callable_obj
                     sig = inspect.signature(obj_to_inspect)
                     for param in sig.parameters.values():
                         if isinstance(param.default, Inject):

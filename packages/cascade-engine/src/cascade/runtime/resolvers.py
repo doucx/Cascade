@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional, Callable
 
 from cascade.graph.model import Node, Graph, Edge, EdgeType
 from cascade.spec.resource import Inject
@@ -10,6 +10,27 @@ import inspect
 
 
 class ArgumentResolver:
+    async def resolve_cache_inputs(
+        self, node: Node, graph: Graph, state_backend: StateBackend
+    ) -> Dict[str, Any]:
+        # TODO: This needs to be smarter for caching.
+        # It should probably include data from input_bindings too?
+        # For now, keeping legacy behavior (edge results only).
+        inputs = {}
+        incoming_edges = [
+            edge
+            for edge in graph.edges
+            if edge.target.current_node_instance_hash == node.current_node_instance_hash
+        ]
+        for edge in incoming_edges:
+            if edge.arg_name.startswith("_"):
+                continue
+            if await state_backend.has_result(edge.source.current_node_instance_hash):
+                inputs[edge.arg_name] = await state_backend.get_result(
+                    edge.source.current_node_instance_hash
+                )
+        return inputs
+
     async def resolve(
         self,
         node: Node,
@@ -17,6 +38,7 @@ class ArgumentResolver:
         state_backend: StateBackend,
         resource_context: Dict[str, Any],
         instance_map: Dict[str, Node],
+        callable_obj: Optional[Callable],
         user_params: Optional[Dict[str, Any]] = None,
         input_overrides: Optional[Dict[str, Any]] = None,
     ) -> Tuple[List[Any], Dict[str, Any]]:
@@ -98,10 +120,10 @@ class ArgumentResolver:
                 kwargs[k] = v
 
         # 3. Handle Resource Injection in Defaults
-        if node.callable_obj:
+        if callable_obj:
             try:
                 # Re-inspect signature on demand
-                sig = inspect.signature(node.callable_obj)
+                sig = inspect.signature(callable_obj)
                 bound_args = sig.bind_partial(*args, **kwargs)
                 for param in sig.parameters.values():
                     if (
@@ -118,7 +140,7 @@ class ArgumentResolver:
         # [CRITICAL] This logic must always run for Param tasks
         from cascade.common.inputs import _get_param_value
 
-        if node.callable_obj is _get_param_value.func:
+        if callable_obj is _get_param_value.func:
             kwargs["params_context"] = user_params or {}
 
         return args, kwargs

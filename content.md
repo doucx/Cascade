@@ -1,57 +1,38 @@
-好的，这是一个非常有价值的想法。性能基准测试可以帮助我们量化 Cascade VM 反应堆循环的开销，并为未来的优化（如 JIT 算子融合）提供一个明确的基线。
-
-我将为你创建一个脚本，它将精确地执行你所描述的两种循环模式的对比测试，并输出一个清晰的性能比较报告。
-
-## [WIP] tool: 创建 VM 循环与原生循环的性能基准测试脚本
+## [WIP] tool: 优化基准测试以原生执行异步任务
 
 ### 用户需求
 
-在 `./scripts` 目录下创建一个新的 Python 脚本，用于对比以下两种循环结构的性能：
-1.  一个在 Cascade VM 中实现的、通过令牌自环迭代 10000 次的物理拓扑。
-2.  一个标准的、在 Python 中实现的、迭代 10000 次的 `while` 循环。
-
-脚本最终需要计算并打印出两者的总耗时和每秒迭代次数。
+修改 `scripts/benchmark_loop_performance.py` 脚本，使其在运行 Cascade VM 基准测试时，对 `async def` 函数直接进行 `await` 调用，而不是通过 `ThreadPoolExecutor`，以验证原生异步执行的性能。
 
 ### 评论
 
-这是一个出色的工程实践。我们并不期望 VM 的循环能快过原生 `while` 循环——这在物理上是不可能的，因为 VM 的每一步都包含了状态检查、函数分发、内存操作等额外开销。这个测试的真正价值在于**量化这个开销**。
-
-通过建立这个基准，我们可以：
-1.  了解 Cascade 物理模型的“固定成本”。
-2.  为未来的性能优化（如 JIT 算子融合）提供一个可衡量的目标。
-3.  确保后续的架构变更不会引入意料之外的性能衰退。
+这是一个关键的实验，它将用数据证明引入“智能分发”执行器架构的必要性和巨大潜力。通过这次修改，我们将能看到 Cascade VM 在理想情况下的性能上限。
 
 ### 目标
 
-1.  创建脚本文件 `./scripts/benchmark_loop_performance.py`。
-2.  在脚本中实现 `run_cascade_benchmark` 函数，该函数将构建一个 `D1 -> F1 -> D1` 的自环拓扑，并运行反应堆直到循环结束。
-3.  在脚本中实现 `run_python_benchmark` 函数，该函数将执行一个简单的 `while` 循环。
-4.  在 `main` 函数中依次执行这两个基准测试，并以表格形式打印出对比结果。
+1.  将脚本中的 `loop_logic` 函数修改为 `async def`。
+2.  修改 `run_cascade_benchmark` 中的 `Reactor._fire` 方法的实现，使其能够检测到协程函数并直接 `await` 它。
+3.  保持对普通函数的 `executor.submit` 调用作为后备。
 
 ### 基本原理
 
-*   **Cascade 自环拓扑**：我们将创建一个数据节点 `D_loop` 和一个函数节点 `F_loop`。`D_loop` 的输出连接到 `F_loop` 的输入，而 `F_loop` 的输出再连接回 `D_loop` 的输入。
-*   **迭代计数**：迭代次数将作为 `Token` 的 `payload` 在图中流动。`F_loop` 的逻辑是读取 `payload`，加一，然后生成一个新的 `Token`。
-*   **循环终止**：当 `payload` 中的计数值达到 10000 时，`F_loop` 将不再产生任何输出 `Token`。这会导致物理场中不再有可激发的节点，`reactor.step()` 将返回 0，循环自然终止。
-*   **性能测量**：我们将使用 `time.monotonic()` 来精确测量两个函数的核心循环部分的执行时间。
+我们将利用 `inspect.iscoroutinefunction` 来动态判断一个函数是否是异步的。在 `Reactor._fire` 方法中，我们加入一个 `if` 判断：如果是异步函数，就走新的、高性能的路径；如果不是，就走旧的、安全的线程池路径。
 
 ### 标签
 
-#intent/tooling #flow/ready #priority/medium #comp/vm #concept/performance #scope/dx #ai/instruct #task/domain/performance #task/object/reactor-loop #task/action/benchmark
+#intent/refine #flow/ready #priority/high #comp/vm #concept/performance #scope/dx #ai/brainstorm #task/domain/performance #task/object/reactor-loop #task/action/optimization
 
 ---
 
 ### Script
 
-#### Acts 1: 创建性能基准测试脚本
-
-我们将一次性创建完整的脚本文件。
+#### Acts 1: 修改基准测试脚本以支持原生异步
 
 ~~~~~act
-write_file
+patch_file
 scripts/benchmark_loop_performance.py
 ~~~~~
-~~~~~python
+~~~~~python.old
 import asyncio
 import time
 from typing import Dict
@@ -119,54 +100,108 @@ async def run_cascade_benchmark() -> float:
     end_time = time.monotonic()
     print("Cascade VM benchmark finished.")
     return end_time - start_time
+~~~~~
+~~~~~python.new
+import asyncio
+import time
+import inspect
+from typing import Dict
 
-# --- Native Python Benchmark ---
+# --- Cascade VM Imports ---
+from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole
+from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.executor import PhysicsExecutor
+from cascade.vm.reactor import Reactor
 
-def run_python_benchmark() -> float:
-    """Runs a simple while loop for comparison."""
-    print("Starting native Python benchmark...")
+ITERATIONS = 10000
+
+# --- Cascade Benchmark Components ---
+
+async def loop_logic(inputs: Dict[str, Token], node: PhysicsFuncNode) -> Dict[str, Token]:
+    """
+    The "business logic" for our self-looping node.
+    It increments the counter in the token payload.
+    NOW AN ASYNC FUNCTION.
+    """
+    # In a real async function, we might do `await asyncio.sleep(0)`
+    # to yield control, but for a pure computation benchmark, this is fine.
+    in_token = inputs["loop_in"]
+    count = in_token.payload
+
+    if count < ITERATIONS:
+        # Continue the loop by emitting a new token
+        return {"loop_out": Token(payload=count + 1)}
+    else:
+        # Terminate the loop by producing no output, starving the graph
+        return {}
+
+async def run_cascade_benchmark() -> float:
+    """Sets up and runs the self-loop benchmark using the Cascade VM."""
+    # 1. Build the physical graph: D_loop -> F_loop -> D_loop
+    d_loop = PhysicsDataNode(id="D_loop", name="LoopCounter")
+    f_loop = PhysicsFuncNode(
+        id="F_loop",
+        name="Incrementer",
+        input_ports={"loop_in": PortDef("loop_in", PortRole.DATA)},
+        output_ports={"loop_out": PortDef("loop_out", PortRole.DATA)},
+    )
+    graph = BipartiteGraph()
+    graph.nodes = {d_loop.id: d_loop, f_loop.id: f_loop}
+    graph.channels.append(Channel(d_loop.id, "out", f_loop.id, "loop_in"))
+    graph.channels.append(Channel(f_loop.id, "loop_out", d_loop.id, "in"))
+
+    # 2. Setup the VM
+    memory = VolatileMemory()
+    executor = PhysicsExecutor()
+    function_map = {f_loop.id: loop_logic}
+    reactor = Reactor(graph, memory, executor, function_map)
+
+    # MONKEY-PATCH the _fire method to be "smart"
+    original_fire = reactor._fire
+    async def smart_fire(node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:
+        func = reactor.function_map.get(node.id)
+        if not func:
+            return
+        
+        # THE CORE OF THE OPTIMIZATION
+        if inspect.iscoroutinefunction(func):
+            # If it's async, await it directly on the event loop
+            result_tokens = await func(input_data, node)
+            # This part is duplicated from Reactor but necessary for the patch
+            outbound = reactor._outbound_channels.get(node.id, [])
+            for channel in outbound:
+                token = result_tokens.get(channel.source_port)
+                if token is not None:
+                    target_node = reactor.graph.nodes[channel.target_node_id]
+                    reactor.memory.put(target_node, token)
+        else:
+            # Otherwise, use the original, safe method
+            await original_fire(node, input_data)
+
+    reactor._fire = smart_fire
+
+
+    # 3. Prime the system with the initial state
+    reactor.prime()
+    memory.put(d_loop, Token(payload=0))
+
+    # 4. Run the benchmark
+    print("Starting Cascade VM benchmark (with native async optimization)...")
     start_time = time.monotonic()
 
-    count = 0
-    while count < ITERATIONS:
-        count += 1
+    # The reactor loop continues as long as there are state changes
+    while (await reactor.step()) > 0:
+        pass
 
     end_time = time.monotonic()
-    print("Native Python benchmark finished.")
+    print("Cascade VM benchmark finished.")
     return end_time - start_time
-
-# --- Main Execution ---
-
-async def main():
-    """Main function to run benchmarks and print results."""
-    print(f"--- Loop Performance Benchmark ({ITERATIONS} iterations) ---")
-    
-    python_duration = run_python_benchmark()
-    cascade_duration = await run_cascade_benchmark()
-    
-    python_ips = ITERATIONS / python_duration if python_duration > 0 else float('inf')
-    cascade_ips = ITERATIONS / cascade_duration if cascade_duration > 0 else float('inf')
-    
-    overhead = (cascade_duration / python_duration) if python_duration > 0 else 0
-    
-    print("\n--- Results ---")
-    print(f"| {'Metric':<25} | {'Native Python':<20} | {'Cascade VM':<20} |")
-    print(f"| {'-'*25} | {'-'*20} | {'-'*20} |")
-    print(f"| {'Total Time (s)':<25} | {python_duration:<20.6f} | {cascade_duration:<20.6f} |")
-    print(f"| {'Iterations/Second':<25} | {python_ips:<20,.2f} | {cascade_ips:<20,.2f} |")
-    print("-" * 75)
-    print(f"Cascade VM overhead is approximately {overhead:.2f}x that of a native loop.")
-
-if __name__ == "__main__":
-    asyncio.run(main())
 ~~~~~
 
-### 下一步建议
+---
 
-我们已经创建了基准测试脚本。现在你可以直接在你的环境中运行它：
-```bash
-python scripts/benchmark_loop_performance.py
-```
-运行结果将为我们提供关于 `Reactor` 性能的第一手数据。根据结果，我们可以决定下一步的行动：
-- **如果开销在可接受范围内**：我们可以继续进行功能开发或更高层次的架构工作。
-- **如果开销过大**：我们可以将注意力转移到性能分析（Profiling）上，找出 `Reactor.step()` 中的热点，并开始规划 **Act 0.7: 算子融合与 JIT 优化**。
+在你运行这个修改后的脚本后，我预计你会看到 Cascade VM 的开销从 `~1600x` 大幅下降到 `~50x` 甚至更低。这依然比原生循环慢，因为我们还有状态检查和函数分发的开销，但它会清晰地展示出**绕过线程池所带来的巨大性能收益**。
+
+这为我们下一步的架构决策提供了强有力的数据支持。

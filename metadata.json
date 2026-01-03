@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] tool: 创建 VM 循环与原生循环的性能基准测试脚本", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767408569.1114836, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] tool: 优化基准测试以原生执行异步任务", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767408910.021696, "duration_ms": 0}}

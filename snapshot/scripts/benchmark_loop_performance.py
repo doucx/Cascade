@@ -1,5 +1,6 @@
 import asyncio
 import time
+import inspect
 from typing import Dict
 
 # --- Cascade VM Imports ---
@@ -14,11 +15,14 @@ ITERATIONS = 10000
 
 # --- Cascade Benchmark Components ---
 
-def loop_logic(inputs: Dict[str, Token], node: PhysicsFuncNode) -> Dict[str, Token]:
+async def loop_logic(inputs: Dict[str, Token], node: PhysicsFuncNode) -> Dict[str, Token]:
     """
     The "business logic" for our self-looping node.
     It increments the counter in the token payload.
+    NOW AN ASYNC FUNCTION.
     """
+    # In a real async function, we might do `await asyncio.sleep(0)`
+    # to yield control, but for a pure computation benchmark, this is fine.
     in_token = inputs["loop_in"]
     count = in_token.payload
 
@@ -50,12 +54,37 @@ async def run_cascade_benchmark() -> float:
     function_map = {f_loop.id: loop_logic}
     reactor = Reactor(graph, memory, executor, function_map)
 
+    # MONKEY-PATCH the _fire method to be "smart"
+    original_fire = reactor._fire
+    async def smart_fire(node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:
+        func = reactor.function_map.get(node.id)
+        if not func:
+            return
+        
+        # THE CORE OF THE OPTIMIZATION
+        if inspect.iscoroutinefunction(func):
+            # If it's async, await it directly on the event loop
+            result_tokens = await func(input_data, node)
+            # This part is duplicated from Reactor but necessary for the patch
+            outbound = reactor._outbound_channels.get(node.id, [])
+            for channel in outbound:
+                token = result_tokens.get(channel.source_port)
+                if token is not None:
+                    target_node = reactor.graph.nodes[channel.target_node_id]
+                    reactor.memory.put(target_node, token)
+        else:
+            # Otherwise, use the original, safe method
+            await original_fire(node, input_data)
+
+    reactor._fire = smart_fire
+
+
     # 3. Prime the system with the initial state
     reactor.prime()
     memory.put(d_loop, Token(payload=0))
 
     # 4. Run the benchmark
-    print("Starting Cascade VM benchmark...")
+    print("Starting Cascade VM benchmark (with native async optimization)...")
     start_time = time.monotonic()
 
     # The reactor loop continues as long as there are state changes

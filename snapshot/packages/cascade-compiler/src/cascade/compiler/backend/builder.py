@@ -173,7 +173,7 @@ class Builder:
                     source_node_id=subgraph.bleacher.id,
                     source_port="obs_output",
                     target_node_id=d_life_id,
-                    target_port="event_token",
+                    target_port="in",
                 )
             )
             physical_graph.channels.append(
@@ -181,7 +181,7 @@ class Builder:
                     source_node_id=subgraph.stainer.id,
                     source_port="obs_output",
                     target_node_id=d_life_id,
-                    target_port="event_token",
+                    target_port="in",
                 )
             )
 

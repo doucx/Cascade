@@ -24,7 +24,7 @@ def test_dumper_generates_valid_dot():
 
     # Assertions
     assert "digraph G {" in dot_output
-    assert 'rankdir=LR;' in dot_output
+    assert "rankdir=LR;" in dot_output
 
     # Check Nodes
     assert '"d1" [label="Data1\\n(d1)\\nTokens: 1"' in dot_output

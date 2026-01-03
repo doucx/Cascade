@@ -17,9 +17,24 @@ import sys
 import os
 
 # Ensure we can import packages from the workspace
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../packages/cascade-spec/src")))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../packages/cascade-compiler/src")))
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../packages/cascade-common/src")))
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../packages/cascade-spec/src")
+    ),
+)
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../packages/cascade-compiler/src")
+    ),
+)
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../packages/cascade-common/src")
+    ),
+)
 # Add other packages if needed, but these should cover the compiler deps
 
 from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
@@ -36,9 +51,9 @@ def main():
     # We use a static fingerprint for reproducibility
     fp = Fingerprint({"canonical_code_structure_hash": "abc12345"})
     task_def = TaskDef(
-        name="gpu_task", 
-        args=[ArgumentDef("x", "POSITIONAL_OR_KEYWORD")], 
-        fingerprint=fp
+        name="gpu_task",
+        args=[ArgumentDef("x", "POSITIONAL_OR_KEYWORD")],
+        fingerprint=fp,
     )
 
     # 2. Create two nodes that both require 1 GPU
@@ -69,7 +84,10 @@ def main():
 
     node_count = len(physical_graph.nodes)
     channel_count = len(physical_graph.channels)
-    print(f"# Generated Physical Graph: {node_count} nodes, {channel_count} channels", file=sys.stderr)
+    print(
+        f"# Generated Physical Graph: {node_count} nodes, {channel_count} channels",
+        file=sys.stderr,
+    )
 
     # 4. Dump to DOT
     print("# Generating DOT output...", file=sys.stderr)

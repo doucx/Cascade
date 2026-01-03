@@ -4,16 +4,12 @@ from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode, PhysicsNode
 
 
 class GraphDumper:
-    """
-    Utility to render a BipartiteGraph into Graphviz DOT format for visualization.
-    """
-
     def to_dot(self, graph: BipartiteGraph) -> str:
         lines: List[str] = [
             "digraph G {",
             "  rankdir=LR;",
-            "  node [fontname=\"Helvetica\", fontsize=10];",
-            "  edge [fontname=\"Helvetica\", fontsize=8];",
+            '  node [fontname="Helvetica", fontsize=10];',
+            '  edge [fontname="Helvetica", fontsize=8];',
         ]
 
         # 1. Render Nodes

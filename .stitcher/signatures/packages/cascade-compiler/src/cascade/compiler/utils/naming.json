@@ -38,6 +38,10 @@
     "baseline_code_signature_text": "def probe_const(target_node_id: str, arg_name: str) -> str:",
     "baseline_code_structure_hash": "f0a21530710523ce8564a46234247ce444fb6582fd38a2d4edaaa8314215ab53"
   },
+  "PhysicalIdGenerator.pulse_source": {
+    "baseline_code_signature_text": "def pulse_source(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "e0b5a15f30796852970af5d33a853304e3cb316a2ba879818908c4febe6fb49d"
+  },
   "PhysicalIdGenerator.requestor": {
     "baseline_code_signature_text": "def requestor(target_node_id: str, resource_name: str) -> str:",
     "baseline_code_structure_hash": "03a61c8cdee8ae9025d161ceeb366df01da900e7115bdb84548808afd581d154"

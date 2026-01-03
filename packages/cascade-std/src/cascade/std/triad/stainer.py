@@ -19,8 +19,12 @@ async def standard_stainer(
     trace_input_token = inputs["trace_input"]
 
     result_payload = worker_result_token.payload
-    # Use a copy to avoid mutating the original trace dict
-    trace_payload = trace_input_token.payload.copy()
+
+    # The trace from the worker token might have been augmented by the worker.
+    # The trace_input_token is the one from the "wormhole" D_trace.
+    # The most up-to-date trace is the one that came through the worker.
+    trace_payload = worker_result_token.trace.copy()
+    trace_payload.update(trace_input_token.payload)
 
     # 2. Determine tag based on result (error or success)
     tag = "error" if isinstance(result_payload, Exception) else "default"
@@ -37,7 +41,10 @@ async def standard_stainer(
     # 4.1 The main result
     outputs["output"] = Token(payload=result_payload, tag=tag, trace=trace_payload)
 
-    # 4.2 Resource Return (The Loop)
+    # 4.2 Observability Event
+    outputs["obs_output"] = Token(payload=None, trace=trace_payload)
+
+    # 4.3 Resource Return (The Loop)
     # We iterate over the node's output ports to find all RESOURCE ports.
     for port_name, port_def in node.output_ports.items():
         if port_def.role == PortRole.RESOURCE:

@@ -5,7 +5,7 @@ from cascade.spec.ir.models import NodeIR
 from cascade.spec.physics import PhysicsNode, PhysicsDataNode
 from cascade.spec.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.topology import Channel
-from cascade.spec.ports import PortDef, PortRole
+from cascade.spec.ports import PortDef, PortRole, PortName
 from cascade.compiler.utils.naming import PhysicalIdGenerator
 
 
@@ -59,6 +59,10 @@ class Expander:
         if node_ir.condition:
             port_name = "condition"
             bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
+
+        # If after all that, there are no inputs, it's a source node that needs a pulse.
+        if not bleacher_inputs:
+            bleacher_inputs[PortName.PULSE] = PortDef(PortName.PULSE, PortRole.SIGNAL)
 
         f_pre = BleachNode(
             id=f_pre_id,

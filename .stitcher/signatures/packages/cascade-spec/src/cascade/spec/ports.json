@@ -9,6 +9,7 @@
   "PortName.LEDGER_IN": {},
   "PortName.LEDGER_OUT": {},
   "PortName.OBS_OUTPUT": {},
+  "PortName.PULSE": {},
   "PortName.REL": {},
   "PortName.REQ": {},
   "PortName.REQ_OUT": {},

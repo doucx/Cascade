@@ -59,7 +59,7 @@ def test_expander_creates_triad_structure():
     assert bleacher.output_ports["obs_output"].role == PortRole.OBSERVABILITY
 
     assert stainer.input_ports["worker_result"].role == PortRole.DATA
-    assert stainer.output_ports["output"].role == PortRole.DATA
+    assert stainer.output_ports["output_default"].role == PortRole.DATA
 
     # Trace -> Stain
     trace_in_channel = next(

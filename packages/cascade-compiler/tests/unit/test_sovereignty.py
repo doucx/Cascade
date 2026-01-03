@@ -8,7 +8,7 @@ def test_expander_generates_sovereign_ports():
     # 1. Setup IR
     fp = Fingerprint({"canonical_code_structure_hash": "abc"})
     task_def = TaskDef(name="my_task", args=[], fingerprint=fp)
-    node_ir = NodeIR(id="node_sov", name="SovereignNode", task=task_def)
+    node_ir = NodeIR(current_node_instance_hash="node_sov", name="SovereignNode", task=task_def)
 
     # 2. Expand
     expander = Expander()

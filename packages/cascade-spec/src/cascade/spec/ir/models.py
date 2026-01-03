@@ -37,7 +37,7 @@ class TaskDef:
 
 @dataclass(frozen=True)
 class NodeIR:
-    id: str
+    current_node_instance_hash: str
 
     name: str
 

@@ -14,7 +14,7 @@ def test_expander_creates_triad_structure():
         args=[ArgumentDef("x", ArgumentKind.POSITIONAL_OR_KEYWORD)],
         fingerprint=fp,
     )
-    node_ir = NodeIR(id="node_1", name="MyNode", task=task_def)
+    node_ir = NodeIR(current_node_instance_hash="node_1", name="MyNode", task=task_def)
 
     # 2. Expand
     expander = Expander()

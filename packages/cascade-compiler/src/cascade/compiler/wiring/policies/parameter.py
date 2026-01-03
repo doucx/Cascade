@@ -36,7 +36,7 @@ class ParameterWiringPolicy(WiringPolicy):
 
                 # Violation Fix: Insert D_dep (Intermediate Data Node)
                 # Use input_key for ID uniqueness to avoid collisions if multiple inputs map to same name (unlikely but safe)
-                d_dep_id = f"dep.{source_ref}.to.{node_ir.id}.{input_key}"
+                d_dep_id = f"dep.{source_ref}.to.{node_ir.current_node_instance_hash}.{input_key}"
                 d_dep = PhysicsDataNode(id=d_dep_id, name=f"Dep({port_name})")
                 ctx.wire.add_node(d_dep)
 
@@ -51,7 +51,7 @@ class ParameterWiringPolicy(WiringPolicy):
             # Case B: Literal Value (Constant) - Use Probe Model
             else:
                 # 1. D_const (DataNode holding the literal value)
-                d_const_id = PhysicalIdGenerator.constant(node_ir.id, input_key)
+                d_const_id = PhysicalIdGenerator.constant(node_ir.current_node_instance_hash, input_key)
                 d_const = PhysicsDataNode(
                     id=d_const_id,
                     name=f"Const({port_name})",
@@ -62,7 +62,7 @@ class ParameterWiringPolicy(WiringPolicy):
                 ctx.wire.add_node(d_const)
 
                 # 2. F_probe (The probe node for constants)
-                f_probe_id = PhysicalIdGenerator.probe_const(node_ir.id, input_key)
+                f_probe_id = PhysicalIdGenerator.probe_const(node_ir.current_node_instance_hash, input_key)
                 f_probe = PhysicsFuncNode(
                     id=f_probe_id,
                     name=f"Probe({port_name})",

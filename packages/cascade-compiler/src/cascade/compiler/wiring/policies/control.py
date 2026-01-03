@@ -21,7 +21,7 @@ class ControlFlowWiringPolicy(WiringPolicy):
                 port_name = f"wait_for_{dep_id}"
 
                 # Violation Fix: Insert D_seq
-                d_seq_id = f"seq.{dep_id}.to.{node_ir.id}"
+                d_seq_id = f"seq.{dep_id}.to.{node_ir.current_node_instance_hash}"
                 d_seq = PhysicsDataNode(id=d_seq_id, name=f"Seq({dep_id})")
                 ctx.wire.add_node(d_seq)
 
@@ -36,7 +36,7 @@ class ControlFlowWiringPolicy(WiringPolicy):
             assert source_subgraph.stainer is not None
 
             # Violation Fix: Insert D_cond
-            d_cond_id = f"cond.{node_ir.condition}.to.{node_ir.id}"
+            d_cond_id = f"cond.{node_ir.condition}.to.{node_ir.current_node_instance_hash}"
             d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
             ctx.wire.add_node(d_cond)
 

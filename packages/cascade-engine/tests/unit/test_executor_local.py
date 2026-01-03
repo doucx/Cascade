@@ -16,7 +16,7 @@ def test_local_executor_sync_execution():
 
     # 2. Simulate the Node with Definition
     stub_def = TaskDef(name="add", args=[], fingerprint=Fingerprint())
-    node_add = TaskNode(structural_id="add", definition=stub_def, _callable=add.func)
+    node_add = TaskNode(current_node_instance_hash="add", definition=stub_def, _callable=add.func)
 
     # 3. Simulate arguments resolved by the Engine
     resolved_args = [5]  # positional argument 'x'
@@ -39,7 +39,7 @@ def test_local_executor_async_execution():
         name="async_add", args=[], fingerprint=Fingerprint(), is_async=True
     )
     node_async = TaskNode(
-        structural_id="async_add", definition=stub_def, _callable=async_add.func
+        current_node_instance_hash="async_add", definition=stub_def, _callable=async_add.func
     )
 
     resolved_args = [5]

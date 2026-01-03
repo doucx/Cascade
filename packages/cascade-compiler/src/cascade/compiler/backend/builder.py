@@ -46,7 +46,7 @@ class Builder:
         for node_ir in graph_ir.nodes:
             # 3.1 Expand triad
             subgraph = self._expander.expand_node(node_ir)
-            ctx.register_subgraph(node_ir.id, subgraph)
+            ctx.register_subgraph(node_ir.current_node_instance_hash, subgraph)
 
             # 3.2 Apply wiring policies
             for policy in self._policies:

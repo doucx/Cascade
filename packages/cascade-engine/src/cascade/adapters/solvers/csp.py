@@ -37,7 +37,7 @@ class CSPSolver:
                     # Dynamic constraints (LazyResults) are treated as 0 usage during planning.
                     if not isinstance(amount, (LazyResult, MappedLazyResult)):
                         reqs[res] = float(amount)
-            node_resources[node.structural_id] = reqs
+            node_resources[node.current_node_instance_hash] = reqs
 
         # 2. Iterative Deepening Search
         # Try to find a schedule with K stages, starting from K=1 up to N (serial execution).
@@ -71,7 +71,7 @@ class CSPSolver:
         sorted_stages = sorted(plan_dict.keys())
 
         # Build list of lists of Nodes
-        node_lookup = {n.structural_id: n for n in active_nodes}
+        node_lookup = {n.current_node_instance_hash: n for n in active_nodes}
         execution_plan = []
 
         for stage_idx in sorted_stages:
@@ -100,7 +100,7 @@ class CSPSolver:
         # Variables: Node IDs (only active ones)
         # Domain: Possible Stage Indices [0, max_stages - 1]
         domain = list(range(max_stages))
-        variables = [n.structural_id for n in active_nodes]
+        variables = [n.current_node_instance_hash for n in active_nodes]
         problem.addVariables(variables, domain)
 
         # Constraint 1: Dependencies
@@ -113,7 +113,7 @@ class CSPSolver:
             # Note: We use a lambda that captures nothing, args are passed by value in addConstraint
             problem.addConstraint(
                 lambda s_src, s_tgt: s_src < s_tgt,
-                (edge.source.structural_id, edge.target.structural_id),
+                (edge.source.current_node_instance_hash, edge.target.current_node_instance_hash),
             )
 
         # Constraint 2: Resources

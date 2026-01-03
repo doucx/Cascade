@@ -162,11 +162,12 @@ async def test_resource_scarcity_topology_and_execution():
             print(f"[OBS-START] {node_id}" if e.event_type == "start" else f"[OBS-END  ] {node_id}")
 
             # Only count logical task events for completion condition
-            if e.trace_data.get("id", "").startswith("node_"):
+            # IRGenerator produces hash-based IDs, so we count all 'end' events
+            # assuming only our tasks are generating them in this topology.
+            if e.event_type == "end":
                 events.append(e)
-                
-            completed = sum(1 for x in events if x.event_type == "end")
-            return completed == TASK_COUNT
+
+            return len(events) == TASK_COUNT
 
         # Timeout needs to be generous.
         # With request recirculation, the reactor steps many times per useful work.

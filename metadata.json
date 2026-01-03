@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(compiler): 添加示例脚本以演示 GraphDumper", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767418431.6784928, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 修正示例脚本中 EnvironmentDef 的实例化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767418491.870532, "duration_ms": 0}}

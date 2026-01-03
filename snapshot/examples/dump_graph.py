@@ -12,7 +12,7 @@ sys.path.append(str(workspace_root / "packages/cascade-std/src"))
 
 
 from cascade.spec.task import task
-from cascade.spec.environment import EnvironmentDef
+from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.frontend import IRGenerator
 from cascade.compiler.backend import Builder
 from cascade.compiler.utils import GraphDumper
@@ -51,7 +51,7 @@ def main():
     graph_ir = ir_generator.generate(result_b)
 
     # Define a simple environment for the builder
-    environment = EnvironmentDef(resources=[{"name": "gpu", "capacity": 2}])
+    environment = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=2)])
 
     print("Building physical graph...", file=sys.stderr)
     physical_graph = builder.build(graph_ir, environment)

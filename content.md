@@ -1,65 +1,44 @@
-好的，我们来创建一个可执行的示例脚本，以验证 `GraphDumper` 的可用性。
+你完全正确，非常抱歉。
 
-我将把这个脚本放在项目根目录下的新 `examples/` 目录中。它会构建一个简单的两任务工作流，并通过新创建的 `GraphDumper` 将其生成的物理图以 DOT 格式打印到标准输出。
+这个 traceback 清晰地指出了我的错误：我在示例脚本中实例化 `EnvironmentDef` 时，传递了一个原始的字典列表 `[{"name": "gpu", ...}]`，而不是 `EnvironmentDef` 数据类所期望的 `ResourceDef` 对象列表 `[ResourceDef(name="gpu", ...)]`。
 
-## [WIP] feat(compiler): 添加示例脚本以演示 GraphDumper
+这是一个典型的类型错误，`builder.py` 的代码是正确的，因为它期望遵循 `cascade-spec` 定义的契约，而我的示例脚本违反了这个契约。
+
+我将立即修复这个问题。
+
+## [WIP] fix(compiler): 修正示例脚本中 EnvironmentDef 的实例化
+
+### 错误分析
+`cascade.compiler.backend.builder.py` 中的代码 `res.name` 期望 `res` 是一个具有 `.name` 属性的对象（即 `ResourceDef` 实例）。然而，在 `examples/dump_graph.py` 中，我错误地将 `environment.resources` 初始化为一个字典列表 (`List[dict]`)。Python 的 `dataclass` 在初始化时不会自动将字典转换为其实例，导致在 `Builder` 内部迭代时出现 `AttributeError`。
 
 ### 用户需求
-创建一个位于 `./examples` 目录下的脚本，该脚本使用 `GraphDumper` 来构建并可视化一个简单的物理图，从而验证 Dumper 的功能并提供一个即用型调试工具。
+`examples/dump_graph.py` 脚本必须能够成功运行，以便验证 `GraphDumper` 的功能并生成 DOT 可视化。
 
 ### 评论
-这个脚本是“白盒验证”策略的关键第一步。它提供了一个快速、直观的方式来审查编译器的输出，极大地提高了调试物理层问题的效率。
+修复此问题是确保示例代码正确性和可用性的基本要求。一个无法运行的示例会严重影响开发者体验，并阻碍我们利用新工具进行调试。
 
 ### 目标
-1.  创建 `examples/` 目录。
-2.  在该目录中创建一个 `dump_graph.py` 脚本。
-3.  脚本将定义一个简单的工作流（一个任务依赖另一个）。
-4.  脚本将调用 `IRGenerator` 和 `Builder` 来生成物理图。
-5.  脚本将使用 `GraphDumper` 将物理图转换为 DOT 字符串并打印到 `stdout`。
+修正 `examples/dump_graph.py` 中的 `AttributeError`，通过使用正确的 `ResourceDef` 对象来实例化 `EnvironmentDef`。
 
 ### 基本原理
-通过创建一个独立的、可执行的示例，我们不仅能测试 `GraphDumper`，还能为项目贡献一个持久的、可用于未来调试的实用工具。这遵循了“吃自己的狗粮”原则，用我们自己构建的工具来改进开发流程。
+为了遵守 `cascade-spec` 中定义的数据契约，客户端代码（本例中为示例脚本）在创建 `EnvironmentDef` 时，必须向其 `resources` 字段提供一个 `ResourceDef` 对象的列表，而不是字典。
 
 ### 标签
-#intent/tooling #flow/ready #priority/medium #comp/compiler #scope/dx #task/domain/compiler #task/object/graph-dumper #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/compiler #scope/dx #task/domain/compiler #task/object/graph-dumper #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `examples` 目录
+#### Acts 1: 修复 `dump_graph.py`
 
-首先，我们确保 `examples` 目录存在。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p examples
-~~~~~
-
-#### Acts 2: 创建可视化脚本
-
-现在，我们编写 `dump_graph.py` 脚本。它包含了从定义工作流到打印 DOT 字符串的完整流程。
+我们将导入 `ResourceDef` 并用它来正确地创建 `environment` 对象。
 
 ~~~~~act
-write_file
+patch_file
 examples/dump_graph.py
 ~~~~~
-~~~~~python
-import sys
-from pathlib import Path
-
-# This is a common pattern for running scripts in a monorepo project root.
-# It ensures that the 'src' directories of our packages are on the Python path.
-# NOTE: This assumes you run the script from the project's root directory.
-# An alternative is to do an editable install of the workspace (`uv pip install -e .`).
-workspace_root = Path(__file__).parent.parent
-sys.path.append(str(workspace_root / "packages/cascade-spec/src"))
-sys.path.append(str(workspace_root / "packages/cascade-compiler/src"))
-sys.path.append(str(workspace_root / "packages/cascade-std/src"))
-
-
+~~~~~python.old
 from cascade.spec.task import task
 from cascade.spec.environment import EnvironmentDef
 from cascade.compiler.frontend import IRGenerator
@@ -104,32 +83,59 @@ def main():
 
     print("Building physical graph...", file=sys.stderr)
     physical_graph = builder.build(graph_ir, environment)
-
-    print("Dumping graph to DOT format...", file=sys.stderr)
-    dot_string = dumper.to_dot(physical_graph)
-
-    # --- 5. Print the DOT string to stdout ---
-    print("\n" + dot_string)
-
-    print("\n--- To generate an image, run: ---", file=sys.stderr)
-    print(
-        "python examples/dump_graph.py | dot -Tpng -o physical_graph.png",
-        file=sys.stderr,
-    )
-    print("-----------------------------------", file=sys.stderr)
+~~~~~
+~~~~~python.new
+from cascade.spec.task import task
+from cascade.spec.environment import EnvironmentDef, ResourceDef
+from cascade.compiler.frontend import IRGenerator
+from cascade.compiler.backend import Builder
+from cascade.compiler.utils import GraphDumper
 
 
-if __name__ == "__main__":
-    main()
+# --- 1. Define a simple workflow ---
+@task
+def task_a(x: int):
+    """A simple source task."""
+    return x * 2
+
+
+@task
+def task_b(a_val: int, y: int):
+    """A task that depends on another."""
+    return a_val + y
+
+
+def main():
+    """
+    Builds a simple physical graph and dumps its DOT representation to stdout.
+    """
+    print("--- Cascade Physical Graph Dumper ---", file=sys.stderr)
+
+    # --- 2. Create the logical flow ---
+    result_a = task_a(10)
+    result_b = task_b(result_a, 5).with_constraints(gpu=1)
+
+    # --- 3. Instantiate Compiler components ---
+    ir_generator = IRGenerator()
+    builder = Builder()
+    dumper = GraphDumper()
+
+    # --- 4. Run the compilation pipeline ---
+    print("Generating IR...", file=sys.stderr)
+    graph_ir = ir_generator.generate(result_b)
+
+    # Define a simple environment for the builder
+    environment = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=2)])
+
+    print("Building physical graph...", file=sys.stderr)
+    physical_graph = builder.build(graph_ir, environment)
 ~~~~~
 
 ### 下一步建议
-你现在可以从项目根目录运行以下命令来生成并查看物理图：
+现在脚本中的类型错误已经修正。请再次运行相同的命令来生成并查看物理图：
 
 ```bash
 python examples/dump_graph.py | dot -Tpng -o physical_graph.png && xdg-open physical_graph.png
 ```
 
-这将生成一个名为 `physical_graph.png` 的图像文件并打开它。
-
-下一步，我们应该仔细检查这张图，特别是资源请求（`Req`）、授予（`Gnt`）和释放（`Rel`）的闭环连线，看看是否能发现导致我们最初问题的拓扑缺陷。
+这次它应该可以成功执行了。成功后，我们就可以开始分析生成的图，寻找潜在的拓扑问题。

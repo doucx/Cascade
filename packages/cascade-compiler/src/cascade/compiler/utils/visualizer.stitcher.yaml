@@ -1,0 +1,2 @@
+"GraphDumper": |-
+  Utility to render a BipartiteGraph into Graphviz DOT format for visualization.

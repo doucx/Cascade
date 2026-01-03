@@ -47,6 +47,12 @@ class NodeIR:
 
     constraints: Dict[str, Any] = field(default_factory=dict)
 
+    # The ID of the node that determines if this node should run
+    condition: Optional[str] = None
+
+    # IDs of nodes that must complete before this node starts (Sequence dependency)
+    dependencies: List[str] = field(default_factory=list)
+
 
 @dataclass(frozen=True)
 class GraphIR:

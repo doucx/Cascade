@@ -1,368 +1,427 @@
-遵循 [Cascade 3.0 全系统集成迁移战略 (Phase 5)](../../01_current/当前任务/Cascade%203.0%20全系统集成迁移战略%20(Phase%205).md) 的指示，开始执行 **阶段 1：物理层的完备化**。
+简要回答
 
-本计划将涵盖 Task 1.1 (Spec 扩展) 和 Task 1.2 (VM 升级)。我们将把 Reactor 从同步步进模型升级为**异步非阻塞模型**，并引入必要的内存事件通知机制。这是一个破坏性变更，因此我们将同步更新受影响的单元测试。
+好的，我将生成一个计划来完善 Compiler Frontend，使其支持 `run_if` 和 `_dependencies` 的逻辑映射。
 
-简要回答：
-升级 `cascade-spec` 添加标准端口定义，重构 `cascade-vm` 实现异步 Reactor 和事件驱动内存，并更新相关测试。
-
-## [WIP] refactor(vm): 升级 Reactor 为异步非阻塞模型并扩展物理定义
+## [WIP] feat(compiler): 实现 Frontend 对 run_if 和 dependencies 的支持
 
 ### 用户需求
-1.  **标准化端口名称**: 在 `cascade-spec` 中定义 `PortName` 常量，避免硬编码字符串。
-2.  **异步物理引擎**: 将 `Reactor` 改造为非阻塞模式。`step()` 仅负责调度任务，不等待执行完成。
-3.  **状态可观测性**: 在 `Reactor` 中增加 `active_task_count` 计数器和 `add_sink` 接口，以便 Strategy 层监控系统状态和获取结果。
-4.  **事件驱动内存**: `VolatileMemory` 需要在数据写入时触发 `asyncio.Event`，支持 `wait_for_mutation`。
+在 `cascade-compiler` 中实现对 `LazyResult` 的 `run_if` (条件执行) 和 `_dependencies` (显式序列依赖) 属性的支持。这意味着 Compiler Frontend 需要解析这些关系，生成包含相应字段的 `NodeIR`，并且 Compiler Backend 需要将这些逻辑关系展开为物理图中的连接。
 
 ### 评论
-这是 Cascade 3.0 向“真实物理模拟”迈出的关键一步。通过将调度（Step）与执行（Execute）解耦，我们能够支持细粒度的并发和非阻塞 IO，同时 `active_task_count` 和 `sink` 机制为上层 Strategy 提供了必要的控制抓手。
+这是 Phase 2 (Compiler Intelligence) 的关键一步。目前编译器只能处理数据依赖 (Data Dependency)，无法处理控制流 (Control Flow) 和纯时序依赖 (Sequence Dependency)。完成此任务后，Cascade 将具备表达复杂 DAG 的能力。
 
 ### 目标
-1.  在 `cascade-spec` 中添加 `PortName`。
-2.  在 `cascade-vm` 中实现 `VolatileMemory.wait_for_mutation`。
-3.  重写 `Reactor.step` 和 `Reactor._fire`，实现 fire-and-forget 调度。
-4.  更新所有受影响的 Reactor 单元测试，确保它们能正确处理异步结果。
+1.  **Spec**: 更新 `NodeIR` 模型，增加 `condition` 和 `dependencies` 字段。
+2.  **Hashing**: 更新 `HashingService`，将条件和依赖的具体的 Node ID 纳入哈希计算（而不仅仅是检查存在性），确保哈希的唯一性和确定性。
+3.  **Frontend**: 更新 `IRGenerator`，使其在遍历 `LazyResult` 时递归解析 `_condition` 和 `_dependencies`。
+4.  **Backend**: 更新 `Expander`，将逻辑上的条件和依赖映射为物理层 `Bleacher` 的 `SIGNAL` 输入端口。
 
 ### 基本原理
-目前的 `Reactor.step` 是阻塞的，这限制了并发能力且不符合 "Physics Field" 的连续演化特性。通过引入异步发射和 `active_task_count`，我们允许 Reactor 在任务执行期间继续扫描或休眠，直到状态发生变化（Mutation），这更符合 Actor 模型和事件驱动架构。
+*   **Hashlife 对齐**: 节点的身份 (`Instance Hash`) 必须由其所有输入决定，包括隐式的控制流输入。因此 `HashingService` 必须包含这些信息。
+*   **物理映射**: 在物理层，所有的依赖（无论是数据的还是控制的）最终都表现为“通道连接”。
+    *   `_dependencies` 映射为从上游 `Stainer` 到下游 `Bleacher` 的 `SIGNAL` 通道（下游只关心“收到Token”，不关心内容）。
+    *   `run_if` 映射为从条件节点到 `Bleacher` 的特定端口连接。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/spec #comp/runtime #concept/state #concept/executor #scope/core #ai/instruct #task/domain/core #task/object/physics-layer #task/action/completion #task/state/begin #task/status/active
+#intent/build #flow/ready #priority/high #comp/compiler #scope/core #ai/instruct #task/domain/compiler #task/object/frontend #task/action/implementation #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 扩展物理定义 (Spec)
+#### Acts 1: 更新 Spec 中的 NodeIR 定义
 
-在 `ports.py` 中增加标准端口名称定义，用于统一资源、Trace 和 Worker 的接口命名。
+我们需要在 `NodeIR` 中增加字段来存储控制流信息。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/ports.py
+packages/cascade-spec/src/cascade/spec/ir/models.py
 ~~~~~
 ~~~~~python.old
-@dataclass
-class PortDef:
+@dataclass(frozen=True)
+class NodeIR:
+    id: str
+
     name: str
-    role: PortRole
-    type_hint: str = "Any"
+
+    task: TaskDef
+
+    inputs: Dict[str, Any] = field(default_factory=dict)
+
+    constraints: Dict[str, Any] = field(default_factory=dict)
 ~~~~~
 ~~~~~python.new
-@dataclass
-class PortDef:
+@dataclass(frozen=True)
+class NodeIR:
+    id: str
+
     name: str
-    role: PortRole
-    type_hint: str = "Any"
 
+    task: TaskDef
 
-class PortName:
-    # Resources
-    REQ = "req_in"
-    REL = "rel_in"
-    GNT = "gnt_out"
-    LEDGER_IN = "ledger_in"
-    LEDGER_OUT = "ledger_out"
+    inputs: Dict[str, Any] = field(default_factory=dict)
 
-    # Worker
-    WORKER_INPUT = "worker_input"
-    WORKER_RESULT = "worker_result"
+    constraints: Dict[str, Any] = field(default_factory=dict)
 
-    # Trace
-    TRACE_INPUT = "trace_input"
-    TRACE_OUTPUT = "trace_output"
+    # The ID of the node that determines if this node should run
+    condition: Optional[str] = None
 
-    # Observability
-    OBS_OUTPUT = "obs_output"
-    EVENT_TOKEN = "event_token"
+    # IDs of nodes that must complete before this node starts (Sequence dependency)
+    dependencies: List[str] = field(default_factory=list)
 ~~~~~
 
-#### Acts 2: 升级内存模型 (VM)
+#### Acts 2: 更新 HashingService 以包含控制流信息
 
-改造 `VolatileMemory`，增加 `wait_for_mutation` 支持，使其成为事件驱动的存储。
+更新哈希计算逻辑，确保 `_condition` 和 `_dependencies` 参与哈希计算。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/memory.py
+packages/cascade-compiler/src/cascade/compiler/utils/hashing.py
 ~~~~~
 ~~~~~python.old
-from typing import Dict
-from collections import deque
-from cascade.spec.physics import Token, PhysicsDataNode
+        # 5. Metadata
+        if getattr(result, "_condition", None):
+            components.append("Condition:PRESENT")
 
-
-class MemoryError(Exception):
+        # 6. Constraints
 ~~~~~
 ~~~~~python.new
-from typing import Dict
-import asyncio
-from collections import deque
-from cascade.spec.physics import Token, PhysicsDataNode
-
-
-class MemoryError(Exception):
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/memory.py
-~~~~~
-~~~~~python.old
-class VolatileMemory:
-    def __init__(self):
-        # Maps node_id -> deque of Tokens
-        self._buffers: Dict[str, deque[Token]] = {}
-        # Maps node_id -> capacity
-        self._capacities: Dict[str, int] = {}
-
-    def put(self, node: PhysicsDataNode, token: Token) -> None:
-        node_id = node.id
-        if node_id not in self._buffers:
-            self._buffers[node_id] = deque()
-            self._capacities[node_id] = node.capacity
-
-        buffer = self._buffers[node_id]
-        capacity = self._capacities[node_id]
-
-        if len(buffer) >= capacity:
-            raise MemoryFullError(
-                f"Node '{node.name}' ({node_id}) with capacity {capacity} is full."
-            )
-
-        buffer.append(token)
-
-    def take(self, node_id: str) -> Token:
-~~~~~
-~~~~~python.new
-class VolatileMemory:
-    def __init__(self):
-        # Maps node_id -> deque of Tokens
-        self._buffers: Dict[str, deque[Token]] = {}
-        # Maps node_id -> capacity
-        self._capacities: Dict[str, int] = {}
-        self._mutation_event = asyncio.Event()
-
-    async def wait_for_mutation(self) -> None:
-        """Wait until a new token is put into memory."""
-        await self._mutation_event.wait()
-        self._mutation_event.clear()
-
-    def put(self, node: PhysicsDataNode, token: Token) -> None:
-        node_id = node.id
-        if node_id not in self._buffers:
-            self._buffers[node_id] = deque()
-            self._capacities[node_id] = node.capacity
-
-        buffer = self._buffers[node_id]
-        capacity = self._capacities[node_id]
-
-        if len(buffer) >= capacity:
-            raise MemoryFullError(
-                f"Node '{node.name}' ({node_id}) with capacity {capacity} is full."
-            )
-
-        buffer.append(token)
-        self._mutation_event.set()
-
-    def take(self, node_id: str) -> Token:
-~~~~~
-
-#### Acts 3: 升级 Reactor 为异步非阻塞模型 (VM)
-
-这将是一个较大的重构。我们需要：
-1.  添加 `active_task_count` 和 `sinks`。
-2.  将 `step` 改为只调度不等待。
-3.  将执行逻辑移至后台任务 `_execute_task`。
-
-~~~~~act
-write_file
-packages/cascade-vm/src/cascade/vm/reactor.py
-~~~~~
-~~~~~python
-import asyncio
-import inspect
-import logging
-from typing import List, Callable, Dict, Tuple, Awaitable
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
-
-logger = logging.getLogger(__name__)
-
-
-class Reactor:
-    def __init__(
-        self,
-        graph: BipartiteGraph,
-        memory: VolatileMemory,
-        executor: PhysicsExecutor,
-        function_map: Dict[str, Callable],
-    ):
-        self.graph = graph
-        self.memory = memory
-        self.executor = executor
-        self.function_map = function_map
-
-        # State
-        self.active_task_count = 0
-        # node_id -> port_name -> list of callbacks
-        self.sinks: Dict[str, Dict[str, List[Callable[[Token], Awaitable[None]]]]] = {}
-
-        # Indexing for O(1) lookups during step/fire
-        self._func_nodes: List[PhysicsFuncNode] = []
-        # node_id -> List[(source_data_node_id, target_port_name)]
-        self._func_inputs: Dict[str, List[Tuple[str, str]]] = {}
-        # node_id -> List[Channel]
-        self._outbound_channels: Dict[str, List[Channel]] = {}
-
-        # 1. Identify Function Nodes
-        for node in self.graph.nodes.values():
-            if isinstance(node, PhysicsFuncNode):
-                self._func_nodes.append(node)
-                self._func_inputs[node.id] = []
-                self._outbound_channels[node.id] = []
-
-        # 2. Build Connectivity Index
-        for channel in self.graph.channels:
-            source = self.graph.nodes.get(channel.source_node_id)
-            target = self.graph.nodes.get(channel.target_node_id)
-
-            if not source or not target:
-                continue
-
-            # Case A: Data -> Func (Input wiring)
-            if isinstance(source, PhysicsDataNode) and isinstance(
-                target, PhysicsFuncNode
-            ):
-                # Record that Target(F) needs input from Source(D) on specific Port
-                self._func_inputs[target.id].append((source.id, channel.target_port))
-
-            # Case B: Func -> Data (Output wiring)
-            elif isinstance(source, PhysicsFuncNode) and isinstance(
-                target, PhysicsDataNode
-            ):
-                # Record the full channel to support filtering logic later
-                self._outbound_channels[source.id].append(channel)
-
-    def add_sink(
-        self,
-        node_id: str,
-        port_name: str,
-        callback: Callable[[Token], Awaitable[None]],
-    ) -> None:
-        """Register a callback to receive tokens emitted by a specific port."""
-        if node_id not in self.sinks:
-            self.sinks[node_id] = {}
-        if port_name not in self.sinks[node_id]:
-            self.sinks[node_id][port_name] = []
-        self.sinks[node_id][port_name].append(callback)
-
-    def prime(self) -> None:
-        for node in self.graph.nodes.values():
-            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
-                for _ in range(node.initial_tokens):
-                    # Initial tokens use the node's defined payload (for constants) or None.
-                    self.memory.put(node, Token(payload=node.initial_payload))
-
-    async def step(self) -> int:
-        """
-        Scans the graph for excited nodes and schedules them for execution.
-        Returns the number of tasks scheduled (fired) in this step.
-        This method is NON-BLOCKING regarding task execution.
-        """
-        nodes_to_fire: List[PhysicsFuncNode] = []
-        inputs_for_fire: Dict[str, Dict[str, Token]] = {}
-
-        # --- ATOMIC SCAN & CONSUME ---
-        # This loop is single-threaded and sequential. The state of `memory`
-        # changes within the loop, ensuring that a resource token consumed by an
-        # early node is unavailable for a later node in the same step.
-        for f_node in self._func_nodes:
-            inputs_def = self._func_inputs.get(f_node.id, [])
-            if not inputs_def:
-                continue
-
-            # Check if this node CAN fire based on the CURRENT memory state
-            if all(self.memory.is_excited(src_id) for src_id, _ in inputs_def):
-                # It can. Atomically consume its inputs NOW.
-                consumed_inputs = {
-                    port: self.memory.take(src_id) for src_id, port in inputs_def
-                }
-                nodes_to_fire.append(f_node)
-                inputs_for_fire[f_node.id] = consumed_inputs
-
-        if not nodes_to_fire:
-            return 0
-
-        # Schedule execution
-        for node in nodes_to_fire:
-            self._schedule_task(node, inputs_for_fire[node.id])
-
-        return len(nodes_to_fire)
-
-    def _schedule_task(self, node: PhysicsFuncNode, input_data: Dict[str, Token]):
-        self.active_task_count += 1
-        asyncio.create_task(self._execute_task(node, input_data))
-
-    async def _execute_task(
-        self, node: PhysicsFuncNode, input_data: Dict[str, Token]
-    ) -> None:
-        try:
-            # 1. Execution
-            func = self.function_map.get(node.id)
-            if not func:
-                raise ValueError(f"No function mapped for node {node.id}")
-
-            if inspect.iscoroutinefunction(func):
-                result_tokens = await func(input_data, node)
+        # 5. Metadata
+        if getattr(result, "_condition", None):
+            # We need the ID of the condition node
+            cond = result._condition
+            # Handle potential MappedLazyResult or other types in condition if necessary
+            # For now assuming LazyResult or similar which is in dep_nodes
+            if hasattr(cond, "_uuid") and cond._uuid in dep_nodes:
+                node = dep_nodes[cond._uuid]
+                node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
+                components.append(f"ConditionID:{node_id}")
             else:
-                result_tokens = await self.executor.submit(func, (input_data, node))
+                components.append("Condition:UNKNOWN")
 
-            if not isinstance(result_tokens, dict):
-                raise ValueError(
-                    f"Function for node {node.id} must return a Dict[str, Token], "
-                    f"got {type(result_tokens)}"
+        if getattr(result, "_dependencies", None):
+            deps = result._dependencies
+            if deps:
+                components.append("Dependencies:[")
+                # Sort by UUID to ensure stable hash
+                sorted_deps = sorted(deps, key=lambda x: x._uuid)
+                for dep in sorted_deps:
+                    if dep._uuid in dep_nodes:
+                        node = dep_nodes[dep._uuid]
+                        node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
+                        components.append(f"DepID:{node_id}")
+                    else:
+                        components.append("DepID:UNKNOWN")
+                components.append("]")
+
+        # 6. Constraints
+~~~~~
+
+#### Acts 3: 更新 IRGenerator 递归解析逻辑
+
+更新 `IRGenerator` 以处理 `_condition` 和 `_dependencies` 的递归访问，并填充 `NodeIR`。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
+~~~~~
+~~~~~python.old
+        # 1. Resolve Dependencies (Post-order)
+        # We visit args and kwargs first to ensure dependencies are registered.
+        # This gives us the "transformed" inputs where LazyResults are replaced by Node IDs.
+        transformed_args = [self._visit(arg) for arg in lr.args]
+        transformed_kwargs = {k: self._visit(v) for k, v in lr.kwargs.items()}
+
+        # Note: We currently don't handle _dependencies (implicit sequence) or _condition
+        # in the NodeIR inputs structure explicitly yet.
+        # TODO: Add support for sequence dependencies and run_if conditions.
+
+        # 2. Analyze Task Definition
+        task_def = self.analyzer.analyze(lr.task)
+
+        # 3. Compute Instance Hash (Node ID)
+~~~~~
+~~~~~python.new
+        # 1. Resolve Dependencies (Post-order)
+        # We visit args and kwargs first to ensure dependencies are registered.
+        transformed_args = [self._visit(arg) for arg in lr.args]
+        transformed_kwargs = {k: self._visit(v) for k, v in lr.kwargs.items()}
+
+        # Handle Condition (visit it so it's registered)
+        condition_id = None
+        if lr._condition:
+            condition_id = self._visit(lr._condition)
+
+        # Handle Explicit Dependencies (visit them)
+        dependency_ids = []
+        for dep in lr._dependencies:
+            dependency_ids.append(self._visit(dep))
+
+        # 2. Analyze Task Definition
+        task_def = self.analyzer.analyze(lr.task)
+
+        # 3. Compute Instance Hash (Node ID)
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
+~~~~~
+~~~~~python.old
+        def collect_deps(raw_obj):
+            if isinstance(raw_obj, LazyResult):
+                if raw_obj._uuid in self._visited:
+                    node_id = self._visited[raw_obj._uuid]
+                    dep_map[raw_obj._uuid] = self.nodes[node_id]
+            elif isinstance(raw_obj, (list, tuple)):
+                for x in raw_obj:
+                    collect_deps(x)
+            elif isinstance(raw_obj, dict):
+                for x in raw_obj.values():
+                    collect_deps(x)
+
+        for arg in lr.args:
+            collect_deps(arg)
+        for val in lr.kwargs.values():
+            collect_deps(val)
+
+        node_id = self.hashing_service.compute_node_instance_hash(task_def, lr, dep_map)
+
+        # 4. Construct NodeIR
+        # Flatten args and kwargs into a single 'inputs' dictionary
+        inputs = {}
+        for i, val in enumerate(transformed_args):
+            inputs[str(i)] = val
+        for k, val in transformed_kwargs.items():
+            inputs[k] = val
+
+        # Handle Constraints
+        constraints = {}
+        if lr._constraints:
+            # We currently assume constraint values are literals.
+            # TODO: Handle dynamic constraints (LazyResult in constraints)
+            constraints = lr._constraints.requirements.copy()
+
+        node_ir = NodeIR(
+            id=node_id,
+            name=task_def.name,
+            task=task_def,
+            inputs=inputs,
+            constraints=constraints,
+        )
+~~~~~
+~~~~~python.new
+        def collect_deps(raw_obj):
+            if isinstance(raw_obj, LazyResult):
+                if raw_obj._uuid in self._visited:
+                    node_id = self._visited[raw_obj._uuid]
+                    dep_map[raw_obj._uuid] = self.nodes[node_id]
+            elif isinstance(raw_obj, (list, tuple)):
+                for x in raw_obj:
+                    collect_deps(x)
+            elif isinstance(raw_obj, dict):
+                for x in raw_obj.values():
+                    collect_deps(x)
+
+        for arg in lr.args:
+            collect_deps(arg)
+        for val in lr.kwargs.values():
+            collect_deps(val)
+        
+        # Also collect deps for condition and dependencies for hashing
+        if lr._condition:
+            collect_deps(lr._condition)
+        for dep in lr._dependencies:
+            collect_deps(dep)
+
+        node_id = self.hashing_service.compute_node_instance_hash(task_def, lr, dep_map)
+
+        # 4. Construct NodeIR
+        # Flatten args and kwargs into a single 'inputs' dictionary
+        inputs = {}
+        for i, val in enumerate(transformed_args):
+            inputs[str(i)] = val
+        for k, val in transformed_kwargs.items():
+            inputs[k] = val
+
+        # Handle Constraints
+        constraints = {}
+        if lr._constraints:
+            # We currently assume constraint values are literals.
+            # TODO: Handle dynamic constraints (LazyResult in constraints)
+            constraints = lr._constraints.requirements.copy()
+
+        node_ir = NodeIR(
+            id=node_id,
+            name=task_def.name,
+            task=task_def,
+            inputs=inputs,
+            constraints=constraints,
+            condition=condition_id,
+            dependencies=dependency_ids,
+        )
+~~~~~
+
+#### Acts 4: 更新 Expander 以物理化连接
+
+修改 `Expander`，为 `Bleacher` 增加 `SIGNAL` 类型的端口，并在 `Builder` (后续计划中) 或 `Expander` 逻辑的配合下完成连接。由于 `Expander` 负责创建节点和内部连接，而 `Builder` 负责外部连接，实际上这里主要需要确保 `Bleacher` 生成了对应的端口定义，或者我们采取动态端口策略。
+
+但 `Expander.expand_node` 目前定义了 `Bleacher` 的端口。我们需要根据 `NodeIR` 的新字段来动态增加端口定义。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+~~~~~
+~~~~~python.old
+        # F_pre: The Bleacher
+        # Inputs = Task Args + Resource Constraints
+        bleacher_inputs = {
+            arg.name: PortDef(arg.name, PortRole.DATA, "Any")
+            for arg in node_ir.task.args
+        }
+        # Add ports for resources
+        for res_name in node_ir.constraints.keys():
+            port_name = f"res_{res_name}"
+            bleacher_inputs[port_name] = PortDef(
+                port_name, PortRole.RESOURCE, "ResourceSlot"
+            )
+
+        f_pre = BleachNode(
+            id=f_pre_id,
+~~~~~
+~~~~~python.new
+        # F_pre: The Bleacher
+        # Inputs = Task Args + Resource Constraints
+        bleacher_inputs = {
+            arg.name: PortDef(arg.name, PortRole.DATA, "Any")
+            for arg in node_ir.task.args
+        }
+        # Add ports for resources
+        for res_name in node_ir.constraints.keys():
+            port_name = f"res_{res_name}"
+            bleacher_inputs[port_name] = PortDef(
+                port_name, PortRole.RESOURCE, "ResourceSlot"
+            )
+        
+        # Add ports for implicit dependencies (SIGNAL)
+        for dep_id in node_ir.dependencies:
+            # We use a naming convention for dependency ports
+            port_name = f"wait_for_{dep_id}"
+            bleacher_inputs[port_name] = PortDef(
+                port_name, PortRole.SIGNAL, "Token"
+            )
+            
+        # Add port for condition (SIGNAL/DATA)
+        if node_ir.condition:
+            port_name = "condition"
+            bleacher_inputs[port_name] = PortDef(
+                port_name, PortRole.SIGNAL, "Bool"
+            )
+
+        f_pre = BleachNode(
+            id=f_pre_id,
+~~~~~
+
+#### Acts 5: 更新 Builder 以连接新端口
+
+最后，我们需要更新 `Builder`，处理这些新暴露出来的端口的连线。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python.old
+        # 4. Wire data dependencies between subgraphs
+        for node_ir in graph_ir.nodes:
+            target_subgraph = subgraphs[node_ir.id]
+
+            # Help static analysis
+            assert target_subgraph.bleacher is not None
+
+            for arg_name, source_ref in node_ir.inputs.items():
+                # Case A: Reference to another node (Dependency)
+                if isinstance(source_ref, str) and source_ref in subgraphs:
+                    source_subgraph = subgraphs[source_ref]
+~~~~~
+~~~~~python.new
+        # 4. Wire dependencies between subgraphs
+        for node_ir in graph_ir.nodes:
+            target_subgraph = subgraphs[node_ir.id]
+
+            # Help static analysis
+            assert target_subgraph.bleacher is not None
+
+            # 4.1 Data Dependencies (Arguments)
+            for arg_name, source_ref in node_ir.inputs.items():
+                # Case A: Reference to another node (Dependency)
+                if isinstance(source_ref, str) and source_ref in subgraphs:
+                    source_subgraph = subgraphs[source_ref]
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python.old
+                    # Wire Const -> Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=const_node_id,
+                            source_port="out",
+                            target_node_id=target_subgraph.bleacher.id,
+                            target_port=arg_name,
+                        )
+                    )
+
+        # 5. Wire Global Resources (The Loop)
+~~~~~
+~~~~~python.new
+                    # Wire Const -> Bleacher
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=const_node_id,
+                            source_port="out",
+                            target_node_id=target_subgraph.bleacher.id,
+                            target_port=arg_name,
+                        )
+                    )
+            
+            # 4.2 Sequence Dependencies (.after())
+            for dep_id in node_ir.dependencies:
+                if dep_id in subgraphs:
+                    source_subgraph = subgraphs[dep_id]
+                    # Help static analysis
+                    assert source_subgraph.stainer is not None
+
+                    port_name = f"wait_for_{dep_id}"
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=source_subgraph.stainer.id,
+                            source_port="output",
+                            target_node_id=target_subgraph.bleacher.id,
+                            target_port=port_name,
+                        )
+                    )
+            
+            # 4.3 Condition (.run_if())
+            if node_ir.condition and node_ir.condition in subgraphs:
+                source_subgraph = subgraphs[node_ir.condition]
+                # Help static analysis
+                assert source_subgraph.stainer is not None
+
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=source_subgraph.stainer.id,
+                        source_port="output",
+                        target_node_id=target_subgraph.bleacher.id,
+                        target_port="condition",
+                    )
                 )
 
-            # 2. Emission & Sinks
-            outbound = self._outbound_channels.get(node.id, [])
-            node_sinks = self.sinks.get(node.id, {})
-
-            # We iterate over all result tokens to handle both Sinks and Channels
-            for port_name, token in result_tokens.items():
-                if token is None:
-                    continue
-
-                # A. Handle Sinks (Direct callback)
-                if port_name in node_sinks:
-                    for cb in node_sinks[port_name]:
-                        try:
-                            await cb(token)
-                        except Exception as e:
-                            logger.exception(f"Sink callback failed for {node.id}:{port_name}: {e}")
-
-                # B. Handle Outbound Channels (Topological Flow)
-                # Find channels connected to this source port
-                matching_channels = [
-                    c for c in outbound if c.source_port == port_name
-                ]
-                
-                for channel in matching_channels:
-                    # Spectrum Filtering
-                    if channel.tag_filter and channel.tag_filter != token.tag:
-                        continue
-
-                    target_node = self.graph.nodes[channel.target_node_id]
-                    if isinstance(target_node, PhysicsDataNode):
-                        self.memory.put(target_node, token)
-
-        except Exception as e:
-            logger.exception(f"Error executing task {node.id}: {e}")
-            # TODO: Emit error token to a special error port or DLQ?
-            # For now, we just log. In v3.0 specs, errors are propagated as tokens.
-            # If the func raised, it means it crashed HARD.
-        finally:
-            self.active_task_count -= 1
-            # If we hit 0, we might want to signal an event?
-            # For now, relying on memory mutation events is enough for forward progress.
+        # 5. Wire Global Resources (The Loop)
 ~~~~~
+
+### 下一步建议
+我们已经完成了前端解析和后端物理连线的基础设施。下一步应该：
+1.  **验证测试**: 编写集成测试，验证 `run_if` 和 `after` 构造的图是否能正确执行（物理层连线是否生效）。
+2.  **完善 VM 逻辑**: 虽然现在连上了，但 `Bleacher` 目前可能只是傻傻地等待。对于 `Condition` 端口，我们需要在 `Bleacher` 或 `VM` 中实现特殊的处理逻辑：如果 `condition` 端口收到 False，则不应激发 Worker，而是直接进入 Skip 状态。这属于 Phase 2 的“收尾”或 Phase 3 的“物理层增强”。

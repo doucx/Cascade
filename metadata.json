@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(vm): 升级 Reactor 为异步非阻塞模型并扩展物理定义", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767411101.9190056, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): 实现 Frontend 对 run_if 和 dependencies 的支持", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767411402.147744, "duration_ms": 0}}

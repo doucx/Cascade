@@ -8,7 +8,7 @@ from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor
 
 
-def noop_producer(inputs, node):
+def noop_producer(inputs, node, resources):
     return {"out": Token(payload="event")}
 
 

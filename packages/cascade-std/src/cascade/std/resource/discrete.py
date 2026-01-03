@@ -9,8 +9,10 @@ class DiscreteLedger:
     available: int
 
 
+from typing import Any
+
 async def discrete_allocator(
-    inputs: Dict[str, Token], node: PhysicsNode
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload
@@ -38,7 +40,7 @@ async def discrete_allocator(
 
 
 async def discrete_reclaimer(
-    inputs: Dict[str, Token], node: PhysicsNode
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload

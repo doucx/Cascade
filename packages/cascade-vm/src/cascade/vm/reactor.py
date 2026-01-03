@@ -1,4 +1,5 @@
 import asyncio
+import inspect
 from typing import List, Callable, Dict, Tuple
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
@@ -105,9 +106,12 @@ class Reactor:
 
         # We pass the node instance as the second argument to the instruction
         # to allow access to static port definitions (PortDef).
-        result_tokens: Dict[str, Token] = await self.executor.submit(
-            func, (input_data, node)
-        )
+        if inspect.iscoroutinefunction(func):
+            # Natively await async functions
+            result_tokens = await func(input_data, node)
+        else:
+            # Offload sync functions to the thread pool
+            result_tokens = await self.executor.submit(func, (input_data, node))
 
         if not isinstance(result_tokens, dict):
             raise ValueError(

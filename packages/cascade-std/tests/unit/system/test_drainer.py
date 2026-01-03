@@ -4,10 +4,10 @@ from cascade.spec.system import SystemControlToken
 from cascade.std.system.drainer import drain_signal
 
 
-def test_drain_signal_produces_correct_token():
+async def test_drain_signal_produces_correct_token():
     inputs = {"trigger": Token(payload=None)}
 
-    outputs = drain_signal(inputs, MagicMock())
+    outputs = await drain_signal(inputs, MagicMock())
 
     assert "out" in outputs
     output_payload = outputs["out"].payload

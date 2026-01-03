@@ -93,6 +93,7 @@ dev = [
   "cascade-connector-local",
   "cascade-vm",
   "cascade-compiler",
+  "cascade-std",
   # "cascade", # The python sdk
   "ruff",
 ]

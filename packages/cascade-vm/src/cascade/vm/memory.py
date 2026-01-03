@@ -1,4 +1,5 @@
 from typing import Dict
+import asyncio
 from collections import deque
 from cascade.spec.physics import Token, PhysicsDataNode
 
@@ -21,6 +22,11 @@ class VolatileMemory:
         self._buffers: Dict[str, deque[Token]] = {}
         # Maps node_id -> capacity
         self._capacities: Dict[str, int] = {}
+        self._mutation_event = asyncio.Event()
+
+    async def wait_for_mutation(self) -> None:
+        await self._mutation_event.wait()
+        self._mutation_event.clear()
 
     def put(self, node: PhysicsDataNode, token: Token) -> None:
         node_id = node.id
@@ -37,6 +43,7 @@ class VolatileMemory:
             )
 
         buffer.append(token)
+        self._mutation_event.set()
 
     def take(self, node_id: str) -> Token:
         if node_id not in self._buffers or not self._buffers[node_id]:

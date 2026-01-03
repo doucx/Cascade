@@ -125,9 +125,17 @@ async def test_concurrency_limit():
     memory.put(physical_graph.nodes["const.node_2.x"], t2)  # Put it back
 
     # 7. Step Execution
+    async def wait_idle():
+        import asyncio
+
+        while reactor.active_task_count > 0:
+            await asyncio.sleep(0.001)
+
     # Step 1: Both Bleachers are ready on 'x', but contend for 'res_gpu'.
     # With the new atomic Reactor, only ONE should fire.
     fired = await reactor.step()
+    await wait_idle()
+
     # What fires?
     # 1. Bleacher (consumes 1 GPU, 1 X) -> fires.
     # The other Bleacher cannot fire because D_res is empty.
@@ -138,20 +146,27 @@ async def test_concurrency_limit():
     # Step 2: The fired Triad proceeds.
     # Worker fires.
     await reactor.step()
+    await wait_idle()
 
     # Step 3: Stainer fires.
     # This should return the resource.
     await reactor.step()
+    await wait_idle()
 
     assert memory.get_count("canonical.resource.gpu") == 1  # Resource returned!
 
     # Step 4: Now the second Bleacher can fire.
     fired_2 = await reactor.step()
+    await wait_idle()
+
     assert fired_2 == 1
     assert memory.get_count("canonical.resource.gpu") == 0
 
     # Step 5 & 6: Finish second task
     await reactor.step()  # Worker
+    await wait_idle()
+
     await reactor.step()  # Stainer
+    await wait_idle()
 
     assert memory.get_count("canonical.resource.gpu") == 1

@@ -1,4 +1,5 @@
 import pytest
+import asyncio
 from typing import Dict, Callable
 
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
@@ -74,6 +75,10 @@ async def test_ping_pong_flow(ping_pong_topology):
 
     # 2. Run the physics simulation for one step
     fired_count = await reactor.step()
+
+    # Wait for async completion
+    while reactor.active_task_count > 0:
+        await asyncio.sleep(0.001)
 
     # 3. Assertions
     assert fired_count == 1

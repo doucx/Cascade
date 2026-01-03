@@ -45,13 +45,18 @@ class IRGenerator:
 
         # 1. Resolve Dependencies (Post-order)
         # We visit args and kwargs first to ensure dependencies are registered.
-        # This gives us the "transformed" inputs where LazyResults are replaced by Node IDs.
         transformed_args = [self._visit(arg) for arg in lr.args]
         transformed_kwargs = {k: self._visit(v) for k, v in lr.kwargs.items()}
 
-        # Note: We currently don't handle _dependencies (implicit sequence) or _condition
-        # in the NodeIR inputs structure explicitly yet.
-        # TODO: Add support for sequence dependencies and run_if conditions.
+        # Handle Condition (visit it so it's registered)
+        condition_id = None
+        if lr._condition:
+            condition_id = self._visit(lr._condition)
+
+        # Handle Explicit Dependencies (visit them)
+        dependency_ids = []
+        for dep in lr._dependencies:
+            dependency_ids.append(self._visit(dep))
 
         # 2. Analyze Task Definition
         task_def = self.analyzer.analyze(lr.task)
@@ -83,6 +88,12 @@ class IRGenerator:
         for val in lr.kwargs.values():
             collect_deps(val)
 
+        # Also collect deps for condition and dependencies for hashing
+        if lr._condition:
+            collect_deps(lr._condition)
+        for dep in lr._dependencies:
+            collect_deps(dep)
+
         node_id = self.hashing_service.compute_node_instance_hash(task_def, lr, dep_map)
 
         # 4. Construct NodeIR
@@ -106,6 +117,8 @@ class IRGenerator:
             task=task_def,
             inputs=inputs,
             constraints=constraints,
+            condition=condition_id,
+            dependencies=dependency_ids,
         )
 
         # 5. Register

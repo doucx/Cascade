@@ -99,13 +99,14 @@ class Builder:
                 )
             )
 
-        # 4. Wire data dependencies between subgraphs
+        # 4. Wire dependencies between subgraphs
         for node_ir in graph_ir.nodes:
             target_subgraph = subgraphs[node_ir.id]
 
             # Help static analysis
             assert target_subgraph.bleacher is not None
 
+            # 4.1 Data Dependencies (Arguments)
             for arg_name, source_ref in node_ir.inputs.items():
                 # Case A: Reference to another node (Dependency)
                 if isinstance(source_ref, str) and source_ref in subgraphs:
@@ -144,6 +145,38 @@ class Builder:
                             target_port=arg_name,
                         )
                     )
+
+            # 4.2 Sequence Dependencies (.after())
+            for dep_id in node_ir.dependencies:
+                if dep_id in subgraphs:
+                    source_subgraph = subgraphs[dep_id]
+                    # Help static analysis
+                    assert source_subgraph.stainer is not None
+
+                    port_name = f"wait_for_{dep_id}"
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=source_subgraph.stainer.id,
+                            source_port="output",
+                            target_node_id=target_subgraph.bleacher.id,
+                            target_port=port_name,
+                        )
+                    )
+
+            # 4.3 Condition (.run_if())
+            if node_ir.condition and node_ir.condition in subgraphs:
+                source_subgraph = subgraphs[node_ir.condition]
+                # Help static analysis
+                assert source_subgraph.stainer is not None
+
+                physical_graph.channels.append(
+                    Channel(
+                        source_node_id=source_subgraph.stainer.id,
+                        source_port="output",
+                        target_node_id=target_subgraph.bleacher.id,
+                        target_port="condition",
+                    )
+                )
 
         # 5. Wire Global Resources (The Loop)
         for node_ir in graph_ir.nodes:

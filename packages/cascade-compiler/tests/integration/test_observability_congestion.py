@@ -125,5 +125,10 @@ async def test_infinite_capacity_handles_concurrency():
     # Both should fire successfully.
     fired = await reactor.step()
 
+    import asyncio
+
+    while reactor.active_task_count > 0:
+        await asyncio.sleep(0.001)
+
     assert fired == 2
     assert memory.get_count(d_life.id) == 2

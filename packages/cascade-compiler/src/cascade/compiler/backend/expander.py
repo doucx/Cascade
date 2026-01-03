@@ -49,6 +49,17 @@ class Expander:
                 port_name, PortRole.RESOURCE, "ResourceSlot"
             )
 
+        # Add ports for implicit dependencies (SIGNAL)
+        for dep_id in node_ir.dependencies:
+            # We use a naming convention for dependency ports
+            port_name = f"wait_for_{dep_id}"
+            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Token")
+
+        # Add port for condition (SIGNAL/DATA)
+        if node_ir.condition:
+            port_name = "condition"
+            bleacher_inputs[port_name] = PortDef(port_name, PortRole.SIGNAL, "Bool")
+
         f_pre = BleachNode(
             id=f_pre_id,
             name=f"Bleach({node_ir.name})",

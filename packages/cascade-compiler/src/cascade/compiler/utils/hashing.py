@@ -49,7 +49,33 @@ class HashingService:
 
         # 5. Metadata
         if getattr(result, "_condition", None):
-            components.append("Condition:PRESENT")
+            # We need the ID of the condition node
+            cond = result._condition
+            # Handle potential MappedLazyResult or other types in condition if necessary
+            # For now assuming LazyResult or similar which is in dep_nodes
+            if hasattr(cond, "_uuid") and cond._uuid in dep_nodes:
+                node = dep_nodes[cond._uuid]
+                node_id = getattr(node, "id", getattr(node, "structural_id", str(node)))
+                components.append(f"ConditionID:{node_id}")
+            else:
+                components.append("Condition:UNKNOWN")
+
+        if getattr(result, "_dependencies", None):
+            deps = result._dependencies
+            if deps:
+                components.append("Dependencies:[")
+                # Sort by UUID to ensure stable hash
+                sorted_deps = sorted(deps, key=lambda x: x._uuid)
+                for dep in sorted_deps:
+                    if dep._uuid in dep_nodes:
+                        node = dep_nodes[dep._uuid]
+                        node_id = getattr(
+                            node, "id", getattr(node, "structural_id", str(node))
+                        )
+                        components.append(f"DepID:{node_id}")
+                    else:
+                        components.append("DepID:UNKNOWN")
+                components.append("]")
 
         # 6. Constraints
         if getattr(result, "_constraints", None):

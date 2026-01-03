@@ -6,6 +6,10 @@
     "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, memory: VolatileMemory, executor: PhysicsExecutor, function_map: Dict[str, Callable]):",
     "baseline_code_structure_hash": "0677bda3a0064d517566c03835d8240a41cd10b0db83af6de7b6f96a219d0fe0"
   },
+  "Reactor._execute_task": {
+    "baseline_code_signature_text": "async def _execute_task(self, node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:",
+    "baseline_code_structure_hash": "c2ccbcdc7a5188b24a0db780dfa47a963c8aaebf593e5d6062a24d9158fa2a11"
+  },
   "Reactor._fire": {
     "baseline_code_signature_text": "async def _fire(self, node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:",
     "baseline_code_structure_hash": "edaeeeb191a0e5ab3c2c5a966c63b435479999110e6d6b260b39918937efc683",
@@ -15,6 +19,16 @@
   "Reactor._func_nodes": {},
   "Reactor._func_outputs": {},
   "Reactor._outbound_channels": {},
+  "Reactor._schedule_task": {
+    "baseline_code_signature_text": "def _schedule_task(self, node: PhysicsFuncNode, input_data: Dict[str, Token]):",
+    "baseline_code_structure_hash": "11d7ac0f211daba7d924adb7d125328f6250df035f2f2f51c22f9c09cc4428ad"
+  },
+  "Reactor.active_task_count": {},
+  "Reactor.add_sink": {
+    "baseline_code_signature_text": "def add_sink(self, node_id: str, port_name: str, callback: Callable[[Token], Awaitable[None]]) -> None:",
+    "baseline_code_structure_hash": "2f74aec3166e2e9750b28295848e2465e03a0a0c89911aff5243c2dca3cda785",
+    "baseline_yaml_content_hash": "6044f02f16fb28ae4bf4aee4cf2f064b2cf0a043a55f11efef6a26b81d0ae878"
+  },
   "Reactor.executor": {},
   "Reactor.function_map": {},
   "Reactor.graph": {},
@@ -24,9 +38,11 @@
     "baseline_code_structure_hash": "ec73b8ca76e1f98e8d8a878be2ad2d18bb2975154a4f48b43ccd1e9f12a436bd",
     "baseline_yaml_content_hash": "69b0517bce2e4616aec74a482166b7e31e2faab77910dfa8acd08ff3543133fb"
   },
+  "Reactor.sinks": {},
   "Reactor.step": {
     "baseline_code_signature_text": "async def step(self) -> int:",
     "baseline_code_structure_hash": "5917d1593782fc58a1dd6c4ae986c38c33e7a8f32330503f356d963f3ea4cb2a",
-    "baseline_yaml_content_hash": "bf7ea269272d762f44007fd265544b7c9cec6340275f8bd84b062cc8cacda81a"
-  }
+    "baseline_yaml_content_hash": "04ecb20a10209dd13361fe1bb0e78426661495e035714ed86b629191e01f7771"
+  },
+  "logger": {}
 }

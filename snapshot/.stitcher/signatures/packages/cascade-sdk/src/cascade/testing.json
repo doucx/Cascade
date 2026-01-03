@@ -71,8 +71,8 @@
   },
   "MockExecutor.delay": {},
   "MockExecutor.execute": {
-    "baseline_code_signature_text": "async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]):",
-    "baseline_code_structure_hash": "65ad91d154609d1f477b3f8a9ee0bb3d62e653183a28679368d0d909b55c8491"
+    "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]):",
+    "baseline_code_structure_hash": "c2694369d4030d0896a7d2637ee1cdea348e82aeeda9301a0facc4d71a91513d"
   },
   "MockExecutor.return_value": {},
   "MockSolver": {
@@ -107,8 +107,8 @@
   },
   "SpyExecutor.call_log": {},
   "SpyExecutor.execute": {
-    "baseline_code_signature_text": "async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
-    "baseline_code_structure_hash": "6ab959946345cf1f86e292dcc605b71552e8872be8e3625a41d658e4379943ca"
+    "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
+    "baseline_code_structure_hash": "42c33adc443e46043352bc8c2c8f3dc4febb95531e696f8dc5fd657b4ef76d58"
   },
   "SpySolver": {
     "baseline_yaml_content_hash": "0338c93b6e412a98b2e158ff085289c1a2ea5585ca35cebc6041f3b97c7e743c"
@@ -139,6 +139,17 @@
     "baseline_code_structure_hash": "191c2fd44c193d6caf8694f764d7ba694809e6f8505c88c331fdb58a08ba8558",
     "baseline_yaml_content_hash": "d208020df868688d8fffced12fb29fe9e6908d08f026b4da5eec304fdb757a99"
   },
+  "TimedMockExecutor": {},
+  "TimedMockExecutor.__init__": {
+    "baseline_code_signature_text": "def __init__(self, delay: float = 0.0):",
+    "baseline_code_structure_hash": "789c7a8e5ba271367c9265bfcb953ae06373edf71ffa24a2e606f723ea95738b"
+  },
+  "TimedMockExecutor.delay": {},
+  "TimedMockExecutor.execute": {
+    "baseline_code_signature_text": "async def execute(self, node, callable_obj, args, kwargs):",
+    "baseline_code_structure_hash": "b4923a8c5804fefae795aa186c1bc66a4172fcdbef80b64f4c3f046cb3a36813"
+  },
+  "__all__": {},
   "override_resource": {
     "baseline_code_signature_text": "def override_resource(engine: Engine, name: str, new_resource_func: Callable[[], Any]):",
     "baseline_code_structure_hash": "8ea5effc00233918706c1f47ca08a5994e229e50505d8abaab84129f15c7613a",

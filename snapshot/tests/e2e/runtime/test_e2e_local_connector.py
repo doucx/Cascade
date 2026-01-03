@@ -5,7 +5,6 @@ import pytest
 import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
 from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
 from cascade.connectors.local.connector import LocalConnector, POLL_INTERVAL
 

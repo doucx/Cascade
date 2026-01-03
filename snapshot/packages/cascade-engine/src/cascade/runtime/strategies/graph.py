@@ -289,7 +289,9 @@ class GraphExecutionStrategy:
                             )
                         )
 
-                        executable = executable_registry[node.current_node_instance_hash]
+                        executable = executable_registry[
+                            node.current_node_instance_hash
+                        ]
 
                         inputs = await self.node_processor.arg_resolver.resolve(
                             node,

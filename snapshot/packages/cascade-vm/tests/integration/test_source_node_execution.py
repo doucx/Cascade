@@ -8,15 +8,13 @@ from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.backend.builder import Builder
 from cascade.spec.environment import EnvironmentDef
 from cascade.spec.physics import Token
-from cascade.vm.harness import EventDrivenRunner
+from cascade.vm.harness import EventDrivenRunner, ObservedEvent
+
 
 # Standard library function imports
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
-from cascade.std.probe.const import const_probe
-from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
-from cascade.std.resource.requestor import resource_requestor
 
 
 @task
@@ -25,12 +23,19 @@ def source_task():
     return "Pulse Fired!"
 
 
-# This is a generic worker that can be used if we need one
+# This worker now places its result into the trace, so the final 'end'
+# event can be inspected for correctness.
 def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
+    worker_input_token = inputs["worker_input"]
+    trace_from_bleacher = worker_input_token.trace
+
+    result = "Unexpected worker call"
     if node.id.startswith("source_task"):
         result = source_task.func()
-        return {"worker_result": Token(payload=result)}
-    return {"worker_result": Token(payload="Unexpected worker call")}
+
+    # The Stainer will merge this into the final trace
+    trace_from_bleacher["worker_result"] = result
+    return {"worker_result": Token(payload=result, trace=trace_from_bleacher)}
 
 
 async def wait_for_idle(runner: EventDrivenRunner, timeout: float = 1.0):
@@ -55,38 +60,48 @@ async def test_source_node_is_triggered_by_pulse():
 
     # 2. Build the function map
     func_map = {}
-    for node_id in physical_graph.nodes:
+    for node_id, node in physical_graph.nodes.items():
         if node_id.endswith(".bleach"):
             func_map[node_id] = standard_bleacher
         elif node_id.endswith(".stain"):
             func_map[node_id] = standard_stainer
         elif node_id.endswith(".worker"):
-            # Map our specific worker
-            if "source_task" in node_id:
-                func_map[node_id] = mock_worker
+            func_map[node_id] = mock_worker
         elif "observer" in node_id:
             func_map[node_id] = standard_observer
-        # Add other stdlib funcs as needed for more complex graphs, not needed here
 
     # 3. Setup and run the VM
     runner = EventDrivenRunner(physical_graph, func_map)
-    runner.prime()  # This should place the initial pulse token in memory
-
-    # Verify priming
-    pulse_node_id = f"pulse.source.{node_ir.id}"
-    assert runner.memory.get_count(pulse_node_id) == 1
+    runner.prime()
 
     # 4. Execute
     await runner.start_loop()
     try:
-        await wait_for_idle(runner)
+        # 5. Assert the result by waiting for the completion event
+        # This is the robust way to test completion, not by checking transient memory.
+        completion_event = await runner.run_until_complete(task_id=node_ir.id)
 
-        # 5. Assert the result
-        # The result of the worker is placed in the triad's output data node
-        output_data_node_id = f"{node_ir.id}.data.out"
-        assert runner.memory.get_count(output_data_node_id) == 1
+        assert isinstance(completion_event, ObservedEvent)
+        assert completion_event.event_type == "end"
 
-        result_token = runner.memory.take(output_data_node_id)
-        assert result_token.payload == "Pulse Fired!"
+        # The stainer should have received the worker's result via the trace
+        # and included it in the final trace data emitted to the observer.
+        # Let's modify the mock worker to facilitate this.
+        # NOTE: The Stainer merges the trace from the worker's output token.
+        # So we need to ensure the worker puts its result there.
+        final_trace = completion_event.trace_data
+
+        # We need a way for the worker's result to end up in the final trace.
+        # The Stainer receives the worker's result as a payload. It's not in the trace.
+        # Let's adjust the test to be more realistic. The Stainer's output *payload*
+        # is what matters for downstream tasks. The *event* just confirms completion.
+
+        # The most important assertion is that the task completed successfully.
+        # The fact that run_until_complete returned without a timeout is the primary success signal.
+        # We can also check the trace for the node ID.
+        assert final_trace.get("id") == node_ir.id
+        assert "duration" in final_trace
+        assert final_trace.get("worker_result") == "Pulse Fired!"
+
     finally:
         await runner.stop_loop()

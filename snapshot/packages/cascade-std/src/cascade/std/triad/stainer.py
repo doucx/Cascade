@@ -19,8 +19,12 @@ async def standard_stainer(
     trace_input_token = inputs["trace_input"]
 
     result_payload = worker_result_token.payload
-    # Use a copy to avoid mutating the original trace dict
-    trace_payload = trace_input_token.payload.copy()
+
+    # The trace from the worker token might have been augmented by the worker.
+    # The trace_input_token is the one from the "wormhole" D_trace.
+    # The most up-to-date trace is the one that came through the worker.
+    trace_payload = worker_result_token.trace.copy()
+    trace_payload.update(trace_input_token.payload)
 
     # 2. Determine tag based on result (error or success)
     tag = "error" if isinstance(result_payload, Exception) else "default"

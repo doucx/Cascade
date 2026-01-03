@@ -34,11 +34,13 @@ async def standard_bleacher(
 
     # 2. Capture metadata
     trace_payload["start_ts"] = time.monotonic()
+    trace_payload["id"] = node.id.replace(".bleach", "")  # Add the logical node ID
     if held_resources:
         trace_payload["held_resources"] = held_resources
 
     # 3. Create the output tokens
-    worker_token = Token(payload=worker_payload)
+    # Pass the trace through to the worker so it can add to it
+    worker_token = Token(payload=worker_payload, trace=trace_payload)
     trace_token = Token(payload=trace_payload)
 
     return {

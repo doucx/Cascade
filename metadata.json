@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): Align bleacher tests with canonical ID trace logic", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767428804.1715934, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(core): 废弃 Tag 路由，实现主权端口模型 (Phase 1)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767428882.889205, "duration_ms": 0}}

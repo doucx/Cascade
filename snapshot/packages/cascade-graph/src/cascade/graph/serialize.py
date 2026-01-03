@@ -94,7 +94,7 @@ def graph_to_dict(graph: Graph) -> Dict[str, Any]:
 
 def _node_to_dict(node: Node) -> Dict[str, Any]:
     data = {
-        "structural_id": node.structural_id,
+        "current_node_instance_hash": node.structural_id,
         "name": node.name,
         "node_type": node.node_type,
         # input_bindings now contains JSON-serializable literals directly.
@@ -242,7 +242,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
 
     if node_type == "map":
         node = MapNode(
-            structural_id=data["structural_id"],
+            structural_id=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="map",
             mapping_factory=_load_func_from_path(data.get("mapping_factory")),
@@ -257,7 +257,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
         # This is acceptable for simple visualization/analysis,
         # but execution of restored ParamNodes might need the spec context.
         node = ParamNode(
-            structural_id=data["structural_id"],
+            structural_id=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="param",
             _callable=_load_func_from_path(data.get("callable")),
@@ -270,7 +270,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     else:
         # Default to TaskNode
         node = TaskNode(
-            structural_id=data["structural_id"],
+            structural_id=data["current_node_instance_hash"],
             definition=stub_def,
             node_type="task",
             _callable=_load_func_from_path(data.get("callable")),

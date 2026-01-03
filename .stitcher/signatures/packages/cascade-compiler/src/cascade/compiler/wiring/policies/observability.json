@@ -1,0 +1,11 @@
+{
+  "ObservabilityWiringPolicy": {},
+  "ObservabilityWiringPolicy.apply": {
+    "baseline_code_signature_text": "def apply(self, ctx: WiringContext, node_ir: NodeIR, subgraph: SubGraph) -> None:",
+    "baseline_code_structure_hash": "eff3dd8900ac3bfb8492a3138311eb9594eab43ef6c18ebf1d19066a360889c2"
+  },
+  "ObservabilityWiringPolicy.setup_globals": {
+    "baseline_code_signature_text": "def setup_globals(self, ctx: WiringContext) -> None:",
+    "baseline_code_structure_hash": "ab3f95fe902aab22c577e918f1621ba155bbbffd6bbb829f6b082557249a11e4"
+  }
+}

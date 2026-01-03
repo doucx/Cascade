@@ -25,7 +25,9 @@ class ControlFlowWiringPolicy(WiringPolicy):
                 d_seq = PhysicsDataNode(id=d_seq_id, name=f"Seq({dep_id})")
                 ctx.wire.add_node(d_seq)
 
-                ctx.wire.connect(source_subgraph.stainer.id, "output_default", d_seq_id, "in")
+                ctx.wire.connect(
+                    source_subgraph.stainer.id, "output_default", d_seq_id, "in"
+                )
                 ctx.wire.connect(d_seq_id, "out", subgraph.bleacher.id, port_name)
 
         # 4.3 Condition (.run_if())
@@ -38,5 +40,7 @@ class ControlFlowWiringPolicy(WiringPolicy):
             d_cond = PhysicsDataNode(id=d_cond_id, name=f"Cond({node_ir.condition})")
             ctx.wire.add_node(d_cond)
 
-            ctx.wire.connect(source_subgraph.stainer.id, "output_default", d_cond_id, "in")
+            ctx.wire.connect(
+                source_subgraph.stainer.id, "output_default", d_cond_id, "in"
+            )
             ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")

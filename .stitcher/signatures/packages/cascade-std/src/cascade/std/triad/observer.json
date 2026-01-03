@@ -1,9 +1,12 @@
 {
-  "ObservedEvent": {},
+  "ObservedEvent": {
+    "baseline_yaml_content_hash": "7c19316ecd7ae702868a27af5743e1cb25110a39b06f49610fffe9983babd54c"
+  },
   "ObservedEvent.event_type": {},
   "ObservedEvent.trace_data": {},
   "standard_observer": {
     "baseline_code_signature_text": "async def standard_observer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "e38cedfac8126889685506e4c60f8814d4cfde00a469c491a8786b9135db1643"
+    "baseline_code_structure_hash": "e38cedfac8126889685506e4c60f8814d4cfde00a469c491a8786b9135db1643",
+    "baseline_yaml_content_hash": "07cf97157cb73587a0f1255090e0fa615386289d9dd2f4d06658dd81b6b35713"
   }
 }

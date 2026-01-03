@@ -1,6 +1,6 @@
 from cascade.spec.ir.models import NodeIR
 from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.ports import PortDef, PortRole, PortName
+from cascade.spec.ports import PortDef, PortRole
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.utils.naming import PhysicalIdGenerator
 from cascade.compiler.wiring.context import WiringContext
@@ -41,7 +41,9 @@ class ParameterWiringPolicy(WiringPolicy):
                 ctx.wire.add_node(d_dep)
 
                 # Source Stainer -> D_dep (Connect from output_default)
-                ctx.wire.connect(source_subgraph.stainer.id, "output_default", d_dep_id, "in")
+                ctx.wire.connect(
+                    source_subgraph.stainer.id, "output_default", d_dep_id, "in"
+                )
 
                 # D_dep -> Target Bleacher
                 ctx.wire.connect(d_dep_id, "out", subgraph.bleacher.id, port_name)

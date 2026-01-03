@@ -208,7 +208,9 @@ class Engine:
                     params=params or {},
                 )
 
-                final_result = await strategy.execute(target=workflow_target, context=context)
+                final_result = await strategy.execute(
+                    target=workflow_target, context=context
+                )
 
             duration = time.time() - start_time
             self.bus.publish(

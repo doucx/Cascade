@@ -8,8 +8,6 @@
   Represents a mapped task execution.
 "Node": |-
   Base class for all nodes in the Cascade graph.
-"Node.callable_obj": |-
-  Polymorphic accessor for the executable object.
 "ParamNode": |-
   Represents an external parameter injection.
 "TaskNode": |-

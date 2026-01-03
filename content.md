@@ -1,78 +1,194 @@
 简要回答
-好的，我将使用 `sed` 批量修复 `cascade-std` 中大部分单元测试的函数调用签名，并手动修复 `test_observer.py` 以引入 `MagicMock` 并适配其特殊的调用方式。
+好的，分析完毕。我的 `sed` 策略过于简单，未能处理多行函数调用，并且完全漏掉了 `test_observer.py` 的调用点修复。感谢您的指正。
 
-## [WIP] fix(tests): 批量更新 cascade-std 单元测试以适配新的物理函数签名
+我们现在将一次性修复剩余的故障并根据您的建议重构这些测试文件以消除重复代码（DRY）。
+
+## [WIP] fix(tests): 修复并重构 cascade-std 单元测试以提高代码质量
 
 ### 错误分析
-`Reactor` 和物理函数的签名变更导致 `cascade-std` 中的单元测试大量失败，因为测试代码中对物理函数的调用仍然缺少新增的 `resources` 参数。
+1.  `test_discrete.py`: `sed` 命令未能匹配多行函数调用，导致 `test_sequential_rel_and_req` 失败。
+2.  `test_observer.py`: 在上一个计划中，我仅添加了 `MagicMock` 的导入，但忘记了更新其三个测试用例中的函数调用点。
+3.  **代码质量**: `test_discrete.py`, `test_continuous.py`, 和 `test_observer.py` 包含大量重复的设置代码，违反了 DRY 原则。
 
 ### 用户需求
-修复 `cascade-std` 下所有因 `TypeError: ... missing 1 required positional argument: 'resources'` 而失败的测试。
+1.  修复所有剩余的测试失败。
+2.  重构相关测试文件以提高代码质量和可维护性。
 
 ### 评论
-这是一个必要的清理工作，标志着“统一资源管理”重构的完成。通过在测试中注入 `MagicMock()` 作为 `resources` 参数，我们满足了新的物理契约，同时保持了单元测试对环境的无知性（Agnoticism）。
+这是一个典型的“修复并改进”循环。简单的批量替换不足以应对代码的多样性。现在，我们将采用更精确的 `write_file` 操作，这不仅能保证修复的正确性，还能通过引入 `pytest` 的 Fixture 范式来提升测试代码的整体质量，使其更简洁、更易于理解。
 
 ### 目标
-1.  使用 `sed` 批量更新测试文件中的函数调用。
-2.  手动修复 `test_observer.py` 的导入和调用逻辑。
+1.  修复 `test_discrete.py` 中的多行调用失败。
+2.  修复 `test_observer.py` 中的所有调用失败。
+3.  重构 `test_discrete.py`、`test_continuous.py` 和 `test_observer.py` 以使用 Fixture，消除代码重复。
 
 ### 基本原理
-大部分测试用例都遵循 `await func(inputs, mock_obj)` 的模式，可以通过正则表达式高效地批量替换。`test_observer.py` 需要引入新的 Mock 对象并调整关键字参数，因此单独处理。
+我们将使用 `pytest.fixture` 来封装重复的对象创建逻辑（如 `Ledger`、`Queue`）。测试函数将通过参数声明其依赖，由 `pytest` 自动注入。这将使每个测试的主体部分只关注其独特的逻辑和断言，从而使代码更清晰、更符合 TDD 的最佳实践。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/std #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/test-suite #task/action/refactor #task/state/continue
+#intent/fix #intent/refine #flow/ready #priority/high #comp/std #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-suite #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 批量替换 MagicMock 调用
+#### Acts 1: 重构 `test_discrete.py`
 
-对于形如 `await func(inputs, MagicMock())` 的调用，我们在末尾插入一个新的 `MagicMock()` 作为 `resources` 参数。这覆盖了大多数 Probe 和 Resource 的测试。
-
-~~~~~act
-run_command
-~~~~~
-~~~~~
-find packages/cascade-std/tests/unit -name "test_*.py" -not -name "test_observer.py" | xargs sed -i 's/MagicMock())/MagicMock(), MagicMock())/g'
-~~~~~
-
-#### Acts 2: 批量替换 node 变量调用
-
-对于形如 `await func(inputs, node)` 或 `await func(..., mock_node)` 的调用，我们在末尾追加 `, MagicMock()`。这主要覆盖了 Triad（Bleacher, Stainer）和部分 Resource 测试。
+我们使用 `write_file` 彻底重写此文件。这将同时修复失败的测试并消除重复代码。
 
 ~~~~~act
-run_command
+write_file
+packages/cascade-std/tests/unit/resource/test_discrete.py
 ~~~~~
+~~~~~python
+import pytest
+from unittest.mock import MagicMock
+from cascade.spec.physics import Token
+from cascade.std.resource.discrete import (
+    discrete_allocator,
+    discrete_reclaimer,
+    DiscreteLedger,
+)
+
+
+@pytest.fixture
+def available_ledger() -> DiscreteLedger:
+    """A ledger with total 10, available 5."""
+    return DiscreteLedger(total=10, available=5)
+
+
+@pytest.fixture
+def starved_ledger() -> DiscreteLedger:
+    """A ledger with total 10, available 1."""
+    return DiscreteLedger(total=10, available=1)
+
+
+async def test_discrete_allocator_grants_when_available(available_ledger):
+    inputs = {"ledger_in": Token(payload=available_ledger), "req_in": Token(payload=2)}
+    outputs = await discrete_allocator(inputs, MagicMock(), MagicMock())
+
+    assert "gnt_out" in outputs
+    assert outputs["gnt_out"].payload == 2
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 3
+    assert "req_out" not in outputs
+
+
+async def test_discrete_allocator_recirculates_when_starved(starved_ledger):
+    req_token = Token(payload=5)
+    inputs = {"ledger_in": Token(payload=starved_ledger), "req_in": req_token}
+    outputs = await discrete_allocator(inputs, MagicMock(), MagicMock())
+
+    assert "gnt_out" not in outputs
+    assert "req_out" in outputs
+    assert outputs["req_out"] is req_token
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 1
+
+
+async def test_discrete_reclaimer_releases_resource(available_ledger):
+    inputs = {"ledger_in": Token(payload=available_ledger), "rel_in": Token(payload=3)}
+    outputs = await discrete_reclaimer(inputs, MagicMock(), MagicMock())
+
+    updated_ledger = outputs["ledger_out"].payload
+    assert updated_ledger.available == 8
+
+
+async def test_sequential_rel_and_req():
+    ledger = DiscreteLedger(total=10, available=2)
+    mock_node = MagicMock()
+    mock_resources = MagicMock()
+
+    rel_outputs = await discrete_reclaimer(
+        {"ledger_in": Token(payload=ledger), "rel_in": Token(payload=3)},
+        mock_node,
+        mock_resources,
+    )
+    new_ledger = rel_outputs["ledger_out"].payload
+
+    alloc_outputs = await discrete_allocator(
+        {"ledger_in": Token(payload=new_ledger), "req_in": Token(payload=4)},
+        mock_node,
+        mock_resources,
+    )
+
+    assert "gnt_out" in alloc_outputs
+    assert alloc_outputs["ledger_out"].payload.available == 1
 ~~~~~
-find packages/cascade-std/tests/unit -name "test_*.py" -not -name "test_observer.py" | xargs sed -i 's/, node)/, node, MagicMock())/g'
-~~~~~
+
+#### Acts 2: 重构 `test_continuous.py`
+
+同理，我们重写此文件以提高代码质量。
 
 ~~~~~act
-run_command
+write_file
+packages/cascade-std/tests/unit/resource/test_continuous.py
 ~~~~~
-~~~~~
-find packages/cascade-std/tests/unit -name "test_*.py" | xargs sed -i 's/, mock_node)/, mock_node, MagicMock())/g'
+~~~~~python
+import pytest
+from unittest.mock import MagicMock
+from cascade.spec.physics import Token
+from cascade.std.resource.continuous import (
+    continuous_allocator,
+    continuous_reclaimer,
+    ContinuousLedger,
+)
+
+
+@pytest.fixture
+def partial_ledger() -> ContinuousLedger:
+    """Ledger with 16.0 total, 4.5 available."""
+    return ContinuousLedger(total=16.0, available=4.5)
+
+
+@pytest.fixture
+def starved_ledger() -> ContinuousLedger:
+    """Ledger with 16.0 total, 1.0 available."""
+    return ContinuousLedger(total=16.0, available=1.0)
+
+
+async def test_continuous_allocator_grants_memory(partial_ledger):
+    inputs = {
+        "ledger_in": Token(payload=partial_ledger),
+        "req_in": Token(payload=2.1),
+    }
+    outputs = await continuous_allocator(inputs, MagicMock(), MagicMock())
+
+    assert "gnt_out" in outputs
+    assert outputs["gnt_out"].payload == 2.1
+    updated = outputs["ledger_out"].payload
+    assert updated.available == pytest.approx(2.4)
+
+
+async def test_continuous_allocator_recirculates_large_request(starved_ledger):
+    req_token = Token(payload=1.1)
+    inputs = {"ledger_in": Token(payload=starved_ledger), "req_in": req_token}
+    outputs = await continuous_allocator(inputs, MagicMock(), MagicMock())
+
+    assert "gnt_out" not in outputs
+    assert outputs["req_out"] is req_token
+    assert outputs["ledger_out"].payload.available == 1.0
+
+
+async def test_continuous_reclaimer_replenish():
+    ledger = ContinuousLedger(total=16.0, available=0.5)
+    inputs = {"ledger_in": Token(payload=ledger), "rel_in": Token(payload=1.2)}
+    outputs = await continuous_reclaimer(inputs, MagicMock(), MagicMock())
+
+    updated = outputs["ledger_out"].payload
+    assert updated.available == pytest.approx(1.7)
 ~~~~~
 
-#### Acts 3: 修复 test_observer.py
+#### Acts 3: 修复并重构 `test_observer.py`
 
-`test_observer.py` 之前利用了隐式的参数传递（将 `queue` 传给了 `node` 位置），现在需要显式地 Mock `node` 和 `resources`，并正确传递关键字参数 `queue`。同时需要导入 `MagicMock`。
+最后，我们重写 observer 测试，修复调用签名并引入 fixture。
 
 ~~~~~act
-patch_file
+write_file
 packages/cascade-std/tests/unit/triad/test_observer.py
 ~~~~~
-~~~~~python.old
-from asyncio import Queue
-
-from cascade.spec.physics import Token
-from cascade.std.triad.observer import standard_observer, ObservedEvent
-
-
-async def test_observer_processes_start_event():
-~~~~~
-~~~~~python.new
+~~~~~python
+import pytest
 from asyncio import Queue
 from unittest.mock import MagicMock
 
@@ -80,8 +196,58 @@ from cascade.spec.physics import Token
 from cascade.std.triad.observer import standard_observer, ObservedEvent
 
 
-async def test_observer_processes_start_event():
+@pytest.fixture
+def event_queue() -> Queue:
+    return Queue()
+
+
+async def test_observer_processes_start_event(event_queue: Queue):
+    start_trace = {"id": "task_A", "start_ts": 100.0}
+    event_token = Token(payload=None, trace=start_trace)
+    inputs = {"event_token": event_token}
+
+    await standard_observer(inputs, MagicMock(), MagicMock(), queue=event_queue)
+
+    assert event_queue.qsize() == 1
+    observed = await event_queue.get()
+
+    assert isinstance(observed, ObservedEvent)
+    assert observed.event_type == "start"
+    assert observed.trace_data == start_trace
+
+
+async def test_observer_processes_end_event(event_queue: Queue):
+    end_trace = {
+        "id": "task_A",
+        "start_ts": 100.0,
+        "end_ts": 102.5,
+        "duration": 2.5,
+    }
+    event_token = Token(payload="result", tag="default", trace=end_trace)
+    inputs = {"event_token": event_token}
+
+    await standard_observer(inputs, MagicMock(), MagicMock(), queue=event_queue)
+
+    assert event_queue.qsize() == 1
+    observed = await event_queue.get()
+
+    assert isinstance(observed, ObservedEvent)
+    assert observed.event_type == "end"
+    assert observed.trace_data == end_trace
+
+
+async def test_observer_with_empty_trace(event_queue: Queue):
+    event_token = Token(payload=None, trace={})
+    inputs = {"event_token": event_token}
+
+    await standard_observer(inputs, MagicMock(), MagicMock(), queue=event_queue)
+
+    assert event_queue.qsize() == 1
+    observed = await event_queue.get()
+
+    assert observed.event_type == "start"
+    assert observed.trace_data == {}
 ~~~~~
 
 ### 下一步建议
-运行测试以确认修复。一旦全绿，我们将进入路线图的**阶段 2：应用新模型并重构测试工具**，重点是重构 `EventDrivenRunner` 以使用 `ResourceRegistry`。
+所有已知的测试故障都已修复，并且相关的测试文件也已重构。现在是再次运行测试套件以确认系统已达到稳定（全绿）状态的最佳时机。确认后，我们将正式完成阶段 1 并准备进入阶段 2。

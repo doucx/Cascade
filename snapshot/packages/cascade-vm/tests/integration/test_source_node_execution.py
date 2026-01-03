@@ -3,7 +3,6 @@ import pytest
 from typing import Dict
 
 from cascade.spec.task import task
-from cascade.spec.ir.models import GraphIR
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.backend.builder import Builder
 from cascade.spec.environment import EnvironmentDef
@@ -19,7 +18,6 @@ from cascade.std.triad.observer import standard_observer
 
 @task
 def source_task():
-    """A simple task with no inputs."""
     return "Pulse Fired!"
 
 
@@ -40,7 +38,6 @@ def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
 
 
 async def wait_for_idle(runner: EventDrivenRunner, timeout: float = 1.0):
-    """Waits until the reactor has no more active tasks."""
     start_time = asyncio.get_event_loop().time()
     while runner.reactor.active_task_count > 0:
         if asyncio.get_event_loop().time() - start_time > timeout:

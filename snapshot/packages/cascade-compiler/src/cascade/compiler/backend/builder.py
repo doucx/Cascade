@@ -9,7 +9,6 @@ from cascade.spec.environment import EnvironmentDef
 from cascade.spec.ports import PortDef, PortRole, PortName
 from cascade.std.resource.discrete import DiscreteLedger
 from .expander import Expander, SubGraph
-from cascade.spec.ports import PortName
 from .validator import GraphValidator
 from .wiring import WiringHarness
 from cascade.compiler.utils.naming import PhysicalIdGenerator

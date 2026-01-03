@@ -42,8 +42,10 @@ async def standard_bleacher(
     # Pass the trace through to the worker so it can add to it
     worker_token = Token(payload=worker_payload, trace=trace_payload)
     trace_token = Token(payload=trace_payload)
+    obs_token = Token(payload=None, trace=trace_payload)
 
     return {
         "worker_input": worker_token,
         "trace_output": trace_token,
+        "obs_output": obs_token,
     }

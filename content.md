@@ -1,244 +1,157 @@
-好的，我们来解决这个问题。
+好的，收到指令。立即停止行动，转入分析模式。
 
-你的分析完全正确。我们不应测试一个瞬态的内部内存状态，而应测试任务完成时发出的、稳定的外部信号。`EventDrivenRunner` 的设计初衷就是为了支持这种基于事件的、健壮的测试模式。
+这是一个极好的、深度的捕获。测试的超时**不是一个随机的竞态条件**，而是暴露了我们标准库（`cascade-std`）中一个根本性的、潜伏至今的逻辑缺陷。你的测试用例像一个完美的探针，精确地触及了这个隐藏的断点。
 
-我将生成一个计划，重写 `test_source_node_is_triggered_by_pulse` 测试用例。新的测试将不再依赖对 `VolatileMemory` 内部状态的脆弱断言，而是改为等待一个明确的、代表任务成功完成的 `ObservedEvent`。
+**症状**:
+测试在 `runner.wait_for_event(...)` 中超时。这意味着 `EventDrivenRunner` 的 `event_queue` 从未收到它所期望的“任务完成”事件。
 
-这不仅能修复当前的测试失败，还能让我们的测试用例提升一个层次，使其更符合“验证意图而非实现”的核心测试原则。
+**根本原因**:
+要让一个“任务完成”事件出现在队列中，必须发生以下物理事件链：
+1.  任务的 `StainNode` (`F_post`) 成功执行。
+2.  `StainNode` 通过其 `obs_output` 端口，发射一个包含最终 `trace` 数据的 `Token`。
+3.  这个 `Token` 流入全局的 `LifecycleBus` (`D_life`)。
+4.  `LifecycleBus` 的 `Token` 激发 `LifecycleObserver` (`F_obs`)。
+5.  `F_obs` 调用 `standard_observer` 函数。
+6.  `standard_observer` 函数将一个 `ObservedEvent` 对象放入 `event_queue`。
 
-## [WIP] fix(test): 修复源任务集成测试以验证事件而非内存
+通过仔细审查我们 `cascade-std` 库的实现，我发现这个链条在**第 2 步**就断了。
+
+**缺陷定位**:
+在 `packages/cascade-std/src/cascade/std/triad/stainer.py` 和 `bleacher.py` 文件中，`standard_stainer` 和 `standard_bleacher` 函数的实现存在缺陷。
+
+*   **硬件 vs 软件**: `Expander` 在编译时，正确地为 `BleachNode` 和 `StainNode` 这两个“硬件”创建了 `obs_output` 物理端口。
+*   **软件缺陷**: 但是，运行在这些节点上的“软件”——`standard_bleacher` 和 `standard_stainer` 函数——在它们的返回字典中，**从未包含 `"obs_output"` 这个键**。它们计算了所有需要的 `trace` 数据，但从未将这些数据打包成一个 `Token` 并从正确的端口发射出去。
+
+因此，观测总线（`LifecycleBus`）从未收到任何 `start` 或 `end` 信号，`LifecycleObserver` 节点从未被激发，`event_queue` 始终为空，导致测试最终超时。
+
+解决方案是修复 `cascade-std` 中的这两个核心函数，让它们正确地履行其与观测系统的契约。我将生成一个计划来修改 `standard_bleacher` 和 `standard_stainer`，确保它们在完成主要工作的同时，也通过 `obs_output` 端口发射一个带有完整 `trace` 数据的观测 `Token`。
+
+这将修复事件链，使测试能够接收到预期的完成信号，从而通过。
+
+---
+
+现在，我将生成修复此问题的计划。
+
+## [WIP] fix(std): 实现 bleacher 和 stainer 的观测令牌发射
 
 ### 错误分析
-测试 `test_source_node_is_triggered_by_pulse` 失败的原因是它错误地断言了一个瞬态的中间内存状态 (`D_worker_out`)。在完整的任务三连体（Bleacher -> Worker -> Stainer）执行流程中，`D_worker_out` 中的 `Token` 会被 `Stainer` 节点消耗掉。当测试的 `wait_for_idle` 函数返回时，整个流程已经完成，`D_worker_out` 自然是空的，导致断言失败。
-
-正确的做法是断言任务最终发出的、可观测的完成信号。
+集成测试 `test_source_node_is_triggered_by_pulse` 因 `EventTimeoutError` 而失败。根本原因是 `cascade-std` 中的 `standard_bleacher` 和 `standard_stainer` 函数没有实现向其 `obs_output` 端口发射观测令牌的逻辑。尽管物理节点拥有该端口，但执行其逻辑的函数从未向其发送数据，导致观测系统从未收到任何 `start` 或 `end` 事件，队列始终为空，测试最终超时。
 
 ### 用户需求
-修改 `packages/cascade-vm/tests/integration/test_source_node_execution.py` 中的集成测试，使其通过等待并验证 `ObservedEvent` 来确认任务的成功执行，而不是检查内部 `VolatileMemory` 的状态。
+修复 `standard_bleacher` 和 `standard_stainer` 的实现，使其能够正确地通过 `obs_output` 端口发射包含 `trace` 数据的观测令牌，从而修复超时的集成测试。
 
 ### 评论
-这是一个典型的从脆弱测试（依赖实现细节）到健壮测试（验证公共契约）的重构。通过将断言目标从易变的内存状态转移到稳定的事件流，我们不仅修复了当前的 Bug，还使测试套件能够更好地抵抗未来对 `cascade-vm` 内部实现的重构，从而提高了测试的长期价值和可靠性。
+这是一个关键的修复，它使我们的标准库实现与架构白皮书中定义的全息可观测性承诺完全对齐。通过修复这个缺陷，我们不仅能让测试通过，更重要的是，我们激活了整个系统的“神经系统”，使得未来所有基于此标准库构建的任务都将自动具备生命周期可观测性。
 
 ### 目标
-1.  修改 `mock_worker` 函数，使其在返回结果的同时，将结果存入 `trace` 数据中，以便在最终的 `end` 事件中可以被观测到。
-2.  修改测试用例的主体逻辑，移除对 `runner.memory.get_count` 的调用。
-3.  使用 `runner.run_until_complete()` 来可靠地等待任务执行完成的 `end` 事件。
-4.  断言返回的 `ObservedEvent` 包含正确的任务 ID 和预期的执行结果。
+1.  修改 `packages/cascade-std/src/cascade/std/triad/bleacher.py` 中的 `standard_bleacher` 函数，在返回字典中增加一个键为 `"obs_output"` 的 `Token`。
+2.  修改 `packages/cascade-std/src/cascade/std/triad/stainer.py` 中的 `standard_stainer` 函数，在返回字典中增加一个键为 `"obs_output"` 的 `Token`。
+3.  确保这两个 `Token` 的 `payload` 为 `None`（因为观测信号只关心元数据），但其 `trace` 属性包含了在该阶段计算出的完整 `trace_payload`。
 
 ### 基本原理
-`EventDrivenRunner` 与 `standard_observer` 协同工作，会将每个任务的 `start` 和 `end` 事件放入一个内部队列。`Stainer` 节点在任务结束时，会将其从 `Worker` 处收到的结果 `payload` 和完整的 `trace` 数据一起打包成一个 `Token`，并将其 `trace` 部分发射给观测总线。
-
-因此，通过等待 `id` 为 `node_ir.id` 的 `end` 事件，并检查其 `trace_data` 字典中是否包含 `worker_result` 字段，我们就能以一种黑盒、非侵入的方式，确定性地验证任务是否成功执行并产生了正确的结果。
+`BleachNode` 和 `StainNode` 是任务生命周期的起点和终点，它们分别拥有任务开始和结束时刻最完整的上下文信息。通过在其标准实现中增加向 `obs_output` 端口的输出，我们将这些关键的上下文信息（封装在 `trace` 中）广播到观测总线。这遵循了“旁路探测（Sidecar Probing）”的设计原则，即业务数据流与观测数据流分离，但共享相同的元数据。此修复将使这一原则在我们的标准库中得到正确实现。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/vm #comp/tests #task/domain/testing #task/object/async-testing-paradigm #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/vm #comp/std #task/domain/runtime #task/object/observability-emission #task/action/implementation #task-state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复并重构集成测试
+#### Acts 1: 修复 Bleacher 和 Stainer
 
-我们将使用 `write_file` 一次性更新 `test_source_node_execution.py`，采用正确的、基于事件的断言模式。
+我们将依次修复这两个核心的标准库函数。
 
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_source_node_execution.py
-~~~~~
-~~~~~python
-import asyncio
-import pytest
-from typing import Dict
+首先是 `standard_bleacher`：
 
-from cascade.spec.task import task
-from cascade.spec.ir.models import GraphIR
-from cascade.compiler.frontend.generator import IRGenerator
-from cascade.compiler.backend.builder import Builder
-from cascade.spec.environment import EnvironmentDef
-from cascade.spec.physics import Token
-from cascade.vm.harness import EventDrivenRunner, ObservedEvent
-
-
-# Standard library function imports
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-
-
-@task
-def source_task():
-    """A simple task with no inputs."""
-    return "Pulse Fired!"
-
-
-# This worker now places its result into the trace, so the final 'end'
-# event can be inspected for correctness.
-def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    worker_input_token = inputs["worker_input"]
-    trace_from_bleacher = worker_input_token.trace
-
-    result = "Unexpected worker call"
-    if node.id.startswith("source_task"):
-        result = source_task.func()
-
-    # The Stainer will merge this into the final trace
-    trace_from_bleacher["worker_result"] = result
-    return {"worker_result": Token(payload=result, trace=trace_from_bleacher)}
-
-
-async def wait_for_idle(runner: EventDrivenRunner, timeout: float = 1.0):
-    """Waits until the reactor has no more active tasks."""
-    start_time = asyncio.get_event_loop().time()
-    while runner.reactor.active_task_count > 0:
-        if asyncio.get_event_loop().time() - start_time > timeout:
-            raise asyncio.TimeoutError("Reactor did not become idle in time")
-        await asyncio.sleep(0.001)
-
-
-@pytest.mark.asyncio
-async def test_source_node_is_triggered_by_pulse():
-    # 1. Compile the graph
-    ir_generator = IRGenerator()
-    builder = Builder()
-
-    flow = source_task()
-    graph_ir = ir_generator.generate(flow)
-    node_ir = graph_ir.nodes[0]
-    physical_graph = builder.build(graph_ir, EnvironmentDef())
-
-    # 2. Build the function map
-    func_map = {}
-    for node_id, node in physical_graph.nodes.items():
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
-        elif node_id.endswith(".worker"):
-            func_map[node_id] = mock_worker
-        elif "observer" in node_id:
-            func_map[node_id] = standard_observer
-
-    # 3. Setup and run the VM
-    runner = EventDrivenRunner(physical_graph, func_map)
-    runner.prime()
-
-    # 4. Execute
-    await runner.start_loop()
-    try:
-        # 5. Assert the result by waiting for the completion event
-        # This is the robust way to test completion, not by checking transient memory.
-        completion_event = await runner.run_until_complete(task_id=node_ir.id)
-
-        assert isinstance(completion_event, ObservedEvent)
-        assert completion_event.event_type == "end"
-
-        # The stainer should have received the worker's result via the trace
-        # and included it in the final trace data emitted to the observer.
-        # Let's modify the mock worker to facilitate this.
-        # NOTE: The Stainer merges the trace from the worker's output token.
-        # So we need to ensure the worker puts its result there.
-        final_trace = completion_event.trace_data
-
-        # We need a way for the worker's result to end up in the final trace.
-        # The Stainer receives the worker's result as a payload. It's not in the trace.
-        # Let's adjust the test to be more realistic. The Stainer's output *payload*
-        # is what matters for downstream tasks. The *event* just confirms completion.
-
-        # The most important assertion is that the task completed successfully.
-        # The fact that run_until_complete returned without a timeout is the primary success signal.
-        # We can also check the trace for the node ID.
-        assert final_trace.get("id") == node_ir.id
-        assert "duration" in final_trace
-        assert final_trace.get("worker_result") == "Pulse Fired!"
-
-    finally:
-        await runner.stop_loop()
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/harness.py
-~~~~~
-~~~~~python.old
-    async def run_until_complete(
-        self, task_id: str, timeout: float = 2.0
-    ) -> ObservedEvent:
-
-        def is_completion(e: ObservedEvent):
-            return e.event_type == "end" and e.trace_data.get("id") == task_id
-
-        return await self.wait_for_event(is_completion, timeout=timeout)
-~~~~~
-~~~~~python.new
-    async def run_until_complete(
-        self, task_id: str, timeout: float = 2.0
-    ) -> ObservedEvent:
-
-        def is_completion(e: ObservedEvent):
-            # The Bleacher sets the 'id' in the trace.
-            return e.event_type == "end" and e.trace_data.get("id") == task_id
-
-        return await self.wait_for_event(is_completion, timeout=timeout)
-~~~~~
 ~~~~~act
 patch_file
 packages/cascade-std/src/cascade/std/triad/bleacher.py
 ~~~~~
 ~~~~~python.old
-    # 2. Capture metadata
-    trace_payload["start_ts"] = time.monotonic()
-    if held_resources:
-        trace_payload["held_resources"] = held_resources
-
-    # 3. Create the output tokens
-    worker_token = Token(payload=worker_payload)
-    trace_token = Token(payload=trace_payload)
-~~~~~
-~~~~~python.new
-    # 2. Capture metadata
-    trace_payload["start_ts"] = time.monotonic()
-    trace_payload["id"] = node.id.replace(".bleach", "")  # Add the logical node ID
-    if held_resources:
-        trace_payload["held_resources"] = held_resources
-
-    # 3. Create the output tokens
     # Pass the trace through to the worker so it can add to it
     worker_token = Token(payload=worker_payload, trace=trace_payload)
     trace_token = Token(payload=trace_payload)
+
+    return {
+        "worker_input": worker_token,
+        "trace_output": trace_token,
+    }
 ~~~~~
+~~~~~python.new
+    # Pass the trace through to the worker so it can add to it
+    worker_token = Token(payload=worker_payload, trace=trace_payload)
+    trace_token = Token(payload=trace_payload)
+    obs_token = Token(payload=None, trace=trace_payload)
+
+    return {
+        "worker_input": worker_token,
+        "trace_output": trace_token,
+        "obs_output": obs_token,
+    }
+~~~~~
+
+然后是 `standard_stainer`：
+
 ~~~~~act
 patch_file
 packages/cascade-std/src/cascade/std/triad/stainer.py
 ~~~~~
 ~~~~~python.old
-    # 1. Extract inputs
-    worker_result_token = inputs["worker_result"]
-    trace_input_token = inputs["trace_input"]
+    # 4.1 The main result
+    outputs["output"] = Token(payload=result_payload, tag=tag, trace=trace_payload)
 
-    result_payload = worker_result_token.payload
-    # Use a copy to avoid mutating the original trace dict
-    trace_payload = trace_input_token.payload.copy()
+    # 4.2 Resource Return (The Loop)
+    # We iterate over the node's output ports to find all RESOURCE ports.
+    for port_name, port_def in node.output_ports.items():
+        if port_def.role == PortRole.RESOURCE:
+            # Look up the amount to release from trace data
+            # The Bleacher stored it under 'resource_amounts' -> 'res_{name}'
+            # But the Stainer's output port might be named differently (e.g. 'rel_{name}' or just 'res_{name}')
+            # Convention: If Stainer output is 'res_gpu', Bleacher input was 'res_gpu'.
+            amount = 1  # Default fallback
 
-    # 2. Determine tag based on result (error or success)
+            # Try to find the specific amount
+            resource_amounts = trace_payload.get("resource_amounts", {})
+            if port_name in resource_amounts:
+                amount = resource_amounts[port_name]
+
+            # Emit token with the correct amount to replenish the broker
+            outputs[port_name] = Token(payload=amount)
+
+    return outputs
 ~~~~~
 ~~~~~python.new
-    # 1. Extract inputs
-    worker_result_token = inputs["worker_result"]
-    trace_input_token = inputs["trace_input"]
+    # 4.1 The main result
+    outputs["output"] = Token(payload=result_payload, tag=tag, trace=trace_payload)
 
-    result_payload = worker_result_token.payload
+    # 4.2 Observability Event
+    outputs["obs_output"] = Token(payload=None, trace=trace_payload)
 
-    # The trace from the worker token might have been augmented by the worker.
-    # The trace_input_token is the one from the "wormhole" D_trace.
-    # The most up-to-date trace is the one that came through the worker.
-    trace_payload = worker_result_token.trace.copy()
-    trace_payload.update(trace_input_token.payload)
+    # 4.3 Resource Return (The Loop)
+    # We iterate over the node's output ports to find all RESOURCE ports.
+    for port_name, port_def in node.output_ports.items():
+        if port_def.role == PortRole.RESOURCE:
+            # Look up the amount to release from trace data
+            # The Bleacher stored it under 'resource_amounts' -> 'res_{name}'
+            # But the Stainer's output port might be named differently (e.g. 'rel_{name}' or just 'res_{name}')
+            # Convention: If Stainer output is 'res_gpu', Bleacher input was 'res_gpu'.
+            amount = 1  # Default fallback
 
-    # 2. Determine tag based on result (error or success)
+            # Try to find the specific amount
+            resource_amounts = trace_payload.get("resource_amounts", {})
+            if port_name in resource_amounts:
+                amount = resource_amounts[port_name]
+
+            # Emit token with the correct amount to replenish the broker
+            outputs[port_name] = Token(payload=amount)
+
+    return outputs
 ~~~~~
 
 ### 下一步建议
-我们已经成功修复了集成测试，使其更加健壮，并且在这个过程中，我们增强了标准库（`bleacher`, `stainer`）和测试工具 (`harness`) 的能力，使 `trace` 信息能够更完整地在任务三连体中流动。这是一个巨大的进步。
+我们已经定位并修复了标准库中的根本性缺陷。现在，`Bleacher` 和 `Stainer` 应该能正确发射观测事件了。
 
-现在，我们所有的重构和测试修复工作已经完成。这是一个理想的提交点。
+我建议立即重新运行 `test_source_node_is_triggered_by_pulse` 测试。如果它通过了，就证明我们的修复是成功的，并且整个从编译到执行再到观测的链路是完全通畅的。
 
-我将生成一个 `[COMMIT]` 计划，将过去几步中对编译器、VM 和标准库的所有修改作为一个原子单元提交。
+在测试通过后，我们就可以自信地创建一个 `[COMMIT]` 计划来固化所有这些重构和修复工作。

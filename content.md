@@ -1,227 +1,74 @@
-好的，我分析了错误日志和 `rg` 的输出。
+好的，我们已经完成了重构计划的前两步，并修复了所有连锁反应导致的测试和工具错误。现在的系统已经具备了“图即数据”的特征，并且执行层与图结构完全解耦。
 
-## [WIP] refactor: Centralize TimedMockExecutor and fix test failures
+我将生成一个 `[COMMIT]` 计划，将这些变更作为一个完整的逻辑单元提交。
 
-### 错误分析
-1.  **TypeError (根本原因)**: 多个测试文件（`test_e2e_local_connector.py`）中的 `TimedMockExecutor` 的 `execute` 方法签名是 `(self, node, args, kwargs)`，这与 `LocalExecutor` 的基类接口 `(self, node, callable_obj, args, kwargs)` 不匹配。`NodeProcessor` 在调用时传递了5个参数，导致 `TypeError`。
-2.  **TimeoutError (副作用)**: 在 `test_pause_and_resume_e2e` 中，由于 `TypeError` 导致后台的 `engine.run` 任务崩溃，测试的主协程一直在等待一个永远不会完成的任务，最终超时。
-3.  **DRY 违规 (问题的根源)**: `rg` 的输出明确显示，`TimedMockExecutor` 这个测试辅助类在三个不同的文件中被重复定义。这种代码重复导致了当核心接口变更时，只有一个定义被正确更新，而其他的定义被遗漏，从而引发了上述错误。
+## [COMMIT] refactor(core): decouple graph topology from execution context
 
 ### 用户需求
-修复 E2E 测试中的 `TypeError` 和 `TimeoutError`，并解决 `TimedMockExecutor` 的代码重复问题。
+完成“engine 与 graph 的预重构计划.md”中的步骤 1 和 步骤 2：解耦 `NodeProcessor` 与 `Graph`，以及解耦 `Node` 对象与 Python Callable。
 
 ### 评论
-这是一个典型的因违反 DRY（Don't Repeat Yourself）原则而导致维护困难和引入错误的案例。通过将 `TimedMockExecutor` 提取到一个共享的测试工具模块（`cascade.testing`），我们可以一劳永逸地解决这个问题，确保所有测试都使用统一且正确的实现，并简化未来的维护工作。
+这是一次重大的架构演进，标志着 Cascade 从“对象图”模型转向了“纯数据图 + 运行时注入”模型。通过移除 `Node` 对 Python 函数的直接持有，并让 `NodeProcessor` 变成无状态的执行器，我们不仅实现了图的完全可序列化，还为未来的分布式执行、JIT 优化以及 v3.0 物理引擎的接入扫清了障碍。
 
 ### 目标
-1.  在 `cascade.testing` 模块中创建一个统一的、签名正确的 `TimedMockExecutor` 类。
-2.  将这个新的 `TimedMockExecutor` 导出到 `cascade.testing` 的 `__all__` 中。
-3.  重构所有使用本地 `TimedMockExecutor` 定义的测试文件，让它们改为从 `cascade.testing` 导入并使用这个共享的类。
+创建一个包含以下变更的 Git 提交：
+1.  **逻辑上浮**: 将参数解析、约束解析和缓存准备逻辑从 `NodeProcessor` 移动到 `GraphExecutionStrategy`。
+2.  **图的净化**: 移除 `Node`、`TaskNode` 和 `MapNode` 上的所有 Python 函数引用。
+3.  **显示注入**: 引入 `ExecutableRegistry`，在运行时将任务实现显式注入到执行器中。
+4.  **全量对齐**: 更新序列化 (JSON)、分析器 (IR)、SDK 工具 (Lisp/Visualize) 以及所有测试替身，以符合新的架构契约。
 
 ### 基本原理
-我们将遵循软件工程的最佳实践，将重复的测试辅助代码抽象到一个公共位置。`packages/cascade-sdk/src/cascade/testing.py` 是存放这类工具的理想场所。通过此重构，我们将修复所有因签名不匹配引起的 `TypeError`，进而解决连锁导致的 `TimeoutError`。
+我们严格执行了**“图的纯粹性”**公理：图只描述“是什么”和“怎么连”，而不包含“怎么做”的运行时细节。所有的执行能力现在都由执行环境 (`ExecutableRegistry`, `ResourceRegistry`) 提供，并在运行时通过 ID 链接。这种设计保证了系统在静态定义和动态执行之间有极度清晰的边界。
 
 ### 标签
-#intent/refine #intent/fix #flow/ready #priority/high #comp/tests #comp/engine #scope/dx #task/domain/testing #task/object/test-helpers #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/core #comp/engine #comp/graph #comp/sdk #scope/core #ai/instruct #task/domain/core #task/object/node-processor #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建共享的 TimedMockExecutor
+#### Acts 1: 提交重构变更
 
-我们将在 `cascade.testing` 模块中定义一个标准的 `TimedMockExecutor`，并将其导出。
-
-~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/testing.py
-~~~~~
-~~~~~python.old
-class MockConnector(Connector):
-    def __init__(self):
-        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
-~~~~~
-~~~~~python.new
-from cascade.adapters.executors.local import LocalExecutor
-
-
-class TimedMockExecutor(LocalExecutor):
-    def __init__(self, delay: float = 0.0):
-        super().__init__()
-        self.delay = delay
-
-    async def execute(self, node, callable_obj, args, kwargs):
-        await asyncio.sleep(self.delay)
-        return await super().execute(node, callable_obj, args, kwargs)
-
-
-class MockConnector(Connector):
-    def __init__(self):
-        self.subscriptions: Dict[str, Callable[[str, Dict], Awaitable[None]]] = {}
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/testing.py
-~~~~~
-~~~~~python.old
-    async def _publish(self, scope: str, constraint: GlobalConstraint):
-        payload = asdict(constraint)
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        await self.connector.publish(topic, payload, retain=True)
-~~~~~
-~~~~~python.new
-    async def _publish(self, scope: str, constraint: GlobalConstraint):
-        payload = asdict(constraint)
-        topic = f"cascade/constraints/{scope.replace(':', '/')}"
-        await self.connector.publish(topic, payload, retain=True)
-
-
-__all__ = [
-    "override_resource",
-    "SpySubscriber",
-    "SpySolver",
-    "MockSolver",
-    "SpyExecutor",
-    "MockExecutor",
-    "MockSubscriptionHandle",
-    "MockConnector",
-    "ControllerTestApp",
-    "TimedMockExecutor",
-]
-~~~~~
-
-#### Acts 2: 更新 E2E 测试以使用共享 Executor
-
-移除 `test_e2e_local_connector.py` 中的本地定义，并修正 `execute` 方法的签名。
+我们将所有受影响的文件添加到暂存区，并创建一个详尽的提交记录。
 
 ~~~~~act
-patch_file
-tests/e2e/runtime/test_e2e_local_connector.py
-~~~~~
-~~~~~python.old
-@pytest.fixture
-def engine(unique_paths, bus_and_spy):
-    """Provides a fully configured Engine using the LocalConnector."""
-    db_path, uds_path = unique_paths
-    bus, _ = bus_and_spy
-    connector = LocalConnector(db_path=db_path, uds_path=uds_path)
-
-    class TimedMockExecutor(LocalExecutor):
-        async def execute(self, node, args, kwargs):
-            await asyncio.sleep(0.05)
-            return await super().execute(node, args, kwargs)
-
-    return Engine(
-        solver=NativeSolver(),
-        executor=TimedMockExecutor(),
-        bus=bus,
-        connector=connector,
-    )
-~~~~~
-~~~~~python.new
-@pytest.fixture
-def engine(unique_paths, bus_and_spy):
-    """Provides a fully configured Engine using the LocalConnector."""
-    from cascade.testing import TimedMockExecutor
-
-    db_path, uds_path = unique_paths
-    bus, _ = bus_and_spy
-    connector = LocalConnector(db_path=db_path, uds_path=uds_path)
-
-    return Engine(
-        solver=NativeSolver(),
-        executor=TimedMockExecutor(delay=0.05),
-        bus=bus,
-        connector=connector,
-    )
-~~~~~
-
-#### Acts 3: 更新集成测试以使用共享 Executor
-
-现在修复 `test_engine_constraints.py`，它之前使用了基于 `SpyExecutor` 的错误版本。
-
-~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/ir/models.py
+packages/cascade-graph/src/cascade/graph/model.py
+packages/cascade-graph/src/cascade/graph/build.py
+packages/cascade-graph/src/cascade/graph/analysis/reflection.py
+packages/cascade-graph/src/cascade/graph/serialize.py
+packages/cascade-engine/src/cascade/runtime/resolvers.py
+packages/cascade-engine/src/cascade/runtime/processor.py
+packages/cascade-engine/src/cascade/runtime/strategies/graph.py
+packages/cascade-engine/src/cascade/runtime/resource_container.py
+packages/cascade-engine/src/cascade/adapters/executors/local.py
 packages/cascade-engine/tests/integration/test_engine_constraints.py
+packages/cascade-application/src/cascade/app/__init__.py
+packages/cascade-sdk/src/cascade/tools/lisp.py
+packages/cascade-sdk/src/cascade/testing.py
 ~~~~~
-~~~~~python.old
-import asyncio
-
-import pytest
-
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.spec.constraint import GlobalConstraint
-from cascade.testing import MockConnector, SpyExecutor, MockExecutor
-
-
-class TimedMockExecutor(SpyExecutor):
-    def __init__(self, delay: float = 0.0):
-        super().__init__()
-        self.delay = delay
-
-    async def execute(self, node, callable_obj, args, kwargs):
-        await asyncio.sleep(self.delay)
-        return await super().execute(node, callable_obj, args, kwargs)
-
-
-# --- Test Fixtures and Mocks ---
-~~~~~
-~~~~~python.new
-import asyncio
-
-import pytest
-
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.spec.constraint import GlobalConstraint
-from cascade.testing import MockConnector, MockExecutor, TimedMockExecutor
-
-
-# --- Test Fixtures and Mocks ---
-~~~~~
-
-#### Acts 4: 统一并发测试中的 Executor 定义
-
-最后，我们也更新 `test_engine_concurrency.py` 以使用共享的辅助类。
 
 ~~~~~act
-patch_file
-packages/cascade-engine/tests/integration/test_engine_concurrency.py
+git_commit
 ~~~~~
-~~~~~python.old
-import time
-import asyncio
-import pytest
-import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.testing import MockConnector
+~~~~~text
+refactor(core): decouple graph topology from execution context
 
+This commit implements a major architectural shift by separating the static workflow definition (Graph) from its runtime implementation (Callables).
 
-class TimedMockExecutor(LocalExecutor):
-    def __init__(self, delay: float = 0.0):
-        super().__init__()
-        self.delay = delay
+Key Changes:
+1.  **Pure Data Graph**: Removed 'callable_obj', '_callable', and 'mapping_factory' from Node and its subclasses in 'cascade-graph'. Graph objects are now 100% serializable and environment-agnostic.
+2.  **Decoupled NodeProcessor**: 'NodeProcessor.process' no longer accepts a 'Graph' object. It has been transformed into a pure execution unit that receives pre-resolved inputs, requirements, and the target executable.
+3.  **ExecutableRegistry**: Introduced a runtime registry (Dict[str, Callable]) produced during graph building. This registry acts as the source of truth for task implementations during a specific run.
+4.  **Strategy Orchestration**: 'GraphExecutionStrategy' now manages the lifecycle of the ExecutableRegistry and coordinates between Resolvers and the Processor.
+5.  **Serialization & IR Enhancement**: Updated 'TaskDef' IR to include 'module' and 'qualname'. Redesigned 'serialize.py' to restore callables using these metadata fields instead of direct object references.
+6.  **Tooling & Test Alignment**: Updated Lisp transpiler, visualization tools, and test spies (SpyExecutor) to handle the new triple-return from 'build_graph' and updated method signatures.
 
-    async def execute(self, node, callable_obj, args, kwargs):
-        await asyncio.sleep(self.delay)
-        return await super().execute(node, callable_obj, args, kwargs)
-~~~~~
-~~~~~python.new
-import time
-import asyncio
-import pytest
-import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
-from cascade.testing import MockConnector, TimedMockExecutor
+This refactoring fulfills the "Graph Purity" axiom and prepares the engine for the v3.0 physical triad model.
 ~~~~~
 
 ### 下一步建议
-所有已知的 `TimedMockExecutor` 定义都已被重构。现在可以重新运行完整的测试套件，以确认所有相关错误都已解决。
+我们已经完成了前两个核心重构步骤。下一步是执行重构计划的**步骤 3：将 `NodeProcessor` 拆分为微管线 (Micro-Pipeline)**。
+
+在接下来的计划中，我将把 `NodeProcessor` 内部庞大的 `process` 逻辑拆解为 `_prepare_context` (Bleacher), `_execute_core` (Worker) 和 `_handle_outcome` (Stainer)。虽然这目前只是代码层面的重构，但它在逻辑上与 v3.0 的物理模型完全同构，将极大地降低后续“心脏移植”的风险。

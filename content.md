@@ -1,65 +1,69 @@
-好的，我们已经完成了 Compiler 对控制流和序列依赖的基础设施构建。现在，我将生成一个 `[COMMIT]` 计划，将这些变更作为 Phase 2 的一个重要里程碑提交。
+好的，阶段 1 的物理层完备化（扩展物理定义与异步 Reactor 重构）已经通过了所有回归测试，证明了异步非阻塞模型的稳定性。
 
-## [COMMIT] feat(compiler): 增强 Frontend 与 Backend 以支持控制流和序列依赖
+我将生成一个 `[COMMIT]` 计划，将这些核心变更提交到 Git 仓库。
+
+## [COMMIT] refactor(vm): 实现异步非阻塞 Reactor 并扩展物理端口定义
 
 ### 用户需求
-完善编译器，使其能够解析并物理化 `LazyResult` 的 `run_if` (条件执行) 和 `after` (序列依赖) 构造。
+完成 Phase 5 阶段 1 的物理层完备化，并将变更提交至 Git 仓库。
 
 ### 评论
-通过这次更新，Cascade 的编译器从仅支持单纯的数据流 (Data-flow) 演进为能够支持复杂的控制流和时序逻辑。这标志着 Phase 2 (Compiler Intelligence) 的核心任务已基本完成。我们将逻辑上的控制信号映射为物理层 `Bleacher` 节点的 `SIGNAL` 输入，从而在不破坏物理层通用性的前提下，实现了高级语言特性的物理拓扑化。
+这次重构是 Cascade 3.0 的基石。通过将 `Reactor` 从同步步进升级为异步非阻塞调度，我们真正实现了“物理场”的并发演化能力。`active_task_count` 的引入为上层策略提供了精确的系统静止检测手段，而端口名称的标准化则消除了系统中的硬编码魔法字符串。
 
 ### 目标
-创建一个 Git 提交，包含对 `NodeIR` 模型、`HashingService`、`IRGenerator`、`Expander` 以及 `Builder` 的所有相关修改。
+1.  提交 `cascade-spec` 中标准端口定义（`PortName`）的变更。
+2.  提交 `cascade-vm` 中 `VolatileMemory` 事件驱动机制和 `Reactor` 异步重构的变更。
+3.  提交所有修复后的单元测试和集成测试。
 
 ### 基本原理
-这些修改构成了一个完整的、互相关联的逻辑单元：
-1.  **定义层**: `NodeIR` 增加了对条件和依赖的感知能力。
-2.  **身份层**: `HashingService` 确保了控制流路径的变更会导致节点 ID 的改变，符合 Hashlife 对确定性的要求。
-3.  **解析层**: `IRGenerator` 实现了递归遍历和信息提取。
-4.  **物理层**: `Expander` 和 `Builder` 协同将这些逻辑字段展开为物理场中的 `SIGNAL` 通道，完成了从“代码逻辑”到“物理拓扑”的最后跳跃。
+按照 TDD 流程和重构路线图，阶段 1 的代码修改已通过所有测试验证（包括 `cascade-vm` 的物理逻辑测试和 `cascade-compiler` 的集成阻塞测试），达到了 `GREEN` 状态。作为一个逻辑完整且稳定的工作单元，现在可以进行原子提交。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/compiler #comp/spec #concept/control-flow #scope/core #ai/instruct #task/domain/compiler #task/object/control-flow-infrastructure #task/action/implementation #task/state/end
+#intent/refine #flow/ready #priority/high #comp/spec #comp/vm #comp/tests #scope/core #ai/instruct #task/domain/core #task/object/physics-layer #task/action/completion #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 提交编译器对控制流的支持
+#### Acts 1: 提交物理层完备化变更
 
-我们将涉及 Spec 修改和 Compiler 内部逻辑修改的所有文件添加到暂存区，并执行提交。
+我们将所有涉及物理定义扩展、VM 异步重构以及配套测试修复的文件添加到暂存区并提交。
 
 ~~~~~act
 git_add
-packages/cascade-spec/src/cascade/spec/ir/models.py
-packages/cascade-compiler/src/cascade/compiler/utils/hashing.py
-packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
-packages/cascade-compiler/src/cascade/compiler/backend/expander.py
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-spec/src/cascade/spec/ports.py
+packages/cascade-vm/src/cascade/vm/memory.py
+packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-vm/tests/unit/test_reactor.py
+packages/cascade-vm/tests/integration/test_branching.py
+packages/cascade-vm/tests/integration/test_ping_pong.py
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
+packages/cascade-compiler/tests/integration/test_observability_congestion.py
 ~~~~~
 
 ~~~~~act
 git_commit
 ~~~~~
 ~~~~~text
-feat(compiler): support run_if and explicit dependencies (after)
+refactor(vm): implement async non-blocking reactor and extend physical specs
 
-Enhances the compiler infrastructure to handle non-data dependencies, bridging the gap between high-level declarative constructs and low-level physical topology.
+This commit completes Phase 1 of the Cascade 3.0 Integration Strategy.
 
-Key changes:
-1. **NodeIR Update**: Added 'condition' and 'dependencies' fields to capture control-flow metadata in the logical graph representation.
-2. **Hashing Service**: Updated the instance hash calculation to include IDs of condition and dependency nodes. This ensures that changes in the control-flow structure lead to unique node identities, essential for caching and structural reuse.
-3. **Frontend (IRGenerator)**: Implemented recursive traversal for lr._condition and lr._dependencies, ensuring all prerequisite nodes are visited and correctly mapped to the NodeIR.
-4. **Backend (Expander & Builder)**:
-   - Expander now dynamically generates SIGNAL-role ports on the Bleacher node based on the NodeIR metadata.
-   - Builder wires these ports to the Stainer's 'output' port of the respective upstream nodes, effectively physicalizing 'wait' and 'conditional' logic as topological channels.
+Key Changes:
+1.  **Spec Extension**: Introduced 'PortName' constants in cascade-spec to standardize names for resources (REQ/REL/GNT), worker I/O, trace, and observability ports.
+2.  **Event-Driven Memory**: Upgraded VolatileMemory with an 'asyncio.Event' based mutation notification system, enabling efficient 'wait_for_mutation' patterns.
+3.  **Async Reactor**: Refactored the Reactor to be non-blocking. The 'step()' method now schedules tasks using 'asyncio.create_task' and returns immediately.
+4.  **Sovereignty Support**: Added 'active_task_count' and 'sinks' (port-level callbacks) to the Reactor, allowing external observers to monitor lifecycle and extract results without violating graph integrity.
+5.  **Test Harmonization**: Updated all unit and integration tests to handle the new asynchronous behavior using deterministic 'wait_for_idle' or 'wait_for_mutation' patterns.
 
-This work completes a major milestone in Phase 2 of the Cascade 3.0 migration.
+This refactoring shifts Cascade from a 'step-and-wait' model to a continuous 'physics field' evolution model, laying the foundation for high-performance resource brokering and reactive control flow.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了编译器的“智能化”改造。现在是时候进入 **Phase 3：引擎的脑叶切除 (Engine Lobotomy)** 了。
+阶段 1 已完美结束。接下来我们将进入 **阶段 2: 编译器的智能化 (Compiler Intelligence)**。
 
-由于 `Reactor`、`Memory` 和 `Compiler` 已经就绪，下一步的最佳行动是：
-- **实现 `VMExecutionStrategy`**: 创建一个新的执行策略，它将作为旧 `Engine` 的核心替换方案。它的职责是调用 `IRGenerator` -> `Builder` 产出物理图，然后启动 `Reactor` 并监听 `Result Sink`。
-- **验证集成**: 编写一个涵盖 `run_if`、`after` 和 `with_constraints` 的端到端测试，确保从 SDK 到 VM 的全链路已经跑通。
+我建议下一步从 **任务 2.1: Frontend 增强** 开始，实现以下功能：
+1.  **参数探测 (ParamProbe)**：当 `IRGenerator` 遇到字面量参数时，自动将其包装为探测节点。
+2.  **资源自动识别**：自动解析 `LazyResult` 的约束并将其映射到 IR 层。
+
+准备好后请告知，我将为你生成详细的实施计划。

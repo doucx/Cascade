@@ -116,16 +116,33 @@ async def test_resource_scarcity_topology_and_execution():
 
     # --- PART B: EXECUTION ASSERTION ---
     
-    # Function Map
+    # Function Map and Debug Wrapper
+    import functools
+
+    print("\n--- Physical Field Event Log (Manual + Observed) ---")
+    
+    def debug_wrapper(func, name):
+        @functools.wraps(func)
+        async def wrapped(*args, **kwargs):
+            print(f"[MAN-START] {name}")
+            try:
+                result = await func(*args, **kwargs)
+                print(f"[MAN-END  ] {name}")
+                return result
+            except Exception as e:
+                print(f"[MAN-ERROR] {name}: {e}")
+                raise
+        return wrapped
+
     func_map = {}
-    for node_id in physical_graph.nodes:
+    for node_id, node in physical_graph.nodes.items():
         if node_id.endswith(".bleach"): func_map[node_id] = standard_bleacher
         elif node_id.endswith(".stain"): func_map[node_id] = standard_stainer
         elif node_id.endswith(".worker"): func_map[node_id] = mock_worker
-        elif "allocator" in node_id: func_map[node_id] = discrete_allocator
-        elif "reclaimer" in node_id: func_map[node_id] = discrete_reclaimer
-        elif node_id.startswith("req."): func_map[node_id] = resource_requestor
-        elif node_id.startswith("probe.const."): func_map[node_id] = const_probe
+        elif "allocator" in node_id: func_map[node_id] = debug_wrapper(discrete_allocator, node.name)
+        elif "reclaimer" in node_id: func_map[node_id] = debug_wrapper(discrete_reclaimer, node.name)
+        elif node_id.startswith("req."): func_map[node_id] = debug_wrapper(resource_requestor, node.name)
+        elif node_id.startswith("probe.const."): func_map[node_id] = debug_wrapper(const_probe, node.name)
         elif "observability" in node_id: func_map[node_id] = standard_observer
             
     runner = EventDrivenRunner(physical_graph, func_map)
@@ -137,14 +154,12 @@ async def test_resource_scarcity_topology_and_execution():
         # Collect all 'start' and 'end' events
         events: List[ObservedEvent] = []
         
-        print("\n--- Physical Field Event Log ---")
-        
         # We wait until we have 2 * TASK_COUNT logical task completions.
         # But we log EVERY physical event to diagnose the deadlock.
         def collection_predicate(e: ObservedEvent):
             # Log ALL physical events for debugging
             node_id = e.trace_data.get("id", "unknown")
-            print(f"[{e.event_type.upper():<5}] {node_id}")
+            print(f"[OBS-START] {node_id}" if e.event_type == "start" else f"[OBS-END  ] {node_id}")
 
             # Only count logical task events for completion condition
             if e.trace_data.get("id", "").startswith("node_"):

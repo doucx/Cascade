@@ -8,7 +8,7 @@ from cascade.vm.executor import PhysicsExecutor
 
 
 # Dummy function for testing
-def noop(inputs, node):
+def noop(inputs, node, resources):
     # Echos back a generic result token on 'out' port
     return {"out": Token(payload="result")}
 
@@ -188,7 +188,7 @@ async def test_event_driven_ping_pong():
     graph.channels.append(Channel(d_life.id, "out", f_obs.id, "event_token"))
 
     # Function Map
-    def obs_enabled_logic(inputs, node):
+    def obs_enabled_logic(inputs, node, resources):
         val = inputs["value"].payload
         # Emit Result AND Observation
         return {

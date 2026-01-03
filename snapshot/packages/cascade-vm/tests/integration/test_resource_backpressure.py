@@ -21,14 +21,14 @@ from cascade.std.probe.const import const_probe
 # --- Mocks ---
 
 
-def mock_worker(inputs: Dict[str, Token], node) -> Dict[str, Token]:
+def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     worker_input_token = inputs["worker_input"]
     worker_payload = worker_input_token.payload
     val = worker_payload["x"]
     return {"worker_result": Token(payload=val + 1)}
 
 
-def noop_observer(inputs: Dict[str, Token], node) -> Dict[str, Token]:
+def noop_observer(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     return {}
 
 

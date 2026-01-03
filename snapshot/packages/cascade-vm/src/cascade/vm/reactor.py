@@ -1,11 +1,12 @@
 import asyncio
 import inspect
 import logging
-from typing import List, Callable, Dict, Tuple, Awaitable
+from typing import List, Callable, Dict, Tuple, Awaitable, Optional, Any
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
+from cascade.vm.resource_registry import ResourceRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +18,13 @@ class Reactor:
         memory: VolatileMemory,
         executor: PhysicsExecutor,
         function_map: Dict[str, Callable],
+        resource_registry: Optional[ResourceRegistry] = None,
     ):
         self.graph = graph
         self.memory = memory
         self.executor = executor
         self.function_map = function_map
+        self.resource_registry = resource_registry or ResourceRegistry()
 
         # State
         self.active_task_count = 0
@@ -128,9 +131,11 @@ class Reactor:
                 raise ValueError(f"No function mapped for node {node.id}")
 
             if inspect.iscoroutinefunction(func):
-                result_tokens = await func(input_data, node)
+                result_tokens = await func(input_data, node, self.resource_registry)
             else:
-                result_tokens = await self.executor.submit(func, (input_data, node))
+                result_tokens = await self.executor.submit(
+                    func, (input_data, node, self.resource_registry)
+                )
 
             if not isinstance(result_tokens, dict):
                 raise ValueError(

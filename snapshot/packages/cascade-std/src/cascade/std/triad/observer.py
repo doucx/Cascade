@@ -15,7 +15,7 @@ from cascade.spec.physics import Token, PhysicsNode
 
 
 async def standard_observer(
-    inputs: Dict[str, Token], node: PhysicsNode, *, queue: Queue
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any, *, queue: Queue
 ) -> None:
     event_token = inputs["event_token"]
     trace = event_token.trace

@@ -9,8 +9,10 @@ class ContinuousLedger:
     available: float
 
 
+from typing import Any
+
 async def continuous_allocator(
-    inputs: Dict[str, Token], node: PhysicsNode
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload
@@ -35,7 +37,7 @@ async def continuous_allocator(
 
 
 async def continuous_reclaimer(
-    inputs: Dict[str, Token], node: PhysicsNode
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload

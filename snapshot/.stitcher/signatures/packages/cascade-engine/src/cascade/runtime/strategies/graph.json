@@ -35,8 +35,8 @@
   "GraphExecutionStrategy.bus": {},
   "GraphExecutionStrategy.constraint_manager": {},
   "GraphExecutionStrategy.execute": {
-    "baseline_code_signature_text": "async def execute(self, target: Any, run_id: str, params: Dict[str, Any], state_backend: StateBackend, run_stack: ExitStack, active_resources: Dict[str, Any]) -> Any:",
-    "baseline_code_structure_hash": "bc85b62d5769841ab7d658588b85b86c20b5ec8d61f0e2759e0468b00c48357e"
+    "baseline_code_signature_text": "async def execute(self, target: Any, context: ExecutionContext) -> Any:",
+    "baseline_code_structure_hash": "896af64d55e3d93d752bffb30eb92d7a7293c272bfe7a40c8882beb33fdc1668"
   },
   "GraphExecutionStrategy.node_processor": {},
   "GraphExecutionStrategy.resource_container": {},

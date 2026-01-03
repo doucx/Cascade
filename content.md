@@ -1,63 +1,95 @@
-## [WIP] fix(test): 修复集成测试中的 worker 匹配逻辑
+好的，所有的测试都已经通过，整个从逻辑编译到物理执行再到事件观测的链路现在已经完全稳固。
 
-### 错误分析
-集成测试 `test_source_node_is_triggered_by_pulse` 失败，因为测试中的 `mock_worker` 函数使用了 `node.id.startswith(...)` 来识别要执行的逻辑任务。这是一个错误的假设，因为物理节点的 `id` 是一个哈希值，与逻辑任务名无关。正确的、稳定的标识符是 `node.name`，它被编译器设置为 `Exec(LogicalTaskName)`。
+我们已经完成了对 **Cascade 3.0** 核心架构的一次重大拨乱反正：
+1.  **Probe 归位**：确立了“探测器模型”，消除了编译器对常量的过早优化。
+2.  **Pulse 引入**：确立了“分布式脉冲模型”，消除了隐式启动，实现了真正的物理场自洽。
+3.  **链路激活**：修复了标准库中的观测信号发射，激活了系统的“全息可观测性”神经系统。
+
+现在，我将生成 `[COMMIT]` 计划，将这些具有里程碑意义的重构固化下来。
+
+## [COMMIT] refactor(core): align with Probe and Distributed Pulse models
 
 ### 用户需求
-修改 `packages/cascade-vm/tests/integration/test_source_node_execution.py` 中的 `mock_worker` 函数，使其使用 `node.name` 来进行条件判断，而不是 `node.id`。
+固化近期对编译器、虚拟机及标准库的所有重构成果，确保系统完全符合 Cascade 3.0 物理模型规范。
 
 ### 评论
-这个修复遵循了“依赖稳定接口而非实现细节”的最佳实践。将匹配逻辑从不稳定的哈希 `id` 切换到语义化的 `name` 属性，使我们的测试代码更加健壮、可读，并且能够抵抗未来对哈希算法的任何修改。
+这次重构是 Cascade 3.0 从“有物理外壳的 v2.0”进化为“真正的全对称物理场”的关键跃迁。我们通过牺牲一些早期的、非法的编译时性能，换取了架构的绝对纯粹性和未来的无限优化空间（JIT）。这为后续实现分布式调度、死锁检测和宏节点缓存扫清了所有理论和物理障碍。
 
 ### 目标
-1.  定位 `test_source_node_execution.py` 中的 `mock_worker` 函数。
-2.  将其中的 `if node.id.startswith("source_task"):` 修改为 `if "source_task" in node.name:`。
+固化所有相关修改并创建一个详尽的 Git 提交。
 
 ### 基本原理
-`cascade-compiler` 的 `Expander` 在创建 `WorkerNode` 时，会将其 `name` 属性设置为一个包含逻辑任务名的、可预测的字符串（例如 `"Exec(source_task)"`）。这个 `name` 属性是专门为调试和可读性设计的，是比哈希 `id` 更合适的语义标识符。通过在测试中利用这个稳定的 `name` 属性，我们可以确保 `mock_worker` 能够准确地路由到正确的业务逻辑，从而修复测试断言。
+按照 `d3-constraint-quipu-plan-script-rules` 公理，由于本计划涉及 Git 提交操作，因此它不包含任何文件系统修改指令。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/vm #comp/tests #task/domain/testing #task/object/test-robustness #task/action/refactor #task-state/continue
+#intent/refine #flow/ready #priority/high #comp/compiler #comp/vm #comp/std #concept/physics-model #scope/core #ai/delegate #task/domain/compiler #task/object/physics-alignment #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复测试中的 `mock_worker`
+#### Acts 1: 提交架构对齐重构成果
 
-我们将使用 `patch_file` 精确地修改 `mock_worker` 函数的条件判断逻辑。
+我们将所有涉及的核心包（spec, compiler, std, vm）及其测试文件添加到暂存区并提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/ports.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+packages/cascade-compiler/src/cascade/compiler/utils/naming.py
+packages/cascade-compiler/tests/unit/backend/test_builder.py
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-vm/src/cascade/vm/harness.py
 packages/cascade-vm/tests/integration/test_source_node_execution.py
 ~~~~~
-~~~~~python.old
-def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    worker_input_token = inputs["worker_input"]
-    trace_from_bleacher = worker_input_token.trace
 
-    result = "Unexpected worker call"
-    if node.id.startswith("source_task"):
-        result = source_task.func()
-
-    # The Stainer will merge this into the final trace
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    worker_input_token = inputs["worker_input"]
-    trace_from_bleacher = worker_input_token.trace
+~~~~~text
+refactor(core): align with Probe and Distributed Pulse models
 
-    result = "Unexpected worker call"
-    # Use the stable semantic name for routing, not the volatile hash-based id
-    if "source_task" in node.name:
-        result = source_task.func()
+This commit represents a major architectural realignment of Cascade 3.0, 
+shifting from implicit compiler optimizations back to pure physical 
+principles as defined in the Genesis Supplement whitepaper.
 
-    # The Stainer will merge this into the final trace
+Key Changes:
+
+1.  **Probe Paradigm for Constants**: 
+    The compiler no longer fold constants into DataNode payloads at build 
+    time. Every literal input now generates a full physical chain: 
+    D_const -> F_probe (const_probe) -> D_probed -> F_bleacher. This 
+    restores the "Everything is a sampling action" axiom.
+
+2.  **Distributed Pulse Model**: 
+    Removed implicit startup logic. Every source node (zero inputs) is 
+    now explicitly wired to a dedicated Pulse node (D_pulse) with 
+    initial_tokens=1. This ensures a self-consistent, decentralized, 
+    and truly parallel startup flow driven solely by the topology's 
+    potential energy.
+
+3.  **Observability Pipeline Activation**: 
+    Fixed standard_bleacher and standard_stainer in cascade-std to 
+    correctly emit lifecycle events through the 'obs_output' port. 
+    Enhanced trace propagation to include logical node IDs and allow 
+    workers to augment trace metadata.
+
+4.  **Robust E2E Testing**: 
+    Introduced a new event-driven integration test that verifies the 
+    entire chain from GraphIR generation to pulse-triggered physical 
+    execution, replacing brittle memory-count assertions with stable 
+    lifecycle event verification.
+
+These changes ensure that the physical graph is a holographic projection 
+of the logical intent, providing full transparency and a solid foundation 
+for future JIT optimizations (like macro-node fusion).
 ~~~~~
 
 ### 下一步建议
-我们已经修复了集成测试中最后一个已知的逻辑错误。现在，测试应该能够成功通过了。
+我们已经夯实了 Cascade 3.0 的物理基础。现在，我们拥有一个真正能够通过物理原语进行自我演化的宇宙。
 
-一旦确认测试通过，就意味着我们对编译器和 VM 的所有重构工作都已完成并通过了验证。这将是一个完美的时机，来创建一个 `[COMMIT]` 计划，将我们过去所有相关的修改（脉冲模型、探测器模型、标准库修复、测试修复）作为一个完整的、原子性的工作单元进行提交。
+下一步，我建议我们继续处理 `识别出的过早优化和架构违规.md` 中的最后一项核心违规：**“观测系统的特权路由”**。目前的 `D_life` 拥有 `sys.maxsize` 的无限容量，这虽然避免了观测反压业务，但在物理上是不纯粹的。
 
-如果你同意，我将在你确认测试通过后，立即为你生成这个 `[COMMIT]` 计划。
+我们可以尝试实现一种 **“全息背压 (Holographic Back-pressure)”** 机制：让观测系统的负载能力通过物理通道自然地反压到业务节点，从而实现更真实的系统仿真。如果你准备好了，我们可以开始针对这一点的战略讨论。

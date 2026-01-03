@@ -39,7 +39,21 @@ class Builder:
             )
             physical_graph.nodes[ledger_id] = d_ledger
 
-            # F_allocator
+            # F_reclaimer (Priority High: Must release before allocate to avoid starvation)
+            f_reclaimer = PhysicsFuncNode(
+                id=reclaimer_id,
+                name=f"Reclaimer({res_def.name})",
+                input_ports={
+                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
+                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
+                },
+                output_ports={
+                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                },
+            )
+            physical_graph.nodes[reclaimer_id] = f_reclaimer
+
+            # F_allocator (Priority Low)
             f_allocator = PhysicsFuncNode(
                 id=allocator_id,
                 name=f"Allocator({res_def.name})",
@@ -54,20 +68,6 @@ class Builder:
                 },
             )
             physical_graph.nodes[allocator_id] = f_allocator
-
-            # F_reclaimer
-            f_reclaimer = PhysicsFuncNode(
-                id=reclaimer_id,
-                name=f"Reclaimer({res_def.name})",
-                input_ports={
-                    PortName.LEDGER_IN: PortDef(PortName.LEDGER_IN, PortRole.DATA),
-                    PortName.REL: PortDef(PortName.REL, PortRole.DATA),
-                },
-                output_ports={
-                    PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
-                },
-            )
-            physical_graph.nodes[reclaimer_id] = f_reclaimer
 
             # Wiring: Ledger <-> Allocator
             physical_graph.channels.append(

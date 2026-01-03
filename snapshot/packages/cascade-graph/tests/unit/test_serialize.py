@@ -36,7 +36,7 @@ def t_target(x):
 
 def test_serialize_basic_graph():
     target = another_task(simple_task(x=10))
-    graph, _ = build_graph(target)
+    graph, _, _ = build_graph(target)
 
     json_str = to_json(graph)
     data = json.loads(json_str)
@@ -61,7 +61,7 @@ def test_serialize_basic_graph():
 def test_round_trip_top_level_functions():
     # We use the top-level tasks defined in this module
     target = another_task(simple_task(x=5))
-    original_graph, _ = build_graph(target)
+    original_graph, _, _ = build_graph(target)
 
     # Serialize
     json_str = to_json(original_graph)
@@ -82,7 +82,7 @@ def test_serialize_params_structure_only():
     # Renamed: this test now only checks the graph structure for params, not metadata
     p = cs.Param("env", default="dev", description="Environment")
     target = simple_task(p)
-    graph, _ = build_graph(target)
+    graph, _, _ = build_graph(target)
 
     data = graph_to_dict(graph)
     param_node = next(n for n in data["nodes"] if n["name"] == "_get_param_value")
@@ -100,7 +100,7 @@ def test_serialize_params_structure_only():
 
 def test_serialize_with_retry():
     t = simple_task(x=1).with_retry(max_attempts=5, delay=1.0, backoff=2.0)
-    graph, _ = build_graph(t)
+    graph, _, _ = build_graph(t)
 
     data = graph_to_dict(graph)
     task_node = next(n for n in data["nodes"] if n["name"] == "simple_task")
@@ -118,7 +118,7 @@ def test_serialize_with_retry():
 
 def test_serialize_with_constraints():
     t = simple_task(x=1).with_constraints(gpu_count=1, memory_gb=16)
-    graph, _ = build_graph(t)
+    graph, _, _ = build_graph(t)
 
     data = graph_to_dict(graph)
     task_node = next(n for n in data["nodes"] if n["name"] == "simple_task")
@@ -143,7 +143,7 @@ def test_serialize_edge_types():
     # 2. Constraint edge (dynamic)
     target = target_condition.with_constraints(cpu=t_dynamic_constraint(1))
 
-    graph, _ = build_graph(target)
+    graph, _, _ = build_graph(target)
     json_str = to_json(graph)
     restored_graph = from_json(json_str)
 
@@ -208,7 +208,7 @@ def test_serialize_router():
     target = consumer(router)
 
     # Build and Serialize
-    graph, _ = build_graph(target)
+    graph, _, _ = build_graph(target)
     json_str = to_json(graph)
 
     # Deserialize

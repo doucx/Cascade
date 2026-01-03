@@ -1,11 +1,21 @@
 import time
-
+import asyncio
 import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
 from cascade.runtime.bus import MessageBus
-from cascade.testing import MockConnector, MockExecutor
+from cascade.testing import MockConnector, SpyExecutor
+
+
+class TimedMockExecutor(SpyExecutor):
+    def __init__(self, delay: float = 0.0):
+        super().__init__()
+        self.delay = delay
+
+    async def execute(self, node, callable_obj, args, kwargs):
+        await asyncio.sleep(self.delay)
+        return await super().execute(node, callable_obj, args, kwargs)
 
 
 # --- Fixtures ---
@@ -20,7 +30,7 @@ def mock_connector():
 def engine(mock_connector):
     return Engine(
         solver=NativeSolver(),
-        executor=MockExecutor(delay=0.05),
+        executor=TimedMockExecutor(delay=0.05),
         bus=MessageBus(),
         connector=mock_connector,
         system_resources={},

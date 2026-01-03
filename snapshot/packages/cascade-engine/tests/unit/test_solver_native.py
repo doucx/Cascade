@@ -25,7 +25,7 @@ def test_native_solver_diamond_graph():
     r_c = t_c(r_a)
     r_d = t_d(r_b, z=r_c)
 
-    graph, _ = build_graph(r_d)
+    graph, _, _ = build_graph(r_d)
     solver = NativeSolver()
     plan = solver.resolve(graph)
 

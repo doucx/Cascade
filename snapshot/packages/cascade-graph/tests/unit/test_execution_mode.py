@@ -32,7 +32,7 @@ def test_execution_mode_is_passed_to_node():
     target = collect_results(ct, bt, dt)
 
     # 2. Build the graph
-    graph, instance_map = build_graph(target)
+    graph, instance_map, _ = build_graph(target)
 
     # 3. Find the nodes in the graph
     compute_node = instance_map[ct._uuid]

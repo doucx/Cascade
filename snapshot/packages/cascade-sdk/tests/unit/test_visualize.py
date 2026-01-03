@@ -26,7 +26,7 @@ def test_visualize_diamond_graph():
     # Pre-build to get the instance map for stable IDs
     from cascade.graph.build import build_graph
 
-    _, instance_map = build_graph(r_d)
+    _, instance_map, _ = build_graph(r_d)
 
     node_a = instance_map[r_a._uuid]
     node_b = instance_map[r_b._uuid]
@@ -86,7 +86,7 @@ def test_visualize_special_edge_types():
 
     from cascade.graph.build import build_graph
 
-    _, instance_map = build_graph(target)
+    _, instance_map, _ = build_graph(target)
 
     node_ds = instance_map[data_source._uuid]
     node_target = instance_map[target._uuid]
@@ -143,7 +143,7 @@ def test_visualize_iterative_jump_edge():
     # Build the graph to get the stable node ID for assertion
     from cascade.graph.build import build_graph
 
-    _, instance_map = build_graph(start_node)
+    _, instance_map, _ = build_graph(start_node)
     node_id = instance_map[start_node._uuid].current_node_instance_hash
 
     dot_string = cs.visualize(start_node)
@@ -185,7 +185,7 @@ def test_visualize_multi_node_jump_edge():
     # 4. Build graph to get stable IDs
     from cascade.graph.build import build_graph
 
-    _, instance_map = build_graph(node_c)
+    _, instance_map, _ = build_graph(node_c)
     source_id = instance_map[node_c._uuid].current_node_instance_hash
     target_id = instance_map[node_a._uuid].current_node_instance_hash
 

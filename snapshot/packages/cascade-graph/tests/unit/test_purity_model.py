@@ -12,8 +12,8 @@ def test_impure_tasks_have_unique_identities():
     b = random_int()
 
     # Build graphs for each instance
-    graph_a, instance_map_a = build_graph(a)
-    graph_b, instance_map_b = build_graph(b)
+    graph_a, instance_map_a, _ = build_graph(a)
+    graph_b, instance_map_b, _ = build_graph(b)
 
     node_a = instance_map_a[a._uuid]
     node_b = instance_map_b[b._uuid]
@@ -33,8 +33,8 @@ def test_pure_tasks_are_deduplicated():
     a = add(1, 2)
     b = add(1, 2)
 
-    graph_a, instance_map_a = build_graph(a)
-    graph_b, instance_map_b = build_graph(b)
+    graph_a, instance_map_a, _ = build_graph(a)
+    graph_b, instance_map_b, _ = build_graph(b)
 
     node_a = instance_map_a[a._uuid]
     node_b = instance_map_b[b._uuid]

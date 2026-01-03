@@ -16,16 +16,16 @@ def test_local_executor_sync_execution():
 
     # 2. Simulate the Node with Definition
     stub_def = TaskDef(name="add", args=[], fingerprint=Fingerprint())
-    node_add = TaskNode(
-        current_node_instance_hash="add", definition=stub_def, _callable=add.func
-    )
+    node_add = TaskNode(current_node_instance_hash="add", definition=stub_def)
 
     # 3. Simulate arguments resolved by the Engine
     resolved_args = [5]  # positional argument 'x'
     resolved_kwargs = {"y": 10, "z": 2}  # keyword arguments 'y' and 'z'
 
     executor = LocalExecutor()
-    result = asyncio.run(executor.execute(node_add, resolved_args, resolved_kwargs))
+    result = asyncio.run(
+        executor.execute(node_add, add.func, resolved_args, resolved_kwargs)
+    )
 
     assert result == 17  # 5 + 10 + 2
 
@@ -43,13 +43,14 @@ def test_local_executor_async_execution():
     node_async = TaskNode(
         current_node_instance_hash="async_add",
         definition=stub_def,
-        _callable=async_add.func,
     )
 
     resolved_args = [5]
     resolved_kwargs = {}
 
     executor = LocalExecutor()
-    result = asyncio.run(executor.execute(node_async, resolved_args, resolved_kwargs))
+    result = asyncio.run(
+        executor.execute(node_async, async_add.func, resolved_args, resolved_kwargs)
+    )
 
     assert result == 6

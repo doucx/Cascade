@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M resolvers.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767447042.1330624, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(core): Adapt API consumers to core refactoring changes", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767447044.261216, "duration_ms": 0}}

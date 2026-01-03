@@ -159,9 +159,9 @@ def test_resource_scan_finds_inject_in_dict():
 
     # The Inject object is nested inside a dict
     flow = task_with_dict_inject(config={"db": cs.inject("my_res")})
-    graph, _ = build_graph(flow)
+    graph, _, executable_registry = build_graph(flow)
 
     container = ResourceContainer(bus=cs.MessageBus())
-    required = container.scan(graph)
+    required = container.scan(graph, executable_registry)
 
     assert "my_res" in required

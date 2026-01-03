@@ -37,7 +37,7 @@ class Builder:
             id=start_pulse_id,
             name="GlobalStartPulse",
             capacity=sys.maxsize, # Can trigger infinite source nodes
-            initial_tokens=1,
+            initial_tokens=sys.maxsize, # Infinite energy for all source nodes
         )
         physical_graph.nodes[start_pulse_id] = d_start
 
@@ -284,25 +284,37 @@ class Builder:
                 )
 
         # 6. Wire Global Start Pulse to all Source Nodes
-        # A source node's bleacher is one that does not depend on any other task's stainer.
-        task_fed_bleacher_ids = {
-            c.target_node_id
-            for c in physical_graph.channels
-            if c.source_node_id.endswith(".stain")
-        }
-
-        for subgraph in subgraphs.values():
-            bleacher = subgraph.bleacher
-            if bleacher and bleacher.id not in task_fed_bleacher_ids:
-                # This bleacher is a source node, connect it to the start pulse
-                physical_graph.channels.append(
-                    Channel(
-                        source_node_id=start_pulse_id,
-                        source_port="out",
-                        target_node_id=bleacher.id,
-                        target_port="__start__",
+        # We identify source nodes based on the Logical IR, which is more robust than analyzing the physical graph.
+        # A source node is one that has no dependencies on other nodes (dynamic inputs, conditions, or sequences).
+        for node_ir in graph_ir.nodes:
+            is_source = True
+            
+            # Check 1: Sequence dependencies
+            if node_ir.dependencies:
+                is_source = False
+            
+            # Check 2: Condition
+            if node_ir.condition:
+                is_source = False
+                
+            # Check 3: Dynamic Data Inputs (Reference to other nodes)
+            if is_source:
+                for source_ref in node_ir.inputs.values():
+                    if isinstance(source_ref, str) and source_ref in subgraphs:
+                        is_source = False
+                        break
+            
+            if is_source:
+                subgraph = subgraphs[node_ir.id]
+                if subgraph.bleacher:
+                    physical_graph.channels.append(
+                        Channel(
+                            source_node_id=start_pulse_id,
+                            source_port="out",
+                            target_node_id=subgraph.bleacher.id,
+                            target_port="__start__",
+                        )
                     )
-                )
 
 
         return physical_graph

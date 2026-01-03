@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 修复 Builder 违反二分图原则导致的依赖失效", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767413711.7824688, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(compiler): 修复启动脉冲能量不足及源节点识别逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767413868.6135657, "duration_ms": 0}}

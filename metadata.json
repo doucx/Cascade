@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M __init__.py, M __init__.py, M __init__.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767418430.7354455, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): 添加示例脚本以演示 GraphDumper", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767418431.6784928, "duration_ms": 0}}

@@ -30,7 +30,8 @@ def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     trace_from_bleacher = worker_input_token.trace
 
     result = "Unexpected worker call"
-    if node.id.startswith("source_task"):
+    # Use the stable semantic name for routing, not the volatile hash-based id
+    if "source_task" in node.name:
         result = source_task.func()
 
     # The Stainer will merge this into the final trace

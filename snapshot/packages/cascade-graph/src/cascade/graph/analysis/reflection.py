@@ -29,6 +29,8 @@ class ReflectionAnalyzer(TaskAnalyzer):
 
         # 1. Basic Metadata
         name = getattr(func, "__name__", "unknown")
+        module = getattr(func, "__module__", "unknown")
+        qualname = getattr(func, "__qualname__", "unknown")
         docstring = inspect.getdoc(func)
         is_async = inspect.iscoroutinefunction(func)
 
@@ -55,6 +57,8 @@ class ReflectionAnalyzer(TaskAnalyzer):
             name=name,
             args=args,
             fingerprint=fingerprint,
+            module=module,
+            qualname=qualname,
             return_annotation=return_annotation,
             docstring=docstring,
             is_async=is_async,

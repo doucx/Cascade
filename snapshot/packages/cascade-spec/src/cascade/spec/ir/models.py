@@ -28,6 +28,8 @@ class TaskDef:
     # The stable semantic identity of this task definition.
     # Must contain keys like 'canonical_code_structure_hash'.
     fingerprint: Fingerprint
+    module: str
+    qualname: str
     return_annotation: Optional[str] = None
     docstring: Optional[str] = None
     is_async: bool = False

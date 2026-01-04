@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 为 Assembly 和 Linker 协议添加纯粹性与 E2E 测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767509484.8444395, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 纠正 VM E2E 测试中 ExecutionContext 的实例化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767509630.6112347, "duration_ms": 0}}

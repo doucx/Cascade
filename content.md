@@ -1,115 +1,47 @@
-好的，你对 `event_bus` 和 `queue` 的区分是完全正确的，当前 `standard_observer` 的设计确实是与 `queue` 绑定的。我们遵循你的决定，将 `event_bus` 的重构作为未来的一个潜在任务，现在专注于完成当前路线图。
+好的，感谢提供 `ExecutionContext` 的定义。我之前的计划中对它的实例化是错误的，忽略了必需的 `run_id`, `state_backend`, 和 `run_stack` 参数。
 
-我们正式进入 **Phase 4: 验证与清理**。我将生成一个计划，创建路线图中指定的两个关键测试文件：一个用于验证 `Assembly` 的纯粹性（可序列化性），另一个用于端到端验证新的 `VMExecutionStrategy` 流程。
+我将立即生成一个修复计划来纠正这个 `TypeError`。
 
-## [WIP] test: 为 Assembly 和 Linker 协议添加纯粹性与 E2E 测试
+## [WIP] fix: 纠正 VM E2E 测试中 ExecutionContext 的实例化
 
 ### 用户需求
 
-根据 "The Linker Protocol" 路线图，实施第四阶段：
-1.  创建一个序列化测试 (`test_assembly_purity.py`)，验证编译器产出的 `Assembly` 对象是纯粹的、可序列化的。
-2.  创建一个端到端集成测试 (`test_vm_strategy.py`)，验证从 `LazyResult` 到最终计算结果的整个 `Compile -> Link -> Execute` 流程能正确工作。
+修复 `test_vm_strategy.py` 中因 `ExecutionContext` 初始化参数不匹配而导致的 `TypeError`。
+
+### 错误分析
+
+`cascade.runtime.strategies.base.ExecutionContext` 的构造函数需要 `run_id`, `state_backend`, 和 `run_stack` 三个必需的位置参数。我生成的 E2E 测试代码在创建 `ExecutionContext` 实例时，仅提供了可选的 `active_resources` 参数，导致了 `TypeError`。
 
 ### 评论
 
-这是确保新架构稳固性的关键一步。
-*   **纯粹性测试** 是一个重要的架构“护栏”。它通过尝试序列化 `Assembly` 对象，从根本上保证了编译产物与任何运行时状态（如函数闭包、队列实例）的彻底解耦。
-*   **E2E 测试** 则验证了所有新组件（`Compiler`, `CodeRegistry`, `Linker`, `VMExecutionStrategy`）能够协同工作，正确地执行一个简单的工作流。这将给我们信心，表明新的链接协议在功能上是完整且正确的。
+这是一个简单的疏忽，但它凸显了编写高层级集成测试时准确模拟运行环境的重要性。通过提供必要的 mock 对象来满足 `ExecutionContext` 的契约，我们可以使测试更真实地反映 `VMExecutionStrategy` 的实际运行条件。
 
 ### 目标
 
-1.  创建新文件 `packages/cascade-compiler/tests/integration/test_assembly_purity.py`。
-2.  在该文件中，实现一个测试，该测试构建一个 `Assembly` 并断言 `pickle.dumps()` 操作成功。
-3.  创建新文件 `packages/cascade-engine/tests/integration/test_vm_strategy.py`。
-4.  在该文件中，实现一个测试，该测试使用 `VMExecutionStrategy` 运行一个简单的工作流（例如 `(1+2)^2`），并断言最终结果为 `9`。
+1.  修改 `packages/cascade-engine/tests/integration/test_vm_strategy.py`。
+2.  在测试 `test_vm_strategy_e2e_execution` 中，使用 `MagicMock` 和 `ExitStack` 来正确地实例化 `ExecutionContext`。
 
 ### 基本原理
 
-*   对于纯粹性测试，`pickle` 是一个极佳的“试金石”。如果一个对象可以被 `pickle` 序列化，就意味着它不包含任何复杂的、不可移植的运行时状态。
-*   对于 E2E 测试，我们选择一个包含依赖关系和字面量参数的简单算术工作流。这个工作流足够简单，可以让我们毫不含糊地验证最终结果，同时又足够复杂，足以触及编译、链接和执行的所有核心路径。
+为了解决 `TypeError`，我们必须为 `ExecutionContext` 提供所有必需的参数。在测试环境中，我们不需要一个功能齐全的 `state_backend` 或 `run_stack`，因此使用 `unittest.mock.MagicMock` 和一个空的 `contextlib.ExitStack` 是最合适的做法。
 
 ### 标签
 
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/compiler #comp/engine #concept/linker #scope/core #ai/instruct #task/domain/compiler #task/object/linker-protocol #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #comp/engine #scope/core #ai/instruct #task/domain/runtime #task/object/linker-protocol #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Assembly 纯粹性测试
+#### Acts 1: 修复 `test_vm_strategy.py` 中的 `ExecutionContext`
 
-这个测试将作为架构的守护者，确保 `Assembly` 永远不会被运行时状态污染。
-
-~~~~~act
-write_file
-packages/cascade-compiler/tests/integration/test_assembly_purity.py
-~~~~~
-~~~~~python
-import pickle
-import pytest
-
-from cascade.spec.task import task
-from cascade.spec.environment import EnvironmentDef
-from cascade.spec.assembly import Assembly
-from cascade.compiler.frontend import IRGenerator
-from cascade.compiler.backend import Builder
-
-
-@task
-def add(a: int, b: int) -> int:
-    return a + b
-
-
-@task
-def square(n: int) -> int:
-    return n * n
-
-
-def test_assembly_is_serializable_and_pure():
-    """
-    This test acts as an architectural guardrail. It ensures that the Assembly
-    produced by the compiler is a pure, serializable data structure, free from
-    any runtime objects like closures or un-pickleable state.
-    """
-    # 1. Define a representative workflow
-    workflow = square(add(1, 2))
-
-    # 2. Compile the workflow into a physical graph
-    generator = IRGenerator()
-    builder = Builder()
-    environment = EnvironmentDef(resources=[])
-
-    graph_ir = generator.generate(workflow)
-    assembly = builder.build(graph_ir, environment)
-    assert isinstance(assembly, Assembly)
-
-    # 3. The Purity Test: Attempt to serialize the Assembly
-    try:
-        serialized_assembly = pickle.dumps(assembly)
-        # Optional: check that it can be deserialized correctly
-        deserialized_assembly = pickle.loads(serialized_assembly)
-    except Exception as e:
-        pytest.fail(
-            "Assembly purity test failed. The Assembly object is not serializable. "
-            f"This likely means a runtime object has been leaked into the "
-            f"graph or symbol table. Error: {e}"
-        )
-
-    # 4. Verify basic integrity after deserialization
-    assert isinstance(deserialized_assembly, Assembly)
-    assert len(assembly.graph.nodes) == len(deserialized_assembly.graph.nodes)
-    assert assembly.symbol_table.keys() == deserialized_assembly.symbol_table.keys()
-~~~~~
-
-#### Acts 2: 创建 VM 策略端到端测试
-
-这个测试将验证整个新流程能否正确地协同工作。
+我们将导入 `ExitStack` 并创建一个 `MagicMock` 来满足 `ExecutionContext` 的构造函数要求。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-engine/tests/integration/test_vm_strategy.py
 ~~~~~
-~~~~~python
+~~~~~python.old
 import pytest
 from unittest.mock import MagicMock
 
@@ -120,22 +52,26 @@ from cascade.runtime.strategies.base import ExecutionContext
 
 @task
 def add(a: int, b: int) -> int:
-    return a + b
+~~~~~
+~~~~~python.new
+import pytest
+from unittest.mock import MagicMock
+from contextlib import ExitStack
+
+from cascade.spec.task import task
+from cascade.runtime.strategies.vm import VMExecutionStrategy
+from cascade.runtime.strategies.base import ExecutionContext
 
 
 @task
-def square(n: int) -> int:
-    return n * n
+def add(a: int, b: int) -> int:
+~~~~~
 
-
-@pytest.mark.asyncio
-async def test_vm_strategy_e2e_execution():
-    """
-    Verifies the full Compile -> Link -> Execute pipeline.
-    """
-    # 1. Define workflow
-    target = square(add(1, 2))
-
+~~~~~act
+patch_file
+packages/cascade-engine/tests/integration/test_vm_strategy.py
+~~~~~
+~~~~~python.old
     # 2. Setup strategy and context
     mock_bus = MagicMock()
     strategy = VMExecutionStrategy(bus=mock_bus)
@@ -143,13 +79,24 @@ async def test_vm_strategy_e2e_execution():
 
     # 3. Execute
     result = await strategy.execute(target, context)
+~~~~~
+~~~~~python.new
+    # 2. Setup strategy and context
+    mock_bus = MagicMock()
+    strategy = VMExecutionStrategy(bus=mock_bus)
+    
+    mock_state_backend = MagicMock()
+    context = ExecutionContext(
+        run_id="test-run-123",
+        state_backend=mock_state_backend,
+        run_stack=ExitStack(),
+        active_resources={},
+    )
 
-    # 4. Assert
-    assert result == 9
+    # 3. Execute
+    result = await strategy.execute(target, context)
 ~~~~~
 
 ### 下一步建议
 
-我们已经为 Phase 4 创建了必要的验证测试。一旦这些测试通过，就标志着 "The Linker Protocol" 这一宏大任务的核心目标已经达成。
-
-我建议在执行此计划并通过测试后，我们可以创建一个 `[COMMIT]` 计划，将 Phase 1 到 Phase 4 的所有变更作为一个逻辑上完整的单元进行提交，并正式宣告此任务的结束。
+这个补丁应该可以解决最后的测试失败。请执行此计划，然后我们再重新运行一次测试套件。如果一切通过，我们就准备好创建 `[COMMIT]` 计划了。

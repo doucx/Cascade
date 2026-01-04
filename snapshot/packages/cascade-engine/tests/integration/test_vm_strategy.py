@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
+from contextlib import ExitStack
 
 from cascade.spec.task import task
 from cascade.runtime.strategies.vm import VMExecutionStrategy
@@ -27,7 +28,14 @@ async def test_vm_strategy_e2e_execution():
     # 2. Setup strategy and context
     mock_bus = MagicMock()
     strategy = VMExecutionStrategy(bus=mock_bus)
-    context = ExecutionContext(active_resources={})
+    
+    mock_state_backend = MagicMock()
+    context = ExecutionContext(
+        run_id="test-run-123",
+        state_backend=mock_state_backend,
+        run_stack=ExitStack(),
+        active_resources={},
+    )
 
     # 3. Execute
     result = await strategy.execute(target, context)

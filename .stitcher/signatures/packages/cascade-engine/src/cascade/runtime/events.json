@@ -90,5 +90,15 @@
   },
   "TaskSkipped.reason": {},
   "ToolEvent": {},
-  "_event_id_gen": {}
+  "_event_id_gen": {},
+  "_from_ir": {
+    "baseline_code_signature_text": "def _from_ir(ir: EventIR) -> Event:",
+    "baseline_code_structure_hash": "696779d8a5b7da5c913c31c0b8a79ac20a19b13354f0d25fd1587604ce16376e",
+    "baseline_yaml_content_hash": "211b9abbf51a8c8e1de509b7571e3f278a3e80bf64fa966a04a9ca723d49a931"
+  },
+  "_hydrate_lifecycle": {
+    "baseline_code_signature_text": "def _hydrate_lifecycle(ir: EventIR, run_id: Optional[str], timestamp: float) -> TaskEvent:",
+    "baseline_code_structure_hash": "82e250aac322e9086bebbf4adfa0dd281f835e1df08f8bafc7c3c428f156720d"
+  },
+  "logger": {}
 }

@@ -6,11 +6,16 @@
   },
   "EventDrivenRunner._captured_events": {},
   "EventDrivenRunner._loop_task": {},
+  "EventDrivenRunner._on_event": {
+    "baseline_code_signature_text": "def _on_event(self, event: Event):",
+    "baseline_code_structure_hash": "a4fd1e7b41e49f32e7ad17f691aed58fedbb9deee85a04cf8bf74a5caeabe774"
+  },
   "EventDrivenRunner._run_loop": {
     "baseline_code_signature_text": "async def _run_loop(self):",
     "baseline_code_structure_hash": "659b1b2495e88c9978eb8fd4ce26945a7e1de37c83a01905813c1ca7b55dc755"
   },
   "EventDrivenRunner._stop_event": {},
+  "EventDrivenRunner.event_bus": {},
   "EventDrivenRunner.event_queue": {},
   "EventDrivenRunner.executor": {},
   "EventDrivenRunner.function_map": {},
@@ -28,8 +33,8 @@
   "EventDrivenRunner.reactor": {},
   "EventDrivenRunner.resource_registry": {},
   "EventDrivenRunner.run_until_complete": {
-    "baseline_code_signature_text": "async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> ObservedEvent:",
-    "baseline_code_structure_hash": "6fc3208ea35666d5161e2f5b07779aa5f3cfda62fc59800d7a4f8148dd2de4cd",
+    "baseline_code_signature_text": "async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> Event:",
+    "baseline_code_structure_hash": "7a507d7de4f62776310e5d5fd22d02d5e0a8f882da14a33951f3b5eec80fe70e",
     "baseline_yaml_content_hash": "cca7aee4e5e0808f3db9c83a63b5c6b7589f95913b281b5f2b0e27a4fd1f838c"
   },
   "EventDrivenRunner.start_loop": {
@@ -42,8 +47,8 @@
     "baseline_code_structure_hash": "d0a34527de60218a303489365f5ed74ca757d6def91589edc22d065198fc6e82"
   },
   "EventDrivenRunner.wait_for_event": {
-    "baseline_code_signature_text": "async def wait_for_event(self, predicate: Callable[[ObservedEvent], bool], timeout: float = 1.0) -> ObservedEvent:",
-    "baseline_code_structure_hash": "8014288e2411ea392550b35b1c99bd76f91a3c7daa81c0e4feff5cf4d5985e58",
+    "baseline_code_signature_text": "async def wait_for_event(self, predicate: Callable[[Event], bool], timeout: float = 1.0) -> Event:",
+    "baseline_code_structure_hash": "2735e23a1b74576928734e9e3aba0459b5ecd94d6632bf3bb7afc89861cb8003",
     "baseline_yaml_content_hash": "2b41810e400fd791a22f34f117c27114e117a76295ac48762f19e87ede33936f"
   },
   "EventTimeoutError": {},

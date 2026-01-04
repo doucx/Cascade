@@ -1,0 +1,2 @@
+"test_vm_strategy_e2e_execution": |-
+  Verifies the full Compile -> Link -> Execute pipeline.

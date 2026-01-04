@@ -10,12 +10,6 @@ SymbolTable = Dict[str, str]
 
 @dataclass(frozen=True)
 class Assembly:
-    """
-    The final, serializable output of the compilation process.
-    It contains the full physical topology of the graph and the symbol table
-    needed to link it to executable code at runtime.
-    """
-
     # The physical topology, defining nodes (What) and channels (How).
     graph: BipartiteGraph
 

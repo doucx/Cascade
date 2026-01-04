@@ -6,9 +6,9 @@ from cascade.spec.physics import Token, PhysicsNode
 async def standard_observer(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
-    # The Observer is now a "Dumb Relay". 
+    # The Observer is now a "Dumb Relay".
     # It blindly forwards the IR payload to the system EventBus.
-    
+
     # 1. Get the EventBus from resources
     # This must be injected by the runtime/harness.
     bus = resources.get("system.event_bus")

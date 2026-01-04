@@ -1,0 +1,4 @@
+"Assembly": |-
+  The final, serializable output of the compilation process.
+  It contains the full physical topology of the graph and the symbol table
+  needed to link it to executable code at runtime.

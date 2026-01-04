@@ -1,0 +1,9 @@
+"CodeRegistry": |-
+  The runtime registry for executable code.
+  It maps canonical code structure hashes to actual Python callables.
+"CodeRegistry.get": |-
+  Retrieves a function by its canonical hash.
+  Raises KeyError if not found.
+"CodeRegistry.register": |-
+  Registers a function under its canonical hash.
+  If the hash already exists, we assume the code is identical (idempotent).

@@ -19,11 +19,6 @@ def square(n: int) -> int:
 
 
 def test_assembly_is_serializable_and_pure():
-    """
-    This test acts as an architectural guardrail. It ensures that the Assembly
-    produced by the compiler is a pure, serializable data structure, free from
-    any runtime objects like closures or un-pickleable state.
-    """
     # 1. Define a representative workflow
     workflow = square(add(1, 2))
 

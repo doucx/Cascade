@@ -197,7 +197,7 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
     # Function Map
     def obs_enabled_logic(inputs, node, resources):
         val = inputs["value"].payload
-        
+
         # This mock logic now simulates what a Stainer does: create an EventIR
         ir: EventIR = {
             "v": "1.0",
@@ -207,11 +207,11 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
             "phy": {"nid": node.id},
             "data": {
                 "state": EventState.SUCCEEDED,
-                "task_id": node.id, # In test, physical ID is fine
-                "task_name": node.name
-            }
+                "task_id": node.id,  # In test, physical ID is fine
+                "task_name": node.name,
+            },
         }
-        
+
         return {
             "result": Token(payload=val + 1),
             "obs_output": Token(payload=ir),
@@ -233,7 +233,7 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
         # We wait for the specific event proving F1 finished
         def predicate(e: Event):
             return isinstance(e, TaskExecutionFinished) and e.task_id == "F1"
-            
+
         event = await runner.wait_for_event(predicate)
         assert event is not None
 

@@ -15,10 +15,9 @@ from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.probe.const import const_probe
 
+
 # Helper to wrap user functions
 def _make_worker_wrapper(func: Callable) -> Callable:
-    """Wraps a user function to match the (inputs, node, resources) signature."""
-
     async def _wrapper(
         inputs: Dict[str, Token], node: Any, resources: Any
     ) -> Dict[str, Token]:
@@ -27,7 +26,7 @@ def _make_worker_wrapper(func: Callable) -> Callable:
         if "worker_input" not in inputs:
             # Fallback or error? For now assume it's there.
             return {}
-            
+
         kwargs = inputs["worker_input"].payload
 
         # Execute
@@ -42,11 +41,6 @@ def _make_worker_wrapper(func: Callable) -> Callable:
 
 
 class Linker:
-    """
-    The Linker binds a static Assembly to a dynamic CodeRegistry.
-    It produces the function_map required by the Reactor.
-    """
-
     def link(self, assembly: Assembly, registry: CodeRegistry) -> Dict[str, Callable]:
         function_map: Dict[str, Callable] = {}
 
@@ -72,7 +66,7 @@ class Linker:
             if stdlib_func:
                 function_map[node_id] = stdlib_func
                 continue
-            
+
             # If we reach here, we have an unlinked function node.
             # In strict mode, this should probably raise.
             # For now, we leave it unmapped (Reactor will raise if it tries to execute it).
@@ -80,19 +74,16 @@ class Linker:
         return function_map
 
     def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:
-        """
-        Resolves infrastructure nodes to standard library implementations.
-        """
         # Triad
         if node_id.endswith(".bleach"):
             return standard_bleacher
         if node_id.endswith(".stain"):
             return standard_stainer
-        
+
         # Observability
         if node_id == PhysicalIdGenerator.observability_observer():
             return standard_observer
-            
+
         # Resources
         if "allocator" in node_id:
             return discrete_allocator
@@ -100,9 +91,9 @@ class Linker:
             return discrete_reclaimer
         if node_id.startswith("req."):
             return resource_requestor
-            
+
         # Probes
         if node_id.startswith("probe.const."):
             return const_probe
-            
+
         return None

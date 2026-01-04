@@ -149,10 +149,6 @@ class PlanAnalysisFinished(ToolEvent):
 
 
 def _from_ir(ir: EventIR) -> "Event":
-    """
-    Static factory method to hydrate an EventIR into a rich Event object.
-    Bound to Event.from_ir dynamically to handle subclass forward references.
-    """
     try:
         # Extract Common Metadata
         ctx = ir.get("ctx", {})
@@ -196,7 +192,7 @@ def _hydrate_lifecycle(
         status = "Succeeded" if state == EventState.SUCCEEDED else "Failed"
         # Convert ms to seconds for internal Event model compatibility
         duration_sec = data.get("duration_ms", 0.0) / 1000.0
-        
+
         return TaskExecutionFinished(
             **base_kwargs,
             status=status,
@@ -210,10 +206,10 @@ def _hydrate_lifecycle(
             **base_kwargs,
             reason=data.get("reason", "Unknown"),
         )
-    
+
     elif state == EventState.PENDING:
-         # Map Pending to generic TaskEvent or a specific one if needed later
-         return TaskEvent(**base_kwargs)
+        # Map Pending to generic TaskEvent or a specific one if needed later
+        return TaskEvent(**base_kwargs)
 
     # Fallback
     return TaskEvent(**base_kwargs)

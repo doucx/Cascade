@@ -2,5 +2,9 @@
   A simple in-memory event bus for dispatching events to subscribers.
 "EventBus.publish": |-
   Dispatch an event to all relevant subscribers.
+"EventBus.publish_ir": |-
+  Hydrates an EventIR into a rich Event object and publishes it.
+  This serves as the translation layer between the raw physical world (IR)
+  and the rich logical world (Events).
 "EventBus.subscribe": |-
   Register a handler for a specific event type.

@@ -1,7 +1,5 @@
 {
-  "ObservedEvent": {
-    "baseline_yaml_content_hash": "7c19316ecd7ae702868a27af5743e1cb25110a39b06f49610fffe9983babd54c"
-  },
+  "ObservedEvent": {},
   "ObservedEvent.event_type": {},
   "ObservedEvent.trace_data": {},
   "standard_observer": {

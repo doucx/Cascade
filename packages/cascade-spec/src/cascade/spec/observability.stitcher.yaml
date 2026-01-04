@@ -1,0 +1,19 @@
+"EventContext": |-
+  Logical context injected by the environment.
+  This metadata is orthogonal to the physical topology.
+"EventIR": |-
+  The Intermediate Representation of an Observability Event.
+  Designed to be a flat, JSON-serializable dictionary (The 'Hologram').
+
+  Structure:
+  - Header: Protocol metadata (v, t, ts)
+  - Context (ctx): Logical environment info
+  - Physics (phy): Physical topology info
+  - Data (data): The actual payload
+"EventState": |-
+  Standard lifecycle states for tasks and workflows.
+"EventType": |-
+  Standard taxonomy for Cascade telemetry events.
+  Aligned with OpenTelemetry semantic conventions where possible.
+"PhysicalAnchor": |-
+  Physical location metadata identifying where the event originated in the topology.

@@ -1,0 +1,7 @@
+"Linker": |-
+  The Linker binds a static Assembly to a dynamic CodeRegistry.
+  It produces the function_map required by the Reactor.
+"Linker._resolve_stdlib": |-
+  Resolves infrastructure nodes to standard library implementations.
+"_make_worker_wrapper": |-
+  Wraps a user function to match the (inputs, node, resources) signature.

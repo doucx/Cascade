@@ -1,9 +1,10 @@
-from typing import Any, Dict
+from typing import Any, Dict, Callable
 
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.spec.ir.models import GraphIR, NodeIR
 from cascade.reflection import ReflectionAnalyzer, HashingService
+from .artifact import CompilationArtifact
 
 
 class IRGenerator:
@@ -14,13 +15,22 @@ class IRGenerator:
         self.nodes: Dict[str, NodeIR] = {}
         # Tracks visited LazyResult UUIDs to their generated Node IDs to handle DAGs
         self._visited: Dict[str, str] = {}
+        # id -> Callable
+        self.registry: Dict[str, Callable] = {}
 
-    def generate(self, target: Any) -> GraphIR:
+    def generate(self, target: Any) -> CompilationArtifact:
         self._visit(target)
         # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
         # which corresponds to the post-order traversal (dependencies first),
         # providing a natural topological sort.
-        return GraphIR(nodes=list(self.nodes.values()))
+        graph_ir = GraphIR(nodes=list(self.nodes.values()))
+
+        # The _visited map IS the source map (UUID -> NodeID)
+        return CompilationArtifact(
+            graph_ir=graph_ir,
+            registry=self.registry,
+            source_map=self._visited.copy(),
+        )
 
     def _visit(self, obj: Any) -> Any:
         if isinstance(obj, LazyResult):
@@ -123,5 +133,15 @@ class IRGenerator:
         # 5. Register
         self.nodes[node_id] = node_ir
         self._visited[lr._uuid] = node_id
+
+        # Register Executable
+        # We store the underlying function, not the Task wrapper,
+        # because the VM expects a raw callable with specific signature or behavior.
+        # But wait, Task wrapper holds metadata like 'mode'.
+        # For now, we store the `func` because that's what physically executes logic.
+        if hasattr(lr.task, "func"):
+            self.registry[node_id] = lr.task.func
+        else:
+            self.registry[node_id] = lr.task
 
         return node_id

@@ -30,7 +30,7 @@ def test_e2e_linear_workflow(mock_messaging_bus):
 
     # We use the event_bus for engine events, which is internal.
     # The subscriber will translate these to calls on the mocked messaging_bus.
-    event_bus = cs.runtime.MessageBus()
+    event_bus = cs.runtime.EventBus()
     cs.runtime.HumanReadableLogSubscriber(event_bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=event_bus)
 
@@ -59,7 +59,7 @@ def test_e2e_failure_propagation(mock_messaging_bus):
     def failing_task():
         raise ValueError("Something went wrong")
 
-    event_bus = cs.runtime.MessageBus()
+    event_bus = cs.runtime.EventBus()
     cs.runtime.HumanReadableLogSubscriber(event_bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=event_bus)
 

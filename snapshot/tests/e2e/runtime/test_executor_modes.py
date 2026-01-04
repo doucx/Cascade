@@ -24,14 +24,14 @@ async def test_compute_tasks_are_isolated_from_blocking_tasks():
     and do not block each other.
     """
     from cascade.runtime.engine import Engine
-    from cascade.runtime.bus import MessageBus
+    from cascade.runtime import EventBus
     from cascade.adapters.solvers.native import NativeSolver
     from cascade.adapters.executors.local import LocalExecutor
 
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
     )
 
     # A short compute task (0.1s) and a long blocking task (0.2s)

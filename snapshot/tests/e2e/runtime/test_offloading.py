@@ -42,14 +42,14 @@ async def test_sync_task_offloading_prevents_blocking():
         Result: async_task finishes BEFORE sync_task.
     """
     from cascade.runtime.engine import Engine
-    from cascade.runtime.bus import MessageBus
+    from cascade.runtime import EventBus
     from cascade.adapters.solvers.native import NativeSolver
     from cascade.adapters.executors.local import LocalExecutor
 
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),  # Silent bus
+        bus=EventBus(),  # Silent bus
     )
 
     # 1. Sync task takes 0.2s

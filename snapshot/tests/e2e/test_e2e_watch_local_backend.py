@@ -6,7 +6,7 @@ import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.connectors.local import LocalConnector
 from cascade.runtime.subscribers import TelemetrySubscriber
 
@@ -38,7 +38,7 @@ async def test_watch_local_uds_e2e(tmp_path, monkeypatch):
     monkeypatch.setattr("cascade.cli.observer.app.on_message", mocked_on_message)
 
     # 2. Configure Engine with LocalConnector
-    event_bus = MessageBus()
+    event_bus = EventBus()
     connector = LocalConnector(db_path=str(db_path), telemetry_uds_path=uds_path)
 
     engine = Engine(

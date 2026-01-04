@@ -5,7 +5,7 @@ import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.spec.constraint import GlobalConstraint
 
 # Use the deterministic Mock infrastructure from the SDK
@@ -49,7 +49,7 @@ async def test_e2e_concurrency_control():
     engine = Engine(
         solver=NativeSolver(),
         executor=MockExecutor(delay=0.05),
-        bus=MessageBus(),
+        bus=EventBus(),
         connector=connector,
     )
 

@@ -21,8 +21,8 @@
   "EventDrivenRunner.function_map": {},
   "EventDrivenRunner.graph": {},
   "EventDrivenRunner.inject_input": {
-    "baseline_code_signature_text": "def inject_input(self, node_id: str, payload: Any):",
-    "baseline_code_structure_hash": "b4c8592a4f6d7131ac26d6660e215d738511328e22c85bc2302c5a0520ec87ac",
+    "baseline_code_signature_text": "def inject_input(self, node_id: str, payload: Any, trace: Optional[Dict[str, Any]] = None):",
+    "baseline_code_structure_hash": "0af48699a7e9ad675092a5567d0a2781a7f1798f16b18e83ca50eb92fa79af33",
     "baseline_yaml_content_hash": "5d6ef6466693bd009e2abe405207369c523220f6bc04375523993361901d9c63"
   },
   "EventDrivenRunner.memory": {},
@@ -32,6 +32,7 @@
   },
   "EventDrivenRunner.reactor": {},
   "EventDrivenRunner.resource_registry": {},
+  "EventDrivenRunner.run_id": {},
   "EventDrivenRunner.run_until_complete": {
     "baseline_code_signature_text": "async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> Event:",
     "baseline_code_structure_hash": "7a507d7de4f62776310e5d5fd22d02d5e0a8f882da14a33951f3b5eec80fe70e",

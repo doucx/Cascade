@@ -88,9 +88,7 @@ class Reactor:
                     # We inject the genesis trace (e.g. run_id) into these primordial tokens.
                     self.memory.put(
                         node,
-                        Token(
-                            payload=node.initial_payload, trace=genesis_trace.copy()
-                        ),
+                        Token(payload=node.initial_payload, trace=genesis_trace.copy()),
                     )
 
     async def step(self) -> int:

@@ -161,7 +161,11 @@ class VMExecutionStrategy:
                 # 3. No new tasks fired (Stability)
                 # This ensures side-effects like Observability (which run in parallel/sequence)
                 # have a chance to complete.
-                if result_future.done() and reactor.active_task_count == 0 and fired == 0:
+                if (
+                    result_future.done()
+                    and reactor.active_task_count == 0
+                    and fired == 0
+                ):
                     break
 
                 if fired == 0:

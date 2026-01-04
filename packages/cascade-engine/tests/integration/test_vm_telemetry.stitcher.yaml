@@ -1,0 +1,4 @@
+"test_vm_telemetry_e2e": |-
+  Verifies that running a workflow with the VM strategy produces
+  correct telemetry events (Started/Finished) with populated
+  task_name and run_id.

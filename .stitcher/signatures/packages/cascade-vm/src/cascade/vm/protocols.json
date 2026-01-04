@@ -9,8 +9,8 @@
     "baseline_yaml_content_hash": "6044f02f16fb28ae4bf4aee4cf2f064b2cf0a043a55f11efef6a26b81d0ae878"
   },
   "ReactorProtocol.prime": {
-    "baseline_code_signature_text": "def prime(self) -> None:",
-    "baseline_code_structure_hash": "ec73b8ca76e1f98e8d8a878be2ad2d18bb2975154a4f48b43ccd1e9f12a436bd",
+    "baseline_code_signature_text": "def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:",
+    "baseline_code_structure_hash": "2c7501c8774bdf1aaea3894fac5086d67d836b20e6a01d36945e121356ca5243",
     "baseline_yaml_content_hash": "6d57c44407439cf284674b68fd40eed3f3b163bfe7370922bf9a61a4bd09d664"
   },
   "ReactorProtocol.step": {

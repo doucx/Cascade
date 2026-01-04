@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 更新 e2e 测试中的 EventBus 引用", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767502774.043395, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor: 重命名运行时的 MessageBus 为 EventBus 以消除命名冲突", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767502837.5191588, "duration_ms": 0}}

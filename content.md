@@ -1,58 +1,78 @@
-收到。针对 `tests/e2e` 目录下的遗留引用，我将继续使用 `sed` 进行批量修复。这对于确保端到端测试在重构后仍能正确执行至关重要。
+好的，核心重构及其跟进修复已全部完成。现在我将创建一个包含所有变更的 `[COMMIT]` 计划，将这次架构优化的成果正式提交到版本控制系统中。
 
-由于这些测试文件位于根目录的 `tests/` 文件夹下，不在之前的 `packages/` 批量处理范围内，因此需要针对性的处理。
-
-## [WIP] refactor: 更新 e2e 测试中的 EventBus 引用
+## [COMMIT] refactor: 重命名运行时的 MessageBus 为 EventBus 以消除命名冲突
 
 ### 用户需求
 
-修复 `tests/e2e` 目录下所有因 `cascade-engine` 重构（`MessageBus` -> `EventBus`）而产生的导入错误和实例化引用。
+提交所有关于 `MessageBus` 重命名为 `EventBus` 的代码变更，涵盖核心库、SDK、应用程序层以及所有相关的集成和端到端测试。
 
 ### 评论
 
-端到端（E2E）测试是验证重构是否破坏系统集成功能的最后防线。由于 E2E 测试通常模拟真实用户的调用路径，它们对 `cascade.runtime` 的 API 变更非常敏感。使用 `sed` 批量修复这些引用不仅高效，而且能保证测试环境与核心代码库的同步。
+这次重构成功解决了 `cascade-engine` 与 `cascade-common` 之间长期存在的命名冲突（Naming Collision）。通过将运行时的事件分发器明确命名为 `EventBus`，我们清晰地划分了“系统级事件驱动”与“用户级反馈通知”这两个不同的语义领域。这一变更虽然影响面广（涉及多个包和数百个测试引用），但通过自动化的 `sed` 批量处理，我们保证了修改的一致性和完整性。
 
 ### 目标
 
-1.  修复 `tests/e2e` 目录下所有 Python 文件的导入路径：将 `from cascade.runtime.bus import MessageBus` 转换为 `from cascade.runtime import EventBus`。
-2.  修复所有类名引用：将 `MessageBus` 替换为 `EventBus`。
-3.  纠正因重命名导致的冠词错误（如 `a EventBus` 修正为 `an EventBus`）。
+1.  将 `cascade-engine` 中的事件总线类名及模块路径正式提交。
+2.  将 `cascade-sdk` 导出的 API 更新记录到 Git。
+3.  将受影响的所有测试文件、示例代码和辅助工具的修正内容一并提交。
 
 ### 基本原理
 
-我们将利用 `find` 定位 `tests/e2e` 下的所有 Python 文件，并管道传输给 `sed`。考虑到导入语句的特殊性，我们先处理具体的 `from...import` 路径，然后再进行全局的类名替换。最后，我们会简单处理一下注释和文档字符串中的语法。
+遵循 Conventional Commits 规范，我们将此次变更标记为 `refactor`。变更涵盖了文件重命名、类名重命名、API 映射更新以及大规模的文本替换。由于所有包的测试引用已在上一阶段同步修复，目前的 Git 暂存区应该包含一个逻辑上自洽且完整的重构单元。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/e2e-imports #task/action/bulk-update #task/state/continue
+#intent/tooling #flow/ready #priority/medium #comp/engine #comp/sdk #comp/application #scope/api #ai/instruct #task/domain/architecture #task/object/event-bus #task/action/commit #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 使用 sed 批量更新 e2e 测试文件
+#### Acts 1: 提交变更
 
-我们将执行三条 `sed` 指令来完成转换。
+我们将添加所有受影响的包目录和测试目录，并执行提交。
 
 ~~~~~act
-run_command
+git_add
+packages/cascade-engine
+packages/cascade-sdk
+packages/cascade-application
+packages/cascade-library
+packages/cascade-graph
+packages/cascade-spec
+packages/cascade-provider-ipfs
+tests
 ~~~~~
-~~~~~bash
-# 1. 处理特定的模块导入路径
-find tests/e2e -type f -name "*.py" -print0 | xargs -0 sed -i 's/from cascade\.runtime\.bus import MessageBus/from cascade.runtime import EventBus/g'
 
-# 2. 全局替换类名（涵盖实例化、类型注解和文档字符串）
-find tests/e2e -type f -name "*.py" -print0 | xargs -0 sed -i 's/MessageBus/EventBus/g'
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+refactor: rename runtime MessageBus to EventBus
 
-# 3. 修正文档字符串中的冠词 (a EventBus -> an EventBus)
-find tests/e2e -type f -name "*.py" -print0 | xargs -0 sed -i 's/a EventBus/an EventBus/g'
+This commit resolves a major naming conflict between 'cascade-engine' and
+'cascade-common'. Both packages previously implemented a 'MessageBus' with
+entirely different semantics:
+
+1. 'cascade-engine' used it for runtime event dispatching (Pub/Sub).
+2. 'cascade-common' uses it for UI/localization feedback (Renderer).
+
+Changes:
+- Renamed 'cascade.runtime.bus' to 'cascade.runtime.event_bus'.
+- Renamed class 'MessageBus' to 'EventBus' within the engine.
+- Updated 'cascade-sdk' imports and public API mappings (cs.EventBus).
+- Synchronized 'CascadeApp', 'SubflowProvider', and 'testing' utilities.
+- Performed a bulk update of all integration and E2E tests across the monorepo
+  to use the new naming convention.
+
+This clarifies the architectural intent: 'EventBus' is the nervous system of
+the engine, while 'MessageBus' (in common) is the voice of the system.
 ~~~~~
 
 ### 下一步建议
 
-`tests/e2e` 的引用已更新完毕。现在，整个 monorepo（包括核心包和根目录测试）关于 `EventBus` 的重构已基本对齐。
+`EventBus` 的重构已正式完成并提交。现在，系统架构在总线层面已变得清晰。
 
-我建议：
-1.  **执行全量测试**: 运行 `pytest`（不带包限定）以观察整体通过情况。
-2.  **清理重构碎片**: 检查是否有遗漏的 `.stitcher.yaml` 文件或文档（README）仍在使用 `MessageBus` 来描述事件总线。
-3.  **启动第二阶段**: 既然 `EventBus` 已站稳脚跟，我们可以开始处理 `cascade-common` 侧的 `MessageBus` 重命名（例如改为 `FeedbackBus`），彻底消除命名冲突。
+我建议的下一步动作是：
+1.  **启动第二阶段重构**: 对 `cascade-common` 侧的 `MessageBus` 进行重命名（例如改为 `FeedbackBus` 或 `Notifier`）。虽然现在重名问题已解决，但为了极致的语义精确度，将“消息”进一步细化为“反馈”是更有价值的。
+2.  **文档更新**: 审查 README.md 或官方架构图，确保它们使用的是 `EventBus` 这一新术语，以保持开发文档与代码实现的一致性。

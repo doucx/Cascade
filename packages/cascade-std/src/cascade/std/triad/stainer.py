@@ -1,18 +1,17 @@
-from typing import Dict
+from typing import Dict, Any
 import time
 
+from cascade.spec import EventIR, EventType, EventState
 from cascade.spec.physics import Token
 from cascade.spec.triad import StainNode
 from cascade.spec.ports import PortRole
 
 
-from typing import Any
-
-
 async def standard_stainer(
     inputs: Dict[str, Token], node: StainNode, resources: Any
 ) -> Dict[str, Token]:
-    end_ts = time.monotonic()
+    end_mono = time.monotonic()
+    now_wall = time.time()
 
     # 1. Extract inputs
     worker_result_token = inputs["worker_result"]
@@ -20,46 +19,60 @@ async def standard_stainer(
 
     result_payload = worker_result_token.payload
 
-    # The trace from the worker token might have been augmented by the worker.
-    # The trace_input_token is the one from the "wormhole" D_trace.
-    # The most up-to-date trace is the one that came through the worker.
+    # Merge traces
     trace_payload = worker_result_token.trace.copy()
     trace_payload.update(trace_input_token.payload)
 
-    # 2. Calculate duration and update trace
-    start_ts = trace_payload.get("start_ts", end_ts)  # Default to end_ts for duration=0
-    duration = end_ts - start_ts
+    # 2. Calculate duration
+    start_mono = trace_payload.get("start_ts", end_mono)
+    duration = end_mono - start_mono
     trace_payload["duration"] = duration
-    trace_payload["end_ts"] = end_ts
+    trace_payload["end_ts"] = end_mono
 
-    # 3. Create output tokens
+    # 3. Construct EventIR
+    logical_id = node.id.replace(".stain", "")
+    
+    # Determine Status (Simplified for now, assuming success if reached here)
+    # Error handling logic will be refined in future phases
+    state = EventState.SUCCEEDED
+    error_msg = None
+    
+    # TODO: Check if result_payload is an Exception wrapper
+    if isinstance(result_payload, Exception):
+        state = EventState.FAILED
+        error_msg = str(result_payload)
+
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": now_wall,
+        "ctx": {},
+        "phy": {"nid": node.id},
+        "data": {
+            "state": state,
+            "task_id": logical_id,
+            "duration_ms": duration * 1000,
+            "error": error_msg,
+            "result_preview": str(result_payload)[:100] if state == EventState.SUCCEEDED else None
+        }
+    }
+
+    # 4. Create output tokens
     outputs = {}
 
-    # 3.1 The main result
-    # Sovereign Routing: We explicitly choose the 'output_default' port for success.
-    # In the future, if result_payload is an Exception or Jump, we would route to
-    # 'output_error' or other dynamic ports.
+    # 4.1 The main result
     outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
 
     # 4.2 Observability Event
-    outputs["obs_output"] = Token(payload=None, trace=trace_payload)
+    outputs["obs_output"] = Token(payload=ir, trace=trace_payload)
 
-    # 4.3 Resource Return (The Loop)
-    # We iterate over the node's output ports to find all RESOURCE ports.
+    # 4.3 Resource Return
     for port_name, port_def in node.output_ports.items():
         if port_def.role == PortRole.RESOURCE:
-            # Look up the amount to release from trace data
-            # The Bleacher stored it under 'resource_amounts' -> 'res_{name}'
-            # But the Stainer's output port might be named differently (e.g. 'rel_{name}' or just 'res_{name}')
-            # Convention: If Stainer output is 'res_gpu', Bleacher input was 'res_gpu'.
-            amount = 1  # Default fallback
-
-            # Try to find the specific amount
+            amount = 1
             resource_amounts = trace_payload.get("resource_amounts", {})
             if port_name in resource_amounts:
                 amount = resource_amounts[port_name]
-
-            # Emit token with the correct amount to replenish the broker
             outputs[port_name] = Token(payload=amount)
 
     return outputs

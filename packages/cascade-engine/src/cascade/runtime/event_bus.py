@@ -1,5 +1,6 @@
 from collections import defaultdict
 from typing import Callable, List, Type, Dict, Any
+from cascade.spec import EventIR
 from .events import Event
 
 # Define a Handler type alias for clarity
@@ -26,3 +27,14 @@ class EventBus:
         # 2. Dispatch to wildcard handlers (subscribed to Event)
         for handler in self._wildcard_subscribers:
             handler(event)
+
+    def publish_ir(self, ir: EventIR):
+        """
+        Hydrates an EventIR into a rich Event object and publishes it.
+        This serves as the translation layer between the raw physical world (IR)
+        and the rich logical world (Events).
+        """
+        # Event.from_ir is dynamically bound in events.py
+        # noinspection PyUnresolvedReferences
+        event = Event.from_ir(ir)  # type: ignore
+        self.publish(event)

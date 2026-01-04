@@ -6,6 +6,13 @@ from .resources import ResourceSlot
 from .environment import EnvironmentDef, ResourceDef
 from .ports import PortRole, PortDef
 from .assembly import Assembly, SymbolTable
+from .observability import (
+    EventIR,
+    EventType,
+    EventState,
+    PhysicalAnchor,
+    EventContext,
+)
 
 __all__ = [
     "Fingerprint",
@@ -27,4 +34,9 @@ __all__ = [
     "PortDef",
     "Assembly",
     "SymbolTable",
+    "EventIR",
+    "EventType",
+    "EventState",
+    "PhysicalAnchor",
+    "EventContext",
 ]

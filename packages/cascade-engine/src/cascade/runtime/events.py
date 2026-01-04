@@ -2,6 +2,11 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 import time
 import itertools
+import logging
+
+from cascade.spec import EventIR, EventType, EventState
+
+logger = logging.getLogger(__name__)
 
 # Fast, thread-safe counter for event IDs
 _event_id_gen = itertools.count()
@@ -138,3 +143,81 @@ class PlanAnalysisFinished(ToolEvent):
 
     def _get_payload(self) -> Dict[str, Any]:
         return {"total_steps": self.total_steps}
+
+
+# --- Event Hydration Logic (Late Binding) ---
+
+
+def _from_ir(ir: EventIR) -> "Event":
+    """
+    Static factory method to hydrate an EventIR into a rich Event object.
+    Bound to Event.from_ir dynamically to handle subclass forward references.
+    """
+    try:
+        # Extract Common Metadata
+        ctx = ir.get("ctx", {})
+        run_id = ctx.get("rid")
+        timestamp = ir["ts"]
+        event_type = ir["t"]
+
+        if event_type == EventType.LIFECYCLE:
+            return _hydrate_lifecycle(ir, run_id, timestamp)
+
+        # Fallback for unknown types
+        return Event(timestamp=timestamp, run_id=run_id)
+    except Exception as e:
+        logger.warning(f"Failed to hydrate EventIR: {e}. Raw: {ir}")
+        # Return a generic event to prevent crashing the bus
+        return Event()
+
+
+def _hydrate_lifecycle(
+    ir: EventIR, run_id: Optional[str], timestamp: float
+) -> "TaskEvent":
+    data = ir["data"]
+    phy = ir.get("phy", {})
+
+    # Prefer logical IDs from data, fallback to physical IDs
+    task_id = data.get("task_id", phy.get("nid", ""))
+    task_name = data.get("task_name", "unknown")
+    state = data.get("state")
+
+    base_kwargs = {
+        "timestamp": timestamp,
+        "run_id": run_id,
+        "task_id": task_id,
+        "task_name": task_name,
+    }
+
+    if state == EventState.RUNNING:
+        return TaskExecutionStarted(**base_kwargs)
+
+    elif state in (EventState.SUCCEEDED, EventState.FAILED):
+        status = "Succeeded" if state == EventState.SUCCEEDED else "Failed"
+        # Convert ms to seconds for internal Event model compatibility
+        duration_sec = data.get("duration_ms", 0.0) / 1000.0
+        
+        return TaskExecutionFinished(
+            **base_kwargs,
+            status=status,
+            duration=duration_sec,
+            error=data.get("error"),
+            result_preview=data.get("result_preview"),
+        )
+
+    elif state == EventState.SKIPPED:
+        return TaskSkipped(
+            **base_kwargs,
+            reason=data.get("reason", "Unknown"),
+        )
+    
+    elif state == EventState.PENDING:
+         # Map Pending to generic TaskEvent or a specific one if needed later
+         return TaskEvent(**base_kwargs)
+
+    # Fallback
+    return TaskEvent(**base_kwargs)
+
+
+# Bind the factory method to the Event class
+Event.from_ir = staticmethod(_from_ir)

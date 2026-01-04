@@ -1,4 +1,4 @@
-from .bus import bus, MessageBus, MessageStore
+from .bus import bus, EventBus, MessageStore
 from . import protocols
 
-__all__ = ["bus", "MessageBus", "MessageStore", "protocols"]
+__all__ = ["bus", "EventBus", "MessageStore", "protocols"]

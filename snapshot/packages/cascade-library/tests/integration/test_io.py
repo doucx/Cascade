@@ -17,7 +17,7 @@ async def test_read_text_provider(test_file):
     lazy = cs.read.text(str(test_file))
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(lazy)
     assert result == "hello cascade"
@@ -29,7 +29,7 @@ async def test_write_text_provider(test_file):
     lazy = cs.write.text(str(test_file), "written by cascade")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     await engine.run(lazy)
 
@@ -43,7 +43,7 @@ async def test_fs_exists_provider(test_file):
     lazy_false = cs.fs.exists(str(test_file) + ".missing")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
 
     test_file.touch()

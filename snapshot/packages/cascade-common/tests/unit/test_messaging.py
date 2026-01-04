@@ -1,4 +1,4 @@
-from cascade.common.messaging import MessageStore, MessageBus
+from cascade.common.messaging import MessageStore, EventBus
 
 
 def test_message_store_loads_defaults():
@@ -12,7 +12,7 @@ def test_message_store_loads_defaults():
 def test_message_bus_renderer_delegation():
     store = MessageStore()
     store._messages["test.msg"] = "Value: {val}"
-    bus = MessageBus(store)
+    bus = EventBus(store)
 
     received = []
 

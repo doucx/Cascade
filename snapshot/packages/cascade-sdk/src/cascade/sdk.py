@@ -17,7 +17,7 @@ _IMPORT_MAP = {
     "bind": ("cascade.control_flow", "bind"),
     # Runtime
     "Engine": ("cascade.runtime.engine", "Engine"),
-    "MessageBus": ("cascade.runtime.bus", "MessageBus"),
+    "EventBus": ("cascade.runtime.event_bus", "EventBus"),
     "Event": ("cascade.runtime.events", "Event"),
     "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
     "sequence": ("cascade.flow", "sequence"),
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
     from cascade.control_flow import select_jump, bind
 
     from cascade.runtime.engine import Engine
-    from cascade.runtime.bus import MessageBus
+    from cascade.runtime.event_bus import EventBus
     from cascade.runtime.events import Event
     from cascade.runtime.exceptions import DependencyMissingError
     from cascade.flow import sequence, pipeline
@@ -184,7 +184,7 @@ __all__ = [
     "LazyResult",
     "Engine",
     "Event",
-    "MessageBus",
+    "EventBus",
     "NativeSolver",
     "LocalExecutor",
     # Tools & Utilities

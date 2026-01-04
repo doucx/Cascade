@@ -38,7 +38,7 @@ def sqlite_db():
 @pytest.fixture
 def db_engine():
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     engine.register(sqlite_db)
     return engine
@@ -75,7 +75,7 @@ async def test_sql_missing_resource():
     target = cs.sql("SELECT 1", conn=cs.inject("non_existent_db"))
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     # We don't register anything
 

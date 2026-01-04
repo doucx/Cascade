@@ -66,7 +66,7 @@ async def test_s3_write_read_text(s3_mock):
     read_op = cs.io.s3.read_text(bucket=bucket_name, key=key)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
 
     # 3. Execute Write
@@ -96,7 +96,7 @@ async def test_s3_write_read_bytes(s3_mock):
     read_op = cs.io.s3.read_bytes(bucket=bucket_name, key=key)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
 
     # 2. Execute Write

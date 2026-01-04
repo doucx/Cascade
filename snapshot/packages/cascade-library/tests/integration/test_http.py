@@ -32,7 +32,7 @@ async def test_http_get_success(aiohttp_client):
     final_result = process_user(api_response)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(final_result)
     assert result == "cascade"
@@ -67,7 +67,7 @@ async def test_http_post_success(aiohttp_client):
     final_result = check_response(api_response)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(final_result)
     assert result["received"] == 42
@@ -102,7 +102,7 @@ async def test_http_with_template(aiohttp_client):
     final_status = get_status(api_response)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(final_status, params={"username": "dynamic_user"})
     assert result == "ok"

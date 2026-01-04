@@ -41,7 +41,7 @@ def test_di_end_to_end():
     import asyncio
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     engine.register(config)
     engine.register(db_connection)
@@ -55,7 +55,7 @@ def test_resource_events():
     import asyncio
 
     events = []
-    bus = cs.MessageBus()
+    bus = cs.EventBus()
     bus.subscribe(Event, events.append)
 
     engine = cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
@@ -93,7 +93,7 @@ def test_resource_override():
         print("TEARDOWN: mock_db_connection")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     engine.register(config)
     engine.register(db_connection)  # Register the original
@@ -110,7 +110,7 @@ def test_resource_override():
     # We create a NEW engine to ensure a clean state and avoid cache pollution from the previous run.
     # This is the most robust way to test restoration.
     engine_after = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     engine_after.register(config)
     engine_after.register(db_connection)
@@ -129,7 +129,7 @@ def test_resource_must_be_generator():
 
 def test_unregistered_resource_raises_error():
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     # Note: We do NOT register any resources.
 
@@ -161,7 +161,7 @@ def test_resource_scan_finds_inject_in_dict():
     flow = task_with_dict_inject(config={"db": cs.inject("my_res")})
     graph, _, executable_registry = build_graph(flow)
 
-    container = ResourceContainer(bus=cs.MessageBus())
+    container = ResourceContainer(bus=cs.EventBus())
     required = container.scan(graph, executable_registry)
 
     assert "my_res" in required

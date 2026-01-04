@@ -5,7 +5,7 @@ def test_core_components_are_accessible_from_top_level():
     try:
         from cascade import (
             Engine,
-            MessageBus,
+            EventBus,
             NativeSolver,
             LocalExecutor,
             DependencyMissingError,
@@ -15,7 +15,7 @@ def test_core_components_are_accessible_from_top_level():
 
     # Dummy assertion to ensure the test runs if imports succeed
     assert Engine is not None
-    assert MessageBus is not None
+    assert EventBus is not None
     assert NativeSolver is not None
     assert LocalExecutor is not None
     assert DependencyMissingError is not None

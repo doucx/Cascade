@@ -123,7 +123,7 @@
   },
   "SpySolver.underlying_solver": {},
   "SpySubscriber": {
-    "baseline_yaml_content_hash": "907912c9d4fe9b9928fe106a5e7baba907d9a3251de225e88502b78adeb3a0fb"
+    "baseline_yaml_content_hash": "c38faf2934fb0cf72b9c723a7b6cc0730c57e27408bfd4adaf2b92fcaf4d695b"
   },
   "SpySubscriber.__init__": {
     "baseline_code_signature_text": "def __init__(self, bus: EventBus):",

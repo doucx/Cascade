@@ -49,7 +49,7 @@ class MessageStore:
             return f"<Formatting error for '{msg_id}': missing key {e}>"
 
 
-class EventBus:
+class FeedbackBus:
     def __init__(self, store: MessageStore):
         self._store = store
         self._renderer: Optional[Renderer] = None
@@ -78,4 +78,4 @@ class EventBus:
 
 # Global singleton instance
 _default_store = MessageStore(locale="en")
-bus = EventBus(store=_default_store)
+bus = FeedbackBus(store=_default_store)

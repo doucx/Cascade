@@ -1,347 +1,606 @@
-[简要回答]
-我们将执行 Phase 2，在 `cascade-engine` 中实现从 `EventIR` 到富 `Event` 对象的翻译层。
+简要回答
+好的，我们将执行 Phase 3，改造物理层标准库组件 (`Bleacher`, `Stainer`, `Observer`) 以发射和处理 `EventIR`，并更新 `EventDrivenRunner` 以适配新的事件流架构。
 
-## [WIP] feat(engine): 实现 EventIR 到 Event 的翻译层
+## [WIP] feat(std): 改造物理发射源以支持 EventIR
 
 ### 用户需求
-根据 [Cascade 3.0 实施路线图 (Phase 2)](docs/实施路线图：Cascade%203.0%20全息投影协议%20(Event%20IR).md)，需要让 Engine 具备理解 `EventIR` 的能力。
+根据 [Cascade 3.0 实施路线图 (Phase 3)](docs/实施路线图：Cascade%203.0%20全息投影协议%20(Event%20IR).md)，需要将标准库中的物理节点改造为 `EventIR` 的发射源。
 具体包括：
-1.  在 `Event` 类中增加 `from_ir` 静态工厂方法，实现从扁平字典到 `TaskExecutionStarted` 等富对象的转换。
-2.  在 `EventBus` 中增加 `publish_ir` 方法，作为物理层到逻辑层的适配器。
+1.  **Bleacher**: 构造并输出 `LIFECYCLE` (RUNNING) 类型的 `EventIR`。
+2.  **Stainer**: 构造并输出 `LIFECYCLE` (SUCCEEDED/FAILED) 类型的 `EventIR`。
+3.  **Observer**: 改造为哑节点，从资源中获取总线并发布 IR。
+4.  **Harness**: 更新 `EventDrivenRunner`，使其建立 `Bus -> Queue` 的桥接，以维持测试的可观测性。
 
 ### 评论
-这是连接物理 VM（产生 IR）和逻辑 Engine（消费 Event）的关键桥梁。通过在总线入口处进行“水合 (Hydration)”，我们确保了 Engine 内部的订阅者（如 UI 渲染器、状态追踪器）无需修改即可兼容新的物理层架构，实现了平滑过渡。
+这是“全息投影”协议的物理实现阶段。通过这次改造，物理层将不再产生非标准的 trace 数据，而是产生符合协议的 IR。同时，`EventDrivenRunner` 的更新标志着我们的测试架构正式转向基于总线的事件验证模式，实现了“吃自己的狗粮”。
 
 ### 目标
-1.  修改 `cascade.runtime.events`，实现 `Event.from_ir` 及其子类调度逻辑。由于 Python 类定义顺序的限制，我们将采用后期绑定的方式实现此工厂方法。
-2.  修改 `cascade.runtime.event_bus`，添加 `publish_ir` 接口。
-3.  添加单元测试验证转换逻辑的正确性（覆盖 Start, Finish, Skip 等状态）。
+1.  修改 `cascade.std.triad.bleacher`，使其在 `obs_output` 端口输出 `EventIR`。
+2.  修改 `cascade.std.triad.stainer`，使其在 `obs_output` 端口输出 `EventIR`。
+3.  修改 `cascade.std.triad.observer`，移除旧的 `ObservedEvent` 逻辑，改为调用 `system.event_bus.publish_ir`。
+4.  修改 `cascade.vm.harness`，注入 `EventBus`，并实现从 Bus 到 `event_queue` 的转发，确保现有测试（经过少量适配后）能继续通过。
 
 ### 基本原理
--   **延迟绑定**: 由于 `Event` 是基类，而工厂方法需要返回其子类（如 `TaskExecutionStarted`），为了避免循环引用或定义顺序问题，我们将转换逻辑函数定义在模块末尾，并动态绑定为 `Event` 的静态方法。
--   **数据映射**: 建立 `EventIR.data` 字段与 `TaskEvent` 属性之间的标准映射契约（如 `duration_ms` -> `duration`）。
+-   **结构化发射**: Bleacher 和 Stainer 使用 `cascade.spec.observability` 中定义的 `EventIR`, `EventType`, `EventState` 构造数据。
+-   **物理锚点**: 使用 `phy: {"nid": node.id}` 明确事件的物理来源。
+-   **依赖反转**: Observer 不再依赖具体的 Queue 实现，而是依赖抽象的 Bus 协议（鸭子类型 `publish_ir`）。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/history #scope/core #ai/instruct #task/domain/observability #task/object/event-translation #task/action/implement #task/state/continue
+#intent/refine #intent/build #flow/ready #priority/high #comp/std #comp/vm #concept/observability #scope/core #ai/instruct #task/domain/observability #task/object/physical-emitter #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 实现 Event 翻译逻辑
+#### Acts 1: 改造 Bleacher 发射源
 
-在 `events.py` 中引入 `cascade-spec` 的类型，并在文件末尾实现转换函数并绑定到 `Event` 类。
+修改 `standard_bleacher` 以构建 `EventIR`。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/events.py
+packages/cascade-std/src/cascade/std/triad/bleacher.py
 ~~~~~
 ~~~~~python.old
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Dict, Any, List
 import time
-import itertools
 
-# Fast, thread-safe counter for event IDs
+from cascade.spec.physics import Token
+from cascade.spec.triad import BleachNode
+from cascade.spec.ports import PortRole
+
+
+async def standard_bleacher(
+    inputs: Dict[str, Token], node: BleachNode, resources: Any
+) -> Dict[str, Token]:
+    worker_payload: Dict[str, Any] = {}
+    trace_payload: Dict[str, Any] = {}
+    held_resources: List[str] = []
+
+    # 1. Extract payloads and merge traces from all inputs
+    for port_name, input_token in inputs.items():
+        port_def = node.input_ports[port_name]
+
+        if port_def.role == PortRole.DATA:
+            worker_payload[port_name] = input_token.payload
+        elif port_def.role == PortRole.RESOURCE:
+            # It's a GNT token.
+            # We record the port name as a held resource.
+            held_resources.append(port_name)
+            # CRITICAL: Record the granted amount (payload) to trace.
+            # This allows the Stainer to know how much to release later.
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
+        # Observability and Signals are processed for trace but not passed to worker
+
+        trace_payload.update(input_token.trace)
+
+    # 2. Capture metadata
+    trace_payload["start_ts"] = time.monotonic()
+    trace_payload["id"] = node.id.replace(".bleach", "")  # Add the logical node ID
+    if held_resources:
+        trace_payload["held_resources"] = held_resources
+
+    # 3. Create the output tokens
+    # Pass the trace through to the worker so it can add to it
+    worker_token = Token(payload=worker_payload, trace=trace_payload)
+    trace_token = Token(payload=trace_payload)
+    obs_token = Token(payload=None, trace=trace_payload)
+
+    return {
+        "worker_input": worker_token,
+        "trace_output": trace_token,
+        "obs_output": obs_token,
+    }
 ~~~~~
 ~~~~~python.new
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Dict, Any, List
 import time
-import itertools
-import logging
 
 from cascade.spec import EventIR, EventType, EventState
+from cascade.spec.physics import Token
+from cascade.spec.triad import BleachNode
+from cascade.spec.ports import PortRole
+
+
+async def standard_bleacher(
+    inputs: Dict[str, Token], node: BleachNode, resources: Any
+) -> Dict[str, Token]:
+    worker_payload: Dict[str, Any] = {}
+    trace_payload: Dict[str, Any] = {}
+    held_resources: List[str] = []
+
+    # 1. Extract payloads and merge traces from all inputs
+    for port_name, input_token in inputs.items():
+        port_def = node.input_ports[port_name]
+
+        if port_def.role == PortRole.DATA:
+            worker_payload[port_name] = input_token.payload
+        elif port_def.role == PortRole.RESOURCE:
+            # It's a GNT token.
+            held_resources.append(port_name)
+            if "resource_amounts" not in trace_payload:
+                trace_payload["resource_amounts"] = {}
+            trace_payload["resource_amounts"][port_name] = input_token.payload
+        
+        trace_payload.update(input_token.trace)
+
+    # 2. Capture metadata
+    start_ts = time.time() # Use wall clock for IR
+    mono_ts = time.monotonic() # Use monotonic for internal duration calc
+    
+    logical_id = node.id.replace(".bleach", "")
+    
+    trace_payload["start_ts"] = mono_ts
+    trace_payload["id"] = logical_id
+    if held_resources:
+        trace_payload["held_resources"] = held_resources
+
+    # 3. Construct EventIR (The Hologram)
+    # Note: 'ctx' will be populated in Phase 4.
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": start_ts,
+        "ctx": {}, 
+        "phy": {"nid": node.id},
+        "data": {
+            "state": EventState.RUNNING,
+            "task_id": logical_id,
+            # We don't have task_name easily here yet, will address in Phase 4
+        }
+    }
+
+    # 4. Create the output tokens
+    worker_token = Token(payload=worker_payload, trace=trace_payload)
+    trace_token = Token(payload=trace_payload)
+    # obs_output now carries the IR as payload
+    obs_token = Token(payload=ir, trace=trace_payload)
+
+    return {
+        "worker_input": worker_token,
+        "trace_output": trace_token,
+        "obs_output": obs_token,
+    }
+~~~~~
+
+#### Acts 2: 改造 Stainer 发射源
+
+修改 `standard_stainer` 以构建 `EventIR`。
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/triad/stainer.py
+~~~~~
+~~~~~python.old
+from typing import Dict
+import time
+
+from cascade.spec.physics import Token
+from cascade.spec.triad import StainNode
+from cascade.spec.ports import PortRole
+
+
+from typing import Any
+
+
+async def standard_stainer(
+    inputs: Dict[str, Token], node: StainNode, resources: Any
+) -> Dict[str, Token]:
+    end_ts = time.monotonic()
+
+    # 1. Extract inputs
+    worker_result_token = inputs["worker_result"]
+    trace_input_token = inputs["trace_input"]
+
+    result_payload = worker_result_token.payload
+
+    # The trace from the worker token might have been augmented by the worker.
+    # The trace_input_token is the one from the "wormhole" D_trace.
+    # The most up-to-date trace is the one that came through the worker.
+    trace_payload = worker_result_token.trace.copy()
+    trace_payload.update(trace_input_token.payload)
+
+    # 2. Calculate duration and update trace
+    start_ts = trace_payload.get("start_ts", end_ts)  # Default to end_ts for duration=0
+    duration = end_ts - start_ts
+    trace_payload["duration"] = duration
+    trace_payload["end_ts"] = end_ts
+
+    # 3. Create output tokens
+    outputs = {}
+
+    # 3.1 The main result
+    # Sovereign Routing: We explicitly choose the 'output_default' port for success.
+    # In the future, if result_payload is an Exception or Jump, we would route to
+    # 'output_error' or other dynamic ports.
+    outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
+
+    # 4.2 Observability Event
+    outputs["obs_output"] = Token(payload=None, trace=trace_payload)
+
+    # 4.3 Resource Return (The Loop)
+    # We iterate over the node's output ports to find all RESOURCE ports.
+    for port_name, port_def in node.output_ports.items():
+        if port_def.role == PortRole.RESOURCE:
+            # Look up the amount to release from trace data
+            # The Bleacher stored it under 'resource_amounts' -> 'res_{name}'
+            # But the Stainer's output port might be named differently (e.g. 'rel_{name}' or just 'res_{name}')
+            # Convention: If Stainer output is 'res_gpu', Bleacher input was 'res_gpu'.
+            amount = 1  # Default fallback
+
+            # Try to find the specific amount
+            resource_amounts = trace_payload.get("resource_amounts", {})
+            if port_name in resource_amounts:
+                amount = resource_amounts[port_name]
+
+            # Emit token with the correct amount to replenish the broker
+            outputs[port_name] = Token(payload=amount)
+
+    return outputs
+~~~~~
+~~~~~python.new
+from typing import Dict, Any
+import time
+
+from cascade.spec import EventIR, EventType, EventState
+from cascade.spec.physics import Token
+from cascade.spec.triad import StainNode
+from cascade.spec.ports import PortRole
+
+
+async def standard_stainer(
+    inputs: Dict[str, Token], node: StainNode, resources: Any
+) -> Dict[str, Token]:
+    end_mono = time.monotonic()
+    now_wall = time.time()
+
+    # 1. Extract inputs
+    worker_result_token = inputs["worker_result"]
+    trace_input_token = inputs["trace_input"]
+
+    result_payload = worker_result_token.payload
+
+    # Merge traces
+    trace_payload = worker_result_token.trace.copy()
+    trace_payload.update(trace_input_token.payload)
+
+    # 2. Calculate duration
+    start_mono = trace_payload.get("start_ts", end_mono)
+    duration = end_mono - start_mono
+    trace_payload["duration"] = duration
+    trace_payload["end_ts"] = end_mono
+
+    # 3. Construct EventIR
+    logical_id = node.id.replace(".stain", "")
+    
+    # Determine Status (Simplified for now, assuming success if reached here)
+    # Error handling logic will be refined in future phases
+    state = EventState.SUCCEEDED
+    error_msg = None
+    
+    # TODO: Check if result_payload is an Exception wrapper
+    if isinstance(result_payload, Exception):
+        state = EventState.FAILED
+        error_msg = str(result_payload)
+
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": now_wall,
+        "ctx": {},
+        "phy": {"nid": node.id},
+        "data": {
+            "state": state,
+            "task_id": logical_id,
+            "duration_ms": duration * 1000,
+            "error": error_msg,
+            "result_preview": str(result_payload)[:100] if state == EventState.SUCCEEDED else None
+        }
+    }
+
+    # 4. Create output tokens
+    outputs = {}
+
+    # 4.1 The main result
+    outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
+
+    # 4.2 Observability Event
+    outputs["obs_output"] = Token(payload=ir, trace=trace_payload)
+
+    # 4.3 Resource Return
+    for port_name, port_def in node.output_ports.items():
+        if port_def.role == PortRole.RESOURCE:
+            amount = 1
+            resource_amounts = trace_payload.get("resource_amounts", {})
+            if port_name in resource_amounts:
+                amount = resource_amounts[port_name]
+            outputs[port_name] = Token(payload=amount)
+
+    return outputs
+~~~~~
+
+#### Acts 3: 改造 Observer 为哑节点
+
+修改 `standard_observer`，使其成为连接物理图与消息总线的通用网关。
+
+~~~~~act
+patch_file
+packages/cascade-std/src/cascade/std/triad/observer.py
+~~~~~
+~~~~~python.old
+from typing import Dict, Any, Literal
+from dataclasses import dataclass, field
+
+from cascade.spec.physics import Token, PhysicsNode
+
+
+@dataclass
+class ObservedEvent:
+    event_type: Literal["start", "end"]
+    trace_data: Dict[str, Any] = field(default_factory=dict)
+
+
+async def standard_observer(
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
+) -> Dict[str, Token]:
+    # 1. Get queue from the resource registry
+    # In a real run, this would be a proper ResourceRegistry instance.
+    # In tests, it might be a mock or a simple dict-like object.
+    queue = resources.get("system.observer.queue")
+
+    event_token = inputs["event_token"]
+    trace = event_token.trace
+
+    # Determine event type based on the presence of 'end_ts', which is only
+    # added by the Stainer node at the end of a lifecycle.
+    event_type = "end" if "end_ts" in trace else "start"
+
+    event = ObservedEvent(event_type=event_type, trace_data=trace)
+    await queue.put(event)
+
+    # Observers do not return tokens into the graph
+    return {}
+~~~~~
+~~~~~python.new
+from typing import Dict, Any
+from cascade.spec import EventIR
+from cascade.spec.physics import Token, PhysicsNode
+
+
+async def standard_observer(
+    inputs: Dict[str, Token], node: PhysicsNode, resources: Any
+) -> Dict[str, Token]:
+    # The Observer is now a "Dumb Relay". 
+    # It blindly forwards the IR payload to the system EventBus.
+    
+    # 1. Get the EventBus from resources
+    # This must be injected by the runtime/harness.
+    bus = resources.get("system.event_bus")
+
+    # 2. Extract IR
+    token = inputs["event_token"]
+    ir: EventIR = token.payload
+
+    # 3. Publish
+    if bus and ir:
+        # We assume the bus supports the 'publish_ir' protocol
+        bus.publish_ir(ir)
+
+    # Observers do not return tokens into the graph
+    return {}
+~~~~~
+
+#### Acts 4: 升级 EventDrivenRunner
+
+更新测试 Harness 以支持新的事件流架构，确保测试可继续运行。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/harness.py
+~~~~~
+~~~~~python.old
+from cascade.spec.physics import Token, PhysicsDataNode
+from cascade.vm.reactor import Reactor
+from cascade.vm.protocols import ReactorProtocol
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.executor import PhysicsExecutor
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.std.triad.observer import ObservedEvent
 
 logger = logging.getLogger(__name__)
 
-# Fast, thread-safe counter for event IDs
-~~~~~
+T = TypeVar("T")
 
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/events.py
-~~~~~
-~~~~~python.old
-    def _get_payload(self) -> Dict[str, Any]:
-        return {"total_steps": self.total_steps}
+
+class EventTimeoutError(TimeoutError):
+    pass
+
+
+class EventDrivenRunner:
+    def __init__(
+        self,
+        graph: BipartiteGraph,
+        function_map: Dict[str, Callable],
+        reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
+    ):
+        self.graph = graph
+        self.memory = VolatileMemory()
+        self.executor = PhysicsExecutor()
+
+        # 1. Setup Resource Registry and Observability Queue
+        self.event_queue: asyncio.Queue[ObservedEvent] = asyncio.Queue()
+        self._captured_events: List[ObservedEvent] = []
+        self.resource_registry = ResourceRegistry()
+        self.resource_registry.register("system.observer.queue", self.event_queue)
+
+        # 2. The function map is now used directly
+        self.function_map = function_map
+
+        # 3. Inject the registry into the Reactor
+        # Use provided factory or default to the Python Reactor
+        factory = reactor_factory or Reactor
+        self.reactor = factory(
+            self.graph,
+            self.memory,
+            self.executor,
+            self.function_map,
+            self.resource_registry,
+        )
+        self._loop_task: Optional[asyncio.Task] = None
+        self._stop_event = asyncio.Event()
+
+    def prime(self):
+        self.reactor.prime()
 ~~~~~
 ~~~~~python.new
-    def _get_payload(self) -> Dict[str, Any]:
-        return {"total_steps": self.total_steps}
+from cascade.spec.physics import Token, PhysicsDataNode
+from cascade.vm.reactor import Reactor
+from cascade.vm.protocols import ReactorProtocol
+from cascade.vm.memory import VolatileMemory
+from cascade.vm.executor import PhysicsExecutor
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.runtime.event_bus import EventBus
+from cascade.runtime.events import Event, TaskExecutionFinished
+
+logger = logging.getLogger(__name__)
+
+T = TypeVar("T")
 
 
-# --- Event Hydration Logic (Late Binding) ---
+class EventTimeoutError(TimeoutError):
+    pass
 
 
-def _from_ir(ir: EventIR) -> "Event":
-    """
-    Static factory method to hydrate an EventIR into a rich Event object.
-    Bound to Event.from_ir dynamically to handle subclass forward references.
-    """
-    try:
-        # Extract Common Metadata
-        ctx = ir.get("ctx", {})
-        run_id = ctx.get("rid")
-        timestamp = ir["ts"]
-        event_type = ir["t"]
+class EventDrivenRunner:
+    def __init__(
+        self,
+        graph: BipartiteGraph,
+        function_map: Dict[str, Callable],
+        reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
+    ):
+        self.graph = graph
+        self.memory = VolatileMemory()
+        self.executor = PhysicsExecutor()
 
-        if event_type == EventType.LIFECYCLE:
-            return _hydrate_lifecycle(ir, run_id, timestamp)
-
-        # Fallback for unknown types
-        return Event(timestamp=timestamp, run_id=run_id)
-    except Exception as e:
-        logger.warning(f"Failed to hydrate EventIR: {e}. Raw: {ir}")
-        # Return a generic event to prevent crashing the bus
-        return Event()
-
-
-def _hydrate_lifecycle(
-    ir: EventIR, run_id: Optional[str], timestamp: float
-) -> "TaskEvent":
-    data = ir["data"]
-    phy = ir.get("phy", {})
-
-    # Prefer logical IDs from data, fallback to physical IDs
-    task_id = data.get("task_id", phy.get("nid", ""))
-    task_name = data.get("task_name", "unknown")
-    state = data.get("state")
-
-    base_kwargs = {
-        "timestamp": timestamp,
-        "run_id": run_id,
-        "task_id": task_id,
-        "task_name": task_name,
-    }
-
-    if state == EventState.RUNNING:
-        return TaskExecutionStarted(**base_kwargs)
-
-    elif state in (EventState.SUCCEEDED, EventState.FAILED):
-        status = "Succeeded" if state == EventState.SUCCEEDED else "Failed"
-        # Convert ms to seconds for internal Event model compatibility
-        duration_sec = data.get("duration_ms", 0.0) / 1000.0
+        # 1. Setup Event Bus & Resource Registry
+        self.event_bus = EventBus()
+        self.event_queue: asyncio.Queue[Event] = asyncio.Queue()
+        self._captured_events: List[Event] = []
         
-        return TaskExecutionFinished(
-            **base_kwargs,
-            status=status,
-            duration=duration_sec,
-            error=data.get("error"),
-            result_preview=data.get("result_preview"),
-        )
+        self.resource_registry = ResourceRegistry()
+        # Register the bus so standard_observer can find it
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        
+        # Bridge Bus -> Queue for testing
+        self.event_bus.subscribe(Event, self._on_event)
 
-    elif state == EventState.SKIPPED:
-        return TaskSkipped(
-            **base_kwargs,
-            reason=data.get("reason", "Unknown"),
+        # 2. The function map is now used directly
+        self.function_map = function_map
+
+        # 3. Inject the registry into the Reactor
+        # Use provided factory or default to the Python Reactor
+        factory = reactor_factory or Reactor
+        self.reactor = factory(
+            self.graph,
+            self.memory,
+            self.executor,
+            self.function_map,
+            self.resource_registry,
         )
+        self._loop_task: Optional[asyncio.Task] = None
+        self._stop_event = asyncio.Event()
     
-    elif state == EventState.PENDING:
-         # Map Pending to generic TaskEvent or a specific one if needed later
-         return TaskEvent(**base_kwargs)
+    def _on_event(self, event: Event):
+        self.event_queue.put_nowait(event)
 
-    # Fallback
-    return TaskEvent(**base_kwargs)
-
-
-# Bind the factory method to the Event class
-Event.from_ir = staticmethod(_from_ir)
-~~~~~
-
-#### Acts 2: 增强 EventBus
-
-修改 `event_bus.py` 以支持 `publish_ir`。
-
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/event_bus.py
-~~~~~
-~~~~~python.old
-from collections import defaultdict
-from typing import Callable, List, Type, Dict, Any
-from .events import Event
-
-# Define a Handler type alias for clarity
-~~~~~
-~~~~~python.new
-from collections import defaultdict
-from typing import Callable, List, Type, Dict, Any
-from cascade.spec import EventIR
-from .events import Event
-
-# Define a Handler type alias for clarity
+    def prime(self):
+        self.reactor.prime()
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/event_bus.py
+packages/cascade-vm/src/cascade/vm/harness.py
 ~~~~~
 ~~~~~python.old
-    def publish(self, event: Event):
-        # 1. Dispatch to handlers explicitly subscribed to this event type
-        handlers = self._subscribers.get(type(event), [])
-        for handler in handlers:
-            handler(event)
+    async def wait_for_event(
+        self,
+        predicate: Callable[[ObservedEvent], bool],
+        timeout: float = 1.0,
+    ) -> ObservedEvent:
+        start_time = asyncio.get_event_loop().time()
 
-        # 2. Dispatch to wildcard handlers (subscribed to Event)
-        for handler in self._wildcard_subscribers:
-            handler(event)
+        while True:
+            # Check timeout
+            now = asyncio.get_event_loop().time()
+            if now - start_time > timeout:
+                raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
+
+            # Wait for next event
+            try:
+                # Calculate remaining time
+                remaining = timeout - (now - start_time)
+                event = await asyncio.wait_for(
+                    self.event_queue.get(), timeout=remaining
+                )
+                self._captured_events.append(event)
+
+                if predicate(event):
+                    return event
+            except asyncio.TimeoutError:
+                raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
+
+    async def run_until_complete(
+        self, task_id: str, timeout: float = 2.0
+    ) -> ObservedEvent:
+        def is_completion(e: ObservedEvent):
+            # The Bleacher sets the 'id' in the trace.
+            return e.event_type == "end" and e.trace_data.get("id") == task_id
+
+        return await self.wait_for_event(is_completion, timeout=timeout)
 ~~~~~
 ~~~~~python.new
-    def publish(self, event: Event):
-        # 1. Dispatch to handlers explicitly subscribed to this event type
-        handlers = self._subscribers.get(type(event), [])
-        for handler in handlers:
-            handler(event)
+    async def wait_for_event(
+        self,
+        predicate: Callable[[Event], bool],
+        timeout: float = 1.0,
+    ) -> Event:
+        start_time = asyncio.get_event_loop().time()
 
-        # 2. Dispatch to wildcard handlers (subscribed to Event)
-        for handler in self._wildcard_subscribers:
-            handler(event)
+        while True:
+            # Check timeout
+            now = asyncio.get_event_loop().time()
+            if now - start_time > timeout:
+                raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
 
-    def publish_ir(self, ir: EventIR):
-        """
-        Hydrates an EventIR into a rich Event object and publishes it.
-        This serves as the translation layer between the raw physical world (IR)
-        and the rich logical world (Events).
-        """
-        # Event.from_ir is dynamically bound in events.py
-        # noinspection PyUnresolvedReferences
-        event = Event.from_ir(ir)  # type: ignore
-        self.publish(event)
-~~~~~
+            # Wait for next event
+            try:
+                # Calculate remaining time
+                remaining = timeout - (now - start_time)
+                event = await asyncio.wait_for(
+                    self.event_queue.get(), timeout=remaining
+                )
+                self._captured_events.append(event)
 
-#### Acts 3: 添加单元测试
+                if predicate(event):
+                    return event
+            except asyncio.TimeoutError:
+                raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
 
-创建测试文件验证翻译逻辑。
+    async def run_until_complete(
+        self, task_id: str, timeout: float = 2.0
+    ) -> Event:
+        def is_completion(e: Event):
+            # Updated to use the new TaskExecutionFinished event
+            if isinstance(e, TaskExecutionFinished):
+                # We match against the logical task_id which is now populated in the Event
+                return e.task_id == task_id
+            return False
 
-~~~~~act
-write_file
-packages/cascade-engine/tests/unit/test_event_translation.py
-~~~~~
-~~~~~python
-import time
-from cascade.spec import EventIR, EventType, EventState
-from cascade.runtime.events import (
-    Event, 
-    TaskExecutionStarted, 
-    TaskExecutionFinished, 
-    TaskSkipped
-)
-
-def test_hydrate_lifecycle_started():
-    ts = time.time()
-    ir: EventIR = {
-        "v": "1.0",
-        "t": EventType.LIFECYCLE,
-        "ts": ts,
-        "ctx": {"rid": "run-xyz"},
-        "phy": {"nid": "node-123"},
-        "data": {
-            "state": EventState.RUNNING,
-            "task_id": "logical-task-1",
-            "task_name": "MyTask"
-        }
-    }
-    
-    # Verify the dynamically bound method exists and works
-    event = Event.from_ir(ir)
-    
-    assert isinstance(event, TaskExecutionStarted)
-    assert event.run_id == "run-xyz"
-    assert event.timestamp == ts
-    assert event.task_id == "logical-task-1"
-    assert event.task_name == "MyTask"
-
-def test_hydrate_lifecycle_finished_success():
-    ts = time.time()
-    ir: EventIR = {
-        "v": "1.0",
-        "t": EventType.LIFECYCLE,
-        "ts": ts,
-        "ctx": {"rid": "run-xyz"},
-        "phy": {"nid": "node-123"},
-        "data": {
-            "state": EventState.SUCCEEDED,
-            "task_id": "logical-task-1",
-            "task_name": "MyTask",
-            "duration_ms": 1500.0,
-            "result_preview": "42"
-        }
-    }
-    
-    event = Event.from_ir(ir)
-    
-    assert isinstance(event, TaskExecutionFinished)
-    assert event.status == "Succeeded"
-    assert event.duration == 1.5  # Verified ms -> s conversion
-    assert event.result_preview == "42"
-    assert event.error is None
-
-def test_hydrate_lifecycle_finished_failed():
-    ts = time.time()
-    ir: EventIR = {
-        "v": "1.0",
-        "t": EventType.LIFECYCLE,
-        "ts": ts,
-        "ctx": {"rid": "run-xyz"},
-        "phy": {"nid": "node-123"},
-        "data": {
-            "state": EventState.FAILED,
-            "task_id": "logical-task-1",
-            "task_name": "MyTask",
-            "duration_ms": 100.0,
-            "error": "ValueError: boom"
-        }
-    }
-    
-    event = Event.from_ir(ir)
-    
-    assert isinstance(event, TaskExecutionFinished)
-    assert event.status == "Failed"
-    assert event.error == "ValueError: boom"
-
-def test_hydrate_lifecycle_skipped():
-    ts = time.time()
-    ir: EventIR = {
-        "v": "1.0",
-        "t": EventType.LIFECYCLE,
-        "ts": ts,
-        "ctx": {"rid": "run-xyz"},
-        "phy": {"nid": "node-123"},
-        "data": {
-            "state": EventState.SKIPPED,
-            "task_id": "logical-task-1",
-            "task_name": "MyTask",
-            "reason": "ConditionFalse"
-        }
-    }
-    
-    event = Event.from_ir(ir)
-    
-    assert isinstance(event, TaskSkipped)
-    assert event.reason == "ConditionFalse"
-
-def test_hydrate_unknown_type():
-    ts = time.time()
-    ir: EventIR = {
-        "v": "1.0",
-        "t": "unknown.type", # type: ignore
-        "ts": ts,
-        "ctx": {},
-        "phy": {"nid": "n1"},
-        "data": {}
-    }
-    
-    event = Event.from_ir(ir)
-    
-    # Should fallback to base Event
-    assert type(event) is Event
-    assert event.timestamp == ts
+        return await self.wait_for_event(is_completion, timeout=timeout)
 ~~~~~
 
 ### 下一步建议
 
-完成 Phase 2 后，Engine 已经具备了处理 IR 的能力。接下来我们将进入 **Phase 3: 物理发射源 (The Emitter)**。
-
-这将涉及修改 `cascade-std` 中的标准库组件（`Bleacher`, `Stainer`, `Observer`），让它们开始产生符合新规范的 `EventIR` 数据，而不是旧的非结构化数据。这将是物理层改造的核心步骤。
+完成 Phase 3 后，物理层已经能够产生标准化的 IR。但目前的 IR 中缺少关键的 `EventContext`（如 `run_id`）。
+下一步我们将进行 **Phase 4: 上下文注入 (The Context Injection)**，在 `cascade-vm` 中实现环境资源的注入机制，确保 `Bleacher` 能够获取到运行时上下文并填入 `EventIR.ctx`。

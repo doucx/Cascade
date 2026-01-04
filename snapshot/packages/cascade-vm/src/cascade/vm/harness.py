@@ -9,7 +9,8 @@ from cascade.vm.protocols import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry
-from cascade.std.triad.observer import ObservedEvent
+from cascade.runtime.event_bus import EventBus
+from cascade.runtime.events import Event, TaskExecutionFinished
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +32,17 @@ class EventDrivenRunner:
         self.memory = VolatileMemory()
         self.executor = PhysicsExecutor()
 
-        # 1. Setup Resource Registry and Observability Queue
-        self.event_queue: asyncio.Queue[ObservedEvent] = asyncio.Queue()
-        self._captured_events: List[ObservedEvent] = []
+        # 1. Setup Event Bus & Resource Registry
+        self.event_bus = EventBus()
+        self.event_queue: asyncio.Queue[Event] = asyncio.Queue()
+        self._captured_events: List[Event] = []
+        
         self.resource_registry = ResourceRegistry()
-        self.resource_registry.register("system.observer.queue", self.event_queue)
+        # Register the bus so standard_observer can find it
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        
+        # Bridge Bus -> Queue for testing
+        self.event_bus.subscribe(Event, self._on_event)
 
         # 2. The function map is now used directly
         self.function_map = function_map
@@ -52,6 +59,9 @@ class EventDrivenRunner:
         )
         self._loop_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
+    
+    def _on_event(self, event: Event):
+        self.event_queue.put_nowait(event)
 
     def prime(self):
         self.reactor.prime()
@@ -94,9 +104,9 @@ class EventDrivenRunner:
 
     async def wait_for_event(
         self,
-        predicate: Callable[[ObservedEvent], bool],
+        predicate: Callable[[Event], bool],
         timeout: float = 1.0,
-    ) -> ObservedEvent:
+    ) -> Event:
         start_time = asyncio.get_event_loop().time()
 
         while True:
@@ -121,9 +131,12 @@ class EventDrivenRunner:
 
     async def run_until_complete(
         self, task_id: str, timeout: float = 2.0
-    ) -> ObservedEvent:
-        def is_completion(e: ObservedEvent):
-            # The Bleacher sets the 'id' in the trace.
-            return e.event_type == "end" and e.trace_data.get("id") == task_id
+    ) -> Event:
+        def is_completion(e: Event):
+            # Updated to use the new TaskExecutionFinished event
+            if isinstance(e, TaskExecutionFinished):
+                # We match against the logical task_id which is now populated in the Event
+                return e.task_id == task_id
+            return False
 
         return await self.wait_for_event(is_completion, timeout=timeout)

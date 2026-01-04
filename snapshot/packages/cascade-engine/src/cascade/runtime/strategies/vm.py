@@ -1,12 +1,10 @@
+from typing import Any, Dict, Callable
 import asyncio
 import time
-from typing import Any, Dict, List, Callable, Optional, Union
-from contextlib import ExitStack
 
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.environment import EnvironmentDef
-from cascade.spec.physics import Token, PhysicsFuncNode
-from cascade.spec.ports import PortName
+from cascade.spec.physics import Token
 
 from cascade.compiler.frontend import IRGenerator
 from cascade.compiler.backend import Builder
@@ -16,15 +14,14 @@ from cascade.vm.reactor import Reactor
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.linker import Linker
 
 from cascade.runtime.strategies.base import ExecutionContext
 from cascade.runtime.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
-    TaskSkipped,
-    Event,
 )
-
 
 class VMExecutionStrategy:
     def __init__(self, bus: Any):
@@ -58,75 +55,50 @@ class VMExecutionStrategy:
         for name, res in context.active_resources.items():
             resource_registry.register(name, res)
 
-        # 3. Build Function Map (The "Linker")
-        # ------------------------------------
-        function_map: Dict[str, Callable] = {}
+        # 3. Registration: Populate CodeRegistry
+        # --------------------------------------
+        code_registry = CodeRegistry()
         
-        # 3.1 Link User Functions (Workers)
-        # We need to traverse the target again to find the actual callables
-        # because GraphIR only contains metadata.
-        # This is a temporary dependency walker until Compiler handles this.
-        lazy_results_map = self._collect_lazy_results(target)
+        # We need to register all tasks involved in the graph.
+        # GraphIR nodes contain the TaskDef, which has the canonical hash.
+        # We also need the actual callable.
+        # Since GraphIR only has metadata, we need to re-discover the callables from the 'target' structure.
         
-        # Link mapping: Physical Node ID -> Python Callable
-        for lr_uuid, lr in lazy_results_map.items():
-            # Calculate the canonical ID logic matching the Compiler
-            # Note: This relies on IRGenerator and Builder being deterministic
-            # and us finding the correct NodeIR match. 
-            # For the prototype, we assume we can look up by logical ID if we had it,
-            # but here we rely on the compiler's output structure.
+        # Collect all LazyResults from the target input
+        lazy_results = self._collect_lazy_results(target)
+        
+        for lr in lazy_results.values():
+            # Analyze to get hash (idempotent)
+            task_def = self.analyzer.analyze(lr.task)
+            canonical_hash = task_def.fingerprint["canonical_code_structure_hash"]
             
-            # WORKAROUND: We iterate the generated GraphIR to find the mapping 
-            # between UUID and Canonical Hash.
-            node_ir = next((n for n in graph_ir.nodes if n.task.name == lr.task.__name__), None) 
-            # The above is risky if multiple tasks have same name. 
-            # Correct approach: IRGenerator should expose a UUID map or we recreate logic.
-            # For this prototype, we'll assume we can use the `current_node_instance_hash` 
-            # if we replicate the hashing logic. 
-            # Actually, `IRGenerator` generates IDs. We need that map.
-            pass
+            # Register the raw function
+            # Note: lr.task is the Task wrapper. We want the underlying function if possible,
+            # or the wrapper if it's callable. Analyzer handles this check.
+            # Here we register the Task wrapper itself, the Linker/Wrapper handles execution.
+            # Actually, `lr.task.func` is usually what we want to run, but `lr.task` is callable too.
+            # Let's register `lr.task.func` to be safe and pure.
+            func_to_run = getattr(lr.task, "func", lr.task)
+            code_registry.register(canonical_hash, func_to_run)
 
-        # REVISIT: The IRGenerator does not expose the map. 
-        # Strategy: We will use a dynamic dispatch inside the worker implementation
-        # or we rely on the fact that `IRGenerator` *returns* the target's Node ID.
-        # But we need to link ALL nodes, not just the target.
+        # 4. Linking: Assembly + Registry -> Function Map
+        # -----------------------------------------------
+        linker = Linker()
+        # We need to bridge the bus for the Observer. 
+        # Ideally, we pass 'context' or 'bus' to the Linker or Reactor?
+        # The standard_observer currently is hardcoded in Linker. 
+        # We need to inject the bus into the standard_observer logic.
+        # Strategy: Use a closure-based Linker or specialized registry?
+        # Better: The Reactor execution passes `resources`. We can put the `bus` in `resources`.
         
-        # Let's take a shortcut for the Prototype:
-        # We will iterate the physical graph, find all ".worker" nodes, 
-        # extract their logical ID prefix, and try to match it? No, physical IDs are hashes.
+        # Register the bus as a resource!
+        resource_registry.register("system.event_bus", self.bus)
         
-        # CORRECT STRATEGY FOR PROTOTYPE:
-        # We will perform a parallel traversal or simply ask IRGenerator to generate again?
-        # No, `IRGenerator` is stateful.
-        
-        # Let's rebuild the `executable_registry` using the v2.0 logic, 
-        # which we know works and maps Hash -> Callable.
-        from cascade.graph.build import build_graph
-        from cascade.graph.registry import NodeRegistry
-        
-        v2_registry = NodeRegistry()
-        _, _, executable_registry = build_graph(target, registry=v2_registry)
+        # Now Link
+        function_map = linker.link(assembly, code_registry)
 
-        for node_hash, func in executable_registry.items():
-            worker_id = PhysicalIdGenerator.worker_node(node_hash)
-            function_map[worker_id] = self._make_worker_wrapper(func)
-
-        # 3.2 Link Infrastructure Functions (Bleacher, Stainer, Observer)
-        for node in physical_graph.nodes.values():
-            if node.id.endswith(".bleach"):
-                function_map[node.id] = self._standard_bleacher
-            elif node.id.endswith(".stain"):
-                function_map[node.id] = self._standard_stainer
-            elif node.id == PhysicalIdGenerator.observability_observer():
-                function_map[node.id] = self._standard_observer
-            elif "pulse" in node.id:
-                # Pulse sources are DataNodes, no function needed
-                pass
-            elif "probe" in node.id:
-                 function_map[node.id] = self._standard_probe
-
-        # 4. Reactor & Bridge Setup
-        # -------------------------
+        # 5. Reactor Setup
+        # ----------------
         reactor = Reactor(
             graph=physical_graph,
             memory=memory,
@@ -141,41 +113,54 @@ class VMExecutionStrategy:
         # Result Future
         result_future = asyncio.get_running_loop().create_future()
 
-        # Identify Target Physical Node
-        # We need the Node ID of the target.
-        # IRGenerator.generate returns GraphIR. The last node added isn't necessarily target.
-        # But `compiler.generate` returns GraphIR, and we don't know which one is target.
-        # HACK: We re-compute the hash for the target using HashingService directly.
+        # Identify Target Physical Node for Sinking Result
+        # We need the Physical ID of the target's Stainer.
+        # 1. Find the NodeIR for the target.
+        # target is a LazyResult. We have its UUID.
+        target_uuid = target._uuid if hasattr(target, "_uuid") else None
+        
+        # If target is a list/dict, we might have multiple roots. 
+        # For now, support single root return.
+        # We can scan GraphIR for the node that corresponds to this UUID?
+        # GraphIR nodes have `current_node_instance_hash` which IS the UUID (in current impl).
+        # Let's verify `generator.py`. 
+        # Yes: `node_id = self.hashing_service.compute_node_instance_hash(...)`
+        # And `_visited[lr._uuid] = node_id`.
+        # So we can re-compute the hash or assume we can find it?
+        
+        # The Compiler doesn't expose the UUID->Hash map.
+        # But we know HashingService is deterministic.
+        # Let's try to find the NodeIR that matches the target's task name and assume it's the last one? Risky.
+        
+        # Robust Fix: We need the Node ID.
+        # Let's re-use the HashingService to compute it for the target.
         from cascade.reflection import HashingService
-        # This is tricky without the full dependency map.
-        # Let's use the v2 executable_registry keys we just built!
-        # The target's UUID is in `target._uuid`.
-        # Wait, v2 `build_graph` returns `instance_map` which maps UUID -> Node.
-        _, instance_map, _ = build_graph(target, registry=v2_registry)
-        target_v2_node = instance_map[target._uuid]
-        target_hash = target_v2_node.current_node_instance_hash
+        # But we need dependencies...
         
-        target_stainer_id = PhysicalIdGenerator.stain_node(target_hash)
+        # OK, let's look at the generated GraphIR. The `current_node_instance_hash` IS the physical ID base.
+        # We need to find which NodeIR corresponds to `target`.
+        # If we assume `target` is the root, it usually appears last in the list (Post-Order Traversal).
+        # Let's try the last node.
+        if graph_ir.nodes:
+            target_node_ir = graph_ir.nodes[-1]
+            target_base_id = target_node_ir.current_node_instance_hash
+            target_stainer_id = PhysicalIdGenerator.stain_node(target_base_id)
 
-        # Bridge: Sink to Future
-        def _result_sink(token: Token):
-            if not result_future.done():
-                result_future.set_result(token.payload)
-        
-        reactor.add_sink(target_stainer_id, "output_default", _result_sink)
+            # Bridge: Sink to Future
+            def _result_sink(token: Token):
+                if not result_future.done():
+                    result_future.set_result(token.payload)
+            
+            reactor.add_sink(target_stainer_id, "output_default", _result_sink)
 
-        # 5. Execution Loop
+        # 6. Execution Loop
         # -----------------
         try:
             while not result_future.done():
                 fired = await reactor.step()
                 if fired == 0 and not result_future.done():
                     # If we stall but haven't got a result, check for errors or deadlocks
-                    # For prototype, just small sleep
                     await asyncio.sleep(0.001)
-                    
-                    # Optional: Check if total energy is 0 (Heat Death)
-                    # if total_tokens == 0: break
         except Exception as e:
             # If reactor crashes, we fail the run
             raise e
@@ -198,86 +183,3 @@ class VMExecutionStrategy:
             for v in target.values():
                 results.update(self._collect_lazy_results(v))
         return results
-
-    # --- Standard Triad Implementations (Micro-Kernel) ---
-
-    def _make_worker_wrapper(self, func: Callable) -> Callable:
-        """Wraps a user function to match the (inputs, node, resources) signature."""
-        async def _wrapper(inputs: Dict[str, Token], node: Any, resources: Any) -> Dict[str, Token]:
-            # Unpack inputs. The Bleacher put them in 'worker_input'
-            # payload is the dict of {arg_name: val}
-            kwargs = inputs["worker_input"].payload
-            
-            # Execute
-            if asyncio.iscoroutinefunction(func):
-                result = await func(**kwargs)
-            else:
-                result = func(**kwargs)
-                
-            return {"worker_result": Token(payload=result)}
-        return _wrapper
-
-    async def _standard_bleacher(self, inputs: Dict[str, Token], node: Any, resources: Any) -> Dict[str, Token]:
-        """
-        F_pre: Joins all inputs and produces a single dict for the worker.
-        Also emits start trace.
-        """
-        # 1. Collect Data Args
-        # The node def has input ports. We assume all DATA inputs are arguments.
-        # We need to look at the node definition to know which port maps to which arg?
-        # Or we just take all inputs that are not special signals.
-        worker_kwargs = {}
-        start_ts = time.time()
-        
-        for port, token in inputs.items():
-            if port in ["condition", PortName.PULSE] or port.startswith("wait_for_"):
-                continue
-            worker_kwargs[port] = token.payload
-            
-        # 2. Emit Start Trace
-        # In a real impl, this goes to D_trace. 
-        # For this prototype, we just pack it into trace_output
-        trace = {"start_ts": start_ts, "node_id": node.id}
-        
-        # 3. Output
-        return {
-            "worker_input": Token(payload=worker_kwargs),
-            "trace_output": Token(payload=trace),
-            "obs_output": Token(payload={"event": "start", "ts": start_ts}) 
-        }
-
-    async def _standard_stainer(self, inputs: Dict[str, Token], node: Any, resources: Any) -> Dict[str, Token]:
-        """
-        F_post: Routes the result.
-        """
-        result = inputs["worker_result"].payload
-        trace = inputs["trace_input"].payload
-        
-        # Simple default routing for now
-        return {
-            "output_default": Token(payload=result, trace=trace),
-            "obs_output": Token(payload={"event": "end", "ts": time.time()})
-        }
-        
-    async def _standard_observer(self, inputs: Dict[str, Token], node: Any, resources: Any) -> Dict[str, Token]:
-        """
-        F_obs: Bridges to the Engine EventBus.
-        """
-        raw_event = inputs["event_token"].payload
-        # Determine Logical Node ID (strip suffix)
-        # The trace or payload should contain the source node ID.
-        # But here we simplified.
-        
-        # For the prototype, we simply map "start" -> TaskExecutionStarted
-        # This is a bit lossy without the full Trace object, but proves the bridge works.
-        
-        if raw_event["event"] == "start":
-            self.bus.publish(TaskExecutionStarted(task_id="vm-node", task_name="vm-task"))
-        elif raw_event["event"] == "end":
-             self.bus.publish(TaskExecutionFinished(task_id="vm-node", task_name="vm-task", status="Succeeded"))
-             
-        return {}
-
-    async def _standard_probe(self, inputs: Dict[str, Token], node: Any, resources: Any) -> Dict[str, Token]:
-        """F_probe: Identity pass-through for constants."""
-        return {"out": inputs["value"]}

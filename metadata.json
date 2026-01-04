@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 适配 cascade-vm 集成测试以处理 Assembly 返回值", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767508722.8124366, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 实现 CodeRegistry 和 Linker，完成 VM 运行时重构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767509047.2700958, "duration_ms": 0}}

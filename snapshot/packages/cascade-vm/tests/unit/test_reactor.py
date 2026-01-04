@@ -1,8 +1,11 @@
 import pytest
 import sys
+import time
 from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.spec import EventIR, EventType, EventState
+from cascade.runtime.events import Event, TaskExecutionFinished
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor
@@ -194,10 +197,24 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
     # Function Map
     def obs_enabled_logic(inputs, node, resources):
         val = inputs["value"].payload
-        # Emit Result AND Observation
+        
+        # This mock logic now simulates what a Stainer does: create an EventIR
+        ir: EventIR = {
+            "v": "1.0",
+            "t": EventType.LIFECYCLE,
+            "ts": time.time(),
+            "ctx": {},
+            "phy": {"nid": node.id},
+            "data": {
+                "state": EventState.SUCCEEDED,
+                "task_id": node.id, # In test, physical ID is fine
+                "task_name": node.name
+            }
+        }
+        
         return {
             "result": Token(payload=val + 1),
-            "obs_output": Token(payload=None, trace={"id": "F1", "status": "done"}),
+            "obs_output": Token(payload=ir),
         }
 
     func_map = {
@@ -214,10 +231,10 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
 
     try:
         # We wait for the specific event proving F1 finished
-        event = await runner.wait_for_event(
-            lambda e: e.trace_data.get("id") == "F1"
-            and e.trace_data.get("status") == "done"
-        )
+        def predicate(e: Event):
+            return isinstance(e, TaskExecutionFinished) and e.task_id == "F1"
+            
+        event = await runner.wait_for_event(predicate)
         assert event is not None
 
         # Verify physical side effect (Memory)

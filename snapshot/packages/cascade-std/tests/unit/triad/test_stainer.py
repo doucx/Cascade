@@ -9,6 +9,7 @@ from cascade.std.triad.stainer import standard_stainer
 
 def create_mock_stain_node(output_ports_config):
     node = MagicMock(spec=StainNode)
+    node.id = "mock.stain.node"  # Add the missing ID attribute
     node.output_ports = {
         name: PortDef(name, role) for name, role in output_ports_config.items()
     }

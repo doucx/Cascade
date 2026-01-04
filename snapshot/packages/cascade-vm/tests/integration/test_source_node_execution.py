@@ -86,7 +86,7 @@ async def test_source_node_is_triggered_by_pulse():
         assert isinstance(completion_event, TaskExecutionFinished)
         assert completion_event.status == "Succeeded"
         assert completion_event.task_id == node_ir.current_node_instance_hash
-        assert completion_event.result_preview.startswith("'Pulse Fired!'")
+        assert completion_event.result_preview == "Pulse Fired!"
 
     finally:
         await runner.stop_loop()

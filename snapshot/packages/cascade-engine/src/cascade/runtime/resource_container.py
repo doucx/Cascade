@@ -6,12 +6,12 @@ from cascade.graph.model import Graph
 from cascade.spec.resource import ResourceDefinition, Inject
 from contextlib import contextmanager
 
-from cascade.runtime.bus import MessageBus
+from cascade.runtime.event_bus import EventBus
 from cascade.runtime.events import ResourceAcquired, ResourceReleased
 
 
 class ResourceContainer:
-    def __init__(self, bus: MessageBus):
+    def __init__(self, bus: EventBus):
         self.bus = bus
         self._resource_providers: Dict[str, Union[Callable, ResourceDefinition]] = {}
 

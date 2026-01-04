@@ -6,7 +6,7 @@ from .events import Event
 Handler = Callable[[Any], None]
 
 
-class MessageBus:
+class EventBus:
     def __init__(self):
         self._subscribers: Dict[Type[Event], List[Handler]] = defaultdict(list)
         self._wildcard_subscribers: List[Handler] = []

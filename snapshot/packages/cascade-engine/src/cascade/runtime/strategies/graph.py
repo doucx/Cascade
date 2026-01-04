@@ -8,7 +8,7 @@ from cascade.graph.registry import NodeRegistry
 from cascade.reflection import BlueprintHasher
 from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.jump import Jump
-from cascade.runtime.bus import MessageBus
+from cascade.runtime.event_bus import EventBus
 from cascade.runtime.resource_container import ResourceContainer
 from cascade.runtime.processor import NodeProcessor
 from cascade.runtime.flow import FlowManager
@@ -31,7 +31,7 @@ class GraphExecutionStrategy:
         node_processor: NodeProcessor,
         resource_container: ResourceContainer,
         constraint_manager: ConstraintManager,
-        bus: MessageBus,
+        bus: EventBus,
         wakeup_event: asyncio.Event,
     ):
         self.solver = solver

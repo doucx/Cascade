@@ -2,7 +2,7 @@ import platform
 import os
 import asyncio
 from datetime import datetime, timezone
-from .bus import MessageBus
+from .event_bus import EventBus
 from cascade.common.messaging import bus
 from .events import (
     RunStarted,
@@ -21,7 +21,7 @@ from cascade.spec.protocols import Connector
 
 
 class HumanReadableLogSubscriber:
-    def __init__(self, event_bus: MessageBus):
+    def __init__(self, event_bus: EventBus):
         # Subscribe to relevant events from the core event_bus
         event_bus.subscribe(RunStarted, self.on_run_started)
         event_bus.subscribe(RunFinished, self.on_run_finished)
@@ -99,7 +99,7 @@ class HumanReadableLogSubscriber:
 
 
 class TelemetrySubscriber:
-    def __init__(self, event_bus: MessageBus, connector: Connector):
+    def __init__(self, event_bus: EventBus, connector: Connector):
         self._connector = connector
         self._source_id = f"{platform.node()}-{os.getpid()}"
         self._pending_tasks = set()

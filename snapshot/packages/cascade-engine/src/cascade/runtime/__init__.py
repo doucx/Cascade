@@ -1,4 +1,4 @@
-from .bus import MessageBus
+from .event_bus import EventBus
 from .engine import Engine
 from .subscribers import HumanReadableLogSubscriber
 from .events import Event
@@ -7,7 +7,7 @@ from .resource_manager import ResourceManager
 from cascade.spec.protocols import ExecutionPlan, Solver, Executor, CachePolicy
 
 __all__ = [
-    "MessageBus",
+    "EventBus",
     "Engine",
     "HumanReadableLogSubscriber",
     "Event",

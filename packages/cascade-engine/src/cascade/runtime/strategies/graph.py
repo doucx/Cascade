@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Callable
 from cascade.graph.model import Graph, Node, EdgeType
 from cascade.graph.build import build_graph
 from cascade.graph.registry import NodeRegistry
-from cascade.graph.hashing import BlueprintHasher
+from cascade.reflection import BlueprintHasher
 from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.jump import Jump
 from cascade.runtime.bus import MessageBus

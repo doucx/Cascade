@@ -21,6 +21,7 @@ members = [
     "cascade-library",
     "cascade-monorepo",
     "cascade-provider-ipfs",
+    "cascade-reflection",
     "cascade-sdk",
     "cascade-spec",
     "cascade-std",
@@ -702,6 +703,7 @@ source = { editable = "packages/cascade-compiler" }
 dependencies = [
     { name = "cascade-common" },
     { name = "cascade-graph" },
+    { name = "cascade-reflection" },
     { name = "cascade-spec" },
 ]
 
@@ -709,6 +711,7 @@ dependencies = [
 requires-dist = [
     { name = "cascade-common", editable = "packages/cascade-common" },
     { name = "cascade-graph", editable = "packages/cascade-graph" },
+    { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]
 
@@ -774,12 +777,14 @@ version = "0.1.0"
 source = { editable = "packages/cascade-graph" }
 dependencies = [
     { name = "cascade-common" },
+    { name = "cascade-reflection" },
     { name = "cascade-spec" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cascade-common", editable = "packages/cascade-common" },
+    { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]
 
@@ -846,8 +851,8 @@ requires-dist = [
     { name = "pyyaml", marker = "extra == 'config'" },
     { name = "sqlalchemy", marker = "extra == 'all'" },
     { name = "sqlalchemy", marker = "extra == 'sql'" },
-    { name = "typer", extras = ["all"], marker = "extra == 'all'" },
-    { name = "typer", extras = ["all"], marker = "extra == 'cli'" },
+    { name = "typer", marker = "extra == 'all'" },
+    { name = "typer", marker = "extra == 'cli'" },
 ]
 provides-extras = ["template", "http", "sql", "cli", "config", "s3", "redis", "all"]
 
@@ -970,6 +975,17 @@ requires-dist = [
     { name = "aiohttp" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]
+
+[[package]]
+name = "cascade-reflection"
+version = "0.1.0"
+source = { editable = "packages/cascade-reflection" }
+dependencies = [
+    { name = "cascade-spec" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "cascade-spec", editable = "packages/cascade-spec" }]
 
 [[package]]
 name = "cascade-sdk"

@@ -3,14 +3,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade-graph"
+name = "cascade-reflection"
 version = "0.1.0"
-description = "Graph building, compilation, and serialization logic for the Cascade ecosystem."
+description = "Core reflection, static analysis, and hashing utilities for the Cascade ecosystem."
 requires-python = ">=3.8"
 dependencies = [
-  "cascade-spec",
-  "cascade-common",
-  "cascade-reflection",
+  "cascade-spec"
 ]
 
 [tool.hatch.build.targets.wheel]

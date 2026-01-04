@@ -3,8 +3,7 @@ from typing import Any, Dict
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.routing import Router
 from cascade.spec.ir.models import GraphIR, NodeIR
-from cascade.compiler.utils.reflection import ReflectionAnalyzer
-from cascade.compiler.utils.hashing import HashingService
+from cascade.reflection import ReflectionAnalyzer, HashingService
 
 
 class IRGenerator:

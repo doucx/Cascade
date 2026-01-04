@@ -1,13 +1,14 @@
 import inspect
 import hashlib
-from typing import Any, List, Optional, Protocol
+from typing import Any, List, Optional
 
 from cascade.spec.ir.models import TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.fingerprint import Fingerprint
+from .protocols import TaskAnalyzer
 
-
-class TaskAnalyzer(Protocol):
-    def analyze(self, target: Any) -> TaskDef: ...
+# Type hint for the Cascade Task wrapper
+# We use Any here to avoid circular imports, but conceptually it is cascade.spec.task.Task
+TaskWrapper = Any
 
 
 class ReflectionAnalyzer(TaskAnalyzer):
@@ -17,7 +18,6 @@ class ReflectionAnalyzer(TaskAnalyzer):
         mode = "blocking"
 
         # Check if it's a cascade.spec.task.Task wrapper
-        # We perform a loose check to avoid importing cascade.spec.task.Task directly
         if hasattr(target, "func") and hasattr(target, "mode"):
             func = target.func
             mode = getattr(target, "mode", "blocking")
@@ -44,8 +44,6 @@ class ReflectionAnalyzer(TaskAnalyzer):
 
         # 3. Compute Fingerprint
         # We compute a structural hash based on the definition's content.
-        # According to Axiom: [State]_[Source]_[Object]_hash
-        # Use 'current' state here because this is a snapshot freshly computed from source.
         current_code_structure_hash = self._compute_structure_hash(
             name, args, return_annotation, docstring, is_async, mode
         )
@@ -66,11 +64,7 @@ class ReflectionAnalyzer(TaskAnalyzer):
     def _analyze_arguments(self, sig: inspect.Signature) -> List[ArgumentDef]:
         args = []
         for param in sig.parameters.values():
-            try:
-                kind = ArgumentKind[param.kind.name]
-            except KeyError:
-                # Fallback or unknown kind
-                kind = ArgumentKind.POSITIONAL_OR_KEYWORD
+            kind = ArgumentKind[param.kind.name]
 
             annotation = None
             if param.annotation is not inspect.Parameter.empty:
@@ -79,6 +73,8 @@ class ReflectionAnalyzer(TaskAnalyzer):
             default_repr = None
             if param.default is not inspect.Parameter.empty:
                 # We use repr() to get a stable string representation of the default value
+                # This corresponds to 'default_value_repr' in IR.
+                # Note: This is an approximation. Complex objects might have unstable reprs.
                 try:
                     default_repr = repr(param.default)
                 except Exception:
@@ -109,6 +105,10 @@ class ReflectionAnalyzer(TaskAnalyzer):
         if return_annotation:
             components.append(f"Return:{return_annotation}")
 
+        # Include Docstring in hash?
+        # Yes, for 'code_structure', doc changes imply structure changes in strict mode,
+        # but arguably docs shouldn't affect execution identity.
+        # For now, we include it to detect ANY definition change, as docstrings might act as prompts.
         if docstring:
             components.append(f"Doc:{docstring}")
 

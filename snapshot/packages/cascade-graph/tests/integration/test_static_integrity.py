@@ -1,7 +1,7 @@
 import pytest
 import cascade as cs
 from cascade.graph import StaticGraphError
-from cascade.runtime import Engine, MessageBus
+from cascade.runtime import Engine, EventBus
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 
@@ -20,7 +20,7 @@ async def test_task_returning_lazy_result_is_forbidden_at_runtime():
 
     workflow = task_a_violating()
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
 
     # This test will FAIL initially because the LocalExecutor does not yet
     # raise StaticGraphError. It will pass once the validation is implemented.

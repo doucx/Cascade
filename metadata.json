@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(engine): 将运行时的 MessageBus 重命名为 EventBus", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767501788.404298, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 更新测试文件以使用重构后的 EventBus", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767502065.4885805, "duration_ms": 0}}

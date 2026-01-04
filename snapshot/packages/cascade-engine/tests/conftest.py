@@ -1,10 +1,10 @@
 import pytest
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.testing import SpySubscriber
 
 
 @pytest.fixture
 def bus_and_spy():
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     return bus, spy

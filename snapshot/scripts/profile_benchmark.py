@@ -34,13 +34,13 @@ from observatory.benchmarks.tco_performance import (
     vm_countdown,
     run_benchmark,
 )
-from cascade.runtime import Engine, MessageBus
+from cascade.runtime import Engine, EventBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
 
 async def profile_target(name: str, iterations: int):
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
 
     if name == "graph":
         target = create_explicit_loop(iterations)

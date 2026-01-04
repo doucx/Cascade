@@ -1,135 +1,94 @@
-分析得非常到位。你说得对，我的上一个计划不够彻底，遗漏了对 `cascade-graph` 包以及 `cascade-reflection` 中 `BlueprintHasher` 的修改，导致了大量测试失败。这是一个疏忽，感谢你指出了具体的问题所在。
+你说得对，我的疏忽导致了这些集成测试的失败。`Builder` 的返回值已经变更为 `Assembly` 对象，但我没有将这个变更完全同步到 `cascade-vm` 包中的测试用例。这些测试仍然错误地假设 `builder.build()` 直接返回 `BipartiteGraph`。
 
-现在，我将生成一个精确的修复计划，完成这次重命名重构，以使测试套件恢复到健康状态。
+我将立即生成一个计划来修复这两个测试。
 
-## [WIP] fix: 完成 code_structure_hash 在所有包中的重命名
+## [WIP] fix: 适配 cascade-vm 集成测试以处理 Assembly 返回值
 
 ### 用户需求
 
-修复因 `current_code_structure_hash` 到 `canonical_code_structure_hash` 的不完整重命名而导致的 94 个测试失败。
+修复 `cascade-vm` 包中的 `test_concurrency_limit` 和 `test_source_node_is_triggered_by_pulse` 测试，解决因 `Builder` 返回 `Assembly` 对象而导致的 `AttributeError`。
 
 ### 错误分析
 
-上一个计划只修改了 `cascade-compiler` 和 `cascade-reflection` 中的 `HashingService`，但忽略了以下几个关键点：
-1.  `cascade-reflection` 中的 `BlueprintHasher` 类仍然在使用旧的 `current_code_structure_hash` 键。
-2.  旧的 `cascade-graph` 包中的序列化逻辑 `serialize.py` 硬编码了旧的键名。
-3.  相关的文档注释 (`hashing.stitcher.yaml`) 也未同步更新，造成了概念上的不一致。
-
-这些遗漏导致了系统内部存在两种不兼容的哈希约定，从而引发了大规模的测试失败。
+在之前的重构中，`Builder.build` 方法的返回类型从 `BipartiteGraph` 更改为了 `Assembly`。然而，位于 `packages/cascade-vm/tests/integration/` 的测试用例没有相应更新。它们接收了 `Assembly` 对象，却仍然试图直接访问 `.nodes` 属性，而该属性现在位于 `Assembly.graph` 内部，导致了 `AttributeError`。
 
 ### 评论
 
-这是一个典型的重构不彻底导致的问题。完成这次修复至关重要，它将统一整个代码库的哈希命名约定，严格遵守“哈希强制长命名规范”公理，为后续的链接器（Linker）开发扫清障碍。
+这是一个典型的因重构影响范围评估不全而导致的问题。修复这些高层级的集成测试至关重要，因为它们是验证编译器 (`cascade-compiler`) 和虚拟机 (`cascade-vm`) 之间核心契约的最后防线。完成此修复将使我们的 Phase 2 成果更加稳固。
 
 ### 目标
 
-1.  在 `packages/cascade-reflection/src/cascade/reflection/hashing.py` 中，将 `BlueprintHasher` 对哈希键的引用更新为 `canonical_code_structure_hash`。
-2.  在 `packages/cascade-graph/src/cascade/graph/serialize.py` 中，将反序列化时硬编码的占位符哈希键更新为 `canonical_code_structure_hash`。
-3.  在 `packages/cascade-graph/src/cascade/graph/hashing.stitcher.yaml` 中，更新注释文档以反映正确的哈希键名。
+1.  修改 `packages/cascade-vm/tests/integration/test_resource_backpressure.py`，正确地从 `Assembly` 对象中解包出 `BipartiteGraph`。
+2.  修改 `packages/cascade-vm/tests/integration/test_source_node_execution.py`，执行同样的操作。
 
 ### 基本原理
 
-为了让系统恢复稳定并通过所有测试，我们必须消除所有对 `current_code_structure_hash` 的引用，确保 `canonical_code_structure_hash` 是系统中代表代码结构身份的唯一标识符。此计划将通过精确的补丁操作，清除所有已知的残留引用。
+解决方案很简单：在调用 `builder.build()` 后，将返回的 `Assembly` 对象赋值给一个新变量（如 `assembly`），然后从中提取 `.graph` 属性，再将其传递给后续需要 `BipartiteGraph` 对象的代码。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/critical #comp/graph #comp/reflection #scope/core #ai/instruct #task/domain/compiler #task/object/linker-protocol #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #comp/vm #scope/core #ai/instruct #task/domain/compiler #task/object/linker-protocol #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `cascade-reflection` 中的 `BlueprintHasher`
+#### Acts 1: 修复 `test_resource_backpressure.py`
 
-`BlueprintHasher` 是一个独立的哈希器，它也需要使用新的规范名称。
-
-~~~~~act
-patch_file
-packages/cascade-reflection/src/cascade/reflection/hashing.py
-~~~~~
-~~~~~python.old
-    def _get_node_components(self, node: Node, graph: Graph) -> List[str]:
-        # Updated to use node.definition
-        components = [f"Node({node.definition.name}, type={node.node_type})"]
-        components.append(
-            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
-        )
-
-        if node.retry_policy:
-            rp = node.retry_policy
-~~~~~
-~~~~~python.new
-    def _get_node_components(self, node: Node, graph: Graph) -> List[str]:
-        # Updated to use node.definition
-        components = [f"Node({node.definition.name}, type={node.node_type})"]
-        components.append(
-            f"CodeHash({node.definition.fingerprint['canonical_code_structure_hash']})"
-        )
-
-        if node.retry_policy:
-            rp = node.retry_policy
-~~~~~
-
-#### Acts 2: 修复 `cascade-graph` 的序列化逻辑
-
-更新反序列化时的占位符，以匹配新的哈希键名。
+我们需要解包 `Assembly` 以获取图。
 
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/serialize.py
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
 ~~~~~
 ~~~~~python.old
-    # We use a dummy fingerprint for deserialized nodes if not present
-    fp = Fingerprint()
-    # If we serialized the code hash, we should restore it, but for now we put a placeholder
-    fp["current_code_structure_hash"] = "restored_from_json"
+    # 2. Define Environment and Build Physical Graph
+    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
+    builder = Builder()
+    physical_graph = builder.build(graph_ir, environment=env)
 
-    stub_def = TaskDef(
-        name=data["name"],
+    # 3. Setup VM
+    memory = VolatileMemory()
 ~~~~~
 ~~~~~python.new
-    # We use a dummy fingerprint for deserialized nodes if not present
-    fp = Fingerprint()
-    # If we serialized the code hash, we should restore it, but for now we put a placeholder
-    fp["canonical_code_structure_hash"] = "restored_from_json"
+    # 2. Define Environment and Build Physical Graph
+    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
+    builder = Builder()
+    assembly = builder.build(graph_ir, environment=env)
+    physical_graph = assembly.graph
 
-    stub_def = TaskDef(
-        name=data["name"],
+    # 3. Setup VM
+    memory = VolatileMemory()
 ~~~~~
 
-#### Acts 3: 更新 `cascade-graph` 的文档注释
+#### Acts 2: 修复 `test_source_node_execution.py`
 
-保持文档与代码同步是至关重要的。
+同样，在这里解包 `Assembly`。
 
 ~~~~~act
 patch_file
-packages/cascade-graph/src/cascade/graph/hashing.stitcher.yaml
+packages/cascade-vm/tests/integration/test_source_node_execution.py
 ~~~~~
 ~~~~~python.old
-"HashingService.compute_node_instance_hash": |-
-  Computes the unique structural ID for a Node instance.
+    flow = source_task()
+    graph_ir = ir_generator.generate(flow)
+    node_ir = graph_ir.nodes[0]
+    physical_graph = builder.build(graph_ir, EnvironmentDef())
 
-  Formula:
-    Hash(
-       Definition.Fingerprint['current_code_structure_hash']
-       | Instance.Policies
-       | Instance.Bindings (merged args/kwargs)
-       | Instance.PuritySalt (if impure)
-    )
+    # 2. Build the function map
+    func_map = {}
 ~~~~~
 ~~~~~python.new
-"HashingService.compute_node_instance_hash": |-
-  Computes the unique structural ID for a Node instance.
+    flow = source_task()
+    graph_ir = ir_generator.generate(flow)
+    node_ir = graph_ir.nodes[0]
+    assembly = builder.build(graph_ir, EnvironmentDef())
+    physical_graph = assembly.graph
 
-  Formula:
-    Hash(
-       Definition.Fingerprint['canonical_code_structure_hash']
-       | Instance.Policies
-       | Instance.Bindings (merged args/kwargs)
-       | Instance.PuritySalt (if impure)
-    )
+    # 2. Build the function map
+    func_map = {}
 ~~~~~
 
 ### 下一步建议
 
-我们已经定位并修复了所有已知的 `current_code_structure_hash` 残留。现在请执行此计划，然后我们应该立即重新运行测试套件。如果所有测试都通过，我们就可以安全地继续推进路线图的 **Phase 3: 运行时层** 的实现。
+这次的修复应该已经覆盖了所有已知的问题。请执行此计划，然后重新运行测试套件。如果一切顺利，我们就可以正式进入 **Phase 3**，开始实现 `CodeRegistry` 和 `Linker` 了。

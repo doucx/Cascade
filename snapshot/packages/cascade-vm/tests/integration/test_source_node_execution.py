@@ -54,7 +54,8 @@ async def test_source_node_is_triggered_by_pulse():
     flow = source_task()
     graph_ir = ir_generator.generate(flow)
     node_ir = graph_ir.nodes[0]
-    physical_graph = builder.build(graph_ir, EnvironmentDef())
+    assembly = builder.build(graph_ir, EnvironmentDef())
+    physical_graph = assembly.graph
 
     # 2. Build the function map
     func_map = {}

@@ -7,7 +7,7 @@ from dataclasses import asdict
 from cascade.adapters.executors.local import LocalExecutor
 
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.runtime.events import Event
 from cascade.spec.protocols import (
     Solver,
@@ -36,7 +36,7 @@ def override_resource(
 
 
 class SpySubscriber:
-    def __init__(self, bus: MessageBus):
+    def __init__(self, bus: EventBus):
         self.events = []
         bus.subscribe(Event, self.collect)
 

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor: 全面清理总线命名术语并更新 SDK 导出", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767504045.3571, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor: 全面对齐总线术语并导出 FeedbackBus", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767504099.9939587, "duration_ms": 0}}

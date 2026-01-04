@@ -71,6 +71,7 @@ asyncio_mode = "auto"
 dev = [
   "pytest",
   "pytest-cov",
+  "pytest-timeout",
   "pytest-aiohttp",
   "pytest-mock",
   "pytest-asyncio",

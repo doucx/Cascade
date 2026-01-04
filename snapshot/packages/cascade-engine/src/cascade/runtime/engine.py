@@ -26,7 +26,7 @@ from cascade.runtime.constraints.handlers import (
 from cascade.adapters.state import InMemoryStateBackend
 from cascade.runtime.processor import NodeProcessor
 from cascade.runtime.resource_container import ResourceContainer
-from cascade.runtime.strategies import GraphExecutionStrategy
+from cascade.runtime.strategies import GraphExecutionStrategy, VMExecutionStrategy
 from cascade.runtime.strategies.base import ExecutionContext
 
 
@@ -89,6 +89,7 @@ class Engine:
             bus=self.bus,
             wakeup_event=self._wakeup_event,
         )
+        self.vm_strategy = VMExecutionStrategy(bus=self.bus)
 
         self._managed_subscribers = []
 
@@ -176,7 +177,7 @@ class Engine:
             )
 
             # 3. Select Strategy
-            strategy = self.graph_strategy
+            strategy = self.vm_strategy if use_vm else self.graph_strategy
 
             # 4. Execute
             # The global stack holds "run" scoped resources

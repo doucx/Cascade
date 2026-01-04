@@ -122,8 +122,8 @@ class GraphBuilder:
 
             if result.task.func is _get_param_value.func:
                 # This is a temporary solution for the build process to access context.
-            # In the long term, context might need to be passed explicitly.
-            from cascade.common.context import get_current_context
+                # In the long term, context might need to be passed explicitly.
+                from cascade.common.context import get_current_context
 
                 param_name = input_bindings.get("0") or input_bindings.get("name")
                 param_spec = None

@@ -9,7 +9,7 @@ from cascade.spec.physics import Token
 from cascade.spec.ports import PortRole
 from cascade.vm.harness import EventDrivenRunner, ObservedEvent
 from cascade.compiler.utils.inspector import GraphInspector
-from cascade.compiler.utils.naming import PhysicalIdGenerator
+from cascade.reflection import PhysicalIdGenerator
 
 # Standard IC imports
 from cascade.std.triad.bleacher import standard_bleacher

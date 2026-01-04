@@ -79,12 +79,19 @@ class Reactor:
             self.sinks[node_id][port_name] = []
         self.sinks[node_id][port_name].append(callback)
 
-    def prime(self) -> None:
+    def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:
+        genesis_trace = genesis_trace or {}
         for node in self.graph.nodes.values():
             if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
                 for _ in range(node.initial_tokens):
                     # Initial tokens use the node's defined payload (for constants) or None.
-                    self.memory.put(node, Token(payload=node.initial_payload))
+                    # We inject the genesis trace (e.g. run_id) into these primordial tokens.
+                    self.memory.put(
+                        node,
+                        Token(
+                            payload=node.initial_payload, trace=genesis_trace.copy()
+                        ),
+                    )
 
     async def step(self) -> int:
         nodes_to_fire: List[PhysicsFuncNode] = []

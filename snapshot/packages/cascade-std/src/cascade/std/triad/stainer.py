@@ -42,11 +42,15 @@ async def standard_stainer(
         state = EventState.FAILED
         error_msg = str(result_payload)
 
+    ctx = {}
+    if "rid" in trace_payload:
+        ctx["rid"] = trace_payload["rid"]
+
     ir: EventIR = {
         "v": "1.0",
         "t": EventType.LIFECYCLE,
         "ts": now_wall,
-        "ctx": {},
+        "ctx": ctx,
         "phy": {"nid": node.id},
         "data": {
             "state": state,

@@ -41,12 +41,15 @@ async def standard_bleacher(
         trace_payload["held_resources"] = held_resources
 
     # 3. Construct EventIR (The Hologram)
-    # Note: 'ctx' will be populated in Phase 4.
+    ctx = {}
+    if "rid" in trace_payload:
+        ctx["rid"] = trace_payload["rid"]
+
     ir: EventIR = {
         "v": "1.0",
         "t": EventType.LIFECYCLE,
         "ts": start_ts,
-        "ctx": {},
+        "ctx": ctx,
         "phy": {"nid": node.id},
         "data": {
             "state": EventState.RUNNING,

@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import uuid
 from typing import Dict, Any, Callable, TypeVar, Optional, List
 
 from cascade.spec.topology import BipartiteGraph
@@ -41,6 +42,9 @@ class EventDrivenRunner:
         # Register the bus so standard_observer can find it
         self.resource_registry.register("system.event_bus", self.event_bus)
 
+        # 1.1 Genesis Identity
+        self.run_id = str(uuid.uuid4())
+
         # Bridge Bus -> Queue for testing
         self.event_bus.subscribe(Event, self._on_event)
 
@@ -64,7 +68,8 @@ class EventDrivenRunner:
         self.event_queue.put_nowait(event)
 
     def prime(self):
-        self.reactor.prime()
+        # Genesis Injection: Inject the run_id into the initial static tokens
+        self.reactor.prime(genesis_trace={"rid": self.run_id})
 
     async def start_loop(self):
         if self._loop_task:
@@ -96,11 +101,19 @@ class EventDrivenRunner:
                 pass
             self._loop_task = None
 
-    def inject_input(self, node_id: str, payload: Any):
+    def inject_input(
+        self, node_id: str, payload: Any, trace: Optional[Dict[str, Any]] = None
+    ):
         node = self.graph.nodes[node_id]
         if not isinstance(node, PhysicsDataNode):
             raise ValueError(f"Node {node_id} is not a DataNode")
-        self.memory.put(node, Token(payload=payload))
+
+        # Merge user trace with genesis trace (run_id)
+        final_trace = {"rid": self.run_id}
+        if trace:
+            final_trace.update(trace)
+
+        self.memory.put(node, Token(payload=payload, trace=final_trace))
 
     async def wait_for_event(
         self,

@@ -152,10 +152,20 @@ class VMExecutionStrategy:
         # 6. Execution Loop
         # -----------------
         try:
-            while not result_future.done():
+            while True:
                 fired = await reactor.step()
-                if fired == 0 and not result_future.done():
-                    # If we stall but haven't got a result, check for errors or deadlocks
+
+                # Exit condition:
+                # 1. We have the result (Business Goal Met)
+                # 2. No tasks are running (Quiescence)
+                # 3. No new tasks fired (Stability)
+                # This ensures side-effects like Observability (which run in parallel/sequence)
+                # have a chance to complete.
+                if result_future.done() and reactor.active_task_count == 0 and fired == 0:
+                    break
+
+                if fired == 0:
+                    # If we stall (or are draining), yield to loop to let active tasks finish
                     await asyncio.sleep(0.001)
         except Exception as e:
             # If reactor crashes, we fail the run

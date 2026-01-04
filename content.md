@@ -1,109 +1,78 @@
 简要回答
-你遇到的错误有两个根本原因：
-1.  **VM 遥测缺失 `run_id`**: `VMExecutionStrategy` 在启动 Reactor 时，没有将 `run_id` 作为“创世微量 (Genesis Trace)”注入到初始令牌中。导致物理层生成的事件缺失了上下文信息。
-2.  **Mock 属性缺失**: 在 `cascade-std` 的单元测试中，`standard_bleacher` 和 `standard_stainer` 试图访问 `node.name` 来推断任务名，但测试用的 Mock 对象没有设置该属性，导致 `AttributeError`。
+测试失败揭示了 VM 执行策略中的一个**“过早退出 (Premature Exit)”**缺陷。当主任务的 `Stainer` 产生结果并触发 `result_future` 完成时，`VMExecutionStrategy` 立即终止了执行循环。然而，此时 `Stainer` 刚刚将观测令牌放入 `D_life`，负责发送遥测事件的旁路节点 `F_obs` 尚未被调度执行。导致 `TaskExecutionFinished` 事件丢失。
 
-我将修复这两个问题。
+我将修改 `VMExecutionStrategy` 的执行循环，使其采用 **"Run Until Idle" (运行至热寂)** 模式：即使结果已产生，也要继续运行 Reactor，直到系统没有任何活动任务且不再产生新的激发，确保所有旁路逻辑（如遥测）执行完毕。
 
-## [WIP] fix(vm): 修复 VM 策略中的 run_id 注入缺失及 Std 库测试的 Mock 属性问题
+## [WIP] fix(vm): 实现 Run-Until-Idle 机制以确保遥测事件完整性
 
 ### 用户需求
-1.  修复 `test_vm_telemetry.py` 中 `run_id` 为 None 的断言失败。
-2.  修复 `cascade-std` 单元测试中因 Mock 对象缺失 `name` 属性导致的 `AttributeError`。
+修复 `test_vm_telemetry.py` 失败。确保在 VM 模式下运行工作流时，所有相关的生命周期事件（特别是 `TaskExecutionFinished`）都能被完整发出。
 
 ### 评论
-这是一个典型的“集成细节”与“测试保真度”问题。
-*   在运行时层面，我们确立了“创世注入”模式，即 `run_id` 必须在 Reactor 启动瞬间注入，而不是作为全局变量。之前的代码遗漏了这一步。
-*   在测试层面，Mock 对象必须如实反映它所模拟的真实对象的契约。`PhysicsNode` 有 `name` 属性，代码依赖它，因此 Mock 必须提供它。
+这是一个经典的异步系统竞态条件。主业务流（返回结果）和旁路业务流（发送遥测）在物理层是并行的。如果主控逻辑在收到结果后立即“拉闸”，旁路逻辑就会被切断。
+修复方案是实施“优雅停机”：收到结果是“准备停机”的信号，但真正的停机必须等待物理场能量耗尽（Idle）。
 
 ### 目标
-1.  修改 `VMExecutionStrategy.execute`，在调用 `reactor.prime()` 时传入包含 `rid` 的 `genesis_trace`。
-2.  修改 `test_bleacher.py` 和 `test_stainer.py` 中的 Mock 创建辅助函数，显式设置 `node.name`。
+修改 `VMExecutionStrategy.execute` 方法中的主循环，将退出条件从 `result_future.done()` 改为 `result_future.done() AND reactor.is_idle()`。
 
 ### 基本原理
-1.  **创世注入**: `Reactor.prime(genesis_trace=...)` 是将环境上下文（如 `run_id`）物理化为 Token Trace 的唯一合法入口。这确保了所有从源头产生的 Token 都携带了正确的上下文。
-2.  **Mock 完整性**: `standard_bleacher` 使用启发式逻辑（检查 `node.name`）来提取逻辑任务名。测试必须满足这一前置条件才能验证核心逻辑。
+在全对称物理场中，Observer 也是一个普通的节点 (`F_obs`)，它受物理定律约束。它需要一个 `Reactor.step()` 周期来从输入槽中摄取 Token 并执行。必须给予 Reactor 足够的周期来处理这些“遗留”的物理反应。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #concept/observability #concept/state
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/observability #scope/core #task/domain/runtime #task/object/vm-strategy #task/action/drain
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 VM 策略中的创世注入
+#### Acts 1: 修改 VM 执行策略的主循环
 
-我们将更新 `VMExecutionStrategy`，使其将 `ExecutionContext` 中的 `run_id` 注入到 Reactor 中。
+我们将重构 `packages/cascade-engine/src/cascade/runtime/strategies/vm.py` 中的执行循环。
 
 ~~~~~act
 patch_file
 packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 ~~~~~
 ~~~~~python.old
-        # Prime the reactor (fill constants, pulses)
-        reactor.prime()
+        # 6. Execution Loop
+        # -----------------
+        try:
+            while not result_future.done():
+                fired = await reactor.step()
+                if fired == 0 and not result_future.done():
+                    # If we stall but haven't got a result, check for errors or deadlocks
+                    await asyncio.sleep(0.001)
+        except Exception as e:
+            # If reactor crashes, we fail the run
+            raise e
 
-        # Result Future
+        return result_future.result()
 ~~~~~
 ~~~~~python.new
-        # Prime the reactor (fill constants, pulses)
-        # Genesis Injection: Inject the run_id into the initial static tokens
-        reactor.prime(genesis_trace={"rid": context.run_id})
+        # 6. Execution Loop
+        # -----------------
+        try:
+            while True:
+                fired = await reactor.step()
 
-        # Result Future
-~~~~~
+                # Exit condition:
+                # 1. We have the result (Business Goal Met)
+                # 2. No tasks are running (Quiescence)
+                # 3. No new tasks fired (Stability)
+                # This ensures side-effects like Observability (which run in parallel/sequence)
+                # have a chance to complete.
+                if result_future.done() and reactor.active_task_count == 0 and fired == 0:
+                    break
 
-#### Acts 2: 修复 cascade-std 单元测试中的 Mock 设置
+                if fired == 0:
+                    # If we stall (or are draining), yield to loop to let active tasks finish
+                    await asyncio.sleep(0.001)
+        except Exception as e:
+            # If reactor crashes, we fail the run
+            raise e
 
-我们将更新测试辅助函数，为 Mock 节点设置 `name` 属性，使其能够通过被测代码中的 `startswith` 检查。
-
-~~~~~act
-patch_file
-packages/cascade-std/tests/unit/triad/test_bleacher.py
-~~~~~
-~~~~~python.old
-def create_mock_bleach_node(input_ports_config):
-    node = MagicMock(spec=BleachNode)
-    node.id = "test_node.bleach"  # Required for ID extraction logic
-    node.input_ports = {
-        name: PortDef(name, role) for name, role in input_ports_config.items()
-    }
-    return node
-~~~~~
-~~~~~python.new
-def create_mock_bleach_node(input_ports_config):
-    node = MagicMock(spec=BleachNode)
-    node.id = "test_node.bleach"  # Required for ID extraction logic
-    node.name = "Bleach(test_node)"  # Fix: Set name for heuristic check
-    node.input_ports = {
-        name: PortDef(name, role) for name, role in input_ports_config.items()
-    }
-    return node
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-std/tests/unit/triad/test_stainer.py
-~~~~~
-~~~~~python.old
-def create_mock_stain_node(output_ports_config):
-    node = MagicMock(spec=StainNode)
-    node.id = "mock.stain.node"  # Add the missing ID attribute
-    node.output_ports = {
-        name: PortDef(name, role) for name, role in output_ports_config.items()
-    }
-    return node
-~~~~~
-~~~~~python.new
-def create_mock_stain_node(output_ports_config):
-    node = MagicMock(spec=StainNode)
-    node.id = "mock.stain.node"  # Add the missing ID attribute
-    node.name = "Stain(mock_task)"  # Fix: Set name for heuristic check
-    node.output_ports = {
-        name: PortDef(name, role) for name, role in output_ports_config.items()
-    }
-    return node
+        return result_future.result()
 ~~~~~
 
 ### 下一步建议
-修复后，建议重新运行 `test_vm_telemetry.py` 和 `cascade-std` 的单元测试以确认通过。如果一切顺利，我们就可以确信 VM 运行时的基本可观测性链路已经打通，并且标准库组件逻辑正确。接下来可以关注更高级的特性或性能优化。
+再次运行 `test_vm_telemetry.py`。既然“创世注入”和“优雅停机”都已修复，测试应该能够通过，不仅能断言 `run_id` 存在，也能断言所有任务的事件都已发出。

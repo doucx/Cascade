@@ -14,8 +14,7 @@ from cascade.spec.routing import Router
 from cascade.spec.jump import JumpSelector
 
 from .registry import NodeRegistry
-from .hashing import HashingService
-from .analysis.reflection import ReflectionAnalyzer
+from cascade.reflection import HashingService, ReflectionAnalyzer
 
 
 class GraphBuilder:

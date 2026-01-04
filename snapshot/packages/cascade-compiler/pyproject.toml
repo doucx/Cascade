@@ -11,6 +11,7 @@ dependencies = [
   "cascade-spec",
   "cascade-common",
   "cascade-graph",
+  "cascade-reflection",
 ]
 
 [tool.hatch.build.targets.wheel]

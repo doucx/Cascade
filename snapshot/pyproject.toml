@@ -20,12 +20,15 @@ dependencies = [
 ]
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = [
+    "packages/*",
+]
 
 [tool.uv.sources]
 cascade-spec = { workspace = true }
 cascade-engine = { workspace = true }
 cascade-sdk = { workspace = true }
+cascade-reflection = { workspace = true }
 cascade-graph = { workspace = true }
 cascade-library = { workspace = true }
 cascade-application = { workspace = true }
@@ -54,6 +57,7 @@ packages = [
     "packages/cascade-compiler",
     "packages/cascade-std",
     "packages/cascade-vm-rs",
+    "packages/cascade-reflection",
 ]
 
 [tool.hatch.build.targets.wheel]

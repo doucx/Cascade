@@ -34,7 +34,7 @@ def test_generate_simple_task():
     node_ir = graph_ir.nodes[0]
     assert node_ir.name == "add"
     assert node_ir.task.name == "add"
-    assert "current_code_structure_hash" in node_ir.task.fingerprint
+    assert "canonical_code_structure_hash" in node_ir.task.fingerprint
 
     # Verify that positional arguments are correctly mapped to string keys
     assert node_ir.inputs == {"0": 1, "1": 2}

@@ -31,7 +31,8 @@ def test_builder_creates_resources_from_env(simple_graph_ir):
 
     # 2. Build
     builder = Builder()
-    graph = builder.build(simple_graph_ir, environment=env)
+    assembly = builder.build(simple_graph_ir, environment=env)
+    graph = assembly.graph
 
     # 3. Assert Broker/Ledger creation
     # Used resource

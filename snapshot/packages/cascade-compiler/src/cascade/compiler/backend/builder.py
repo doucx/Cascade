@@ -3,6 +3,7 @@ from typing import List
 from cascade.spec.ir.models import GraphIR
 from cascade.spec.topology import BipartiteGraph
 from cascade.spec.environment import EnvironmentDef
+from cascade.spec.assembly import Assembly
 from .expander import Expander
 from .validator import GraphValidator
 from .wiring import WiringHarness
@@ -27,7 +28,7 @@ class Builder:
             PulseWiringPolicy(),
         ]
 
-    def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> BipartiteGraph:
+    def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> Assembly:
         # 1. Initialize Context
         physical_graph = BipartiteGraph()
         wire = WiringHarness(physical_graph)
@@ -37,6 +38,7 @@ class Builder:
             physical_graph=physical_graph,
             wire=wire,
         )
+        symbol_table = {}
 
         # 2. Phase 0: Setup Global Infrastructure
         for policy in self._policies:
@@ -48,6 +50,14 @@ class Builder:
             subgraph = self._expander.expand_node(node_ir)
             ctx.register_subgraph(node_ir.current_node_instance_hash, subgraph)
 
+            # 3.1.b Populate Symbol Table
+            # Map the physical worker ID to the canonical code structure hash
+            if subgraph.worker:
+                canonical_hash = node_ir.task.fingerprint[
+                    "canonical_code_structure_hash"
+                ]
+                symbol_table[subgraph.worker.id] = canonical_hash
+
             # 3.2 Apply wiring policies
             for policy in self._policies:
                 policy.apply(ctx, node_ir, subgraph)
@@ -55,4 +65,8 @@ class Builder:
         # 4. Final Validation
         self._validator.validate(physical_graph, graph_ir)
 
-        return physical_graph
+        return Assembly(
+            graph=physical_graph,
+            symbol_table=symbol_table,
+            metadata={"compiler": "cascade-compiler-v0.1.0"},
+        )

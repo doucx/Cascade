@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 在 cascade-spec 中定义 Assembly 和 SymbolTable", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767507881.9360366, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat: 升级 Builder 以产出 Assembly 并统一规范哈希命名", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767508095.755798, "duration_ms": 0}}

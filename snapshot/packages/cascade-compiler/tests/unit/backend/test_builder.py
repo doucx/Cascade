@@ -41,7 +41,16 @@ def source_only_graph_ir():
 
 def test_builder_expands_and_wires_nodes(sample_graph_ir):
     builder = Builder()
-    graph = builder.build(sample_graph_ir, environment=EnvironmentDef())
+    assembly = builder.build(sample_graph_ir, environment=EnvironmentDef())
+    graph = assembly.graph
+    symbol_table = assembly.symbol_table
+
+    # Assert Symbol Table
+    # worker nodes should be in symbol table
+    assert "node_a.worker" in symbol_table
+    assert symbol_table["node_a.worker"] == "abc"
+    assert "node_b.worker" in symbol_table
+    assert symbol_table["node_b.worker"] == "abc"
 
     # Assert nodes: 2 triads (6*2=12) + 1 D_life + 1 F_obs + 1 D_dep + 1 D_pulse = 16 nodes
     assert len(graph.nodes) == 16
@@ -94,7 +103,8 @@ def test_builder_expands_and_wires_nodes(sample_graph_ir):
 
 def test_builder_creates_pulse_for_source_node(source_only_graph_ir):
     builder = Builder()
-    graph = builder.build(source_only_graph_ir, environment=EnvironmentDef())
+    assembly = builder.build(source_only_graph_ir, environment=EnvironmentDef())
+    graph = assembly.graph
 
     # 1. Assert Pulse node creation
     pulse_id = PhysicalIdGenerator.pulse_source("source_node")

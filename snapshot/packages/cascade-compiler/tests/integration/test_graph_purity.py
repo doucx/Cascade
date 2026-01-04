@@ -27,7 +27,8 @@ def test_graph_is_serializable_and_pure():
     environment = EnvironmentDef(resources=[])
 
     graph_ir = generator.generate(workflow)
-    physical_graph = builder.build(graph_ir, environment)
+    assembly = builder.build(graph_ir, environment)
+    physical_graph = assembly.graph
 
     # 3. The Purity Test: Attempt to serialize the graph
     try:

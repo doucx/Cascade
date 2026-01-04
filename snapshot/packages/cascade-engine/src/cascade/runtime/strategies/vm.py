@@ -45,7 +45,8 @@ class VMExecutionStrategy:
         graph_ir = compiler.generate(target)
         
         builder = Builder()
-        physical_graph = builder.build(graph_ir, env_def)
+        assembly = builder.build(graph_ir, env_def)
+        physical_graph = assembly.graph
 
         # 2. Runtime Setup
         # ----------------

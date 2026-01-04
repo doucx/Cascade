@@ -44,12 +44,12 @@ class ReflectionAnalyzer(TaskAnalyzer):
 
         # 3. Compute Fingerprint
         # We compute a structural hash based on the definition's content.
-        current_code_structure_hash = self._compute_structure_hash(
+        canonical_code_structure_hash = self._compute_structure_hash(
             name, args, return_annotation, docstring, is_async, mode
         )
 
         fingerprint = Fingerprint()
-        fingerprint["current_code_structure_hash"] = current_code_structure_hash
+        fingerprint["canonical_code_structure_hash"] = canonical_code_structure_hash
 
         return TaskDef(
             name=name,

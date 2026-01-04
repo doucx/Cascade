@@ -1,78 +1,54 @@
-简要回答
-测试失败揭示了 VM 执行策略中的一个**“过早退出 (Premature Exit)”**缺陷。当主任务的 `Stainer` 产生结果并触发 `result_future` 完成时，`VMExecutionStrategy` 立即终止了执行循环。然而，此时 `Stainer` 刚刚将观测令牌放入 `D_life`，负责发送遥测事件的旁路节点 `F_obs` 尚未被调度执行。导致 `TaskExecutionFinished` 事件丢失。
+太好了。既然测试已经全面通过，这标志着我们成功打通了 Cascade 3.0 VM 模式下的“全息观测链路”。
 
-我将修改 `VMExecutionStrategy` 的执行循环，使其采用 **"Run Until Idle" (运行至热寂)** 模式：即使结果已产生，也要继续运行 Reactor，直到系统没有任何活动任务且不再产生新的激发，确保所有旁路逻辑（如遥测）执行完毕。
+我们不仅解决了 `run_id` 的溯源问题，还通过“热寂退出”机制解决了物理层并联任务的竞态问题。
 
-## [WIP] fix(vm): 实现 Run-Until-Idle 机制以确保遥测事件完整性
+## [COMMIT] fix(vm): 确保遥测事件完整性并修复测试桩属性
 
 ### 用户需求
-修复 `test_vm_telemetry.py` 失败。确保在 VM 模式下运行工作流时，所有相关的生命周期事件（特别是 `TaskExecutionFinished`）都能被完整发出。
+将针对 VM 遥测丢失事件、缺失 `run_id` 上下文以及 `cascade-std` 单元测试崩溃的修复方案永久化。
 
 ### 评论
-这是一个经典的异步系统竞态条件。主业务流（返回结果）和旁路业务流（发送遥测）在物理层是并行的。如果主控逻辑在收到结果后立即“拉闸”，旁路逻辑就会被切断。
-修复方案是实施“优雅停机”：收到结果是“准备停机”的信号，但真正的停机必须等待物理场能量耗尽（Idle）。
+这次修复确立了 VM 执行策略的一个核心设计模式：**由业务结果驱动完成，由物理热寂驱动退出。** 这保证了所有的侧链任务（如日志和监控）在主流程结束时都能得到妥善处理。
 
 ### 目标
-修改 `VMExecutionStrategy.execute` 方法中的主循环，将退出条件从 `result_future.done()` 改为 `result_future.done() AND reactor.is_idle()`。
+提交针对 `VMExecutionStrategy` 和 `cascade-std` 测试套件的修改。
 
 ### 基本原理
-在全对称物理场中，Observer 也是一个普通的节点 (`F_obs`)，它受物理定律约束。它需要一个 `Reactor.step()` 周期来从输入槽中摄取 Token 并执行。必须给予 Reactor 足够的周期来处理这些“遗留”的物理反应。
+按照 TDD 流程，在 RED 状态（捕获错误）到 GREEN 状态（修复并验证）切换后，执行代码入库。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/runtime #concept/observability #scope/core #task/domain/runtime #task/object/vm-strategy #task/action/drain
+#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #concept/observability #task/domain/runtime #task/object/vm-strategy #task/action/bug-fix #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 VM 执行策略的主循环
+#### Acts 1: 提交变更
 
-我们将重构 `packages/cascade-engine/src/cascade/runtime/strategies/vm.py` 中的执行循环。
+我们将修改后的代码和测试文件添加到暂存区，并创建一个详细的提交。
 
 ~~~~~act
-patch_file
+git_add
 packages/cascade-engine/src/cascade/runtime/strategies/vm.py
+packages/cascade-std/tests/unit/triad/test_bleacher.py
+packages/cascade-std/tests/unit/triad/test_stainer.py
 ~~~~~
-~~~~~python.old
-        # 6. Execution Loop
-        # -----------------
-        try:
-            while not result_future.done():
-                fired = await reactor.step()
-                if fired == 0 and not result_future.done():
-                    # If we stall but haven't got a result, check for errors or deadlocks
-                    await asyncio.sleep(0.001)
-        except Exception as e:
-            # If reactor crashes, we fail the run
-            raise e
 
-        return result_future.result()
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-        # 6. Execution Loop
-        # -----------------
-        try:
-            while True:
-                fired = await reactor.step()
+~~~~~text
+fix(vm): ensure telemetry completeness and fix mock testing attributes
 
-                # Exit condition:
-                # 1. We have the result (Business Goal Met)
-                # 2. No tasks are running (Quiescence)
-                # 3. No new tasks fired (Stability)
-                # This ensures side-effects like Observability (which run in parallel/sequence)
-                # have a chance to complete.
-                if result_future.done() and reactor.active_task_count == 0 and fired == 0:
-                    break
+1. VM Execution Strategy Improvements:
+   - Implemented Genesis Injection: Pass the `run_id` into initial tokens via `reactor.prime()`. This ensures all subsequent physics tokens carry the logical context for observability.
+   - Refactored Execution Loop: Changed the termination condition to "Run Until Idle". The VM now waits for the reactor to reach a state of zero active tasks and zero new firings after the result future is done. This ensures that observability side-effects (Observer node) have time to drain.
 
-                if fired == 0:
-                    # If we stall (or are draining), yield to loop to let active tasks finish
-                    await asyncio.sleep(0.001)
-        except Exception as e:
-            # If reactor crashes, we fail the run
-            raise e
-
-        return result_future.result()
+2. Test Suite Fixes:
+   - Updated `create_mock_bleach_node` and `create_mock_stain_node` in `cascade-std` to explicitly set the `name` attribute. This fixes the AttributeErrors encountered during heuristic task name extraction.
 ~~~~~
 
 ### 下一步建议
-再次运行 `test_vm_telemetry.py`。既然“创世注入”和“优雅停机”都已修复，测试应该能够通过，不仅能断言 `run_id` 存在，也能断言所有任务的事件都已发出。
+我们现在拥有了一个可观测且稳健的物理执行层。下一步，我建议：
+- **性能基准测试**: 运行 `scripts/benchmark_vm_tco.py`，看看增加这些“优雅停机”逻辑后，对物理层的 Step Latency 有何影响。
+- **资源限制验证**: 既然 `run_id` 已注入，我们可以开始测试在 VM 模式下，复杂的资源背压（Back-pressure）和并发限制是否如预期般工作。

@@ -1,217 +1,79 @@
-好的，我来分析并修复这些测试失败。
+好的，底层的全息投影协议基础设施已经搭建完毕，我们可以将其作为一个完整的逻辑单元提交。
 
-[简要回答]
-这些测试失败是由于 Phase 3 中对事件模型的重构引入的。`standard_stainer` 函数现在需要访问 `node.id`，导致 Mock 测试失败；同时，部分集成测试的断言逻辑仍然依赖于已被移除的 `ObservedEvent` 结构或不正确的字符串比较。我将修复这些问题。
+这标志着 Cascade 3.0 正式告别了非结构化的 trace 数据，转向了标准化的、工业级的遥测协议。
 
-## [WIP] fix(tests): 修复 Stainer mock 并适配 VM 测试到新事件模型
+## [COMMIT] feat(obs): Implement EventIR protocol and Holographic Telemetry infrastructure
 
-### 错误分析
-1.  **`AttributeError: Mock object has no attribute 'id'`**:
-    -   **原因**: `standard_stainer` 函数被修改以从 `node` 对象中读取 `id` 属性来构建 `EventIR`。`test_stainer.py` 中的单元测试使用的是一个没有配置 `id` 属性的 `MagicMock`，导致了属性错误。
-    -   **解决方案**: 更新测试辅助函数 `create_mock_stain_node`，为 mock 对象添加一个 `id` 属性。
-2.  **`AssertionError` in `test_source_node_execution`**:
-    -   **原因**: `stainer` 生成的 `result_preview` 是对结果的 `str()` 调用，对于字符串 `"Pulse Fired!"`，其结果就是自身。测试用例错误地断言其 `startswith("'Pulse Fired!'")`，包含了多余的单引号。
-    -   **解决方案**: 将断言修正为 `assert completion_event.result_preview == "Pulse Fired!"`。
-3.  **`EventTimeoutError` in `test_event_driven_ping_pong`**:
-    -   **原因**: 这个测试用例被重构遗漏了。它仍在尝试断言旧的 `ObservedEvent` 结构（`e.trace_data`），并且其 mock 逻辑向 `obs_output` 端口发送了错误的 payload 格式（`trace` 而不是 `EventIR`）。这导致 `standard_observer` 无法处理，没有事件被发布到总线，最终导致 `wait_for_event` 超时。
-    -   **解决方案**: 将此测试完全重构，使其 mock 逻辑产生一个符合规范的 `EventIR` 作为 payload，并将断言谓词更新为检查新的富 `Event` 对象（如 `TaskExecutionFinished`）。
+### 用户需求
+完成 [Cascade 3.0 实施路线图] 的前三个阶段：
+1.  **立法**: 定义 `EventIR` 核心 Schema。
+2.  **翻译**: 实现逻辑层对 IR 的水合 (Hydration) 能力。
+3.  **发射**: 改造物理原语使其能够产生和中转 IR。
+
+### 评论
+这个提交确立了物理层（VM）与逻辑层（Engine）之间的解耦契约。通过 `EventIR`，我们实现了“全息投影”愿景的第一步：让物理世界的事件以标准的、扁平的格式流向逻辑世界。这不仅解决了之前的测试失败问题，还为未来的分布式可观测性铺平了道路。
+
+### 目标
+1.  提交 `cascade-spec` 中关于 `EventIR`, `EventType`, `EventState` 的定义。
+2.  提交 `cascade-engine` 中 `Event.from_ir` 的水合逻辑及其总线增强。
+3.  提交 `cascade-std` 中 `Bleacher`, `Stainer`, `Observer` 的发射源改造。
+4.  提交 `cascade-vm` 中 `EventDrivenRunner` 对新事件流架构的适配。
+
+### 基本原理
+我们通过在 `spec` 层定义数据契约，在 `engine` 层定义适配器，在 `std` 层应用契约，建立了一套完整的数据流链路。特别是 `EventDrivenRunner` 的改造，证明了这套架构不仅能满足生产环境，还能完美兼容并增强现有的 TDD 测试套件。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #comp/std #comp/vm #scope/dx #ai/instruct #task/domain/testing #task/object/test-suite #task/action/bug-fix #task/state/continue
+#intent/build #flow/ready #priority/high #comp/spec #comp/engine #comp/std #comp/vm #concept/observability #scope/core #ai/instruct #task/domain/observability #task/object/holographic-telemetry #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `test_stainer.py`
+#### Acts 1: 提交全息投影协议基础设施
 
-为 `StainNode` 的 mock 添加 `id` 属性。
-
-~~~~~act
-patch_file
-packages/cascade-std/tests/unit/triad/test_stainer.py
-~~~~~
-~~~~~python.old
-def create_mock_stain_node(output_ports_config):
-    node = MagicMock(spec=StainNode)
-    node.output_ports = {
-        name: PortDef(name, role) for name, role in output_ports_config.items()
-    }
-    return node
-
-
-async def test_stainer_success_case():
-~~~~~
-~~~~~python.new
-def create_mock_stain_node(output_ports_config):
-    node = MagicMock(spec=StainNode)
-    node.id = "mock.stain.node"  # Add the missing ID attribute
-    node.output_ports = {
-        name: PortDef(name, role) for name, role in output_ports_config.items()
-    }
-    return node
-
-
-async def test_stainer_success_case():
-~~~~~
-
-#### Acts 2: 修复 `test_source_node_execution.py`
-
-修正 `result_preview` 的断言。
+我们将所有相关的修改添加到暂存区并创建一个详尽的提交。
 
 ~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_source_node_execution.py
-~~~~~
-~~~~~python.old
-        assert isinstance(completion_event, TaskExecutionFinished)
-        assert completion_event.status == "Succeeded"
-        assert completion_event.task_id == node_ir.current_node_instance_hash
-        assert completion_event.result_preview.startswith("'Pulse Fired!'")
-
-    finally:
-        await runner.stop_loop()
-~~~~~
-~~~~~python.new
-        assert isinstance(completion_event, TaskExecutionFinished)
-        assert completion_event.status == "Succeeded"
-        assert completion_event.task_id == node_ir.current_node_instance_hash
-        assert completion_event.result_preview == "Pulse Fired!"
-
-    finally:
-        await runner.stop_loop()
-~~~~~
-
-#### Acts 3: 修复 `test_reactor.py`
-
-重构 `test_event_driven_ping_pong` 以使用新的事件模型。
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/unit/test_reactor.py
-~~~~~
-~~~~~python.old
-import pytest
-import sys
-from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.ports import PortDef, PortRole
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-from cascade.vm.executor import PhysicsExecutor
-from cascade.vm.harness import EventDrivenRunner
-from cascade.spec.triad import ObservabilityNode
-from cascade.std.triad.observer import standard_observer
-~~~~~
-~~~~~python.new
-import pytest
-import sys
-import time
-from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.ports import PortDef, PortRole
-from cascade.spec.topology import BipartiteGraph, Channel
-from cascade.spec import EventIR, EventType, EventState
-from cascade.runtime.events import Event, TaskExecutionFinished
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-from cascade.vm.executor import PhysicsExecutor
-from cascade.vm.harness import EventDrivenRunner
-from cascade.spec.triad import ObservabilityNode
-from cascade.std.triad.observer import standard_observer
+git_add
+packages/cascade-spec/src/cascade/spec/observability.py
+packages/cascade-spec/src/cascade/spec/__init__.py
+packages/cascade-spec/tests/unit/test_observability.py
+packages/cascade-engine/src/cascade/runtime/events.py
+packages/cascade-engine/src/cascade/runtime/event_bus.py
+packages/cascade-engine/tests/unit/test_event_translation.py
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-std/src/cascade/std/triad/observer.py
+packages/cascade-vm/src/cascade/vm/harness.py
 ~~~~~
 
 ~~~~~act
-patch_file
-packages/cascade-vm/tests/unit/test_reactor.py
+git_commit
 ~~~~~
-~~~~~python.old
-    # Function Map
-    def obs_enabled_logic(inputs, node, resources):
-        val = inputs["value"].payload
-        # Emit Result AND Observation
-        return {
-            "result": Token(payload=val + 1),
-            "obs_output": Token(payload=None, trace={"id": "F1", "status": "done"}),
-        }
+~~~~~text
+feat(obs): implement EventIR protocol and holographic telemetry
 
-    func_map = {
-        "F1": obs_enabled_logic,
-        "global.observability.observer": standard_observer,
-    }
+This commit establishes the "Holographic Projection" protocol for Cascade 3.0,
+decoupling the physical VM from the logical Engine through a standardized
+Intermediate Representation (EventIR).
 
-    # 2. Use Runner, injecting the backend factory
-    runner = EventDrivenRunner(graph, func_map, reactor_factory=reactor_backend_factory)
-    runner.inject_input("D1", 10)
+Key architectural changes:
+1.  **Specification (cascade-spec)**: Introduced `EventIR` (JSON-serializable 
+    telemetry schema), `EventType`, and `EventState` as the system's 
+    observability axioms.
+2.  **Hydration (cascade-engine)**: Implemented `Event.from_ir` and 
+    `EventBus.publish_ir` to translate raw physical signals into rich, 
+    semantically aware Event objects.
+3.  **Physical Emitters (cascade-std)**: Refactored `Bleacher` and `Stainer` 
+    to emit structured IR packets. The `Observer` is now a "Dumb Relay" that 
+    blindly forwards IR payloads to the global event bus.
+4.  **Harness Update (cascade-vm)**: Upgraded `EventDrivenRunner` to use 
+    the system `EventBus` as its primary observability source, ensuring 
+    testing infrastructure eats its own dogfood.
 
-    # 3. Start & Wait
-    await runner.start_loop()
-
-    try:
-        # We wait for the specific event proving F1 finished
-        event = await runner.wait_for_event(
-            lambda e: e.trace_data.get("id") == "F1"
-            and e.trace_data.get("status") == "done"
-        )
-        assert event is not None
-
-        # Verify physical side effect (Memory)
-        assert runner.memory.get_count("D2") == 1
-        assert runner.memory.take("D2").payload == 11
-
-    finally:
-        await runner.stop_loop()
-~~~~~
-~~~~~python.new
-    # Function Map
-    def obs_enabled_logic(inputs, node, resources):
-        val = inputs["value"].payload
-        
-        # This mock logic now simulates what a Stainer does: create an EventIR
-        ir: EventIR = {
-            "v": "1.0",
-            "t": EventType.LIFECYCLE,
-            "ts": time.time(),
-            "ctx": {},
-            "phy": {"nid": node.id},
-            "data": {
-                "state": EventState.SUCCEEDED,
-                "task_id": node.id, # In test, physical ID is fine
-                "task_name": node.name
-            }
-        }
-        
-        return {
-            "result": Token(payload=val + 1),
-            "obs_output": Token(payload=ir),
-        }
-
-    func_map = {
-        "F1": obs_enabled_logic,
-        "global.observability.observer": standard_observer,
-    }
-
-    # 2. Use Runner, injecting the backend factory
-    runner = EventDrivenRunner(graph, func_map, reactor_factory=reactor_backend_factory)
-    runner.inject_input("D1", 10)
-
-    # 3. Start & Wait
-    await runner.start_loop()
-
-    try:
-        # We wait for the specific event proving F1 finished
-        def predicate(e: Event):
-            return isinstance(e, TaskExecutionFinished) and e.task_id == "F1"
-            
-        event = await runner.wait_for_event(predicate)
-        assert event is not None
-
-        # Verify physical side effect (Memory)
-        assert runner.memory.get_count("D2") == 1
-        assert runner.memory.take("D2").payload == 11
-
-    finally:
-        await runner.stop_loop()
+This infrastructure roots observability in the physical Locality Principle, 
+where events carry their own context as tokens flow through the graph.
 ~~~~~
 
 ### 下一步建议
-测试套件已修复。我们已准备好继续进行 **Phase 4: 上下文注入**，这将使我们能够将 `run_id` 等关键信息填充到 `EventIR` 中。
+我们已经锁定了基础设施。下一步我们将启动 **Phase 4: 上下文注入 (The Context Injection)**，按照我们之前的战略分析，通过“创世注入”和“迹流传播”机制，让 `run_id` 自动在物理场中流动，从而填充 `EventIR.ctx` 字段。

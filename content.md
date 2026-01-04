@@ -1,70 +1,148 @@
-简要回答：
-你说得完全正确，我提到了 `CASCADE_TEST_BACKEND` 标志但没有实现它，这是一个疏漏。我将添加这个逻辑，使其能够通过环境变量来选择执行策略。为了通用性，我将使用 `CASCADE_BACKEND` 作为环境变量名。
+好的，我们开始实施 "Cascade 3.0 Assembly 与 链接系统" 路线图。
 
-## [WIP] feat(engine): 添加环境变量以选择执行策略
+第一阶段是协议层，目标是在 `cascade-spec` 包中定义核心数据结构。这是一个关键的基础步骤，它将确立编译器和运行时之间的核心契约。
+
+我将生成一个计划来创建 `Assembly` 模型并将其导出。
+
+## [WIP] feat: 在 cascade-spec 中定义 Assembly 和 SymbolTable
 
 ### 用户需求
-用户指出，我遗漏了通过环境变量（如 `CASCADE_BACKEND=vm`）来选择 `VMExecutionStrategy` 的逻辑，并要求我将其补全。
+
+根据 "The Linker Protocol" 路线图，实施第一阶段：在 `cascade-spec` 包中定义 `Assembly` 数据类及其相关的 `SymbolTable` 类型。
 
 ### 评论
-这是一个非常重要的补充。通过环境变量控制后端，可以极大地简化 CI/CD 和本地测试流程，允许我们在不修改任何调用代码的情况下，对整个测试套件进行后端切换，这对于评估 v3.0 的差距至关重要。
+
+这是路线图中至关重要的一步。通过在 `cascade-spec` 中明确定义 `Assembly` 作为一个纯粹、可序列化的数据结构，我们为编译器（生产者）和运行时（消费者）之间建立了一个清晰、稳定的契约。这彻底解决了当前架构中“身份丢失”和“运行时污染编译产物”的核心问题，是实现分布式执行和持久化调度的基石。
 
 ### 目标
-1.  在 `cascade-engine` 的 `Engine.run` 方法中，添加读取 `CASCADE_BACKEND` 环境变量的逻辑。
-2.  确保显式传递的 `use_vm` 参数优先级高于环境变量。
-3.  更新代码以根据组合逻辑选择正确的执行策略 (`GraphExecutionStrategy` 或 `VMExecutionStrategy`)。
+
+1.  创建新文件 `packages/cascade-spec/src/cascade/spec/assembly.py`。
+2.  在该文件中定义 `SymbolTable` 类型别名和 `Assembly` 数据类。
+3.  更新 `packages/cascade-spec/src/cascade/spec/__init__.py`，导出新定义的 `Assembly` 和 `SymbolTable`，使其成为包的公共 API 的一部分。
 
 ### 基本原理
-在策略选择阶段，我们将检查 `use_vm` 参数。如果它为 `True`，则直接使用 VM 策略。如果为 `False`（默认值），则进一步检查 `os.getenv("CASCADE_BACKEND") == "vm"`。这种 `or` 逻辑提供了一个灵活的覆盖机制，既支持代码驱动的显式选择，也支持环境驱动的全局切换。
+
+我们遵循“协议先行”的原则。首先在系统的核心规范包 (`cascade-spec`) 中定义数据结构，确保所有后续的实现（编译器、链接器、虚拟机）都有一个共同的、稳定的目标可以遵循。这避免了因实现细节泄漏而导致的耦合，并保证了新架构的概念完整性。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/config #scope/dx #ai/instruct #task/domain/runtime #task/object/vm-strategy #task/action/continue
+
+#intent/architect #flow/ready #priority/high #comp/interfaces #scope/api #ai/instruct #task/domain/compiler #task/object/linker-protocol #task/action/implementation #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 在 Engine 中实现策略选择逻辑
+#### Acts 1: 定义 Assembly 数据模型
 
-我们将修改 `engine.py` 文件，导入 `os` 模块并更新 `run` 方法中的策略选择部分。
+我们首先创建 `assembly.py` 文件，并定义 `SymbolTable` 和 `Assembly`。`Assembly` 将被定义为一个“冷”数据结构，只包含可序列化的数据，为后续的链接和分布式执行奠定基础。
+
+~~~~~act
+write_file
+packages/cascade-spec/src/cascade/spec/assembly.py
+~~~~~
+~~~~~python
+from dataclasses import dataclass, field
+from typing import Dict, Any
+
+from .topology import BipartiteGraph
+
+# The SymbolTable defines the mapping between a physical node's ID
+# in the graph and the canonical hash of its executable code structure.
+SymbolTable = Dict[str, str]
+
+
+@dataclass(frozen=True)
+class Assembly:
+    """
+    The final, serializable output of the compilation process.
+    It contains the full physical topology of the graph and the symbol table
+    needed to link it to executable code at runtime.
+    """
+
+    # The physical topology, defining nodes (What) and channels (How).
+    graph: BipartiteGraph
+
+    # The symbol table, mapping physical node IDs to canonical code structure hashes.
+    # Key: Physical Node ID (e.g., "hash123.worker")
+    # Value: Canonical Code Structure Hash (e.g., "sha256:abc...")
+    symbol_table: SymbolTable = field(default_factory=dict)
+
+    # Metadata about the assembly, such as compiler version, build time, etc.
+    metadata: Dict[str, Any] = field(default_factory=dict)
+~~~~~
+
+#### Acts 2: 导出新的协议定义
+
+现在，我们将新创建的 `Assembly` 和 `SymbolTable` 从 `cascade.spec` 包中导出，使它们可供其他包（如 `cascade-compiler` 和 `cascade-vm`）使用。
 
 ~~~~~act
 patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
+packages/cascade-spec/src/cascade/spec/__init__.py
 ~~~~~
 ~~~~~python.old
-import sys
-import time
-import asyncio
-from typing import Any, Dict, Optional, Callable
+from .fingerprint import Fingerprint, InvalidFingerprintKeyError
+from .physics import Token, PhysicsNode, PhysicsDataNode, PhysicsFuncNode
+from .triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
+from .topology import Channel, BipartiteGraph
+from .resources import ResourceSlot
+from .environment import EnvironmentDef, ResourceDef
+from .ports import PortRole, PortDef
+
+__all__ = [
+    "Fingerprint",
+    "InvalidFingerprintKeyError",
+    "Token",
+    "PhysicsNode",
+    "PhysicsDataNode",
+    "PhysicsFuncNode",
+    "BleachNode",
+    "WorkerNode",
+    "StainNode",
+    "ObservabilityNode",
+    "Channel",
+    "BipartiteGraph",
+    "ResourceSlot",
+    "EnvironmentDef",
+    "ResourceDef",
+    "PortRole",
+    "PortDef",
+]
 ~~~~~
 ~~~~~python.new
-import os
-import sys
-import time
-import asyncio
-from typing import Any, Dict, Optional, Callable
-~~~~~
+from .fingerprint import Fingerprint, InvalidFingerprintKeyError
+from .physics import Token, PhysicsNode, PhysicsDataNode, PhysicsFuncNode
+from .triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
+from .topology import Channel, BipartiteGraph
+from .resources import ResourceSlot
+from .environment import EnvironmentDef, ResourceDef
+from .ports import PortRole, PortDef
+from .assembly import Assembly, SymbolTable
 
-~~~~~act
-patch_file
-packages/cascade-engine/src/cascade/runtime/engine.py
-~~~~~
-~~~~~python.old
-            # 3. Select Strategy
-            strategy = self.vm_strategy if use_vm else self.graph_strategy
-
-            # 4. Execute
-~~~~~
-~~~~~python.new
-            # 3. Select Strategy
-            # The explicit `use_vm` flag takes precedence.
-            # Otherwise, fall back to the environment variable for testing/experimental runs.
-            should_use_vm = use_vm or os.getenv("CASCADE_BACKEND") == "vm"
-            strategy = self.vm_strategy if should_use_vm else self.graph_strategy
-
-            # 4. Execute
+__all__ = [
+    "Fingerprint",
+    "InvalidFingerprintKeyError",
+    "Token",
+    "PhysicsNode",
+    "PhysicsDataNode",
+    "PhysicsFuncNode",
+    "BleachNode",
+    "WorkerNode",
+    "StainNode",
+    "ObservabilityNode",
+    "Channel",
+    "BipartiteGraph",
+    "ResourceSlot",
+    "EnvironmentDef",
+    "ResourceDef",
+    "PortRole",
+    "PortDef",
+    "Assembly",
+    "SymbolTable",
+]
 ~~~~~
 
 ### 下一步建议
-逻辑已经添加完毕。现在你可以设置环境变量 `export CASCADE_BACKEND=vm` 并运行现有的 `pytest` 测试套件，这将自动通过 `VMExecutionStrategy` 路径执行，从而开始暴露 v3.0 原型与 v2.0 产品之间的真实差距。
+
+我们已经成功定义了 `Assembly` 协议。根据路线图，下一步是 **Phase 2: 编译器层**。我们将改造 `Builder`，使其不再直接返回 `BipartiteGraph`，而是产出符合新协议的 `Assembly` 对象，并正确填充其中的 `symbol_table`。
+
+准备好后，我们就可以开始实施第二阶段了。

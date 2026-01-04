@@ -32,6 +32,11 @@ async def standard_stainer(
     # 3. Construct EventIR
     logical_id = node.id.replace(".stain", "")
 
+    # Heuristic: Extract task_name from physical name "Stain(MyTask)"
+    task_name = "unknown"
+    if node.name.startswith("Stain(") and node.name.endswith(")"):
+        task_name = node.name[6:-1]
+
     # Determine Status (Simplified for now, assuming success if reached here)
     # Error handling logic will be refined in future phases
     state = EventState.SUCCEEDED
@@ -55,6 +60,7 @@ async def standard_stainer(
         "data": {
             "state": state,
             "task_id": logical_id,
+            "task_name": task_name,
             "duration_ms": duration * 1000,
             "error": error_msg,
             "result_preview": str(result_payload)[:100]

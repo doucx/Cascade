@@ -164,7 +164,9 @@ class Reactor:
                 if port_name in node_sinks:
                     for cb in node_sinks[port_name]:
                         try:
-                            await cb(token)
+                            res = cb(token)
+                            if inspect.isawaitable(res):
+                                await res
                         except Exception as e:
                             logger.exception(
                                 f"Sink callback failed for {node.id}:{port_name}: {e}"

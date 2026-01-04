@@ -35,6 +35,11 @@ async def standard_bleacher(
 
     logical_id = node.id.replace(".bleach", "")
 
+    # Heuristic: Extract task_name from physical name "Bleach(MyTask)"
+    task_name = "unknown"
+    if node.name.startswith("Bleach(") and node.name.endswith(")"):
+        task_name = node.name[7:-1]
+
     trace_payload["start_ts"] = mono_ts
     trace_payload["id"] = logical_id
     if held_resources:
@@ -54,7 +59,7 @@ async def standard_bleacher(
         "data": {
             "state": EventState.RUNNING,
             "task_id": logical_id,
-            # We don't have task_name easily here yet, will address in Phase 4
+            "task_name": task_name,
         },
     }
 

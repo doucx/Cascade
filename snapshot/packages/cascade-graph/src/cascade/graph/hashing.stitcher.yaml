@@ -20,7 +20,7 @@
 
   Formula:
     Hash(
-       Definition.Fingerprint['current_code_structure_hash']
+       Definition.Fingerprint['canonical_code_structure_hash']
        | Instance.Policies
        | Instance.Bindings (merged args/kwargs)
        | Instance.PuritySalt (if impure)

@@ -125,7 +125,7 @@ class BlueprintHasher:
         # Updated to use node.definition
         components = [f"Node({node.definition.name}, type={node.node_type})"]
         components.append(
-            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
+            f"CodeHash({node.definition.fingerprint['canonical_code_structure_hash']})"
         )
 
         if node.retry_policy:

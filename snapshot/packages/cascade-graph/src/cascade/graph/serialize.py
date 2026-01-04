@@ -237,7 +237,7 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
     # We use a dummy fingerprint for deserialized nodes if not present
     fp = Fingerprint()
     # If we serialized the code hash, we should restore it, but for now we put a placeholder
-    fp["current_code_structure_hash"] = "restored_from_json"
+    fp["canonical_code_structure_hash"] = "restored_from_json"
 
     stub_def = TaskDef(
         name=data["name"],

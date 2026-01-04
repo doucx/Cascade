@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import asyncio
@@ -177,7 +178,10 @@ class Engine:
             )
 
             # 3. Select Strategy
-            strategy = self.vm_strategy if use_vm else self.graph_strategy
+            # The explicit `use_vm` flag takes precedence.
+            # Otherwise, fall back to the environment variable for testing/experimental runs.
+            should_use_vm = use_vm or os.getenv("CASCADE_BACKEND") == "vm"
+            strategy = self.vm_strategy if should_use_vm else self.graph_strategy
 
             # 4. Execute
             # The global stack holds "run" scoped resources

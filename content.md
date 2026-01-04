@@ -1,102 +1,98 @@
-好的，感谢提供 `ExecutionContext` 的定义。我之前的计划中对它的实例化是错误的，忽略了必需的 `run_id`, `state_backend`, 和 `run_stack` 参数。
+太棒了！所有测试通过意味着我们已经成功完成了 Cascade 3.0 架构演进中最关键的一环：**链接协议 (The Linker Protocol)**。
 
-我将立即生成一个修复计划来纠正这个 `TypeError`。
+我们现在正式确立了“编译器生产 Assembly，运行时链接并执行”的工业级模型。我将生成一个 `[COMMIT]` 计划，将这一里程碑式的改进永久记录在仓库中。
 
-## [WIP] fix: 纠正 VM E2E 测试中 ExecutionContext 的实例化
+## [COMMIT] feat: 实现 Cascade 3.0 Assembly 与链接协议 (The Linker Protocol)
 
 ### 用户需求
-
-修复 `test_vm_strategy.py` 中因 `ExecutionContext` 初始化参数不匹配而导致的 `TypeError`。
-
-### 错误分析
-
-`cascade.runtime.strategies.base.ExecutionContext` 的构造函数需要 `run_id`, `state_backend`, 和 `run_stack` 三个必需的位置参数。我生成的 E2E 测试代码在创建 `ExecutionContext` 实例时，仅提供了可选的 `active_resources` 参数，导致了 `TypeError`。
+按照实施路线图，完成从“单体编译执行”到“编译-链接-执行”分层架构的转型。
 
 ### 评论
-
-这是一个简单的疏忽，但它凸显了编写高层级集成测试时准确模拟运行环境的重要性。通过提供必要的 mock 对象来满足 `ExecutionContext` 的契约，我们可以使测试更真实地反映 `VMExecutionStrategy` 的实际运行条件。
+这是 Cascade 3.0 走向成熟的重要里程碑。通过引入 `Assembly` 和 `Linker`，我们彻底解决了分布式环境下代码身份识别的难题，移除了 `VMExecutionStrategy` 中脆弱的 Hack，并为未来的持久化调度和远程执行节点奠定了协议基础。同时，通过统一“哈希强制长命名规范”，我们大幅提升了系统底层的可读性与健壮性。
 
 ### 目标
-
-1.  修改 `packages/cascade-engine/tests/integration/test_vm_strategy.py`。
-2.  在测试 `test_vm_strategy_e2e_execution` 中，使用 `MagicMock` 和 `ExitStack` 来正确地实例化 `ExecutionContext`。
+创建一个完整的 Git 提交，包含以下核心变更：
+1.  **协议定义**: 在 `cascade-spec` 中引入 `Assembly` 和 `SymbolTable`。
+2.  **编译器升级**: `Builder` 现在产出 `Assembly`，并自动填充符号表映射。
+3.  **哈希规范化**: 全局统一使用 `canonical_code_structure_hash`。
+4.  **运行时重构**: 实现 `CodeRegistry` 和 `Linker`，重写 `VMExecutionStrategy`。
+5.  **质量保证**: 包含 Assembly 纯粹性测试和 VM 策略的端到端集成测试。
 
 ### 基本原理
-
-为了解决 `TypeError`，我们必须为 `ExecutionContext` 提供所有必需的参数。在测试环境中，我们不需要一个功能齐全的 `state_backend` 或 `run_stack`，因此使用 `unittest.mock.MagicMock` 和一个空的 `contextlib.ExitStack` 是最合适的做法。
+我们通过在物理图之外引入一个显式的“符号表 (Symbol Table)”，将静态的拓扑结构与动态的可执行代码解耦。这允许图在不同进程、不同机器甚至不同时间被加载和链接，只要目标环境的 `CodeRegistry` 能够提供符合规范哈希的函数实现。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/high #comp/tests #comp/engine #scope/core #ai/instruct #task/domain/runtime #task/object/linker-protocol #task/action/implementation #task/state/continue
+#intent/build #flow/ready #priority/high #comp/spec #comp/compiler #comp/vm #comp/engine #concept/linker #scope/api #ai/instruct #task/domain/compiler #task/object/linker-protocol #task/action/implementation #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `test_vm_strategy.py` 中的 `ExecutionContext`
+#### Acts 1: 提交链接协议的完整实现
 
-我们将导入 `ExitStack` 并创建一个 `MagicMock` 来满足 `ExecutionContext` 的构造函数要求。
-
-~~~~~act
-patch_file
-packages/cascade-engine/tests/integration/test_vm_strategy.py
-~~~~~
-~~~~~python.old
-import pytest
-from unittest.mock import MagicMock
-
-from cascade.spec.task import task
-from cascade.runtime.strategies.vm import VMExecutionStrategy
-from cascade.runtime.strategies.base import ExecutionContext
-
-
-@task
-def add(a: int, b: int) -> int:
-~~~~~
-~~~~~python.new
-import pytest
-from unittest.mock import MagicMock
-from contextlib import ExitStack
-
-from cascade.spec.task import task
-from cascade.runtime.strategies.vm import VMExecutionStrategy
-from cascade.runtime.strategies.base import ExecutionContext
-
-
-@task
-def add(a: int, b: int) -> int:
-~~~~~
+我们将所有受影响的包、新创建的模块以及修复后的测试用例添加到暂存区。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/assembly.py
+packages/cascade-spec/src/cascade/spec/__init__.py
+packages/cascade-spec/src/cascade/spec/ir/models.py
+packages/cascade-reflection/src/cascade/reflection/analyzer.py
+packages/cascade-reflection/src/cascade/reflection/hashing.py
+packages/cascade-reflection/src/cascade/reflection/naming.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+packages/cascade-compiler/tests/integration/test_assembly_purity.py
+packages/cascade-compiler/tests/unit/backend/test_builder.py
+packages/cascade-compiler/tests/unit/backend/test_builder_environment.py
+packages/cascade-compiler/tests/unit/backend/test_builder_observability.py
+packages/cascade-compiler/tests/unit/backend/test_expander.py
+packages/cascade-compiler/tests/unit/frontend/test_generator.py
+packages/cascade-compiler/tests/integration/test_graph_purity.py
+packages/cascade-compiler/tests/integration/test_resource_contention.py
+packages/cascade-compiler/tests/integration/test_sovereign_wiring.py
+packages/cascade-vm/src/cascade/vm/registry.py
+packages/cascade-vm/src/cascade/vm/linker.py
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
+packages/cascade-vm/tests/integration/test_source_node_execution.py
+packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 packages/cascade-engine/tests/integration/test_vm_strategy.py
+packages/cascade-graph/src/cascade/graph/serialize.py
+packages/cascade-graph/src/cascade/graph/hashing.stitcher.yaml
 ~~~~~
-~~~~~python.old
-    # 2. Setup strategy and context
-    mock_bus = MagicMock()
-    strategy = VMExecutionStrategy(bus=mock_bus)
-    context = ExecutionContext(active_resources={})
 
-    # 3. Execute
-    result = await strategy.execute(target, context)
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-    # 2. Setup strategy and context
-    mock_bus = MagicMock()
-    strategy = VMExecutionStrategy(bus=mock_bus)
-    
-    mock_state_backend = MagicMock()
-    context = ExecutionContext(
-        run_id="test-run-123",
-        state_backend=mock_state_backend,
-        run_stack=ExitStack(),
-        active_resources={},
-    )
+~~~~~text
+feat: Implement Cascade 3.0 Assembly and the Linker Protocol
 
-    # 3. Execute
-    result = await strategy.execute(target, context)
+This commit introduces a standard compilation and linking model, decoupling
+graph topology from runtime executable code.
+
+Key Highlights:
+1. Spec: Added 'Assembly' and 'SymbolTable' models to 'cascade-spec'.
+2. Compiler: Upgraded 'Builder' to produce 'Assembly' objects. Worker nodes are
+   now automatically mapped to their canonical code hashes in the symbol table.
+3. Hashing: Unified all code-structure-related hashes to 'canonical_code_structure_hash'
+   across 'reflection', 'compiler', and 'graph' packages.
+4. Runtime:
+   - Implemented 'CodeRegistry' for managing 'Hash -> Callable' mappings.
+   - Implemented 'Linker' to bind 'Assembly' to 'CodeRegistry' at load time.
+   - Refactored 'VMExecutionStrategy' to use the new protocol, removing legacy hacks.
+5. Verification:
+   - Added 'test_assembly_purity' to ensure compiled assets remain serializable.
+   - Added 'test_vm_strategy_e2e' for full pipeline validation.
+
+This architecture enables true distributed execution and persistent task scheduling
+by providing a stable, verifiable identity for all computational units.
 ~~~~~
 
 ### 下一步建议
 
-这个补丁应该可以解决最后的测试失败。请执行此计划，然后我们再重新运行一次测试套件。如果一切通过，我们就准备好创建 `[COMMIT]` 计划了。
+"The Linker Protocol" 的成功实施为我们打开了多扇大门。接下来的方向建议：
+1.  **分布式执行雏形**: 既然 `Assembly` 是纯粹可序列化的，我们可以尝试编写一个简单的脚本，将编译好的 `Assembly` 通过网络发送给另一个进程中的 `Linker` 执行。
+2.  **JIT 优化器启动**: 现在的物理图是完全保真但冗余的。我们可以开始在 `Linker` 之前或作为其一部分，引入 JIT 优化（如路线图提到的常量折叠和算子融合）。
+3.  **持久化缓存**: 利用 `canonical_code_structure_hash` 实现基于代码内容感知的持久化结果缓存。
+
+再次祝贺完成这一核心重构！

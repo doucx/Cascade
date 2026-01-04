@@ -10,7 +10,8 @@ requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
   "cascade-common",
-  "cascade-graph"
+  "cascade-graph",
+  "cascade-reflection"
 ]
 
 [project.optional-dependencies]

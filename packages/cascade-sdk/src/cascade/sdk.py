@@ -75,7 +75,7 @@ def Param(
     # Lazy import dependencies to keep module load time minimal
     from cascade.spec.input import ParamSpec
     from cascade.common.context import get_current_context
-    from cascade.common.inputs import _get_param_value
+    from cascade.reflection import _get_param_value
 
     spec = ParamSpec(name=name, default=default, type=type, description=description)
     get_current_context().register(spec)
@@ -85,7 +85,7 @@ def Param(
 def Env(name: str, default: Any = None, description: str = "") -> "LazyResult":
     from cascade.spec.input import EnvSpec
     from cascade.common.context import get_current_context
-    from cascade.common.inputs import _get_env_var
+    from cascade.reflection import _get_env_var
 
     spec = EnvSpec(name=name, default=default, description=description)
     get_current_context().register(spec)

@@ -3,7 +3,7 @@ from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef, Argume
 from cascade.spec.fingerprint import Fingerprint
 from cascade.compiler.backend.builder import Builder
 from cascade.spec.environment import EnvironmentDef
-from cascade.compiler.utils.naming import PhysicalIdGenerator
+from cascade.reflection import PhysicalIdGenerator
 from cascade.spec.physics import PhysicsDataNode
 from cascade.spec.ports import PortName
 

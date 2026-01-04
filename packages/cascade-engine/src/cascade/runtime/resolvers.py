@@ -138,7 +138,7 @@ class ArgumentResolver:
 
         # 4. Handle internal param fetching context
         # [CRITICAL] This logic must always run for Param tasks
-        from cascade.common.inputs import _get_param_value
+        from cascade.reflection import _get_param_value
 
         if callable_obj is _get_param_value.func:
             kwargs["params_context"] = user_params or {}

@@ -6,7 +6,7 @@ from cascade.spec.physics import PhysicsNode, PhysicsDataNode
 from cascade.spec.triad import BleachNode, WorkerNode, StainNode
 from cascade.spec.topology import Channel
 from cascade.spec.ports import PortDef, PortRole, PortName
-from cascade.compiler.utils.naming import PhysicalIdGenerator
+from cascade.reflection import PhysicalIdGenerator
 
 
 @dataclass

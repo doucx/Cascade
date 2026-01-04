@@ -701,7 +701,6 @@ name = "cascade-compiler"
 version = "0.1.0"
 source = { editable = "packages/cascade-compiler" }
 dependencies = [
-    { name = "cascade-common" },
     { name = "cascade-graph" },
     { name = "cascade-reflection" },
     { name = "cascade-spec" },
@@ -709,7 +708,6 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cascade-common", editable = "packages/cascade-common" },
     { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
@@ -748,6 +746,7 @@ source = { editable = "packages/cascade-engine" }
 dependencies = [
     { name = "cascade-common" },
     { name = "cascade-graph" },
+    { name = "cascade-reflection" },
     { name = "cascade-spec" },
 ]
 
@@ -765,6 +764,7 @@ redis = [
 requires-dist = [
     { name = "cascade-common", editable = "packages/cascade-common" },
     { name = "cascade-graph", editable = "packages/cascade-graph" },
+    { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
     { name = "python-constraint", marker = "extra == 'csp-solver'" },
     { name = "redis", marker = "extra == 'redis'" },
@@ -776,14 +776,12 @@ name = "cascade-graph"
 version = "0.1.0"
 source = { editable = "packages/cascade-graph" }
 dependencies = [
-    { name = "cascade-common" },
     { name = "cascade-reflection" },
     { name = "cascade-spec" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "cascade-common", editable = "packages/cascade-common" },
     { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]

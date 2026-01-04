@@ -1,0 +1,14 @@
+{
+  "test_event_ir_structure": {
+    "baseline_code_signature_text": "def test_event_ir_structure():",
+    "baseline_code_structure_hash": "554791a44d7537857cd649cd3babb76fba2b1a8b2246210141e73d8ee9f12bcc"
+  },
+  "test_event_state_enums": {
+    "baseline_code_signature_text": "def test_event_state_enums():",
+    "baseline_code_structure_hash": "b61e0d506ebde7317e59ae76f888f05812d627f1749efdf315cb16259d43919d"
+  },
+  "test_event_type_enums": {
+    "baseline_code_signature_text": "def test_event_type_enums():",
+    "baseline_code_structure_hash": "1d2f1aac6f4f31ef60091f23106afcd54ea4f1d1c6fc431608df9f6345f01f0c"
+  }
+}

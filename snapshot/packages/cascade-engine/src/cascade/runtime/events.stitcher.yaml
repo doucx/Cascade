@@ -28,3 +28,6 @@
   Fired when a task fails but is about to be retried.
 "TaskSkipped": |-
   Fired when a task is skipped due to caching or conditional logic.
+"_from_ir": |-
+  Static factory method to hydrate an EventIR into a rich Event object.
+  Bound to Event.from_ir dynamically to handle subclass forward references.

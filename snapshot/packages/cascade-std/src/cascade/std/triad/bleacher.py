@@ -26,15 +26,15 @@ async def standard_bleacher(
             if "resource_amounts" not in trace_payload:
                 trace_payload["resource_amounts"] = {}
             trace_payload["resource_amounts"][port_name] = input_token.payload
-        
+
         trace_payload.update(input_token.trace)
 
     # 2. Capture metadata
-    start_ts = time.time() # Use wall clock for IR
-    mono_ts = time.monotonic() # Use monotonic for internal duration calc
-    
+    start_ts = time.time()  # Use wall clock for IR
+    mono_ts = time.monotonic()  # Use monotonic for internal duration calc
+
     logical_id = node.id.replace(".bleach", "")
-    
+
     trace_payload["start_ts"] = mono_ts
     trace_payload["id"] = logical_id
     if held_resources:
@@ -46,13 +46,13 @@ async def standard_bleacher(
         "v": "1.0",
         "t": EventType.LIFECYCLE,
         "ts": start_ts,
-        "ctx": {}, 
+        "ctx": {},
         "phy": {"nid": node.id},
         "data": {
             "state": EventState.RUNNING,
             "task_id": logical_id,
             # We don't have task_name easily here yet, will address in Phase 4
-        }
+        },
     }
 
     # 4. Create the output tokens

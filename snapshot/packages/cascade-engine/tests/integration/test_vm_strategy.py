@@ -19,16 +19,13 @@ def square(n: int) -> int:
 
 @pytest.mark.asyncio
 async def test_vm_strategy_e2e_execution():
-    """
-    Verifies the full Compile -> Link -> Execute pipeline.
-    """
     # 1. Define workflow
     target = square(add(1, 2))
 
     # 2. Setup strategy and context
     mock_bus = MagicMock()
     strategy = VMExecutionStrategy(bus=mock_bus)
-    
+
     mock_state_backend = MagicMock()
     context = ExecutionContext(
         run_id="test-run-123",

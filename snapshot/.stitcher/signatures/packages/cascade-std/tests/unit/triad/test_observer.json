@@ -3,10 +3,18 @@
     "baseline_code_signature_text": "def event_queue() -> Queue:",
     "baseline_code_structure_hash": "ec323a67bf3b9ecc563fa66bc176c2b9f4484f5cb0d555a8520bafecdb75cf2b"
   },
+  "mock_bus": {
+    "baseline_code_signature_text": "def mock_bus() -> MagicMock:",
+    "baseline_code_structure_hash": "0037e75f5349bdb710e313e7906bf98bdc88b4e4d5b3f573417f9137cab33b65"
+  },
   "mock_resources": {
-    "baseline_code_signature_text": "def mock_resources(event_queue: Queue) -> MagicMock:",
-    "baseline_code_structure_hash": "580c9e08beb9025d59bb747c2d0b01d15fe599656f903b1f07c4ef589180a0a9",
+    "baseline_code_signature_text": "def mock_resources(mock_bus: MagicMock) -> MagicMock:",
+    "baseline_code_structure_hash": "7889110c5ec7317ed9410f326c82bf405eac395c3462101c471331bc450771e3",
     "baseline_yaml_content_hash": "786e6418efe5cf4e34f5ebf2e5fc25964c891d089485289d36c38e5318cac049"
+  },
+  "test_observer_handles_no_bus": {
+    "baseline_code_signature_text": "async def test_observer_handles_no_bus(mock_resources: MagicMock):",
+    "baseline_code_structure_hash": "4ffc344913e97e5765aa7d93c243768f3fceed63ceabfae4a15587f3d767d006"
   },
   "test_observer_processes_end_event": {
     "baseline_code_signature_text": "async def test_observer_processes_end_event(event_queue: Queue, mock_resources: MagicMock):",
@@ -17,6 +25,10 @@
     "baseline_code_signature_text": "async def test_observer_processes_start_event(event_queue: Queue, mock_resources: MagicMock):",
     "baseline_code_structure_hash": "a5dc7d83288a5910b03f636df9c0c06d60821a2d2824a401606e307c2ee83fd5",
     "baseline_yaml_content_hash": "d83e12d61c62752ee888f014df1575bd32261c7ab447b8ad2c8ea406db8a552c"
+  },
+  "test_observer_publishes_ir_to_bus": {
+    "baseline_code_signature_text": "async def test_observer_publishes_ir_to_bus(mock_bus: MagicMock, mock_resources: MagicMock):",
+    "baseline_code_structure_hash": "9a00e139a612dd7884face913d3cce2c58323a0722ee6fb55d83bec7f4e101fa"
   },
   "test_observer_with_empty_trace": {
     "baseline_code_signature_text": "async def test_observer_with_empty_trace(event_queue: Queue, mock_resources: MagicMock):",

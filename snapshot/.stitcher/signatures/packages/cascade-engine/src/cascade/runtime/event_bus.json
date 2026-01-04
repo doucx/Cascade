@@ -13,6 +13,11 @@
     "baseline_code_structure_hash": "8af1449f40bb54d7c3cb3e911e803addabc3e4083a5af32083200df7b936dd74",
     "baseline_yaml_content_hash": "c89a42b644b1dbeee03599e4511710773962d04b0d8b4b88ba893b3df8325c6c"
   },
+  "EventBus.publish_ir": {
+    "baseline_code_signature_text": "def publish_ir(self, ir: EventIR):",
+    "baseline_code_structure_hash": "3d3cd143985be3514e8e017869d4ca1d2cc3ebdc4559c2a3dbe81931f1c9f979",
+    "baseline_yaml_content_hash": "22d573f2fd0fcbef97b4114687b48df113c608cb911869353b992d69eaf83a23"
+  },
   "EventBus.subscribe": {
     "baseline_code_signature_text": "def subscribe(self, event_type: Type[Event], handler: Handler):",
     "baseline_code_structure_hash": "d7409aa8a0504d6bccbdca20aadce93d300ca8aec9ad28b54d98501e21b80772",

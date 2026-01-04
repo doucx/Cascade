@@ -1,0 +1,19 @@
+{
+  "Linker": {
+    "baseline_yaml_content_hash": "28b13a85cf34b4fae975d06bcb37ff992615217c4faf7722e83dd67700970c00"
+  },
+  "Linker._resolve_stdlib": {
+    "baseline_code_signature_text": "def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:",
+    "baseline_code_structure_hash": "772518e4c07a771eb5018a5ece6f1a076a7405ff221cb5de3aac621784b0dab4",
+    "baseline_yaml_content_hash": "c2ee8f7ab2e39ba8655e2786c496b41c730a2258fa63e75f2063caa7a00360fd"
+  },
+  "Linker.link": {
+    "baseline_code_signature_text": "def link(self, assembly: Assembly, registry: CodeRegistry) -> Dict[str, Callable]:",
+    "baseline_code_structure_hash": "c61445a9436de954c6d6636a146930bb84be84b6a6d5132192464d9ba0e7ad9d"
+  },
+  "_make_worker_wrapper": {
+    "baseline_code_signature_text": "def _make_worker_wrapper(func: Callable) -> Callable:",
+    "baseline_code_structure_hash": "5d7bfe760a737037b52e5bef74f8128a4731db70a4ea75d12a3ba4c7e60b3f9d",
+    "baseline_yaml_content_hash": "cecbe597bc934f9e4a9d85b2b1779a2e690e259aa254b2f9e0ca50239b5c06fc"
+  }
+}

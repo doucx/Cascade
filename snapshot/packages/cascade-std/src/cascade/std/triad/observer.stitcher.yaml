@@ -1,5 +1,3 @@
-"ObservedEvent": |-
-  A structured event produced by an Observer node for external consumption.
 "standard_observer": |-
   The standard implementation for an Observability Node (F_obs).
 

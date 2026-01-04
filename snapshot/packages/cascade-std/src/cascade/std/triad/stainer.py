@@ -31,12 +31,12 @@ async def standard_stainer(
 
     # 3. Construct EventIR
     logical_id = node.id.replace(".stain", "")
-    
+
     # Determine Status (Simplified for now, assuming success if reached here)
     # Error handling logic will be refined in future phases
     state = EventState.SUCCEEDED
     error_msg = None
-    
+
     # TODO: Check if result_payload is an Exception wrapper
     if isinstance(result_payload, Exception):
         state = EventState.FAILED
@@ -53,8 +53,10 @@ async def standard_stainer(
             "task_id": logical_id,
             "duration_ms": duration * 1000,
             "error": error_msg,
-            "result_preview": str(result_payload)[:100] if state == EventState.SUCCEEDED else None
-        }
+            "result_preview": str(result_payload)[:100]
+            if state == EventState.SUCCEEDED
+            else None,
+        },
     }
 
     # 4. Create output tokens

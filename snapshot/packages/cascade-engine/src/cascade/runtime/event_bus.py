@@ -29,11 +29,6 @@ class EventBus:
             handler(event)
 
     def publish_ir(self, ir: EventIR):
-        """
-        Hydrates an EventIR into a rich Event object and publishes it.
-        This serves as the translation layer between the raw physical world (IR)
-        and the rich logical world (Events).
-        """
         # Event.from_ir is dynamically bound in events.py
         # noinspection PyUnresolvedReferences
         event = Event.from_ir(ir)  # type: ignore

@@ -176,10 +176,10 @@ async def test_resource_scarcity_topology_and_execution():
     try:
         # Collect all events
         events: List[Event] = []
-        
+
         def collection_predicate(e: Event):
             events.append(e)
-            
+
             if isinstance(e, TaskExecutionStarted):
                 print(f"[OBS-START] {e.task_id}")
             elif isinstance(e, TaskExecutionFinished):
@@ -193,9 +193,17 @@ async def test_resource_scarcity_topology_and_execution():
 
         # Analyze Concurrency from the rich event stream
         intervals: Dict[str, Dict[str, float]] = {}
-        
-        start_events = {e.task_id: e.timestamp for e in events if isinstance(e, TaskExecutionStarted)}
-        end_events = {e.task_id: e.timestamp for e in events if isinstance(e, TaskExecutionFinished)}
+
+        start_events = {
+            e.task_id: e.timestamp
+            for e in events
+            if isinstance(e, TaskExecutionStarted)
+        }
+        end_events = {
+            e.task_id: e.timestamp
+            for e in events
+            if isinstance(e, TaskExecutionFinished)
+        }
 
         for task_id in start_events:
             if task_id in end_events:
@@ -214,7 +222,7 @@ async def test_resource_scarcity_topology_and_execution():
                 if info["start"] <= t + 0.0001 and info["end"] > t:
                     active += 1
             max_concurrency = max(max_concurrency, active)
-        
+
         assert max_concurrency <= RESOURCE_CAPACITY, (
             f"Max concurrency {max_concurrency} exceeded capacity {RESOURCE_CAPACITY}"
         )

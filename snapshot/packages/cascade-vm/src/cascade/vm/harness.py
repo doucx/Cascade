@@ -36,11 +36,11 @@ class EventDrivenRunner:
         self.event_bus = EventBus()
         self.event_queue: asyncio.Queue[Event] = asyncio.Queue()
         self._captured_events: List[Event] = []
-        
+
         self.resource_registry = ResourceRegistry()
         # Register the bus so standard_observer can find it
         self.resource_registry.register("system.event_bus", self.event_bus)
-        
+
         # Bridge Bus -> Queue for testing
         self.event_bus.subscribe(Event, self._on_event)
 
@@ -59,7 +59,7 @@ class EventDrivenRunner:
         )
         self._loop_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
-    
+
     def _on_event(self, event: Event):
         self.event_queue.put_nowait(event)
 
@@ -129,9 +129,7 @@ class EventDrivenRunner:
             except asyncio.TimeoutError:
                 raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
 
-    async def run_until_complete(
-        self, task_id: str, timeout: float = 2.0
-    ) -> Event:
+    async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> Event:
         def is_completion(e: Event):
             # Updated to use the new TaskExecutionFinished event
             if isinstance(e, TaskExecutionFinished):

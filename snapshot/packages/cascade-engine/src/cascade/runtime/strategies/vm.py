@@ -1,6 +1,5 @@
-from typing import Any, Dict, Callable
+from typing import Any, Dict
 import asyncio
-import time
 
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.spec.environment import EnvironmentDef
@@ -18,10 +17,7 @@ from cascade.vm.registry import CodeRegistry
 from cascade.vm.linker import Linker
 
 from cascade.runtime.strategies.base import ExecutionContext
-from cascade.runtime.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-)
+
 
 class VMExecutionStrategy:
     def __init__(self, bus: Any):
@@ -37,10 +33,10 @@ class VMExecutionStrategy:
         # -------------------------------
         # TODO: Handle EnvironmentDef properly based on context.active_resources
         env_def = EnvironmentDef(resources=[])
-        
+
         compiler = IRGenerator()
         graph_ir = compiler.generate(target)
-        
+
         builder = Builder()
         assembly = builder.build(graph_ir, env_def)
         physical_graph = assembly.graph
@@ -58,20 +54,20 @@ class VMExecutionStrategy:
         # 3. Registration: Populate CodeRegistry
         # --------------------------------------
         code_registry = CodeRegistry()
-        
+
         # We need to register all tasks involved in the graph.
         # GraphIR nodes contain the TaskDef, which has the canonical hash.
         # We also need the actual callable.
         # Since GraphIR only has metadata, we need to re-discover the callables from the 'target' structure.
-        
+
         # Collect all LazyResults from the target input
         lazy_results = self._collect_lazy_results(target)
-        
+
         for lr in lazy_results.values():
             # Analyze to get hash (idempotent)
             task_def = self.analyzer.analyze(lr.task)
             canonical_hash = task_def.fingerprint["canonical_code_structure_hash"]
-            
+
             # Register the raw function
             # Note: lr.task is the Task wrapper. We want the underlying function if possible,
             # or the wrapper if it's callable. Analyzer handles this check.
@@ -84,16 +80,16 @@ class VMExecutionStrategy:
         # 4. Linking: Assembly + Registry -> Function Map
         # -----------------------------------------------
         linker = Linker()
-        # We need to bridge the bus for the Observer. 
+        # We need to bridge the bus for the Observer.
         # Ideally, we pass 'context' or 'bus' to the Linker or Reactor?
-        # The standard_observer currently is hardcoded in Linker. 
+        # The standard_observer currently is hardcoded in Linker.
         # We need to inject the bus into the standard_observer logic.
         # Strategy: Use a closure-based Linker or specialized registry?
         # Better: The Reactor execution passes `resources`. We can put the `bus` in `resources`.
-        
+
         # Register the bus as a resource!
         resource_registry.register("system.event_bus", self.bus)
-        
+
         # Now Link
         function_map = linker.link(assembly, code_registry)
 
@@ -104,9 +100,9 @@ class VMExecutionStrategy:
             memory=memory,
             executor=executor,
             function_map=function_map,
-            resource_registry=resource_registry
+            resource_registry=resource_registry,
         )
-        
+
         # Prime the reactor (fill constants, pulses)
         reactor.prime()
 
@@ -117,26 +113,25 @@ class VMExecutionStrategy:
         # We need the Physical ID of the target's Stainer.
         # 1. Find the NodeIR for the target.
         # target is a LazyResult. We have its UUID.
-        target_uuid = target._uuid if hasattr(target, "_uuid") else None
-        
-        # If target is a list/dict, we might have multiple roots. 
+        # target_uuid = target._uuid if hasattr(target, "_uuid") else None
+
+        # If target is a list/dict, we might have multiple roots.
         # For now, support single root return.
         # We can scan GraphIR for the node that corresponds to this UUID?
         # GraphIR nodes have `current_node_instance_hash` which IS the UUID (in current impl).
-        # Let's verify `generator.py`. 
+        # Let's verify `generator.py`.
         # Yes: `node_id = self.hashing_service.compute_node_instance_hash(...)`
         # And `_visited[lr._uuid] = node_id`.
         # So we can re-compute the hash or assume we can find it?
-        
+
         # The Compiler doesn't expose the UUID->Hash map.
         # But we know HashingService is deterministic.
         # Let's try to find the NodeIR that matches the target's task name and assume it's the last one? Risky.
-        
+
         # Robust Fix: We need the Node ID.
         # Let's re-use the HashingService to compute it for the target.
-        from cascade.reflection import HashingService
         # But we need dependencies...
-        
+
         # OK, let's look at the generated GraphIR. The `current_node_instance_hash` IS the physical ID base.
         # We need to find which NodeIR corresponds to `target`.
         # If we assume `target` is the root, it usually appears last in the list (Post-Order Traversal).
@@ -150,7 +145,7 @@ class VMExecutionStrategy:
             def _result_sink(token: Token):
                 if not result_future.done():
                     result_future.set_result(token.payload)
-            
+
             reactor.add_sink(target_stainer_id, "output_default", _result_sink)
 
         # 6. Execution Loop
@@ -164,11 +159,10 @@ class VMExecutionStrategy:
         except Exception as e:
             # If reactor crashes, we fail the run
             raise e
-            
+
         return result_future.result()
 
     def _collect_lazy_results(self, target: Any) -> Dict[str, Any]:
-        """Recursive finder."""
         results = {}
         if isinstance(target, (LazyResult, MappedLazyResult)):
             results[target._uuid] = target

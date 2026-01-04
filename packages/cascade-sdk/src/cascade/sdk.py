@@ -18,6 +18,7 @@ _IMPORT_MAP = {
     # Runtime
     "Engine": ("cascade.runtime.engine", "Engine"),
     "EventBus": ("cascade.runtime.event_bus", "EventBus"),
+    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
     "Event": ("cascade.runtime.events", "Event"),
     "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
     "sequence": ("cascade.flow", "sequence"),

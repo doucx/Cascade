@@ -22,7 +22,7 @@
   A test double for the Solver protocol that spies on calls to `resolve`
   while delegating to a real underlying solver.
 "SpySubscriber": |-
-  A test utility to collect events from a MessageBus.
+  A test utility to collect events from an EventBus.
 "SpySubscriber.events_of_type": |-
   Returns a list of all events of a specific type.
 "override_resource": |-

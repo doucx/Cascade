@@ -1,6 +1,6 @@
 {
   "HumanReadableLogSubscriber": {
-    "baseline_yaml_content_hash": "4b7172dfe3979c55823e5084a6e3352012c409bb4b61d37be492e57244734606"
+    "baseline_yaml_content_hash": "ce3745aec3d8a8853b73841237cc6bb11d5ad49bd3709328603fc01ed0a53894"
   },
   "HumanReadableLogSubscriber.__init__": {
     "baseline_code_signature_text": "def __init__(self, event_bus: EventBus):",
@@ -47,7 +47,7 @@
     "baseline_code_structure_hash": "694bc45e124b092c7114b5599909651680105bea9cdcb939dbf1859eded44b73"
   },
   "TelemetrySubscriber": {
-    "baseline_yaml_content_hash": "e17ac1991d3624129c6657fa5e69404365415b9270319eb979dae6b2476b97e5"
+    "baseline_yaml_content_hash": "26d0304f5880fb874b31cc3091afe0185c5a0e2654f63b18a084f68597679c6b"
   },
   "TelemetrySubscriber.__init__": {
     "baseline_code_signature_text": "def __init__(self, event_bus: EventBus, connector: Connector):",
@@ -63,7 +63,7 @@
   "TelemetrySubscriber.on_event": {
     "baseline_code_signature_text": "def on_event(self, event: Event):",
     "baseline_code_structure_hash": "08af49bf34e78b9cb1fd49e117d0101be5ab4347b3bc8b8af96f77e1a30c0d30",
-    "baseline_yaml_content_hash": "75238fdb9c3b4ce2d6cb6c4cb052add61f254ccc9e1fd832eb8d8d538e8d4af4"
+    "baseline_yaml_content_hash": "013def771e1344695d470ce5878e340420c0b721d17e0327b71fdfdeda727c65"
   },
   "TelemetrySubscriber.shutdown": {
     "baseline_code_signature_text": "async def shutdown(self):",

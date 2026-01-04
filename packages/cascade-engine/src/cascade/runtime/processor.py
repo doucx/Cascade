@@ -8,7 +8,7 @@ from cascade.graph.model import Node
 if TYPE_CHECKING:
     from cascade.graph.model import MapNode
 from cascade.spec.protocols import Executor, StateBackend, Solver
-from cascade.runtime.bus import MessageBus
+from cascade.runtime.event_bus import EventBus
 from cascade.runtime.resource_manager import ResourceManager
 from cascade.runtime.constraints.manager import ConstraintManager
 from cascade.runtime.resolvers import ArgumentResolver, ConstraintResolver
@@ -25,7 +25,7 @@ class NodeProcessor:
     def __init__(
         self,
         executor: Executor,
-        bus: MessageBus,
+        bus: EventBus,
         resource_manager: ResourceManager,
         constraint_manager: ConstraintManager,
         solver: Solver,  # Needed for map nodes

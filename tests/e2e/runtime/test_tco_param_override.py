@@ -3,7 +3,7 @@ import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 
 
 @pytest.mark.asyncio
@@ -32,7 +32,7 @@ async def test_jump_overrides_param():
     t = recursive_task(cs.Param("n", 3, int))
     cs.bind(t, cs.select_jump({"continue": t}))
 
-    bus = MessageBus()
+    bus = EventBus()
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
     # Run with initial param n=3
@@ -74,7 +74,7 @@ async def test_jump_overrides_param_complex_path():
     t = recursive_task_with_injection(cs.Param("n", 3, int))
     cs.bind(t, cs.select_jump({"continue": t}))
 
-    bus = MessageBus()
+    bus = EventBus()
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
     # Register the resource required by the task
     engine.register(dummy_resource)

@@ -7,9 +7,7 @@ from cascade.adapters.solvers.native import NativeSolver
 
 @pytest.fixture
 def engine():
-    return cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
-    )
+    return cs.Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus())
 
 
 @pytest.mark.asyncio

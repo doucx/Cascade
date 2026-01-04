@@ -33,7 +33,7 @@ async def test_map_reduce_pipeline():
     total = sum_all(numbers=doubled_nums)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(total)
 

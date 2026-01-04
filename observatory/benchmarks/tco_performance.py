@@ -1,7 +1,7 @@
 import asyncio
 import time
 import cascade as cs
-from cascade.runtime import Engine, MessageBus
+from cascade.runtime import Engine, EventBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
@@ -71,7 +71,7 @@ async def run_benchmark(
 
 async def main():
     iterations = 5000
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
 
     print("--- Cascade v1.4 Performance Benchmark ---")
     print(f"Iterations: {iterations}\n")

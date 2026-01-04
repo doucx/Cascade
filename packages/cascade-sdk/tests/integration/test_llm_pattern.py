@@ -52,7 +52,7 @@ async def test_llm_pattern_via_subflow(mock_http_post, monkeypatch):
 
     # Run the workflow
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(summary)
 

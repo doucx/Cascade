@@ -1,5 +1,5 @@
 import pytest
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.testing import SpySubscriber
 
 
@@ -26,7 +26,7 @@ def cleanup_local_bus():
 
 @pytest.fixture
 def bus_and_spy():
-    """Provides a MessageBus instance and an attached SpySubscriber."""
-    bus = MessageBus()
+    """Provides an EventBus instance and an attached SpySubscriber."""
+    bus = EventBus()
     spy = SpySubscriber(bus)
     return bus, spy

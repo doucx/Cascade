@@ -39,7 +39,7 @@ async def test_subflow_execution(subflow_file):
     workflow = finalize(sub_result)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
 
     # 10 * 5 = 50 -> "Final: 50"
@@ -53,7 +53,7 @@ async def test_subflow_file_not_found():
     workflow = cs.subflow(path="non_existent.py", target="foo")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
 
     with pytest.raises(FileNotFoundError):
@@ -65,7 +65,7 @@ async def test_subflow_target_not_found(subflow_file):
     workflow = cs.subflow(path=subflow_file, target="missing_var")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
 
     with pytest.raises(ValueError, match="Target 'missing_var' not found"):

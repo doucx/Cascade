@@ -32,7 +32,7 @@ async def test_load_yaml_provider(dummy_config_file):
     loaded_data = cs.load_yaml(dummy_config_file)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(loaded_data)
 
@@ -49,7 +49,7 @@ async def test_lookup_provider_basic(dummy_config_file):
     version = cs.lookup(source=config_source, key="project.version")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(version)
 
@@ -66,7 +66,7 @@ async def test_lookup_on_static_dict():
     value = cs.lookup(source=source, key="a.b")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(value)
     assert result == 10
@@ -83,7 +83,7 @@ async def test_lookup_missing_key_raises_error():
     missing_value = cs.lookup(source=source, key="b")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     with pytest.raises(KeyError):
         await engine.run(missing_value)
@@ -101,7 +101,7 @@ async def test_lookup_invalid_path_raises_type_error():
     invalid_lookup = cs.lookup(source=source, key="a.nonexistent")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     with pytest.raises(TypeError, match="Cannot access segment"):
         await engine.run(invalid_lookup)

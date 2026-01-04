@@ -3,7 +3,7 @@ import cascade as cs
 from cascade.runtime.engine import Engine
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.runtime.subscribers import TelemetrySubscriber
 from .harness import InProcessConnector
 
@@ -20,7 +20,7 @@ async def test_startup_telemetry_no_race_condition():
     """
     # 1. Setup Harness
     connector = InProcessConnector()
-    bus = MessageBus()
+    bus = EventBus()
 
     # CRITICAL: Manually assemble the TelemetrySubscriber, which bridges
     # the internal event bus to the external connector. This is what cs.run()

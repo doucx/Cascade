@@ -32,7 +32,7 @@ async def test_file_read_text_success(dummy_file):
     read_result = cs.read.text(dummy_file)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(read_result)
 
@@ -45,7 +45,7 @@ async def test_file_read_bytes_success(binary_file):
     read_result = cs.read.bytes(binary_file)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(read_result)
 
@@ -57,7 +57,7 @@ async def test_file_exists_true(dummy_file):
     exist_result = cs.fs.exists(dummy_file)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(exist_result)
 
@@ -70,7 +70,7 @@ async def test_file_exists_false(tmp_path):
     exist_result = cs.fs.exists(path)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(exist_result)
 
@@ -88,7 +88,7 @@ async def test_file_json_parsing_composition(dummy_file):
     json_result = parse_json(text_content)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(json_result)
 
@@ -109,7 +109,7 @@ async def test_file_dynamic_path_dependency(tmp_path):
     read_result = cs.read.text(path_result)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(read_result)
 

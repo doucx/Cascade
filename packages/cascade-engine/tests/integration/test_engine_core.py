@@ -2,7 +2,7 @@ import pytest
 
 import cascade as cs
 from cascade.graph.build import build_graph
-from cascade.runtime import Engine, MessageBus, ExecutionPlan
+from cascade.runtime import Engine, EventBus, ExecutionPlan
 from cascade.testing import SpyExecutor, MockSolver
 
 
@@ -33,7 +33,7 @@ async def test_engine_follows_solver_plan():
     # 3. Setup test doubles and Engine
     solver = MockSolver(plan=mock_plan)
     executor = SpyExecutor()
-    bus = MessageBus()
+    bus = EventBus()
 
     engine = Engine(solver=solver, executor=executor, bus=bus)
 

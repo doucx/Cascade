@@ -2,7 +2,7 @@ import pytest
 import cascade as cs
 from aiohttp import web
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
@@ -68,7 +68,7 @@ async def test_ipfs_cat_provider(mock_ipfs_server):
     workflow = cs.ipfs.cat(cid=TEST_CID, api_base_url=mock_ipfs_server)
 
     # Run the workflow
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     # Assert the result
@@ -85,7 +85,7 @@ async def test_ipfs_add_provider(mock_ipfs_server, tmp_path):
     workflow = cs.ipfs.add(path=str(test_file), api_base_url=mock_ipfs_server)
 
     # Run
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     # Assert we got the hash from the JSON response

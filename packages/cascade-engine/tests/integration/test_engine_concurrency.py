@@ -3,7 +3,7 @@ import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.testing import MockConnector, TimedMockExecutor
 
 
@@ -20,7 +20,7 @@ def engine(mock_connector):
     return Engine(
         solver=NativeSolver(),
         executor=TimedMockExecutor(delay=0.05),
-        bus=MessageBus(),
+        bus=EventBus(),
         connector=mock_connector,
         system_resources={},
     )

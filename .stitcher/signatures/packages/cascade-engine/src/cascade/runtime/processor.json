@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "93a85bea35b9acec92b111a122fdae2fa2fb6bc9c6348258e6c749fe5ea531ea"
   },
   "NodeProcessor.__init__": {
-    "baseline_code_signature_text": "def __init__(self, executor: Executor, bus: MessageBus, resource_manager: ResourceManager, constraint_manager: ConstraintManager, solver: Solver):",
-    "baseline_code_structure_hash": "28d338685fc8acc4c8a2f1bb8af86a3b394a063813b8b579f5765d8ed0b8ef4c"
+    "baseline_code_signature_text": "def __init__(self, executor: Executor, bus: EventBus, resource_manager: ResourceManager, constraint_manager: ConstraintManager, solver: Solver):",
+    "baseline_code_structure_hash": "2065de7286d9979bd1b3cd88a722bba70db6f50131e9384130f0ed5c7fefd34a"
   },
   "NodeProcessor._execute_core": {
     "baseline_code_signature_text": "async def _execute_core(self, node: Node, executable: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",

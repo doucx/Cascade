@@ -113,7 +113,7 @@ def worker_main(
             engine = cs.Engine(
                 solver=cs.NativeSolver(),
                 executor=cs.LocalExecutor(),
-                bus=cs.MessageBus(),
+                bus=cs.EventBus(),
                 connector=None,
                 resource_manager=resource_manager,
             )

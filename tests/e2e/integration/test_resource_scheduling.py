@@ -3,7 +3,7 @@ import asyncio
 import time
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 
@@ -41,7 +41,7 @@ async def test_resource_concurrency_limit():
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
         system_resources={"slots": 1},
     )
     result = await engine.run(workflow)
@@ -81,7 +81,7 @@ async def test_dynamic_resource_constraint():
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
         system_resources={"cpu": 4},
     )
     result = await engine.run(job)
@@ -106,7 +106,7 @@ async def test_insufficient_resources_deadlock():
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
         system_resources={"memory_gb": 16},
     )
 

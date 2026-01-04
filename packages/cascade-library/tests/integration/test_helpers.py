@@ -1,7 +1,7 @@
 import pytest
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 
@@ -14,7 +14,7 @@ async def test_dict_provider():
 
     workflow = cs.dict(static_key="static", dynamic_key=get_val())
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     assert result == {"static_key": "static", "dynamic_key": "dynamic_value"}
@@ -28,7 +28,7 @@ async def test_format_provider():
 
     workflow = cs.format("Hello, {name}!", name=get_name())
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     assert result == "Hello, World!"
@@ -46,7 +46,7 @@ async def test_format_provider_with_positional_args():
 
     workflow = cs.format("Positional: {}, {}", get_first(), get_second())
 
-    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=MessageBus())
+    engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=EventBus())
     result = await engine.run(workflow)
 
     assert result == "Positional: first, second"

@@ -8,7 +8,7 @@ from contextlib import ExitStack
 from cascade.spec.resource import ResourceDefinition
 from cascade.spec.constraint import GlobalConstraint
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.bus import MessageBus
+from cascade.runtime.event_bus import EventBus
 from cascade.runtime.events import (
     RunStarted,
     RunFinished,
@@ -35,7 +35,7 @@ class Engine:
         self,
         solver: Solver,
         executor: Executor,
-        bus: MessageBus,
+        bus: EventBus,
         state_backend_factory: Optional[Callable[[str], StateBackend]] = None,
         system_resources: Optional[Dict[str, Any]] = None,
         connector: Optional[Connector] = None,

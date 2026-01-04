@@ -7,7 +7,7 @@ from cascade.spec.protocols import LazyFactory, Provider
 from cascade.runtime.engine import Engine
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 
 
 class SubflowProvider(Provider):
@@ -49,7 +49,7 @@ async def _subflow_task(
     # resource manager or event bus.
     # For now, subflow logs are not forwarded to the parent bus to keep things clean.
     # Errors will propagate as exceptions.
-    sub_bus = MessageBus()
+    sub_bus = EventBus()
     sub_engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),

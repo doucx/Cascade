@@ -126,8 +126,8 @@
     "baseline_yaml_content_hash": "907912c9d4fe9b9928fe106a5e7baba907d9a3251de225e88502b78adeb3a0fb"
   },
   "SpySubscriber.__init__": {
-    "baseline_code_signature_text": "def __init__(self, bus: MessageBus):",
-    "baseline_code_structure_hash": "a1efdcdf83398161dcb0fa10a726ccece737051e0692e435d96e134300becd61"
+    "baseline_code_signature_text": "def __init__(self, bus: EventBus):",
+    "baseline_code_structure_hash": "f0031b8dc0af4f513fb34481d680aaa74cb395a005af0bef448efa49d6f88ac7"
   },
   "SpySubscriber.collect": {
     "baseline_code_signature_text": "def collect(self, event: Event):",

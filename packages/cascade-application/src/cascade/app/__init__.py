@@ -9,7 +9,7 @@ from cascade.graph.build import build_graph
 from cascade.graph.model import Node, EdgeType
 
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.runtime.events import (
     PlanAnalysisStarted,
     PlanNodeInspected,
@@ -70,7 +70,7 @@ def _get_node_shape(node: Node) -> str:
 
 
 class DryRunConsoleSubscriber:
-    def __init__(self, bus: MessageBus):
+    def __init__(self, bus: EventBus):
         bus.subscribe(PlanAnalysisStarted, self.on_start)
         bus.subscribe(PlanNodeInspected, self.on_node)
         bus.subscribe(PlanAnalysisFinished, self.on_finish)
@@ -125,7 +125,7 @@ class CascadeApp:
         bus.set_renderer(self.renderer)
 
         # 3. Setup Event System
-        self.event_bus = MessageBus()
+        self.event_bus = EventBus()
         self.log_subscriber = HumanReadableLogSubscriber(self.event_bus)
 
         self.telemetry_subscriber = None
@@ -210,7 +210,7 @@ class CascadeApp:
         # Create a temporary local bus for the dry run report
         # We don't want to use the main app bus because dry_run
         # is a special analysis mode, not a "run".
-        local_bus = MessageBus()
+        local_bus = EventBus()
         DryRunConsoleSubscriber(local_bus)
 
         # Handle empty case

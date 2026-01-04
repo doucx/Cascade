@@ -19,7 +19,7 @@ async def test_engine_executes_param_task():
     workflow = double(p)
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
 
     # 执行，传入 params
@@ -36,7 +36,7 @@ async def test_engine_executes_env_task(monkeypatch):
     e = cs.Env("TEST_VAR")
 
     engine = cs.Engine(
-        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.MessageBus()
+        solver=NativeSolver(), executor=LocalExecutor(), bus=cs.EventBus()
     )
     result = await engine.run(e)
 

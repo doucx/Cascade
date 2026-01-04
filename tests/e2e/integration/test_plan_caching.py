@@ -3,7 +3,7 @@ import pytest
 from cascade import task, Engine
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.testing import SpySolver
 
 
@@ -22,7 +22,7 @@ def engine_with_spy_solver():
     engine = Engine(
         solver=spy_solver,
         executor=LocalExecutor(),
-        bus=MessageBus(),  # A silent bus for clean test output
+        bus=EventBus(),  # A silent bus for clean test output
     )
     # Return the engine and the mock object for making assertions
     return engine, spy_solver.resolve

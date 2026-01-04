@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "4b7172dfe3979c55823e5084a6e3352012c409bb4b61d37be492e57244734606"
   },
   "HumanReadableLogSubscriber.__init__": {
-    "baseline_code_signature_text": "def __init__(self, event_bus: MessageBus):",
-    "baseline_code_structure_hash": "261e1d76dad0bba63c69159bc3298cf438fdc4f82343d7a1bf2130b402def6ad"
+    "baseline_code_signature_text": "def __init__(self, event_bus: EventBus):",
+    "baseline_code_structure_hash": "7c64ca8725e6125f4a196386e81d9d5984f0e520f1f6c5acc908615a8f5b6b3a"
   },
   "HumanReadableLogSubscriber.on_connector_connected": {
     "baseline_code_signature_text": "def on_connector_connected(self, event: ConnectorConnected):",
@@ -50,8 +50,8 @@
     "baseline_yaml_content_hash": "e17ac1991d3624129c6657fa5e69404365415b9270319eb979dae6b2476b97e5"
   },
   "TelemetrySubscriber.__init__": {
-    "baseline_code_signature_text": "def __init__(self, event_bus: MessageBus, connector: Connector):",
-    "baseline_code_structure_hash": "ba23842190ff7f8e3b082bd6762646a300af1e1f3759191cc55a3daa9d6697f6"
+    "baseline_code_signature_text": "def __init__(self, event_bus: EventBus, connector: Connector):",
+    "baseline_code_structure_hash": "ea2ca0a3928ba018fb476336ac6f2a2a6aed6ec6a5f9dde94c7a27d2d917dc2a"
   },
   "TelemetrySubscriber._connector": {},
   "TelemetrySubscriber._create_header": {

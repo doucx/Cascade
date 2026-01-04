@@ -3,7 +3,7 @@ import pytest
 import cascade as cs
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.testing import MockExecutor
 
 from .harness import InProcessConnector
@@ -48,7 +48,7 @@ async def test_e2e_ttl_expiration():
     engine = Engine(
         solver=NativeSolver(),
         executor=MockExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
         connector=connector,
     )
 
@@ -65,7 +65,7 @@ async def test_e2e_ttl_expiration():
     engine = Engine(
         solver=NativeSolver(),
         executor=MockExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
         connector=connector,
     )
 

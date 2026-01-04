@@ -3,7 +3,7 @@ import time
 import pytest
 import cascade as cs
 
-from cascade.runtime import Engine, MessageBus
+from cascade.runtime import Engine, EventBus
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.connectors.local import LocalBusConnector
@@ -19,7 +19,7 @@ def engine(local_connector):
     return Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
         connector=local_connector,
     )
 

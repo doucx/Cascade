@@ -1,7 +1,7 @@
 import pytest
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.runtime.events import TaskRetrying, TaskExecutionFinished
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
@@ -22,7 +22,7 @@ async def test_retry_success_after_failure():
 
     task_with_retry = flaky_task().with_retry(max_attempts=3, delay=0.01)
 
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
@@ -53,7 +53,7 @@ async def test_retry_exhausted_failure():
 
     task_with_retry = always_fail().with_retry(max_attempts=2, delay=0.01)
 
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 

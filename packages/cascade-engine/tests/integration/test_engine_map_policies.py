@@ -3,7 +3,7 @@ import asyncio
 import time
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.runtime.events import TaskRetrying
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
@@ -29,7 +29,7 @@ async def test_map_with_retry_policy():
     inputs = [1, 2, 3]
     mapped = flaky_process.map(x=inputs).with_retry(max_attempts=2, delay=0.01)
 
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
@@ -74,7 +74,7 @@ async def test_map_with_constraints_policy():
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
         system_resources={"slots": 2},  # Allow 2 concurrent tasks
     )
 

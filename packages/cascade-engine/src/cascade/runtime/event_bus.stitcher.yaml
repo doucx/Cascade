@@ -1,0 +1,6 @@
+"EventBus": |-
+  A simple in-memory event bus for dispatching events to subscribers.
+"EventBus.publish": |-
+  Dispatch an event to all relevant subscribers.
+"EventBus.subscribe": |-
+  Register a handler for a specific event type.

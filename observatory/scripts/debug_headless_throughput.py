@@ -75,7 +75,7 @@ async def run_headless_experiment():
     connector = HeadlessConnector()
 
     channels = [DirectChannel(f"agent_{i}") for i in range(NUM_AGENTS)]
-    engine = cs.Engine(cs.NativeSolver(), cs.LocalExecutor(), cs.MessageBus())
+    engine = cs.Engine(cs.NativeSolver(), cs.LocalExecutor(), cs.EventBus())
 
     @resource(name="connector")
     def connector_provider():

@@ -16,11 +16,18 @@ class ReflectionAnalyzer(TaskAnalyzer):
         # Determine the underlying function and metadata source
         func = target
         mode = "blocking"
+        # Default name extraction from the callable itself
+        name = getattr(target, "__name__", "unknown")
 
         # Check if it's a cascade.spec.task.Task wrapper
         if hasattr(target, "func") and hasattr(target, "mode"):
             func = target.func
             mode = getattr(target, "mode", "blocking")
+            # If the wrapper has a specific name override, use it.
+            if hasattr(target, "name") and target.name:
+                name = target.name
+            elif hasattr(func, "__name__"):
+                name = func.__name__
 
         if not callable(func):
             raise TypeError(
@@ -28,7 +35,10 @@ class ReflectionAnalyzer(TaskAnalyzer):
             )
 
         # 1. Basic Metadata
-        name = getattr(func, "__name__", "unknown")
+        # If name was not resolved by wrapper, try func
+        if name == "unknown" and hasattr(func, "__name__"):
+            name = func.__name__
+
         docstring = inspect.getdoc(func)
         is_async = inspect.iscoroutinefunction(func)
 

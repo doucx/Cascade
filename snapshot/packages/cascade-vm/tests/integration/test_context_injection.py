@@ -1,41 +1,3 @@
-简要回答
-我们已完成了代码的修改，现在将创建一个集成测试来验证 `run_id` 是否能正确地从 `EventDrivenRunner` 注入并传播到 `EventBus` 上的所有遥测事件中。
-
-## [WIP] test(vm): 验证基于 Trace 的上下文注入全链路
-
-### 用户需求
-创建一个集成测试 `packages/cascade-vm/tests/integration/test_context_injection.py`，用于验证：
-1.  `EventDrivenRunner` 在初始化时正确生成了 `run_id`。
-2.  `inject_input` 操作将 `run_id` 注入到了 Token 的 `trace` 中。
-3.  `Bleacher` 和 `Stainer` 生成的生命周期事件（Lifecycle Events）均包含正确的 `ctx.rid`。
-
-### 评论
-这个测试是 Phase 4 的验收标准。它不依赖于编译器，而是通过手动构建一个最小化的物理三连体（Triad），直接测试 VM 和标准库（Bleacher/Stainer）的交互。这确保了测试关注点集中在运行时行为和上下文传播机制上。
-
-### 目标
-1.  构建一个包含 `Bleacher`, `Worker`, `Stainer` 和 `Observer` 的最小物理图。
-2.  运行该图并捕获事件。
-3.  断言所有关键节点的事件都携带了统一的 `run_id`。
-
-### 基本原理
-我们将使用 `EventDrivenRunner` 作为 Harness。通过手动构建物理图，我们可以精确控制端口定义和连接，排除编译器可能引入的干扰。测试将模拟一次完整的任务执行，从数据注入到结果产出，从而验证 Trace 在整个生命周期中的完整性。
-
-### 标签
-#intent/test #flow/ready #priority/high #comp/vm #comp/std #concept/observability #task/domain/observability #task/object/context-injection #task/action/verification #task/state/end
-
----
-
-### Script
-
-#### Acts 1: 创建上下文注入集成测试
-
-我们创建一个新的测试文件，手动组装一个物理图来验证 Trace 传播。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_context_injection.py
-~~~~~
-~~~~~python
 import asyncio
 import pytest
 from typing import Dict, Any
@@ -211,9 +173,3 @@ async def test_genesis_injection_propagates_run_id():
 
     finally:
         await runner.stop_loop()
-~~~~~
-
-### 下一步建议
-如果此测试通过，Phase 4 就算圆满完成了。
-接下来的建议是运行此测试，并清理（提交）本次变更。
-之后，我们可以开始考虑 **Phase 5: 清理与验证**，即移除 `VMExecutionStrategy` 中为了适配旧 trace 而写的硬编码逻辑，并确保 Engine 的 `HumanReadableLogSubscriber` 能够正确打印出日志。

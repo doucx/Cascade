@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(vm): 修复 Reactor Sink 调用和 Task 名称解析", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767514902.7526274, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(vm): 修复 VM 策略中的 run_id 注入缺失及 Std 库测试的 Mock 属性问题", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767515146.0394816, "duration_ms": 0}}

@@ -104,7 +104,8 @@ class VMExecutionStrategy:
         )
 
         # Prime the reactor (fill constants, pulses)
-        reactor.prime()
+        # Genesis Injection: Inject the run_id into the initial static tokens
+        reactor.prime(genesis_trace={"rid": context.run_id})
 
         # Result Future
         result_future = asyncio.get_running_loop().create_future()

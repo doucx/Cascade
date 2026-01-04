@@ -12,8 +12,8 @@
     "baseline_yaml_content_hash": "bd5924665138bd4c44570cb37df4bc3acf814d06b01b440761995100e8f174d0"
   },
   "GraphExecutionStrategy.__init__": {
-    "baseline_code_signature_text": "def __init__(self, solver: Solver, node_processor: NodeProcessor, resource_container: ResourceContainer, constraint_manager: ConstraintManager, bus: MessageBus, wakeup_event: asyncio.Event):",
-    "baseline_code_structure_hash": "89e5fde89c513b836bd9df72b73716c1174d9f0c7543aadf52bad85d0286a223"
+    "baseline_code_signature_text": "def __init__(self, solver: Solver, node_processor: NodeProcessor, resource_container: ResourceContainer, constraint_manager: ConstraintManager, bus: EventBus, wakeup_event: asyncio.Event):",
+    "baseline_code_structure_hash": "e530f3654d8300bec5c751a03c843ba9af466dca258c5258590f7d273e447d61"
   },
   "GraphExecutionStrategy._execute_graph": {
     "baseline_code_signature_text": "async def _execute_graph(self, target: Any, params: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, state_backend: StateBackend, graph: Graph, plan: Any, instance_map: Dict[str, Node], executable_registry: Dict[str, Callable], root_input_overrides: Optional[Dict[str, Any]] = None) -> GraphExecutionResult:",

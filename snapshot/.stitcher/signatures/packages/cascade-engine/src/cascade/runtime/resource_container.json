@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "3f1b2f35cd90c34cc8bc181e697727a6243f8353e0cf4191eff307fba887c920"
   },
   "ResourceContainer.__init__": {
-    "baseline_code_signature_text": "def __init__(self, bus: MessageBus):",
-    "baseline_code_structure_hash": "a1efdcdf83398161dcb0fa10a726ccece737051e0692e435d96e134300becd61"
+    "baseline_code_signature_text": "def __init__(self, bus: EventBus):",
+    "baseline_code_structure_hash": "f0031b8dc0af4f513fb34481d680aaa74cb395a005af0bef448efa49d6f88ac7"
   },
   "ResourceContainer._resource_providers": {},
   "ResourceContainer._scan_item": {

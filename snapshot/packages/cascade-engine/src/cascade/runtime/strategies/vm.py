@@ -170,6 +170,13 @@ class VMExecutionStrategy:
                 results.update(self._collect_lazy_results(arg))
             for k, v in target.kwargs.items():
                 results.update(self._collect_lazy_results(v))
+
+            # Traverse Control Flow & Dependencies
+            if target._condition:
+                results.update(self._collect_lazy_results(target._condition))
+            for dep in target._dependencies:
+                results.update(self._collect_lazy_results(dep))
+
         elif isinstance(target, (list, tuple)):
             for item in target:
                 results.update(self._collect_lazy_results(item))

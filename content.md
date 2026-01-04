@@ -1,73 +1,298 @@
-好的，Phase 4：上下文注入（Context Injection）已经顺利完成并通过了集成测试验证。
+简要回答
+我们进入 Phase 5：清理与验证。此阶段我们将修复 VM 代码注册的漏洞，增强标准库的遥测语义（填充 `task_name`），并进行端到端的遥测验证。
 
-我们已经成功建立了“创世注入”与“迹流传播”机制。现在，`run_id` 不再通过全局注册表进行“走私”，而是作为 Token 的内禀属性在物理场中流动，并最终完美地转化为高层业务事件。
-
-## [COMMIT] feat(vm): 实现基于 Trace 的上下文注入机制 (Phase 4)
+## [WIP] fix(vm): 修复代码注册漏洞并增强 E2E 遥测语义
 
 ### 用户需求
-在 Cascade 物理场中建立无状态的上下文传播协议，确保 `run_id` 能够从图的入口（Genesis）自动流向每一个遥测节点，而无需依赖全局资源。
+1.  **修复注册漏洞**: `VMExecutionStrategy` 在收集任务代码时，忽略了 `run_if` 条件和 `after` 依赖中的任务。这会导致这些任务在运行时因找不到代码而崩溃。
+2.  **增强遥测**: 目前的 `EventIR` 中 `task_name` 缺失（显示为 "unknown"）。需要从物理节点名称中解析出真实任务名。
+3.  **E2E 验证**: 确保从 `Engine` 到 `EventBus` 的链路中，`run_id` 和 `task_name` 均正确传递。
 
 ### 评论
-这是 Cascade 架构演进的一个里程碑。通过将 `run_id` 刻入 `Token.trace`，我们不仅满足了当前的监控需求，还为未来支持 OpenTelemetry 等分布式追踪标准打下了坚实基础。系统现在真正实现了物理层与逻辑层的语义解耦。
+这是 VM 走向生产就绪的关键一步。完善的遍历逻辑保证了复杂图的执行稳定性，而正确的 `task_name` 则是用户能看懂日志的前提。
 
 ### 目标
-1.  **Run ID 持久化**: 在 `EventDrivenRunner` 中生成并持有 `run_id`。
-2.  **创世注入**: 修改 `Reactor.prime` 和 `Runner.inject_input` 以将 `run_id` 注入到初始 Token 中。
-3.  **迹流提取**: 更新 `bleacher` 和 `stainer` 以从 Trace 中提取 `rid` 并填充到 `EventIR` 的 `ctx` 字段。
-4.  **全链路验证**: 通过集成测试确保 `EventBus` 产出的领域对象包含正确的 `run_id`。
+1.  修改 `VMExecutionStrategy._collect_lazy_results` 以递归遍历 `_condition` 和 `_dependencies`。
+2.  更新 `standard_bleacher` 和 `standard_stainer`，从节点名称（如 `Bleach(MyTask)`) 中提取 `MyTask` 作为 `task_name`。
+3.  创建 `test_vm_telemetry.py` 验证完整的事件流。
 
 ### 基本原理
-根据“创世注入”原则，物理场中的粒子（Token）携带其历史（Trace）。我们将 `run_id` 定义为宇宙的初始微扰，在激发时刻注入系统。由于 `Bleacher` 会自动合并上游 Token 的 Trace，因此 `run_id` 会像染料一样随着数据流自动扩散到图的所有分支，实现了完美的局域性。
+-   **代码发现**: 静态分析必须覆盖图的所有边缘（包括控制流和依赖边），不仅仅是数据流。
+-   **元数据恢复**: 虽然物理层是无状态的，但编译器在生成物理节点名称时保留了逻辑名称（如 `Bleach(Name)`）。我们可以利用这一约定在运行时“水合”出业务语义。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/vm #comp/std #comp/engine #concept/observability #task/domain/observability #task/object/context-injection #task/action/implementation #task/state/end
+#intent/fix #intent/refine #flow/ready #priority/high #comp/engine #comp/std #scope/core #task/domain/observability #task/object/telemetry #task/action/cleanup #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交上下文注入功能及测试
+#### Acts 1: 修复 VM 策略的代码收集逻辑
 
-我们将更新后的 VM 协议、Harness 逻辑、标准库组件以及新创建的集成测试文件添加到暂存区并提交。
+我们将修改 `VMExecutionStrategy`，使其能够递归地发现 `condition` 和 `dependencies` 中的 `LazyResult`，防止因代码未注册导致的运行时错误。
 
 ~~~~~act
-git_add
-packages/cascade-vm/src/cascade/vm/protocols.py
-packages/cascade-vm/src/cascade/vm/reactor.py
-packages/cascade-vm/src/cascade/vm/harness.py
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/vm.py
+~~~~~
+~~~~~python.old
+        if isinstance(target, (LazyResult, MappedLazyResult)):
+            results[target._uuid] = target
+            for arg in target.args:
+                results.update(self._collect_lazy_results(arg))
+            for k, v in target.kwargs.items():
+                results.update(self._collect_lazy_results(v))
+        elif isinstance(target, (list, tuple)):
+~~~~~
+~~~~~python.new
+        if isinstance(target, (LazyResult, MappedLazyResult)):
+            results[target._uuid] = target
+            for arg in target.args:
+                results.update(self._collect_lazy_results(arg))
+            for k, v in target.kwargs.items():
+                results.update(self._collect_lazy_results(v))
+
+            # Traverse Control Flow & Dependencies
+            if target._condition:
+                results.update(self._collect_lazy_results(target._condition))
+            for dep in target._dependencies:
+                results.update(self._collect_lazy_results(dep))
+
+        elif isinstance(target, (list, tuple)):
+~~~~~
+
+#### Acts 2: 增强 Bleacher 的遥测语义
+
+更新 `standard_bleacher`，尝试从物理节点名称中解析出逻辑任务名。
+
+~~~~~act
+patch_file
 packages/cascade-std/src/cascade/std/triad/bleacher.py
-packages/cascade-std/src/cascade/std/triad/stainer.py
-packages/cascade-vm/tests/integration/test_context_injection.py
 ~~~~~
+~~~~~python.old
+    logical_id = node.id.replace(".bleach", "")
+
+    trace_payload["start_ts"] = mono_ts
+    trace_payload["id"] = logical_id
+    if held_resources:
+        trace_payload["held_resources"] = held_resources
+
+    # 3. Construct EventIR (The Hologram)
+    ctx = {}
+    if "rid" in trace_payload:
+        ctx["rid"] = trace_payload["rid"]
+
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": start_ts,
+        "ctx": ctx,
+        "phy": {"nid": node.id},
+        "data": {
+            "state": EventState.RUNNING,
+            "task_id": logical_id,
+            # We don't have task_name easily here yet, will address in Phase 4
+        },
+    }
+~~~~~
+~~~~~python.new
+    logical_id = node.id.replace(".bleach", "")
+
+    # Heuristic: Extract task_name from physical name "Bleach(MyTask)"
+    task_name = "unknown"
+    if node.name.startswith("Bleach(") and node.name.endswith(")"):
+        task_name = node.name[7:-1]
+
+    trace_payload["start_ts"] = mono_ts
+    trace_payload["id"] = logical_id
+    if held_resources:
+        trace_payload["held_resources"] = held_resources
+
+    # 3. Construct EventIR (The Hologram)
+    ctx = {}
+    if "rid" in trace_payload:
+        ctx["rid"] = trace_payload["rid"]
+
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": start_ts,
+        "ctx": ctx,
+        "phy": {"nid": node.id},
+        "data": {
+            "state": EventState.RUNNING,
+            "task_id": logical_id,
+            "task_name": task_name,
+        },
+    }
+~~~~~
+
+#### Acts 3: 增强 Stainer 的遥测语义
+
+同样更新 `standard_stainer`。
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-std/src/cascade/std/triad/stainer.py
 ~~~~~
-~~~~~text
-feat(vm): implement Trace-based context injection (Phase 4)
+~~~~~python.old
+    # 3. Construct EventIR
+    logical_id = node.id.replace(".stain", "")
 
-This commit implements the "Genesis Injection" and "Trace Propagation" patterns,
-enabling context awareness (specifically 'run_id') in stateless physics nodes.
+    # Determine Status (Simplified for now, assuming success if reached here)
+    # Error handling logic will be refined in future phases
+    state = EventState.SUCCEEDED
+    error_msg = None
 
-Key Changes:
-1. Reactor/Harness: Updated prime() and inject_input() to inject a genesis
-   trace (containing 'run_id') into tokens at the "moment of creation".
-2. Standard Library: Updated standard_bleacher and standard_stainer to
-   extract 'rid' from Token.trace and populate EventIR.ctx.rid.
-3. Observability: The system now correctly propagates context from raw physical
-   traces to rich domain events (e.g., TaskExecutionStarted.run_id).
-4. Integration Test: Added test_context_injection.py to verify the full flow 
-   from data injection to rich event delivery.
+    # TODO: Check if result_payload is an Exception wrapper
+    if isinstance(result_payload, Exception):
+        state = EventState.FAILED
+        error_msg = str(result_payload)
 
-This architecture adheres to the Locality Principle, ensuring that nodes
-only act on data they receive, without smuggling context through global resources.
+    ctx = {}
+    if "rid" in trace_payload:
+        ctx["rid"] = trace_payload["rid"]
+
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": now_wall,
+        "ctx": ctx,
+        "phy": {"nid": node.id},
+        "data": {
+            "state": state,
+            "task_id": logical_id,
+            "duration_ms": duration * 1000,
+            "error": error_msg,
+            "result_preview": str(result_payload)[:100]
+            if state == EventState.SUCCEEDED
+            else None,
+        },
+    }
+~~~~~
+~~~~~python.new
+    # 3. Construct EventIR
+    logical_id = node.id.replace(".stain", "")
+
+    # Heuristic: Extract task_name from physical name "Stain(MyTask)"
+    task_name = "unknown"
+    if node.name.startswith("Stain(") and node.name.endswith(")"):
+        task_name = node.name[6:-1]
+
+    # Determine Status (Simplified for now, assuming success if reached here)
+    # Error handling logic will be refined in future phases
+    state = EventState.SUCCEEDED
+    error_msg = None
+
+    # TODO: Check if result_payload is an Exception wrapper
+    if isinstance(result_payload, Exception):
+        state = EventState.FAILED
+        error_msg = str(result_payload)
+
+    ctx = {}
+    if "rid" in trace_payload:
+        ctx["rid"] = trace_payload["rid"]
+
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": now_wall,
+        "ctx": ctx,
+        "phy": {"nid": node.id},
+        "data": {
+            "state": state,
+            "task_id": logical_id,
+            "task_name": task_name,
+            "duration_ms": duration * 1000,
+            "error": error_msg,
+            "result_preview": str(result_payload)[:100]
+            if state == EventState.SUCCEEDED
+            else None,
+        },
+    }
+~~~~~
+
+#### Acts 4: 创建 VM 遥测 E2E 测试
+
+创建一个集成测试，使用 `Engine` 和 `VMExecutionStrategy` 运行一个工作流，并断言 `EventBus` 收到了包含正确元数据的 `TaskExecutionFinished` 事件。
+
+~~~~~act
+write_file
+packages/cascade-engine/tests/integration/test_vm_telemetry.py
+~~~~~
+~~~~~python
+import pytest
+import cascade as cs
+from cascade.runtime import Engine, EventBus
+from cascade.adapters.solvers.native import NativeSolver
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
+from cascade.testing import SpySubscriber
+
+
+@pytest.mark.asyncio
+async def test_vm_telemetry_e2e():
+    """
+    Verifies that running a workflow with the VM strategy produces
+    correct telemetry events (Started/Finished) with populated
+    task_name and run_id.
+    """
+    
+    # 1. Define Workflow
+    @cs.task(name="MyCalcTask")
+    def calc(x: int) -> int:
+        return x * 2
+
+    # Using a condition to ensure the new VM traversal logic is also exercised
+    @cs.task(name="MyCondition")
+    def should_run() -> bool:
+        return True
+
+    workflow = calc(21).run_if(should_run())
+
+    # 2. Setup Engine with VM
+    bus = EventBus()
+    spy = SpySubscriber(bus)
+    
+    engine = Engine(
+        solver=NativeSolver(), 
+        executor=LocalExecutor(), 
+        bus=bus
+    )
+
+    # 3. Run
+    # Force use_vm=True to test the VM strategy
+    result = await engine.run(workflow, use_vm=True)
+    assert result == 42
+
+    # 4. Assert Telemetry
+    
+    # A. Check Start Events
+    started = spy.events_of_type(TaskExecutionStarted)
+    task_names = sorted([e.task_name for e in started])
+    # Note: 'calc' node and 'should_run' node.
+    # The names come from @cs.task(name=...).
+    assert "MyCalcTask" in task_names
+    assert "MyCondition" in task_names
+    
+    # Check Run ID presence
+    run_id = started[0].run_id
+    assert run_id is not None
+    assert all(e.run_id == run_id for e in started)
+
+    # B. Check Finish Events
+    finished = spy.events_of_type(TaskExecutionFinished)
+    finished_map = {e.task_name: e for e in finished}
+    
+    assert "MyCalcTask" in finished_map
+    calc_event = finished_map["MyCalcTask"]
+    
+    assert calc_event.status == "Succeeded"
+    assert calc_event.duration >= 0.0
+    assert calc_event.run_id == run_id
+    
+    print("VM Telemetry E2E Passed: Context and Metadata verified.")
 ~~~~~
 
 ### 下一步建议
-
-随着 Phase 4 的交付，我们的物理场已经具备了完整的生产级可观测性基础。下一步我们将进入 **Phase 5: 清理与验证 (Cleanup & Verification)**。
-
-具体建议：
-- **移除 Legacy 代码**: 清理 `VMExecutionStrategy` 和 `Event.from_ir` 中之前为了临时兼容旧 Trace 而留下的硬编码 Hack。
-- **E2E 冒烟测试**: 运行 `test_vm_strategy_e2e`，验证从 `LazyResult` 声明到 VM 执行再到控制台日志打印的完整回路是否完全通畅且符合预期。
-- **文档更新**: 在 `.stitcher.yaml` 中记录这一新的上下文传播协议。
+运行 `test_vm_telemetry.py`。如果通过，说明我们的 VM 策略已经具备了正确的代码发现能力和完整的遥测能力，这标志着 Cascade 3.0 的物理内核已经稳定可用。

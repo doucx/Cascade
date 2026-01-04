@@ -2,8 +2,7 @@ from typing import Protocol, Callable, Awaitable
 from cascade.spec.physics import Token
 
 
-from typing import Protocol, Callable, Awaitable, Dict, Any, Optional
-from cascade.spec.physics import Token
+from typing import Dict, Any, Optional
 
 
 class ReactorProtocol(Protocol):

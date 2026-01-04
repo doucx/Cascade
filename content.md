@@ -4,7 +4,7 @@
 
 ### 📝 变更文件摘要:
 ```
-pyproject.toml |  1 +
- uv.lock        | 16 ++++++++++++++++
- 2 files changed, 17 insertions(+)
+packages/cascade-engine/src/cascade/connectors/__init__.py | 2 --
+ packages/cascade-engine/tests/conftest.stitcher.yaml       | 2 +-
+ 2 files changed, 1 insertion(+), 3 deletions(-)
 ```

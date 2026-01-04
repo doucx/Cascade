@@ -6,7 +6,7 @@ from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.ports import PortDef, PortRole, PortName
 from cascade.std.resource.discrete import DiscreteLedger
 from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.utils.naming import PhysicalIdGenerator
+from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.wiring.context import WiringContext
 from cascade.compiler.wiring.prism import ResourcePrism
 

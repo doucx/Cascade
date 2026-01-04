@@ -137,7 +137,7 @@ class Engine:
         params: Optional[Dict[str, Any]] = None,
     ) -> Any:
         # Handle Auto-Gathering
-        from cascade.common.inputs import _internal_gather
+        from cascade.reflection import _internal_gather
 
         if isinstance(target, (list, tuple)):
             if not target:

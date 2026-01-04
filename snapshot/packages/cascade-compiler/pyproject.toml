@@ -9,7 +9,6 @@ description = "The graph compiler for Cascade 3.0, expanding logic into physical
 requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
-  "cascade-common",
   "cascade-graph",
   "cascade-reflection",
 ]

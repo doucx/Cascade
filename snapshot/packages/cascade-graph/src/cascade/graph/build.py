@@ -91,7 +91,7 @@ class GraphBuilder:
 
             # Complexity check
             from cascade.spec.resource import Inject as InjectMarker
-            from cascade.common.inputs import _get_param_value
+            from cascade.reflection import _get_param_value
 
             has_complex = False
             if result.task.func is _get_param_value.func:
@@ -121,7 +121,9 @@ class GraphBuilder:
                 has_complex = any(is_complex_value(v) for v in input_bindings.values())
 
             if result.task.func is _get_param_value.func:
-                from cascade.common.context import get_current_context
+                # This is a temporary solution for the build process to access context.
+            # In the long term, context might need to be passed explicitly.
+            from cascade.common.context import get_current_context
 
                 param_name = input_bindings.get("0") or input_bindings.get("name")
                 param_spec = None

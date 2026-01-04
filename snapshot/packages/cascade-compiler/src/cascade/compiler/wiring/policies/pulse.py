@@ -2,7 +2,7 @@ from cascade.spec.ir.models import NodeIR
 from cascade.spec.physics import PhysicsDataNode
 from cascade.spec.ports import PortName
 from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.utils.naming import PhysicalIdGenerator
+from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.wiring.context import WiringContext
 from cascade.compiler.wiring.protocol import WiringPolicy
 

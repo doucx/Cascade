@@ -163,17 +163,51 @@ class VMExecutionStrategy:
         return result_future.result()
 
     def _collect_lazy_results(self, target: Any) -> Dict[str, Any]:
+        # Use a visited set to handle cycles (though LR graph should be DAG) and avoid redundant work
         results = {}
-        if isinstance(target, (LazyResult, MappedLazyResult)):
-            results[target._uuid] = target
-            for arg in target.args:
-                results.update(self._collect_lazy_results(arg))
-            for k, v in target.kwargs.items():
-                results.update(self._collect_lazy_results(v))
-        elif isinstance(target, (list, tuple)):
-            for item in target:
-                results.update(self._collect_lazy_results(item))
-        elif isinstance(target, dict):
-            for v in target.values():
-                results.update(self._collect_lazy_results(v))
+        self._visit(target, results, set())
         return results
+
+    def _visit(self, obj: Any, results: Dict[str, Any], visited: set) -> None:
+        if isinstance(obj, (LazyResult, MappedLazyResult)):
+            if obj._uuid in visited:
+                return
+            visited.add(obj._uuid)
+            results[obj._uuid] = obj
+
+            # 1. Data Dependencies (Args/Kwargs)
+            if hasattr(obj, "args"):
+                for arg in obj.args:
+                    self._visit(arg, results, visited)
+            if hasattr(obj, "kwargs"):
+                for v in obj.kwargs.values():
+                    self._visit(v, results, visited)
+            if hasattr(obj, "mapping_kwargs"):
+                for v in obj.mapping_kwargs.values():
+                    self._visit(v, results, visited)
+
+            # 2. Control Dependencies
+            if obj._condition:
+                self._visit(obj._condition, results, visited)
+            
+            for dep in obj._dependencies:
+                self._visit(dep, results, visited)
+
+            # 3. Constraint Dependencies (Dynamic resource amounts)
+            if obj._constraints:
+                for req in obj._constraints.requirements.values():
+                    self._visit(req, results, visited)
+
+            # 4. Jump/Router Dependencies (Recursion/Branching)
+            if hasattr(obj, "_jump_selector") and obj._jump_selector:
+                selector = obj._jump_selector
+                for route_lr in selector.routes.values():
+                    if route_lr:
+                        self._visit(route_lr, results, visited)
+
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                self._visit(item, results, visited)
+        elif isinstance(obj, dict):
+            for v in obj.values():
+                self._visit(v, results, visited)

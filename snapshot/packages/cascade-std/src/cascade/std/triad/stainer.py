@@ -55,6 +55,7 @@ async def standard_stainer(
         "data": {
             "state": state,
             "task_id": logical_id,
+            "task_name": node.name,  # e.g., "Stain(MyTask)"
             "duration_ms": duration * 1000,
             "error": error_msg,
             "result_preview": str(result_payload)[:100]

@@ -54,7 +54,7 @@ async def standard_bleacher(
         "data": {
             "state": EventState.RUNNING,
             "task_id": logical_id,
-            # We don't have task_name easily here yet, will address in Phase 4
+            "task_name": node.name,  # e.g., "Bleach(MyTask)"
         },
     }
 

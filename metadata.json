@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(common): 将错误的 EventBus 命名纠正为 FeedbackBus", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767503860.4178686, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 全面清理总线命名术语并更新 SDK 导出", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767504045.3571, "duration_ms": 0}}

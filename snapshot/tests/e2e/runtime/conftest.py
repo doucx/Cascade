@@ -26,7 +26,7 @@ def cleanup_local_bus():
 
 @pytest.fixture
 def bus_and_spy():
-    """Provides an EventBus instance and an attached SpySubscriber."""
+    """Provides a runtime EventBus instance and an attached SpySubscriber."""
     bus = EventBus()
     spy = SpySubscriber(bus)
     return bus, spy

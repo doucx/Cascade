@@ -1,6 +1,6 @@
 import pytest
 import cascade as cs
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.runtime.engine import Engine
 from cascade.runtime.events import TaskSkipped
 from cascade.adapters.executors.local import LocalExecutor
@@ -20,7 +20,7 @@ async def test_run_if_true():
 
     flow = action().run_if(condition())
 
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
@@ -43,7 +43,7 @@ async def test_run_if_false():
 
     flow = action().run_if(condition())
 
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
@@ -75,7 +75,7 @@ async def test_cascade_skip():
     res_a = step_a().run_if(condition())
     res_b = step_b(res_a)
 
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 

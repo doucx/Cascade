@@ -1,7 +1,7 @@
 import io
 from cascade.runtime.events import RunStarted, TaskExecutionFinished
 from cascade.runtime.subscribers import HumanReadableLogSubscriber
-from cascade.runtime.bus import MessageBus as EventBus
+from cascade.runtime import EventBus as EventBus
 from cascade.common.messaging import bus as ui_bus
 from cascade.common.renderers import CliRenderer
 

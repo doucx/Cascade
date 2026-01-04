@@ -4,7 +4,7 @@ import pytest
 
 from cascade.adapters.solvers.native import NativeSolver
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.spec.constraint import GlobalConstraint
 from cascade.testing import MockConnector, MockExecutor, TimedMockExecutor
 
@@ -25,7 +25,7 @@ def engine_with_connector(mock_connector):
     return Engine(
         solver=NativeSolver(),
         executor=TimedMockExecutor(delay=0.05),
-        bus=MessageBus(),
+        bus=EventBus(),
         connector=mock_connector,
     )
 

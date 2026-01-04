@@ -1,6 +1,6 @@
 import pytest
 import cascade as cs
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.runtime.engine import Engine
 from cascade.runtime.events import TaskSkipped
 from cascade.adapters.executors.local import LocalExecutor
@@ -44,7 +44,7 @@ async def test_pruning_exclusive_branches():
 
     workflow = consumer(router)
 
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 
@@ -94,7 +94,7 @@ async def test_pruning_shared_dependency():
 
     workflow = consumer(router)
 
-    bus = MessageBus()
+    bus = EventBus()
     spy = SpySubscriber(bus)
     engine = Engine(solver=NativeSolver(), executor=LocalExecutor(), bus=bus)
 

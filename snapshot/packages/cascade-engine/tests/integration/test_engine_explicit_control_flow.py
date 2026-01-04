@@ -1,7 +1,7 @@
 import pytest
 import cascade as cs
 from cascade.runtime.engine import Engine
-from cascade.runtime.bus import MessageBus
+from cascade.runtime import EventBus
 from cascade.adapters.executors.local import LocalExecutor
 from cascade.adapters.solvers.native import NativeSolver
 
@@ -35,7 +35,7 @@ async def test_explicit_jump_loop():
     engine = Engine(
         solver=NativeSolver(),
         executor=LocalExecutor(),
-        bus=MessageBus(),
+        bus=EventBus(),
     )
 
     # The target is the loop_node itself. The engine should follow the jump

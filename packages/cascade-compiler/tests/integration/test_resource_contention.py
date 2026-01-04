@@ -75,7 +75,8 @@ async def test_resource_scarcity_topology_and_execution():
         resources=[ResourceDef(name=RESOURCE_NAME, capacity=RESOURCE_CAPACITY)]
     )
     builder = Builder()
-    physical_graph = builder.build(graph_ir, env)
+    assembly = builder.build(graph_ir, env)
+    physical_graph = assembly.graph
 
     # --- PART A: TOPOLOGY ASSERTION ---
     inspector = GraphInspector(physical_graph)
@@ -265,7 +266,8 @@ async def test_mixed_resource_wiring():
 
     env = EnvironmentDef(resources=[ResourceDef("gpu", 1), ResourceDef("cpu", 1)])
     builder = Builder()
-    physical_graph = builder.build(graph_ir, env)
+    assembly = builder.build(graph_ir, env)
+    physical_graph = assembly.graph
     inspector = GraphInspector(physical_graph)
 
     gpu_alloc = PhysicalIdGenerator.global_allocator("gpu")

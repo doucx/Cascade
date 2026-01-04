@@ -5,6 +5,7 @@ from .topology import Channel, BipartiteGraph
 from .resources import ResourceSlot
 from .environment import EnvironmentDef, ResourceDef
 from .ports import PortRole, PortDef
+from .assembly import Assembly, SymbolTable
 
 __all__ = [
     "Fingerprint",
@@ -24,4 +25,6 @@ __all__ = [
     "ResourceDef",
     "PortRole",
     "PortDef",
+    "Assembly",
+    "SymbolTable",
 ]

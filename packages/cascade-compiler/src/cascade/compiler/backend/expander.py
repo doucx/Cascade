@@ -16,6 +16,7 @@ class SubGraph:
 
     # Interface pointers
     bleacher: Optional[BleachNode] = None
+    worker: Optional[WorkerNode] = None
     stainer: Optional[StainNode] = None
 
 
@@ -127,6 +128,7 @@ class Expander:
             for n in [f_pre, d_worker_in, f_worker, d_worker_out, d_trace, f_post]
         }
         subgraph.bleacher = f_pre
+        subgraph.worker = f_worker
         subgraph.stainer = f_post
 
         # 3. Create Internal Wiring (Channels)

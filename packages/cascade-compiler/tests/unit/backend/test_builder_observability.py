@@ -14,7 +14,8 @@ def empty_graph_ir():
 
 def test_builder_creates_observer_sidecar(empty_graph_ir):
     builder = Builder()
-    graph = builder.build(empty_graph_ir, environment=EnvironmentDef())
+    assembly = builder.build(empty_graph_ir, environment=EnvironmentDef())
+    graph = assembly.graph
 
     # 1. Assert D_life exists (Baseline check)
     assert "global.observability.bus" in graph.nodes

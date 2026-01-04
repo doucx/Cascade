@@ -33,8 +33,9 @@ def test_expander_creates_triad_structure():
     assert stainer.id == "node_1.stain"
 
     # Check intermediate nodes
-    worker = subgraph.nodes["node_1.worker"]
+    worker = subgraph.worker
     assert isinstance(worker, WorkerNode)
+    assert worker.id == "node_1.worker"
 
     d_trace = subgraph.nodes["node_1.data.trace"]
     assert isinstance(d_trace, PhysicsDataNode)

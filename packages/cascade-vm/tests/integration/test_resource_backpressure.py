@@ -63,7 +63,8 @@ async def test_concurrency_limit():
     # 2. Define Environment and Build Physical Graph
     env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
     builder = Builder()
-    physical_graph = builder.build(graph_ir, environment=env)
+    assembly = builder.build(graph_ir, environment=env)
+    physical_graph = assembly.graph
 
     # 3. Setup VM
     memory = VolatileMemory()

@@ -15,10 +15,10 @@ class HashingService:
         dep_nodes: Dict[str, Node],
     ) -> str:
         # 1. Start with the Stable Code Fingerprint
-        current_code_structure_hash = definition.fingerprint[
-            "current_code_structure_hash"
+        canonical_code_structure_hash = definition.fingerprint[
+            "canonical_code_structure_hash"
         ]
-        components = [f"CodeHash:{current_code_structure_hash}"]
+        components = [f"CodeHash:{canonical_code_structure_hash}"]
 
         # 2. Purity Salt
         # Get purity from the Task wrapper if available, else assume False (Impure) for safety
@@ -125,7 +125,7 @@ class BlueprintHasher:
         # Updated to use node.definition
         components = [f"Node({node.definition.name}, type={node.node_type})"]
         components.append(
-            f"CodeHash({node.definition.fingerprint['current_code_structure_hash']})"
+            f"CodeHash({node.definition.fingerprint['canonical_code_structure_hash']})"
         )
 
         if node.retry_policy:

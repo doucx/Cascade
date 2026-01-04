@@ -745,9 +745,11 @@ version = "0.1.0"
 source = { editable = "packages/cascade-engine" }
 dependencies = [
     { name = "cascade-common" },
+    { name = "cascade-compiler" },
     { name = "cascade-graph" },
     { name = "cascade-reflection" },
     { name = "cascade-spec" },
+    { name = "cascade-vm" },
 ]
 
 [package.optional-dependencies]
@@ -763,9 +765,11 @@ redis = [
 [package.metadata]
 requires-dist = [
     { name = "cascade-common", editable = "packages/cascade-common" },
+    { name = "cascade-compiler", editable = "packages/cascade-compiler" },
     { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-reflection", editable = "packages/cascade-reflection" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
+    { name = "cascade-vm", editable = "packages/cascade-vm" },
     { name = "python-constraint", marker = "extra == 'csp-solver'" },
     { name = "redis", marker = "extra == 'redis'" },
 ]

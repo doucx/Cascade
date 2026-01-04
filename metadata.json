@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat: 集成 VMExecutionStrategy 以支持 v3.0 物理引擎实验", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767505395.883323, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: M uv.lock", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767505521.782689, "duration_ms": 0}}

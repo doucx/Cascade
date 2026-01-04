@@ -1,7 +1,7 @@
 import asyncio
 import inspect
 import logging
-from typing import List, Callable, Dict, Tuple, Awaitable, Optional
+from typing import List, Callable, Dict, Tuple, Awaitable, Optional, Any
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.vm.memory import VolatileMemory

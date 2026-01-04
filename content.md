@@ -1,73 +1,126 @@
-好的，Phase 4：上下文注入（Context Injection）已经顺利完成并通过了集成测试验证。
+简要回答
+我们进入 **Phase 5: 清理与验证**。
 
-我们已经成功建立了“创世注入”与“迹流传播”机制。现在，`run_id` 不再通过全局注册表进行“走私”，而是作为 Token 的内禀属性在物理场中流动，并最终完美地转化为高层业务事件。
+首要任务是修正 `VMExecutionStrategy`，使其利用 Phase 4 引入的“创世注入”协议，将 Engine 上下文中的 `run_id` 传递给 Reactor。这填补了 Engine 和 VM 之间的最后一块拼图。随后，我们将通过端到端 (E2E) 测试验证整个系统的可观测性回路。
 
-## [COMMIT] feat(vm): 实现基于 Trace 的上下文注入机制 (Phase 4)
+## [WIP] fix(engine): 在 VM 策略中注入 Run ID 并进行 E2E 验证 (Phase 5)
 
 ### 用户需求
-在 Cascade 物理场中建立无状态的上下文传播协议，确保 `run_id` 能够从图的入口（Genesis）自动流向每一个遥测节点，而无需依赖全局资源。
+1.  **连接上下文**: 修改 `VMExecutionStrategy`，使其在调用 `reactor.prime()` 时，从 `ExecutionContext` 中提取 `run_id` 并作为 `genesis_trace` 注入。
+2.  **全链路验证**: 创建或更新 E2E 测试，验证使用 `use_vm=True` 运行 Engine 时，能够产生包含正确 `run_id` 的结构化日志/事件。
 
 ### 评论
-这是 Cascade 架构演进的一个里程碑。通过将 `run_id` 刻入 `Token.trace`，我们不仅满足了当前的监控需求，还为未来支持 OpenTelemetry 等分布式追踪标准打下了坚实基础。系统现在真正实现了物理层与逻辑层的语义解耦。
+这是“创世注入”模式在生产环境（Engine）中的落地。在 Phase 4 中我们升级了底层机制（VM/Reactor），现在我们需要升级上层调用者（Engine/Strategy）来利用这一机制。如果不做这一步，VM 运行的任务将丢失 `run_id`，导致遥测数据断裂。
 
 ### 目标
-1.  **Run ID 持久化**: 在 `EventDrivenRunner` 中生成并持有 `run_id`。
-2.  **创世注入**: 修改 `Reactor.prime` 和 `Runner.inject_input` 以将 `run_id` 注入到初始 Token 中。
-3.  **迹流提取**: 更新 `bleacher` 和 `stainer` 以从 Trace 中提取 `rid` 并填充到 `EventIR` 的 `ctx` 字段。
-4.  **全链路验证**: 通过集成测试确保 `EventBus` 产出的领域对象包含正确的 `run_id`。
+1.  修正 `packages/cascade-engine/src/cascade/runtime/strategies/vm.py`。
+2.  创建 `packages/cascade-engine/tests/integration/test_vm_strategy_e2e.py` 以验证完整的执行链路。
 
 ### 基本原理
-根据“创世注入”原则，物理场中的粒子（Token）携带其历史（Trace）。我们将 `run_id` 定义为宇宙的初始微扰，在激发时刻注入系统。由于 `Bleacher` 会自动合并上游 Token 的 Trace，因此 `run_id` 会像染料一样随着数据流自动扩散到图的所有分支，实现了完美的局域性。
+`VMExecutionStrategy` 是 Engine 和 VM 之间的适配器。Engine 负责生成 `run_id` 并管理资源，VM 负责执行。通过在 `prime` 阶段注入 `run_id`，我们确保了物理层的执行与逻辑层的会话 ID 绑定，而无需物理层知道 Engine 的存在。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/vm #comp/std #comp/engine #concept/observability #task/domain/observability #task/object/context-injection #task/action/implementation #task/state/end
+#intent/fix #intent/test #flow/ready #priority/high #comp/engine #comp/vm #concept/observability #task/domain/observability #task/object/context-injection #task/action/integration #task/state/begin
 
 ---
 
 ### Script
 
-#### Acts 1: 提交上下文注入功能及测试
+#### Acts 1: 修正 VMExecutionStrategy
 
-我们将更新后的 VM 协议、Harness 逻辑、标准库组件以及新创建的集成测试文件添加到暂存区并提交。
-
-~~~~~act
-git_add
-packages/cascade-vm/src/cascade/vm/protocols.py
-packages/cascade-vm/src/cascade/vm/reactor.py
-packages/cascade-vm/src/cascade/vm/harness.py
-packages/cascade-std/src/cascade/std/triad/bleacher.py
-packages/cascade-std/src/cascade/std/triad/stainer.py
-packages/cascade-vm/tests/integration/test_context_injection.py
-~~~~~
+我们将修改 `vm.py`，从执行上下文中提取 `run_id` 并传递给 `reactor.prime`。
 
 ~~~~~act
-git_commit
+patch_file
+packages/cascade-engine/src/cascade/runtime/strategies/vm.py
 ~~~~~
-~~~~~text
-feat(vm): implement Trace-based context injection (Phase 4)
+~~~~~python.old
+        # Prime the reactor (fill constants, pulses)
+        reactor.prime()
 
-This commit implements the "Genesis Injection" and "Trace Propagation" patterns,
-enabling context awareness (specifically 'run_id') in stateless physics nodes.
+        # Result Future
+~~~~~
+~~~~~python.new
+        # Prime the reactor (fill constants, pulses)
+        # Genesis Injection: Pass the run_id from context so it propagates to all tokens
+        reactor.prime(genesis_trace={"rid": context.run_id})
 
-Key Changes:
-1. Reactor/Harness: Updated prime() and inject_input() to inject a genesis
-   trace (containing 'run_id') into tokens at the "moment of creation".
-2. Standard Library: Updated standard_bleacher and standard_stainer to
-   extract 'rid' from Token.trace and populate EventIR.ctx.rid.
-3. Observability: The system now correctly propagates context from raw physical
-   traces to rich domain events (e.g., TaskExecutionStarted.run_id).
-4. Integration Test: Added test_context_injection.py to verify the full flow 
-   from data injection to rich event delivery.
+        # Result Future
+~~~~~
 
-This architecture adheres to the Locality Principle, ensuring that nodes
-only act on data they receive, without smuggling context through global resources.
+#### Acts 2: 创建 E2E 验证测试
+
+我们将创建一个集成测试，模拟用户使用 `Engine` 运行任务的场景，并验证 `MessageBus` 上收到的事件是否完整且正确。
+
+~~~~~act
+write_file
+packages/cascade-engine/tests/integration/test_vm_strategy_e2e.py
+~~~~~
+~~~~~python
+import pytest
+from unittest.mock import MagicMock
+from cascade.spec.task import task
+from cascade.engine import Engine
+from cascade.runtime.event_bus import EventBus
+from cascade.runtime.events import TaskExecutionFinished, RunStarted
+from cascade.adapters.executors.local import LocalExecutor
+from cascade.adapters.solvers.native import NativeSolver
+
+
+@task
+def hello_task(name: str) -> str:
+    return f"Hello, {name}!"
+
+
+@pytest.mark.asyncio
+async def test_vm_strategy_e2e_observability():
+    """
+    Verifies that running a task via the VM strategy:
+    1. Executes correctly.
+    2. Emits LifeCycle events (Started, Finished).
+    3. Events contain the correct run_id (Context Injection works).
+    """
+    # 1. Setup Engine components
+    bus = EventBus()
+    executor = LocalExecutor()
+    solver = NativeSolver()
+    engine = Engine(solver=solver, executor=executor, bus=bus)
+
+    # 2. Setup Event Spy
+    captured_events = []
+    bus.subscribe(TaskExecutionFinished, captured_events.append)
+    bus.subscribe(RunStarted, captured_events.append)
+
+    # 3. Execute Workflow using VM Strategy
+    flow = hello_task("World")
+    result = await engine.run(flow, use_vm=True)
+
+    # 4. Verify Result
+    assert result == "Hello, World!"
+
+    # 5. Verify Observability
+    # Check that we got a RunStarted event
+    run_started = next((e for e in captured_events if isinstance(e, RunStarted)), None)
+    assert run_started is not None
+    run_id = run_started.run_id
+    assert run_id is not None
+
+    # Check that we got a TaskExecutionFinished event with the SAME run_id
+    task_finished = next((e for e in captured_events if isinstance(e, TaskExecutionFinished)), None)
+    assert task_finished is not None
+    
+    assert task_finished.task_name == "hello_task"
+    assert task_finished.status == "Succeeded"
+    
+    # THE CRITICAL CHECK: Did the run_id propagate from Engine -> VM -> Token -> EventIR -> Bus -> Event?
+    assert task_finished.run_id == run_id, \
+        f"Context Injection Failed: Expected run_id {run_id}, got {task_finished.run_id}"
+
+    print(f"E2E Verification Passed. Run ID: {run_id}")
 ~~~~~
 
 ### 下一步建议
 
-随着 Phase 4 的交付，我们的物理场已经具备了完整的生产级可观测性基础。下一步我们将进入 **Phase 5: 清理与验证 (Cleanup & Verification)**。
+运行此 E2E 测试。如果通过，即证明我们成功地将旧的、硬编码的追踪逻辑替换为了基于物理原理的、统一的上下文注入机制。
 
-具体建议：
-- **移除 Legacy 代码**: 清理 `VMExecutionStrategy` 和 `Event.from_ir` 中之前为了临时兼容旧 Trace 而留下的硬编码 Hack。
-- **E2E 冒烟测试**: 运行 `test_vm_strategy_e2e`，验证从 `LazyResult` 声明到 VM 执行再到控制台日志打印的完整回路是否完全通畅且符合预期。
-- **文档更新**: 在 `.stitcher.yaml` 中记录这一新的上下文传播协议。
+之后，我们可以进行最后的清理工作（如果有剩余的死代码），并更新文档。

@@ -106,7 +106,7 @@ async def main():
     engine = cs.Engine(
         solver=cs.NativeSolver(),
         executor=cs.LocalExecutor(),
-        bus=cs.MessageBus(),  # A silent bus for clean test output
+        bus=cs.EventBus(),  # A silent bus for clean test output
     )
     timing_errors = await engine.run(probe_workflow)
 

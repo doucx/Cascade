@@ -67,7 +67,7 @@ async def run_experiment(visualize: bool = True):
 
     # 4. Setup Engine
     engine = cs.Engine(
-        solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=cs.MessageBus()
+        solver=cs.NativeSolver(), executor=cs.LocalExecutor(), bus=cs.EventBus()
     )
 
     @resource(name="shared_connector")

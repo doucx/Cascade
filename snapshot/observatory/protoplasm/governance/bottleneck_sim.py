@@ -110,7 +110,7 @@ async def run_simulation():
             pass
 
     # 3. Setup Engine
-    engine_bus = cs.MessageBus()
+    engine_bus = cs.EventBus()
     engine_bus.subscribe(cs.Event, handle_event)
 
     engine = cs.Engine(

@@ -88,7 +88,7 @@ async def run_recursion_experiment():
     # Configure global renderer for the bus (used by subscribers)
     global_bus.set_renderer(CliRenderer(store=global_bus.store, min_level="WARNING"))
 
-    engine_bus = cs.MessageBus()
+    engine_bus = cs.EventBus()
     # Attach subscriber to the engine's bus
     HumanReadableLogSubscriber(engine_bus)
 

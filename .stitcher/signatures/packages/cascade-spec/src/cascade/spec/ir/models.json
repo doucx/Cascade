@@ -27,9 +27,7 @@
   },
   "NodeIR.current_node_instance_hash": {},
   "NodeIR.dependencies": {},
-  "NodeIR.id": {
-    "baseline_yaml_content_hash": "c9eb8e303ca01e651c344ad062f4293410f9c2e63b6d986a6fb63b6002cf65dc"
-  },
+  "NodeIR.id": {},
   "NodeIR.inputs": {
     "baseline_yaml_content_hash": "d9b42d06d9b428812129bbfab5aa6b464b87fd17fafed13d931ca1894266065f"
   },

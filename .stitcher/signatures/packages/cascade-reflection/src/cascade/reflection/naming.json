@@ -1,0 +1,67 @@
+{
+  "PhysicalIdGenerator": {},
+  "PhysicalIdGenerator.bleach_node": {
+    "baseline_code_signature_text": "def bleach_node(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "df1e30f5d15ad629990bde1b338e337c708129cd20148692b79096ed5b8939fd"
+  },
+  "PhysicalIdGenerator.constant": {
+    "baseline_code_signature_text": "def constant(target_node_id: str, arg_name: str) -> str:",
+    "baseline_code_structure_hash": "32acb59bd9ab40b15e3e09d4907761387a199aeccc85898acf2a610ca0286be1"
+  },
+  "PhysicalIdGenerator.global_allocator": {
+    "baseline_code_signature_text": "def global_allocator(resource_name: str) -> str:",
+    "baseline_code_structure_hash": "7079010bb755169e380868cc975f88b85a82dfa8358e2447b796f0b52da482db"
+  },
+  "PhysicalIdGenerator.global_ledger": {
+    "baseline_code_signature_text": "def global_ledger(resource_name: str) -> str:",
+    "baseline_code_structure_hash": "26b43a240211c145ddb63ef76afa2092a70d60b0db0b148ea666c8a410bd67f7"
+  },
+  "PhysicalIdGenerator.global_reclaimer": {
+    "baseline_code_signature_text": "def global_reclaimer(resource_name: str) -> str:",
+    "baseline_code_structure_hash": "f821699724d22e56c872ff39e0c529867d9fcc2d8715388634f41152b70ff3c9"
+  },
+  "PhysicalIdGenerator.global_resource": {
+    "baseline_code_signature_text": "def global_resource(resource_name: str) -> str:",
+    "baseline_code_structure_hash": "dc428514da57a65d56f05022b9f88dc2aaf050bf668e9f9d98c55a907c8ae23d"
+  },
+  "PhysicalIdGenerator.observability_bus": {
+    "baseline_code_signature_text": "def observability_bus() -> str:",
+    "baseline_code_structure_hash": "c916f40c96b47133bed9a63f6b0c6787a4248ca0fdf51fe44f4855b5df605e75"
+  },
+  "PhysicalIdGenerator.observability_observer": {
+    "baseline_code_signature_text": "def observability_observer() -> str:",
+    "baseline_code_structure_hash": "c29b7166c5e7317e0af71cac92dca47fec14b13c353d44f453e5b786ea7ab224"
+  },
+  "PhysicalIdGenerator.probe_const": {
+    "baseline_code_signature_text": "def probe_const(target_node_id: str, arg_name: str) -> str:",
+    "baseline_code_structure_hash": "f0a21530710523ce8564a46234247ce444fb6582fd38a2d4edaaa8314215ab53"
+  },
+  "PhysicalIdGenerator.pulse_source": {
+    "baseline_code_signature_text": "def pulse_source(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "e0b5a15f30796852970af5d33a853304e3cb316a2ba879818908c4febe6fb49d"
+  },
+  "PhysicalIdGenerator.requestor": {
+    "baseline_code_signature_text": "def requestor(target_node_id: str, resource_name: str) -> str:",
+    "baseline_code_structure_hash": "03a61c8cdee8ae9025d161ceeb366df01da900e7115bdb84548808afd581d154"
+  },
+  "PhysicalIdGenerator.stain_node": {
+    "baseline_code_signature_text": "def stain_node(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "9c4768662ce4ef749a88ac3337551eaec567e34ab181b05b9a275db33e98aca3"
+  },
+  "PhysicalIdGenerator.trace_data": {
+    "baseline_code_signature_text": "def trace_data(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "2a08f82a6029600a6e9ca3596420a17614bc10c8009101ae9c99b9bbe3cc7976"
+  },
+  "PhysicalIdGenerator.worker_in_data": {
+    "baseline_code_signature_text": "def worker_in_data(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "87f3fe0a2e4af96eb7e2edf44f1801f6fcf4d484bb97e6147cb6214ccb8fd06c"
+  },
+  "PhysicalIdGenerator.worker_node": {
+    "baseline_code_signature_text": "def worker_node(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "b143963d86083553ce6e1e37e4902cce0fc400da52975262bdf730db16914e10"
+  },
+  "PhysicalIdGenerator.worker_out_data": {
+    "baseline_code_signature_text": "def worker_out_data(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "59854a69a9ae8a6b658998d8ba83488ac09a31c2c5cc7926fe549a8a39e13803"
+  }
+}

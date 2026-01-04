@@ -55,9 +55,7 @@
     "baseline_code_structure_hash": "7409e98f7a8b1744675be2e9b5f2695604e295b5b714e2e35b1fdc20b6806699"
   },
   "Node.cache_policy": {},
-  "Node.callable_obj": {
-    "baseline_yaml_content_hash": "b095571b1d27c62676bcf8eb64d42d2d2179105048709fc110896b3c1e3f9c35"
-  },
+  "Node.callable_obj": {},
   "Node.constraints": {},
   "Node.current_node_instance_hash": {},
   "Node.definition": {},

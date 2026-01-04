@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(std): 改造物理发射源以支持 EventIR", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767511947.1569805, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 适配 EventIR 重构，修复测试导入错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767512078.285471, "duration_ms": 0}}

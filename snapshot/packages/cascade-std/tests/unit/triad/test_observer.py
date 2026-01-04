@@ -1,76 +1,65 @@
 import pytest
-from asyncio import Queue
 from unittest.mock import MagicMock
 
 from cascade.spec.physics import Token
-from cascade.std.triad.observer import standard_observer, ObservedEvent
+from cascade.spec import EventIR, EventType, EventState
+from cascade.std.triad.observer import standard_observer
 
 
 @pytest.fixture
-def event_queue() -> Queue:
-    return Queue()
+def mock_bus() -> MagicMock:
+    return MagicMock()
 
 
 @pytest.fixture
-def mock_resources(event_queue: Queue) -> MagicMock:
+def mock_resources(mock_bus: MagicMock) -> MagicMock:
     registry = MagicMock()
-    registry.get.return_value = event_queue
+    registry.get.return_value = mock_bus
     return registry
 
 
-async def test_observer_processes_start_event(
-    event_queue: Queue, mock_resources: MagicMock
-):
-    start_trace = {"id": "task_A", "start_ts": 100.0}
-    event_token = Token(payload=None, trace=start_trace)
-    inputs = {"event_token": event_token}
-
-    await standard_observer(inputs, MagicMock(), mock_resources)
-
-    # Assertions
-    mock_resources.get.assert_called_once_with("system.observer.queue")
-    assert event_queue.qsize() == 1
-    observed = await event_queue.get()
-
-    assert isinstance(observed, ObservedEvent)
-    assert observed.event_type == "start"
-    assert observed.trace_data == start_trace
-
-
-async def test_observer_processes_end_event(
-    event_queue: Queue, mock_resources: MagicMock
-):
-    end_trace = {
-        "id": "task_A",
-        "start_ts": 100.0,
-        "end_ts": 102.5,
-        "duration": 2.5,
+@pytest.mark.asyncio
+async def test_observer_publishes_ir_to_bus(mock_bus: MagicMock, mock_resources: MagicMock):
+    # 1. Prepare Input
+    ir_payload: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": 123.456,
+        "ctx": {"rid": "run-1"},
+        "phy": {"nid": "node-abc.stain"},
+        "data": {"state": EventState.SUCCEEDED, "duration_ms": 100},
     }
-    event_token = Token(payload="result", trace=end_trace)
+    event_token = Token(payload=ir_payload, trace={})
     inputs = {"event_token": event_token}
 
+    # 2. Execute
     await standard_observer(inputs, MagicMock(), mock_resources)
 
-    # Assertions
-    mock_resources.get.assert_called_once_with("system.observer.queue")
-    assert event_queue.qsize() == 1
-    observed = await event_queue.get()
-
-    assert isinstance(observed, ObservedEvent)
-    assert observed.event_type == "end"
-    assert observed.trace_data == end_trace
+    # 3. Assert
+    # Assert that the observer requested the bus from resources
+    mock_resources.get.assert_called_once_with("system.event_bus")
+    
+    # Assert that the observer published the IR payload to the bus
+    mock_bus.publish_ir.assert_called_once_with(ir_payload)
 
 
-async def test_observer_with_empty_trace(event_queue: Queue, mock_resources: MagicMock):
-    event_token = Token(payload=None, trace={})
+@pytest.mark.asyncio
+async def test_observer_handles_no_bus(mock_resources: MagicMock):
+    # Set up resources to return None for the bus
+    mock_resources.get.return_value = None
+    
+    ir_payload: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": 123.456,
+        "ctx": {}, "phy": {"nid": "n1"}, "data": {},
+    }
+    event_token = Token(payload=ir_payload, trace={})
     inputs = {"event_token": event_token}
 
+    # Execute and expect no exceptions
     await standard_observer(inputs, MagicMock(), mock_resources)
-
-    # Assertions
-    mock_resources.get.assert_called_once_with("system.observer.queue")
-    assert event_queue.qsize() == 1
-    observed = await event_queue.get()
-
-    assert observed.event_type == "start"
-    assert observed.trace_data == {}
+    
+    # Bus's publish method should not have been called
+    # (since bus itself is None, getattr would fail if not guarded)
+    # The main test is that it doesn't crash.

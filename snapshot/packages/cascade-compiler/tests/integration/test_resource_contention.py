@@ -7,7 +7,8 @@ from cascade.compiler.backend.builder import Builder
 from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.spec.physics import Token
 from cascade.spec.ports import PortRole
-from cascade.vm.harness import EventDrivenRunner, ObservedEvent
+from cascade.vm.harness import EventDrivenRunner
+from cascade.runtime.events import Event, TaskExecutionStarted, TaskExecutionFinished
 from cascade.compiler.utils.inspector import GraphInspector
 from cascade.reflection import PhysicalIdGenerator
 
@@ -173,77 +174,50 @@ async def test_resource_scarcity_topology_and_execution():
     await runner.start_loop()
 
     try:
-        # Collect all 'start' and 'end' events
-        events: List[ObservedEvent] = []
-
-        # We wait until we have 2 * TASK_COUNT logical task completions.
-        # But we log EVERY physical event to diagnose the deadlock.
-        def collection_predicate(e: ObservedEvent):
-            # Log ALL physical events for debugging
-            node_id = e.trace_data.get("current_node_instance_hash", "unknown")
-            print(
-                f"[OBS-START] {node_id}"
-                if e.event_type == "start"
-                else f"[OBS-END  ] {node_id}"
-            )
-
-            # Log ALL physical events for debugging
-            # node_id = e.trace_data.get("id", "unknown")
-            # print(f"[OBS-START] {node_id}" if e.event_type == "start" else f"[OBS-END  ] {node_id}")
-
-            # Collect ALL events so we can analyze start/end intervals later
+        # Collect all events
+        events: List[Event] = []
+        
+        def collection_predicate(e: Event):
             events.append(e)
+            
+            if isinstance(e, TaskExecutionStarted):
+                print(f"[OBS-START] {e.task_id}")
+            elif isinstance(e, TaskExecutionFinished):
+                print(f"[OBS-END  ] {e.task_id} ({e.status})")
 
             # Check completion condition based on END events only
-            completed = sum(1 for x in events if x.event_type == "end")
+            completed = len([e for e in events if isinstance(e, TaskExecutionFinished)])
             return completed == TASK_COUNT
 
-        # Timeout needs to be generous.
-        # With request recirculation, the reactor steps many times per useful work.
         await runner.wait_for_event(collection_predicate, timeout=10.0)
 
-        # Analyze Concurrency
-        # Convert events to intervals [start, end]
+        # Analyze Concurrency from the rich event stream
         intervals: Dict[str, Dict[str, float]] = {}
-        for e in events:
-            tid = e.trace_data["id"]
-            if tid not in intervals:
-                intervals[tid] = {}
+        
+        start_events = {e.task_id: e.timestamp for e in events if isinstance(e, TaskExecutionStarted)}
+        end_events = {e.task_id: e.timestamp for e in events if isinstance(e, TaskExecutionFinished)}
 
-            if e.event_type == "start":
-                intervals[tid]["start"] = e.trace_data["start_ts"]
-            elif e.event_type == "end":
-                intervals[tid]["end"] = e.trace_data["end_ts"]
+        for task_id in start_events:
+            if task_id in end_events:
+                intervals[task_id] = {
+                    "start": start_events[task_id],
+                    "end": end_events[task_id],
+                }
 
         # Check max overlap
-        # We sample at the start time of each task
         max_concurrency = 0
-
-        sorted_starts = sorted(
-            [info["start"] for info in intervals.values() if "start" in info]
-        )
+        sorted_starts = sorted(intervals[tid]["start"] for tid in intervals)
 
         for t in sorted_starts:
-            # Count how many tasks are active at time t (start <= t < end)
-            # We use a small epsilon for float comparison safety
             active = 0
             for info in intervals.values():
-                if "start" in info and "end" in info:
-                    if info["start"] <= t + 0.0001 and info["end"] > t:
-                        active += 1
+                if info["start"] <= t + 0.0001 and info["end"] > t:
+                    active += 1
             max_concurrency = max(max_concurrency, active)
-
-        # Assertion: Concurrency should never exceed capacity
-        # Note: Due to async/thread timing granularity, 'start_ts' from bleacher
-        # and 'end_ts' from stainer might show slight overlaps that didn't physically exist
-        # in the Allocator's ledger. But it should be close.
-        # Ideally it should be exactly 3.
+        
         assert max_concurrency <= RESOURCE_CAPACITY, (
             f"Max concurrency {max_concurrency} exceeded capacity {RESOURCE_CAPACITY}"
         )
-
-        # Sanity check: verify we actually ran stuff in parallel (at least > 1)
-        # With 50 tasks and cap 3, we definitely should hit 2 or 3.
         assert max_concurrency > 1, (
             "Tasks ran purely sequentially, which is suspicious."
         )

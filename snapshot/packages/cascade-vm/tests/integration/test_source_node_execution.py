@@ -7,7 +7,8 @@ from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.backend.builder import Builder
 from cascade.spec.environment import EnvironmentDef
 from cascade.spec.physics import Token
-from cascade.vm.harness import EventDrivenRunner, ObservedEvent
+from cascade.vm.harness import EventDrivenRunner
+from cascade.runtime.events import Event, TaskExecutionFinished, TaskExecutionStarted
 
 
 # Standard library function imports
@@ -32,8 +33,8 @@ def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     if "source_task" in node.name:
         result = source_task.func()
 
-    # The Stainer will merge this into the final trace
-    trace_from_bleacher["worker_result"] = result
+    # The Stainer will see the result as a payload, not in the trace.
+    # The trace is passed through for duration calculation etc.
     return {"worker_result": Token(payload=result, trace=trace_from_bleacher)}
 
 
@@ -82,27 +83,10 @@ async def test_source_node_is_triggered_by_pulse():
             task_id=node_ir.current_node_instance_hash
         )
 
-        assert isinstance(completion_event, ObservedEvent)
-        assert completion_event.event_type == "end"
-
-        # The stainer should have received the worker's result via the trace
-        # and included it in the final trace data emitted to the observer.
-        # Let's modify the mock worker to facilitate this.
-        # NOTE: The Stainer merges the trace from the worker's output token.
-        # So we need to ensure the worker puts its result there.
-        final_trace = completion_event.trace_data
-
-        # We need a way for the worker's result to end up in the final trace.
-        # The Stainer receives the worker's result as a payload. It's not in the trace.
-        # Let's adjust the test to be more realistic. The Stainer's output *payload*
-        # is what matters for downstream tasks. The *event* just confirms completion.
-
-        # The most important assertion is that the task completed successfully.
-        # The fact that run_until_complete returned without a timeout is the primary success signal.
-        # We can also check the trace for the node ID.
-        assert final_trace.get("id") == node_ir.current_node_instance_hash
-        assert "duration" in final_trace
-        assert final_trace.get("worker_result") == "Pulse Fired!"
+        assert isinstance(completion_event, TaskExecutionFinished)
+        assert completion_event.status == "Succeeded"
+        assert completion_event.task_id == node_ir.current_node_instance_hash
+        assert completion_event.result_preview.startswith("'Pulse Fired!'")
 
     finally:
         await runner.stop_loop()

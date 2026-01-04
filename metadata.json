@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test(vm): 验证基于 Trace 的上下文注入全链路", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767514181.2621217, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(vm): 修复 Trace 上下文注入测试的断言逻辑", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767514254.4321313, "duration_ms": 0}}

@@ -6,7 +6,7 @@ from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsDataNode, Token
 from cascade.spec.triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
 from cascade.spec.ports import PortDef, PortRole
-from cascade.spec import EventType
+from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
 from cascade.vm.harness import EventDrivenRunner
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
@@ -145,12 +145,14 @@ async def test_genesis_injection_propagates_run_id():
         runner.inject_input("d_in", "test_data")
 
         # 4. Wait for completion (Stainer success event)
-        # We look for the SUCCEEDED event from the stainer
+        # We look for the SUCCEEDED event from the stainer (which maps to TaskExecutionFinished)
+        # Note: standard_stainer emits an IR with logic_id derived from node id.
+        # "task.stain" -> logical_id "task"
         def is_success(e):
             return (
-                e.type == EventType.LIFECYCLE 
-                and e.payload["data"]["state"] == "succeeded"
-                and e.payload["phy"]["nid"] == "task.stain"
+                isinstance(e, TaskExecutionFinished)
+                and e.task_id == "task"
+                and e.status == "Succeeded"
             )
         
         await runner.wait_for_event(is_success, timeout=2.0)
@@ -158,16 +160,19 @@ async def test_genesis_injection_propagates_run_id():
         # 5. Verify Events
         events = runner._captured_events
         
-        # Filter relevant lifecycle events
-        lifecycle_events = [e for e in events if e.type == EventType.LIFECYCLE]
-        assert len(lifecycle_events) >= 2  # At least Bleacher(Running) and Stainer(Succeeded)
+        # Filter relevant lifecycle events (Rich Objects)
+        lifecycle_events = [
+            e for e in events 
+            if isinstance(e, (TaskExecutionStarted, TaskExecutionFinished))
+        ]
+        assert len(lifecycle_events) >= 2  # At least Started and Finished
 
         for event in lifecycle_events:
             # THE CORE ASSERTION:
-            # Every lifecycle event must carry the correct run_id in its context
-            assert "ctx" in event.payload, f"Event {event} missing ctx"
-            assert event.payload["ctx"].get("rid") == runner.run_id, \
-                f"Run ID mismatch in event {event.payload['phy']['nid']}"
+            # Every lifecycle event object must carry the correct run_id
+            # The translation layer (Event.from_ir) extracts 'ctx.rid' -> 'event.run_id'
+            assert event.run_id == runner.run_id, \
+                f"Run ID mismatch in event {event}"
 
         print("Context propagation verified successfully.")
 

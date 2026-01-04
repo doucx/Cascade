@@ -1,45 +1,41 @@
 简要回答
-我们已完成了代码的修改，现在将创建一个集成测试来验证 `run_id` 是否能正确地从 `EventDrivenRunner` 注入并传播到 `EventBus` 上的所有遥测事件中。
+测试失败是因为 `EventBus` 已经按预期工作，将底层的 `EventIR` 字典转换为了高级的 **Rich Event Objects** (如 `TaskExecutionStarted`)，而我们的测试代码仍试图将其作为原始字典或具有 `type` 属性的对象来访问。
 
-## [WIP] test(vm): 验证基于 Trace 的上下文注入全链路
+这实际上是一个好消息：错误信息中的 `run_id='a22e49a7...'` 证明了上下文注入机制**已经生效**。我们需要做的仅仅是修复测试代码，使其针对 Rich Event 对象进行断言。
+
+## [WIP] test(vm): 修复 Trace 上下文注入测试的断言逻辑
 
 ### 用户需求
-创建一个集成测试 `packages/cascade-vm/tests/integration/test_context_injection.py`，用于验证：
-1.  `EventDrivenRunner` 在初始化时正确生成了 `run_id`。
-2.  `inject_input` 操作将 `run_id` 注入到了 Token 的 `trace` 中。
-3.  `Bleacher` 和 `Stainer` 生成的生命周期事件（Lifecycle Events）均包含正确的 `ctx.rid`。
+修复 `packages/cascade-vm/tests/integration/test_context_injection.py` 中的 `AttributeError`。
+1.  修改测试以导入并使用 `cascade.runtime.events` 中的 `TaskExecutionStarted` 和 `TaskExecutionFinished` 类。
+2.  更新 `wait_for_event` 的谓词逻辑，使用 `isinstance` 检查类型，并检查 `task_id` 和 `status`。
+3.  更新后续的断言逻辑，直接验证 Rich Event 对象的 `run_id` 属性。
 
 ### 评论
-这个测试是 Phase 4 的验收标准。它不依赖于编译器，而是通过手动构建一个最小化的物理三连体（Triad），直接测试 VM 和标准库（Bleacher/Stainer）的交互。这确保了测试关注点集中在运行时行为和上下文传播机制上。
+这个修复确认了我们的架构分层（VM -> IR -> EventBus -> Rich Events）正在协同工作。直接验证 Rich Event 不仅修复了测试，还隐式验证了从 IR 到 Rich Event 的转换逻辑是否正确保留了上下文信息。
 
 ### 目标
-1.  构建一个包含 `Bleacher`, `Worker`, `Stainer` 和 `Observer` 的最小物理图。
-2.  运行该图并捕获事件。
-3.  断言所有关键节点的事件都携带了统一的 `run_id`。
+让集成测试通过。
 
 ### 基本原理
-我们将使用 `EventDrivenRunner` 作为 Harness。通过手动构建物理图，我们可以精确控制端口定义和连接，排除编译器可能引入的干扰。测试将模拟一次完整的任务执行，从数据注入到结果产出，从而验证 Trace 在整个生命周期中的完整性。
+测试应反映系统的实际行为。系统现在的行为是发出领域对象，而不是原始数据，因此测试必须演进以匹配这一契约。
 
 ### 标签
-#intent/test #flow/ready #priority/high #comp/vm #comp/std #concept/observability #task/domain/observability #task/object/context-injection #task/action/verification #task/state/end
+#intent/test #intent/fix #flow/ready #priority/high #comp/vm #task/domain/observability #task/object/context-injection #task/action/verification #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建上下文注入集成测试
+#### Acts 1: 修复测试断言
 
-我们创建一个新的测试文件，手动组装一个物理图来验证 Trace 传播。
+我们将修改测试文件，导入正确的事件类，并调整断言逻辑。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-vm/tests/integration/test_context_injection.py
 ~~~~~
-~~~~~python
-import asyncio
-import pytest
-from typing import Dict, Any
-
+~~~~~python.old
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsDataNode, Token
 from cascade.spec.triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
@@ -48,140 +44,23 @@ from cascade.spec import EventType
 from cascade.vm.harness import EventDrivenRunner
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
+~~~~~
+~~~~~python.new
+from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.spec.physics import PhysicsDataNode, Token
+from cascade.spec.triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
+from cascade.spec.ports import PortDef, PortRole
+from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
+from cascade.vm.harness import EventDrivenRunner
+from cascade.std.triad.bleacher import standard_bleacher
+from cascade.std.triad.stainer import standard_stainer
+~~~~~
 
-
-# --- Helper: Build a Physical Triad manually ---
-def build_test_triad() -> BipartiteGraph:
-    graph = BipartiteGraph()
-
-    # 1. Nodes
-    # Input Data
-    d_in = PhysicsDataNode(id="d_in", name="Input")
-    
-    # F_pre (Bleacher)
-    f_pre = BleachNode(
-        id="task.bleach",
-        name="Bleacher",
-        input_ports={"arg1": PortDef("arg1", PortRole.DATA)},
-        output_ports={
-            "worker_input": PortDef("worker_input", PortRole.DATA),
-            "trace_output": PortDef("trace_output", PortRole.DATA),
-            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
-        },
-    )
-
-    # D_worker_in & D_trace
-    d_worker_in = PhysicsDataNode(id="d_worker_in", name="WorkerIn")
-    d_trace = PhysicsDataNode(id="d_trace", name="Trace")
-
-    # F_exec (Worker)
-    f_worker = WorkerNode(
-        id="task.worker",
-        name="Worker",
-        input_ports={"worker_input": PortDef("worker_input", PortRole.DATA)},
-        output_ports={"worker_result": PortDef("worker_result", PortRole.DATA)},
-    )
-
-    # D_worker_out
-    d_worker_out = PhysicsDataNode(id="d_worker_out", name="WorkerOut")
-
-    # F_post (Stainer)
-    f_stain = StainNode(
-        id="task.stain",
-        name="Stainer",
-        input_ports={
-            "worker_result": PortDef("worker_result", PortRole.DATA),
-            "trace_input": PortDef("trace_input", PortRole.DATA),
-        },
-        output_ports={
-            "output_default": PortDef("output_default", PortRole.DATA),
-            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
-        },
-    )
-    
-    # D_out (Final Result)
-    d_out = PhysicsDataNode(id="d_out", name="Output")
-
-    # Observability Infrastructure
-    d_life = PhysicsDataNode(id="global.observability.bus", name="EventBus", capacity=100)
-    f_obs = ObservabilityNode(
-        id="global.observability.observer",
-        name="Observer",
-        input_ports={"event_token": PortDef("event_token", PortRole.OBSERVABILITY)}
-    )
-
-    # Register Nodes
-    for n in [d_in, f_pre, d_worker_in, d_trace, f_worker, d_worker_out, f_stain, d_out, d_life, f_obs]:
-        graph.nodes[n.id] = n
-
-    # 2. Channels (Wiring)
-    channels = [
-        # Input -> Bleacher
-        Channel("d_in", "out", "task.bleach", "arg1"),
-        
-        # Bleacher -> Worker
-        Channel("task.bleach", "worker_input", "d_worker_in", "in"),
-        Channel("d_worker_in", "out", "task.worker", "worker_input"),
-        
-        # Worker -> Stainer
-        Channel("task.worker", "worker_result", "d_worker_out", "in"),
-        Channel("d_worker_out", "out", "task.stain", "worker_result"),
-
-        # Bleacher -> Trace -> Stainer (The Wormhole)
-        Channel("task.bleach", "trace_output", "d_trace", "in"),
-        Channel("d_trace", "out", "task.stain", "trace_input"),
-
-        # Stainer -> Output
-        Channel("task.stain", "output_default", "d_out", "in"),
-
-        # Observability Wiring
-        Channel("task.bleach", "obs_output", "global.observability.bus", "in"),
-        Channel("task.stain", "obs_output", "global.observability.bus", "in"),
-        Channel("global.observability.bus", "out", "global.observability.observer", "event_token"),
-    ]
-    
-    graph.channels.extend(channels)
-    return graph
-
-
-async def simple_worker(inputs: Dict[str, Token], node: Any, resources: Any) -> Dict[str, Token]:
-    # A simple pass-through worker
-    payload = inputs["worker_input"].payload
-    val = payload["arg1"]
-    return {"worker_result": Token(payload=f"processed_{val}")}
-
-
-@pytest.mark.asyncio
-async def test_genesis_injection_propagates_run_id():
-    """
-    Verifies that the run_id generated by the Runner is injected into the trace
-    and propagated to all Lifecycle events generated by Bleacher and Stainer.
-    """
-    # 1. Setup
-    graph = build_test_triad()
-    function_map = {
-        "task.bleach": standard_bleacher,
-        "task.worker": simple_worker,
-        "task.stain": standard_stainer,
-        "global.observability.observer": standard_observer,
-    }
-
-    runner = EventDrivenRunner(graph, function_map)
-    
-    # Assert Runner has generated a Run ID
-    assert runner.run_id is not None
-    print(f"Test Run ID: {runner.run_id}")
-
-    # 2. Prime and Start
-    runner.prime()
-    await runner.start_loop()
-
-    try:
-        # 3. Inject Input (This trigger Genesis Injection logic in inject_input)
-        # We assume inject_input adds the run_id from runner to the token trace
-        runner.inject_input("d_in", "test_data")
-
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_context_injection.py
+~~~~~
+~~~~~python.old
         # 4. Wait for completion (Stainer success event)
         # We look for the SUCCEEDED event from the stainer
         def is_success(e):
@@ -208,12 +87,43 @@ async def test_genesis_injection_propagates_run_id():
                 f"Run ID mismatch in event {event.payload['phy']['nid']}"
 
         print("Context propagation verified successfully.")
+~~~~~
+~~~~~python.new
+        # 4. Wait for completion (Stainer success event)
+        # We look for the SUCCEEDED event from the stainer (which maps to TaskExecutionFinished)
+        # Note: standard_stainer emits an IR with logic_id derived from node id.
+        # "task.stain" -> logical_id "task"
+        def is_success(e):
+            return (
+                isinstance(e, TaskExecutionFinished)
+                and e.task_id == "task"
+                and e.status == "Succeeded"
+            )
+        
+        await runner.wait_for_event(is_success, timeout=2.0)
 
-    finally:
-        await runner.stop_loop()
+        # 5. Verify Events
+        events = runner._captured_events
+        
+        # Filter relevant lifecycle events (Rich Objects)
+        lifecycle_events = [
+            e for e in events 
+            if isinstance(e, (TaskExecutionStarted, TaskExecutionFinished))
+        ]
+        assert len(lifecycle_events) >= 2  # At least Started and Finished
+
+        for event in lifecycle_events:
+            # THE CORE ASSERTION:
+            # Every lifecycle event object must carry the correct run_id
+            # The translation layer (Event.from_ir) extracts 'ctx.rid' -> 'event.run_id'
+            assert event.run_id == runner.run_id, \
+                f"Run ID mismatch in event {event}"
+
+        print("Context propagation verified successfully.")
 ~~~~~
 
 ### 下一步建议
-如果此测试通过，Phase 4 就算圆满完成了。
-接下来的建议是运行此测试，并清理（提交）本次变更。
-之后，我们可以开始考虑 **Phase 5: 清理与验证**，即移除 `VMExecutionStrategy` 中为了适配旧 trace 而写的硬编码逻辑，并确保 Engine 的 `HumanReadableLogSubscriber` 能够正确打印出日志。
+
+再次运行测试。一旦通过，Phase 4 上下文注入部分即告完成。
+
+接下来我们可以进入 **Phase 5: 清理与验证 (Cleanup & Verification)**，清理旧的 Hack 代码并进行 E2E 验证。

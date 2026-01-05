@@ -1,185 +1,63 @@
-Of course. The test failures are extensive and almost all point to the same root cause: the public-facing SDK module (`cascade.sdk`) is failing to correctly locate and export the necessary components. The lazy-loading map (`_IMPORT_MAP`) is outdated and doesn't reflect the actual file structure of the project, causing the `AttributeError` exceptions when tests try to import things like `cs.Engine`.
+你观察得很仔细。这个 `ModuleNotFoundError` 是因为 `test_solver_csp.py` 还在引用旧的模块路径 `cascade.adapters.solvers.csp`，而该组件在重构中已经迁移到了 `cascade.runtime.kernel.solvers.csp`。
 
-The errors related to providers like `cs.read`, `cs.shell`, and `cs.http` are also related, as they are loaded through the same `__getattr__` mechanism, which appears to be failing to find them in the provider registry. However, the most immediate and widespread problem is the incorrect paths in the core API map.
+我将生成一个计划来修复这个路径残留。
 
-I will generate a plan to fix the `_IMPORT_MAP` in `cascade.sdk.py`.
-
-## [WIP] fix: Correct lazy import paths in cascade.sdk
+## [WIP] fix: 修正 CSP Solver 测试中的模块导入路径
 
 ### 错误分析
 
-The vast majority of the 59 test failures are `AttributeError: module 'cascade' has no attribute '...'`. This indicates a critical failure in the public API layer defined in `packages/cascade-sdk/src/cascade/sdk.py`.
+在执行 `pytest` 时，`test_solver_csp.py` 报错：
+`ModuleNotFoundError: No module named 'cascade.adapters.solvers'`
 
-This file uses a lazy-loading mechanism via `__getattr__` that relies on an `_IMPORT_MAP` dictionary to resolve module paths. A review of this map shows that many paths are outdated due to recent refactoring. For example:
--   `Engine` is mapped to `cascade.runtime.engine`, but it now resides in `cascade.runtime.host.instance`.
--   `EventBus` is mapped to `cascade.runtime.event_bus`, but its correct path is `cascade.runtime.services.observability.bus`.
--   `DependencyMissingError` is mapped to `cascade.runtime.exceptions`, but it's actually in `cascade.runtime.errors`.
-
-These incorrect paths cause the `__getattr__` function to fail, leading to the widespread `AttributeError`s during testing.
+这是由于测试函数 `test_csp_solver_missing_dependency` 尝试 `import cascade.adapters.solvers.csp as csp_module`。根据我们之前的架构重组，所有的调度器（Solvers）现在都位于 `cascade.runtime.kernel.solvers` 下。因此，该导入语句已经失效。
 
 ### 用户需求
 
-Fix the `AttributeError`s by correcting the lazy-loading import paths in the main `cascade.sdk` module to match the current project structure. You've also noted that provider-related attributes (`.read`, `.shell`, etc.) should not be added to the explicit exports (`__all__`), as they are handled by a separate plugin mechanism.
+修正 `packages/cascade-runtime/tests/unit/test_solver_csp.py` 中的模块导入路径，使其指向正确的物理位置，从而恢复测试的运行。
 
 ### 评论
 
-A stable and correct public API is the most critical contract of an SDK. The current state makes the library completely unusable. Correcting these paths is a high-priority fix that will restore basic functionality and unblock the entire test suite.
+这是一个典型的由于架构重构导致的测试残留问题。及时清理这些失效的路径对于保持代码库的一致性和确保测试套件的有效性至关重要。
 
 ### 目标
 
-1.  Identify all incorrect module paths within the `_IMPORT_MAP` dictionary in `packages/cascade-sdk/src/cascade/sdk.py`.
-2.  Update these paths to point to the correct locations of the `Engine`, `EventBus`, `Event`, `DependencyMissingError`, `NativeSolver`, and `LocalExecutor` classes.
-3.  Ensure the `TYPE_CHECKING` import block also reflects these correct paths for static analysis consistency.
+将 `test_solver_csp.py` 中 `test_csp_solver_missing_dependency` 函数内的导入语句从 `cascade.adapters.solvers.csp` 更改为 `cascade.runtime.kernel.solvers.csp`。
 
 ### 基本原理
 
-The solution is to directly patch the `_IMPORT_MAP` dictionary and the corresponding `TYPE_CHECKING` import block in `sdk.py`. By providing the correct module paths, the lazy-loading mechanism will be able to resolve and import the components on demand, satisfying the test suite's import requests and eliminating the `AttributeError`s.
+通过 `patch_file` 指令，我们能够精确地替换掉测试文件中的错误导入路径。这将使 `monkeypatch` 能够正确地作用于目标模块，从而使测试逻辑能够正常执行。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/critical #comp/sdk #scope/api #scope/dx #ai/instruct #task/domain/testing #task/object/sdk-api #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/csp-solver-test #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: Correct SDK Import Paths
+#### Acts 1: 修正 `test_solver_csp.py` 中的导入路径
 
-We will apply two patches to `sdk.py`. The first will fix the lazy-loading map, and the second will update the static type-checking import block to match. This will resolve all the core `AttributeError` issues.
+我们将修改该测试文件，确保它引用的是重构后的正确内核路径。
 
 ~~~~~act
 patch_file
-packages/cascade-sdk/src/cascade/sdk.py
+packages/cascade-runtime/tests/unit/test_solver_csp.py
 ~~~~~
 ~~~~~python.old
-_IMPORT_MAP = {
-    # Core Specs
-    "task": ("cascade.spec.task", "task"),
-    "LazyResult": ("cascade.spec.lazy_types", "LazyResult"),
-    "Router": ("cascade.spec.routing", "Router"),
-    "Jump": ("cascade.spec.jump", "Jump"),
-    "resource": ("cascade.spec.resource", "resource"),
-    "inject": ("cascade.spec.resource", "inject"),
-    "with_constraints": ("cascade.spec.constraint", "with_constraints"),
-    "get_current_context": ("cascade.common.context", "get_current_context"),
-    # Advanced Flow Control
-    "select_jump": ("cascade.control_flow", "select_jump"),
-    "bind": ("cascade.control_flow", "bind"),
-    # Runtime
-    "Engine": ("cascade.runtime.engine", "Engine"),
-    "EventBus": ("cascade.runtime.event_bus", "EventBus"),
-    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
-    "Event": ("cascade.runtime.events", "Event"),
-    "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
-    "sequence": ("cascade.flow", "sequence"),
-    "pipeline": ("cascade.flow", "pipeline"),
-    # Adapters & Protocols
-    "NativeSolver": ("cascade.adapters.solvers.native", "NativeSolver"),
-    "LocalExecutor": ("cascade.adapters.executors.local", "LocalExecutor"),
-    "Connector": ("cascade.spec.protocols", "Connector"),
-    "StateBackend": ("cascade.spec.protocols", "StateBackend"),
-    # Tools & Utilities
-    "to_json": ("cascade.graph.serialize", "to_json"),
-    "from_json": ("cascade.graph.serialize", "from_json"),
-    "override_resource": ("cascade.testing", "override_resource"),
-    "ControllerTestApp": ("cascade.testing", "ControllerTestApp"),
-    "create_cli": ("cascade.tools.cli", "create_cli"),
-}
+def test_csp_solver_missing_dependency(monkeypatch):
+    import cascade.adapters.solvers.csp as csp_module
+
+    # Simulate missing dependency by setting constraint to None
 ~~~~~
 ~~~~~python.new
-_IMPORT_MAP = {
-    # Core Specs
-    "task": ("cascade.spec.task", "task"),
-    "LazyResult": ("cascade.spec.lazy_types", "LazyResult"),
-    "Router": ("cascade.spec.routing", "Router"),
-    "Jump": ("cascade.spec.jump", "Jump"),
-    "resource": ("cascade.spec.resource", "resource"),
-    "inject": ("cascade.spec.resource", "inject"),
-    "with_constraints": ("cascade.spec.constraint", "with_constraints"),
-    "get_current_context": ("cascade.common.context", "get_current_context"),
-    # Advanced Flow Control
-    "select_jump": ("cascade.control_flow", "select_jump"),
-    "bind": ("cascade.control_flow", "bind"),
-    # Runtime
-    "Engine": ("cascade.runtime.host.instance", "Engine"),
-    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
-    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
-    "Event": ("cascade.runtime.services.observability.events", "Event"),
-    "DependencyMissingError": ("cascade.runtime.errors", "DependencyMissingError"),
-    "sequence": ("cascade.flow", "sequence"),
-    "pipeline": ("cascade.flow", "pipeline"),
-    # Adapters & Protocols
-    "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
-    "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
-    "Connector": ("cascade.spec.protocols", "Connector"),
-    "StateBackend": ("cascade.spec.protocols", "StateBackend"),
-    # Tools & Utilities
-    "to_json": ("cascade.graph.serialize", "to_json"),
-    "from_json": ("cascade.graph.serialize", "from_json"),
-    "override_resource": ("cascade.testing", "override_resource"),
-    "ControllerTestApp": ("cascade.testing", "ControllerTestApp"),
-    "create_cli": ("cascade.tools.cli", "create_cli"),
-}
-~~~~~
-~~~~~act
-patch_file
-packages/cascade-sdk/src/cascade/sdk.py
-~~~~~
-~~~~~python.old
-if TYPE_CHECKING:
-    from cascade.spec.task import task
-    from cascade.spec.lazy_types import LazyResult
-    from cascade.spec.routing import Router
-    from cascade.spec.jump import Jump
-    from cascade.spec.resource import resource, inject
-    from cascade.spec.constraint import with_constraints
-    from cascade.common.context import get_current_context
+def test_csp_solver_missing_dependency(monkeypatch):
+    import cascade.runtime.kernel.solvers.csp as csp_module
 
-    from cascade.control_flow import select_jump, bind
-
-    from cascade.runtime.host.instance import Engine
-    from cascade.runtime.services.observability.bus import EventBus
-    from cascade.runtime.services.observability.events import Event
-    from cascade.runtime.errors import DependencyMissingError
-    from cascade.flow import sequence, pipeline
-
-    from cascade.runtime.kernel.solvers.native import NativeSolver
-    from cascade.runtime.io.executors.local import LocalExecutor
-    from cascade.spec.protocols import Connector, StateBackend
-
-    from cascade.graph.serialize import to_json, from_json
-    from cascade.testing import override_resource, ControllerTestApp
-    from cascade.tools.cli import create_cli
-~~~~~
-~~~~~python.new
-if TYPE_CHECKING:
-    from cascade.spec.task import task
-    from cascade.spec.lazy_types import LazyResult
-    from cascade.spec.routing import Router
-    from cascade.spec.jump import Jump
-    from cascade.spec.resource import resource, inject
-    from cascade.spec.constraint import with_constraints
-    from cascade.common.context import get_current_context
-
-    from cascade.control_flow import select_jump, bind
-
-    from cascade.runtime.host.instance import Engine
-    from cascade.runtime.services.observability.bus import EventBus
-    from cascade.runtime.services.observability.events import Event
-    from cascade.runtime.errors import DependencyMissingError
-    from cascade.flow import sequence, pipeline
-
-    from cascade.runtime.kernel.solvers.native import NativeSolver
-    from cascade.runtime.io.executors.local import LocalExecutor
-    from cascade.spec.protocols import Connector, StateBackend
-
-    from cascade.graph.serialize import to_json, from_json
-    from cascade.testing import override_resource, ControllerTestApp
-    from cascade.tools.cli import create_cli
+    # Simulate missing dependency by setting constraint to None
 ~~~~~
 
 ### 下一步建议
 
-The core API import paths have now been corrected. This should resolve the majority of the `AttributeError` failures related to components like `Engine`, `EventBus`, and `DependencyMissingError`.
+现在这条“漏网之鱼”也已经被处理了。请重新运行 `pytest packages/cascade-runtime`。
 
-Please run `pytest` again. We can then analyze any remaining failures, which are likely related to the dynamic provider loading mechanism (`cs.read`, `cs.shell`, etc.).
+由于我们已经连续修复了多个涉及 SDK 导出、路径迁移和类型声明的严重问题，如果本次运行测试通过，我建议立即生成一个 `[COMMIT]` 计划，将这些修复作为一个稳定的工作单元提交。

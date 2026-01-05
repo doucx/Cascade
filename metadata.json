@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: Correct lazy import paths in cascade.sdk", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767619840.088773, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修正 CSP Solver 测试中的模块导入路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767619894.0278594, "duration_ms": 0}}

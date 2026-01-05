@@ -16,12 +16,12 @@ members = [
     "cascade-compiler",
     "cascade-connector-local",
     "cascade-connector-mqtt",
-    "cascade-engine",
     "cascade-graph",
     "cascade-library",
     "cascade-monorepo",
     "cascade-provider-ipfs",
     "cascade-reflection",
+    "cascade-runtime",
     "cascade-sdk",
     "cascade-spec",
     "cascade-std",
@@ -630,16 +630,16 @@ version = "0.1.0"
 source = { editable = "packages/cascade-application" }
 dependencies = [
     { name = "cascade-common" },
-    { name = "cascade-engine" },
     { name = "cascade-graph" },
+    { name = "cascade-runtime" },
     { name = "cascade-spec" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "cascade-common", editable = "packages/cascade-common" },
-    { name = "cascade-engine", editable = "packages/cascade-engine" },
     { name = "cascade-graph", editable = "packages/cascade-graph" },
+    { name = "cascade-runtime", editable = "packages/cascade-runtime" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]
 
@@ -740,42 +740,6 @@ requires-dist = [
 ]
 
 [[package]]
-name = "cascade-engine"
-version = "0.1.0"
-source = { editable = "packages/cascade-engine" }
-dependencies = [
-    { name = "cascade-common" },
-    { name = "cascade-compiler" },
-    { name = "cascade-graph" },
-    { name = "cascade-reflection" },
-    { name = "cascade-spec" },
-    { name = "cascade-vm" },
-]
-
-[package.optional-dependencies]
-csp-solver = [
-    { name = "python-constraint" },
-]
-redis = [
-    { name = "redis", version = "6.1.1", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
-    { name = "redis", version = "7.0.1", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version == '3.9.*'" },
-    { name = "redis", version = "7.1.0", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version >= '3.10'" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "cascade-common", editable = "packages/cascade-common" },
-    { name = "cascade-compiler", editable = "packages/cascade-compiler" },
-    { name = "cascade-graph", editable = "packages/cascade-graph" },
-    { name = "cascade-reflection", editable = "packages/cascade-reflection" },
-    { name = "cascade-spec", editable = "packages/cascade-spec" },
-    { name = "cascade-vm", editable = "packages/cascade-vm" },
-    { name = "python-constraint", marker = "extra == 'csp-solver'" },
-    { name = "redis", marker = "extra == 'redis'" },
-]
-provides-extras = ["csp-solver", "redis"]
-
-[[package]]
 name = "cascade-graph"
 version = "0.1.0"
 source = { editable = "packages/cascade-graph" }
@@ -795,7 +759,7 @@ name = "cascade-library"
 version = "0.1.0"
 source = { editable = "packages/cascade-library" }
 dependencies = [
-    { name = "cascade-engine" },
+    { name = "cascade-runtime" },
     { name = "cascade-spec" },
 ]
 
@@ -805,7 +769,7 @@ all = [
     { name = "aiobotocore", version = "3.1.0", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version >= '3.9'" },
     { name = "aiohttp", version = "3.10.11", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
     { name = "aiohttp", version = "3.13.2", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version >= '3.9'" },
-    { name = "cascade-engine", extra = ["redis"] },
+    { name = "cascade-runtime", extra = ["redis"] },
     { name = "jinja2" },
     { name = "pyyaml" },
     { name = "sqlalchemy" },
@@ -824,7 +788,7 @@ http = [
     { name = "aiohttp", version = "3.13.2", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version >= '3.9'" },
 ]
 redis = [
-    { name = "cascade-engine", extra = ["redis"] },
+    { name = "cascade-runtime", extra = ["redis"] },
 ]
 s3 = [
     { name = "aiobotocore", version = "2.22.0", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
@@ -843,9 +807,9 @@ requires-dist = [
     { name = "aiobotocore", marker = "extra == 's3'" },
     { name = "aiohttp", marker = "extra == 'all'" },
     { name = "aiohttp", marker = "extra == 'http'" },
-    { name = "cascade-engine", editable = "packages/cascade-engine" },
-    { name = "cascade-engine", extras = ["redis"], marker = "extra == 'all'", editable = "packages/cascade-engine" },
-    { name = "cascade-engine", extras = ["redis"], marker = "extra == 'redis'", editable = "packages/cascade-engine" },
+    { name = "cascade-runtime", editable = "packages/cascade-runtime" },
+    { name = "cascade-runtime", extras = ["redis"], marker = "extra == 'all'", editable = "packages/cascade-runtime" },
+    { name = "cascade-runtime", extras = ["redis"], marker = "extra == 'redis'", editable = "packages/cascade-runtime" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
     { name = "jinja2", marker = "extra == 'all'" },
     { name = "jinja2", marker = "extra == 'template'" },
@@ -864,9 +828,9 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "cascade-compiler" },
-    { name = "cascade-engine" },
     { name = "cascade-graph" },
     { name = "cascade-library" },
+    { name = "cascade-runtime" },
     { name = "cascade-sdk" },
     { name = "cascade-spec" },
     { name = "cascade-vm" },
@@ -933,10 +897,10 @@ requires-dist = [
     { name = "cascade-compiler", marker = "extra == 'dev'", editable = "packages/cascade-compiler" },
     { name = "cascade-connector-local", marker = "extra == 'dev'", editable = "packages/cascade-connector-local" },
     { name = "cascade-connector-mqtt", marker = "extra == 'dev'", editable = "packages/cascade-connector-mqtt" },
-    { name = "cascade-engine", editable = "packages/cascade-engine" },
     { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-library", editable = "packages/cascade-library" },
     { name = "cascade-provider-ipfs", marker = "extra == 'dev'", editable = "packages/cascade-provider-ipfs" },
+    { name = "cascade-runtime", editable = "packages/cascade-runtime" },
     { name = "cascade-sdk", editable = "packages/cascade-sdk" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
     { name = "cascade-std", marker = "extra == 'dev'", editable = "packages/cascade-std" },
@@ -992,15 +956,51 @@ dependencies = [
 requires-dist = [{ name = "cascade-spec", editable = "packages/cascade-spec" }]
 
 [[package]]
+name = "cascade-runtime"
+version = "0.1.0"
+source = { editable = "packages/cascade-runtime" }
+dependencies = [
+    { name = "cascade-common" },
+    { name = "cascade-compiler" },
+    { name = "cascade-graph" },
+    { name = "cascade-reflection" },
+    { name = "cascade-spec" },
+    { name = "cascade-vm" },
+]
+
+[package.optional-dependencies]
+csp-solver = [
+    { name = "python-constraint" },
+]
+redis = [
+    { name = "redis", version = "6.1.1", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
+    { name = "redis", version = "7.0.1", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version == '3.9.*'" },
+    { name = "redis", version = "7.1.0", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version >= '3.10'" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cascade-common", editable = "packages/cascade-common" },
+    { name = "cascade-compiler", editable = "packages/cascade-compiler" },
+    { name = "cascade-graph", editable = "packages/cascade-graph" },
+    { name = "cascade-reflection", editable = "packages/cascade-reflection" },
+    { name = "cascade-spec", editable = "packages/cascade-spec" },
+    { name = "cascade-vm", editable = "packages/cascade-vm" },
+    { name = "python-constraint", marker = "extra == 'csp-solver'" },
+    { name = "redis", marker = "extra == 'redis'" },
+]
+provides-extras = ["csp-solver", "redis"]
+
+[[package]]
 name = "cascade-sdk"
 version = "0.1.0"
 source = { editable = "packages/cascade-sdk" }
 dependencies = [
     { name = "cascade-application" },
     { name = "cascade-common" },
-    { name = "cascade-engine" },
     { name = "cascade-graph" },
     { name = "cascade-library" },
+    { name = "cascade-runtime" },
     { name = "cascade-spec" },
 ]
 
@@ -1008,9 +1008,9 @@ dependencies = [
 requires-dist = [
     { name = "cascade-application", editable = "packages/cascade-application" },
     { name = "cascade-common", editable = "packages/cascade-common" },
-    { name = "cascade-engine", editable = "packages/cascade-engine" },
     { name = "cascade-graph", editable = "packages/cascade-graph" },
     { name = "cascade-library", editable = "packages/cascade-library" },
+    { name = "cascade-runtime", editable = "packages/cascade-runtime" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
 ]
 provides-extras = ["all"]

@@ -9,7 +9,7 @@ description = "The application layer for Cascade, providing a unified API entryp
 requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
-  "cascade-engine",
+  "cascade-runtime",
   "cascade-graph",
   "cascade-common"
 ]
@@ -22,6 +22,6 @@ allow-direct-references = true
 
 [tool.uv.sources]
 cascade-spec = { workspace = true }
-cascade-engine = { workspace = true }
+cascade-runtime = { workspace = true }
 cascade-graph = { workspace = true }
 cascade-common = { workspace = true }

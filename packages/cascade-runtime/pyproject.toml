@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cascade-engine"
+name = "cascade-runtime"
 version = "0.1.0"
 description = "The core runtime engine for Cascade workflows."
 requires-python = ">=3.8"

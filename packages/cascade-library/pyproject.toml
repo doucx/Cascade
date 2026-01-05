@@ -9,7 +9,7 @@ description = "Standard library of providers for the Cascade ecosystem."
 requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
-  "cascade-engine"
+  "cascade-runtime"
 ]
 
 [project.optional-dependencies]
@@ -19,7 +19,7 @@ sql = ["sqlalchemy"]
 cli = ["typer"]
 config = ["PyYAML"]
 s3 = ["aiobotocore"]
-redis = ["cascade-engine[redis]"]
+redis = ["cascade-runtime[redis]"]
 all = [
   "jinja2",
   "aiohttp",
@@ -27,7 +27,7 @@ all = [
   "typer",
   "PyYAML",
   "aiobotocore",
-  "cascade-engine[redis]",
+  "cascade-runtime[redis]",
 ]
 
 [project.entry-points."cascade.providers"]
@@ -71,4 +71,4 @@ allow-direct-references = true
 
 [tool.uv.sources]
 cascade-sdk = { workspace = true }
-cascade-engine = { workspace = true }
+cascade-runtime = { workspace = true }

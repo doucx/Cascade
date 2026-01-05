@@ -9,9 +9,9 @@ from cascade.graph.model import (
     MapNode,
     ParamNode,
 )
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.spec.dsl.routing import Router
-from cascade.spec.dsl.jump import JumpSelector
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.jump import JumpSelector
 
 from .registry import NodeRegistry
 from cascade.reflection import HashingService, ReflectionAnalyzer
@@ -90,7 +90,7 @@ class GraphBuilder:
                     input_bindings[k] = val
 
             # Complexity check
-            from cascade.spec.dsl.resources import Inject as InjectMarker
+            from cascade.spec.resource import Inject as InjectMarker
             from cascade.reflection import _get_param_value
 
             has_complex = False
@@ -131,7 +131,7 @@ class GraphBuilder:
                     ctx = get_current_context()
                     for spec in ctx.get_all_specs():
                         if spec.name == param_name:
-                            from cascade.spec.dsl.inputs import ParamSpec
+                            from cascade.spec.input import ParamSpec
 
                             if isinstance(spec, ParamSpec):
                                 param_spec = spec

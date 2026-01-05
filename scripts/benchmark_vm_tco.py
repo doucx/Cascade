@@ -11,9 +11,9 @@ sys.path.append(
     os.path.join(os.path.dirname(__file__), "..", "packages", "cascade-vm", "src")
 )
 
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
-from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode, Token
+from cascade.spec.ports import PortDef, PortRole
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor

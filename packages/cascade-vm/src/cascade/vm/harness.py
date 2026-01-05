@@ -3,8 +3,8 @@ import logging
 import uuid
 from typing import Dict, Any, Callable, TypeVar, Optional, List
 
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
+from cascade.spec.topology import BipartiteGraph
+from cascade.spec.physics import Token, PhysicsDataNode
 from cascade.vm.reactor import Reactor
 from cascade.vm.protocols import ReactorProtocol
 from cascade.vm.memory import VolatileMemory

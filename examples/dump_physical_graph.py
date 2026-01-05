@@ -37,9 +37,9 @@ sys.path.insert(
 )
 # Add other packages if needed, but these should cover the compiler deps
 
-from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef, ArgumentDef
-from cascade.spec.ir.fingerprint import Fingerprint
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
 from cascade.compiler.utils.visualizer import GraphDumper
 

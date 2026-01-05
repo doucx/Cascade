@@ -1,7 +1,7 @@
 import sys
 import importlib.metadata
 from typing import Any, Dict
-from cascade.spec.runtime.interfaces import LazyFactory
+from cascade.spec.protocols import LazyFactory
 
 
 class ProviderNamespace:

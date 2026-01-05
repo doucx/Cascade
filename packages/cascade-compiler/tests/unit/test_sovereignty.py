@@ -1,6 +1,6 @@
-from cascade.spec.ir.graph import NodeIR, TaskDef
-from cascade.spec.ir.fingerprint import Fingerprint
-from cascade.spec.physical.ports import PortRole
+from cascade.spec.ir.models import NodeIR, TaskDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.ports import PortRole
 from cascade.compiler.backend.expander import Expander
 
 

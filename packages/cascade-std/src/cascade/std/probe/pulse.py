@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.physics import Token, PhysicsNode
 
 
 async def pulse_generator(

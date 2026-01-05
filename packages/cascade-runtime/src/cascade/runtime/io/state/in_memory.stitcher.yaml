@@ -1,4 +1,4 @@
-"cascade.runtime.io.state.in_memory.InMemoryStateBackend": |-
+"InMemoryStateBackend": |-
   An in-memory implementation of the StateBackend protocol using Python dictionaries.
   This is the default backend for local, single-process runs.
 
@@ -15,5 +15,5 @@
 
   This implementation provides a compliant async interface with minimal overhead,
   making it suitable for its primary role as a high-performance, single-process backend.
-"cascade.runtime.io.state.in_memory.InMemoryStateBackend.clear": |-
+"InMemoryStateBackend.clear": |-
   Clears all results and skip reasons. Used between TCO iterations.

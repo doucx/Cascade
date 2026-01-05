@@ -17,7 +17,7 @@ from cascade.runtime.services.observability.events import (
     ConnectorDisconnected,
     Event,
 )
-from cascade.spec.runtime.interfaces import Connector
+from cascade.spec.protocols import Connector
 
 
 class HumanReadableLogSubscriber:

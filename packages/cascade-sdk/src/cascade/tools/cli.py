@@ -6,9 +6,9 @@ try:
 except ImportError:
     typer = None
 
-from cascade.spec.dsl.fluent import LazyResult
+from cascade.spec.lazy_types import LazyResult
 from cascade.common.context import get_current_context
-from cascade.spec.dsl.inputs import ParamSpec
+from cascade.spec.input import ParamSpec
 
 
 def create_cli(target: "LazyResult[Any]") -> Callable[[], None]:

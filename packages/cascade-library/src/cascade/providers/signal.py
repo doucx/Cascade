@@ -1,10 +1,10 @@
 import asyncio
 from typing import Optional, Any
 
-from cascade.spec.dsl.task import task
-from cascade.spec.dsl.resources import inject
-from cascade.spec.runtime.interfaces import LazyFactory, Provider
-from cascade.spec.runtime.interfaces import Connector
+from cascade.spec.task import task
+from cascade.spec.resource import inject
+from cascade.spec.protocols import LazyFactory, Provider
+from cascade.spec.protocols import Connector
 
 
 @task(name="recv")

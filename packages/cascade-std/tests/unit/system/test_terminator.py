@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock
-from cascade.spec.physical.nodes import Token
-from cascade.spec.runtime.system import SystemControlToken
+from cascade.spec.physics import Token
+from cascade.spec.system import SystemControlToken
 from cascade.std.system.terminator import halt_signal
 
 

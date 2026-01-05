@@ -1,9 +1,9 @@
-from cascade.spec.ir.graph import NodeIR, TaskDef, ArgumentDef, ArgumentKind
-from cascade.spec.ir.fingerprint import Fingerprint
-from cascade.spec.physical.ports import PortRole
+from cascade.spec.ir.models import NodeIR, TaskDef, ArgumentDef, ArgumentKind
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.ports import PortRole
 from cascade.compiler.backend.expander import Expander
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.triad import BleachNode, WorkerNode, StainNode
+from cascade.spec.physics import PhysicsDataNode
 
 
 def test_expander_creates_triad_structure():

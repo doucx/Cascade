@@ -1,6 +1,6 @@
 from typing import Protocol, Any
-from cascade.spec.physical.environment import ResourceDef
-from cascade.spec.ir.graph import NodeIR
+from cascade.spec.environment import ResourceDef
+from cascade.spec.ir.models import NodeIR
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.wiring.context import WiringContext
 

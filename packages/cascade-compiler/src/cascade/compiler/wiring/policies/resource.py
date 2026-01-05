@@ -1,6 +1,6 @@
 from typing import Dict
 
-from cascade.spec.ir.graph import NodeIR
+from cascade.spec.ir.models import NodeIR
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.wiring.context import WiringContext
 from cascade.compiler.wiring.protocol import WiringPolicy

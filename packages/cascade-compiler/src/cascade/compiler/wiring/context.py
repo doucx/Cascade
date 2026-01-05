@@ -1,9 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Dict
 
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.ir.graph import GraphIR
+from cascade.spec.topology import BipartiteGraph
+from cascade.spec.environment import EnvironmentDef
+from cascade.spec.ir.models import GraphIR
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.backend.wiring import WiringHarness
 

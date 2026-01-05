@@ -1,7 +1,7 @@
 from typing import Protocol, TYPE_CHECKING, Dict, Any
 
 from cascade.graph.model import Node
-from cascade.spec.dsl.constraint import GlobalConstraint
+from cascade.spec.constraint import GlobalConstraint
 
 if TYPE_CHECKING:
     from cascade.runtime.services.constraints.manager import ConstraintManager

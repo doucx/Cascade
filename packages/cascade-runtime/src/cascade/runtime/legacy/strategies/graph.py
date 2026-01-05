@@ -6,8 +6,8 @@ from cascade.graph.model import Graph, Node, EdgeType
 from cascade.graph.build import build_graph
 from cascade.graph.registry import NodeRegistry
 from cascade.reflection import BlueprintHasher
-from cascade.spec.runtime.interfaces import Solver, StateBackend
-from cascade.spec.dsl.jump import Jump
+from cascade.spec.protocols import Solver, StateBackend
+from cascade.spec.jump import Jump
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.resources.container import ResourceContainer
 from cascade.runtime.legacy.processor import NodeProcessor

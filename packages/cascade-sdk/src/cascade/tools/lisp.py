@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict, List, Set
 from cascade.graph.model import Graph, Node, Edge, EdgeType
 from cascade.graph.build import build_graph
-from cascade.spec.dsl.fluent import LazyResult
+from cascade.spec.lazy_types import LazyResult
 
 
 class LispTranspiler:

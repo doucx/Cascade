@@ -1,8 +1,8 @@
 import pytest
 import asyncio
-from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.ports import PortDef, PortRole, PortName
-from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole, PortName
+from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor

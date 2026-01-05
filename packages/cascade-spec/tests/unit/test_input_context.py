@@ -1,5 +1,5 @@
 from cascade.common.context import get_current_context, WorkflowContext
-from cascade.spec.dsl.inputs import ParamSpec, EnvSpec
+from cascade.spec.input import ParamSpec, EnvSpec
 
 
 def test_context_isolation():
@@ -35,7 +35,7 @@ def test_param_factory_registration():
     assert spec.description == "Environment"
 
     # 2. 验证返回类型 (不再是 Param 对象，而是 LazyResult)
-    from cascade.spec.dsl.fluent import LazyResult
+    from cascade.spec.lazy_types import LazyResult
 
     assert isinstance(result, LazyResult)
     # 验证内部任务名称

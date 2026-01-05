@@ -1,9 +1,9 @@
 from typing import Any
 
-from cascade.spec.physical.environment import ResourceDef
-from cascade.spec.ir.graph import NodeIR
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.ports import PortDef, PortRole, PortName
+from cascade.spec.environment import ResourceDef
+from cascade.spec.ir.models import NodeIR
+from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole, PortName
 from cascade.std.resource.discrete import DiscreteLedger
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator

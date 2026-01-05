@@ -7,8 +7,8 @@ from cascade.common.messaging import bus
 from cascade.common.renderers import CliRenderer
 from cascade.connectors.mqtt import MqttConnector
 from cascade.connectors.local import LocalConnector
-from cascade.spec.runtime.interfaces import Connector
-from cascade.spec.dsl.constraint import GlobalConstraint
+from cascade.spec.protocols import Connector
+from cascade.spec.constraint import GlobalConstraint
 
 app = typer.Typer(help="A command-line tool to control running Cascade workflows.")
 

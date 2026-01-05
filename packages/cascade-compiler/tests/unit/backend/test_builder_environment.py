@@ -1,7 +1,7 @@
 import pytest
-from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef
-from cascade.spec.ir.fingerprint import Fingerprint
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef
+from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
 
 

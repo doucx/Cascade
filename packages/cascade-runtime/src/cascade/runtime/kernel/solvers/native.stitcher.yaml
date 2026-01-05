@@ -1,7 +1,7 @@
-"cascade.runtime.kernel.solvers.native.NativeSolver": |-
+"NativeSolver": |-
   A simple solver that uses topological sort (Kahn's algorithm) to create
   a sequential execution plan.
-"cascade.runtime.kernel.solvers.native.NativeSolver.resolve": |-
+"NativeSolver.resolve": |-
   Resolves a dependency graph into a list of execution stages.
 
   Raises:

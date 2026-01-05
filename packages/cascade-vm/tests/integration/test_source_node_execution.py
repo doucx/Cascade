@@ -2,11 +2,11 @@ import asyncio
 import pytest
 from typing import Dict
 
-from cascade.spec.dsl.task import task
+from cascade.spec.task import task
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.backend.builder import Builder
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.nodes import Token
+from cascade.spec.environment import EnvironmentDef
+from cascade.spec.physics import Token
 from cascade.vm.harness import EventDrivenRunner
 from cascade.runtime.services.observability.events import TaskExecutionFinished
 

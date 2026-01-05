@@ -4,10 +4,10 @@ from typing import Any, Dict, Optional, List, Callable
 from dataclasses import dataclass
 
 from .model import Graph, Node, Edge, EdgeType, TaskNode, MapNode, ParamNode
-from cascade.spec.dsl.constraint import ResourceConstraint
-from cascade.spec.dsl.fluent import RetryPolicy, LazyResult, MappedLazyResult
-from cascade.spec.dsl.routing import Router
-from cascade.spec.dsl.task import Task
+from cascade.spec.constraint import ResourceConstraint
+from cascade.spec.lazy_types import RetryPolicy, LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.task import Task
 
 
 # --- Helpers ---
@@ -231,8 +231,8 @@ def _dict_to_node(data: Dict[str, Any]) -> Node:
 
     # Reconstruct a minimal TaskDef for the Node from the serialized data
     # This is a stub definition to satisfy the Node contract for deserialization
-    from cascade.spec.ir.graph import TaskDef
-    from cascade.spec.ir.fingerprint import Fingerprint
+    from cascade.spec.ir.models import TaskDef
+    from cascade.spec.fingerprint import Fingerprint
 
     # We use a dummy fingerprint for deserialized nodes if not present
     fp = Fingerprint()

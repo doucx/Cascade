@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict
-from cascade.spec.physical.ports import PortDef
+from cascade.spec.ports import PortDef
 
 
 @dataclass

@@ -1,11 +1,11 @@
 import asyncio
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.graph.model import TaskNode
-from cascade.spec.dsl.task import task
+from cascade.spec.task import task
 
 
-from cascade.spec.ir.graph import TaskDef
-from cascade.spec.ir.fingerprint import Fingerprint
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.fingerprint import Fingerprint
 
 
 def test_local_executor_sync_execution():

@@ -1,6 +1,6 @@
 from typing import Dict, Optional, Any
-from cascade.spec.dsl.fluent import LazyResult
-from cascade.spec.dsl.jump import JumpSelector
+from cascade.spec.lazy_types import LazyResult
+from cascade.spec.jump import JumpSelector
 
 
 def select_jump(routes: Dict[str, Optional[LazyResult]]) -> JumpSelector:

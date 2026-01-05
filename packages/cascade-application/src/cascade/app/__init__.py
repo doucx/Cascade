@@ -1,9 +1,9 @@
 import asyncio
 from typing import Any, Dict, List, Tuple, Union, Optional, Callable
 
-from cascade.spec.dsl.fluent import LazyResult
-from cascade.spec.dsl.task import task
-from cascade.spec.runtime.interfaces import Connector, StateBackend
+from cascade.spec.lazy_types import LazyResult
+from cascade.spec.task import task
+from cascade.spec.protocols import Connector, StateBackend
 
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, EdgeType

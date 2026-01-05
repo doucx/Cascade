@@ -1,6 +1,6 @@
 from typing import Dict, Any
-from cascade.spec.physical.nodes import Token, PhysicsNode
-from cascade.spec.runtime.system import SystemControlToken
+from cascade.spec.physics import Token, PhysicsNode
+from cascade.spec.system import SystemControlToken
 
 
 async def drain_signal(

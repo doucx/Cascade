@@ -3,7 +3,7 @@ from contextlib import ExitStack
 from typing import Any, Dict, Callable, Union, Generator, Set
 
 from cascade.graph.model import Graph
-from cascade.spec.dsl.resources import ResourceDefinition, Inject
+from cascade.spec.resource import ResourceDefinition, Inject
 from contextlib import contextmanager
 
 from cascade.runtime.services.observability.bus import EventBus

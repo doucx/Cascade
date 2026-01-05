@@ -2,7 +2,7 @@ from collections import deque
 from typing import Dict, List
 
 from cascade.graph.model import Graph, Node, EdgeType
-from cascade.spec.runtime.interfaces import Solver, ExecutionPlan
+from cascade.spec.protocols import Solver, ExecutionPlan
 
 
 class NativeSolver(Solver):

@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import patch, MagicMock
 
-from cascade.spec.physical.nodes import Token
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.triad import StainNode
+from cascade.spec.physics import Token
+from cascade.spec.ports import PortDef, PortRole
+from cascade.spec.triad import StainNode
 from cascade.std.triad.stainer import standard_stainer
 
 

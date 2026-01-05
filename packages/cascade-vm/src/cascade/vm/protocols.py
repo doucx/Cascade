@@ -1,5 +1,5 @@
 from typing import Protocol, Callable, Awaitable
-from cascade.spec.physical.nodes import Token
+from cascade.spec.physics import Token
 
 
 from typing import Dict, Any, Optional

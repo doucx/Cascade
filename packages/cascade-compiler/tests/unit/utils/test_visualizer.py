@@ -1,5 +1,5 @@
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode
 from cascade.compiler.utils.visualizer import GraphDumper
 
 

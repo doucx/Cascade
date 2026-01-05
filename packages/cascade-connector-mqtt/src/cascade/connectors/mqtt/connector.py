@@ -10,7 +10,7 @@ try:
 except ImportError:
     aiomqtt = None
 
-from cascade.spec.runtime.interfaces import SubscriptionHandle
+from cascade.spec.protocols import SubscriptionHandle
 
 logger = logging.getLogger(__name__)
 

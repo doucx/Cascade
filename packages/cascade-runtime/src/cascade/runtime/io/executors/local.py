@@ -3,7 +3,7 @@ import functools
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Callable
 from cascade.graph.model import Node
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
 from cascade.graph.exceptions import StaticGraphError
 
 

@@ -1,11 +1,11 @@
 import pytest
-from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef, ArgumentDef, ArgumentKind
-from cascade.spec.ir.fingerprint import Fingerprint
+from cascade.spec.ir.models import GraphIR, NodeIR, TaskDef, ArgumentDef, ArgumentKind
+from cascade.spec.fingerprint import Fingerprint
 from cascade.compiler.backend.builder import Builder
-from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.environment import EnvironmentDef
 from cascade.reflection import PhysicalIdGenerator
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.ports import PortName
+from cascade.spec.physics import PhysicsDataNode
+from cascade.spec.ports import PortName
 
 
 @pytest.fixture

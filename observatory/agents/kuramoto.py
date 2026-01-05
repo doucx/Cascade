@@ -14,7 +14,7 @@ import time
 from typing import List
 
 import cascade as cs
-from cascade.spec.runtime.interfaces import Connector
+from cascade.spec.protocols import Connector
 from cascade.spec.blueprint import TailCall
 from observatory.networking.direct_channel import DirectChannel
 

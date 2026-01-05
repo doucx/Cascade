@@ -1,4 +1,4 @@
-"cascade.runtime.legacy.strategies.base.ExecutionContext": |-
+"ExecutionContext": |-
   Encapsulates the runtime context required for a strategy to execute a workflow.
-"cascade.runtime.legacy.strategies.base.ExecutionStrategy": |-
+"ExecutionStrategy": |-
   Protocol defining a strategy for executing a workflow target.

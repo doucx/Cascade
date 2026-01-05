@@ -1,6 +1,6 @@
-"cascade.runtime.io.state.redis.RedisStateBackend": |-
+"RedisStateBackend": |-
   A StateBackend implementation that persists results to Redis.
-"cascade.runtime.io.state.redis.RedisStateBackend.clear": |-
+"RedisStateBackend.clear": |-
   Clears the state for the current run.
   For Redis, since TCO reuses the same run_id and overwrites keys,
   explicit clearing might be expensive (SCAN+DEL).

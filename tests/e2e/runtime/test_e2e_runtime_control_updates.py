@@ -4,7 +4,7 @@ import cascade as cs
 from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
 from cascade.runtime.services.observability.events import TaskExecutionFinished
-from cascade.spec.dsl.constraint import GlobalConstraint
+from cascade.spec.constraint import GlobalConstraint
 from dataclasses import asdict
 import uuid
 

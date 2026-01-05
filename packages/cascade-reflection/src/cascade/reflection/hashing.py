@@ -1,10 +1,10 @@
 import hashlib
 from typing import Any, List, Dict
 from cascade.graph.model import Graph, Node
-from cascade.spec.ir.graph import TaskDef
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.spec.dsl.routing import Router
-from cascade.spec.dsl.resources import Inject
+from cascade.spec.ir.models import TaskDef
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.resource import Inject
 
 
 class HashingService:

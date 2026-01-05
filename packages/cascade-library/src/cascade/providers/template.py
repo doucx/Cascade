@@ -1,7 +1,7 @@
 from typing import Any, Dict, Optional
 
-from cascade.spec.dsl.task import task
-from cascade.spec.runtime.interfaces import LazyFactory
+from cascade.spec.task import task
+from cascade.spec.protocols import LazyFactory
 
 try:
     import jinja2

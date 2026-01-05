@@ -1,6 +1,6 @@
-from cascade.spec.physical.topology import BipartiteGraph
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.ir.graph import GraphIR
+from cascade.spec.topology import BipartiteGraph
+from cascade.spec.physics import PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ir.models import GraphIR
 
 
 class GraphValidationError(ValueError):

@@ -1,4 +1,4 @@
-from cascade.spec.dsl.task import task
+from cascade.spec.task import task
 from cascade.graph.build import build_graph
 
 

@@ -1,7 +1,7 @@
 from typing import Dict
 import asyncio
 from collections import deque
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
+from cascade.spec.physics import Token, PhysicsDataNode
 
 
 class MemoryError(Exception):

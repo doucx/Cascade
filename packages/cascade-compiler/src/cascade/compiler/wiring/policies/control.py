@@ -1,5 +1,5 @@
-from cascade.spec.ir.graph import NodeIR
-from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.ir.models import NodeIR
+from cascade.spec.physics import PhysicsDataNode
 from cascade.compiler.backend.expander import SubGraph
 from cascade.compiler.wiring.context import WiringContext
 from cascade.compiler.wiring.protocol import WiringPolicy

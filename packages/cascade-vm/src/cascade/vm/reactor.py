@@ -2,8 +2,8 @@ import asyncio
 import inspect
 import logging
 from typing import List, Callable, Dict, Tuple, Awaitable, Optional, Any
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsFuncNode, PhysicsDataNode, Token
+from cascade.spec.topology import BipartiteGraph, Channel
+from cascade.spec.physics import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry

@@ -1,16 +1,16 @@
 import pytest
 import sys
 import time
-from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
+from cascade.spec.ports import PortDef, PortRole
+from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec import EventIR, EventType, EventState
 from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.harness import EventDrivenRunner
-from cascade.spec.physical.triad import ObservabilityNode
+from cascade.spec.triad import ObservabilityNode
 from cascade.std.triad.observer import standard_observer
 
 

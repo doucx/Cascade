@@ -1,4 +1,4 @@
-from cascade.spec.runtime.interfaces import LazyFactory, Provider
+from cascade.spec.protocols import LazyFactory, Provider
 from .manager import ProviderRegistry, ProviderNamespace
 
 __all__ = [

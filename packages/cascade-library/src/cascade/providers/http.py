@@ -2,8 +2,8 @@ import os
 from contextlib import ExitStack
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
-from cascade.spec.dsl.task import task
-from cascade.spec.runtime.interfaces import LazyFactory, Provider
+from cascade.spec.task import task
+from cascade.spec.protocols import LazyFactory, Provider
 
 try:
     import aiohttp

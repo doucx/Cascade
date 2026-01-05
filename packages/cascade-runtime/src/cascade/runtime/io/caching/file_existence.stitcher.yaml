@@ -1,6 +1,6 @@
-"cascade.runtime.io.caching.file_existence.FileExistenceCache": |-
+"FileExistenceCache": |-
   A simple cache policy that considers a task 'cached' if a specific file exists.
-"cascade.runtime.io.caching.file_existence.FileExistenceCache.__init__": |-
+"FileExistenceCache.__init__": |-
   Args:
       target_path: A string path or a function that accepts task inputs
                    (args/kwargs dict) and returns a path string.

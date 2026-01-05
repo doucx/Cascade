@@ -1,12 +1,12 @@
-from cascade.spec.ir.fingerprint import Fingerprint, InvalidFingerprintKeyError
-from cascade.spec.physical.nodes import Token, PhysicsNode, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
-from cascade.spec.physical.topology import Channel, BipartiteGraph
-from cascade.spec.physical.resources import ResourceSlot
-from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
-from cascade.spec.physical.ports import PortRole, PortDef
-from cascade.spec.physical.assembly import Assembly, SymbolTable
-from cascade.spec.runtime.observability import (
+from .fingerprint import Fingerprint, InvalidFingerprintKeyError
+from .physics import Token, PhysicsNode, PhysicsDataNode, PhysicsFuncNode
+from .triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
+from .topology import Channel, BipartiteGraph
+from .resources import ResourceSlot
+from .environment import EnvironmentDef, ResourceDef
+from .ports import PortRole, PortDef
+from .assembly import Assembly, SymbolTable
+from .observability import (
     EventIR,
     EventType,
     EventState,

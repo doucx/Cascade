@@ -3,7 +3,7 @@ import logging
 from typing import Any, Optional
 import aiohttp
 
-from cascade.spec.runtime.interfaces import CacheBackend
+from cascade.spec.protocols import CacheBackend
 
 logger = logging.getLogger(__name__)
 

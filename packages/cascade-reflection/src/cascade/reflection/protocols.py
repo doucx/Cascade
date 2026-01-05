@@ -1,5 +1,5 @@
 from typing import Protocol, Any
-from cascade.spec.ir.graph import TaskDef
+from cascade.spec.ir.models import TaskDef
 
 
 class TaskAnalyzer(Protocol):

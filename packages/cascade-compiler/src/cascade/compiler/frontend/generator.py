@@ -1,8 +1,8 @@
 from typing import Any, Dict
 
-from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
-from cascade.spec.dsl.routing import Router
-from cascade.spec.ir.graph import GraphIR, NodeIR
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.routing import Router
+from cascade.spec.ir.models import GraphIR, NodeIR
 from cascade.reflection import ReflectionAnalyzer, HashingService
 
 

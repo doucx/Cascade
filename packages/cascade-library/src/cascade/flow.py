@@ -1,5 +1,5 @@
 from typing import Union, Callable, Any, Sequence
-from cascade.spec.dsl.fluent import LazyResult
+from cascade.spec.lazy_types import LazyResult
 
 
 def sequence(tasks: Sequence[LazyResult]) -> LazyResult:

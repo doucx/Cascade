@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import MagicMock
-from cascade.spec.physical.nodes import Token
+from cascade.spec.physics import Token
 from cascade.std.resource.discrete import (
     discrete_allocator,
     discrete_reclaimer,

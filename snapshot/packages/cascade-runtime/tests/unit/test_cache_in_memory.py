@@ -1,6 +1,6 @@
 import pytest
 from unittest.mock import patch
-from cascade.adapters.cache.in_memory import InMemoryCacheBackend
+from cascade.runtime.io.cache.in_memory import InMemoryCacheBackend
 
 
 @pytest.mark.asyncio

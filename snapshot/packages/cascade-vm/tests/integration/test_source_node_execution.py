@@ -8,7 +8,7 @@ from cascade.compiler.backend.builder import Builder
 from cascade.spec.environment import EnvironmentDef
 from cascade.spec.physics import Token
 from cascade.vm.harness import EventDrivenRunner
-from cascade.runtime.events import TaskExecutionFinished
+from cascade.runtime.services.observability.events import TaskExecutionFinished
 
 
 # Standard library function imports

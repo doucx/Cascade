@@ -41,10 +41,10 @@ async def test_sync_task_offloading_prevents_blocking():
         finish first.
         Result: async_task finishes BEFORE sync_task.
     """
-    from cascade.runtime.engine import Engine
+    from cascade.runtime.host.instance import Engine
     from cascade.runtime import EventBus
-    from cascade.adapters.solvers.native import NativeSolver
-    from cascade.adapters.executors.local import LocalExecutor
+    from cascade.runtime.kernel.solvers.native import NativeSolver
+    from cascade.runtime.io.executors.local import LocalExecutor
 
     engine = Engine(
         solver=NativeSolver(),

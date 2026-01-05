@@ -4,9 +4,9 @@ from typing import Any, Dict, Optional
 
 from cascade.spec.task import task
 from cascade.spec.protocols import LazyFactory, Provider
-from cascade.runtime.engine import Engine
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime import EventBus
 
 

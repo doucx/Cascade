@@ -3,8 +3,8 @@ from unittest.mock import MagicMock
 from contextlib import ExitStack
 
 from cascade.spec.task import task
-from cascade.runtime.strategies.vm import VMExecutionStrategy
-from cascade.runtime.strategies.base import ExecutionContext
+from cascade.runtime.legacy.strategies.vm import VMExecutionStrategy
+from cascade.runtime.legacy.strategies.base import ExecutionContext
 
 
 @task

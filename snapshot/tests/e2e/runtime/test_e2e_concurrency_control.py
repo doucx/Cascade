@@ -3,8 +3,8 @@ from dataclasses import asdict
 
 import pytest
 import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
 from cascade.spec.constraint import GlobalConstraint
 

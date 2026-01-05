@@ -10,8 +10,8 @@ from cascade.vm.protocols import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry
-from cascade.runtime.event_bus import EventBus
-from cascade.runtime.events import Event, TaskExecutionFinished
+from cascade.runtime.services.observability.bus import EventBus
+from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
 
 logger = logging.getLogger(__name__)
 

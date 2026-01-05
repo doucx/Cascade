@@ -2,10 +2,10 @@ import pytest
 import asyncio
 import time
 import cascade as cs
-from cascade.runtime.engine import Engine
+from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 
 
 @pytest.mark.asyncio

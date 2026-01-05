@@ -5,7 +5,7 @@ from cascade.spec.physics import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.ports import PortDef, PortRole
 from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec import EventIR, EventType, EventState
-from cascade.runtime.events import Event, TaskExecutionFinished
+from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor

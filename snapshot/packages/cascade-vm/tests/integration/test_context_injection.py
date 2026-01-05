@@ -5,7 +5,7 @@ from cascade.spec.topology import BipartiteGraph, Channel
 from cascade.spec.physics import PhysicsDataNode, Token
 from cascade.spec.triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
 from cascade.spec.ports import PortDef, PortRole
-from cascade.runtime.events import TaskExecutionStarted, TaskExecutionFinished
+from cascade.runtime.services.observability.events import TaskExecutionStarted, TaskExecutionFinished
 from cascade.vm.harness import EventDrivenRunner
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer

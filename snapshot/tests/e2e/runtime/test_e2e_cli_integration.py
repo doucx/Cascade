@@ -1,9 +1,9 @@
 import asyncio
 import pytest
 import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import TaskExecutionFinished
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.services.observability.events import TaskExecutionFinished
 from cascade.testing import MockExecutor
 
 # 导入 app 模块中的核心异步逻辑函数

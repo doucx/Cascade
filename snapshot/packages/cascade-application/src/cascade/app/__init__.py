@@ -8,16 +8,16 @@ from cascade.spec.protocols import Connector, StateBackend
 from cascade.graph.build import build_graph
 from cascade.graph.model import Node, EdgeType
 
-from cascade.runtime.engine import Engine
+from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.runtime.events import (
+from cascade.runtime.services.observability.events import (
     PlanAnalysisStarted,
     PlanNodeInspected,
     PlanAnalysisFinished,
 )
-from cascade.runtime.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.services.observability.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
 
 from cascade.common.messaging import bus
 from cascade.common.renderers import CliRenderer, JsonRenderer
@@ -44,7 +44,7 @@ def _create_state_backend_factory(
         if backend_spec.startswith("redis://"):
             try:
                 import redis
-                from cascade.adapters.state.redis import RedisStateBackend
+                from cascade.runtime.io.state.redis import RedisStateBackend
             except ImportError:
                 raise ImportError(
                     "The 'redis' library is required for redis:// backends."

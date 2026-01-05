@@ -1,5 +1,5 @@
 import pytest
-from cascade.adapters.state.in_memory import InMemoryStateBackend
+from cascade.runtime.io.state.in_memory import InMemoryStateBackend
 
 
 @pytest.mark.asyncio

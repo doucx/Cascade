@@ -1,7 +1,7 @@
 import pytest
 import cascade as cs
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 # 注意：在实现阶段需要确保这些模块存在
 # from cascade.context import get_current_context
 

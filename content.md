@@ -4,6 +4,6 @@
 
 ### 📝 变更文件摘要:
 ```
-uv.lock | 98 ++++++++++++++++++++++++++++++++---------------------------------
- 1 file changed, 49 insertions(+), 49 deletions(-)
+migrations/002_restructure_runtime.py | 58 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 58 insertions(+)
 ```

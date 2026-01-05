@@ -18,7 +18,7 @@ def mock_ui_bus(monkeypatch):
     """Mocks the UI bus where it's used for constraint error logging."""
     mock_bus = MagicMock()
     # This must target where 'bus' is imported and used, which is now handlers.py
-    monkeypatch.setattr("cascade.runtime.constraints.handlers.bus", mock_bus)
+    monkeypatch.setattr("cascade.runtime.services.constraints.handlers.bus", mock_bus)
     return mock_bus
 
 

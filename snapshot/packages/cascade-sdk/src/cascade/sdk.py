@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, Callable
 # Maps exported names to (module_path, object_name)
 _IMPORT_MAP = {
     # Core Specs
-    "task": ("cascade.spec.task", "task"),
-    "LazyResult": ("cascade.spec.lazy_types", "LazyResult"),
-    "Router": ("cascade.spec.routing", "Router"),
-    "Jump": ("cascade.spec.jump", "Jump"),
-    "resource": ("cascade.spec.resource", "resource"),
-    "inject": ("cascade.spec.resource", "inject"),
-    "with_constraints": ("cascade.spec.constraint", "with_constraints"),
+    "task": ("cascade.spec.dsl.task", "task"),
+    "LazyResult": ("cascade.spec.dsl.fluent", "LazyResult"),
+    "Router": ("cascade.spec.dsl.routing", "Router"),
+    "Jump": ("cascade.spec.dsl.jump", "Jump"),
+    "resource": ("cascade.spec.dsl.resources", "resource"),
+    "inject": ("cascade.spec.dsl.resources", "inject"),
+    "with_constraints": ("cascade.spec.dsl.constraint", "with_constraints"),
     "get_current_context": ("cascade.common.context", "get_current_context"),
     # Advanced Flow Control
     "select_jump": ("cascade.control_flow", "select_jump"),
@@ -26,8 +26,8 @@ _IMPORT_MAP = {
     # Adapters & Protocols
     "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
     "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
-    "Connector": ("cascade.spec.protocols", "Connector"),
-    "StateBackend": ("cascade.spec.protocols", "StateBackend"),
+    "Connector": ("cascade.spec.runtime.interfaces", "Connector"),
+    "StateBackend": ("cascade.spec.runtime.interfaces", "StateBackend"),
     # Tools & Utilities
     "to_json": ("cascade.graph.serialize", "to_json"),
     "from_json": ("cascade.graph.serialize", "from_json"),

@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] fix(runtime/sdk): 修复重构后的导入、类型提示及测试路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767620011.303568, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 添加 cascade-spec 重组迁移脚本 (003)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767620380.0467784, "duration_ms": 0}}

@@ -1,40 +1,3 @@
-## [WIP] fix(docs): 批量修复 .stitcher.yaml 键名为简短格式
-
-### 用户需求
-在重构后，`.stitcher.yaml` 文件中的键被自动转换为了完全限定名 (FQN)。用户需要将这些键恢复为相对于模块的简短名称（例如 `InMemoryCacheBackend` 而非 `cascade.runtime.io.cache.in_memory.InMemoryCacheBackend`），以保持文档的可读性。
-
-### 评论
-Stitcher 的 `refactor apply` 为了保证引用的绝对正确性，将所有关联文档的键都更新为了 FQN。这是一个正确的“防御性”行为，但在语义对齐完成后，我们需要进行一次“可读性回归”。使用 `griffe` 进行语义解析是确保简化后的名称确实存在于对应模块中的最佳实践。
-
-### 目标
-1.  创建一个 Python 脚本 `scripts/restore_stitcher_keys.py`。
-2.  该脚本遍历所有 `.stitcher.yaml`，推断其对应的模块 FQN。
-3.  利用 `griffe` 解析对应的 `.py` 源码，验证符号是否存在。
-4.  将以模块 FQN 开头的键替换为相对名称。
-5.  执行该脚本。
-
-### 基本原理
-通过自动化脚本批量处理，既能保证覆盖率，又能通过语义检查（Griffe）避免错误的字符串截断。这比手动查找替换要安全得多，特别是面对像 Cascade 这样复杂的 Monorepo 结构时。
-
-### 标签
-#intent/tune #flow/ready #priority/high 
-#comp/docs #intent/tooling
-#ai/instruct
-#task/domain/architecture #task/object/monorepo #task/action/refactor #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建恢复脚本
-
-我们将编写一个脚本，它结合了路径推断和 Griffe 语义分析来安全地简化 YAML 键。
-
-~~~~~act
-write_file
-scripts/restore_stitcher_keys.py
-~~~~~
-~~~~~python
 import sys
 from pathlib import Path
 import griffe
@@ -139,7 +102,3 @@ def restore_keys():
 
 if __name__ == "__main__":
     restore_keys()
-~~~~~
-
-### 下一步建议
-脚本执行完毕后，所有 `.stitcher.yaml` 文件应该都已恢复整洁。此时可以安全地生成 `[COMMIT]` 计划，将代码重构和文档修复一同提交。

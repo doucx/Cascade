@@ -1,10 +1,10 @@
 import pytest
 import cascade as cs
 from aiohttp import web
-from cascade.runtime.engine import Engine
+from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
 
 # The CID we will request in the test
 TEST_CID = "QmZULkCELmmk5XNfCgTnflahDcwr9ssAAkAJd15uiNpdEp"

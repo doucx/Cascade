@@ -8,14 +8,14 @@ from cascade.graph.registry import NodeRegistry
 from cascade.reflection import BlueprintHasher
 from cascade.spec.protocols import Solver, StateBackend
 from cascade.spec.jump import Jump
-from cascade.runtime.event_bus import EventBus
-from cascade.runtime.resource_container import ResourceContainer
-from cascade.runtime.processor import NodeProcessor
-from cascade.runtime.flow import FlowManager
-from cascade.runtime.exceptions import DependencyMissingError
-from cascade.runtime.events import TaskSkipped, TaskBlocked
-from cascade.runtime.constraints.manager import ConstraintManager
-from cascade.runtime.strategies.base import ExecutionContext
+from cascade.runtime.services.observability.bus import EventBus
+from cascade.runtime.services.resources.container import ResourceContainer
+from cascade.runtime.legacy.processor import NodeProcessor
+from cascade.runtime.legacy.flow import FlowManager
+from cascade.runtime.errors import DependencyMissingError
+from cascade.runtime.services.observability.events import TaskSkipped, TaskBlocked
+from cascade.runtime.services.constraints.manager import ConstraintManager
+from cascade.runtime.legacy.strategies.base import ExecutionContext
 
 
 class GraphExecutionResult:

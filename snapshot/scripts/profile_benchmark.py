@@ -35,8 +35,8 @@ from observatory.benchmarks.tco_performance import (
     run_benchmark,
 )
 from cascade.runtime import Engine, EventBus
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
 
 
 async def profile_target(name: str, iterations: int):

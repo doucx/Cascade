@@ -9,7 +9,7 @@ import typer
 import cascade as cs
 from cascade.connectors.local import LocalBusConnector
 from cascade.spec.resource import resource
-from cascade.runtime.resource_manager import ResourceManager
+from cascade.runtime.services.resources.manager import ResourceManager
 
 from observatory.agents.kuramoto import firefly_agent
 from observatory.monitors.convergence import ConvergenceMonitor

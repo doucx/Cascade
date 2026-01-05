@@ -2,9 +2,9 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock
 import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 
 
 @pytest.fixture

@@ -1,8 +1,8 @@
 import pytest
 
 from cascade import task, Engine
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.runtime import EventBus
 from cascade.testing import SpySolver
 

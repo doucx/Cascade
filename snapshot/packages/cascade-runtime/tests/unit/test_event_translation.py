@@ -1,6 +1,6 @@
 import time
 from cascade.spec import EventIR, EventType, EventState
-from cascade.runtime.events import (
+from cascade.runtime.services.observability.events import (
     Event,
     TaskExecutionStarted,
     TaskExecutionFinished,

@@ -2,14 +2,14 @@ from typing import TYPE_CHECKING, Dict, Any, Optional
 import fnmatch
 from cascade.common.messaging import bus
 
-from .protocols import ConstraintHandler
+from cascade.runtime.services.constraints.protocols import ConstraintHandler
 from cascade.graph.model import Node
 from cascade.spec.constraint import GlobalConstraint
-from .rate_limiter import RateLimiter
+from cascade.runtime.services.constraints.rate_limiter import RateLimiter
 
 
 if TYPE_CHECKING:
-    from .manager import ConstraintManager
+    from cascade.runtime.services.constraints.manager import ConstraintManager
 
 
 def _matches(scope: str, task_name: str) -> bool:

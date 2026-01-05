@@ -16,7 +16,7 @@ from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.linker import Linker
 
-from cascade.runtime.strategies.base import ExecutionContext
+from cascade.runtime.legacy.strategies.base import ExecutionContext
 
 
 class VMExecutionStrategy:

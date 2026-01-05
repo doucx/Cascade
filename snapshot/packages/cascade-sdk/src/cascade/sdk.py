@@ -48,14 +48,14 @@ if TYPE_CHECKING:
 
     from cascade.control_flow import select_jump, bind
 
-    from cascade.runtime.engine import Engine
-    from cascade.runtime.event_bus import EventBus
-    from cascade.runtime.events import Event
-    from cascade.runtime.exceptions import DependencyMissingError
+    from cascade.runtime.host.instance import Engine
+    from cascade.runtime.services.observability.bus import EventBus
+    from cascade.runtime.services.observability.events import Event
+    from cascade.runtime.errors import DependencyMissingError
     from cascade.flow import sequence, pipeline
 
-    from cascade.adapters.solvers.native import NativeSolver
-    from cascade.adapters.executors.local import LocalExecutor
+    from cascade.runtime.kernel.solvers.native import NativeSolver
+    from cascade.runtime.io.executors.local import LocalExecutor
     from cascade.spec.protocols import Connector, StateBackend
 
     from cascade.graph.serialize import to_json, from_json

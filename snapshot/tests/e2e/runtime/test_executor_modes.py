@@ -23,10 +23,10 @@ async def test_compute_tasks_are_isolated_from_blocking_tasks():
     Verifies that 'compute' and 'blocking' tasks run in separate thread pools
     and do not block each other.
     """
-    from cascade.runtime.engine import Engine
+    from cascade.runtime.host.instance import Engine
     from cascade.runtime import EventBus
-    from cascade.adapters.solvers.native import NativeSolver
-    from cascade.adapters.executors.local import LocalExecutor
+    from cascade.runtime.kernel.solvers.native import NativeSolver
+    from cascade.runtime.io.executors.local import LocalExecutor
 
     engine = Engine(
         solver=NativeSolver(),

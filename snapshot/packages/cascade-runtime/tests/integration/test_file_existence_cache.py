@@ -1,5 +1,5 @@
 import cascade as cs
-from cascade.adapters.caching import FileExistenceCache
+from cascade.runtime.io.caching import FileExistenceCache
 
 
 def test_file_existence_cache_hit(tmp_path):

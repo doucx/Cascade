@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Tuple, Optional, Callable
 from cascade.graph.model import Node, Graph, Edge, EdgeType
 from cascade.spec.resource import Inject
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.exceptions import DependencyMissingError, ResourceNotFoundError
+from cascade.runtime.errors import DependencyMissingError, ResourceNotFoundError
 from cascade.spec.protocols import StateBackend
 
 import inspect

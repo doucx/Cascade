@@ -1,9 +1,9 @@
 import pytest
 from unittest.mock import MagicMock
 import cascade as cs
-from cascade.runtime.events import ResourceAcquired, ResourceReleased, Event
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.services.observability.events import ResourceAcquired, ResourceReleased, Event
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 
 # --- Test Resources ---
 
@@ -146,7 +146,7 @@ def test_unregistered_resource_raises_error():
 
 
 def test_resource_scan_finds_inject_in_dict():
-    from cascade.runtime.resource_container import ResourceContainer
+    from cascade.runtime.services.resources.container import ResourceContainer
     from cascade.graph.build import build_graph
 
     @cs.resource

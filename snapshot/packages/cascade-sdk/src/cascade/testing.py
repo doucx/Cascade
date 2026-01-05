@@ -4,11 +4,11 @@ from unittest.mock import MagicMock
 import asyncio
 import uuid
 from dataclasses import asdict
-from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.io.executors.local import LocalExecutor
 
-from cascade.runtime.engine import Engine
+from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.runtime.events import Event
+from cascade.runtime.services.observability.events import Event
 from cascade.spec.protocols import (
     Solver,
     Executor,

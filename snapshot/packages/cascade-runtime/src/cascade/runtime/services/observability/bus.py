@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import Callable, List, Type, Dict, Any
 from cascade.spec import EventIR
-from .events import Event
+from cascade.runtime.services.observability.events import Event
 
 # Define a Handler type alias for clarity
 Handler = Callable[[Any], None]

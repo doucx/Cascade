@@ -9,26 +9,26 @@ from contextlib import ExitStack
 from cascade.spec.resource import ResourceDefinition
 from cascade.spec.constraint import GlobalConstraint
 from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.runtime.event_bus import EventBus
-from cascade.runtime.events import (
+from cascade.runtime.services.observability.bus import EventBus
+from cascade.runtime.services.observability.events import (
     RunStarted,
     RunFinished,
     ConnectorConnected,
     ConnectorDisconnected,
 )
 from cascade.spec.protocols import Solver, Executor, StateBackend, Connector
-from cascade.runtime.resource_manager import ResourceManager
-from cascade.runtime.constraints import ConstraintManager
-from cascade.runtime.constraints.handlers import (
+from cascade.runtime.services.resources.manager import ResourceManager
+from cascade.runtime.services.constraints import ConstraintManager
+from cascade.runtime.services.constraints.handlers import (
     PauseConstraintHandler,
     ConcurrencyConstraintHandler,
     RateLimitConstraintHandler,
 )
-from cascade.adapters.state import InMemoryStateBackend
-from cascade.runtime.processor import NodeProcessor
-from cascade.runtime.resource_container import ResourceContainer
-from cascade.runtime.strategies import GraphExecutionStrategy, VMExecutionStrategy
-from cascade.runtime.strategies.base import ExecutionContext
+from cascade.runtime.io.state import InMemoryStateBackend
+from cascade.runtime.legacy.processor import NodeProcessor
+from cascade.runtime.services.resources.container import ResourceContainer
+from cascade.runtime.legacy.strategies import GraphExecutionStrategy, VMExecutionStrategy
+from cascade.runtime.legacy.strategies.base import ExecutionContext
 
 
 class Engine:

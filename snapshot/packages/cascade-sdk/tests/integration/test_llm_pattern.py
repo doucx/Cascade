@@ -1,8 +1,8 @@
 import pytest
 import cascade as cs
 from unittest.mock import MagicMock
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.providers.http import HttpResponse
 
 # 模拟一个成功的 OpenAI API 响应

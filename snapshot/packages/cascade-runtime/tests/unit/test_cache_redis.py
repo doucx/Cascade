@@ -2,7 +2,7 @@ import pickle
 import pytest
 from unittest.mock import MagicMock
 
-from cascade.adapters.cache import redis as redis_cache_module
+from cascade.runtime.io.cache import redis as redis_cache_module
 
 
 @pytest.fixture
@@ -13,7 +13,7 @@ def mock_redis_client():
 def test_redis_cache_backend_dependency_check(monkeypatch):
     monkeypatch.setattr(redis_cache_module, "redis", None)
     with pytest.raises(ImportError, match="The 'redis' library is required"):
-        from cascade.adapters.cache.redis import RedisCacheBackend
+        from cascade.runtime.io.cache.redis import RedisCacheBackend
 
         RedisCacheBackend(client=MagicMock())
 

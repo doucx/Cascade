@@ -2,8 +2,8 @@ import inspect
 import hashlib
 from typing import Any, List, Optional
 
-from cascade.spec.ir.models import TaskDef, ArgumentDef, ArgumentKind
-from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.ir.graph import TaskDef, ArgumentDef, ArgumentKind
+from cascade.spec.ir.fingerprint import Fingerprint
 from .protocols import TaskAnalyzer
 
 # Type hint for the Cascade Task wrapper

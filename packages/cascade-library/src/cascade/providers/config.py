@@ -5,8 +5,8 @@ try:
 except ImportError:
     yaml = None
 
-from cascade.spec.task import task
-from cascade.spec.protocols import LazyFactory, Provider
+from cascade.spec.dsl.task import task
+from cascade.spec.runtime.interfaces import LazyFactory, Provider
 import asyncio
 
 

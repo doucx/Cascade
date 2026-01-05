@@ -1,7 +1,7 @@
 from typing import Protocol, Any, Dict
 from dataclasses import dataclass, field
 from contextlib import ExitStack
-from cascade.spec.protocols import StateBackend
+from cascade.spec.runtime.interfaces import StateBackend
 
 
 @dataclass

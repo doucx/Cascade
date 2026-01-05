@@ -17,7 +17,7 @@ async def test_e2e_ttl_expiration():
     connector = InProcessConnector()
 
     # Helper to avoid complex harness logic for now
-    from cascade.spec.constraint import GlobalConstraint
+    from cascade.spec.dsl.constraint import GlobalConstraint
     from dataclasses import asdict
     import uuid
 

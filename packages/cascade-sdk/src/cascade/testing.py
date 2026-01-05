@@ -9,7 +9,7 @@ from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
 from cascade.runtime.services.observability.events import Event
-from cascade.spec.protocols import (
+from cascade.spec.runtime.interfaces import (
     Solver,
     Executor,
     ExecutionPlan,
@@ -17,7 +17,7 @@ from cascade.spec.protocols import (
     SubscriptionHandle,
 )
 from cascade.graph.model import Node, Graph
-from cascade.spec.constraint import GlobalConstraint
+from cascade.spec.dsl.constraint import GlobalConstraint
 
 
 @contextmanager

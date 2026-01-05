@@ -6,9 +6,9 @@ from typing import Any, Dict, Optional, Callable
 from uuid import uuid4
 from contextlib import ExitStack
 
-from cascade.spec.resource import ResourceDefinition
-from cascade.spec.constraint import GlobalConstraint
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.dsl.resources import ResourceDefinition
+from cascade.spec.dsl.constraint import GlobalConstraint
+from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.observability.events import (
     RunStarted,
@@ -16,7 +16,7 @@ from cascade.runtime.services.observability.events import (
     ConnectorConnected,
     ConnectorDisconnected,
 )
-from cascade.spec.protocols import Solver, Executor, StateBackend, Connector
+from cascade.spec.runtime.interfaces import Solver, Executor, StateBackend, Connector
 from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints import ConstraintManager
 from cascade.runtime.services.constraints.handlers import (
@@ -188,7 +188,7 @@ class Engine:
             with ExitStack() as run_stack:
                 # Register the engine's connector as a special internal resource
                 if self.connector:
-                    from cascade.spec.resource import ResourceDefinition
+                    from cascade.spec.dsl.resources import ResourceDefinition
 
                     # We define the provider and then explicitly wrap it in a ResourceDefinition
                     # because the @resource decorator doesn't work as expected on closures

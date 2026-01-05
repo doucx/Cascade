@@ -2,12 +2,12 @@ from unittest.mock import MagicMock
 import pytest
 
 from cascade.graph.model import Node, Edge, EdgeType
-from cascade.spec.routing import Router
-from cascade.spec.lazy_types import LazyResult
+from cascade.spec.dsl.routing import Router
+from cascade.spec.dsl.fluent import LazyResult
 from cascade.runtime.legacy.flow import FlowManager
 from cascade.runtime.io.state.in_memory import InMemoryStateBackend
-from cascade.spec.ir.models import TaskDef
-from cascade.spec.fingerprint import Fingerprint
+from cascade.spec.ir.graph import TaskDef
+from cascade.spec.ir.fingerprint import Fingerprint
 
 
 def create_mock_node(name: str) -> Node:

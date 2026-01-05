@@ -1,9 +1,9 @@
 from typing import Any, Dict
 import asyncio
 
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
-from cascade.spec.environment import EnvironmentDef
-from cascade.spec.physics import Token
+from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.physical.nodes import Token
 
 from cascade.compiler.frontend import IRGenerator
 from cascade.compiler.backend import Builder

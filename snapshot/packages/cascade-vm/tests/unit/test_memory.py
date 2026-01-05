@@ -1,5 +1,5 @@
 import pytest
-from cascade.spec.physics import Token, PhysicsDataNode
+from cascade.spec.physical.nodes import Token, PhysicsDataNode
 from cascade.vm.memory import VolatileMemory, MemoryFullError, MemoryEmptyError
 
 

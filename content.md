@@ -1,116 +1,39 @@
-好的，我将基于您提供的参考文件和重构路线图，创建 `migrations/003_restructure_spec.py`。
+# 📸 Snapshot Capture
 
-这个脚本将定义 `cascade-spec` 包的物理文件重组逻辑，将其划分为清晰的 `dsl`, `ir`, `physical`, 和 `runtime` 四个层次。
+检测到工作区发生变更。
 
-## [WIP] refactor: 添加 cascade-spec 重组迁移脚本 (003)
-
-### 用户需求
-
-创建一个名为 `migrations/003_restructure_spec.py` 的 Stitcher 迁移脚本，用于执行 `cascade-spec` 包的大规模目录重组。该脚本需要将现有的扁平化结构映射到新的分层架构（DSL, IR, Physical, Runtime）。
-
-### 评论
-
-这是“休克疗法”重构的关键一步。通过编写此脚本，我们利用 Stitcher 的语义感知能力来自动处理文件移动、引用更新和 Sidecar 文件的同步，从而避免了手动重构可能带来的大量人为错误。
-
-### 目标
-
-1.  创建 `migrations/003_restructure_spec.py`。
-2.  在脚本中定义从旧路径到新路径的 `Move` 操作，涵盖 DSL、IR、Physical 和 Runtime 四个层级。
-3.  确保重命名符合映射表（例如 `lazy_types.py` -> `fluent.py`, `protocols.py` -> `interfaces.py`）。
-
-### 基本原理
-
-Stitcher 的 `refactor apply` 命令依赖于迁移脚本来规划和执行重构。将重构逻辑固化为代码（Migration as Code）使得重构过程可复现、可审查，并且能够利用 CI/CD 进行验证。
-
-### 标签
-
-#intent/refine #flow/ready #priority/high
-#comp/build #concept/state #scope/core
-#ai/instruct
-#task/domain/architecture #task/object/monorepo #task/action/refactor #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建迁移脚本 003
-
-~~~~~act
-write_file
-migrations/003_restructure_spec.py
-~~~~~
-~~~~~python
-from pathlib import Path
-from stitcher.refactor.migration import MigrationSpec, Move
-
-def upgrade(spec: MigrationSpec):
-    # Base path for cascade-spec source
-    base = Path("packages/cascade-spec/src/cascade/spec").absolute()
-
-    # ==========================================
-    # 1. DSL Layer (Domain Specific Language)
-    # ==========================================
-    # Fluent Interface & Types
-    spec.add(Move(base / "lazy_types.py", base / "dsl/fluent.py"))
-    
-    # Core DSL Entities
-    spec.add(Move(base / "task.py",       base / "dsl/task.py"))
-    # resource.py -> dsl/resources.py (Renamed to plural to match 'inputs')
-    spec.add(Move(base / "resource.py",   base / "dsl/resources.py"))
-    # input.py -> dsl/inputs.py (Renamed to plural)
-    spec.add(Move(base / "input.py",      base / "dsl/inputs.py"))
-    
-    # Control Flow & Routing
-    spec.add(Move(base / "jump.py",       base / "dsl/jump.py"))
-    spec.add(Move(base / "routing.py",    base / "dsl/routing.py"))
-    spec.add(Move(base / "constraint.py", base / "dsl/constraint.py"))
-
-    # ==========================================
-    # 2. IR Layer (Intermediate Representation)
-    # ==========================================
-    # Graph Models
-    # Note: Using Move for single file inside existing ir dir
-    spec.add(Move(base / "ir/models.py",  base / "ir/graph.py"))
-    # Fingerprinting
-    spec.add(Move(base / "fingerprint.py", base / "ir/fingerprint.py"))
-
-    # ==========================================
-    # 3. Physical Layer (Physics & Topology)
-    # ==========================================
-    # Core Physics Nodes
-    spec.add(Move(base / "physics.py",     base / "physical/nodes.py"))
-    # Topology & Channels
-    spec.add(Move(base / "topology.py",    base / "physical/topology.py"))
-    # Special Nodes (Bleach, Stain, Worker)
-    spec.add(Move(base / "triad.py",       base / "physical/triad.py"))
-    # Ports & Roles
-    spec.add(Move(base / "ports.py",       base / "physical/ports.py"))
-    # Environment Definitions
-    spec.add(Move(base / "environment.py", base / "physical/environment.py"))
-    # Resource Slots (Physical)
-    spec.add(Move(base / "resources.py",   base / "physical/resources.py"))
-    # Assembly & Symbol Table
-    spec.add(Move(base / "assembly.py",    base / "physical/assembly.py"))
-    # Bindings
-    spec.add(Move(base / "binding.py",     base / "physical/binding.py"))
-
-    # ==========================================
-    # 4. Runtime Layer (Interfaces & Telemetry)
-    # ==========================================
-    # Protocols & Interfaces
-    spec.add(Move(base / "protocols.py",     base / "runtime/interfaces.py"))
-    # Observability (Events IR)
-    spec.add(Move(base / "observability.py", base / "runtime/observability.py"))
-    # Telemetry (Headers & Events)
-    spec.add(Move(base / "telemetry.py",     base / "runtime/telemetry.py"))
-    # System Control
-    spec.add(Move(base / "system.py",        base / "runtime/system.py"))
-~~~~~
-
-### 下一步建议
-
-现在脚本已创建，您可以按照重构路线图执行以下操作：
-1.  **Dry Run**: 运行 `stitcher refactor apply migrations/003_restructure_spec.py --dry-run` 来预览变更。
-2.  **Apply**: 确认无误后，执行实际迁移。
-3.  **Check**: 检查是否有遗漏的文件或损坏的导入（尽管 Stitcher 会处理绝大多数情况）。
-
+### 📝 变更文件摘要:
+```
+.../cascade-spec/src/cascade/spec/assembly.json    |   9 --
+ .../cascade-spec/src/cascade/spec/binding.json     |   3 -
+ .../cascade-spec/src/cascade/spec/constraint.json  |  27 -----
+ .../src/cascade/spec/dsl/constraint.json           |  27 +++++
+ .../cascade-spec/src/cascade/spec/dsl/fluent.json  |  79 ++++++++++++++
+ .../cascade-spec/src/cascade/spec/dsl/inputs.json  |  15 +++
+ .../cascade-spec/src/cascade/spec/dsl/jump.json    |  16 +++
+ .../src/cascade/spec/dsl/resources.json            |  35 ++++++
+ .../cascade-spec/src/cascade/spec/dsl/routing.json |   7 ++
+ .../cascade-spec/src/cascade/spec/dsl/task.json    |  35 ++++++
+ .../cascade-spec/src/cascade/spec/environment.json |  16 ---
+ .../cascade-spec/src/cascade/spec/fingerprint.json |  50 ---------
+ .../cascade-spec/src/cascade/spec/input.json       |  15 ---
+ .../src/cascade/spec/ir/fingerprint.json           |  50 +++++++++
+ .../cascade-spec/src/cascade/spec/ir/graph.json    |  50 +++++++++
+ .../cascade-spec/src/cascade/spec/ir/models.json   |  50 ---------
+ .../cascade-spec/src/cascade/spec/jump.json        |  16 ---
+ .../cascade-spec/src/cascade/spec/lazy_types.json  |  79 --------------
+ .../src/cascade/spec/observability.json            |  38 -------
+ .../src/cascade/spec/physical/assembly.json        |   9 ++
+ .../src/cascade/spec/physical/binding.json         |   3 +
+ .../src/cascade/spec/physical/environment.json     |  16 +++
+ .../src/cascade/spec/physical/nodes.json           |  42 +++++++
+ .../src/cascade/spec/physical/ports.json           |  26 +++++
+ .../src/cascade/spec/physical/resources.json       |   5 +
+ .../src/cascade/spec/physical/topology.json        |  27 +++++
+ .../src/cascade/spec/physical/triad.json           |  14 +++
+ .../cascade-spec/src/cascade/spec/physics.json     |  42 -------
+ .../cascade-spec/src/cascade/spec/ports.json       |  26 -----
+ .../cascade-spec/src/cascade/spec/protocols.json   | 121 ---------------------
+ ...
+ 261 files changed, 1958 insertions(+), 1958 deletions(-)
+```

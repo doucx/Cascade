@@ -2,11 +2,11 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Any, Dict
 from enum import Enum, auto
 
-from cascade.spec.constraint import ResourceConstraint
-from cascade.spec.ir.models import TaskDef
+from cascade.spec.dsl.constraint import ResourceConstraint
+from cascade.spec.ir.graph import TaskDef
 
 # We store the ParamSpec here explicitly for type safety
-from cascade.spec.input import ParamSpec
+from cascade.spec.dsl.inputs import ParamSpec
 
 
 class EdgeType(Enum):

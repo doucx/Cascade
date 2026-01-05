@@ -1,6 +1,6 @@
 import os
 from typing import Any, Dict, Optional
-from cascade.spec.task import task
+from cascade.spec.dsl.task import task
 
 
 # 这个任务的职责是从 Engine 提供的参数上下文中获取值。

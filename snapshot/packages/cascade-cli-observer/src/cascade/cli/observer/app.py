@@ -13,7 +13,7 @@ from cascade.common.messaging import bus
 from .rendering import RichCliRenderer
 from cascade.connectors.mqtt import MqttConnector
 from cascade.connectors.local.connector import DEFAULT_TELEMETRY_UDS_PATH
-from cascade.spec.constraint import GlobalConstraint
+from cascade.spec.dsl.constraint import GlobalConstraint
 
 app = typer.Typer()
 console = Console(stderr=True)

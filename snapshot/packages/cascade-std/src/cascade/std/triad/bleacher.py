@@ -2,9 +2,9 @@ from typing import Dict, Any, List
 import time
 
 from cascade.spec import EventIR, EventType, EventState
-from cascade.spec.physics import Token
-from cascade.spec.triad import BleachNode
-from cascade.spec.ports import PortRole
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.triad import BleachNode
+from cascade.spec.physical.ports import PortRole
 
 
 async def standard_bleacher(

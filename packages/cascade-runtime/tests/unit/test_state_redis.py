@@ -3,7 +3,7 @@ import pytest
 from unittest.mock import MagicMock
 
 # We import the module to patch its members
-from cascade.adapters.state import redis as redis_state_module
+from cascade.runtime.io.state import redis as redis_state_module
 
 
 @pytest.fixture
@@ -18,7 +18,7 @@ def mock_redis_client():
 def test_redis_state_backend_dependency_check(monkeypatch):
     monkeypatch.setattr(redis_state_module, "redis", None)
     with pytest.raises(ImportError, match="The 'redis' library is required"):
-        from cascade.adapters.state.redis import RedisStateBackend
+        from cascade.runtime.io.state.redis import RedisStateBackend
 
         RedisStateBackend(run_id="test", client=MagicMock())
 

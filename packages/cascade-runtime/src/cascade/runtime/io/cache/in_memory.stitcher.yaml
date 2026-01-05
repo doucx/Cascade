@@ -1,0 +1,2 @@
+"cascade.runtime.io.cache.in_memory.InMemoryCacheBackend": |-
+  A simple in-memory implementation of the CacheBackend protocol.

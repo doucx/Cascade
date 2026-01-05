@@ -3,12 +3,12 @@ import json
 import sys
 import pytest
 import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime import EventBus
 from cascade.connectors.local import LocalConnector
-from cascade.runtime.subscribers import TelemetrySubscriber
+from cascade.runtime.services.observability.subscribers import TelemetrySubscriber
 
 # We import the internal logic from observer to test real-world behavior
 

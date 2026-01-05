@@ -1,10 +1,10 @@
 import asyncio
 import pytest
 import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.runtime.events import TaskExecutionStarted
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.services.observability.events import TaskExecutionStarted
 
 from .harness import InProcessConnector, ControllerTestApp
 

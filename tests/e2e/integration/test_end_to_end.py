@@ -2,9 +2,9 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock
 import cascade as cs
-from cascade.runtime.engine import Engine
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 
 
 @pytest.fixture
@@ -13,7 +13,7 @@ def mock_messaging_bus(monkeypatch):
     mock_bus = MagicMock()
     # Patch the bus WHERE IT IS USED, not where it is defined.
     # subscribers.py does: from cascade.common.messaging import bus
-    monkeypatch.setattr("cascade.runtime.subscribers.bus", mock_bus)
+    monkeypatch.setattr("cascade.runtime.services.observability.subscribers.bus", mock_bus)
     return mock_bus
 
 

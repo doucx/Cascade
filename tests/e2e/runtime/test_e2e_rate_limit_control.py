@@ -1,9 +1,9 @@
 import time
 import pytest
 import cascade as cs
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import TaskExecutionFinished
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.services.observability.events import TaskExecutionFinished
 from cascade.testing import MockExecutor
 
 from .harness import InProcessConnector

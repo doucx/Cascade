@@ -3,8 +3,8 @@ import cascade as cs
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
 
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 
 # Skip if sqlalchemy missing
 pytest.importorskip("sqlalchemy")

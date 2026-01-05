@@ -1,8 +1,8 @@
 import pytest
 import cascade as cs
 import aiohttp
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 
 # Mark all tests in this module to be skipped if aiohttp is not installed
 pytest.importorskip("aiohttp")

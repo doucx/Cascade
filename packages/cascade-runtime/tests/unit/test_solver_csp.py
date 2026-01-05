@@ -1,7 +1,7 @@
 import pytest
 from cascade.spec.task import task
 from cascade.graph.build import build_graph
-from cascade.adapters.solvers.csp import CSPSolver
+from cascade.runtime.kernel.solvers.csp import CSPSolver
 
 # Skip tests if python-constraint is not installed
 pytest.importorskip("constraint")
@@ -13,7 +13,7 @@ def test_csp_solver_init():
 
 
 def test_csp_solver_missing_dependency(monkeypatch):
-    import cascade.adapters.solvers.csp as csp_module
+    import cascade.runtime.kernel.solvers.csp as csp_module
 
     # Simulate missing dependency by setting constraint to None
     monkeypatch.setattr(csp_module, "constraint", None)

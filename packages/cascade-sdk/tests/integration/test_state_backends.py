@@ -53,10 +53,10 @@ def stateful_redis_mock(monkeypatch):
 
     # Patch the redis module in all necessary locations
     monkeypatch.setitem(__import__("sys").modules, "redis", mock_redis_module)
-    from cascade.adapters.state import redis as redis_state_module
+    from cascade.runtime.io.state import redis as redis_state_module
 
     monkeypatch.setattr(redis_state_module, "redis", mock_redis_module)
-    from cascade.adapters.cache import redis as redis_cache_module
+    from cascade.runtime.io.cache import redis as redis_cache_module
 
     monkeypatch.setattr(redis_cache_module, "redis", mock_redis_module)
 

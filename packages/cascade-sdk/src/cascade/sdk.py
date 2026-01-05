@@ -16,16 +16,16 @@ _IMPORT_MAP = {
     "select_jump": ("cascade.control_flow", "select_jump"),
     "bind": ("cascade.control_flow", "bind"),
     # Runtime
-    "Engine": ("cascade.runtime.engine", "Engine"),
-    "EventBus": ("cascade.runtime.event_bus", "EventBus"),
+    "Engine": ("cascade.runtime.host.instance", "Engine"),
+    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
     "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
-    "Event": ("cascade.runtime.events", "Event"),
-    "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
+    "Event": ("cascade.runtime.services.observability.events", "Event"),
+    "DependencyMissingError": ("cascade.runtime.errors", "DependencyMissingError"),
     "sequence": ("cascade.flow", "sequence"),
     "pipeline": ("cascade.flow", "pipeline"),
     # Adapters & Protocols
-    "NativeSolver": ("cascade.adapters.solvers.native", "NativeSolver"),
-    "LocalExecutor": ("cascade.adapters.executors.local", "LocalExecutor"),
+    "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
+    "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
     "Connector": ("cascade.spec.protocols", "Connector"),
     "StateBackend": ("cascade.spec.protocols", "StateBackend"),
     # Tools & Utilities
@@ -48,14 +48,14 @@ if TYPE_CHECKING:
 
     from cascade.control_flow import select_jump, bind
 
-    from cascade.runtime.engine import Engine
-    from cascade.runtime.event_bus import EventBus
-    from cascade.runtime.events import Event
-    from cascade.runtime.exceptions import DependencyMissingError
+    from cascade.runtime.host.instance import Engine
+    from cascade.runtime.services.observability.bus import EventBus
+    from cascade.runtime.services.observability.events import Event
+    from cascade.runtime.errors import DependencyMissingError
     from cascade.flow import sequence, pipeline
 
-    from cascade.adapters.solvers.native import NativeSolver
-    from cascade.adapters.executors.local import LocalExecutor
+    from cascade.runtime.kernel.solvers.native import NativeSolver
+    from cascade.runtime.io.executors.local import LocalExecutor
     from cascade.spec.protocols import Connector, StateBackend
 
     from cascade.graph.serialize import to_json, from_json

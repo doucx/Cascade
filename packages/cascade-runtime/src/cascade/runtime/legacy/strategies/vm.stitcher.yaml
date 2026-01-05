@@ -1,0 +1,4 @@
+"cascade.runtime.legacy.strategies.vm.VMExecutionStrategy": |-
+  Executes tasks by compiling them into a Blueprint and running them on a Virtual Machine.
+"cascade.runtime.legacy.strategies.vm.VMExecutionStrategy._collect_lazy_results": |-
+  Recursive finder.

@@ -1,0 +1,349 @@
+from typing import Any, Dict, List, Tuple, Optional, Callable
+
+from cascade.graph.model import Node, Graph, Edge, EdgeType
+from cascade.spec.resource import Inject
+from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.runtime.errors import DependencyMissingError, ResourceNotFoundError
+from cascade.spec.protocols import StateBackend
+
+import inspect
+
+
+class ArgumentResolver:
+    async def resolve_cache_inputs(
+        self, node: Node, graph: Graph, state_backend: StateBackend
+    ) -> Dict[str, Any]:
+        # TODO: This needs to be smarter for caching.
+        # It should probably include data from input_bindings too?
+        # For now, keeping legacy behavior (edge results only).
+        inputs = {}
+        incoming_edges = [
+            edge
+            for edge in graph.edges
+            if edge.target.current_node_instance_hash == node.current_node_instance_hash
+        ]
+        for edge in incoming_edges:
+            if edge.arg_name.startswith("_"):
+                continue
+            if await state_backend.has_result(edge.source.current_node_instance_hash):
+                inputs[edge.arg_name] = await state_backend.get_result(
+                    edge.source.current_node_instance_hash
+                )
+        return inputs
+
+    async def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        resource_context: Dict[str, Any],
+        instance_map: Dict[str, Node],
+        callable_obj: Optional[Callable],
+        user_params: Optional[Dict[str, Any]] = None,
+        input_overrides: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        # FAST PATH: If node is simple (no Injects, no magic params), skip the ceremony.
+        if not node.has_complex_inputs:
+            # Reconstruct args/kwargs from Bindings (Literals) and Overrides
+            bindings = node.input_bindings
+            if input_overrides:
+                bindings = bindings.copy()
+                bindings.update(input_overrides)
+
+            # 1. Fill from bindings
+            f_args: List[Any] = []
+            f_kwargs: Dict[str, Any] = {}
+            for k, v in bindings.items():
+                if k.isdigit():
+                    idx = int(k)
+                    while len(f_args) <= idx:
+                        f_args.append(None)
+                    f_args[idx] = v
+                else:
+                    f_kwargs[k] = v
+
+            # 2. Fill from edges using the unified helper
+            resolved_edge_values = await self._resolve_data_edges(
+                node, graph, state_backend, instance_map, input_overrides
+            )
+            for k, v in resolved_edge_values.items():
+                if k.isdigit():
+                    idx = int(k)
+                    while len(f_args) <= idx:
+                        f_args.append(None)
+                    f_args[idx] = v
+                else:
+                    f_kwargs[k] = v
+
+            return f_args, f_kwargs
+
+        # --- COMPLEX PATH ---
+        args: List[Any] = []
+        kwargs: Dict[str, Any] = {}
+
+        # 1. Reconstruct initial args/kwargs from Bindings (Literals)
+        bindings = node.input_bindings
+        if input_overrides:
+            bindings = bindings.copy()
+            bindings.update(input_overrides)
+
+        positional_args_dict = {}
+        for name, value_raw in bindings.items():
+            # Always resolve structures to handle nested Injects correctly
+            value = self._resolve_structure(
+                value_raw,
+                node.current_node_instance_hash,
+                state_backend,
+                resource_context,
+                graph,
+            )
+
+            if name.isdigit():
+                positional_args_dict[int(name)] = value
+            else:
+                kwargs[name] = value
+
+        sorted_indices = sorted(positional_args_dict.keys())
+        args = [positional_args_dict[i] for i in sorted_indices]
+
+        # 2. Overlay Dependencies from Edges using the unified helper
+        resolved_edge_values = await self._resolve_data_edges(
+            node, graph, state_backend, instance_map, input_overrides
+        )
+        for k, v in resolved_edge_values.items():
+            if k.isdigit():
+                idx = int(k)
+                while len(args) <= idx:
+                    args.append(None)
+                args[idx] = v
+            else:
+                kwargs[k] = v
+
+        # 3. Handle Resource Injection in Defaults
+        if callable_obj:
+            try:
+                # Re-inspect signature on demand
+                sig = inspect.signature(callable_obj)
+                bound_args = sig.bind_partial(*args, **kwargs)
+                for param in sig.parameters.values():
+                    if (
+                        isinstance(param.default, Inject)
+                        and param.name not in bound_args.arguments
+                    ):
+                        kwargs[param.name] = self._resolve_inject(
+                            param.default, node.name, resource_context
+                        )
+            except (ValueError, TypeError):
+                pass
+
+        # 4. Handle internal param fetching context
+        # [CRITICAL] This logic must always run for Param tasks
+        from cascade.reflection import _get_param_value
+
+        if callable_obj is _get_param_value.func:
+            kwargs["params_context"] = user_params or {}
+
+        return args, kwargs
+
+    async def _resolve_data_edges(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        instance_map: Dict[str, Node],
+        input_overrides: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        resolved_values = {}
+        incoming_edges = [
+            e
+            for e in graph.edges
+            if e.target.current_node_instance_hash == node.current_node_instance_hash
+            and e.edge_type == EdgeType.DATA
+        ]
+
+        if not incoming_edges:
+            return {}
+
+        for edge in incoming_edges:
+            # [CRITICAL] Unified Priority Check:
+            # Overrides from Jump must take precedence over the static graph.
+            if input_overrides and edge.arg_name in input_overrides:
+                continue
+
+            val = await self._resolve_dependency(
+                edge,
+                node.current_node_instance_hash,
+                state_backend,
+                graph,
+                instance_map,
+            )
+            resolved_values[edge.arg_name] = val
+
+        return resolved_values
+
+    def _resolve_structure(
+        self,
+        obj: Any,
+        consumer_id: str,
+        state_backend: StateBackend,
+        resource_context: Dict[str, Any],
+        graph: Graph,
+    ) -> Any:
+        if isinstance(obj, Inject):
+            return self._resolve_inject(obj, consumer_id, resource_context)
+        elif isinstance(obj, list):
+            return [
+                self._resolve_structure(
+                    item, consumer_id, state_backend, resource_context, graph
+                )
+                for item in obj
+            ]
+        elif isinstance(obj, tuple):
+            return tuple(
+                self._resolve_structure(
+                    item, consumer_id, state_backend, resource_context, graph
+                )
+                for item in obj
+            )
+        elif isinstance(obj, dict):
+            return {
+                k: self._resolve_structure(
+                    v, consumer_id, state_backend, resource_context, graph
+                )
+                for k, v in obj.items()
+            }
+        return obj
+
+    async def _resolve_dependency(
+        self,
+        edge: Edge,
+        consumer_id: str,
+        state_backend: StateBackend,
+        graph: Graph,
+        instance_map: Dict[str, Node],
+    ) -> Any:
+        # ** CORE ROUTER LOGIC FIX **
+        if edge.router:
+            # This edge represents a Router. Its source is the SELECTOR.
+            # We must resolve the selector's value first.
+            selector_result = await self._get_node_result(
+                edge.source.current_node_instance_hash,
+                consumer_id,
+                "router_selector",
+                state_backend,
+                graph,
+            )
+
+            # Use the result to pick the correct route.
+            try:
+                selected_route_lr = edge.router.routes[selector_result]
+            except KeyError:
+                raise ValueError(
+                    f"Router selector for '{consumer_id}' returned '{selector_result}', "
+                    f"but no matching route found in {list(edge.router.routes.keys())}"
+                )
+
+            # Now, resolve the result of the SELECTED route.
+            # Convert instance UUID to canonical node ID using the map.
+            selected_node = instance_map[selected_route_lr._uuid]
+            return await self._get_node_result(
+                selected_node.current_node_instance_hash,
+                consumer_id,
+                edge.arg_name,
+                state_backend,
+                graph,
+            )
+        else:
+            # Standard dependency
+            return await self._get_node_result(
+                edge.source.current_node_instance_hash,
+                consumer_id,
+                edge.arg_name,
+                state_backend,
+                graph,
+            )
+
+    async def _get_node_result(
+        self,
+        node_id: str,
+        consumer_id: str,
+        arg_name: str,
+        state_backend: StateBackend,
+        graph: Graph,
+    ) -> Any:
+        if await state_backend.has_result(node_id):
+            return await state_backend.get_result(node_id)
+
+        # Slow Path: Check for skip/penetration
+        skip_reason = await state_backend.get_skip_reason(node_id)
+        if skip_reason:
+            upstream_edges = [
+                e for e in graph.edges if e.target.current_node_instance_hash == node_id
+            ]
+            data_inputs = [e for e in upstream_edges if e.edge_type == EdgeType.DATA]
+            if data_inputs:
+                # Recursively try to penetrate the skipped node
+                return await self._get_node_result(
+                    data_inputs[0].source.current_node_instance_hash,
+                    consumer_id,
+                    arg_name,
+                    state_backend,
+                    graph,
+                )
+
+        skip_info = f" (skipped: {skip_reason})" if skip_reason else ""
+        raise DependencyMissingError(consumer_id, arg_name, f"{node_id}{skip_info}")
+
+    def _resolve_inject(
+        self, inject: Inject, consumer_id: str, resource_context: Dict[str, Any]
+    ) -> Any:
+        if inject.resource_name in resource_context:
+            return resource_context[inject.resource_name]
+        raise ResourceNotFoundError(inject.resource_name, consumer_name=consumer_id)
+
+
+class ConstraintResolver:
+    async def resolve(
+        self,
+        node: Node,
+        graph: Graph,
+        state_backend: StateBackend,
+        constraint_manager: Any,
+        instance_map: Dict[str, Node],
+    ) -> Dict[str, Any]:
+        resolved = {}
+
+        # 1. Resolve Node-level constraints
+        if node.constraints and not node.constraints.is_empty():
+            for res, amount in node.constraints.requirements.items():
+                if isinstance(amount, (LazyResult, MappedLazyResult)):
+                    # Get the canonical node for the dynamic constraint value
+                    constraint_node = instance_map.get(amount._uuid)
+                    if not constraint_node:
+                        raise DependencyMissingError(
+                            node.current_node_instance_hash,
+                            f"constraint:{res}",
+                            amount._uuid,
+                        )
+
+                    if await state_backend.has_result(
+                        constraint_node.current_node_instance_hash
+                    ):
+                        resolved[res] = await state_backend.get_result(
+                            constraint_node.current_node_instance_hash
+                        )
+                    else:
+                        raise DependencyMissingError(
+                            node.current_node_instance_hash,
+                            f"constraint:{res}",
+                            constraint_node.current_node_instance_hash,
+                        )
+                else:
+                    resolved[res] = amount
+
+        # 2. Resolve Global constraints
+        if constraint_manager:
+            extra = constraint_manager.get_extra_requirements(node)
+            resolved.update(extra)
+
+        return resolved

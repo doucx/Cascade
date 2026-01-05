@@ -4,8 +4,8 @@ import pytest
 from cascade.graph.model import Node, Edge, EdgeType
 from cascade.spec.routing import Router
 from cascade.spec.lazy_types import LazyResult
-from cascade.runtime.flow import FlowManager
-from cascade.adapters.state.in_memory import InMemoryStateBackend
+from cascade.runtime.legacy.flow import FlowManager
+from cascade.runtime.io.state.in_memory import InMemoryStateBackend
 from cascade.spec.ir.models import TaskDef
 from cascade.spec.fingerprint import Fingerprint
 

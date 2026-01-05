@@ -1,10 +1,10 @@
 import pytest
 import cascade as cs
 from cascade.runtime import EventBus
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import TaskSkipped
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.services.observability.events import TaskSkipped
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.testing import SpySubscriber
 
 

@@ -3,10 +3,10 @@ import pytest
 from unittest.mock import MagicMock, ANY
 
 import cascade as cs
-from cascade.adapters.executors.local import LocalExecutor
-from cascade.adapters.solvers.native import NativeSolver
-from cascade.runtime.engine import Engine
-from cascade.runtime.events import TaskExecutionStarted
+from cascade.runtime.io.executors.local import LocalExecutor
+from cascade.runtime.kernel.solvers.native import NativeSolver
+from cascade.runtime.host.instance import Engine
+from cascade.runtime.services.observability.events import TaskExecutionStarted
 from cascade.spec.constraint import GlobalConstraint
 from dataclasses import asdict
 
@@ -18,7 +18,7 @@ def mock_ui_bus(monkeypatch):
     """Mocks the UI bus where it's used for constraint error logging."""
     mock_bus = MagicMock()
     # This must target where 'bus' is imported and used, which is now handlers.py
-    monkeypatch.setattr("cascade.runtime.constraints.handlers.bus", mock_bus)
+    monkeypatch.setattr("cascade.runtime.services.constraints.handlers.bus", mock_bus)
     return mock_bus
 
 

@@ -1,4 +1,0 @@
-"VMExecutionStrategy": |-
-  Executes tasks by compiling them into a Blueprint and running them on a Virtual Machine.
-"VMExecutionStrategy._collect_lazy_results": |-
-  Recursive finder.

@@ -1,9 +1,7 @@
-"EventDrivenRunner.inject_input": |-
-  Helper to inject data into a node.
-"EventDrivenRunner.run_until_complete": |-
-  Convenience method to wait for a specific task to complete (End event).
-"EventDrivenRunner.start_loop": |-
-  Starts the reactor loop in the background.
-"EventDrivenRunner.wait_for_event": |-
-  Waits until an event matching the predicate arrives.
-  Captures all intermediate events.
+inject_input: Helper to inject data into a node.
+run_until_complete: Convenience method to wait for a specific task to complete (End
+  event).
+start_loop: Starts the reactor loop in the background.
+wait_for_event: 'Waits until an event matching the predicate arrives.
+
+  Captures all intermediate events.'

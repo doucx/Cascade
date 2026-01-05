@@ -1,2 +1,1 @@
-"GraphInspector.assert_port_exists": |-
-  direction: 'input' or 'output'
+assert_port_exists: 'direction: ''input'' or ''output'''

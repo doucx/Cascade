@@ -1,14 +1,12 @@
-"cascade.runtime.services.constraints.handlers.ConcurrencyConstraintHandler": |-
-  Handles the 'concurrency' constraint type.
-  Maps concurrency limits to dynamic system resources.
-"cascade.runtime.services.constraints.handlers.PauseConstraintHandler": |-
-  Handles the 'pause' constraint type.
-  It can pause execution globally or for a specific task.
-"cascade.runtime.services.constraints.handlers.PauseConstraintHandler.check_permission": |-
-  Returns False (permission denied) if the task matches the constraint's scope.
-"cascade.runtime.services.constraints.handlers.RateLimitConstraintHandler": |-
-  Handles 'rate_limit' constraints using a Token Bucket algorithm.
-"cascade.runtime.services.constraints.handlers._matches": |-
-  Helper to check if a task name matches a scope pattern.
-"cascade.runtime.services.constraints.handlers._parse_rate_string": |-
-  Parses '10/m', '5/s', '300/h' into tokens per second.
+ConcurrencyConstraintHandler: 'Handles the ''concurrency'' constraint type.
+
+  Maps concurrency limits to dynamic system resources.'
+PauseConstraintHandler: 'Handles the ''pause'' constraint type.
+
+  It can pause execution globally or for a specific task.'
+RateLimitConstraintHandler: Handles 'rate_limit' constraints using a Token Bucket
+  algorithm.
+_matches: Helper to check if a task name matches a scope pattern.
+_parse_rate_string: Parses '10/m', '5/s', '300/h' into tokens per second.
+check_permission: Returns False (permission denied) if the task matches the constraint's
+  scope.

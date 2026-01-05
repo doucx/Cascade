@@ -1,18 +1,13 @@
-"BipartiteGraph": |-
-  The static, physical representation of the computational field.
-"BipartiteGraph.channels": |-
-  All connections between nodes.
-"BipartiteGraph.nodes": |-
-  All physical nodes indexed by their ID.
-"Channel": |-
-  A directed connection between a Function Node and a Data Node.
-"Channel.source_node_id": |-
-  The ID of the upstream node.
-"Channel.source_port": |-
-  The name of the output port on the source node.
-"Channel.target_node_id": |-
-  The ID of the downstream node.
-  Note: In a bipartite graph, if Source is Func, Target MUST be Data.
-"Channel.target_port": |-
-  The name of the input port on the target node.
-  For DataNodes, this is typically 'in'. For FuncNodes, it matches the argument name.
+BipartiteGraph: The static, physical representation of the computational field.
+Channel: A directed connection between a Function Node and a Data Node.
+channels: All connections between nodes.
+nodes: All physical nodes indexed by their ID.
+source_node_id: The ID of the upstream node.
+source_port: The name of the output port on the source node.
+target_node_id: 'The ID of the downstream node.
+
+  Note: In a bipartite graph, if Source is Func, Target MUST be Data.'
+target_port: 'The name of the input port on the target node.
+
+  For DataNodes, this is typically ''in''. For FuncNodes, it matches the argument
+  name.'

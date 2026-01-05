@@ -1,15 +1,10 @@
-"CascadeApp": |-
-  The central manager for a workflow's lifecycle, encapsulating all
-  infrastructure, configuration, and top-level operations.
-"CascadeApp.dry_run": |-
-  Builds and prints the execution plan without running any tasks.
-"CascadeApp.run": |-
-  Executes the workflow and returns the final result.
-"CascadeApp.visualize": |-
-  Generates and returns a Graphviz DOT string of the workflow.
-"DryRunConsoleSubscriber": |-
-  Listens to plan analysis events and prints a human-readable report.
-"_get_node_shape": |-
-  Returns the Graphviz shape for a given node type.
-"_internal_gather": |-
-  An internal pure task used to gather results from a list.
+CascadeApp: 'The central manager for a workflow''s lifecycle, encapsulating all
+
+  infrastructure, configuration, and top-level operations.'
+DryRunConsoleSubscriber: Listens to plan analysis events and prints a human-readable
+  report.
+_get_node_shape: Returns the Graphviz shape for a given node type.
+_internal_gather: An internal pure task used to gather results from a list.
+dry_run: Builds and prints the execution plan without running any tasks.
+run: Executes the workflow and returns the final result.
+visualize: Generates and returns a Graphviz DOT string of the workflow.

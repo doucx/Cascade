@@ -1,10 +1,8 @@
-"EventBus": |-
-  A simple in-memory event bus for dispatching events to subscribers.
-"EventBus.publish": |-
-  Dispatch an event to all relevant subscribers.
-"EventBus.publish_ir": |-
-  Hydrates an EventIR into a rich Event object and publishes it.
+EventBus: A simple in-memory event bus for dispatching events to subscribers.
+publish: Dispatch an event to all relevant subscribers.
+publish_ir: 'Hydrates an EventIR into a rich Event object and publishes it.
+
   This serves as the translation layer between the raw physical world (IR)
-  and the rich logical world (Events).
-"EventBus.subscribe": |-
-  Register a handler for a specific event type.
+
+  and the rich logical world (Events).'
+subscribe: Register a handler for a specific event type.

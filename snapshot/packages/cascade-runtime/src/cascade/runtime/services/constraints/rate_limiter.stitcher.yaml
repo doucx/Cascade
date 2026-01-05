@@ -1,16 +1,9 @@
-"cascade.runtime.services.constraints.rate_limiter.RateLimiter": |-
-  Implements a Token Bucket algorithm for rate limiting.
-  Manages multiple independent buckets identified by a key (scope).
-"cascade.runtime.services.constraints.rate_limiter.RateLimiter.try_acquire": |-
-  Attempts to acquire tokens from the bucket.
+RateLimiter: 'Implements a Token Bucket algorithm for rate limiting.
 
-  Returns:
-      0.0 if successful.
-      >0.0 if failed, representing the seconds to wait until enough tokens are available.
-"cascade.runtime.services.constraints.rate_limiter.RateLimiter.update_bucket": |-
-  Updates or creates a bucket configuration.
-
-  Args:
-      key: Unique identifier for the bucket.
-      rate: Tokens per second.
-      capacity: Max tokens. Defaults to rate (i.e., 1 second worth of tokens).
+  Manages multiple independent buckets identified by a key (scope).'
+try_acquire: "Attempts to acquire tokens from the bucket.\n\nReturns:\n    0.0 if\
+  \ successful.\n    >0.0 if failed, representing the seconds to wait until enough\
+  \ tokens are available."
+update_bucket: "Updates or creates a bucket configuration.\n\nArgs:\n    key: Unique\
+  \ identifier for the bucket.\n    rate: Tokens per second.\n    capacity: Max tokens.\
+  \ Defaults to rate (i.e., 1 second worth of tokens)."

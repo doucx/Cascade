@@ -1,8 +1,9 @@
-"ResourcePrism": |-
-  A Prism refracts a high-level Resource Definition into a complex physical topology.
-  It encapsulates the knowledge of how to wire a specific type of resource.
-"ResourcePrism.connect_task": |-
-  Wire a specific task to request/release this resource.
-"ResourcePrism.ensure_globals": |-
-  Create the global infrastructure for this resource (e.g., Allocator, Ledger).
-  This may be called multiple times for different resources of the same type.
+ResourcePrism: 'A Prism refracts a high-level Resource Definition into a complex physical
+  topology.
+
+  It encapsulates the knowledge of how to wire a specific type of resource.'
+connect_task: Wire a specific task to request/release this resource.
+ensure_globals: 'Create the global infrastructure for this resource (e.g., Allocator,
+  Ledger).
+
+  This may be called multiple times for different resources of the same type.'

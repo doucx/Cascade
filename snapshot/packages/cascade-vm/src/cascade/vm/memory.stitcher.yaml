@@ -1,19 +1,11 @@
-"MemoryEmptyError": |-
-  Raised when attempting to take from an empty DataNode.
-"MemoryError": |-
-  Base class for memory-related errors.
-"MemoryFullError": |-
-  Raised when a DataNode exceeds its capacity.
-"VolatileMemory": |-
-  In-memory state manager for PhysicsDataNodes.
-  Implements FIFO queues and capacity enforcement.
-"VolatileMemory.get_count": |-
-  Returns the current token count in the node.
-"VolatileMemory.is_excited": |-
-  Returns True if the token count meets or exceeds the threshold.
-"VolatileMemory.put": |-
-  Adds a token to the specified data node.
-"VolatileMemory.take": |-
-  Consumes and returns the oldest token from the node.
-"VolatileMemory.wait_for_mutation": |-
-  Wait until a new token is put into memory.
+MemoryEmptyError: Raised when attempting to take from an empty DataNode.
+MemoryError: Base class for memory-related errors.
+MemoryFullError: Raised when a DataNode exceeds its capacity.
+VolatileMemory: 'In-memory state manager for PhysicsDataNodes.
+
+  Implements FIFO queues and capacity enforcement.'
+get_count: Returns the current token count in the node.
+is_excited: Returns True if the token count meets or exceeds the threshold.
+put: Adds a token to the specified data node.
+take: Consumes and returns the oldest token from the node.
+wait_for_mutation: Wait until a new token is put into memory.

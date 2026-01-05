@@ -1,12 +1,12 @@
-"Reactor": |-
-  The heart of the physics engine.
-  Scans the topology for excited states and fires transitions.
-"Reactor.add_sink": |-
-  Register a callback to receive tokens emitted by a specific port.
-"Reactor.prime": |-
-  Injects initial potential energy (tokens) into the system
-  based on PhysicsDataNode.initial_tokens.
-"Reactor.step": |-
-  Scans the graph for excited nodes and schedules them for execution.
+Reactor: 'The heart of the physics engine.
+
+  Scans the topology for excited states and fires transitions.'
+add_sink: Register a callback to receive tokens emitted by a specific port.
+prime: 'Injects initial potential energy (tokens) into the system
+
+  based on PhysicsDataNode.initial_tokens.'
+step: 'Scans the graph for excited nodes and schedules them for execution.
+
   Returns the number of tasks scheduled (fired) in this step.
-  This method is NON-BLOCKING regarding task execution.
+
+  This method is NON-BLOCKING regarding task execution.'

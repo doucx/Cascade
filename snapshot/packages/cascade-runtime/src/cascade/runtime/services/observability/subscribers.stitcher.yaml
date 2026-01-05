@@ -1,12 +1,14 @@
-"HumanReadableLogSubscriber": |-
-  Listens to system events from the EventBus and translates them into
+HumanReadableLogSubscriber: 'Listens to system events from the EventBus and translates
+  them into
+
   semantic messages on the FeedbackBus. It acts as a bridge between
-  the system event domain and the user-facing feedback domain.
-"TelemetrySubscriber": |-
-  Listens to runtime events from the EventBus and publishes them as
-  structured telemetry data via a Connector.
-"TelemetrySubscriber.on_event": |-
-  Handles incoming events synchronously and schedules asynchronous publishing.
-  This bridges the synchronous EventBus with the asynchronous Connector.
-"TelemetrySubscriber.shutdown": |-
-  Waits for all pending telemetry tasks to complete.
+
+  the system event domain and the user-facing feedback domain.'
+TelemetrySubscriber: 'Listens to runtime events from the EventBus and publishes them
+  as
+
+  structured telemetry data via a Connector.'
+on_event: 'Handles incoming events synchronously and schedules asynchronous publishing.
+
+  This bridges the synchronous EventBus with the asynchronous Connector.'
+shutdown: Waits for all pending telemetry tasks to complete.

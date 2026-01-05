@@ -1,9 +1,9 @@
-"IRGenerator": |-
-  Compiler Frontend: Converts user-facing LazyResult structures into
-  the Intermediate Representation (GraphIR) used by the backend.
-"IRGenerator._visit": |-
-  Recursive visitor that transforms LazyResults into Node IDs.
+IRGenerator: 'Compiler Frontend: Converts user-facing LazyResult structures into
+
+  the Intermediate Representation (GraphIR) used by the backend.'
+_visit: 'Recursive visitor that transforms LazyResults into Node IDs.
+
   Returns the transformed value (e.g., Node ID string for LazyResult,
-  or the literal value for others).
-"IRGenerator.generate": |-
-  Main entry point. Generates a GraphIR from a target (usually a LazyResult).
+
+  or the literal value for others).'
+generate: Main entry point. Generates a GraphIR from a target (usually a LazyResult).

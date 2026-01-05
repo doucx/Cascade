@@ -1,10 +1,7 @@
-"NodeRegistry": |-
-  A session-level registry that ensures any structurally identical node
-  is represented by a single, unique object in memory (interning).
-"NodeRegistry.get": |-
-  Gets a node by its structural hash key.
-"NodeRegistry.get_or_create": |-
-  Gets a node from the registry or creates it using the factory if not found.
+NodeRegistry: 'A session-level registry that ensures any structurally identical node
 
-  Returns:
-      A tuple of (Node, bool) where the boolean is True if the node was newly created.
+  is represented by a single, unique object in memory (interning).'
+get: Gets a node by its structural hash key.
+get_or_create: "Gets a node from the registry or creates it using the factory if not\
+  \ found.\n\nReturns:\n    A tuple of (Node, bool) where the boolean is True if the\
+  \ node was newly created."

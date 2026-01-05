@@ -1,11 +1,7 @@
-"WiringError": |-
-  Raised when an invalid wiring operation is attempted.
-"WiringHarness": |-
-  A safety harness for building BipartiteGraphs.
-  Enforces existence checks and port validation at connection time.
-"WiringHarness.add_node": |-
-  Registers a node in the graph, ensuring ID uniqueness.
-"WiringHarness.add_subgraph": |-
-  Registers all nodes and channels from a subgraph.
-"WiringHarness.connect": |-
-  Creates a channel between two nodes with strict validation.
+WiringError: Raised when an invalid wiring operation is attempted.
+WiringHarness: 'A safety harness for building BipartiteGraphs.
+
+  Enforces existence checks and port validation at connection time.'
+add_node: Registers a node in the graph, ensuring ID uniqueness.
+add_subgraph: Registers all nodes and channels from a subgraph.
+connect: Creates a channel between two nodes with strict validation.

@@ -1,10 +1,12 @@
-"cascade.runtime.kernel.solvers.csp.CSPSolver": |-
-  A solver that uses Constraint Satisfaction Problem (CSP) techniques to produce
+CSPSolver: 'A solver that uses Constraint Satisfaction Problem (CSP) techniques to
+  produce
+
   a resource-aware execution plan.
 
+
   It employs Iterative Deepening Search to find the schedule with the minimum
-  number of stages (Makespan) that satisfies all dependency and resource constraints.
-"cascade.runtime.kernel.solvers.csp.CSPSolver.__init__": |-
-  Args:
-      system_resources: A dictionary defining the total available capacity
-                        for each resource (e.g., {"gpu": 2, "memory_gb": 32}).
+
+  number of stages (Makespan) that satisfies all dependency and resource constraints.'
+__init__: "Args:\n    system_resources: A dictionary defining the total available\
+  \ capacity\n                      for each resource (e.g., {\"gpu\": 2, \"memory_gb\"\
+  : 32})."

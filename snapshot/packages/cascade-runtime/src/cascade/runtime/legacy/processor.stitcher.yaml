@@ -1,12 +1,10 @@
-"NodeProcessor": |-
-  Responsible for executing a single node within a workflow graph.
-  Handles policies such as constraints, caching, retries, and argument resolution.
-"NodeProcessor._execute_core": |-
-  Purely executes the callable via the configured executor.
-"NodeProcessor._handle_failed_outcome": |-
-  Handles retry logic and event publishing for a failed execution.
-  Returns True if a retry should be attempted, False otherwise.
-"NodeProcessor._handle_successful_outcome": |-
-  Handles caching and event publishing for a successful execution.
-"NodeProcessor.process": |-
-  Executes a node with all associated policies (constraints, cache, retry).
+NodeProcessor: 'Responsible for executing a single node within a workflow graph.
+
+  Handles policies such as constraints, caching, retries, and argument resolution.'
+_execute_core: Purely executes the callable via the configured executor.
+_handle_failed_outcome: 'Handles retry logic and event publishing for a failed execution.
+
+  Returns True if a retry should be attempted, False otherwise.'
+_handle_successful_outcome: Handles caching and event publishing for a successful
+  execution.
+process: Executes a node with all associated policies (constraints, cache, retry).

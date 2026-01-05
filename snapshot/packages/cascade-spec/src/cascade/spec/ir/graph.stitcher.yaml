@@ -1,23 +1,21 @@
-"ArgumentDef": |-
-  A specific definition of a single argument in a task's signature.
-  Designed to be serializable.
-"ArgumentKind": |-
-  Defines the kind of an argument, aligning with Python's inspect.Parameter kinds
-  and the Stitcher specification.
-"GraphIR": |-
-  A collection of NodeIRs representing the full logical workflow.
-"NodeIR": |-
-  Intermediate Representation of a Task instantiation in the logical graph.
-  This is the input to the Compiler Backend.
-"NodeIR.constraints": |-
-  Resource constraints for this node (e.g. {'gpu': 1}).
-"NodeIR.inputs": "Mapping of argument names to values. \nValues can be literals or\
-  \ references to other NodeIR IDs."
-"NodeIR.name": |-
-  Human-readable name.
-"NodeIR.task": |-
-  The definition of the task being invoked.
-"TaskDef": |-
-  The static intermediate representation (IR) of a Task.
-  This separates the 'definition' of what a task is from the 'node'
-  of where it is used in a graph.
+ArgumentDef: 'A specific definition of a single argument in a task''s signature.
+
+  Designed to be serializable.'
+ArgumentKind: 'Defines the kind of an argument, aligning with Python''s inspect.Parameter
+  kinds
+
+  and the Stitcher specification.'
+GraphIR: A collection of NodeIRs representing the full logical workflow.
+NodeIR: 'Intermediate Representation of a Task instantiation in the logical graph.
+
+  This is the input to the Compiler Backend.'
+TaskDef: 'The static intermediate representation (IR) of a Task.
+
+  This separates the ''definition'' of what a task is from the ''node''
+
+  of where it is used in a graph.'
+constraints: 'Resource constraints for this node (e.g. {''gpu'': 1}).'
+inputs: "Mapping of argument names to values. \nValues can be literals or references\
+  \ to other NodeIR IDs."
+name: Human-readable name.
+task: The definition of the task being invoked.

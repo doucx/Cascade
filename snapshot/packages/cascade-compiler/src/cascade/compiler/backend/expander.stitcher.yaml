@@ -1,10 +1,10 @@
-"Expander": "The 'Big Bang' engine. \nIt expands a single logical NodeIR into a physical\
+Expander: "The 'Big Bang' engine. \nIt expands a single logical NodeIR into a physical\
   \ Triad SubGraph.\n\nTriad Structure:\n    F_pre (Bleacher) --> D_worker_in -->\
   \ F_worker --> D_worker_out --> F_post (Stainer)\n           |                 \
   \                                             ^\n           +--------------------->\
   \ D_trace -------------------------------+"
-"Expander.expand_node": |-
-  Expands a NodeIR into a physical Triad.
-"SubGraph": |-
-  A collection of physical nodes and channels that represent a single logical unit
-  (e.g., a Triad).
+SubGraph: 'A collection of physical nodes and channels that represent a single logical
+  unit
+
+  (e.g., a Triad).'
+expand_node: Expands a NodeIR into a physical Triad.

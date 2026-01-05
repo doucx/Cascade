@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(sdk): 更新 _IMPORT_MAP 以反映重构后的模块路径", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767620512.8204515, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor: 实现架构分层重构与语义对齐", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767620568.2128863, "duration_ms": 0}}

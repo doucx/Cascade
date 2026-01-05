@@ -20,6 +20,12 @@ class Event:
     # In a real run, this would be injected by the Engine context
     run_id: Optional[str] = None
 
+    @staticmethod
+    def from_ir(ir: "EventIR") -> "Event":
+        # This is a stub for the type checker. The real implementation is assigned later
+        # at the end of the file to break a circular dependency while keeping pyright happy.
+        raise NotImplementedError
+
 
 @dataclass(frozen=True)
 class RunStarted(Event):

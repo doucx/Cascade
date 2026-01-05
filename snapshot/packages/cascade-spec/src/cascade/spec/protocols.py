@@ -14,6 +14,7 @@ class Executor(Protocol):
     async def execute(
         self,
         node: Node,
+        callable_obj: Callable,
         args: List[Any],
         kwargs: Dict[str, Any],
     ) -> Any: ...

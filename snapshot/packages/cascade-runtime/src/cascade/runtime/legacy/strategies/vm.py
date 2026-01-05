@@ -143,7 +143,7 @@ class VMExecutionStrategy:
             target_stainer_id = PhysicalIdGenerator.stain_node(target_base_id)
 
             # Bridge: Sink to Future
-            def _result_sink(token: Token):
+            async def _result_sink(token: Token):
                 if not result_future.done():
                     result_future.set_result(token.payload)
 
@@ -179,23 +179,35 @@ class VMExecutionStrategy:
 
     def _collect_lazy_results(self, target: Any) -> Dict[str, Any]:
         results = {}
-        if isinstance(target, (LazyResult, MappedLazyResult)):
-            results[target._uuid] = target
-            for arg in target.args:
-                results.update(self._collect_lazy_results(arg))
-            for k, v in target.kwargs.items():
-                results.update(self._collect_lazy_results(v))
+        # Use a stack to avoid deep recursion
+        stack = [target]
+        processed_uuids = set()
 
-            # Traverse Control Flow & Dependencies
-            if target._condition:
-                results.update(self._collect_lazy_results(target._condition))
-            for dep in target._dependencies:
-                results.update(self._collect_lazy_results(dep))
+        while stack:
+            current = stack.pop()
 
-        elif isinstance(target, (list, tuple)):
-            for item in target:
-                results.update(self._collect_lazy_results(item))
-        elif isinstance(target, dict):
-            for v in target.values():
-                results.update(self._collect_lazy_results(v))
+            if isinstance(current, (LazyResult, MappedLazyResult)):
+                if current._uuid in processed_uuids:
+                    continue
+                processed_uuids.add(current._uuid)
+                results[current._uuid] = current
+
+                # Common dependencies
+                if current._condition:
+                    stack.append(current._condition)
+                if hasattr(current, "_dependencies"):
+                    stack.extend(current._dependencies)
+
+                # Type-specific arguments
+                if isinstance(current, LazyResult):
+                    stack.extend(current.args)
+                    stack.extend(current.kwargs.values())
+                elif isinstance(current, MappedLazyResult):
+                    stack.extend(current.mapping_kwargs.values())
+
+            elif isinstance(current, (list, tuple)):
+                stack.extend(current)
+            elif isinstance(current, dict):
+                stack.extend(current.values())
+
         return results

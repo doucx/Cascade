@@ -13,21 +13,38 @@ _IMPORT_MAP = {
     "with_constraints": ("cascade.spec.constraint", "with_constraints"),
     "get_current_context": ("cascade.common.context", "get_current_context"),
     # Advanced Flow Control
-    "select_jump": ("cascade.control_flow", "select_jump"),
-    "bind": ("cascade.control_flow", "bind"),
+    "select_jump": ("cascade.library.flow", "select_jump"),
+    "bind": ("cascade.library.flow", "bind"),
+    "sequence": ("cascade.library.flow", "sequence"),
+    "pipeline": ("cascade.library.flow", "pipeline"),
+    "subflow": ("cascade.library.flow", "subflow"),
     # Runtime
-    "Engine": ("cascade.runtime.engine", "Engine"),
-    "EventBus": ("cascade.runtime.event_bus", "EventBus"),
-    "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
-    "Event": ("cascade.runtime.events", "Event"),
-    "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
-    "sequence": ("cascade.flow", "sequence"),
-    "pipeline": ("cascade.flow", "pipeline"),
+    "Engine": ("cascade.runtime.host.instance", "Engine"),
+    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
+    "Event": ("cascade.runtime.services.observability.events", "Event"),
+    "DependencyMissingError": ("cascade.runtime.errors", "DependencyMissingError"),
     # Adapters & Protocols
-    "NativeSolver": ("cascade.adapters.solvers.native", "NativeSolver"),
-    "LocalExecutor": ("cascade.adapters.executors.local", "LocalExecutor"),
+    "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
+    "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
     "Connector": ("cascade.spec.protocols", "Connector"),
     "StateBackend": ("cascade.spec.protocols", "StateBackend"),
+    # Standard Library Providers
+    "shell": ("cascade.library.providers.shell", "shell"),
+    "read": ("cascade.library.providers.io", "read"),
+    "write": ("cascade.library.providers.io", "write"),
+    "fs": ("cascade.library.providers.fs", "fs"),
+    "sql": ("cascade.library.providers.sql", "sql"),
+    "http": ("cascade.library.providers.http", "http"),
+    "template": ("cascade.library.providers.template", "template"),
+    "load_yaml": ("cascade.library.providers.config", "load_yaml"),
+    "lookup": ("cascade.library.providers.config", "lookup"),
+    "dict": ("cascade.library.providers.helpers", "dict"),
+    "format": ("cascade.library.providers.helpers", "format"),
+    "wait": ("cascade.library.providers.time", "wait"),
+    "send": ("cascade.library.providers.signal", "send"),
+    "recv": ("cascade.library.providers.signal", "recv"),
+    "io": ("cascade.library.providers.s3", "io"),
+    "ipfs": ("cascade.provider.ipfs", "ipfs"),
     # Tools & Utilities
     "to_json": ("cascade.graph.serialize", "to_json"),
     "from_json": ("cascade.graph.serialize", "from_json"),
@@ -46,13 +63,12 @@ if TYPE_CHECKING:
     from cascade.spec.constraint import with_constraints
     from cascade.common.context import get_current_context
 
-    from cascade.control_flow import select_jump, bind
+    from cascade.library.flow import select_jump, bind, sequence, pipeline, subflow
 
     from cascade.runtime.host.instance import Engine
     from cascade.runtime.services.observability.bus import EventBus
     from cascade.runtime.services.observability.events import Event
     from cascade.runtime.errors import DependencyMissingError
-    from cascade.flow import sequence, pipeline
 
     from cascade.runtime.kernel.solvers.native import NativeSolver
     from cascade.runtime.io.executors.local import LocalExecutor
@@ -62,10 +78,20 @@ if TYPE_CHECKING:
     from cascade.testing import override_resource, ControllerTestApp
     from cascade.tools.cli import create_cli
 
-    # Dynamic Providers Stubs (for static analysis)
-    # These are populated at runtime via __getattr__ delegation to the registry
-    http: Any
-    template: Any
+    # Library stubs
+    from cascade.library.providers.shell import shell
+    from cascade.library.providers.io import read, write
+    from cascade.library.providers.fs import fs
+    from cascade.library.providers.sql import sql
+    from cascade.library.providers.http import http
+    from cascade.library.providers.template import template
+    from cascade.library.providers.config import load_yaml, lookup
+    from cascade.library.providers.helpers import dict, format
+    from cascade.library.providers.time import wait
+    from cascade.library.providers.signal import send, recv
+    from cascade.library.providers.s3 import io
+    from cascade.provider.ipfs import ipfs
+
 
 # --- V1.4 Factory Functions ---
 
@@ -144,17 +170,21 @@ def __getattr__(name: str) -> Any:
     # 1. Check if it's a known API member in our lazy map
     if name in _IMPORT_MAP:
         module_path, obj_name = _IMPORT_MAP[name]
-        module = __import__(module_path, fromlist=[obj_name])
-        return getattr(module, obj_name)
+        try:
+            module = __import__(module_path, fromlist=[obj_name])
+            return getattr(module, obj_name)
+        except ImportError as e:
+            raise ImportError(
+                f"Cascade SDK could not lazy-load '{obj_name}' from '{module_path}'. "
+                f"Original error: {e}"
+            ) from e
 
-    # 2. Check if it's a dynamic provider (e.g., cs.read.text)
-    # This maintains the v1.3 behavior of dynamic provider loading
+    # 2. Check if it's a dynamic provider (legacy support)
     try:
         from cascade.providers.registry import registry
 
         return registry.get(name)
     except (ImportError, AttributeError):
-        # Fallthrough to raise the standard AttributeError below
         pass
 
     raise AttributeError(f"module 'cascade' has no attribute '{name}'")
@@ -173,6 +203,7 @@ __all__ = [
     # Advanced Flow Control
     "sequence",
     "pipeline",
+    "subflow",
     "Router",
     "Jump",
     "select_jump",
@@ -188,6 +219,23 @@ __all__ = [
     "EventBus",
     "NativeSolver",
     "LocalExecutor",
+    # Standard Library
+    "shell",
+    "read",
+    "write",
+    "fs",
+    "sql",
+    "http",
+    "template",
+    "load_yaml",
+    "lookup",
+    "dict",
+    "format",
+    "wait",
+    "send",
+    "recv",
+    "io",
+    "ipfs",
     # Tools & Utilities
     "to_json",
     "from_json",

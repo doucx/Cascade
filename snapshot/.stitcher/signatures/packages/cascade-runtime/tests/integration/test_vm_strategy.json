@@ -1,0 +1,15 @@
+{
+  "add": {
+    "baseline_code_signature_text": "def add(a: int, b: int) -> int:",
+    "baseline_code_structure_hash": "6a0e278928c0b8f86e6fc8d18606e21229844e6b16bef22297ac533564b3dcc6"
+  },
+  "square": {
+    "baseline_code_signature_text": "def square(n: int) -> int:",
+    "baseline_code_structure_hash": "cbe0ba853b2d4995d621005d310d766fee07751eea08f4a1144a594f447d0a86"
+  },
+  "test_vm_strategy_e2e_execution": {
+    "baseline_code_signature_text": "async def test_vm_strategy_e2e_execution():",
+    "baseline_code_structure_hash": "db053095783372a9d2c4c9771481ac6b1514f4cf7fa2218a7bd80943c3d75f67",
+    "baseline_yaml_content_hash": "6638d46e985c1667824783c115906c3d28b49c530db1ee6f9b17f27fd533123e"
+  }
+}

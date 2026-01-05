@@ -53,8 +53,8 @@
     "baseline_yaml_content_hash": "fd30b29648cc3914f93a39d7115adac3d6288f5a2c68bad69cd3d12430d46607"
   },
   "Executor.execute": {
-    "baseline_code_signature_text": "async def execute(self, node: Node, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
-    "baseline_code_structure_hash": "6ab959946345cf1f86e292dcc605b71552e8872be8e3625a41d658e4379943ca",
+    "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
+    "baseline_code_structure_hash": "42c33adc443e46043352bc8c2c8f3dc4febb95531e696f8dc5fd657b4ef76d58",
     "baseline_yaml_content_hash": "65845f05ecd6bab98df93b153d4737a89c6fa860aa581cb5cabfc0b8593e10be"
   },
   "LazyFactory": {

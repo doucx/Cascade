@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor: 实现架构分层重构与语义对齐", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767620568.2128863, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: A __init__.json, A __init__.json, A errors.json ... and 55 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767620824.438475, "duration_ms": 0}}

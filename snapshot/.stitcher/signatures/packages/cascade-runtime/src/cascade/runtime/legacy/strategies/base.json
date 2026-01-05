@@ -1,0 +1,13 @@
+{
+  "ExecutionContext": {},
+  "ExecutionContext.active_resources": {},
+  "ExecutionContext.params": {},
+  "ExecutionContext.run_id": {},
+  "ExecutionContext.run_stack": {},
+  "ExecutionContext.state_backend": {},
+  "ExecutionStrategy": {},
+  "ExecutionStrategy.execute": {
+    "baseline_code_signature_text": "async def execute(self, target: Any, context: ExecutionContext) -> Any:",
+    "baseline_code_structure_hash": "896af64d55e3d93d752bffb30eb92d7a7293c272bfe7a40c8882beb33fdc1668"
+  }
+}

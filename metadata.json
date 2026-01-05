@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M tco_performance.py, M run_fireflies.py, M __init__.py ... and 189 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767619427.227678, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 解决 pyright 类型检查错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767619429.3551075, "duration_ms": 0}}

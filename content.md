@@ -1,103 +1,65 @@
-这两处报错也是典型的“路径残留”，属于 E2E（端到端）测试在重构后没有及时同步内部私有路径导致的。由于我们的 `cascade-runtime` 内部结构变得更加模块化和深层，原本扁平的路径（如 `cascade.runtime.subscribers`）已经不存在了。
+太棒了。既然所有的单元测试、集成测试以及 E2E 测试都已经顺利通过，并且 `pyright` 的静态分析也恢复了清爽，这标志着我们的架构重构已经达到了一个稳定且一致的状态。
 
-我将生成一个计划来修正这些 E2E 测试中的 `monkeypatch` 路径。
+我将生成一个提交计划，将这些修复作为一个完整的工作单元固化到 Git 历史中。
 
-## [WIP] fix: 修正 E2E 测试中的内部模块引用路径
-
-### 错误分析
-
-在执行 E2E 测试时，遇到了以下 `ImportError`，这些错误都发生在 `pytest` 的 `monkeypatch.setattr` 过程中：
-
-1.  **`test_end_to_end.py`**: 报错 `No module named 'cascade.runtime.subscribers'`。
-    *   **原因**: 在重构后，订阅者逻辑被移动到了 `cascade.runtime.services.observability.subscribers`。
-2.  **`test_e2e_robustness.py`**: 报错 `No module named 'cascade.runtime.constraints'`。
-    *   **原因**: 约束处理器逻辑被移动到了 `cascade.runtime.services.constraints.handlers`。
-
-`monkeypatch` 需要导入字符串指定的完整模块路径才能进行属性替换。如果路径在物理磁盘上不存在，就会抛出 `ImportError`。
+## [COMMIT] fix(runtime/sdk): 修复重构后的导入、类型提示及测试路径
 
 ### 用户需求
-
-修正 `tests/e2e/integration/test_end_to_end.py` 和 `tests/e2e/runtime/test_e2e_robustness.py` 中的 `monkeypatch` 目标路径，使其指向重构后的正确物理位置。
+完成所有修复工作并提交代码。
 
 ### 评论
-
-E2E 测试通常会触及系统的内部深层逻辑，因此对架构重组最为敏感。保持这些测试的路径同步是维护测试套件健康度的必要工作。
+这是一组关键的“粘合逻辑”修复。在架构大规模重构后，确保公共接口（SDK）、内部依赖（__init__ 导出）、协议契约（Protocols）以及测试套件（Tests）同步更新是维持项目生命力的必要步骤。目前的修复已经消除了所有的导入错误和主要的类型争议。
 
 ### 目标
-
-1.  在 `test_end_to_end.py` 中，将 `monkeypatch.setattr` 的目标从 `"cascade.runtime.subscribers.bus"` 更改为 `"cascade.runtime.services.observability.subscribers.bus"`。
-2.  在 `test_e2e_robustness.py` 中，将 `monkeypatch.setattr` 的目标从 `"cascade.runtime.constraints.handlers.bus"` 更改为 `"cascade.runtime.services.constraints.handlers.bus"`。
+1.  提交对 `cascade-runtime`、`cascade-spec` 和 `cascade-sdk` 的修改。
+2.  提交对单元测试和 E2E 测试路径的修复。
 
 ### 基本原理
-
-通过精确替换 `monkeypatch` 使用的字符串路径，我们可以让 `pytest` 正确找到并 Mock 掉底层的消息总线（Feedback Bus）。这既保证了测试的隔离性（不产生真实的 UI 输出），也解决了因模块路径不存在而导致的导入失败。
+根据架构原则，我们通过显式导出、协议对齐和路径同步，恢复了系统的“逻辑闭环”。这不仅让当前代码能够运行，也为后续基于新架构的开发奠定了坚实的基础。
 
 ### 标签
-
-#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/e2e-tests #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #comp/sdk #comp/spec #scope/core #ai/instruct #task/domain/testing #task/object/refactoring-fix #task/action/commit #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `test_end_to_end.py` 中的 Mock 路径
+#### Acts 1: 提交所有变更
 
-我们将更新集成测试，使其指向正确的观测服务路径。
+我们将把涉及重构修复的所有文件添加到 Git 暂存区并提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-runtime/src/cascade/runtime/services/constraints/__init__.py
+packages/cascade-runtime/src/cascade/runtime/io/state/__init__.py
+packages/cascade-runtime/src/cascade/runtime/legacy/strategies/__init__.py
+packages/cascade-runtime/src/cascade/runtime/io/caching/__init__.py
+packages/cascade-spec/src/cascade/spec/protocols.py
+packages/cascade-runtime/src/cascade/runtime/legacy/strategies/vm.py
+packages/cascade-runtime/src/cascade/runtime/services/observability/events.py
+packages/cascade-sdk/src/cascade/sdk.py
+packages/cascade-runtime/tests/unit/test_solver_csp.py
 tests/e2e/integration/test_end_to_end.py
-~~~~~
-~~~~~python.old
-@pytest.fixture
-def mock_messaging_bus(monkeypatch):
-    """Mocks the global messaging bus and returns the mock object."""
-    mock_bus = MagicMock()
-    # Patch the bus WHERE IT IS USED, not where it is defined.
-    # subscribers.py does: from cascade.common.messaging import bus
-    monkeypatch.setattr("cascade.runtime.subscribers.bus", mock_bus)
-    return mock_bus
-~~~~~
-~~~~~python.new
-@pytest.fixture
-def mock_messaging_bus(monkeypatch):
-    """Mocks the global messaging bus and returns the mock object."""
-    mock_bus = MagicMock()
-    # Patch the bus WHERE IT IS USED, not where it is defined.
-    # subscribers.py does: from cascade.common.messaging import bus
-    monkeypatch.setattr("cascade.runtime.services.observability.subscribers.bus", mock_bus)
-    return mock_bus
-~~~~~
-
-#### Acts 2: 修正 `test_e2e_robustness.py` 中的 Mock 路径
-
-接着更新鲁棒性测试，指向正确的约束服务路径。
-
-~~~~~act
-patch_file
 tests/e2e/runtime/test_e2e_robustness.py
 ~~~~~
-~~~~~python.old
-@pytest.fixture
-def mock_ui_bus(monkeypatch):
-    """Mocks the UI bus where it's used for constraint error logging."""
-    mock_bus = MagicMock()
-    # This must target where 'bus' is imported and used, which is now handlers.py
-    monkeypatch.setattr("cascade.runtime.constraints.handlers.bus", mock_bus)
-    return mock_bus
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-@pytest.fixture
-def mock_ui_bus(monkeypatch):
-    """Mocks the UI bus where it's used for constraint error logging."""
-    mock_bus = MagicMock()
-    # This must target where 'bus' is imported and used, which is now handlers.py
-    monkeypatch.setattr("cascade.runtime.services.constraints.handlers.bus", mock_bus)
-    return mock_bus
+~~~~~text
+fix(runtime/sdk): fix broken imports and type hints after refactoring
+
+Consolidated and resolved multiple regression issues introduced during the AXA v1.0 refactoring:
+
+1.  Public API (SDK): Updated 'cascade.sdk' _IMPORT_MAP and TYPE_CHECKING blocks with correct module paths for Engine, EventBus, solvers, and executors.
+2.  Module Exports: Added missing class exports to __init__.py files across cascade-runtime (constraints, state, strategies, caching).
+3.  Protocols: Updated 'Executor' protocol signature to match its 4-argument implementation and usage.
+4.  Type Safety: Fixed pyright errors in Event (static from_ir stub) and VMExecutionStrategy (async callback type and MappedLazyResult attribute access).
+5.  Tests: Corrected internal module import paths and monkeypatch targets in both unit tests (CSP Solver) and E2E tests.
+
+These changes restore system-wide integrity, passing all static analysis and runtime test suites.
 ~~~~~
 
 ### 下一步建议
-
-现在所有已知的路径错误和导入错误应该都已清理干净。
-
-我建议你再次运行完整的测试套件。如果这次测试全部通过（或者只有与本次重构无关的错误），我们就可以生成最终的 `[COMMIT]` 计划了。
+- **监控持续集成**: 建议在 CI 环境中运行全量测试，确保不同环境下的兼容性。
+- **文档同步**: 检查 SDK 变更是否需要更新外部用户手册或示例代码。

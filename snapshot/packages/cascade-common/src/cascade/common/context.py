@@ -1,6 +1,6 @@
 from contextvars import ContextVar
 from typing import Dict, List, Any, Optional
-from cascade.spec.input import InputSpec
+from cascade.spec.dsl.inputs import InputSpec
 
 
 class WorkflowContext:

@@ -1,5 +1,5 @@
 from typing import Protocol
-from cascade.spec.ir.models import NodeIR
+from cascade.spec.ir.graph import NodeIR
 from cascade.compiler.backend.expander import SubGraph
 from .context import WiringContext
 

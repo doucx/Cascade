@@ -5,7 +5,7 @@ import pytest
 from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.spec.constraint import GlobalConstraint
+from cascade.spec.dsl.constraint import GlobalConstraint
 from cascade.testing import MockConnector, MockExecutor, TimedMockExecutor
 
 
@@ -59,7 +59,7 @@ async def wait_for_task_start(spy, task_name: str, timeout: float = 2.0):
 
 @pytest.mark.asyncio
 async def test_engine_subscribes_to_constraints(engine_with_connector, mock_connector):
-    from cascade.spec.task import task
+    from cascade.spec.dsl.task import task
 
     @task
     def dummy_task():
@@ -77,7 +77,7 @@ async def test_engine_subscribes_to_constraints(engine_with_connector, mock_conn
 async def test_engine_updates_constraints_on_message(
     engine_with_connector, mock_connector
 ):
-    from cascade.spec.task import task
+    from cascade.spec.dsl.task import task
 
     @task
     def dummy_task():
@@ -127,7 +127,7 @@ async def test_engine_updates_constraints_on_message(
 async def test_engine_handles_malformed_constraint_payload(
     engine_with_connector, mock_connector, capsys
 ):
-    from cascade.spec.task import task
+    from cascade.spec.dsl.task import task
 
     @task
     def dummy_task():
@@ -171,7 +171,7 @@ async def test_engine_handles_malformed_constraint_payload(
 
 @pytest.mark.asyncio
 async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_spy):
-    from cascade.spec.task import task
+    from cascade.spec.dsl.task import task
     from cascade.runtime.services.observability.events import TaskExecutionStarted
 
     bus, spy = bus_and_spy
@@ -238,7 +238,7 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
 
 @pytest.mark.asyncio
 async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):
-    from cascade.spec.task import task
+    from cascade.spec.dsl.task import task
     from cascade.runtime.services.observability.events import TaskExecutionStarted, TaskExecutionFinished
 
     bus, spy = bus_and_spy

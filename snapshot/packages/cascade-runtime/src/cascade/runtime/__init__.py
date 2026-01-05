@@ -4,7 +4,7 @@ from cascade.runtime.services.observability.subscribers import HumanReadableLogS
 from cascade.runtime.services.observability.events import Event
 from cascade.runtime.errors import DependencyMissingError
 from cascade.runtime.services.resources.manager import ResourceManager
-from cascade.spec.protocols import ExecutionPlan, Solver, Executor, CachePolicy
+from cascade.spec.runtime.interfaces import ExecutionPlan, Solver, Executor, CachePolicy
 
 __all__ = [
     "EventBus",

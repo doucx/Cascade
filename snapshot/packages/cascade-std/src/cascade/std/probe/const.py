@@ -1,5 +1,5 @@
 from typing import Dict, Any
-from cascade.spec.physics import Token, PhysicsNode
+from cascade.spec.physical.nodes import Token, PhysicsNode
 
 
 async def const_probe(

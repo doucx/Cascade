@@ -1,8 +1,8 @@
 from typing import Dict, Optional
 from collections import defaultdict
 from cascade.graph.model import Graph
-from cascade.spec.protocols import ExecutionPlan
-from cascade.spec.lazy_types import LazyResult, MappedLazyResult
+from cascade.spec.runtime.interfaces import ExecutionPlan
+from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 
 try:
     import constraint

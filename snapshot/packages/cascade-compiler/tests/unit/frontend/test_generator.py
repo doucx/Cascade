@@ -1,5 +1,5 @@
-from cascade.spec.task import task
-from cascade.spec.ir.models import GraphIR
+from cascade.spec.dsl.task import task
+from cascade.spec.ir.graph import GraphIR
 from cascade.compiler.frontend.generator import IRGenerator
 
 

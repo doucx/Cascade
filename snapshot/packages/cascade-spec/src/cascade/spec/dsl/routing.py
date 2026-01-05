@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, Any
-from .lazy_types import LazyResult  # NEW
+from cascade.spec.dsl.fluent import LazyResult  # NEW
 
 
 @dataclass

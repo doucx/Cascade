@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from .physics import PhysicsFuncNode
+from cascade.spec.physical.nodes import PhysicsFuncNode
 
 
 @dataclass

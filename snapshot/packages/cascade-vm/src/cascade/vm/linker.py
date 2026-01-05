@@ -1,8 +1,8 @@
 import asyncio
 from typing import Dict, Callable, Any, Optional
 
-from cascade.spec.assembly import Assembly
-from cascade.spec.physics import Token, PhysicsFuncNode
+from cascade.spec.physical.assembly import Assembly
+from cascade.spec.physical.nodes import Token, PhysicsFuncNode
 from cascade.reflection import PhysicalIdGenerator
 
 from .registry import CodeRegistry

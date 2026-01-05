@@ -7,7 +7,7 @@ import socket
 from pathlib import Path
 from typing import Callable, Awaitable, Dict, Any, List
 
-from cascade.spec.protocols import Connector, SubscriptionHandle
+from cascade.spec.runtime.interfaces import Connector, SubscriptionHandle
 from .uds_server import UdsTelemetryServer
 
 POLL_INTERVAL = 0.2  # seconds

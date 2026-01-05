@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 from uuid import uuid4
-from .lazy_types import LazyResult
+from cascade.spec.dsl.fluent import LazyResult
 
 
 @dataclass

@@ -1,6 +1,6 @@
 from typing import Dict, Any
 from cascade.spec import EventIR
-from cascade.spec.physics import Token, PhysicsNode
+from cascade.spec.physical.nodes import Token, PhysicsNode
 
 
 async def standard_observer(

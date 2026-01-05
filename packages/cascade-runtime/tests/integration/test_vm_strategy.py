@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 from contextlib import ExitStack
 
-from cascade.spec.task import task
+from cascade.spec.dsl.task import task
 from cascade.runtime.legacy.strategies.vm import VMExecutionStrategy
 from cascade.runtime.legacy.strategies.base import ExecutionContext
 

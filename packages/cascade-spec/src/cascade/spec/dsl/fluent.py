@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from uuid import uuid4
 
 if TYPE_CHECKING:
-    from cascade.spec.protocols import CachePolicy
+    from cascade.spec.runtime.interfaces import CachePolicy
 
 # Forward reference for ResourceConstraint
 T = TypeVar("T")
@@ -50,7 +50,7 @@ class LazyResult(Generic[T]):
 
     def with_constraints(self, **kwargs) -> "LazyResult[T]":
         # Import internally to avoid circular dependency at module level
-        from cascade.spec.constraint import ResourceConstraint
+        from cascade.spec.dsl.constraint import ResourceConstraint
 
         self._constraints = ResourceConstraint(requirements=kwargs)
         return self
@@ -89,7 +89,7 @@ class MappedLazyResult(Generic[T]):
         return self
 
     def with_constraints(self, **kwargs) -> "MappedLazyResult[T]":
-        from cascade.spec.constraint import ResourceConstraint
+        from cascade.spec.dsl.constraint import ResourceConstraint
 
         self._constraints = ResourceConstraint(requirements=kwargs)
         return self

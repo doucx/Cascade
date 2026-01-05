@@ -4,13 +4,13 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Union, Callable
 # Maps exported names to (module_path, object_name)
 _IMPORT_MAP = {
     # Core Specs
-    "task": ("cascade.spec.task", "task"),
-    "LazyResult": ("cascade.spec.lazy_types", "LazyResult"),
-    "Router": ("cascade.spec.routing", "Router"),
-    "Jump": ("cascade.spec.jump", "Jump"),
-    "resource": ("cascade.spec.resource", "resource"),
-    "inject": ("cascade.spec.resource", "inject"),
-    "with_constraints": ("cascade.spec.constraint", "with_constraints"),
+    "task": ("cascade.spec.dsl.task", "task"),
+    "LazyResult": ("cascade.spec.dsl.fluent", "LazyResult"),
+    "Router": ("cascade.spec.dsl.routing", "Router"),
+    "Jump": ("cascade.spec.dsl.jump", "Jump"),
+    "resource": ("cascade.spec.dsl.resources", "resource"),
+    "inject": ("cascade.spec.dsl.resources", "inject"),
+    "with_constraints": ("cascade.spec.dsl.constraint", "with_constraints"),
     "get_current_context": ("cascade.common.context", "get_current_context"),
     # Advanced Flow Control
     "select_jump": ("cascade.control_flow", "select_jump"),
@@ -26,8 +26,8 @@ _IMPORT_MAP = {
     # Adapters & Protocols
     "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
     "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
-    "Connector": ("cascade.spec.protocols", "Connector"),
-    "StateBackend": ("cascade.spec.protocols", "StateBackend"),
+    "Connector": ("cascade.spec.runtime.interfaces", "Connector"),
+    "StateBackend": ("cascade.spec.runtime.interfaces", "StateBackend"),
     # Tools & Utilities
     "to_json": ("cascade.graph.serialize", "to_json"),
     "from_json": ("cascade.graph.serialize", "from_json"),
@@ -38,12 +38,12 @@ _IMPORT_MAP = {
 
 # --- Type Checking Imports ---
 if TYPE_CHECKING:
-    from cascade.spec.task import task
-    from cascade.spec.lazy_types import LazyResult
-    from cascade.spec.routing import Router
-    from cascade.spec.jump import Jump
-    from cascade.spec.resource import resource, inject
-    from cascade.spec.constraint import with_constraints
+    from cascade.spec.dsl.task import task
+    from cascade.spec.dsl.fluent import LazyResult
+    from cascade.spec.dsl.routing import Router
+    from cascade.spec.dsl.jump import Jump
+    from cascade.spec.dsl.resources import resource, inject
+    from cascade.spec.dsl.constraint import with_constraints
     from cascade.common.context import get_current_context
 
     from cascade.control_flow import select_jump, bind
@@ -56,7 +56,7 @@ if TYPE_CHECKING:
 
     from cascade.runtime.kernel.solvers.native import NativeSolver
     from cascade.runtime.io.executors.local import LocalExecutor
-    from cascade.spec.protocols import Connector, StateBackend
+    from cascade.spec.runtime.interfaces import Connector, StateBackend
 
     from cascade.graph.serialize import to_json, from_json
     from cascade.testing import override_resource, ControllerTestApp
@@ -74,7 +74,7 @@ def Param(
     name: str, default: Any = None, type: Any = str, description: str = ""
 ) -> "LazyResult":
     # Lazy import dependencies to keep module load time minimal
-    from cascade.spec.input import ParamSpec
+    from cascade.spec.dsl.inputs import ParamSpec
     from cascade.common.context import get_current_context
     from cascade.reflection import _get_param_value
 
@@ -84,7 +84,7 @@ def Param(
 
 
 def Env(name: str, default: Any = None, description: str = "") -> "LazyResult":
-    from cascade.spec.input import EnvSpec
+    from cascade.spec.dsl.inputs import EnvSpec
     from cascade.common.context import get_current_context
     from cascade.reflection import _get_env_var
 

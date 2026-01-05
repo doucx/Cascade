@@ -1,5 +1,5 @@
 import pytest
-from cascade.spec.task import task
+from cascade.spec.dsl.task import task
 from cascade.graph.build import build_graph
 from cascade.runtime.kernel.solvers.csp import CSPSolver
 

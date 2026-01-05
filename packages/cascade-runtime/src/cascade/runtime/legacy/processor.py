@@ -7,7 +7,7 @@ from cascade.graph.model import Node
 
 if TYPE_CHECKING:
     from cascade.graph.model import MapNode
-from cascade.spec.protocols import Executor, StateBackend, Solver
+from cascade.spec.runtime.interfaces import Executor, StateBackend, Solver
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.resources.manager import ResourceManager
 from cascade.runtime.services.constraints.manager import ConstraintManager

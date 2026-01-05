@@ -1,6 +1,6 @@
 import os
 from unittest.mock import MagicMock, patch
-from cascade.spec.physics import Token
+from cascade.spec.physical.nodes import Token
 from cascade.std.probe.env import env_probe
 
 

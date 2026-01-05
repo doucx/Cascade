@@ -2,9 +2,9 @@ from typing import Dict, Any
 import time
 
 from cascade.spec import EventIR, EventType, EventState
-from cascade.spec.physics import Token
-from cascade.spec.triad import StainNode
-from cascade.spec.ports import PortRole
+from cascade.spec.physical.nodes import Token
+from cascade.spec.physical.triad import StainNode
+from cascade.spec.physical.ports import PortRole
 
 
 async def standard_stainer(

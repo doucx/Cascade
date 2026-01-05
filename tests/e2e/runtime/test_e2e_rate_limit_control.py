@@ -21,7 +21,7 @@ async def test_e2e_rate_limit_control(bus_and_spy):
     bus, spy = bus_and_spy
 
     # 2. Setup Helper (Inline to avoid complex harness changes for now)
-    from cascade.spec.constraint import GlobalConstraint
+    from cascade.spec.dsl.constraint import GlobalConstraint
     from dataclasses import asdict
     import uuid
 

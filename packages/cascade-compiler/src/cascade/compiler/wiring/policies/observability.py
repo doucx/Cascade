@@ -1,8 +1,8 @@
 import sys
-from cascade.spec.ir.models import NodeIR
-from cascade.spec.physics import PhysicsDataNode
-from cascade.spec.triad import ObservabilityNode
-from cascade.spec.ports import PortRole, PortDef
+from cascade.spec.ir.graph import NodeIR
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.triad import ObservabilityNode
+from cascade.spec.physical.ports import PortRole, PortDef
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
 from cascade.compiler.wiring.context import WiringContext

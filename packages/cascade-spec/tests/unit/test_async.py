@@ -1,4 +1,4 @@
-from cascade.spec.task import task
+from cascade.spec.dsl.task import task
 
 
 def test_task_detects_sync_function():

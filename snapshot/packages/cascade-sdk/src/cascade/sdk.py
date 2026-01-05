@@ -16,16 +16,16 @@ _IMPORT_MAP = {
     "select_jump": ("cascade.control_flow", "select_jump"),
     "bind": ("cascade.control_flow", "bind"),
     # Runtime
-    "Engine": ("cascade.runtime.engine", "Engine"),
-    "EventBus": ("cascade.runtime.event_bus", "EventBus"),
+    "Engine": ("cascade.runtime.host.instance", "Engine"),
+    "EventBus": ("cascade.runtime.services.observability.bus", "EventBus"),
     "FeedbackBus": ("cascade.common.messaging", "FeedbackBus"),
-    "Event": ("cascade.runtime.events", "Event"),
-    "DependencyMissingError": ("cascade.runtime.exceptions", "DependencyMissingError"),
+    "Event": ("cascade.runtime.services.observability.events", "Event"),
+    "DependencyMissingError": ("cascade.runtime.errors", "DependencyMissingError"),
     "sequence": ("cascade.flow", "sequence"),
     "pipeline": ("cascade.flow", "pipeline"),
     # Adapters & Protocols
-    "NativeSolver": ("cascade.adapters.solvers.native", "NativeSolver"),
-    "LocalExecutor": ("cascade.adapters.executors.local", "LocalExecutor"),
+    "NativeSolver": ("cascade.runtime.kernel.solvers.native", "NativeSolver"),
+    "LocalExecutor": ("cascade.runtime.io.executors.local", "LocalExecutor"),
     "Connector": ("cascade.spec.protocols", "Connector"),
     "StateBackend": ("cascade.spec.protocols", "StateBackend"),
     # Tools & Utilities

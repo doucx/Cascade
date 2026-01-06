@@ -13,7 +13,9 @@ def mock_messaging_bus(monkeypatch):
     mock_bus = MagicMock()
     # Patch the bus WHERE IT IS USED, not where it is defined.
     # subscribers.py does: from cascade.common.messaging import bus
-    monkeypatch.setattr("cascade.runtime.services.observability.subscribers.bus", mock_bus)
+    monkeypatch.setattr(
+        "cascade.runtime.services.observability.subscribers.bus", mock_bus
+    )
     return mock_bus
 
 

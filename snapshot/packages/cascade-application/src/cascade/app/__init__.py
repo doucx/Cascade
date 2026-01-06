@@ -15,7 +15,10 @@ from cascade.runtime.services.observability.events import (
     PlanNodeInspected,
     PlanAnalysisFinished,
 )
-from cascade.runtime.services.observability.subscribers import HumanReadableLogSubscriber, TelemetrySubscriber
+from cascade.runtime.services.observability.subscribers import (
+    HumanReadableLogSubscriber,
+    TelemetrySubscriber,
+)
 from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.runtime.io.executors.local import LocalExecutor
 

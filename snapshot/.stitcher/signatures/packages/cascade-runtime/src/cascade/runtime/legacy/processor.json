@@ -1,0 +1,44 @@
+{
+  "NodeProcessor": {
+    "baseline_yaml_content_hash": "93a85bea35b9acec92b111a122fdae2fa2fb6bc9c6348258e6c749fe5ea531ea"
+  },
+  "NodeProcessor.__init__": {
+    "baseline_code_signature_text": "def __init__(self, executor: Executor, bus: EventBus, resource_manager: ResourceManager, constraint_manager: ConstraintManager, solver: Solver):",
+    "baseline_code_structure_hash": "2065de7286d9979bd1b3cd88a722bba70db6f50131e9384130f0ed5c7fefd34a"
+  },
+  "NodeProcessor._execute_core": {
+    "baseline_code_signature_text": "async def _execute_core(self, node: Node, executable: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
+    "baseline_code_structure_hash": "9fae17204b59e027803519d71da37cbf829d155aa9988f07321399530881040f",
+    "baseline_yaml_content_hash": "0259c8a08416dff0c6722a062af2572c69530259d3b291f1c458a917ffb5b4d5"
+  },
+  "NodeProcessor._execute_internal": {
+    "baseline_code_signature_text": "async def _execute_internal(self, node: Node, executable: Callable, inputs: Tuple[List[Any], Dict[str, Any]], cache_inputs: Dict[str, Any], state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable) -> Any:",
+    "baseline_code_structure_hash": "28c423b858cfc6215f987a45dec7509a52eff9bd77fc4c2e711988a27a63ed8f"
+  },
+  "NodeProcessor._execute_map_node": {
+    "baseline_code_signature_text": "async def _execute_map_node(self, node: MapNode, factory: Callable, kwargs: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], parent_state_backend: StateBackend, sub_graph_runner: Callable) -> List[Any]:",
+    "baseline_code_structure_hash": "20d93a5b975b5193181ca2b845384986a9d255e9e9ea5b67fad848ae03a82e15"
+  },
+  "NodeProcessor._handle_failed_outcome": {
+    "baseline_code_signature_text": "async def _handle_failed_outcome(self, exception: Exception, node: Node, run_id: str, attempt: int, max_attempts: int, delay: float, start_time: float) -> bool:",
+    "baseline_code_structure_hash": "6daf5b4a5280bbf3f89873acaabf978d8474a62393e58f109bbd754639c594aa",
+    "baseline_yaml_content_hash": "e6adef4d8760ea3d4e6165cfdc9d91dfc3af503dd1b19663f3e90490f6f6c889"
+  },
+  "NodeProcessor._handle_successful_outcome": {
+    "baseline_code_signature_text": "async def _handle_successful_outcome(self, node: Node, run_id: str, cache_inputs: Dict[str, Any], start_time: float, result: Any) -> Any:",
+    "baseline_code_structure_hash": "4606abccd38c241efb90960ff4babbaa8f583ad0b471df58cc9d21c82b78ae3e",
+    "baseline_yaml_content_hash": "54c9425b4afd2d6fea3a4bc65809e760ee93bd441427ebea540526512fa95a0d"
+  },
+  "NodeProcessor.arg_resolver": {},
+  "NodeProcessor.bus": {},
+  "NodeProcessor.constraint_manager": {},
+  "NodeProcessor.constraint_resolver": {},
+  "NodeProcessor.executor": {},
+  "NodeProcessor.process": {
+    "baseline_code_signature_text": "async def process(self, node: Node, executable: Callable, inputs: Tuple[List[Any], Dict[str, Any]], requirements: Dict[str, Any], cache_inputs: Dict[str, Any], state_backend: StateBackend, active_resources: Dict[str, Any], run_id: str, params: Dict[str, Any], sub_graph_runner: Callable[[Any, Dict[str, Any], StateBackend], Awaitable[Any]]) -> Any:",
+    "baseline_code_structure_hash": "c8cecf64d26f2a62d927c386f400cc5d44e1c5a0b119562c4ffcee42563538cb",
+    "baseline_yaml_content_hash": "1af59a7b75e04d2e216a2bad2ad9e73b115011e0558c331f3bc70442239951e9"
+  },
+  "NodeProcessor.resource_manager": {},
+  "NodeProcessor.solver": {}
+}

@@ -1,7 +1,11 @@
 import pytest
 from unittest.mock import MagicMock
 import cascade as cs
-from cascade.runtime.services.observability.events import ResourceAcquired, ResourceReleased, Event
+from cascade.runtime.services.observability.events import (
+    ResourceAcquired,
+    ResourceReleased,
+    Event,
+)
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.kernel.solvers.native import NativeSolver
 

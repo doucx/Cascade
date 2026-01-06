@@ -8,7 +8,11 @@ from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.ports import PortRole
 from cascade.vm.harness import EventDrivenRunner
-from cascade.runtime.services.observability.events import Event, TaskExecutionStarted, TaskExecutionFinished
+from cascade.runtime.services.observability.events import (
+    Event,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+)
 from cascade.compiler.utils.inspector import GraphInspector
 from cascade.reflection import PhysicalIdGenerator
 

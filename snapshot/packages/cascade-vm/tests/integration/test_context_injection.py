@@ -3,9 +3,17 @@ from typing import Dict, Any
 
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsDataNode, Token
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
+from cascade.spec.physical.triad import (
+    BleachNode,
+    WorkerNode,
+    StainNode,
+    ObservabilityNode,
+)
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.runtime.services.observability.events import TaskExecutionStarted, TaskExecutionFinished
+from cascade.runtime.services.observability.events import (
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+)
 from cascade.vm.harness import EventDrivenRunner
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer

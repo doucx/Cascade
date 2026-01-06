@@ -2,7 +2,7 @@ from typing import Dict, Any
 from cascade.spec.physical.nodes import Token, PhysicsNode
 
 
-async def pulse_generator(
+def pulse_generator(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     trigger_token = inputs["trigger"]

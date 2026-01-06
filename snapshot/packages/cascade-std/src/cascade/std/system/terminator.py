@@ -3,7 +3,7 @@ from cascade.spec.physical.nodes import Token, PhysicsNode
 from cascade.spec.runtime.system import SystemControlToken
 
 
-async def halt_signal(
+def halt_signal(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     # The output token is a special system type, not a standard data Token.

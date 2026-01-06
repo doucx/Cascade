@@ -17,7 +17,7 @@ def create_mock_stain_node(output_ports_config):
     return node
 
 
-async def test_stainer_success_case():
+def test_stainer_success_case():
     start_ts = 1000.0
     end_ts = 1002.5
 
@@ -28,7 +28,7 @@ async def test_stainer_success_case():
     node = create_mock_stain_node({"output_default": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = await standard_stainer(inputs, node, MagicMock())
+        outputs = standard_stainer(inputs, node, MagicMock())
 
     assert "output_default" in outputs
     output_token = outputs["output_default"]
@@ -41,7 +41,7 @@ async def test_stainer_success_case():
     assert output_token.trace["duration"] == 2.5
 
 
-async def test_stainer_error_case():
+def test_stainer_error_case():
     start_ts = 2000.0
     end_ts = 2000.1
     error = ValueError("Something went wrong")
@@ -53,7 +53,7 @@ async def test_stainer_error_case():
     node = create_mock_stain_node({"output_default": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = await standard_stainer(inputs, node, MagicMock())
+        outputs = standard_stainer(inputs, node, MagicMock())
 
     assert "output_default" in outputs
     output_token = outputs["output_default"]
@@ -64,7 +64,7 @@ async def test_stainer_error_case():
     assert pytest.approx(output_token.trace["duration"]) == 0.1
 
 
-async def test_stainer_handles_missing_start_ts_gracefully():
+def test_stainer_handles_missing_start_ts_gracefully():
     end_ts = 3000.0
     inputs = {
         "worker_result": Token(payload="data"),
@@ -73,7 +73,7 @@ async def test_stainer_handles_missing_start_ts_gracefully():
     node = create_mock_stain_node({"output_default": PortRole.DATA})
 
     with patch("time.monotonic", return_value=end_ts):
-        outputs = await standard_stainer(inputs, node, MagicMock())
+        outputs = standard_stainer(inputs, node, MagicMock())
 
     output_token = outputs["output_default"]
     assert output_token.trace["duration"] == 0.0

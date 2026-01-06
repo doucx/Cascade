@@ -21,6 +21,7 @@ from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
 from cascade.std.triad.dispatcher import standard_dispatcher
 from cascade.vm.registry import CodeRegistry
+from cascade.reflection import PhysicalIdGenerator
 
 
 # --- User Logic ---
@@ -36,13 +37,26 @@ async def actual_user_logic(arg1: str) -> str:
 def build_test_triad_for_injection() -> BipartiteGraph:
     graph = BipartiteGraph()
 
+    # Base logical ID for the task
+    base_id = "task"
+
+    # Generate IDs using the standard protocol
+    f_pre_id = PhysicalIdGenerator.bleach_node(base_id)       # e.g., task.bleach
+    f_worker_id = PhysicalIdGenerator.worker_node(base_id)    # e.g., task.worker
+    f_stain_id = PhysicalIdGenerator.stain_node(base_id)      # e.g., task.stain
+    
+    # Data nodes must also follow convention where Dispatcher relies on it
+    d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
+    d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
+    d_trace_id = PhysicalIdGenerator.trace_data(base_id)
+
     # 1. Nodes
-    # Input Data
+    # Input Data (External)
     d_in = PhysicsDataNode(id="d_in", name="Input")
 
     # F_pre (Bleacher)
     f_pre = BleachNode(
-        id="task.bleach",
+        id=f_pre_id,
         name="Bleacher",
         input_ports={"arg1": PortDef("arg1", PortRole.DATA)},
         output_ports={
@@ -53,13 +67,13 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     )
 
     # D_worker_in & D_trace
-    d_worker_in = PhysicsDataNode(id="d_worker_in", name="WorkerIn")
-    d_trace = PhysicsDataNode(id="d_trace", name="Trace")
+    d_worker_in = PhysicsDataNode(id=d_worker_in_id, name="WorkerIn")
+    d_trace = PhysicsDataNode(id=d_trace_id, name="Trace")
 
     # F_exec (Worker)
     # NOTE: In v3.3, WorkerNode holds the hash of the code it should dispatch.
     f_worker = WorkerNode(
-        id="task.worker",
+        id=f_worker_id,
         name="Worker",
         canonical_code_structure_hash="hash_user_logic_001",
         input_ports={"worker_input": PortDef("worker_input", PortRole.DATA)},
@@ -67,11 +81,11 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     )
 
     # D_worker_out
-    d_worker_out = PhysicsDataNode(id="d_worker_out", name="WorkerOut")
+    d_worker_out = PhysicsDataNode(id=d_worker_out_id, name="WorkerOut")
 
     # F_post (Stainer)
     f_stain = StainNode(
-        id="task.stain",
+        id=f_stain_id,
         name="Stainer",
         input_ports={
             "worker_result": PortDef("worker_result", PortRole.DATA),
@@ -87,11 +101,14 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     d_out = PhysicsDataNode(id="d_out", name="Output")
 
     # Observability Infrastructure
+    d_life_id = PhysicalIdGenerator.observability_bus()
+    f_obs_id = PhysicalIdGenerator.observability_observer()
+    
     d_life = PhysicsDataNode(
-        id="global.observability.bus", name="EventBus", capacity=100
+        id=d_life_id, name="EventBus", capacity=100
     )
     f_obs = ObservabilityNode(
-        id="global.observability.observer",
+        id=f_obs_id,
         name="Observer",
         input_ports={"event_token": PortDef("event_token", PortRole.OBSERVABILITY)},
     )
@@ -114,25 +131,25 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     # 2. Channels (Wiring)
     channels = [
         # Input -> Bleacher
-        Channel("d_in", "out", "task.bleach", "arg1"),
+        Channel("d_in", "out", f_pre_id, "arg1"),
         # Bleacher -> Worker
-        Channel("task.bleach", "worker_input", "d_worker_in", "in"),
-        Channel("d_worker_in", "out", "task.worker", "worker_input"),
+        Channel(f_pre_id, "worker_input", d_worker_in_id, "in"),
+        Channel(d_worker_in_id, "out", f_worker_id, "worker_input"),
         # Worker -> Stainer
-        Channel("task.worker", "worker_result", "d_worker_out", "in"),
-        Channel("d_worker_out", "out", "task.stain", "worker_result"),
+        Channel(f_worker_id, "worker_result", d_worker_out_id, "in"),
+        Channel(d_worker_out_id, "out", f_stain_id, "worker_result"),
         # Bleacher -> Trace -> Stainer (The Wormhole)
-        Channel("task.bleach", "trace_output", "d_trace", "in"),
-        Channel("d_trace", "out", "task.stain", "trace_input"),
+        Channel(f_pre_id, "trace_output", d_trace_id, "in"),
+        Channel(d_trace_id, "out", f_stain_id, "trace_input"),
         # Stainer -> Output
-        Channel("task.stain", "output_default", "d_out", "in"),
+        Channel(f_stain_id, "output_default", "d_out", "in"),
         # Observability Wiring
-        Channel("task.bleach", "obs_output", "global.observability.bus", "in"),
-        Channel("task.stain", "obs_output", "global.observability.bus", "in"),
+        Channel(f_pre_id, "obs_output", d_life_id, "in"),
+        Channel(f_stain_id, "obs_output", d_life_id, "in"),
         Channel(
-            "global.observability.bus",
+            d_life_id,
             "out",
-            "global.observability.observer",
+            f_obs_id,
             "event_token",
         ),
     ]
@@ -152,11 +169,13 @@ async def test_genesis_injection_propagates_run_id():
 
     # 3. Setup Physics Kernel Function Map
     # NOTE: The worker now maps to the standard_dispatcher!
+    # We must use the exact IDs generated by PhysicalIdGenerator
+    base_id = "task"
     function_map = {
-        "task.bleach": standard_bleacher,
-        "task.worker": standard_dispatcher,
-        "task.stain": standard_stainer,
-        "global.observability.observer": standard_observer,
+        PhysicalIdGenerator.bleach_node(base_id): standard_bleacher,
+        PhysicalIdGenerator.worker_node(base_id): standard_dispatcher,
+        PhysicalIdGenerator.stain_node(base_id): standard_stainer,
+        PhysicalIdGenerator.observability_observer(): standard_observer,
     }
 
     runner = EventDrivenRunner(graph, function_map, registry)

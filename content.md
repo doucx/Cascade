@@ -1,34 +1,36 @@
-## [WIP] fix(test): 重构上下文注入测试以适配 Cascade 3.3 物理层架构
+简要回答
+测试超时是因为 `standard_dispatcher` 依赖 `PhysicalIdGenerator` 根据 Worker ID 自动推导下游 DataNode 的 ID（日志显示为 `task.data.out`），而我在测试中手动硬编码了 ID 为 `d_worker_out`，导致 Reactor 无法将计算结果路由回图谱中。
+
+我将修改测试，使用 `PhysicalIdGenerator` 生成所有节点的 ID，以确保拓扑结构符合标准组件的隐式契约。
+
+## [WIP] fix(test): 使用 PhysicalIdGenerator 修正测试图谱的节点 ID
 
 ### 错误分析
-- **根本原因**: 测试用例 `test_context_injection.py` 仍然沿用了旧的 Cascade 物理层模式，即将用户的异步业务逻辑 (`simple_worker`) 直接挂载为物理节点 (`task.worker`) 的执行函数。
-- **架构冲突**: 在 Cascade 3.3 中，物理层 (`Reactor`) 是全同步的，且不执行用户代码。`WorkerNode` 的职责是运行同步的 `standard_dispatcher`，将任务通过 `ComputeQueue` 卸载给异步的 `ComputeService`。
-- **故障现象**: `Reactor` 调用 `simple_worker`（async）时得到了一个协程对象而不是结果字典，导致执行链断裂，下游的 `Stainer` 无法接收到信号，最终导致测试等待完成事件超时。
+- **症状**: 测试超时，日志中有 `WARNING ... Invalid reply_to_nid 'task.data.out': not a DataNode.`。
+- **原因**: `standard_dispatcher` 并不通过连接关系查找下游节点，而是通过 `PhysicalIdGenerator.worker_out_data(base_id)` 确定回复地址。测试中手动构建的图谱使用了自定义 ID (`d_worker_out`)，导致地址不匹配。
+- **解决方案**: 在构建测试图谱时，使用 `PhysicalIdGenerator` 生成节点 ID，确保与标准库组件的行为一致。
 
 ### 用户需求
-完整重写 `packages/cascade-vm/tests/integration/test_context_injection.py`，使其符合当前的架构标准：使用 `standard_dispatcher` 配合 `CodeRegistry` 和 `ComputeService` 来执行用户逻辑，并验证 `run_id` 在此跨越同步/异步边界的过程中的传播。
+修复集成测试中的 ID 匹配问题。
 
 ### 评论
-这是一个必要的测试重构。虽然代码量看起来比旧测试多（因为涉及了注册表和分发器），但它真实地反映了系统在生产环境下的运行方式，因此具有更高的回归测试价值。
+这是一个典型的“隐式契约”问题。在使用标准组件（如 Dispatcher）时，必须遵守其对拓扑结构的假设。
 
 ### 目标
-1.  重构 `build_test_triad`，为 `WorkerNode` 添加 `canonical_code_structure_hash`。
-2.  定义一个独立的用户逻辑函数，并将其注册到 `CodeRegistry`。
-3.  配置 `EventDrivenRunner` 使用 `standard_dispatcher` 作为 Worker 的物理实现。
-4.  验证 `run_id` 能够通过 `Dispatcher` -> `ComputeService` -> `Stainer` 的完整链路正确传播。
+让测试通过。
 
 ### 基本原理
-通过构建一个包含真实分发和计算环节的测试环境，我们不仅验证了上下文注入，还隐式地验证了 `Reactor` 与 `LocalComputeService` 之间的协同工作能力。
+统一 ID 生成逻辑，消除硬编码。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #concept/kernel #scope/core #ai/instruct #task/domain/testing #task/object/integration-test #task/action/rewrite
+#intent/fix #flow/ready #priority/high #comp/tests #concept/topology #scope/core #ai/instruct #task/domain/testing #task/object/integration-test #task/action/fix
 
 ---
 
 ### Script
 
-#### Acts 1: 重写 `test_context_injection.py`
-我将重写整个测试文件。新的测试将显式注册用户代码，并配置 Runner 使用标准的物理层组件。
+#### Acts 1: 修正 `test_context_injection.py`
+使用 `PhysicalIdGenerator` 重构图构建逻辑。
 
 ~~~~~act
 write_file
@@ -58,6 +60,7 @@ from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
 from cascade.std.triad.dispatcher import standard_dispatcher
 from cascade.vm.registry import CodeRegistry
+from cascade.reflection import PhysicalIdGenerator
 
 
 # --- User Logic ---
@@ -73,13 +76,26 @@ async def actual_user_logic(arg1: str) -> str:
 def build_test_triad_for_injection() -> BipartiteGraph:
     graph = BipartiteGraph()
 
+    # Base logical ID for the task
+    base_id = "task"
+
+    # Generate IDs using the standard protocol
+    f_pre_id = PhysicalIdGenerator.bleach_node(base_id)       # e.g., task.bleach
+    f_worker_id = PhysicalIdGenerator.worker_node(base_id)    # e.g., task.worker
+    f_stain_id = PhysicalIdGenerator.stain_node(base_id)      # e.g., task.stain
+    
+    # Data nodes must also follow convention where Dispatcher relies on it
+    d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
+    d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
+    d_trace_id = PhysicalIdGenerator.trace_data(base_id)
+
     # 1. Nodes
-    # Input Data
+    # Input Data (External)
     d_in = PhysicsDataNode(id="d_in", name="Input")
 
     # F_pre (Bleacher)
     f_pre = BleachNode(
-        id="task.bleach",
+        id=f_pre_id,
         name="Bleacher",
         input_ports={"arg1": PortDef("arg1", PortRole.DATA)},
         output_ports={
@@ -90,13 +106,13 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     )
 
     # D_worker_in & D_trace
-    d_worker_in = PhysicsDataNode(id="d_worker_in", name="WorkerIn")
-    d_trace = PhysicsDataNode(id="d_trace", name="Trace")
+    d_worker_in = PhysicsDataNode(id=d_worker_in_id, name="WorkerIn")
+    d_trace = PhysicsDataNode(id=d_trace_id, name="Trace")
 
     # F_exec (Worker)
     # NOTE: In v3.3, WorkerNode holds the hash of the code it should dispatch.
     f_worker = WorkerNode(
-        id="task.worker",
+        id=f_worker_id,
         name="Worker",
         canonical_code_structure_hash="hash_user_logic_001",
         input_ports={"worker_input": PortDef("worker_input", PortRole.DATA)},
@@ -104,11 +120,11 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     )
 
     # D_worker_out
-    d_worker_out = PhysicsDataNode(id="d_worker_out", name="WorkerOut")
+    d_worker_out = PhysicsDataNode(id=d_worker_out_id, name="WorkerOut")
 
     # F_post (Stainer)
     f_stain = StainNode(
-        id="task.stain",
+        id=f_stain_id,
         name="Stainer",
         input_ports={
             "worker_result": PortDef("worker_result", PortRole.DATA),
@@ -124,11 +140,14 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     d_out = PhysicsDataNode(id="d_out", name="Output")
 
     # Observability Infrastructure
+    d_life_id = PhysicalIdGenerator.observability_bus()
+    f_obs_id = PhysicalIdGenerator.observability_observer()
+    
     d_life = PhysicsDataNode(
-        id="global.observability.bus", name="EventBus", capacity=100
+        id=d_life_id, name="EventBus", capacity=100
     )
     f_obs = ObservabilityNode(
-        id="global.observability.observer",
+        id=f_obs_id,
         name="Observer",
         input_ports={"event_token": PortDef("event_token", PortRole.OBSERVABILITY)},
     )
@@ -151,25 +170,25 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     # 2. Channels (Wiring)
     channels = [
         # Input -> Bleacher
-        Channel("d_in", "out", "task.bleach", "arg1"),
+        Channel("d_in", "out", f_pre_id, "arg1"),
         # Bleacher -> Worker
-        Channel("task.bleach", "worker_input", "d_worker_in", "in"),
-        Channel("d_worker_in", "out", "task.worker", "worker_input"),
+        Channel(f_pre_id, "worker_input", d_worker_in_id, "in"),
+        Channel(d_worker_in_id, "out", f_worker_id, "worker_input"),
         # Worker -> Stainer
-        Channel("task.worker", "worker_result", "d_worker_out", "in"),
-        Channel("d_worker_out", "out", "task.stain", "worker_result"),
+        Channel(f_worker_id, "worker_result", d_worker_out_id, "in"),
+        Channel(d_worker_out_id, "out", f_stain_id, "worker_result"),
         # Bleacher -> Trace -> Stainer (The Wormhole)
-        Channel("task.bleach", "trace_output", "d_trace", "in"),
-        Channel("d_trace", "out", "task.stain", "trace_input"),
+        Channel(f_pre_id, "trace_output", d_trace_id, "in"),
+        Channel(d_trace_id, "out", f_stain_id, "trace_input"),
         # Stainer -> Output
-        Channel("task.stain", "output_default", "d_out", "in"),
+        Channel(f_stain_id, "output_default", "d_out", "in"),
         # Observability Wiring
-        Channel("task.bleach", "obs_output", "global.observability.bus", "in"),
-        Channel("task.stain", "obs_output", "global.observability.bus", "in"),
+        Channel(f_pre_id, "obs_output", d_life_id, "in"),
+        Channel(f_stain_id, "obs_output", d_life_id, "in"),
         Channel(
-            "global.observability.bus",
+            d_life_id,
             "out",
-            "global.observability.observer",
+            f_obs_id,
             "event_token",
         ),
     ]
@@ -189,11 +208,13 @@ async def test_genesis_injection_propagates_run_id():
 
     # 3. Setup Physics Kernel Function Map
     # NOTE: The worker now maps to the standard_dispatcher!
+    # We must use the exact IDs generated by PhysicalIdGenerator
+    base_id = "task"
     function_map = {
-        "task.bleach": standard_bleacher,
-        "task.worker": standard_dispatcher,
-        "task.stain": standard_stainer,
-        "global.observability.observer": standard_observer,
+        PhysicalIdGenerator.bleach_node(base_id): standard_bleacher,
+        PhysicalIdGenerator.worker_node(base_id): standard_dispatcher,
+        PhysicalIdGenerator.stain_node(base_id): standard_stainer,
+        PhysicalIdGenerator.observability_observer(): standard_observer,
     }
 
     runner = EventDrivenRunner(graph, function_map, registry)
@@ -245,4 +266,4 @@ async def test_genesis_injection_propagates_run_id():
 ~~~~~
 
 ### 下一步建议
-运行修改后的测试以确认修复。
+运行测试验证。

@@ -11,7 +11,6 @@ from cascade.reflection import PhysicalIdGenerator, ReflectionAnalyzer
 
 from cascade.vm.reactor import Reactor
 from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.linker import Linker

@@ -1,182 +1,94 @@
-简要回答：
-好的，我将修复 `test_event_driven_ping_pong` 测试失败的问题。
+好的，我来修复 `test_resource_contention.py` 中因 `EventDrivenRunner` 签名变更导致的 `TypeError`。
 
-## [WIP] fix(vm): 修复 E2E 测试中的 Ref 解引用错误
+## [WIP] fix(compiler): 修复资源竞争测试中的 Runner 初始化错误
 
 ### 错误分析
 
-`test_event_driven_ping_pong` 失败是因为在 v3.1 架构中，物理层的数据载荷（Payload）强制为 `Ref` 对象，而测试用的 Mock 函数 `obs_enabled_logic` 试图直接对 `Ref` 对象执行整数加法 (`val + 1`)，导致 `TypeError`。
-
-此外，由于测试未正确模拟 Ref 的解引用和再封装过程，且 `EventDrivenRunner` 未将 `ObjectStore` 暴露给 Reactor 内运行的函数，导致 Mock 函数无法通过合法途径获取数据。
+`EventDrivenRunner` 的构造函数 `__init__` 在之前的重构中被更新，增加了 `code_registry` 作为必需的参数。然而，位于 `cascade-compiler` 包内的集成测试 `test_resource_contention.py` 在初始化 `EventDrivenRunner` 时没有提供这个参数，导致了 `TypeError`。
 
 ### 用户需求
 
-1.  修复 `EventDrivenRunner`，使其将 `ObjectStore` 注册到 `ResourceRegistry`，以便测试函数可以访问。
-2.  更新 `test_reactor.py` 中的 Mock 逻辑，使其遵循 Ref-Based 协议：`Get Ref` -> `Dereference` -> `Compute` -> `Put Result` -> `Return Ref`。
-3.  更新测试断言，以验证最终结果是否为指向正确值的 `Ref`。
+修复 `packages/cascade-compiler/tests/integration/test_resource_contention.py` 中的测试失败。
 
 ### 评论
 
-这是一个非常典型的架构升级带来的“阵痛”。它暴露了我们的测试代码（模拟器）落后于核心架构规范的问题。修复这个问题不仅能通过测试，还能进一步验证 Ref-Based 机制在 Reactor 内部的闭环流转。
+这是一个常见的、因 API 变更而产生的连锁反应。修复它能确保我们的测试套件与最新的组件接口保持同步，维持测试的有效性。由于此测试使用一个 `mock_worker` 而不是通过 `standard_dispatcher` 调用真实代码，我们只需传入一个空的 `CodeRegistry` 实例即可满足签名要求。
 
 ### 目标
 
-1.  修改 `packages/cascade-vm/src/cascade/vm/harness.py`，注册 `system.object_store`。
-2.  修改 `packages/cascade-vm/tests/unit/test_reactor.py`，适配 Ref 操作。
+1.  在 `test_resource_contention.py` 中导入 `CodeRegistry`。
+2.  在实例化 `EventDrivenRunner` 时，传入一个 `CodeRegistry` 对象。
 
 ### 基本原理
 
-在 v3.1 中，Reactor 并不感知数据内容，只传递 `Ref`。任何试图操作数据的逻辑（即便是测试用的 Mock Worker）都必须显式地与 `ObjectStore` 交互。这增强了物理层的纯粹性。
+保持测试代码与被测代码的接口同步是测试驱动开发的基本要求。通过修复这个简单的初始化错误，我们恢复了该集成测试的健康状态，确保资源管理相关的物理拓扑和执行逻辑能够被持续验证。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/vm #task/object/harness #task/action/bug-fix #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #scope/dx #ai/instruct #task/domain/testing #task/object/test-runner #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 在 EventDrivenRunner 中注册 ObjectStore
+#### Acts 1: 修复 `test_resource_contention.py`
 
-我们需要让运行在 Reactor 中的函数能够访问 `ObjectStore`。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/harness.py
-~~~~~
-~~~~~python.old
-        self.resource_registry = ResourceRegistry()
-        self.resource_registry.register("system.event_bus", self.event_bus)
-        self.resource_registry.register("system.compute_queue", self.compute_queue)
-
-        # 4. Setup Reactor
-~~~~~
-~~~~~python.new
-        self.resource_registry = ResourceRegistry()
-        self.resource_registry.register("system.event_bus", self.event_bus)
-        self.resource_registry.register("system.compute_queue", self.compute_queue)
-        self.resource_registry.register("system.object_store", self.object_store)
-
-        # 4. Setup Reactor
-~~~~~
-
-#### Acts 2: 修复 test_reactor.py 中的 Mock 逻辑和断言
-
-我们将更新 `obs_enabled_logic` 以处理 `Ref`，并更新测试断言。
+我们将导入 `CodeRegistry` 并更新 `EventDrivenRunner` 的调用。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/unit/test_reactor.py
+packages/cascade-compiler/tests/integration/test_resource_contention.py
 ~~~~~
 ~~~~~python.old
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.harness import EventDrivenRunner
-from cascade.spec.physical.triad import ObservabilityNode
-from cascade.std.triad.observer import standard_observer
-from cascade.vm.registry import CodeRegistry
+from cascade.runtime.services.observability.events import (
+    Event,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+)
+from cascade.compiler.utils.inspector import GraphInspector
+from cascade.reflection import PhysicalIdGenerator
 ~~~~~
 ~~~~~python.new
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.harness import EventDrivenRunner
-from cascade.spec.physical.triad import ObservabilityNode
-from cascade.spec.physical.object import Ref
-from cascade.std.triad.observer import standard_observer
+from cascade.runtime.services.observability.events import (
+    Event,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+)
+from cascade.compiler.utils.inspector import GraphInspector
+from cascade.reflection import PhysicalIdGenerator
 from cascade.vm.registry import CodeRegistry
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/tests/unit/test_reactor.py
+packages/cascade-compiler/tests/integration/test_resource_contention.py
 ~~~~~
 ~~~~~python.old
-    # Function Map
-    def obs_enabled_logic(inputs, node, resources):
-        val = inputs["value"].payload
+        elif "observability" in node_id:
+            func_map[node_id] = standard_observer
 
-        # This mock logic now simulates what a Stainer does: create an EventIR
-        ir: EventIR = {
-            "v": "1.0",
-            "t": EventType.LIFECYCLE,
-            "ts": time.time(),
-            "ctx": {},
-            "phy": {"nid": node.id},
-            "data": {
-                "state": EventState.SUCCEEDED,
-                "task_id": node.id,  # In test, physical ID is fine
-                "task_name": node.name,
-            },
-        }
+    runner = EventDrivenRunner(physical_graph, func_map)
+    runner.prime()
 
-        return {
-            "result": Token(payload=val + 1),
-            "obs_output": Token(payload=ir),
-        }
+    await runner.start_loop()
 ~~~~~
 ~~~~~python.new
-    # Function Map
-    def obs_enabled_logic(inputs, node, resources):
-        # Ref-Based Architecture Adaptation
-        # 1. Get Store
-        store = resources.get("system.object_store")
-        
-        # 2. Dereference Input
-        ref_in = inputs["value"].payload
-        assert isinstance(ref_in, Ref)
-        val = store.get(ref_in)
+        elif "observability" in node_id:
+            func_map[node_id] = standard_observer
 
-        # 3. Compute
-        new_val = val + 1
-        
-        # 4. Store Result
-        ref_out = store.put(new_val)
+    code_registry = CodeRegistry()
+    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
+    runner.prime()
 
-        # This mock logic now simulates what a Stainer does: create an EventIR
-        ir: EventIR = {
-            "v": "1.0",
-            "t": EventType.LIFECYCLE,
-            "ts": time.time(),
-            "ctx": {},
-            "phy": {"nid": node.id},
-            "data": {
-                "state": EventState.SUCCEEDED,
-                "task_id": node.id,  # In test, physical ID is fine
-                "task_name": node.name,
-            },
-        }
-
-        return {
-            "result": Token(payload=ref_out),
-            "obs_output": Token(payload=ir),
-        }
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/unit/test_reactor.py
-~~~~~
-~~~~~python.old
-        # Verify physical side effect (Memory)
-        assert runner.memory.get_count("D2") == 1
-        assert runner.memory.take("D2").payload == 11
-
-    finally:
-        await runner.stop_loop()
-~~~~~
-~~~~~python.new
-        # Verify physical side effect (Memory)
-        assert runner.memory.get_count("D2") == 1
-        result_token = runner.memory.take("D2")
-        
-        # Verify it is a Ref and dereference it
-        assert isinstance(result_token.payload, Ref)
-        final_val = runner.object_store.get(result_token.payload)
-        assert final_val == 11
-
-    finally:
-        await runner.stop_loop()
+    await runner.start_loop()
 ~~~~~
 
 ### 下一步建议
 
-执行测试，确认 `test_reactor.py` 通过。
-同时，可以再次运行 `test_context_injection.py` 确保它没有因为这次改动而受到负面影响（虽然不太可能，因为它是 E2E 测试，逻辑相对独立）。
+现在所有的测试应该都已修复并能通过。我建议我们进入第五阶段的收尾工作：**集成与验证 (Phase 5: Integration & Verification)**。
+
+具体来说，我将创建一个新的集成测试 `tests/integration/test_ref_architecture.py`，它将端到端地验证整个“出境-入境”数据流，确保 `Dispatcher`、`ComputeService` 和 `Reactor` 之间的交互完全符合预期。
+
+如果你同意，我将开始制定并执行这个计划。

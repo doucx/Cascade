@@ -15,6 +15,7 @@ from cascade.runtime.services.observability.events import (
 )
 from cascade.compiler.utils.inspector import GraphInspector
 from cascade.reflection import PhysicalIdGenerator
+from cascade.vm.registry import CodeRegistry
 
 # Standard IC imports
 from cascade.std.triad.bleacher import standard_bleacher
@@ -172,7 +173,8 @@ async def test_resource_scarcity_topology_and_execution():
         elif "observability" in node_id:
             func_map[node_id] = standard_observer
 
-    runner = EventDrivenRunner(physical_graph, func_map)
+    code_registry = CodeRegistry()
+    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
     runner.prime()
 
     await runner.start_loop()

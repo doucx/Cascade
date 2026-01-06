@@ -54,7 +54,9 @@ async def run_async_yielding(iterations: int) -> float:
     return time.perf_counter() - start_time
 
 
-def run_physical_tco_sync(iterations: int, graph: BipartiteGraph, function_map: Dict[str, Callable]):
+def run_physical_tco_sync(
+    iterations: int, graph: BipartiteGraph, function_map: Dict[str, Callable]
+):
     memory = VolatileMemory()
     reactor = Reactor(graph, memory, function_map)
     memory.put(graph.nodes["D1"], Token(payload=1))

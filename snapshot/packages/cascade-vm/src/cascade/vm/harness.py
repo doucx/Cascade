@@ -93,14 +93,21 @@ class EventDrivenRunner:
             # CRITICAL: We only materialize nodes that are explicitly marked as constants.
             # System-level nodes like resource ledgers must retain their object payloads
             # to be used directly by kernel functions without I/O.
-            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0 and node.id.startswith("const."):
+            if (
+                isinstance(node, PhysicsDataNode)
+                and node.initial_tokens > 0
+                and node.id.startswith("const.")
+            ):
                 payload = node.initial_payload
                 if payload is not None and not isinstance(payload, Ref):
                     meta = {}
                     # Perform Scalar Hoisting for kernel-readable values
-                    if isinstance(payload, (int, float, bool, str)) and len(str(payload)) < 256:
+                    if (
+                        isinstance(payload, (int, float, bool, str))
+                        and len(str(payload)) < 256
+                    ):
                         meta["scalar_value"] = payload
-                    
+
                     # Materialize the raw value into the object store with metadata
                     node.initial_payload = self.object_store.put(payload, metadata=meta)
 

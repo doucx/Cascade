@@ -52,13 +52,13 @@ async def test_machine_e2e_integration():
 
     ir_gen = IRGenerator()
     builder = Builder()
-    
+
     graph_ir = ir_gen.generate(workflow)
     assembly = builder.build(graph_ir, EnvironmentDef())
     graph = assembly.graph
 
     # --- 3. Infrastructure Setup ---
-    
+
     # Storage & Registry
     store = InMemoryObjectStore()
     code_registry = CodeRegistry()
@@ -84,7 +84,7 @@ async def test_machine_e2e_integration():
         store=store,
         registry=code_registry,
         inbound_queue=compute_queue,
-        outbound_queue=ingress_queue
+        outbound_queue=ingress_queue,
     )
 
     # Reactor Function Map (The Physical Plane Logic)
@@ -111,12 +111,12 @@ async def test_machine_e2e_integration():
     # Reactor
     memory = VolatileMemory()
     reactor = Reactor(graph, memory, func_map, resources, ingress_queue)
-    
+
     # Prime the reactor (loads constants into memory)
     reactor.prime()
 
     # --- 4. Execution ---
-    
+
     # The Machine coordinates the Reactor and ComputeService
     machine = Machine(reactor, compute_service, ingress_queue)
 
@@ -127,23 +127,24 @@ async def test_machine_e2e_integration():
     # Run! (Should exit automatically when idle)
     # Enable logging to see Machine internals during test
     import logging
+
     logging.basicConfig(level=logging.DEBUG)
     # Silence asyncio debug logs
     logging.getLogger("asyncio").setLevel(logging.WARNING)
-    
+
     await machine.run()
 
     # --- 5. Verification ---
-    
+
     assert len(captured_events) == 1
     event = captured_events[0]
-    
+
     assert event.status == "Succeeded"
     assert event.task_name == "async_multiplier"
-    
+
     # Verify the actual calculated result
     result_ref = event.result_preview
     assert isinstance(result_ref, Ref)
-    
+
     final_value = store.get(result_ref)
     assert final_value == 50  # 10 * 5

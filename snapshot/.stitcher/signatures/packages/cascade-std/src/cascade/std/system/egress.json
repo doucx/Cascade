@@ -1,0 +1,7 @@
+{
+  "standard_egress": {
+    "baseline_code_signature_text": "def standard_egress(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "53aedb8387bc7654493007bcc967ecf3d834d3ce119b7010c0bbc89758024a68",
+    "baseline_yaml_content_hash": "5deff5a9ad7acb115f86191ae22ad09946c2312ffb116713a1d3a038b10a7241"
+  }
+}

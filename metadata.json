@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(spec): 定义 v3.1 Ref-Based 架构核心本体与协议", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767680973.7801971, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(runtime): 实现 InMemoryObjectStore", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767681214.68748, "duration_ms": 0}}

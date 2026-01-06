@@ -1,232 +1,140 @@
-按照路线图，我将执行 **Phase 1: Ontology & Protocols**。这将建立 v3.1 Ref-Based 架构的核心类型定义。
+好的，我们将进入 **第二阶段：存储适配器实现 (Phase 2: Storage Adapters)**。
 
-## [WIP] feat(spec): 定义 v3.1 Ref-Based 架构核心本体与协议
+我将按照路线图，在 `cascade-runtime` 包中创建新的 `storage` 模块，并实现 `InMemoryObjectStore`。这将是 v3.1 架构中默认的、用于开发和测试的存储后端。
+
+## [WIP] feat(runtime): 实现 InMemoryObjectStore
 
 ### 用户需求
-实现 Cascade v3.1 "Ref-Based Architecture" 的第一阶段：本体定义与协议。
-具体包括：
-1.  定义物理引用 `Ref`，作为物理图流转的基本粒子。
-2.  定义存储协议 `ObjectStore`，规范数据层的交互。
-3.  定义计算委托协议 `ComputeDelegate`，用于异步计算任务的提交。
+在 `cascade-runtime` 中创建存储适配器层，并实现基于内存的 `ObjectStore`，用于支持 v3.1 Ref-Based 架构的本地运行和测试。
 
 ### 评论
-这是 v3.1 架构的地基。通过引入 `Ref`，我们正式将控制流（物理层）与数据流（逻辑层）解耦。这些协议定义纯粹位于 `cascade-spec` 包中，不涉及具体实现，确保了接口的纯粹性。
+这是连接物理引用 (`Ref`) 与实际数据 (`Object`) 的第一座桥梁。虽然它很简单，但它完整地展示了“引用-实体分离”的语义。后续的 Redis 或 S3 实现将遵循相同的协议。
 
 ### 目标
-1.  创建 `cascade.spec.physical.object` 模块，定义 `Ref`。
-2.  创建 `cascade.spec.runtime.storage` 模块，定义 `ObjectStore`。
-3.  创建 `cascade.spec.runtime.compute` 模块，定义 `ComputeDelegate`。
-4.  更新相关的 `__init__.py` 文件以导出新符号。
+1.  创建 `cascade.runtime.storage` 包。
+2.  实现 `InMemoryObjectStore` 类，符合 `cascade.spec.runtime.storage.ObjectStore` 协议。
+3.  实现 URI 生成逻辑 (`mem://<uuid>`)。
 
 ### 基本原理
-*   **`Ref`**: 必须是轻量级、不可变的数据结构 (`frozen dataclass`)，包含 `uri` 和 `meta`。它是物理图上唯一流动的实体。
-*   **`ObjectStore`**: 定义了 `put`/`get`/`peek`/`delete` 操作，确保存储后端的可插拔性。`peek` 方法对于实现无需下载 payload 即可进行路由决策至关重要。
-*   **`ComputeDelegate`**: 取代旧的 `Executor` 概念，强调其“委托”性质。它接收 `Ref`，返回 `Ref`，完全在引用层面操作。
+*   **存储结构**: 使用一个简单的 `Dict[str, Tuple[Any, Dict]]` 来存储对象及其元数据。
+*   **URI 协议**: 采用 `mem://` 作为协议头，保证 URI 的自描述性。
+*   **元数据处理**: `put` 操作会自动提取基本元数据（如 `type`），同时也接受用户自定义元数据。`peek` 操作仅查表返回元数据，不进行深拷贝。
 
 ### 标签
-#intent/architect #flow/ready #priority/critical #comp/interfaces #scope/core #ai/instruct #task/domain/spec #task/object/ref-architecture #task/action/define-protocols #task/state/begin
+#intent/build #flow/ready #priority/high #comp/runtime #concept/storage #scope/core #ai/instruct #task/domain/storage #task/object/memory-store #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 定义物理引用对象 (`Ref`)
+#### Acts 1: 创建存储模块目录
 
-创建 `cascade/spec/physical/object.py` 并定义 `Ref` 数据结构。
+~~~~~act
+run_command
+~~~~~
+~~~~~bash
+mkdir -p packages/cascade-runtime/src/cascade/runtime/storage
+~~~~~
+
+#### Acts 2: 实现 `InMemoryObjectStore`
+
+创建 `packages/cascade-runtime/src/cascade/runtime/storage/memory.py`。
 
 ~~~~~act
 write_file
-packages/cascade-spec/src/cascade/spec/physical/object.py
+packages/cascade-runtime/src/cascade/runtime/storage/memory.py
 ~~~~~
 ~~~~~python
-from dataclasses import dataclass, field
-from typing import Dict, Any
+import uuid
+from typing import Any, Dict, Optional, Tuple
 
-
-@dataclass(frozen=True)
-class Ref:
-    """
-    A physical reference to a data object stored in an external ObjectStore.
-    This is the fundamental particle of the v3.1 Physics Layer.
-
-    The Physics Layer (Reactor) only operates on Ref objects, never on the actual
-    heavyweight payloads.
-    """
-
-    uri: str
-    """The Uniform Resource Identifier for the data (e.g., mem://uuid, redis://key)."""
-
-    meta: Dict[str, Any] = field(default_factory=dict)
-    """
-    Lightweight metadata hoisted from the payload to allow routing decisions
-    without I/O (e.g., {'type': 'Tensor', 'size': 1024, 'is_error': False}).
-    """
-~~~~~
-
-#### Acts 2: 导出 `Ref`
-
-更新 `packages/cascade-spec/src/cascade/spec/__init__.py`。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/__init__.py
-~~~~~
-~~~~~python.old
-from cascade.spec.ir.fingerprint import Fingerprint, InvalidFingerprintKeyError
-from cascade.spec.physical.nodes import (
-    Token,
-    PhysicsNode,
-~~~~~
-~~~~~python.new
-from cascade.spec.ir.fingerprint import Fingerprint, InvalidFingerprintKeyError
 from cascade.spec.physical.object import Ref
-from cascade.spec.physical.nodes import (
-    Token,
-    PhysicsNode,
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/__init__.py
-~~~~~
-~~~~~python.old
-__all__ = [
-    "Fingerprint",
-    "InvalidFingerprintKeyError",
-    "Token",
-    "PhysicsNode",
-~~~~~
-~~~~~python.new
-__all__ = [
-    "Fingerprint",
-    "InvalidFingerprintKeyError",
-    "Ref",
-    "Token",
-    "PhysicsNode",
-~~~~~
-
-#### Acts 3: 定义存储协议 (`ObjectStore`)
-
-创建 `cascade/spec/runtime/storage.py`。
-
-~~~~~act
-write_file
-packages/cascade-spec/src/cascade/spec/runtime/storage.py
-~~~~~
-~~~~~python
-from typing import Protocol, Any, Dict, Optional
-from cascade.spec.physical.object import Ref
+from cascade.spec.runtime.storage import ObjectStore
 
 
-class ObjectStore(Protocol):
+class InMemoryObjectStore:
     """
-    Protocol defining the interface for the Data Plane storage layer.
+    A reference implementation of ObjectStore using an in-memory dictionary.
+    Suitable for development, testing, and single-process execution.
+    URI Scheme: mem://<uuid>
     """
+
+    def __init__(self):
+        # Storage: uri -> (obj, metadata)
+        self._store: Dict[str, Tuple[Any, Dict[str, Any]]] = {}
 
     def put(self, obj: Any, metadata: Optional[Dict[str, Any]] = None) -> Ref:
         """
-        Store an object and return a physical Reference.
+        Store an object in memory and return a Reference.
         """
-        ...
+        # 1. Generate URI
+        uid = str(uuid.uuid4())
+        uri = f"mem://{uid}"
+
+        # 2. Prepare Metadata
+        meta = metadata.copy() if metadata else {}
+        
+        # Auto-detect basic metadata if not provided
+        if "type" not in meta:
+            meta["type"] = type(obj).__name__
+        
+        # 3. Store
+        self._store[uri] = (obj, meta)
+
+        # 4. Return Ref
+        return Ref(uri=uri, meta=meta)
 
     def get(self, ref: Ref) -> Any:
         """
         Dereference a Reference to retrieve the actual object.
-        This is typically an I/O intensive operation.
         """
-        ...
+        if ref.uri not in self._store:
+            raise KeyError(f"Object not found: {ref.uri}")
+        
+        obj, _ = self._store[ref.uri]
+        return obj
 
     def peek(self, ref: Ref) -> Ref:
         """
-        Retrieve the latest metadata for a Reference without loading the object.
-        Useful for control flow decisions based on metadata (e.g. is_error, type checks).
-        Returns a new Ref instance with potentially updated metadata.
+        Retrieve the latest metadata for a Reference.
+        For InMemoryStore, this is a cheap lookup.
         """
-        ...
+        if ref.uri not in self._store:
+            # If the object is missing in the store but we have a Ref, 
+            # we consider it "gone" or invalid, but peek typically shouldn't fail hard 
+            # if we just want to check existence, or maybe it should?
+            # Following the protocol: if we can't find it, we can't refresh metadata.
+            # We raise KeyError to be consistent with get().
+            raise KeyError(f"Object not found: {ref.uri}")
+
+        _, meta = self._store[ref.uri]
+        
+        # Return a new Ref with potentially updated metadata from the store
+        return Ref(uri=ref.uri, meta=meta)
 
     def delete(self, ref: Ref) -> None:
         """
-        Physically destroy the object associated with the Reference.
+        Physically destroy the object.
         """
-        ...
+        if ref.uri in self._store:
+            del self._store[ref.uri]
 ~~~~~
 
-#### Acts 4: 定义计算委托协议 (`ComputeDelegate`)
+#### Acts 3: 导出存储模块
 
-创建 `cascade/spec/runtime/compute.py`。
+创建 `packages/cascade-runtime/src/cascade/runtime/storage/__init__.py`。
 
 ~~~~~act
 write_file
-packages/cascade-spec/src/cascade/spec/runtime/compute.py
+packages/cascade-runtime/src/cascade/runtime/storage/__init__.py
 ~~~~~
 ~~~~~python
-from typing import Protocol, Dict, Awaitable, Any
-from cascade.spec.physical.object import Ref
+from .memory import InMemoryObjectStore
 
-
-class ComputeDelegate(Protocol):
-    """
-    Protocol for offloading computation to the Data Plane (User Executors).
-    This interface deals exclusively with References, never with raw objects.
-    """
-
-    def submit(
-        self, code_hash: str, input_refs: Dict[str, Ref], config: Dict[str, Any]
-    ) -> Awaitable[Ref]:
-        """
-        Submit a computation task asynchronously.
-
-        Args:
-            code_hash: The canonical hash of the code to execute.
-            input_refs: A dictionary mapping argument names to input References.
-            config: Execution configuration (e.g., resources, timeouts).
-
-        Returns:
-            An Awaitable that resolves to a Ref pointing to the result.
-            The Reactor should NOT await this directly in its main loop;
-            instead, it should treat this as a signal that the task has been dispatched.
-        """
-        ...
-~~~~~
-
-#### Acts 5: 导出运行时协议
-
-更新 `packages/cascade-spec/src/cascade/spec/runtime/__init__.py`。
-
-~~~~~act
-write_file
-packages/cascade-spec/src/cascade/spec/runtime/__init__.py
-~~~~~
-~~~~~python
-from .interfaces import (
-    Solver,
-    Executor,
-    CacheBackend,
-    CachePolicy,
-    StateBackend,
-    SubscriptionHandle,
-    LazyFactory,
-    Provider,
-    Connector,
-)
-from .storage import ObjectStore
-from .compute import ComputeDelegate
-
-__all__ = [
-    "Solver",
-    "Executor",
-    "CacheBackend",
-    "CachePolicy",
-    "StateBackend",
-    "SubscriptionHandle",
-    "LazyFactory",
-    "Provider",
-    "Connector",
-    "ObjectStore",
-    "ComputeDelegate",
-]
+__all__ = ["InMemoryObjectStore"]
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 Phase 1 的所有定义。
-下一步应进入 **第二阶段：存储适配器实现 (Phase 2: Storage Adapters)**。建议优先实现 `InMemoryObjectStore`，这是后续开发和测试的基础。
+我们已经实现了 `ObjectStore` 的内存版本。根据路线图，第三阶段是 **执行层大分裂 (Phase 3: The Great Schism)**，我们将建立 `PhysicsKernel` 和 `LocalComputeDelegate`。
+
+我建议先实现 `LocalComputeDelegate`，因为它将使用我们刚刚创建的 `InMemoryObjectStore` 来模拟数据的存取，这将是一个很好的集成验证点。

@@ -1,4 +1,2 @@
 "source_task": |-
   A simple task with no inputs.
-"wait_for_idle": |-
-  Waits until the reactor has no more active tasks.

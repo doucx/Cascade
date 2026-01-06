@@ -7,4 +7,11 @@ async def const_probe(
 ) -> Dict[str, Token]:
     # Assuming the input port is named 'value'
     val_token = inputs["value"]
-    return {"out": Token(payload=val_token.payload, trace=val_token.trace)}
+    raw_value = val_token.payload
+
+    # Ref-Based Architecture:
+    # Probes are responsible for materializing external/static data into Refs.
+    store = resources.get("system.object_store")
+    ref = store.put(raw_value)
+
+    return {"out": Token(payload=ref, trace=val_token.trace)}

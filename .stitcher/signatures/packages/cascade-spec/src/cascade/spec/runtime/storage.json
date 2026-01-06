@@ -1,0 +1,25 @@
+{
+  "ObjectStore": {
+    "baseline_yaml_content_hash": "ad5905191213ef350cb3601bc347a342fd8c195e9bd2cb3f8179e37a16feea59"
+  },
+  "ObjectStore.delete": {
+    "baseline_code_signature_text": "def delete(self, ref: Ref) -> None:",
+    "baseline_code_structure_hash": "7d9694dad2db2d960cfce229d146b7a7dd334558af2acd3cb3fd4b8fbeab5345",
+    "baseline_yaml_content_hash": "01b4b58255ec4b13e25cea8c9b4d557e2bd1a0c200ace88158af71309d2f5ad0"
+  },
+  "ObjectStore.get": {
+    "baseline_code_signature_text": "def get(self, ref: Ref) -> Any:",
+    "baseline_code_structure_hash": "7cd775234278a72d2c87200ace87a11b406abcb8373af40f4452d5ef4ed6b247",
+    "baseline_yaml_content_hash": "57363394375bff7518fc2a2c6d6d529e566aff060e8b7d0c9c2b9b15537c9b24"
+  },
+  "ObjectStore.peek": {
+    "baseline_code_signature_text": "def peek(self, ref: Ref) -> Ref:",
+    "baseline_code_structure_hash": "fc22c66fc8c358cb0c5a2932cfaaaf0c323e9739e7137d677ebe399df6298ea7",
+    "baseline_yaml_content_hash": "97fa5b2b0d1392d00ae4dfb838e16fb72a3d5c30104d5b4e70b7e7aabdfb33a1"
+  },
+  "ObjectStore.put": {
+    "baseline_code_signature_text": "def put(self, obj: Any, metadata: Optional[Dict[str, Any]] = None) -> Ref:",
+    "baseline_code_structure_hash": "bd36361dad4b3a43a019873148b5a3b24a5e346829a668a81adb31e0a22e2d57",
+    "baseline_yaml_content_hash": "225df0b7ceda4a3ba7eae44d624b80d00c85b04850c4a441d3caca2bee745e0e"
+  }
+}

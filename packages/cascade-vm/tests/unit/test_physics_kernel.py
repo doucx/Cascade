@@ -55,30 +55,30 @@ def kernel(resources):
 def test_kernel_identity_execution(kernel):
     node = PhysicsFuncNode(id="node_ident", name="Identity")
     input_ref = Ref(uri="mem://input-123")
-    
+
     inputs = {"in": input_ref}
     outputs = kernel.execute(node, inputs)
-    
+
     assert outputs["out"] == input_ref
 
 
 def test_kernel_resource_access(kernel):
     node = PhysicsFuncNode(id="node_res", name="ResourceUser")
-    
+
     outputs = kernel.execute(node, {})
-    
+
     assert outputs["out"].uri == "mem://config-1.0"
 
 
 def test_kernel_missing_mapping(kernel):
     node = PhysicsFuncNode(id="node_unknown", name="Unknown")
-    
+
     with pytest.raises(ValueError, match="No kernel function mapped"):
         kernel.execute(node, {})
 
 
 def test_kernel_exception_propagation(kernel):
     node = PhysicsFuncNode(id="node_fail", name="FailNode")
-    
+
     with pytest.raises(RuntimeError, match="Kernel Crash"):
         kernel.execute(node, {})

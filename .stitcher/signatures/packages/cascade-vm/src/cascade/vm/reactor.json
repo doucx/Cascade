@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "c3ed326a1d94e8e8a7256dd9e3ce92cedbfb0d9843171a24b0d4cd48969a3f19"
   },
   "Reactor.__init__": {
-    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, memory: VolatileMemory, executor: PhysicsExecutor, function_map: Dict[str, Callable], resource_registry: Optional[ResourceRegistry] = None):",
-    "baseline_code_structure_hash": "770aad0153487fca9566bd1b6f6ae34e33e428f5cd8dbd38312d2d037a83652e"
+    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, memory: VolatileMemory, executor: PhysicsExecutor, function_map: Dict[str, Callable], resource_registry: Optional[ResourceRegistry] = None, ingress_queue: Optional[asyncio.Queue] = None):",
+    "baseline_code_structure_hash": "169f622c002da0ad93d98ff0621694e00be06bff10b14d822fdb3402824e8c24"
   },
   "Reactor._execute_task": {
     "baseline_code_signature_text": "async def _execute_task(self, node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:",
@@ -19,6 +19,10 @@
   "Reactor._func_nodes": {},
   "Reactor._func_outputs": {},
   "Reactor._outbound_channels": {},
+  "Reactor._process_ingress": {
+    "baseline_code_signature_text": "def _process_ingress(self):",
+    "baseline_code_structure_hash": "24b417a5a3fdfea3bbc0c91457d6aea31e9432473500388496aab336826be6ca"
+  },
   "Reactor._schedule_task": {
     "baseline_code_signature_text": "def _schedule_task(self, node: PhysicsFuncNode, input_data: Dict[str, Token]):",
     "baseline_code_structure_hash": "11d7ac0f211daba7d924adb7d125328f6250df035f2f2f51c22f9c09cc4428ad"
@@ -32,6 +36,7 @@
   "Reactor.executor": {},
   "Reactor.function_map": {},
   "Reactor.graph": {},
+  "Reactor.ingress_queue": {},
   "Reactor.memory": {},
   "Reactor.prime": {
     "baseline_code_signature_text": "def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:",

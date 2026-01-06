@@ -51,6 +51,16 @@ async def standard_stainer(
     if "rid" in trace_payload:
         ctx["rid"] = trace_payload["rid"]
 
+    # Handle preview generation: pass Refs through, stringify others.
+    preview = None
+    if state == EventState.SUCCEEDED:
+        from cascade.spec.physical.object import Ref
+
+        if isinstance(result_payload, Ref):
+            preview = result_payload
+        else:
+            preview = str(result_payload)[:100]
+
     ir: EventIR = {
         "v": "1.0",
         "t": EventType.LIFECYCLE,
@@ -63,9 +73,7 @@ async def standard_stainer(
             "task_name": task_name,
             "duration_ms": duration * 1000,
             "error": error_msg,
-            "result_preview": str(result_payload)[:100]
-            if state == EventState.SUCCEEDED
-            else None,
+            "result_preview": preview,
         },
     }
 

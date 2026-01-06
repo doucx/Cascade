@@ -9,7 +9,9 @@ class BleachNode(PhysicsFuncNode):
 
 @dataclass
 class WorkerNode(PhysicsFuncNode):
-    pass
+    # The canonical hash of the code this worker is supposed to execute.
+    # This is populated by the compiler and used by the standard_dispatcher.
+    canonical_code_structure_hash: str = ""
 
 
 @dataclass

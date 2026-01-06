@@ -11,7 +11,9 @@ from cascade.vm.reactor import Reactor
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.harness import EventDrivenRunner
 from cascade.spec.physical.triad import ObservabilityNode
+from cascade.spec.physical.object import Ref
 from cascade.std.triad.observer import standard_observer
+from cascade.vm.registry import CodeRegistry
 
 
 # Dummy function for testing
@@ -196,7 +198,20 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
 
     # Function Map
     def obs_enabled_logic(inputs, node, resources):
-        val = inputs["value"].payload
+        # Ref-Based Architecture Adaptation
+        # 1. Get Store
+        store = resources.get("system.object_store")
+
+        # 2. Dereference Input
+        ref_in = inputs["value"].payload
+        assert isinstance(ref_in, Ref)
+        val = store.get(ref_in)
+
+        # 3. Compute
+        new_val = val + 1
+
+        # 4. Store Result
+        ref_out = store.put(new_val)
 
         # This mock logic now simulates what a Stainer does: create an EventIR
         ir: EventIR = {
@@ -213,7 +228,7 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
         }
 
         return {
-            "result": Token(payload=val + 1),
+            "result": Token(payload=ref_out),
             "obs_output": Token(payload=ir),
         }
 
@@ -223,7 +238,9 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
     }
 
     # 2. Use Runner, injecting the backend factory
-    runner = EventDrivenRunner(graph, func_map, reactor_factory=reactor_backend_factory)
+    runner = EventDrivenRunner(
+        graph, func_map, CodeRegistry(), reactor_factory=reactor_backend_factory
+    )
     runner.inject_input("D1", 10)
 
     # 3. Start & Wait
@@ -239,7 +256,12 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
 
         # Verify physical side effect (Memory)
         assert runner.memory.get_count("D2") == 1
-        assert runner.memory.take("D2").payload == 11
+        result_token = runner.memory.take("D2")
+
+        # Verify it is a Ref and dereference it
+        assert isinstance(result_token.payload, Ref)
+        final_val = runner.object_store.get(result_token.payload)
+        assert final_val == 11
 
     finally:
         await runner.stop_loop()

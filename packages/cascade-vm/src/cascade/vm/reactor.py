@@ -19,12 +19,14 @@ class Reactor:
         executor: PhysicsExecutor,
         function_map: Dict[str, Callable],
         resource_registry: Optional[ResourceRegistry] = None,
+        ingress_queue: Optional[asyncio.Queue] = None,
     ):
         self.graph = graph
         self.memory = memory
         self.executor = executor
         self.function_map = function_map
         self.resource_registry = resource_registry or ResourceRegistry()
+        self.ingress_queue = ingress_queue
 
         # State
         self.active_task_count = 0
@@ -92,6 +94,9 @@ class Reactor:
                     )
 
     async def step(self) -> int:
+        # 0. Ingress Cycle
+        self._process_ingress()
+
         nodes_to_fire: List[PhysicsFuncNode] = []
         inputs_for_fire: Dict[str, Dict[str, Token]] = {}
 
@@ -188,3 +193,20 @@ class Reactor:
             self.active_task_count -= 1
             # If we hit 0, we might want to signal an event?
             # For now, relying on memory mutation events is enough for forward progress.
+
+    def _process_ingress(self):
+        if not self.ingress_queue:
+            return
+
+        while not self.ingress_queue.empty():
+            try:
+                reply_to_nid, result_token = self.ingress_queue.get_nowait()
+                node = self.graph.nodes.get(reply_to_nid)
+                if isinstance(node, PhysicsDataNode):
+                    self.memory.put(node, result_token)
+                else:
+                    logger.warning(
+                        f"Invalid reply_to_nid '{reply_to_nid}': not a DataNode."
+                    )
+            except asyncio.QueueEmpty:
+                break

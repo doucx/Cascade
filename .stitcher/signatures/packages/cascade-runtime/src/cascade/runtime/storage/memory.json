@@ -1,0 +1,30 @@
+{
+  "InMemoryObjectStore": {
+    "baseline_yaml_content_hash": "9e161154ae7a239e7d0a56277c4df73c2857ccd450d989c5a6c7848b5a9cd711"
+  },
+  "InMemoryObjectStore.__init__": {
+    "baseline_code_signature_text": "def __init__(self):",
+    "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
+  },
+  "InMemoryObjectStore._store": {},
+  "InMemoryObjectStore.delete": {
+    "baseline_code_signature_text": "def delete(self, ref: Ref) -> None:",
+    "baseline_code_structure_hash": "7d9694dad2db2d960cfce229d146b7a7dd334558af2acd3cb3fd4b8fbeab5345",
+    "baseline_yaml_content_hash": "613c1e2e6a0015f053130e4e00cc3ebb8d55b0af61100d0e0d8f32e96c7fceb3"
+  },
+  "InMemoryObjectStore.get": {
+    "baseline_code_signature_text": "def get(self, ref: Ref) -> Any:",
+    "baseline_code_structure_hash": "7cd775234278a72d2c87200ace87a11b406abcb8373af40f4452d5ef4ed6b247",
+    "baseline_yaml_content_hash": "71bc31b3e1b7157d77280f386cbc6d0f66352f97d2888b980fc38f27f61b6de6"
+  },
+  "InMemoryObjectStore.peek": {
+    "baseline_code_signature_text": "def peek(self, ref: Ref) -> Ref:",
+    "baseline_code_structure_hash": "fc22c66fc8c358cb0c5a2932cfaaaf0c323e9739e7137d677ebe399df6298ea7",
+    "baseline_yaml_content_hash": "89da5c3615e0d25759638003e7455c2481a96edfe7f70c204891e84be2600b1e"
+  },
+  "InMemoryObjectStore.put": {
+    "baseline_code_signature_text": "def put(self, obj: Any, metadata: Optional[Dict[str, Any]] = None) -> Ref:",
+    "baseline_code_structure_hash": "bd36361dad4b3a43a019873148b5a3b24a5e346829a668a81adb31e0a22e2d57",
+    "baseline_yaml_content_hash": "2799004c9eeb80b93275cb8f303470a9f84d2c5777d7803ec8219718c469810a"
+  }
+}

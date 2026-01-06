@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] feat: 实现 Ref-Based 架构 v3.1 核心协议与基础组件", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767681499.7538204, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(vm): 定义计算契约 ComputeRequest", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767684827.0138545, "duration_ms": 0}}

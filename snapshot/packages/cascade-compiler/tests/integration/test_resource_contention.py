@@ -24,6 +24,7 @@ from cascade.std.triad.observer import standard_observer
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.probe.const import const_probe
+from cascade.spec.physical.object import Ref
 
 
 @task
@@ -43,6 +44,10 @@ def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     # Simulate execution duration
     payload = worker_input_token.payload
     duration = payload.get("duration", 0.0)
+    
+    # Adapt to Ref-Based Architecture
+    if isinstance(duration, Ref):
+        duration = duration.meta.get("scalar_value", 0.0)
 
     # We cheat a bit and sleep async here to allow reactor to switch contexts
     # In a real ThreadPool executor, this would be time.sleep

@@ -1,58 +1,37 @@
-好的，我们已经完成了 `Reactor` 的进化，现在是时候通过一个全面的端到端集成测试来验证整个新架构的正确性了。
+简要回答：
+`test_full_ref_based_e2e_flow` 失败的原因是 `func_map` 中缺少了对 `probe.const` 节点的映射。在 `add_one(10)` 的编译过程中，编译器为常量 `10` 生成了一个 `F_probe` 节点，但测试 harness 未加载对应的 `const_probe` 标准库函数，导致 Reactor 在尝试执行该节点时抛出 `ValueError: No function mapped`，进而导致测试超时。
 
-## [WIP] test(vm): Add integration test for Ref-Based architecture
+我们将修复此测试配置错误。
+
+## [WIP] fix(tests): 修复集成测试中缺失 const_probe 映射的问题
+
+### 错误分析
+测试日志显示 `ERROR cascade.vm.reactor:reactor.py:188 Error executing task probe.const...: No function mapped for node probe.const...`。这是因为集成测试手动构建 `func_map` 时，只包含了 Triad 和 Dispatcher，遗漏了用于处理常量输入的 `const_probe`。
 
 ### 用户需求
-
-创建一个新的集成测试，用于验证 Cascade v3.1 "Ref-Based Architecture" 的完整工作流程，包括：
-1.  通过 `standard_dispatcher` 将计算请求“出境”。
-2.  `LocalComputeService` 在后台执行该请求。
-3.  `Reactor` 通过 `ingress_queue` 接收计算结果并将其“入境”。
-4.  入境的 Token 成功激活图中的下游节点。
-
-### 评论
-
-这是对 v3.1 架构核心承诺的最终验证。这个测试将超越所有单元测试，成为一个“顶点测试（Capstone Test）”，因为它模拟了一个完整的、真实的异步工作流，并强制所有新组件（`Dispatcher`, `ComputeService`, `ObjectStore`, `Reactor` with ingress）协同工作。它的通过将为新架构的稳定性提供最高级别的信心。
+修复 `packages/cascade-vm/tests/integration/test_ref_architecture.py`，使其能够正确运行包含常量参数的工作流。
 
 ### 目标
-
-1.  创建新的测试文件 `packages/cascade-vm/tests/integration/test_ref_architecture.py`。
-2.  在文件中实现一个名为 `test_full_ref_based_e2e_flow` 的测试用例。
-3.  该测试将编译一个简单的两步工作流（例如 `square(add_one(10))`），并通过 `EventDrivenRunner` 执行它。
-4.  最终断言工作流的计算结果正确无误，从而证明整个“出境-入境”数据流是通畅且正确的。
+1.  在测试文件中导入 `cascade.std.probe.const.const_probe`。
+2.  在构建 `func_map` 的循环中添加对 `probe.const.*` ID 模式的匹配，并将其映射到 `const_probe`。
 
 ### 基本原理
-
-通过构建一个完整的、自包含的测试场景，我们能捕捉到在单元测试中可能被忽略的、由于组件间交互而产生的复杂问题。`EventDrivenRunner` 在这里扮演了关键角色，它为我们提供了一个高保真的微型运行时环境，用于模拟和验证生产环境中的真实行为。
+集成测试手动组装运行时环境时，必须显式包含所有生成的物理图节点所需的内核函数。编译器会将常量参数转换为 `F_probe` 节点，因此运行时必须提供对应的实现。
 
 ### 标签
-
-#intent/tooling #flow/ready #priority/high #comp/tests #concept/executor #scope/core #ai/instruct #task/domain/testing #task/object/integration-test #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #ai/instruct #task/domain/testing #task/object/integration-test #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 Ref-Based 架构的端到端集成测试
-
-我们将创建新的测试文件，并填充完整的测试逻辑。
+#### Acts 1: 添加 const_probe 到集成测试
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-vm/tests/integration/test_ref_architecture.py
 ~~~~~
-~~~~~python
-import pytest
-
-from cascade.spec.dsl.task import task
-from cascade.compiler.frontend import IRGenerator
-from cascade.compiler.backend import Builder
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.vm.harness import EventDrivenRunner
-from cascade.vm.registry import CodeRegistry
-from cascade.runtime.services.observability.events import TaskExecutionFinished
-
-# Standard library function imports
+~~~~~python.old
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
@@ -60,44 +39,23 @@ from cascade.std.triad.dispatcher import standard_dispatcher
 
 
 # --- User-defined tasks for the test ---
-@task
-def add_one(n: int) -> int:
-    return n + 1
+~~~~~
+~~~~~python.new
+from cascade.std.triad.bleacher import standard_bleacher
+from cascade.std.triad.stainer import standard_stainer
+from cascade.std.triad.observer import standard_observer
+from cascade.std.triad.dispatcher import standard_dispatcher
+from cascade.std.probe.const import const_probe
 
 
-@task
-def square(n: int) -> int:
-    return n * n
+# --- User-defined tasks for the test ---
+~~~~~
 
-
-@pytest.mark.asyncio
-async def test_full_ref_based_e2e_flow():
-    # 1. Define the logical workflow
-    workflow = square(add_one(10))
-
-    # 2. Compile into a physical Assembly
-    ir_generator = IRGenerator()
-    builder = Builder()
-    graph_ir = ir_generator.generate(workflow)
-    assembly = builder.build(graph_ir, EnvironmentDef())
-    physical_graph = assembly.graph
-
-    # 3. Register user code in the CodeRegistry
-    # The key is the canonical hash, found in the symbol table
-    code_registry = CodeRegistry()
-    for node_id, canonical_hash in assembly.symbol_table.items():
-        if "add_one" in node_id:
-            code_registry.register(canonical_hash, add_one.func)
-        elif "square" in node_id:
-            code_registry.register(canonical_hash, square.func)
-
-    # 4. Build the function map for the Reactor (Standard Library ICs)
-    func_map = {}
-    for node_id, node in physical_graph.nodes.items():
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
+~~~~~act
+patch_file
+packages/cascade-vm/tests/integration/test_ref_architecture.py
+~~~~~
+~~~~~python.old
         elif "observer" in node_id:
             func_map[node_id] = standard_observer
         # All user workers are now implemented by the dispatcher
@@ -105,36 +63,18 @@ async def test_full_ref_based_e2e_flow():
             func_map[node_id] = standard_dispatcher
 
     # 5. Setup and prime the VM Harness
-    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
-    runner.prime()
+~~~~~
+~~~~~python.new
+        elif "observer" in node_id:
+            func_map[node_id] = standard_observer
+        elif node_id.startswith("probe.const."):
+            func_map[node_id] = const_probe
+        # All user workers are now implemented by the dispatcher
+        elif node_id in assembly.symbol_table:
+            func_map[node_id] = standard_dispatcher
 
-    # 6. Start the reactor and compute service loops
-    await runner.start_loop()
-    try:
-        # 7. Wait for the final task in the chain to complete.
-        # We identify the final node by its name from the IR.
-        square_node_ir = next(n for n in graph_ir.nodes if n.name == "square")
-        final_task_id = square_node_ir.current_node_instance_hash
-
-        completion_event = await runner.run_until_complete(
-            task_id=final_task_id, timeout=5.0
-        )
-
-        # 8. Assertions
-        assert isinstance(completion_event, TaskExecutionFinished)
-        assert completion_event.status == "Succeeded"
-        assert completion_event.task_id == final_task_id
-
-        # The most important check: verify the final computed value.
-        # This proves the entire round-trip (outbound dispatch -> compute -> inbound ingress) worked.
-        result_ref = completion_event.result_preview
-        final_result = runner.object_store.get(result_ref)
-        assert final_result == (10 + 1) ** 2  # 121
-
-    finally:
-        await runner.stop_loop()
+    # 5. Setup and prime the VM Harness
 ~~~~~
 
 ### 下一步建议
-
-执行所有测试。如果此测试通过，它将标志着 v3.1 Ref-Based 架构的核心功能已成功实现。我们可以考虑将这个宏观任务标记为 `#task/state/end` 并创建一个 `[COMMIT]` 计划。
+再次运行测试。如果通过，我们将完成所有验证工作，并可以提交代码。

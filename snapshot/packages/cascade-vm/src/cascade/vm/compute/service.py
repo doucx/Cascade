@@ -84,8 +84,6 @@ class LocalComputeService:
 
         # 5. Report Completion to Outbound Queue
         await self.outbound_queue.put((request.reply_to_nid, result_token))
-        finally:
-            self._active_count -= 1
 
     def _resolve_arguments(
         self, inputs: Dict[str, Any]

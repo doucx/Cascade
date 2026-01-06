@@ -2,12 +2,13 @@ from typing import Dict, Any
 import time
 
 from cascade.spec import EventIR, EventType, EventState
+from cascade.spec.physical.object import Ref
 from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.triad import StainNode
 from cascade.spec.physical.ports import PortRole
 
 
-async def standard_stainer(
+def standard_stainer(
     inputs: Dict[str, Token], node: StainNode, resources: Any
 ) -> Dict[str, Token]:
     end_mono = time.monotonic()
@@ -17,7 +18,7 @@ async def standard_stainer(
     worker_result_token = inputs["worker_result"]
     trace_input_token = inputs["trace_input"]
 
-    result_payload = worker_result_token.payload
+    result_ref = worker_result_token.payload
 
     # Merge traces
     trace_payload = worker_result_token.trace.copy()
@@ -32,20 +33,33 @@ async def standard_stainer(
     # 3. Construct EventIR
     logical_id = node.id.replace(".stain", "")
 
-    # Heuristic: Extract task_name from physical name "Stain(MyTask)"
     task_name = "unknown"
     if node.name.startswith("Stain(") and node.name.endswith(")"):
         task_name = node.name[6:-1]
 
-    # Determine Status (Simplified for now, assuming success if reached here)
-    # Error handling logic will be refined in future phases
+    # --- Ref-Based Logic ---
+    # The result_ref is expected to be a Ref object.
+    # We decide state based on its metadata, not its payload.
     state = EventState.SUCCEEDED
     error_msg = None
+    output_port = "output_default"
+    result_preview = None
 
-    # TODO: Check if result_payload is an Exception wrapper
-    if isinstance(result_payload, Exception):
+    if isinstance(result_ref, Ref):
+        is_error = result_ref.meta.get("is_error", False)
+        if is_error:
+            state = EventState.FAILED
+            # The actual error object is in the remote store,
+            # we can only preview what's in the meta.
+            error_msg = result_ref.meta.get("error_str", "Error flag set in Ref meta")
+            output_port = "output_error"
+        else:
+             result_preview = result_ref.meta.get("preview", str(result_ref))
+    elif isinstance(result_ref, Exception):
+        # Fallback for systems where an exception might still be passed directly
         state = EventState.FAILED
-        error_msg = str(result_payload)
+        error_msg = str(result_ref)
+        output_port = "output_error"
 
     ctx = {}
     if "rid" in trace_payload:
@@ -63,17 +77,15 @@ async def standard_stainer(
             "task_name": task_name,
             "duration_ms": duration * 1000,
             "error": error_msg,
-            "result_preview": str(result_payload)[:100]
-            if state == EventState.SUCCEEDED
-            else None,
+            "result_preview": result_preview,
         },
     }
 
     # 4. Create output tokens
     outputs = {}
 
-    # 4.1 The main result
-    outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
+    # 4.1 The main result (routed via sovereign port)
+    outputs[output_port] = Token(payload=result_ref, trace=trace_payload)
 
     # 4.2 Observability Event
     outputs["obs_output"] = Token(payload=ir, trace=trace_payload)

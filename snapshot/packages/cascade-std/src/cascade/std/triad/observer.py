@@ -3,7 +3,7 @@ from cascade.spec import EventIR
 from cascade.spec.physical.nodes import Token, PhysicsNode
 
 
-async def standard_observer(
+def standard_observer(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     # The Observer is now a "Dumb Relay".
@@ -19,7 +19,7 @@ async def standard_observer(
 
     # 3. Publish
     if bus and ir:
-        # We assume the bus supports the 'publish_ir' protocol
+        # We assume the bus supports a non-blocking publish from sync code.
         bus.publish_ir(ir)
 
     # Observers do not return tokens into the graph

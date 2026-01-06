@@ -3,7 +3,7 @@ from cascade.spec.physical.nodes import Token, PhysicsNode
 from cascade.common.context import get_current_context
 
 
-async def param_probe(
+def param_probe(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     name = inputs["name"].payload

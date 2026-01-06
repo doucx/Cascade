@@ -4,10 +4,10 @@ from cascade.spec.runtime.system import SystemControlToken
 from cascade.std.system.terminator import halt_signal
 
 
-async def test_halt_signal_produces_correct_token():
+def test_halt_signal_produces_correct_token():
     inputs = {"trigger": Token(payload=None)}
 
-    outputs = await halt_signal(inputs, MagicMock(), MagicMock())
+    outputs = halt_signal(inputs, MagicMock(), MagicMock())
 
     assert "out" in outputs
     output_payload = outputs["out"].payload

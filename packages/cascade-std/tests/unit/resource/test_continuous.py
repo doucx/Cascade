@@ -18,12 +18,12 @@ def starved_ledger() -> ContinuousLedger:
     return ContinuousLedger(total=16.0, available=1.0)
 
 
-async def test_continuous_allocator_grants_memory(partial_ledger):
+def test_continuous_allocator_grants_memory(partial_ledger):
     inputs = {
         "ledger_in": Token(payload=partial_ledger),
         "req_in": Token(payload=2.1),
     }
-    outputs = await continuous_allocator(inputs, MagicMock(), MagicMock())
+    outputs = continuous_allocator(inputs, MagicMock(), MagicMock())
 
     assert "gnt_out" in outputs
     assert outputs["gnt_out"].payload == 2.1
@@ -31,20 +31,20 @@ async def test_continuous_allocator_grants_memory(partial_ledger):
     assert updated.available == pytest.approx(2.4)
 
 
-async def test_continuous_allocator_recirculates_large_request(starved_ledger):
+def test_continuous_allocator_recirculates_large_request(starved_ledger):
     req_token = Token(payload=1.1)
     inputs = {"ledger_in": Token(payload=starved_ledger), "req_in": req_token}
-    outputs = await continuous_allocator(inputs, MagicMock(), MagicMock())
+    outputs = continuous_allocator(inputs, MagicMock(), MagicMock())
 
     assert "gnt_out" not in outputs
     assert outputs["req_out"] is req_token
     assert outputs["ledger_out"].payload.available == 1.0
 
 
-async def test_continuous_reclaimer_replenish():
+def test_continuous_reclaimer_replenish():
     ledger = ContinuousLedger(total=16.0, available=0.5)
     inputs = {"ledger_in": Token(payload=ledger), "rel_in": Token(payload=1.2)}
-    outputs = await continuous_reclaimer(inputs, MagicMock(), MagicMock())
+    outputs = continuous_reclaimer(inputs, MagicMock(), MagicMock())
 
     updated = outputs["ledger_out"].payload
     assert updated.available == pytest.approx(1.7)

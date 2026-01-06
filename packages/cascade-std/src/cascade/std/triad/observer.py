@@ -3,7 +3,7 @@ from cascade.spec import EventIR
 from cascade.spec.physical.nodes import Token, PhysicsNode
 
 
-async def standard_observer(
+def standard_observer(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     # The Observer is now a "Dumb Relay".

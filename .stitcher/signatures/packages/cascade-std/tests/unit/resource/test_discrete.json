@@ -10,12 +10,12 @@
     "baseline_yaml_content_hash": "1030541f9fb9effe49220be645a8d56745f067d01e367a4fbd7039a3e68b0c0b"
   },
   "test_discrete_allocator_grants_when_available": {
-    "baseline_code_signature_text": "async def test_discrete_allocator_grants_when_available(available_ledger):",
-    "baseline_code_structure_hash": "415b2e8fc34ea64d4ef4edf4157741e2d76c5f5fea3b9806a1262c3683237050"
+    "baseline_code_signature_text": "def test_discrete_allocator_grants_when_available(available_ledger):",
+    "baseline_code_structure_hash": "c4d809253b9bb3d60b4d986c20c1d61486e42446e8d3a0604968b1d460460b9e"
   },
   "test_discrete_allocator_recirculates_when_starved": {
-    "baseline_code_signature_text": "async def test_discrete_allocator_recirculates_when_starved(starved_ledger):",
-    "baseline_code_structure_hash": "69f4cb4f12d759f8ae5b6da4f3ced2c88607793d1c0fc79f302dcd15ba6c1f89"
+    "baseline_code_signature_text": "def test_discrete_allocator_recirculates_when_starved(starved_ledger):",
+    "baseline_code_structure_hash": "8152852d7494db86eb2dd7d30ceae6d6a2c1a021699e2bbcfc41b0823e42744f"
   },
   "test_discrete_broker_grants_when_available": {
     "baseline_code_signature_text": "async def test_discrete_broker_grants_when_available():",
@@ -34,11 +34,11 @@
     "baseline_code_structure_hash": "f2768363d65597a68025b6d6e609de70b995b81178bb16f674c938d8003eb451"
   },
   "test_discrete_reclaimer_releases_resource": {
-    "baseline_code_signature_text": "async def test_discrete_reclaimer_releases_resource(available_ledger):",
-    "baseline_code_structure_hash": "e4c36e7f609679138ce5d50499dfc77ecd6a276b56af6cfb3b713b598226d57e"
+    "baseline_code_signature_text": "def test_discrete_reclaimer_releases_resource(available_ledger):",
+    "baseline_code_structure_hash": "b6f0330c3e4f830ae5425b804ea3cb78c80599f91d586cc80dc17f2b7bc43389"
   },
   "test_sequential_rel_and_req": {
-    "baseline_code_signature_text": "async def test_sequential_rel_and_req():",
-    "baseline_code_structure_hash": "3683901eaf9369050e7ecb6c03d57094bf2227d5a36fb3c5cbc78bafb29be541"
+    "baseline_code_signature_text": "def test_sequential_rel_and_req():",
+    "baseline_code_structure_hash": "10a345dc148876d0affe26f1c0abd37e57c871ebd046b62da57bdc167f104d48"
   }
 }

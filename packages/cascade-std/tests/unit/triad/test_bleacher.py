@@ -16,14 +16,14 @@ def create_mock_bleach_node(input_ports_config):
     return node
 
 
-async def test_standard_bleacher_extracts_payloads():
+def test_standard_bleacher_extracts_payloads():
     inputs = {
         "arg1": Token(payload="hello"),
         "arg2": Token(payload=123),
     }
     node = create_mock_bleach_node({"arg1": PortRole.DATA, "arg2": PortRole.DATA})
 
-    outputs = await standard_bleacher(inputs, node, MagicMock())
+    outputs = standard_bleacher(inputs, node, MagicMock())
 
     assert "worker_input" in outputs
     worker_token = outputs["worker_input"]
@@ -31,12 +31,12 @@ async def test_standard_bleacher_extracts_payloads():
     assert worker_token.payload == {"arg1": "hello", "arg2": 123}
 
 
-async def test_standard_bleacher_generates_trace_with_timestamp():
+def test_standard_bleacher_generates_trace_with_timestamp():
     MOCK_TIMESTAMP = 12345.6789
     node = create_mock_bleach_node({"data": PortRole.DATA})
 
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):
-        outputs = await standard_bleacher({"data": Token(payload=1)}, node, MagicMock())
+        outputs = standard_bleacher({"data": Token(payload=1)}, node, MagicMock())
 
     assert "trace_output" in outputs
     trace_token = outputs["trace_output"]
@@ -45,12 +45,12 @@ async def test_standard_bleacher_generates_trace_with_timestamp():
     assert trace_token.payload.get("start_ts") == MOCK_TIMESTAMP
 
 
-async def test_standard_bleacher_with_empty_inputs():
+def test_standard_bleacher_with_empty_inputs():
     MOCK_TIMESTAMP = 100.0
     node = create_mock_bleach_node({})
 
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):
-        outputs = await standard_bleacher({}, node, MagicMock())
+        outputs = standard_bleacher({}, node, MagicMock())
 
     assert "worker_input" in outputs
     assert outputs["worker_input"].payload == {}
@@ -62,7 +62,7 @@ async def test_standard_bleacher_with_empty_inputs():
     }
 
 
-async def test_standard_bleacher_merges_traces():
+def test_standard_bleacher_merges_traces():
     inputs = {
         "token_a": Token(payload=1, trace={"id": "A", "source": "X"}),
         "token_b": Token(payload=2, trace={"id": "B", "retry": 1}),
@@ -71,7 +71,7 @@ async def test_standard_bleacher_merges_traces():
 
     MOCK_TIMESTAMP = 200.0
     with patch("time.monotonic", return_value=MOCK_TIMESTAMP):
-        outputs = await standard_bleacher(inputs, node, MagicMock())
+        outputs = standard_bleacher(inputs, node, MagicMock())
 
     assert "trace_output" in outputs
     trace_payload = outputs["trace_output"].payload

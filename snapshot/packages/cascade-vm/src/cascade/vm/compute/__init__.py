@@ -1,4 +1,4 @@
-from .local import LocalComputeDelegate
 from .contract import ComputeRequest
+from .service import LocalComputeService
 
-__all__ = ["LocalComputeDelegate", "ComputeRequest"]
+__all__ = ["ComputeRequest", "LocalComputeService"]

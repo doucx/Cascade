@@ -1,78 +1,170 @@
-好的，我们开始实现路线图的第三阶段修订版。
+Excellent. We will now replace the one-off `LocalComputeDelegate` with the persistent `LocalComputeService`, which aligns perfectly with the event-driven, "out-of-process" execution model described in the architecture roadmap.
 
-第一步是定义计算契约 `ComputeRequest`，它将作为物理层和计算层之间通信的标准数据结构。
+This is a significant refactoring. We are moving from a model where the Reactor would directly `await` a future from the delegate, to a fire-and-forget model where the Reactor simply places a request on a queue and moves on.
 
-我将创建一个新文件 `packages/cascade-vm/src/cascade/vm/compute/contract.py` 来存放这个结构，并更新相应的 `__init__.py` 文件。
+I will generate a plan to perform this replacement.
 
-## [WIP] feat(vm): 定义计算契约 ComputeRequest
+## [WIP] feat(vm): Implement LocalComputeService for background execution
 
 ### 用户需求
 
-根据修订后的 v3.1 架构路线图，需要在 `cascade.vm.compute` 命名空间下定义一个标准的、可序列化的 `ComputeRequest` 数据结构。该结构用于封装从物理图发往后台计算服务的计算请求。
+实现一个后台服务 `LocalComputeService`，它会持续监听一个入站队列以接收和处理 `ComputeRequest` 对象。同时，废弃并删除旧的 `LocalComputeDelegate` 实现。
 
 ### 评论
 
-这是实现“出境-入境 (Dispatch Model)”异步计算模型的关键第一步。通过定义一个标准的、不可变的数据结构作为契约，我们确保了物理层（Reactor）和计算层（ComputeDelegate/Service）之间的通信是清晰、解耦且可审计的。这为后续实现 `standard_dispatcher` 和 `LocalComputeService` 奠定了基础。
+这是一个关键的架构演进。将 `LocalComputeDelegate` (一个按需调用的异步函数) 升级为 `LocalComputeService` (一个持续运行的后台服务) 是实现“断连式执行 (Disconnected Execution)”的核心。这种模式确保了 Reactor 的主循环永远不会被用户代码的执行所阻塞，因为它只需将计算请求发射到队列中即可，剩下的工作由 `LocalComputeService` 在独立的任务中异步完成。
 
 ### 目标
 
-1.  创建新文件 `packages/cascade-vm/src/cascade/vm/compute/contract.py`。
-2.  在该文件中，使用 `@dataclass(frozen=True)` 定义 `ComputeRequest` 结构，包含 `code_hash`, `input_refs`, `reply_to_nid`, 和 `trace` 字段。
-3.  更新 `packages/cascade-vm/src/cascade/vm/compute/__init__.py`，导出 `ComputeRequest`。
+1.  删除 `packages/cascade-vm/src/cascade/vm/compute/local.py` 文件。
+2.  创建 `packages/cascade-vm/src/cascade/vm/compute/service.py` 文件。
+3.  在新文件中实现 `LocalComputeService` 类，使其包含一个 `run()` 方法来监听和处理来自队列的 `ComputeRequest`。
+4.  更新 `packages/cascade-vm/src/cascade/vm/compute/__init__.py` 以导出新实现的 `LocalComputeService`。
 
 ### 基本原理
 
-将 `ComputeRequest` 作为一个独立的契约（contract）文件，可以清晰地分离数据结构定义与具体实现。使用 `dataclasses` 可以快速创建一个健壮且类型安全的值对象。将其设为 `frozen=True` 确保了计算请求在系统内部流转时是不可变的，这增强了系统的可预测性。
+`LocalComputeService` 将被设计为一个长期运行的 `asyncio` 任务。它在其 `__init__` 方法中接收所有必要的依赖（`ObjectStore`, `CodeRegistry`）以及两个关键的队列：一个用于接收请求 (`inbound_queue`)，另一个用于发送结果 (`outbound_queue`)。它的 `run` 方法将构成一个无限循环，持续从 `inbound_queue` 中拉取请求，执行计算（将同步代码委托给线程池），然后将封装好的结果 `Token` 放入 `outbound_queue`，以通知 Reactor 任务已完成。
 
 ### 标签
 
-#intent/architect #flow/ready #priority/high #comp/vm #concept/executor #scope/api #ai/instruct #task/domain/vm #task/object/compute-contract #task/action/implementation #task/state/begin
+#intent/refine #flow/ready #priority/high #comp/vm #concept/executor #scope/api #scope/core #ai/instruct #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建计算契约文件
+#### Acts 1: 废弃 `LocalComputeDelegate`
 
-首先，我们创建 `contract.py` 文件并定义 `ComputeRequest` 数据类。
+首先，我们删除旧的 `LocalComputeDelegate` 实现文件。
+
+~~~~~act
+delete_file
+packages/cascade-vm/src/cascade/vm/compute/local.py
+~~~~~
+
+#### Acts 2: 创建 `LocalComputeService`
+
+现在，我们创建新的 `service.py` 文件并实现 `LocalComputeService`。
 
 ~~~~~act
 write_file
-packages/cascade-vm/src/cascade/vm/compute/contract.py
+packages/cascade-vm/src/cascade/vm/compute/service.py
 ~~~~~
 ~~~~~python
-from dataclasses import dataclass, field
-from typing import Dict, Any
+import asyncio
+import inspect
+import logging
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Dict, List, Tuple, Coroutine
 
 from cascade.spec.physical.object import Ref
+from cascade.spec.physical.nodes import Token
+from cascade.spec.runtime.storage import ObjectStore
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.compute.contract import ComputeRequest
+
+logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
-class ComputeRequest:
+class LocalComputeService:
     """
-    A standard data structure to define a computation request dispatched
-    from the Physics Layer to the Data Plane.
-    """
-
-    code_hash: str
-    """The canonical hash of the code to execute."""
-
-    input_refs: Dict[str, Ref]
-    """A dictionary mapping argument names to input References."""
-
-    reply_to_nid: str
-    """
-    The "reply-to" address. After computation, the result Token should be
-    injected into the DataNode with this ID.
+    A background service that listens for ComputeRequests and executes them locally.
+    It embodies the "Data Plane" for a local, in-process execution environment.
     """
 
-    trace: Dict[str, Any] = field(default_factory=dict)
-    """The physical trace inherited from the original Token, for context propagation."""
+    def __init__(
+        self,
+        store: ObjectStore,
+        registry: CodeRegistry,
+        inbound_queue: "asyncio.Queue[ComputeRequest]",
+        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
+        max_workers: int = None,
+    ):
+        self.store = store
+        self.registry = registry
+        self.inbound_queue = inbound_queue
+        self.outbound_queue = outbound_queue
+        self._pool = ThreadPoolExecutor(
+            max_workers=max_workers, thread_name_prefix="cascade_compute"
+        )
+        self._running = False
+
+    async def run(self) -> None:
+        """
+        The main loop of the service. Continuously fetches and processes requests.
+        """
+        self._running = True
+        logger.info("LocalComputeService started.")
+        try:
+            while self._running:
+                request = await self.inbound_queue.get()
+                # Create a non-blocking task for each request to allow concurrency
+                asyncio.create_task(self._process_request(request))
+        finally:
+            self._pool.shutdown(wait=False)
+            logger.info("LocalComputeService stopped.")
+
+    def stop(self) -> None:
+        self._running = False
+        # To unblock the `run` loop, we can put a sentinel value,
+        # but for now, we assume the managing task will be cancelled.
+
+    async def _process_request(self, request: ComputeRequest) -> None:
+        try:
+            # 1. Resolve Inputs
+            inputs: Dict[str, Any] = {
+                key: self.store.get(ref) for key, ref in request.input_refs.items()
+            }
+            args, kwargs = self._resolve_arguments(inputs)
+
+            # 2. Resolve Code
+            func = self.registry.get(request.code_hash)
+
+            # 3. Execute
+            if inspect.iscoroutinefunction(func):
+                result = await func(*args, **kwargs)
+            else:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(
+                    self._pool, lambda: func(*args, **kwargs)
+                )
+        except Exception as e:
+            logger.exception(f"Computation failed for request on code {request.code_hash}")
+            # Per v3.1 spec, exceptions are treated as values
+            result = e
+
+        # 4. Store Result and Prepare Token
+        result_ref = self.store.put(result)
+        result_token = Token(payload=result_ref, trace=request.trace)
+
+        # 5. Report Completion to Outbound Queue
+        await self.outbound_queue.put((request.reply_to_nid, result_token))
+
+    def _resolve_arguments(
+        self, inputs: Dict[str, Any]
+    ) -> Tuple[List[Any], Dict[str, Any]]:
+        args_map: Dict[int, Any] = {}
+        kwargs: Dict[str, Any] = {}
+
+        for k, v in inputs.items():
+            if k.isdigit():
+                args_map[int(k)] = v
+            else:
+                kwargs[k] = v
+
+        args: List[Any] = []
+        if args_map:
+            max_idx = max(args_map.keys())
+            args = [None] * (max_idx + 1)
+            for idx, val in args_map.items():
+                args[idx] = val
+
+        return args, kwargs
 ~~~~~
 
-#### Acts 2: 更新 `__init__.py` 以导出新符号
+#### Acts 3: 更新 `__init__.py` 以导出新服务
 
-接下来，更新 `__init__.py` 文件，使 `ComputeRequest` 成为 `cascade.vm.compute` 命名空间的一部分。
+最后，我们更新 `__init__.py`，移除对 `LocalComputeDelegate` 的引用，并导出新的 `LocalComputeService`。
 
 ~~~~~act
 patch_file
@@ -80,16 +172,17 @@ packages/cascade-vm/src/cascade/vm/compute/__init__.py
 ~~~~~
 ~~~~~python.old
 from .local import LocalComputeDelegate
-
-__all__ = ["LocalComputeDelegate"]
-~~~~~
-~~~~~python.new
-from .local import LocalComputeDelegate
 from .contract import ComputeRequest
 
 __all__ = ["LocalComputeDelegate", "ComputeRequest"]
 ~~~~~
+~~~~~python.new
+from .contract import ComputeRequest
+from .service import LocalComputeService
+
+__all__ = ["ComputeRequest", "LocalComputeService"]
+~~~~~
 
 ### 下一步建议
 
-我们已经成功定义了计算契约。下一步是实现 `LocalComputeService`，它将作为一个后台服务，监听并处理这些 `ComputeRequest` 对象。
+我们已经成功地创建了计算服务的核心。现在，我们需要创建一个能向这个服务发送 `ComputeRequest` 的组件。根据路线图，下一步是创建 `standard_dispatcher` 内核函数，它将作为所有用户 `WorkerNode` 在物理层的标准实现，负责将计算任务“发射”到计算队列中。

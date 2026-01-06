@@ -1,183 +1,102 @@
-好的，我们来执行这个关键的集成验证步骤。
+分析正确。测试失败了，这是我的疏忽。
 
-这次更新不仅仅是修改一个测试文件，它将第一次完整地贯穿我们新建立的异步执行模型：从 `Reactor` 发射请求，到 `LocalComputeService` 接收并执行，再到结果返回并重新注入 `Reactor` 的内存中。
+测试失败的根本原因在于 `standard_stainer` 的实现。它在为 `TaskExecutionFinished` 事件创建 `EventIR` 时，为了生成 `result_preview`，无条件地将任务的返回结果（`result_payload`）转换为了字符串：
 
-为了让测试正确工作，我们必须首先修复测试Harness (`EventDrivenRunner`) 中的一个小问题：根据v3.1架构，注入的数据不应是原始值，而应该是存储在 `ObjectStore` 中的`Ref`。
+`"result_preview": str(result_payload)[:100]`
 
-## [WIP] test(vm): 更新端到端测试以验证新的异步执行模型
+在我们的新异步模型中，`worker` (即 `source_task`) 的结果被 `LocalComputeService` 存入 `ObjectStore`，返回的是一个 `Ref` 对象。因此，当 `Stainer` 接收到这个结果时，`result_payload` 就是一个 `Ref` 实例。`str(Ref(...))` 会产生一个类似 `"Ref(uri='...')"` 的字符串。
+
+这个字符串随后被放入事件的 `result_preview` 字段。测试代码接收到这个事件，并尝试将这个**字符串**传递给 `runner.object_store.get()`，而该方法期望接收一个真正的 `Ref` **对象**，因此在尝试访问 `.uri` 属性时抛出了 `AttributeError: 'str' object has no attribute 'uri'`。
+
+我们将修复 `standard_stainer` 的逻辑。它应该足够智能，能够区分 `Ref` 对象和其他可字符串化的结果。如果结果是一个 `Ref` 对象，它应该直接将该对象放入 `result_preview`，而不是其字符串表示。
+
+这将确保事件携带的是高保真的、可直接使用的引用对象，从而修复测试并使我们的可观测性系统更加健壮。
+
+我将生成一个计划来应用此修复。
+
+## [WIP] fix(std): 防止 stainer 在事件预览中字符串化 Ref 对象
 
 ### 用户需求
 
-更新 `test_source_node_execution.py` 测试，使其能够正确地设置和验证基于 `standard_dispatcher` 和 `LocalComputeService` 的新异步执行流程。
+修复 `standard_stainer` 的实现，使其在处理 `Ref` 类型的任务结果时，不要将其转换为字符串，而是直接将 `Ref` 对象本身放入事件的 `result_preview` 字段。
 
 ### 评论
 
-这是对我们近期重构工作的一次全面的“大考”。通过修复这个测试，我们不仅能验证 `dispatcher` 和 `service` 的正确性，还能确保它们之间的队列通信、`CodeRegistry` 的动态函数解析，以及 `Reactor` 与 `Harness` 对整个“出境-入境”数据流的协同处理都符合预期。这个测试的通过将是我们v3.1架构演进的一个重要里程碑。
+这是一个关键的修复，它暴露了在数据流中保持类型保真度的重要性。通过确保 `Ref` 对象在整个可观测性管道中保持其对象身份，我们不仅修复了当前的测试失败，还增强了事件系统的整体能力，使其能够传递更丰富、更具功能性的数据，而不仅仅是文本表示。
 
 ### 目标
 
-1.  **修复 `EventDrivenRunner`**: 修改 `harness.py` 中的 `inject_input` 方法，使其在注入数据时，先将数据存入 `ObjectStore` 并获取一个 `Ref`，然后将该 `Ref` 作为 `Token` 的载荷。
-2.  **重构测试设置**:
-    *   在 `test_source_node_execution.py` 中，创建并填充一个 `CodeRegistry` 实例。
-    *   修改 `function_map`，将用户 `WorkerNode` 链接到 `standard_dispatcher`，而不是旧的 `mock_worker`。
-    *   使用新的构造函数签名实例化 `EventDrivenRunner`，传入 `CodeRegistry`。
-3.  **验证**: 确保测试通过，从而证明从“脉冲”触发到任务最终完成的整个异步闭环是完整且正确的。
+1.  定位 `packages/cascade-std/src/cascade/std/triad/stainer.py` 中 `result_preview` 的生成逻辑。
+2.  修改该逻辑，增加一个类型检查：如果 `result_payload` 是一个 `Ref` 实例，则直接使用它；否则，才进行字符串转换和截断。
+3.  确保修复后的代码能够正确处理两种类型的结果。
 
 ### 基本原理
 
-在新的模型下，测试流程如下：
-1.  `EventDrivenRunner.prime()` 触发 `Pulse`。
-2.  `Reactor` 激活 `Bleacher`。
-3.  `Bleacher` 准备好输入（一个空的 `Ref` 字典），激活 `Dispatcher` (`WorkerNode`)。
-4.  `Dispatcher` 被调用，它从 `WorkerNode` 读取 `code_hash`，组装 `ComputeRequest`，并将其放入 `compute_queue`。
-5.  `LocalComputeService` 的后台任务从队列中获取请求，使用 `code_hash` 从 `CodeRegistry` 查到 `source_task.func` 并执行它。
-6.  `Service` 将结果 `"Pulse Fired!"` 存入 `ObjectStore`，获得一个 `Ref`，然后将 `(reply_to_nid, result_token)` 放入 `ingress_queue`。
-7.  `EventDrivenRunner` 的主循环从 `ingress_queue` 中“收割”结果，并将其注入到 `d_worker_out` 数据节点。
-8.  `Reactor` 检测到 `d_worker_out` 被激发，从而激活 `Stainer`。
-9.  `Stainer` 运行，并最终发出 `TaskExecutionFinished` 事件，测试断言成功。
-
-这个完整的流程验证了我们架构的每一个新组件。
+通过在 `standard_stainer` 中引入一个简单的 `isinstance(result_payload, Ref)` 判断，我们可以优雅地处理不同类型的数据。这是一种简单、直接且影响范围最小的修复方式，它直接解决了问题的根源，即 `Ref` 对象被过早地、不恰当地序列化为字符串。
 
 ### 标签
 
-#intent/fix #intent/tooling #flow/ready #priority/high #comp/vm #comp/tests #concept/executor #scope/core #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/std #comp/vm #concept/executor #scope/core #ai/instruct #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修复 `EventDrivenRunner.inject_input`
+#### Acts 1: 修复 `standard_stainer`
 
-我们首先修正 `harness.py`，确保它遵循“万物皆引用”的原则。
+我们将修改 `stainer.py`，为其添加处理 `Ref` 对象的逻辑。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/harness.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
 ~~~~~
 ~~~~~python.old
-    def inject_input(
-        self, node_id: str, payload: Any, trace: Optional[Dict[str, Any]] = None
-    ):
-        node = self.graph.nodes[node_id]
-        if not isinstance(node, PhysicsDataNode):
-            raise ValueError(f"Node {node_id} is not a DataNode")
-        final_trace = {"rid": self.run_id}
-        if trace:
-            final_trace.update(trace)
-        self.memory.put(node, Token(payload=payload, trace=final_trace))
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": now_wall,
+        "ctx": ctx,
+        "phy": {"nid": node.id},
+        "data": {
+            "state": state,
+            "task_id": logical_id,
+            "task_name": task_name,
+            "duration_ms": duration * 1000,
+            "error": error_msg,
+            "result_preview": str(result_payload)[:100]
+            if state == EventState.SUCCEEDED
+            else None,
+        },
+    }
 ~~~~~
 ~~~~~python.new
-    def inject_input(
-        self, node_id: str, payload: Any, trace: Optional[Dict[str, Any]] = None
-    ):
-        node = self.graph.nodes[node_id]
-        if not isinstance(node, PhysicsDataNode):
-            raise ValueError(f"Node {node_id} is not a DataNode")
-        final_trace = {"rid": self.run_id}
-        if trace:
-            final_trace.update(trace)
+    # Handle preview generation: pass Refs through, stringify others.
+    preview = None
+    if state == EventState.SUCCEEDED:
+        from cascade.spec.physical.object import Ref
 
-        # v3.1: All data in the physical layer is a Ref.
-        ref = self.object_store.put(payload)
-        self.memory.put(node, Token(payload=ref, trace=final_trace))
-~~~~~
+        if isinstance(result_payload, Ref):
+            preview = result_payload
+        else:
+            preview = str(result_payload)[:100]
 
-#### Acts 2: 更新端到端测试用例
-
-现在，我们重写 `test_source_node_execution.py` 以适应并验证新的异步模型。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_source_node_execution.py
-~~~~~
-~~~~~python
-import asyncio
-import pytest
-from typing import Dict
-
-from cascade.spec.dsl.task import task
-from cascade.compiler.frontend.generator import IRGenerator
-from cascade.compiler.backend.builder import Builder
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.vm.harness import EventDrivenRunner
-from cascade.vm.registry import CodeRegistry
-from cascade.runtime.services.observability.events import TaskExecutionFinished
-
-# Standard library function imports
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-from cascade.std.triad.dispatcher import standard_dispatcher
-
-
-@task
-def source_task():
-    return "Pulse Fired!"
-
-
-@pytest.mark.asyncio
-async def test_source_node_is_triggered_by_pulse():
-    # 1. Compile the graph
-    ir_generator = IRGenerator()
-    builder = Builder()
-
-    flow = source_task()
-    graph_ir = ir_generator.generate(flow)
-    node_ir = graph_ir.nodes[0]
-    assembly = builder.build(graph_ir, EnvironmentDef())
-    physical_graph = assembly.graph
-
-    # 2. Setup Code Registry for the Compute Service
-    code_registry = CodeRegistry()
-    worker_node_id = f"{node_ir.current_node_instance_hash}.worker"
-    canonical_hash = assembly.symbol_table[worker_node_id]
-    code_registry.register(canonical_hash, source_task.func)
-
-    # 3. Build the function map for the Reactor
-    func_map = {}
-    for node_id, node in physical_graph.nodes.items():
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
-        elif node_id.endswith(".worker"):
-            # All user workers are now handled by the dispatcher
-            func_map[node_id] = standard_dispatcher
-        elif "observer" in node_id:
-            func_map[node_id] = standard_observer
-
-    # 4. Setup and run the VM using the new Harness
-    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
-    runner.prime()
-
-    # 5. Execute
-    await runner.start_loop()
-    try:
-        # 6. Assert the result by waiting for the completion event.
-        # This now validates the full dispatch -> compute -> ingress loop.
-        completion_event = await runner.run_until_complete(
-            task_id=node_ir.current_node_instance_hash, timeout=5.0
-        )
-
-        assert isinstance(completion_event, TaskExecutionFinished)
-        assert completion_event.status == "Succeeded"
-        assert completion_event.task_id == node_ir.current_node_instance_hash
-
-        # The result preview is now a Ref. To verify the content, we need to
-        # access the runner's object store.
-        result_ref = completion_event.result_preview
-        final_result = runner.object_store.get(result_ref)
-        assert final_result == "Pulse Fired!"
-
-    finally:
-        await runner.stop_loop()
+    ir: EventIR = {
+        "v": "1.0",
+        "t": EventType.LIFECYCLE,
+        "ts": now_wall,
+        "ctx": ctx,
+        "phy": {"nid": node.id},
+        "data": {
+            "state": state,
+            "task_id": logical_id,
+            "task_name": task_name,
+            "duration_ms": duration * 1000,
+            "error": error_msg,
+            "result_preview": preview,
+        },
+    }
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功地验证了新的异步执行模型的核心路径！这是一个巨大的进步。
-
-现在，我们可以专注于完成 `Reactor` 的演进。根据路线图，下一步是：
-
-*   **实现入口队列 (`cascade.vm.reactor`)**: 使 `Reactor` 自身能够处理来自 `ingress_queue` 的事件，而不是依赖 `Harness` 来做这件事。这将使 `Reactor` 成为一个完全自洽的、事件驱动的状态机。
-*   **实现统一循环**: 简化 `Reactor.step()` 方法，使其包含一个“入境周期”和一个“物理周期”，从而完成其最终形态的演化。
+我们已经应用了修复程序。现在，我们应该重新运行 `test_source_node_execution.py` 测试。如果一切顺利，它现在应该会通过，这将确认我们的整个异步执行和可观测性流程已经成功集成。

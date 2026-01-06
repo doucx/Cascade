@@ -1,92 +1,77 @@
-好的，我来分析这个新的、更深层次的错误。
+好的，Phase 1 和 Phase 2 的实施与验证已经圆满完成。我们成功清理了标准库，优化了编译器后端，并建立了一套高保真的测试基础设施。
 
-## [WIP] fix: 区分用户常量与系统状态的物质化
+现在，我将为这些变更创建一个正式的 Git 提交。
 
-### 错误分析
-1.  **核心错误**: `AttributeError: 'Ref' object has no attribute 'available'`。
-2.  **位置**: 在 `discrete_allocator` 内核函数中，当它试图检查资源账本 (`ledger`) 的可用数量时。
-3.  **根本原因**: 这是一个微妙但极其重要的架构冲突。
-    *   `discrete_allocator` 是一个**物理内核函数**，它在同步、无 I/O 的 `Reactor` 中运行。它**绝对不能**调用 `store.get()` 来解引用一个 `Ref`。因此，它期望接收到的 `ledger_in` 令牌的 `payload` 就是 `DiscreteLedger` 对象本身。
-    *   然而，在上一步修复中，我们的 `EventDrivenRunner.prime()` 方法变得过于“热心”。它将**所有**初始化的数据节点（包括用于资源管理的 `D_ledger` 节点）的 `initial_payload` 都物质化成了 `Ref` 对象。
-    *   这就导致 `Allocator` 收到的是一个指向 `DiscreteLedger` 对象的 `Ref`，而不是对象本身。当它试图访问 `.available` 属性时，自然会失败。
+## [COMMIT] refactor(vm): implement Phase 1 & 2 of Physical Kernel Integration
 
 ### 用户需求
-修复测试基础设施，使其能够正确区分应被物质化的“用户数据”和不应被物质化的“内核内部状态”，从而让依赖内核状态的测试（如资源管理）能够通过。
+完成 **Project Singularity** 集成路线图的前两个阶段：
+1.  **Phase 1**: 净化标准库，移除所有 `probe` 组件，并引入 `standard_egress` 作为唯一的物理出口。
+2.  **Phase 2**: 优化编译器后端，移除对 `F_probe` 节点的依赖，建立直接的 `D_const` 连线模型。
+3.  **Harness Update**: 升级测试工具链，支持常量物质化 (Materialization) 和标量提升 (Scalar Hoisting) 机制。
 
 ### 评论
-这个失败是架构演进过程中的一个关键里程碑。它强制我们明确区分了两种类型的“初始数据”：
-1.  **用户常量 (User Constants)**: 来自用户代码（如 `add(1, 2)` 中的 `1` 和 `2`）。这些**必须**被物质化为 `Ref`，因为它们是用户数据，物理层不应直接处理。
-2.  **系统状态 (System State)**: 由编译器/系统自身创建的、用于物理内核内部运作的对象（如 `DiscreteLedger`）。这些**绝不能**被物质化，因为它们是内核运行所必需的“燃料”，必须以原始对象形式存在于令牌中。
-
-我们的测试工具现在必须学会这种区分。
+这是 Cascade VM 迈向生产级的里程碑。通过将“数据采样”逻辑从物理层彻底剥离到策略层/计算层，我们实现了物理内核的纯粹性。特别是“标量提升”机制的引入，完美解决了物理内核无 I/O 执行与读取资源约束值之间的矛盾，为后续的 TCO 优化打下了坚实基础。
 
 ### 目标
-修改 `EventDrivenRunner.prime()` 的逻辑，使其只对代表“用户常量”的数据节点执行物质化操作，而忽略系统内部状态节点。我们将通过检查节点的 ID 是否以 `"const."` 开头（这是由 `PhysicalIdGenerator` 保证的命名约定）来实现这一点。
+创建一个包含标准库净化、编译器瘦身及测试工具链升级的完整提交。
 
 ### 基本原理
-遵循“物理层纯粹性”公理。内核函数是纯粹的，不能有 I/O。因此，它们依赖的内部状态对象必须作为值直接在令牌中传递，而不是作为引用。物质化仅适用于需要跨越物理层/计算层边界的用户数据。
+遵循“计算同质性”和“边界显式化”公理。通过在编译时简化结构、在加载时预处理数据，我们实现了一个更紧凑、更鲁棒的物理执行模型。
 
 ### 标签
-#intent/fix #intent/tooling #flow/ready #priority/high #comp/tests #comp/vm #concept/physics #scope/core #ai/instruct
-#task/domain/vm #task-object/materialization-logic #task-action/refinement #task-state/continue
+#intent/refine #flow/ready #priority/high #comp/vm #comp/compiler #comp/std #concept/physics #concept/materialization #scope/core #ai/instruct #task/domain/vm #task/object/physical-kernel-integration #task/action/standardization-optimization #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 精炼 `EventDrivenRunner` 的物质化逻辑
+#### Acts 1: 提交 Phase 1 & 2 的所有变更
 
-我们将修改 `harness.py` 中的 `prime` 方法，增加一个 `node.id.startswith("const.")` 的判断条件，从而精确地只物质化常量节点。
+我们将所有新增、修改以及由于目录删除导致的变更添加到暂存区，并创建一个内容详尽的提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-std/src/cascade/std/system/egress.py
+packages/cascade-vm/src/cascade/vm/linker.py
+packages/cascade-compiler/src/cascade/compiler/wiring/policies/parameter.py
+packages/cascade-compiler/src/cascade/compiler/wiring/prisms/discrete.py
+packages/cascade-spec/src/cascade/spec/runtime/storage.py
 packages/cascade-vm/src/cascade/vm/harness.py
+packages/cascade-compiler/tests/integration/test_resource_contention.py
+packages/cascade-vm/tests/integration/test_ref_architecture.py
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
+packages/cascade-std/src/cascade/std/probe
+packages/cascade-std/tests/unit/probe
 ~~~~~
-~~~~~python.old
-    def prime(self):
-        # Phase 3.2 - Constant Materialization & Scalar Hoisting
-        # The runner, acting as the Strategy, scans the graph for any initial payloads
-        # and converts them to Refs before priming the reactor.
-        for node in self.graph.nodes.values():
-            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
-                payload = node.initial_payload
-                if payload is not None and not isinstance(payload, Ref):
-                    meta = {}
-                    # Perform Scalar Hoisting for kernel-readable values
-                    if isinstance(payload, (int, float, bool, str)) and len(str(payload)) < 256:
-                        meta["scalar_value"] = payload
-                    
-                    # Materialize the raw value into the object store with metadata
-                    node.initial_payload = self.object_store.put(payload, metadata=meta)
 
-        self.reactor.prime(genesis_trace={"rid": self.run_id})
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-    def prime(self):
-        # Phase 3.2 - Constant Materialization & Scalar Hoisting
-        # The runner, acting as the Strategy, scans the graph for any initial payloads
-        # and converts them to Refs before priming the reactor.
-        for node in self.graph.nodes.values():
-            # CRITICAL: We only materialize nodes that are explicitly marked as constants.
-            # System-level nodes like resource ledgers must retain their object payloads
-            # to be used directly by kernel functions without I/O.
-            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0 and node.id.startswith("const."):
-                payload = node.initial_payload
-                if payload is not None and not isinstance(payload, Ref):
-                    meta = {}
-                    # Perform Scalar Hoisting for kernel-readable values
-                    if isinstance(payload, (int, float, bool, str)) and len(str(payload)) < 256:
-                        meta["scalar_value"] = payload
-                    
-                    # Materialize the raw value into the object store with metadata
-                    node.initial_payload = self.object_store.put(payload, metadata=meta)
+~~~~~text
+refactor(vm): implement Phase 1 & 2 of Physical Kernel Integration
 
-        self.reactor.prime(genesis_trace={"rid": self.run_id})
+This commit marks the completion of the first two phases of the Project Singularity roadmap, focusing on physical layer purification and compiler optimization.
+
+Key Changes:
+1.  **Standard Library Purification (Phase 1)**:
+    -   Completely removed the legacy `cascade.std.probe` package. All environment/parameter sampling is now treated as a compute task or handled via pre-materialization.
+    -   Introduced `cascade.std.system.egress.standard_egress`, the new physical exit node that teleports tokens to the strategy-managed egress queue.
+    -   Updated `Linker` to map `egress.*` nodes and removed all probe-related mappings.
+
+2.  **Compiler Backend Thinning (Phase 2)**:
+    -   Refactored `ParameterWiringPolicy` and `DiscreteResourcePrism` to eliminate the generation of `F_probe` and `D_probed` nodes.
+    -   Implemented a direct `D_const -> TargetFunc` wiring model, reducing graph complexity and node count per constant.
+
+3.  **Test Harness Alignment**:
+    -   Updated `EventDrivenRunner` to implement 'Constant Materialization' and 'Scalar Hoisting'.
+    -   User constants are now automatically materialized into `Ref` objects before reactor priming.
+    -   Critical kernel-readable values (like resource amounts) are hoisted into Ref metadata, satisfying the Data-Free Physics Axiom while maintaining synchronous kernel execution.
+
+These changes establish a robust, high-fidelity physical field model ready for integration into the runtime engine.
 ~~~~~
 
 ### 下一步建议
-通过这次修复，我们的测试工具现在能够正确处理内核内部状态和用户数据之间的区别，这使得所有核心物理组件（包括资源管理器）都能在测试环境中正确运行。
+我们已经稳固了底层的物理模型。下一步是 **Phase 3: 策略层重构**。
 
-现在，测试套件应该能完全通过了。这标志着我们对 Phase 1 和 Phase 2 的验证工作已圆满完成。
-
-接下来，我们将正式启动 **Phase 3: 策略层重构 (The Glue Layer - CascadeVMStrategy)**，开始构建将这一切整合到生产环境中的核心策略。
+我们需要开始编写 `packages/cascade-runtime/src/cascade/runtime/strategies/vm.py`，实现 `CascadeVMStrategy`。我建议首要任务是实现其 **子阶段 3.2: 编译与物质化** 逻辑，将我们在测试工具中验证过的物质化算法正式引入生产级策略中。

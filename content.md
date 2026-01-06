@@ -1,301 +1,218 @@
-## [WIP] feat(vm): 实现 LocalComputeDelegate
+## [WIP] feat(vm): 实现 PhysicsKernel
 
 ### 用户需求
-在 `cascade-vm` 中实现 `LocalComputeDelegate`，作为 v3.1 架构中负责执行用户态任务的组件。它负责连接存储层（`ObjectStore`）和代码注册表（`CodeRegistry`），处理数据的下载、计算和上传。
+在 `cascade-vm` 中实现 `PhysicsKernel`，作为 v3.1 架构中负责执行内核态任务（ICs, Standard Library）的组件。它是一个纯同步、高性能的执行单元，仅处理引用和元数据，不进行 I/O 操作。
 
 ### 评论
-这是 v3.1 架构中“计算层”的核心实现。与旧的 `Executor` 不同，`LocalComputeDelegate` 不直接处理图节点，而是处理更底层的“代码哈希”和“数据引用”。这种设计使得计算逻辑完全脱离了图的拓扑结构。
+`PhysicsKernel` 是 v3.1 架构的“心脏”。它的设计目标是**极速**。与 `ComputeDelegate` 处理繁重的用户代码不同，Kernel 只负责推演图的状态。所有的操作（漂白、染色、路由）都必须在微秒级完成。因此，它**严禁**使用 `async`，也**严禁**进行 `store.get()` (除非是极其特殊的轻量级元数据操作，但即便如此也应避免)。
 
 ### 目标
-1.  创建 `cascade.vm.compute` 包。
-2.  实现 `LocalComputeDelegate` 类，符合 `ComputeDelegate` 协议。
-3.  实现参数解析逻辑，将扁平的输入字典还原为 `args` 和 `kwargs`。
-4.  实现对同步和异步函数的混合支持。
-5.  添加单元测试验证其行为。
+1.  创建 `cascade.vm.kernel` 包。
+2.  实现 `PhysicsKernel` 类。
+3.  定义 Kernel 函数的签名规范：`(inputs: Dict[str, Ref], node: PhysicsNode, resources: Any) -> Dict[str, Ref]`。
+4.  实现 `executor` 风格的接口，但要是同步的。
+5.  添加单元测试。
 
 ### 基本原理
-*   **引用解析**: 使用注入的 `ObjectStore` 将输入的 `Ref` 解引用为实际对象。
-*   **参数重组**: 根据输入键是否为数字字符串，将其分流为位置参数 (`args`) 和关键字参数 (`kwargs`)。
-*   **混合执行**: 使用 `inspect.iscoroutinefunction` 检测目标函数类型。异步函数直接 `await`，同步函数在 `ThreadPoolExecutor` 中运行，以避免阻塞主循环。
-*   **结果物化**: 计算结果再次通过 `ObjectStore.put` 存回，并返回新的 `Ref`。
+*   **同步执行**: 所有 Kernel 函数都是普通的 Python 函数，不是协程。
+*   **引用传递**: 输入输出全都是 `Ref`。Kernel 不关心 `Ref` 背后是什么，只关心如何传递它。
+*   **即时返回**: 调用 `kernel.execute(...)` 会立即返回结果字典，没有 `await`，没有 `Future`。
+*   **资源注入**: 依然支持 `resource_registry` 的注入，用于访问 EventBus 等系统服务（EventBus 的发布操作在 Kernel 中通常是 `fire_and_forget` 或非阻塞的）。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/vm #task/object/compute-delegate #task/action/implement #task/state/continue
+#intent/build #flow/ready #priority/high #comp/runtime #concept/kernel #scope/core #ai/instruct #task/domain/vm #task/object/physics-kernel #task/action/implement #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 compute 模块
+#### Acts 1: 创建 kernel 模块目录
 
 ~~~~~act
 run_command
 ~~~~~
 ~~~~~bash
-mkdir -p packages/cascade-vm/src/cascade/vm/compute
-touch packages/cascade-vm/src/cascade/vm/compute/__init__.py
+mkdir -p packages/cascade-vm/src/cascade/vm/kernel
+touch packages/cascade-vm/src/cascade/vm/kernel/__init__.py
 ~~~~~
 
-#### Acts 2: 实现 `LocalComputeDelegate`
+#### Acts 2: 实现 `PhysicsKernel`
 
-创建 `packages/cascade-vm/src/cascade/vm/compute/local.py`。
+创建 `packages/cascade-vm/src/cascade/vm/kernel/core.py`。
 
 ~~~~~act
 write_file
-packages/cascade-vm/src/cascade/vm/compute/local.py
+packages/cascade-vm/src/cascade/vm/kernel/core.py
 ~~~~~
 ~~~~~python
-import asyncio
-import inspect
-from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Tuple
+import logging
+from typing import Any, Callable, Dict
 
 from cascade.spec.physical.object import Ref
-from cascade.spec.runtime.compute import ComputeDelegate
-from cascade.spec.runtime.storage import ObjectStore
-from cascade.vm.registry import CodeRegistry
+from cascade.spec.physical.nodes import PhysicsFuncNode
+from cascade.vm.resource_registry import ResourceRegistry
+
+logger = logging.getLogger(__name__)
+
+# Kernel function signature:
+# (inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: ResourceRegistry) -> Dict[str, Ref]
+KernelFunc = Callable[[Dict[str, Ref], PhysicsFuncNode, ResourceRegistry], Dict[str, Ref]]
 
 
-class LocalComputeDelegate(ComputeDelegate):
+class PhysicsKernel:
     """
-    A local implementation of ComputeDelegate that executes code in the current process.
-    It handles:
-    1. Dereferencing input Refs using the ObjectStore.
-    2. Resolving code from the CodeRegistry.
-    3. Executing the code (sync code in a thread pool, async code directly).
-    4. Storing the result back to the ObjectStore and returning a Ref.
+    The synchronous execution core for Cascade v3.1 Physics Layer.
+
+    Responsibilities:
+    1. Executes Standard Library ICs (Bleachers, Stainers, Allocators).
+    2. Operates exclusively on References (Ref), never dereferencing payloads.
+    3. Guarantees microseconds-level latency per operation.
+    4. Purely synchronous execution model (no async/await).
     """
 
-    def __init__(
-        self, store: ObjectStore, registry: CodeRegistry, max_workers: int = None
-    ):
-        self.store = store
-        self.registry = registry
-        self._pool = ThreadPoolExecutor(
-            max_workers=max_workers, thread_name_prefix="cascade_compute"
-        )
+    def __init__(self, function_map: Dict[str, KernelFunc], resources: ResourceRegistry):
+        self._function_map = function_map
+        self._resources = resources
 
-    async def submit(
-        self, code_hash: str, input_refs: Dict[str, Ref], config: Dict[str, Any]
-    ) -> Ref:
+    def execute(
+        self, node: PhysicsFuncNode, inputs: Dict[str, Ref]
+    ) -> Dict[str, Ref]:
         """
-        Execute a task defined by code_hash and input_refs.
+        Execute a kernel function for the given node.
+
+        Args:
+            node: The physical function node being executed.
+            inputs: A dictionary of input References mapped by port name.
+
+        Returns:
+            A dictionary of output References mapped by port name.
+
+        Raises:
+            ValueError: If no kernel function is mapped to the node.
+            Exception: Any error raised by the kernel function itself.
         """
-        # 1. Resolve Inputs (IO Bound)
-        # In a real distributed system, this might be parallelized pre-fetching.
-        inputs: Dict[str, Any] = {}
-        for key, ref in input_refs.items():
-            inputs[key] = self.store.get(ref)
+        func = self._function_map.get(node.id)
+        if not func:
+            raise ValueError(f"No kernel function mapped for node '{node.id}'")
 
-        # 2. Reconstruct Arguments (CPU Bound)
-        args, kwargs = self._resolve_arguments(inputs)
-
-        # 3. Resolve Code
-        func = self.registry.get(code_hash)
-
-        # 4. Execute (CPU/IO Mixed)
         try:
-            if inspect.iscoroutinefunction(func):
-                result = await func(*args, **kwargs)
-            else:
-                loop = asyncio.get_running_loop()
-                result = await loop.run_in_executor(
-                    self._pool, lambda: func(*args, **kwargs)
-                )
+            # Execute synchronously
+            outputs = func(inputs, node, self._resources)
+            return outputs
         except Exception as e:
-            # Wrap exception to store it as a result?
-            # Or let it propagate?
-            # In v3.1, exceptions are typically values.
-            # But here we might want to let the caller handle the crash
-            # or return a specific Error object.
-            # For simplicity in this phase, we treat the exception as the result
-            # if the architecture expects 'Ref to Error'.
-            # However, standard Python behavior is to raise.
-            # Let's propagate for now, the caller (Reactor/Adapter) can catch.
+            logger.exception(f"Kernel panic at node '{node.id}': {e}")
             raise e
-
-        # 5. Store Result (IO Bound)
-        result_ref = self.store.put(result)
-        return result_ref
-
-    def _resolve_arguments(
-        self, inputs: Dict[str, Any]
-    ) -> Tuple[List[Any], Dict[str, Any]]:
-        """
-        Reconstruct positional and keyword arguments from a flat dictionary.
-        Keys that are digit strings ('0', '1') are treated as positional indices.
-        Other keys are treated as keyword arguments.
-        """
-        args_map: Dict[int, Any] = {}
-        kwargs: Dict[str, Any] = {}
-
-        for k, v in inputs.items():
-            if k.isdigit():
-                args_map[int(k)] = v
-            else:
-                kwargs[k] = v
-
-        # Convert args_map to list, assuming contiguous 0-based indexing for simplicity.
-        # If there are gaps, we might need a more robust approach, but Compiler guarantees 0..N.
-        args: List[Any] = []
-        if args_map:
-            max_idx = max(args_map.keys())
-            args = [None] * (max_idx + 1)
-            for idx, val in args_map.items():
-                args[idx] = val
-
-        return args, kwargs
 ~~~~~
 
 #### Acts 3: 导出模块
 
-更新 `packages/cascade-vm/src/cascade/vm/compute/__init__.py`。
+更新 `packages/cascade-vm/src/cascade/vm/kernel/__init__.py`。
 
 ~~~~~act
 write_file
-packages/cascade-vm/src/cascade/vm/compute/__init__.py
+packages/cascade-vm/src/cascade/vm/kernel/__init__.py
 ~~~~~
 ~~~~~python
-from .local import LocalComputeDelegate
+from .core import PhysicsKernel, KernelFunc
 
-__all__ = ["LocalComputeDelegate"]
+__all__ = ["PhysicsKernel", "KernelFunc"]
 ~~~~~
 
 #### Acts 4: 创建单元测试
 
-创建 `packages/cascade-vm/tests/unit/test_compute_delegate.py`。我们将定义一个简单的 MockObjectStore 来避免对 `cascade-runtime` 的硬依赖，确保单元测试的独立性。
+创建 `packages/cascade-vm/tests/unit/test_physics_kernel.py`。
 
 ~~~~~act
 write_file
-packages/cascade-vm/tests/unit/test_compute_delegate.py
+packages/cascade-vm/tests/unit/test_physics_kernel.py
 ~~~~~
 ~~~~~python
-import asyncio
-import uuid
 import pytest
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Any
 
 from cascade.spec.physical.object import Ref
-from cascade.spec.runtime.storage import ObjectStore
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute.local import LocalComputeDelegate
+from cascade.spec.physical.nodes import PhysicsFuncNode
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.kernel.core import PhysicsKernel
 
 
-# --- Mocks ---
+# --- Kernel Function Mocks ---
 
 
-class MockObjectStore:
-    def __init__(self):
-        self._data: Dict[str, Any] = {}
-
-    def put(self, obj: Any, metadata: Optional[Dict[str, Any]] = None) -> Ref:
-        uri = f"mem://{uuid.uuid4()}"
-        self._data[uri] = obj
-        return Ref(uri=uri, meta=metadata or {})
-
-    def get(self, ref: Ref) -> Any:
-        return self._data[ref.uri]
-
-    def peek(self, ref: Ref) -> Ref:
-        return ref
-
-    def delete(self, ref: Ref) -> None:
-        pass
+def kernel_identity(
+    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: Any
+) -> Dict[str, Ref]:
+    # Simple pass-through: input 'in' -> output 'out'
+    return {"out": inputs["in"]}
 
 
-def sync_add(a, b):
-    return a + b
+def kernel_resource_access(
+    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: ResourceRegistry
+) -> Dict[str, Ref]:
+    # Validates that we can access resources
+    config = resources.get("config")
+    # Return a synthetic Ref based on config (just for testing logic)
+    return {"out": Ref(uri=f"mem://config-{config['version']}")}
 
 
-async def async_mul(a, b):
-    await asyncio.sleep(0.01)
-    return a * b
-
-
-def sync_fail():
-    raise ValueError("Boom")
+def kernel_fail(
+    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: Any
+) -> Dict[str, Ref]:
+    raise RuntimeError("Kernel Crash")
 
 
 # --- Tests ---
 
 
 @pytest.fixture
-def registry():
-    reg = CodeRegistry()
-    reg.register("hash_add", sync_add)
-    reg.register("hash_mul", async_mul)
-    reg.register("hash_fail", sync_fail)
-    return reg
+def resources():
+    r = ResourceRegistry()
+    r.register("config", {"version": "1.0"})
+    return r
 
 
 @pytest.fixture
-def store():
-    return MockObjectStore()
+def kernel(resources):
+    func_map = {
+        "node_ident": kernel_identity,
+        "node_res": kernel_resource_access,
+        "node_fail": kernel_fail,
+    }
+    return PhysicsKernel(func_map, resources)
 
 
-@pytest.fixture
-def delegate(store, registry):
-    return LocalComputeDelegate(store, registry)
+def test_kernel_identity_execution(kernel):
+    node = PhysicsFuncNode(id="node_ident", name="Identity")
+    input_ref = Ref(uri="mem://input-123")
+    
+    inputs = {"in": input_ref}
+    outputs = kernel.execute(node, inputs)
+    
+    assert outputs["out"] == input_ref
 
 
-@pytest.mark.asyncio
-async def test_submit_sync_task(delegate, store):
-    # Prepare inputs
-    ref_a = store.put(10)
-    ref_b = store.put(20)
-
-    # Submit
-    result_ref = await delegate.submit(
-        "hash_add", {"0": ref_a, "1": ref_b}, config={}
-    )
-
-    # Verify
-    result = store.get(result_ref)
-    assert result == 30
+def test_kernel_resource_access(kernel):
+    node = PhysicsFuncNode(id="node_res", name="ResourceUser")
+    
+    outputs = kernel.execute(node, {})
+    
+    assert outputs["out"].uri == "mem://config-1.0"
 
 
-@pytest.mark.asyncio
-async def test_submit_async_task(delegate, store):
-    # Prepare inputs
-    ref_a = store.put(10)
-    ref_b = store.put(20)
-
-    # Submit
-    result_ref = await delegate.submit(
-        "hash_mul", {"a": ref_a, "b": ref_b}, config={}
-    )
-
-    # Verify
-    result = store.get(result_ref)
-    assert result == 200
+def test_kernel_missing_mapping(kernel):
+    node = PhysicsFuncNode(id="node_unknown", name="Unknown")
+    
+    with pytest.raises(ValueError, match="No kernel function mapped"):
+        kernel.execute(node, {})
 
 
-@pytest.mark.asyncio
-async def test_argument_resolution_mixed(delegate, store, registry):
-    # Register a function taking mixed args
-    def mixed(a, b, c=0):
-        return a + b + c
-
-    registry.register("hash_mixed", mixed)
-
-    ref_1 = store.put(1)
-    ref_2 = store.put(2)
-    ref_3 = store.put(3)
-
-    # Submit with positional '0', '1' and keyword 'c'
-    result_ref = await delegate.submit(
-        "hash_mixed", {"0": ref_1, "1": ref_2, "c": ref_3}, config={}
-    )
-
-    assert store.get(result_ref) == 6
-
-
-@pytest.mark.asyncio
-async def test_exception_propagation(delegate, store):
-    with pytest.raises(ValueError, match="Boom"):
-        await delegate.submit("hash_fail", {}, config={})
+def test_kernel_exception_propagation(kernel):
+    node = PhysicsFuncNode(id="node_fail", name="FailNode")
+    
+    with pytest.raises(RuntimeError, match="Kernel Crash"):
+        kernel.execute(node, {})
 ~~~~~
 
 ### 下一步建议
-我们已经成功实现了 `LocalComputeDelegate` 并通过了单元测试。这标志着 v3.1 架构中“计算委托”组件的就绪。
-根据路线图，第三阶段的另一半是 **建立内核执行器 (`PhysicsKernel`)**。这将是纯同步的、基于 `Ref` 操作的核心组件，负责运行标准库中的 `Bleacher`, `Stainer` 等。建议下一步实现 `PhysicsKernel`。
+我们已经完成了 **Phase 3** 的核心组件：`LocalComputeDelegate` 和 `PhysicsKernel`。
+下一步，我们需要进入 **第四阶段：标准库同步化 (Phase 4: StdLib Synchronization)**。这涉及到重写 `cascade-std` 中的核心 ICs（`Bleacher`, `Stainer` 等），使其适应新的 `Ref` 模型和同步签名。这将是连接 Kernel 与具体业务逻辑的关键一步。

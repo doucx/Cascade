@@ -1,44 +1,3 @@
-## [WIP] test: 添加 Machine 跨界集成测试
-
-### 用户需求
-
-编写一个新的集成测试 `tests/vm/integration/test_machine_integration.py`，用于验证 `Machine`、`Reactor`（同步内核）和 `LocalComputeService`（异步计算平面）之间的端到端协作。
-
-该测试需要满足：
-1.  **自动化图生成**：使用 `IRGenerator` 和 `Builder` 从 Python 代码生成物理图。
-2.  **避免硬编码**：使用 `CodeRegistry` 和 `ResourceRegistry` 进行标准的依赖注入。
-3.  **黑盒验证**：通过 `EventBus` 捕获任务完成事件来验证结果，而不是直接窥探内存。
-
-### 评论
-
-这将是 Cascade 3.3 架构的“验收测试”。它不仅证明了同步内核可以正确驱动异步任务，还验证了新的 `Machine` 类能够正确地协调这两者，并在任务完成后自动退出。这是一个非常关键的里程碑。
-
-### 目标
-
-1.  创建 `tests/vm/integration/test_machine_integration.py`。
-2.  定义一个包含异步操作的 `@task`。
-3.  手动组装 `Machine` 的运行环境（不使用 `EventDrivenRunner`，而是直接实例化各个组件以验证 `Machine` 的独立性）。
-4.  执行 `Machine.run()` 并断言最终结果正确。
-
-### 基本原理
-
-通过手动组装 `ObjectStore`, `CodeRegistry`, `ResourceRegistry`, `Reactor`, `LocalComputeService` 并将它们喂给 `Machine`，我们模拟了生产环境的启动流程。这种“白板”风格的测试能最大程度地暴露组件间的接口不匹配或隐式依赖问题。
-
-### 标签
-
-#intent/test #flow/ready #priority/high #comp/tests #comp/runtime #concept/executor #task/domain/testing #task/object/machine-integration #task/action/implement #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建集成测试文件
-
-~~~~~act
-write_file
-tests/vm/integration/test_machine_integration.py
-~~~~~
-~~~~~python
 import pytest
 import asyncio
 from typing import Dict, Callable
@@ -182,10 +141,3 @@ async def test_machine_e2e_integration():
     
     final_value = store.get(result_ref)
     assert final_value == 50  # 10 * 5
-~~~~~
-
-### 下一步建议
-
-运行此测试以验证 `Machine` 的功能：`pytest tests/vm/integration/test_machine_integration.py`。
-
-如果测试通过，我们就可以进入 **任务 4.1**：重写架构白皮书，正式确立“基于引用的计算物理场”和“绝对同步内核”作为 Cascade 3.3 的官方架构。这将标志着我们从探索阶段正式进入稳定化阶段。

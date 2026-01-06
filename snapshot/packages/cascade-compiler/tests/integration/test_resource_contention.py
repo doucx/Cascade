@@ -141,18 +141,32 @@ async def test_resource_scarcity_topology_and_execution():
     print("\n--- Physical Field Event Log (Manual + Observed) ---")
 
     def debug_wrapper(func, name):
-        @functools.wraps(func)
-        async def wrapped(*args, **kwargs):
-            print(f"[MAN-START] {name}")
-            try:
-                result = await func(*args, **kwargs)
-                print(f"[MAN-END  ] {name}")
-                return result
-            except Exception as e:
-                print(f"[MAN-ERROR] {name}: {e}")
-                raise
-
-        return wrapped
+        import inspect
+        
+        if inspect.iscoroutinefunction(func):
+            @functools.wraps(func)
+            async def async_wrapped(*args, **kwargs):
+                print(f"[MAN-START] {name}")
+                try:
+                    result = await func(*args, **kwargs)
+                    print(f"[MAN-END  ] {name}")
+                    return result
+                except Exception as e:
+                    print(f"[MAN-ERROR] {name}: {e}")
+                    raise
+            return async_wrapped
+        else:
+            @functools.wraps(func)
+            def sync_wrapped(*args, **kwargs):
+                print(f"[MAN-START] {name}")
+                try:
+                    result = func(*args, **kwargs)
+                    print(f"[MAN-END  ] {name}")
+                    return result
+                except Exception as e:
+                    print(f"[MAN-ERROR] {name}: {e}")
+                    raise
+            return sync_wrapped
 
     func_map = {}
     for node_id, node in physical_graph.nodes.items():

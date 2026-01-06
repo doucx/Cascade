@@ -18,6 +18,7 @@ from cascade.std.triad.stainer import standard_stainer
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.probe.const import const_probe
+from cascade.spec.physical.object import Ref
 
 
 # --- Mocks ---
@@ -26,7 +27,19 @@ from cascade.std.probe.const import const_probe
 def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     worker_input_token = inputs["worker_input"]
     worker_payload = worker_input_token.payload
+    
+    # Handle Ref-based payload (v3.1)
     val = worker_payload["x"]
+    if isinstance(val, Ref):
+        # In this specific test, we know const_probe hoists scalar values.
+        # So we can peek at meta. In a real worker, we'd use store.get().
+        if "scalar_value" in val.meta:
+            val = val.meta["scalar_value"]
+        else:
+            # Fallback for completeness, though test setup should ensure hoisting
+            store = resources.get("system.object_store")
+            val = store.get(val)
+
     return {"worker_result": Token(payload=val + 1)}
 
 

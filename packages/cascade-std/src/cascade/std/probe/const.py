@@ -2,7 +2,7 @@ from typing import Dict, Any
 from cascade.spec.physical.nodes import Token, PhysicsNode
 
 
-async def const_probe(
+def const_probe(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     # Assuming the input port is named 'value'
@@ -12,6 +12,14 @@ async def const_probe(
     # Ref-Based Architecture:
     # Probes are responsible for materializing external/static data into Refs.
     store = resources.get("system.object_store")
-    ref = store.put(raw_value)
+
+    # Scalar Hoisting:
+    # If the value is a scalar, we hoist it into metadata so Kernel ICs (Allocator)
+    # can read it without I/O.
+    meta = {}
+    if isinstance(raw_value, (int, float, bool, str)) and len(str(raw_value)) < 1024:
+        meta["scalar_value"] = raw_value
+
+    ref = store.put(raw_value, metadata=meta)
 
     return {"out": Token(payload=ref, trace=val_token.trace)}

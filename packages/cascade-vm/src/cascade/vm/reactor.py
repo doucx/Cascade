@@ -144,9 +144,10 @@ class Reactor:
             if inspect.iscoroutinefunction(func):
                 result_tokens = await func(input_data, node, self.resource_registry)
             else:
-                result_tokens = await self.executor.submit(
-                    func, (input_data, node, self.resource_registry)
-                )
+                # Sync Kernel Activation: Direct Execution
+                # For high-performance ICs (Allocator, Bleacher, etc.), we execute
+                # directly on the reactor thread to avoid executor overhead.
+                result_tokens = func(input_data, node, self.resource_registry)
 
             if not isinstance(result_tokens, dict):
                 raise ValueError(

@@ -24,6 +24,7 @@ from cascade.std.triad.observer import standard_observer
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.probe.const import const_probe
+from cascade.spec.physical.object import Ref
 
 
 @task
@@ -43,6 +44,10 @@ def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     # Simulate execution duration
     payload = worker_input_token.payload
     duration = payload.get("duration", 0.0)
+
+    # Adapt to Ref-Based Architecture
+    if isinstance(duration, Ref):
+        duration = duration.meta.get("scalar_value", 0.0)
 
     # We cheat a bit and sleep async here to allow reactor to switch contexts
     # In a real ThreadPool executor, this would be time.sleep
@@ -141,18 +146,36 @@ async def test_resource_scarcity_topology_and_execution():
     print("\n--- Physical Field Event Log (Manual + Observed) ---")
 
     def debug_wrapper(func, name):
-        @functools.wraps(func)
-        async def wrapped(*args, **kwargs):
-            print(f"[MAN-START] {name}")
-            try:
-                result = await func(*args, **kwargs)
-                print(f"[MAN-END  ] {name}")
-                return result
-            except Exception as e:
-                print(f"[MAN-ERROR] {name}: {e}")
-                raise
+        import inspect
 
-        return wrapped
+        if inspect.iscoroutinefunction(func):
+
+            @functools.wraps(func)
+            async def async_wrapped(*args, **kwargs):
+                print(f"[MAN-START] {name}")
+                try:
+                    result = await func(*args, **kwargs)
+                    print(f"[MAN-END  ] {name}")
+                    return result
+                except Exception as e:
+                    print(f"[MAN-ERROR] {name}: {e}")
+                    raise
+
+            return async_wrapped
+        else:
+
+            @functools.wraps(func)
+            def sync_wrapped(*args, **kwargs):
+                print(f"[MAN-START] {name}")
+                try:
+                    result = func(*args, **kwargs)
+                    print(f"[MAN-END  ] {name}")
+                    return result
+                except Exception as e:
+                    print(f"[MAN-ERROR] {name}: {e}")
+                    raise
+
+            return sync_wrapped
 
     func_map = {}
     for node_id, node in physical_graph.nodes.items():

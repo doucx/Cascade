@@ -10,7 +10,7 @@ from cascade.reflection import PhysicalIdGenerator
 logger = logging.getLogger(__name__)
 
 
-async def standard_dispatcher(
+def standard_dispatcher(
     inputs: Dict[str, Token], node: WorkerNode, resources: Any
 ) -> Dict[str, Token]:
     # 1. Extract input refs from the token prepared by the Bleacher.
@@ -44,7 +44,7 @@ async def standard_dispatcher(
     # 6. Get the compute queue from the resource registry and dispatch.
     try:
         compute_queue = resources.get("system.compute_queue")
-        await compute_queue.put(request)
+        compute_queue.put_nowait(request)
     except KeyError:
         logger.error(
             "Resource 'system.compute_queue' not found. Cannot dispatch compute request."

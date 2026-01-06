@@ -1,7 +1,7 @@
 {
   "resource_requestor": {
-    "baseline_code_signature_text": "async def resource_requestor(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "cd92c5dea26d97724a91d246bdfc477a72ab4e2693cfbeb1400f7a7fd8affeaa",
+    "baseline_code_signature_text": "def resource_requestor(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "cfe37b04fbdefa908010888aafa09ef063ff1720a314ebe3bd1a5a42b162ad3f",
     "baseline_yaml_content_hash": "54cb049ea20edb7cd975ba09d65e8b15bcbe6f96f599219e641068f3232f3980"
   }
 }

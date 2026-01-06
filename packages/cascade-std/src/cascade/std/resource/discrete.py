@@ -1,6 +1,7 @@
-from typing import Dict, Any
+from typing import Dict, Any, Union
 from dataclasses import dataclass
 from cascade.spec.physical.nodes import Token, PhysicsNode
+from cascade.spec.physical.object import Ref
 
 
 @dataclass
@@ -9,19 +10,35 @@ class DiscreteLedger:
     available: int
 
 
-async def discrete_allocator(
+def _extract_scalar(payload: Any) -> Union[int, float]:
+    if isinstance(payload, Ref):
+        # v3.1: Try to get hoisted scalar
+        if "scalar_value" in payload.meta:
+            return payload.meta["scalar_value"]
+        # If not hoisted, we technically can't read it in Kernel.
+        # But for now we fail gracefully or return 0?
+        # Raising error is better to catch missing hoisting.
+        raise ValueError(
+            f"Ref {payload.uri} missing 'scalar_value' metadata for Kernel access."
+        )
+    return payload
+
+
+def discrete_allocator(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload
-    # Ideally we should clone or re-instantiate if immutable, but for now we mutate in place for perf
+
+    # Extract Ledger (Handle Ref if ledger itself is ref-based in future, currently payload is obj)
+    # For now ledger payload is passed as-is (PhysicsDataNode initial_payload)
     if isinstance(ledger_data, dict):
         ledger = DiscreteLedger(**ledger_data)
     else:
         ledger = ledger_data
 
     req_token = inputs["req_in"]
-    req_amount = req_token.payload
+    req_amount = _extract_scalar(req_token.payload)
 
     outputs: Dict[str, Token] = {}
 
@@ -36,7 +53,7 @@ async def discrete_allocator(
             out_port = f"gnt_for_{requestor_id}"
             outputs[out_port] = Token(payload=req_amount, trace=req_token.trace)
         else:
-            # Fallback for legacy/testing (should generally not happen in valid graph)
+            # Fallback for legacy/testing
             outputs["gnt_out"] = Token(payload=req_amount, trace=req_token.trace)
     else:
         # Reject & Recirculate
@@ -46,7 +63,7 @@ async def discrete_allocator(
     return outputs
 
 
-async def discrete_reclaimer(
+def discrete_reclaimer(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     ledger_token = inputs["ledger_in"]
@@ -57,7 +74,7 @@ async def discrete_reclaimer(
         ledger = ledger_data
 
     rel_token = inputs["rel_in"]
-    release_amount = rel_token.payload
+    release_amount = _extract_scalar(rel_token.payload)
 
     # Replenish
     ledger.available = min(ledger.total, ledger.available + release_amount)

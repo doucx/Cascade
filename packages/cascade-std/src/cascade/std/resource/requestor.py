@@ -2,7 +2,7 @@ from typing import Dict, Any
 from cascade.spec.physical.nodes import Token, PhysicsNode
 
 
-async def resource_requestor(
+def resource_requestor(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
     amount_token = inputs["amount"]

@@ -4,18 +4,18 @@
     "baseline_code_structure_hash": "23b2a130f3d9bb673902f05b8afb34ead769f8e008529da713f46a684b6031e2"
   },
   "test_stainer_error_case": {
-    "baseline_code_signature_text": "async def test_stainer_error_case():",
-    "baseline_code_structure_hash": "193e60739cbafe6bcbd5f6a3c9c2a1c881b5a9936f921a5bc044ce57841b2a54",
+    "baseline_code_signature_text": "def test_stainer_error_case():",
+    "baseline_code_structure_hash": "eeba5255db142f0414c43b3337ea55e50088574437af1d791b8e7f4fcb162675",
     "baseline_yaml_content_hash": "69ee05fca92b540b9b41b538fdea6fe848cb5fdfce44ee1ad3e532f5df8e6b6e"
   },
   "test_stainer_handles_missing_start_ts_gracefully": {
-    "baseline_code_signature_text": "async def test_stainer_handles_missing_start_ts_gracefully():",
-    "baseline_code_structure_hash": "a1c7784292b4df77fd1fea7e3f118b4606f2f9b8469f110cee7743cfe0c6fa1c",
+    "baseline_code_signature_text": "def test_stainer_handles_missing_start_ts_gracefully():",
+    "baseline_code_structure_hash": "5962a43ccd72f252098d6d3f448e83ca1d5fc180ce133370ce275eff222ba3f9",
     "baseline_yaml_content_hash": "13b5dca5c5d21c4dabbc39014647c268a56160236680764db20b584657be3f38"
   },
   "test_stainer_success_case": {
-    "baseline_code_signature_text": "async def test_stainer_success_case():",
-    "baseline_code_structure_hash": "bb6fb8c36ffba759c4bf282dfce330dc508c568296ec6d48b0a28bb7b4b07cfc",
+    "baseline_code_signature_text": "def test_stainer_success_case():",
+    "baseline_code_structure_hash": "aaebe6ad45a5c2d081a34f680f57e9081f17d3e2df271478798121f80aedf3cb",
     "baseline_yaml_content_hash": "0979bb74a552e1e7686014411d23d5fc18772d7d3a7acea87345b62205ae5fe9"
   }
 }

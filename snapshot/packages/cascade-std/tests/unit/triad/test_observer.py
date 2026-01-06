@@ -18,9 +18,7 @@ def mock_resources(mock_bus: MagicMock) -> MagicMock:
     return registry
 
 
-def test_observer_publishes_ir_to_bus(
-    mock_bus: MagicMock, mock_resources: MagicMock
-):
+def test_observer_publishes_ir_to_bus(mock_bus: MagicMock, mock_resources: MagicMock):
     # 1. Prepare Input
     ir_payload: EventIR = {
         "v": "1.0",

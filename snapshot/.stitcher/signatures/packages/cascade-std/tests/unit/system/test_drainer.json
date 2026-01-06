@@ -1,6 +1,6 @@
 {
   "test_drain_signal_produces_correct_token": {
-    "baseline_code_signature_text": "async def test_drain_signal_produces_correct_token():",
-    "baseline_code_structure_hash": "be581793becf29d41c160a8c989f39a329d3e34da6bd210f1305ab0b26c4eb05"
+    "baseline_code_signature_text": "def test_drain_signal_produces_correct_token():",
+    "baseline_code_structure_hash": "f9c3d79291b3918a449c9af46c1ae45b37ab53634ee4c2511b60802459af7302"
   }
 }

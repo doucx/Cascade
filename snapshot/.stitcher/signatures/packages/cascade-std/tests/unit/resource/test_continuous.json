@@ -10,12 +10,12 @@
     "baseline_yaml_content_hash": "88a99e289e41b9f34b66c6cf53066b17ceb5897f7f4b2266e319c1031ce0480d"
   },
   "test_continuous_allocator_grants_memory": {
-    "baseline_code_signature_text": "async def test_continuous_allocator_grants_memory(partial_ledger):",
-    "baseline_code_structure_hash": "1366592a116e24a84ee76747dd59da50abb5a39b2b2c9a4308e27992444a1298"
+    "baseline_code_signature_text": "def test_continuous_allocator_grants_memory(partial_ledger):",
+    "baseline_code_structure_hash": "bd43e929e7c6fad8dd52ca2068f8661edbbaf4b976751fb9f5ccf8e7d4df7f63"
   },
   "test_continuous_allocator_recirculates_large_request": {
-    "baseline_code_signature_text": "async def test_continuous_allocator_recirculates_large_request(starved_ledger):",
-    "baseline_code_structure_hash": "62c86b635b61a61e4b796e02721e2e8eb1d32309c912e08c9baa39e8c3609e59"
+    "baseline_code_signature_text": "def test_continuous_allocator_recirculates_large_request(starved_ledger):",
+    "baseline_code_structure_hash": "93cf407674ad8e5228f60888ed365ce951b51733e0eb3427fcf560f7deca6efe"
   },
   "test_continuous_broker_grants_memory": {
     "baseline_code_signature_text": "async def test_continuous_broker_grants_memory():",
@@ -30,7 +30,7 @@
     "baseline_code_structure_hash": "cefd1f3832a00de5c186a5176a88c89736841da43a60e5259b6f206d5fb4fab9"
   },
   "test_continuous_reclaimer_replenish": {
-    "baseline_code_signature_text": "async def test_continuous_reclaimer_replenish():",
-    "baseline_code_structure_hash": "7e6200c3480eb2596a896e6c946ccdd13cdba9d7883c840aca36af9184bbdf0e"
+    "baseline_code_signature_text": "def test_continuous_reclaimer_replenish():",
+    "baseline_code_structure_hash": "04751dcb8fdba6a5c76350c50fe86f3dffafffe4082887e172c4b065b65f8c94"
   }
 }

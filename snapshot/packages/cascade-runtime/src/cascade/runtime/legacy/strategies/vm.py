@@ -5,7 +5,7 @@ from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.reflection import ReflectionAnalyzer
 
 
-from cascade.runtime.legacy.strategies.base import ExecutionContext
+from cascade.spec.runtime import ExecutionContext
 
 
 class VMExecutionStrategy:

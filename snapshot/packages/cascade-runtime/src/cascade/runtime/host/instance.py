@@ -31,7 +31,7 @@ from cascade.runtime.legacy.strategies import (
     GraphExecutionStrategy,
     VMExecutionStrategy,
 )
-from cascade.runtime.legacy.strategies.base import ExecutionContext
+from cascade.spec.runtime import ExecutionContext
 
 
 class Engine:

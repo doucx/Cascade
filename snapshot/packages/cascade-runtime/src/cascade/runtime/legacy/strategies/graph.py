@@ -15,7 +15,7 @@ from cascade.runtime.legacy.flow import FlowManager
 from cascade.runtime.errors import DependencyMissingError
 from cascade.runtime.services.observability.events import TaskSkipped, TaskBlocked
 from cascade.runtime.services.constraints.manager import ConstraintManager
-from cascade.runtime.legacy.strategies.base import ExecutionContext
+from cascade.spec.runtime import ExecutionContext
 
 
 class GraphExecutionResult:

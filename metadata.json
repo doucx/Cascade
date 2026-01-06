@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] test: 添加 Machine 跨界集成测试", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767694693.81935, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 修复 LocalComputeService 竞态条件并增强 Machine 日志", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767694915.2728305, "duration_ms": 0}}

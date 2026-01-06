@@ -31,10 +31,22 @@ class Machine:
                 fired_count = self.reactor.step()
 
                 # 2. Check for Quiescence
+                ingress_empty = self.ingress_queue.empty()
+                compute_idle = self.compute_service.is_idle()
+
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        f"Machine Step: fired={fired_count}, "
+                        f"ingress_empty={ingress_empty}, "
+                        f"compute_idle={compute_idle} "
+                        f"(inbound={self.compute_service.inbound_queue.qsize()}, "
+                        f"active={self.compute_service._active_count})"
+                    )
+
                 # If the reactor did nothing, and there's no pending I/O...
-                if fired_count == 0 and self.ingress_queue.empty():
+                if fired_count == 0 and ingress_empty:
                     # ...and the compute service has no active workers...
-                    if self.compute_service.is_idle():
+                    if compute_idle:
                         logger.info("Machine idle. Stopping.")
                         break
 

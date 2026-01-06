@@ -1,191 +1,274 @@
-## [WIP] test: 添加 Machine 跨界集成测试
+## [WIP] fix: 修复 LocalComputeService 竞态条件并增强 Machine 日志
+
+### 错误分析
+
+用户报告的测试失败（`AssertionError`）实际上是由 `LocalComputeService` 和 `Machine` 之间的一个微小的**竞态条件**引起的。
+
+1.  **真空期 (The Vacuum)**: 当 `LocalComputeService` 从 `inbound_queue` 中取出一个请求 (`get()`)，但还没有来得及启动处理协程 (`_process_request`) 时，存在一个极其短暂的时间窗口。
+2.  **状态误判**: 在这个窗口期内，`inbound_queue` 是空的（请求已被取出），而 `_active_count` 也是 0（协程还未开始执行并增加计数）。
+3.  **过早退出**: 如果 `Machine` 恰好在这个时刻检查 `is_idle()`，它会错误地认为系统已经处理完所有任务，从而过早终止运行，导致下游节点（如 Stainer 或最终输出节点）从未收到结果，最终测试断言失败。
+
+**解决方案**:
+我们将修改 `LocalComputeService` 的计数逻辑，采用**“预增加 (Pre-increment)”**策略：在从队列取出请求的那一刻立即增加 `_active_count`，确保存储在“空中”的任务被正确统计。
+
+同时，响应用户的请求，我们将为 `Machine` 及其组件添加详细的结构化日志，以便清晰地观察状态流转。
 
 ### 用户需求
 
-编写一个新的集成测试 `tests/vm/integration/test_machine_integration.py`，用于验证 `Machine`、`Reactor`（同步内核）和 `LocalComputeService`（异步计算平面）之间的端到端协作。
-
-该测试需要满足：
-1.  **自动化图生成**：使用 `IRGenerator` 和 `Builder` 从 Python 代码生成物理图。
-2.  **避免硬编码**：使用 `CodeRegistry` 和 `ResourceRegistry` 进行标准的依赖注入。
-3.  **黑盒验证**：通过 `EventBus` 捕获任务完成事件来验证结果，而不是直接窥探内存。
+1.  解决测试失败的问题。
+2.  插入日志以监视状态。
 
 ### 评论
 
-这将是 Cascade 3.3 架构的“验收测试”。它不仅证明了同步内核可以正确驱动异步任务，还验证了新的 `Machine` 类能够正确地协调这两者，并在任务完成后自动退出。这是一个非常关键的里程碑。
+这是一个非常经典的异步并发 bug，也是我们进行“黑盒集成测试”的价值所在——它在代码合并到主分支前暴露了这种时序依赖问题。修复这个问题将显著提高 `Machine` 在高并发场景下的稳定性。
 
 ### 目标
 
-1.  创建 `tests/vm/integration/test_machine_integration.py`。
-2.  定义一个包含异步操作的 `@task`。
-3.  手动组装 `Machine` 的运行环境（不使用 `EventDrivenRunner`，而是直接实例化各个组件以验证 `Machine` 的独立性）。
-4.  执行 `Machine.run()` 并断言最终结果正确。
+1.  修改 `LocalComputeService`，实现 active count 的预增加逻辑。
+2.  增强 `Machine` 的日志，使其输出每次循环的决策依据（Reactor Fired Count, Queue Sizes, Idle State）。
+3.  更新测试配置，启用日志输出。
 
 ### 基本原理
 
-通过手动组装 `ObjectStore`, `CodeRegistry`, `ResourceRegistry`, `Reactor`, `LocalComputeService` 并将它们喂给 `Machine`，我们模拟了生产环境的启动流程。这种“白板”风格的测试能最大程度地暴露组件间的接口不匹配或隐式依赖问题。
+通过消除任务状态的“真空期”，我们确保 `Machine` 只有在真正的“全局静止”状态下才会退出。增强的日志则提供了必要的可观测性，让我们能确信系统是按预期工作的。
 
 ### 标签
 
-#intent/test #flow/ready #priority/high #comp/tests #comp/runtime #concept/executor #task/domain/testing #task/object/machine-integration #task/action/implement #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/testing #task/object/machine-integration #task/action/fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建集成测试文件
+#### Acts 1: 修复 LocalComputeService 的竞态条件
+
+我们将修改 `run` 方法以在取出任务时立即增加计数，并修改 `_process_request` 以仅负责减少计数。
 
 ~~~~~act
-write_file
+patch_file
+packages/cascade-vm/src/cascade/vm/compute/service.py
+~~~~~
+~~~~~python.old
+    async def run(self) -> None:
+        self._running = True
+        logger.info("LocalComputeService started.")
+        try:
+            while self._running:
+                request = await self.inbound_queue.get()
+                # Create a non-blocking task for each request to allow concurrency
+                asyncio.create_task(self._process_request(request))
+        finally:
+            self._pool.shutdown(wait=False)
+            logger.info("LocalComputeService stopped.")
+
+    def stop(self) -> None:
+        self._running = False
+        # To unblock the `run` loop, we can put a sentinel value,
+        # but for now, we assume the managing task will be cancelled.
+
+    async def _process_request(self, request: ComputeRequest) -> None:
+        self._active_count += 1
+        try:
+            # 1. Resolve Inputs
+            inputs: Dict[str, Any] = {
+                key: self.store.get(ref) for key, ref in request.input_refs.items()
+            }
+            args, kwargs = self._resolve_arguments(inputs)
+
+            # 2. Resolve Code
+            func = self.registry.get(request.code_hash)
+
+            # 3. Execute
+            if inspect.iscoroutinefunction(func):
+                result = await func(*args, **kwargs)
+            else:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(
+                    self._pool, lambda: func(*args, **kwargs)
+                )
+        except Exception as e:
+            logger.exception(
+                f"Computation failed for request on code {request.code_hash}"
+            )
+            # Per v3.1 spec, exceptions are treated as values
+            result = e
+
+        # 4. Store Result and Prepare Token
+        result_ref = self.store.put(result)
+        result_token = Token(payload=result_ref, trace=request.trace)
+
+        # 5. Report Completion to Outbound Queue
+        await self.outbound_queue.put((request.reply_to_nid, result_token))
+~~~~~
+~~~~~python.new
+    async def run(self) -> None:
+        self._running = True
+        logger.info("LocalComputeService started.")
+        try:
+            while self._running:
+                request = await self.inbound_queue.get()
+                # Pre-increment active count to avoid race condition where
+                # queue is empty but task hasn't started yet.
+                self._active_count += 1
+                # Create a non-blocking task for each request to allow concurrency
+                asyncio.create_task(self._process_request(request))
+        finally:
+            self._pool.shutdown(wait=False)
+            logger.info("LocalComputeService stopped.")
+
+    def stop(self) -> None:
+        self._running = False
+        # To unblock the `run` loop, we can put a sentinel value,
+        # but for now, we assume the managing task will be cancelled.
+
+    async def _process_request(self, request: ComputeRequest) -> None:
+        # Note: self._active_count is incremented in run() before calling this
+        try:
+            # 1. Resolve Inputs
+            inputs: Dict[str, Any] = {
+                key: self.store.get(ref) for key, ref in request.input_refs.items()
+            }
+            args, kwargs = self._resolve_arguments(inputs)
+
+            # 2. Resolve Code
+            func = self.registry.get(request.code_hash)
+
+            # 3. Execute
+            if inspect.iscoroutinefunction(func):
+                result = await func(*args, **kwargs)
+            else:
+                loop = asyncio.get_running_loop()
+                result = await loop.run_in_executor(
+                    self._pool, lambda: func(*args, **kwargs)
+                )
+        except Exception as e:
+            logger.exception(
+                f"Computation failed for request on code {request.code_hash}"
+            )
+            # Per v3.1 spec, exceptions are treated as values
+            result = e
+        finally:
+            self._active_count -= 1
+
+        # 4. Store Result and Prepare Token
+        result_ref = self.store.put(result)
+        result_token = Token(payload=result_ref, trace=request.trace)
+
+        # 5. Report Completion to Outbound Queue
+        await self.outbound_queue.put((request.reply_to_nid, result_token))
+~~~~~
+
+#### Acts 2: 增强 Machine 日志
+
+在 `Machine.run` 中添加 DEBUG 级别的状态日志。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/machine.py
+~~~~~
+~~~~~python.old
+    async def run(self) -> None:
+        logger.info("Machine started.")
+
+        # Start the Compute Service
+        service_task = asyncio.create_task(self.compute_service.run())
+
+        try:
+            while True:
+                # 1. Drive the Physics Kernel (Synchronous Step)
+                fired_count = self.reactor.step()
+
+                # 2. Check for Quiescence
+                # If the reactor did nothing, and there's no pending I/O...
+                if fired_count == 0 and self.ingress_queue.empty():
+                    # ...and the compute service has no active workers...
+                    if self.compute_service.is_idle():
+                        logger.info("Machine idle. Stopping.")
+                        break
+
+                    # If we are just waiting for Compute, yield to the event loop
+                    # to give the Service a chance to work.
+                    await asyncio.sleep(0.001)
+                else:
+                    # If we did work, yield briefly to allow I/O ingress processing
+                    # but return quickly to sustain high throughput.
+                    await asyncio.sleep(0)
+~~~~~
+~~~~~python.new
+    async def run(self) -> None:
+        logger.info("Machine started.")
+
+        # Start the Compute Service
+        service_task = asyncio.create_task(self.compute_service.run())
+
+        try:
+            while True:
+                # 1. Drive the Physics Kernel (Synchronous Step)
+                fired_count = self.reactor.step()
+
+                # 2. Check for Quiescence
+                ingress_empty = self.ingress_queue.empty()
+                compute_idle = self.compute_service.is_idle()
+
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        f"Machine Step: fired={fired_count}, "
+                        f"ingress_empty={ingress_empty}, "
+                        f"compute_idle={compute_idle} "
+                        f"(inbound={self.compute_service.inbound_queue.qsize()}, "
+                        f"active={self.compute_service._active_count})"
+                    )
+
+                # If the reactor did nothing, and there's no pending I/O...
+                if fired_count == 0 and ingress_empty:
+                    # ...and the compute service has no active workers...
+                    if compute_idle:
+                        logger.info("Machine idle. Stopping.")
+                        break
+
+                    # If we are just waiting for Compute, yield to the event loop
+                    # to give the Service a chance to work.
+                    await asyncio.sleep(0.001)
+                else:
+                    # If we did work, yield briefly to allow I/O ingress processing
+                    # but return quickly to sustain high throughput.
+                    await asyncio.sleep(0)
+~~~~~
+
+#### Acts 3: 更新测试以启用日志
+
+更新 `test_machine_integration.py`，配置 logging 到 stderr。
+
+~~~~~act
+patch_file
 tests/vm/integration/test_machine_integration.py
 ~~~~~
-~~~~~python
-import pytest
-import asyncio
-from typing import Dict, Callable
-
-# Cascade DSL & Compiler
-from cascade.spec.dsl.task import task
-from cascade.compiler.frontend import IRGenerator
-from cascade.compiler.backend import Builder
-from cascade.spec.physical.environment import EnvironmentDef
-
-# Runtime Components
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.runtime.storage import InMemoryObjectStore
-from cascade.vm.compute.service import LocalComputeService
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-from cascade.vm.machine import Machine
-from cascade.spec.physical.object import Ref
-
-# Observability
-from cascade.runtime.services.observability.bus import EventBus
-from cascade.runtime.services.observability.events import TaskExecutionFinished
-
-# Standard Library ICs
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-from cascade.std.triad.dispatcher import standard_dispatcher
-from cascade.std.probe.const import const_probe
-from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
-from cascade.std.resource.requestor import resource_requestor
-
-
-# --- 1. Define User Task ---
-@task
-async def async_multiplier(a: int, b: int) -> int:
-    # Simulate IO delay to ensure the Machine handles async suspension correctly
-    await asyncio.sleep(0.01)
-    return a * b
-
-
-@pytest.mark.asyncio
-async def test_machine_e2e_integration():
-    """
-    Verifies that the Machine can orchestrate a full end-to-end flow:
-    Compiler -> Physical Graph -> Reactor -> Dispatcher -> ComputeService -> Worker -> Result
-    """
-    # --- 2. Compilation ---
-    # Define a simple workflow: async_multiplier(10, 5)
-    workflow = async_multiplier(10, 5)
-
-    ir_gen = IRGenerator()
-    builder = Builder()
-    
-    graph_ir = ir_gen.generate(workflow)
-    assembly = builder.build(graph_ir, EnvironmentDef())
-    graph = assembly.graph
-
-    # --- 3. Infrastructure Setup ---
-    
-    # Storage & Registry
-    store = InMemoryObjectStore()
-    code_registry = CodeRegistry()
-
-    # Register the worker function based on the compiler's symbol table
-    worker_node_id = list(assembly.symbol_table.keys())[0]
-    canonical_hash = assembly.symbol_table[worker_node_id]
-    code_registry.register(canonical_hash, async_multiplier.func)
-
-    # Communication Channels
-    compute_queue = asyncio.Queue()
-    ingress_queue = asyncio.Queue()
-    event_bus = EventBus()
-
-    # Resource Registry (The "Environment" for ICs)
-    resources = ResourceRegistry()
-    resources.register("system.object_store", store)
-    resources.register("system.compute_queue", compute_queue)
-    resources.register("system.event_bus", event_bus)
-
-    # Compute Service (The Async Plane)
-    compute_service = LocalComputeService(
-        store=store,
-        registry=code_registry,
-        inbound_queue=compute_queue,
-        outbound_queue=ingress_queue
-    )
-
-    # Reactor Function Map (The Physical Plane Logic)
-    func_map: Dict[str, Callable] = {}
-    for nid in graph.nodes:
-        if nid.endswith(".bleach"):
-            func_map[nid] = standard_bleacher
-        elif nid.endswith(".stain"):
-            func_map[node_id := nid] = standard_stainer
-        elif nid.endswith(".worker"):
-            # Crucial: Map workers to the dispatcher, NOT the user function
-            func_map[nid] = standard_dispatcher
-        elif nid.startswith("probe.const"):
-            func_map[nid] = const_probe
-        elif "observer" in nid:
-            func_map[nid] = standard_observer
-        elif "allocator" in nid:
-            func_map[nid] = discrete_allocator
-        elif "reclaimer" in nid:
-            func_map[nid] = discrete_reclaimer
-        elif nid.startswith("req."):
-            func_map[nid] = resource_requestor
-
-    # Reactor
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory, func_map, resources, ingress_queue)
-    
-    # Prime the reactor (loads constants into memory)
-    reactor.prime()
-
-    # --- 4. Execution ---
-    
-    # The Machine coordinates the Reactor and ComputeService
-    machine = Machine(reactor, compute_service, ingress_queue)
-
-    # Attach an observer to verify the result
-    captured_events = []
-    event_bus.subscribe(TaskExecutionFinished, captured_events.append)
-
+~~~~~python.old
     # Run! (Should exit automatically when idle)
     await machine.run()
 
     # --- 5. Verification ---
     
     assert len(captured_events) == 1
-    event = captured_events[0]
+~~~~~
+~~~~~python.new
+    # Run! (Should exit automatically when idle)
+    # Enable logging to see Machine internals during test
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    # Silence asyncio debug logs
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
     
-    assert event.status == "Succeeded"
-    assert event.task_name == "async_multiplier"
+    await machine.run()
+
+    # --- 5. Verification ---
     
-    # Verify the actual calculated result
-    result_ref = event.result_preview
-    assert isinstance(result_ref, Ref)
-    
-    final_value = store.get(result_ref)
-    assert final_value == 50  # 10 * 5
+    assert len(captured_events) == 1
 ~~~~~
 
 ### 下一步建议
 
-运行此测试以验证 `Machine` 的功能：`pytest tests/vm/integration/test_machine_integration.py`。
+现在修复了核心的竞态条件并添加了日志，请再次运行测试：
+`pytest tests/vm/integration/test_machine_integration.py`
 
-如果测试通过，我们就可以进入 **任务 4.1**：重写架构白皮书，正式确立“基于引用的计算物理场”和“绝对同步内核”作为 Cascade 3.3 的官方架构。这将标志着我们从探索阶段正式进入稳定化阶段。
+如果通过，我们就可以自信地进入白皮书更新阶段。

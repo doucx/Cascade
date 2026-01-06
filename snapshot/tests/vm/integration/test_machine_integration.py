@@ -125,6 +125,12 @@ async def test_machine_e2e_integration():
     event_bus.subscribe(TaskExecutionFinished, captured_events.append)
 
     # Run! (Should exit automatically when idle)
+    # Enable logging to see Machine internals during test
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    # Silence asyncio debug logs
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    
     await machine.run()
 
     # --- 5. Verification ---

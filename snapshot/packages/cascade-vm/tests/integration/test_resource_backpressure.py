@@ -9,6 +9,8 @@ from cascade.compiler.backend.builder import Builder
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
+from cascade.vm.resource_registry import ResourceRegistry
+from cascade.runtime.storage import InMemoryObjectStore
 
 # Import new ICs
 from cascade.std.triad.bleacher import standard_bleacher
@@ -91,7 +93,12 @@ async def test_concurrency_limit():
             func_map[node_id] = noop_observer
 
     # 5. Initialize Reactor
-    reactor = Reactor(physical_graph, memory, executor, func_map)
+    # Probe needs an object store to materialize scalar values into Refs
+    registry = ResourceRegistry()
+    store = InMemoryObjectStore()
+    registry.register("system.object_store", store)
+    
+    reactor = Reactor(physical_graph, memory, executor, func_map, resource_registry=registry)
 
     # 6. Prime the reactor.
     reactor.prime()

@@ -7,7 +7,7 @@ from cascade.spec.physical.triad import StainNode
 from cascade.spec.physical.ports import PortRole
 
 
-async def standard_stainer(
+def standard_stainer(
     inputs: Dict[str, Token], node: StainNode, resources: Any
 ) -> Dict[str, Token]:
     end_mono = time.monotonic()

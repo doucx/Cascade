@@ -7,7 +7,10 @@ from cascade.spec.dsl.resources import ResourceDefinition, Inject
 from contextlib import contextmanager
 
 from cascade.runtime.services.observability.bus import EventBus
-from cascade.runtime.services.observability.events import ResourceAcquired, ResourceReleased
+from cascade.runtime.services.observability.events import (
+    ResourceAcquired,
+    ResourceReleased,
+)
 
 
 class ResourceContainer:

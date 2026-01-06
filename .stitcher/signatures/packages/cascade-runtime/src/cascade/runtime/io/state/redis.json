@@ -1,0 +1,47 @@
+{
+  "RedisStateBackend": {
+    "baseline_yaml_content_hash": "9d9685a60f761ccc2ceb10497988d225a6a2da309d1e36b0765b6c209501091f"
+  },
+  "RedisStateBackend.__init__": {
+    "baseline_code_signature_text": "def __init__(self, run_id: str, client: Any, ttl: int = 86400):",
+    "baseline_code_structure_hash": "12fe5b94509d1f9711c5d774e2638da6adaf53ecd53905f765eda33d2d118a55"
+  },
+  "RedisStateBackend._client": {},
+  "RedisStateBackend._results_key": {},
+  "RedisStateBackend._run_id": {},
+  "RedisStateBackend._skipped_key": {},
+  "RedisStateBackend._sync_mark_skipped": {
+    "baseline_code_signature_text": "def _sync_mark_skipped(self, node_id: str, reason: str):",
+    "baseline_code_structure_hash": "22d66ac958389ff96e7f2e76759e543105ea92105ecca5806d79a3e91a90b5cf"
+  },
+  "RedisStateBackend._sync_put": {
+    "baseline_code_signature_text": "def _sync_put(self, node_id: str, data: bytes):",
+    "baseline_code_structure_hash": "817c4902be0deeb131febd4a1d52463b2d6544f666db671021ce3f277e5d56e5"
+  },
+  "RedisStateBackend._ttl": {},
+  "RedisStateBackend.clear": {
+    "baseline_code_signature_text": "async def clear(self) -> None:",
+    "baseline_code_structure_hash": "1e1d110f0d48734e2552a9d1d1561437c16def8309d251c39c34e0312fdb6011",
+    "baseline_yaml_content_hash": "7e39ed33a51c342a8151bb840ca4e0d520231ff5ce38eb3aff406eb23daf1903"
+  },
+  "RedisStateBackend.get_result": {
+    "baseline_code_signature_text": "async def get_result(self, node_id: str) -> Optional[Any]:",
+    "baseline_code_structure_hash": "51418bf92cec6631beb3552551485f2acf34a8f96c917cbb7611cd62c6b63e60"
+  },
+  "RedisStateBackend.get_skip_reason": {
+    "baseline_code_signature_text": "async def get_skip_reason(self, node_id: str) -> Optional[str]:",
+    "baseline_code_structure_hash": "0fddd65837891612049ea67bc2f3dd668a0fd2597b3e84fa27e07f92a0f1e315"
+  },
+  "RedisStateBackend.has_result": {
+    "baseline_code_signature_text": "async def has_result(self, node_id: str) -> bool:",
+    "baseline_code_structure_hash": "3804e2a04b3507c99010837c3f8d45db9d438716cbbc57b162671c5f0ccaf690"
+  },
+  "RedisStateBackend.mark_skipped": {
+    "baseline_code_signature_text": "async def mark_skipped(self, node_id: str, reason: str) -> None:",
+    "baseline_code_structure_hash": "25910ebf3b914a401566c1f8fad34221b95acc460c520fc039cdb4c3b924a135"
+  },
+  "RedisStateBackend.put_result": {
+    "baseline_code_signature_text": "async def put_result(self, node_id: str, result: Any) -> None:",
+    "baseline_code_structure_hash": "0a0d2dc66a8690f5a2a1c7bdfa5418fde426a0a4a55d94eb7282f1a9f3965091"
+  }
+}

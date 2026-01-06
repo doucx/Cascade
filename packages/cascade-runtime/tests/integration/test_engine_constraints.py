@@ -239,7 +239,10 @@ async def test_engine_pauses_on_global_pause_constraint(mock_connector, bus_and_
 @pytest.mark.asyncio
 async def test_engine_pauses_and_resumes_specific_task(mock_connector, bus_and_spy):
     from cascade.spec.dsl.task import task
-    from cascade.runtime.services.observability.events import TaskExecutionStarted, TaskExecutionFinished
+    from cascade.runtime.services.observability.events import (
+        TaskExecutionStarted,
+        TaskExecutionFinished,
+    )
 
     bus, spy = bus_and_spy
     engine = Engine(

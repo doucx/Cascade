@@ -1,6 +1,16 @@
 from cascade.spec.ir.fingerprint import Fingerprint, InvalidFingerprintKeyError
-from cascade.spec.physical.nodes import Token, PhysicsNode, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
+from cascade.spec.physical.nodes import (
+    Token,
+    PhysicsNode,
+    PhysicsDataNode,
+    PhysicsFuncNode,
+)
+from cascade.spec.physical.triad import (
+    BleachNode,
+    WorkerNode,
+    StainNode,
+    ObservabilityNode,
+)
 from cascade.spec.physical.topology import Channel, BipartiteGraph
 from cascade.spec.physical.resources import ResourceSlot
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef

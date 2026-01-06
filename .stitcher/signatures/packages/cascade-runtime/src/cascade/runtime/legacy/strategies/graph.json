@@ -1,0 +1,45 @@
+{
+  "GraphExecutionResult": {
+    "baseline_yaml_content_hash": "e01c47c954ac173636dae7ec566f136769b19188a67ebeae7cff6c91324a6e09"
+  },
+  "GraphExecutionResult.__init__": {
+    "baseline_code_signature_text": "def __init__(self, value: Any, source_node_id: str):",
+    "baseline_code_structure_hash": "1914fa40805e7b23be73e62b0d2236c3638b8f355092a623699cbe3128eee786"
+  },
+  "GraphExecutionResult.source_node_id": {},
+  "GraphExecutionResult.value": {},
+  "GraphExecutionStrategy": {
+    "baseline_yaml_content_hash": "bd5924665138bd4c44570cb37df4bc3acf814d06b01b440761995100e8f174d0"
+  },
+  "GraphExecutionStrategy.__init__": {
+    "baseline_code_signature_text": "def __init__(self, solver: Solver, node_processor: NodeProcessor, resource_container: ResourceContainer, constraint_manager: ConstraintManager, bus: EventBus, wakeup_event: asyncio.Event):",
+    "baseline_code_structure_hash": "e530f3654d8300bec5c751a03c843ba9af466dca258c5258590f7d273e447d61"
+  },
+  "GraphExecutionStrategy._execute_graph": {
+    "baseline_code_signature_text": "async def _execute_graph(self, target: Any, params: Dict[str, Any], active_resources: Dict[str, Any], run_id: str, state_backend: StateBackend, graph: Graph, plan: Any, instance_map: Dict[str, Node], executable_registry: Dict[str, Callable], root_input_overrides: Optional[Dict[str, Any]] = None) -> GraphExecutionResult:",
+    "baseline_code_structure_hash": "cfad88de843b085da55b90d86cec419856907a4c91ca73e6a842171dc16ef73c"
+  },
+  "GraphExecutionStrategy._index_plan": {
+    "baseline_code_signature_text": "def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:",
+    "baseline_code_structure_hash": "5e894e79c670e7d3c8ab307c801c290df4ad0f64355e2a0871affd02bb2a8637",
+    "baseline_yaml_content_hash": "e9458f1b1b05bd258dabe169a7c29cce237a9df78baca693d7de62ad3ee8c10f"
+  },
+  "GraphExecutionStrategy._node_registry": {},
+  "GraphExecutionStrategy._rehydrate_plan": {
+    "baseline_code_signature_text": "def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:",
+    "baseline_code_structure_hash": "23d79fe6bf6d50043583c7874b422e3b63b269fdf69e163d9146c03e5ed0f478",
+    "baseline_yaml_content_hash": "b895bf1a247e171a40c02369deb1343b342a1e1e7b0791ee8df1cfed82a6422c"
+  },
+  "GraphExecutionStrategy._template_plan_cache": {},
+  "GraphExecutionStrategy.blueprint_hasher": {},
+  "GraphExecutionStrategy.bus": {},
+  "GraphExecutionStrategy.constraint_manager": {},
+  "GraphExecutionStrategy.execute": {
+    "baseline_code_signature_text": "async def execute(self, target: Any, context: ExecutionContext) -> Any:",
+    "baseline_code_structure_hash": "896af64d55e3d93d752bffb30eb92d7a7293c272bfe7a40c8882beb33fdc1668"
+  },
+  "GraphExecutionStrategy.node_processor": {},
+  "GraphExecutionStrategy.resource_container": {},
+  "GraphExecutionStrategy.solver": {},
+  "GraphExecutionStrategy.wakeup_event": {}
+}

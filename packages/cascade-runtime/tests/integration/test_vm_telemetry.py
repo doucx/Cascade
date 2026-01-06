@@ -3,7 +3,10 @@ import cascade as cs
 from cascade.runtime import Engine, EventBus
 from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.runtime.io.executors.local import LocalExecutor
-from cascade.runtime.services.observability.events import TaskExecutionStarted, TaskExecutionFinished
+from cascade.runtime.services.observability.events import (
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+)
 from cascade.testing import SpySubscriber
 
 

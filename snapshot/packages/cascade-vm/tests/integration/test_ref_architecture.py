@@ -1,47 +1,3 @@
-好的，我们已经完成了 `Reactor` 的进化，现在是时候通过一个全面的端到端集成测试来验证整个新架构的正确性了。
-
-## [WIP] test(vm): Add integration test for Ref-Based architecture
-
-### 用户需求
-
-创建一个新的集成测试，用于验证 Cascade v3.1 "Ref-Based Architecture" 的完整工作流程，包括：
-1.  通过 `standard_dispatcher` 将计算请求“出境”。
-2.  `LocalComputeService` 在后台执行该请求。
-3.  `Reactor` 通过 `ingress_queue` 接收计算结果并将其“入境”。
-4.  入境的 Token 成功激活图中的下游节点。
-
-### 评论
-
-这是对 v3.1 架构核心承诺的最终验证。这个测试将超越所有单元测试，成为一个“顶点测试（Capstone Test）”，因为它模拟了一个完整的、真实的异步工作流，并强制所有新组件（`Dispatcher`, `ComputeService`, `ObjectStore`, `Reactor` with ingress）协同工作。它的通过将为新架构的稳定性提供最高级别的信心。
-
-### 目标
-
-1.  创建新的测试文件 `packages/cascade-vm/tests/integration/test_ref_architecture.py`。
-2.  在文件中实现一个名为 `test_full_ref_based_e2e_flow` 的测试用例。
-3.  该测试将编译一个简单的两步工作流（例如 `square(add_one(10))`），并通过 `EventDrivenRunner` 执行它。
-4.  最终断言工作流的计算结果正确无误，从而证明整个“出境-入境”数据流是通畅且正确的。
-
-### 基本原理
-
-通过构建一个完整的、自包含的测试场景，我们能捕捉到在单元测试中可能被忽略的、由于组件间交互而产生的复杂问题。`EventDrivenRunner` 在这里扮演了关键角色，它为我们提供了一个高保真的微型运行时环境，用于模拟和验证生产环境中的真实行为。
-
-### 标签
-
-#intent/tooling #flow/ready #priority/high #comp/tests #concept/executor #scope/core #ai/instruct #task/domain/testing #task/object/integration-test #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 Ref-Based 架构的端到端集成测试
-
-我们将创建新的测试文件，并填充完整的测试逻辑。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_ref_architecture.py
-~~~~~
-~~~~~python
 import pytest
 
 from cascade.spec.dsl.task import task
@@ -133,8 +89,3 @@ async def test_full_ref_based_e2e_flow():
 
     finally:
         await runner.stop_loop()
-~~~~~
-
-### 下一步建议
-
-执行所有测试。如果此测试通过，它将标志着 v3.1 Ref-Based 架构的核心功能已成功实现。我们可以考虑将这个宏观任务标记为 `#task/state/end` 并创建一个 `[COMMIT]` 计划。

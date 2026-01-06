@@ -48,7 +48,7 @@ class ParameterWiringPolicy(WiringPolicy):
                 # D_dep -> Target Bleacher
                 ctx.wire.connect(d_dep_id, "out", subgraph.bleacher.id, port_name)
 
-            # Case B: Literal Value (Constant) - Use Probe Model
+            # Case B: Literal Value (Constant) - Direct Materialization Model
             else:
                 # 1. D_const (DataNode holding the literal value)
                 d_const_id = PhysicalIdGenerator.constant(
@@ -63,27 +63,8 @@ class ParameterWiringPolicy(WiringPolicy):
                 )
                 ctx.wire.add_node(d_const)
 
-                # 2. F_probe (The probe node for constants)
-                f_probe_id = PhysicalIdGenerator.probe_const(
-                    node_ir.current_node_instance_hash, input_key
-                )
-                f_probe = PhysicsFuncNode(
-                    id=f_probe_id,
-                    name=f"Probe({port_name})",
-                    input_ports={"value": PortDef("value", PortRole.DATA)},
-                    output_ports={"out": PortDef("out", PortRole.DATA)},
-                )
-                ctx.wire.add_node(f_probe)
-
-                # 3. D_probed (Intermediate data node to connect to Bleacher)
-                d_probed_id = f"{f_probe_id}.out"
-                d_probed = PhysicsDataNode(id=d_probed_id, name=f"Probed({port_name})")
-                ctx.wire.add_node(d_probed)
-
-                # 4. Wiring
-                # D_const -> F_probe
-                ctx.wire.connect(d_const_id, "out", f_probe_id, "value")
-                # F_probe -> D_probed
-                ctx.wire.connect(f_probe_id, "out", d_probed_id, "in")
-                # D_probed -> Target Bleacher
-                ctx.wire.connect(d_probed_id, "out", subgraph.bleacher.id, port_name)
+                # 2. Wiring: D_const -> Bleacher
+                # Note: This is a direct D -> F connection, which is valid in Bipartite graphs.
+                # The Strategy layer will be responsible for materializing the literal value
+                # into a Ref during the loading phase.
+                ctx.wire.connect(d_const_id, "out", subgraph.bleacher.id, port_name)

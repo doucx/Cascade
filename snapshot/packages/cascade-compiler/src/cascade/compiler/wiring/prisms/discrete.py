@@ -116,19 +116,7 @@ class DiscreteResourcePrism(ResourcePrism):
         )
         ctx.wire.add_node(d_amt)
 
-        # 2. F_probe (ConstProbe)
-        f_probe_id = PhysicalIdGenerator.probe_const(
-            node_ir.current_node_instance_hash, res_name
-        )
-        f_probe = PhysicsFuncNode(
-            id=f_probe_id,
-            name=f"Probe({res_name})",
-            input_ports={"value": PortDef("value", PortRole.DATA)},
-            output_ports={"out": PortDef("out", PortRole.DATA)},
-        )
-        ctx.wire.add_node(f_probe)
-
-        # 3. F_req (Requestor)
+        # 2. F_req (Requestor)
         f_req_id = PhysicalIdGenerator.requestor(
             node_ir.current_node_instance_hash, res_name
         )
@@ -140,19 +128,9 @@ class DiscreteResourcePrism(ResourcePrism):
         )
         ctx.wire.add_node(f_req)
 
-        # 4. Wiring
-        # D_amt -> F_probe
-        ctx.wire.connect(d_amt_id, "out", f_probe_id, "value")
-
-        # F_probe -> D_probed
-        d_probed_id = f"{f_probe_id}.out"
-        d_probed = PhysicsDataNode(id=d_probed_id, name="ProbedVal")
-        ctx.wire.add_node(d_probed)
-
-        ctx.wire.connect(f_probe_id, "out", d_probed_id, "in")
-
-        # D_probed -> F_req
-        ctx.wire.connect(d_probed_id, "out", f_req_id, "amount")
+        # 3. Wiring
+        # D_amt -> F_req (Direct connection)
+        ctx.wire.connect(d_amt_id, "out", f_req_id, "amount")
 
         # F_req -> D_req_buffer
         ctx.wire.connect(f_req_id, PortName.REQ_OUT, req_buffer_id, "in")

@@ -151,7 +151,10 @@ class EventDrivenRunner:
         final_trace = {"rid": self.run_id}
         if trace:
             final_trace.update(trace)
-        self.memory.put(node, Token(payload=payload, trace=final_trace))
+
+        # v3.1: All data in the physical layer is a Ref.
+        ref = self.object_store.put(payload)
+        self.memory.put(node, Token(payload=ref, trace=final_trace))
 
     async def wait_for_event(
         self,

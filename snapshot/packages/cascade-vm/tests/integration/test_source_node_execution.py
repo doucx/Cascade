@@ -6,44 +6,20 @@ from cascade.spec.dsl.task import task
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.backend.builder import Builder
 from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.nodes import Token
 from cascade.vm.harness import EventDrivenRunner
+from cascade.vm.registry import CodeRegistry
 from cascade.runtime.services.observability.events import TaskExecutionFinished
-
 
 # Standard library function imports
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
+from cascade.std.triad.dispatcher import standard_dispatcher
 
 
 @task
 def source_task():
     return "Pulse Fired!"
-
-
-# This worker now places its result into the trace, so the final 'end'
-# event can be inspected for correctness.
-def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    worker_input_token = inputs["worker_input"]
-    trace_from_bleacher = worker_input_token.trace
-
-    result = "Unexpected worker call"
-    # Use the stable semantic name for routing, not the volatile hash-based id
-    if "source_task" in node.name:
-        result = source_task.func()
-
-    # The Stainer will see the result as a payload, not in the trace.
-    # The trace is passed through for duration calculation etc.
-    return {"worker_result": Token(payload=result, trace=trace_from_bleacher)}
-
-
-async def wait_for_idle(runner: EventDrivenRunner, timeout: float = 1.0):
-    start_time = asyncio.get_event_loop().time()
-    while runner.reactor.active_task_count > 0:
-        if asyncio.get_event_loop().time() - start_time > timeout:
-            raise asyncio.TimeoutError("Reactor did not become idle in time")
-        await asyncio.sleep(0.001)
 
 
 @pytest.mark.asyncio
@@ -58,7 +34,13 @@ async def test_source_node_is_triggered_by_pulse():
     assembly = builder.build(graph_ir, EnvironmentDef())
     physical_graph = assembly.graph
 
-    # 2. Build the function map
+    # 2. Setup Code Registry for the Compute Service
+    code_registry = CodeRegistry()
+    worker_node_id = f"{node_ir.current_node_instance_hash}.worker"
+    canonical_hash = assembly.symbol_table[worker_node_id]
+    code_registry.register(canonical_hash, source_task.func)
+
+    # 3. Build the function map for the Reactor
     func_map = {}
     for node_id, node in physical_graph.nodes.items():
         if node_id.endswith(".bleach"):
@@ -66,27 +48,33 @@ async def test_source_node_is_triggered_by_pulse():
         elif node_id.endswith(".stain"):
             func_map[node_id] = standard_stainer
         elif node_id.endswith(".worker"):
-            func_map[node_id] = mock_worker
+            # All user workers are now handled by the dispatcher
+            func_map[node_id] = standard_dispatcher
         elif "observer" in node_id:
             func_map[node_id] = standard_observer
 
-    # 3. Setup and run the VM
-    runner = EventDrivenRunner(physical_graph, func_map)
+    # 4. Setup and run the VM using the new Harness
+    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
     runner.prime()
 
-    # 4. Execute
+    # 5. Execute
     await runner.start_loop()
     try:
-        # 5. Assert the result by waiting for the completion event
-        # This is the robust way to test completion, not by checking transient memory.
+        # 6. Assert the result by waiting for the completion event.
+        # This now validates the full dispatch -> compute -> ingress loop.
         completion_event = await runner.run_until_complete(
-            task_id=node_ir.current_node_instance_hash
+            task_id=node_ir.current_node_instance_hash, timeout=5.0
         )
 
         assert isinstance(completion_event, TaskExecutionFinished)
         assert completion_event.status == "Succeeded"
         assert completion_event.task_id == node_ir.current_node_instance_hash
-        assert completion_event.result_preview == "Pulse Fired!"
+
+        # The result preview is now a Ref. To verify the content, we need to
+        # access the runner's object store.
+        result_ref = completion_event.result_preview
+        final_result = runner.object_store.get(result_ref)
+        assert final_result == "Pulse Fired!"
 
     finally:
         await runner.stop_loop()

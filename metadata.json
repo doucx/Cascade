@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(vm): 集成 dispatcher 和 compute service", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767685535.1681807, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(vm): 更新端到端测试以验证新的异步执行模型", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767685625.9167767, "duration_ms": 0}}

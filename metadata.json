@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(runtime): 实现 InMemoryObjectStore", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767681214.68748, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(vm): 实现 LocalComputeDelegate", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767681365.5354626, "duration_ms": 0}}

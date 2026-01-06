@@ -2,9 +2,14 @@
   "DiscreteLedger": {},
   "DiscreteLedger.available": {},
   "DiscreteLedger.total": {},
+  "_extract_scalar": {
+    "baseline_code_signature_text": "def _extract_scalar(payload: Any) -> Union[int, float]:",
+    "baseline_code_structure_hash": "8a5eadeee430fd8b9d85d6312c66c68c681007488fea32d23f7091cf296b128b",
+    "baseline_yaml_content_hash": "d4cf7c899350acfa2fc771b5e58f2e49369e9329a967c8d364326b7c3385a0f9"
+  },
   "discrete_allocator": {
-    "baseline_code_signature_text": "async def discrete_allocator(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "4178d82c7e426214cf1ae32466ac660e9d576be294c52747c58d64264e77e1e4",
+    "baseline_code_signature_text": "def discrete_allocator(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "3b2a9a684b9ae230f15c7dce1e52ad7a0825e079d0f5358219c442d43fe07e78",
     "baseline_yaml_content_hash": "64ef08ebc64eab90939cb2ea428ccf853058de613da7a51ae6527caa9b386be5"
   },
   "discrete_broker": {
@@ -13,8 +18,8 @@
     "baseline_yaml_content_hash": "6ca9cbd960a65463d32ef9255a399857711c8a3133580df65d5b16daed921c2b"
   },
   "discrete_reclaimer": {
-    "baseline_code_signature_text": "async def discrete_reclaimer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
-    "baseline_code_structure_hash": "8417e19269eb46b958b8172f137a88d7e3d21182620ba7cb3334ea8989b5e2b2",
+    "baseline_code_signature_text": "def discrete_reclaimer(inputs: Dict[str, Token], node: PhysicsNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "afc030ee78b34e2678766a8d209d53f6c673243bf28b6552ce8fd956b43513dc",
     "baseline_yaml_content_hash": "2f791ca9f57d21b446c2289f831ced253cb3dd98ebf45d06265652e7bbb650fa"
   }
 }

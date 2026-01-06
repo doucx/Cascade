@@ -1,3 +1,5 @@
+"_extract_scalar": |-
+  Helper to extract scalar value from Ref or raw payload.
 "discrete_allocator": |-
   Handles Resource Requests.
   Inputs: ledger_in, req_in

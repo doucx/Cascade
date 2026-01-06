@@ -11,7 +11,6 @@ class DiscreteLedger:
 
 
 def _extract_scalar(payload: Any) -> Union[int, float]:
-    """Helper to extract scalar value from Ref or raw payload."""
     if isinstance(payload, Ref):
         # v3.1: Try to get hoisted scalar
         if "scalar_value" in payload.meta:
@@ -19,7 +18,9 @@ def _extract_scalar(payload: Any) -> Union[int, float]:
         # If not hoisted, we technically can't read it in Kernel.
         # But for now we fail gracefully or return 0?
         # Raising error is better to catch missing hoisting.
-        raise ValueError(f"Ref {payload.uri} missing 'scalar_value' metadata for Kernel access.")
+        raise ValueError(
+            f"Ref {payload.uri} missing 'scalar_value' metadata for Kernel access."
+        )
     return payload
 
 
@@ -28,7 +29,7 @@ def discrete_allocator(
 ) -> Dict[str, Token]:
     ledger_token = inputs["ledger_in"]
     ledger_data = ledger_token.payload
-    
+
     # Extract Ledger (Handle Ref if ledger itself is ref-based in future, currently payload is obj)
     # For now ledger payload is passed as-is (PhysicsDataNode initial_payload)
     if isinstance(ledger_data, dict):

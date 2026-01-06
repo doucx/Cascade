@@ -44,7 +44,7 @@ def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     # Simulate execution duration
     payload = worker_input_token.payload
     duration = payload.get("duration", 0.0)
-    
+
     # Adapt to Ref-Based Architecture
     if isinstance(duration, Ref):
         duration = duration.meta.get("scalar_value", 0.0)
@@ -147,8 +147,9 @@ async def test_resource_scarcity_topology_and_execution():
 
     def debug_wrapper(func, name):
         import inspect
-        
+
         if inspect.iscoroutinefunction(func):
+
             @functools.wraps(func)
             async def async_wrapped(*args, **kwargs):
                 print(f"[MAN-START] {name}")
@@ -159,8 +160,10 @@ async def test_resource_scarcity_topology_and_execution():
                 except Exception as e:
                     print(f"[MAN-ERROR] {name}: {e}")
                     raise
+
             return async_wrapped
         else:
+
             @functools.wraps(func)
             def sync_wrapped(*args, **kwargs):
                 print(f"[MAN-START] {name}")
@@ -171,6 +174,7 @@ async def test_resource_scarcity_topology_and_execution():
                 except Exception as e:
                     print(f"[MAN-ERROR] {name}: {e}")
                     raise
+
             return sync_wrapped
 
     func_map = {}

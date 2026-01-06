@@ -27,7 +27,7 @@ from cascade.spec.physical.object import Ref
 def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     worker_input_token = inputs["worker_input"]
     worker_payload = worker_input_token.payload
-    
+
     # Handle Ref-based payload (v3.1)
     val = worker_payload["x"]
     if isinstance(val, Ref):
@@ -110,8 +110,10 @@ async def test_concurrency_limit():
     registry = ResourceRegistry()
     store = InMemoryObjectStore()
     registry.register("system.object_store", store)
-    
-    reactor = Reactor(physical_graph, memory, executor, func_map, resource_registry=registry)
+
+    reactor = Reactor(
+        physical_graph, memory, executor, func_map, resource_registry=registry
+    )
 
     # 6. Prime the reactor.
     reactor.prime()

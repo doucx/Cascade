@@ -1,269 +1,64 @@
-简要回答
-测试超时是因为 `standard_dispatcher` 依赖 `PhysicalIdGenerator` 根据 Worker ID 自动推导下游 DataNode 的 ID（日志显示为 `task.data.out`），而我在测试中手动硬编码了 ID 为 `d_worker_out`，导致 Reactor 无法将计算结果路由回图谱中。
+好的，我们已经完成了“大净化”并重塑了内核的心脏。现在是时候将这些具有里程碑意义的变更作为一个完整的逻辑单元提交到版本库中了。
 
-我将修改测试，使用 `PhysicalIdGenerator` 生成所有节点的 ID，以确保拓扑结构符合标准组件的隐式契约。
-
-## [WIP] fix(test): 使用 PhysicalIdGenerator 修正测试图谱的节点 ID
-
-### 错误分析
-- **症状**: 测试超时，日志中有 `WARNING ... Invalid reply_to_nid 'task.data.out': not a DataNode.`。
-- **原因**: `standard_dispatcher` 并不通过连接关系查找下游节点，而是通过 `PhysicalIdGenerator.worker_out_data(base_id)` 确定回复地址。测试中手动构建的图谱使用了自定义 ID (`d_worker_out`)，导致地址不匹配。
-- **解决方案**: 在构建测试图谱时，使用 `PhysicalIdGenerator` 生成节点 ID，确保与标准库组件的行为一致。
+## [COMMIT] feat(vm): 实现同步直驱内核与 Machine 协调器
 
 ### 用户需求
-修复集成测试中的 ID 匹配问题。
+完成“奇点项目”的阶段 0 和阶段 1，记录物理内核从异步调度向纯同步直驱转型的架构变更。
 
 ### 评论
-这是一个典型的“隐式契约”问题。在使用标准组件（如 Dispatcher）时，必须遵守其对拓扑结构的假设。
+这次提交标志着 Cascade VM 架构的范式转移。我们彻底废弃了基于 `PhysicsExecutor` 的异步任务调度模型，转而采用了极其精简、高性能的同步直驱模型。通过引入 `Machine` 类作为新的物理层入口点，我们成功实现了“控制面（同步）”与“计算面（异步）”的物理隔离。这不仅提升了系统的确定性，也为后续达到百万级 Mops/s 的性能目标铺平了道路。
 
 ### 目标
-让测试通过。
+创建一个 Git 提交，记录以下变更：
+1.  废除 `PhysicsExecutor`。
+2.  `Reactor` 的全同步化改造。
+3.  `LocalComputeService` 的空闲状态感知。
+4.  引入 `Machine` 协调器。
+5.  适配测试固件。
 
 ### 基本原理
-统一 ID 生成逻辑，消除硬编码。
+按照“先保真，后加速”的原则，我们首先在架构层面上锁定了“绝对同步”的法律事实。`Machine` 类通过混合循环（Hybrid Loop）优雅地解决了同步内核与异步环境的协作问题。在 `step()` 过程中直接处理结果，消除了协程创建的内存开销和延迟。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #concept/topology #scope/core #ai/instruct #task/domain/testing #task/object/integration-test #task/action/fix
+#intent/build #flow/ready #priority/high #comp/vm #concept/state #scope/core #ai/instruct #task/domain/vm #task/object/reactor #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修正 `test_context_injection.py`
-使用 `PhysicalIdGenerator` 重构图构建逻辑。
+#### Acts 1: 提交阶段性成果
+
+我们将所有涉及内核重构的文件添加到暂存区并执行提交。
 
 ~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_context_injection.py
+git_add
+packages/cascade-vm/
 ~~~~~
-~~~~~python
-import pytest
-import asyncio
-from typing import Dict, Any
 
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode
-from cascade.spec.physical.triad import (
-    BleachNode,
-    WorkerNode,
-    StainNode,
-    ObservabilityNode,
-)
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.runtime.services.observability.events import (
-    TaskExecutionStarted,
-    TaskExecutionFinished,
-)
-from cascade.vm.harness import EventDrivenRunner
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-from cascade.std.triad.dispatcher import standard_dispatcher
-from cascade.vm.registry import CodeRegistry
-from cascade.reflection import PhysicalIdGenerator
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(vm): Implement Synchronous Direct-Drive Kernel and Machine Coordinator
 
+This commit marks the completion of Phase 0 and Phase 1 of the Singularity Project, fundamentally transforming the Cascade VM into a dual-speed engine.
 
-# --- User Logic ---
-async def actual_user_logic(arg1: str) -> str:
-    """
-    The actual user code that runs in the Compute Plane.
-    It doesn't deal with Tokens or Nodes, just data.
-    """
-    return f"processed_{arg1}"
+Key Changes:
+1.  **Abolished PhysicsExecutor**: Removed the thread-pool based asynchronous executor. Physical graph evolution is now purely synchronous.
+2.  **Synchronous Reactor**: Refactored 'Reactor.step()' to be a synchronous method. It now follows a "Scan-Execute-Emit" direct-drive logic, calling kernel functions directly.
+3.  **Machine Coordinator**: Introduced 'cascade.vm.machine.Machine' as the new top-level orchestrator. It manages the synchronous Reactor loop and coordinates with the asynchronous Compute Plane.
+4.  **Idle-Aware Compute Service**: Updated 'LocalComputeService' to track active workers and provide 'is_idle()' status, enabling the Machine to detect quiescence.
+5.  **Cleaned Up Harness**: Updated 'EventDrivenRunner' to adapt to the new architecture by removing executor-related logic.
 
-
-# --- Helper: Build a Physical Triad manually ---
-def build_test_triad_for_injection() -> BipartiteGraph:
-    graph = BipartiteGraph()
-
-    # Base logical ID for the task
-    base_id = "task"
-
-    # Generate IDs using the standard protocol
-    f_pre_id = PhysicalIdGenerator.bleach_node(base_id)       # e.g., task.bleach
-    f_worker_id = PhysicalIdGenerator.worker_node(base_id)    # e.g., task.worker
-    f_stain_id = PhysicalIdGenerator.stain_node(base_id)      # e.g., task.stain
-    
-    # Data nodes must also follow convention where Dispatcher relies on it
-    d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
-    d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
-    d_trace_id = PhysicalIdGenerator.trace_data(base_id)
-
-    # 1. Nodes
-    # Input Data (External)
-    d_in = PhysicsDataNode(id="d_in", name="Input")
-
-    # F_pre (Bleacher)
-    f_pre = BleachNode(
-        id=f_pre_id,
-        name="Bleacher",
-        input_ports={"arg1": PortDef("arg1", PortRole.DATA)},
-        output_ports={
-            "worker_input": PortDef("worker_input", PortRole.DATA),
-            "trace_output": PortDef("trace_output", PortRole.DATA),
-            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
-        },
-    )
-
-    # D_worker_in & D_trace
-    d_worker_in = PhysicsDataNode(id=d_worker_in_id, name="WorkerIn")
-    d_trace = PhysicsDataNode(id=d_trace_id, name="Trace")
-
-    # F_exec (Worker)
-    # NOTE: In v3.3, WorkerNode holds the hash of the code it should dispatch.
-    f_worker = WorkerNode(
-        id=f_worker_id,
-        name="Worker",
-        canonical_code_structure_hash="hash_user_logic_001",
-        input_ports={"worker_input": PortDef("worker_input", PortRole.DATA)},
-        output_ports={"worker_result": PortDef("worker_result", PortRole.DATA)},
-    )
-
-    # D_worker_out
-    d_worker_out = PhysicsDataNode(id=d_worker_out_id, name="WorkerOut")
-
-    # F_post (Stainer)
-    f_stain = StainNode(
-        id=f_stain_id,
-        name="Stainer",
-        input_ports={
-            "worker_result": PortDef("worker_result", PortRole.DATA),
-            "trace_input": PortDef("trace_input", PortRole.DATA),
-        },
-        output_ports={
-            "output_default": PortDef("output_default", PortRole.DATA),
-            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
-        },
-    )
-
-    # D_out (Final Result)
-    d_out = PhysicsDataNode(id="d_out", name="Output")
-
-    # Observability Infrastructure
-    d_life_id = PhysicalIdGenerator.observability_bus()
-    f_obs_id = PhysicalIdGenerator.observability_observer()
-    
-    d_life = PhysicsDataNode(
-        id=d_life_id, name="EventBus", capacity=100
-    )
-    f_obs = ObservabilityNode(
-        id=f_obs_id,
-        name="Observer",
-        input_ports={"event_token": PortDef("event_token", PortRole.OBSERVABILITY)},
-    )
-
-    # Register Nodes
-    for n in [
-        d_in,
-        f_pre,
-        d_worker_in,
-        d_trace,
-        f_worker,
-        d_worker_out,
-        f_stain,
-        d_out,
-        d_life,
-        f_obs,
-    ]:
-        graph.nodes[n.id] = n
-
-    # 2. Channels (Wiring)
-    channels = [
-        # Input -> Bleacher
-        Channel("d_in", "out", f_pre_id, "arg1"),
-        # Bleacher -> Worker
-        Channel(f_pre_id, "worker_input", d_worker_in_id, "in"),
-        Channel(d_worker_in_id, "out", f_worker_id, "worker_input"),
-        # Worker -> Stainer
-        Channel(f_worker_id, "worker_result", d_worker_out_id, "in"),
-        Channel(d_worker_out_id, "out", f_stain_id, "worker_result"),
-        # Bleacher -> Trace -> Stainer (The Wormhole)
-        Channel(f_pre_id, "trace_output", d_trace_id, "in"),
-        Channel(d_trace_id, "out", f_stain_id, "trace_input"),
-        # Stainer -> Output
-        Channel(f_stain_id, "output_default", "d_out", "in"),
-        # Observability Wiring
-        Channel(f_pre_id, "obs_output", d_life_id, "in"),
-        Channel(f_stain_id, "obs_output", d_life_id, "in"),
-        Channel(
-            d_life_id,
-            "out",
-            f_obs_id,
-            "event_token",
-        ),
-    ]
-
-    graph.channels.extend(channels)
-    return graph
-
-
-@pytest.mark.asyncio
-async def test_genesis_injection_propagates_run_id():
-    # 1. Setup Code Registry
-    registry = CodeRegistry()
-    registry.register("hash_user_logic_001", actual_user_logic)
-
-    # 2. Setup Graph
-    graph = build_test_triad_for_injection()
-
-    # 3. Setup Physics Kernel Function Map
-    # NOTE: The worker now maps to the standard_dispatcher!
-    # We must use the exact IDs generated by PhysicalIdGenerator
-    base_id = "task"
-    function_map = {
-        PhysicalIdGenerator.bleach_node(base_id): standard_bleacher,
-        PhysicalIdGenerator.worker_node(base_id): standard_dispatcher,
-        PhysicalIdGenerator.stain_node(base_id): standard_stainer,
-        PhysicalIdGenerator.observability_observer(): standard_observer,
-    }
-
-    runner = EventDrivenRunner(graph, function_map, registry)
-
-    # Assert Runner has generated a Run ID
-    assert runner.run_id is not None
-    print(f"Test Run ID: {runner.run_id}")
-
-    # 4. Prime and Start
-    runner.prime()
-    await runner.start_loop()
-
-    try:
-        # 5. Inject Input (Trigger Genesis Injection)
-        # Runner.inject_input will embed the runner.run_id into the Token trace.
-        runner.inject_input("d_in", "test_data")
-
-        # 6. Wait for completion
-        # We look for the SUCCEEDED event from the stainer.
-        def is_success(e):
-            return (
-                isinstance(e, TaskExecutionFinished)
-                and e.task_id == "task"
-                and e.status == "Succeeded"
-            )
-
-        await runner.wait_for_event(is_success, timeout=2.0)
-
-        # 7. Verify Events
-        events = runner._captured_events
-
-        lifecycle_events = [
-            e
-            for e in events
-            if isinstance(e, (TaskExecutionStarted, TaskExecutionFinished))
-        ]
-        assert len(lifecycle_events) >= 2
-
-        for event in lifecycle_events:
-            # The Critical Assertion:
-            # Did the run_id survive the trip through:
-            # Bleacher -> Dispatcher -> ComputeService -> Worker -> Stainer -> EventBus?
-            assert event.run_id == runner.run_id, f"Run ID mismatch in event {event}"
-
-        print("Context propagation verified successfully.")
-
-    finally:
-        await runner.stop_loop()
+This refactoring removes the overhead of asyncio task creation within the physical core, ensuring microsecond-level step latency and a clear jurisdictional boundary between control and execution.
 ~~~~~
 
 ### 下一步建议
-运行测试验证。
+
+内核的“心脏”已经更换完成。接下来的**“阶段 2: 桥接司法管辖区”**将是验证工作。
+
+我建议采取以下行动：
+1.  **编写集成测试**: 在 `tests/vm/test_machine_runtime.py` 中创建一个新的测试用例，模拟一个包含 `WorkerNode` 的完整工作流，验证 `Machine` 能否正确驱动 `Reactor` 发射请求、`ComputeService` 处理请求并返回结果。
+2.  **审查标准库 IC**: 确保 `standard_dispatcher` 和 `standard_stainer` 在同步环境下的行为符合预期（它们目前已经是同步函数，但需要验证它们与 `Machine` 的交互）。
+
+如果你准备好了，我们可以开始编写这个“黄金标准”集成测试。

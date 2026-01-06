@@ -40,6 +40,9 @@ class LocalComputeService:
         try:
             while self._running:
                 request = await self.inbound_queue.get()
+                # Pre-increment active count to avoid race condition where
+                # queue is empty but task hasn't started yet.
+                self._active_count += 1
                 # Create a non-blocking task for each request to allow concurrency
                 asyncio.create_task(self._process_request(request))
         finally:
@@ -52,7 +55,7 @@ class LocalComputeService:
         # but for now, we assume the managing task will be cancelled.
 
     async def _process_request(self, request: ComputeRequest) -> None:
-        self._active_count += 1
+        # Note: self._active_count is incremented in run() before calling this
         try:
             # 1. Resolve Inputs
             inputs: Dict[str, Any] = {
@@ -77,6 +80,8 @@ class LocalComputeService:
             )
             # Per v3.1 spec, exceptions are treated as values
             result = e
+        finally:
+            self._active_count -= 1
 
         # 4. Store Result and Prepare Token
         result_ref = self.store.put(result)

@@ -86,15 +86,20 @@ class EventDrivenRunner:
         self.event_queue.put_nowait(event)
 
     def prime(self):
-        # Phase 3.2 - Constant Materialization
+        # Phase 3.2 - Constant Materialization & Scalar Hoisting
         # The runner, acting as the Strategy, scans the graph for any initial payloads
         # and converts them to Refs before priming the reactor.
         for node in self.graph.nodes.values():
             if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
                 payload = node.initial_payload
                 if payload is not None and not isinstance(payload, Ref):
-                    # Materialize the raw value into the object store
-                    node.initial_payload = self.object_store.put(payload)
+                    meta = {}
+                    # Perform Scalar Hoisting for kernel-readable values
+                    if isinstance(payload, (int, float, bool, str)) and len(str(payload)) < 256:
+                        meta["scalar_value"] = payload
+                    
+                    # Materialize the raw value into the object store with metadata
+                    node.initial_payload = self.object_store.put(payload, metadata=meta)
 
         self.reactor.prime(genesis_trace={"rid": self.run_id})
 

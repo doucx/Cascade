@@ -74,7 +74,18 @@ class LocalComputeService:
             result = e
 
         # 4. Store Result and Prepare Token
-        result_ref = self.store.put(result)
+        meta = {}
+        if isinstance(result, Exception):
+            meta["is_error"] = True
+            meta["error_type"] = type(result).__name__
+            meta["error_msg"] = str(result)
+        elif isinstance(result, (int, float, bool, str)) and len(str(result)) < 64:
+            meta["value"] = result
+            meta["is_error"] = False
+        else:
+            meta["is_error"] = False
+
+        result_ref = self.store.put(result, metadata=meta)
         result_token = Token(payload=result_ref, trace=request.trace)
 
         # 5. Report Completion to Outbound Queue

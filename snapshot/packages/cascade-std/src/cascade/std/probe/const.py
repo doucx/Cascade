@@ -12,6 +12,12 @@ async def const_probe(
     # Ref-Based Architecture:
     # Probes are responsible for materializing external/static data into Refs.
     store = resources.get("system.object_store")
-    ref = store.put(raw_value)
+
+    # Metadata Hoisting: Lift scalars to metadata for Kernel access
+    meta = {}
+    if isinstance(raw_value, (int, float, bool, str)) and len(str(raw_value)) < 64:
+        meta["value"] = raw_value
+
+    ref = store.put(raw_value, metadata=meta)
 
     return {"out": Token(payload=ref, trace=val_token.trace)}

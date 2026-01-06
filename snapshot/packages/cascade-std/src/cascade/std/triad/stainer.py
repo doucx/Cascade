@@ -17,7 +17,7 @@ async def standard_stainer(
     worker_result_token = inputs["worker_result"]
     trace_input_token = inputs["trace_input"]
 
-    result_payload = worker_result_token.payload
+    result_ref = worker_result_token.payload
 
     # Merge traces
     trace_payload = worker_result_token.trace.copy()
@@ -37,29 +37,30 @@ async def standard_stainer(
     if node.name.startswith("Stain(") and node.name.endswith(")"):
         task_name = node.name[6:-1]
 
-    # Determine Status (Simplified for now, assuming success if reached here)
-    # Error handling logic will be refined in future phases
+    # Determine Status using Metadata
+    from cascade.spec.physical.object import Ref
     state = EventState.SUCCEEDED
     error_msg = None
-
-    # TODO: Check if result_payload is an Exception wrapper
-    if isinstance(result_payload, Exception):
+    
+    if isinstance(result_ref, Ref) and result_ref.meta.get("is_error"):
         state = EventState.FAILED
-        error_msg = str(result_payload)
+        error_msg = result_ref.meta.get("error_msg", "Unknown error")
+        # For telemetry, we might want the error type
+    elif isinstance(result_ref, Exception):
+        # Fallback for legacy raw exception payloads
+        state = EventState.FAILED
+        error_msg = str(result_ref)
 
     ctx = {}
     if "rid" in trace_payload:
         ctx["rid"] = trace_payload["rid"]
 
-    # Handle preview generation: pass Refs through, stringify others.
+    # Handle preview generation
     preview = None
-    if state == EventState.SUCCEEDED:
-        from cascade.spec.physical.object import Ref
-
-        if isinstance(result_payload, Ref):
-            preview = result_payload
-        else:
-            preview = str(result_payload)[:100]
+    if isinstance(result_ref, Ref):
+        preview = result_ref
+    else:
+        preview = str(result_ref)[:100]
 
     ir: EventIR = {
         "v": "1.0",

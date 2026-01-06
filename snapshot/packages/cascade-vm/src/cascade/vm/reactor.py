@@ -83,14 +83,33 @@ class Reactor:
 
     def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:
         genesis_trace = genesis_trace or {}
+        # Try to get object store for genesis materialization
+        store = None
+        if self.resource_registry and self.resource_registry.has("system.object_store"):
+            store = self.resource_registry.get("system.object_store")
+
+        from cascade.spec.physical.object import Ref
+
         for node in self.graph.nodes.values():
             if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
                 for _ in range(node.initial_tokens):
-                    # Initial tokens use the node's defined payload (for constants) or None.
-                    # We inject the genesis trace (e.g. run_id) into these primordial tokens.
+                    payload = node.initial_payload
+                    
+                    # Genesis Materialization: Convert raw initial payloads to Refs if possible
+                    if store and payload is not None and not isinstance(payload, Ref):
+                        # Hoist basic metadata for Ledger/Constants
+                        meta = {}
+                        if hasattr(payload, "__class__"):
+                             meta["type"] = payload.__class__.__name__
+                        # For simple scalars, hoist value
+                        if isinstance(payload, (int, float, bool, str)) and len(str(payload)) < 64:
+                            meta["value"] = payload
+                            
+                        payload = store.put(payload, metadata=meta)
+
                     self.memory.put(
                         node,
-                        Token(payload=node.initial_payload, trace=genesis_trace.copy()),
+                        Token(payload=payload, trace=genesis_trace.copy()),
                     )
 
     async def step(self) -> int:

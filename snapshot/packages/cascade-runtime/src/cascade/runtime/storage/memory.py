@@ -17,7 +17,7 @@ class InMemoryObjectStore:
         # 2. Prepare Metadata
         meta = metadata.copy() if metadata else {}
 
-        # Auto-detect basic metadata if not provided
+        # Auto-detect basic metadata
         if "type" not in meta:
             meta["type"] = type(obj).__name__
 

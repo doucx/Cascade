@@ -1,100 +1,67 @@
-## [WIP] fix(tests): Adapt `mock_worker` in contention test to Ref Protocol
+太棒了。所有关键测试（包括高压资源竞争测试和背压测试）现已通过，这标志着 Cascade v3.1 的**同步内核 (Sync Kernel)** 和 **引用架构 (Ref-Based Architecture)** 已成功落地。
 
-### 错误分析
+我们不仅修复了技术上的崩溃，更通过“标量提升”解决了架构上的逻辑矛盾，使系统达到了真正的物理层纯粹性。
 
-**错误**: `TypeError: 'Ref' object cannot be interpreted as an integer`
-**位置**: `packages/cascade-compiler/tests/integration/test_resource_contention.py` 中的 `mock_worker` 函数。
-**原因**: 
-1.  在 `test_resource_scarcity_topology_and_execution` 中，任务的 `duration` 参数通过 `const_probe` 被转换为一个 `Ref` 对象。
-2.  `standard_bleacher` 将这个 `Ref` 包装在 `worker_input` 的 payload 字典中。
-3.  `mock_worker` 直接从 payload 中取出 `duration` 并传递给 `time.sleep()`。
-4.  由于 `duration` 是一个 `Ref` 而不是 `float/int`，`time.sleep` 崩溃。
-
-**修复方案**: 
-在 `mock_worker` 中添加对 `Ref` 的解包逻辑，优先读取 `meta['scalar_value']`。
+## [COMMIT] feat(std,vm): Finalize Sync Kernel and Ref-Based Protocol migration
 
 ### 用户需求
-修复集成测试中的类型错误，确保资源竞争压力测试能正常运行。
+将 Cascade 核心执行单元从异步模型迁移到同步物理内核模型，并实施基于引用的数据流协议，确保资源管理和图调度在微秒级延迟下运行。
 
 ### 评论
-这再次验证了架构迁移中“数据主权”变更的影响。Mock 代码必须与物理层的真实数据契约保持同步。虽然手动修复这些 Mock 很繁琐，但它揭示了我们在 `Ref` 协议设计上的正确性：标量提升确实为 Kernel 级别的操作提供了必要的数据，而无需触发昂贵的 I/O。
+这是一个具有里程碑意义的提交。通过将 `Bleacher`, `Stainer`, `Allocator` 等标准 IC 转换为同步函数，并激活 `Reactor` 的直接调用路径，我们彻底消除了标准操作的线程调度开销。同时，适配后的 `Ref` 协议为未来的分布式扩展和零拷贝数据流奠定了坚实基础。
 
 ### 目标
-修改 `packages/cascade-compiler/tests/integration/test_resource_contention.py` 中的 `mock_worker`，使其能够识别并解包 `duration` 引用。
+创建一个 Git 提交，包含同步化后的标准库、具备同步路径的反应堆以及适配后的测试套件。
+
+### 基本原理
+按照 Cascade v3.1 路线图，我们将“物理层”与“计算层”分离。本提交完成了物理层的“纯净化”：
+1.  **物理层同步化**: 反应堆主循环现在可以在单线程内同步、顺序地执行所有控制流逻辑。
+2.  **数据权属流转**: 物理令牌现在仅承载 `Ref`，通过标量元数据提升技术，保证了决策的确定性而无需 I/O。
 
 ### 标签
-#intent/fix #flow/ready #priority/high #comp/tests #scope/core #ai/instruct #task/domain/testing #task/object/contention-test #task/action/fix-mock-payload #task/state/continue
+#intent/build #flow/ready #priority/critical #comp/std #comp/vm #comp/compiler #concept/ref-architecture #concept/reactor #scope/core #ai/instruct #task/domain/core #task/object/sync-kernel #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 适配 `test_resource_contention.py` 中的 `mock_worker`
+#### Acts 1: 提交同步内核与引用架构的完整实现
 
-我们将添加一个通用的 `_extract_val` 逻辑，以便 Mock 能够透明地处理 `Ref`。
+我们将所有修改后的核心组件和测试适配代码提交到版本库。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-std/src/cascade/std/probe/const.py
+packages/cascade-std/src/cascade/std/resource/discrete.py
+packages/cascade-std/src/cascade/std/resource/requestor.py
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-std/src/cascade/std/triad/dispatcher.py
+packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-vm/tests/integration/test_resource_backpressure.py
 packages/cascade-compiler/tests/integration/test_resource_contention.py
 ~~~~~
-~~~~~python.old
-from cascade.std.resource.requestor import resource_requestor
-from cascade.std.probe.const import const_probe
 
-
-@task
-def resource_heavy_task(duration: float = 0.01):
-    # Simulate work
-    import time
-
-    time.sleep(duration)
-    return "Done"
-
-
-# Mock Worker
-def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    worker_input_token = inputs["worker_input"]
-    trace = worker_input_token.trace
-
-    # Simulate execution duration
-    payload = worker_input_token.payload
-    duration = payload.get("duration", 0.0)
-
-    # We cheat a bit and sleep async here to allow reactor to switch contexts
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-from cascade.std.resource.requestor import resource_requestor
-from cascade.std.probe.const import const_probe
-from cascade.spec.physical.object import Ref
+~~~~~text
+feat(std,vm): Implement Sync Kernel and Ref-Based Protocol
 
+This commit completes Phase 3 of the Ref-Based Architecture (v3.1) by converting all core ICs to a synchronous execution model and introducing Scalar Hoisting for Reference-based data flow.
 
-@task
-def resource_heavy_task(duration: float = 0.01):
-    # Simulate work
-    import time
+Key Changes:
+1. **Sync Conversion**: Bleacher, Stainer, Dispatcher, and Resource Brokers (Allocator/Reclaimer) are now pure synchronous functions (`def`), allowing the Reactor to execute them without thread-pool or async overhead.
+2. **Reactor Activation**: The VM Reactor now detects synchronous functions and executes them directly, significantly reducing step latency and enabling deterministic TCO.
+3. **Scalar Hoisting**: Probes now detect scalar values (int, float, bool) and hoist them into Ref metadata. This allows Kernel ICs to perform logic-gate decisions (like resource comparison) without dereferencing from the ObjectStore.
+4. **Protocol Alignment**: Standardized the physical function signature to `(inputs, node, resources) -> outputs`.
+5. **Test Stabilization**: Updated integration tests and mocks to handle Ref payloads and the new synchronous call stack.
 
-    time.sleep(duration)
-    return "Done"
-
-
-# Mock Worker
-def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    worker_input_token = inputs["worker_input"]
-    trace = worker_input_token.trace
-
-    # Simulate execution duration
-    payload = worker_input_token.payload
-    duration = payload.get("duration", 0.0)
-    
-    # Adapt to Ref-Based Architecture
-    if isinstance(duration, Ref):
-        duration = duration.meta.get("scalar_value", 0.0)
-
-    # We cheat a bit and sleep async here to allow reactor to switch contexts
+This architecture ensures that the Physics Field remains a low-latency, non-blocking control plane while heavy computation is dispatched to the asynchronous compute plane.
 ~~~~~
 
 ### 下一步建议
 
-1.  **全面回归测试**: 在修复了这两个关键的 Mock 错误后，请再次运行 `pytest`。
-2.  **性能观测**: 如果测试通过，你可以观察 `test_resource_scarcity_topology_and_execution` 的运行时间。由于我们激活了同步内核，它应该比之前稍快。
-3.  **正式进入 Phase 4**: 随着执行层的基本稳固，我们可以开始考虑 `Reactor` 的进一步进化，特别是如何更优雅地处理 `Ref` 的生命周期和垃圾回收。
+1.  **性能基准测试**: 建议运行 `scripts/benchmark_vm_tco.py`，量化同步内核带来的延迟降低。根据设计预期，每步延迟应进入微秒量级。
+2.  **分布式存储适配**: 现在 Ref 协议已稳固，可以开始尝试实现基于 `Redis` 或 `Plasma` 的 `ObjectStore` 后端，验证跨进程数据流。
+3.  **VM 状态持久化**: 研究如何将基于 Ref 的 `Assembly` 和 `Memory` 状态快照化，以支持工作流的断点续传。

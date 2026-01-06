@@ -1,4 +1,5 @@
 from cascade.spec.ir.fingerprint import Fingerprint, InvalidFingerprintKeyError
+from cascade.spec.physical.object import Ref
 from cascade.spec.physical.nodes import (
     Token,
     PhysicsNode,
@@ -27,6 +28,7 @@ from cascade.spec.runtime.observability import (
 __all__ = [
     "Fingerprint",
     "InvalidFingerprintKeyError",
+    "Ref",
     "Token",
     "PhysicsNode",
     "PhysicsDataNode",

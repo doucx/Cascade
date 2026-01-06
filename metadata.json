@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix: 在测试工具中实现标量提升以对齐物理内核公理", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767699087.3602438, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix: 区分用户常量与系统状态的物质化", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767699174.109257, "duration_ms": 0}}

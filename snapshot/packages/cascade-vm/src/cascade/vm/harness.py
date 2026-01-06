@@ -90,7 +90,10 @@ class EventDrivenRunner:
         # The runner, acting as the Strategy, scans the graph for any initial payloads
         # and converts them to Refs before priming the reactor.
         for node in self.graph.nodes.values():
-            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0:
+            # CRITICAL: We only materialize nodes that are explicitly marked as constants.
+            # System-level nodes like resource ledgers must retain their object payloads
+            # to be used directly by kernel functions without I/O.
+            if isinstance(node, PhysicsDataNode) and node.initial_tokens > 0 and node.id.startswith("const."):
                 payload = node.initial_payload
                 if payload is not None and not isinstance(payload, Ref):
                     meta = {}

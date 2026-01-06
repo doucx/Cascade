@@ -29,6 +29,10 @@ class LocalComputeService:
             max_workers=max_workers, thread_name_prefix="cascade_compute"
         )
         self._running = False
+        self._active_count = 0
+
+    def is_idle(self) -> bool:
+        return self.inbound_queue.empty() and self._active_count == 0
 
     async def run(self) -> None:
         self._running = True
@@ -48,6 +52,7 @@ class LocalComputeService:
         # but for now, we assume the managing task will be cancelled.
 
     async def _process_request(self, request: ComputeRequest) -> None:
+        self._active_count += 1
         try:
             # 1. Resolve Inputs
             inputs: Dict[str, Any] = {
@@ -79,6 +84,8 @@ class LocalComputeService:
 
         # 5. Report Completion to Outbound Queue
         await self.outbound_queue.put((request.reply_to_nid, result_token))
+        finally:
+            self._active_count -= 1
 
     def _resolve_arguments(
         self, inputs: Dict[str, Any]

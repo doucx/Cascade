@@ -89,7 +89,7 @@ class Reactor:
                         Token(payload=node.initial_payload, trace=genesis_trace.copy()),
                     )
 
-    async def step(self) -> int:
+    def step(self) -> int:
         # 0. Ingress Cycle
         self._process_ingress()
 
@@ -117,12 +117,58 @@ class Reactor:
         if not nodes_to_fire:
             return 0
 
-        # --- EXECUTION LOGIC REMOVED ---
-        # The logic to call _schedule_task was here.
-        # It is removed as part of Phase 0 purification.
-        # Phase 1 will implement the new direct-drive logic.
+        # --- DIRECT DRIVE EXECUTION ---
+        for node in nodes_to_fire:
+            inputs = inputs_for_fire[node.id]
+            try:
+                # 1. Synchronous Execution
+                func = self.function_map.get(node.id)
+                if not func:
+                    raise ValueError(f"No function mapped for node {node.id}")
+                
+                results = func(inputs, node, self.resource_registry)
+                
+                # 2. Immediate Result Handling
+                self._handle_results_immediate(node, results)
+                
+            except Exception as e:
+                logger.exception(f"Kernel panic at node '{node.id}': {e}")
+                # TODO: In v3.2, implement exception tokens for fault tolerance.
+                # For now, we log and suppress to keep the reactor alive.
 
         return len(nodes_to_fire)
+
+    def _handle_results_immediate(self, node: PhysicsFuncNode, results: Dict[str, Token]) -> None:
+        if not isinstance(results, dict):
+            logger.error(f"Function for node {node.id} returned {type(results)}, expected dict.")
+            return
+
+        outbound = self._outbound_channels.get(node.id, [])
+        node_sinks = self.sinks.get(node.id, {})
+
+        for port_name, token in results.items():
+            if token is None:
+                continue
+
+            # A. Handle Sinks (Callbacks)
+            # Note: Sinks in the physical layer MUST be non-blocking.
+            # If they return a coroutine, we schedule it on the loop but do NOT await.
+            if port_name in node_sinks:
+                for cb in node_sinks[port_name]:
+                    try:
+                        res = cb(token)
+                        if inspect.isawaitable(res):
+                            # Fire and forget for async sinks
+                            asyncio.create_task(res)
+                    except Exception as e:
+                        logger.exception(f"Sink callback failed for {node.id}:{port_name}: {e}")
+
+            # B. Handle Outbound Channels (Topological Flow)
+            matching_channels = [c for c in outbound if c.source_port == port_name]
+            for channel in matching_channels:
+                target_node = self.graph.nodes[channel.target_node_id]
+                if isinstance(target_node, PhysicsDataNode):
+                    self.memory.put(target_node, token)
 
     def _process_ingress(self):
         if not self.ingress_queue:

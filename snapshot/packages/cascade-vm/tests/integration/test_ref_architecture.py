@@ -40,13 +40,22 @@ async def test_full_ref_based_e2e_flow():
     physical_graph = assembly.graph
 
     # 3. Register user code in the CodeRegistry
-    # The key is the canonical hash, found in the symbol table
+    # We need to map the physical ID back to the function.
+    # We use the GraphIR to find the node ID for each task name.
     code_registry = CodeRegistry()
-    for node_id, canonical_hash in assembly.symbol_table.items():
-        if "add_one" in node_id:
-            code_registry.register(canonical_hash, add_one.func)
-        elif "square" in node_id:
-            code_registry.register(canonical_hash, square.func)
+    
+    # Helper to find canonical hash for a named task
+    def register_task(task_name, func):
+        # Find the NodeIR
+        node_ir = next(n for n in graph_ir.nodes if n.name == task_name)
+        # Construct the physical worker ID (Convention from PhysicalIdGenerator)
+        worker_id = f"{node_ir.current_node_instance_hash}.worker"
+        # Lookup canonical hash
+        canonical_hash = assembly.symbol_table[worker_id]
+        code_registry.register(canonical_hash, func)
+
+    register_task("add_one", add_one.func)
+    register_task("square", square.func)
 
     # 4. Build the function map for the Reactor (Standard Library ICs)
     func_map = {}

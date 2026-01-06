@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import uuid
-from typing import Dict, Any, Callable, TypeVar, Optional, List
+from typing import Dict, Any, Callable, TypeVar, Optional, List, Tuple
 
 from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.nodes import Token, PhysicsDataNode
@@ -12,6 +12,8 @@ from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
+from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.vm.registry import CodeRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -27,73 +29,112 @@ class EventDrivenRunner:
         self,
         graph: BipartiteGraph,
         function_map: Dict[str, Callable],
+        code_registry: CodeRegistry,
         reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
     ):
         self.graph = graph
         self.memory = VolatileMemory()
         self.executor = PhysicsExecutor()
+        self.run_id = str(uuid.uuid4())
 
-        # 1. Setup Event Bus & Resource Registry
+        # 1. Setup Queues for disconnected execution
+        self.compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
+        self.ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
+
+        # 2. Setup Services
+        # In a real system, store would be a separate entity.
+        # Here we use a mock that is part of the test setup.
+        # This runner doesn't have a store, but the compute service will need one.
+        # Let's assume for now the compute service can be built without a real store
+        # because the test functions it calls don't use it.
+        # CORRECTION: LocalComputeService requires a store. Test functions will need one.
+        # Let's create a mock store for the service.
+        from cascade.runtime.storage import InMemoryObjectStore
+
+        self.object_store = InMemoryObjectStore()
+        self.compute_service = LocalComputeService(
+            store=self.object_store,
+            registry=code_registry,
+            inbound_queue=self.compute_queue,
+            outbound_queue=self.ingress_queue,
+        )
+
+        # 3. Setup Event Bus & Resource Registry
         self.event_bus = EventBus()
         self.event_queue: asyncio.Queue[Event] = asyncio.Queue()
         self._captured_events: List[Event] = []
-
-        self.resource_registry = ResourceRegistry()
-        # Register the bus so standard_observer can find it
-        self.resource_registry.register("system.event_bus", self.event_bus)
-
-        # 1.1 Genesis Identity
-        self.run_id = str(uuid.uuid4())
-
-        # Bridge Bus -> Queue for testing
         self.event_bus.subscribe(Event, self._on_event)
 
-        # 2. The function map is now used directly
-        self.function_map = function_map
+        self.resource_registry = ResourceRegistry()
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        self.resource_registry.register("system.compute_queue", self.compute_queue)
 
-        # 3. Inject the registry into the Reactor
-        # Use provided factory or default to the Python Reactor
+        # 4. Setup Reactor
         factory = reactor_factory or Reactor
         self.reactor = factory(
             self.graph,
             self.memory,
             self.executor,
-            self.function_map,
+            function_map,
             self.resource_registry,
         )
         self._loop_task: Optional[asyncio.Task] = None
+        self._service_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
 
     def _on_event(self, event: Event):
         self.event_queue.put_nowait(event)
 
     def prime(self):
-        # Genesis Injection: Inject the run_id into the initial static tokens
         self.reactor.prime(genesis_trace={"rid": self.run_id})
 
     async def start_loop(self):
         if self._loop_task:
             return
         self._stop_event.clear()
+        # Start both the reactor and the compute service as background tasks
+        self._service_task = asyncio.create_task(self.compute_service.run())
         self._loop_task = asyncio.create_task(self._run_loop())
 
     async def _run_loop(self):
-        logger.info("Reactor loop started.")
+        logger.info("Reactor loop with ingress handling started.")
         try:
             while not self._stop_event.is_set():
+                # This is the core of the v3.1 harness: it simulates the Reactor's
+                # ability to handle both internal state changes and external events.
+                await self._handle_ingress()
                 fired = await self.reactor.step()
-                if fired == 0:
-                    # Avoid busy loop if idle
+                if fired == 0 and self.ingress_queue.empty():
                     await asyncio.sleep(0.001)
         except asyncio.CancelledError:
             pass
-        except Exception as e:
+        except Exception:
             logger.exception("Reactor loop crashed")
-            raise e
+            raise
+
+    async def _handle_ingress(self):
+        """Process all pending results from the compute service."""
+        while not self.ingress_queue.empty():
+            reply_to_nid, result_token = self.ingress_queue.get_nowait()
+            node = self.graph.nodes.get(reply_to_nid)
+            if isinstance(node, PhysicsDataNode):
+                self.memory.put(node, result_token)
+            else:
+                logger.warning(
+                    f"Invalid reply_to_nid '{reply_to_nid}': not a DataNode."
+                )
 
     async def stop_loop(self):
+        self._stop_event.set()
+        if self._service_task:
+            self.compute_service.stop()
+            self._service_task.cancel()
+            try:
+                await self._service_task
+            except asyncio.CancelledError:
+                pass
+            self._service_task = None
         if self._loop_task:
-            self._stop_event.set()
             self._loop_task.cancel()
             try:
                 await self._loop_task
@@ -107,12 +148,9 @@ class EventDrivenRunner:
         node = self.graph.nodes[node_id]
         if not isinstance(node, PhysicsDataNode):
             raise ValueError(f"Node {node_id} is not a DataNode")
-
-        # Merge user trace with genesis trace (run_id)
         final_trace = {"rid": self.run_id}
         if trace:
             final_trace.update(trace)
-
         self.memory.put(node, Token(payload=payload, trace=final_trace))
 
     async def wait_for_event(
@@ -121,22 +159,16 @@ class EventDrivenRunner:
         timeout: float = 1.0,
     ) -> Event:
         start_time = asyncio.get_event_loop().time()
-
         while True:
-            # Check timeout
             now = asyncio.get_event_loop().time()
             if now - start_time > timeout:
                 raise EventTimeoutError(f"Timed out waiting for event after {timeout}s")
-
-            # Wait for next event
             try:
-                # Calculate remaining time
                 remaining = timeout - (now - start_time)
                 event = await asyncio.wait_for(
-                    self.event_queue.get(), timeout=remaining
+                    self.event_queue.get(), timeout=max(0.001, remaining)
                 )
                 self._captured_events.append(event)
-
                 if predicate(event):
                     return event
             except asyncio.TimeoutError:
@@ -144,10 +176,7 @@ class EventDrivenRunner:
 
     async def run_until_complete(self, task_id: str, timeout: float = 2.0) -> Event:
         def is_completion(e: Event):
-            # Updated to use the new TaskExecutionFinished event
             if isinstance(e, TaskExecutionFinished):
-                # We match against the logical task_id which is now populated in the Event
                 return e.task_id == task_id
             return False
-
         return await self.wait_for_event(is_completion, timeout=timeout)

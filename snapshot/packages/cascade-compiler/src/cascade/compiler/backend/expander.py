@@ -81,9 +81,11 @@ class Expander:
 
         # F_worker: The actual execution logic
         # It conceptually takes *args/**kwargs, but physically takes one 'worker_input' dict
+        canonical_hash = node_ir.task.fingerprint["canonical_code_structure_hash"]
         f_worker = WorkerNode(
             id=f_worker_id,
             name=f"Exec({node_ir.name})",
+            canonical_code_structure_hash=canonical_hash,
             input_ports={
                 "worker_input": PortDef("worker_input", PortRole.DATA, "Dict")
             },

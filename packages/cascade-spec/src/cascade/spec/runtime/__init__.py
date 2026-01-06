@@ -11,6 +11,7 @@ from .interfaces import (
 )
 from .storage import ObjectStore
 from .compute import ComputeDelegate
+from .strategies import ExecutionContext, ExecutionStrategy
 
 __all__ = [
     "Solver",
@@ -24,4 +25,6 @@ __all__ = [
     "Connector",
     "ObjectStore",
     "ComputeDelegate",
+    "ExecutionContext",
+    "ExecutionStrategy",
 ]

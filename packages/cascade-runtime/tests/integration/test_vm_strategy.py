@@ -4,7 +4,7 @@ from contextlib import ExitStack
 
 from cascade.spec.dsl.task import task
 from cascade.runtime.legacy.strategies.vm import VMExecutionStrategy
-from cascade.runtime.legacy.strategies.base import ExecutionContext
+from cascade.spec.runtime import ExecutionContext
 
 
 @task

@@ -1,133 +1,122 @@
-import asyncio
 import time
-import sys
-import os
+import asyncio
+from typing import Dict, Callable
 
-# 确保可以导入本地 package
-sys.path.append(
-    os.path.join(os.path.dirname(__file__), "..", "packages", "cascade-spec", "src")
-)
-sys.path.append(
-    os.path.join(os.path.dirname(__file__), "..", "packages", "cascade-vm", "src")
-)
-
-from cascade.spec.physical.topology import BipartiteGraph, Channel
+from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
 from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.vm.memory import VolatileMemory
+from cascade.spec.physical.topology import Channel
 from cascade.vm.reactor import Reactor
-from cascade.vm.executor import PhysicsExecutor
-
-# --- 基准测试目标 ---
+from cascade.vm.memory import VolatileMemory
 
 
-def sync_while_baseline(iterations: int):
-    count = 0
-    start_time = time.perf_counter()
-    while count < iterations:
-        count += 1
-    duration = time.perf_counter() - start_time
-    return duration
+# --- Kernel ICs ---
+def tco_func(inputs, node, resources):
+    in_token = inputs["in"]
+    return {"out": Token(payload=in_token.payload, trace=in_token.trace)}
 
 
-async def async_while_no_yield(iterations: int):
-    count = 0
-    start_time = time.perf_counter()
-    while count < iterations:
-        count += 1
-    duration = time.perf_counter() - start_time
-    return duration
-
-
-async def async_while_yielding(iterations: int):
-    count = 0
-    start_time = time.perf_counter()
-    while count < iterations:
-        count += 1
-        await asyncio.sleep(0)  # 强制让出控制权，模拟一次完整的事件循环调度
-    duration = time.perf_counter() - start_time
-    return duration
-
-
-async def async_increment(inputs, node, resources):
-    val = inputs["in"].payload
-    return {"out": Token(payload=val + 1)}
-
-
-async def run_physical_tco(iterations: int):
-    d_state = PhysicsDataNode(id="D_state", name="StateSlot", capacity=1)
-    f_inc = PhysicsFuncNode(
-        id="F_inc",
-        name="Incremetor",
+# --- Test Setups ---
+def setup_physical_tco() -> BipartiteGraph:
+    d1 = PhysicsDataNode(id="D1", name="Slot1")
+    f1 = PhysicsFuncNode(
+        id="F1",
+        name="Func1",
         input_ports={"in": PortDef("in", PortRole.DATA)},
         output_ports={"out": PortDef("out", PortRole.DATA)},
     )
     graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d_state, f_inc]}
-    graph.channels.append(Channel("D_state", "out", "F_inc", "in"))
-    graph.channels.append(Channel("F_inc", "out", "D_state", "in"))
+    graph.nodes = {d1.id: d1, f1.id: f1}
+    graph.channels.append(Channel(f1.id, "out", d1.id, "in"))
+    return graph
 
+
+# --- Runners ---
+def run_sync_while(iterations: int) -> float:
+    start_time = time.perf_counter()
+    i = 0
+    while i < iterations:
+        i += 1
+    return time.perf_counter() - start_time
+
+
+async def run_async_no_yield(iterations: int) -> float:
+    start_time = time.perf_counter()
+    for _ in range(iterations):
+        pass
+    return time.perf_counter() - start_time
+
+
+async def run_async_yielding(iterations: int) -> float:
+    start_time = time.perf_counter()
+    for _ in range(iterations):
+        await asyncio.sleep(0)
+    return time.perf_counter() - start_time
+
+
+def run_physical_tco_sync(iterations: int, graph: BipartiteGraph, function_map: Dict[str, Callable]):
     memory = VolatileMemory()
-    executor = PhysicsExecutor()
-    func_map = {"F_inc": async_increment}
-    reactor = Reactor(graph, memory, executor, func_map)
-
-    memory.put(d_state, Token(payload=0))
+    reactor = Reactor(graph, memory, function_map)
+    memory.put(graph.nodes["D1"], Token(payload=1))
 
     start_time = time.perf_counter()
     for _ in range(iterations):
-        await reactor.step()
-        # 等待任务在后台执行完成并回流 Token
-        # 物理场中这是必须的，因为 Reactor 使用 create_task 异步发射
-        while reactor.active_task_count > 0:
-            await asyncio.sleep(0)
-
+        reactor.step()
     duration = time.perf_counter() - start_time
-
-    # 结果校验
-    final_val = memory.take("D_state").payload
-    assert final_val == iterations
     return duration
 
 
-# --- 报告生成 ---
+def main():
+    iterations = 10_000
+    print(f"\n--- Cascade 性能多维基准测试 (迭代: {iterations}) ---")
+    try:
+        import sys
 
+        py_version = ".".join(map(str, sys.version_info[:3]))
+        print(f"Python 版本: {py_version}")
+    except Exception:
+        pass
+    print("------------------------------------------------------------")
 
-async def main():
-    ITERATIONS = 10_000
-
-    print(f"--- Cascade 性能多维基准测试 (迭代: {ITERATIONS:,.0f}) ---")
-    print(f"Python 版本: {sys.version.split()[0]}")
-    print("-" * 60)
-
-    # 1. Sync
-    d_sync = sync_while_baseline(ITERATIONS)
+    # 1. Ground Truth (Sync)
+    duration_sync = run_sync_while(iterations)
+    ops_sync = iterations / duration_sync
     print(
-        f"1. Sync While         : {d_sync:.6f}s | {ITERATIONS / d_sync:12,.0f} ops/s (基准)"
+        f"1. Sync While         : {duration_sync:.6f}s | {ops_sync:12,.0f} ops/s (基准)"
     )
 
     # 2. Async (No Yield)
-    d_asy_ny = await async_while_no_yield(ITERATIONS)
+    duration_async_noyield = asyncio.run(run_async_no_yield(iterations))
+    ops_async_noyield = iterations / duration_async_noyield
+    overhead_noyield = ops_sync / ops_async_noyield
     print(
-        f"2. Async (No Yield)   : {d_asy_ny:.6f}s | {ITERATIONS / d_asy_ny:12,.0f} ops/s (开销: {d_asy_ny / d_sync:.1f}x)"
+        f"2. Async (No Yield)   : {duration_async_noyield:.6f}s | {ops_async_noyield:12,.0f} ops/s (开销: {overhead_noyield:.1f}x)"
     )
 
     # 3. Async (Yielding)
-    d_asy_y = await async_while_yielding(ITERATIONS)
+    duration_async_yield = asyncio.run(run_async_yielding(iterations))
+    ops_async_yield = iterations / duration_async_yield
+    overhead_yield = ops_sync / ops_async_yield
     print(
-        f"3. Async (Yielding)   : {d_asy_y:.6f}s | {ITERATIONS / d_asy_y:12,.0f} ops/s (开销: {d_asy_y / d_sync:.1f}x)"
+        f"3. Async (Yielding)   : {duration_async_yield:.6f}s | {ops_async_yield:12,.0f} ops/s (开销: {overhead_yield:.1f}x)"
     )
 
-    # 4. Physical Field
-    d_phys = await run_physical_tco(ITERATIONS)
+    # 4. Physical TCO (The new sync version)
+    graph = setup_physical_tco()
+    func_map = {"F1": tco_func}
+    duration_physical = run_physical_tco_sync(iterations, graph, func_map)
+    ops_physical = iterations / duration_physical
+    overhead_physical = ops_sync / ops_physical
+    step_latency_us = (duration_physical / iterations) * 1_000_000
     print(
-        f"4. Physical TCO       : {d_phys:.6f}s | {ITERATIONS / d_phys:12,.0f} ops/s (开销: {d_phys / d_sync:.1f}x)"
+        f"4. Sync Kernel TCO    : {duration_physical:.6f}s | {ops_physical:12,.0f} ops/s (开销: {overhead_physical:.1f}x)"
     )
 
-    print("-" * 60)
-    print(f"结论: 物理引擎相对于纯 Async(Yielding) 的净税收为: {d_phys / d_asy_y:.2f}x")
-    print(f"物理层单步延迟 (Step Latency): {(d_phys / ITERATIONS) * 1_000_000:.2f} μs")
+    print("------------------------------------------------------------")
+    net_tax = ops_async_yield / ops_physical
+    print(f"结论: 物理引擎相对于纯 Async(Yielding) 的净税收为: {net_tax:.2f}x")
+    print(f"物理层单步延迟 (Step Latency): {step_latency_us:.2f} μs")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

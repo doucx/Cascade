@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "ruff and stitcher Capture: M service.json, A machine.json, M reactor.json ... and 11 more files", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767694207.3622513, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] refactor: 重构基准测试以反映同步内核", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767694415.052091, "duration_ms": 0}}

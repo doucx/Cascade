@@ -100,9 +100,12 @@ class EventDrivenRunner:
         try:
             while not self._stop_event.is_set():
                 # In v3.1 Phase 4, the Reactor handles ingress internally during step().
-                fired = await self.reactor.step()
+                fired = self.reactor.step()
                 if fired == 0 and self.ingress_queue.empty():
                     await asyncio.sleep(0.001)
+                else:
+                    # Yield to allow other tasks (like ComputeService) to run
+                    await asyncio.sleep(0)
         except asyncio.CancelledError:
             pass
         except Exception:

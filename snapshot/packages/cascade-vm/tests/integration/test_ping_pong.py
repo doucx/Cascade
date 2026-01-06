@@ -6,7 +6,6 @@ from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
 
 
@@ -66,19 +65,14 @@ async def test_ping_pong_flow(ping_pong_topology):
     graph, d1, f1, d2, function_map = ping_pong_topology
 
     memory = VolatileMemory()
-    executor = PhysicsExecutor()
-    reactor = Reactor(graph, memory, executor, function_map)
+    reactor = Reactor(graph, memory, function_map)
 
     # 1. Start state
     initial_token = Token(payload=10)
     memory.put(d1, initial_token)
 
     # 2. Run the physics simulation for one step
-    fired_count = await reactor.step()
-
-    # Wait for async completion
-    while reactor.active_task_count > 0:
-        await asyncio.sleep(0.001)
+    fired_count = reactor.step()
 
     # 3. Assertions
     assert fired_count == 1

@@ -8,7 +8,6 @@ from cascade.spec import EventIR, EventType, EventState
 from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.harness import EventDrivenRunner
 from cascade.spec.physical.triad import ObservabilityNode
 from cascade.spec.physical.object import Ref
@@ -49,11 +48,10 @@ def simple_topology():
 async def test_reactor_step_idle(simple_topology):
     graph, d1, f1 = simple_topology
     memory = VolatileMemory()
-    executor = PhysicsExecutor()
     function_map = {f1.id: noop}
-    reactor = Reactor(graph, memory, executor, function_map)
+    reactor = Reactor(graph, memory, function_map)
 
-    fired_count = await reactor.step()
+    fired_count = reactor.step()
 
     assert fired_count == 0
 
@@ -62,16 +60,15 @@ async def test_reactor_step_idle(simple_topology):
 async def test_reactor_step_fire(simple_topology):
     graph, d1, f1 = simple_topology
     memory = VolatileMemory()
-    executor = PhysicsExecutor()
     function_map = {f1.id: noop}
-    reactor = Reactor(graph, memory, executor, function_map)
+    reactor = Reactor(graph, memory, function_map)
 
     # 1. Put token
     memory.put(d1, Token(payload="energy"))
     assert memory.get_count(d1.id) == 1
 
     # 2. Step
-    fired_count = await reactor.step()
+    fired_count = reactor.step()
 
     # 3. Assertions
     assert fired_count == 1
@@ -102,14 +99,13 @@ async def test_reactor_partial_inputs():
     graph.channels.append(Channel(d2.id, "out", f1.id, target_port="in2"))
 
     memory = VolatileMemory()
-    executor = PhysicsExecutor()
     function_map = {f1.id: noop}
-    reactor = Reactor(graph, memory, executor, function_map)
+    reactor = Reactor(graph, memory, function_map)
 
     # Only fill D1
     memory.put(d1, Token(payload="A"))
 
-    fired_count = await reactor.step()
+    fired_count = reactor.step()
 
     assert fired_count == 0
     # Token in D1 should remain untouched
@@ -140,14 +136,13 @@ async def test_reactor_independent_nodes():
     graph.channels.append(Channel(d2.id, "out", f2.id, target_port="in"))
 
     memory = VolatileMemory()
-    executor = PhysicsExecutor()
     function_map = {f1.id: noop, f2.id: noop}
-    reactor = Reactor(graph, memory, executor, function_map)
+    reactor = Reactor(graph, memory, function_map)
 
     memory.put(d1, Token("A"))
     memory.put(d2, Token("B"))
 
-    fired_count = await reactor.step()
+    fired_count = reactor.step()
 
     assert fired_count == 2
     assert memory.get_count(d1.id) == 0

@@ -5,7 +5,6 @@ from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory, MemoryFullError
 from cascade.vm.reactor import Reactor
-from cascade.vm.executor import PhysicsExecutor
 
 
 def noop_producer(inputs, node, resources):
@@ -51,7 +50,6 @@ async def test_limited_capacity_causes_crash():
     reactor = Reactor(
         graph,
         memory,
-        PhysicsExecutor(),
         {f_p1.id: noop_producer, f_p2.id: noop_producer},
     )
     reactor.prime()
@@ -62,7 +60,7 @@ async def test_limited_capacity_causes_crash():
     # One will succeed, the other SHOULD fail with MemoryFullError.
 
     try:
-        await reactor.step()
+        reactor.step()
     except Exception as e:
         # We expect a crash here due to atomic consumption but separate emission
         # Actually, Reactor.step() gathers exceptions.
@@ -116,19 +114,13 @@ async def test_infinite_capacity_handles_concurrency():
     reactor = Reactor(
         graph,
         memory,
-        PhysicsExecutor(),
         {f_p1.id: noop_producer, f_p2.id: noop_producer},
     )
     reactor.prime()
 
     # 2. Execution
     # Both should fire successfully.
-    fired = await reactor.step()
-
-    import asyncio
-
-    while reactor.active_task_count > 0:
-        await asyncio.sleep(0.001)
+    fired = reactor.step()
 
     assert fired == 2
     assert memory.get_count(d_life.id) == 2

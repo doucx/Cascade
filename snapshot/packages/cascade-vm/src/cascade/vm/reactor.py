@@ -125,12 +125,12 @@ class Reactor:
                 func = self.function_map.get(node.id)
                 if not func:
                     raise ValueError(f"No function mapped for node {node.id}")
-                
+
                 results = func(inputs, node, self.resource_registry)
-                
+
                 # 2. Immediate Result Handling
                 self._handle_results_immediate(node, results)
-                
+
             except Exception as e:
                 logger.exception(f"Kernel panic at node '{node.id}': {e}")
                 # TODO: In v3.2, implement exception tokens for fault tolerance.
@@ -138,9 +138,13 @@ class Reactor:
 
         return len(nodes_to_fire)
 
-    def _handle_results_immediate(self, node: PhysicsFuncNode, results: Dict[str, Token]) -> None:
+    def _handle_results_immediate(
+        self, node: PhysicsFuncNode, results: Dict[str, Token]
+    ) -> None:
         if not isinstance(results, dict):
-            logger.error(f"Function for node {node.id} returned {type(results)}, expected dict.")
+            logger.error(
+                f"Function for node {node.id} returned {type(results)}, expected dict."
+            )
             return
 
         outbound = self._outbound_channels.get(node.id, [])
@@ -161,7 +165,9 @@ class Reactor:
                             # Fire and forget for async sinks
                             asyncio.create_task(res)
                     except Exception as e:
-                        logger.exception(f"Sink callback failed for {node.id}:{port_name}: {e}")
+                        logger.exception(
+                            f"Sink callback failed for {node.id}:{port_name}: {e}"
+                        )
 
             # B. Handle Outbound Channels (Topological Flow)
             matching_channels = [c for c in outbound if c.source_port == port_name]

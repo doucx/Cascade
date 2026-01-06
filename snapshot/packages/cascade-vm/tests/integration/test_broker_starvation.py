@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole, PortName
 from cascade.spec.physical.topology import BipartiteGraph, Channel

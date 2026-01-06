@@ -1,5 +1,4 @@
 import pytest
-import asyncio
 from typing import Dict
 
 from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode

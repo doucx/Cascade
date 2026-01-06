@@ -109,9 +109,7 @@ async def test_concurrency_limit():
     store = InMemoryObjectStore()
     registry.register("system.object_store", store)
 
-    reactor = Reactor(
-        physical_graph, memory, func_map, resource_registry=registry
-    )
+    reactor = Reactor(physical_graph, memory, func_map, resource_registry=registry)
 
     # 6. Prime the reactor.
     reactor.prime()

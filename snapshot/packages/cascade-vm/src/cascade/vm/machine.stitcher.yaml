@@ -1,0 +1,4 @@
+"Machine": "The Machine coordinates the synchronous Physics Kernel (Reactor) \nand\
+  \ the asynchronous Compute Plane (LocalComputeService)."
+"Machine.run": |-
+  Starts the Machine loop. Runs until the system settles (idle).

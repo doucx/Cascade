@@ -1,6 +1,4 @@
 import pytest
-import asyncio
-from typing import Dict, Any
 
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsDataNode
@@ -26,10 +24,6 @@ from cascade.reflection import PhysicalIdGenerator
 
 # --- User Logic ---
 async def actual_user_logic(arg1: str) -> str:
-    """
-    The actual user code that runs in the Compute Plane.
-    It doesn't deal with Tokens or Nodes, just data.
-    """
     return f"processed_{arg1}"
 
 
@@ -41,10 +35,10 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     base_id = "task"
 
     # Generate IDs using the standard protocol
-    f_pre_id = PhysicalIdGenerator.bleach_node(base_id)       # e.g., task.bleach
-    f_worker_id = PhysicalIdGenerator.worker_node(base_id)    # e.g., task.worker
-    f_stain_id = PhysicalIdGenerator.stain_node(base_id)      # e.g., task.stain
-    
+    f_pre_id = PhysicalIdGenerator.bleach_node(base_id)  # e.g., task.bleach
+    f_worker_id = PhysicalIdGenerator.worker_node(base_id)  # e.g., task.worker
+    f_stain_id = PhysicalIdGenerator.stain_node(base_id)  # e.g., task.stain
+
     # Data nodes must also follow convention where Dispatcher relies on it
     d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
     d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
@@ -103,10 +97,8 @@ def build_test_triad_for_injection() -> BipartiteGraph:
     # Observability Infrastructure
     d_life_id = PhysicalIdGenerator.observability_bus()
     f_obs_id = PhysicalIdGenerator.observability_observer()
-    
-    d_life = PhysicsDataNode(
-        id=d_life_id, name="EventBus", capacity=100
-    )
+
+    d_life = PhysicsDataNode(id=d_life_id, name="EventBus", capacity=100)
     f_obs = ObservabilityNode(
         id=f_obs_id,
         name="Observer",

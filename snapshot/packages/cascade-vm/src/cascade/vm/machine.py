@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from typing import Optional, Tuple
+from typing import Tuple
 from cascade.spec.physical.nodes import Token
 from cascade.vm.reactor import Reactor
 from cascade.vm.compute.service import LocalComputeService
@@ -9,11 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class Machine:
-    """
-    The Machine coordinates the synchronous Physics Kernel (Reactor) 
-    and the asynchronous Compute Plane (LocalComputeService).
-    """
-
     def __init__(
         self,
         reactor: Reactor,
@@ -25,14 +20,11 @@ class Machine:
         self.ingress_queue = ingress_queue
 
     async def run(self) -> None:
-        """
-        Starts the Machine loop. Runs until the system settles (idle).
-        """
         logger.info("Machine started.")
-        
+
         # Start the Compute Service
         service_task = asyncio.create_task(self.compute_service.run())
-        
+
         try:
             while True:
                 # 1. Drive the Physics Kernel (Synchronous Step)
@@ -45,7 +37,7 @@ class Machine:
                     if self.compute_service.is_idle():
                         logger.info("Machine idle. Stopping.")
                         break
-                    
+
                     # If we are just waiting for Compute, yield to the event loop
                     # to give the Service a chance to work.
                     await asyncio.sleep(0.001)
@@ -53,7 +45,7 @@ class Machine:
                     # If we did work, yield briefly to allow I/O ingress processing
                     # but return quickly to sustain high throughput.
                     await asyncio.sleep(0)
-                    
+
         finally:
             # Shutdown sequence
             self.compute_service.stop()

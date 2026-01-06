@@ -1,49 +1,3 @@
-好的，我们现在开始处理“桥接司法管辖区 (Phase 2: Bridging Jurisdictions)”阶段，并根据计划（Task 3.2）创建关键的“跨界”集成测试。
-
-这个测试将成为新架构正确性的“黄金标准”，验证从同步物理内核（Reactor）到异步计算平面（ComputeService）再返回的完整端到端流程。
-
-我将生成一个计划来创建这个新的测试文件。
-
-## [WIP] test: 为 Machine 端到端执行创建集成测试
-
-### 用户需求
-
-根据“奇点内核重构”计划，开始处理第二阶段（桥接司法管辖区），并创建第三阶段中的核心集成测试（任务 3.2）。该测试需要验证一个包含异步用户代码的完整工作流是否可以在新的 `Machine` 协调器下正确执行。
-
-### 评论
-
-这个测试对于验证“奇点内核”重构的核心架构假设至关重要。它确保了通过内存队列在同步 `Reactor` 和异步 `ComputeService` 之间建立的“司法管辖区桥梁”能够正确工作。这是新虚拟机实现高性能和逻辑正确性的基石。
-
-### 目标
-
-1.  创建一个新的测试文件 `packages/cascade-vm/tests/integration/test_machine_integration.py`。
-2.  实现一个测试，该测试定义了一个简单的、跨越同步与异步边界的工作流（一个异步任务将结果传递给另一个任务）。
-3.  测试将把此工作流编译成一个物理 `Assembly`。
-4.  它将实例化并连接所有必要的 VM 组件（`Machine`, `Reactor`, `LocalComputeService`, 队列, 注册表等）。
-5.  运行 `Machine` 直到系统稳定（空闲）。
-6.  断言最终结果是正确的，从而证明整个端到端的数据流是成功的。
-
-### 基本原理
-
-通过现在创建这个测试，我们为新架构的正确行为建立了一个清晰的、可执行的规范。这遵循了测试驱动开发的原则，我们首先用一个测试来定义期望的结果，这个测试将指导后续对 VM 组件的任何必要修复或改进。此计划直接实现了项目路线图中的任务 3.2。
-
-### 标签
-
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/vm #concept/state #scope/core #ai/instruct #task/domain/testing #task/object/integration-test #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 machine 集成测试文件
-
-我们将创建 `test_machine_integration.py` 文件，它将包含验证新架构下同步内核和异步计算平面之间通信的黄金标准测试。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_machine_integration.py
-~~~~~
-~~~~~python
 import asyncio
 from typing import List, Any
 
@@ -160,12 +114,3 @@ async def test_machine_end_to_end_integration():
 
     # Assert that the sink task was called with the correct result
     assert results == [3]
-~~~~~
-
-### 下一步建议
-
-我们已经创建了测试文件。下一步是运行测试，验证新架构是否按预期工作。
-
-如果测试失败，我们需要仔细分析失败的原因，并修复 `Reactor`、`Machine` 或 `LocalComputeService` 中的逻辑。
-
-如果测试通过，我们将进入 **阶段 3** 的下一部分：重构基准测试（`scripts/benchmark_vm_tco.py`），以量化新架构带来的性能提升。

@@ -5,7 +5,6 @@ from typing import List, Callable, Dict, Tuple, Awaitable, Optional, Any
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsFuncNode, PhysicsDataNode, Token
 from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry
 
 logger = logging.getLogger(__name__)
@@ -16,20 +15,17 @@ class Reactor:
         self,
         graph: BipartiteGraph,
         memory: VolatileMemory,
-        executor: PhysicsExecutor,
         function_map: Dict[str, Callable],
         resource_registry: Optional[ResourceRegistry] = None,
         ingress_queue: Optional[asyncio.Queue] = None,
     ):
         self.graph = graph
         self.memory = memory
-        self.executor = executor
         self.function_map = function_map
         self.resource_registry = resource_registry or ResourceRegistry()
         self.ingress_queue = ingress_queue
 
         # State
-        self.active_task_count = 0
         # node_id -> port_name -> list of callbacks
         self.sinks: Dict[str, Dict[str, List[Callable[[Token], Awaitable[None]]]]] = {}
 
@@ -121,79 +117,12 @@ class Reactor:
         if not nodes_to_fire:
             return 0
 
-        # Schedule execution
-        for node in nodes_to_fire:
-            self._schedule_task(node, inputs_for_fire[node.id])
+        # --- EXECUTION LOGIC REMOVED ---
+        # The logic to call _schedule_task was here.
+        # It is removed as part of Phase 0 purification.
+        # Phase 1 will implement the new direct-drive logic.
 
         return len(nodes_to_fire)
-
-    def _schedule_task(self, node: PhysicsFuncNode, input_data: Dict[str, Token]):
-        self.active_task_count += 1
-        asyncio.create_task(self._execute_task(node, input_data))
-
-    async def _execute_task(
-        self, node: PhysicsFuncNode, input_data: Dict[str, Token]
-    ) -> None:
-        try:
-            # 1. Execution
-            func = self.function_map.get(node.id)
-            if not func:
-                raise ValueError(f"No function mapped for node {node.id}")
-
-            # The new standard signature for all physical functions is (inputs, node, resources)
-            if inspect.iscoroutinefunction(func):
-                result_tokens = await func(input_data, node, self.resource_registry)
-            else:
-                # Sync Kernel Activation: Direct Execution
-                # For high-performance ICs (Allocator, Bleacher, etc.), we execute
-                # directly on the reactor thread to avoid executor overhead.
-                result_tokens = func(input_data, node, self.resource_registry)
-
-            if not isinstance(result_tokens, dict):
-                raise ValueError(
-                    f"Function for node {node.id} must return a Dict[str, Token], "
-                    f"got {type(result_tokens)}"
-                )
-
-            # 2. Emission & Sinks
-            outbound = self._outbound_channels.get(node.id, [])
-            node_sinks = self.sinks.get(node.id, {})
-
-            # We iterate over all result tokens to handle both Sinks and Channels
-            for port_name, token in result_tokens.items():
-                if token is None:
-                    continue
-
-                # A. Handle Sinks (Direct callback)
-                if port_name in node_sinks:
-                    for cb in node_sinks[port_name]:
-                        try:
-                            res = cb(token)
-                            if inspect.isawaitable(res):
-                                await res
-                        except Exception as e:
-                            logger.exception(
-                                f"Sink callback failed for {node.id}:{port_name}: {e}"
-                            )
-
-                # B. Handle Outbound Channels (Topological Flow)
-                # Find channels connected to this source port
-                matching_channels = [c for c in outbound if c.source_port == port_name]
-
-                for channel in matching_channels:
-                    target_node = self.graph.nodes[channel.target_node_id]
-                    if isinstance(target_node, PhysicsDataNode):
-                        self.memory.put(target_node, token)
-
-        except Exception as e:
-            logger.exception(f"Error executing task {node.id}: {e}")
-            # TODO: Emit error token to a special error port or DLQ?
-            # For now, we just log. In v3.0 specs, errors are propagated as tokens.
-            # If the func raised, it means it crashed HARD.
-        finally:
-            self.active_task_count -= 1
-            # If we hit 0, we might want to signal an event?
-            # For now, relying on memory mutation events is enough for forward progress.
 
     def _process_ingress(self):
         if not self.ingress_queue:

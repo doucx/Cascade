@@ -31,8 +31,19 @@ class LocalComputeService:
         self._running = False
         self._active_count = 0
 
+    def put_nowait(self, request: ComputeRequest) -> None:
+        """
+        Submit a request to the service. 
+        Increments active count immediately to prevent idle-detection race conditions.
+        Matches the asyncio.Queue interface expected by standard_dispatcher.
+        """
+        self._active_count += 1
+        self.inbound_queue.put_nowait(request)
+
     def is_idle(self) -> bool:
-        return self.inbound_queue.empty() and self._active_count == 0
+        # Since active_count covers both "in queue" and "processing", 
+        # we only need to check this counter.
+        return self._active_count == 0
 
     async def run(self) -> None:
         self._running = True
@@ -40,9 +51,7 @@ class LocalComputeService:
         try:
             while self._running:
                 request = await self.inbound_queue.get()
-                # Pre-increment active count to avoid race condition where
-                # queue is empty but task hasn't started yet.
-                self._active_count += 1
+                # Active count was already incremented in put_nowait
                 # Create a non-blocking task for each request to allow concurrency
                 asyncio.create_task(self._process_request(request))
         finally:
@@ -89,9 +98,6 @@ class LocalComputeService:
             # 5. Report Completion to Outbound Queue
             await self.outbound_queue.put((request.reply_to_nid, result_token))
         finally:
-            # CRITICAL: We must only decrement the active count AFTER the result
-            # is visible in the outbound queue. Otherwise, the Machine might
-            # see (active=0, queue=empty) in the gap and exit prematurely.
             self._active_count -= 1
 
     def _resolve_arguments(

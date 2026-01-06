@@ -66,7 +66,8 @@ class VMExecutionStrategy:
             )
             
             resource_registry.register("system.object_store", object_store)
-            resource_registry.register("system.compute_queue", compute_queue)
+            # Register the service itself as the queue, as it implements put_nowait
+            resource_registry.register("system.compute_queue", compute_service)
             resource_registry.register("system.egress_queue", egress_queue)
             resource_registry.register("system.event_bus", self.bus)
 

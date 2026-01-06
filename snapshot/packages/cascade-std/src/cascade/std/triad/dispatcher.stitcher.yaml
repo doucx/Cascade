@@ -1,0 +1,5 @@
+"standard_dispatcher": |-
+  The standard physical implementation for all user WorkerNodes.
+
+  This function does not execute user code directly. Instead, it dispatches
+  a ComputeRequest to a background service via a queue.

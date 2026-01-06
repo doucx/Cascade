@@ -1,6 +1,4 @@
-import asyncio
 import pytest
-from typing import Dict
 
 from cascade.spec.dsl.task import task
 from cascade.compiler.frontend.generator import IRGenerator

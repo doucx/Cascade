@@ -1,0 +1,8 @@
+{
+  "logger": {},
+  "standard_dispatcher": {
+    "baseline_code_signature_text": "async def standard_dispatcher(inputs: Dict[str, Token], node: WorkerNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "78d3e1b6674aa92c32088d80ca2558e77253b4c94897cd1c5c8170c80aa55fbb",
+    "baseline_yaml_content_hash": "7f7131b21ce6a46f12652935d9415176f30a5534095a3bbc453b856252700083"
+  }
+}

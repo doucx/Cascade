@@ -113,7 +113,6 @@ class EventDrivenRunner:
             raise
 
     async def _handle_ingress(self):
-        """Process all pending results from the compute service."""
         while not self.ingress_queue.empty():
             reply_to_nid, result_token = self.ingress_queue.get_nowait()
             node = self.graph.nodes.get(reply_to_nid)
@@ -182,4 +181,5 @@ class EventDrivenRunner:
             if isinstance(e, TaskExecutionFinished):
                 return e.task_id == task_id
             return False
+
         return await self.wait_for_event(is_completion, timeout=timeout)

@@ -1,0 +1,5 @@
+"LocalComputeService": |-
+  A background service that listens for ComputeRequests and executes them locally.
+  It embodies the "Data Plane" for a local, in-process execution environment.
+"LocalComputeService.run": |-
+  The main loop of the service. Continuously fetches and processes requests.

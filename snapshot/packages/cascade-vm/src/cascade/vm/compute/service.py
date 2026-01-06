@@ -2,9 +2,8 @@ import asyncio
 import inspect
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Tuple, Coroutine
+from typing import Any, Dict, List, Tuple
 
-from cascade.spec.physical.object import Ref
 from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime.storage import ObjectStore
 from cascade.vm.registry import CodeRegistry
@@ -14,11 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 class LocalComputeService:
-    """
-    A background service that listens for ComputeRequests and executes them locally.
-    It embodies the "Data Plane" for a local, in-process execution environment.
-    """
-
     def __init__(
         self,
         store: ObjectStore,
@@ -37,9 +31,6 @@ class LocalComputeService:
         self._running = False
 
     async def run(self) -> None:
-        """
-        The main loop of the service. Continuously fetches and processes requests.
-        """
         self._running = True
         logger.info("LocalComputeService started.")
         try:
@@ -76,7 +67,9 @@ class LocalComputeService:
                     self._pool, lambda: func(*args, **kwargs)
                 )
         except Exception as e:
-            logger.exception(f"Computation failed for request on code {request.code_hash}")
+            logger.exception(
+                f"Computation failed for request on code {request.code_hash}"
+            )
             # Per v3.1 spec, exceptions are treated as values
             result = e
 

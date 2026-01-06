@@ -1,0 +1,10 @@
+{
+  "ComputeDelegate": {
+    "baseline_yaml_content_hash": "edd15774b296d7827e50f15bfd07e484e26d7175333f0eca57fd78cee35feb28"
+  },
+  "ComputeDelegate.submit": {
+    "baseline_code_signature_text": "def submit(self, code_hash: str, input_refs: Dict[str, Ref], config: Dict[str, Any]) -> Awaitable[Ref]:",
+    "baseline_code_structure_hash": "b44b8894e70f0c5aab9e73b565b386fb06b29a44235f3278919881be31cf3538",
+    "baseline_yaml_content_hash": "117bb3a910bb77c512537f641187f18fef248e56a7f5cf9501e387fec2483a83"
+  }
+}

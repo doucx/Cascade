@@ -1,0 +1,12 @@
+"ComputeRequest": |-
+  A standard data structure to define a computation request dispatched
+  from the Physics Layer to the Data Plane.
+"ComputeRequest.code_hash": |-
+  The canonical hash of the code to execute.
+"ComputeRequest.input_refs": |-
+  A dictionary mapping argument names to input References.
+"ComputeRequest.reply_to_nid": |-
+  The "reply-to" address. After computation, the result Token should be
+  injected into the DataNode with this ID.
+"ComputeRequest.trace": |-
+  The physical trace inherited from the original Token, for context propagation.

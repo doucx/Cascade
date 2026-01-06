@@ -1,0 +1,13 @@
+"ObjectStore": |-
+  Protocol defining the interface for the Data Plane storage layer.
+"ObjectStore.delete": |-
+  Physically destroy the object associated with the Reference.
+"ObjectStore.get": |-
+  Dereference a Reference to retrieve the actual object.
+  This is typically an I/O intensive operation.
+"ObjectStore.peek": |-
+  Retrieve the latest metadata for a Reference without loading the object.
+  Useful for control flow decisions based on metadata (e.g. is_error, type checks).
+  Returns a new Ref instance with potentially updated metadata.
+"ObjectStore.put": |-
+  Store an object and return a physical Reference.

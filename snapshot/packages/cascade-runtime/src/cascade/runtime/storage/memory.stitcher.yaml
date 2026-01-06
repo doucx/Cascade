@@ -1,0 +1,13 @@
+"InMemoryObjectStore": |-
+  A reference implementation of ObjectStore using an in-memory dictionary.
+  Suitable for development, testing, and single-process execution.
+  URI Scheme: mem://<uuid>
+"InMemoryObjectStore.delete": |-
+  Physically destroy the object.
+"InMemoryObjectStore.get": |-
+  Dereference a Reference to retrieve the actual object.
+"InMemoryObjectStore.peek": |-
+  Retrieve the latest metadata for a Reference.
+  For InMemoryStore, this is a cheap lookup.
+"InMemoryObjectStore.put": |-
+  Store an object in memory and return a Reference.

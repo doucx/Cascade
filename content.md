@@ -1,318 +1,87 @@
 简要回答：
-好的，我将执行“第四阶段：反应堆进化”的核心任务，将 `ingress_queue` 的处理逻辑从测试辅助工具 `Harness` 下沉到核心组件 `Reactor` 中，使其成为一个真正自洽的、能主动处理外部事件的状态机。同时，我将修复因 `EventDrivenRunner` 签名变更导致的测试失败。
+好的，我将修复 `test_event_driven_ping_pong` 测试失败的问题。
 
-## [WIP] feat(vm): 进化 Reactor 以内置处理 Ingress 队列
+## [WIP] fix(vm): 修复 E2E 测试中的 Ref 解引用错误
 
 ### 错误分析
 
-用户报告了两个 `TypeError`，均指出 `EventDrivenRunner.__init__()` 缺少 `code_registry` 参数。这是因为在上一阶段引入计算服务时，更新了 `EventDrivenRunner` 的签名，但未同步更新所有相关测试用例。本次计划将一并修复此问题。
+`test_event_driven_ping_pong` 失败是因为在 v3.1 架构中，物理层的数据载荷（Payload）强制为 `Ref` 对象，而测试用的 Mock 函数 `obs_enabled_logic` 试图直接对 `Ref` 对象执行整数加法 (`val + 1`)，导致 `TypeError`。
+
+此外，由于测试未正确模拟 Ref 的解引用和再封装过程，且 `EventDrivenRunner` 未将 `ObjectStore` 暴露给 Reactor 内运行的函数，导致 Mock 函数无法通过合法途径获取数据。
 
 ### 用户需求
 
-1.  **Reactor 自洽性**: `Reactor` 必须内置 `ingress_queue` 属性，并在 `step()` 循环中主动消费该队列，将外部计算结果（Token）注入到物理图的 DataNode 中。
-2.  **Harness 简化**: `EventDrivenRunner` 应剥离手动处理 Ingress 的逻辑，转而只负责组装组件。
-3.  **测试修复**: 修复所有因 `EventDrivenRunner` 接口变更而崩溃的测试。
+1.  修复 `EventDrivenRunner`，使其将 `ObjectStore` 注册到 `ResourceRegistry`，以便测试函数可以访问。
+2.  更新 `test_reactor.py` 中的 Mock 逻辑，使其遵循 Ref-Based 协议：`Get Ref` -> `Dereference` -> `Compute` -> `Put Result` -> `Return Ref`。
+3.  更新测试断言，以验证最终结果是否为指向正确值的 `Ref`。
 
 ### 评论
 
-这是一个关键的架构重构。将 Ingress 处理移入 Reactor 意味着 Reactor 不再仅仅是一个被动的“图遍历器”，它变成了一个真正的“反应堆”，能够响应外部世界的刺激。这对于实现高吞吐量的异步/同步混合调度至关重要，因为它允许 I/O 密集型任务在后台完成后，自动、低延迟地唤醒 Reactor 的物理周期。
+这是一个非常典型的架构升级带来的“阵痛”。它暴露了我们的测试代码（模拟器）落后于核心架构规范的问题。修复这个问题不仅能通过测试，还能进一步验证 Ref-Based 机制在 Reactor 内部的闭环流转。
 
 ### 目标
 
-1.  修改 `Reactor` 类，使其接收并处理 `ingress_queue`。
-2.  重构 `EventDrivenRunner`，移除冗余逻辑并适配新 `Reactor`。
-3.  修复 `test_context_injection.py` 和 `test_reactor.py`。
+1.  修改 `packages/cascade-vm/src/cascade/vm/harness.py`，注册 `system.object_store`。
+2.  修改 `packages/cascade-vm/tests/unit/test_reactor.py`，适配 Ref 操作。
 
 ### 基本原理
 
-通过将 Ingress 逻辑标准化为 Reactor 生命周期的一部分（即在每次 `step` 的物理计算之前先处理“入境”），我们保证了所有外部输入都在确定的时机进入系统，消除了 Harness 层面手动调度可能引入的竞态条件或延迟。这也使得 Reactor 在生产环境（非测试环境）下更容易被托管。
+在 v3.1 中，Reactor 并不感知数据内容，只传递 `Ref`。任何试图操作数据的逻辑（即便是测试用的 Mock Worker）都必须显式地与 `ObjectStore` 交互。这增强了物理层的纯粹性。
 
 ### 标签
 
-#intent/refine #flow/ready #priority/high #comp/runtime #concept/executor #scope/core #ai/instruct #task/domain/vm #task/object/reactor #task/action/evolution #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/vm #task/object/harness #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 修改 Reactor 以支持 Ingress 处理
+#### Acts 1: 在 EventDrivenRunner 中注册 ObjectStore
 
-我们将向 `Reactor` 添加 `ingress_queue` 并在 `step` 方法的开头处理它。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
-~~~~~
-~~~~~python.old
-    def __init__(
-        self,
-        graph: BipartiteGraph,
-        memory: VolatileMemory,
-        executor: PhysicsExecutor,
-        function_map: Dict[str, Callable],
-        resource_registry: Optional[ResourceRegistry] = None,
-    ):
-        self.graph = graph
-        self.memory = memory
-        self.executor = executor
-        self.function_map = function_map
-        self.resource_registry = resource_registry or ResourceRegistry()
-
-        # State
-        self.active_task_count = 0
-~~~~~
-~~~~~python.new
-    def __init__(
-        self,
-        graph: BipartiteGraph,
-        memory: VolatileMemory,
-        executor: PhysicsExecutor,
-        function_map: Dict[str, Callable],
-        resource_registry: Optional[ResourceRegistry] = None,
-        ingress_queue: Optional[asyncio.Queue] = None,
-    ):
-        self.graph = graph
-        self.memory = memory
-        self.executor = executor
-        self.function_map = function_map
-        self.resource_registry = resource_registry or ResourceRegistry()
-        self.ingress_queue = ingress_queue
-
-        # State
-        self.active_task_count = 0
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
-~~~~~
-~~~~~python.old
-    async def step(self) -> int:
-        nodes_to_fire: List[PhysicsFuncNode] = []
-        inputs_for_fire: Dict[str, Dict[str, Token]] = {}
-
-        # --- ATOMIC SCAN & CONSUME ---
-~~~~~
-~~~~~python.new
-    async def step(self) -> int:
-        # 0. Ingress Cycle
-        self._process_ingress()
-
-        nodes_to_fire: List[PhysicsFuncNode] = []
-        inputs_for_fire: Dict[str, Dict[str, Token]] = {}
-
-        # --- ATOMIC SCAN & CONSUME ---
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
-~~~~~
-~~~~~python.old
-        except Exception as e:
-            logger.exception(f"Error executing task {node.id}: {e}")
-            # TODO: Emit error token to a special error port or DLQ?
-            # For now, we just log. In v3.0 specs, errors are propagated as tokens.
-            # If the func raised, it means it crashed HARD.
-        finally:
-            self.active_task_count -= 1
-            # If we hit 0, we might want to signal an event?
-            # For now, relying on memory mutation events is enough for forward progress.
-~~~~~
-~~~~~python.new
-        except Exception as e:
-            logger.exception(f"Error executing task {node.id}: {e}")
-            # TODO: Emit error token to a special error port or DLQ?
-            # For now, we just log. In v3.0 specs, errors are propagated as tokens.
-            # If the func raised, it means it crashed HARD.
-        finally:
-            self.active_task_count -= 1
-            # If we hit 0, we might want to signal an event?
-            # For now, relying on memory mutation events is enough for forward progress.
-
-    def _process_ingress(self):
-        if not self.ingress_queue:
-            return
-
-        while not self.ingress_queue.empty():
-            try:
-                reply_to_nid, result_token = self.ingress_queue.get_nowait()
-                node = self.graph.nodes.get(reply_to_nid)
-                if isinstance(node, PhysicsDataNode):
-                    self.memory.put(node, result_token)
-                else:
-                    logger.warning(
-                        f"Invalid reply_to_nid '{reply_to_nid}': not a DataNode."
-                    )
-            except asyncio.QueueEmpty:
-                break
-~~~~~
-
-#### Acts 2: 重构 EventDrivenRunner
-
-我们将从 `EventDrivenRunner` 中移除 `_handle_ingress` 逻辑，并将 `ingress_queue` 传递给 `Reactor`。
+我们需要让运行在 Reactor 中的函数能够访问 `ObjectStore`。
 
 ~~~~~act
 patch_file
 packages/cascade-vm/src/cascade/vm/harness.py
 ~~~~~
 ~~~~~python.old
+        self.resource_registry = ResourceRegistry()
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        self.resource_registry.register("system.compute_queue", self.compute_queue)
+
         # 4. Setup Reactor
-        factory = reactor_factory or Reactor
-        self.reactor = factory(
-            self.graph,
-            self.memory,
-            self.executor,
-            function_map,
-            self.resource_registry,
-        )
-        self._loop_task: Optional[asyncio.Task] = None
 ~~~~~
 ~~~~~python.new
+        self.resource_registry = ResourceRegistry()
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        self.resource_registry.register("system.compute_queue", self.compute_queue)
+        self.resource_registry.register("system.object_store", self.object_store)
+
         # 4. Setup Reactor
-        factory = reactor_factory or Reactor
-        self.reactor = factory(
-            self.graph,
-            self.memory,
-            self.executor,
-            function_map,
-            self.resource_registry,
-            ingress_queue=self.ingress_queue,
-        )
-        self._loop_task: Optional[asyncio.Task] = None
 ~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/harness.py
-~~~~~
-~~~~~python.old
-    async def _run_loop(self):
-        logger.info("Reactor loop with ingress handling started.")
-        try:
-            while not self._stop_event.is_set():
-                # This is the core of the v3.1 harness: it simulates the Reactor's
-                # ability to handle both internal state changes and external events.
-                await self._handle_ingress()
-                fired = await self.reactor.step()
-                if fired == 0 and self.ingress_queue.empty():
-                    await asyncio.sleep(0.001)
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            logger.exception("Reactor loop crashed")
-            raise
+#### Acts 2: 修复 test_reactor.py 中的 Mock 逻辑和断言
 
-    async def _handle_ingress(self):
-        while not self.ingress_queue.empty():
-            reply_to_nid, result_token = self.ingress_queue.get_nowait()
-            node = self.graph.nodes.get(reply_to_nid)
-            if isinstance(node, PhysicsDataNode):
-                self.memory.put(node, result_token)
-            else:
-                logger.warning(
-                    f"Invalid reply_to_nid '{reply_to_nid}': not a DataNode."
-                )
-
-    async def stop_loop(self):
-~~~~~
-~~~~~python.new
-    async def _run_loop(self):
-        logger.info("Reactor loop with ingress handling started.")
-        try:
-            while not self._stop_event.is_set():
-                # In v3.1 Phase 4, the Reactor handles ingress internally during step().
-                fired = await self.reactor.step()
-                if fired == 0 and self.ingress_queue.empty():
-                    await asyncio.sleep(0.001)
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            logger.exception("Reactor loop crashed")
-            raise
-
-    async def stop_loop(self):
-~~~~~
-
-#### Acts 3: 修复 Integration Test 中的 Runner 初始化
-
-`test_context_injection.py` 需要更新 `EventDrivenRunner` 的初始化调用，传入一个 Dummy CodeRegistry。
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_context_injection.py
-~~~~~
-~~~~~python.old
-from cascade.std.triad.observer import standard_observer
-
-
-# --- Helper: Build a Physical Triad manually ---
-~~~~~
-~~~~~python.new
-from cascade.std.triad.observer import standard_observer
-from cascade.vm.registry import CodeRegistry
-
-
-# --- Helper: Build a Physical Triad manually ---
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-vm/tests/integration/test_context_injection.py
-~~~~~
-~~~~~python.old
-    function_map = {
-        "task.bleach": standard_bleacher,
-        "task.worker": simple_worker,
-        "task.stain": standard_stainer,
-        "global.observability.observer": standard_observer,
-    }
-
-    runner = EventDrivenRunner(graph, function_map)
-
-    # Assert Runner has generated a Run ID
-    assert runner.run_id is not None
-~~~~~
-~~~~~python.new
-    function_map = {
-        "task.bleach": standard_bleacher,
-        "task.worker": simple_worker,
-        "task.stain": standard_stainer,
-        "global.observability.observer": standard_observer,
-    }
-
-    runner = EventDrivenRunner(graph, function_map, CodeRegistry())
-
-    # Assert Runner has generated a Run ID
-    assert runner.run_id is not None
-~~~~~
-
-#### Acts 4: 修复 Unit Test 中的 Runner 初始化
-
-`test_reactor.py` 中的 `test_event_driven_ping_pong` 同样需要更新。
+我们将更新 `obs_enabled_logic` 以处理 `Ref`，并更新测试断言。
 
 ~~~~~act
 patch_file
 packages/cascade-vm/tests/unit/test_reactor.py
 ~~~~~
 ~~~~~python.old
-from cascade.vm.harness import EventDrivenRunner
-from cascade.spec.physical.triad import ObservabilityNode
-from cascade.std.triad.observer import standard_observer
-
-
-# Dummy function for testing
-def noop(inputs, node, resources):
-~~~~~
-~~~~~python.new
+from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.harness import EventDrivenRunner
 from cascade.spec.physical.triad import ObservabilityNode
 from cascade.std.triad.observer import standard_observer
 from cascade.vm.registry import CodeRegistry
-
-
-# Dummy function for testing
-def noop(inputs, node, resources):
+~~~~~
+~~~~~python.new
+from cascade.vm.executor import PhysicsExecutor
+from cascade.vm.harness import EventDrivenRunner
+from cascade.spec.physical.triad import ObservabilityNode
+from cascade.spec.physical.object import Ref
+from cascade.std.triad.observer import standard_observer
+from cascade.vm.registry import CodeRegistry
 ~~~~~
 
 ~~~~~act
@@ -320,30 +89,94 @@ patch_file
 packages/cascade-vm/tests/unit/test_reactor.py
 ~~~~~
 ~~~~~python.old
-    }
+    # Function Map
+    def obs_enabled_logic(inputs, node, resources):
+        val = inputs["value"].payload
 
-    # 2. Use Runner, injecting the backend factory
-    runner = EventDrivenRunner(graph, func_map, reactor_factory=reactor_backend_factory)
-    runner.inject_input("D1", 10)
+        # This mock logic now simulates what a Stainer does: create an EventIR
+        ir: EventIR = {
+            "v": "1.0",
+            "t": EventType.LIFECYCLE,
+            "ts": time.time(),
+            "ctx": {},
+            "phy": {"nid": node.id},
+            "data": {
+                "state": EventState.SUCCEEDED,
+                "task_id": node.id,  # In test, physical ID is fine
+                "task_name": node.name,
+            },
+        }
 
-    # 3. Start & Wait
+        return {
+            "result": Token(payload=val + 1),
+            "obs_output": Token(payload=ir),
+        }
 ~~~~~
 ~~~~~python.new
-    }
+    # Function Map
+    def obs_enabled_logic(inputs, node, resources):
+        # Ref-Based Architecture Adaptation
+        # 1. Get Store
+        store = resources.get("system.object_store")
+        
+        # 2. Dereference Input
+        ref_in = inputs["value"].payload
+        assert isinstance(ref_in, Ref)
+        val = store.get(ref_in)
 
-    # 2. Use Runner, injecting the backend factory
-    runner = EventDrivenRunner(
-        graph, func_map, CodeRegistry(), reactor_factory=reactor_backend_factory
-    )
-    runner.inject_input("D1", 10)
+        # 3. Compute
+        new_val = val + 1
+        
+        # 4. Store Result
+        ref_out = store.put(new_val)
 
-    # 3. Start & Wait
+        # This mock logic now simulates what a Stainer does: create an EventIR
+        ir: EventIR = {
+            "v": "1.0",
+            "t": EventType.LIFECYCLE,
+            "ts": time.time(),
+            "ctx": {},
+            "phy": {"nid": node.id},
+            "data": {
+                "state": EventState.SUCCEEDED,
+                "task_id": node.id,  # In test, physical ID is fine
+                "task_name": node.name,
+            },
+        }
+
+        return {
+            "result": Token(payload=ref_out),
+            "obs_output": Token(payload=ir),
+        }
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/tests/unit/test_reactor.py
+~~~~~
+~~~~~python.old
+        # Verify physical side effect (Memory)
+        assert runner.memory.get_count("D2") == 1
+        assert runner.memory.take("D2").payload == 11
+
+    finally:
+        await runner.stop_loop()
+~~~~~
+~~~~~python.new
+        # Verify physical side effect (Memory)
+        assert runner.memory.get_count("D2") == 1
+        result_token = runner.memory.take("D2")
+        
+        # Verify it is a Ref and dereference it
+        assert isinstance(result_token.payload, Ref)
+        final_val = runner.object_store.get(result_token.payload)
+        assert final_val == 11
+
+    finally:
+        await runner.stop_loop()
 ~~~~~
 
 ### 下一步建议
 
-执行测试以验证：
-1.  `test_context_injection.py` 和 `test_reactor.py` 是否通过。
-2.  `Reactor` 是否正确处理了 `ingress_queue` 中的 Token。
-
-如果通过，可以考虑将此变更提交。
+执行测试，确认 `test_reactor.py` 通过。
+同时，可以再次运行 `test_context_injection.py` 确保它没有因为这次改动而受到负面影响（虽然不太可能，因为它是 E2E 测试，逻辑相对独立）。

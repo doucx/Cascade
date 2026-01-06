@@ -68,6 +68,7 @@ class EventDrivenRunner:
         self.resource_registry = ResourceRegistry()
         self.resource_registry.register("system.event_bus", self.event_bus)
         self.resource_registry.register("system.compute_queue", self.compute_queue)
+        self.resource_registry.register("system.object_store", self.object_store)
 
         # 4. Setup Reactor
         factory = reactor_factory or Reactor

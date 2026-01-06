@@ -13,7 +13,7 @@ from cascade.std.triad.observer import standard_observer
 from cascade.std.triad.dispatcher import standard_dispatcher
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
-from cascade.std.probe.const import const_probe
+from cascade.std.system.egress import standard_egress
 
 
 class Linker:
@@ -57,8 +57,8 @@ class Linker:
         if node_id.startswith("req."):
             return resource_requestor
 
-        # Probes
-        if node_id.startswith("probe.const."):
-            return const_probe
+        # System / Egress
+        if node_id.startswith("egress."):
+            return standard_egress
 
         return None

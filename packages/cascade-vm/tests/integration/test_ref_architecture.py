@@ -13,7 +13,6 @@ from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
 from cascade.std.triad.dispatcher import standard_dispatcher
-from cascade.std.probe.const import const_probe
 
 
 # --- User-defined tasks for the test ---
@@ -66,8 +65,6 @@ async def test_full_ref_based_e2e_flow():
             func_map[node_id] = standard_stainer
         elif "observer" in node_id:
             func_map[node_id] = standard_observer
-        elif node_id.startswith("probe.const."):
-            func_map[node_id] = const_probe
         # All user workers are now implemented by the dispatcher
         elif node_id in assembly.symbol_table:
             func_map[node_id] = standard_dispatcher

@@ -23,7 +23,6 @@ from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
-from cascade.std.probe.const import const_probe
 from cascade.spec.physical.object import Ref
 
 
@@ -191,8 +190,6 @@ async def test_resource_scarcity_topology_and_execution():
             func_map[node_id] = debug_wrapper(discrete_reclaimer, node.name)
         elif node_id.startswith("req."):
             func_map[node_id] = debug_wrapper(resource_requestor, node.name)
-        elif node_id.startswith("probe.const."):
-            func_map[node_id] = debug_wrapper(const_probe, node.name)
         elif "observability" in node_id:
             func_map[node_id] = standard_observer
 

@@ -16,7 +16,6 @@ from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
-from cascade.std.probe.const import const_probe
 from cascade.spec.physical.object import Ref
 
 
@@ -98,8 +97,6 @@ async def test_concurrency_limit():
             func_map[node_id] = discrete_reclaimer
         elif node_id.startswith("req."):
             func_map[node_id] = resource_requestor
-        elif node_id.startswith("probe.const."):
-            func_map[node_id] = const_probe
         elif "observability" in node_id:
             func_map[node_id] = noop_observer
 
@@ -122,12 +119,9 @@ async def test_concurrency_limit():
     memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
 
     # --- SIMULATION ---
-    # The new graph has many more steps due to Probe -> Req -> Broker -> Bleacher
+    # With direct D_const -> F_req wiring, requestors fire on the first step.
 
-    # Round 1: Probes fire (providing Amount and X)
-    reactor.step()
-
-    # Round 2: Requestors fire (sending Req Tokens to Buffer)
+    # Step 1: Requestors for both tasks fire, populating the request buffer.
     reactor.step()
 
     # Check Buffer state

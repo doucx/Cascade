@@ -1,2 +1,0 @@
-"param_probe": |-
-  Samples a value from the global WorkflowContext based on the 'name' input.

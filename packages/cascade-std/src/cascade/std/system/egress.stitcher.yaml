@@ -1,0 +1,9 @@
+"standard_egress": |-
+  Standard Egress IC (Physical Exit).
+
+  This node acts as a 'Black Hole' in the physical graph. It consumes a Token
+  and teleports it to the 'system.egress_queue', allowing the Strategy layer
+  to observe the result.
+
+  Ports:
+      - in: The token to export.

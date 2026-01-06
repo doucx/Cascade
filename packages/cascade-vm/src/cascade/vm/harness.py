@@ -5,6 +5,7 @@ from typing import Dict, Any, Callable, TypeVar, Optional, List, Tuple
 
 from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.nodes import Token, PhysicsDataNode
+from cascade.spec.physical.object import Ref
 from cascade.vm.reactor import Reactor
 from cascade.vm.protocols import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
@@ -85,6 +86,31 @@ class EventDrivenRunner:
         self.event_queue.put_nowait(event)
 
     def prime(self):
+        # Phase 3.2 - Constant Materialization & Scalar Hoisting
+        # The runner, acting as the Strategy, scans the graph for any initial payloads
+        # and converts them to Refs before priming the reactor.
+        for node in self.graph.nodes.values():
+            # CRITICAL: We only materialize nodes that are explicitly marked as constants.
+            # System-level nodes like resource ledgers must retain their object payloads
+            # to be used directly by kernel functions without I/O.
+            if (
+                isinstance(node, PhysicsDataNode)
+                and node.initial_tokens > 0
+                and node.id.startswith("const.")
+            ):
+                payload = node.initial_payload
+                if payload is not None and not isinstance(payload, Ref):
+                    meta = {}
+                    # Perform Scalar Hoisting for kernel-readable values
+                    if (
+                        isinstance(payload, (int, float, bool, str))
+                        and len(str(payload)) < 256
+                    ):
+                        meta["scalar_value"] = payload
+
+                    # Materialize the raw value into the object store with metadata
+                    node.initial_payload = self.object_store.put(payload, metadata=meta)
+
         self.reactor.prime(genesis_trace={"rid": self.run_id})
 
     async def start_loop(self):

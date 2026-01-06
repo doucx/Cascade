@@ -23,6 +23,7 @@ from cascade.std.triad.stainer import standard_stainer
 
 # --- Test Fixtures ---
 
+
 # 1. A simple async user function to be executed by the ComputeService
 async def user_square(n: int) -> int:
     await asyncio.sleep(0.01)  # Simulate real async work
@@ -82,19 +83,23 @@ def build_test_graph() -> BipartiteGraph:
         graph.nodes[node.id] = node
 
     # Channels
-    graph.channels.extend([
-        Channel(d_in_id, "out", f_bleach_id, "n"),
-        Channel(f_bleach_id, "worker_input", d_worker_in_id, "in"),
-        Channel(d_worker_in_id, "out", f_worker_id, "worker_input"),
-        Channel(f_worker_id, "worker_result", d_worker_out_id, "in"),
-        Channel(d_worker_out_id, "out", f_stain_id, "worker_result"),
-        Channel(f_bleach_id, "trace_output", d_trace_id, "in"),
-        Channel(d_trace_id, "out", f_stain_id, "trace_input"),
-        Channel(f_stain_id, "output_default", d_out_id, "in"),
-    ])
+    graph.channels.extend(
+        [
+            Channel(d_in_id, "out", f_bleach_id, "n"),
+            Channel(f_bleach_id, "worker_input", d_worker_in_id, "in"),
+            Channel(d_worker_in_id, "out", f_worker_id, "worker_input"),
+            Channel(f_worker_id, "worker_result", d_worker_out_id, "in"),
+            Channel(d_worker_out_id, "out", f_stain_id, "worker_result"),
+            Channel(f_bleach_id, "trace_output", d_trace_id, "in"),
+            Channel(d_trace_id, "out", f_stain_id, "trace_input"),
+            Channel(f_stain_id, "output_default", d_out_id, "in"),
+        ]
+    )
     return graph
 
+
 # --- The Test ---
+
 
 @pytest.mark.asyncio
 async def test_machine_runs_cross_jurisdiction_flow():
@@ -147,7 +152,7 @@ async def test_machine_runs_cross_jurisdiction_flow():
     # 4. Assert: Verify the final state
     # The machine should stop when idle. We can now inspect the final memory state.
     assert memory.get_count("d_out") == 1, "Final output node should have one token"
-    
+
     final_token = memory.take("d_out")
     final_ref = final_token.payload
     final_result = object_store.get(final_ref)

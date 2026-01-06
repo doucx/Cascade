@@ -6,6 +6,7 @@
     "baseline_code_signature_text": "def __init__(self, store: ObjectStore, registry: CodeRegistry, inbound_queue: asyncio.Queue[ComputeRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], max_workers: int = None):",
     "baseline_code_structure_hash": "ec8b052f564175c45bf43a35f151ea50adcc9ba46c313f61bf52176fa480923b"
   },
+  "LocalComputeService._active_count": {},
   "LocalComputeService._pool": {},
   "LocalComputeService._process_request": {
     "baseline_code_signature_text": "async def _process_request(self, request: ComputeRequest) -> None:",
@@ -17,6 +18,10 @@
   },
   "LocalComputeService._running": {},
   "LocalComputeService.inbound_queue": {},
+  "LocalComputeService.is_idle": {
+    "baseline_code_signature_text": "def is_idle(self) -> bool:",
+    "baseline_code_structure_hash": "c95ad9d9ef6894d5590de285647a6720b3997d9779f5c663448d7b30f8a0a271"
+  },
   "LocalComputeService.outbound_queue": {},
   "LocalComputeService.registry": {},
   "LocalComputeService.run": {

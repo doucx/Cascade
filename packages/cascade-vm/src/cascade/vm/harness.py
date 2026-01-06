@@ -8,7 +8,6 @@ from cascade.spec.physical.nodes import Token, PhysicsDataNode
 from cascade.vm.reactor import Reactor
 from cascade.vm.protocols import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
@@ -34,7 +33,6 @@ class EventDrivenRunner:
     ):
         self.graph = graph
         self.memory = VolatileMemory()
-        self.executor = PhysicsExecutor()
         self.run_id = str(uuid.uuid4())
 
         # 1. Setup Queues for disconnected execution
@@ -75,7 +73,6 @@ class EventDrivenRunner:
         self.reactor = factory(
             self.graph,
             self.memory,
-            self.executor,
             function_map,
             self.resource_registry,
             ingress_queue=self.ingress_queue,
@@ -103,9 +100,12 @@ class EventDrivenRunner:
         try:
             while not self._stop_event.is_set():
                 # In v3.1 Phase 4, the Reactor handles ingress internally during step().
-                fired = await self.reactor.step()
+                fired = self.reactor.step()
                 if fired == 0 and self.ingress_queue.empty():
                     await asyncio.sleep(0.001)
+                else:
+                    # Yield to allow other tasks (like ComputeService) to run
+                    await asyncio.sleep(0)
         except asyncio.CancelledError:
             pass
         except Exception:

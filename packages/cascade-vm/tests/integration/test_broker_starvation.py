@@ -1,21 +1,14 @@
 import pytest
-import asyncio
 from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
 from cascade.spec.physical.ports import PortDef, PortRole, PortName
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
 from cascade.std.resource.discrete import (
     discrete_allocator,
     discrete_reclaimer,
     DiscreteLedger,
 )
-
-
-async def wait_idle(reactor):
-    while reactor.active_task_count > 0:
-        await asyncio.sleep(0.001)
 
 
 def create_starvation_topology(allocator_first: bool):
@@ -116,14 +109,13 @@ async def test_allocator_starves_reclaimer():
     )
 
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory, PhysicsExecutor(), func_map)
+    reactor = Reactor(graph, memory, func_map)
     reactor.prime()
 
     # Step 1
     # Allocator should fire (it sees Ledger and Req).
     # Reclaimer sees Ledger and Rel, BUT Ledger is consumed by Allocator first.
-    fired = await reactor.step()
-    await wait_idle(reactor)
+    fired = reactor.step()
 
     assert fired == 1
 
@@ -137,8 +129,7 @@ async def test_allocator_starves_reclaimer():
 
     # Step 2
     # Allocator fires AGAIN.
-    fired = await reactor.step()
-    await wait_idle(reactor)
+    fired = reactor.step()
 
     assert fired == 1
     assert memory.get_count(d_rel.id) == 1  # Reclaimer STILL hasn't ran
@@ -151,13 +142,12 @@ async def test_reclaimer_priority_fixes_starvation():
     )
 
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory, PhysicsExecutor(), func_map)
+    reactor = Reactor(graph, memory, func_map)
     reactor.prime()
 
     # Step 1
     # Reclaimer should fire first.
-    fired = await reactor.step()
-    await wait_idle(reactor)
+    fired = reactor.step()
 
     assert fired >= 1  # Could be 1 (Reclaim) or 2 (Reclaim then Alloc in same step?)
     # Wait, in one step, if Reclaim consumes Ledger, Allocator CANNOT fire in that same step.
@@ -173,8 +163,7 @@ async def test_reclaimer_priority_fixes_starvation():
 
     # Step 2
     # Now Allocator should fire and SUCCEED
-    fired = await reactor.step()
-    await wait_idle(reactor)
+    fired = reactor.step()
 
     # Ledger should be 0 again (Granted)
     ledger = memory.take(d_ledger.id).payload

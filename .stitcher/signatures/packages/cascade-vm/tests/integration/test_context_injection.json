@@ -1,7 +1,16 @@
 {
+  "actual_user_logic": {
+    "baseline_code_signature_text": "async def actual_user_logic(arg1: str) -> str:",
+    "baseline_code_structure_hash": "ef883be13113539a729b201b2600f5e0239348b65bd28bc465ceb2ef3d1f7a4f",
+    "baseline_yaml_content_hash": "0f9222948017d63d0dfc4b2d30c7d88b9ed11aaa52edd6da06beab511c9ca1db"
+  },
   "build_test_triad": {
     "baseline_code_signature_text": "def build_test_triad() -> BipartiteGraph:",
     "baseline_code_structure_hash": "690423a1e53fc918ff5545652f5747188c231752b887c61d1bf19ff419386eb8"
+  },
+  "build_test_triad_for_injection": {
+    "baseline_code_signature_text": "def build_test_triad_for_injection() -> BipartiteGraph:",
+    "baseline_code_structure_hash": "f299540f2c4f5b191e6e3ac67730d75ddafa6cd5139c93f76d347fea178245c8"
   },
   "simple_worker": {
     "baseline_code_signature_text": "async def simple_worker(inputs: Dict[str, Token], node: Any, resources: Any) -> Dict[str, Token]:",

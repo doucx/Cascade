@@ -7,7 +7,6 @@ from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
 from cascade.vm.memory import VolatileMemory
-from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.reactor import Reactor
 from cascade.vm.resource_registry import ResourceRegistry
 from cascade.runtime.storage import InMemoryObjectStore
@@ -83,7 +82,6 @@ async def test_concurrency_limit():
 
     # 3. Setup VM
     memory = VolatileMemory()
-    executor = PhysicsExecutor()
 
     # Map functions
     func_map = {}
@@ -111,9 +109,7 @@ async def test_concurrency_limit():
     store = InMemoryObjectStore()
     registry.register("system.object_store", store)
 
-    reactor = Reactor(
-        physical_graph, memory, executor, func_map, resource_registry=registry
-    )
+    reactor = Reactor(physical_graph, memory, func_map, resource_registry=registry)
 
     # 6. Prime the reactor.
     reactor.prime()
@@ -125,23 +121,14 @@ async def test_concurrency_limit():
     assert ledger.available == 1
     memory.put(physical_graph.nodes[ledger_node_id], Token(payload=ledger))
 
-    # 7. Step Execution Logic
-    async def wait_idle():
-        import asyncio
-
-        while reactor.active_task_count > 0:
-            await asyncio.sleep(0.001)
-
     # --- SIMULATION ---
     # The new graph has many more steps due to Probe -> Req -> Broker -> Bleacher
 
     # Round 1: Probes fire (providing Amount and X)
-    await reactor.step()
-    await wait_idle()
+    reactor.step()
 
     # Round 2: Requestors fire (sending Req Tokens to Buffer)
-    await reactor.step()
-    await wait_idle()
+    reactor.step()
 
     # Check Buffer state
     req_buffer_id = "buffer.req.gpu"
@@ -150,8 +137,7 @@ async def test_concurrency_limit():
     # Round 3: Allocator fires.
     # It consumes Ledger + ONE request from Buffer.
     # Since capacity is 1, it Grants.
-    await reactor.step()
-    await wait_idle()
+    reactor.step()
 
     # Ledger should now have 0 available
     ledger = memory.take(ledger_node_id).payload
@@ -167,8 +153,7 @@ async def test_concurrency_limit():
     #   Yes, it reads Ledger(0) and Request(1).
     #   Logic: 0 < 1. Reject & Recirculate.
 
-    await reactor.step()
-    await wait_idle()
+    reactor.step()
 
     # If Allocator fired, it recirculated the request back to Buffer.
     # If Bleacher fired, it started the triad.
@@ -179,8 +164,7 @@ async def test_concurrency_limit():
     # We loop until resource is released (Ledger becomes 1)
     max_steps = 30
     for _ in range(max_steps):
-        await reactor.step()
-        await wait_idle()
+        reactor.step()
 
         # Check if resource returned
         ledger = memory.take(ledger_node_id).payload
@@ -199,8 +183,7 @@ async def test_concurrency_limit():
         ):
             # If buffers are empty and tasks done, we are good.
             pass
-        await reactor.step()
-        await wait_idle()
+        reactor.step()
 
     # Final check: Ledger full, Buffers empty
     ledger = memory.take(ledger_node_id).payload

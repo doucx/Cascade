@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: M vm.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767693138.315258, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(test): 重构上下文注入测试以适配 Cascade 3.3 物理层架构", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767693819.7968795, "duration_ms": 0}}

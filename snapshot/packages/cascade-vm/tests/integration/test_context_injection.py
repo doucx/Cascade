@@ -1,8 +1,9 @@
 import pytest
+import asyncio
 from typing import Dict, Any
 
 from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode, Token
+from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.triad import (
     BleachNode,
     WorkerNode,
@@ -18,11 +19,21 @@ from cascade.vm.harness import EventDrivenRunner
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
+from cascade.std.triad.dispatcher import standard_dispatcher
 from cascade.vm.registry import CodeRegistry
 
 
+# --- User Logic ---
+async def actual_user_logic(arg1: str) -> str:
+    """
+    The actual user code that runs in the Compute Plane.
+    It doesn't deal with Tokens or Nodes, just data.
+    """
+    return f"processed_{arg1}"
+
+
 # --- Helper: Build a Physical Triad manually ---
-def build_test_triad() -> BipartiteGraph:
+def build_test_triad_for_injection() -> BipartiteGraph:
     graph = BipartiteGraph()
 
     # 1. Nodes
@@ -46,9 +57,11 @@ def build_test_triad() -> BipartiteGraph:
     d_trace = PhysicsDataNode(id="d_trace", name="Trace")
 
     # F_exec (Worker)
+    # NOTE: In v3.3, WorkerNode holds the hash of the code it should dispatch.
     f_worker = WorkerNode(
         id="task.worker",
         name="Worker",
+        canonical_code_structure_hash="hash_user_logic_001",
         input_ports={"worker_input": PortDef("worker_input", PortRole.DATA)},
         output_ports={"worker_result": PortDef("worker_result", PortRole.DATA)},
     )
@@ -128,45 +141,41 @@ def build_test_triad() -> BipartiteGraph:
     return graph
 
 
-async def simple_worker(
-    inputs: Dict[str, Token], node: Any, resources: Any
-) -> Dict[str, Token]:
-    # A simple pass-through worker
-    payload = inputs["worker_input"].payload
-    val = payload["arg1"]
-    return {"worker_result": Token(payload=f"processed_{val}")}
-
-
 @pytest.mark.asyncio
 async def test_genesis_injection_propagates_run_id():
-    # 1. Setup
-    graph = build_test_triad()
+    # 1. Setup Code Registry
+    registry = CodeRegistry()
+    registry.register("hash_user_logic_001", actual_user_logic)
+
+    # 2. Setup Graph
+    graph = build_test_triad_for_injection()
+
+    # 3. Setup Physics Kernel Function Map
+    # NOTE: The worker now maps to the standard_dispatcher!
     function_map = {
         "task.bleach": standard_bleacher,
-        "task.worker": simple_worker,
+        "task.worker": standard_dispatcher,
         "task.stain": standard_stainer,
         "global.observability.observer": standard_observer,
     }
 
-    runner = EventDrivenRunner(graph, function_map, CodeRegistry())
+    runner = EventDrivenRunner(graph, function_map, registry)
 
     # Assert Runner has generated a Run ID
     assert runner.run_id is not None
     print(f"Test Run ID: {runner.run_id}")
 
-    # 2. Prime and Start
+    # 4. Prime and Start
     runner.prime()
     await runner.start_loop()
 
     try:
-        # 3. Inject Input (This trigger Genesis Injection logic in inject_input)
-        # We assume inject_input adds the run_id from runner to the token trace
+        # 5. Inject Input (Trigger Genesis Injection)
+        # Runner.inject_input will embed the runner.run_id into the Token trace.
         runner.inject_input("d_in", "test_data")
 
-        # 4. Wait for completion (Stainer success event)
-        # We look for the SUCCEEDED event from the stainer (which maps to TaskExecutionFinished)
-        # Note: standard_stainer emits an IR with logic_id derived from node id.
-        # "task.stain" -> logical_id "task"
+        # 6. Wait for completion
+        # We look for the SUCCEEDED event from the stainer.
         def is_success(e):
             return (
                 isinstance(e, TaskExecutionFinished)
@@ -176,21 +185,20 @@ async def test_genesis_injection_propagates_run_id():
 
         await runner.wait_for_event(is_success, timeout=2.0)
 
-        # 5. Verify Events
+        # 7. Verify Events
         events = runner._captured_events
 
-        # Filter relevant lifecycle events (Rich Objects)
         lifecycle_events = [
             e
             for e in events
             if isinstance(e, (TaskExecutionStarted, TaskExecutionFinished))
         ]
-        assert len(lifecycle_events) >= 2  # At least Started and Finished
+        assert len(lifecycle_events) >= 2
 
         for event in lifecycle_events:
-            # THE CORE ASSERTION:
-            # Every lifecycle event object must carry the correct run_id
-            # The translation layer (Event.from_ir) extracts 'ctx.rid' -> 'event.run_id'
+            # The Critical Assertion:
+            # Did the run_id survive the trip through:
+            # Bleacher -> Dispatcher -> ComputeService -> Worker -> Stainer -> EventBus?
             assert event.run_id == runner.run_id, f"Run ID mismatch in event {event}"
 
         print("Context propagation verified successfully.")

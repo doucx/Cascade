@@ -77,6 +77,7 @@ class EventDrivenRunner:
             self.executor,
             function_map,
             self.resource_registry,
+            ingress_queue=self.ingress_queue,
         )
         self._loop_task: Optional[asyncio.Task] = None
         self._service_task: Optional[asyncio.Task] = None
@@ -100,9 +101,7 @@ class EventDrivenRunner:
         logger.info("Reactor loop with ingress handling started.")
         try:
             while not self._stop_event.is_set():
-                # This is the core of the v3.1 harness: it simulates the Reactor's
-                # ability to handle both internal state changes and external events.
-                await self._handle_ingress()
+                # In v3.1 Phase 4, the Reactor handles ingress internally during step().
                 fired = await self.reactor.step()
                 if fired == 0 and self.ingress_queue.empty():
                     await asyncio.sleep(0.001)
@@ -111,17 +110,6 @@ class EventDrivenRunner:
         except Exception:
             logger.exception("Reactor loop crashed")
             raise
-
-    async def _handle_ingress(self):
-        while not self.ingress_queue.empty():
-            reply_to_nid, result_token = self.ingress_queue.get_nowait()
-            node = self.graph.nodes.get(reply_to_nid)
-            if isinstance(node, PhysicsDataNode):
-                self.memory.put(node, result_token)
-            else:
-                logger.warning(
-                    f"Invalid reply_to_nid '{reply_to_nid}': not a DataNode."
-                )
 
     async def stop_loop(self):
         self._stop_event.set()

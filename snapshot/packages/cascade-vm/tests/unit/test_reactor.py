@@ -12,6 +12,7 @@ from cascade.vm.executor import PhysicsExecutor
 from cascade.vm.harness import EventDrivenRunner
 from cascade.spec.physical.triad import ObservabilityNode
 from cascade.std.triad.observer import standard_observer
+from cascade.vm.registry import CodeRegistry
 
 
 # Dummy function for testing
@@ -223,7 +224,9 @@ async def test_event_driven_ping_pong(reactor_backend_factory):
     }
 
     # 2. Use Runner, injecting the backend factory
-    runner = EventDrivenRunner(graph, func_map, reactor_factory=reactor_backend_factory)
+    runner = EventDrivenRunner(
+        graph, func_map, CodeRegistry(), reactor_factory=reactor_backend_factory
+    )
     runner.inject_input("D1", 10)
 
     # 3. Start & Wait

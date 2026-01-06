@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "Capture: D __init__.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767686100.6999075, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(vm): 进化 Reactor 以内置处理 Ingress 队列", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767686561.8137376, "duration_ms": 0}}

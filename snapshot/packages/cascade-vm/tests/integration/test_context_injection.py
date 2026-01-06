@@ -18,6 +18,7 @@ from cascade.vm.harness import EventDrivenRunner
 from cascade.std.triad.bleacher import standard_bleacher
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.triad.observer import standard_observer
+from cascade.vm.registry import CodeRegistry
 
 
 # --- Helper: Build a Physical Triad manually ---
@@ -147,7 +148,7 @@ async def test_genesis_injection_propagates_run_id():
         "global.observability.observer": standard_observer,
     }
 
-    runner = EventDrivenRunner(graph, function_map)
+    runner = EventDrivenRunner(graph, function_map, CodeRegistry())
 
     # Assert Runner has generated a Run ID
     assert runner.run_id is not None

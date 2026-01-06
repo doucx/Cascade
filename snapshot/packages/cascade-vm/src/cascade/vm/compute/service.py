@@ -80,15 +80,19 @@ class LocalComputeService:
             )
             # Per v3.1 spec, exceptions are treated as values
             result = e
+
+        try:
+            # 4. Store Result and Prepare Token
+            result_ref = self.store.put(result)
+            result_token = Token(payload=result_ref, trace=request.trace)
+
+            # 5. Report Completion to Outbound Queue
+            await self.outbound_queue.put((request.reply_to_nid, result_token))
         finally:
+            # CRITICAL: We must only decrement the active count AFTER the result
+            # is visible in the outbound queue. Otherwise, the Machine might
+            # see (active=0, queue=empty) in the gap and exit prematurely.
             self._active_count -= 1
-
-        # 4. Store Result and Prepare Token
-        result_ref = self.store.put(result)
-        result_token = Token(payload=result_ref, trace=request.trace)
-
-        # 5. Report Completion to Outbound Queue
-        await self.outbound_queue.put((request.reply_to_nid, result_token))
 
     def _resolve_arguments(
         self, inputs: Dict[str, Any]

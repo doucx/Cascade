@@ -49,12 +49,21 @@ async def async_while_yielding(iterations: int):
     return duration
 
 
-async def async_increment(inputs, node, resources):
+# --- 新增：纯同步的内核函数 (模拟 std IC) ---
+def sync_increment(inputs, node, resources):
     val = inputs["in"].payload
     return {"out": Token(payload=val + 1)}
 
 
-async def run_physical_tco(iterations: int):
+# --- 异步工作单元 (模拟用户 task) ---
+async def async_increment(inputs, node, resources):
+    val = inputs["in"].payload
+    # 模拟异步 IO 操作
+    await asyncio.sleep(0)
+    return {"out": Token(payload=val + 1)}
+
+
+async def run_physical_tco_async(iterations: int):
     d_state = PhysicsDataNode(id="D_state", name="StateSlot", capacity=1)
     f_inc = PhysicsFuncNode(
         id="F_inc",
@@ -90,6 +99,41 @@ async def run_physical_tco(iterations: int):
     return duration
 
 
+# --- 新增：纯同步的物理场测试 ---
+async def run_physical_tco_sync(iterations: int):
+    d_state = PhysicsDataNode(id="D_state", name="StateSlot", capacity=1)
+    f_inc = PhysicsFuncNode(
+        id="F_inc",
+        name="Incremetor",
+        input_ports={"in": PortDef("in", PortRole.DATA)},
+        output_ports={"out": PortDef("out", PortRole.DATA)},
+    )
+    graph = BipartiteGraph()
+    graph.nodes = {n.id: n for n in [d_state, f_inc]}
+    graph.channels.append(Channel("D_state", "out", "F_inc", "in"))
+    graph.channels.append(Channel("F_inc", "out", "D_state", "in"))
+
+    memory = VolatileMemory()
+    executor = PhysicsExecutor()
+    func_map = {"F_inc": sync_increment} # <--- 使用同步函数
+    reactor = Reactor(graph, memory, executor, func_map)
+
+    memory.put(d_state, Token(payload=0))
+
+    start_time = time.perf_counter()
+    for _ in range(iterations):
+        await reactor.step()
+        # 即使是同步函数，Reactor 仍然调度一个包装器 Task，所以需要等待它完成
+        while reactor.active_task_count > 0:
+            await asyncio.sleep(0)
+
+    duration = time.perf_counter() - start_time
+
+    # 结果校验
+    final_val = memory.take("D_state").payload
+    assert final_val == iterations
+    return duration
+
 # --- 报告生成 ---
 
 
@@ -118,15 +162,22 @@ async def main():
         f"3. Async (Yielding)   : {d_asy_y:.6f}s | {ITERATIONS / d_asy_y:12,.0f} ops/s (开销: {d_asy_y / d_sync:.1f}x)"
     )
 
-    # 4. Physical Field
-    d_phys = await run_physical_tco(ITERATIONS)
+    # 4. Physical Field (Async Worker)
+    d_phys_async = await run_physical_tco_async(ITERATIONS)
     print(
-        f"4. Physical TCO       : {d_phys:.6f}s | {ITERATIONS / d_phys:12,.0f} ops/s (开销: {d_phys / d_sync:.1f}x)"
+        f"4. Async Worker TCO   : {d_phys_async:.6f}s | {ITERATIONS / d_phys_async:12,.0f} ops/s (开销: {d_phys_async / d_sync:.1f}x)"
+    )
+    
+    # 5. Physical Field (Sync Kernel)
+    d_phys_sync = await run_physical_tco_sync(ITERATIONS)
+    print(
+        f"5. Sync Kernel TCO    : {d_phys_sync:.6f}s | {ITERATIONS / d_phys_sync:12,.0f} ops/s (开销: {d_phys_sync / d_sync:.1f}x)"
     )
 
     print("-" * 60)
-    print(f"结论: 物理引擎相对于纯 Async(Yielding) 的净税收为: {d_phys / d_asy_y:.2f}x")
-    print(f"物理层单步延迟 (Step Latency): {(d_phys / ITERATIONS) * 1_000_000:.2f} μs")
+    print(f"结论: 异步 Worker 净税收 (vs Async Yielding): {d_phys_async / d_asy_y:.2f}x")
+    print(f"结论: 同步 Kernel 净税收 (vs Async Yielding): {d_phys_sync / d_asy_y:.2f}x")
+    print(f"同步内核单步延迟 (Step Latency): {(d_phys_sync / ITERATIONS) * 1_000_000:.2f} μs")
 
 
 if __name__ == "__main__":

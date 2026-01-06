@@ -1,48 +1,3 @@
-Excellent! The benchmark results are fantastic. A step latency of 0.11 microseconds (110 nanoseconds) and an effective throughput of over 8.7 million operations per second demonstrates the massive performance gain from the new synchronous kernel. This successfully validates the core premise of the "Singularity" refactor.
-
-Now, as planned, we will move to **Task 3.2**. This is the most crucial validation step: writing an integration test to prove that the synchronous physics plane can correctly communicate with the asynchronous compute plane and that the entire system works cohesively. This test will become the new "golden standard" for the architecture's correctness.
-
-Here is the plan to create this essential test.
-
-## [WIP] test: Create cross-jurisdiction integration test for Machine
-
-### 用户需求
-
-根据“奇点内核重构”项目计划，执行任务 3.2：创建一个新的集成测试文件 `packages/cascade-vm/tests/integration/test_machine_integration.py`，用于验证 `Machine` 组件的端到端功能，确保同步 `Reactor` 和异步 `LocalComputeService` 能够正确协作。
-
-### 评论
-
-这是对新架构的终极考验。此前的所有测试要么验证纯粹的物理内核（如 TCO 基准测试），要么验证独立的组件。这个“跨界”测试将首次把所有核心组件——`Reactor`、`LocalComputeService`、`ObjectStore`、`CodeRegistry` 以及通过内存队列的通信协议——全部整合在一起。它的成功将证明我们的“物理层/计算层”分离模型在实践中是健壮和正确的。
-
-### 目标
-
-1.  创建新文件 `packages/cascade-vm/tests/integration/test_machine_integration.py`。
-2.  在该文件中，定义一个包含 `WorkerNode` 的物理图，该节点将执行一个异步的用户函数。
-3.  实例化完整的 `Machine`，包括其依赖的 `Reactor` 和 `LocalComputeService`。
-4.  执行 `await machine.run()`。
-5.  断言用户函数被成功调用，并且其计算结果被正确地传回物理图，触发下游节点，最终得到预期的结果。
-
-### 基本原理
-
-为了保证“绝对同步内核”的纯粹性，所有用户代码（尤其是异步I/O操作）都被驱逐到了 `LocalComputeService` 中。物理内核中的 `standard_dispatcher` IC 的工作是将计算请求放入 `compute_queue`。`LocalComputeService` 监听此队列，执行代码，然后将结果（封装为 `Ref`）放入 `ingress_queue`。`Reactor` 在其 `step` 循环中从 `ingress_queue` 摄取结果，并将其注入物理图。本测试将完整地模拟并验证这一系列跨司法管辖区的“请求-执行-响应”流程。
-
-### 标签
-
-#intent/build #intent/tooling #flow/ready #priority/high #comp/tests #comp/vm #concept/state #task/domain/testing #task/object/integration-test #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 `Machine` 集成测试文件
-
-我们将创建这个新的测试文件，它将成为新架构正确性的核心证明。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_machine_integration.py
-~~~~~
-~~~~~python
 import asyncio
 import pytest
 from typing import Dict, Callable, Tuple
@@ -199,13 +154,3 @@ async def test_machine_runs_cross_jurisdiction_flow():
 
     assert final_result == 100, "The final result should be 10*10"
     print("Machine integration test passed: Final result is 100.")
-
-~~~~~
-
-### 下一步建议
-
-我们已经创建了新架构的“黄金标准”测试。下一步是运行 `pytest` 来执行这个测试，确保它能够成功通过。
-
-如果测试通过，这将标志着**阶段 3 (终极验证)** 的核心目标已经达成。我们可以满怀信心地认为，新的“绝对同步内核”与异步计算平面的架构是稳固的。
-
-接下来，我们将进入项目的最后阶段 **阶段 4: 文档与知识固化**，更新我们的架构白皮书以反映这一重大的、成功的架构演进。

@@ -1,5 +1,3 @@
-"EventDrivenRunner._handle_ingress": |-
-  Process all pending results from the compute service.
 "EventDrivenRunner.inject_input": |-
   Helper to inject data into a node.
 "EventDrivenRunner.run_until_complete": |-

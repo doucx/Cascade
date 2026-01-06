@@ -43,7 +43,7 @@ async def test_full_ref_based_e2e_flow():
     # We need to map the physical ID back to the function.
     # We use the GraphIR to find the node ID for each task name.
     code_registry = CodeRegistry()
-    
+
     # Helper to find canonical hash for a named task
     def register_task(task_name, func):
         # Find the NodeIR

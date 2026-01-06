@@ -1,218 +1,78 @@
-## [WIP] feat(vm): 实现 PhysicsKernel
+我们已经完成了 Cascade v3.1 Ref-Based 架构最核心的基础设施建设。现在，我们将这些变更作为一个完整的逻辑单元进行提交，锁定当前的架构基线。
+
+## [COMMIT] feat: 实现 Ref-Based 架构 v3.1 核心协议与基础组件
 
 ### 用户需求
-在 `cascade-vm` 中实现 `PhysicsKernel`，作为 v3.1 架构中负责执行内核态任务（ICs, Standard Library）的组件。它是一个纯同步、高性能的执行单元，仅处理引用和元数据，不进行 I/O 操作。
+完成 Cascade v3.1 架构演进的第一阶段至第三阶段核心组件，确立“控制流（物理引用）”与“数据流（对象实体）”的解耦模型。
 
 ### 评论
-`PhysicsKernel` 是 v3.1 架构的“心脏”。它的设计目标是**极速**。与 `ComputeDelegate` 处理繁重的用户代码不同，Kernel 只负责推演图的状态。所有的操作（漂白、染色、路由）都必须在微秒级完成。因此，它**严禁**使用 `async`，也**严禁**进行 `store.get()` (除非是极其特殊的轻量级元数据操作，但即便如此也应避免)。
+这是 Cascade 历史上的一次重大架构跃迁。通过引入 `Ref` 和 `ObjectStore`，我们从根本上消除了 Reactor 对业务数据的依赖，解决了由于搬运大数据载荷导致的性能瓶颈，并为未来的分布式执行铺平了道路。
 
 ### 目标
-1.  创建 `cascade.vm.kernel` 包。
-2.  实现 `PhysicsKernel` 类。
-3.  定义 Kernel 函数的签名规范：`(inputs: Dict[str, Ref], node: PhysicsNode, resources: Any) -> Dict[str, Ref]`。
-4.  实现 `executor` 风格的接口，但要是同步的。
-5.  添加单元测试。
+1.  提交 `Ref`, `ObjectStore`, `ComputeDelegate` 等核心协议定义。
+2.  提交 `InMemoryObjectStore` 实现，确立 `mem://` 存储规范。
+3.  提交 `PhysicsKernel`（同步内核）和 `LocalComputeDelegate`（异步执行器）实现。
+4.  确保所有新组件均配备完备的单元测试。
 
 ### 基本原理
-*   **同步执行**: 所有 Kernel 函数都是普通的 Python 函数，不是协程。
-*   **引用传递**: 输入输出全都是 `Ref`。Kernel 不关心 `Ref` 背后是什么，只关心如何传递它。
-*   **即时返回**: 调用 `kernel.execute(...)` 会立即返回结果字典，没有 `await`，没有 `Future`。
-*   **资源注入**: 依然支持 `resource_registry` 的注入，用于访问 EventBus 等系统服务（EventBus 的发布操作在 Kernel 中通常是 `fire_and_forget` 或非阻塞的）。
+本提交通过物化“引用（Ref）”这一概念，实现了物理执行层与用户计算层的完全隔离。`PhysicsKernel` 专注于处理拓扑演化（同步、无 IO），而 `LocalComputeDelegate` 负责繁重的计算任务（异步、数据感知）。这种“两极分化”的设计在保证极致正确性的同时，预留了最大的性能优化空间。
 
 ### 标签
-#intent/build #flow/ready #priority/high #comp/runtime #concept/kernel #scope/core #ai/instruct #task/domain/vm #task/object/physics-kernel #task/action/implement #task/state/continue
+#intent/architect #flow/ready #priority/critical #comp/interfaces #comp/runtime #comp/vm #concept/storage #concept/executor #scope/core #ai/instruct #task/domain/vm #task/object/ref-architecture #task/action/foundation-commit #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 kernel 模块目录
+#### Acts 1: 提交 v3.1 核心定义与组件
+
+我们将所有的接口定义、存储实现、执行器实现以及配套测试添加到 Git 暂存区并提交。
 
 ~~~~~act
-run_command
-~~~~~
-~~~~~bash
-mkdir -p packages/cascade-vm/src/cascade/vm/kernel
-touch packages/cascade-vm/src/cascade/vm/kernel/__init__.py
-~~~~~
-
-#### Acts 2: 实现 `PhysicsKernel`
-
-创建 `packages/cascade-vm/src/cascade/vm/kernel/core.py`。
-
-~~~~~act
-write_file
+git_add
+packages/cascade-spec/src/cascade/spec/physical/object.py
+packages/cascade-spec/src/cascade/spec/runtime/storage.py
+packages/cascade-spec/src/cascade/spec/runtime/compute.py
+packages/cascade-spec/src/cascade/spec/__init__.py
+packages/cascade-spec/src/cascade/spec/runtime/__init__.py
+packages/cascade-runtime/src/cascade/runtime/storage/memory.py
+packages/cascade-runtime/src/cascade/runtime/storage/__init__.py
+packages/cascade-vm/src/cascade/vm/compute/local.py
+packages/cascade-vm/src/cascade/vm/compute/__init__.py
 packages/cascade-vm/src/cascade/vm/kernel/core.py
-~~~~~
-~~~~~python
-import logging
-from typing import Any, Callable, Dict
-
-from cascade.spec.physical.object import Ref
-from cascade.spec.physical.nodes import PhysicsFuncNode
-from cascade.vm.resource_registry import ResourceRegistry
-
-logger = logging.getLogger(__name__)
-
-# Kernel function signature:
-# (inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: ResourceRegistry) -> Dict[str, Ref]
-KernelFunc = Callable[[Dict[str, Ref], PhysicsFuncNode, ResourceRegistry], Dict[str, Ref]]
-
-
-class PhysicsKernel:
-    """
-    The synchronous execution core for Cascade v3.1 Physics Layer.
-
-    Responsibilities:
-    1. Executes Standard Library ICs (Bleachers, Stainers, Allocators).
-    2. Operates exclusively on References (Ref), never dereferencing payloads.
-    3. Guarantees microseconds-level latency per operation.
-    4. Purely synchronous execution model (no async/await).
-    """
-
-    def __init__(self, function_map: Dict[str, KernelFunc], resources: ResourceRegistry):
-        self._function_map = function_map
-        self._resources = resources
-
-    def execute(
-        self, node: PhysicsFuncNode, inputs: Dict[str, Ref]
-    ) -> Dict[str, Ref]:
-        """
-        Execute a kernel function for the given node.
-
-        Args:
-            node: The physical function node being executed.
-            inputs: A dictionary of input References mapped by port name.
-
-        Returns:
-            A dictionary of output References mapped by port name.
-
-        Raises:
-            ValueError: If no kernel function is mapped to the node.
-            Exception: Any error raised by the kernel function itself.
-        """
-        func = self._function_map.get(node.id)
-        if not func:
-            raise ValueError(f"No kernel function mapped for node '{node.id}'")
-
-        try:
-            # Execute synchronously
-            outputs = func(inputs, node, self._resources)
-            return outputs
-        except Exception as e:
-            logger.exception(f"Kernel panic at node '{node.id}': {e}")
-            raise e
-~~~~~
-
-#### Acts 3: 导出模块
-
-更新 `packages/cascade-vm/src/cascade/vm/kernel/__init__.py`。
-
-~~~~~act
-write_file
 packages/cascade-vm/src/cascade/vm/kernel/__init__.py
-~~~~~
-~~~~~python
-from .core import PhysicsKernel, KernelFunc
-
-__all__ = ["PhysicsKernel", "KernelFunc"]
-~~~~~
-
-#### Acts 4: 创建单元测试
-
-创建 `packages/cascade-vm/tests/unit/test_physics_kernel.py`。
-
-~~~~~act
-write_file
+packages/cascade-vm/tests/unit/test_compute_delegate.py
 packages/cascade-vm/tests/unit/test_physics_kernel.py
 ~~~~~
-~~~~~python
-import pytest
-from typing import Dict, Any
 
-from cascade.spec.physical.object import Ref
-from cascade.spec.physical.nodes import PhysicsFuncNode
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.kernel.core import PhysicsKernel
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat: Implement Ref-Based Architecture v3.1 core protocols and components
 
+This commit establishes the foundational infrastructure for the 'Reference-Based'
+architecture, strictly decoupling the Physics Layer (Control Plane) from the 
+Object Plane (Data Plane).
 
-# --- Kernel Function Mocks ---
+Key additions:
+1. Physical References (Ref): Defined in cascade-spec as lightweight pointers 
+   carrying URI and hoisted metadata.
+2. ObjectStore Protocol: Defined the standard for data persistence and 
+   dereferencing, including 'peek' for IO-free metadata access.
+3. InMemoryObjectStore: A reference implementation of ObjectStore in runtime.
+4. PhysicsKernel: A high-performance synchronous execution unit for kernel ICs 
+   that operates exclusively on Refs.
+5. LocalComputeDelegate: An asynchronous worker bridge that handles data 
+   dereferencing, code execution, and result materialization.
 
-
-def kernel_identity(
-    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: Any
-) -> Dict[str, Ref]:
-    # Simple pass-through: input 'in' -> output 'out'
-    return {"out": inputs["in"]}
-
-
-def kernel_resource_access(
-    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: ResourceRegistry
-) -> Dict[str, Ref]:
-    # Validates that we can access resources
-    config = resources.get("config")
-    # Return a synthetic Ref based on config (just for testing logic)
-    return {"out": Ref(uri=f"mem://config-{config['version']}")}
-
-
-def kernel_fail(
-    inputs: Dict[str, Ref], node: PhysicsFuncNode, resources: Any
-) -> Dict[str, Ref]:
-    raise RuntimeError("Kernel Crash")
-
-
-# --- Tests ---
-
-
-@pytest.fixture
-def resources():
-    r = ResourceRegistry()
-    r.register("config", {"version": "1.0"})
-    return r
-
-
-@pytest.fixture
-def kernel(resources):
-    func_map = {
-        "node_ident": kernel_identity,
-        "node_res": kernel_resource_access,
-        "node_fail": kernel_fail,
-    }
-    return PhysicsKernel(func_map, resources)
-
-
-def test_kernel_identity_execution(kernel):
-    node = PhysicsFuncNode(id="node_ident", name="Identity")
-    input_ref = Ref(uri="mem://input-123")
-    
-    inputs = {"in": input_ref}
-    outputs = kernel.execute(node, inputs)
-    
-    assert outputs["out"] == input_ref
-
-
-def test_kernel_resource_access(kernel):
-    node = PhysicsFuncNode(id="node_res", name="ResourceUser")
-    
-    outputs = kernel.execute(node, {})
-    
-    assert outputs["out"].uri == "mem://config-1.0"
-
-
-def test_kernel_missing_mapping(kernel):
-    node = PhysicsFuncNode(id="node_unknown", name="Unknown")
-    
-    with pytest.raises(ValueError, match="No kernel function mapped"):
-        kernel.execute(node, {})
-
-
-def test_kernel_exception_propagation(kernel):
-    node = PhysicsFuncNode(id="node_fail", name="FailNode")
-    
-    with pytest.raises(RuntimeError, match="Kernel Crash"):
-        kernel.execute(node, {})
+This structure allows the Reactor to drive graph evolution at nanosecond speeds 
+without being blocked by user payload weights or IO latency.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 **Phase 3** 的核心组件：`LocalComputeDelegate` 和 `PhysicsKernel`。
-下一步，我们需要进入 **第四阶段：标准库同步化 (Phase 4: StdLib Synchronization)**。这涉及到重写 `cascade-std` 中的核心 ICs（`Bleacher`, `Stainer` 等），使其适应新的 `Ref` 模型和同步签名。这将是连接 Kernel 与具体业务逻辑的关键一步。
+我们已经锁定了 v3.1 的地基。接下来的任务是：
+1.  **Phase 4: StdLib Synchronization**: 重写 `cascade-std` 中的 `Bleacher` 和 `Stainer`，使其适配同步的 `PhysicsKernel` 和 `Ref` 模型。
+2.  **Phase 5: Reactor Evolution**: 改造 `Reactor` 以支持“断连式异步桥接”和双循环机制。
+
+建议从 **Phase 4** 开始，先准备好内核所需的“零件”。

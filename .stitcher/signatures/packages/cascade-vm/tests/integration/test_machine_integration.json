@@ -7,6 +7,14 @@
     "baseline_code_signature_text": "async def test_machine_runs_cross_jurisdiction_flow():",
     "baseline_code_structure_hash": "848b2049eae4bead403549b330b3c0299d0bd48a5f1c74c8bdbc61461e819f85"
   },
+  "test_machine_self_terminating_flow": {
+    "baseline_code_signature_text": "async def test_machine_self_terminating_flow():",
+    "baseline_code_structure_hash": "6d6aae5dfc81a11d5e7fa9364e8ad913633e1ac913e30d5b1a6774ec3474619d"
+  },
+  "transparent_halt": {
+    "baseline_code_signature_text": "def transparent_halt(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "97bc1d8ab09662e8f0802a4e975e45a9fca0425b94d0487422b6a18185313e86"
+  },
   "user_square": {
     "baseline_code_signature_text": "async def user_square(n: int) -> int:",
     "baseline_code_structure_hash": "82e66dcf0601654606496c72bee98919492987b666ab492e60f513730f3a9f53"

@@ -41,6 +41,7 @@
     "baseline_code_structure_hash": "2f74aec3166e2e9750b28295848e2465e03a0a0c89911aff5243c2dca3cda785",
     "baseline_yaml_content_hash": "6044f02f16fb28ae4bf4aee4cf2f064b2cf0a043a55f11efef6a26b81d0ae878"
   },
+  "Reactor.drain_event": {},
   "Reactor.executor": {},
   "Reactor.function_map": {},
   "Reactor.graph": {},

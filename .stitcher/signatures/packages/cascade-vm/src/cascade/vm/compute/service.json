@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "d5cff9af5c82d7e59fd60a124d9c11011ea72abf672939cf02e87385adb8b9ab"
   },
   "LocalComputeService.__init__": {
-    "baseline_code_signature_text": "def __init__(self, store: ObjectStore, registry: CodeRegistry, inbound_queue: asyncio.Queue[ComputeRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], max_workers: int = None):",
-    "baseline_code_structure_hash": "ec8b052f564175c45bf43a35f151ea50adcc9ba46c313f61bf52176fa480923b"
+    "baseline_code_signature_text": "def __init__(self, store: ObjectStore, registry: CodeRegistry, inbound_queue: asyncio.Queue[ComputeRequest], outbound_queue: asyncio.Queue[Tuple[str, Token]], max_workers: int = None, wakeup_event: Optional[asyncio.Event] = None):",
+    "baseline_code_structure_hash": "816f607eda26ba28723dc26722b6d187cdf5b574464b189990b2e98586cbc8b0"
   },
   "LocalComputeService._active_count": {},
   "LocalComputeService._pool": {},
@@ -17,6 +17,8 @@
     "baseline_code_structure_hash": "fd9c6c08b3f8954247b0fee859b04b3a112fec76502bb3d276283fe090de01f4"
   },
   "LocalComputeService._running": {},
+  "LocalComputeService._wakeup_event": {},
+  "LocalComputeService.active_count": {},
   "LocalComputeService.inbound_queue": {},
   "LocalComputeService.is_idle": {
     "baseline_code_signature_text": "def is_idle(self) -> bool:",

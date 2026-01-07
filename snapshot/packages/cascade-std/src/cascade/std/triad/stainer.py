@@ -16,12 +16,17 @@ def standard_stainer(
     # 1. Extract inputs
     worker_result_token = inputs["worker_result"]
     trace_input_token = inputs["trace_input"]
+    context_input_token = inputs.get("context_input")  # Use .get for graceful upgrade
 
     result_payload = worker_result_token.payload
 
     # Merge traces
     trace_payload = worker_result_token.trace.copy()
     trace_payload.update(trace_input_token.payload)
+    if context_input_token:
+        # For now, we just merge the context payload into the final trace,
+        # under the key 'input_context'.
+        trace_payload["input_context"] = context_input_token.payload
 
     # 2. Calculate duration
     start_mono = trace_payload.get("start_ts", end_mono)

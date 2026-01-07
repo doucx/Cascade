@@ -33,6 +33,7 @@ class Expander:
         f_worker_id = PhysicalIdGenerator.worker_node(base_id)
         d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
         d_trace_id = PhysicalIdGenerator.trace_data(base_id)
+        d_context_id = PhysicalIdGenerator.context_data(base_id)
         f_post_id = PhysicalIdGenerator.stain_node(base_id)
 
         # 2. Create Nodes

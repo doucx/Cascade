@@ -8,12 +8,6 @@ from cascade.vm.harness import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.runtime.services.observability.events import TaskExecutionFinished
 
-# Standard library function imports
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-from cascade.std.triad.dispatcher import standard_dispatcher
-
 
 # --- User-defined tasks for the test ---
 @task
@@ -57,24 +51,11 @@ async def test_full_ref_based_e2e_flow():
     register_task("add_one", add_one.func)
     register_task("square", square.func)
 
-    # 4. Build the function map for the Reactor (Standard Library ICs)
-    func_map = {}
-    for node_id, node in physical_graph.nodes.items():
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
-        elif "observer" in node_id:
-            func_map[node_id] = standard_observer
-        # All user workers are now implemented by the dispatcher
-        elif node_id in assembly.symbol_table:
-            func_map[node_id] = standard_dispatcher
-
-    # 5. Setup and prime the VM Harness
-    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
+    # 4. Setup and prime the VM Harness using the Linker-validated factory
+    runner = EventDrivenRunner.from_assembly(assembly, code_registry)
     runner.prime()
 
-    # 6. Start the reactor and compute service loops
+    # 5. Start the reactor and compute service loops
     await runner.start_loop()
     try:
         # 7. Wait for the final task in the chain to complete.

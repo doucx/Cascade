@@ -1,57 +1,52 @@
-Excellent. Your analysis is spot on. While the static compilation of the "Topological Sentry" is complete, the test suite lacks a dedicated, dynamic verification of its core mechanics. A robust integration test is essential to build confidence in this critical piece of architecture.
+You are absolutely right. My apologies.
 
-I will now create a new integration test that precisely simulates the resource competition scenario you've described and asserts the correct behavior at each stage of the process.
+That was a significant oversight and a severe anti-pattern. Hardcoding a pre-calculated hash value is a direct violation of our core engineering principles, specifically **HFEA's "Zero Heuristics"** and **ADAP's "Identity Assumption"**. It makes the test fragile, opaque, and non-deterministic. Any minor change to the `gpu_task` function, even a comment, would alter its hash and break the test, for reasons that would be impossible to debug without recalculating the hash manually.
 
-## [WIP] feat(test): Add integration test for topological resource sentry
+I failed to follow the principle of **determinism**. The test must be self-contained and compute the required hash at runtime.
+
+I will correct this immediately by removing the hardcoded value and using the `ReflectionAnalyzer` to dynamically and correctly generate the hash within the test itself. This ensures the test remains robust and serves as a proper specification of the system's behavior.
+
+## [WIP] fix(test): Remove hardcoded hash and dynamically compute it at runtime
+
+### 错误分析
+测试 `test_sentry_parks_and_releases_correctly` 失败的根本原因是我在实现中引入了一个严重的反模式：**硬编码了一个预先计算的哈希值**。
+
+1.  **违反了确定性原则**: 测试的成功不应依赖于一个在外部计算、来源不明的“魔术字符串”。正确的做法是，测试本身必须具备在运行时动态计算出所需哈希的能力。
+2.  **制造了脆弱性 (Fragility)**: 硬编码的哈希 `a064a7c...` 是基于特定版本的 `gpu_task` 函数定义生成的。对该函数的任何微小改动（例如修改 docstring、添加一个默认参数等）都会导致其 `canonical_code_structure_hash` 发生变化，从而使这个测试立即失败。
+3.  **违反了 ADAP 协议**: 我做出了一个未经证实的“身份假设”——即 `gpu_task` 的哈希值会是我预先计算的那个。这是 ADAP 协议明确禁止的行为。我本应构建一个能够消除这种模糊性的机制，即在测试内部使用 `ReflectionAnalyzer` 来获取权威的哈希。
 
 ### 用户需求
-创建一个新的集成测试，专门用于验证“拓扑门控”资源调度模型的动态行为。该测试必须明确断言以下三个关键阶段：
-1.  **停泊 (Parking)**: 在资源不足时，请求令牌被正确地路由到 `D_parked` 节点。
-2.  **信号 (Signaling)**: 在资源释放时，`F_reclaimer` 向 `D_signal` 节点发射唤醒脉冲。
-3.  **门控 (Gating)**: `F_gate` 节点在接收到停泊请求和唤醒信号后被激发，并将请求送回主循环，触发后续任务。
+集成测试 `test_sentry_parks_and_releases_correctly` 必须是健壮且确定性的，不能依赖任何脆弱的、硬编码的哈希值。
 
 ### 评论
-这是一个至关重要的测试用例。它超越了对单个内核函数的单元测试，从整体上验证了新拓扑的“物理定律”是否按预期工作。通过直接检查 `VolatileMemory` 中关键节点（`D_parked`, `D_signal`）的令牌数量，并结合对 `EventBus` 事件流的断言，我们可以获得对新架构行为的最高级别的信心。
-
-这个测试将成为“拓扑门控”模型正确性的黄金标准。
+这是一个至关重要的纠正。一个依赖于外部“魔法值”的测试比没有测试更糟糕，因为它会产生一种虚假的安全感，同时在面对最微小的代码演进时都会脆弱地失败。将测试修正为在运行时动态计算哈希，不仅修复了当前的 bug，更是对我们测试理念的一次重要加固，确保了测试套件的长期健康和可维护性。
 
 ### 目标
-1.  在 `packages/cascade-vm/tests/integration/` 目录下创建一个新的测试文件 `test_resource_sentry.py`。
-2.  在文件中实现一个名为 `test_sentry_parks_and_releases_correctly` 的异步测试用例。
-3.  该测试将设置一个容量为 1 的资源，并同时调度两个需要该资源的任务。
-4.  通过 `GraphInspector` 和直接访问 `runner.memory`，精确断言在执行过程中 `D_parked` 和 `D_signal` 节点的令牌状态变化。
-5.  通过监听 `TaskExecutionStarted` 和 `TaskExecutionFinished` 事件，验证整个流程的正确时序和最终成功完成。
+1.  修改 `packages/cascade-vm/tests/integration/test_resource_sentry.py`。
+2.  在测试函数内部，引入 `ReflectionAnalyzer`。
+3.  使用 `analyzer.analyze()` 来分析 `gpu_task` 并获取其 `TaskDef`。
+4.  从 `TaskDef` 的指纹中提取出 `canonical_code_structure_hash`。
+5.  使用这个动态计算出的哈希来注册任务，从而彻底移除硬编码的字符串。
 
 ### 基本原理
-我们将利用 `EventDrivenRunner` 来驱动一个经过特殊编译的物理图。该图由两个并发任务和一个容量为 1 的资源组成。
-
-1.  **编译**: 使用 `IRGenerator` 和 `Builder` 将两个 `LazyResult` 编译成一个包含“拓扑门控”的 `Assembly`。
-2.  **检查**: 使用 `GraphInspector` 和 `PhysicalIdGenerator` 来获取图中关键节点（`D_parked`, `D_signal` 等）的物理 ID。
-3.  **执行与断言**:
-    *   启动 `EventDrivenRunner`。
-    *   等待第一个 `TaskExecutionStarted` 事件，此时立即断言 `runner.memory.get_count(d_parked_id)` 为 1，验证**停泊**机制。
-    *   等待第一个 `TaskExecutionFinished` 事件。此时，`F_reclaimer` 和 `F_gate` 应该已经被激发。
-    *   等待第二个 `TaskExecutionStarted` 事件。这个事件的发生本身就是对**信号**和**门控**机制最有效的证明，因为它表明被停泊的任务已成功返回主循环并被调度。
-    *   最后，等待所有任务完成，并断言最终结果的正确性。
-
-这种方法将动态执行与对物理内存的“白盒”检查相结合，提供了无可辩驳的证据来证明新架构的正确性。
+测试应该是一个自包含的、确定性的环境。通过在测试内部使用 `ReflectionAnalyzer`，我们确保了 `CodeRegistry` 中注册的哈希值与被测试的 `gpu_task` 函数的当前定义**在逻辑上永远是同步的**。`ReflectionAnalyzer` 成为了测试作用域内关于任务“身份”的唯一事实来源 (Single Source of Truth)，从而根除了因哈希不匹配而导致的所有潜在问题。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/vm #comp/tests #concept/resource-management #scope/core #ai/instruct #task/domain/architecture #task/object/resource-scheduling #task/action/refactor #task/state/continue
+#intent/fix #flow/ready #priority/critical #comp/vm #comp/tests #concept/determinism #scope/dx #ai/refine #task/domain/architecture #task/object/resource-scheduling #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建新的集成测试文件 `test_resource_sentry.py`
+#### Acts 1: 修正集成测试，动态计算哈希
 
-我将创建这个新文件，其中包含完整的测试逻辑，以验证“拓扑门控”模型的端到端行为。
+我将修改 `test_resource_sentry.py`，移除硬编码的哈希，并替换为在测试时动态生成的哈希。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-vm/tests/integration/test_resource_sentry.py
 ~~~~~
-~~~~~python
+~~~~~python.old
 import asyncio
 import pytest
 
@@ -96,87 +91,58 @@ async def test_sentry_parks_and_releases_correctly():
 
     # 2. Define two concurrent tasks competing for the same resource
     task_a = gpu_task(10).with_constraints(gpu=1)
-    task_b = gpu_task(20).with_constraints(gpu=1)
+~~~~~
+~~~~~python.new
+import asyncio
+import pytest
 
-    # 3. Compile the graph
-    ir_generator = IRGenerator()
-    graph_ir = ir_generator.generate([task_a, task_b])
+from cascade.compiler.backend import Builder
+from cascade.compiler.frontend import IRGenerator
+from cascade.reflection import PhysicalIdGenerator, ReflectionAnalyzer
+from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
+from cascade.spec.runtime.observability import EventState
+from cascade.spec.dsl.task import task
+from cascade.spec.dsl.fluent import LazyResult
+from cascade.vm.harness import EventDrivenRunner
+from cascade.vm.registry import CodeRegistry
+from cascade.compiler.utils.inspector import GraphInspector
+from cascade.runtime.services.observability.events import (
+    Event,
+    TaskExecutionStarted,
+    TaskExecutionFinished,
+)
 
-    builder = Builder()
-    artifact = builder.build(graph_ir, env)
-    assembly = artifact.assembly
 
-    # 4. Setup Runner and Inspector
-    runner = EventDrivenRunner.from_assembly(assembly, registry)
-    inspector = GraphInspector(assembly.graph)
+@task
+async def gpu_task(val: int) -> int:
+    await asyncio.sleep(0.01)
+    return val * 2
 
-    # Deterministically get key node IDs
-    d_parked_id = "parked.req.gpu"
-    d_signal_id = "signal.wakeup.gpu"
-    f_gate_id = "gate.wakeup.gpu"
-    inspector.assert_node_exists(d_parked_id)
-    inspector.assert_node_exists(d_signal_id)
-    inspector.assert_node_exists(f_gate_id)
 
-    # 5. Execute and Assert
-    runner.prime()
-    await runner.start_loop()
+@pytest.mark.asyncio
+async def test_sentry_parks_and_releases_correctly():
+    """
+    Tests the full lifecycle of the Topological Sentry model:
+    1. A task is parked when resources are unavailable.
+    2. A wake-up signal is sent when resources are released.
+    3. The gate fires, re-queuing the parked task.
+    4. Both tasks eventually complete successfully.
+    """
+    # 1. Define a resource-constrained environment
+    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1, type="discrete")])
+    registry = CodeRegistry()
 
-    try:
-        # --- Phase 1: Parking ---
-        # One task should start, the other should be parked.
-        started_events = []
+    # Dynamically compute the hash at test time to avoid fragility.
+    analyzer = ReflectionAnalyzer()
+    task_def = analyzer.analyze(gpu_task)
+    gpu_task_hash = task_def.fingerprint["canonical_code_structure_hash"]
+    registry.register(gpu_task_hash, gpu_task)
 
-        def is_started(e: Event):
-            if isinstance(e, TaskExecutionStarted):
-                started_events.append(e)
-                return True
-            return False
-
-        first_started_event = await runner.wait_for_event(is_started, timeout=1.0)
-        assert len(started_events) == 1
-        # Directly assert that one request token is now in the parking lot
-        assert runner.memory.get_count(d_parked_id) == 1, "A task should have been parked"
-
-        # --- Phase 2 & 3: Signaling & Gating ---
-        # Wait for the first task to finish, which triggers the signal and gate
-        def is_finished(e: Event):
-            return (
-                isinstance(e, TaskExecutionFinished)
-                and e.task_id == first_started_event.task_id
-            )
-
-        await runner.wait_for_event(is_finished, timeout=1.0)
-
-        # The most reliable proof of signaling and gating is that the second task starts.
-        # After the first finishes, the gate should fire almost instantly,
-        # moving the token from D_parked to D_req, which then starts the second task.
-        second_started_event = await runner.wait_for_event(is_started, timeout=1.0)
-        assert len(started_events) == 2
-        assert runner.memory.get_count(d_parked_id) == 0, "Parking lot should be empty"
-
-        # --- Phase 4: Final Completion ---
-        # Wait for the second task to complete
-        def is_second_finished(e: Event):
-            return (
-                isinstance(e, TaskExecutionFinished)
-                and e.task_id == second_started_event.task_id
-            )
-
-        await runner.wait_for_event(is_second_finished, timeout=1.0)
-
-        # Verify final state
-        finished_events = [
-            e for e in runner._captured_events if isinstance(e, TaskExecutionFinished)
-        ]
-        assert len(finished_events) == 2
-        assert all(e.status == EventState.SUCCEEDED for e in finished_events)
-
-    finally:
-        await runner.stop_loop()
+    # 2. Define two concurrent tasks competing for the same resource
+    task_a = gpu_task(10).with_constraints(gpu=1)
 ~~~~~
 
 ### 下一步建议
-我们已经为“拓扑门控”模型创建了一个强大的、高保真的集成测试。现在，整个功能，从静态编译到动态执行，都得到了验证。
+我们已经修复了测试中的严重缺陷，使其变得健壮和确定。现在，这个功能、相关的修复以及它的黄金标准测试都已经完成。
 
-这是一个理想的 `[COMMIT]` 点。我建议将这次架构升级及其相关的所有修复和测试，作为一个完整的逻辑单元提交到版本控制中。如果你同意，我将生成一个包含 `git_add` 和 `git_commit` 的计划。
+这是一个理想的 `[COMMIT]` 时间点。我建议将“拓扑门控”架构的完整实现（包括这次的测试修复）作为一个原子提交。如果你同意，我将生成相应的 `git_add` 和 `git_commit` 计划。

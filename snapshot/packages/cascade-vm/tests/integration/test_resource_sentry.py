@@ -3,7 +3,7 @@ import pytest
 
 from cascade.compiler.backend import Builder
 from cascade.compiler.frontend import IRGenerator
-from cascade.reflection import PhysicalIdGenerator
+from cascade.reflection import PhysicalIdGenerator, ReflectionAnalyzer
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.spec.runtime.observability import EventState
 from cascade.spec.dsl.task import task
@@ -36,9 +36,12 @@ async def test_sentry_parks_and_releases_correctly():
     # 1. Define a resource-constrained environment
     env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1, type="discrete")])
     registry = CodeRegistry()
-    registry.register(
-        "a064a7c067339a0d859187a43586a512c1c28c863a948508f75b0625e1744131", gpu_task
-    )  # Pre-calculated hash
+
+    # Dynamically compute the hash at test time to avoid fragility.
+    analyzer = ReflectionAnalyzer()
+    task_def = analyzer.analyze(gpu_task)
+    gpu_task_hash = task_def.fingerprint["canonical_code_structure_hash"]
+    registry.register(gpu_task_hash, gpu_task)
 
     # 2. Define two concurrent tasks competing for the same resource
     task_a = gpu_task(10).with_constraints(gpu=1)

@@ -16,13 +16,6 @@ from cascade.runtime.services.observability.events import (
 from cascade.compiler.utils.inspector import GraphInspector
 from cascade.reflection import PhysicalIdGenerator
 from cascade.vm.registry import CodeRegistry
-
-# Standard IC imports
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
-from cascade.std.resource.requestor import resource_requestor
 from cascade.spec.physical.object import Ref
 
 
@@ -139,63 +132,10 @@ async def test_resource_scarcity_topology_and_execution():
     )
 
     # --- PART B: EXECUTION ASSERTION ---
-
-    # Function Map and Debug Wrapper
-    import functools
-
-    print("\n--- Physical Field Event Log (Manual + Observed) ---")
-
-    def debug_wrapper(func, name):
-        import inspect
-
-        if inspect.iscoroutinefunction(func):
-
-            @functools.wraps(func)
-            async def async_wrapped(*args, **kwargs):
-                print(f"[MAN-START] {name}")
-                try:
-                    result = await func(*args, **kwargs)
-                    print(f"[MAN-END  ] {name}")
-                    return result
-                except Exception as e:
-                    print(f"[MAN-ERROR] {name}: {e}")
-                    raise
-
-            return async_wrapped
-        else:
-
-            @functools.wraps(func)
-            def sync_wrapped(*args, **kwargs):
-                print(f"[MAN-START] {name}")
-                try:
-                    result = func(*args, **kwargs)
-                    print(f"[MAN-END  ] {name}")
-                    return result
-                except Exception as e:
-                    print(f"[MAN-ERROR] {name}: {e}")
-                    raise
-
-            return sync_wrapped
-
-    func_map = {}
-    for node_id, node in physical_graph.nodes.items():
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
-        elif node_id.endswith(".worker"):
-            func_map[node_id] = mock_worker
-        elif "allocator" in node_id:
-            func_map[node_id] = debug_wrapper(discrete_allocator, node.name)
-        elif "reclaimer" in node_id:
-            func_map[node_id] = debug_wrapper(discrete_reclaimer, node.name)
-        elif node_id.startswith("req."):
-            func_map[node_id] = debug_wrapper(resource_requestor, node.name)
-        elif "observability" in node_id:
-            func_map[node_id] = standard_observer
+    print("\n--- Physical Field Event Log (Observed) ---")
 
     code_registry = CodeRegistry()
-    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
+    runner = EventDrivenRunner.from_assembly(assembly, code_registry)
     runner.prime()
 
     await runner.start_loop()

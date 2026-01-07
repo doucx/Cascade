@@ -5,10 +5,6 @@ from cascade.spec.physical.nodes import Token, PhysicsNode
 def gate_passthrough(
     inputs: Dict[str, Token], node: PhysicsNode, resources: Any
 ) -> Dict[str, Token]:
-    """
-    A simple gate that requires two inputs (a request and a signal)
-    and passes the request token through.
-    """
     # We expect 'req_in' and 'signal_in' ports
     req_token = inputs.get("req_in")
     signal_token = inputs.get("signal_in")

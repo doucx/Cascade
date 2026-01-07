@@ -13,6 +13,8 @@
   "PortName.REL": {},
   "PortName.REQ": {},
   "PortName.REQ_OUT": {},
+  "PortName.REQ_PARKED": {},
+  "PortName.SIGNAL_OUT": {},
   "PortName.TRACE_INPUT": {},
   "PortName.TRACE_OUTPUT": {},
   "PortName.WORKER_INPUT": {},

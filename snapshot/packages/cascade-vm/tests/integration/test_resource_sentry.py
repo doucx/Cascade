@@ -3,11 +3,9 @@ import pytest
 
 from cascade.compiler.backend import Builder
 from cascade.compiler.frontend import IRGenerator
-from cascade.reflection import PhysicalIdGenerator, ReflectionAnalyzer
+from cascade.reflection import ReflectionAnalyzer
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
-from cascade.spec.runtime.observability import EventState
 from cascade.spec.dsl.task import task
-from cascade.spec.dsl.fluent import LazyResult
 from cascade.vm.harness import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.compiler.utils.inspector import GraphInspector
@@ -26,15 +24,10 @@ async def gpu_task(val: int) -> int:
 
 @pytest.mark.asyncio
 async def test_sentry_parks_and_releases_correctly():
-    """
-    Tests the full lifecycle of the Topological Sentry model:
-    1. A task is parked when resources are unavailable.
-    2. A wake-up signal is sent when resources are released.
-    3. The gate fires, re-queuing the parked task.
-    4. Both tasks eventually complete successfully.
-    """
     # 1. Define a resource-constrained environment
-    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1, type="discrete")])
+    env = EnvironmentDef(
+        resources=[ResourceDef(name="gpu", capacity=1, type="discrete")]
+    )
     registry = CodeRegistry()
 
     # Dynamically compute the hash at test time to avoid fragility.
@@ -85,7 +78,9 @@ async def test_sentry_parks_and_releases_correctly():
         first_started_event = await runner.wait_for_event(is_started, timeout=1.0)
         assert len(started_events) == 1
         # Directly assert that one request token is now in the parking lot
-        assert runner.memory.get_count(d_parked_id) == 1, "A task should have been parked"
+        assert runner.memory.get_count(d_parked_id) == 1, (
+            "A task should have been parked"
+        )
 
         # --- Phase 2 & 3: Signaling & Gating ---
         # Wait for the first task to finish, which triggers the signal and gate

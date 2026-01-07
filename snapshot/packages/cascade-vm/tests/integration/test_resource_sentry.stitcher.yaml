@@ -1,0 +1,6 @@
+"test_sentry_parks_and_releases_correctly": |-
+  Tests the full lifecycle of the Topological Sentry model:
+  1. A task is parked when resources are unavailable.
+  2. A wake-up signal is sent when resources are released.
+  3. The gate fires, re-queuing the parked task.
+  4. Both tasks eventually complete successfully.

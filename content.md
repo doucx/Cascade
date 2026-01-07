@@ -1,251 +1,92 @@
-此计划旨在重构 `test_machine_integration.py`，通过引入一个透明的终止节点来实现测试的自我终结，从而移除不稳定的外部轮询机制。同时，我们将确保测试环境中正确配置了 Event Bus。
+好的，我们已经成功偿还了多项核心技术债务，显著增强了系统的确定性和效率。现在是时候将这些更改作为一个完整的逻辑单元进行提交，并更新我们的状态记录了。
 
-## [WIP] test(vm): 重构集成测试以实现自我终结并连接 Event Bus
+## [COMMIT] refactor: 偿还关键架构债务，增强运行时确定性与可观测性
 
 ### 用户需求
-1.  **自我终结**: 测试图应包含明确的控制流路径（如 `Terminator` 节点），以便在计算完成后自动停止 `Machine`，而不是依赖测试代码中的外部轮询。
-2.  **完整环境**: 测试环境必须初始化并注册 `EventBus`，以模拟真实的运行时环境。
+1.  实现真正的 `DRAIN` 优雅停机协议。
+2.  集成系统级 `ERROR` 信号捕获。
+3.  完善 `CompilationManifest` 以包含显式的入口 (`entry_points`) 和出口 (`exit_points`)。
+4.  将 `Machine` 的调度模型从轮询优化为事件驱动。
+5.  重构集成测试，移除外部轮询，实现测试图的自我终结。
 
 ### 评论
-依赖 `asyncio.sleep` 轮询检查输出节点的测试是脆弱且非惯用的。通过在物理图中引入一个“透明终结者”节点，我们将测试逻辑内化为图的一部分，这验证了系统处理控制流信号的能力，并使测试更加确定和快速。
+本次重构彻底解决了 Stage 3 集成过程中暴露的几个系统性风险点。通过引入“静止检测” (Quiescence Detection) 和“边界声明” (Boundary Declaration)，我们将系统从一个依赖猜测的“黑盒”转变为一个完全可观测、契约明确的“晶体”。这为后续更大规模的并发优化和分布式执行奠定了坚实的架构基础。
 
 ### 目标
-1.  在 `test_machine_integration.py` 中定义一个 `transparent_halt` 内核函数，它在透传数据的同时也发出 `HALT` 信号。
-2.  修改 `build_test_graph`，在 `Stainer` 的输出之后添加这个终止节点。
-3.  更新测试逻辑，移除 `observer_task`，改为直接等待 `machine.run()` 完成。
-4.  在测试设置中初始化 `EventBus` 并注册到 `ResourceRegistry`。
+1.  提交对 `cascade-spec` 的修改，更新 IR 和 Assembly 结构。
+2.  提交对 `cascade-compiler` 的修改，实现 Manifest 边界收集和 Egress 自动布线。
+3.  提交对 `cascade-vm` 的修改，实现事件驱动调度、生命周期信号处理及内核恐慌捕获。
+4.  提交新的集成测试用例。
 
 ### 基本原理
-我们利用 `Reactor` 对 `SystemControlToken` 的拦截机制。只要任何节点输出了包含 `HALT` 命令的 Token（无论该 Token 是否连接到下游 DataNode），`Reactor` 都会触发停机。通过构建一个 `D_out -> F_halt -> D_final` 的链条，并让 `F_halt` 同时输出数据到 `D_final` 和输出 `HALT` 信号，我们既保留了结果用于断言，又实现了优雅停机。
+我们遵循了“显式优于隐式”和“状态驱动优于时间驱动”的原则。
+*   **边界声明**: 编译器现在明确指出数据的来源和去向，使得运行时无需猜测。
+*   **物理信号控制**: `DRAIN`、`HALT`、`ERROR` 现在是物理场内一等的公民，通过 `Machine` 协调者实现确定性的状态转换。
+*   **能效优化**: 引入 `wakeup_event` 确保了 CPU 资源仅在真正有工作需要处理时才被激活。
 
 ### 标签
-#intent/refine #flow/ready #priority/medium #comp/tests #comp/vm #scope/dx #ai/instruct #task/domain/testing #task/object/integration-test #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high 
+#comp/compiler #comp/vm #comp/spec #comp/tests
+#concept/state #concept/history #concept/executor
+#scope/core #scope/api #scope/dx
+#ai/instruct
+#task/domain/runtime #task/object/deterministic-refactor #task/action/integration #task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 重构 `test_machine_integration.py`
+#### Acts 1: 提交核心架构与编译器增强
 
-我们将重写整个测试文件以应用新的拓扑和逻辑。
+我们将 Spec、编译器逻辑以及相关测试添加到暂存区。
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-spec/src/cascade/spec/physical/assembly.py
+packages/cascade-spec/src/cascade/spec/ir/graph.py
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
+packages/cascade-compiler/src/cascade/compiler/wiring/policies/control.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-compiler/tests/integration/test_manifest_content.py
+~~~~~
+
+#### Acts 2: 提交运行时优化与信号处理
+
+我们将 VM 核心逻辑、Harness 更新及生命周期测试添加到暂存区。
+
+~~~~~act
+git_add
+packages/cascade-vm/src/cascade/vm/compute/service.py
+packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-vm/src/cascade/vm/machine.py
+packages/cascade-vm/src/cascade/vm/harness.py
+packages/cascade-vm/tests/integration/test_lifecycle_signals.py
 packages/cascade-vm/tests/integration/test_machine_integration.py
 ~~~~~
-~~~~~python
-import asyncio
-import pytest
-from typing import Dict, Callable, Tuple
 
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from cascade.reflection import PhysicalIdGenerator
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute import ComputeRequest, LocalComputeService
-from cascade.runtime.services.observability.bus import EventBus
-from cascade.runtime.storage import InMemoryObjectStore
+#### Acts 3: 执行 Git 提交
 
-# Standard Library ICs
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.dispatcher import standard_dispatcher
-from cascade.std.triad.stainer import standard_stainer
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+refactor: Implement deterministic lifecycle signals and manifest declaration
 
+This commit repays several critical architectural debts identified during the Stage 3 integration.
 
-# --- Test Fixtures ---
-
-
-# 1. A simple async user function to be executed by the ComputeService
-async def user_square(n: int) -> int:
-    await asyncio.sleep(0.01)  # Simulate real async work
-    return n * n
-
-
-# 2. A transparent terminator kernel function
-def transparent_halt(
-    inputs: Dict[str, Token], node, resources
-) -> Dict[str, Token]:
-    # Pass through the data
-    data_token = inputs["in"]
-    
-    # Emit HALT signal AND pass data
-    return {
-        "out": data_token,
-        "ctrl": Token(payload=SystemControlToken(command=ControlCommand.HALT))
-    }
-
-
-# 3. A helper to build the physical graph for the test
-def build_test_graph() -> BipartiteGraph:
-    graph = BipartiteGraph()
-    base_id = "task_square"
-
-    # Node IDs
-    d_in_id = "d_in"
-    f_bleach_id = PhysicalIdGenerator.bleach_node(base_id)
-    d_worker_in_id = PhysicalIdGenerator.worker_in_data(base_id)
-    f_worker_id = PhysicalIdGenerator.worker_node(base_id)
-    d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
-    d_trace_id = PhysicalIdGenerator.trace_data(base_id)
-    f_stain_id = PhysicalIdGenerator.stain_node(base_id)
-    d_out_id = "d_out" # Output of Stainer
-    f_halt_id = "f_halt"
-    d_final_id = "d_final" # Final output after Halt pass-through
-
-    # Node Definitions
-    nodes = [
-        PhysicsDataNode(id=d_in_id, name="Input"),
-        BleachNode(
-            id=f_bleach_id,
-            name="Bleach(square)",
-            input_ports={"n": PortDef("n", PortRole.DATA)},
-            output_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA),
-                "trace_output": PortDef("trace_output", PortRole.DATA),
-                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
-            },
-        ),
-        PhysicsDataNode(id=d_worker_in_id, name="In(square)"),
-        WorkerNode(
-            id=f_worker_id,
-            name="Exec(square)",
-            canonical_code_structure_hash="hash_for_user_square",
-            input_ports={"worker_input": PortDef("worker_input", PortRole.DATA)},
-            output_ports={"worker_result": PortDef("worker_result", PortRole.DATA)},
-        ),
-        PhysicsDataNode(id=d_worker_out_id, name="Out(square)"),
-        PhysicsDataNode(id=d_trace_id, name="Trace(square)"),
-        StainNode(
-            id=f_stain_id,
-            name="Stain(square)",
-            input_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA),
-                "trace_input": PortDef("trace_input", PortRole.DATA),
-            },
-            output_ports={"output_default": PortDef("output_default", PortRole.DATA)},
-        ),
-        PhysicsDataNode(id=d_out_id, name="IntermediateOutput"),
-        PhysicsFuncNode(
-            id=f_halt_id,
-            name="TransparentHalt",
-            input_ports={"in": PortDef("in", PortRole.DATA)},
-            output_ports={
-                "out": PortDef("out", PortRole.DATA),
-                "ctrl": PortDef("ctrl", PortRole.SIGNAL)
-            }
-        ),
-        PhysicsDataNode(id=d_final_id, name="FinalOutput"),
-    ]
-    for node in nodes:
-        graph.nodes[node.id] = node
-
-    # Channels
-    graph.channels.extend(
-        [
-            Channel(d_in_id, "out", f_bleach_id, "n"),
-            Channel(f_bleach_id, "worker_input", d_worker_in_id, "in"),
-            Channel(d_worker_in_id, "out", f_worker_id, "worker_input"),
-            Channel(f_worker_id, "worker_result", d_worker_out_id, "in"),
-            Channel(d_worker_out_id, "out", f_stain_id, "worker_result"),
-            Channel(f_bleach_id, "trace_output", d_trace_id, "in"),
-            Channel(d_trace_id, "out", f_stain_id, "trace_input"),
-            Channel(f_stain_id, "output_default", d_out_id, "in"),
-            # Connect Stainer Output to Halt Node
-            Channel(d_out_id, "out", f_halt_id, "in"),
-            # Connect Halt Node to Final Data
-            Channel(f_halt_id, "out", d_final_id, "in"),
-        ]
-    )
-    return graph
-
-
-# --- The Test ---
-
-
-@pytest.mark.asyncio
-async def test_machine_self_terminating_flow():
-    # 1. Setup: Build all components of the Machine
-    graph = build_test_graph()
-    memory = VolatileMemory()
-
-    # Kernel Function Map
-    function_map: Dict[str, Callable] = {
-        PhysicalIdGenerator.bleach_node("task_square"): standard_bleacher,
-        PhysicalIdGenerator.worker_node("task_square"): standard_dispatcher,
-        PhysicalIdGenerator.stain_node("task_square"): standard_stainer,
-        "f_halt": transparent_halt,
-    }
-
-    # Code Registry
-    code_registry = CodeRegistry()
-    code_registry.register("hash_for_user_square", user_square)
-
-    # Object Store
-    object_store = InMemoryObjectStore()
-
-    # Communication Queues & Events
-    compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
-    ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
-    wakeup_event = asyncio.Event()
-
-    # Event Bus (Connecting the missing piece)
-    event_bus = EventBus()
-
-    # Resource Registry
-    resource_registry = ResourceRegistry()
-    resource_registry.register("system.object_store", object_store)
-    resource_registry.register("system.compute_queue", compute_queue)
-    resource_registry.register("system.event_bus", event_bus)
-
-    # Instantiate Core Components
-    reactor = Reactor(graph, memory, function_map, resource_registry, ingress_queue)
-    compute_service = LocalComputeService(
-        store=object_store,
-        registry=code_registry,
-        inbound_queue=compute_queue,
-        outbound_queue=ingress_queue,
-        wakeup_event=wakeup_event
-    )
-    machine = Machine(reactor, compute_service, wakeup_event)
-
-    # 2. Prime the System
-    initial_value = 10
-    initial_ref = object_store.put(initial_value)
-    initial_token = Token(payload=initial_ref, trace={"rid": "self_term_run"})
-    memory.put(graph.nodes["d_in"], initial_token)
-
-    # 3. Execute
-    # The graph is designed to self-terminate. We just wait.
-    # We add a timeout to prevent infinite hangs if logic fails.
-    try:
-        await asyncio.wait_for(machine.run(), timeout=5.0)
-    except asyncio.TimeoutError:
-        pytest.fail("Machine execution timed out! Self-termination failed.")
-
-    # 4. Assert
-    # Check if the result propagated to the final node
-    assert memory.get_count("d_final") == 1, "Final output node should have one token"
-
-    final_token = memory.take("d_final")
-    final_ref = final_token.payload
-    final_result = object_store.get(final_ref)
-
-    assert final_result == 100, "The final result should be 10*10"
-    print("Machine self-termination test passed: Final result is 100.")
+Key improvements:
+1.  **Event-Driven Machine**: Replaced inefficient polling (asyncio.sleep) with an event-driven 'wakeup' mechanism using asyncio.Event. This reduces CPU usage to near-zero when the system is idle while maintaining low latency for computation results.
+2.  **Graceful DRAIN Protocol**: Implemented a true DRAIN lifecycle state. The Machine now correctly waits for 'Quiescence' (idle reactor + no active compute tasks + empty ingress) before shutting down when a DRAIN signal is received.
+3.  **Kernel Panic Capture**: Enhanced the Reactor and Machine to catch unhandled exceptions, converting them into SystemControlToken(ERROR) signals for structured propagation and shutdown.
+4.  **Explicit Manifest Boundaries**: The CompilationManifest now explicitly declares 'entry_points' and 'exit_points'. The compiler automatically wires 'egress' nodes for graph roots, removing the need for the strategy layer to guess which nodes hold final results.
+5.  **Self-Terminating Tests**: Refactored integration tests to use a transparent halt node within the graph topology, enabling deterministic self-termination and removing flaky external observers.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了集成测试的重构，验证了 `Machine`、`Reactor`、`ComputeService` 以及新的信号机制协同工作的能力。
+我们已经完成了运行时基础的“确定性重构”。债务清单中的“高优先级”项目已清空。
 
-现在，我们有一套坚实的、确定性的运行时基础。接下来的重点可以转向更高级的功能，例如**链接验证器 (Linker Validator)**，它将确保在启动 Machine 前，Assembly 中的所有 `canonical_hash` 都在 `CodeRegistry` 中存在，从而消除了“盲目乐观”的假设。
+接下来的建议方向：
+1.  **异常处理的“最后一公里”**：实现标准的 `F_retry` 节点，它可以消费 `output_error` 端口的数据，并根据策略决定是重新注能（重试）还是导向永久失败节点。
+2.  **链接验证器 (Linker Validator)**：实现一个强制性的校验步骤，在 `Machine.run()` 之前确保 `Assembly` 中引用的所有 `canonical_hash` 在 `CodeRegistry` 中都具备可执行的实现。这对应了战略分析中的“可达性盲目乐观”问题。
 
-或者，我们可以开始实现**双通道出口 (Dual-Channel Egress)**，解决错误 Token 掉入虚空导致系统意外静止的问题。这是目前架构中一个明显的盲点。
-
-鉴于错误处理的紧迫性，我建议下一步：**实现标准错误处理节点与双通道出口**。
+我提议下一步：**实现 `Linker` 的完整性验证逻辑**。

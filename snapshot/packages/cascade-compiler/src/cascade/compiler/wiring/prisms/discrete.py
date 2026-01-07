@@ -82,11 +82,15 @@ class DiscreteResourcePrism(ResourcePrism):
         # --- Parking & Wake-up Mechanism ---
         # 1. New Nodes
         d_parked_id = f"parked.req.{res_def.name}"
-        d_parked = PhysicsDataNode(id=d_parked_id, name=f"Parked({res_def.name})")
+        d_parked = PhysicsDataNode(
+            id=d_parked_id, name=f"Parked({res_def.name})", capacity=1000
+        )
         ctx.wire.add_node(d_parked)
 
         d_signal_id = f"signal.wakeup.{res_def.name}"
-        d_signal = PhysicsDataNode(id=d_signal_id, name=f"Signal({res_def.name})")
+        d_signal = PhysicsDataNode(
+            id=d_signal_id, name=f"Signal({res_def.name})", capacity=1000
+        )
         ctx.wire.add_node(d_signal)
 
         f_gate_id = f"gate.wakeup.{res_def.name}"

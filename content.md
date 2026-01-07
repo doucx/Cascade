@@ -1,301 +1,272 @@
-好的，我们开始实施 `D_context` 通道。
+好的，我们已经为重试机制奠定了信息守恒的基础。现在，我们将利用 `D_context` 通道，实现“最后一公里”——构建一个物理上的 `F_retry` 节点。
 
-根据我们的战略分析，这将为未来的重试机制奠定坚实的架构基础。我将生成一个计划，通过修改编译器后端和标准库，在“三连体”微观结构中加入这个新的旁路通道。
+这个计划将创建一个独立的、可重用的标准库函数，它封装了重试决策的全部逻辑，将错误处理从命令式代码转变为计算图中的拓扑结构。
 
-## [WIP] feat(core): Implement D_context side-channel for Triad retry capability
+## [WIP] feat(core): Implement F_retry node for topological error handling
 
 ### 错误分析
 
-无。此计划旨在实现一个新功能，解决一个先前诊断出的架构缺陷。
+无。此计划是上一个计划的延续，旨在实现一个新功能。
 
 ### 用户需求
 
-在 Triad 物理结构中实现一个专用的 `D_context` 旁路通道。该通道的职责是持久化一个任务执行所需的完整输入上下文（输入引用），以便在任务失败时，下游的重试逻辑（如 `F_retry` 节点）可以使用此上下文重新触发任务。
+实现一个标准的 `F_retry` 物理节点逻辑，该逻辑可以：
+1.  同时消费来自 `Stainer` 的 `output_error` 端口的错误 `Token` 和来自 `D_context` 旁路通道的原始输入上下文 `Token`。
+2.  根据节点自身定义的重试策略（例如 `max_attempts`）和 `Token` 中追踪的当前重试次数，做出决策。
+3.  如果决定重试，则将原始输入上下文 `Token` 路由到 `retry_out` 端口，以便将其连接回原始任务的 `Bleacher`。
+4.  如果达到重试上限，则将错误 `Token` 路由到 `fail_out` 端口，导向一个永久失败的终端节点。
 
 ### 评论
 
-这是一个至关重要的架构演进。通过为重试上下文建立一个物理上独立的通道，我们遵循了“本体论正确性”原则，将“观测轨迹”（`D_trace`）和“执行上下文”（`D_context`）的职责清晰地分离开来。这不仅解决了当前输入信息丢失的问题，也为未来构建更复杂的、有状态的错误处理机制提供了无与伦比的清晰度和可扩展性。
+这是 Cascade 架构理念的一次完美体现。我们正在将一个传统的、隐藏在执行器内部的命令式控制流（`for` 循环重试）转化为一个显式的、可观测的、声明式的物理拓扑结构。`F_retry` 节点就像一个物理上的“分拣机”，它根据能量（`Token`）的属性（`trace` 中的重试次数）将其引导到不同的物理路径。这种方法使得错误处理和重试策略变得与核心业务逻辑完全解耦，并且其行为在可视化图上清晰可见。
 
 ### 目标
 
-1.  在 `PhysicalIdGenerator` 中为新的上下文数据节点 (`D_context`) 添加一个规范的 ID 生成方法。
-2.  修改编译器后端的 `Expander`，使其在为每个逻辑任务展开 Triad 子图时，自动创建 `D_context` 节点、在 `Bleacher` 和 `Stainer` 上创建相应的端口，并建立正确的内部连接。
-3.  更新 `standard_bleacher` 的运行时逻辑，使其在处理输入后，将原始的输入引用（`input_refs`）打包成一个新的 `Token`，并从新增的 `context_output` 端口发出。
-4.  更新 `standard_stainer` 的运行时逻辑，使其能够接收来自 `D_context` 的 `Token`，为未来的使用做好准备。
+1.  在 `cascade-spec` 中定义一个新的物理节点类型 `RetryNode`，它继承自 `PhysicsFuncNode` 并包含 `max_attempts` 等策略属性。
+2.  在 `cascade-std` 标准库中创建一个新的 `retry.py` 文件，用于存放重试逻辑。
+3.  实现核心的 `standard_retry_logic` 函数，该函数将作为所有 `RetryNode` 的物理实现。
+4.  更新 `Linker`，使其能够将 `RetryNode` 类型的物理节点链接到 `standard_retry_logic` 函数。
+5.  将新的 `standard_retry_logic` 导出，使其成为标准库的一部分。
 
 ### 基本原理
 
-我们将对系统的“创世”引擎（`Expander`）进行精确的外科手术。通过向 Triad 结构中注入一个新的 `PhysicsDataNode` (`D_context`) 和两条新的 `Channel`，我们建立了一条与主执行流和观测流并行的“上下文”流。`Bleacher` 将同时向 `D_worker_in`（用于立即执行）和 `D_context`（用于未来重试）发送相同的输入引用。`Stainer` 将消费 `D_context` 的内容，确保信息流的守恒。这个改动是纯粹的加法，对现有逻辑的侵入性极小，但极大地增强了系统的弹性和信息完整性。
+我们将遵循“策略在节点，状态在令牌”的核心原则。
+-   **策略 (Policy)**: 重试的配置（如最大次数 `max_attempts`）将被静态地存储在编译器生成的 `RetryNode` 实例中。
+-   **状态 (State)**: 当前的重试次数 (`retry_count`) 将作为动态状态，在 `Token` 的 `trace` 载荷中进行传递和累加。
+
+`standard_retry_logic` 函数将是一个纯粹的状态机，它接收代表策略的 `node` 和代表状态的 `token`，然后根据规则产生输出，决定能量的下一个流向。这种设计确保了逻辑的确定性和可测试性。
 
 ### 标签
 
-#intent/build #intent/architect #flow/ready #priority/high #comp/compiler #comp/engine #concept/state #scope/core #ai/delegate #task/domain/core #task/object/retry-context #task/action/implementation #task/state/begin
+#intent/build #flow/ready #priority/high #comp/engine #comp/std-library #concept/state #scope/core #ai/delegate #task/domain/core #task/object/retry-node #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 `PhysicalIdGenerator`
+#### Acts 1: 定义 `RetryNode` 物理节点规范
 
-首先，我们在 `cascade-reflection` 包中为 `D_context` 节点添加一个新的、规范的 ID 生成器方法。
-
-~~~~~act
-patch_file
-packages/cascade-reflection/src/cascade/reflection/naming.py
-~~~~~
-~~~~~python.old
-    @staticmethod
-    def trace_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.trace"
-
-    @staticmethod
-~~~~~
-~~~~~python.new
-    @staticmethod
-    def trace_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.trace"
-
-    @staticmethod
-    def context_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.context"
-
-    @staticmethod
-~~~~~
-
-#### Acts 2: 扩展 `Expander` 以构建 `D_context` 通道
-
-接下来，修改 `cascade-compiler` 的核心 `Expander`。这是本次计划的核心，我们将在 Triad 中创建新的物理实体。
+首先，我们需要在 `cascade-spec` 中为 `F_retry` 节点创建一个正式的类型定义。我们将其放在 `triad.py` 中，因为它与 Triad 结构紧密相关。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+packages/cascade-spec/src/cascade/spec/physical/triad.py
 ~~~~~
 ~~~~~python.old
-        d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
-        d_trace_id = PhysicalIdGenerator.trace_data(base_id)
-        f_post_id = PhysicalIdGenerator.stain_node(base_id)
-
-        # 2. Create Nodes
+@dataclass
+class ObservabilityNode(PhysicsFuncNode):
+    pass
 ~~~~~
 ~~~~~python.new
-        d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
-        d_trace_id = PhysicalIdGenerator.trace_data(base_id)
-        d_context_id = PhysicalIdGenerator.context_data(base_id)
-        f_post_id = PhysicalIdGenerator.stain_node(base_id)
+@dataclass
+class ObservabilityNode(PhysicsFuncNode):
+    pass
 
-        # 2. Create Nodes
-~~~~~
-~~~~~python.old
-            output_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict"),
-                "trace_output": PortDef("trace_output", PortRole.DATA, "TraceCtx"),
-                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
-            },
-        )
-~~~~~
-~~~~~python.new
-            output_ports={
-                "worker_input": PortDef("worker_input", PortRole.DATA, "Dict"),
-                "trace_output": PortDef("trace_output", PortRole.DATA, "TraceCtx"),
-                "context_output": PortDef("context_output", PortRole.DATA, "Dict"),
-                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY, "Event"),
-            },
-        )
-~~~~~
-~~~~~python.old
-        # D_trace: The wormhole for metadata (start_ts, trace_id)
-        d_trace = PhysicsDataNode(id=d_trace_id, name=f"Trace({node_ir.name})")
 
-        # F_post: The Stainer
-~~~~~
-~~~~~python.new
-        # D_trace: The wormhole for metadata (start_ts, trace_id)
-        d_trace = PhysicsDataNode(id=d_trace_id, name=f"Trace({node_ir.name})")
-
-        # D_context: The wormhole for re-execution context (input refs)
-        d_context = PhysicsDataNode(id=d_context_id, name=f"Context({node_ir.name})")
-
-        # F_post: The Stainer
-~~~~~
-~~~~~python.old
-        f_post = StainNode(
-            id=f_post_id,
-            name=f"Stain({node_ir.name})",
-            input_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA, "Any"),
-                "trace_input": PortDef("trace_input", PortRole.DATA, "TraceCtx"),
-            },
-            output_ports=stainer_outputs,
-        )
-~~~~~
-~~~~~python.new
-        f_post = StainNode(
-            id=f_post_id,
-            name=f"Stain({node_ir.name})",
-            input_ports={
-                "worker_result": PortDef("worker_result", PortRole.DATA, "Any"),
-                "trace_input": PortDef("trace_input", PortRole.DATA, "TraceCtx"),
-                "context_input": PortDef("context_input", PortRole.DATA, "Dict"),
-            },
-            output_ports=stainer_outputs,
-        )
-~~~~~
-~~~~~python.old
-        # Register nodes
-        subgraph.nodes = {
-            n.id: n
-            for n in [f_pre, d_worker_in, f_worker, d_worker_out, d_trace, f_post]
-        }
-        subgraph.bleacher = f_pre
-~~~~~
-~~~~~python.new
-        # Register nodes
-        subgraph.nodes = {
-            n.id: n
-            for n in [
-                f_pre,
-                d_worker_in,
-                f_worker,
-                d_worker_out,
-                d_trace,
-                d_context,
-                f_post,
-            ]
-        }
-        subgraph.bleacher = f_pre
-~~~~~
-~~~~~python.old
-        # D_trace -> F_post
-        channels.append(
-            Channel(
-                source_node_id=d_trace_id,
-                source_port="out",
-                target_node_id=f_post_id,
-                target_port="trace_input",
-            )
-        )
-
-        subgraph.channels = channels
-~~~~~
-~~~~~python.new
-        # D_trace -> F_post
-        channels.append(
-            Channel(
-                source_node_id=d_trace_id,
-                source_port="out",
-                target_node_id=f_post_id,
-                target_port="trace_input",
-            )
-        )
-
-        # Path 3: Context Bypass
-        # F_pre -> D_context
-        channels.append(
-            Channel(
-                source_node_id=f_pre_id,
-                source_port="context_output",
-                target_node_id=d_context_id,
-                target_port="in",
-            )
-        )
-        # D_context -> F_post
-        channels.append(
-            Channel(
-                source_node_id=d_context_id,
-                source_port="out",
-                target_node_id=f_post_id,
-                target_port="context_input",
-            )
-        )
-
-        subgraph.channels = channels
+@dataclass
+class RetryNode(PhysicsFuncNode):
+    max_attempts: int = 3
+    # Future: delay, backoff, etc.
 ~~~~~
 
-#### Acts 3: 更新 `standard_bleacher` 以填充 `D_context`
-
-现在修改 `cascade-std` 中的 `standard_bleacher` 逻辑，使其生成并发出新的上下文 `Token`。
+并且更新 `__init__.py` 使其可被外部引用。
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-spec/src/cascade/spec/__init__.py
 ~~~~~
 ~~~~~python.old
-    # 4. Create the output tokens
-    worker_token = Token(payload=worker_payload, trace=trace_payload)
-    trace_token = Token(payload=trace_payload)
-    # obs_output now carries the IR as payload
-    obs_token = Token(payload=ir, trace=trace_payload)
-
-    return {
-        "worker_input": worker_token,
-        "trace_output": trace_token,
-        "obs_output": obs_token,
-    }
+from cascade.spec.physical.triad import (
+    BleachNode,
+    WorkerNode,
+    StainNode,
+    ObservabilityNode,
+)
 ~~~~~
 ~~~~~python.new
-    # 4. Create the output tokens
-    worker_token = Token(payload=worker_payload, trace=trace_payload)
-    trace_token = Token(payload=trace_payload)
-    # The context payload IS the worker payload (the input refs)
-    context_token = Token(payload=worker_payload, trace=trace_payload)
-    # obs_output now carries the IR as payload
-    obs_token = Token(payload=ir, trace=trace_payload)
-
-    return {
-        "worker_input": worker_token,
-        "trace_output": trace_token,
-        "context_output": context_token,
-        "obs_output": obs_token,
-    }
+from cascade.spec.physical.triad import (
+    BleachNode,
+    WorkerNode,
+    StainNode,
+    ObservabilityNode,
+    RetryNode,
+)
+~~~~~
+~~~~~python.old
+    "StainNode",
+    "ObservabilityNode",
+]
+~~~~~
+~~~~~python.new
+    "StainNode",
+    "ObservabilityNode",
+    "RetryNode",
+]
 ~~~~~
 
-#### Acts 4: 更新 `standard_stainer` 以消费 `D_context`
 
-最后，修改 `standard_stainer` 以接收新的 `context_input`。目前我们只是简单地将其内容合并到最终的 `trace` 中，以确保信息守恒。
+#### Acts 2: 创建 `standard_retry_logic` 实现
+
+现在，我们在 `cascade-std` 中创建 `retry.py` 并实现核心重试逻辑。
+
+~~~~~act
+write_file
+packages/cascade-std/src/cascade/std/system/retry.py
+~~~~~
+~~~~~python
+from typing import Dict, Any
+
+from cascade.spec import RetryNode
+from cascade.spec.physical.nodes import Token
+
+
+def standard_retry_logic(
+    inputs: Dict[str, Token], node: RetryNode, resources: Any
+) -> Dict[str, Token]:
+    """
+    Implements topological retry logic.
+
+    Inputs:
+        - error_in: The error token from the failed task.
+        - context_in: The original input context token.
+
+    Outputs:
+        - retry_out: The context token, to be routed back for retry.
+        - fail_out: The error token, if retries are exhausted.
+    """
+    error_token = inputs["error_in"]
+    context_token = inputs["context_in"]
+
+    # State is in the token trace
+    trace = context_token.trace
+    retry_count = trace.get("retry_count", 0)
+    retry_count += 1
+
+    # Policy is in the node definition
+    max_attempts = node.max_attempts
+
+    if retry_count < max_attempts:
+        # Retry: update state and route context token back
+        trace["retry_count"] = retry_count
+        return {"retry_out": context_token}
+    else:
+        # Fail permanently: route error token to failure sink
+        return {"fail_out": error_token}
+~~~~~
+
+#### Acts 3: 在标准库中导出新函数
+
+将新创建的 `standard_retry_logic` 函数添加到 `cascade-std.system` 的 `__init__.py` 中，使其成为公共 API。
 
 ~~~~~act
 patch_file
-packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-std/src/cascade/std/system/__init__.py
 ~~~~~
 ~~~~~python.old
-    # 1. Extract inputs
-    worker_result_token = inputs["worker_result"]
-    trace_input_token = inputs["trace_input"]
+# System Control ICs for graph lifecycle management (Sovereignty).
+from .gate import gate_passthrough
 
-    result_payload = worker_result_token.payload
-
-    # Merge traces
-    trace_payload = worker_result_token.trace.copy()
-    trace_payload.update(trace_input_token.payload)
-
-    # 2. Calculate duration
+__all__ = ["gate_passthrough"]
 ~~~~~
 ~~~~~python.new
-    # 1. Extract inputs
-    worker_result_token = inputs["worker_result"]
-    trace_input_token = inputs["trace_input"]
-    context_input_token = inputs.get("context_input")  # Use .get for graceful upgrade
+# System Control ICs for graph lifecycle management (Sovereignty).
+from .gate import gate_passthrough
+from .retry import standard_retry_logic
 
-    result_payload = worker_result_token.payload
+__all__ = ["gate_passthrough", "standard_retry_logic"]
+~~~~~
 
-    # Merge traces
-    trace_payload = worker_result_token.trace.copy()
-    trace_payload.update(trace_input_token.payload)
-    if context_input_token:
-        # For now, we just merge the context payload into the final trace,
-        # under the key 'input_context'.
-        trace_payload["input_context"] = context_input_token.payload
+#### Acts 4: 更新 `Linker` 以识别 `RetryNode`
 
-    # 2. Calculate duration
+最后，也是关键的一步，我们教 `Linker` 如何将新的 `RetryNode` 类型链接到它的标准实现。
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/linker.py
+~~~~~
+~~~~~python.old
+from cascade.spec.physical.assembly import Assembly
+from cascade.spec.physical.nodes import PhysicsFuncNode
+from cascade.reflection import PhysicalIdGenerator
+
+from .registry import CodeRegistry
+~~~~~
+~~~~~python.new
+from cascade.spec.physical.assembly import Assembly
+from cascade.spec.physical.nodes import PhysicsFuncNode
+from cascade.spec.physical.triad import RetryNode
+from cascade.reflection import PhysicalIdGenerator
+
+from .registry import CodeRegistry
+~~~~~
+~~~~~python.old
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
+from cascade.std.resource.requestor import resource_requestor
+from cascade.std.system.egress import standard_egress
+from cascade.std.system.gate import gate_passthrough
+~~~~~
+~~~~~python.new
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
+from cascade.std.resource.requestor import resource_requestor
+from cascade.std.system.egress import standard_egress
+from cascade.std.system.gate import gate_passthrough
+from cascade.std.system.retry import standard_retry_logic
+~~~~~
+~~~~~python.old
+            # 2. Standard Library Nodes (via ID Heuristics)
+            stdlib_func = self._resolve_stdlib(node_id)
+            if stdlib_func:
+                function_map[node_id] = stdlib_func
+                continue
+
+        return function_map
+~~~~~
+~~~~~python.new
+            # 2. Standard Library Nodes (via ID Heuristics or Type)
+            stdlib_func = self._resolve_stdlib(node)
+            if stdlib_func:
+                function_map[node.id] = stdlib_func
+                continue
+
+        return function_map
+~~~~~
+~~~~~python.old
+    def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:
+        # Triad
+        if node_id.endswith(".bleach"):
+            return standard_bleacher
+        if node_id.endswith(".stain"):
+            return standard_stainer
+~~~~~
+~~~~~python.new
+    def _resolve_stdlib(self, node: PhysicsFuncNode) -> Optional[Callable]:
+        node_id = node.id
+        # Type-based resolution is more robust
+        if isinstance(node, RetryNode):
+            return standard_retry_logic
+
+        # Heuristic-based resolution for legacy/generic nodes
+        if node_id.endswith(".bleach"):
+            return standard_bleacher
+        if node_id.endswith(".stain"):
+            return standard_stainer
 ~~~~~
 
 ### 下一步建议
 
-我们已经成功地在物理层面构建了信息守恒的旁路通道。现在，架构已经为真正的弹性做好了准备。
+我们已经成功地创建了 `F_retry` 节点的核心逻辑和类型规范。它现在是标准库中一个可用的“物理元件”。
 
-下一步的核心任务是：
-1.  **实现 `F_retry` 物理节点**：创建一个新的标准库函数 (`standard_retry_logic`)，它可以被连接到 `Stainer` 的 `output_error` 端口。
-2.  **消费上下文**：这个新的重试函数将消费来自 `D_error` 的错误 `Token` 和来自 `D_context` 的上下文 `Token`。
-3.  **实现策略**：根据错误类型和重试次数（存储在 `D_context` 的 trace 中），决定是将原始输入 `Token` 重新注入到 `Bleacher`（实现重试），还是将其路由到一个永久失败的 `D_failed` 节点。
+然而，它还没有被集成到我们的“宇宙”中。`LazyResult.with_retry()` 策略仍然没有被编译成使用这个节点的物理拓扑。
 
-如果你同意，我将开始准备实现 `F_retry` 节点的计划。
+因此，下一步的宏观任务是：
+1.  **修改编译器 `WiringPolicy`**：创建一个新的 `RetryWiringPolicy` 或增强现有的 `ControlFlowWiringPolicy`。
+2.  **实现拓扑生成**：当该策略检测到 `node_ir` 中存在 `retry_policy` 时，它将：
+    *   在 Triad 旁边创建一个 `RetryNode` 实例，并将策略（如 `max_attempts`）配置到该节点上。
+    *   创建一个 `D_failed` 终端数据节点。
+    *   **自动布线**：
+        *   `Stainer:output_error` -> `RetryNode:error_in`
+        *   `D_context:out` -> `RetryNode:context_in`
+        *   `RetryNode:retry_out` -> `Bleacher: (new retry_in port)`
+        *   `RetryNode:fail_out` -> `D_failed:in`
+
+这个步骤将完全自动化重试逻辑的物理实现，完成从用户意图到物理现实的转换。如果你同意，我将开始制定这个编译时布线策略的计划。

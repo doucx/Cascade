@@ -33,7 +33,7 @@ def controller_connector(unique_paths):
 @pytest.fixture
 def engine(unique_paths, bus_and_spy):
     """Provides a fully configured Engine using the LocalConnector."""
-    from cascade.testing import TimedMockExecutor
+    from cascade.test_utils.helpers import TimedMockExecutor
 
     db_path, uds_path = unique_paths
     bus, _ = bus_and_spy

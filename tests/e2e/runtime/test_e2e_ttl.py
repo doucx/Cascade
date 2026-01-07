@@ -4,7 +4,7 @@ import cascade as cs
 from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
 from cascade.runtime import EventBus
-from cascade.testing import MockExecutor
+from cascade.test_utils.helpers import MockExecutor
 
 from .harness import InProcessConnector
 

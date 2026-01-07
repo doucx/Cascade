@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cascade-test-utils"
+version = "0.1.0"
+description = "Shared testing utilities for the Cascade monorepo."
+requires-python = ">=3.8"
+dependencies = [
+  "cascade-spec",
+  "cascade-runtime",
+  "cascade-graph",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cascade"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.uv.sources]
+cascade-spec = { workspace = true }
+cascade-runtime = { workspace = true }
+cascade-graph = { workspace = true }

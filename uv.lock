@@ -25,6 +25,7 @@ members = [
     "cascade-sdk",
     "cascade-spec",
     "cascade-std",
+    "cascade-test-utils",
     "cascade-vm",
     "cascade-vm-rs",
 ]
@@ -850,6 +851,7 @@ dev = [
     { name = "cascade-connector-mqtt" },
     { name = "cascade-provider-ipfs" },
     { name = "cascade-std" },
+    { name = "cascade-test-utils" },
     { name = "cascade-vm" },
     { name = "cascade-vm-rs" },
     { name = "flask-cors", version = "5.0.0", source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }, marker = "python_full_version < '3.9'" },
@@ -904,6 +906,7 @@ requires-dist = [
     { name = "cascade-sdk", editable = "packages/cascade-sdk" },
     { name = "cascade-spec", editable = "packages/cascade-spec" },
     { name = "cascade-std", marker = "extra == 'dev'", editable = "packages/cascade-std" },
+    { name = "cascade-test-utils", marker = "extra == 'dev'", editable = "packages/cascade-test-utils" },
     { name = "cascade-vm", editable = "packages/cascade-vm" },
     { name = "cascade-vm", marker = "extra == 'dev'", editable = "packages/cascade-vm" },
     { name = "cascade-vm-rs", marker = "extra == 'dev'", editable = "packages/cascade-vm-rs" },
@@ -1030,6 +1033,23 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "cascade-spec", editable = "packages/cascade-spec" }]
+
+[[package]]
+name = "cascade-test-utils"
+version = "0.1.0"
+source = { editable = "packages/cascade-test-utils" }
+dependencies = [
+    { name = "cascade-graph" },
+    { name = "cascade-runtime" },
+    { name = "cascade-spec" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cascade-graph", editable = "packages/cascade-graph" },
+    { name = "cascade-runtime", editable = "packages/cascade-runtime" },
+    { name = "cascade-spec", editable = "packages/cascade-spec" },
+]
 
 [[package]]
 name = "cascade-vm"

@@ -3,7 +3,7 @@ import pytest
 import cascade as cs
 from cascade.graph.build import build_graph
 from cascade.runtime import Engine, EventBus, ExecutionPlan
-from cascade.testing import SpyExecutor, MockSolver
+from cascade.test_utils.helpers import SpyExecutor, MockSolver
 
 
 # --- Test Case ---

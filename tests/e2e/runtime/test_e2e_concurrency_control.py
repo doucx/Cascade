@@ -9,7 +9,7 @@ from cascade.runtime import EventBus
 from cascade.spec.dsl.constraint import GlobalConstraint
 
 # Use the deterministic Mock infrastructure from the SDK
-from cascade.testing import MockExecutor, MockConnector
+from cascade.test_utils.helpers import MockExecutor, MockConnector
 
 
 @pytest.mark.asyncio

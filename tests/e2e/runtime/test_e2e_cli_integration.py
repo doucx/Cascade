@@ -4,7 +4,7 @@ import cascade as cs
 from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.runtime.host.instance import Engine
 from cascade.runtime.services.observability.events import TaskExecutionFinished
-from cascade.testing import MockExecutor
+from cascade.test_utils.helpers import MockExecutor
 
 # 导入 app 模块中的核心异步逻辑函数
 from cascade.cli.controller import app as controller_app

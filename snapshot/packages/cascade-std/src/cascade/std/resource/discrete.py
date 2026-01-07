@@ -2,6 +2,7 @@ from typing import Dict, Any, Union
 from dataclasses import dataclass
 from cascade.spec.physical.nodes import Token, PhysicsNode
 from cascade.spec.physical.object import Ref
+from cascade.spec.physical.ports import PortName
 
 
 @dataclass
@@ -56,8 +57,8 @@ def discrete_allocator(
             # Fallback for legacy/testing
             outputs["gnt_out"] = Token(payload=req_amount, trace=req_token.trace)
     else:
-        # Reject & Recirculate
-        outputs["req_out"] = req_token
+        # Reject & Park
+        outputs[PortName.REQ_PARKED] = req_token
 
     outputs["ledger_out"] = Token(payload=ledger)
     return outputs
@@ -79,4 +80,8 @@ def discrete_reclaimer(
     # Replenish
     ledger.available = min(ledger.total, ledger.available + release_amount)
 
-    return {"ledger_out": Token(payload=ledger)}
+    outputs = {"ledger_out": Token(payload=ledger)}
+    # Emit wake-up signal
+    outputs[PortName.SIGNAL_OUT] = Token(payload=None, trace=rel_token.trace)
+
+    return outputs

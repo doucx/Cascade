@@ -40,6 +40,7 @@ class DiscreteResourcePrism(ResourcePrism):
             },
             output_ports={
                 PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
+                PortName.SIGNAL_OUT: PortDef(PortName.SIGNAL_OUT, PortRole.SIGNAL),
             },
         )
         ctx.wire.add_node(f_reclaimer)
@@ -55,7 +56,7 @@ class DiscreteResourcePrism(ResourcePrism):
             output_ports={
                 PortName.LEDGER_OUT: PortDef(PortName.LEDGER_OUT, PortRole.DATA),
                 PortName.GNT: PortDef(PortName.GNT, PortRole.RESOURCE),
-                PortName.REQ_OUT: PortDef(PortName.REQ_OUT, PortRole.DATA),
+                PortName.REQ_PARKED: PortDef(PortName.REQ_PARKED, PortRole.DATA),
             },
         )
         ctx.wire.add_node(f_allocator)
@@ -77,8 +78,39 @@ class DiscreteResourcePrism(ResourcePrism):
 
         # Buffer -> Allocator
         ctx.wire.connect(d_req_buffer_id, "out", allocator_id, PortName.REQ)
-        # Recirculation: Allocator -> Buffer
-        ctx.wire.connect(allocator_id, PortName.REQ_OUT, d_req_buffer_id, "in")
+
+        # --- Parking & Wake-up Mechanism ---
+        # 1. New Nodes
+        d_parked_id = f"parked.req.{res_def.name}"
+        d_parked = PhysicsDataNode(id=d_parked_id, name=f"Parked({res_def.name})")
+        ctx.wire.add_node(d_parked)
+
+        d_signal_id = f"signal.wakeup.{res_def.name}"
+        d_signal = PhysicsDataNode(id=d_signal_id, name=f"Signal({res_def.name})")
+        ctx.wire.add_node(d_signal)
+
+        f_gate_id = f"gate.wakeup.{res_def.name}"
+        f_gate = PhysicsFuncNode(
+            id=f_gate_id,
+            name=f"Gate({res_def.name})",
+            input_ports={
+                "req_in": PortDef("req_in", PortRole.DATA),
+                "signal_in": PortDef("signal_in", PortRole.SIGNAL),
+            },
+            output_ports={"req_out": PortDef("req_out", PortRole.DATA)},
+        )
+        ctx.wire.add_node(f_gate)
+
+        # 2. New Wiring
+        # Allocator parks rejected requests
+        ctx.wire.connect(allocator_id, PortName.REQ_PARKED, d_parked_id, "in")
+        # Reclaimer sends wake-up signal
+        ctx.wire.connect(reclaimer_id, PortName.SIGNAL_OUT, d_signal_id, "in")
+        # Gate is triggered by parked request and signal
+        ctx.wire.connect(d_parked_id, "out", f_gate_id, "req_in")
+        ctx.wire.connect(d_signal_id, "out", f_gate_id, "signal_in")
+        # Gate sends request back to the main buffer for retry
+        ctx.wire.connect(f_gate_id, "req_out", d_req_buffer_id, "in")
 
         # Release Buffer
         rel_buffer_id = f"buffer.rel.{res_def.name}"

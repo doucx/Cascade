@@ -23,6 +23,8 @@ class PortName:
     REL = "rel_in"
     GNT = "gnt_out"
     REQ_OUT = "req_out"  # For recirculation
+    REQ_PARKED = "req_parked"  # For parking rejected requests
+    SIGNAL_OUT = "signal_out"  # For wake-up signals
     LEDGER_IN = "ledger_in"
     LEDGER_OUT = "ledger_out"
 

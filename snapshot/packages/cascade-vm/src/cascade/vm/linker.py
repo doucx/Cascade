@@ -14,6 +14,7 @@ from cascade.std.triad.dispatcher import standard_dispatcher
 from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.system.egress import standard_egress
+from cascade.std.system.gate import gate_passthrough
 
 
 class LinkerError(RuntimeError):
@@ -79,6 +80,8 @@ class Linker:
             return discrete_reclaimer
         if node_id.startswith("req."):
             return resource_requestor
+        if "gate.wakeup" in node_id:
+            return gate_passthrough
 
         # System / Egress
         if node_id.startswith("egress."):

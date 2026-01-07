@@ -1,507 +1,252 @@
-根据你的路线图，我将生成执行 **Phase 3.1: 编译器增强** 的计划。此计划将引入 `CompilationManifest` 和 `CompilationArtifact`，并更新编译器前端和后端以生成和填充这些结构，同时修复因破坏性变更（Breaking Change）导致的所有受影响测试。
+好的，我们将开始执行 **Phase 3.2: 链接器增强**。
 
-这是确定性重构的第一步，为后续消除“猜测性编程”奠定基础。
+此计划的核心是赋予 `Linker` 验证职责，使其成为 VM 启动前的一道“防火墙”。通过在链接时强制进行完整性校验，我们能将潜在的、难以调试的运行时 `KeyError`（因函数未注册）转变为一个清晰的、在启动阶段就发生的 `LinkerError`。
 
 [简要回答]
-我们将执行 Phase 3.1，引入 `CompilationManifest` 和 `CompilationArtifact`，使编译器显式返回逻辑 UUID 到物理节点 ID 的映射。这将涉及修改 Spec、Frontend Generator、Backend Builder 以及所有依赖 `Builder.build` 的测试用例。
+我将立即实施 Phase 3.2。此计划将修改 `Linker`，使其在生成函数映射前，强制验证 `Assembly` 所需的每一个函数都在 `CodeRegistry` 中存在。如果校验失败，将抛出一个明确的 `LinkerError`。我还将创建新的单元测试来锁定这一关键行为。
 
-## [WIP] feat(compiler): 引入 CompilationManifest 以建立确定的逻辑-物理映射
+## [WIP] feat(vm): 在 Linker 中实现启动前完整性校验
 
 ### 用户需求
-目前 `Builder.build()` 仅返回物理 `Assembly`。运行时策略层（Strategy）在拥有逻辑 `LazyResult` 对象时，不得不猜测其对应的物理节点 ID（例如假设 ID 为 `hash` 或 `hash.worker`）。这种隐式假设是脆弱的。
-用户需要一个权威的、由编译器生成的清单（Manifest），明确记录逻辑 UUID 与物理节点 ID 之间的映射关系。
+VM 不应在缺少必要函数实现的情况下启动。`Linker` 需要一个强制性的验证步骤，以确保 `Assembly` 中 `symbol_table` 引用的所有 `canonical_code_structure_hash` 都在 `CodeRegistry` 中有对应的函数实现。
 
 ### 评论
-这是 ADAP 协议（假设驱动分析）的直接应用。通过将映射关系具体化为数据结构，我们消除了运行时对编译器内部命名约定的隐式依赖。
+这是一个典型的“快速失败”(Fail-Fast)设计模式。通过在系统启动的最早阶段捕获配置错误，我们极大地提高了系统的健壮性和可调试性。这个改动将“代码未找到”的错误从一个不确定的运行时事件，转变为一个确定性的链接时错误。
 
 ### 目标
-1.  在 `cascade-spec` 中定义 `CompilationManifest` 和 `CompilationArtifact`。
-2.  更新 `NodeIR` 以携带可选的 `logical_id` (UUID)。
-3.  更新 `IRGenerator` 以在生成 IR 时填充 `logical_id`。
-4.  更新 `Builder` 以生成 Manifest 并返回 `CompilationArtifact`。
-5.  修复所有因 `Builder.build` 返回值类型改变而破坏的单元测试和集成测试。
+1.  在 `linker.py` 中定义一个新的异常类型 `LinkerError`。
+2.  修改 `Linker.link` 方法，增加完整性校验逻辑。
+3.  如果发现任何代码哈希缺失，`Linker.link` 必须抛出 `LinkerError`，并在错误消息中列出所有缺失的哈希。
+4.  创建一个新的测试文件 `tests/unit/test_linker.py`。
+5.  在新测试文件中，添加用例以验证校验成功和失败（抛出异常）两种情况。
 
 ### 基本原理
--   **SSoT (单一事实来源)**: 编译器是唯一知道逻辑节点如何映射到物理节点的组件。它必须将这一知识显式导出，而不是让下游去重新计算或猜测。
--   **Artifact 封装**: 将 `Assembly`（物理图）和 `Manifest`（元数据）封装在 `CompilationArtifact` 中，为未来增加更多编译产物（如调试符号、Source Map）预留空间。
+`Linker` 是连接静态编译产物 (`Assembly`) 和动态运行时环境 (`CodeRegistry`) 的唯一桥梁。因此，它是执行这种契约验证最理想、最权威的位置。强制校验将确保 Reactor 在接收到 `function_map` 时，该映射是完全可信且完整的。
 
 ### 标签
-#intent/architect #intent/refine #flow/ready #priority/high
+#intent/build #flow/ready #priority/high
 #comp/engine #scope/core
-#task/domain/compiler #task/object/compilation-manifest #task/action/implementation
-#task/state/begin
+#task/domain/vm #task/object/linker #task/action/validation
+#task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 更新 Spec 定义 (NodeIR & Assembly)
+#### Acts 1: 增强 Linker 并定义 LinkerError
 
-首先，我们在 IR 中增加 `logical_id` 字段，并在物理层定义新的 Artifact 结构。
-
-~~~~~act
-patch_file
-packages/cascade-spec/src/cascade/spec/ir/graph.py
-~~~~~
-~~~~~python.old
-@dataclass(frozen=True)
-class NodeIR:
-    current_node_instance_hash: str
-
-    name: str
-
-    task: TaskDef
-
-    inputs: Dict[str, Any] = field(default_factory=dict)
-~~~~~
-~~~~~python.new
-@dataclass(frozen=True)
-class NodeIR:
-    current_node_instance_hash: str
-
-    name: str
-
-    task: TaskDef
-
-    # The logical UUID from the high-level DSL (LazyResult), if available.
-    logical_id: Optional[str] = None
-
-    inputs: Dict[str, Any] = field(default_factory=dict)
-~~~~~
+我们首先修改 `linker.py`，加入新的异常类和验证逻辑。
 
 ~~~~~act
 patch_file
-packages/cascade-spec/src/cascade/spec/physical/assembly.py
+packages/cascade-vm/src/cascade/vm/linker.py
 ~~~~~
 ~~~~~python.old
-@dataclass(frozen=True)
-class Assembly:
-    # The physical topology, defining nodes (What) and channels (How).
-    graph: BipartiteGraph
+from typing import Dict, Callable, Optional
 
-    # The symbol table, mapping physical node IDs to canonical code structure hashes.
-    # Key: Physical Node ID (e.g., "hash123.worker")
-    # Value: Canonical Code Structure Hash (e.g., "sha256:abc...")
-    symbol_table: SymbolTable = field(default_factory=dict)
-
-    # Metadata about the assembly, such as compiler version, build time, etc.
-    metadata: Dict[str, Any] = field(default_factory=dict)
-~~~~~
-~~~~~python.new
-@dataclass(frozen=True)
-class Assembly:
-    # The physical topology, defining nodes (What) and channels (How).
-    graph: BipartiteGraph
-
-    # The symbol table, mapping physical node IDs to canonical code structure hashes.
-    # Key: Physical Node ID (e.g., "hash123.worker")
-    # Value: Canonical Code Structure Hash (e.g., "sha256:abc...")
-    symbol_table: SymbolTable = field(default_factory=dict)
-
-    # Metadata about the assembly, such as compiler version, build time, etc.
-    metadata: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class CompilationManifest:
-    # Maps logical UUIDs (from LazyResult) to the base physical node ID.
-    # Key: Logical UUID
-    # Value: Physical Base ID (current_node_instance_hash)
-    logical_to_physical_map: Dict[str, str] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class CompilationArtifact:
-    assembly: Assembly
-    manifest: CompilationManifest
-~~~~~
-
-#### Acts 2: 更新编译器前端 (IRGenerator)
-
-更新 `IRGenerator` 以在生成 `NodeIR` 时传递 `logical_id`。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
-~~~~~
-~~~~~python.old
-        node_ir = NodeIR(
-            current_node_instance_hash=node_id,
-            name=task_def.name,
-            task=task_def,
-            inputs=inputs,
-            constraints=constraints,
-            condition=condition_id,
-            dependencies=dependency_ids,
-        )
-~~~~~
-~~~~~python.new
-        node_ir = NodeIR(
-            current_node_instance_hash=node_id,
-            name=task_def.name,
-            task=task_def,
-            logical_id=lr._uuid,
-            inputs=inputs,
-            constraints=constraints,
-            condition=condition_id,
-            dependencies=dependency_ids,
-        )
-~~~~~
-
-#### Acts 3: 更新编译器后端 (Builder)
-
-更新 `Builder` 以生成 `CompilationManifest` 并返回 `CompilationArtifact`。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-from cascade.spec.physical.environment import EnvironmentDef
 from cascade.spec.physical.assembly import Assembly
-from .expander import Expander
-from .validator import GraphValidator
+from cascade.spec.physical.nodes import PhysicsFuncNode
+from cascade.reflection import PhysicalIdGenerator
+
+from .registry import CodeRegistry
+
+# Standard Library Imports (Micro-Kernel)
+from cascade.std.triad.bleacher import standard_bleacher
+from cascade.std.triad.stainer import standard_stainer
+from cascade.std.triad.observer import standard_observer
+from cascade.std.triad.dispatcher import standard_dispatcher
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
+from cascade.std.resource.requestor import resource_requestor
+from cascade.std.system.egress import standard_egress
+
+
+class Linker:
+    def link(self, assembly: Assembly, registry: CodeRegistry) -> Dict[str, Callable]:
+        function_map: Dict[str, Callable] = {}
+
+        for node_id, node in assembly.graph.nodes.items():
+            if not isinstance(node, PhysicsFuncNode):
+                continue
+
+            # 1. User Worker Nodes (via Symbol Table)
+            # All user workers are now implemented by the standard_dispatcher.
+            if node_id in assembly.symbol_table:
+                function_map[node_id] = standard_dispatcher
+                continue
+
+            # 2. Standard Library Nodes (via ID Heuristics)
+            stdlib_func = self._resolve_stdlib(node_id)
+            if stdlib_func:
+                function_map[node_id] = stdlib_func
+                continue
+
+        return function_map
 ~~~~~
 ~~~~~python.new
-from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.assembly import (
-    Assembly,
-    CompilationArtifact,
-    CompilationManifest,
-)
-from .expander import Expander
-from .validator import GraphValidator
+from typing import Dict, Callable, Optional
+
+from cascade.spec.physical.assembly import Assembly
+from cascade.spec.physical.nodes import PhysicsFuncNode
+from cascade.reflection import PhysicalIdGenerator
+
+from .registry import CodeRegistry
+
+# Standard Library Imports (Micro-Kernel)
+from cascade.std.triad.bleacher import standard_bleacher
+from cascade.std.triad.stainer import standard_stainer
+from cascade.std.triad.observer import standard_observer
+from cascade.std.triad.dispatcher import standard_dispatcher
+from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
+from cascade.std.resource.requestor import resource_requestor
+from cascade.std.system.egress import standard_egress
+
+
+class LinkerError(RuntimeError):
+    """Raised when linking fails due to missing code implementations."""
+
+    pass
+
+
+class Linker:
+    def link(self, assembly: Assembly, registry: CodeRegistry) -> Dict[str, Callable]:
+        # Phase 1: Integrity Validation
+        self._verify_integrity(assembly, registry)
+
+        # Phase 2: Function Mapping
+        function_map: Dict[str, Callable] = {}
+
+        for node_id, node in assembly.graph.nodes.items():
+            if not isinstance(node, PhysicsFuncNode):
+                continue
+
+            # 1. User Worker Nodes (via Symbol Table)
+            # All user workers are now implemented by the standard_dispatcher.
+            if node_id in assembly.symbol_table:
+                function_map[node_id] = standard_dispatcher
+                continue
+
+            # 2. Standard Library Nodes (via ID Heuristics)
+            stdlib_func = self._resolve_stdlib(node_id)
+            if stdlib_func:
+                function_map[node_id] = stdlib_func
+                continue
+
+        return function_map
+
+    def _verify_integrity(self, assembly: Assembly, registry: CodeRegistry) -> None:
+        """Ensures all required code hashes in the assembly exist in the registry."""
+        missing_hashes = {
+            code_hash
+            for code_hash in assembly.symbol_table.values()
+            if not registry.has(code_hash)
+        }
+
+        if missing_hashes:
+            missing_list = "\n - ".join(sorted(list(missing_hashes)))
+            raise LinkerError(
+                f"Linker integrity check failed. The following code hashes "
+                f"are required by the assembly but were not found in the CodeRegistry:\n"
+                f" - {missing_list}"
+            )
 ~~~~~
+
+#### Acts 2: 创建 Linker 的单元测试
+
+由于 `Linker` 目前没有专门的测试文件，我们将创建一个，并添加验证新行为的用例。
 
 ~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+write_file
+packages/cascade-vm/tests/unit/test_linker.py
 ~~~~~
-~~~~~python.old
-    def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> Assembly:
-        # 1. Initialize Context
-        physical_graph = BipartiteGraph()
-        wire = WiringHarness(physical_graph)
-~~~~~
-~~~~~python.new
-    def build(
-        self, graph_ir: GraphIR, environment: EnvironmentDef
-    ) -> CompilationArtifact:
-        # 1. Initialize Context
-        physical_graph = BipartiteGraph()
-        wire = WiringHarness(physical_graph)
-~~~~~
+~~~~~python
+import pytest
+from typing import Callable, Dict
 
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-        # 4. Final Validation
-        self._validator.validate(physical_graph, graph_ir)
+from cascade.spec.physical.assembly import Assembly, SymbolTable
+from cascade.spec.physical.topology import BipartiteGraph
+from cascade.spec.physical.triad import WorkerNode
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.linker import Linker, LinkerError
+from cascade.std.triad.dispatcher import standard_dispatcher
 
-        return Assembly(
-            graph=physical_graph,
-            symbol_table=symbol_table,
-            metadata={"compiler": "cascade-compiler-v0.1.0"},
-        )
-~~~~~
-~~~~~python.new
-        # 4. Final Validation
-        self._validator.validate(physical_graph, graph_ir)
 
-        # 5. Generate Manifest
-        logical_to_physical_map = {}
-        for node_ir in graph_ir.nodes:
-            if node_ir.logical_id:
-                logical_to_physical_map[node_ir.logical_id] = (
-                    node_ir.current_node_instance_hash
-                )
+def dummy_task_a():
+    pass
 
-        assembly = Assembly(
-            graph=physical_graph,
-            symbol_table=symbol_table,
-            metadata={"compiler": "cascade-compiler-v0.1.0"},
-        )
-        manifest = CompilationManifest(logical_to_physical_map=logical_to_physical_map)
 
-        return CompilationArtifact(assembly=assembly, manifest=manifest)
-~~~~~
+def dummy_task_b():
+    pass
 
-#### Acts 4: 修复单元测试 (Backend)
 
-修复 `tests/unit/backend` 下的所有测试。
+@pytest.fixture
+def code_registry() -> CodeRegistry:
+    registry = CodeRegistry()
+    registry.register("hash_a", dummy_task_a)
+    registry.register("hash_b", dummy_task_b)
+    return registry
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/backend/test_builder.py
-~~~~~
-~~~~~python.old
-def test_builder_expands_and_wires_nodes(sample_graph_ir):
-    builder = Builder()
-    assembly = builder.build(sample_graph_ir, environment=EnvironmentDef())
-    graph = assembly.graph
-    symbol_table = assembly.symbol_table
-~~~~~
-~~~~~python.new
-def test_builder_expands_and_wires_nodes(sample_graph_ir):
-    builder = Builder()
-    artifact = builder.build(sample_graph_ir, environment=EnvironmentDef())
-    assembly = artifact.assembly
-    graph = assembly.graph
-    symbol_table = assembly.symbol_table
-~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/backend/test_builder.py
-~~~~~
-~~~~~python.old
-def test_builder_creates_pulse_for_source_node(source_only_graph_ir):
-    builder = Builder()
-    assembly = builder.build(source_only_graph_ir, environment=EnvironmentDef())
-    graph = assembly.graph
-
-    # 1. Assert Pulse node creation
-~~~~~
-~~~~~python.new
-def test_builder_creates_pulse_for_source_node(source_only_graph_ir):
-    builder = Builder()
-    artifact = builder.build(source_only_graph_ir, environment=EnvironmentDef())
-    assembly = artifact.assembly
-    graph = assembly.graph
-
-    # 1. Assert Pulse node creation
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/backend/test_builder_environment.py
-~~~~~
-~~~~~python.old
-    # 2. Build
-    builder = Builder()
-    assembly = builder.build(simple_graph_ir, environment=env)
-    graph = assembly.graph
-
-    # 3. Assert Broker/Ledger creation
-~~~~~
-~~~~~python.new
-    # 2. Build
-    builder = Builder()
-    artifact = builder.build(simple_graph_ir, environment=env)
-    assembly = artifact.assembly
-    graph = assembly.graph
-
-    # 3. Assert Broker/Ledger creation
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/unit/backend/test_builder_observability.py
-~~~~~
-~~~~~python.old
-def test_builder_creates_observer_sidecar(empty_graph_ir):
-    builder = Builder()
-    assembly = builder.build(empty_graph_ir, environment=EnvironmentDef())
-    graph = assembly.graph
-
-    # 1. Assert D_life exists (Baseline check)
-~~~~~
-~~~~~python.new
-def test_builder_creates_observer_sidecar(empty_graph_ir):
-    builder = Builder()
-    artifact = builder.build(empty_graph_ir, environment=EnvironmentDef())
-    assembly = artifact.assembly
-    graph = assembly.graph
-
-    # 1. Assert D_life exists (Baseline check)
-~~~~~
-
-#### Acts 5: 修复集成测试 (Integration)
-
-修复 `tests/integration` 下的所有测试。
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_assembly_purity.py
-~~~~~
-~~~~~python.old
-    graph_ir = generator.generate(workflow)
-    assembly = builder.build(graph_ir, environment)
-    assert isinstance(assembly, Assembly)
-
-    # 3. The Purity Test: Attempt to serialize the Assembly
-~~~~~
-~~~~~python.new
-    graph_ir = generator.generate(workflow)
-    artifact = builder.build(graph_ir, environment)
-    assembly = artifact.assembly
-    assert isinstance(assembly, Assembly)
-
-    # 3. The Purity Test: Attempt to serialize the Assembly
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_graph_purity.py
-~~~~~
-~~~~~python.old
-    graph_ir = generator.generate(workflow)
-    assembly = builder.build(graph_ir, environment)
-    physical_graph = assembly.graph
-
-    # 3. The Purity Test: Attempt to serialize the graph
-~~~~~
-~~~~~python.new
-    graph_ir = generator.generate(workflow)
-    artifact = builder.build(graph_ir, environment)
-    assembly = artifact.assembly
-    physical_graph = assembly.graph
-
-    # 3. The Purity Test: Attempt to serialize the graph
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_resource_contention.py
-~~~~~
-~~~~~python.old
-    env = EnvironmentDef(
-        resources=[ResourceDef(name=RESOURCE_NAME, capacity=RESOURCE_CAPACITY)]
+@pytest.fixture
+def assembly() -> Assembly:
+    graph = BipartiteGraph()
+    # We only need worker nodes for this test, as only they populate the symbol table
+    graph.nodes["worker1.worker"] = WorkerNode(
+        id="worker1.worker", name="Worker1", canonical_code_structure_hash="hash_a"
     )
-    builder = Builder()
-    assembly = builder.build(graph_ir, env)
-    physical_graph = assembly.graph
-
-    # --- PART A: TOPOLOGY ASSERTION ---
-~~~~~
-~~~~~python.new
-    env = EnvironmentDef(
-        resources=[ResourceDef(name=RESOURCE_NAME, capacity=RESOURCE_CAPACITY)]
+    graph.nodes["worker2.worker"] = WorkerNode(
+        id="worker2.worker", name="Worker2", canonical_code_structure_hash="hash_b"
     )
-    builder = Builder()
-    artifact = builder.build(graph_ir, env)
-    assembly = artifact.assembly
-    physical_graph = assembly.graph
+    symbol_table: SymbolTable = {
+        "worker1.worker": "hash_a",
+        "worker2.worker": "hash_b",
+    }
+    return Assembly(graph=graph, symbol_table=symbol_table)
 
-    # --- PART A: TOPOLOGY ASSERTION ---
-~~~~~
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_resource_contention.py
-~~~~~
-~~~~~python.old
-    env = EnvironmentDef(resources=[ResourceDef("gpu", 1), ResourceDef("cpu", 1)])
-    builder = Builder()
-    assembly = builder.build(graph_ir, env)
-    physical_graph = assembly.graph
-    inspector = GraphInspector(physical_graph)
-~~~~~
-~~~~~python.new
-    env = EnvironmentDef(resources=[ResourceDef("gpu", 1), ResourceDef("cpu", 1)])
-    builder = Builder()
-    artifact = builder.build(graph_ir, env)
-    assembly = artifact.assembly
-    physical_graph = assembly.graph
-    inspector = GraphInspector(physical_graph)
-~~~~~
+def test_linker_success_with_all_code_present(assembly, code_registry):
+    linker = Linker()
+    function_map = linker.link(assembly, code_registry)
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_sovereign_wiring.py
-~~~~~
-~~~~~python.old
-    # 2. Build Physical Graph
-    builder = Builder()
-    assembly = builder.build(graph_ir, EnvironmentDef())
-    physical_graph = assembly.graph
+    # All workers should be mapped to the standard_dispatcher
+    assert len(function_map) == 2
+    assert function_map["worker1.worker"] is standard_dispatcher
+    assert function_map["worker2.worker"] is standard_dispatcher
 
-    # 3. Inspect Topology
-~~~~~
-~~~~~python.new
-    # 2. Build Physical Graph
-    builder = Builder()
-    artifact = builder.build(graph_ir, EnvironmentDef())
-    assembly = artifact.assembly
-    physical_graph = assembly.graph
 
-    # 3. Inspect Topology
-~~~~~
+def test_linker_raises_on_missing_code(assembly, code_registry):
+    linker = Linker()
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_source_node_execution.py
-~~~~~
-~~~~~python.old
-    flow = source_task()
-    graph_ir = ir_generator.generate(flow)
-    node_ir = graph_ir.nodes[0]
-    assembly = builder.build(graph_ir, EnvironmentDef())
-    physical_graph = assembly.graph
+    # Tamper with the assembly to require a hash that doesn't exist
+    assembly.symbol_table["worker3.worker"] = "hash_c_missing"
 
-    # 2. Setup Code Registry for the Compute Service
-~~~~~
-~~~~~python.new
-    flow = source_task()
-    graph_ir = ir_generator.generate(flow)
-    node_ir = graph_ir.nodes[0]
-    artifact = builder.build(graph_ir, EnvironmentDef())
-    assembly = artifact.assembly
-    physical_graph = assembly.graph
+    with pytest.raises(LinkerError) as exc_info:
+        linker.link(assembly, code_registry)
 
-    # 2. Setup Code Registry for the Compute Service
-~~~~~
+    # Verify the error message is informative
+    assert "Linker integrity check failed" in str(exc_info.value)
+    assert "hash_c_missing" in str(exc_info.value)
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_ref_architecture.py
-~~~~~
-~~~~~python.old
-    ir_generator = IRGenerator()
-    builder = Builder()
-    graph_ir = ir_generator.generate(workflow)
-    assembly = builder.build(graph_ir, EnvironmentDef())
-    physical_graph = assembly.graph
 
-    # 3. Register user code in the CodeRegistry
-~~~~~
-~~~~~python.new
-    ir_generator = IRGenerator()
-    builder = Builder()
-    graph_ir = ir_generator.generate(workflow)
-    artifact = builder.build(graph_ir, EnvironmentDef())
-    assembly = artifact.assembly
-    physical_graph = assembly.graph
+def test_linker_raises_on_multiple_missing_codes():
+    linker = Linker()
+    registry = CodeRegistry()  # Empty registry
+    assembly = Assembly(
+        graph=BipartiteGraph(),
+        symbol_table={
+            "w1.worker": "hash_1",
+            "w2.worker": "hash_2",
+        },
+    )
 
-    # 3. Register user code in the CodeRegistry
-~~~~~
+    with pytest.raises(LinkerError) as exc_info:
+        linker.link(assembly, registry)
 
-~~~~~act
-patch_file
-packages/cascade-compiler/tests/integration/test_resource_backpressure.py
-~~~~~
-~~~~~python.old
-    # 2. Define Environment and Build Physical Graph
-    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
-    builder = Builder()
-    assembly = builder.build(graph_ir, environment=env)
-    physical_graph = assembly.graph
-
-    # 3. Setup VM
-~~~~~
-~~~~~python.new
-    # 2. Define Environment and Build Physical Graph
-    env = EnvironmentDef(resources=[ResourceDef(name="gpu", capacity=1)])
-    builder = Builder()
-    artifact = builder.build(graph_ir, environment=env)
-    assembly = artifact.assembly
-    physical_graph = assembly.graph
-
-    # 3. Setup VM
+    error_str = str(exc_info.value)
+    assert "hash_1" in error_str
+    assert "hash_2" in error_str
 ~~~~~
 
 ### 下一步建议
-我们已经完成了编译器层面的契约增强，并修复了所有受影响的测试。
-下一步，我们将执行 **Phase 3.2: 链接器增强**。我们需要在 VM 启动前，利用 Linker 强制验证 Assembly 中的所有代码哈希是否在 Registry 中存在，从而实现“启动前的完整性校验”。这将涉及修改 `Linker` 类并添加新的测试。
+我们已经为 `Linker` 建立了强制性的启动前校验。这为我们进入下一阶段铺平了道路。
+
+下一步，我们将执行 **Phase 3.3: VM 增强**。我们将引入 `SystemControlToken` 和明确的信号，以取代当前基于“空闲检测”的脆弱停止机制，让 `Machine` 的生命周期由信号驱动。

@@ -16,8 +16,18 @@ from cascade.std.resource.requestor import resource_requestor
 from cascade.std.system.egress import standard_egress
 
 
+class LinkerError(RuntimeError):
+    """Raised when linking fails due to missing code implementations."""
+
+    pass
+
+
 class Linker:
     def link(self, assembly: Assembly, registry: CodeRegistry) -> Dict[str, Callable]:
+        # Phase 1: Integrity Validation
+        self._verify_integrity(assembly, registry)
+
+        # Phase 2: Function Mapping
         function_map: Dict[str, Callable] = {}
 
         for node_id, node in assembly.graph.nodes.items():
@@ -37,6 +47,22 @@ class Linker:
                 continue
 
         return function_map
+
+    def _verify_integrity(self, assembly: Assembly, registry: CodeRegistry) -> None:
+        """Ensures all required code hashes in the assembly exist in the registry."""
+        missing_hashes = {
+            code_hash
+            for code_hash in assembly.symbol_table.values()
+            if not registry.has(code_hash)
+        }
+
+        if missing_hashes:
+            missing_list = "\n - ".join(sorted(list(missing_hashes)))
+            raise LinkerError(
+                f"Linker integrity check failed. The following code hashes "
+                f"are required by the assembly but were not found in the CodeRegistry:\n"
+                f" - {missing_list}"
+            )
 
     def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:
         # Triad

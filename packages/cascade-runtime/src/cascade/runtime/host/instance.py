@@ -29,7 +29,6 @@ from cascade.runtime.legacy.processor import NodeProcessor
 from cascade.runtime.services.resources.container import ResourceContainer
 from cascade.runtime.legacy.strategies import (
     GraphExecutionStrategy,
-    VMExecutionStrategy,
 )
 from cascade.spec.runtime import ExecutionContext
 
@@ -93,7 +92,7 @@ class Engine:
             bus=self.bus,
             wakeup_event=self._wakeup_event,
         )
-        self.vm_strategy = VMExecutionStrategy(bus=self.bus)
+        self.vm_strategy = self.graph_strategy  # for future
 
         self._managed_subscribers = []
 

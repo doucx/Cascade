@@ -37,7 +37,7 @@ sys.path.insert(
 )
 # Add other packages if needed, but these should cover the compiler deps
 
-from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef, ArgumentDef
+from cascade.spec.ir.graph import GraphIR, NodeIR, TaskDef, ArgumentDef, ArgumentKind
 from cascade.spec.ir.fingerprint import Fingerprint
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
 from cascade.compiler.backend.builder import Builder
@@ -49,23 +49,23 @@ def main():
 
     # 1. Define a dummy task definition
     # We use a static fingerprint for reproducibility
-    fp = Fingerprint({"canonical_code_structure_hash": "abc12345"})
+    fp = Fingerprint.from_dict({"canonical_code_structure_hash": "abc12345"})
     task_def = TaskDef(
         name="gpu_task",
-        args=[ArgumentDef("x", "POSITIONAL_OR_KEYWORD")],
+        args=[ArgumentDef("x", ArgumentKind.POSITIONAL_OR_KEYWORD)],
         fingerprint=fp,
     )
 
     # 2. Create two nodes that both require 1 GPU
     node_1 = NodeIR(
-        id="node_1",
+        current_node_instance_hash="node_1",
         name="TrainingJob_A",
         task=task_def,
         inputs={"x": 10},
         constraints={"gpu": 1},
     )
     node_2 = NodeIR(
-        id="node_2",
+        current_node_instance_hash="node_2",
         name="TrainingJob_B",
         task=task_def,
         inputs={"x": 20},
@@ -80,7 +80,8 @@ def main():
 
     print("# Compiling to Physical Bipartite Graph...", file=sys.stderr)
     builder = Builder()
-    physical_graph = builder.build(graph_ir, environment=env)
+    artifact = builder.build(graph_ir, environment=env)
+    physical_graph = artifact.assembly.graph
 
     node_count = len(physical_graph.nodes)
     channel_count = len(physical_graph.channels)

@@ -4,7 +4,7 @@
 
 ### 📝 变更文件摘要:
 ```
-.../integration/test_source_node_execution.py      | 78 ++++++++++++++++++++++
- .../integration/test_source_node_execution.py      | 78 ----------------------
- 2 files changed, 78 insertions(+), 78 deletions(-)
+.../tests/integration/test_ref_architecture.py     | 100 +++++++++++++++++++++
+ .../tests/integration/test_ref_architecture.py     | 100 ---------------------
+ 2 files changed, 100 insertions(+), 100 deletions(-)
 ```

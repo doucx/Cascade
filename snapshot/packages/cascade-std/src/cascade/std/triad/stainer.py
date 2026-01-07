@@ -80,8 +80,13 @@ def standard_stainer(
     # 4. Create output tokens
     outputs = {}
 
-    # 4.1 The main result
-    outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
+    # 4.1 The main result (with Error Routing)
+    # If it's an exception AND we have an error port, route it there.
+    # Otherwise, it goes to default (downstream must handle it or crash).
+    if isinstance(result_payload, Exception) and "output_error" in node.output_ports:
+        outputs["output_error"] = Token(payload=result_payload, trace=trace_payload)
+    else:
+        outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
 
     # 4.2 Observability Event
     outputs["obs_output"] = Token(payload=ir, trace=trace_payload)

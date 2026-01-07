@@ -53,7 +53,7 @@ class HumanReadableLogSubscriber:
             bus.info("run.started_with_params", params=event.params)
 
     def on_run_finished(self, event: RunFinished):
-        if event.status is EventState.SUCCEEDED:
+        if event.status == EventState.SUCCEEDED:
             bus.info("run.finished_success", duration=event.duration)
         else:
             bus.error(
@@ -64,7 +64,7 @@ class HumanReadableLogSubscriber:
         bus.info("task.started", task_name=event.task_name)
 
     def on_task_finished(self, event: TaskExecutionFinished):
-        if event.status is EventState.SUCCEEDED:
+        if event.status == EventState.SUCCEEDED:
             bus.info(
                 "task.finished_success",
                 task_name=event.task_name,
@@ -141,7 +141,7 @@ class TelemetrySubscriber:
             state_map = {
                 TaskExecutionStarted: "RUNNING",
                 TaskExecutionFinished: "COMPLETED"
-                if getattr(event, "status", EventState.FAILED) is EventState.SUCCEEDED
+                if getattr(event, "status", EventState.FAILED) == EventState.SUCCEEDED
                 else "FAILED",
                 TaskSkipped: "SKIPPED",
                 TaskBlocked: "BLOCKED",

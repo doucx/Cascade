@@ -35,7 +35,8 @@ async def test_full_ref_based_e2e_flow():
     ir_generator = IRGenerator()
     builder = Builder()
     graph_ir = ir_generator.generate(workflow)
-    assembly = builder.build(graph_ir, EnvironmentDef())
+    artifact = builder.build(graph_ir, EnvironmentDef())
+    assembly = artifact.assembly
     physical_graph = assembly.graph
 
     # 3. Register user code in the CodeRegistry

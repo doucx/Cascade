@@ -28,7 +28,8 @@ def test_assembly_is_serializable_and_pure():
     environment = EnvironmentDef(resources=[])
 
     graph_ir = generator.generate(workflow)
-    assembly = builder.build(graph_ir, environment)
+    artifact = builder.build(graph_ir, environment)
+    assembly = artifact.assembly
     assert isinstance(assembly, Assembly)
 
     # 3. The Purity Test: Attempt to serialize the Assembly

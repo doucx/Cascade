@@ -3,7 +3,11 @@ from typing import List
 from cascade.spec.ir.graph import GraphIR
 from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.environment import EnvironmentDef
-from cascade.spec.physical.assembly import Assembly
+from cascade.spec.physical.assembly import (
+    Assembly,
+    CompilationArtifact,
+    CompilationManifest,
+)
 from .expander import Expander
 from .validator import GraphValidator
 from .wiring import WiringHarness
@@ -28,7 +32,9 @@ class Builder:
             PulseWiringPolicy(),
         ]
 
-    def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> Assembly:
+    def build(
+        self, graph_ir: GraphIR, environment: EnvironmentDef
+    ) -> CompilationArtifact:
         # 1. Initialize Context
         physical_graph = BipartiteGraph()
         wire = WiringHarness(physical_graph)
@@ -65,8 +71,19 @@ class Builder:
         # 4. Final Validation
         self._validator.validate(physical_graph, graph_ir)
 
-        return Assembly(
+        # 5. Generate Manifest
+        logical_to_physical_map = {}
+        for node_ir in graph_ir.nodes:
+            if node_ir.logical_id:
+                logical_to_physical_map[node_ir.logical_id] = (
+                    node_ir.current_node_instance_hash
+                )
+
+        assembly = Assembly(
             graph=physical_graph,
             symbol_table=symbol_table,
             metadata={"compiler": "cascade-compiler-v0.1.0"},
         )
+        manifest = CompilationManifest(logical_to_physical_map=logical_to_physical_map)
+
+        return CompilationArtifact(assembly=assembly, manifest=manifest)

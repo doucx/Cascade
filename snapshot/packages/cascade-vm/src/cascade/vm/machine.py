@@ -60,13 +60,3 @@ class Machine:
             except asyncio.CancelledError:
                 pass
             logger.info("Machine stopped.")
-
-        finally:
-            # Shutdown sequence
-            self.compute_service.stop()
-            service_task.cancel()
-            try:
-                await service_task
-            except asyncio.CancelledError:
-                pass
-            logger.info("Machine stopped.")

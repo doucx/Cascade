@@ -8,6 +8,10 @@
     "baseline_code_signature_text": "def constant(target_node_id: str, arg_name: str) -> str:",
     "baseline_code_structure_hash": "32acb59bd9ab40b15e3e09d4907761387a199aeccc85898acf2a610ca0286be1"
   },
+  "PhysicalIdGenerator.context_data": {
+    "baseline_code_signature_text": "def context_data(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "fb7d03217568d7ed6d796719070e0eed8727c8dbee07848c32ed369440b372f7"
+  },
   "PhysicalIdGenerator.global_allocator": {
     "baseline_code_signature_text": "def global_allocator(resource_name: str) -> str:",
     "baseline_code_structure_hash": "7079010bb755169e380868cc975f88b85a82dfa8358e2447b796f0b52da482db"

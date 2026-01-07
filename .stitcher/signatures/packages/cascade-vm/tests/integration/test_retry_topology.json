@@ -1,0 +1,17 @@
+{
+  "retry_topology_and_runner": {
+    "baseline_code_signature_text": "def retry_topology_and_runner():",
+    "baseline_code_structure_hash": "abc536af6e7c5ea3aa62d756561e5608170b1d5940c0234667e97eb7f34f0f85",
+    "baseline_yaml_content_hash": "938feb645fa5f928aba98dfa7b4d650e15115a3fa3e497755a9fa76bbc75b618"
+  },
+  "test_failure_path": {
+    "baseline_code_signature_text": "async def test_failure_path(retry_topology_and_runner):",
+    "baseline_code_structure_hash": "5f3333194f81ba9962a40b2ec16a256772ea93dd4391f4e10a5a571e85ec51b6",
+    "baseline_yaml_content_hash": "c8d418c6165be3267261b097205ec17e013214c2192081ba22ace776f08a8ba5"
+  },
+  "test_retry_path": {
+    "baseline_code_signature_text": "async def test_retry_path(retry_topology_and_runner):",
+    "baseline_code_structure_hash": "ac395eff24a531dffc9ae8e139eb970c4cf6e42b7f1987e9e93cffe31c099d9e",
+    "baseline_yaml_content_hash": "509f984dba6105c743c0c795194631734dc498f684c93f14a63a644b2933cf3f"
+  }
+}

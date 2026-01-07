@@ -66,11 +66,14 @@ def standard_bleacher(
     # 4. Create the output tokens
     worker_token = Token(payload=worker_payload, trace=trace_payload)
     trace_token = Token(payload=trace_payload)
+    # The context payload IS the worker payload (the input refs)
+    context_token = Token(payload=worker_payload, trace=trace_payload)
     # obs_output now carries the IR as payload
     obs_token = Token(payload=ir, trace=trace_payload)
 
     return {
         "worker_input": worker_token,
         "trace_output": trace_token,
+        "context_output": context_token,
         "obs_output": obs_token,
     }

@@ -5,6 +5,8 @@
   "ObservabilityNode": {
     "baseline_yaml_content_hash": "f1a8997e74d2d756380e9dcd06327e2fca5d5eead451a76f57371b4094fea6bc"
   },
+  "RetryNode": {},
+  "RetryNode.max_attempts": {},
   "StainNode": {
     "baseline_yaml_content_hash": "da53673984bef0b13985e05c3a7fec5e98f989eb0df803bb890ccfc1ae4617ce"
   },

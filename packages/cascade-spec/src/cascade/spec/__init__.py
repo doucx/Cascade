@@ -11,6 +11,7 @@ from cascade.spec.physical.triad import (
     WorkerNode,
     StainNode,
     ObservabilityNode,
+    RetryNode,
 )
 from cascade.spec.physical.topology import Channel, BipartiteGraph
 from cascade.spec.physical.resources import ResourceSlot
@@ -37,6 +38,7 @@ __all__ = [
     "WorkerNode",
     "StainNode",
     "ObservabilityNode",
+    "RetryNode",
     "Channel",
     "BipartiteGraph",
     "ResourceSlot",

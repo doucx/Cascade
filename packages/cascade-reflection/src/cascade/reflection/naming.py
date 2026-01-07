@@ -24,6 +24,10 @@ class PhysicalIdGenerator:
         return f"{logical_node_id}.data.trace"
 
     @staticmethod
+    def context_data(logical_node_id: str) -> str:
+        return f"{logical_node_id}.data.context"
+
+    @staticmethod
     def global_resource(resource_name: str) -> str:
         # Legacy: Keeping it for D_res if needed, but we are moving to brokers
         return f"canonical.resource.{resource_name}"

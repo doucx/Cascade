@@ -1,0 +1,10 @@
+"standard_retry_logic": |-
+  Implements topological retry logic.
+
+  Inputs:
+      - error_in: The error token from the failed task.
+      - context_in: The original input context token.
+
+  Outputs:
+      - retry_out: The context token, to be routed back for retry.
+      - fail_out: The error token, if retries are exhausted.

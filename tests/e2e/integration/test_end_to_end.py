@@ -49,6 +49,9 @@ def test_e2e_linear_workflow(mock_messaging_bus):
     )
     mock_messaging_bus.info.assert_any_call("task.started", task_name="greet")
     mock_messaging_bus.info.assert_any_call(
+        "task.finished_success", task_name="greet", duration=pytest.approx(0, abs=1)
+    )
+    mock_messaging_bus.info.assert_any_call(
         "run.finished_success", duration=pytest.approx(0, abs=1)
     )
 

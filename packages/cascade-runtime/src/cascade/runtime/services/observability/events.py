@@ -36,7 +36,7 @@ class RunStarted(Event):
 
 @dataclass(frozen=True)
 class RunFinished(Event):
-    status: str = "Unknown"  # "Succeeded", "Failed"
+    status: EventState = EventState.SUCCEEDED
     duration: float = 0.0
     error: Optional[str] = None
 
@@ -54,7 +54,7 @@ class TaskExecutionStarted(TaskEvent):
 
 @dataclass(frozen=True)
 class TaskExecutionFinished(TaskEvent):
-    status: str = "Unknown"  # "Succeeded", "Failed"
+    status: EventState = EventState.SUCCEEDED
     duration: float = 0.0
     result_preview: Optional[str] = None
     error: Optional[str] = None
@@ -195,13 +195,12 @@ def _hydrate_lifecycle(
         return TaskExecutionStarted(**base_kwargs)
 
     elif state in (EventState.SUCCEEDED, EventState.FAILED):
-        status = "Succeeded" if state == EventState.SUCCEEDED else "Failed"
         # Convert ms to seconds for internal Event model compatibility
         duration_sec = data.get("duration_ms", 0.0) / 1000.0
 
         return TaskExecutionFinished(
             **base_kwargs,
-            status=status,
+            status=state,
             duration=duration_sec,
             error=data.get("error"),
             result_preview=data.get("result_preview"),

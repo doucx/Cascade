@@ -9,6 +9,7 @@ from cascade.spec.physical.triad import (
     ObservabilityNode,
 )
 from cascade.spec.physical.ports import PortDef, PortRole
+from cascade.spec.runtime.observability import EventState
 from cascade.runtime.services.observability.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
@@ -191,7 +192,7 @@ async def test_genesis_injection_propagates_run_id():
             return (
                 isinstance(e, TaskExecutionFinished)
                 and e.task_id == "task"
-                and e.status == "Succeeded"
+                and e.status is EventState.SUCCEEDED
             )
 
         await runner.wait_for_event(is_success, timeout=2.0)

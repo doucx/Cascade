@@ -1,196 +1,68 @@
-好的，我将为你创建一个新的测试文件，其中包含一个用于构建重试拓扑的 fixture 以及两个核心测试用例，分别验证重试路径和失败路径。
+好的，我们现在已经完成了“拓扑化重试”的基础设施建设，包括信息守恒的 `D_context` 通道、核心决策单元 `F_retry` 以及配套的集成测试。现在我们将这些变更打包为一个完整的逻辑提交。
 
-## [WIP] test: 添加重试拓扑的集成测试
+## [COMMIT] feat(core): Implement topological retry infrastructure with D_context and F_retry
 
 ### 用户需求
-
-用户要求在 `packages/cascade-vm/tests/integration/` 目录下创建一个新的测试文件 `test_retry_topology.py`。该文件需要包含：
-1.  一个 pytest fixture，用于手动构建一个包含 `RetryNode` 的 `BipartiteGraph`。
-2.  两个测试用例，使用 `EventDrivenRunner` 来验证：
-    *   当重试次数未达到上限时，Token 被路由到 `retry_out` 端口。
-    *   当重试次数达到上限时，Token 被路由到 `fail_out` 端口。
+构建 Cascade 物理层重试机制的完整基础设施。这包括解决原始输入信息丢失的架构缺陷（通过 `D_context` 旁路通道），实现标准的重试决策逻辑节点 (`RetryNode` / `standard_retry_logic`)，以及提供相应的集成验证测试。
 
 ### 评论
-
-这是一个至关重要的测试。它在物理层面对重试机制的核心拓扑路由逻辑进行了验证。通过这个测试，我们能确保 `standard_retry_logic` 内核函数能够正确地解释 Token 的状态（`trace` 中的 `retry_count`）和节点的元数据（`max_attempts`），从而做出确定性的路由决策。这完全符合我们构建确定性、可观测系统的工程原则。
+这是一次重要的架构补完。通过将“重试”从一个隐式的运行时策略转化为显式的物理拓扑结构，我们不仅实现了“信息守恒”（确保重试时原始输入可用），还极大地提升了系统在面对故障时的韧性和可观测性。`RetryNode` 的引入标志着 Cascade 向着“万物皆节点”的愿景又迈进了坚实的一步。
 
 ### 目标
-
-1.  创建新文件 `packages/cascade-vm/tests/integration/test_retry_topology.py`。
-2.  在该文件中定义一个名为 `retry_topology_and_runner` 的 pytest fixture。
-3.  fixture 将构建一个包含 `D_error_in`, `D_context_in`, `F_retry`, `D_retry_out`, `D_fail_out` 节点的图，并初始化一个 `EventDrivenRunner` 实例来驱动它。
-4.  实现 `test_retry_path` 测试用例，注入一个 `retry_count` 较低的 Token，并断言它出现在 `D_retry_out` 中。
-5.  实现 `test_failure_path` 测试用例，注入一个 `retry_count` 达到临界值的 Token，并断言它出现在 `D_fail_out` 中。
+1.  **信息守恒**: 在 Triad 中引入 `D_context` 通道，持久化任务输入引用。
+2.  **决策单元**: 实现 `F_retry` 节点和配套的 `standard_retry_logic` 内核函数。
+3.  **类型安全**: 在 `Linker` 中支持基于物理类型的标准库链接。
+4.  **质量保证**: 提供完整的集成测试用例，覆盖重试路由和失败路由。
 
 ### 基本原理
-
-我们将手动构造一个最小化的 `BipartiteGraph`，它精确地模拟了任务失败后进入重试决策单元的场景。`F_retry` 节点将是一个 `RetryNode` 实例，其 `max_attempts` 属性被设置为一个已知的值（例如 3）。`standard_retry_logic` 函数将被链接到这个节点。
-
-通过 `EventDrivenRunner` 的 `memory` 组件，我们可以直接将带有特定 `retry_count` 值的 Token 注入到输入数据节点。然后，我们手动触发一个 reactor `step()`，这是驱动这个同步微流程最直接的方式。最后，我们检查 `runner.memory` 的状态，断言输出 Token 是否出现在了预期的 DataNode 中，从而验证路由逻辑的正确性。
+我们通过在 Triad 微观结构中引入 `D_context` 通道，将任务的“执行上下文”与“观测轨迹”分离。当任务失败时，`Stainer` 会发出错误信号，而 `D_context` 则提供了再次执行所需的“弹药”。`F_retry` 节点作为物理层面的分拣机，根据 Token 中的 `retry_count` 状态做出路由决策。这种设计确保了即便在复杂的重试序列中，物理图的能量流向依然是确定且可追踪的。
 
 ### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/vm #concept/state #ai/instruct #task/domain/testing #task/object/retry-logic #task/action/integration #task/state/begin
+#intent/build #flow/ready #priority/high #comp/compiler #comp/std-library #comp/vm #concept/state #scope/core #ai/delegate #task/domain/core #task/object/retry-infrastructure #task/action/implementation #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: 创建重试逻辑的集成测试文件
+#### Acts 1: 提交重试基础设施变更
 
-我将创建 `test_retry_topology.py` 文件，并填充所有必需的 imports、fixture 和测试用例。
+我们将所有涉及编译器后端、物理规范、标准库实现以及集成测试的文件添加到暂存区并执行提交。
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-reflection/src/cascade/reflection/naming.py
+packages/cascade-compiler/src/cascade/compiler/backend/expander.py
+packages/cascade-std/src/cascade/std/triad/bleacher.py
+packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-spec/src/cascade/spec/physical/triad.py
+packages/cascade-spec/src/cascade/spec/__init__.py
+packages/cascade-std/src/cascade/std/system/retry.py
+packages/cascade-std/src/cascade/std/system/__init__.py
+packages/cascade-vm/src/cascade/vm/linker.py
 packages/cascade-vm/tests/integration/test_retry_topology.py
 ~~~~~
-~~~~~python
-import pytest
-from typing import Dict, Callable
 
-from cascade.spec.physical.nodes import Token, PhysicsDataNode
-from cascade.spec.physical.triad import RetryNode
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.vm.harness import EventDrivenRunner
-from cascade.vm.registry import CodeRegistry
-from cascade.std.system.retry import standard_retry_logic
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+feat(core): Implement topological retry infrastructure with D_context and F_retry
 
+This commit establishes the physical foundation for robust, stateful retries within the Cascade VM, adhering to the principle of "Information Conservation" and "Topological Sovereignty."
 
-@pytest.fixture
-def retry_topology_and_runner():
-    """
-    Builds a minimal graph for testing retry logic and provides a runner.
+Key architectural changes:
+1.  **D_context side-channel**: Added a dedicated physical channel in the Triad structure to preserve task input references. This fixes a critical flaw where original inputs were lost upon task failure.
+2.  **RetryNode & standard_retry_logic**: Introduced a standard functional node that implements re-routing logic based on retry policies (max_attempts) and token state (retry_count).
+3.  **Physical Linker Upgrades**: Enhanced the Linker to support type-based resolution for standard library nodes, moving away from fragile ID-based heuristics.
+4.  **Bleacher/Stainer Evolution**: Updated standard Triad ICs to populate and consume the context channel, ensuring a continuous flow of metadata and input refs.
 
-    Topology:
-        (D_error_in, D_context_in) -> F_retry -> (D_retry_out, D_fail_out)
-    """
-    max_attempts = 3
+This infrastructure allows the high-level '.with_retry()' DSL to be compiled into a transparent and observable physical topology, rather than hidden imperative code.
 
-    # 1. Define Nodes
-    d_error_in = PhysicsDataNode(id="D_error_in", name="ErrorInput")
-    d_context_in = PhysicsDataNode(id="D_context_in", name="ContextInput")
-
-    f_retry = RetryNode(
-        id="F_retry",
-        name="RetryLogic",
-        max_attempts=max_attempts,
-        input_ports={
-            "error_in": PortDef("error_in", PortRole.DATA),
-            "context_in": PortDef("context_in", PortRole.DATA),
-        },
-        output_ports={
-            "retry_out": PortDef("retry_out", PortRole.DATA),
-            "fail_out": PortDef("fail_out", PortRole.DATA),
-        },
-    )
-
-    d_retry_out = PhysicsDataNode(id="D_retry_out", name="RetryOutput")
-    d_fail_out = PhysicsDataNode(id="D_fail_out", name="FailureOutput")
-
-    # 2. Build Graph
-    graph = BipartiteGraph()
-    for node in [
-        d_error_in,
-        d_context_in,
-        f_retry,
-        d_retry_out,
-        d_fail_out,
-    ]:
-        graph.nodes[node.id] = node
-
-    # 3. Define Channels
-    graph.channels.extend(
-        [
-            # Inputs to RetryNode
-            Channel(d_error_in.id, "out", f_retry.id, "error_in"),
-            Channel(d_context_in.id, "out", f_retry.id, "context_in"),
-            # Outputs from RetryNode
-            Channel(f_retry.id, "retry_out", d_retry_out.id, "in"),
-            Channel(f_retry.id, "fail_out", d_fail_out.id, "in"),
-        ]
-    )
-
-    # 4. Setup Runner
-    function_map: Dict[str, Callable] = {f_retry.id: standard_retry_logic}
-    code_registry = CodeRegistry()  # Not needed for stdlib, but runner requires it
-    runner = EventDrivenRunner(graph, function_map, code_registry)
-
-    # Yield runner and node IDs for tests to use
-    node_ids = {
-        "d_error_in": d_error_in.id,
-        "d_context_in": d_context_in.id,
-        "d_retry_out": d_retry_out.id,
-        "d_fail_out": d_fail_out.id,
-    }
-    yield runner, node_ids
-
-
-@pytest.mark.asyncio
-async def test_retry_path(retry_topology_and_runner):
-    """
-    Verify that when retry_count < max_attempts, the token is routed for retry.
-    """
-    runner, nodes = retry_topology_and_runner
-
-    # 1. Prepare tokens. retry_count is 1, which is less than max_attempts (3).
-    error_token = Token(payload=ValueError("Transient Error"))
-    context_token = Token(payload="original_context", trace={"retry_count": 1})
-
-    # 2. Inject tokens into the memory
-    runner.memory.put(runner.graph.nodes[nodes["d_error_in"]], error_token)
-    runner.memory.put(runner.graph.nodes[nodes["d_context_in"]], context_token)
-
-    # 3. Drive the reactor for one step
-    fired_count = runner.reactor.step()
-    assert fired_count == 1
-
-    # 4. Assert correct routing
-    assert runner.memory.get_count(nodes["d_retry_out"]) == 1
-    assert runner.memory.get_count(nodes["d_fail_out"]) == 0
-
-    # 5. Verify token state
-    out_token = runner.memory.take(nodes["d_retry_out"])
-    assert out_token.payload == "original_context"
-    # standard_retry_logic increments the count *before* checking
-    assert out_token.trace["retry_count"] == 2
-
-
-@pytest.mark.asyncio
-async def test_failure_path(retry_topology_and_runner):
-    """
-    Verify that when retry_count reaches max_attempts, the token is routed to fail.
-    """
-    runner, nodes = retry_topology_and_runner
-
-    # 1. Prepare tokens. The logic increments before checking, so a count of 2
-    # will become 3, which equals max_attempts (3) and should trigger failure.
-    error_token = Token(payload=ValueError("Permanent Error"))
-    context_token = Token(payload="original_context", trace={"retry_count": 2})
-
-    # 2. Inject tokens
-    runner.memory.put(runner.graph.nodes[nodes["d_error_in"]], error_token)
-    runner.memory.put(runner.graph.nodes[nodes["d_context_in"]], context_token)
-
-    # 3. Drive the reactor
-    fired_count = runner.reactor.step()
-    assert fired_count == 1
-
-    # 4. Assert correct routing
-    assert runner.memory.get_count(nodes["d_retry_out"]) == 0
-    assert runner.memory.get_count(nodes["d_fail_out"]) == 1
-
-    # 5. Verify token state
-    out_token = runner.memory.take(nodes["d_fail_out"])
-    # The error token should be the one passed to the failure path
-    assert isinstance(out_token.payload, ValueError)
-    assert str(out_token.payload) == "Permanent Error"
-
+Includes comprehensive integration tests in 'test_retry_topology.py' verifying both retry and permanent failure paths.
 ~~~~~
 
 ### 下一步建议
-
-我们已经成功验证了 `RetryNode` 的核心路由逻辑。下一步，我们可以考虑以下增强：
-
-1.  **端到端重构**：将这个手动构建的图替换为一个由编译器从高层 DSL（例如 `.with_retry()`）生成的真实图，以进行更高级别的端到端集成测试。
-2.  **延迟与退避**：在 `standard_retry_logic` 中实现延迟和指数退避逻辑，并编写测试来验证执行是否确实被推迟了相应的时间。
-3.  **健壮性测试**：测试边界情况，例如 `context_in` 或 `error_in` Token 缺失时系统的行为。
+基础设施已经就位。下一步建议：
+1.  **编译器策略实现**：开发 `RetryWiringPolicy`，使编译器能够自动将 `LazyResult.with_retry()` 编译为包含 `F_retry` 节点的物理拓扑。
+2.  **端到端测试**：编写一个使用 DSL 定义重试的工作流，并验证其在真实运行时的行为。
+3.  **退避算法支持**：在 `RetryNode` 中引入 `delay` 和 `backoff` 参数，并实现相应的物理延迟机制。

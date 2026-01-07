@@ -16,11 +16,21 @@ class IRGenerator:
         self._visited: Dict[str, str] = {}
 
     def generate(self, target: Any) -> GraphIR:
-        self._visit(target)
+        # If target is a list, treat all items as roots. Otherwise, wrap it.
+        targets = target if isinstance(target, (list, tuple)) else [target]
+        root_logical_ids = []
+
+        for t in targets:
+            if isinstance(t, LazyResult):
+                root_logical_ids.append(t._uuid)
+            self._visit(t)
+
         # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
         # which corresponds to the post-order traversal (dependencies first),
         # providing a natural topological sort.
-        return GraphIR(nodes=list(self.nodes.values()))
+        return GraphIR(
+            nodes=list(self.nodes.values()), root_logical_ids=root_logical_ids
+        )
 
     def _visit(self, obj: Any) -> Any:
         if isinstance(obj, LazyResult):

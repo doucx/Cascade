@@ -3,6 +3,7 @@ from typing import List
 from cascade.spec.ir.graph import GraphIR
 from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.environment import EnvironmentDef
+from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.assembly import (
     Assembly,
     CompilationArtifact,
@@ -84,6 +85,22 @@ class Builder:
             symbol_table=symbol_table,
             metadata={"compiler": "cascade-compiler-v0.1.0"},
         )
-        manifest = CompilationManifest(logical_to_physical_map=logical_to_physical_map)
+        entry_points = [
+            node_id
+            for node_id, node in physical_graph.nodes.items()
+            if isinstance(node, PhysicsDataNode)
+            and (node_id.startswith("const.") or node_id.startswith("pulse."))
+        ]
+        exit_points = {
+            node.id.split(".")[1]: node.id
+            for node in physical_graph.nodes.values()
+            if isinstance(node, PhysicsDataNode) and node.id.startswith("egress.")
+        }
+
+        manifest = CompilationManifest(
+            logical_to_physical_map=logical_to_physical_map,
+            entry_points=sorted(entry_points),
+            exit_points=exit_points,
+        )
 
         return CompilationArtifact(assembly=assembly, manifest=manifest)

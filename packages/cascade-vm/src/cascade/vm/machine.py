@@ -13,11 +13,13 @@ class Machine:
         self,
         reactor: Reactor,
         compute_service: LocalComputeService,
-        ingress_queue: "asyncio.Queue[Tuple[str, Token]]",
+        wakeup_event: asyncio.Event,
     ):
         self.reactor = reactor
         self.compute_service = compute_service
-        self.ingress_queue = ingress_queue
+        self.wakeup_event = wakeup_event
+        # We can get the queue from the reactor, which is the canonical consumer
+        self.ingress_queue = reactor.ingress_queue
 
     async def run(self) -> None:
         logger.info("Machine started.")
@@ -28,26 +30,44 @@ class Machine:
         try:
             # Run until explicit shutdown signal
             while not self.reactor.shutdown_event.is_set():
-                # 1. Drive the Physics Kernel (Synchronous Step)
-                fired_count = self.reactor.step()
+                try:
+                    # 1. Drive the Physics Kernel (Synchronous Step)
+                    fired_count = self.reactor.step()
 
-                # 2. Adaptive Throttling
-                # If the reactor did work, we yield briefly to allow I/O but return ASAP.
-                # If it was idle, we sleep longer to save CPU.
-                if fired_count > 0:
-                    await asyncio.sleep(0)
-                else:
-                    # Check if there is pending ingress work not yet processed?
-                    # Reactor.step() handles ingress, so if fired_count is 0,
-                    # it means ingress was empty or didn't trigger any firing.
+                    # 2. DRAIN Logic: Check for Quiescence
+                    if self.reactor.drain_event.is_set():
+                        # System is quiescent if:
+                        # - No physics transitions occurred (fired_count == 0)
+                        # - No compute tasks are running (active_count == 0)
+                        # - No results are pending ingress (ingress_queue empty)
+                        if (
+                            fired_count == 0
+                            and self.compute_service.active_count == 0
+                            and self.ingress_queue.empty()
+                        ):
+                            logger.info("System drained (Quiescent). Shutting down.")
+                            self.reactor.shutdown_event.set()
+                            continue
 
-                    # We can sleep a bit longer to be nice to the CPU,
-                    # but check ingress_queue emptiness to be responsive.
-                    if not self.ingress_queue.empty():
+                    # 3. Adaptive Throttling / Waiting
+                    if fired_count > 0 or (
+                        self.ingress_queue and not self.ingress_queue.empty()
+                    ):
+                        # If physics fired or ingress is pending, yield but loop again immediately.
                         await asyncio.sleep(0)
                     else:
-                        # Truly idle loop
-                        await asyncio.sleep(0.001)
+                        # System is physically idle. Wait for new ingress.
+                        try:
+                            # Use a timeout to periodically re-check for drain completion
+                            await asyncio.wait_for(self.wakeup_event.wait(), timeout=0.1)
+                            self.wakeup_event.clear()
+                        except asyncio.TimeoutError:
+                            pass  # Loop again to check state
+
+                except Exception as e:
+                    logger.critical(f"Machine loop crashed: {e}", exc_info=True)
+                    # Force shutdown on machine loop crash
+                    self.reactor.shutdown_event.set()
 
             logger.info("Machine shutdown signal received.")
 

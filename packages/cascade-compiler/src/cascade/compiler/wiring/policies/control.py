@@ -46,3 +46,14 @@ class ControlFlowWiringPolicy(WiringPolicy):
                 source_subgraph.stainer.id, "output_default", d_cond_id, "in"
             )
             ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")
+
+        # 4.4 Egress for Root Nodes
+        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
+            assert subgraph.stainer is not None
+            # Create a dedicated, addressable exit point for this graph root
+            d_egress_id = f"egress.{node_ir.logical_id}"
+            d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
+            ctx.wire.add_node(d_egress)
+
+            # Connect the stainer's default output to this egress node
+            ctx.wire.connect(subgraph.stainer.id, "output_default", d_egress_id, "in")

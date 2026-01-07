@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 from cascade.spec.physical.topology import BipartiteGraph
 
@@ -28,6 +28,13 @@ class CompilationManifest:
     # Key: Logical UUID
     # Value: Physical Base ID (current_node_instance_hash)
     logical_to_physical_map: Dict[str, str] = field(default_factory=dict)
+
+    # List of physical DataNode IDs that are initial sources of energy (e.g., const, pulse)
+    entry_points: List[str] = field(default_factory=list)
+
+    # Maps the logical UUID of a root LazyResult to the physical DataNode ID
+    # that will hold its final result.
+    exit_points: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime.storage import ObjectStore
@@ -20,6 +20,7 @@ class LocalComputeService:
         inbound_queue: "asyncio.Queue[ComputeRequest]",
         outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
         max_workers: int = None,
+        wakeup_event: Optional[asyncio.Event] = None,
     ):
         self.store = store
         self.registry = registry
@@ -28,8 +29,13 @@ class LocalComputeService:
         self._pool = ThreadPoolExecutor(
             max_workers=max_workers, thread_name_prefix="cascade_compute"
         )
+        self._wakeup_event = wakeup_event
         self._running = False
         self._active_count = 0
+
+    @property
+    def active_count(self) -> int:
+        return self._active_count
 
     def is_idle(self) -> bool:
         return self.inbound_queue.empty() and self._active_count == 0
@@ -89,6 +95,10 @@ class LocalComputeService:
 
         # 5. Report Completion to Outbound Queue
         await self.outbound_queue.put((request.reply_to_nid, result_token))
+
+        # 6. Signal that new work is available
+        if self._wakeup_event:
+            self._wakeup_event.set()
 
     def _resolve_arguments(
         self, inputs: Dict[str, Any]

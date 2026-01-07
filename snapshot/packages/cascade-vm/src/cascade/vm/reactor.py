@@ -28,6 +28,7 @@ class Reactor:
 
         # Lifecycle Signals
         self.shutdown_event = asyncio.Event()
+        self.drain_event = asyncio.Event()
 
         # State
         # node_id -> port_name -> list of callbacks
@@ -137,8 +138,10 @@ class Reactor:
 
             except Exception as e:
                 logger.exception(f"Kernel panic at node '{node.id}': {e}")
-                # TODO: In v3.2, implement exception tokens for fault tolerance.
-                # For now, we log and suppress to keep the reactor alive.
+                # Upgrade kernel panic to System Error Signal
+                self._handle_control_signal(
+                    SystemControlToken(command=ControlCommand.ERROR, payload=e)
+                )
 
         return len(nodes_to_fire)
 
@@ -206,10 +209,8 @@ class Reactor:
         if ctrl.command == ControlCommand.HALT:
             self.shutdown_event.set()
         elif ctrl.command == ControlCommand.DRAIN:
-            # TODO: Implement drain logic (wait for active tasks to zero out)
-            # For now, treat as Halt for safety
-            logger.warning("DRAIN not fully implemented, treating as HALT.")
-            self.shutdown_event.set()
+            logger.info("DRAIN signal received. System entering draining mode.")
+            self.drain_event.set()
         elif ctrl.command == ControlCommand.ERROR:
             logger.error(f"System Critical Error: {ctrl.payload}")
             self.shutdown_event.set()

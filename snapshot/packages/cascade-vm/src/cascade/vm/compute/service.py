@@ -31,6 +31,10 @@ class LocalComputeService:
         self._running = False
         self._active_count = 0
 
+    @property
+    def active_count(self) -> int:
+        return self._active_count
+
     def is_idle(self) -> bool:
         return self.inbound_queue.empty() and self._active_count == 0
 

@@ -28,26 +28,38 @@ class Machine:
         try:
             # Run until explicit shutdown signal
             while not self.reactor.shutdown_event.is_set():
-                # 1. Drive the Physics Kernel (Synchronous Step)
-                fired_count = self.reactor.step()
+                try:
+                    # 1. Drive the Physics Kernel (Synchronous Step)
+                    fired_count = self.reactor.step()
 
-                # 2. Adaptive Throttling
-                # If the reactor did work, we yield briefly to allow I/O but return ASAP.
-                # If it was idle, we sleep longer to save CPU.
-                if fired_count > 0:
-                    await asyncio.sleep(0)
-                else:
-                    # Check if there is pending ingress work not yet processed?
-                    # Reactor.step() handles ingress, so if fired_count is 0,
-                    # it means ingress was empty or didn't trigger any firing.
+                    # 2. DRAIN Logic: Check for Quiescence
+                    if self.reactor.drain_event.is_set():
+                        # System is quiescent if:
+                        # - No physics transitions occurred (fired_count == 0)
+                        # - No compute tasks are running (active_count == 0)
+                        # - No results are pending ingress (ingress_queue empty)
+                        if (
+                            fired_count == 0
+                            and self.compute_service.active_count == 0
+                            and self.ingress_queue.empty()
+                        ):
+                            logger.info("System drained (Quiescent). Shutting down.")
+                            self.reactor.shutdown_event.set()
+                            continue
 
-                    # We can sleep a bit longer to be nice to the CPU,
-                    # but check ingress_queue emptiness to be responsive.
-                    if not self.ingress_queue.empty():
+                    # 3. Adaptive Throttling
+                    if fired_count > 0:
                         await asyncio.sleep(0)
                     else:
-                        # Truly idle loop
-                        await asyncio.sleep(0.001)
+                        if not self.ingress_queue.empty():
+                            await asyncio.sleep(0)
+                        else:
+                            await asyncio.sleep(0.001)
+
+                except Exception as e:
+                    logger.critical(f"Machine loop crashed: {e}", exc_info=True)
+                    # Force shutdown on machine loop crash
+                    self.reactor.shutdown_event.set()
 
             logger.info("Machine shutdown signal received.")
 

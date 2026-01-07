@@ -16,8 +16,8 @@ def test_event_type_enums():
 
 
 def test_event_state_enums():
-    assert EventState.RUNNING == "running"
-    assert EventState.FAILED == "failed"
+    assert EventState.RUNNING == "Running"
+    assert EventState.FAILED == "Failed"
 
 
 def test_event_ir_structure():
@@ -40,4 +40,4 @@ def test_event_ir_structure():
     assert event["t"] == "task.lifecycle"
     assert event["ctx"]["rid"] == "run-123"
     assert event["phy"]["nid"] == "node-hash-xyz"
-    assert event["data"]["state"] == "running"
+    assert event["data"]["state"] == "Running"

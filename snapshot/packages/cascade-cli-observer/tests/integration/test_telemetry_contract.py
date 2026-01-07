@@ -2,8 +2,15 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock
 
+import pytest
+import asyncio
+from unittest.mock import MagicMock
+
 from cascade.runtime.services.observability.events import TaskExecutionFinished
 from cascade.runtime.services.observability.subscribers import TelemetrySubscriber
+from cascade.cli.observer.app import on_message
+from cascade.testing import MockConnector
+from cascade.spec import EventState
 from cascade.cli.observer.app import on_message
 from cascade.testing import MockConnector
 
@@ -19,7 +26,7 @@ async def test_telemetry_subscriber_to_observer_contract():
         run_id="run-contract-test",
         task_id="task-abc",
         task_name="contract_task",
-        status="Succeeded",
+        status=EventState.SUCCEEDED,
         duration=0.123,
     )
     subscriber.on_event(event)

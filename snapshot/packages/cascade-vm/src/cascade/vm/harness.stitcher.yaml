@@ -1,3 +1,6 @@
+"EventDrivenRunner.from_assembly": |-
+  Creates an EventDrivenRunner from a compiled Assembly.
+  This method automatically runs the Linker to verify integrity and build the function map.
 "EventDrivenRunner.inject_input": |-
   Helper to inject data into a node.
 "EventDrivenRunner.run_until_complete": |-

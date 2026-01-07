@@ -34,10 +34,6 @@ class EventDrivenRunner:
         code_registry: CodeRegistry,
         reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
     ) -> "EventDrivenRunner":
-        """
-        Creates an EventDrivenRunner from a compiled Assembly.
-        This method automatically runs the Linker to verify integrity and build the function map.
-        """
         linker = Linker()
         # This will raise LinkerError if code_registry is missing required hashes
         function_map = linker.link(assembly, code_registry)

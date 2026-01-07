@@ -21,10 +21,6 @@ def missing_task():
 
 @pytest.mark.asyncio
 async def test_blind_optimism_without_linker():
-    """
-    Demonstrates that without the Linker, the VM starts even if code is missing,
-    leading to a runtime failure (or "blind optimism").
-    """
     # 1. Compile
     workflow = missing_task()
     ir_generator = IRGenerator()
@@ -69,9 +65,6 @@ async def test_blind_optimism_without_linker():
 
 @pytest.mark.asyncio
 async def test_linker_enforces_integrity():
-    """
-    Demonstrates that the Linker correctly identifies missing code and prevents startup.
-    """
     # 1. Compile
     workflow = missing_task()
     ir_generator = IRGenerator()
@@ -95,9 +88,6 @@ async def test_linker_enforces_integrity():
 
 @pytest.mark.asyncio
 async def test_runner_from_assembly_enforces_linker():
-    """
-    Demonstrates that using EventDrivenRunner.from_assembly() creates a safe, validated runtime.
-    """
     # 1. Compile
     workflow = missing_task()
     ir_generator = IRGenerator()

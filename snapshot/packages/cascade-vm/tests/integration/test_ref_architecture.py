@@ -31,7 +31,6 @@ async def test_full_ref_based_e2e_flow():
     graph_ir = ir_generator.generate(workflow)
     artifact = builder.build(graph_ir, EnvironmentDef())
     assembly = artifact.assembly
-    physical_graph = assembly.graph
 
     # 3. Register user code in the CodeRegistry
     # We need to map the physical ID back to the function.

@@ -60,3 +60,6 @@ class NodeIR:
 @dataclass(frozen=True)
 class GraphIR:
     nodes: List[NodeIR] = field(default_factory=list)
+
+    # The logical UUIDs of the LazyResults that were the entry points for generation.
+    root_logical_ids: List[str] = field(default_factory=list)

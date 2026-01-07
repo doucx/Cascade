@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(runtime): 实现 DRAIN 优雅停机与系统级 ERROR 信号捕获", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767759922.817247, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(compiler): 完善 CompilationManifest 以包含 entry/exit points", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767760086.1543238, "duration_ms": 0}}

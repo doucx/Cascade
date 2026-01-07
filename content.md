@@ -1,434 +1,278 @@
-简要回答
-我们正在处理两个关键的技术债务：实现真正的 `DRAIN` 优雅停机逻辑，以及集成系统级的 `ERROR` 信号处理。这将增强系统在生产环境中的可靠性和可观测性。
+好的，我们开始偿还下一项技术债务：完善 `CompilationManifest`。
 
-## [WIP] fix(runtime): 实现 DRAIN 优雅停机与系统级 ERROR 信号捕获
+当前 `Manifest` 只包含了逻辑 ID 到物理 ID 的映射，缺少了关键的 `entry_points` 和 `exit_points` 信息，这迫使运行时环境去猜测图的入口和出口。我们将通过增强编译器来解决这个问题。
+
+## [WIP] feat(compiler): 完善 CompilationManifest 以包含 entry/exit points
 
 ### 用户需求
-1.  **`DRAIN` 信号实现**: 收到 `DRAIN` 信号时，系统不应立即停止，而应等待所有当前活动的计算任务完成（即系统达到静止状态）后再关闭。
-2.  **系统级 `ERROR` 处理**: `Reactor` 和 `Machine` 应当捕获未处理的异常（如 `MemoryFullError`），将其转换为标准的 `SystemControlToken(ERROR)` 进行广播，并安全关闭系统。
+增强编译器，使其生成的 `CompilationManifest` 包含以下信息：
+1.  `entry_points`: 一个列表，包含所有作为图输入源的物理数据节点 ID（例如，常量节点、脉冲节点）。
+2.  `exit_points`: 一个字典，将图的最终输出（根 `LazyResult`）的逻辑 UUID 映射到其结果最终所在的物理数据节点 ID。
 
 ### 评论
-当前的 `DRAIN` 只是 `HALT` 的别名，这在生产环境中是不可接受的，因为它会丢失正在处理的数据。将其改为“等待静止 (Quiescence)”是标准的流处理模式。同时，将 Python 异常转换为系统内的控制流 Token，使得错误处理符合“物理场”的统一隐喻。
+这是一个关键的架构改进，它遵循了“显式优于隐式”的原则。通过让编译器明确声明图的边界，我们消除了运行时环境的猜测工作，使得 `Strategy` 层的实现可以更加健壮和确定。这为未来更复杂的执行策略（如跨进程图执行）铺平了道路。
 
 ### 目标
-1.  修改 `LocalComputeService` 以暴露 `active_count`。
-2.  修改 `Reactor` 以支持 `drain_event` 状态，并在发生恐慌（Panic）时生成 `ERROR` Token。
-3.  修改 `Machine` 以实现“DRAIN 时检测静止”的循环逻辑，并增加顶层异常捕获。
-4.  添加集成测试验证上述行为。
+1.  更新 `CompilationManifest` 和 `GraphIR` 的数据结构，以包含新的字段。
+2.  增强 `IRGenerator` 以识别并标记根节点。
+3.  修改 `ControlFlowWiringPolicy`，为根节点自动创建专用的 `Egress` 数据节点。
+4.  更新 `Builder` 以扫描最终的物理图，并从特定模式的节点（`const.*`, `pulse.*`, `egress.*`）中提取信息，填充到 `Manifest` 中。
+5.  创建新的集成测试来验证 `Manifest` 内容的正确性。
 
 ### 基本原理
-我们利用 `Machine` 作为协调者，因为它拥有 `Reactor`（物理状态）和 `ComputeService`（计算状态）的全局视图。
-*   **DRAIN**: `Machine` 循环检查 `reactor.drain_event`。如果置位，它将轮询直到 `reactor.step() == 0` 且 `compute_service.active_count == 0` 且 `ingress_queue` 为空，确信系统完全静止后，才触发 `shutdown`。
-*   **ERROR**: `Reactor.step()` 内的 `try...except` 块确保了内核级错误不会炸毁整个进程，而是转化为一个可被路由、观测的信号。
+1.  **识别根节点**: `IRGenerator.generate` 的 `target` 参数就是图的根节点。我们将捕获其逻辑 UUID 并将其记录在 `GraphIR` 中。
+2.  **创建出口**: `ControlFlowWiringPolicy` 会检查一个节点是否是根节点。如果是，它会创建一个专用的 `egress.{logical_id}` 数据节点，并将该任务的 `Stainer` 的 `output_default` 端口连接到此节点。这为最终结果提供了一个明确的、可寻址的物理位置。
+3.  **收集边界**: `Builder` 在完成所有布线后，通过简单的命名约定扫描（`startswith('const.')` 等）来识别所有的入口和出口数据节点，并将它们的信息系统地记录在 `Manifest` 中。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/runtime #concept/state #scope/core #ai/instruct #task/domain/runtime #task/object/lifecycle-signals #task/action/implementation #task/state/begin
+#intent/architect #flow/ready #priority/high #comp/compiler #concept/state #scope/api #ai/instruct #task/domain/compiler #task/object/manifest #task/action/refactor #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 公开 `LocalComputeService.active_count`
+#### Acts 1: 更新 `spec` 定义
 
-我们需要让 Machine 能够查询当前正在运行的异步任务数量。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/compute/service.py
-~~~~~
-~~~~~python.old
-        self._running = False
-        self._active_count = 0
-
-    def is_idle(self) -> bool:
-        return self.inbound_queue.empty() and self._active_count == 0
-
-    async def run(self) -> None:
-~~~~~
-~~~~~python.new
-        self._running = False
-        self._active_count = 0
-
-    @property
-    def active_count(self) -> int:
-        return self._active_count
-
-    def is_idle(self) -> bool:
-        return self.inbound_queue.empty() and self._active_count == 0
-
-    async def run(self) -> None:
-~~~~~
-
-#### Acts 2: 增强 `Reactor` 处理 DRAIN 和 ERROR
-
-修改 `Reactor` 初始化 `drain_event`，更新信号处理逻辑，并在 `step` 中捕获异常。
+首先，我们在 `cascade-spec` 中更新 `CompilationManifest` 和 `GraphIR` 的数据结构。
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-spec/src/cascade/spec/physical/assembly.py
 ~~~~~
 ~~~~~python.old
-        # Lifecycle Signals
-        self.shutdown_event = asyncio.Event()
-
-        # State
-        # node_id -> port_name -> list of callbacks
+@dataclass(frozen=True)
+class CompilationManifest:
+    # Maps logical UUIDs (from LazyResult) to the base physical node ID.
+    # Key: Logical UUID
+    # Value: Physical Base ID (current_node_instance_hash)
+    logical_to_physical_map: Dict[str, str] = field(default_factory=dict)
 ~~~~~
 ~~~~~python.new
-        # Lifecycle Signals
-        self.shutdown_event = asyncio.Event()
-        self.drain_event = asyncio.Event()
+@dataclass(frozen=True)
+class CompilationManifest:
+    # Maps logical UUIDs (from LazyResult) to the base physical node ID.
+    # Key: Logical UUID
+    # Value: Physical Base ID (current_node_instance_hash)
+    logical_to_physical_map: Dict[str, str] = field(default_factory=dict)
 
-        # State
-        # node_id -> port_name -> list of callbacks
+    # List of physical DataNode IDs that are initial sources of energy (e.g., const, pulse)
+    entry_points: List[str] = field(default_factory=list)
+
+    # Maps the logical UUID of a root LazyResult to the physical DataNode ID
+    # that will hold its final result.
+    exit_points: Dict[str, str] = field(default_factory=dict)
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-spec/src/cascade/spec/ir/graph.py
 ~~~~~
 ~~~~~python.old
-        # --- DIRECT DRIVE EXECUTION ---
-        for node in nodes_to_fire:
-            inputs = inputs_for_fire[node.id]
-            try:
-                # 1. Synchronous Execution
-                func = self.function_map.get(node.id)
-                if not func:
-                    raise ValueError(f"No function mapped for node {node.id}")
-
-                results = func(inputs, node, self.resource_registry)
-
-                # 2. Immediate Result Handling
-                self._handle_results_immediate(node, results)
-
-            except Exception as e:
-                logger.exception(f"Kernel panic at node '{node.id}': {e}")
-                # TODO: In v3.2, implement exception tokens for fault tolerance.
-                # For now, we log and suppress to keep the reactor alive.
-
-        return len(nodes_to_fire)
-
-    def _handle_results_immediate(
+@dataclass(frozen=True)
+class GraphIR:
+    nodes: List[NodeIR] = field(default_factory=list)
 ~~~~~
 ~~~~~python.new
-        # --- DIRECT DRIVE EXECUTION ---
-        for node in nodes_to_fire:
-            inputs = inputs_for_fire[node.id]
-            try:
-                # 1. Synchronous Execution
-                func = self.function_map.get(node.id)
-                if not func:
-                    raise ValueError(f"No function mapped for node {node.id}")
+@dataclass(frozen=True)
+class GraphIR:
+    nodes: List[NodeIR] = field(default_factory=list)
 
-                results = func(inputs, node, self.resource_registry)
+    # The logical UUIDs of the LazyResults that were the entry points for generation.
+    root_logical_ids: List[str] = field(default_factory=list)
+~~~~~
 
-                # 2. Immediate Result Handling
-                self._handle_results_immediate(node, results)
+#### Acts 2: 增强 `IRGenerator` 以识别根节点
 
-            except Exception as e:
-                logger.exception(f"Kernel panic at node '{node.id}': {e}")
-                # Upgrade kernel panic to System Error Signal
-                self._handle_control_signal(
-                    SystemControlToken(command=ControlCommand.ERROR, payload=e)
-                )
+修改 `generate` 方法以捕获根节点的 UUID。
 
-        return len(nodes_to_fire)
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
+~~~~~
+~~~~~python.old
+    def generate(self, target: Any) -> GraphIR:
+        self._visit(target)
+        # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
+        # which corresponds to the post-order traversal (dependencies first),
+        # providing a natural topological sort.
+        return GraphIR(nodes=list(self.nodes.values()))
+~~~~~
+~~~~~python.new
+    def generate(self, target: Any) -> GraphIR:
+        # If target is a list, treat all items as roots. Otherwise, wrap it.
+        targets = target if isinstance(target, (list, tuple)) else [target]
+        root_logical_ids = []
 
-    def _handle_results_immediate(
+        for t in targets:
+            if isinstance(t, LazyResult):
+                root_logical_ids.append(t._uuid)
+            self._visit(t)
+
+        # Return nodes. The order in self.nodes.values() respects insertion order (Python 3.7+),
+        # which corresponds to the post-order traversal (dependencies first),
+        # providing a natural topological sort.
+        return GraphIR(
+            nodes=list(self.nodes.values()), root_logical_ids=root_logical_ids
+        )
+~~~~~
+
+#### Acts 3: 修改 `ControlFlowWiringPolicy` 以创建 Egress 节点
+
+为每个根节点创建一个物理出口。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/wiring/policies/control.py
+~~~~~
+~~~~~python.old
+            ctx.wire.connect(
+                source_subgraph.stainer.id, "output_default", d_cond_id, "in"
+            )
+            ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")
+~~~~~
+~~~~~python.new
+            ctx.wire.connect(
+                source_subgraph.stainer.id, "output_default", d_cond_id, "in"
+            )
+            ctx.wire.connect(d_cond_id, "out", subgraph.bleacher.id, "condition")
+
+        # 4.4 Egress for Root Nodes
+        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
+            assert subgraph.stainer is not None
+            # Create a dedicated, addressable exit point for this graph root
+            d_egress_id = f"egress.{node_ir.logical_id}"
+            d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
+            ctx.wire.add_node(d_egress)
+
+            # Connect the stainer's default output to this egress node
+            ctx.wire.connect(subgraph.stainer.id, "output_default", d_egress_id, "in")
+~~~~~
+
+#### Acts 4: 更新 `Builder` 以填充 Manifest
+
+`Builder` 现在负责扫描图并填充 `entry_points` 和 `exit_points`。
+
+~~~~~act
+patch_file
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+~~~~~
+~~~~~python.old
+from cascade.spec.physical.assembly import (
+    Assembly,
+    CompilationArtifact,
+    CompilationManifest,
+)
+~~~~~
+~~~~~python.new
+from cascade.spec.physical.nodes import PhysicsDataNode
+from cascade.spec.physical.assembly import (
+    Assembly,
+    CompilationArtifact,
+    CompilationManifest,
+)
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
 ~~~~~
 ~~~~~python.old
-    def _handle_control_signal(self, ctrl: SystemControlToken) -> None:
-        logger.info(f"Reactor received control signal: {ctrl.command}")
-        if ctrl.command == ControlCommand.HALT:
-            self.shutdown_event.set()
-        elif ctrl.command == ControlCommand.DRAIN:
-            # TODO: Implement drain logic (wait for active tasks to zero out)
-            # For now, treat as Halt for safety
-            logger.warning("DRAIN not fully implemented, treating as HALT.")
-            self.shutdown_event.set()
-        elif ctrl.command == ControlCommand.ERROR:
-            logger.error(f"System Critical Error: {ctrl.payload}")
-            self.shutdown_event.set()
+        manifest = CompilationManifest(logical_to_physical_map=logical_to_physical_map)
+
+        return CompilationArtifact(assembly=assembly, manifest=manifest)
 ~~~~~
 ~~~~~python.new
-    def _handle_control_signal(self, ctrl: SystemControlToken) -> None:
-        logger.info(f"Reactor received control signal: {ctrl.command}")
-        if ctrl.command == ControlCommand.HALT:
-            self.shutdown_event.set()
-        elif ctrl.command == ControlCommand.DRAIN:
-            logger.info("DRAIN signal received. System entering draining mode.")
-            self.drain_event.set()
-        elif ctrl.command == ControlCommand.ERROR:
-            logger.error(f"System Critical Error: {ctrl.payload}")
-            self.shutdown_event.set()
+        entry_points = [
+            node_id
+            for node_id, node in physical_graph.nodes.items()
+            if isinstance(node, PhysicsDataNode)
+            and (node_id.startswith("const.") or node_id.startswith("pulse."))
+        ]
+        exit_points = {
+            node.id.split(".")[1]: node.id
+            for node in physical_graph.nodes.values()
+            if isinstance(node, PhysicsDataNode) and node.id.startswith("egress.")
+        }
+
+        manifest = CompilationManifest(
+            logical_to_physical_map=logical_to_physical_map,
+            entry_points=sorted(entry_points),
+            exit_points=exit_points,
+        )
+
+        return CompilationArtifact(assembly=assembly, manifest=manifest)
 ~~~~~
 
-#### Acts 3: 升级 `Machine` 循环逻辑
+#### Acts 5: 添加集成测试
 
-实现 DRAIN 状态下的静止检测，并增加顶层异常防护。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/machine.py
-~~~~~
-~~~~~python.old
-    async def run(self) -> None:
-        logger.info("Machine started.")
-
-        # Start the Compute Service
-        service_task = asyncio.create_task(self.compute_service.run())
-
-        try:
-            # Run until explicit shutdown signal
-            while not self.reactor.shutdown_event.is_set():
-                # 1. Drive the Physics Kernel (Synchronous Step)
-                fired_count = self.reactor.step()
-
-                # 2. Adaptive Throttling
-                # If the reactor did work, we yield briefly to allow I/O but return ASAP.
-                # If it was idle, we sleep longer to save CPU.
-                if fired_count > 0:
-                    await asyncio.sleep(0)
-                else:
-                    # Check if there is pending ingress work not yet processed?
-                    # Reactor.step() handles ingress, so if fired_count is 0,
-                    # it means ingress was empty or didn't trigger any firing.
-
-                    # We can sleep a bit longer to be nice to the CPU,
-                    # but check ingress_queue emptiness to be responsive.
-                    if not self.ingress_queue.empty():
-                        await asyncio.sleep(0)
-                    else:
-                        # Truly idle loop
-                        await asyncio.sleep(0.001)
-
-            logger.info("Machine shutdown signal received.")
-
-        finally:
-~~~~~
-~~~~~python.new
-    async def run(self) -> None:
-        logger.info("Machine started.")
-
-        # Start the Compute Service
-        service_task = asyncio.create_task(self.compute_service.run())
-
-        try:
-            # Run until explicit shutdown signal
-            while not self.reactor.shutdown_event.is_set():
-                try:
-                    # 1. Drive the Physics Kernel (Synchronous Step)
-                    fired_count = self.reactor.step()
-
-                    # 2. DRAIN Logic: Check for Quiescence
-                    if self.reactor.drain_event.is_set():
-                        # System is quiescent if:
-                        # - No physics transitions occurred (fired_count == 0)
-                        # - No compute tasks are running (active_count == 0)
-                        # - No results are pending ingress (ingress_queue empty)
-                        if (
-                            fired_count == 0
-                            and self.compute_service.active_count == 0
-                            and self.ingress_queue.empty()
-                        ):
-                            logger.info("System drained (Quiescent). Shutting down.")
-                            self.reactor.shutdown_event.set()
-                            continue
-
-                    # 3. Adaptive Throttling
-                    if fired_count > 0:
-                        await asyncio.sleep(0)
-                    else:
-                        if not self.ingress_queue.empty():
-                            await asyncio.sleep(0)
-                        else:
-                            await asyncio.sleep(0.001)
-
-                except Exception as e:
-                    logger.critical(f"Machine loop crashed: {e}", exc_info=True)
-                    # Force shutdown on machine loop crash
-                    self.reactor.shutdown_event.set()
-
-            logger.info("Machine shutdown signal received.")
-
-        finally:
-~~~~~
-
-#### Acts 4: 添加测试用例
-
-创建一个新的测试文件 `tests/integration/test_lifecycle_signals.py` 来验证 DRAIN 和 ERROR 行为。
+创建一个新的测试文件来验证 `Manifest` 的内容。
 
 ~~~~~act
 write_file
-packages/cascade-vm/tests/integration/test_lifecycle_signals.py
+packages/cascade-compiler/tests/integration/test_manifest_content.py
 ~~~~~
 ~~~~~python
-import asyncio
 import pytest
-from typing import Dict, Tuple
 
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from cascade.vm.machine import Machine
-from cascade.vm.reactor import Reactor
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.resource_registry import ResourceRegistry
-from cascade.vm.registry import CodeRegistry
-from cascade.vm.compute import ComputeRequest, LocalComputeService
-from cascade.runtime.storage import InMemoryObjectStore
+from cascade.spec.dsl.task import task
+from cascade.compiler.frontend import IRGenerator
+from cascade.compiler.backend import Builder
+from cascade.spec.physical.environment import EnvironmentDef
 
-# --- DRAIN Test Helpers ---
 
-async def slow_worker_func(n: int) -> int:
-    # Sleeps to ensure DRAIN signal arrives while task is active
-    await asyncio.sleep(0.1)
+@task
+def add(a: int, b: int) -> int:
+    return a + b
+
+
+@task
+def square(n: int) -> int:
     return n * n
 
-def drain_trigger_kernel(inputs, node, resources):
-    # Emits a DRAIN signal immediately
-    return {"out": Token(payload=SystemControlToken(ControlCommand.DRAIN))}
-
-def mock_dispatcher_kernel(inputs, node, resources):
-    # Dispatches the slow task
-    compute_queue = resources.get("system.compute_queue")
-    input_val = inputs["in"].payload # Assumed Ref for simplicity in full stack, but here we can cheat for micro-test
-    # We construct a fake request just to trigger the service
-    req = ComputeRequest(
-        code_hash="slow_task",
-        input_refs={}, # Ignored by our registry mock wrapper below
-        reply_to_nid="D_out",
-        trace={}
-    )
-    compute_queue.put_nowait(req)
-    return {}
-
-# --- ERROR Test Helpers ---
-
-def crashing_kernel(inputs, node, resources):
-    raise ValueError("Intentional Kernel Panic")
-
-# --- Fixtures ---
-
-@pytest.fixture
-def machine_components():
-    memory = VolatileMemory()
-    object_store = InMemoryObjectStore()
-    compute_queue = asyncio.Queue()
-    ingress_queue = asyncio.Queue()
-    
-    code_registry = CodeRegistry()
-    # Mocking execution to skip Ref resolution complexity for this specific test
-    # We intercept the _process_request in a real integration, or just ensure 
-    # the service's registry call works.
-    # Let's use the real service but trick the registry.
-    code_registry.register("slow_task", slow_worker_func)
-
-    resource_registry = ResourceRegistry()
-    resource_registry.register("system.object_store", object_store)
-    resource_registry.register("system.compute_queue", compute_queue)
-
-    compute_service = LocalComputeService(
-        store=object_store,
-        registry=code_registry,
-        inbound_queue=compute_queue,
-        outbound_queue=ingress_queue
-    )
-
-    return memory, resource_registry, ingress_queue, compute_service
-
-# --- Tests ---
-
-@pytest.mark.asyncio
-async def test_drain_waits_for_active_task(machine_components):
-    memory, resource_registry, ingress_queue, compute_service = machine_components
-    
-    # Topology: 
-    # 1. D_start -> F_launch (starts slow task) -> D_out
-    # 2. D_drain -> F_drain (sends DRAIN)
-    
-    d_start = PhysicsDataNode(id="D_start", name="Start")
-    d_out = PhysicsDataNode(id="D_out", name="Out")
-    f_launch = PhysicsFuncNode(id="F_launch", name="Launch", input_ports={"in": PortDef("in", PortRole.DATA)})
-    
-    d_drain = PhysicsDataNode(id="D_drain", name="DrainTrigger")
-    f_drain = PhysicsFuncNode(id="F_drain", name="Drainer", input_ports={"in": PortDef("in", PortRole.DATA)})
-    # F_drain output is intercepted by Reactor, no target D needed
-    
-    graph = BipartiteGraph()
-    for n in [d_start, d_out, f_launch, d_drain, f_drain]:
-        graph.nodes[n.id] = n
-        
-    graph.channels.append(Channel("D_start", "out", "F_launch", "in"))
-    graph.channels.append(Channel("D_drain", "out", "F_drain", "in"))
-    
-    func_map = {
-        "F_launch": mock_dispatcher_kernel,
-        "F_drain": drain_trigger_kernel
-    }
-    
-    reactor = Reactor(graph, memory, func_map, resource_registry, ingress_queue)
-    machine = Machine(reactor, compute_service, ingress_queue)
-    
-    # Inject inputs
-    memory.put(d_start, Token(payload="go"))
-    memory.put(d_drain, Token(payload="stop"))
-    
-    # Run
-    # The machine should:
-    # 1. Fire F_launch (starts slow task in background)
-    # 2. Fire F_drain (sets DRAIN flag)
-    # 3. Wait approx 0.1s for slow task to finish
-    # 4. Process result in D_out
-    # 5. Detect Quiescence -> Shutdown
-    
-    await asyncio.wait_for(machine.run(), timeout=1.0)
-    
-    # Assertions
-    assert memory.get_count("D_out") == 1
-    assert reactor.shutdown_event.is_set()
-    assert reactor.drain_event.is_set()
+@task
+def source():
+    return "start"
 
 
-@pytest.mark.asyncio
-async def test_error_signal_shuts_down_machine(machine_components):
-    memory, resource_registry, ingress_queue, compute_service = machine_components
+def test_manifest_is_populated_correctly():
+    # 1. Define a workflow with clear entry and exit points
+    # Entry: source(), const 1, const 2
+    # Exit: square()
+    workflow = square(add(source(), 2))
     
-    d_err = PhysicsDataNode(id="D_err", name="ErrTrigger")
-    f_crash = PhysicsFuncNode(id="F_crash", name="Crasher", input_ports={"in": PortDef("in", PortRole.DATA)})
+    # We need the logical ID of the root to verify the exit point
+    root_logical_id = workflow._uuid
+
+    # 2. Compile
+    generator = IRGenerator()
+    builder = Builder()
+    environment = EnvironmentDef(resources=[])
+
+    graph_ir = generator.generate(workflow)
+    artifact = builder.build(graph_ir, environment)
+    manifest = artifact.manifest
+
+    # 3. Assert Entry Points
+    # We expect one pulse node (for source) and one const node (for value 2).
+    # The first argument to add() is from source(), not a const.
+    assert len(manifest.entry_points) == 2
     
-    graph = BipartiteGraph()
-    graph.nodes[d_err.id] = d_err
-    graph.nodes[f_crash.id] = f_crash
-    graph.channels.append(Channel("D_err", "out", "F_crash", "in"))
+    # Check that entries look correct
+    assert any(ep.startswith("pulse.source.") for ep in manifest.entry_points)
+    assert any(ep.startswith("const.") for ep in manifest.entry_points)
     
-    func_map = { "F_crash": crashing_kernel }
+    # 4. Assert Exit Points
+    assert len(manifest.exit_points) == 1
+    assert root_logical_id in manifest.exit_points
     
-    reactor = Reactor(graph, memory, func_map, resource_registry, ingress_queue)
-    machine = Machine(reactor, compute_service, ingress_queue)
-    
-    memory.put(d_err, Token("die"))
-    
-    await asyncio.wait_for(machine.run(), timeout=1.0)
-    
-    assert reactor.shutdown_event.is_set()
-    # The system should have stopped cleanly despite the exception
+    exit_node_id = manifest.exit_points[root_logical_id]
+    assert exit_node_id.startswith("egress.")
+    assert exit_node_id.endswith(root_logical_id)
 ~~~~~
 
 ### 下一步建议
-我们已经完成了 DRAIN 信号和 ERROR 信号的核心支持。
+我们已经成功地让编译器生成了包含完整边界信息的 `Manifest`。
 
-下一步应该：
-1.  **实现 `SystemControlToken` 的专用通道**：目前控制 Token 是混在普通数据通道中返回的，这依赖于 `Reactor` 检查每一个输出。为了性能和清晰度，应该考虑引入专用的控制端口或总线。
-2.  **实现 `F_retry` 逻辑**：现在错误虽然被捕获了，但导致了系统关闭。我们需要一个能消费 ERROR 信号并决定是否重试的节点。
-3.  **完善 `Manifest`**：解决编译产物缺失 Entry Point 和 Exit Point 映射的问题。
+下一步，我们可以解决 `Machine` 的低效轮询问题，引入 `asyncio.Event` 来实现真正的事件驱动调度，从而在系统空闲时降低 CPU 消耗。
 
-建议继续执行：**完善 CompilationManifest 的内容**。
----
+我建议我们开始实施：**`Machine` 的轮询式休眠优化**。

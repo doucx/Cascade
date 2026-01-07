@@ -2,7 +2,7 @@ import asyncio
 import inspect
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, Optional
 
 from cascade.spec.physical.nodes import Token
 from cascade.spec.runtime.storage import ObjectStore

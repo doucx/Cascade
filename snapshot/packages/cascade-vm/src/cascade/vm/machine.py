@@ -31,7 +31,18 @@ class Machine:
                 # 1. Drive the Physics Kernel (Synchronous Step)
                 fired_count = self.reactor.step()
 
-                # 2. Adaptive Throttling
+                # 2. Check Draining State
+                # If DRAIN signal was received, we only shutdown when everything is idle.
+                if self.reactor.drain_event.is_set():
+                    is_reactor_idle = fired_count == 0
+                    is_ingress_idle = self.ingress_queue.empty()
+                    is_compute_idle = self.compute_service.is_idle()
+
+                    if is_reactor_idle and is_ingress_idle and is_compute_idle:
+                        logger.info("System drained successfully. Initiating shutdown.")
+                        self.reactor.shutdown_event.set()
+
+                # 3. Adaptive Throttling
                 # If the reactor did work, we yield briefly to allow I/O but return ASAP.
                 # If it was idle, we sleep longer to save CPU.
                 if fired_count > 0:

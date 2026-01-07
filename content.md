@@ -1,138 +1,90 @@
-You are right to push for a complete fix. The failures in the end-to-end tests reveal the final piece of the puzzle: the subscribers themselves were still implicitly coupled to the old contract, and one of the tests had a logical omission. My previous change correctly fixed the event *creation*, but now we must ensure the event *consumption* is equally robust and the tests are logically complete.
+好的，既然所有测试都已顺利通过，这证明我们的重构已经完美闭合，实现了从事件生产者到最终消费者的端到端类型安全。
 
-## [WIP] fix(e2e): Correct subscriber logic and complete E2E test assertions
+我将生成一个 `[COMMIT]` 计划，将这一重要的架构演进记录到代码库中。
+
+## [COMMIT] refactor(events): Unify event state contract to use EventState enum
 
 ### 错误分析
 
-The remaining two failures stem from two distinct issues that were exposed by my previous refactoring:
+系统中存在深层级的“语义漂移” (Semantic Drift)：
+- **生产者** (`Stainer`) 使用 `EventState` 枚举成员。
+- **转换层** (`events.py`) 错误地将枚举转换为硬编码字符串（如 `"Succeeded"`），并将其定义为 `str` 类型。
+- **消费者** (Tests/Subscribers) 因此被迫依赖脆弱的字符串字面量进行断言。
 
-1.  **`test_e2e_watch_local_backend.py`**: The `TelemetrySubscriber` incorrectly flags a successful task as `FAILED`. This is because its status check (`is EventState.SUCCEEDED`) is too strict. While the `EventState` enum is now used to create the event, some part of the event processing or transport layer (like JSON serialization in the `LocalConnector`) may be converting the `StrEnum` member to its primitive string value. Using a more lenient `==` comparison is idiomatic and correct for `StrEnum` and will fix this. The same issue affects `HumanReadableLogSubscriber`.
-2.  **`test_end_to_end.py`**: The test itself is logically incomplete. It starts a two-step workflow (`greet(get_name())`) but only asserts that the first task (`get_name`) finished successfully, while omitting the assertion for the final `greet` task. This is a simple omission in the test's logic that needs to be corrected.
+这种不一致导致了测试的脆弱性，任何对状态文本表现形式的微调都会引发大规模的回归错误，且无法通过静态分析工具捕捉，违背了“验证意图而非实现”的工程哲学。
 
 ### 用户需求
 
-To resolve the final E2E test failures by:
-1.  Making the event subscriber logic robust to handle `StrEnum`'s string-like nature.
-2.  Correcting the incomplete test logic in the E2E workflow test.
+彻底统一事件状态契约，强制在整个系统中（Spec, Runtime, Tests, E2E）使用类型安全的 `EventState` 枚举作为单一事实来源。
 
-### 評論
+### 评论
 
-This is the final cleanup step. By fixing the subscribers and the E2E test, we ensure that the "Concord" proposal is not only implemented but also correctly and fully validated by the highest level of testing, proving its resilience in a realistic execution environment.
+这是一个标志性的重构，它实现了“Concord”（和谐）提案的目标。通过消除魔法字符串，我们将系统的状态契约从一个模糊的隐式约定提升为了一个显式的、编译器可验证的物理常数，极大增强了系统的本体论正确性。
 
 ### 目标
 
-1.  Modify `HumanReadableLogSubscriber` and `TelemetrySubscriber` in `subscribers.py` to use `==` instead of `is` for `EventState` comparisons, making them robust.
-2.  Add the missing `task.finished_success` assertion for the `greet` task in `test_end_to_end.py`.
+1.  在 `cascade-spec` 中将 `EventState` 枚举值标准化。
+2.  在 `cascade-runtime` 中修正事件类的类型定义和水合（Hydration）逻辑，保持枚举类型的完整性。
+3.  在订阅者中实施稳健的枚举比较逻辑。
+4.  更新所有受影响的集成测试和 E2E 测试，确保它们遵循新的类型安全契约。
 
 ### 基本原理
 
-Using `==` with a `StrEnum` provides the best of both worlds: it allows for type-safe, semantic comparison against the enum member while also correctly comparing against the enum's underlying string value, should a conversion happen during serialization. This makes the consumers robust. Completing the assertions in the E2E test ensures our validation is as thorough as our implementation.
+核心原理是“正本清源”：通过在契约的最底层（Spec 和 Events 定义）确立类型，并迫使所有中间环节（Hydrator）尊重该类型，最终使得消费端（Tests）能够以最稳健、语义化最高的方式执行断言。使用 `StrEnum` 的 `==` 运算符提供了完美的兼容性，既保留了类型安全性，又兼顾了序列化可能引入的微小差异。
 
 ### 标签
 
-#intent/fix #flow/ready #priority/high #comp/runtime #comp/tests #scope/core #ai/instruct #task/domain/architecture #task/object/event-contracts #task/action/refactor #task/state/continue
+#intent/refine #flow/ready #priority/high #comp/spec #comp/runtime #comp/tests #concept/state #scope/core #ai/instruct #task/domain/architecture #task/object/event-contracts #task/action/refactor #task/state/end
 
 ---
 
 ### Script
 
-#### Acts 1: Make Subscribers Robust
+#### Acts 1: 提交架构重构
 
-I will update both subscribers in `subscribers.py` to use the `==` operator for enum comparison.
+我们将所有修改过的文件添加到暂存区，并创建一个详细的提交。
 
 ~~~~~act
-patch_file
+git_add
+packages/cascade-spec/src/cascade/spec/runtime/observability.py
+packages/cascade-runtime/src/cascade/runtime/services/observability/events.py
 packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py
-~~~~~
-~~~~~python.old
-    def on_run_finished(self, event: RunFinished):
-        if event.status is EventState.SUCCEEDED:
-            bus.info("run.finished_success", duration=event.duration)
-        else:
-~~~~~
-~~~~~python.new
-    def on_run_finished(self, event: RunFinished):
-        if event.status == EventState.SUCCEEDED:
-            bus.info("run.finished_success", duration=event.duration)
-        else:
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py
-~~~~~
-~~~~~python.old
-    def on_task_finished(self, event: TaskExecutionFinished):
-        if event.status is EventState.SUCCEEDED:
-            bus.info(
-                "task.finished_success",
-~~~~~
-~~~~~python.new
-    def on_task_finished(self, event: TaskExecutionFinished):
-        if event.status == EventState.SUCCEEDED:
-            bus.info(
-                "task.finished_success",
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-runtime/src/cascade/runtime/services/observability/subscribers.py
-~~~~~
-~~~~~python.old
-            state_map = {
-                TaskExecutionStarted: "RUNNING",
-                TaskExecutionFinished: "COMPLETED"
-                if getattr(event, "status", EventState.FAILED) is EventState.SUCCEEDED
-                else "FAILED",
-                TaskSkipped: "SKIPPED",
-                TaskBlocked: "BLOCKED",
-            }
-~~~~~
-~~~~~python.new
-            state_map = {
-                TaskExecutionStarted: "RUNNING",
-                TaskExecutionFinished: "COMPLETED"
-                if getattr(event, "status", EventState.FAILED) == EventState.SUCCEEDED
-                else "FAILED",
-                TaskSkipped: "SKIPPED",
-                TaskBlocked: "BLOCKED",
-            }
-~~~~~
-
-#### Acts 2: Complete E2E Test Logic
-
-Finally, I will add the missing assertion to `test_end_to_end.py` to make the test logically complete.
-
-~~~~~act
-patch_file
+packages/cascade-vm/tests/integration/test_context_injection.py
+packages/cascade-vm/tests/integration/test_ref_architecture.py
+packages/cascade-vm/tests/integration/test_resource_sentry.py
+packages/cascade-vm/tests/integration/test_source_node_execution.py
+packages/cascade-cli-observer/tests/integration/test_telemetry_contract.py
+packages/cascade-spec/tests/unit/test_observability.py
 tests/e2e/integration/test_end_to_end.py
 ~~~~~
-~~~~~python.old
-    mock_messaging_bus.info.assert_any_call("task.started", task_name="get_name")
-    mock_messaging_bus.info.assert_any_call(
-        "task.finished_success", task_name="get_name", duration=pytest.approx(0, abs=1)
-    )
-    mock_messaging_bus.info.assert_any_call("task.started", task_name="greet")
-    mock_messaging_bus.info.assert_any_call(
-        "run.finished_success", duration=pytest.approx(0, abs=1)
-    )
+
+~~~~~act
+git_commit
 ~~~~~
-~~~~~python.new
-    mock_messaging_bus.info.assert_any_call("task.started", task_name="get_name")
-    mock_messaging_bus.info.assert_any_call(
-        "task.finished_success", task_name="get_name", duration=pytest.approx(0, abs=1)
-    )
-    mock_messaging_bus.info.assert_any_call("task.started", task_name="greet")
-    mock_messaging_bus.info.assert_any_call(
-        "task.finished_success", task_name="greet", duration=pytest.approx(0, abs=1)
-    )
-    mock_messaging_bus.info.assert_any_call(
-        "run.finished_success", duration=pytest.approx(0, abs=1)
-    )
+~~~~~text
+refactor(events): Unify event state contract to use EventState enum
+
+This commit implements the "Concord" proposal, establishing a strict,
+type-safe contract for all event states throughout the Cascade system.
+
+Core Changes:
+1. Standardized 'EventState' enum values in 'cascade-spec' to use
+   capitalized strings (e.g., 'Succeeded', 'Failed'), aligning the
+   Single Source of Truth with real-world representation.
+2. Refactored 'TaskExecutionFinished' and 'RunFinished' dataclasses in
+   'cascade-runtime' to type the 'status' field as 'EventState' instead of 'str'.
+3. Fixed the event hydration logic in 'events.py' to preserve the enum
+   type during the transition from IR to rich Event objects.
+4. Updated all subscribers and tests (Integration and E2E) to use
+   type-safe enum comparisons (e.g., 'event.status == EventState.SUCCEEDED'),
+   eradicating all magic string literals.
+
+This refactoring eliminates "semantic drift" and ensures that the system's
+state contract is explicit, self-documenting, and protected by static analysis.
 ~~~~~
 
 ### 下一步建议
 
-We have now addressed all known failures and inconsistencies related to the event state contract. The implementation should be complete and correct.
-
-Please run the full test suite one last time. If all tests pass, I will be ready to generate the final `[COMMIT]` plan to conclude this task.
+- **跨语言对齐**: 既然 Python 端的 `EventState` 已经标准化，建议检查 `cascade-vm-rs` (Rust 核心) 中的相关枚举定义，确保它们在跨语言 FFI 边界上也保持一致。
+- **状态机审计**: 考虑对系统中的其他核心枚举（如 `ControlCommand` 或 `PortRole`）进行类似的审计，确保没有任何地方仍在使用隐式的字符串约定。
+- **文档更新**: 更新架构文档，将“枚举优先契约”作为 Cascade 状态管理的标准最佳实践进行记录。

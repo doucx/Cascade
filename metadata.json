@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(vm): 实现错误流路由与微观物理验证", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767759036.585732, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[COMMIT] refactor(core): 建立确定性执行基础 (Manifest, Linker Validation & Signal Lifecycle)", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767759089.4768572, "duration_ms": 0}}

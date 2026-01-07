@@ -1,313 +1,123 @@
-[简要回答]
-我们将合并执行 **Phase 3.4 (错误流)** 和 **Phase 3.5 (微观验证)**。这包括升级 `Stainer` 以支持异常路由，并创建一套微观物理测试来验证激发、错误处理和信号终止机制。
+好的，重构阶段的所有测试均已通过。现在我们将创建一个包含所有变更的提交，标志着 Cascade 核心确定性基础建设的圆满完成。
 
-## [WIP] feat(vm): 实现错误流路由与微观物理验证
+[简要回答]
+我将生成一个 `[COMMIT]` 计划，将涉及编译器契约增强、链接器校验、VM 信号驱动生命周期以及错误路由的所有修改正式提交到版本库。
+
+## [COMMIT] refactor(core): 建立确定性执行基础 (Manifest, Linker Validation & Signal Lifecycle)
 
 ### 用户需求
-1.  **错误不应被吞没**: 当 Worker 抛出异常时，该异常应被封装为 Token 并路由到专用的错误通道（如果存在），而不是混入正常数据流或导致系统崩溃。
-2.  **物理层必须可验证**: 需要一套不依赖复杂业务逻辑的单元测试，直接验证 Reactor 的核心物理定律：能量守恒、路由正确性、信号响应性。
+结束“Stage 3 - Reset”重构阶段，将编译器增强、启动前校验、信号驱动退出和错误路由功能合并入主分支，确保系统地基稳固。
 
 ### 评论
-这是“确定性构建”的关键一步。通过给予错误（Error）和信号（Signal）物理实体（Token）的地位，我们将控制流问题转化为了数据流问题，从而复用了现有的拓扑路由机制。微观测试将成为未来所有 VM 变更的基准（Baseline）。
+这次重构彻底解决了此前“假死”和“隐式命名依赖”的根本问题。通过显式的 `CompilationManifest`，我们将 Strategy 与 Compiler 的耦合从代码层面提升到了数据结构层面；通过信号驱动机制，我们让 VM 的行为变得完全可预测。
 
 ### 目标
-1.  **增强 `Stainer`**: 修改 `standard_stainer`，使其检测 `result_payload` 是否为 `Exception`。如果是且节点定义了 `output_error` 端口，则将 Token 路由至该端口。
-2.  **创建微观测试套件**: 新建 `tests/unit/vm/physics/test_micro_physics.py`。
-3.  **验证场景**:
-    *   **The Spark**: 正常的 D->F->D 激发。
-    *   **The Crash**: Worker 失败 -> Stainer 路由到 `D_error`。
-    *   **The Halt**: 触发 `F_halt` -> 生成 `HALT` 信号 -> Reactor 停止位被置位。
+1.  提交 `CompilationManifest` 及其相关的编译器（Frontend/Backend）变更。
+2.  提交 `Linker` 的完整性校验逻辑及其单元测试。
+3.  提交 `Machine` 的信号驱动循环和 `Reactor` 的控制信号拦截机制。
+4.  提交 `Stainer` 的错误流路由逻辑。
+5.  提交全新的微观物理验证测试套件。
 
 ### 基本原理
--   **Exception as Data**: 在物理层，异常只是另一种数据载体。Stainer 作为“分类器”，负责将这种数据分流。
--   **Unit Physics**: 就像测试电路板上的单个晶体管一样，我们需要在不运行整个操作系统（Machine/ComputeService）的情况下测试 Reactor 的物理特性。
+按照 HFEA 协议，我们拒绝了对“假死”问题的战术修补，而是选择了回归架构基石进行重演。这些改动虽然涉及面广，但统一了物理层的行为准则，即“一切皆显式，万物皆有迹”。
 
 ### 标签
-#intent/build #intent/test #flow/ready #priority/high
-#comp/runtime #comp/std #concept/error-handling #scope/core
-#task/domain/vm #task/object/reactor #task/action/verification
-#task/state/end
+#intent/refine #flow/ready #priority/critical
+#comp/compiler #comp/engine #comp/runtime #comp/std
+#task/domain/core #task/object/execution-engine #task/action/refactor
+#task/state/end #task/status/completed
 
 ---
 
 ### Script
 
-#### Acts 1: 增强 Stainer 的错误路由能力
+#### Acts 1: 提交确定性重构的所有变更
 
-修改标准库中的 `stainer.py`，实现基于类型的路由分支。
-
-~~~~~act
-patch_file
-packages/cascade-std/src/cascade/std/triad/stainer.py
-~~~~~
-~~~~~python.old
-    ir: EventIR = {
-        "v": "1.0",
-        "t": EventType.LIFECYCLE,
-        "ts": now_wall,
-        "ctx": ctx,
-        "phy": {"nid": node.id},
-        "data": {
-            "state": state,
-            "task_id": logical_id,
-            "task_name": task_name,
-            "duration_ms": duration * 1000,
-            "error": error_msg,
-            "result_preview": preview,
-        },
-    }
-
-    # 4. Create output tokens
-    outputs = {}
-
-    # 4.1 The main result
-    outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
-
-    # 4.2 Observability Event
-    outputs["obs_output"] = Token(payload=ir, trace=trace_payload)
-~~~~~
-~~~~~python.new
-    ir: EventIR = {
-        "v": "1.0",
-        "t": EventType.LIFECYCLE,
-        "ts": now_wall,
-        "ctx": ctx,
-        "phy": {"nid": node.id},
-        "data": {
-            "state": state,
-            "task_id": logical_id,
-            "task_name": task_name,
-            "duration_ms": duration * 1000,
-            "error": error_msg,
-            "result_preview": preview,
-        },
-    }
-
-    # 4. Create output tokens
-    outputs = {}
-
-    # 4.1 The main result (with Error Routing)
-    # If it's an exception AND we have an error port, route it there.
-    # Otherwise, it goes to default (downstream must handle it or crash).
-    if isinstance(result_payload, Exception) and "output_error" in node.output_ports:
-        outputs["output_error"] = Token(payload=result_payload, trace=trace_payload)
-    else:
-        outputs["output_default"] = Token(payload=result_payload, trace=trace_payload)
-
-    # 4.2 Observability Event
-    outputs["obs_output"] = Token(payload=ir, trace=trace_payload)
-~~~~~
-
-#### Acts 2: 创建微观物理测试
-
-创建一个新的测试文件，专门验证 Reactor 的微观行为。
+我们将所有修改的文件添加到暂存区。由于涉及包较多，我们将分包执行 `git_add`，最后统一执行一个内容详尽的 `git_commit`。
 
 ~~~~~act
-run_command
-~~~~~
-~~~~~
-mkdir -p packages/cascade-vm/tests/unit/physics
-touch packages/cascade-vm/tests/unit/physics/__init__.py
+git_add
+packages/cascade-spec/src/cascade/spec/ir/graph.py
+packages/cascade-spec/src/cascade/spec/physical/assembly.py
+packages/cascade-spec/src/cascade/spec/runtime/system.py
 ~~~~~
 
 ~~~~~act
-write_file
+git_add
+packages/cascade-compiler/src/cascade/compiler/frontend/generator.py
+packages/cascade-compiler/src/cascade/compiler/backend/builder.py
+packages/cascade-compiler/tests/unit/backend/test_builder.py
+packages/cascade-compiler/tests/unit/backend/test_builder_environment.py
+packages/cascade-compiler/tests/unit/backend/test_builder_observability.py
+packages/cascade-compiler/tests/integration/test_assembly_purity.py
+packages/cascade-compiler/tests/integration/test_graph_purity.py
+packages/cascade-compiler/tests/integration/test_resource_contention.py
+packages/cascade-compiler/tests/integration/test_sovereign_wiring.py
+packages/cascade-compiler/tests/integration/test_source_node_execution.py
+packages/cascade-compiler/tests/integration/test_ref_architecture.py
+packages/cascade-compiler/tests/integration/test_resource_backpressure.py
+~~~~~
+
+~~~~~act
+git_add
+packages/cascade-vm/src/cascade/vm/linker.py
+packages/cascade-vm/src/cascade/vm/reactor.py
+packages/cascade-vm/src/cascade/vm/machine.py
+packages/cascade-vm/tests/unit/test_linker.py
+packages/cascade-vm/tests/integration/test_machine_integration.py
 packages/cascade-vm/tests/unit/physics/test_micro_physics.py
 ~~~~~
-~~~~~python
-import pytest
-import asyncio
-from typing import Dict, Any
 
-from cascade.spec.physical.nodes import Token, PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.triad import StainNode
-from cascade.spec.runtime.system import SystemControlToken, ControlCommand
-from cascade.vm.memory import VolatileMemory
-from cascade.vm.reactor import Reactor
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.system.terminator import halt_signal
+~~~~~act
+git_add
+packages/cascade-std/src/cascade/std/triad/stainer.py
+packages/cascade-std/src/cascade/std/system/terminator.py
+packages/cascade-std/src/cascade/std/system/drainer.py
+~~~~~
 
+~~~~~act
+git_commit
+~~~~~
+~~~~~text
+refactor(core): Establish deterministic foundation for VM execution
 
-# --- Mocks ---
+This commit completes the "Phase 3-Reset" architectural reconstruction,
+replacing implicit assumptions and heuristic-based logic with explicit
+contracts and signal-driven lifecycles.
 
-def mock_worker_success(inputs, node, resources):
-    return {"worker_result": Token(payload="Success")}
+Key components:
 
-def mock_worker_failure(inputs, node, resources):
-    return {"worker_result": Token(payload=ValueError("Boom!"))}
+1.  **Compilation Manifest**: 'Builder.build' now returns a 'CompilationArtifact'
+    containing a 'CompilationManifest'. This manifest explicitly maps logical
+    UUIDs (from LazyResult) to physical Node IDs, eliminating the need for
+    the Strategy layer to guess physical IDs.
 
-# --- Tests ---
+2.  **Linker Integrity Check**: The Linker now performs a mandatory pre-run
+    validation, ensuring all code hashes referenced in the physical Assembly
+    exist in the CodeRegistry. Failure to link now results in a descriptive
+    'LinkerError' before the VM starts.
 
-@pytest.mark.asyncio
-async def test_physics_the_spark():
-    """
-    Case 1: The Spark.
-    Verify that a single token correctly triggers a function and produces a result.
-    Conservation of Energy: 1 Token In -> 1 Token Out (consumed and emitted).
-    """
-    d_in = PhysicsDataNode(id="D_in", name="Input", initial_tokens=1, initial_payload="Spark")
-    f_node = PhysicsFuncNode(
-        id="F_proc",
-        name="Processor",
-        input_ports={"in": PortDef("in", PortRole.DATA)},
-        output_ports={"out": PortDef("out", PortRole.DATA)}
-    )
-    d_out = PhysicsDataNode(id="D_out", name="Output")
+3.  **Signal-Driven Lifecycle**: Introduced 'SystemControlToken' and 'ControlCommand'.
+    The 'Machine' run loop has been refactored to stop only upon receiving an
+    explicit HALT/DRAIN signal or a critical error, replacing the fragile
+    'idle-exit' mechanism that caused premature shutdowns.
 
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d_in, f_node, d_out]}
-    
-    # Wiring
-    graph.channels.append(Channel(d_in.id, "out", f_node.id, "in"))
-    graph.channels.append(Channel(f_node.id, "out", d_out.id, "in"))
+4.  **Error-as-Data Routing**: The 'standard_stainer' now implements sovereign
+    routing for exceptions. If a worker fails, the exception is encapsulated
+    as a Token and routed to the 'output_error' port (if defined), preserving
+    energy conservation laws in the physical field.
 
-    # Logic: Simple identity
-    def identity(inputs, node, res):
-        return {"out": inputs["in"]}
+5.  **Micro-Physics Verification**: Added a specialized test suite to verify
+    fundamental physics laws (The Spark, The Crash, The Halt) without
+    business logic overhead.
 
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory, {f_node.id: identity})
-    reactor.prime()
-
-    # Action
-    fired = reactor.step()
-
-    # Verification
-    assert fired == 1
-    assert memory.get_count(d_in.id) == 0  # Consumed
-    assert memory.get_count(d_out.id) == 1 # Produced
-    assert memory.take(d_out.id).payload == "Spark"
-
-
-@pytest.mark.asyncio
-async def test_physics_the_crash():
-    """
-    Case 2: The Crash.
-    Verify that an exception payload is correctly routed to the error port
-    by the Standard Stainer.
-    """
-    # Topology: D_in -> Stainer -> (D_ok, D_err)
-    # We simulate the stainer receiving a failed result from a worker
-    
-    d_res = PhysicsDataNode(id="D_res", name="WorkerResult") # Holds the Exception
-    d_trace = PhysicsDataNode(id="D_trace", name="TraceCtx")
-    
-    f_stain = StainNode(
-        id="F_stain",
-        name="Stainer",
-        input_ports={
-            "worker_result": PortDef("worker_result", PortRole.DATA),
-            "trace_input": PortDef("trace_input", PortRole.DATA)
-        },
-        output_ports={
-            "output_default": PortDef("output_default", PortRole.DATA),
-            "output_error": PortDef("output_error", PortRole.DATA), # Sovereign Port
-            "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY)
-        }
-    )
-    
-    d_ok = PhysicsDataNode(id="D_ok", name="SuccessPath")
-    d_err = PhysicsDataNode(id="D_err", name="ErrorPath")
-    d_obs = PhysicsDataNode(id="global.observability.bus", name="Bus", capacity=100)
-
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d_res, d_trace, f_stain, d_ok, d_err, d_obs]}
-
-    # Wiring
-    graph.channels.append(Channel(d_res.id, "out", f_stain.id, "worker_result"))
-    graph.channels.append(Channel(d_trace.id, "out", f_stain.id, "trace_input"))
-    
-    graph.channels.append(Channel(f_stain.id, "output_default", d_ok.id, "in"))
-    graph.channels.append(Channel(f_stain.id, "output_error", d_err.id, "in"))
-    graph.channels.append(Channel(f_stain.id, "obs_output", d_obs.id, "in"))
-
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory, {f_stain.id: standard_stainer})
-    
-    # Inject Fault
-    memory.put(d_res, Token(payload=ValueError("Micro-Physics Failure")))
-    memory.put(d_trace, Token(payload={"rid": "test-crash"}))
-
-    # Action
-    fired = reactor.step()
-
-    # Verification
-    assert fired == 1
-    
-    # 1. Error Path should be active
-    assert memory.get_count(d_err.id) == 1
-    err_token = memory.take(d_err.id)
-    assert isinstance(err_token.payload, ValueError)
-    
-    # 2. Success Path should be empty (Sovereign Routing)
-    assert memory.get_count(d_ok.id) == 0
-
-
-@pytest.mark.asyncio
-async def test_physics_the_halt():
-    """
-    Case 3: The Halt.
-    Verify that a SystemControlToken generated by a node correctly sets
-    the Reactor's shutdown event.
-    """
-    d_trig = PhysicsDataNode(id="D_trig", name="Trigger", initial_tokens=1)
-    f_halt = PhysicsFuncNode(
-        id="F_halt",
-        name="Terminator",
-        input_ports={"in": PortDef("in", PortRole.DATA)},
-        output_ports={"out": PortDef("out", PortRole.DATA)}
-    )
-    
-    # Note: F_halt output is usually not wired to a DataNode in user graphs,
-    # but for physics validity, it emits a token. Reactor intercepts it.
-    # We wire it to a dummy node just to satisfy graph validity if needed,
-    # though Reactor intercepts ControlTokens before putting them in memory.
-    d_void = PhysicsDataNode(id="D_void", name="Void")
-
-    graph = BipartiteGraph()
-    graph.nodes = {n.id: n for n in [d_trig, f_halt, d_void]}
-    
-    graph.channels.append(Channel(d_trig.id, "out", f_halt.id, "in"))
-    graph.channels.append(Channel(f_halt.id, "out", d_void.id, "in"))
-
-    memory = VolatileMemory()
-    reactor = Reactor(graph, memory, {f_halt.id: halt_signal})
-    reactor.prime()
-
-    # Pre-condition
-    assert not reactor.shutdown_event.is_set()
-
-    # Action
-    fired = reactor.step()
-
-    # Verification
-    assert fired == 1
-    
-    # The Reactor should have intercepted the HALT signal
-    assert reactor.shutdown_event.is_set()
-    
-    # The D_void node should represent the fact that the token was 'intercepted' or processed?
-    # Actually, Reactor._handle_results_immediate does:
-    # 1. Check Control Signal
-    # 2. Handle Sinks
-    # 3. Handle Outbound Channels
-    # Current implementation does NOT stop propagation if control signal is found.
-    # So D_void might still get the token.
-    # Let's check implementation details:
-    # It calls _handle_control_signal but continues to loop over channels.
-    # So the SystemControlToken physically travels to D_void too.
-    assert memory.get_count(d_void.id) == 1
-    token = memory.take(d_void.id)
-    assert isinstance(token.payload, SystemControlToken)
-    assert token.payload.command == ControlCommand.HALT
+This refactoring provides the rock-solid ground required for implementing
+complex dynamic features like cs.Router and cs.Map.
 ~~~~~
 
 ### 下一步建议
-我们已经完成了编译器、链接器、VM 信号机制以及微观物理验证的全面重构。
-现在，系统的核心已经建立在确定性的基础之上。
+我们已经完成了地基重写。接下来的路线将非常顺畅。
+按照原始的阶段规划，我们应该重新回到 **Stage 3: 高级 DSL 能力**。
+由于现在的物理层已经支持了主权路由（Sovereign Routing）和信号机制，实现 **`cs.Router`** 将变得非常直观。
 
-**建议**:
-1.  **运行所有测试**: 确保 `tests/unit/physics` 以及之前修复的集成测试全部通过。
-2.  如果测试全部通过，我们就可以安全地**合并**这个重构分支（在思维模型中），并重新开始考虑 Stage 3 的功能开发（如 Router, Map），因为现在我们有了坚实的地基。
+我建议下一步开始实现 `cs.Router` 的编译器前端生成逻辑。

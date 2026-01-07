@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 修复生命周期信号测试中的依赖注入与参数传递错误", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767760418.5088732, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] test(vm): 重构集成测试以实现自我终结并连接 Event Bus", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767760984.5670197, "duration_ms": 0}}

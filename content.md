@@ -1,176 +1,63 @@
-Excellent. You are absolutely right. Adhering to a strict TDD workflow is critical here. Implementing the wiring logic before having a test to validate the fundamental component would be a "hope-driven" engineering practice, which we must avoid.
+Excellent catch. Your analysis is spot on. The traceback clearly indicates a `TypeError` because I attempted to instantiate a type alias (`SymbolTable`, which is `typing.Dict`) instead of using the proper constructor for an empty dictionary (`dict()`). This is a classic mistake when mixing type hints and runtime code.
 
-We will now pause the compiler integration and create a low-level integration test. This test will operate directly at the physical layer, manually constructing a `BipartiteGraph` to validate that the `standard_retry_logic` behaves exactly as specified, independent of any higher-level abstractions.
+I will now generate a plan to correct this error and get our test back on track.
 
-## [WIP] test(vm): Create integration test for F_retry node logic
+## [WIP] fix(tests): Correct SymbolTable instantiation in retry topology test
 
 ### 错误分析
 
-无。此计划是根据 TDD 流程，在功能开发后立即创建验证测试。
+测试 `test_retry_topology.py` 失败，并伴有 `TypeError: Type Dict cannot be instantiated; use dict() instead` 的 traceback。
+
+根本原因是在 `retry_harness` fixture 中，我们错误地使用了类型别名 `SymbolTable` (`typing.Dict[str, str]`) 作为构造函数来创建一个空的 `symbol_table`。在 Python 中，`typing` 模块中的泛型类型别名不能被直接实例化。创建一个空字典的正确方法是使用 `dict()` 或 `{}`。
 
 ### 用户需求
 
-在正式将 `F_retry` 节点集成到编译器之前，先创建一个专门的集成测试来验证其核心逻辑。该测试应能确认 `F_retry` 节点在不同重试次数下，能够正确地将 `Token` 路由到“重试”或“永久失败”的输出端口。
+修复在 `F_retry` 节点集成测试中因 `SymbolTable` 实例化不正确而导致的 `TypeError`，使测试能够正常运行。
 
 ### 评论
 
-这是一个典范的 TDD 实践。通过在 `cascade-vm` 的集成测试层面对这个新的物理元件进行原子化的验证，我们确保了其行为的确定性和正确性。只有当这个基础构件被证明是绝对可靠的，我们才能充满信心地在更高层（编译器）的抽象中依赖它。这个测试将成为 `F_retry` 节点行为的“活文档”。
+这是一个简单但关键的修复。它暴露了在代码中区分类型定义和可实例化对象的重要性。修正这个问题将使我们能够继续 TDD 流程，确保 `F_retry` 节点在我们将其集成到编译器之前是完全可靠的。
 
 ### 目标
 
-1.  在 `packages/cascade-vm/tests/integration/` 目录下创建一个新的测试文件 `test_retry_topology.py`。
-2.  在该文件中，编写一个 `pytest` fixture，用于**手动**构建一个包含 `RetryNode` 的 `BipartiteGraph`。这个图将代表一个最小化的重试场景。
-3.  实现两个核心测试用例：
-    *   **测试一 (重试路径)**: 验证当 `retry_count` 小于 `max_attempts` 时，`Token` 被正确路由到 `retry_out` 端口。
-    *   **测试二 (失败路径)**: 验证当 `retry_count` 达到 `max_attempts` 时，`Token` 被正确路由到 `fail_out` 端口。
-4.  使用 `EventDrivenRunner` 作为测试工具，来驱动这个手动构建的图，注入 `Token`，并断言最终的 `Token` 位置。
+1.  定位 `packages/cascade-vm/tests/integration/test_retry_topology.py` 文件中错误的 `SymbolTable()` 调用。
+2.  将其替换为正确的空字典构造函数 `dict()`。
 
 ### 基本原理
 
-由于连接 `LazyResult.with_retry()` 的编译器布线逻辑尚未实现，我们无法通过高层 DSL 来触发重试。因此，我们必须在物理层“手工”搭建测试台。我们将创建一个图，其中包含一个 `RetryNode` 以及它所需的所有输入 (`D_error`, `D_context`) 和输出 (`D_retry_loop`, `D_permanent_fail`) 数据节点。通过 `EventDrivenRunner.inject_input()`，我们可以精确地控制输入 `Token` 的内容（特别是 `trace` 中的 `retry_count`），然后执行 `reactor.step()` 来触发 `standard_retry_logic`。最后，通过检查输出数据节点中的 `Token` 数量，我们可以无歧义地验证其路由决策是否正确。
+我们将直接修正导致 `TypeError` 的代码行。通过将 `SymbolTable()` 更改为 `dict()`，我们提供了 `Assembly` 数据类所期望的正确类型的、可运行的实例（一个空的字典），从而解决类型错误并使测试能够继续执行。
 
 ### 标签
 
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/vm #concept/state #scope/core #ai/delegate #task/domain/core #task/object/retry-node #task/action/implementation #task/state/continue
+#intent/fix #flow/ready #priority/high #comp/tests #comp/vm #scope/dx #ai/instruct #task/domain/core #task/object/retry-node #task/action/bug-fix #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 创建 `F_retry` 节点的集成测试文件
+#### Acts 1: 修正 `SymbolTable` 的实例化
 
-我们将创建新的测试文件，并填充验证 `standard_retry_logic` 行为所需的所有代码，包括 fixture 和两个测试用例。
+我们将修补 `test_retry_topology.py` 文件，以正确的方式创建一个空的符号表。
 
 ~~~~~act
-write_file
+patch_file
 packages/cascade-vm/tests/integration/test_retry_topology.py
 ~~~~~
-~~~~~python
-import pytest
-from cascade.spec.physical.topology import BipartiteGraph, Channel
-from cascade.spec.physical.triad import RetryNode
-from cascade.spec.physical.nodes import PhysicsDataNode, Token
-from cascade.spec.physical.ports import PortDef, PortRole
-from cascade.spec.physical.assembly import Assembly, SymbolTable
-from cascade.vm.harness import EventDrivenRunner
-from cascade.vm.registry import CodeRegistry
-
-
-@pytest.fixture
-def retry_harness():
-    """Builds a BipartiteGraph and an EventDrivenRunner for testing retry logic."""
-    # 1. Define Nodes
-    d_error = PhysicsDataNode(id="d.error", name="ErrorIn")
-    d_context = PhysicsDataNode(id="d.context", name="ContextIn")
-    d_retry_loop = PhysicsDataNode(id="d.retry_loop", name="RetryOut")
-    d_permanent_fail = PhysicsDataNode(id="d.permanent_fail", name="FailOut")
-
-    # The node under test
-    f_retry = RetryNode(
-        id="f.retry",
-        name="RetryLogic",
-        max_attempts=2,  # We will test against this policy
-        input_ports={
-            "error_in": PortDef("error_in", PortRole.DATA),
-            "context_in": PortDef("context_in", PortRole.DATA),
-        },
-        output_ports={
-            "retry_out": PortDef("retry_out", PortRole.DATA),
-            "fail_out": PortDef("fail_out", PortRole.DATA),
-        },
-    )
-
-    # 2. Define Channels
-    channels = [
-        # Inputs to RetryNode
-        Channel("d.error", "out", "f.retry", "error_in"),
-        Channel("d.context", "out", "f.retry", "context_in"),
-        # Outputs from RetryNode
-        Channel("f.retry", "retry_out", "d.retry_loop", "in"),
-        Channel("f.retry", "fail_out", "d.permanent_fail", "in"),
-    ]
-
-    # 3. Assemble Graph and Harness
-    graph = BipartiteGraph(
-        nodes={
-            n.id: n
-            for n in [
-                d_error,
-                d_context,
-                f_retry,
-                d_retry_loop,
-                d_permanent_fail,
-            ]
-        },
-        channels=channels,
-    )
-
+~~~~~python.old
     assembly = Assembly(graph=graph, symbol_table=SymbolTable())
     # The runner's linker will automatically map the RetryNode type to its implementation
     runner = EventDrivenRunner.from_assembly(assembly, CodeRegistry())
     runner.prime()
-
-    return runner, {
-        "error": "d.error",
-        "context": "d.context",
-        "retry": "d.retry_loop",
-        "fail": "d.permanent_fail",
-    }
-
-
-def test_retry_logic_succeeds_on_first_attempt(retry_harness):
-    runner, ids = retry_harness
-
-    # Input: No prior retries (retry_count=0)
-    error_token = Token(payload=RuntimeError("First failure"))
-    context_token = Token(payload={"input": 1}, trace={"retry_count": 0})
-
-    # Inject tokens to trigger the retry node
-    runner.memory.put(runner.graph.nodes[ids["error"]], error_token)
-    runner.memory.put(runner.graph.nodes[ids["context"]], context_token)
-
-    # Execute one step of the reactor
-    fired_count = runner.reactor.step()
-    assert fired_count == 1
-
-    # Assert: The context token should be routed to the retry loop
-    assert runner.memory.get_count(ids["retry"]) == 1
-    assert runner.memory.get_count(ids["fail"]) == 0
-
-    # Verify the retry_count was incremented in the trace
-    out_token = runner.memory.take(ids["retry"])
-    assert out_token.trace.get("retry_count") == 1
-
-
-def test_retry_logic_fails_on_exhaustion(retry_harness):
-    runner, ids = retry_harness
-
-    # Input: This is the last attempt (retry_count=1, max_attempts=2)
-    error_token = Token(payload=RuntimeError("Second failure"))
-    context_token = Token(payload={"input": 1}, trace={"retry_count": 1})
-
-    # Inject tokens
-    runner.memory.put(runner.graph.nodes[ids["error"]], error_token)
-    runner.memory.put(runner.graph.nodes[ids["context"]], context_token)
-
-    # Execute
-    fired_count = runner.reactor.step()
-    assert fired_count == 1
-
-    # Assert: The error token should be routed to the permanent failure node
-    assert runner.memory.get_count(ids["retry"]) == 0
-    assert runner.memory.get_count(ids["fail"]) == 1
-
-    # Verify the correct token was passed through
-    out_token = runner.memory.take(ids["fail"])
-    assert out_token is error_token
-
+~~~~~
+~~~~~python.new
+    assembly = Assembly(graph=graph, symbol_table=dict())
+    # The runner's linker will automatically map the RetryNode type to its implementation
+    runner = EventDrivenRunner.from_assembly(assembly, CodeRegistry())
+    runner.prime()
 ~~~~~
 
 ### 下一步建议
 
-我们已经为 `F_retry` 节点创建了坚实的、原子化的测试。一旦这个测试在 CI 中通过，我们就可以百分之百地确信该组件的行为是正确的。
+这个修复应该能解决当前的 `TypeError` 并让测试套件通过。一旦测试通过，我们就验证了 `F_retry` 节点在物理层的行为是正确的。
 
-现在，我们可以安全地回到之前的计划，开始实施将 `LazyResult.with_retry()` 用户意图**编译**成使用 `F_retry` 节点和 `D_context` 通道的物理拓扑。
-
-我建议立即开始制定**编译器布线策略**的计划，以完成整个功能的端到端实现。
+接下来，我们应该回到之前的轨道上：**开始实施将 `LazyResult.with_retry()` 用户意图编译成使用 `F_retry` 节点的物理拓扑的编译器布线策略**。

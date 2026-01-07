@@ -57,7 +57,7 @@ def retry_harness():
         channels=channels,
     )
 
-    assembly = Assembly(graph=graph, symbol_table=SymbolTable())
+    assembly = Assembly(graph=graph, symbol_table=dict())
     # The runner's linker will automatically map the RetryNode type to its implementation
     runner = EventDrivenRunner.from_assembly(assembly, CodeRegistry())
     runner.prime()

@@ -4,7 +4,7 @@
 
 ### 📝 变更文件摘要:
 ```
-.../tests/integration/test_resource_contention.py  | 319 ---------------------
- .../tests/integration/test_resource_contention.py  | 319 +++++++++++++++++++++
- 2 files changed, 319 insertions(+), 319 deletions(-)
+.../integration/test_source_node_execution.py      | 79 ----------------------
+ .../integration/test_source_node_execution.py      | 79 ++++++++++++++++++++++
+ 2 files changed, 79 insertions(+), 79 deletions(-)
 ```

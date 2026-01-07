@@ -5,5 +5,10 @@
   "Assembly.graph": {},
   "Assembly.metadata": {},
   "Assembly.symbol_table": {},
+  "CompilationArtifact": {},
+  "CompilationArtifact.assembly": {},
+  "CompilationArtifact.manifest": {},
+  "CompilationManifest": {},
+  "CompilationManifest.logical_to_physical_map": {},
   "SymbolTable": {}
 }

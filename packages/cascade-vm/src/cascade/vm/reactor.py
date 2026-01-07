@@ -25,7 +25,7 @@ class Reactor:
         self.function_map = function_map
         self.resource_registry = resource_registry or ResourceRegistry()
         self.ingress_queue = ingress_queue
-        
+
         # Lifecycle Signals
         self.shutdown_event = asyncio.Event()
 
@@ -157,7 +157,7 @@ class Reactor:
         for port_name, token in results.items():
             if token is None:
                 continue
-            
+
             # 0. Intercept System Control Tokens
             if isinstance(token.payload, SystemControlToken):
                 self._handle_control_signal(token.payload)

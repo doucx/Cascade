@@ -3,3 +3,7 @@
   It produces the function_map required by the Reactor.
 "Linker._resolve_stdlib": |-
   Resolves infrastructure nodes to standard library implementations.
+"Linker._verify_integrity": |-
+  Ensures all required code hashes in the assembly exist in the registry.
+"LinkerError": |-
+  Raised when linking fails due to missing code implementations.

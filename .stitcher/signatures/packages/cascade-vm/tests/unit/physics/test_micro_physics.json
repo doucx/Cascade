@@ -1,0 +1,25 @@
+{
+  "mock_worker_failure": {
+    "baseline_code_signature_text": "def mock_worker_failure(inputs, node, resources):",
+    "baseline_code_structure_hash": "240c1283a27afa81351fdc6996b0ce6661145803eacca39187f47c38c6a3ee5d"
+  },
+  "mock_worker_success": {
+    "baseline_code_signature_text": "def mock_worker_success(inputs, node, resources):",
+    "baseline_code_structure_hash": "60d6fa3d0c67312775155b94d3f71fb99a5f07bcbb6564e183a2f26046ded7eb"
+  },
+  "test_physics_the_crash": {
+    "baseline_code_signature_text": "async def test_physics_the_crash():",
+    "baseline_code_structure_hash": "83c601d0239b651b9fc80a9aeffd8d52a60669c055c6a3060033875b2461babb",
+    "baseline_yaml_content_hash": "fbc509eace5c0863f453de7ba684bb4a4c62becebf2d995cd749089c96f91916"
+  },
+  "test_physics_the_halt": {
+    "baseline_code_signature_text": "async def test_physics_the_halt():",
+    "baseline_code_structure_hash": "04c08d4a323ff7153acecff39f1cd48c0014917b626631c65b49176363f855eb",
+    "baseline_yaml_content_hash": "24bbe002a5da704ba56ee798384bb0eaaa74b185f455d86a4415a22a37d45677"
+  },
+  "test_physics_the_spark": {
+    "baseline_code_signature_text": "async def test_physics_the_spark():",
+    "baseline_code_structure_hash": "d74ffe972234416823ea3148e09b16943d6a1f84d452d5bffa6e66616e0f41b2",
+    "baseline_yaml_content_hash": "3fcbde4f34b84b5b9f21f8684910aec3465349333e028859c83a40b787146024"
+  }
+}

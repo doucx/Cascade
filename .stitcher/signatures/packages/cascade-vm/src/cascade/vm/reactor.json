@@ -18,6 +18,10 @@
   "Reactor._func_inputs": {},
   "Reactor._func_nodes": {},
   "Reactor._func_outputs": {},
+  "Reactor._handle_control_signal": {
+    "baseline_code_signature_text": "def _handle_control_signal(self, ctrl: SystemControlToken) -> None:",
+    "baseline_code_structure_hash": "87b18b45f479f1b31491a740d9c6fe82a413957d6d26c164ef170e3071eba94f"
+  },
   "Reactor._handle_results_immediate": {
     "baseline_code_signature_text": "def _handle_results_immediate(self, node: PhysicsFuncNode, results: Dict[str, Token]) -> None:",
     "baseline_code_structure_hash": "23d94744a4516cccb93474394cd0cb9cbf08fccc58d2946dcbd9ec1de3626151"
@@ -48,6 +52,7 @@
     "baseline_yaml_content_hash": "69b0517bce2e4616aec74a482166b7e31e2faab77910dfa8acd08ff3543133fb"
   },
   "Reactor.resource_registry": {},
+  "Reactor.shutdown_event": {},
   "Reactor.sinks": {},
   "Reactor.step": {
     "baseline_code_signature_text": "def step(self) -> int:",

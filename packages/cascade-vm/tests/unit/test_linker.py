@@ -1,5 +1,4 @@
 import pytest
-from typing import Callable, Dict
 
 from cascade.spec.physical.assembly import Assembly, SymbolTable
 from cascade.spec.physical.topology import BipartiteGraph

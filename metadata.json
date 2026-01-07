@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(vm): 迁移集成测试以使用 Linker 校验的 Runner", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767761348.5801113, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: D test_resource_contention.py, A test_resource_contention.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767761458.4152107, "duration_ms": 0}}

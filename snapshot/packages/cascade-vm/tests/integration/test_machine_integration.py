@@ -155,7 +155,7 @@ async def test_machine_runs_cross_jurisdiction_flow():
                 reactor.shutdown_event.set()
                 break
             await asyncio.sleep(0.01)
-    
+
     # Run observer and machine concurrently
     observer_task = asyncio.create_task(stop_when_done())
     await machine.run()

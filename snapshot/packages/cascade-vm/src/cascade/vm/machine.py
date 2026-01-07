@@ -40,14 +40,14 @@ class Machine:
                     # Check if there is pending ingress work not yet processed?
                     # Reactor.step() handles ingress, so if fired_count is 0,
                     # it means ingress was empty or didn't trigger any firing.
-                    
-                    # We can sleep a bit longer to be nice to the CPU, 
+
+                    # We can sleep a bit longer to be nice to the CPU,
                     # but check ingress_queue emptiness to be responsive.
                     if not self.ingress_queue.empty():
-                         await asyncio.sleep(0)
+                        await asyncio.sleep(0)
                     else:
-                         # Truly idle loop
-                         await asyncio.sleep(0.001)
+                        # Truly idle loop
+                        await asyncio.sleep(0.001)
 
             logger.info("Machine shutdown signal received.")
 

@@ -93,7 +93,7 @@ async def test_machine_e2e_integration():
         if nid.endswith(".bleach"):
             func_map[nid] = standard_bleacher
         elif nid.endswith(".stain"):
-            func_map[node_id := nid] = standard_stainer
+            func_map[nid] = standard_stainer
         elif nid.endswith(".worker"):
             # Crucial: Map workers to the dispatcher, NOT the user function
             func_map[nid] = standard_dispatcher

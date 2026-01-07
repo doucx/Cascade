@@ -10,7 +10,7 @@
   "Builder._policies": {},
   "Builder._validator": {},
   "Builder.build": {
-    "baseline_code_signature_text": "def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> Assembly:",
-    "baseline_code_structure_hash": "9e46b77548ff4252c21408eb0de9bb77120a4c1d30cca6551bd97aceb93c1935"
+    "baseline_code_signature_text": "def build(self, graph_ir: GraphIR, environment: EnvironmentDef) -> CompilationArtifact:",
+    "baseline_code_structure_hash": "60239dd10f9bbb76eeb5e85f6b3a90e972275767c00a69b95a51d805db89bed4"
   }
 }

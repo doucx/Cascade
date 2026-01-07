@@ -17,8 +17,6 @@ from cascade.std.system.egress import standard_egress
 
 
 class LinkerError(RuntimeError):
-    """Raised when linking fails due to missing code implementations."""
-
     pass
 
 
@@ -49,7 +47,6 @@ class Linker:
         return function_map
 
     def _verify_integrity(self, assembly: Assembly, registry: CodeRegistry) -> None:
-        """Ensures all required code hashes in the assembly exist in the registry."""
         missing_hashes = {
             code_hash
             for code_hash in assembly.symbol_table.values()

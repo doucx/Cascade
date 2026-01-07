@@ -7,9 +7,17 @@
     "baseline_code_structure_hash": "772518e4c07a771eb5018a5ece6f1a076a7405ff221cb5de3aac621784b0dab4",
     "baseline_yaml_content_hash": "c2ee8f7ab2e39ba8655e2786c496b41c730a2258fa63e75f2063caa7a00360fd"
   },
+  "Linker._verify_integrity": {
+    "baseline_code_signature_text": "def _verify_integrity(self, assembly: Assembly, registry: CodeRegistry) -> None:",
+    "baseline_code_structure_hash": "745f6c877dcf42b3cc97c35a00eefb85a59c4c4efa441aa903e295a15cc16a29",
+    "baseline_yaml_content_hash": "e91a9b2f96949176ae2be5747f9ed0c8f06e2287edf9151654d5af196dcf0ae5"
+  },
   "Linker.link": {
     "baseline_code_signature_text": "def link(self, assembly: Assembly, registry: CodeRegistry) -> Dict[str, Callable]:",
     "baseline_code_structure_hash": "c61445a9436de954c6d6636a146930bb84be84b6a6d5132192464d9ba0e7ad9d"
+  },
+  "LinkerError": {
+    "baseline_yaml_content_hash": "1b26ea246103aa88c46dedc46384f84990cc0358132035a40a58b0d251a2927b"
   },
   "_make_worker_wrapper": {
     "baseline_code_signature_text": "def _make_worker_wrapper(func: Callable) -> Callable:",

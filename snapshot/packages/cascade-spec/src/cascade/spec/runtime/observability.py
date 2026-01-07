@@ -11,12 +11,12 @@ class EventType(StrEnum):
 
 
 class EventState(StrEnum):
-    PENDING = "pending"
-    RUNNING = "running"
-    SUCCEEDED = "succeeded"
-    FAILED = "failed"
-    SKIPPED = "skipped"
-    CANCELLED = "cancelled"
+    PENDING = "Pending"
+    RUNNING = "Running"
+    SUCCEEDED = "Succeeded"
+    FAILED = "Failed"
+    SKIPPED = "Skipped"
+    CANCELLED = "Cancelled"
 
 
 class PhysicalAnchor(TypedDict):

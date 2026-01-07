@@ -14,6 +14,7 @@ from cascade.runtime.services.observability.events import (
     TaskExecutionStarted,
     TaskExecutionFinished,
 )
+from cascade.spec.runtime.observability import EventState
 
 
 @task
@@ -114,7 +115,7 @@ async def test_sentry_parks_and_releases_correctly():
             e for e in runner._captured_events if isinstance(e, TaskExecutionFinished)
         ]
         assert len(finished_events) == 2
-        assert all(e.status == "Succeeded" for e in finished_events)
+        assert all(e.status is EventState.SUCCEEDED for e in finished_events)
 
     finally:
         await runner.stop_loop()

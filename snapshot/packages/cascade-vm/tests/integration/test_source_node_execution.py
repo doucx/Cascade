@@ -7,6 +7,7 @@ from cascade.spec.physical.environment import EnvironmentDef
 from cascade.vm.harness import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.runtime.services.observability.events import TaskExecutionFinished
+from cascade.spec.runtime.observability import EventState
 
 
 @task
@@ -46,7 +47,7 @@ async def test_source_node_is_triggered_by_pulse():
         )
 
         assert isinstance(completion_event, TaskExecutionFinished)
-        assert completion_event.status == "Succeeded"
+        assert completion_event.status is EventState.SUCCEEDED
         assert completion_event.task_id == node_ir.current_node_instance_hash
 
         # The result preview is now a Ref. To verify the content, we need to

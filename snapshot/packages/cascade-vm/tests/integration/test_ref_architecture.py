@@ -7,6 +7,7 @@ from cascade.spec.physical.environment import EnvironmentDef
 from cascade.vm.harness import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.runtime.services.observability.events import TaskExecutionFinished
+from cascade.spec.runtime.observability import EventState
 
 
 # --- User-defined tasks for the test ---
@@ -68,7 +69,7 @@ async def test_full_ref_based_e2e_flow():
 
         # 8. Assertions
         assert isinstance(completion_event, TaskExecutionFinished)
-        assert completion_event.status == "Succeeded"
+        assert completion_event.status is EventState.SUCCEEDED
         assert completion_event.task_id == final_task_id
 
         # The most important check: verify the final computed value.

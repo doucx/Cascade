@@ -13,11 +13,13 @@ class Machine:
         self,
         reactor: Reactor,
         compute_service: LocalComputeService,
-        ingress_queue: "asyncio.Queue[Tuple[str, Token]]",
+        wakeup_event: asyncio.Event,
     ):
         self.reactor = reactor
         self.compute_service = compute_service
-        self.ingress_queue = ingress_queue
+        self.wakeup_event = wakeup_event
+        # We can get the queue from the reactor, which is the canonical consumer
+        self.ingress_queue = reactor.ingress_queue
 
     async def run(self) -> None:
         logger.info("Machine started.")
@@ -47,14 +49,20 @@ class Machine:
                             self.reactor.shutdown_event.set()
                             continue
 
-                    # 3. Adaptive Throttling
-                    if fired_count > 0:
+                    # 3. Adaptive Throttling / Waiting
+                    if fired_count > 0 or (
+                        self.ingress_queue and not self.ingress_queue.empty()
+                    ):
+                        # If physics fired or ingress is pending, yield but loop again immediately.
                         await asyncio.sleep(0)
                     else:
-                        if not self.ingress_queue.empty():
-                            await asyncio.sleep(0)
-                        else:
-                            await asyncio.sleep(0.001)
+                        # System is physically idle. Wait for new ingress.
+                        try:
+                            # Use a timeout to periodically re-check for drain completion
+                            await asyncio.wait_for(self.wakeup_event.wait(), timeout=0.1)
+                            self.wakeup_event.clear()
+                        except asyncio.TimeoutError:
+                            pass  # Loop again to check state
 
                 except Exception as e:
                     logger.critical(f"Machine loop crashed: {e}", exc_info=True)

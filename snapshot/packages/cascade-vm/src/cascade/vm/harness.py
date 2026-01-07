@@ -51,11 +51,13 @@ class EventDrivenRunner:
         from cascade.runtime.storage import InMemoryObjectStore
 
         self.object_store = InMemoryObjectStore()
+        self.wakeup_event = asyncio.Event()
         self.compute_service = LocalComputeService(
             store=self.object_store,
             registry=code_registry,
             inbound_queue=self.compute_queue,
             outbound_queue=self.ingress_queue,
+            wakeup_event=self.wakeup_event,
         )
 
         # 3. Setup Event Bus & Resource Registry
@@ -78,6 +80,10 @@ class EventDrivenRunner:
             self.resource_registry,
             ingress_queue=self.ingress_queue,
         )
+        # The Machine is now a component managed by the harness
+        from cascade.vm.machine import Machine
+
+        self.machine = Machine(self.reactor, self.compute_service, self.wakeup_event)
         self._loop_task: Optional[asyncio.Task] = None
         self._service_task: Optional[asyncio.Task] = None
         self._stop_event = asyncio.Event()
@@ -117,43 +123,24 @@ class EventDrivenRunner:
         if self._loop_task:
             return
         self._stop_event.clear()
-        # Start both the reactor and the compute service as background tasks
-        self._service_task = asyncio.create_task(self.compute_service.run())
-        self._loop_task = asyncio.create_task(self._run_loop())
+        # The machine now manages starting the compute service.
+        self._loop_task = asyncio.create_task(self.machine.run())
 
-    async def _run_loop(self):
-        logger.info("Reactor loop with ingress handling started.")
-        try:
-            while not self._stop_event.is_set():
-                # In v3.1 Phase 4, the Reactor handles ingress internally during step().
-                fired = self.reactor.step()
-                if fired == 0 and self.ingress_queue.empty():
-                    await asyncio.sleep(0.001)
-                else:
-                    # Yield to allow other tasks (like ComputeService) to run
-                    await asyncio.sleep(0)
-        except asyncio.CancelledError:
-            pass
-        except Exception:
-            logger.exception("Reactor loop crashed")
-            raise
+    # The _run_loop is now managed by the Machine, so we can remove it.
+    # async def _run_loop(self): ...
 
     async def stop_loop(self):
-        self._stop_event.set()
-        if self._service_task:
-            self.compute_service.stop()
-            self._service_task.cancel()
-            try:
-                await self._service_task
-            except asyncio.CancelledError:
-                pass
-            self._service_task = None
+        # Trigger shutdown via the reactor's event, which the machine listens for
+        self.reactor.shutdown_event.set()
         if self._loop_task:
-            self._loop_task.cancel()
             try:
-                await self._loop_task
+                # Wait for the machine's run() to finish its cleanup
+                await asyncio.wait_for(self._loop_task, timeout=2.0)
+            except asyncio.TimeoutError:
+                logger.warning("Machine did not shut down cleanly, cancelling task.")
+                self._loop_task.cancel()
             except asyncio.CancelledError:
-                pass
+                pass  # It's already cancelled, that's fine.
             self._loop_task = None
 
     def inject_input(

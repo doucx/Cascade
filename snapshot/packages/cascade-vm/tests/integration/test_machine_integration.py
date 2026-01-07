@@ -131,14 +131,16 @@ async def test_machine_runs_cross_jurisdiction_flow():
     resource_registry.register("system.compute_queue", compute_queue)
 
     # Instantiate Core Components
+    wakeup_event = asyncio.Event()
     reactor = Reactor(graph, memory, function_map, resource_registry, ingress_queue)
     compute_service = LocalComputeService(
         store=object_store,
         registry=code_registry,
         inbound_queue=compute_queue,
         outbound_queue=ingress_queue,
+        wakeup_event=wakeup_event,
     )
-    machine = Machine(reactor, compute_service, ingress_queue)
+    machine = Machine(reactor, compute_service, wakeup_event)
 
     # 2. Prime the System: Inject the initial input data
     initial_value = 10

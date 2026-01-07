@@ -9,6 +9,8 @@
   "CompilationArtifact.assembly": {},
   "CompilationArtifact.manifest": {},
   "CompilationManifest": {},
+  "CompilationManifest.entry_points": {},
+  "CompilationManifest.exit_points": {},
   "CompilationManifest.logical_to_physical_map": {},
   "SymbolTable": {}
 }

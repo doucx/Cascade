@@ -33,16 +33,14 @@ async def user_square(n: int) -> int:
 
 
 # 2. A transparent terminator kernel function
-def transparent_halt(
-    inputs: Dict[str, Token], node, resources
-) -> Dict[str, Token]:
+def transparent_halt(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
     # Pass through the data
     data_token = inputs["in"]
-    
+
     # Emit HALT signal AND pass data
     return {
         "out": data_token,
-        "ctrl": Token(payload=SystemControlToken(command=ControlCommand.HALT))
+        "ctrl": Token(payload=SystemControlToken(command=ControlCommand.HALT)),
     }
 
 
@@ -59,9 +57,9 @@ def build_test_graph() -> BipartiteGraph:
     d_worker_out_id = PhysicalIdGenerator.worker_out_data(base_id)
     d_trace_id = PhysicalIdGenerator.trace_data(base_id)
     f_stain_id = PhysicalIdGenerator.stain_node(base_id)
-    d_out_id = "d_out" # Output of Stainer
+    d_out_id = "d_out"  # Output of Stainer
     f_halt_id = "f_halt"
-    d_final_id = "d_final" # Final output after Halt pass-through
+    d_final_id = "d_final"  # Final output after Halt pass-through
 
     # Node Definitions
     nodes = [
@@ -102,8 +100,8 @@ def build_test_graph() -> BipartiteGraph:
             input_ports={"in": PortDef("in", PortRole.DATA)},
             output_ports={
                 "out": PortDef("out", PortRole.DATA),
-                "ctrl": PortDef("ctrl", PortRole.SIGNAL)
-            }
+                "ctrl": PortDef("ctrl", PortRole.SIGNAL),
+            },
         ),
         PhysicsDataNode(id=d_final_id, name="FinalOutput"),
     ]
@@ -175,7 +173,7 @@ async def test_machine_self_terminating_flow():
         registry=code_registry,
         inbound_queue=compute_queue,
         outbound_queue=ingress_queue,
-        wakeup_event=wakeup_event
+        wakeup_event=wakeup_event,
     )
     machine = Machine(reactor, compute_service, wakeup_event)
 

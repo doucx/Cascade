@@ -1,4 +1,3 @@
-import pytest
 
 from cascade.spec.dsl.task import task
 from cascade.compiler.frontend import IRGenerator
@@ -15,6 +14,7 @@ def add(a: int, b: int) -> int:
 def square(n: int) -> int:
     return n * n
 
+
 @task
 def source():
     return "start"
@@ -25,7 +25,7 @@ def test_manifest_is_populated_correctly():
     # Entry: source(), const 1, const 2
     # Exit: square()
     workflow = square(add(source(), 2))
-    
+
     # We need the logical ID of the root to verify the exit point
     root_logical_id = workflow._uuid
 
@@ -42,15 +42,15 @@ def test_manifest_is_populated_correctly():
     # We expect one pulse node (for source) and one const node (for value 2).
     # The first argument to add() is from source(), not a const.
     assert len(manifest.entry_points) == 2
-    
+
     # Check that entries look correct
     assert any(ep.startswith("pulse.source.") for ep in manifest.entry_points)
     assert any(ep.startswith("const.") for ep in manifest.entry_points)
-    
+
     # 4. Assert Exit Points
     assert len(manifest.exit_points) == 1
     assert root_logical_id in manifest.exit_points
-    
+
     exit_node_id = manifest.exit_points[root_logical_id]
     assert exit_node_id.startswith("egress.")
     assert exit_node_id.endswith(root_logical_id)

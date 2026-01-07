@@ -1,6 +1,5 @@
 import asyncio
 import pytest
-from typing import Dict, Tuple
 
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode, Token
@@ -16,14 +15,17 @@ from cascade.runtime.storage import InMemoryObjectStore
 
 # --- DRAIN Test Helpers ---
 
+
 async def slow_worker_func(n: int) -> int:
     # Sleeps to ensure DRAIN signal arrives while task is active
     await asyncio.sleep(0.1)
     return n * n
 
+
 def drain_trigger_kernel(inputs, node, resources):
     # Emits a DRAIN signal immediately
     return {"out": Token(payload=SystemControlToken(ControlCommand.DRAIN))}
+
 
 def mock_dispatcher_kernel(inputs, node, resources):
     # Dispatches the slow task
@@ -47,11 +49,13 @@ def mock_dispatcher_kernel(inputs, node, resources):
 
 # --- ERROR Test Helpers ---
 
+
 def crashing_kernel(inputs, node, resources):
     raise ValueError("Intentional Kernel Panic")
 
 
 # --- Fixtures ---
+
 
 @pytest.fixture
 def machine_components():
@@ -80,6 +84,7 @@ def machine_components():
 
 
 # --- Tests ---
+
 
 @pytest.mark.asyncio
 async def test_drain_waits_for_active_task(machine_components):
@@ -130,9 +135,9 @@ async def test_drain_waits_for_active_task(machine_components):
     # 3. Wait approx 0.1s for slow task to finish
     # 4. Process result in D_out
     # 5. Detect Quiescence -> Shutdown
-    
+
     await asyncio.wait_for(machine.run(), timeout=1.0)
-    
+
     # Assertions
     assert memory.get_count("D_out") == 1
     assert reactor.shutdown_event.is_set()
@@ -167,6 +172,6 @@ async def test_error_signal_shuts_down_machine(machine_components):
     memory.put(d_err, Token("die"))
 
     await asyncio.wait_for(machine.run(), timeout=1.0)
-    
+
     assert reactor.shutdown_event.is_set()
     # The system should have stopped cleanly despite the exception

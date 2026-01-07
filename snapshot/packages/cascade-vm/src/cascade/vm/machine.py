@@ -1,7 +1,5 @@
 import asyncio
 import logging
-from typing import Tuple
-from cascade.spec.physical.nodes import Token
 from cascade.vm.reactor import Reactor
 from cascade.vm.compute.service import LocalComputeService
 
@@ -59,7 +57,9 @@ class Machine:
                         # System is physically idle. Wait for new ingress.
                         try:
                             # Use a timeout to periodically re-check for drain completion
-                            await asyncio.wait_for(self.wakeup_event.wait(), timeout=0.1)
+                            await asyncio.wait_for(
+                                self.wakeup_event.wait(), timeout=0.1
+                            )
                             self.wakeup_event.clear()
                         except asyncio.TimeoutError:
                             pass  # Loop again to check state

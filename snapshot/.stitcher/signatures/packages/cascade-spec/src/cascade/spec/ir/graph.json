@@ -18,6 +18,7 @@
     "baseline_yaml_content_hash": "1ecffaf6460a4511c2bd35b0e73cb52292dd33d8fd6e6188732876662febb558"
   },
   "GraphIR.nodes": {},
+  "GraphIR.root_logical_ids": {},
   "NodeIR": {
     "baseline_yaml_content_hash": "ac5a306e32ed790fe771a0e4aeed17630ac9088d1df677734bb19c163c78607b"
   },

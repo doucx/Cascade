@@ -1,0 +1,3 @@
+"gate_passthrough": |-
+  A simple gate that requires two inputs (a request and a signal)
+  and passes the request token through.

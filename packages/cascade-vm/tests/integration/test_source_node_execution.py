@@ -8,12 +8,6 @@ from cascade.vm.harness import EventDrivenRunner
 from cascade.vm.registry import CodeRegistry
 from cascade.runtime.services.observability.events import TaskExecutionFinished
 
-# Standard library function imports
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-from cascade.std.triad.dispatcher import standard_dispatcher
-
 
 @task
 def source_task():
@@ -31,7 +25,6 @@ async def test_source_node_is_triggered_by_pulse():
     node_ir = graph_ir.nodes[0]
     artifact = builder.build(graph_ir, EnvironmentDef())
     assembly = artifact.assembly
-    physical_graph = assembly.graph
 
     # 2. Setup Code Registry for the Compute Service
     code_registry = CodeRegistry()
@@ -39,24 +32,11 @@ async def test_source_node_is_triggered_by_pulse():
     canonical_hash = assembly.symbol_table[worker_node_id]
     code_registry.register(canonical_hash, source_task.func)
 
-    # 3. Build the function map for the Reactor
-    func_map = {}
-    for node_id, node in physical_graph.nodes.items():
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
-        elif node_id.endswith(".worker"):
-            # All user workers are now handled by the dispatcher
-            func_map[node_id] = standard_dispatcher
-        elif "observer" in node_id:
-            func_map[node_id] = standard_observer
-
-    # 4. Setup and run the VM using the new Harness
-    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
+    # 3. Setup and run the VM using the new Harness
+    runner = EventDrivenRunner.from_assembly(assembly, code_registry)
     runner.prime()
 
-    # 5. Execute
+    # 4. Execute
     await runner.start_loop()
     try:
         # 6. Assert the result by waiting for the completion event.

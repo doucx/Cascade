@@ -14,6 +14,8 @@ from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
 from cascade.vm.compute import ComputeRequest, LocalComputeService
 from cascade.vm.registry import CodeRegistry
+from cascade.vm.linker import Linker
+from cascade.spec.physical.assembly import Assembly
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +27,18 @@ class EventTimeoutError(TimeoutError):
 
 
 class EventDrivenRunner:
+    @classmethod
+    def from_assembly(
+        cls,
+        assembly: Assembly,
+        code_registry: CodeRegistry,
+        reactor_factory: Optional[Callable[..., ReactorProtocol]] = None,
+    ) -> "EventDrivenRunner":
+        linker = Linker()
+        # This will raise LinkerError if code_registry is missing required hashes
+        function_map = linker.link(assembly, code_registry)
+        return cls(assembly.graph, function_map, code_registry, reactor_factory)
+
     def __init__(
         self,
         graph: BipartiteGraph,

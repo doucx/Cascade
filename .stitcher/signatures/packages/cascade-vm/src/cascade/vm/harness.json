@@ -26,6 +26,11 @@
   "EventDrivenRunner.event_bus": {},
   "EventDrivenRunner.event_queue": {},
   "EventDrivenRunner.executor": {},
+  "EventDrivenRunner.from_assembly": {
+    "baseline_code_signature_text": "def from_assembly(cls, assembly: Assembly, code_registry: CodeRegistry, reactor_factory: Optional[Callable[..., ReactorProtocol]] = None) -> EventDrivenRunner:",
+    "baseline_code_structure_hash": "1c02c00d0423c401ae4def63ae78112f45968288adf49a15cadbb119fca47329",
+    "baseline_yaml_content_hash": "74d43dd3c22da12659b7d65009c83cacbdc9f3c3e4f900d0d1b5845bc7211541"
+  },
   "EventDrivenRunner.function_map": {},
   "EventDrivenRunner.graph": {},
   "EventDrivenRunner.ingress_queue": {},

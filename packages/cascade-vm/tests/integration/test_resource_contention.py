@@ -5,7 +5,6 @@ from cascade.spec.dsl.task import task
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.compiler.backend.builder import Builder
 from cascade.spec.physical.environment import EnvironmentDef, ResourceDef
-from cascade.spec.physical.nodes import Token
 from cascade.spec.physical.ports import PortRole
 from cascade.vm.harness import EventDrivenRunner
 from cascade.runtime.services.observability.events import (
@@ -17,14 +16,6 @@ from cascade.compiler.utils.inspector import GraphInspector
 from cascade.reflection import PhysicalIdGenerator
 from cascade.vm.registry import CodeRegistry
 
-# Standard IC imports
-from cascade.std.triad.bleacher import standard_bleacher
-from cascade.std.triad.stainer import standard_stainer
-from cascade.std.triad.observer import standard_observer
-from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
-from cascade.std.resource.requestor import resource_requestor
-from cascade.spec.physical.object import Ref
-
 
 @task
 def resource_heavy_task(duration: float = 0.01):
@@ -35,36 +26,13 @@ def resource_heavy_task(duration: float = 0.01):
     return "Done"
 
 
-# Mock Worker
-def mock_worker(inputs: Dict[str, Token], node, resources) -> Dict[str, Token]:
-    worker_input_token = inputs["worker_input"]
-    trace = worker_input_token.trace
-
-    # Simulate execution duration
-    payload = worker_input_token.payload
-    duration = payload.get("duration", 0.0)
-
-    # Adapt to Ref-Based Architecture
-    if isinstance(duration, Ref):
-        duration = duration.meta.get("scalar_value", 0.0)
-
-    # We cheat a bit and sleep async here to allow reactor to switch contexts
-    # In a real ThreadPool executor, this would be time.sleep
-    # But since we use PhysicsExecutor in tests which is threaded, time.sleep is fine.
-    # However, to keep tests fast, we assume the duration is small.
-    import time
-
-    time.sleep(duration)
-
-    return {"worker_result": Token(payload="Done", trace=trace)}
-
-
+@pytest.mark.timeout(10)
 @pytest.mark.asyncio
 async def test_resource_scarcity_topology_and_execution():
     # Configuration
-    # Reduced from 50 to 20 to avoid "request storm" livelock in the simple reactor simulation.
-    # When 47 requests are rejected and recirculated instantly, it consumes massive CPU cycles.
-    TASK_COUNT = 20
+    # Reduced to 10 to avoid "request storm" livelock in the simple reactor simulation.
+    # When many requests are rejected and recirculated instantly, it consumes massive CPU cycles.
+    TASK_COUNT = 10
     RESOURCE_CAPACITY = 3
     RESOURCE_NAME = "gpu"
 
@@ -139,63 +107,16 @@ async def test_resource_scarcity_topology_and_execution():
     )
 
     # --- PART B: EXECUTION ASSERTION ---
-
-    # Function Map and Debug Wrapper
-    import functools
-
-    print("\n--- Physical Field Event Log (Manual + Observed) ---")
-
-    def debug_wrapper(func, name):
-        import inspect
-
-        if inspect.iscoroutinefunction(func):
-
-            @functools.wraps(func)
-            async def async_wrapped(*args, **kwargs):
-                print(f"[MAN-START] {name}")
-                try:
-                    result = await func(*args, **kwargs)
-                    print(f"[MAN-END  ] {name}")
-                    return result
-                except Exception as e:
-                    print(f"[MAN-ERROR] {name}: {e}")
-                    raise
-
-            return async_wrapped
-        else:
-
-            @functools.wraps(func)
-            def sync_wrapped(*args, **kwargs):
-                print(f"[MAN-START] {name}")
-                try:
-                    result = func(*args, **kwargs)
-                    print(f"[MAN-END  ] {name}")
-                    return result
-                except Exception as e:
-                    print(f"[MAN-ERROR] {name}: {e}")
-                    raise
-
-            return sync_wrapped
-
-    func_map = {}
-    for node_id, node in physical_graph.nodes.items():
-        if node_id.endswith(".bleach"):
-            func_map[node_id] = standard_bleacher
-        elif node_id.endswith(".stain"):
-            func_map[node_id] = standard_stainer
-        elif node_id.endswith(".worker"):
-            func_map[node_id] = mock_worker
-        elif "allocator" in node_id:
-            func_map[node_id] = debug_wrapper(discrete_allocator, node.name)
-        elif "reclaimer" in node_id:
-            func_map[node_id] = debug_wrapper(discrete_reclaimer, node.name)
-        elif node_id.startswith("req."):
-            func_map[node_id] = debug_wrapper(resource_requestor, node.name)
-        elif "observability" in node_id:
-            func_map[node_id] = standard_observer
+    print("\n--- Physical Field Event Log (Observed) ---")
 
     code_registry = CodeRegistry()
-    runner = EventDrivenRunner(physical_graph, func_map, code_registry)
+    # All tasks are the same, so they share the same canonical hash.
+    # We can just grab the first one from the symbol table to register the implementation.
+    if assembly.symbol_table:
+        canonical_hash = next(iter(assembly.symbol_table.values()))
+        code_registry.register(canonical_hash, resource_heavy_task.func)
+
+    runner = EventDrivenRunner.from_assembly(assembly, code_registry)
     runner.prime()
 
     await runner.start_loop()

@@ -29,14 +29,14 @@ def test_discrete_allocator_grants_when_available(available_ledger):
     assert "req_out" not in outputs
 
 
-def test_discrete_allocator_recirculates_when_starved(starved_ledger):
+def test_discrete_allocator_parks_when_starved(starved_ledger):
     req_token = Token(payload=5)
     inputs = {"ledger_in": Token(payload=starved_ledger), "req_in": req_token}
     outputs = discrete_allocator(inputs, MagicMock(), MagicMock())
 
     assert "gnt_out" not in outputs
-    assert "req_out" in outputs
-    assert outputs["req_out"] is req_token
+    assert "req_parked" in outputs
+    assert outputs["req_parked"] is req_token
     updated_ledger = outputs["ledger_out"].payload
     assert updated_ledger.available == 1
 

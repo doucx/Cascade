@@ -1,0 +1,7 @@
+{
+  "standard_retry_logic": {
+    "baseline_code_signature_text": "def standard_retry_logic(inputs: Dict[str, Token], node: RetryNode, resources: Any) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "182871be84b6d13d2d2f10c336ebaa1dbaa996aeaccdea65d418d101e0955023",
+    "baseline_yaml_content_hash": "06b2c2cc6b7d250f7ed06aee1ed1c9f6fa860b9db6c7efbe6b0e452c81a29907"
+  }
+}

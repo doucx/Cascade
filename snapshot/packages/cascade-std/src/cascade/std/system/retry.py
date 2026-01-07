@@ -7,17 +7,6 @@ from cascade.spec.physical.nodes import Token
 def standard_retry_logic(
     inputs: Dict[str, Token], node: RetryNode, resources: Any
 ) -> Dict[str, Token]:
-    """
-    Implements topological retry logic.
-
-    Inputs:
-        - error_in: The error token from the failed task.
-        - context_in: The original input context token.
-
-    Outputs:
-        - retry_out: The context token, to be routed back for retry.
-        - fail_out: The error token, if retries are exhausted.
-    """
     error_token = inputs["error_in"]
     context_token = inputs["context_in"]
 

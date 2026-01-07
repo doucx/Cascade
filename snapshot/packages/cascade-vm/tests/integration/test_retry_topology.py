@@ -12,12 +12,6 @@ from cascade.std.system.retry import standard_retry_logic
 
 @pytest.fixture
 def retry_topology_and_runner():
-    """
-    Builds a minimal graph for testing retry logic and provides a runner.
-
-    Topology:
-        (D_error_in, D_context_in) -> F_retry -> (D_retry_out, D_fail_out)
-    """
     max_attempts = 3
 
     # 1. Define Nodes
@@ -81,9 +75,6 @@ def retry_topology_and_runner():
 
 @pytest.mark.asyncio
 async def test_retry_path(retry_topology_and_runner):
-    """
-    Verify that when retry_count < max_attempts, the token is routed for retry.
-    """
     runner, nodes = retry_topology_and_runner
 
     # 1. Prepare tokens. retry_count is 1, which is less than max_attempts (3).
@@ -111,9 +102,6 @@ async def test_retry_path(retry_topology_and_runner):
 
 @pytest.mark.asyncio
 async def test_failure_path(retry_topology_and_runner):
-    """
-    Verify that when retry_count reaches max_attempts, the token is routed to fail.
-    """
     runner, nodes = retry_topology_and_runner
 
     # 1. Prepare tokens. The logic increments before checking, so a count of 2

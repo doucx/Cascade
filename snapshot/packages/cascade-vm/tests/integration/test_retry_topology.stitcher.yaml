@@ -1,0 +1,9 @@
+"retry_topology_and_runner": |-
+  Builds a minimal graph for testing retry logic and provides a runner.
+
+  Topology:
+      (D_error_in, D_context_in) -> F_retry -> (D_retry_out, D_fail_out)
+"test_failure_path": |-
+  Verify that when retry_count reaches max_attempts, the token is routed to fail.
+"test_retry_path": |-
+  Verify that when retry_count < max_attempts, the token is routed for retry.

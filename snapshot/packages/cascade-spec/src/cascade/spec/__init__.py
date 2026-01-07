@@ -38,6 +38,7 @@ __all__ = [
     "WorkerNode",
     "StainNode",
     "ObservabilityNode",
+    "RetryNode",
     "Channel",
     "BipartiteGraph",
     "ResourceSlot",

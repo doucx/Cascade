@@ -2,7 +2,6 @@ from typing import Dict, Callable, Optional
 
 from cascade.spec.physical.assembly import Assembly
 from cascade.spec.physical.nodes import PhysicsFuncNode
-from cascade.spec.physical.triad import RetryNode
 from cascade.reflection import PhysicalIdGenerator
 
 from .registry import CodeRegistry

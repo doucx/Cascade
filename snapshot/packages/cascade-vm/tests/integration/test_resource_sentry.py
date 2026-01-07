@@ -1,57 +1,3 @@
-Excellent. Your analysis is spot on. While the static compilation of the "Topological Sentry" is complete, the test suite lacks a dedicated, dynamic verification of its core mechanics. A robust integration test is essential to build confidence in this critical piece of architecture.
-
-I will now create a new integration test that precisely simulates the resource competition scenario you've described and asserts the correct behavior at each stage of the process.
-
-## [WIP] feat(test): Add integration test for topological resource sentry
-
-### 用户需求
-创建一个新的集成测试，专门用于验证“拓扑门控”资源调度模型的动态行为。该测试必须明确断言以下三个关键阶段：
-1.  **停泊 (Parking)**: 在资源不足时，请求令牌被正确地路由到 `D_parked` 节点。
-2.  **信号 (Signaling)**: 在资源释放时，`F_reclaimer` 向 `D_signal` 节点发射唤醒脉冲。
-3.  **门控 (Gating)**: `F_gate` 节点在接收到停泊请求和唤醒信号后被激发，并将请求送回主循环，触发后续任务。
-
-### 评论
-这是一个至关重要的测试用例。它超越了对单个内核函数的单元测试，从整体上验证了新拓扑的“物理定律”是否按预期工作。通过直接检查 `VolatileMemory` 中关键节点（`D_parked`, `D_signal`）的令牌数量，并结合对 `EventBus` 事件流的断言，我们可以获得对新架构行为的最高级别的信心。
-
-这个测试将成为“拓扑门控”模型正确性的黄金标准。
-
-### 目标
-1.  在 `packages/cascade-vm/tests/integration/` 目录下创建一个新的测试文件 `test_resource_sentry.py`。
-2.  在文件中实现一个名为 `test_sentry_parks_and_releases_correctly` 的异步测试用例。
-3.  该测试将设置一个容量为 1 的资源，并同时调度两个需要该资源的任务。
-4.  通过 `GraphInspector` 和直接访问 `runner.memory`，精确断言在执行过程中 `D_parked` 和 `D_signal` 节点的令牌状态变化。
-5.  通过监听 `TaskExecutionStarted` 和 `TaskExecutionFinished` 事件，验证整个流程的正确时序和最终成功完成。
-
-### 基本原理
-我们将利用 `EventDrivenRunner` 来驱动一个经过特殊编译的物理图。该图由两个并发任务和一个容量为 1 的资源组成。
-
-1.  **编译**: 使用 `IRGenerator` 和 `Builder` 将两个 `LazyResult` 编译成一个包含“拓扑门控”的 `Assembly`。
-2.  **检查**: 使用 `GraphInspector` 和 `PhysicalIdGenerator` 来获取图中关键节点（`D_parked`, `D_signal` 等）的物理 ID。
-3.  **执行与断言**:
-    *   启动 `EventDrivenRunner`。
-    *   等待第一个 `TaskExecutionStarted` 事件，此时立即断言 `runner.memory.get_count(d_parked_id)` 为 1，验证**停泊**机制。
-    *   等待第一个 `TaskExecutionFinished` 事件。此时，`F_reclaimer` 和 `F_gate` 应该已经被激发。
-    *   等待第二个 `TaskExecutionStarted` 事件。这个事件的发生本身就是对**信号**和**门控**机制最有效的证明，因为它表明被停泊的任务已成功返回主循环并被调度。
-    *   最后，等待所有任务完成，并断言最终结果的正确性。
-
-这种方法将动态执行与对物理内存的“白盒”检查相结合，提供了无可辩驳的证据来证明新架构的正确性。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/vm #comp/tests #concept/resource-management #scope/core #ai/instruct #task/domain/architecture #task/object/resource-scheduling #task/action/refactor #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建新的集成测试文件 `test_resource_sentry.py`
-
-我将创建这个新文件，其中包含完整的测试逻辑，以验证“拓扑门控”模型的端到端行为。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_resource_sentry.py
-~~~~~
-~~~~~python
 import asyncio
 import pytest
 
@@ -174,9 +120,3 @@ async def test_sentry_parks_and_releases_correctly():
 
     finally:
         await runner.stop_loop()
-~~~~~
-
-### 下一步建议
-我们已经为“拓扑门控”模型创建了一个强大的、高保真的集成测试。现在，整个功能，从静态编译到动态执行，都得到了验证。
-
-这是一个理想的 `[COMMIT]` 点。我建议将这次架构升级及其相关的所有修复和测试，作为一个完整的逻辑单元提交到版本控制中。如果你同意，我将生成一个包含 `git_add` 和 `git_commit` 的计划。

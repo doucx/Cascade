@@ -29,7 +29,8 @@ async def test_source_node_is_triggered_by_pulse():
     flow = source_task()
     graph_ir = ir_generator.generate(flow)
     node_ir = graph_ir.nodes[0]
-    assembly = builder.build(graph_ir, EnvironmentDef())
+    artifact = builder.build(graph_ir, EnvironmentDef())
+    assembly = artifact.assembly
     physical_graph = assembly.graph
 
     # 2. Setup Code Registry for the Compute Service

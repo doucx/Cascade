@@ -41,7 +41,8 @@ def source_only_graph_ir():
 
 def test_builder_expands_and_wires_nodes(sample_graph_ir):
     builder = Builder()
-    assembly = builder.build(sample_graph_ir, environment=EnvironmentDef())
+    artifact = builder.build(sample_graph_ir, environment=EnvironmentDef())
+    assembly = artifact.assembly
     graph = assembly.graph
     symbol_table = assembly.symbol_table
 
@@ -103,7 +104,8 @@ def test_builder_expands_and_wires_nodes(sample_graph_ir):
 
 def test_builder_creates_pulse_for_source_node(source_only_graph_ir):
     builder = Builder()
-    assembly = builder.build(source_only_graph_ir, environment=EnvironmentDef())
+    artifact = builder.build(source_only_graph_ir, environment=EnvironmentDef())
+    assembly = artifact.assembly
     graph = assembly.graph
 
     # 1. Assert Pulse node creation

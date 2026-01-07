@@ -25,7 +25,8 @@ def test_sovereign_wiring_flow():
 
     # 2. Build Physical Graph
     builder = Builder()
-    assembly = builder.build(graph_ir, EnvironmentDef())
+    artifact = builder.build(graph_ir, EnvironmentDef())
+    assembly = artifact.assembly
     physical_graph = assembly.graph
 
     # 3. Inspect Topology

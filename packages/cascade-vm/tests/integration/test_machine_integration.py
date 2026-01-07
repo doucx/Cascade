@@ -146,8 +146,20 @@ async def test_machine_runs_cross_jurisdiction_flow():
     initial_token = Token(payload=initial_ref, trace={"rid": "test_run_01"})
     memory.put(graph.nodes["d_in"], initial_token)
 
-    # 3. Execute: Run the machine until it becomes idle
+    # 3. Execute: Run the machine until explicit shutdown
+    # Since we removed idle-exit, we must simulate an external observer stopping the machine
+    # when the result is ready.
+    async def stop_when_done():
+        while True:
+            if memory.get_count("d_out") > 0:
+                reactor.shutdown_event.set()
+                break
+            await asyncio.sleep(0.01)
+    
+    # Run observer and machine concurrently
+    observer_task = asyncio.create_task(stop_when_done())
     await machine.run()
+    await observer_task
 
     # 4. Assert: Verify the final state
     # The machine should stop when idle. We can now inspect the final memory state.

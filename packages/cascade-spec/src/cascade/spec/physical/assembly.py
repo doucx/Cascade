@@ -20,3 +20,17 @@ class Assembly:
 
     # Metadata about the assembly, such as compiler version, build time, etc.
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class CompilationManifest:
+    # Maps logical UUIDs (from LazyResult) to the base physical node ID.
+    # Key: Logical UUID
+    # Value: Physical Base ID (current_node_instance_hash)
+    logical_to_physical_map: Dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class CompilationArtifact:
+    assembly: Assembly
+    manifest: CompilationManifest

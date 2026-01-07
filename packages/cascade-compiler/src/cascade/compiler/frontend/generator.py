@@ -114,6 +114,7 @@ class IRGenerator:
             current_node_instance_hash=node_id,
             name=task_def.name,
             task=task_def,
+            logical_id=lr._uuid,
             inputs=inputs,
             constraints=constraints,
             condition=condition_id,

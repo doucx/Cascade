@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] fix(tests): 在重构后的集成测试中正确注册任务代码", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767761549.2464142, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 优化资源竞争测试以避免超时", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767761673.4089615, "duration_ms": 0}}

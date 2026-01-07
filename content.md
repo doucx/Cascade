@@ -4,7 +4,7 @@
 
 ### 📝 变更文件摘要:
 ```
-.../tests/integration/test_ref_architecture.py     | 100 +++++++++++++++++++++
- .../tests/integration/test_ref_architecture.py     | 100 ---------------------
- 2 files changed, 100 insertions(+), 100 deletions(-)
+.../integration/test_resource_backpressure.py      | 185 +++++++++++++++++++++
+ .../integration/test_resource_backpressure.py      | 185 ---------------------
+ 2 files changed, 185 insertions(+), 185 deletions(-)
 ```

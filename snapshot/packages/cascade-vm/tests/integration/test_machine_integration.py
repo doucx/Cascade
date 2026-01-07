@@ -4,7 +4,7 @@ from typing import Dict, Callable
 
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsDataNode, PhysicsFuncNode
-from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode
+from cascade.spec.physical.triad import BleachNode, WorkerNode, StainNode, ObservabilityNode
 from cascade.spec.physical.ports import PortDef, PortRole
 from cascade.reflection import PhysicalIdGenerator
 from cascade.vm.harness import EventDrivenRunner
@@ -43,6 +43,9 @@ def build_test_graph() -> BipartiteGraph:
     d_trace_id = PhysicalIdGenerator.trace_data(base_id)
     f_stain_id = PhysicalIdGenerator.stain_node(base_id)
 
+    d_life_id = PhysicalIdGenerator.observability_bus()
+    f_obs_id = PhysicalIdGenerator.observability_observer()
+
     # Node Definitions
     nodes = [
         PhysicsDataNode(id=d_in_id, name="Input"),
@@ -73,7 +76,10 @@ def build_test_graph() -> BipartiteGraph:
                 "worker_result": PortDef("worker_result", PortRole.DATA),
                 "trace_input": PortDef("trace_input", PortRole.DATA),
             },
-            output_ports={"output_default": PortDef("output_default", PortRole.DATA)},
+            output_ports={
+                "output_default": PortDef("output_default", PortRole.DATA),
+                "obs_output": PortDef("obs_output", PortRole.OBSERVABILITY),
+            },
         ),
         PhysicsDataNode(id=d_out_id, name="FinalOutput"),
         PhysicsFuncNode(
@@ -81,6 +87,13 @@ def build_test_graph() -> BipartiteGraph:
             name="Halt",
             input_ports={"in": PortDef("in", PortRole.DATA)},
             output_ports={"out": PortDef("out", PortRole.DATA)},
+        ),
+        # Observability Infrastructure
+        PhysicsDataNode(id=d_life_id, name="EventBus", capacity=100),
+        ObservabilityNode(
+            id=f_obs_id,
+            name="Observer",
+            input_ports={"event_token": PortDef("event_token", PortRole.OBSERVABILITY)},
         ),
     ]
     for node in nodes:
@@ -99,6 +112,10 @@ def build_test_graph() -> BipartiteGraph:
             Channel(f_stain_id, "output_default", d_out_id, "in"),
             # Add the self-termination channel
             Channel(d_out_id, "out", f_halt_id, "in"),
+            # Observability Wiring
+            Channel(f_bleach_id, "obs_output", d_life_id, "in"),
+            Channel(f_stain_id, "obs_output", d_life_id, "in"),
+            Channel(d_life_id, "out", f_obs_id, "event_token"),
         ]
     )
     return graph
@@ -117,6 +134,7 @@ async def test_machine_runs_self_terminating_flow():
         PhysicalIdGenerator.bleach_node("task_square"): standard_bleacher,
         PhysicalIdGenerator.worker_node("task_square"): standard_dispatcher,
         PhysicalIdGenerator.stain_node("task_square"): standard_stainer,
+        PhysicalIdGenerator.observability_observer(): standard_observer,
         "f_halt": halt_signal,
     }
 

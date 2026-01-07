@@ -1,51 +1,3 @@
-Excellent. You are absolutely right. Adhering to a strict TDD workflow is critical here. Implementing the wiring logic before having a test to validate the fundamental component would be a "hope-driven" engineering practice, which we must avoid.
-
-We will now pause the compiler integration and create a low-level integration test. This test will operate directly at the physical layer, manually constructing a `BipartiteGraph` to validate that the `standard_retry_logic` behaves exactly as specified, independent of any higher-level abstractions.
-
-## [WIP] test(vm): Create integration test for F_retry node logic
-
-### 错误分析
-
-无。此计划是根据 TDD 流程，在功能开发后立即创建验证测试。
-
-### 用户需求
-
-在正式将 `F_retry` 节点集成到编译器之前，先创建一个专门的集成测试来验证其核心逻辑。该测试应能确认 `F_retry` 节点在不同重试次数下，能够正确地将 `Token` 路由到“重试”或“永久失败”的输出端口。
-
-### 评论
-
-这是一个典范的 TDD 实践。通过在 `cascade-vm` 的集成测试层面对这个新的物理元件进行原子化的验证，我们确保了其行为的确定性和正确性。只有当这个基础构件被证明是绝对可靠的，我们才能充满信心地在更高层（编译器）的抽象中依赖它。这个测试将成为 `F_retry` 节点行为的“活文档”。
-
-### 目标
-
-1.  在 `packages/cascade-vm/tests/integration/` 目录下创建一个新的测试文件 `test_retry_topology.py`。
-2.  在该文件中，编写一个 `pytest` fixture，用于**手动**构建一个包含 `RetryNode` 的 `BipartiteGraph`。这个图将代表一个最小化的重试场景。
-3.  实现两个核心测试用例：
-    *   **测试一 (重试路径)**: 验证当 `retry_count` 小于 `max_attempts` 时，`Token` 被正确路由到 `retry_out` 端口。
-    *   **测试二 (失败路径)**: 验证当 `retry_count` 达到 `max_attempts` 时，`Token` 被正确路由到 `fail_out` 端口。
-4.  使用 `EventDrivenRunner` 作为测试工具，来驱动这个手动构建的图，注入 `Token`，并断言最终的 `Token` 位置。
-
-### 基本原理
-
-由于连接 `LazyResult.with_retry()` 的编译器布线逻辑尚未实现，我们无法通过高层 DSL 来触发重试。因此，我们必须在物理层“手工”搭建测试台。我们将创建一个图，其中包含一个 `RetryNode` 以及它所需的所有输入 (`D_error`, `D_context`) 和输出 (`D_retry_loop`, `D_permanent_fail`) 数据节点。通过 `EventDrivenRunner.inject_input()`，我们可以精确地控制输入 `Token` 的内容（特别是 `trace` 中的 `retry_count`），然后执行 `reactor.step()` 来触发 `standard_retry_logic`。最后，通过检查输出数据节点中的 `Token` 数量，我们可以无歧义地验证其路由决策是否正确。
-
-### 标签
-
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/vm #concept/state #scope/core #ai/delegate #task/domain/core #task/object/retry-node #task/action/implementation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建 `F_retry` 节点的集成测试文件
-
-我们将创建新的测试文件，并填充验证 `standard_retry_logic` 行为所需的所有代码，包括 fixture 和两个测试用例。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_retry_topology.py
-~~~~~
-~~~~~python
 import pytest
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.triad import RetryNode
@@ -164,13 +116,3 @@ def test_retry_logic_fails_on_exhaustion(retry_harness):
     # Verify the correct token was passed through
     out_token = runner.memory.take(ids["fail"])
     assert out_token is error_token
-
-~~~~~
-
-### 下一步建议
-
-我们已经为 `F_retry` 节点创建了坚实的、原子化的测试。一旦这个测试在 CI 中通过，我们就可以百分之百地确信该组件的行为是正确的。
-
-现在，我们可以安全地回到之前的计划，开始实施将 `LazyResult.with_retry()` 用户意图**编译**成使用 `F_retry` 节点和 `D_context` 通道的物理拓扑。
-
-我建议立即开始制定**编译器布线策略**的计划，以完成整个功能的端到端实现。

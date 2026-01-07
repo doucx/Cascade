@@ -2,17 +2,12 @@ import pytest
 import asyncio
 from unittest.mock import MagicMock
 
-import pytest
-import asyncio
-from unittest.mock import MagicMock
 
 from cascade.runtime.services.observability.events import TaskExecutionFinished
 from cascade.runtime.services.observability.subscribers import TelemetrySubscriber
 from cascade.cli.observer.app import on_message
 from cascade.testing import MockConnector
 from cascade.spec import EventState
-from cascade.cli.observer.app import on_message
-from cascade.testing import MockConnector
 
 
 @pytest.mark.asyncio

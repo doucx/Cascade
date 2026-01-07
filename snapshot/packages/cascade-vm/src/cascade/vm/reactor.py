@@ -4,6 +4,7 @@ import logging
 from typing import List, Callable, Dict, Tuple, Awaitable, Optional, Any
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsFuncNode, PhysicsDataNode, Token
+from cascade.spec.runtime.system import SystemControlToken, ControlCommand
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
 
@@ -24,6 +25,9 @@ class Reactor:
         self.function_map = function_map
         self.resource_registry = resource_registry or ResourceRegistry()
         self.ingress_queue = ingress_queue
+        
+        # Lifecycle Signals
+        self.shutdown_event = asyncio.Event()
 
         # State
         # node_id -> port_name -> list of callbacks
@@ -153,6 +157,10 @@ class Reactor:
         for port_name, token in results.items():
             if token is None:
                 continue
+            
+            # 0. Intercept System Control Tokens
+            if isinstance(token.payload, SystemControlToken):
+                self._handle_control_signal(token.payload)
 
             # A. Handle Sinks (Callbacks)
             # Note: Sinks in the physical layer MUST be non-blocking.
@@ -192,3 +200,16 @@ class Reactor:
                     )
             except asyncio.QueueEmpty:
                 break
+
+    def _handle_control_signal(self, ctrl: SystemControlToken) -> None:
+        logger.info(f"Reactor received control signal: {ctrl.command}")
+        if ctrl.command == ControlCommand.HALT:
+            self.shutdown_event.set()
+        elif ctrl.command == ControlCommand.DRAIN:
+            # TODO: Implement drain logic (wait for active tasks to zero out)
+            # For now, treat as Halt for safety
+            logger.warning("DRAIN not fully implemented, treating as HALT.")
+            self.shutdown_event.set()
+        elif ctrl.command == ControlCommand.ERROR:
+            logger.error(f"System Critical Error: {ctrl.payload}")
+            self.shutdown_event.set()

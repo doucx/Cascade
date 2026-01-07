@@ -26,37 +26,40 @@ class Machine:
         service_task = asyncio.create_task(self.compute_service.run())
 
         try:
-            while True:
+            # Run until explicit shutdown signal
+            while not self.reactor.shutdown_event.is_set():
                 # 1. Drive the Physics Kernel (Synchronous Step)
                 fired_count = self.reactor.step()
 
-                # 2. Check for Quiescence
-                ingress_empty = self.ingress_queue.empty()
-                compute_idle = self.compute_service.is_idle()
-
-                if logger.isEnabledFor(logging.DEBUG):
-                    logger.debug(
-                        f"Machine Step: fired={fired_count}, "
-                        f"ingress_empty={ingress_empty}, "
-                        f"compute_idle={compute_idle} "
-                        f"(inbound={self.compute_service.inbound_queue.qsize()}, "
-                        f"active={self.compute_service._active_count})"
-                    )
-
-                # If the reactor did nothing, and there's no pending I/O...
-                if fired_count == 0 and ingress_empty:
-                    # ...and the compute service has no active workers...
-                    if compute_idle:
-                        logger.info("Machine idle. Stopping.")
-                        break
-
-                    # If we are just waiting for Compute, yield to the event loop
-                    # to give the Service a chance to work.
-                    await asyncio.sleep(0.001)
-                else:
-                    # If we did work, yield briefly to allow I/O ingress processing
-                    # but return quickly to sustain high throughput.
+                # 2. Adaptive Throttling
+                # If the reactor did work, we yield briefly to allow I/O but return ASAP.
+                # If it was idle, we sleep longer to save CPU.
+                if fired_count > 0:
                     await asyncio.sleep(0)
+                else:
+                    # Check if there is pending ingress work not yet processed?
+                    # Reactor.step() handles ingress, so if fired_count is 0,
+                    # it means ingress was empty or didn't trigger any firing.
+                    
+                    # We can sleep a bit longer to be nice to the CPU, 
+                    # but check ingress_queue emptiness to be responsive.
+                    if not self.ingress_queue.empty():
+                         await asyncio.sleep(0)
+                    else:
+                         # Truly idle loop
+                         await asyncio.sleep(0.001)
+
+            logger.info("Machine shutdown signal received.")
+
+        finally:
+            # Shutdown sequence
+            self.compute_service.stop()
+            service_task.cancel()
+            try:
+                await service_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Machine stopped.")
 
         finally:
             # Shutdown sequence

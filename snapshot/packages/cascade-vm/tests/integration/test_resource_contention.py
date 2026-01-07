@@ -135,6 +135,12 @@ async def test_resource_scarcity_topology_and_execution():
     print("\n--- Physical Field Event Log (Observed) ---")
 
     code_registry = CodeRegistry()
+    # All tasks are the same, so they share the same canonical hash.
+    # We can just grab the first one from the symbol table to register the implementation.
+    if assembly.symbol_table:
+        canonical_hash = next(iter(assembly.symbol_table.values()))
+        code_registry.register(canonical_hash, resource_heavy_task.func)
+
     runner = EventDrivenRunner.from_assembly(assembly, code_registry)
     runner.prime()
 

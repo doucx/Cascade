@@ -4,7 +4,7 @@ from cascade import task, Engine
 from cascade.runtime.io.executors.local import LocalExecutor
 from cascade.runtime.kernel.solvers.native import NativeSolver
 from cascade.runtime import EventBus
-from cascade.testing import SpySolver
+from cascade.test_utils.helpers import SpySolver
 
 
 # Define a simple task for testing

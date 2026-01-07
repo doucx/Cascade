@@ -31,8 +31,8 @@ _IMPORT_MAP = {
     # Tools & Utilities
     "to_json": ("cascade.graph.serialize", "to_json"),
     "from_json": ("cascade.graph.serialize", "from_json"),
-    "override_resource": ("cascade.testing", "override_resource"),
-    "ControllerTestApp": ("cascade.testing", "ControllerTestApp"),
+    "override_resource": ("cascade.test_utils.helpers", "override_resource"),
+    "ControllerTestApp": ("cascade.test_utils.helpers", "ControllerTestApp"),
     "create_cli": ("cascade.tools.cli", "create_cli"),
 }
 
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from cascade.spec.runtime.interfaces import Connector, StateBackend
 
     from cascade.graph.serialize import to_json, from_json
-    from cascade.testing import override_resource, ControllerTestApp
+    from cascade.test_utils.helpers import override_resource, ControllerTestApp
     from cascade.tools.cli import create_cli
 
     # Dynamic Providers Stubs (for static analysis)

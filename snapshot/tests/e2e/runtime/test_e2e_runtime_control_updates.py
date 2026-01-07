@@ -9,7 +9,7 @@ from dataclasses import asdict
 import uuid
 
 from .harness import InProcessConnector
-from cascade.testing import MockExecutor
+from cascade.test_utils.helpers import MockExecutor
 
 
 async def set_rate_limit(

@@ -1,6 +1,6 @@
 import pytest
 from cascade.runtime import EventBus
-from cascade.testing import SpySubscriber
+from cascade.test_utils.helpers import SpySubscriber
 
 
 # Attempt to import LocalBusConnector for global cleanup

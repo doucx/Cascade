@@ -38,6 +38,7 @@ cascade-cli-observer = { workspace = true }
 cascade-connector-mqtt = { workspace = true }
 cascade-connector-local = { workspace = true }
 cascade-common = { workspace = true }
+cascade-test-utils = { workspace = true }
 cascade-vm = { workspace = true }
 cascade-compiler = { workspace = true }
 cascade-std = { workspace = true }
@@ -58,6 +59,7 @@ packages = [
     "packages/cascade-std",
     "packages/cascade-vm-rs",
     "packages/cascade-reflection",
+    "packages/cascade-test-utils",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -96,6 +98,7 @@ dev = [
   "cascade-cli-observer",
   "cascade-connector-mqtt",
   "cascade-connector-local",
+  "cascade-test-utils",
   "cascade-vm",
   "cascade-vm-rs",
   "cascade-compiler",

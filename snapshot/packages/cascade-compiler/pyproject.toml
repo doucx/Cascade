@@ -21,4 +21,3 @@ allow-direct-references = true
 [tool.uv.sources]
 cascade-spec = { workspace = true }
 cascade-common = { workspace = true }
-cascade-graph = { workspace = true }

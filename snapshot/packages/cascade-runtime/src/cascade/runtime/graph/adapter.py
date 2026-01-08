@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional, Tuple, Callable
+from typing import Dict, Any, Optional, Tuple, Callable, List
 from dataclasses import dataclass
 
 from cascade.spec.ir.graph import NodeIR
@@ -67,6 +67,12 @@ class IRToRuntimeAdapter:
 
         return self.graph, instance_map, executables
 
+    def _is_dependency(self, value: Any) -> bool:
+        """Check if a value looks like a node reference (Physical ID)."""
+        if isinstance(value, str) and value in self.node_map:
+            return True
+        return False
+
     def _create_node(self, node_ir: NodeIR, executables: Dict[str, Callable]) -> Node:
         # Recover policies
         retry_policy = None
@@ -77,33 +83,11 @@ class IRToRuntimeAdapter:
                 backoff=node_ir.retry_policy["backoff"],
             )
 
-        # Recover Cache Policy
-        # Note: IR currently doesn't strictly specify the format of cache_policy dict/object
-        # But we assume the IRGenerator passes it through if attached.
-        # Since IRGenerator currently copies attributes, check if it's there.
-        # If node_ir.cache_policy is missing from NodeIR definition, we might need to add it or it's in inputs?
-        # NodeIR def has retry_policy but missing explicit cache_policy field?
-        # Checking cascade/spec/ir/graph.py... NodeIR definition HAS retry_policy but NO cache_policy field.
-        # Wait, let's check if we can pass it via metadata or if we need to extend NodeIR.
-        # For this fix, let's assume we can retrieve it if we extended NodeIR or patched IRGenerator.
-        # But wait, IRGenerator code:
-        # node_ir = NodeIR(..., retry_policy=self._extract_retry_policy(lr))
-        # It ignores cache_policy!
-        # We need to fix IRGenerator first to include cache_policy, OR pass it differently.
-        # Given we are in the Adapter, let's assume we will fix IRGenerator to pass it.
-        # Let's verify NodeIR structure in next step. For now, placeholder.
-
         constraints = None
         if node_ir.constraints:
-            # Note: Dynamic constraints (LazyResults) are stored as UUID strings in IR constraints dict
-            # if they were properly processed. But IRGenerator currently copies requirements dict.
-            # If IRGenerator leaves LazyResult objects in constraints, we might have issues if strict JSON is needed.
-            # For now, assuming in-memory transfer, objects might be fine, but spec says IR should be simple.
-            # The current IRGenerator implementation copies the dict.
-            # We wrap it back into ResourceConstraint.
             constraints = ResourceConstraint(requirements=node_ir.constraints)
 
-        # Input bindings: filter out router definitions from inputs
+        # Input bindings: filter out router definitions and dependencies
         input_bindings = {}
         has_complex_inputs = False
         from cascade.spec.dsl.resources import Inject
@@ -121,6 +105,11 @@ class IRToRuntimeAdapter:
         for k, v in node_ir.inputs.items():
             if isinstance(v, dict) and v.get("$router"):
                 continue
+            
+            # If it's a direct dependency string, don't add to bindings
+            if self._is_dependency(v):
+                continue
+                
             input_bindings[k] = v
             if not has_complex_inputs and check_complexity(v):
                 has_complex_inputs = True
@@ -177,7 +166,7 @@ class IRToRuntimeAdapter:
     def _create_edges(self, node_ir: NodeIR, target_node: Node):
         # 1. Data Edges & Routers
         for arg_name, value in node_ir.inputs.items():
-            if isinstance(value, str) and value in self.node_map:
+            if self._is_dependency(value):
                 # Simple Data Dependency (Node ID ref)
                 source_node = self.node_map[value]
                 self.graph.add_edge(
@@ -191,6 +180,9 @@ class IRToRuntimeAdapter:
             elif isinstance(value, dict) and value.get("$router"):
                 # Reconstruct Router
                 self._reconstruct_router_edges(value, arg_name, target_node)
+            else:
+                # Recursively scan for nested dependencies to ensure Graph connectivity
+                self._scan_and_create_nested_edges(value, arg_name, target_node)
 
         # 2. Condition
         if node_ir.condition and node_ir.condition in self.node_map:
@@ -227,10 +219,6 @@ class IRToRuntimeAdapter:
 
             for key, val in node_ir.constraints.items():
                 if isinstance(val, (LazyResult, MappedLazyResult)):
-                    # Note: val is the LazyResult object because IRGenerator copied the dict.
-                    # We need to find its logical ID or use UUID to lookup in maps.
-                    # IRGenerator output guarantees nodes are generated.
-                    # Since Adapter has logic to build maps, we use logical_map for UUIDs.
                     if val._uuid in self.logical_map:
                         source_node = self.logical_map[val._uuid]
                         self.graph.add_edge(
@@ -242,6 +230,25 @@ class IRToRuntimeAdapter:
                             )
                         )
 
+    def _scan_and_create_nested_edges(self, obj: Any, arg_name: str, target_node: Node):
+        """Recursively scan object for Node IDs and create edges."""
+        if self._is_dependency(obj):
+            source_node = self.node_map[obj]
+            self.graph.add_edge(
+                Edge(
+                    source=source_node,
+                    target=target_node,
+                    arg_name=arg_name,
+                    edge_type=EdgeType.DATA,
+                )
+            )
+        elif isinstance(obj, (list, tuple)):
+            for item in obj:
+                self._scan_and_create_nested_edges(item, arg_name, target_node)
+        elif isinstance(obj, dict):
+            for value in obj.values():
+                self._scan_and_create_nested_edges(value, arg_name, target_node)
+
     def _reconstruct_router_edges(
         self, router_def: Dict[str, Any], arg_name: str, target_node: Node
     ):
@@ -252,23 +259,6 @@ class IRToRuntimeAdapter:
             return  # Error or stub?
 
         selector_node = self.node_map[selector_id]
-
-        # Reconstruct Router Object with Stubs
-        # The runtime needs selector._uuid and route_val._uuid
-        # We need to find the logical IDs for these physical nodes to populate the stubs correctly?
-        # GraphIR stores physical IDs in 'selector' and 'routes'.
-        # But LazyResult._uuid usually matches logical_id.
-        # Wait, IRGenerator resolves everything to Physical IDs (Node Instance Hashes).
-        # But _StubLazyResult needs a UUID that matches keys in instance_map.
-        # FlowManager uses: `instance_map[instance._uuid]`
-        # So we must put the LOGICAL UUID into the stub if we want FlowManager to find the node in instance_map.
-
-        # Problem: NodeIR inputs store PHYSICAL IDs (hashes).
-        # We need a reverse map from Physical ID -> Logical ID to populate the stub correctly?
-        # Or, we update instance_map to ALSO support Physical IDs?
-        # -> Updating instance_map to support Physical IDs is robust and easier.
-        # BUT, FlowManager logic is: `self.instance_map.get(instance._uuid)`
-        # So if we put physical ID in stub._uuid, and ensure instance_map has physical keys, it works.
 
         selector_stub = _StubLazyResult(selector_id)
         routes_stubs = {k: _StubLazyResult(v) for k, v in routes_def.items() if v}
@@ -300,11 +290,6 @@ class IRToRuntimeAdapter:
                 )
 
     def _reconstruct_jump_edges(self, flow_control: Dict[str, Any], source_node: Node):
-        # Flow control in IR: {"target_key": "target_logical_id"}
-        # Note: Compiler now emits Logical IDs to avoid recursion cycles.
-        # We need to resolve these Logical IDs to Runtime Nodes using logical_map or instance_map
-        # But wait, self.logical_map maps Logical ID -> Runtime Node.
-
         routes_stubs = {
             k: (_StubLazyResult(v) if v else None) for k, v in flow_control.items()
         }

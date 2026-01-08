@@ -1,5 +1,7 @@
 {
-  "ControllerTestApp": {},
+  "ControllerTestApp": {
+    "baseline_yaml_content_hash": "b628b899644b9edd0197a0cd89877810a04b7f1f9e19705536647198dce1b97d"
+  },
   "ControllerTestApp.__init__": {
     "baseline_code_signature_text": "def __init__(self, connector: Connector):",
     "baseline_code_structure_hash": "246225c5f80ebdf5fe3c6d08b1663ead39b39bf4f06bd4a3d3d8d86ff4db6ee5"
@@ -17,7 +19,9 @@
     "baseline_code_signature_text": "async def resume(self, scope: str = 'global'):",
     "baseline_code_structure_hash": "39dec974c06daf7654911984b59f5df0226c2ffedb1fd6219e7f073542f475b7"
   },
-  "MockConnector": {},
+  "MockConnector": {
+    "baseline_yaml_content_hash": "a14a00b10d5ec116e2b07e69017fcbf9b02108ab9f0734b36f610402301d691d"
+  },
   "MockConnector.__init__": {
     "baseline_code_signature_text": "def __init__(self):",
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
@@ -28,7 +32,8 @@
   },
   "MockConnector._trigger_message": {
     "baseline_code_signature_text": "async def _trigger_message(self, topic: str, payload: Dict[str, Any]):",
-    "baseline_code_structure_hash": "a6e04c68274cca8a6dab38b3378967dd999f8cf04351a385b67ee2587bc625d4"
+    "baseline_code_structure_hash": "a6e04c68274cca8a6dab38b3378967dd999f8cf04351a385b67ee2587bc625d4",
+    "baseline_yaml_content_hash": "fa574bd8f20ac2eacce95c38deb423e6b99334ca02fe562e634e6c1e4b10f243"
   },
   "MockConnector.connect": {
     "baseline_code_signature_text": "async def connect(self) -> None:",
@@ -42,20 +47,24 @@
   "MockConnector.disconnected": {},
   "MockConnector.publish": {
     "baseline_code_signature_text": "async def publish(self, topic: str, payload: Dict[str, Any], qos: int = 0, retain: bool = False) -> None:",
-    "baseline_code_structure_hash": "fffa806eb7ae282b4fdadb2aa14bf5887f8f964a3f437db025760cfd8a8d5c66"
+    "baseline_code_structure_hash": "fffa806eb7ae282b4fdadb2aa14bf5887f8f964a3f437db025760cfd8a8d5c66",
+    "baseline_yaml_content_hash": "eb8d2b442816041fa59795395636abe5c6d55021d8e397f912ba80da8cbcc266"
   },
   "MockConnector.publish_log": {},
   "MockConnector.retained_messages": {},
   "MockConnector.seed_retained_message": {
     "baseline_code_signature_text": "def seed_retained_message(self, topic: str, payload: Dict[str, Any]):",
-    "baseline_code_structure_hash": "bba0745ad66b9f7f86e90f9ab86bf173aceda1c3f343a274bcb9e38ca682c949"
+    "baseline_code_structure_hash": "bba0745ad66b9f7f86e90f9ab86bf173aceda1c3f343a274bcb9e38ca682c949",
+    "baseline_yaml_content_hash": "b4610b15a72b7a94a2854c01f389ffe3e100804d512bc2bab0c3774a32781b91"
   },
   "MockConnector.subscribe": {
     "baseline_code_signature_text": "async def subscribe(self, topic: str, callback: Callable[[str, Dict], Awaitable[None]]) -> SubscriptionHandle:",
     "baseline_code_structure_hash": "c2addf29fd60240c9ff8400c72be68453d50b874a54b87a5fba2cd3b64ad5e02"
   },
   "MockConnector.subscriptions": {},
-  "MockExecutor": {},
+  "MockExecutor": {
+    "baseline_yaml_content_hash": "57ef73fe14a2dc9ed6b4c3c257b4a0fd0296ac84cce6daa1d9bf1cc193aadd9d"
+  },
   "MockExecutor.__init__": {
     "baseline_code_signature_text": "def __init__(self, delay: float = 0, return_value: Any = 'result'):",
     "baseline_code_structure_hash": "16511409a3efcd874093dc26849daab50fd1c8b62c53756c0a57970774eaa540"
@@ -66,7 +75,9 @@
     "baseline_code_structure_hash": "c2694369d4030d0896a7d2637ee1cdea348e82aeeda9301a0facc4d71a91513d"
   },
   "MockExecutor.return_value": {},
-  "MockSolver": {},
+  "MockSolver": {
+    "baseline_yaml_content_hash": "57f4990e1b39b9c5c3acc72a68387346f34c38bf73a06cba3e1d798b7d59ddaf"
+  },
   "MockSolver.__init__": {
     "baseline_code_signature_text": "def __init__(self, plan: ExecutionPlan):",
     "baseline_code_structure_hash": "536b66822f30cd7050e78fc8759a82c26ba0fd2ee1815b41895afa383bc49a1e"
@@ -87,7 +98,9 @@
     "baseline_code_signature_text": "async def unsubscribe(self) -> None:",
     "baseline_code_structure_hash": "8db3add491babae6d33f8c27a23af07c012ac7395e700a61a643648621a7a3ef"
   },
-  "SpyExecutor": {},
+  "SpyExecutor": {
+    "baseline_yaml_content_hash": "74c48ffa3a5da4a617000d5d534207e276ee016eb1c7d56b257d0f32b3f0b8d9"
+  },
   "SpyExecutor.__init__": {
     "baseline_code_signature_text": "def __init__(self):",
     "baseline_code_structure_hash": "9bab2b1dd22fea04e58176b09f65ef4f673738c47abf25fca7e0c62af472206f"
@@ -97,7 +110,9 @@
     "baseline_code_signature_text": "async def execute(self, node: Node, callable_obj: Callable, args: List[Any], kwargs: Dict[str, Any]) -> Any:",
     "baseline_code_structure_hash": "42c33adc443e46043352bc8c2c8f3dc4febb95531e696f8dc5fd657b4ef76d58"
   },
-  "SpySolver": {},
+  "SpySolver": {
+    "baseline_yaml_content_hash": "0338c93b6e412a98b2e158ff085289c1a2ea5585ca35cebc6041f3b97c7e743c"
+  },
   "SpySolver.__init__": {
     "baseline_code_signature_text": "def __init__(self, underlying_solver: Solver):",
     "baseline_code_structure_hash": "888919f477b512483f1c6a2647457d03c6e3fa6f1c38e533f833648c0fa693ff"
@@ -107,7 +122,9 @@
     "baseline_code_structure_hash": "f2052bdd2c09e031b4b2c7b485db658ae2a280b9b66962e42123368a6c654c1f"
   },
   "SpySolver.underlying_solver": {},
-  "SpySubscriber": {},
+  "SpySubscriber": {
+    "baseline_yaml_content_hash": "c38faf2934fb0cf72b9c723a7b6cc0730c57e27408bfd4adaf2b92fcaf4d695b"
+  },
   "SpySubscriber.__init__": {
     "baseline_code_signature_text": "def __init__(self, bus: EventBus):",
     "baseline_code_structure_hash": "f0031b8dc0af4f513fb34481d680aaa74cb395a005af0bef448efa49d6f88ac7"
@@ -119,7 +136,8 @@
   "SpySubscriber.events": {},
   "SpySubscriber.events_of_type": {
     "baseline_code_signature_text": "def events_of_type(self, event_type):",
-    "baseline_code_structure_hash": "191c2fd44c193d6caf8694f764d7ba694809e6f8505c88c331fdb58a08ba8558"
+    "baseline_code_structure_hash": "191c2fd44c193d6caf8694f764d7ba694809e6f8505c88c331fdb58a08ba8558",
+    "baseline_yaml_content_hash": "d208020df868688d8fffced12fb29fe9e6908d08f026b4da5eec304fdb757a99"
   },
   "TimedMockExecutor": {},
   "TimedMockExecutor.__init__": {
@@ -134,6 +152,7 @@
   "__all__": {},
   "override_resource": {
     "baseline_code_signature_text": "def override_resource(engine: Engine, name: str, new_resource_func: Callable[[], Any]):",
-    "baseline_code_structure_hash": "8ea5effc00233918706c1f47ca08a5994e229e50505d8abaab84129f15c7613a"
+    "baseline_code_structure_hash": "8ea5effc00233918706c1f47ca08a5994e229e50505d8abaab84129f15c7613a",
+    "baseline_yaml_content_hash": "932b22888c00cdf70b11aef13d71f64faa42b8626587592469a9e8b0dea3fad0"
   }
 }

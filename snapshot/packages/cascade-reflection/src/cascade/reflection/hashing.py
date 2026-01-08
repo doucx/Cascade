@@ -1,6 +1,6 @@
 import hashlib
 from typing import Any, List, Dict
-from cascade.graph.model import Graph, Node
+from cascade.runtime.graph.model import Graph, Node
 from cascade.spec.ir.graph import TaskDef
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.spec.dsl.routing import Router

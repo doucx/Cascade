@@ -1,5 +1,5 @@
 from cascade.spec.dsl.task import task
-from cascade.graph.build import build_graph
+from cascade.runtime.graph.build import build_graph
 
 
 def test_impure_tasks_have_unique_identities():

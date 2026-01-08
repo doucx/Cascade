@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 from cascade.spec.ir.graph import NodeIR
 from cascade.compiler.frontend.generator import GenerationResult
-from cascade.graph.model import (
+from cascade.runtime.graph.model import (
     Graph,
     Node,
     TaskNode,
@@ -12,7 +12,7 @@ from cascade.graph.model import (
     Edge,
     EdgeType,
 )
-from cascade.graph.registry import NodeRegistry
+from cascade.runtime.graph.registry import NodeRegistry
 from cascade.spec.dsl.fluent import RetryPolicy
 from cascade.spec.dsl.constraint import ResourceConstraint
 from cascade.spec.dsl.routing import Router

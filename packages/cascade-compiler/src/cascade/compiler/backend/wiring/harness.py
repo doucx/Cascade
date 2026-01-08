@@ -1,6 +1,6 @@
 from cascade.spec.physical.topology import BipartiteGraph, Channel
 from cascade.spec.physical.nodes import PhysicsNode, PhysicsFuncNode, PhysicsDataNode
-from .expander import SubGraph
+from ..expander import SubGraph
 
 
 class WiringError(ValueError):

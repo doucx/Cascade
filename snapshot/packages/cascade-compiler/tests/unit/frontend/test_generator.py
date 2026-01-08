@@ -25,7 +25,8 @@ def test_generate_simple_task():
     target = add(1, 2)
 
     # Act
-    graph_ir = generator.generate(target)
+    generation_result = generator.generate(target)
+    graph_ir = generation_result.ir
 
     # Assert
     assert isinstance(graph_ir, GraphIR)
@@ -47,7 +48,8 @@ def test_generate_task_with_kwargs():
     target = process_data(data={"key": "value"})
 
     # Act
-    graph_ir = generator.generate(target)
+    generation_result = generator.generate(target)
+    graph_ir = generation_result.ir
 
     # Assert
     assert len(graph_ir.nodes) == 1
@@ -63,7 +65,8 @@ def test_generate_task_with_dependency():
     downstream_lr = add(upstream_lr, 3)
 
     # Act
-    graph_ir = generator.generate(downstream_lr)
+    generation_result = generator.generate(downstream_lr)
+    graph_ir = generation_result.ir
 
     # Assert
     assert len(graph_ir.nodes) == 2

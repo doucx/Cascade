@@ -22,7 +22,8 @@ async def test_source_node_is_triggered_by_pulse():
     builder = Builder()
 
     flow = source_task()
-    graph_ir = ir_generator.generate(flow)
+    generation_result = ir_generator.generate(flow)
+    graph_ir = generation_result.ir
     node_ir = graph_ir.nodes[0]
     artifact = builder.build(graph_ir, EnvironmentDef())
     assembly = artifact.assembly

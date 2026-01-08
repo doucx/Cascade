@@ -43,10 +43,10 @@ async def test_sentry_parks_and_releases_correctly():
 
     # 3. Compile the graph
     ir_generator = IRGenerator()
-    graph_ir = ir_generator.generate([task_a, task_b])
+    generation_result = ir_generator.generate([task_a, task_b])
 
     builder = Builder()
-    artifact = builder.build(graph_ir, env)
+    artifact = builder.build(generation_result.ir, env)
     assembly = artifact.assembly
 
     # 4. Setup Runner and Inspector

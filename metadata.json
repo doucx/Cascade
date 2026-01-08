@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] feat(runtime): 引入 IRToRuntimeAdapter 并增强 IRGenerator", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767857789.2922118, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(tests): 适配 IRGenerator 以处理新的 GenerationResult API", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767858160.632788, "duration_ms": 0}}

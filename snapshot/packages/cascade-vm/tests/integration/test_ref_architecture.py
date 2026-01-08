@@ -29,7 +29,8 @@ async def test_full_ref_based_e2e_flow():
     # 2. Compile into a physical Assembly
     ir_generator = IRGenerator()
     builder = Builder()
-    graph_ir = ir_generator.generate(workflow)
+    generation_result = ir_generator.generate(workflow)
+    graph_ir = generation_result.ir
     artifact = builder.build(graph_ir, EnvironmentDef())
     assembly = artifact.assembly
 

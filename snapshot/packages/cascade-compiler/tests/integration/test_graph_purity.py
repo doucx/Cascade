@@ -26,8 +26,8 @@ def test_graph_is_serializable_and_pure():
     builder = Builder()
     environment = EnvironmentDef(resources=[])
 
-    graph_ir = generator.generate(workflow)
-    artifact = builder.build(graph_ir, environment)
+    generation_result = generator.generate(workflow)
+    artifact = builder.build(generation_result.ir, environment)
     assembly = artifact.assembly
     physical_graph = assembly.graph
 

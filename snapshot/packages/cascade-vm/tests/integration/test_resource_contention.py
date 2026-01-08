@@ -46,7 +46,8 @@ async def test_resource_scarcity_topology_and_execution():
     # We group them in a list to generate graph
     ir_generator = IRGenerator()
     # IRGenerator can handle a list of LazyResults (it treats them as independent roots)
-    graph_ir = ir_generator.generate(tasks)
+    generation_result = ir_generator.generate(tasks)
+    graph_ir = generation_result.ir
 
     # 2. Build Physical Graph
     env = EnvironmentDef(
@@ -192,7 +193,8 @@ async def test_mixed_resource_wiring():
     t_cpu = resource_heavy_task().with_constraints(cpu=1)
 
     ir_generator = IRGenerator()
-    graph_ir = ir_generator.generate([t_gpu, t_cpu])
+    generation_result = ir_generator.generate([t_gpu, t_cpu])
+    graph_ir = generation_result.ir
 
     env = EnvironmentDef(resources=[ResourceDef("gpu", 1), ResourceDef("cpu", 1)])
     builder = Builder()

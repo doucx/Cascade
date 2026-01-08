@@ -12,6 +12,7 @@ from cascade.vm.machine import Machine
 from cascade.vm.reactor import Reactor
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.kernel import PhysicsKernel
 from cascade.vm.registry import CodeRegistry
 from cascade.vm.compute import ComputeRequest, LocalComputeService
 from cascade.vm.services.chronos import ChronosService
@@ -171,7 +172,8 @@ async def test_machine_self_terminating_flow():
     resource_registry.register("system.event_bus", event_bus)
 
     # Instantiate Core Components
-    reactor = Reactor(graph, memory, function_map, resource_registry, ingress_queue)
+    kernel = PhysicsKernel(function_map, resource_registry)
+    reactor = Reactor(graph, memory, kernel, ingress_queue)
     compute_service = LocalComputeService(
         store=object_store,
         registry=code_registry,

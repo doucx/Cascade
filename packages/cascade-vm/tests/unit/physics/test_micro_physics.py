@@ -7,6 +7,8 @@ from cascade.spec.physical.triad import StainNode
 from cascade.spec.runtime.system import SystemControlToken, ControlCommand
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
+from cascade.vm.kernel import PhysicsKernel
+from cascade.vm.resource_registry import ResourceRegistry
 from cascade.std.triad.stainer import standard_stainer
 from cascade.std.system.terminator import halt_signal
 
@@ -50,7 +52,9 @@ async def test_physics_the_spark():
         return {"out": inputs["in"]}
 
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory, {f_node.id: identity})
+    resources = ResourceRegistry()
+    kernel = PhysicsKernel({f_node.id: identity}, resources)
+    reactor = Reactor(graph, memory, kernel)
     reactor.prime()
 
     # Action
@@ -101,7 +105,9 @@ async def test_physics_the_crash():
     graph.channels.append(Channel(f_stain.id, "obs_output", d_obs.id, "in"))
 
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory, {f_stain.id: standard_stainer})
+    resources = ResourceRegistry()
+    kernel = PhysicsKernel({f_stain.id: standard_stainer}, resources)
+    reactor = Reactor(graph, memory, kernel)
 
     # Inject Fault
     memory.put(d_res, Token(payload=ValueError("Micro-Physics Failure")))
@@ -145,7 +151,9 @@ async def test_physics_the_halt():
     graph.channels.append(Channel(f_halt.id, "out", d_void.id, "in"))
 
     memory = VolatileMemory()
-    reactor = Reactor(graph, memory, {f_halt.id: halt_signal})
+    resources = ResourceRegistry()
+    kernel = PhysicsKernel({f_halt.id: halt_signal}, resources)
+    reactor = Reactor(graph, memory, kernel)
     reactor.prime()
 
     # Pre-condition

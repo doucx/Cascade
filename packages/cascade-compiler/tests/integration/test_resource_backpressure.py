@@ -9,6 +9,7 @@ from cascade.compiler.backend.builder import Builder
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.reactor import Reactor
 from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.kernel import PhysicsKernel
 from cascade.runtime.storage import InMemoryObjectStore
 
 # Import new ICs
@@ -107,7 +108,8 @@ async def test_concurrency_limit():
     store = InMemoryObjectStore()
     registry.register("system.object_store", store)
 
-    reactor = Reactor(physical_graph, memory, func_map, resource_registry=registry)
+    kernel = PhysicsKernel(func_map, registry)
+    reactor = Reactor(physical_graph, memory, kernel)
 
     # 6. Prime the reactor.
     reactor.prime()

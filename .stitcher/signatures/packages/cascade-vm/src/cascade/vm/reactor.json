@@ -3,8 +3,8 @@
     "baseline_yaml_content_hash": "c3ed326a1d94e8e8a7256dd9e3ce92cedbfb0d9843171a24b0d4cd48969a3f19"
   },
   "Reactor.__init__": {
-    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, memory: VolatileMemory, function_map: Dict[str, Callable], resource_registry: Optional[ResourceRegistry] = None, ingress_queue: Optional[asyncio.Queue] = None):",
-    "baseline_code_structure_hash": "74066133c372b4c223dd204ac9dc800dfe130786a21f0f6bfbc587325723d356"
+    "baseline_code_signature_text": "def __init__(self, graph: BipartiteGraph, memory: VolatileMemory, kernel: PhysicsKernel, ingress_queue: Optional[asyncio.Queue] = None):",
+    "baseline_code_structure_hash": "00d892ddb9ce3a942085114dcf16c52c014bee0a30e5d1fbbf9a251e16c8e6f4"
   },
   "Reactor._execute_task": {
     "baseline_code_signature_text": "async def _execute_task(self, node: PhysicsFuncNode, input_data: Dict[str, Token]) -> None:",
@@ -46,6 +46,7 @@
   "Reactor.function_map": {},
   "Reactor.graph": {},
   "Reactor.ingress_queue": {},
+  "Reactor.kernel": {},
   "Reactor.memory": {},
   "Reactor.prime": {
     "baseline_code_signature_text": "def prime(self, genesis_trace: Optional[Dict[str, Any]] = None) -> None:",

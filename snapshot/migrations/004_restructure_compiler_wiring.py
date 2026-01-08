@@ -1,5 +1,5 @@
 from pathlib import Path
-from stitcher.refactor.migration import MigrationSpec, Move, MoveDir
+from stitcher.refactor.migration import MigrationSpec, MoveDir
 
 
 def upgrade(spec: MigrationSpec):

@@ -7,8 +7,8 @@ from cascade.spec.physical.ports import PortDef, PortRole, PortName
 from cascade.std.resource.discrete import DiscreteLedger
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
-from cascade.compiler.wiring.context import WiringContext
-from cascade.compiler.wiring.prism import ResourcePrism
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.prism import ResourcePrism
 
 
 class DiscreteResourcePrism(ResourcePrism):

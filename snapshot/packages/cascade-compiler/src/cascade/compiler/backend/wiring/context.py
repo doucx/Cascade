@@ -5,7 +5,7 @@ from cascade.spec.physical.topology import BipartiteGraph
 from cascade.spec.physical.environment import EnvironmentDef
 from cascade.spec.ir.graph import GraphIR
 from cascade.compiler.backend.expander import SubGraph
-from cascade.compiler.backend.wiring import WiringHarness
+from cascade.compiler.wiring.harness import WiringHarness
 
 
 @dataclass

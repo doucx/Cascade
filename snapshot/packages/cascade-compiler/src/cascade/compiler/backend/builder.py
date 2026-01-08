@@ -11,7 +11,7 @@ from cascade.spec.physical.assembly import (
 )
 from .expander import Expander
 from .validator import GraphValidator
-from cascade.compiler.wiring.harness import WiringHarness
+from cascade.compiler.backend.wiring.harness import WiringHarness
 from cascade.compiler.backend.wiring.context import WiringContext
 from cascade.compiler.backend.wiring.protocol import WiringPolicy
 from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy

@@ -99,6 +99,9 @@ class IRGenerator:
 
         if lr._condition:
             collect_deps(lr._condition)
+        if lr._constraints:
+            for val in lr._constraints.requirements.values():
+                collect_deps(val)
         for dep in lr._dependencies:
             collect_deps(dep)
 
@@ -135,6 +138,11 @@ class IRGenerator:
         if lr._condition:
             condition_id = self._visit(lr._condition)
 
+        # Visit dynamic constraints to ensure they are generated
+        if lr._constraints:
+            for val in lr._constraints.requirements.values():
+                self._visit(val)
+
         dependency_ids = []
         for dep in lr._dependencies:
             dependency_ids.append(self._visit(dep))
@@ -144,7 +152,12 @@ class IRGenerator:
             flow_control = {}
             for k, target in lr._jump_selector.routes.items():
                 if target:
-                    flow_control[k] = self._visit(target)
+                    # [Cycle Breaking]
+                    # For flow control, we use the Logical ID (UUID) instead of the Physical ID
+                    # to avoid infinite recursion when a Jump points back to an ancestor or self.
+                    # The Runtime Adapter will use the instance_map to resolve this UUID to the Node.
+                    # We DO NOT call self._visit(target) here.
+                    flow_control[k] = target._uuid
                 else:
                     flow_control[k] = None
 
@@ -166,11 +179,16 @@ class IRGenerator:
         if lr._constraints:
             constraints = lr._constraints.requirements.copy()
 
+        # Detect Param nodes
+        node_type = "task"
+        if task_def.name == "_get_param_value":
+            node_type = "param"
+
         node_ir = NodeIR(
             current_node_instance_hash=node_id,
             name=task_def.name,
             task=task_def,
-            type="task",
+            type=node_type,
             logical_id=lr._uuid,
             inputs=inputs,
             constraints=constraints,
@@ -178,6 +196,7 @@ class IRGenerator:
             dependencies=dependency_ids,
             flow_control=flow_control,
             retry_policy=self._extract_retry_policy(lr),
+            cache_policy=lr._cache_policy,
         )
 
         # 5. Register
@@ -202,6 +221,10 @@ class IRGenerator:
         condition_id = None
         if lr._condition:
             condition_id = self._visit(lr._condition)
+
+        if lr._constraints:
+            for val in lr._constraints.requirements.values():
+                self._visit(val)
 
         dependency_ids = []
         for dep in lr._dependencies:

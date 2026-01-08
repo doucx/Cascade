@@ -22,6 +22,7 @@
   "NodeIR": {
     "baseline_yaml_content_hash": "ac5a306e32ed790fe771a0e4aeed17630ac9088d1df677734bb19c163c78607b"
   },
+  "NodeIR.cache_policy": {},
   "NodeIR.condition": {},
   "NodeIR.constraints": {
     "baseline_yaml_content_hash": "3ae90761dbe3274616b3ac71ecff97f382ce25e33eed5c5fcd70b80a6578f581"

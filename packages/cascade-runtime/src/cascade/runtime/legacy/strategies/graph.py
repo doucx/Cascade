@@ -3,7 +3,8 @@ from contextlib import ExitStack
 from typing import Any, Dict, List, Optional, Callable
 
 from cascade.graph.model import Graph, Node, EdgeType
-from cascade.graph.build import build_graph
+from cascade.compiler.frontend.generator import IRGenerator
+from cascade.runtime.graph.adapter import IRToRuntimeAdapter
 from cascade.graph.registry import NodeRegistry
 from cascade.reflection import BlueprintHasher
 from cascade.spec.runtime.interfaces import Solver, StateBackend
@@ -93,9 +94,10 @@ class GraphExecutionStrategy:
                         executable_registry,
                     ) = local_context_cache[current_target._uuid]
                 else:
-                    graph, instance_map, executable_registry = build_graph(
-                        current_target, registry=self._node_registry
-                    )
+                    # Cascade 3.1: Use Compiler Frontend + Adapter instead of direct GraphBuilder
+                    gen_result = IRGenerator().generate(current_target)
+                    adapter = IRToRuntimeAdapter(registry=self._node_registry)
+                    graph, instance_map, executable_registry = adapter.adapt(gen_result)
 
                     if current_target._uuid not in instance_map:
                         raise RuntimeError(
@@ -255,11 +257,15 @@ class GraphExecutionStrategy:
                 if executable_this_pass:
 
                     async def sub_graph_runner(target, sub_params, parent_state):
+                        # Cascade 3.1: Use Compiler Frontend + Adapter
+                        gen_result = IRGenerator().generate(target)
+                        adapter = IRToRuntimeAdapter()
                         (
                             sub_graph,
                             sub_instance_map,
                             sub_executable_registry,
-                        ) = build_graph(target)
+                        ) = adapter.adapt(gen_result)
+
                         sub_plan = self.solver.resolve(sub_graph)
                         result_obj = await self._execute_graph(
                             target,

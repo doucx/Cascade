@@ -9,8 +9,8 @@
     "baseline_code_structure_hash": "3d4d9f7bd872f6df7bf63e38378944c4e141aab96ef5a282a90f2e413f9b5eb4"
   },
   "IRToRuntimeAdapter._create_node": {
-    "baseline_code_signature_text": "def _create_node(self, node_ir: NodeIR) -> Node:",
-    "baseline_code_structure_hash": "802a89157591038fa9e40b7d0f52b68dd4237ec8af11dfa66ae267c11f2eb594"
+    "baseline_code_signature_text": "def _create_node(self, node_ir: NodeIR, executables: Dict[str, Callable]) -> Node:",
+    "baseline_code_structure_hash": "5d82a39d27b5185feecde9108db1db542b80e09d8e7bfd358370b7564ee29297"
   },
   "IRToRuntimeAdapter._reconstruct_jump_edges": {
     "baseline_code_signature_text": "def _reconstruct_jump_edges(self, flow_control: Dict[str, Any], source_node: Node):",

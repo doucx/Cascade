@@ -41,7 +41,7 @@ class IRToRuntimeAdapter:
 
         # 1. Create Nodes
         for node_ir in ir.nodes:
-            node = self._create_node(node_ir)
+            node = self._create_node(node_ir, executables)
             self.graph.add_node(node)
             self.node_map[node.current_node_instance_hash] = node
             if node_ir.logical_id:
@@ -56,14 +56,18 @@ class IRToRuntimeAdapter:
         # Legacy runtime uses UUIDs for lookups in FlowManager
         instance_map: Dict[str, Node] = {}
         for node_ir in ir.nodes:
+            runtime_node = self.node_map[node_ir.current_node_instance_hash]
+
+            # 1. Map Physical Hash -> Node (Used by FlowManager/Routers)
+            instance_map[node_ir.current_node_instance_hash] = runtime_node
+
+            # 2. Map Logical UUID -> Node (Used by External API / Legacy lookups)
             if node_ir.logical_id:
-                instance_map[node_ir.logical_id] = self.node_map[
-                    node_ir.current_node_instance_hash
-                ]
+                instance_map[node_ir.logical_id] = runtime_node
 
         return self.graph, instance_map, executables
 
-    def _create_node(self, node_ir: NodeIR) -> Node:
+    def _create_node(self, node_ir: NodeIR, executables: Dict[str, Callable]) -> Node:
         # Recover policies
         retry_policy = None
         if node_ir.retry_policy:
@@ -72,6 +76,22 @@ class IRToRuntimeAdapter:
                 delay=node_ir.retry_policy["delay"],
                 backoff=node_ir.retry_policy["backoff"],
             )
+
+        # Recover Cache Policy
+        # Note: IR currently doesn't strictly specify the format of cache_policy dict/object
+        # But we assume the IRGenerator passes it through if attached.
+        # Since IRGenerator currently copies attributes, check if it's there.
+        # If node_ir.cache_policy is missing from NodeIR definition, we might need to add it or it's in inputs?
+        # NodeIR def has retry_policy but missing explicit cache_policy field?
+        # Checking cascade/spec/ir/graph.py... NodeIR definition HAS retry_policy but NO cache_policy field.
+        # Wait, let's check if we can pass it via metadata or if we need to extend NodeIR.
+        # For this fix, let's assume we can retrieve it if we extended NodeIR or patched IRGenerator.
+        # But wait, IRGenerator code:
+        # node_ir = NodeIR(..., retry_policy=self._extract_retry_policy(lr))
+        # It ignores cache_policy!
+        # We need to fix IRGenerator first to include cache_policy, OR pass it differently.
+        # Given we are in the Adapter, let's assume we will fix IRGenerator to pass it.
+        # Let's verify NodeIR structure in next step. For now, placeholder.
 
         constraints = None
         if node_ir.constraints:
@@ -85,10 +105,38 @@ class IRToRuntimeAdapter:
 
         # Input bindings: filter out router definitions from inputs
         input_bindings = {}
+        has_complex_inputs = False
+        from cascade.spec.dsl.resources import Inject
+        import inspect
+
+        def check_complexity(obj):
+            if isinstance(obj, Inject):
+                return True
+            if isinstance(obj, (list, tuple)):
+                return any(check_complexity(x) for x in obj)
+            if isinstance(obj, dict):
+                return any(check_complexity(x) for x in obj.values())
+            return False
+
         for k, v in node_ir.inputs.items():
             if isinstance(v, dict) and v.get("$router"):
                 continue
             input_bindings[k] = v
+            if not has_complex_inputs and check_complexity(v):
+                has_complex_inputs = True
+
+        # Also check the executable signature for Inject defaults
+        if not has_complex_inputs:
+            executable = executables.get(node_ir.current_node_instance_hash)
+            if executable:
+                try:
+                    sig = inspect.signature(executable)
+                    for param in sig.parameters.values():
+                        if isinstance(param.default, Inject):
+                            has_complex_inputs = True
+                            break
+                except (ValueError, TypeError):
+                    pass
 
         # Determine Node Type
         if node_ir.type == "map":
@@ -97,6 +145,7 @@ class IRToRuntimeAdapter:
                 definition=node_ir.task,
                 node_type="map",
                 retry_policy=retry_policy,
+                cache_policy=node_ir.cache_policy,
                 constraints=constraints,
                 input_bindings=input_bindings,
             )
@@ -106,27 +155,21 @@ class IRToRuntimeAdapter:
                 definition=node_ir.task,
                 node_type="param",
                 retry_policy=retry_policy,
+                cache_policy=node_ir.cache_policy,
                 constraints=constraints,
                 input_bindings=input_bindings,
                 has_complex_inputs=True,
             )
         else:
-            # Check for complex inputs (heuristic)
-            # In new IR, we might want an explicit flag. For now, assume False unless proven otherwise?
-            # Or safe default True? GraphBuilder logic was complex.
-            # Let's assume False for standard tasks unless we see specialized inputs.
-            # Actually, Runtime ArgumentResolver handles complex inputs fine even if flag is False,
-            # it just skips the "Fast Path". Setting False is safe but maybe slower.
-            # Setting True forces complex path.
-            # Let's check bindings for nested structures.
             node = TaskNode(
                 current_node_instance_hash=node_ir.current_node_instance_hash,
                 definition=node_ir.task,
                 node_type="task",
                 retry_policy=retry_policy,
+                cache_policy=node_ir.cache_policy,
                 constraints=constraints,
                 input_bindings=input_bindings,
-                has_complex_inputs=False,  # TODO: Optimization: detect complexity
+                has_complex_inputs=has_complex_inputs,
             )
 
         return node
@@ -177,6 +220,27 @@ class IRToRuntimeAdapter:
         # 4. Jump / Flow Control
         if node_ir.flow_control:
             self._reconstruct_jump_edges(node_ir.flow_control, target_node)
+
+        # 5. Constraint Edges
+        if node_ir.constraints:
+            from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
+
+            for key, val in node_ir.constraints.items():
+                if isinstance(val, (LazyResult, MappedLazyResult)):
+                    # Note: val is the LazyResult object because IRGenerator copied the dict.
+                    # We need to find its logical ID or use UUID to lookup in maps.
+                    # IRGenerator output guarantees nodes are generated.
+                    # Since Adapter has logic to build maps, we use logical_map for UUIDs.
+                    if val._uuid in self.logical_map:
+                        source_node = self.logical_map[val._uuid]
+                        self.graph.add_edge(
+                            Edge(
+                                source=source_node,
+                                target=target_node,
+                                arg_name=key,
+                                edge_type=EdgeType.CONSTRAINT,
+                            )
+                        )
 
     def _reconstruct_router_edges(
         self, router_def: Dict[str, Any], arg_name: str, target_node: Node
@@ -236,9 +300,10 @@ class IRToRuntimeAdapter:
                 )
 
     def _reconstruct_jump_edges(self, flow_control: Dict[str, Any], source_node: Node):
-        # Flow control in IR: {"target_key": "target_node_id"}
-        # Runtime expects EdgeType.ITERATIVE_JUMP from Source -> Target
-        # carrying a JumpSelector object.
+        # Flow control in IR: {"target_key": "target_logical_id"}
+        # Note: Compiler now emits Logical IDs to avoid recursion cycles.
+        # We need to resolve these Logical IDs to Runtime Nodes using logical_map or instance_map
+        # But wait, self.logical_map maps Logical ID -> Runtime Node.
 
         routes_stubs = {
             k: (_StubLazyResult(v) if v else None) for k, v in flow_control.items()
@@ -246,9 +311,9 @@ class IRToRuntimeAdapter:
         selector_obj = JumpSelector(routes=routes_stubs)  # type: ignore
 
         # Add edges for each potential jump target
-        for key, target_id in flow_control.items():
-            if target_id and target_id in self.node_map:
-                target_node = self.node_map[target_id]
+        for key, target_logical_id in flow_control.items():
+            if target_logical_id and target_logical_id in self.logical_map:
+                target_node = self.logical_map[target_logical_id]
                 self.graph.add_edge(
                     Edge(
                         source=source_node,

@@ -24,6 +24,10 @@ class NodePrefix(StrEnum):
     REQ = "req"        # Resource Requestor
     GATE = "gate"      # Control Gate
     PROBE = "probe"    # Introspection Probe
+    SLEEP = "sleep"    # Time delay requestor
+
+    # Data Node Subtypes
+    WAKEUP = "wakeup"  # Return point for a sleep operation
 
     # Global/System
     GLOBAL = "global"  # Global singleton

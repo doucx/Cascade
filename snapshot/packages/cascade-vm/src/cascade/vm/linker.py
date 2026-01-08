@@ -15,6 +15,7 @@ from cascade.std.resource.discrete import discrete_allocator, discrete_reclaimer
 from cascade.std.resource.requestor import resource_requestor
 from cascade.std.system.egress import standard_egress
 from cascade.std.system.gate import gate_passthrough
+from cascade.std.system.time import standard_sleep
 from cascade.spec.physical.constants import NodePrefix
 
 
@@ -64,11 +65,13 @@ class Linker:
             )
 
     def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:
-        # Triad
+        # Triad & Time
         if node_id.endswith(f".{NodePrefix.BLEACH}"):
             return standard_bleacher
         if node_id.endswith(f".{NodePrefix.STAIN}"):
             return standard_stainer
+        if node_id.endswith(f".{NodePrefix.SLEEP}"):
+            return standard_sleep
 
         # Observability
         if node_id == PhysicalIdGenerator.observability_observer():

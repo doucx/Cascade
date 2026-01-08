@@ -10,8 +10,8 @@
   "PhysicsKernel._function_map": {},
   "PhysicsKernel._resources": {},
   "PhysicsKernel.execute": {
-    "baseline_code_signature_text": "def execute(self, node: PhysicsFuncNode, inputs: Dict[str, Ref]) -> Dict[str, Ref]:",
-    "baseline_code_structure_hash": "d786657816b8f6f2b87101d385e69bab259de6cb9c5611dca2e2cca461b8abcb",
+    "baseline_code_signature_text": "def execute(self, node: PhysicsFuncNode, inputs: Dict[str, Token]) -> Dict[str, Token]:",
+    "baseline_code_structure_hash": "bcff403fc09afb2e19857a31928347e0e75aa6155b952e6ccc160404ff4975f7",
     "baseline_yaml_content_hash": "e906e61c7ae846fc9f2f6393ef3802c1da028b63342d1bfb2f87136fc08853bf"
   },
   "logger": {}

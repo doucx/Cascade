@@ -41,6 +41,7 @@
     "baseline_code_structure_hash": "0af48699a7e9ad675092a5567d0a2781a7f1798f16b18e83ca50eb92fa79af33",
     "baseline_yaml_content_hash": "5d6ef6466693bd009e2abe405207369c523220f6bc04375523993361901d9c63"
   },
+  "EventDrivenRunner.kernel": {},
   "EventDrivenRunner.machine": {},
   "EventDrivenRunner.memory": {},
   "EventDrivenRunner.object_store": {},

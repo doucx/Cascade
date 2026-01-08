@@ -6,7 +6,6 @@ from cascade.runtime.graph.model import Graph, Node, EdgeType
 from cascade.compiler.frontend.generator import IRGenerator
 from cascade.runtime.graph.adapter import IRToRuntimeAdapter
 from cascade.runtime.graph.registry import NodeRegistry
-from cascade.runtime.graph.hashing import BlueprintHasher
 from cascade.spec.runtime.interfaces import Solver, StateBackend
 from cascade.spec.dsl.jump import Jump
 from cascade.runtime.services.observability.bus import EventBus
@@ -41,29 +40,8 @@ class GraphExecutionStrategy:
         self.constraint_manager = constraint_manager
         self.bus = bus
         self.wakeup_event = wakeup_event
-        self.blueprint_hasher = BlueprintHasher()
 
-        self._template_plan_cache: Dict[str, List[List[int]]] = {}
         self._node_registry = NodeRegistry()
-
-    def _index_plan(self, graph: Graph, plan: Any) -> List[List[int]]:
-        id_to_idx = {
-            node.current_node_instance_hash: i for i, node in enumerate(graph.nodes)
-        }
-        indexed_plan = []
-        for stage in plan:
-            indexed_stage = [
-                id_to_idx[node.current_node_instance_hash] for node in stage
-            ]
-            indexed_plan.append(indexed_stage)
-        return indexed_plan
-
-    def _rehydrate_plan(self, graph: Graph, indexed_plan: List[List[int]]) -> Any:
-        plan = []
-        for stage_indices in indexed_plan:
-            stage_nodes = [graph.nodes[idx] for idx in stage_indices]
-            plan.append(stage_nodes)
-        return plan
 
     async def execute(
         self,
@@ -104,20 +82,8 @@ class GraphExecutionStrategy:
                             f"Critical: Target instance {current_target._uuid} not found in InstanceMap."
                         )
 
-                    current_graph_structure_hash = self.blueprint_hasher.compute_hash(
-                        graph
-                    )
-                    if current_graph_structure_hash in self._template_plan_cache:
-                        indexed_plan = self._template_plan_cache[
-                            current_graph_structure_hash
-                        ]
-                        plan = self._rehydrate_plan(graph, indexed_plan)
-                    else:
-                        plan = self.solver.resolve(graph)
-                        indexed_plan = self._index_plan(graph, plan)
-                        self._template_plan_cache[current_graph_structure_hash] = (
-                            indexed_plan
-                        )
+                    # Legacy cache logic removed. Always resolve the plan.
+                    plan = self.solver.resolve(graph)
 
                     local_context_cache[current_target._uuid] = (
                         graph,

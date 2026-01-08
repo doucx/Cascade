@@ -12,13 +12,13 @@ from cascade.spec.physical.assembly import (
 from .expander import Expander
 from .validator import GraphValidator
 from .wiring import WiringHarness
-from cascade.compiler.wiring.context import WiringContext
-from cascade.compiler.wiring.protocol import WiringPolicy
-from cascade.compiler.wiring.policies.parameter import ParameterWiringPolicy
-from cascade.compiler.wiring.policies.control import ControlFlowWiringPolicy
-from cascade.compiler.wiring.policies.observability import ObservabilityWiringPolicy
-from cascade.compiler.wiring.policies.resource import ResourceWiringPolicy
-from cascade.compiler.wiring.policies.pulse import PulseWiringPolicy
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.protocol import WiringPolicy
+from cascade.compiler.backend.wiring.policies.parameter import ParameterWiringPolicy
+from cascade.compiler.backend.wiring.policies.control import ControlFlowWiringPolicy
+from cascade.compiler.backend.wiring.policies.observability import ObservabilityWiringPolicy
+from cascade.compiler.backend.wiring.policies.resource import ResourceWiringPolicy
+from cascade.compiler.backend.wiring.policies.pulse import PulseWiringPolicy
 from cascade.spec.physical.constants import NodePrefix
 
 

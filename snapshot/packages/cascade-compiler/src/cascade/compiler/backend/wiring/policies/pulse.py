@@ -3,8 +3,8 @@ from cascade.spec.physical.nodes import PhysicsDataNode
 from cascade.spec.physical.ports import PortName
 from cascade.compiler.backend.expander import SubGraph
 from cascade.reflection import PhysicalIdGenerator
-from cascade.compiler.wiring.context import WiringContext
-from cascade.compiler.wiring.protocol import WiringPolicy
+from cascade.compiler.backend.wiring.context import WiringContext
+from cascade.compiler.backend.wiring.protocol import WiringPolicy
 
 
 class PulseWiringPolicy(WiringPolicy):

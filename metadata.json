@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[COMMIT] refactor(vm): integrate PhysicsKernel into Reactor and update tests", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767874848.364826, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "Capture: A 004_restructure_compiler_wiring.py", "type": "capture", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767875225.5704994, "duration_ms": 0}}

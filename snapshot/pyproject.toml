@@ -100,7 +100,6 @@ dev = [
   "cascade-vm-rs",
   "cascade-compiler",
   "cascade-std",
-  # "cascade", # The python sdk
   "ruff",
 ]
 

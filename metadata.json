@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(graph): 迁移对象模型至 Runtime 并更新全局引用", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767860050.8233776, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] fix(spec): 修复 interfaces.py 中的循环导入", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767860199.4753563, "duration_ms": 0}}

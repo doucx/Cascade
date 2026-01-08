@@ -1,1 +1,1 @@
-{"meta_version": "1.0", "summary": "[WIP] refactor(spec): 标准化物理层原子节点命名与常量", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767872945.5298498, "duration_ms": 0}}
+{"meta_version": "1.0", "summary": "[WIP] feat(vm): 引入 ChronosService 以处理异步时间延迟", "type": "plan", "generator": {"id": "manual", "tool": "pyquipu-cli"}, "env": {"quipu": "0.1.0", "python": "3.13.5", "os": "linux"}, "exec": {"start": 1767873123.7491922, "duration_ms": 0}}

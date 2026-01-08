@@ -1,444 +1,345 @@
-遵循“少即是多”和“消除魔法字符串”的原则，我们将首先建立物理层原子节点的命名规范。
+好的，我们来执行路线图的第二步。
 
-这个计划将创建一个新的常量定义文件，并重构 ID 生成器和编译器后端，使其依赖于这些权威的常量，而不是分散的字符串字面量。
+这个计划将引入 `ChronosService`，一个专门处理异步时间延迟的后台服务。它将与 `Reactor` 和 `ComputeService` 一起被 `Machine` 管理，通过专用的队列接收延迟请求，并将完成信号通过 `ingress_queue` 注入回物理层。
 
-我们将引入 `cascade.spec.physical.constants` 模块来定义 `NodePrefix` 等核心常量，并重构 `PhysicalIdGenerator` 和编译器策略以完全遵循此规范。
+这使得物理层在请求一个“等待”操作时，自身可以保持完全同步和非阻塞。
 
-## [WIP] refactor(spec): 标准化物理层原子节点命名与常量
+## [WIP] feat(vm): 引入 ChronosService 以处理异步时间延迟
 
 ### 用户需求
-1.  消除物理层代码中关于节点 ID（如 `"const."`, `"pulse."`）的硬编码字符串。
-2.  统一物理层原子节点（`D_const`, `D_pulse`, `D_ledger` 等）的命名规范。
+1.  创建一个 `ChronosService`，用于处理时间延迟请求。
+2.  将该服务集成到 `Machine` 的生命周期中，使其与 `Reactor` 和 `ComputeService` 协同工作。
+3.  建立一个通信机制，允许物理层的 Kernel 函数向 `ChronosService` 发送延迟请求。
 
 ### 评论
-这是迈向“确定性构建”的关键一步。通过将这些协议级的字符串提升为类型安全的常量，我们消除了拼写错误导致的隐性 Bug，并为未来的重构（如更改 ID 结构）提供了中心化的修改点。这也让代码的意图更加清晰——我们是在检查“这是一个常量节点吗”，而不是“这个字符串是以 c 开头的吗”。
+这是 Cascade 架构中一个优雅的飞跃。通过将“时间”抽象为一个外部服务，我们彻底解决了同步物理引擎与异步现实世界之间的矛盾。`ChronosService` 就像是物理层的一个外部“晶振”，为系统提供了时间脉冲，而物理层本身则保持了其纯粹的、基于因果律的离散步进模型。
 
 ### 目标
-1.  创建 `cascade-spec/src/cascade/spec/physical/constants.py`，定义 `NodePrefix` 枚举。
-2.  重构 `cascade-reflection` 中的 `PhysicalIdGenerator`，使其成为这些常量的唯一组装工厂。
-3.  重构 `cascade-compiler` 中的 `Builder` 和相关 `Policy`，将硬编码字符串替换为对 `NodePrefix` 的引用。
+1.  在 `cascade.vm` 中定义一个新的 `DelayRequest` 数据契约。
+2.  创建 `ChronosService` 类，它监听一个请求队列，执行 `asyncio.sleep`，然后将结果发送到 `Reactor` 的 `ingress_queue`。
+3.  修改 `Machine` 以管理 `ChronosService` 的启动和关闭。
+4.  更新测试工具 `EventDrivenRunner`，将 `ChronosService` 和其所需的 `chronos_queue` 正确地装配进测试环境。
 
 ### 基本原理
-目前的 ID 生成逻辑分散在 `naming.py` 和编译器的各个策略中，且存在直接使用字符串字面量进行判断（`startswith`）的情况。这种“魔法字符串”是维护的噩梦。通过引入 `NodePrefix`，我们在 Spec 层面确立了物理世界的本体论分类。
+`Reactor` 必须保持同步。时间延迟是异步的。为了解耦这两者，我们引入 `ChronosService` 作为中介。Kernel 函数（物理层）通过向 `system.chronos_queue` 发送一个 `DelayRequest` 来“请求”一个延迟。`ChronosService`（环境层）接收此请求，执行异步等待，然后将一个完成信号（Token）注入回 `Reactor` 的 `ingress_queue`。对于 `Reactor` 来说，它无法区分这个 Token 是来自 `ComputeService` 的计算结果，还是来自 `ChronosService` 的时间信号，从而保持了其核心逻辑的纯粹性。
 
 ### 标签
-#intent/refine #flow/ready #priority/high #comp/interfaces #comp/compiler #scope/core #task/domain/physics #task/object/primitives #task/action/standardize #task/state/begin
+#intent/build #flow/ready #priority/high #comp/vm #concept/time #task/domain/physics #task/object/time-service #task/action/implementation #task/state/continue
 
 ---
 
 ### Script
 
-#### Acts 1: 定义物理层常量
+#### Acts 1: 定义 DelayRequest 契约
 
-我们首先在 Spec 包中创建一个新的常量文件，定义所有标准的节点前缀。
+我们首先需要一个标准的数据结构来描述延迟请求。
 
 ~~~~~act
 write_file
-packages/cascade-spec/src/cascade/spec/physical/constants.py
+packages/cascade-vm/src/cascade/vm/services/contracts.py
 ~~~~~
 ~~~~~python
-from enum import StrEnum
+from dataclasses import dataclass
+from cascade.spec.physical.nodes import Token
 
 
-class NodePrefix(StrEnum):
+@dataclass(frozen=True)
+class DelayRequest:
     """
-    Standard prefixes for Physical Node IDs.
-    These define the 'Atomic Type' of the node in the physical topology.
+    A request sent to the ChronosService to delay a token.
     """
 
-    # Data Nodes (Places)
-    CONST = "const"  # Constant value holder
-    PULSE = "pulse"  # Event trigger (0 tokens, infinite capacity)
-    LEDGER = "ledger"  # Resource state holder
-    BUFFER = "buffer"  # Queue for resources or data
-    PARKED = "parked"  # Parking lot for pending requests
-    SIGNAL = "signal"  # Signaling channel
-    EGRESS = "egress"  # Exit point
-    INGRESS = "ingress"  # Entry point (reserved)
-
-    # Function Nodes (Transitions)
-    BLEACH = "bleach"  # Triad: Pre-process
-    WORKER = "worker"  # Triad: Execution
-    STAIN = "stain"    # Triad: Post-process
-    REQ = "req"        # Resource Requestor
-    GATE = "gate"      # Control Gate
-    PROBE = "probe"    # Introspection Probe
-
-    # Global/System
-    GLOBAL = "global"  # Global singleton
-    CANONICAL = "canonical"  # Canonical resource broker
+    delay_seconds: float
+    target_nid: str
+    token: Token
 ~~~~~
 
-#### Acts 2: 更新 PhysicalIdGenerator
+#### Acts 2: 实现 ChronosService
 
-接着，我们修改 ID 生成器，使其严格使用上述常量。
+现在，我们创建核心的时间服务。它是一个简单的异步循环，监听请求并处理它们。
 
 ~~~~~act
-patch_file
-packages/cascade-reflection/src/cascade/reflection/naming.py
+write_file
+packages/cascade-vm/src/cascade/vm/services/chronos.py
 ~~~~~
-~~~~~python.old
-    @staticmethod
-    def bleach_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.bleach"
+~~~~~python
+import asyncio
+import logging
+from typing import Tuple
 
-    @staticmethod
-    def worker_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.worker"
+from cascade.spec.physical.nodes import Token
+from cascade.vm.services.contracts import DelayRequest
 
-    @staticmethod
-    def stain_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.stain"
-
-    @staticmethod
-    def worker_in_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.in"
-
-    @staticmethod
-    def worker_out_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.out"
-
-    @staticmethod
-    def trace_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.trace"
-
-    @staticmethod
-    def context_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.context"
-
-    @staticmethod
-    def global_resource(resource_name: str) -> str:
-        # Legacy: Keeping it for D_res if needed, but we are moving to brokers
-        return f"canonical.resource.{resource_name}"
-
-    @staticmethod
-    def global_allocator(resource_name: str) -> str:
-        return f"canonical.resource.allocator.{resource_name}"
-
-    @staticmethod
-    def global_reclaimer(resource_name: str) -> str:
-        return f"canonical.resource.reclaimer.{resource_name}"
-
-    @staticmethod
-    def global_ledger(resource_name: str) -> str:
-        return f"canonical.resource.ledger.{resource_name}"
-
-    @staticmethod
-    def requestor(target_node_id: str, resource_name: str) -> str:
-        return f"req.{target_node_id}.{resource_name}"
-
-    @staticmethod
-    def probe_const(target_node_id: str, arg_name: str) -> str:
-        return f"probe.const.{target_node_id}.{arg_name}"
-
-    @staticmethod
-    def constant(target_node_id: str, arg_name: str) -> str:
-        # The DataNode holding the constant value
-        return f"const.{target_node_id}.{arg_name}"
-
-    @staticmethod
-    def observability_bus() -> str:
-        return "global.observability.bus"
-
-    @staticmethod
-    def observability_observer() -> str:
-        return "global.observability.observer"
-
-    @staticmethod
-    def pulse_source(logical_node_id: str) -> str:
-        return f"pulse.source.{logical_node_id}"
-~~~~~
-~~~~~python.new
-    @staticmethod
-    def bleach_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.{NodePrefix.BLEACH}"
-
-    @staticmethod
-    def worker_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.{NodePrefix.WORKER}"
-
-    @staticmethod
-    def stain_node(logical_node_id: str) -> str:
-        return f"{logical_node_id}.{NodePrefix.STAIN}"
-
-    @staticmethod
-    def worker_in_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.in"
-
-    @staticmethod
-    def worker_out_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.out"
-
-    @staticmethod
-    def trace_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.trace"
-
-    @staticmethod
-    def context_data(logical_node_id: str) -> str:
-        return f"{logical_node_id}.data.context"
-
-    @staticmethod
-    def global_resource(resource_name: str) -> str:
-        # Legacy: Keeping it for D_res if needed, but we are moving to brokers
-        return f"{NodePrefix.CANONICAL}.resource.{resource_name}"
-
-    @staticmethod
-    def global_allocator(resource_name: str) -> str:
-        return f"{NodePrefix.CANONICAL}.resource.allocator.{resource_name}"
-
-    @staticmethod
-    def global_reclaimer(resource_name: str) -> str:
-        return f"{NodePrefix.CANONICAL}.resource.reclaimer.{resource_name}"
-
-    @staticmethod
-    def global_ledger(resource_name: str) -> str:
-        return f"{NodePrefix.CANONICAL}.resource.{NodePrefix.LEDGER}.{resource_name}"
-
-    @staticmethod
-    def requestor(target_node_id: str, resource_name: str) -> str:
-        return f"{NodePrefix.REQ}.{target_node_id}.{resource_name}"
-
-    @staticmethod
-    def probe_const(target_node_id: str, arg_name: str) -> str:
-        return f"{NodePrefix.PROBE}.{NodePrefix.CONST}.{target_node_id}.{arg_name}"
-
-    @staticmethod
-    def constant(target_node_id: str, arg_name: str) -> str:
-        # The DataNode holding the constant value
-        return f"{NodePrefix.CONST}.{target_node_id}.{arg_name}"
-
-    @staticmethod
-    def observability_bus() -> str:
-        return f"{NodePrefix.GLOBAL}.observability.bus"
-
-    @staticmethod
-    def observability_observer() -> str:
-        return f"{NodePrefix.GLOBAL}.observability.observer"
-
-    @staticmethod
-    def pulse_source(logical_node_id: str) -> str:
-        return f"{NodePrefix.PULSE}.source.{logical_node_id}"
-~~~~~
-
-#### Acts 3: 导入依赖
-
-我们需要在 `naming.py` 头部导入新定义的 `NodePrefix`。
-
-~~~~~act
-patch_file
-packages/cascade-reflection/src/cascade/reflection/naming.py
-~~~~~
-~~~~~python.old
-class PhysicalIdGenerator:
-    @staticmethod
-~~~~~
-~~~~~python.new
-from cascade.spec.physical.constants import NodePrefix
+logger = logging.getLogger(__name__)
 
 
-class PhysicalIdGenerator:
-    @staticmethod
-~~~~~
+class ChronosService:
+    """
+    A service that handles time-based delays asynchronously.
+    """
 
-#### Acts 4: 更新 Compiler Builder 的入口扫描逻辑
+    def __init__(
+        self,
+        inbound_queue: "asyncio.Queue[DelayRequest]",
+        outbound_queue: "asyncio.Queue[Tuple[str, Token]]",
+        wakeup_event: asyncio.Event,
+    ):
+        self.inbound_queue = inbound_queue
+        self.outbound_queue = outbound_queue
+        self.wakeup_event = wakeup_event
+        self._running = False
 
-现在，我们将替换编译器中用于识别 Entry Point 和 Exit Point 的硬编码字符串。
+    async def run(self) -> None:
+        self._running = True
+        logger.info("ChronosService started.")
+        try:
+            while self._running:
+                request = await self.inbound_queue.get()
+                asyncio.create_task(self._handle_request(request))
+        finally:
+            logger.info("ChronosService stopped.")
 
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-from cascade.compiler.wiring.policies.pulse import PulseWiringPolicy
+    def stop(self) -> None:
+        self._running = False
 
-
-class Builder:
-    def __init__(self):
-~~~~~
-~~~~~python.new
-from cascade.compiler.wiring.policies.pulse import PulseWiringPolicy
-from cascade.spec.physical.constants import NodePrefix
-
-
-class Builder:
-    def __init__(self):
-~~~~~
-
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/backend/builder.py
-~~~~~
-~~~~~python.old
-        entry_points = [
-            node_id
-            for node_id, node in physical_graph.nodes.items()
-            if isinstance(node, PhysicsDataNode)
-            and (node_id.startswith("const.") or node_id.startswith("pulse."))
-        ]
-        exit_points = {
-            node.id.split(".")[1]: node.id
-            for node in physical_graph.nodes.values()
-            if isinstance(node, PhysicsDataNode) and node.id.startswith("egress.")
-        }
-~~~~~
-~~~~~python.new
-        entry_points = [
-            node_id
-            for node_id, node in physical_graph.nodes.items()
-            if isinstance(node, PhysicsDataNode)
-            and (
-                node_id.startswith(f"{NodePrefix.CONST}.")
-                or node_id.startswith(f"{NodePrefix.PULSE}.")
+    async def _handle_request(self, request: DelayRequest) -> None:
+        try:
+            await asyncio.sleep(request.delay_seconds)
+            await self.outbound_queue.put((request.target_nid, request.token))
+            self.wakeup_event.set()
+        except asyncio.CancelledError:
+            logger.debug("Delay request cancelled.")
+        except Exception:
+            logger.exception(
+                f"ChronosService failed to handle delay request for {request.target_nid}"
             )
-        ]
-        exit_points = {
-            node.id.split(".")[1]: node.id
-            for node in physical_graph.nodes.values()
-            if isinstance(node, PhysicsDataNode)
-            and node.id.startswith(f"{NodePrefix.EGRESS}.")
-        }
 ~~~~~
 
-#### Acts 5: 更新 Control Wiring Policy
+#### Acts 3: 将 ChronosService 集成到 Machine
 
-替换 `control.py` 中 `egress` 相关的硬编码。
+`Machine` 是所有后台服务的总协调器。我们需要让它来管理 `ChronosService` 的生命周期。
 
 ~~~~~act
 patch_file
-packages/cascade-compiler/src/cascade/compiler/wiring/policies/control.py
+packages/cascade-vm/src/cascade/vm/machine.py
 ~~~~~
 ~~~~~python.old
-from cascade.compiler.wiring.protocol import WiringPolicy
+import asyncio
+import logging
+from cascade.vm.reactor import Reactor
+from cascade.vm.compute.service import LocalComputeService
+
+logger = logging.getLogger(__name__)
 
 
-class ControlFlowWiringPolicy(WiringPolicy):
-    def setup_globals(self, ctx: WiringContext) -> None:  # pragma: no cover
+class Machine:
+    def __init__(
+        self,
+        reactor: Reactor,
+        compute_service: LocalComputeService,
+        wakeup_event: asyncio.Event,
+    ):
+        self.reactor = reactor
+        self.compute_service = compute_service
+        self.wakeup_event = wakeup_event
+        # We can get the queue from the reactor, which is the canonical consumer
+        self.ingress_queue = reactor.ingress_queue
+
+    async def run(self) -> None:
+        logger.info("Machine started.")
+
+        # Start the Compute Service
+        service_task = asyncio.create_task(self.compute_service.run())
+
+        try:
+            # Run until explicit shutdown signal
 ~~~~~
 ~~~~~python.new
-from cascade.compiler.wiring.protocol import WiringPolicy
-from cascade.spec.physical.constants import NodePrefix
+import asyncio
+import logging
+from cascade.vm.reactor import Reactor
+from cascade.vm.compute.service import LocalComputeService
+from cascade.vm.services.chronos import ChronosService
+
+logger = logging.getLogger(__name__)
 
 
-class ControlFlowWiringPolicy(WiringPolicy):
-    def setup_globals(self, ctx: WiringContext) -> None:  # pragma: no cover
-~~~~~
+class Machine:
+    def __init__(
+        self,
+        reactor: Reactor,
+        compute_service: LocalComputeService,
+        chronos_service: ChronosService,
+        wakeup_event: asyncio.Event,
+    ):
+        self.reactor = reactor
+        self.compute_service = compute_service
+        self.chronos_service = chronos_service
+        self.wakeup_event = wakeup_event
+        # We can get the queue from the reactor, which is the canonical consumer
+        self.ingress_queue = reactor.ingress_queue
 
-~~~~~act
-patch_file
-packages/cascade-compiler/src/cascade/compiler/wiring/policies/control.py
-~~~~~
-~~~~~python.old
-        # 4.4 Egress for Root Nodes
-        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
-            assert subgraph.stainer is not None
-            # Create a dedicated, addressable exit point for this graph root
-            d_egress_id = f"egress.{node_ir.logical_id}"
-            d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
-            ctx.wire.add_node(d_egress)
+    async def run(self) -> None:
+        logger.info("Machine started.")
 
-            # Connect the stainer's default output to this egress node
-            ctx.wire.connect(subgraph.stainer.id, "output_default", d_egress_id, "in")
-~~~~~
-~~~~~python.new
-        # 4.4 Egress for Root Nodes
-        if node_ir.logical_id in ctx.graph_ir.root_logical_ids:
-            assert subgraph.stainer is not None
-            # Create a dedicated, addressable exit point for this graph root
-            d_egress_id = f"{NodePrefix.EGRESS}.{node_ir.logical_id}"
-            d_egress = PhysicsDataNode(id=d_egress_id, name=f"Egress({node_ir.name})")
-            ctx.wire.add_node(d_egress)
+        # Start Services
+        compute_task = asyncio.create_task(self.compute_service.run())
+        chronos_task = asyncio.create_task(self.chronos_service.run())
 
-            # Connect the stainer's default output to this egress node
-            ctx.wire.connect(subgraph.stainer.id, "output_default", d_egress_id, "in")
-~~~~~
-
-#### Acts 6: 更新 Linker
-
-最后，更新 `Linker` 中的硬编码匹配逻辑。
-
-~~~~~act
-patch_file
-packages/cascade-vm/src/cascade/vm/linker.py
-~~~~~
-~~~~~python.old
-from cascade.std.system.gate import gate_passthrough
-
-
-class LinkerError(RuntimeError):
-    pass
-~~~~~
-~~~~~python.new
-from cascade.std.system.gate import gate_passthrough
-from cascade.spec.physical.constants import NodePrefix
-
-
-class LinkerError(RuntimeError):
-    pass
+        try:
+            # Run until explicit shutdown signal
 ~~~~~
 
 ~~~~~act
 patch_file
-packages/cascade-vm/src/cascade/vm/linker.py
+packages/cascade-vm/src/cascade/vm/machine.py
 ~~~~~
 ~~~~~python.old
-    def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:
-        # Triad
-        if node_id.endswith(".bleach"):
-            return standard_bleacher
-        if node_id.endswith(".stain"):
-            return standard_stainer
-
-        # Observability
-        if node_id == PhysicalIdGenerator.observability_observer():
-            return standard_observer
-
-        # Resources
-        if "allocator" in node_id:
-            return discrete_allocator
-        if "reclaimer" in node_id:
-            return discrete_reclaimer
-        if node_id.startswith("req."):
-            return resource_requestor
-        if "gate.wakeup" in node_id:
-            return gate_passthrough
-
-        # System / Egress
-        if node_id.startswith("egress."):
-            return standard_egress
-
-        return None
+        finally:
+            # Shutdown sequence
+            self.compute_service.stop()
+            service_task.cancel()
+            try:
+                await service_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Machine stopped.")
 ~~~~~
 ~~~~~python.new
-    def _resolve_stdlib(self, node_id: str) -> Optional[Callable]:
-        # Triad
-        if node_id.endswith(f".{NodePrefix.BLEACH}"):
-            return standard_bleacher
-        if node_id.endswith(f".{NodePrefix.STAIN}"):
-            return standard_stainer
+        finally:
+            # Shutdown sequence
+            self.compute_service.stop()
+            self.chronos_service.stop()
+            compute_task.cancel()
+            chronos_task.cancel()
+            try:
+                await asyncio.gather(compute_task, chronos_task)
+            except asyncio.CancelledError:
+                pass
+            logger.info("Machine stopped.")
+~~~~~
 
-        # Observability
-        if node_id == PhysicalIdGenerator.observability_observer():
-            return standard_observer
+#### Acts 4: 在测试工具中装配 ChronosService
 
-        # Resources
-        if "allocator" in node_id:
-            return discrete_allocator
-        if "reclaimer" in node_id:
-            return discrete_reclaimer
-        if node_id.startswith(f"{NodePrefix.REQ}."):
-            return resource_requestor
-        if f"{NodePrefix.GATE}.wakeup" in node_id:
-            return gate_passthrough
+最后，我们需要更新 `EventDrivenRunner`，这个测试工具负责创建和连接所有服务。
 
-        # System / Egress
-        if node_id.startswith(f"{NodePrefix.EGRESS}."):
-            return standard_egress
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/harness.py
+~~~~~
+~~~~~python.old
+from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
+from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.linker import Linker
+~~~~~
+~~~~~python.new
+from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
+from cascade.vm.compute import ComputeRequest, LocalComputeService
+from cascade.vm.services.chronos import ChronosService
+from cascade.vm.services.contracts import DelayRequest
+from cascade.vm.registry import CodeRegistry
+from cascade.vm.linker import Linker
+~~~~~
 
-        return None
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/harness.py
+~~~~~
+~~~~~python.old
+        # 1. Setup Queues for disconnected execution
+        self.compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
+        self.ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
+
+        # 2. Setup Services
+        # In a real system, store would be a separate entity.
+~~~~~
+~~~~~python.new
+        # 1. Setup Queues for disconnected execution
+        self.compute_queue: asyncio.Queue[ComputeRequest] = asyncio.Queue()
+        self.chronos_queue: asyncio.Queue[DelayRequest] = asyncio.Queue()
+        self.ingress_queue: asyncio.Queue[Tuple[str, Token]] = asyncio.Queue()
+
+        # 2. Setup Services
+        # In a real system, store would be a separate entity.
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/harness.py
+~~~~~
+~~~~~python.old
+            inbound_queue=self.compute_queue,
+            outbound_queue=self.ingress_queue,
+            wakeup_event=self.wakeup_event,
+        )
+
+        # 3. Setup Event Bus & Resource Registry
+        self.event_bus = EventBus()
+~~~~~
+~~~~~python.new
+            inbound_queue=self.compute_queue,
+            outbound_queue=self.ingress_queue,
+            wakeup_event=self.wakeup_event,
+        )
+        self.chronos_service = ChronosService(
+            inbound_queue=self.chronos_queue,
+            outbound_queue=self.ingress_queue,
+            wakeup_event=self.wakeup_event,
+        )
+
+        # 3. Setup Event Bus & Resource Registry
+        self.event_bus = EventBus()
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/harness.py
+~~~~~
+~~~~~python.old
+        self.resource_registry = ResourceRegistry()
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        self.resource_registry.register("system.compute_queue", self.compute_queue)
+        self.resource_registry.register("system.object_store", self.object_store)
+
+        # 4. Setup Reactor
+        factory = reactor_factory or Reactor
+~~~~~
+~~~~~python.new
+        self.resource_registry = ResourceRegistry()
+        self.resource_registry.register("system.event_bus", self.event_bus)
+        self.resource_registry.register("system.compute_queue", self.compute_queue)
+        self.resource_registry.register("system.chronos_queue", self.chronos_queue)
+        self.resource_registry.register("system.object_store", self.object_store)
+
+        # 4. Setup Reactor
+        factory = reactor_factory or Reactor
+~~~~~
+
+~~~~~act
+patch_file
+packages/cascade-vm/src/cascade/vm/harness.py
+~~~~~
+~~~~~python.old
+        # The Machine is now a component managed by the harness
+        from cascade.vm.machine import Machine
+
+        self.machine = Machine(self.reactor, self.compute_service, self.wakeup_event)
+        self._loop_task: Optional[asyncio.Task] = None
+        self._service_task: Optional[asyncio.Task] = None
+~~~~~
+~~~~~python.new
+        # The Machine is now a component managed by the harness
+        from cascade.vm.machine import Machine
+
+        self.machine = Machine(
+            self.reactor, self.compute_service, self.chronos_service, self.wakeup_event
+        )
+        self._loop_task: Optional[asyncio.Task] = None
+        self._service_task: Optional[asyncio.Task] = None
 ~~~~~
 
 ### 下一步建议
-我们已经建立了物理节点的命名规范，下一步可以开始引入 `ChronosService`。这涉及：
-1.  在 `cascade.vm` 中创建 `services/chronos.py`。
-2.  定义 `DelayRequest` 数据结构。
-3.  将服务集成到 `Machine` 循环中。
+基础设施已经就位。我们现在可以继续执行路线图的第三步：**实现 `std.system.sleep` IC**。
+
+这将是一个非常简单的 Kernel 函数，它的唯一作用就是从 `ResourceRegistry` 中获取 `system.chronos_queue`，然后将一个 `DelayRequest` 放入其中。这将是第一个真正利用到我们新构建的时间服务的物理层组件。

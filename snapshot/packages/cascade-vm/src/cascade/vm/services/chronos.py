@@ -9,10 +9,6 @@ logger = logging.getLogger(__name__)
 
 
 class ChronosService:
-    """
-    A service that handles time-based delays asynchronously.
-    """
-
     def __init__(
         self,
         inbound_queue: "asyncio.Queue[DelayRequest]",

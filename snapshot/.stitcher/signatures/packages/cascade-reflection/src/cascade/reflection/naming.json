@@ -48,6 +48,10 @@
     "baseline_code_signature_text": "def requestor(target_node_id: str, resource_name: str) -> str:",
     "baseline_code_structure_hash": "03a61c8cdee8ae9025d161ceeb366df01da900e7115bdb84548808afd581d154"
   },
+  "PhysicalIdGenerator.sleep_node": {
+    "baseline_code_signature_text": "def sleep_node(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "65c029dfb6e07822a8830c67447df04541f6c0ceba74bb134d1304bd010d13c0"
+  },
   "PhysicalIdGenerator.stain_node": {
     "baseline_code_signature_text": "def stain_node(logical_node_id: str) -> str:",
     "baseline_code_structure_hash": "9c4768662ce4ef749a88ac3337551eaec567e34ab181b05b9a275db33e98aca3"
@@ -55,6 +59,10 @@
   "PhysicalIdGenerator.trace_data": {
     "baseline_code_signature_text": "def trace_data(logical_node_id: str) -> str:",
     "baseline_code_structure_hash": "2a08f82a6029600a6e9ca3596420a17614bc10c8009101ae9c99b9bbe3cc7976"
+  },
+  "PhysicalIdGenerator.wakeup_data": {
+    "baseline_code_signature_text": "def wakeup_data(logical_node_id: str) -> str:",
+    "baseline_code_structure_hash": "07b3692d91c1c0f62a806eacf18ca687eee7519a1527bd86004cbb112fa50b23"
   },
   "PhysicalIdGenerator.worker_in_data": {
     "baseline_code_signature_text": "def worker_in_data(logical_node_id: str) -> str:",

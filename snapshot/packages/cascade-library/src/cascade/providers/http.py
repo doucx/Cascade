@@ -48,7 +48,7 @@ async def _perform_request(
     with ExitStack() as stack:
         # Prepare files for httpx
         httpx_files: Optional[Dict[str, Union[IO[bytes], Tuple[str, IO[bytes]]]]] = None
-        
+
         if files:
             httpx_files = {}
             for field_name, file_path in files.items():
@@ -68,7 +68,7 @@ async def _perform_request(
                 data=data,
                 files=httpx_files,
             )
-            
+
             # Construct the response object
             resp_obj = HttpResponse(
                 status=response.status_code,

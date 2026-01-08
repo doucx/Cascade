@@ -2,11 +2,6 @@ from enum import StrEnum
 
 
 class NodePrefix(StrEnum):
-    """
-    Standard prefixes for Physical Node IDs.
-    These define the 'Atomic Type' of the node in the physical topology.
-    """
-
     # Data Nodes (Places)
     CONST = "const"  # Constant value holder
     PULSE = "pulse"  # Event trigger (0 tokens, infinite capacity)
@@ -20,11 +15,11 @@ class NodePrefix(StrEnum):
     # Function Nodes (Transitions)
     BLEACH = "bleach"  # Triad: Pre-process
     WORKER = "worker"  # Triad: Execution
-    STAIN = "stain"    # Triad: Post-process
-    REQ = "req"        # Resource Requestor
-    GATE = "gate"      # Control Gate
-    PROBE = "probe"    # Introspection Probe
-    SLEEP = "sleep"    # Time delay requestor
+    STAIN = "stain"  # Triad: Post-process
+    REQ = "req"  # Resource Requestor
+    GATE = "gate"  # Control Gate
+    PROBE = "probe"  # Introspection Probe
+    SLEEP = "sleep"  # Time delay requestor
 
     # Data Node Subtypes
     WAKEUP = "wakeup"  # Return point for a sleep operation

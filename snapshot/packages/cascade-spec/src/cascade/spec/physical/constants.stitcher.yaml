@@ -1,0 +1,3 @@
+"NodePrefix": |-
+  Standard prefixes for Physical Node IDs.
+  These define the 'Atomic Type' of the node in the physical topology.

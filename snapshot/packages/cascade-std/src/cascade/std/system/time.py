@@ -11,17 +11,6 @@ logger = logging.getLogger(__name__)
 def standard_sleep(
     inputs: Dict[str, Token], node: PhysicsFuncNode, resources: any
 ) -> Dict[str, Token]:
-    """
-    Kernel function to request a time delay.
-
-    It sends a DelayRequest to the ChronosService and returns nothing,
-    effectively pausing a branch of execution until the ChronosService
-    re-injects the token at a later time.
-
-    Inputs:
-        - 'delay_in': Token with a float payload for seconds to wait.
-        - 'data_in': The token to be returned after the delay.
-    """
     try:
         chronos_queue = resources.get("system.chronos_queue")
 

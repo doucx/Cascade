@@ -10,6 +10,7 @@ from cascade.vm.reactor import Reactor
 from cascade.vm.protocols import ReactorProtocol
 from cascade.vm.memory import VolatileMemory
 from cascade.vm.resource_registry import ResourceRegistry
+from cascade.vm.kernel import PhysicsKernel
 from cascade.runtime.services.observability.bus import EventBus
 from cascade.runtime.services.observability.events import Event, TaskExecutionFinished
 from cascade.vm.compute import ComputeRequest, LocalComputeService
@@ -95,12 +96,14 @@ class EventDrivenRunner:
         self.resource_registry.register("system.object_store", self.object_store)
 
         # 4. Setup Reactor
+        # Construct the Physics Kernel
+        self.kernel = PhysicsKernel(function_map, self.resource_registry)
+
         factory = reactor_factory or Reactor
         self.reactor = factory(
             self.graph,
             self.memory,
-            function_map,
-            self.resource_registry,
+            self.kernel,
             ingress_queue=self.ingress_queue,
         )
         # The Machine is now a component managed by the harness

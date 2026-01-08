@@ -1,42 +1,3 @@
-Of course. We will now create the crucial integration test to validate that our entire time architecture—from the `standard_sleep` IC to the `ChronosService` and back to the `Reactor`—works as a cohesive unit.
-
-This test will build a small physical graph, request a delay, and then assert that the token's arrival is correctly postponed by measuring real-world time.
-
-## [WIP] test(vm): 添加集成测试以验证 `standard_sleep` 和 `ChronosService`
-
-### 用户需求
-创建一个集成测试，以验证 `standard_sleep` IC 能够通过 `ChronosService` 成功地延迟一个 Token 的传递。
-
-### 评论
-这是我们“时间即服务”架构的最终试金石。一个通过的测试将证明我们的设计是健全的：物理层可以保持其同步确定性，同时能够与异步的、基于真实世界的“时间”维度进行可靠的交互。这个测试的成功将为实现更复杂的、基于时间的功能（如指数退避和超时）奠定坚实的基础。
-
-### 目标
-1.  创建新的测试文件 `packages/cascade-vm/tests/integration/test_time_services.py`。
-2.  构建一个包含 `F_sleep` 和 `D_wakeup` 节点的物理图。
-3.  使用 `EventDrivenRunner` 来驱动测试，它会自动装配 `ChronosService`。
-4.  注入一个代表延迟时间的 Token 和一个代表载荷的 Token。
-5.  测量从启动到载荷 Token 到达 `D_wakeup` 节点的实际时间。
-6.  断言测量到的时间大于等于请求的延迟，并且载荷数据保持不变。
-
-### 基本原理
-我们将构建一个简单的拓扑：两个常量数据节点（一个提供延迟秒数，一个提供载荷）作为 `F_sleep` 节点的输入。`F_sleep` 节点将向 `ChronosService` 发送一个 `DelayRequest`。该请求包含延迟时间和载荷 Token，并指定返回地址为 `D_wakeup`。测试的主体将异步等待 `D_wakeup` 节点中出现 Token，并记录这一过程所花费的时间，从而验证延迟是否生效。
-
-### 标签
-#intent/tooling #flow/ready #priority/high #comp/tests #comp/vm #concept/time #task/domain/testing #task/object/time-service #task/action/validation #task/state/continue
-
----
-
-### Script
-
-#### Acts 1: 创建新的集成测试文件
-
-我们将创建一个专门用于测试时间相关服务的 `test_time_services.py` 文件。
-
-~~~~~act
-write_file
-packages/cascade-vm/tests/integration/test_time_services.py
-~~~~~
-~~~~~python
 import asyncio
 import time
 import pytest
@@ -132,14 +93,3 @@ async def test_sleep_ic_delays_token():
     assert runner.memory.get_count(d_wakeup_id) == 1
     result_token = runner.memory.take(d_wakeup_id)
     assert result_token.payload == payload_data
-~~~~~
-
-### 下一步建议
-我们已经为时间服务建立了坚实的基础并用测试加以验证。现在，所有的准备工作都已经完成，我们可以向最终目标迈进了：**实现指数退避重试逻辑**。
-
-这将会是一个更复杂的 IC，它需要：
-1.  从 Token 的 `trace` 中读取当前的 `retry_count`。
-2.  根据 `retry_count` 计算出延迟时间。
-3.  将计算出的延迟和原始的上下文 Token 传递给我们刚刚验证过的 `standard_sleep` 物理结构。
-
-如果你准备好了，我们可以开始设计 `std.system.retry` 的具体实现。

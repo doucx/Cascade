@@ -11,7 +11,7 @@ dependencies = [
   "cascade-spec",
   "cascade-runtime",
   "cascade-common",
-  "cascade-graph",
+  "cascade.runtime.graph",
   "cascade-application",
   "cascade-library"
 ]
@@ -31,4 +31,4 @@ cascade-spec = { workspace = true }
 cascade-runtime = { workspace = true }
 cascade-common = { workspace = true }
 cascade-application = { workspace = true }
-cascade-graph = { workspace = true }
+cascade.runtime.graph = { workspace = true }

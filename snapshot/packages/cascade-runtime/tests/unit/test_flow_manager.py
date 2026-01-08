@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 import pytest
 
-from cascade.graph.model import Node, Edge, EdgeType
+from cascade.runtime.graph.model import Node, Edge, EdgeType
 from cascade.spec.dsl.routing import Router
 from cascade.spec.dsl.fluent import LazyResult
 from cascade.runtime.legacy.flow import FlowManager

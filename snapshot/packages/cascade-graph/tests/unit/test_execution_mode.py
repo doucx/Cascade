@@ -1,5 +1,5 @@
 from cascade import task
-from cascade.graph.build import build_graph
+from cascade.runtime.graph.build import build_graph
 
 
 @task(mode="compute")

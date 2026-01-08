@@ -1,6 +1,6 @@
 from typing import Protocol, TYPE_CHECKING, Dict, Any
 
-from cascade.graph.model import Node
+from cascade.runtime.graph.model import Node
 from cascade.spec.dsl.constraint import GlobalConstraint
 
 if TYPE_CHECKING:

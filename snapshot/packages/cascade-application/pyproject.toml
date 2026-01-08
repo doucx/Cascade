@@ -10,7 +10,7 @@ requires-python = ">=3.8"
 dependencies = [
   "cascade-spec",
   "cascade-runtime",
-  "cascade-graph",
+  "cascade.runtime.graph",
   "cascade-common"
 ]
 
@@ -23,5 +23,5 @@ allow-direct-references = true
 [tool.uv.sources]
 cascade-spec = { workspace = true }
 cascade-runtime = { workspace = true }
-cascade-graph = { workspace = true }
+cascade.runtime.graph = { workspace = true }
 cascade-common = { workspace = true }

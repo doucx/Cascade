@@ -2,7 +2,7 @@ import inspect
 from contextlib import ExitStack
 from typing import Any, Dict, Callable, Union, Generator, Set
 
-from cascade.graph.model import Graph
+from cascade.runtime.graph.model import Graph
 from cascade.spec.dsl.resources import ResourceDefinition, Inject
 from contextlib import contextmanager
 

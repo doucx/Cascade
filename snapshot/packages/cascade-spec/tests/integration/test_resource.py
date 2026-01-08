@@ -151,7 +151,7 @@ def test_unregistered_resource_raises_error():
 
 def test_resource_scan_finds_inject_in_dict():
     from cascade.runtime.services.resources.container import ResourceContainer
-    from cascade.graph.build import build_graph
+    from cascade.runtime.graph.build import build_graph
 
     @cs.resource
     def my_res():

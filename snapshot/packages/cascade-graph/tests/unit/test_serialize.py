@@ -1,7 +1,7 @@
 import json
 import cascade as cs
-from cascade.graph.build import build_graph
-from cascade.graph.serialize import to_json, from_json, graph_to_dict
+from cascade.runtime.graph.build import build_graph
+from cascade.runtime.graph.serialize import to_json, from_json, graph_to_dict
 
 # --- Top-Level Tasks for Serialization Testing ---
 

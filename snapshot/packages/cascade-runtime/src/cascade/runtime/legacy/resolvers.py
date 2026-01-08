@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Tuple, Optional, Callable
 
-from cascade.graph.model import Node, Graph, Edge, EdgeType, ParamNode
+from cascade.runtime.graph.model import Node, Graph, Edge, EdgeType, ParamNode
 from cascade.spec.dsl.resources import Inject
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 from cascade.runtime.errors import DependencyMissingError, ResourceNotFoundError

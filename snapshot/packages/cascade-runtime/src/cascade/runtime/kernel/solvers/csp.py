@@ -1,6 +1,6 @@
 from typing import Dict, Optional
 from collections import defaultdict
-from cascade.graph.model import Graph
+from cascade.runtime.graph.model import Graph
 from cascade.spec.runtime.interfaces import ExecutionPlan
 from cascade.spec.dsl.fluent import LazyResult, MappedLazyResult
 
@@ -90,7 +90,7 @@ class CSPSolver:
         node_resources: Dict[str, Dict[str, float]],
         max_stages: int,
     ) -> Optional[Dict[str, int]]:
-        from cascade.graph.model import EdgeType
+        from cascade.runtime.graph.model import EdgeType
 
         if constraint is None:
             raise ImportError("python-constraint is required")

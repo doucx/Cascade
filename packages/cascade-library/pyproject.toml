@@ -14,7 +14,7 @@ dependencies = [
 
 [project.optional-dependencies]
 template = ["jinja2"]
-http = ["aiohttp"]
+http = ["httpx"]
 sql = ["sqlalchemy"]
 cli = ["typer"]
 config = ["PyYAML"]
@@ -22,7 +22,7 @@ s3 = ["aiobotocore"]
 redis = ["cascade-runtime[redis]"]
 all = [
   "jinja2",
-  "aiohttp",
+  "httpx",
   "sqlalchemy",
   "typer",
   "PyYAML",

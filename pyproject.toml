@@ -86,6 +86,7 @@ dev = [
   "PyYAML",
   "jinja2",
   "aiohttp",
+  "httpx",
   "python-constraint",
   "flask_cors",
   # Local workspace packages needed for testing

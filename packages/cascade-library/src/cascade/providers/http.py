@@ -1,14 +1,14 @@
 import os
 from contextlib import ExitStack
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union, Tuple, IO
 from cascade.spec.dsl.task import task
 from cascade.spec.runtime.interfaces import LazyFactory, Provider
 
 try:
-    import aiohttp
+    import httpx
 except ImportError:
-    aiohttp = None
+    httpx = None
 
 
 @dataclass
@@ -38,53 +38,45 @@ async def _perform_request(
     data: Optional[Any] = None,
     files: Optional[Dict[str, str]] = None,
 ) -> HttpResponse:
-    if aiohttp is None:
+    if httpx is None:
         raise ImportError(
-            "The 'aiohttp' library is required to use the http provider. "
+            "The 'httpx' library is required to use the http provider. "
             "Please install it with: pip install cascade-py[http]"
         )
 
     # Use ExitStack to ensure any files opened for upload are closed
     with ExitStack() as stack:
-        final_data = data
-
+        # Prepare files for httpx
+        httpx_files: Optional[Dict[str, Union[IO[bytes], Tuple[str, IO[bytes]]]]] = None
+        
         if files:
-            # If files are provided, we must use FormData
-            form = aiohttp.FormData()
-
-            # Add existing data fields if it's a dict
-            if isinstance(data, dict):
-                for k, v in data.items():
-                    form.add_field(k, str(v))
-
+            httpx_files = {}
             for field_name, file_path in files.items():
                 if isinstance(file_path, str) and os.path.exists(file_path):
                     f = stack.enter_context(open(file_path, "rb"))
-                    form.add_field(field_name, f, filename=os.path.basename(file_path))
+                    httpx_files[field_name] = (os.path.basename(file_path), f)
                 else:
-                    # Fallback for bytes or other content
-                    form.add_field(field_name, file_path)
+                    httpx_files[field_name] = file_path  # type: ignore
 
-            final_data = form
+        # In httpx, if 'data' is a dict and 'files' is present, it handles multipart/form-data.
+        async with httpx.AsyncClient(headers=headers, follow_redirects=True) as client:
+            response = await client.request(
+                method,
+                url,
+                params=params,
+                json=json_data,
+                data=data,
+                files=httpx_files,
+            )
+            
+            # Construct the response object
+            resp_obj = HttpResponse(
+                status=response.status_code,
+                headers=dict(response.headers),
+                body=response.content,
+            )
 
-        async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.request(
-                method, url, params=params, json=json_data, data=final_data
-            ) as response:
-                # Note: We do NOT raise_for_status() automatically here.
-                # We want to return the response object so the user (or a downstream task)
-                # can decide how to handle 4xx/5xx codes.
-
-                body_bytes = await response.read()
-
-                # We construct the response object FIRST
-                resp_obj = HttpResponse(
-                    status=response.status,
-                    headers=dict(response.headers),
-                    body=body_bytes,
-                )
-
-                return resp_obj
+            return resp_obj
 
 
 # --- Tasks ---
